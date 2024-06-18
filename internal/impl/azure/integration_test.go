@@ -23,10 +23,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/integration"
-	"github.com/benthosdev/benthos/v4/public/bloblang"
-	_ "github.com/benthosdev/benthos/v4/public/components/pure"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
+	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
+	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
 
 func TestIntegrationAzure(t *testing.T) {
@@ -60,7 +60,6 @@ func TestIntegrationAzure(t *testing.T) {
 		client, err := azblob.NewClientFromConnectionString(connString, nil)
 		if err != nil {
 			return err
-
 		}
 
 		ctx, done := context.WithTimeout(context.Background(), 1*time.Second)
@@ -70,7 +69,6 @@ func TestIntegrationAzure(t *testing.T) {
 			return err
 		}
 		return nil
-
 	})
 	require.NoError(t, err, "Failed to start Azurite")
 
@@ -98,9 +96,44 @@ input:
 			integration.StreamTestStreamIsolated(10),
 		).Run(
 			t, template,
-			integration.StreamTestOptVarOne(dummyContainer),
-			integration.StreamTestOptVarTwo(dummyPrefix),
-			integration.StreamTestOptVarThree(connString),
+			integration.StreamTestOptVarSet("VAR1", dummyContainer),
+			integration.StreamTestOptVarSet("VAR2", dummyPrefix),
+			integration.StreamTestOptVarSet("VAR3", connString),
+		)
+	})
+
+	t.Run("blob_storage_streamed", func(t *testing.T) {
+		template := `
+output:
+  azure_blob_storage:
+    blob_type: BLOCK
+    container: $VAR1-$ID
+    max_in_flight: 1
+    path: $VAR2/${!count("$ID")}.txt
+    public_access_level: PRIVATE
+    storage_connection_string: $VAR3
+
+input:
+  azure_blob_storage:
+    container: $VAR1-$ID
+    prefix: $VAR2
+    storage_connection_string: $VAR3
+    targets_input:
+      azure_blob_storage:
+        container: $VAR1-$ID
+        prefix: $VAR2
+        storage_connection_string: $VAR3
+      processors:
+        - mapping: 'root.name = @blob_storage_key'
+`
+		integration.StreamTests(
+			integration.StreamTestOpenCloseIsolated(),
+			integration.StreamTestStreamIsolated(10),
+		).Run(
+			t, template,
+			integration.StreamTestOptVarSet("VAR1", dummyContainer),
+			integration.StreamTestOptVarSet("VAR2", dummyPrefix),
+			integration.StreamTestOptVarSet("VAR3", connString),
 		)
 	})
 
@@ -138,13 +171,13 @@ input:
 			integration.StreamTestOpenCloseIsolated(),
 		).Run(
 			t, template,
-			integration.StreamTestOptVarOne(dummyContainer),
-			integration.StreamTestOptVarTwo(dummyPrefix),
-			integration.StreamTestOptVarThree(connString),
+			integration.StreamTestOptVarSet("VAR1", dummyContainer),
+			integration.StreamTestOptVarSet("VAR2", dummyPrefix),
+			integration.StreamTestOptVarSet("VAR3", connString),
 		)
 	})
 
-	os.Setenv("AZURITE_QUEUE_ENDPOINT_PORT", resource.GetPort("10001/tcp"))
+	os.Setenv("AZURITE_QUEUE_ENDPOINT_PORT", resource.GetPort("10001/tcp")) //nolint: tenv // this test runs in parallel
 	dummyQueue := "foo"
 	t.Run("queue_storage", func(t *testing.T) {
 		template := `
@@ -163,8 +196,8 @@ input:
 			integration.StreamTestStreamIsolated(10),
 		).Run(
 			t, template,
-			integration.StreamTestOptVarOne(dummyQueue),
-			integration.StreamTestOptVarTwo("UseDevelopmentStorage=true;"),
+			integration.StreamTestOptVarSet("VAR1", dummyQueue),
+			integration.StreamTestOptVarSet("VAR2", "UseDevelopmentStorage=true;"),
 		)
 	})
 }
@@ -323,13 +356,13 @@ input:
 		).Run(
 			t, template,
 			integration.StreamTestOptPort(servicePort),
-			integration.StreamTestOptVarOne(emulatorKey),
-			integration.StreamTestOptVarTwo(dummyDatabase),
-			integration.StreamTestOptVarThree(dummyContainer),
-			integration.StreamTestOptVarFour(dummyPartitionKeyField),
-			integration.StreamTestOptVarFive(dummyPartitionKeyValue),
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, _ *integration.StreamTestConfigVars) {
-				dbSetup(t, ctx, fmt.Sprintf("%s-%s", dummyDatabase, testID))
+			integration.StreamTestOptVarSet("VAR1", emulatorKey),
+			integration.StreamTestOptVarSet("VAR2", dummyDatabase),
+			integration.StreamTestOptVarSet("VAR3", dummyContainer),
+			integration.StreamTestOptVarSet("VAR4", dummyPartitionKeyField),
+			integration.StreamTestOptVarSet("VAR5", dummyPartitionKeyValue),
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+				dbSetup(t, ctx, fmt.Sprintf("%s-%s", dummyDatabase, vars.ID))
 			}),
 		)
 	})

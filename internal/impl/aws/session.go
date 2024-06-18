@@ -10,7 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func int64Field(conf *service.ParsedConfig, path ...string) (int64, error) {
@@ -21,6 +21,7 @@ func int64Field(conf *service.ParsedConfig, path ...string) (int64, error) {
 	return int64(i), nil
 }
 
+// GetSession constructs an AWS session from a parsed config and provided options.
 func GetSession(ctx context.Context, parsedConf *service.ParsedConfig, opts ...func(*config.LoadOptions) error) (aws.Config, error) {
 	if region, _ := parsedConf.FieldString("region"); region != "" {
 		opts = append(opts, config.WithRegion(region))

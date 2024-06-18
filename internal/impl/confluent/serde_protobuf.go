@@ -3,6 +3,7 @@ package confluent
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -12,15 +13,16 @@ import (
 	"google.golang.org/protobuf/reflect/protoregistry"
 	"google.golang.org/protobuf/types/dynamicpb"
 
-	"github.com/benthosdev/benthos/v4/internal/impl/protobuf"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/protobuf"
 )
 
-func (s *schemaRegistryDecoder) getProtobufDecoder(ctx context.Context, info SchemaInfo) (schemaDecoder, error) {
+func (s *schemaRegistryDecoder) getProtobufDecoder(ctx context.Context, info schemaInfo) (schemaDecoder, error) {
 	regMap := map[string]string{
 		".": info.Schema,
 	}
-	if err := s.client.WalkReferences(ctx, info.References, func(ctx context.Context, name string, si SchemaInfo) error {
+	if err := s.client.WalkReferences(ctx, info.References, func(ctx context.Context, name string, si schemaInfo) error {
 		regMap[name] = si.Schema
 		return nil
 	}); err != nil {
@@ -84,11 +86,11 @@ func (s *schemaRegistryDecoder) getProtobufDecoder(ctx context.Context, info Sch
 	}, nil
 }
 
-func (s *schemaRegistryEncoder) getProtobufEncoder(ctx context.Context, info SchemaInfo) (schemaEncoder, error) {
+func (s *schemaRegistryEncoder) getProtobufEncoder(ctx context.Context, info schemaInfo) (schemaEncoder, error) {
 	regMap := map[string]string{
 		".": info.Schema,
 	}
-	if err := s.client.WalkReferences(ctx, info.References, func(ctx context.Context, name string, si SchemaInfo) error {
+	if err := s.client.WalkReferences(ctx, info.References, func(ctx context.Context, name string, si schemaInfo) error {
 		regMap[name] = si.Schema
 		return nil
 	}); err != nil {
@@ -205,7 +207,7 @@ func (c *cachedMessageTypes) TryParseMsg(data []byte) (*dynamicpb.Message, []byt
 	lastSuccessful := c.lastSuccessful
 	c.cacheMut.Unlock()
 
-	if len(lastSuccessful) > 0 {
+	if lastSuccessful != "" {
 		if msgDesc, ok := c.msgTypeMap[lastSuccessful]; ok {
 			if dynMsg, err := c.tryDesc(data, msgDesc); err == nil {
 				// Happy path: We had a cached message index that worked with a
@@ -258,7 +260,7 @@ func (c *cachedMessageTypes) tryDesc(data []byte, desc protoreflect.MessageDescr
 func readMessageIndexes(payload []byte) (int, []int, error) {
 	arrayLen, bytesRead := binary.Varint(payload)
 	if bytesRead <= 0 {
-		return bytesRead, nil, fmt.Errorf("unable to read message indexes")
+		return bytesRead, nil, errors.New("unable to read message indexes")
 	}
 	if arrayLen == 0 {
 		// Handle the optimization for the first message in the schema
@@ -268,7 +270,7 @@ func readMessageIndexes(payload []byte) (int, []int, error) {
 	for i := 0; i < int(arrayLen); i++ {
 		idx, read := binary.Varint(payload[bytesRead:])
 		if read <= 0 {
-			return bytesRead, nil, fmt.Errorf("unable to read message indexes")
+			return bytesRead, nil, errors.New("unable to read message indexes")
 		}
 		bytesRead += read
 		msgIndexes[i] = int(idx)

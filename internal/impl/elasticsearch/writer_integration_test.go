@@ -14,9 +14,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/impl/elasticsearch"
-	"github.com/benthosdev/benthos/v4/internal/integration"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service/integration"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/elasticsearch"
 )
 
 func outputFromConf(t testing.TB, confStr string, args ...any) *elasticsearch.Output {
@@ -224,7 +225,7 @@ sniff: false
 	wg.Wait()
 
 	for id, exp := range docs {
-		// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
+		//nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
 		get, err := client.Get().
 			Index("new_index_parallel_writes").
 			Type("_doc").
@@ -299,7 +300,7 @@ sniff: false
 	}
 	for i := 0; i < N; i++ {
 		id := fmt.Sprintf("foo-%v", i+1)
-		// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
+		//nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
 		get, err := client.Get().
 			Index("test_conn_index").
 			Type("_doc").
@@ -345,7 +346,7 @@ sniff: false
 	}
 	for i := 0; i < N; i++ {
 		id := fmt.Sprintf("bar-%v", i+1)
-		// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
+		//nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
 		get, err := client.Get().
 			Index("test_conn_index").
 			Type("_doc").
@@ -392,7 +393,7 @@ sniff: false
 
 	for i := 0; i < N; i++ {
 		id := fmt.Sprintf("baz-%v", i+1)
-		// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
+		//nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
 		get, err := client.Get().
 			Index("test_conn_index").
 			Type("_doc").
@@ -441,7 +442,7 @@ sniff: false
 
 	for i := 0; i < N; i++ {
 		id := fmt.Sprintf("buz-%v", i+1)
-		// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
+		//nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
 		get, err := client.Get().
 			Index("test_conn_index").
 			Type("_doc").
@@ -466,7 +467,7 @@ sniff: false
 
 	for i := 0; i < N; i++ {
 		id := fmt.Sprintf("buz-%v", i+1)
-		// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
+		//nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
 		get, err := client.Get().
 			Index("test_conn_index").
 			Type("_doc").
@@ -517,7 +518,7 @@ sniff: false
 	for i := 0; i < 2; i++ {
 		index, _ := testBatch[i].MetaGet("index")
 
-		// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
+		//nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
 		get, err := client.Get().
 			Index(index).
 			Type("_doc").
@@ -553,7 +554,7 @@ sniff: false
 	}
 	require.NoError(t, m2.WriteBatch(ctx, testBatch))
 
-	// nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
+	//nolint:staticcheck // Ignore SA1019 Type is deprecated warning for .Index()
 	get, err := client.Get().
 		Index("test_conn_index").
 		Type("_doc").

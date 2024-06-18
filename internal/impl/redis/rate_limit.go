@@ -2,17 +2,18 @@ package redis
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func redisRatelimitConfig() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
-		Summary(`A rate limit implementation using Redis. It works by using a simple token bucket algorithm to limit the number of requests to a given count within a given time period. The rate limit is shared across all instances of Benthos that use the same Redis instance, which must all have a consistent count and interval.`).
+		Summary(`A rate limit implementation using Redis. It works by using a simple token bucket algorithm to limit the number of requests to a given count within a given time period. The rate limit is shared across all instances of Redpanda Connect that use the same Redis instance, which must all have a consistent count and interval.`).
 		Version("4.12.0")
 
 	for _, f := range clientFields() {
@@ -76,7 +77,7 @@ func newRedisRatelimitFromConfig(conf *service.ParsedConfig) (*redisRatelimit, e
 	}
 
 	if count <= 0 {
-		return nil, fmt.Errorf("count must be larger than zero")
+		return nil, errors.New("count must be larger than zero")
 	}
 
 	return &redisRatelimit{

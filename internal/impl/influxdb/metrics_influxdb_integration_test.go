@@ -12,7 +12,7 @@ import (
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/integration"
+	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
 
 func TestInfluxIntegration(t *testing.T) {
@@ -72,7 +72,7 @@ func TestInfluxIntegration(t *testing.T) {
 		t.Fatalf("Could not connect to influxdb docker container: %s", err)
 	}
 
-	pConf, err := ConfigSpec().ParseYAML(fmt.Sprintf(`
+	pConf, err := configSpec().ParseYAML(fmt.Sprintf(`
 url: %v
 db: db0
 interval: 1s

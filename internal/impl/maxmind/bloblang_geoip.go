@@ -8,16 +8,15 @@ import (
 
 	"github.com/oschwald/geoip2-golang"
 
-	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
-	"github.com/benthosdev/benthos/v4/public/bloblang"
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
 )
 
 func registerMaxmindMethodSpec(name, entity string, fn func(*geoip2.Reader, net.IP) (any, error)) {
 	if err := bloblang.RegisterMethodV2(name,
 		bloblang.NewPluginSpec().
 			Experimental().
-			Category(query.MethodCategoryGeoIP).
-			Description(fmt.Sprintf("Looks up an IP address against a [MaxMind database file](https://www.maxmind.com/en/home) and, if found, returns an object describing the %v associated with it.", entity)).
+			Category("GeoIP").
+			Description(fmt.Sprintf("Looks up an IP address against a https://www.maxmind.com/en/home[MaxMind database file^] and, if found, returns an object describing the %v associated with it.", entity)).
 			Param(bloblang.NewStringParam("path").Description("A path to an mmdb (maxmind) file.")),
 		func(args *bloblang.ParsedParams) (bloblang.Method, error) {
 			path, err := args.GetString("path")

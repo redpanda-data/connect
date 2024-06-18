@@ -1,4 +1,4 @@
-package xml_test
+package xml
 
 import (
 	"context"
@@ -7,9 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/component/testutil"
-	"github.com/benthosdev/benthos/v4/internal/manager/mock"
-	"github.com/benthosdev/benthos/v4/internal/message"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func TestXMLCases(t *testing.T) {
@@ -93,54 +91,46 @@ func TestXMLCases(t *testing.T) {
 		},
 	}
 
-	conf, err := testutil.ProcessorFromYAML(`
-xml:
-  operator: to_json
-`)
+	pConf, err := xmlProcSpec().ParseYAML(`operator: to_json`, nil)
 	require.NoError(t, err)
 
-	proc, err := mock.NewManager().NewProcessor(conf)
+	proc, err := xmlProcFromParsed(pConf, service.MockResources())
 	require.NoError(t, err)
 
 	for _, test := range tests {
 		t.Run(test.name, func(tt *testing.T) {
-			msgsOut, res := proc.ProcessBatch(context.Background(), message.QuickBatch([][]byte{[]byte(test.input)}))
-			if res != nil {
-				tt.Fatal(res)
-			}
-			if len(msgsOut) != 1 {
-				tt.Fatalf("Wrong count of result messages: %v != 1", len(msgsOut))
-			}
-			if exp, act := test.output, string(msgsOut[0].Get(0).AsBytes()); exp != act {
-				tt.Errorf("Wrong result: %v != %v", act, exp)
-			}
-			assert.NoError(t, msgsOut[0].Get(0).ErrorGet())
+			msgsOut, err := proc.Process(context.Background(), service.NewMessage([]byte(test.input)))
+			require.NoError(t, err)
+			require.Len(t, msgsOut, 1)
+
+			mBytes, err := msgsOut[0].AsBytes()
+			require.NoError(t, err)
+
+			assert.Equal(t, test.output, string(mBytes))
 		})
 	}
 }
 
 func TestXMLWithCast(t *testing.T) {
-	conf, err := testutil.ProcessorFromYAML(`
-xml:
-  operator: to_json
-  cast: true
-`)
+
+	pConf, err := xmlProcSpec().ParseYAML(`
+operator: to_json
+cast: true
+`, nil)
+	require.NoError(t, err)
+
+	proc, err := xmlProcFromParsed(pConf, service.MockResources())
 	require.NoError(t, err)
 
 	testString := `<root><title>This is a title</title><number id="99">123</number><bool>True</bool></root>`
 
-	proc, err := mock.NewManager().NewProcessor(conf)
+	msgsOut, err := proc.Process(context.Background(), service.NewMessage([]byte(testString)))
 	require.NoError(t, err)
 
-	msgsOut, res := proc.ProcessBatch(context.Background(), message.QuickBatch([][]byte{[]byte(testString)}))
-	if res != nil {
-		t.Fatal(res.Error())
-	}
-	if len(msgsOut) != 1 {
-		t.Fatalf("Wrong count of result messages: %v != 1", len(msgsOut))
-	}
-	if exp, act := `{"root":{"bool":true,"number":{"#text":123,"-id":99},"title":"This is a title"}}`, string(msgsOut[0].Get(0).AsBytes()); exp != act {
-		t.Errorf("Wrong result: %v != %v", act, exp)
-	}
-	assert.NoError(t, msgsOut[0].Get(0).ErrorGet())
+	require.Len(t, msgsOut, 1)
+
+	mBytes, err := msgsOut[0].AsBytes()
+	require.NoError(t, err)
+
+	assert.Equal(t, `{"root":{"bool":true,"number":{"#text":123,"-id":99},"title":"This is a title"}}`, string(mBytes))
 }

@@ -11,15 +11,14 @@ import (
 
 	"github.com/parquet-go/parquet-go"
 
-	"github.com/benthosdev/benthos/v4/internal/filepath"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func parquetInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		// Stable(). TODO
 		Categories("Local").
-		Summary("Reads and decodes [Parquet files](https://parquet.apache.org/docs/) into a stream of structured messages.").
+		Summary("Reads and decodes https://parquet.apache.org/docs/[Parquet files^] into a stream of structured messages.").
 		Field(service.NewStringListField("paths").
 			Description("A list of file paths to read from. Each file will be read sequentially until the list is exhausted, at which point the input will close. Glob patterns are supported, including super globs (double star).").
 			Example("/tmp/foo.parquet").
@@ -29,8 +28,9 @@ func parquetInputConfig() *service.ConfigSpec {
 			Description(`Optionally process records in batches. This can help to speed up the consumption of exceptionally large files. When the end of the file is reached the remaining records are processed as a (potentially smaller) batch.`).
 			Default(1).
 			Advanced()).
+		Field(service.NewAutoRetryNacksToggleField()).
 		Description(`
-This input uses [https://github.com/parquet-go/parquet-go](https://github.com/parquet-go/parquet-go), which is itself experimental. Therefore changes could be made into how this processor functions outside of major version releases.
+This input uses https://github.com/parquet-go/parquet-go[https://github.com/parquet-go/parquet-go^], which is itself experimental. Therefore changes could be made into how this processor functions outside of major version releases.
 
 By default any BYTE_ARRAY or FIXED_LEN_BYTE_ARRAY value will be extracted as a byte slice (` + "`[]byte`" + `) unless the logical type is UTF8, in which case they are extracted as a string (` + "`string`" + `).
 
@@ -46,7 +46,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return service.AutoRetryNacksBatched(in), nil
+			return service.AutoRetryNacksBatchedToggled(conf, in)
 		})
 	if err != nil {
 		panic(err)
@@ -60,7 +60,7 @@ func newParquetInputFromConfig(conf *service.ParsedConfig, mgr *service.Resource
 	if err != nil {
 		return nil, err
 	}
-	pathsRemaining, err := filepath.Globs(mgr.FS(), pathsList)
+	pathsRemaining, err := service.Globs(mgr.FS(), pathsList...)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +161,7 @@ func (r *parquetReader) getOpenFile() (*openParquetFile, error) {
 		rdr:    rdr,
 	}
 
-	r.log.Infof("Consuming parquet data from file '%v'", path)
+	r.log.Debugf("Consuming parquet data from file '%v'", path)
 	return r.openFile, nil
 }
 

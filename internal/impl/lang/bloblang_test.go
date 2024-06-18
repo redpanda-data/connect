@@ -1,20 +1,20 @@
 package lang
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
-	"github.com/benthosdev/benthos/v4/public/bloblang"
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
 )
 
 func TestFakeFunction_Invalid(t *testing.T) {
-	e, err := query.InitFunctionHelper("fake", "foo")
-	require.Nil(t, err)
+	e, err := bloblang.Parse(`root = fake("foo")`)
+	require.NoError(t, err)
 
-	res, err := e.Exec(query.FunctionContext{})
+	res, err := e.Query(nil)
 	require.Error(t, err, "invalid faker function: foo")
 	assert.Empty(t, res)
 }
@@ -40,10 +40,10 @@ func TestFieldsFromNode(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			e, err := query.InitFunctionHelper("fake", test.function)
-			require.Nil(t, err)
+			e, err := bloblang.Parse(fmt.Sprintf(`root = fake("%v")`, test.function))
+			require.NoError(t, err)
 
-			res, err := e.Exec(query.FunctionContext{})
+			res, err := e.Query(nil)
 			require.NoError(t, err)
 
 			assert.NotEmpty(t, res)

@@ -2,9 +2,7 @@ package nats
 
 import (
 	"context"
-	"crypto/tls"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -12,10 +10,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/stan.go"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/input/span"
-	"github.com/benthosdev/benthos/v4/internal/impl/nats/auth"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -35,7 +30,7 @@ const (
 )
 
 type siConfig struct {
-	URLs            []string
+	connDetails     connectionDetails
 	ClusterID       string
 	ClientID        string
 	QueueID         string
@@ -45,13 +40,10 @@ type siConfig struct {
 	Subject         string
 	MaxInflight     int
 	AckWait         time.Duration
-	TLS             *tls.Config
-	TLSEnabled      bool
-	Auth            auth.Config
 }
 
-func siConfigFromParsed(pConf *service.ParsedConfig) (conf siConfig, err error) {
-	if conf.URLs, err = pConf.FieldStringList(siFieldURLs); err != nil {
+func siConfigFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (conf siConfig, err error) {
+	if conf.connDetails, err = connectionDetailsFromParsed(pConf, mgr); err != nil {
 		return
 	}
 	if conf.ClusterID, err = pConf.FieldString(siFieldClusterID); err != nil {
@@ -81,12 +73,6 @@ func siConfigFromParsed(pConf *service.ParsedConfig) (conf siConfig, err error) 
 	if conf.AckWait, err = pConf.FieldDuration(siFieldAckWait); err != nil {
 		return
 	}
-	if conf.TLS, conf.TLSEnabled, err = pConf.FieldTLSToggled(siFieldTLS); err != nil {
-		return
-	}
-	if conf.Auth, err = AuthFromParsedConfig(pConf.Namespace(siFieldAuth)); err != nil {
-		return
-	}
 	return
 }
 
@@ -96,31 +82,28 @@ func siSpec() *service.ConfigSpec {
 		Categories("Services").
 		Summary(`Subscribe to a NATS Stream subject. Joining a queue is optional and allows multiple clients of a subject to consume using queue semantics.`).
 		Description(`
-:::caution Deprecation Notice
-The NATS Streaming Server is being deprecated. Critical bug fixes and security fixes will be applied until June of 2023. NATS-enabled applications requiring persistence should use [JetStream](https://docs.nats.io/nats-concepts/jetstream).
-:::
+[CAUTION]
+.Deprecation notice
+====
+The NATS Streaming Server is being deprecated. Critical bug fixes and security fixes will be applied until June of 2023. NATS-enabled applications requiring persistence should use https://docs.nats.io/nats-concepts/jetstream[JetStream^].
+====
 
 Tracking and persisting offsets through a durable name is also optional and works with or without a queue. If a durable name is not provided then subjects are consumed from the most recently published message.
 
 When a consumer closes its connection it unsubscribes, when all consumers of a durable queue do this the offsets are deleted. In order to avoid this you can stop the consumers from unsubscribing by setting the field `+"`unsubscribe_on_close` to `false`"+`.
 
-### Metadata
+== Metadata
 
 This input adds the following metadata fields to each message:
 
-`+"``` text"+`
 - nats_stream_subject
 - nats_stream_sequence
-`+"```"+`
 
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
+You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
 
-`+auth.Description()).
+`+authDescription()).
+		Fields(connectionHeadFields()...).
 		Fields(
-			service.NewStringListField(siFieldURLs).
-				Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
-				Example([]string{"nats://127.0.0.1:4222"}).
-				Example([]string{"nats://username:password@127.0.0.1:4222"}),
 			service.NewStringField(siFieldClusterID).
 				Description("The ID of the cluster to consume from."),
 			service.NewStringField(siFieldClientID).
@@ -150,17 +133,16 @@ You can access these metadata fields using [function interpolation](/docs/config
 				Description("An optional duration to specify at which a message that is yet to be acked will be automatically retried.").
 				Advanced().
 				Default("30s"),
-			service.NewTLSToggledField(siFieldTLS),
-			service.NewInternalField(auth.FieldSpec()),
-			span.ExtractTracingSpanMappingDocs().Version(tracingVersion),
-		)
+		).
+		Fields(connectionTailFields()...).
+		Field(inputTracingDocs())
 }
 
 func init() {
 	err := service.RegisterInput(
 		"nats_stream", siSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
-			pConf, err := siConfigFromParsed(conf)
+			pConf, err := siConfigFromParsed(conf, mgr)
 			if err != nil {
 				return nil, err
 			}
@@ -168,7 +150,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return span.NewInput("nats_stream", conf, input, mgr)
+			return conf.WrapInputExtractTracingSpanMapping("nats_stream", input)
 		})
 	if err != nil {
 		panic(err)
@@ -177,10 +159,7 @@ func init() {
 
 type natsStreamReader struct {
 	conf siConfig
-	urls string
-
-	log *service.Logger
-	fs  *service.FS
+	log  *service.Logger
 
 	unAckMsgs []*stan.Msg
 
@@ -205,14 +184,12 @@ func newNATSStreamReader(conf siConfig, mgr *service.Resources) (*natsStreamRead
 
 	n := natsStreamReader{
 		conf:          conf,
-		fs:            mgr.FS(),
 		log:           mgr.Logger(),
 		msgChan:       make(chan *stan.Msg),
 		interruptChan: make(chan struct{}),
 	}
 
 	close(n.msgChan)
-	n.urls = strings.Join(conf.URLs, ",")
 	return &n, nil
 }
 
@@ -241,15 +218,7 @@ func (n *natsStreamReader) Connect(ctx context.Context) error {
 		return nil
 	}
 
-	var opts []nats.Option
-	if n.conf.TLSEnabled && n.conf.TLS != nil {
-		opts = append(opts, nats.Secure(n.conf.TLS))
-	}
-
-	opts = append(opts, authConfToOptions(n.conf.Auth, n.fs)...)
-	opts = append(opts, errorHandlerOption(n.log))
-
-	natsConn, err := nats.Connect(n.urls, opts...)
+	natsConn, err := n.conf.connDetails.get(ctx)
 	if err != nil {
 		return err
 	}
@@ -287,7 +256,7 @@ func (n *natsStreamReader) Connect(ctx context.Context) error {
 	options := []stan.SubscriptionOption{
 		stan.SetManualAckMode(),
 	}
-	if len(n.conf.DurableName) > 0 {
+	if n.conf.DurableName != "" {
 		options = append(options, stan.DurableName(n.conf.DurableName))
 	}
 	if n.conf.StartFromOldest {
@@ -303,7 +272,7 @@ func (n *natsStreamReader) Connect(ctx context.Context) error {
 	}
 
 	var natsSub stan.Subscription
-	if len(n.conf.QueueID) > 0 {
+	if n.conf.QueueID != "" {
 		natsSub, err = stanConn.QueueSubscribe(
 			n.conf.Subject,
 			n.conf.QueueID,
@@ -326,7 +295,6 @@ func (n *natsStreamReader) Connect(ctx context.Context) error {
 	n.stanConn = stanConn
 	n.natsSub = natsSub
 	n.msgChan = newMsgChan
-	n.log.Infof("Receiving NATS Streaming messages from subject: %v\n", n.conf.Subject)
 	return nil
 }
 
@@ -339,11 +307,11 @@ func (n *natsStreamReader) read(ctx context.Context) (*stan.Msg, error) {
 			return nil, service.ErrNotConnected
 		}
 	case <-ctx.Done():
-		return nil, component.ErrTimeout
+		return nil, ctx.Err()
 	case <-n.interruptChan:
 		n.unAckMsgs = nil
 		n.disconnect()
-		return nil, component.ErrTypeClosed
+		return nil, service.ErrEndOfInput
 	}
 	return msg, nil
 }

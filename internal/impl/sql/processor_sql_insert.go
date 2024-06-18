@@ -8,9 +8,10 @@ import (
 
 	"github.com/Masterminds/squirrel"
 
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
-	"github.com/benthosdev/benthos/v4/public/bloblang"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/Jeffail/shutdown"
+
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 // InsertProcessorConfig returns a config spec for an sql_insert processor.
@@ -20,7 +21,7 @@ func InsertProcessorConfig() *service.ConfigSpec {
 		Categories("Integration").
 		Summary("Inserts rows into an SQL database for each message, and leaves the message unchanged.").
 		Description(`
-If the insert fails to execute then the message will still remain unchanged and the error can be caught using error handling methods outlined [here](/docs/configuration/error_handling).`).
+If the insert fails to execute then the message will still remain unchanged and the error can be caught using xref:configuration:error_handling.adoc[error handling methods].`).
 		Field(driverField).
 		Field(dsnField).
 		Field(service.NewStringField("table").
@@ -30,7 +31,7 @@ If the insert fails to execute then the message will still remain unchanged and 
 			Description("A list of columns to insert.").
 			Example([]string{"foo", "bar", "baz"})).
 		Field(service.NewBloblangField("args_mapping").
-			Description("A [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of values matching in size to the number of columns specified.").
+			Description("A xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of columns specified.").
 			Example("root = [ this.cat.meow, this.doc.woofs[0] ]").
 			Example(`root = [ meta("user.id") ]`)).
 		Field(service.NewStringField("prefix").
@@ -96,7 +97,6 @@ type sqlInsertProcessor struct {
 }
 
 // NewSQLInsertProcessorFromConfig returns an internal sql_insert processor.
-// nolint:revive // Not bothered as this is internal anyway
 func NewSQLInsertProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*sqlInsertProcessor, error) {
 	s := &sqlInsertProcessor{
 		logger:  mgr.Logger(),
@@ -178,13 +178,13 @@ func NewSQLInsertProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Re
 	connSettings.apply(context.Background(), s.db, s.logger)
 
 	go func() {
-		<-s.shutSig.CloseNowChan()
+		<-s.shutSig.HardStopChan()
 
 		s.dbMut.Lock()
 		_ = s.db.Close()
 		s.dbMut.Unlock()
 
-		s.shutSig.ShutdownComplete()
+		s.shutSig.TriggerHasStopped()
 	}()
 	return s, nil
 }
@@ -258,9 +258,9 @@ func (s *sqlInsertProcessor) ProcessBatch(ctx context.Context, batch service.Mes
 }
 
 func (s *sqlInsertProcessor) Close(ctx context.Context) error {
-	s.shutSig.CloseNow()
+	s.shutSig.TriggerHardStop()
 	select {
-	case <-s.shutSig.HasClosedChan():
+	case <-s.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

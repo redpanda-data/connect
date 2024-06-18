@@ -10,7 +10,7 @@ import (
 
 	"github.com/linkedin/goavro/v2"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func avroConfigSpec() *service.ConfigSpec {
@@ -19,21 +19,21 @@ func avroConfigSpec() *service.ConfigSpec {
 		Categories("Parsing").
 		Summary(`Performs Avro based operations on messages based on a schema.`).
 		Description(`
-WARNING: If you are consuming or generating messages using a schema registry service then it is likely this processor will fail as those services require messages to be prefixed with the identifier of the schema version being used. Instead, try the ` + "[`schema_registry_encode`](/docs/components/processors/schema_registry_encode) and [`schema_registry_decode`](/docs/components/processors/schema_registry_decode)" + ` processors.
+WARNING: If you are consuming or generating messages using a schema registry service then it is likely this processor will fail as those services require messages to be prefixed with the identifier of the schema version being used. Instead, try the ` + "xref:components:processors/schema_registry_encode.adoc[`schema_registry_encode`] and xref:components:processors/schema_registry_decode.adoc[`schema_registry_decode`]" + ` processors.
 
-## Operators
+== Operators
 
-### ` + "`to_json`" + `
+=== ` + "`to_json`" + `
 
 Converts Avro documents into a JSON structure. This makes it easier to
 manipulate the contents of the document within Benthos. The encoding field
 specifies how the source documents are encoded.
 
-### ` + "`from_json`" + `
+=== ` + "`from_json`" + `
 
 Attempts to convert JSON documents into Avro documents according to the
 specified encoding.`).
-		Field(service.NewStringEnumField("operator", "to_json", "from_json").Description("The [operator](#operators) to execute")).
+		Field(service.NewStringEnumField("operator", "to_json", "from_json").Description("The <<operators, operator>> to execute")).
 		Field(service.NewStringEnumField("encoding", "textual", "binary", "single").Description("An Avro encoding format to use for conversions to and from a schema.").Default("textual")).
 		Field(service.NewStringField("schema").Description("A full Avro schema to use.").Default("")).
 		Field(service.NewStringField("schema_path").
@@ -159,7 +159,12 @@ func loadSchema(schemaPath string) (string, error) {
 	t.RegisterProtocol("file", http.NewFileTransport(http.Dir("/")))
 	c := &http.Client{Transport: t}
 
-	response, err := c.Get(schemaPath)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, schemaPath, http.NoBody)
+	if err != nil {
+		return "", err
+	}
+
+	response, err := c.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -201,7 +206,7 @@ func newAvroFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (serv
 	}
 	if schemaPath != "" {
 		if !(strings.HasPrefix(schemaPath, "file://") || strings.HasPrefix(schemaPath, "http://")) {
-			return nil, fmt.Errorf("invalid schema_path provided, must start with file:// or http://")
+			return nil, errors.New("invalid schema_path provided, must start with file:// or http://")
 		}
 		if schema, err = loadSchema(schemaPath); err != nil {
 			return nil, fmt.Errorf("failed to load Avro schema definition: %v", err)

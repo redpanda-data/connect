@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/benthosdev/benthos/v4/internal/integration"
+	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
 
 func TestIntegration(t *testing.T) {
@@ -31,7 +31,7 @@ output:
 input:
   nsq:
     nsqd_tcp_addresses: [ localhost:4150 ]
-    lookupd_http_addresses: [ localhost:4160 ]
+    lookupd_http_addresses: [ localhost:4160 ^]
     topic: topic-$ID
     channel: channel-$ID
     # user_agent: ""

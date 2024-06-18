@@ -2,17 +2,13 @@ package nats
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/nats-io/nats.go"
 
-	"github.com/benthosdev/benthos/v4/internal/component/input/span"
-	"github.com/benthosdev/benthos/v4/internal/impl/nats/auth"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func natsInputConfig() *service.ConfigSpec {
@@ -21,28 +17,27 @@ func natsInputConfig() *service.ConfigSpec {
 		Categories("Services").
 		Summary(`Subscribe to a NATS subject.`).
 		Description(`
-### Metadata
+== Metadata
 
 This input adds the following metadata fields to each message:
 
-` + "``` text" + `
+` + "```text" + `
 - nats_subject
+- nats_reply_subject
 - All message headers (when supported by the connection)
 ` + "```" + `
 
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
+You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
 
-` + ConnectionNameDescription() + auth.Description()).
-		Field(service.NewStringListField("urls").
-			Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
-			Example([]string{"nats://127.0.0.1:4222"}).
-			Example([]string{"nats://username:password@127.0.0.1:4222"})).
+` + connectionNameDescription() + authDescription()).
+		Fields(connectionHeadFields()...).
 		Field(service.NewStringField("subject").
 			Description("A subject to consume from. Supports wildcards for consuming multiple subjects. Either a subject or stream must be specified.").
 			Example("foo.bar.baz").Example("foo.*.baz").Example("foo.bar.*").Example("foo.>")).
 		Field(service.NewStringField("queue").
 			Description("An optional queue group to consume as.").
 			Optional()).
+		Field(service.NewAutoRetryNacksToggleField()).
 		Field(service.NewDurationField("nak_delay").
 			Description("An optional delay duration on redelivering a message when negatively acknowledged.").
 			Example("1m").
@@ -53,9 +48,8 @@ You can access these metadata fields using [function interpolation](/docs/config
 			Advanced().
 			Default(nats.DefaultSubPendingMsgsLimit).
 			LintRule(`root = if this < 0 { ["prefetch count must be greater than or equal to zero"] }`)).
-		Field(service.NewTLSToggledField("tls")).
-		Field(service.NewInternalField(auth.FieldSpec())).
-		Field(span.ExtractTracingSpanMappingDocs().Version(tracingVersion))
+		Fields(connectionTailFields()...).
+		Field(inputTracingDocs())
 }
 
 func init() {
@@ -66,7 +60,12 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return span.NewInput("nats", conf, service.AutoRetryNacks(input), mgr)
+
+			r, err := service.AutoRetryNacksToggled(conf, input)
+			if err != nil {
+				return nil, err
+			}
+			return conf.WrapInputExtractTracingSpanMapping("nats", r)
 		},
 	)
 	if err != nil {
@@ -75,17 +74,13 @@ func init() {
 }
 
 type natsReader struct {
-	label         string
-	urls          string
+	connDetails   connectionDetails
 	subject       string
 	queue         string
 	prefetchCount int
 	nakDelay      time.Duration
-	authConf      auth.Config
-	tlsConf       *tls.Config
 
 	log *service.Logger
-	fs  *service.FS
 
 	cMut sync.Mutex
 
@@ -98,17 +93,14 @@ type natsReader struct {
 
 func newNATSReader(conf *service.ParsedConfig, mgr *service.Resources) (*natsReader, error) {
 	n := natsReader{
-		label:         mgr.Label(),
 		log:           mgr.Logger(),
-		fs:            mgr.FS(),
 		interruptChan: make(chan struct{}),
 	}
 
-	urlList, err := conf.FieldStringList("urls")
-	if err != nil {
+	var err error
+	if n.connDetails, err = connectionDetailsFromParsed(conf, mgr); err != nil {
 		return nil, err
 	}
-	n.urls = strings.Join(urlList, ",")
 
 	if n.subject, err = conf.FieldString("subject"); err != nil {
 		return nil, err
@@ -133,19 +125,6 @@ func newNATSReader(conf *service.ParsedConfig, mgr *service.Resources) (*natsRea
 			return nil, err
 		}
 	}
-
-	tlsConf, tlsEnabled, err := conf.FieldTLSToggled("tls")
-	if err != nil {
-		return nil, err
-	}
-	if tlsEnabled {
-		n.tlsConf = tlsConf
-	}
-
-	if n.authConf, err = AuthFromParsedConfig(conf.Namespace("auth")); err != nil {
-		return nil, err
-	}
-
 	return &n, nil
 }
 
@@ -160,22 +139,14 @@ func (n *natsReader) Connect(ctx context.Context) error {
 	var natsConn *nats.Conn
 	var natsSub *nats.Subscription
 	var err error
-	var opts []nats.Option
 
-	if n.tlsConf != nil {
-		opts = append(opts, nats.Secure(n.tlsConf))
-	}
-
-	opts = append(opts, nats.Name(n.label))
-	opts = append(opts, authConfToOptions(n.authConf, n.fs)...)
-	opts = append(opts, errorHandlerOption(n.log))
-
-	if natsConn, err = nats.Connect(n.urls, opts...); err != nil {
+	if natsConn, err = n.connDetails.get(ctx); err != nil {
 		return err
 	}
+
 	natsChan := make(chan *nats.Msg, n.prefetchCount)
 
-	if len(n.queue) > 0 {
+	if n.queue != "" {
 		natsSub, err = natsConn.ChanQueueSubscribe(n.subject, n.queue, natsChan)
 	} else {
 		natsSub, err = natsConn.ChanSubscribe(n.subject, natsChan)
@@ -184,8 +155,6 @@ func (n *natsReader) Connect(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-
-	n.log.Infof("Receiving NATS messages from subject: %v\n", n.subject)
 
 	n.natsConn = natsConn
 	n.natsSub = natsSub
@@ -229,6 +198,7 @@ func (n *natsReader) Read(ctx context.Context) (*service.Message, service.AckFun
 
 	bmsg := service.NewMessage(msg.Data)
 	bmsg.MetaSetMut("nats_subject", msg.Subject)
+	bmsg.MetaSetMut("nats_reply_subject", msg.Reply)
 	// process message headers if server supports the feature
 	if natsConn.HeadersSupported() {
 		for key := range msg.Header {

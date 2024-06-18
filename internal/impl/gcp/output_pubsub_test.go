@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func TestPubSubOutput(t *testing.T) {
@@ -127,7 +127,7 @@ func TestPubSubOutput_MessageAttr(t *testing.T) {
 	require.NoError(t, err, "publish failed")
 
 	require.Len(t, fooTopic.Calls, 3)
-	require.Equal(t, fooTopic.Calls[2].Method, "Publish")
+	require.Equal(t, "Publish", fooTopic.Calls[2].Method)
 	require.Len(t, fooTopic.Calls[2].Arguments, 2)
 	psmsg := fooTopic.Calls[2].Arguments[1].(*pubsub.Message)
 	require.Equal(t, map[string]string{"keep_a": "good stuff"}, psmsg.Attributes)

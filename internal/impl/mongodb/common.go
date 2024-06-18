@@ -7,13 +7,13 @@ import (
 	"strconv"
 	"time"
 
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/writeconcern"
 
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/public/bloblang"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 // JSONMarshalMode represents the way in which BSON should be marshalled to JSON.
@@ -191,22 +191,27 @@ const (
 	commonFieldOperation = "operation"
 )
 
-func processorOperationDocs(defaultOperation Operation) docs.FieldSpec {
-	fs := outputOperationDocs(defaultOperation)
-	return fs.HasOptions(append(fs.Options, string(OperationFindOne))...)
-}
-
-func outputOperationDocs(defaultOperation Operation) docs.FieldSpec {
-	return docs.FieldString(
-		"operation",
-		"The mongodb operation to perform.",
-	).HasOptions(
+func processorOperationDocs(defaultOperation Operation) *service.ConfigField {
+	return service.NewStringEnumField("operation",
 		string(OperationInsertOne),
 		string(OperationDeleteOne),
 		string(OperationDeleteMany),
 		string(OperationReplaceOne),
 		string(OperationUpdateOne),
-	).HasDefault(string(defaultOperation))
+		string(OperationFindOne),
+	).Description("The mongodb operation to perform.").
+		Default(string(defaultOperation))
+}
+
+func outputOperationDocs(defaultOperation Operation) *service.ConfigField {
+	return service.NewStringEnumField("operation",
+		string(OperationInsertOne),
+		string(OperationDeleteOne),
+		string(OperationDeleteMany),
+		string(OperationReplaceOne),
+		string(OperationUpdateOne),
+	).Description("The mongodb operation to perform.").
+		Default(string(defaultOperation))
 }
 
 func operationFromParsed(pConf *service.ParsedConfig) (operation Operation, err error) {
@@ -231,13 +236,18 @@ const (
 	commonFieldWriteConcernWTimeout = "w_timeout"
 )
 
-func writeConcernDocs() docs.FieldSpec {
-	return docs.FieldObject(commonFieldWriteConcern, "The write concern settings for the mongo connection.").
-		WithChildren(
-			docs.FieldString(commonFieldWriteConcernW, "W requests acknowledgement that write operations propagate to the specified number of mongodb instances.").HasDefault(""),
-			docs.FieldBool(commonFieldWriteConcernJ, "J requests acknowledgement from MongoDB that write operations are written to the journal.").HasDefault(false),
-			docs.FieldString(commonFieldWriteConcernWTimeout, "The write concern timeout.").HasDefault(""),
-		)
+func writeConcernDocs() *service.ConfigField {
+	return service.NewObjectField(commonFieldWriteConcern,
+		service.NewStringField(commonFieldWriteConcernW).
+			Description("W requests acknowledgement that write operations propagate to the specified number of mongodb instances.").
+			Default(""),
+		service.NewBoolField(commonFieldWriteConcernJ).
+			Description("J requests acknowledgement from MongoDB that write operations are written to the journal.").
+			Default(false),
+		service.NewStringField(commonFieldWriteConcernWTimeout).
+			Description("The write concern timeout.").
+			Default(""),
+	).Description("The write concern settings for the mongo connection.")
 }
 
 func writeConcernCollectionOptionFromParsed(pConf *service.ParsedConfig) (opt *options.CollectionOptions, err error) {
@@ -286,19 +296,18 @@ const (
 func writeMapsFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewBloblangField(commonFieldDocumentMap).
-			Description("A bloblang map representing the records in the mongo db. Used to generate the document for mongodb by " +
-				"mapping the fields in the message to the mongodb fields. The document map is required for the operations " +
+			Description("A bloblang map representing a document to store within MongoDB, expressed as https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/[extended JSON in canonical form^]. The document map is required for the operations " +
 				"insert-one, replace-one and update-one.").
 			Examples(mapExamples()...).
 			Default(""),
 		service.NewBloblangField(commonFieldFilterMap).
-			Description("A bloblang map representing the filter for the mongo db command. The filter map is required for all operations except " +
+			Description("A bloblang map representing a filter for a MongoDB command, expressed as https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/[extended JSON in canonical form^]. The filter map is required for all operations except " +
 				"insert-one. It is used to find the document(s) for the operation. For example in a delete-one case, the filter map should " +
 				"have the fields required to locate the document to delete.").
 			Examples(mapExamples()...).
 			Default(""),
 		service.NewBloblangField(commonFieldHintMap).
-			Description("A bloblang map representing the hint for the mongo db command. This map is optional and is used with all operations " +
+			Description("A bloblang map representing the hint for the MongoDB command, expressed as https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/[extended JSON in canonical form^]. This map is optional and is used with all operations " +
 				"except insert-one. It is used to improve performance of finding the documents in the mongodb.").
 			Examples(mapExamples()...).
 			Default(""),
@@ -369,58 +378,49 @@ func writeMapsFromParsed(conf *service.ParsedConfig, operation Operation) (maps 
 	return
 }
 
+func extJSONFromMap(b service.MessageBatch, i int, m *bloblang.Executor) (any, error) {
+	msg, err := b.BloblangQuery(i, m)
+	if err != nil {
+		return nil, err
+	}
+	if msg == nil {
+		return nil, nil
+	}
+
+	valBytes, err := msg.AsBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	var ejsonVal any
+	if err := bson.UnmarshalExtJSON(valBytes, true, &ejsonVal); err != nil {
+		return nil, err
+	}
+	return ejsonVal, nil
+}
+
 func (w writeMaps) extractFromMessage(operation Operation, i int, batch service.MessageBatch) (
 	docJSON, filterJSON, hintJSON any, err error,
 ) {
-	var hintVal, filterVal, documentVal *service.Message
-	var filterValWanted, documentValWanted bool
+	filterValWanted := operation.isFilterAllowed()
+	documentValWanted := operation.isDocumentAllowed()
 
-	filterValWanted = operation.isFilterAllowed()
-	documentValWanted = operation.isDocumentAllowed()
-
-	if filterValWanted {
-		if filterVal, err = batch.BloblangQuery(i, w.filterMap); err != nil {
+	if filterValWanted && w.filterMap != nil {
+		if filterJSON, err = extJSONFromMap(batch, i, w.filterMap); err != nil {
 			err = fmt.Errorf("failed to execute filter_map: %v", err)
 			return
 		}
 	}
 
-	if (filterVal != nil || !filterValWanted) && documentValWanted {
-		if documentVal, err = batch.BloblangQuery(i, w.documentMap); err != nil {
+	if documentValWanted && w.documentMap != nil {
+		if docJSON, err = extJSONFromMap(batch, i, w.documentMap); err != nil {
 			err = fmt.Errorf("failed to execute document_map: %v", err)
 			return
 		}
 	}
 
-	if filterVal == nil && filterValWanted {
-		err = fmt.Errorf("failed to generate filterVal")
-		return
-	}
-
-	if documentVal == nil && documentValWanted {
-		err = fmt.Errorf("failed to generate documentVal")
-		return
-	}
-
-	if filterValWanted {
-		if filterJSON, err = filterVal.AsStructured(); err != nil {
-			return
-		}
-	}
-
-	if documentValWanted {
-		if docJSON, err = documentVal.AsStructured(); err != nil {
-			return
-		}
-	}
-
 	if w.hintMap != nil {
-		hintVal, err = batch.BloblangQuery(i, w.hintMap)
-		if err != nil {
-			err = fmt.Errorf("failed to execute hint_map: %v", err)
-			return
-		}
-		if hintJSON, err = hintVal.AsStructured(); err != nil {
+		if hintJSON, err = extJSONFromMap(batch, i, w.hintMap); err != nil {
 			return
 		}
 	}

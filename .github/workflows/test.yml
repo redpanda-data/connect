@@ -10,7 +10,7 @@ on:
 
 jobs:
   test:
-    if: ${{ github.repository == 'benthosdev/benthos' || github.event_name != 'schedule' }}
+    if: ${{ github.repository == 'redpanda-data/connect' || github.event_name != 'schedule' }}
     runs-on: ubuntu-latest
     env:
       CGO_ENABLED: 0
@@ -22,20 +22,23 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v5
       with:
-        go-version: 1.21.x
+        go-version: 1.22.x
         check-latest: true
+
+    - name: Install dependencies for x_benthos_extra
+      run: sudo apt install -y --no-install-recommends libzmq3-dev
 
     - name: Deps
       run: make deps && git diff-index --quiet HEAD || { >&2 echo "Stale go.{mod,sum} detected. This can be fixed with 'make deps'."; exit 1; }
 
     - name: Docs
-      run: make docs && git diff-index --quiet HEAD || { >&2 echo "Stale docs detected. This can be fixed with 'make docs'."; exit 1; }
+      run: CGO_ENABLED=1 make docs TAGS=x_benthos_extra && test -z "$(git ls-files --others --modified --exclude-standard)" || { >&2 echo "Stale docs detected. This can be fixed with 'make docs'."; exit 1; }
 
     - name: Test
       run: make test
 
   golangci-lint:
-    if: ${{ github.repository == 'benthosdev/benthos' || github.event_name != 'schedule' }}
+    if: ${{ github.repository == 'redpanda-data/connect' || github.event_name != 'schedule' }}
     runs-on: ubuntu-latest
     env:
       CGO_ENABLED: 0
@@ -53,12 +56,5 @@ jobs:
     - name: Lint
       uses: golangci/golangci-lint-action@v4
       with:
-        version: v1.54.1
+        version: v1.57.1
         args: --timeout 30m cmd/... internal/... public/...
-
-    # TODO: Remove this after https://github.com/golangci/golangci-lint/issues/3094 is addressed
-    # - name: Get govulncheck
-    #   run: go install golang.org/x/vuln/cmd/govulncheck@latest
-
-    # - name: Run govulncheck
-    #   run: govulncheck ./...

@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/integration"
+	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
 
 func createTable(ctx context.Context, t testing.TB, dynamoPort, id string) error {
@@ -126,8 +126,8 @@ cache_resources:
 	suite.Run(
 		t, template,
 		integration.CacheTestOptPort(resource.GetPort("8000/tcp")),
-		integration.CacheTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.CacheTestConfigVars) {
-			require.NoError(t, createTable(ctx, t, resource.GetPort("8000/tcp"), testID))
+		integration.CacheTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.CacheTestConfigVars) {
+			require.NoError(t, createTable(ctx, t, resource.GetPort("8000/tcp"), vars.ID))
 		}),
 	)
 }

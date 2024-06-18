@@ -7,8 +7,7 @@ import (
 
 	"github.com/apache/pulsar-client-go/pulsar"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func init() {
@@ -147,8 +146,6 @@ func (p *pulsarWriter) Connect(ctx context.Context) error {
 
 	p.client = client
 	p.producer = producer
-
-	p.log.Infof("Writing Pulsar messages to URL: %v\n", p.url)
 	return nil
 }
 
@@ -180,7 +177,7 @@ func (p *pulsarWriter) Write(ctx context.Context, msg *service.Message) error {
 	p.m.RUnlock()
 
 	if r == nil {
-		return component.ErrNotConnected
+		return service.ErrNotConnected
 	}
 
 	b, err := msg.AsBytes()

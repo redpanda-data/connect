@@ -7,7 +7,7 @@ import (
 
 	"github.com/IBM/sarama"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 // Setup is run at the beginning of a new session, before ConsumeClaim.
@@ -165,6 +165,5 @@ func (k *kafkaReader) connectBalancedTopics(ctx context.Context, config *sarama.
 
 	k.msgChan = make(chan asyncMessage)
 	k.consumerDoneCtx = consumerDoneCtx
-	k.mgr.Logger().Infof("Consuming kafka topics %v from brokers %s as group '%v'\n", k.balancedTopics, k.addresses, k.consumerGroup)
 	return nil
 }

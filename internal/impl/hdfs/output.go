@@ -8,8 +8,7 @@ import (
 
 	"github.com/colinmarc/hdfs"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -25,7 +24,7 @@ func outputSpec() *service.ConfigSpec {
 		Stable().
 		Categories("Services").
 		Summary(`Sends message parts as files to a HDFS directory.`).
-		Description(output.Description(true, false, `Each file is written with the path specified with the 'path' field, in order to have a different path for each object you should use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).`)).
+		Description(`Each file is written with the path specified with the 'path' field, in order to have a different path for each object you should use function interpolations described xref:configuration:interpolation.adoc#bloblang-queries[here].`+service.OutputPerformanceDocs(true, false)).
 		Fields(
 			service.NewStringListField(oFieldHosts).
 				Description("A list of target host addresses to connect to.").
@@ -41,7 +40,6 @@ func outputSpec() *service.ConfigSpec {
 			service.NewOutputMaxInFlightField(),
 			service.NewBatchPolicyField(oFieldBatching),
 		)
-
 }
 
 func init() {
@@ -101,8 +99,6 @@ func (h *hdfsWriter) Connect(ctx context.Context) error {
 	}
 
 	h.client = client
-
-	h.log.Infof("Writing message parts as files to HDFS directory: %v\n", h.directory)
 	return nil
 }
 

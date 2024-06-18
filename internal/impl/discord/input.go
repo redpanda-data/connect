@@ -9,9 +9,11 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 
-	"github.com/benthosdev/benthos/v4/internal/checkpoint"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/Jeffail/checkpoint"
+
+	"github.com/Jeffail/shutdown"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func inputConfig() *service.ConfigSpec {
@@ -30,6 +32,7 @@ func inputConfig() *service.ConfigSpec {
 				Description("The key identifier used when storing the ID of the last message received.").
 				Default("last_message_id").
 				Advanced(),
+			service.NewAutoRetryNacksToggleField(),
 
 			// Deprecated
 			service.NewDurationField("poll_period").
@@ -52,7 +55,10 @@ func init() {
 		"discord", inputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 			reader, err := newReader(conf, mgr)
-			return service.AutoRetryNacks(reader), err
+			if err != nil {
+				return nil, err
+			}
+			return service.AutoRetryNacksToggled(conf, reader)
 		},
 	)
 	if err != nil {
@@ -124,7 +130,7 @@ func (r *reader) Connect(ctx context.Context) error {
 		return fmt.Errorf("failed to obtain latest seen message ID: %v", err)
 	}
 
-	sess, doneWithSessFn, err := getGlobalSession(r.botToken)
+	sess, doneWithSessFn, err := getGlobalSession(r.botToken, r.mgr.EngineVersion())
 	if err != nil {
 		return err
 	}
@@ -133,12 +139,12 @@ func (r *reader) Connect(ctx context.Context) error {
 	go func() {
 		defer func() {
 			doneWithSessFn()
-			r.shutSig.ShutdownComplete()
+			r.shutSig.TriggerHasStopped()
 		}()
 
 		backfill := func(beforeID, afterID string) string {
 			for {
-				if r.shutSig.ShouldCloseAtLeisure() {
+				if r.shutSig.IsSoftStopSignalled() {
 					return ""
 				}
 				msgs, err := sess.ChannelMessages(r.channelID, 100, beforeID, afterID, "")
@@ -155,7 +161,7 @@ func (r *reader) Connect(ctx context.Context) error {
 					afterID = msgs[i].ID
 					select {
 					case msgChan <- msgs[i]:
-					case <-r.shutSig.CloseAtLeisureChan():
+					case <-r.shutSig.SoftStopChan():
 						return ""
 					}
 				}
@@ -167,7 +173,7 @@ func (r *reader) Connect(ctx context.Context) error {
 		if lastMsgID != "" {
 			lastSeen = backfill("", lastMsgID)
 		}
-		if r.shutSig.ShouldCloseAtLeisure() {
+		if r.shutSig.IsSoftStopSignalled() {
 			return
 		}
 
@@ -187,17 +193,16 @@ func (r *reader) Connect(ctx context.Context) error {
 				}
 			}
 			select {
-			case <-r.shutSig.CloseAtLeisureChan():
+			case <-r.shutSig.SoftStopChan():
 				return
 			case msgChan <- m.Message:
 			}
 		})()
 
-		<-r.shutSig.CloseAtLeisureChan()
+		<-r.shutSig.SoftStopChan()
 	}()
 
 	r.msgChan = msgChan
-	r.log.Infof("Receiving discord messages from channel %s", r.channelID)
 	return nil
 }
 
@@ -244,17 +249,17 @@ func (r *reader) Read(ctx context.Context) (*service.Message, service.AckFunc, e
 
 func (r *reader) Close(ctx context.Context) error {
 	go func() {
-		r.shutSig.CloseAtLeisure()
+		r.shutSig.TriggerSoftStop()
 		r.connMut.Lock()
 		if r.msgChan == nil {
 			// Indicates that we were never connected, so indicate shutdown is
 			// complete.
-			r.shutSig.ShutdownComplete()
+			r.shutSig.TriggerHasStopped()
 		}
 		r.connMut.Unlock()
 	}()
 	select {
-	case <-r.shutSig.HasClosedChan():
+	case <-r.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

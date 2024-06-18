@@ -2,21 +2,16 @@ package nats
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"math/rand"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/stan.go"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/component/output/span"
-	"github.com/benthosdev/benthos/v4/internal/impl/nats/auth"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -30,17 +25,14 @@ const (
 )
 
 type soConfig struct {
-	URLs       []string
-	ClusterID  string
-	ClientID   string
-	Subject    string
-	TLS        *tls.Config
-	TLSEnabled bool
-	Auth       auth.Config
+	connDetails connectionDetails
+	ClusterID   string
+	ClientID    string
+	Subject     string
 }
 
-func soConfigFromParsed(pConf *service.ParsedConfig) (conf soConfig, err error) {
-	if conf.URLs, err = pConf.FieldStringList(soFieldURLs); err != nil {
+func soConfigFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (conf soConfig, err error) {
+	if conf.connDetails, err = connectionDetailsFromParsed(pConf, mgr); err != nil {
 		return
 	}
 	if conf.ClusterID, err = pConf.FieldString(soFieldClusterID); err != nil {
@@ -52,12 +44,6 @@ func soConfigFromParsed(pConf *service.ParsedConfig) (conf soConfig, err error) 
 	if conf.Subject, err = pConf.FieldString(soFieldSubject); err != nil {
 		return
 	}
-	if conf.TLS, conf.TLSEnabled, err = pConf.FieldTLSToggled(soFieldTLS); err != nil {
-		return
-	}
-	if conf.Auth, err = AuthFromParsedConfig(pConf.Namespace(soFieldAuth)); err != nil {
-		return
-	}
 	return
 }
 
@@ -67,16 +53,15 @@ func soSpec() *service.ConfigSpec {
 		Categories("Services").
 		Summary(`Publish to a NATS Stream subject.`).
 		Description(`
-:::caution Deprecation Notice
-The NATS Streaming Server is being deprecated. Critical bug fixes and security fixes will be applied until June of 2023. NATS-enabled applications requiring persistence should use [JetStream](https://docs.nats.io/nats-concepts/jetstream).
-:::
+[CAUTION]
+.Deprecation notice
+====
+The NATS Streaming Server is being deprecated. Critical bug fixes and security fixes will be applied until June of 2023. NATS-enabled applications requiring persistence should use https://docs.nats.io/nats-concepts/jetstream[JetStream^].
+====
 
-`+output.Description(true, false, auth.Description())).
+`+authDescription()+service.OutputPerformanceDocs(true, false)).
+		Fields(connectionHeadFields()...).
 		Fields(
-			service.NewStringListField(soFieldURLs).
-				Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
-				Example([]string{"nats://127.0.0.1:4222"}).
-				Example([]string{"nats://username:password@127.0.0.1:4222"}),
 			service.NewStringField(soFieldClusterID).
 				Description("The cluster ID to publish to."),
 			service.NewStringField(soFieldSubject).
@@ -86,17 +71,16 @@ The NATS Streaming Server is being deprecated. Critical bug fixes and security f
 				Default(""),
 			service.NewOutputMaxInFlightField().
 				Description("The maximum number of messages to have in flight at a given time. Increase this to improve throughput."),
-			service.NewTLSToggledField(soFieldTLS),
-			service.NewInternalField(auth.FieldSpec()),
-			span.InjectTracingSpanMappingDocs().Version(tracingVersion),
-		)
+		).
+		Fields(connectionTailFields()...).
+		Field(outputTracingDocs())
 }
 
 func init() {
 	err := service.RegisterOutput(
 		"nats_stream", soSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Output, int, error) {
-			pConf, err := soConfigFromParsed(conf)
+			pConf, err := soConfigFromParsed(conf, mgr)
 			if err != nil {
 				return nil, 0, err
 			}
@@ -108,7 +92,7 @@ func init() {
 			if err != nil {
 				return nil, 0, err
 			}
-			spanOutput, err := span.NewOutput("nats_stream", conf, w, mgr)
+			spanOutput, err := conf.WrapOutputExtractTracingSpanMapping("nats_stream", w)
 			return spanOutput, maxInFlight, err
 		})
 	if err != nil {
@@ -124,7 +108,6 @@ type natsStreamWriter struct {
 	natsConn *nats.Conn
 	connMut  sync.RWMutex
 
-	urls string
 	conf soConfig
 }
 
@@ -143,7 +126,6 @@ func newNATSStreamWriter(conf soConfig, mgr *service.Resources) (*natsStreamWrit
 		fs:   service.NewFS(mgr.FS()),
 		conf: conf,
 	}
-	n.urls = strings.Join(conf.URLs, ",")
 	return &n, nil
 }
 
@@ -155,15 +137,7 @@ func (n *natsStreamWriter) Connect(ctx context.Context) error {
 		return nil
 	}
 
-	var opts []nats.Option
-	if n.conf.TLSEnabled && n.conf.TLS != nil {
-		opts = append(opts, nats.Secure(n.conf.TLS))
-	}
-
-	opts = append(opts, authConfToOptions(n.conf.Auth, n.fs)...)
-	opts = append(opts, errorHandlerOption(n.log))
-
-	natsConn, err := nats.Connect(n.urls, opts...)
+	natsConn, err := n.conf.connDetails.get(ctx)
 	if err != nil {
 		return err
 	}
@@ -180,7 +154,6 @@ func (n *natsStreamWriter) Connect(ctx context.Context) error {
 
 	n.stanConn = stanConn
 	n.natsConn = natsConn
-	n.log.Infof("Sending NATS messages to subject: %v", n.conf.Subject)
 	return nil
 }
 

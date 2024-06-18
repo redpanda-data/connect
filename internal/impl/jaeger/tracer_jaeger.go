@@ -1,20 +1,20 @@
 package jaeger
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/exporters/jaeger" // nolint:staticcheck
+	"go.opentelemetry.io/otel/exporters/jaeger" //nolint:staticcheck
 	"go.opentelemetry.io/otel/sdk/resource"
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.7.0"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/benthosdev/benthos/v4/internal/cli"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -27,6 +27,7 @@ const (
 )
 
 type jaegerConfig struct {
+	engineVersion string
 	AgentAddress  string
 	CollectorURL  string
 	SamplerType   string
@@ -38,7 +39,7 @@ type jaegerConfig struct {
 func jaegerConfigSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
-		Summary("Send tracing events to a [Jaeger](https://www.jaegertracing.io/) agent or collector.").
+		Summary("Send tracing events to a https://www.jaegertracing.io/[Jaeger^] agent or collector.").
 		Fields(
 			service.NewStringField(jtFieldAgentAddress).
 				Description("The address of a Jaeger agent to send tracing events to.").
@@ -75,7 +76,9 @@ var exporterInitFn = func(epOpt jaeger.EndpointOption) (tracesdk.SpanExporter, e
 
 func init() {
 	err := service.RegisterOtelTracerProvider("jaeger", jaegerConfigSpec(), func(conf *service.ParsedConfig) (p trace.TracerProvider, err error) {
-		jConf := jaegerConfig{}
+		jConf := jaegerConfig{
+			engineVersion: conf.EngineVersion(),
+		}
 		if jConf.AgentAddress, err = conf.FieldString(jtFieldAgentAddress); err != nil {
 			return
 		}
@@ -104,17 +107,17 @@ func init() {
 // NewJaeger creates and returns a new Jaeger object.
 func NewJaeger(config jaegerConfig) (trace.TracerProvider, error) {
 	var sampler tracesdk.Sampler
-	if sType := config.SamplerType; len(sType) > 0 {
+	if sType := config.SamplerType; sType != "" {
 		// TODO: https://github.com/open-telemetry/opentelemetry-go-contrib/pull/936
 		switch strings.ToLower(sType) {
 		case "const":
 			sampler = tracesdk.TraceIDRatioBased(config.SamplerParam)
 		case "probabilistic":
-			return nil, fmt.Errorf("probabalistic sampling is no longer available")
+			return nil, errors.New("probabalistic sampling is no longer available")
 		case "ratelimiting":
-			return nil, fmt.Errorf("rate limited sampling is no longer available")
+			return nil, errors.New("rate limited sampling is no longer available")
 		case "remote":
-			return nil, fmt.Errorf("remote sampling is no longer available")
+			return nil, errors.New("remote sampling is no longer available")
 		default:
 			return nil, fmt.Errorf("unrecognised sampler type: %v", sType)
 		}
@@ -149,12 +152,12 @@ func NewJaeger(config jaegerConfig) (trace.TracerProvider, error) {
 		// Only set the default service version tag if the user doesn't provide
 		// a custom service name tag.
 		if _, ok := config.Tags[string(semconv.ServiceVersionKey)]; !ok {
-			attrs = append(attrs, semconv.ServiceVersionKey.String(cli.Version))
+			attrs = append(attrs, semconv.ServiceVersionKey.String(config.engineVersion))
 		}
 	}
 
 	var batchOpts []tracesdk.BatchSpanProcessorOption
-	if i := config.FlushInterval; len(i) > 0 {
+	if i := config.FlushInterval; i != "" {
 		flushInterval, err := time.ParseDuration(i)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse flush interval '%s': %v", i, err)

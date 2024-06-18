@@ -8,23 +8,23 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/url"
 
-	"github.com/benthosdev/benthos/v4/internal/httpclient"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 type schemaRegistryClient struct {
 	client                *http.Client
 	schemaRegistryBaseURL *url.URL
-	requestSigner         httpclient.RequestSigner
+	requestSigner         func(f fs.FS, req *http.Request) error
 	mgr                   *service.Resources
 }
 
 func newSchemaRegistryClient(
 	urlStr string,
-	reqSigner httpclient.RequestSigner,
+	reqSigner func(f fs.FS, req *http.Request) error,
 	tlsConf *tls.Config,
 	mgr *service.Resources,
 ) (*schemaRegistryClient, error) {
@@ -55,22 +55,22 @@ func newSchemaRegistryClient(
 	}, nil
 }
 
-type SchemaInfo struct {
+type schemaInfo struct {
 	ID         int               `json:"id"`
 	Type       string            `json:"schemaType"`
 	Schema     string            `json:"schema"`
-	References []SchemaReference `json:"references"`
+	References []schemaReference `json:"references"`
 }
 
 // TODO: Further reading:
 // https://www.confluent.io/blog/multiple-event-types-in-the-same-kafka-topic/
-type SchemaReference struct {
+type schemaReference struct {
 	Name    string `json:"name"`
 	Subject string `json:"subject"`
 	Version int    `json:"version"`
 }
 
-func (c *schemaRegistryClient) GetSchemaByID(ctx context.Context, id int) (resPayload SchemaInfo, err error) {
+func (c *schemaRegistryClient) GetSchemaByID(ctx context.Context, id int) (resPayload schemaInfo, err error) {
 	var resCode int
 	var resBody []byte
 	if resCode, resBody, err = c.doRequest(ctx, "GET", fmt.Sprintf("/schemas/ids/%v", id)); err != nil {
@@ -98,7 +98,7 @@ func (c *schemaRegistryClient) GetSchemaByID(ctx context.Context, id int) (resPa
 	return
 }
 
-func (c *schemaRegistryClient) GetSchemaBySubjectAndVersion(ctx context.Context, subject string, version *int) (resPayload SchemaInfo, err error) {
+func (c *schemaRegistryClient) GetSchemaBySubjectAndVersion(ctx context.Context, subject string, version *int) (resPayload schemaInfo, err error) {
 	var path string
 	if version != nil {
 		path = fmt.Sprintf("/subjects/%s/versions/%v", url.PathEscape(subject), *version)
@@ -133,7 +133,7 @@ func (c *schemaRegistryClient) GetSchemaBySubjectAndVersion(ctx context.Context,
 	return
 }
 
-type RefWalkFn func(ctx context.Context, name string, info SchemaInfo) error
+type refWalkFn func(ctx context.Context, name string, info schemaInfo) error
 
 // For each reference provided the schema info is obtained and the provided
 // closure is called recursively, which means each reference obtained will also
@@ -141,11 +141,11 @@ type RefWalkFn func(ctx context.Context, name string, info SchemaInfo) error
 //
 // If a reference of a given subject but differing version is detected an error
 // is returned as this would put us in an invalid state.
-func (c *schemaRegistryClient) WalkReferences(ctx context.Context, refs []SchemaReference, fn RefWalkFn) error {
+func (c *schemaRegistryClient) WalkReferences(ctx context.Context, refs []schemaReference, fn refWalkFn) error {
 	return c.walkReferencesTracked(ctx, map[string]int{}, refs, fn)
 }
 
-func (c *schemaRegistryClient) walkReferencesTracked(ctx context.Context, seen map[string]int, refs []SchemaReference, fn RefWalkFn) error {
+func (c *schemaRegistryClient) walkReferencesTracked(ctx context.Context, seen map[string]int, refs []schemaReference, fn refWalkFn) error {
 	for _, ref := range refs {
 		if i, exists := seen[ref.Name]; exists {
 			if i != ref.Version {

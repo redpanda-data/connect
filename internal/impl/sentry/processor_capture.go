@@ -2,14 +2,14 @@ package sentry
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/getsentry/sentry-go"
 
-	"github.com/benthosdev/benthos/v4/internal/cli"
-	"github.com/benthosdev/benthos/v4/public/bloblang"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -20,7 +20,7 @@ const (
 func newCaptureProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Version("4.16.0").
-		Summary("Captures log events from messages and submits them to [Sentry](https://sentry.io/).").
+		Summary("Captures log events from messages and submits them to https://sentry.io/[Sentry^].").
 		Fields(
 			service.NewStringField("dsn").
 				Default("").
@@ -168,7 +168,7 @@ func newCaptureProcessor(conf *service.ParsedConfig, mgr *service.Resources, opt
 		return nil, fmt.Errorf("failed to create sentry client: %w", err)
 	}
 
-	version := cli.Version
+	version := mgr.EngineVersion()
 	if len(version) > 200 {
 		version = version[:200]
 	}
@@ -247,7 +247,7 @@ func (proc *captureProcessor) Process(ctx context.Context, msg *service.Message)
 
 func (proc *captureProcessor) Close(ctx context.Context) error {
 	if flushed := proc.hub.Flush(proc.flushTimeout); !flushed {
-		return fmt.Errorf("failed to flush sentry events before timeout")
+		return errors.New("failed to flush sentry events before timeout")
 	}
 
 	return nil
@@ -316,7 +316,7 @@ func mapLevel(raw string) (sentry.Level, error) {
 	case "FATAL":
 		return sentry.LevelFatal, nil
 	default:
-		return sentry.Level(""), fmt.Errorf("unrecognized sentry level: %s", raw)
+		return sentry.Level(""), fmt.Errorf("unrecognised sentry level: %s", raw)
 	}
 }
 

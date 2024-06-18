@@ -7,7 +7,7 @@ import (
 
 	"github.com/beanstalkd/go-beanstalk"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func beanstalkdOutputConfig() *service.ConfigSpec {
@@ -71,7 +71,6 @@ func (bs *beanstalkdWriter) Connect(ctx context.Context) error {
 	}
 
 	bs.connection = conn
-	bs.log.Infof("Sending Beanstalkd messages to address: %s\n", bs.address)
 	return nil
 }
 

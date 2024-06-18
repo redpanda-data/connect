@@ -7,8 +7,7 @@ import (
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -23,20 +22,18 @@ func inputConfigSpec() *service.ConfigSpec {
 		Categories("Services").
 		Summary("Subscribe to topics on MQTT brokers.").
 		Description(`
-### Metadata
+== Metadata
 
 This input adds the following metadata fields to each message:
 
-`+"``` text"+`
 - mqtt_duplicate
 - mqtt_qos
 - mqtt_retained
 - mqtt_topic
 - mqtt_message_id
-`+"```"+`
 
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).`).
-		Fields(ClientFields()...).
+You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].`).
+		Fields(clientFields()...).
 		Fields(
 			service.NewStringListField(miFieldTopics).
 				Description("A list of topics to consume from."),
@@ -48,6 +45,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 				Description("Set whether the connection is non-persistent.").
 				Default(true).
 				Advanced(),
+			service.NewAutoRetryNacksToggleField(),
 		)
 }
 
@@ -57,7 +55,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return service.AutoRetryNacks(rdr), nil
+		return service.AutoRetryNacksToggled(conf, rdr)
 	})
 	if err != nil {
 		panic(err)
@@ -166,7 +164,6 @@ func (m *mqttReader) Connect(ctx context.Context) error {
 		return err
 	}
 
-	m.log.Infof("Receiving MQTT messages from topics: %v", m.topics)
 	go func() {
 		for {
 			select {
@@ -194,7 +191,7 @@ func (m *mqttReader) Read(ctx context.Context) (*service.Message, service.AckFun
 	m.cMut.Unlock()
 
 	if msgChan == nil {
-		return nil, nil, component.ErrNotConnected
+		return nil, nil, service.ErrNotConnected
 	}
 
 	select {

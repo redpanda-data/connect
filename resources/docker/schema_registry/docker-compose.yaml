@@ -1,7 +1,7 @@
 version: '3.3'
 services:
   redpanda:
-    image: docker.vectorized.io/vectorized/redpanda
+    image: docker.redpanda.com/redpandadata/redpanda
     ports:
       - 8081:8081
     command:
@@ -13,14 +13,14 @@ services:
       - '--pandaproxy-addr 0.0.0.0:8082'
       - '--advertise-pandaproxy-addr redpanda:8082'
 
-  benthos-in:
-    image: jeffail/benthos
-    command: [ '-w', '-c', '/benthos.yaml' ]
+  connect-in:
+    image: ghcr.io/redpanda-data/connect
+    command: [ '-w', '-c', '/connect.yaml' ]
     volumes:
-      - ./in.yaml:/benthos.yaml
+      - ./in.yaml:/connect.yaml
 
-  benthos-out:
-    image: jeffail/benthos
-    command: [ '-w', '-c', '/benthos.yaml' ]
+  connect-out:
+    image: ghcr.io/redpanda-data/connect
+    command: [ '-w', '-c', '/connect.yaml' ]
     volumes:
-      - ./out.yaml:/benthos.yaml
+      - ./out.yaml:/connect.yaml

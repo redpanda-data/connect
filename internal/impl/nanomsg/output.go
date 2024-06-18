@@ -12,8 +12,7 @@ import (
 	"go.nanomsg.org/mangos/v3/protocol/pub"
 	"go.nanomsg.org/mangos/v3/protocol/push"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 
 	// Import all transport types.
 	_ "go.nanomsg.org/mangos/v3/transport/all"
@@ -31,7 +30,7 @@ func outputConfigSpec() *service.ConfigSpec {
 		Stable().
 		Categories("Network").
 		Summary(`Send messages over a Nanomsg socket.`).
-		Description(output.Description(true, false, `Currently only PUSH and PUB sockets are supported.`)).
+		Description(`Currently only PUSH and PUB sockets are supported.`+service.OutputPerformanceDocs(true, false)).
 		Fields(
 			service.NewURLListField(noFieldURLs).
 				Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs."),
@@ -151,12 +150,6 @@ func (s *nanomsgWriter) Connect(ctx context.Context) error {
 	}
 	if err != nil {
 		return err
-	}
-
-	if s.bind {
-		s.log.Infof("Sending nanomsg messages to bound URLs: %s", s.urls)
-	} else {
-		s.log.Infof("Sending nanomsg messages to connected URLs: %s", s.urls)
 	}
 	s.socket = socket
 	return nil

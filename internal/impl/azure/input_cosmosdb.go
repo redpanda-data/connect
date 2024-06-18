@@ -5,13 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strconv"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos"
 	"github.com/mitchellh/mapstructure"
 
-	"github.com/benthosdev/benthos/v4/internal/impl/azure/cosmosdb"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/azure/cosmosdb"
 )
 
 const (
@@ -25,24 +27,25 @@ func cosmosDBInputSpec() *service.ConfigSpec {
 		// Beta().
 		Categories("Azure").
 		Version("v4.25.0").
-		Summary(`Executes a SQL query against [Azure CosmosDB](https://learn.microsoft.com/en-us/azure/cosmos-db/introduction) and creates a batch of messages from each page of items.`).
+		Summary(`Executes a SQL query against https://learn.microsoft.com/en-us/azure/cosmos-db/introduction[Azure CosmosDB^] and creates a batch of messages from each page of items.`).
 		Description(`
-## Cross-partition Queries
+== Cross-partition queries
 
-Cross-partition queries are currently not supported by the underlying driver. For every query, the PartitionKey value(s) must be known in advance and specified in the config. See details [here](https://github.com/Azure/azure-sdk-for-go/issues/18578#issuecomment-1222510989).
+Cross-partition queries are currently not supported by the underlying driver. For every query, the PartitionKey values must be known in advance and specified in the config. https://github.com/Azure/azure-sdk-for-go/issues/18578#issuecomment-1222510989[See details^].
 `+cosmosdb.CredentialsDocs+cosmosdb.MetadataDocs).
 		Footnotes(cosmosdb.EmulatorDocs).
 		Fields(cosmosdb.ContainerClientConfigFields()...).
 		Field(cosmosdb.PartitionKeysField(true)).
 		Field(service.NewStringField(cdbiFieldQuery).Description("The query to execute").Example(`SELECT c.foo FROM testcontainer AS c WHERE c.bar = "baz" AND c.timestamp < @timestamp`)).
 		Field(service.NewBloblangField(cdbiFieldArgsMapping).
-			Description("A [Bloblang mapping](/docs/guides/bloblang/about) that, for each message, creates a list of arguments to use with the query.").Optional().Example(`root = [
+			Description("A xref:guides:bloblang/about.adoc[Bloblang mapping] that, for each message, creates a list of arguments to use with the query.").Optional().Example(`root = [
   { "Name": "@name", "Value": "benthos" },
 ]`)).
 		Field(service.NewIntField(cdbiFieldBatchCount).
 			Description(`The maximum number of messages that should be accumulated into each batch. Use '-1' specify dynamic page size.`).
 			Default(-1).
-			Advanced().LintRule(`root = if this < -1 || this == 0 || this > `+fmt.Sprint(math.MaxInt32)+` { [ "`+cdbiFieldBatchCount+` must be must be > 0 and smaller than `+fmt.Sprint(math.MaxInt32)+` or -1." ] }`)).
+			Advanced().LintRule(`root = if this < -1 || this == 0 || this > `+strconv.Itoa(math.MaxInt32)+` { [ "`+cdbiFieldBatchCount+` must be must be > 0 and smaller than `+strconv.Itoa(math.MaxInt32)+` or -1." ] }`)).
+		Field(service.NewAutoRetryNacksToggleField()).
 		LintRule("root = []"+cosmosdb.CommonLintRules).
 		Example("Query container", "Execute a parametrized SQL query to select documents from a container.", `
 input:
@@ -66,7 +69,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return service.AutoRetryNacksBatched(r), nil
+		return service.AutoRetryNacksBatchedToggled(conf, r)
 	})
 	if err != nil {
 		panic(err)
@@ -80,13 +83,13 @@ type cosmosDBReader struct {
 	pager *runtime.Pager[azcosmos.QueryItemsResponse]
 }
 
-func newCosmosDBReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (*cosmosDBReader, error) {
+func newCosmosDBReaderFromParsed(conf *service.ParsedConfig, _ *service.Resources) (*cosmosDBReader, error) {
 	containerClient, err := cosmosdb.ContainerClientFromParsed(conf)
 	if err != nil {
 		return nil, err
 	}
 
-	partitionKeysMapping, err := conf.FieldBloblang(cosmosdb.FieldPartitionKeys)
+	partitionKeysMapping, err := conf.FieldBloblang(cosmosdb.FieldPartitionKeysMap)
 	if err != nil {
 		return nil, err
 	}

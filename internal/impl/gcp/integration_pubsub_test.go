@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/integration"
+	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
 
 func TestIntegrationGCPPubSub(t *testing.T) {
@@ -80,11 +80,11 @@ input:
 		integration.StreamTestOptSleepAfterInput(100 * time.Millisecond),
 		integration.StreamTestOptSleepAfterOutput(100 * time.Millisecond),
 		integration.StreamTestOptTimeout(time.Minute * 5),
-		integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+		integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
 			client, err := pubsub.NewClient(ctx, "benthos-test-project")
 			require.NoError(t, err)
 
-			_, err = client.CreateTopic(ctx, fmt.Sprintf("topic-%v", testID))
+			_, err = client.CreateTopic(ctx, fmt.Sprintf("topic-%v", vars.ID))
 			require.NoError(t, err)
 
 			client.Close()

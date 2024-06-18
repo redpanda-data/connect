@@ -11,8 +11,7 @@ import (
 
 	"github.com/pebbe/zmq4"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func zmqInputConfig() *service.ConfigSpec {
@@ -21,11 +20,11 @@ func zmqInputConfig() *service.ConfigSpec {
 		Categories("Network").
 		Summary("Consumes messages from a ZeroMQ socket.").
 		Description(`
-By default Benthos does not build with components that require linking to external libraries. If you wish to build Benthos locally with this component then set the build tag ` + "`x_benthos_extra`" + `:
+By default Redpanda Connect does not build with components that require linking to external libraries. If you wish to build Redpanda Connect locally with this component then set the build tag ` + "`x_benthos_extra`" + `:
 
-` + "```shell" + `
+` + "```bash" + `
 # With go
-go install -tags "x_benthos_extra" github.com/benthosdev/benthos/v4/cmd/benthos@latest
+go install -tags "x_benthos_extra" github.com/redpanda-data/benthos/v4/cmd/benthos@latest
 
 # Using make
 make TAGS=x_benthos_extra
@@ -185,12 +184,6 @@ func (z *zmqInput) Connect(ignored context.Context) (err error) {
 	z.socket = socket
 	z.poller = zmq4.NewPoller()
 	z.poller.Add(z.socket, zmq4.POLLIN)
-
-	if z.bind {
-		z.log.Infof("Receiving zmqInput messages on bound URLs: %s\n", z.urls)
-	} else {
-		z.log.Infof("Receiving zmqInput messages on connected URLs: %s\n", z.urls)
-	}
 	return nil
 }
 
@@ -205,7 +198,7 @@ func (z *zmqInput) ReadBatch(ctx context.Context) (service.MessageBatch, service
 		if polled, err = z.poller.Poll(z.pollTimeout); len(polled) == 1 {
 			data, err = z.socket.RecvMessageBytes(0)
 		} else if err == nil {
-			return nil, nil, component.ErrTimeout
+			return nil, nil, context.Canceled
 		}
 	}
 	if err != nil {

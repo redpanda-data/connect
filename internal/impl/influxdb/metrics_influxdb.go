@@ -11,7 +11,7 @@ import (
 	client "github.com/influxdata/influxdb1-client/v2"
 	"github.com/rcrowley/go-metrics"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -32,7 +32,7 @@ const (
 	imFieldTags             = "tags"
 )
 
-func ConfigSpec() *service.ConfigSpec {
+func configSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Beta().
 		Version("3.36.0").
@@ -102,7 +102,7 @@ func ConfigSpec() *service.ConfigSpec {
 
 func init() {
 	err := service.RegisterMetricsExporter(
-		"influxdb", ConfigSpec(),
+		"influxdb", configSpec(),
 		func(conf *service.ParsedConfig, log *service.Logger) (service.MetricsExporter, error) {
 			return fromParsed(conf, log)
 		})

@@ -14,11 +14,10 @@ import (
 
 	"github.com/Azure/go-amqp"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-//go:embed input_description.md
+//go:embed input_description.adoc
 var inputDescription string
 
 func amqp1InputSpec() *service.ConfigSpec {
@@ -108,7 +107,7 @@ func amqp1ReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (
 
 	for _, u := range urlStrs {
 		for _, splitURL := range strings.Split(u, ",") {
-			if trimmed := strings.TrimSpace(splitURL); len(trimmed) > 0 {
+			if trimmed := strings.TrimSpace(splitURL); trimmed != "" {
 				a.urls = append(a.urls, trimmed)
 			}
 		}
@@ -206,7 +205,6 @@ func (a *amqp1Reader) Connect(ctx context.Context) (err error) {
 	}
 
 	a.conn = conn
-	a.log.Infof("Receiving AMQP 1.0 messages from source: %v\n", a.sourceAddr)
 	return nil
 }
 
@@ -233,9 +231,7 @@ func (a *amqp1Reader) ReadBatch(ctx context.Context) (service.MessageBatch, serv
 	// Receive next message
 	amqpMsg, err := conn.receiver.Receive(ctx, nil)
 	if err != nil {
-		if ctx.Err() != nil {
-			err = component.ErrTimeout
-		} else {
+		if ctx.Err() == nil {
 			a.log.Errorf("Lost connection due to: %v", err)
 			_ = a.disconnect(ctx)
 			err = service.ErrNotConnected
@@ -415,7 +411,7 @@ func (a *amqp1Reader) startRenewJob(amqpMsg *amqp.Message) chan struct{} {
 
 func uuidFromLockTokenBytes(bytes []byte) (*amqp.UUID, error) {
 	if len(bytes) != 16 {
-		return nil, fmt.Errorf("invalid lock token, token was not 16 bytes long")
+		return nil, errors.New("invalid lock token, token was not 16 bytes long")
 	}
 
 	swapIndex := func(indexOne, indexTwo int, array *[16]byte) {
@@ -425,7 +421,7 @@ func uuidFromLockTokenBytes(bytes []byte) (*amqp.UUID, error) {
 	// Get lock token from the deliveryTag
 	var lockTokenBytes [16]byte
 	copy(lockTokenBytes[:], bytes[:16])
-	// translate from .net guid byte serialisation format to amqp rfc standard
+	// translate from .net guid byte serialization format to amqp rfc standard
 	swapIndex(0, 3, &lockTokenBytes)
 	swapIndex(1, 2, &lockTokenBytes)
 	swapIndex(4, 5, &lockTokenBytes)
@@ -441,7 +437,7 @@ func (a *amqp1Reader) renewWithContext(ctx context.Context, msg *amqp.Message) (
 	a.m.RUnlock()
 
 	if conn == nil {
-		return time.Time{}, component.ErrNotConnected
+		return time.Time{}, service.ErrNotConnected
 	}
 
 	lockToken, err := uuidFromLockTokenBytes(msg.DeliveryTag)

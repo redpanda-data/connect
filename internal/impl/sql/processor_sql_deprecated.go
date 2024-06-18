@@ -1,8 +1,8 @@
 package sql
 
 import (
-	"github.com/benthosdev/benthos/v4/public/bloblang"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 // DeprecatedProcessorConfig returns a config spec for an sql processor.
@@ -12,21 +12,21 @@ func DeprecatedProcessorConfig() *service.ConfigSpec {
 		Categories("Integration").
 		Summary("Runs an arbitrary SQL query against a database and (optionally) returns the result as an array of objects, one for each row returned.").
 		Description(`
-If the query fails to execute then the message will remain unchanged and the error can be caught using error handling methods outlined [here](/docs/configuration/error_handling).
+If the query fails to execute then the message will remain unchanged and the error can be caught using xref:configuration:error_handling.adoc[error handling methods].
 
-## Alternatives
+== Alternatives
 
-For basic inserts or select queries use use either the ` + "[`sql_insert`](/docs/components/processors/sql_insert)" + ` or the ` + "[`sql_select`](/docs/components/processors/sql_select)" + ` processor. For more complex queries use the ` + "[`sql_raw`](/docs/components/processors/sql_raw)" + ` processor.`).
+For basic inserts or select queries use either the ` + "xref:components:processors/sql_insert.adoc[`sql_insert`]" + ` or the ` + "xref:components:processors/sql_select.adoc[`sql_select`]" + ` processor. For more complex queries use the ` + "xref:components:processors/sql_raw.adoc[`sql_raw`]" + ` processor.`).
 		Field(driverField).
 		Field(service.NewStringField("data_source_name").Description("Data source name.")).
 		Field(rawQueryField().
 			Example("INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);")).
 		Field(service.NewBoolField("unsafe_dynamic_query").
-			Description("Whether to enable [interpolation functions](/docs/configuration/interpolation/#bloblang-queries) in the query. Great care should be made to ensure your queries are defended against injection attacks.").
+			Description("Whether to enable xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions] in the query. Great care should be made to ensure your queries are defended against injection attacks.").
 			Advanced().
 			Default(false)).
 		Field(service.NewBloblangField("args_mapping").
-			Description("An optional [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `query`.").
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `query`.").
 			Example("root = [ this.cat.meow, this.doc.woofs[0] ]").
 			Example(`root = [ meta("user.id") ]`).
 			Optional()).
@@ -49,7 +49,6 @@ func init() {
 }
 
 // NewSQLDeprecatedProcessorFromConfig returns an internal sql processor.
-// nolint:revive // Not bothered as this is internal anyway
 func NewSQLDeprecatedProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*sqlRawProcessor, error) {
 	driverStr, err := conf.FieldString("driver")
 	if err != nil {

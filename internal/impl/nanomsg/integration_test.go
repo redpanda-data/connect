@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/benthosdev/benthos/v4/internal/integration"
+	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
 
 func TestIntegrationNanomsg(t *testing.T) {
@@ -38,8 +38,8 @@ input:
 		t, template,
 		integration.StreamTestOptSleepAfterInput(500*time.Millisecond),
 		integration.StreamTestOptSleepAfterOutput(500*time.Millisecond),
-		integration.StreamTestOptVarOne("PUSH"),
-		integration.StreamTestOptVarTwo("PULL"),
+		integration.StreamTestOptVarSet("VAR1", "PUSH"),
+		integration.StreamTestOptVarSet("VAR2", "PULL"),
 	)
 	t.Run("with max in flight", func(t *testing.T) {
 		t.Parallel()
@@ -47,8 +47,8 @@ input:
 			t, template,
 			integration.StreamTestOptSleepAfterInput(500*time.Millisecond),
 			integration.StreamTestOptSleepAfterOutput(500*time.Millisecond),
-			integration.StreamTestOptVarOne("PUSH"),
-			integration.StreamTestOptVarTwo("PULL"),
+			integration.StreamTestOptVarSet("VAR1", "PUSH"),
+			integration.StreamTestOptVarSet("VAR2", "PULL"),
 			integration.StreamTestOptMaxInFlight(10),
 		)
 	})
@@ -58,9 +58,9 @@ input:
 			t, template,
 			integration.StreamTestOptSleepAfterInput(500*time.Millisecond),
 			integration.StreamTestOptSleepAfterOutput(500*time.Millisecond),
-			integration.StreamTestOptVarOne("PUB"),
-			integration.StreamTestOptVarTwo("SUB"),
-			integration.StreamTestOptVarThree(`""`),
+			integration.StreamTestOptVarSet("VAR1", "PUB"),
+			integration.StreamTestOptVarSet("VAR2", "SUB"),
+			integration.StreamTestOptVarSet("VAR3", `""`),
 		)
 	})
 }

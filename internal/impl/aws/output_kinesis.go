@@ -11,11 +11,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/kinesis/types"
 	"github.com/cenkalti/backoff/v4"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
-	"github.com/benthosdev/benthos/v4/internal/impl/pure"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/aws/config"
+	"github.com/redpanda-data/connect/v4/internal/retries"
 )
 
 const (
@@ -50,7 +49,7 @@ func koConfigFromParsed(pConf *service.ParsedConfig) (conf koConfig, err error) 
 	if conf.aconf, err = GetSession(context.TODO(), pConf); err != nil {
 		return
 	}
-	if conf.backoffCtor, err = pure.CommonRetryBackOffCtorFromParsed(pConf); err != nil {
+	if conf.backoffCtor, err = retries.CommonRetryBackOffCtorFromParsed(pConf); err != nil {
 		return
 	}
 	return
@@ -62,12 +61,12 @@ func koOutputSpec() *service.ConfigSpec {
 		Version("3.36.0").
 		Categories("Services", "AWS").
 		Summary(`Sends messages to a Kinesis stream.`).
-		Description(output.Description(true, true, `
-Both the `+"`partition_key`"+`(required) and `+"`hash_key`"+` (optional) fields can be dynamically set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries). When sending batched messages the interpolations are performed per message part.
+		Description(`
+Both the `+"`partition_key`"+`(required) and `+"`hash_key`"+` (optional) fields can be dynamically set using function interpolations described xref:configuration:interpolation.adoc#bloblang-queries[here]. When sending batched messages the interpolations are performed per message part.
 
-### Credentials
+== Credentials
 
-By default Benthos will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more [in this document](/docs/guides/cloud/aws).`)).
+By default Redpanda Connect will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more in xref:guides:cloud/aws.adoc[].`+service.OutputPerformanceDocs(true, true)).
 		Fields(
 			service.NewStringField(koFieldStream).
 				Description("The stream to publish messages to. Streams can either be specified by their name or full ARN.").
@@ -83,7 +82,7 @@ By default Benthos will use a shared credentials file when connecting to AWS ser
 			service.NewBatchPolicyField(koFieldBatching),
 		).
 		Fields(config.SessionFields()...).
-		Fields(pure.CommonRetryBackOffFields(0, "1s", "5s", "30s")...)
+		Fields(retries.CommonRetryBackOffFields(0, "1s", "5s", "30s")...)
 }
 
 func init() {
@@ -154,8 +153,9 @@ func (a *kinesisWriter) toRecords(batch service.MessageBatch) ([]types.PutRecord
 		}
 
 		if len(entry.Data) > mebibyte {
-			a.log.Errorf("part %d exceeds the maximum Kinesis payload limit of 1 MiB\n", i)
-			return component.ErrMessageTooLarge
+			err = fmt.Errorf("batch message %d exceeds the maximum Kinesis payload limit of 1 MiB", i)
+			a.log.With("error", err).Error("Failed to prepare record")
+			return err
 		}
 
 		var hashKey string
@@ -196,14 +196,12 @@ func (a *kinesisWriter) Connect(ctx context.Context) error {
 
 	a.streamARN = *out.StreamDescription.StreamARN
 	a.kinesis = k
-	a.log.Infof("Sending messages to Kinesis stream: %v\n", a.conf.Stream)
-
 	return nil
 }
 
 func (a *kinesisWriter) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
 	if a.kinesis == nil {
-		return component.ErrNotConnected
+		return service.ErrNotConnected
 	}
 
 	backOff := a.conf.backoffCtor()
@@ -267,7 +265,7 @@ func (a *kinesisWriter) WriteBatch(ctx context.Context, batch service.MessageBat
 		if l > 0 {
 			a.log.Warnf("scheduling retry of throttled records (%d)\n", l)
 			if wait == backoff.Stop {
-				return component.ErrTimeout
+				return fmt.Errorf("%v records failed to be delivered within backoff policy", l)
 			}
 			time.Sleep(wait)
 		}
@@ -281,7 +279,7 @@ func (a *kinesisWriter) WriteBatch(ctx context.Context, batch service.MessageBat
 			}
 		}
 	}
-	return err
+	return nil
 }
 
 func (a *kinesisWriter) Close(context.Context) error {

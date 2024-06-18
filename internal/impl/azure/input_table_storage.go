@@ -2,12 +2,12 @@ package azure
 
 import (
 	"context"
+	"sync/atomic"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/Azure/azure-sdk-for-go/sdk/data/aztables"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -56,13 +56,13 @@ func tsiSpec() *service.ConfigSpec {
 		Summary(`Queries an Azure Storage Account Table, optionally with multiple filters.`).
 		Description(`
 Queries an Azure Storage Account Table, optionally with multiple filters.
-## Metadata
+== Metadata
 This input adds the following metadata fields to each message:
-`+"```"+`
+
 - table_storage_name
 - row_num
-`+"```"+`
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).`).
+
+You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].`).
 		Fields(
 			service.NewStringField(tsiFieldTableName).
 				Description("The table to read messages from.").
@@ -104,7 +104,7 @@ func init() {
 type azureTableStorage struct {
 	conf  tsiConfig
 	pager *runtime.Pager[aztables.ListEntitiesResponse]
-	row   int
+	row   int64
 	log   *service.Logger
 }
 
@@ -129,7 +129,7 @@ func (a *azureTableStorage) Connect(ctx context.Context) error {
 }
 
 func stringOrNil(val string) *string {
-	if len(val) > 0 {
+	if val != "" {
 		return &val
 	}
 	return nil
@@ -144,28 +144,30 @@ func int32OrNil(val int32) *int32 {
 
 // ReadBatch attempts to read a new page from the target Azure Storage Table.
 func (a *azureTableStorage) ReadBatch(ctx context.Context) (batch service.MessageBatch, ackFn service.AckFunc, err error) {
-	if a.pager.More() {
+	for a.pager.More() {
 		resp, err := a.pager.NextPage(ctx)
 		if err != nil {
-			a.log.Warnf("error fetching next page", err)
-			return nil, nil, component.ErrTypeClosed
-		}
-		if len(resp.Entities) > 0 {
-			for _, entity := range resp.Entities {
-				p := service.NewMessage(entity)
-				batch = append(batch, p)
+			if ctx.Err() == nil {
+				a.log.Warnf("error fetching next page: %v", err)
 			}
-			for i := 0; i < len(batch); i++ {
-				a.row++
-				batch[i].MetaSetMut("table_storage_name", a.conf.TableName)
-				batch[i].MetaSetMut("row_num", a.row)
-			}
-			return batch, func(rctx context.Context, res error) error {
-				return nil
-			}, err
+			return nil, nil, service.ErrEndOfInput
 		}
+		if len(resp.Entities) == 0 {
+			continue
+		}
+
+		batch = make(service.MessageBatch, 0, len(resp.Entities))
+		for _, entity := range resp.Entities {
+			m := service.NewMessage(entity)
+			m.MetaSetMut("table_storage_name", a.conf.TableName)
+			m.MetaSetMut("row_num", atomic.AddInt64(&a.row, 1))
+			batch = append(batch, m)
+		}
+		return batch, func(_ context.Context, res error) error {
+			return nil
+		}, err
 	}
-	return nil, nil, component.ErrTypeClosed
+	return nil, nil, service.ErrEndOfInput
 }
 
 // Close is called when the pipeline ends

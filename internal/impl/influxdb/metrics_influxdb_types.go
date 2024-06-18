@@ -102,18 +102,18 @@ func decodeInfluxDBName(n string) (outName string, tags map[string]string) {
 		return "", nil
 	} else if len(nameSplit) == 1 {
 		return escape.UnescapeString(nameSplit[0]), nil
-	} else {
-		tags = make(map[string]string, len(nameSplit)-1)
-		for _, v := range nameSplit[1:] {
-			tagSplit := splitUnescaped(v, "=")
-			if len(tagSplit) == 2 {
-				key := escape.UnescapeString(tagSplit[0])
-				value := escape.UnescapeString(tagSplit[1])
-				tags[key] = value
-			}
-		}
-		return escape.UnescapeString(nameSplit[0]), tags
 	}
+
+	tags = make(map[string]string, len(nameSplit)-1)
+	for _, v := range nameSplit[1:] {
+		tagSplit := splitUnescaped(v, "=")
+		if len(tagSplit) == 2 {
+			key := escape.UnescapeString(tagSplit[0])
+			value := escape.UnescapeString(tagSplit[1])
+			tags[key] = value
+		}
+	}
+	return escape.UnescapeString(nameSplit[0]), tags
 }
 
 func splitUnescaped(name, separator string) []string {

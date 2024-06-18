@@ -3,16 +3,102 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## 4.30.0 - 2024-06-13
+
+### Added
+
+- (Benthos) Field `omit_empty` added to the `lines` scanner. (@mihaitodor)
+- (Benthos) New scheme `gcm` added to the `encrypt_aes` and `decrypy_aes` Bloblang methods. (@abergmeier)
+- (Benthos) New Bloblang method `pow`. (@mfamador)
+- (Benthos) New `sin`, `cos`, `tan` and `pi` bloblang methods. (@mfamador)
+- (Benthos) Field `proxy_url` added to the `websocket` input and output. (@mihaitodor)
+- New experimental `splunk` input. (@mihaitodor)
+
+### Fixed
+
+- The `sql_insert` and `sql_raw` components no longer fail when inserting large binary blobs into Oracle `BLOB` columns. (@mihaitodor)
+- (Benthos) The `websocket` input and output now obey the `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY` environment variables. (@mihaitodor)
+
+### Changed
+
+- The `splunk_hec` output is now implemented as a native Go component. (@mihaitodor)
+
+## 4.29.0 - 2024-06-04
+
+### Added
+
+- Go API: New packages `public/bundle/free` and `public/bundle/enterprise` with explicit licensing for bundles of component imports.
+- Field `auth.oauth2.scope` added to the `pulsar` input and output. (@srenatus)
+- Field `subscription_initial_position` added to the `pulsar` input. (@srenatus)
+
+### Fixed
+
+- The `pulsar` input and output should no longer ignore `auth.oauth2` fields. (@srenatus)
+- Creating builds using `make` no longer prints warnings when the repository does not contain a tag. (@mkysel)
+- Messages resulting from the `redis` processor are no longer invalid when using hash commands. (@mkysel)
+- The `nats_jetstream` input no longer fails to initialise when a stream is specified and a subject is not. (@maxarndt)
+
+## 4.28.0 - 2024-05-30
+
+### Changed
+
+- The repository has been moved to `redpanda-data/connect` and no longer contains the core Benthos engine, which is now broken out into `redpanda-data/benthos`.
+
+## 4.27.0 - 2024-04-23
+
+### Added
+
+- New `nats_kv` cache type.
+- The `nats_jetstream` input now supports `last_per_subject` and `new` deliver fallbacks.
+- Field `error_patterns` added to the `drop_on` output.
+- New `redis_scan` input type.
+- Field `auto_replay_nacks` added to all inputs that traditionally automatically retry nacked messages as a toggle for this behaviour.
+- New `retry` processor.
+- New `noop` cache.
+- Field `targets_input` added to the `azure_blob_storage` input.
+- New `reject_errored` output.
+- New `nats_request_reply` processor.
+- New `json_documents` scanner.
+
+### Fixed
+
+- The `unarchive` processor no longer yields linting errors when the format `csv:x` is specified. This is a regression introduced in v4.25.0.
+- The `sftp` input will no longer consume files when the watcher cache returns an error. Instead, it will reattempt the file upon the next poll.
+- The `aws_sqs` input no longer logs error level logs for visibility timeout refreshing errors.
+- The `nats_kv` processor now allows [nats wildcards](https://docs.nats.io/nats-concepts/subjects#wildcards) for the `keys` operation.
+- The `nats_kv` processor `keys` operation now returns a single message with an array of found keys instead of a batch of messages.
+- The `nats_kv` processor `history` operation now returns a single message with an array of objects containing the record fields instead of a batch of messages.
+- Field `timeout` added to the `nats_kv` processor to specify the maximum period to wait on an operation before aborting and returning an error.
+- Bloblang comparison operators (`>`, `<`, `<=`, `>=`) now match the precision of the compared integers when applicable.
+- The `parse_form_url_encoded` Bloblang method no longer produces results with an unknown data type for repeated query parameters.
+- The `echo` CLI command no longer fails to sanitise configs when encountering an empty `password` field.
+- The `sql_insert` and `sql_raw` components no longer fail when inserting large binary blobs into Oracle `BLOB` columns.
+
+### Changed
+
+- The log events from all inputs and outputs when they first connect have been made more consistent and no longer contain any information regarding the nature of their connections.
+- Splitting message batches with a `split` processor (or custom plugins) no longer results in downstream error handling loops around nacks. This was previously implemented as a feature to ensure unbounded expanded and split batches don't flood downstream services in the event of a minority of errors. However, introducing more clever origin tracking of errored messages has eliminated the need for this undocumented behaviour.
+
+## 4.26.0 - 2024-03-18
 
 ### Added
 
 - Field `credit` added to the `amqp_1` input to specify the maximum number of unacknowledged messages the sender can transmit.
 - Bloblang now supports root-level `if` statements.
+- New experimental `sql` cache.
+- Fields `batch_size`, `sort` and `limit` added to the `mongodb` input.
+- Field `idemponent_write` added to the `kafka` output.
 
 ### Changed
 
 - The default value of the `amqp_1.credit` input has changed from `1` to `64`.
+- The `mongodb` processor and output now support extended JSON in canonical form for document, filter and hint mappings.
+- The `open_telemetry_collector` tracer has had the `url` field of gRPC and HTTP collectors deprecated in favour of `address`, which more accurately describes the intended format of endpoints. The old style will continue to work, but eventually will have its default value removed and an explicit value will be required.
+
+### Fixed
+
+- Resource config imports containing `%` characters were being incorrectly parsed during unit test execution. This was a regression introduced in v4.25.0.
+- Dynamic input and output config updates containing `%` characters were being incorrectly parsed. This was a regression introduced in v4.25.0.
 
 ## 4.25.1 - 2024-03-01
 

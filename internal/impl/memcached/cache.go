@@ -10,7 +10,7 @@ import (
 	"github.com/bradfitz/gomemcache/memcache"
 	"github.com/cenkalti/backoff/v4"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func memcachedConfig() *service.ConfigSpec {
@@ -91,7 +91,7 @@ func newMemcachedCache(
 	addresses := []string{}
 	for _, addr := range inAddresses {
 		for _, splitAddr := range strings.Split(addr, ",") {
-			if len(splitAddr) > 0 {
+			if splitAddr != "" {
 				addresses = append(addresses, splitAddr)
 			}
 		}

@@ -8,8 +8,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -23,8 +22,8 @@ func redisHashOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Summary(`Sets Redis hash objects using the HMSET command.`).
-		Description(output.Description(true, false, `
-The field `+"`key`"+` supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries), allowing you to create a unique key for each message.
+		Description(`
+The field `+"`key`"+` supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions], allowing you to create a unique key for each message.
 
 The field `+"`fields`"+` allows you to specify an explicit map of field names to interpolated values, also evaluated per message of a batch:
 
@@ -39,9 +38,9 @@ output:
       content: ${!json("document.text")}
 `+"```"+`
 
-If the field `+"`walk_metadata`"+` is set to `+"`true`"+` then Benthos will walk all metadata fields of messages and add them to the list of hash fields to set.
+If the field `+"`walk_metadata`"+` is set to `+"`true`"+` then Redpanda Connect will walk all metadata fields of messages and add them to the list of hash fields to set.
 
-If the field `+"`walk_json_object`"+` is set to `+"`true`"+` then Benthos will walk each message as a JSON object, extracting keys and the string representation of their value and adds them to the list of hash fields to set.
+If the field `+"`walk_json_object`"+` is set to `+"`true`"+` then Redpanda Connect will walk each message as a JSON object, extracting keys and the string representation of their value and adds them to the list of hash fields to set.
 
 The order of hash field extraction is as follows:
 
@@ -49,7 +48,7 @@ The order of hash field extraction is as follows:
 2. JSON object (if enabled)
 3. Explicit fields
 
-Where latter stages will overwrite matching field names of a former stage.`)).
+Where latter stages will overwrite matching field names of a former stage.`+service.OutputPerformanceDocs(true, false)).
 		Categories("Services").
 		Fields(clientFields()...).
 		Fields(
@@ -138,8 +137,6 @@ func (r *redisHashWriter) Connect(ctx context.Context) error {
 	if _, err = client.Ping(ctx).Result(); err != nil {
 		return err
 	}
-
-	r.log.Info("Setting messages as hash objects to Redis")
 	r.client = client
 	return nil
 }

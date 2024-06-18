@@ -5,18 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
 	"sync"
 	"time"
 
 	"cloud.google.com/go/storage"
 	"google.golang.org/api/iterator"
 
-	"github.com/benthosdev/benthos/v4/internal/codec"
-	"github.com/benthosdev/benthos/v4/internal/codec/interop"
-	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/scanner"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service/codec"
 )
 
 const (
@@ -30,7 +26,7 @@ type csiConfig struct {
 	Bucket        string
 	Prefix        string
 	DeleteObjects bool
-	Codec         interop.FallbackReaderCodec
+	Codec         codec.DeprecatedFallbackCodec
 }
 
 func csiConfigFromParsed(pConf *service.ParsedConfig) (conf csiConfig, err error) {
@@ -40,7 +36,7 @@ func csiConfigFromParsed(pConf *service.ParsedConfig) (conf csiConfig, err error
 	if conf.Prefix, err = pConf.FieldString(csiFieldPrefix); err != nil {
 		return
 	}
-	if conf.Codec, err = interop.OldReaderCodecFromParsed(pConf); err != nil {
+	if conf.Codec, err = codec.DeprecatedCodecFromParsed(pConf); err != nil {
 		return
 	}
 	if conf.DeleteObjects, err = pConf.FieldBool(csiFieldDeleteObjects); err != nil {
@@ -56,7 +52,7 @@ func csiSpec() *service.ConfigSpec {
 		Categories("Services", "GCP").
 		Summary(`Downloads objects within a Google Cloud Storage bucket, optionally filtered by a prefix.`).
 		Description(`
-## Metadata
+== Metadata
 
 This input adds the following metadata fields to each message:
 
@@ -70,11 +66,11 @@ This input adds the following metadata fields to each message:
 - All user defined metadata
 `+"```"+`
 
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
+You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
 
-### Credentials
+=== Credentials
 
-By default Benthos will use a shared credentials file when connecting to GCP services. You can find out more [in this document](/docs/guides/cloud/gcp).`).
+By default Redpanda Connect will use a shared credentials file when connecting to GCP services. You can find out more in xref:guides:cloud/gcp.adoc[].`).
 		Fields(
 			service.NewStringField(csiFieldBucket).
 				Description("The name of the bucket from which to download objects."),
@@ -82,7 +78,7 @@ By default Benthos will use a shared credentials file when connecting to GCP ser
 				Description("An optional path prefix, if set only objects with the prefix are consumed.").
 				Default(""),
 		).
-		Fields(interop.OldReaderCodecFields("to_the_end")...).
+		Fields(codec.DeprecatedCodecFields("to_the_end")...).
 		Fields(
 			service.NewBoolField(csiFieldDeleteObjects).
 				Description("Whether to delete downloaded objects from the bucket once they are processed.").
@@ -119,7 +115,7 @@ type gcpCloudStorageObjectTarget struct {
 	ackFn func(context.Context, error) error
 }
 
-func newGCPCloudStorageObjectTarget(key string, ackFn codec.ReaderAckFn) *gcpCloudStorageObjectTarget {
+func newGCPCloudStorageObjectTarget(key string, ackFn service.AckFunc) *gcpCloudStorageObjectTarget {
 	if ackFn == nil {
 		ackFn = func(context.Context, error) error {
 			return nil
@@ -134,8 +130,8 @@ func deleteGCPCloudStorageObjectAckFn(
 	bucket *storage.BucketHandle,
 	key string,
 	del bool,
-	prev codec.ReaderAckFn,
-) codec.ReaderAckFn {
+	prev service.AckFunc,
+) service.AckFunc {
 	return func(ctx context.Context, err error) error {
 		if prev != nil {
 			if aerr := prev(ctx, err); aerr != nil {
@@ -156,7 +152,7 @@ type gcpCloudStoragePendingObject struct {
 	target    *gcpCloudStorageObjectTarget
 	obj       *storage.ObjectAttrs
 	extracted int
-	scanner   interop.FallbackReaderStream
+	scanner   codec.DeprecatedFallbackStream
 }
 
 type gcpCloudStorageTargetReader struct {
@@ -232,7 +228,7 @@ func (r gcpCloudStorageTargetReader) Close(context.Context) error {
 type gcpCloudStorageInput struct {
 	conf csiConfig
 
-	objectScannerCtor interop.FallbackReaderCodec
+	objectScannerCtor codec.DeprecatedFallbackCodec
 	keyReader         *gcpCloudStorageTargetReader
 
 	objectMut sync.Mutex
@@ -294,7 +290,9 @@ func (g *gcpCloudStorageInput) getObjectTarget(ctx context.Context) (*gcpCloudSt
 		target: target,
 		obj:    objAttributes,
 	}
-	if object.scanner, err = g.objectScannerCtor.Create(objReader, target.ackFn, scanner.SourceDetails{Name: target.key}); err != nil {
+	details := service.NewScannerSourceDetails()
+	details.SetName(target.key)
+	if object.scanner, err = g.objectScannerCtor.Create(objReader, target.ackFn, details); err != nil {
 		_ = target.ackFn(ctx, err)
 		return nil, err
 	}
@@ -327,10 +325,6 @@ func (g *gcpCloudStorageInput) ReadBatch(ctx context.Context) (msg service.Messa
 	defer func() {
 		if errors.Is(err, io.EOF) {
 			err = service.ErrEndOfInput
-		} else if errors.Is(err, context.Canceled) ||
-			errors.Is(err, context.DeadlineExceeded) ||
-			(err != nil && strings.HasSuffix(err.Error(), "context canceled")) {
-			err = component.ErrTimeout
 		}
 	}()
 

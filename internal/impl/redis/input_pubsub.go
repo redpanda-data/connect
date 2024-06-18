@@ -6,8 +6,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -35,6 +34,7 @@ Use `+"`\\`"+` to escape special characters if you want to match them verbatim.`
 			service.NewBoolField(psiFieldUsePatterns).
 				Description("Whether to use the PSUBSCRIBE command, allowing for glob-style patterns within target channel names.").
 				Default(false),
+			service.NewAutoRetryNacksToggleField(),
 		)
 }
 
@@ -46,7 +46,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return service.AutoRetryNacks(r), nil
+			return service.AutoRetryNacksToggled(conf, r)
 		})
 	if err != nil {
 		panic(err)
@@ -94,8 +94,6 @@ func (r *redisPubSubReader) Connect(ctx context.Context) error {
 		return err
 	}
 
-	r.log.Infof("Receiving Redis pub/sub messages from channels: %v\n", r.channels)
-
 	if r.usePatterns {
 		r.pubsub = r.client.PSubscribe(ctx, r.channels...)
 	} else {
@@ -119,15 +117,14 @@ func (r *redisPubSubReader) Read(ctx context.Context) (*service.Message, service
 	case rMsg, open := <-pubsub.Channel():
 		if !open {
 			_ = r.disconnect()
-			return nil, nil, component.ErrTypeClosed
+			return nil, nil, service.ErrEndOfInput
 		}
 		return service.NewMessage([]byte(rMsg.Payload)), func(ctx context.Context, err error) error {
 			return nil
 		}, nil
 	case <-ctx.Done():
+		return nil, nil, ctx.Err()
 	}
-
-	return nil, nil, component.ErrTimeout
 }
 
 func (r *redisPubSubReader) disconnect() error {

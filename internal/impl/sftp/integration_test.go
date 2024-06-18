@@ -1,6 +1,8 @@
 package sftp
 
 import (
+	"io/fs"
+	"os"
 	"testing"
 	"time"
 
@@ -8,11 +10,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
-	"github.com/benthosdev/benthos/v4/internal/integration"
+	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
 	// Bring in memory cache.
-	_ "github.com/benthosdev/benthos/v4/public/components/pure"
+	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 )
 
 var (
@@ -32,7 +33,8 @@ func TestIntegration(t *testing.T) {
 		Repository: "atmoz/sftp",
 		Tag:        "alpine",
 		Cmd: []string{
-			sftpUsername + ":" + sftpPassword + ":1001:100:upload",
+			// https://github.com/atmoz/sftp/issues/401
+			"/bin/sh", "-c", "ulimit -n 65535 && exec /entrypoint " + sftpUsername + ":" + sftpPassword + ":1001:100:upload",
 		},
 	})
 	require.NoError(t, err)
@@ -42,13 +44,13 @@ func TestIntegration(t *testing.T) {
 
 	_ = resource.Expire(900)
 
-	creds := Credentials{
+	creds := credentials{
 		Username: sftpUsername,
 		Password: sftpPassword,
 	}
 
 	require.NoError(t, pool.Retry(func() error {
-		_, err = creds.GetClient(ifs.OS(), "localhost:"+resource.GetPort("22/tcp"))
+		_, err = creds.GetClient(&osPT{}, "localhost:"+resource.GetPort("22/tcp"))
 		return err
 	}))
 
@@ -92,8 +94,8 @@ cache_resources:
 		suite.Run(
 			t, template,
 			integration.StreamTestOptPort(resource.GetPort("22/tcp")),
-			integration.StreamTestOptVarOne("all-bytes"),
-			integration.StreamTestOptVarTwo("false"),
+			integration.StreamTestOptVarSet("VAR1", "all-bytes"),
+			integration.StreamTestOptVarSet("VAR2", "false"),
 		)
 
 		t.Run("watcher", func(t *testing.T) {
@@ -106,9 +108,31 @@ cache_resources:
 			watcherSuite.Run(
 				t, template,
 				integration.StreamTestOptPort(resource.GetPort("22/tcp")),
-				integration.StreamTestOptVarOne("all-bytes"),
-				integration.StreamTestOptVarTwo("true"),
+				integration.StreamTestOptVarSet("VAR1", "all-bytes"),
+				integration.StreamTestOptVarSet("VAR2", "true"),
 			)
 		})
 	})
+}
+
+type osPT struct{}
+
+func (o *osPT) Open(name string) (fs.File, error) {
+	return os.Open(name)
+}
+
+func (o *osPT) OpenFile(name string, flag int, perm fs.FileMode) (fs.File, error) {
+	return os.OpenFile(name, flag, perm)
+}
+
+func (o *osPT) Stat(name string) (fs.FileInfo, error) {
+	return os.Stat(name)
+}
+
+func (o *osPT) Remove(name string) error {
+	return os.Remove(name)
+}
+
+func (o *osPT) MkdirAll(path string, perm fs.FileMode) error {
+	return os.MkdirAll(path, perm)
 }

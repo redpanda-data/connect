@@ -7,8 +7,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -20,8 +19,8 @@ func redisPubSubOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Summary(`Publishes messages through the Redis PubSub model. It is not possible to guarantee that messages have been received.`).
-		Description(output.Description(true, true, `
-This output will interpolate functions within the channel field, you can find a list of functions [here](/docs/configuration/interpolation#bloblang-queries).`)).
+		Description(`
+This output will interpolate functions within the channel field, you can find a list of functions xref:configuration:interpolation.adoc#bloblang-queries[here].`+service.OutputPerformanceDocs(true, true)).
 		Categories("Services").
 		Fields(clientFields()...).
 		Fields(
@@ -93,8 +92,6 @@ func (r *redisPubSubWriter) Connect(ctx context.Context) error {
 	if _, err = client.Ping(ctx).Result(); err != nil {
 		return err
 	}
-
-	r.log.Infof("Pushing messages to Redis channel: %v\n", r.channelStr)
 	r.client = client
 	return nil
 }

@@ -14,13 +14,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func promFromYAML(t testing.TB, conf string, args ...any) *Metrics {
+func promFromYAML(t testing.TB, conf string, args ...any) *metrics {
 	t.Helper()
 
-	pConf, err := ConfigSpec().ParseYAML(fmt.Sprintf(conf, args...), nil)
+	pConf, err := configSpec().ParseYAML(fmt.Sprintf(conf, args...), nil)
 	require.NoError(t, err)
 
-	p, err := FromParsed(pConf, nil)
+	p, err := fromParsed(pConf, nil)
 	require.NoError(t, err)
 
 	return p
@@ -90,7 +90,7 @@ push_interval: %v
 	}
 }
 
-func getTestProm(t *testing.T) (*Metrics, http.HandlerFunc) {
+func getTestProm(t *testing.T) (*metrics, http.HandlerFunc) {
 	t.Helper()
 
 	prom := promFromYAML(t, ``)
@@ -100,7 +100,7 @@ func getTestProm(t *testing.T) (*Metrics, http.HandlerFunc) {
 func getPage(t *testing.T, handler http.HandlerFunc) string {
 	t.Helper()
 
-	req := httptest.NewRequest("GET", "http://example.com/foo", nil)
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/foo", http.NoBody)
 	w := httptest.NewRecorder()
 	handler(w, req)
 
@@ -199,7 +199,7 @@ file_output_path: %v
 	assertContainsTestMetrics(t, string(file))
 }
 
-func applyTestMetrics(nm *Metrics) {
+func applyTestMetrics(nm *metrics) {
 	ctr := nm.NewCounterCtor("counterone")()
 	ctr.Incr(10)
 	ctr.Incr(11)

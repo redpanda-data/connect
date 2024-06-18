@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func TestInputKVParse(t *testing.T) {
@@ -34,16 +34,16 @@ auth:
 		e, err := newKVReader(conf, service.MockResources())
 		require.NoError(t, err)
 
-		assert.Equal(t, "url1,url2", e.urls)
+		assert.Equal(t, "url1,url2", e.connDetails.urls)
 		assert.Equal(t, "testbucket", e.bucket)
 		assert.Equal(t, "testkey", e.key)
-		assert.Equal(t, true, e.ignoreDeletes)
-		assert.Equal(t, true, e.includeHistory)
-		assert.Equal(t, true, e.metaOnly)
-		assert.Equal(t, "test auth n key file", e.authConf.NKeyFile)
-		assert.Equal(t, "test auth user creds file", e.authConf.UserCredentialsFile)
-		assert.Equal(t, "test auth inline user JWT", e.authConf.UserJWT)
-		assert.Equal(t, "test auth inline user NKey Seed", e.authConf.UserNkeySeed)
+		assert.True(t, e.ignoreDeletes)
+		assert.True(t, e.includeHistory)
+		assert.True(t, e.metaOnly)
+		assert.Equal(t, "test auth n key file", e.connDetails.authConf.NKeyFile)
+		assert.Equal(t, "test auth user creds file", e.connDetails.authConf.UserCredentialsFile)
+		assert.Equal(t, "test auth inline user JWT", e.connDetails.authConf.UserJWT)
+		assert.Equal(t, "test auth inline user NKey Seed", e.connDetails.authConf.UserNkeySeed)
 	})
 
 	t.Run("Missing user_nkey_seed", func(t *testing.T) {

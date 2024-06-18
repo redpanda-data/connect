@@ -15,7 +15,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
-	"github.com/benthosdev/benthos/v4/internal/integration"
+	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
 
 func generateCollectionName(testID string) string {
@@ -108,9 +108,9 @@ output:
 		suite.Run(
 			t, template,
 			integration.StreamTestOptPort(resource.GetPort("27017/tcp")),
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-				cName := generateCollectionName(testID)
-				vars.Var1 = cName
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+				cName := generateCollectionName(vars.ID)
+				vars.General["VAR1"] = cName
 				require.NoError(t, mongoClient.Database("TestDB").CreateCollection(ctx, cName))
 			}),
 		)
@@ -139,9 +139,9 @@ cache_resources:
 		cacheSuite.Run(
 			t, cacheTemplate,
 			integration.CacheTestOptPort(resource.GetPort("27017/tcp")),
-			integration.CacheTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.CacheTestConfigVars) {
-				cName := generateCollectionName(testID)
-				vars.Var1 = cName
+			integration.CacheTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.CacheTestConfigVars) {
+				cName := generateCollectionName(vars.ID)
+				vars.General["VAR1"] = cName
 				require.NoError(t, mongoClient.Database("TestDB").CreateCollection(ctx, cName))
 			}),
 		)

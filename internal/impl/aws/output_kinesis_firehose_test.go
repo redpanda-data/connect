@@ -14,7 +14,7 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 type mockKinesisFirehose struct {
@@ -45,7 +45,6 @@ func testKFO(t *testing.T, m *mockKinesisFirehose) *kinesisFirehoseWriter {
 		},
 		firehose: m,
 	}
-
 }
 
 func TestKinesisFirehoseWriteSinglePartMessage(t *testing.T) {

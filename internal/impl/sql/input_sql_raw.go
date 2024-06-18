@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
-	"github.com/benthosdev/benthos/v4/public/bloblang"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/Jeffail/shutdown"
+
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func sqlRawInputConfig() *service.ConfigSpec {
@@ -16,16 +17,17 @@ func sqlRawInputConfig() *service.ConfigSpec {
 		Beta().
 		Categories("Services").
 		Summary("Executes a select query and creates a message for each row received.").
-		Description(`Once the rows from the query are exhausted this input shuts down, allowing the pipeline to gracefully terminate (or the next input in a [sequence](/docs/components/inputs/sequence) to execute).`).
+		Description(`Once the rows from the query are exhausted this input shuts down, allowing the pipeline to gracefully terminate (or the next input in a xref:components:inputs/sequence.adoc[sequence] to execute).`).
 		Field(driverField).
 		Field(dsnField).
 		Field(rawQueryField().
 			Example("SELECT * FROM footable WHERE user_id = $1;")).
 		Field(service.NewBloblangField("args_mapping").
-			Description("A [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of values matching in size to the number of columns specified.").
+			Description("A xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of columns specified.").
 			Example("root = [ this.cat.meow, this.doc.woofs[0] ]").
 			Example(`root = [ meta("user.id") ]`).
-			Optional())
+			Optional()).
+		Field(service.NewAutoRetryNacksToggleField())
 	for _, f := range connFields() {
 		spec = spec.Field(f)
 	}
@@ -58,7 +60,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return service.AutoRetryNacks(i), nil
+			return service.AutoRetryNacksToggled(conf, i)
 		})
 	if err != nil {
 		panic(err)
@@ -158,13 +160,15 @@ func (s *sqlRawInput) Connect(ctx context.Context) (err error) {
 	var rows *sql.Rows
 	if rows, err = db.Query(s.queryStatic, args...); err != nil {
 		return
+	} else if err = rows.Err(); err != nil {
+		s.logger.With("err", err).Warnf("unexpected error while execute raw query %q", s.queryStatic)
 	}
 
 	s.db = db
 	s.rows = rows
 
 	go func() {
-		<-s.shutSig.CloseNowChan()
+		<-s.shutSig.HardStopChan()
 
 		s.dbMut.Lock()
 		if s.rows != nil {
@@ -177,7 +181,7 @@ func (s *sqlRawInput) Connect(ctx context.Context) (err error) {
 		}
 		s.dbMut.Unlock()
 
-		s.shutSig.ShutdownComplete()
+		s.shutSig.TriggerHasStopped()
 	}()
 	return nil
 }
@@ -221,7 +225,7 @@ func (s *sqlRawInput) Read(ctx context.Context) (*service.Message, service.AckFu
 }
 
 func (s *sqlRawInput) Close(ctx context.Context) error {
-	s.shutSig.CloseNow()
+	s.shutSig.TriggerHardStop()
 	s.dbMut.Lock()
 	isNil := s.db == nil
 	s.dbMut.Unlock()
@@ -229,7 +233,7 @@ func (s *sqlRawInput) Close(ctx context.Context) error {
 		return nil
 	}
 	select {
-	case <-s.shutSig.HasClosedChan():
+	case <-s.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

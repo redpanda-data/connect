@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/integration"
+	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
 
 func TestIntegrationNatsJetstream(t *testing.T) {
@@ -66,15 +66,15 @@ input:
 	)
 	suite.Run(
 		t, template,
-		integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+		integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
 			js, err := natsConn.JetStream()
 			require.NoError(t, err)
 
-			streamName := "stream-" + testID
+			streamName := "stream-" + vars.ID
 
 			_, err = js.AddStream(&nats.StreamConfig{
 				Name:     streamName,
-				Subjects: []string{"subject-" + testID},
+				Subjects: []string{"subject-" + vars.ID},
 			})
 			require.NoError(t, err)
 		}),
@@ -137,20 +137,20 @@ input:
 	)
 	suite.Run(
 		t, template,
-		integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+		integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
 			js, err := natsConn.JetStream()
 			require.NoError(t, err)
 
-			streamName := "stream-" + testID
+			streamName := "stream-" + vars.ID
 
 			_, err = js.AddStream(&nats.StreamConfig{
 				Name:     streamName,
-				Subjects: []string{"subject-" + testID},
+				Subjects: []string{"subject-" + vars.ID},
 			})
 			require.NoError(t, err)
 
 			_, err = js.AddConsumer(streamName, &nats.ConsumerConfig{
-				Durable:       "durable-" + testID,
+				Durable:       "durable-" + vars.ID,
 				DeliverPolicy: nats.DeliverAllPolicy,
 				AckPolicy:     nats.AckExplicitPolicy,
 			})

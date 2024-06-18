@@ -13,7 +13,7 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/sasl"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func franzKafkaOutputConfig() *service.ConfigSpec {
@@ -21,7 +21,7 @@ func franzKafkaOutputConfig() *service.ConfigSpec {
 		Beta().
 		Categories("Services").
 		Version("3.61.0").
-		Summary("A Kafka output using the [Franz Kafka client library](https://github.com/twmb/franz-go).").
+		Summary("A Kafka output using the https://github.com/twmb/franz-go[Franz Kafka client library^].").
 		Description(`
 Writes a batch of messages to Kafka brokers and waits for acknowledgement before propagating it back to the input.
 
@@ -82,7 +82,7 @@ This output often out-performs the traditional ` + "`kafka`" + ` output as well 
 			Optional().
 			Advanced()).
 		Field(service.NewTLSToggledField("tls")).
-		Field(saslField()).
+		Field(SASLFields()).
 		LintRule(`
 root = if this.partitioner == "manual" {
   if this.partition.or("") == "" {
@@ -257,7 +257,7 @@ func newFranzKafkaWriterFromConfig(conf *service.ParsedConfig, log *service.Logg
 	if tlsEnabled {
 		f.tlsConf = tlsConf
 	}
-	if f.saslConfs, err = saslMechanismsFromConfig(conf); err != nil {
+	if f.saslConfs, err = SASLMechanismsFromConfig(conf); err != nil {
 		return nil, err
 	}
 
@@ -279,7 +279,7 @@ func (f *franzKafkaWriter) Connect(ctx context.Context) error {
 		kgo.ProduceRequestTimeout(f.timeout),
 		kgo.ClientID(f.clientID),
 		kgo.Rack(f.rackID),
-		kgo.WithLogger(&kgoLogger{f.log}),
+		kgo.WithLogger(&KGoLogger{f.log}),
 	}
 	if f.tlsConf != nil {
 		clientOpts = append(clientOpts, kgo.DialTLSConfig(f.tlsConf))
@@ -300,7 +300,6 @@ func (f *franzKafkaWriter) Connect(ctx context.Context) error {
 	}
 
 	f.client = cl
-	f.log.Infof("Writing messages to Kafka topic: %v", f.topicStr)
 	return nil
 }
 

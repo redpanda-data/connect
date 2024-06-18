@@ -6,7 +6,7 @@ import (
 
 	"github.com/colinmarc/hdfs"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -21,17 +21,15 @@ func inputSpec() *service.ConfigSpec {
 		Categories("Services").
 		Summary(`Reads files from a HDFS directory, where each discrete file will be consumed as a single message payload.`).
 		Description(`
-### Metadata
+== Metadata
 
 This input adds the following metadata fields to each message:
 
-`+"``` text"+`
 - hdfs_name
 - hdfs_path
-`+"```"+`
 
 You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#bloblang-queries).`).
+xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].`).
 		Fields(
 			service.NewStringListField(iFieldHosts).
 				Description("A list of target host addresses to connect to.").
@@ -42,7 +40,6 @@ You can access these metadata fields using
 			service.NewStringField(iFieldDirectory).
 				Description("The directory to consume from."),
 		)
-
 }
 
 func init() {
@@ -105,8 +102,6 @@ func (h *hdfsReader) Connect(ctx context.Context) error {
 			h.targets = append(h.targets, info.Name())
 		}
 	}
-
-	h.log.Infof("Receiving files from HDFS directory: %v\n", h.directory)
 	return nil
 }
 

@@ -2,15 +2,18 @@ package nats
 
 import (
 	"context"
-	"crypto/tls"
-	"strings"
 	"sync"
 
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 
-	"github.com/benthosdev/benthos/v4/internal/impl/nats/auth"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/Jeffail/shutdown"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
+)
+
+const (
+	kvoFieldKey = "key"
 )
 
 func natsKVOutputConfig() *service.ConfigSpec {
@@ -21,27 +24,18 @@ func natsKVOutputConfig() *service.ConfigSpec {
 		Summary("Put messages in a NATS key-value bucket.").
 		Description(`
 The field ` + "`key`" + ` supports
-[interpolation functions](/docs/configuration/interpolation#bloblang-queries), allowing
+xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions], allowing
 you to create a unique key for each message.
 
-` + ConnectionNameDescription() + auth.Description()).
-		Field(service.NewStringListField("urls").
-			Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
-			Example([]string{"nats://127.0.0.1:4222"}).
-			Example([]string{"nats://username:password@127.0.0.1:4222"})).
-		Field(service.NewStringField("bucket").
-			Description("The name of the KV bucket to operate on.").
-			Example("my_kv_bucket")).
-		Field(service.NewInterpolatedStringField("key").
-			Description("The key for each message.").
-			Example("foo").
-			Example("foo.bar.baz").
-			Example(`foo.${! json("meta.type") }`)).
-		Field(service.NewIntField("max_in_flight").
-			Description("The maximum number of messages to have in flight at a given time. Increase this to improve throughput.").
-			Default(1024)).
-		Field(service.NewTLSToggledField("tls")).
-		Field(service.NewInternalField(auth.FieldSpec()))
+` + connectionNameDescription() + authDescription()).
+		Fields(kvDocs([]*service.ConfigField{
+			service.NewInterpolatedStringField(kvoFieldKey).
+				Description("The key for each message.").
+				Example("foo").
+				Example("foo.bar.baz").
+				Example(`foo.${! json("meta.type") }`),
+			service.NewOutputMaxInFlightField().Default(1024),
+		}...)...)
 }
 
 func init() {
@@ -63,60 +57,40 @@ func init() {
 //------------------------------------------------------------------------------
 
 type kvOutput struct {
-	label  string
-	urls   string
-	bucket string
-	key    *service.InterpolatedString
-	keyRaw string
-
-	authConf auth.Config
-	tlsConf  *tls.Config
+	connDetails connectionDetails
+	bucket      string
+	key         *service.InterpolatedString
+	keyRaw      string
 
 	log *service.Logger
-	fs  *service.FS
 
 	connMut  sync.Mutex
 	natsConn *nats.Conn
-	keyValue nats.KeyValue
+	keyValue jetstream.KeyValue
 
 	shutSig *shutdown.Signaller
 }
 
 func newKVOutput(conf *service.ParsedConfig, mgr *service.Resources) (*kvOutput, error) {
 	kv := kvOutput{
-		label:   mgr.Label(),
 		log:     mgr.Logger(),
-		fs:      mgr.FS(),
 		shutSig: shutdown.NewSignaller(),
 	}
 
-	urlList, err := conf.FieldStringList("urls")
-	if err != nil {
-		return nil, err
-	}
-	kv.urls = strings.Join(urlList, ",")
-
-	if kv.bucket, err = conf.FieldString("bucket"); err != nil {
+	var err error
+	if kv.connDetails, err = connectionDetailsFromParsed(conf, mgr); err != nil {
 		return nil, err
 	}
 
-	if kv.keyRaw, err = conf.FieldString("key"); err != nil {
+	if kv.bucket, err = conf.FieldString(kvFieldBucket); err != nil {
 		return nil, err
 	}
 
-	if kv.key, err = conf.FieldInterpolatedString("key"); err != nil {
+	if kv.keyRaw, err = conf.FieldString(kvoFieldKey); err != nil {
 		return nil, err
 	}
 
-	tlsConf, tlsEnabled, err := conf.FieldTLSToggled("tls")
-	if err != nil {
-		return nil, err
-	}
-	if tlsEnabled {
-		kv.tlsConf = tlsConf
-	}
-
-	if kv.authConf, err = AuthFromParsedConfig(conf.Namespace("auth")); err != nil {
+	if kv.key, err = conf.FieldInterpolatedString(kvoFieldKey); err != nil {
 		return nil, err
 	}
 	return &kv, nil
@@ -140,27 +114,19 @@ func (kv *kvOutput) Connect(ctx context.Context) (err error) {
 		}
 	}()
 
-	var opts []nats.Option
-	if kv.tlsConf != nil {
-		opts = append(opts, nats.Secure(kv.tlsConf))
-	}
-	opts = append(opts, nats.Name(kv.label))
-	opts = append(opts, authConfToOptions(kv.authConf, kv.fs)...)
-	if natsConn, err = nats.Connect(kv.urls, opts...); err != nil {
+	if natsConn, err = kv.connDetails.get(ctx); err != nil {
 		return err
 	}
 
-	jsc, err := natsConn.JetStream()
+	jsc, err := jetstream.New(natsConn)
 	if err != nil {
 		return err
 	}
 
-	kv.keyValue, err = jsc.KeyValue(kv.bucket)
+	kv.keyValue, err = jsc.KeyValue(ctx, kv.bucket)
 	if err != nil {
 		return err
 	}
-
-	kv.log.Infof("Setting values on NATS KV bucket: %s and key: %s", kv.bucket, kv.keyRaw)
 
 	kv.natsConn = natsConn
 	return nil
@@ -197,7 +163,7 @@ func (kv *kvOutput) Write(ctx context.Context, msg *service.Message) error {
 		return err
 	}
 
-	rev, err := keyValue.Put(key, value)
+	rev, err := keyValue.Put(ctx, key, value)
 	if err != nil {
 		return err
 	}
@@ -214,10 +180,10 @@ func (kv *kvOutput) Write(ctx context.Context, msg *service.Message) error {
 func (kv *kvOutput) Close(ctx context.Context) error {
 	go func() {
 		kv.disconnect()
-		kv.shutSig.ShutdownComplete()
+		kv.shutSig.TriggerHasStopped()
 	}()
 	select {
-	case <-kv.shutSig.HasClosedChan():
+	case <-kv.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

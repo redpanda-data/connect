@@ -47,7 +47,7 @@ func parseTopics(sourceTopics []string, defaultOffset int64, allowExplicitOffset
 		for _, splitTopic := range strings.Split(t, ",") {
 			// Trim whitespace so that `foo, bar` is still valid
 			trimmed := strings.TrimSpace(splitTopic)
-			if len(trimmed) == 0 {
+			if trimmed == "" {
 				continue
 			}
 
