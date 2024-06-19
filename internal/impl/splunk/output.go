@@ -12,6 +12,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -29,14 +30,15 @@ const (
 	soFieldEventSource     = "event_source"
 	soFieldEventSourceType = "event_sourcetype"
 	soFieldEventIndex      = "event_index"
-	soFieldSkipCertVerify  = "skip_cert_verify"
+	soFieldTLS             = "tls"
 	soFieldBatching        = "batching"
 
 	// Deprecated fields
-	soFieldBatchCount    = "batching_count"
-	soFieldBatchPeriod   = "batching_period"
-	soFieldBatchByteSize = "batching_byte_size"
-	soFieldRateLimit     = "rate_limit"
+	soFieldSkipCertVerify = "skip_cert_verify"
+	soFieldBatchCount     = "batching_count"
+	soFieldBatchPeriod    = "batching_period"
+	soFieldBatchByteSize  = "batching_byte_size"
+	soFieldRateLimit      = "rate_limit"
 )
 
 //------------------------------------------------------------------------------
@@ -56,11 +58,14 @@ func outputSpec() *service.ConfigSpec {
 			service.NewStringField(soFieldEventSource).Description("Set the source value to assign to the event data. Overrides existing source field if present.").Optional(),
 			service.NewStringField(soFieldEventSourceType).Description("Set the sourcetype value to assign to the event data. Overrides existing sourcetype field if present.").Optional(),
 			service.NewStringField(soFieldEventIndex).Description("Set the index value to assign to the event data. Overrides existing index field if present.").Optional(),
-			service.NewBoolField(soFieldSkipCertVerify).Description("Whether to skip server side certificate verification.").Advanced().Default(false),
+			service.NewTLSToggledField(soFieldTLS),
 			service.NewOutputMaxInFlightField(),
 			service.NewBatchPolicyField(soFieldBatching),
 
 			// Old deprecated fields
+			service.NewBoolField(soFieldSkipCertVerify).
+				Optional().
+				Deprecated(),
 			service.NewIntField(soFieldBatchCount).
 				Optional().
 				Deprecated(),
@@ -151,14 +156,24 @@ func outputFromParsed(pConf *service.ParsedConfig, log *service.Logger) (o *outp
 		return
 	}
 
-	var skipCertVerify bool
-	if skipCertVerify, err = pConf.FieldBool(soFieldSkipCertVerify); err != nil {
+	var tlsConf *tls.Config
+	var tlsEnabled bool
+	if tlsConf, tlsEnabled, err = pConf.FieldTLSToggled(soFieldTLS); err != nil {
 		return
 	}
 
-	tr := http.DefaultTransport.(*http.Transport).Clone()
-	tr.TLSClientConfig.InsecureSkipVerify = skipCertVerify
-	o.client = http.Client{Transport: tr}
+	o.client = http.Client{}
+	if tlsEnabled && tlsConf != nil {
+		if c, ok := http.DefaultTransport.(*http.Transport); ok {
+			cloned := c.Clone()
+			cloned.TLSClientConfig = tlsConf
+			o.client.Transport = cloned
+		} else {
+			o.client.Transport = &http.Transport{
+				TLSClientConfig: tlsConf,
+			}
+		}
+	}
 
 	return
 }

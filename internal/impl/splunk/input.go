@@ -11,6 +11,7 @@ package splunk
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"net/http"
@@ -24,11 +25,11 @@ import (
 )
 
 const (
-	siFieldURL            = "url"
-	siFieldUser           = "user"
-	siFieldPassword       = "password"
-	siFieldQuery          = "query"
-	siFieldSkipCertVerify = "skip_cert_verify"
+	siFieldURL      = "url"
+	siFieldUser     = "user"
+	siFieldPassword = "password"
+	siFieldQuery    = "query"
+	siFieldTLS      = "tls"
 )
 
 //------------------------------------------------------------------------------
@@ -44,7 +45,7 @@ func inputSpec() *service.ConfigSpec {
 			service.NewStringField(siFieldUser).Description("Splunk account user."),
 			service.NewStringField(siFieldPassword).Description("Splunk account password.").Secret(),
 			service.NewStringField(siFieldQuery).Description("Splunk search query."),
-			service.NewBoolField(siFieldSkipCertVerify).Description("Whether to skip server side certificate verification.").Advanced().Default(false),
+			service.NewTLSToggledField(siFieldTLS),
 			service.NewAutoRetryNacksToggleField(),
 		)
 }
@@ -77,36 +78,46 @@ type input struct {
 	log       *service.Logger
 }
 
-func inputFromParsed(pConf *service.ParsedConfig, log *service.Logger) (o *input, err error) {
-	o = &input{
+func inputFromParsed(pConf *service.ParsedConfig, log *service.Logger) (i *input, err error) {
+	i = &input{
 		shutSig: shutdown.NewSignaller(),
 		log:     log,
 	}
 
-	if o.url, err = pConf.FieldString(siFieldURL); err != nil {
+	if i.url, err = pConf.FieldString(siFieldURL); err != nil {
 		return
 	}
 
-	if o.user, err = pConf.FieldString(siFieldUser); err != nil {
+	if i.user, err = pConf.FieldString(siFieldUser); err != nil {
 		return
 	}
 
-	if o.password, err = pConf.FieldString(siFieldPassword); err != nil {
+	if i.password, err = pConf.FieldString(siFieldPassword); err != nil {
 		return
 	}
 
-	if o.query, err = pConf.FieldString(siFieldQuery); err != nil {
+	if i.query, err = pConf.FieldString(siFieldQuery); err != nil {
 		return
 	}
 
-	var skipCertVerify bool
-	if skipCertVerify, err = pConf.FieldBool(siFieldSkipCertVerify); err != nil {
+	var tlsConf *tls.Config
+	var tlsEnabled bool
+	if tlsConf, tlsEnabled, err = pConf.FieldTLSToggled(siFieldTLS); err != nil {
 		return
 	}
 
-	tr := http.DefaultTransport.(*http.Transport).Clone()
-	tr.TLSClientConfig.InsecureSkipVerify = skipCertVerify
-	o.client = http.Client{Transport: tr}
+	i.client = http.Client{}
+	if tlsEnabled && tlsConf != nil {
+		if c, ok := http.DefaultTransport.(*http.Transport); ok {
+			cloned := c.Clone()
+			cloned.TLSClientConfig = tlsConf
+			i.client.Transport = cloned
+		} else {
+			i.client.Transport = &http.Transport{
+				TLSClientConfig: tlsConf,
+			}
+		}
+	}
 
 	return
 }
