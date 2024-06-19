@@ -513,7 +513,7 @@ func (k *kafkaReader) saramaConfigFromParsed(conf *service.ParsedConfig) (*saram
 		return calculatedBackoff
 	}
 
-	sarama.Logger = &saramaLogger{l: k.mgr.Logger()}
+	sarama.Logger = &saramaLogger{l: k.mgr.Logger}
 
 	if err := ApplySaramaSASLFromParsed(conf, k.mgr, config); err != nil {
 		return nil, err
@@ -523,19 +523,19 @@ func (k *kafkaReader) saramaConfigFromParsed(conf *service.ParsedConfig) (*saram
 
 // saramaLogger implemented the StdLogger interface for sarama.
 type saramaLogger struct {
-	l *service.Logger
+	l func() *service.Logger
 }
 
 func (sl *saramaLogger) Print(v ...interface{}) {
-	sl.l.Infof("%v", v)
+	sl.l().Infof("[Sarama] %v", v)
 }
 
 func (sl *saramaLogger) Printf(format string, v ...interface{}) {
-	sl.l.Infof(format, v...)
+	sl.l().Infof("[Sarama] "+format, v...)
 }
 
 func (sl *saramaLogger) Println(v ...interface{}) {
-	sl.l.Infof("%v\n", v)
+	sl.l().Infof("[Sarama] %v\n", v)
 }
 
 // Connect establishes a kafkaReader connection.
