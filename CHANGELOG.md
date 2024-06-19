@@ -7,7 +7,8 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- The `splunk` input and `splunk_hec` output now support custom `tls` configuration.
+- The `splunk` input and `splunk_hec` output now support custom `tls` configuration. (@mihaitodor)
+- Field `timestamp` added to the `kafka` and `kafka_franz` outputs. (@mihaitodor)
 
 ## 4.30.0 - 2024-06-13
 

@@ -83,6 +83,11 @@ This output often out-performs the traditional ` + "`kafka`" + ` output as well 
 			Advanced()).
 		Field(service.NewTLSToggledField("tls")).
 		Field(SASLFields()).
+		Field(service.NewInterpolatedStringField("timestamp").
+			Description("An optional timestamp to set for each message. When left empty, the current timestamp is used.").
+			Example(`${! timestamp_unix() }`).
+			Example(`${! metadata("kafka_timestamp_unix") }`).
+			Optional()).
 		LintRule(`
 root = if this.partitioner == "manual" {
   if this.partition.or("") == "" {
@@ -119,10 +124,10 @@ func init() {
 
 type franzKafkaWriter struct {
 	seedBrokers      []string
-	topicStr         string
 	topic            *service.InterpolatedString
 	key              *service.InterpolatedString
 	partition        *service.InterpolatedString
+	timestamp        *service.InterpolatedString
 	clientID         string
 	rackID           string
 	idempotentWrite  bool
@@ -155,7 +160,6 @@ func newFranzKafkaWriterFromConfig(conf *service.ParsedConfig, log *service.Logg
 	if f.topic, err = conf.FieldInterpolatedString("topic"); err != nil {
 		return nil, err
 	}
-	f.topicStr, _ = conf.FieldString("topic")
 
 	if conf.Contains("key") {
 		if f.key, err = conf.FieldInterpolatedString("key"); err != nil {
@@ -261,6 +265,12 @@ func newFranzKafkaWriterFromConfig(conf *service.ParsedConfig, log *service.Logg
 		return nil, err
 	}
 
+	if conf.Contains("timestamp") {
+		if f.timestamp, err = conf.FieldInterpolatedString("timestamp"); err != nil {
+			return nil, err
+		}
+	}
+
 	return &f, nil
 }
 
@@ -342,6 +352,17 @@ func (f *franzKafkaWriter) WriteBatch(ctx context.Context, b service.MessageBatc
 			})
 			return nil
 		})
+		if f.timestamp != nil {
+			if tsStr, err := b.TryInterpolatedString(i, f.timestamp); err != nil {
+				return fmt.Errorf("timestamp interpolation error: %w", err)
+			} else {
+				if ts, err := strconv.ParseInt(tsStr, 10, 64); err != nil {
+					return fmt.Errorf("failed to parse timestamp: %w", err)
+				} else {
+					record.Timestamp = time.Unix(ts, 0)
+				}
+			}
+		}
 		records = append(records, record)
 	}
 
