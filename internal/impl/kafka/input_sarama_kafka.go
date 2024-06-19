@@ -506,7 +506,7 @@ func (k *kafkaReader) saramaConfigFromParsed(conf *service.ParsedConfig) (*saram
 		}
 
 		// exponential backoff with a max
-		calculatedBackoff := time.Duration(retries*retries) * initialBackoff
+		calculatedBackoff := time.Duration((retries+1)*(retries+1)) * initialBackoff
 		if calculatedBackoff > maxBackoff {
 			return maxBackoff
 		}
