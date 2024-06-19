@@ -43,6 +43,7 @@ const (
 	oskFieldBatching                     = "batching"
 	oskFieldMaxRetries                   = "max_retries"
 	oskFieldBackoff                      = "backoff"
+	oskFieldTimestamp                    = "timestamp"
 )
 
 // OSKConfigSpec creates a new config spec for a kafka output.
@@ -151,6 +152,11 @@ Unfortunately this error message will appear for a wide range of connection prob
 				MaxInterval:     time.Second * 10,
 				MaxElapsedTime:  time.Second * 30,
 			}).Description("Control time intervals between retry attempts.").Advanced(),
+			service.NewInterpolatedStringField(oskFieldTimestamp).
+				Description("An optional timestamp to set for each message. When left empty, the current timestamp is used.").
+				Example(`${! timestamp_unix() }`).
+				Example(`${! metadata("kafka_timestamp_unix") }`).
+				Optional(),
 		)
 }
 
@@ -183,6 +189,7 @@ type kafkaWriter struct {
 	key           *service.InterpolatedString
 	topic         *service.InterpolatedString
 	partition     *service.InterpolatedString
+	timestamp     *service.InterpolatedString
 	staticHeaders map[string]string
 	metaFilter    *service.MetadataExcludeFilter
 	retryAsBatch  bool
@@ -292,6 +299,12 @@ func NewKafkaWriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources
 
 	if k.admin, err = sarama.NewClusterAdmin(k.addresses, k.saramConf); err != nil {
 		return nil, err
+	}
+
+	if conf.Contains("timestamp") {
+		if k.timestamp, err = conf.FieldInterpolatedString("timestamp"); err != nil {
+			return nil, err
+		}
 	}
 
 	return &k, nil
@@ -534,6 +547,19 @@ func (k *kafkaWriter) WriteBatch(ctx context.Context, msg service.MessageBatch) 
 			// samara requires a 32-bit integer for the partition field
 			nextMsg.Partition = int32(partitionInt)
 		}
+
+		if k.timestamp != nil {
+			if tsStr, err := msg.TryInterpolatedString(i, k.timestamp); err != nil {
+				return fmt.Errorf("timestamp interpolation error: %w", err)
+			} else {
+				if ts, err := strconv.ParseInt(tsStr, 10, 64); err != nil {
+					return fmt.Errorf("failed to parse timestamp: %w", err)
+				} else {
+					nextMsg.Timestamp = time.Unix(ts, 0)
+				}
+			}
+		}
+
 		msgs = append(msgs, nextMsg)
 	}
 

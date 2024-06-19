@@ -44,6 +44,7 @@ output:
       byte_size: 0
       period: ""
       check: ""
+    timestamp: ${! timestamp_unix() } # No default (optional)
 ```
 
 --
@@ -85,6 +86,7 @@ output:
       root_cas_file: ""
       client_certs: []
     sasl: [] # No default (optional)
+    timestamp: ${! timestamp_unix() } # No default (optional)
 ```
 
 --
@@ -749,5 +751,22 @@ An external ID to provide when assuming a role.
 *Type*: `string`
 
 *Default*: `""`
+
+=== `timestamp`
+
+An optional timestamp to set for each message. When left empty, the current timestamp is used.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+
+*Type*: `string`
+
+
+```yml
+# Examples
+
+timestamp: ${! timestamp_unix() }
+
+timestamp: ${! metadata("kafka_timestamp_unix") }
+```
 
 
