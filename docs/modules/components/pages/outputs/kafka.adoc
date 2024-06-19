@@ -44,7 +44,6 @@ output:
       byte_size: 0
       period: ""
       check: ""
-    timestamp: ${! timestamp_unix() } # No default (optional)
 ```
 
 --
