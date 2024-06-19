@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/IBM/sarama"
+	"github.com/cenkalti/backoff/v4"
 
 	"github.com/Jeffail/checkpoint"
 
@@ -34,6 +35,7 @@ const (
 	iskFieldFetchBufferCap                = "fetch_buffer_cap"
 	iskFieldMultiHeader                   = "multi_header"
 	iskFieldBatching                      = "batching"
+	iskFieldConnectionBackoff             = "connection_backoff"
 )
 
 func iskConfigSpec() *service.ConfigSpec {
@@ -147,6 +149,11 @@ Unfortunately this error message will appear for a wide range of connection prob
 				Description("Decode headers into lists to allow handling of multiple values with the same key").
 				Advanced().Default(false),
 			service.NewBatchPolicyField(iskFieldBatching).Advanced(),
+			service.NewBackOffField(iskFieldConnectionBackoff, true, &backoff.ExponentialBackOff{
+				InitialInterval: time.Millisecond * 500,
+				MaxInterval:     time.Second * 10,
+				MaxElapsedTime:  0,
+			}).Description("Control time intervals between reconnection attempts when the broker is unavailable.").Advanced(),
 		)
 }
 
@@ -498,19 +505,27 @@ func (k *kafkaReader) saramaConfigFromParsed(conf *service.ParsedConfig) (*saram
 		config.Consumer.Offsets.Initial = sarama.OffsetOldest
 	}
 
-	config.Metadata.Retry.BackoffFunc = func(retries, maxRetries int) time.Duration {
-		initialBackoff := 500 * time.Millisecond
-		maxBackoff := 10 * time.Second
-		if retries == 0 {
-			return initialBackoff
+	if conf.Contains(iskFieldConnectionBackoff) {
+		var expBackoff *backoff.ExponentialBackOff
+		if expBackoff, err = conf.FieldBackOff(iskFieldConnectionBackoff); err != nil {
+			return nil, err
 		}
 
-		// exponential backoff with a max
-		calculatedBackoff := time.Duration((retries+1)*(retries+1)) * initialBackoff
-		if calculatedBackoff > maxBackoff {
-			return maxBackoff
+		// retrofit the configured backoff into Sarama's BackoffFunc
+		config.Metadata.Retry.BackoffFunc = func(retries, maxRetries int) time.Duration {
+			initialInterval := expBackoff.InitialInterval
+			maxInterval := expBackoff.MaxInterval
+			if retries == 0 {
+				return initialInterval
+			}
+
+			// exponential backoff with a max
+			calculatedBackoff := time.Duration((retries+1)*(retries+1)) * initialInterval
+			if calculatedBackoff > maxInterval {
+				return maxInterval
+			}
+			return calculatedBackoff
 		}
-		return calculatedBackoff
 	}
 
 	sarama.Logger = &saramaLogger{l: k.mgr.Logger}
@@ -519,23 +534,6 @@ func (k *kafkaReader) saramaConfigFromParsed(conf *service.ParsedConfig) (*saram
 		return nil, err
 	}
 	return config, nil
-}
-
-// saramaLogger implemented the StdLogger interface for sarama.
-type saramaLogger struct {
-	l func() *service.Logger
-}
-
-func (sl *saramaLogger) Print(v ...interface{}) {
-	sl.l().Infof("[Sarama] %v", v)
-}
-
-func (sl *saramaLogger) Printf(format string, v ...interface{}) {
-	sl.l().Infof("[Sarama] "+format, v...)
-}
-
-func (sl *saramaLogger) Println(v ...interface{}) {
-	sl.l().Infof("[Sarama] %v\n", v)
 }
 
 // Connect establishes a kafkaReader connection.
@@ -573,7 +571,7 @@ func (k *kafkaReader) ReadBatch(ctx context.Context) (service.MessageBatch, serv
 	return nil, nil, ctx.Err()
 }
 
-// CloseAsync shuts down the kafkaReader input and stops processing requests.
+// Close shuts down the kafkaReader input and stops processing requests.
 func (k *kafkaReader) Close(ctx context.Context) (err error) {
 	k.closeGroupAndConsumers()
 	select {
@@ -582,4 +580,21 @@ func (k *kafkaReader) Close(ctx context.Context) (err error) {
 		err = ctx.Err()
 	}
 	return
+}
+
+// saramaLogger implements the StdLogger interface for sarama.
+type saramaLogger struct {
+	l func() *service.Logger
+}
+
+func (sl *saramaLogger) Print(v ...interface{}) {
+	sl.l().Debugf("[Sarama] %v", v)
+}
+
+func (sl *saramaLogger) Printf(format string, v ...interface{}) {
+	sl.l().Debugf("[Sarama] "+format, v...)
+}
+
+func (sl *saramaLogger) Println(v ...interface{}) {
+	sl.l().Debugf("[Sarama] %v\n", v)
 }
