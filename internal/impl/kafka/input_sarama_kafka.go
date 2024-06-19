@@ -498,6 +498,21 @@ func (k *kafkaReader) saramaConfigFromParsed(conf *service.ParsedConfig) (*saram
 		config.Consumer.Offsets.Initial = sarama.OffsetOldest
 	}
 
+	config.Metadata.Retry.BackoffFunc = func(retries, maxRetries int) time.Duration {
+		initialBackoff := 500 * time.Millisecond
+		maxBackoff := 10 * time.Second
+		if retries == 0 {
+			return initialBackoff
+		}
+
+		// exponential backoff with a max
+		calculatedBackoff := time.Duration(retries*retries) * initialBackoff
+		if calculatedBackoff > maxBackoff {
+			return maxBackoff
+		}
+		return calculatedBackoff
+	}
+
 	if err := ApplySaramaSASLFromParsed(conf, k.mgr, config); err != nil {
 		return nil, err
 	}
