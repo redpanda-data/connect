@@ -156,7 +156,8 @@ Unfortunately this error message will appear for a wide range of connection prob
 				Description("An optional timestamp to set for each message. When left empty, the current timestamp is used.").
 				Example(`${! timestamp_unix() }`).
 				Example(`${! metadata("kafka_timestamp_unix") }`).
-				Optional(),
+				Optional().
+				Advanced(),
 		)
 }
 

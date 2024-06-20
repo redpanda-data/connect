@@ -87,7 +87,8 @@ This output often out-performs the traditional ` + "`kafka`" + ` output as well 
 			Description("An optional timestamp to set for each message. When left empty, the current timestamp is used.").
 			Example(`${! timestamp_unix() }`).
 			Example(`${! metadata("kafka_timestamp_unix") }`).
-			Optional()).
+			Optional().
+			Advanced()).
 		LintRule(`
 root = if this.partitioner == "manual" {
   if this.partition.or("") == "" {
