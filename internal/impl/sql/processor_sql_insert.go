@@ -226,10 +226,15 @@ func (s *sqlInsertProcessor) ProcessBatch(ctx context.Context, batch service.Mes
 		}
 	}
 
+	var argsExec *service.MessageBatchBloblangExecutor
+	if s.argsMapping != nil {
+		argsExec = batch.BloblangExecutor(s.argsMapping)
+	}
+
 	for i, msg := range batch {
 		var args []any
-		if s.argsMapping != nil {
-			resMsg, err := batch.BloblangQuery(i, s.argsMapping)
+		if argsExec != nil {
+			resMsg, err := argsExec.Query(i)
 			if err != nil {
 				s.logger.Debugf("Arguments mapping failed: %v", err)
 				msg.SetError(err)

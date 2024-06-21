@@ -155,13 +155,18 @@ func newRedisScriptProcFromConfig(conf *service.ParsedConfig, res *service.Resou
 	return r, nil
 }
 
-func (r *redisScriptProc) exec(ctx context.Context, index int, inBatch service.MessageBatch, msg *service.Message) error {
-	args, err := getArgsMapping(inBatch, index, r.argsMapping)
+func (r *redisScriptProc) exec(
+	ctx context.Context,
+	index int,
+	argsExec, keysStrExec *service.MessageBatchBloblangExecutor,
+	msg *service.Message,
+) error {
+	args, err := getArgsMapping(index, argsExec)
 	if err != nil {
 		return fmt.Errorf("args_mapping failed: %w", err)
 	}
 
-	keys, err := getKeysStrMapping(inBatch, index, r.keysMapping)
+	keys, err := getKeysStrMapping(index, keysStrExec)
 	if err != nil {
 		return fmt.Errorf("keys_mapping failed: %w", err)
 	}
@@ -186,8 +191,9 @@ func (r *redisScriptProc) exec(ctx context.Context, index int, inBatch service.M
 
 func (r *redisScriptProc) ProcessBatch(ctx context.Context, inBatch service.MessageBatch) ([]service.MessageBatch, error) {
 	newMsg := inBatch.Copy()
+	argsExec, keysExec := inBatch.BloblangExecutor(r.argsMapping), inBatch.BloblangExecutor(r.keysMapping)
 	for index, part := range newMsg {
-		if err := r.exec(ctx, index, inBatch, part); err != nil {
+		if err := r.exec(ctx, index, argsExec, keysExec, part); err != nil {
 			r.log.Debugf("Args mapping failed: %v", err)
 			part.SetError(err)
 		}
@@ -199,8 +205,8 @@ func (r *redisScriptProc) Close(ctx context.Context) error {
 	return r.client.Close()
 }
 
-func getArgsMapping(inBatch service.MessageBatch, index int, mapping *bloblang.Executor) ([]any, error) {
-	resMsg, err := inBatch.BloblangQuery(index, mapping)
+func getArgsMapping(index int, mapping *service.MessageBatchBloblangExecutor) ([]any, error) {
+	resMsg, err := mapping.Query(index)
 	if err != nil {
 		return nil, fmt.Errorf("mapping failed: %v", err)
 	}
@@ -221,8 +227,8 @@ func getArgsMapping(inBatch service.MessageBatch, index int, mapping *bloblang.E
 	return args, nil
 }
 
-func getKeysStrMapping(inBatch service.MessageBatch, index int, mapping *bloblang.Executor) ([]string, error) {
-	resMsg, err := inBatch.BloblangQuery(index, mapping)
+func getKeysStrMapping(index int, mapping *service.MessageBatchBloblangExecutor) ([]string, error) {
+	resMsg, err := mapping.Query(index)
 	if err != nil {
 		return nil, fmt.Errorf("mapping failed: %v", err)
 	}

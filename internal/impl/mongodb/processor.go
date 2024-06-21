@@ -133,6 +133,8 @@ type msgsAndModels struct {
 func (m *Processor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
 	writeModelsMap := map[string]msgsAndModels{}
 
+	wmExec := m.writeMaps.exec(batch)
+
 	_ = batch.WalkWithBatchedErrors(func(i int, msg *service.Message) (err error) {
 		defer func() {
 			if err != nil {
@@ -140,7 +142,7 @@ func (m *Processor) ProcessBatch(ctx context.Context, batch service.MessageBatch
 			}
 		}()
 
-		docJSON, filterJSON, hintJSON, err := m.writeMaps.extractFromMessage(m.operation, i, batch)
+		docJSON, filterJSON, hintJSON, err := wmExec.extractFromMessage(m.operation, i)
 		if err != nil {
 			return err
 		}

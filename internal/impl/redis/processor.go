@@ -321,8 +321,14 @@ func getRedisOperator(opStr string) (redisOperator, error) {
 	return nil, fmt.Errorf("operator not recognised: %v", opStr)
 }
 
-func (r *redisProc) execRaw(ctx context.Context, index int, inBatch service.MessageBatch, msg *service.Message) error {
-	resMsg, err := inBatch.BloblangQuery(index, r.argsMapping)
+func (r *redisProc) execRaw(
+	ctx context.Context,
+	index int,
+	argsExec *service.MessageBatchBloblangExecutor,
+	commandInterp *service.MessageBatchInterpolationExecutor,
+	msg *service.Message,
+) error {
+	resMsg, err := argsExec.Query(index)
 	if err != nil {
 		return fmt.Errorf("args mapping failed: %v", err)
 	}
@@ -349,7 +355,7 @@ func (r *redisProc) execRaw(ctx context.Context, index int, inBatch service.Mess
 		}
 	}
 
-	command, err := inBatch.TryInterpolatedString(index, r.command)
+	command, err := commandInterp.TryString(index)
 	if err != nil {
 		return fmt.Errorf("command interpolation error: %w", err)
 	}
@@ -384,8 +390,8 @@ func (r *redisProc) execRaw(ctx context.Context, index int, inBatch service.Mess
 
 func (r *redisProc) ProcessBatch(ctx context.Context, inBatch service.MessageBatch) ([]service.MessageBatch, error) {
 	newMsg := inBatch.Copy()
-	for index, part := range newMsg {
-		if r.operator != nil {
+	if r.operator != nil {
+		for index, part := range newMsg {
 			key, err := inBatch.TryInterpolatedString(index, r.key)
 			if err != nil {
 				r.log.Errorf("Key interpolation error: %v", err)
@@ -396,11 +402,16 @@ func (r *redisProc) ProcessBatch(ctx context.Context, inBatch service.MessageBat
 				r.log.Debugf("Operator failed for key '%s': %v", key, err)
 				part.SetError(fmt.Errorf("redis operator failed: %w", err))
 			}
-		} else {
-			if err := r.execRaw(ctx, index, inBatch, part); err != nil {
-				r.log.Debugf("Args mapping failed: %v", err)
-				part.SetError(err)
-			}
+		}
+		return []service.MessageBatch{newMsg}, nil
+	}
+
+	argsExec := inBatch.BloblangExecutor(r.argsMapping)
+	commandExec := inBatch.InterpolationExecutor(r.command)
+	for index, part := range newMsg {
+		if err := r.execRaw(ctx, index, argsExec, commandExec, part); err != nil {
+			r.log.Debugf("Args mapping failed: %v", err)
+			part.SetError(err)
 		}
 	}
 	return []service.MessageBatch{newMsg}, nil
