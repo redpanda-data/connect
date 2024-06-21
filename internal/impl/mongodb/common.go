@@ -399,13 +399,18 @@ type writeMapsExec struct {
 	upsert      bool
 }
 
-func (w writeMaps) exec(b service.MessageBatch) writeMapsExec {
-	return writeMapsExec{
-		filterMap:   b.BloblangExecutor(w.filterMap),
-		documentMap: b.BloblangExecutor(w.documentMap),
-		hintMap:     b.BloblangExecutor(w.hintMap),
-		upsert:      w.upsert,
+func (w writeMaps) exec(b service.MessageBatch) (e writeMapsExec) {
+	if w.filterMap != nil {
+		e.filterMap = b.BloblangExecutor(w.filterMap)
 	}
+	if w.documentMap != nil {
+		e.documentMap = b.BloblangExecutor(w.documentMap)
+	}
+	if w.hintMap != nil {
+		e.hintMap = b.BloblangExecutor(w.hintMap)
+	}
+	e.upsert = w.upsert
+	return
 }
 
 func extJSONFromMap(i int, m *service.MessageBatchBloblangExecutor) (any, error) {
