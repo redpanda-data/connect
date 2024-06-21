@@ -44,6 +44,7 @@ $(PATHINSTBIN)/%: $(SOURCE_FILES)
 	@go build $(GO_FLAGS) -tags "$(TAGS)" -ldflags "$(LD_FLAGS) $(VER_FLAGS)" -o $@ ./cmd/$*
 
 $(APPS): %: $(PATHINSTBIN)/%
+	go generate ./internal/impl/redpanda
 
 # TOOLS = redpanda-docs TODO
 # tools: $(TOOLS)
