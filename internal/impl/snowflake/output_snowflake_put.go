@@ -420,12 +420,12 @@ func getPrivateKey(f ifs.FS, path, passphrase string) (*rsa.PrivateKey, error) {
 
 	privateKeyBlock, _ := pem.Decode(privateKeyBytes)
 	if privateKeyBlock == nil {
-		return nil, fmt.Errorf("could not parse private key, key is not in PEM format")
+		return nil, errors.New("could not parse private key, key is not in PEM format")
 	}
 
 	if privateKeyBlock.Type == "ENCRYPTED PRIVATE KEY" {
 		if passphrase == "" {
-			return nil, fmt.Errorf("private key requires a passphrase, but private_key_passphrase was not supplied")
+			return nil, errors.New("private key requires a passphrase, but private_key_passphrase was not supplied")
 		}
 
 		// Only keys encrypted with pbes2 http://oid-info.com/get/1.2.840.113549.1.5.13 are supported.
@@ -724,7 +724,7 @@ func (s *snowflakeWriter) getSnowpipeInsertURL(snowpipe, requestID string) strin
 	query := url.Values{"requestId": []string{requestID}}
 	u := url.URL{
 		Scheme:   "https",
-		Host:     fmt.Sprintf("%s.snowflakecomputing.com", s.accountIdentifier),
+		Host:     s.accountIdentifier + ".snowflakecomputing.com",
 		Path:     path.Join("/v1/data/pipes", fmt.Sprintf("%s.%s.%s", s.database, s.schema, snowpipe), "insertFiles"),
 		RawQuery: query.Encode(),
 	}

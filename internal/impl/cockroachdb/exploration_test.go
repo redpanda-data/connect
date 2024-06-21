@@ -15,9 +15,9 @@ import (
 
 	_ "github.com/lib/pq"
 
-	"github.com/benthosdev/benthos/v4/internal/integration"
 	_ "github.com/benthosdev/benthos/v4/public/components/io"
 	_ "github.com/benthosdev/benthos/v4/public/components/pure"
+	"github.com/benthosdev/benthos/v4/public/service/integration"
 )
 
 func TestIntegrationExploration(t *testing.T) {
@@ -94,6 +94,8 @@ func TestIntegrationExploration(t *testing.T) {
 		assert.Equal(t, float64(j), gObj.S("after", "a").Data(), gObj.String())
 	}
 
+	require.NoError(t, rows.Err(), "checking rows.Err()")
+
 	done()
 
 	cfdb.Close()
@@ -128,6 +130,8 @@ func TestIntegrationExploration(t *testing.T) {
 	}
 
 	done()
+
+	require.NoError(t, rows.Err(), "checking rows.Err()")
 
 	cfdb.Close()
 	rows.Close()

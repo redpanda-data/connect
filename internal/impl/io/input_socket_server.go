@@ -17,10 +17,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/codec/interop"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/scanner"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -62,6 +63,7 @@ func socketServerInputSpec() *service.ConfigSpec {
 			).
 				Description("TLS specific configuration, valid when the `network` is set to `tls`.").
 				Optional(),
+			service.NewAutoRetryNacksToggleField(),
 		).
 		Fields(interop.OldReaderCodecFields("lines")...)
 }
@@ -72,7 +74,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return service.AutoRetryNacksBatched(i), nil
+		return service.AutoRetryNacksBatchedToggled(conf, i)
 	})
 	if err != nil {
 		panic(err)
@@ -206,15 +208,15 @@ func (t *socketServerInput) loop(listener net.Listener) {
 		wg.Wait()
 		_ = listener.Close()
 		close(t.messages)
-		t.shutSig.ShutdownComplete()
+		t.shutSig.TriggerHasStopped()
 	}()
 
 	go func() {
-		<-t.shutSig.CloseAtLeisureChan()
+		<-t.shutSig.SoftStopChan()
 		_ = listener.Close()
 	}()
 
-	closeCtx, done := t.shutSig.CloseAtLeisureCtx(context.Background())
+	closeCtx, done := t.shutSig.SoftStopCtx(context.Background())
 	defer done()
 
 acceptLoop:
@@ -227,13 +229,13 @@ acceptLoop:
 			select {
 			case <-time.After(time.Second):
 				continue acceptLoop
-			case <-t.shutSig.CloseAtLeisureChan():
+			case <-t.shutSig.SoftStopChan():
 				return
 			}
 		}
 
 		go func() {
-			<-t.shutSig.CloseAtLeisureChan()
+			<-t.shutSig.SoftStopChan()
 			_ = conn.Close()
 		}()
 
@@ -267,7 +269,7 @@ acceptLoop:
 
 				select {
 				case t.messages <- parts:
-				case <-t.shutSig.CloseAtLeisureChan():
+				case <-t.shutSig.SoftStopChan():
 					return
 				}
 			}
@@ -279,15 +281,15 @@ func (t *socketServerInput) udpLoop(conn net.PacketConn) {
 	defer func() {
 		_ = conn.Close()
 		close(t.messages)
-		t.shutSig.ShutdownComplete()
+		t.shutSig.TriggerHasStopped()
 	}()
 
 	go func() {
-		<-t.shutSig.CloseAtLeisureChan()
+		<-t.shutSig.SoftStopChan()
 		_ = conn.Close()
 	}()
 
-	closeCtx, done := t.shutSig.CloseAtLeisureCtx(context.Background())
+	closeCtx, done := t.shutSig.SoftStopCtx(context.Background())
 	defer done()
 
 	codec, err := t.codecCtor.Create(&wrapPacketConn{PacketConn: conn}, func(ctx context.Context, err error) error {
@@ -313,16 +315,16 @@ func (t *socketServerInput) udpLoop(conn net.PacketConn) {
 
 		select {
 		case t.messages <- parts:
-		case <-t.shutSig.CloseAtLeisureChan():
+		case <-t.shutSig.SoftStopChan():
 			return
 		}
 	}
 }
 
 func (t *socketServerInput) Close(ctx context.Context) error {
-	t.shutSig.CloseAtLeisure()
+	t.shutSig.TriggerSoftStop()
 	select {
-	case <-t.shutSig.HasClosedChan():
+	case <-t.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

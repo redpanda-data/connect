@@ -4,12 +4,13 @@ import (
 	"context"
 	"time"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/metrics"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -63,13 +64,13 @@ type inprocInput struct {
 func (i *inprocInput) loop() {
 	defer func() {
 		close(i.transactions)
-		i.shutSig.ShutdownComplete()
+		i.shutSig.TriggerHasStopped()
 	}()
 
 	var inprocChan <-chan message.Transaction
 
 messageLoop:
-	for !i.shutSig.ShouldCloseAtLeisure() {
+	for !i.shutSig.IsSoftStopSignalled() {
 		if inprocChan == nil {
 			for {
 				var err error
@@ -77,7 +78,7 @@ messageLoop:
 					i.log.Error("Failed to connect to inproc output '%v': %v\n", i.pipe, err)
 					select {
 					case <-time.After(time.Second):
-					case <-i.shutSig.CloseAtLeisureChan():
+					case <-i.shutSig.SoftStopChan():
 						return
 					}
 				} else {
@@ -94,10 +95,10 @@ messageLoop:
 			}
 			select {
 			case i.transactions <- t:
-			case <-i.shutSig.CloseAtLeisureChan():
+			case <-i.shutSig.SoftStopChan():
 				return
 			}
-		case <-i.shutSig.CloseAtLeisureChan():
+		case <-i.shutSig.SoftStopChan():
 			return
 		}
 	}
@@ -112,16 +113,16 @@ func (i *inprocInput) Connected() bool {
 }
 
 func (i *inprocInput) TriggerStopConsuming() {
-	i.shutSig.CloseAtLeisure()
+	i.shutSig.TriggerSoftStop()
 }
 
 func (i *inprocInput) TriggerCloseNow() {
-	i.shutSig.CloseNow()
+	i.shutSig.TriggerHardStop()
 }
 
 func (i *inprocInput) WaitForClose(ctx context.Context) error {
 	select {
-	case <-i.shutSig.HasClosedChan():
+	case <-i.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

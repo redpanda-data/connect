@@ -308,22 +308,26 @@ Default: `""`
 # Examples
 
 result_map: |-
-  meta foo_code = meta("code")
+  meta foo_code = metadata("code")
   root.foo_result = this
 
 result_map: |-
-  meta = meta()
+  meta = metadata()
   root.bar.body = this.body
   root.bar.id = this.user.id
 
 result_map: root.raw_result = content().string()
 
 result_map: |-
-  root.enrichments.foo = if meta("request_failed") != null {
-    throw(meta("request_failed"))
+  root.enrichments.foo = if metadata("request_failed") != null {
+    throw(metadata("request_failed"))
   } else {
     this
   }
+
+result_map: |-
+  # Retain only the updated metadata fields which were present in the origin message
+  meta = metadata().filter(v -> @.get(v.key) != null)
 ```
 
 ## Structured Metadata

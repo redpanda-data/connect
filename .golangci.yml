@@ -8,12 +8,26 @@ issues:
   include:
     - EXC0012
     - EXC0014
-
+  exclude-rules:
+    - path: _test.go
+      linters:
+        - bodyclose
+        - perfsprint
 linters-settings:
+  revive:
+    enable-all-rules: false
+    rules:
+      - name: superfluous-else
   errcheck:
     exclude-functions:
       - (*github.com/benthosdev/benthos/v4/internal/batch.Error).Failed
       - (*github.com/benthosdev/benthos/v4/public/service.BatchError).Failed
+  govet:
+    enable-all: true
+    disable:
+      - fieldalignment
+      - deepequalerrors
+      - shadow
   gocritic:
     enabled-tags:
       - diagnostic
@@ -32,7 +46,17 @@ linters-settings:
   #     main:
   #       deny:
   #         - pkg: "io/ioutil"
-
+  testifylint:
+    disable-all: true
+    enable:
+      - nil-compare
+      - compares
+      - error-is-as
+      - bool-compare
+      - empty
+      - len
+      - expected-actual
+      - error-nil
 linters:
   disable-all: true
   enable:
@@ -51,7 +75,7 @@ linters:
     - goimports
     # gocritic is very slow (golangci-lint v1.52.0)
     # - gocritic
-    # - revive
+    - revive
     - unconvert
     - durationcheck
     # - depguard
@@ -59,3 +83,11 @@ linters:
     # - gosec
     # - misspell
     # - prealloc
+    - perfsprint
+    - testifylint
+    - tenv
+    - predeclared
+    - mirror
+    - rowserrcheck
+    - bodyclose
+    - nolintlint

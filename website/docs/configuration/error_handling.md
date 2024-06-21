@@ -76,22 +76,20 @@ pipeline:
 
 ## Attempt Until Success
 
-It's possible to reattempt a processor for a particular message until it is successful with a [`while`][processor.while] processor:
+It's possible to reattempt a processor for a particular message until it is successful with a [`retry`][processor.retry] processor:
 
 ```yaml
 pipeline:
   processors:
-    - for_each:
-      - while:
-          at_least_once: true
-          max_loops: 0 # Set this greater than zero to cap the number of attempts
-          check: errored()
-          processors:
-            - catch: [] # Wipe any previous error
-            - resource: foo # Attempt this processor until success
+    - retry:
+        backoff:
+          initial_interval: 1s
+          max_interval: 5s
+          max_elapsed_time: 30s
+        processors:
+          # Attempt this processor until success, or the maximum elapsed time is reached.
+          - resource: foo
 ```
-
-This loop will block the pipeline and prevent the blocking message from being acknowledged. It is therefore usually a good idea in practice to use the `max_loops` field to set a limit to the number of attempts to make so that the pipeline can unblock itself without intervention.
 
 ## Drop Failed Messages
 
@@ -105,51 +103,59 @@ pipeline:
 
 This will remove any failed messages from a batch. Furthermore, dropping a message will propagate an acknowledgement (also known as "ack") upstream to the pipeline's input.
 
-## Route to a Dead-Letter Queue
-
-It is possible to route failed messages to different destinations using a [`switch` output][output.switch]:
-
-```yaml
-output:
-  switch:
-    cases:
-      - check: errored()
-        output:
-          resource: foo # Dead letter queue
-
-      - output:
-          resource: bar # Everything else
-```
-
 ## Reject Messages
 
-Some inputs such as GCP Pub/Sub and AMQP support rejecting messages, in which case it can sometimes be more efficient to reject messages that have failed processing rather than route them to a dead letter queue. This can be achieved with the [`reject` output][output.reject]:
+Some inputs such as NATS, GCP Pub/Sub and AMQP support nacking (rejecting) messages. We can perform a nack (or rejection) on data that has failed to process rather than delivering it to our output with a [`reject_errored` output][output.reject_errored]:
+
+```yaml
+output:
+  reject_errored:
+    resource: foo # Only non-errored messages go here
+```
+
+## Route to a Dead-Letter Queue
+
+And by placing the above within a [`fallback` output][output.fallback] we can instead route the failed messages to a different output:
+
+```yaml
+output:
+  fallback:
+    - reject_errored:
+        resource: foo # Only non-errored messages go here
+
+    - resource: bar # Only errored messages, or those that failed to be delivered to foo, go here
+```
+
+And, finally, in cases where we wish to route data differently depending on the error message itself we can use a [`switch` output][output.switch]:
 
 ```yaml
 output:
   switch:
-    retry_until_success: false
     cases:
+      # Capture specifically cat related errors
+      - check: errored() && error().contains("meow")
+        output:
+          resource: foo
+
+      # Capture all other errors
       - check: errored()
         output:
-          # Reject failed messages
-          reject: "Message failed due to: ${! error() }"
+          resource: bar
 
+      # Finally, route messages that haven't errored
       - output:
-          resource: bar # Everything else
+          resource: baz
 ```
-
-When the source of a rejected message is a sequential input without support for conventional nacks, such as the Kafka or file inputs, a rejected message will be reprocessed from scratch, applying back pressure until it is successfully processed. This can also sometimes be a useful pattern.
 
 [processors]: /docs/components/processors/about
 [processor.mapping]: /docs/components/processors/mapping
 [processor.switch]: /docs/components/processors/switch
-[processor.while]: /docs/components/processors/while
+[processor.retry]: /docs/components/processors/retry
 [processor.for_each]: /docs/components/processors/for_each
 [processor.catch]: /docs/components/processors/catch
 [processor.try]: /docs/components/processors/try
 [processor.log]: /docs/components/processors/log
 [output.switch]: /docs/components/outputs/switch
-[output.broker]: /docs/components/outputs/broker
-[output.reject]: /docs/components/outputs/reject
+[output.fallback]: /docs/components/outputs/fallback
+[output.reject_errored]: /docs/components/outputs/reject_errored
 [configuration.interpolation]: /docs/configuration/interpolation#bloblang-queries

@@ -495,7 +495,7 @@ func TestSnakeCase(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			res := parser([]rune(test.input))
-			if res.Err != nil || len(test.err) > 0 {
+			if res.Err != nil || test.err != "" {
 				assert.Equal(t, test.err, res.Err.ErrorAtPosition([]rune(test.input)), "Error")
 			}
 			assert.Equal(t, test.result, res.Payload, "Result")

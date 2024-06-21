@@ -8,7 +8,8 @@ import (
 
 	"github.com/Masterminds/squirrel"
 
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -198,13 +199,13 @@ func (s *sqlInsertOutput) Connect(ctx context.Context) error {
 	s.connSettings.apply(ctx, s.db, s.logger)
 
 	go func() {
-		<-s.shutSig.CloseNowChan()
+		<-s.shutSig.HardStopChan()
 
 		s.dbMut.Lock()
 		_ = s.db.Close()
 		s.dbMut.Unlock()
 
-		s.shutSig.ShutdownComplete()
+		s.shutSig.TriggerHasStopped()
 	}()
 	return nil
 }
@@ -269,7 +270,7 @@ func (s *sqlInsertOutput) WriteBatch(ctx context.Context, batch service.MessageB
 }
 
 func (s *sqlInsertOutput) Close(ctx context.Context) error {
-	s.shutSig.CloseNow()
+	s.shutSig.TriggerHardStop()
 	s.dbMut.RLock()
 	isNil := s.db == nil
 	s.dbMut.RUnlock()
@@ -277,7 +278,7 @@ func (s *sqlInsertOutput) Close(ctx context.Context) error {
 		return nil
 	}
 	select {
-	case <-s.shutSig.HasClosedChan():
+	case <-s.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

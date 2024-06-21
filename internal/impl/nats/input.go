@@ -24,12 +24,13 @@ This input adds the following metadata fields to each message:
 
 ` + "``` text" + `
 - nats_subject
+- nats_reply_subject
 - All message headers (when supported by the connection)
 ` + "```" + `
 
 You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
-` + ConnectionNameDescription() + authDescription()).
+` + connectionNameDescription() + authDescription()).
 		Fields(connectionHeadFields()...).
 		Field(service.NewStringField("subject").
 			Description("A subject to consume from. Supports wildcards for consuming multiple subjects. Either a subject or stream must be specified.").
@@ -37,6 +38,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 		Field(service.NewStringField("queue").
 			Description("An optional queue group to consume as.").
 			Optional()).
+		Field(service.NewAutoRetryNacksToggleField()).
 		Field(service.NewDurationField("nak_delay").
 			Description("An optional delay duration on redelivering a message when negatively acknowledged.").
 			Example("1m").
@@ -48,7 +50,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 			Default(nats.DefaultSubPendingMsgsLimit).
 			LintRule(`root = if this < 0 { ["prefetch count must be greater than or equal to zero"] }`)).
 		Fields(connectionTailFields()...).
-		Field(span.ExtractTracingSpanMappingDocs().Version(tracingVersion))
+		Field(inputTracingDocs())
 }
 
 func init() {
@@ -59,7 +61,12 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return span.NewInput("nats", conf, service.AutoRetryNacks(input), mgr)
+
+			r, err := service.AutoRetryNacksToggled(conf, input)
+			if err != nil {
+				return nil, err
+			}
+			return span.NewInput("nats", conf, r, mgr)
 		},
 	)
 	if err != nil {
@@ -140,7 +147,7 @@ func (n *natsReader) Connect(ctx context.Context) error {
 
 	natsChan := make(chan *nats.Msg, n.prefetchCount)
 
-	if len(n.queue) > 0 {
+	if n.queue != "" {
 		natsSub, err = natsConn.ChanQueueSubscribe(n.subject, n.queue, natsChan)
 	} else {
 		natsSub, err = natsConn.ChanSubscribe(n.subject, natsChan)
@@ -149,8 +156,6 @@ func (n *natsReader) Connect(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-
-	n.log.Infof("Receiving NATS messages from subject: %v\n", n.subject)
 
 	n.natsConn = natsConn
 	n.natsSub = natsSub
@@ -194,6 +199,7 @@ func (n *natsReader) Read(ctx context.Context) (*service.Message, service.AckFun
 
 	bmsg := service.NewMessage(msg.Data)
 	bmsg.MetaSetMut("nats_subject", msg.Subject)
+	bmsg.MetaSetMut("nats_reply_subject", msg.Reply)
 	// process message headers if server supports the feature
 	if natsConn.HeadersSupported() {
 		for key := range msg.Header {

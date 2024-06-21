@@ -8,7 +8,8 @@ import (
 
 	"github.com/Masterminds/squirrel"
 
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -44,7 +45,8 @@ func sqlSelectInputConfig() *service.ConfigSpec {
 		Field(service.NewStringField("suffix").
 			Description("An optional suffix to append to the select query.").
 			Optional().
-			Advanced())
+			Advanced()).
+		Field(service.NewAutoRetryNacksToggleField())
 
 	for _, f := range connFields() {
 		spec = spec.Field(f)
@@ -80,7 +82,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return service.AutoRetryNacks(i), nil
+			return service.AutoRetryNacksToggled(conf, i)
 		})
 	if err != nil {
 		panic(err)
@@ -214,13 +216,15 @@ func (s *sqlSelectInput) Connect(ctx context.Context) (err error) {
 	var rows *sql.Rows
 	if rows, err = queryBuilder.RunWith(db).Query(); err != nil {
 		return
+	} else if err = rows.Err(); err != nil {
+		s.logger.With("err", err).Warn("unexpected error while execute raw select")
 	}
 
 	s.db = db
 	s.rows = rows
 
 	go func() {
-		<-s.shutSig.CloseNowChan()
+		<-s.shutSig.HardStopChan()
 
 		s.dbMut.Lock()
 		if s.rows != nil {
@@ -232,7 +236,7 @@ func (s *sqlSelectInput) Connect(ctx context.Context) (err error) {
 		}
 		s.dbMut.Unlock()
 
-		s.shutSig.ShutdownComplete()
+		s.shutSig.TriggerHasStopped()
 	}()
 	return nil
 }
@@ -276,7 +280,7 @@ func (s *sqlSelectInput) Read(ctx context.Context) (*service.Message, service.Ac
 }
 
 func (s *sqlSelectInput) Close(ctx context.Context) error {
-	s.shutSig.CloseNow()
+	s.shutSig.TriggerHardStop()
 	s.dbMut.Lock()
 	isNil := s.db == nil
 	s.dbMut.Unlock()
@@ -284,7 +288,7 @@ func (s *sqlSelectInput) Close(ctx context.Context) error {
 		return nil
 	}
 	select {
-	case <-s.shutSig.HasClosedChan():
+	case <-s.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

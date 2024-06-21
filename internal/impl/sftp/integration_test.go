@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
-	"github.com/benthosdev/benthos/v4/internal/integration"
+	"github.com/benthosdev/benthos/v4/public/service/integration"
 
 	// Bring in memory cache.
 	_ "github.com/benthosdev/benthos/v4/public/components/pure"
@@ -32,7 +32,8 @@ func TestIntegration(t *testing.T) {
 		Repository: "atmoz/sftp",
 		Tag:        "alpine",
 		Cmd: []string{
-			sftpUsername + ":" + sftpPassword + ":1001:100:upload",
+			// https://github.com/atmoz/sftp/issues/401
+			"/bin/sh", "-c", "ulimit -n 65535 && exec /entrypoint " + sftpUsername + ":" + sftpPassword + ":1001:100:upload",
 		},
 	})
 	require.NoError(t, err)
@@ -92,8 +93,8 @@ cache_resources:
 		suite.Run(
 			t, template,
 			integration.StreamTestOptPort(resource.GetPort("22/tcp")),
-			integration.StreamTestOptVarOne("all-bytes"),
-			integration.StreamTestOptVarTwo("false"),
+			integration.StreamTestOptVarSet("VAR1", "all-bytes"),
+			integration.StreamTestOptVarSet("VAR2", "false"),
 		)
 
 		t.Run("watcher", func(t *testing.T) {
@@ -106,8 +107,8 @@ cache_resources:
 			watcherSuite.Run(
 				t, template,
 				integration.StreamTestOptPort(resource.GetPort("22/tcp")),
-				integration.StreamTestOptVarOne("all-bytes"),
-				integration.StreamTestOptVarTwo("true"),
+				integration.StreamTestOptVarSet("VAR1", "all-bytes"),
+				integration.StreamTestOptVarSet("VAR2", "true"),
 			)
 		})
 	})

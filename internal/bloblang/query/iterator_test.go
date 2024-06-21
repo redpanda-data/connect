@@ -133,7 +133,7 @@ func TestIteratorMethods(t *testing.T) {
 			res, err := test.input.Exec(FunctionContext{
 				Maps: map[string]Function{},
 			}.WithValueFunc(func() *any { return test.value }))
-			if len(test.err) > 0 {
+			if test.err != "" {
 				require.EqualError(t, err, test.err)
 			} else {
 				require.NoError(t, err)

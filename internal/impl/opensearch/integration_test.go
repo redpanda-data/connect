@@ -18,9 +18,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/benthosdev/benthos/v4/internal/impl/opensearch"
-	"github.com/benthosdev/benthos/v4/internal/integration"
 	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/benthosdev/benthos/v4/public/service/integration"
 )
 
 func outputFromConf(t testing.TB, confStr string, args ...any) *opensearch.Output {
@@ -58,7 +58,8 @@ func TestIntegration(t *testing.T) {
 	var client *os.Client
 
 	if err = pool.Retry(func() error {
-		opts := os.Config{Addresses: urls,
+		opts := os.Config{
+			Addresses: urls,
 			Transport: http.DefaultTransport,
 		}
 
@@ -137,7 +138,6 @@ func TestIntegration(t *testing.T) {
 	t.Run("TestOpenSearchBatchIDCollision", func(te *testing.T) {
 		testOpenSearchBatchIDCollision(urls, client, te)
 	})
-
 }
 
 func testOpenSearchNoIndex(urls []string, client *os.Client, t *testing.T) {

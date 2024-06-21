@@ -34,6 +34,7 @@ input:
     parse_header_row: true
     delimiter: ','
     lazy_quotes: false
+    auto_replay_nacks: true
 ```
 
 </TabItem>
@@ -50,6 +51,7 @@ input:
     lazy_quotes: false
     delete_on_finish: false
     batch_count: 1
+    auto_replay_nacks: true
 ```
 
 </TabItem>
@@ -186,6 +188,14 @@ Optionally process records in batches. This can help to speed up the consumption
 
 Type: `int`  
 Default: `1`  
+
+### `auto_replay_nacks`
+
+Whether messages that are rejected (nacked) at the output level should be automatically replayed indefinitely, eventually resulting in back pressure if the cause of the rejections is persistent. If set to `false` these messages will instead be deleted. Disabling auto replays can greatly improve memory efficiency of high throughput streams as the original shape of the data can be discarded immediately upon consumption and mutation.
+
+
+Type: `bool`  
+Default: `true`  
 
 This input is particularly useful when consuming CSV from files too large to parse entirely within memory. However, in cases where CSV is consumed from other input types it's also possible to parse them using the [Bloblang `parse_csv` method](/docs/guides/bloblang/methods#parse_csv).
 

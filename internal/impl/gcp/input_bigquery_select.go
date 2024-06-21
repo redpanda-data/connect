@@ -10,7 +10,8 @@ import (
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -97,6 +98,7 @@ func newBigQuerySelectInputConfig() *service.ConfigSpec {
 			Example("user_id = ?").
 			Optional(),
 		).
+		Field(service.NewAutoRetryNacksToggleField()).
 		Field(service.NewStringMapField("job_labels").Description("A list of labels to add to the query job.").Default(map[string]any{})).
 		Field(service.NewStringField("priority").Description("The priority with which to schedule the query.").Default("")).
 		Field(service.NewBloblangField("args_mapping").
@@ -160,7 +162,7 @@ func newBigQuerySelectInput(inConf *service.ParsedConfig, logger *service.Logger
 }
 
 func (inp *bigQuerySelectInput) Connect(ctx context.Context) error {
-	jobctx, _ := inp.shutdownSig.CloseAtLeisureCtx(context.Background())
+	jobctx, _ := inp.shutdownSig.SoftStopCtx(context.Background())
 
 	if inp.client == nil {
 		client, err := bigquery.NewClient(jobctx, inp.config.project, inp.config.credentials...)
@@ -231,7 +233,7 @@ func (inp *bigQuerySelectInput) Read(ctx context.Context) (*service.Message, ser
 }
 
 func (inp *bigQuerySelectInput) Close(ctx context.Context) error {
-	inp.shutdownSig.CloseNow()
+	inp.shutdownSig.TriggerHardStop()
 
 	if inp.client != nil {
 		return inp.client.Close()
@@ -248,7 +250,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return service.AutoRetryNacks(i), nil
+			return service.AutoRetryNacksToggled(conf, i)
 		})
 	if err != nil {
 		panic(err)

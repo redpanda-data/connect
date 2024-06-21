@@ -286,7 +286,7 @@ func methodForCat(s query.MethodSpec, cat string) (query.MethodSpec, bool) {
 	for _, c := range s.Categories {
 		if c.Category == cat {
 			spec := s
-			if len(c.Description) > 0 {
+			if c.Description != "" {
 				spec.Description = strings.TrimSpace(c.Description)
 			}
 			if len(c.Examples) > 0 {

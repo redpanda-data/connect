@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/integration"
 	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/benthosdev/benthos/v4/public/service/integration"
 )
 
 func TestIntegrationRedisProcessor(t *testing.T) {
@@ -339,7 +339,7 @@ key: foo*
 	require.NoError(t, response)
 
 	require.Len(t, resMsgs, 1)
-	require.Equal(t, 1, len(resMsgs[0]))
+	require.Len(t, resMsgs[0], 1)
 
 	exp := []string{"fooa", "foob", "fooc"}
 

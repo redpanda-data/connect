@@ -2,6 +2,7 @@ package kafka
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"hash"
 	"strconv"
@@ -172,7 +173,6 @@ func init() {
 		o, err = span.NewBatchOutput("kafka", conf, o, mgr)
 		return
 	})
-
 	if err != nil {
 		panic(err)
 	}
@@ -203,7 +203,7 @@ type kafkaWriter struct {
 	topicCache syncmap.Map
 }
 
-// NewKafkaWriteFromParsed returns a kafka output from a parsed config.
+// NewKafkaWriterFromParsed returns a kafka output from a parsed config.
 func NewKafkaWriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchOutput, error) {
 	k := kafkaWriter{
 		mgr: mgr,
@@ -215,7 +215,7 @@ func NewKafkaWriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources
 	}
 	for _, addr := range cAddresses {
 		for _, splitAddr := range strings.Split(addr, ",") {
-			if trimmed := strings.TrimSpace(splitAddr); len(trimmed) > 0 {
+			if trimmed := strings.TrimSpace(splitAddr); trimmed != "" {
 				k.addresses = append(k.addresses, trimmed)
 			}
 		}
@@ -344,7 +344,7 @@ func strToPartitioner(str string) (sarama.PartitionerConstructor, error) {
 func (k *kafkaWriter) buildSystemHeaders(part *service.Message) []sarama.RecordHeader {
 	if k.saramConf.Version.IsAtLeast(sarama.V0_11_0_0) {
 		out := []sarama.RecordHeader{}
-		_ = k.metaFilter.Walk(part, func(k string, v string) error {
+		_ = k.metaFilter.Walk(part, func(k, v string) error {
 			out = append(out, sarama.RecordHeader{
 				Key:   []byte(k),
 				Value: []byte(value.IToString(v)),
@@ -415,9 +415,9 @@ func (k *kafkaWriter) saramaConfigFromParsed(conf *service.ParsedConfig) (*saram
 		return nil, err
 	}
 	if k.partition == nil && partitionerStr == "manual" {
-		return nil, fmt.Errorf("partition field required for 'manual' partitioner")
+		return nil, errors.New("partition field required for 'manual' partitioner")
 	} else if k.partition != nil && partitionerStr != "manual" {
-		return nil, fmt.Errorf("partition field can only be specified for 'manual' partitioner")
+		return nil, errors.New("partition field can only be specified for 'manual' partitioner")
 	}
 	if config.Producer.Partitioner, err = strToPartitioner(partitionerStr); err != nil {
 		return nil, err
@@ -465,10 +465,6 @@ func (k *kafkaWriter) Connect(ctx context.Context) error {
 
 	var err error
 	k.producer, err = sarama.NewSyncProducer(k.addresses, k.saramConf)
-
-	if err == nil {
-		k.mgr.Logger().Infof("Sending Kafka messages to addresses: %s\n", k.addresses)
-	}
 	return err
 }
 
@@ -527,7 +523,7 @@ func (k *kafkaWriter) WriteBatch(ctx context.Context, msg service.MessageBatch) 
 				return fmt.Errorf("partition interpolation error: %w", err)
 			}
 			if partitionString == "" {
-				return fmt.Errorf("partition expression failed to produce a value")
+				return errors.New("partition expression failed to produce a value")
 			}
 
 			partitionInt, err := strconv.Atoi(partitionString)

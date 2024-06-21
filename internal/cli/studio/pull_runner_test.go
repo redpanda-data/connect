@@ -108,8 +108,10 @@ func testServerForPullRunner(
 	return
 }
 
-type obj = map[string]any
-type arr = []any
+type (
+	obj = map[string]any
+	arr = []any
+)
 
 func jsonRequestEqual(t *testing.T, r *http.Request, exp any) {
 	t.Helper()

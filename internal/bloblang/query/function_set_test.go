@@ -120,7 +120,7 @@ func TestFunctionBadName(t *testing.T) {
 		t.Run(k, func(t *testing.T) {
 			setOne := AllFunctions.Without()
 			err := setOne.Add(NewFunctionSpec(FunctionCategoryGeneral, k, ""), nil)
-			if len(v) > 0 {
+			if v != "" {
 				assert.EqualError(t, err, v)
 			} else {
 				assert.NoError(t, err)

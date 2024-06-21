@@ -10,8 +10,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/httpclient"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -125,7 +126,7 @@ func newSchemaRegistryDecoder(
 			select {
 			case <-time.After(schemaCachePurgePeriod):
 				s.clearExpired()
-			case <-s.shutSig.CloseAtLeisureChan():
+			case <-s.shutSig.SoftStopChan():
 				return
 			}
 		}
@@ -158,7 +159,7 @@ func (s *schemaRegistryDecoder) Process(ctx context.Context, msg *service.Messag
 }
 
 func (s *schemaRegistryDecoder) Close(ctx context.Context) error {
-	s.shutSig.CloseNow()
+	s.shutSig.TriggerHardStop()
 	s.cacheMut.Lock()
 	defer s.cacheMut.Unlock()
 	if ctx.Err() != nil {

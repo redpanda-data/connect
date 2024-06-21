@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/bloblang/mapping"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
@@ -13,7 +15,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -110,7 +111,7 @@ func newWhile(maxLoops int, atLeastOnce bool, checkStr string, children []proces
 	var check *mapping.Executor
 	var err error
 
-	if len(checkStr) > 0 {
+	if checkStr != "" {
 		if check, err = mgr.BloblEnvironment().NewMapping(checkStr); err != nil {
 			return nil, fmt.Errorf("failed to parse check query: %w", err)
 		}
@@ -143,7 +144,7 @@ func (w *whileProc) ProcessBatch(ctx *processor.BatchProcContext, msg message.Ba
 	loops := 0
 	condResult := w.atLeastOnce || w.checkMsg(msg)
 	for condResult {
-		if w.shutSig.ShouldCloseAtLeisure() || ctx.Context().Err() != nil {
+		if w.shutSig.IsSoftStopSignalled() || ctx.Context().Err() != nil {
 			return nil, component.ErrTypeClosed
 		}
 		if w.maxLoops > 0 && loops >= w.maxLoops {
@@ -176,7 +177,7 @@ func (w *whileProc) ProcessBatch(ctx *processor.BatchProcContext, msg message.Ba
 }
 
 func (w *whileProc) Close(ctx context.Context) error {
-	w.shutSig.CloseNow()
+	w.shutSig.TriggerHardStop()
 	for _, p := range w.children {
 		if err := p.Close(ctx); err != nil {
 			return err

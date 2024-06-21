@@ -30,7 +30,7 @@ func TestParseUrlencoded(t *testing.T) {
 			method: "parse_form_url_encoded",
 			target: "usernames=userA&usernames=userB",
 			args:   []any{},
-			exp:    map[string]any{"usernames": []string{"userA", "userB"}},
+			exp:    map[string]any{"usernames": []any{"userA", "userB"}},
 		},
 		{
 			name:   "decodes data correctly",

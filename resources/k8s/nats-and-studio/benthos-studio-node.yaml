@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: benthos
-          image: jeffail/benthos:latest
+          image: ghcr.io/benthosdev/benthos:latest
           args: [ "studio", "pull", "-s", "<SESSION_ID>" ]
           env:
             - name: BSTDIO_NODE_TOKEN

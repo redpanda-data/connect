@@ -10,8 +10,9 @@ import (
 
 	"github.com/nats-io/nats.go"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/component/input/span"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -43,7 +44,7 @@ This input adds the following metadata fields to each message:
 You can access these metadata fields using
 [function interpolation](/docs/configuration/interpolation#bloblang-queries).
 
-` + ConnectionNameDescription() + authDescription()).
+` + connectionNameDescription() + authDescription()).
 		Fields(connectionHeadFields()...).
 		Field(service.NewStringField("queue").
 			Description("An optional queue group to consume as.").
@@ -62,8 +63,10 @@ You can access these metadata fields using
 			Description("Indicates that the subscription should use an existing consumer.").
 			Optional()).
 		Field(service.NewStringAnnotatedEnumField("deliver", map[string]string{
-			"all":  "Deliver all available messages.",
-			"last": "Deliver starting with the last published messages.",
+			"all":              "Deliver all available messages.",
+			"last":             "Deliver starting with the last published messages.",
+			"last_per_subject": "Deliver starting with the last published message per subject.",
+			"new":              "Deliver starting from now, not taking into account any previous messages.",
 		}).
 			Description("Determines which messages to deliver when consuming without a durable subscriber.").
 			Default("all")).
@@ -78,7 +81,7 @@ You can access these metadata fields using
 			Advanced().
 			Default(1024)).
 		Fields(connectionTailFields()...).
-		Field(span.ExtractTracingSpanMappingDocs().Version(tracingVersion))
+		Field(inputTracingDocs())
 }
 
 func init() {
@@ -139,6 +142,10 @@ func newJetStreamReaderFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 		j.deliverOpt = nats.DeliverAll()
 	case "last":
 		j.deliverOpt = nats.DeliverLast()
+	case "last_per_subject":
+		j.deliverOpt = nats.DeliverLastPerSubject()
+	case "new":
+		j.deliverOpt = nats.DeliverNew()
 	default:
 		return nil, fmt.Errorf("deliver option %v was not recognised", deliver)
 	}
@@ -171,11 +178,11 @@ func newJetStreamReaderFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 	}
 	if j.bind {
 		if j.stream == "" && j.durable == "" {
-			return nil, fmt.Errorf("stream or durable is required, when bind is true")
+			return nil, errors.New("stream or durable is required, when bind is true")
 		}
 	} else {
 		if j.subject == "" {
-			return nil, fmt.Errorf("subject is empty")
+			return nil, errors.New("subject is empty")
 		}
 	}
 
@@ -282,8 +289,6 @@ func (j *jetStreamReader) Connect(ctx context.Context) (err error) {
 		return err
 	}
 
-	j.log.Infof("Receiving NATS messages from JetStream subject: %v", j.subject)
-
 	j.natsConn = natsConn
 	j.natsSub = natsSub
 	return nil
@@ -345,10 +350,10 @@ func (j *jetStreamReader) Read(ctx context.Context) (*service.Message, service.A
 func (j *jetStreamReader) Close(ctx context.Context) error {
 	go func() {
 		j.disconnect()
-		j.shutSig.ShutdownComplete()
+		j.shutSig.TriggerHasStopped()
 	}()
 	select {
-	case <-j.shutSig.HasClosedChan():
+	case <-j.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

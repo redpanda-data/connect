@@ -4,11 +4,12 @@ import (
 	"context"
 	"sync"
 
+	"github.com/Jeffail/shutdown"
+
+	"github.com/benthosdev/benthos/v4/internal/batch"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/processor"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/old/util/throttle"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 // Processor is a pipeline that supports both Consumer and Producer interfaces.
@@ -39,7 +40,7 @@ func NewProcessor(msgProcessors ...processor.V1) *Processor {
 
 // loop is the processing loop of this pipeline.
 func (p *Processor) loop() {
-	closeNowCtx, cnDone := p.shutSig.CloseNowCtx(context.Background())
+	closeNowCtx, cnDone := p.shutSig.HardStopCtx(context.Background())
 	defer cnDone()
 
 	defer func() {
@@ -51,94 +52,93 @@ func (p *Processor) loop() {
 		}
 
 		close(p.messagesOut)
-		p.shutSig.ShutdownComplete()
+		p.shutSig.TriggerHasStopped()
 	}()
 
 	var open bool
-	for !p.shutSig.ShouldCloseAtLeisure() {
+	for !p.shutSig.IsSoftStopSignalled() {
 		var tran message.Transaction
 		select {
 		case tran, open = <-p.messagesIn:
 			if !open {
 				return
 			}
-		case <-p.shutSig.CloseNowChan():
+		case <-p.shutSig.HardStopChan():
 			return
 		}
 
-		resultMsgs, resultRes := processor.ExecuteAll(closeNowCtx, p.msgProcessors, tran.Payload)
-		if len(resultMsgs) == 0 {
-			if err := tran.Ack(closeNowCtx, resultRes); err != nil && closeNowCtx.Err() != nil {
+		sorter, sortBatch := message.NewSortGroup(tran.Payload)
+
+		resultBatches, err := processor.ExecuteAll(closeNowCtx, p.msgProcessors, sortBatch)
+		if len(resultBatches) == 0 || err != nil {
+			if _ = tran.Ack(closeNowCtx, err); closeNowCtx.Err() != nil {
 				return
 			}
 			continue
 		}
 
-		if len(resultMsgs) > 1 {
-			p.dispatchMessages(closeNowCtx, resultMsgs, tran.Ack)
-		} else {
+		if len(resultBatches) == 1 {
 			select {
-			case p.messagesOut <- message.NewTransactionFunc(resultMsgs[0], tran.Ack):
-			case <-p.shutSig.CloseNowChan():
+			case p.messagesOut <- message.NewTransactionFunc(resultBatches[0], tran.Ack):
+			case <-p.shutSig.HardStopChan():
 				return
 			}
+			continue
 		}
-	}
-}
 
-// dispatchMessages attempts to send a multiple messages results of processors
-// over the shared messages channel. This send is retried until success.
-func (p *Processor) dispatchMessages(ctx context.Context, msgs []message.Batch, ackFn func(context.Context, error) error) {
-	throt := throttle.New(throttle.OptCloseChan(p.shutSig.CloseAtLeisureChan()))
+		var (
+			errMut     sync.Mutex
+			batchErr   *batch.Error
+			generalErr error
+			batchWG    sync.WaitGroup
+		)
 
-	pending := msgs
-	for len(pending) > 0 {
-		doneChan := make(chan struct{}, len(pending))
+		for _, b := range resultBatches {
+			var wgOnce sync.Once
+			batchWG.Add(1)
+			tmpBatch := b.ShallowCopy()
 
-		var newPending []message.Batch
-		var newPendingMut sync.Mutex
-
-		for _, b := range pending {
-			b := b
-			transac := message.NewTransactionFunc(b.ShallowCopy(), func(ctx context.Context, err error) error {
+			select {
+			case p.messagesOut <- message.NewTransactionFunc(tmpBatch, func(ctx context.Context, err error) error {
 				if err != nil {
-					newPendingMut.Lock()
-					newPending = append(newPending, b)
-					newPendingMut.Unlock()
+					errMut.Lock()
+					defer errMut.Unlock()
+
+					if batchErr == nil {
+						batchErr = batch.NewError(sortBatch, err)
+					}
+					for _, m := range tmpBatch {
+						if bIndex := sorter.GetIndex(m); bIndex >= 0 {
+							batchErr.Failed(bIndex, err)
+						} else {
+							// We are unable to link this message with an origin
+							// and therefore we must provide a general
+							// batch-wide error instead.
+							generalErr = err
+						}
+					}
 				}
-				select {
-				case doneChan <- struct{}{}:
-				default:
-				}
+
+				wgOnce.Do(func() {
+					batchWG.Done()
+				})
 				return nil
-			})
-
-			select {
-			case p.messagesOut <- transac:
-			case <-ctx.Done():
-				select {
-				case doneChan <- struct{}{}:
-				default:
-				}
+			}):
+			case <-p.shutSig.HardStopChan():
 				return
 			}
 		}
 
-		for i := 0; i < len(pending); i++ {
-			select {
-			case <-doneChan:
-			case <-ctx.Done():
-				return
-			}
-		}
+		batchWG.Wait()
 
-		if pending = newPending; len(pending) > 0 && !throt.Retry() {
-			return
+		if generalErr != nil {
+			_ = tran.Ack(closeNowCtx, generalErr)
+		} else if batchErr != nil {
+			_ = tran.Ack(closeNowCtx, batchErr)
+		} else {
+			_ = tran.Ack(closeNowCtx, nil)
 		}
 	}
-
-	throt.Reset()
-	_ = ackFn(ctx, nil)
 }
 
 //------------------------------------------------------------------------------
@@ -161,7 +161,7 @@ func (p *Processor) TransactionChan() <-chan message.Transaction {
 
 // TriggerCloseNow signals that the processor pipeline should close immediately.
 func (p *Processor) TriggerCloseNow() {
-	p.shutSig.CloseNow()
+	p.shutSig.TriggerHardStop()
 }
 
 // WaitForClose blocks until the component has closed down or the context is
@@ -169,7 +169,7 @@ func (p *Processor) TriggerCloseNow() {
 // and messages are flushed (and acked), or when CloseNowAsync is called.
 func (p *Processor) WaitForClose(ctx context.Context) error {
 	select {
-	case <-p.shutSig.HasClosedChan():
+	case <-p.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

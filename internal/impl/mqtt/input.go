@@ -48,6 +48,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 				Description("Set whether the connection is non-persistent.").
 				Default(true).
 				Advanced(),
+			service.NewAutoRetryNacksToggleField(),
 		)
 }
 
@@ -57,7 +58,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return service.AutoRetryNacks(rdr), nil
+		return service.AutoRetryNacksToggled(conf, rdr)
 	})
 	if err != nil {
 		panic(err)
@@ -166,7 +167,6 @@ func (m *mqttReader) Connect(ctx context.Context) error {
 		return err
 	}
 
-	m.log.Infof("Receiving MQTT messages from topics: %v", m.topics)
 	go func() {
 		for {
 			select {

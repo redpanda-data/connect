@@ -159,7 +159,12 @@ func loadSchema(schemaPath string) (string, error) {
 	t.RegisterProtocol("file", http.NewFileTransport(http.Dir("/")))
 	c := &http.Client{Transport: t}
 
-	response, err := c.Get(schemaPath)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, schemaPath, http.NoBody)
+	if err != nil {
+		return "", err
+	}
+
+	response, err := c.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -201,7 +206,7 @@ func newAvroFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (serv
 	}
 	if schemaPath != "" {
 		if !(strings.HasPrefix(schemaPath, "file://") || strings.HasPrefix(schemaPath, "http://")) {
-			return nil, fmt.Errorf("invalid schema_path provided, must start with file:// or http://")
+			return nil, errors.New("invalid schema_path provided, must start with file:// or http://")
 		}
 		if schema, err = loadSchema(schemaPath); err != nil {
 			return nil, fmt.Errorf("failed to load Avro schema definition: %v", err)

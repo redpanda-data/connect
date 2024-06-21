@@ -30,7 +30,7 @@ This is useful for preserving the original message contents when using processor
 
 ### Metadata
 
-Metadata fields that are added to messages during branch processing will not be automatically copied into the resulting message. In order to do this you should explicitly declare in your `result_map` either a wholesale copy with `meta = meta()`, or selective copies with `meta foo = meta("bar")` and so on.
+Metadata fields that are added to messages during branch processing will not be automatically copied into the resulting message. In order to do this you should explicitly declare in your `result_map` either a wholesale copy with `meta = metadata()`, or selective copies with `meta foo = metadata("bar")` and so on. It is also possible to reference the metadata of the origin message in the `result_map` using the [`@` operator](/docs/guides/bloblang/about#metadata).
 
 ### Error Handling
 
@@ -86,22 +86,26 @@ Default: `""`
 # Examples
 
 result_map: |-
-  meta foo_code = meta("code")
+  meta foo_code = metadata("code")
   root.foo_result = this
 
 result_map: |-
-  meta = meta()
+  meta = metadata()
   root.bar.body = this.body
   root.bar.id = this.user.id
 
 result_map: root.raw_result = content().string()
 
 result_map: |-
-  root.enrichments.foo = if meta("request_failed") != null {
-    throw(meta("request_failed"))
+  root.enrichments.foo = if metadata("request_failed") != null {
+    throw(metadata("request_failed"))
   } else {
     this
   }
+
+result_map: |-
+  # Retain only the updated metadata fields which were present in the origin message
+  meta = metadata().filter(v -> @.get(v.key) != null)
 ```
 
 ## Examples
@@ -127,6 +131,8 @@ pipeline:
           - http:
               url: https://hub.docker.com/v2/repositories/jeffail/benthos
               verb: GET
+              headers:
+                Content-Type: application/json
         result_map: root.image.pull_count = this.pull_count
 
 # Example input:  {"id":"foo","some":"pre-existing data"}
@@ -195,7 +201,7 @@ pipeline:
           - cache:
               resource: TODO
               operator: set
-              key: ${! meta("id") }
+              key: ${! @id }
               value: ${! content() }
 ```
 

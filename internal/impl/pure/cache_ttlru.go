@@ -2,7 +2,7 @@ package pure
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"sync"
 	"time"
 
@@ -139,8 +139,8 @@ type ttlruCacheAdapter struct {
 }
 
 var (
-	errInvalidTTLRUCacheCapacityValue = fmt.Errorf("invalid ttlru cache parameter capacity: must be bigger than 0")
-	errInvalidTTLRUCachetTTLValue     = fmt.Errorf("invalid ttlru cache parameter default_ttl: must be bigger than 0s")
+	errInvalidTTLRUCacheCapacityValue = errors.New("invalid ttlru cache parameter capacity: must be bigger than 0")
+	errInvalidTTLRUCachetTTLValue     = errors.New("invalid ttlru cache parameter default_ttl: must be bigger than 0s")
 )
 
 func ttlruMemCache(capacity int,

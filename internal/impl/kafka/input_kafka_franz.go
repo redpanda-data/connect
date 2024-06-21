@@ -12,8 +12,10 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/sasl"
 
-	"github.com/benthosdev/benthos/v4/internal/checkpoint"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
+	"github.com/Jeffail/checkpoint"
+
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -78,6 +80,7 @@ Finally, it's also possible to specify an explicit offset to consume from by add
 			Description("Determines how many messages of the same partition can be processed in parallel before applying back pressure. When a message of a given offset is delivered to the output the offset is only allowed to be committed when all messages of prior offsets have also been delivered, this ensures at-least-once delivery guarantees. However, this mechanism also increases the likelihood of duplicates in the event of crashes or server faults, reducing the checkpoint limit will mitigate this.").
 			Default(1024).
 			Advanced()).
+		Field(service.NewAutoRetryNacksToggleField()).
 		Field(service.NewDurationField("commit_period").
 			Description("The period of time between each commit of the current partition offsets. Offsets are always committed during shutdown.").
 			Default("5s").
@@ -111,7 +114,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return service.AutoRetryNacksBatched(rdr), nil
+			return service.AutoRetryNacksBatchedToggled(conf, rdr)
 		})
 	if err != nil {
 		panic(err)
@@ -320,7 +323,7 @@ func (p *partitionTracker) loop() {
 		if p.batcher != nil {
 			p.batcher.Close(context.Background())
 		}
-		p.shutSig.ShutdownComplete()
+		p.shutSig.TriggerHasStopped()
 	}()
 
 	// No need to loop when there's no batcher for async writes.
@@ -352,7 +355,7 @@ func (p *partitionTracker) loop() {
 		flushBatch = flushBatchTicker.C
 	}
 
-	closeAtLeisureCtx, done := p.shutSig.CloseAtLeisureCtx(context.Background())
+	closeAtLeisureCtx, done := p.shutSig.SoftStopCtx(context.Background())
 	defer done()
 
 	for {
@@ -387,7 +390,7 @@ func (p *partitionTracker) loop() {
 					return
 				}
 			}
-		case <-p.shutSig.CloseAtLeisureChan():
+		case <-p.shutSig.SoftStopChan():
 			return
 		}
 	}
@@ -460,11 +463,11 @@ func (p *partitionTracker) pauseFetch(limit int) (pauseFetch bool) {
 }
 
 func (p *partitionTracker) close(ctx context.Context) error {
-	p.shutSig.CloseAtLeisure()
+	p.shutSig.TriggerSoftStop()
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	case <-p.shutSig.HasClosedChan():
+	case <-p.shutSig.HasStoppedChan():
 	}
 	return nil
 }
@@ -578,8 +581,8 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 		return nil
 	}
 
-	if f.shutSig.ShouldCloseAtLeisure() {
-		f.shutSig.ShutdownComplete()
+	if f.shutSig.IsSoftStopSignalled() {
+		f.shutSig.TriggerHasStopped()
 		return service.ErrEndOfInput
 	}
 
@@ -652,12 +655,12 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 			checkpoints.close()
 			f.storeBatchChan(nil)
 			close(batchChan)
-			if f.shutSig.ShouldCloseAtLeisure() {
-				f.shutSig.ShutdownComplete()
+			if f.shutSig.IsSoftStopSignalled() {
+				f.shutSig.TriggerHasStopped()
 			}
 		}()
 
-		closeCtx, done := f.shutSig.CloseAtLeisureCtx(context.Background())
+		closeCtx, done := f.shutSig.SoftStopCtx(context.Background())
 		defer done()
 
 		for {
@@ -727,7 +730,6 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 	}()
 
 	f.storeBatchChan(batchChan)
-	f.log.Infof("Receiving messages from Kafka topics: %v", f.topics)
 	return nil
 }
 
@@ -757,15 +759,15 @@ func (f *franzKafkaReader) ReadBatch(ctx context.Context) (service.MessageBatch,
 
 func (f *franzKafkaReader) Close(ctx context.Context) error {
 	go func() {
-		f.shutSig.CloseAtLeisure()
+		f.shutSig.TriggerSoftStop()
 		if f.getBatchChan() == nil {
 			// If the record chan is already nil then we might've not been
 			// connected, so force the shutdown complete signal.
-			f.shutSig.ShutdownComplete()
+			f.shutSig.TriggerHasStopped()
 		}
 	}()
 	select {
-	case <-f.shutSig.HasClosedChan():
+	case <-f.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

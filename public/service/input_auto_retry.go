@@ -8,6 +8,19 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/autoretry"
 )
 
+// AutoRetryNacksToggled wraps an input implementation with AutoRetryNacks only
+// if a field defined by NewAutoRetryNacksToggleField has been set to true.
+func AutoRetryNacksToggled(c *ParsedConfig, i Input) (Input, error) {
+	b, err := c.FieldBool(AutoRetryNacksToggleFieldName)
+	if err != nil {
+		return nil, err
+	}
+	if b {
+		return AutoRetryNacks(i), nil
+	}
+	return i, nil
+}
+
 // AutoRetryNacks wraps an input implementation with a component that
 // automatically reattempts messages that fail downstream. This is useful for
 // inputs that do not support nacks, and therefore don't have an answer for

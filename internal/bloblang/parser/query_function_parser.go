@@ -265,6 +265,7 @@ func fieldReferenceRootParser(pCtx Context) Func[query.Function] {
 			if pCtx.HasNamedContext(path) {
 				fn = query.NewNamedContextFieldFunction(path, "")
 			} else {
+				// TODO V5: Remove this and force this, root, or named contexts
 				fn = query.NewFieldFunction(path)
 			}
 		}

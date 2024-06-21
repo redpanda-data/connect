@@ -12,20 +12,20 @@ import (
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 
-	"github.com/benthosdev/benthos/v4/internal/checkpoint"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
+	"github.com/Jeffail/checkpoint"
+
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/public/service"
 
 	_ "github.com/lib/pq"
 )
 
-var (
-	sampleString = `{
+var sampleString = `{
 	"primary_key": "[\"1a7ff641-3e3b-47ee-94fe-a0cadb56cd8f\", 2]", // stringifed JSON array
 	"row": "{\"after\": {\"k\": \"1a7ff641-3e3b-47ee-94fe-a0cadb56cd8f\", \"v\": 2}, \"updated\": \"1637953249519902405.0000000000\"}", // stringified JSON object
 	"table": "strm_2"
 }`
-)
 
 func crdbChangefeedInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
@@ -48,6 +48,7 @@ func crdbChangefeedInputConfig() *service.ConfigSpec {
 				Example([]string{`virtual_columns="omitted"`}).
 				Advanced().
 				Optional(),
+			service.NewAutoRetryNacksToggleField(),
 		)
 }
 
@@ -129,17 +130,17 @@ func newCRDBChangefeedInputFromConfig(conf *service.ParsedConfig, res *service.R
 
 	changeFeedOptions := ""
 	if len(options) > 0 {
-		changeFeedOptions = fmt.Sprintf(" WITH %s", strings.Join(options, ", "))
+		changeFeedOptions = " WITH " + strings.Join(options, ", ")
 	}
 
 	c.statement = fmt.Sprintf("EXPERIMENTAL CHANGEFEED FOR %s%s", strings.Join(tables, ", "), changeFeedOptions)
 	res.Logger().Debug("Creating changefeed: " + c.statement)
 
 	go func() {
-		<-c.shutSig.CloseAtLeisureChan()
+		<-c.shutSig.SoftStopChan()
 
 		c.closeConnection()
-		c.shutSig.ShutdownComplete()
+		c.shutSig.TriggerHasStopped()
 	}()
 	return c, nil
 }
@@ -152,9 +153,8 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return service.AutoRetryNacks(i), nil
+			return service.AutoRetryNacksToggled(conf, i)
 		})
-
 	if err != nil {
 		panic(err)
 	}
@@ -168,7 +168,7 @@ func (c *crdbChangefeedInput) Connect(ctx context.Context) (err error) {
 		return
 	}
 
-	if c.shutSig.ShouldCloseAtLeisure() {
+	if c.shutSig.IsSoftStopSignalled() {
 		return service.ErrEndOfInput
 	}
 
@@ -200,6 +200,11 @@ func (c *crdbChangefeedInput) closeConnection() {
 	defer c.dbMut.Unlock()
 
 	if c.rows != nil {
+		err := c.rows.Err()
+		if err != nil {
+			c.logger.With("err", err).Warn("unexpected error from cockroachdb before closing")
+		}
+
 		c.rows.Close()
 		c.rows = nil
 	}
@@ -220,7 +225,7 @@ func (c *crdbChangefeedInput) Read(ctx context.Context) (*service.Message, servi
 
 	if !rows.Next() {
 		go c.closeConnection()
-		if c.shutSig.ShouldCloseAtLeisure() {
+		if c.shutSig.IsSoftStopSignalled() {
 			return nil, nil, service.ErrNotConnected
 		}
 
@@ -276,9 +281,9 @@ func (c *crdbChangefeedInput) Read(ctx context.Context) (*service.Message, servi
 }
 
 func (c *crdbChangefeedInput) Close(ctx context.Context) error {
-	c.shutSig.CloseNow()
+	c.shutSig.TriggerHardStop()
 	select {
-	case <-c.shutSig.HasClosedChan():
+	case <-c.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

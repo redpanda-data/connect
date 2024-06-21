@@ -35,6 +35,7 @@ Use `+"`\\`"+` to escape special characters if you want to match them verbatim.`
 			service.NewBoolField(psiFieldUsePatterns).
 				Description("Whether to use the PSUBSCRIBE command, allowing for glob-style patterns within target channel names.").
 				Default(false),
+			service.NewAutoRetryNacksToggleField(),
 		)
 }
 
@@ -46,7 +47,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return service.AutoRetryNacks(r), nil
+			return service.AutoRetryNacksToggled(conf, r)
 		})
 	if err != nil {
 		panic(err)
@@ -93,8 +94,6 @@ func (r *redisPubSubReader) Connect(ctx context.Context) error {
 	if _, err := r.client.Ping(ctx).Result(); err != nil {
 		return err
 	}
-
-	r.log.Infof("Receiving Redis pub/sub messages from channels: %v\n", r.channels)
 
 	if r.usePatterns {
 		r.pubsub = r.client.PSubscribe(ctx, r.channels...)

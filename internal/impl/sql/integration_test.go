@@ -15,8 +15,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	isql "github.com/benthosdev/benthos/v4/internal/impl/sql"
-	"github.com/benthosdev/benthos/v4/internal/integration"
 	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/benthosdev/benthos/v4/public/service/integration"
 
 	_ "github.com/benthosdev/benthos/v4/public/components/pure"
 	_ "github.com/benthosdev/benthos/v4/public/components/sql"

@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -101,7 +102,7 @@ type resourceInput struct {
 func (r *resourceInput) loop() {
 	defer func() {
 		close(r.tChan)
-		r.shutSig.ShutdownComplete()
+		r.shutSig.TriggerHasStopped()
 	}()
 
 	for {
@@ -111,7 +112,7 @@ func (r *resourceInput) loop() {
 		}); err != nil {
 			r.log.Error("Failed to obtain input resource '%v': %v", r.name, err)
 			select {
-			case <-r.shutSig.CloseAtLeisureChan():
+			case <-r.shutSig.SoftStopChan():
 				return
 			case <-time.After(time.Second):
 			}
@@ -120,7 +121,7 @@ func (r *resourceInput) loop() {
 
 		for {
 			select {
-			case <-r.shutSig.CloseAtLeisureChan():
+			case <-r.shutSig.SoftStopChan():
 				return
 			case t, open := <-resourceTChan:
 				if !open {
@@ -128,7 +129,7 @@ func (r *resourceInput) loop() {
 				}
 				select {
 				case r.tChan <- t:
-				case <-r.shutSig.CloseNowChan():
+				case <-r.shutSig.HardStopChan():
 					go func() {
 						_ = t.Ack(context.Background(), component.ErrFailedSend)
 					}()
@@ -153,16 +154,16 @@ func (r *resourceInput) Connected() (isConnected bool) {
 }
 
 func (r *resourceInput) TriggerStopConsuming() {
-	r.shutSig.CloseAtLeisure()
+	r.shutSig.TriggerSoftStop()
 }
 
 func (r *resourceInput) TriggerCloseNow() {
-	r.shutSig.CloseNow()
+	r.shutSig.TriggerHardStop()
 }
 
 func (r *resourceInput) WaitForClose(ctx context.Context) error {
 	select {
-	case <-r.shutSig.HasClosedChan():
+	case <-r.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

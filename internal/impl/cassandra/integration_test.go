@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/integration"
+	"github.com/benthosdev/benthos/v4/public/service/integration"
 )
 
 func TestIntegrationCassandra(t *testing.T) {
@@ -83,8 +83,8 @@ output:
 			integration.StreamTestOptPort(resource.GetPort("9042/tcp")),
 			integration.StreamTestOptSleepAfterInput(time.Second*10),
 			integration.StreamTestOptSleepAfterOutput(time.Second*10),
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-				vars.ID = strings.ReplaceAll(testID, "-", "")
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+				vars.ID = strings.ReplaceAll(vars.ID, "-", "")
 				require.NoError(t, session.Query(
 					fmt.Sprintf(
 						"CREATE TABLE testspace.table%v (id int primary key, content text, created_at timestamp);",
@@ -130,8 +130,8 @@ output:
 			integration.StreamTestOptPort(resource.GetPort("9042/tcp")),
 			integration.StreamTestOptSleepAfterInput(time.Second*10),
 			integration.StreamTestOptSleepAfterOutput(time.Second*10),
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-				vars.ID = strings.ReplaceAll(testID, "-", "")
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+				vars.ID = strings.ReplaceAll(vars.ID, "-", "")
 				require.NoError(t, session.Query(
 					fmt.Sprintf(
 						"CREATE TABLE testspace.table%v (id int primary key, content text, created_at timestamp, meows list<text>);",

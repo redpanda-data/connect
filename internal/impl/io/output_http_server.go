@@ -15,6 +15,8 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/api"
 	"github.com/benthosdev/benthos/v4/internal/batch"
 	"github.com/benthosdev/benthos/v4/internal/bundle"
@@ -25,7 +27,6 @@ import (
 	"github.com/benthosdev/benthos/v4/internal/httpserver"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -205,7 +206,7 @@ func newHTTPServerOutput(conf hsoConfig, mgr bundle.NewManagement) (output.Strea
 	var server *http.Server
 
 	var err error
-	if len(conf.Address) > 0 {
+	if conf.Address != "" {
 		gMux = mux.NewRouter()
 		server = &http.Server{Addr: conf.Address}
 		if server.Handler, err = conf.CORS.WrapHandler(gMux); err != nil {
@@ -238,30 +239,30 @@ func newHTTPServerOutput(conf hsoConfig, mgr bundle.NewManagement) (output.Strea
 	}
 
 	if gMux != nil {
-		if len(h.conf.Path) > 0 {
+		if h.conf.Path != "" {
 			api.GetMuxRoute(gMux, h.conf.Path).HandlerFunc(h.getHandler)
 		}
-		if len(h.conf.StreamPath) > 0 {
+		if h.conf.StreamPath != "" {
 			api.GetMuxRoute(gMux, h.conf.StreamPath).HandlerFunc(h.streamHandler)
 		}
-		if len(h.conf.WSPath) > 0 {
+		if h.conf.WSPath != "" {
 			api.GetMuxRoute(gMux, h.conf.WSPath).HandlerFunc(h.wsHandler)
 		}
 	} else {
-		if len(h.conf.Path) > 0 {
+		if h.conf.Path != "" {
 			mgr.RegisterEndpoint(
 				h.conf.Path, "Read a single message from Benthos.",
 				h.getHandler,
 			)
 		}
-		if len(h.conf.StreamPath) > 0 {
+		if h.conf.StreamPath != "" {
 			mgr.RegisterEndpoint(
 				h.conf.StreamPath,
 				"Read a continuous stream of messages from Benthos.",
 				h.streamHandler,
 			)
 		}
-		if len(h.conf.WSPath) > 0 {
+		if h.conf.WSPath != "" {
 			mgr.RegisterEndpoint(
 				h.conf.WSPath,
 				"Read messages from Benthos via websockets.",
@@ -276,12 +277,12 @@ func newHTTPServerOutput(conf hsoConfig, mgr bundle.NewManagement) (output.Strea
 //------------------------------------------------------------------------------
 
 func (h *httpServerOutput) getHandler(w http.ResponseWriter, r *http.Request) {
-	if h.shutSig.ShouldCloseAtLeisure() {
+	if h.shutSig.IsSoftStopSignalled() {
 		http.Error(w, "Server closed", http.StatusServiceUnavailable)
 		return
 	}
 
-	ctx, done := h.shutSig.CloseAtLeisureCtx(r.Context())
+	ctx, done := h.shutSig.SoftStopCtx(r.Context())
 	defer done()
 
 	if _, exists := h.conf.AllowedVerbs[r.Method]; !exists {
@@ -347,10 +348,10 @@ func (h *httpServerOutput) streamHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	ctx, done := h.shutSig.CloseAtLeisureCtx(r.Context())
+	ctx, done := h.shutSig.SoftStopCtx(r.Context())
 	defer done()
 
-	for !h.shutSig.ShouldCloseAtLeisure() {
+	for !h.shutSig.IsSoftStopSignalled() {
 		var ts message.Transaction
 		var open bool
 
@@ -403,10 +404,10 @@ func (h *httpServerOutput) wsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer ws.Close()
 
-	ctx, done := h.shutSig.CloseAtLeisureCtx(r.Context())
+	ctx, done := h.shutSig.SoftStopCtx(r.Context())
 	defer done()
 
-	for !h.shutSig.ShouldCloseAtLeisure() {
+	for !h.shutSig.IsSoftStopSignalled() {
 		var ts message.Transaction
 		var open bool
 
@@ -418,7 +419,7 @@ func (h *httpServerOutput) wsHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		case <-r.Context().Done():
 			return
-		case <-h.shutSig.CloseAtLeisureChan():
+		case <-h.shutSig.SoftStopChan():
 			return
 		}
 
@@ -445,7 +446,7 @@ func (h *httpServerOutput) Consume(ts <-chan message.Transaction) error {
 
 	if h.server != nil {
 		go func() {
-			if len(h.conf.KeyFile) > 0 || len(h.conf.CertFile) > 0 {
+			if h.conf.KeyFile != "" || h.conf.CertFile != "" {
 				h.log.Info(
 					"Serving messages through HTTPS GET request at: https://%s\n",
 					h.conf.Address+h.conf.Path,
@@ -465,8 +466,8 @@ func (h *httpServerOutput) Consume(ts <-chan message.Transaction) error {
 				}
 			}
 
-			h.shutSig.CloseAtLeisure()
-			h.shutSig.ShutdownComplete()
+			h.shutSig.TriggerSoftStop()
+			h.shutSig.TriggerHasStopped()
 		}()
 	}
 	return nil
@@ -478,18 +479,18 @@ func (h *httpServerOutput) Connected() bool {
 }
 
 func (h *httpServerOutput) TriggerCloseNow() {
-	h.shutSig.CloseNow()
+	h.shutSig.TriggerHardStop()
 	h.closeServerOnce.Do(func() {
 		if h.server != nil {
 			_ = h.server.Shutdown(context.Background())
 		}
-		h.shutSig.ShutdownComplete()
+		h.shutSig.TriggerHasStopped()
 	})
 }
 
 func (h *httpServerOutput) WaitForClose(ctx context.Context) error {
 	select {
-	case <-h.shutSig.HasClosedChan():
+	case <-h.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

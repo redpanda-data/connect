@@ -4,10 +4,11 @@ import (
 	"context"
 	"sync"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/component"
 	ioutput "github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 var _ ioutput.Sync = &outputWrapper{}
@@ -37,7 +38,7 @@ func (w *outputWrapper) WriteTransaction(ctx context.Context, t message.Transact
 	defer w.tranMut.RUnlock()
 	select {
 	case w.tranChan <- t:
-	case <-w.shutSig.CloseAtLeisureChan():
+	case <-w.shutSig.SoftStopChan():
 	case <-ctx.Done():
 		return component.ErrTimeout
 	}
@@ -51,7 +52,7 @@ func (w *outputWrapper) Connected() bool {
 }
 
 func (w *outputWrapper) TriggerStopConsuming() {
-	w.shutSig.CloseAtLeisure()
+	w.shutSig.TriggerSoftStop()
 	w.tranMut.Lock()
 	if w.tranChan != nil {
 		close(w.tranChan)

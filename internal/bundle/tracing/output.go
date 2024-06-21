@@ -4,9 +4,10 @@ import (
 	"context"
 	"sync/atomic"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 type tracedOutput struct {
@@ -42,7 +43,7 @@ func (t *tracedOutput) loop(inChan <-chan message.Transaction) {
 			if !open {
 				return
 			}
-		case <-t.shutSig.CloseNowChan():
+		case <-t.shutSig.HardStopChan():
 			return
 		}
 		if t.e.IsEnabled() {
@@ -54,7 +55,7 @@ func (t *tracedOutput) loop(inChan <-chan message.Transaction) {
 		}
 		select {
 		case t.tChan <- tran:
-		case <-t.shutSig.CloseNowChan():
+		case <-t.shutSig.HardStopChan():
 			// Stop flushing if we fully timed out
 			return
 		}
@@ -72,11 +73,11 @@ func (t *tracedOutput) Connected() bool {
 
 func (t *tracedOutput) TriggerCloseNow() {
 	t.wrapped.TriggerCloseNow()
-	t.shutSig.CloseNow()
+	t.shutSig.TriggerHardStop()
 }
 
 func (t *tracedOutput) WaitForClose(ctx context.Context) error {
 	err := t.wrapped.WaitForClose(ctx)
-	t.shutSig.CloseNow()
+	t.shutSig.TriggerHardStop()
 	return err
 }

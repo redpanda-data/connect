@@ -10,8 +10,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/httpclient"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -96,7 +97,7 @@ type schemaRegistryEncoder struct {
 	avroRawJSON        bool
 	schemaRefreshAfter time.Duration
 
-	schemas    map[string]*cachedSchemaEncoder
+	schemas    map[string]cachedSchemaEncoder
 	cacheMut   sync.RWMutex
 	requestMut sync.Mutex
 	shutSig    *shutdown.Signaller
@@ -155,7 +156,7 @@ func newSchemaRegistryEncoder(
 		subject:            subject,
 		avroRawJSON:        avroRawJSON,
 		schemaRefreshAfter: schemaRefreshAfter,
-		schemas:            map[string]*cachedSchemaEncoder{},
+		schemas:            map[string]cachedSchemaEncoder{},
 		shutSig:            shutdown.NewSignaller(),
 		logger:             mgr.Logger(),
 		mgr:                mgr,
@@ -171,7 +172,7 @@ func newSchemaRegistryEncoder(
 			select {
 			case <-time.After(schemaRefreshTicker):
 				s.refreshEncoders()
-			case <-s.shutSig.CloseAtLeisureChan():
+			case <-s.shutSig.SoftStopChan():
 				return
 			}
 		}
@@ -216,7 +217,7 @@ func (s *schemaRegistryEncoder) ProcessBatch(ctx context.Context, batch service.
 }
 
 func (s *schemaRegistryEncoder) Close(ctx context.Context) error {
-	s.shutSig.CloseNow()
+	s.shutSig.TriggerHardStop()
 	s.cacheMut.Lock()
 	defer s.cacheMut.Unlock()
 	if ctx.Err() != nil {
@@ -284,9 +285,12 @@ func (s *schemaRegistryEncoder) refreshEncoders() {
 				s.logger.Errorf("Failed to refresh schema subject '%v': %v", k, err)
 			} else {
 				s.cacheMut.Lock()
-				s.schemas[k].encoder = encoder
-				s.schemas[k].id = id
-				s.schemas[k].lastUpdatedUnixSeconds = s.nowFn().Unix()
+				s.schemas[k] = cachedSchemaEncoder{
+					encoder:                encoder,
+					id:                     id,
+					lastUpdatedUnixSeconds: s.nowFn().Unix(),
+					lastUsedUnixSeconds:    s.schemas[k].lastUsedUnixSeconds,
+				}
 				s.cacheMut.Unlock()
 			}
 		}
@@ -351,7 +355,7 @@ func (s *schemaRegistryEncoder) getEncoder(subject string) (schemaEncoder, int, 
 	}
 
 	s.cacheMut.Lock()
-	s.schemas[subject] = &cachedSchemaEncoder{
+	s.schemas[subject] = cachedSchemaEncoder{
 		lastUsedUnixSeconds:    s.nowFn().Unix(),
 		lastUpdatedUnixSeconds: s.nowFn().Unix(),
 		id:                     id,

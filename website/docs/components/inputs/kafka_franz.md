@@ -39,6 +39,7 @@ input:
     topics: [] # No default (required)
     regexp_topics: false
     consumer_group: "" # No default (optional)
+    auto_replay_nacks: true
 ```
 
 </TabItem>
@@ -56,6 +57,7 @@ input:
     client_id: benthos
     rack_id: ""
     checkpoint_limit: 1024
+    auto_replay_nacks: true
     commit_period: 5s
     start_from_oldest: true
     tls:
@@ -194,6 +196,14 @@ Determines how many messages of the same partition can be processed in parallel 
 
 Type: `int`  
 Default: `1024`  
+
+### `auto_replay_nacks`
+
+Whether messages that are rejected (nacked) at the output level should be automatically replayed indefinitely, eventually resulting in back pressure if the cause of the rejections is persistent. If set to `false` these messages will instead be deleted. Disabling auto replays can greatly improve memory efficiency of high throughput streams as the original shape of the data can be discarded immediately upon consumption and mutation.
+
+
+Type: `bool`  
+Default: `true`  
 
 ### `commit_period`
 

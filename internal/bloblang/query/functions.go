@@ -105,7 +105,7 @@ func (f *fieldFunction) Close(ctx context.Context) error {
 // return a field from a named context.
 func NewNamedContextFieldFunction(namedContext, pathStr string) Function {
 	var path []string
-	if len(pathStr) > 0 {
+	if pathStr != "" {
 		path = gabs.DotPathToSlice(pathStr)
 	}
 	return &fieldFunction{namedContext: namedContext, fromRoot: false, path: path}
@@ -115,7 +115,7 @@ func NewNamedContextFieldFunction(namedContext, pathStr string) Function {
 // current context.
 func NewFieldFunction(pathStr string) Function {
 	var path []string
-	if len(pathStr) > 0 {
+	if pathStr != "" {
 		path = gabs.DotPathToSlice(pathStr)
 	}
 	return &fieldFunction{
@@ -127,7 +127,7 @@ func NewFieldFunction(pathStr string) Function {
 // root context.
 func NewRootFieldFunction(pathStr string) Function {
 	var path []string
-	if len(pathStr) > 0 {
+	if pathStr != "" {
 		path = gabs.DotPathToSlice(pathStr)
 	}
 	return &fieldFunction{
@@ -442,7 +442,7 @@ func jsonFunction(args *ParsedParams) (Function, error) {
 		return nil, err
 	}
 	var argPath []string
-	if len(path) > 0 {
+	if path != "" {
 		argPath = gabs.DotPathToSlice(path)
 	}
 	return ClosureFunction("json path `"+SliceToDotPath(argPath...)+"`", func(ctx FunctionContext) (any, error) {
@@ -468,7 +468,7 @@ func jsonFunction(args *ParsedParams) (Function, error) {
 
 // NewMetaFunction creates a new function for obtaining a metadata value.
 func NewMetaFunction(key string) Function {
-	if len(key) > 0 {
+	if key != "" {
 		return ClosureFunction("meta field "+key, func(ctx FunctionContext) (any, error) {
 			if ctx.NewMeta == nil {
 				return nil, errors.New("metadata cannot be queried in this context")
@@ -508,7 +508,7 @@ func NewMetaFunction(key string) Function {
 var _ = registerFunction(
 	NewFunctionSpec(
 		FunctionCategoryMessage, "metadata",
-		"Returns the value of a metadata key from the input message, or `null` if the key does not exist. Since values are extracted from the read-only input message they do NOT reflect changes made from within the map, in order to query metadata mutations made within a mapping use the `@.foo` syntax. This function supports extracting metadata from other messages of a batch with the `from` method.",
+		"Returns the value of a metadata key from the input message, or `null` if the key does not exist. Since values are extracted from the read-only input message they do NOT reflect changes made from within the map, in order to query metadata mutations made within a mapping use the [`@` operator](/docs/guides/bloblang/about#metadata). This function supports extracting metadata from other messages of a batch with the `from` method.",
 		NewExampleSpec("", `root.topic = metadata("kafka_topic")`),
 		NewExampleSpec(
 			"The key parameter is optional and if omitted the entire metadata contents are returned as an object.",
@@ -520,7 +520,7 @@ var _ = registerFunction(
 		if err != nil {
 			return nil, err
 		}
-		if len(key) > 0 {
+		if key != "" {
 			return ClosureFunction("metadata field "+key, func(ctx FunctionContext) (any, error) {
 				v, exists := ctx.MsgBatch.Get(ctx.Index).MetaGetMut(key)
 				if !exists {
@@ -570,7 +570,7 @@ var _ = registerFunction(
 		if err != nil {
 			return nil, err
 		}
-		if len(key) > 0 {
+		if key != "" {
 			return ClosureFunction("meta field "+key, func(ctx FunctionContext) (any, error) {
 				v := ctx.MsgBatch.Get(ctx.Index).MetaGetStr(key)
 				if v == "" {
@@ -622,7 +622,7 @@ var _ = registerFunction(
 		if err != nil {
 			return nil, err
 		}
-		if len(key) > 0 {
+		if key != "" {
 			return ClosureFunction("root_meta field "+key, func(ctx FunctionContext) (any, error) {
 				if ctx.NewMeta == nil {
 					return nil, errors.New("root metadata cannot be queried in this context")

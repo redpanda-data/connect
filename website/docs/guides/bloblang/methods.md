@@ -2923,8 +2923,8 @@ Attempts to parse a url-encoded query string (from an x-www-form-urlencoded requ
 ```coffee
 root.values = this.body.parse_form_url_encoded()
 
-# In:  {"body":"noise=meow&animal=cat"}
-# Out: {"values":{"animal":"cat","noise":"meow"}}
+# In:  {"body":"noise=meow&animal=cat&fur=orange&fur=fluffy"}
+# Out: {"values":{"animal":"cat","fur":["orange","fluffy"],"noise":"meow"}}
 ```
 
 ### `parse_json`

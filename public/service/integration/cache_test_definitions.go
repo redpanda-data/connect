@@ -106,14 +106,14 @@ func CacheTestGetAndSet(n int) CacheTestDefinition {
 			})
 
 			for i := 0; i < n; i++ {
-				key := fmt.Sprintf("key:%v", i)
-				value := fmt.Sprintf("value:%v", i)
+				key := fmt.Sprintf("key%v", i)
+				value := fmt.Sprintf("value%v", i)
 				require.NoError(t, cache.Set(env.ctx, key, []byte(value), nil))
 			}
 
 			for i := 0; i < n; i++ {
-				key := fmt.Sprintf("key:%v", i)
-				value := fmt.Sprintf("value:%v", i)
+				key := fmt.Sprintf("key%v", i)
+				value := fmt.Sprintf("value%v", i)
 
 				res, err := cache.Get(env.ctx, key)
 				require.NoError(t, err)

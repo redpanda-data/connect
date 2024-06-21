@@ -39,6 +39,7 @@ input:
     table: bigquery-public-data.samples.shakespeare # No default (required)
     columns: [] # No default (required)
     where: type = ? and created_at > ? # No default (optional)
+    auto_replay_nacks: true
     job_labels: {}
     priority: ""
     args_mapping: root = [ "article", now().ts_format("2006-01-02") ] # No default (optional)
@@ -58,6 +59,7 @@ input:
     table: bigquery-public-data.samples.shakespeare # No default (required)
     columns: [] # No default (required)
     where: type = ? and created_at > ? # No default (optional)
+    auto_replay_nacks: true
     job_labels: {}
     priority: ""
     args_mapping: root = [ "article", now().ts_format("2006-01-02") ] # No default (optional)
@@ -156,6 +158,14 @@ where: type = ? and created_at > ?
 
 where: user_id = ?
 ```
+
+### `auto_replay_nacks`
+
+Whether messages that are rejected (nacked) at the output level should be automatically replayed indefinitely, eventually resulting in back pressure if the cause of the rejections is persistent. If set to `false` these messages will instead be deleted. Disabling auto replays can greatly improve memory efficiency of high throughput streams as the original shape of the data can be discarded immediately upon consumption and mutation.
+
+
+Type: `bool`  
+Default: `true`  
 
 ### `job_labels`
 

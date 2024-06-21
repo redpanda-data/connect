@@ -50,7 +50,6 @@ The `+"`topic`"+` field can be dynamically set using function interpolations des
 				Version("3.59.0"),
 			service.NewOutputMaxInFlightField(),
 		)
-
 }
 
 func init() {

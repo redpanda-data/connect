@@ -3,13 +3,14 @@ package pure
 import (
 	"context"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/bundle"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -70,7 +71,7 @@ func (i *inprocOutput) loop() {
 	defer func() {
 		i.mgr.UnsetPipe(i.pipe, i.transactionsOut)
 		close(i.transactionsOut)
-		i.shutSig.ShutdownComplete()
+		i.shutSig.TriggerHasStopped()
 	}()
 
 	i.log.Info("Sending inproc messages to ID: %s\n", i.pipe)
@@ -83,13 +84,13 @@ func (i *inprocOutput) loop() {
 			if !open {
 				return
 			}
-		case <-i.shutSig.CloseNowChan():
+		case <-i.shutSig.HardStopChan():
 			return
 		}
 
 		select {
 		case i.transactionsOut <- ts:
-		case <-i.shutSig.CloseNowChan():
+		case <-i.shutSig.HardStopChan():
 			return
 		}
 	}
@@ -109,12 +110,12 @@ func (i *inprocOutput) Connected() bool {
 }
 
 func (i *inprocOutput) TriggerCloseNow() {
-	i.shutSig.CloseNow()
+	i.shutSig.TriggerHardStop()
 }
 
 func (i *inprocOutput) WaitForClose(ctx context.Context) error {
 	select {
-	case <-i.shutSig.HasClosedChan():
+	case <-i.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

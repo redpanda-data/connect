@@ -7,8 +7,9 @@ import (
 
 	"github.com/nats-io/nats.go"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/component/output/span"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -18,7 +19,7 @@ func natsJetStreamOutputConfig() *service.ConfigSpec {
 		Categories("Services").
 		Version("3.46.0").
 		Summary("Write messages to a NATS JetStream subject.").
-		Description(ConnectionNameDescription() + authDescription()).
+		Description(connectionNameDescription() + authDescription()).
 		Fields(connectionHeadFields()...).
 		Field(service.NewInterpolatedStringField("subject").
 			Description("A subject to write to.").
@@ -35,11 +36,9 @@ func natsJetStreamOutputConfig() *service.ConfigSpec {
 		Field(service.NewMetadataFilterField("metadata").
 			Description("Determine which (if any) metadata values should be added to messages as headers.").
 			Optional()).
-		Field(service.NewIntField("max_in_flight").
-			Description("The maximum number of messages to have in flight at a given time. Increase this to improve throughput.").
-			Default(1024)).
+		Field(service.NewOutputMaxInFlightField().Default(1024)).
 		Fields(connectionTailFields()...).
-		Field(span.InjectTracingSpanMappingDocs().Version(tracingVersion))
+		Field(outputTracingDocs())
 }
 
 func init() {
@@ -138,8 +137,6 @@ func (j *jetStreamOutput) Connect(ctx context.Context) (err error) {
 		return err
 	}
 
-	j.log.Infof("Sending NATS messages to JetStream subject: %v", j.subjectStrRaw)
-
 	j.natsConn = natsConn
 	j.jCtx = jCtx
 	return nil
@@ -198,10 +195,10 @@ func (j *jetStreamOutput) Write(ctx context.Context, msg *service.Message) error
 func (j *jetStreamOutput) Close(ctx context.Context) error {
 	go func() {
 		j.disconnect()
-		j.shutSig.ShutdownComplete()
+		j.shutSig.TriggerHasStopped()
 	}()
 	select {
-	case <-j.shutSig.HasClosedChan():
+	case <-j.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

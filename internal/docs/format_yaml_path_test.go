@@ -430,7 +430,7 @@ pipeline:
 			require.NoError(t, err)
 
 			err = configSpec.SetYAMLPath(mockProv, input, value, path...)
-			if len(test.errContains) > 0 {
+			if test.errContains != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), test.errContains)
 			} else {
@@ -549,7 +549,7 @@ func TestGetPathDocs(t *testing.T) {
 			require.NoError(t, err)
 
 			docs, err := configSpec.GetDocsForPath(mockProv, path...)
-			if len(test.errContains) > 0 {
+			if test.errContains != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), test.errContains)
 			} else {
@@ -558,7 +558,7 @@ func TestGetPathDocs(t *testing.T) {
 				assert.Equal(t, test.resName, docs.Name)
 				assert.Equal(t, test.resType, string(docs.Type))
 				assert.Equal(t, test.resKind, string(docs.Kind))
-				assert.Equal(t, test.resChildren, len(docs.Children))
+				assert.Len(t, docs.Children, test.resChildren)
 			}
 		})
 	}
@@ -626,7 +626,7 @@ input:
 			require.NoError(t, err)
 
 			output, err := docs.GetYAMLPath(&input, path...)
-			if len(test.errContains) > 0 {
+			if test.errContains != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), test.errContains)
 			} else {

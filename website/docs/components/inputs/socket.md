@@ -24,6 +24,7 @@ input:
   socket:
     network: "" # No default (required)
     address: /tmp/benthos.sock # No default (required)
+    auto_replay_nacks: true
     scanner:
       lines: {}
 ```
@@ -52,6 +53,14 @@ address: /tmp/benthos.sock
 
 address: 127.0.0.1:6000
 ```
+
+### `auto_replay_nacks`
+
+Whether messages that are rejected (nacked) at the output level should be automatically replayed indefinitely, eventually resulting in back pressure if the cause of the rejections is persistent. If set to `false` these messages will instead be deleted. Disabling auto replays can greatly improve memory efficiency of high throughput streams as the original shape of the data can be discarded immediately upon consumption and mutation.
+
+
+Type: `bool`  
+Default: `true`  
 
 ### `scanner`
 

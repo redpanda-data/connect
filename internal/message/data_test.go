@@ -113,5 +113,5 @@ func TestSetNil(t *testing.T) {
 
 	v, err = source.AsStructured()
 	require.NoError(t, err)
-	assert.Equal(t, nil, v)
+	assert.Nil(t, v)
 }

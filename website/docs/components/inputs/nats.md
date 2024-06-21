@@ -33,6 +33,7 @@ input:
     urls: [] # No default (required)
     subject: foo.bar.baz # No default (required)
     queue: "" # No default (optional)
+    auto_replay_nacks: true
 ```
 
 </TabItem>
@@ -46,6 +47,7 @@ input:
     urls: [] # No default (required)
     subject: foo.bar.baz # No default (required)
     queue: "" # No default (optional)
+    auto_replay_nacks: true
     nak_delay: 1m # No default (optional)
     prefetch_count: 524288
     tls:
@@ -72,6 +74,7 @@ This input adds the following metadata fields to each message:
 
 ``` text
 - nats_subject
+- nats_reply_subject
 - All message headers (when supported by the connection)
 ```
 
@@ -91,7 +94,7 @@ There are several components within Benthos which utilise NATS services. You wil
 support optional advanced authentication parameters for [NKeys](https://docs.nats.io/nats-server/configuration/securing_nats/auth_intro/nkey_auth)
 and [User Credentials](https://docs.nats.io/developing-with-nats/security/creds).
 
-An in depth tutorial can be found [here](https://docs.nats.io/developing-with-nats/tutorials/jwt).
+An in depth tutorial can be found [here](https://docs.nats.io/running-a-nats-service/nats_admin/security/jwt).
 
 #### NKey file
 
@@ -159,6 +162,14 @@ An optional queue group to consume as.
 
 
 Type: `string`  
+
+### `auto_replay_nacks`
+
+Whether messages that are rejected (nacked) at the output level should be automatically replayed indefinitely, eventually resulting in back pressure if the cause of the rejections is persistent. If set to `false` these messages will instead be deleted. Disabling auto replays can greatly improve memory efficiency of high throughput streams as the original shape of the data can be discarded immediately upon consumption and mutation.
+
+
+Type: `bool`  
+Default: `true`  
 
 ### `nak_delay`
 

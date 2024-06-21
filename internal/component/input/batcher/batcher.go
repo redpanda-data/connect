@@ -5,11 +5,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/batch/policy"
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/internal/transaction"
 )
 
@@ -41,7 +42,7 @@ func New(batcher *policy.Batcher, child input.Streamed, log log.Modular) input.S
 //------------------------------------------------------------------------------
 
 func (m *Impl) loop() {
-	closeNowCtx, cnDone := m.shutSig.CloseNowCtx(context.Background())
+	closeNowCtx, cnDone := m.shutSig.HardStopCtx(context.Background())
 	defer cnDone()
 
 	defer func() {
@@ -51,7 +52,7 @@ func (m *Impl) loop() {
 		_ = m.batcher.Close(context.Background())
 
 		close(m.messagesOut)
-		m.shutSig.ShutdownComplete()
+		m.shutSig.TriggerHasStopped()
 	}()
 
 	var nextTimedBatchChan <-chan time.Time
@@ -71,7 +72,7 @@ func (m *Impl) loop() {
 		resChan := make(chan error)
 		select {
 		case m.messagesOut <- message.NewTransaction(sendMsg, resChan):
-		case <-m.shutSig.CloseNowChan():
+		case <-m.shutSig.HardStopChan():
 			return
 		}
 
@@ -80,7 +81,7 @@ func (m *Impl) loop() {
 			defer pendingAcks.Done()
 
 			select {
-			case <-m.shutSig.CloseNowChan():
+			case <-m.shutSig.HardStopChan():
 				return
 			case res, open := <-rChan:
 				if !open {
@@ -122,7 +123,7 @@ func (m *Impl) loop() {
 				if nextTimedBatchChan != nil {
 					select {
 					case <-nextTimedBatchChan:
-					case <-m.shutSig.CloseAtLeisureChan():
+					case <-m.shutSig.SoftStopChan():
 					}
 				}
 				flushBatchFn()
@@ -140,7 +141,7 @@ func (m *Impl) loop() {
 		case <-nextTimedBatchChan:
 			flushBatch = true
 			nextTimedBatchChan = nil
-		case <-m.shutSig.CloseNowChan():
+		case <-m.shutSig.HardStopChan():
 			return
 		}
 
@@ -165,21 +166,21 @@ func (m *Impl) TransactionChan() <-chan message.Transaction {
 // once all pending messages are delivered and acknowledged. This call does
 // not block.
 func (m *Impl) TriggerStopConsuming() {
-	m.shutSig.CloseAtLeisure()
+	m.shutSig.TriggerSoftStop()
 	m.child.TriggerStopConsuming()
 }
 
 // TriggerCloseNow triggers the shut down of this component but should not block
 // the calling goroutine.
 func (m *Impl) TriggerCloseNow() {
-	m.shutSig.CloseNow()
+	m.shutSig.TriggerHardStop()
 }
 
 // WaitForClose is a blocking call to wait until the component has finished
 // shutting down and cleaning up resources.
 func (m *Impl) WaitForClose(ctx context.Context) error {
 	select {
-	case <-m.shutSig.HasClosedChan():
+	case <-m.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

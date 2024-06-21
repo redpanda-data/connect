@@ -27,7 +27,7 @@ func TestInitSpansFromParentTextMap(t *testing.T) {
 		tp := noop.NewTracerProvider()
 
 		err := InitSpansFromParentTextMap(tp, "test", textMap, batch)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 
 		spanOne := trace.SpanFromContext(batch[0].GetContext())
 		assert.Equal(t, "4bf92f3577b34da6a3ce929d0e0e4736", spanOne.SpanContext().TraceID().String())

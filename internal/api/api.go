@@ -258,7 +258,7 @@ func (t *Type) ListenAndServe() error {
 	if t.server.TLSConfig != nil {
 		return t.server.ListenAndServeTLS("", "")
 	}
-	if len(t.conf.CertFile) > 0 {
+	if t.conf.CertFile != "" {
 		return t.server.ListenAndServeTLS(t.conf.CertFile, t.conf.KeyFile)
 	}
 	return t.server.ListenAndServe()

@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 
+	"github.com/Jeffail/shutdown"
+
+	"github.com/benthosdev/benthos/v4/internal/batch"
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/interop"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
 
@@ -164,7 +166,7 @@ func (t *fallbackBroker) loop() {
 			close(c)
 		}
 		_ = closeAllOutputs(context.Background(), t.outputs)
-		t.shutSig.ShutdownComplete()
+		t.shutSig.TriggerHasStopped()
 	}()
 
 	for {
@@ -176,8 +178,49 @@ func (t *fallbackBroker) loop() {
 			if !open {
 				return
 			}
-		case <-t.shutSig.CloseAtLeisureChan():
+		case <-t.shutSig.SoftStopChan():
 			return
+		}
+
+		outSorter, outBatch := message.NewSortGroup(tran.Payload)
+		nextBatchFromErr := func(err error) message.Batch {
+			var bErr *batch.Error
+			if len(outBatch) <= 1 || !errors.As(err, &bErr) {
+				tmpBatch := outBatch.ShallowCopy()
+				for _, m := range tmpBatch {
+					m.MetaSetMut("fallback_error", err.Error())
+				}
+				return tmpBatch
+			}
+
+			var onlyErrs message.Batch
+			seenIndexes := map[int]struct{}{}
+			bErr.WalkPartsBySource(outSorter, outBatch, func(i int, p *message.Part, err error) bool {
+				if err != nil && p != nil {
+					if _, exists := seenIndexes[i]; exists {
+						return true
+					}
+					seenIndexes[i] = struct{}{}
+					tmp := p.ShallowCopy()
+					tmp.MetaSetMut("fallback_error", err.Error())
+					onlyErrs = append(onlyErrs, tmp)
+				}
+				return true
+			})
+
+			// This is an edge case that means the only failed messages aren't
+			// capable of being associated with our origin batch. To be safe we
+			// fall everything through.
+			if len(onlyErrs) == 0 {
+				tmpBatch := outBatch.ShallowCopy()
+				for _, m := range tmpBatch {
+					m.MetaSetMut("fallback_error", err.Error())
+				}
+				return tmpBatch
+			}
+
+			outSorter, outBatch = message.NewSortGroup(onlyErrs)
+			return outBatch
 		}
 
 		i := 0
@@ -187,13 +230,9 @@ func (t *fallbackBroker) loop() {
 			if err == nil || len(t.outputTSChans) <= i {
 				return tran.Ack(ctx, err)
 			}
-			newPayload := tran.Payload.ShallowCopy()
-			_ = newPayload.Iter(func(i int, p *message.Part) error {
-				p.MetaSetMut("fallback_error", err.Error())
-				return nil
-			})
+
 			select {
-			case t.outputTSChans[i] <- message.NewTransactionFunc(newPayload, ackFn):
+			case t.outputTSChans[i] <- message.NewTransactionFunc(nextBatchFromErr(err), ackFn):
 			case <-ctx.Done():
 				return ctx.Err()
 			}
@@ -201,20 +240,20 @@ func (t *fallbackBroker) loop() {
 		}
 
 		select {
-		case t.outputTSChans[i] <- message.NewTransactionFunc(tran.Payload.ShallowCopy(), ackFn):
-		case <-t.shutSig.CloseAtLeisureChan():
+		case t.outputTSChans[i] <- message.NewTransactionFunc(outBatch.ShallowCopy(), ackFn):
+		case <-t.shutSig.SoftStopChan():
 			return
 		}
 	}
 }
 
 func (t *fallbackBroker) TriggerCloseNow() {
-	t.shutSig.CloseNow()
+	t.shutSig.TriggerHardStop()
 }
 
 func (t *fallbackBroker) WaitForClose(ctx context.Context) error {
 	select {
-	case <-t.shutSig.HasClosedChan():
+	case <-t.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

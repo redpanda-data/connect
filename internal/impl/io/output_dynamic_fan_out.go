@@ -7,11 +7,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/log"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 // wrappedOutput is a struct that wraps a DynamicOutput with an identifying
@@ -165,7 +166,7 @@ func (d *dynamicFanOutOutputBroker) loop() {
 			case <-ackInterruptChan:
 			case <-time.After(time.Millisecond * 100):
 				// Just incase an interrupt doesn't arrive.
-			case <-d.shutSig.CloseAtLeisureChan():
+			case <-d.shutSig.SoftStopChan():
 				break ackWaitLoop
 			}
 		}
@@ -181,11 +182,11 @@ func (d *dynamicFanOutOutputBroker) loop() {
 			_ = ow.output.WaitForClose(context.Background())
 		}
 
-		d.shutSig.CloseNow()
+		d.shutSig.TriggerHardStop()
 		apiWG.Wait()
 
 		d.outputs = map[string]outputWithTSChan{}
-		d.shutSig.ShutdownComplete()
+		d.shutSig.TriggerHasStopped()
 	}()
 
 	apiWG.Add(1)
@@ -222,7 +223,7 @@ func (d *dynamicFanOutOutputBroker) loop() {
 						wrappedOutput.ResChan <- err
 					}
 				}()
-			case <-d.shutSig.CloseAtLeisureChan():
+			case <-d.shutSig.SoftStopChan():
 				return
 			}
 		}
@@ -236,7 +237,7 @@ func (d *dynamicFanOutOutputBroker) loop() {
 			if !open {
 				return
 			}
-		case <-d.shutSig.CloseAtLeisureChan():
+		case <-d.shutSig.SoftStopChan():
 			return
 		}
 
@@ -248,7 +249,7 @@ func (d *dynamicFanOutOutputBroker) loop() {
 			d.outputsMut.RUnlock()
 			select {
 			case <-time.After(time.Millisecond * 10):
-			case <-d.shutSig.CloseAtLeisureChan():
+			case <-d.shutSig.SoftStopChan():
 				return
 			}
 			d.outputsMut.RLock()
@@ -273,7 +274,7 @@ func (d *dynamicFanOutOutputBroker) loop() {
 				}
 				return nil
 			}):
-			case <-d.shutSig.CloseAtLeisureChan():
+			case <-d.shutSig.SoftStopChan():
 				break outputsLoop // This signal will be caught again in the next loop
 			}
 		}
@@ -293,12 +294,12 @@ func (d *dynamicFanOutOutputBroker) Connected() bool {
 }
 
 func (d *dynamicFanOutOutputBroker) TriggerCloseNow() {
-	d.shutSig.CloseNow()
+	d.shutSig.TriggerHardStop()
 }
 
 func (d *dynamicFanOutOutputBroker) WaitForClose(ctx context.Context) error {
 	select {
-	case <-d.shutSig.HasClosedChan():
+	case <-d.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

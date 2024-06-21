@@ -165,16 +165,16 @@ func (f FieldSpec) Optional() FieldSpec {
 	return f
 }
 
-const bloblREEnvVar = "\\${[0-9A-Za-z_.]+(:((\\${[^}]+})|[^}])*)?}"
+const bloblREEnvVar = `\${[0-9A-Za-z_.]+(:((\${[^}]+})|[^}])*)?}`
 
 // Secret marks this field as being a secret, which means it represents
 // information that is generally considered sensitive such as passwords or
 // access tokens.
 func (f FieldSpec) Secret() FieldSpec {
 	f.IsSecret = true
-	f.Scrubber = fmt.Sprintf(`root = if this != "" && !this.trim().re_match("""^%v$""") {
+	f.Scrubber = fmt.Sprintf(`root = if this != null && this != "" && !this.trim().re_match("""^%v$""") {
   "!!!SECRET_SCRUBBED!!!"
-}`, bloblREEnvVar)
+} else if this == null { "" }`, bloblREEnvVar)
 	return f
 }
 
@@ -319,7 +319,7 @@ func lintsFromAny(line int, v any) (lints []Lint) {
 		_ = bloblang.NewArgSpec().Int64Var(&typeInt).Extract([]any{t["type"]})
 		lints = append(lints, NewLintError(line, LintType(typeInt), errors.New(t["what"].(string))))
 	case string:
-		if len(t) > 0 {
+		if t != "" {
 			lints = append(lints, NewLintError(line, LintCustom, errors.New(t)))
 		}
 	}
@@ -433,7 +433,7 @@ func (f FieldSpec) ScrubValue(v any) (any, error) {
 
 func (f FieldSpec) GetLintFunc() LintFunc {
 	fn := f.customLintFn
-	if fn == nil && len(f.Linter) > 0 {
+	if fn == nil && f.Linter != "" {
 		fn = f.LinterBlobl(f.Linter).customLintFn
 	}
 	if f.Interpolated {

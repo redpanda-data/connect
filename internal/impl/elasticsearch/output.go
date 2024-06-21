@@ -68,7 +68,7 @@ func esoConfigFromParsed(pConf *service.ParsedConfig) (conf esoConfig, err error
 	}
 	for _, u := range tmpURLs {
 		for _, splitURL := range strings.Split(u, ",") {
-			if len(splitURL) > 0 {
+			if splitURL != "" {
 				conf.urls = append(conf.urls, splitURL)
 			}
 		}
@@ -267,7 +267,6 @@ It's possible to enable AWS connectivity with this output using the `+"`aws`"+` 
 				Advanced().
 				Default(false),
 		)
-
 }
 
 func init() {
@@ -320,7 +319,6 @@ func (e *Output) Connect(ctx context.Context) error {
 	}
 
 	e.client = client
-	e.log.Infof("Sending messages to Elasticsearch index at urls: %s\n", e.conf.urls)
 	return nil
 }
 
@@ -413,6 +411,7 @@ func (e *Output) WriteBatch(ctx context.Context, msg service.MessageBatch) error
 		}
 
 		var newRequests []*pendingBulkIndex
+		var errorsOccurred bool
 		for i, resp := range result.Items {
 			for _, item := range resp {
 				if item.Status >= 200 && item.Status <= 299 {
@@ -428,6 +427,7 @@ func (e *Output) WriteBatch(ctx context.Context, msg service.MessageBatch) error
 				e.log.Errorf("Elasticsearch message '%v' rejected with status [%v]: %v\n", item.Id, item.Status, reason)
 				if !shouldRetry(item.Status) {
 					msg[i].SetError(fmt.Errorf("failed to send message '%v': %v", item.Id, reason))
+					errorsOccurred = true
 				} else {
 					// IMPORTANT: i exactly matches the index of our source requests
 					// and when we re-run our bulk request with errored requests
@@ -442,6 +442,11 @@ func (e *Output) WriteBatch(ctx context.Context, msg service.MessageBatch) error
 				}
 			}
 		}
+
+		if errorsOccurred {
+			return errors.New("errors occurred sending messages")
+		}
+
 		requests = newRequests
 
 		wait := boff.NextBackOff()

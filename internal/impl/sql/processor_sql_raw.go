@@ -6,7 +6,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -103,7 +104,6 @@ type sqlRawProcessor struct {
 }
 
 // NewSQLRawProcessorFromConfig returns an internal sql_raw processor.
-// nolint:revive // Not bothered as this is internal anyway
 func NewSQLRawProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*sqlRawProcessor, error) {
 	driverStr, err := conf.FieldString("driver")
 	if err != nil {
@@ -173,13 +173,13 @@ func newSQLRawProcessor(
 	connSettings.apply(context.Background(), s.db, s.logger)
 
 	go func() {
-		<-s.shutSig.CloseNowChan()
+		<-s.shutSig.HardStopChan()
 
 		s.dbMut.Lock()
 		_ = s.db.Close()
 		s.dbMut.Unlock()
 
-		s.shutSig.ShutdownComplete()
+		s.shutSig.TriggerHasStopped()
 	}()
 	return s, nil
 }
@@ -250,9 +250,9 @@ func (s *sqlRawProcessor) ProcessBatch(ctx context.Context, batch service.Messag
 }
 
 func (s *sqlRawProcessor) Close(ctx context.Context) error {
-	s.shutSig.CloseNow()
+	s.shutSig.TriggerHardStop()
 	select {
-	case <-s.shutSig.HasClosedChan():
+	case <-s.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

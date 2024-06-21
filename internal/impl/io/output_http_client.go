@@ -146,7 +146,6 @@ func newHTTPClientOutputFromParsed(conf *service.ParsedConfig, mgr *service.Reso
 }
 
 func (h *httpClientWriter) Connect(ctx context.Context) error {
-	h.log.Infof("Sending messages via HTTP requests to: %s\n", h.logURL)
 	return nil
 }
 
@@ -158,6 +157,7 @@ func (h *httpClientWriter) WriteBatch(ctx context.Context, msg service.MessageBa
 					return err
 				}
 			}
+			return nil
 		} else {
 			// Hard, need to do parallel requests limited by max parallelism.
 			return h.handleParallelRequests(msg)

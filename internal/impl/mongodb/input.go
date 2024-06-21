@@ -47,6 +47,7 @@ func mongoConfigSpec() *service.ConfigSpec {
   root.from = {"$lte": timestamp_unix()}
   root.to = {"$gte": timestamp_unix()}
 `)).
+		Field(service.NewAutoRetryNacksToggleField()).
 		Field(service.NewIntField("batch_size").
 			Description("A explicit number of documents to batch up before flushing them for processing. Must be greater than `0`. Operations: `find`, `aggregate`").
 			Optional().
@@ -122,7 +123,7 @@ func newMongoInput(conf *service.ParsedConfig, logger *service.Logger) (service.
 			return nil, err
 		}
 	}
-	return service.AutoRetryNacksBatched(&mongoInput{
+	return service.AutoRetryNacksBatchedToggled(conf, &mongoInput{
 		query:        query,
 		collection:   collection,
 		client:       mClient,
@@ -134,7 +135,7 @@ func newMongoInput(conf *service.ParsedConfig, logger *service.Logger) (service.
 		limit:        int64(limit),
 		count:        0,
 		logger:       logger,
-	}), nil
+	})
 }
 
 type mongoInput struct {

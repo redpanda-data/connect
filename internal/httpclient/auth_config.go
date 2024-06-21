@@ -201,7 +201,7 @@ func (oauth OAuthConfig) Sign(req *http.Request) error {
 
 	nonceGenerator := rand.New(rand.NewSource(time.Now().UnixNano()))
 	nonce := strconv.FormatInt(nonceGenerator.Int63(), 10)
-	ts := fmt.Sprintf("%d", time.Now().Unix())
+	ts := strconv.FormatInt(time.Now().Unix(), 10)
 
 	params := &url.Values{}
 	params.Add("oauth_consumer_key", oauth.ConsumerKey)

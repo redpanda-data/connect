@@ -37,7 +37,7 @@ This is useful for preserving the original message contents when using processor
 
 ### Metadata
 
-Metadata fields that are added to messages during branch processing will not be automatically copied into the resulting message. In order to do this you should explicitly declare in your `+"`result_map`"+` either a wholesale copy with `+"`meta = meta()`"+`, or selective copies with `+"`meta foo = meta(\"bar\")`"+` and so on.
+Metadata fields that are added to messages during branch processing will not be automatically copied into the resulting message. In order to do this you should explicitly declare in your `+"`result_map`"+` either a wholesale copy with `+"`meta = metadata()`"+`, or selective copies with `+"`meta foo = metadata(\"bar\")`"+` and so on. It is also possible to reference the metadata of the origin message in the `+"`result_map`"+` using the [`+"`@`"+` operator](/docs/guides/bloblang/about#metadata).
 
 ### Error Handling
 
@@ -56,6 +56,8 @@ pipeline:
           - http:
               url: https://hub.docker.com/v2/repositories/jeffail/benthos
               verb: GET
+              headers:
+                Content-Type: application/json
         result_map: root.image.pull_count = this.pull_count
 
 # Example input:  {"id":"foo","some":"pre-existing data"}
@@ -106,7 +108,7 @@ pipeline:
           - cache:
               resource: TODO
               operator: set
-              key: ${! meta("id") }
+              key: ${! @id }
               value: ${! content() }
 `).
 		Fields(branchSpecFields()...)
@@ -130,17 +132,18 @@ func branchSpecFields() []*service.ConfigField {
 			Description("A list of processors to apply to mapped requests. When processing message batches the resulting batch must match the size and ordering of the input batch, therefore filtering, grouping should not be performed within these processors."),
 		service.NewBloblangField(branchProcFieldResMap).
 			Description("A [Bloblang mapping](/docs/guides/bloblang/about) that describes how the resulting messages from branched processing should be mapped back into the original payload. If left empty the origin message will remain unchanged (including metadata).").
-			Examples(`meta foo_code = meta("code")
+			Examples(`meta foo_code = metadata("code")
 root.foo_result = this`,
-				`meta = meta()
+				`meta = metadata()
 root.bar.body = this.body
 root.bar.id = this.user.id`,
 				`root.raw_result = content().string()`,
-				`root.enrichments.foo = if meta("request_failed") != null {
-  throw(meta("request_failed"))
+				`root.enrichments.foo = if metadata("request_failed") != null {
+  throw(metadata("request_failed"))
 } else {
   this
-}`).
+}`, `# Retain only the updated metadata fields which were present in the origin message
+meta = metadata().filter(v -> @.get(v.key) != null)`).
 			Default(""),
 	}
 }
@@ -206,12 +209,12 @@ func newBranchFromParsed(conf *service.ParsedConfig, mgr bundle.NewManagement) (
 		b.children[i] = interop.UnwrapOwnedProcessor(c)
 	}
 
-	if reqMapStr, _ := conf.FieldString(branchProcFieldReqMap); len(reqMapStr) > 0 {
+	if reqMapStr, _ := conf.FieldString(branchProcFieldReqMap); reqMapStr != "" {
 		if b.requestMap, err = mgr.BloblEnvironment().NewMapping(reqMapStr); err != nil {
 			return nil, fmt.Errorf("failed to parse request mapping: %w", err)
 		}
 	}
-	if resMapStr, _ := conf.FieldString(branchProcFieldResMap); len(resMapStr) > 0 {
+	if resMapStr, _ := conf.FieldString(branchProcFieldResMap); resMapStr != "" {
 		if b.resultMap, err = mgr.BloblEnvironment().NewMapping(resMapStr); err != nil {
 			return nil, fmt.Errorf("failed to parse result mapping: %w", err)
 		}

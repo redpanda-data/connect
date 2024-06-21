@@ -248,7 +248,7 @@ func (m *Type) Stop(ctx context.Context) error {
 
 	failedStreams := []string{}
 	for i := 0; i < len(m.streams); i++ {
-		if failedStrm := <-resultChan; len(failedStrm) > 0 {
+		if failedStrm := <-resultChan; failedStrm != "" {
 			failedStreams = append(failedStreams, failedStrm)
 		}
 	}

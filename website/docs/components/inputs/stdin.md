@@ -24,6 +24,7 @@ input:
   stdin:
     scanner:
       lines: {}
+    auto_replay_nacks: true
 ```
 
 ## Fields
@@ -36,5 +37,13 @@ The [scanner](/docs/components/scanners/about) by which the stream of bytes cons
 Type: `scanner`  
 Default: `{"lines":{}}`  
 Requires version 4.25.0 or newer  
+
+### `auto_replay_nacks`
+
+Whether messages that are rejected (nacked) at the output level should be automatically replayed indefinitely, eventually resulting in back pressure if the cause of the rejections is persistent. If set to `false` these messages will instead be deleted. Disabling auto replays can greatly improve memory efficiency of high throughput streams as the original shape of the data can be discarded immediately upon consumption and mutation.
+
+
+Type: `bool`  
+Default: `true`  
 
 

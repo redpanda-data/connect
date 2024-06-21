@@ -5,10 +5,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/component"
 	"github.com/benthosdev/benthos/v4/internal/component/output"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 type fanOutOutputBroker struct {
@@ -68,7 +69,7 @@ func (o *fanOutOutputBroker) loop() {
 			case <-ackInterruptChan:
 			case <-time.After(time.Millisecond * 100):
 				// Just incase an interrupt doesn't arrive.
-			case <-o.shutSig.CloseNowChan():
+			case <-o.shutSig.HardStopChan():
 				break ackWaitLoop
 			}
 		}
@@ -76,7 +77,7 @@ func (o *fanOutOutputBroker) loop() {
 			close(c)
 		}
 		_ = closeAllOutputs(context.Background(), o.outputs)
-		o.shutSig.ShutdownComplete()
+		o.shutSig.TriggerHasStopped()
 	}()
 
 	for {
@@ -87,7 +88,7 @@ func (o *fanOutOutputBroker) loop() {
 			if !open {
 				return
 			}
-		case <-o.shutSig.CloseNowChan():
+		case <-o.shutSig.HardStopChan():
 			return
 		}
 
@@ -109,7 +110,7 @@ func (o *fanOutOutputBroker) loop() {
 				}
 				return nil
 			}):
-			case <-o.shutSig.CloseNowChan():
+			case <-o.shutSig.HardStopChan():
 				return
 			}
 		}
@@ -117,12 +118,12 @@ func (o *fanOutOutputBroker) loop() {
 }
 
 func (o *fanOutOutputBroker) TriggerCloseNow() {
-	o.shutSig.CloseNow()
+	o.shutSig.TriggerHardStop()
 }
 
 func (o *fanOutOutputBroker) WaitForClose(ctx context.Context) error {
 	select {
-	case <-o.shutSig.HasClosedChan():
+	case <-o.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

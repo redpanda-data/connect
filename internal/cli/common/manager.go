@@ -126,7 +126,7 @@ func RunManagerUntilStopped(
 	dataStreamClosedChan chan struct{},
 ) int {
 	var exitDelay time.Duration
-	if td := conf.SystemCloseDelay; len(td) > 0 {
+	if td := conf.SystemCloseDelay; td != "" {
 		var err error
 		if exitDelay, err = time.ParseDuration(td); err != nil {
 			stopMgr.Manager().Logger().Error("Failed to parse shutdown delay period string: %v\n", err)
@@ -135,7 +135,7 @@ func RunManagerUntilStopped(
 	}
 
 	var exitTimeout time.Duration
-	if tout := conf.SystemCloseTimeout; len(tout) > 0 {
+	if tout := conf.SystemCloseTimeout; tout != "" {
 		var err error
 		if exitTimeout, err = time.ParseDuration(tout); err != nil {
 			stopMgr.Manager().Logger().Error("Failed to parse shutdown timeout period string: %v\n", err)

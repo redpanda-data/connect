@@ -26,7 +26,7 @@ import (
 // unique names.
 func inferStreamID(dir, path string) (string, error) {
 	var id string
-	if len(dir) > 0 {
+	if dir != "" {
 		var err error
 		if id, err = filepath.Rel(dir, path); err != nil {
 			return "", err
@@ -140,7 +140,7 @@ func (r *Reader) streamPathsExpanded() ([]string, error) {
 
 			// TODO: This is quite lazy and might run into issues e.g. the path
 			// `foo/bar.yaml` would collide with a test suffix of `_bar`.
-			if len(r.testSuffix) > 0 && strings.HasSuffix(id, r.testSuffix) {
+			if r.testSuffix != "" && strings.HasSuffix(id, r.testSuffix) {
 				return nil
 			}
 

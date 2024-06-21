@@ -5,9 +5,10 @@ import (
 	"errors"
 	"sync"
 
+	"github.com/Jeffail/shutdown"
+
 	"github.com/benthosdev/benthos/v4/internal/component/input"
 	"github.com/benthosdev/benthos/v4/internal/message"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
 )
 
 type fanInInputBroker struct {
@@ -56,12 +57,12 @@ func newFanInInputBroker(inputs []input.Streamed) (*fanInInputBroker, error) {
 					if !open {
 						return
 					}
-				case <-i.shutSig.CloseNowChan():
+				case <-i.shutSig.HardStopChan():
 					return
 				}
 				select {
 				case i.transactions <- in:
-				case <-i.shutSig.CloseNowChan():
+				case <-i.shutSig.HardStopChan():
 					return
 				}
 			}
@@ -96,7 +97,7 @@ func (i *fanInInputBroker) loop() {
 	defer func() {
 		close(i.inputClosedChan)
 		close(i.transactions)
-		i.shutSig.ShutdownComplete()
+		i.shutSig.TriggerHasStopped()
 	}()
 
 	for {
@@ -123,12 +124,12 @@ func (i *fanInInputBroker) TriggerCloseNow() {
 	for _, closable := range i.closables {
 		closable.TriggerCloseNow()
 	}
-	i.shutSig.CloseNow()
+	i.shutSig.TriggerHardStop()
 }
 
 func (i *fanInInputBroker) WaitForClose(ctx context.Context) error {
 	select {
-	case <-i.shutSig.HasClosedChan():
+	case <-i.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

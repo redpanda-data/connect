@@ -37,7 +37,7 @@ spec:
             name: benthos-generator-config
       containers:
         - name: benthos
-          image: jeffail/benthos:latest
+          image: ghcr.io/benthosdev/benthos:latest
           args:
             - "-c"
             - "/etc/benthos/config.yaml"

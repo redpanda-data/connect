@@ -111,7 +111,7 @@ There are several components within Benthos which utilise NATS services. You wil
 support optional advanced authentication parameters for [NKeys](https://docs.nats.io/nats-server/configuration/securing_nats/auth_intro/nkey_auth)
 and [User Credentials](https://docs.nats.io/developing-with-nats/security/creds).
 
-An in depth tutorial can be found [here](https://docs.nats.io/developing-with-nats/tutorials/jwt).
+An in depth tutorial can be found [here](https://docs.nats.io/running-a-nats-service/nats_admin/security/jwt).
 
 #### NKey file
 
@@ -213,6 +213,8 @@ Default: `"all"`
 |---|---|
 | `all` | Deliver all available messages. |
 | `last` | Deliver starting with the last published messages. |
+| `last_per_subject` | Deliver starting with the last published message per subject. |
+| `new` | Deliver starting from now, not taking into account any previous messages. |
 
 
 ### `ack_wait`

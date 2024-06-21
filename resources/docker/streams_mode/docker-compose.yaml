@@ -1,7 +1,7 @@
 version: '3.3'
 services:
   benthos:
-    image: jeffail/benthos
+    image: ghcr.io/benthosdev/benthos
     command: [ '-c', '/benthos.yaml', 'streams', '/streams/*.yaml' ]
     volumes:
       - ./benthos.yaml:/benthos.yaml

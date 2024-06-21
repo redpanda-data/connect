@@ -14,10 +14,13 @@ import (
 
 func TestArithmeticNumberDegradation(t *testing.T) {
 	fn := numberDegradationFunc(ArithmeticAdd,
-		func(left, right int64) (int64, error) {
+		func(left, right uint64) (any, error) {
 			return left / right, nil
 		},
-		func(left, right float64) (float64, error) {
+		func(left, right int64) (any, error) {
+			return left / right, nil
+		},
+		func(left, right float64) (any, error) {
 			return left / right, nil
 		},
 	)
@@ -107,7 +110,7 @@ func TestArithmeticNumberDegradation(t *testing.T) {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			res, err := fn(NewLiteralFunction("left", test.left), NewLiteralFunction("right", test.right), test.left, test.right)
-			if len(test.err) > 0 {
+			if test.err != "" {
 				assert.EqualError(t, err, test.err)
 			} else {
 				require.NoError(t, err)
@@ -126,6 +129,20 @@ func TestArithmeticComparisons(t *testing.T) {
 		result      any
 		errContains string
 	}{
+		{
+			name:   "left int64 to right int64",
+			left:   int64(1780921717355446273),
+			right:  int64(1780921717355446272),
+			op:     ArithmeticGt,
+			result: true,
+		},
+		{
+			name:   "left uint64 to right uint64",
+			left:   uint64(18446744073709551613),
+			right:  uint64(18446744073709551612),
+			op:     ArithmeticGt,
+			result: true,
+		},
 		{
 			name:   "right null equal to int",
 			left:   int64(12),
@@ -260,7 +277,7 @@ func TestArithmeticComparisons(t *testing.T) {
 			require.NoError(t, err)
 
 			res, err := fn.Exec(FunctionContext{})
-			if len(test.errContains) > 0 {
+			if test.errContains != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), test.errContains)
 			} else {

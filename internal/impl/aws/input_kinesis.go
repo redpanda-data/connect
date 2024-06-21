@@ -126,6 +126,7 @@ Use the `+"`batching`"+` fields to configure an optional [batching policy](/docs
 		service.NewIntField(kiFieldCheckpointLimit).
 			Description("The maximum gap between the in flight sequence versus the latest acknowledged sequence at a given time. Increasing this limit enables parallel processing and batching at the output level to work on individual shards. Any given sequence will not be committed unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
 			Default(1024),
+		service.NewAutoRetryNacksToggleField(),
 		service.NewDurationField(kiFieldCommitPeriod).
 			Description("The period of time between each update to the checkpoint table.").
 			Default("5s"),
@@ -153,7 +154,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return service.AutoRetryNacksBatched(r), nil
+			return service.AutoRetryNacksBatchedToggled(conf, r)
 		})
 	if err != nil {
 		panic(err)
@@ -223,7 +224,7 @@ func newKinesisReaderFromParsed(pConf *service.ParsedConfig, mgr *service.Resour
 	return newKinesisReaderFromConfig(conf, batcher, sess, mgr)
 }
 
-func parseStreamID(id string) (remaining string, shard string, err error) {
+func parseStreamID(id string) (remaining, shard string, err error) {
 	if streamStartsAt := strings.LastIndex(id, "/"); streamStartsAt > 0 {
 		remaining = id[0:streamStartsAt]
 		id = id[streamStartsAt:]
@@ -276,7 +277,7 @@ func newKinesisReaderFromConfig(conf kiConfig, batcher service.BatchPolicy, sess
 	for _, t := range conf.Streams {
 		for _, splitStreams := range strings.Split(t, ",") {
 			trimmed := strings.TrimSpace(splitStreams)
-			if len(trimmed) == 0 {
+			if trimmed == "" {
 				continue
 			}
 
@@ -335,7 +336,7 @@ func (k *kinesisReader) getIter(info streamInfo, shardID, sequence string) (stri
 		iterType = types.ShardIteratorTypeLatest
 	}
 	var startingSequence *string
-	if len(sequence) > 0 {
+	if sequence != "" {
 		iterType = types.ShardIteratorTypeAfterSequenceNumber
 		startingSequence = &sequence
 	}
@@ -799,9 +800,9 @@ func (k *kinesisReader) runExplicitShards() {
 		}
 		if len(pendingShards) == 0 {
 			break
-		} else {
-			<-time.After(time.Second)
 		}
+
+		<-time.After(time.Second)
 	}
 }
 
@@ -812,7 +813,7 @@ func (k *kinesisReader) waitUntilStreamsExists(ctx context.Context) error {
 		go func(info *streamInfo) {
 			waiter := kinesis.NewStreamExistsWaiter(k.svc)
 			input := &kinesis.DescribeStreamInput{}
-			if strings.HasPrefix("arn:", info.id) {
+			if strings.HasPrefix(info.id, "arn:") {
 				input.StreamARN = &info.id
 			} else {
 				input.StreamName = &info.id

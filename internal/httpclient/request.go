@@ -60,7 +60,7 @@ func RequestCreatorFromOldConfig(conf OldConfig, mgr *service.Resources, opts ..
 		opt(r)
 	}
 	for k, v := range r.headers {
-		if strings.ToLower(k) == "host" {
+		if strings.EqualFold(k, "host") {
 			r.host = v
 			delete(r.headers, k)
 			break
