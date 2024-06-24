@@ -85,6 +85,7 @@ input:
       period: ""
       check: ""
       processors: [] # No default (optional)
+    broker_connection_retry_interval: 250ms
 ```
 
 --
@@ -697,5 +698,14 @@ processors:
   - archive:
       format: json_array
 ```
+
+=== `broker_connection_retry_interval`
+
+Interval used to reconnect to the broker
+
+
+*Type*: `string`
+
+*Default*: `250000000`
 
 
