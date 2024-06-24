@@ -47,6 +47,7 @@ const (
 	iskFieldFetchBufferCap                = "fetch_buffer_cap"
 	iskFieldMultiHeader                   = "multi_header"
 	iskFieldBatching                      = "batching"
+	iskFieldRetryBrokerConnection         = "retry_broker_connection"
 )
 
 func iskConfigSpec() *service.ConfigSpec {
@@ -158,6 +159,9 @@ Unfortunately this error message will appear for a wide range of connection prob
 				Description("Decode headers into lists to allow handling of multiple values with the same key").
 				Advanced().Default(false),
 			service.NewBatchPolicyField(iskFieldBatching).Advanced(),
+			service.NewBoolField(iskFieldRetryBrokerConnection).
+				Description("Retry connecting to the broker when the connection fails. Setting this to false leaves retrying up to Redpanda Connect itself.").
+				Advanced().Default(true),
 		)
 }
 
@@ -507,6 +511,14 @@ func (k *kafkaReader) saramaConfigFromParsed(conf *service.ParsedConfig) (*saram
 
 	if k.startFromOldest {
 		config.Consumer.Offsets.Initial = sarama.OffsetOldest
+	}
+
+	var retryBrokerConn bool
+	if retryBrokerConn, err = conf.FieldBool(iskFieldRetryBrokerConnection); err != nil {
+		return nil, err
+	}
+	if !retryBrokerConn {
+		config.Metadata.Retry.Max = 0 // disables retrying
 	}
 
 	if err := ApplySaramaSASLFromParsed(conf, k.mgr, config); err != nil {
