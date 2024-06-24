@@ -47,7 +47,7 @@ const (
 	iskFieldFetchBufferCap                = "fetch_buffer_cap"
 	iskFieldMultiHeader                   = "multi_header"
 	iskFieldBatching                      = "batching"
-	iskFieldRetryBrokerConnection         = "retry_broker_connection"
+	iskFieldBrokerConnectionRetryInterval = "broker_connection_retry_interval"
 )
 
 func iskConfigSpec() *service.ConfigSpec {
@@ -159,9 +159,9 @@ Unfortunately this error message will appear for a wide range of connection prob
 				Description("Decode headers into lists to allow handling of multiple values with the same key").
 				Advanced().Default(false),
 			service.NewBatchPolicyField(iskFieldBatching).Advanced(),
-			service.NewBoolField(iskFieldRetryBrokerConnection).
-				Description("Retry connecting to the broker when the connection fails. Setting this to false leaves retrying up to Redpanda Connect itself.").
-				Advanced().Default(true),
+			service.NewDurationField(iskFieldBrokerConnectionRetryInterval).
+				Description("Default interval used to reconnect to the broker").
+				Advanced().Default(250*time.Millisecond),
 		)
 }
 
@@ -513,13 +513,10 @@ func (k *kafkaReader) saramaConfigFromParsed(conf *service.ParsedConfig) (*saram
 		config.Consumer.Offsets.Initial = sarama.OffsetOldest
 	}
 
-	var retryBrokerConn bool
-	if retryBrokerConn, err = conf.FieldBool(iskFieldRetryBrokerConnection); err != nil {
+	if config.Metadata.Retry.Backoff, err = conf.FieldDuration(iskFieldBrokerConnectionRetryInterval); err != nil {
 		return nil, err
 	}
-	if !retryBrokerConn {
-		config.Metadata.Retry.Max = 0 // disables retrying
-	}
+	k.mgr.Logger().Debugf("Sarama broker reconnection interval set to %v.\n", config.Metadata.Retry.Backoff)
 
 	if err := ApplySaramaSASLFromParsed(conf, k.mgr, config); err != nil {
 		return nil, err
@@ -562,7 +559,7 @@ func (k *kafkaReader) ReadBatch(ctx context.Context) (service.MessageBatch, serv
 	return nil, nil, ctx.Err()
 }
 
-// CloseAsync shuts down the kafkaReader input and stops processing requests.
+// Close shuts down the kafkaReader input and stops processing requests.
 func (k *kafkaReader) Close(ctx context.Context) (err error) {
 	k.closeGroupAndConsumers()
 	select {
