@@ -160,7 +160,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 				Advanced().Default(false),
 			service.NewBatchPolicyField(iskFieldBatching).Advanced(),
 			service.NewDurationField(iskFieldBrokerConnectionRetryInterval).
-				Description("Default interval used to reconnect to the broker").
+				Description("Interval used to reconnect to the broker").
 				Advanced().Default(250*time.Millisecond),
 		)
 }
@@ -516,7 +516,6 @@ func (k *kafkaReader) saramaConfigFromParsed(conf *service.ParsedConfig) (*saram
 	if config.Metadata.Retry.Backoff, err = conf.FieldDuration(iskFieldBrokerConnectionRetryInterval); err != nil {
 		return nil, err
 	}
-	k.mgr.Logger().Debugf("Sarama broker reconnection interval set to %v.\n", config.Metadata.Retry.Backoff)
 
 	if err := ApplySaramaSASLFromParsed(conf, k.mgr, config); err != nil {
 		return nil, err
