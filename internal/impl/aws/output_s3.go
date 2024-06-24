@@ -49,6 +49,7 @@ const (
 	s3oFieldMetadata                = "metadata"
 	s3oFieldStorageClass            = "storage_class"
 	s3oFieldTimeout                 = "timeout"
+	s3oFieldACL                     = "acl"
 	s3oFieldKMSKeyID                = "kms_key_id"
 	s3oFieldServerSideEncryption    = "server_side_encryption"
 	s3oFieldBatching                = "batching"
@@ -73,6 +74,7 @@ type s3oConfig struct {
 	Metadata                *service.MetadataExcludeFilter
 	StorageClass            *service.InterpolatedString
 	Timeout                 time.Duration
+	ACL                     *service.InterpolatedString
 	KMSKeyID                string
 	ServerSideEncryption    string
 	UsePathStyle            bool
@@ -131,6 +133,9 @@ func s3oConfigFromParsed(pConf *service.ParsedConfig) (conf s3oConfig, err error
 		return
 	}
 	if conf.Timeout, err = pConf.FieldDuration(s3oFieldTimeout); err != nil {
+		return
+	}
+	if conf.ACL, err = pConf.FieldInterpolatedString(s3oFieldACL); err != nil {
 		return
 	}
 	if conf.KMSKeyID, err = pConf.FieldString(s3oFieldKMSKeyID); err != nil {
@@ -256,6 +261,11 @@ output:
 			).
 				Description("The storage class to set for each object.").
 				Default("STANDARD").
+				Advanced(),
+			service.NewInterpolatedStringEnumField(s3oFieldACL,
+				"private", "public-read", "public-read-write", "authenticated-read", "aws-exec-read", "bucket-owner-read", "bucket-owner-full-control").
+				Description("The canned ACL to set for each object.").
+				Default("").
 				Advanced(),
 			service.NewStringField(s3oFieldKMSKeyID).
 				Description("An optional server side encryption key.").
@@ -424,6 +434,15 @@ func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg service.MessageBat
 				tags[j] = url.QueryEscape(pair.key) + "=" + url.QueryEscape(tagStr)
 			}
 			uploadInput.Tagging = aws.String(strings.Join(tags, "&"))
+		}
+
+		acl, err := msg.TryInterpolatedString(i, a.conf.ACL)
+		if err != nil {
+			return fmt.Errorf("acl interpolation: %w", err)
+		}
+
+		if acl != "" {
+			uploadInput.ACL = types.ObjectCannedACL(acl)
 		}
 
 		if a.conf.KMSKeyID != "" {
