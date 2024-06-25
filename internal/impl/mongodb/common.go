@@ -114,6 +114,8 @@ const (
 	OperationReplaceOne Operation = "replace-one"
 	// OperationUpdateOne Update one operation.
 	OperationUpdateOne Operation = "update-one"
+	// OperationUpdateMany Update many operation.
+	OperationUpdateMany Operation = "update-many"
 	// OperationFindOne Find one operation.
 	OperationFindOne Operation = "find-one"
 	// OperationFindMany Find many operation.
@@ -126,7 +128,8 @@ func (op Operation) isDocumentAllowed() bool {
 	switch op {
 	case OperationInsertOne,
 		OperationReplaceOne,
-		OperationUpdateOne:
+		OperationUpdateOne,
+		OperationUpdateMany:
 		return true
 	default:
 		return false
@@ -139,6 +142,7 @@ func (op Operation) isFilterAllowed() bool {
 		OperationDeleteMany,
 		OperationReplaceOne,
 		OperationUpdateOne,
+		OperationUpdateMany,
 		OperationFindOne,
 		OperationFindMany:
 		return true
@@ -153,6 +157,7 @@ func (op Operation) isHintAllowed() bool {
 		OperationDeleteMany,
 		OperationReplaceOne,
 		OperationUpdateOne,
+		OperationUpdateMany,
 		OperationFindOne,
 		OperationFindMany:
 		return true
@@ -184,6 +189,8 @@ func NewOperation(op string) Operation {
 		return OperationReplaceOne
 	case "update-one":
 		return OperationUpdateOne
+	case "update-many":
+		return OperationUpdateMany
 	case "find-one":
 		return OperationFindOne
 	case "find-many":
@@ -213,6 +220,7 @@ func outputOperationDocs(defaultOperation Operation) docs.FieldSpec {
 		string(OperationDeleteMany),
 		string(OperationReplaceOne),
 		string(OperationUpdateOne),
+		string(OperationDeleteMany),
 	).HasDefault(string(defaultOperation))
 }
 
@@ -223,7 +231,7 @@ func operationFromParsed(pConf *service.ParsedConfig) (operation Operation, err 
 	}
 
 	if operation = NewOperation(operationStr); operation == OperationInvalid {
-		err = fmt.Errorf("mongodb operation '%s' unknown: must be insert-one, delete-one, delete-many, replace-one or update-one", operationStr)
+		err = fmt.Errorf("mongodb operation '%s' unknown: must be insert-one, delete-one, delete-many, replace-one, update-one or update-many", operationStr)
 	}
 	return
 }
@@ -294,7 +302,7 @@ func writeMapsFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewBloblangField(commonFieldDocumentMap).
 			Description("A bloblang map representing a document to store within MongoDB, expressed as [extended JSON in canonical form](https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/). The document map is required for the operations " +
-				"insert-one, replace-one and update-one.").
+				"insert-one, replace-one, update-one and update-many.").
 			Examples(mapExamples()...).
 			Default(""),
 		service.NewBloblangField(commonFieldFilterMap).
@@ -309,7 +317,7 @@ func writeMapsFields() []*service.ConfigField {
 			Examples(mapExamples()...).
 			Default(""),
 		service.NewBoolField(commonFieldUpsert).
-			Description("The upsert setting is optional and only applies for update-one and replace-one operations. If the filter specified in filter_map matches, the document is updated or replaced accordingly, otherwise it is created.").
+			Description("The upsert setting is optional and only applies for update-one, update-many and replace-one operations. If the filter specified in filter_map matches, the document is updated or replaced accordingly, otherwise it is created.").
 			Version("3.60.0").
 			Default(false),
 	}

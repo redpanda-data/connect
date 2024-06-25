@@ -157,7 +157,7 @@ The mongodb operation to perform.
 
 Type: `string`  
 Default: `"update-one"`  
-Options: `insert-one`, `delete-one`, `delete-many`, `replace-one`, `update-one`.
+Options: `insert-one`, `delete-one`, `delete-many`, `replace-one`, `update-one`, `update-many`.
 
 ### `write_concern`
 
@@ -192,7 +192,7 @@ Default: `""`
 
 ### `document_map`
 
-A bloblang map representing a document to store within MongoDB, expressed as [extended JSON in canonical form](https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/). The document map is required for the operations insert-one, replace-one and update-one.
+A bloblang map representing a document to store within MongoDB, expressed as [extended JSON in canonical form](https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/). The document map is required for the operations insert-one, replace-one, update-one and update-many.
 
 
 Type: `string`  

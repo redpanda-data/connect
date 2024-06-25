@@ -167,6 +167,13 @@ func (m *outputWriter) WriteBatch(ctx context.Context, batch service.MessageBatc
 				Update: docJSON,
 				Hint:   hintJSON,
 			}
+		case OperationUpdateMany:
+			writeModel = &mongo.UpdateManyModel{
+				Upsert: &m.writeMaps.upsert,
+				Filter: filterJSON,
+				Update: docJSON,
+				Hint:   hintJSON,
+			}
 		}
 
 		if writeModel != nil {
