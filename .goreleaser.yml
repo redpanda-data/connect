@@ -1,4 +1,5 @@
 project_name: redpanda-connect
+version: 2
 builds:
   - id: connect
     main: cmd/redpanda-connect/main.go
@@ -57,7 +58,7 @@ archives:
   - id: connect-lambda-al2
     builds: [ connect-lambda-al2 ]
     format: zip
-    name_template: "connect-lambda-al2_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    name_template: "redpanda-connect-lambda-al2_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 dist: target/dist
 release:
   github:
