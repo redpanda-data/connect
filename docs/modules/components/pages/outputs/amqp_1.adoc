@@ -64,6 +64,8 @@ output:
     metadata:
       exclude_prefixes: []
     persistent: false
+    target_capabilities: [] # No default (optional)
+    message_properties_to: amqp://localhost:5672/ # No default (optional)
 ```
 
 --
@@ -378,45 +380,49 @@ Provide a list of explicit metadata key prefixes to be excluded when adding meta
 
 *Default*: `[]`
 
-### `persistent`
+=== `persistent`
 
 Whether message delivery should be persistent (transient by default).
 
 
-Type: `bool`
-Default: `false`
+*Type*: `bool`
 
+*Default*: `false`
 
-### `target_capabilities`
+=== `target_capabilities`
 
 List of extension capabilities the sender desires.
 
 
-Type: `array`
-Default: `[]`
+*Type*: `array`
+
 
 ```yml
 # Examples
 
-target_capabilities: [ "queue" ]
+target_capabilities:
+  - queue
 
-target_capabilities: [ "topic" ]
+target_capabilities:
+  - topic
 
-target_capabilities: [ "queue", "topic" ]
-
+target_capabilities:
+  - queue
+  - topic
 ```
 
-
-### `message_properties_to`
+=== `message_properties_to`
 
 Identifies the node that is the intended destination of the message.
 
 
-Type: `string`
+*Type*: `string`
+
 
 ```yml
 # Examples
 
-message_properties_to: amqp://127.0.0.1:5672/
+message_properties_to: amqp://localhost:5672/
 ```
+
 
