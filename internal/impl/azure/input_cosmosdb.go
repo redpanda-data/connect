@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package azure
 
 import (
@@ -11,8 +25,9 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos"
 	"github.com/mitchellh/mapstructure"
 
-	"github.com/benthosdev/benthos/v4/internal/impl/azure/cosmosdb"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/azure/cosmosdb"
 )
 
 const (
@@ -26,18 +41,18 @@ func cosmosDBInputSpec() *service.ConfigSpec {
 		// Beta().
 		Categories("Azure").
 		Version("v4.25.0").
-		Summary(`Executes a SQL query against [Azure CosmosDB](https://learn.microsoft.com/en-us/azure/cosmos-db/introduction) and creates a batch of messages from each page of items.`).
+		Summary(`Executes a SQL query against https://learn.microsoft.com/en-us/azure/cosmos-db/introduction[Azure CosmosDB^] and creates a batch of messages from each page of items.`).
 		Description(`
-## Cross-partition Queries
+== Cross-partition queries
 
-Cross-partition queries are currently not supported by the underlying driver. For every query, the PartitionKey value(s) must be known in advance and specified in the config. See details [here](https://github.com/Azure/azure-sdk-for-go/issues/18578#issuecomment-1222510989).
+Cross-partition queries are currently not supported by the underlying driver. For every query, the PartitionKey values must be known in advance and specified in the config. https://github.com/Azure/azure-sdk-for-go/issues/18578#issuecomment-1222510989[See details^].
 `+cosmosdb.CredentialsDocs+cosmosdb.MetadataDocs).
 		Footnotes(cosmosdb.EmulatorDocs).
 		Fields(cosmosdb.ContainerClientConfigFields()...).
 		Field(cosmosdb.PartitionKeysField(true)).
 		Field(service.NewStringField(cdbiFieldQuery).Description("The query to execute").Example(`SELECT c.foo FROM testcontainer AS c WHERE c.bar = "baz" AND c.timestamp < @timestamp`)).
 		Field(service.NewBloblangField(cdbiFieldArgsMapping).
-			Description("A [Bloblang mapping](/docs/guides/bloblang/about) that, for each message, creates a list of arguments to use with the query.").Optional().Example(`root = [
+			Description("A xref:guides:bloblang/about.adoc[Bloblang mapping] that, for each message, creates a list of arguments to use with the query.").Optional().Example(`root = [
   { "Name": "@name", "Value": "benthos" },
 ]`)).
 		Field(service.NewIntField(cdbiFieldBatchCount).
@@ -82,13 +97,13 @@ type cosmosDBReader struct {
 	pager *runtime.Pager[azcosmos.QueryItemsResponse]
 }
 
-func newCosmosDBReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (*cosmosDBReader, error) {
+func newCosmosDBReaderFromParsed(conf *service.ParsedConfig, _ *service.Resources) (*cosmosDBReader, error) {
 	containerClient, err := cosmosdb.ContainerClientFromParsed(conf)
 	if err != nil {
 		return nil, err
 	}
 
-	partitionKeysMapping, err := conf.FieldBloblang(cosmosdb.FieldPartitionKeys)
+	partitionKeysMapping, err := conf.FieldBloblang(cosmosdb.FieldPartitionKeysMap)
 	if err != nil {
 		return nil, err
 	}

@@ -1,32 +1,28 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package crypto
 
 import (
 	"fmt"
 	"testing"
 
-	"github.com/golang-jwt/jwt/v4"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/public/bloblang"
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
 )
-
-type testClaims struct {
-	Sub  string  `json:"sub"`
-	Mood string  `json:"mood"`
-	Iat  float64 `json:"iat"`
-}
-
-func (c *testClaims) Valid() error {
-	return nil
-}
-
-func (c *testClaims) MarshalMap() map[string]any {
-	return map[string]any{
-		"sub":  c.Sub,
-		"mood": c.Mood,
-		"iat":  c.Iat,
-	}
-}
 
 func TestBloblangSignJwt(t *testing.T) {
 	dummySecretHMAC := "dont-tell-anyone"
@@ -78,10 +74,10 @@ AhySg0xjk96WycIacgFPZeH01CSNYXkrrFLi6kWxsZIDBD4YjLKTkg8nYseA7IxI
 JWHmBFldXcJkvNe6PH+6YL1R5jJO3TnNFFa4P6nltg==
 -----END EC PRIVATE KEY-----`
 
-	inClaims := testClaims{
-		Sub:  "1234567890",
-		Mood: "Disdainful",
-		Iat:  1516239022,
+	inClaims := jwt.MapClaims{
+		"sub":  "1234567890",
+		"mood": "Disdainful",
+		"iat":  1516239022.0,
 	}
 
 	testCases := []struct {
@@ -108,13 +104,13 @@ JWHmBFldXcJkvNe6PH+6YL1R5jJO3TnNFFa4P6nltg==
 			exe, err := bloblang.Parse(mapping)
 			require.NoError(t, err)
 
-			res, err := exe.Query(inClaims.MarshalMap())
+			res, err := exe.Query(map[string]any(inClaims))
 			require.NoError(t, err)
 
 			output, ok := res.(string)
 			require.True(t, ok, "bloblang result is not a string")
 
-			var outClaims testClaims
+			var outClaims jwt.MapClaims
 			_, err = jwt.ParseWithClaims(output, &outClaims, func(tok *jwt.Token) (any, error) {
 				var key any
 				switch tok.Method.(type) {

@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package gcp_test
 
 import (
@@ -12,9 +26,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/api/iterator"
 
-	"github.com/benthosdev/benthos/v4/internal/integration"
+	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
-	_ "github.com/benthosdev/benthos/v4/public/components/pure"
+	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 )
 
 func createGCPCloudStorageBucket(var1, id string) error {
@@ -103,11 +117,11 @@ input:
 			integration.StreamTestStreamIsolated(10),
 		).Run(
 			t, template,
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-				require.NoError(t, createGCPCloudStorageBucket(vars.Var1, testID))
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+				require.NoError(t, createGCPCloudStorageBucket(vars.General["VAR1"], vars.ID))
 			}),
-			integration.StreamTestOptVarOne(dummyBucketPrefix),
-			integration.StreamTestOptVarTwo(dummyPathPrefix),
+			integration.StreamTestOptVarSet("VAR1", dummyBucketPrefix),
+			integration.StreamTestOptVarSet("VAR2", dummyPathPrefix),
 		)
 	})
 
@@ -132,11 +146,11 @@ input:
 			integration.StreamTestStreamIsolated(10),
 		).Run(
 			t, template,
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-				require.NoError(t, createGCPCloudStorageBucket(vars.Var1, testID))
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+				require.NoError(t, createGCPCloudStorageBucket(vars.General["VAR1"], vars.ID))
 			}),
-			integration.StreamTestOptVarOne(dummyBucketPrefix),
-			integration.StreamTestOptVarTwo(dummyPathPrefix),
+			integration.StreamTestOptVarSet("VAR1", dummyBucketPrefix),
+			integration.StreamTestOptVarSet("VAR2", dummyPathPrefix),
 		)
 	})
 
@@ -159,11 +173,11 @@ input:
 			integration.StreamTestStreamIsolated(10),
 		).Run(
 			t, template,
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-				require.NoError(t, createGCPCloudStorageBucket(vars.Var1, testID))
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+				require.NoError(t, createGCPCloudStorageBucket(vars.General["VAR1"], vars.ID))
 			}),
-			integration.StreamTestOptVarOne(dummyBucketPrefix),
-			integration.StreamTestOptVarTwo(dummyPathPrefix),
+			integration.StreamTestOptVarSet("VAR1", dummyBucketPrefix),
+			integration.StreamTestOptVarSet("VAR2", dummyPathPrefix),
 		)
 	})
 }

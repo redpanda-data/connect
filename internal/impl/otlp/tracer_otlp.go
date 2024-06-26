@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package otlp
 
 import (
@@ -15,13 +29,12 @@ import (
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/benthosdev/benthos/v4/internal/cli"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func oltpSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Summary("Send tracing events to an [Open Telemetry collector](https://opentelemetry.io/docs/collector/).").
+		Summary("Send tracing events to an https://opentelemetry.io/docs/collector/[Open Telemetry collector^].").
 		Field(service.NewObjectListField("http",
 			service.NewStringField("address").
 				Description("The endpoint of a collector to send tracing events to.").
@@ -90,10 +103,11 @@ type sampleConfig struct {
 }
 
 type otlp struct {
-	grpc     []collector
-	http     []collector
-	tags     map[string]string
-	sampling sampleConfig
+	engineVersion string
+	grpc          []collector
+	http          []collector
+	tags          map[string]string
+	sampling      sampleConfig
 }
 
 func oltpConfigFromParsed(conf *service.ParsedConfig) (*otlp, error) {
@@ -118,6 +132,7 @@ func oltpConfigFromParsed(conf *service.ParsedConfig) (*otlp, error) {
 	}
 
 	return &otlp{
+		conf.EngineVersion(),
 		grpc,
 		http,
 		tags,
@@ -203,7 +218,7 @@ func newOtlp(config *otlp) (trace.TracerProvider, error) {
 		// Only set the default service version tag if the user doesn't provide
 		// a custom service name tag.
 		if _, ok := config.tags[string(semconv.ServiceVersionKey)]; !ok {
-			attrs = append(attrs, semconv.ServiceVersionKey.String(cli.Version))
+			attrs = append(attrs, semconv.ServiceVersionKey.String(config.engineVersion))
 		}
 	}
 

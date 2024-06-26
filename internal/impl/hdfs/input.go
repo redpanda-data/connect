@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package hdfs
 
 import (
@@ -6,7 +20,7 @@ import (
 
 	"github.com/colinmarc/hdfs"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -21,17 +35,15 @@ func inputSpec() *service.ConfigSpec {
 		Categories("Services").
 		Summary(`Reads files from a HDFS directory, where each discrete file will be consumed as a single message payload.`).
 		Description(`
-### Metadata
+== Metadata
 
 This input adds the following metadata fields to each message:
 
-`+"``` text"+`
 - hdfs_name
 - hdfs_path
-`+"```"+`
 
 You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#bloblang-queries).`).
+xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].`).
 		Fields(
 			service.NewStringListField(iFieldHosts).
 				Description("A list of target host addresses to connect to.").

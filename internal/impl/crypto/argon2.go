@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package crypto
 
 import (
@@ -10,8 +24,7 @@ import (
 	"go.uber.org/multierr"
 	"golang.org/x/crypto/argon2"
 
-	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
-	"github.com/benthosdev/benthos/v4/public/bloblang"
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
 )
 
 var errInvalidArgon2Hash = errors.New("invalid argon2 hash")
@@ -104,7 +117,7 @@ func decodeArgon2Hash(hashedSecret string) (*argon2Value, error) {
 
 func registerArgon2CompareMethod() error {
 	spec := bloblang.NewPluginSpec().
-		Category(query.MethodCategoryStrings).
+		Category("String Manipulation").
 		Description("Checks whether a string matches a hashed secret using Argon2.").
 		Param(bloblang.NewStringParam("hashed_secret").Description("The hashed secret to compare with the input. This must be a fully-qualified string which encodes the Argon2 options used to generate the hash.")).
 		Example("", `root.match = this.secret.compare_argon2("$argon2id$v=19$m=4096,t=3,p=1$c2FsdHktbWNzYWx0ZmFjZQ$RMUMwgtS32/mbszd+ke4o4Ej1jFpYiUqY6MHWa69X7Y")`, [2]string{

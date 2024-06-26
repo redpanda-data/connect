@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package nats
 
 import (
@@ -11,9 +25,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/stan.go"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/component/output/span"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -55,11 +67,13 @@ func soSpec() *service.ConfigSpec {
 		Categories("Services").
 		Summary(`Publish to a NATS Stream subject.`).
 		Description(`
-:::caution Deprecation Notice
-The NATS Streaming Server is being deprecated. Critical bug fixes and security fixes will be applied until June of 2023. NATS-enabled applications requiring persistence should use [JetStream](https://docs.nats.io/nats-concepts/jetstream).
-:::
+[CAUTION]
+.Deprecation notice
+====
+The NATS Streaming Server is being deprecated. Critical bug fixes and security fixes will be applied until June of 2023. NATS-enabled applications requiring persistence should use https://docs.nats.io/nats-concepts/jetstream[JetStream^].
+====
 
-`+output.Description(true, false, authDescription())).
+`+authDescription()+service.OutputPerformanceDocs(true, false)).
 		Fields(connectionHeadFields()...).
 		Fields(
 			service.NewStringField(soFieldClusterID).
@@ -92,7 +106,7 @@ func init() {
 			if err != nil {
 				return nil, 0, err
 			}
-			spanOutput, err := span.NewOutput("nats_stream", conf, w, mgr)
+			spanOutput, err := conf.WrapOutputExtractTracingSpanMapping("nats_stream", w)
 			return spanOutput, maxInFlight, err
 		})
 	if err != nil {

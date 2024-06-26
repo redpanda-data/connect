@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package crypto
 
 import (
@@ -5,10 +19,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/golang-jwt/jwt/v4"
+	"github.com/golang-jwt/jwt/v5"
 
-	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
-	"github.com/benthosdev/benthos/v4/public/bloblang"
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
 )
 
 var errJWTIncorrectMethod = errors.New("incorrect signing method")
@@ -62,7 +75,7 @@ func jwtParser(secretDecoder secretDecoderFunc, method jwt.SigningMethod) blobla
 
 func registerParseJwtMethod(m parseJwtMethodSpec) error {
 	spec := bloblang.NewPluginSpec().
-		Category(query.MethodCategoryJWT).
+		Category("JSON Web Tokens").
 		Description(fmt.Sprintf("Parses a claims object from a JWT string encoded with %s. This method does not validate JWT claims.", m.method.Alg())).
 		Param(bloblang.NewStringParam("signing_secret").Description(fmt.Sprintf("The %s secret that was used for signing the token.", m.method.Alg()))).
 		Version(m.version)

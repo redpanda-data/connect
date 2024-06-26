@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package nats
 
 import (
@@ -7,8 +21,9 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/Jeffail/shutdown"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -25,7 +40,7 @@ func natsKVInputConfig() *service.ConfigSpec {
 		Version("4.12.0").
 		Summary("Watches for updates in a NATS key-value bucket.").
 		Description(`
-### Metadata
+== Metadata
 
 This input adds the following metadata fields to each message:
 
@@ -235,10 +250,10 @@ func (r *kvReader) Read(ctx context.Context) (*service.Message, service.AckFunc,
 func (r *kvReader) Close(ctx context.Context) error {
 	go func() {
 		r.disconnect()
-		r.shutSig.ShutdownComplete()
+		r.shutSig.TriggerHasStopped()
 	}()
 	select {
-	case <-r.shutSig.HasClosedChan():
+	case <-r.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

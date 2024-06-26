@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package parquet
 
 import (
@@ -11,15 +25,14 @@ import (
 
 	"github.com/parquet-go/parquet-go"
 
-	"github.com/benthosdev/benthos/v4/internal/filepath"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func parquetInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		// Stable(). TODO
 		Categories("Local").
-		Summary("Reads and decodes [Parquet files](https://parquet.apache.org/docs/) into a stream of structured messages.").
+		Summary("Reads and decodes https://parquet.apache.org/docs/[Parquet files^] into a stream of structured messages.").
 		Field(service.NewStringListField("paths").
 			Description("A list of file paths to read from. Each file will be read sequentially until the list is exhausted, at which point the input will close. Glob patterns are supported, including super globs (double star).").
 			Example("/tmp/foo.parquet").
@@ -31,7 +44,7 @@ func parquetInputConfig() *service.ConfigSpec {
 			Advanced()).
 		Field(service.NewAutoRetryNacksToggleField()).
 		Description(`
-This input uses [https://github.com/parquet-go/parquet-go](https://github.com/parquet-go/parquet-go), which is itself experimental. Therefore changes could be made into how this processor functions outside of major version releases.
+This input uses https://github.com/parquet-go/parquet-go[https://github.com/parquet-go/parquet-go^], which is itself experimental. Therefore changes could be made into how this processor functions outside of major version releases.
 
 By default any BYTE_ARRAY or FIXED_LEN_BYTE_ARRAY value will be extracted as a byte slice (` + "`[]byte`" + `) unless the logical type is UTF8, in which case they are extracted as a string (` + "`string`" + `).
 
@@ -61,7 +74,7 @@ func newParquetInputFromConfig(conf *service.ParsedConfig, mgr *service.Resource
 	if err != nil {
 		return nil, err
 	}
-	pathsRemaining, err := filepath.Globs(mgr.FS(), pathsList)
+	pathsRemaining, err := service.Globs(mgr.FS(), pathsList...)
 	if err != nil {
 		return nil, err
 	}

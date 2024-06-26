@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package aws
 
 import (
@@ -16,12 +30,11 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	"github.com/cenkalti/backoff/v4"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
-	"github.com/benthosdev/benthos/v4/internal/impl/pure"
-	"github.com/benthosdev/benthos/v4/internal/value"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
+	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/aws/config"
+	"github.com/redpanda-data/connect/v4/internal/retries"
 )
 
 const (
@@ -72,7 +85,7 @@ func sqsoConfigFromParsed(pConf *service.ParsedConfig) (conf sqsoConfig, err err
 	if conf.aconf, err = GetSession(context.TODO(), pConf); err != nil {
 		return
 	}
-	if conf.backoffCtor, err = pure.CommonRetryBackOffCtorFromParsed(pConf); err != nil {
+	if conf.backoffCtor, err = retries.CommonRetryBackOffCtorFromParsed(pConf); err != nil {
 		return
 	}
 	return
@@ -84,14 +97,14 @@ func sqsoOutputSpec() *service.ConfigSpec {
 		Version("3.36.0").
 		Categories("Services", "AWS").
 		Summary(`Sends messages to an SQS queue.`).
-		Description(output.Description(true, true, `
+		Description(`
 Metadata values are sent along with the payload as attributes with the data type String. If the number of metadata values in a message exceeds the message attribute limit (10) then the top ten keys ordered alphabetically will be selected.
 
-The fields `+"`message_group_id`, `message_deduplication_id` and `delay_seconds`"+` can be set dynamically using [function interpolations](/docs/configuration/interpolation#bloblang-queries), which are resolved individually for each message of a batch.
+The fields `+"`message_group_id`, `message_deduplication_id` and `delay_seconds`"+` can be set dynamically using xref:configuration:interpolation.adoc#bloblang-queries[function interpolations], which are resolved individually for each message of a batch.
 
-### Credentials
+== Credentials
 
-By default Benthos will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more [in this document](/docs/guides/cloud/aws).`)).
+By default Redpanda Connect will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more in xref:guides:cloud/aws.adoc[].`+service.OutputPerformanceDocs(true, true)).
 		Fields(
 			service.NewStringField(sqsoFieldURL).Description("The URL of the target SQS queue."),
 			service.NewInterpolatedStringField(sqsoFieldMessageGroupID).
@@ -110,7 +123,7 @@ By default Benthos will use a shared credentials file when connecting to AWS ser
 			service.NewBatchPolicyField(koFieldBatching),
 		).
 		Fields(config.SessionFields()...).
-		Fields(pure.CommonRetryBackOffFields(0, "1s", "5s", "30s")...)
+		Fields(retries.CommonRetryBackOffFields(0, "1s", "5s", "30s")...)
 }
 
 func init() {
@@ -180,7 +193,7 @@ func (a *sqsWriter) getSQSAttributes(batch service.MessageBatch, i int) (sqsAttr
 	msg := batch[i]
 	keys := []string{}
 	_ = a.conf.Metadata.WalkMut(msg, func(k string, v any) error {
-		if isValidSQSAttribute(k, value.IToString(v)) {
+		if isValidSQSAttribute(k, bloblang.ValueToString(v)) {
 			keys = append(keys, k)
 		} else {
 			a.log.Debugf("Rejecting metadata key '%v' due to invalid characters\n", k)
@@ -305,7 +318,7 @@ func (a *sqsWriter) WriteBatch(ctx context.Context, batch service.MessageBatch) 
 			select {
 			case <-time.After(wait):
 			case <-ctx.Done():
-				return component.ErrTimeout
+				return ctx.Err()
 			case <-a.closeChan:
 				return err
 			}
@@ -341,7 +354,7 @@ func (a *sqsWriter) WriteBatch(ctx context.Context, batch service.MessageBatch) 
 			select {
 			case <-time.After(wait):
 			case <-ctx.Done():
-				return component.ErrTimeout
+				return ctx.Err()
 			case <-a.closeChan:
 				return err
 			}

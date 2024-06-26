@@ -3,7 +3,55 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.27.0 - TBD
+## v4.31.0 - TBD
+
+### Added
+
+- The `splunk` input and `splunk_hec` output now support custom `tls` configuration. (@mihaitodor)
+- Field `timestamp` added to the `kafka` and `kafka_franz` outputs. (@mihaitodor)
+
+## 4.30.0 - 2024-06-13
+
+### Added
+
+- (Benthos) Field `omit_empty` added to the `lines` scanner. (@mihaitodor)
+- (Benthos) New scheme `gcm` added to the `encrypt_aes` and `decrypy_aes` Bloblang methods. (@abergmeier)
+- (Benthos) New Bloblang method `pow`. (@mfamador)
+- (Benthos) New `sin`, `cos`, `tan` and `pi` bloblang methods. (@mfamador)
+- (Benthos) Field `proxy_url` added to the `websocket` input and output. (@mihaitodor)
+- New experimental `splunk` input. (@mihaitodor)
+
+### Fixed
+
+- The `sql_insert` and `sql_raw` components no longer fail when inserting large binary blobs into Oracle `BLOB` columns. (@mihaitodor)
+- (Benthos) The `websocket` input and output now obey the `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY` environment variables. (@mihaitodor)
+
+### Changed
+
+- The `splunk_hec` output is now implemented as a native Go component. (@mihaitodor)
+
+## 4.29.0 - 2024-06-04
+
+### Added
+
+- Go API: New packages `public/bundle/free` and `public/bundle/enterprise` with explicit licensing for bundles of component imports.
+- Field `auth.oauth2.scope` added to the `pulsar` input and output. (@srenatus)
+- Field `subscription_initial_position` added to the `pulsar` input. (@srenatus)
+
+### Fixed
+
+- The `pulsar` input and output should no longer ignore `auth.oauth2` fields. (@srenatus)
+- Creating builds using `make` no longer prints warnings when the repository does not contain a tag. (@mkysel)
+- Messages resulting from the `redis` processor are no longer invalid when using hash commands. (@mkysel)
+- The `nats_jetstream` input no longer fails to initialise when a stream is specified and a subject is not. (@maxarndt)
+
+## 4.28.0 - 2024-05-30
+
+### Changed
+
+- The repository has been moved to `redpanda-data/connect` and no longer contains the core Benthos engine, which is now broken out into `redpanda-data/benthos`.
+
+## 4.27.0 - 2024-04-23
 
 ### Added
 
@@ -36,6 +84,7 @@ All notable changes to this project will be documented in this file.
 - Bloblang comparison operators (`>`, `<`, `<=`, `>=`) now match the precision of the compared integers when applicable.
 - The `parse_form_url_encoded` Bloblang method no longer produces results with an unknown data type for repeated query parameters.
 - The `echo` CLI command no longer fails to sanitise configs when encountering an empty `password` field.
+- The `sql_insert` and `sql_raw` components no longer fail when inserting large binary blobs into Oracle `BLOB` columns.
 
 ### Changed
 

@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package amqp1
 
 import (
@@ -14,11 +28,10 @@ import (
 
 	"github.com/Azure/go-amqp"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-//go:embed input_description.md
+//go:embed input_description.adoc
 var inputDescription string
 
 func amqp1InputSpec() *service.ConfigSpec {
@@ -248,9 +261,7 @@ func (a *amqp1Reader) ReadBatch(ctx context.Context) (service.MessageBatch, serv
 	// Receive next message
 	amqpMsg, err := conn.receiver.Receive(ctx, nil)
 	if err != nil {
-		if ctx.Err() != nil {
-			err = component.ErrTimeout
-		} else {
+		if ctx.Err() == nil {
 			a.log.Errorf("Lost connection due to: %v", err)
 			_ = a.disconnect(ctx)
 			err = service.ErrNotConnected
@@ -440,7 +451,7 @@ func uuidFromLockTokenBytes(bytes []byte) (*amqp.UUID, error) {
 	// Get lock token from the deliveryTag
 	var lockTokenBytes [16]byte
 	copy(lockTokenBytes[:], bytes[:16])
-	// translate from .net guid byte serialisation format to amqp rfc standard
+	// translate from .net guid byte serialization format to amqp rfc standard
 	swapIndex(0, 3, &lockTokenBytes)
 	swapIndex(1, 2, &lockTokenBytes)
 	swapIndex(4, 5, &lockTokenBytes)
@@ -456,7 +467,7 @@ func (a *amqp1Reader) renewWithContext(ctx context.Context, msg *amqp.Message) (
 	a.m.RUnlock()
 
 	if conn == nil {
-		return time.Time{}, component.ErrNotConnected
+		return time.Time{}, service.ErrNotConnected
 	}
 
 	lockToken, err := uuidFromLockTokenBytes(msg.DeliveryTag)

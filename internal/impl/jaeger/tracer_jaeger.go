@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package jaeger
 
 import (
@@ -14,8 +28,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.7.0"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/benthosdev/benthos/v4/internal/cli"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -28,6 +41,7 @@ const (
 )
 
 type jaegerConfig struct {
+	engineVersion string
 	AgentAddress  string
 	CollectorURL  string
 	SamplerType   string
@@ -39,7 +53,7 @@ type jaegerConfig struct {
 func jaegerConfigSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
-		Summary("Send tracing events to a [Jaeger](https://www.jaegertracing.io/) agent or collector.").
+		Summary("Send tracing events to a https://www.jaegertracing.io/[Jaeger^] agent or collector.").
 		Fields(
 			service.NewStringField(jtFieldAgentAddress).
 				Description("The address of a Jaeger agent to send tracing events to.").
@@ -76,7 +90,9 @@ var exporterInitFn = func(epOpt jaeger.EndpointOption) (tracesdk.SpanExporter, e
 
 func init() {
 	err := service.RegisterOtelTracerProvider("jaeger", jaegerConfigSpec(), func(conf *service.ParsedConfig) (p trace.TracerProvider, err error) {
-		jConf := jaegerConfig{}
+		jConf := jaegerConfig{
+			engineVersion: conf.EngineVersion(),
+		}
 		if jConf.AgentAddress, err = conf.FieldString(jtFieldAgentAddress); err != nil {
 			return
 		}
@@ -150,7 +166,7 @@ func NewJaeger(config jaegerConfig) (trace.TracerProvider, error) {
 		// Only set the default service version tag if the user doesn't provide
 		// a custom service name tag.
 		if _, ok := config.Tags[string(semconv.ServiceVersionKey)]; !ok {
-			attrs = append(attrs, semconv.ServiceVersionKey.String(cli.Version))
+			attrs = append(attrs, semconv.ServiceVersionKey.String(config.engineVersion))
 		}
 	}
 

@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package avro
 
 import (
@@ -10,7 +24,7 @@ import (
 
 	"github.com/linkedin/goavro/v2"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func avroConfigSpec() *service.ConfigSpec {
@@ -19,21 +33,21 @@ func avroConfigSpec() *service.ConfigSpec {
 		Categories("Parsing").
 		Summary(`Performs Avro based operations on messages based on a schema.`).
 		Description(`
-WARNING: If you are consuming or generating messages using a schema registry service then it is likely this processor will fail as those services require messages to be prefixed with the identifier of the schema version being used. Instead, try the ` + "[`schema_registry_encode`](/docs/components/processors/schema_registry_encode) and [`schema_registry_decode`](/docs/components/processors/schema_registry_decode)" + ` processors.
+WARNING: If you are consuming or generating messages using a schema registry service then it is likely this processor will fail as those services require messages to be prefixed with the identifier of the schema version being used. Instead, try the ` + "xref:components:processors/schema_registry_encode.adoc[`schema_registry_encode`] and xref:components:processors/schema_registry_decode.adoc[`schema_registry_decode`]" + ` processors.
 
-## Operators
+== Operators
 
-### ` + "`to_json`" + `
+=== ` + "`to_json`" + `
 
 Converts Avro documents into a JSON structure. This makes it easier to
 manipulate the contents of the document within Benthos. The encoding field
 specifies how the source documents are encoded.
 
-### ` + "`from_json`" + `
+=== ` + "`from_json`" + `
 
 Attempts to convert JSON documents into Avro documents according to the
 specified encoding.`).
-		Field(service.NewStringEnumField("operator", "to_json", "from_json").Description("The [operator](#operators) to execute")).
+		Field(service.NewStringEnumField("operator", "to_json", "from_json").Description("The <<operators, operator>> to execute")).
 		Field(service.NewStringEnumField("encoding", "textual", "binary", "single").Description("An Avro encoding format to use for conversions to and from a schema.").Default("textual")).
 		Field(service.NewStringField("schema").Description("A full Avro schema to use.").Default("")).
 		Field(service.NewStringField("schema_path").

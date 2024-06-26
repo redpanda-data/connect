@@ -1,9 +1,21 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package nats
 
 import (
-	ispan "github.com/benthosdev/benthos/v4/internal/component/input/span"
-	ospan "github.com/benthosdev/benthos/v4/internal/component/output/span"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -15,22 +27,22 @@ const (
 )
 
 func connectionNameDescription() string {
-	return `### Connection Name
+	return `== Connection name
 
 When monitoring and managing a production NATS system, it is often useful to
 know which connection a message was send/received from. This can be achieved by
 setting the connection name option when creating a NATS connection.
 
-Benthos will automatically set the connection name based off the label of the given
-NATS component, so that monitoring tools between NATS and benthos can stay in sync.
+Redpanda Connect will automatically set the connection name based off the label of the given
+NATS component, so that monitoring tools between NATS and Redpanda Connect can stay in sync.
 `
 }
 
 func inputTracingDocs() *service.ConfigField {
-	return ispan.ExtractTracingSpanMappingDocs().Version(tracingVersion)
+	return service.NewExtractTracingSpanMappingField().Version(tracingVersion)
 }
 func outputTracingDocs() *service.ConfigField {
-	return ospan.InjectTracingSpanMappingDocs().Version(tracingVersion)
+	return service.NewInjectTracingSpanMappingField().Version(tracingVersion)
 }
 func kvDocs(extraFields ...*service.ConfigField) []*service.ConfigField {
 	// TODO: Use `slices.Concat()` after switching to Go 1.22

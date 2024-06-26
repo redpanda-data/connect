@@ -34,7 +34,7 @@ tests:
       - content: '{"firstName":"john","lastName":"oates","age":10}'
       - content: '{"firstName":"daryl","lastName":"hall"}'
       - content: '{"firstName":"caleb","lastName":"quaye","email":"caleb@myspace.com"}'
-      - content: '{"firstName":"bad","lastName":"data","contains":"unrecognized fields"}'
+      - content: '{"firstName":"bad","lastName":"data","contains":"unrecognised fields"}'
     output_batches:
       - - json_equals: '{"firstName":"john","lastName":"oates","fullName":"john oates","age":20}'
         - json_equals: '{"firstName":"daryl","lastName":"hall","fullName":"daryl hall","age":10}'

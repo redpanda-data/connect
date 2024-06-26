@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package hdfs
 
 import (
@@ -8,8 +22,7 @@ import (
 
 	"github.com/colinmarc/hdfs"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -25,7 +38,7 @@ func outputSpec() *service.ConfigSpec {
 		Stable().
 		Categories("Services").
 		Summary(`Sends message parts as files to a HDFS directory.`).
-		Description(output.Description(true, false, `Each file is written with the path specified with the 'path' field, in order to have a different path for each object you should use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).`)).
+		Description(`Each file is written with the path specified with the 'path' field, in order to have a different path for each object you should use function interpolations described xref:configuration:interpolation.adoc#bloblang-queries[here].`+service.OutputPerformanceDocs(true, false)).
 		Fields(
 			service.NewStringListField(oFieldHosts).
 				Description("A list of target host addresses to connect to.").

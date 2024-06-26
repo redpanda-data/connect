@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package redis
 
 import (
@@ -11,8 +25,7 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -323,7 +336,7 @@ func (r *redisStreamsReader) read(ctx context.Context) (pendingRedisStreamMsg, e
 
 	if err != nil && err != redis.Nil {
 		if strings.Contains(err.Error(), "i/o timeout") {
-			return msg, component.ErrTimeout
+			return msg, context.Canceled
 		}
 		_ = r.disconnect(ctx)
 		r.log.Errorf("Error from redis: %v\n", err)
@@ -385,7 +398,7 @@ func (r *redisStreamsReader) read(ctx context.Context) (pendingRedisStreamMsg, e
 
 	r.pendingMsgs = pendingMsgs
 	if msg.payload == nil {
-		return msg, component.ErrTimeout
+		return msg, context.Canceled
 	}
 	return msg, nil
 }
@@ -393,7 +406,7 @@ func (r *redisStreamsReader) read(ctx context.Context) (pendingRedisStreamMsg, e
 func (r *redisStreamsReader) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
 	msg, err := r.read(ctx)
 	if err != nil {
-		if errors.Is(err, component.ErrTimeout) {
+		if errors.Is(err, context.Canceled) {
 			// Allow for one more attempt in case we asked for backlog.
 			select {
 			case <-ctx.Done():

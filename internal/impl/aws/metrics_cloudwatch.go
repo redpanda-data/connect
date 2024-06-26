@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package aws
 
 import (
@@ -11,9 +25,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch/types"
 
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/aws/config"
 )
 
 const (
@@ -43,11 +57,11 @@ func cwMetricsSpec() *service.ConfigSpec {
 		Version("3.36.0").
 		Summary(`Send metrics to AWS CloudWatch using the PutMetricData endpoint.`).
 		Description(`
-### Timing Metrics
+== Timing metrics
 
 The smallest timing unit that CloudWatch supports is microseconds, therefore timing metrics are automatically downgraded to microseconds (by dividing delta values by 1000). This conversion will also apply to custom timing metrics produced with a `+"`metric`"+` processor.
 
-### Billing
+== Billing
 
 AWS bills per metric series exported, it is therefore STRONGLY recommended that you reduce the metrics that are exposed with a `+"`mapping`"+` like this:
 
@@ -254,7 +268,7 @@ type cloudWatchCounterVec struct {
 	cloudWatchStatVec
 }
 
-func (c *cloudWatchCounterVec) With(labelValues ...string) metrics.StatCounter {
+func (c *cloudWatchCounterVec) With(labelValues ...string) service.MetricsExporterCounter {
 	return c.with(labelValues...)
 }
 
@@ -262,7 +276,7 @@ type cloudWatchTimerVec struct {
 	cloudWatchStatVec
 }
 
-func (c *cloudWatchTimerVec) With(labelValues ...string) metrics.StatTimer {
+func (c *cloudWatchTimerVec) With(labelValues ...string) service.MetricsExporterTimer {
 	return c.with(labelValues...)
 }
 
@@ -270,7 +284,7 @@ type cloudWatchGaugeVec struct {
 	cloudWatchStatVec
 }
 
-func (c *cloudWatchGaugeVec) With(labelValues ...string) metrics.StatGauge {
+func (c *cloudWatchGaugeVec) With(labelValues ...string) service.MetricsExporterGauge {
 	return c.with(labelValues...)
 }
 

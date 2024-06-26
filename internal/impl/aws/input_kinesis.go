@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package aws
 
 import (
@@ -15,9 +29,9 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/gofrs/uuid"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/aws/config"
 )
 
 const (
@@ -83,21 +97,21 @@ func kinesisInputSpec() *service.ConfigSpec {
 		Categories("Services", "AWS").
 		Summary("Receive messages from one or more Kinesis streams.").
 		Description(`
-Consumes messages from one or more Kinesis streams either by automatically balancing shards across other instances of this input, or by consuming shards listed explicitly. The latest message sequence consumed by this input is stored within a [DynamoDB table](#table-schema), which allows it to resume at the correct sequence of the shard during restarts. This table is also used for coordination across distributed inputs when shard balancing.
+Consumes messages from one or more Kinesis streams either by automatically balancing shards across other instances of this input, or by consuming shards listed explicitly. The latest message sequence consumed by this input is stored within a <<table-schema,DynamoDB table>>, which allows it to resume at the correct sequence of the shard during restarts. This table is also used for coordination across distributed inputs when shard balancing.
 
-Benthos will not store a consumed sequence unless it is acknowledged at the output level, which ensures at-least-once delivery guarantees.
+Redpanda Connect will not store a consumed sequence unless it is acknowledged at the output level, which ensures at-least-once delivery guarantees.
 
-### Ordering
+== Ordering
 
 By default messages of a shard can be processed in parallel, up to a limit determined by the field `+"`checkpoint_limit`"+`. However, if strict ordered processing is required then this value must be set to 1 in order to process shard messages in lock-step. When doing so it is recommended that you perform batching at this component for performance as it will not be possible to batch lock-stepped messages at the output level.
 
-### Table Schema
+== Table schema
 
-It's possible to configure Benthos to create the DynamoDB table required for coordination if it does not already exist. However, if you wish to create this yourself (recommended) then create a table with a string HASH key `+"`StreamID`"+` and a string RANGE key `+"`ShardID`"+`.
+It's possible to configure Redpanda Connect to create the DynamoDB table required for coordination if it does not already exist. However, if you wish to create this yourself (recommended) then create a table with a string HASH key `+"`StreamID`"+` and a string RANGE key `+"`ShardID`"+`.
 
-### Batching
+== Batching
 
-Use the `+"`batching`"+` fields to configure an optional [batching policy](/docs/configuration/batching#batch-policy). Each stream shard will be batched separately in order to ensure that acknowledgements aren't contaminated.
+Use the `+"`batching`"+` fields to configure an optional xref:configuration:batching.adoc#batch-policy[batching policy]. Each stream shard will be batched separately in order to ensure that acknowledgements aren't contaminated.
 `).Fields(
 		service.NewStringListField(kiFieldStreams).
 			Description("One or more Kinesis data streams to consume from. Streams can either be specified by their name or full ARN. Shards of a stream are automatically balanced across consumers by coordinating through the provided DynamoDB table. Multiple comma separated streams can be listed in a single element. Shards are automatically distributed across consumers of a stream by coordinating through the provided DynamoDB table. Alternatively, it's possible to specify an explicit shard to consume from with a colon after the stream name, e.g. `foo:0` would consume the shard `0` of the stream `foo`.").
@@ -403,7 +417,6 @@ func (k *kinesisReader) getRecords(info streamInfo, shardID, shardIter string) (
 func awsErrIsTimeout(err error) bool {
 	return errors.Is(err, context.Canceled) ||
 		errors.Is(err, context.DeadlineExceeded) ||
-		errors.Is(err, component.ErrTimeout) ||
 		(err != nil && strings.HasSuffix(err.Error(), "context canceled"))
 }
 
@@ -884,8 +897,8 @@ func (k *kinesisReader) ReadBatch(ctx context.Context) (service.MessageBatch, se
 		}
 		return m.msg, m.ackFn, nil
 	case <-ctx.Done():
+		return nil, nil, ctx.Err()
 	}
-	return nil, nil, component.ErrTimeout
 }
 
 // CloseAsync shuts down the Kinesis input and stops processing requests.

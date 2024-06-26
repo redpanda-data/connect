@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package gcp
 
 import (
@@ -9,7 +23,7 @@ import (
 	"github.com/sourcegraph/conc/pool"
 	"google.golang.org/api/option"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func newPubSubOutputConfig() *service.ConfigSpec {
@@ -18,11 +32,11 @@ func newPubSubOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Categories("Services", "GCP").
-		Summary("Sends messages to a GCP Cloud Pub/Sub topic. [Metadata](/docs/configuration/metadata) from messages are sent as attributes.").
+		Summary("Sends messages to a GCP Cloud Pub/Sub topic. xref:configuration:metadata.adoc[Metadata] from messages are sent as attributes.").
 		Description(`
-For information on how to set up credentials check out [this guide](https://cloud.google.com/docs/authentication/production).
+For information on how to set up credentials, see https://cloud.google.com/docs/authentication/production[this guide^].
 
-### Troubleshooting
+== Troubleshooting
 
 If you're consistently seeing `+"`Failed to send message to gcp_pubsub: context deadline exceeded`"+` error logs without any further information it is possible that you are encountering https://github.com/benthosdev/benthos/issues/1042, which occurs when metadata values contain characters that are not valid utf-8. This can frequently occur when consuming from Kafka as the key metadata field may be populated with an arbitrary binary value, but this issue is not exclusive to Kafka.
 
@@ -49,7 +63,7 @@ pipeline:
 				Default("").
 				Example("us-central1-pubsub.googleapis.com:443").
 				Example("us-west3-pubsub.googleapis.com:443").
-				Description("An optional endpoint to override the default of `pubsub.googleapis.com:443`. This can be used to connect to a region specific pubsub endpoint. For a list of valid values check out [this document.](https://cloud.google.com/pubsub/docs/reference/service_apis_overview#list_of_regional_endpoints)"),
+				Description("An optional endpoint to override the default of `pubsub.googleapis.com:443`. This can be used to connect to a region specific pubsub endpoint. For a list of valid values, see https://cloud.google.com/pubsub/docs/reference/service_apis_overview#list_of_regional_endpoints[this document^]."),
 			service.NewInterpolatedStringField("ordering_key").
 				Optional().
 				Description("The ordering key to use for publishing messages.").
@@ -167,7 +181,7 @@ func newPubSubOutput(conf *service.ParsedConfig) (*pubsubOutput, error) {
 	case "signal_error":
 		flowControl.LimitExceededBehavior = pubsub.FlowControlSignalError
 	default:
-		return nil, fmt.Errorf("unrecognized flow control setting: %s", limitBehavior)
+		return nil, fmt.Errorf("unrecognised flow control setting: %s", limitBehavior)
 	}
 
 	settings.FlowControlSettings = flowControl

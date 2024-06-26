@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package gcp
 
 import (
@@ -9,9 +23,10 @@ import (
 	"cloud.google.com/go/bigquery"
 	"google.golang.org/api/iterator"
 
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
-	"github.com/benthosdev/benthos/v4/public/bloblang"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/Jeffail/shutdown"
+
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 type bigQuerySelectInputConfig struct {
@@ -81,7 +96,7 @@ func newBigQuerySelectInputConfig() *service.ConfigSpec {
 		Version("3.63.0").
 		Categories("Services", "GCP").
 		Summary("Executes a `SELECT` query against BigQuery and creates a message for each row received.").
-		Description(`Once the rows from the query are exhausted, this input shuts down, allowing the pipeline to gracefully terminate (or the next input in a [sequence](/docs/components/inputs/sequence) to execute).`).
+		Description(`Once the rows from the query are exhausted, this input shuts down, allowing the pipeline to gracefully terminate (or the next input in a xref:components:inputs/sequence.adoc[sequence] to execute).`).
 		Field(service.NewStringField("project").Description("GCP project where the query job will execute.")).
 		Field(service.NewStringField("table").Description("Fully-qualified BigQuery table name to query.").Example("bigquery-public-data.samples.shakespeare")).
 		Field(service.NewStringListField("columns").Description("A list of columns to query.")).
@@ -95,7 +110,7 @@ func newBigQuerySelectInputConfig() *service.ConfigSpec {
 		Field(service.NewStringMapField("job_labels").Description("A list of labels to add to the query job.").Default(map[string]any{})).
 		Field(service.NewStringField("priority").Description("The priority with which to schedule the query.").Default("")).
 		Field(service.NewBloblangField("args_mapping").
-			Description("An optional [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `where`.").
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `where`.").
 			Example(`root = [ "article", now().ts_format("2006-01-02") ]`).
 			Optional()).
 		Field(service.NewStringField("prefix").
@@ -154,7 +169,7 @@ func newBigQuerySelectInput(inConf *service.ParsedConfig, logger *service.Logger
 }
 
 func (inp *bigQuerySelectInput) Connect(ctx context.Context) error {
-	jobctx, _ := inp.shutdownSig.CloseAtLeisureCtx(context.Background())
+	jobctx, _ := inp.shutdownSig.SoftStopCtx(context.Background())
 
 	if inp.client == nil {
 		client, err := bigquery.NewClient(jobctx, inp.config.project)
@@ -225,7 +240,7 @@ func (inp *bigQuerySelectInput) Read(ctx context.Context) (*service.Message, ser
 }
 
 func (inp *bigQuerySelectInput) Close(ctx context.Context) error {
-	inp.shutdownSig.CloseNow()
+	inp.shutdownSig.TriggerHardStop()
 
 	if inp.client != nil {
 		return inp.client.Close()

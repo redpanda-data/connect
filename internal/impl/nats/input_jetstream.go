@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package nats
 
 import (
@@ -10,9 +24,9 @@ import (
 
 	"github.com/nats-io/nats.go"
 
-	"github.com/benthosdev/benthos/v4/internal/component/input/span"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/Jeffail/shutdown"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func natsJetStreamInputConfig() *service.ConfigSpec {
@@ -22,11 +36,11 @@ func natsJetStreamInputConfig() *service.ConfigSpec {
 		Version("3.46.0").
 		Summary("Reads messages from NATS JetStream subjects.").
 		Description(`
-### Consuming Mirrored Streams
+== Consume mirrored streams
 
 In the case where a stream being consumed is mirrored from a different JetStream domain the stream cannot be resolved from the subject name alone, and so the stream name as well as the subject (if applicable) must both be specified.
 
-### Metadata
+== Metadata
 
 This input adds the following metadata fields to each message:
 
@@ -41,7 +55,7 @@ This input adds the following metadata fields to each message:
 ` + "```" + `
 
 You can access these metadata fields using
-[function interpolation](/docs/configuration/interpolation#bloblang-queries).
+xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
 
 ` + connectionNameDescription() + authDescription()).
 		Fields(connectionHeadFields()...).
@@ -91,7 +105,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return span.NewInput("nats_jetstream", conf, input, mgr)
+			return conf.WrapInputExtractTracingSpanMapping("nats_jetstream", input)
 		})
 	if err != nil {
 		panic(err)
@@ -180,8 +194,8 @@ func newJetStreamReaderFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 			return nil, errors.New("stream or durable is required, when bind is true")
 		}
 	} else {
-		if j.subject == "" {
-			return nil, errors.New("subject is empty")
+		if j.subject == "" && j.stream == "" {
+			return nil, errors.New("subject and stream is empty")
 		}
 	}
 
@@ -349,10 +363,10 @@ func (j *jetStreamReader) Read(ctx context.Context) (*service.Message, service.A
 func (j *jetStreamReader) Close(ctx context.Context) error {
 	go func() {
 		j.disconnect()
-		j.shutSig.ShutdownComplete()
+		j.shutSig.TriggerHasStopped()
 	}()
 	select {
-	case <-j.shutSig.HasClosedChan():
+	case <-j.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

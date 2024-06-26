@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package statsd
 
 import (
@@ -8,7 +22,7 @@ import (
 
 	statsd "github.com/smira/go-statsd"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -20,7 +34,7 @@ const (
 func statsdSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
-		Summary("Pushes metrics using the [StatsD protocol](https://github.com/statsd/statsd). Supported tagging formats are 'none', 'datadog' and 'influxdb'.").
+		Summary("Pushes metrics using the https://github.com/statsd/statsd[StatsD protocol^]. Supported tagging formats are 'none', 'datadog' and 'influxdb'.").
 		Fields(
 			service.NewStringField(smFieldAddress).
 				Description("The address to send metrics to."),

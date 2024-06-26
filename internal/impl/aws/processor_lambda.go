@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package aws
 
 import (
@@ -10,23 +24,24 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 
-	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/aws/config"
 )
 
 func init() {
 	conf := service.NewConfigSpec().
 		Stable().
 		Summary("Invokes an AWS lambda for each message. The contents of the message is the payload of the request, and the result of the invocation will become the new contents of the message.").
-		Description(`The `+"`rate_limit`"+` field can be used to specify a rate limit [resource](/docs/components/rate_limits/about) to cap the rate of requests across parallel components service wide.
+		Description(`The `+"`rate_limit`"+` field can be used to specify a rate limit xref:components:rate_limits/about.adoc[resource] to cap the rate of requests across parallel components service wide.
 
-In order to map or encode the payload to a specific request body, and map the response back into the original payload instead of replacing it entirely, you can use the `+"[`branch` processor](/docs/components/processors/branch)"+`.
+In order to map or encode the payload to a specific request body, and map the response back into the original payload instead of replacing it entirely, you can use the `+"xref:components:processors/branch.adoc[`branch` processor]"+`.
 
-### Error Handling
+== Error handling
 
-When Benthos is unable to connect to the AWS endpoint or is otherwise unable to invoke the target lambda function it will retry the request according to the configured number of retries. Once these attempts have been exhausted the failed message will continue through the pipeline with it's contents unchanged, but flagged as having failed, allowing you to use [standard processor error handling patterns](/docs/configuration/error_handling).
+When Redpanda Connect is unable to connect to the AWS endpoint or is otherwise unable to invoke the target lambda function it will retry the request according to the configured number of retries. Once these attempts have been exhausted the failed message will continue through the pipeline with it's contents unchanged, but flagged as having failed, allowing you to use xref:configuration:error_handling.adoc[standard processor error handling patterns].
 
-However, if the invocation of the function is successful but the function itself throws an error, then the message will have it's contents updated with a JSON payload describing the reason for the failure, and a metadata field `+"`lambda_function_error`"+` will be added to the message allowing you to detect and handle function errors with a `+"[`branch`](/docs/components/processors/branch)"+`:
+However, if the invocation of the function is successful but the function itself throws an error, then the message will have it's contents updated with a JSON payload describing the reason for the failure, and a metadata field `+"`lambda_function_error`"+` will be added to the message allowing you to detect and handle function errors with a `+"xref:components:processors/branch.adoc[`branch`]"+`:
 
 `+"```yaml"+`
 pipeline:
@@ -52,15 +67,15 @@ output:
           resource: somewhere_else
 `+"```"+`
 
-### Credentials
+== Credentials
 
-By default Benthos will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more [in this document](/docs/guides/cloud/aws).`).
+By default Redpanda Connect will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more in xref:guides:cloud/aws.adoc[].`).
 		Categories("Integration").
 		Version("3.36.0").
 		Example(
 			"Branched Invoke",
 			`
-This example uses a `+"[`branch` processor](/docs/components/processors/branch/)"+` to map a new payload for triggering a lambda function with an ID and username from the original message, and the result of the lambda is discarded, meaning the original message is unchanged.`,
+This example uses a `+"xref:components:processors/branch.adoc[`branch` processor]"+` to map a new payload for triggering a lambda function with an ID and username from the original message, and the result of the lambda is discarded, meaning the original message is unchanged.`,
 			`
 pipeline:
   processors:
@@ -77,7 +92,7 @@ pipeline:
 		Field(service.NewStringField("function").
 			Description("The function to invoke.")).
 		Field(service.NewStringField("rate_limit").
-			Description("An optional [`rate_limit`](/docs/components/rate_limits/about) to throttle invocations by.").
+			Description("An optional xref:components:rate_limits/about.adoc[`rate_limit`] to throttle invocations by.").
 			Default("").
 			Advanced())
 

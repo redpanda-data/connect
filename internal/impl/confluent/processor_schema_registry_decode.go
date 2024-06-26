@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package confluent
 
 import (
@@ -6,13 +20,15 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io/fs"
+	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/benthosdev/benthos/v4/internal/httpclient"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/Jeffail/shutdown"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func schemaRegistryDecoderConfig() *service.ConfigSpec {
@@ -21,13 +37,13 @@ func schemaRegistryDecoderConfig() *service.ConfigSpec {
 		Categories("Parsing", "Integration").
 		Summary("Automatically decodes and validates messages with schemas from a Confluent Schema Registry service.").
 		Description(`
-Decodes messages automatically from a schema stored within a [Confluent Schema Registry service](https://docs.confluent.io/platform/current/schema-registry/index.html) by extracting a schema ID from the message and obtaining the associated schema from the registry. If a message fails to match against the schema then it will remain unchanged and the error can be caught using error handling methods outlined [here](/docs/configuration/error_handling).
+Decodes messages automatically from a schema stored within a https://docs.confluent.io/platform/current/schema-registry/index.html[Confluent Schema Registry service^] by extracting a schema ID from the message and obtaining the associated schema from the registry. If a message fails to match against the schema then it will remain unchanged and the error can be caught using xref:configuration:error_handling.adoc[error handling methods].
 
 Avro, Protobuf and Json schemas are supported, all are capable of expanding from schema references as of v4.22.0.
 
-### Avro JSON Format
+== Avro JSON format
 
-This processor creates documents formatted as [Avro JSON](https://avro.apache.org/docs/current/specification/_print/#json-encoding) when decoding with Avro schemas. In this format the value of a union is encoded in JSON as follows:
+This processor creates documents formatted as https://avro.apache.org/docs/current/specification/_print/#json-encoding[Avro JSON^] when decoding with Avro schemas. In this format the value of a union is encoded in JSON as follows:
 
 - if its type is ` + "`null`, then it is encoded as a JSON `null`" + `;
 - otherwise it is encoded as a JSON object with one name/value pair whose name is the type's name and whose value is the recursively encoded value. For Avro's named types (record, fixed or enum) the user-specified name is used, for other types the type name is used.
@@ -35,20 +51,21 @@ This processor creates documents formatted as [Avro JSON](https://avro.apache.or
 For example, the union schema ` + "`[\"null\",\"string\",\"Foo\"]`, where `Foo`" + ` is a record name, would encode:
 
 - ` + "`null` as `null`" + `;
-- the string ` + "`\"a\"` as `{\"string\": \"a\"}`" + `; and
-- a ` + "`Foo` instance as `{\"Foo\": {...}}`, where `{...}` indicates the JSON encoding of a `Foo`" + ` instance.
+- the string ` + "`\"a\"` as `\\{\"string\": \"a\"}`" + `; and
+- a ` + "`Foo` instance as `\\{\"Foo\": {...}}`, where `{...}` indicates the JSON encoding of a `Foo`" + ` instance.
 
-However, it is possible to instead create documents in [standard/raw JSON format](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull) by setting the field ` + "[`avro_raw_json`](#avro_raw_json) to `true`" + `.
-### Protobuf Format
+However, it is possible to instead create documents in https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull[standard/raw JSON format^] by setting the field ` + "<<avro_raw_json, `avro_raw_json`>> to `true`" + `.
+
+== Protobuf format
 
 This processor decodes protobuf messages to JSON documents, you can read more about JSON mapping of protobuf messages here: https://developers.google.com/protocol-buffers/docs/proto3#json
 `).
 		Field(service.NewBoolField("avro_raw_json").
-			Description("Whether Avro messages should be decoded into normal JSON (\"json that meets the expectations of regular internet json\") rather than [Avro JSON](https://avro.apache.org/docs/current/specification/_print/#json-encoding). If `true` the schema returned from the subject should be decoded as [standard json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull) instead of as [avro json](https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodec). There is a [comment in goavro](https://github.com/linkedin/goavro/blob/5ec5a5ee7ec82e16e6e2b438d610e1cab2588393/union.go#L224-L249), the [underlining library used for avro serialization](https://github.com/linkedin/goavro), that explains in more detail the difference between the standard json and avro json.").
+			Description("Whether Avro messages should be decoded into normal JSON (\"json that meets the expectations of regular internet json\") rather than https://avro.apache.org/docs/current/specification/_print/#json-encoding[Avro JSON^]. If `true` the schema returned from the subject should be decoded as https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull[standard json^] instead of as https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodec[avro json^]. There is a https://github.com/linkedin/goavro/blob/5ec5a5ee7ec82e16e6e2b438d610e1cab2588393/union.go#L224-L249[comment in goavro^], the https://github.com/linkedin/goavro[underlining library used for avro serialization^], that explains in more detail the difference between the standard json and avro json.").
 			Advanced().Default(false)).
 		Field(service.NewURLField("url").Description("The base URL of the schema registry service."))
 
-	for _, f := range httpclient.AuthFieldSpecs() {
+	for _, f := range service.NewHTTPRequestAuthSignerFields() {
 		spec = spec.Field(f.Version("4.7.0"))
 	}
 
@@ -90,7 +107,7 @@ func newSchemaRegistryDecoderFromConfig(conf *service.ParsedConfig, mgr *service
 	if err != nil {
 		return nil, err
 	}
-	authSigner, err := httpclient.AuthSignerFromParsed(conf)
+	authSigner, err := conf.HTTPRequestAuthSignerFromParsed()
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +120,7 @@ func newSchemaRegistryDecoderFromConfig(conf *service.ParsedConfig, mgr *service
 
 func newSchemaRegistryDecoder(
 	urlStr string,
-	reqSigner httpclient.RequestSigner,
+	reqSigner func(f fs.FS, req *http.Request) error,
 	tlsConf *tls.Config,
 	avroRawJSON bool,
 	mgr *service.Resources,
@@ -125,7 +142,7 @@ func newSchemaRegistryDecoder(
 			select {
 			case <-time.After(schemaCachePurgePeriod):
 				s.clearExpired()
-			case <-s.shutSig.CloseAtLeisureChan():
+			case <-s.shutSig.SoftStopChan():
 				return
 			}
 		}
@@ -158,7 +175,7 @@ func (s *schemaRegistryDecoder) Process(ctx context.Context, msg *service.Messag
 }
 
 func (s *schemaRegistryDecoder) Close(ctx context.Context) error {
-	s.shutSig.CloseNow()
+	s.shutSig.TriggerHardStop()
 	s.cacheMut.Lock()
 	defer s.cacheMut.Unlock()
 	if ctx.Err() != nil {

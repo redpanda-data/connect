@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package aws
 
 import (
@@ -12,7 +26,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/kinesis"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/integration"
+	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
 
 func createKinesisShards(ctx context.Context, t testing.TB, awsPort, id string, numShards int32) ([]string, error) {
@@ -114,35 +128,37 @@ input:
 	t.Run("with static shards", func(t *testing.T) {
 		suite.Run(
 			t, template,
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-				streamName := "stream-" + testID
-				shards, err := createKinesisShards(ctx, t, lsPort, testID, 2)
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+				streamName := "stream-" + vars.ID
+				shards, err := createKinesisShards(ctx, t, lsPort, vars.ID, 2)
 				require.NoError(t, err)
 
 				for i, shard := range shards {
 					if i == 0 {
-						vars.Var1 = fmt.Sprintf(":%v", shard)
+						vars.General["VAR1"] = fmt.Sprintf(":%v", shard)
 					} else {
-						vars.Var1 += fmt.Sprintf(",%v:%v", streamName, shard)
+						vars.General["VAR1"] += fmt.Sprintf(",%v:%v", streamName, shard)
 					}
 				}
 			}),
 			integration.StreamTestOptPort(lsPort),
 			integration.StreamTestOptAllowDupes(),
-			integration.StreamTestOptVarTwo("10"),
+			integration.StreamTestOptVarSet("VAR1", ""),
+			integration.StreamTestOptVarSet("VAR2", "10"),
 		)
 	})
 
 	t.Run("with balanced shards", func(t *testing.T) {
 		suite.Run(
 			t, template,
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-				_, err := createKinesisShards(ctx, t, lsPort, testID, 2)
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+				_, err := createKinesisShards(ctx, t, lsPort, vars.ID, 2)
 				require.NoError(t, err)
 			}),
 			integration.StreamTestOptPort(lsPort),
 			integration.StreamTestOptAllowDupes(),
-			integration.StreamTestOptVarTwo("10"),
+			integration.StreamTestOptVarSet("VAR1", ""),
+			integration.StreamTestOptVarSet("VAR2", "10"),
 		)
 	})
 
@@ -151,14 +167,14 @@ input:
 			integration.StreamTestCheckpointCapture(),
 		).Run(
 			t, template,
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
-				shards, err := createKinesisShards(ctx, t, lsPort, testID, 1)
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+				shards, err := createKinesisShards(ctx, t, lsPort, vars.ID, 1)
 				require.NoError(t, err)
-				vars.Var1 = ":" + shards[0]
+				vars.General["VAR1"] = ":" + shards[0]
 			}),
 			integration.StreamTestOptPort(lsPort),
 			integration.StreamTestOptAllowDupes(),
-			integration.StreamTestOptVarTwo("10"),
+			integration.StreamTestOptVarSet("VAR2", "10"),
 		)
 	})
 }

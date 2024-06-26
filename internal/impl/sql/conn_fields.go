@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package sql
 
 import (
@@ -9,38 +23,57 @@ import (
 	"sync"
 	"time"
 
-	"github.com/benthosdev/benthos/v4/internal/filepath"
-	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 var driverField = service.NewStringEnumField("driver", "mysql", "postgres", "clickhouse", "mssql", "sqlite", "oracle", "snowflake", "trino", "gocosmos").
-	Description("A database [driver](#drivers) to use.")
+	Description("A database <<drivers, driver>> to use.")
 
 var dsnField = service.NewStringField("dsn").
 	Description(`A Data Source Name to identify the target database.
 
-#### Drivers
+==== Drivers
+
+:driver-support: mysql=certified, postgres=certified, clickhouse=community, mssql=community, sqlite=certified, oracle=certified, snowflake=community, trino=community, gocosmos=community
 
 The following is a list of supported drivers, their placeholder style, and their respective DSN formats:
 
-| Driver | Data Source Name Format |
-|---|---|
-` + "| `clickhouse` | [`clickhouse://[username[:password]@][netloc][:port]/dbname[?param1=value1&...&paramN=valueN]`](https://github.com/ClickHouse/clickhouse-go#dsn) |" + `
-` + "| `mysql` | `[username[:password]@][protocol[(address)]]/dbname[?param1=value1&...&paramN=valueN]` |" + `
-` + "| `postgres` | `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]` |" + `
-` + "| `mssql` | `sqlserver://[user[:password]@][netloc][:port][?database=dbname&param1=value1&...]` |" + `
-` + "| `sqlite` | `file:/path/to/filename.db[?param&=value1&...]` |" + `
-` + "| `oracle` | `oracle://[username[:password]@][netloc][:port]/service_name?server=server2&server=server3` |" + `
-` + "| `snowflake` | `username[:password]@account_identifier/dbname/schemaname[?param1=value&...&paramN=valueN]` |" + `
-` + "| `trino` | [`http[s]://user[:pass]@host[:port][?parameters]`](https://github.com/trinodb/trino-go-client#dsn-data-source-name) |" + `
-` + "| `gocosmos` | [`AccountEndpoint=<cosmosdb-endpoint>;AccountKey=<cosmosdb-account-key>[;TimeoutMs=<timeout-in-ms>][;Version=<cosmosdb-api-version>][;DefaultDb/Db=<db-name>][;AutoId=<true/false>][;InsecureSkipVerify=<true/false>]`](https://pkg.go.dev/github.com/microsoft/gocosmos#readme-example-usage) |" + `
+|===
+| Driver | Data Source Name Format
+
+` + "| `clickhouse` " + `
+` + "| https://github.com/ClickHouse/clickhouse-go#dsn[`clickhouse://[username[:password\\]@\\][netloc\\][:port\\]/dbname[?param1=value1&...&paramN=valueN\\]`^] " + `
+
+` + "| `mysql` " + `
+` + "| `[username[:password]@][protocol[(address)]]/dbname[?param1=value1&...&paramN=valueN]` " + `
+
+` + "| `postgres` " + `
+` + "| `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]` " + `
+
+` + "| `mssql` " + `
+` + "| `sqlserver://[user[:password]@][netloc][:port][?database=dbname&param1=value1&...]` " + `
+
+` + "| `sqlite` " + `
+` + "| `file:/path/to/filename.db[?param&=value1&...]` " + `
+
+` + "| `oracle` " + `
+` + "| `oracle://[username[:password]@][netloc][:port]/service_name?server=server2&server=server3` " + `
+
+` + "| `snowflake` " + `
+` + "| `username[:password]@account_identifier/dbname/schemaname[?param1=value&...&paramN=valueN]` " + `
+
+` + "| `trino` " + `
+` + "| https://github.com/trinodb/trino-go-client#dsn-data-source-name[`http[s\\]://user[:pass\\]@host[:port\\][?parameters\\]`^] " + `
+
+` + "| `gocosmos` " + `
+` + "| https://pkg.go.dev/github.com/microsoft/gocosmos#readme-example-usage[`AccountEndpoint=<cosmosdb-endpoint>;AccountKey=<cosmosdb-account-key>[;TimeoutMs=<timeout-in-ms>\\][;Version=<cosmosdb-api-version>\\][;DefaultDb/Db=<db-name>\\][;AutoId=<true/false>\\][;InsecureSkipVerify=<true/false>\\]`^] " + `
+|===
 
 Please note that the ` + "`postgres`" + ` driver enforces SSL by default, you can override this with the parameter ` + "`sslmode=disable`" + ` if required.
 
-The ` + "`snowflake`" + ` driver supports multiple DSN formats. Please consult [the docs](https://pkg.go.dev/github.com/snowflakedb/gosnowflake#hdr-Connection_String) for more details. For [key pair authentication](https://docs.snowflake.com/en/user-guide/key-pair-auth.html#configuring-key-pair-authentication), the DSN has the following format: ` + "`<snowflake_user>@<snowflake_account>/<db_name>/<schema_name>?warehouse=<warehouse>&role=<role>&authenticator=snowflake_jwt&privateKey=<base64_url_encoded_private_key>`" + `, where the value for the ` + "`privateKey`" + ` parameter can be constructed from an unencrypted RSA private key file ` + "`rsa_key.p8`" + ` using ` + "`openssl enc -d -base64 -in rsa_key.p8 | basenc --base64url -w0`" + ` (you can use ` + "`gbasenc`" + ` insted of ` + "`basenc`" + ` on OSX if you install ` + "`coreutils`" + ` via Homebrew). If you have a password-encrypted private key, you can decrypt it using ` + "`openssl pkcs8 -in rsa_key_encrypted.p8 -out rsa_key.p8`" + `. Also, make sure fields such as the username are URL-encoded.
+The ` + "`snowflake`" + ` driver supports multiple DSN formats. Please consult https://pkg.go.dev/github.com/snowflakedb/gosnowflake#hdr-Connection_String[the docs^] for more details. For https://docs.snowflake.com/en/user-guide/key-pair-auth.html#configuring-key-pair-authentication[key pair authentication^], the DSN has the following format: ` + "`<snowflake_user>@<snowflake_account>/<db_name>/<schema_name>?warehouse=<warehouse>&role=<role>&authenticator=snowflake_jwt&privateKey=<base64_url_encoded_private_key>`" + `, where the value for the ` + "`privateKey`" + ` parameter can be constructed from an unencrypted RSA private key file ` + "`rsa_key.p8`" + ` using ` + "`openssl enc -d -base64 -in rsa_key.p8 | basenc --base64url -w0`" + ` (you can use ` + "`gbasenc`" + ` insted of ` + "`basenc`" + ` on OSX if you install ` + "`coreutils`" + ` via Homebrew). If you have a password-encrypted private key, you can decrypt it using ` + "`openssl pkcs8 -in rsa_key_encrypted.p8 -out rsa_key.p8`" + `. Also, make sure fields such as the username are URL-encoded.
 
-The ` + "[`gocosmos`](https://pkg.go.dev/github.com/microsoft/gocosmos)" + ` driver is still experimental, but it has support for [hierarchical partition keys](https://learn.microsoft.com/en-us/azure/cosmos-db/hierarchical-partition-keys) as well as [cross-partition queries](https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/how-to-query-container#cross-partition-query). Please refer to the [SQL notes](https://github.com/microsoft/gocosmos/blob/main/SQL.md) for details.`).
+The ` + "https://pkg.go.dev/github.com/microsoft/gocosmos[`gocosmos`^]" + ` driver is still experimental, but it has support for https://learn.microsoft.com/en-us/azure/cosmos-db/hierarchical-partition-keys[hierarchical partition keys^] as well as https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/how-to-query-container#cross-partition-query[cross-partition queries^]. Please refer to the https://github.com/microsoft/gocosmos/blob/main/SQL.md[SQL notes^] for details.`).
 	Example("clickhouse://username:password@host1:9000,host2:9000/database?dial_timeout=200ms&max_execution_time=60").
 	Example("foouser:foopassword@tcp(localhost:3306)/foodb").
 	Example("postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable").
@@ -194,13 +227,13 @@ func connSettingsFromParsed(
 		if tmpFiles, err = conf.FieldStringList("init_files"); err != nil {
 			return
 		}
-		if tmpFiles, err = filepath.Globs(mgr.FS(), tmpFiles); err != nil {
+		if tmpFiles, err = service.Globs(mgr.FS(), tmpFiles...); err != nil {
 			err = fmt.Errorf("failed to expand init_files glob patterns: %w", err)
 			return
 		}
 		for _, p := range tmpFiles {
 			var statementBytes []byte
-			if statementBytes, err = ifs.ReadFile(mgr.FS(), p); err != nil {
+			if statementBytes, err = service.ReadFile(mgr.FS(), p); err != nil {
 				return
 			}
 			c.initFileStatements = append(c.initFileStatements, [2]string{

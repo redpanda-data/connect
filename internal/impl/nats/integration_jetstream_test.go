@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package nats
 
 import (
@@ -11,7 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/integration"
+	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
 
 func TestIntegrationNatsJetstream(t *testing.T) {
@@ -66,15 +80,15 @@ input:
 	)
 	suite.Run(
 		t, template,
-		integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+		integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
 			js, err := natsConn.JetStream()
 			require.NoError(t, err)
 
-			streamName := "stream-" + testID
+			streamName := "stream-" + vars.ID
 
 			_, err = js.AddStream(&nats.StreamConfig{
 				Name:     streamName,
-				Subjects: []string{"subject-" + testID},
+				Subjects: []string{"subject-" + vars.ID},
 			})
 			require.NoError(t, err)
 		}),
@@ -137,20 +151,20 @@ input:
 	)
 	suite.Run(
 		t, template,
-		integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+		integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
 			js, err := natsConn.JetStream()
 			require.NoError(t, err)
 
-			streamName := "stream-" + testID
+			streamName := "stream-" + vars.ID
 
 			_, err = js.AddStream(&nats.StreamConfig{
 				Name:     streamName,
-				Subjects: []string{"subject-" + testID},
+				Subjects: []string{"subject-" + vars.ID},
 			})
 			require.NoError(t, err)
 
 			_, err = js.AddConsumer(streamName, &nats.ConsumerConfig{
-				Durable:       "durable-" + testID,
+				Durable:       "durable-" + vars.ID,
 				DeliverPolicy: nats.DeliverAllPolicy,
 				AckPolicy:     nats.AckExplicitPolicy,
 			})

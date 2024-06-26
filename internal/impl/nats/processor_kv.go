@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package nats
 
 import (
@@ -10,8 +24,9 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/Jeffail/shutdown"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -54,15 +69,15 @@ func natsKVProcessorConfig() *service.ConfigSpec {
 		Version("4.12.0").
 		Summary("Perform operations on a NATS key-value bucket.").
 		Description(`
-### KV Operations
+== KV operations
 
-The NATS KV processor supports a multitude of KV operations via the [operation](#operation) field. Along with ` + "`get`" + `, ` + "`put`" + `, and ` + "`delete`" + `, this processor supports atomic operations like ` + "`update`" + ` and ` + "`create`" + `, as well as utility operations like ` + "`purge`" + `, ` + "`history`" + `, and ` + "`keys`" + `.
+The NATS KV processor supports a multitude of KV operations via the <<operation>> field. Along with ` + "`get`" + `, ` + "`put`" + `, and ` + "`delete`" + `, this processor supports atomic operations like ` + "`update`" + ` and ` + "`create`" + `, as well as utility operations like ` + "`purge`" + `, ` + "`history`" + `, and ` + "`keys`" + `.
 
-### Metadata
+== Metadata
 
 This processor adds the following metadata fields to each message, depending on the chosen ` + "`operation`" + `:
 
-#### get, get_revision
+=== get, get_revision
 ` + "``` text" + `
 - nats_kv_key
 - nats_kv_bucket
@@ -72,7 +87,7 @@ This processor adds the following metadata fields to each message, depending on 
 - nats_kv_created
 ` + "```" + `
 
-#### create, update, delete, purge
+=== create, update, delete, purge
 ` + "``` text" + `
 - nats_kv_key
 - nats_kv_bucket
@@ -80,7 +95,7 @@ This processor adds the following metadata fields to each message, depending on 
 - nats_kv_operation
 ` + "```" + `
 
-#### keys
+=== keys
 ` + "``` text" + `
 - nats_kv_bucket
 ` + "```" + `
@@ -90,7 +105,7 @@ This processor adds the following metadata fields to each message, depending on 
 			service.NewStringAnnotatedEnumField(kvpFieldOperation, kvpOperations).
 				Description("The operation to perform on the KV bucket."),
 			service.NewInterpolatedStringField(kvpFieldKey).
-				Description("The key for each message. Supports [wildcards](https://docs.nats.io/nats-concepts/subjects#wildcards) for the `history` and `keys` operations.").
+				Description("The key for each message. Supports https://docs.nats.io/nats-concepts/subjects#wildcards[wildcards^] for the `history` and `keys` operations.").
 				Example("foo").
 				Example("foo.bar.baz").
 				Example("foo.*").
@@ -393,10 +408,10 @@ func (p *kvProcessor) Connect(ctx context.Context) (err error) {
 func (p *kvProcessor) Close(ctx context.Context) error {
 	go func() {
 		p.disconnect()
-		p.shutSig.ShutdownComplete()
+		p.shutSig.TriggerHasStopped()
 	}()
 	select {
-	case <-p.shutSig.HasClosedChan():
+	case <-p.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

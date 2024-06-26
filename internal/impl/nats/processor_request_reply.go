@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package nats
 
 import (
@@ -8,7 +22,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func natsRequestReplyConfig() *service.ConfigSpec {
@@ -17,7 +31,7 @@ func natsRequestReplyConfig() *service.ConfigSpec {
 		Version("4.27.0").
 		Summary("Sends a message to a NATS subject and expects a reply, from a NATS subscriber acting as a responder, back.").
 		Description(`
-### Metadata
+== Metadata
 
 This input adds the following metadata fields to each message:
 
@@ -31,7 +45,7 @@ This input adds the following metadata fields to each message:
 - nats_timestamp_unix_nano
 ` + "```" + `
 
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
+You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
 
 ` + connectionNameDescription() + authDescription()).
 		Fields(connectionHeadFields()...).
@@ -155,7 +169,8 @@ func (r *requestReplyProcessor) Process(ctx context.Context, msg *service.Messag
 	}
 
 	nMsg := nats.NewMsg(subject)
-	nMsg.Data, err = msg.AsBytes()
+	m := msg.Copy()
+	nMsg.Data, err = m.AsBytes()
 	if err != nil {
 		return nil, err
 	}
@@ -176,15 +191,19 @@ func (r *requestReplyProcessor) Process(ctx context.Context, msg *service.Messag
 
 	callCtx, cancel := context.WithTimeout(ctx, r.timeout)
 	defer cancel()
+	r.log.Debugf("Sending NATS message to subject %s", subject)
 	resp, err := r.natsConn.RequestMsgWithContext(callCtx, nMsg)
 	if err != nil {
 		return nil, err
 	}
-	msg, _, err = convertMessage(resp)
-	if err != nil {
-		return nil, err
+	m.SetBytes(resp.Data)
+	if r.natsConn.HeadersSupported() {
+		for key := range resp.Header {
+			value := resp.Header.Get(key)
+			m.MetaSetMut(key, value)
+		}
 	}
-	return service.MessageBatch{msg}, nil
+	return service.MessageBatch{m}, nil
 }
 
 func (r *requestReplyProcessor) Close(ctx context.Context) error {

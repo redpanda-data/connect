@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package redis
 
 import (
@@ -7,8 +21,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -23,10 +36,10 @@ func redisStreamsOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Summary(`Pushes messages to a Redis (v5.0+) Stream (which is created if it doesn't already exist) using the XADD command.`).
-		Description(output.Description(true, true, `
+		Description(`
 It's possible to specify a maximum length of the target stream by setting it to a value greater than 0, in which case this cap is applied only when Redis is able to remove a whole macro node, for efficiency.
 
-Redis stream entries are key/value pairs, as such it is necessary to specify the key to be set to the body of the message. All metadata fields of the message will also be set as key/value pairs, if there is a key collision between a metadata item and the body then the body takes precedence.`)).
+Redis stream entries are key/value pairs, as such it is necessary to specify the key to be set to the body of the message. All metadata fields of the message will also be set as key/value pairs, if there is a key collision between a metadata item and the body then the body takes precedence.`+service.OutputPerformanceDocs(true, true)).
 		Categories("Services").
 		Fields(clientFields()...).
 		Fields(

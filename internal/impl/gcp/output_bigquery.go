@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package gcp
 
 import (
@@ -13,8 +27,7 @@ import (
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 type gcpBigQueryCSVConfig struct {
@@ -119,41 +132,42 @@ func gcpBigQueryConfig() *service.ConfigSpec {
 		Categories("GCP", "Services").
 		Version("3.55.0").
 		Summary(`Sends messages as new rows to a Google Cloud BigQuery table.`).
-		Description(output.Description(true, true, `
-## Credentials
+		Description(`
+== Credentials
 
-By default Benthos will use a shared credentials file when connecting to GCP services. You can find out more [in this document](/docs/guides/cloud/gcp).
+By default Redpanda Connect will use a shared credentials file when connecting to GCP services. You can find out more in xref:guides:cloud/gcp.adoc[].
 
-## Format
+== Format
 
 This output currently supports only CSV and NEWLINE_DELIMITED_JSON formats. Learn more about how to use GCP BigQuery with them here:
-- `+"[`NEWLINE_DELIMITED_JSON`](https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-json)"+`
-- `+"[`CSV`](https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-csv)"+`
+
+- ` + "https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-json[`NEWLINE_DELIMITED_JSON`^]" + `
+- ` + "https://cloud.google.com/bigquery/docs/loading-data-cloud-storage-csv[`CSV`^]" + `
 
 Each message may contain multiple elements separated by newlines. For example a single message containing:
 
-`+"```json"+`
+` + "```json" + `
 {"key": "1"}
 {"key": "2"}
-`+"```"+`
+` + "```" + `
 
 Is equivalent to two separate messages:
 
-`+"```json"+`
+` + "```json" + `
 {"key": "1"}
-`+"```"+`
+` + "```" + `
 
 And:
 
-`+"```json"+`
+` + "```json" + `
 {"key": "2"}
-`+"```"+`
+` + "```" + `
 
 The same is true for the CSV format.
 
-### CSV
+=== CSV
 
-For the CSV format when the field `+"`csv.header`"+` is specified a header row will be inserted as the first line of each message batch. If this field is not provided then the first message of each message batch must include a header line.`)).
+For the CSV format when the field ` + "`csv.header`" + ` is specified a header row will be inserted as the first line of each message batch. If this field is not provided then the first message of each message batch must include a header line.` + service.OutputPerformanceDocs(true, true)).
 		Field(service.NewStringField("project").Description("The project ID of the dataset to insert data to. If not set, it will be inferred from the credentials or read from the GOOGLE_CLOUD_PROJECT environment variable.").Default("")).
 		Field(service.NewStringField("dataset").Description("The BigQuery Dataset ID.")).
 		Field(service.NewStringField("table").Description("The table to insert messages to.")).
@@ -205,7 +219,7 @@ For the CSV format when the field `+"`csv.header`"+` is specified a header row w
 				Advanced().
 				Default(string(bigquery.UTF_8)),
 			service.NewIntField("skip_leading_rows").
-				Description("The number of rows at the top of a CSV file that BigQuery will skip when reading data. The default value is 1 since Benthos will add the specified header in the first line of each batch sent to BigQuery.").
+				Description("The number of rows at the top of a CSV file that BigQuery will skip when reading data. The default value is 1 since Redpanda Connect will add the specified header in the first line of each batch sent to BigQuery.").
 				Advanced().
 				Default(1),
 		).Description("Specify how CSV data should be interpretted.")).

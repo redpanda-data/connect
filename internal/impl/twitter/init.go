@@ -1,20 +1,34 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package twitter
 
 import (
 	_ "embed"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
+
 	// bloblang functions are registered in init functions under this package
 	// so ensure they are loaded first
-	_ "github.com/benthosdev/benthos/v4/internal/impl/pure"
-
-	"github.com/benthosdev/benthos/v4/internal/bundle"
-	"github.com/benthosdev/benthos/v4/internal/template"
+	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 )
 
 //go:embed template_search_input.yaml
 var searchInputTemplate []byte
 
 func init() {
-	if err := template.RegisterTemplateYAML(bundle.GlobalEnvironment, searchInputTemplate); err != nil {
+	if err := service.RegisterTemplateYAML(string(searchInputTemplate)); err != nil {
 		panic(err)
 	}
 }

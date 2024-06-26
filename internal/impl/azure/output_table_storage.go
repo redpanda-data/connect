@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package azure
 
 import (
@@ -11,8 +25,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/data/aztables"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -71,10 +84,10 @@ func tsoSpec() *service.ConfigSpec {
 		Beta().
 		Version("3.36.0").
 		Summary(`Stores messages in an Azure Table Storage table.`).
-		Description(output.Description(true, true, `
+		Description(`
 Only one authentication method is required, `+"`storage_connection_string`"+` or `+"`storage_account` and `storage_access_key`"+`. If both are set then the `+"`storage_connection_string`"+` is given priority.
 
-In order to set the `+"`table_name`"+`,  `+"`partition_key`"+` and `+"`row_key`"+` you can use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are calculated per message of a batch.
+In order to set the `+"`table_name`"+`,  `+"`partition_key`"+` and `+"`row_key`"+` you can use function interpolations described xref:configuration:interpolation.adoc#bloblang-queries[here], which are calculated per message of a batch.
 
 If the `+"`properties`"+` are not set in the config, all the `+"`json`"+` fields are marshalled and stored in the table, which will be created if it does not exist.
 
@@ -107,7 +120,7 @@ It's also possible to use function interpolations to get or transform the proper
 properties:
   device: '${! json("device") }'
   timestamp: '${! json("timestamp") }'
-`+"```"+``)).
+`+"```"+``+service.OutputPerformanceDocs(true, true)).
 		Fields(
 			service.NewInterpolatedStringField(tsoFieldTableName).
 				Description("The table to store messages into.").

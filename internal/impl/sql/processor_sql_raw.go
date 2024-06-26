@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package sql
 
 import (
@@ -6,9 +20,10 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
-	"github.com/benthosdev/benthos/v4/public/bloblang"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/Jeffail/shutdown"
+
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 // RawProcessorConfig returns a config spec for an sql_raw processor.
@@ -18,18 +33,18 @@ func RawProcessorConfig() *service.ConfigSpec {
 		Categories("Integration").
 		Summary("Runs an arbitrary SQL query against a database and (optionally) returns the result as an array of objects, one for each row returned.").
 		Description(`
-If the query fails to execute then the message will remain unchanged and the error can be caught using error handling methods outlined [here](/docs/configuration/error_handling).`).
+If the query fails to execute then the message will remain unchanged and the error can be caught using xref:configuration:error_handling.adoc[error handling methods].`).
 		Field(driverField).
 		Field(dsnField).
 		Field(rawQueryField().
 			Example("INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);").
 			Example("SELECT * FROM footable WHERE user_id = $1;")).
 		Field(service.NewBoolField("unsafe_dynamic_query").
-			Description("Whether to enable [interpolation functions](/docs/configuration/interpolation/#bloblang-queries) in the query. Great care should be made to ensure your queries are defended against injection attacks.").
+			Description("Whether to enable xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions] in the query. Great care should be made to ensure your queries are defended against injection attacks.").
 			Advanced().
 			Default(false)).
 		Field(service.NewBloblangField("args_mapping").
-			Description("An optional [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `query`.").
+			Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `query`.").
 			Example("root = [ this.cat.meow, this.doc.woofs[0] ]").
 			Example(`root = [ meta("user.id") ]`).
 			Optional()).
@@ -58,7 +73,7 @@ pipeline:
 		).
 		Example(
 			"Table Query (PostgreSQL)",
-			`Here we query a database for columns of footable that share a `+"`user_id`"+` with the message field `+"`user.id`"+`. A `+"[`branch` processor](/docs/components/processors/branch)"+` is used in order to insert the resulting array into the original message at the path `+"`foo_rows`"+`.`,
+			`Here we query a database for columns of footable that share a `+"`user_id`"+` with the message field `+"`user.id`"+`. A `+"xref:components:processors/branch.adoc[`branch` processor]"+` is used in order to insert the resulting array into the original message at the path `+"`foo_rows`"+`.`,
 			`
 pipeline:
   processors:
@@ -172,13 +187,13 @@ func newSQLRawProcessor(
 	connSettings.apply(context.Background(), s.db, s.logger)
 
 	go func() {
-		<-s.shutSig.CloseNowChan()
+		<-s.shutSig.HardStopChan()
 
 		s.dbMut.Lock()
 		_ = s.db.Close()
 		s.dbMut.Unlock()
 
-		s.shutSig.ShutdownComplete()
+		s.shutSig.TriggerHasStopped()
 	}()
 	return s, nil
 }
@@ -249,9 +264,9 @@ func (s *sqlRawProcessor) ProcessBatch(ctx context.Context, batch service.Messag
 }
 
 func (s *sqlRawProcessor) Close(ctx context.Context) error {
-	s.shutSig.CloseNow()
+	s.shutSig.TriggerHardStop()
 	select {
-	case <-s.shutSig.HasClosedChan():
+	case <-s.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

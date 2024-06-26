@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package gcp
 
 import (
@@ -13,7 +27,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/integration"
+	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
 
 func TestIntegrationGCPPubSub(t *testing.T) {
@@ -80,11 +94,11 @@ input:
 		integration.StreamTestOptSleepAfterInput(100 * time.Millisecond),
 		integration.StreamTestOptSleepAfterOutput(100 * time.Millisecond),
 		integration.StreamTestOptTimeout(time.Minute * 5),
-		integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, testID string, vars *integration.StreamTestConfigVars) {
+		integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
 			client, err := pubsub.NewClient(ctx, "benthos-test-project")
 			require.NoError(t, err)
 
-			_, err = client.CreateTopic(ctx, fmt.Sprintf("topic-%v", testID))
+			_, err = client.CreateTopic(ctx, fmt.Sprintf("topic-%v", vars.ID))
 			require.NoError(t, err)
 
 			client.Close()

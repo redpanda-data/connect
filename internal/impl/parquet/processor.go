@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 //go:build !arm
 
 package parquet
@@ -11,27 +25,26 @@ import (
 	"github.com/xitongsys/parquet-go/reader"
 	"github.com/xitongsys/parquet-go/writer"
 
-	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func parquetProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Deprecated().
 		Categories("Parsing").
-		Summary("Converts batches of documents to or from [Parquet files](https://parquet.apache.org/docs/).").
+		Summary("Converts batches of documents to or from https://parquet.apache.org/docs/[Parquet files^].").
 		Description(`
-### Alternatives
+== Alternatives
 
-This processor is now deprecated, it's recommended that you use the new ` + "[`parquet_decode`](/docs/components/processors/parquet_decode) and [`parquet_encode`](/docs/components/processors/parquet_encode)" + ` processors as they provide a number of advantages, the most important of which is better error messages for when schemas are mismatched or files could not be consumed.
+This processor is now deprecated, it's recommended that you use the new ` + "xref:components:processors/parquet_decode.adoc[`parquet_decode`] and xref:components:processors/parquet_encode.adoc[`parquet_encode`]" + ` processors as they provide a number of advantages, the most important of which is better error messages for when schemas are mismatched or files could not be consumed.
 
-### Troubleshooting
+== Troubleshooting
 
-This processor is experimental and the error messages that it provides are often vague and unhelpful. An error message of the form ` + "`interface {} is nil, not <value type>`" + ` implies that a field of the given type was expected but not found in the processed message when writing parquet files.
+This processor is experimental and the error messages that it provides are often vague and unhelpful. An error message of the form ` + "`interface \\{} is nil, not <value type>`" + ` implies that a field of the given type was expected but not found in the processed message when writing parquet files.
 
 Unfortunately the name of the field will sometimes be missing from the error, in which case it's worth double checking the schema you provided to make sure that there are no typos in the field names, and if that doesn't reveal the issue it can help to mark fields as OPTIONAL in the schema and gradually change them back to REQUIRED until the error returns.
 
-### Defining the Schema
+== Define the schema
 
 The schema must be specified as a JSON string, containing an object that describes the fields expected at the root of each document. Each field can itself have more fields defined, allowing for nested structures:
 
@@ -134,7 +147,7 @@ func newParquetProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Reso
 			return nil, err
 		}
 		if schemaFile != "" {
-			rawSchemaBytes, err := ifs.ReadFile(mgr.FS(), schemaFile)
+			rawSchemaBytes, err := service.ReadFile(mgr.FS(), schemaFile)
 			if err != nil {
 				return nil, fmt.Errorf("failed to read schema file: %w", err)
 			}

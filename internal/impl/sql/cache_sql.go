@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package sql
 
 import (
@@ -9,8 +23,9 @@ import (
 
 	"github.com/Masterminds/squirrel"
 
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/Jeffail/shutdown"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -29,21 +44,21 @@ Each cache key/value pair will exist as a row within the specified table. Curren
 
 Cache operations are translated into SQL statements as follows:
 
-### Get
+== Get
 
 All ` + "`get`" + ` operations are performed with a traditional ` + "`select`" + ` statement.
 
-### Delete
+== Delete
 
 All ` + "`delete`" + ` operations are performed with a traditional ` + "`delete`" + ` statement.
 
-### Set
+== Set
 
 The ` + "`set`" + ` operation is performed with a traditional ` + "`insert`" + ` statement.
 
 This will behave as an ` + "`add`" + ` operation by default, and so ideally needs to be adapted in order to provide updates instead of failing on collision	s. Since different SQL engines implement upserts differently it is necessary to specify a ` + "`set_suffix`" + ` that modifies an ` + "`insert`" + ` statement in order to perform updates on conflict.
 
-### Add
+== Add
 
 The ` + "`add`" + ` operation is performed with a traditional ` + "`insert`" + ` statement.
 `).
@@ -166,9 +181,9 @@ func newSQLCacheFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (
 	connSettings.apply(context.Background(), s.db, s.logger)
 
 	go func() {
-		<-s.shutSig.CloseNowChan()
+		<-s.shutSig.HardStopChan()
 		_ = s.db.Close()
-		s.shutSig.ShutdownComplete()
+		s.shutSig.TriggerHasStopped()
 	}()
 	return s, nil
 }
@@ -211,9 +226,9 @@ func (s *sqlCache) Delete(ctx context.Context, key string) error {
 }
 
 func (s *sqlCache) Close(ctx context.Context) error {
-	s.shutSig.CloseNow()
+	s.shutSig.TriggerHardStop()
 	select {
-	case <-s.shutSig.HasClosedChan():
+	case <-s.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

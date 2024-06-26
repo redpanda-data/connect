@@ -11,7 +11,7 @@ pipeline:
         - check: this.type == 7
           processors:
             - bloblang: |
-                root = "Welcome to the Benthos Blobchat server <@%v>! We'd love to hear your story over in <#853284952261918773>.".format(this.author.id)
+                root = "Welcome to the Redpanda Connect Blobchat server <@%v>! We'd love to hear your story over in <#853284952261918773>.".format(this.author.id)
 
         - check: this.content == "/commands"
           processors:
@@ -49,9 +49,9 @@ pipeline:
             - bloblang: 'root = ""'
             - try:
               - http:
-                  url: https://api.github.com/repos/benthosdev/benthos/releases/latest
+                  url: https://api.github.com/repos/redpanda-data/benthos/releases/latest
                   verb: GET
-              - bloblang: 'root = "The latest release of Benthos is %v: %v".format(this.tag_name, this.html_url)'
+              - bloblang: 'root = "The latest release of Redpanda Connect is %v: %v".format(this.tag_name, this.html_url)'
 
         - processors:
             - bloblang: 'root = deleted()'

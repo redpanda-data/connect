@@ -4,13 +4,13 @@ status: experimental
 categories: [ Services, Social ]
 summary: Consumes tweets matching a given search using the Twitter recent search V2 API.
 description: |
-  Continuously polls the [Twitter recent search V2 API](https://developer.twitter.com/en/docs/twitter-api/tweets/search/api-reference/get-tweets-search-recent) for tweets that match a given search query.
+  Continuously polls the https://developer.twitter.com/en/docs/twitter-api/tweets/search/api-reference/get-tweets-search-recent[Twitter recent search V2 API^] for tweets that match a given search query.
 
-  Each tweet received is emitted as a JSON object message, with a field `id` and `text` by default. Extra fields [can be obtained from the search API](https://developer.twitter.com/en/docs/twitter-api/fields) when listed with the `tweet_fields` field.
+  Each tweet received is emitted as a JSON object message, with a field `id` and `text` by default. Extra fields https://developer.twitter.com/en/docs/twitter-api/fields[can be obtained from the search API^] when listed with the `tweet_fields` field.
 
-  In order to paginate requests that are made the ID of the latest received tweet is stored in a [cache resource](/docs/components/caches/about), which is then used by subsequent requests to ensure only tweets after it are consumed. It is recommended that the cache you use is persistent so that Benthos can resume searches at the correct place on a restart.
+  In order to paginate requests that are made the ID of the latest received tweet is stored in a xref:components:caches/about.adoc[cache resource], which is then used by subsequent requests to ensure only tweets after it are consumed. It is recommended that the cache you use is persistent so that Redpanda Connect can resume searches at the correct place on a restart.
 
-  Authentication is done using OAuth 2.0 credentials which can be generated within the [Twitter developer portal](https://developer.twitter.com).
+  Authentication is done using OAuth 2.0 credentials which can be generated within the https://developer.twitter.com[Twitter developer portal^].
 
 fields:
   - name: query
@@ -18,7 +18,7 @@ fields:
     type: string
 
   - name: tweet_fields
-    description: An optional list of additional fields to obtain for each tweet, by default only the fields `id` and `text` are returned. For more info refer to the [twitter API docs.](https://developer.twitter.com/en/docs/twitter-api/fields)
+    description: An optional list of additional fields to obtain for each tweet, by default only the fields `id` and `text` are returned. For more info refer to the https://developer.twitter.com/en/docs/twitter-api/fields[twitter API docs^].
     type: string
     kind: list
     default: []
@@ -50,11 +50,11 @@ fields:
     advanced: true
 
   - name: api_key
-    description: An API key for OAuth 2.0 authentication. It is recommended that you populate this field using [environment variables](/docs/configuration/interpolation).
+    description: An API key for OAuth 2.0 authentication. It is recommended that you populate this field using xref:configuration:interpolation.adoc[environment variables].
     type: string
 
   - name: api_secret
-    description: An API secret for OAuth 2.0 authentication. It is recommended that you populate this field using [environment variables](/docs/configuration/interpolation).
+    description: An API secret for OAuth 2.0 authentication. It is recommended that you populate this field using xref:configuration:interpolation.adoc[environment variables].
     type: string
 
 mapping: |

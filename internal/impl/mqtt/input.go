@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package mqtt
 
 import (
@@ -7,8 +21,7 @@ import (
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -23,20 +36,18 @@ func inputConfigSpec() *service.ConfigSpec {
 		Categories("Services").
 		Summary("Subscribe to topics on MQTT brokers.").
 		Description(`
-### Metadata
+== Metadata
 
 This input adds the following metadata fields to each message:
 
-`+"``` text"+`
 - mqtt_duplicate
 - mqtt_qos
 - mqtt_retained
 - mqtt_topic
 - mqtt_message_id
-`+"```"+`
 
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).`).
-		Fields(ClientFields()...).
+You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].`).
+		Fields(clientFields()...).
 		Fields(
 			service.NewStringListField(miFieldTopics).
 				Description("A list of topics to consume from."),
@@ -194,7 +205,7 @@ func (m *mqttReader) Read(ctx context.Context) (*service.Message, service.AckFun
 	m.cMut.Unlock()
 
 	if msgChan == nil {
-		return nil, nil, component.ErrNotConnected
+		return nil, nil, service.ErrNotConnected
 	}
 
 	select {

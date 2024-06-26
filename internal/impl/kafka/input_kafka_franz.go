@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package kafka
 
 import (
@@ -12,9 +26,11 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/sasl"
 
-	"github.com/benthosdev/benthos/v4/internal/checkpoint"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/Jeffail/checkpoint"
+
+	"github.com/Jeffail/shutdown"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func franzKafkaInputConfig() *service.ConfigSpec {
@@ -22,17 +38,17 @@ func franzKafkaInputConfig() *service.ConfigSpec {
 		Beta().
 		Categories("Services").
 		Version("3.61.0").
-		Summary(`A Kafka input using the [Franz Kafka client library](https://github.com/twmb/franz-go).`).
+		Summary(`A Kafka input using the https://github.com/twmb/franz-go[Franz Kafka client library^].`).
 		Description(`
 When a consumer group is specified this input consumes one or more topics where partitions will automatically balance across any other connected clients with the same consumer group. When a consumer group is not specified topics can either be consumed in their entirety or with explicit partitions.
 
 This input often out-performs the traditional ` + "`kafka`" + ` input as well as providing more useful logs and error messages.
 
-### Metadata
+== Metadata
 
 This input adds the following metadata fields to each message:
 
-` + "``` text" + `
+` + "```text" + `
 - kafka_key
 - kafka_topic
 - kafka_partition
@@ -88,10 +104,10 @@ Finally, it's also possible to specify an explicit offset to consume from by add
 			Default(true).
 			Advanced()).
 		Field(service.NewTLSToggledField("tls")).
-		Field(saslField()).
+		Field(SASLFields()).
 		Field(service.NewBoolField("multi_header").Description("Decode headers into lists to allow handling of multiple values with the same key").Default(false).Advanced()).
 		Field(service.NewBatchPolicyField("batching").
-			Description("Allows you to configure a [batching policy](/docs/configuration/batching) that applies to individual topic partitions in order to batch messages together before flushing them for processing. Batching can be beneficial for performance as well as useful for windowed processing, and doing so this way preserves the ordering of topic partitions.").
+			Description("Allows you to configure a xref:configuration:batching.adoc[batching policy] that applies to individual topic partitions in order to batch messages together before flushing them for processing. Batching can be beneficial for performance as well as useful for windowed processing, and doing so this way preserves the ordering of topic partitions.").
 			Advanced()).
 		LintRule(`
 let has_topic_partitions = this.topics.any(t -> t.contains(":"))
@@ -239,7 +255,7 @@ func newFranzKafkaReaderFromConfig(conf *service.ParsedConfig, res *service.Reso
 	if f.multiHeader, err = conf.FieldBool("multi_header"); err != nil {
 		return nil, err
 	}
-	if f.saslConfs, err = saslMechanismsFromConfig(conf); err != nil {
+	if f.saslConfs, err = SASLMechanismsFromConfig(conf); err != nil {
 		return nil, err
 	}
 
@@ -321,7 +337,7 @@ func (p *partitionTracker) loop() {
 		if p.batcher != nil {
 			p.batcher.Close(context.Background())
 		}
-		p.shutSig.ShutdownComplete()
+		p.shutSig.TriggerHasStopped()
 	}()
 
 	// No need to loop when there's no batcher for async writes.
@@ -353,7 +369,7 @@ func (p *partitionTracker) loop() {
 		flushBatch = flushBatchTicker.C
 	}
 
-	closeAtLeisureCtx, done := p.shutSig.CloseAtLeisureCtx(context.Background())
+	closeAtLeisureCtx, done := p.shutSig.SoftStopCtx(context.Background())
 	defer done()
 
 	for {
@@ -388,7 +404,7 @@ func (p *partitionTracker) loop() {
 					return
 				}
 			}
-		case <-p.shutSig.CloseAtLeisureChan():
+		case <-p.shutSig.SoftStopChan():
 			return
 		}
 	}
@@ -461,11 +477,11 @@ func (p *partitionTracker) pauseFetch(limit int) (pauseFetch bool) {
 }
 
 func (p *partitionTracker) close(ctx context.Context) error {
-	p.shutSig.CloseAtLeisure()
+	p.shutSig.TriggerSoftStop()
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	case <-p.shutSig.HasClosedChan():
+	case <-p.shutSig.HasStoppedChan():
 	}
 	return nil
 }
@@ -579,8 +595,8 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 		return nil
 	}
 
-	if f.shutSig.ShouldCloseAtLeisure() {
-		f.shutSig.ShutdownComplete()
+	if f.shutSig.IsSoftStopSignalled() {
+		f.shutSig.TriggerHasStopped()
 		return service.ErrEndOfInput
 	}
 
@@ -630,7 +646,7 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 			}),
 			kgo.AutoCommitMarks(),
 			kgo.AutoCommitInterval(f.commitPeriod),
-			kgo.WithLogger(&kgoLogger{f.log}),
+			kgo.WithLogger(&KGoLogger{f.log}),
 		)
 	}
 
@@ -653,12 +669,12 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 			checkpoints.close()
 			f.storeBatchChan(nil)
 			close(batchChan)
-			if f.shutSig.ShouldCloseAtLeisure() {
-				f.shutSig.ShutdownComplete()
+			if f.shutSig.IsSoftStopSignalled() {
+				f.shutSig.TriggerHasStopped()
 			}
 		}()
 
-		closeCtx, done := f.shutSig.CloseAtLeisureCtx(context.Background())
+		closeCtx, done := f.shutSig.SoftStopCtx(context.Background())
 		defer done()
 
 		for {
@@ -757,15 +773,15 @@ func (f *franzKafkaReader) ReadBatch(ctx context.Context) (service.MessageBatch,
 
 func (f *franzKafkaReader) Close(ctx context.Context) error {
 	go func() {
-		f.shutSig.CloseAtLeisure()
+		f.shutSig.TriggerSoftStop()
 		if f.getBatchChan() == nil {
 			// If the record chan is already nil then we might've not been
 			// connected, so force the shutdown complete signal.
-			f.shutSig.ShutdownComplete()
+			f.shutSig.TriggerHasStopped()
 		}
 	}()
 	select {
-	case <-f.shutSig.HasClosedChan():
+	case <-f.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

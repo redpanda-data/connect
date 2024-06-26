@@ -1,10 +1,21 @@
+project_name: redpanda-connect
 builds:
-  - id: benthos
-    main: cmd/benthos/main.go
-    binary: benthos
+  - id: connect
+    main: cmd/redpanda-connect/main.go
+    binary: redpanda-connect
     goos: [ windows, darwin, linux, freebsd, openbsd ]
     goarch: [ amd64, arm, arm64 ]
     goarm: [ 6, 7 ]
+    hooks:
+      post:
+        # The binary is signed and notarized when running a production release, but for snapshot builds notarization is
+        # skipped and only ad-hoc signing is performed (not cryptographic material is needed).
+        #
+        # note: environment variables required for signing and notarization (set in CI) but are not needed for snapshot builds
+        #    QUILL_SIGN_P12, QUILL_SIGN_PASSWORD, QUILL_NOTARY_KEY, QUILL_NOTARY_KEY_ID, QUILL_NOTARY_ISSUER
+        - cmd: ./resources/scripts/sign_for_darwin.sh "{{ .Os }}" "{{ .Path }}" "{{ .IsSnapshot }}"
+          env:
+            - QUILL_LOG_FILE=target/dist/quill-{{ .Target }}.log
     ignore:
       - goos: windows
         goarch: arm
@@ -14,42 +25,43 @@ builds:
       - CGO_ENABLED=0
     ldflags: >
       -s -w
-      -X github.com/benthosdev/benthos/v4/internal/cli.Version={{.Version}}
-      -X github.com/benthosdev/benthos/v4/internal/cli.DateBuilt={{.Date}}
-  - id: benthos-lambda
-    main: cmd/serverless/benthos-lambda/main.go
-    binary: benthos-lambda
+      -X main.Version={{.Version}}
+      -X main.DateBuilt={{.Date}}
+      -X main.BinaryName=redpanda-connect
+  - id: connect-lambda
+    main: cmd/serverless/connect-lambda/main.go
+    binary: redpanda-connect-lambda
     env:
       - CGO_ENABLED=0
     goos: [ linux ]
     goarch: [ amd64 ]
-  - id: benthos-lambda-al2
-    main: cmd/serverless/benthos-lambda/main.go
+  - id: connect-lambda-al2
+    main: cmd/serverless/connect-lambda/main.go
     binary: bootstrap
     env:
       - CGO_ENABLED=0
     goos: [ linux ]
     goarch: [ amd64, arm64 ]
 archives:
-  - id: benthos
-    builds: [ benthos ]
+  - id: connect
+    builds: [ connect ]
     format: tar.gz
     files:
       - README.md
       - CHANGELOG.md
-      - LICENSE
-  - id: benthos-lambda
-    builds: [ benthos-lambda ]
+      - licenses
+  - id: connect-lambda
+    builds: [ connect-lambda ]
     format: zip
     name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-  - id: benthos-lambda-al2
-    builds: [ benthos-lambda-al2 ]
+  - id: connect-lambda-al2
+    builds: [ connect-lambda-al2 ]
     format: zip
-    name_template: "benthos-lambda-al2_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    name_template: "connect-lambda-al2_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 dist: target/dist
 release:
   github:
-    owner: benthosdev
-    name: benthos
+    owner: redpanda-data
+    name: connect
   prerelease: auto
   disable: false

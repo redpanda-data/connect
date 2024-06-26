@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package aws
 
 import (
@@ -10,10 +24,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/firehose/types"
 	"github.com/cenkalti/backoff/v4"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
-	"github.com/benthosdev/benthos/v4/internal/impl/pure"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/aws/config"
+	"github.com/redpanda-data/connect/v4/internal/retries"
 )
 
 const (
@@ -36,7 +50,7 @@ func kfoConfigFromParsed(pConf *service.ParsedConfig) (conf kfoConfig, err error
 	if conf.aconf, err = GetSession(context.TODO(), pConf); err != nil {
 		return
 	}
-	if conf.backoffCtor, err = pure.CommonRetryBackOffCtorFromParsed(pConf); err != nil {
+	if conf.backoffCtor, err = retries.CommonRetryBackOffCtorFromParsed(pConf); err != nil {
 		return
 	}
 	return
@@ -49,15 +63,15 @@ func kfoOutputSpec() *service.ConfigSpec {
 		Categories("Services", "AWS").
 		Summary(`Sends messages to a Kinesis Firehose delivery stream.`).
 		Description(`
-### Credentials
+== Credentials
 
-By default Benthos will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more [in this document](/docs/guides/cloud/aws).
+By default Redpanda Connect will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more in xref:guides:cloud/aws.adoc[].
 
-## Performance
+== Performance
 
 This output benefits from sending multiple messages in flight in parallel for improved performance. You can tune the max number of in flight messages (or message batches) with the field `+"`max_in_flight`"+`.
 
-This output benefits from sending messages as a batch for improved performance. Batches can be formed at both the input and output level. You can find out more [in this doc](/docs/configuration/batching).
+This output benefits from sending messages as a batch for improved performance. Batches can be formed at both the input and output level. You can find out more xref:configuration:batching.adoc[in this doc].
 `).
 		Fields(
 			service.NewStringField(kfoFieldStream).
@@ -66,7 +80,7 @@ This output benefits from sending messages as a batch for improved performance. 
 			service.NewBatchPolicyField(kfoFieldBatching),
 		).
 		Fields(config.SessionFields()...).
-		Fields(pure.CommonRetryBackOffFields(0, "1s", "5s", "30s")...)
+		Fields(retries.CommonRetryBackOffFields(0, "1s", "5s", "30s")...)
 }
 
 func init() {
@@ -125,8 +139,9 @@ func (a *kinesisFirehoseWriter) toRecords(batch service.MessageBatch) ([]types.R
 		}
 
 		if len(entry.Data) > mebibyte {
-			a.log.Errorf("batch message %d exceeds the maximum Kinesis Firehose payload limit of 1 MiB", i)
-			return nil, component.ErrMessageTooLarge
+			err = fmt.Errorf("batch message %d exceeds the maximum Kinesis Firehose payload limit of 1 MiB", i)
+			a.log.With("error", err).Error("Failed to prepare record")
+			return nil, err
 		}
 
 		entries[i] = entry
@@ -216,7 +231,7 @@ func (a *kinesisFirehoseWriter) WriteBatch(ctx context.Context, batch service.Me
 		if l > 0 {
 			a.log.Warnf("scheduling retry of throttled records (%d)\n", l)
 			if wait == backoff.Stop {
-				return component.ErrTimeout
+				return fmt.Errorf("%v records failed to be delivered within backoff policy", l)
 			}
 			time.Sleep(wait)
 		}

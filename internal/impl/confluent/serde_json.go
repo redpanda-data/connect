@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package confluent
 
 import (
@@ -6,10 +20,10 @@ import (
 
 	"github.com/xeipuuv/gojsonschema"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-func resolveJSONSchema(ctx context.Context, client *schemaRegistryClient, info SchemaInfo) (*gojsonschema.Schema, error) {
+func resolveJSONSchema(ctx context.Context, client *schemaRegistryClient, info schemaInfo) (*gojsonschema.Schema, error) {
 	sl := gojsonschema.NewSchemaLoader()
 
 	if len(info.References) == 0 {
@@ -20,7 +34,7 @@ func resolveJSONSchema(ctx context.Context, client *schemaRegistryClient, info S
 		return sl.Compile(gojsonschema.NewStringLoader(info.Schema))
 	}
 
-	if err := client.WalkReferences(ctx, info.References, func(ctx context.Context, name string, info SchemaInfo) error {
+	if err := client.WalkReferences(ctx, info.References, func(ctx context.Context, name string, info schemaInfo) error {
 		return sl.AddSchemas(gojsonschema.NewStringLoader(info.Schema))
 	}); err != nil {
 		return nil, err
@@ -29,15 +43,15 @@ func resolveJSONSchema(ctx context.Context, client *schemaRegistryClient, info S
 	return sl.Compile(gojsonschema.NewStringLoader(info.Schema))
 }
 
-func (s *schemaRegistryEncoder) getJSONEncoder(ctx context.Context, info SchemaInfo) (schemaEncoder, error) {
+func (s *schemaRegistryEncoder) getJSONEncoder(ctx context.Context, info schemaInfo) (schemaEncoder, error) {
 	return getJSONTranscoder(ctx, s.client, info)
 }
 
-func (s *schemaRegistryDecoder) getJSONDecoder(ctx context.Context, info SchemaInfo) (schemaDecoder, error) {
+func (s *schemaRegistryDecoder) getJSONDecoder(ctx context.Context, info schemaInfo) (schemaDecoder, error) {
 	return getJSONTranscoder(ctx, s.client, info)
 }
 
-func getJSONTranscoder(ctx context.Context, cl *schemaRegistryClient, info SchemaInfo) (func(m *service.Message) error, error) {
+func getJSONTranscoder(ctx context.Context, cl *schemaRegistryClient, info schemaInfo) (func(m *service.Message) error, error) {
 	sch, err := resolveJSONSchema(ctx, cl, info)
 	if err != nil {
 		return nil, err

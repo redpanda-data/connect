@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package amqp09
 
 import (
@@ -13,8 +27,7 @@ import (
 
 	amqp "github.com/rabbitmq/amqp091-go"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func amqp09OutputSpec() *service.ConfigSpec {
@@ -28,7 +41,7 @@ It's possible for this output type to create the target exchange by setting `+"`
 
 TLS is automatic when connecting to an `+"`amqps`"+` URL, but custom settings can be enabled in the `+"`tls`"+` section.
 
-The fields 'key', 'exchange' and 'type' can be dynamically set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).`).
+The fields 'key', 'exchange' and 'type' can be dynamically set using xref:configuration:interpolation.adoc#bloblang-queries[function interpolations].`).
 		Fields(
 			service.NewURLListField(urlsField).
 				Description("A list of URLs to connect to. The first URL to successfully establish a connection will be used until the connection is closed. If an item of the list contains commas it will be expanded into multiple URLs.").
@@ -355,6 +368,8 @@ func (a *amqp09Writer) declareExchange(exchange string) error {
 	return nil
 }
 
+var errNoAck = errors.New("failed to receive acknowledgement")
+
 func (a *amqp09Writer) Write(ctx context.Context, msg *service.Message) error {
 	a.connLock.RLock()
 	conn := a.conn
@@ -488,7 +503,7 @@ func (a *amqp09Writer) Write(ctx context.Context, msg *service.Message) error {
 	}
 	if !conf.Wait() {
 		a.log.Error("Failed to acknowledge message.")
-		return component.ErrNoAck
+		return errNoAck
 	}
 	if returnChan != nil {
 		select {
@@ -496,7 +511,7 @@ func (a *amqp09Writer) Write(ctx context.Context, msg *service.Message) error {
 			if !open {
 				return errors.New("acknowledgement not supported, ensure server supports immediate and mandatory flags")
 			}
-			return component.ErrNoAck
+			return errNoAck
 		default:
 		}
 	}

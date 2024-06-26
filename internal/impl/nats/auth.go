@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package nats
 
 import (
@@ -12,49 +26,63 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nkeys"
 
-	"github.com/benthosdev/benthos/v4/internal/docs"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func authDescription() string {
-	return `### Authentication
+	return `
 
-There are several components within Benthos which utilise NATS services. You will find that each of these components
-support optional advanced authentication parameters for [NKeys](https://docs.nats.io/nats-server/configuration/securing_nats/auth_intro/nkey_auth)
-and [User Credentials](https://docs.nats.io/developing-with-nats/security/creds).
+== Authentication
 
-An in depth tutorial can be found [here](https://docs.nats.io/developing-with-nats/tutorials/jwt).
+There are several components within Redpanda Connect which uses NATS services. You will find that each of these components
+support optional advanced authentication parameters for https://docs.nats.io/nats-server/configuration/securing_nats/auth_intro/nkey_auth[NKeys^]
+and https://docs.nats.io/using-nats/developer/connecting/creds[User Credentials^].
 
-#### NKey file
+See an https://docs.nats.io/running-a-nats-service/nats_admin/security/jwt[in-depth tutorial^].
+
+=== NKey file
 
 The NATS server can use these NKeys in several ways for authentication. The simplest is for the server to be configured
 with a list of known public keys and for the clients to respond to the challenge by signing it with its private NKey
 configured in the ` + "`nkey_file`" + ` field.
 
-More details [here](https://docs.nats.io/developing-with-nats/security/nkey).
+https://docs.nats.io/running-a-nats-service/configuration/securing_nats/auth_intro/nkey_auth[More details^].
 
-#### User Credentials
+=== User credentials
 
-NATS server supports decentralized authentication based on JSON Web Tokens (JWT). Clients need an [user JWT](https://docs.nats.io/nats-server/configuration/securing_nats/jwt#json-web-tokens)
-and a corresponding [NKey secret](https://docs.nats.io/developing-with-nats/security/nkey) when connecting to a server
+NATS server supports decentralized authentication based on JSON Web Tokens (JWT). Clients need an https://docs.nats.io/nats-server/configuration/securing_nats/jwt#json-web-tokens[user JWT^]
+and a corresponding https://docs.nats.io/running-a-nats-service/configuration/securing_nats/auth_intro/nkey_auth[NKey secret^] when connecting to a server
 which is configured to use this authentication scheme.
 
 The ` + "`user_credentials_file`" + ` field should point to a file containing both the private key and the JWT and can be
-generated with the [nsc tool](https://docs.nats.io/nats-tools/nsc).
+generated with the https://docs.nats.io/nats-tools/nsc[nsc tool^].
 
 Alternatively, the ` + "`user_jwt`" + ` field can contain a plain text JWT and the ` + "`user_nkey_seed`" + `can contain
 the plain text NKey Seed.
 
-More details [here](https://docs.nats.io/developing-with-nats/security/creds).`
+https://docs.nats.io/using-nats/developer/connecting/creds[More details^].`
 }
 
-func authFieldSpec() docs.FieldSpec {
-	return docs.FieldObject("auth", "Optional configuration of NATS authentication parameters.").WithChildren(
-		docs.FieldString("nkey_file", "An optional file containing a NKey seed.", "./seed.nk").Optional(),
-		docs.FieldString("user_credentials_file", "An optional file containing user credentials which consist of an user JWT and corresponding NKey seed.", "./user.creds").Optional(),
-		docs.FieldString("user_jwt", "An optional plain text user JWT (given along with the corresponding user NKey Seed).").Secret().Optional(),
-		docs.FieldString("user_nkey_seed", "An optional plain text user NKey Seed (given along with the corresponding user JWT).").Secret().Optional(),
-	).Advanced()
+func authFieldSpec() *service.ConfigField {
+	return service.NewObjectField("auth",
+		service.NewStringField("nkey_file").
+			Description("An optional file containing a NKey seed.").
+			Example("./seed.nk").
+			Optional(),
+		service.NewStringField("user_credentials_file").
+			Description("An optional file containing user credentials which consist of an user JWT and corresponding NKey seed.").
+			Example("./user.creds").
+			Optional(),
+		service.NewStringField("user_jwt").
+			Description("An optional plain text user JWT (given along with the corresponding user NKey Seed).").
+			Secret().
+			Optional(),
+		service.NewStringField("user_nkey_seed").
+			Description("An optional plain text user NKey Seed (given along with the corresponding user JWT).").
+			Secret().
+			Optional(),
+	).Description("Optional configuration of NATS authentication parameters.").
+		Advanced()
 }
 
 type authConfig struct {
@@ -78,7 +106,7 @@ func authConfToOptions(auth authConfig, fs *service.FS) []nats.Option {
 
 	// Previously we used nats.UserCredentials to authenticate. In order to
 	// support a custom FS implementation in our NATS components, we needed to
-	// switch to the nats.UserJWT option, while still preserving the behavior
+	// switch to the nats.UserJWT option, while still preserving the behaviour
 	// of the nats.UserCredentials option, which includes things like path
 	// expansing, home directory support and wiping credentials held in memory
 	if auth.UserCredentialsFile != "" {

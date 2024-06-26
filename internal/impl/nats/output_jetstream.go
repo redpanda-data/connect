@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package nats
 
 import (
@@ -7,9 +21,9 @@ import (
 
 	"github.com/nats-io/nats.go"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output/span"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/Jeffail/shutdown"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func natsJetStreamOutputConfig() *service.ConfigSpec {
@@ -52,7 +66,7 @@ func init() {
 			if err != nil {
 				return nil, 0, err
 			}
-			spanOutput, err := span.NewOutput("nats_jetstream", conf, w, mgr)
+			spanOutput, err := conf.WrapOutputExtractTracingSpanMapping("nats_jetstream", w)
 			return spanOutput, maxInFlight, err
 		})
 	if err != nil {
@@ -194,10 +208,10 @@ func (j *jetStreamOutput) Write(ctx context.Context, msg *service.Message) error
 func (j *jetStreamOutput) Close(ctx context.Context) error {
 	go func() {
 		j.disconnect()
-		j.shutSig.ShutdownComplete()
+		j.shutSig.TriggerHasStopped()
 	}()
 	select {
-	case <-j.shutSig.HasClosedChan():
+	case <-j.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

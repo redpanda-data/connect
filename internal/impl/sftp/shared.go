@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package sftp
 
 import (
@@ -8,8 +22,7 @@ import (
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 
-	"github.com/benthosdev/benthos/v4/internal/filepath/ifs"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -28,7 +41,7 @@ func credentialsFields() []*service.ConfigField {
 	}
 }
 
-func credentialsFromParsed(pConf *service.ParsedConfig) (creds Credentials, err error) {
+func credentialsFromParsed(pConf *service.ParsedConfig) (creds credentials, err error) {
 	if creds.Username, err = pConf.FieldString(scFieldCredentialsUsername); err != nil {
 		return
 	}
@@ -44,14 +57,14 @@ func credentialsFromParsed(pConf *service.ParsedConfig) (creds Credentials, err 
 	return
 }
 
-type Credentials struct {
+type credentials struct {
 	Username       string
 	Password       string
 	PrivateKeyFile string
 	PrivateKeyPass string
 }
 
-func (c Credentials) GetClient(fs fs.FS, address string) (*sftp.Client, error) {
+func (c credentials) GetClient(fs fs.FS, address string) (*sftp.Client, error) {
 	host, port, err := net.SplitHostPort(address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse address: %v", err)
@@ -85,7 +98,7 @@ func (c Credentials) GetClient(fs fs.FS, address string) (*sftp.Client, error) {
 	if c.PrivateKeyFile != "" {
 		// read private key file
 		var privateKey []byte
-		privateKey, err = ifs.ReadFile(fs, c.PrivateKeyFile)
+		privateKey, err = service.ReadFile(fs, c.PrivateKeyFile)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read private key: %v", err)
 		}

@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package crypto
 
 import (
@@ -5,13 +19,12 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
-	"github.com/benthosdev/benthos/v4/public/bloblang"
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
 )
 
 func registerCompareBCryptMethod() error {
 	spec := bloblang.NewPluginSpec().
-		Category(query.MethodCategoryStrings).
+		Category("String Manipulation").
 		Description("Checks whether a string matches a hashed secret using bcrypt.").
 		Param(bloblang.NewStringParam("hashed_secret").Description("The hashed secret value to compare with the input.")).
 		Example("", `root.match = this.secret.compare_bcrypt("$2y$10$Dtnt5NNzVtMCOZONT705tOcS8It6krJX8bEjnDJnwxiFKsz1C.3Ay")`, [2]string{

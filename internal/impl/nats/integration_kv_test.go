@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package nats
 
 import (
@@ -14,8 +28,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/internal/integration"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
 
 func TestIntegrationNatsKV(t *testing.T) {
@@ -54,7 +68,7 @@ output:
     bucket: bucket-$ID
     # We need to make this key random as the NATS server will only deliver the
     # latest revision of a key when it's requested by a watcher, this is by
-    # design, but if we want to test benthos semantics like batching we should
+    # design, but if we want to test Redpanda Connect semantics like batching we should
     # use unique keys for every message passing through the output
     key: ${! ksuid() }
 
@@ -75,11 +89,11 @@ input:
 	)
 	suite.Run(
 		t, template,
-		integration.StreamTestOptPreTest(func(t testing.TB, _ context.Context, testID string, _ *integration.StreamTestConfigVars) {
+		integration.StreamTestOptPreTest(func(t testing.TB, _ context.Context, vars *integration.StreamTestConfigVars) {
 			js, err := jetstream.New(natsConn)
 			require.NoError(t, err)
 
-			bucketName := "bucket-" + testID
+			bucketName := "bucket-" + vars.ID
 
 			_, err = js.CreateKeyValue(context.Background(), jetstream.KeyValueConfig{
 				Bucket: bucketName,
@@ -107,11 +121,11 @@ cache_resources:
 		)
 		suite.Run(
 			t, template,
-			integration.CacheTestOptPreTest(func(t testing.TB, _ context.Context, testID string, _ *integration.CacheTestConfigVars) {
+			integration.CacheTestOptPreTest(func(t testing.TB, _ context.Context, vars *integration.CacheTestConfigVars) {
 				js, err := jetstream.New(natsConn)
 				require.NoError(t, err)
 
-				bucketName := "bucket-" + testID
+				bucketName := "bucket-" + vars.ID
 
 				_, err = js.CreateKeyValue(context.Background(), jetstream.KeyValueConfig{
 					Bucket: bucketName,

@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package aws
 
 import (
@@ -14,11 +28,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
-	"github.com/benthosdev/benthos/v4/internal/value"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
+	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/aws/config"
 )
 
 const (
@@ -138,16 +151,16 @@ func s3oOutputSpec() *service.ConfigSpec {
 		Version("3.36.0").
 		Categories("Services", "AWS").
 		Summary(`Sends message parts as objects to an Amazon S3 bucket. Each object is uploaded with the path specified with the `+"`path`"+` field.`).
-		Description(output.Description(true, false, `
-In order to have a different path for each object you should use function interpolations described [here](/docs/configuration/interpolation#bloblang-queries), which are calculated per message of a batch.
+		Description(`
+In order to have a different path for each object you should use function interpolations described in xref:configuration:interpolation.adoc#bloblang-queries[Bloblang queries], which are calculated per message of a batch.
 
-### Metadata
+== Metadata
 
-Metadata fields on messages will be sent as headers, in order to mutate these values (or remove them) check out the [metadata docs](/docs/configuration/metadata).
+Metadata fields on messages will be sent as headers, in order to mutate these values (or remove them) check out the xref:configuration:metadata.adoc[metadata docs].
 
-### Tags
+== Tags
 
-The tags field allows you to specify key/value pairs to attach to objects as tags, where the values support [interpolation functions](/docs/configuration/interpolation#bloblang-queries):
+The tags field allows you to specify key/value pairs to attach to objects as tags, where the values support xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions]:
 
 `+"```yaml"+`
 output:
@@ -159,13 +172,13 @@ output:
       Timestamp: ${!meta("Timestamp")}
 `+"```"+`
 
-### Credentials
+=== Credentials
 
-By default Benthos will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more [in this document](/docs/guides/cloud/aws).
+By default Redpanda Connect will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more in xref:guides:cloud/aws.adoc[].
 
-### Batching
+== Batching
 
-It's common to want to upload messages to S3 as batched archives, the easiest way to do this is to batch your messages at the output level and join the batch of messages with an `+"[`archive`](/docs/components/processors/archive)"+` and/or `+"[`compress`](/docs/components/processors/compress)"+` processor.
+It's common to want to upload messages to S3 as batched archives, the easiest way to do this is to batch your messages at the output level and join the batch of messages with an `+"xref:components:processors/archive.adoc[`archive`]"+` and/or `+"xref:components:processors/compress.adoc[`compress`]"+` processor.
 
 For example, if we wished to upload messages as a .tar.gz archive of documents we could achieve that with the following config:
 
@@ -196,7 +209,7 @@ output:
       processors:
         - archive:
             format: json_array
-`+"```"+``)).
+`+"```"+``+service.OutputPerformanceDocs(true, false)).
 		Fields(
 			service.NewStringField(s3oFieldBucket).
 				Description("The bucket to upload messages to."),
@@ -316,7 +329,7 @@ func (a *amazonS3Writer) Connect(ctx context.Context) error {
 
 func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg service.MessageBatch) error {
 	if a.uploader == nil {
-		return component.ErrNotConnected
+		return service.ErrNotConnected
 	}
 
 	ctx, cancel := context.WithTimeout(wctx, a.conf.Timeout)
@@ -325,7 +338,7 @@ func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg service.MessageBat
 	return msg.WalkWithBatchedErrors(func(i int, m *service.Message) error {
 		metadata := map[string]string{}
 		_ = a.conf.Metadata.WalkMut(m, func(k string, v any) error {
-			metadata[k] = value.IToString(v)
+			metadata[k] = bloblang.ValueToString(v)
 			return nil
 		})
 

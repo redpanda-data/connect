@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package kafka
 
 import (
@@ -7,8 +21,9 @@ import (
 
 	"github.com/IBM/sarama"
 
-	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/aws/config"
 
 	"github.com/twmb/franz-go/pkg/sasl"
 	"github.com/twmb/franz-go/pkg/sasl/oauth"
@@ -23,7 +38,8 @@ func notImportedAWSFn(c *service.ParsedConfig) (sasl.Mechanism, error) {
 // AWSSASLFromConfigFn is populated with the child `aws` package when imported.
 var AWSSASLFromConfigFn = notImportedAWSFn
 
-func saslField() *service.ConfigField {
+// SASLFields returns the SASL config fields.
+func SASLFields() *service.ConfigField {
 	return service.NewObjectListField("sasl",
 		service.NewStringAnnotatedEnumField("mechanism", map[string]string{
 			"none":          "Disable sasl authentication",
@@ -63,7 +79,8 @@ func saslField() *service.ConfigField {
 		)
 }
 
-func saslMechanismsFromConfig(c *service.ParsedConfig) ([]sasl.Mechanism, error) {
+// SASLMechanismsFromConfig constructs a sasl.Mechanism slice from a parsed config.
+func SASLMechanismsFromConfig(c *service.ParsedConfig) ([]sasl.Mechanism, error) {
 	if !c.Contains("sasl") {
 		return nil, nil
 	}
@@ -205,7 +222,7 @@ func SaramaSASLField() *service.ConfigField {
 		service.NewStringAnnotatedEnumField(saramaFieldSASLMechanism,
 			map[string]string{
 				"none":          "Default, no SASL authentication.",
-				"PLAIN":         "Plain text authentication. NOTE: When using plain text auth it is extremely likely that you'll also need to [enable TLS](#tlsenabled).",
+				"PLAIN":         "Plain text authentication. NOTE: When using plain text auth it is extremely likely that you'll also need to <<tls-enabled, enable TLS>>.",
 				"OAUTHBEARER":   "OAuth Bearer based authentication.",
 				"SCRAM-SHA-256": "Authentication using the SCRAM-SHA-256 mechanism.",
 				"SCRAM-SHA-512": "Authentication using the SCRAM-SHA-512 mechanism.",
@@ -225,7 +242,7 @@ func SaramaSASLField() *service.ConfigField {
 			Description("A static OAUTHBEARER access token").
 			Default(""),
 		service.NewStringField(saramaFieldSASLTokenCache).
-			Description("Instead of using a static `access_token` allows you to query a [`cache`](/docs/components/caches/about) resource to fetch OAUTHBEARER tokens from").
+			Description("Instead of using a static `access_token` allows you to query a xref:components:caches/about.adoc[`cache`] resource to fetch OAUTHBEARER tokens from").
 			Default(""),
 		service.NewStringField(saramaFieldSASLTokenKey).
 			Description("Required when using a `token_cache`, the key to query the cache with for tokens.").

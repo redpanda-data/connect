@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package kafka
 
 import (
@@ -13,7 +27,7 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/sasl"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func franzKafkaOutputConfig() *service.ConfigSpec {
@@ -21,7 +35,7 @@ func franzKafkaOutputConfig() *service.ConfigSpec {
 		Beta().
 		Categories("Services").
 		Version("3.61.0").
-		Summary("A Kafka output using the [Franz Kafka client library](https://github.com/twmb/franz-go).").
+		Summary("A Kafka output using the https://github.com/twmb/franz-go[Franz Kafka client library^].").
 		Description(`
 Writes a batch of messages to Kafka brokers and waits for acknowledgement before propagating it back to the input.
 
@@ -82,7 +96,13 @@ This output often out-performs the traditional ` + "`kafka`" + ` output as well 
 			Optional().
 			Advanced()).
 		Field(service.NewTLSToggledField("tls")).
-		Field(saslField()).
+		Field(SASLFields()).
+		Field(service.NewInterpolatedStringField("timestamp").
+			Description("An optional timestamp to set for each message. When left empty, the current timestamp is used.").
+			Example(`${! timestamp_unix() }`).
+			Example(`${! metadata("kafka_timestamp_unix") }`).
+			Optional().
+			Advanced()).
 		LintRule(`
 root = if this.partitioner == "manual" {
   if this.partition.or("") == "" {
@@ -119,10 +139,10 @@ func init() {
 
 type franzKafkaWriter struct {
 	seedBrokers      []string
-	topicStr         string
 	topic            *service.InterpolatedString
 	key              *service.InterpolatedString
 	partition        *service.InterpolatedString
+	timestamp        *service.InterpolatedString
 	clientID         string
 	rackID           string
 	idempotentWrite  bool
@@ -155,7 +175,6 @@ func newFranzKafkaWriterFromConfig(conf *service.ParsedConfig, log *service.Logg
 	if f.topic, err = conf.FieldInterpolatedString("topic"); err != nil {
 		return nil, err
 	}
-	f.topicStr, _ = conf.FieldString("topic")
 
 	if conf.Contains("key") {
 		if f.key, err = conf.FieldInterpolatedString("key"); err != nil {
@@ -257,8 +276,14 @@ func newFranzKafkaWriterFromConfig(conf *service.ParsedConfig, log *service.Logg
 	if tlsEnabled {
 		f.tlsConf = tlsConf
 	}
-	if f.saslConfs, err = saslMechanismsFromConfig(conf); err != nil {
+	if f.saslConfs, err = SASLMechanismsFromConfig(conf); err != nil {
 		return nil, err
+	}
+
+	if conf.Contains("timestamp") {
+		if f.timestamp, err = conf.FieldInterpolatedString("timestamp"); err != nil {
+			return nil, err
+		}
 	}
 
 	return &f, nil
@@ -279,7 +304,7 @@ func (f *franzKafkaWriter) Connect(ctx context.Context) error {
 		kgo.ProduceRequestTimeout(f.timeout),
 		kgo.ClientID(f.clientID),
 		kgo.Rack(f.rackID),
-		kgo.WithLogger(&kgoLogger{f.log}),
+		kgo.WithLogger(&KGoLogger{f.log}),
 	}
 	if f.tlsConf != nil {
 		clientOpts = append(clientOpts, kgo.DialTLSConfig(f.tlsConf))
@@ -342,6 +367,17 @@ func (f *franzKafkaWriter) WriteBatch(ctx context.Context, b service.MessageBatc
 			})
 			return nil
 		})
+		if f.timestamp != nil {
+			if tsStr, err := b.TryInterpolatedString(i, f.timestamp); err != nil {
+				return fmt.Errorf("timestamp interpolation error: %w", err)
+			} else {
+				if ts, err := strconv.ParseInt(tsStr, 10, 64); err != nil {
+					return fmt.Errorf("failed to parse timestamp: %w", err)
+				} else {
+					record.Timestamp = time.Unix(ts, 0)
+				}
+			}
+		}
 		records = append(records, record)
 	}
 

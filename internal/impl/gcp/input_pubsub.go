@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package gcp
 
 import (
@@ -9,8 +23,7 @@ import (
 	"cloud.google.com/go/pubsub"
 	"google.golang.org/api/option"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -74,19 +87,17 @@ func pbiSpec() *service.ConfigSpec {
 		Categories("Services", "GCP").
 		Summary(`Consumes messages from a GCP Cloud Pub/Sub subscription.`).
 		Description(`
-For information on how to set up credentials check out [this guide](https://cloud.google.com/docs/authentication/production).
+For information on how to set up credentials see https://cloud.google.com/docs/authentication/production[this guide^].
 
-### Metadata
+== Metadata
 
 This input adds the following metadata fields to each message:
 
-`+"``` text"+`
 - gcp_pubsub_publish_time_unix - The time at which the message was published to the topic.
 - gcp_pubsub_delivery_attempt - When dead lettering is enabled, this is set to the number of times PubSub has attempted to deliver a message.
 - All message attributes
-`+"```"+`
 
-You can access these metadata fields using [function interpolation](/docs/configuration/interpolation#bloblang-queries).
+You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
 `).
 		Fields(
 			service.NewStringField(pbiFieldProjectID).
@@ -94,7 +105,7 @@ You can access these metadata fields using [function interpolation](/docs/config
 			service.NewStringField(pbiFieldSubscriptionID).
 				Description("The target subscription ID."),
 			service.NewStringField(pbiFieldEndpoint).
-				Description("An optional endpoint to override the default of `pubsub.googleapis.com:443`. This can be used to connect to a region specific pubsub endpoint. For a list of valid values check out [this document.](https://cloud.google.com/pubsub/docs/reference/service_apis_overview#list_of_regional_endpoints)").
+				Description("An optional endpoint to override the default of `pubsub.googleapis.com:443`. This can be used to connect to a region specific pubsub endpoint. For a list of valid values, see https://cloud.google.com/pubsub/docs/reference/service_apis_overview#list_of_regional_endpoints[this document^].").
 				Example("us-central1-pubsub.googleapis.com:443").
 				Example("us-west3-pubsub.googleapis.com:443").
 				Default(""),
@@ -250,7 +261,7 @@ func (c *gcpPubSubReader) Read(ctx context.Context) (*service.Message, service.A
 	select {
 	case gmsg, open = <-msgsChan:
 	case <-ctx.Done():
-		return nil, nil, component.ErrTimeout
+		return nil, nil, ctx.Err()
 	}
 	if !open {
 		return nil, nil, service.ErrNotConnected

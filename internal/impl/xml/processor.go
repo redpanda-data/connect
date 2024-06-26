@@ -1,10 +1,24 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package xml
 
 import (
 	"context"
 	"fmt"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -12,16 +26,15 @@ const (
 	pFieldCast     = "cast"
 )
 
-func init() {
-	err := service.RegisterProcessor(
-		"xml", service.NewConfigSpec().
-			Categories("Parsing").
-			Beta().
-			Summary(`Parses messages as an XML document, performs a mutation on the data, and then overwrites the previous contents with the new value.`).
-			Description(`
-## Operators
+func xmlProcSpec() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Categories("Parsing").
+		Beta().
+		Summary(`Parses messages as an XML document, performs a mutation on the data, and then overwrites the previous contents with the new value.`).
+		Description(`
+== Operators
 
-### `+"`to_json`"+`
+=== `+"`to_json`"+`
 
 Converts an XML document into a JSON structure, where elements appear as keys of an object according to the following rules:
 
@@ -79,26 +92,21 @@ With cast set to true, the resulting JSON structure would look like this:
   }
 }
 `+"```").
-			Fields(
-				service.NewStringEnumField(pFieldOperator, "to_json").
-					Description("An XML [operation](#operators) to apply to messages.").
-					Default(""),
-				service.NewBoolField(pFieldCast).
-					Description("Whether to try to cast values that are numbers and booleans to the right type. Default: all values are strings.").
-					Default(false),
-			),
+		Fields(
+			service.NewStringEnumField(pFieldOperator, "to_json").
+				Description("An XML <<operators, operation>> to apply to messages.").
+				Default(""),
+			service.NewBoolField(pFieldCast).
+				Description("Whether to try to cast values that are numbers and booleans to the right type. Default: all values are strings.").
+				Default(false),
+		)
+}
+
+func init() {
+	err := service.RegisterProcessor(
+		"xml", xmlProcSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-			op, err := conf.FieldString(pFieldOperator)
-			if err != nil {
-				return nil, err
-			}
-
-			cast, err := conf.FieldBool(pFieldCast)
-			if err != nil {
-				return nil, err
-			}
-
-			return newXML(op, cast, mgr)
+			return xmlProcFromParsed(conf, mgr)
 		})
 	if err != nil {
 		panic(err)
@@ -110,10 +118,20 @@ type xmlProc struct {
 	cast bool
 }
 
-func newXML(operator string, cast bool, mgr *service.Resources) (*xmlProc, error) {
+func xmlProcFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (*xmlProc, error) {
+	operator, err := pConf.FieldString(pFieldOperator)
+	if err != nil {
+		return nil, err
+	}
 	if operator != "to_json" {
 		return nil, fmt.Errorf("operator not recognised: %v", operator)
 	}
+
+	cast, err := pConf.FieldBool(pFieldCast)
+	if err != nil {
+		return nil, err
+	}
+
 	j := &xmlProc{
 		log:  mgr.Logger(),
 		cast: cast,

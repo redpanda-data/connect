@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package kafka
 
 import (
@@ -14,10 +28,8 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"golang.org/x/sync/syncmap"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/component/output/span"
-	"github.com/benthosdev/benthos/v4/internal/value"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -45,6 +57,7 @@ const (
 	oskFieldBatching                     = "batching"
 	oskFieldMaxRetries                   = "max_retries"
 	oskFieldBackoff                      = "backoff"
+	oskFieldTimestamp                    = "timestamp"
 )
 
 // OSKConfigSpec creates a new config spec for a kafka output.
@@ -53,28 +66,28 @@ func OSKConfigSpec() *service.ConfigSpec {
 		Stable().
 		Categories("Services").
 		Summary(`The kafka output type writes a batch of messages to Kafka brokers and waits for acknowledgement before propagating it back to the input.`).
-		Description(output.Description(true, true, `
+		Description(`
 The config field `+"`ack_replicas`"+` determines whether we wait for acknowledgement from all replicas or just a single broker.
 
-Both the `+"`key` and `topic`"+` fields can be dynamically set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries).
+Both the `+"`key` and `topic`"+` fields can be dynamically set using function interpolations described in xref:configuration:interpolation.adoc#bloblang-queries[Bloblang queries].
 
-[Metadata](/docs/configuration/metadata) will be added to each message sent as headers (version 0.11+), but can be restricted using the field `+"[`metadata`](#metadata)"+`.
+xref:configuration:metadata.adoc[Metadata] will be added to each message sent as headers (version 0.11+), but can be restricted using the field `+"<<metadata, `metadata`>>"+`.
 
-### Strict Ordering and Retries
+== Strict ordering and retries
 
 When strict ordering is required for messages written to topic partitions it is important to ensure that both the field `+"`max_in_flight` is set to `1` and that the field `retry_as_batch` is set to `true`"+`.
 
 You must also ensure that failed batches are never rerouted back to the same output. This can be done by setting the field `+"`max_retries` to `0` and `backoff.max_elapsed_time`"+` to empty, which will apply back pressure indefinitely until the batch is sent successfully.
 
-However, this also means that manual intervention will eventually be required in cases where the batch cannot be sent due to configuration problems such as an incorrect `+"`max_msg_bytes`"+` estimate. A less strict but automated alternative would be to route failed batches to a dead letter queue using a `+"[`fallback` broker](/docs/components/outputs/fallback)"+`, but this would allow subsequent batches to be delivered in the meantime whilst those failed batches are dealt with.
+However, this also means that manual intervention will eventually be required in cases where the batch cannot be sent due to configuration problems such as an incorrect `+"`max_msg_bytes`"+` estimate. A less strict but automated alternative would be to route failed batches to a dead letter queue using a `+"xref:components:outputs/fallback.adoc[`fallback` broker]"+`, but this would allow subsequent batches to be delivered in the meantime whilst those failed batches are dealt with.
 
-### Troubleshooting
+== Troubleshooting
 
-If you're seeing issues writing to or reading from Kafka with this component then it's worth trying out the newer `+"[`kafka_franz` output](/docs/components/outputs/kafka_franz)"+`.
+If you're seeing issues writing to or reading from Kafka with this component then it's worth trying out the newer `+"xref:components:outputs/kafka_franz.adoc[`kafka_franz` output]"+`.
 
 - I'm seeing logs that report `+"`Failed to connect to kafka: kafka: client has run out of available brokers to talk to (Is your cluster reachable?)`"+`, but the brokers are definitely reachable.
 
-Unfortunately this error message will appear for a wide range of connection problems even when the broker endpoint can be reached. Double check your authentication configuration and also ensure that you have [enabled TLS](#tlsenabled) if applicable.`)).
+Unfortunately this error message will appear for a wide range of connection problems even when the broker endpoint can be reached. Double check your authentication configuration and also ensure that you have <<tlsenabled, enabled TLS>> if applicable.`+service.OutputPerformanceDocs(true, true)).
 		Fields(
 			service.NewStringListField(oskFieldAddresses).
 				Description("A list of broker addresses to connect to. If an item of the list contains commas it will be expanded into multiple addresses.").
@@ -126,7 +139,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 				Optional(),
 			service.NewMetadataExcludeFilterField(oskFieldMetadata).
 				Description("Specify criteria for which metadata values are sent with messages as headers."),
-			span.InjectTracingSpanMappingDocs(),
+			service.NewInjectTracingSpanMappingField(),
 			service.NewOutputMaxInFlightField(),
 			service.NewBoolField(oskFieldIdempotentWrite).
 				Description("Enable the idempotent write producer option. This requires the `IDEMPOTENT_WRITE` permission on `CLUSTER` and can be disabled if this permission is not available.").
@@ -153,6 +166,12 @@ Unfortunately this error message will appear for a wide range of connection prob
 				MaxInterval:     time.Second * 10,
 				MaxElapsedTime:  time.Second * 30,
 			}).Description("Control time intervals between retry attempts.").Advanced(),
+			service.NewInterpolatedStringField(oskFieldTimestamp).
+				Description("An optional timestamp to set for each message. When left empty, the current timestamp is used.").
+				Example(`${! timestamp_unix() }`).
+				Example(`${! metadata("kafka_timestamp_unix") }`).
+				Optional().
+				Advanced(),
 		)
 }
 
@@ -170,7 +189,7 @@ func init() {
 			return
 		}
 
-		o, err = span.NewBatchOutput("kafka", conf, o, mgr)
+		o, err = conf.WrapBatchOutputExtractTracingSpanMapping("kafka", o)
 		return
 	})
 	if err != nil {
@@ -185,6 +204,7 @@ type kafkaWriter struct {
 	key           *service.InterpolatedString
 	topic         *service.InterpolatedString
 	partition     *service.InterpolatedString
+	timestamp     *service.InterpolatedString
 	staticHeaders map[string]string
 	metaFilter    *service.MetadataExcludeFilter
 	retryAsBatch  bool
@@ -296,6 +316,12 @@ func NewKafkaWriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources
 		return nil, err
 	}
 
+	if conf.Contains("timestamp") {
+		if k.timestamp, err = conf.FieldInterpolatedString("timestamp"); err != nil {
+			return nil, err
+		}
+	}
+
 	return &k, nil
 }
 
@@ -347,7 +373,7 @@ func (k *kafkaWriter) buildSystemHeaders(part *service.Message) []sarama.RecordH
 		_ = k.metaFilter.Walk(part, func(k, v string) error {
 			out = append(out, sarama.RecordHeader{
 				Key:   []byte(k),
-				Value: []byte(value.IToString(v)),
+				Value: []byte(bloblang.ValueToString(v)),
 			})
 			return nil
 		})
@@ -536,6 +562,19 @@ func (k *kafkaWriter) WriteBatch(ctx context.Context, msg service.MessageBatch) 
 			// samara requires a 32-bit integer for the partition field
 			nextMsg.Partition = int32(partitionInt)
 		}
+
+		if k.timestamp != nil {
+			if tsStr, err := msg.TryInterpolatedString(i, k.timestamp); err != nil {
+				return fmt.Errorf("timestamp interpolation error: %w", err)
+			} else {
+				if ts, err := strconv.ParseInt(tsStr, 10, 64); err != nil {
+					return fmt.Errorf("failed to parse timestamp: %w", err)
+				} else {
+					nextMsg.Timestamp = time.Unix(ts, 0)
+				}
+			}
+		}
+
 		msgs = append(msgs, nextMsg)
 	}
 

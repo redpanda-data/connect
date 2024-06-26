@@ -1,27 +1,24 @@
 pipeline:
   processors:
-  - bloblang: |
-      root = this
-      fans = fans.map_each(match {
-        this.obsession > 0.5 => this
-        _ => deleted()
-      })
+  - mutation: |
+      root.fans = this.fans.filter(fan -> fan.obsession > 0.5)
 
 tests:
   - name: Bloblang fans test
-    environment: {}
-    target_processors: /pipeline/processors
     input_batch:
-      - content: |
-          {
-            "id":"foo",
-            "fans":[
-              {"name":"bev","obsession":0.57},
-              {"name":"grace","obsession":0.21},
-              {"name":"ali","obsession":0.89},
-              {"name":"vic","obsession":0.43}
-            ]
-          }
+      - json_content:
+          id: foo
+          fans:
+            - {"name":"bev","obsession":0.57}
+            - {"name":"grace","obsession":0.21}
+            - {"name":"ali","obsession":0.89}
+            - {"name":"vic","obsession":0.43}
     output_batches:
-      - - content_equals: |
-            {"fans":[{"name":"bev","obsession":0.57},{"name":"ali","obsession":0.89}],"id":"foo"}
+      - - json_equals:
+            id: foo
+            fans:
+              - {"name":"bev","obsession":0.57}
+              - {"name":"ali","obsession":0.89}
+
+
+

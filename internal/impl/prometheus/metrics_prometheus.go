@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package prometheus
 
 import (
@@ -14,8 +28,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/push"
 	"github.com/prometheus/common/model"
 
-	"github.com/benthosdev/benthos/v4/internal/component/metrics"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -35,16 +48,16 @@ const (
 	pmFieldFileOutputPath              = "file_output_path"
 )
 
-func ConfigSpec() *service.ConfigSpec {
+func configSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Summary("Host endpoints (`/metrics` and `/stats`) for Prometheus scraping.").
 		Footnotes(`
-## Push Gateway
+== Push gateway
 
-The field `+"`push_url`"+` is optional and when set will trigger a push of metrics to a [Prometheus Push Gateway](https://prometheus.io/docs/instrumenting/pushing/) once Benthos shuts down. It is also possible to specify a `+"`push_interval`"+` which results in periodic pushes.
+The field `+"`push_url`"+` is optional and when set will trigger a push of metrics to a https://prometheus.io/docs/instrumenting/pushing/[Prometheus Push Gateway^] once Redpanda Connect shuts down. It is also possible to specify a `+"`push_interval`"+` which results in periodic pushes.
 
-The Push Gateway is useful for when Benthos instances are short lived. Do not include the "/metrics/jobs/..." path in the push URL.
+The Push Gateway is useful for when Redpanda Connect instances are short lived. Do not include the "/metrics/jobs/..." path in the push URL.
 
 If the Push Gateway requires HTTP Basic Authentication it can be configured with `+"`push_basic_auth`.").
 		Fields(
@@ -80,15 +93,15 @@ If the Push Gateway requires HTTP Basic Authentication it can be configured with
 					{"quantile": 0.99, "error": 0.001},
 				}),
 			service.NewBoolField(pmFieldAddProcessMetrics).
-				Description("Whether to export process metrics such as CPU and memory usage in addition to Benthos metrics.").
+				Description("Whether to export process metrics such as CPU and memory usage in addition to Redpanda Connect metrics.").
 				Advanced().
 				Default(false),
 			service.NewBoolField(pmFieldAddGoMetrics).
-				Description("Whether to export Go runtime metrics such as GC pauses in addition to Benthos metrics.").
+				Description("Whether to export Go runtime metrics such as GC pauses in addition to Redpanda Connect metrics.").
 				Advanced().
 				Default(false),
 			service.NewURLField(pmFieldPushURL).
-				Description("An optional [Push Gateway URL](#push-gateway) to push metrics to.").
+				Description("An optional <<push-gateway, Push Gateway URL>> to push metrics to.").
 				Advanced().
 				Optional(),
 			service.NewDurationField(pmFieldPushInterval).
@@ -118,9 +131,9 @@ If the Push Gateway requires HTTP Basic Authentication it can be configured with
 
 func init() {
 	err := service.RegisterMetricsExporter(
-		"prometheus", ConfigSpec(),
+		"prometheus", configSpec(),
 		func(conf *service.ParsedConfig, log *service.Logger) (service.MetricsExporter, error) {
-			return FromParsed(conf, log)
+			return fromParsed(conf, log)
 		})
 	if err != nil {
 		panic(err)
@@ -189,7 +202,7 @@ type promCounterVec struct {
 	count int
 }
 
-func (p *promCounterVec) With(labelValues ...string) metrics.StatCounter {
+func (p *promCounterVec) With(labelValues ...string) service.MetricsExporterCounter {
 	return &promCounter{
 		ctr: p.ctr.WithLabelValues(labelValues...),
 	}
@@ -200,7 +213,7 @@ type promTimingVec struct {
 	count int
 }
 
-func (p *promTimingVec) With(labelValues ...string) metrics.StatTimer {
+func (p *promTimingVec) With(labelValues ...string) service.MetricsExporterTimer {
 	return &promTiming{
 		sum: p.sum.WithLabelValues(labelValues...),
 	}
@@ -211,7 +224,7 @@ type promTimingHistVec struct {
 	count int
 }
 
-func (p *promTimingHistVec) With(labelValues ...string) metrics.StatTimer {
+func (p *promTimingHistVec) With(labelValues ...string) service.MetricsExporterTimer {
 	return &promTiming{
 		asSeconds: true,
 		sum:       p.sum.WithLabelValues(labelValues...),
@@ -223,7 +236,7 @@ type promGaugeVec struct {
 	count int
 }
 
-func (p *promGaugeVec) With(labelValues ...string) metrics.StatGauge {
+func (p *promGaugeVec) With(labelValues ...string) service.MetricsExporterGauge {
 	return &promGauge{
 		ctr: p.ctr.WithLabelValues(labelValues...),
 	}
@@ -231,7 +244,7 @@ func (p *promGaugeVec) With(labelValues ...string) metrics.StatGauge {
 
 //------------------------------------------------------------------------------
 
-type Metrics struct {
+type metrics struct {
 	log        *service.Logger
 	closedChan chan struct{}
 	running    int32
@@ -269,8 +282,8 @@ func quantilesAsFloatMapFromParsed(confs []*service.ParsedConfig) (map[float64]f
 	return resultFloatMap, nil
 }
 
-func FromParsed(conf *service.ParsedConfig, log *service.Logger) (p *Metrics, err error) {
-	p = &Metrics{
+func fromParsed(conf *service.ParsedConfig, log *service.Logger) (p *metrics, err error) {
+	p = &metrics{
 		log:        log,
 		running:    1,
 		closedChan: make(chan struct{}),
@@ -353,17 +366,17 @@ func FromParsed(conf *service.ParsedConfig, log *service.Logger) (p *Metrics, er
 
 //------------------------------------------------------------------------------
 
-func (p *Metrics) HandlerFunc() http.HandlerFunc {
+func (p *metrics) HandlerFunc() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		promhttp.HandlerFor(p.reg, promhttp.HandlerOpts{}).ServeHTTP(w, r)
 	}
 }
 
-func (p *Metrics) NewCounterCtor(path string, labelNames ...string) service.MetricsExporterCounterCtor {
+func (p *metrics) NewCounterCtor(path string, labelNames ...string) service.MetricsExporterCounterCtor {
 	if !model.IsValidMetricName(model.LabelValue(path)) {
 		p.log.Errorf("Ignoring metric '%v' due to invalid name", path)
 		return func(labelValues ...string) service.MetricsExporterCounter {
-			return metrics.DudStat{}
+			return noopStat{}
 		}
 	}
 
@@ -389,7 +402,7 @@ func (p *Metrics) NewCounterCtor(path string, labelNames ...string) service.Metr
 	if pv.count != len(labelNames) {
 		p.log.Errorf("Metrics label mismatch %v versus %v %v for name '%v', skipping metric", pv.count, len(labelNames), labelNames, path)
 		return func(labelValues ...string) service.MetricsExporterCounter {
-			return metrics.DudStat{}
+			return noopStat{}
 		}
 	}
 	return func(labelValues ...string) service.MetricsExporterCounter {
@@ -397,11 +410,11 @@ func (p *Metrics) NewCounterCtor(path string, labelNames ...string) service.Metr
 	}
 }
 
-func (p *Metrics) NewTimerCtor(path string, labelNames ...string) service.MetricsExporterTimerCtor {
+func (p *metrics) NewTimerCtor(path string, labelNames ...string) service.MetricsExporterTimerCtor {
 	if !model.IsValidMetricName(model.LabelValue(path)) {
 		p.log.Errorf("Ignoring metric '%v' due to invalid name", path)
 		return func(labelValues ...string) service.MetricsExporterTimer {
-			return metrics.DudStat{}
+			return noopStat{}
 		}
 	}
 
@@ -432,7 +445,7 @@ func (p *Metrics) NewTimerCtor(path string, labelNames ...string) service.Metric
 	if pv.count != len(labelNames) {
 		p.log.Errorf("Metrics label mismatch %v versus %v %v for name '%v', skipping metric", pv.count, len(labelNames), labelNames, path)
 		return func(labelValues ...string) service.MetricsExporterTimer {
-			return metrics.DudStat{}
+			return noopStat{}
 		}
 	}
 	return func(labelValues ...string) service.MetricsExporterTimer {
@@ -440,7 +453,7 @@ func (p *Metrics) NewTimerCtor(path string, labelNames ...string) service.Metric
 	}
 }
 
-func (p *Metrics) getTimerHistVec(path string, labelNames ...string) service.MetricsExporterTimerCtor {
+func (p *metrics) getTimerHistVec(path string, labelNames ...string) service.MetricsExporterTimerCtor {
 	var pv *promTimingHistVec
 
 	p.mut.Lock()
@@ -464,7 +477,7 @@ func (p *Metrics) getTimerHistVec(path string, labelNames ...string) service.Met
 	if pv.count != len(labelNames) {
 		p.log.Errorf("Metrics label mismatch %v versus %v %v for name '%v', skipping metric", pv.count, len(labelNames), labelNames, path)
 		return func(labelValues ...string) service.MetricsExporterTimer {
-			return metrics.DudStat{}
+			return noopStat{}
 		}
 	}
 	return func(labelValues ...string) service.MetricsExporterTimer {
@@ -472,11 +485,11 @@ func (p *Metrics) getTimerHistVec(path string, labelNames ...string) service.Met
 	}
 }
 
-func (p *Metrics) NewGaugeCtor(path string, labelNames ...string) service.MetricsExporterGaugeCtor {
+func (p *metrics) NewGaugeCtor(path string, labelNames ...string) service.MetricsExporterGaugeCtor {
 	if !model.IsValidMetricName(model.LabelValue(path)) {
 		p.log.Errorf("Ignoring metric '%v' due to invalid name", path)
 		return func(labelValues ...string) service.MetricsExporterGauge {
-			return &metrics.DudStat{}
+			return &noopStat{}
 		}
 	}
 
@@ -502,7 +515,7 @@ func (p *Metrics) NewGaugeCtor(path string, labelNames ...string) service.Metric
 	if pv.count != len(labelNames) {
 		p.log.Errorf("Metrics label mismatch %v versus %v %v for name '%v', skipping metric", pv.count, len(labelNames), labelNames, path)
 		return func(labelValues ...string) service.MetricsExporterGauge {
-			return metrics.DudStat{}
+			return noopStat{}
 		}
 	}
 	return func(labelValues ...string) service.MetricsExporterGauge {
@@ -510,7 +523,7 @@ func (p *Metrics) NewGaugeCtor(path string, labelNames ...string) service.Metric
 	}
 }
 
-func (p *Metrics) Close(context.Context) error {
+func (p *metrics) Close(context.Context) error {
 	if atomic.CompareAndSwapInt32(&p.running, 1, 0) {
 		close(p.closedChan)
 	}
@@ -526,3 +539,15 @@ func (p *Metrics) Close(context.Context) error {
 
 	return nil
 }
+
+//------------------------------------------------------------------------------
+
+type noopStat struct{}
+
+func (n noopStat) Incr(count int64)          {}
+func (n noopStat) Decr(count int64)          {}
+func (n noopStat) Timing(delta int64)        {}
+func (n noopStat) Set(value int64)           {}
+func (n noopStat) SetFloat64(value float64)  {}
+func (n noopStat) IncrFloat64(count float64) {}
+func (n noopStat) DecrFloat64(count float64) {}

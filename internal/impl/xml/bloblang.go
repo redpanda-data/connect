@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package xml
 
 import (
@@ -6,14 +20,13 @@ import (
 
 	"github.com/clbanning/mxj/v2"
 
-	"github.com/benthosdev/benthos/v4/internal/bloblang/query"
-	"github.com/benthosdev/benthos/v4/public/bloblang"
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
 )
 
 func init() {
 	if err := bloblang.RegisterMethodV2("parse_xml",
 		bloblang.NewPluginSpec().
-			Category(query.MethodCategoryParsing).
+			Category("Parsing").
 			Description(`
 Attempts to parse a string as an XML document and returns a structured result, where elements appear as keys of an object according to the following rules:
 
@@ -60,7 +73,7 @@ Attempts to parse a string as an XML document and returns a structured result, w
 
 	if err := bloblang.RegisterMethodV2("format_xml",
 		bloblang.NewPluginSpec().
-			Category(query.MethodCategoryParsing).
+			Category("Parsing").
 			Description(`
 Serializes a target value into an XML byte array.
 `).

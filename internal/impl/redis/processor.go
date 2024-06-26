@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package redis
 
 import (
@@ -10,15 +24,15 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"github.com/benthosdev/benthos/v4/public/bloblang"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func redisProcConfig() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
 		Stable().
-		Summary(`Performs actions against Redis that aren't possible using a ` + "[`cache`](/docs/components/processors/cache)" + ` processor. Actions are
-performed for each message and the message contents are replaced with the result. In order to merge the result into the original message compose this processor within a ` + "[`branch` processor](/docs/components/processors/branch)" + `.`).
+		Summary(`Performs actions against Redis that aren't possible using a ` + "xef:components:processors/cache.adoc[`cache`]" + ` processor. Actions are
+performed for each message and the message contents are replaced with the result. In order to merge the result into the original message compose this processor within a ` + "xref:components:processors/branch.adoc[`branch` processor]" + `.`).
 		Categories("Integration")
 
 	for _, f := range clientFields() {
@@ -34,7 +48,7 @@ performed for each message and the message contents are replaced with the result
 			Example(`${! meta("command") }`).
 			Optional()).
 		Field(service.NewBloblangField("args_mapping").
-			Description("A [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of values matching in size to the number of arguments required for the specified Redis command.").
+			Description("A xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of arguments required for the specified Redis command.").
 			Version("4.3.0").
 			Optional().
 			Example("root = [ this.key ]").
@@ -65,7 +79,7 @@ performed for each message and the message contents are replaced with the result
   this.exists("args_mapping") && this.exists("operator") => [ "field args_mapping is invalid with an operator set" ],
 }`).
 		Example("Querying Cardinality",
-			`If given payloads containing a metadata field `+"`set_key`"+` it's possible to query and store the cardinality of the set for each message using a `+"[`branch` processor](/docs/components/processors/branch)"+` in order to augment rather than replace the message contents:`,
+			`If given payloads containing a metadata field `+"`set_key`"+` it's possible to query and store the cardinality of the set for each message using a `+"xref:components:processors/branch.adoc[`branch` processor]"+` in order to augment rather than replace the message contents:`,
 			`
 pipeline:
   processors:
@@ -349,6 +363,19 @@ func (r *redisProc) execRaw(ctx context.Context, index int, inBatch service.Mess
 	}
 	if err != nil {
 		return err
+	}
+
+	if structured, ok := res.(map[any]any); ok {
+		m2 := make(map[string]any, len(structured))
+
+		for key, value := range structured {
+			typeCast, ok := key.(string)
+			if !ok {
+				return fmt.Errorf("expected a string, got: %T", key)
+			}
+			m2[typeCast] = value
+		}
+		res = m2
 	}
 
 	msg.SetStructuredMut(res)

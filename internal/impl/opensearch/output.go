@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package opensearch
 
 import (
@@ -14,11 +28,9 @@ import (
 	"github.com/opensearch-project/opensearch-go/v3/opensearchapi"
 	"github.com/opensearch-project/opensearch-go/v3/opensearchutil"
 
-	"github.com/benthosdev/benthos/v4/internal/component"
-	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/internal/httpclient"
-	"github.com/benthosdev/benthos/v4/internal/impl/aws/config"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/aws/config"
 )
 
 const (
@@ -35,7 +47,8 @@ const (
 	esoFieldAuthPassword = "password"
 	esoFieldBatching     = "batching"
 	esoFieldAWS          = "aws"
-	ESOFieldAWSEnabled   = "enabled"
+	// ESOFieldAWSEnabled enabled field.
+	ESOFieldAWSEnabled = "enabled"
 )
 
 func notImportedAWSOptFn(conf *service.ParsedConfig, osconf *opensearchapi.Config) error {
@@ -138,8 +151,8 @@ func OutputSpec() *service.ConfigSpec {
 		Stable().
 		Categories("Services").
 		Summary(`Publishes messages into an Elasticsearch index. If the index does not exist then it is created with a dynamic mapping.`).
-		Description(output.Description(true, true, `
-Both the `+"`id` and `index`"+` fields can be dynamically set using function interpolations described [here](/docs/configuration/interpolation#bloblang-queries). When sending batched messages these interpolations are performed per message part.`)).
+		Description(`
+Both the `+"`id` and `index`"+` fields can be dynamically set using function interpolations described xref:configuration:interpolation.adoc#bloblang-queries[here]. When sending batched messages these interpolations are performed per message part.`+service.OutputPerformanceDocs(true, true)).
 		Fields(
 			service.NewStringListField(esoFieldURLs).
 				Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
@@ -163,11 +176,23 @@ Both the `+"`id` and `index`"+` fields can be dynamically set using function int
 			service.NewOutputMaxInFlightField(),
 		).
 		Fields(
-			httpclient.BasicAuthField(),
+			service.NewObjectField(esoFieldAuth,
+				service.NewBoolField(esoFieldAuthEnabled).
+					Description("Whether to use basic authentication in requests.").
+					Default(false),
+				service.NewStringField(esoFieldAuthUsername).
+					Description("A username to authenticate as.").
+					Default(""),
+				service.NewStringField(esoFieldAuthPassword).
+					Description("A password to authenticate with.").
+					Default("").Secret(),
+			).Description("Allows you to specify basic authentication.").
+				Advanced().
+				Optional(),
 			service.NewBatchPolicyField(esoFieldBatching),
 			AWSField(),
 		).
-		Example("Updating Documents", "When [updating documents](https://opensearch.org/docs/latest/api-reference/document-apis/update-document/) the request body should contain a combination of a `doc`, `upsert`, and/or `script` fields at the top level, this should be done via mapping processors.", `
+		Example("Updating Documents", "When https://opensearch.org/docs/latest/api-reference/document-apis/update-document/[updating documents^] the request body should contain a combination of a `doc`, `upsert`, and/or `script` fields at the top level, this should be done via mapping processors.", `
 output:
   processors:
     - mapping: |
@@ -220,6 +245,7 @@ func OutputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (*Out
 
 //------------------------------------------------------------------------------
 
+// Connect attempts to connect to the server.
 func (e *Output) Connect(ctx context.Context) error {
 	if e.client != nil {
 		return nil
@@ -243,9 +269,10 @@ type pendingBulkIndex struct {
 	ID       string
 }
 
+// WriteBatch writes a message batch to the output.
 func (e *Output) WriteBatch(ctx context.Context, msg service.MessageBatch) error {
 	if e.client == nil {
-		return component.ErrNotConnected
+		return service.ErrNotConnected
 	}
 
 	requests := make([]*pendingBulkIndex, len(msg))
@@ -323,6 +350,7 @@ func (e *Output) WriteBatch(ctx context.Context, msg service.MessageBatch) error
 	return nil
 }
 
+// Close closes the output.
 func (e *Output) Close(context.Context) error {
 	return nil
 }

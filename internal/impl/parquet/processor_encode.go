@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package parquet
 
 import (
@@ -8,14 +22,14 @@ import (
 	"github.com/parquet-go/parquet-go"
 	"github.com/parquet-go/parquet-go/compress"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func parquetEncodeProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		// Stable(). TODO
 		Categories("Parsing").
-		Summary("Encodes [Parquet files](https://parquet.apache.org/docs/) from a batch of structured messages.").
+		Summary("Encodes https://parquet.apache.org/docs/[Parquet files^] from a batch of structured messages.").
 		Field(parquetSchemaConfig()).
 		Field(service.NewStringEnumField("default_compression",
 			"uncompressed", "snappy", "gzip", "brotli", "zstd", "lz4raw",
@@ -30,7 +44,7 @@ func parquetEncodeProcessorConfig() *service.ConfigSpec {
 			Advanced().
 			Version("4.11.0")).
 		Description(`
-This processor uses [https://github.com/parquet-go/parquet-go](https://github.com/parquet-go/parquet-go), which is itself experimental. Therefore changes could be made into how this processor functions outside of major version releases.
+This processor uses https://github.com/parquet-go/parquet-go[https://github.com/parquet-go/parquet-go^], which is itself experimental. Therefore changes could be made into how this processor functions outside of major version releases.
 `).
 		Version("4.4.0").
 		// TODO: Add an example that demonstrates error handling

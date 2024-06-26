@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package redis
 
 import (
@@ -8,8 +22,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"github.com/benthosdev/benthos/v4/internal/component/output"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -23,8 +36,8 @@ func redisHashOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Summary(`Sets Redis hash objects using the HMSET command.`).
-		Description(output.Description(true, false, `
-The field `+"`key`"+` supports [interpolation functions](/docs/configuration/interpolation#bloblang-queries), allowing you to create a unique key for each message.
+		Description(`
+The field `+"`key`"+` supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions], allowing you to create a unique key for each message.
 
 The field `+"`fields`"+` allows you to specify an explicit map of field names to interpolated values, also evaluated per message of a batch:
 
@@ -39,9 +52,9 @@ output:
       content: ${!json("document.text")}
 `+"```"+`
 
-If the field `+"`walk_metadata`"+` is set to `+"`true`"+` then Benthos will walk all metadata fields of messages and add them to the list of hash fields to set.
+If the field `+"`walk_metadata`"+` is set to `+"`true`"+` then Redpanda Connect will walk all metadata fields of messages and add them to the list of hash fields to set.
 
-If the field `+"`walk_json_object`"+` is set to `+"`true`"+` then Benthos will walk each message as a JSON object, extracting keys and the string representation of their value and adds them to the list of hash fields to set.
+If the field `+"`walk_json_object`"+` is set to `+"`true`"+` then Redpanda Connect will walk each message as a JSON object, extracting keys and the string representation of their value and adds them to the list of hash fields to set.
 
 The order of hash field extraction is as follows:
 
@@ -49,7 +62,7 @@ The order of hash field extraction is as follows:
 2. JSON object (if enabled)
 3. Explicit fields
 
-Where latter stages will overwrite matching field names of a former stage.`)).
+Where latter stages will overwrite matching field names of a former stage.`+service.OutputPerformanceDocs(true, false)).
 		Categories("Services").
 		Fields(clientFields()...).
 		Fields(

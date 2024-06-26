@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package crdb
 
 import (
@@ -12,9 +26,11 @@ import (
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 
-	"github.com/benthosdev/benthos/v4/internal/checkpoint"
-	"github.com/benthosdev/benthos/v4/internal/shutdown"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/Jeffail/checkpoint"
+
+	"github.com/Jeffail/shutdown"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 
 	_ "github.com/lib/pq"
 )
@@ -28,8 +44,8 @@ var sampleString = `{
 func crdbChangefeedInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Integration").
-		Summary(fmt.Sprintf("Listens to a [CockroachDB Core Changefeed](https://www.cockroachlabs.com/docs/stable/changefeed-examples) and creates a message for each row received. Each message is a json object looking like: \n```json\n%s\n```", sampleString)).
-		Description("This input will continue to listen to the changefeed until shutdown. A backfill of the full current state of the table will be delivered upon each run unless a cache is configured for storing cursor timestamps, as this is how Benthos keeps track as to which changes have been successfully delivered.\n\nNote: You must have `SET CLUSTER SETTING kv.rangefeed.enabled = true;` on your CRDB cluster, for more information refer to [the official CockroachDB documentation.](https://www.cockroachlabs.com/docs/stable/changefeed-examples?filters=core)").
+		Summary(fmt.Sprintf("Listens to a https://www.cockroachlabs.com/docs/stable/changefeed-examples[CockroachDB Core Changefeed^] and creates a message for each row received. Each message is a json object looking like: \n```json\n%s\n```", sampleString)).
+		Description("This input will continue to listen to the changefeed until shutdown. A backfill of the full current state of the table will be delivered upon each run unless a cache is configured for storing cursor timestamps, as this is how Redpanda Connect keeps track as to which changes have been successfully delivered.\n\nNote: You must have `SET CLUSTER SETTING kv.rangefeed.enabled = true;` on your CRDB cluster, for more information refer to https://www.cockroachlabs.com/docs/stable/changefeed-examples?filters=core[the official CockroachDB documentation^].").
 		Fields(
 			service.NewStringField("dsn").
 				Description(`A Data Source Name to identify the target database.`).
@@ -39,10 +55,10 @@ func crdbChangefeedInputConfig() *service.ConfigSpec {
 				Description("CSV of tables to be included in the changefeed").
 				Example([]string{"table1", "table2"}),
 			service.NewStringField("cursor_cache").
-				Description("A [cache resource](https://www.benthos.dev/docs/components/caches/about) to use for storing the current latest cursor that has been successfully delivered, this allows Benthos to continue from that cursor upon restart, rather than consume the entire state of the table.").
+				Description("A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current latest cursor that has been successfully delivered, this allows Redpanda Connect to continue from that cursor upon restart, rather than consume the entire state of the table.").
 				Optional(),
 			service.NewStringListField("options").
-				Description("A list of options to be included in the changefeed (WITH X, Y...).\n**NOTE: Both the CURSOR option and UPDATED will be ignored from these options when a `cursor_cache` is specified, as they are set explicitly by Benthos in this case.**").
+				Description("A list of options to be included in the changefeed (WITH X, Y...).\n\nNOTE: Both the CURSOR option and UPDATED will be ignored from these options when a `cursor_cache` is specified, as they are set explicitly by Redpanda Connect in this case.").
 				Example([]string{`virtual_columns="omitted"`}).
 				Advanced().
 				Optional(),
@@ -135,10 +151,10 @@ func newCRDBChangefeedInputFromConfig(conf *service.ParsedConfig, res *service.R
 	res.Logger().Debug("Creating changefeed: " + c.statement)
 
 	go func() {
-		<-c.shutSig.CloseAtLeisureChan()
+		<-c.shutSig.SoftStopChan()
 
 		c.closeConnection()
-		c.shutSig.ShutdownComplete()
+		c.shutSig.TriggerHasStopped()
 	}()
 	return c, nil
 }
@@ -166,7 +182,7 @@ func (c *crdbChangefeedInput) Connect(ctx context.Context) (err error) {
 		return
 	}
 
-	if c.shutSig.ShouldCloseAtLeisure() {
+	if c.shutSig.IsSoftStopSignalled() {
 		return service.ErrEndOfInput
 	}
 
@@ -223,7 +239,7 @@ func (c *crdbChangefeedInput) Read(ctx context.Context) (*service.Message, servi
 
 	if !rows.Next() {
 		go c.closeConnection()
-		if c.shutSig.ShouldCloseAtLeisure() {
+		if c.shutSig.IsSoftStopSignalled() {
 			return nil, nil, service.ErrNotConnected
 		}
 
@@ -279,9 +295,9 @@ func (c *crdbChangefeedInput) Read(ctx context.Context) (*service.Message, servi
 }
 
 func (c *crdbChangefeedInput) Close(ctx context.Context) error {
-	c.shutSig.CloseNow()
+	c.shutSig.TriggerHardStop()
 	select {
-	case <-c.shutSig.HasClosedChan():
+	case <-c.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

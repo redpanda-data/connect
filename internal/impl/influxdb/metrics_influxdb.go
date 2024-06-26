@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package influxdb
 
 import (
@@ -11,7 +25,7 @@ import (
 	client "github.com/influxdata/influxdb1-client/v2"
 	"github.com/rcrowley/go-metrics"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -32,7 +46,7 @@ const (
 	imFieldTags             = "tags"
 )
 
-func ConfigSpec() *service.ConfigSpec {
+func configSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Beta().
 		Version("3.36.0").
@@ -102,7 +116,7 @@ func ConfigSpec() *service.ConfigSpec {
 
 func init() {
 	err := service.RegisterMetricsExporter(
-		"influxdb", ConfigSpec(),
+		"influxdb", configSpec(),
 		func(conf *service.ParsedConfig, log *service.Logger) (service.MetricsExporter, error) {
 			return fromParsed(conf, log)
 		})
