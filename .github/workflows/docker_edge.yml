@@ -1,0 +1,70 @@
+name: Docker Edge
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '0 2 * * *' # run at 2 AM UTC
+
+jobs:
+  build:
+    if: ${{ github.repository == 'redpanda-data/connect' || github.event_name != 'schedule' }}
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      contents: read
+    steps:
+
+    - name: Check Out Repo
+      uses: actions/checkout@v4
+
+    - name: Free up some disk space on ubuntu
+      if: ${{ runner.os == 'Linux' }}
+      run: |
+        # Workaround to provide additional free space for testing.
+        #   https://github.com/actions/virtual-environments/issues/2840
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /opt/ghc
+        sudo rm -rf "/usr/local/share/boost"
+        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+
+    - name: configure aws credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_SM_READONLY_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SM_READONLY_SECRET_ACCESS_KEY }}
+        aws-region: us-west-2
+
+    - name: get secrets from aws sm
+      uses: aws-actions/aws-secretsmanager-get-secrets@v2
+      with:
+        secret-ids: |
+          ,sdlc/prod/github/dockerhub_token
+        parse-json-secrets: true
+
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: vectorizedbot
+        password: ${{ env.DOCKERHUB_TOKEN }}
+
+    - name: Install Buildx
+      id: buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build and push
+      uses: docker/build-push-action@v5
+      with:
+        context: ./
+        file: ./resources/docker/Dockerfile
+        builder: ${{ steps.buildx.outputs.name }}
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: redpandadata/connect:edge
+
+    - name: Build and push CGO
+      uses: docker/build-push-action@v5
+      with:
+        context: ./
+        file: ./resources/docker/Dockerfile.cgo
+        push: true
+        tags: redpandadata/connect:edge-cgo
