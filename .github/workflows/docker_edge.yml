@@ -52,7 +52,7 @@ jobs:
       uses: docker/setup-buildx-action@v3
 
     - name: Build and push
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v6
       with:
         context: ./
         file: ./resources/docker/Dockerfile
@@ -62,7 +62,7 @@ jobs:
         tags: redpandadata/connect:edge
 
     - name: Build and push CGO
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v6
       with:
         context: ./
         file: ./resources/docker/Dockerfile.cgo
