@@ -40,17 +40,11 @@ func createBucket(ctx context.Context, s3Port, bucket string) error {
 	conf, err := config.LoadDefaultConfig(ctx,
 		config.WithRegion("eu-west-1"),
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("xxxxx", "xxxxx", "xxxxx")),
-		config.WithEndpointResolverWithOptions(aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
-			return aws.Endpoint{
-				PartitionID:   "aws",
-				URL:           endpoint,
-				SigningRegion: "eu-west-1",
-			}, nil
-		})),
 	)
 	if err != nil {
 		return err
 	}
+	conf.BaseEndpoint = &endpoint
 
 	client := s3.NewFromConfig(conf, func(o *s3.Options) {
 		o.UsePathStyle = true
@@ -90,17 +84,11 @@ func createBucketQueue(ctx context.Context, s3Port, sqsPort, id string) error {
 		conf, err := config.LoadDefaultConfig(ctx,
 			config.WithRegion("eu-west-1"),
 			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("xxxxx", "xxxxx", "xxxxx")),
-			config.WithEndpointResolverWithOptions(aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
-				return aws.Endpoint{
-					PartitionID:   "aws",
-					URL:           endpoint,
-					SigningRegion: "eu-west-1",
-				}, nil
-			})),
 		)
 		if err != nil {
 			return err
 		}
+		conf.BaseEndpoint = &endpoint
 
 		s3Client = s3.NewFromConfig(conf, func(o *s3.Options) {
 			o.UsePathStyle = true
