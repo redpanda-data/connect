@@ -9,6 +9,15 @@ All notable changes to this project will be documented in this file.
 
 - The `splunk` input and `splunk_hec` output now support custom `tls` configuration. (@mihaitodor)
 - Field `timestamp` added to the `kafka` and `kafka_franz` outputs. (@mihaitodor)
+- (Benthos) Field `max_retries` added to the `retry` processor. (@mihaitodor)
+- (Benthos) Metadata fields `retry_count` and `backoff_duration` added to the `retry` processor. (@mihaitodor)
+- (Benthos) Parameter `escape_html` added to the `format_json()` Bloblang method. (@mihaitodor)
+- (Benthos) New `array` bloblang method. (@gramian)
+- (Benthos) Algorithm `fnv32` added to the `hash` bloblang method. (@CallMeMhz)
+
+### Changed
+
+- (Benthos) All cli subcommands that previously relied on root-level flags (`streams`, `lint`, `test`, `echo`) now explicitly define those flags such that they appear in help-text and can be specified _after_ the subcommand itself. This means previous commands such as `connect -r ./foo.yaml streams ./bar.yaml` can now be more intuitively written as `connect streams -r ./foo.yaml ./bar.yaml` and so on. The old style will still work in order to preserve backwards compatibility, but the help-text for these root-level flags has been hidden.
 
 ## 4.30.0 - 2024-06-13
 
