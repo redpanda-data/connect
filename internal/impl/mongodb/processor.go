@@ -187,6 +187,13 @@ func (m *Processor) ProcessBatch(ctx context.Context, batch service.MessageBatch
 				Update: docJSON,
 				Hint:   hintJSON,
 			}
+		case OperationUpdateMany:
+			writeModel = &mongo.UpdateManyModel{
+				Upsert: &m.writeMaps.upsert,
+				Filter: filterJSON,
+				Update: docJSON,
+				Hint:   hintJSON,
+			}
 		case OperationFindOne:
 			collection := m.database.Collection(collectionStr, m.writeConcernSpec.options)
 

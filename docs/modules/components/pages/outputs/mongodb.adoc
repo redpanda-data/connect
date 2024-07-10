@@ -185,6 +185,7 @@ Options:
 , `delete-many`
 , `replace-one`
 , `update-one`
+, `update-many`
 .
 
 === `write_concern`
@@ -224,7 +225,7 @@ The write concern timeout.
 
 === `document_map`
 
-A bloblang map representing a document to store within MongoDB, expressed as https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/[extended JSON in canonical form^]. The document map is required for the operations insert-one, replace-one, update-one and aggregate.
+A bloblang map representing a document to store within MongoDB, expressed as https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/[extended JSON in canonical form^]. The document map is required for the operations insert-one, replace-one, update-one, aggregate and update-many.
 
 
 *Type*: `string`
@@ -275,7 +276,7 @@ hint_map: |-
 
 === `upsert`
 
-The upsert setting is optional and only applies for update-one and replace-one operations. If the filter specified in filter_map matches, the document is updated or replaced accordingly, otherwise it is created.
+The upsert setting is optional and only applies for update-one, update-many and replace-one operations. If the filter specified in filter_map matches, the document is updated or replaced accordingly, otherwise it is created.
 
 
 *Type*: `bool`

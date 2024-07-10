@@ -1,7 +1,7 @@
 ---
 title: mongodb
 slug: mongodb
-type: processor
+type: output
 status: experimental
 categories: ["Services"]
 ---
@@ -18,7 +18,7 @@ import TabItem from '@theme/TabItem';
 :::caution EXPERIMENTAL
 This component is experimental and therefore subject to change or removal outside of major version releases.
 :::
-Performs operations against MongoDB for each message, allowing you to store or retrieve data within message payloads.
+Inserts items into a MongoDB collection.
 
 Introduced in version 3.43.0.
 
@@ -32,22 +32,29 @@ Introduced in version 3.43.0.
 
 ```yml
 # Common config fields, showing default values
-label: ""
-mongodb:
-  url: mongodb://localhost:27017 # No default (required)
-  database: "" # No default (required)
-  username: ""
-  password: ""
-  collection: "" # No default (required)
-  operation: insert-one
-  write_concern:
-    w: ""
-    j: false
-    w_timeout: ""
-  document_map: ""
-  filter_map: ""
-  hint_map: ""
-  upsert: false
+output:
+  label: ""
+  mongodb:
+    url: mongodb://localhost:27017 # No default (required)
+    database: "" # No default (required)
+    username: ""
+    password: ""
+    collection: "" # No default (required)
+    operation: update-one
+    write_concern:
+      w: ""
+      j: false
+      w_timeout: ""
+    document_map: ""
+    filter_map: ""
+    hint_map: ""
+    upsert: false
+    max_in_flight: 64
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
 ```
 
 </TabItem>
@@ -55,27 +62,45 @@ mongodb:
 
 ```yml
 # All config fields, showing default values
-label: ""
-mongodb:
-  url: mongodb://localhost:27017 # No default (required)
-  database: "" # No default (required)
-  username: ""
-  password: ""
-  collection: "" # No default (required)
-  operation: insert-one
-  write_concern:
-    w: ""
-    j: false
-    w_timeout: ""
-  document_map: ""
-  filter_map: ""
-  hint_map: ""
-  upsert: false
-  json_marshal_mode: canonical
+output:
+  label: ""
+  mongodb:
+    url: mongodb://localhost:27017 # No default (required)
+    database: "" # No default (required)
+    username: ""
+    password: ""
+    collection: "" # No default (required)
+    operation: update-one
+    write_concern:
+      w: ""
+      j: false
+      w_timeout: ""
+    document_map: ""
+    filter_map: ""
+    hint_map: ""
+    upsert: false
+    max_in_flight: 64
+    batching:
+      count: 0
+      byte_size: 0
+      period: ""
+      check: ""
+      processors: [] # No default (optional)
 ```
 
 </TabItem>
 </Tabs>
+
+
+## Performance
+
+This output benefits from sending multiple messages in flight in parallel for
+improved performance. You can tune the max number of in flight messages (or
+message batches) with the field `max_in_flight`.
+
+This output benefits from sending messages as a batch for improved performance.
+Batches can be formed at both the input and output level. You can find out more
+[in this doc](/docs/configuration/batching).
 
 ## Fields
 
@@ -131,8 +156,8 @@ The mongodb operation to perform.
 
 
 Type: `string`  
-Default: `"insert-one"`  
-Options: `insert-one`, `delete-one`, `delete-many`, `replace-one`, `update-one`, `update-many`, `find-one`, `find-many`.
+Default: `"update-one"`  
+Options: `insert-one`, `delete-one`, `delete-many`, `replace-one`, `update-one`, `update-many`.
 
 ### `write_concern`
 
@@ -222,19 +247,108 @@ Type: `bool`
 Default: `false`  
 Requires version 3.60.0 or newer  
 
-### `json_marshal_mode`
+### `max_in_flight`
 
-The json_marshal_mode setting is optional and controls the format of the output message.
+The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
+
+
+Type: `int`  
+Default: `64`  
+
+### `batching`
+
+Allows you to configure a [batching policy](/docs/configuration/batching).
+
+
+Type: `object`  
+
+```yml
+# Examples
+
+batching:
+  byte_size: 5000
+  count: 0
+  period: 1s
+
+batching:
+  count: 10
+  period: 1s
+
+batching:
+  check: this.contains("END BATCH")
+  count: 0
+  period: 1m
+```
+
+### `batching.count`
+
+A number of messages at which the batch should be flushed. If `0` disables count based batching.
+
+
+Type: `int`  
+Default: `0`  
+
+### `batching.byte_size`
+
+An amount of bytes at which the batch should be flushed. If `0` disables size based batching.
+
+
+Type: `int`  
+Default: `0`  
+
+### `batching.period`
+
+A period in which an incomplete batch should be flushed regardless of its size.
 
 
 Type: `string`  
-Default: `"canonical"`  
-Requires version 3.60.0 or newer  
+Default: `""`  
 
-| Option | Summary |
-|---|---|
-| `canonical` | A string format that emphasizes type preservation at the expense of readability and interoperability. That is, conversion from canonical to BSON will generally preserve type information except in certain specific cases.  |
-| `relaxed` | A string format that emphasizes readability and interoperability at the expense of type preservation. That is, conversion from relaxed format to BSON can lose type information. |
+```yml
+# Examples
 
+period: 1s
+
+period: 1m
+
+period: 500ms
+```
+
+### `batching.check`
+
+A [Bloblang query](/docs/guides/bloblang/about/) that should return a boolean value indicating whether a message should end a batch.
+
+
+Type: `string`  
+Default: `""`  
+
+```yml
+# Examples
+
+check: this.type == "end_of_transaction"
+```
+
+### `batching.processors`
+
+A list of [processors](/docs/components/processors/about) to apply to a batch as it is flushed. This allows you to aggregate and archive the batch however you see fit. Please note that all resulting messages are flushed as a single batch, therefore splitting the batch into smaller batches using these processors is a no-op.
+
+
+Type: `array`  
+
+```yml
+# Examples
+
+processors:
+  - archive:
+      format: concatenate
+
+processors:
+  - archive:
+      format: lines
+
+processors:
+  - archive:
+      format: json_array
+```
 
 

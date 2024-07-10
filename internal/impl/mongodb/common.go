@@ -134,6 +134,8 @@ const (
 	OperationReplaceOne Operation = "replace-one"
 	// OperationUpdateOne Update one operation.
 	OperationUpdateOne Operation = "update-one"
+	// OperationUpdateMany Update many operation.
+	OperationUpdateMany Operation = "update-many"
 	// OperationFindOne Find one operation.
 	OperationFindOne Operation = "find-one"
 	// OperationAggregate Execute Aggregation Pipeline operation.
@@ -162,6 +164,7 @@ func (op Operation) isFilterAllowed() bool {
 		OperationDeleteMany,
 		OperationReplaceOne,
 		OperationUpdateOne,
+		OperationUpdateMany,
 		OperationFindOne,
 		OperationFindMany:
 		return true
@@ -176,6 +179,7 @@ func (op Operation) isHintAllowed() bool {
 		OperationDeleteMany,
 		OperationReplaceOne,
 		OperationUpdateOne,
+		OperationUpdateMany,
 		OperationFindOne,
 		OperationFindMany:
 		return true
@@ -207,6 +211,8 @@ func NewOperation(op string) Operation {
 		return OperationReplaceOne
 	case "update-one":
 		return OperationUpdateOne
+	case "update-many":
+		return OperationUpdateMany
 	case "find-one":
 		return OperationFindOne
 	case "aggregate":
@@ -243,6 +249,7 @@ func outputOperationDocs(defaultOperation Operation) *service.ConfigField {
 		string(OperationDeleteMany),
 		string(OperationReplaceOne),
 		string(OperationUpdateOne),
+		string(OperationUpdateMany),
 	).Description("The mongodb operation to perform.").
 		Default(string(defaultOperation))
 }
@@ -254,7 +261,7 @@ func operationFromParsed(pConf *service.ParsedConfig) (operation Operation, err 
 	}
 
 	if operation = NewOperation(operationStr); operation == OperationInvalid {
-		err = fmt.Errorf("mongodb operation %q unknown: must be insert-one, delete-one, delete-many, replace-one, update-one or aggregate", operationStr)
+		err = fmt.Errorf("mongodb operation '%s' unknown: must be insert-one, delete-one, delete-many, replace-one, update-one, aggregate or update-many", operationStr)
 	}
 	return
 }
@@ -337,7 +344,7 @@ func writeMapsFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewBloblangField(commonFieldDocumentMap).
 			Description("A bloblang map representing a document to store within MongoDB, expressed as https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/[extended JSON in canonical form^]. The document map is required for the operations " +
-				"insert-one, replace-one, update-one and aggregate.").
+				"insert-one, replace-one, update-one, aggregate and update-many.").
 			Examples(mapExamples()...).
 			Default(""),
 		service.NewBloblangField(commonFieldFilterMap).
@@ -352,7 +359,7 @@ func writeMapsFields() []*service.ConfigField {
 			Examples(mapExamples()...).
 			Default(""),
 		service.NewBoolField(commonFieldUpsert).
-			Description("The upsert setting is optional and only applies for update-one and replace-one operations. If the filter specified in filter_map matches, the document is updated or replaced accordingly, otherwise it is created.").
+			Description("The upsert setting is optional and only applies for update-one, update-many and replace-one operations. If the filter specified in filter_map matches, the document is updated or replaced accordingly, otherwise it is created.").
 			Version("3.60.0").
 			Default(false),
 	}

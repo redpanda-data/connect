@@ -95,6 +95,9 @@ func TestProcessorIntegration(t *testing.T) {
 	t.Run("update one", func(t *testing.T) {
 		testMongoDBProcessorUpdateOne(mongoClient, port, t)
 	})
+	t.Run("update many", func(t *testing.T) {
+		testMongoDBProcessorUpdateMany(mongoClient, port, t)
+	})
 	t.Run("find one", func(t *testing.T) {
 		testMongoDBProcessorFindOne(mongoClient, port, t)
 	})
@@ -334,6 +337,57 @@ filter_map: |
 	assert.Equal(t, `"foo_update"`, aVal.String())
 	assert.Equal(t, `"bar_update_new"`, bVal.String())
 	assert.Equal(t, `"c1"`, cVal.String())
+}
+
+func testMongoDBProcessorUpdateMany(mongoClient *mongo.Client, port string, t *testing.T) {
+	tCtx := context.Background()
+	m := testMProc(t, port, "", `
+write_concern:
+  w: "1"
+  j: false
+  timeout: 100s
+operation: update-many
+document_map: |
+  root = { "$set": { "a": this.foo, "b": this.bar } }
+filter_map: |
+  root.a = this.foo
+`)
+
+	collection := mongoClient.Database("TestDB").Collection("TestCollection")
+
+	_, err := collection.InsertMany(context.Background(), []interface{}{
+		bson.M{"a": "foo_update", "b": "bar_update_old", "c": "c1"},
+		bson.M{"a": "foo_update", "b": "bar_update_old2", "c": "c2"},
+	})
+	assert.NoError(t, err)
+
+	resMsgs, err := m.ProcessBatch(tCtx, service.MessageBatch{
+		service.NewMessage([]byte(`{"foo":"foo_update","bar":"bar_update_new"}`)),
+	})
+	require.NoError(t, err)
+	require.Len(t, resMsgs, 1)
+	assertMessagesEqual(t, resMsgs[0], []string{
+		`{"foo":"foo_update","bar":"bar_update_new"}`,
+	})
+
+	// // Validate if records have been updated in the db
+	cursor, err := collection.Find(context.Background(), bson.M{"a": "foo_update", "b": "bar_update_new"})
+	assert.NoError(t, err)
+
+	var results []bson.M
+	err = cursor.All(context.Background(), &results)
+	assert.NoError(t, err)
+	assert.Len(t, results, 2)
+
+	for _, result := range results {
+		aVal := result["a"]
+		bVal := result["b"]
+		cVal := result["c"]
+
+		assert.Equal(t, "foo_update", aVal)
+		assert.Equal(t, "bar_update_new", bVal)
+		assert.Contains(t, []string{"c1", "c2"}, cVal)
+	}
 }
 
 func testMongoDBProcessorUpsert(mongoClient *mongo.Client, port string, t *testing.T) {
