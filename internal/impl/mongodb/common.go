@@ -392,8 +392,29 @@ func writeMapsFromParsed(conf *service.ParsedConfig, operation Operation) (maps 
 	return
 }
 
-func extJSONFromMap(b service.MessageBatch, i int, m *bloblang.Executor) (any, error) {
-	msg, err := b.BloblangQuery(i, m)
+type writeMapsExec struct {
+	filterMap   *service.MessageBatchBloblangExecutor
+	documentMap *service.MessageBatchBloblangExecutor
+	hintMap     *service.MessageBatchBloblangExecutor
+	upsert      bool
+}
+
+func (w writeMaps) exec(b service.MessageBatch) (e writeMapsExec) {
+	if w.filterMap != nil {
+		e.filterMap = b.BloblangExecutor(w.filterMap)
+	}
+	if w.documentMap != nil {
+		e.documentMap = b.BloblangExecutor(w.documentMap)
+	}
+	if w.hintMap != nil {
+		e.hintMap = b.BloblangExecutor(w.hintMap)
+	}
+	e.upsert = w.upsert
+	return
+}
+
+func extJSONFromMap(i int, m *service.MessageBatchBloblangExecutor) (any, error) {
+	msg, err := m.Query(i)
 	if err != nil {
 		return nil, err
 	}
@@ -413,28 +434,28 @@ func extJSONFromMap(b service.MessageBatch, i int, m *bloblang.Executor) (any, e
 	return ejsonVal, nil
 }
 
-func (w writeMaps) extractFromMessage(operation Operation, i int, batch service.MessageBatch) (
+func (w writeMapsExec) extractFromMessage(operation Operation, i int) (
 	docJSON, filterJSON, hintJSON any, err error,
 ) {
 	filterValWanted := operation.isFilterAllowed()
 	documentValWanted := operation.isDocumentAllowed()
 
 	if filterValWanted && w.filterMap != nil {
-		if filterJSON, err = extJSONFromMap(batch, i, w.filterMap); err != nil {
+		if filterJSON, err = extJSONFromMap(i, w.filterMap); err != nil {
 			err = fmt.Errorf("failed to execute filter_map: %v", err)
 			return
 		}
 	}
 
 	if documentValWanted && w.documentMap != nil {
-		if docJSON, err = extJSONFromMap(batch, i, w.documentMap); err != nil {
+		if docJSON, err = extJSONFromMap(i, w.documentMap); err != nil {
 			err = fmt.Errorf("failed to execute document_map: %v", err)
 			return
 		}
 	}
 
 	if w.hintMap != nil {
-		if hintJSON, err = extJSONFromMap(batch, i, w.hintMap); err != nil {
+		if hintJSON, err = extJSONFromMap(i, w.hintMap); err != nil {
 			return
 		}
 	}

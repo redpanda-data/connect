@@ -133,6 +133,11 @@ func (p *Processor) ProcessBatch(ctx context.Context, inBatch service.MessageBat
 	newMsg := inBatch.Copy()
 	ops := make([]gocb.BulkOp, len(inBatch))
 
+	var contentExec *service.MessageBatchBloblangExecutor
+	if p.content != nil {
+		contentExec = inBatch.BloblangExecutor(p.content)
+	}
+
 	// generate query
 	for index := range newMsg {
 		// generate id
@@ -143,8 +148,8 @@ func (p *Processor) ProcessBatch(ctx context.Context, inBatch service.MessageBat
 
 		// generate content
 		var content []byte
-		if p.content != nil {
-			res, err := inBatch.BloblangQuery(index, p.content)
+		if contentExec != nil {
+			res, err := contentExec.Query(index)
 			if err != nil {
 				return nil, err
 			}

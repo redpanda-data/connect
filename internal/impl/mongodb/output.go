@@ -137,6 +137,7 @@ func (m *outputWriter) WriteBatch(ctx context.Context, batch service.MessageBatc
 	}
 
 	writeModelsMap := map[string][]mongo.WriteModel{}
+	wmExec := m.writeMaps.exec(batch)
 
 	err := batch.WalkWithBatchedErrors(func(i int, _ *service.Message) error {
 		var err error
@@ -146,7 +147,7 @@ func (m *outputWriter) WriteBatch(ctx context.Context, batch service.MessageBatc
 			return fmt.Errorf("collection interpolation error: %w", err)
 		}
 
-		docJSON, filterJSON, hintJSON, err := m.writeMaps.extractFromMessage(m.operation, i, batch)
+		docJSON, filterJSON, hintJSON, err := wmExec.extractFromMessage(m.operation, i)
 		if err != nil {
 			return err
 		}

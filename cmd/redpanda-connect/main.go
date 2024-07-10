@@ -63,7 +63,6 @@ func main() {
 			"/etc/benthos.yaml",
 		),
 		service.CLIOptSetDocumentationURL("https://docs.redpanda.com/redpanda-connect"),
-		service.CLIOptSetShowRunCommand(true),
 		service.CLIOptSetMainSchemaFrom(func() *service.ConfigSchema {
 			return service.NewEnvironment().FullConfigSchema(Version, DateBuilt).
 				Field(redpandaTopLevelConfigField())

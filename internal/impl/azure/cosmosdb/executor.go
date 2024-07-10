@@ -40,7 +40,7 @@ func ExecMessageBatch(ctx context.Context, batch service.MessageBatch, client *a
 			fmt.Errorf("current batch has %d messages, but the CosmosDB transactional batch limit is %d", len(batch), maxTransactionalBatchSize)
 	}
 
-	pkQueryResult, err := batch.BloblangQueryValue(0, config.PartitionKeys)
+	pkQueryResult, err := batch.BloblangExecutor(config.PartitionKeys).QueryValue(0)
 	if err != nil {
 		return azcosmos.TransactionalBatchResponse{}, fmt.Errorf("failed to evaluate partition key values: %s", err)
 	}
@@ -128,7 +128,7 @@ func ExecMessageBatch(ctx context.Context, batch service.MessageBatch, client *a
 
 				var value any
 				if po.Value != nil {
-					if value, err = batch.BloblangQueryValue(idx, po.Value); err != nil {
+					if value, err = batch.BloblangExecutor(po.Value).QueryValue(idx); err != nil {
 						return azcosmos.TransactionalBatchResponse{}, fmt.Errorf("failed to evaluate patch value: %s", err)
 					}
 				}

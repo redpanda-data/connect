@@ -178,16 +178,19 @@ func newBigQuerySelectProcessor(inConf *service.ParsedConfig, options *bigQueryP
 }
 
 func (proc *bigQuerySelectProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
-	argsMapping := proc.config.argsMapping
-
 	outBatch := make(service.MessageBatch, 0, len(batch))
+
+	var argsExec *service.MessageBatchBloblangExecutor
+	if proc.config.argsMapping != nil {
+		argsExec = batch.BloblangExecutor(proc.config.argsMapping)
+	}
 
 	for i, msg := range batch {
 		outBatch = append(outBatch, msg)
 
 		var args []any
-		if argsMapping != nil {
-			resMsg, err := batch.BloblangQuery(i, argsMapping)
+		if argsExec != nil {
+			resMsg, err := argsExec.Query(i)
 			if err != nil {
 				msg.SetError(fmt.Errorf("failed to resolve args mapping: %w", err))
 				continue
