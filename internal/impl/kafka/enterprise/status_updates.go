@@ -9,7 +9,9 @@
 package enterprise
 
 import (
+	"bytes"
 	"context"
+	"strings"
 	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -78,6 +80,20 @@ func (l *TopicLogger) sendStatusEvent(e *protoconnect.StatusEvent) {
 	}) // TODO: Log errors (occasionally)
 }
 
+// Convert a slice to a dot path following https://docs.redpanda.com/redpanda-connect/configuration/field_paths/
+func sliceToDotPath(path []string) string {
+	var b bytes.Buffer
+	for i, s := range path {
+		s = strings.ReplaceAll(s, "~", "~0")
+		s = strings.ReplaceAll(s, ".", "~1")
+		b.WriteString(s)
+		if i < len(path)-1 {
+			b.WriteRune('.')
+		}
+	}
+	return b.String()
+}
+
 func (l *TopicLogger) statusEventLoop() {
 	for {
 		_, open := <-l.streamStatusPollTicker.C
@@ -102,7 +118,7 @@ func (l *TopicLogger) statusEventLoop() {
 			if !c.Active() {
 				e.Type = protoconnect.StatusEvent_TYPE_CONNECTION_ERROR
 				cErr := &protoconnect.ConnectionError{
-					Path: c.Path(),
+					Path: sliceToDotPath(c.Path()),
 				}
 				if l := c.Label(); l != "" {
 					cErr.Label = &l

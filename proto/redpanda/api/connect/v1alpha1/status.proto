@@ -7,7 +7,7 @@ option go_package = "internal/protoconnect";
 // ConnectionError describes a specific connection failure.
 message ConnectionError {
   string message = 1; // The error message.
-  repeated string path = 2; // The path of the connector in the config.
+  string path = 2; // The path of the connector in the config, following the spec outlined in https://docs.redpanda.com/redpanda-connect/configuration/field_paths/
   optional string label = 3; // An optional label given to the connector.
 }
 
