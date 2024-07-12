@@ -23,7 +23,7 @@ message StatusEvent {
     // The status has not been specified.
     TYPE_UNSPECIFIED = 0;
     // An instance has parsed a config and is now attempting to run a pipeline.
-    TYPE_INITIALISING = 1;
+    TYPE_INITIALIZING = 1;
     // An instance is running and is connected to all inputs and outputs.
     TYPE_CONNECTION_HEALTHY = 2;
     // An instance is running but is not connected to all inputs and outputs.

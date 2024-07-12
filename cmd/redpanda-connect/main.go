@@ -20,8 +20,8 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/gofrs/uuid"
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/rs/xid"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka/enterprise"
 
@@ -42,12 +42,7 @@ func redpandaTopLevelConfigField() *service.ConfigField {
 }
 
 func main() {
-	instanceID, err := uuid.NewV4()
-	if err != nil {
-		panic(err)
-	}
-
-	rpLogger := enterprise.NewTopicLogger(instanceID.String())
+	rpLogger := enterprise.NewTopicLogger(xid.New().String())
 
 	exitCode, err := service.RunCLIToCode(
 		context.Background(),

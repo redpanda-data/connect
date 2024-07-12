@@ -214,7 +214,7 @@ max_message_bytes: 1MB
 	var m protoconnect.StatusEvent
 
 	require.NoError(t, proto.Unmarshal([]byte(outRecords[0]), &m))
-	assert.Equal(t, protoconnect.StatusEvent_TYPE_INITIALISING, m.Type)
+	assert.Equal(t, protoconnect.StatusEvent_TYPE_INITIALIZING, m.Type)
 	assert.Equal(t, "baz", m.InstanceId)
 	assert.Equal(t, "buz", m.PipelineId)
 

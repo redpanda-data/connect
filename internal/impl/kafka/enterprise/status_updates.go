@@ -25,7 +25,7 @@ func (l *TopicLogger) TriggerEventConfigParsed() {
 	l.sendStatusEvent(&protoconnect.StatusEvent{
 		PipelineId: l.pipelineID,
 		InstanceId: l.id,
-		Type:       protoconnect.StatusEvent_TYPE_INITIALISING,
+		Type:       protoconnect.StatusEvent_TYPE_INITIALIZING,
 		Timestamp:  time.Now().Unix(),
 	})
 }
