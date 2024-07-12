@@ -27,9 +27,17 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
 )
 
+const (
+	statusTickerDuration = time.Second * 30
+	topicMetaKey         = "__connect_topic"
+)
+
 // TopicLoggerFields returns the topic logger config fields.
 func TopicLoggerFields() []*service.ConfigField {
 	return []*service.ConfigField{
+		service.NewStringField("pipeline_id").
+			Description("An optional identifier for the pipeline, this will be present in logs and status updates sent to topics.").
+			Default(""),
 		service.NewStringListField("seed_brokers").
 			Description("A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses.").
 			Optional().
@@ -37,9 +45,13 @@ func TopicLoggerFields() []*service.ConfigField {
 			Example([]string{"foo:9092", "bar:9092"}).
 			Example([]string{"foo:9092,bar:9092"}),
 		service.NewStringField("logs_topic").
+			Description("A topic to send process logs to.").
 			Default("__redpanda.connect.logs"),
 		service.NewStringEnumField("logs_level", "debug", "info", "warn", "error").
 			Default("info"),
+		service.NewStringField("status_topic").
+			Description("A topic to send status updates to.").
+			Default("__redpanda.connect.status"),
 		service.NewStringField("client_id").
 			Description("An identifier for the client connection.").
 			Default("benthos").
@@ -67,19 +79,33 @@ func TopicLoggerFields() []*service.ConfigField {
 // topic. The writing is done by a regular output, but this type is necessary in
 // order to allow hot swapping of log components during start up.
 type TopicLogger struct {
+	id         string
+	pipelineID string
+
 	fallbackLogger *atomic.Pointer[service.Logger]
 	o              *atomic.Pointer[service.OwnedOutput]
 	level          *atomic.Pointer[slog.Level]
 	attrs          []slog.Attr
+
+	streamStatus           *atomic.Pointer[service.RunningStreamSummary]
+	streamStatusPollTicker *time.Ticker
+
+	logsTopic   string
+	statusTopic string
 }
 
 // NewTopicLogger constructs a new topic logger.
-func NewTopicLogger() *TopicLogger {
-	return &TopicLogger{
-		fallbackLogger: &atomic.Pointer[service.Logger]{},
-		o:              &atomic.Pointer[service.OwnedOutput]{},
-		level:          &atomic.Pointer[slog.Level]{},
+func NewTopicLogger(id string) *TopicLogger {
+	t := &TopicLogger{
+		id:                     id,
+		fallbackLogger:         &atomic.Pointer[service.Logger]{},
+		o:                      &atomic.Pointer[service.OwnedOutput]{},
+		level:                  &atomic.Pointer[slog.Level]{},
+		streamStatus:           &atomic.Pointer[service.RunningStreamSummary]{},
+		streamStatusPollTicker: time.NewTicker(statusTickerDuration),
 	}
+	go t.statusEventLoop()
+	return t
 }
 
 // SetFallbackLogger configures a fallback logger.
@@ -95,6 +121,18 @@ func (l *TopicLogger) InitOutputFromParsed(pConf *service.ParsedConfig) error {
 	}
 	if w == nil {
 		return nil
+	}
+
+	if l.pipelineID, err = pConf.FieldString("pipeline_id"); err != nil {
+		return err
+	}
+
+	if l.logsTopic, err = pConf.FieldString("logs_topic"); err != nil {
+		return err
+	}
+
+	if l.statusTopic, err = pConf.FieldString("status_topic"); err != nil {
+		return err
 	}
 
 	lvlStr, err := pConf.FieldString("logs_level")
@@ -134,6 +172,7 @@ func (l *TopicLogger) InitOutputFromParsed(pConf *service.ParsedConfig) error {
 	tmpO = tmpO.BatchedWith(batchPol)
 	if err := tmpO.PrimeBuffered(100); err == nil {
 		l.o.Store(tmpO)
+		l.TriggerEventConfigParsed()
 	} else {
 		l.fallbackLogger.Load().With("error", err.Error()).Warn("failed to initialise topic logs writer")
 	}
@@ -152,7 +191,7 @@ func (l *TopicLogger) Enabled(ctx context.Context, atLevel slog.Level) bool {
 // Handle invokes the logger for the input record.
 func (l *TopicLogger) Handle(ctx context.Context, r slog.Record) error {
 	tmpO := l.o.Load()
-	if tmpO == nil {
+	if tmpO == nil || l.logsTopic == "" {
 		return nil
 	}
 
@@ -164,9 +203,11 @@ func (l *TopicLogger) Handle(ctx context.Context, r slog.Record) error {
 	msg := service.NewMessage(nil)
 
 	v := map[string]any{
-		"message": r.Message,
-		"level":   r.Level.String(),
-		"time":    r.Time.Format(time.RFC3339Nano),
+		"message":     r.Message,
+		"level":       r.Level.String(),
+		"time":        r.Time.Format(time.RFC3339Nano),
+		"instance_id": l.id,
+		"pipeline_id": l.pipelineID,
 	}
 	for _, a := range l.attrs {
 		v[a.Key] = a.Value.String()
@@ -176,6 +217,8 @@ func (l *TopicLogger) Handle(ctx context.Context, r slog.Record) error {
 		return true
 	})
 	msg.SetStructured(v)
+	msg.MetaSetMut(topicMetaKey, l.logsTopic)
+
 	_ = tmpO.WriteBatchNonBlocking(service.MessageBatch{msg}, func(ctx context.Context, err error) error {
 		return nil // TODO: Log nacks
 	}) // TODO: Log errors (occasionally)
@@ -197,11 +240,22 @@ func (l *TopicLogger) WithGroup(name string) slog.Handler {
 	return l // TODO
 }
 
+// Close the underlying connections of this topic logger.
+func (l *TopicLogger) Close(ctx context.Context) error {
+	l.streamStatusPollTicker.Stop()
+
+	o := l.o.Load()
+	if o != nil {
+		if err := o.Close(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 //------------------------------------------------------------------------------
 
 type franzTopicLoggerWriter struct {
-	topic string
-
 	seedBrokers      []string
 	clientID         string
 	rackID           string
@@ -234,13 +288,6 @@ func newTopicLoggerWriterFromConfig(conf *service.ParsedConfig, log *service.Log
 		f.seedBrokers = append(f.seedBrokers, strings.Split(b, ",")...)
 	}
 	if len(brokerList) == 0 {
-		return nil, nil
-	}
-
-	if f.topic, err = conf.FieldString("logs_topic"); err != nil {
-		return nil, err
-	}
-	if f.topic == "" {
 		return nil, nil
 	}
 
@@ -370,7 +417,11 @@ func (f *franzTopicLoggerWriter) WriteBatch(ctx context.Context, b service.Messa
 
 	records := make([]*kgo.Record, 0, len(b))
 	for _, msg := range b {
-		record := &kgo.Record{Topic: f.topic}
+		topic, _ := msg.MetaGet(topicMetaKey)
+		if topic == "" {
+			continue
+		}
+		record := &kgo.Record{Topic: topic}
 		if record.Value, err = msg.AsBytes(); err != nil {
 			return
 		}

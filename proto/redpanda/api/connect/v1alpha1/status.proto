@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package redpanda.api.connect.v1alpha1;
+
+option go_package = "internal/protoconnect";
+
+// ConnectionError describes a specific connection failure.
+message ConnectionError {
+  string message = 1; // The error message.
+  repeated string path = 2; // The path of the connector in the config.
+  optional string label = 3; // An optional label given to the connector.
+}
+
+// ExitError describes an error encountered that caused the instance to exit.
+message ExitError {
+  string message = 1; // The error message.
+}
+
+// StatusEvent describes the current state of an individual connect instance,
+// which is self-reported periodically.
+message StatusEvent {
+  enum Type {
+    // The status has not been specified.
+    TYPE_UNSPECIFIED = 0;
+    // An instance has parsed a config and is now attempting to run a pipeline.
+    TYPE_INITIALISING = 1;
+    // An instance is running and is connected to all inputs and outputs.
+    TYPE_CONNECTION_HEALTHY = 2;
+    // An instance is running but is not connected to all inputs and outputs.
+    TYPE_CONNECTION_ERROR = 3;
+    // An instance is in the process of exiting and will no longer sent status events.
+    TYPE_EXITING = 4;
+  }
+
+  Type type = 1; // The type of the event.
+  string pipeline_id = 2; // The identifier of the running pipeline.
+  string instance_id = 3; // The unique identifier of the connect instance.
+  int64 timestamp = 4; // The time this event was emitted.
+
+  repeated ConnectionError connection_errors = 5; // Zero or more connection errors.
+  optional ExitError exit_error = 6; // An optional exit error.
+}
