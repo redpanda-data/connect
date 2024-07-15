@@ -16,9 +16,12 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"os"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/rs/xid"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka/enterprise"
 
@@ -39,9 +42,9 @@ func redpandaTopLevelConfigField() *service.ConfigField {
 }
 
 func main() {
-	rpLogger := enterprise.NewTopicLogger()
+	rpLogger := enterprise.NewTopicLogger(xid.New().String())
 
-	service.RunCLI(
+	exitCode, err := service.RunCLIToCode(
 		context.Background(),
 		service.CLIOptSetVersion(Version, DateBuilt),
 		service.CLIOptSetBinaryName(BinaryName),
@@ -74,5 +77,18 @@ func main() {
 		service.CLIOptOnConfigParse(func(fn *service.ParsedConfig) error {
 			return rpLogger.InitOutputFromParsed(fn.Namespace("redpanda"))
 		}),
+		service.CLIOptOnStreamStart(func(s *service.RunningStreamSummary) error {
+			rpLogger.SetStreamSummary(s)
+			return nil
+		}),
 	)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err.Error())
+	}
+	rpLogger.TriggerEventStopped(err)
+
+	_ = rpLogger.Close(context.Background())
+	if exitCode != 0 {
+		os.Exit(exitCode)
+	}
 }
