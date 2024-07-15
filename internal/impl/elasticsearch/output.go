@@ -560,7 +560,11 @@ func (e *Output) buildBulkableRequest(p *pendingBulkIndex) (elastic.BulkableRequ
 			Upsert(p.Doc)
 
 		if p.StoredScript != "" {
+			r = r.Upsert(p.Doc)
 			addScript(p, r).ScriptedUpsert(true)
+		} else {
+			r = r.Doc(p.Doc).
+				DocAsUpsert(true)
 		}
 
 		if p.Type != "" {
