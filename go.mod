@@ -91,7 +91,8 @@ require (
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475
 	github.com/redis/go-redis/v9 v9.5.3
 	github.com/redpanda-data/benthos/v4 v4.31.0
-	github.com/rs/xid v1.5.0
+	github.com/redpanda-data/connect/public/bundle/free/v4 v4.29.0
+	github.com/rs/xid v1.2.1
 	github.com/sijms/go-ora/v2 v2.8.19
 	github.com/smira/go-statsd v1.3.3
 	github.com/snowflakedb/gosnowflake v1.10.1
@@ -241,6 +242,7 @@ require (
 	github.com/hailocab/go-hostpool v0.0.0-20160125115350-e80d13ce29ed // indirect
 	github.com/hashicorp/errwrap v1.0.0 // indirect
 	github.com/hashicorp/go-immutable-radix v1.3.0 // indirect
+	github.com/hashicorp/go-msgpack/v2 v2.1.2 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
 	github.com/hashicorp/golang-lru v0.5.4 // indirect

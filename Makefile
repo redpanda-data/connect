@@ -1,4 +1,4 @@
-.PHONY: all serverless deps docker docker-cgo clean docs test test-race test-integration fmt lint install deploy-docs
+.PHONY: all deps docker docker-cgo clean test test-race test-integration fmt lint install
 
 TAGS ?=
 
@@ -7,10 +7,7 @@ INSTALL_DIR        ?= $(GOPATH)/bin
 WEBSITE_DIR        ?= ./docs/modules
 DEST_DIR           ?= ./target
 PATHINSTBIN        = $(DEST_DIR)/bin
-PATHINSTTOOLS      = $(DEST_DIR)/tools
-PATHINSTSERVERLESS = $(DEST_DIR)/serverless
-PATHINSTDOCKER     = $(DEST_DIR)/docker
-DOCKER_IMAGE       ?= ghcr.io/redpanda-data/connect
+DOCKER_IMAGE       ?= redpandadata/connect
 
 VERSION   := $(shell git describe --tags 2> /dev/null || echo "v0.0.0")
 VER_CUT   := $(shell echo $(VERSION) | cut -c2-)
@@ -44,24 +41,6 @@ $(PATHINSTBIN)/%: $(SOURCE_FILES)
 	@go build $(GO_FLAGS) -tags "$(TAGS)" -ldflags "$(LD_FLAGS) $(VER_FLAGS)" -o $@ ./cmd/$*
 
 $(APPS): %: $(PATHINSTBIN)/%
-
-# TOOLS = redpanda-docs TODO
-# tools: $(TOOLS)
-
-$(PATHINSTTOOLS)/%: $(SOURCE_FILES)
-	@go build $(GO_FLAGS) -tags "$(TAGS)" -ldflags "$(LD_FLAGS) $(VER_FLAGS)" -o $@ ./cmd/tools/$*
-
-$(TOOLS): %: $(PATHINSTTOOLS)/%
-
-# SERVERLESS = redpanda-connect-lambda TODO
-# serverless: $(SERVERLESS)
-
-$(PATHINSTSERVERLESS)/%: $(SOURCE_FILES)
-	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-		go build $(GO_FLAGS) -tags "$(TAGS)" -ldflags "$(LD_FLAGS) $(VER_FLAGS)" -o $@ ./cmd/serverless/$*
-	@zip -m -j $@.zip $@
-
-$(SERVERLESS): %: $(PATHINSTSERVERLESS)/%
 
 docker-tags:
 	@echo "latest,$(VER_CUT),$(VER_MAJOR).$(VER_MINOR),$(VER_MAJOR)" > .tags
@@ -104,9 +83,6 @@ test-integration:
 clean:
 	rm -rf $(PATHINSTBIN)
 	rm -rf $(DEST_DIR)/dist
-	rm -rf $(DEST_DIR)/tools
-	rm -rf $(DEST_DIR)/serverless
-	rm -rf $(PATHINSTDOCKER)
 
 docs: $(APPS) $(TOOLS)
 	@go run -tags "$(TAGS)" ./cmd/tools/docs_gen

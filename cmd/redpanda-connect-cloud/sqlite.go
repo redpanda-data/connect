@@ -12,23 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Platforms and architectures list from https://pkg.go.dev/modernc.org/sqlite?utm_source=godoc#hdr-Supported_platforms_and_architectures
+// Last updated from modernc.org/sqlite@v1.19.1
+//go:build (darwin && (amd64 || arm64)) || (freebsd && (amd64 || arm64)) || (linux && (386 || amd64 || arm || arm64 || riscv64)) || (windows && (amd64 || arm64))
+
 package main
 
 import (
-	"github.com/redpanda-data/connect/v4/internal/cli"
-
-	_ "github.com/redpanda-data/connect/v4/public/components/all"
+	// Import sqlite specifically.
+	_ "modernc.org/sqlite"
 )
-
-var (
-	// Version version set at compile time.
-	Version string
-	// DateBuilt date built set at compile time.
-	DateBuilt string
-	// BinaryName binary name.
-	BinaryName string = "redpanda-connect"
-)
-
-func main() {
-	cli.InitEnterpriseCLI(BinaryName, Version, DateBuilt, false)
-}
