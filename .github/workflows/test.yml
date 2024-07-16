@@ -26,7 +26,8 @@ jobs:
         check-latest: true
 
     - name: Install dependencies for x_benthos_extra
-      run: sudo apt install -y --no-install-recommends libzmq3-dev
+      run: |
+        sudo apt install -y --no-install-recommends libzmq3-dev
 
     - name: Deps
       run: make deps && git diff-index --quiet HEAD || { >&2 echo "Stale go.{mod,sum} detected. This can be fixed with 'make deps'."; exit 1; }

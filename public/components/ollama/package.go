@@ -12,18 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package all imports all enterprise and FOSS component implementations that
-// ship with Redpanda Connect. This is a convenient way of importing every
-// single connector at the cost of a larger dependency tree for your
-// application.
-package all
+package ollama
 
 import (
-	// Import all community components.
-	_ "github.com/redpanda-data/connect/v4/public/components/community"
-
-	// Import all enterprise components.
-	_ "github.com/redpanda-data/connect/v4/public/components/ollama"
-	_ "github.com/redpanda-data/connect/v4/public/components/snowflake"
-	_ "github.com/redpanda-data/connect/v4/public/components/splunk"
+	// Bring in the internal plugin definitions.
+	_ "github.com/redpanda-data/connect/v4/internal/impl/ollama"
 )

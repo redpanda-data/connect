@@ -1,4 +1,4 @@
-.PHONY: all deps docker docker-cgo clean test test-race test-integration fmt lint install
+.PHONY: all deps docker docker-cgo clean test test-race test-integration fmt lint install generate
 
 TAGS ?=
 
@@ -40,7 +40,12 @@ TEMPLATE_FILES = $(shell find internal/impl -type f -name "template_*.yaml")
 $(PATHINSTBIN)/%: $(SOURCE_FILES)
 	@go build $(GO_FLAGS) -tags "$(TAGS)" -ldflags "$(LD_FLAGS) $(VER_FLAGS)" -o $@ ./cmd/$*
 
-$(APPS): %: $(PATHINSTBIN)/%
+./internal/impl/ollama/ollama:
+	@go generate -tags "$(TAGS)" ./internal/impl/ollama
+
+generate: ./internal/impl/ollama/ollama
+
+$(APPS): %: generate $(PATHINSTBIN)/%
 
 docker-tags:
 	@echo "latest,$(VER_CUT),$(VER_MAJOR).$(VER_MINOR),$(VER_MAJOR)" > .tags
