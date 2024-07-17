@@ -51,6 +51,7 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/nsq"
 	_ "github.com/redpanda-data/connect/v4/public/components/opensearch"
 	_ "github.com/redpanda-data/connect/v4/public/components/otlp"
+	_ "github.com/redpanda-data/connect/v4/public/components/pinecone"
 	_ "github.com/redpanda-data/connect/v4/public/components/prometheus"
 	_ "github.com/redpanda-data/connect/v4/public/components/pulsar"
 	_ "github.com/redpanda-data/connect/v4/public/components/pure"
