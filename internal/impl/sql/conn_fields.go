@@ -170,14 +170,14 @@ func (c *connSettings) apply(ctx context.Context, db *sql.DB, log *service.Logge
 
 	c.initOnce.Do(func() {
 		for _, fileStmt := range c.initFileStatements {
-			if _, err := db.ExecContext(ctx, fileStmt[1]); err != nil {
+			if err := execMultiWithContext(db, ctx, fileStmt[1]); err != nil {
 				log.Warnf("Failed to execute init_file '%v': %v", fileStmt[0], err)
 			} else {
 				log.Debugf("Successfully ran init_file '%v'", fileStmt[0])
 			}
 		}
 		if c.initStatement != "" {
-			if _, err := db.ExecContext(ctx, c.initStatement); err != nil {
+			if err := execMultiWithContext(db, ctx, c.initStatement); err != nil {
 				log.Warnf("Failed to execute init_statement: %v", err)
 			} else {
 				log.Debug("Successfully ran init_statement")

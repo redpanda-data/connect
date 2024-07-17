@@ -234,7 +234,7 @@ func (s *sqlRawOutput) WriteBatch(ctx context.Context, batch service.MessageBatc
 			}
 		}
 
-		if _, err := s.db.ExecContext(ctx, queryStr, args...); err != nil {
+		if err := execMultiWithContext(s.db, ctx, queryStr, args...); err != nil {
 			return err
 		}
 	}

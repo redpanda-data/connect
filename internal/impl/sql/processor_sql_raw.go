@@ -244,13 +244,13 @@ func (s *sqlRawProcessor) ProcessBatch(ctx context.Context, batch service.Messag
 		}
 
 		if s.onlyExec {
-			if _, err := s.db.ExecContext(ctx, queryStr, args...); err != nil {
+			if err := execMultiWithContext(s.db, ctx, queryStr, args...); err != nil {
 				s.logger.Debugf("Failed to run query: %v", err)
 				msg.SetError(err)
 				continue
 			}
 		} else {
-			rows, err := s.db.QueryContext(ctx, queryStr, args...)
+			rows, err := queryMultiWithContext(s.db, ctx, queryStr, args...)
 			if err != nil {
 				s.logger.Debugf("Failed to run query: %v", err)
 				msg.SetError(err)
