@@ -53,7 +53,10 @@ schema_registry_encode
 select_parts
 sftp
 sleep
+snowflake_put
 socket
+splunk
+splunk_hec
 sql_insert
 sql_raw
 sql_select
