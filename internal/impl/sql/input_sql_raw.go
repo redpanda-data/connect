@@ -172,7 +172,7 @@ func (s *sqlRawInput) Connect(ctx context.Context) (err error) {
 	}
 
 	var rows *sql.Rows
-	if rows, err = db.Query(s.queryStatic, args...); err != nil {
+	if rows, err = db.QueryContext(ctx, s.queryStatic, args...); err != nil {
 		return
 	} else if err = rows.Err(); err != nil {
 		s.logger.With("err", err).Warnf("unexpected error while execute raw query %q", s.queryStatic)
