@@ -14,10 +14,19 @@ All notable changes to this project will be documented in this file.
 - (Benthos) Parameter `escape_html` added to the `format_json()` Bloblang method. (@mihaitodor)
 - (Benthos) New `array` bloblang method. (@gramian)
 - (Benthos) Algorithm `fnv32` added to the `hash` bloblang method. (@CallMeMhz)
+- New `-community` suffixed build included in release artifacts, containing only FOSS functionality. (@Jeffail)
+- New `-cloud` suffixed build included in release artifacts, containing components enabled in Redpanda Cloud. (@Jeffail)
+- Field `status_topic` added to the global `redpanda` config block. (@Jeffail)
 
 ### Changed
 
-- (Benthos) All cli subcommands that previously relied on root-level flags (`streams`, `lint`, `test`, `echo`) now explicitly define those flags such that they appear in help-text and can be specified _after_ the subcommand itself. This means previous commands such as `connect -r ./foo.yaml streams ./bar.yaml` can now be more intuitively written as `connect streams -r ./foo.yaml ./bar.yaml` and so on. The old style will still work in order to preserve backwards compatibility, but the help-text for these root-level flags has been hidden.
+- (Benthos) All cli subcommands that previously relied on root-level flags (`streams`, `lint`, `test`, `echo`) now explicitly define those flags such that they appear in help-text and can be specified _after_ the subcommand itself. This means previous commands such as `connect -r ./foo.yaml streams ./bar.yaml` can now be more intuitively written as `connect streams -r ./foo.yaml ./bar.yaml` and so on. The old style will still work in order to preserve backwards compatibility, but the help-text for these root-level flags has been hidden. (@Jeffail)
+
+## 4.30.1 - 2024-06-13
+
+### Fixed
+
+- AWS Lambda serverless build artifacts have been added back to official releases.
 
 ## 4.30.0 - 2024-06-13
 
