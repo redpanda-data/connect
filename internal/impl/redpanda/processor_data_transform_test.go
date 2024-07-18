@@ -14,12 +14,12 @@
 
 package redpanda
 
-//go:generate env GOOS=wasip1 GOARCH=wasm go build -C ./testdata/uppercase -o $PWD/uppercase.wasm
-
 import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -38,13 +38,45 @@ func defaultConfig() dataTransformConfig {
 	return cfg
 }
 
-func TestDataTransformProcessorSerial(t *testing.T) {
-	wasm, err := os.ReadFile("./uppercase.wasm")
-	if os.IsNotExist(err) {
-		t.Skip("skipping as wasm example not compiled, run go generate to remedy")
-	}
+func getWASMArtifact(t testing.TB) []byte {
+	t.Helper()
+
+	tmpDir := t.TempDir()
+	outPath := filepath.Join(tmpDir, "uppercase.wasm")
+
+	require.NoError(t, exec.Command("env", "GOOS=wasip1", "GOARCH=wasm", "go", "build", "-C", "./testdata/uppercase", "-o", outPath).Run())
+
+	outBytes, err := os.ReadFile(outPath)
 	require.NoError(t, err)
 
+	return outBytes
+}
+
+func TestDataTransform(t *testing.T) {
+	outBytes := getWASMArtifact(t)
+
+	t.Run("serial", func(t *testing.T) {
+		testDataTransformProcessorSerial(t, outBytes)
+	})
+
+	t.Run("init_timeout", func(t *testing.T) {
+		testDataTransformProcessorInitTimeout(t, outBytes)
+	})
+
+	t.Run("oom", func(t *testing.T) {
+		testDataTransformProcessorOutOfMemory(t, outBytes)
+	})
+
+	t.Run("keys", func(t *testing.T) {
+		testDataTransformProcessorKeys(t, outBytes)
+	})
+
+	t.Run("parallel", func(t *testing.T) {
+		testDataTransformProcessorParallel(t, outBytes)
+	})
+}
+
+func testDataTransformProcessorSerial(t *testing.T, wasm []byte) {
 	proc, err := newDataTransformProcessor(wasm, defaultConfig(), service.MockResources())
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -65,37 +97,23 @@ func TestDataTransformProcessorSerial(t *testing.T) {
 	}
 }
 
-func TestDataTransformProcessorInitTimeout(t *testing.T) {
-	wasm, err := os.ReadFile("./uppercase.wasm")
-	if os.IsNotExist(err) {
-		t.Skip("skipping as wasm example not compiled, run go generate to remedy")
-	}
-	require.NoError(t, err)
+func testDataTransformProcessorInitTimeout(t *testing.T, wasm []byte) {
 	cfg := defaultConfig()
 	cfg.timeout = time.Nanosecond
-	_, err = newDataTransformProcessor(wasm, cfg, service.MockResources())
+	_, err := newDataTransformProcessor(wasm, cfg, service.MockResources())
 	require.Error(t, err)
 }
 
-func TestDataTransformProcessorOutOfMemory(t *testing.T) {
-	wasm, err := os.ReadFile("./uppercase.wasm")
-	if os.IsNotExist(err) {
-		t.Skip("skipping as wasm example not compiled, run go generate to remedy")
-	}
-	require.NoError(t, err)
+func testDataTransformProcessorOutOfMemory(t *testing.T, wasm []byte) {
 	cfg := defaultConfig()
 	cfg.maxMemoryPages = 1
-	_, err = newDataTransformProcessor(wasm, cfg, service.MockResources())
+	_, err := newDataTransformProcessor(wasm, cfg, service.MockResources())
 	require.Error(t, err)
 }
 
-func TestDataTransformProcessorKeys(t *testing.T) {
-	wasm, err := os.ReadFile("./uppercase.wasm")
-	if os.IsNotExist(err) {
-		t.Skip("skipping as wasm example not compiled, run go generate to remedy")
-	}
-	require.NoError(t, err)
+func testDataTransformProcessorKeys(t *testing.T, wasm []byte) {
 	cfg := defaultConfig()
+	var err error
 	cfg.inputKey, err = service.NewInterpolatedString(`${! metadata("example_input_key") }`)
 	require.NoError(t, err)
 	var outputKeyField = "example_output_key"
@@ -113,13 +131,7 @@ func TestDataTransformProcessorKeys(t *testing.T) {
 	assert.Equal(t, []byte("foobar"), outKey)
 }
 
-func TestDataTransformProcessorParallel(t *testing.T) {
-	wasm, err := os.ReadFile("./uppercase.wasm")
-	if os.IsNotExist(err) {
-		t.Skip("skipping as wasm example not compiled, run go generate to remedy")
-	}
-	require.NoError(t, err)
-
+func testDataTransformProcessorParallel(t *testing.T, wasm []byte) {
 	proc, err := newDataTransformProcessor(wasm, defaultConfig(), service.MockResources())
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -153,11 +165,7 @@ func TestDataTransformProcessorParallel(t *testing.T) {
 }
 
 func BenchmarkRedpandaDataTransforms(b *testing.B) {
-	wasm, err := os.ReadFile("./uppercase.wasm")
-	if os.IsNotExist(err) {
-		b.Skip("skipping as wasm example not compiled, run go generate to remedy")
-	}
-	require.NoError(b, err)
+	wasm := getWASMArtifact(b)
 
 	proc, err := newDataTransformProcessor(wasm, defaultConfig(), service.MockResources())
 	require.NoError(b, err)
