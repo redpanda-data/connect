@@ -78,7 +78,7 @@ This processor executes a Redpanda Data Transform WebAssembly module, calling On
 			Description("The maximum amount of wasm memory pages (64KiB) that an individual wasm module instance can use").
 			Default(dtpDefaultMaxMemory / wasmPageSize).
 			Advanced()).
-		Version("0.1.0")
+		Version("4.31.0")
 }
 
 func init() {

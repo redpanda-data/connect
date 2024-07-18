@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - (Benthos) Parameter `escape_html` added to the `format_json()` Bloblang method. (@mihaitodor)
 - (Benthos) New `array` bloblang method. (@gramian)
 - (Benthos) Algorithm `fnv32` added to the `hash` bloblang method. (@CallMeMhz)
+- New experimental `redpanda_data_transform`. (@rockwotj)
 
 ### Changed
 

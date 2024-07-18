@@ -23,7 +23,7 @@ component_type_dropdown::[]
 
 Executes a Redpanda Data Transform as a processor
 
-Introduced in version 0.1.0.
+Introduced in version 4.31.0.
 
 
 [tabs]
