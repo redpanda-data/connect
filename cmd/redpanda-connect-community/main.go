@@ -15,9 +15,11 @@
 package main
 
 import (
-	"github.com/redpanda-data/connect/v4/internal/cli"
+	"context"
 
-	_ "github.com/redpanda-data/connect/v4/public/components/all"
+	"github.com/redpanda-data/benthos/v4/public/service"
+
+	_ "github.com/redpanda-data/connect/public/bundle/free/v4"
 )
 
 var (
@@ -30,5 +32,27 @@ var (
 )
 
 func main() {
-	cli.InitEnterpriseCLI(BinaryName, Version, DateBuilt, false)
+	service.RunCLI(
+		context.Background(),
+		service.CLIOptSetVersion(Version, DateBuilt),
+		service.CLIOptSetBinaryName(BinaryName),
+		service.CLIOptSetProductName("Redpanda Connect"),
+		service.CLIOptSetDefaultConfigPaths(
+			"redpanda-connect.yaml",
+			"/redpanda-connect.yaml",
+			"/etc/redpanda-connect/config.yaml",
+			"/etc/redpanda-connect.yaml",
+
+			"connect.yaml",
+			"/connect.yaml",
+			"/etc/connect/config.yaml",
+			"/etc/connect.yaml",
+
+			// Keep these for now, for backwards compatibility
+			"/benthos.yaml",
+			"/etc/benthos/config.yaml",
+			"/etc/benthos.yaml",
+		),
+		service.CLIOptSetDocumentationURL("https://docs.redpanda.com/redpanda-connect"),
+	)
 }
