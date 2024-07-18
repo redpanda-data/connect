@@ -408,7 +408,7 @@ mapping: |
 `))
 			}
 
-			// upsert
+			// replace
 			require.NoError(t, streamOutBuilder.AddProcessorYAML(fmt.Sprintf(`
 couchbase:
   url: 'couchbase://localhost:%s'
@@ -417,7 +417,7 @@ couchbase:
   password: %s
   id: '${! json("key") }'
   content: 'root = this'
-  operation: 'upsert'
+  operation: 'replace'
 `, servicePort, bucket, username, password)))
 
 			if clearCAS { // ignore cas check
@@ -523,7 +523,7 @@ workflow:
             content: |
               root = this
               root.at = timestamp_unix_micro()
-            operation: 'upsert'
+            operation: 'replace'
     remove:
       processors:
         - sleep:
@@ -537,7 +537,7 @@ workflow:
             content: |
               root = this
               root.at = timestamp_unix_micro()
-            operation: 'remove'
+            operation: 'replace'
 `, servicePort, bucket, username, password)))
 
 	streamOut, err := streamOutBuilder.Build()
