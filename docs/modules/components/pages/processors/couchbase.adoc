@@ -72,7 +72,7 @@ couchbase:
 --
 ======
 
-When inserting, replacing or upserting documents, each must have the `content` property set.
+When inserting, replacing or upserting documents, each must have the `content` property set. CAS value is stored in meta `couchbase_cas`. It prevent read/write conflict by only allowing write if not modified by other. You can clear the value with `meta couchbase_cas = deleted()` to disable this check.
 
 == Fields
 

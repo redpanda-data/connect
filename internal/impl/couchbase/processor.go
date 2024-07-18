@@ -27,6 +27,11 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/couchbase/client"
 )
 
+const (
+	// MetaCASKey hold CAS of entry.
+	MetaCASKey = "couchbase_cas"
+)
+
 var (
 	// ErrInvalidOperation specified operation is not supported.
 	ErrInvalidOperation = errors.New("invalid operation")
@@ -41,7 +46,7 @@ func ProcessorConfig() *service.ConfigSpec {
 		Version("4.11.0").
 		Categories("Integration").
 		Summary("Performs operations against Couchbase for each message, allowing you to store or retrieve data within message payloads.").
-		Description("When inserting, replacing or upserting documents, each must have the `content` property set.").
+		Description("When inserting, replacing or upserting documents, each must have the `content` property set. CAS value is stored in meta `couchbase_cas`. It prevent read/write conflict by only allowing write if not modified by other. You can clear the value with `meta couchbase_cas = deleted()` to disable this check.").
 		Field(service.NewInterpolatedStringField("id").Description("Document id.").Example(`${! json("id") }`)).
 		Field(service.NewBloblangField("content").Description("Document content.").Optional()).
 		Field(service.NewStringAnnotatedEnumField("operation", map[string]string{
@@ -70,7 +75,7 @@ type Processor struct {
 	*couchbaseClient
 	id      *service.InterpolatedString
 	content *bloblang.Executor
-	op      func(key string, data []byte) gocb.BulkOp
+	op      func(key string, data []byte, cas gocb.Cas) gocb.BulkOp
 }
 
 // NewProcessor returns a Couchbase processor.
@@ -136,7 +141,7 @@ func (p *Processor) ProcessBatch(_ context.Context, inBatch service.MessageBatch
 	}
 
 	// generate query
-	for index := range newMsg {
+	for index, msg := range newMsg {
 		// generate id
 		k, err := inBatch.TryInterpolatedString(index, p.id)
 		if err != nil {
@@ -156,7 +161,14 @@ func (p *Processor) ProcessBatch(_ context.Context, inBatch service.MessageBatch
 			}
 		}
 
-		ops[index] = p.op(k, content)
+		var cas gocb.Cas // retrieve cas if set
+		if val, ok := msg.MetaGetMut(MetaCASKey); ok {
+			if v, ok := val.(gocb.Cas); ok {
+				cas = v
+			}
+		}
+
+		ops[index] = p.op(k, content, cas)
 	}
 
 	// execute
@@ -167,7 +179,7 @@ func (p *Processor) ProcessBatch(_ context.Context, inBatch service.MessageBatch
 
 	// set results
 	for index, part := range newMsg {
-		out, err := valueFromOp(ops[index])
+		out, cas, err := valueFromOp(ops[index])
 		if err != nil {
 			part.SetError(fmt.Errorf("couchbase operator failed: %w", err))
 		}
@@ -177,6 +189,8 @@ func (p *Processor) ProcessBatch(_ context.Context, inBatch service.MessageBatch
 		} else if out != nil {
 			part.SetStructured(out)
 		}
+
+		part.MetaSetMut(MetaCASKey, cas)
 	}
 
 	return []service.MessageBatch{newMsg}, nil
