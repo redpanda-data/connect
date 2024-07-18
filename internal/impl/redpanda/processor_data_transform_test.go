@@ -14,7 +14,7 @@
 
 package redpanda
 
-//go:generate env GOOS=wasip1 GOARCH=wasm go build -C ../../../resources/testdata/redpanda_data_transforms/uppercase -o $PWD/uppercase.wasm
+//go:generate env GOOS=wasip1 GOARCH=wasm go build -C ./testdata/uppercase -o $PWD/uppercase.wasm
 
 import (
 	"context"

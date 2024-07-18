@@ -12,59 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package all imports all component implementations that ship with the open
-// source Benthos repo. This is a convenient way of importing every single
-// connector at the cost of a larger dependency tree for your application.
+// Package all imports all enterprise and FOSS component implementations that
+// ship with Redpanda Connect. This is a convenient way of importing every
+// single connector at the cost of a larger dependency tree for your
+// application.
 package all
 
 import (
-	// Import all public sub-categories.
-	_ "github.com/redpanda-data/connect/v4/public/components/amqp09"
-	_ "github.com/redpanda-data/connect/v4/public/components/amqp1"
-	_ "github.com/redpanda-data/connect/v4/public/components/avro"
-	_ "github.com/redpanda-data/connect/v4/public/components/aws"
-	_ "github.com/redpanda-data/connect/v4/public/components/azure"
-	_ "github.com/redpanda-data/connect/v4/public/components/beanstalkd"
-	_ "github.com/redpanda-data/connect/v4/public/components/cassandra"
-	_ "github.com/redpanda-data/connect/v4/public/components/changelog"
-	_ "github.com/redpanda-data/connect/v4/public/components/cockroachdb"
-	_ "github.com/redpanda-data/connect/v4/public/components/confluent"
-	_ "github.com/redpanda-data/connect/v4/public/components/couchbase"
-	_ "github.com/redpanda-data/connect/v4/public/components/crypto"
-	_ "github.com/redpanda-data/connect/v4/public/components/dgraph"
-	_ "github.com/redpanda-data/connect/v4/public/components/discord"
-	_ "github.com/redpanda-data/connect/v4/public/components/elasticsearch"
-	_ "github.com/redpanda-data/connect/v4/public/components/gcp"
-	_ "github.com/redpanda-data/connect/v4/public/components/hdfs"
-	_ "github.com/redpanda-data/connect/v4/public/components/influxdb"
-	_ "github.com/redpanda-data/connect/v4/public/components/io"
-	_ "github.com/redpanda-data/connect/v4/public/components/jaeger"
-	_ "github.com/redpanda-data/connect/v4/public/components/javascript"
-	_ "github.com/redpanda-data/connect/v4/public/components/kafka"
-	_ "github.com/redpanda-data/connect/v4/public/components/maxmind"
-	_ "github.com/redpanda-data/connect/v4/public/components/memcached"
-	_ "github.com/redpanda-data/connect/v4/public/components/mongodb"
-	_ "github.com/redpanda-data/connect/v4/public/components/mqtt"
-	_ "github.com/redpanda-data/connect/v4/public/components/msgpack"
-	_ "github.com/redpanda-data/connect/v4/public/components/nanomsg"
-	_ "github.com/redpanda-data/connect/v4/public/components/nats"
-	_ "github.com/redpanda-data/connect/v4/public/components/nsq"
-	_ "github.com/redpanda-data/connect/v4/public/components/opensearch"
-	_ "github.com/redpanda-data/connect/v4/public/components/otlp"
-	_ "github.com/redpanda-data/connect/v4/public/components/prometheus"
-	_ "github.com/redpanda-data/connect/v4/public/components/pulsar"
-	_ "github.com/redpanda-data/connect/v4/public/components/pure"
-	_ "github.com/redpanda-data/connect/v4/public/components/pure/extended"
-	_ "github.com/redpanda-data/connect/v4/public/components/pusher"
-	_ "github.com/redpanda-data/connect/v4/public/components/redis"
-	_ "github.com/redpanda-data/connect/v4/public/components/redpanda"
-	_ "github.com/redpanda-data/connect/v4/public/components/sentry"
-	_ "github.com/redpanda-data/connect/v4/public/components/sftp"
+	// Import all community components.
+	_ "github.com/redpanda-data/connect/v4/public/components/community"
+
+	// Import all enterprise components.
 	_ "github.com/redpanda-data/connect/v4/public/components/snowflake"
 	_ "github.com/redpanda-data/connect/v4/public/components/splunk"
-	_ "github.com/redpanda-data/connect/v4/public/components/sql"
-	_ "github.com/redpanda-data/connect/v4/public/components/statsd"
-	_ "github.com/redpanda-data/connect/v4/public/components/twitter"
-	_ "github.com/redpanda-data/connect/v4/public/components/wasm"
-	_ "github.com/redpanda-data/connect/v4/public/components/zeromq"
 )
