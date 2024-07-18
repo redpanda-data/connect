@@ -49,6 +49,7 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/nanomsg"
 	_ "github.com/redpanda-data/connect/v4/public/components/nats"
 	_ "github.com/redpanda-data/connect/v4/public/components/nsq"
+	_ "github.com/redpanda-data/connect/v4/public/components/openai"
 	_ "github.com/redpanda-data/connect/v4/public/components/opensearch"
 	_ "github.com/redpanda-data/connect/v4/public/components/otlp"
 	_ "github.com/redpanda-data/connect/v4/public/components/pinecone"
