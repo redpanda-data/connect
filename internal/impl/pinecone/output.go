@@ -38,7 +38,7 @@ const (
 
 func outputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Version("0.1.0").
+		Version("4.31.0").
 		Categories("AI").
 		Summary("Inserts items into a Pinecone index.").
 		Description(service.OutputPerformanceDocs(true, true)).
