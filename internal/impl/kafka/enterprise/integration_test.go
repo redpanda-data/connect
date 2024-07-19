@@ -20,7 +20,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
-	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka/enterprise"
 	"github.com/redpanda-data/connect/v4/internal/protoconnect"
@@ -213,12 +213,12 @@ max_message_bytes: 1MB
 
 	var m protoconnect.StatusEvent
 
-	require.NoError(t, proto.Unmarshal([]byte(outRecords[0]), &m))
+	require.NoError(t, protojson.Unmarshal([]byte(outRecords[0]), &m))
 	assert.Equal(t, protoconnect.StatusEvent_TYPE_INITIALIZING, m.Type)
 	assert.Equal(t, "baz", m.InstanceId)
 	assert.Equal(t, "buz", m.PipelineId)
 
-	require.NoError(t, proto.Unmarshal([]byte(outRecords[1]), &m))
+	require.NoError(t, protojson.Unmarshal([]byte(outRecords[1]), &m))
 	assert.Equal(t, protoconnect.StatusEvent_TYPE_EXITING, m.Type)
 	assert.Equal(t, "uh oh", m.ExitError.Message)
 	assert.Equal(t, "baz", m.InstanceId)

@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/redpanda-data/connect/v4/internal/protoconnect"
 )
@@ -65,7 +65,7 @@ func (l *TopicLogger) sendStatusEvent(e *protoconnect.StatusEvent) {
 		return
 	}
 
-	data, err := proto.Marshal(e)
+	data, err := protojson.Marshal(e)
 	if err != nil {
 		l.fallbackLogger.Load().With("error", err).Error("Failed to marshal status event")
 		return
