@@ -3,7 +3,7 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## v4.31.0 - TBD
+## v4.31.0 - 2024-07-19
 
 ### Added
 
@@ -18,6 +18,8 @@ All notable changes to this project will be documented in this file.
 - New `-community` suffixed build included in release artifacts, containing only FOSS functionality. (@Jeffail)
 - New `-cloud` suffixed build included in release artifacts, containing components enabled in Redpanda Cloud. (@Jeffail)
 - Field `status_topic` added to the global `redpanda` config block. (@Jeffail)
+- New `pinecone` output. (@rockwotj)
+- (Benthos) The `/ready` endpoint in regular operation now provides a detailed summary of all inputs and outputs, including connection errors where applicable. (@Jeffail)
 
 ### Changed
 
