@@ -82,6 +82,7 @@ require (
 	github.com/oschwald/geoip2-golang v1.11.0
 	github.com/parquet-go/parquet-go v0.22.0
 	github.com/pebbe/zmq4 v1.2.11
+	github.com/pinecone-io/go-pinecone v0.5.0
 	github.com/pkg/sftp v1.13.6
 	github.com/prometheus/client_golang v1.19.1
 	github.com/prometheus/common v0.48.0
@@ -157,6 +158,7 @@ require (
 	github.com/apache/arrow/go/arrow v0.0.0-20211112161151-bc219186db40 // indirect
 	github.com/apache/arrow/go/v15 v15.0.2 // indirect
 	github.com/apache/thrift v0.18.1 // indirect
+	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/ardielle/ardielle-go v1.5.2 // indirect
 	github.com/armon/go-metrics v0.3.4 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.3 // indirect
@@ -285,6 +287,7 @@ require (
 	github.com/nats-io/nats-streaming-server v0.24.6 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/ncruces/go-strftime v0.1.9 // indirect
+	github.com/oapi-codegen/runtime v1.1.1 // indirect
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.0 // indirect
