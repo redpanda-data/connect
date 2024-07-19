@@ -3,13 +3,13 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## v4.32.0 - TBD
+## 4.32.0 - TBD
 
 ### Changed
 
 - The `gcp_pubsub` output now rejects messages with metadata values which contain invalid UTF-8-encoded runes. (@AndreasBergmeier6176)
 
-## v4.31.0 - 2024-07-19
+## 4.31.0 - 2024-07-19
 
 ### Added
 
