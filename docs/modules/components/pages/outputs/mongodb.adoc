@@ -73,6 +73,7 @@ output:
     database: "" # No default (required)
     username: ""
     password: ""
+    app_name: benthos
     collection: "" # No default (required)
     operation: update-one
     write_concern:
@@ -148,6 +149,15 @@ This field contains sensitive information that usually shouldn't be added to a c
 *Type*: `string`
 
 *Default*: `""`
+
+=== `app_name`
+
+The client application name.
+
+
+*Type*: `string`
+
+*Default*: `"benthos"`
 
 === `collection`
 

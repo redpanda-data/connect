@@ -48,6 +48,7 @@ const (
 	commonFieldClientDatabase = "database"
 	commonFieldClientUsername = "username"
 	commonFieldClientPassword = "password"
+	commonFieldClientAppName  = "app_name"
 )
 
 func clientFields() []*service.ConfigField {
@@ -64,6 +65,10 @@ func clientFields() []*service.ConfigField {
 			Description("The password to connect to the database.").
 			Default("").
 			Secret(),
+		service.NewURLField(commonFieldClientAppName).
+			Description("The client application name.").
+			Default("benthos").
+			Advanced(),
 	}
 }
 
@@ -81,11 +86,17 @@ func getClient(parsedConf *service.ParsedConfig) (client *mongo.Client, database
 		return
 	}
 
+	var appName string
+	if appName, err = parsedConf.FieldString(commonFieldClientAppName); err != nil {
+		return
+	}
+
 	opt := options.Client().
 		SetConnectTimeout(10 * time.Second).
 		SetSocketTimeout(30 * time.Second).
 		SetServerSelectionTimeout(30 * time.Second).
-		ApplyURI(url)
+		ApplyURI(url).
+		SetAppName(appName)
 
 	if username != "" && password != "" {
 		creds := options.Credential{
