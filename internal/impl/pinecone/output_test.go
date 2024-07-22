@@ -17,6 +17,7 @@ package pinecone
 import (
 	"context"
 	"math/rand"
+	"slices"
 	"testing"
 
 	"github.com/pinecone-io/go-pinecone/pinecone"
@@ -26,7 +27,8 @@ import (
 )
 
 type mockClient struct {
-	data map[string]map[string]map[string]*pinecone.Vector
+	data            map[string]map[string]map[string]*pinecone.Vector
+	openConnections int
 }
 
 func (c *mockClient) Index(host string) (indexClient, error) {
@@ -35,7 +37,8 @@ func (c *mockClient) Index(host string) (indexClient, error) {
 		c.data[host] = map[string]map[string]*pinecone.Vector{}
 		i = c.data[host]
 	}
-	return &mockIndexClient{index: i}, nil
+	c.openConnections++
+	return &mockIndexClient{index: i, openConnections: &c.openConnections}, nil
 }
 
 func (c *mockClient) Write(host string, ns string, value *pinecone.Vector) {
@@ -57,8 +60,9 @@ func (c *mockClient) Get(host, ns, id string) *pinecone.Vector {
 }
 
 type mockIndexClient struct {
-	namespace string
-	index     map[string]map[string]*pinecone.Vector
+	namespace       string
+	index           map[string]map[string]*pinecone.Vector
+	openConnections *int
 }
 
 func (c *mockIndexClient) SetNamespace(namespace string) {
@@ -112,6 +116,7 @@ func (c *mockIndexClient) DeleteVectorsByID(ctx context.Context, ids []string) e
 }
 
 func (c *mockIndexClient) Close() error {
+	*c.openConnections--
 	return nil
 }
 
@@ -124,13 +129,17 @@ type mockMessage struct {
 func (m *mockMessage) AsVector() *pinecone.Vector {
 	return &pinecone.Vector{
 		Id:     m.id,
-		Values: m.vector,
+		Values: slices.Clone(m.vector),
 	}
 }
 
 func (m *mockMessage) AsMessage() *service.Message {
 	msg := service.NewMessage(nil)
-	msg.SetStructuredMut(m.vector)
+	vec := make([]any, len(m.vector))
+	for i, f := range m.vector {
+		vec[i] = f
+	}
+	msg.SetStructuredMut(vec)
 	msg.MetaSetMut("ns", m.namespace)
 	msg.MetaSetMut("id", m.id)
 	return msg
@@ -210,4 +219,18 @@ func TestDelete(t *testing.T) {
 		require.Nil(t, c.Get(w.host, m.namespace, m.id))
 	}
 	require.NotNil(t, c.Get(w.host, "fuzz", "qux"))
+}
+
+func TestMapping(t *testing.T) {
+	w, c := setup(operationUpsert)
+	var err error
+	w.vectorMapping, err = bloblang.GlobalEnvironment().Parse("this.map_each(v -> v * 2)")
+	require.NoError(t, err)
+	m := newMessage("foo", "bar")
+	err = w.WriteBatch(context.Background(), service.MessageBatch{m.AsMessage()})
+	require.NoError(t, err)
+	for i, v := range m.vector {
+		m.vector[i] = v * 2
+	}
+	require.Equal(t, m.AsVector(), c.Get(w.host, m.namespace, m.id))
 }

@@ -208,6 +208,8 @@ func (w *outputWriter) WriteBatch(ctx context.Context, batch service.MessageBatc
 	defer func() {
 		if err == nil {
 			w.pool.Put(c)
+		} else {
+			_ = c.Close()
 		}
 	}()
 	switch w.op {
@@ -295,6 +297,14 @@ func (w *outputWriter) computeBatchedVectors(batch service.MessageBatch) (map[st
 			values = make([]float32, len(vec))
 			for i, v := range vec {
 				values[i] = float32(v)
+			}
+		case []any:
+			values = make([]float32, len(vec))
+			for i, v := range vec {
+				values[i], err = bloblang.ValueAsFloat32(v)
+				if err != nil {
+					return nil, fmt.Errorf("unable to coerce vector output type: %w", err)
+				}
 			}
 		default:
 			return nil, fmt.Errorf("unable to coerce vector output type from %T", vec)
