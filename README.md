@@ -47,7 +47,7 @@ AWS (DynamoDB, Kinesis, S3, SQS, SNS), Azure (Blob storage, Queue storage, Table
 
 If you want to dive fully into Redpanda Connect then don't waste your time in this dump, check out the [documentation site][general-docs].
 
-For guidance on building your own custom plugins in Go check out [the public APIs.][godoc-url]
+For guidance on building your own custom plugins in Go check out [the public APIs](https://pkg.go.dev/github.com/redpanda-data/benthos/v4/public/service).
 
 ## Install
 
