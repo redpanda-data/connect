@@ -24,8 +24,15 @@ Use a MongoDB instance as a cache.
 
 Introduced in version 3.43.0.
 
+
+[tabs]
+======
+Common::
++
+--
+
 ```yml
-# Config fields, showing default values
+# Common config fields, showing default values
 label: ""
 mongodb:
   url: mongodb://localhost:27017 # No default (required)
@@ -36,6 +43,28 @@ mongodb:
   key_field: "" # No default (required)
   value_field: "" # No default (required)
 ```
+
+--
+Advanced::
++
+--
+
+```yml
+# All config fields, showing default values
+label: ""
+mongodb:
+  url: mongodb://localhost:27017 # No default (required)
+  database: "" # No default (required)
+  username: ""
+  password: ""
+  app_name: benthos
+  collection: "" # No default (required)
+  key_field: "" # No default (required)
+  value_field: "" # No default (required)
+```
+
+--
+======
 
 == Fields
 
@@ -83,6 +112,15 @@ This field contains sensitive information that usually shouldn't be added to a c
 *Type*: `string`
 
 *Default*: `""`
+
+=== `app_name`
+
+The client application name.
+
+
+*Type*: `string`
+
+*Default*: `"benthos"`
 
 === `collection`
 

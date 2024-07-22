@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## 4.32.0 - TBD
 
+### Added
+
+- Field `app_name` added to the MongoDB components. (@mihaitodor)
+
 ### Changed
 
 - The `gcp_pubsub` output now rejects messages with metadata values which contain invalid UTF-8-encoded runes. (@AndreasBergmeier6176)
