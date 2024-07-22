@@ -16,6 +16,8 @@
      https://github.com/redpanda-data/connect/tree/main/cmd/tools/docs_gen/templates/plugin.adoc.tmpl
 ////
 
+// Copyright Redpanda Data, Inc
+
 
 component_type_dropdown::[]
 
