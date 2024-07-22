@@ -67,7 +67,7 @@ brew install redpanda-data/tap/redpanda
 Or pull the docker image:
 
 ```shell
-docker pull docker.redpanda.com/redpandadata/redpanda
+docker pull docker.redpanda.com/redpandadata/connect
 ```
 
 For more information check out the [getting started guide][getting-started].
@@ -82,10 +82,10 @@ Or, with docker:
 
 ```shell
 # Using a config file
-docker run --rm -v /path/to/your/config.yaml:/connect.yaml docker.redpanda.com/redpandadata/redpanda connect run
+docker run --rm -v /path/to/your/config.yaml:/connect.yaml docker.redpanda.com/redpandadata/connect run
 
 # Using a series of -s flags
-docker run --rm -p 4195:4195 docker.redpanda.com/redpandadata/redpanda connect run \
+docker run --rm -p 4195:4195 docker.redpanda.com/redpandadata/connect run \
   -s "input.type=http_server" \
   -s "output.type=kafka" \
   -s "output.kafka.addresses=kafka-server:9092" \
@@ -165,7 +165,7 @@ docker run --rm \
 	-v /path/to/your/benthos.yaml:/config.yaml \
 	-v /tmp/data:/data \
 	-p 4195:4195 \
-	redpanda-connect -c /config.yaml
+	redpandadata/connect -c /config.yaml
 ```
 
 ## Contributing
