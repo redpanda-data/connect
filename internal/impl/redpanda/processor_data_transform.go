@@ -174,7 +174,7 @@ func newDataTransformProcessorFromConfig(conf *service.ParsedConfig, mgr *servic
 		cfg.timestamp = ts
 	}
 
-	timeout, err := conf.FieldDuration(dtpFieldTimestamp)
+	timeout, err := conf.FieldDuration(dtpFieldTimeout)
 	if err != nil {
 		return nil, err
 	}
