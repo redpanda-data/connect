@@ -76,6 +76,10 @@ All notable changes to this project will be documented in this file.
 - The `gcp_pubsub` output now rejects messages with metadata values which contain invalid UTF-8-encoded runes. (@AndreasBergmeier6176)
 - The `.goreleaser.yml` configuration has been set back to version 1. (@Jeffail)
 
+### Fixed
+
+- The `schema_registry_encode` and `schema_registry_decode` processors no longer unescape path separators in the schema name. (@Mizaro)
+
 ## 4.31.0 - 2024-07-19
 
 ### Added
