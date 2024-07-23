@@ -21,7 +21,7 @@
 component_type_dropdown::[]
 
 
-Processor that uses the OpenAI API to create a model response for the given chat conversation.
+Generates responses to messages in a chat conversation, using the OpenAI API.
 
 Introduced in version 4.32.0.
 
@@ -61,15 +61,15 @@ openai_chat_completion:
 --
 ======
 
-This processor calls the OpenAI API, creating a chat completion based on the user prompt. By default the entire message's payload as a string is submitted, and the `prompt` configuration field allows customizing that.
+This processor sends the contents of user prompts to the OpenAI API, which generates responses. By default, the processor submits the entire payload of each message as a string, unless you use the `prompt` configuration field to customize it.
 
-You can learn more about chat completion here: https://platform.openai.com/docs/guides/chat-completions[https://platform.openai.com/docs/guides/chat-completions^]
+To learn more about chat completion, see the https://platform.openai.com/docs/guides/chat-completions[OpenAI API documentation^]
 
 == Fields
 
 === `server_address`
 
-The endpoint used to make API requests. This can be changed to use another OpenAI compatible service.
+The Open API endpoint that the processor sends requests to. Update the default value to use another OpenAI compatible service.
 
 
 *Type*: `string`
@@ -78,7 +78,7 @@ The endpoint used to make API requests. This can be changed to use another OpenA
 
 === `api_key`
 
-The API Key for OpenAI.
+The API key for OpenAI API.
 [CAUTION]
 ====
 This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
@@ -91,7 +91,7 @@ This field contains sensitive information that usually shouldn't be added to a c
 
 === `model`
 
-The OpenAI model to use.
+The name of the OpenAI model to use.
 
 
 *Type*: `string`
@@ -111,7 +111,7 @@ model: gpt4-turbo
 
 === `prompt`
 
-The prompt to generate text from. By default the entire payload as a string is submitted.
+The user prompt you want to generate a response for. By default, the processor submits the entire payload as a string.
 
 
 *Type*: `string`
@@ -119,7 +119,7 @@ The prompt to generate text from. By default the entire payload as a string is s
 
 === `system_prompt`
 
-The system prompt to submit along with the prompt.
+The system prompt to submit along with the user prompt.
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
 

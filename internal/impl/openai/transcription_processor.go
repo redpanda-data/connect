@@ -44,11 +44,11 @@ func init() {
 func transcriptionProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("AI").
-		Summary("Processor that uses the OpenAI API to transcribes audio into the input language.").
+		Summary("Generates a transcription of spoken audio in the input language, using the OpenAI API.").
 		Description(`
-This processor calls the OpenAI API for each message, transcribing audio. By default the entire message's payload is submitted, and the `+"`"+otspFieldFile+"`"+` configuration field allows customizing that.
+This processor sends an audio file object along with the input language to OpenAI API to generate a transcription. By default, the processor submits the entire payload of each message as a string, unless you use the `+"`"+otspFieldFile+"`"+` configuration field to customize it.
 
-You can learn more about transcription here: https://platform.openai.com/docs/guides/speech-to-text[https://platform.openai.com/docs/guides/speech-to-text^]`).
+To learn more about audio transcription, see the: https://platform.openai.com/docs/guides/speech-to-text[OpenAI API documentation^]`).
 		Version("4.32.0").
 		Fields(
 			baseConfigFieldsWithModels(
@@ -57,14 +57,14 @@ You can learn more about transcription here: https://platform.openai.com/docs/gu
 		).
 		Fields(
 			service.NewBloblangField(otspFieldFile).
-				Description("The audio file object (not file name) to transcribe, in one of these formats: flac, mp3, mp4, mpeg, mpga, m4a, ogg, wav, or webm."),
+				Description("The audio file object (not file name) to transcribe, in one of the following formats: `flac`, `mp3`, `mp4`, `mpeg`, `mpga`, `m4a`, `ogg`, `wav`, or `webm`."),
 			service.NewInterpolatedStringField(otspFieldLang).
-				Description("The language of the input audio. Supplying the input language in ISO-639-1 format will improve accuracy and latency.").
+				Description("The language of the input audio. Supplying the input language in ISO-639-1 format improves accuracy and latency.").
 				Examples("en", "fr", "de", "zh").
 				Optional().
 				Advanced(),
 			service.NewInterpolatedStringField(otspFieldPrompt).
-				Description("An optional text to guide the model's style or continue a previous audio segment. The prompt should match the audio language.").
+				Description("Optional text to guide the model's style or continue a previous audio segment. The prompt should match the audio language.").
 				Optional().
 				Advanced(),
 		)

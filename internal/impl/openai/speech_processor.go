@@ -45,11 +45,11 @@ func init() {
 func speechProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("AI").
-		Summary("Processor that uses the OpenAI API to generate audio from the input text.").
+		Summary("Generates audio from a text description and other attributes, using OpenAI API.").
 		Description(`
-This processor calls the OpenAI API for each message, creating speech. By default the entire message's payload as a string is submitted, and the `+"`"+ospFieldInput+"`"+` configuration field allows customizing that.
+This processor sends a text description and other attributes, such as a voice type and format, to the OpenAI API, which generates audio. By default, the processor submits the entire payload of each message as a string, unless you use the `+"`"+oipFieldPrompt+"`"+` configuration field to customize it.
 
-You can learn more about text-to-speech here: https://platform.openai.com/docs/guides/text-to-speech[https://platform.openai.com/docs/guides/text-to-speech^]`).
+To learn more about turning text into spoken audio, see the https://platform.openai.com/docs/guides/text-to-speech[OpenAI API documentation^]`).
 		Version("4.32.0").
 		Fields(
 			baseConfigFieldsWithModels(
@@ -59,13 +59,13 @@ You can learn more about text-to-speech here: https://platform.openai.com/docs/g
 		).
 		Fields(
 			service.NewBloblangField(ospFieldInput).
-				Description("The text to generate audio for. The maximum length is 4096 characters.").
+				Description("A text description of the audio you want to generate with a length of 4096 characters.").
 				Optional(),
 			service.NewInterpolatedStringField(ospFieldVoice).
 				Description("The voice to use when generating the audio.").
 				Examples("alloy", "echo", "fable", "onyx", "nova", "shimmer"),
 			service.NewInterpolatedStringField(ospFieldResponseFormat).
-				Description("The format to generate audio in. The default is mp3.").
+				Description("The format to generate audio in. Default is `mp3`.").
 				Examples("mp3", "opus", "aac", "flac", "wav", "pcm").
 				Advanced().
 				Optional(),

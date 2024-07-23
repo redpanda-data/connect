@@ -43,11 +43,11 @@ func init() {
 func chatProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("AI").
-		Summary("Processor that uses the OpenAI API to create a model response for the given chat conversation.").
+		Summary("Generates responses to messages in a chat conversation, using the OpenAI API.").
 		Description(`
-This processor calls the OpenAI API, creating a chat completion based on the user prompt. By default the entire message's payload as a string is submitted, and the `+"`"+ocpFieldUserPrompt+"`"+` configuration field allows customizing that.
+This processor sends the contents of user prompts to the OpenAI API, which generates responses. By default, the processor submits the entire payload of each message as a string, unless you use the `+"`"+ocpFieldUserPrompt+"`"+` configuration field to customize it.
 
-You can learn more about chat completion here: https://platform.openai.com/docs/guides/chat-completions[https://platform.openai.com/docs/guides/chat-completions^]`).
+To learn more about chat completion, see the https://platform.openai.com/docs/guides/chat-completions[OpenAI API documentation^]`).
 		Version("4.32.0").
 		Fields(
 			baseConfigFieldsWithModels(
@@ -59,10 +59,10 @@ You can learn more about chat completion here: https://platform.openai.com/docs/
 		).
 		Fields(
 			service.NewBloblangField(ocpFieldUserPrompt).
-				Description("The prompt to generate text from. By default the entire payload as a string is submitted.").
+				Description("The user prompt you want to generate a response for. By default, the processor submits the entire payload as a string.").
 				Optional(),
 			service.NewInterpolatedStringField(ocpFieldSystemPrompt).
-				Description("The system prompt to submit along with the prompt.").
+				Description("The system prompt to submit along with the user prompt.").
 				Optional(),
 		)
 }

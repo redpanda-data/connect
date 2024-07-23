@@ -41,11 +41,11 @@ func init() {
 func embeddingProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("AI").
-		Summary("Processor that uses the OpenAI API to create an embedding vector representing the input text.").
+		Summary("Generates vector embeddings to represent input text, using the OpenAI API.").
 		Description(`
-This processor calls the OpenAI API, computing an embedding of text. By default the entire message's payload as a string is submitted, and the ` + "`text`" + ` configuration field allows customizing that.
+This processor sends the text strings to the OpenAI API, which generates vector embeddings. By default, the processor submits the entire payload of each message as a string, unless you use the ` + "`text`" + ` configuration field to customize it.
 
-You can learn more about embeddings here: https://platform.openai.com/docs/guides/embeddings[https://platform.openai.com/docs/guides/embeddings^]`).
+To learn more about vector embeddings, see the https://platform.openai.com/docs/guides/embeddings[OpenAI API documentation^]`).
 		Version("4.32.0").
 		Fields(
 			baseConfigFieldsWithModels(
@@ -56,7 +56,7 @@ You can learn more about embeddings here: https://platform.openai.com/docs/guide
 		).
 		Field(
 			service.NewBloblangField(oepFieldTextMapping).
-				Description("The text to create embeddings for. By default the entire payload as a string is submitted.").
+				Description("The text you want to generate a vector embedding for. By default, the processor submits the entire payload as a string.").
 				Optional(),
 		)
 }

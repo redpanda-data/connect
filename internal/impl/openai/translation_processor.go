@@ -43,11 +43,11 @@ func init() {
 func translationProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("AI").
-		Summary("Processor that uses the OpenAI API to translate audio into English.").
+		Summary("Translates spoken audio into English, using the OpenAI API.").
 		Description(`
-This processor calls the OpenAI API for each message, translating audio into English. By default the entire message's payload is submitted, and the `+"`"+otlpFieldFile+"`"+` configuration field allows customizing that.
+This processor sends an audio file object to OpenAI API to generate a translation. By default, the processor submits the entire payload of each message as a string, unless you use the `+"`"+otlpFieldFile+"`"+` configuration field to customize it.
 
-You can learn more about translation here: https://platform.openai.com/docs/guides/speech-to-text[https://platform.openai.com/docs/guides/speech-to-text^]`).
+To learn more about translation, see the https://platform.openai.com/docs/guides/speech-to-text[OpenAI API documentation^]`).
 		Version("4.32.0").
 		Fields(
 			baseConfigFieldsWithModels(
@@ -56,10 +56,10 @@ You can learn more about translation here: https://platform.openai.com/docs/guid
 		).
 		Fields(
 			service.NewBloblangField(otspFieldFile).
-				Description("The audio file object (not file name) to transcribe, in one of these formats: flac, mp3, mp4, mpeg, mpga, m4a, ogg, wav, or webm.").
+				Description("The audio file object (not file name) to translate, in one of the following formats: `flac`, `mp3`, `mp4`, `mpeg`, `mpga`, `m4a`, `ogg`, `wav`, or `webm`.").
 				Optional(),
 			service.NewInterpolatedStringField(otspFieldPrompt).
-				Description("An optional text to guide the model's style or continue a previous audio segment. The prompt should match the audio language.").
+				Description("Optional text to guide the model's style or continue a previous audio segment. The prompt should match the audio language.").
 				Optional().
 				Advanced(),
 		)

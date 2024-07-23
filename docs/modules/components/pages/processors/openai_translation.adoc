@@ -21,7 +21,7 @@
 component_type_dropdown::[]
 
 
-Processor that uses the OpenAI API to translate audio into English.
+Translates spoken audio into English, using the OpenAI API.
 
 Introduced in version 4.32.0.
 
@@ -60,15 +60,15 @@ openai_translation:
 --
 ======
 
-This processor calls the OpenAI API for each message, translating audio into English. By default the entire message's payload is submitted, and the `file` configuration field allows customizing that.
+This processor sends an audio file object to OpenAI API to generate a translation. By default, the processor submits the entire payload of each message as a string, unless you use the `file` configuration field to customize it.
 
-You can learn more about translation here: https://platform.openai.com/docs/guides/speech-to-text[https://platform.openai.com/docs/guides/speech-to-text^]
+To learn more about translation, see the https://platform.openai.com/docs/guides/speech-to-text[OpenAI API documentation^]
 
 == Fields
 
 === `server_address`
 
-The endpoint used to make API requests. This can be changed to use another OpenAI compatible service.
+The Open API endpoint that the processor sends requests to. Update the default value to use another OpenAI compatible service.
 
 
 *Type*: `string`
@@ -77,7 +77,7 @@ The endpoint used to make API requests. This can be changed to use another OpenA
 
 === `api_key`
 
-The API Key for OpenAI.
+The API key for OpenAI API.
 [CAUTION]
 ====
 This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
@@ -90,7 +90,7 @@ This field contains sensitive information that usually shouldn't be added to a c
 
 === `model`
 
-The OpenAI model to use.
+The name of the OpenAI model to use.
 
 
 *Type*: `string`
@@ -104,7 +104,7 @@ model: whisper-1
 
 === `file`
 
-The audio file object (not file name) to transcribe, in one of these formats: flac, mp3, mp4, mpeg, mpga, m4a, ogg, wav, or webm.
+The audio file object (not file name) to translate, in one of the following formats: `flac`, `mp3`, `mp4`, `mpeg`, `mpga`, `m4a`, `ogg`, `wav`, or `webm`.
 
 
 *Type*: `string`
@@ -112,7 +112,7 @@ The audio file object (not file name) to transcribe, in one of these formats: fl
 
 === `prompt`
 
-An optional text to guide the model's style or continue a previous audio segment. The prompt should match the audio language.
+Optional text to guide the model's style or continue a previous audio segment. The prompt should match the audio language.
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
 

@@ -31,14 +31,14 @@ const (
 func baseConfigFieldsWithModels(modelExamples ...any) []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewStringField(opFieldServerAddress).
-			Description("The endpoint used to make API requests. This can be changed to use another OpenAI compatible service.").
+			Description("The Open API endpoint that the processor sends requests to. Update the default value to use another OpenAI compatible service.").
 			Advanced().
 			Default("https://api.openai.com/v1"),
 		service.NewStringField(opFieldAPIKey).
 			Secret().
-			Description("The API Key for OpenAI."),
+			Description("The API key for OpenAI API."),
 		service.NewStringField(opFieldModel).
-			Description("The OpenAI model to use.").
+			Description("The name of the OpenAI model to use.").
 			Examples(modelExamples...),
 	}
 }
