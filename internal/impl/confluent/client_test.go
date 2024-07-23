@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"testing"
+
+	"github.com/benthosdev/benthos/v4/public/service"
 )
 
 func TestSchemaRegistryClient_GetSchemaBySubjectAndVersion(t *testing.T) {
@@ -30,14 +32,14 @@ func TestSchemaRegistryClient_GetSchemaBySubjectAndVersion(t *testing.T) {
 	}
 	tests := []struct {
 		name                    string
-		schemaRegistryServerUrl string
+		schemaRegistryServerURL string
 		args                    args
 		wantResPayload          SchemaInfo
 		wantErr                 assert.ErrorAssertionFunc
 	}{
 		{
 			name:                    "sanity",
-			schemaRegistryServerUrl: "/subjects/foo/versions/latest",
+			schemaRegistryServerURL: "/subjects/foo/versions/latest",
 			args: args{
 				subject: "foo",
 				version: nil,
@@ -50,7 +52,7 @@ func TestSchemaRegistryClient_GetSchemaBySubjectAndVersion(t *testing.T) {
 		},
 		{
 			name:                    "contains sep (%2F)",
-			schemaRegistryServerUrl: "/subjects/main%2Fcommon/versions/latest",
+			schemaRegistryServerURL: "/subjects/main%2Fcommon/versions/latest",
 			args: args{
 				subject: "main/common",
 				version: nil,
@@ -63,7 +65,7 @@ func TestSchemaRegistryClient_GetSchemaBySubjectAndVersion(t *testing.T) {
 		},
 		{
 			name:                    "sanity with version",
-			schemaRegistryServerUrl: "/subjects/foo/versions/4",
+			schemaRegistryServerURL: "/subjects/foo/versions/4",
 			args: args{
 				subject: "foo",
 				version: &version,
@@ -76,7 +78,7 @@ func TestSchemaRegistryClient_GetSchemaBySubjectAndVersion(t *testing.T) {
 		},
 		{
 			name:                    "contains sep (%2F)  with version",
-			schemaRegistryServerUrl: "/subjects/main%2Fcommon/versions/4",
+			schemaRegistryServerURL: "/subjects/main%2Fcommon/versions/4",
 			args: args{
 				subject: "main/common",
 				version: &version,
@@ -91,7 +93,7 @@ func TestSchemaRegistryClient_GetSchemaBySubjectAndVersion(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			urlStr := runSchemaRegistryServer(t, func(path string) ([]byte, error) {
-				if path == tt.schemaRegistryServerUrl {
+				if path == tt.schemaRegistryServerURL {
 					return fooFirst, nil
 				}
 				return nil, errors.New("nope")
