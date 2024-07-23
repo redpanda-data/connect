@@ -31,7 +31,7 @@ import (
 )
 
 var (
-	EscapedSepRegexp = regexp.MustCompile("(?i)%2F")
+	escapedSepRegexp = regexp.MustCompile("(?i)%2F")
 )
 
 type schemaRegistryClient struct {
@@ -194,7 +194,7 @@ func (c *schemaRegistryClient) doRequest(ctx context.Context, verb, reqPath stri
 	}
 
 	reqURLString := reqURL.String()
-	if match := EscapedSepRegexp.MatchString(reqPath); match {
+	if match := escapedSepRegexp.MatchString(reqPath); match {
 		// Supporting '%2f' in the request url bypassing
 		// Workaround for Golang issue https://github.com/golang/go/issues/3659
 		if reqURLString, err = url.PathUnescape(reqURLString); err != nil {

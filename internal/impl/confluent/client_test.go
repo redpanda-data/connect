@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func TestSchemaRegistryClient_GetSchemaBySubjectAndVersion(t *testing.T) {
@@ -34,7 +34,7 @@ func TestSchemaRegistryClient_GetSchemaBySubjectAndVersion(t *testing.T) {
 		name                    string
 		schemaRegistryServerURL string
 		args                    args
-		wantResPayload          SchemaInfo
+		wantResPayload          schemaInfo
 		wantErr                 assert.ErrorAssertionFunc
 	}{
 		{
@@ -44,7 +44,7 @@ func TestSchemaRegistryClient_GetSchemaBySubjectAndVersion(t *testing.T) {
 				subject: "foo",
 				version: nil,
 			},
-			wantResPayload: SchemaInfo{
+			wantResPayload: schemaInfo{
 				ID:     3,
 				Schema: testSchema,
 			},
@@ -57,7 +57,7 @@ func TestSchemaRegistryClient_GetSchemaBySubjectAndVersion(t *testing.T) {
 				subject: "main/common",
 				version: nil,
 			},
-			wantResPayload: SchemaInfo{
+			wantResPayload: schemaInfo{
 				ID:     3,
 				Schema: testSchema,
 			},
@@ -70,7 +70,7 @@ func TestSchemaRegistryClient_GetSchemaBySubjectAndVersion(t *testing.T) {
 				subject: "foo",
 				version: &version,
 			},
-			wantResPayload: SchemaInfo{
+			wantResPayload: schemaInfo{
 				ID:     3,
 				Schema: testSchema,
 			},
@@ -83,7 +83,7 @@ func TestSchemaRegistryClient_GetSchemaBySubjectAndVersion(t *testing.T) {
 				subject: "main/common",
 				version: &version,
 			},
-			wantResPayload: SchemaInfo{
+			wantResPayload: schemaInfo{
 				ID:     3,
 				Schema: testSchema,
 			},
