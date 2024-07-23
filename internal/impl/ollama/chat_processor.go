@@ -11,7 +11,6 @@ package ollama
 import (
 	"context"
 	"errors"
-	"os"
 	"unicode/utf8"
 
 	"github.com/ollama/ollama/api"
@@ -38,24 +37,20 @@ func ollamaChatProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("AI").
 		Summary("Processor that uses the Ollama API to generate text.").
-		Description(`Sends prompts to your chosen Ollama large language model (LLM) and generates text from the responses, using the Ollama API.
+		Description(`This processor sends prompts to your chosen Ollama large language model (LLM) and generates text from the responses, using the Ollama API.
 
 For more information, see the https://ollama.com/[Ollama website^].`).
 		Version("4.32.0").
 		Fields(
 			service.NewStringField(bopFieldServerAddress).
-				Description("The address of the Ollama server to use. By default, a local Ollama server starts and runs unless you specify the address of a remote server.").
+				Description("The address of the Ollama server to use. By default, a local Ollama server starts and runs unless you specify the address of a local or remote server.").
 				Example("http://127.0.0.1:11434").
-				Optional(),
-			service.NewStringField(bopFieldOllamaDir).
-				Description("Unpack the Ollama binary to this directory. Default is `"+os.TempDir()+"`.").
-				Advanced().
 				Optional(),
 			service.NewStringField(bopFieldModel).
 				Description("The name of the Ollama LLM to use. For a full list of models, see the https://ollama.com/models[Ollama website].").
 				Examples("llama3", "gemma2", "qwen2", "phi3"),
 			service.NewInterpolatedStringField(ocpFieldUserPrompt).
-				Description("The prompt you want to generate a response for. By default, the processor submits the entire payload as a string. This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].").
+				Description("The prompt you want to generate a response for. By default, the processor submits the entire payload as a string.").
 				Optional(),
 			service.NewInterpolatedStringField(ocpFieldSystemPrompt).
 				Description("The system prompt to submit to the Ollama LLM.").

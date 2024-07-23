@@ -12,13 +12,9 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"io"
-	"io/fs"
 	"net/http"
 	"net/url"
-	"os"
 	"os/exec"
-	"path"
 	"sync"
 	"time"
 
@@ -29,31 +25,8 @@ import (
 
 const (
 	bopFieldServerAddress = "server_address"
-	bopFieldOllamaDir     = "ollama_directory"
 	bopFieldModel         = "model"
 )
-
-func extractEmbeddedServer(fsys *service.FS, serverPath string) error {
-	_, err := fsys.Stat(serverPath)
-	if err == nil {
-		return nil
-	}
-	if errors.Is(err, fs.ErrNotExist) {
-		file, err := fsys.OpenFile(serverPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, os.ModePerm)
-		if err != nil {
-			return err
-		}
-		writer, isw := file.(io.Writer)
-		if !isw {
-			return errors.New("failed to write binary")
-		}
-		if _, err = writer.Write(embeddedServer); err != nil {
-			return err
-		}
-		return file.Close()
-	}
-	return err
-}
 
 type commandOutput struct {
 	logger *service.Logger
@@ -86,16 +59,10 @@ type baseOllamaProcessor struct {
 	logger *service.Logger
 }
 
-func (o *baseOllamaProcessor) startServer(fs *service.FS, tmpDir string) (*exec.Cmd, error) {
+func (o *baseOllamaProcessor) startServer(fs *service.FS) (*exec.Cmd, error) {
 	serverPath, err := exec.LookPath("ollama")
 	if errors.Is(err, exec.ErrNotFound) {
-		if embeddedServer == nil {
-			return nil, errors.New("embedded ollama not supported for this platform - please specify a server_address")
-		}
-		serverPath = path.Join(tmpDir, "ollama")
-		if err = extractEmbeddedServer(fs, serverPath); err != nil {
-			return nil, err
-		}
+		return nil, errors.New("ollama binary not found in PATH")
 	} else if err != nil {
 		return nil, err
 	}
@@ -128,14 +95,7 @@ func newBaseProcessor(conf *service.ParsedConfig, mgr *service.Resources) (p *ba
 		}
 		p.client = api.NewClient(u, http.DefaultClient)
 	} else {
-		tmpDir := os.TempDir()
-		if conf.Contains(bopFieldOllamaDir) {
-			tmpDir, err = conf.FieldString(bopFieldOllamaDir)
-			if err != nil {
-				return
-			}
-		}
-		p.cmd, err = p.startServer(mgr.FS(), tmpDir)
+		p.cmd, err = p.startServer(mgr.FS())
 		if err != nil {
 			return
 		}

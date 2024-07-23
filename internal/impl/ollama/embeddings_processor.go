@@ -11,7 +11,6 @@ package ollama
 import (
 	"context"
 	"errors"
-	"os"
 	"unicode/utf8"
 
 	"github.com/ollama/ollama/api"
@@ -37,19 +36,15 @@ func ollamaEmbeddingProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("AI").
 		Summary("Processor that uses the Ollama API to create vector embeddings.").
-		Description(`Sends text to your chosen Ollama large language model (LLM) and creates vector embeddings, using the Ollama API. Vector embeddings are long arrays of numbers that represent values or objects, in this case text. 
+		Description(`This processor sends text to your chosen Ollama large language model (LLM) and creates vector embeddings, using the Ollama API. Vector embeddings are long arrays of numbers that represent values or objects, in this case text. 
 
 
-See https://ollama.com/[https://ollama.com/^] for more information.`).
+For more information, see the https://ollama.com/[Ollama website^]`).
 		Version("4.32.0").
 		Fields(
 			service.NewStringField(bopFieldServerAddress).
-				Description("The address of the Ollama server to use. By default, a local Ollama server starts and runs unless you specify the address of a remote server.").
+				Description("The address of the Ollama server to use. By default, a local Ollama server starts and runs unless you specify the address of a local or remote server.").
 				Example("http://127.0.0.1:11434").
-				Optional(),
-			service.NewStringField(bopFieldOllamaDir).
-				Description("Unpack the Ollama binary to this directory. Default is `"+os.TempDir()+"`.").
-				Advanced().
 				Optional(),
 			service.NewStringField(bopFieldModel).
 				Description("The name of the Ollama LLM to use. For a full list of models, see the https://ollama.com/models[Ollama website].").

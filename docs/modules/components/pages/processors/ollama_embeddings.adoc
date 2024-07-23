@@ -25,15 +25,8 @@ Processor that uses the Ollama API to create vector embeddings.
 
 Introduced in version 4.32.0.
 
-
-[tabs]
-======
-Common::
-+
---
-
 ```yml
-# Common config fields, showing default values
+# Config fields, showing default values
 label: ""
 ollama_embeddings:
   server_address: http://127.0.0.1:11434 # No default (optional)
@@ -41,34 +34,16 @@ ollama_embeddings:
   text: "" # No default (optional)
 ```
 
---
-Advanced::
-+
---
-
-```yml
-# All config fields, showing default values
-label: ""
-ollama_embeddings:
-  server_address: http://127.0.0.1:11434 # No default (optional)
-  ollama_directory: "" # No default (optional)
-  model: nomic-embed-text # No default (required)
-  text: "" # No default (optional)
-```
-
---
-======
-
-Sends text to your chosen Ollama large language model (LLM) and creates vector embeddings, using the Ollama API. Vector embeddings are long arrays of numbers that represent values or objects, in this case text. 
+This processor sends text to your chosen Ollama large language model (LLM) and creates vector embeddings, using the Ollama API. Vector embeddings are long arrays of numbers that represent values or objects, in this case text. 
 
 
-See https://ollama.com/[https://ollama.com/^] for more information.
+For more information, see the https://ollama.com/[Ollama website^]
 
 == Fields
 
 === `server_address`
 
-The address of the Ollama server to use. By default, a local Ollama server starts and runs unless you specify the address of a remote server.
+The address of the Ollama server to use. By default, a local Ollama server starts and runs unless you specify the address of a local or remote server.
 
 
 *Type*: `string`
@@ -79,14 +54,6 @@ The address of the Ollama server to use. By default, a local Ollama server start
 
 server_address: http://127.0.0.1:11434
 ```
-
-=== `ollama_directory`
-
-Unpack the Ollama binary to this directory. Default is `/tmp`.
-
-
-*Type*: `string`
-
 
 === `model`
 

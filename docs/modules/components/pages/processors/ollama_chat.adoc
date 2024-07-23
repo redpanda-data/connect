@@ -51,7 +51,6 @@ Advanced::
 label: ""
 ollama_chat:
   server_address: http://127.0.0.1:11434 # No default (optional)
-  ollama_directory: "" # No default (optional)
   model: llama3 # No default (required)
   prompt: "" # No default (optional)
   system_prompt: "" # No default (optional)
@@ -60,7 +59,7 @@ ollama_chat:
 --
 ======
 
-Sends prompts to your chosen Ollama large language model (LLM) and generates text from the responses, using the Ollama API.
+This processor sends prompts to your chosen Ollama large language model (LLM) and generates text from the responses, using the Ollama API.
 
 For more information, see the https://ollama.com/[Ollama website^].
 
@@ -68,7 +67,7 @@ For more information, see the https://ollama.com/[Ollama website^].
 
 === `server_address`
 
-The address of the Ollama server to use. By default, a local Ollama server starts and runs unless you specify the address of a remote server.
+The address of the Ollama server to use. By default, a local Ollama server starts and runs unless you specify the address of a local or remote server.
 
 
 *Type*: `string`
@@ -79,14 +78,6 @@ The address of the Ollama server to use. By default, a local Ollama server start
 
 server_address: http://127.0.0.1:11434
 ```
-
-=== `ollama_directory`
-
-Unpack the Ollama binary to this directory. Default is `/tmp`.
-
-
-*Type*: `string`
-
 
 === `model`
 
@@ -110,7 +101,7 @@ model: phi3
 
 === `prompt`
 
-The prompt you want to generate a response for. By default, the processor submits the entire payload as a string. This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+The prompt you want to generate a response for. By default, the processor submits the entire payload as a string.
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
 
