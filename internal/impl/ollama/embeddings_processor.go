@@ -38,6 +38,7 @@ func ollamaEmbeddingProcessorConfig() *service.ConfigSpec {
 		Summary("Processor that uses the Ollama API to create vector embeddings.").
 		Description(`This processor sends text to your chosen Ollama large language model (LLM) and creates vector embeddings, using the Ollama API. Vector embeddings are long arrays of numbers that represent values or objects, in this case text. 
 
+By default this processor will start a locally installed Ollama server. Ollama can be installed by following the instructions found https://ollama.com/download[here^]. An already running Ollama server can be used by configuring `+"`"+bopFieldServerAddress+"`"+`.
 
 For more information, see the https://ollama.com/[Ollama website^]`).
 		Version("4.32.0").
