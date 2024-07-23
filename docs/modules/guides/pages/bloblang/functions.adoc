@@ -10,6 +10,8 @@
      https://github.com/redpanda-data/connect/tree/main/cmd/tools/docs_gen/templates/bloblang_functions.adoc.tmpl
 ////
 
+// © 2024 Redpanda Data Inc.
+
 
 Functions can be placed anywhere and allow you to extract information from your environment, generate values, or access data from the underlying message being mapped:
 
