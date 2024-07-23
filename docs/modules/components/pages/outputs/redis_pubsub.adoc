@@ -35,7 +35,7 @@ Common::
 output:
   label: ""
   redis_pubsub:
-    url: redis://:6397 # No default (required)
+    url: redis://:6379 # No default (required)
     channel: "" # No default (required)
     max_in_flight: 64
     batching:
@@ -55,7 +55,7 @@ Advanced::
 output:
   label: ""
   redis_pubsub:
-    url: redis://:6397 # No default (required)
+    url: redis://:6379 # No default (required)
     kind: simple
     master: ""
     tls:
@@ -99,7 +99,7 @@ The URL of the target Redis server. Database is optional and is supplied as the 
 ```yml
 # Examples
 
-url: redis://:6397
+url: redis://:6379
 
 url: redis://localhost:6379
 
