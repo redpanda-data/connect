@@ -23,6 +23,7 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/community"
 
 	// Import all enterprise components.
+	_ "github.com/redpanda-data/connect/v4/public/components/ollama"
 	_ "github.com/redpanda-data/connect/v4/public/components/openai"
 	_ "github.com/redpanda-data/connect/v4/public/components/snowflake"
 	_ "github.com/redpanda-data/connect/v4/public/components/splunk"
