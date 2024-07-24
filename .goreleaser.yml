@@ -33,14 +33,8 @@ builds:
   - id: connect-cloud
     main: cmd/redpanda-connect-cloud/main.go
     binary: redpanda-connect
-    goos: [ windows, darwin, linux, freebsd, openbsd ]
-    goarch: [ amd64, arm, arm64 ]
-    goarm: [ 6, 7 ]
-    ignore:
-      - goos: windows
-        goarch: arm
-      - goos: darwin
-        goarch: arm
+    goos: [ darwin, linux ]
+    goarch: [ amd64, arm64 ]
     env:
       - CGO_ENABLED=0
     ldflags: >
@@ -52,14 +46,8 @@ builds:
   - id: connect-community
     main: cmd/redpanda-connect-community/main.go
     binary: redpanda-connect
-    goos: [ windows, darwin, linux, freebsd, openbsd ]
-    goarch: [ amd64, arm, arm64 ]
-    goarm: [ 6, 7 ]
-    ignore:
-      - goos: windows
-        goarch: arm
-      - goos: darwin
-        goarch: arm
+    goos: [ darwin, linux ]
+    goarch: [ amd64, arm64 ]
     env:
       - CGO_ENABLED=0
     ldflags: >
