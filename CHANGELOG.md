@@ -3,15 +3,24 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.32.0 - TBD
+## 4.32.0 - 2024-07-24
 
 ### Added
 
 - Field `app_name` added to the MongoDB components. (@mihaitodor)
+- New `openai_chat_completion` processor. (@rockwotj)
+- New `openai_embeddings` processor. (@rockwotj)
+- New `openai_image_generation` processor. (@rockwotj)
+- New `openai_speech` processor. (@rockwotj)
+- New `openai_transcription` processor. (@rockwotj)
+- New `openai_translation` processor. (@rockwotj)
+- New `ollama_chat` processor. (@rockwotj)
+- New `ollama_embeddings` processor. (@rockwotj)
 
 ### Changed
 
 - The `gcp_pubsub` output now rejects messages with metadata values which contain invalid UTF-8-encoded runes. (@AndreasBergmeier6176)
+- The `.goreleaser.yml` configuration has been set back to version 1. (@Jeffail)
 
 ## 4.31.0 - 2024-07-19
 
