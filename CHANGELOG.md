@@ -8,6 +8,12 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Field `app_name` added to the MongoDB components. (@mihaitodor)
+- New `openai_chat_completion` processor. (@rockwotj)
+- New `openai_embeddings` processor. (@rockwotj)
+- New `openai_image_generation` processor. (@rockwotj)
+- New `openai_speech` processor. (@rockwotj)
+- New `openai_transcription` processor. (@rockwotj)
+- New `openai_translation` processor. (@rockwotj)
 
 ### Changed
 
