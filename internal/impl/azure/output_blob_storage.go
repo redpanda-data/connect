@@ -160,14 +160,13 @@ func (a *azureBlobStorageWriter) Connect(ctx context.Context) error {
 }
 
 func (a *azureBlobStorageWriter) uploadBlob(ctx context.Context, containerName, blobName, blobType string, msg *service.Message) error {
-	uploadBody, err := a.getUploadBody(msg)
-	if err != nil {
-		return err
-	}
-
 	containerClient := a.conf.client.ServiceClient().NewContainerClient(containerName)
 	if blobType == "APPEND" {
 		appendBlobClient := containerClient.NewAppendBlobClient(blobName)
+		uploadBody, err := a.getUploadBody(msg)
+		if err != nil {
+			return err
+		}
 		_, err = appendBlobClient.AppendBlock(ctx, streaming.NopCloser(uploadBody), nil)
 		if err != nil {
 			if isErrorCode(err, bloberror.BlobNotFound) {
@@ -177,6 +176,10 @@ func (a *azureBlobStorageWriter) uploadBlob(ctx context.Context, containerName, 
 				}
 
 				// Try to upload the message again now that we created the blob
+				uploadBody, err := a.getUploadBody(msg)
+				if err != nil {
+					return err
+				}
 				_, err = appendBlobClient.AppendBlock(ctx, streaming.NopCloser(uploadBody), nil)
 				if err != nil {
 					return fmt.Errorf("failed retrying to append block to blob: %w", err)
@@ -186,6 +189,10 @@ func (a *azureBlobStorageWriter) uploadBlob(ctx context.Context, containerName, 
 			}
 		}
 	} else {
+		uploadBody, err := a.getUploadBody(msg)
+		if err != nil {
+			return err
+		}
 		_, err = containerClient.NewBlockBlobClient(blobName).UploadStream(ctx, uploadBody, nil)
 		if err != nil {
 			return fmt.Errorf("failed to push block to blob: %w", err)

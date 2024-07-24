@@ -114,6 +114,64 @@ input:
 			integration.StreamTestOptVarSet("VAR2", dummyPrefix),
 			integration.StreamTestOptVarSet("VAR3", connString),
 		)
+
+		t.Run("blob_storage_targets_input_metadata", func(t *testing.T) {
+			containerUUID, err := uuid.NewV4()
+			require.NoError(t, err)
+			containerName := containerUUID.String()
+
+			blobUUID, err := uuid.NewV4()
+			require.NoError(t, err)
+			blobName := blobUUID.String()
+
+			client, err := azblob.NewClientFromConnectionString(connString, nil)
+			require.NoError(t, err)
+
+			_, err = client.CreateContainer(context.Background(), containerName, nil)
+			require.NoError(t, err)
+
+			_, err = client.UploadBuffer(context.Background(), containerName, blobName, []byte("hello world"), nil)
+			require.NoError(t, err)
+
+			defer func() {
+				_, err := client.DeleteContainer(context.Background(), containerName, nil)
+				if err != nil {
+					t.Logf("Failed to delete container: %v", err)
+				}
+			}()
+
+			customMetadataName := "custom_metadata"
+			customMetadataValue := "1234"
+			template := fmt.Sprintf(`
+container: %v
+storage_connection_string: %v
+targets_input:
+  generate:
+    mapping: |
+      root.name = "%v"
+      meta %v = "%v"
+    count: 1`, containerName, connString, blobName, customMetadataName, customMetadataValue)
+
+			env := service.NewEnvironment()
+			parsedConfig, err := bsiSpec().ParseYAML(template, env)
+			require.NoError(t, err)
+
+			conf, err := bsiConfigFromParsed(parsedConfig)
+			require.NoError(t, err)
+
+			input, err := newAzureBlobStorage(conf, service.MockResources().Logger())
+			require.NoError(t, err)
+
+			require.NoError(t, input.Connect(context.Background()))
+
+			msgBatch, _, err := input.ReadBatch(context.Background())
+			require.NoError(t, err)
+			for _, msg := range msgBatch {
+				metadataValue, found := msg.MetaGet(fmt.Sprintf("targets_input_%v", customMetadataName))
+				require.True(t, found)
+				require.Equal(t, customMetadataValue, metadataValue)
+			}
+		})
 	})
 
 	t.Run("blob_storage_streamed", func(t *testing.T) {
