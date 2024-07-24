@@ -78,6 +78,7 @@ type embeddingsProcessor struct {
 
 func (p *embeddingsProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
 	var body oai.EmbeddingsOptions
+	body.DeploymentName = &p.model
 	if p.text != nil {
 		s, err := msg.BloblangQueryValue(p.text)
 		if err != nil {
