@@ -9,6 +9,8 @@
      https://github.com/redpanda-data/connect/blob/main/cmd/tools/docs_gen/templates/templates.adoc.tmpl
 ////
 
+// © 2024 Redpanda Data Inc.
+
 [CAUTION]
 ====
 Templates are an experimental feature and are subject to change outside major version releases.
