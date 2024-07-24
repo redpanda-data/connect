@@ -60,8 +60,7 @@ func (l *TopicLogger) TriggerEventStopped(err error) {
 }
 
 func (l *TopicLogger) sendStatusEvent(e *protoconnect.StatusEvent) {
-	tmpO := l.o.Load()
-	if tmpO == nil || l.statusTopic == "" {
+	if l.statusTopic == "" {
 		return
 	}
 
@@ -75,6 +74,10 @@ func (l *TopicLogger) sendStatusEvent(e *protoconnect.StatusEvent) {
 	msg.SetBytes(data)
 	msg.MetaSetMut(topicMetaKey, l.statusTopic)
 
+	tmpO := l.o.Load()
+	if tmpO == nil {
+		return
+	}
 	_ = tmpO.WriteBatchNonBlocking(service.MessageBatch{msg}, func(ctx context.Context, err error) error {
 		return nil // TODO: Log nacks
 	}) // TODO: Log errors (occasionally)

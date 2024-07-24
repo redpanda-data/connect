@@ -190,8 +190,7 @@ func (l *TopicLogger) Enabled(ctx context.Context, atLevel slog.Level) bool {
 
 // Handle invokes the logger for the input record.
 func (l *TopicLogger) Handle(ctx context.Context, r slog.Record) error {
-	tmpO := l.o.Load()
-	if tmpO == nil || l.logsTopic == "" {
+	if l.logsTopic == "" {
 		return nil
 	}
 
@@ -219,6 +218,10 @@ func (l *TopicLogger) Handle(ctx context.Context, r slog.Record) error {
 	msg.SetStructured(v)
 	msg.MetaSetMut(topicMetaKey, l.logsTopic)
 
+	tmpO := l.o.Load()
+	if tmpO == nil {
+		return nil
+	}
 	_ = tmpO.WriteBatchNonBlocking(service.MessageBatch{msg}, func(ctx context.Context, err error) error {
 		return nil // TODO: Log nacks
 	}) // TODO: Log errors (occasionally)
@@ -246,6 +249,7 @@ func (l *TopicLogger) Close(ctx context.Context) error {
 
 	o := l.o.Load()
 	if o != nil {
+		l.o.Store(nil)
 		if err := o.Close(ctx); err != nil {
 			return err
 		}
