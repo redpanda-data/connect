@@ -16,6 +16,7 @@ import (
 
 	"github.com/ollama/ollama/api"
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go/modules/ollama"
@@ -38,9 +39,8 @@ func createEmbeddingsProcessorForTest(t *testing.T, addr string) *ollamaEmbeddin
 }
 
 func TestOllamaEmbeddingsIntegration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
+	integration.CheckSkip(t)
+
 	ctx := context.Background()
 	ollamaContainer, err := ollama.Run(ctx, "ollama/ollama:0.2.5")
 	assert.NoError(t, err)
