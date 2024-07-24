@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## 4.32.1 - 2024-07-24
 
+### Added
+
+- Field `content_md5` added to the `aws_s3` output. (@dom-lee-naimuri)
+
 ### Changed
 
 - The number of release build artifacts for the `community` and `cloud` flavours have been reduced due to Github Action Runner disk space limitations.

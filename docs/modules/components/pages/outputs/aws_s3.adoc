@@ -71,6 +71,7 @@ output:
     cache_control: ""
     content_disposition: ""
     content_language: ""
+    content_md5: ""
     website_redirect_location: ""
     metadata:
       exclude_prefixes: []
@@ -255,6 +256,16 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 === `content_language`
 
 The content language to set for each object.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `content_md5`
+
+The content MD5 to set for each object.
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
 
