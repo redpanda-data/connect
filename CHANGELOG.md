@@ -3,7 +3,7 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.32.0 - 2024-07-23
+## 4.32.0 - 2024-07-24
 
 ### Added
 
@@ -14,6 +14,8 @@ All notable changes to this project will be documented in this file.
 - New `openai_speech` processor. (@rockwotj)
 - New `openai_transcription` processor. (@rockwotj)
 - New `openai_translation` processor. (@rockwotj)
+- New `ollama_chat` processor. (@rockwotj)
+- New `ollama_embeddings` processor. (@rockwotj)
 
 ### Changed
 
