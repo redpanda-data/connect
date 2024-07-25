@@ -27,30 +27,8 @@ Generates responses to messages in a chat conversation, using the OpenAI API.
 
 Introduced in version 4.32.0.
 
-
-[tabs]
-======
-Common::
-+
---
-
 ```yml
-# Common config fields, showing default values
-label: ""
-openai_chat_completion:
-  api_key: "" # No default (required)
-  model: gpt-4o # No default (required)
-  prompt: "" # No default (optional)
-  system_prompt: "" # No default (optional)
-```
-
---
-Advanced::
-+
---
-
-```yml
-# All config fields, showing default values
+# Config fields, showing default values
 label: ""
 openai_chat_completion:
   server_address: https://api.openai.com/v1
@@ -60,12 +38,9 @@ openai_chat_completion:
   system_prompt: "" # No default (optional)
 ```
 
---
-======
-
 This processor sends the contents of user prompts to the OpenAI API, which generates responses. By default, the processor submits the entire payload of each message as a string, unless you use the `prompt` configuration field to customize it.
 
-To learn more about chat completion, see the https://platform.openai.com/docs/guides/chat-completions[OpenAI API documentation^]
+To learn more about chat completion, see the https://platform.openai.com/docs/guides/chat-completions[OpenAI API documentation^].
 
 == Fields
 

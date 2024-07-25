@@ -41,9 +41,9 @@ func speechProcessorConfig() *service.ConfigSpec {
 		Categories("AI").
 		Summary("Generates audio from a text description and other attributes, using OpenAI API.").
 		Description(`
-This processor sends a text description and other attributes, such as a voice type and format, to the OpenAI API, which generates audio. By default, the processor submits the entire payload of each message as a string, unless you use the `+"`"+oipFieldPrompt+"`"+` configuration field to customize it.
+This processor sends a text description and other attributes, such as a voice type and format to the OpenAI API, which generates audio. By default, the processor submits the entire payload of each message as a string, unless you use the `+"`"+ospFieldInput+"`"+` configuration field to customize it.
 
-To learn more about turning text into spoken audio, see the https://platform.openai.com/docs/guides/text-to-speech[OpenAI API documentation^]`).
+To learn more about turning text into spoken audio, see the https://platform.openai.com/docs/guides/text-to-speech[OpenAI API documentation^].`).
 		Version("4.32.0").
 		Fields(
 			baseConfigFieldsWithModels(
@@ -53,10 +53,10 @@ To learn more about turning text into spoken audio, see the https://platform.ope
 		).
 		Fields(
 			service.NewBloblangField(ospFieldInput).
-				Description("A text description of the audio you want to generate with a length of 4096 characters.").
+				Description("A text description of the audio you want to generate. The `"+ospFieldInput+"` field accepts a maximum of 4096 characters.").
 				Optional(),
 			service.NewInterpolatedStringField(ospFieldVoice).
-				Description("The voice to use when generating the audio.").
+				Description("The type of voice to use when generating the audio.").
 				Examples("alloy", "echo", "fable", "onyx", "nova", "shimmer"),
 			service.NewInterpolatedStringField(ospFieldResponseFormat).
 				Description("The format to generate audio in. Default is `mp3`.").
