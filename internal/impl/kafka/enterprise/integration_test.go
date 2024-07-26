@@ -60,7 +60,7 @@ func createKafkaTopic(ctx context.Context, address, id string, partitions int32)
 	return kerr.ErrorForCode(res.Topics[0].ErrorCode)
 }
 
-func readNKafkaMessages(ctx context.Context, t testing.TB, address, topic string, nMessages int) (res []string) {
+func readNKafkaMessages(ctx context.Context, t testing.TB, address, topic string, nMessages int) (res []*kgo.Record) {
 	t.Helper()
 
 	cl, err := kgo.NewClient(
@@ -79,7 +79,7 @@ func readNKafkaMessages(ctx context.Context, t testing.TB, address, topic string
 			t.Error(err)
 		})
 		fetches.EachRecord(func(r *kgo.Record) {
-			res = append(res, string(r.Value))
+			res = append(res, r)
 		})
 	}
 	return
@@ -178,12 +178,13 @@ max_message_bytes: 1MB
 			Level      string `json:"level"`
 			V          string `json:"v"`
 		}{}
-		require.NoError(t, json.Unmarshal([]byte(v), &j))
+		require.NoError(t, json.Unmarshal(v.Value, &j))
 		assert.Equal(t, "foo", j.InstanceID)
 		assert.Equal(t, "bar", j.PipelineID)
 		assert.Equal(t, strconv.Itoa(i), j.V)
 		assert.Equal(t, "INFO", j.Level)
 		assert.Equal(t, "This is a log message", j.Message)
+		assert.Equal(t, "bar", string(v.Key))
 	}
 }
 
@@ -213,14 +214,16 @@ max_message_bytes: 1MB
 
 	var m protoconnect.StatusEvent
 
-	require.NoError(t, protojson.Unmarshal([]byte(outRecords[0]), &m))
+	require.NoError(t, protojson.Unmarshal(outRecords[0].Value, &m))
 	assert.Equal(t, protoconnect.StatusEvent_TYPE_INITIALIZING, m.Type)
 	assert.Equal(t, "baz", m.InstanceId)
 	assert.Equal(t, "buz", m.PipelineId)
+	assert.Equal(t, "buz", string(outRecords[0].Key))
 
-	require.NoError(t, protojson.Unmarshal([]byte(outRecords[1]), &m))
+	require.NoError(t, protojson.Unmarshal(outRecords[1].Value, &m))
 	assert.Equal(t, protoconnect.StatusEvent_TYPE_EXITING, m.Type)
 	assert.Equal(t, "uh oh", m.ExitError.Message)
 	assert.Equal(t, "baz", m.InstanceId)
 	assert.Equal(t, "buz", m.PipelineId)
+	assert.Equal(t, "buz", string(outRecords[1].Key))
 }

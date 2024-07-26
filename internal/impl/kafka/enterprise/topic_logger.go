@@ -30,6 +30,7 @@ import (
 const (
 	statusTickerDuration = time.Second * 30
 	topicMetaKey         = "__connect_topic"
+	keyMetaKey           = "__connect_key"
 )
 
 // TopicLoggerFields returns the topic logger config fields.
@@ -217,6 +218,7 @@ func (l *TopicLogger) Handle(ctx context.Context, r slog.Record) error {
 	})
 	msg.SetStructured(v)
 	msg.MetaSetMut(topicMetaKey, l.logsTopic)
+	msg.MetaSetMut(keyMetaKey, l.pipelineID)
 
 	tmpO := l.o.Load()
 	if tmpO == nil {
@@ -425,7 +427,14 @@ func (f *franzTopicLoggerWriter) WriteBatch(ctx context.Context, b service.Messa
 		if topic == "" {
 			continue
 		}
-		record := &kgo.Record{Topic: topic}
+		var key []byte
+		if keyStr, _ := msg.MetaGet(keyMetaKey); keyStr != "" {
+			key = []byte(keyStr)
+		}
+		record := &kgo.Record{
+			Key:   key,
+			Topic: topic,
+		}
 		if record.Value, err = msg.AsBytes(); err != nil {
 			return
 		}
