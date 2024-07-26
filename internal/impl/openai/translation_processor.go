@@ -41,7 +41,7 @@ func translationProcessorConfig() *service.ConfigSpec {
 		Description(`
 This processor sends an audio file object to OpenAI API to generate a translation. By default, the processor submits the entire payload of each message as a string, unless you use the `+"`"+otlpFieldFile+"`"+` configuration field to customize it.
 
-To learn more about translation, see the https://platform.openai.com/docs/guides/speech-to-text[OpenAI API documentation^]`).
+To learn more about translation, see the https://platform.openai.com/docs/guides/speech-to-text[OpenAI API documentation^].`).
 		Version("4.32.0").
 		Fields(
 			baseConfigFieldsWithModels(

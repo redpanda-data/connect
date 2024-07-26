@@ -42,7 +42,7 @@ func transcriptionProcessorConfig() *service.ConfigSpec {
 		Description(`
 This processor sends an audio file object along with the input language to OpenAI API to generate a transcription. By default, the processor submits the entire payload of each message as a string, unless you use the `+"`"+otspFieldFile+"`"+` configuration field to customize it.
 
-To learn more about audio transcription, see the: https://platform.openai.com/docs/guides/speech-to-text[OpenAI API documentation^]`).
+To learn more about audio transcription, see the: https://platform.openai.com/docs/guides/speech-to-text[OpenAI API documentation^].`).
 		Version("4.32.0").
 		Fields(
 			baseConfigFieldsWithModels(
