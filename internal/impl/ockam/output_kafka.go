@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package ockam
 
 import (
@@ -18,10 +32,10 @@ func init() {
 			maxInFlight int,
 			err error,
 		) {
-			if maxInFlight, err = conf.FieldInt("max_in_flight"); err != nil {
+			if maxInFlight, err = conf.FieldInt("kafka", "max_in_flight"); err != nil {
 				return
 			}
-			if batchPolicy, err = conf.FieldBatchPolicy("batching"); err != nil {
+			if batchPolicy, err = conf.FieldBatchPolicy("kafka", "batching"); err != nil {
 				return
 			}
 			output, err = newOckamKafkaOutput(conf, mgr.Logger())
@@ -33,20 +47,24 @@ func init() {
 }
 
 func ockamKafkaOutputConfig() *service.ConfigSpec {
-	return kafka.FranzKafkaOutputConfig().
+	return service.NewConfigSpec().
 		Summary("Ockam").
-		Field(service.NewStringListField("seed_brokers").Optional().
-			Description("A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses.").
-			Example([]string{"localhost:9092"}).
-			Example([]string{"foo:9092", "bar:9092"}).
-			Example([]string{"foo:9092,bar:9092"})).
-		Field(service.NewBoolField("disable_content_encryption").Default(false).Optional()).
-		Field(service.NewStringField("ockam_enrollment_ticket").Optional()).
-		Field(service.NewStringField("ockam_identity_name").Optional()).
-		Field(service.NewStringField("ockam_allow_consumer").Default("self").Optional()).
-		Field(service.NewStringField("ockam_route_to_consumer").Default("/ip4/127.0.0.1/tcp/6262")).
-		Field(service.NewStringField("ockam_allow").Default("self").Optional()).
-		Field(service.NewStringField("ockam_route_to_kafka_outlet").Default("self").Optional())
+		Categories("Services").
+		Field(service.NewObjectField("kafka", append(
+			kafka.FranzKafkaOutputConfigFields(),
+			service.NewStringListField("seed_brokers").Optional().
+				Description("A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses.").
+				Example([]string{"localhost:9092"}).
+				Example([]string{"foo:9092", "bar:9092"}).
+				Example([]string{"foo:9092,bar:9092"}),
+		)...)).
+		Field(service.NewBoolField("disable_content_encryption").Default(false)).
+		Field(service.NewStringField("enrollment_ticket").Optional()).
+		Field(service.NewStringField("identity_name").Optional()).
+		Field(service.NewStringField("allow").Default("self").Optional()).
+		Field(service.NewStringField("route_to_kafka_outlet").Default("self")).
+		Field(service.NewStringField("allow_consumer").Default("self")).
+		Field(service.NewStringField("route_to_consumer").Default("/ip4/127.0.0.1/tcp/6262"))
 }
 
 //------------------------------------------------------------------------------
@@ -65,16 +83,16 @@ func newOckamKafkaOutput(conf *service.ParsedConfig, log *service.Logger) (*ocka
 	// --- Create Ockam Node ----
 
 	var ticket string
-	if conf.Contains("ockam_enrollment_ticket") {
-		ticket, err = conf.FieldString("ockam_enrollment_ticket")
+	if conf.Contains("enrollment_ticket") {
+		ticket, err = conf.FieldString("enrollment_ticket")
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	var identityName string
-	if conf.Contains("ockam_identity_name") {
-		identityName, err = conf.FieldString("ockam_identity_name")
+	if conf.Contains("identity_name") {
+		identityName, err = conf.FieldString("identity_name")
 		if err != nil {
 			return nil, err
 		}
@@ -92,12 +110,12 @@ func newOckamKafkaOutput(conf *service.ParsedConfig, log *service.Logger) (*ocka
 
 	// --- Create Ockam Kafka Inlet ----
 
-	routeToConsumer, err := conf.FieldString("ockam_route_to_consumer")
+	routeToConsumer, err := conf.FieldString("route_to_consumer")
 	if err != nil {
 		return nil, err
 	}
 
-	allowConsumer, err := conf.FieldString("ockam_allow_consumer")
+	allowConsumer, err := conf.FieldString("allow_consumer")
 	if err != nil {
 		return nil, err
 	}
@@ -108,13 +126,13 @@ func newOckamKafkaOutput(conf *service.ParsedConfig, log *service.Logger) (*ocka
 	}
 
 	var routeToKafkaOutlet string
-	routeToKafkaOutlet, err = conf.FieldString("ockam_route_to_kafka_outlet")
+	routeToKafkaOutlet, err = conf.FieldString("route_to_kafka_outlet")
 	if err != nil {
 		return nil, err
 	}
 
 	var allowOutlet string
-	allowOutlet, err = conf.FieldString("ockam_allow")
+	allowOutlet, err = conf.FieldString("allow")
 	if err != nil {
 		return nil, err
 	}
@@ -132,24 +150,24 @@ func newOckamKafkaOutput(conf *service.ParsedConfig, log *service.Logger) (*ocka
 
 	// ---- Create Ockam Kafka Outlet ----
 
-	kafkaWriter, err := kafka.NewFranzKafkaWriterFromConfig(conf, log)
+	kafkaWriter, err := kafka.NewFranzKafkaWriterFromConfig(conf.Namespace("kafka"), log)
 	if err != nil {
 		return nil, err
 	}
 
 	if routeToKafkaOutlet == "self" {
 		// Use the first "seed_brokers" field item as the bootstrapServer argument for Ockam.
-		seedBrokers, err := conf.FieldStringList("seed_brokers")
+		seedBrokers, err := conf.FieldStringList("kafka", "seed_brokers")
 		if err != nil {
 			return nil, err
 		}
-		if len(seedBrokers) > 1 {
+		if len(seedBrokers) != 1 {
 			log.Warn("ockam_kafka output only supports one seed broker")
 		}
 		bootstrapServer := strings.Split(seedBrokers[0], ",")[0]
 		// TODO: Handle more that one seed brokers
 
-		_, tls, err := conf.FieldTLSToggled("tls")
+		_, tls, err := conf.FieldTLSToggled("kafka", "tls")
 		if err != nil {
 			tls = false
 		}

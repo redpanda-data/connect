@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package ockam
 
 import (
@@ -17,7 +31,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			return service.AutoRetryNacksBatchedToggled(conf, i)
+			return service.AutoRetryNacksBatchedToggled(conf.Namespace("kafka"), i)
 		})
 	if err != nil {
 		panic(err)
@@ -25,21 +39,25 @@ func init() {
 }
 
 func ockamKafkaInputConfig() *service.ConfigSpec {
-	return kafka.FranzKafkaInputConfig().
-		Summary(`Ockam`).
-		Field(service.NewStringListField("seed_brokers").Optional().
-			Description("A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses.").
-			Example([]string{"localhost:9092"}).
-			Example([]string{"foo:9092", "bar:9092"}).
-			Example([]string{"foo:9092,bar:9092"})).
-		Field(service.NewBoolField("disable_content_encryption").Default(false).Optional()).
-		Field(service.NewStringField("ockam_identity_name").Optional()).
-		Field(service.NewStringField("ockam_node_address").Default("127.0.0.1:6262").Optional()).
-		Field(service.NewStringField("ockam_allow_producer").Default("self").Optional()).
-		Field(service.NewStringField("ockam_enrollment_ticket").Optional()).
-		Field(service.NewStringField("ockam_relay").Optional()).
-		Field(service.NewStringField("ockam_allow").Default("self").Optional()).
-		Field(service.NewStringField("ockam_route_to_kafka_outlet").Default("self").Optional())
+	return service.NewConfigSpec().
+		Summary("Ockam").
+		Categories("Services").
+		Field(service.NewObjectField("kafka", append(
+			kafka.FranzKafkaInputConfigFields(),
+			service.NewStringListField("seed_brokers").Optional().
+				Description("A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses.").
+				Example([]string{"localhost:9092"}).
+				Example([]string{"foo:9092", "bar:9092"}).
+				Example([]string{"foo:9092,bar:9092"}),
+		)...)).
+		Field(service.NewBoolField("disable_content_encryption").Default(false)).
+		Field(service.NewStringField("enrollment_ticket").Optional()).
+		Field(service.NewStringField("identity_name").Optional()).
+		Field(service.NewStringField("allow").Default("self")).
+		Field(service.NewStringField("route_to_kafka_outlet").Default("self")).
+		Field(service.NewStringField("allow_producer").Default("self")).
+		Field(service.NewStringField("relay").Optional()).
+		Field(service.NewStringField("node_address").Default("127.0.0.1:6262"))
 }
 
 //------------------------------------------------------------------------------
@@ -58,35 +76,35 @@ func newOckamKafkaInput(conf *service.ParsedConfig, mgr *service.Resources) (*oc
 	// --- Create Ockam Node ----
 
 	var ticket string
-	if conf.Contains("ockam_enrollment_ticket") {
-		ticket, err = conf.FieldString("ockam_enrollment_ticket")
+	if conf.Contains("enrollment_ticket") {
+		ticket, err = conf.FieldString("enrollment_ticket")
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	var relay string
-	if conf.Contains("ockam_relay") {
-		relay, err = conf.FieldString("ockam_relay")
+	if conf.Contains("relay") {
+		relay, err = conf.FieldString("relay")
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	var identityName string
-	if conf.Contains("ockam_identity_name") {
-		identityName, err = conf.FieldString("ockam_identity_name")
+	if conf.Contains("identity_name") {
+		identityName, err = conf.FieldString("identity_name")
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	address, err := conf.FieldString("ockam_node_address")
+	address, err := conf.FieldString("node_address")
 	if err != nil {
 		return nil, err
 	}
 	if localTCPAddressIsTaken(address) {
-		return nil, errors.New("ockam_node_address '" + address + "' is already in use")
+		return nil, errors.New("node_address '" + address + "' is already in use")
 	}
 
 	n, err := newNode(identityName, address, ticket, relay)
@@ -96,7 +114,7 @@ func newOckamKafkaInput(conf *service.ParsedConfig, mgr *service.Resources) (*oc
 
 	// --- Create Ockam Kafka Inlet ----
 
-	allowProducer, err := conf.FieldString("ockam_allow_producer")
+	allowProducer, err := conf.FieldString("allow_producer")
 	if err != nil {
 		return nil, err
 	}
@@ -107,13 +125,13 @@ func newOckamKafkaInput(conf *service.ParsedConfig, mgr *service.Resources) (*oc
 	}
 
 	var routeToKafkaOutlet string
-	routeToKafkaOutlet, err = conf.FieldString("ockam_route_to_kafka_outlet")
+	routeToKafkaOutlet, err = conf.FieldString("route_to_kafka_outlet")
 	if err != nil {
 		return nil, err
 	}
 
 	var allowOutlet string
-	allowOutlet, err = conf.FieldString("ockam_allow")
+	allowOutlet, err = conf.FieldString("allow")
 	if err != nil {
 		return nil, err
 	}
@@ -130,23 +148,23 @@ func newOckamKafkaInput(conf *service.ParsedConfig, mgr *service.Resources) (*oc
 	}
 
 	// ---- Create Ockam Kafka Outlet if necessary ----
-	kafkaReader, err := kafka.NewFranzKafkaReaderFromConfig(conf, mgr)
+	kafkaReader, err := kafka.NewFranzKafkaReaderFromConfig(conf.Namespace("kafka"), mgr)
 	if err != nil {
 		return nil, err
 	}
 
 	if routeToKafkaOutlet == "self" {
 		// TODO: Handle other tls fields in kafka franz
-		_, tls, err := conf.FieldTLSToggled("tls")
+		_, tls, err := conf.FieldTLSToggled("kafka", "tls")
 		if err != nil {
 			tls = false
 		}
 		// Use the first "seed_brokers" field item as the bootstrapServer argument for Ockam.
-		seedBrokers, err := conf.FieldStringList("seed_brokers")
+		seedBrokers, err := conf.FieldStringList("kafka", "seed_brokers")
 		if err != nil {
 			return nil, err
 		}
-		if len(seedBrokers) > 1 {
+		if len(seedBrokers) != 1 {
 			mgr.Logger().Warn("ockam_kafka input only supports one seed broker")
 		}
 		bootstrapServer := strings.Split(seedBrokers[0], ",")[0]
