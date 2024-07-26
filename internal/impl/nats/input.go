@@ -52,6 +52,9 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 			Description("An optional queue group to consume as.").
 			Optional()).
 		Field(service.NewAutoRetryNacksToggleField()).
+		Field(service.NewBoolField("send_ack").
+			Description("Control whether ACKS are sent").
+			Default(true)).
 		Field(service.NewDurationField("nak_delay").
 			Description("An optional delay duration on redelivering a message when negatively acknowledged.").
 			Example("1m").
@@ -93,6 +96,7 @@ type natsReader struct {
 	queue         string
 	prefetchCount int
 	nakDelay      time.Duration
+	sendAck       bool
 
 	log *service.Logger
 
@@ -121,6 +125,10 @@ func newNATSReader(conf *service.ParsedConfig, mgr *service.Resources) (*natsRea
 	}
 
 	if n.prefetchCount, err = conf.FieldInt("prefetch_count"); err != nil {
+		return nil, err
+	}
+
+	if n.sendAck, err = conf.FieldBool("send_ack"); err != nil {
 		return nil, err
 	}
 
@@ -229,7 +237,7 @@ func (n *natsReader) Read(ctx context.Context) (*service.Message, service.AckFun
 			} else {
 				ackErr = msg.Nak()
 			}
-		} else {
+		} else if n.sendAck {
 			ackErr = msg.Ack()
 		}
 		if errors.Is(ackErr, nats.ErrMsgNoReply) {
