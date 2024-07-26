@@ -35,16 +35,16 @@ func init() {
 func ollamaEmbeddingProcessorConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("AI").
-		Summary("Processor that uses the Ollama API to create vector embeddings.").
+		Summary("Generates vector embeddings from text, using the Ollama API.").
 		Description(`This processor sends text to your chosen Ollama large language model (LLM) and creates vector embeddings, using the Ollama API. Vector embeddings are long arrays of numbers that represent values or objects, in this case text. 
 
-By default this processor will start a locally installed Ollama server. Ollama can be installed by following the instructions found https://ollama.com/download[here^]. An already running Ollama server can be used by configuring `+"`"+bopFieldServerAddress+"`"+`.
+By default, the processor starts and runs a locally installed Ollama server. Alternatively, to use an already running Ollama server, add your server details to the `+"`"+bopFieldServerAddress+"`"+` field. You can https://ollama.com/download[download and install Ollama from the Ollama website^].
 
-For more information, see the https://ollama.com/[Ollama website^]`).
+For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ollama documentation^].`).
 		Version("4.32.0").
 		Fields(
 			service.NewStringField(bopFieldServerAddress).
-				Description("The address of the Ollama server to use. By default, a local Ollama server starts and runs unless you specify the address of a local or remote server.").
+				Description("The address of the Ollama server to use. Leave the field blank and the processor starts and runs a local Ollama server or specify the address of your own local or remote server.").
 				Example("http://127.0.0.1:11434").
 				Optional(),
 			service.NewStringField(bopFieldModel).
