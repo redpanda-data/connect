@@ -38,6 +38,7 @@ Common::
 # Common config fields, showing default values
 label: ""
 openai_translation:
+  server_address: https://api.openai.com/v1
   api_key: "" # No default (required)
   model: whisper-1 # No default (required)
   file: "" # No default (optional)
@@ -64,7 +65,7 @@ openai_translation:
 
 This processor sends an audio file object to OpenAI API to generate a translation. By default, the processor submits the entire payload of each message as a string, unless you use the `file` configuration field to customize it.
 
-To learn more about translation, see the https://platform.openai.com/docs/guides/speech-to-text[OpenAI API documentation^]
+To learn more about translation, see the https://platform.openai.com/docs/guides/speech-to-text[OpenAI API documentation^].
 
 == Fields
 

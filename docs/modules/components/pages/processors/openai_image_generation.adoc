@@ -38,6 +38,7 @@ Common::
 # Common config fields, showing default values
 label: ""
 openai_image_generation:
+  server_address: https://api.openai.com/v1
   api_key: "" # No default (required)
   model: dall-e-3 # No default (required)
   prompt: "" # No default (optional)
@@ -64,9 +65,9 @@ openai_image_generation:
 --
 ======
 
-This processor sends an image description and other attributes, such as image size and quality, to the OpenAI API, which generates an image. By default, the processor submits the entire payload of each message as a string, unless you use the `prompt` configuration field to customize it.
+This processor sends an image description and other attributes, such as image size and quality to the OpenAI API, which generates an image. By default, the processor submits the entire payload of each message as a string, unless you use the `prompt` configuration field to customize it.
 
-To learn more about image generation, see the https://platform.openai.com/docs/guides/images[OpenAI API documentation^]
+To learn more about image generation, see the https://platform.openai.com/docs/guides/images[OpenAI API documentation^].
 
 == Fields
 
@@ -110,7 +111,7 @@ model: dall-e-2
 
 === `prompt`
 
-A text description the images you want to generate with a maximum length of 1000 characters for dall-e-2 and 4000 characters for dall-e-3.
+A text description of the image you want to generate. The `prompt` field accepts a maximum of 1000 characters for `dall-e-2` and 4000 characters for `dall-e-3`.
 
 
 *Type*: `string`
@@ -118,7 +119,7 @@ A text description the images you want to generate with a maximum length of 1000
 
 === `quality`
 
-The quality of the image to generate. Use `hd` to create images with finer details and greater consistency across the image. This parameter is only supported for dall-e-3 models.
+The quality of the image to generate. Use `hd` to create images with finer details and greater consistency across the image. This parameter is only supported for `dall-e-3` models.
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
 
@@ -135,7 +136,7 @@ quality: hd
 
 === `size`
 
-The size of the generated images. Choose from `256x256`, `512x512`, or `1024x1024` for dall-e-2. Choose from `1024x1024`, `1792x1024`, or `1024x1792` for dall-e-3 models.
+The size of the generated image. Choose from `256x256`, `512x512`, or `1024x1024` for `dall-e-2`. Choose from `1024x1024`, `1792x1024`, or `1024x1792` for `dall-e-3` models.
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
 
@@ -156,7 +157,7 @@ size: 1024x1792
 
 === `style`
 
-The style of the generated images. Choose from `vivid` or `natural`. Vivid causes the model to lean towards generating hyper-real and dramatic images. Natural causes the model to produce more natural, less hyper-real looking images. This parameter is only supported for dall-e-3.
+The style of the generated image. Choose from `vivid` or `natural`. Vivid causes the model to lean towards generating hyperreal and dramatic images. Natural causes the model to produce more natural, less hyperreal looking images. This parameter is only supported for `dall-e-3`.
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
 

@@ -43,9 +43,9 @@ func imageProcessorConfig() *service.ConfigSpec {
 		Categories("AI").
 		Summary("Generates an image from a text description and other attributes, using OpenAI API.").
 		Description(`
-This processor sends an image description and other attributes, such as image size and quality, to the OpenAI API, which generates an image. By default, the processor submits the entire payload of each message as a string, unless you use the `+"`"+oipFieldPrompt+"`"+` configuration field to customize it.
+This processor sends an image description and other attributes, such as image size and quality to the OpenAI API, which generates an image. By default, the processor submits the entire payload of each message as a string, unless you use the `+"`"+oipFieldPrompt+"`"+` configuration field to customize it.
 
-To learn more about image generation, see the https://platform.openai.com/docs/guides/images[OpenAI API documentation^]`).
+To learn more about image generation, see the https://platform.openai.com/docs/guides/images[OpenAI API documentation^].`).
 		Version("4.32.0").
 		Fields(
 			baseConfigFieldsWithModels(
@@ -55,20 +55,20 @@ To learn more about image generation, see the https://platform.openai.com/docs/g
 		).
 		Fields(
 			service.NewBloblangField(oipFieldPrompt).
-				Description("A text description the images you want to generate with a maximum length of 1000 characters for dall-e-2 and 4000 characters for dall-e-3.").
+				Description("A text description of the image you want to generate. The `prompt` field accepts a maximum of 1000 characters for `dall-e-2` and 4000 characters for `dall-e-3`.").
 				Optional(),
 			service.NewInterpolatedStringField(oipFieldQuality).
-				Description("The quality of the image to generate. Use `hd` to create images with finer details and greater consistency across the image. This parameter is only supported for dall-e-3 models.").
+				Description("The quality of the image to generate. Use `hd` to create images with finer details and greater consistency across the image. This parameter is only supported for `dall-e-3` models.").
 				Examples("standard", "hd").
 				Advanced().
 				Optional(),
 			service.NewInterpolatedStringField(oipFieldSize).
-				Description("The size of the generated images. Choose from `256x256`, `512x512`, or `1024x1024` for dall-e-2. Choose from `1024x1024`, `1792x1024`, or `1024x1792` for dall-e-3 models.").
+				Description("The size of the generated image. Choose from `256x256`, `512x512`, or `1024x1024` for `dall-e-2`. Choose from `1024x1024`, `1792x1024`, or `1024x1792` for `dall-e-3` models.").
 				Examples("1024x1024", "512x512", "1792x1024", "1024x1792").
 				Advanced().
 				Optional(),
 			service.NewInterpolatedStringField(oipFieldStyle).
-				Description("The style of the generated images. Choose from `vivid` or `natural`. Vivid causes the model to lean towards generating hyper-real and dramatic images. Natural causes the model to produce more natural, less hyper-real looking images. This parameter is only supported for dall-e-3.").
+				Description("The style of the generated image. Choose from `vivid` or `natural`. Vivid causes the model to lean towards generating hyperreal and dramatic images. Natural causes the model to produce more natural, less hyperreal looking images. This parameter is only supported for `dall-e-3`.").
 				Examples("vivid", "natural").
 				Advanced().
 				Optional(),
