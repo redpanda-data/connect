@@ -41,6 +41,7 @@ input:
     subject: foo.bar.baz # No default (required)
     queue: "" # No default (optional)
     auto_replay_nacks: true
+    send_ack: true
 ```
 
 --
@@ -57,6 +58,7 @@ input:
     subject: foo.bar.baz # No default (required)
     queue: "" # No default (optional)
     auto_replay_nacks: true
+    send_ack: true
     nak_delay: 1m # No default (optional)
     prefetch_count: 524288
     tls:
@@ -180,6 +182,15 @@ An optional queue group to consume as.
 === `auto_replay_nacks`
 
 Whether messages that are rejected (nacked) at the output level should be automatically replayed indefinitely, eventually resulting in back pressure if the cause of the rejections is persistent. If set to `false` these messages will instead be deleted. Disabling auto replays can greatly improve memory efficiency of high throughput streams as the original shape of the data can be discarded immediately upon consumption and mutation.
+
+
+*Type*: `bool`
+
+*Default*: `true`
+
+=== `send_ack`
+
+Control whether ACKS are sent as a reply to each message. When enabled, these replies are sent only once the data has been delivered to all outputs.
 
 
 *Type*: `bool`
