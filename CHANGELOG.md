@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Field `content_md5` added to the `aws_s3` output. (@dom-lee-naimuri)
+- Field `send_ack` added to the `nats` input. (@plejd-sebman)
 
 ## 4.32.1 - 2024-07-24
 
