@@ -3,11 +3,13 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.32.1 - 2024-07-24
+## 4.33.0 - TBD
 
 ### Added
 
 - Field `content_md5` added to the `aws_s3` output. (@dom-lee-naimuri)
+
+## 4.32.1 - 2024-07-24
 
 ### Changed
 
