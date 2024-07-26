@@ -73,6 +73,7 @@ func (l *TopicLogger) sendStatusEvent(e *protoconnect.StatusEvent) {
 	msg := service.NewMessage(nil)
 	msg.SetBytes(data)
 	msg.MetaSetMut(topicMetaKey, l.statusTopic)
+	msg.MetaSetMut(keyMetaKey, l.pipelineID)
 
 	tmpO := l.o.Load()
 	if tmpO == nil {
