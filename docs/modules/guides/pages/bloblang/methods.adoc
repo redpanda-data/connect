@@ -299,8 +299,8 @@ Joins an array of path elements into a single file path. The separator depends o
 ```coffeescript
 root.path = this.path_elements.filepath_join()
 
-# In:  {"path_elements":["/foo/","bar.txt"]}
-# Out: {"path":"/foo/bar.txt"}
+# In:  {"path_elements":["\foo\","bar.txt"]}
+# Out: {"path":"\foo\bar.txt"}
 ```
 
 === `filepath_split`
@@ -313,8 +313,8 @@ Splits a file path immediately following the final Separator, separating it into
 ```coffeescript
 root.path_sep = this.path.filepath_split()
 
-# In:  {"path":"/foo/bar.txt"}
-# Out: {"path_sep":["/foo/","bar.txt"]}
+# In:  {"path":"\foo\bar.txt"}
+# Out: {"path_sep":["\foo\","bar.txt"]}
 
 # In:  {"path":"baz.txt"}
 # Out: {"path_sep":["","baz.txt"]}

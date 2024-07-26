@@ -168,7 +168,7 @@ urls:
 
 === `queue`
 
-An optional queue group to consume as.
+An optional queue group to consume as. Used to configure a push consumer.
 
 
 *Type*: `string`
@@ -196,7 +196,7 @@ subject: foo.>
 
 === `durable`
 
-Preserve the state of your consumer under a durable name.
+Preserve the state of your consumer under a durable name. Used to configure a pull consumer.
 
 
 *Type*: `string`
