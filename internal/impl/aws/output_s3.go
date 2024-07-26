@@ -45,6 +45,7 @@ const (
 	s3oFieldCacheControl            = "cache_control"
 	s3oFieldContentDisposition      = "content_disposition"
 	s3oFieldContentLanguage         = "content_language"
+	s3oFieldContentMD5              = "content_md5"
 	s3oFieldWebsiteRedirectLocation = "website_redirect_location"
 	s3oFieldMetadata                = "metadata"
 	s3oFieldStorageClass            = "storage_class"
@@ -69,6 +70,7 @@ type s3oConfig struct {
 	CacheControl            *service.InterpolatedString
 	ContentDisposition      *service.InterpolatedString
 	ContentLanguage         *service.InterpolatedString
+	ContentMD5              *service.InterpolatedString
 	WebsiteRedirectLocation *service.InterpolatedString
 	Metadata                *service.MetadataExcludeFilter
 	StorageClass            *service.InterpolatedString
@@ -119,6 +121,9 @@ func s3oConfigFromParsed(pConf *service.ParsedConfig) (conf s3oConfig, err error
 		return
 	}
 	if conf.ContentLanguage, err = pConf.FieldInterpolatedString(s3oFieldContentLanguage); err != nil {
+		return
+	}
+	if conf.ContentMD5, err = pConf.FieldInterpolatedString(s3oFieldContentMD5); err != nil {
 		return
 	}
 	if conf.WebsiteRedirectLocation, err = pConf.FieldInterpolatedString(s3oFieldWebsiteRedirectLocation); err != nil {
@@ -243,6 +248,10 @@ output:
 				Advanced(),
 			service.NewInterpolatedStringField(s3oFieldContentLanguage).
 				Description("The content language to set for each object.").
+				Default("").
+				Advanced(),
+			service.NewInterpolatedStringField(s3oFieldContentMD5).
+				Description("The content MD5 to set for each object.").
 				Default("").
 				Advanced(),
 			service.NewInterpolatedStringField(s3oFieldWebsiteRedirectLocation).
@@ -371,6 +380,13 @@ func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg service.MessageBat
 		if ce != "" {
 			contentLanguage = aws.String(ce)
 		}
+		var contentMD5 *string
+		if ce, err = msg.TryInterpolatedString(i, a.conf.ContentMD5); err != nil {
+			return fmt.Errorf("content MD5 interpolation: %w", err)
+		}
+		if ce != "" {
+			contentMD5 = aws.String(ce)
+		}
 		var websiteRedirectLocation *string
 		if ce, err = msg.TryInterpolatedString(i, a.conf.WebsiteRedirectLocation); err != nil {
 			return fmt.Errorf("website redirect location interpolation: %w", err)
@@ -408,6 +424,7 @@ func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg service.MessageBat
 			CacheControl:            cacheControl,
 			ContentDisposition:      contentDisposition,
 			ContentLanguage:         contentLanguage,
+			ContentMD5:              contentMD5,
 			WebsiteRedirectLocation: websiteRedirectLocation,
 			StorageClass:            types.StorageClass(storageClass),
 			Metadata:                metadata,
