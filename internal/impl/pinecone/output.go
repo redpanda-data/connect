@@ -61,10 +61,15 @@ func outputSpec() *service.ConfigSpec {
 				Description("The ID for the index entry in Pinecone."),
 			service.NewBloblangField(poFieldVectorMapping).
 				Optional().
-				Description("The mapping to extract out the vector from the document. The result must be a floating point array. Required if not a delete operation."),
+				Description("The mapping to extract out the vector from the document. The result must be a floating point array. Required if not a delete operation.").
+				Example("root = this.embeddings_vector").
+				Example("root = [1.2, 0.5, 0.76]"),
 			service.NewBloblangField(poFieldMetadataMapping).
 				Optional().
-				Description("An optional mapping of message to metadata in the Pinecone index entry."),
+				Description("An optional mapping of message to metadata in the Pinecone index entry.").
+				Example(`root = @`).
+				Example(`root = metadata()`).
+				Example(`root = {"summary": this.summary, "foo": this.other_field}`),
 		)
 }
 

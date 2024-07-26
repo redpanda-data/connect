@@ -49,8 +49,8 @@ output:
     api_key: "" # No default (required)
     operation: upsert-vectors
     id: "" # No default (required)
-    vector_mapping: "" # No default (optional)
-    metadata_mapping: "" # No default (optional)
+    vector_mapping: root = this.embeddings_vector # No default (optional)
+    metadata_mapping: root = @ # No default (optional)
 ```
 
 --
@@ -75,8 +75,8 @@ output:
     operation: upsert-vectors
     namespace: ""
     id: "" # No default (required)
-    vector_mapping: "" # No default (optional)
-    metadata_mapping: "" # No default (optional)
+    vector_mapping: root = this.embeddings_vector # No default (optional)
+    metadata_mapping: root = @ # No default (optional)
 ```
 
 --
@@ -265,6 +265,14 @@ The mapping to extract out the vector from the document. The result must be a fl
 *Type*: `string`
 
 
+```yml
+# Examples
+
+vector_mapping: root = this.embeddings_vector
+
+vector_mapping: root = [1.2, 0.5, 0.76]
+```
+
 === `metadata_mapping`
 
 An optional mapping of message to metadata in the Pinecone index entry.
@@ -272,5 +280,15 @@ An optional mapping of message to metadata in the Pinecone index entry.
 
 *Type*: `string`
 
+
+```yml
+# Examples
+
+metadata_mapping: root = @
+
+metadata_mapping: root = metadata()
+
+metadata_mapping: 'root = {"summary": this.summary, "foo": this.other_field}'
+```
 
 
