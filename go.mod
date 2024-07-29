@@ -1,6 +1,9 @@
 module github.com/redpanda-data/connect/v4
 
-replace github.com/99designs/keyring => github.com/Jeffail/keyring v1.2.3
+replace (
+	github.com/99designs/keyring => github.com/Jeffail/keyring v1.2.3
+	github.com/redpanda-data/connect/v4/internal/impl/scylla => ./internal/impl/scylla
+)
 
 require (
 	cloud.google.com/go/bigquery v1.61.0
@@ -95,6 +98,7 @@ require (
 	github.com/redis/go-redis/v9 v9.5.3
 	github.com/redpanda-data/benthos/v4 v4.33.0
 	github.com/redpanda-data/connect/public/bundle/free/v4 v4.29.0
+	github.com/redpanda-data/connect/v4/internal/impl/scylla v0.0.0-00010101000000-000000000000
 	github.com/rs/xid v1.2.1
 	github.com/sijms/go-ora/v2 v2.8.19
 	github.com/smira/go-statsd v1.3.3
