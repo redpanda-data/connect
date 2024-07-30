@@ -2755,6 +2755,34 @@ root.foo_vals = this.foo.values().sort()
 # Out: {"foo_vals":[1,2]}
 ```
 
+=== `vector`
+
+[CAUTION]
+====
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+====
+Creates a vector from a given array of floating point numbers.
+
+This vector can be inserted into various SQL databases if they have support for embeddings vectors (for example `pgvector`).
+
+Introduced in version 4.4.1.
+
+
+==== Examples
+
+
+Create a vector from an array literal
+
+```coffeescript
+root.embeddings = [1.2, 0.6, 0.9].vector()
+```
+
+Create a vector from an array
+
+```coffeescript
+root.embedding_vector = this.embedding_array.vector()
+```
+
 === `with`
 
 Returns an object where all but one or more xref:configuration:field_paths.adoc[field path] arguments are removed. Each path specifies a specific field to be retained from the input object, allowing for nested fields.

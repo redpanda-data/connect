@@ -113,8 +113,9 @@ type sqlInsertOutput struct {
 	builder squirrel.InsertBuilder
 	dbMut   sync.RWMutex
 
-	useTxStmt   bool
-	argsMapping *bloblang.Executor
+	useTxStmt     bool
+	argsMapping   *bloblang.Executor
+	argsConverter argsConverter
 
 	connSettings *connSettings
 
@@ -165,6 +166,12 @@ func newSQLInsertOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 		s.builder = s.builder.PlaceholderFormat(squirrel.Dollar)
 	} else if s.driver == "oracle" || s.driver == "gocosmos" {
 		s.builder = s.builder.PlaceholderFormat(squirrel.Colon)
+	}
+
+	if s.driver == "postgres" {
+		s.argsConverter = bloblValuesToPgSQLValues
+	} else {
+		s.argsConverter = func(v []any) []any { return v }
 	}
 
 	if s.useTxStmt {
@@ -268,6 +275,7 @@ func (s *sqlInsertOutput) WriteBatch(ctx context.Context, batch service.MessageB
 			if args, ok = iargs.([]any); !ok {
 				return fmt.Errorf("mapping returned non-array result: %T", iargs)
 			}
+			args = s.argsConverter(args)
 		}
 
 		if tx == nil {

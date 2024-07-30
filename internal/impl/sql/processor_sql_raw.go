@@ -111,7 +111,8 @@ type sqlRawProcessor struct {
 	queryDyn    *service.InterpolatedString
 	onlyExec    bool
 
-	argsMapping *bloblang.Executor
+	argsMapping   *bloblang.Executor
+	argsConverter argsConverter
 
 	logger  *service.Logger
 	shutSig *shutdown.Signaller
@@ -159,7 +160,15 @@ func NewSQLRawProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 	if err != nil {
 		return nil, err
 	}
-	return newSQLRawProcessor(mgr.Logger(), driverStr, dsnStr, queryStatic, queryDyn, onlyExec, argsMapping, connSettings)
+
+	var argsConverter argsConverter
+	if driverStr == "postgres" {
+		argsConverter = bloblValuesToPgSQLValues
+	} else {
+		argsConverter = func(v []any) []any { return v }
+	}
+
+	return newSQLRawProcessor(mgr.Logger(), driverStr, dsnStr, queryStatic, queryDyn, onlyExec, argsMapping, argsConverter, connSettings)
 }
 
 func newSQLRawProcessor(
@@ -169,15 +178,17 @@ func newSQLRawProcessor(
 	queryDyn *service.InterpolatedString,
 	onlyExec bool,
 	argsMapping *bloblang.Executor,
+	argsConverter argsConverter,
 	connSettings *connSettings,
 ) (*sqlRawProcessor, error) {
 	s := &sqlRawProcessor{
-		logger:      logger,
-		shutSig:     shutdown.NewSignaller(),
-		queryStatic: queryStatic,
-		queryDyn:    queryDyn,
-		onlyExec:    onlyExec,
-		argsMapping: argsMapping,
+		logger:        logger,
+		shutSig:       shutdown.NewSignaller(),
+		queryStatic:   queryStatic,
+		queryDyn:      queryDyn,
+		onlyExec:      onlyExec,
+		argsMapping:   argsMapping,
+		argsConverter: argsConverter,
 	}
 
 	var err error
@@ -231,6 +242,7 @@ func (s *sqlRawProcessor) ProcessBatch(ctx context.Context, batch service.Messag
 				msg.SetError(fmt.Errorf("mapping returned non-array result: %T", iargs))
 				continue
 			}
+			args = s.argsConverter(args)
 		}
 
 		queryStr := s.queryStatic
