@@ -122,7 +122,8 @@ func newOutputWriter(conf *service.ParsedConfig, mgr *service.Resources) (*outpu
 		return nil, err
 	}
 	pc, err := pinecone.NewClient(pinecone.NewClientParams{
-		ApiKey: k,
+		ApiKey:    k,
+		SourceTag: "redpanda_connect",
 	})
 	if err != nil {
 		return nil, err
