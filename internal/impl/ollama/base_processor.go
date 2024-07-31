@@ -21,6 +21,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/ollama/ollama/api"
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/singleton"
 )
 
 const (
@@ -52,27 +53,44 @@ func (co *commandOutput) Write(b []byte) (int, error) {
 	return len(b), nil
 }
 
+type key int
+
+const loggerKey key = key(1)
+
+var ollamaProcess = singleton.New(singleton.Config[*exec.Cmd]{
+	Constructor: func(ctx context.Context) (*exec.Cmd, error) {
+		serverPath, err := exec.LookPath("ollama")
+		if errors.Is(err, exec.ErrNotFound) {
+			return nil, errors.New("ollama binary not found in PATH")
+		} else if err != nil {
+			return nil, err
+		}
+		proc := exec.Command(serverPath, "serve")
+		logger, ok := ctx.Value(loggerKey).(*service.Logger)
+		if ok {
+			proc.Stdout = &commandOutput{logger: logger}
+			proc.Stderr = &commandOutput{logger: logger}
+		}
+		if err = proc.Start(); err != nil {
+			return nil, err
+		}
+		return proc, nil
+	},
+	Destructor: func(ctx context.Context, cmd *exec.Cmd) error {
+		if cmd.Process == nil {
+			return nil
+		}
+		if err := cmd.Process.Kill(); err != nil {
+			return err
+		}
+		return cmd.Wait()
+	}})
+
 type baseOllamaProcessor struct {
 	model  string
-	cmd    *exec.Cmd
+	ticket singleton.Ticket
 	client *api.Client
 	logger *service.Logger
-}
-
-func (o *baseOllamaProcessor) startServer(fs *service.FS) (*exec.Cmd, error) {
-	serverPath, err := exec.LookPath("ollama")
-	if errors.Is(err, exec.ErrNotFound) {
-		return nil, errors.New("ollama binary not found in PATH")
-	} else if err != nil {
-		return nil, err
-	}
-	proc := exec.Command(serverPath, "serve")
-	proc.Stdout = &commandOutput{logger: o.logger}
-	proc.Stderr = &commandOutput{logger: o.logger}
-	if err = proc.Start(); err != nil {
-		return nil, err
-	}
-	return proc, nil
 }
 
 func newBaseProcessor(conf *service.ParsedConfig, mgr *service.Resources) (p *baseOllamaProcessor, err error) {
@@ -95,7 +113,9 @@ func newBaseProcessor(conf *service.ParsedConfig, mgr *service.Resources) (p *ba
 		}
 		p.client = api.NewClient(u, http.DefaultClient)
 	} else {
-		p.cmd, err = p.startServer(mgr.FS())
+		ctx := context.Background()
+		ctx = context.WithValue(ctx, loggerKey, mgr.Logger())
+		_, p.ticket, err = ollamaProcess.Acquire(ctx)
 		if err != nil {
 			return
 		}
@@ -144,11 +164,5 @@ func (o *baseOllamaProcessor) pullModel(ctx context.Context) error {
 }
 
 func (o *baseOllamaProcessor) Close(ctx context.Context) error {
-	if o.cmd == nil || o.cmd.Process == nil {
-		return nil
-	}
-	if err := o.cmd.Process.Kill(); err != nil {
-		return err
-	}
-	return o.cmd.Wait()
+	return ollamaProcess.Close(ctx, o.ticket)
 }
