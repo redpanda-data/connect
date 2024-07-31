@@ -41,6 +41,7 @@ output:
     index: "" # No default (required)
     id: ${!count("elastic_ids")}-${!timestamp_unix()}
     type: ""
+    api_key: "" # No default (optional)
     max_in_flight: 64
     batching:
       count: 0
@@ -69,6 +70,7 @@ output:
     sniff: true
     healthcheck: true
     timeout: 5s
+    api_key: "" # No default (optional)
     tls:
       enabled: false
       skip_cert_verify: false
@@ -224,6 +226,19 @@ The maximum time to wait before abandoning a request (and trying again).
 *Type*: `string`
 
 *Default*: `"5s"`
+
+=== `api_key`
+
+The key to set in the Authorization header if using API keys for authentication.
+[CAUTION]
+====
+This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
+====
+
+
+
+*Type*: `string`
+
 
 === `tls`
 
