@@ -27,11 +27,11 @@ type vector struct {
 func init() {
 	vectorSpec := bloblang.NewPluginSpec().
 		Beta().
-		Category("Object & Array Manipulation").
+		Category("SQL").
 		Description(`Creates a vector from a given array of floating point numbers.
 
 This vector can be inserted into various SQL databases if they have support for embeddings vectors (for example `+"`pgvector`).").
-		Version("4.4.1").
+		Version("4.33.0").
 		Example("Create a vector from an array literal",
 			`root.embeddings = [1.2, 0.6, 0.9].vector()`,
 		).
