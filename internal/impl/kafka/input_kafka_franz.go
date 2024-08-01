@@ -58,57 +58,7 @@ This input adds the following metadata fields to each message:
 - All record headers
 ` + "```" + `
 `).
-		Field(service.NewStringListField("seed_brokers").
-			Description("A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses.").
-			Example([]string{"localhost:9092"}).
-			Example([]string{"foo:9092", "bar:9092"}).
-			Example([]string{"foo:9092,bar:9092"})).
-		Field(service.NewStringListField("topics").
-			Description(`
-A list of topics to consume from. Multiple comma separated topics can be listed in a single element. When a ` + "`consumer_group`" + ` is specified partitions are automatically distributed across consumers of a topic, otherwise all partitions are consumed.
-
-Alternatively, it's possible to specify explicit partitions to consume from with a colon after the topic name, e.g. ` + "`foo:0`" + ` would consume the partition 0 of the topic foo. This syntax supports ranges, e.g. ` + "`foo:0-10`" + ` would consume partitions 0 through to 10 inclusive.
-
-Finally, it's also possible to specify an explicit offset to consume from by adding another colon after the partition, e.g. ` + "`foo:0:10`" + ` would consume the partition 0 of the topic foo starting from the offset 10. If the offset is not present (or remains unspecified) then the field ` + "`start_from_oldest`" + ` determines which offset to start from.`).
-			Example([]string{"foo", "bar"}).
-			Example([]string{"things.*"}).
-			Example([]string{"foo,bar"}).
-			Example([]string{"foo:0", "bar:1", "bar:3"}).
-			Example([]string{"foo:0,bar:1,bar:3"}).
-			Example([]string{"foo:0-5"})).
-		Field(service.NewBoolField("regexp_topics").
-			Description("Whether listed topics should be interpreted as regular expression patterns for matching multiple topics. When topics are specified with explicit partitions this field must remain set to `false`.").
-			Default(false)).
-		Field(service.NewStringField("consumer_group").
-			Description("An optional consumer group to consume as. When specified the partitions of specified topics are automatically distributed across consumers sharing a consumer group, and partition offsets are automatically committed and resumed under this name. Consumer groups are not supported when specifying explicit partitions to consume from in the `topics` field.").
-			Optional()).
-		Field(service.NewStringField("client_id").
-			Description("An identifier for the client connection.").
-			Default("benthos").
-			Advanced()).
-		Field(service.NewStringField("rack_id").
-			Description("A rack identifier for this client.").
-			Default("").
-			Advanced()).
-		Field(service.NewIntField("checkpoint_limit").
-			Description("Determines how many messages of the same partition can be processed in parallel before applying back pressure. When a message of a given offset is delivered to the output the offset is only allowed to be committed when all messages of prior offsets have also been delivered, this ensures at-least-once delivery guarantees. However, this mechanism also increases the likelihood of duplicates in the event of crashes or server faults, reducing the checkpoint limit will mitigate this.").
-			Default(1024).
-			Advanced()).
-		Field(service.NewAutoRetryNacksToggleField()).
-		Field(service.NewDurationField("commit_period").
-			Description("The period of time between each commit of the current partition offsets. Offsets are always committed during shutdown.").
-			Default("5s").
-			Advanced()).
-		Field(service.NewBoolField("start_from_oldest").
-			Description("Determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset. The setting is applied when creating a new consumer group or the saved offset no longer exists.").
-			Default(true).
-			Advanced()).
-		Field(service.NewTLSToggledField("tls")).
-		Field(SASLFields()).
-		Field(service.NewBoolField("multi_header").Description("Decode headers into lists to allow handling of multiple values with the same key").Default(false).Advanced()).
-		Field(service.NewBatchPolicyField("batching").
-			Description("Allows you to configure a xref:configuration:batching.adoc[batching policy] that applies to individual topic partitions in order to batch messages together before flushing them for processing. Batching can be beneficial for performance as well as useful for windowed processing, and doing so this way preserves the ordering of topic partitions.").
-			Advanced()).
+		Fields(FranzKafkaInputConfigFields()...).
 		LintRule(`
 let has_topic_partitions = this.topics.any(t -> t.contains(":"))
 root = if $has_topic_partitions {
@@ -121,10 +71,68 @@ root = if $has_topic_partitions {
 `)
 }
 
+// FranzKafkaInputConfigFields returns the full suite of config fields for a
+// kafka input using the franz-go client library.
+func FranzKafkaInputConfigFields() []*service.ConfigField {
+	return []*service.ConfigField{
+		service.NewStringListField("seed_brokers").
+			Description("A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses.").
+			Example([]string{"localhost:9092"}).
+			Example([]string{"foo:9092", "bar:9092"}).
+			Example([]string{"foo:9092,bar:9092"}),
+		service.NewStringListField("topics").
+			Description(`
+A list of topics to consume from. Multiple comma separated topics can be listed in a single element. When a ` + "`consumer_group`" + ` is specified partitions are automatically distributed across consumers of a topic, otherwise all partitions are consumed.
+
+Alternatively, it's possible to specify explicit partitions to consume from with a colon after the topic name, e.g. ` + "`foo:0`" + ` would consume the partition 0 of the topic foo. This syntax supports ranges, e.g. ` + "`foo:0-10`" + ` would consume partitions 0 through to 10 inclusive.
+
+Finally, it's also possible to specify an explicit offset to consume from by adding another colon after the partition, e.g. ` + "`foo:0:10`" + ` would consume the partition 0 of the topic foo starting from the offset 10. If the offset is not present (or remains unspecified) then the field ` + "`start_from_oldest`" + ` determines which offset to start from.`).
+			Example([]string{"foo", "bar"}).
+			Example([]string{"things.*"}).
+			Example([]string{"foo,bar"}).
+			Example([]string{"foo:0", "bar:1", "bar:3"}).
+			Example([]string{"foo:0,bar:1,bar:3"}).
+			Example([]string{"foo:0-5"}),
+		service.NewBoolField("regexp_topics").
+			Description("Whether listed topics should be interpreted as regular expression patterns for matching multiple topics. When topics are specified with explicit partitions this field must remain set to `false`.").
+			Default(false),
+		service.NewStringField("consumer_group").
+			Description("An optional consumer group to consume as. When specified the partitions of specified topics are automatically distributed across consumers sharing a consumer group, and partition offsets are automatically committed and resumed under this name. Consumer groups are not supported when specifying explicit partitions to consume from in the `topics` field.").
+			Optional(),
+		service.NewStringField("client_id").
+			Description("An identifier for the client connection.").
+			Default("benthos").
+			Advanced(),
+		service.NewStringField("rack_id").
+			Description("A rack identifier for this client.").
+			Default("").
+			Advanced(),
+		service.NewIntField("checkpoint_limit").
+			Description("Determines how many messages of the same partition can be processed in parallel before applying back pressure. When a message of a given offset is delivered to the output the offset is only allowed to be committed when all messages of prior offsets have also been delivered, this ensures at-least-once delivery guarantees. However, this mechanism also increases the likelihood of duplicates in the event of crashes or server faults, reducing the checkpoint limit will mitigate this.").
+			Default(1024).
+			Advanced(),
+		service.NewAutoRetryNacksToggleField(),
+		service.NewDurationField("commit_period").
+			Description("The period of time between each commit of the current partition offsets. Offsets are always committed during shutdown.").
+			Default("5s").
+			Advanced(),
+		service.NewBoolField("start_from_oldest").
+			Description("Determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset. The setting is applied when creating a new consumer group or the saved offset no longer exists.").
+			Default(true).
+			Advanced(),
+		service.NewTLSToggledField("tls"),
+		SASLFields(),
+		service.NewBoolField("multi_header").Description("Decode headers into lists to allow handling of multiple values with the same key").Default(false).Advanced(),
+		service.NewBatchPolicyField("batching").
+			Description("Allows you to configure a xref:configuration:batching.adoc[batching policy] that applies to individual topic partitions in order to batch messages together before flushing them for processing. Batching can be beneficial for performance as well as useful for windowed processing, and doing so this way preserves the ordering of topic partitions.").
+			Advanced(),
+	}
+}
+
 func init() {
 	err := service.RegisterBatchInput("kafka_franz", franzKafkaInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
-			rdr, err := newFranzKafkaReaderFromConfig(conf, mgr)
+			rdr, err := NewFranzKafkaReaderFromConfig(conf, mgr)
 			if err != nil {
 				return nil, err
 			}
@@ -142,14 +150,15 @@ type batchWithAckFn struct {
 	batch service.MessageBatch
 }
 
-type franzKafkaReader struct {
-	seedBrokers     []string
+// FranzKafkaReader implements a kafka reader using the franz-go library.
+type FranzKafkaReader struct {
+	SeedBrokers     []string
 	topics          []string
 	topicPartitions map[string]map[int32]kgo.Offset
 	clientID        string
 	rackID          string
 	consumerGroup   string
-	tlsConf         *tls.Config
+	TLSConf         *tls.Config
 	saslConfs       []sasl.Mechanism
 	checkpointLimit int
 	startFromOldest bool
@@ -164,17 +173,19 @@ type franzKafkaReader struct {
 	shutSig   *shutdown.Signaller
 }
 
-func (f *franzKafkaReader) getBatchChan() chan batchWithAckFn {
+func (f *FranzKafkaReader) getBatchChan() chan batchWithAckFn {
 	c, _ := f.batchChan.Load().(chan batchWithAckFn)
 	return c
 }
 
-func (f *franzKafkaReader) storeBatchChan(c chan batchWithAckFn) {
+func (f *FranzKafkaReader) storeBatchChan(c chan batchWithAckFn) {
 	f.batchChan.Store(c)
 }
 
-func newFranzKafkaReaderFromConfig(conf *service.ParsedConfig, res *service.Resources) (*franzKafkaReader, error) {
-	f := franzKafkaReader{
+// NewFranzKafkaReaderFromConfig attempts to instantiate a new FranzKafkaReader
+// from a parsed config.
+func NewFranzKafkaReaderFromConfig(conf *service.ParsedConfig, res *service.Resources) (*FranzKafkaReader, error) {
+	f := FranzKafkaReader{
 		res:     res,
 		log:     res.Logger(),
 		shutSig: shutdown.NewSignaller(),
@@ -185,7 +196,7 @@ func newFranzKafkaReaderFromConfig(conf *service.ParsedConfig, res *service.Reso
 		return nil, err
 	}
 	for _, b := range brokerList {
-		f.seedBrokers = append(f.seedBrokers, strings.Split(b, ",")...)
+		f.SeedBrokers = append(f.SeedBrokers, strings.Split(b, ",")...)
 	}
 
 	if f.startFromOldest, err = conf.FieldBool("start_from_oldest"); err != nil {
@@ -250,7 +261,7 @@ func newFranzKafkaReaderFromConfig(conf *service.ParsedConfig, res *service.Reso
 		return nil, err
 	}
 	if tlsEnabled {
-		f.tlsConf = tlsConf
+		f.TLSConf = tlsConf
 	}
 	if f.multiHeader, err = conf.FieldBool("multi_header"); err != nil {
 		return nil, err
@@ -267,7 +278,7 @@ type msgWithRecord struct {
 	r   *kgo.Record
 }
 
-func (f *franzKafkaReader) recordToMessage(record *kgo.Record) *msgWithRecord {
+func (f *FranzKafkaReader) recordToMessage(record *kgo.Record) *msgWithRecord {
 	msg := service.NewMessage(record.Value)
 	msg.MetaSetMut("kafka_key", string(record.Key))
 	msg.MetaSetMut("kafka_topic", record.Topic)
@@ -590,7 +601,8 @@ func (c *checkpointTracker) removeTopicPartitions(ctx context.Context, m map[str
 
 //------------------------------------------------------------------------------
 
-func (f *franzKafkaReader) Connect(ctx context.Context) error {
+// Connect to the kafka seed brokers.
+func (f *FranzKafkaReader) Connect(ctx context.Context) error {
 	if f.getBatchChan() != nil {
 		return nil
 	}
@@ -622,7 +634,7 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 	checkpoints := newCheckpointTracker(f.res, batchChan, commitFn, f.batchPolicy)
 
 	clientOpts := []kgo.Opt{
-		kgo.SeedBrokers(f.seedBrokers...),
+		kgo.SeedBrokers(f.SeedBrokers...),
 		kgo.ConsumeTopics(f.topics...),
 		kgo.ConsumePartitions(f.topicPartitions),
 		kgo.ConsumeResetOffset(initialOffset),
@@ -650,8 +662,8 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 		)
 	}
 
-	if f.tlsConf != nil {
-		clientOpts = append(clientOpts, kgo.DialTLSConfig(f.tlsConf))
+	if f.TLSConf != nil {
+		clientOpts = append(clientOpts, kgo.DialTLSConfig(f.TLSConf))
 	}
 
 	if f.regexPattern {
@@ -747,7 +759,8 @@ func (f *franzKafkaReader) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (f *franzKafkaReader) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
+// ReadBatch attempts to extract a batch of messages from the target topics.
+func (f *FranzKafkaReader) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
 	batchChan := f.getBatchChan()
 	if batchChan == nil {
 		return nil, nil, service.ErrNotConnected
@@ -771,7 +784,8 @@ func (f *franzKafkaReader) ReadBatch(ctx context.Context) (service.MessageBatch,
 	}, nil
 }
 
-func (f *franzKafkaReader) Close(ctx context.Context) error {
+// Close underlying connections.
+func (f *FranzKafkaReader) Close(ctx context.Context) error {
 	go func() {
 		f.shutSig.TriggerSoftStop()
 		if f.getBatchChan() == nil {
