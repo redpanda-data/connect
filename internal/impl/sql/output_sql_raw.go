@@ -104,7 +104,8 @@ type sqlRawOutput struct {
 	queryStatic string
 	queryDyn    *service.InterpolatedString
 
-	argsMapping *bloblang.Executor
+	argsMapping   *bloblang.Executor
+	argsConverter argsConverter
 
 	connSettings *connSettings
 
@@ -148,7 +149,15 @@ func newSQLRawOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resource
 	if err != nil {
 		return nil, err
 	}
-	return newSQLRawOutput(mgr.Logger(), driverStr, dsnStr, queryStatic, queryDyn, argsMapping, connSettings), nil
+
+	var argsConverter argsConverter
+	if driverStr == "postgres" {
+		argsConverter = bloblValuesToPgSQLValues
+	} else {
+		argsConverter = func(v []any) []any { return v }
+	}
+
+	return newSQLRawOutput(mgr.Logger(), driverStr, dsnStr, queryStatic, queryDyn, argsMapping, argsConverter, connSettings), nil
 }
 
 func newSQLRawOutput(
@@ -157,17 +166,19 @@ func newSQLRawOutput(
 	queryStatic string,
 	queryDyn *service.InterpolatedString,
 	argsMapping *bloblang.Executor,
+	argsConverter argsConverter,
 	connSettings *connSettings,
 ) *sqlRawOutput {
 	return &sqlRawOutput{
-		logger:       logger,
-		shutSig:      shutdown.NewSignaller(),
-		driver:       driverStr,
-		dsn:          dsnStr,
-		queryStatic:  queryStatic,
-		queryDyn:     queryDyn,
-		argsMapping:  argsMapping,
-		connSettings: connSettings,
+		logger:        logger,
+		shutSig:       shutdown.NewSignaller(),
+		driver:        driverStr,
+		dsn:           dsnStr,
+		queryStatic:   queryStatic,
+		queryDyn:      queryDyn,
+		argsMapping:   argsMapping,
+		argsConverter: argsConverter,
+		connSettings:  connSettings,
 	}
 }
 

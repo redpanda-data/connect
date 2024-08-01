@@ -3402,6 +3402,36 @@ root.h2 = this.value.hash(algorithm: "crc32", polynomial: "Koopman").encode("hex
 # Out: {"h1":"c99465aa","h2":"df373d3c"}
 ```
 
+== SQL
+
+=== `vector`
+
+[CAUTION]
+====
+This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
+====
+Creates a vector from a given array of floating point numbers.
+
+This vector can be inserted into various SQL databases if they have support for embeddings vectors (for example `pgvector`).
+
+Introduced in version 4.33.0.
+
+
+==== Examples
+
+
+Create a vector from an array literal
+
+```coffeescript
+root.embeddings = [1.2, 0.6, 0.9].vector()
+```
+
+Create a vector from an array
+
+```coffeescript
+root.embedding_vector = this.embedding_array.vector()
+```
+
 == JSON Web Tokens
 
 === `parse_jwt_es256`

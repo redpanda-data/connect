@@ -16,6 +16,9 @@ package sql
 
 import (
 	"database/sql"
+	"slices"
+
+	"github.com/pgvector/pgvector-go"
 )
 
 func sqlRowsToArray(rows *sql.Rows) ([]any, error) {
@@ -91,4 +94,27 @@ func sqlRowToMap(rows *sql.Rows) (map[string]any, error) {
 		}
 	}
 	return jObj, nil
+}
+
+type argsConverter func([]any) []any
+
+func bloblValuesToPgSQLValues(v []any) []any {
+	hasVector := slices.ContainsFunc(v, func(e any) bool {
+		_, ok := e.(vector)
+		return ok
+	})
+	// Don't allocate the output array if there are no vectors
+	if !hasVector {
+		return v
+	}
+	o := make([]any, len(v))
+	for i, e := range v {
+		vec, ok := e.(vector)
+		if ok {
+			o[i] = pgvector.NewVector(vec.value)
+		} else {
+			o[i] = e
+		}
+	}
+	return o
 }
