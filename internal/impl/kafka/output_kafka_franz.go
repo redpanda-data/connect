@@ -52,6 +52,8 @@ if this.partition.or("") == "" {
 }`)
 }
 
+// FranzKafkaOutputConfigFields returns the full suite of config fields for a
+// kafka output using the franz-go client library.
 func FranzKafkaOutputConfigFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewStringListField("seed_brokers").
@@ -143,6 +145,7 @@ func init() {
 
 //------------------------------------------------------------------------------
 
+// FranzKafkaWriter implements a kafka writer using the franz-go library.
 type FranzKafkaWriter struct {
 	SeedBrokers      []string
 	topic            *service.InterpolatedString
@@ -165,6 +168,8 @@ type FranzKafkaWriter struct {
 	log *service.Logger
 }
 
+// NewFranzKafkaWriterFromConfig attempts to instantiate a FranzKafkaWriter from
+// a parsed config.
 func NewFranzKafkaWriterFromConfig(conf *service.ParsedConfig, log *service.Logger) (*FranzKafkaWriter, error) {
 	f := FranzKafkaWriter{
 		log: log,
@@ -297,6 +302,7 @@ func NewFranzKafkaWriterFromConfig(conf *service.ParsedConfig, log *service.Logg
 
 //------------------------------------------------------------------------------
 
+// Connect to the target seed brokers.
 func (f *FranzKafkaWriter) Connect(ctx context.Context) error {
 	if f.client != nil {
 		return nil
@@ -334,6 +340,7 @@ func (f *FranzKafkaWriter) Connect(ctx context.Context) error {
 	return nil
 }
 
+// WriteBatch attempts to write a batch of messages to the target topics.
 func (f *FranzKafkaWriter) WriteBatch(ctx context.Context, b service.MessageBatch) (err error) {
 	if f.client == nil {
 		return service.ErrNotConnected
@@ -401,6 +408,7 @@ func (f *FranzKafkaWriter) disconnect() {
 	f.client = nil
 }
 
+// Close underlying connections.
 func (f *FranzKafkaWriter) Close(ctx context.Context) error {
 	f.disconnect()
 	return nil

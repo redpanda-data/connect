@@ -71,6 +71,8 @@ root = if $has_topic_partitions {
 `)
 }
 
+// FranzKafkaInputConfigFields returns the full suite of config fields for a
+// kafka input using the franz-go client library.
 func FranzKafkaInputConfigFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewStringListField("seed_brokers").
@@ -148,6 +150,7 @@ type batchWithAckFn struct {
 	batch service.MessageBatch
 }
 
+// FranzKafkaReader implements a kafka reader using the franz-go library.
 type FranzKafkaReader struct {
 	SeedBrokers     []string
 	topics          []string
@@ -179,6 +182,8 @@ func (f *FranzKafkaReader) storeBatchChan(c chan batchWithAckFn) {
 	f.batchChan.Store(c)
 }
 
+// NewFranzKafkaReaderFromConfig attempts to instantiate a new FranzKafkaReader
+// from a parsed config.
 func NewFranzKafkaReaderFromConfig(conf *service.ParsedConfig, res *service.Resources) (*FranzKafkaReader, error) {
 	f := FranzKafkaReader{
 		res:     res,
@@ -596,6 +601,7 @@ func (c *checkpointTracker) removeTopicPartitions(ctx context.Context, m map[str
 
 //------------------------------------------------------------------------------
 
+// Connect to the kafka seed brokers.
 func (f *FranzKafkaReader) Connect(ctx context.Context) error {
 	if f.getBatchChan() != nil {
 		return nil
@@ -753,6 +759,7 @@ func (f *FranzKafkaReader) Connect(ctx context.Context) error {
 	return nil
 }
 
+// ReadBatch attempts to extract a batch of messages from the target topics.
 func (f *FranzKafkaReader) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
 	batchChan := f.getBatchChan()
 	if batchChan == nil {
@@ -777,6 +784,7 @@ func (f *FranzKafkaReader) ReadBatch(ctx context.Context) (service.MessageBatch,
 	}, nil
 }
 
+// Close underlying connections.
 func (f *FranzKafkaReader) Close(ctx context.Context) error {
 	go func() {
 		f.shutSig.TriggerSoftStop()
