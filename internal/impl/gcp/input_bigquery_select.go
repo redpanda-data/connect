@@ -22,6 +22,7 @@ import (
 
 	"cloud.google.com/go/bigquery"
 	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
 
 	"github.com/Jeffail/shutdown"
 
@@ -30,11 +31,12 @@ import (
 )
 
 type bigQuerySelectInputConfig struct {
-	project       string
-	queryParts    *bqQueryParts
-	argsMapping   *bloblang.Executor
-	queryPriority bigquery.QueryPriority
-	jobLabels     map[string]string
+	project         string
+	queryParts      *bqQueryParts
+	argsMapping     *bloblang.Executor
+	queryPriority   bigquery.QueryPriority
+	jobLabels       map[string]string
+	credentialsJSON string
 }
 
 func bigQuerySelectInputConfigFromParsed(inConf *service.ParsedConfig) (conf bigQuerySelectInputConfig, err error) {
@@ -87,6 +89,13 @@ func bigQuerySelectInputConfigFromParsed(inConf *service.ParsedConfig) (conf big
 		return
 	}
 
+	if inConf.Contains("credentials_json") {
+		conf.credentialsJSON, err = inConf.FieldString("credentials_json")
+		if err != nil {
+			return
+		}
+	}
+
 	return
 }
 
@@ -98,6 +107,11 @@ func newBigQuerySelectInputConfig() *service.ConfigSpec {
 		Summary("Executes a `SELECT` query against BigQuery and creates a message for each row received.").
 		Description(`Once the rows from the query are exhausted, this input shuts down, allowing the pipeline to gracefully terminate (or the next input in a xref:components:inputs/sequence.adoc[sequence] to execute).`).
 		Field(service.NewStringField("project").Description("GCP project where the query job will execute.")).
+		Field(service.NewStringField("credentials_json").
+			Description("An optional field to set Google Service Account Credentials json.").
+			Optional().
+			Secret().
+			Default("")).
 		Field(service.NewStringField("table").Description("Fully-qualified BigQuery table name to query.").Example("bigquery-public-data.samples.shakespeare")).
 		Field(service.NewStringListField("columns").Description("A list of columns to query.")).
 		Field(service.NewStringField("where").
@@ -172,7 +186,14 @@ func (inp *bigQuerySelectInput) Connect(ctx context.Context) error {
 	jobctx, _ := inp.shutdownSig.SoftStopCtx(context.Background())
 
 	if inp.client == nil {
-		client, err := bigquery.NewClient(jobctx, inp.config.project)
+		var err error
+		var opt []option.ClientOption
+		opt, err = getClientOptionWithCredential(inp.config.credentialsJSON, opt)
+		if err != nil {
+			return err
+		}
+
+		client, err := bigquery.NewClient(jobctx, inp.config.project, opt...)
 		if err != nil {
 			return fmt.Errorf("failed to create bigquery client: %w", err)
 		}

@@ -38,6 +38,7 @@ input:
   label: ""
   gcp_pubsub:
     project: "" # No default (required)
+    credentials_json: ""
     subscription: "" # No default (required)
     endpoint: ""
     sync: false
@@ -56,6 +57,7 @@ input:
   label: ""
   gcp_pubsub:
     project: "" # No default (required)
+    credentials_json: ""
     subscription: "" # No default (required)
     endpoint: ""
     sync: false
@@ -91,6 +93,20 @@ The project ID of the target subscription.
 
 *Type*: `string`
 
+
+=== `credentials_json`
+
+An optional field to set Google Service Account Credentials json.
+[CAUTION]
+====
+This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
+====
+
+
+
+*Type*: `string`
+
+*Default*: `""`
 
 === `subscription`
 
