@@ -310,6 +310,7 @@ require (
 	github.com/opencontainers/runc v1.1.12 // indirect
 	github.com/oschwald/maxminddb-golang v1.13.0 // indirect
 	github.com/paulmach/orb v0.11.1 // indirect
+	github.com/pgvector/pgvector-go v0.2.1
 	github.com/pierrec/lz4 v2.6.1+incompatible // indirect
 	github.com/pierrec/lz4/v4 v4.1.21 // indirect
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c // indirect

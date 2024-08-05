@@ -48,6 +48,7 @@ const (
 	esoFieldAuthEnabled  = "enabled"
 	esoFieldAuthUsername = "username"
 	esoFieldAuthPassword = "password"
+	esoFieldAPIKey       = "api_key"
 	esoFieldAWS          = "aws"
 	// ESOFieldAWSEnabled enabled field.
 	ESOFieldAWSEnabled      = "enabled"
@@ -107,6 +108,17 @@ func esoConfigFromParsed(pConf *service.ParsedConfig) (conf esoConfig, err error
 			}
 			conf.clientOpts = append(conf.clientOpts, elastic.SetBasicAuth(username, password))
 		}
+	}
+
+	if pConf.Contains(esoFieldAPIKey) {
+		var apiKey string
+		apiKey, err = pConf.FieldString(esoFieldAPIKey)
+		if err != nil {
+			return
+		}
+		header := http.Header{}
+		header.Set("Authorization", "ApiKey "+apiKey)
+		conf.clientOpts = append(conf.clientOpts, elastic.SetHeaders(header))
 	}
 
 	var timeout time.Duration
@@ -245,6 +257,10 @@ It's possible to enable AWS connectivity with this output using the `+"`aws`"+` 
 				Description("The maximum time to wait before abandoning a request (and trying again).").
 				Advanced().
 				Default("5s"),
+			service.NewStringField(esoFieldAPIKey).
+				Description("The key to set in the Authorization header if using API keys for authentication.").
+				Optional().
+				Secret(),
 			service.NewTLSToggledField(esoFieldTLS),
 			service.NewOutputMaxInFlightField(),
 		).

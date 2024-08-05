@@ -8,6 +8,9 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Field `content_md5` added to the `aws_s3` output. (@dom-lee-naimuri)
+- Field `send_ack` added to the `nats` input. (@plejd-sebman)
+- New Bloblang method `vector`. (@rockwotj)
+- New experimental `ockam_kafka` input and output. (@mrinalwadhwa, @davide-baldo)
 
 ## 4.32.1 - 2024-07-24
 

@@ -103,8 +103,9 @@ type sqlInsertProcessor struct {
 	builder squirrel.InsertBuilder
 	dbMut   sync.RWMutex
 
-	useTxStmt   bool
-	argsMapping *bloblang.Executor
+	useTxStmt     bool
+	argsMapping   *bloblang.Executor
+	argsConverter argsConverter
 
 	logger  *service.Logger
 	shutSig *shutdown.Signaller
@@ -154,6 +155,12 @@ func NewSQLInsertProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Re
 		s.builder = s.builder.PlaceholderFormat(squirrel.Dollar)
 	} else if driverStr == "oracle" || driverStr == "gocosmos" {
 		s.builder = s.builder.PlaceholderFormat(squirrel.Colon)
+	}
+
+	if driverStr == "postgres" {
+		s.argsConverter = bloblValuesToPgSQLValues
+	} else {
+		s.argsConverter = func(v []any) []any { return v }
 	}
 
 	if s.useTxStmt {
@@ -254,6 +261,7 @@ func (s *sqlInsertProcessor) ProcessBatch(ctx context.Context, batch service.Mes
 				msg.SetError(fmt.Errorf("mapping returned non-array result: %T", iargs))
 				continue
 			}
+			args = s.argsConverter(args)
 		}
 
 		if tx == nil {

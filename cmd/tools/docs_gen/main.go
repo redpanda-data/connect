@@ -248,6 +248,7 @@ func doBloblangMethods(dir string) {
 		"Object & Array Manipulation",
 		"Parsing",
 		"Encoding and Encryption",
+		"SQL",
 		"JSON Web Tokens",
 		"GeoIP",
 		"Deprecated",

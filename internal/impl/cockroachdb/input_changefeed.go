@@ -43,7 +43,7 @@ var sampleString = `{
 
 func crdbChangefeedInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Categories("Integration").
+		Categories("Services").
 		Summary(fmt.Sprintf("Listens to a https://www.cockroachlabs.com/docs/stable/changefeed-examples[CockroachDB Core Changefeed^] and creates a message for each row received. Each message is a json object looking like: \n```json\n%s\n```", sampleString)).
 		Description("This input will continue to listen to the changefeed until shutdown. A backfill of the full current state of the table will be delivered upon each run unless a cache is configured for storing cursor timestamps, as this is how Redpanda Connect keeps track as to which changes have been successfully delivered.\n\nNote: You must have `SET CLUSTER SETTING kv.rangefeed.enabled = true;` on your CRDB cluster, for more information refer to https://www.cockroachlabs.com/docs/stable/changefeed-examples?filters=core[the official CockroachDB documentation^].").
 		Fields(
