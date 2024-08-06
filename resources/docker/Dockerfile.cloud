@@ -1,36 +1,38 @@
 FROM golang:1.22 AS build
 
-ENV CGO_ENABLED=1
+ENV CGO_ENABLED=0
 ENV GOOS=linux
+RUN useradd -u 10001 connect
 
 WORKDIR /go/src/github.com/redpanda-data/connect/
 # Update dependencies: On unchanged dependencies, cached layer will be reused
 COPY go.* /go/src/github.com/redpanda-data/connect/
 RUN go mod download
 
-RUN apt-get update && apt-get install -y --no-install-recommends libzmq3-dev
-
 # Build
 COPY . /go/src/github.com/redpanda-data/connect/
-
-RUN make TAGS=x_benthos_extra redpanda-connect
+# Tag timetzdata required for busybox base image:
+# https://github.com/benthosdev/benthos/issues/897
+RUN make TAGS="timetzdata" redpanda-connect-cloud
 
 # Pack
-FROM debian:latest
+FROM busybox AS package
 
 LABEL maintainer="Ashley Jeffs <ash.jeffs@redpanda.com>"
 LABEL org.opencontainers.image.source="https://github.com/redpanda-data/connect"
 
-WORKDIR /root/
-
-RUN apt-get update && apt-get install -y --no-install-recommends libzmq3-dev
+WORKDIR /
 
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=build /go/src/github.com/redpanda-data/connect/target/bin/redpanda-connect .
+COPY --from=build /etc/passwd /etc/passwd
+COPY --from=build /go/src/github.com/redpanda-data/connect/target/bin/redpanda-connect-cloud ./redpanda-connect
 COPY ./config/docker.yaml /connect.yaml
+
+USER connect
 
 EXPOSE 4195
 
-ENTRYPOINT ["./redpanda-connect"]
+ENTRYPOINT ["/redpanda-connect"]
 
 CMD ["-c", "/connect.yaml"]
+

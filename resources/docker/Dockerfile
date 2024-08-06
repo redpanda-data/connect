@@ -13,7 +13,7 @@ RUN go mod download
 COPY . /go/src/github.com/redpanda-data/connect/
 # Tag timetzdata required for busybox base image:
 # https://github.com/benthosdev/benthos/issues/897
-RUN make TAGS="timetzdata"
+RUN make TAGS="timetzdata" redpanda-connect
 
 # Pack
 FROM busybox AS package
