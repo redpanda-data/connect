@@ -44,6 +44,7 @@ output:
     content_type: application/octet-stream
     collision_mode: overwrite
     timeout: 3s
+    credentials_json: ""
     max_in_flight: 64
     batching:
       count: 0
@@ -69,6 +70,7 @@ output:
     collision_mode: overwrite
     chunk_size: 16777216
     timeout: 3s
+    credentials_json: ""
     max_in_flight: 64
     batching:
       count: 0
@@ -231,6 +233,21 @@ timeout: 1s
 
 timeout: 500ms
 ```
+
+=== `credentials_json`
+
+An optional field to set Google Service Account Credentials json.
+[CAUTION]
+====
+This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
+====
+
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+
+*Type*: `string`
+
+*Default*: `""`
 
 === `max_in_flight`
 

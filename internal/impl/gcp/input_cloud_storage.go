@@ -24,6 +24,7 @@ import (
 
 	"cloud.google.com/go/storage"
 	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/codec"
@@ -31,16 +32,18 @@ import (
 
 const (
 	// Cloud Storage Input Fields
-	csiFieldBucket        = "bucket"
-	csiFieldPrefix        = "prefix"
-	csiFieldDeleteObjects = "delete_objects"
+	csiFieldBucket          = "bucket"
+	csiFieldPrefix          = "prefix"
+	csiFieldCredentialsJSON = "credentials_json"
+	csiFieldDeleteObjects   = "delete_objects"
 )
 
 type csiConfig struct {
-	Bucket        string
-	Prefix        string
-	DeleteObjects bool
-	Codec         codec.DeprecatedFallbackCodec
+	Bucket          string
+	Prefix          string
+	CredentialsJSON string
+	DeleteObjects   bool
+	Codec           codec.DeprecatedFallbackCodec
 }
 
 func csiConfigFromParsed(pConf *service.ParsedConfig) (conf csiConfig, err error) {
@@ -48,6 +51,9 @@ func csiConfigFromParsed(pConf *service.ParsedConfig) (conf csiConfig, err error
 		return
 	}
 	if conf.Prefix, err = pConf.FieldString(csiFieldPrefix); err != nil {
+		return
+	}
+	if conf.CredentialsJSON, err = pConf.FieldString(csiFieldCredentialsJSON); err != nil {
 		return
 	}
 	if conf.Codec, err = codec.DeprecatedCodecFromParsed(pConf); err != nil {
@@ -91,6 +97,10 @@ By default Redpanda Connect will use a shared credentials file when connecting t
 			service.NewStringField(csiFieldPrefix).
 				Description("An optional path prefix, if set only objects with the prefix are consumed.").
 				Default(""),
+			service.NewStringField(csiFieldCredentialsJSON).
+				Description("An optional field to set Google Service Account Credentials json.").
+				Default("").
+				Secret(),
 		).
 		Fields(codec.DeprecatedCodecFields("to_the_end")...).
 		Fields(
@@ -267,7 +277,14 @@ func newGCPCloudStorageInput(conf csiConfig, res *service.Resources) (*gcpCloudS
 // Cloud Storage bucket.
 func (g *gcpCloudStorageInput) Connect(ctx context.Context) error {
 	var err error
-	g.client, err = storage.NewClient(context.Background())
+
+	var opt []option.ClientOption
+	opt, err = getClientOptionWithCredential(g.conf.CredentialsJSON, opt)
+	if err != nil {
+		return err
+	}
+
+	g.client, err = storage.NewClient(context.Background(), opt...)
 	if err != nil {
 		return err
 	}

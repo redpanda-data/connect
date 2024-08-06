@@ -38,6 +38,7 @@ output:
   label: ""
   gcp_pubsub:
     project: "" # No default (required)
+    credentials_json: ""
     topic: "" # No default (required)
     endpoint: ""
     max_in_flight: 64
@@ -64,6 +65,7 @@ output:
   label: ""
   gcp_pubsub:
     project: "" # No default (required)
+    credentials_json: ""
     topic: "" # No default (required)
     endpoint: ""
     ordering_key: "" # No default (optional)
@@ -121,6 +123,20 @@ The project ID of the topic to publish to.
 
 *Type*: `string`
 
+
+=== `credentials_json`
+
+An optional field to set Google Service Account Credentials json.
+[CAUTION]
+====
+This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
+====
+
+
+
+*Type*: `string`
+
+*Default*: `""`
 
 === `topic`
 

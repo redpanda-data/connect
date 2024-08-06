@@ -59,6 +59,10 @@ pipeline:
 `+"```"+``).
 		Fields(
 			service.NewStringField("project").Description("The project ID of the topic to publish to."),
+			service.NewStringField("credentials_json").
+				Description("An optional field to set Google Service Account Credentials json.").
+				Default("").
+				Secret(),
 			service.NewInterpolatedStringField("topic").Description("The topic to publish to."),
 			service.NewStringField("endpoint").
 				Default("").
@@ -195,6 +199,16 @@ func newPubSubOutput(conf *service.ParsedConfig) (*pubsubOutput, error) {
 	var opt []option.ClientOption
 	if endpoint != "" {
 		opt = []option.ClientOption{option.WithEndpoint(endpoint)}
+	}
+
+	var credsJSON string
+	credsJSON, err = conf.FieldString("credentials_json")
+	if err != nil {
+		return nil, err
+	}
+	opt, err = getClientOptionWithCredential(credsJSON, opt)
+	if err != nil {
+		return nil, err
 	}
 
 	return &pubsubOutput{

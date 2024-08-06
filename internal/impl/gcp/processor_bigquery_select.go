@@ -29,7 +29,8 @@ import (
 )
 
 type bigQuerySelectProcessorConfig struct {
-	project string
+	project         string
+	credentialsJSON string
 
 	queryParts  *bqQueryParts
 	jobLabels   map[string]string
@@ -41,6 +42,10 @@ func bigQuerySelectProcessorConfigFromParsed(inConf *service.ParsedConfig) (conf
 	conf.queryParts = &queryParts
 
 	if conf.project, err = inConf.FieldString("project"); err != nil {
+		return
+	}
+
+	if conf.credentialsJSON, err = inConf.FieldString("credentials_json"); err != nil {
 		return
 	}
 
@@ -91,6 +96,7 @@ func newBigQuerySelectProcessorConfig() *service.ConfigSpec {
 		Categories("Integration").
 		Summary("Executes a `SELECT` query against BigQuery and replaces messages with the rows returned.").
 		Field(service.NewStringField("project").Description("GCP project where the query job will execute.")).
+		Field(service.NewStringField("credentials_json").Description("An optional field to set Google Service Account Credentials json.").Secret().Default("")).
 		Field(service.NewStringField("table").Description("Fully-qualified BigQuery table name to query.").Example("bigquery-public-data.samples.shakespeare")).
 		Field(service.NewStringListField("columns").Description("A list of columns to query.")).
 		Field(service.NewStringField("where").
@@ -159,6 +165,12 @@ func newBigQuerySelectProcessor(inConf *service.ParsedConfig, options *bigQueryP
 	}
 
 	closeCtx, closeF := context.WithCancel(context.Background())
+
+	options.clientOptions, err = getClientOptionWithCredential(conf.credentialsJSON, options.clientOptions)
+	if err != nil {
+		closeF()
+		return nil, err
+	}
 
 	wrapped, err := bigquery.NewClient(closeCtx, conf.project, options.clientOptions...)
 	if err != nil {

@@ -29,6 +29,7 @@ import (
 const (
 	// Pubsub Input Fields
 	pbiFieldProjectID              = "project"
+	pbiFieldCredentialsJSON        = "credentials_json"
 	pbiFieldSubscriptionID         = "subscription"
 	pbiFieldEndpoint               = "endpoint"
 	pbiFieldMaxOutstandingMessages = "max_outstanding_messages"
@@ -41,6 +42,7 @@ const (
 
 type pbiConfig struct {
 	ProjectID              string
+	CredentialsJSON        string
 	SubscriptionID         string
 	Endpoint               string
 	MaxOutstandingMessages int
@@ -52,6 +54,9 @@ type pbiConfig struct {
 
 func pbiConfigFromParsed(pConf *service.ParsedConfig) (conf pbiConfig, err error) {
 	if conf.ProjectID, err = pConf.FieldString(pbiFieldProjectID); err != nil {
+		return
+	}
+	if conf.CredentialsJSON, err = pConf.FieldString(pbiFieldCredentialsJSON); err != nil {
 		return
 	}
 	if conf.SubscriptionID, err = pConf.FieldString(pbiFieldSubscriptionID); err != nil {
@@ -102,6 +107,10 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 		Fields(
 			service.NewStringField(pbiFieldProjectID).
 				Description("The project ID of the target subscription."),
+			service.NewStringField(pbiFieldCredentialsJSON).
+				Description("An optional field to set Google Service Account Credentials json.").
+				Default("").
+				Secret(),
 			service.NewStringField(pbiFieldSubscriptionID).
 				Description("The target subscription ID."),
 			service.NewStringField(pbiFieldEndpoint).
@@ -182,12 +191,19 @@ type gcpPubSubReader struct {
 }
 
 func newGCPPubSubReader(conf pbiConfig, res *service.Resources) (*gcpPubSubReader, error) {
+	var err error
 	var opt []option.ClientOption
 	if strings.TrimSpace(conf.Endpoint) != "" {
 		opt = []option.ClientOption{option.WithEndpoint(conf.Endpoint)}
 	}
 
-	client, err := pubsub.NewClient(context.Background(), conf.ProjectID, opt...)
+	opt, err = getClientOptionWithCredential(conf.CredentialsJSON, opt)
+	if err != nil {
+		return nil, err
+	}
+
+	var client *pubsub.Client
+	client, err = pubsub.NewClient(context.Background(), conf.ProjectID, opt...)
 	if err != nil {
 		return nil, err
 	}
