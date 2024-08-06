@@ -58,6 +58,15 @@ For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ol
 				Description("The system prompt to submit to the Ollama LLM.").
 				Advanced().
 				Optional(),
+			service.NewStringField(bopFieldCacheDirectory).
+				Description("If `"+bopFieldServerAddress+"` is not set - the directory to download the ollama binary and use as a model cache.").
+				Example("/opt/cache/connect/ollama").
+				Advanced().
+				Optional(),
+			service.NewStringField(bopFieldDownloadURL).
+				Description("If `"+bopFieldServerAddress+"` is not set - the URL to download the ollama binary from. Defaults to the offical Ollama GitHub release for this platform.").
+				Advanced().
+				Optional(),
 		)
 }
 

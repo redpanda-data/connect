@@ -53,6 +53,15 @@ For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ol
 			service.NewInterpolatedStringField(oepFieldText).
 				Description("The text you want to create vector embeddings for. By default, the processor submits the entire payload as a string.").
 				Optional(),
+			service.NewStringField(bopFieldCacheDirectory).
+				Description("If `"+bopFieldServerAddress+"` is not set - the directory to download the ollama binary and use as a model cache.").
+				Example("/opt/cache/connect/ollama").
+				Advanced().
+				Optional(),
+			service.NewStringField(bopFieldDownloadURL).
+				Description("If `"+bopFieldServerAddress+"` is not set - the URL to download the ollama binary from. Defaults to the offical Ollama GitHub release for this platform.").
+				Advanced().
+				Optional(),
 		)
 }
 
