@@ -183,7 +183,6 @@ output:
 			service.NewInterpolatedStringField(csoFieldCredentialsJSON).
 				Description("An optional field to set Google Service Account Credentials json.").
 				Default("").
-				Optional().
 				Secret(),
 			service.NewOutputMaxInFlightField().
 				Description("The maximum number of message batches to have in flight at a given time. Increase this to improve throughput."),

@@ -100,7 +100,6 @@ By default Redpanda Connect will use a shared credentials file when connecting t
 			service.NewStringField(csiFieldCredentialsJSON).
 				Description("An optional field to set Google Service Account Credentials json.").
 				Default("").
-				Optional().
 				Secret(),
 		).
 		Fields(codec.DeprecatedCodecFields("to_the_end")...).

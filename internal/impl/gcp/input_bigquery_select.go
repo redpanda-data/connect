@@ -89,11 +89,8 @@ func bigQuerySelectInputConfigFromParsed(inConf *service.ParsedConfig) (conf big
 		return
 	}
 
-	if inConf.Contains("credentials_json") {
-		conf.credentialsJSON, err = inConf.FieldString("credentials_json")
-		if err != nil {
-			return
-		}
+	if conf.credentialsJSON, err = inConf.FieldString("credentials_json"); err != nil {
+		return
 	}
 
 	return
@@ -109,7 +106,6 @@ func newBigQuerySelectInputConfig() *service.ConfigSpec {
 		Field(service.NewStringField("project").Description("GCP project where the query job will execute.")).
 		Field(service.NewStringField("credentials_json").
 			Description("An optional field to set Google Service Account Credentials json.").
-			Optional().
 			Secret().
 			Default("")).
 		Field(service.NewStringField("table").Description("Fully-qualified BigQuery table name to query.").Example("bigquery-public-data.samples.shakespeare")).

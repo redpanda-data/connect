@@ -209,7 +209,7 @@ For the CSV format when the field ` + "`csv.header`" + ` is specified a header r
 			Advanced().
 			Default(false)).
 		Field(service.NewStringMapField("job_labels").Description("A list of labels to add to the load job.").Default(map[string]any{})).
-		Field(service.NewStringField("credentials_json").Description("An optional field to set Google Service Account Credentials json.").Optional().Secret().Default("")).
+		Field(service.NewStringField("credentials_json").Description("An optional field to set Google Service Account Credentials json.").Secret().Default("")).
 		Field(service.NewObjectField("csv",
 			service.NewStringListField("header").
 				Description("A list of values to use as header for each batch of messages. If not specified the first line of each message will be used as header.").

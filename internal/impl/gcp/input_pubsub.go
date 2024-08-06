@@ -110,7 +110,6 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 			service.NewStringField(pbiFieldCredentialsJSON).
 				Description("An optional field to set Google Service Account Credentials json.").
 				Default("").
-				Optional().
 				Secret(),
 			service.NewStringField(pbiFieldSubscriptionID).
 				Description("The target subscription ID."),

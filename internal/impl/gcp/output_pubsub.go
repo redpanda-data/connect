@@ -62,7 +62,6 @@ pipeline:
 			service.NewStringField("credentials_json").
 				Description("An optional field to set Google Service Account Credentials json.").
 				Default("").
-				Optional().
 				Secret(),
 			service.NewInterpolatedStringField("topic").Description("The topic to publish to."),
 			service.NewStringField("endpoint").
