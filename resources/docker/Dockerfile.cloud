@@ -34,5 +34,4 @@ EXPOSE 4195
 
 ENTRYPOINT ["/redpanda-connect"]
 
-CMD ["-c", "/connect.yaml"]
-
+CMD ["run", "/connect.yaml"]
