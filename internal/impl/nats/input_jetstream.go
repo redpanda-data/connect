@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -96,6 +97,23 @@ xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
 			Description("The maximum number of outstanding acks to be allowed before consuming is halted.").
 			Advanced().
 			Default(1024)).
+		Field(service.NewBoolField("create_if_not_exists").
+			Description("Create the `stream` and `subject` if do not exist.").
+			Advanced().
+			Default(false)).
+		Field(service.NewStringEnumField("storage_type", "memory", "file").
+			Description("Storage type to use when the stream does not exist and is created when `create_if_not_exists` is set to true. Can be `memory` or `file` storage").
+			Advanced().
+			Default("memory")).
+		Field(service.NewDurationField("nak_delay").
+			Description("An optional delay duration on redelivering the messages when negatively acknowledged.").
+			Example("1m").
+			Advanced().
+			Optional()).
+		Field(service.NewStringField("nak_delay_until_header").
+			Description("An optional header name on which will come a unix epoch timestamp in seconds until when the message delivery should be delayed. By default is `nak_delay_until`").
+			Advanced().
+			Default("nak_delay_until")).
 		Fields(connectionTailFields()...).
 		Field(inputTracingDocs())
 }
@@ -118,16 +136,20 @@ func init() {
 //------------------------------------------------------------------------------
 
 type jetStreamReader struct {
-	connDetails   connectionDetails
-	deliverOpt    nats.SubOpt
-	subject       string
-	queue         string
-	stream        string
-	bind          bool
-	pull          bool
-	durable       string
-	ackWait       time.Duration
-	maxAckPending int
+	connDetails         connectionDetails
+	deliverOpt          nats.SubOpt
+	subject             string
+	queue               string
+	stream              string
+	bind                bool
+	pull                bool
+	durable             string
+	ackWait             time.Duration
+	nakDelay            time.Duration
+	nakDelayUntilHeader string
+	maxAckPending       int
+	createIfNotExists   bool
+	storageType         string
 
 	log *service.Logger
 
@@ -201,7 +223,7 @@ func newJetStreamReaderFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 		}
 	} else {
 		if j.subject == "" && j.stream == "" {
-			return nil, errors.New("subject and stream is empty")
+			return nil, errors.New("subject and stream are empty")
 		}
 	}
 
@@ -214,6 +236,26 @@ func newJetStreamReaderFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse ack wait duration: %v", err)
 		}
+	}
+
+	if conf.Contains("create_if_not_exists") {
+		if j.createIfNotExists, err = conf.FieldBool("create_if_not_exists"); err != nil {
+			return nil, err
+		}
+	}
+	if conf.Contains("storage_type") {
+		if j.storageType, err = conf.FieldString("storage_type"); err != nil {
+			return nil, err
+		}
+	}
+
+	if conf.Contains("nak_delay") {
+		if j.nakDelay, err = conf.FieldDuration("nak_delay"); err != nil {
+			return nil, err
+		}
+	}
+	if j.nakDelayUntilHeader, err = conf.FieldString("nak_delay_until_header"); err != nil {
+		return nil, err
 	}
 
 	if j.maxAckPending, err = conf.FieldInt("max_ack_pending"); err != nil {
@@ -304,7 +346,47 @@ func (j *jetStreamReader) Connect(ctx context.Context) (err error) {
 			natsSub, err = jCtx.QueueSubscribeSync(j.subject, j.queue, options...)
 		}
 	}
+
 	if err != nil {
+		if j.createIfNotExists {
+			var natsErr *nats.APIError
+			if errors.As(err, &natsErr) {
+				if natsErr.ErrorCode == nats.JSErrCodeStreamNotFound {
+					_, err = jCtx.AddStream(&nats.StreamConfig{
+						Name: j.stream,
+						Subjects: func() []string {
+							if j.subject == "" {
+								return nil
+							}
+							return []string{j.subject}
+						}(),
+						Storage: func() nats.StorageType {
+							if j.storageType == "file" {
+								return nats.FileStorage
+							}
+							return nats.MemoryStorage
+						}(),
+					})
+				}
+			} else if strings.Contains(err.Error(), "does not match consumer") {
+				// create subject to existent stream .stream
+				_, err = jCtx.UpdateStream(&nats.StreamConfig{
+					Name: j.stream,
+					Subjects: func() []string {
+						if j.subject == "" {
+							return nil
+						}
+						return []string{j.subject}
+					}(),
+					Storage: func() nats.StorageType {
+						if j.storageType == "file" {
+							return nats.FileStorage
+						}
+						return nats.MemoryStorage
+					}(),
+				})
+			}
+		}
 		return err
 	}
 
@@ -334,14 +416,13 @@ func (j *jetStreamReader) Read(ctx context.Context) (*service.Message, service.A
 	if natsSub == nil {
 		return nil, nil, service.ErrNotConnected
 	}
-
 	if !j.pull {
 		nmsg, err := natsSub.NextMsgWithContext(ctx)
 		if err != nil {
 			// TODO: Any errors need capturing here to signal a lost connection?
 			return nil, nil, err
 		}
-		return convertMessage(nmsg)
+		return j.convertMessage(nmsg)
 	}
 
 	for {
@@ -362,7 +443,7 @@ func (j *jetStreamReader) Read(ctx context.Context) (*service.Message, service.A
 		if len(msgs) == 0 {
 			continue
 		}
-		return convertMessage(msgs[0])
+		return j.convertMessage(msgs[0])
 	}
 }
 
@@ -379,7 +460,7 @@ func (j *jetStreamReader) Close(ctx context.Context) error {
 	return nil
 }
 
-func convertMessage(m *nats.Msg) (*service.Message, service.AckFunc, error) {
+func (j *jetStreamReader) convertMessage(m *nats.Msg) (*service.Message, service.AckFunc, error) {
 	msg := service.NewMessage(m.Data)
 	msg.MetaSet("nats_subject", m.Subject)
 
@@ -401,9 +482,19 @@ func convertMessage(m *nats.Msg) (*service.Message, service.AckFunc, error) {
 	}
 
 	return msg, func(ctx context.Context, res error) error {
-		if res == nil {
-			return m.Ack()
+		if res != nil {
+			if val, ok := m.Header[j.nakDelayUntilHeader]; ok {
+				if unixTime, err := strconv.ParseInt(val[0], 10, 64); err != nil {
+					j.log.Warnf("error parsing unix epoch time from header %s: %s error: %v", j.nakDelayUntilHeader, val[0], err)
+					return m.Nak()
+				} else {
+					return m.NakWithDelay(time.Unix(unixTime, 0).Sub(time.Now().UTC()))
+				}
+			} else if j.nakDelay > 0 {
+				return m.NakWithDelay(j.nakDelay)
+			}
+			return m.Nak()
 		}
-		return m.Nak()
+		return m.Ack()
 	}, nil
 }
