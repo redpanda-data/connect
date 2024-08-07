@@ -68,6 +68,22 @@ This output benefits from sending multiple messages in flight in parallel for im
 			saslFieldSpec(),
 			service.NewMetadataExcludeFilterField(metaFilterField).
 				Description("Specify criteria for which metadata values are attached to messages as headers."),
+			service.NewBoolField(persistentField).
+				Description("Whether message delivery should be persistent (transient by default).").
+				Advanced().
+				Default(false),
+			service.NewStringListField(targetCapsField).
+				Description("List of extension capabilities the sender desires.").
+				Optional().
+				Advanced().
+				Example([]string{"queue"}).
+				Example([]string{"topic"}).
+				Example([]string{"queue", "topic"}),
+			service.NewStringField(messagePropsTo).
+				Description("Identifies the node that is the intended destination of the message.").
+				Optional().
+				Advanced().
+				Example("amqp://localhost:5672/"),
 		).LintRule(`
 root = if this.url.or("") == "" && this.urls.or([]).length() == 0 {
   "field 'urls' must be set"
@@ -105,6 +121,10 @@ type amqp1Writer struct {
 	metaFilter               *service.MetadataExcludeFilter
 	applicationPropertiesMap *bloblang.Executor
 	connOpts                 *amqp.ConnOptions
+	senderOpts               *amqp.SenderOptions
+	persistent               bool
+	targetCaps               []string
+	msgTo                    string
 
 	log      *service.Logger
 	connLock sync.RWMutex
@@ -112,8 +132,9 @@ type amqp1Writer struct {
 
 func amqp1WriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (*amqp1Writer, error) {
 	a := amqp1Writer{
-		log:      mgr.Logger(),
-		connOpts: &amqp.ConnOptions{},
+		log:        mgr.Logger(),
+		connOpts:   &amqp.ConnOptions{},
+		senderOpts: &amqp.SenderOptions{},
 	}
 
 	urlStrs, err := conf.FieldStringList(urlsField)
@@ -164,6 +185,25 @@ func amqp1WriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (
 	if a.metaFilter, err = conf.FieldMetadataExcludeFilter(metaFilterField); err != nil {
 		return nil, err
 	}
+
+	if a.persistent, err = conf.FieldBool(persistentField); err != nil {
+		return nil, err
+	}
+
+	a.targetCaps, err = conf.FieldStringList(targetCapsField)
+	if err != nil {
+		return nil, err
+	}
+	if len(a.targetCaps) != 0 {
+		a.senderOpts.TargetCapabilities = a.targetCaps
+	}
+
+	if conf.Contains(messagePropsTo) {
+		if a.msgTo, err = conf.FieldString(messagePropsTo); err != nil {
+			return nil, err
+		}
+	}
+
 	return &a, nil
 }
 
@@ -193,7 +233,7 @@ func (a *amqp1Writer) Connect(ctx context.Context) (err error) {
 	}
 
 	// Create a sender
-	if sender, err = session.NewSender(ctx, a.targetAddr, nil); err != nil {
+	if sender, err = session.NewSender(ctx, a.targetAddr, a.senderOpts); err != nil {
 		_ = session.Close(ctx)
 		_ = client.Close()
 		return
@@ -279,6 +319,14 @@ func (a *amqp1Writer) Write(ctx context.Context, msg *service.Message) error {
 		m.Annotations[k] = v
 		return nil
 	})
+
+	if a.persistent {
+		m.Header = &amqp.MessageHeader{Durable: true}
+	}
+
+	if a.msgTo != "" {
+		m.Properties = &amqp.MessageProperties{To: &a.msgTo}
+	}
 
 	if err = s.Send(ctx, m, nil); err != nil {
 		if ctx.Err() == nil {
