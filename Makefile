@@ -7,7 +7,7 @@ INSTALL_DIR        ?= $(GOPATH)/bin
 WEBSITE_DIR        ?= ./docs/modules
 DEST_DIR           ?= ./target
 PATHINSTBIN        = $(DEST_DIR)/bin
-DOCKER_IMAGE       ?= redpandadata/connect
+DOCKER_IMAGE       ?= docker.redpanda.com/redpandadata/connect
 
 VERSION   := $(shell git describe --tags 2> /dev/null || echo "v0.0.0")
 VER_CUT   := $(shell echo $(VERSION) | cut -c2-)
@@ -23,7 +23,7 @@ LD_FLAGS   ?= -w -s
 GO_FLAGS   ?=
 DOCS_FLAGS ?=
 
-APPS = redpanda-connect
+APPS = redpanda-connect redpanda-connect-cloud redpanda-connect-community
 all: $(APPS)
 
 install: $(APPS)
@@ -54,6 +54,10 @@ docker-cgo-tags:
 docker:
 	@docker build -f ./resources/docker/Dockerfile . -t $(DOCKER_IMAGE):$(VER_CUT)
 	@docker tag $(DOCKER_IMAGE):$(VER_CUT) $(DOCKER_IMAGE):latest
+
+docker-cloud:
+	@docker build -f ./resources/docker/Dockerfile.cloud . -t $(DOCKER_IMAGE):$(VER_CUT)-cloud
+	@docker tag $(DOCKER_IMAGE):$(VER_CUT)-cloud $(DOCKER_IMAGE):latest-cloud
 
 docker-cgo:
 	@docker build -f ./resources/docker/Dockerfile.cgo . -t $(DOCKER_IMAGE):$(VER_CUT)-cgo

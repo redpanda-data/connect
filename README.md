@@ -165,7 +165,7 @@ docker run --rm \
 	-v /path/to/your/benthos.yaml:/config.yaml \
 	-v /tmp/data:/data \
 	-p 4195:4195 \
-	redpandadata/connect -c /config.yaml
+	docker.redpanda.com/redpandadata/connect run /config.yaml
 ```
 
 ## Contributing

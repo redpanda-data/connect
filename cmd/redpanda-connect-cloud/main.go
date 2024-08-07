@@ -73,21 +73,15 @@ func main() {
 		allowSlice = append(allowSlice, s)
 	}
 
-	env := service.GlobalEnvironment()
-
 	// Observability and scanner plugins aren't necessarily present in our
 	// internal lists and so we allow everything that's imported
-	env.WalkScanners(func(name string, config *service.ConfigView) {
-		allowSlice = append(allowSlice, name)
-	})
-	env.WalkMetrics(func(name string, config *service.ConfigView) {
-		allowSlice = append(allowSlice, name)
-	})
-	env.WalkTracers(func(name string, config *service.ConfigView) {
-		allowSlice = append(allowSlice, name)
-	})
-
-	env = env.With(allowSlice...)
+	env := service.GlobalEnvironment().
+		WithBuffers(allowSlice...).
+		WithCaches(allowSlice...).
+		WithInputs(allowSlice...).
+		WithOutputs(allowSlice...).
+		WithProcessors(allowSlice...).
+		WithRateLimits(allowSlice...)
 
 	// Allow only pure methods and functions within Bloblang.
 	benv := bloblang.GlobalEnvironment()

@@ -126,3 +126,30 @@ jobs:
         platforms: linux/amd64,linux/arm64
         push: true
         tags: ${{ steps.docker_meta.outputs.tags }}
+
+    - name: Docker meta cloud
+      id: docker_meta_cloud
+      uses: docker/metadata-action@v5
+      with:
+        images: |
+          redpandadata/connect
+        flavor: |
+          latest=auto
+          suffix=-cloud
+        tags: |
+          type=semver,suffix=-cloud,pattern={{version}}
+          type=semver,suffix=-cloud,pattern={{major}}.{{minor}}
+          type=semver,suffix=-cloud,pattern={{major}}
+
+    - name: Build and push cloud
+      uses: docker/build-push-action@v6
+      with:
+        context: ./
+        file: ./resources/docker/Dockerfile.cloud
+        builder: ${{ steps.buildx.outputs.name }}
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: ${{ steps.docker_meta.outputs.tags }}
+        tags: ${{ steps.docker_meta_cloud.outputs.tags }}
+
+

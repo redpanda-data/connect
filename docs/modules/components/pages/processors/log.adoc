@@ -70,8 +70,7 @@ The log level to use.
 *Default*: `"INFO"`
 
 Options:
-`FATAL`
-, `ERROR`
+`ERROR`
 , `WARN`
 , `INFO`
 , `DEBUG`
