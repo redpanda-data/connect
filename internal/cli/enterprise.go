@@ -24,6 +24,17 @@ func redpandaTopLevelConfigField() *service.ConfigField {
 	return service.NewObjectField("redpanda", enterprise.TopicLoggerFields()...)
 }
 
+// Schema returns the config schema for Redpanda Connect.
+func Schema(removeDefaultInputOutput bool, version, dateBuilt string) *service.ConfigSchema {
+	s := service.NewEnvironment().FullConfigSchema(version, dateBuilt)
+	if removeDefaultInputOutput {
+		s.SetFieldDefault(map[string]any{}, "input")
+		s.SetFieldDefault(map[string]any{}, "output")
+	}
+	s = s.Field(redpandaTopLevelConfigField())
+	return s
+}
+
 // InitEnterpriseCLI kicks off the benthos cli with a suite of options that adds
 // all of the enterprise functionality of Redpanda Connect. This has been
 // abstracted into a separate package so that multiple distributions (classic
@@ -54,13 +65,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, removeDefaultInput
 		),
 		service.CLIOptSetDocumentationURL("https://docs.redpanda.com/redpanda-connect"),
 		service.CLIOptSetMainSchemaFrom(func() *service.ConfigSchema {
-			s := service.NewEnvironment().FullConfigSchema(version, dateBuilt)
-			if removeDefaultInputOutput {
-				s.SetFieldDefault(map[string]any{}, "input")
-				s.SetFieldDefault(map[string]any{}, "output")
-			}
-			s = s.Field(redpandaTopLevelConfigField())
-			return s
+			return Schema(removeDefaultInputOutput, version, dateBuilt)
 		}),
 		service.CLIOptOnLoggerInit(func(l *service.Logger) {
 			fbLogger = l
