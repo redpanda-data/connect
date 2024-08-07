@@ -47,6 +47,7 @@ const (
 	iskFieldFetchBufferCap                = "fetch_buffer_cap"
 	iskFieldMultiHeader                   = "multi_header"
 	iskFieldBatching                      = "batching"
+	iskFieldBrokerConnectionRetryInterval = "broker_connection_retry_interval"
 )
 
 func iskConfigSpec() *service.ConfigSpec {
@@ -158,6 +159,9 @@ Unfortunately this error message will appear for a wide range of connection prob
 				Description("Decode headers into lists to allow handling of multiple values with the same key").
 				Advanced().Default(false),
 			service.NewBatchPolicyField(iskFieldBatching).Advanced(),
+			service.NewDurationField(iskFieldBrokerConnectionRetryInterval).
+				Description("Interval used to reconnect to the broker").
+				Advanced().Default(250*time.Millisecond),
 		)
 }
 
@@ -509,6 +513,10 @@ func (k *kafkaReader) saramaConfigFromParsed(conf *service.ParsedConfig) (*saram
 		config.Consumer.Offsets.Initial = sarama.OffsetOldest
 	}
 
+	if config.Metadata.Retry.Backoff, err = conf.FieldDuration(iskFieldBrokerConnectionRetryInterval); err != nil {
+		return nil, err
+	}
+
 	if err := ApplySaramaSASLFromParsed(conf, k.mgr, config); err != nil {
 		return nil, err
 	}
@@ -550,7 +558,7 @@ func (k *kafkaReader) ReadBatch(ctx context.Context) (service.MessageBatch, serv
 	return nil, nil, ctx.Err()
 }
 
-// CloseAsync shuts down the kafkaReader input and stops processing requests.
+// Close shuts down the kafkaReader input and stops processing requests.
 func (k *kafkaReader) Close(ctx context.Context) (err error) {
 	k.closeGroupAndConsumers()
 	select {
