@@ -9,22 +9,20 @@
 package enterprise_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
+	"net/http"
+	"net/url"
 	"strconv"
 	"testing"
 	"time"
 
-	"github.com/redpanda-data/benthos/v4/public/service"
-	"github.com/redpanda-data/benthos/v4/public/service/integration"
-	"google.golang.org/protobuf/encoding/protojson"
-
-	"github.com/redpanda-data/connect/v4/internal/impl/kafka/enterprise"
-	"github.com/redpanda-data/connect/v4/internal/protoconnect"
-
+	"github.com/gofrs/uuid"
 	"github.com/ory/dockertest/v3"
 	"github.com/ory/dockertest/v3/docker"
 	"github.com/stretchr/testify/assert"
@@ -32,6 +30,13 @@ import (
 	"github.com/twmb/franz-go/pkg/kerr"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
+	"google.golang.org/protobuf/encoding/protojson"
+
+	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
+	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service/integration"
+	"github.com/redpanda-data/connect/v4/internal/impl/kafka/enterprise"
+	"github.com/redpanda-data/connect/v4/internal/protoconnect"
 )
 
 func createKafkaTopic(ctx context.Context, address, id string, partitions int32) error {
@@ -226,4 +231,198 @@ max_message_bytes: 1MB
 	assert.Equal(t, "baz", m.InstanceId)
 	assert.Equal(t, "buz", m.PipelineId)
 	assert.Equal(t, "buz", string(outRecords[1].Key))
+}
+
+func TestSchemaRegistryIntegration(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Parallel()
+
+	pool, err := dockertest.NewPool("")
+	require.NoError(t, err)
+
+	tests := []struct {
+		name                       string
+		schema                     string
+		includeSoftDeletedSubjects bool
+		subjectFilter              string
+	}{
+		{
+			name:   "roundtrip",
+			schema: `{"name":"foo", "type": "string"}`,
+		},
+		{
+			name:                       "roundtrip with deleted subject",
+			schema:                     `{"name":"foo", "type": "string"}`,
+			includeSoftDeletedSubjects: true,
+		},
+		{
+			name:          "roundtrip with subject filter",
+			schema:        `{"name":"foo", "type": "string"}`,
+			subjectFilter: `\w+-\w+-\w+-\w+-\w+`,
+		},
+	}
+
+	cleanupSubject := func(port, subject string, hardDelete bool) {
+		u, err := url.Parse(fmt.Sprintf("http://localhost:%s/subjects/%s", port, subject))
+		require.NoError(t, err)
+		if hardDelete {
+			q := u.Query()
+			q.Add("permanent", "true")
+			u.RawQuery = q.Encode()
+		}
+		req, err := http.NewRequest(http.MethodDelete, u.String(), nil)
+		require.NoError(t, err)
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		require.NoError(t, resp.Body.Close())
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			u4, err := uuid.NewV4()
+			require.NoError(t, err)
+			subject := u4.String()
+			extraSubject := "foobar"
+
+			// TODO: Move these start calls outside of the test loop once we have a way to cleanup subjects which works.
+			sourcePort := startSchemaRegistry(t, pool)
+			sinkPort := startSchemaRegistry(t, pool)
+			t.Cleanup(func() {
+				cleanupSubject(sourcePort, subject, false)
+				cleanupSubject(sourcePort, subject, true)
+				cleanupSubject(sinkPort, subject, false)
+				cleanupSubject(sinkPort, subject, true)
+			})
+
+			postContentType := "application/vnd.schemaregistry.v1+json"
+			type payload struct {
+				Subject string `json:"subject,omitempty"`
+				Version int    `json:"version,omitempty"`
+				Schema  string `json:"schema"`
+			}
+			body, err := json.Marshal(payload{Schema: test.schema})
+			require.NoError(t, err)
+			req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://localhost:%s/subjects/%s/versions", sourcePort, subject), bytes.NewReader(body))
+			require.NoError(t, err)
+			req.Header.Set("Content-Type", postContentType)
+
+			resp, err := http.DefaultClient.Do(req)
+			require.NoError(t, err)
+			require.NoError(t, resp.Body.Close())
+
+			if test.subjectFilter != "" {
+				resp, err = http.DefaultClient.Post(fmt.Sprintf("http://localhost:%s/subjects/%s/versions", sourcePort, extraSubject), postContentType, bytes.NewReader(body))
+				require.NoError(t, err)
+				require.NoError(t, resp.Body.Close())
+			}
+
+			if test.includeSoftDeletedSubjects {
+				req, err := http.NewRequest(http.MethodDelete, fmt.Sprintf("http://localhost:%s/subjects/%s", sourcePort, subject), nil)
+				require.NoError(t, err)
+				resp, err = http.DefaultClient.Do(req)
+				require.NoError(t, err)
+				require.NoError(t, resp.Body.Close())
+			}
+
+			streamBuilder := service.NewStreamBuilder()
+			require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
+input:
+  schema_registry:
+    url: http://localhost:%s
+    include_deleted: %t
+    subject_filter: %s
+output:
+  schema_registry:
+    url: http://localhost:%s
+    subject: ${! @schema_registry_subject }
+`, sourcePort, test.includeSoftDeletedSubjects, test.subjectFilter, sinkPort)))
+			require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
+
+			stream, err := streamBuilder.Build()
+			require.NoError(t, err)
+
+			ctx, done := context.WithTimeout(context.Background(), 3*time.Second)
+			defer done()
+
+			require.NoError(t, stream.Run(ctx))
+
+			resp, err = http.DefaultClient.Get(fmt.Sprintf("http://localhost:%s/subjects", sinkPort))
+			require.NoError(t, err)
+			body, err = io.ReadAll(resp.Body)
+			require.NoError(t, err)
+			require.NoError(t, resp.Body.Close())
+			require.Equal(t, http.StatusOK, resp.StatusCode)
+			if test.subjectFilter != "" {
+				assert.Contains(t, string(body), subject)
+				assert.NotContains(t, string(body), extraSubject)
+			}
+
+			resp, err = http.DefaultClient.Get(fmt.Sprintf("http://localhost:%s/subjects/%s/versions/1", sinkPort, subject))
+			require.NoError(t, err)
+			body, err = io.ReadAll(resp.Body)
+			require.NoError(t, err)
+			require.NoError(t, resp.Body.Close())
+			require.Equal(t, http.StatusOK, resp.StatusCode)
+
+			var p payload
+			require.NoError(t, json.Unmarshal(body, &p))
+			assert.Equal(t, subject, p.Subject)
+			assert.Equal(t, 1, p.Version)
+			assert.JSONEq(t, test.schema, p.Schema)
+		})
+	}
+}
+
+func startSchemaRegistry(t *testing.T, pool *dockertest.Pool) string {
+	// TODO: Generalise this helper for the other Kafka tests here which use Redpanda...
+	t.Helper()
+
+	options := &dockertest.RunOptions{
+		Repository:   "redpandadata/redpanda",
+		Tag:          "latest",
+		Hostname:     "redpanda",
+		ExposedPorts: []string{"8081"},
+		Cmd: []string{
+			"redpanda",
+			"start",
+			"--node-id 0",
+			"--mode dev-container",
+			"--set rpk.additional_start_flags=[--reactor-backend=epoll]",
+			"--schema-registry-addr 0.0.0.0:8081",
+		},
+	}
+
+	pool.MaxWait = time.Minute
+	resource, err := pool.RunWithOptions(options)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		assert.NoError(t, pool.Purge(resource))
+	})
+
+	port := resource.GetPort("8081/tcp")
+
+	_ = resource.Expire(900)
+	require.NoError(t, pool.Retry(func() error {
+		ctx, done := context.WithTimeout(context.Background(), 3*time.Second)
+		defer done()
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("http://localhost:%s/subjects", port), nil)
+		if err != nil {
+			return err
+		}
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return errors.New("invalid status")
+		}
+
+		return nil
+	}))
+
+	return port
 }
