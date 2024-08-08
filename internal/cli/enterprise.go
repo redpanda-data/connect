@@ -20,26 +20,11 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka/enterprise"
 )
 
-func redpandaTopLevelConfigField() *service.ConfigField {
-	return service.NewObjectField("redpanda", enterprise.TopicLoggerFields()...)
-}
-
-// Schema returns the config schema for Redpanda Connect.
-func Schema(removeDefaultInputOutput bool, version, dateBuilt string) *service.ConfigSchema {
-	s := service.NewEnvironment().FullConfigSchema(version, dateBuilt)
-	if removeDefaultInputOutput {
-		s.SetFieldDefault(map[string]any{}, "input")
-		s.SetFieldDefault(map[string]any{}, "output")
-	}
-	s = s.Field(redpandaTopLevelConfigField())
-	return s
-}
-
 // InitEnterpriseCLI kicks off the benthos cli with a suite of options that adds
 // all of the enterprise functionality of Redpanda Connect. This has been
 // abstracted into a separate package so that multiple distributions (classic
 // versus cloud) can reference the same code.
-func InitEnterpriseCLI(binaryName, version, dateBuilt string, removeDefaultInputOutput bool, opts ...service.CLIOptFunc) {
+func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.ConfigSchema, opts ...service.CLIOptFunc) {
 	rpLogger := enterprise.NewTopicLogger(xid.New().String())
 	var fbLogger *service.Logger
 
@@ -65,7 +50,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, removeDefaultInput
 		),
 		service.CLIOptSetDocumentationURL("https://docs.redpanda.com/redpanda-connect"),
 		service.CLIOptSetMainSchemaFrom(func() *service.ConfigSchema {
-			return Schema(removeDefaultInputOutput, version, dateBuilt)
+			return schema
 		}),
 		service.CLIOptOnLoggerInit(func(l *service.Logger) {
 			fbLogger = l

@@ -9,17 +9,66 @@
 package schema
 
 import (
+	"strings"
+
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
 
-	"github.com/redpanda-data/connect/v4/internal/cli"
+	"github.com/redpanda-data/connect/v4/internal/impl/kafka/enterprise"
+
+	_ "embed"
 )
 
+//go:embed cloud_allow_list.txt
+var cloudAllowList string
+
+func redpandaTopLevelConfigField() *service.ConfigField {
+	return service.NewObjectField("redpanda", enterprise.TopicLoggerFields()...)
+}
+
 // Standard returns the config schema of a standard build of Redpanda Connect.
-func Standard() *service.ConfigSchema {
-	return cli.Schema(false, "", "")
+func Standard(version, dateBuilt string) *service.ConfigSchema {
+	env := service.NewEnvironment()
+
+	s := env.FullConfigSchema(version, dateBuilt)
+	s.SetFieldDefault(map[string]any{
+		"@service": "redpanda-connect",
+	}, "logger", "static_fields")
+	s = s.Field(redpandaTopLevelConfigField())
+	return s
 }
 
 // Cloud returns the config schema of a cloud build of Redpanda Connect.
-func Cloud() *service.ConfigSchema {
-	return cli.Schema(true, "", "")
+func Cloud(version, dateBuilt string) *service.ConfigSchema {
+	var allowSlice []string
+	for _, s := range strings.Split(cloudAllowList, "\n") {
+		s = strings.TrimSpace(s)
+		if s == "" || strings.HasPrefix(s, "#") {
+			continue
+		}
+		allowSlice = append(allowSlice, s)
+	}
+
+	// Observability and scanner plugins aren't necessarily present in our
+	// internal lists and so we allow everything that's imported
+	env := service.GlobalEnvironment().
+		WithBuffers(allowSlice...).
+		WithCaches(allowSlice...).
+		WithInputs(allowSlice...).
+		WithOutputs(allowSlice...).
+		WithProcessors(allowSlice...).
+		WithRateLimits(allowSlice...)
+
+	// Allow only pure methods and functions within Bloblang.
+	benv := bloblang.GlobalEnvironment()
+	env.UseBloblangEnvironment(benv.OnlyPure())
+
+	s := env.FullConfigSchema(version, dateBuilt)
+	s.SetFieldDefault(map[string]any{}, "input")
+	s.SetFieldDefault(map[string]any{}, "output")
+	s.SetFieldDefault(map[string]any{
+		"@service": "redpanda-connect",
+	}, "logger", "static_fields")
+	s = s.Field(redpandaTopLevelConfigField())
+	return s
 }

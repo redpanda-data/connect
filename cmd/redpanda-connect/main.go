@@ -16,6 +16,7 @@ package main
 
 import (
 	"github.com/redpanda-data/connect/v4/internal/cli"
+	"github.com/redpanda-data/connect/v4/public/schema"
 
 	_ "github.com/redpanda-data/connect/v4/public/components/all"
 )
@@ -30,5 +31,5 @@ var (
 )
 
 func main() {
-	cli.InitEnterpriseCLI(BinaryName, Version, DateBuilt, false)
+	cli.InitEnterpriseCLI(BinaryName, Version, DateBuilt, schema.Standard(Version, DateBuilt))
 }
