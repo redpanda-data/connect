@@ -80,3 +80,4 @@ reject
 reject_errored
 retry
 switch
+none
