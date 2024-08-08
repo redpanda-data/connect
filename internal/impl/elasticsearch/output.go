@@ -285,7 +285,20 @@ It's possible to enable AWS connectivity with this output using the `+"`aws`"+` 
 				Description("Enable gzip compression on the request side.").
 				Advanced().
 				Default(false),
-		)
+		).
+		Example(
+			"Elastic Cloud Serverless",
+			"This is an example of writing data to https://www.elastic.co/docs/current/serverless[Elastic Cloud serverless^].",
+			`
+output:
+  elasticsearch:
+    urls: ["https://${ELASTIC_CLOUD_CLUSTER_ID}.es.us-east-1.aws.elastic.cloud:443"]
+    sniff: false
+    healthcheck: false
+    index: "my-elasticsearch-index"
+    id: my-document-id-${!count("elastic_ids")}-${!timestamp_unix()}
+    api_key: "${ELASTIC_CLOUD_API_KEY}"
+`)
 }
 
 func init() {
