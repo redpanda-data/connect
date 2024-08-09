@@ -31,9 +31,7 @@ func createCompletionProcessorForTest(t *testing.T, addr string) *ollamaCompleti
 		baseOllamaProcessor: &baseOllamaProcessor{
 			// use smallest model possible to make it cheaper
 			model:  "tinyllama",
-			cmd:    nil,
 			client: api.NewClient(url, http.DefaultClient),
-			logger: nil,
 		},
 		userPrompt:   nil,
 		systemPrompt: nil,

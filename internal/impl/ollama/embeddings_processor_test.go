@@ -30,9 +30,7 @@ func createEmbeddingsProcessorForTest(t *testing.T, addr string) *ollamaEmbeddin
 		baseOllamaProcessor: &baseOllamaProcessor{
 			// use smallest model possible to make it cheaper
 			model:  "all-minilm",
-			cmd:    nil,
 			client: api.NewClient(url, http.DefaultClient),
-			logger: nil,
 		},
 		text: nil,
 	}
