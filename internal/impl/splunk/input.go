@@ -138,27 +138,27 @@ func (i *input) Connect(ctx context.Context) error {
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, i.url, strings.NewReader(payload.Encode()))
 	if err != nil {
-		return fmt.Errorf("failed to construct http request: %s", err)
+		return fmt.Errorf("failed to construct HTTP request: %s", err)
 	}
 	req.SetBasicAuth(i.user, i.password)
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := i.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to execute http request: %s", err)
+		return fmt.Errorf("failed to execute HTTP request: %s", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		// Clean up immediately if we don't have any data to read
 		defer resp.Body.Close()
 
-		if body, err := httputil.DumpResponse(resp, true); err != nil {
-			return fmt.Errorf("failed to read response body: %s", err)
+		if respData, err := httputil.DumpResponse(resp, true); err != nil {
+			return fmt.Errorf("failed to read response: %s", err)
 		} else {
-			i.log.Debugf("Failed to fetch data from Splunk with status %d: %s", resp.StatusCode, string(body))
+			i.log.Debugf("Failed to fetch data to Splunk with status %d: %s", resp.StatusCode, string(respData))
 		}
 
-		return fmt.Errorf("http request returned status: %d", resp.StatusCode)
+		return fmt.Errorf("HTTP request returned status: %d", resp.StatusCode)
 	}
 
 	i.body = resp.Body

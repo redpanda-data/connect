@@ -243,7 +243,7 @@ func (o *output) WriteBatch(ctx context.Context, b service.MessageBatch) (err er
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, o.url, &payload)
 	if err != nil {
-		return fmt.Errorf("failed to construct http request: %s", err)
+		return fmt.Errorf("failed to construct HTTP request: %s", err)
 	}
 	req.Header = header
 	req.ContentLength = int64(payload.Len())
@@ -255,13 +255,13 @@ func (o *output) WriteBatch(ctx context.Context, b service.MessageBatch) (err er
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		if body, err := httputil.DumpResponse(resp, true); err != nil {
-			return fmt.Errorf("failed to read response body: %s", err)
+		if respData, err := httputil.DumpResponse(resp, true); err != nil {
+			return fmt.Errorf("failed to read response: %s", err)
 		} else {
-			o.log.Debugf("Failed to fetch data from Splunk with status %d: %s", resp.StatusCode, string(body))
+			o.log.Debugf("Failed to push data to Splunk with status %d: %s", resp.StatusCode, string(respData))
 		}
 
-		return fmt.Errorf("http request returned status: %d", resp.StatusCode)
+		return fmt.Errorf("HTTP request returned status: %d", resp.StatusCode)
 	}
 
 	return

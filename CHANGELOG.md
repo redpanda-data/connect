@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - New experimental `ockam_kafka` input and output. (@mrinalwadhwa, @davide-baldo)
 - Field `credentials_json` added to all GCP components. (@tomasz-sadura)
 - (Benthos) The `list` subcommand now supports the format `jsonschema`. (@Jeffail)
+- New experimental `schema_registry` input and output. (@mihaitodor)
 
 ## 4.32.1 - 2024-07-24
 
