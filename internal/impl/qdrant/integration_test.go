@@ -17,11 +17,11 @@ package qdrant
 import (
 	"context"
 	"fmt"
-	"log"
 	"testing"
 
 	pb "github.com/qdrant/go-client/qdrant"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
+	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go/modules/qdrant"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -49,9 +49,7 @@ func TestIntegrationQdrant(t *testing.T) {
 
 	ctx := context.Background()
 	qdrantContainer, err := qdrant.Run(ctx, "qdrant/qdrant:v1.10.1")
-	if err != nil {
-		log.Fatalf("failed to start container: %s", err)
-	}
+	require.NoError(t, err, "failed to start container")
 
 	testCases := []struct {
 		name    string
@@ -86,11 +84,10 @@ func TestIntegrationQdrant(t *testing.T) {
 	}
 
 	containerPort, err := qdrantContainer.MappedPort(ctx, "6334/tcp")
-	if err != nil {
-		log.Fatalf("failed to get container port: %s", err)
-	}
+	require.NoError(t, err, "failed to get container port")
 
-	setupCollection(ctx, fmt.Sprintf("localhost:%v", containerPort.Port()), collectionName)
+	err = setupCollection(ctx, fmt.Sprintf("localhost:%v", containerPort.Port()), collectionName)
+	require.NoError(t, err, "failed to setup collection")
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -113,17 +110,15 @@ func TestIntegrationQdrant(t *testing.T) {
 		})
 	}
 
-	if err := qdrantContainer.Terminate(ctx); err != nil {
-		log.Fatalf("failed to terminate container: %s", err)
-	}
+	require.NoError(t, qdrantContainer.Terminate(ctx), "failed to terminate container")
 }
 
-func setupCollection(ctx context.Context, host, collectionName string) {
+func setupCollection(ctx context.Context, host, collectionName string) error {
 
 	conn, err := grpc.NewClient(host, grpc.WithTransportCredentials(insecure.NewCredentials()))
 
 	if err != nil {
-		log.Fatalf("failed to instantiate client for tetsts: %s", err)
+		return err
 	}
 
 	collectionsClient := pb.NewCollectionsClient(conn)
@@ -162,7 +157,5 @@ func setupCollection(ctx context.Context, host, collectionName string) {
 		},
 	})
 
-	if err != nil {
-		log.Fatalf("failed to create collection: %s", err)
-	}
+	return err
 }

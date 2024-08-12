@@ -24,14 +24,14 @@ import (
 )
 
 const (
-	poFieldBatching       = "batching"
-	poFieldGrpcHost       = "grpc_host"
-	poFieldAPIToken       = "api_token"
-	poFieldUseTLS         = "tls"
-	poFieldCollectionName = "collection_name"
-	poFieldID             = "id"
-	poFieldVectorMapping  = "vector_mapping"
-	poFieldPayloadMapping = "payload_mapping"
+	qoFieldBatching       = "batching"
+	qoFieldGrpcHost       = "grpc_host"
+	qoFieldAPIToken       = "api_token"
+	qoFieldUseTLS         = "tls"
+	qoFieldCollectionName = "collection_name"
+	qoFieldID             = "id"
+	qoFieldVectorMapping  = "vector_mapping"
+	qoFieldPayloadMapping = "payload_mapping"
 )
 
 func outputSpec() *service.ConfigSpec {
@@ -42,32 +42,32 @@ func outputSpec() *service.ConfigSpec {
 		Description(service.OutputPerformanceDocs(true, true)).
 		Fields(
 			service.NewOutputMaxInFlightField(),
-			service.NewBatchPolicyField(poFieldBatching),
-			service.NewStringField(poFieldGrpcHost).
+			service.NewBatchPolicyField(qoFieldBatching),
+			service.NewStringField(qoFieldGrpcHost).
 				Description("The gRPC host of the Qdrant collection. Defaults to 'localhost:6334'.").Default("localhost:6334"),
-			service.NewStringField(poFieldAPIToken).
+			service.NewStringField(qoFieldAPIToken).
 				Secret().
 				Description("The Qdrant API token for authentication. Defaults to an empty string.").Default(""),
-			service.NewTLSToggledField(poFieldUseTLS).Default("TLS(HTTPS) config to use when connecting"),
-			service.NewInterpolatedStringField(poFieldCollectionName).
-				Description("The name of the collection in Qdrant. REQUIRED"),
-			service.NewBloblangField(poFieldID).
-				Description("The ID of the point to insert. REQUIRED").
+			service.NewTLSToggledField(qoFieldUseTLS).Default("TLS(HTTPS) config to use when connecting"),
+			service.NewInterpolatedStringField(qoFieldCollectionName).
+				Description("The name of the collection in Qdrant."),
+			service.NewBloblangField(qoFieldID).
+				Description("The ID of the point to insert. Can be a UUID string or positive integer.").
 				Example(`root.id = this.id`).
 				Example(`root.id = 832`).
 				Example(`root.id = "dc88c126-679f-49f5-ab85-04b77e8c2791"`),
-			service.NewBloblangField(poFieldVectorMapping).
-				Description("The mapping to extract the vector from the document. REQUIRED").
+			service.NewBloblangField(qoFieldVectorMapping).
+				Description("The mapping to extract the vector from the document.").
 				Example(`root = this.vector`).
 				Example(`root = [1.2, 0.5, 0.76]`).
 				Example(`root = [[0.352,0.532,0.532,0.234],[0.352,0.532,0.532,0.234]]`).
 				Example(`root = {"some_sparse": {"indices":[23,325,532],"values":[0.352,0.532,0.532]}}`).
 				Example(`root = {"some_multi": [[0.352,0.532,0.532,0.234],[0.352,0.532,0.532,0.234]]}`).
 				Example(`root = {"some_dense": [0.352,0.532,0.532,0.234],"some_sparse": {"indices": [23,325,532],"values": [0.352,0.532,0.532]}}`),
-			service.NewBloblangField(poFieldPayloadMapping).
-				Optional().
+			service.NewBloblangField(qoFieldPayloadMapping).
 				Description("An optional mapping of message to payload associated with the point.").
 				Example(`root = metadata()`).
+				Example(`root = {}`).
 				Example(`root = {"field": this.value, "field_2": 987}`),
 		)
 }
@@ -77,7 +77,7 @@ func init() {
 		"qdrant",
 		outputSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPol service.BatchPolicy, mif int, err error) {
-			if batchPol, err = conf.FieldBatchPolicy(poFieldBatching); err != nil {
+			if batchPol, err = conf.FieldBatchPolicy(qoFieldBatching); err != nil {
 				return
 			}
 			if mif, err = conf.FieldMaxInFlight(); err != nil {
@@ -103,36 +103,36 @@ type outputWriter struct {
 }
 
 func newOutputWriter(conf *service.ParsedConfig, mgr *service.Resources) (*outputWriter, error) {
-	collectionName, err := conf.FieldInterpolatedString(poFieldCollectionName)
+	collectionName, err := conf.FieldInterpolatedString(qoFieldCollectionName)
 	if err != nil {
 		return nil, err
 	}
 
-	host, err := conf.FieldString(poFieldGrpcHost)
+	host, err := conf.FieldString(qoFieldGrpcHost)
 	if err != nil {
 		return nil, err
 	}
 
-	apiToken, err := conf.FieldString(poFieldAPIToken)
+	apiToken, err := conf.FieldString(qoFieldAPIToken)
 	if err != nil {
 		return nil, err
 	}
 
-	config, enabled, err := conf.FieldTLSToggled(poFieldUseTLS)
+	config, enabled, err := conf.FieldTLSToggled(qoFieldUseTLS)
 	if err != nil {
 		return nil, err
 	}
-	id, err := conf.FieldBloblang(poFieldID)
-	if err != nil {
-		return nil, err
-	}
-
-	vectorMapping, err := conf.FieldBloblang(poFieldVectorMapping)
+	id, err := conf.FieldBloblang(qoFieldID)
 	if err != nil {
 		return nil, err
 	}
 
-	payloadMapping, err := conf.FieldBloblang(poFieldPayloadMapping)
+	vectorMapping, err := conf.FieldBloblang(qoFieldVectorMapping)
+	if err != nil {
+		return nil, err
+	}
+
+	payloadMapping, err := conf.FieldBloblang(qoFieldPayloadMapping)
 	if err != nil {
 		return nil, err
 	}
@@ -179,33 +179,33 @@ func (w *outputWriter) batchPointsByCollection(batch service.MessageBatch) (map[
 	for i := 0; i < len(batch); i++ {
 		collectionName, err := cnExec.TryString(i)
 		if err != nil {
-			return nil, fmt.Errorf("%s interpolation error: %w", poFieldCollectionName, err)
+			return nil, fmt.Errorf("%s interpolation error: %w", qoFieldCollectionName, err)
 		}
 		rawID, err := idExec.Query(i)
 		if err != nil {
-			return nil, fmt.Errorf("failed to execute %s: %w", poFieldID, err)
+			return nil, fmt.Errorf("failed to execute %s: %w", qoFieldID, err)
 		}
 
 		maybeID, err := rawID.AsStructured()
 		if err != nil {
-			return nil, fmt.Errorf("%s extraction failed: %w", poFieldID, err)
+			return nil, fmt.Errorf("%s extraction failed: %w", qoFieldID, err)
 		}
 
 		id, err := newPointID(maybeID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to coerce point Id type: %w", err)
+			return nil, fmt.Errorf("failed to coerce point ID type: %w", err)
 		}
 
 		rawVec, err := vectorExec.Query(i)
 		if err != nil {
-			return nil, fmt.Errorf("failed to execute %s: %w", poFieldVectorMapping, err)
+			return nil, fmt.Errorf("failed to execute %s: %w", qoFieldVectorMapping, err)
 		}
 		if rawVec == nil {
 			continue
 		}
 		maybeVec, err := rawVec.AsStructured()
 		if err != nil {
-			return nil, fmt.Errorf("%s extraction failed: %w", poFieldVectorMapping, err)
+			return nil, fmt.Errorf("%s extraction failed: %w", qoFieldVectorMapping, err)
 		}
 		vec, err := newVectors(maybeVec)
 		if err != nil {
@@ -214,12 +214,12 @@ func (w *outputWriter) batchPointsByCollection(batch service.MessageBatch) (map[
 
 		rawMeta, err := payloadExec.Query(i)
 		if err != nil {
-			return nil, fmt.Errorf("failed to execute %s: %w", poFieldPayloadMapping, err)
+			return nil, fmt.Errorf("failed to execute %s: %w", qoFieldPayloadMapping, err)
 		}
 
 		maybePayload, err := rawMeta.AsStructured()
 		if err != nil {
-			return nil, fmt.Errorf("%s extraction failed: %w", poFieldPayloadMapping, err)
+			return nil, fmt.Errorf("%s extraction failed: %w", qoFieldPayloadMapping, err)
 		}
 		payload, err := newValueMap(maybePayload)
 		if err != nil {

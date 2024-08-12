@@ -64,7 +64,7 @@ func newQdrantClient(host, apiKey string, useTLS bool, config *tls.Config, logge
 }
 
 func (c *qdrantClient) Upsert(ctx context.Context, collectionName string, points []*pb.PointStruct) error {
-	c.logger.Infof("Upserting %d points to collection %s", len(points), collectionName)
+	c.logger.Debugf("Upserting %d points to collection %s", len(points), collectionName)
 	wait := true
 	request := &pb.UpsertPoints{
 		CollectionName: collectionName,
@@ -77,7 +77,7 @@ func (c *qdrantClient) Upsert(ctx context.Context, collectionName string, points
 }
 
 func (c *qdrantClient) Connect(ctx context.Context) error {
-	c.logger.Info("Checking connection to Qdrant")
+	c.logger.Debug("Checking connection to Qdrant")
 	_, err := c.serviceClient.HealthCheck(ctx, &pb.HealthCheckRequest{})
 
 	if err != nil {

@@ -48,9 +48,9 @@ output:
     grpc_host: localhost:6334
     api_token: ""
     collection_name: "" # No default (required)
-    id: root = this.id # No default (required)
+    id: root.id = this.id # No default (required)
     vector_mapping: root = this.vector # No default (required)
-    payload_mapping: root = metadata() # No default (optional)
+    payload_mapping: root = metadata() # No default (required)
 ```
 
 --
@@ -74,9 +74,9 @@ output:
     api_token: ""
     tls: TLS(HTTPS) config to use when connecting
     collection_name: "" # No default (required)
-    id: root = this.id # No default (required)
+    id: root.id = this.id # No default (required)
     vector_mapping: root = this.vector # No default (required)
-    payload_mapping: root = metadata() # No default (optional)
+    payload_mapping: root = metadata() # No default (required)
 ```
 
 --
@@ -388,7 +388,7 @@ password: ${KEY_PASSWORD}
 
 === `collection_name`
 
-The name of the collection in Qdrant. REQUIRED
+The name of the collection in Qdrant.
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
 
@@ -397,7 +397,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 === `id`
 
-The ID of the point to insert. REQUIRED
+The ID of the point to insert. Can be a UUID string or positive integer.
 
 
 *Type*: `string`
@@ -406,16 +406,16 @@ The ID of the point to insert. REQUIRED
 ```yml
 # Examples
 
-id: root = this.id
+id: root.id = this.id
 
-id: root = 832
+id: root.id = 832
 
-id: root = "dc88c126-679f-49f5-ab85-04b77e8c2791"
+id: root.id = "dc88c126-679f-49f5-ab85-04b77e8c2791"
 ```
 
 === `vector_mapping`
 
-The mapping to extract the vector from the document. REQUIRED
+The mapping to extract the vector from the document.
 
 
 *Type*: `string`
@@ -449,6 +449,8 @@ An optional mapping of message to payload associated with the point.
 # Examples
 
 payload_mapping: root = metadata()
+
+payload_mapping: root = {}
 
 payload_mapping: 'root = {"field": this.value, "field_2": 987}'
 ```
