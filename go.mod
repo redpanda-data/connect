@@ -103,6 +103,7 @@ require (
 	github.com/sourcegraph/conc v0.3.0
 	github.com/stretchr/testify v1.9.0
 	github.com/testcontainers/testcontainers-go/modules/ollama v0.32.0
+	github.com/testcontainers/testcontainers-go/modules/qdrant v0.32.0
 	github.com/tetratelabs/wazero v1.7.3
 	github.com/trinodb/trino-go-client v0.315.0
 	github.com/twmb/franz-go v1.17.0

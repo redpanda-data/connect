@@ -51,7 +51,7 @@ func outputSpec() *service.ConfigSpec {
 			service.NewTLSToggledField(poFieldUseTLS).Default("TLS(HTTPS) config to use when connecting"),
 			service.NewInterpolatedStringField(poFieldCollectionName).
 				Description("The name of the collection in Qdrant. REQUIRED"),
-			service.NewInterpolatedStringField(poFieldID).
+			service.NewBloblangField(poFieldID).
 				Description("The ID of the point to insert. REQUIRED").
 				Example(`root = this.id`).
 				Example(`root = 832`).

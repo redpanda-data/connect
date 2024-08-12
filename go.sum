@@ -1097,8 +1097,8 @@ github.com/testcontainers/testcontainers-go v0.32.0 h1:ug1aK08L3gCHdhknlTTwWjPHP
 github.com/testcontainers/testcontainers-go v0.32.0/go.mod h1:CRHrzHLQhlXUsa5gXjTOfqIEJcrK5+xMDmBr/WMI88E=
 github.com/testcontainers/testcontainers-go/modules/ollama v0.32.0 h1:nuYlIE4zOGd8m+TzjY0v41kyfYre3inp/iw1p4qn2eU=
 github.com/testcontainers/testcontainers-go/modules/ollama v0.32.0/go.mod h1:PeIvLbruDuwReyIbJT6Km+ZRxSaqLsS8VcTqeDgxs1A=
-github.com/testcontainers/testcontainers-go/modules/qdrant v0.29.1 h1:8Bu6UgUoIzl3gBXHdfiVrfH3fOXbZbU8TjaFVzvH524=
-github.com/testcontainers/testcontainers-go/modules/qdrant v0.29.1/go.mod h1:e/Xu0sSGSeNN6aPMPWY9hhYTjrBHJHetUI0TZPd9L6g=
+github.com/testcontainers/testcontainers-go/modules/qdrant v0.32.0 h1:rsk1UKBcu3s5V/msn6Hsizx7f70SPDyLZKlgz0xDEJ8=
+github.com/testcontainers/testcontainers-go/modules/qdrant v0.32.0/go.mod h1:ZZOrxXkhK34ldv9MEmVw69Uvnuxwq+7jYMPeUVv9FhQ=
 github.com/tetratelabs/wazero v1.7.3 h1:PBH5KVahrt3S2AHgEjKu4u+LlDbbk+nsGE3KLucy6Rw=
 github.com/tetratelabs/wazero v1.7.3/go.mod h1:ytl6Zuh20R/eROuyDaGPkp82O9C/DJfXAwJfQ3X6/7Y=
 github.com/tidwall/pretty v1.0.0/go.mod h1:XNkn88O1ChpSDQmQeStsy+sBenx6DDtFZJxhVysOjyk=

@@ -398,7 +398,6 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 === `id`
 
 The ID of the point to insert. REQUIRED
-This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
 
 *Type*: `string`
