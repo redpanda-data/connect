@@ -27,6 +27,7 @@ jobs:
 
     - name: Install dependencies for x_benthos_extra
       run: |
+        sudo apt update -y
         sudo apt install -y --no-install-recommends libzmq3-dev
 
     - name: Deps
