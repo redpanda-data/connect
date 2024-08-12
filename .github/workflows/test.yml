@@ -11,7 +11,7 @@ on:
 jobs:
   test:
     if: ${{ github.repository == 'redpanda-data/connect' || github.event_name != 'schedule' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       CGO_ENABLED: 0
     steps:
