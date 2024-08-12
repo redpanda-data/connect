@@ -53,9 +53,9 @@ func outputSpec() *service.ConfigSpec {
 				Description("The name of the collection in Qdrant. REQUIRED"),
 			service.NewBloblangField(poFieldID).
 				Description("The ID of the point to insert. REQUIRED").
-				Example(`root = this.id`).
-				Example(`root = 832`).
-				Example(`root = "dc88c126-679f-49f5-ab85-04b77e8c2791"`),
+				Example(`root.id = this.id`).
+				Example(`root.id = 832`).
+				Example(`root.id = "dc88c126-679f-49f5-ab85-04b77e8c2791"`),
 			service.NewBloblangField(poFieldVectorMapping).
 				Description("The mapping to extract the vector from the document. REQUIRED").
 				Example(`root = this.vector`).

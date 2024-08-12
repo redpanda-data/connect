@@ -35,7 +35,7 @@ output:
   qdrant:
     grpc_host: 'localhost:$PORT'
     tls: {enabled: false}
-    id: 'root = $POINT_ID'
+    id: 'root.id = $POINT_ID'
     collection_name: $COLLECTION_NAME
     vector_mapping: 'root = $VECTOR'
     payload_mapping: 'root = $PAYLOAD'
@@ -79,7 +79,7 @@ func TestIntegrationQdrant(t *testing.T) {
 		},
 		{
 			name:    "Test With dense and sparse vector",
-			pointID: `4`,
+			pointID: `"465213dd-3f11-4534-8daf-9fedf203549a"`,
 			vector:  `{"some_dense": [0.352,0.532,0.532],"some_sparse": {"indices": [23,325,532],"values": [0.352,0.532,0.532]}}`,
 			payload: `{"content":"test payload"}`,
 		},
