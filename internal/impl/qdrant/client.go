@@ -18,9 +18,9 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"log"
 
 	pb "github.com/qdrant/go-client/qdrant"
+	"github.com/redpanda-data/benthos/v4/public/service"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -31,15 +31,17 @@ type qdrantClient struct {
 	pointsClient  pb.PointsClient
 	serviceClient pb.QdrantClient
 	connection    *grpc.ClientConn
+
+	logger *service.Logger
 }
 
-func newQdrantClient(host, apiKey string, useTLS bool, config *tls.Config) (*qdrantClient, error) {
+func newQdrantClient(host, apiKey string, useTLS bool, config *tls.Config, logger *service.Logger) (*qdrantClient, error) {
 
 	var tlsCredential credentials.TransportCredentials
 
 	if !useTLS && apiKey != "" {
-		log.Println("Warning: API key is set but TLS is not enabled. The API key will be sent in plaintext.")
-		log.Println("May fail when using Qdrant cloud.")
+		logger.Warn("API key is set but TLS is not enabled. The API key will be sent in plaintext.")
+		logger.Warn("May fail when using Qdrant cloud.")
 	}
 
 	if useTLS {
@@ -57,10 +59,12 @@ func newQdrantClient(host, apiKey string, useTLS bool, config *tls.Config) (*qdr
 		serviceClient: pb.NewQdrantClient(conn),
 		pointsClient:  pb.NewPointsClient(conn),
 		connection:    conn,
+		logger:        logger,
 	}, nil
 }
 
 func (c *qdrantClient) Upsert(ctx context.Context, collectionName string, points []*pb.PointStruct) error {
+	c.logger.Infof("Upserting %d points to collection %s", len(points), collectionName)
 	wait := true
 	request := &pb.UpsertPoints{
 		CollectionName: collectionName,
@@ -73,6 +77,7 @@ func (c *qdrantClient) Upsert(ctx context.Context, collectionName string, points
 }
 
 func (c *qdrantClient) Connect(ctx context.Context) error {
+	c.logger.Info("Checking connection to Qdrant")
 	_, err := c.serviceClient.HealthCheck(ctx, &pb.HealthCheckRequest{})
 
 	if err != nil {

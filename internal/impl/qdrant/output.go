@@ -94,7 +94,6 @@ func init() {
 }
 
 type outputWriter struct {
-	logger *service.Logger
 	client *qdrantClient
 
 	collectionName *service.InterpolatedString
@@ -138,13 +137,12 @@ func newOutputWriter(conf *service.ParsedConfig, mgr *service.Resources) (*outpu
 		return nil, err
 	}
 
-	client, err := newQdrantClient(host, apiToken, enabled, config)
+	client, err := newQdrantClient(host, apiToken, enabled, config, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
 
 	w := outputWriter{
-		logger: mgr.Logger(),
 		client: client,
 
 		collectionName: collectionName,
@@ -156,13 +154,11 @@ func newOutputWriter(conf *service.ParsedConfig, mgr *service.Resources) (*outpu
 }
 
 func (w *outputWriter) Connect(ctx context.Context) error {
-	w.logger.Info("Connecting to Qdrant")
 	return w.client.Connect(ctx)
 }
 
 func (w *outputWriter) WriteBatch(ctx context.Context, batch service.MessageBatch) (err error) {
-	w.logger.Infof("Writing batch of %v messages", len(batch))
-	batches, err := w.computeBatchedVectors(batch)
+	batches, err := w.batchPointsByCollection(batch)
 	if err != nil {
 		return err
 	}
@@ -174,7 +170,7 @@ func (w *outputWriter) WriteBatch(ctx context.Context, batch service.MessageBatc
 	return nil
 }
 
-func (w *outputWriter) computeBatchedVectors(batch service.MessageBatch) (map[string][]*pb.PointStruct, error) {
+func (w *outputWriter) batchPointsByCollection(batch service.MessageBatch) (map[string][]*pb.PointStruct, error) {
 	cnExec := batch.InterpolationExecutor(w.collectionName)
 	idExec := batch.BloblangExecutor(w.id)
 	vectorExec := batch.BloblangExecutor(w.vectorMapping)
