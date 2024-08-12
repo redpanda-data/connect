@@ -22,6 +22,8 @@ import (
 
 	// Only import a subset of components for execution.
 	_ "github.com/redpanda-data/connect/v4/public/components/cloud"
+	// Add in extra new AI plugins
+	_ "github.com/redpanda-data/connect/v4/public/components/ollama"
 )
 
 var (
@@ -34,6 +36,6 @@ var (
 )
 
 func main() {
-	schema := schema.Cloud(Version, DateBuilt, false)
+	schema := schema.Cloud(Version, DateBuilt, true)
 	cli.InitEnterpriseCLI(BinaryName, Version, DateBuilt, schema, service.CLIOptSetEnvironment(schema.Environment()))
 }
