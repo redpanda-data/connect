@@ -48,7 +48,7 @@ func outputSpec() *service.ConfigSpec {
 			service.NewStringField(qoFieldAPIToken).
 				Secret().
 				Description("The Qdrant API token for authentication. Defaults to an empty string.").Default(""),
-			service.NewTLSToggledField(qoFieldUseTLS).Default("TLS(HTTPS) config to use when connecting"),
+			service.NewTLSToggledField(qoFieldUseTLS).Description("TLS(HTTPS) config to use when connecting"),
 			service.NewInterpolatedStringField(qoFieldCollectionName).
 				Description("The name of the collection in Qdrant."),
 			service.NewBloblangField(qoFieldID).
