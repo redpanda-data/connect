@@ -49,8 +49,8 @@ output:
     api_token: ""
     collection_name: "" # No default (required)
     id: root.id = this.id # No default (required)
-    vector_mapping: root = this.vector # No default (required)
-    payload_mapping: root = metadata() # No default (required)
+    vector_mapping: root = [1.2, 0.5, 0.76] # No default (required)
+    payload_mapping: root = {}
 ```
 
 --
@@ -75,8 +75,8 @@ output:
     tls: TLS(HTTPS) config to use when connecting
     collection_name: "" # No default (required)
     id: root.id = this.id # No default (required)
-    vector_mapping: root = this.vector # No default (required)
-    payload_mapping: root = metadata() # No default (required)
+    vector_mapping: root = [1.2, 0.5, 0.76] # No default (required)
+    payload_mapping: root = {}
 ```
 
 --
@@ -424,9 +424,9 @@ The mapping to extract the vector from the document.
 ```yml
 # Examples
 
-vector_mapping: root = this.vector
-
 vector_mapping: root = [1.2, 0.5, 0.76]
+
+vector_mapping: root = this.vector
 
 vector_mapping: root = [[0.352,0.532,0.532,0.234],[0.352,0.532,0.532,0.234]]
 
@@ -444,15 +444,14 @@ An optional mapping of message to payload associated with the point.
 
 *Type*: `string`
 
+*Default*: `"root = {}"`
 
 ```yml
 # Examples
 
-payload_mapping: root = metadata()
-
-payload_mapping: root = {}
-
 payload_mapping: 'root = {"field": this.value, "field_2": 987}'
+
+payload_mapping: root = metadata()
 ```
 
 

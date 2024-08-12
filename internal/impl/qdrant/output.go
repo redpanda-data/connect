@@ -58,17 +58,17 @@ func outputSpec() *service.ConfigSpec {
 				Example(`root.id = "dc88c126-679f-49f5-ab85-04b77e8c2791"`),
 			service.NewBloblangField(qoFieldVectorMapping).
 				Description("The mapping to extract the vector from the document.").
-				Example(`root = this.vector`).
 				Example(`root = [1.2, 0.5, 0.76]`).
+				Example(`root = this.vector`).
 				Example(`root = [[0.352,0.532,0.532,0.234],[0.352,0.532,0.532,0.234]]`).
 				Example(`root = {"some_sparse": {"indices":[23,325,532],"values":[0.352,0.532,0.532]}}`).
 				Example(`root = {"some_multi": [[0.352,0.532,0.532,0.234],[0.352,0.532,0.532,0.234]]}`).
 				Example(`root = {"some_dense": [0.352,0.532,0.532,0.234],"some_sparse": {"indices": [23,325,532],"values": [0.352,0.532,0.532]}}`),
 			service.NewBloblangField(qoFieldPayloadMapping).
+				Default(`root = {}`).
 				Description("An optional mapping of message to payload associated with the point.").
-				Example(`root = metadata()`).
-				Example(`root = {}`).
-				Example(`root = {"field": this.value, "field_2": 987}`),
+				Example(`root = {"field": this.value, "field_2": 987}`).
+				Example(`root = metadata()`),
 		)
 }
 
