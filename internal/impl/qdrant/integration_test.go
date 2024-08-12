@@ -37,7 +37,7 @@ output:
   qdrant:
     grpc_host: 'localhost:$PORT'
     tls: {enabled: false}
-    id: 'root.id = $POINT_ID'
+    id: 'root = $POINT_ID'
     collection_name: $COLLECTION_NAME
     vector_mapping: 'root = $VECTOR'
     payload_mapping: 'root = $PAYLOAD'

@@ -53,9 +53,9 @@ func outputSpec() *service.ConfigSpec {
 				Description("The name of the collection in Qdrant."),
 			service.NewBloblangField(qoFieldID).
 				Description("The ID of the point to insert. Can be a UUID string or positive integer.").
-				Example(`root.id = this.id`).
-				Example(`root.id = 832`).
-				Example(`root.id = "dc88c126-679f-49f5-ab85-04b77e8c2791"`),
+				Example(`root = this.id`).
+				Example(`root = 832`).
+				Example(`root = "dc88c126-679f-49f5-ab85-04b77e8c2791"`),
 			service.NewBloblangField(qoFieldVectorMapping).
 				Description("The mapping to extract the vector from the document.").
 				Example(`root = [1.2, 0.5, 0.76]`).
@@ -181,17 +181,12 @@ func (w *outputWriter) batchPointsByCollection(batch service.MessageBatch) (map[
 		if err != nil {
 			return nil, fmt.Errorf("%s interpolation error: %w", qoFieldCollectionName, err)
 		}
-		rawID, err := idExec.Query(i)
+		rawID, err := idExec.QueryValue(i)
 		if err != nil {
 			return nil, fmt.Errorf("failed to execute %s: %w", qoFieldID, err)
 		}
 
-		maybeID, err := rawID.AsStructured()
-		if err != nil {
-			return nil, fmt.Errorf("%s extraction failed: %w", qoFieldID, err)
-		}
-
-		id, err := newPointID(maybeID)
+		id, err := newPointID(rawID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to coerce point ID type: %w", err)
 		}

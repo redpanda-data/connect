@@ -1,29 +1,14 @@
 package qdrant
 
 import (
-	"errors"
 	"fmt"
 
 	pb "github.com/qdrant/go-client/qdrant"
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
 )
 
-// parsePointID extracts and converts the 'id' field from a map to a pb.PointId.
+// newPointID converts an ID of any type to a pb.PointId, returning an error if the type is invalid.
 func newPointID(id any) (*pb.PointId, error) {
-	idMap, ok := id.(map[string]any)
-	if !ok {
-		return nil, errors.New("failed to parse root to map, got invalid type")
-	}
-
-	idVal, exists := idMap["id"]
-	if !exists {
-		return nil, errors.New("'id' field not found in map")
-	}
-
-	return parseID(idVal)
-}
-
-// converts an ID of any type to a pb.PointId, returning an error if the type is invalid.
-func parseID(id any) (*pb.PointId, error) {
 	switch v := id.(type) {
 	case string:
 		return &pb.PointId{
@@ -31,16 +16,18 @@ func parseID(id any) (*pb.PointId, error) {
 				Uuid: v,
 			},
 		}, nil
-	case int64:
-		if v < 0 {
+	default:
+		n, err := bloblang.ValueAsInt64(id)
+		if err != nil {
+			return nil, err
+		}
+		if n < 0 {
 			return nil, fmt.Errorf("ID cannot be a negative integer ID: %d", v)
 		}
 		return &pb.PointId{
 			PointIdOptions: &pb.PointId_Num{
-				Num: uint64(v),
+				Num: uint64(n),
 			},
 		}, nil
-	default:
-		return nil, fmt.Errorf("unsupported ID type: %T Expected UUID string or a postive integer", v)
 	}
 }
