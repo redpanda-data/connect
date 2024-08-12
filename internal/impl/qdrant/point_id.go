@@ -21,6 +21,6 @@ func newPointID(id any) (*pb.PointId, error) {
 			},
 		}, nil
 	default:
-		return nil, fmt.Errorf("invalid ID type %T", id)
+		return nil, fmt.Errorf("invalid point ID type %T", id)
 	}
 }

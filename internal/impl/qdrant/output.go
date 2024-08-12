@@ -230,13 +230,11 @@ func (w *outputWriter) computeBatchedVectors(batch service.MessageBatch) (map[st
 			return nil, fmt.Errorf("unable to coerce payload output type: %w", err)
 		}
 
-		points := batches[collectionName]
-		points = append(points, &pb.PointStruct{
+		batches[collectionName] = append(batches[collectionName], &pb.PointStruct{
 			Id:      id,
 			Vectors: vec,
 			Payload: payload,
 		})
-		batches[collectionName] = points
 	}
 	return batches, nil
 }
