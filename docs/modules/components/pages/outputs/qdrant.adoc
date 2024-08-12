@@ -48,7 +48,7 @@ output:
     grpc_host: localhost:6334
     api_token: ""
     collection_name: "" # No default (required)
-    id: root = this.id # No default (required)
+    id: root = "dc88c126-679f-49f5-ab85-04b77e8c2791" # No default (required)
     vector_mapping: root = [1.2, 0.5, 0.76] # No default (required)
     payload_mapping: root = {}
 ```
@@ -74,7 +74,7 @@ output:
     api_token: ""
     tls: TLS(HTTPS) config to use when connecting
     collection_name: "" # No default (required)
-    id: root = this.id # No default (required)
+    id: root = "dc88c126-679f-49f5-ab85-04b77e8c2791" # No default (required)
     vector_mapping: root = [1.2, 0.5, 0.76] # No default (required)
     payload_mapping: root = {}
 ```
@@ -406,11 +406,9 @@ The ID of the point to insert. Can be a UUID string or positive integer.
 ```yml
 # Examples
 
-id: root = this.id
+id: root = "dc88c126-679f-49f5-ab85-04b77e8c2791"
 
 id: root = 832
-
-id: root = "dc88c126-679f-49f5-ab85-04b77e8c2791"
 ```
 
 === `vector_mapping`
