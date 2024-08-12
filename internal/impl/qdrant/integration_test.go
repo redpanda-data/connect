@@ -16,11 +16,13 @@ package qdrant
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 
 	pb "github.com/qdrant/go-client/qdrant"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go/modules/qdrant"
 	"google.golang.org/grpc"
@@ -55,39 +57,51 @@ func TestIntegrationQdrant(t *testing.T) {
 		name    string
 		pointID string
 		vector  string
-		payload string
 	}{
 		{
 			name:    "Test With default dense vector",
 			pointID: `1`,
 			vector:  `[0.352,0.532,0.532]`,
-			payload: `{ "content": this.content, "some_number": 42 }`,
 		},
 		{
 			name:    "Test With sparse vector",
 			pointID: `2`,
 			vector:  `{"some_sparse": {"indices":[23,325,532],"values":[0.352,0.532,0.532]}}`,
-			payload: `{"content":"test payload"}`,
 		},
 		{
 			name:    "Test With multi vector",
 			pointID: `3`,
 			vector:  `{"some_multi": [[0.352,0.532,0.532],[0.352,0.532,0.532]]}`,
-			payload: `{"content":"test payload"}`,
 		},
 		{
 			name:    "Test With dense and sparse vector",
 			pointID: `"465213dd-3f11-4534-8daf-9fedf203549a"`,
 			vector:  `{"some_dense": [0.352,0.532,0.532],"some_sparse": {"indices": [23,325,532],"values": [0.352,0.532,0.532]}}`,
-			payload: `{"content":"test payload"}`,
 		},
 	}
 
 	containerPort, err := qdrantContainer.MappedPort(ctx, "6334/tcp")
 	require.NoError(t, err, "failed to get container port")
 
-	err = setupCollection(ctx, fmt.Sprintf("localhost:%v", containerPort.Port()), collectionName)
+	addr, err := qdrantContainer.GRPCEndpoint(ctx)
+	require.NoError(t, err, "failed to get container grpc endpoint")
+
+	err = setupCollection(ctx, addr, collectionName)
 	require.NoError(t, err, "failed to setup collection")
+
+	payload := map[string]any{
+		"str":    "str_value",
+		"number": 42,
+		"bool":   true,
+		"array":  []any{13, "str"},
+		"nested": map[string]any{
+			"nested_str": "nested_str_value",
+			"nested_num": 13,
+		},
+	}
+
+	payloadBytes, err := json.Marshal(payload)
+	require.NoError(t, err, "failed to marshal payload")
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -97,18 +111,21 @@ func TestIntegrationQdrant(t *testing.T) {
 			}
 
 			suite := integration.StreamTests(
-				// Is is possible to test output only without a `getFn GetMessageFunc` arg?
-				integration.StreamTestOutputOnlySendBatch(10, defaultQuery),
+				// Is it possible to test output only without a `getFn GetMessageFunc` arg?
+				integration.StreamTestOutputOnlySendBatch(1, defaultQuery),
 			)
 			suite.Run(
 				t, template, integration.StreamTestOptPort(containerPort.Port()),
 				integration.StreamTestOptVarSet("POINT_ID", tc.pointID),
 				integration.StreamTestOptVarSet("COLLECTION_NAME", collectionName),
 				integration.StreamTestOptVarSet("VECTOR", tc.vector),
-				integration.StreamTestOptVarSet("PAYLOAD", tc.payload),
+				integration.StreamTestOptVarSet("PAYLOAD", string(payloadBytes)),
 			)
+
 		})
 	}
+
+	require.NoError(t, assertPoints(t, ctx, addr, collectionName, payload), "failed to assert points")
 
 	require.NoError(t, qdrantContainer.Terminate(ctx), "failed to terminate container")
 }
@@ -158,4 +175,53 @@ func setupCollection(ctx context.Context, host, collectionName string) error {
 	})
 
 	return err
+}
+
+func assertPoints(t *testing.T, ctx context.Context, host string, collectionName string, payload map[string]any) error {
+	conn, err := grpc.NewClient(host, grpc.WithTransportCredentials(insecure.NewCredentials()))
+
+	if err != nil {
+		return err
+	}
+
+	pointsClient := pb.NewPointsClient(conn)
+
+	limit := uint32(10)
+	response, err := pointsClient.Scroll(ctx, &pb.ScrollPoints{
+		CollectionName: collectionName,
+		WithPayload: &pb.WithPayloadSelector{
+			SelectorOptions: &pb.WithPayloadSelector_Enable{
+				Enable: true,
+			},
+		},
+		Limit: &limit,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	assert.Len(t, response.GetResult(), 4)
+
+	for _, point := range response.GetResult() {
+		err := assertPayloadStructure(t, point.Payload, payload)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func assertPayloadStructure(t *testing.T, actual map[string]*pb.Value, expected map[string]any) error {
+	valueMap, err := newValueMap(expected)
+	if err != nil {
+		return err
+	}
+
+	for key, value := range valueMap {
+		assert.Equal(t, actual[key], value)
+	}
+
+	return nil
 }
