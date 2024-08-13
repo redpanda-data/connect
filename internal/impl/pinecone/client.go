@@ -40,7 +40,9 @@ type realClient struct {
 }
 
 func (c *realClient) Index(host string) (indexClient, error) {
-	i, err := c.client.Index(host)
+	i, err := c.client.Index(pinecone.NewIndexConnParams{
+		Host: host,
+	})
 	if err != nil {
 		return nil, err
 	}
