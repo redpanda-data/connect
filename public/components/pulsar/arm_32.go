@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build !arm
+//go:build arm
 
 package pulsar
-
-import (
-	// Bring in the internal plugin definitions.
-	_ "github.com/redpanda-data/connect/v4/internal/impl/pulsar"
-)
