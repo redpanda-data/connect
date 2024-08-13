@@ -149,7 +149,6 @@ jobs:
         builder: ${{ steps.buildx.outputs.name }}
         platforms: linux/amd64,linux/arm64
         push: true
-        tags: ${{ steps.docker_meta.outputs.tags }}
         tags: ${{ steps.docker_meta_cloud.outputs.tags }}
 
 
