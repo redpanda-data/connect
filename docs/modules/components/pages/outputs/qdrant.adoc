@@ -45,7 +45,7 @@ output:
       byte_size: 0
       period: ""
       check: ""
-    grpc_host: localhost:6334
+    grpc_host: localhost:6334 # No default (required)
     api_token: ""
     collection_name: "" # No default (required)
     id: root = "dc88c126-679f-49f5-ab85-04b77e8c2791" # No default (required)
@@ -70,7 +70,7 @@ output:
       period: ""
       check: ""
       processors: [] # No default (optional)
-    grpc_host: localhost:6334
+    grpc_host: localhost:6334 # No default (required)
     api_token: ""
     tls:
       enabled: false
@@ -215,7 +215,14 @@ The gRPC host of the Qdrant collection. Defaults to 'localhost:6334'.
 
 *Type*: `string`
 
-*Default*: `"localhost:6334"`
+
+```yml
+# Examples
+
+grpc_host: localhost:6334
+
+grpc_host: xyz-example.eu-central.aws.cloud.qdrant.io:6334
+```
 
 === `api_token`
 
