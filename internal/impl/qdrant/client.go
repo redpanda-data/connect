@@ -88,10 +88,8 @@ func (c *qdrantClient) Connect(ctx context.Context) error {
 }
 
 func (c *qdrantClient) Close() error {
-	if c.connection != nil {
-		return c.connection.Close()
-	}
-	return nil
+	c.logger.Debug("Closing connection to Qdrant")
+	return c.connection.Close()
 }
 
 // Appends "api-key" to the metadata for authentication
