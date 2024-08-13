@@ -18,6 +18,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
 	"testing"
 
 	pb "github.com/qdrant/go-client/qdrant"
@@ -86,14 +88,12 @@ func TestIntegrationQdrant(t *testing.T) {
 	addr, err := qdrantContainer.GRPCEndpoint(ctx)
 	require.NoError(t, err, "failed to get container grpc endpoint")
 
-	err = setupCollection(ctx, addr, collectionName)
-	require.NoError(t, err, "failed to setup collection")
-
 	payload := map[string]any{
-		"str":    "str_value",
-		"number": 42,
-		"bool":   true,
-		"array":  []any{13, "str"},
+		"content": "hello world",
+		"str":     "str_value",
+		"number":  42,
+		"bool":    true,
+		"array":   []any{13, "str"},
 		"nested": map[string]any{
 			"nested_str": "nested_str_value",
 			"nested_num": 13,
@@ -103,16 +103,42 @@ func TestIntegrationQdrant(t *testing.T) {
 	payloadBytes, err := json.Marshal(payload)
 	require.NoError(t, err, "failed to marshal payload")
 
+	err = setupCollection(ctx, addr, collectionName)
+	require.NoError(t, err, "failed to setup collection")
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 
-			defaultQuery := func(ctx context.Context, testID, messageID string) (string, []string, error) {
-				return fmt.Sprintf(`{"content":"%v","id":%v}`, "hello world", messageID), nil, err
+			queryPoint := func(ctx context.Context, testID, messageID string) (string, []string, error) {
+				conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+				require.NoError(t, err, "failed to create grpc client")
+
+				pointsClient := pb.NewPointsClient(conn)
+
+				points, err := pointsClient.Get(ctx, &pb.GetPoints{
+					CollectionName: collectionName,
+					Ids:            []*pb.PointId{parsePointID(tc.pointID)},
+					WithPayload: &pb.WithPayloadSelector{
+						SelectorOptions: &pb.WithPayloadSelector_Enable{
+							Enable: true,
+						},
+					},
+				})
+				require.NoError(t, err, "failed to get point")
+
+				assert.Len(t, points.GetResult(), 1)
+
+				point := points.GetResult()[0]
+
+				err = assertPayloadStructure(t, point.Payload, payload)
+				require.NoError(t, err, "failed to assert payload structure")
+
+				return fmt.Sprintf(`{"content":"%v","id":%v}`, point.Payload["content"].GetStringValue(), messageID), nil, err
 			}
 
 			suite := integration.StreamTests(
-				// Is it possible to test output only without a `getFn GetMessageFunc` arg?
-				integration.StreamTestOutputOnlySendBatch(1, defaultQuery),
+				integration.StreamTestOutputOnlySendBatch(10, queryPoint),
+				integration.StreamTestOutputOnlySendSequential(10, queryPoint),
 			)
 			suite.Run(
 				t, template, integration.StreamTestOptPort(containerPort.Port()),
@@ -124,8 +150,6 @@ func TestIntegrationQdrant(t *testing.T) {
 
 		})
 	}
-
-	require.NoError(t, assertPoints(t, ctx, addr, collectionName, payload), "failed to assert points")
 
 	require.NoError(t, qdrantContainer.Terminate(ctx), "failed to terminate container")
 }
@@ -177,42 +201,6 @@ func setupCollection(ctx context.Context, host, collectionName string) error {
 	return err
 }
 
-func assertPoints(t *testing.T, ctx context.Context, host string, collectionName string, payload map[string]any) error {
-	conn, err := grpc.NewClient(host, grpc.WithTransportCredentials(insecure.NewCredentials()))
-
-	if err != nil {
-		return err
-	}
-
-	pointsClient := pb.NewPointsClient(conn)
-
-	limit := uint32(10)
-	response, err := pointsClient.Scroll(ctx, &pb.ScrollPoints{
-		CollectionName: collectionName,
-		WithPayload: &pb.WithPayloadSelector{
-			SelectorOptions: &pb.WithPayloadSelector_Enable{
-				Enable: true,
-			},
-		},
-		Limit: &limit,
-	})
-
-	if err != nil {
-		return err
-	}
-
-	assert.Len(t, response.GetResult(), 4)
-
-	for _, point := range response.GetResult() {
-		err := assertPayloadStructure(t, point.Payload, payload)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 func assertPayloadStructure(t *testing.T, actual map[string]*pb.Value, expected map[string]any) error {
 	valueMap, err := newValueMap(expected)
 	if err != nil {
@@ -224,4 +212,23 @@ func assertPayloadStructure(t *testing.T, actual map[string]*pb.Value, expected 
 	}
 
 	return nil
+}
+
+func parsePointID(input string) *pb.PointId {
+	// Try to convert the input string to a number
+	if num, err := strconv.ParseUint(input, 10, 64); err == nil {
+		return &pb.PointId{
+			PointIdOptions: &pb.PointId_Num{
+				Num: num,
+			},
+		}
+	}
+
+	// Remove the quotes from the input string
+	uuid := strings.Trim(input, `"`)
+	return &pb.PointId{
+		PointIdOptions: &pb.PointId_Uuid{
+			Uuid: uuid,
+		},
+	}
 }
