@@ -33,6 +33,7 @@ install: $(APPS)
 
 deps:
 	@go mod tidy
+	@cd internal/impl/scylla && go mod tidy
 
 SOURCE_FILES = $(shell find internal public cmd -type f)
 TEMPLATE_FILES = $(shell find internal/impl -type f -name "template_*.yaml")
@@ -83,6 +84,7 @@ test-race: $(APPS)
 test-integration:
 	$(warning WARNING! Running the integration tests in their entirety consumes a huge amount of computing resources and is likely to time out on most machines. It's recommended that you instead run the integration suite for connectors you are working selectively with `go test -run 'TestIntegration/kafka' ./...` and so on.)
 	@go test $(GO_FLAGS) -ldflags "$(LD_FLAGS)" -run "^Test.*Integration.*$$" -timeout 5m ./...
+	@cd internal/impl/scylla && go test $(GO_FLAGS) -ldflags "$(LD_FLAGS)" -run "^Test.*Integration.*$$" -timeout 5m ./...
 
 clean:
 	rm -rf $(PATHINSTBIN)
