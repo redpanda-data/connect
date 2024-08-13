@@ -31,6 +31,7 @@ All notable changes to this project will be documented in this file.
 - New experimental `schema_registry` input and output. (@mihaitodor)
 - New experimental `qdrant` output. (@Anush008)
 - (Benthos) The `--set` run flag now supports structured values, e.g. `--set input={}`. (@Jeffail)
+- New experimental `redpanda_replicator` and `redpanda_replicator_bundle` inputs and outputs. (@mihaitodor)
 
 ## 4.32.1 - 2024-07-24
 

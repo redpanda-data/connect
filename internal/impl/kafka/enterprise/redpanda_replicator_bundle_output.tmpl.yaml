@@ -1,0 +1,134 @@
+# Copyright 2024 Redpanda Data, Inc.
+#
+# Licensed as a Redpanda Enterprise file under the Redpanda Community
+# License (the "License"); you may not use this file except in compliance with
+# the License. You may obtain a copy of the License at
+#
+# https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
+
+name: redpanda_replicator_bundle
+type: output
+status: experimental
+categories: [ Services ]
+summary: Redpanda Replicator bundle output
+description: |
+  All-in-one output which writes messages and schemas to a Kafka or Redpanda cluster. This output is meant to be used
+  together with the `redpanda_replicator_bundle` input.
+
+fields:
+  - name: redpanda_replicator
+    type: unknown
+    kind: map
+    default: null
+    description: |
+      The `redpanda_replicator` output configuration.
+
+  - name: schema_registry
+    type: unknown
+    kind: map
+    default: null
+    description: |
+      The `schema_registry` output configuration. The `subject` field must be left empty.
+
+mapping: |
+  #!blobl
+
+  let redpanda_replicator = this.redpanda_replicator.assign(
+    {
+      "topic": "${! metadata(\"kafka_topic\").or(throw(\"missing kafka_topic metadata\")) }",
+      "key": "${! metadata(\"kafka_key\") }",
+      "partition": "${! metadata(\"kafka_partition\").or(throw(\"missing kafka_partition metadata\")) }",
+      "partitioner": "manual",
+      "timestamp": "${! metadata(\"kafka_timestamp_unix\").or(timestamp_unix()) }"
+    }
+  )
+
+  if this.schema_registry.keys().contains("subject") {
+    root = throw("The subject field of the schema_registry output mustnot be set")
+  }
+  let schema_registry = this.schema_registry.assign({"subject": "${! @schema_registry_subject }"})
+  if ["topic", "key", "partition", "partitioner", "timestamp"].any(f -> this.redpanda_replicator.keys().contains(f)) {
+    root = throw("The topic, key, partition, partitioner and timestamp fields of the redpanda_replicator output must be left empty")
+  }
+
+  root = if this.redpanda_replicator.length() == 0 || this.schema_registry.length() == 0 {
+    throw("both redpanda_replicator and schema_registry inputs must be configured")
+  } else {
+    """
+      switch:
+        cases:
+          - check: metadata("input_label") == "redpanda_replicator"
+            output:
+              fallback:
+                - redpanda_replicator: %s
+                # TODO: Use a DLQ
+                - drop: {}
+                  processors:
+                    - log:
+                        message: |
+                          Dropping message: ${! content() } / ${! metadata() }
+          - check: metadata("input_label") == "schema_registry"
+            output:
+              fallback:
+                - schema_registry: %s
+                - switch:
+                    cases:
+                      - check: '@fallback_error == "request returned status: 422"'
+                        output:
+                          # TODO: Use a DLQ
+                          drop: {}
+                          processors:
+                            - log:
+                                message: |
+                                  Subject '${! @schema_registry_subject }' version ${! @schema_registry_version } already has schema: ${! content() }
+                      - output:
+                          reject: ${! @fallback_error }
+    """.format($redpanda_replicator.string(), $schema_registry.string()).parse_yaml()
+  }
+
+tests:
+  - name: Replicate both data and schemas
+    config:
+      redpanda_replicator:
+        seed_brokers: [ "127.0.0.1:9092" ]
+        max_in_flight: 1
+      schema_registry:
+        url: http://localhost:8081
+
+    expected:
+      switch:
+        cases:
+          - check: metadata("input_label") == "redpanda_replicator"
+            output:
+              fallback:
+                - redpanda_replicator:
+                    key: ${! metadata("kafka_key") }
+                    max_in_flight: 1
+                    partition: ${! metadata("kafka_partition").or(throw("missing kafka_partition metadata")) }
+                    partitioner: manual
+                    seed_brokers:
+                      - 127.0.0.1:9092
+                    timestamp: ${! metadata("kafka_timestamp_unix").or(timestamp_unix()) }
+                    topic: ${! metadata("kafka_topic").or(throw("missing kafka_topic metadata")) }
+                - drop: {}
+                  processors:
+                    - log:
+                        message: |
+                          Dropping message: ${! content() } / ${! metadata() }
+          - check: metadata("input_label") == "schema_registry"
+            output:
+              fallback:
+                - schema_registry:
+                    subject: ${! @schema_registry_subject }
+                    url: http://localhost:8081
+                - switch:
+                    cases:
+                      - check: '@fallback_error == "request returned status: 422"'
+                        output:
+                          drop: {}
+                          processors:
+                            - log:
+                                message: |
+                                  Subject '${! @schema_registry_subject }' version ${! @schema_registry_version } already has schema: ${! content() }
+                      - output:
+                          reject: ${! @fallback_error }

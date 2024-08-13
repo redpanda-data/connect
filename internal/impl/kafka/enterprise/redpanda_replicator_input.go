@@ -1,28 +1,24 @@
 // Copyright 2024 Redpanda Data, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
 //
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
-package kafka
+package enterprise
 
 import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/sasl"
 
@@ -31,6 +27,11 @@ import (
 	"github.com/Jeffail/shutdown"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
+)
+
+const (
+	rpriDefaultLabel = "redpanda_replicator_input"
 )
 
 func franzKafkaInputConfig() *service.ConfigSpec {
@@ -40,9 +41,9 @@ func franzKafkaInputConfig() *service.ConfigSpec {
 		Version("3.61.0").
 		Summary(`A Kafka input using the https://github.com/twmb/franz-go[Franz Kafka client library^].`).
 		Description(`
-When a consumer group is specified this input consumes one or more topics where partitions will automatically balance across any other connected clients with the same consumer group. When a consumer group is not specified topics can either be consumed in their entirety or with explicit partitions.
+This input can be used in combination with a ` + "`redpanda_replicator`" + ` output which can query it for topic configurations and topic ACLs.
 
-This input often out-performs the traditional ` + "`kafka`" + ` input as well as providing more useful logs and error messages.
+When a consumer group is specified this input consumes one or more topics where partitions will automatically balance across any other connected clients with the same consumer group. When a consumer group is not specified topics can either be consumed in their entirety or with explicit partitions.
 
 == Metadata
 
@@ -53,6 +54,7 @@ This input adds the following metadata fields to each message:
 - kafka_topic
 - kafka_partition
 - kafka_offset
+- kafka_lag
 - kafka_timestamp_unix
 - kafka_tombstone_message
 - All record headers
@@ -121,16 +123,20 @@ Finally, it's also possible to specify an explicit offset to consume from by add
 			Default(true).
 			Advanced(),
 		service.NewTLSToggledField("tls"),
-		SASLFields(),
+		kafka.SASLFields(),
 		service.NewBoolField("multi_header").Description("Decode headers into lists to allow handling of multiple values with the same key").Default(false).Advanced(),
 		service.NewBatchPolicyField("batching").
 			Description("Allows you to configure a xref:configuration:batching.adoc[batching policy] that applies to individual topic partitions in order to batch messages together before flushing them for processing. Batching can be beneficial for performance as well as useful for windowed processing, and doing so this way preserves the ordering of topic partitions.").
+			Advanced(),
+		service.NewDurationField("topic_lag_refresh_period").
+			Description("The period of time between each topic lag refresh cycle.").
+			Default("5s").
 			Advanced(),
 	}
 }
 
 func init() {
-	err := service.RegisterBatchInput("kafka_franz", franzKafkaInputConfig(),
+	err := service.RegisterBatchInput("redpanda_replicator", franzKafkaInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
 			rdr, err := NewFranzKafkaReaderFromConfig(conf, mgr)
 			if err != nil {
@@ -152,20 +158,24 @@ type batchWithAckFn struct {
 
 // FranzKafkaReader implements a kafka reader using the franz-go library.
 type FranzKafkaReader struct {
-	SeedBrokers     []string
-	topics          []string
-	topicPartitions map[string]map[int32]kgo.Offset
-	clientID        string
-	rackID          string
-	consumerGroup   string
-	TLSConf         *tls.Config
-	saslConfs       []sasl.Mechanism
-	checkpointLimit int
-	startFromOldest bool
-	commitPeriod    time.Duration
-	regexPattern    bool
-	multiHeader     bool
-	batchPolicy     service.BatchPolicy
+	SeedBrokers           []string
+	topics                []string
+	topicPartitions       map[string]map[int32]kgo.Offset
+	clientID              string
+	rackID                string
+	consumerGroup         string
+	TLSConf               *tls.Config
+	saslConfs             []sasl.Mechanism
+	checkpointLimit       int
+	startFromOldest       bool
+	commitPeriod          time.Duration
+	regexPattern          bool
+	multiHeader           bool
+	batchPolicy           service.BatchPolicy
+	topicLagRefreshPeriod time.Duration
+
+	client        *kgo.Client
+	topicLagCache sync.Map
 
 	batchChan atomic.Value
 	res       *service.Resources
@@ -214,7 +224,7 @@ func NewFranzKafkaReaderFromConfig(conf *service.ParsedConfig, res *service.Reso
 	}
 
 	var topicPartitions map[string]map[int32]int64
-	if f.topics, topicPartitions, err = ParseTopics(topicList, defaultOffset, true); err != nil {
+	if f.topics, topicPartitions, err = kafka.ParseTopics(topicList, defaultOffset, true); err != nil {
 		return nil, err
 	}
 	if len(topicPartitions) > 0 {
@@ -266,8 +276,18 @@ func NewFranzKafkaReaderFromConfig(conf *service.ParsedConfig, res *service.Reso
 	if f.multiHeader, err = conf.FieldBool("multi_header"); err != nil {
 		return nil, err
 	}
-	if f.saslConfs, err = SASLMechanismsFromConfig(conf); err != nil {
+	if f.saslConfs, err = kafka.SASLMechanismsFromConfig(conf); err != nil {
 		return nil, err
+	}
+
+	if f.topicLagRefreshPeriod, err = conf.FieldDuration("topic_lag_refresh_period"); err != nil {
+		return nil, err
+	}
+
+	if label := res.Label(); label != "" {
+		res.SetGeneric(res.Label(), &f)
+	} else {
+		res.SetGeneric(rpriDefaultLabel, &f)
 	}
 
 	return &f, nil
@@ -302,6 +322,12 @@ func (f *FranzKafkaReader) recordToMessage(record *kgo.Record) *msgWithRecord {
 			msg.MetaSetMut(hdr.Key, string(hdr.Value))
 		}
 	}
+
+	lag := int64(-1)
+	if val, ok := f.topicLagCache.Load(record.Topic); ok {
+		lag = val.(int64)
+	}
+	msg.MetaSetMut("kafka_lag", lag)
 
 	// The record lives on for checkpointing, but we don't need the contents
 	// going forward so discard these. This looked fine to me but could
@@ -621,14 +647,13 @@ func (f *FranzKafkaReader) Connect(ctx context.Context) error {
 
 	batchChan := make(chan batchWithAckFn)
 
-	var cl *kgo.Client
 	commitFn := func(r *kgo.Record) {}
 	if f.consumerGroup != "" {
 		commitFn = func(r *kgo.Record) {
-			if cl == nil {
+			if f.client == nil {
 				return
 			}
-			cl.MarkCommitRecords(r)
+			f.client.MarkCommitRecords(r)
 		}
 	}
 	checkpoints := newCheckpointTracker(f.res, batchChan, commitFn, f.batchPolicy)
@@ -658,7 +683,8 @@ func (f *FranzKafkaReader) Connect(ctx context.Context) error {
 			}),
 			kgo.AutoCommitMarks(),
 			kgo.AutoCommitInterval(f.commitPeriod),
-			kgo.WithLogger(&KGoLogger{f.log}),
+			// TODO
+			kgo.WithLogger(&kafka.KGoLogger{L: f.log}),
 		)
 	}
 
@@ -671,13 +697,43 @@ func (f *FranzKafkaReader) Connect(ctx context.Context) error {
 	}
 
 	var err error
-	if cl, err = kgo.NewClient(clientOpts...); err != nil {
+	if f.client, err = kgo.NewClient(clientOpts...); err != nil {
 		return err
 	}
 
 	go func() {
+		closeCtx, done := f.shutSig.SoftStopCtx(context.Background())
+		defer done()
+
+		adminClient := kadm.NewClient(f.client)
+
+		for {
+			ctx, done = context.WithTimeout(closeCtx, f.topicLagRefreshPeriod)
+			var lags kadm.DescribedGroupLags
+			var err error
+			if lags, err = adminClient.Lag(ctx, f.consumerGroup); err != nil {
+				f.log.Errorf("Failed to fetch group lags: %s", err)
+			}
+			done()
+
+			lags.Each(func(gl kadm.DescribedGroupLag) {
+				for _, tl := range gl.Lag.TotalByTopic() {
+					f.topicLagCache.Store(tl.Topic, tl.Lag)
+				}
+			})
+
+			select {
+			case <-f.shutSig.SoftStopChan():
+				return
+			case <-time.After(f.topicLagRefreshPeriod):
+			}
+		}
+	}()
+
+	go func() {
 		defer func() {
-			cl.Close()
+			f.client.Close()
+			f.client = nil
 			checkpoints.close()
 			f.storeBatchChan(nil)
 			close(batchChan)
@@ -689,6 +745,7 @@ func (f *FranzKafkaReader) Connect(ctx context.Context) error {
 		closeCtx, done := f.shutSig.SoftStopCtx(context.Background())
 		defer done()
 
+		listedTopics := false
 		for {
 			// Using a stall prevention context here because I've realised we
 			// might end up disabling literally all the partitions and topics
@@ -697,8 +754,29 @@ func (f *FranzKafkaReader) Connect(ctx context.Context) error {
 			// In this case we don't want to actually resume any of them yet so
 			// I add a forced timeout to deal with it.
 			stallCtx, pollDone := context.WithTimeout(closeCtx, time.Second)
-			fetches := cl.PollFetches(stallCtx)
+			fetches := f.client.PollFetches(stallCtx)
 			pollDone()
+
+			// TODO: Find a way to disable this logging code based on the log level
+			if !listedTopics {
+				topics := f.client.GetConsumeTopics()
+				var selectedTopics []string
+				if f.regexPattern {
+					selectedTopics = make([]string, 0, len(topics))
+					for _, topic := range topics {
+						for _, t := range f.topics {
+							if match, err := regexp.MatchString(t, topic); err == nil && match {
+								selectedTopics = append(selectedTopics, topic)
+							}
+						}
+					}
+				} else {
+					selectedTopics = topics
+				}
+
+				f.log.Infof("Consuming from topics: %s", selectedTopics)
+				listedTopics = true
+			}
 
 			if errs := fetches.Errors(); len(errs) > 0 {
 				// Any non-temporal error sets this true and we close the client
@@ -722,7 +800,8 @@ func (f *FranzKafkaReader) Connect(ctx context.Context) error {
 				}
 
 				if nonTemporalErr {
-					cl.Close()
+					f.client.Close()
+					f.client = nil
 					return
 				}
 			}
@@ -742,7 +821,7 @@ func (f *FranzKafkaReader) Connect(ctx context.Context) error {
 			// Walk all the disabled topic partitions and check whether any of
 			// them can be resumed.
 			resumeTopicPartitions := map[string][]int32{}
-			for pausedTopic, pausedPartitions := range cl.PauseFetchPartitions(pauseTopicPartitions) {
+			for pausedTopic, pausedPartitions := range f.client.PauseFetchPartitions(pauseTopicPartitions) {
 				for _, pausedPartition := range pausedPartitions {
 					if !checkpoints.pauseFetch(pausedTopic, pausedPartition, f.checkpointLimit) {
 						resumeTopicPartitions[pausedTopic] = append(resumeTopicPartitions[pausedTopic], pausedPartition)
@@ -750,7 +829,7 @@ func (f *FranzKafkaReader) Connect(ctx context.Context) error {
 				}
 			}
 			if len(resumeTopicPartitions) > 0 {
-				cl.ResumeFetchPartitions(resumeTopicPartitions)
+				f.client.ResumeFetchPartitions(resumeTopicPartitions)
 			}
 		}
 	}()
@@ -786,6 +865,8 @@ func (f *FranzKafkaReader) ReadBatch(ctx context.Context) (service.MessageBatch,
 
 // Close underlying connections.
 func (f *FranzKafkaReader) Close(ctx context.Context) error {
+	// TODO: Do we need to do some locking and close the client here as well?!?
+
 	go func() {
 		f.shutSig.TriggerSoftStop()
 		if f.getBatchChan() == nil {

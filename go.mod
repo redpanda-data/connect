@@ -109,6 +109,7 @@ require (
 	github.com/tetratelabs/wazero v1.7.3
 	github.com/trinodb/trino-go-client v0.315.0
 	github.com/twmb/franz-go v1.17.1
+	github.com/twmb/franz-go/pkg/kadm v1.13.0
 	github.com/twmb/franz-go/pkg/kmsg v1.8.0
 	github.com/vmihailenco/msgpack/v5 v5.4.1
 	github.com/xdg-go/scram v1.1.2
