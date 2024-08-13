@@ -25,7 +25,7 @@ component_type_dropdown::[]
 
 Adds items to a [Qdrant](https://qdrant.tech/) collection
 
-Introduced in version 4.32.2.
+Introduced in version 4.33.0.
 
 
 [tabs]
@@ -210,7 +210,7 @@ processors:
 
 === `grpc_host`
 
-The gRPC host of the Qdrant collection. Defaults to 'localhost:6334'.
+The gRPC host of the Qdrant collection.
 
 
 *Type*: `string`
