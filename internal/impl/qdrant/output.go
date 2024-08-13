@@ -44,7 +44,7 @@ func outputSpec() *service.ConfigSpec {
 			service.NewOutputMaxInFlightField(),
 			service.NewBatchPolicyField(qoFieldBatching),
 			service.NewStringField(qoFieldGrpcHost).
-				Description("The gRPC host of the Qdrant collection.").
+				Description("The gRPC host of the Qdrant server.").
 				Example("localhost:6334").
 				Example("xyz-example.eu-central.aws.cloud.qdrant.io:6334"),
 			service.NewStringField(qoFieldAPIToken).
