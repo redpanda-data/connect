@@ -5,8 +5,8 @@ builds:
     main: cmd/redpanda-connect/main.go
     binary: redpanda-connect
     goos: [ windows, darwin, linux, freebsd, openbsd ]
-    goarch: [ amd64, arm, arm64 ]
-    goarm: [ 6, 7 ]
+    goarch: [ amd64, arm64 ]
+    # goarm: [ 6, 7 ]
     hooks:
       post:
         # The binary is signed and notarized when running a production release, but for snapshot builds notarization is
