@@ -20,6 +20,7 @@ require (
 	github.com/99designs/keyring v1.2.2 // indirect
 	github.com/AthenZ/athenz v1.10.43 // indirect
 	github.com/Azure/azure-sdk-for-go v68.0.0+incompatible // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/ai/azopenai v0.6.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.12.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.5.2 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos v1.0.3 // indirect
@@ -41,7 +42,7 @@ require (
 	github.com/Jeffail/shutdown v1.0.0 // indirect
 	github.com/JohnCGriffin/overflow v0.0.0-20211019200055-46fa312c352c // indirect
 	github.com/Masterminds/squirrel v1.5.4 // indirect
-	github.com/Microsoft/go-winio v0.6.1 // indirect
+	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/OneOfOne/xxhash v1.2.8 // indirect
 	github.com/PaesslerAG/gval v1.2.2 // indirect
 	github.com/PaesslerAG/jsonpath v0.1.1 // indirect
@@ -126,7 +127,7 @@ require (
 	github.com/fatih/color v1.17.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
-	github.com/gabriel-vasile/mimetype v1.4.2 // indirect
+	github.com/gabriel-vasile/mimetype v1.4.3 // indirect
 	github.com/generikvault/gvalstrings v0.0.0-20180926130504-471f38f0112a // indirect
 	github.com/getsentry/sentry-go v0.28.1 // indirect
 	github.com/go-faker/faker/v4 v4.4.2 // indirect
@@ -149,7 +150,7 @@ require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
-	github.com/google/flatbuffers v23.5.26+incompatible // indirect
+	github.com/google/flatbuffers v24.3.25+incompatible // indirect
 	github.com/google/pprof v0.0.0-20240409012703-83162a5b38cd // indirect
 	github.com/google/s2a-go v0.1.7 // indirect
 	github.com/google/uuid v1.6.0 // indirect
@@ -166,7 +167,7 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.20.0 // indirect
 	github.com/gsterjov/go-libsecret v0.0.0-20161001094733-a6f4afe4910c // indirect
 	github.com/hailocab/go-hostpool v0.0.0-20160125115350-e80d13ce29ed // indirect
-	github.com/hashicorp/errwrap v1.0.0 // indirect
+	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-hclog v1.6.3 // indirect
 	github.com/hashicorp/go-msgpack v0.5.5 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
@@ -227,12 +228,14 @@ require (
 	github.com/oklog/ulid v1.3.1 // indirect
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
 	github.com/olivere/elastic/v7 v7.0.32 // indirect
+	github.com/ollama/ollama v0.2.5 // indirect
 	github.com/opensearch-project/opensearch-go/v3 v3.1.0 // indirect
 	github.com/oschwald/geoip2-golang v1.11.0 // indirect
 	github.com/oschwald/maxminddb-golang v1.13.0 // indirect
 	github.com/parquet-go/parquet-go v0.22.0 // indirect
 	github.com/paulmach/orb v0.11.1 // indirect
 	github.com/pebbe/zmq4 v1.2.11 // indirect
+	github.com/pgvector/pgvector-go v0.2.1 // indirect
 	github.com/pierrec/lz4 v2.6.1+incompatible // indirect
 	github.com/pierrec/lz4/v4 v4.1.21 // indirect
 	github.com/pinecone-io/go-pinecone v0.5.0 // indirect
@@ -244,12 +247,13 @@ require (
 	github.com/prometheus/common v0.48.0 // indirect
 	github.com/prometheus/procfs v0.12.0 // indirect
 	github.com/pusher/pusher-http-go v4.0.1+incompatible // indirect
+	github.com/qdrant/go-client v1.10.0 // indirect
 	github.com/quipo/dependencysolver v0.0.0-20170801134659-2b009cb4ddcc // indirect
 	github.com/r3labs/diff/v3 v3.0.1 // indirect
 	github.com/rabbitmq/amqp091-go v1.10.0 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475 // indirect
 	github.com/redis/go-redis/v9 v9.5.3 // indirect
-	github.com/redpanda-data/benthos/v4 v4.33.0 // indirect
+	github.com/redpanda-data/benthos/v4 v4.34.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rickb777/period v1.0.5 // indirect
 	github.com/rickb777/plural v1.4.2 // indirect
@@ -304,7 +308,7 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	golang.org/x/crypto v0.25.0 // indirect
-	golang.org/x/exp v0.0.0-20231108232855-2478ac86f678 // indirect
+	golang.org/x/exp v0.0.0-20240222234643-814bf88cf225 // indirect
 	golang.org/x/mod v0.17.0 // indirect
 	golang.org/x/net v0.27.0 // indirect
 	golang.org/x/oauth2 v0.20.0 // indirect
