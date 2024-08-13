@@ -36,7 +36,7 @@ const (
 
 func outputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Version("4.32.2").
+		Version("4.33.0").
 		Categories("AI").
 		Summary("Adds items to a [Qdrant](https://qdrant.tech/) collection").
 		Description(service.OutputPerformanceDocs(true, true)).
@@ -44,7 +44,7 @@ func outputSpec() *service.ConfigSpec {
 			service.NewOutputMaxInFlightField(),
 			service.NewBatchPolicyField(qoFieldBatching),
 			service.NewStringField(qoFieldGrpcHost).
-				Description("The gRPC host of the Qdrant collection. Defaults to 'localhost:6334'.").
+				Description("The gRPC host of the Qdrant server.").
 				Example("localhost:6334").
 				Example("xyz-example.eu-central.aws.cloud.qdrant.io:6334"),
 			service.NewStringField(qoFieldAPIToken).

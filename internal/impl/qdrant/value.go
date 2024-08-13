@@ -98,7 +98,7 @@ func newValue(v any) (*pb.Value, error) {
 	case float32:
 		return newDoubleValue(float64(v)), nil
 	case float64:
-		return newDoubleValue(float64(v)), nil
+		return newDoubleValue(v), nil
 	case string:
 		if !utf8.ValidString(v) {
 			return nil, fmt.Errorf("invalid UTF-8 in string: %q", v)
