@@ -42,6 +42,12 @@ message foo {
 message bar {
   string b = 1;
 }
+	
+message baz {
+	string the_message = 1;
+	string anotherMessage = 2;
+	bool is_valid = 3;
+}
 `
 
 	urlStr := runSchemaRegistryServer(t, func(path string) ([]byte, error) {
@@ -61,11 +67,12 @@ message bar {
 	require.NoError(t, err)
 
 	tests := []struct {
-		name        string
-		subject     string
-		input       string
-		output      string
-		errContains []string
+		name                string
+		subject             string
+		input               string
+		output              string
+		protobufDecoderOpts protobufDecoderOpts
+		errContains         []string
 	}{
 		{
 			name:    "things foo exact match",
@@ -88,6 +95,47 @@ message bar {
 				"unknown field \"a\"",
 			},
 		},
+		{
+			name:    "test snake_case and camelCase",
+			subject: "things",
+			input:   `{"the_message":"hey mom", "anotherMessage":"once upon a time, there was nothing"}`,
+			output:  `{"theMessage":"hey mom", "anotherMessage":"once upon a time, there was nothing"}`,
+		},
+		{
+			name:                "test snake_case and camelCase",
+			subject:             "things",
+			input:               `{"the_message":"hey mom", "anotherMessage":"once upon a time, there was nothing"}`,
+			output:              `{"the_message":"hey mom", "anotherMessage":"once upon a time, there was nothing"}`,
+			protobufDecoderOpts: protobufDecoderOpts{useProtoNames: true},
+		},
+		{
+			name:                "test snake_case and camelCase",
+			subject:             "things",
+			input:               `{"the_message":"hey mom", "anotherMessage":"once upon a time, there was nothing", "is_valid": false}`,
+			output:              `{"the_message":"hey mom", "anotherMessage":"once upon a time, there was nothing", "is_valid": false}`,
+			protobufDecoderOpts: protobufDecoderOpts{useProtoNames: true, emitUnpopulated: true},
+		},
+		{
+			name:                "test snake_case and camelCase",
+			subject:             "things",
+			input:               `{"the_message":"hey mom", "anotherMessage":"once upon a time, there was nothing", "is_valid": false}`,
+			output:              `{"the_message":"hey mom", "anotherMessage":"once upon a time, there was nothing"}`,
+			protobufDecoderOpts: protobufDecoderOpts{useProtoNames: true, emitUnpopulated: false},
+		},
+		{
+			name:                "test snake_case and camelCase",
+			subject:             "things",
+			input:               `{"the_message":"hey mom", "anotherMessage":"once upon a time, there was nothing", "is_valid": false}`,
+			output:              `{"theMessage":"hey mom", "anotherMessage":"once upon a time, there was nothing", "isValid": false}`,
+			protobufDecoderOpts: protobufDecoderOpts{useProtoNames: false, emitUnpopulated: true},
+		},
+		{
+			name:                "test snake_case and camelCase",
+			subject:             "things",
+			input:               `{"the_message":"hey mom", "anotherMessage":"once upon a time, there was nothing", "is_valid": false}`,
+			output:              `{"theMessage":"hey mom", "anotherMessage":"once upon a time, there was nothing"}`,
+			protobufDecoderOpts: protobufDecoderOpts{useProtoNames: false, emitUnpopulated: false},
+		},
 	}
 
 	for _, test := range tests {
@@ -96,7 +144,7 @@ message bar {
 			encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, true, time.Minute*10, time.Minute, service.MockResources())
 			require.NoError(t, err)
 
-			decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, true, service.MockResources())
+			decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, true, test.protobufDecoderOpts, service.MockResources())
 			require.NoError(t, err)
 
 			t.Cleanup(func() {
@@ -226,7 +274,7 @@ message bar {
 			encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, true, time.Minute*10, time.Minute, service.MockResources())
 			require.NoError(t, err)
 
-			decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, true, service.MockResources())
+			decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, true, protobufDecoderOpts{}, service.MockResources())
 			require.NoError(t, err)
 
 			t.Cleanup(func() {
