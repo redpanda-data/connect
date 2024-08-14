@@ -23,7 +23,7 @@
 component_type_dropdown::[]
 
 
-Adds items to a [Qdrant](https://qdrant.tech/) collection
+Adds items to a https://qdrant.tech/[Qdrant^] collection
 
 Introduced in version 4.33.0.
 
