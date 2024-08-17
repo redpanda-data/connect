@@ -159,8 +159,8 @@ func (o *output) Connect(ctx context.Context) error {
 		}
 	}
 
-	if payload.Mode != "READWRITE" {
-		return fmt.Errorf("schema registry instance mode must be set to READWRITE instead of %q", payload.Mode)
+	if payload.Mode != "READWRITE" && payload.Mode != "IMPORT" {
+		return fmt.Errorf("schema registry instance mode must be set to READWRITE or IMPORT instead of %q", payload.Mode)
 	}
 
 	o.connected.Store(true)

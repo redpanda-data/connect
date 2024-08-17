@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.33.1 - TBD
+
+### Fixed
+
+- The `schema_registry` output now allows pushing schemas if the target Schema Registry instance is in `IMPORT` mode. (@mihaitodor)
+
 ## 4.33.0 - 2024-08-13
 
 ### Added
