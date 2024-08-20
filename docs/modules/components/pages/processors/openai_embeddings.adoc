@@ -35,6 +35,7 @@ openai_embeddings:
   api_key: "" # No default (required)
   model: text-embedding-3-large # No default (required)
   text_mapping: "" # No default (optional)
+  dimensions: 0 # No default (optional)
 ```
 
 This processor sends text strings to the OpenAI API, which generates vector embeddings. By default, the processor submits the entire payload of each message as a string, unless you use the `text_mapping` configuration field to customize it.
@@ -89,6 +90,14 @@ The text you want to generate a vector embedding for. By default, the processor 
 
 
 *Type*: `string`
+
+
+=== `dimensions`
+
+The number of dimensions the resulting output embeddings should have. Only supported in `text-embedding-3` and later models.
+
+
+*Type*: `int`
 
 
 
