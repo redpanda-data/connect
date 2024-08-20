@@ -263,6 +263,9 @@ func TestSchemaRegistryIntegration(t *testing.T) {
 		},
 	}
 
+	sourcePort := startSchemaRegistry(t, pool)
+	sinkPort := startSchemaRegistry(t, pool)
+
 	cleanupSubject := func(port, subject string, hardDelete bool) {
 		u, err := url.Parse(fmt.Sprintf("http://localhost:%s/subjects/%s", port, subject))
 		require.NoError(t, err)
@@ -285,9 +288,6 @@ func TestSchemaRegistryIntegration(t *testing.T) {
 			subject := u4.String()
 			extraSubject := "foobar"
 
-			// TODO: Move these start calls outside of the test loop once we have a way to cleanup subjects which works.
-			sourcePort := startSchemaRegistry(t, pool)
-			sinkPort := startSchemaRegistry(t, pool)
 			t.Cleanup(func() {
 				cleanupSubject(sourcePort, subject, false)
 				cleanupSubject(sourcePort, subject, true)
