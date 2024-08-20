@@ -27,8 +27,15 @@ Generates responses to messages in a chat conversation, using the OpenAI API.
 
 Introduced in version 4.32.0.
 
+
+[tabs]
+======
+Common::
++
+--
+
 ```yml
-# Config fields, showing default values
+# Common config fields, showing default values
 label: ""
 openai_chat_completion:
   server_address: https://api.openai.com/v1
@@ -36,7 +43,37 @@ openai_chat_completion:
   model: gpt-4o # No default (required)
   prompt: "" # No default (optional)
   system_prompt: "" # No default (optional)
+  max_tokens: 0 # No default (optional)
+  temperature: 0 # No default (optional)
+  user: "" # No default (optional)
 ```
+
+--
+Advanced::
++
+--
+
+```yml
+# All config fields, showing default values
+label: ""
+openai_chat_completion:
+  server_address: https://api.openai.com/v1
+  api_key: "" # No default (required)
+  model: gpt-4o # No default (required)
+  prompt: "" # No default (optional)
+  system_prompt: "" # No default (optional)
+  max_tokens: 0 # No default (optional)
+  temperature: 0 # No default (optional)
+  user: "" # No default (optional)
+  top_p: 0 # No default (optional)
+  frequency_penalty: 0 # No default (optional)
+  presence_penalty: 0 # No default (optional)
+  seed: 0 # No default (optional)
+  stop: [] # No default (optional)
+```
+
+--
+======
 
 This processor sends the contents of user prompts to the OpenAI API, which generates responses. By default, the processor submits the entire payload of each message as a string, unless you use the `prompt` configuration field to customize it.
 
@@ -101,6 +138,75 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 
 *Type*: `string`
+
+
+=== `max_tokens`
+
+The maximum number of tokens that can be generated in the chat completion.
+
+
+*Type*: `int`
+
+
+=== `temperature`
+
+What sampling temperature to use, between 0 and 2. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic.
+
+We generally recommend altering this or top_p but not both.
+
+
+*Type*: `float`
+
+
+=== `user`
+
+A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+
+*Type*: `string`
+
+
+=== `top_p`
+
+An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with top_p probability mass. So 0.1 means only the tokens comprising the top 10% probability mass are considered.
+
+We generally recommend altering this or temperature but not both.
+
+
+*Type*: `float`
+
+
+=== `frequency_penalty`
+
+Number between -2.0 and 2.0. Positive values penalize new tokens based on their existing frequency in the text so far, decreasing the model's likelihood to repeat the same line verbatim.
+
+
+*Type*: `float`
+
+
+=== `presence_penalty`
+
+Number between -2.0 and 2.0. Positive values penalize new tokens based on whether they appear in the text so far, increasing the model's likelihood to talk about new topics.
+
+
+*Type*: `float`
+
+
+=== `seed`
+
+If specified, our system will make a best effort to sample deterministically, such that repeated requests with the same seed and parameters should return the same result. Determinism is not guaranteed.
+
+
+*Type*: `int`
+
+
+=== `stop`
+
+Up to 4 sequences where the API will stop generating further tokens.
+
+
+*Type*: `array`
 
 
 

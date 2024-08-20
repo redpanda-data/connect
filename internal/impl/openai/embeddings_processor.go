@@ -19,6 +19,7 @@ import (
 
 const (
 	oepFieldTextMapping = "text_mapping"
+	oepFieldDims        = "dimensions"
 )
 
 func init() {
@@ -37,7 +38,7 @@ func embeddingProcessorConfig() *service.ConfigSpec {
 		Categories("AI").
 		Summary("Generates vector embeddings to represent input text, using the OpenAI API.").
 		Description(`
-This processor sends text strings to the OpenAI API, which generates vector embeddings. By default, the processor submits the entire payload of each message as a string, unless you use the ` + "`" + oepFieldTextMapping + "`" + ` configuration field to customize it.
+This processor sends text strings to the OpenAI API, which generates vector embeddings. By default, the processor submits the entire payload of each message as a string, unless you use the `+"`"+oepFieldTextMapping+"`"+` configuration field to customize it.
 
 To learn more about vector embeddings, see the https://platform.openai.com/docs/guides/embeddings[OpenAI API documentation^].`).
 		Version("4.32.0").
@@ -48,9 +49,12 @@ To learn more about vector embeddings, see the https://platform.openai.com/docs/
 				"text-embedding-ada-002",
 			)...,
 		).
-		Field(
+		Fields(
 			service.NewBloblangField(oepFieldTextMapping).
 				Description("The text you want to generate a vector embedding for. By default, the processor submits the entire payload as a string.").
+				Optional(),
+			service.NewIntField(oepFieldDims).
+				Description("The number of dimensions the resulting output embeddings should have. Only supported in `text-embedding-3` and later models.").
 				Optional(),
 		)
 }
@@ -67,18 +71,29 @@ func makeEmbeddingsProcessor(conf *service.ParsedConfig, mgr *service.Resources)
 			return nil, err
 		}
 	}
-	return &embeddingsProcessor{b, t}, nil
+	var dims *int32
+	if conf.Contains(oepFieldDims) {
+		v, err := conf.FieldInt(oepFieldDims)
+		if err != nil {
+			return nil, err
+		}
+		d := int32(v)
+		dims = &d
+	}
+	return &embeddingsProcessor{b, t, dims}, nil
 }
 
 type embeddingsProcessor struct {
 	*baseProcessor
 
-	text *bloblang.Executor
+	text       *bloblang.Executor
+	dimensions *int32
 }
 
 func (p *embeddingsProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
 	var body oai.EmbeddingsOptions
 	body.DeploymentName = &p.model
+	body.Dimensions = p.dimensions
 	if p.text != nil {
 		s, err := msg.BloblangQueryValue(p.text)
 		if err != nil {

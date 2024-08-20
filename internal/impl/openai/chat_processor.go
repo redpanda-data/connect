@@ -19,8 +19,16 @@ import (
 )
 
 const (
-	ocpFieldUserPrompt   = "prompt"
-	ocpFieldSystemPrompt = "system_prompt"
+	ocpFieldUserPrompt       = "prompt"
+	ocpFieldSystemPrompt     = "system_prompt"
+	ocpFieldMaxTokens        = "max_tokens"
+	ocpFieldTemp             = "temperature"
+	ocpFieldUser             = "user"
+	ocpFieldTopP             = "top_p"
+	ocpFieldSeed             = "seed"
+	ocpFieldStop             = "stop"
+	ocpFieldPresencePenalty  = "presence_penalty"
+	ocpFieldFrequencyPenalty = "frequency_penalty"
 )
 
 func init() {
@@ -58,6 +66,43 @@ To learn more about chat completion, see the https://platform.openai.com/docs/gu
 			service.NewInterpolatedStringField(ocpFieldSystemPrompt).
 				Description("The system prompt to submit along with the user prompt.").
 				Optional(),
+			service.NewIntField(ocpFieldMaxTokens).
+				Optional().
+				Description("The maximum number of tokens that can be generated in the chat completion."),
+			service.NewFloatField(ocpFieldTemp).
+				Optional().
+				Description(`What sampling temperature to use, between 0 and 2. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic.
+
+We generally recommend altering this or top_p but not both.`).
+				LintRule(`root = if this > 2 || this < 0 { [ "field must be between 0 and 2" ] }`),
+			service.NewInterpolatedStringField(ocpFieldUser).
+				Optional().
+				Description("A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse."),
+			service.NewFloatField(ocpFieldTopP).
+				Optional().
+				Advanced().
+				Description(`An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with top_p probability mass. So 0.1 means only the tokens comprising the top 10% probability mass are considered.
+
+We generally recommend altering this or temperature but not both.`).
+				LintRule(`root = if this > 1 || this < 0 { [ "field must be between 0 and 1" ] }`),
+			service.NewFloatField(ocpFieldFrequencyPenalty).
+				Optional().
+				Advanced().
+				Description("Number between -2.0 and 2.0. Positive values penalize new tokens based on their existing frequency in the text so far, decreasing the model's likelihood to repeat the same line verbatim.").
+				LintRule(`root = if this > 2 || this < -2 { [ "field must be less than 2 and greater than -2" ] }`),
+			service.NewFloatField(ocpFieldPresencePenalty).
+				Optional().
+				Advanced().
+				Description("Number between -2.0 and 2.0. Positive values penalize new tokens based on whether they appear in the text so far, increasing the model's likelihood to talk about new topics.").
+				LintRule(`root = if this > 2 || this < -2 { [ "field must be less than 2 and greater than -2" ] }`),
+			service.NewIntField(ocpFieldSeed).
+				Advanced().
+				Optional().
+				Description("If specified, our system will make a best effort to sample deterministically, such that repeated requests with the same seed and parameters should return the same result. Determinism is not guaranteed."),
+			service.NewStringListField(ocpFieldStop).
+				Optional().
+				Advanced().
+				Description("Up to 4 sequences where the API will stop generating further tokens."),
 		)
 }
 
@@ -80,19 +125,109 @@ func makeChatProcessor(conf *service.ParsedConfig, mgr *service.Resources) (serv
 			return nil, err
 		}
 	}
-	return &chatProcessor{b, up, sp}, nil
+	var maxTokens *int32
+	if conf.Contains(ocpFieldMaxTokens) {
+		mt, err := conf.FieldInt(ocpFieldMaxTokens)
+		if err != nil {
+			return nil, err
+		}
+		m := int32(mt)
+		maxTokens = &m
+	}
+	var temp *float32
+	if conf.Contains(ocpFieldTemp) {
+		ft, err := conf.FieldFloat(ocpFieldTemp)
+		if err != nil {
+			return nil, err
+		}
+		t := float32(ft)
+		temp = &t
+	}
+	var user *service.InterpolatedString
+	if conf.Contains(ocpFieldUser) {
+		user, err = conf.FieldInterpolatedString(ocpFieldUser)
+		if err != nil {
+			return nil, err
+		}
+	}
+	var topP *float32
+	if conf.Contains(ocpFieldTopP) {
+		v, err := conf.FieldFloat(ocpFieldTopP)
+		if err != nil {
+			return nil, err
+		}
+		tp := float32(v)
+		topP = &tp
+	}
+	var frequencyPenalty *float32
+	if conf.Contains(ocpFieldFrequencyPenalty) {
+		v, err := conf.FieldFloat(ocpFieldFrequencyPenalty)
+		if err != nil {
+			return nil, err
+		}
+		fp := float32(v)
+		frequencyPenalty = &fp
+	}
+	var presencePenalty *float32
+	if conf.Contains(ocpFieldPresencePenalty) {
+		v, err := conf.FieldFloat(ocpFieldPresencePenalty)
+		if err != nil {
+			return nil, err
+		}
+		pp := float32(v)
+		presencePenalty = &pp
+	}
+	var seed *int64
+	if conf.Contains(ocpFieldSeed) {
+		intSeed, err := conf.FieldInt(ocpFieldSeed)
+		if err != nil {
+			return nil, err
+		}
+		s := int64(intSeed)
+		seed = &s
+	}
+	var stop []string
+	if conf.Contains(ocpFieldStop) {
+		stop, err = conf.FieldStringList(ocpFieldStop)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &chatProcessor{b, up, sp, maxTokens, temp, user, topP, frequencyPenalty, presencePenalty, seed, stop}, nil
 }
 
 type chatProcessor struct {
 	*baseProcessor
 
-	userPrompt   *bloblang.Executor
-	systemPrompt *service.InterpolatedString
+	userPrompt       *bloblang.Executor
+	systemPrompt     *service.InterpolatedString
+	maxTokens        *int32
+	temperature      *float32
+	user             *service.InterpolatedString
+	topP             *float32
+	frequencyPenalty *float32
+	presencePenalty  *float32
+	seed             *int64
+	stop             []string
 }
 
 func (p *chatProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
 	var body oai.ChatCompletionsOptions
 	body.DeploymentName = &p.model
+	body.MaxTokens = p.maxTokens
+	body.Temperature = p.temperature
+	body.TopP = p.topP
+	body.Seed = p.seed
+	body.FrequencyPenalty = p.frequencyPenalty
+	body.PresencePenalty = p.presencePenalty
+	body.Stop = p.stop
+	if p.user != nil {
+		u, err := p.user.TryString(msg)
+		if err != nil {
+			return nil, fmt.Errorf("%s interpolation error: %w", ocpFieldUser, err)
+		}
+		body.User = &u
+	}
 	if p.systemPrompt != nil {
 		s, err := p.systemPrompt.TryString(msg)
 		if err != nil {
