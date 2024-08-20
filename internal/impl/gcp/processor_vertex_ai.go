@@ -20,12 +20,20 @@ import (
 )
 
 const (
-	vaiFieldProject         = "project"
-	vaiFieldCredentialsJSON = "credentials_json"
-	vaiFieldModel           = "model"
-	vaiFieldLocation        = "location"
-	vaiFieldPrompt          = "prompt"
-	vaiFieldSystemPrompt    = "system_prompt"
+	vaiFieldProject          = "project"
+	vaiFieldCredentialsJSON  = "credentials_json"
+	vaiFieldModel            = "model"
+	vaiFieldLocation         = "location"
+	vaiFieldPrompt           = "prompt"
+	vaiFieldSystemPrompt     = "system_prompt"
+	vaiFieldTemp             = "temperature"
+	vaiFieldTopP             = "top_p"
+	vaiFieldTopK             = "top_k"
+	vaiFieldMaxTokens        = "max_tokens"
+	vaiFieldStop             = "stop"
+	vaiFieldPresencePenalty  = "presence_penalty"
+	vaiFieldFrequencyPenalty = "frequency_penalty"
+	vaiFieldResponseFormat   = "response_format"
 )
 
 func init() {
@@ -67,6 +75,35 @@ For more information, see the https://cloud.google.com/vertex-ai/docs[Vertex AI 
 			service.NewInterpolatedStringField(vaiFieldSystemPrompt).
 				Description("The system prompt to submit to the Vertex AI LLM.").
 				Advanced().
+				Optional(),
+			service.NewFloatField(vaiFieldTemp).
+				Description("Controls the randomness of predications.").
+				Optional(),
+			service.NewIntField(vaiFieldMaxTokens).
+				Description("The maximum number of output tokens to generate per message.").
+				Optional(),
+			service.NewStringEnumField(vaiFieldResponseFormat, "text", "json").
+				Description("The response format of generated type, the model must also be prompted to output the appropriate response type.").
+				Default("text"),
+			service.NewFloatField(vaiFieldTopP).
+				Advanced().
+				Description("If specified, nucleus sampling will be used.").
+				Optional(),
+			service.NewIntField(vaiFieldTopK).
+				Advanced().
+				Description("If specified top-k sampling will be used.").
+				Optional(),
+			service.NewStringListField(vaiFieldStop).
+				Advanced().
+				Description("Stop sequences to when the model will stop generating further tokens.").
+				Optional(),
+			service.NewFloatField(vaiFieldPresencePenalty).
+				Advanced().
+				Description("Positive values penalize new tokens based on whether they appear in the text so far, increasing the model's likelihood to talk about new topics.").
+				Optional(),
+			service.NewFloatField(vaiFieldFrequencyPenalty).
+				Advanced().
+				Description("Positive values penalize new tokens based on their existing frequency in the text so far, decreasing the model's likelihood to repeat the same line verbatim.").
 				Optional(),
 		)
 }
@@ -123,6 +160,67 @@ func newVertexAIProcessor(conf *service.ParsedConfig, mgr *service.Resources) (p
 			return
 		}
 	}
+	if conf.Contains(vaiFieldTemp) {
+		var temp float64
+		temp, err = conf.FieldFloat(vaiFieldTemp)
+		if err != nil {
+			return
+		}
+		proc.temp = genai.Ptr(float32(temp))
+	}
+	if conf.Contains(vaiFieldTopP) {
+		var topP float64
+		topP, err = conf.FieldFloat(vaiFieldTopP)
+		if err != nil {
+			return
+		}
+		proc.topP = genai.Ptr(float32(topP))
+	}
+	if conf.Contains(vaiFieldTopK) {
+		var topK int
+		topK, err = conf.FieldInt(vaiFieldTopK)
+		if err != nil {
+			return
+		}
+		proc.topK = genai.Ptr(int32(topK))
+	}
+	if conf.Contains(vaiFieldMaxTokens) {
+		var maxTokens int
+		maxTokens, err = conf.FieldInt(vaiFieldMaxTokens)
+		if err != nil {
+			return
+		}
+		proc.maxTokens = genai.Ptr(int32(maxTokens))
+	}
+	if conf.Contains(vaiFieldStop) {
+		proc.stopSequences, err = conf.FieldStringList(vaiFieldStop)
+		if err != nil {
+			return
+		}
+	}
+	if conf.Contains(vaiFieldPresencePenalty) {
+		var pp float64
+		pp, err = conf.FieldFloat(vaiFieldPresencePenalty)
+		if err != nil {
+			return
+		}
+		proc.presencePenalty = genai.Ptr(float32(pp))
+	}
+	if conf.Contains(vaiFieldFrequencyPenalty) {
+		var fp float64
+		fp, err = conf.FieldFloat(vaiFieldFrequencyPenalty)
+		if err != nil {
+			return
+		}
+		proc.frequencyPenalty = genai.Ptr(float32(fp))
+	}
+	var format string
+	format, err = conf.FieldString(vaiFieldResponseFormat)
+	if format == "json" {
+		proc.responseMIMEType = "application/json"
+	} else {
+		proc.responseMIMEType = "text/plain"
+	}
 	p = proc
 	return
 }
@@ -131,12 +229,28 @@ type vertexAIChatProcessor struct {
 	client *genai.Client
 	model  string
 
-	userPrompt   *service.InterpolatedString
-	systemPrompt *service.InterpolatedString
+	userPrompt       *service.InterpolatedString
+	systemPrompt     *service.InterpolatedString
+	temp             *float32
+	topP             *float32
+	topK             *int32
+	maxTokens        *int32
+	stopSequences    []string
+	presencePenalty  *float32
+	frequencyPenalty *float32
+	responseMIMEType string
 }
 
 func (p *vertexAIChatProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
 	m := p.client.GenerativeModel(p.model)
+	m.Temperature = p.temp
+	m.TopP = p.topP
+	m.TopK = p.topK
+	m.MaxOutputTokens = p.maxTokens
+	m.StopSequences = p.stopSequences
+	m.PresencePenalty = p.presencePenalty
+	m.FrequencyPenalty = p.frequencyPenalty
+	m.ResponseMIMEType = p.responseMIMEType
 	if p.systemPrompt != nil {
 		p, err := p.systemPrompt.TryString(msg)
 		if err != nil {

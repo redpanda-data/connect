@@ -43,6 +43,9 @@ gcp_vertex_ai_chat:
   location: us-central1 # No default (optional)
   model: gemini-1.5-pro-001 # No default (required)
   prompt: "" # No default (optional)
+  temperature: 0 # No default (optional)
+  max_tokens: 0 # No default (optional)
+  response_format: text
 ```
 
 --
@@ -60,6 +63,14 @@ gcp_vertex_ai_chat:
   model: gemini-1.5-pro-001 # No default (required)
   prompt: "" # No default (optional)
   system_prompt: "" # No default (optional)
+  temperature: 0 # No default (optional)
+  max_tokens: 0 # No default (optional)
+  response_format: text
+  top_p: 0 # No default (optional)
+  top_k: 0 # No default (optional)
+  stop: [] # No default (optional)
+  presence_penalty: 0 # No default (optional)
+  frequency_penalty: 0 # No default (optional)
 ```
 
 --
@@ -138,6 +149,76 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 
 *Type*: `string`
+
+
+=== `temperature`
+
+Controls the randomness of predications.
+
+
+*Type*: `float`
+
+
+=== `max_tokens`
+
+The maximum number of output tokens to generate per message.
+
+
+*Type*: `int`
+
+
+=== `response_format`
+
+The response format of generated type, the model must also be prompted to output the appropriate response type.
+
+
+*Type*: `string`
+
+*Default*: `"text"`
+
+Options:
+`text`
+, `json`
+.
+
+=== `top_p`
+
+If specified, nucleus sampling will be used.
+
+
+*Type*: `float`
+
+
+=== `top_k`
+
+If specified top-k sampling will be used.
+
+
+*Type*: `int`
+
+
+=== `stop`
+
+Stop sequences to when the model will stop generating further tokens.
+
+
+*Type*: `array`
+
+
+=== `presence_penalty`
+
+Positive values penalize new tokens based on whether they appear in the text so far, increasing the model's likelihood to talk about new topics.
+
+
+*Type*: `float`
+
+
+=== `frequency_penalty`
+
+Positive values penalize new tokens based on their existing frequency in the text so far, decreasing the model's likelihood to repeat the same line verbatim.
+
+
+*Type*: `float`
 
 
 
