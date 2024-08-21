@@ -41,6 +41,8 @@ aws_bedrock_chat:
   model: amazon.titan-text-express-v1 # No default (required)
   prompt: "" # No default (optional)
   system_prompt: "" # No default (optional)
+  max_tokens: 0 # No default (optional)
+  stop: 0 # No default (optional)
 ```
 
 --
@@ -65,6 +67,10 @@ aws_bedrock_chat:
   model: amazon.titan-text-express-v1 # No default (required)
   prompt: "" # No default (optional)
   system_prompt: "" # No default (optional)
+  max_tokens: 0 # No default (optional)
+  stop: 0 # No default (optional)
+  temperature: [] # No default (optional)
+  top_p: 0 # No default (optional)
 ```
 
 --
@@ -206,6 +212,38 @@ The system prompt to submit to the AWS Bedrock LLM.
 
 
 *Type*: `string`
+
+
+=== `max_tokens`
+
+The maximum number of tokens to allow in the generated response.
+
+
+*Type*: `int`
+
+
+=== `stop`
+
+The likelihood of the model selecting higher-probability options while generating a response. A lower value makes the model omre likely to choose higher-probability options, while a higher value makes the model more likely to choose lower-probability options.
+
+
+*Type*: `float`
+
+
+=== `temperature`
+
+A list of stop sequences. A stop sequence is a sequence of characters that causes the model to stop generating the response.
+
+
+*Type*: `array`
+
+
+=== `top_p`
+
+The percentage of most-likely candidates that the model considers for the next token. For example, if you choose a value of 0.8, the model selects from the top 80% of the probability distribution of tokens that could be next in the sequence.
+
+
+*Type*: `float`
 
 
 

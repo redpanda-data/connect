@@ -24,6 +24,10 @@ const (
 	bedFieldModel        = "model"
 	bedFieldUserPrompt   = "prompt"
 	bedFieldSystemPrompt = "system_prompt"
+	bedFieldMaxTokens    = "max_tokens"
+	bedFieldTemp         = "stop"
+	bedFieldStop         = "temperature"
+	bedFieldTopP         = "top_p"
 )
 
 func init() {
@@ -49,7 +53,23 @@ For more information, see the https://docs.aws.amazon.com/bedrock/latest/usergui
 			Optional()).
 		Field(service.NewStringField(bedFieldSystemPrompt).
 			Optional().
-			Description("The system prompt to submit to the AWS Bedrock LLM."))
+			Description("The system prompt to submit to the AWS Bedrock LLM.")).
+		Field(service.NewIntField(bedFieldMaxTokens).
+			Optional().
+			Description("The maximum number of tokens to allow in the generated response.")).
+		Field(service.NewFloatField(bedFieldTemp).
+			Optional().
+			Description("The likelihood of the model selecting higher-probability options while generating a response. A lower value makes the model omre likely to choose higher-probability options, while a higher value makes the model more likely to choose lower-probability options.").
+			LintRule(`root = if this < 0 || this > 1 { ["field must be between 0.0-1.0"] }`)).
+		Field(service.NewStringListField(bedFieldStop).
+			Optional().
+			Advanced().
+			Description("A list of stop sequences. A stop sequence is a sequence of characters that causes the model to stop generating the response.")).
+		Field(service.NewFloatField(bedFieldTopP).
+			Optional().
+			Advanced().
+			Description("The percentage of most-likely candidates that the model considers for the next token. For example, if you choose a value of 0.8, the model selects from the top 80% of the probability distribution of tokens that could be next in the sequence. ").
+			LintRule(`root = if this < 0 || this > 1 { ["field must be between 0.0-1.0"] }`))
 
 }
 
@@ -81,6 +101,37 @@ func newBedrockProcessor(conf *service.ParsedConfig, mgr *service.Resources) (se
 		}
 		p.systemPrompt = pf
 	}
+	if conf.Contains(bedFieldMaxTokens) {
+		v, err := conf.FieldInt(bedFieldMaxTokens)
+		if err != nil {
+			return nil, err
+		}
+		mt := int32(v)
+		p.maxTokens = &mt
+	}
+	if conf.Contains(bedFieldTemp) {
+		v, err := conf.FieldFloat(bedFieldTemp)
+		if err != nil {
+			return nil, err
+		}
+		t := float32(v)
+		p.temp = &t
+	}
+	if conf.Contains(bedFieldStop) {
+		stop, err := conf.FieldStringList(bedFieldStop)
+		if err != nil {
+			return nil, err
+		}
+		p.stop = stop
+	}
+	if conf.Contains(bedFieldTopP) {
+		v, err := conf.FieldFloat(bedFieldTopP)
+		if err != nil {
+			return nil, err
+		}
+		tp := float32(v)
+		p.topP = &tp
+	}
 	return p, nil
 }
 
@@ -90,6 +141,10 @@ type bedrockProcessor struct {
 
 	userPrompt   *service.InterpolatedString
 	systemPrompt *service.InterpolatedString
+	maxTokens    *int32
+	stop         []string
+	temp         *float32
+	topP         *float32
 }
 
 func (b *bedrockProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
@@ -109,6 +164,12 @@ func (b *bedrockProcessor) Process(ctx context.Context, msg *service.Message) (s
 			},
 		},
 		ModelId: &b.model,
+		InferenceConfig: &bedrocktypes.InferenceConfiguration{
+			MaxTokens:     b.maxTokens,
+			StopSequences: b.stop,
+			Temperature:   b.temp,
+			TopP:          b.topP,
+		},
 	}
 	if b.systemPrompt != nil {
 		prompt, err := b.systemPrompt.TryString(msg)
