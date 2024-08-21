@@ -9,6 +9,7 @@
 package schema
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
@@ -45,7 +46,7 @@ func Standard(version, dateBuilt string) *service.ConfigSchema {
 func Cloud(version, dateBuilt string, aiEnabled bool) *service.ConfigSchema {
 	allowList := cloudAllowList
 	if aiEnabled {
-		allowList = aiAllowList
+		allowList = fmt.Sprintf("%s\n%s", allowList, aiAllowList)
 	}
 	var allowSlice []string
 	for _, s := range strings.Split(allowList, "\n") {
