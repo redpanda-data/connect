@@ -6,6 +6,7 @@ require (
 	cloud.google.com/go/bigquery v1.62.0
 	cloud.google.com/go/pubsub v1.40.0
 	cloud.google.com/go/storage v1.42.0
+	cloud.google.com/go/vertexai v0.12.0
 	github.com/Azure/azure-sdk-for-go/sdk/ai/azopenai v0.6.0
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.14.0
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.7.0
@@ -135,6 +136,8 @@ require (
 )
 
 require (
+	cloud.google.com/go/aiplatform v1.68.0 // indirect
+	cloud.google.com/go/longrunning v0.5.9 // indirect
 	github.com/hamba/avro/v2 v2.22.2-0.20240625062549-66aad10411d9 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
