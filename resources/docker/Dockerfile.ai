@@ -26,7 +26,7 @@ RUN make TAGS="timetzdata" redpanda-connect-ai
 RUN touch /tmp/keep
 
 # Pack
-FROM gcr.io/distroless/cc AS package
+FROM nvidia/cuda:12.6.0-runtime-ubuntu24.04 AS package
 
 LABEL maintainer="Tyler Rockwood <rockwood@redpanda.com>"
 LABEL org.opencontainers.image.source="https://github.com/redpanda-data/connect"
