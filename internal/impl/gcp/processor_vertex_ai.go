@@ -20,20 +20,20 @@ import (
 )
 
 const (
-	vaiFieldProject          = "project"
-	vaiFieldCredentialsJSON  = "credentials_json"
-	vaiFieldModel            = "model"
-	vaiFieldLocation         = "location"
-	vaiFieldPrompt           = "prompt"
-	vaiFieldSystemPrompt     = "system_prompt"
-	vaiFieldTemp             = "temperature"
-	vaiFieldTopP             = "top_p"
-	vaiFieldTopK             = "top_k"
-	vaiFieldMaxTokens        = "max_tokens"
-	vaiFieldStop             = "stop"
-	vaiFieldPresencePenalty  = "presence_penalty"
-	vaiFieldFrequencyPenalty = "frequency_penalty"
-	vaiFieldResponseFormat   = "response_format"
+	vaipFieldProject          = "project"
+	vaipFieldCredentialsJSON  = "credentials_json"
+	vaipFieldModel            = "model"
+	vaipFieldLocation         = "location"
+	vaipFieldPrompt           = "prompt"
+	vaipFieldSystemPrompt     = "system_prompt"
+	vaipFieldTemp             = "temperature"
+	vaipFieldTopP             = "top_p"
+	vaipFieldTopK             = "top_k"
+	vaipFieldMaxTokens        = "max_tokens"
+	vaipFieldStop             = "stop"
+	vaipFieldPresencePenalty  = "presence_penalty"
+	vaipFieldFrequencyPenalty = "frequency_penalty"
+	vaipFieldResponseFormat   = "response_format"
 )
 
 func init() {
@@ -54,57 +54,62 @@ func newVertexAIProcessorConfig() *service.ConfigSpec {
 		Description(`This processor sends prompts to your chosen large language model (LLM) and generates text from the responses, using the Vertex AI API.
 
 For more information, see the https://cloud.google.com/vertex-ai/docs[Vertex AI documentation^].`).
-		Version("4.33.0").
+		Version("4.34.0").
 		Fields(
-			service.NewStringField(vaiFieldProject).
+			service.NewStringField(vaipFieldProject).
 				Description("GCP project ID to use"),
-			service.NewStringField(vaiFieldCredentialsJSON).
+			service.NewStringField(vaipFieldCredentialsJSON).
 				Description("An optional field to set google Service Account Credentials json.").
 				Secret().
 				Optional(),
-			service.NewStringField(vaiFieldLocation).
+			service.NewStringField(vaipFieldLocation).
 				Description("The location of the model if using a fined tune model. For base models this can be omitted").
 				Optional().
 				Examples("us-central1"),
-			service.NewStringField(vaiFieldModel).
+			service.NewStringField(vaipFieldModel).
 				Description("The name of the LLM to use. For a full list of models, see the https://console.cloud.google.com/vertex-ai/model-garden[Vertex AI Model Garden].").
 				Examples("gemini-1.5-pro-001", "gemini-1.5-flash-001"),
-			service.NewInterpolatedStringField(vaiFieldPrompt).
+			service.NewInterpolatedStringField(vaipFieldPrompt).
 				Description("The prompt you want to generate a response for. By default, the processor submits the entire payload as a string.").
 				Optional(),
-			service.NewInterpolatedStringField(vaiFieldSystemPrompt).
+			service.NewInterpolatedStringField(vaipFieldSystemPrompt).
 				Description("The system prompt to submit to the Vertex AI LLM.").
 				Advanced().
 				Optional(),
-			service.NewFloatField(vaiFieldTemp).
+			service.NewFloatField(vaipFieldTemp).
 				Description("Controls the randomness of predications.").
-				Optional(),
-			service.NewIntField(vaiFieldMaxTokens).
+				Optional().
+				LintRule(`root = if this < 0 || this > 2 { ["field must be between 0.0-2.0"] }`),
+			service.NewIntField(vaipFieldMaxTokens).
 				Description("The maximum number of output tokens to generate per message.").
 				Optional(),
-			service.NewStringEnumField(vaiFieldResponseFormat, "text", "json").
+			service.NewStringEnumField(vaipFieldResponseFormat, "text", "json").
 				Description("The response format of generated type, the model must also be prompted to output the appropriate response type.").
 				Default("text"),
-			service.NewFloatField(vaiFieldTopP).
+			service.NewFloatField(vaipFieldTopP).
 				Advanced().
 				Description("If specified, nucleus sampling will be used.").
-				Optional(),
-			service.NewIntField(vaiFieldTopK).
+				Optional().
+				LintRule(`root = if this < 0 || this > 1 { ["field must be between 0.0-1.0"] }`),
+			service.NewIntField(vaipFieldTopK).
 				Advanced().
 				Description("If specified top-k sampling will be used.").
-				Optional(),
-			service.NewStringListField(vaiFieldStop).
+				Optional().
+				LintRule(`root = if this < 1 || this > 40 { ["field must be between 1-40"] }`),
+			service.NewStringListField(vaipFieldStop).
 				Advanced().
 				Description("Stop sequences to when the model will stop generating further tokens.").
 				Optional(),
-			service.NewFloatField(vaiFieldPresencePenalty).
+			service.NewFloatField(vaipFieldPresencePenalty).
 				Advanced().
 				Description("Positive values penalize new tokens based on whether they appear in the text so far, increasing the model's likelihood to talk about new topics.").
-				Optional(),
-			service.NewFloatField(vaiFieldFrequencyPenalty).
+				Optional().
+				LintRule(`root = if this < -2 || this > 2 { ["field must be greater than -2.0 and less than 2.0"] }`),
+			service.NewFloatField(vaipFieldFrequencyPenalty).
 				Advanced().
 				Description("Positive values penalize new tokens based on their existing frequency in the text so far, decreasing the model's likelihood to repeat the same line verbatim.").
-				Optional(),
+				Optional().
+				LintRule(`root = if this < -2 || this > 2 { ["field must be greater than -2.0 and less than 2.0"] }`),
 		)
 }
 
@@ -112,21 +117,21 @@ func newVertexAIProcessor(conf *service.ParsedConfig, mgr *service.Resources) (p
 	ctx := context.Background()
 	proc := &vertexAIChatProcessor{}
 	var project string
-	project, err = conf.FieldString(vaiFieldProject)
+	project, err = conf.FieldString(vaipFieldProject)
 	if err != nil {
 		return
 	}
 	var location string
-	if conf.Contains(vaiFieldLocation) {
-		location, err = conf.FieldString(vaiFieldLocation)
+	if conf.Contains(vaipFieldLocation) {
+		location, err = conf.FieldString(vaipFieldLocation)
 		if err != nil {
 			return
 		}
 	}
 	opts := []option.ClientOption{}
-	if conf.Contains(vaiFieldCredentialsJSON) {
+	if conf.Contains(vaipFieldCredentialsJSON) {
 		var jsonFile string
-		jsonFile, err = conf.FieldString(vaiFieldCredentialsJSON)
+		jsonFile, err = conf.FieldString(vaipFieldCredentialsJSON)
 		if err != nil {
 			return
 		}
@@ -144,82 +149,84 @@ func newVertexAIProcessor(conf *service.ParsedConfig, mgr *service.Resources) (p
 			_ = proc.client.Close()
 		}
 	}()
-	proc.model, err = conf.FieldString(vaiFieldModel)
+	proc.model, err = conf.FieldString(vaipFieldModel)
 	if err != nil {
 		return
 	}
-	if conf.Contains(vaiFieldPrompt) {
-		proc.userPrompt, err = conf.FieldInterpolatedString(vaiFieldPrompt)
+	if conf.Contains(vaipFieldPrompt) {
+		proc.userPrompt, err = conf.FieldInterpolatedString(vaipFieldPrompt)
 		if err != nil {
 			return
 		}
 	}
-	if conf.Contains(vaiFieldSystemPrompt) {
-		proc.systemPrompt, err = conf.FieldInterpolatedString(vaiFieldSystemPrompt)
+	if conf.Contains(vaipFieldSystemPrompt) {
+		proc.systemPrompt, err = conf.FieldInterpolatedString(vaipFieldSystemPrompt)
 		if err != nil {
 			return
 		}
 	}
-	if conf.Contains(vaiFieldTemp) {
+	if conf.Contains(vaipFieldTemp) {
 		var temp float64
-		temp, err = conf.FieldFloat(vaiFieldTemp)
+		temp, err = conf.FieldFloat(vaipFieldTemp)
 		if err != nil {
 			return
 		}
 		proc.temp = genai.Ptr(float32(temp))
 	}
-	if conf.Contains(vaiFieldTopP) {
+	if conf.Contains(vaipFieldTopP) {
 		var topP float64
-		topP, err = conf.FieldFloat(vaiFieldTopP)
+		topP, err = conf.FieldFloat(vaipFieldTopP)
 		if err != nil {
 			return
 		}
 		proc.topP = genai.Ptr(float32(topP))
 	}
-	if conf.Contains(vaiFieldTopK) {
+	if conf.Contains(vaipFieldTopK) {
 		var topK int
-		topK, err = conf.FieldInt(vaiFieldTopK)
+		topK, err = conf.FieldInt(vaipFieldTopK)
 		if err != nil {
 			return
 		}
 		proc.topK = genai.Ptr(int32(topK))
 	}
-	if conf.Contains(vaiFieldMaxTokens) {
+	if conf.Contains(vaipFieldMaxTokens) {
 		var maxTokens int
-		maxTokens, err = conf.FieldInt(vaiFieldMaxTokens)
+		maxTokens, err = conf.FieldInt(vaipFieldMaxTokens)
 		if err != nil {
 			return
 		}
 		proc.maxTokens = genai.Ptr(int32(maxTokens))
 	}
-	if conf.Contains(vaiFieldStop) {
-		proc.stopSequences, err = conf.FieldStringList(vaiFieldStop)
+	if conf.Contains(vaipFieldStop) {
+		proc.stopSequences, err = conf.FieldStringList(vaipFieldStop)
 		if err != nil {
 			return
 		}
 	}
-	if conf.Contains(vaiFieldPresencePenalty) {
+	if conf.Contains(vaipFieldPresencePenalty) {
 		var pp float64
-		pp, err = conf.FieldFloat(vaiFieldPresencePenalty)
+		pp, err = conf.FieldFloat(vaipFieldPresencePenalty)
 		if err != nil {
 			return
 		}
 		proc.presencePenalty = genai.Ptr(float32(pp))
 	}
-	if conf.Contains(vaiFieldFrequencyPenalty) {
+	if conf.Contains(vaipFieldFrequencyPenalty) {
 		var fp float64
-		fp, err = conf.FieldFloat(vaiFieldFrequencyPenalty)
+		fp, err = conf.FieldFloat(vaipFieldFrequencyPenalty)
 		if err != nil {
 			return
 		}
 		proc.frequencyPenalty = genai.Ptr(float32(fp))
 	}
 	var format string
-	format, err = conf.FieldString(vaiFieldResponseFormat)
+	format, err = conf.FieldString(vaipFieldResponseFormat)
 	if format == "json" {
 		proc.responseMIMEType = "application/json"
-	} else {
+	} else if format == "text" {
 		proc.responseMIMEType = "text/plain"
+	} else {
+		return nil, fmt.Errorf("invalid value %q for `%s`", format, vaipFieldResponseFormat)
 	}
 	p = proc
 	return
@@ -254,7 +261,7 @@ func (p *vertexAIChatProcessor) Process(ctx context.Context, msg *service.Messag
 	if p.systemPrompt != nil {
 		p, err := p.systemPrompt.TryString(msg)
 		if err != nil {
-			return nil, fmt.Errorf("unable to evaluate `%s`: %w", vaiFieldSystemPrompt, err)
+			return nil, fmt.Errorf("unable to evaluate `%s`: %w", vaipFieldSystemPrompt, err)
 		}
 		m.SystemInstruction = &genai.Content{
 			Role:  "system",
@@ -264,11 +271,11 @@ func (p *vertexAIChatProcessor) Process(ctx context.Context, msg *service.Messag
 	chat := m.StartChat()
 	prompt, err := p.computePrompt(msg)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to compute prompt: %w", err)
 	}
 	resp, err := chat.SendMessage(ctx, genai.Text(prompt))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to generate response: %w", err)
 	}
 	if len(resp.Candidates) != 1 {
 		if resp.PromptFeedback != nil && resp.PromptFeedback.BlockReasonMessage != "" {
