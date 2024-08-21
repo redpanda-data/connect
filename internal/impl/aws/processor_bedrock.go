@@ -43,7 +43,7 @@ func newBedrockConfigSpec() *service.ConfigSpec {
 		Description(`This processor sends prompts to your chosen large language model (LLM) and generates text from the responses, using the AWS Bedrock API.
 For more information, see the https://docs.aws.amazon.com/bedrock/latest/userguide[AWS Bedrock documentation^].`).
 		Categories("AI").
-		Version("4.33.0").
+		Version("4.34.0").
 		Fields(config.SessionFields()...).
 		Field(service.NewStringField(bedFieldModel).
 			Examples("amazon.titan-text-express-v1", "anthropic.claude-3-5-sonnet-20240620-v1:0", "cohere.command-text-v14", "meta.llama3-1-70b-instruct-v1:0", "mistral.mistral-large-2402-v1:0").
