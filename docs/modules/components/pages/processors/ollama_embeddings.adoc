@@ -27,14 +27,40 @@ Generates vector embeddings from text, using the Ollama API.
 
 Introduced in version 4.32.0.
 
+
+[tabs]
+======
+Common::
++
+--
+
 ```yml
-# Config fields, showing default values
+# Common config fields, showing default values
 label: ""
 ollama_embeddings:
   server_address: http://127.0.0.1:11434 # No default (optional)
   model: nomic-embed-text # No default (required)
   text: "" # No default (optional)
 ```
+
+--
+Advanced::
++
+--
+
+```yml
+# All config fields, showing default values
+label: ""
+ollama_embeddings:
+  server_address: http://127.0.0.1:11434 # No default (optional)
+  model: nomic-embed-text # No default (required)
+  text: "" # No default (optional)
+  cache_directory: /opt/cache/connect/ollama # No default (optional)
+  download_url: "" # No default (optional)
+```
+
+--
+======
 
 This processor sends text to your chosen Ollama large language model (LLM) and creates vector embeddings, using the Ollama API. Vector embeddings are long arrays of numbers that represent values or objects, in this case text. 
 
@@ -82,6 +108,28 @@ model: all-minilm
 
 The text you want to create vector embeddings for. By default, the processor submits the entire payload as a string.
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+
+*Type*: `string`
+
+
+=== `cache_directory`
+
+If `server_address` is not set - the directory to download the ollama binary and use as a model cache.
+
+
+*Type*: `string`
+
+
+```yml
+# Examples
+
+cache_directory: /opt/cache/connect/ollama
+```
+
+=== `download_url`
+
+If `server_address` is not set - the URL to download the ollama binary from. Defaults to the offical Ollama GitHub release for this platform.
 
 
 *Type*: `string`

@@ -56,6 +56,8 @@ ollama_chat:
   model: llama3 # No default (required)
   prompt: "" # No default (optional)
   system_prompt: "" # No default (optional)
+  cache_directory: /opt/cache/connect/ollama # No default (optional)
+  download_url: "" # No default (optional)
 ```
 
 --
@@ -116,6 +118,28 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 The system prompt to submit to the Ollama LLM.
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+
+*Type*: `string`
+
+
+=== `cache_directory`
+
+If `server_address` is not set - the directory to download the ollama binary and use as a model cache.
+
+
+*Type*: `string`
+
+
+```yml
+# Examples
+
+cache_directory: /opt/cache/connect/ollama
+```
+
+=== `download_url`
+
+If `server_address` is not set - the URL to download the ollama binary from. Defaults to the offical Ollama GitHub release for this platform.
 
 
 *Type*: `string`
