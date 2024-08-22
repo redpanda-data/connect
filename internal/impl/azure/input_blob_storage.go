@@ -243,6 +243,7 @@ func newAzureTargetReader(ctx context.Context, logger *service.Logger, conf bsiC
 		return newAzureTargetBatchReader(ctx, conf)
 	}
 	return &azureTargetStreamReader{
+		conf:  conf,
 		input: conf.FileReader,
 		log:   logger,
 	}, nil
@@ -252,6 +253,7 @@ func newAzureTargetReader(ctx context.Context, logger *service.Logger, conf bsiC
 
 type azureTargetStreamReader struct {
 	pending []*azureObjectTarget
+	conf    bsiConfig
 	input   *service.OwnedInput
 	log     *service.Logger
 }
@@ -308,6 +310,7 @@ func (a *azureTargetStreamReader) Pop(ctx context.Context) (*azureObjectTarget, 
 					} else {
 						ackOnce.Do(func() {
 							if atomic.AddInt32(&pendingAcks, -1) == 0 {
+								ackFn := deleteAzureObjectAckFn(a.conf.client, a.conf.Container, name, a.conf.DeleteObjects, ackFn)
 								aerr = ackFn(ctx, nil)
 							}
 						})

@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - The `schema_registry` output now allows pushing schemas if the target Schema Registry instance is in `IMPORT` mode. (@mihaitodor)
+- Fixed an issue where the `azure_blob_storage` input would fail to delete blobs when using `targets_input` with `delete_objects: true`. (@mihaitodor)
 
 ## 4.33.0 - 2024-08-13
 
