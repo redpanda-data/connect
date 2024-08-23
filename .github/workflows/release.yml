@@ -134,7 +134,7 @@ jobs:
         images: |
           redpandadata/connect
         flavor: |
-          latest=auto
+          latest=false
           suffix=-cloud
         tags: |
           type=semver,suffix=-cloud,pattern={{version}}
