@@ -111,6 +111,7 @@ func (o *ollamaEmbeddingProcessor) generateEmbedding(ctx context.Context, text s
 	var req api.EmbeddingRequest
 	req.Model = o.model
 	req.Prompt = text
+	req.Options = o.opts
 	resp, err := o.client.Embeddings(ctx, &req)
 	if err != nil {
 		return nil, err

@@ -127,6 +127,7 @@ func (o *ollamaCompletionProcessor) computePrompt(msg *service.Message) (string,
 func (o *ollamaCompletionProcessor) generateCompletion(ctx context.Context, systemPrompt, userPrompt string) (string, error) {
 	var req api.ChatRequest
 	req.Model = o.model
+	req.Options = o.opts
 	if systemPrompt != "" {
 		req.Messages = append(req.Messages, api.Message{
 			Role:    "system",
