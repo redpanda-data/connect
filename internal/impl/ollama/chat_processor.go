@@ -11,6 +11,7 @@ package ollama
 import (
 	"context"
 	"errors"
+	"fmt"
 	"unicode/utf8"
 
 	"github.com/ollama/ollama/api"
@@ -18,8 +19,9 @@ import (
 )
 
 const (
-	ocpFieldUserPrompt   = "prompt"
-	ocpFieldSystemPrompt = "system_prompt"
+	ocpFieldUserPrompt     = "prompt"
+	ocpFieldSystemPrompt   = "system_prompt"
+	ocpFieldResponseFormat = "response_format"
 )
 
 func init() {
@@ -54,7 +56,11 @@ For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ol
 				Description("The system prompt to submit to the Ollama LLM.").
 				Advanced().
 				Optional(),
+			service.NewStringEnumField(ocpFieldResponseFormat, "text", "json").
+				Description("The response format of generated type, the model must also be prompted to output the appropriate response type.").
+				Default("text"),
 		).Fields(commonFields()...)
+
 }
 
 func makeOllamaCompletionProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
@@ -73,6 +79,18 @@ func makeOllamaCompletionProcessor(conf *service.ParsedConfig, mgr *service.Reso
 		}
 		p.systemPrompt = pf
 	}
+	format, err := conf.FieldString(ocpFieldResponseFormat)
+	if err != nil {
+		return nil, err
+	}
+	if format == "json" {
+		p.format = "json"
+	} else if format == "text" {
+		// This is the default
+		p.format = ""
+	} else {
+		return nil, fmt.Errorf("invalid %s: %q", ocpFieldResponseFormat, format)
+	}
 	b, err := newBaseProcessor(conf, mgr)
 	if err != nil {
 		return nil, err
@@ -84,6 +102,7 @@ func makeOllamaCompletionProcessor(conf *service.ParsedConfig, mgr *service.Reso
 type ollamaCompletionProcessor struct {
 	*baseOllamaProcessor
 
+	format       string
 	userPrompt   *service.InterpolatedString
 	systemPrompt *service.InterpolatedString
 }
@@ -128,6 +147,7 @@ func (o *ollamaCompletionProcessor) generateCompletion(ctx context.Context, syst
 	var req api.ChatRequest
 	req.Model = o.model
 	req.Options = o.opts
+	req.Format = o.format
 	if systemPrompt != "" {
 		req.Messages = append(req.Messages, api.Message{
 			Role:    "system",
