@@ -29,14 +29,15 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
+	"github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
 	"github.com/redpanda-data/connect/v4/internal/impl/protobuf"
 )
 
-func (s *schemaRegistryDecoder) getProtobufDecoder(ctx context.Context, info schemaInfo) (schemaDecoder, error) {
+func (s *schemaRegistryDecoder) getProtobufDecoder(ctx context.Context, info sr.SchemaInfo) (schemaDecoder, error) {
 	regMap := map[string]string{
 		".": info.Schema,
 	}
-	if err := s.client.WalkReferences(ctx, info.References, func(ctx context.Context, name string, si schemaInfo) error {
+	if err := s.client.WalkReferences(ctx, info.References, func(ctx context.Context, name string, si sr.SchemaInfo) error {
 		regMap[name] = si.Schema
 		return nil
 	}); err != nil {
@@ -96,11 +97,11 @@ func (s *schemaRegistryDecoder) getProtobufDecoder(ctx context.Context, info sch
 	}, nil
 }
 
-func (s *schemaRegistryEncoder) getProtobufEncoder(ctx context.Context, info schemaInfo) (schemaEncoder, error) {
+func (s *schemaRegistryEncoder) getProtobufEncoder(ctx context.Context, info sr.SchemaInfo) (schemaEncoder, error) {
 	regMap := map[string]string{
 		".": info.Schema,
 	}
-	if err := s.client.WalkReferences(ctx, info.References, func(ctx context.Context, name string, si schemaInfo) error {
+	if err := s.client.WalkReferences(ctx, info.References, func(ctx context.Context, name string, si sr.SchemaInfo) error {
 		regMap[name] = si.Schema
 		return nil
 	}); err != nil {

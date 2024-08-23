@@ -21,9 +21,10 @@ import (
 	"github.com/xeipuuv/gojsonschema"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
 )
 
-func resolveJSONSchema(ctx context.Context, client *schemaRegistryClient, info schemaInfo) (*gojsonschema.Schema, error) {
+func resolveJSONSchema(ctx context.Context, client *sr.Client, info sr.SchemaInfo) (*gojsonschema.Schema, error) {
 	sl := gojsonschema.NewSchemaLoader()
 
 	if len(info.References) == 0 {
@@ -34,7 +35,7 @@ func resolveJSONSchema(ctx context.Context, client *schemaRegistryClient, info s
 		return sl.Compile(gojsonschema.NewStringLoader(info.Schema))
 	}
 
-	if err := client.WalkReferences(ctx, info.References, func(ctx context.Context, name string, info schemaInfo) error {
+	if err := client.WalkReferences(ctx, info.References, func(ctx context.Context, name string, info sr.SchemaInfo) error {
 		return sl.AddSchemas(gojsonschema.NewStringLoader(info.Schema))
 	}); err != nil {
 		return nil, err
@@ -43,15 +44,15 @@ func resolveJSONSchema(ctx context.Context, client *schemaRegistryClient, info s
 	return sl.Compile(gojsonschema.NewStringLoader(info.Schema))
 }
 
-func (s *schemaRegistryEncoder) getJSONEncoder(ctx context.Context, info schemaInfo) (schemaEncoder, error) {
+func (s *schemaRegistryEncoder) getJSONEncoder(ctx context.Context, info sr.SchemaInfo) (schemaEncoder, error) {
 	return getJSONTranscoder(ctx, s.client, info)
 }
 
-func (s *schemaRegistryDecoder) getJSONDecoder(ctx context.Context, info schemaInfo) (schemaDecoder, error) {
+func (s *schemaRegistryDecoder) getJSONDecoder(ctx context.Context, info sr.SchemaInfo) (schemaDecoder, error) {
 	return getJSONTranscoder(ctx, s.client, info)
 }
 
-func getJSONTranscoder(ctx context.Context, cl *schemaRegistryClient, info schemaInfo) (func(m *service.Message) error, error) {
+func getJSONTranscoder(ctx context.Context, cl *sr.Client, info sr.SchemaInfo) (func(m *service.Message) error, error) {
 	sch, err := resolveJSONSchema(ctx, cl, info)
 	if err != nil {
 		return nil, err

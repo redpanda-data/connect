@@ -29,6 +29,7 @@ import (
 	"github.com/Jeffail/shutdown"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
 )
 
 func schemaRegistryDecoderConfig() *service.ConfigSpec {
@@ -87,7 +88,7 @@ func init() {
 
 type schemaRegistryDecoder struct {
 	avroRawJSON bool
-	client      *schemaRegistryClient
+	client      *sr.Client
 
 	schemas    map[int]*cachedSchemaDecoder
 	cacheMut   sync.RWMutex
@@ -133,7 +134,7 @@ func newSchemaRegistryDecoder(
 		mgr:         mgr,
 	}
 	var err error
-	if s.client, err = newSchemaRegistryClient(urlStr, reqSigner, tlsConf, mgr); err != nil {
+	if s.client, err = sr.NewClient(urlStr, reqSigner, tlsConf, mgr); err != nil {
 		return nil, err
 	}
 
