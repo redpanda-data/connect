@@ -44,10 +44,6 @@ By default, the processor starts and runs a locally installed Ollama server. Alt
 For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ollama documentation^].`).
 		Version("4.32.0").
 		Fields(
-			service.NewStringField(bopFieldServerAddress).
-				Description("The address of the Ollama server to use. Leave the field blank and the processor starts and runs a local Ollama server or specify the address of your own local or remote server.").
-				Example("http://127.0.0.1:11434").
-				Optional(),
 			service.NewStringField(bopFieldModel).
 				Description("The name of the Ollama LLM to use. For a full list of models, see the https://ollama.com/models[Ollama website].").
 				Examples("llama3.1", "gemma2", "qwen2", "phi3"),
@@ -58,16 +54,7 @@ For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ol
 				Description("The system prompt to submit to the Ollama LLM.").
 				Advanced().
 				Optional(),
-			service.NewStringField(bopFieldCacheDirectory).
-				Description("If `"+bopFieldServerAddress+"` is not set - the directory to download the ollama binary and use as a model cache.").
-				Example("/opt/cache/connect/ollama").
-				Advanced().
-				Optional(),
-			service.NewStringField(bopFieldDownloadURL).
-				Description("If `"+bopFieldServerAddress+"` is not set - the URL to download the ollama binary from. Defaults to the offical Ollama GitHub release for this platform.").
-				Advanced().
-				Optional(),
-		)
+		).Fields(commonFields()...)
 }
 
 func makeOllamaCompletionProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {

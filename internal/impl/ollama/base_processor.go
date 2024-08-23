@@ -40,6 +40,24 @@ const (
 	bopFieldDownloadURL    = "download_url"
 )
 
+func commonFields() []*service.ConfigField {
+	return []*service.ConfigField{
+		service.NewStringField(bopFieldServerAddress).
+			Description("The address of the Ollama server to use. Leave the field blank and the processor starts and runs a local Ollama server or specify the address of your own local or remote server.").
+			Example("http://127.0.0.1:11434").
+			Optional(),
+		service.NewStringField(bopFieldCacheDirectory).
+			Description("If `" + bopFieldServerAddress + "` is not set - the directory to download the ollama binary and use as a model cache.").
+			Example("/opt/cache/connect/ollama").
+			Advanced().
+			Optional(),
+		service.NewStringField(bopFieldDownloadURL).
+			Description("If `" + bopFieldServerAddress + "` is not set - the URL to download the ollama binary from. Defaults to the offical Ollama GitHub release for this platform.").
+			Advanced().
+			Optional(),
+	}
+}
+
 type commandOutput struct {
 	logger *service.Logger
 	buffer []byte
