@@ -11,9 +11,13 @@ package openai
 import (
 	"context"
 	"fmt"
+	"math"
+	"slices"
+	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
 	oai "github.com/sashabaranov/go-openai"
 )
 
@@ -28,6 +32,19 @@ const (
 	ocpFieldStop             = "stop"
 	ocpFieldPresencePenalty  = "presence_penalty"
 	ocpFieldFrequencyPenalty = "frequency_penalty"
+	ocpFieldResponseFormat   = "response_format"
+	// JSON schema fields
+	ocpFieldJSONSchema       = "json_schema"
+	ocpFieldJSONSchemaName   = "name"
+	ocpFieldJSONSchemaDesc   = "description"
+	ocpFieldJSONSchemaSchema = "schema"
+	// Schema registry fields
+	ocpFieldSchemaRegistry                = "schema_registry"
+	ocpFieldSchemaRegistrySubject         = "subject"
+	ocpFieldSchemaRegistryRefreshInterval = "refresh_interval"
+	ocpFieldSchemaRegistryNamePrefix      = "name_prefix"
+	ocpFieldSchemaRegistryURL             = "url"
+	ocpFieldSchemaRegistryTLS             = "tls"
 )
 
 func init() {
@@ -77,6 +94,37 @@ We generally recommend altering this or top_p but not both.`).
 			service.NewInterpolatedStringField(ocpFieldUser).
 				Optional().
 				Description("A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse."),
+			service.NewStringEnumField(ocpFieldResponseFormat, "text", "json", "json_schema").
+				Default("text").
+				Description("Specify the model's output format. If `json_schema` is specified, then additionally a `json_schema` or `schema_registry` must be configured."),
+			service.NewObjectField(ocpFieldJSONSchema,
+				service.NewStringField(ocpFieldJSONSchemaName).Description("The name of the schema."),
+				service.NewStringField(ocpFieldJSONSchemaDesc).Optional().Advanced().Description("Additional description of the schema for the LLM."),
+				service.NewStringField(ocpFieldJSONSchemaSchema).Description("The JSON schema for the LLM to use when generating the output."),
+			).
+				Optional().
+				Description("The JSON schema to use when responding in `json_schema` format. To learn more about what JSON schema is supported see the https://platform.openai.com/docs/guides/structured-outputs/supported-schemas[OpenAI documentation^]."),
+			service.NewObjectField(
+				ocpFieldSchemaRegistry,
+				slices.Concat(
+					[]*service.ConfigField{
+						service.NewURLField(ocpFieldSchemaRegistryURL).Description("The base URL of the schema registry service."),
+						service.NewStringField(ocpFieldSchemaRegistryNamePrefix).
+							Default("schema_registry_id_").
+							Description("The prefix of the name for this schema, the schema ID is used as a suffix."),
+						service.NewStringField(ocpFieldSchemaRegistrySubject).
+							Description("The subject name to fetch the schema for."),
+						service.NewDurationField(ocpFieldSchemaRegistryRefreshInterval).
+							Optional().
+							Description("The refresh rate for getting the latest schema. If not specified the schema does not refresh."),
+						service.NewTLSField(ocpFieldSchemaRegistryTLS),
+					},
+					service.NewHTTPRequestAuthSignerFields(),
+				)...,
+			).
+				Description("The schema registry to dynamically load schemas from when responding in `json_schema` format. Schemas themselves must be in JSON format. To learn more about what JSON schema is supported see the https://platform.openai.com/docs/guides/structured-outputs/supported-schemas[OpenAI documentation^].").
+				Optional().
+				Advanced(),
 			service.NewFloatField(ocpFieldTopP).
 				Optional().
 				Advanced().
@@ -102,7 +150,12 @@ We generally recommend altering this or temperature but not both.`).
 				Optional().
 				Advanced().
 				Description("Up to 4 sequences where the API will stop generating further tokens."),
-		)
+		).LintRule(`
+      root = match {
+        this.exists("` + ocpFieldJSONSchema + `") && this.exists("` + ocpFieldSchemaRegistry + `") => ["cannot set both ` + "`" + ocpFieldJSONSchema + "`" + ` and ` + "`" + ocpFieldSchemaRegistry + "`" + `"]
+        this.response_format == "json_schema" && !this.exists("` + ocpFieldJSONSchema + `") && !this.exists("` + ocpFieldSchemaRegistry + `") => ["schema must be specified using either ` + "`" + ocpFieldJSONSchema + "`" + ` or ` + "`" + ocpFieldSchemaRegistry + "`" + `"]
+      }
+    `)
 }
 
 func makeChatProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
@@ -190,7 +243,92 @@ func makeChatProcessor(conf *service.ParsedConfig, mgr *service.Resources) (serv
 			return nil, err
 		}
 	}
-	return &chatProcessor{b, up, sp, maxTokens, temp, user, topP, frequencyPenalty, presencePenalty, seed, stop}, nil
+	v, err := conf.FieldString(ocpFieldResponseFormat)
+	if err != nil {
+		return nil, err
+	}
+	var responseFormat oai.ChatCompletionResponseFormatType
+	var schemaProvider jsonSchemaProvider
+	switch v {
+	case "json":
+		fallthrough
+	case "json_object":
+		responseFormat = oai.ChatCompletionResponseFormatTypeJSONObject
+	case "json_schema":
+		responseFormat = oai.ChatCompletionResponseFormatTypeJSONSchema
+		if conf.Contains(ocpFieldJSONSchema) {
+			schemaProvider, err = newFixedSchemaProvider(conf.Namespace(ocpFieldJSONSchema))
+			if err != nil {
+				return nil, err
+			}
+		} else if conf.Contains(ocpFieldSchemaRegistry) {
+			schemaProvider, err = newDynamicSchemaProvider(conf.Namespace(ocpFieldSchemaRegistry), mgr)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, fmt.Errorf("using %s %q, but did not specify %s or %s", ocpFieldResponseFormat, v, ocpFieldJSONSchema, ocpFieldSchemaRegistry)
+		}
+	case "text":
+		responseFormat = oai.ChatCompletionResponseFormatTypeText
+	default:
+		return nil, fmt.Errorf("unknown %s: %q", ocpFieldResponseFormat, v)
+	}
+	return &chatProcessor{b, up, sp, maxTokens, temp, user, topP, frequencyPenalty, presencePenalty, seed, stop, responseFormat, schemaProvider}, nil
+}
+
+func newFixedSchemaProvider(conf *service.ParsedConfig) (jsonSchemaProvider, error) {
+	name, err := conf.FieldString(ocpFieldJSONSchemaName)
+	if err != nil {
+		return nil, err
+	}
+	description := ""
+	if conf.Contains(ocpFieldJSONSchemaDesc) {
+		description, err = conf.FieldString(ocpFieldJSONSchemaDesc)
+		if err != nil {
+			return nil, err
+		}
+	}
+	schema, err := conf.FieldString(ocpFieldJSONSchemaSchema)
+	if err != nil {
+		return nil, err
+	}
+	return newFixedSchema(name, description, schema)
+}
+
+func newDynamicSchemaProvider(conf *service.ParsedConfig, mgr *service.Resources) (jsonSchemaProvider, error) {
+	url, err := conf.FieldString(ocpFieldSchemaRegistryURL)
+	if err != nil {
+		return nil, err
+	}
+	reqSigner, err := conf.HTTPRequestAuthSignerFromParsed()
+	if err != nil {
+		return nil, err
+	}
+	tlsConfig, err := conf.FieldTLS(ocpFieldSchemaRegistryTLS)
+	if err != nil {
+		return nil, err
+	}
+	client, err := sr.NewClient(url, reqSigner, tlsConfig, mgr)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create schema registry client: %w", err)
+	}
+	subject, err := conf.FieldString(ocpFieldSchemaRegistrySubject)
+	if err != nil {
+		return nil, err
+	}
+	var refreshInterval time.Duration = math.MaxInt64
+	if conf.Contains(ocpFieldSchemaRegistryRefreshInterval) {
+		refreshInterval, err = conf.FieldDuration(ocpFieldSchemaRegistryRefreshInterval)
+		if err != nil {
+			return nil, err
+		}
+	}
+	namePrefix, err := conf.FieldString(ocpFieldSchemaRegistryNamePrefix)
+	if err != nil {
+		return nil, err
+	}
+	return newDynamicSchema(client, subject, namePrefix, refreshInterval), nil
 }
 
 type chatProcessor struct {
@@ -206,6 +344,8 @@ type chatProcessor struct {
 	presencePenalty  *float32
 	seed             *int
 	stop             []string
+	responseFormat   oai.ChatCompletionResponseFormatType
+	schemaProvider   jsonSchemaProvider
 }
 
 func (p *chatProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
@@ -226,6 +366,16 @@ func (p *chatProcessor) Process(ctx context.Context, msg *service.Message) (serv
 	}
 	if p.presencePenalty != nil {
 		body.PresencePenalty = *p.presencePenalty
+	}
+	if p.responseFormat != oai.ChatCompletionResponseFormatTypeText {
+		body.ResponseFormat = &oai.ChatCompletionResponseFormat{Type: p.responseFormat}
+		if p.schemaProvider != nil {
+			s, err := p.schemaProvider.GetJSONSchema(ctx)
+			if err != nil {
+				return nil, err
+			}
+			body.ResponseFormat.JSONSchema = s
+		}
 	}
 	body.Stop = p.stop
 	if p.user != nil {
