@@ -12,11 +12,10 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"slices"
 
-	oai "github.com/Azure/azure-sdk-for-go/sdk/ai/azopenai"
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
+	oai "github.com/sashabaranov/go-openai"
 )
 
 const (
@@ -101,50 +100,39 @@ type speechProcessor struct {
 }
 
 func (p *speechProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
-	var body oai.SpeechGenerationOptions
-	body.DeploymentName = &p.model
+	var body oai.CreateSpeechRequest
+	body.Model = oai.SpeechModel(p.model)
 	v, err := p.voice.TryString(msg)
 	if err != nil {
 		return nil, fmt.Errorf("%s interpolation error: %w", ospFieldVoice, err)
 	}
-	voice := oai.SpeechVoice(v)
-	if !slices.Contains(oai.PossibleSpeechVoiceValues(), voice) {
-		return nil, fmt.Errorf("unknown speech voice value: %q", voice)
-	}
-	body.Voice = &voice
+	body.Voice = oai.SpeechVoice(v)
 	if p.input != nil {
 		v, err := msg.BloblangQueryValue(p.input)
 		if err != nil {
 			return nil, fmt.Errorf("%s execution error: %w", ospFieldInput, err)
 		}
-		s := bloblang.ValueToString(v)
-		body.Input = &s
+		body.Input = bloblang.ValueToString(v)
 	} else {
 		b, err := msg.AsBytes()
 		if err != nil {
 			return nil, err
 		}
-		s := string(b)
-		body.Input = &s
+		body.Input = string(b)
 	}
 	if p.responseFormat != nil {
 		rf, err := p.responseFormat.TryString(msg)
 		if err != nil {
 			return nil, fmt.Errorf("%s interpolation error: %w", ospFieldResponseFormat, err)
 		}
-		format := oai.SpeechGenerationResponseFormat(rf)
-		if !slices.Contains(oai.PossibleSpeechGenerationResponseFormatValues(), format) {
-			return nil, fmt.Errorf("unknown speech generation format value: %q", format)
-		}
-		body.ResponseFormat = &format
+		body.ResponseFormat = oai.SpeechResponseFormat(rf)
 	}
-	var opts oai.GenerateSpeechFromTextOptions
-	resp, err := p.client.GenerateSpeechFromText(ctx, body, &opts)
+	resp, err := p.client.CreateSpeech(ctx, body)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-	b, err := io.ReadAll(resp.Body)
+	defer resp.Close()
+	b, err := io.ReadAll(resp)
 	if err != nil {
 		return nil, err
 	}

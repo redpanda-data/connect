@@ -11,9 +11,8 @@ package openai
 import (
 	"context"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/ai/azopenai"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/redpanda-data/benthos/v4/public/service"
+	oai "github.com/sashabaranov/go-openai"
 )
 
 const (
@@ -54,11 +53,9 @@ func newBaseProcessor(conf *service.ParsedConfig) (*baseProcessor, error) {
 	if err != nil {
 		return nil, err
 	}
-	kc := azcore.NewKeyCredential(k)
-	c, err := azopenai.NewClientForOpenAI(sa, kc, nil)
-	if err != nil {
-		return nil, err
-	}
+	cfg := oai.DefaultConfig(k)
+	cfg.BaseURL = sa
+	c := oai.NewClientWithConfig(cfg)
 	m, err := conf.FieldString(opFieldModel)
 	if err != nil {
 		return nil, err

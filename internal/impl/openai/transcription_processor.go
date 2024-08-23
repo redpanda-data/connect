@@ -9,13 +9,13 @@
 package openai
 
 import (
+	"bytes"
 	"context"
-	"errors"
 	"fmt"
 
-	oai "github.com/Azure/azure-sdk-for-go/sdk/ai/azopenai"
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
+	oai "github.com/sashabaranov/go-openai"
 )
 
 const (
@@ -99,39 +99,36 @@ type transcriptionProcessor struct {
 }
 
 func (p *transcriptionProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
-	var body oai.AudioTranscriptionOptions
-	body.DeploymentName = &p.model
+	var body oai.AudioRequest
+	body.Model = p.model
 	f, err := msg.BloblangQueryValue(p.file)
 	if err != nil {
 		return nil, fmt.Errorf("%s execution error: %w", otspFieldFile, err)
 	}
-	body.File, err = bloblang.ValueAsBytes(f)
+	b, err := bloblang.ValueAsBytes(f)
 	if err != nil {
 		return nil, err
 	}
+	body.Reader = bytes.NewReader(b)
 	if p.lang != nil {
 		l, err := p.lang.TryString(msg)
 		if err != nil {
 			return nil, fmt.Errorf("%s interpolation error: %w", otspFieldLang, err)
 		}
-		body.Language = &l
+		body.Language = l
 	}
 	if p.prompt != nil {
 		pr, err := p.prompt.TryString(msg)
 		if err != nil {
 			return nil, fmt.Errorf("%s interpolation error: %w", otspFieldPrompt, err)
 		}
-		body.Prompt = &pr
+		body.Prompt = pr
 	}
-	var opts oai.GetAudioTranscriptionOptions
-	resp, err := p.client.GetAudioTranscription(ctx, body, &opts)
+	resp, err := p.client.CreateTranscription(ctx, body)
 	if err != nil {
 		return nil, err
 	}
-	if resp.Text == nil {
-		return nil, errors.New("missing text in transcription response")
-	}
 	msg = msg.Copy()
-	msg.SetBytes([]byte(*resp.Text))
+	msg.SetBytes([]byte(resp.Text))
 	return service.MessageBatch{msg}, nil
 }

@@ -10,12 +10,11 @@ package openai
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
-	oai "github.com/Azure/azure-sdk-for-go/sdk/ai/azopenai"
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
+	oai "github.com/sashabaranov/go-openai"
 )
 
 const (
@@ -125,14 +124,13 @@ func makeChatProcessor(conf *service.ParsedConfig, mgr *service.Resources) (serv
 			return nil, err
 		}
 	}
-	var maxTokens *int32
+	var maxTokens *int
 	if conf.Contains(ocpFieldMaxTokens) {
 		mt, err := conf.FieldInt(ocpFieldMaxTokens)
 		if err != nil {
 			return nil, err
 		}
-		m := int32(mt)
-		maxTokens = &m
+		maxTokens = &mt
 	}
 	var temp *float32
 	if conf.Contains(ocpFieldTemp) {
@@ -177,14 +175,13 @@ func makeChatProcessor(conf *service.ParsedConfig, mgr *service.Resources) (serv
 		pp := float32(v)
 		presencePenalty = &pp
 	}
-	var seed *int64
+	var seed *int
 	if conf.Contains(ocpFieldSeed) {
 		intSeed, err := conf.FieldInt(ocpFieldSeed)
 		if err != nil {
 			return nil, err
 		}
-		s := int64(intSeed)
-		seed = &s
+		seed = &intSeed
 	}
 	var stop []string
 	if conf.Contains(ocpFieldStop) {
@@ -201,40 +198,51 @@ type chatProcessor struct {
 
 	userPrompt       *bloblang.Executor
 	systemPrompt     *service.InterpolatedString
-	maxTokens        *int32
+	maxTokens        *int
 	temperature      *float32
 	user             *service.InterpolatedString
 	topP             *float32
 	frequencyPenalty *float32
 	presencePenalty  *float32
-	seed             *int64
+	seed             *int
 	stop             []string
 }
 
 func (p *chatProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
-	var body oai.ChatCompletionsOptions
-	body.DeploymentName = &p.model
-	body.MaxTokens = p.maxTokens
-	body.Temperature = p.temperature
-	body.TopP = p.topP
+	var body oai.ChatCompletionRequest
+	body.Model = p.model
+	if p.maxTokens != nil {
+		body.MaxTokens = *p.maxTokens
+	}
+	if p.temperature != nil {
+		body.Temperature = *p.temperature
+	}
+	if p.topP != nil {
+		body.TopP = *p.topP
+	}
 	body.Seed = p.seed
-	body.FrequencyPenalty = p.frequencyPenalty
-	body.PresencePenalty = p.presencePenalty
+	if p.frequencyPenalty != nil {
+		body.FrequencyPenalty = *p.frequencyPenalty
+	}
+	if p.presencePenalty != nil {
+		body.PresencePenalty = *p.presencePenalty
+	}
 	body.Stop = p.stop
 	if p.user != nil {
 		u, err := p.user.TryString(msg)
 		if err != nil {
 			return nil, fmt.Errorf("%s interpolation error: %w", ocpFieldUser, err)
 		}
-		body.User = &u
+		body.User = u
 	}
 	if p.systemPrompt != nil {
 		s, err := p.systemPrompt.TryString(msg)
 		if err != nil {
 			return nil, fmt.Errorf("%s interpolation error: %w", ocpFieldSystemPrompt, err)
 		}
-		body.Messages = append(body.Messages, &oai.ChatRequestSystemMessage{
-			Content: &s,
+		body.Messages = append(body.Messages, oai.ChatCompletionMessage{
+			Role:    "system",
+			Content: s,
 		})
 	}
 	if p.userPrompt != nil {
@@ -242,33 +250,28 @@ func (p *chatProcessor) Process(ctx context.Context, msg *service.Message) (serv
 		if err != nil {
 			return nil, fmt.Errorf("%s execution error: %w", ocpFieldUserPrompt, err)
 		}
-		body.Messages = append(body.Messages, &oai.ChatRequestUserMessage{
-			Content: oai.NewChatRequestUserMessageContent(bloblang.ValueToString(s)),
+		body.Messages = append(body.Messages, oai.ChatCompletionMessage{
+			Role:    "user",
+			Content: bloblang.ValueToString(s),
 		})
 	} else {
 		b, err := msg.AsBytes()
 		if err != nil {
 			return nil, err
 		}
-		body.Messages = append(body.Messages, &oai.ChatRequestUserMessage{
-			Content: oai.NewChatRequestUserMessageContent(string(b)),
+		body.Messages = append(body.Messages, oai.ChatCompletionMessage{
+			Role:    "user",
+			Content: string(b),
 		})
 	}
-	var opts oai.GetChatCompletionsOptions
-	resp, err := p.client.GetChatCompletions(ctx, body, &opts)
+	resp, err := p.client.CreateChatCompletion(ctx, body)
 	if err != nil {
 		return nil, err
 	}
 	if len(resp.Choices) != 1 {
 		return nil, fmt.Errorf("invalid number of choices in response: %d", len(resp.Choices))
 	}
-	if resp.Choices[0].Message == nil {
-		return nil, errors.New("invalid missing message in chat response")
-	}
-	if resp.Choices[0].Message.Content == nil {
-		return nil, errors.New("invalid missing message content in chat response")
-	}
 	msg = msg.Copy()
-	msg.SetBytes([]byte(*resp.Choices[0].Message.Content))
+	msg.SetBytes([]byte(resp.Choices[0].Message.Content))
 	return service.MessageBatch{msg}, nil
 }

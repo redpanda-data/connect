@@ -9,13 +9,13 @@
 package openai
 
 import (
+	"bytes"
 	"context"
-	"errors"
 	"fmt"
 
-	oai "github.com/Azure/azure-sdk-for-go/sdk/ai/azopenai"
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
+	oai "github.com/sashabaranov/go-openai"
 )
 
 const (
@@ -89,40 +89,37 @@ type translationProcessor struct {
 }
 
 func (p *translationProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
-	var body oai.AudioTranslationOptions
-	body.DeploymentName = &p.model
+	var body oai.AudioRequest
+	body.Model = p.model
 	if p.file != nil {
 		f, err := msg.BloblangQueryValue(p.file)
 		if err != nil {
 			return nil, fmt.Errorf("%s execution error: %w", otlpFieldFile, err)
 		}
-		body.File, err = bloblang.ValueAsBytes(f)
+		b, err := bloblang.ValueAsBytes(f)
 		if err != nil {
 			return nil, fmt.Errorf("%s conversion error: %w", otlpFieldFile, err)
 		}
+		body.Reader = bytes.NewReader(b)
 	} else {
 		f, err := msg.AsBytes()
 		if err != nil {
 			return nil, err
 		}
-		body.File = f
+		body.Reader = bytes.NewReader(f)
 	}
 	if p.prompt != nil {
 		pr, err := p.prompt.TryString(msg)
 		if err != nil {
 			return nil, fmt.Errorf("%s interpolation error: %w", otlpFieldPrompt, err)
 		}
-		body.Prompt = &pr
+		body.Prompt = pr
 	}
-	var opts oai.GetAudioTranslationOptions
-	resp, err := p.client.GetAudioTranslation(ctx, body, &opts)
+	resp, err := p.client.CreateTranslation(ctx, body)
 	if err != nil {
 		return nil, err
 	}
-	if resp.Text == nil {
-		return nil, errors.New("missing text in translation response")
-	}
 	msg = msg.Copy()
-	msg.SetBytes([]byte(*resp.Text))
+	msg.SetBytes([]byte(resp.Text))
 	return service.MessageBatch{msg}, nil
 }
