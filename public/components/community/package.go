@@ -66,6 +66,7 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/sql"
 	_ "github.com/redpanda-data/connect/v4/public/components/statsd"
 	_ "github.com/redpanda-data/connect/v4/public/components/twitter"
+	_ "github.com/redpanda-data/connect/v4/public/components/vault"
 	_ "github.com/redpanda-data/connect/v4/public/components/wasm"
 	_ "github.com/redpanda-data/connect/v4/public/components/zeromq"
 )
