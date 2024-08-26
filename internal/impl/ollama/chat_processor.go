@@ -50,7 +50,7 @@ For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ol
 				Optional(),
 			service.NewStringField(bopFieldModel).
 				Description("The name of the Ollama LLM to use. For a full list of models, see the https://ollama.com/models[Ollama website].").
-				Examples("llama3", "gemma2", "qwen2", "phi3"),
+				Examples("llama3.1", "gemma2", "qwen2", "phi3"),
 			service.NewInterpolatedStringField(ocpFieldUserPrompt).
 				Description("The prompt you want to generate a response for. By default, the processor submits the entire payload as a string.").
 				Optional(),

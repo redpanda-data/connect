@@ -39,7 +39,7 @@ Common::
 label: ""
 ollama_chat:
   server_address: http://127.0.0.1:11434 # No default (optional)
-  model: llama3 # No default (required)
+  model: llama3.1 # No default (required)
   prompt: "" # No default (optional)
 ```
 
@@ -53,7 +53,7 @@ Advanced::
 label: ""
 ollama_chat:
   server_address: http://127.0.0.1:11434 # No default (optional)
-  model: llama3 # No default (required)
+  model: llama3.1 # No default (required)
   prompt: "" # No default (optional)
   system_prompt: "" # No default (optional)
   cache_directory: /opt/cache/connect/ollama # No default (optional)
@@ -96,7 +96,7 @@ The name of the Ollama LLM to use. For a full list of models, see the https://ol
 ```yml
 # Examples
 
-model: llama3
+model: llama3.1
 
 model: gemma2
 
