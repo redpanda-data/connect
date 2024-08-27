@@ -11,7 +11,6 @@ package enterprise
 import (
 	"context"
 	"crypto/tls"
-	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -20,21 +19,22 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
-	"github.com/twmb/franz-go/pkg/kadm"
-	"github.com/twmb/franz-go/pkg/kerr"
 	"github.com/twmb/franz-go/pkg/kgo"
-	"github.com/twmb/franz-go/pkg/kmsg"
 	"github.com/twmb/franz-go/pkg/sasl"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
 )
 
-func franzKafkaOutputConfig() *service.ConfigSpec {
+const (
+	rproDefaultLabel = "redpanda_replicator_output"
+)
+
+func redpandaReplicatorOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Beta().
 		Categories("Services").
-		Version("3.61.0").
+		Version("4.33.1").
 		Summary("A Kafka output using the https://github.com/twmb/franz-go[Franz Kafka client library^].").
 		Description(`
 Writes a batch of messages to Kafka brokers and waits for acknowledgement before propagating it back to the input.
@@ -43,7 +43,7 @@ If the configured broker does not contain the current message `+"topic"+`, it at
 ACLs which are read automatically from the `+"`redpanda_replicator`"+` input identified by the label specified in
 `+"`topic_source`"+`.
 `).
-		Fields(FranzKafkaOutputConfigFields()...).
+		Fields(RedpandaReplicatorOutputConfigFields()...).
 		LintRule(`
 root = if this.partitioner == "manual" {
 if this.partition.or("") == "" {
@@ -65,9 +65,9 @@ output:
 `)
 }
 
-// FranzKafkaOutputConfigFields returns the full suite of config fields for a
-// kafka output using the franz-go client library.
-func FranzKafkaOutputConfigFields() []*service.ConfigField {
+// RedpandaReplicatorOutputConfigFields returns the full suite of config fields for a
+// redpanda_replicator output using the franz-go client library.
+func RedpandaReplicatorOutputConfigFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewStringListField("seed_brokers").
 			Description("A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses.").
@@ -139,7 +139,7 @@ func FranzKafkaOutputConfigFields() []*service.ConfigField {
 }
 
 func init() {
-	err := service.RegisterBatchOutput("redpanda_replicator", franzKafkaOutputConfig(),
+	err := service.RegisterBatchOutput("redpanda_replicator", redpandaReplicatorOutputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (
 			output service.BatchOutput,
 			batchPolicy service.BatchPolicy,
@@ -152,7 +152,7 @@ func init() {
 			if batchPolicy, err = conf.FieldBatchPolicy("batching"); err != nil {
 				return
 			}
-			output, err = NewFranzKafkaWriterFromConfig(conf, mgr)
+			output, err = NewRedpandaReplicatorWriterFromConfig(conf, mgr)
 			return
 		})
 	if err != nil {
@@ -162,8 +162,8 @@ func init() {
 
 //------------------------------------------------------------------------------
 
-// FranzKafkaWriter implements a kafka writer using the franz-go library.
-type FranzKafkaWriter struct {
+// RedpandaReplicatorWriter implements a kafka writer using the franz-go library.
+type RedpandaReplicatorWriter struct {
 	SeedBrokers      []string
 	topic            *service.InterpolatedString
 	key              *service.InterpolatedString
@@ -187,10 +187,10 @@ type FranzKafkaWriter struct {
 	mgr *service.Resources
 }
 
-// NewFranzKafkaWriterFromConfig attempts to instantiate a FranzKafkaWriter from
+// NewRedpandaReplicatorWriterFromConfig attempts to instantiate a RedpandaReplicatorWriter from
 // a parsed config.
-func NewFranzKafkaWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*FranzKafkaWriter, error) {
-	f := FranzKafkaWriter{
+func NewRedpandaReplicatorWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*RedpandaReplicatorWriter, error) {
+	w := RedpandaReplicatorWriter{
 		mgr: mgr,
 	}
 
@@ -199,28 +199,28 @@ func NewFranzKafkaWriterFromConfig(conf *service.ParsedConfig, mgr *service.Reso
 		return nil, err
 	}
 	for _, b := range brokerList {
-		f.SeedBrokers = append(f.SeedBrokers, strings.Split(b, ",")...)
+		w.SeedBrokers = append(w.SeedBrokers, strings.Split(b, ",")...)
 	}
 
-	if f.topic, err = conf.FieldInterpolatedString("topic"); err != nil {
+	if w.topic, err = conf.FieldInterpolatedString("topic"); err != nil {
 		return nil, err
 	}
 
 	if conf.Contains("key") {
-		if f.key, err = conf.FieldInterpolatedString("key"); err != nil {
+		if w.key, err = conf.FieldInterpolatedString("key"); err != nil {
 			return nil, err
 		}
 	}
 
 	if conf.Contains("partition") {
 		if rawStr, _ := conf.FieldString("partition"); rawStr != "" {
-			if f.partition, err = conf.FieldInterpolatedString("partition"); err != nil {
+			if w.partition, err = conf.FieldInterpolatedString("partition"); err != nil {
 				return nil, err
 			}
 		}
 	}
 
-	if f.timeout, err = conf.FieldDuration("timeout"); err != nil {
+	if w.timeout, err = conf.FieldDuration("timeout"); err != nil {
 		return nil, err
 	}
 
@@ -235,7 +235,7 @@ func NewFranzKafkaWriterFromConfig(conf *service.ParsedConfig, mgr *service.Reso
 	if maxBytes > uint64(math.MaxInt32) {
 		return nil, fmt.Errorf("invalid max_message_bytes, must not exceed %v", math.MaxInt32)
 	}
-	f.produceMaxBytes = int32(maxBytes)
+	w.produceMaxBytes = int32(maxBytes)
 
 	if conf.Contains("compression") {
 		cStr, err := conf.FieldString("compression")
@@ -258,10 +258,10 @@ func NewFranzKafkaWriterFromConfig(conf *service.ParsedConfig, mgr *service.Reso
 		default:
 			return nil, fmt.Errorf("compression codec %v not recognised", cStr)
 		}
-		f.compressionPrefs = append(f.compressionPrefs, c)
+		w.compressionPrefs = append(w.compressionPrefs, c)
 	}
 
-	f.partitioner = kgo.StickyKeyPartitioner(nil)
+	w.partitioner = kgo.StickyKeyPartitioner(nil)
 	if conf.Contains("partitioner") {
 		partStr, err := conf.FieldString("partitioner")
 		if err != nil {
@@ -269,32 +269,32 @@ func NewFranzKafkaWriterFromConfig(conf *service.ParsedConfig, mgr *service.Reso
 		}
 		switch partStr {
 		case "murmur2_hash":
-			f.partitioner = kgo.StickyKeyPartitioner(nil)
+			w.partitioner = kgo.StickyKeyPartitioner(nil)
 		case "round_robin":
-			f.partitioner = kgo.RoundRobinPartitioner()
+			w.partitioner = kgo.RoundRobinPartitioner()
 		case "least_backup":
-			f.partitioner = kgo.LeastBackupPartitioner()
+			w.partitioner = kgo.LeastBackupPartitioner()
 		case "manual":
-			f.partitioner = kgo.ManualPartitioner()
+			w.partitioner = kgo.ManualPartitioner()
 		default:
 			return nil, fmt.Errorf("unknown partitioner: %v", partStr)
 		}
 	}
 
-	if f.clientID, err = conf.FieldString("client_id"); err != nil {
+	if w.clientID, err = conf.FieldString("client_id"); err != nil {
 		return nil, err
 	}
 
-	if f.rackID, err = conf.FieldString("rack_id"); err != nil {
+	if w.rackID, err = conf.FieldString("rack_id"); err != nil {
 		return nil, err
 	}
 
-	if f.idempotentWrite, err = conf.FieldBool("idempotent_write"); err != nil {
+	if w.idempotentWrite, err = conf.FieldBool("idempotent_write"); err != nil {
 		return nil, err
 	}
 
 	if conf.Contains("metadata") {
-		if f.metaFilter, err = conf.FieldMetadataFilter("metadata"); err != nil {
+		if w.metaFilter, err = conf.FieldMetadataFilter("metadata"); err != nil {
 			return nil, err
 		}
 	}
@@ -304,178 +304,109 @@ func NewFranzKafkaWriterFromConfig(conf *service.ParsedConfig, mgr *service.Reso
 		return nil, err
 	}
 	if tlsEnabled {
-		f.TLSConf = tlsConf
+		w.TLSConf = tlsConf
 	}
-	if f.saslConfs, err = kafka.SASLMechanismsFromConfig(conf); err != nil {
+	if w.saslConfs, err = kafka.SASLMechanismsFromConfig(conf); err != nil {
 		return nil, err
 	}
 
 	if conf.Contains("timestamp") {
-		if f.timestamp, err = conf.FieldInterpolatedString("timestamp"); err != nil {
+		if w.timestamp, err = conf.FieldInterpolatedString("timestamp"); err != nil {
 			return nil, err
 		}
 	}
 
-	if f.topicSource, err = conf.FieldString("topic_source"); err != nil {
+	if w.topicSource, err = conf.FieldString("topic_source"); err != nil {
 		return nil, err
 	}
 
-	return &f, nil
+	if label := mgr.Label(); label != "" {
+		mgr.SetGeneric(mgr.Label(), &w)
+	} else {
+		mgr.SetGeneric(rproDefaultLabel, &w)
+	}
+
+	return &w, nil
 }
 
 //------------------------------------------------------------------------------
 
 // Connect to the target seed brokers.
-func (f *FranzKafkaWriter) Connect(ctx context.Context) error {
-	if f.client != nil {
+func (w *RedpandaReplicatorWriter) Connect(ctx context.Context) error {
+	if w.client != nil {
 		return nil
 	}
 
 	clientOpts := []kgo.Opt{
-		kgo.SeedBrokers(f.SeedBrokers...),
-		kgo.SASL(f.saslConfs...),
+		kgo.SeedBrokers(w.SeedBrokers...),
+		kgo.SASL(w.saslConfs...),
 		// TODO: Do we want to allow this option in some cases and make it configurable somehow?
 		// kgo.AllowAutoTopicCreation(),
-		kgo.ProducerBatchMaxBytes(f.produceMaxBytes),
-		kgo.ProduceRequestTimeout(f.timeout),
-		kgo.ClientID(f.clientID),
-		kgo.Rack(f.rackID),
-		kgo.WithLogger(&kafka.KGoLogger{L: f.mgr.Logger()}),
+		kgo.ProducerBatchMaxBytes(w.produceMaxBytes),
+		kgo.ProduceRequestTimeout(w.timeout),
+		kgo.ClientID(w.clientID),
+		kgo.Rack(w.rackID),
+		kgo.WithLogger(&kafka.KGoLogger{L: w.mgr.Logger()}),
 	}
-	if f.TLSConf != nil {
-		clientOpts = append(clientOpts, kgo.DialTLSConfig(f.TLSConf))
+	if w.TLSConf != nil {
+		clientOpts = append(clientOpts, kgo.DialTLSConfig(w.TLSConf))
 	}
-	if f.partitioner != nil {
-		clientOpts = append(clientOpts, kgo.RecordPartitioner(f.partitioner))
+	if w.partitioner != nil {
+		clientOpts = append(clientOpts, kgo.RecordPartitioner(w.partitioner))
 	}
-	if !f.idempotentWrite {
+	if !w.idempotentWrite {
 		clientOpts = append(clientOpts, kgo.DisableIdempotentWrite())
 	}
-	if len(f.compressionPrefs) > 0 {
-		clientOpts = append(clientOpts, kgo.ProducerBatchCompression(f.compressionPrefs...))
+	if len(w.compressionPrefs) > 0 {
+		clientOpts = append(clientOpts, kgo.ProducerBatchCompression(w.compressionPrefs...))
 	}
 
-	cl, err := kgo.NewClient(clientOpts...)
-	if err != nil {
+	var err error
+	if w.client, err = kgo.NewClient(clientOpts...); err != nil {
 		return err
 	}
 
-	f.client = cl
-
-	return nil
-}
-
-func (f *FranzKafkaWriter) createTopicAndACLs(ctx context.Context, topic string, topicSourceReader *FranzKafkaReader) error {
-	outputAdminClient := kadm.NewClient(f.client)
-
-	outputTopicExists := false
-	if topics, err := outputAdminClient.ListTopics(ctx, topic); err != nil {
-		return fmt.Errorf("failed to fetch topic %q from output broker: %s", topic, err)
-	} else {
-		if topics.Has(topic) {
-			outputTopicExists = true
-		}
+	// Check connectivity to cluster
+	if err := w.client.Ping(ctx); err != nil {
+		return fmt.Errorf("failed to connect to cluster: %s", err)
 	}
-
-	if !outputTopicExists {
-		f.mgr.Logger().Infof("Creating topic %q", topic)
-
-		inputAdminClient := kadm.NewClient(topicSourceReader.client)
-		var inputTopic kadm.TopicDetail
-		if topics, err := inputAdminClient.ListTopics(ctx, topic); err != nil {
-			return fmt.Errorf("failed to fetch topic %q from source broker: %s", topic, err)
-		} else {
-			inputTopic = topics[topic]
-		}
-
-		partitions := int32(len(inputTopic.Partitions))
-		if partitions == 0 {
-			partitions = -1
-		}
-		replicationFactor := int16(inputTopic.Partitions.NumReplicas())
-		if replicationFactor == 0 {
-			replicationFactor = -1
-		}
-
-		if _, err := outputAdminClient.CreateTopic(ctx, partitions, replicationFactor, nil, topic); err != nil {
-			if !errors.Is(err, kerr.TopicAlreadyExists) {
-				return fmt.Errorf("failed to create topic %q: %s", topic, err)
-			}
-		}
-
-		// Only topic ACLs are migrated, group ACLs are not migrated.
-		// Users are not migrated because we can't read passwords.
-
-		aclBuilder := kadm.NewACLs().Topics(topic).
-			ResourcePatternType(kadm.ACLPatternLiteral).Operations().Allow().Deny().AllowHosts().DenyHosts()
-		var inputACLResults kadm.DescribeACLsResults
-		var err error
-		if inputACLResults, err = inputAdminClient.DescribeACLs(ctx, aclBuilder); err != nil {
-			return fmt.Errorf("failed to fetch ACLs for topic %q: %s", topic, err)
-		}
-
-		if len(inputACLResults) > 1 {
-			return fmt.Errorf("received unexpected number of ACL results for topic %q: %d", topic, len(inputACLResults))
-		}
-
-		for _, acl := range inputACLResults[0].Described {
-			builder := kadm.NewACLs()
-
-			if acl.Permission == kmsg.ACLPermissionTypeAllow && acl.Operation == kmsg.ACLOperationWrite {
-				// ALLOW WRITE ACLs for topics are not migrated.
-				continue
-			}
-
-			op := acl.Operation
-			if op == kmsg.ACLOperationAll {
-				// ALLOW ALL ACLs for topics are downgraded to ALLOW READ.
-				op = kmsg.ACLOperationRead
-			}
-			switch acl.Permission {
-			case kmsg.ACLPermissionTypeAllow:
-				builder = builder.Allow(acl.Principal).AllowHosts(acl.Host).Topics(acl.Name).ResourcePatternType(acl.Pattern).Operations(op)
-			case kmsg.ACLPermissionTypeDeny:
-				builder = builder.Deny(acl.Principal).DenyHosts(acl.Host).Topics(acl.Name).ResourcePatternType(acl.Pattern).Operations(op)
-			}
-
-			// Attempting to overwrite existing ACLs is idempotent and doesn't seem to raise an error.
-			if _, err := outputAdminClient.CreateACLs(ctx, builder); err != nil {
-				return fmt.Errorf("failed to create ACLs for topic %q: %s", topic, err)
-			}
-		}
-	} else {
-		f.mgr.Logger().Infof("Topic %q already exists", topic)
-	}
-
-	f.topicCache.Store(topic, struct{}{})
 
 	return nil
 }
 
 // WriteBatch attempts to write a batch of messages to the target topics.
-func (f *FranzKafkaWriter) WriteBatch(ctx context.Context, b service.MessageBatch) (err error) {
-	if f.client == nil {
+func (w *RedpandaReplicatorWriter) WriteBatch(ctx context.Context, b service.MessageBatch) (err error) {
+	if w.client == nil {
 		return service.ErrNotConnected
 	}
 
 	records := make([]*kgo.Record, 0, len(b))
 	for i, msg := range b {
 		var topic string
-		if topic, err = b.TryInterpolatedString(i, f.topic); err != nil {
+		if topic, err = b.TryInterpolatedString(i, w.topic); err != nil {
 			return fmt.Errorf("topic interpolation error: %w", err)
 		}
 
-		var topicSourceReader *FranzKafkaReader
-		if res, ok := f.mgr.GetGeneric(f.topicSource); ok {
-			topicSourceReader = res.(*FranzKafkaReader)
+		var input *RedpandaReplicatorReader
+		if res, ok := w.mgr.GetGeneric(w.topicSource); ok {
+			input = res.(*RedpandaReplicatorReader)
 		} else {
-			f.mgr.Logger().Debugf("Reader for topic source %q not found", f.topicSource)
+			w.mgr.Logger().Debugf("Reader for topic source %q not found", w.topicSource)
 		}
 
-		if topicSourceReader != nil {
-			if _, ok := f.topicCache.Load(topic); !ok {
-				if err := f.createTopicAndACLs(ctx, topic, topicSourceReader); err != nil {
-					return err
+		if input != nil {
+			if _, ok := w.topicCache.Load(topic); !ok {
+				w.mgr.Logger().Infof("Creating topic %q", topic)
+
+				if err := createTopic(ctx, topic, input.client, w.client); err != nil && err != errTopicAlreadyExists {
+					return fmt.Errorf("failed to create topic %q: %s", topic, err)
+				} else {
+					if err == errTopicAlreadyExists {
+						w.mgr.Logger().Infof("Topic %q already exists", topic)
+					}
+					if err := createACLs(ctx, topic, input.client, w.client); err != nil {
+						w.mgr.Logger().Errorf("Failed to create ACLs for topic %q: %s", topic, err)
+					}
 				}
 			}
 		}
@@ -484,13 +415,13 @@ func (f *FranzKafkaWriter) WriteBatch(ctx context.Context, b service.MessageBatc
 		if record.Value, err = msg.AsBytes(); err != nil {
 			return
 		}
-		if f.key != nil {
-			if record.Key, err = b.TryInterpolatedBytes(i, f.key); err != nil {
+		if w.key != nil {
+			if record.Key, err = b.TryInterpolatedBytes(i, w.key); err != nil {
 				return fmt.Errorf("key interpolation error: %w", err)
 			}
 		}
-		if f.partition != nil {
-			partStr, err := b.TryInterpolatedString(i, f.partition)
+		if w.partition != nil {
+			partStr, err := b.TryInterpolatedString(i, w.partition)
 			if err != nil {
 				return fmt.Errorf("partition interpolation error: %w", err)
 			}
@@ -500,15 +431,15 @@ func (f *FranzKafkaWriter) WriteBatch(ctx context.Context, b service.MessageBatc
 			}
 			record.Partition = int32(partInt)
 		}
-		_ = f.metaFilter.Walk(msg, func(key, value string) error {
+		_ = w.metaFilter.Walk(msg, func(key, value string) error {
 			record.Headers = append(record.Headers, kgo.RecordHeader{
 				Key:   key,
 				Value: []byte(value),
 			})
 			return nil
 		})
-		if f.timestamp != nil {
-			if tsStr, err := b.TryInterpolatedString(i, f.timestamp); err != nil {
+		if w.timestamp != nil {
+			if tsStr, err := b.TryInterpolatedString(i, w.timestamp); err != nil {
 				return fmt.Errorf("timestamp interpolation error: %w", err)
 			} else {
 				if ts, err := strconv.ParseInt(tsStr, 10, 64); err != nil {
@@ -523,20 +454,20 @@ func (f *FranzKafkaWriter) WriteBatch(ctx context.Context, b service.MessageBatc
 
 	// TODO: This is very cool and allows us to easily return granular errors,
 	// so we should honor travis by doing it.
-	err = f.client.ProduceSync(ctx, records...).FirstErr()
+	err = w.client.ProduceSync(ctx, records...).FirstErr()
 	return
 }
 
-func (f *FranzKafkaWriter) disconnect() {
-	if f.client == nil {
+func (w *RedpandaReplicatorWriter) disconnect() {
+	if w.client == nil {
 		return
 	}
-	f.client.Close()
-	f.client = nil
+	w.client.Close()
+	w.client = nil
 }
 
 // Close underlying connections.
-func (f *FranzKafkaWriter) Close(ctx context.Context) error {
-	f.disconnect()
+func (w *RedpandaReplicatorWriter) Close(ctx context.Context) error {
+	w.disconnect()
 	return nil
 }

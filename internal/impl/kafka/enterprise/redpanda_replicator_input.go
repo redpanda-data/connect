@@ -12,19 +12,18 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"regexp"
+	"slices"
+	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
+	"github.com/Jeffail/shutdown"
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/sasl"
-
-	"github.com/Jeffail/checkpoint"
-
-	"github.com/Jeffail/shutdown"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
@@ -34,16 +33,22 @@ const (
 	rpriDefaultLabel = "redpanda_replicator_input"
 )
 
-func franzKafkaInputConfig() *service.ConfigSpec {
+func redpandaReplicatorInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Beta().
 		Categories("Services").
-		Version("3.61.0").
+		Version("4.33.1").
 		Summary(`A Kafka input using the https://github.com/twmb/franz-go[Franz Kafka client library^].`).
 		Description(`
 This input can be used in combination with a ` + "`redpanda_replicator`" + ` output which can query it for topic configurations and topic ACLs.
 
 When a consumer group is specified this input consumes one or more topics where partitions will automatically balance across any other connected clients with the same consumer group. When a consumer group is not specified topics can either be consumed in their entirety or with explicit partitions.
+
+It attempts to create all selected topics it along with their associated ACLs in the broker that the ` + "`redpanda_replicator`" + ` output points to identified by the label specified in ` + "`topic_sink`" + `.
+
+== Metrics
+
+Emits a ` + "`input_kafka_lag`" + ` metric with ` + "`topic`" + ` and ` + "`partition`" + ` labels for each consumed topic.
 
 == Metadata
 
@@ -60,7 +65,7 @@ This input adds the following metadata fields to each message:
 - All record headers
 ` + "```" + `
 `).
-		Fields(FranzKafkaInputConfigFields()...).
+		Fields(RedpandaReplicatorInputConfigFields()...).
 		LintRule(`
 let has_topic_partitions = this.topics.any(t -> t.contains(":"))
 root = if $has_topic_partitions {
@@ -73,9 +78,9 @@ root = if $has_topic_partitions {
 `)
 }
 
-// FranzKafkaInputConfigFields returns the full suite of config fields for a
-// kafka input using the franz-go client library.
-func FranzKafkaInputConfigFields() []*service.ConfigField {
+// RedpandaReplicatorInputConfigFields returns the full suite of config fields for a
+// redpanda_replicator input using the franz-go client library.
+func RedpandaReplicatorInputConfigFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewStringListField("seed_brokers").
 			Description("A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses.").
@@ -109,8 +114,8 @@ Finally, it's also possible to specify an explicit offset to consume from by add
 			Description("A rack identifier for this client.").
 			Default("").
 			Advanced(),
-		service.NewIntField("checkpoint_limit").
-			Description("Determines how many messages of the same partition can be processed in parallel before applying back pressure. When a message of a given offset is delivered to the output the offset is only allowed to be committed when all messages of prior offsets have also been delivered, this ensures at-least-once delivery guarantees. However, this mechanism also increases the likelihood of duplicates in the event of crashes or server faults, reducing the checkpoint limit will mitigate this.").
+		service.NewIntField("batch_size").
+			Description("The maximum number of messages that should be accumulated into each batch.").
 			Default(1024).
 			Advanced(),
 		service.NewAutoRetryNacksToggleField(),
@@ -132,13 +137,17 @@ Finally, it's also possible to specify an explicit offset to consume from by add
 			Description("The period of time between each topic lag refresh cycle.").
 			Default("5s").
 			Advanced(),
+		service.NewStringField("topic_sink").
+			Description("The label of a redpanda_replicator output from which to read the list of topics which need to be created.").
+			Default(rproDefaultLabel).
+			Advanced(),
 	}
 }
 
 func init() {
-	err := service.RegisterBatchInput("redpanda_replicator", franzKafkaInputConfig(),
+	err := service.RegisterBatchInput("redpanda_replicator", redpandaReplicatorInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
-			rdr, err := NewFranzKafkaReaderFromConfig(conf, mgr)
+			rdr, err := NewRedpandaReplicatorReaderFromConfig(conf, mgr)
 			if err != nil {
 				return nil, err
 			}
@@ -151,54 +160,43 @@ func init() {
 
 //------------------------------------------------------------------------------
 
-type batchWithAckFn struct {
-	onAck func()
-	batch service.MessageBatch
-}
-
-// FranzKafkaReader implements a kafka reader using the franz-go library.
-type FranzKafkaReader struct {
+// RedpandaReplicatorReader implements a kafka reader using the franz-go library.
+type RedpandaReplicatorReader struct {
 	SeedBrokers           []string
 	topics                []string
+	topicPatterns         []*regexp.Regexp
 	topicPartitions       map[string]map[int32]kgo.Offset
 	clientID              string
 	rackID                string
 	consumerGroup         string
 	TLSConf               *tls.Config
 	saslConfs             []sasl.Mechanism
-	checkpointLimit       int
+	batchSize             int
 	startFromOldest       bool
 	commitPeriod          time.Duration
 	regexPattern          bool
 	multiHeader           bool
 	batchPolicy           service.BatchPolicy
 	topicLagRefreshPeriod time.Duration
+	topicSink             string
 
-	client        *kgo.Client
-	topicLagCache sync.Map
+	connMut             sync.Mutex
+	client              *kgo.Client
+	topicLagGauge       *service.MetricGauge
+	topicLagCache       sync.Map
+	outputTopicsCreated bool
 
-	batchChan atomic.Value
-	res       *service.Resources
-	log       *service.Logger
-	shutSig   *shutdown.Signaller
+	mgr     *service.Resources
+	shutSig *shutdown.Signaller
 }
 
-func (f *FranzKafkaReader) getBatchChan() chan batchWithAckFn {
-	c, _ := f.batchChan.Load().(chan batchWithAckFn)
-	return c
-}
-
-func (f *FranzKafkaReader) storeBatchChan(c chan batchWithAckFn) {
-	f.batchChan.Store(c)
-}
-
-// NewFranzKafkaReaderFromConfig attempts to instantiate a new FranzKafkaReader
+// NewRedpandaReplicatorReaderFromConfig attempts to instantiate a new RedpandaReplicatorReader
 // from a parsed config.
-func NewFranzKafkaReaderFromConfig(conf *service.ParsedConfig, res *service.Resources) (*FranzKafkaReader, error) {
-	f := FranzKafkaReader{
-		res:     res,
-		log:     res.Logger(),
-		shutSig: shutdown.NewSignaller(),
+func NewRedpandaReplicatorReaderFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*RedpandaReplicatorReader, error) {
+	r := RedpandaReplicatorReader{
+		mgr:           mgr,
+		shutSig:       shutdown.NewSignaller(),
+		topicLagGauge: mgr.Metrics().NewGauge("input_kafka_lag", "topic", "partition"),
 	}
 
 	brokerList, err := conf.FieldStringList("seed_brokers")
@@ -206,10 +204,10 @@ func NewFranzKafkaReaderFromConfig(conf *service.ParsedConfig, res *service.Reso
 		return nil, err
 	}
 	for _, b := range brokerList {
-		f.SeedBrokers = append(f.SeedBrokers, strings.Split(b, ",")...)
+		r.SeedBrokers = append(r.SeedBrokers, strings.Split(b, ",")...)
 	}
 
-	if f.startFromOldest, err = conf.FieldBool("start_from_oldest"); err != nil {
+	if r.startFromOldest, err = conf.FieldBool("start_from_oldest"); err != nil {
 		return nil, err
 	}
 
@@ -219,50 +217,61 @@ func NewFranzKafkaReaderFromConfig(conf *service.ParsedConfig, res *service.Reso
 	}
 
 	var defaultOffset int64 = -1
-	if f.startFromOldest {
+	if r.startFromOldest {
 		defaultOffset = -2
 	}
 
 	var topicPartitions map[string]map[int32]int64
-	if f.topics, topicPartitions, err = kafka.ParseTopics(topicList, defaultOffset, true); err != nil {
+	if r.topics, topicPartitions, err = kafka.ParseTopics(topicList, defaultOffset, true); err != nil {
 		return nil, err
 	}
 	if len(topicPartitions) > 0 {
-		f.topicPartitions = map[string]map[int32]kgo.Offset{}
+		r.topicPartitions = map[string]map[int32]kgo.Offset{}
 		for topic, partitions := range topicPartitions {
 			partMap := map[int32]kgo.Offset{}
 			for part, offset := range partitions {
 				partMap[part] = kgo.NewOffset().At(offset)
 			}
-			f.topicPartitions[topic] = partMap
+			r.topicPartitions[topic] = partMap
 		}
 	}
 
-	if f.regexPattern, err = conf.FieldBool("regexp_topics"); err != nil {
+	if r.regexPattern, err = conf.FieldBool("regexp_topics"); err != nil {
 		return nil, err
 	}
 
-	if f.clientID, err = conf.FieldString("client_id"); err != nil {
+	if r.regexPattern {
+		r.topicPatterns = make([]*regexp.Regexp, 0, len(r.topics))
+		for _, topic := range r.topics {
+			tp, err := regexp.Compile(topic)
+			if err != nil {
+				return nil, fmt.Errorf("failed to compile topic regex %q: %s", topic, err)
+			}
+			r.topicPatterns = append(r.topicPatterns, tp)
+		}
+	}
+
+	if r.clientID, err = conf.FieldString("client_id"); err != nil {
 		return nil, err
 	}
 
-	if f.rackID, err = conf.FieldString("rack_id"); err != nil {
+	if r.rackID, err = conf.FieldString("rack_id"); err != nil {
 		return nil, err
 	}
 
-	if f.consumerGroup, err = conf.FieldString("consumer_group"); err != nil {
+	if r.consumerGroup, err = conf.FieldString("consumer_group"); err != nil {
 		return nil, err
 	}
 
-	if f.checkpointLimit, err = conf.FieldInt("checkpoint_limit"); err != nil {
+	if r.batchSize, err = conf.FieldInt("batch_size"); err != nil {
 		return nil, err
 	}
 
-	if f.commitPeriod, err = conf.FieldDuration("commit_period"); err != nil {
+	if r.commitPeriod, err = conf.FieldDuration("commit_period"); err != nil {
 		return nil, err
 	}
 
-	if f.batchPolicy, err = conf.FieldBatchPolicy("batching"); err != nil {
+	if r.batchPolicy, err = conf.FieldBatchPolicy("batching"); err != nil {
 		return nil, err
 	}
 
@@ -271,34 +280,27 @@ func NewFranzKafkaReaderFromConfig(conf *service.ParsedConfig, res *service.Reso
 		return nil, err
 	}
 	if tlsEnabled {
-		f.TLSConf = tlsConf
+		r.TLSConf = tlsConf
 	}
-	if f.multiHeader, err = conf.FieldBool("multi_header"); err != nil {
+	if r.multiHeader, err = conf.FieldBool("multi_header"); err != nil {
 		return nil, err
 	}
-	if f.saslConfs, err = kafka.SASLMechanismsFromConfig(conf); err != nil {
-		return nil, err
-	}
-
-	if f.topicLagRefreshPeriod, err = conf.FieldDuration("topic_lag_refresh_period"); err != nil {
+	if r.saslConfs, err = kafka.SASLMechanismsFromConfig(conf); err != nil {
 		return nil, err
 	}
 
-	if label := res.Label(); label != "" {
-		res.SetGeneric(res.Label(), &f)
-	} else {
-		res.SetGeneric(rpriDefaultLabel, &f)
+	if r.topicLagRefreshPeriod, err = conf.FieldDuration("topic_lag_refresh_period"); err != nil {
+		return nil, err
 	}
 
-	return &f, nil
+	if r.topicSink, err = conf.FieldString("topic_sink"); err != nil {
+		return nil, err
+	}
+
+	return &r, nil
 }
 
-type msgWithRecord struct {
-	msg *service.Message
-	r   *kgo.Record
-}
-
-func (f *FranzKafkaReader) recordToMessage(record *kgo.Record) *msgWithRecord {
+func (r *RedpandaReplicatorReader) recordToMessage(record *kgo.Record) *service.Message {
 	msg := service.NewMessage(record.Value)
 	msg.MetaSetMut("kafka_key", string(record.Key))
 	msg.MetaSetMut("kafka_topic", record.Topic)
@@ -306,7 +308,7 @@ func (f *FranzKafkaReader) recordToMessage(record *kgo.Record) *msgWithRecord {
 	msg.MetaSetMut("kafka_offset", int(record.Offset))
 	msg.MetaSetMut("kafka_timestamp_unix", record.Timestamp.Unix())
 	msg.MetaSetMut("kafka_tombstone_message", record.Value == nil)
-	if f.multiHeader {
+	if r.multiHeader {
 		// in multi header mode we gather headers so we can encode them as lists
 		headers := map[string][]any{}
 
@@ -323,8 +325,8 @@ func (f *FranzKafkaReader) recordToMessage(record *kgo.Record) *msgWithRecord {
 		}
 	}
 
-	lag := int64(-1)
-	if val, ok := f.topicLagCache.Load(record.Topic); ok {
+	lag := int64(0)
+	if val, ok := r.topicLagCache.Load(fmt.Sprintf("%s_%d", record.Topic, record.Partition)); ok {
 		lag = val.(int64)
 	}
 	msg.MetaSetMut("kafka_lag", lag)
@@ -335,548 +337,241 @@ func (f *FranzKafkaReader) recordToMessage(record *kgo.Record) *msgWithRecord {
 	record.Key = nil
 	record.Value = nil
 
-	return &msgWithRecord{
-		msg: msg,
-		r:   record,
-	}
-}
-
-//------------------------------------------------------------------------------
-
-type partitionTracker struct {
-	batcherLock    sync.Mutex
-	topBatchRecord *kgo.Record
-	batcher        *service.Batcher
-
-	checkpointerLock sync.Mutex
-	checkpointer     *checkpoint.Uncapped[*kgo.Record]
-
-	outBatchChan chan<- batchWithAckFn
-	commitFn     func(r *kgo.Record)
-
-	shutSig *shutdown.Signaller
-}
-
-func newPartitionTracker(batcher *service.Batcher, batchChan chan<- batchWithAckFn, commitFn func(r *kgo.Record)) *partitionTracker {
-	pt := &partitionTracker{
-		batcher:      batcher,
-		checkpointer: checkpoint.NewUncapped[*kgo.Record](),
-		outBatchChan: batchChan,
-		commitFn:     commitFn,
-		shutSig:      shutdown.NewSignaller(),
-	}
-	go pt.loop()
-	return pt
-}
-
-func (p *partitionTracker) loop() {
-	defer func() {
-		if p.batcher != nil {
-			p.batcher.Close(context.Background())
-		}
-		p.shutSig.TriggerHasStopped()
-	}()
-
-	// No need to loop when there's no batcher for async writes.
-	if p.batcher == nil {
-		return
-	}
-
-	var flushBatch <-chan time.Time
-	var flushBatchTicker *time.Ticker
-	adjustTimedFlush := func() {
-		if flushBatch != nil || p.batcher == nil {
-			return
-		}
-
-		tNext, exists := p.batcher.UntilNext()
-		if !exists {
-			if flushBatchTicker != nil {
-				flushBatchTicker.Stop()
-				flushBatchTicker = nil
-			}
-			return
-		}
-
-		if flushBatchTicker != nil {
-			flushBatchTicker.Reset(tNext)
-		} else {
-			flushBatchTicker = time.NewTicker(tNext)
-		}
-		flushBatch = flushBatchTicker.C
-	}
-
-	closeAtLeisureCtx, done := p.shutSig.SoftStopCtx(context.Background())
-	defer done()
-
-	for {
-		adjustTimedFlush()
-		select {
-		case <-flushBatch:
-			var sendBatch service.MessageBatch
-			var sendRecord *kgo.Record
-
-			// Wrap this in a closure to make locking/unlocking easier.
-			func() {
-				p.batcherLock.Lock()
-				defer p.batcherLock.Unlock()
-
-				flushBatch = nil
-				if tNext, exists := p.batcher.UntilNext(); !exists || tNext > 1 {
-					// This can happen if a pushed message triggered a batch before
-					// the last known flush period. In this case we simply enter the
-					// loop again which readjusts our flush batch timer.
-					return
-				}
-
-				if sendBatch, _ = p.batcher.Flush(closeAtLeisureCtx); len(sendBatch) == 0 {
-					return
-				}
-				sendRecord = p.topBatchRecord
-				p.topBatchRecord = nil
-			}()
-
-			if len(sendBatch) > 0 {
-				if err := p.sendBatch(closeAtLeisureCtx, sendBatch, sendRecord); err != nil {
-					return
-				}
-			}
-		case <-p.shutSig.SoftStopChan():
-			return
-		}
-	}
-}
-
-func (p *partitionTracker) sendBatch(ctx context.Context, b service.MessageBatch, r *kgo.Record) error {
-	p.checkpointerLock.Lock()
-	releaseFn := p.checkpointer.Track(r, int64(len(b)))
-	p.checkpointerLock.Unlock()
-
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case p.outBatchChan <- batchWithAckFn{
-		batch: b,
-		onAck: func() {
-			p.checkpointerLock.Lock()
-			releaseRecord := releaseFn()
-			p.checkpointerLock.Unlock()
-
-			if releaseRecord != nil && *releaseRecord != nil {
-				p.commitFn(*releaseRecord)
-			}
-		},
-	}:
-	}
-	return nil
-}
-
-func (p *partitionTracker) add(ctx context.Context, m *msgWithRecord, limit int) (pauseFetch bool) {
-	var sendBatch service.MessageBatch
-	if p.batcher != nil {
-		// Wrap this in a closure to make locking/unlocking easier.
-		func() {
-			p.batcherLock.Lock()
-			defer p.batcherLock.Unlock()
-
-			if p.batcher.Add(m.msg) {
-				// Batch triggered, we flush it here synchronously.
-				sendBatch, _ = p.batcher.Flush(ctx)
-			} else {
-				// Otherwise store the latest record as the representative of the
-				// pending batch offset. This will be used by the timer based
-				// flushing mechanism within loop() if applicable.
-				p.topBatchRecord = m.r
-			}
-		}()
-	} else {
-		sendBatch = service.MessageBatch{m.msg}
-	}
-
-	if len(sendBatch) > 0 {
-		// Ignoring in the error here is fine, it implies shut down has been
-		// triggered and we would only acknowledge the message by committing it
-		// if it were successfully delivered.
-		_ = p.sendBatch(ctx, sendBatch, m.r)
-	}
-
-	p.checkpointerLock.Lock()
-	pauseFetch = p.checkpointer.Pending() >= int64(limit)
-	p.checkpointerLock.Unlock()
-	return
-}
-
-func (p *partitionTracker) pauseFetch(limit int) (pauseFetch bool) {
-	p.checkpointerLock.Lock()
-	pauseFetch = p.checkpointer.Pending() >= int64(limit)
-	p.checkpointerLock.Unlock()
-	return
-}
-
-func (p *partitionTracker) close(ctx context.Context) error {
-	p.shutSig.TriggerSoftStop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-p.shutSig.HasStoppedChan():
-	}
-	return nil
-}
-
-//------------------------------------------------------------------------------
-
-type checkpointTracker struct {
-	mut    sync.Mutex
-	topics map[string]map[int32]*partitionTracker
-
-	res       *service.Resources
-	batchChan chan<- batchWithAckFn
-	commitFn  func(r *kgo.Record)
-	batchPol  service.BatchPolicy
-}
-
-func newCheckpointTracker(
-	res *service.Resources,
-	batchChan chan<- batchWithAckFn,
-	releaseFn func(r *kgo.Record),
-	batchPol service.BatchPolicy,
-) *checkpointTracker {
-	return &checkpointTracker{
-		topics:    map[string]map[int32]*partitionTracker{},
-		res:       res,
-		batchChan: batchChan,
-		commitFn:  releaseFn,
-		batchPol:  batchPol,
-	}
-}
-
-func (c *checkpointTracker) close() {
-	c.mut.Lock()
-	defer c.mut.Unlock()
-
-	for _, partitions := range c.topics {
-		for _, tracker := range partitions {
-			_ = tracker.close(context.Background())
-		}
-	}
-}
-
-func (c *checkpointTracker) addRecord(ctx context.Context, m *msgWithRecord, limit int) (pauseFetch bool) {
-	c.mut.Lock()
-	defer c.mut.Unlock()
-
-	topicTracker := c.topics[m.r.Topic]
-	if topicTracker == nil {
-		topicTracker = map[int32]*partitionTracker{}
-		c.topics[m.r.Topic] = topicTracker
-	}
-
-	partTracker := topicTracker[m.r.Partition]
-	if partTracker == nil {
-		var batcher *service.Batcher
-		if !c.batchPol.IsNoop() {
-			var err error
-			if batcher, err = c.batchPol.NewBatcher(c.res); err != nil {
-				c.res.Logger().Errorf("Failed to initialise batch policy: %v, falling back to individual message delivery", err)
-				batcher = nil
-			}
-		}
-		partTracker = newPartitionTracker(batcher, c.batchChan, c.commitFn)
-		topicTracker[m.r.Partition] = partTracker
-	}
-
-	return partTracker.add(ctx, m, limit)
-}
-
-func (c *checkpointTracker) pauseFetch(topic string, partition int32, limit int) bool {
-	c.mut.Lock()
-	defer c.mut.Unlock()
-
-	topicTracker := c.topics[topic]
-	if topicTracker == nil {
-		return false
-	}
-	partTracker := topicTracker[partition]
-	if partTracker == nil {
-		return false
-	}
-
-	return partTracker.pauseFetch(limit)
-}
-
-func (c *checkpointTracker) removeTopicPartitions(ctx context.Context, m map[string][]int32) {
-	c.mut.Lock()
-	defer c.mut.Unlock()
-
-	for topicName, lostTopic := range m {
-		trackedTopic, exists := c.topics[topicName]
-		if !exists {
-			continue
-		}
-		for _, lostPartition := range lostTopic {
-			if trackedPartition, exists := trackedTopic[lostPartition]; exists {
-				_ = trackedPartition.close(ctx)
-			}
-			delete(trackedTopic, lostPartition)
-		}
-		if len(trackedTopic) == 0 {
-			delete(c.topics, topicName)
-		}
-	}
+	return msg
 }
 
 //------------------------------------------------------------------------------
 
 // Connect to the kafka seed brokers.
-func (f *FranzKafkaReader) Connect(ctx context.Context) error {
-	if f.getBatchChan() != nil {
+func (r *RedpandaReplicatorReader) Connect(ctx context.Context) error {
+	r.connMut.Lock()
+	defer r.connMut.Unlock()
+
+	if r.client != nil {
 		return nil
 	}
 
-	if f.shutSig.IsSoftStopSignalled() {
-		f.shutSig.TriggerHasStopped()
+	if r.shutSig.IsSoftStopSignalled() {
+		r.shutSig.TriggerHasStopped()
 		return service.ErrEndOfInput
 	}
 
 	var initialOffset kgo.Offset
-	if f.startFromOldest {
+	if r.startFromOldest {
 		initialOffset = kgo.NewOffset().AtStart()
 	} else {
 		initialOffset = kgo.NewOffset().AtEnd()
 	}
 
-	batchChan := make(chan batchWithAckFn)
-
-	commitFn := func(r *kgo.Record) {}
-	if f.consumerGroup != "" {
-		commitFn = func(r *kgo.Record) {
-			if f.client == nil {
-				return
-			}
-			f.client.MarkCommitRecords(r)
-		}
-	}
-	checkpoints := newCheckpointTracker(f.res, batchChan, commitFn, f.batchPolicy)
-
 	clientOpts := []kgo.Opt{
-		kgo.SeedBrokers(f.SeedBrokers...),
-		kgo.ConsumeTopics(f.topics...),
-		kgo.ConsumePartitions(f.topicPartitions),
+		kgo.SeedBrokers(r.SeedBrokers...),
+		kgo.ConsumeTopics(r.topics...),
+		kgo.ConsumePartitions(r.topicPartitions),
 		kgo.ConsumeResetOffset(initialOffset),
-		kgo.SASL(f.saslConfs...),
-		kgo.ConsumerGroup(f.consumerGroup),
-		kgo.ClientID(f.clientID),
-		kgo.Rack(f.rackID),
+		kgo.SASL(r.saslConfs...),
+		kgo.ConsumerGroup(r.consumerGroup),
+		kgo.ClientID(r.clientID),
+		kgo.Rack(r.rackID),
 	}
 
-	if f.consumerGroup != "" {
+	if r.consumerGroup != "" {
 		clientOpts = append(clientOpts,
-			kgo.OnPartitionsRevoked(func(rctx context.Context, c *kgo.Client, m map[string][]int32) {
-				if commitErr := c.CommitMarkedOffsets(rctx); commitErr != nil {
-					f.log.Errorf("Commit error on partition revoke: %v", commitErr)
-				}
-				checkpoints.removeTopicPartitions(rctx, m)
-			}),
-			kgo.OnPartitionsLost(func(rctx context.Context, _ *kgo.Client, m map[string][]int32) {
-				// No point trying to commit our offsets, just clean up our topic map
-				checkpoints.removeTopicPartitions(rctx, m)
-			}),
+			// TODO: Do we need to do anything in `kgo.OnPartitionsRevoked()` / `kgo.OnPartitionsLost()`
 			kgo.AutoCommitMarks(),
-			kgo.AutoCommitInterval(f.commitPeriod),
-			// TODO
-			kgo.WithLogger(&kafka.KGoLogger{L: f.log}),
+			kgo.BlockRebalanceOnPoll(),
+			kgo.AutoCommitInterval(r.commitPeriod),
+			kgo.WithLogger(&kafka.KGoLogger{L: r.mgr.Logger()}),
 		)
 	}
 
-	if f.TLSConf != nil {
-		clientOpts = append(clientOpts, kgo.DialTLSConfig(f.TLSConf))
+	if r.TLSConf != nil {
+		clientOpts = append(clientOpts, kgo.DialTLSConfig(r.TLSConf))
 	}
 
-	if f.regexPattern {
+	if r.regexPattern {
 		clientOpts = append(clientOpts, kgo.ConsumeRegex())
 	}
 
 	var err error
-	if f.client, err = kgo.NewClient(clientOpts...); err != nil {
+	if r.client, err = kgo.NewClient(clientOpts...); err != nil {
 		return err
 	}
 
+	// Check connectivity to cluster
+	if err = r.client.Ping(ctx); err != nil {
+		return fmt.Errorf("failed to connect to cluster: %s", err)
+	}
+
 	go func() {
-		closeCtx, done := f.shutSig.SoftStopCtx(context.Background())
+		closeCtx, done := r.shutSig.SoftStopCtx(context.Background())
 		defer done()
 
-		adminClient := kadm.NewClient(f.client)
+		adminClient := kadm.NewClient(r.client)
 
 		for {
-			ctx, done = context.WithTimeout(closeCtx, f.topicLagRefreshPeriod)
+			ctx, done = context.WithTimeout(closeCtx, r.topicLagRefreshPeriod)
 			var lags kadm.DescribedGroupLags
 			var err error
-			if lags, err = adminClient.Lag(ctx, f.consumerGroup); err != nil {
-				f.log.Errorf("Failed to fetch group lags: %s", err)
+			if lags, err = adminClient.Lag(ctx, r.consumerGroup); err != nil {
+				r.mgr.Logger().Errorf("Failed to fetch group lags: %s", err)
 			}
 			done()
 
 			lags.Each(func(gl kadm.DescribedGroupLag) {
-				for _, tl := range gl.Lag.TotalByTopic() {
-					f.topicLagCache.Store(tl.Topic, tl.Lag)
+				for _, gl := range gl.Lag {
+					for _, pl := range gl {
+						lag := pl.Lag
+						if lag < 0 {
+							lag = 0
+						}
+
+						r.topicLagGauge.Set(lag, pl.Topic, strconv.Itoa(int(pl.Partition)))
+						r.topicLagCache.Store(fmt.Sprintf("%s_%d", pl.Topic, pl.Partition), lag)
+					}
 				}
 			})
 
 			select {
-			case <-f.shutSig.SoftStopChan():
+			case <-r.shutSig.SoftStopChan():
 				return
-			case <-time.After(f.topicLagRefreshPeriod):
+			case <-time.After(r.topicLagRefreshPeriod):
 			}
 		}
 	}()
 
-	go func() {
-		defer func() {
-			f.client.Close()
-			f.client = nil
-			checkpoints.close()
-			f.storeBatchChan(nil)
-			close(batchChan)
-			if f.shutSig.IsSoftStopSignalled() {
-				f.shutSig.TriggerHasStopped()
-			}
-		}()
-
-		closeCtx, done := f.shutSig.SoftStopCtx(context.Background())
-		defer done()
-
-		listedTopics := false
-		for {
-			// Using a stall prevention context here because I've realised we
-			// might end up disabling literally all the partitions and topics
-			// we're allocated.
-			//
-			// In this case we don't want to actually resume any of them yet so
-			// I add a forced timeout to deal with it.
-			stallCtx, pollDone := context.WithTimeout(closeCtx, time.Second)
-			fetches := f.client.PollFetches(stallCtx)
-			pollDone()
-
-			// TODO: Find a way to disable this logging code based on the log level
-			if !listedTopics {
-				topics := f.client.GetConsumeTopics()
-				var selectedTopics []string
-				if f.regexPattern {
-					selectedTopics = make([]string, 0, len(topics))
-					for _, topic := range topics {
-						for _, t := range f.topics {
-							if match, err := regexp.MatchString(t, topic); err == nil && match {
-								selectedTopics = append(selectedTopics, topic)
-							}
-						}
-					}
-				} else {
-					selectedTopics = topics
-				}
-
-				f.log.Infof("Consuming from topics: %s", selectedTopics)
-				listedTopics = true
-			}
-
-			if errs := fetches.Errors(); len(errs) > 0 {
-				// Any non-temporal error sets this true and we close the client
-				// forcing a reconnect.
-				nonTemporalErr := false
-
-				for _, kerr := range errs {
-					// TODO: The documentation from franz-go is top-tier, it
-					// should be straight forward to expand this to include more
-					// errors that are safe to disregard.
-					if errors.Is(kerr.Err, context.DeadlineExceeded) ||
-						errors.Is(kerr.Err, context.Canceled) {
-						continue
-					}
-
-					nonTemporalErr = true
-
-					if !errors.Is(kerr.Err, kgo.ErrClientClosed) {
-						f.log.Errorf("Kafka poll error on topic %v, partition %v: %v", kerr.Topic, kerr.Partition, kerr.Err)
-					}
-				}
-
-				if nonTemporalErr {
-					f.client.Close()
-					f.client = nil
-					return
-				}
-			}
-			if closeCtx.Err() != nil {
-				return
-			}
-
-			pauseTopicPartitions := map[string][]int32{}
-			iter := fetches.RecordIter()
-			for !iter.Done() {
-				record := iter.Next()
-				if checkpoints.addRecord(closeCtx, f.recordToMessage(record), f.checkpointLimit) {
-					pauseTopicPartitions[record.Topic] = append(pauseTopicPartitions[record.Topic], record.Partition)
-				}
-			}
-
-			// Walk all the disabled topic partitions and check whether any of
-			// them can be resumed.
-			resumeTopicPartitions := map[string][]int32{}
-			for pausedTopic, pausedPartitions := range f.client.PauseFetchPartitions(pauseTopicPartitions) {
-				for _, pausedPartition := range pausedPartitions {
-					if !checkpoints.pauseFetch(pausedTopic, pausedPartition, f.checkpointLimit) {
-						resumeTopicPartitions[pausedTopic] = append(resumeTopicPartitions[pausedTopic], pausedPartition)
-					}
-				}
-			}
-			if len(resumeTopicPartitions) > 0 {
-				f.client.ResumeFetchPartitions(resumeTopicPartitions)
-			}
-		}
-	}()
-
-	f.storeBatchChan(batchChan)
 	return nil
 }
 
 // ReadBatch attempts to extract a batch of messages from the target topics.
-func (f *FranzKafkaReader) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
-	batchChan := f.getBatchChan()
-	if batchChan == nil {
+func (r *RedpandaReplicatorReader) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
+	r.connMut.Lock()
+	defer r.connMut.Unlock()
+
+	if r.client == nil {
 		return nil, nil, service.ErrNotConnected
 	}
 
-	var mAck batchWithAckFn
-	var open bool
-	select {
-	case mAck, open = <-batchChan:
-		if !open {
+	// TODO: Is there a way to wait a while until we actually get f.batchSize messages instead of returning as many as
+	// we have right now? Otherwise, maybe switch back to `PollFetches()` and have `batch_byte_size` and `batch_period`
+	// via `FetchMinBytes`, `FetchMaxBytes` and `FetchMaxWait()`?
+
+	// TODO: Maybe use a `context.WithTimeout()` here and return `context.Canceled` so we can periodically check for new
+	// topics.
+	fetches := r.client.PollRecords(ctx, r.batchSize)
+	if errs := fetches.Errors(); len(errs) > 0 {
+		// Any non-temporal error sets this true and we close the client
+		// forcing a reconnect.
+		nonTemporalErr := false
+
+		for _, kerr := range errs {
+			// TODO: The documentation from franz-go is top-tier, it
+			// should be straight forward to expand this to include more
+			// errors that are safe to disregard.
+			if errors.Is(kerr.Err, context.DeadlineExceeded) ||
+				errors.Is(kerr.Err, context.Canceled) {
+				continue
+			}
+
+			nonTemporalErr = true
+
+			if !errors.Is(kerr.Err, kgo.ErrClientClosed) {
+				r.mgr.Logger().Errorf("Kafka poll error on topic %v, partition %v: %v", kerr.Topic, kerr.Partition, kerr.Err)
+			}
+		}
+
+		if nonTemporalErr {
+			r.client.Close()
+			r.client = nil
 			return nil, nil, service.ErrNotConnected
 		}
-	case <-ctx.Done():
-		return nil, nil, ctx.Err()
 	}
 
-	return mAck.batch, func(ctx context.Context, res error) error {
-		// Res will always be nil because we initialize with service.AutoRetryNacks
-		mAck.onAck()
+	// TODO: Is there a way to get the actual selected topics instead of all of them?
+	topics := r.client.GetConsumeTopics()
+	if r.regexPattern {
+		topics = slices.DeleteFunc(topics, func(topic string) bool {
+			for _, tp := range r.topicPatterns {
+				if tp.MatchString(topic) {
+					return false
+				}
+			}
+			return true
+		})
+	}
+
+	if len(topics) > 0 {
+		r.mgr.Logger().Debugf("Consuming from topics: %s", topics)
+	} else if r.regexPattern {
+		r.mgr.Logger().Warn("No matching topics found")
+	}
+
+	if !r.outputTopicsCreated {
+		var output *RedpandaReplicatorWriter
+		if res, ok := r.mgr.GetGeneric(r.topicSink); ok {
+			output = res.(*RedpandaReplicatorWriter)
+		} else {
+			r.mgr.Logger().Debugf("Writer for topic sink %q not found", r.topicSink)
+		}
+
+		if output != nil {
+			for _, topic := range topics {
+				r.mgr.Logger().Infof("Creating topic %q", topic)
+
+				if err := createTopic(ctx, topic, r.client, output.client); err != nil && err != errTopicAlreadyExists {
+					r.mgr.Logger().Errorf("Failed to create topic %q and ACLs: %s", topic, err)
+				} else {
+					if err == errTopicAlreadyExists {
+						r.mgr.Logger().Infof("Topic %q already exists", topic)
+					}
+					if err := createACLs(ctx, topic, r.client, output.client); err != nil {
+						r.mgr.Logger().Errorf("Failed to create ACLs for topic %q: %s", topic, err)
+					}
+				}
+			}
+		}
+		r.outputTopicsCreated = true
+	}
+
+	resBatch := make(service.MessageBatch, 0, fetches.NumRecords())
+	fetches.EachRecord(func(rec *kgo.Record) {
+		resBatch = append(resBatch, r.recordToMessage(rec))
+	})
+
+	// TODO: Does this need to happen after the call to `MarkCommitRecords()`?
+	r.client.AllowRebalance()
+
+	return resBatch, func(ctx context.Context, res error) error {
+		// TODO: What should happen when `auto_replay_nacks: false` and a batch gets rejected followed by another one
+		// which gets acked?
+		// Also see "Res will always be nil because we initialize with service.AutoRetryNacks" comment in
+		// `input_kafka_franz.go`
+		if res != nil {
+			return res
+		}
+
+		r.client.MarkCommitRecords(fetches.Records()...)
+
 		return nil
 	}, nil
 }
 
 // Close underlying connections.
-func (f *FranzKafkaReader) Close(ctx context.Context) error {
-	// TODO: Do we need to do some locking and close the client here as well?!?
+func (r *RedpandaReplicatorReader) Close(ctx context.Context) error {
+	r.connMut.Lock()
+	defer r.connMut.Unlock()
 
 	go func() {
-		f.shutSig.TriggerSoftStop()
-		if f.getBatchChan() == nil {
-			// If the record chan is already nil then we might've not been
-			// connected, so force the shutdown complete signal.
-			f.shutSig.TriggerHasStopped()
+		r.shutSig.TriggerSoftStop()
+		if r.client != nil {
+			r.client.Close()
+			r.client = nil
+
+			r.shutSig.TriggerHasStopped()
 		}
 	}()
+
 	select {
-	case <-f.shutSig.HasStoppedChan():
+	case <-r.shutSig.HasStoppedChan():
 	case <-ctx.Done():
 		return ctx.Err()
 	}

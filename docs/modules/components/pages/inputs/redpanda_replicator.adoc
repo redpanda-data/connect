@@ -25,7 +25,7 @@ component_type_dropdown::[]
 
 A Kafka input using the https://github.com/twmb/franz-go[Franz Kafka client library^].
 
-Introduced in version 3.61.0.
+Introduced in version 4.33.1.
 
 
 [tabs]
@@ -62,7 +62,7 @@ input:
     consumer_group: "" # No default (optional)
     client_id: benthos
     rack_id: ""
-    checkpoint_limit: 1024
+    batch_size: 1024
     auto_replay_nacks: true
     commit_period: 5s
     start_from_oldest: true
@@ -82,6 +82,7 @@ input:
       check: ""
       processors: [] # No default (optional)
     topic_lag_refresh_period: 5s
+    topic_sink: redpanda_replicator_output
 ```
 
 --
@@ -90,6 +91,12 @@ input:
 This input can be used in combination with a `redpanda_replicator` output which can query it for topic configurations and topic ACLs.
 
 When a consumer group is specified this input consumes one or more topics where partitions will automatically balance across any other connected clients with the same consumer group. When a consumer group is not specified topics can either be consumed in their entirety or with explicit partitions.
+
+It attempts to create all selected topics it along with their associated ACLs in the broker that the `redpanda_replicator` output points to identified by the label specified in `topic_sink`.
+
+== Metrics
+
+Emits a `input_kafka_lag` metric with `topic` and `partition` labels for each consumed topic.
 
 == Metadata
 
@@ -203,9 +210,9 @@ A rack identifier for this client.
 
 *Default*: `""`
 
-=== `checkpoint_limit`
+=== `batch_size`
 
-Determines how many messages of the same partition can be processed in parallel before applying back pressure. When a message of a given offset is delivered to the output the offset is only allowed to be committed when all messages of prior offsets have also been delivered, this ensures at-least-once delivery guarantees. However, this mechanism also increases the likelihood of duplicates in the event of crashes or server faults, reducing the checkpoint limit will mitigate this.
+The maximum number of messages that should be accumulated into each batch.
 
 
 *Type*: `int`
@@ -704,5 +711,14 @@ The period of time between each topic lag refresh cycle.
 *Type*: `string`
 
 *Default*: `"5s"`
+
+=== `topic_sink`
+
+The label of a redpanda_replicator output from which to read the list of topics which need to be created.
+
+
+*Type*: `string`
+
+*Default*: `"redpanda_replicator_output"`
 
 
