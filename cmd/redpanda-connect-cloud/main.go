@@ -34,6 +34,6 @@ var (
 )
 
 func main() {
-	schema := schema.Cloud(Version, DateBuilt, false)
+	schema := schema.Cloud(Version, DateBuilt)
 	cli.InitEnterpriseCLI(BinaryName, Version, DateBuilt, schema, service.CLIOptSetEnvironment(schema.Environment()))
 }
