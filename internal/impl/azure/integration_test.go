@@ -208,7 +208,7 @@ input:
 		require.True(t, pager.More())
 		page, err := pager.NextPage(ctx)
 		require.NoError(t, err)
-		require.Len(t, page.Segment.BlobItems, 0)
+		require.Empty(t, page.Segment.BlobItems)
 	})
 
 	t.Run("blob_storage_append", func(t *testing.T) {

@@ -29,6 +29,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/ollama/ollama/api"
 	"github.com/redpanda-data/benthos/v4/public/service"
+
 	"github.com/redpanda-data/connect/v4/internal/singleton"
 )
 
