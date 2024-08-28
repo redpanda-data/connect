@@ -86,6 +86,7 @@ type TopicLogger struct {
 	fallbackLogger *atomic.Pointer[service.Logger]
 	o              *atomic.Pointer[service.OwnedOutput]
 	level          *atomic.Pointer[slog.Level]
+	pendingWrites  *atomic.Int64
 	attrs          []slog.Attr
 
 	streamStatus           *atomic.Pointer[service.RunningStreamSummary]
@@ -102,6 +103,7 @@ func NewTopicLogger(id string) *TopicLogger {
 		fallbackLogger:         &atomic.Pointer[service.Logger]{},
 		o:                      &atomic.Pointer[service.OwnedOutput]{},
 		level:                  &atomic.Pointer[slog.Level]{},
+		pendingWrites:          &atomic.Int64{},
 		streamStatus:           &atomic.Pointer[service.RunningStreamSummary]{},
 		streamStatusPollTicker: time.NewTicker(statusTickerDuration),
 	}
@@ -224,9 +226,14 @@ func (l *TopicLogger) Handle(ctx context.Context, r slog.Record) error {
 	if tmpO == nil {
 		return nil
 	}
-	_ = tmpO.WriteBatchNonBlocking(service.MessageBatch{msg}, func(ctx context.Context, err error) error {
-		return nil // TODO: Log nacks
-	}) // TODO: Log errors (occasionally)
+
+	l.pendingWrites.Add(1)
+	if err := tmpO.WriteBatchNonBlocking(service.MessageBatch{msg}, func(ctx context.Context, err error) error {
+		l.pendingWrites.Add(-1)
+		return nil
+	}); err != nil {
+		l.pendingWrites.Add(-1)
+	}
 	return nil
 }
 
@@ -248,6 +255,14 @@ func (l *TopicLogger) WithGroup(name string) slog.Handler {
 // Close the underlying connections of this topic logger.
 func (l *TopicLogger) Close(ctx context.Context) error {
 	l.streamStatusPollTicker.Stop()
+
+	for l.pendingWrites.Load() > 0 {
+		select {
+		case <-time.After(time.Second):
+		case <-ctx.Done():
+			break
+		}
+	}
 
 	o := l.o.Load()
 	if o != nil {

@@ -18,14 +18,13 @@ dedupe
 generate
 group_by
 group_by_value
-http
-http_client
 jmespath
 jq
 json_schema
 kafka
 kafka_franz
 log
+local
 mapping
 memcached
 memory
@@ -71,6 +70,7 @@ catch
 parallel
 processors
 switch
+split
 for_each
 drop
 batched
