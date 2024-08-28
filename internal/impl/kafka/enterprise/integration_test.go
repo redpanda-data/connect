@@ -145,6 +145,10 @@ func TestIntegration(t *testing.T) {
 	t.Run("test_status_happy", func(t *testing.T) {
 		testStatusHappy(ctx, t, brokerAddr)
 	})
+
+	t.Run("test_logs_close_flush", func(t *testing.T) {
+		testLogsCloseFlush(ctx, t, brokerAddr)
+	})
 }
 
 func testLogsHappy(ctx context.Context, t testing.TB, brokerAddr string) {
@@ -172,6 +176,55 @@ max_message_bytes: 1MB
 	for i := 0; i < inputLogs; i++ {
 		tmpLogger.With("v", i).Info("This is a log message")
 	}
+
+	outRecords := readNKafkaMessages(ctx, t, brokerAddr, logsTopic, inputLogs)
+	assert.Len(t, outRecords, inputLogs)
+
+	for i, v := range outRecords {
+		j := struct {
+			PipelineID string `json:"pipeline_id"`
+			InstanceID string `json:"instance_id"`
+			Message    string `json:"message"`
+			Level      string `json:"level"`
+			V          string `json:"v"`
+		}{}
+		require.NoError(t, json.Unmarshal(v.Value, &j))
+		assert.Equal(t, "foo", j.InstanceID)
+		assert.Equal(t, "bar", j.PipelineID)
+		assert.Equal(t, strconv.Itoa(i), j.V)
+		assert.Equal(t, "INFO", j.Level)
+		assert.Equal(t, "This is a log message", j.Message)
+		assert.Equal(t, "bar", string(v.Key))
+	}
+}
+
+func testLogsCloseFlush(ctx context.Context, t testing.TB, brokerAddr string) {
+	logsTopic, statusTopic := "__testlogscloseflush.logs", "_testlogscloseflush.status"
+
+	require.NoError(t, createKafkaTopic(ctx, brokerAddr, logsTopic, 1))
+	require.NoError(t, createKafkaTopic(ctx, brokerAddr, statusTopic, 1))
+
+	conf, err := service.NewConfigSpec().Fields(enterprise.TopicLoggerFields()...).ParseYAML(fmt.Sprintf(`
+seed_brokers: [ %v ]
+pipeline_id: bar
+logs_topic: %v
+logs_level: info
+status_topic: %v
+max_message_bytes: 1MB
+`, brokerAddr, logsTopic, statusTopic), nil)
+	require.NoError(t, err)
+
+	logger := enterprise.NewTopicLogger("foo")
+	require.NoError(t, logger.InitOutputFromParsed(conf))
+
+	inputLogs := 10
+
+	tmpLogger := slog.New(logger)
+	for i := 0; i < inputLogs; i++ {
+		tmpLogger.With("v", i).Info("This is a log message")
+	}
+
+	require.NoError(t, logger.Close(ctx))
 
 	outRecords := readNKafkaMessages(ctx, t, brokerAddr, logsTopic, inputLogs)
 	assert.Len(t, outRecords, inputLogs)
