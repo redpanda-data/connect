@@ -23,7 +23,7 @@
 component_type_dropdown::[]
 
 
-Pushes messages a QuestDB table
+Pushes messages to a QuestDB table
 
 
 [tabs]
@@ -98,7 +98,7 @@ output:
 --
 ======
 
-Important: We recommend that the dedupe feature is enabled on the QuestDB server
+Important: We recommend that the dedupe feature is enabled on the QuestDB server. Please visit https://questdb.io/docs/ for more information about deploying, configuring, and using QuestDB.
 
 == Performance
 
