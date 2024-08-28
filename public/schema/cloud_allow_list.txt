@@ -69,6 +69,7 @@ catch
 parallel
 processors
 switch
+split
 for_each
 drop
 batched
