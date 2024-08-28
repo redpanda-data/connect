@@ -1,0 +1,50 @@
+# Copyright 2024 Redpanda Data, Inc.
+#
+# Licensed as a Redpanda Enterprise file under the Redpanda Community
+# License (the "License"); you may not use this file except in compliance with
+# the License. You may obtain a copy of the License at
+#
+# https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
+
+FROM golang:1.22 AS build
+
+ENV CGO_ENABLED=0
+ENV GOOS=linux
+RUN useradd -u 10001 connect
+
+WORKDIR /go/src/github.com/redpanda-data/connect/
+# Update dependencies: On unchanged dependencies, cached layer will be reused
+COPY go.* /go/src/github.com/redpanda-data/connect/
+RUN go mod download
+
+# Build
+COPY . /go/src/github.com/redpanda-data/connect/
+# Tag timetzdata required for busybox base image:
+# https://github.com/benthosdev/benthos/issues/897
+RUN make TAGS="timetzdata" redpanda-connect-ai
+
+RUN touch /tmp/keep
+
+# Pack
+FROM nvidia/cuda:12.6.0-runtime-ubuntu24.04 AS package
+
+LABEL maintainer="Tyler Rockwood <rockwood@redpanda.com>"
+LABEL org.opencontainers.image.source="https://github.com/redpanda-data/connect"
+
+WORKDIR /
+
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=build /etc/passwd /etc/passwd
+COPY --from=build /go/src/github.com/redpanda-data/connect/target/bin/redpanda-connect-ai ./redpanda-connect
+COPY ./config/docker.yaml /connect.yaml
+
+USER connect
+
+ADD --chown=connect:connect --chmod=755 https://github.com/ollama/ollama/releases/download/v0.3.6/ollama-linux-amd64 /home/connect/.cache/ollama/ollama
+COPY --chown=connect:connect --from=build /tmp/keep /home/connect/.ollama/keep
+
+EXPOSE 4195
+
+ENTRYPOINT ["/redpanda-connect"]
+
+CMD ["run", "/connect.yaml"]

@@ -20,7 +20,7 @@ import (
 )
 
 //go:embed cloud_allow_list.txt
-var cloudAllowList string
+var allowList string
 
 func redpandaTopLevelConfigField() *service.ConfigField {
 	return service.NewObjectField("redpanda", enterprise.TopicLoggerFields()...)
@@ -41,7 +41,7 @@ func Standard(version, dateBuilt string) *service.ConfigSchema {
 // Cloud returns the config schema of a cloud build of Redpanda Connect.
 func Cloud(version, dateBuilt string) *service.ConfigSchema {
 	var allowSlice []string
-	for _, s := range strings.Split(cloudAllowList, "\n") {
+	for _, s := range strings.Split(allowList, "\n") {
 		s = strings.TrimSpace(s)
 		if s == "" || strings.HasPrefix(s, "#") {
 			continue

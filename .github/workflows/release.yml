@@ -150,3 +150,27 @@ jobs:
         platforms: linux/amd64,linux/arm64
         push: true
         tags: ${{ steps.docker_meta_cloud.outputs.tags }}
+
+    - name: Docker meta cloud AI
+      id: docker_meta_ai
+      uses: docker/metadata-action@v5
+      with:
+        images: |
+          redpandadata/connect
+        flavor: |
+          latest=false
+          suffix=-ai
+        tags: |
+          type=semver,suffix=-ai,pattern={{version}}
+          type=semver,suffix=-ai,pattern={{major}}.{{minor}}
+          type=semver,suffix=-ai,pattern={{major}}
+
+    - name: Build and push cloud
+      uses: docker/build-push-action@v6
+      with:
+        context: ./
+        file: ./resources/docker/Dockerfile.ai
+        builder: ${{ steps.buildx.outputs.name }}
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: ${{ steps.docker_meta_ai.outputs.tags }}

@@ -23,7 +23,7 @@ LD_FLAGS   ?= -w -s
 GO_FLAGS   ?=
 DOCS_FLAGS ?=
 
-APPS = redpanda-connect redpanda-connect-cloud redpanda-connect-community
+APPS = redpanda-connect redpanda-connect-cloud redpanda-connect-community redpanda-connect-ai
 all: $(APPS)
 
 install: $(APPS)
@@ -58,6 +58,10 @@ docker:
 docker-cloud:
 	@docker build -f ./resources/docker/Dockerfile.cloud . -t $(DOCKER_IMAGE):$(VER_CUT)-cloud
 	@docker tag $(DOCKER_IMAGE):$(VER_CUT)-cloud $(DOCKER_IMAGE):latest-cloud
+
+docker-ai:
+	@docker build -f ./resources/docker/Dockerfile.ai . -t $(DOCKER_IMAGE):$(VER_CUT)-ai
+	@docker tag $(DOCKER_IMAGE):$(VER_CUT)-ai $(DOCKER_IMAGE):latest-ai
 
 docker-cgo:
 	@docker build -f ./resources/docker/Dockerfile.cgo . -t $(DOCKER_IMAGE):$(VER_CUT)-cgo
