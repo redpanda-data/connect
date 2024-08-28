@@ -25,18 +25,16 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-const (
-	loFieldBatching = "batching"
-)
-
 func questdbOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Summary("Pushes messages a QuestDB table").
-		Description(`Important: We recommend that the dedupe feature is enabled on the QuestDB server`+service.OutputPerformanceDocs(true, true)).
+		Summary("Pushes messages to a QuestDB table").
+		Description("Important: We recommend that the dedupe feature is enabled on the QuestDB server. "+
+			"Please visit https://questdb.io/docs/ for more information about deploying, configuring, and using QuestDB."+
+			service.OutputPerformanceDocs(true, true)).
 		Categories("Services").
 		Fields(
 			service.NewOutputMaxInFlightField(),
-			service.NewBatchPolicyField(loFieldBatching),
+			service.NewBatchPolicyField("batching"),
 			service.NewStringField("address").
 				Description("Address of the QuestDB server's HTTP port (excluding protocol)").
 				Example("localhost:9000"),
@@ -56,8 +54,9 @@ func questdbOutputConfig() *service.ConfigSpec {
 				Description("Use TLS to secure the connection to the server").
 				Optional(),
 			service.NewStringField("tlsVerify").
-				Description("Whether to verify the server's certificate. This should only be used for testing as a last resort "+
-					"and never used in production as it makes the connection vulnerable to man-in-the-middle attacks. Options are 'on' or 'unsafe_off'.").
+				Description("Whether to verify the server's certificate. This should only be used for testing as a "+
+					"last resort and never used in production as it makes the connection vulnerable to "+
+					"man-in-the-middle attacks. Options are 'on' or 'unsafe_off'.").
 				Optional().
 				Default("on").
 				LintRule(`root = if ["on","unsafe_off"].contains(this != true { ["valid options are \"on\" or \"unsafe_off\"" ] }`),
@@ -67,7 +66,8 @@ func questdbOutputConfig() *service.ConfigSpec {
 				Optional().
 				Advanced(),
 			service.NewDurationField("requestTimeout").
-				Description("The time to wait for a response from the server. This is in addition to the calculation derived from the requestMinThroughput parameter.").
+				Description("The time to wait for a response from the server. This is in addition to the calculation "+
+					"derived from the requestMinThroughput parameter.").
 				Optional().
 				Advanced(),
 			service.NewIntField("requestMinThroughput").
@@ -124,7 +124,7 @@ type questdbWriter struct {
 
 func fromConf(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPol service.BatchPolicy, mif int, err error) {
 
-	if batchPol, err = conf.FieldBatchPolicy(loFieldBatching); err != nil {
+	if batchPol, err = conf.FieldBatchPolicy("batching"); err != nil {
 		return
 	}
 
@@ -132,11 +132,16 @@ func fromConf(conf *service.ParsedConfig, mgr *service.Resources) (out service.B
 		return
 	}
 
-	// Collect QuestDB LineSenderOptions for pool initialization
+	// We force the use of HTTP connections (instead of TCP) and
+	// disable the QuestDB LineSender auto flush to force the client
+	// to send data over the wire only when a MessageBatch has been
+	// completely processed.
 	opts := []qdb.LineSenderOption{
 		qdb.WithHttp(),
 		qdb.WithAutoFlushDisabled(),
 	}
+
+	// Now, we process options for and construct our LineSenderPool
 
 	var addr string
 	if addr, err = conf.FieldString("address"); err != nil {
@@ -204,6 +209,7 @@ func fromConf(conf *service.ParsedConfig, mgr *service.Resources) (out service.B
 	}
 
 	// Allocate the QuestDBWriter which wraps the LineSenderPool
+
 	w := &questdbWriter{
 		log:                   mgr.Logger(),
 		symbols:               map[string]bool{},
@@ -225,6 +231,8 @@ func fromConf(conf *service.ParsedConfig, mgr *service.Resources) (out service.B
 		return
 	}
 
+	// Symbols, doubles, and timestampStringFields are stored in maps
+	// for fast lookup.
 	var symbols []string
 	if conf.Contains("symbols") {
 		if symbols, err = conf.FieldStringList("symbols"); err != nil {
@@ -254,6 +262,8 @@ func fromConf(conf *service.ParsedConfig, mgr *service.Resources) (out service.B
 			w.timestampStringFields[f] = true
 		}
 	}
+
+	// Finish processing the writer options
 
 	if conf.Contains("designatedTimestampField") {
 		if w.designatedTimestampField, err = conf.FieldString("designatedTimestampField"); err != nil {
@@ -337,9 +347,6 @@ func (q *questdbWriter) WriteBatch(ctx context.Context, batch service.MessageBat
 
 		q.log.Tracef("Writing message %v", i)
 
-		// Fields must be written in a particular order by type, so
-		// we use a mutable obj to delete fields written at an earlier stage
-		// of the message construction process.
 		jVal, err := m.AsStructured()
 		if err != nil {
 			err = fmt.Errorf("unable to parse JSON: %v", err)
@@ -377,28 +384,8 @@ func (q *questdbWriter) WriteBatch(ctx context.Context, batch service.MessageBat
 				continue
 			}
 
-			// Skip symbols
-			if _, ok := q.symbols[k]; ok {
-				continue
-			}
-
-			// Skip symbols since we already wrote them
+			// Skip symbols (already processed in 1st stage)
 			if _, isSymbol := q.symbols[k]; isSymbol {
-				continue
-			}
-
-			// Check if the field is a timestamp and process accordingly
-			if _, isTimestampField := q.timestampStringFields[k]; isTimestampField {
-				timestamp, err := q.parseTimestamp(v)
-				if err == nil {
-					if !hasTable {
-						sender.Table(q.table)
-						hasTable = true
-					}
-					sender.TimestampColumn(k, timestamp)
-				} else {
-					q.log.Errorf("%v", err)
-				}
 				continue
 			}
 
@@ -406,6 +393,21 @@ func (q *questdbWriter) WriteBatch(ctx context.Context, batch service.MessageBat
 			// with structured messages
 			switch val := v.(type) {
 			case string:
+				// Check if the field is a timestamp and process accordingly
+				if _, isTimestampField := q.timestampStringFields[k]; isTimestampField {
+					timestamp, err := q.parseTimestamp(v)
+					if err == nil {
+						if !hasTable {
+							sender.Table(q.table)
+							hasTable = true
+						}
+						sender.TimestampColumn(k, timestamp)
+					} else {
+						q.log.Errorf("%v", err)
+					}
+					continue
+				}
+
 				if !hasTable {
 					sender.Table(q.table)
 					hasTable = true
