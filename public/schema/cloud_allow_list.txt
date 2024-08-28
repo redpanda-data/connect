@@ -18,8 +18,6 @@ dedupe
 generate
 group_by
 group_by_value
-http
-http_client
 jmespath
 jq
 json_schema
