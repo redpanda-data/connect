@@ -235,7 +235,6 @@ func (s *sftpReader) Connect(ctx context.Context) (err error) {
 			return nil
 		}
 		if s.deleteOnFinish {
-			s.scannerMut.Lock()
 			client := s.client
 			if client == nil {
 				if client, outErr = s.creds.GetClient(s.mgr.FS(), s.address); outErr != nil {
@@ -250,7 +249,6 @@ func (s *sftpReader) Connect(ctx context.Context) (err error) {
 					outErr = fmt.Errorf("remove %v: %w", nextPath, outErr)
 				}
 			}
-			s.scannerMut.Unlock()
 		}
 		return
 	}, details); err != nil {
