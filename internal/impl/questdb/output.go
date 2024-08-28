@@ -133,15 +133,16 @@ func fromConf(conf *service.ParsedConfig, mgr *service.Resources) (out service.B
 	}
 
 	// We force the use of HTTP connections (instead of TCP) and
-	// disable the QuestDB LineSender auto flush to force the client
-	// to send data over the wire only when a MessageBatch has been
+	// disable the QuestDB LineSender[s] auto flush to force the client
+	// to send data over the wire only once, when a MessageBatch has been
 	// completely processed.
 	opts := []qdb.LineSenderOption{
 		qdb.WithHttp(),
 		qdb.WithAutoFlushDisabled(),
 	}
 
-	// Now, we process options for and construct our LineSenderPool
+	// Now, we process options for and construct the LineSenderPool
+	// which is used to send data to QuestDB using Influx Line Protocol
 
 	var addr string
 	if addr, err = conf.FieldString("address"); err != nil {
@@ -197,15 +198,24 @@ func fromConf(conf *service.ParsedConfig, mgr *service.Resources) (out service.B
 		opts = append(opts, qdb.WithMinThroughput(requestMinThroughput))
 	}
 
-	if token, _ := conf.FieldString("token"); token != "" {
-		opts = append(opts, qdb.WithBearerToken(token))
-	} else {
-		username, _ := conf.FieldString("username")
-		password, _ := conf.FieldString("password")
-		if username != "" && password != "" {
-			opts = append(opts, qdb.WithBasicAuth(username, password))
-
+	if conf.Contains("token") {
+		var token string
+		if token, err = conf.FieldString("token"); err != nil {
+			return
 		}
+		opts = append(opts, qdb.WithBearerToken(token))
+	}
+
+	if conf.Contains("username") && conf.Contains("password") {
+		var username, password string
+		if username, err = conf.FieldString("username"); err != nil {
+			return
+		}
+		if password, err = conf.FieldString("password"); err != nil {
+			return
+		}
+		opts = append(opts, qdb.WithBasicAuth(username, password))
+
 	}
 
 	// Allocate the QuestDBWriter which wraps the LineSenderPool
@@ -262,8 +272,6 @@ func fromConf(conf *service.ParsedConfig, mgr *service.Resources) (out service.B
 			w.timestampStringFields[f] = true
 		}
 	}
-
-	// Finish processing the writer options
 
 	if conf.Contains("designatedTimestampField") {
 		if w.designatedTimestampField, err = conf.FieldString("designatedTimestampField"); err != nil {
@@ -435,7 +443,7 @@ func (q *questdbWriter) WriteBatch(ctx context.Context, batch service.MessageBat
 				} else {
 					intVal, err := val.Int64()
 					if err != nil {
-						q.log.Errorf("could not parse %v into an int: %v", val, err)
+						q.log.Errorf("could not parse %v into an integer: %v", val, err)
 					}
 
 					if !hasTable {
