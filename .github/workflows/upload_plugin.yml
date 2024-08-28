@@ -1,0 +1,83 @@
+name: Upload rpk connect plugin to S3
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      # All runs triggered by tag will really push to S3.
+      # Take care when adding more patterns here.
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-rc[0-9]+'
+  pull_request:
+    # Keep CI snappy for unrelated PRs
+    paths:
+      - 'resources/plugin_uploader/**'
+      - '.github/workflows/upload_plugin.yml'
+      - '.github/actions/upload_managed_plugin/**'
+      - '.goreleaser.yml'
+  workflow_dispatch: {}
+
+env:
+  # Do dry run in most cases, UNLESS the triggering event was a "tag".
+  DRY_RUN: ${{ ! github.ref_type == 'tag' }}
+
+jobs:
+  upload_rpk_connect_plugin:
+    # Let's make this fast by using a beefy runner.
+    runs-on: ubuntu-latest-32
+    if: ${{ github.repository == 'redpanda-data/connect' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == 'redpanda-data/connect') }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ vars.RP_AWS_CRED_REGION }}
+          role-to-assume: arn:aws:iam::${{ secrets.RP_AWS_CRED_ACCOUNT_ID }}:role/${{ vars.RP_AWS_CRED_BASE_ROLE_NAME }}${{ github.event.repository.name }}
+
+      - name: Get secrets from AWS Secrets Manager (for read/writing S3-backed plugins repo)
+        uses: aws-actions/aws-secretsmanager-get-secrets@v2
+        with:
+          secret-ids: |
+            ,sdlc/prod/github/rpk_plugin_publisher
+          parse-json-secrets: true
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.22.x
+          check-latest: true
+
+      - name: Build binaries (dry run / snapshot mode)
+        if: ${{ env.DRY_RUN }}
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: 1.26.2
+          args: build --snapshot
+
+      - name: Build binaries
+        if: ${{ ! env.DRY_RUN }}
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: 1.26.2
+          args: build
+
+      - name: Upload connect plugin to S3
+        uses: ./.github/actions/upload_managed_plugin
+        with:
+          aws_access_key_id: ${{ env.RPK_PLUGIN_PUBLISHER_AWS_ACCESS_KEY_ID }}
+          aws_secret_access_key: ${{ env.RPK_PLUGIN_PUBLISHER_AWS_SECRET_ACCESS_KEY }}
+          aws_region: "us-west-2"
+          aws_s3_bucket: "rpk-plugins-repo"
+          project_root_dir: ${{ github.workspace }}
+          artifacts_file: ${{ github.workspace }}/target/dist/artifacts.json
+          metadata_file: ${{ github.workspace }}/target/dist/metadata.json
+          plugin_name: "connect"
+          goos: linux,darwin
+          goarch: amd64,arm64
+          repo_hostname: rpk-plugins.redpanda.com
+          dry_run: ${{ env.DRY_RUN }}
+

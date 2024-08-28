@@ -1,0 +1,86 @@
+name: upload-managed-plugin
+description: Upload binaries as rpk managed plugin
+inputs:
+  aws_access_key_id:
+    description: For accessing S3 bucket
+    required: true
+  aws_secret_access_key:
+    description: For accessing S3 bucket
+    required: true
+  aws_region:
+    description: For accessing S3 bucket
+    required: true
+  aws_s3_bucket:
+    description: S3 bucket to use
+    required: true
+  artifacts_file:
+    description: Path to goreleaser artifacts.json
+    required: true
+  metadata_file:
+    description: Path to goreleaser artifacts.json
+    required: true
+  project_root_dir:
+    description: Root dir of goreleaser project
+    required: true
+  plugin_name:
+    description: Should match the goreleaser build id for the binary  E.g. "connect"
+    required: true
+  goos:
+    description: CSV list of target OS's to filter on
+    required: true
+  goarch:
+    description: CSV list of target arch's to filter on
+    required: true
+  repo_hostname:
+    description: RPK Plugins repo hostname. E.g. rpk-plugins.redpanda.com
+    required: true
+  dry_run:
+    description: Dry run means skipping writes to S3
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ inputs.aws_access_key_id }}
+        aws-secret-access-key: ${{ inputs.aws_secret_access_key }}
+        aws-region: ${{ inputs.aws_region }}
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: install deps
+      working-directory: resources/plugin_uploader
+      shell: bash
+      run: pip install -r requirements.txt
+
+    - name: Upload archives
+      working-directory: resources/plugin_uploader
+      shell: bash
+      run: |
+        DRY_RUN_FLAG=${{ inputs.dry_run && '--dry-run' || '' }}
+        ./plugin_uploader.py upload-archives \
+          --artifacts-file=${{ inputs.artifacts_file }} \
+          --metadata-file=${{ inputs.metadata_file }} \
+          --project-root-dir=${{ inputs.project_root_dir }} \
+          --region=${{ inputs.aws_region }} \
+          --bucket=${{ inputs.aws_s3_bucket }} \
+          --plugin=${{ inputs.plugin_name }} \
+          --goos=${{ inputs.goos }} \
+          --goarch=${{ inputs.goarch }} \
+          $DRY_RUN_FLAG
+
+    - name: Upload manifest
+      working-directory: resources/plugin_uploader
+      shell: bash
+      run: |
+        DRY_RUN_FLAG=${{ inputs.dry_run && '--dry-run' || '' }}
+        ./plugin_uploader.py upload-manifest \
+          --region=${{ inputs.aws_region }} \
+          --bucket=${{ inputs.aws_s3_bucket }} \
+          --plugin=${{ inputs.plugin_name }} \
+          --repo-hostname=${{ inputs.repo_hostname }} \
+          $DRY_RUN_FLAG
