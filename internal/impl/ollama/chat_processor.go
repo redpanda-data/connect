@@ -22,6 +22,17 @@ const (
 	ocpFieldUserPrompt     = "prompt"
 	ocpFieldSystemPrompt   = "system_prompt"
 	ocpFieldResponseFormat = "response_format"
+	// Prediction options
+	ocpFieldMaxTokens        = "max_tokens"
+	ocpFieldNumKeep          = "num_keep"
+	ocpFieldSeed             = "seed"
+	ocpFieldTopK             = "top_k"
+	ocpFieldTopP             = "top_p"
+	ocpFieldTemp             = "temperature"
+	ocpFieldRepeatPenalty    = "repeat_penalty"
+	ocpFieldPresencePenalty  = "presence_penalty"
+	ocpFieldFrequencyPenalty = "frequency_penalty"
+	ocpFieldStop             = "stop"
 )
 
 func init() {
@@ -57,8 +68,47 @@ For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ol
 				Advanced().
 				Optional(),
 			service.NewStringEnumField(ocpFieldResponseFormat, "text", "json").
-				Description("The response format of generated type, the model must also be prompted to output the appropriate response type.").
+				Description("The format of the response that the Ollama model generates. If specifying JSON output, then the `"+ocpFieldUserPrompt+"` should specify that the output should be in JSON as well.").
 				Default("text"),
+			service.NewIntField(ocpFieldMaxTokens).
+				Optional().
+				Description("The maximum number of tokens to predict and output. Limiting the amount of output means that requests are processed faster and have a fixed limit on the cost."),
+			service.NewIntField(ocpFieldTemp).
+				Optional().
+				Description("The temperature of the model. Increasing the temperature makes the model answer more creatively."),
+			service.NewIntField(ocpFieldNumKeep).
+				Optional().
+				Advanced().
+				Description("Specify the number of tokens from the initial prompt to retain when the model resets its internal context. By default, this value is set to `4`. Use `-1` to retain all tokens from the initial prompt."),
+			service.NewIntField(ocpFieldSeed).
+				Optional().
+				Advanced().
+				Description("Sets the random number seed to use for generation. Setting this to a specific number will make the model generate the same text for the same prompt.").
+				Example(42),
+			service.NewIntField(ocpFieldTopK).
+				Optional().
+				Advanced().
+				Description("Reduces the probability of generating nonsense. A higher value, for example `100`, will give more diverse answers. A lower value, for example `10`, will be more conservative."),
+			service.NewFloatField(ocpFieldTopP).
+				Optional().
+				Advanced().
+				Description("Works together with `top-k`. A higher value, for example 0.95, will lead to more diverse text. A lower value, for example 0.5, will generate more focused and conservative text."),
+			service.NewFloatField(ocpFieldRepeatPenalty).
+				Optional().
+				Advanced().
+				Description(`Sets how strongly to penalize repetitions. A higher value, for example 1.5, will penalize repetitions more strongly. A lower value, for example 0.9, will be more lenient.`),
+			service.NewFloatField(ocpFieldPresencePenalty).
+				Optional().
+				Advanced().
+				Description(`Positive values penalize new tokens if they have appeared in the text so far. This increases the model's likelihood to talk about new topics.`),
+			service.NewFloatField(ocpFieldFrequencyPenalty).
+				Optional().
+				Advanced().
+				Description(`Positive values penalize new tokens based on the frequency of their appearance in the text so far. This decreases the model's likelihood to repeat the same line verbatim.`),
+			service.NewStringListField(ocpFieldStop).
+				Optional().
+				Advanced().
+				Description(`Sets the stop sequences to use. When this pattern is encountered the LLM stops generating text and returns the final response.`),
 		).Fields(commonFields()...)
 
 }

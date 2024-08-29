@@ -65,7 +65,7 @@ ollama_chat:
   max_tokens: 0 # No default (optional)
   temperature: 0 # No default (optional)
   num_keep: 0 # No default (optional)
-  seed: 0 # No default (optional)
+  seed: 42 # No default (optional)
   top_k: 0 # No default (optional)
   top_p: 0 # No default (optional)
   repeat_penalty: 0 # No default (optional)
@@ -135,7 +135,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 === `response_format`
 
-The response format of generated type, the model must also be prompted to output the appropriate response type.
+The format of the response that the Ollama model generates. If specifying JSON output, then the `prompt` should specify that the output should be in JSON as well.
 
 
 *Type*: `string`
@@ -149,7 +149,7 @@ Options:
 
 === `max_tokens`
 
-The maximum number of tokens to predict and output.
+The maximum number of tokens to predict and output. Limiting the amount of output means that requests are processed faster and have a fixed limit on the cost.
 
 
 *Type*: `int`
@@ -157,7 +157,7 @@ The maximum number of tokens to predict and output.
 
 === `temperature`
 
-The temperature of the model. Increasing the temperature will make the model answer more creatively.
+The temperature of the model. Increasing the temperature makes the model answer more creatively.
 
 
 *Type*: `int`
@@ -165,7 +165,7 @@ The temperature of the model. Increasing the temperature will make the model ans
 
 === `num_keep`
 
-Specify the number of tokens from the initial prompt to retain when the model resets its internal context. By default, this value is set to 4. Use -1 to retain all tokens from the initial prompt.
+Specify the number of tokens from the initial prompt to retain when the model resets its internal context. By default, this value is set to `4`. Use `-1` to retain all tokens from the initial prompt.
 
 
 *Type*: `int`
@@ -179,9 +179,15 @@ Sets the random number seed to use for generation. Setting this to a specific nu
 *Type*: `int`
 
 
+```yml
+# Examples
+
+seed: 42
+```
+
 === `top_k`
 
-Reduces the probability of generating nonsense. A higher value (e.g. 100) will give more diverse answers, while a lower value (e.g. 10) will be more conservative.
+Reduces the probability of generating nonsense. A higher value, for example `100`, will give more diverse answers. A lower value, for example `10`, will be more conservative.
 
 
 *Type*: `int`
@@ -189,7 +195,7 @@ Reduces the probability of generating nonsense. A higher value (e.g. 100) will g
 
 === `top_p`
 
-Works together with top-k. A higher value (e.g., 0.95) will lead to more diverse text, while a lower value (e.g., 0.5) will generate more focused and conservative text.
+Works together with `top-k`. A higher value, for example 0.95, will lead to more diverse text. A lower value, for example 0.5, will generate more focused and conservative text.
 
 
 *Type*: `float`
@@ -197,7 +203,7 @@ Works together with top-k. A higher value (e.g., 0.95) will lead to more diverse
 
 === `repeat_penalty`
 
-Sets how strongly to penalize repetitions. A higher value (e.g., 1.5) will penalize repetitions more strongly, while a lower value (e.g., 0.9) will be more lenient.
+Sets how strongly to penalize repetitions. A higher value, for example 1.5, will penalize repetitions more strongly. A lower value, for example 0.9, will be more lenient.
 
 
 *Type*: `float`
@@ -205,7 +211,7 @@ Sets how strongly to penalize repetitions. A higher value (e.g., 1.5) will penal
 
 === `presence_penalty`
 
-Positive values penalize new tokens based on whether they appear in the text so far, increasing the model's likelihood to talk about new topics.
+Positive values penalize new tokens if they have appeared in the text so far. This increases the model's likelihood to talk about new topics.
 
 
 *Type*: `float`
@@ -213,7 +219,7 @@ Positive values penalize new tokens based on whether they appear in the text so 
 
 === `frequency_penalty`
 
-Positive values penalize new tokens based on their existing frequency in the text so far, decreasing the model's likelihood to repeat the same line verbatim.
+Positive values penalize new tokens based on the frequency of their appearance in the text so far. This decreases the model's likelihood to repeat the same line verbatim.
 
 
 *Type*: `float`
@@ -221,7 +227,7 @@ Positive values penalize new tokens based on their existing frequency in the tex
 
 === `stop`
 
-Sets the stop sequences to use. When this pattern is encountered the LLM will stop generating text and return.
+Sets the stop sequences to use. When this pattern is encountered the LLM stops generating text and returns the final response.
 
 
 *Type*: `array`
@@ -237,7 +243,7 @@ Options for the model runner that are used when the model is first loaded into m
 
 === `runner.context_size`
 
-Sets the size of the context window used to generate the next token.
+Sets the size of the context window used to generate the next token. Using a larger context window uses more memory and takes longer to processor.
 
 
 *Type*: `int`
@@ -253,7 +259,7 @@ The maximum number of requests to process in parallel.
 
 === `runner.gpu_layers`
 
-This option allows offloading some layers to the GPU for computation. Generally results in increased performance. By default the runtime decides the number of layers dynamically.
+This option allows offloading some layers to the GPU for computation. This generally results in increased performance. By default, the runtime decides the number of layers dynamically.
 
 
 *Type*: `int`
@@ -261,7 +267,7 @@ This option allows offloading some layers to the GPU for computation. Generally 
 
 === `runner.threads`
 
-Set the number of threads to use during generation. For optimal performance, it is recommended to set this value to the number of physical CPU cores your system has. By default the runtime decides the optimal number of threads.
+Set the number of threads to use during generation. For optimal performance, it is recommended to set this value to the number of physical CPU cores your system has. By default, the runtime decides the optimal number of threads.
 
 
 *Type*: `int`
@@ -269,7 +275,7 @@ Set the number of threads to use during generation. For optimal performance, it 
 
 === `runner.use_mmap`
 
-If supported, map the model into memory. This allows the system to load only the necessary parts of the model as needed.
+Map the model into memory. This is only support on unix systems and allows loading only the necessary parts of the model as needed.
 
 
 *Type*: `bool`
@@ -277,7 +283,7 @@ If supported, map the model into memory. This allows the system to load only the
 
 === `runner.use_mlock`
 
-Lock the model in memory, preventing it from being swapped out when memory-mapped. This can improve performance but trades away some of the advantages of memory-mapping by requiring more RAM to run and potentially slowing down load times as the model loads into RAM.
+Lock the model in memory, preventing it from being swapped out when memory-mapped. This option can improve performance but reduces some of the advantages of memory-mapping because it uses more RAM to run and can slow down load times as the model loads into RAM.
 
 
 *Type*: `bool`

@@ -39,17 +39,6 @@ const (
 	bopFieldModel          = "model"
 	bopFieldCacheDirectory = "cache_directory"
 	bopFieldDownloadURL    = "download_url"
-	// Prediction options
-	bopFieldMaxTokens        = "max_tokens"
-	bopFieldNumKeep          = "num_keep"
-	bopFieldSeed             = "seed"
-	bopFieldTopK             = "top_k"
-	bopFieldTopP             = "top_p"
-	bopFieldTemp             = "temperature"
-	bopFieldRepeatPenalty    = "repeat_penalty"
-	bopFieldPresencePenalty  = "presence_penalty"
-	bopFieldFrequencyPenalty = "frequency_penalty"
-	bopFieldStop             = "stop"
 
 	bopFieldRunner = "runner"
 	// Runner fields
@@ -64,68 +53,30 @@ const (
 
 func commonFields() []*service.ConfigField {
 	return []*service.ConfigField{
-		service.NewIntField(bopFieldMaxTokens).
-			Optional().
-			Description("The maximum number of tokens to predict and output."),
-		service.NewIntField(bopFieldTemp).
-			Optional().
-			Description("The temperature of the model. Increasing the temperature will make the model answer more creatively."),
-		service.NewIntField(bopFieldNumKeep).
-			Optional().
-			Advanced().
-			Description(`Specify the number of tokens from the initial prompt to retain when the model resets its internal context. By default, this value is set to 4. Use -1 to retain all tokens from the initial prompt.`),
-		service.NewIntField(bopFieldSeed).
-			Optional().
-			Advanced().
-			Description("Sets the random number seed to use for generation. Setting this to a specific number will make the model generate the same text for the same prompt."),
-		service.NewIntField(bopFieldTopK).
-			Optional().
-			Advanced().
-			Description(`Reduces the probability of generating nonsense. A higher value (e.g. 100) will give more diverse answers, while a lower value (e.g. 10) will be more conservative.`),
-		service.NewFloatField(bopFieldTopP).
-			Optional().
-			Advanced().
-			Description(`Works together with top-k. A higher value (e.g., 0.95) will lead to more diverse text, while a lower value (e.g., 0.5) will generate more focused and conservative text.`),
-		service.NewFloatField(bopFieldRepeatPenalty).
-			Optional().
-			Advanced().
-			Description(`Sets how strongly to penalize repetitions. A higher value (e.g., 1.5) will penalize repetitions more strongly, while a lower value (e.g., 0.9) will be more lenient.`),
-		service.NewFloatField(bopFieldPresencePenalty).
-			Optional().
-			Advanced().
-			Description(`Positive values penalize new tokens based on whether they appear in the text so far, increasing the model's likelihood to talk about new topics.`),
-		service.NewFloatField(bopFieldFrequencyPenalty).
-			Optional().
-			Advanced().
-			Description(`Positive values penalize new tokens based on their existing frequency in the text so far, decreasing the model's likelihood to repeat the same line verbatim.`),
-		service.NewStringListField(bopFieldStop).
-			Optional().
-			Advanced().
-			Description(`Sets the stop sequences to use. When this pattern is encountered the LLM will stop generating text and return.`),
 		service.NewObjectField(
 			bopFieldRunner,
 			service.NewIntField(bopFieldContextSize).
 				Optional().
-				Description("Sets the size of the context window used to generate the next token."),
+				Description("Sets the size of the context window used to generate the next token. Using a larger context window uses more memory and takes longer to processor."),
 			service.NewIntField(bopFieldBatchSize).
 				Optional().
 				Description("The maximum number of requests to process in parallel."),
 			service.NewIntField(bopFieldGPULayers).
 				Optional().
 				Advanced().
-				Description("This option allows offloading some layers to the GPU for computation. Generally results in increased performance. By default the runtime decides the number of layers dynamically."),
+				Description("This option allows offloading some layers to the GPU for computation. This generally results in increased performance. By default, the runtime decides the number of layers dynamically."),
 			service.NewIntField(bopFieldThreads).
 				Optional().
 				Advanced().
-				Description("Set the number of threads to use during generation. For optimal performance, it is recommended to set this value to the number of physical CPU cores your system has. By default the runtime decides the optimal number of threads."),
+				Description("Set the number of threads to use during generation. For optimal performance, it is recommended to set this value to the number of physical CPU cores your system has. By default, the runtime decides the optimal number of threads."),
 			service.NewBoolField(bopFieldUseMMap).
 				Optional().
 				Advanced().
-				Description("If supported, map the model into memory. This allows the system to load only the necessary parts of the model as needed."),
+				Description("Map the model into memory. This is only support on unix systems and allows loading only the necessary parts of the model as needed."),
 			service.NewBoolField(bopFieldUseMLock).
 				Optional().
 				Advanced().
-				Description("Lock the model in memory, preventing it from being swapped out when memory-mapped. This can improve performance but trades away some of the advantages of memory-mapping by requiring more RAM to run and potentially slowing down load times as the model loads into RAM."),
+				Description("Lock the model in memory, preventing it from being swapped out when memory-mapped. This option can improve performance but reduces some of the advantages of memory-mapping because it uses more RAM to run and can slow down load times as the model loads into RAM."),
 		).Optional().Description(`Options for the model runner that are used when the model is first loaded into memory.`),
 		service.NewStringField(bopFieldServerAddress).
 			Description("The address of the Ollama server to use. Leave the field blank and the processor starts and runs a local Ollama server or specify the address of your own local or remote server.").
@@ -145,113 +96,113 @@ func commonFields() []*service.ConfigField {
 
 func extractOptions(conf *service.ParsedConfig) (map[string]any, error) {
 	opts := api.Options{}
-	if conf.Contains(bopFieldMaxTokens) {
-		v, err := conf.FieldInt(bopFieldMaxTokens)
+	if conf.Contains(ocpFieldMaxTokens) {
+		v, err := conf.FieldInt(ocpFieldMaxTokens)
 		if err != nil {
 			return nil, err
 		}
 		opts.NumPredict = v
 	}
-	if conf.Contains(bopFieldTemp) {
-		v, err := conf.FieldFloat(bopFieldTemp)
+	if conf.Contains(ocpFieldTemp) {
+		v, err := conf.FieldFloat(ocpFieldTemp)
 		if err != nil {
 			return nil, err
 		}
 		opts.Temperature = float32(v)
 	}
-	if conf.Contains(bopFieldNumKeep) {
-		v, err := conf.FieldInt(bopFieldNumKeep)
+	if conf.Contains(ocpFieldNumKeep) {
+		v, err := conf.FieldInt(ocpFieldNumKeep)
 		if err != nil {
 			return nil, err
 		}
 		opts.NumKeep = v
 	}
-	if conf.Contains(bopFieldSeed) {
-		v, err := conf.FieldInt(bopFieldSeed)
+	if conf.Contains(ocpFieldSeed) {
+		v, err := conf.FieldInt(ocpFieldSeed)
 		if err != nil {
 			return nil, err
 		}
 		opts.Seed = v
 	}
-	if conf.Contains(bopFieldTopK) {
-		v, err := conf.FieldInt(bopFieldTopK)
+	if conf.Contains(ocpFieldTopK) {
+		v, err := conf.FieldInt(ocpFieldTopK)
 		if err != nil {
 			return nil, err
 		}
 		opts.TopK = v
 	}
-	if conf.Contains(bopFieldTopP) {
-		v, err := conf.FieldFloat(bopFieldTopP)
+	if conf.Contains(ocpFieldTopP) {
+		v, err := conf.FieldFloat(ocpFieldTopP)
 		if err != nil {
 			return nil, err
 		}
 		opts.TopP = float32(v)
 	}
-	if conf.Contains(bopFieldRepeatPenalty) {
-		v, err := conf.FieldFloat(bopFieldTopP)
+	if conf.Contains(ocpFieldRepeatPenalty) {
+		v, err := conf.FieldFloat(ocpFieldTopP)
 		if err != nil {
 			return nil, err
 		}
 		opts.RepeatPenalty = float32(v)
 	}
-	if conf.Contains(bopFieldFrequencyPenalty) {
-		v, err := conf.FieldFloat(bopFieldFrequencyPenalty)
+	if conf.Contains(ocpFieldFrequencyPenalty) {
+		v, err := conf.FieldFloat(ocpFieldFrequencyPenalty)
 		if err != nil {
 			return nil, err
 		}
 		opts.FrequencyPenalty = float32(v)
 	}
-	if conf.Contains(bopFieldPresencePenalty) {
-		v, err := conf.FieldFloat(bopFieldPresencePenalty)
+	if conf.Contains(ocpFieldPresencePenalty) {
+		v, err := conf.FieldFloat(ocpFieldPresencePenalty)
 		if err != nil {
 			return nil, err
 		}
 		opts.PresencePenalty = float32(v)
 	}
-	if conf.Contains(bopFieldStop) {
-		v, err := conf.FieldStringList(bopFieldStop)
+	if conf.Contains(ocpFieldStop) {
+		v, err := conf.FieldStringList(ocpFieldStop)
 		if err != nil {
 			return nil, err
 		}
 		opts.Stop = v
 	}
 	if conf.Contains(bopFieldRunner, bopFieldContextSize) {
-		v, err := conf.FieldInt(bopFieldStop, bopFieldContextSize)
+		v, err := conf.FieldInt(ocpFieldStop, bopFieldContextSize)
 		if err != nil {
 			return nil, err
 		}
 		opts.Runner.NumCtx = v
 	}
 	if conf.Contains(bopFieldRunner, bopFieldBatchSize) {
-		v, err := conf.FieldInt(bopFieldStop, bopFieldBatchSize)
+		v, err := conf.FieldInt(ocpFieldStop, bopFieldBatchSize)
 		if err != nil {
 			return nil, err
 		}
 		opts.Runner.NumBatch = v
 	}
 	if conf.Contains(bopFieldRunner, bopFieldGPULayers) {
-		v, err := conf.FieldInt(bopFieldStop, bopFieldGPULayers)
+		v, err := conf.FieldInt(ocpFieldStop, bopFieldGPULayers)
 		if err != nil {
 			return nil, err
 		}
 		opts.Runner.NumGPU = v
 	}
 	if conf.Contains(bopFieldRunner, bopFieldThreads) {
-		v, err := conf.FieldInt(bopFieldStop, bopFieldThreads)
+		v, err := conf.FieldInt(ocpFieldStop, bopFieldThreads)
 		if err != nil {
 			return nil, err
 		}
 		opts.Runner.NumThread = v
 	}
 	if conf.Contains(bopFieldRunner, bopFieldUseMMap) {
-		v, err := conf.FieldBool(bopFieldStop, bopFieldUseMMap)
+		v, err := conf.FieldBool(ocpFieldStop, bopFieldUseMMap)
 		if err != nil {
 			return nil, err
 		}
 		opts.Runner.UseMMap = &v
 	}
 	if conf.Contains(bopFieldRunner, bopFieldUseMLock) {
-		v, err := conf.FieldBool(bopFieldStop, bopFieldUseMLock)
+		v, err := conf.FieldBool(ocpFieldStop, bopFieldUseMLock)
 		if err != nil {
 			return nil, err
 		}
