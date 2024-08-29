@@ -3,12 +3,14 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.33.1 - TBD
+## 4.34.0 - 2024-08-29
 
 ### Fixed
 
 - The `schema_registry` output now allows pushing schemas if the target Schema Registry instance is in `IMPORT` mode. (@mihaitodor)
 - Fixed an issue where the `azure_blob_storage` input would fail to delete blobs when using `targets_input` with `delete_objects: true`. (@mihaitodor)
+- New experimental `gcp_vertex_ai_chat` processor. (@rockwotj)
+- New experimental `aws_bedrock_chat` processor. (@rockwotj)
 
 ## 4.33.0 - 2024-08-13
 
