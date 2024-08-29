@@ -38,7 +38,6 @@ nats_kv
 nats_request_reply
 ollama_chat
 ollama_embeddings
-openai_chat
 openai_chat_completion
 openai_embeddings
 openai_image_generation
