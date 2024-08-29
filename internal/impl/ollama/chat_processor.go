@@ -11,6 +11,7 @@ package ollama
 import (
 	"context"
 	"errors"
+	"fmt"
 	"unicode/utf8"
 
 	"github.com/ollama/ollama/api"
@@ -18,8 +19,20 @@ import (
 )
 
 const (
-	ocpFieldUserPrompt   = "prompt"
-	ocpFieldSystemPrompt = "system_prompt"
+	ocpFieldUserPrompt     = "prompt"
+	ocpFieldSystemPrompt   = "system_prompt"
+	ocpFieldResponseFormat = "response_format"
+	// Prediction options
+	ocpFieldMaxTokens        = "max_tokens"
+	ocpFieldNumKeep          = "num_keep"
+	ocpFieldSeed             = "seed"
+	ocpFieldTopK             = "top_k"
+	ocpFieldTopP             = "top_p"
+	ocpFieldTemp             = "temperature"
+	ocpFieldRepeatPenalty    = "repeat_penalty"
+	ocpFieldPresencePenalty  = "presence_penalty"
+	ocpFieldFrequencyPenalty = "frequency_penalty"
+	ocpFieldStop             = "stop"
 )
 
 func init() {
@@ -44,10 +57,6 @@ By default, the processor starts and runs a locally installed Ollama server. Alt
 For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ollama documentation^].`).
 		Version("4.32.0").
 		Fields(
-			service.NewStringField(bopFieldServerAddress).
-				Description("The address of the Ollama server to use. Leave the field blank and the processor starts and runs a local Ollama server or specify the address of your own local or remote server.").
-				Example("http://127.0.0.1:11434").
-				Optional(),
 			service.NewStringField(bopFieldModel).
 				Description("The name of the Ollama LLM to use. For a full list of models, see the https://ollama.com/models[Ollama website].").
 				Examples("llama3.1", "gemma2", "qwen2", "phi3"),
@@ -58,16 +67,55 @@ For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ol
 				Description("The system prompt to submit to the Ollama LLM.").
 				Advanced().
 				Optional(),
-			service.NewStringField(bopFieldCacheDirectory).
-				Description("If `"+bopFieldServerAddress+"` is not set - the directory to download the ollama binary and use as a model cache.").
-				Example("/opt/cache/connect/ollama").
+			service.NewStringEnumField(ocpFieldResponseFormat, "text", "json").
+				Description("The format of the response that the Ollama model generates. If specifying JSON output, then the `"+ocpFieldUserPrompt+"` should specify that the output should be in JSON as well.").
+				Default("text"),
+			service.NewIntField(ocpFieldMaxTokens).
+				Optional().
+				Description("The maximum number of tokens to predict and output. Limiting the amount of output means that requests are processed faster and have a fixed limit on the cost."),
+			service.NewIntField(ocpFieldTemp).
+				Optional().
+				Description("The temperature of the model. Increasing the temperature makes the model answer more creatively.").
+				LintRule(`root = if this > 2 || this < 0 { [ "field must be between 0.0 and 2.0" ] }`),
+			service.NewIntField(ocpFieldNumKeep).
+				Optional().
 				Advanced().
-				Optional(),
-			service.NewStringField(bopFieldDownloadURL).
-				Description("If `"+bopFieldServerAddress+"` is not set - the URL to download the ollama binary from. Defaults to the offical Ollama GitHub release for this platform.").
+				Description("Specify the number of tokens from the initial prompt to retain when the model resets its internal context. By default, this value is set to `4`. Use `-1` to retain all tokens from the initial prompt."),
+			service.NewIntField(ocpFieldSeed).
+				Optional().
 				Advanced().
-				Optional(),
-		)
+				Description("Sets the random number seed to use for generation. Setting this to a specific number will make the model generate the same text for the same prompt.").
+				Example(42),
+			service.NewIntField(ocpFieldTopK).
+				Optional().
+				Advanced().
+				Description("Reduces the probability of generating nonsense. A higher value, for example `100`, will give more diverse answers. A lower value, for example `10`, will be more conservative."),
+			service.NewFloatField(ocpFieldTopP).
+				Optional().
+				Advanced().
+				Description("Works together with `top-k`. A higher value, for example 0.95, will lead to more diverse text. A lower value, for example 0.5, will generate more focused and conservative text.").
+				LintRule(`root = if this > 1 || this < 0 { [ "field must be between 0.0 and 1.0" ] }`),
+			service.NewFloatField(ocpFieldRepeatPenalty).
+				Optional().
+				Advanced().
+				Description(`Sets how strongly to penalize repetitions. A higher value, for example 1.5, will penalize repetitions more strongly. A lower value, for example 0.9, will be more lenient.`).
+				LintRule(`root = if this > 2 || this < -2 { [ "field must be between -2.0 and 2.0" ] }`),
+			service.NewFloatField(ocpFieldPresencePenalty).
+				Optional().
+				Advanced().
+				Description(`Positive values penalize new tokens if they have appeared in the text so far. This increases the model's likelihood to talk about new topics.`).
+				LintRule(`root = if this > 2 || this < -2 { [ "field must be between -2.0 and 2.0" ] }`),
+			service.NewFloatField(ocpFieldFrequencyPenalty).
+				Optional().
+				Advanced().
+				Description(`Positive values penalize new tokens based on the frequency of their appearance in the text so far. This decreases the model's likelihood to repeat the same line verbatim.`).
+				LintRule(`root = if this > 2 || this < -2 { [ "field must be between -2.0 and 2.0" ] }`),
+			service.NewStringListField(ocpFieldStop).
+				Optional().
+				Advanced().
+				Description(`Sets the stop sequences to use. When this pattern is encountered the LLM stops generating text and returns the final response.`),
+		).Fields(commonFields()...)
+
 }
 
 func makeOllamaCompletionProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
@@ -86,6 +134,18 @@ func makeOllamaCompletionProcessor(conf *service.ParsedConfig, mgr *service.Reso
 		}
 		p.systemPrompt = pf
 	}
+	format, err := conf.FieldString(ocpFieldResponseFormat)
+	if err != nil {
+		return nil, err
+	}
+	if format == "json" {
+		p.format = "json"
+	} else if format == "text" {
+		// This is the default
+		p.format = ""
+	} else {
+		return nil, fmt.Errorf("invalid %s: %q", ocpFieldResponseFormat, format)
+	}
 	b, err := newBaseProcessor(conf, mgr)
 	if err != nil {
 		return nil, err
@@ -97,6 +157,7 @@ func makeOllamaCompletionProcessor(conf *service.ParsedConfig, mgr *service.Reso
 type ollamaCompletionProcessor struct {
 	*baseOllamaProcessor
 
+	format       string
 	userPrompt   *service.InterpolatedString
 	systemPrompt *service.InterpolatedString
 }
@@ -140,6 +201,8 @@ func (o *ollamaCompletionProcessor) computePrompt(msg *service.Message) (string,
 func (o *ollamaCompletionProcessor) generateCompletion(ctx context.Context, systemPrompt, userPrompt string) (string, error) {
 	var req api.ChatRequest
 	req.Model = o.model
+	req.Options = o.opts
+	req.Format = o.format
 	if systemPrompt != "" {
 		req.Messages = append(req.Messages, api.Message{
 			Role:    "system",

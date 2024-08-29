@@ -38,9 +38,12 @@ Common::
 # Common config fields, showing default values
 label: ""
 ollama_embeddings:
-  server_address: http://127.0.0.1:11434 # No default (optional)
   model: nomic-embed-text # No default (required)
   text: "" # No default (optional)
+  runner:
+    context_size: 0 # No default (optional)
+    batch_size: 0 # No default (optional)
+  server_address: http://127.0.0.1:11434 # No default (optional)
 ```
 
 --
@@ -52,9 +55,16 @@ Advanced::
 # All config fields, showing default values
 label: ""
 ollama_embeddings:
-  server_address: http://127.0.0.1:11434 # No default (optional)
   model: nomic-embed-text # No default (required)
   text: "" # No default (optional)
+  runner:
+    context_size: 0 # No default (optional)
+    batch_size: 0 # No default (optional)
+    gpu_layers: 0 # No default (optional)
+    threads: 0 # No default (optional)
+    use_mmap: false # No default (optional)
+    use_mlock: false # No default (optional)
+  server_address: http://127.0.0.1:11434 # No default (optional)
   cache_directory: /opt/cache/connect/ollama # No default (optional)
   download_url: "" # No default (optional)
 ```
@@ -69,20 +79,6 @@ By default, the processor starts and runs a locally installed Ollama server. Alt
 For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ollama documentation^].
 
 == Fields
-
-=== `server_address`
-
-The address of the Ollama server to use. Leave the field blank and the processor starts and runs a local Ollama server or specify the address of your own local or remote server.
-
-
-*Type*: `string`
-
-
-```yml
-# Examples
-
-server_address: http://127.0.0.1:11434
-```
 
 === `model`
 
@@ -112,6 +108,76 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 *Type*: `string`
 
+
+=== `runner`
+
+Options for the model runner that are used when the model is first loaded into memory.
+
+
+*Type*: `object`
+
+
+=== `runner.context_size`
+
+Sets the size of the context window used to generate the next token. Using a larger context window uses more memory and takes longer to processor.
+
+
+*Type*: `int`
+
+
+=== `runner.batch_size`
+
+The maximum number of requests to process in parallel.
+
+
+*Type*: `int`
+
+
+=== `runner.gpu_layers`
+
+This option allows offloading some layers to the GPU for computation. This generally results in increased performance. By default, the runtime decides the number of layers dynamically.
+
+
+*Type*: `int`
+
+
+=== `runner.threads`
+
+Set the number of threads to use during generation. For optimal performance, it is recommended to set this value to the number of physical CPU cores your system has. By default, the runtime decides the optimal number of threads.
+
+
+*Type*: `int`
+
+
+=== `runner.use_mmap`
+
+Map the model into memory. This is only support on unix systems and allows loading only the necessary parts of the model as needed.
+
+
+*Type*: `bool`
+
+
+=== `runner.use_mlock`
+
+Lock the model in memory, preventing it from being swapped out when memory-mapped. This option can improve performance but reduces some of the advantages of memory-mapping because it uses more RAM to run and can slow down load times as the model loads into RAM.
+
+
+*Type*: `bool`
+
+
+=== `server_address`
+
+The address of the Ollama server to use. Leave the field blank and the processor starts and runs a local Ollama server or specify the address of your own local or remote server.
+
+
+*Type*: `string`
+
+
+```yml
+# Examples
+
+server_address: http://127.0.0.1:11434
+```
 
 === `cache_directory`
 
