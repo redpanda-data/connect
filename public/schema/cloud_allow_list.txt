@@ -62,6 +62,7 @@ redis_streams
 ristretto
 schema_registry_decode
 schema_registry_encode
+schema_registry
 select_parts
 sftp
 sleep

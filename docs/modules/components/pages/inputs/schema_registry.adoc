@@ -83,6 +83,27 @@ xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
 
 
 
+== Examples
+
+[tabs]
+======
+Read schemas::
++
+--
+
+Read all schemas (including deleted) from a Schema Registry instance which are associated with subjects matching the `^foo.*` filter.
+
+```yaml
+input:
+  schema_registry:
+    url: http://localhost:8081
+    include_deleted: true
+    subject_filter: ^foo.*
+```
+
+--
+======
+
 == Fields
 
 === `url`
