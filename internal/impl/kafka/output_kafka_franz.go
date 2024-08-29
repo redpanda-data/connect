@@ -106,6 +106,12 @@ func FranzKafkaOutputConfigFields() []*service.ConfigField {
 			Default("1MB").
 			Example("100MB").
 			Example("50mib"),
+		service.NewStringField("broker_write_max_bytes").
+			Description("The upper bound for the number of bytes written to a broker connection in a single write. This field corresponds to Kafka's `socket.request.max.bytes`.").
+			Advanced().
+			Default("100MB").
+			Example("128MB").
+			Example("50mib"),
 		service.NewStringEnumField("compression", "lz4", "snappy", "gzip", "none", "zstd").
 			Description("Optionally set an explicit compression type. The default preference is to use snappy when the broker supports it, and fall back to none if not.").
 			Optional().
@@ -147,21 +153,22 @@ func init() {
 
 // FranzKafkaWriter implements a kafka writer using the franz-go library.
 type FranzKafkaWriter struct {
-	SeedBrokers      []string
-	topic            *service.InterpolatedString
-	key              *service.InterpolatedString
-	partition        *service.InterpolatedString
-	timestamp        *service.InterpolatedString
-	clientID         string
-	rackID           string
-	idempotentWrite  bool
-	TLSConf          *tls.Config
-	saslConfs        []sasl.Mechanism
-	metaFilter       *service.MetadataFilter
-	partitioner      kgo.Partitioner
-	timeout          time.Duration
-	produceMaxBytes  int32
-	compressionPrefs []kgo.CompressionCodec
+	SeedBrokers         []string
+	topic               *service.InterpolatedString
+	key                 *service.InterpolatedString
+	partition           *service.InterpolatedString
+	timestamp           *service.InterpolatedString
+	clientID            string
+	rackID              string
+	idempotentWrite     bool
+	TLSConf             *tls.Config
+	saslConfs           []sasl.Mechanism
+	metaFilter          *service.MetadataFilter
+	partitioner         kgo.Partitioner
+	timeout             time.Duration
+	produceMaxBytes     int32
+	brokerWriteMaxBytes int32
+	compressionPrefs    []kgo.CompressionCodec
 
 	client *kgo.Client
 
@@ -205,18 +212,30 @@ func NewFranzKafkaWriterFromConfig(conf *service.ParsedConfig, log *service.Logg
 		return nil, err
 	}
 
-	maxBytesStr, err := conf.FieldString("max_message_bytes")
+	maxMessageBytesStr, err := conf.FieldString("max_message_bytes")
 	if err != nil {
 		return nil, err
 	}
-	maxBytes, err := humanize.ParseBytes(maxBytesStr)
+	maxMessageBytes, err := humanize.ParseBytes(maxMessageBytesStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse max_message_bytes: %w", err)
 	}
-	if maxBytes > uint64(math.MaxInt32) {
+	if maxMessageBytes > uint64(math.MaxInt32) {
 		return nil, fmt.Errorf("invalid max_message_bytes, must not exceed %v", math.MaxInt32)
 	}
-	f.produceMaxBytes = int32(maxBytes)
+	f.produceMaxBytes = int32(maxMessageBytes)
+	brokerWriteMaxBytesStr, err := conf.FieldString("broker_write_max_bytes")
+	if err != nil {
+		return nil, err
+	}
+	brokerWriteMaxBytes, err := humanize.ParseBytes(brokerWriteMaxBytesStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse broker_write_max_bytes: %w", err)
+	}
+	if brokerWriteMaxBytes > 1<<30 {
+		return nil, fmt.Errorf("invalid broker_write_max_bytes, must not exceed %v", 1<<30)
+	}
+	f.brokerWriteMaxBytes = int32(brokerWriteMaxBytes)
 
 	if conf.Contains("compression") {
 		cStr, err := conf.FieldString("compression")
@@ -313,6 +332,7 @@ func (f *FranzKafkaWriter) Connect(ctx context.Context) error {
 		kgo.SASL(f.saslConfs...),
 		kgo.AllowAutoTopicCreation(), // TODO: Configure this
 		kgo.ProducerBatchMaxBytes(f.produceMaxBytes),
+		kgo.BrokerMaxWriteBytes(f.brokerWriteMaxBytes),
 		kgo.ProduceRequestTimeout(f.timeout),
 		kgo.ClientID(f.clientID),
 		kgo.Rack(f.rackID),
