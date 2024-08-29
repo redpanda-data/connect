@@ -6,11 +6,6 @@
 //
 // https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
-//go:build !windows
+//go:build windows
 
 package ollama
-
-import (
-	// Bring in the internal plugin definitions.
-	_ "github.com/redpanda-data/connect/v4/internal/impl/ollama"
-)
