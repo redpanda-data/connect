@@ -130,15 +130,12 @@ func newVertexAIProcessor(conf *service.ParsedConfig, mgr *service.Resources) (p
 	}
 	opts := []option.ClientOption{}
 	if conf.Contains(vaipFieldCredentialsJSON) {
-		var jsonFile string
-		jsonFile, err = conf.FieldString(vaipFieldCredentialsJSON)
+		var jsonObject string
+		jsonObject, err = conf.FieldString(vaipFieldCredentialsJSON)
 		if err != nil {
 			return
 		}
-		opts, err = getClientOptionWithCredential(jsonFile, opts)
-		if err != nil {
-			return
-		}
+		opts = append(opts, option.WithCredentialsJSON([]byte(jsonObject)))
 	}
 	proc.client, err = genai.NewClient(ctx, project, location, opts...)
 	if err != nil {
