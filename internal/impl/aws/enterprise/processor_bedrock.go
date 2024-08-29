@@ -18,6 +18,7 @@ import (
 	bedrocktypes "github.com/aws/aws-sdk-go-v2/service/bedrockruntime/types"
 	"github.com/redpanda-data/benthos/v4/public/service"
 
+	"github.com/redpanda-data/connect/v4/internal/impl/aws"
 	"github.com/redpanda-data/connect/v4/internal/impl/aws/config"
 )
 
@@ -75,7 +76,7 @@ For more information, see the https://docs.aws.amazon.com/bedrock/latest/usergui
 }
 
 func newBedrockProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-	aconf, err := GetSession(context.Background(), conf)
+	aconf, err := aws.GetSession(context.Background(), conf)
 	if err != nil {
 		return nil, err
 	}

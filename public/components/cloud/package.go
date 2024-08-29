@@ -20,9 +20,11 @@ import (
 	// Only import a subset of components for execution.
 	_ "github.com/redpanda-data/connect/v4/public/components/amqp09"
 	_ "github.com/redpanda-data/connect/v4/public/components/aws"
+	_ "github.com/redpanda-data/connect/v4/public/components/aws/enterprise"
 	_ "github.com/redpanda-data/connect/v4/public/components/changelog"
 	_ "github.com/redpanda-data/connect/v4/public/components/confluent"
 	_ "github.com/redpanda-data/connect/v4/public/components/crypto"
+	_ "github.com/redpanda-data/connect/v4/public/components/gcp/enterprise"
 	_ "github.com/redpanda-data/connect/v4/public/components/io"
 	_ "github.com/redpanda-data/connect/v4/public/components/kafka"
 	_ "github.com/redpanda-data/connect/v4/public/components/maxmind"
