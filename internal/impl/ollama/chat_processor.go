@@ -75,7 +75,8 @@ For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ol
 				Description("The maximum number of tokens to predict and output. Limiting the amount of output means that requests are processed faster and have a fixed limit on the cost."),
 			service.NewIntField(ocpFieldTemp).
 				Optional().
-				Description("The temperature of the model. Increasing the temperature makes the model answer more creatively."),
+				Description("The temperature of the model. Increasing the temperature makes the model answer more creatively.").
+				LintRule(`root = if this > 2 || this < 0 { [ "field must be between 0.0 and 2.0" ] }`),
 			service.NewIntField(ocpFieldNumKeep).
 				Optional().
 				Advanced().
@@ -92,19 +93,23 @@ For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ol
 			service.NewFloatField(ocpFieldTopP).
 				Optional().
 				Advanced().
-				Description("Works together with `top-k`. A higher value, for example 0.95, will lead to more diverse text. A lower value, for example 0.5, will generate more focused and conservative text."),
+				Description("Works together with `top-k`. A higher value, for example 0.95, will lead to more diverse text. A lower value, for example 0.5, will generate more focused and conservative text.").
+				LintRule(`root = if this > 1 || this < 0 { [ "field must be between 0.0 and 1.0" ] }`),
 			service.NewFloatField(ocpFieldRepeatPenalty).
 				Optional().
 				Advanced().
-				Description(`Sets how strongly to penalize repetitions. A higher value, for example 1.5, will penalize repetitions more strongly. A lower value, for example 0.9, will be more lenient.`),
+				Description(`Sets how strongly to penalize repetitions. A higher value, for example 1.5, will penalize repetitions more strongly. A lower value, for example 0.9, will be more lenient.`).
+				LintRule(`root = if this > 2 || this < -2 { [ "field must be between -2.0 and 2.0" ] }`),
 			service.NewFloatField(ocpFieldPresencePenalty).
 				Optional().
 				Advanced().
-				Description(`Positive values penalize new tokens if they have appeared in the text so far. This increases the model's likelihood to talk about new topics.`),
+				Description(`Positive values penalize new tokens if they have appeared in the text so far. This increases the model's likelihood to talk about new topics.`).
+				LintRule(`root = if this > 2 || this < -2 { [ "field must be between -2.0 and 2.0" ] }`),
 			service.NewFloatField(ocpFieldFrequencyPenalty).
 				Optional().
 				Advanced().
-				Description(`Positive values penalize new tokens based on the frequency of their appearance in the text so far. This decreases the model's likelihood to repeat the same line verbatim.`),
+				Description(`Positive values penalize new tokens based on the frequency of their appearance in the text so far. This decreases the model's likelihood to repeat the same line verbatim.`).
+				LintRule(`root = if this > 2 || this < -2 { [ "field must be between -2.0 and 2.0" ] }`),
 			service.NewStringListField(ocpFieldStop).
 				Optional().
 				Advanced().
