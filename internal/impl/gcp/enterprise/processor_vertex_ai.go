@@ -6,7 +6,7 @@
 //
 // https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
-package gcp
+package enterprise
 
 import (
 	"context"

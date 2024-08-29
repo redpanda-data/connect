@@ -6,7 +6,7 @@
 //
 // https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
 
-package gcp
+package enterprise
 
 import (
 	// Bring in the internal plugin definitions.
