@@ -1,5 +1,6 @@
 amqp_0_9
 archive
+aws_bedrock_chat
 aws_dynamodb
 aws_dynamodb_partiql
 aws_kinesis
@@ -15,6 +16,7 @@ cached
 compress
 decompress
 dedupe
+gcp_vertex_ai_chat
 generate
 group_by
 group_by_value
@@ -23,8 +25,8 @@ jq
 json_schema
 kafka
 kafka_franz
-log
 local
+log
 mapping
 memcached
 memory
