@@ -74,7 +74,37 @@ output:
 
 This output benefits from sending multiple messages in flight in parallel for improved performance. You can tune the max number of in flight messages (or message batches) with the field `max_in_flight`.
 
-This output benefits from sending messages as a batch for improved performance. Batches can be formed at both the input and output level. You can find out more xref:configuration:batching.adoc[in this doc].
+== Examples
+
+[tabs]
+======
+Write schemas::
++
+--
+
+Write schemas to a Schema Registry instance and log errors for schemas which already exist.
+
+```yaml
+output:
+  fallback:
+    - schema_registry:
+        url: http://localhost:8082
+        subject: ${! @schema_registry_subject }
+    - switch:
+        cases:
+          - check: '@fallback_error == "request returned status: 422"'
+            output:
+              drop: {}
+              processors:
+                - log:
+                    message: |
+                      Subject '${! @schema_registry_subject }' version ${! @schema_registry_version } already has schema: ${! content() }
+          - output:
+              reject: ${! @fallback_error }
+```
+
+--
+======
 
 == Fields
 

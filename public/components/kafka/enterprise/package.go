@@ -6,9 +6,9 @@
 //
 // https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
-package snowflake
+package enterprise
 
 import (
 	// Bring in the internal plugin definitions.
-	_ "github.com/redpanda-data/connect/v4/internal/impl/snowflake"
+	_ "github.com/redpanda-data/connect/v4/internal/impl/kafka/enterprise"
 )
