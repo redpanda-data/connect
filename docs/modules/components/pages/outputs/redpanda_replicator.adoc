@@ -84,6 +84,7 @@ output:
       check: ""
       processors: [] # No default (optional)
     max_message_bytes: 1MB
+    broker_write_max_bytes: 100MB
     compression: "" # No default (optional)
     tls:
       enabled: false
@@ -424,6 +425,23 @@ The maximum space in bytes than an individual message may take, messages larger 
 max_message_bytes: 100MB
 
 max_message_bytes: 50mib
+```
+
+=== `broker_write_max_bytes`
+
+The upper bound for the number of bytes written to a broker connection in a single write. This field corresponds to Kafka's `socket.request.max.bytes`.
+
+
+*Type*: `string`
+
+*Default*: `"100MB"`
+
+```yml
+# Examples
+
+broker_write_max_bytes: 128MB
+
+broker_write_max_bytes: 50mib
 ```
 
 === `compression`
