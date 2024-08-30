@@ -183,10 +183,7 @@ func (c *schemaRegistryClient) walkReferencesTracked(ctx context.Context, seen m
 }
 
 func (c *schemaRegistryClient) doRequest(ctx context.Context, verb, reqPath string) (resCode int, resBody []byte, err error) {
-	reqURL := *c.schemaRegistryBaseURL
-	if reqURL.Path, err = url.JoinPath(reqURL.Path, reqPath); err != nil {
-		return
-	}
+	reqURL := c.schemaRegistryBaseURL.JoinPath(reqPath)
 
 	var req *http.Request
 	if req, err = http.NewRequestWithContext(ctx, verb, reqURL.String(), http.NoBody); err != nil {
