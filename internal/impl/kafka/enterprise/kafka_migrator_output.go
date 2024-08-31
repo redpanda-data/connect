@@ -27,10 +27,10 @@ import (
 )
 
 const (
-	rproDefaultLabel = "redpanda_replicator_output"
+	rproDefaultLabel = "kafka_migrator_output"
 )
 
-func redpandaReplicatorOutputConfig() *service.ConfigSpec {
+func kafkaMigratorOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Beta().
 		Categories("Services").
@@ -40,10 +40,10 @@ func redpandaReplicatorOutputConfig() *service.ConfigSpec {
 Writes a batch of messages to Kafka brokers and waits for acknowledgement before propagating it back to the input.
 
 If the configured broker does not contain the current message `+"topic"+`, it attempts to create it along with the topic
-ACLs which are read automatically from the `+"`redpanda_replicator`"+` input identified by the label specified in
+ACLs which are read automatically from the `+"`kafka_migrator`"+` input identified by the label specified in
 `+"`topic_source`"+`.
 `).
-		Fields(RedpandaReplicatorOutputConfigFields()...).
+		Fields(KafkaMigratorOutputConfigFields()...).
 		LintRule(`
 root = if this.partitioner == "manual" {
 if this.partition.or("") == "" {
@@ -53,21 +53,21 @@ if this.partition.or("") == "" {
 "a partition cannot be specified unless the partitioner is set to manual"
 }`).Example("Transfer data", "Writes messages to the configured broker and creates topics and topic ACLs if they don't exist. It also ensures that the message order is preserved.", `
 output:
-  redpanda_replicator:
+  kafka_migrator:
     seed_brokers: [ "127.0.0.1:9093" ]
     topic: ${! metadata("kafka_topic").or(throw("missing kafka_topic metadata")) }
     key: ${! metadata("kafka_key") }
     partitioner: manual
     partition: ${! metadata("kafka_partition").or(throw("missing kafka_partition metadata")) }
     timestamp: ${! metadata("kafka_timestamp_unix").or(timestamp_unix()) }
-    topic_source: redpanda_replicator_input
+    topic_source: kafka_migrator_input
     max_in_flight: 1
 `)
 }
 
-// RedpandaReplicatorOutputConfigFields returns the full suite of config fields for a
-// redpanda_replicator output using the franz-go client library.
-func RedpandaReplicatorOutputConfigFields() []*service.ConfigField {
+// KafkaMigratorOutputConfigFields returns the full suite of config fields for a `kafka_migrator` output using
+// the franz-go client library.
+func KafkaMigratorOutputConfigFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewStringListField("seed_brokers").
 			Description("A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses.").
@@ -138,14 +138,14 @@ func RedpandaReplicatorOutputConfigFields() []*service.ConfigField {
 			Optional().
 			Advanced(),
 		service.NewStringField("topic_source").
-			Description("The label of a redpanda_replicator input from which to read the list of topics which need to be created.").
+			Description("The label of a kafka_migrator input from which to read the list of topics which need to be created.").
 			Default(rpriDefaultLabel).
 			Advanced(),
 	}
 }
 
 func init() {
-	err := service.RegisterBatchOutput("redpanda_replicator", redpandaReplicatorOutputConfig(),
+	err := service.RegisterBatchOutput("kafka_migrator", kafkaMigratorOutputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (
 			output service.BatchOutput,
 			batchPolicy service.BatchPolicy,
@@ -158,7 +158,7 @@ func init() {
 			if batchPolicy, err = conf.FieldBatchPolicy("batching"); err != nil {
 				return
 			}
-			output, err = NewRedpandaReplicatorWriterFromConfig(conf, mgr)
+			output, err = NewKafkaMigratorWriterFromConfig(conf, mgr)
 			return
 		})
 	if err != nil {
@@ -168,8 +168,8 @@ func init() {
 
 //------------------------------------------------------------------------------
 
-// RedpandaReplicatorWriter implements a kafka writer using the franz-go library.
-type RedpandaReplicatorWriter struct {
+// KafkaMigratorWriter implements a Kafka writer using the franz-go library.
+type KafkaMigratorWriter struct {
 	SeedBrokers         []string
 	topic               *service.InterpolatedString
 	key                 *service.InterpolatedString
@@ -188,16 +188,16 @@ type RedpandaReplicatorWriter struct {
 	compressionPrefs    []kgo.CompressionCodec
 	topicSource         string
 
+	connMut    sync.Mutex
 	client     *kgo.Client
 	topicCache sync.Map
 
 	mgr *service.Resources
 }
 
-// NewRedpandaReplicatorWriterFromConfig attempts to instantiate a RedpandaReplicatorWriter from
-// a parsed config.
-func NewRedpandaReplicatorWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*RedpandaReplicatorWriter, error) {
-	w := RedpandaReplicatorWriter{
+// NewKafkaMigratorWriterFromConfig attempts to instantiate a KafkaMigratorWriter from a parsed config.
+func NewKafkaMigratorWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*KafkaMigratorWriter, error) {
+	w := KafkaMigratorWriter{
 		mgr: mgr,
 	}
 
@@ -351,7 +351,10 @@ func NewRedpandaReplicatorWriterFromConfig(conf *service.ParsedConfig, mgr *serv
 //------------------------------------------------------------------------------
 
 // Connect to the target seed brokers.
-func (w *RedpandaReplicatorWriter) Connect(ctx context.Context) error {
+func (w *KafkaMigratorWriter) Connect(ctx context.Context) error {
+	w.connMut.Lock()
+	defer w.connMut.Unlock()
+
 	if w.client != nil {
 		return nil
 	}
@@ -395,7 +398,10 @@ func (w *RedpandaReplicatorWriter) Connect(ctx context.Context) error {
 }
 
 // WriteBatch attempts to write a batch of messages to the target topics.
-func (w *RedpandaReplicatorWriter) WriteBatch(ctx context.Context, b service.MessageBatch) (err error) {
+func (w *KafkaMigratorWriter) WriteBatch(ctx context.Context, b service.MessageBatch) (err error) {
+	w.connMut.Lock()
+	defer w.connMut.Unlock()
+
 	if w.client == nil {
 		return service.ErrNotConnected
 	}
@@ -407,9 +413,9 @@ func (w *RedpandaReplicatorWriter) WriteBatch(ctx context.Context, b service.Mes
 			return fmt.Errorf("topic interpolation error: %w", err)
 		}
 
-		var input *RedpandaReplicatorReader
+		var input *KafkaMigratorReader
 		if res, ok := w.mgr.GetGeneric(w.topicSource); ok {
-			input = res.(*RedpandaReplicatorReader)
+			input = res.(*KafkaMigratorReader)
 		} else {
 			w.mgr.Logger().Debugf("Reader for topic source %q not found", w.topicSource)
 		}
@@ -478,7 +484,7 @@ func (w *RedpandaReplicatorWriter) WriteBatch(ctx context.Context, b service.Mes
 	return
 }
 
-func (w *RedpandaReplicatorWriter) disconnect() {
+func (w *KafkaMigratorWriter) disconnect() {
 	if w.client == nil {
 		return
 	}
@@ -487,7 +493,7 @@ func (w *RedpandaReplicatorWriter) disconnect() {
 }
 
 // Close underlying connections.
-func (w *RedpandaReplicatorWriter) Close(ctx context.Context) error {
+func (w *KafkaMigratorWriter) Close(ctx context.Context) error {
 	w.disconnect()
 	return nil
 }

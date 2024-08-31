@@ -1,0 +1,169 @@
+# Copyright 2024 Redpanda Data, Inc.
+#
+# Licensed as a Redpanda Enterprise file under the Redpanda Community
+# License (the "License"); you may not use this file except in compliance with
+# the License. You may obtain a copy of the License at
+#
+# https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
+
+name: kafka_migrator_bundle
+type: input
+status: experimental
+categories: [ Services ]
+summary: Kafka Migrator bundle input
+description: |
+  All-in-one input which reads messages and schemas from a Kafka or Redpanda cluster. This input is meant to be used
+  together with the `kafka_migrator_bundle` output.
+
+fields:
+  - name: kafka_migrator
+    type: unknown
+    kind: map
+    description: |
+      The `kafka_migrator` input configuration.
+
+  - name: schema_registry
+    type: unknown
+    kind: map
+    description: |
+      The `schema_registry` input configuration.
+
+  - name: migrate_schemas_before_data
+    type: bool
+    kind: scalar
+    default: true
+    description: |
+      Migrate all schemas first before starting to migrate data.
+
+mapping: |
+  #!blobl
+
+  let kafkaMigratorOffsets = this.kafka_migrator.with("seed_brokers", "consumer_group", "client_id", "rack_id", "tls", "sasl").assign({"topics": ["__consumer_offsets"]})
+
+  root = if this.kafka_migrator.length() == 0 || this.schema_registry.length() == 0 {
+    throw("both kafka_migrator and schema_registry inputs must be configured")
+  } else if this.migrate_schemas_before_data {
+    """
+      sequence:
+        inputs:
+          - sequence:
+              inputs:
+                - schema_registry: %s
+                  processors:
+                    - mapping: meta input_label = "schema_registry"
+                - generate:
+                    count: 1
+                    mapping: root = ""
+                  processors:
+                    - log:
+                        message: Finished importing schemas
+                    - mapping: root = deleted()
+          - broker:
+              inputs:
+                - kafka_migrator: %s
+                  processors:
+                    - mapping: meta input_label = "kafka_migrator"
+                - kafka_franz: %s
+                  processors:
+                    - mapping: meta input_label = "kafka_migrator_offsets"
+    """.format(this.schema_registry.string(), this.kafka_migrator.string(), $kafkaMigratorOffsets.string()).parse_yaml()
+  } else {
+    """
+      broker:
+        inputs:
+          - sequence:
+              inputs:
+                - schema_registry: %s
+                  processors:
+                    - mapping: meta input_label = "schema_registry"
+                - generate:
+                    count: 1
+                    mapping: root = ""
+                  processors:
+                    - log:
+                        message: Finished importing schemas
+                    - mapping: root = deleted()
+          - kafka_migrator: %s
+            processors:
+              - mapping: meta input_label = "kafka_migrator"
+          - kafka_franz: %s
+            processors:
+              - mapping: meta input_label = "kafka_migrator_offsets"
+    """.format(this.schema_registry.string(), this.kafka_migrator.string(), $kafkaMigratorOffsets.string()).parse_yaml()
+  }
+
+tests:
+  - name: Migrate both data and schemas simultaneously
+    config:
+      kafka_migrator:
+        seed_brokers: [ "127.0.0.1:9092" ]
+        topics: [ "foobar" ]
+      schema_registry:
+        url: http://localhost:8081
+
+    expected:
+      broker:
+        inputs:
+          - sequence:
+              inputs:
+                - processors:
+                    - mapping: meta input_label = "schema_registry"
+                  schema_registry:
+                     url: http://localhost:8081
+                - generate:
+                    count: 1
+                    mapping: root = ""
+                  processors:
+                    - log:
+                        message: Finished importing schemas
+                    - mapping: root = deleted()
+          - kafka_migrator:
+              seed_brokers: [ "127.0.0.1:9092" ]
+              topics: [ "foobar" ]
+            processors:
+              - mapping: meta input_label = "kafka_migrator"
+          - kafka_franz:
+              seed_brokers: [ "127.0.0.1:9092" ]
+              topics: [ "__consumer_offsets" ]
+            processors:
+              - mapping: meta input_label = "kafka_migrator_offsets"
+
+  - name: Migrate schemas first
+    config:
+      kafka_migrator:
+        seed_brokers: [ "127.0.0.1:9092" ]
+        topics: [ "foobar" ]
+      schema_registry:
+        url: http://localhost:8081
+      migrate_schemas_before_data: true
+
+    expected:
+      sequence:
+        inputs:
+          - sequence:
+              inputs:
+                - processors:
+                    - mapping: meta input_label = "schema_registry"
+                  schema_registry:
+                     url: http://localhost:8081
+                - generate:
+                    count: 1
+                    mapping: root = ""
+                  processors:
+                    - log:
+                        message: Finished importing schemas
+                    - mapping: root = deleted()
+          - broker:
+              inputs:
+                - kafka_migrator:
+                    seed_brokers:
+                      - 127.0.0.1:9092
+                    topics:
+                      - foobar
+                  processors:
+                    - mapping: meta input_label = "kafka_migrator"
+                - kafka_franz:
+                    seed_brokers: [ "127.0.0.1:9092" ]
+                    topics: [ "__consumer_offsets" ]
+                  processors:
+                    - mapping: meta input_label = "kafka_migrator_offsets"

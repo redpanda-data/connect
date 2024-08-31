@@ -1,4 +1,4 @@
-= redpanda_replicator
+= kafka_migrator
 :type: input
 :status: beta
 :categories: ["Services"]
@@ -38,7 +38,7 @@ Common::
 # Common config fields, showing default values
 input:
   label: ""
-  redpanda_replicator:
+  kafka_migrator:
     seed_brokers: [] # No default (required)
     topics: [] # No default (required)
     regexp_topics: false
@@ -55,7 +55,7 @@ Advanced::
 # All config fields, showing default values
 input:
   label: ""
-  redpanda_replicator:
+  kafka_migrator:
     seed_brokers: [] # No default (required)
     topics: [] # No default (required)
     regexp_topics: false
@@ -82,21 +82,21 @@ input:
       check: ""
       processors: [] # No default (optional)
     topic_lag_refresh_period: 5s
-    topic_sink: redpanda_replicator_output
+    topic_sink: kafka_migrator_output
 ```
 
 --
 ======
 
-This input can be used in combination with a `redpanda_replicator` output which can query it for topic configurations and topic ACLs.
+This input can be used in combination with a `kafka_migrator` output which can query it for topic configurations and topic ACLs.
 
 When a consumer group is specified this input consumes one or more topics where partitions will automatically balance across any other connected clients with the same consumer group. When a consumer group is not specified topics can either be consumed in their entirety or with explicit partitions.
 
-It attempts to create all selected topics it along with their associated ACLs in the broker that the `redpanda_replicator` output points to identified by the label specified in `topic_sink`.
+It attempts to create all selected topics it along with their associated ACLs in the broker that the `kafka_migrator` output points to identified by the label specified in `topic_sink`.
 
 == Metrics
 
-Emits a `input_kafka_lag` metric with `topic` and `partition` labels for each consumed topic.
+Emits a `input_kafka_migrator_lag` metric with `topic` and `partition` labels for each consumed topic.
 
 == Metadata
 
@@ -714,11 +714,11 @@ The period of time between each topic lag refresh cycle.
 
 === `topic_sink`
 
-The label of a redpanda_replicator output from which to read the list of topics which need to be created.
+The label of a kafka_migrator output from which to read the list of topics which need to be created.
 
 
 *Type*: `string`
 
-*Default*: `"redpanda_replicator_output"`
+*Default*: `"kafka_migrator_output"`
 
 

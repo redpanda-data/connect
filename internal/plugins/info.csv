@@ -104,6 +104,11 @@ kafka                   ,input     ,Kafka                   ,0.0.0   ,certified 
 kafka                   ,output    ,Kafka                   ,0.0.0   ,certified  ,n          ,y     ,y
 kafka_franz             ,input     ,kafka_franz             ,3.61.0  ,certified  ,n          ,y     ,y
 kafka_franz             ,output    ,kafka_franz             ,3.61.0  ,certified  ,n          ,y     ,y
+kafka_migrator          ,input     ,kafka_migrator          ,4.35.0  ,enterprise ,n          ,y     ,y
+kafka_migrator          ,output    ,kafka_migrator          ,4.35.0  ,enterprise ,n          ,y     ,y
+kafka_migrator_bundle   ,input     ,kafka_migrator_bundle   ,4.35.0  ,enterprise ,n          ,y     ,y
+kafka_migrator_bundle   ,output    ,kafka_migrator_bundle   ,4.35.0  ,enterprise ,n          ,y     ,y
+kafka_migrator_offsets  ,output    ,kafka_migrator_offsets  ,4.35.0  ,enterprise ,n          ,y     ,y
 lines                   ,scanner   ,lines                   ,0.0.0   ,certified  ,n          ,y     ,y
 local                   ,rate_limit,local                   ,0.0.0   ,certified  ,n          ,y     ,y
 log                     ,processor ,log                     ,0.0.0   ,certified  ,n          ,y     ,y

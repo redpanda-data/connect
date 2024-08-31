@@ -1,4 +1,4 @@
-= redpanda_replicator_bundle
+= kafka_migrator_bundle
 :type: output
 :status: experimental
 :categories: ["Services"]
@@ -23,26 +23,26 @@
 component_type_dropdown::[]
 
 
-Redpanda Replicator bundle output
+Kafka Migrator bundle output
 
 ```yml
 # Config fields, showing default values
 output:
   label: ""
-  redpanda_replicator_bundle:
-    redpanda_replicator: {} # No default (required)
+  kafka_migrator_bundle:
+    kafka_migrator: {} # No default (required)
     schema_registry: {} # No default (required)
 ```
 
 All-in-one output which writes messages and schemas to a Kafka or Redpanda cluster. This output is meant to be used
-together with the `redpanda_replicator_bundle` input.
+together with the `kafka_migrator_bundle` input.
 
 
 == Fields
 
-=== `redpanda_replicator`
+=== `kafka_migrator`
 
-The `redpanda_replicator` output configuration.
+The `kafka_migrator` output configuration.
 
 
 *Type*: `object`

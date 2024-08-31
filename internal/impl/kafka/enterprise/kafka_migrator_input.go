@@ -30,25 +30,25 @@ import (
 )
 
 const (
-	rpriDefaultLabel = "redpanda_replicator_input"
+	rpriDefaultLabel = "kafka_migrator_input"
 )
 
-func redpandaReplicatorInputConfig() *service.ConfigSpec {
+func kafkaMigratorInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Beta().
 		Categories("Services").
 		Version("4.33.1").
 		Summary(`A Kafka input using the https://github.com/twmb/franz-go[Franz Kafka client library^].`).
 		Description(`
-This input can be used in combination with a ` + "`redpanda_replicator`" + ` output which can query it for topic configurations and topic ACLs.
+This input can be used in combination with a ` + "`kafka_migrator`" + ` output which can query it for topic configurations and topic ACLs.
 
 When a consumer group is specified this input consumes one or more topics where partitions will automatically balance across any other connected clients with the same consumer group. When a consumer group is not specified topics can either be consumed in their entirety or with explicit partitions.
 
-It attempts to create all selected topics it along with their associated ACLs in the broker that the ` + "`redpanda_replicator`" + ` output points to identified by the label specified in ` + "`topic_sink`" + `.
+It attempts to create all selected topics it along with their associated ACLs in the broker that the ` + "`kafka_migrator`" + ` output points to identified by the label specified in ` + "`topic_sink`" + `.
 
 == Metrics
 
-Emits a ` + "`input_kafka_lag`" + ` metric with ` + "`topic`" + ` and ` + "`partition`" + ` labels for each consumed topic.
+Emits a ` + "`input_kafka_migrator_lag`" + ` metric with ` + "`topic`" + ` and ` + "`partition`" + ` labels for each consumed topic.
 
 == Metadata
 
@@ -65,7 +65,7 @@ This input adds the following metadata fields to each message:
 - All record headers
 ` + "```" + `
 `).
-		Fields(RedpandaReplicatorInputConfigFields()...).
+		Fields(KafkaMigratorInputConfigFields()...).
 		LintRule(`
 let has_topic_partitions = this.topics.any(t -> t.contains(":"))
 root = if $has_topic_partitions {
@@ -78,9 +78,9 @@ root = if $has_topic_partitions {
 `)
 }
 
-// RedpandaReplicatorInputConfigFields returns the full suite of config fields for a
-// redpanda_replicator input using the franz-go client library.
-func RedpandaReplicatorInputConfigFields() []*service.ConfigField {
+// KafkaMigratorInputConfigFields returns the full suite of config fields for a `kafka_migrator` input using the
+// franz-go client library.
+func KafkaMigratorInputConfigFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewStringListField("seed_brokers").
 			Description("A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses.").
@@ -138,16 +138,16 @@ Finally, it's also possible to specify an explicit offset to consume from by add
 			Default("5s").
 			Advanced(),
 		service.NewStringField("topic_sink").
-			Description("The label of a redpanda_replicator output from which to read the list of topics which need to be created.").
+			Description("The label of a kafka_migrator output from which to read the list of topics which need to be created.").
 			Default(rproDefaultLabel).
 			Advanced(),
 	}
 }
 
 func init() {
-	err := service.RegisterBatchInput("redpanda_replicator", redpandaReplicatorInputConfig(),
+	err := service.RegisterBatchInput("kafka_migrator", kafkaMigratorInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
-			rdr, err := NewRedpandaReplicatorReaderFromConfig(conf, mgr)
+			rdr, err := NewKafkaMigratorReaderFromConfig(conf, mgr)
 			if err != nil {
 				return nil, err
 			}
@@ -160,8 +160,8 @@ func init() {
 
 //------------------------------------------------------------------------------
 
-// RedpandaReplicatorReader implements a kafka reader using the franz-go library.
-type RedpandaReplicatorReader struct {
+// KafkaMigratorReader implements a kafka reader using the franz-go library.
+type KafkaMigratorReader struct {
 	SeedBrokers           []string
 	topics                []string
 	topicPatterns         []*regexp.Regexp
@@ -190,13 +190,13 @@ type RedpandaReplicatorReader struct {
 	shutSig *shutdown.Signaller
 }
 
-// NewRedpandaReplicatorReaderFromConfig attempts to instantiate a new RedpandaReplicatorReader
+// NewKafkaMigratorReaderFromConfig attempts to instantiate a new KafkaMigratorReader
 // from a parsed config.
-func NewRedpandaReplicatorReaderFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*RedpandaReplicatorReader, error) {
-	r := RedpandaReplicatorReader{
+func NewKafkaMigratorReaderFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*KafkaMigratorReader, error) {
+	r := KafkaMigratorReader{
 		mgr:           mgr,
 		shutSig:       shutdown.NewSignaller(),
-		topicLagGauge: mgr.Metrics().NewGauge("input_kafka_lag", "topic", "partition"),
+		topicLagGauge: mgr.Metrics().NewGauge("input_kafka_migrator_lag", "topic", "partition"),
 	}
 
 	brokerList, err := conf.FieldStringList("seed_brokers")
@@ -300,9 +300,9 @@ func NewRedpandaReplicatorReaderFromConfig(conf *service.ParsedConfig, mgr *serv
 	return &r, nil
 }
 
-func (r *RedpandaReplicatorReader) recordToMessage(record *kgo.Record) *service.Message {
+func (r *KafkaMigratorReader) recordToMessage(record *kgo.Record) *service.Message {
 	msg := service.NewMessage(record.Value)
-	msg.MetaSetMut("kafka_key", string(record.Key))
+	msg.MetaSetMut("kafka_key", record.Key)
 	msg.MetaSetMut("kafka_topic", record.Topic)
 	msg.MetaSetMut("kafka_partition", int(record.Partition))
 	msg.MetaSetMut("kafka_offset", int(record.Offset))
@@ -343,7 +343,7 @@ func (r *RedpandaReplicatorReader) recordToMessage(record *kgo.Record) *service.
 //------------------------------------------------------------------------------
 
 // Connect to the kafka seed brokers.
-func (r *RedpandaReplicatorReader) Connect(ctx context.Context) error {
+func (r *KafkaMigratorReader) Connect(ctx context.Context) error {
 	r.connMut.Lock()
 	defer r.connMut.Unlock()
 
@@ -443,7 +443,7 @@ func (r *RedpandaReplicatorReader) Connect(ctx context.Context) error {
 }
 
 // ReadBatch attempts to extract a batch of messages from the target topics.
-func (r *RedpandaReplicatorReader) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
+func (r *KafkaMigratorReader) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
 	r.connMut.Lock()
 	defer r.connMut.Unlock()
 
@@ -455,8 +455,9 @@ func (r *RedpandaReplicatorReader) ReadBatch(ctx context.Context) (service.Messa
 	// we have right now? Otherwise, maybe switch back to `PollFetches()` and have `batch_byte_size` and `batch_period`
 	// via `FetchMinBytes`, `FetchMaxBytes` and `FetchMaxWait()`?
 
-	// TODO: Maybe use a `context.WithTimeout()` here and return `context.Canceled` so we can periodically check for new
-	// topics.
+	// TODO: Looks like when using `regexp_topics: true`, franz-go takes over a minute to discover topics which were
+	// created after `PollRecords()` was called for the first time. Might need to adjust the timeout for the internal
+	// topic cache.
 	fetches := r.client.PollRecords(ctx, r.batchSize)
 	if errs := fetches.Errors(); len(errs) > 0 {
 		// Any non-temporal error sets this true and we close the client
@@ -506,9 +507,9 @@ func (r *RedpandaReplicatorReader) ReadBatch(ctx context.Context) (service.Messa
 	}
 
 	if !r.outputTopicsCreated {
-		var output *RedpandaReplicatorWriter
+		var output *KafkaMigratorWriter
 		if res, ok := r.mgr.GetGeneric(r.topicSink); ok {
-			output = res.(*RedpandaReplicatorWriter)
+			output = res.(*KafkaMigratorWriter)
 		} else {
 			r.mgr.Logger().Debugf("Writer for topic sink %q not found", r.topicSink)
 		}
@@ -556,7 +557,7 @@ func (r *RedpandaReplicatorReader) ReadBatch(ctx context.Context) (service.Messa
 }
 
 // Close underlying connections.
-func (r *RedpandaReplicatorReader) Close(ctx context.Context) error {
+func (r *KafkaMigratorReader) Close(ctx context.Context) error {
 	r.connMut.Lock()
 	defer r.connMut.Unlock()
 

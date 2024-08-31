@@ -18,18 +18,18 @@ import (
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 )
 
-//go:embed redpanda_replicator_bundle_input.tmpl.yaml
-var redpandaReplicatorInputTemplate []byte
+//go:embed kafka_migrator_bundle_input.tmpl.yaml
+var kafkaMigratorInputTemplate []byte
 
-//go:embed redpanda_replicator_bundle_output.tmpl.yaml
-var redpandaReplicatorOutputTemplate []byte
+//go:embed kafka_migrator_bundle_output.tmpl.yaml
+var kafkaMigratorOutputTemplate []byte
 
 func init() {
-	if err := service.RegisterTemplateYAML(string(redpandaReplicatorInputTemplate)); err != nil {
+	if err := service.RegisterTemplateYAML(string(kafkaMigratorInputTemplate)); err != nil {
 		panic(err)
 	}
 
-	if err := service.RegisterTemplateYAML(string(redpandaReplicatorOutputTemplate)); err != nil {
+	if err := service.RegisterTemplateYAML(string(kafkaMigratorOutputTemplate)); err != nil {
 		panic(err)
 	}
 }
