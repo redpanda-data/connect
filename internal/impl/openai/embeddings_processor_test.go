@@ -12,11 +12,11 @@ import (
 	"context"
 	"testing"
 
-	oai "github.com/Azure/azure-sdk-for-go/sdk/ai/azopenai"
 	"github.com/go-faker/faker/v4"
 	"github.com/go-faker/faker/v4/pkg/options"
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
+	oai "github.com/sashabaranov/go-openai"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -33,12 +33,12 @@ func mockEmbeddings(text string) []float32 {
 	return embd
 }
 
-func (m *mockEmbeddingsClient) GetEmbeddings(ctx context.Context, body oai.EmbeddingsOptions, options *oai.GetEmbeddingsOptions) (resp oai.GetEmbeddingsResponse, err error) {
+func (m *mockEmbeddingsClient) CreateEmbeddings(ctx context.Context, genericBody oai.EmbeddingRequestConverter) (resp oai.EmbeddingResponse, err error) {
+	body := genericBody.(oai.EmbeddingRequestStrings)
 	for i, text := range body.Input {
-		idx := int32(i)
-		resp.Data = append(resp.Data, oai.EmbeddingItem{
+		resp.Data = append(resp.Data, oai.Embedding{
 			Embedding: mockEmbeddings(text),
-			Index:     &idx,
+			Index:     i,
 		})
 	}
 	return

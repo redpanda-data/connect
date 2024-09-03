@@ -12,9 +12,9 @@ import (
 	"context"
 	"fmt"
 
-	oai "github.com/Azure/azure-sdk-for-go/sdk/ai/azopenai"
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
+	oai "github.com/sashabaranov/go-openai"
 )
 
 const (
@@ -71,14 +71,13 @@ func makeEmbeddingsProcessor(conf *service.ParsedConfig, mgr *service.Resources)
 			return nil, err
 		}
 	}
-	var dims *int32
+	var dims *int
 	if conf.Contains(oepFieldDims) {
 		v, err := conf.FieldInt(oepFieldDims)
 		if err != nil {
 			return nil, err
 		}
-		d := int32(v)
-		dims = &d
+		dims = &v
 	}
 	return &embeddingsProcessor{b, t, dims}, nil
 }
@@ -87,13 +86,15 @@ type embeddingsProcessor struct {
 	*baseProcessor
 
 	text       *bloblang.Executor
-	dimensions *int32
+	dimensions *int
 }
 
 func (p *embeddingsProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
-	var body oai.EmbeddingsOptions
-	body.DeploymentName = &p.model
-	body.Dimensions = p.dimensions
+	var body oai.EmbeddingRequestStrings
+	body.Model = oai.EmbeddingModel(p.model)
+	if p.dimensions != nil {
+		body.Dimensions = *p.dimensions
+	}
 	if p.text != nil {
 		s, err := msg.BloblangQueryValue(p.text)
 		if err != nil {
@@ -107,7 +108,7 @@ func (p *embeddingsProcessor) Process(ctx context.Context, msg *service.Message)
 		}
 		body.Input = append(body.Input, string(b))
 	}
-	resp, err := p.client.GetEmbeddings(ctx, body, nil)
+	resp, err := p.client.CreateEmbeddings(ctx, body)
 	if err != nil {
 		return nil, err
 	}

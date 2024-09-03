@@ -13,11 +13,10 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"slices"
 
-	oai "github.com/Azure/azure-sdk-for-go/sdk/ai/azopenai"
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
+	oai "github.com/sashabaranov/go-openai"
 )
 
 const (
@@ -121,70 +120,56 @@ type moderationProcessor struct {
 }
 
 func (p *moderationProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
-	var body oai.ImageGenerationOptions
-	body.DeploymentName = &p.model
-	format := oai.ImageGenerationResponseFormatBase64
-	body.ResponseFormat = &format
+	var body oai.ImageRequest
+	body.Model = p.model
+	body.ResponseFormat = "b64_json"
 	if p.input != nil {
 		v, err := msg.BloblangQueryValue(p.input)
 		if err != nil {
 			return nil, fmt.Errorf("%s execution error: %w", oipFieldPrompt, err)
 		}
 		s := bloblang.ValueToString(v)
-		body.Prompt = &s
+		body.Prompt = s
 	} else {
 		b, err := msg.AsBytes()
 		if err != nil {
 			return nil, err
 		}
 		s := string(b)
-		body.Prompt = &s
+		body.Prompt = s
 	}
 	if p.quality != nil {
 		r, err := p.quality.TryString(msg)
 		if err != nil {
 			return nil, fmt.Errorf("%s interpolation error: %w", oipFieldQuality, err)
 		}
-		q := oai.ImageGenerationQuality(r)
-		if !slices.Contains(oai.PossibleImageGenerationQualityValues(), q) {
-			return nil, fmt.Errorf("invalid image quality: %q", q)
-		}
-		body.Quality = &q
+		body.Quality = r
 	}
 	if p.style != nil {
 		r, err := p.style.TryString(msg)
 		if err != nil {
 			return nil, fmt.Errorf("%s interpolation error: %w", oipFieldStyle, err)
 		}
-		s := oai.ImageGenerationStyle(r)
-		if !slices.Contains(oai.PossibleImageGenerationStyleValues(), s) {
-			return nil, fmt.Errorf("invalid image style: %q", s)
-		}
-		body.Style = &s
+		body.Style = r
 	}
 	if p.size != nil {
 		r, err := p.size.TryString(msg)
 		if err != nil {
 			return nil, fmt.Errorf("%s interpolation error: %w", oipFieldSize, err)
 		}
-		s := oai.ImageSize(r)
-		if !slices.Contains(oai.PossibleImageSizeValues(), s) {
-			return nil, fmt.Errorf("invalid image style: %q", s)
-		}
-		body.Size = &s
+		body.Size = r
 	}
-	var opts oai.GetImageGenerationsOptions
-	resp, err := p.client.GetImageGenerations(ctx, body, &opts)
+	resp, err := p.client.CreateImage(ctx, body)
 	if err != nil {
 		return nil, err
 	}
 	if len(resp.Data) != 1 {
 		return nil, fmt.Errorf("expected single generated image in response, got: %d", len(resp.Data))
 	}
-	if resp.Data[0].Base64Data == nil {
+	if resp.Data[0].B64JSON == "" {
 		return nil, errors.New("missing generated image data in response")
 	}
-	b, err := base64.StdEncoding.DecodeString(*resp.Data[0].Base64Data)
+	b, err := base64.StdEncoding.DecodeString(resp.Data[0].B64JSON)
 	if err != nil {
 		return nil, err
 	}
