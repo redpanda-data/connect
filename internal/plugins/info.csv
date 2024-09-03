@@ -246,3 +246,5 @@ websocket               ,output    ,websocket               ,certified  ,n      
 while                   ,processor ,while                   ,certified  ,n          ,y     ,y
 workflow                ,processor ,workflow                ,certified  ,n          ,y     ,y
 xml                     ,processor ,xml                     ,community  ,n          ,y     ,y
+zmq4                    ,input     ,zmq4                    ,community  ,n          ,n     ,n
+zmq4                    ,output    ,zmq4                    ,community  ,n          ,n     ,n
