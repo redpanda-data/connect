@@ -156,14 +156,6 @@ table: test
 designated_timestamp_unit: hello`,
 			expectedErrContains: "is not a valid timestamp unit",
 		},
-		{
-			name: "invalid tlsVerify",
-			conf: `
-address: "localhost:9000"
-table: test
-tls_verify: notavalidsetting`,
-			expectedErrContains: "invalid tls_verify setting",
-		},
 	}
 
 	for _, tc := range testCases {

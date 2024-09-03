@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"time"
 
 	qdb "github.com/questdb/go-questdb-client/v3"
@@ -35,6 +36,7 @@ func questdbOutputConfig() *service.ConfigSpec {
 		Fields(
 			service.NewOutputMaxInFlightField(),
 			service.NewBatchPolicyField("batching"),
+			service.NewTLSToggledField("tls"),
 			service.NewStringField("address").
 				Description("Address of the QuestDB server's HTTP port (excluding protocol)").
 				Example("localhost:9000"),
@@ -50,16 +52,6 @@ func questdbOutputConfig() *service.ConfigSpec {
 				Description("Bearer token for HTTP auth (takes precedence over basic auth username & password)").
 				Optional().
 				Secret(),
-			service.NewBoolField("tls_enabled").
-				Description("Use TLS to secure the connection to the server").
-				Optional(),
-			service.NewStringField("tls_verify").
-				Description("Whether to verify the server's certificate. This should only be used for testing as a "+
-					"last resort and never used in production as it makes the connection vulnerable to "+
-					"man-in-the-middle attacks. Options are 'on' or 'unsafe_off'.").
-				Optional().
-				Default("on").
-				LintRule(`root = if ["on","unsafe_off"].contains(this != true { ["valid options are \"on\" or \"unsafe_off\"" ] }`),
 			service.NewDurationField("retry_timeout").
 				Description("The time to continue retrying after a failed HTTP request. The interval between retries is an exponential "+
 					"backoff starting at 10ms and doubling after each failed attempt up to a maximum of 1 second.").
@@ -110,8 +102,10 @@ func questdbOutputConfig() *service.ConfigSpec {
 type questdbWriter struct {
 	log *service.Logger
 
-	pool *qdb.LineSenderPool
+	pool      *qdb.LineSenderPool
+	transport *http.Transport
 
+	address                  string
 	symbols                  map[string]bool
 	doubles                  map[string]bool
 	table                    string
@@ -149,30 +143,6 @@ func fromConf(conf *service.ParsedConfig, mgr *service.Resources) (out service.B
 		return
 	}
 	opts = append(opts, qdb.WithAddress(addr))
-
-	if conf.Contains("tls_enabled") {
-		var tls bool
-		if tls, err = conf.FieldBool("tls_enabled"); err != nil {
-			return
-		}
-		if tls {
-			opts = append(opts, qdb.WithTls())
-		}
-	}
-
-	var tlsVerify string
-	if tlsVerify, err = conf.FieldString("tls_verify"); err != nil {
-		return
-	}
-	switch tlsVerify {
-	case "on":
-		break
-	case "unsafe_off":
-		opts = append(opts, qdb.WithTlsInsecureSkipVerify())
-	default:
-		err = fmt.Errorf("invalid tls_verify setting: %s", tlsVerify)
-		return
-	}
 
 	if conf.Contains("retry_timeout") {
 		var retryTimeout time.Duration
@@ -218,13 +188,36 @@ func fromConf(conf *service.ParsedConfig, mgr *service.Resources) (out service.B
 
 	}
 
-	// Allocate the QuestDBWriter which wraps the LineSenderPool
+	// Use a common http transport with user-defined TLS config
+	transport := &http.Transport{
+		Proxy:               http.ProxyFromEnvironment,
+		MaxConnsPerHost:     0,
+		MaxIdleConns:        64,
+		MaxIdleConnsPerHost: 64,
+		IdleConnTimeout:     120 * time.Second,
+		TLSHandshakeTimeout: 10 * time.Second,
+	}
 
+	tlsConf, tlsEnabled, err := conf.FieldTLSToggled("tls")
+	if err != nil {
+		return
+	}
+
+	if tlsEnabled {
+		opts = append(opts, qdb.WithTls())
+		transport.TLSClientConfig = tlsConf
+	}
+
+	opts = append(opts, qdb.WithHttpTransport(transport))
+
+	// Allocate the QuestDBWriter which wraps the LineSenderPool
 	w := &questdbWriter{
+		address:               addr,
 		log:                   mgr.Logger(),
 		symbols:               map[string]bool{},
 		doubles:               map[string]bool{},
 		timestampStringFields: map[string]bool{},
+		transport:             transport,
 	}
 	out = w
 	w.pool, err = qdb.PoolFromOptions(opts...)
@@ -237,6 +230,7 @@ func fromConf(conf *service.ParsedConfig, mgr *service.Resources) (out service.B
 	qdb.WithMaxSenders(mif)(w.pool)
 
 	// Configure the questdbWriter with additional options
+
 	if w.table, err = conf.FieldString("table"); err != nil {
 		return
 	}
