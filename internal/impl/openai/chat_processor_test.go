@@ -13,7 +13,6 @@ import (
 	"testing"
 
 	"github.com/go-faker/faker/v4"
-	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	oai "github.com/sashabaranov/go-openai"
 	"github.com/stretchr/testify/assert"
@@ -54,7 +53,7 @@ func TestChat(t *testing.T) {
 }
 
 func TestChatInterpolationError(t *testing.T) {
-	text, err := bloblang.GlobalEnvironment().Parse(`throw("kaboom!")`)
+	text, err := service.NewInterpolatedString(`${!throw("kaboom!")}`)
 	assert.NoError(t, err)
 	p := chatProcessor{
 		baseProcessor: &baseProcessor{
