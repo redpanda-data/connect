@@ -162,6 +162,7 @@ model: gpt4-turbo
 === `prompt`
 
 The user prompt you want to generate a response for. By default, the processor submits the entire payload as a string.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
 
 *Type*: `string`

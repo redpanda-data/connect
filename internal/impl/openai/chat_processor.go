@@ -15,7 +15,6 @@ import (
 	"slices"
 	"time"
 
-	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
 	oai "github.com/sashabaranov/go-openai"
@@ -76,7 +75,7 @@ To learn more about chat completion, see the https://platform.openai.com/docs/gu
 			)...,
 		).
 		Fields(
-			service.NewBloblangField(ocpFieldUserPrompt).
+			service.NewInterpolatedStringField(ocpFieldUserPrompt).
 				Description("The user prompt you want to generate a response for. By default, the processor submits the entire payload as a string.").
 				Optional(),
 			service.NewInterpolatedStringField(ocpFieldSystemPrompt).
@@ -163,9 +162,9 @@ func makeChatProcessor(conf *service.ParsedConfig, mgr *service.Resources) (serv
 	if err != nil {
 		return nil, err
 	}
-	var up *bloblang.Executor
+	var up *service.InterpolatedString
 	if conf.Contains(ocpFieldUserPrompt) {
-		up, err = conf.FieldBloblang(ocpFieldUserPrompt)
+		up, err = conf.FieldInterpolatedString(ocpFieldUserPrompt)
 		if err != nil {
 			return nil, err
 		}
@@ -334,7 +333,7 @@ func newDynamicSchemaProvider(conf *service.ParsedConfig, mgr *service.Resources
 type chatProcessor struct {
 	*baseProcessor
 
-	userPrompt       *bloblang.Executor
+	userPrompt       *service.InterpolatedString
 	systemPrompt     *service.InterpolatedString
 	maxTokens        *int
 	temperature      *float32
@@ -396,13 +395,13 @@ func (p *chatProcessor) Process(ctx context.Context, msg *service.Message) (serv
 		})
 	}
 	if p.userPrompt != nil {
-		s, err := msg.BloblangQueryValue(p.userPrompt)
+		s, err := p.userPrompt.TryString(msg)
 		if err != nil {
-			return nil, fmt.Errorf("%s execution error: %w", ocpFieldUserPrompt, err)
+			return nil, fmt.Errorf("%s interpolation error: %w", ocpFieldUserPrompt, err)
 		}
 		body.Messages = append(body.Messages, oai.ChatCompletionMessage{
 			Role:    "user",
-			Content: bloblang.ValueToString(s),
+			Content: s,
 		})
 	} else {
 		b, err := msg.AsBytes()
