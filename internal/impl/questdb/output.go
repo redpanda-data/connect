@@ -50,47 +50,47 @@ func questdbOutputConfig() *service.ConfigSpec {
 				Description("Bearer token for HTTP auth (takes precedence over basic auth username & password)").
 				Optional().
 				Secret(),
-			service.NewBoolField("tlsEnabled").
+			service.NewBoolField("tls_enabled").
 				Description("Use TLS to secure the connection to the server").
 				Optional(),
-			service.NewStringField("tlsVerify").
+			service.NewStringField("tls_verify").
 				Description("Whether to verify the server's certificate. This should only be used for testing as a "+
 					"last resort and never used in production as it makes the connection vulnerable to "+
 					"man-in-the-middle attacks. Options are 'on' or 'unsafe_off'.").
 				Optional().
 				Default("on").
 				LintRule(`root = if ["on","unsafe_off"].contains(this != true { ["valid options are \"on\" or \"unsafe_off\"" ] }`),
-			service.NewDurationField("retryTimeout").
+			service.NewDurationField("retry_timeout").
 				Description("The time to continue retrying after a failed HTTP request. The interval between retries is an exponential "+
 					"backoff starting at 10ms and doubling after each failed attempt up to a maximum of 1 second.").
 				Optional().
 				Advanced(),
-			service.NewDurationField("requestTimeout").
+			service.NewDurationField("request_timeout").
 				Description("The time to wait for a response from the server. This is in addition to the calculation "+
-					"derived from the requestMinThroughput parameter.").
+					"derived from the request_min_throughput parameter.").
 				Optional().
 				Advanced(),
-			service.NewIntField("requestMinThroughput").
+			service.NewIntField("request_min_throughput").
 				Description("Minimum expected throughput in bytes per second for HTTP requests. If the throughput is lower than this value, "+
-					"the connection will time out. This is used to calculate an additional timeout on top of requestTimeout. This is useful for large requests. "+
+					"the connection will time out. This is used to calculate an additional timeout on top of request_timeout. This is useful for large requests. "+
 					"You can set this value to 0 to disable this logic.").
 				Optional().
 				Advanced(),
 			service.NewStringField("table").
 				Description("Destination table").
 				Example("trades"),
-			service.NewStringField("designatedTimestampField").
+			service.NewStringField("designated_timestamp_field").
 				Description("Name of the designated timestamp field").
 				Optional(),
-			service.NewStringField("designatedTimestampUnit").
+			service.NewStringField("designated_timestamp_unit").
 				Description("Designated timestamp field units").
 				Default("auto").
 				LintRule(`root = if ["nanos","micros","millis","seconds","auto"].contains(this) != true { [ "valid options are \"nanos\", \"micros\", \"millis\", \"seconds\", \"auto\"" ] }`).
 				Optional(),
-			service.NewStringListField("timestampStringFields").
+			service.NewStringListField("timestamp_string_fields").
 				Description("String fields with textual timestamps").
 				Optional(),
-			service.NewStringField("timestampStringFormat").
+			service.NewStringField("timestamp_string_format").
 				Description("Timestamp format, used when parsing timestamp string fields. Specified in golang's time.Parse layout").
 				Default(time.StampMicro+"Z0700").
 				Optional(),
@@ -100,7 +100,7 @@ func questdbOutputConfig() *service.ConfigSpec {
 			service.NewStringListField("doubles").
 				Description("Columns that should be double type, (int is default)").
 				Optional(),
-			service.NewBoolField("errorOnEmptyMessages").
+			service.NewBoolField("error_on_empty_messages").
 				Description("Mark a message as errored if it is empty after field validation").
 				Optional().
 				Default(false),
@@ -150,9 +150,9 @@ func fromConf(conf *service.ParsedConfig, mgr *service.Resources) (out service.B
 	}
 	opts = append(opts, qdb.WithAddress(addr))
 
-	if conf.Contains("tlsEnabled") {
+	if conf.Contains("tls_enabled") {
 		var tls bool
-		if tls, err = conf.FieldBool("tlsEnabled"); err != nil {
+		if tls, err = conf.FieldBool("tls_enabled"); err != nil {
 			return
 		}
 		if tls {
@@ -161,7 +161,7 @@ func fromConf(conf *service.ParsedConfig, mgr *service.Resources) (out service.B
 	}
 
 	var tlsVerify string
-	if tlsVerify, err = conf.FieldString("tlsVerify"); err != nil {
+	if tlsVerify, err = conf.FieldString("tls_verify"); err != nil {
 		return
 	}
 	switch tlsVerify {
@@ -170,29 +170,29 @@ func fromConf(conf *service.ParsedConfig, mgr *service.Resources) (out service.B
 	case "unsafe_off":
 		opts = append(opts, qdb.WithTlsInsecureSkipVerify())
 	default:
-		err = fmt.Errorf("invalid tlsVerify setting: %s", tlsVerify)
+		err = fmt.Errorf("invalid tls_verify setting: %s", tlsVerify)
 		return
 	}
 
-	if conf.Contains("retryTimeout") {
+	if conf.Contains("retry_timeout") {
 		var retryTimeout time.Duration
-		if retryTimeout, err = conf.FieldDuration("retryTimeout"); err != nil {
+		if retryTimeout, err = conf.FieldDuration("retry_timeout"); err != nil {
 			return
 		}
 		opts = append(opts, qdb.WithRetryTimeout(retryTimeout))
 	}
 
-	if conf.Contains("requestTimeout") {
+	if conf.Contains("request_timeout") {
 		var requestTimeout time.Duration
-		if requestTimeout, err = conf.FieldDuration("requestTimeout"); err != nil {
+		if requestTimeout, err = conf.FieldDuration("request_timeout"); err != nil {
 			return
 		}
 		opts = append(opts, qdb.WithRequestTimeout(requestTimeout))
 	}
 
-	if conf.Contains("requestMinThroughput") {
+	if conf.Contains("request_min_throughput") {
 		var requestMinThroughput int
-		if requestMinThroughput, err = conf.FieldInt("requestMinThroughput"); err != nil {
+		if requestMinThroughput, err = conf.FieldInt("request_min_throughput"); err != nil {
 			return
 		}
 		opts = append(opts, qdb.WithMinThroughput(requestMinThroughput))
@@ -264,8 +264,8 @@ func fromConf(conf *service.ParsedConfig, mgr *service.Resources) (out service.B
 	}
 
 	var timestampStringFields []string
-	if conf.Contains("timestampStringFields") {
-		if timestampStringFields, err = conf.FieldStringList("timestampStringFields"); err != nil {
+	if conf.Contains("timestamp_string_fields") {
+		if timestampStringFields, err = conf.FieldStringList("timestamp_string_fields"); err != nil {
 			return
 		}
 		for _, f := range timestampStringFields {
@@ -273,15 +273,15 @@ func fromConf(conf *service.ParsedConfig, mgr *service.Resources) (out service.B
 		}
 	}
 
-	if conf.Contains("designatedTimestampField") {
-		if w.designatedTimestampField, err = conf.FieldString("designatedTimestampField"); err != nil {
+	if conf.Contains("designated_timestamp_field") {
+		if w.designatedTimestampField, err = conf.FieldString("designated_timestamp_field"); err != nil {
 			return
 		}
 	}
 
 	var designatedTimestampUnit string
-	if conf.Contains("designatedTimestampUnit") {
-		if designatedTimestampUnit, err = conf.FieldString("designatedTimestampUnit"); err != nil {
+	if conf.Contains("designated_timestamp_unit") {
+		if designatedTimestampUnit, err = conf.FieldString("designated_timestamp_unit"); err != nil {
 			return
 		}
 
@@ -293,13 +293,13 @@ func fromConf(conf *service.ParsedConfig, mgr *service.Resources) (out service.B
 		}
 	}
 
-	if conf.Contains("timestampStringFormat") {
-		if w.timestampStringFormat, err = conf.FieldString("timestampStringFormat"); err != nil {
+	if conf.Contains("timestamp_string_format") {
+		if w.timestampStringFormat, err = conf.FieldString("timestamp_string_format"); err != nil {
 			return
 		}
 	}
 
-	if w.errorOnEmptyMessages, err = conf.FieldBool("errorOnEmptyMessages"); err != nil {
+	if w.errorOnEmptyMessages, err = conf.FieldBool("error_on_empty_messages"); err != nil {
 		return
 	}
 

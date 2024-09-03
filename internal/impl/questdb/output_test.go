@@ -102,12 +102,12 @@ func TestFromConf(t *testing.T) {
 	conf := `
 table: test
 address: "localhost:9000"
-designatedTimestampField: myDesignatedTimestamp
-designatedTimestampUnit: nanos
-timestampStringFields:
+designated_timestamp_field: myDesignatedTimestamp
+designated_timestamp_unit: nanos
+timestamp_string_fields:
   - fieldA
   - fieldB
-timestampStringFormat: 2006-01-02T15:04:05Z07:00 # rfc3339
+timestamp_string_format: 2006-01-02T15:04:05Z07:00 # rfc3339
 symbols:
   - mySymbolA
   - mySymbolB
@@ -153,7 +153,7 @@ func TestValidationErrorsFromConf(t *testing.T) {
 			conf: `
 address: "localhost:9000"
 table: test
-designatedTimestampUnit: hello`,
+designated_timestamp_unit: hello`,
 			expectedErrContains: "is not a valid timestamp unit",
 		},
 		{
@@ -161,8 +161,8 @@ designatedTimestampUnit: hello`,
 			conf: `
 address: "localhost:9000"
 table: test
-tlsVerify: notavalidsetting`,
-			expectedErrContains: "invalid tlsVerify setting",
+tls_verify: notavalidsetting`,
+			expectedErrContains: "invalid tls_verify setting",
 		},
 	}
 
@@ -224,7 +224,7 @@ func TestOptionsOnWrite(t *testing.T) {
 		},
 		{
 			name:      "withDesignatedTimestamp",
-			extraConf: "designatedTimestampField: timestamp",
+			extraConf: "designated_timestamp_field: timestamp",
 			payload:   []string{`{"hello": "world", "timestamp": 1}`},
 			expectedLines: []string{
 				`withDesignatedTimestamp hello="world" 1000000000`,
@@ -232,7 +232,7 @@ func TestOptionsOnWrite(t *testing.T) {
 		},
 		{
 			name:      "withTimestampUnit",
-			extraConf: "designatedTimestampField: timestamp\ndesignatedTimestampUnit: nanos",
+			extraConf: "designated_timestamp_field: timestamp\ndesignated_timestamp_unit: nanos",
 			payload:   []string{`{"hello": "world", "timestamp": 1}`},
 			expectedLines: []string{
 				`withTimestampUnit hello="world" 1`,
@@ -240,7 +240,7 @@ func TestOptionsOnWrite(t *testing.T) {
 		},
 		{
 			name:      "withTimestampStringFields",
-			extraConf: "timestampStringFields: ['timestamp']\ntimestampStringFormat: 2006-02-01",
+			extraConf: "timestamp_string_fields: ['timestamp']\ntimestamp_string_format: 2006-02-01",
 			payload:   []string{`{"timestamp": "1970-01-02"}`},
 			expectedLines: []string{
 				`withTimestampStringFields timestamp=2678400000000t`,
@@ -248,7 +248,7 @@ func TestOptionsOnWrite(t *testing.T) {
 		},
 		{
 			name:      "withBoolValue",
-			extraConf: "timestampStringFields: ['timestamp']\ntimestampStringFormat: 2006-02-01",
+			extraConf: "timestamp_string_fields: ['timestamp']\ntimestamp_string_format: 2006-02-01",
 			payload:   []string{`{"hello": true}`},
 			expectedLines: []string{
 				`withBoolValue hello=t`,
