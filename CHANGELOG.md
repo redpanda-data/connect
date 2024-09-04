@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.35.0 - TBD
+
+### Added
+
+- Auth fields added to the `schema_registry` input and output. (@mihaitodor)
+
 ## 4.34.0 - 2024-08-29
 
 ### Fixed

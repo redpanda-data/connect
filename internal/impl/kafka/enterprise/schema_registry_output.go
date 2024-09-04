@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -39,11 +40,7 @@ func outputSpec() *service.ConfigSpec {
 		Summary(`Publishes schemas to SchemaRegistry.`).
 		Description(service.OutputPerformanceDocs(true, false)).
 		Fields(
-			service.NewStringField(sroFieldURL).Description("The base URL of the schema registry service."),
-			service.NewInterpolatedStringField(sroFieldSubject).Description("Subject."),
-			service.NewStringField(sroFieldURL).Description("The base URL of the schema registry service."),
-			service.NewTLSToggledField(sroFieldTLS),
-			service.NewOutputMaxInFlightField(),
+			schemaRegistryOutputConfigFields()...,
 		).Example("Write schemas", "Write schemas to a Schema Registry instance and log errors for schemas which already exist.", `
 output:
   fallback:
@@ -64,6 +61,18 @@ output:
 `)
 }
 
+func schemaRegistryOutputConfigFields() []*service.ConfigField {
+	return append([]*service.ConfigField{
+		service.NewStringField(sroFieldURL).Description("The base URL of the schema registry service."),
+		service.NewInterpolatedStringField(sroFieldSubject).Description("Subject."),
+		service.NewStringField(sroFieldURL).Description("The base URL of the schema registry service."),
+		service.NewTLSToggledField(sroFieldTLS),
+		service.NewOutputMaxInFlightField(),
+	},
+		service.NewHTTPRequestAuthSignerFields()...,
+	)
+}
+
 func init() {
 	err := service.RegisterOutput("schema_registry", outputSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.Output, maxInFlight int, err error) {
@@ -71,7 +80,7 @@ func init() {
 				return
 			}
 
-			out, err = outputFromParsed(conf, mgr.Logger())
+			out, err = outputFromParsed(conf, mgr)
 			return
 		})
 	if err != nil {
@@ -79,18 +88,19 @@ func init() {
 	}
 }
 
-type output struct {
-	url     *url.URL
-	subject *service.InterpolatedString
+type schemaRegistryOutput struct {
+	url           *url.URL
+	subject       *service.InterpolatedString
+	requestSigner func(fs.FS, *http.Request) error
 
 	client    http.Client
 	connected atomic.Bool
-	log       *service.Logger
+	mgr       *service.Resources
 }
 
-func outputFromParsed(pConf *service.ParsedConfig, log *service.Logger) (o *output, err error) {
-	o = &output{
-		log: log,
+func outputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (o *schemaRegistryOutput, err error) {
+	o = &schemaRegistryOutput{
+		mgr: mgr,
 	}
 
 	var u string
@@ -103,6 +113,10 @@ func outputFromParsed(pConf *service.ParsedConfig, log *service.Logger) (o *outp
 
 	if o.subject, err = pConf.FieldInterpolatedString(sroFieldSubject); err != nil {
 		return
+	}
+
+	if o.requestSigner, err = pConf.HTTPRequestAuthSignerFromParsed(); err != nil {
+		return nil, err
 	}
 
 	var tlsConf *tls.Config
@@ -129,7 +143,7 @@ func outputFromParsed(pConf *service.ParsedConfig, log *service.Logger) (o *outp
 
 //------------------------------------------------------------------------------
 
-func (o *output) Connect(ctx context.Context) error {
+func (o *schemaRegistryOutput) Connect(ctx context.Context) error {
 	if o.connected.Load() {
 		return nil
 	}
@@ -138,6 +152,11 @@ func (o *output) Connect(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to construct mode HTTP request: %s", err)
 	}
+
+	if err = o.requestSigner(o.mgr.FS(), req); err != nil {
+		return fmt.Errorf("failed to sign request: %s", err)
+	}
+
 	resp, err := o.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to execute mode HTTP request: %s", err)
@@ -168,7 +187,7 @@ func (o *output) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (o *output) Write(ctx context.Context, m *service.Message) error {
+func (o *schemaRegistryOutput) Write(ctx context.Context, m *service.Message) error {
 	if !o.connected.Load() {
 		return service.ErrNotConnected
 	}
@@ -190,6 +209,10 @@ func (o *output) Write(ctx context.Context, m *service.Message) error {
 	}
 	req.Header.Set("Content-Type", "application/vnd.schemaregistry.v1+json")
 
+	if err = o.requestSigner(o.mgr.FS(), req); err != nil {
+		return fmt.Errorf("failed to sign request: %s", err)
+	}
+
 	resp, err := o.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to execute request: %s", err)
@@ -200,7 +223,7 @@ func (o *output) Write(ctx context.Context, m *service.Message) error {
 		if respData, err := httputil.DumpResponse(resp, true); err != nil {
 			return fmt.Errorf("failed to read response: %s", err)
 		} else {
-			o.log.Debugf("Failed to push data to SchemaRegistry with status %d: %s", resp.StatusCode, string(respData))
+			o.mgr.Logger().Debugf("Failed to push data to SchemaRegistry with status %d: %s", resp.StatusCode, string(respData))
 		}
 
 		return fmt.Errorf("request returned status: %d", resp.StatusCode)
@@ -209,7 +232,7 @@ func (o *output) Write(ctx context.Context, m *service.Message) error {
 	return nil
 }
 
-func (o *output) Close(_ context.Context) error {
+func (o *schemaRegistryOutput) Close(_ context.Context) error {
 	o.connected.Store(false)
 
 	return nil
