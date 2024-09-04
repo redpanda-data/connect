@@ -214,6 +214,15 @@ splunk_hec              ,output    ,splunk_hec              ,enterprise ,n      
 sql                     ,cache     ,sql                     ,certified  ,n          ,n     ,n
 sql                     ,output    ,sql                     ,community  ,y          ,n     ,n
 sql                     ,processor ,sql                     ,community  ,y          ,n     ,n
+sql_driver_clickhouse   ,sql_driver,ClickHouse              ,community  ,n          ,n     ,n
+sql_driver_gocosmos     ,sql_driver,Azure Cosmos DB         ,community  ,n          ,n     ,n
+sql_driver_mssql        ,sql_driver,Microsoft SQL Server    ,community  ,n          ,n     ,n
+sql_driver_mysql        ,sql_driver,MYSQL                   ,certified  ,n          ,y     ,y
+sql_driver_oracle       ,sql_driver,Oracle                  ,certified  ,n          ,y     ,y
+sql_driver_postgres     ,sql_driver,PostgreSQL              ,certified  ,n          ,y     ,y
+sql_driver_snowflake    ,sql_driver,Snowflake               ,community  ,n          ,n     ,n
+sql_driver_sqlite       ,sql_driver,SQLite                  ,certified  ,n          ,y     ,y
+sql_driver_trino        ,sql_driver,Trino                   ,community  ,n          ,n     ,n
 sql_insert              ,output    ,sql_insert              ,certified  ,n          ,y     ,y
 sql_insert              ,processor ,sql_insert              ,certified  ,n          ,y     ,y
 sql_raw                 ,input     ,sql_raw                 ,certified  ,n          ,y     ,y

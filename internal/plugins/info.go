@@ -44,6 +44,22 @@ const (
 	TypeSQLDriver TypeName = "sql_driver"
 )
 
+// IsCore returns true if the type name is for a core benthos plugin type.
+func (t TypeName) IsCore() bool {
+	_, isCore := map[TypeName]struct{}{
+		TypeBuffer:    {},
+		TypeCache:     {},
+		TypeInput:     {},
+		TypeMetric:    {},
+		TypeOutput:    {},
+		TypeProcessor: {},
+		TypeRateLimit: {},
+		TypeScanner:   {},
+		TypeTracer:    {},
+	}[t]
+	return isCore
+}
+
 //go:embed info.csv
 var baseInfoCSV []byte
 
@@ -164,7 +180,11 @@ func PluginNamesForCloudAI(typeStr TypeName) []string {
 		if !info.CloudAI {
 			continue
 		}
-		if typeStr != TypeNone && info.Type != typeStr {
+		if typeStr != TypeNone {
+			if info.Type != typeStr {
+				continue
+			}
+		} else if !info.Type.IsCore() {
 			continue
 		}
 		if _, exists := seen[info.Name]; !exists {
@@ -184,7 +204,11 @@ func PluginNamesForCloud(typeStr TypeName) []string {
 		if !info.Cloud {
 			continue
 		}
-		if typeStr != TypeNone && info.Type != typeStr {
+		if typeStr != TypeNone {
+			if info.Type != typeStr {
+				continue
+			}
+		} else if !info.Type.IsCore() {
 			continue
 		}
 		if _, exists := seen[info.Name]; !exists {
