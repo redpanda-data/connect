@@ -6,35 +6,22 @@
 //
 // https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
-package schema_test
+package cloudtest_test
 
 import (
-	// Only import a subset of components for execution.
-	"strings"
 	"testing"
 
+	"github.com/redpanda-data/connect/v4/internal/plugins"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"github.com/stretchr/testify/assert"
 
 	_ "embed"
 
 	_ "github.com/redpanda-data/connect/v4/public/components/cloud"
 )
 
-//go:embed cloud_allow_list.txt
-var allowList string
-
 func TestImportsMatch(t *testing.T) {
-	t.Skip("Skipping until we have a structured allow list")
-
-	var allowSlice []string
-	for _, s := range strings.Split(allowList, "\n") {
-		s = strings.TrimSpace(s)
-		if s == "" || strings.HasPrefix(s, "#") {
-			continue
-		}
-		allowSlice = append(allowSlice, s)
-	}
+	allowSlice := plugins.PluginNamesForCloud(plugins.TypeNone)
 
 	env := service.GlobalEnvironment()
 
@@ -77,6 +64,8 @@ func TestImportsMatch(t *testing.T) {
 	})
 
 	for _, k := range allowSlice {
-		assert.Contains(t, seen, k)
+		if _, exists := seen[k]; !exists {
+			t.Errorf("plugin '%v' referenced within internal/plugins/info.csv is not imported by this product", k)
+		}
 	}
 }

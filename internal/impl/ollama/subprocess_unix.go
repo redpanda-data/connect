@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+
 	"github.com/redpanda-data/connect/v4/internal/singleton"
 )
 
