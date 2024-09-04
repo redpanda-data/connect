@@ -64,6 +64,22 @@ output:
       root_cas_file: ""
       client_certs: []
     max_in_flight: 64
+    oauth:
+      enabled: false
+      consumer_key: ""
+      consumer_secret: ""
+      access_token: ""
+      access_token_secret: ""
+    basic_auth:
+      enabled: false
+      username: ""
+      password: ""
+    jwt:
+      enabled: false
+      private_key_file: ""
+      signing_method: ""
+      claims: {}
+      headers: {}
 ```
 
 --
@@ -293,5 +309,161 @@ The maximum number of messages to have in flight at a given time. Increase this 
 *Type*: `int`
 
 *Default*: `64`
+
+=== `oauth`
+
+Allows you to specify open authentication via OAuth version 1.
+
+
+*Type*: `object`
+
+
+=== `oauth.enabled`
+
+Whether to use OAuth version 1 in requests.
+
+
+*Type*: `bool`
+
+*Default*: `false`
+
+=== `oauth.consumer_key`
+
+A value used to identify the client to the service provider.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `oauth.consumer_secret`
+
+A secret used to establish ownership of the consumer key.
+[CAUTION]
+====
+This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
+====
+
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `oauth.access_token`
+
+A value used to gain access to the protected resources on behalf of the user.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `oauth.access_token_secret`
+
+A secret provided in order to establish ownership of a given access token.
+[CAUTION]
+====
+This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
+====
+
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `basic_auth`
+
+Allows you to specify basic authentication.
+
+
+*Type*: `object`
+
+
+=== `basic_auth.enabled`
+
+Whether to use basic authentication in requests.
+
+
+*Type*: `bool`
+
+*Default*: `false`
+
+=== `basic_auth.username`
+
+A username to authenticate as.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `basic_auth.password`
+
+A password to authenticate with.
+[CAUTION]
+====
+This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
+====
+
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `jwt`
+
+BETA: Allows you to specify JWT authentication.
+
+
+*Type*: `object`
+
+
+=== `jwt.enabled`
+
+Whether to use JWT authentication in requests.
+
+
+*Type*: `bool`
+
+*Default*: `false`
+
+=== `jwt.private_key_file`
+
+A file with the PEM encoded via PKCS1 or PKCS8 as private key.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `jwt.signing_method`
+
+A method used to sign the token such as RS256, RS384, RS512 or EdDSA.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `jwt.claims`
+
+A value used to identify the claims that issued the JWT.
+
+
+*Type*: `object`
+
+*Default*: `{}`
+
+=== `jwt.headers`
+
+Add optional key/value headers to the JWT.
+
+
+*Type*: `object`
+
+*Default*: `{}`
 
 
