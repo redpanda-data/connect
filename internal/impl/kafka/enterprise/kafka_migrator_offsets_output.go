@@ -33,7 +33,7 @@ func kafkaMigratorOffsetsOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Beta().
 		Categories("Services").
-		Version("4.33.1").
+		Version("4.35.0").
 		Summary("Kafka Migrator consumer group offsets output using the https://github.com/twmb/franz-go[Franz Kafka client library^].").
 		// TODO
 		Description("This output can be used in combination with the `kafka_franz` input that is configured to read the `__consumer_offsets` topic.").

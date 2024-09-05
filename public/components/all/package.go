@@ -18,7 +18,6 @@ import (
 
 	// Import all enterprise components.
 	_ "github.com/redpanda-data/connect/v4/public/components/aws/enterprise"
-	_ "github.com/redpanda-data/connect/v4/public/components/enterprise"
 	_ "github.com/redpanda-data/connect/v4/public/components/gcp/enterprise"
 	_ "github.com/redpanda-data/connect/v4/public/components/kafka/enterprise"
 	_ "github.com/redpanda-data/connect/v4/public/components/ollama"

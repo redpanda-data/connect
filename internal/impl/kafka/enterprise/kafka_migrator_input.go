@@ -37,14 +37,16 @@ func kafkaMigratorInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Beta().
 		Categories("Services").
-		Version("4.33.1").
-		Summary(`A Kafka input using the https://github.com/twmb/franz-go[Franz Kafka client library^].`).
+		Version("4.35.0").
+		Summary(`A Kafka Migrator input using the https://github.com/twmb/franz-go[Franz Kafka client library^].`).
 		Description(`
-This input can be used in combination with a ` + "`kafka_migrator`" + ` output which can query it for topic configurations and topic ACLs.
+Reads a batch of messages from a Kafka broker and waits for the output to acknowledge the writes before updating the Kafka consumer group offset.
+
+This input should be used in combination with a ` + "`kafka_migrator`" + ` input which it can query for existing topics.
 
 When a consumer group is specified this input consumes one or more topics where partitions will automatically balance across any other connected clients with the same consumer group. When a consumer group is not specified topics can either be consumed in their entirety or with explicit partitions.
 
-It attempts to create all selected topics it along with their associated ACLs in the broker that the ` + "`kafka_migrator`" + ` output points to identified by the label specified in ` + "`topic_sink`" + `.
+It attempts to create all selected topics it along with their associated ACLs in the broker that the ` + "`kafka_migrator`" + ` output points to identified by the label specified in ` + "`output_resource`" + `.
 
 == Metrics
 
@@ -137,8 +139,8 @@ Finally, it's also possible to specify an explicit offset to consume from by add
 			Description("The period of time between each topic lag refresh cycle.").
 			Default("5s").
 			Advanced(),
-		service.NewStringField("topic_sink").
-			Description("The label of a kafka_migrator output from which to read the list of topics which need to be created.").
+		service.NewStringField("output_resource").
+			Description("The label of the kafka_migrator output in which the currently selected topics need to be created before attempting to read messages.").
 			Default(rproDefaultLabel).
 			Advanced(),
 	}
@@ -178,9 +180,10 @@ type KafkaMigratorReader struct {
 	multiHeader           bool
 	batchPolicy           service.BatchPolicy
 	topicLagRefreshPeriod time.Duration
-	topicSink             string
+	outputResource        string
 
 	connMut             sync.Mutex
+	readMut             sync.Mutex
 	client              *kgo.Client
 	topicLagGauge       *service.MetricGauge
 	topicLagCache       sync.Map
@@ -293,7 +296,7 @@ func NewKafkaMigratorReaderFromConfig(conf *service.ParsedConfig, mgr *service.R
 		return nil, err
 	}
 
-	if r.topicSink, err = conf.FieldString("topic_sink"); err != nil {
+	if r.outputResource, err = conf.FieldString("output_resource"); err != nil {
 		return nil, err
 	}
 
@@ -447,6 +450,9 @@ func (r *KafkaMigratorReader) ReadBatch(ctx context.Context) (service.MessageBat
 	r.connMut.Lock()
 	defer r.connMut.Unlock()
 
+	r.readMut.Lock()
+	defer r.readMut.Unlock()
+
 	if r.client == nil {
 		return nil, nil, service.ErrNotConnected
 	}
@@ -508,10 +514,10 @@ func (r *KafkaMigratorReader) ReadBatch(ctx context.Context) (service.MessageBat
 
 	if !r.outputTopicsCreated {
 		var output *KafkaMigratorWriter
-		if res, ok := r.mgr.GetGeneric(r.topicSink); ok {
+		if res, ok := r.mgr.GetGeneric(r.outputResource); ok {
 			output = res.(*KafkaMigratorWriter)
 		} else {
-			r.mgr.Logger().Debugf("Writer for topic sink %q not found", r.topicSink)
+			r.mgr.Logger().Debugf("Writer for topic sink %q not found", r.outputResource)
 		}
 
 		if output != nil {
@@ -522,7 +528,7 @@ func (r *KafkaMigratorReader) ReadBatch(ctx context.Context) (service.MessageBat
 					r.mgr.Logger().Errorf("Failed to create topic %q and ACLs: %s", topic, err)
 				} else {
 					if err == errTopicAlreadyExists {
-						r.mgr.Logger().Infof("Topic %q already exists", topic)
+						r.mgr.Logger().Debugf("Topic %q already exists", topic)
 					}
 					if err := createACLs(ctx, topic, r.client, output.client); err != nil {
 						r.mgr.Logger().Errorf("Failed to create ACLs for topic %q: %s", topic, err)
@@ -542,6 +548,9 @@ func (r *KafkaMigratorReader) ReadBatch(ctx context.Context) (service.MessageBat
 	r.client.AllowRebalance()
 
 	return resBatch, func(ctx context.Context, res error) error {
+		r.readMut.Lock()
+		defer r.readMut.Unlock()
+
 		// TODO: What should happen when `auto_replay_nacks: false` and a batch gets rejected followed by another one
 		// which gets acked?
 		// Also see "Res will always be nil because we initialize with service.AutoRetryNacks" comment in

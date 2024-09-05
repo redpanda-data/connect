@@ -23,9 +23,9 @@
 component_type_dropdown::[]
 
 
-A Kafka output using the https://github.com/twmb/franz-go[Franz Kafka client library^].
+A Kafka Migrator output using the https://github.com/twmb/franz-go[Franz Kafka client library^].
 
-Introduced in version 4.33.1.
+Introduced in version 4.35.0.
 
 
 [tabs]
@@ -95,17 +95,19 @@ output:
       client_certs: []
     sasl: [] # No default (optional)
     timestamp: ${! timestamp_unix() } # No default (optional)
-    topic_source: kafka_migrator_input
+    input_resource: kafka_migrator_input
 ```
 
 --
 ======
 
-Writes a batch of messages to Kafka brokers and waits for acknowledgement before propagating it back to the input.
+Writes a batch of messages to a Kafka broker and waits for acknowledgement before propagating it back to the input.
+
+This output should be used in combination with a `kafka_migrator` input which it can query for topic and ACL configurations.
 
 If the configured broker does not contain the current message topic, it attempts to create it along with the topic
 ACLs which are read automatically from the `kafka_migrator` input identified by the label specified in
-`topic_source`.
+`input_resource`.
 
 
 == Examples
@@ -127,7 +129,7 @@ output:
     partitioner: manual
     partition: ${! metadata("kafka_partition").or(throw("missing kafka_partition metadata")) }
     timestamp: ${! metadata("kafka_timestamp_unix").or(timestamp_unix()) }
-    topic_source: kafka_migrator_input
+    input_resource: kafka_migrator_input
     max_in_flight: 1
 ```
 
@@ -823,9 +825,9 @@ timestamp: ${! timestamp_unix() }
 timestamp: ${! metadata("kafka_timestamp_unix") }
 ```
 
-=== `topic_source`
+=== `input_resource`
 
-The label of a kafka_migrator input from which to read the list of topics which need to be created.
+The label of the kafka_migrator input from which to read the configurations for topics and ACLs which need to be created.
 
 
 *Type*: `string`

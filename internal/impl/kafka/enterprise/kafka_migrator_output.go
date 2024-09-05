@@ -34,14 +34,16 @@ func kafkaMigratorOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Beta().
 		Categories("Services").
-		Version("4.33.1").
-		Summary("A Kafka output using the https://github.com/twmb/franz-go[Franz Kafka client library^].").
+		Version("4.35.0").
+		Summary("A Kafka Migrator output using the https://github.com/twmb/franz-go[Franz Kafka client library^].").
 		Description(`
-Writes a batch of messages to Kafka brokers and waits for acknowledgement before propagating it back to the input.
+Writes a batch of messages to a Kafka broker and waits for acknowledgement before propagating it back to the input.
+
+This output should be used in combination with a `+"`kafka_migrator`"+` input which it can query for topic and ACL configurations.
 
 If the configured broker does not contain the current message `+"topic"+`, it attempts to create it along with the topic
 ACLs which are read automatically from the `+"`kafka_migrator`"+` input identified by the label specified in
-`+"`topic_source`"+`.
+`+"`input_resource`"+`.
 `).
 		Fields(KafkaMigratorOutputConfigFields()...).
 		LintRule(`
@@ -60,7 +62,7 @@ output:
     partitioner: manual
     partition: ${! metadata("kafka_partition").or(throw("missing kafka_partition metadata")) }
     timestamp: ${! metadata("kafka_timestamp_unix").or(timestamp_unix()) }
-    topic_source: kafka_migrator_input
+    input_resource: kafka_migrator_input
     max_in_flight: 1
 `)
 }
@@ -137,8 +139,8 @@ func KafkaMigratorOutputConfigFields() []*service.ConfigField {
 			Example(`${! metadata("kafka_timestamp_unix") }`).
 			Optional().
 			Advanced(),
-		service.NewStringField("topic_source").
-			Description("The label of a kafka_migrator input from which to read the list of topics which need to be created.").
+		service.NewStringField("input_resource").
+			Description("The label of the kafka_migrator input from which to read the configurations for topics and ACLs which need to be created.").
 			Default(rpriDefaultLabel).
 			Advanced(),
 	}
@@ -186,7 +188,7 @@ type KafkaMigratorWriter struct {
 	produceMaxBytes     int32
 	brokerWriteMaxBytes int32
 	compressionPrefs    []kgo.CompressionCodec
-	topicSource         string
+	inputResource       string
 
 	connMut    sync.Mutex
 	client     *kgo.Client
@@ -335,7 +337,7 @@ func NewKafkaMigratorWriterFromConfig(conf *service.ParsedConfig, mgr *service.R
 		}
 	}
 
-	if w.topicSource, err = conf.FieldString("topic_source"); err != nil {
+	if w.inputResource, err = conf.FieldString("input_resource"); err != nil {
 		return nil, err
 	}
 
@@ -414,10 +416,10 @@ func (w *KafkaMigratorWriter) WriteBatch(ctx context.Context, b service.MessageB
 		}
 
 		var input *KafkaMigratorReader
-		if res, ok := w.mgr.GetGeneric(w.topicSource); ok {
+		if res, ok := w.mgr.GetGeneric(w.inputResource); ok {
 			input = res.(*KafkaMigratorReader)
 		} else {
-			w.mgr.Logger().Debugf("Reader for topic source %q not found", w.topicSource)
+			w.mgr.Logger().Debugf("Input resource %q not found", w.inputResource)
 		}
 
 		if input != nil {
