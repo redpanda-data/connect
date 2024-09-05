@@ -95,6 +95,7 @@ input:
       processors: [] # No default (optional)
     topic_lag_refresh_period: 5s
     auto_replay_nacks: true
+    extract_tracing_map: root = @ # No default (optional)
 ```
 
 --
@@ -839,5 +840,22 @@ Whether messages that are rejected (nacked) at the output level should be automa
 *Type*: `bool`
 
 *Default*: `true`
+
+=== `extract_tracing_map`
+
+EXPERIMENTAL: A xref:guides:bloblang/about.adoc[Bloblang mapping] that attempts to extract an object containing tracing propagation information, which will then be used as the root tracing span for the message. The specification of the extracted fields must match the format used by the service wide tracer.
+
+
+*Type*: `string`
+
+Requires version 3.45.0 or newer
+
+```yml
+# Examples
+
+extract_tracing_map: root = @
+
+extract_tracing_map: root = this.meta.span
+```
 
 
