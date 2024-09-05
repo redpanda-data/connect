@@ -42,6 +42,30 @@ jobs:
 
   docker:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        flavor: [default, cgo, cloud, ai]
+        platform: ["linux/amd64", "linux/arm64"]
+        exclude:
+        - flavor: cgo
+          platform: linux/arm64
+        include:
+          - flavor: default
+            latest: auto
+            suffix: ""
+            file: ./resources/docker/Dockerfile
+          - flavor: cgo
+            latest: false
+            suffix: -cgo
+            file: ./resources/docker/Dockerfile.cgo
+          - flavor: cloud
+            latest: false
+            suffix: -cloud
+            file: ./resources/docker/Dockerfile.cloud
+          - flavor: ai
+            latest: false
+            suffix: -ai
+            file: ./resources/docker/Dockerfile.ai
     permissions:
       id-token: write
       packages: write
@@ -84,93 +108,25 @@ jobs:
       id: buildx
       uses: docker/setup-buildx-action@v3
 
-    - name: Docker meta CGO
-      id: docker_meta_cgo
-      uses: docker/metadata-action@v5
-      with:
-        images: |
-          redpandadata/connect
-        flavor: |
-          latest=auto
-          suffix=-cgo
-        tags: |
-          type=semver,suffix=-cgo,pattern={{version}}
-          type=semver,suffix=-cgo,pattern={{major}}.{{minor}}
-          type=semver,suffix=-cgo,pattern={{major}}
-
-    - name: Build and push CGO
-      uses: docker/build-push-action@v6
-      with:
-        context: ./
-        file: ./resources/docker/Dockerfile.cgo
-        push: true
-        tags: ${{ steps.docker_meta_cgo.outputs.tags }}
-
     - name: Docker meta
       id: docker_meta
       uses: docker/metadata-action@v5
       with:
         images: |
           redpandadata/connect
+        flavor: |
+          latest=${{ matrix.latest }}
+          suffix=${{ matrix.suffix }}
         tags: |
-          type=semver,pattern={{version}}
-          type=semver,pattern={{major}}.{{minor}}
-          type=semver,pattern={{major}}
+          type=semver,suffix=${{ matrix.suffix }},pattern={{version}}
+          type=semver,suffix=${{ matrix.suffix }},pattern={{major}}.{{minor}}
+          type=semver,suffix=${{ matrix.suffix }},pattern={{major}}
 
     - name: Build and push
       uses: docker/build-push-action@v6
       with:
         context: ./
-        file: ./resources/docker/Dockerfile
-        builder: ${{ steps.buildx.outputs.name }}
-        platforms: linux/amd64,linux/arm64
+        file: ${{ matrix.file }}
+        platforms: ${{ matrix.platform }}
         push: true
         tags: ${{ steps.docker_meta.outputs.tags }}
-
-    - name: Docker meta cloud
-      id: docker_meta_cloud
-      uses: docker/metadata-action@v5
-      with:
-        images: |
-          redpandadata/connect
-        flavor: |
-          latest=false
-          suffix=-cloud
-        tags: |
-          type=semver,suffix=-cloud,pattern={{version}}
-          type=semver,suffix=-cloud,pattern={{major}}.{{minor}}
-          type=semver,suffix=-cloud,pattern={{major}}
-
-    - name: Build and push cloud
-      uses: docker/build-push-action@v6
-      with:
-        context: ./
-        file: ./resources/docker/Dockerfile.cloud
-        builder: ${{ steps.buildx.outputs.name }}
-        platforms: linux/amd64,linux/arm64
-        push: true
-        tags: ${{ steps.docker_meta_cloud.outputs.tags }}
-
-    - name: Docker meta cloud AI
-      id: docker_meta_ai
-      uses: docker/metadata-action@v5
-      with:
-        images: |
-          redpandadata/connect
-        flavor: |
-          latest=false
-          suffix=-ai
-        tags: |
-          type=semver,suffix=-ai,pattern={{version}}
-          type=semver,suffix=-ai,pattern={{major}}.{{minor}}
-          type=semver,suffix=-ai,pattern={{major}}
-
-    - name: Build and push cloud
-      uses: docker/build-push-action@v6
-      with:
-        context: ./
-        file: ./resources/docker/Dockerfile.ai
-        builder: ${{ steps.buildx.outputs.name }}
-        platforms: linux/amd64,linux/arm64
-        push: true
-        tags: ${{ steps.docker_meta_ai.outputs.tags }}
