@@ -8,10 +8,26 @@ on:
 jobs:
   goreleaser:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     steps:
 
     - name: Check Out Repo
       uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-region: ${{ vars.RP_AWS_CRED_REGION }}
+        role-to-assume: arn:aws:iam::${{ secrets.RP_AWS_CRED_ACCOUNT_ID }}:role/${{ vars.RP_AWS_CRED_BASE_ROLE_NAME }}${{ github.event.repository.name }}
+
+    - name: Get secrets from AWS Secrets Manager
+      uses: aws-actions/aws-secretsmanager-get-secrets@v2
+      with:
+        secret-ids: |
+          ,sdlc/prod/github/cloudsmith_api_key
+        parse-json-secrets: true
 
     - name: Free up some disk space on ubuntu
       if: ${{ runner.os == 'Linux' }}
@@ -32,6 +48,13 @@ jobs:
     - name: Release Notes
       run: ./resources/scripts/release_notes.sh > ./release_notes.md
 
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install cloudsmith CLI (for publishing Linux packages)
+      run: pip install cloudsmith-cli
+
     - name: GoReleaser
       uses: goreleaser/goreleaser-action@v6
       with:
@@ -39,6 +62,7 @@ jobs:
         args: release --release-notes=./release_notes.md --timeout 120m
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        CLOUDSMITH_API_KEY: ${{ env.CLOUDSMITH_API_KEY }}
 
   docker:
     runs-on: ubuntu-latest
