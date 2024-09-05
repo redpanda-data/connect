@@ -35,7 +35,7 @@ inputs:
     description: RPK Plugins repo hostname. E.g. rpk-plugins.redpanda.com
     required: true
   dry_run:
-    description: Dry run means skipping writes to S3
+    description: Dry run means skipping writes to S3 ("true" or "false")
     required: true
 
 runs:
@@ -61,7 +61,7 @@ runs:
       working-directory: resources/plugin_uploader
       shell: bash
       run: |
-        DRY_RUN_FLAG=${{ inputs.dry_run && '--dry-run' || '' }}
+        DRY_RUN_FLAG=${{ inputs.dry_run != 'false' && '--dry-run' || '' }}
         ./plugin_uploader.py upload-archives \
           --artifacts-file=${{ inputs.artifacts_file }} \
           --metadata-file=${{ inputs.metadata_file }} \
@@ -77,7 +77,7 @@ runs:
       working-directory: resources/plugin_uploader
       shell: bash
       run: |
-        DRY_RUN_FLAG=${{ inputs.dry_run && '--dry-run' || '' }}
+        DRY_RUN_FLAG=${{ inputs.dry_run != 'false' && '--dry-run' || '' }}
         ./plugin_uploader.py upload-manifest \
           --region=${{ inputs.aws_region }} \
           --bucket=${{ inputs.aws_s3_bucket }} \

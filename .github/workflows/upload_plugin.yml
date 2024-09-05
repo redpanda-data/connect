@@ -20,7 +20,7 @@ on:
 
 env:
   # Do dry run in most cases, UNLESS the triggering event was a "tag".
-  DRY_RUN: ${{ ! github.ref_type == 'tag' }}
+  DRY_RUN: ${{ github.ref_type != 'tag' }}
 
 jobs:
   upload_rpk_connect_plugin:
@@ -52,14 +52,15 @@ jobs:
           check-latest: true
 
       - name: Build binaries (dry run / snapshot mode)
-        if: ${{ env.DRY_RUN }}
+        if: ${{ env.DRY_RUN != 'false' }}
         uses: goreleaser/goreleaser-action@v6
         with:
           version: 1.26.2
           args: build --snapshot
 
       - name: Build binaries
-        if: ${{ ! env.DRY_RUN }}
+        # Only one way to not dry run - see 'false'. All other cases, conservatively assume --dry-run
+        if: ${{ env.DRY_RUN == 'false' }}
         uses: goreleaser/goreleaser-action@v6
         with:
           version: 1.26.2
@@ -79,5 +80,5 @@ jobs:
           goos: linux,darwin
           goarch: amd64,arm64
           repo_hostname: rpk-plugins.redpanda.com
-          dry_run: ${{ env.DRY_RUN }}
+          dry_run: ${{ env.DRY_RUN != 'false' }}
 
