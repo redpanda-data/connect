@@ -124,6 +124,7 @@ func FranzKafkaOutputConfigFields() []*service.ConfigField {
 			Example(`${! metadata("kafka_timestamp_unix") }`).
 			Optional().
 			Advanced(),
+		service.NewInjectTracingSpanMappingField(),
 	}
 }
 
@@ -141,7 +142,11 @@ func init() {
 			if batchPolicy, err = conf.FieldBatchPolicy("batching"); err != nil {
 				return
 			}
-			output, err = NewFranzKafkaWriterFromConfig(conf, mgr.Logger())
+			if output, err = NewFranzKafkaWriterFromConfig(conf, mgr.Logger()); err != nil {
+				return
+			}
+
+			output, err = conf.WrapBatchOutputExtractTracingSpanMapping("kafka_franz", output)
 			return
 		})
 	if err != nil {
