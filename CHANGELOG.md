@@ -8,6 +8,8 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Auth fields added to the `schema_registry` input and output. (@mihaitodor)
+- New experimental `kafka_migrator` and `kafka_migrator_bundle` inputs and outputs. (@mihaitodor)
+- New experimental `kafka_migrator_offsets` output. (@mihaitodor)
 
 ## 4.34.0 - 2024-08-29
 

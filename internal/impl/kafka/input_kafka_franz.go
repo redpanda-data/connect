@@ -214,7 +214,7 @@ func NewFranzKafkaReaderFromConfig(conf *service.ParsedConfig, res *service.Reso
 	}
 
 	var topicPartitions map[string]map[int32]int64
-	if f.topics, topicPartitions, err = parseTopics(topicList, defaultOffset, true); err != nil {
+	if f.topics, topicPartitions, err = ParseTopics(topicList, defaultOffset, true); err != nil {
 		return nil, err
 	}
 	if len(topicPartitions) > 0 {

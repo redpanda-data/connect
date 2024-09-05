@@ -55,7 +55,8 @@ func parsePartitions(expr string) ([]int32, error) {
 	return parts, nil
 }
 
-func parseTopics(sourceTopics []string, defaultOffset int64, allowExplicitOffsets bool) (topics []string, topicPartitions map[string]map[int32]int64, err error) {
+// ParseTopics parses topic specifications.
+func ParseTopics(sourceTopics []string, defaultOffset int64, allowExplicitOffsets bool) (topics []string, topicPartitions map[string]map[int32]int64, err error) {
 	for _, t := range sourceTopics {
 		// Split out comma-sep topics such as `foo,bar`
 		for _, splitTopic := range strings.Split(t, ",") {
