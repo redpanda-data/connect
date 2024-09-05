@@ -1,0 +1,61 @@
+name: Test Plugin Uploader
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'resources/plugin_uploader/**'
+      - '.github/workflows/test_plugin_uploader.yml'
+  pull_request:
+    paths:
+      - 'resources/plugin_uploader/**'
+      - '.github/workflows/test_plugin_uploader.yml'
+
+jobs:
+  unit-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - working-directory: resources/plugin_uploader
+        run: pip install -r requirements_test.txt
+
+      - working-directory: resources/plugin_uploader
+        run: pytest -vv .
+
+  ruff-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Lint with Ruff
+        working-directory: resources/plugin_uploader
+        run: |
+          pip install ruff==0.4.10
+          ruff check --output-format=github
+
+  pyright-type-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - working-directory: resources/plugin_uploader
+        run: pip install -r requirements_test.txt
+
+      - run: pip install pyright==1.1.378
+
+      - working-directory: resources/plugin_uploader
+        run: pyright

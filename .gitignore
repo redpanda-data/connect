@@ -9,3 +9,4 @@ release_notes.md
 .idea
 .vscode
 .op
+__pycache__

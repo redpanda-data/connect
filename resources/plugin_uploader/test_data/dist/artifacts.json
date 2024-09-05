@@ -1,0 +1,35 @@
+[
+  {
+    "name": "metadata.json",
+    "path": "dist/metadata.json",
+    "internal_type": 30,
+    "type": "Metadata"
+  },
+  {
+    "name": "redpanda-cow",
+    "path": "dist/cow_linux_amd64_v1/redpanda-cow",
+    "goos": "linux",
+    "goarch": "amd64",
+    "goamd64": "v1",
+    "internal_type": 4,
+    "type": "Binary",
+    "extra": {
+      "Binary": "redpanda-cow",
+      "Ext": "",
+      "ID": "cow"
+    }
+  },
+  {
+    "name": "redpanda-cow",
+    "path": "dist/cow_darwin_arm64/redpanda-cow",
+    "goos": "darwin",
+    "goarch": "arm64",
+    "internal_type": 4,
+    "type": "Binary",
+    "extra": {
+      "Binary": "redpanda-cow",
+      "Ext": "",
+      "ID": "cow"
+    }
+  }
+]
