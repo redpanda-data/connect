@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.35.1 - 2024-09-06
+
+### Added
+
+- Azure and GCP components added to cloud builds. (@Jeffail)
+
 ## 4.35.0 - 2024-09-05
 
 ### Added
