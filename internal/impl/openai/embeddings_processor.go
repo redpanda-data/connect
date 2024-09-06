@@ -96,11 +96,15 @@ func (p *embeddingsProcessor) Process(ctx context.Context, msg *service.Message)
 		body.Dimensions = *p.dimensions
 	}
 	if p.text != nil {
-		s, err := msg.BloblangQueryValue(p.text)
+		s, err := msg.BloblangQuery(p.text)
 		if err != nil {
 			return nil, fmt.Errorf("%s execution error: %w", oepFieldTextMapping, err)
 		}
-		body.Input = append(body.Input, bloblang.ValueToString(s))
+		r, err := s.AsBytes()
+		if err != nil {
+			return nil, fmt.Errorf("%s extraction error: %w", oepFieldTextMapping, err)
+		}
+		body.Input = append(body.Input, string(r))
 	} else {
 		b, err := msg.AsBytes()
 		if err != nil {

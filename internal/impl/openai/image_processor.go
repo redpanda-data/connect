@@ -124,12 +124,15 @@ func (p *moderationProcessor) Process(ctx context.Context, msg *service.Message)
 	body.Model = p.model
 	body.ResponseFormat = "b64_json"
 	if p.input != nil {
-		v, err := msg.BloblangQueryValue(p.input)
+		v, err := msg.BloblangQuery(p.input)
 		if err != nil {
 			return nil, fmt.Errorf("%s execution error: %w", oipFieldPrompt, err)
 		}
-		s := bloblang.ValueToString(v)
-		body.Prompt = s
+		r, err := v.AsBytes()
+		if err != nil {
+			return nil, fmt.Errorf("%s conversion error: %w", oipFieldPrompt, err)
+		}
+		body.Prompt = string(r)
 	} else {
 		b, err := msg.AsBytes()
 		if err != nil {

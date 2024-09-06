@@ -92,11 +92,11 @@ func (p *translationProcessor) Process(ctx context.Context, msg *service.Message
 	var body oai.AudioRequest
 	body.Model = p.model
 	if p.file != nil {
-		f, err := msg.BloblangQueryValue(p.file)
+		m, err := msg.BloblangQuery(p.file)
 		if err != nil {
 			return nil, fmt.Errorf("%s execution error: %w", otlpFieldFile, err)
 		}
-		b, err := bloblang.ValueAsBytes(f)
+		b, err := m.AsBytes()
 		if err != nil {
 			return nil, fmt.Errorf("%s conversion error: %w", otlpFieldFile, err)
 		}

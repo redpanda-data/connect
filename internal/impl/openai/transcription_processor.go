@@ -101,13 +101,13 @@ type transcriptionProcessor struct {
 func (p *transcriptionProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
 	var body oai.AudioRequest
 	body.Model = p.model
-	f, err := msg.BloblangQueryValue(p.file)
+	m, err := msg.BloblangQuery(p.file)
 	if err != nil {
 		return nil, fmt.Errorf("%s execution error: %w", otspFieldFile, err)
 	}
-	b, err := bloblang.ValueAsBytes(f)
+	b, err := m.AsBytes()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%s conversion error: %w", otspFieldFile, err)
 	}
 	body.Reader = bytes.NewReader(b)
 	if p.lang != nil {
