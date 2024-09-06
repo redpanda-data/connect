@@ -108,11 +108,15 @@ func (p *speechProcessor) Process(ctx context.Context, msg *service.Message) (se
 	}
 	body.Voice = oai.SpeechVoice(v)
 	if p.input != nil {
-		v, err := msg.BloblangQueryValue(p.input)
+		m, err := msg.BloblangQuery(p.input)
 		if err != nil {
 			return nil, fmt.Errorf("%s execution error: %w", ospFieldInput, err)
 		}
-		body.Input = bloblang.ValueToString(v)
+		v, err := m.AsBytes()
+		if err != nil {
+			return nil, fmt.Errorf("%s conversion error: %w", ospFieldInput, err)
+		}
+		body.Input = string(v)
 	} else {
 		b, err := msg.AsBytes()
 		if err != nil {
