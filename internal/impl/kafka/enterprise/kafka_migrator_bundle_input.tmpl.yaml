@@ -40,9 +40,9 @@ mapping: |
 
   let kafkaMigratorOffsets = this.kafka_migrator.with("seed_brokers", "consumer_group", "client_id", "rack_id", "tls", "sasl").assign({"topics": ["__consumer_offsets"]})
 
-  root = if this.kafka_migrator.length() == 0 || this.schema_registry.length() == 0 {
-    throw("both kafka_migrator and schema_registry inputs must be configured")
-  } else if this.migrate_schemas_before_data {
+  root = if this.kafka_migrator.length() == 0 {
+    throw("the kafka_migrator input must be configured")
+  } else if this.migrate_schemas_before_data && this.schema_registry.length() > 0 {
     """
       sequence:
         inputs:
@@ -67,7 +67,7 @@ mapping: |
                   processors:
                     - mapping: meta input_label = "kafka_migrator_offsets"
     """.format(this.schema_registry.string(), this.kafka_migrator.string(), $kafkaMigratorOffsets.string()).parse_yaml()
-  } else {
+  } else if this.schema_registry.length() > 0 {
     """
       broker:
         inputs:
@@ -90,16 +90,29 @@ mapping: |
             processors:
               - mapping: meta input_label = "kafka_migrator_offsets"
     """.format(this.schema_registry.string(), this.kafka_migrator.string(), $kafkaMigratorOffsets.string()).parse_yaml()
+  } else {
+    """
+      broker:
+        inputs:
+          - kafka_migrator: %s
+            processors:
+              - mapping: meta input_label = "kafka_migrator"
+          - kafka_franz: %s
+            processors:
+              - mapping: meta input_label = "kafka_migrator_offsets"
+    """.format(this.kafka_migrator.string(), $kafkaMigratorOffsets.string()).parse_yaml()
   }
 
 tests:
-  - name: Migrate both data and schemas simultaneously
+  - name: Migrate messages, offsets and schemas simultaneously
     config:
       kafka_migrator:
         seed_brokers: [ "127.0.0.1:9092" ]
         topics: [ "foobar" ]
       schema_registry:
         url: http://localhost:8081
+
+      migrate_schemas_before_data: false
 
     expected:
       broker:
@@ -128,14 +141,13 @@ tests:
             processors:
               - mapping: meta input_label = "kafka_migrator_offsets"
 
-  - name: Migrate schemas first
+  - name: Migrate schemas first, then messages and offsets
     config:
       kafka_migrator:
         seed_brokers: [ "127.0.0.1:9092" ]
         topics: [ "foobar" ]
       schema_registry:
         url: http://localhost:8081
-      migrate_schemas_before_data: true
 
     expected:
       sequence:
@@ -167,3 +179,25 @@ tests:
                     topics: [ "__consumer_offsets" ]
                   processors:
                     - mapping: meta input_label = "kafka_migrator_offsets"
+
+  - name: Migrate messages and offsets without schemas
+    config:
+      kafka_migrator:
+        seed_brokers: [ "127.0.0.1:9092" ]
+        topics: [ "foobar" ]
+
+    expected:
+      broker:
+        inputs:
+          - kafka_migrator:
+              seed_brokers:
+                - 127.0.0.1:9092
+              topics:
+                - foobar
+            processors:
+              - mapping: meta input_label = "kafka_migrator"
+          - kafka_franz:
+              seed_brokers: [ "127.0.0.1:9092" ]
+              topics: [ "__consumer_offsets" ]
+            processors:
+              - mapping: meta input_label = "kafka_migrator_offsets"
