@@ -3,6 +3,16 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.35.1 - 2024-09-06
+
+### Added
+
+- Azure and GCP components added to cloud builds. (@Jeffail)
+
+### Fixed
+
+- The `kafka_migrator_bundle` input and output no longer require schema registry to be configured. (@mihaitodor)
+
 ## 4.35.0 - 2024-09-05
 
 ### Added

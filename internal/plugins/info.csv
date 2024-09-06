@@ -22,15 +22,15 @@ aws_s3                  ,output    ,AWS S3                  ,3.36.0  ,certified 
 aws_sns                 ,output    ,AWS SNS                 ,3.36.0  ,community  ,n          ,y     ,y
 aws_sqs                 ,input     ,AWS SQS                 ,0.0.0   ,certified  ,n          ,y     ,y
 aws_sqs                 ,output    ,AWS SQS                 ,3.36.0  ,certified  ,n          ,y     ,y
-azure_blob_storage      ,input     ,azure_blob_storage      ,3.36.0  ,certified  ,n          ,n     ,n
-azure_blob_storage      ,output    ,azure_blob_storage      ,3.36.0  ,certified  ,n          ,n     ,n
-azure_cosmosdb          ,input     ,azure_cosmosdb          ,4.25.0  ,certified  ,n          ,n     ,n
-azure_cosmosdb          ,output    ,azure_cosmosdb          ,4.25.0  ,certified  ,n          ,n     ,n
-azure_cosmosdb          ,processor ,azure_cosmosdb          ,4.25.0  ,certified  ,n          ,n     ,n
-azure_queue_storage     ,input     ,azure_queue_storage     ,3.42.0  ,certified  ,n          ,n     ,n
-azure_queue_storage     ,output    ,azure_queue_storage     ,3.36.0  ,certified  ,n          ,n     ,n
-azure_table_storage     ,input     ,azure_table_storage     ,4.10.0  ,certified  ,n          ,n     ,n
-azure_table_storage     ,output    ,azure_table_storage     ,3.36.0  ,certified  ,n          ,n     ,n
+azure_blob_storage      ,input     ,azure_blob_storage      ,3.36.0  ,certified  ,n          ,y     ,y
+azure_blob_storage      ,output    ,azure_blob_storage      ,3.36.0  ,certified  ,n          ,y     ,y
+azure_cosmosdb          ,input     ,azure_cosmosdb          ,4.25.0  ,certified  ,n          ,y     ,y
+azure_cosmosdb          ,output    ,azure_cosmosdb          ,4.25.0  ,certified  ,n          ,y     ,y
+azure_cosmosdb          ,processor ,azure_cosmosdb          ,4.25.0  ,certified  ,n          ,y     ,y
+azure_queue_storage     ,input     ,azure_queue_storage     ,3.42.0  ,certified  ,n          ,y     ,y
+azure_queue_storage     ,output    ,azure_queue_storage     ,3.36.0  ,certified  ,n          ,y     ,y
+azure_table_storage     ,input     ,azure_table_storage     ,4.10.0  ,certified  ,n          ,y     ,y
+azure_table_storage     ,output    ,azure_table_storage     ,3.36.0  ,certified  ,n          ,y     ,y
 batched                 ,input     ,batched                 ,4.11.0  ,certified  ,n          ,y     ,y
 beanstalkd              ,input     ,beanstalkd              ,4.7.0   ,community  ,n          ,n     ,n
 beanstalkd              ,output    ,beanstalkd              ,4.7.0   ,community  ,n          ,n     ,n
@@ -68,15 +68,15 @@ file                    ,cache     ,File                    ,0.0.0   ,certified 
 file                    ,input     ,File                    ,0.0.0   ,certified  ,n          ,n     ,n
 file                    ,output    ,File                    ,0.0.0   ,certified  ,n          ,n     ,n
 for_each                ,processor ,for_each                ,0.0.0   ,certified  ,n          ,y     ,y
-gcp_bigquery            ,output    ,GCP BigQuery            ,3.55.0  ,certified  ,n          ,n     ,n
-gcp_bigquery_select     ,input     ,GCP BigQuery            ,3.63.0  ,certified  ,n          ,n     ,n
-gcp_bigquery_select     ,processor ,GCP BigQuery            ,3.64.0  ,certified  ,n          ,n     ,n
-gcp_cloud_storage       ,cache     ,GCP Cloud Storage       ,0.0.0   ,certified  ,n          ,n     ,n
-gcp_cloud_storage       ,input     ,GCP Cloud Storage       ,3.43.0  ,certified  ,n          ,n     ,n
-gcp_cloud_storage       ,output    ,GCP Cloud Storage       ,3.43.0  ,certified  ,n          ,n     ,n
-gcp_cloudtrace          ,tracer    ,GCP Cloud Trace         ,4.2.0   ,certified  ,n          ,n     ,n
-gcp_pubsub              ,input     ,GCP PubSub              ,0.0.0   ,certified  ,n          ,n     ,n
-gcp_pubsub              ,output    ,GCP PubSub              ,0.0.0   ,certified  ,n          ,n     ,n
+gcp_bigquery            ,output    ,GCP BigQuery            ,3.55.0  ,certified  ,n          ,y     ,y
+gcp_bigquery_select     ,input     ,GCP BigQuery            ,3.63.0  ,certified  ,n          ,y     ,y
+gcp_bigquery_select     ,processor ,GCP BigQuery            ,3.64.0  ,certified  ,n          ,y     ,y
+gcp_cloud_storage       ,cache     ,GCP Cloud Storage       ,0.0.0   ,certified  ,n          ,y     ,y
+gcp_cloud_storage       ,input     ,GCP Cloud Storage       ,3.43.0  ,certified  ,n          ,y     ,y
+gcp_cloud_storage       ,output    ,GCP Cloud Storage       ,3.43.0  ,certified  ,n          ,y     ,y
+gcp_cloudtrace          ,tracer    ,GCP Cloud Trace         ,4.2.0   ,certified  ,n          ,y     ,y
+gcp_pubsub              ,input     ,GCP PubSub              ,0.0.0   ,certified  ,n          ,y     ,y
+gcp_pubsub              ,output    ,GCP PubSub              ,0.0.0   ,certified  ,n          ,y     ,y
 gcp_vertex_ai_chat      ,processor ,GCP Vertex AI           ,4.34.0  ,enterprise ,n          ,y     ,y
 generate                ,input     ,generate                ,3.40.0  ,certified  ,n          ,y     ,y
 grok                    ,processor ,grok                    ,0.0.0   ,community  ,n          ,n     ,n
