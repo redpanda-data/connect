@@ -42,6 +42,37 @@ This processor sends text strings to the OpenAI API, which generates vector embe
 
 To learn more about vector embeddings, see the https://platform.openai.com/docs/guides/embeddings[OpenAI API documentation^].
 
+== Examples
+
+[tabs]
+======
+Store embedding vectors in Pinecone::
++
+--
+
+Compute embeddings for some generated data and store it within xrefs:component:outputs/pinecone.adoc[Pinecone]
+
+```yamlinput:
+  generate:
+    interval: 1s
+    mapping: |
+      root = {"text": fake("paragraph")}
+pipeline:
+  processors:
+  - openai_embeddings:
+      model: text-embedding-3-large
+      api_key: "${OPENAI_API_KEY}"
+      text_mapping: "root = this.text"
+output:
+  pinecone:
+    host: "${PINECONE_HOST}"
+    api_key: "${PINECONE_API_KEY}"
+    id: "root = uuid_v4()"
+    vector_mapping: "root = this"```
+
+--
+======
+
 == Fields
 
 === `server_address`
