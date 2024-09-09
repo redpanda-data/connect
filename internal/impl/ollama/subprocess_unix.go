@@ -53,7 +53,7 @@ func (c *runOllamaConfig) lookPath(file string) (string, error) {
 func (c *runOllamaConfig) downloadOllama(ctx context.Context, path string) error {
 	var url string
 	if c.downloadURL == "" {
-		const baseURL string = "https://github.com/ollama/ollama/releases/download/v0.3.6/ollama"
+		const baseURL string = "https://github.com/ollama/ollama/releases/download/v0.3.9/ollama"
 		switch runtime.GOOS {
 		case "darwin":
 			// They ship an universal executable for darwin
