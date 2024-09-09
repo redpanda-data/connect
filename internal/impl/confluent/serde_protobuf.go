@@ -53,6 +53,11 @@ func (s *schemaRegistryDecoder) getProtobufDecoder(ctx context.Context, info sch
 		return nil, err
 	}
 
+	protoJSONMarshalOpts := protojson.MarshalOptions{
+		Resolver:          types,
+		EmitDefaultValues: s.protoJSONEmitDefaults,
+	}
+
 	msgTypes := targetFile.Messages()
 	return func(m *service.Message) error {
 		b, err := m.AsBytes()
@@ -86,7 +91,7 @@ func (s *schemaRegistryDecoder) getProtobufDecoder(ctx context.Context, info sch
 			return fmt.Errorf("failed to unmarshal protobuf message: %w", err)
 		}
 
-		data, err := protojson.MarshalOptions{Resolver: types}.Marshal(dynMsg)
+		data, err := protoJSONMarshalOpts.Marshal(dynMsg)
 		if err != nil {
 			return fmt.Errorf("failed to marshal JSON protobuf message: %w", err)
 		}
