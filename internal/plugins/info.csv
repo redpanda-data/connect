@@ -1,4 +1,4 @@
-name                    ,type      ,commercial_name         ,version ,support    ,deprecated ,cloud ,cloud_ai
+name                    ,type      ,commercial_name         ,version ,support    ,deprecated ,cloud ,cloud_with_gpu
 amqp_0_9                ,input     ,amqp_0_9                ,0.0.0   ,certified  ,n          ,y     ,y
 amqp_0_9                ,output    ,amqp_0_9                ,0.0.0   ,certified  ,n          ,y     ,y
 amqp_1                  ,input     ,amqp_1                  ,0.0.0   ,community  ,n          ,n     ,n
