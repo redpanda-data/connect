@@ -12,37 +12,37 @@ import (
 	"context"
 	"errors"
 
-	oai "github.com/Azure/azure-sdk-for-go/sdk/ai/azopenai"
+	oai "github.com/sashabaranov/go-openai"
 )
 
 type stubClient struct{}
 
-func (*stubClient) GetEmbeddings(ctx context.Context, body oai.EmbeddingsOptions, options *oai.GetEmbeddingsOptions) (r oai.GetEmbeddingsResponse, err error) {
+func (*stubClient) CreateEmbeddings(ctx context.Context, body oai.EmbeddingRequestConverter) (r oai.EmbeddingResponse, err error) {
 	err = errors.New("unimplemented")
 	return
 }
 
-func (*stubClient) GetChatCompletions(ctx context.Context, body oai.ChatCompletionsOptions, options *oai.GetChatCompletionsOptions) (r oai.GetChatCompletionsResponse, err error) {
+func (*stubClient) CreateChatCompletion(ctx context.Context, body oai.ChatCompletionRequest) (r oai.ChatCompletionResponse, err error) {
 	err = errors.New("unimplemented")
 	return
 }
 
-func (*stubClient) GenerateSpeechFromText(ctx context.Context, body oai.SpeechGenerationOptions, options *oai.GenerateSpeechFromTextOptions) (r oai.GenerateSpeechFromTextResponse, err error) {
+func (*stubClient) CreateSpeech(ctx context.Context, body oai.CreateSpeechRequest) (r oai.RawResponse, err error) {
 	err = errors.New("unimplemented")
 	return
 }
 
-func (*stubClient) GetAudioTranscription(ctx context.Context, body oai.AudioTranscriptionOptions, options *oai.GetAudioTranscriptionOptions) (r oai.GetAudioTranscriptionResponse, err error) {
+func (*stubClient) CreateTranscription(ctx context.Context, body oai.AudioRequest) (r oai.AudioResponse, err error) {
 	err = errors.New("unimplemented")
 	return
 }
 
-func (*stubClient) GetAudioTranslation(ctx context.Context, body oai.AudioTranslationOptions, options *oai.GetAudioTranslationOptions) (r oai.GetAudioTranslationResponse, err error) {
+func (*stubClient) CreateTranslation(ctx context.Context, body oai.AudioRequest) (r oai.AudioResponse, err error) {
 	err = errors.New("unimplemented")
 	return
 }
 
-func (*stubClient) GetImageGenerations(ctx context.Context, body oai.ImageGenerationOptions, options *oai.GetImageGenerationsOptions) (r oai.GetImageGenerationsResponse, err error) {
+func (*stubClient) CreateImage(ctx context.Context, body oai.ImageRequest) (r oai.ImageResponse, err error) {
 	err = errors.New("unimplemented")
 	return
 }

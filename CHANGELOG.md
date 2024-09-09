@@ -3,12 +3,33 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.33.1 - TBD
+## 4.35.1 - 2024-09-06
+
+### Added
+
+- Azure and GCP components added to cloud builds. (@Jeffail)
+
+### Fixed
+
+- The `kafka_migrator_bundle` input and output no longer require schema registry to be configured. (@mihaitodor)
+
+## 4.35.0 - 2024-09-05
+
+### Added
+
+- Auth fields added to the `schema_registry` input and output. (@mihaitodor)
+- New experimental `kafka_migrator` and `kafka_migrator_bundle` inputs and outputs. (@mihaitodor)
+- New experimental `kafka_migrator_offsets` output. (@mihaitodor)
+- Field `job_project` added to the `gcp_bigquery` output. (@Roviluca)
+
+## 4.34.0 - 2024-08-29
 
 ### Fixed
 
 - The `schema_registry` output now allows pushing schemas if the target Schema Registry instance is in `IMPORT` mode. (@mihaitodor)
 - Fixed an issue where the `azure_blob_storage` input would fail to delete blobs when using `targets_input` with `delete_objects: true`. (@mihaitodor)
+- New experimental `gcp_vertex_ai_chat` processor. (@rockwotj)
+- New experimental `aws_bedrock_chat` processor. (@rockwotj)
 
 ## 4.33.0 - 2024-08-13
 

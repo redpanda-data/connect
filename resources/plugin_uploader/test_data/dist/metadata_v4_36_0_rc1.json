@@ -1,0 +1,12 @@
+{
+  "project_name": "cow",
+  "tag": "v4.36.0-rc1",
+  "previous_tag": "v4.34.0-rc2",
+  "version": "4.36.0-rc1",
+  "commit": "7eb28f2a994e277f17bf0530097d99208e65cddb",
+  "date": "2024-08-29T23:53:58.388135715Z",
+  "runtime": {
+    "goos": "linux",
+    "goarch": "arm64"
+  }
+}

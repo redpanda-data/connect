@@ -256,11 +256,12 @@ func (l *TopicLogger) WithGroup(name string) slog.Handler {
 func (l *TopicLogger) Close(ctx context.Context) error {
 	l.streamStatusPollTicker.Stop()
 
+loop:
 	for l.pendingWrites.Load() > 0 {
 		select {
 		case <-time.After(time.Second):
 		case <-ctx.Done():
-			break
+			break loop
 		}
 	}
 

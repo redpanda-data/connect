@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -32,7 +33,7 @@ const (
 
 //------------------------------------------------------------------------------
 
-func inputSpec() *service.ConfigSpec {
+func schemaRegistryInputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Beta().
 		Version("4.32.2").
@@ -53,11 +54,7 @@ xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
 
 `).
 		Fields(
-			service.NewStringField(sriFieldURL).Description("The base URL of the schema registry service."),
-			service.NewBoolField(sriFieldIncludeDeleted).Description("Include deleted entities.").Default(false).Advanced(),
-			service.NewStringField(sriFieldSubjectFilter).Description("Include only subjects which match the regular expression filter. All subjects are selected when not set.").Default("").Advanced(),
-			service.NewTLSToggledField(sriFieldTLS),
-			service.NewAutoRetryNacksToggleField(),
+			schemaRegistryInputConfigFields()...,
 		).Example("Read schemas", "Read all schemas (including deleted) from a Schema Registry instance which are associated with subjects matching the `^foo.*` filter.", `
 input:
   schema_registry:
@@ -67,10 +64,22 @@ input:
 `)
 }
 
+func schemaRegistryInputConfigFields() []*service.ConfigField {
+	return append([]*service.ConfigField{
+		service.NewStringField(sriFieldURL).Description("The base URL of the schema registry service."),
+		service.NewBoolField(sriFieldIncludeDeleted).Description("Include deleted entities.").Default(false).Advanced(),
+		service.NewStringField(sriFieldSubjectFilter).Description("Include only subjects which match the regular expression filter. All subjects are selected when not set.").Default("").Advanced(),
+		service.NewTLSToggledField(sriFieldTLS),
+		service.NewAutoRetryNacksToggleField(),
+	},
+		service.NewHTTPRequestAuthSignerFields()...,
+	)
+}
+
 func init() {
-	err := service.RegisterInput("schema_registry", inputSpec(),
+	err := service.RegisterInput("schema_registry", schemaRegistryInputSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
-			i, err := inputFromParsed(conf, mgr.Logger())
+			i, err := inputFromParsed(conf, mgr)
 			if err != nil {
 				return nil, err
 			}
@@ -81,9 +90,10 @@ func init() {
 	}
 }
 
-type input struct {
+type schemaRegistryInput struct {
 	url           *url.URL
 	subjectFilter *regexp.Regexp
+	requestSigner func(fs.FS, *http.Request) error
 
 	client    http.Client
 	connMut   sync.Mutex
@@ -91,12 +101,12 @@ type input struct {
 	subjects  []string
 	subject   string
 	versions  []int
-	log       *service.Logger
+	mgr       *service.Resources
 }
 
-func inputFromParsed(pConf *service.ParsedConfig, log *service.Logger) (i *input, err error) {
-	i = &input{
-		log: log,
+func inputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (i *schemaRegistryInput, err error) {
+	i = &schemaRegistryInput{
+		mgr: mgr,
 	}
 
 	var u string
@@ -125,6 +135,10 @@ func inputFromParsed(pConf *service.ParsedConfig, log *service.Logger) (i *input
 		return nil, fmt.Errorf("failed to compile subject filter %q: %s", filter, err)
 	}
 
+	if i.requestSigner, err = pConf.HTTPRequestAuthSignerFromParsed(); err != nil {
+		return nil, err
+	}
+
 	var tlsConf *tls.Config
 	var tlsEnabled bool
 	if tlsConf, tlsEnabled, err = pConf.FieldTLSToggled(sriFieldTLS); err != nil {
@@ -149,11 +163,11 @@ func inputFromParsed(pConf *service.ParsedConfig, log *service.Logger) (i *input
 
 //------------------------------------------------------------------------------
 
-func (i *input) Connect(ctx context.Context) error {
+func (i *schemaRegistryInput) Connect(ctx context.Context) error {
 	i.connMut.Lock()
 	defer i.connMut.Unlock()
 
-	data, err := doSchemaRegistryRequest(ctx, i.client, i.url.JoinPath("subjects").String())
+	data, err := i.doSchemaRegistryRequest(ctx, i.url.JoinPath("subjects").String())
 	if err != nil {
 		return fmt.Errorf("failed to fetch subjects: %s", err)
 	}
@@ -175,7 +189,7 @@ func (i *input) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (i *input) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
+func (i *schemaRegistryInput) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
 	i.connMut.Lock()
 	defer i.connMut.Unlock()
 	if !i.connected {
@@ -193,7 +207,7 @@ func (i *input) Read(ctx context.Context) (*service.Message, service.AckFunc, er
 
 		i.subject = i.subjects[0]
 
-		data, err := doSchemaRegistryRequest(ctx, i.client, i.url.JoinPath("subjects", i.subject, "versions").String())
+		data, err := i.doSchemaRegistryRequest(ctx, i.url.JoinPath("subjects", i.subject, "versions").String())
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to fetch versions for subject %q: %s", i.subject, err)
 		}
@@ -205,7 +219,7 @@ func (i *input) Read(ctx context.Context) (*service.Message, service.AckFunc, er
 		i.subjects = i.subjects[1:]
 
 		if len(i.versions) == 0 {
-			i.log.Infof("Subject %q does not contain any versions", i.subject)
+			i.mgr.Logger().Infof("Subject %q does not contain any versions", i.subject)
 			continue
 		}
 
@@ -217,7 +231,7 @@ func (i *input) Read(ctx context.Context) (*service.Message, service.AckFunc, er
 		i.versions = i.versions[1:]
 	}()
 
-	data, err := doSchemaRegistryRequest(ctx, i.client, i.url.JoinPath("subjects", i.subject, "versions", strconv.Itoa(version)).String())
+	data, err := i.doSchemaRegistryRequest(ctx, i.url.JoinPath("subjects", i.subject, "versions", strconv.Itoa(version)).String())
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to fetch version %d for subject %q: %s", version, i.subject, err)
 	}
@@ -244,13 +258,17 @@ func (i *input) Read(ctx context.Context) (*service.Message, service.AckFunc, er
 	}, nil
 }
 
-func doSchemaRegistryRequest(ctx context.Context, client http.Client, url string) ([]byte, error) {
+func (i *schemaRegistryInput) doSchemaRegistryRequest(ctx context.Context, url string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to construct request: %s", err)
 	}
 
-	resp, err := client.Do(req)
+	if err = i.requestSigner(i.mgr.FS(), req); err != nil {
+		return nil, fmt.Errorf("failed to sign request: %s", err)
+	}
+
+	resp, err := i.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute request: %s", err)
 	}
@@ -268,7 +286,7 @@ func doSchemaRegistryRequest(ctx context.Context, client http.Client, url string
 	return body, nil
 }
 
-func (i *input) Close(ctx context.Context) error {
+func (i *schemaRegistryInput) Close(ctx context.Context) error {
 	i.connMut.Lock()
 	defer i.connMut.Unlock()
 

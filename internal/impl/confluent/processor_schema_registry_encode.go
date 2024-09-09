@@ -29,6 +29,8 @@ import (
 	"github.com/Jeffail/shutdown"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
 )
 
 func schemaRegistryEncoderConfig() *service.ConfigSpec {
@@ -107,7 +109,7 @@ func init() {
 //------------------------------------------------------------------------------
 
 type schemaRegistryEncoder struct {
-	client             *schemaRegistryClient
+	client             *sr.Client
 	subject            *service.InterpolatedString
 	avroRawJSON        bool
 	schemaRefreshAfter time.Duration
@@ -178,7 +180,7 @@ func newSchemaRegistryEncoder(
 		nowFn:              time.Now,
 	}
 	var err error
-	if s.client, err = newSchemaRegistryClient(urlStr, reqSigner, tlsConf, mgr); err != nil {
+	if s.client, err = sr.NewClient(urlStr, reqSigner, tlsConf, mgr); err != nil {
 		return nil, err
 	}
 

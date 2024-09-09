@@ -94,6 +94,7 @@ clean:
 
 docs: $(APPS) $(TOOLS)
 	@go run -tags "$(TAGS)" ./cmd/tools/docs_gen
+	@go run -tags "$(TAGS)" ./cmd/tools/plugins_csv_fmt
 	@$(PATHINSTBIN)/redpanda-connect lint --deprecated "./config/examples/*.yaml" \
 		"$(WEBSITE_DIR)/**/*.md"
 	@$(PATHINSTBIN)/redpanda-connect template lint "./config/template_examples/*.yaml"

@@ -12,10 +12,9 @@ import (
 	"context"
 	"testing"
 
-	oai "github.com/Azure/azure-sdk-for-go/sdk/ai/azopenai"
 	"github.com/go-faker/faker/v4"
-	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
+	oai "github.com/sashabaranov/go-openai"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -24,15 +23,14 @@ type mockChatClient struct {
 	stubClient
 }
 
-func (m *mockChatClient) GetChatCompletions(ctx context.Context, body oai.ChatCompletionsOptions, options *oai.GetChatCompletionsOptions) (resp oai.GetChatCompletionsResponse, err error) {
-	id := faker.UUIDHyphenated()
-	resp.ID = &id
-	resp.Model = body.DeploymentName
-	content := faker.Paragraph()
-	resp.Choices = []oai.ChatChoice{
+func (m *mockChatClient) CreateChatCompletion(ctx context.Context, body oai.ChatCompletionRequest) (resp oai.ChatCompletionResponse, err error) {
+	resp.ID = faker.UUIDHyphenated()
+	resp.Model = body.Model
+	resp.Choices = []oai.ChatCompletionChoice{
 		{
-			Message: &oai.ChatResponseMessage{
-				Content: &content,
+			Message: oai.ChatCompletionMessage{
+				Role:    "assistant",
+				Content: faker.Paragraph(),
 			},
 		},
 	}
@@ -55,7 +53,7 @@ func TestChat(t *testing.T) {
 }
 
 func TestChatInterpolationError(t *testing.T) {
-	text, err := bloblang.GlobalEnvironment().Parse(`throw("kaboom!")`)
+	text, err := service.NewInterpolatedString(`${!throw("kaboom!")}`)
 	assert.NoError(t, err)
 	p := chatProcessor{
 		baseProcessor: &baseProcessor{

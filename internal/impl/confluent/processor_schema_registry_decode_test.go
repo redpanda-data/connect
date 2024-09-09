@@ -74,7 +74,7 @@ basic_auth:
 
 			e, err := newSchemaRegistryDecoderFromConfig(conf, service.MockResources())
 			if e != nil {
-				assert.Equal(t, test.expectedBaseURL, e.client.schemaRegistryBaseURL.String())
+				assert.Equal(t, test.expectedBaseURL, e.client.SchemaRegistryBaseURL.String())
 			}
 
 			if err == nil {

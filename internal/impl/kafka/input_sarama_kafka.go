@@ -254,7 +254,7 @@ func newKafkaReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources
 		return nil, errors.New("must specify at least one topic in the topics field")
 	}
 
-	balancedTopics, topicPartitions, err := parseTopics(topics, -1, false)
+	balancedTopics, topicPartitions, err := ParseTopics(topics, -1, false)
 	if err != nil {
 		return nil, err
 	}

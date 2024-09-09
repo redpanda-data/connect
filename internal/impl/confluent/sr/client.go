@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package confluent
+package sr
 
 import (
 	"bytes"
@@ -29,19 +29,21 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-type schemaRegistryClient struct {
+// Client is used to make requests to a schema registry.
+type Client struct {
+	SchemaRegistryBaseURL *url.URL
 	client                *http.Client
-	schemaRegistryBaseURL *url.URL
 	requestSigner         func(f fs.FS, req *http.Request) error
 	mgr                   *service.Resources
 }
 
-func newSchemaRegistryClient(
+// NewClient creates a new schema registry client.
+func NewClient(
 	urlStr string,
 	reqSigner func(f fs.FS, req *http.Request) error,
 	tlsConf *tls.Config,
 	mgr *service.Resources,
-) (*schemaRegistryClient, error) {
+) (*Client, error) {
 	u, err := url.Parse(urlStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse url: %w", err)
@@ -61,30 +63,33 @@ func newSchemaRegistryClient(
 		}
 	}
 
-	return &schemaRegistryClient{
+	return &Client{
 		client:                hClient,
-		schemaRegistryBaseURL: u,
+		SchemaRegistryBaseURL: u,
 		requestSigner:         reqSigner,
 		mgr:                   mgr,
 	}, nil
 }
 
-type schemaInfo struct {
+// SchemaInfo is the information about a schema stored in the registry.
+type SchemaInfo struct {
 	ID         int               `json:"id"`
 	Type       string            `json:"schemaType"`
 	Schema     string            `json:"schema"`
-	References []schemaReference `json:"references"`
+	References []SchemaReference `json:"references"`
 }
 
-// TODO: Further reading:
-// https://www.confluent.io/blog/multiple-event-types-in-the-same-kafka-topic/
-type schemaReference struct {
+// SchemaReference is a reference to another schema within the registry.
+//
+// TODO: further reading https://www.confluent.io/blog/multiple-event-types-in-the-same-kafka-topic/
+type SchemaReference struct {
 	Name    string `json:"name"`
 	Subject string `json:"subject"`
 	Version int    `json:"version"`
 }
 
-func (c *schemaRegistryClient) GetSchemaByID(ctx context.Context, id int) (resPayload schemaInfo, err error) {
+// GetSchemaByID gets a schema by it's global identifier.
+func (c *Client) GetSchemaByID(ctx context.Context, id int) (resPayload SchemaInfo, err error) {
 	var resCode int
 	var resBody []byte
 	if resCode, resBody, err = c.doRequest(ctx, "GET", fmt.Sprintf("/schemas/ids/%v", id)); err != nil {
@@ -112,7 +117,8 @@ func (c *schemaRegistryClient) GetSchemaByID(ctx context.Context, id int) (resPa
 	return
 }
 
-func (c *schemaRegistryClient) GetSchemaBySubjectAndVersion(ctx context.Context, subject string, version *int) (resPayload schemaInfo, err error) {
+// GetSchemaBySubjectAndVersion returns the schema by it's subject and optional version. A `nil` version returns the latest schema.
+func (c *Client) GetSchemaBySubjectAndVersion(ctx context.Context, subject string, version *int) (resPayload SchemaInfo, err error) {
 	var path string
 	if version != nil {
 		path = fmt.Sprintf("/subjects/%s/versions/%v", url.PathEscape(subject), *version)
@@ -147,19 +153,19 @@ func (c *schemaRegistryClient) GetSchemaBySubjectAndVersion(ctx context.Context,
 	return
 }
 
-type refWalkFn func(ctx context.Context, name string, info schemaInfo) error
+type refWalkFn func(ctx context.Context, name string, info SchemaInfo) error
 
-// For each reference provided the schema info is obtained and the provided
-// closure is called recursively, which means each reference obtained will also
-// be walked.
+// WalkReferences goes through the provided schema info and for each reference
+// the provided closure is called recursively, which means each reference obtained
+// will also be walked.
 //
 // If a reference of a given subject but differing version is detected an error
 // is returned as this would put us in an invalid state.
-func (c *schemaRegistryClient) WalkReferences(ctx context.Context, refs []schemaReference, fn refWalkFn) error {
+func (c *Client) WalkReferences(ctx context.Context, refs []SchemaReference, fn refWalkFn) error {
 	return c.walkReferencesTracked(ctx, map[string]int{}, refs, fn)
 }
 
-func (c *schemaRegistryClient) walkReferencesTracked(ctx context.Context, seen map[string]int, refs []schemaReference, fn refWalkFn) error {
+func (c *Client) walkReferencesTracked(ctx context.Context, seen map[string]int, refs []SchemaReference, fn refWalkFn) error {
 	for _, ref := range refs {
 		if i, exists := seen[ref.Name]; exists {
 			if i != ref.Version {
@@ -182,8 +188,8 @@ func (c *schemaRegistryClient) walkReferencesTracked(ctx context.Context, seen m
 	return nil
 }
 
-func (c *schemaRegistryClient) doRequest(ctx context.Context, verb, reqPath string) (resCode int, resBody []byte, err error) {
-	reqURL := *c.schemaRegistryBaseURL
+func (c *Client) doRequest(ctx context.Context, verb, reqPath string) (resCode int, resBody []byte, err error) {
+	reqURL := *c.SchemaRegistryBaseURL
 	if reqURL.Path, err = url.JoinPath(reqURL.Path, reqPath); err != nil {
 		return
 	}

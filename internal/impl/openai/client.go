@@ -11,15 +11,15 @@ package openai
 import (
 	"context"
 
-	oai "github.com/Azure/azure-sdk-for-go/sdk/ai/azopenai"
+	oai "github.com/sashabaranov/go-openai"
 )
 
 // A mockable client for unit testing
 type client interface {
-	GetEmbeddings(ctx context.Context, body oai.EmbeddingsOptions, options *oai.GetEmbeddingsOptions) (oai.GetEmbeddingsResponse, error)
-	GetChatCompletions(ctx context.Context, body oai.ChatCompletionsOptions, options *oai.GetChatCompletionsOptions) (oai.GetChatCompletionsResponse, error)
-	GenerateSpeechFromText(ctx context.Context, body oai.SpeechGenerationOptions, options *oai.GenerateSpeechFromTextOptions) (oai.GenerateSpeechFromTextResponse, error)
-	GetAudioTranscription(ctx context.Context, body oai.AudioTranscriptionOptions, options *oai.GetAudioTranscriptionOptions) (oai.GetAudioTranscriptionResponse, error)
-	GetAudioTranslation(ctx context.Context, body oai.AudioTranslationOptions, options *oai.GetAudioTranslationOptions) (oai.GetAudioTranslationResponse, error)
-	GetImageGenerations(ctx context.Context, body oai.ImageGenerationOptions, options *oai.GetImageGenerationsOptions) (oai.GetImageGenerationsResponse, error)
+	CreateChatCompletion(ctx context.Context, body oai.ChatCompletionRequest) (oai.ChatCompletionResponse, error)
+	CreateEmbeddings(ctx context.Context, body oai.EmbeddingRequestConverter) (oai.EmbeddingResponse, error)
+	CreateSpeech(ctx context.Context, body oai.CreateSpeechRequest) (oai.RawResponse, error)
+	CreateTranscription(ctx context.Context, body oai.AudioRequest) (oai.AudioResponse, error)
+	CreateTranslation(ctx context.Context, body oai.AudioRequest) (oai.AudioResponse, error)
+	CreateImage(ctx context.Context, body oai.ImageRequest) (oai.ImageResponse, error)
 }
