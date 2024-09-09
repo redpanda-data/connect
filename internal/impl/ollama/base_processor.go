@@ -334,9 +334,11 @@ func newBaseProcessor(conf *service.ParsedConfig, mgr *service.Resources) (p *ba
 	if err = p.waitForServer(context.Background()); err != nil {
 		return
 	}
+	p.logger.Infof("Pulling %q", p.model)
 	if err = p.pullModel(context.Background()); err != nil {
 		return
 	}
+	p.logger.Infof("Finished pulling %q", p.model)
 	return
 }
 
@@ -360,7 +362,7 @@ func (o *baseOllamaProcessor) pullModel(ctx context.Context) error {
 		Model: o.model,
 	}
 	return o.client.Pull(ctx, &pr, func(resp api.ProgressResponse) error {
-		o.logger.Infof("Pulling %q: %s [%s/%s]", o.model, resp.Status, humanize.Bytes(uint64(resp.Completed)), humanize.Bytes(uint64(resp.Total)))
+		o.logger.Tracef("Pulling %q: %s [%s/%s]", o.model, resp.Status, humanize.Bytes(uint64(resp.Completed)), humanize.Bytes(uint64(resp.Total)))
 		return nil
 	})
 }
