@@ -83,6 +83,8 @@ input:
       processors: [] # No default (optional)
     topic_lag_refresh_period: 5s
     output_resource: kafka_migrator_output
+    replication_factor_override: true
+    replication_factor: 3
 ```
 
 --
@@ -90,7 +92,7 @@ input:
 
 Reads a batch of messages from a Kafka broker and waits for the output to acknowledge the writes before updating the Kafka consumer group offset.
 
-This input should be used in combination with a `kafka_migrator` input which it can query for existing topics.
+This input should be used in combination with a `kafka_migrator` output which it can query for existing topics.
 
 When a consumer group is specified this input consumes one or more topics where partitions will automatically balance across any other connected clients with the same consumer group. When a consumer group is not specified topics can either be consumed in their entirety or with explicit partitions.
 
@@ -722,5 +724,23 @@ The label of the kafka_migrator output in which the currently selected topics ne
 *Type*: `string`
 
 *Default*: `"kafka_migrator_output"`
+
+=== `replication_factor_override`
+
+Use the specified replication factor when creating topics.
+
+
+*Type*: `bool`
+
+*Default*: `true`
+
+=== `replication_factor`
+
+Replication factor for created topics. This is only used when `replication_factor_override` is set to `true`.
+
+
+*Type*: `int`
+
+*Default*: `3`
 
 

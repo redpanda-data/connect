@@ -23,7 +23,7 @@ var (
 	errTopicAlreadyExists = errors.New("topic already exists")
 )
 
-func createTopic(ctx context.Context, topic string, inputClient *kgo.Client, outputClient *kgo.Client) error {
+func createTopic(ctx context.Context, topic string, replicationFactorOverride bool, replicationFactor int, inputClient *kgo.Client, outputClient *kgo.Client) error {
 	outputAdminClient := kadm.NewClient(outputClient)
 
 	if topics, err := outputAdminClient.ListTopics(ctx, topic); err != nil {
@@ -46,12 +46,17 @@ func createTopic(ctx context.Context, topic string, inputClient *kgo.Client, out
 	if partitions == 0 {
 		partitions = -1
 	}
-	replicationFactor := int16(inputTopic.Partitions.NumReplicas())
-	if replicationFactor == 0 {
-		replicationFactor = -1
+	var rp int16
+	if replicationFactorOverride {
+		rp = int16(replicationFactor)
+	} else {
+		rp = int16(inputTopic.Partitions.NumReplicas())
+		if rp == 0 {
+			rp = -1
+		}
 	}
 
-	if _, err := outputAdminClient.CreateTopic(ctx, partitions, replicationFactor, nil, topic); err != nil {
+	if _, err := outputAdminClient.CreateTopic(ctx, partitions, rp, nil, topic); err != nil {
 		if !errors.Is(err, kerr.TopicAlreadyExists) {
 			return fmt.Errorf("failed to create topic %q: %s", topic, err)
 		}
