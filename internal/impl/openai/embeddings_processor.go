@@ -56,7 +56,27 @@ To learn more about vector embeddings, see the https://platform.openai.com/docs/
 			service.NewIntField(oepFieldDims).
 				Description("The number of dimensions the resulting output embeddings should have. Only supported in `text-embedding-3` and later models.").
 				Optional(),
-		)
+		).
+		Example(
+			"Store embedding vectors in Pinecone",
+			"Compute embeddings for some generated data and store it within xrefs:component:outputs/pinecone.adoc[Pinecone]",
+			`input:
+  generate:
+    interval: 1s
+    mapping: |
+      root = {"text": fake("paragraph")}
+pipeline:
+  processors:
+  - openai_embeddings:
+      model: text-embedding-3-large
+      api_key: "${OPENAI_API_KEY}"
+      text_mapping: "root = this.text"
+output:
+  pinecone:
+    host: "${PINECONE_HOST}"
+    api_key: "${PINECONE_API_KEY}"
+    id: "root = uuid_v4()"
+    vector_mapping: "root = this"`)
 }
 
 func makeEmbeddingsProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
