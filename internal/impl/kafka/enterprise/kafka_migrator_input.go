@@ -43,7 +43,7 @@ func kafkaMigratorInputConfig() *service.ConfigSpec {
 		Description(`
 Reads a batch of messages from a Kafka broker and waits for the output to acknowledge the writes before updating the Kafka consumer group offset.
 
-This input should be used in combination with a ` + "`kafka_migrator`" + ` input which it can query for existing topics.
+This input should be used in combination with a ` + "`kafka_migrator`" + ` output which it can query for existing topics.
 
 When a consumer group is specified this input consumes one or more topics where partitions will automatically balance across any other connected clients with the same consumer group. When a consumer group is not specified topics can either be consumed in their entirety or with explicit partitions.
 
@@ -144,6 +144,14 @@ Finally, it's also possible to specify an explicit offset to consume from by add
 			Description("The label of the kafka_migrator output in which the currently selected topics need to be created before attempting to read messages.").
 			Default(rproDefaultLabel).
 			Advanced(),
+		service.NewBoolField("replication_factor_override").
+			Description("Use the specified replication factor when creating topics.").
+			Default(true).
+			Advanced(),
+		service.NewIntField("replication_factor").
+			Description("Replication factor for created topics. This is only used when `replication_factor_override` is set to `true`.").
+			Default(3).
+			Advanced(),
 	}
 }
 
@@ -165,23 +173,25 @@ func init() {
 
 // KafkaMigratorReader implements a kafka reader using the franz-go library.
 type KafkaMigratorReader struct {
-	SeedBrokers           []string
-	topics                []string
-	topicPatterns         []*regexp.Regexp
-	topicPartitions       map[string]map[int32]kgo.Offset
-	clientID              string
-	rackID                string
-	consumerGroup         string
-	TLSConf               *tls.Config
-	saslConfs             []sasl.Mechanism
-	batchSize             int
-	startFromOldest       bool
-	commitPeriod          time.Duration
-	regexPattern          bool
-	multiHeader           bool
-	batchPolicy           service.BatchPolicy
-	topicLagRefreshPeriod time.Duration
-	outputResource        string
+	SeedBrokers               []string
+	topics                    []string
+	topicPatterns             []*regexp.Regexp
+	topicPartitions           map[string]map[int32]kgo.Offset
+	clientID                  string
+	rackID                    string
+	consumerGroup             string
+	TLSConf                   *tls.Config
+	saslConfs                 []sasl.Mechanism
+	batchSize                 int
+	startFromOldest           bool
+	commitPeriod              time.Duration
+	regexPattern              bool
+	multiHeader               bool
+	batchPolicy               service.BatchPolicy
+	topicLagRefreshPeriod     time.Duration
+	replicationFactorOverride bool
+	replicationFactor         int
+	outputResource            string
 
 	connMut             sync.Mutex
 	readMut             sync.Mutex
@@ -294,6 +304,14 @@ func NewKafkaMigratorReaderFromConfig(conf *service.ParsedConfig, mgr *service.R
 	}
 
 	if r.topicLagRefreshPeriod, err = conf.FieldDuration("topic_lag_refresh_period"); err != nil {
+		return nil, err
+	}
+
+	if r.replicationFactorOverride, err = conf.FieldBool("replication_factor_override"); err != nil {
+		return nil, err
+	}
+
+	if r.replicationFactor, err = conf.FieldInt("replication_factor"); err != nil {
 		return nil, err
 	}
 
@@ -525,7 +543,7 @@ func (r *KafkaMigratorReader) ReadBatch(ctx context.Context) (service.MessageBat
 			for _, topic := range topics {
 				r.mgr.Logger().Infof("Creating topic %q", topic)
 
-				if err := createTopic(ctx, topic, r.client, output.client); err != nil && err != errTopicAlreadyExists {
+				if err := createTopic(ctx, topic, r.replicationFactorOverride, r.replicationFactor, r.client, output.client); err != nil && err != errTopicAlreadyExists {
 					r.mgr.Logger().Errorf("Failed to create topic %q and ACLs: %s", topic, err)
 				} else {
 					if err == errTopicAlreadyExists {
