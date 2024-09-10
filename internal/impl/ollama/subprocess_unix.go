@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/redpanda-data/connect/v4/internal/singleton"
 )
@@ -154,8 +155,26 @@ var ollamaProcess = singleton.New(singleton.Config[*exec.Cmd]{
 		if cmd.Process == nil {
 			return nil
 		}
-		if err := cmd.Process.Kill(); err != nil {
+		if err := cmd.Process.Signal(os.Interrupt); err != nil {
 			return err
 		}
-		return cmd.Wait()
+		// Wait for 3 seconds for the process to exit gracefully then kill it by force.
+		stop := make(chan any, 1)
+		wg := errgroup.Group{}
+		wg.Go(func() error {
+			err := cmd.Wait()
+			stop <- struct{}{}
+			return err
+		})
+		wg.Go(func() error {
+			select {
+			case <-stop:
+			case <-time.After(3 * time.Second):
+				// Ignore errors if there is a race
+				// and the process has already closed.
+				_ = cmd.Process.Kill()
+			}
+			return nil
+		})
+		return wg.Wait()
 	}})
