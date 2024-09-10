@@ -151,6 +151,12 @@ func makeOllamaCompletionProcessor(conf *service.ParsedConfig, mgr *service.Reso
 		return nil, err
 	}
 	p.baseOllamaProcessor = b
+	p.totalDuration = mgr.Metrics().NewTimer("ollama_chat_total_latency_ns")
+	p.loadDuration = mgr.Metrics().NewTimer("ollama_chat_load_latency_ns")
+	p.promptEvalDuration = mgr.Metrics().NewTimer("ollama_chat_prompt_eval_latency_ns")
+	p.promptEvalTokens = mgr.Metrics().NewCounter("ollama_chat_prompt_tokens")
+	p.evalDuration = mgr.Metrics().NewTimer("ollama_chat_completion_latency_ns")
+	p.evalTokens = mgr.Metrics().NewCounter("ollama_chat_completion_tokens")
 	return &p, nil
 }
 
@@ -160,6 +166,13 @@ type ollamaCompletionProcessor struct {
 	format       string
 	userPrompt   *service.InterpolatedString
 	systemPrompt *service.InterpolatedString
+
+	totalDuration      *service.MetricTimer
+	loadDuration       *service.MetricTimer
+	promptEvalDuration *service.MetricTimer
+	promptEvalTokens   *service.MetricCounter
+	evalDuration       *service.MetricTimer
+	evalTokens         *service.MetricCounter
 }
 
 func (o *ollamaCompletionProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
@@ -218,6 +231,12 @@ func (o *ollamaCompletionProcessor) generateCompletion(ctx context.Context, syst
 	var g string
 	err := o.client.Chat(ctx, &req, func(resp api.ChatResponse) error {
 		g = resp.Message.Content
+		o.totalDuration.Timing(resp.Metrics.TotalDuration.Nanoseconds())
+		o.loadDuration.Timing(resp.Metrics.LoadDuration.Nanoseconds())
+		o.promptEvalDuration.Timing(resp.Metrics.PromptEvalDuration.Nanoseconds())
+		o.promptEvalTokens.Incr(int64(resp.Metrics.PromptEvalCount))
+		o.evalDuration.Timing(resp.Metrics.EvalDuration.Nanoseconds())
+		o.evalTokens.Incr(int64(resp.Metrics.EvalCount))
 		return nil
 	})
 	return g, err
