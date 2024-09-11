@@ -12,6 +12,9 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - The `schema_registry_encode` and `schema_registry_decode` processors no longer unescape path separators in the schema name. (@Mizaro)
+- (Benthos) The `switch` output metrics now emit the case id as part of their labels. This is a regression introduced in v4.25.0. (@mihaitodor)
+- (Benthos) Fixed a bug where certain logs used the `%w` verb to print errors resulting in incorrect output. (@mihaitodor)
+- (Benthos) The logger no longer tries to replace Go fmt verbs in log messages. (@mihaitodor)
 
 ## 4.35.1 - 2024-09-06
 
