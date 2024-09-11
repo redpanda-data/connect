@@ -17,13 +17,13 @@ package qdrant
 import (
 	"fmt"
 
-	pb "github.com/qdrant/go-client/qdrant"
+	"github.com/qdrant/go-client/qdrant"
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 )
 
 // newVectors converts the input into the appropriate *pb.Vectors format
-func newVectors(input any) (*pb.Vectors, error) {
-	namedVectors := make(map[string]*pb.Vector)
+func newVectors(input any) (*qdrant.Vectors, error) {
+	namedVectors := make(map[string]*qdrant.Vector)
 
 	switch vec := input.(type) {
 	case []any:
@@ -78,18 +78,12 @@ func newVectors(input any) (*pb.Vectors, error) {
 		return nil, fmt.Errorf("unsupported vector input type: %T", input)
 	}
 
-	return &pb.Vectors{
-		VectorsOptions: &pb.Vectors_Vectors{
-			Vectors: &pb.NamedVectors{
-				Vectors: namedVectors,
-			},
-		},
-	}, nil
+	return qdrant.NewVectorsMap(namedVectors), nil
 }
 
 // Handle dense and multi-vectors
-func handleDenseOrMultiVector(input []any) (*pb.Vector, error) {
-	var vector *pb.Vector
+func handleDenseOrMultiVector(input []any) (*qdrant.Vector, error) {
+	var vector *qdrant.Vector
 	var err error
 
 	_, isMultiVector := input[0].([]any)
@@ -110,44 +104,35 @@ func handleDenseOrMultiVector(input []any) (*pb.Vector, error) {
 }
 
 // Convert a []any containing a dense vector to a *pb.Vector
-func convertToDenseVector(input []any) (*pb.Vector, error) {
+func convertToDenseVector(input []any) (*qdrant.Vector, error) {
 	data, err := convertToFloat32Slice(input)
 	if err != nil {
 		return nil, err
 	}
-	return &pb.Vector{
-		Data: data,
-	}, nil
+	return qdrant.NewVectorDense(data), nil
 }
 
 // Convert a [][]any containing a multi-vector to a *pb.Vector
-func convertToMultiVector(input []any) (*pb.Vector, error) {
-	vectorsCount := uint32(len(input))
-
-	// Convert the []any to [][]any
-	inputTyped := make([][]any, len(input))
+func convertToMultiVector(input []any) (*qdrant.Vector, error) {
+	// Convert the []any to [][]float32
+	inputTyped := make([][]float32, len(input))
 	for i, vec := range input {
-		inputTyped[i] = vec.([]any)
+		vecTyped, ok := vec.([]any)
+		if !ok {
+			return nil, fmt.Errorf("failed to convert vector at index %d to []any", i)
+		}
+		floats, err := convertToFloat32Slice(vecTyped)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert vector at index %d: %w", i, err)
+		}
+		inputTyped[i] = floats
 	}
 
-	// Flatten the input into a single slice
-	flattenedInput := make([]any, 0, len(inputTyped)*len(inputTyped[0]))
-	for _, vec := range inputTyped {
-		flattenedInput = append(flattenedInput, vec...)
-	}
-
-	data, err := convertToFloat32Slice(flattenedInput)
-	if err != nil {
-		return nil, err
-	}
-	return &pb.Vector{
-		Data:         data,
-		VectorsCount: &vectorsCount,
-	}, nil
+	return qdrant.NewVectorMulti(inputTyped), nil
 }
 
 // Convert a map[string]any containing a sparse vector to a *pb.Vector
-func handleSparseVector(input map[string]any) (*pb.Vector, error) {
+func handleSparseVector(input map[string]any) (*qdrant.Vector, error) {
 	var (
 		indices []uint32
 		data    []float32
@@ -168,12 +153,7 @@ func handleSparseVector(input map[string]any) (*pb.Vector, error) {
 		}
 	}
 
-	return &pb.Vector{
-		Data: data,
-		Indices: &pb.SparseIndices{
-			Data: indices,
-		},
-	}, nil
+	return qdrant.NewVectorSparse(indices, data), nil
 }
 
 // Convert a []any slice to a []float32 slice

@@ -22,13 +22,11 @@ import (
 	"strings"
 	"testing"
 
-	pb "github.com/qdrant/go-client/qdrant"
+	"github.com/qdrant/go-client/qdrant"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go/modules/qdrant"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	qc "github.com/testcontainers/testcontainers-go/modules/qdrant"
 )
 
 const (
@@ -52,7 +50,7 @@ func TestIntegrationQdrant(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	qdrantContainer, err := qdrant.Run(ctx, "qdrant/qdrant:v1.10.1")
+	qdrantContainer, err := qc.Run(ctx, "qdrant/qdrant:v1.10.1")
 	require.NoError(t, err, "failed to start container")
 
 	testCases := []struct {
@@ -109,26 +107,26 @@ func TestIntegrationQdrant(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 
+			host, port, err := parseHostAndPort(addr)
+			require.NoError(t, err, "failed to parse host and port")
 			queryPoint := func(ctx context.Context, testID, messageID string) (string, []string, error) {
-				conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-				require.NoError(t, err, "failed to create grpc client")
-
-				pointsClient := pb.NewPointsClient(conn)
-
-				points, err := pointsClient.Get(ctx, &pb.GetPoints{
-					CollectionName: collectionName,
-					Ids:            []*pb.PointId{parsePointID(tc.pointID)},
-					WithPayload: &pb.WithPayloadSelector{
-						SelectorOptions: &pb.WithPayloadSelector_Enable{
-							Enable: true,
-						},
-					},
+				client, err := qdrant.NewClient(&qdrant.Config{
+					Host: host,
+					Port: port,
 				})
+				require.NoError(t, err, "failed to create qdrant client")
+
+				points, err := client.Get(ctx, &qdrant.GetPoints{
+					CollectionName: collectionName,
+					Ids:            []*qdrant.PointId{parsePointID(tc.pointID)},
+					WithPayload:    qdrant.NewWithPayload(true),
+				})
+
 				require.NoError(t, err, "failed to get point")
 
-				assert.Len(t, points.GetResult(), 1)
+				assert.Len(t, points, 1)
 
-				point := points.GetResult()[0]
+				point := points[0]
 
 				err = assertPayloadStructure(t, point.Payload, payload)
 				require.NoError(t, err, "failed to assert payload structure")
@@ -154,55 +152,51 @@ func TestIntegrationQdrant(t *testing.T) {
 	require.NoError(t, qdrantContainer.Terminate(ctx), "failed to terminate container")
 }
 
-func setupCollection(ctx context.Context, host, collectionName string) error {
+func setupCollection(ctx context.Context, addr, collectionName string) error {
 
-	conn, err := grpc.NewClient(host, grpc.WithTransportCredentials(insecure.NewCredentials()))
-
+	host, port, err := parseHostAndPort(addr)
+	if err != nil {
+		return err
+	}
+	client, err := qdrant.NewClient(&qdrant.Config{
+		Host: host,
+		Port: port,
+	})
 	if err != nil {
 		return err
 	}
 
-	collectionsClient := pb.NewCollectionsClient(conn)
-
-	_, err = collectionsClient.Create(ctx, &pb.CreateCollection{
+	err = client.CreateCollection(ctx, &qdrant.CreateCollection{
 		CollectionName: collectionName,
-		VectorsConfig: &pb.VectorsConfig{
-			Config: &pb.VectorsConfig_ParamsMap{
-				ParamsMap: &pb.VectorParamsMap{
-					Map: map[string]*pb.VectorParams{
-						// Default unnamed vector
-						// Created when using https://qdrant.tech/documentation/concepts/collections/#create-a-collection
-						"": {
-							Size:     3,
-							Distance: pb.Distance_Cosine,
-						},
-						"some_dense": {
-							Size:     3,
-							Distance: pb.Distance_Cosine,
-						},
-						"some_multi": {
-							Size:     3,
-							Distance: pb.Distance_Cosine,
-							MultivectorConfig: &pb.MultiVectorConfig{
-								Comparator: pb.MultiVectorComparator_MaxSim,
-							},
-						},
-					},
+		VectorsConfig: qdrant.NewVectorsConfigMap(map[string]*qdrant.VectorParams{
+			// Default unnamed vector
+			// Created when using https://qdrant.tech/documentation/concepts/collections/#create-a-collection
+			"": {
+				Size:     3,
+				Distance: qdrant.Distance_Cosine,
+			},
+			"some_dense": {
+				Size:     3,
+				Distance: qdrant.Distance_Cosine,
+			},
+			"some_multi": {
+				Size:     3,
+				Distance: qdrant.Distance_Cosine,
+				MultivectorConfig: &qdrant.MultiVectorConfig{
+					Comparator: qdrant.MultiVectorComparator_MaxSim,
 				},
 			},
-		},
-		SparseVectorsConfig: &pb.SparseVectorConfig{
-			Map: map[string]*pb.SparseVectorParams{
-				"some_sparse": {},
-			},
-		},
+		}),
+		SparseVectorsConfig: qdrant.NewSparseVectorsConfig(map[string]*qdrant.SparseVectorParams{
+			"some_sparse": {},
+		}),
 	})
 
 	return err
 }
 
-func assertPayloadStructure(t *testing.T, actual map[string]*pb.Value, expected map[string]any) error {
-	valueMap, err := newValueMap(expected)
+func assertPayloadStructure(t *testing.T, actual map[string]*qdrant.Value, expected map[string]any) error {
+	valueMap, err := qdrant.TryValueMap(expected)
 	if err != nil {
 		return err
 	}
@@ -214,21 +208,13 @@ func assertPayloadStructure(t *testing.T, actual map[string]*pb.Value, expected 
 	return nil
 }
 
-func parsePointID(input string) *pb.PointId {
+func parsePointID(input string) *qdrant.PointId {
 	// Try to convert the input string to a number
 	if num, err := strconv.ParseUint(input, 10, 64); err == nil {
-		return &pb.PointId{
-			PointIdOptions: &pb.PointId_Num{
-				Num: num,
-			},
-		}
+		return qdrant.NewIDNum(num)
 	}
 
 	// Remove the quotes from the input string
 	uuid := strings.Trim(input, `"`)
-	return &pb.PointId{
-		PointIdOptions: &pb.PointId_Uuid{
-			Uuid: uuid,
-		},
-	}
+	return qdrant.NewID(uuid)
 }
