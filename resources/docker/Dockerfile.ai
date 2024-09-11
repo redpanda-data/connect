@@ -25,6 +25,11 @@ RUN make TAGS="timetzdata" redpanda-connect-ai
 
 RUN touch /tmp/keep
 
+FROM ubuntu AS download
+
+RUN apt update && apt install -y curl
+RUN curl -fsSL https://ollama.com/install.sh | sh
+
 # Pack
 FROM nvidia/cuda:12.6.0-runtime-ubuntu24.04 AS package
 
@@ -40,7 +45,7 @@ COPY ./config/docker.yaml /connect.yaml
 
 USER connect
 
-ADD --chown=connect:connect --chmod=755 https://github.com/ollama/ollama/releases/download/v0.3.6/ollama-linux-amd64 /home/connect/.cache/ollama/ollama
+COPY --chown=connect:connect --from=download /usr/local/bin/ollama /usr/local/
 COPY --chown=connect:connect --from=build /tmp/keep /home/connect/.ollama/keep
 
 EXPOSE 4195

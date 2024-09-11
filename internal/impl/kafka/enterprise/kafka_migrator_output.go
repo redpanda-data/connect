@@ -144,6 +144,14 @@ func KafkaMigratorOutputConfigFields() []*service.ConfigField {
 			Description("The label of the kafka_migrator input from which to read the configurations for topics and ACLs which need to be created.").
 			Default(rpriDefaultLabel).
 			Advanced(),
+		service.NewBoolField("replication_factor_override").
+			Description("Use the specified replication factor when creating topics.").
+			Default(true).
+			Advanced(),
+		service.NewIntField("replication_factor").
+			Description("Replication factor for created topics. This is only used when `replication_factor_override` is set to `true`.").
+			Default(3).
+			Advanced(),
 	}
 }
 
@@ -173,23 +181,25 @@ func init() {
 
 // KafkaMigratorWriter implements a Kafka writer using the franz-go library.
 type KafkaMigratorWriter struct {
-	SeedBrokers         []string
-	topic               *service.InterpolatedString
-	key                 *service.InterpolatedString
-	partition           *service.InterpolatedString
-	timestamp           *service.InterpolatedString
-	clientID            string
-	rackID              string
-	idempotentWrite     bool
-	TLSConf             *tls.Config
-	saslConfs           []sasl.Mechanism
-	metaFilter          *service.MetadataFilter
-	partitioner         kgo.Partitioner
-	timeout             time.Duration
-	produceMaxBytes     int32
-	brokerWriteMaxBytes int32
-	compressionPrefs    []kgo.CompressionCodec
-	inputResource       string
+	SeedBrokers               []string
+	topic                     *service.InterpolatedString
+	key                       *service.InterpolatedString
+	partition                 *service.InterpolatedString
+	timestamp                 *service.InterpolatedString
+	clientID                  string
+	rackID                    string
+	idempotentWrite           bool
+	TLSConf                   *tls.Config
+	saslConfs                 []sasl.Mechanism
+	metaFilter                *service.MetadataFilter
+	partitioner               kgo.Partitioner
+	timeout                   time.Duration
+	produceMaxBytes           int32
+	brokerWriteMaxBytes       int32
+	compressionPrefs          []kgo.CompressionCodec
+	replicationFactorOverride bool
+	replicationFactor         int
+	inputResource             string
 
 	connMut    sync.Mutex
 	client     *kgo.Client
@@ -342,6 +352,14 @@ func NewKafkaMigratorWriterFromConfig(conf *service.ParsedConfig, mgr *service.R
 		return nil, err
 	}
 
+	if w.replicationFactorOverride, err = conf.FieldBool("replication_factor_override"); err != nil {
+		return nil, err
+	}
+
+	if w.replicationFactor, err = conf.FieldInt("replication_factor"); err != nil {
+		return nil, err
+	}
+
 	if label := mgr.Label(); label != "" {
 		mgr.SetGeneric(mgr.Label(), &w)
 	} else {
@@ -427,7 +445,7 @@ func (w *KafkaMigratorWriter) WriteBatch(ctx context.Context, b service.MessageB
 			if _, ok := w.topicCache.Load(topic); !ok {
 				w.mgr.Logger().Infof("Creating topic %q", topic)
 
-				if err := createTopic(ctx, topic, input.client, w.client); err != nil && err != errTopicAlreadyExists {
+				if err := createTopic(ctx, topic, w.replicationFactorOverride, w.replicationFactor, input.client, w.client); err != nil && err != errTopicAlreadyExists {
 					return fmt.Errorf("failed to create topic %q: %s", topic, err)
 				} else {
 					if err == errTopicAlreadyExists {

@@ -72,7 +72,7 @@ type PluginInfo struct {
 	Version        string
 	Deprecated     bool
 	Cloud          bool
-	CloudAI        bool
+	CloudWithGPU   bool
 }
 
 func basePluginInfo(name string, typeStr TypeName, view *service.ConfigView) PluginInfo {
@@ -107,7 +107,7 @@ func pluginInfoFromMap(m map[string]string) PluginInfo {
 		Support:        supportStr,
 		Deprecated:     m["deprecated"] == "y",
 		Cloud:          m["cloud"] == "y",
-		CloudAI:        m["cloud_ai"] == "y",
+		CloudWithGPU:   m["cloud_with_gpu"] == "y",
 	}
 }
 
@@ -117,7 +117,7 @@ type columnInfo struct {
 }
 
 func pluginInfoMapColumns() []columnInfo {
-	return []columnInfo{{"name", 24}, {"type", 10}, {"commercial_name", 24}, {"version", 8}, {"support", 11}, {"deprecated", 11}, {"cloud", 6}, {"cloud_ai", 0}}
+	return []columnInfo{{"name", 24}, {"type", 10}, {"commercial_name", 24}, {"version", 8}, {"support", 11}, {"deprecated", 11}, {"cloud", 6}, {"cloud_with_gpu", 0}}
 }
 
 func (c PluginInfo) toMap() map[string]string {
@@ -129,7 +129,7 @@ func (c PluginInfo) toMap() map[string]string {
 		"support":         c.Support,
 		"deprecated":      formatBool(c.Deprecated),
 		"cloud":           formatBool(c.Cloud),
-		"cloud_ai":        formatBool(c.CloudAI),
+		"cloud_with_gpu":  formatBool(c.CloudWithGPU),
 	}
 }
 
@@ -185,7 +185,7 @@ func PluginNamesForCloudAI(typeStr TypeName) []string {
 	var names []string
 	seen := map[string]struct{}{}
 	for _, info := range BaseInfo {
-		if !info.CloudAI {
+		if !info.CloudWithGPU {
 			continue
 		}
 		if typeStr != TypeNone {

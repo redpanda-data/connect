@@ -49,7 +49,26 @@ For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ol
 			service.NewInterpolatedStringField(oepFieldText).
 				Description("The text you want to create vector embeddings for. By default, the processor submits the entire payload as a string.").
 				Optional(),
-		).Fields(commonFields()...)
+		).Fields(commonFields()...).
+		Example(
+			"Store embedding vectors in Qdrant",
+			"Compute embeddings for some generated data and store it within xrefs:component:outputs/qdrant.adoc[Qdrant]",
+			`input:
+  generate:
+    interval: 1s
+    mapping: |
+      root = {"text": fake("paragraph")}
+pipeline:
+  processors:
+  - ollama_embeddings:
+      model: snowflake-artic-embed
+      text: "${!this.text}"
+output:
+  qdrant:
+    grpc_host: localhost:6334
+    collection_name: "example_collection"
+    id: "root = uuid_v4()"
+    vector_mapping: "root = this"`)
 }
 
 func makeOllamaEmbeddingProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {

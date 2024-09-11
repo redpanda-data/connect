@@ -96,6 +96,8 @@ output:
     sasl: [] # No default (optional)
     timestamp: ${! timestamp_unix() } # No default (optional)
     input_resource: kafka_migrator_input
+    replication_factor_override: true
+    replication_factor: 3
 ```
 
 --
@@ -833,5 +835,23 @@ The label of the kafka_migrator input from which to read the configurations for 
 *Type*: `string`
 
 *Default*: `"kafka_migrator_input"`
+
+=== `replication_factor_override`
+
+Use the specified replication factor when creating topics.
+
+
+*Type*: `bool`
+
+*Default*: `true`
+
+=== `replication_factor`
+
+Replication factor for created topics. This is only used when `replication_factor_override` is set to `true`.
+
+
+*Type*: `int`
+
+*Default*: `3`
 
 

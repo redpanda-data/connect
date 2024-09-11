@@ -162,42 +162,42 @@ func extractOptions(conf *service.ParsedConfig) (map[string]any, error) {
 		opts.Stop = v
 	}
 	if conf.Contains(bopFieldRunner, bopFieldContextSize) {
-		v, err := conf.FieldInt(ocpFieldStop, bopFieldContextSize)
+		v, err := conf.FieldInt(bopFieldRunner, bopFieldContextSize)
 		if err != nil {
 			return nil, err
 		}
 		opts.Runner.NumCtx = v
 	}
 	if conf.Contains(bopFieldRunner, bopFieldBatchSize) {
-		v, err := conf.FieldInt(ocpFieldStop, bopFieldBatchSize)
+		v, err := conf.FieldInt(bopFieldRunner, bopFieldBatchSize)
 		if err != nil {
 			return nil, err
 		}
 		opts.Runner.NumBatch = v
 	}
 	if conf.Contains(bopFieldRunner, bopFieldGPULayers) {
-		v, err := conf.FieldInt(ocpFieldStop, bopFieldGPULayers)
+		v, err := conf.FieldInt(bopFieldRunner, bopFieldGPULayers)
 		if err != nil {
 			return nil, err
 		}
 		opts.Runner.NumGPU = v
 	}
 	if conf.Contains(bopFieldRunner, bopFieldThreads) {
-		v, err := conf.FieldInt(ocpFieldStop, bopFieldThreads)
+		v, err := conf.FieldInt(bopFieldRunner, bopFieldThreads)
 		if err != nil {
 			return nil, err
 		}
 		opts.Runner.NumThread = v
 	}
 	if conf.Contains(bopFieldRunner, bopFieldUseMMap) {
-		v, err := conf.FieldBool(ocpFieldStop, bopFieldUseMMap)
+		v, err := conf.FieldBool(bopFieldRunner, bopFieldUseMMap)
 		if err != nil {
 			return nil, err
 		}
 		opts.Runner.UseMMap = &v
 	}
 	if conf.Contains(bopFieldRunner, bopFieldUseMLock) {
-		v, err := conf.FieldBool(ocpFieldStop, bopFieldUseMLock)
+		v, err := conf.FieldBool(bopFieldRunner, bopFieldUseMLock)
 		if err != nil {
 			return nil, err
 		}
@@ -273,6 +273,9 @@ func newBaseProcessor(conf *service.ParsedConfig, mgr *service.Resources) (p *ba
 		return
 	}
 	p.opts, err = extractOptions(conf)
+	if err != nil {
+		return
+	}
 	if conf.Contains(bopFieldServerAddress) {
 		var a string
 		a, err = conf.FieldString(bopFieldServerAddress)

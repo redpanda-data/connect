@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.36.0 - TBD
+
+### Added
+
+- Fields `replication_factor` and `replication_factor_override` added to the `kafka_migrator` input and output. (@mihaitodor)
+
 ## 4.35.1 - 2024-09-06
 
 ### Added
