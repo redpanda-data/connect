@@ -63,7 +63,7 @@ jobs:
           - flavor: ai
             latest: false
             suffix: -ai
-            platform: linux/amd64
+            platform: linux/amd64,linux/arm64
             file: ./resources/docker/Dockerfile.ai
     permissions:
       id-token: write
