@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package confluent
 
 import (
@@ -11,6 +25,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
 )
 
 func TestSchemaRegistryClient_GetSchemaBySubjectAndVersion(t *testing.T) {
@@ -34,7 +50,7 @@ func TestSchemaRegistryClient_GetSchemaBySubjectAndVersion(t *testing.T) {
 		name                    string
 		schemaRegistryServerURL string
 		args                    args
-		wantResPayload          schemaInfo
+		wantResPayload          sr.SchemaInfo
 		wantErr                 assert.ErrorAssertionFunc
 	}{
 		{
@@ -44,7 +60,7 @@ func TestSchemaRegistryClient_GetSchemaBySubjectAndVersion(t *testing.T) {
 				subject: "foo",
 				version: nil,
 			},
-			wantResPayload: schemaInfo{
+			wantResPayload: sr.SchemaInfo{
 				ID:     3,
 				Schema: testSchema,
 			},
@@ -57,7 +73,7 @@ func TestSchemaRegistryClient_GetSchemaBySubjectAndVersion(t *testing.T) {
 				subject: "main/common",
 				version: nil,
 			},
-			wantResPayload: schemaInfo{
+			wantResPayload: sr.SchemaInfo{
 				ID:     3,
 				Schema: testSchema,
 			},
@@ -70,7 +86,7 @@ func TestSchemaRegistryClient_GetSchemaBySubjectAndVersion(t *testing.T) {
 				subject: "foo",
 				version: &version,
 			},
-			wantResPayload: schemaInfo{
+			wantResPayload: sr.SchemaInfo{
 				ID:     3,
 				Schema: testSchema,
 			},
@@ -83,7 +99,7 @@ func TestSchemaRegistryClient_GetSchemaBySubjectAndVersion(t *testing.T) {
 				subject: "main/common",
 				version: &version,
 			},
-			wantResPayload: schemaInfo{
+			wantResPayload: sr.SchemaInfo{
 				ID:     3,
 				Schema: testSchema,
 			},
@@ -99,7 +115,7 @@ func TestSchemaRegistryClient_GetSchemaBySubjectAndVersion(t *testing.T) {
 				return nil, errors.New("nope")
 			})
 
-			c, err := newSchemaRegistryClient(urlStr, noopReqSign, nil, service.MockResources())
+			c, err := sr.NewClient(urlStr, noopReqSign, nil, service.MockResources())
 			require.NoError(t, err)
 
 			gotResPayload, err := c.GetSchemaBySubjectAndVersion(ctx, tt.args.subject, tt.args.version)
