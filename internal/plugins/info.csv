@@ -8,6 +8,7 @@ avro                    ,processor ,avro                    ,0.0.0   ,community 
 avro                    ,scanner   ,avro                    ,0.0.0   ,community  ,n          ,y     ,y
 awk                     ,processor ,awk                     ,0.0.0   ,community  ,n          ,n     ,n
 aws_bedrock_chat        ,processor ,aws_bedrock_chat        ,4.34.0  ,enterprise ,n          ,y     ,y
+aws_bedrock_embeddings  ,processor ,aws_bedrock_embeddings  ,4.37.0  ,enterprise ,n          ,y     ,y
 aws_cloudwatch          ,metric    ,aws_cloudwatch          ,3.36.0  ,community  ,n          ,n     ,n
 aws_dynamodb            ,cache     ,AWS DynamoDB            ,3.36.0  ,community  ,n          ,y     ,y
 aws_dynamodb            ,output    ,AWS DynamoDB            ,3.36.0  ,community  ,n          ,y     ,y
