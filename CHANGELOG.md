@@ -3,11 +3,15 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.36.0 - TBD
+## 4.36.0 - 2024-09-11
 
 ### Added
 
 - Fields `replication_factor` and `replication_factor_override` added to the `kafka_migrator` input and output. (@mihaitodor)
+
+### Fixed
+
+- The `schema_registry_encode` and `schema_registry_decode` processors no longer unescape path separators in the schema name. (@Mizaro)
 
 ## 4.35.1 - 2024-09-06
 
