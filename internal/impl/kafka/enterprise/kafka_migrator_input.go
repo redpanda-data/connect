@@ -319,6 +319,12 @@ func NewKafkaMigratorReaderFromConfig(conf *service.ParsedConfig, mgr *service.R
 		return nil, err
 	}
 
+	if label := mgr.Label(); label != "" {
+		mgr.SetGeneric(mgr.Label(), &r)
+	} else {
+		mgr.SetGeneric(rpriDefaultLabel, &r)
+	}
+
 	return &r, nil
 }
 
@@ -536,7 +542,7 @@ func (r *KafkaMigratorReader) ReadBatch(ctx context.Context) (service.MessageBat
 		if res, ok := r.mgr.GetGeneric(r.outputResource); ok {
 			output = res.(*KafkaMigratorWriter)
 		} else {
-			r.mgr.Logger().Debugf("Writer for topic sink %q not found", r.outputResource)
+			r.mgr.Logger().Debugf("Writer for topic destination %q not found", r.outputResource)
 		}
 
 		if output != nil {
