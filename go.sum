@@ -1011,6 +1011,8 @@ github.com/pusher/pusher-http-go v4.0.1+incompatible h1:4u6tomPG1WhHaST7Wi9mw83Y
 github.com/pusher/pusher-http-go v4.0.1+incompatible/go.mod h1:XAv1fxRmVTI++2xsfofDhg7whapsLRG/gH/DXbF3a18=
 github.com/qdrant/go-client v1.11.1 h1:kla7n21wSEWWZLrvpttTOnCppDm6jluYDZEFe2kJ8zs=
 github.com/qdrant/go-client v1.11.1/go.mod h1:zFa6t5Y3Oqecoa0aSsGWhMqQWq3x3kTPvm0sMf5qplw=
+github.com/questdb/go-questdb-client/v3 v3.2.0 h1:rFlkc3tD+vNucd4dkNv2xN5xqcFJGwqxt3F5p2H8zrg=
+github.com/questdb/go-questdb-client/v3 v3.2.0/go.mod h1:kXoftTVQZlksdJ9tsHQRWfdWO5Kyl4bZuKotyyeWa3c=
 github.com/quipo/dependencysolver v0.0.0-20170801134659-2b009cb4ddcc h1:hK577yxEJ2f5s8w2iy2KimZmgrdAUZUNftE1ESmg2/Q=
 github.com/quipo/dependencysolver v0.0.0-20170801134659-2b009cb4ddcc/go.mod h1:OQt6Zo5B3Zs+C49xul8kcHo+fZ1mCLPvd0LFxiZ2DHc=
 github.com/r3labs/diff/v3 v3.0.1 h1:CBKqf3XmNRHXKmdU7mZP1w7TV0pDyVCis1AUHtA4Xtg=
