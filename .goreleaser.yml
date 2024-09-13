@@ -94,3 +94,32 @@ release:
     name: connect
   prerelease: auto
   disable: false
+
+nfpms:
+  - id: connect-linux-pkgs
+    description: Redpanda Connect is a high performance and resilient stream processor.
+    package_name: redpanda-connect
+    file_name_template: "{{ .ConventionalFileName }}"
+    # this is the default value, but specifying explicitly it relates to the symlink creation below
+    bindir: /usr/bin
+    contents:
+      - src: /usr/bin/redpanda-connect
+        dst: /usr/bin/.rpk-ac.connect
+        type: symlink
+    builds:
+      - connect
+    vendor: Redpanda Data, Inc.
+    license: "https://github.com/redpanda-data/connect/blob/main/licenses/README.md"
+    homepage: redpanda.com
+    maintainer: Redpanda Data <support@redpanda.com>
+    formats:
+      - deb
+      - rpm
+publishers:
+  # Gets run once per artifact (deb or rpm)
+  - name: Publish Linux packages to Cloudsmith
+    ids:
+      - connect-linux-pkgs
+    cmd: ./resources/scripts/push_pkg_to_cloudsmith.sh {{ .ArtifactPath }}
+    env:
+      - CLOUDSMITH_API_KEY={{ .Env.CLOUDSMITH_API_KEY }}
