@@ -23,23 +23,23 @@ import (
 )
 
 const (
-	bedpFieldModel        = "model"
-	bedpFieldUserPrompt   = "prompt"
-	bedpFieldSystemPrompt = "system_prompt"
-	bedpFieldMaxTokens    = "max_tokens"
-	bedpFieldTemp         = "stop"
-	bedpFieldStop         = "temperature"
-	bedpFieldTopP         = "top_p"
+	bedcpFieldModel        = "model"
+	bedcpFieldUserPrompt   = "prompt"
+	bedcpFieldSystemPrompt = "system_prompt"
+	bedcpFieldMaxTokens    = "max_tokens"
+	bedcpFieldTemp         = "stop"
+	bedcpFieldStop         = "temperature"
+	bedcpFieldTopP         = "top_p"
 )
 
 func init() {
-	err := service.RegisterProcessor("aws_bedrock_chat", newBedrockConfigSpec(), newBedrockProcessor)
+	err := service.RegisterProcessor("aws_bedrock_chat", newBedrockChatConfigSpec(), newBedrockChatProcessor)
 	if err != nil {
 		panic(err)
 	}
 }
 
-func newBedrockConfigSpec() *service.ConfigSpec {
+func newBedrockChatConfigSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Summary("Generates responses to messages in a chat conversation, using the AWS Bedrock API.").
 		Description(`This processor sends prompts to your chosen large language model (LLM) and generates text from the responses, using the AWS Bedrock API.
@@ -47,87 +47,87 @@ For more information, see the https://docs.aws.amazon.com/bedrock/latest/usergui
 		Categories("AI").
 		Version("4.34.0").
 		Fields(config.SessionFields()...).
-		Field(service.NewStringField(bedpFieldModel).
+		Field(service.NewStringField(bedcpFieldModel).
 			Examples("amazon.titan-text-express-v1", "anthropic.claude-3-5-sonnet-20240620-v1:0", "cohere.command-text-v14", "meta.llama3-1-70b-instruct-v1:0", "mistral.mistral-large-2402-v1:0").
 			Description("The model ID to use. For a full list see the https://docs.aws.amazon.com/bedrock/latest/userguide/model-ids.html[AWS Bedrock documentation^].")).
-		Field(service.NewStringField(bedpFieldUserPrompt).
+		Field(service.NewStringField(bedcpFieldUserPrompt).
 			Description("The prompt you want to generate a response for. By default, the processor submits the entire payload as a string.").
 			Optional()).
-		Field(service.NewStringField(bedpFieldSystemPrompt).
+		Field(service.NewStringField(bedcpFieldSystemPrompt).
 			Optional().
 			Description("The system prompt to submit to the AWS Bedrock LLM.")).
-		Field(service.NewIntField(bedpFieldMaxTokens).
+		Field(service.NewIntField(bedcpFieldMaxTokens).
 			Optional().
 			Description("The maximum number of tokens to allow in the generated response.").
 			LintRule(`root = this < 1 { ["field must be greater than or equal to 1"] }`)).
-		Field(service.NewFloatField(bedpFieldTemp).
+		Field(service.NewFloatField(bedcpFieldTemp).
 			Optional().
 			Description("The likelihood of the model selecting higher-probability options while generating a response. A lower value makes the model omre likely to choose higher-probability options, while a higher value makes the model more likely to choose lower-probability options.").
 			LintRule(`root = if this < 0 || this > 1 { ["field must be between 0.0-1.0"] }`)).
-		Field(service.NewStringListField(bedpFieldStop).
+		Field(service.NewStringListField(bedcpFieldStop).
 			Optional().
 			Advanced().
 			Description("A list of stop sequences. A stop sequence is a sequence of characters that causes the model to stop generating the response.")).
-		Field(service.NewFloatField(bedpFieldTopP).
+		Field(service.NewFloatField(bedcpFieldTopP).
 			Optional().
 			Advanced().
 			Description("The percentage of most-likely candidates that the model considers for the next token. For example, if you choose a value of 0.8, the model selects from the top 80% of the probability distribution of tokens that could be next in the sequence. ").
 			LintRule(`root = if this < 0 || this > 1 { ["field must be between 0.0-1.0"] }`))
 }
 
-func newBedrockProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func newBedrockChatProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
 	aconf, err := aws.GetSession(context.Background(), conf)
 	if err != nil {
 		return nil, err
 	}
 	client := bedrockruntime.NewFromConfig(aconf)
-	model, err := conf.FieldString(bedpFieldModel)
+	model, err := conf.FieldString(bedcpFieldModel)
 	if err != nil {
 		return nil, err
 	}
-	p := &bedrockProcessor{
+	p := &bedrockChatProcessor{
 		client: client,
 		model:  model,
 	}
-	if conf.Contains(bedpFieldUserPrompt) {
-		pf, err := conf.FieldInterpolatedString(bedpFieldUserPrompt)
+	if conf.Contains(bedcpFieldUserPrompt) {
+		pf, err := conf.FieldInterpolatedString(bedcpFieldUserPrompt)
 		if err != nil {
 			return nil, err
 		}
 		p.userPrompt = pf
 	}
-	if conf.Contains(bedpFieldSystemPrompt) {
-		pf, err := conf.FieldInterpolatedString(bedpFieldSystemPrompt)
+	if conf.Contains(bedcpFieldSystemPrompt) {
+		pf, err := conf.FieldInterpolatedString(bedcpFieldSystemPrompt)
 		if err != nil {
 			return nil, err
 		}
 		p.systemPrompt = pf
 	}
-	if conf.Contains(bedpFieldMaxTokens) {
-		v, err := conf.FieldInt(bedpFieldMaxTokens)
+	if conf.Contains(bedcpFieldMaxTokens) {
+		v, err := conf.FieldInt(bedcpFieldMaxTokens)
 		if err != nil {
 			return nil, err
 		}
 		mt := int32(v)
 		p.maxTokens = &mt
 	}
-	if conf.Contains(bedpFieldTemp) {
-		v, err := conf.FieldFloat(bedpFieldTemp)
+	if conf.Contains(bedcpFieldTemp) {
+		v, err := conf.FieldFloat(bedcpFieldTemp)
 		if err != nil {
 			return nil, err
 		}
 		t := float32(v)
 		p.temp = &t
 	}
-	if conf.Contains(bedpFieldStop) {
-		stop, err := conf.FieldStringList(bedpFieldStop)
+	if conf.Contains(bedcpFieldStop) {
+		stop, err := conf.FieldStringList(bedcpFieldStop)
 		if err != nil {
 			return nil, err
 		}
 		p.stop = stop
 	}
-	if conf.Contains(bedpFieldTopP) {
-		v, err := conf.FieldFloat(bedpFieldTopP)
+	if conf.Contains(bedcpFieldTopP) {
+		v, err := conf.FieldFloat(bedcpFieldTopP)
 		if err != nil {
 			return nil, err
 		}
@@ -137,7 +137,7 @@ func newBedrockProcessor(conf *service.ParsedConfig, mgr *service.Resources) (se
 	return p, nil
 }
 
-type bedrockProcessor struct {
+type bedrockChatProcessor struct {
 	client *bedrockruntime.Client
 	model  string
 
@@ -149,7 +149,7 @@ type bedrockProcessor struct {
 	topP         *float32
 }
 
-func (b *bedrockProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+func (b *bedrockChatProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
 	prompt, err := b.computePrompt(msg)
 	if err != nil {
 		return nil, err
@@ -176,7 +176,7 @@ func (b *bedrockProcessor) Process(ctx context.Context, msg *service.Message) (s
 	if b.systemPrompt != nil {
 		prompt, err := b.systemPrompt.TryString(msg)
 		if err != nil {
-			return nil, fmt.Errorf("unable to interpolate `%s`: %w", bedpFieldSystemPrompt, err)
+			return nil, fmt.Errorf("unable to interpolate `%s`: %w", bedcpFieldSystemPrompt, err)
 		}
 		input.System = []bedrocktypes.SystemContentBlock{
 			&bedrocktypes.SystemContentBlockMemberText{Value: prompt},
@@ -204,7 +204,7 @@ func (b *bedrockProcessor) Process(ctx context.Context, msg *service.Message) (s
 	return service.MessageBatch{out}, nil
 }
 
-func (b *bedrockProcessor) computePrompt(msg *service.Message) (string, error) {
+func (b *bedrockChatProcessor) computePrompt(msg *service.Message) (string, error) {
 	if b.userPrompt != nil {
 		return b.userPrompt.TryString(msg)
 	}
@@ -218,6 +218,6 @@ func (b *bedrockProcessor) computePrompt(msg *service.Message) (string, error) {
 	return string(buf), nil
 }
 
-func (b *bedrockProcessor) Close(ctx context.Context) error {
+func (b *bedrockChatProcessor) Close(ctx context.Context) error {
 	return nil
 }
