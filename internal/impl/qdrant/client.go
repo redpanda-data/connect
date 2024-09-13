@@ -17,68 +17,74 @@ package qdrant
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 
-	pb "github.com/qdrant/go-client/qdrant"
+	"github.com/qdrant/go-client/qdrant"
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/metadata"
 )
 
 type qdrantClient struct {
-	pointsClient  pb.PointsClient
-	serviceClient pb.QdrantClient
-	connection    *grpc.ClientConn
+	client *qdrant.Client
 
 	logger *service.Logger
 }
 
 func newQdrantClient(host, apiKey string, useTLS bool, config *tls.Config, logger *service.Logger) (*qdrantClient, error) {
-
-	var tlsCredential credentials.TransportCredentials
-
-	if !useTLS && apiKey != "" {
-		logger.Warn("API key is set but TLS is not enabled. The API key will be sent in plaintext.")
-		logger.Warn("May fail when using Qdrant cloud.")
-	}
-
-	if useTLS {
-		tlsCredential = credentials.NewTLS(config)
-	} else {
-		tlsCredential = insecure.NewCredentials()
-	}
-
-	conn, err := grpc.NewClient(host, grpc.WithTransportCredentials(tlsCredential), withAPIKeyInterceptor(apiKey))
+	hostName, portInt, err := parseHostAndPort(host)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to Qdrant: %w", err)
+		return nil, fmt.Errorf("failed to parse host and port: %w", err)
+	}
+
+	client, err := qdrant.NewClient(&qdrant.Config{
+		Host:      hostName,
+		Port:      portInt,
+		APIKey:    apiKey,
+		UseTLS:    useTLS,
+		TLSConfig: config,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Qdrant client: %w", err)
 	}
 
 	return &qdrantClient{
-		serviceClient: pb.NewQdrantClient(conn),
-		pointsClient:  pb.NewPointsClient(conn),
-		connection:    conn,
-		logger:        logger,
+		client: client,
+		logger: logger,
 	}, nil
 }
 
-func (c *qdrantClient) Upsert(ctx context.Context, collectionName string, points []*pb.PointStruct) error {
+func parseHostAndPort(host string) (string, int, error) {
+	splits := strings.Split(host, ":")
+	if len(splits) != 2 {
+		return "", 0, errors.New("invalid host format, expected 'host:port'")
+	}
+
+	portInt, err := strconv.Atoi(splits[1])
+	if err != nil {
+		return "", 0, fmt.Errorf("failed to parse port: %w", err)
+	}
+
+	return splits[0], portInt, nil
+}
+
+func (c *qdrantClient) Upsert(ctx context.Context, collectionName string, points []*qdrant.PointStruct) error {
 	c.logger.Debugf("Upserting %d points to collection %s", len(points), collectionName)
 	wait := true
-	request := &pb.UpsertPoints{
+	request := &qdrant.UpsertPoints{
 		CollectionName: collectionName,
 		Points:         points,
 		Wait:           &wait,
 	}
-	_, err := c.pointsClient.Upsert(ctx, request)
+	_, err := c.client.Upsert(ctx, request)
 
 	return err
 }
 
 func (c *qdrantClient) Connect(ctx context.Context) error {
 	c.logger.Debug("Checking connection to Qdrant")
-	_, err := c.serviceClient.HealthCheck(ctx, &pb.HealthCheckRequest{})
+	_, err := c.client.HealthCheck(ctx)
 
 	if err != nil {
 		return fmt.Errorf("failed to connect to Qdrant: %w", err)
@@ -89,13 +95,5 @@ func (c *qdrantClient) Connect(ctx context.Context) error {
 
 func (c *qdrantClient) Close() error {
 	c.logger.Debug("Closing connection to Qdrant")
-	return c.connection.Close()
-}
-
-// Appends "api-key" to the metadata for authentication
-func withAPIKeyInterceptor(apiKey string) grpc.DialOption {
-	return grpc.WithUnaryInterceptor(func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-		newCtx := metadata.AppendToOutgoingContext(ctx, "api-key", apiKey)
-		return invoker(newCtx, method, req, reply, cc, opts...)
-	})
+	return c.client.Close()
 }

@@ -16,9 +16,10 @@ package qdrant
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
-	pb "github.com/qdrant/go-client/qdrant"
+	"github.com/qdrant/go-client/qdrant"
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -172,12 +173,12 @@ func (w *outputWriter) WriteBatch(ctx context.Context, batch service.MessageBatc
 	return nil
 }
 
-func (w *outputWriter) batchPointsByCollection(batch service.MessageBatch) (map[string][]*pb.PointStruct, error) {
+func (w *outputWriter) batchPointsByCollection(batch service.MessageBatch) (map[string][]*qdrant.PointStruct, error) {
 	cnExec := batch.InterpolationExecutor(w.collectionName)
 	idExec := batch.BloblangExecutor(w.id)
 	vectorExec := batch.BloblangExecutor(w.vectorMapping)
 	payloadExec := batch.BloblangExecutor(w.payloadMapping)
-	batches := map[string][]*pb.PointStruct{}
+	batches := make(map[string][]*qdrant.PointStruct)
 	for i := 0; i < len(batch); i++ {
 		collectionName, err := cnExec.TryString(i)
 		if err != nil {
@@ -218,12 +219,17 @@ func (w *outputWriter) batchPointsByCollection(batch service.MessageBatch) (map[
 		if err != nil {
 			return nil, fmt.Errorf("%s extraction failed: %w", qoFieldPayloadMapping, err)
 		}
-		payload, err := newValueMap(maybePayload)
+		maybePayloadMap, ok := maybePayload.(map[string]interface{})
+		if !ok {
+			return nil, errors.New("unable to coerce payload output type")
+		}
+
+		payload, err := qdrant.TryValueMap(maybePayloadMap)
 		if err != nil {
 			return nil, fmt.Errorf("unable to coerce payload output type: %w", err)
 		}
 
-		batches[collectionName] = append(batches[collectionName], &pb.PointStruct{
+		batches[collectionName] = append(batches[collectionName], &qdrant.PointStruct{
 			Id:      id,
 			Vectors: vec,
 			Payload: payload,
