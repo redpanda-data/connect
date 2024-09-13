@@ -18,6 +18,7 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/aws/enterprise"
 	_ "github.com/redpanda-data/connect/v4/public/components/azure"
 	_ "github.com/redpanda-data/connect/v4/public/components/changelog"
+	_ "github.com/redpanda-data/connect/v4/public/components/cohere"
 	_ "github.com/redpanda-data/connect/v4/public/components/confluent"
 	_ "github.com/redpanda-data/connect/v4/public/components/crypto"
 	_ "github.com/redpanda-data/connect/v4/public/components/dgraph"

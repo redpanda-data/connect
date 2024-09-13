@@ -3,6 +3,14 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.37.0 - TBD
+
+### Added
+
+- New experimental `gcp_vertex_ai_embeddings` processor. (@rockwotj)
+- New experimental `aws_bedrock_embeddings` processor. (@rockwotj)
+- New experimental `cohere_chat` and `cohere_embeddings` processors. (@rockwotj)
+
 ## 4.36.0 - 2024-09-11
 
 ### Added

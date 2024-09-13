@@ -48,6 +48,8 @@ cassandra               ,output    ,cassandra               ,0.0.0   ,community 
 catch                   ,processor ,catch                   ,0.0.0   ,certified  ,n          ,y     ,y
 chunker                 ,scanner   ,chunker                 ,0.0.0   ,certified  ,n          ,y     ,y
 cockroachdb_changefeed  ,input     ,cockroachdb_changefeed  ,0.0.0   ,community  ,n          ,n     ,n
+cohere_chat             ,processor ,cohere_chat             ,4.37.0  ,enterprise ,n          ,y     ,y
+cohere_embeddings       ,processor ,cohere_embeddings       ,4.37.0  ,enterprise ,n          ,y     ,y
 command                 ,processor ,command                 ,4.21.0  ,certified  ,n          ,n     ,n
 compress                ,processor ,compress                ,0.0.0   ,certified  ,n          ,y     ,y
 couchbase               ,cache     ,Couchbase               ,4.12.0  ,community  ,n          ,n     ,n
