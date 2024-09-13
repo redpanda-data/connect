@@ -76,7 +76,7 @@ pipeline:
   processors:
   - cohere_embeddings:
       model: embed-english-v3
-      auth_token: "${COHERE_AUTH_TOKEN}"
+      api_key: "${COHERE_API_KEY}"
       text_mapping: "root = this.text"
 output:
   qdrant:

@@ -16,9 +16,9 @@ import (
 )
 
 const (
-	cpFieldBaseURL   = "base_url"
-	cpFieldAuthToken = "auth_token"
-	cpFieldModel     = "model"
+	cpFieldBaseURL = "base_url"
+	cpFieldAPIKey  = "api_key"
+	cpFieldModel   = "model"
 )
 
 func baseConfigFieldsWithModels(modelExamples ...any) []*service.ConfigField {
@@ -26,9 +26,9 @@ func baseConfigFieldsWithModels(modelExamples ...any) []*service.ConfigField {
 		service.NewStringField(cpFieldBaseURL).
 			Description("The base URL to use for API requests.").
 			Default("https://api.cohere.com"),
-		service.NewStringField(cpFieldAuthToken).
+		service.NewStringField(cpFieldAPIKey).
 			Secret().
-			Description("The auth token for the Cohere API."),
+			Description("The API key for the Cohere API."),
 		service.NewStringField(cpFieldModel).
 			Description("The name of the Cohere model to use.").
 			Examples(modelExamples...),
@@ -49,7 +49,7 @@ func newBaseProcessor(conf *service.ParsedConfig) (*baseProcessor, error) {
 	if err != nil {
 		return nil, err
 	}
-	k, err := conf.FieldString(cpFieldAuthToken)
+	k, err := conf.FieldString(cpFieldAPIKey)
 	if err != nil {
 		return nil, err
 	}
