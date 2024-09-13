@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - New experimental `gcp_vertex_ai_embeddings` processor. (@rockwotj)
 - New experimental `aws_bedrock_embeddings` processor. (@rockwotj)
 - New experimental `cohere_chat` and `cohere_embeddings` processors. (@rockwotj)
+- New experimental `questdb` output. (@sklarsa)
 
 ## 4.36.0 - 2024-09-11
 

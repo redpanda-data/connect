@@ -197,9 +197,11 @@ func TestOptionsOnWrite(t *testing.T) {
 			w.WriteHeader(200)
 		}),
 	}
-	t.Cleanup(func() { s.Shutdown(ctx) })
+	t.Cleanup(func() {
+		_ = s.Shutdown(ctx)
+	})
 	go func() {
-		s.Serve(listener)
+		_ = s.Serve(listener)
 	}()
 
 	testCases := []struct {
