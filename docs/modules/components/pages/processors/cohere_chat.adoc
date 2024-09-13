@@ -39,7 +39,7 @@ Common::
 label: ""
 cohere_chat:
   base_url: https://api.cohere.com
-  auth_token: "" # No default (required)
+  api_key: "" # No default (required)
   model: command-r-plus # No default (required)
   prompt: "" # No default (optional)
   system_prompt: "" # No default (optional)
@@ -59,7 +59,7 @@ Advanced::
 label: ""
 cohere_chat:
   base_url: https://api.cohere.com
-  auth_token: "" # No default (required)
+  api_key: "" # No default (required)
   model: command-r-plus # No default (required)
   prompt: "" # No default (optional)
   system_prompt: "" # No default (optional)
@@ -118,9 +118,9 @@ The base URL to use for API requests.
 
 *Default*: `"https://api.cohere.com"`
 
-=== `auth_token`
+=== `api_key`
 
-The auth token for the Cohere API.
+The API key for the Cohere API.
 [CAUTION]
 ====
 This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].

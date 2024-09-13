@@ -32,7 +32,7 @@ Introduced in version 4.37.0.
 label: ""
 cohere_embeddings:
   base_url: https://api.cohere.com
-  auth_token: "" # No default (required)
+  api_key: "" # No default (required)
   model: embed-english-v3.0 # No default (required)
   text_mapping: "" # No default (optional)
   dimensions: search_document
@@ -61,7 +61,7 @@ pipeline:
   processors:
   - cohere_embeddings:
       model: embed-english-v3
-      auth_token: "${COHERE_AUTH_TOKEN}"
+      api_key: "${COHERE_API_KEY}"
       text_mapping: "root = this.text"
 output:
   qdrant:
@@ -84,9 +84,9 @@ The base URL to use for API requests.
 
 *Default*: `"https://api.cohere.com"`
 
-=== `auth_token`
+=== `api_key`
 
-The auth token for the Cohere API.
+The API key for the Cohere API.
 [CAUTION]
 ====
 This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
