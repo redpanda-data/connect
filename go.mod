@@ -3,6 +3,7 @@ module github.com/redpanda-data/connect/v4
 replace github.com/99designs/keyring => github.com/Jeffail/keyring v1.2.3
 
 require (
+	cloud.google.com/go/aiplatform v1.68.0
 	cloud.google.com/go/bigquery v1.62.0
 	cloud.google.com/go/pubsub v1.40.0
 	cloud.google.com/go/storage v1.42.0
@@ -138,7 +139,6 @@ require (
 )
 
 require (
-	cloud.google.com/go/aiplatform v1.68.0 // indirect
 	cloud.google.com/go/longrunning v0.5.9 // indirect
 	github.com/containerd/platforms v0.2.1 // indirect
 	github.com/hamba/avro/v2 v2.22.2-0.20240625062549-66aad10411d9 // indirect
