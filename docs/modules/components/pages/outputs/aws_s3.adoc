@@ -77,6 +77,7 @@ output:
       exclude_prefixes: []
     storage_class: STANDARD
     kms_key_id: ""
+    checksum_algorithm: ""
     server_side_encryption: ""
     force_path_style_urls: false
     max_in_flight: 64
@@ -328,6 +329,22 @@ An optional server side encryption key.
 *Type*: `string`
 
 *Default*: `""`
+
+=== `checksum_algorithm`
+
+The algorithm used to create the checksum for each object.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+Options:
+`CRC32`
+, `CRC32C`
+, `SHA1`
+, `SHA256`
+.
 
 === `server_side_encryption`
 

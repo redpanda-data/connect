@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.38.0 - TBD
+
+### Added
+
+- Field `checksum_algorithm` added to the `aws_s3` output. (@dom-lee-naimuri)
+
 ## 4.37.0 - 2024-09-26
 
 ### Added
