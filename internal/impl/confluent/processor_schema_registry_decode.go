@@ -102,7 +102,7 @@ func init() {
 type schemaRegistryDecoder struct {
 	avroRawJSON           bool
 	protoJSONEmitDefaults bool
-	client      *sr.Client
+	client                *sr.Client
 
 	schemas    map[int]*cachedSchemaDecoder
 	cacheMut   sync.RWMutex
