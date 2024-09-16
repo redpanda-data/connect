@@ -81,6 +81,7 @@ input:
       period: ""
       check: ""
       processors: [] # No default (optional)
+    extract_tracing_map: root = @ # No default (optional)
 ```
 
 --
@@ -692,6 +693,23 @@ processors:
 processors:
   - archive:
       format: json_array
+```
+
+=== `extract_tracing_map`
+
+EXPERIMENTAL: A xref:guides:bloblang/about.adoc[Bloblang mapping] that attempts to extract an object containing tracing propagation information, which will then be used as the root tracing span for the message. The specification of the extracted fields must match the format used by the service wide tracer.
+
+
+*Type*: `string`
+
+Requires version 3.45.0 or newer
+
+```yml
+# Examples
+
+extract_tracing_map: root = @
+
+extract_tracing_map: root = this.meta.span
 ```
 
 
