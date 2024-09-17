@@ -569,9 +569,6 @@ func (r *KafkaMigratorReader) ReadBatch(ctx context.Context) (service.MessageBat
 		resBatch = append(resBatch, r.recordToMessage(rec))
 	})
 
-	// TODO: Does this need to happen after the call to `MarkCommitRecords()`?
-	r.client.AllowRebalance()
-
 	return resBatch, func(ctx context.Context, res error) error {
 		r.readMut.Lock()
 		defer r.readMut.Unlock()
@@ -585,6 +582,7 @@ func (r *KafkaMigratorReader) ReadBatch(ctx context.Context) (service.MessageBat
 		}
 
 		r.client.MarkCommitRecords(fetches.Records()...)
+		r.client.AllowRebalance()
 
 		return nil
 	}, nil
