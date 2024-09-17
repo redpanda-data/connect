@@ -13,14 +13,13 @@ All notable changes to this project will be documented in this file.
 - New experimental `questdb` output. (@sklarsa)
 - Field `metadata_max_age` added to the `kafka_franz` input. (@Scarjit)
 - Field `metadata_max_age` added to the `kafka_migrator` input. (@mihaitodor)
+- New experimental `cypher` output. (@rockwotj)
 
 ### Fixed
 
 - Fixed a bug with the `input_resource` field for the `kafka_migrator` output where new topics weren't created as expected. (@mihaitodor)
 - Fixed a bug in the `kafka_migrator` input which could lead to extra duplicate messages during a consumer group rebalance. (@mihaitodor)
 - `kafka_migrator`, `kafka_migrator_offsets` and `kafka_migrator_bundle` components renamed to `redpanda_migrator`, `redpanda_migrator_offsets` and `redpanda_migrator_bundle` (@mihaitodor)
-
-## 4.36.0 - 2024-09-11
 
 ### Added
 

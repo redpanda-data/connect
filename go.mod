@@ -76,6 +76,7 @@ require (
 	github.com/nats-io/nats.go v1.37.0
 	github.com/nats-io/nkeys v0.4.7
 	github.com/nats-io/stan.go v0.10.4
+	github.com/neo4j/neo4j-go-driver/v5 v5.24.0
 	github.com/nsf/jsondiff v0.0.0-20210926074059-1e845ec5d249
 	github.com/nsqio/go-nsq v1.1.0
 	github.com/oklog/ulid v1.3.1

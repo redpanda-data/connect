@@ -56,6 +56,7 @@ couchbase                 ,cache     ,Couchbase                 ,4.12.0  ,commun
 couchbase                 ,processor ,Couchbase                 ,4.11.0  ,community  ,n          ,n     ,n
 csv                       ,input     ,csv                       ,0.0.0   ,certified  ,n          ,n     ,n
 csv                       ,scanner   ,csv                       ,0.0.0   ,certified  ,n          ,y     ,y
+cypher                    ,output    ,cypher                    ,4.37.0  ,community  ,n          ,n     ,n
 decompress                ,processor ,decompress                ,0.0.0   ,certified  ,n          ,y     ,y
 decompress                ,scanner   ,decompress                ,0.0.0   ,certified  ,n          ,y     ,y
 dedupe                    ,processor ,dedupe                    ,0.0.0   ,certified  ,n          ,y     ,y
