@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - New experimental `aws_bedrock_embeddings` processor. (@rockwotj)
 - New experimental `cohere_chat` and `cohere_embeddings` processors. (@rockwotj)
 - New experimental `questdb` output. (@sklarsa)
+- Field `metadata_max_age` added to the `kafka_franz` input. (@Scarjit)
 
 ## 4.36.0 - 2024-09-11
 
