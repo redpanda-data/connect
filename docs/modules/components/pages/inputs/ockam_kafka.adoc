@@ -52,6 +52,7 @@ input:
     allow_producer: self
     relay: "" # No default (optional)
     node_address: 127.0.0.1:6262
+    encrypted_fields: []
 ```
 
 --
@@ -99,6 +100,7 @@ input:
     allow_producer: self
     relay: "" # No default (optional)
     node_address: 127.0.0.1:6262
+    encrypted_fields: []
 ```
 
 --
@@ -791,5 +793,14 @@ Sorry! This field is missing documentation.
 *Type*: `string`
 
 *Default*: `"127.0.0.1:6262"`
+
+=== `encrypted_fields`
+
+The fields to encrypt in the kafka messages, assuming the record is a valid JSON map. By default, the whole record is encrypted.
+
+
+*Type*: `array`
+
+*Default*: `[]`
 
 
