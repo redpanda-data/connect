@@ -75,13 +75,13 @@ input:
       client_certs: []
     sasl: [] # No default (optional)
     multi_header: false
-    metadata_max_age: 5m
     batching:
       count: 0
       byte_size: 0
       period: ""
       check: ""
       processors: [] # No default (optional)
+    metadata_max_age: 5m
 ```
 
 --
@@ -593,15 +593,6 @@ Decode headers into lists to allow handling of multiple values with the same key
 
 *Default*: `false`
 
-=== `metadata_max_age`
-
-The maximum age of metadata before it is refreshed. This can help reduce the number of requests made to the broker or speed up the detection of new topics.
-
-
-*Type*: `string`
-
-*Default*: `5m`
-
 === `batching`
 
 Allows you to configure a xref:configuration:batching.adoc[batching policy] that applies to individual topic partitions in order to batch messages together before flushing them for processing. Batching can be beneficial for performance as well as useful for windowed processing, and doing so this way preserves the ordering of topic partitions.
@@ -703,5 +694,14 @@ processors:
   - archive:
       format: json_array
 ```
+
+=== `metadata_max_age`
+
+The maximum age of metadata before it is refreshed.
+
+
+*Type*: `string`
+
+*Default*: `"5m"`
 
 
