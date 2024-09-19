@@ -233,7 +233,7 @@ func (co *commandOutput) Write(b []byte) (int, error) {
 		}
 		line := co.buffer[:idx]
 		if len(line) > 0 {
-			if bytes.HasPrefix([]byte("[GIN]"), line) {
+			if bytes.HasPrefix(line, []byte("[GIN]")) {
 				co.logger.Debugf("%s", line)
 			} else {
 				co.logger.Infof("%s", line)
