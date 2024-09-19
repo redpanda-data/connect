@@ -126,6 +126,10 @@ Finally, it's also possible to specify an explicit offset to consume from by add
 		service.NewBatchPolicyField("batching").
 			Description("Allows you to configure a xref:configuration:batching.adoc[batching policy] that applies to individual topic partitions in order to batch messages together before flushing them for processing. Batching can be beneficial for performance as well as useful for windowed processing, and doing so this way preserves the ordering of topic partitions.").
 			Advanced(),
+		service.NewDurationField("metadata_max_age").
+			Description("The maximum age of metadata before it is refreshed.").
+			Default("5m").
+			Advanced(),
 	}
 }
 
@@ -166,6 +170,7 @@ type FranzKafkaReader struct {
 	regexPattern    bool
 	multiHeader     bool
 	batchPolicy     service.BatchPolicy
+	metadataMaxAge  time.Duration
 
 	batchChan atomic.Value
 	res       *service.Resources
@@ -267,6 +272,9 @@ func NewFranzKafkaReaderFromConfig(conf *service.ParsedConfig, res *service.Reso
 		return nil, err
 	}
 	if f.saslConfs, err = SASLMechanismsFromConfig(conf); err != nil {
+		return nil, err
+	}
+	if f.metadataMaxAge, err = conf.FieldDuration("metadata_max_age"); err != nil {
 		return nil, err
 	}
 
@@ -642,6 +650,7 @@ func (f *FranzKafkaReader) Connect(ctx context.Context) error {
 		kgo.ConsumerGroup(f.consumerGroup),
 		kgo.ClientID(f.clientID),
 		kgo.Rack(f.rackID),
+		kgo.MetadataMaxAge(f.metadataMaxAge),
 	}
 
 	if f.consumerGroup != "" {

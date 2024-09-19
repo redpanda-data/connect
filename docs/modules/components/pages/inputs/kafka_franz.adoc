@@ -81,6 +81,7 @@ input:
       period: ""
       check: ""
       processors: [] # No default (optional)
+    metadata_max_age: 5m
 ```
 
 --
@@ -693,5 +694,14 @@ processors:
   - archive:
       format: json_array
 ```
+
+=== `metadata_max_age`
+
+The maximum age of metadata before it is refreshed.
+
+
+*Type*: `string`
+
+*Default*: `"5m"`
 
 
