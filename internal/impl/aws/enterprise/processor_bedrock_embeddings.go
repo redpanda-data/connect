@@ -48,7 +48,33 @@ For more information, see the https://docs.aws.amazon.com/bedrock/latest/usergui
 			Description("The model ID to use. For a full list see the https://docs.aws.amazon.com/bedrock/latest/userguide/model-ids.html[AWS Bedrock documentation^].")).
 		Field(service.NewStringField(bedepFieldText).
 			Description("The prompt you want to generate a response for. By default, the processor submits the entire payload as a string.").
-			Optional())
+			Optional()).
+		Example(
+			"Store embedding vectors in Clickhouse",
+			"Compute embeddings for some generated data and store it within https://clickhouse.com/[Clickhouse^]",
+			`input:
+  generate:
+    interval: 1s
+    mapping: |
+      root = {"text": fake("paragraph")}
+pipeline:
+  processors:
+  - branch:
+      request_map: |
+        root = this.text
+      processors:
+      - aws_bedrock_embeddings:
+          model: amazon.titan-embed-text-v1
+      result_map: |
+        root.embeddings = this
+output:
+  sql_insert:
+    driver: clickhouse
+    dsn: "clickhouse://localhost:9000"
+    table: searchable_text
+    columns: ["id", "text", "vector"]
+    args_mapping: "root = [uuid_v4(), this.text, this.embeddings]"
+`)
 }
 
 func newBedrockEmbeddingsProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
