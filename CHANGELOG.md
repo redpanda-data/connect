@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - New experimental `cohere_chat` and `cohere_embeddings` processors. (@rockwotj)
 - New experimental `questdb` output. (@sklarsa)
 - Field `metadata_max_age` added to the `kafka_franz` input. (@Scarjit)
+- Field `metadata_max_age` added to the `kafka_migrator` input. (@mihaitodor)
 
 ### Fixed
 

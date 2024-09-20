@@ -85,6 +85,7 @@ input:
     output_resource: kafka_migrator_output
     replication_factor_override: true
     replication_factor: 3
+    metadata_max_age: 5m
 ```
 
 --
@@ -742,5 +743,14 @@ Replication factor for created topics. This is only used when `replication_facto
 *Type*: `int`
 
 *Default*: `3`
+
+=== `metadata_max_age`
+
+The maximum age of metadata before it is refreshed.
+
+
+*Type*: `string`
+
+*Default*: `"5m"`
 
 
