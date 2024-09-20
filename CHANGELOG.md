@@ -13,6 +13,10 @@ All notable changes to this project will be documented in this file.
 - New experimental `questdb` output. (@sklarsa)
 - Field `metadata_max_age` added to the `kafka_franz` input. (@Scarjit)
 
+### Fixed
+
+- Fixes a panic in the `parquet_encode` processor (@mihaitodor)
+
 ## 4.36.0 - 2024-09-11
 
 ### Added

@@ -270,6 +270,7 @@ func (s *parquetEncodeProcessor) ProcessBatch(ctx context.Context, batch service
 	buf := bytes.NewBuffer(nil)
 	pWtr := parquet.NewGenericWriter[any](buf, s.schema, parquet.Compression(s.compressionType))
 
+	batch = batch.Copy()
 	rows := make([]any, len(batch))
 	for i, m := range batch {
 		ms, err := m.AsStructured()
