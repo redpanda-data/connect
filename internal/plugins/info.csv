@@ -53,10 +53,11 @@ cohere_embeddings         ,processor ,cohere_embeddings         ,4.37.0  ,enterp
 command                   ,processor ,command                   ,4.21.0  ,certified  ,n          ,n     ,n
 compress                  ,processor ,compress                  ,0.0.0   ,certified  ,n          ,y     ,y
 couchbase                 ,cache     ,Couchbase                 ,4.12.0  ,community  ,n          ,n     ,n
+couchbase                 ,output    ,Couchbase                 ,4.37.0  ,community  ,n          ,n     ,n
 couchbase                 ,processor ,Couchbase                 ,4.11.0  ,community  ,n          ,n     ,n
 csv                       ,input     ,csv                       ,0.0.0   ,certified  ,n          ,n     ,n
 csv                       ,scanner   ,csv                       ,0.0.0   ,certified  ,n          ,y     ,y
-cypher                    ,output    ,cypher                    ,4.37.0  ,community  ,n          ,n     ,n
+cypher                    ,output    ,cypher                    ,0.0.0   ,community  ,n          ,n     ,n
 decompress                ,processor ,decompress                ,0.0.0   ,certified  ,n          ,y     ,y
 decompress                ,scanner   ,decompress                ,0.0.0   ,certified  ,n          ,y     ,y
 dedupe                    ,processor ,dedupe                    ,0.0.0   ,certified  ,n          ,y     ,y
@@ -109,6 +110,11 @@ kafka                     ,input     ,Kafka                     ,0.0.0   ,certif
 kafka                     ,output    ,Kafka                     ,0.0.0   ,certified  ,n          ,y     ,y
 kafka_franz               ,input     ,kafka_franz               ,3.61.0  ,certified  ,n          ,y     ,y
 kafka_franz               ,output    ,kafka_franz               ,3.61.0  ,certified  ,n          ,y     ,y
+kafka_migrator            ,input     ,kafka_migrator            ,4.35.0  ,enterprise ,n          ,y     ,y
+kafka_migrator            ,output    ,kafka_migrator            ,4.35.0  ,enterprise ,n          ,y     ,y
+kafka_migrator_bundle     ,input     ,kafka_migrator_bundle     ,4.35.0  ,enterprise ,n          ,y     ,y
+kafka_migrator_bundle     ,output    ,kafka_migrator_bundle     ,4.35.0  ,enterprise ,n          ,y     ,y
+kafka_migrator_offsets    ,output    ,kafka_migrator_offsets    ,4.35.0  ,enterprise ,n          ,y     ,y
 lines                     ,scanner   ,lines                     ,0.0.0   ,certified  ,n          ,y     ,y
 local                     ,rate_limit,local                     ,0.0.0   ,certified  ,n          ,y     ,y
 log                       ,processor ,log                       ,0.0.0   ,certified  ,n          ,y     ,y
@@ -191,11 +197,11 @@ redis_script              ,processor ,Redis Script              ,4.11.0  ,certif
 redis_streams             ,input     ,Redis Streams             ,0.0.0   ,certified  ,n          ,y     ,y
 redis_streams             ,output    ,Redis Streams             ,0.0.0   ,certified  ,n          ,y     ,y
 redpanda_data_transform   ,processor ,redpanda_data_transform   ,4.31.0  ,certified  ,n          ,n     ,n
-redpanda_migrator         ,input     ,redpanda_migrator         ,4.38.0  ,enterprise ,n          ,y     ,y
-redpanda_migrator         ,output    ,redpanda_migrator         ,4.38.0  ,enterprise ,n          ,y     ,y
-redpanda_migrator_bundle  ,input     ,redpanda_migrator_bundle  ,4.38.0  ,enterprise ,n          ,y     ,y
-redpanda_migrator_bundle  ,output    ,redpanda_migrator_bundle  ,4.38.0  ,enterprise ,n          ,y     ,y
-redpanda_migrator_offsets ,output    ,redpanda_migrator_offsets ,4.38.0  ,enterprise ,n          ,y     ,y
+redpanda_migrator         ,input     ,redpanda_migrator         ,0.0.0   ,community  ,n          ,n     ,n
+redpanda_migrator         ,output    ,redpanda_migrator         ,0.0.0   ,community  ,n          ,n     ,n
+redpanda_migrator_bundle  ,input     ,redpanda_migrator_bundle  ,0.0.0   ,community  ,n          ,n     ,n
+redpanda_migrator_bundle  ,output    ,redpanda_migrator_bundle  ,0.0.0   ,community  ,n          ,n     ,n
+redpanda_migrator_offsets ,output    ,redpanda_migrator_offsets ,0.0.0   ,community  ,n          ,n     ,n
 reject                    ,output    ,reject                    ,0.0.0   ,certified  ,n          ,y     ,y
 reject_errored            ,output    ,reject_errored            ,0.0.0   ,certified  ,n          ,y     ,y
 resource                  ,input     ,resource                  ,0.0.0   ,certified  ,n          ,y     ,y

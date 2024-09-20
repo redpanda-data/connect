@@ -29,12 +29,27 @@ import (
 // ErrInvalidTranscoder specified transcoder is not supported.
 var ErrInvalidTranscoder = errors.New("invalid transcoder")
 
+type couchbaseConfig struct {
+	url        string
+	opts       gocb.ClusterOptions
+	bucket     string
+	collection string
+}
+
 type couchbaseClient struct {
 	collection *gocb.Collection
 	cluster    *gocb.Cluster
 }
 
-func getClient(conf *service.ParsedConfig, mgr *service.Resources) (*couchbaseClient, error) {
+func getClient(conf *service.ParsedConfig) (*couchbaseClient, error) {
+	cfg, err := getClientConfig(conf)
+	if err != nil {
+		return nil, err
+	}
+	return makeClient(cfg)
+}
+
+func getClientConfig(conf *service.ParsedConfig) (*couchbaseConfig, error) {
 	// retrieve params
 	url, err := conf.FieldString("url")
 	if err != nil {
@@ -99,14 +114,24 @@ func getClient(conf *service.ParsedConfig, mgr *service.Resources) (*couchbaseCl
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrInvalidTranscoder, tr)
 	}
+	var collection string
+	if conf.Contains("collection") {
+		collection, err = conf.FieldString("collection")
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &couchbaseConfig{url, opts, bucket, collection}, nil
+}
 
-	cluster, err := gocb.Connect(url, opts)
+func makeClient(cfg *couchbaseConfig) (*couchbaseClient, error) {
+	cluster, err := gocb.Connect(cfg.url, cfg.opts)
 	if err != nil {
 		return nil, err
 	}
 
 	// check that we can do query
-	err = cluster.Bucket(bucket).WaitUntilReady(timeout, nil)
+	err = cluster.Bucket(cfg.bucket).WaitUntilReady(cfg.opts.TimeoutsConfig.ConnectTimeout, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -116,14 +141,10 @@ func getClient(conf *service.ParsedConfig, mgr *service.Resources) (*couchbaseCl
 	}
 
 	// retrieve collection
-	if conf.Contains("collection") {
-		collectionStr, err := conf.FieldString("collection")
-		if err != nil {
-			return nil, err
-		}
-		proc.collection = cluster.Bucket(bucket).Collection(collectionStr)
+	if cfg.collection != "" {
+		proc.collection = cluster.Bucket(cfg.bucket).Collection(cfg.collection)
 	} else {
-		proc.collection = cluster.Bucket(bucket).DefaultCollection()
+		proc.collection = cluster.Bucket(cfg.bucket).DefaultCollection()
 	}
 
 	return proc, nil
