@@ -65,7 +65,10 @@ func ockamKafkaOutputConfig() *service.ConfigSpec {
 		Field(service.NewStringField("allow").Default("self").Optional()).
 		Field(service.NewStringField("route_to_kafka_outlet").Default("self")).
 		Field(service.NewStringField("allow_consumer").Default("self")).
-		Field(service.NewStringField("route_to_consumer").Default("/ip4/127.0.0.1/tcp/6262"))
+		Field(service.NewStringField("route_to_consumer").Default("/ip4/127.0.0.1/tcp/6262")).
+		Field(service.NewStringListField("encrypted_fields").
+			Description("The fields to encrypt in the kafka messages, assuming the record is a valid JSON map. By default, the whole record is encrypted.").
+			Default([]string{}))
 }
 
 //------------------------------------------------------------------------------
@@ -144,7 +147,13 @@ func newOckamKafkaOutput(conf *service.ParsedConfig, log *service.Logger) (*ocka
 		return nil, err
 	}
 
-	err = n.createKafkaInlet("redpanda-connect-kafka-inlet", kafkaInletAddress, routeToKafkaOutlet, true, routeToConsumer, allowOutlet, "", allowConsumer, disableContentEncryption)
+	var encryptedFields []string
+	encryptedFields, err = conf.FieldStringList("encrypted_fields")
+	if err != nil {
+		return nil, err
+	}
+
+	err = n.createKafkaInlet("redpanda-connect-kafka-inlet", kafkaInletAddress, routeToKafkaOutlet, true, routeToConsumer, allowOutlet, "", allowConsumer, disableContentEncryption, encryptedFields)
 	if err != nil {
 		return nil, err
 	}

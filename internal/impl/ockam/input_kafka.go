@@ -58,7 +58,10 @@ func ockamKafkaInputConfig() *service.ConfigSpec {
 		Field(service.NewStringField("route_to_kafka_outlet").Default("self")).
 		Field(service.NewStringField("allow_producer").Default("self")).
 		Field(service.NewStringField("relay").Optional()).
-		Field(service.NewStringField("node_address").Default("127.0.0.1:6262"))
+		Field(service.NewStringField("node_address").Default("127.0.0.1:6262")).
+		Field(service.NewStringListField("encrypted_fields").
+			Description("The fields to encrypt in the kafka messages, assuming the record is a valid JSON map. By default, the whole record is encrypted.").
+			Default([]string{}))
 }
 
 //------------------------------------------------------------------------------
@@ -143,7 +146,13 @@ func newOckamKafkaInput(conf *service.ParsedConfig, mgr *service.Resources) (*oc
 		return nil, err
 	}
 
-	err = n.createKafkaInlet("redpanda-connect-kafka-inlet", kafkaInletAddress, routeToKafkaOutlet, true, "self", allowOutlet, allowProducer, "", disableContentEncryption)
+	var encryptedFields []string
+	encryptedFields, err = conf.FieldStringList("encrypted_fields")
+	if err != nil {
+		return nil, err
+	}
+
+	err = n.createKafkaInlet("redpanda-connect-kafka-inlet", kafkaInletAddress, routeToKafkaOutlet, true, "self", allowOutlet, allowProducer, "", disableContentEncryption, encryptedFields)
 	if err != nil {
 		return nil, err
 	}

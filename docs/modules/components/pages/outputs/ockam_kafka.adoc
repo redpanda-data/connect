@@ -59,6 +59,7 @@ output:
     route_to_kafka_outlet: self
     allow_consumer: self
     route_to_consumer: /ip4/127.0.0.1/tcp/6262
+    encrypted_fields: []
 ```
 
 --
@@ -111,6 +112,7 @@ output:
     route_to_kafka_outlet: self
     allow_consumer: self
     route_to_consumer: /ip4/127.0.0.1/tcp/6262
+    encrypted_fields: []
 ```
 
 --
@@ -895,5 +897,14 @@ Sorry! This field is missing documentation.
 *Type*: `string`
 
 *Default*: `"/ip4/127.0.0.1/tcp/6262"`
+
+=== `encrypted_fields`
+
+The fields to encrypt in the kafka messages, assuming the record is a valid JSON map. By default, the whole record is encrypted.
+
+
+*Type*: `array`
+
+*Default*: `[]`
 
 
