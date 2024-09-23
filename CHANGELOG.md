@@ -18,6 +18,7 @@ All notable changes to this project will be documented in this file.
 
 - Fixed a bug with the `input_resource` field for the `kafka_migrator` output where new topics weren't created as expected. (@mihaitodor)
 - Fixed a bug in the `kafka_migrator` input which could lead to extra duplicate messages during a consumer group rebalance. (@mihaitodor)
+- `kafka_migrator`, `kafka_migrator_offsets` and `kafka_migrator_bundle` components renamed to `redpanda_migrator`, `redpanda_migrator_offsets` and `redpanda_migrator_bundle` (@mihaitodor)
 
 ## 4.36.0 - 2024-09-11
 

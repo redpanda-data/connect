@@ -117,7 +117,7 @@ type columnInfo struct {
 }
 
 func pluginInfoMapColumns() []columnInfo {
-	return []columnInfo{{"name", 24}, {"type", 10}, {"commercial_name", 24}, {"version", 8}, {"support", 11}, {"deprecated", 11}, {"cloud", 6}, {"cloud_with_gpu", 0}}
+	return []columnInfo{{"name", 26}, {"type", 10}, {"commercial_name", 26}, {"version", 8}, {"support", 11}, {"deprecated", 11}, {"cloud", 6}, {"cloud_with_gpu", 0}}
 }
 
 func (c PluginInfo) toMap() map[string]string {

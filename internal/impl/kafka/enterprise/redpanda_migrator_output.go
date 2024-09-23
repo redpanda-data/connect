@@ -28,25 +28,31 @@ import (
 )
 
 const (
-	rproDefaultLabel = "kafka_migrator_output"
+	rproDefaultLabel = "redpanda_migrator_output"
 )
 
-func kafkaMigratorOutputConfig() *service.ConfigSpec {
+func redpandaMigratorOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Beta().
 		Categories("Services").
 		Version("4.35.0").
-		Summary("A Kafka Migrator output using the https://github.com/twmb/franz-go[Franz Kafka client library^].").
+		Summary("A Redpanda Migrator output using the https://github.com/twmb/franz-go[Franz Kafka client library^].").
 		Description(`
 Writes a batch of messages to a Kafka broker and waits for acknowledgement before propagating it back to the input.
 
-This output should be used in combination with a `+"`kafka_migrator`"+` input which it can query for topic and ACL configurations.
+This output should be used in combination with a `+"`redpanda_migrator`"+` input which it can query for topic and ACL configurations.
 
 If the configured broker does not contain the current message `+"topic"+`, it attempts to create it along with the topic
-ACLs which are read automatically from the `+"`kafka_migrator`"+` input identified by the label specified in
+ACLs which are read automatically from the `+"`redpanda_migrator`"+` input identified by the label specified in
 `+"`input_resource`"+`.
+
+ACL migration adheres to the following principles:
+
+- `+"`ALLOW WRITE`"+` ACLs for topics are not migrated
+- `+"`ALLOW ALL`"+` ACLs for topics are downgraded to `+"`ALLOW READ`"+`
+- Only topic ACLs are migrated, group ACLs are not migrated
 `).
-		Fields(KafkaMigratorOutputConfigFields()...).
+		Fields(RedpandaMigratorOutputConfigFields()...).
 		LintRule(`
 root = if this.partitioner == "manual" {
 if this.partition.or("") == "" {
@@ -56,21 +62,21 @@ if this.partition.or("") == "" {
 "a partition cannot be specified unless the partitioner is set to manual"
 }`).Example("Transfer data", "Writes messages to the configured broker and creates topics and topic ACLs if they don't exist. It also ensures that the message order is preserved.", `
 output:
-  kafka_migrator:
+  redpanda_migrator:
     seed_brokers: [ "127.0.0.1:9093" ]
     topic: ${! metadata("kafka_topic").or(throw("missing kafka_topic metadata")) }
     key: ${! metadata("kafka_key") }
     partitioner: manual
     partition: ${! metadata("kafka_partition").or(throw("missing kafka_partition metadata")) }
     timestamp: ${! metadata("kafka_timestamp_unix").or(timestamp_unix()) }
-    input_resource: kafka_migrator_input
+    input_resource: redpanda_migrator_input
     max_in_flight: 1
 `)
 }
 
-// KafkaMigratorOutputConfigFields returns the full suite of config fields for a `kafka_migrator` output using
+// RedpandaMigratorOutputConfigFields returns the full suite of config fields for a `redpanda_migrator` output using
 // the franz-go client library.
-func KafkaMigratorOutputConfigFields() []*service.ConfigField {
+func RedpandaMigratorOutputConfigFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewStringListField("seed_brokers").
 			Description("A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses.").
@@ -141,7 +147,7 @@ func KafkaMigratorOutputConfigFields() []*service.ConfigField {
 			Optional().
 			Advanced(),
 		service.NewStringField("input_resource").
-			Description("The label of the kafka_migrator input from which to read the configurations for topics and ACLs which need to be created.").
+			Description("The label of the redpanda_migrator input from which to read the configurations for topics and ACLs which need to be created.").
 			Default(rpriDefaultLabel).
 			Advanced(),
 		service.NewBoolField("replication_factor_override").
@@ -156,7 +162,7 @@ func KafkaMigratorOutputConfigFields() []*service.ConfigField {
 }
 
 func init() {
-	err := service.RegisterBatchOutput("kafka_migrator", kafkaMigratorOutputConfig(),
+	err := service.RegisterBatchOutput("redpanda_migrator", redpandaMigratorOutputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (
 			output service.BatchOutput,
 			batchPolicy service.BatchPolicy,
@@ -169,7 +175,7 @@ func init() {
 			if batchPolicy, err = conf.FieldBatchPolicy("batching"); err != nil {
 				return
 			}
-			output, err = NewKafkaMigratorWriterFromConfig(conf, mgr)
+			output, err = NewRedpandaMigratorWriterFromConfig(conf, mgr)
 			return
 		})
 	if err != nil {
@@ -179,8 +185,8 @@ func init() {
 
 //------------------------------------------------------------------------------
 
-// KafkaMigratorWriter implements a Kafka writer using the franz-go library.
-type KafkaMigratorWriter struct {
+// RedpandaMigratorWriter implements a Kafka writer using the franz-go library.
+type RedpandaMigratorWriter struct {
 	SeedBrokers               []string
 	topic                     *service.InterpolatedString
 	key                       *service.InterpolatedString
@@ -208,9 +214,9 @@ type KafkaMigratorWriter struct {
 	mgr *service.Resources
 }
 
-// NewKafkaMigratorWriterFromConfig attempts to instantiate a KafkaMigratorWriter from a parsed config.
-func NewKafkaMigratorWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*KafkaMigratorWriter, error) {
-	w := KafkaMigratorWriter{
+// NewRedpandaMigratorWriterFromConfig attempts to instantiate a RedpandaMigratorWriter from a parsed config.
+func NewRedpandaMigratorWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*RedpandaMigratorWriter, error) {
+	w := RedpandaMigratorWriter{
 		mgr: mgr,
 	}
 
@@ -372,7 +378,7 @@ func NewKafkaMigratorWriterFromConfig(conf *service.ParsedConfig, mgr *service.R
 //------------------------------------------------------------------------------
 
 // Connect to the target seed brokers.
-func (w *KafkaMigratorWriter) Connect(ctx context.Context) error {
+func (w *RedpandaMigratorWriter) Connect(ctx context.Context) error {
 	w.connMut.Lock()
 	defer w.connMut.Unlock()
 
@@ -419,7 +425,7 @@ func (w *KafkaMigratorWriter) Connect(ctx context.Context) error {
 }
 
 // WriteBatch attempts to write a batch of messages to the target topics.
-func (w *KafkaMigratorWriter) WriteBatch(ctx context.Context, b service.MessageBatch) (err error) {
+func (w *RedpandaMigratorWriter) WriteBatch(ctx context.Context, b service.MessageBatch) (err error) {
 	w.connMut.Lock()
 	defer w.connMut.Unlock()
 
@@ -434,9 +440,9 @@ func (w *KafkaMigratorWriter) WriteBatch(ctx context.Context, b service.MessageB
 			return fmt.Errorf("topic interpolation error: %w", err)
 		}
 
-		var input *KafkaMigratorReader
+		var input *RedpandaMigratorReader
 		if res, ok := w.mgr.GetGeneric(w.inputResource); ok {
-			input = res.(*KafkaMigratorReader)
+			input = res.(*RedpandaMigratorReader)
 		} else {
 			w.mgr.Logger().Debugf("Input resource %q not found", w.inputResource)
 		}
@@ -505,7 +511,7 @@ func (w *KafkaMigratorWriter) WriteBatch(ctx context.Context, b service.MessageB
 	return
 }
 
-func (w *KafkaMigratorWriter) disconnect() {
+func (w *RedpandaMigratorWriter) disconnect() {
 	if w.client == nil {
 		return
 	}
@@ -514,7 +520,7 @@ func (w *KafkaMigratorWriter) disconnect() {
 }
 
 // Close underlying connections.
-func (w *KafkaMigratorWriter) Close(ctx context.Context) error {
+func (w *RedpandaMigratorWriter) Close(ctx context.Context) error {
 	w.disconnect()
 	return nil
 }

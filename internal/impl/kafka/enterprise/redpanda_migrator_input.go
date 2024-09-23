@@ -31,27 +31,27 @@ import (
 )
 
 const (
-	rpriDefaultLabel = "kafka_migrator_input"
+	rpriDefaultLabel = "redpanda_migrator_input"
 )
 
-func kafkaMigratorInputConfig() *service.ConfigSpec {
+func redpandaMigratorInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Beta().
 		Categories("Services").
 		Version("4.35.0").
-		Summary(`A Kafka Migrator input using the https://github.com/twmb/franz-go[Franz Kafka client library^].`).
+		Summary(`A Redpanda Migrator input using the https://github.com/twmb/franz-go[Franz Kafka client library^].`).
 		Description(`
 Reads a batch of messages from a Kafka broker and waits for the output to acknowledge the writes before updating the Kafka consumer group offset.
 
-This input should be used in combination with a ` + "`kafka_migrator`" + ` output which it can query for existing topics.
+This input should be used in combination with a ` + "`redpanda_migrator`" + ` output which it can query for existing topics.
 
 When a consumer group is specified this input consumes one or more topics where partitions will automatically balance across any other connected clients with the same consumer group. When a consumer group is not specified topics can either be consumed in their entirety or with explicit partitions.
 
-It attempts to create all selected topics it along with their associated ACLs in the broker that the ` + "`kafka_migrator`" + ` output points to identified by the label specified in ` + "`output_resource`" + `.
+It attempts to create all selected topics it along with their associated ACLs in the broker that the ` + "`redpanda_migrator`" + ` output points to identified by the label specified in ` + "`output_resource`" + `.
 
 == Metrics
 
-Emits a ` + "`input_kafka_migrator_lag`" + ` metric with ` + "`topic`" + ` and ` + "`partition`" + ` labels for each consumed topic.
+Emits a ` + "`input_redpanda_migrator_lag`" + ` metric with ` + "`topic`" + ` and ` + "`partition`" + ` labels for each consumed topic.
 
 == Metadata
 
@@ -68,7 +68,7 @@ This input adds the following metadata fields to each message:
 - All record headers
 ` + "```" + `
 `).
-		Fields(KafkaMigratorInputConfigFields()...).
+		Fields(RedpandaMigratorInputConfigFields()...).
 		LintRule(`
 let has_topic_partitions = this.topics.any(t -> t.contains(":"))
 root = if $has_topic_partitions {
@@ -81,9 +81,9 @@ root = if $has_topic_partitions {
 `)
 }
 
-// KafkaMigratorInputConfigFields returns the full suite of config fields for a `kafka_migrator` input using the
+// RedpandaMigratorInputConfigFields returns the full suite of config fields for a `redpanda_migrator` input using the
 // franz-go client library.
-func KafkaMigratorInputConfigFields() []*service.ConfigField {
+func RedpandaMigratorInputConfigFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewStringListField("seed_brokers").
 			Description("A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses.").
@@ -141,7 +141,7 @@ Finally, it's also possible to specify an explicit offset to consume from by add
 			Default("5s").
 			Advanced(),
 		service.NewStringField("output_resource").
-			Description("The label of the kafka_migrator output in which the currently selected topics need to be created before attempting to read messages.").
+			Description("The label of the redpanda_migrator output in which the currently selected topics need to be created before attempting to read messages.").
 			Default(rproDefaultLabel).
 			Advanced(),
 		service.NewBoolField("replication_factor_override").
@@ -160,9 +160,9 @@ Finally, it's also possible to specify an explicit offset to consume from by add
 }
 
 func init() {
-	err := service.RegisterBatchInput("kafka_migrator", kafkaMigratorInputConfig(),
+	err := service.RegisterBatchInput("redpanda_migrator", redpandaMigratorInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
-			rdr, err := NewKafkaMigratorReaderFromConfig(conf, mgr)
+			rdr, err := NewRedpandaMigratorReaderFromConfig(conf, mgr)
 			if err != nil {
 				return nil, err
 			}
@@ -175,8 +175,8 @@ func init() {
 
 //------------------------------------------------------------------------------
 
-// KafkaMigratorReader implements a kafka reader using the franz-go library.
-type KafkaMigratorReader struct {
+// RedpandaMigratorReader implements a kafka reader using the franz-go library.
+type RedpandaMigratorReader struct {
 	SeedBrokers               []string
 	topics                    []string
 	topicPatterns             []*regexp.Regexp
@@ -209,13 +209,13 @@ type KafkaMigratorReader struct {
 	shutSig *shutdown.Signaller
 }
 
-// NewKafkaMigratorReaderFromConfig attempts to instantiate a new KafkaMigratorReader
+// NewRedpandaMigratorReaderFromConfig attempts to instantiate a new RedpandaMigratorReader
 // from a parsed config.
-func NewKafkaMigratorReaderFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*KafkaMigratorReader, error) {
-	r := KafkaMigratorReader{
+func NewRedpandaMigratorReaderFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*RedpandaMigratorReader, error) {
+	r := RedpandaMigratorReader{
 		mgr:           mgr,
 		shutSig:       shutdown.NewSignaller(),
-		topicLagGauge: mgr.Metrics().NewGauge("input_kafka_migrator_lag", "topic", "partition"),
+		topicLagGauge: mgr.Metrics().NewGauge("input_redpanda_migrator_lag", "topic", "partition"),
 	}
 
 	brokerList, err := conf.FieldStringList("seed_brokers")
@@ -337,7 +337,7 @@ func NewKafkaMigratorReaderFromConfig(conf *service.ParsedConfig, mgr *service.R
 	return &r, nil
 }
 
-func (r *KafkaMigratorReader) recordToMessage(record *kgo.Record) *service.Message {
+func (r *RedpandaMigratorReader) recordToMessage(record *kgo.Record) *service.Message {
 	msg := service.NewMessage(record.Value)
 	msg.MetaSetMut("kafka_key", record.Key)
 	msg.MetaSetMut("kafka_topic", record.Topic)
@@ -380,7 +380,7 @@ func (r *KafkaMigratorReader) recordToMessage(record *kgo.Record) *service.Messa
 //------------------------------------------------------------------------------
 
 // Connect to the kafka seed brokers.
-func (r *KafkaMigratorReader) Connect(ctx context.Context) error {
+func (r *RedpandaMigratorReader) Connect(ctx context.Context) error {
 	r.connMut.Lock()
 	defer r.connMut.Unlock()
 
@@ -481,7 +481,7 @@ func (r *KafkaMigratorReader) Connect(ctx context.Context) error {
 }
 
 // ReadBatch attempts to extract a batch of messages from the target topics.
-func (r *KafkaMigratorReader) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
+func (r *RedpandaMigratorReader) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
 	r.connMut.Lock()
 	defer r.connMut.Unlock()
 
@@ -548,9 +548,9 @@ func (r *KafkaMigratorReader) ReadBatch(ctx context.Context) (service.MessageBat
 	}
 
 	if !r.outputTopicsCreated {
-		var output *KafkaMigratorWriter
+		var output *RedpandaMigratorWriter
 		if res, ok := r.mgr.GetGeneric(r.outputResource); ok {
-			output = res.(*KafkaMigratorWriter)
+			output = res.(*RedpandaMigratorWriter)
 		} else {
 			r.mgr.Logger().Debugf("Writer for topic destination %q not found", r.outputResource)
 		}
@@ -599,7 +599,7 @@ func (r *KafkaMigratorReader) ReadBatch(ctx context.Context) (service.MessageBat
 }
 
 // Close underlying connections.
-func (r *KafkaMigratorReader) Close(ctx context.Context) error {
+func (r *RedpandaMigratorReader) Close(ctx context.Context) error {
 	r.connMut.Lock()
 	defer r.connMut.Unlock()
 

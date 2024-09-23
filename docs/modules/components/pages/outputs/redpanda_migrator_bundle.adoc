@@ -1,5 +1,5 @@
-= kafka_migrator_bundle
-:type: input
+= redpanda_migrator_bundle
+:type: output
 :status: experimental
 :categories: ["Services"]
 
@@ -23,27 +23,26 @@
 component_type_dropdown::[]
 
 
-Kafka Migrator bundle input
+Redpanda Migrator bundle output
 
 ```yml
 # Config fields, showing default values
-input:
+output:
   label: ""
-  kafka_migrator_bundle:
-    kafka_migrator: {} # No default (required)
+  redpanda_migrator_bundle:
+    redpanda_migrator: {} # No default (required)
     schema_registry: {} # No default (required)
-    migrate_schemas_before_data: true
 ```
 
-All-in-one input which reads messages and schemas from a Kafka or Redpanda cluster. This input is meant to be used
-together with the `kafka_migrator_bundle` output.
+All-in-one output which writes messages and schemas to a Kafka or Redpanda cluster. This output is meant to be used
+together with the `redpanda_migrator_bundle` input.
 
 
 == Fields
 
-=== `kafka_migrator`
+=== `redpanda_migrator`
 
-The `kafka_migrator` input configuration.
+The `redpanda_migrator` output configuration.
 
 
 *Type*: `object`
@@ -51,19 +50,10 @@ The `kafka_migrator` input configuration.
 
 === `schema_registry`
 
-The `schema_registry` input configuration.
+The `schema_registry` output configuration. The `subject` field must be left empty.
 
 
 *Type*: `object`
 
-
-=== `migrate_schemas_before_data`
-
-Migrate all schemas first before starting to migrate data.
-
-
-*Type*: `bool`
-
-*Default*: `true`
 
 
