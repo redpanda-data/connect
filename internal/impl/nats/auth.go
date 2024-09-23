@@ -44,7 +44,7 @@ See an https://docs.nats.io/running-a-nats-service/nats_admin/security/jwt[in-de
 
 The NATS server can use these NKeys in several ways for authentication. The simplest is for the server to be configured
 with a list of known public keys and for the clients to respond to the challenge by signing it with its private NKey
-configured in the ` + "`nkey_file`" + ` field.
+configured in the ` + "`nkey_file`" + ` or ` + "`nkey`" + ` field.
 
 https://docs.nats.io/running-a-nats-service/configuration/securing_nats/auth_intro/nkey_auth[More details^].
 
@@ -69,6 +69,11 @@ func authFieldSpec() *service.ConfigField {
 			Description("An optional file containing a NKey seed.").
 			Example("./seed.nk").
 			Optional(),
+		service.NewStringField("nkey").
+			Description("The NKey seed.").
+			Default("").
+			Secret().
+			Optional(),
 		service.NewStringField("user_credentials_file").
 			Description("An optional file containing user credentials which consist of an user JWT and corresponding NKey seed.").
 			Example("./user.creds").
@@ -87,6 +92,7 @@ func authFieldSpec() *service.ConfigField {
 
 type authConfig struct {
 	NKeyFile            string
+	NKey                string
 	UserCredentialsFile string
 	UserJWT             string
 	UserNkeySeed        string
@@ -101,6 +107,19 @@ func authConfToOptions(auth authConfig, fs *service.FS) []nats.Option {
 			opts = append(opts, func(*nats.Options) error { return err })
 		} else {
 			opts = append(opts, opt)
+		}
+	}
+
+	// in case a nkey file content is provided, save to a tmp file and load it
+	if auth.NKey != "" {
+		if file, err := saveTempNkeyFile(auth.NKey); err != nil {
+			opts = append(opts, func(*nats.Options) error { return err })
+		} else {
+			if opt, err := nats.NkeyOptionFromSeed(file); err != nil {
+				opts = append(opts, func(*nats.Options) error { return err })
+			} else {
+				opts = append(opts, opt)
+			}
 		}
 	}
 
@@ -129,6 +148,11 @@ func authConfToOptions(auth authConfig, fs *service.FS) []nats.Option {
 func AuthFromParsedConfig(p *service.ParsedConfig) (c authConfig, err error) {
 	if p.Contains("nkey_file") {
 		if c.NKeyFile, err = p.FieldString("nkey_file"); err != nil {
+			return
+		}
+	}
+	if p.Contains("nkey") {
+		if c.NKey, err = p.FieldString("nkey"); err != nil {
 			return
 		}
 	}
@@ -247,4 +271,25 @@ func loadFileContents(filename string, fs *service.FS) ([]byte, error) {
 	defer f.Close()
 
 	return io.ReadAll(f)
+}
+
+func saveTempNkeyFile(content string) (string, error) {
+	dir, err := os.MkdirTemp("", "nats")
+	if err != nil {
+		return "", err
+	}
+	nkeyFile := filepath.Join(dir, "nkeys")
+
+	file, err := os.Create(nkeyFile)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	_, err = file.WriteString(content)
+	if err != nil {
+		return "", err
+	}
+
+	return nkeyFile, nil
 }
