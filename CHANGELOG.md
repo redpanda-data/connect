@@ -12,6 +12,12 @@ All notable changes to this project will be documented in this file.
 - New experimental `cohere_chat` and `cohere_embeddings` processors. (@rockwotj)
 - New experimental `questdb` output. (@sklarsa)
 - Field `metadata_max_age` added to the `kafka_franz` input. (@Scarjit)
+- Field `metadata_max_age` added to the `kafka_migrator` input. (@mihaitodor)
+
+### Fixed
+
+- Fixed a bug with the `input_resource` field for the `kafka_migrator` output where new topics weren't created as expected. (@mihaitodor)
+- Fixed a bug in the `kafka_migrator` input which could lead to extra duplicate messages during a consumer group rebalance. (@mihaitodor)
 
 ## 4.36.0 - 2024-09-11
 

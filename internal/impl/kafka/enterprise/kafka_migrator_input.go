@@ -152,6 +152,10 @@ Finally, it's also possible to specify an explicit offset to consume from by add
 			Description("Replication factor for created topics. This is only used when `replication_factor_override` is set to `true`.").
 			Default(3).
 			Advanced(),
+		service.NewDurationField("metadata_max_age").
+			Description("The maximum age of metadata before it is refreshed.").
+			Default("5m").
+			Advanced(),
 	}
 }
 
@@ -188,6 +192,7 @@ type KafkaMigratorReader struct {
 	regexPattern              bool
 	multiHeader               bool
 	batchPolicy               service.BatchPolicy
+	metadataMaxAge            time.Duration
 	topicLagRefreshPeriod     time.Duration
 	replicationFactorOverride bool
 	replicationFactor         int
@@ -303,6 +308,10 @@ func NewKafkaMigratorReaderFromConfig(conf *service.ParsedConfig, mgr *service.R
 		return nil, err
 	}
 
+	if r.metadataMaxAge, err = conf.FieldDuration("metadata_max_age"); err != nil {
+		return nil, err
+	}
+
 	if r.topicLagRefreshPeriod, err = conf.FieldDuration("topic_lag_refresh_period"); err != nil {
 		return nil, err
 	}
@@ -317,6 +326,12 @@ func NewKafkaMigratorReaderFromConfig(conf *service.ParsedConfig, mgr *service.R
 
 	if r.outputResource, err = conf.FieldString("output_resource"); err != nil {
 		return nil, err
+	}
+
+	if label := mgr.Label(); label != "" {
+		mgr.SetGeneric(mgr.Label(), &r)
+	} else {
+		mgr.SetGeneric(rpriDefaultLabel, &r)
 	}
 
 	return &r, nil
@@ -394,6 +409,7 @@ func (r *KafkaMigratorReader) Connect(ctx context.Context) error {
 		kgo.ConsumerGroup(r.consumerGroup),
 		kgo.ClientID(r.clientID),
 		kgo.Rack(r.rackID),
+		kgo.MetadataMaxAge(r.metadataMaxAge),
 	}
 
 	if r.consumerGroup != "" {
@@ -536,7 +552,7 @@ func (r *KafkaMigratorReader) ReadBatch(ctx context.Context) (service.MessageBat
 		if res, ok := r.mgr.GetGeneric(r.outputResource); ok {
 			output = res.(*KafkaMigratorWriter)
 		} else {
-			r.mgr.Logger().Debugf("Writer for topic sink %q not found", r.outputResource)
+			r.mgr.Logger().Debugf("Writer for topic destination %q not found", r.outputResource)
 		}
 
 		if output != nil {
@@ -563,9 +579,6 @@ func (r *KafkaMigratorReader) ReadBatch(ctx context.Context) (service.MessageBat
 		resBatch = append(resBatch, r.recordToMessage(rec))
 	})
 
-	// TODO: Does this need to happen after the call to `MarkCommitRecords()`?
-	r.client.AllowRebalance()
-
 	return resBatch, func(ctx context.Context, res error) error {
 		r.readMut.Lock()
 		defer r.readMut.Unlock()
@@ -579,6 +592,7 @@ func (r *KafkaMigratorReader) ReadBatch(ctx context.Context) (service.MessageBat
 		}
 
 		r.client.MarkCommitRecords(fetches.Records()...)
+		r.client.AllowRebalance()
 
 		return nil
 	}, nil
