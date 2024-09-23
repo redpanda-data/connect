@@ -6,22 +6,22 @@
 #
 # https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
-name: kafka_migrator_bundle
+name: redpanda_migrator_bundle
 type: output
 status: experimental
 categories: [ Services ]
-summary: Kafka Migrator bundle output
+summary: Redpanda Migrator bundle output
 description: |
   All-in-one output which writes messages and schemas to a Kafka or Redpanda cluster. This output is meant to be used
-  together with the `kafka_migrator_bundle` input.
+  together with the `redpanda_migrator_bundle` input.
 
 fields:
-  - name: kafka_migrator
+  - name: redpanda_migrator
     type: unknown
     kind: map
     default: null
     description: |
-      The `kafka_migrator` output configuration.
+      The `redpanda_migrator` output configuration.
 
   - name: schema_registry
     type: unknown
@@ -33,9 +33,9 @@ fields:
 mapping: |
   #!blobl
 
-  let kafkaMigratorOffsets = this.kafka_migrator.with("seed_brokers", "consumer_group", "client_id", "rack_id", "max_message_bytes", "broker_write_max_bytes", "tls", "sasl")
+  let redpandaMigratorOffsets = this.redpanda_migrator.with("seed_brokers", "consumer_group", "client_id", "rack_id", "max_message_bytes", "broker_write_max_bytes", "tls", "sasl")
 
-  let kafka_migrator = this.kafka_migrator.assign(
+  let redpanda_migrator = this.redpanda_migrator.assign(
     {
       "topic": "${! metadata(\"kafka_topic\").or(throw(\"missing kafka_topic metadata\")) }",
       "key": "${! metadata(\"kafka_key\") }",
@@ -49,30 +49,30 @@ mapping: |
     root = throw("The subject field of the schema_registry output must not be set")
   }
   let schema_registry = if this.schema_registry.length() > 0 { this.schema_registry.assign({"subject": "${! @schema_registry_subject }"}) }
-  if ["topic", "key", "partition", "partitioner", "timestamp"].any(f -> this.kafka_migrator.keys().contains(f)) {
-    root = throw("The topic, key, partition, partitioner and timestamp fields of the kafka_migrator output must be left empty")
+  if ["topic", "key", "partition", "partitioner", "timestamp"].any(f -> this.redpanda_migrator.keys().contains(f)) {
+    root = throw("The topic, key, partition, partitioner and timestamp fields of the redpanda_migrator output must be left empty")
   }
 
-  root = if this.kafka_migrator.length() == 0 {
-    throw("the kafka_migrator output must be configured")
+  root = if this.redpanda_migrator.length() == 0 {
+    throw("the redpanda_migrator output must be configured")
   } else if this.schema_registry.length() > 0 {
     """
       switch:
         cases:
-          - check: metadata("input_label") == "kafka_migrator"
+          - check: metadata("input_label") == "redpanda_migrator"
             output:
               fallback:
-                - kafka_migrator: %s
+                - redpanda_migrator: %s
                 # TODO: Use a DLQ
                 - drop: {}
                   processors:
                     - log:
                         message: |
                           Dropping message: ${! content() } / ${! metadata() }
-          - check: metadata("input_label") == "kafka_migrator_offsets"
+          - check: metadata("input_label") == "redpanda_migrator_offsets"
             output:
               fallback:
-                - kafka_migrator_offsets: %s
+                - redpanda_migrator_offsets: %s
                 # TODO: Use a DLQ
                 - drop: {}
                   processors:
@@ -95,38 +95,38 @@ mapping: |
                                   Subject '${! @schema_registry_subject }' version ${! @schema_registry_version } already has schema: ${! content() }
                       - output:
                           reject: ${! @fallback_error }
-    """.format($kafka_migrator.string(), $kafkaMigratorOffsets.string(), $schema_registry.string()).parse_yaml()
+    """.format($redpanda_migrator.string(), $redpandaMigratorOffsets.string(), $schema_registry.string()).parse_yaml()
   } else {
     """
       switch:
         cases:
-          - check: metadata("input_label") == "kafka_migrator"
+          - check: metadata("input_label") == "redpanda_migrator"
             output:
               fallback:
-                - kafka_migrator: %s
+                - redpanda_migrator: %s
                 # TODO: Use a DLQ
                 - drop: {}
                   processors:
                     - log:
                         message: |
                           Dropping message: ${! content() } / ${! metadata() }
-          - check: metadata("input_label") == "kafka_migrator_offsets"
+          - check: metadata("input_label") == "redpanda_migrator_offsets"
             output:
               fallback:
-                - kafka_migrator_offsets: %s
+                - redpanda_migrator_offsets: %s
                 # TODO: Use a DLQ
                 - drop: {}
                   processors:
                     - log:
                         message: |
                           Dropping message: ${! content() } / ${! metadata() }
-    """.format($kafka_migrator.string(), $kafkaMigratorOffsets.string()).parse_yaml()
+    """.format($redpanda_migrator.string(), $redpandaMigratorOffsets.string()).parse_yaml()
   }
 
 tests:
   - name: Migrate messages, offsets and schemas
     config:
-      kafka_migrator:
+      redpanda_migrator:
         seed_brokers: [ "127.0.0.1:9092" ]
         max_in_flight: 1
       schema_registry:
@@ -135,10 +135,10 @@ tests:
     expected:
       switch:
         cases:
-          - check: metadata("input_label") == "kafka_migrator"
+          - check: metadata("input_label") == "redpanda_migrator"
             output:
               fallback:
-                - kafka_migrator:
+                - redpanda_migrator:
                     key: ${! metadata("kafka_key") }
                     max_in_flight: 1
                     partition: ${! metadata("kafka_partition").or(throw("missing kafka_partition metadata")) }
@@ -152,10 +152,10 @@ tests:
                     - log:
                         message: |
                           Dropping message: ${! content() } / ${! metadata() }
-          - check: metadata("input_label") == "kafka_migrator_offsets"
+          - check: metadata("input_label") == "redpanda_migrator_offsets"
             output:
               fallback:
-                - kafka_migrator_offsets:
+                - redpanda_migrator_offsets:
                     seed_brokers:
                       - 127.0.0.1:9092
                 - drop: {}
@@ -183,17 +183,17 @@ tests:
 
   - name: Migrate only messages and offsets
     config:
-      kafka_migrator:
+      redpanda_migrator:
         seed_brokers: [ "127.0.0.1:9092" ]
         max_in_flight: 1
 
     expected:
       switch:
         cases:
-          - check: metadata("input_label") == "kafka_migrator"
+          - check: metadata("input_label") == "redpanda_migrator"
             output:
               fallback:
-                - kafka_migrator:
+                - redpanda_migrator:
                     key: ${! metadata("kafka_key") }
                     max_in_flight: 1
                     partition: ${! metadata("kafka_partition").or(throw("missing kafka_partition metadata")) }
@@ -207,10 +207,10 @@ tests:
                     - log:
                         message: |
                           Dropping message: ${! content() } / ${! metadata() }
-          - check: metadata("input_label") == "kafka_migrator_offsets"
+          - check: metadata("input_label") == "redpanda_migrator_offsets"
             output:
               fallback:
-                - kafka_migrator_offsets:
+                - redpanda_migrator_offsets:
                     seed_brokers:
                       - 127.0.0.1:9092
                 - drop: {}

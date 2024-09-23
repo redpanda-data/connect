@@ -30,20 +30,20 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/retries"
 )
 
-func kafkaMigratorOffsetsOutputConfig() *service.ConfigSpec {
+func redpandaMigratorOffsetsOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Beta().
 		Categories("Services").
 		Version("4.35.0").
-		Summary("Kafka Migrator consumer group offsets output using the https://github.com/twmb/franz-go[Franz Kafka client library^].").
+		Summary("Redpanda Migrator consumer group offsets output using the https://github.com/twmb/franz-go[Franz Kafka client library^].").
 		// TODO
 		Description("This output can be used in combination with the `kafka_franz` input that is configured to read the `__consumer_offsets` topic.").
-		Fields(KafkaMigratorOffsetsOutputConfigFields()...)
+		Fields(RedpandaMigratorOffsetsOutputConfigFields()...)
 }
 
-// KafkaMigratorOffsetsOutputConfigFields returns the full suite of config fields for a kafka_migrator_offsets output using the
+// RedpandaMigratorOffsetsOutputConfigFields returns the full suite of config fields for a redpanda_migrator_offsets output using the
 // franz-go client library.
-func KafkaMigratorOffsetsOutputConfigFields() []*service.ConfigField {
+func RedpandaMigratorOffsetsOutputConfigFields() []*service.ConfigField {
 	return append(
 		[]*service.ConfigField{
 			service.NewStringListField("seed_brokers").
@@ -84,7 +84,7 @@ func KafkaMigratorOffsetsOutputConfigFields() []*service.ConfigField {
 }
 
 func init() {
-	err := service.RegisterOutput("kafka_migrator_offsets", kafkaMigratorOffsetsOutputConfig(),
+	err := service.RegisterOutput("redpanda_migrator_offsets", redpandaMigratorOffsetsOutputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (
 			output service.Output,
 			maxInFlight int,
@@ -93,7 +93,7 @@ func init() {
 			if maxInFlight, err = conf.FieldInt("max_in_flight"); err != nil {
 				return
 			}
-			output, err = NewKafkaMigratorOffsetsWriterFromConfig(conf, mgr)
+			output, err = NewRedpandaMigratorOffsetsWriterFromConfig(conf, mgr)
 			return
 		})
 	if err != nil {
@@ -103,8 +103,8 @@ func init() {
 
 //------------------------------------------------------------------------------
 
-// KafkaMigratorOffsetsWriter implements a Kafka Migrator offsets writer using the franz-go library.
-type KafkaMigratorOffsetsWriter struct {
+// RedpandaMigratorOffsetsWriter implements a Redpanda Migrator offsets writer using the franz-go library.
+type RedpandaMigratorOffsetsWriter struct {
 	SeedBrokers         []string
 	kafkaKey            *service.InterpolatedString
 	clientID            string
@@ -121,9 +121,9 @@ type KafkaMigratorOffsetsWriter struct {
 	mgr *service.Resources
 }
 
-// NewKafkaMigratorOffsetsWriterFromConfig attempts to instantiate a KafkaMigratorOffsetsWriter from a parsed config.
-func NewKafkaMigratorOffsetsWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*KafkaMigratorOffsetsWriter, error) {
-	w := KafkaMigratorOffsetsWriter{
+// NewRedpandaMigratorOffsetsWriterFromConfig attempts to instantiate a RedpandaMigratorOffsetsWriter from a parsed config.
+func NewRedpandaMigratorOffsetsWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*RedpandaMigratorOffsetsWriter, error) {
+	w := RedpandaMigratorOffsetsWriter{
 		mgr: mgr,
 	}
 
@@ -192,7 +192,7 @@ func NewKafkaMigratorOffsetsWriterFromConfig(conf *service.ParsedConfig, mgr *se
 //------------------------------------------------------------------------------
 
 // Connect to the target seed brokers.
-func (w *KafkaMigratorOffsetsWriter) Connect(ctx context.Context) error {
+func (w *RedpandaMigratorOffsetsWriter) Connect(ctx context.Context) error {
 	w.connMut.Lock()
 	defer w.connMut.Unlock()
 
@@ -230,7 +230,7 @@ func (w *KafkaMigratorOffsetsWriter) Connect(ctx context.Context) error {
 }
 
 // Write attempts to write a message to the output cluster.
-func (w *KafkaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.Message) error {
+func (w *RedpandaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.Message) error {
 	w.connMut.Lock()
 	defer w.connMut.Unlock()
 
@@ -307,7 +307,7 @@ func (w *KafkaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.Mes
 }
 
 // Close underlying connections.
-func (w *KafkaMigratorOffsetsWriter) Close(ctx context.Context) error {
+func (w *RedpandaMigratorOffsetsWriter) Close(ctx context.Context) error {
 	w.connMut.Lock()
 	defer w.connMut.Unlock()
 

@@ -1,269 +1,269 @@
-name                    ,type      ,commercial_name         ,version ,support    ,deprecated ,cloud ,cloud_with_gpu
-amqp_0_9                ,input     ,amqp_0_9                ,0.0.0   ,certified  ,n          ,y     ,y
-amqp_0_9                ,output    ,amqp_0_9                ,0.0.0   ,certified  ,n          ,y     ,y
-amqp_1                  ,input     ,amqp_1                  ,0.0.0   ,community  ,n          ,n     ,n
-amqp_1                  ,output    ,amqp_1                  ,0.0.0   ,community  ,n          ,n     ,n
-archive                 ,processor ,archive                 ,0.0.0   ,certified  ,n          ,y     ,y
-avro                    ,processor ,avro                    ,0.0.0   ,community  ,n          ,y     ,y
-avro                    ,scanner   ,avro                    ,0.0.0   ,community  ,n          ,y     ,y
-awk                     ,processor ,awk                     ,0.0.0   ,community  ,n          ,n     ,n
-aws_bedrock_chat        ,processor ,aws_bedrock_chat        ,4.34.0  ,enterprise ,n          ,y     ,y
-aws_bedrock_embeddings  ,processor ,aws_bedrock_embeddings  ,4.37.0  ,enterprise ,n          ,y     ,y
-aws_cloudwatch          ,metric    ,aws_cloudwatch          ,3.36.0  ,community  ,n          ,n     ,n
-aws_dynamodb            ,cache     ,AWS DynamoDB            ,3.36.0  ,community  ,n          ,y     ,y
-aws_dynamodb            ,output    ,AWS DynamoDB            ,3.36.0  ,community  ,n          ,y     ,y
-aws_dynamodb_partiql    ,processor ,aws_dynamodb_partiql    ,3.48.0  ,certified  ,n          ,y     ,y
-aws_kinesis             ,input     ,AWS Kinesis             ,3.36.0  ,certified  ,n          ,y     ,y
-aws_kinesis             ,output    ,AWS Kinesis             ,3.36.0  ,certified  ,n          ,y     ,y
-aws_kinesis_firehose    ,output    ,AWS Kinesis Firehose    ,3.36.0  ,certified  ,n          ,y     ,y
-aws_lambda              ,processor ,AWS Lambda              ,3.36.0  ,certified  ,n          ,y     ,y
-aws_s3                  ,cache     ,AWS S3                  ,3.36.0  ,certified  ,n          ,y     ,y
-aws_s3                  ,input     ,AWS S3                  ,0.0.0   ,certified  ,n          ,y     ,y
-aws_s3                  ,output    ,AWS S3                  ,3.36.0  ,certified  ,n          ,y     ,y
-aws_sns                 ,output    ,AWS SNS                 ,3.36.0  ,community  ,n          ,y     ,y
-aws_sqs                 ,input     ,AWS SQS                 ,0.0.0   ,certified  ,n          ,y     ,y
-aws_sqs                 ,output    ,AWS SQS                 ,3.36.0  ,certified  ,n          ,y     ,y
-azure_blob_storage      ,input     ,azure_blob_storage      ,3.36.0  ,certified  ,n          ,y     ,y
-azure_blob_storage      ,output    ,azure_blob_storage      ,3.36.0  ,certified  ,n          ,y     ,y
-azure_cosmosdb          ,input     ,azure_cosmosdb          ,4.25.0  ,certified  ,n          ,y     ,y
-azure_cosmosdb          ,output    ,azure_cosmosdb          ,4.25.0  ,certified  ,n          ,y     ,y
-azure_cosmosdb          ,processor ,azure_cosmosdb          ,4.25.0  ,certified  ,n          ,y     ,y
-azure_queue_storage     ,input     ,azure_queue_storage     ,3.42.0  ,certified  ,n          ,y     ,y
-azure_queue_storage     ,output    ,azure_queue_storage     ,3.36.0  ,certified  ,n          ,y     ,y
-azure_table_storage     ,input     ,azure_table_storage     ,4.10.0  ,certified  ,n          ,y     ,y
-azure_table_storage     ,output    ,azure_table_storage     ,3.36.0  ,certified  ,n          ,y     ,y
-batched                 ,input     ,batched                 ,4.11.0  ,certified  ,n          ,y     ,y
-beanstalkd              ,input     ,beanstalkd              ,4.7.0   ,community  ,n          ,n     ,n
-beanstalkd              ,output    ,beanstalkd              ,4.7.0   ,community  ,n          ,n     ,n
-bloblang                ,processor ,bloblang                ,0.0.0   ,certified  ,n          ,y     ,y
-bounds_check            ,processor ,bounds_check            ,0.0.0   ,certified  ,n          ,y     ,y
-branch                  ,processor ,branch                  ,0.0.0   ,certified  ,n          ,y     ,y
-broker                  ,input     ,broker                  ,0.0.0   ,certified  ,n          ,y     ,y
-broker                  ,output    ,broker                  ,0.0.0   ,certified  ,n          ,y     ,y
-cache                   ,output    ,cache                   ,0.0.0   ,certified  ,n          ,y     ,y
-cache                   ,processor ,cache                   ,0.0.0   ,certified  ,n          ,y     ,y
-cached                  ,processor ,cached                  ,4.3.0   ,certified  ,n          ,y     ,y
-cassandra               ,input     ,cassandra               ,0.0.0   ,community  ,n          ,n     ,n
-cassandra               ,output    ,cassandra               ,0.0.0   ,community  ,n          ,n     ,n
-catch                   ,processor ,catch                   ,0.0.0   ,certified  ,n          ,y     ,y
-chunker                 ,scanner   ,chunker                 ,0.0.0   ,certified  ,n          ,y     ,y
-cockroachdb_changefeed  ,input     ,cockroachdb_changefeed  ,0.0.0   ,community  ,n          ,n     ,n
-cohere_chat             ,processor ,cohere_chat             ,4.37.0  ,enterprise ,n          ,y     ,y
-cohere_embeddings       ,processor ,cohere_embeddings       ,4.37.0  ,enterprise ,n          ,y     ,y
-command                 ,processor ,command                 ,4.21.0  ,certified  ,n          ,n     ,n
-compress                ,processor ,compress                ,0.0.0   ,certified  ,n          ,y     ,y
-couchbase               ,cache     ,Couchbase               ,4.12.0  ,community  ,n          ,n     ,n
-couchbase               ,processor ,Couchbase               ,4.11.0  ,community  ,n          ,n     ,n
-csv                     ,input     ,csv                     ,0.0.0   ,certified  ,n          ,n     ,n
-csv                     ,scanner   ,csv                     ,0.0.0   ,certified  ,n          ,y     ,y
-decompress              ,processor ,decompress              ,0.0.0   ,certified  ,n          ,y     ,y
-decompress              ,scanner   ,decompress              ,0.0.0   ,certified  ,n          ,y     ,y
-dedupe                  ,processor ,dedupe                  ,0.0.0   ,certified  ,n          ,y     ,y
-discord                 ,input     ,discord                 ,0.0.0   ,community  ,n          ,n     ,n
-discord                 ,output    ,discord                 ,0.0.0   ,community  ,n          ,n     ,n
-drop                    ,output    ,drop                    ,0.0.0   ,certified  ,n          ,y     ,y
-drop_on                 ,output    ,drop_on                 ,0.0.0   ,certified  ,n          ,y     ,y
-dynamic                 ,input     ,dynamic                 ,0.0.0   ,community  ,n          ,n     ,n
-dynamic                 ,output    ,dynamic                 ,0.0.0   ,community  ,n          ,n     ,n
-elasticsearch           ,output    ,elasticsearch           ,0.0.0   ,community  ,n          ,n     ,n
-fallback                ,output    ,fallback                ,3.58.0  ,certified  ,n          ,y     ,y
-file                    ,cache     ,File                    ,0.0.0   ,certified  ,n          ,n     ,n
-file                    ,input     ,File                    ,0.0.0   ,certified  ,n          ,n     ,n
-file                    ,output    ,File                    ,0.0.0   ,certified  ,n          ,n     ,n
-for_each                ,processor ,for_each                ,0.0.0   ,certified  ,n          ,y     ,y
-gcp_bigquery            ,output    ,GCP BigQuery            ,3.55.0  ,certified  ,n          ,y     ,y
-gcp_bigquery_select     ,input     ,GCP BigQuery            ,3.63.0  ,certified  ,n          ,y     ,y
-gcp_bigquery_select     ,processor ,GCP BigQuery            ,3.64.0  ,certified  ,n          ,y     ,y
-gcp_cloud_storage       ,cache     ,GCP Cloud Storage       ,0.0.0   ,certified  ,n          ,y     ,y
-gcp_cloud_storage       ,input     ,GCP Cloud Storage       ,3.43.0  ,certified  ,n          ,y     ,y
-gcp_cloud_storage       ,output    ,GCP Cloud Storage       ,3.43.0  ,certified  ,n          ,y     ,y
-gcp_cloudtrace          ,tracer    ,GCP Cloud Trace         ,4.2.0   ,certified  ,n          ,y     ,y
-gcp_pubsub              ,input     ,GCP PubSub              ,0.0.0   ,certified  ,n          ,y     ,y
-gcp_pubsub              ,output    ,GCP PubSub              ,0.0.0   ,certified  ,n          ,y     ,y
-gcp_vertex_ai_chat      ,processor ,GCP Vertex AI           ,4.34.0  ,enterprise ,n          ,y     ,y
-gcp_vertex_ai_embeddings,processor ,gcp_vertex_ai_embeddings,4.37.0  ,enterprise ,n          ,y     ,y
-generate                ,input     ,generate                ,3.40.0  ,certified  ,n          ,y     ,y
-grok                    ,processor ,grok                    ,0.0.0   ,community  ,n          ,n     ,n
-group_by                ,processor ,group_by                ,0.0.0   ,certified  ,n          ,y     ,y
-group_by_value          ,processor ,group_by_value          ,0.0.0   ,certified  ,n          ,y     ,y
-hdfs                    ,input     ,hdfs                    ,0.0.0   ,community  ,n          ,n     ,n
-hdfs                    ,output    ,hdfs                    ,0.0.0   ,community  ,n          ,n     ,n
-http                    ,processor ,HTTP                    ,0.0.0   ,certified  ,n          ,n     ,n
-http_client             ,input     ,http_client             ,0.0.0   ,certified  ,n          ,n     ,n
-http_client             ,output    ,http_client             ,0.0.0   ,certified  ,n          ,n     ,n
-http_server             ,input     ,http_server             ,0.0.0   ,certified  ,n          ,n     ,n
-http_server             ,output    ,http_server             ,0.0.0   ,certified  ,n          ,n     ,n
-influxdb                ,metric    ,influxdb                ,3.36.0  ,community  ,n          ,n     ,n
-inproc                  ,input     ,inproc                  ,0.0.0   ,certified  ,n          ,y     ,y
-inproc                  ,output    ,inproc                  ,0.0.0   ,certified  ,n          ,y     ,y
-insert_part             ,processor ,insert_part             ,0.0.0   ,certified  ,n          ,y     ,y
-jaeger                  ,tracer    ,jaeger                  ,0.0.0   ,community  ,n          ,n     ,n
-javascript              ,processor ,javascript              ,4.14.0  ,certified  ,n          ,n     ,n
-jmespath                ,processor ,JMESPath                ,0.0.0   ,certified  ,n          ,y     ,y
-jq                      ,processor ,jq                      ,0.0.0   ,certified  ,n          ,y     ,y
-json_api                ,metric    ,json_api                ,0.0.0   ,certified  ,n          ,n     ,n
-json_documents          ,scanner   ,json_documents          ,4.27.0  ,certified  ,n          ,y     ,y
-json_schema             ,processor ,JSON Schema             ,0.0.0   ,certified  ,n          ,y     ,y
-kafka                   ,input     ,Kafka                   ,0.0.0   ,certified  ,n          ,y     ,y
-kafka                   ,output    ,Kafka                   ,0.0.0   ,certified  ,n          ,y     ,y
-kafka_franz             ,input     ,kafka_franz             ,3.61.0  ,certified  ,n          ,y     ,y
-kafka_franz             ,output    ,kafka_franz             ,3.61.0  ,certified  ,n          ,y     ,y
-kafka_migrator          ,input     ,kafka_migrator          ,4.35.0  ,enterprise ,n          ,y     ,y
-kafka_migrator          ,output    ,kafka_migrator          ,4.35.0  ,enterprise ,n          ,y     ,y
-kafka_migrator_bundle   ,input     ,kafka_migrator_bundle   ,4.35.0  ,enterprise ,n          ,y     ,y
-kafka_migrator_bundle   ,output    ,kafka_migrator_bundle   ,4.35.0  ,enterprise ,n          ,y     ,y
-kafka_migrator_offsets  ,output    ,kafka_migrator_offsets  ,4.35.0  ,enterprise ,n          ,y     ,y
-lines                   ,scanner   ,lines                   ,0.0.0   ,certified  ,n          ,y     ,y
-local                   ,rate_limit,local                   ,0.0.0   ,certified  ,n          ,y     ,y
-log                     ,processor ,log                     ,0.0.0   ,certified  ,n          ,y     ,y
-logger                  ,metric    ,logger                  ,0.0.0   ,certified  ,n          ,n     ,n
-lru                     ,cache     ,lru                     ,0.0.0   ,community  ,n          ,y     ,y
-mapping                 ,processor ,mapping                 ,4.5.0   ,certified  ,n          ,y     ,y
-memcached               ,cache     ,Memcached               ,0.0.0   ,community  ,n          ,y     ,y
-memory                  ,buffer    ,Memory                  ,0.0.0   ,certified  ,n          ,y     ,y
-memory                  ,cache     ,Memory                  ,0.0.0   ,certified  ,n          ,y     ,y
-metric                  ,processor ,metric                  ,0.0.0   ,certified  ,n          ,y     ,y
-mongodb                 ,cache     ,MongoDB                 ,3.43.0  ,community  ,n          ,n     ,n
-mongodb                 ,input     ,MongoDB                 ,3.64.0  ,community  ,n          ,n     ,n
-mongodb                 ,output    ,MongoDB                 ,3.43.0  ,community  ,n          ,n     ,n
-mongodb                 ,processor ,MongoDB                 ,3.43.0  ,community  ,n          ,n     ,n
-mqtt                    ,input     ,mqtt                    ,0.0.0   ,community  ,n          ,n     ,n
-mqtt                    ,output    ,mqtt                    ,0.0.0   ,community  ,n          ,n     ,n
-msgpack                 ,processor ,msgpack                 ,3.59.0  ,community  ,n          ,n     ,n
-multilevel              ,cache     ,Multilevel              ,0.0.0   ,certified  ,n          ,y     ,y
-mutation                ,processor ,mutation                ,4.5.0   ,certified  ,n          ,y     ,y
-nanomsg                 ,input     ,nanomsg                 ,0.0.0   ,community  ,n          ,n     ,n
-nanomsg                 ,output    ,nanomsg                 ,0.0.0   ,community  ,n          ,n     ,n
-nats                    ,input     ,NATS                    ,0.0.0   ,certified  ,n          ,y     ,y
-nats                    ,output    ,NATS                    ,0.0.0   ,certified  ,n          ,y     ,y
-nats_jetstream          ,input     ,NATS JetStream          ,3.46.0  ,certified  ,n          ,y     ,y
-nats_jetstream          ,output    ,NATS JetStream          ,3.46.0  ,certified  ,n          ,y     ,y
-nats_kv                 ,cache     ,NATS KV                 ,4.27.0  ,certified  ,n          ,y     ,y
-nats_kv                 ,input     ,NATS KV                 ,4.12.0  ,certified  ,n          ,y     ,y
-nats_kv                 ,output    ,NATS KV                 ,4.12.0  ,certified  ,n          ,y     ,y
-nats_kv                 ,processor ,NATS KV                 ,4.12.0  ,certified  ,n          ,y     ,y
-nats_request_reply      ,processor ,NATS Request Reply      ,4.27.0  ,certified  ,n          ,y     ,y
-nats_stream             ,input     ,NATS Stream             ,0.0.0   ,community  ,n          ,n     ,n
-nats_stream             ,output    ,NATS Stream             ,0.0.0   ,community  ,n          ,n     ,n
-none                    ,buffer    ,none                    ,0.0.0   ,certified  ,n          ,y     ,y
-none                    ,metric    ,none                    ,0.0.0   ,certified  ,n          ,y     ,y
-none                    ,tracer    ,none                    ,0.0.0   ,certified  ,n          ,y     ,y
-noop                    ,cache     ,noop                    ,4.27.0  ,certified  ,n          ,y     ,y
-noop                    ,processor ,noop                    ,0.0.0   ,certified  ,n          ,y     ,y
-nsq                     ,input     ,nsq                     ,0.0.0   ,community  ,n          ,n     ,n
-nsq                     ,output    ,nsq                     ,0.0.0   ,community  ,n          ,n     ,n
-ockam_kafka             ,input     ,ockam_kafka             ,0.0.0   ,community  ,n          ,n     ,n
-ockam_kafka             ,output    ,ockam_kafka             ,0.0.0   ,community  ,n          ,n     ,n
-ollama_chat             ,processor ,ollama_chat             ,4.32.0  ,enterprise ,n          ,n     ,y
-ollama_embeddings       ,processor ,ollama_embeddings       ,4.32.0  ,enterprise ,n          ,n     ,y
-open_telemetry_collector,tracer    ,open_telemetry_collector,0.0.0   ,community  ,n          ,n     ,n
-openai_chat_completion  ,processor ,openai_chat_completion  ,4.32.0  ,enterprise ,n          ,y     ,y
-openai_embeddings       ,processor ,openai_embeddings       ,4.32.0  ,enterprise ,n          ,y     ,y
-openai_image_generation ,processor ,openai_image_generation ,4.32.0  ,enterprise ,n          ,y     ,y
-openai_speech           ,processor ,openai_speech           ,4.32.0  ,enterprise ,n          ,y     ,y
-openai_transcription    ,processor ,openai_transcription    ,4.32.0  ,enterprise ,n          ,y     ,y
-openai_translation      ,processor ,openai_translation      ,4.32.0  ,enterprise ,n          ,y     ,y
-opensearch              ,output    ,OpenSearch              ,0.0.0   ,certified  ,n          ,y     ,y
-parallel                ,processor ,parallel                ,0.0.0   ,certified  ,n          ,y     ,y
-parquet                 ,input     ,parquet                 ,4.8.0   ,certified  ,n          ,n     ,n
-parquet                 ,processor ,parquet                 ,3.62.0  ,community  ,y          ,n     ,n
-parquet_decode          ,processor ,parquet_decode          ,4.4.0   ,certified  ,n          ,y     ,y
-parquet_encode          ,processor ,parquet_encode          ,4.4.0   ,certified  ,n          ,y     ,y
-parse_log               ,processor ,parse_log               ,0.0.0   ,community  ,n          ,y     ,y
-pinecone                ,output    ,pinecone                ,4.31.0  ,certified  ,n          ,y     ,y
-processors              ,processor ,processors              ,0.0.0   ,certified  ,n          ,y     ,y
-prometheus              ,metric    ,prometheus              ,0.0.0   ,certified  ,n          ,y     ,y
-protobuf                ,processor ,Protobuf                ,0.0.0   ,certified  ,n          ,y     ,y
-pulsar                  ,input     ,pulsar                  ,3.43.0  ,community  ,n          ,n     ,n
-pulsar                  ,output    ,pulsar                  ,3.43.0  ,community  ,n          ,n     ,n
-pusher                  ,output    ,pusher                  ,4.3.0   ,community  ,n          ,n     ,n
-qdrant                  ,output    ,qdrant                  ,4.33.0  ,certified  ,n          ,y     ,y
-questdb                 ,output    ,questdb                 ,4.37.0  ,community  ,n          ,n     ,n
-rate_limit              ,processor ,rate_limit              ,0.0.0   ,certified  ,n          ,y     ,y
-re_match                ,scanner   ,re_match                ,0.0.0   ,certified  ,n          ,y     ,y
-read_until              ,input     ,read_until              ,0.0.0   ,certified  ,n          ,y     ,y
-redis                   ,cache     ,Redis                   ,0.0.0   ,certified  ,n          ,y     ,y
-redis                   ,processor ,Redis                   ,0.0.0   ,certified  ,n          ,y     ,y
-redis                   ,rate_limit,Redis                   ,4.12.0  ,certified  ,n          ,y     ,y
-redis_hash              ,output    ,Redis Hash              ,0.0.0   ,certified  ,n          ,y     ,y
-redis_list              ,input     ,Redis List              ,0.0.0   ,certified  ,n          ,y     ,y
-redis_list              ,output    ,Redis List              ,0.0.0   ,certified  ,n          ,y     ,y
-redis_pubsub            ,input     ,Redis PubSub            ,0.0.0   ,certified  ,n          ,y     ,y
-redis_pubsub            ,output    ,Redis PubSub            ,0.0.0   ,certified  ,n          ,y     ,y
-redis_scan              ,input     ,Redis                   ,4.27.0  ,certified  ,n          ,y     ,y
-redis_script            ,processor ,Redis Script            ,4.11.0  ,certified  ,n          ,y     ,y
-redis_streams           ,input     ,Redis Streams           ,0.0.0   ,certified  ,n          ,y     ,y
-redis_streams           ,output    ,Redis Streams           ,0.0.0   ,certified  ,n          ,y     ,y
-redpanda_data_transform ,processor ,redpanda_data_transform ,4.31.0  ,certified  ,n          ,n     ,n
-reject                  ,output    ,reject                  ,0.0.0   ,certified  ,n          ,y     ,y
-reject_errored          ,output    ,reject_errored          ,0.0.0   ,certified  ,n          ,y     ,y
-resource                ,input     ,resource                ,0.0.0   ,certified  ,n          ,y     ,y
-resource                ,output    ,resource                ,0.0.0   ,certified  ,n          ,y     ,y
-resource                ,processor ,resource                ,0.0.0   ,certified  ,n          ,y     ,y
-retry                   ,output    ,retry                   ,0.0.0   ,certified  ,n          ,y     ,y
-retry                   ,processor ,retry                   ,4.27.0  ,certified  ,n          ,y     ,y
-ristretto               ,cache     ,Ristretto               ,0.0.0   ,community  ,n          ,y     ,y
-schema_registry         ,input     ,schema_registry         ,4.33.0  ,enterprise ,n          ,y     ,y
-schema_registry         ,output    ,schema_registry         ,4.33.0  ,enterprise ,n          ,y     ,y
-schema_registry_decode  ,processor ,schema_registry_decode  ,0.0.0   ,certified  ,n          ,y     ,y
-schema_registry_encode  ,processor ,schema_registry_encode  ,3.58.0  ,certified  ,n          ,y     ,y
-select_parts            ,processor ,select_parts            ,0.0.0   ,certified  ,n          ,y     ,y
-sentry_capture          ,processor ,sentry_capture          ,4.16.0  ,community  ,n          ,n     ,n
-sequence                ,input     ,sequence                ,0.0.0   ,certified  ,n          ,y     ,y
-sftp                    ,input     ,sftp                    ,3.39.0  ,certified  ,n          ,y     ,y
-sftp                    ,output    ,sftp                    ,3.39.0  ,certified  ,n          ,y     ,y
-skip_bom                ,scanner   ,skip_bom                ,0.0.0   ,certified  ,n          ,y     ,y
-sleep                   ,processor ,sleep                   ,0.0.0   ,certified  ,n          ,y     ,y
-snowflake_put           ,output    ,Snowflake               ,4.0.0   ,enterprise ,n          ,y     ,y
-socket                  ,input     ,Socket                  ,0.0.0   ,certified  ,n          ,n     ,n
-socket                  ,output    ,Socket                  ,0.0.0   ,certified  ,n          ,n     ,n
-socket_server           ,input     ,socket_server           ,0.0.0   ,certified  ,n          ,n     ,n
-split                   ,processor ,split                   ,0.0.0   ,certified  ,n          ,y     ,y
-splunk                  ,input     ,Splunk                  ,4.30.0  ,enterprise ,n          ,y     ,y
-splunk_hec              ,output    ,Splunk                  ,4.30.0  ,enterprise ,n          ,y     ,y
-sql                     ,cache     ,SQL                     ,4.26.0  ,certified  ,n          ,n     ,n
-sql                     ,output    ,SQL                     ,3.65.0  ,community  ,y          ,n     ,n
-sql                     ,processor ,SQL                     ,3.65.0  ,community  ,y          ,n     ,n
-sql_driver_clickhouse   ,sql_driver,ClickHouse              ,0.0.0   ,community  ,n          ,n     ,n
-sql_driver_gocosmos     ,sql_driver,Azure Cosmos DB         ,0.0.0   ,community  ,n          ,n     ,n
-sql_driver_mssql        ,sql_driver,Microsoft SQL Server    ,0.0.0   ,community  ,n          ,n     ,n
-sql_driver_mysql        ,sql_driver,MYSQL                   ,0.0.0   ,certified  ,n          ,y     ,y
-sql_driver_oracle       ,sql_driver,Oracle                  ,0.0.0   ,certified  ,n          ,y     ,y
-sql_driver_postgres     ,sql_driver,PostgreSQL              ,0.0.0   ,certified  ,n          ,y     ,y
-sql_driver_snowflake    ,sql_driver,Snowflake               ,0.0.0   ,community  ,n          ,n     ,n
-sql_driver_sqlite       ,sql_driver,SQLite                  ,0.0.0   ,certified  ,n          ,y     ,y
-sql_driver_trino        ,sql_driver,Trino                   ,0.0.0   ,community  ,n          ,n     ,n
-sql_insert              ,output    ,sql_insert              ,3.59.0  ,certified  ,n          ,y     ,y
-sql_insert              ,processor ,sql_insert              ,3.59.0  ,certified  ,n          ,y     ,y
-sql_raw                 ,input     ,sql_raw                 ,4.10.0  ,certified  ,n          ,y     ,y
-sql_raw                 ,output    ,sql_raw                 ,3.65.0  ,certified  ,n          ,y     ,y
-sql_raw                 ,processor ,sql_raw                 ,3.65.0  ,certified  ,n          ,y     ,y
-sql_select              ,input     ,sql_select              ,3.59.0  ,certified  ,n          ,y     ,y
-sql_select              ,processor ,sql_select              ,3.59.0  ,certified  ,n          ,y     ,y
-sqlite                  ,buffer    ,sqlite                  ,0.0.0   ,community  ,n          ,n     ,n
-statsd                  ,metric    ,statsd                  ,0.0.0   ,certified  ,n          ,n     ,n
-stdin                   ,input     ,stdin                   ,0.0.0   ,certified  ,n          ,n     ,n
-stdout                  ,output    ,stdout                  ,0.0.0   ,certified  ,n          ,n     ,n
-subprocess              ,input     ,subprocess              ,0.0.0   ,community  ,n          ,n     ,n
-subprocess              ,output    ,subprocess              ,0.0.0   ,community  ,n          ,n     ,n
-subprocess              ,processor ,subprocess              ,0.0.0   ,community  ,n          ,n     ,n
-switch                  ,output    ,switch                  ,0.0.0   ,certified  ,n          ,y     ,y
-switch                  ,processor ,switch                  ,0.0.0   ,certified  ,n          ,y     ,y
-switch                  ,scanner   ,switch                  ,0.0.0   ,certified  ,n          ,y     ,y
-sync_response           ,output    ,sync_response           ,0.0.0   ,certified  ,n          ,y     ,y
-sync_response           ,processor ,sync_response           ,0.0.0   ,certified  ,n          ,y     ,y
-system_window           ,buffer    ,system_window           ,3.53.0  ,certified  ,n          ,y     ,y
-tar                     ,scanner   ,tar                     ,0.0.0   ,certified  ,n          ,y     ,y
-to_the_end              ,scanner   ,to_the_end              ,0.0.0   ,certified  ,n          ,y     ,y
-try                     ,processor ,try                     ,0.0.0   ,certified  ,n          ,y     ,y
-ttlru                   ,cache     ,ttlru                   ,0.0.0   ,community  ,n          ,y     ,y
-twitter_search          ,input     ,twitter_search          ,0.0.0   ,community  ,n          ,n     ,n
-unarchive               ,processor ,unarchive               ,0.0.0   ,certified  ,n          ,y     ,y
-wasm                    ,processor ,wasm                    ,4.11.0  ,community  ,n          ,n     ,n
-websocket               ,input     ,websocket               ,0.0.0   ,certified  ,n          ,n     ,n
-websocket               ,output    ,websocket               ,0.0.0   ,certified  ,n          ,n     ,n
-while                   ,processor ,while                   ,0.0.0   ,certified  ,n          ,y     ,y
-workflow                ,processor ,workflow                ,0.0.0   ,certified  ,n          ,y     ,y
-xml                     ,processor ,xml                     ,0.0.0   ,community  ,n          ,y     ,y
-zmq4                    ,input     ,zmq4                    ,0.0.0   ,community  ,n          ,n     ,n
-zmq4                    ,output    ,zmq4                    ,0.0.0   ,community  ,n          ,n     ,n
+name                      ,type      ,commercial_name           ,version ,support    ,deprecated ,cloud ,cloud_with_gpu
+amqp_0_9                  ,input     ,amqp_0_9                  ,0.0.0   ,certified  ,n          ,y     ,y
+amqp_0_9                  ,output    ,amqp_0_9                  ,0.0.0   ,certified  ,n          ,y     ,y
+amqp_1                    ,input     ,amqp_1                    ,0.0.0   ,community  ,n          ,n     ,n
+amqp_1                    ,output    ,amqp_1                    ,0.0.0   ,community  ,n          ,n     ,n
+archive                   ,processor ,archive                   ,0.0.0   ,certified  ,n          ,y     ,y
+avro                      ,processor ,avro                      ,0.0.0   ,community  ,n          ,y     ,y
+avro                      ,scanner   ,avro                      ,0.0.0   ,community  ,n          ,y     ,y
+awk                       ,processor ,awk                       ,0.0.0   ,community  ,n          ,n     ,n
+aws_bedrock_chat          ,processor ,aws_bedrock_chat          ,4.34.0  ,enterprise ,n          ,y     ,y
+aws_bedrock_embeddings    ,processor ,aws_bedrock_embeddings    ,4.37.0  ,enterprise ,n          ,y     ,y
+aws_cloudwatch            ,metric    ,aws_cloudwatch            ,3.36.0  ,community  ,n          ,n     ,n
+aws_dynamodb              ,cache     ,AWS DynamoDB              ,3.36.0  ,community  ,n          ,y     ,y
+aws_dynamodb              ,output    ,AWS DynamoDB              ,3.36.0  ,community  ,n          ,y     ,y
+aws_dynamodb_partiql      ,processor ,aws_dynamodb_partiql      ,3.48.0  ,certified  ,n          ,y     ,y
+aws_kinesis               ,input     ,AWS Kinesis               ,3.36.0  ,certified  ,n          ,y     ,y
+aws_kinesis               ,output    ,AWS Kinesis               ,3.36.0  ,certified  ,n          ,y     ,y
+aws_kinesis_firehose      ,output    ,AWS Kinesis Firehose      ,3.36.0  ,certified  ,n          ,y     ,y
+aws_lambda                ,processor ,AWS Lambda                ,3.36.0  ,certified  ,n          ,y     ,y
+aws_s3                    ,cache     ,AWS S3                    ,3.36.0  ,certified  ,n          ,y     ,y
+aws_s3                    ,input     ,AWS S3                    ,0.0.0   ,certified  ,n          ,y     ,y
+aws_s3                    ,output    ,AWS S3                    ,3.36.0  ,certified  ,n          ,y     ,y
+aws_sns                   ,output    ,AWS SNS                   ,3.36.0  ,community  ,n          ,y     ,y
+aws_sqs                   ,input     ,AWS SQS                   ,0.0.0   ,certified  ,n          ,y     ,y
+aws_sqs                   ,output    ,AWS SQS                   ,3.36.0  ,certified  ,n          ,y     ,y
+azure_blob_storage        ,input     ,azure_blob_storage        ,3.36.0  ,certified  ,n          ,y     ,y
+azure_blob_storage        ,output    ,azure_blob_storage        ,3.36.0  ,certified  ,n          ,y     ,y
+azure_cosmosdb            ,input     ,azure_cosmosdb            ,4.25.0  ,certified  ,n          ,y     ,y
+azure_cosmosdb            ,output    ,azure_cosmosdb            ,4.25.0  ,certified  ,n          ,y     ,y
+azure_cosmosdb            ,processor ,azure_cosmosdb            ,4.25.0  ,certified  ,n          ,y     ,y
+azure_queue_storage       ,input     ,azure_queue_storage       ,3.42.0  ,certified  ,n          ,y     ,y
+azure_queue_storage       ,output    ,azure_queue_storage       ,3.36.0  ,certified  ,n          ,y     ,y
+azure_table_storage       ,input     ,azure_table_storage       ,4.10.0  ,certified  ,n          ,y     ,y
+azure_table_storage       ,output    ,azure_table_storage       ,3.36.0  ,certified  ,n          ,y     ,y
+batched                   ,input     ,batched                   ,4.11.0  ,certified  ,n          ,y     ,y
+beanstalkd                ,input     ,beanstalkd                ,4.7.0   ,community  ,n          ,n     ,n
+beanstalkd                ,output    ,beanstalkd                ,4.7.0   ,community  ,n          ,n     ,n
+bloblang                  ,processor ,bloblang                  ,0.0.0   ,certified  ,n          ,y     ,y
+bounds_check              ,processor ,bounds_check              ,0.0.0   ,certified  ,n          ,y     ,y
+branch                    ,processor ,branch                    ,0.0.0   ,certified  ,n          ,y     ,y
+broker                    ,input     ,broker                    ,0.0.0   ,certified  ,n          ,y     ,y
+broker                    ,output    ,broker                    ,0.0.0   ,certified  ,n          ,y     ,y
+cache                     ,output    ,cache                     ,0.0.0   ,certified  ,n          ,y     ,y
+cache                     ,processor ,cache                     ,0.0.0   ,certified  ,n          ,y     ,y
+cached                    ,processor ,cached                    ,4.3.0   ,certified  ,n          ,y     ,y
+cassandra                 ,input     ,cassandra                 ,0.0.0   ,community  ,n          ,n     ,n
+cassandra                 ,output    ,cassandra                 ,0.0.0   ,community  ,n          ,n     ,n
+catch                     ,processor ,catch                     ,0.0.0   ,certified  ,n          ,y     ,y
+chunker                   ,scanner   ,chunker                   ,0.0.0   ,certified  ,n          ,y     ,y
+cockroachdb_changefeed    ,input     ,cockroachdb_changefeed    ,0.0.0   ,community  ,n          ,n     ,n
+cohere_chat               ,processor ,cohere_chat               ,4.37.0  ,enterprise ,n          ,y     ,y
+cohere_embeddings         ,processor ,cohere_embeddings         ,4.37.0  ,enterprise ,n          ,y     ,y
+command                   ,processor ,command                   ,4.21.0  ,certified  ,n          ,n     ,n
+compress                  ,processor ,compress                  ,0.0.0   ,certified  ,n          ,y     ,y
+couchbase                 ,cache     ,Couchbase                 ,4.12.0  ,community  ,n          ,n     ,n
+couchbase                 ,processor ,Couchbase                 ,4.11.0  ,community  ,n          ,n     ,n
+csv                       ,input     ,csv                       ,0.0.0   ,certified  ,n          ,n     ,n
+csv                       ,scanner   ,csv                       ,0.0.0   ,certified  ,n          ,y     ,y
+decompress                ,processor ,decompress                ,0.0.0   ,certified  ,n          ,y     ,y
+decompress                ,scanner   ,decompress                ,0.0.0   ,certified  ,n          ,y     ,y
+dedupe                    ,processor ,dedupe                    ,0.0.0   ,certified  ,n          ,y     ,y
+discord                   ,input     ,discord                   ,0.0.0   ,community  ,n          ,n     ,n
+discord                   ,output    ,discord                   ,0.0.0   ,community  ,n          ,n     ,n
+drop                      ,output    ,drop                      ,0.0.0   ,certified  ,n          ,y     ,y
+drop_on                   ,output    ,drop_on                   ,0.0.0   ,certified  ,n          ,y     ,y
+dynamic                   ,input     ,dynamic                   ,0.0.0   ,community  ,n          ,n     ,n
+dynamic                   ,output    ,dynamic                   ,0.0.0   ,community  ,n          ,n     ,n
+elasticsearch             ,output    ,elasticsearch             ,0.0.0   ,community  ,n          ,n     ,n
+fallback                  ,output    ,fallback                  ,3.58.0  ,certified  ,n          ,y     ,y
+file                      ,cache     ,File                      ,0.0.0   ,certified  ,n          ,n     ,n
+file                      ,input     ,File                      ,0.0.0   ,certified  ,n          ,n     ,n
+file                      ,output    ,File                      ,0.0.0   ,certified  ,n          ,n     ,n
+for_each                  ,processor ,for_each                  ,0.0.0   ,certified  ,n          ,y     ,y
+gcp_bigquery              ,output    ,GCP BigQuery              ,3.55.0  ,certified  ,n          ,y     ,y
+gcp_bigquery_select       ,input     ,GCP BigQuery              ,3.63.0  ,certified  ,n          ,y     ,y
+gcp_bigquery_select       ,processor ,GCP BigQuery              ,3.64.0  ,certified  ,n          ,y     ,y
+gcp_cloud_storage         ,cache     ,GCP Cloud Storage         ,0.0.0   ,certified  ,n          ,y     ,y
+gcp_cloud_storage         ,input     ,GCP Cloud Storage         ,3.43.0  ,certified  ,n          ,y     ,y
+gcp_cloud_storage         ,output    ,GCP Cloud Storage         ,3.43.0  ,certified  ,n          ,y     ,y
+gcp_cloudtrace            ,tracer    ,GCP Cloud Trace           ,4.2.0   ,certified  ,n          ,y     ,y
+gcp_pubsub                ,input     ,GCP PubSub                ,0.0.0   ,certified  ,n          ,y     ,y
+gcp_pubsub                ,output    ,GCP PubSub                ,0.0.0   ,certified  ,n          ,y     ,y
+gcp_vertex_ai_chat        ,processor ,GCP Vertex AI             ,4.34.0  ,enterprise ,n          ,y     ,y
+gcp_vertex_ai_embeddings  ,processor ,gcp_vertex_ai_embeddings  ,4.37.0  ,enterprise ,n          ,y     ,y
+generate                  ,input     ,generate                  ,3.40.0  ,certified  ,n          ,y     ,y
+grok                      ,processor ,grok                      ,0.0.0   ,community  ,n          ,n     ,n
+group_by                  ,processor ,group_by                  ,0.0.0   ,certified  ,n          ,y     ,y
+group_by_value            ,processor ,group_by_value            ,0.0.0   ,certified  ,n          ,y     ,y
+hdfs                      ,input     ,hdfs                      ,0.0.0   ,community  ,n          ,n     ,n
+hdfs                      ,output    ,hdfs                      ,0.0.0   ,community  ,n          ,n     ,n
+http                      ,processor ,HTTP                      ,0.0.0   ,certified  ,n          ,n     ,n
+http_client               ,input     ,http_client               ,0.0.0   ,certified  ,n          ,n     ,n
+http_client               ,output    ,http_client               ,0.0.0   ,certified  ,n          ,n     ,n
+http_server               ,input     ,http_server               ,0.0.0   ,certified  ,n          ,n     ,n
+http_server               ,output    ,http_server               ,0.0.0   ,certified  ,n          ,n     ,n
+influxdb                  ,metric    ,influxdb                  ,3.36.0  ,community  ,n          ,n     ,n
+inproc                    ,input     ,inproc                    ,0.0.0   ,certified  ,n          ,y     ,y
+inproc                    ,output    ,inproc                    ,0.0.0   ,certified  ,n          ,y     ,y
+insert_part               ,processor ,insert_part               ,0.0.0   ,certified  ,n          ,y     ,y
+jaeger                    ,tracer    ,jaeger                    ,0.0.0   ,community  ,n          ,n     ,n
+javascript                ,processor ,javascript                ,4.14.0  ,certified  ,n          ,n     ,n
+jmespath                  ,processor ,JMESPath                  ,0.0.0   ,certified  ,n          ,y     ,y
+jq                        ,processor ,jq                        ,0.0.0   ,certified  ,n          ,y     ,y
+json_api                  ,metric    ,json_api                  ,0.0.0   ,certified  ,n          ,n     ,n
+json_documents            ,scanner   ,json_documents            ,4.27.0  ,certified  ,n          ,y     ,y
+json_schema               ,processor ,JSON Schema               ,0.0.0   ,certified  ,n          ,y     ,y
+kafka                     ,input     ,Kafka                     ,0.0.0   ,certified  ,n          ,y     ,y
+kafka                     ,output    ,Kafka                     ,0.0.0   ,certified  ,n          ,y     ,y
+kafka_franz               ,input     ,kafka_franz               ,3.61.0  ,certified  ,n          ,y     ,y
+kafka_franz               ,output    ,kafka_franz               ,3.61.0  ,certified  ,n          ,y     ,y
+lines                     ,scanner   ,lines                     ,0.0.0   ,certified  ,n          ,y     ,y
+local                     ,rate_limit,local                     ,0.0.0   ,certified  ,n          ,y     ,y
+log                       ,processor ,log                       ,0.0.0   ,certified  ,n          ,y     ,y
+logger                    ,metric    ,logger                    ,0.0.0   ,certified  ,n          ,n     ,n
+lru                       ,cache     ,lru                       ,0.0.0   ,community  ,n          ,y     ,y
+mapping                   ,processor ,mapping                   ,4.5.0   ,certified  ,n          ,y     ,y
+memcached                 ,cache     ,Memcached                 ,0.0.0   ,community  ,n          ,y     ,y
+memory                    ,buffer    ,Memory                    ,0.0.0   ,certified  ,n          ,y     ,y
+memory                    ,cache     ,Memory                    ,0.0.0   ,certified  ,n          ,y     ,y
+metric                    ,processor ,metric                    ,0.0.0   ,certified  ,n          ,y     ,y
+mongodb                   ,cache     ,MongoDB                   ,3.43.0  ,community  ,n          ,n     ,n
+mongodb                   ,input     ,MongoDB                   ,3.64.0  ,community  ,n          ,n     ,n
+mongodb                   ,output    ,MongoDB                   ,3.43.0  ,community  ,n          ,n     ,n
+mongodb                   ,processor ,MongoDB                   ,3.43.0  ,community  ,n          ,n     ,n
+mqtt                      ,input     ,mqtt                      ,0.0.0   ,community  ,n          ,n     ,n
+mqtt                      ,output    ,mqtt                      ,0.0.0   ,community  ,n          ,n     ,n
+msgpack                   ,processor ,msgpack                   ,3.59.0  ,community  ,n          ,n     ,n
+multilevel                ,cache     ,Multilevel                ,0.0.0   ,certified  ,n          ,y     ,y
+mutation                  ,processor ,mutation                  ,4.5.0   ,certified  ,n          ,y     ,y
+nanomsg                   ,input     ,nanomsg                   ,0.0.0   ,community  ,n          ,n     ,n
+nanomsg                   ,output    ,nanomsg                   ,0.0.0   ,community  ,n          ,n     ,n
+nats                      ,input     ,NATS                      ,0.0.0   ,certified  ,n          ,y     ,y
+nats                      ,output    ,NATS                      ,0.0.0   ,certified  ,n          ,y     ,y
+nats_jetstream            ,input     ,NATS JetStream            ,3.46.0  ,certified  ,n          ,y     ,y
+nats_jetstream            ,output    ,NATS JetStream            ,3.46.0  ,certified  ,n          ,y     ,y
+nats_kv                   ,cache     ,NATS KV                   ,4.27.0  ,certified  ,n          ,y     ,y
+nats_kv                   ,input     ,NATS KV                   ,4.12.0  ,certified  ,n          ,y     ,y
+nats_kv                   ,output    ,NATS KV                   ,4.12.0  ,certified  ,n          ,y     ,y
+nats_kv                   ,processor ,NATS KV                   ,4.12.0  ,certified  ,n          ,y     ,y
+nats_request_reply        ,processor ,NATS Request Reply        ,4.27.0  ,certified  ,n          ,y     ,y
+nats_stream               ,input     ,NATS Stream               ,0.0.0   ,community  ,n          ,n     ,n
+nats_stream               ,output    ,NATS Stream               ,0.0.0   ,community  ,n          ,n     ,n
+none                      ,buffer    ,none                      ,0.0.0   ,certified  ,n          ,y     ,y
+none                      ,metric    ,none                      ,0.0.0   ,certified  ,n          ,y     ,y
+none                      ,tracer    ,none                      ,0.0.0   ,certified  ,n          ,y     ,y
+noop                      ,cache     ,noop                      ,4.27.0  ,certified  ,n          ,y     ,y
+noop                      ,processor ,noop                      ,0.0.0   ,certified  ,n          ,y     ,y
+nsq                       ,input     ,nsq                       ,0.0.0   ,community  ,n          ,n     ,n
+nsq                       ,output    ,nsq                       ,0.0.0   ,community  ,n          ,n     ,n
+ockam_kafka               ,input     ,ockam_kafka               ,0.0.0   ,community  ,n          ,n     ,n
+ockam_kafka               ,output    ,ockam_kafka               ,0.0.0   ,community  ,n          ,n     ,n
+ollama_chat               ,processor ,ollama_chat               ,4.32.0  ,enterprise ,n          ,n     ,y
+ollama_embeddings         ,processor ,ollama_embeddings         ,4.32.0  ,enterprise ,n          ,n     ,y
+open_telemetry_collector  ,tracer    ,open_telemetry_collector  ,0.0.0   ,community  ,n          ,n     ,n
+openai_chat_completion    ,processor ,openai_chat_completion    ,4.32.0  ,enterprise ,n          ,y     ,y
+openai_embeddings         ,processor ,openai_embeddings         ,4.32.0  ,enterprise ,n          ,y     ,y
+openai_image_generation   ,processor ,openai_image_generation   ,4.32.0  ,enterprise ,n          ,y     ,y
+openai_speech             ,processor ,openai_speech             ,4.32.0  ,enterprise ,n          ,y     ,y
+openai_transcription      ,processor ,openai_transcription      ,4.32.0  ,enterprise ,n          ,y     ,y
+openai_translation        ,processor ,openai_translation        ,4.32.0  ,enterprise ,n          ,y     ,y
+opensearch                ,output    ,OpenSearch                ,0.0.0   ,certified  ,n          ,y     ,y
+parallel                  ,processor ,parallel                  ,0.0.0   ,certified  ,n          ,y     ,y
+parquet                   ,input     ,parquet                   ,4.8.0   ,certified  ,n          ,n     ,n
+parquet                   ,processor ,parquet                   ,3.62.0  ,community  ,y          ,n     ,n
+parquet_decode            ,processor ,parquet_decode            ,4.4.0   ,certified  ,n          ,y     ,y
+parquet_encode            ,processor ,parquet_encode            ,4.4.0   ,certified  ,n          ,y     ,y
+parse_log                 ,processor ,parse_log                 ,0.0.0   ,community  ,n          ,y     ,y
+pinecone                  ,output    ,pinecone                  ,4.31.0  ,certified  ,n          ,y     ,y
+processors                ,processor ,processors                ,0.0.0   ,certified  ,n          ,y     ,y
+prometheus                ,metric    ,prometheus                ,0.0.0   ,certified  ,n          ,y     ,y
+protobuf                  ,processor ,Protobuf                  ,0.0.0   ,certified  ,n          ,y     ,y
+pulsar                    ,input     ,pulsar                    ,3.43.0  ,community  ,n          ,n     ,n
+pulsar                    ,output    ,pulsar                    ,3.43.0  ,community  ,n          ,n     ,n
+pusher                    ,output    ,pusher                    ,4.3.0   ,community  ,n          ,n     ,n
+qdrant                    ,output    ,qdrant                    ,4.33.0  ,certified  ,n          ,y     ,y
+questdb                   ,output    ,questdb                   ,4.37.0  ,community  ,n          ,n     ,n
+rate_limit                ,processor ,rate_limit                ,0.0.0   ,certified  ,n          ,y     ,y
+re_match                  ,scanner   ,re_match                  ,0.0.0   ,certified  ,n          ,y     ,y
+read_until                ,input     ,read_until                ,0.0.0   ,certified  ,n          ,y     ,y
+redis                     ,cache     ,Redis                     ,0.0.0   ,certified  ,n          ,y     ,y
+redis                     ,processor ,Redis                     ,0.0.0   ,certified  ,n          ,y     ,y
+redis                     ,rate_limit,Redis                     ,4.12.0  ,certified  ,n          ,y     ,y
+redis_hash                ,output    ,Redis Hash                ,0.0.0   ,certified  ,n          ,y     ,y
+redis_list                ,input     ,Redis List                ,0.0.0   ,certified  ,n          ,y     ,y
+redis_list                ,output    ,Redis List                ,0.0.0   ,certified  ,n          ,y     ,y
+redis_pubsub              ,input     ,Redis PubSub              ,0.0.0   ,certified  ,n          ,y     ,y
+redis_pubsub              ,output    ,Redis PubSub              ,0.0.0   ,certified  ,n          ,y     ,y
+redis_scan                ,input     ,Redis                     ,4.27.0  ,certified  ,n          ,y     ,y
+redis_script              ,processor ,Redis Script              ,4.11.0  ,certified  ,n          ,y     ,y
+redis_streams             ,input     ,Redis Streams             ,0.0.0   ,certified  ,n          ,y     ,y
+redis_streams             ,output    ,Redis Streams             ,0.0.0   ,certified  ,n          ,y     ,y
+redpanda_data_transform   ,processor ,redpanda_data_transform   ,4.31.0  ,certified  ,n          ,n     ,n
+redpanda_migrator         ,input     ,redpanda_migrator         ,4.38.0  ,enterprise ,n          ,y     ,y
+redpanda_migrator         ,output    ,redpanda_migrator         ,4.38.0  ,enterprise ,n          ,y     ,y
+redpanda_migrator_bundle  ,input     ,redpanda_migrator_bundle  ,4.38.0  ,enterprise ,n          ,y     ,y
+redpanda_migrator_bundle  ,output    ,redpanda_migrator_bundle  ,4.38.0  ,enterprise ,n          ,y     ,y
+redpanda_migrator_offsets ,output    ,redpanda_migrator_offsets ,4.38.0  ,enterprise ,n          ,y     ,y
+reject                    ,output    ,reject                    ,0.0.0   ,certified  ,n          ,y     ,y
+reject_errored            ,output    ,reject_errored            ,0.0.0   ,certified  ,n          ,y     ,y
+resource                  ,input     ,resource                  ,0.0.0   ,certified  ,n          ,y     ,y
+resource                  ,output    ,resource                  ,0.0.0   ,certified  ,n          ,y     ,y
+resource                  ,processor ,resource                  ,0.0.0   ,certified  ,n          ,y     ,y
+retry                     ,output    ,retry                     ,0.0.0   ,certified  ,n          ,y     ,y
+retry                     ,processor ,retry                     ,4.27.0  ,certified  ,n          ,y     ,y
+ristretto                 ,cache     ,Ristretto                 ,0.0.0   ,community  ,n          ,y     ,y
+schema_registry           ,input     ,schema_registry           ,4.33.0  ,enterprise ,n          ,y     ,y
+schema_registry           ,output    ,schema_registry           ,4.33.0  ,enterprise ,n          ,y     ,y
+schema_registry_decode    ,processor ,schema_registry_decode    ,0.0.0   ,certified  ,n          ,y     ,y
+schema_registry_encode    ,processor ,schema_registry_encode    ,3.58.0  ,certified  ,n          ,y     ,y
+select_parts              ,processor ,select_parts              ,0.0.0   ,certified  ,n          ,y     ,y
+sentry_capture            ,processor ,sentry_capture            ,4.16.0  ,community  ,n          ,n     ,n
+sequence                  ,input     ,sequence                  ,0.0.0   ,certified  ,n          ,y     ,y
+sftp                      ,input     ,sftp                      ,3.39.0  ,certified  ,n          ,y     ,y
+sftp                      ,output    ,sftp                      ,3.39.0  ,certified  ,n          ,y     ,y
+skip_bom                  ,scanner   ,skip_bom                  ,0.0.0   ,certified  ,n          ,y     ,y
+sleep                     ,processor ,sleep                     ,0.0.0   ,certified  ,n          ,y     ,y
+snowflake_put             ,output    ,Snowflake                 ,4.0.0   ,enterprise ,n          ,y     ,y
+socket                    ,input     ,Socket                    ,0.0.0   ,certified  ,n          ,n     ,n
+socket                    ,output    ,Socket                    ,0.0.0   ,certified  ,n          ,n     ,n
+socket_server             ,input     ,socket_server             ,0.0.0   ,certified  ,n          ,n     ,n
+split                     ,processor ,split                     ,0.0.0   ,certified  ,n          ,y     ,y
+splunk                    ,input     ,Splunk                    ,4.30.0  ,enterprise ,n          ,y     ,y
+splunk_hec                ,output    ,Splunk                    ,4.30.0  ,enterprise ,n          ,y     ,y
+sql                       ,cache     ,SQL                       ,4.26.0  ,certified  ,n          ,n     ,n
+sql                       ,output    ,SQL                       ,3.65.0  ,community  ,y          ,n     ,n
+sql                       ,processor ,SQL                       ,3.65.0  ,community  ,y          ,n     ,n
+sql_driver_clickhouse     ,sql_driver,ClickHouse                ,0.0.0   ,community  ,n          ,n     ,n
+sql_driver_gocosmos       ,sql_driver,Azure Cosmos DB           ,0.0.0   ,community  ,n          ,n     ,n
+sql_driver_mssql          ,sql_driver,Microsoft SQL Server      ,0.0.0   ,community  ,n          ,n     ,n
+sql_driver_mysql          ,sql_driver,MYSQL                     ,0.0.0   ,certified  ,n          ,y     ,y
+sql_driver_oracle         ,sql_driver,Oracle                    ,0.0.0   ,certified  ,n          ,y     ,y
+sql_driver_postgres       ,sql_driver,PostgreSQL                ,0.0.0   ,certified  ,n          ,y     ,y
+sql_driver_snowflake      ,sql_driver,Snowflake                 ,0.0.0   ,community  ,n          ,n     ,n
+sql_driver_sqlite         ,sql_driver,SQLite                    ,0.0.0   ,certified  ,n          ,y     ,y
+sql_driver_trino          ,sql_driver,Trino                     ,0.0.0   ,community  ,n          ,n     ,n
+sql_insert                ,output    ,sql_insert                ,3.59.0  ,certified  ,n          ,y     ,y
+sql_insert                ,processor ,sql_insert                ,3.59.0  ,certified  ,n          ,y     ,y
+sql_raw                   ,input     ,sql_raw                   ,4.10.0  ,certified  ,n          ,y     ,y
+sql_raw                   ,output    ,sql_raw                   ,3.65.0  ,certified  ,n          ,y     ,y
+sql_raw                   ,processor ,sql_raw                   ,3.65.0  ,certified  ,n          ,y     ,y
+sql_select                ,input     ,sql_select                ,3.59.0  ,certified  ,n          ,y     ,y
+sql_select                ,processor ,sql_select                ,3.59.0  ,certified  ,n          ,y     ,y
+sqlite                    ,buffer    ,sqlite                    ,0.0.0   ,community  ,n          ,n     ,n
+statsd                    ,metric    ,statsd                    ,0.0.0   ,certified  ,n          ,n     ,n
+stdin                     ,input     ,stdin                     ,0.0.0   ,certified  ,n          ,n     ,n
+stdout                    ,output    ,stdout                    ,0.0.0   ,certified  ,n          ,n     ,n
+subprocess                ,input     ,subprocess                ,0.0.0   ,community  ,n          ,n     ,n
+subprocess                ,output    ,subprocess                ,0.0.0   ,community  ,n          ,n     ,n
+subprocess                ,processor ,subprocess                ,0.0.0   ,community  ,n          ,n     ,n
+switch                    ,output    ,switch                    ,0.0.0   ,certified  ,n          ,y     ,y
+switch                    ,processor ,switch                    ,0.0.0   ,certified  ,n          ,y     ,y
+switch                    ,scanner   ,switch                    ,0.0.0   ,certified  ,n          ,y     ,y
+sync_response             ,output    ,sync_response             ,0.0.0   ,certified  ,n          ,y     ,y
+sync_response             ,processor ,sync_response             ,0.0.0   ,certified  ,n          ,y     ,y
+system_window             ,buffer    ,system_window             ,3.53.0  ,certified  ,n          ,y     ,y
+tar                       ,scanner   ,tar                       ,0.0.0   ,certified  ,n          ,y     ,y
+to_the_end                ,scanner   ,to_the_end                ,0.0.0   ,certified  ,n          ,y     ,y
+try                       ,processor ,try                       ,0.0.0   ,certified  ,n          ,y     ,y
+ttlru                     ,cache     ,ttlru                     ,0.0.0   ,community  ,n          ,y     ,y
+twitter_search            ,input     ,twitter_search            ,0.0.0   ,community  ,n          ,n     ,n
+unarchive                 ,processor ,unarchive                 ,0.0.0   ,certified  ,n          ,y     ,y
+wasm                      ,processor ,wasm                      ,4.11.0  ,community  ,n          ,n     ,n
+websocket                 ,input     ,websocket                 ,0.0.0   ,certified  ,n          ,n     ,n
+websocket                 ,output    ,websocket                 ,0.0.0   ,certified  ,n          ,n     ,n
+while                     ,processor ,while                     ,0.0.0   ,certified  ,n          ,y     ,y
+workflow                  ,processor ,workflow                  ,0.0.0   ,certified  ,n          ,y     ,y
+xml                       ,processor ,xml                       ,0.0.0   ,community  ,n          ,y     ,y
+zmq4                      ,input     ,zmq4                      ,0.0.0   ,community  ,n          ,n     ,n
+zmq4                      ,output    ,zmq4                      ,0.0.0   ,community  ,n          ,n     ,n
