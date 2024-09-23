@@ -273,7 +273,7 @@ func (s *parquetEncodeProcessor) ProcessBatch(ctx context.Context, batch service
 	batch = batch.Copy()
 	rows := make([]any, len(batch))
 	for i, m := range batch {
-		ms, err := m.AsStructured()
+		ms, err := m.AsStructuredMut()
 		if err != nil {
 			return nil, err
 		}
