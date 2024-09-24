@@ -68,7 +68,33 @@ output:
     grpc_host: localhost:6334
     collection_name: "example_collection"
     id: "root = uuid_v4()"
-    vector_mapping: "root = this"`)
+    vector_mapping: "root = this"
+`).
+		Example(
+			"Store embedding vectors in Clickhouse",
+			"Compute embeddings for some generated data and store it within https://clickhouse.com/[Clickhouse^]",
+			`input:
+  generate:
+    interval: 1s
+    mapping: |
+      root = {"text": fake("paragraph")}
+pipeline:
+  processors:
+  - branch:
+      processors:
+      - ollama_embeddings:
+          model: snowflake-artic-embed
+          text: "${!this.text}"
+      result_map: |
+        root.embeddings = this
+output:
+  sql_insert:
+    driver: clickhouse
+    dsn: "clickhouse://localhost:9000"
+    table: searchable_text
+    columns: ["id", "text", "vector"]
+    args_mapping: "root = [uuid_v4(), this.text, this.embeddings]"
+`)
 }
 
 func makeOllamaEmbeddingProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
