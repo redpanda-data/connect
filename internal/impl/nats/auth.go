@@ -71,9 +71,9 @@ func authFieldSpec() *service.ConfigField {
 			Optional(),
 		service.NewStringField("nkey").
 			Description("The NKey seed.").
-			Default("").
 			Secret().
-			Optional(),
+			Optional().
+			Example("UDXU4RCSJNZOIQHZNWXHXORDPRTGNJAHAHFRGZNEEJCPQTT2M7NLCNF4"), // don't worry, this sample seed is from Nats offical doc
 		service.NewStringField("user_credentials_file").
 			Description("An optional file containing user credentials which consist of an user JWT and corresponding NKey seed.").
 			Example("./user.creds").
@@ -286,8 +286,7 @@ func saveTempNkeyFile(content string) (string, error) {
 	}
 	defer file.Close()
 
-	_, err = file.WriteString(content)
-	if err != nil {
+	if _, err = file.WriteString(content); err != nil {
 		return "", err
 	}
 

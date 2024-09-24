@@ -68,7 +68,7 @@ output:
       client_certs: []
     auth:
       nkey_file: ./seed.nk # No default (optional)
-      nkey: ""
+      nkey: '!!!SECRET_SCRUBBED!!!' # No default (optional)
       user_credentials_file: ./user.creds # No default (optional)
       user_jwt: "" # No default (optional)
       user_nkey_seed: "" # No default (optional)
@@ -377,7 +377,12 @@ This field contains sensitive information that usually shouldn't be added to a c
 
 *Type*: `string`
 
-*Default*: `""`
+
+```yml
+# Examples
+
+nkey: UDXU4RCSJNZOIQHZNWXHXORDPRTGNJAHAHFRGZNEEJCPQTT2M7NLCNF4
+```
 
 === `auth.user_credentials_file`
 
