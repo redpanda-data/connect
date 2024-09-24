@@ -35,7 +35,7 @@ func redpandaMigratorOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Beta().
 		Categories("Services").
-		Version("4.35.0").
+		Version("4.37.0").
 		Summary("A Redpanda Migrator output using the https://github.com/twmb/franz-go[Franz Kafka client library^].").
 		Description(`
 Writes a batch of messages to a Kafka broker and waits for acknowledgement before propagating it back to the input.

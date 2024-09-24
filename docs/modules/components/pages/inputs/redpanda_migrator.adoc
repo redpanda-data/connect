@@ -25,7 +25,7 @@ component_type_dropdown::[]
 
 A Redpanda Migrator input using the https://github.com/twmb/franz-go[Franz Kafka client library^].
 
-Introduced in version 4.35.0.
+Introduced in version 4.37.0.
 
 
 [tabs]
