@@ -449,17 +449,19 @@ func (w *RedpandaMigratorWriter) WriteBatch(ctx context.Context, b service.Messa
 
 		if input != nil {
 			if _, ok := w.topicCache.Load(topic); !ok {
-				w.mgr.Logger().Infof("Creating topic %q", topic)
-
 				if err := createTopic(ctx, topic, w.replicationFactorOverride, w.replicationFactor, input.client, w.client); err != nil && err != errTopicAlreadyExists {
 					return fmt.Errorf("failed to create topic %q: %s", topic, err)
 				} else {
 					if err == errTopicAlreadyExists {
-						w.mgr.Logger().Infof("Topic %q already exists", topic)
+						w.mgr.Logger().Debugf("Topic %q already exists", topic)
+					} else {
+						w.mgr.Logger().Infof("Created topic %q", topic)
 					}
 					if err := createACLs(ctx, topic, input.client, w.client); err != nil {
 						w.mgr.Logger().Errorf("Failed to create ACLs for topic %q: %s", topic, err)
 					}
+
+					w.topicCache.Store(topic, struct{}{})
 				}
 			}
 		}

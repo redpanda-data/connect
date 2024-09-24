@@ -557,13 +557,18 @@ func (r *RedpandaMigratorReader) ReadBatch(ctx context.Context) (service.Message
 
 		if output != nil {
 			for _, topic := range topics {
-				r.mgr.Logger().Infof("Creating topic %q", topic)
-
 				if err := createTopic(ctx, topic, r.replicationFactorOverride, r.replicationFactor, r.client, output.client); err != nil && err != errTopicAlreadyExists {
+					// We could end up attempting to create a topic which doesn't have any messages in it, so if that
+					// fails, we can just log an error and carry on. If it does contain messages, the output will
+					// attempt to create it again anyway and will trigger and error if it can't.
+					// The output `topicCache` could be populated here to avoid the redundant call to create topics, but
+					// it's not worth the complexity.
 					r.mgr.Logger().Errorf("Failed to create topic %q and ACLs: %s", topic, err)
 				} else {
 					if err == errTopicAlreadyExists {
 						r.mgr.Logger().Debugf("Topic %q already exists", topic)
+					} else {
+						r.mgr.Logger().Infof("Created topic %q in output cluster", topic)
 					}
 					if err := createACLs(ctx, topic, r.client, output.client); err != nil {
 						r.mgr.Logger().Errorf("Failed to create ACLs for topic %q: %s", topic, err)
