@@ -78,7 +78,7 @@ type Processor struct {
 
 // NewProcessor returns a Couchbase processor.
 func NewProcessor(conf *service.ParsedConfig, mgr *service.Resources) (*Processor, error) {
-	cl, err := getClient(conf, mgr)
+	cl, err := getClient(conf)
 	if err != nil {
 		return nil, err
 	}
