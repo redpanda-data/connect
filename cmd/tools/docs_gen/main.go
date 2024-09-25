@@ -27,6 +27,8 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
 
+	"github.com/redpanda-data/connect/v4/public/schema"
+
 	_ "github.com/redpanda-data/connect/v4/public/components/all"
 
 	_ "embed"
@@ -50,6 +52,9 @@ var templateHTTPRaw string
 //go:embed templates/logger.adoc.tmpl
 var templateLoggerRaw string
 
+//go:embed templates/redpanda.adoc.tmpl
+var templateRedpandaRaw string
+
 //go:embed templates/tests.adoc.tmpl
 var templateTestsRaw string
 
@@ -62,6 +67,7 @@ var (
 	templatePlugin         *template.Template
 	templateHTTP           *template.Template
 	templateLogger         *template.Template
+	templateRedpanda       *template.Template
 	templateTests          *template.Template
 	templateTemplates      *template.Template
 )
@@ -72,6 +78,7 @@ func init() {
 	templatePlugin = template.Must(template.New("plugin").Parse(templatePluginFieldsRaw + templatePluginRaw))
 	templateHTTP = template.Must(template.New("http").Parse(templatePluginFieldsRaw + templateHTTPRaw))
 	templateLogger = template.Must(template.New("logger").Parse(templatePluginFieldsRaw + templateLoggerRaw))
+	templateRedpanda = template.Must(template.New("redpanda").Parse(templatePluginFieldsRaw + templateRedpandaRaw))
 	templateTests = template.Must(template.New("tests").Parse(templatePluginFieldsRaw + templateTestsRaw))
 	templateTemplates = template.Must(template.New("templates").Parse(templatePluginFieldsRaw + templateTemplatesRaw))
 }
@@ -88,20 +95,24 @@ func create(t, path string, resBytes []byte) {
 	fmt.Printf("Documentation for '%v' has changed, updating: %v\n", t, path)
 }
 
+func getSchema() *service.ConfigSchema {
+	return schema.Standard("", "")
+}
+
 func main() {
 	docsDir := "./docs/modules/components/pages"
 	flag.StringVar(&docsDir, "dir", docsDir, "The directory to write docs to")
 	flag.Parse()
 
-	service.GlobalEnvironment().WalkInputs(viewForDir(path.Join(docsDir, "./inputs")))
-	service.GlobalEnvironment().WalkBuffers(viewForDir(path.Join(docsDir, "./buffers")))
-	service.GlobalEnvironment().WalkCaches(viewForDir(path.Join(docsDir, "./caches")))
-	service.GlobalEnvironment().WalkMetrics(viewForDir(path.Join(docsDir, "./metrics")))
-	service.GlobalEnvironment().WalkOutputs(viewForDir(path.Join(docsDir, "./outputs")))
-	service.GlobalEnvironment().WalkProcessors(viewForDir(path.Join(docsDir, "./processors")))
-	service.GlobalEnvironment().WalkRateLimits(viewForDir(path.Join(docsDir, "./rate_limits")))
-	service.GlobalEnvironment().WalkTracers(viewForDir(path.Join(docsDir, "./tracers")))
-	service.GlobalEnvironment().WalkScanners(viewForDir(path.Join(docsDir, "./scanners")))
+	getSchema().Environment().WalkInputs(viewForDir(path.Join(docsDir, "./inputs")))
+	getSchema().Environment().WalkBuffers(viewForDir(path.Join(docsDir, "./buffers")))
+	getSchema().Environment().WalkCaches(viewForDir(path.Join(docsDir, "./caches")))
+	getSchema().Environment().WalkMetrics(viewForDir(path.Join(docsDir, "./metrics")))
+	getSchema().Environment().WalkOutputs(viewForDir(path.Join(docsDir, "./outputs")))
+	getSchema().Environment().WalkProcessors(viewForDir(path.Join(docsDir, "./processors")))
+	getSchema().Environment().WalkRateLimits(viewForDir(path.Join(docsDir, "./rate_limits")))
+	getSchema().Environment().WalkTracers(viewForDir(path.Join(docsDir, "./tracers")))
+	getSchema().Environment().WalkScanners(viewForDir(path.Join(docsDir, "./scanners")))
 
 	// Bloblang stuff
 	doBloblangMethods(docsDir)
@@ -115,6 +126,9 @@ func main() {
 
 	// Logger docs
 	doLogger(docsDir)
+
+	// Redpanda docs
+	doRedpanda(docsDir)
 
 	// Template docs
 	doTemplates(docsDir)
@@ -284,7 +298,7 @@ func doBloblangMethods(dir string) {
 }
 
 func doTestDocs(dir string) {
-	data, err := service.GlobalEnvironment().FullConfigSchema("", "").TemplateData()
+	data, err := getSchema().TemplateData()
 	if err != nil {
 		panic(fmt.Sprintf("Failed to prepare tests docs: %v", err))
 	}
@@ -306,7 +320,7 @@ func doTestDocs(dir string) {
 }
 
 func doHTTP(dir string) {
-	data, err := service.GlobalEnvironment().FullConfigSchema("", "").TemplateData("http")
+	data, err := getSchema().TemplateData("http")
 	if err != nil {
 		panic(fmt.Sprintf("Failed to prepare http docs: %v", err))
 	}
@@ -320,7 +334,7 @@ func doHTTP(dir string) {
 }
 
 func doLogger(dir string) {
-	data, err := service.GlobalEnvironment().FullConfigSchema("", "").TemplateData("logger")
+	data, err := getSchema().TemplateData("logger")
 	if err != nil {
 		panic(fmt.Sprintf("Failed to prepare logger docs: %v", err))
 	}
@@ -333,8 +347,22 @@ func doLogger(dir string) {
 	create("logger docs", filepath.Join(dir, "logger", "about.adoc"), buf.Bytes())
 }
 
+func doRedpanda(dir string) {
+	data, err := getSchema().TemplateData("redpanda")
+	if err != nil {
+		panic(fmt.Sprintf("Failed to prepare redpanda docs: %v", err))
+	}
+
+	var buf bytes.Buffer
+	if err := templateRedpanda.Execute(&buf, data); err != nil {
+		panic(fmt.Sprintf("Failed to generate redpanda docs: %v", err))
+	}
+
+	create("redpanda docs", filepath.Join(dir, "redpanda", "about.adoc"), buf.Bytes())
+}
+
 func doTemplates(dir string) {
-	data, err := service.GlobalEnvironment().TemplateSchema("", "").TemplateData()
+	data, err := getSchema().Environment().TemplateSchema("", "").TemplateData()
 	if err != nil {
 		panic(fmt.Sprintf("Failed to prepare template docs: %v", err))
 	}

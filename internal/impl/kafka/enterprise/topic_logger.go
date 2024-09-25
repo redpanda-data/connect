@@ -47,12 +47,14 @@ func TopicLoggerFields() []*service.ConfigField {
 			Example([]string{"foo:9092,bar:9092"}),
 		service.NewStringField("logs_topic").
 			Description("A topic to send process logs to.").
-			Default("__redpanda.connect.logs"),
+			Default("").
+			Example("__redpanda.connect.logs"),
 		service.NewStringEnumField("logs_level", "debug", "info", "warn", "error").
 			Default("info"),
 		service.NewStringField("status_topic").
 			Description("A topic to send status updates to.").
-			Default("__redpanda.connect.status"),
+			Default("").
+			Example("__redpanda.connect.status"),
 		service.NewStringField("client_id").
 			Description("An identifier for the client connection.").
 			Default("benthos").
