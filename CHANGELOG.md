@@ -22,6 +22,10 @@ All notable changes to this project will be documented in this file.
 - Fixed a bug in the `kafka_migrator` input which could lead to extra duplicate messages during a consumer group rebalance. (@mihaitodor)
 - `kafka_migrator`, `kafka_migrator_offsets` and `kafka_migrator_bundle` components renamed to `redpanda_migrator`, `redpanda_migrator_offsets` and `redpanda_migrator_bundle` (@mihaitodor)
 
+### Fixed
+
+- Fixes a panic in the `parquet_encode` processor (@mihaitodor)
+
 ## 4.36.0 - 2024-09-11
 
 ### Added

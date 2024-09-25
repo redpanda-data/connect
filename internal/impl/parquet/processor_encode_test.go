@@ -18,7 +18,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
+	"sync"
 	"testing"
 
 	"github.com/parquet-go/parquet-go"
@@ -382,4 +384,59 @@ func TestParquetEncodeProcessor(t *testing.T) {
 
 		assert.JSONEq(t, string(expectedBytes), string(actualBytes))
 	})
+}
+
+func TestParquetEncodeParallel(t *testing.T) {
+	encodeConf, err := parquetEncodeProcessorConfig().ParseYAML(`
+schema:
+  - { name: id, type: INT64 }
+  - { name: as, type: DOUBLE, repeated: true }
+  - { name: b, type: BYTE_ARRAY }
+  - { name: c, type: DOUBLE }
+  - { name: d, type: BOOLEAN }
+  - { name: e, type: INT64, optional: true }
+  - { name: f, type: INT64 }
+  - { name: g, type: UTF8 }
+  - name: nested_stuff
+    optional: true
+    fields:
+      - { name: a_stuff, type: BYTE_ARRAY }
+      - { name: b_stuff, type: BYTE_ARRAY }
+`, nil)
+	require.NoError(t, err)
+
+	encodeProc, err := newParquetEncodeProcessorFromConfig(encodeConf, nil)
+	require.NoError(t, err)
+
+	inBatch := service.MessageBatch{
+		service.NewMessage([]byte(`{
+	"id": 3,
+	"as": [ 0.1, 0.2, 0.3, 0.4 ],
+	"b": "hello world basic values",
+	"c": 0.5,
+	"d": true,
+	"e": 6,
+	"f": 7,
+	"g": "logical string represent",
+	"nested_stuff": {
+		"a_stuff": "a value",
+		"b_stuff": "b value"
+	},
+	"canary":"not in schema"
+}`)),
+	}
+
+	wg := sync.WaitGroup{}
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		t.Run(fmt.Sprintf("iteration %d", i), func(t *testing.T) {
+			defer wg.Done()
+
+			encodedBatches, err := encodeProc.ProcessBatch(context.Background(), inBatch)
+			require.NoError(t, err)
+			require.Len(t, encodedBatches, 1)
+			require.Len(t, encodedBatches[0], 1)
+		})
+	}
+	wg.Wait()
 }
