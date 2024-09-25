@@ -97,26 +97,26 @@ type SchemaReference struct {
 func (c *Client) GetSchemaByID(ctx context.Context, id int) (resPayload SchemaInfo, err error) {
 	var resCode int
 	var resBody []byte
-	if resCode, resBody, err = c.doRequest(ctx, "GET", fmt.Sprintf("/schemas/ids/%v", id)); err != nil {
-		err = fmt.Errorf("request failed for schema '%v': %v", id, err)
+	if resCode, resBody, err = c.doRequest(ctx, http.MethodGet, fmt.Sprintf("/schemas/ids/%d", id), nil); err != nil {
+		err = fmt.Errorf("request failed for schema '%d': %s", id, err)
 		c.mgr.Logger().Errorf(err.Error())
 		return
 	}
 
 	if resCode == http.StatusNotFound {
-		err = fmt.Errorf("schema '%v' not found by registry", id)
+		err = fmt.Errorf("schema '%d' not found by registry", id)
 		c.mgr.Logger().Errorf(err.Error())
 		return
 	}
 
 	if len(resBody) == 0 {
-		c.mgr.Logger().Errorf("request for schema '%v' returned an empty body", id)
+		c.mgr.Logger().Errorf("request for schema '%d' returned an empty body", id)
 		err = errors.New("schema request returned an empty body")
 		return
 	}
 
 	if err = json.Unmarshal(resBody, &resPayload); err != nil {
-		c.mgr.Logger().Errorf("failed to parse response for schema '%v': %v", id, err)
+		c.mgr.Logger().Errorf("failed to parse response for schema '%d': %s", id, err)
 		return
 	}
 	return
@@ -126,36 +126,119 @@ func (c *Client) GetSchemaByID(ctx context.Context, id int) (resPayload SchemaIn
 func (c *Client) GetSchemaBySubjectAndVersion(ctx context.Context, subject string, version *int) (resPayload SchemaInfo, err error) {
 	var path string
 	if version != nil {
-		path = fmt.Sprintf("/subjects/%s/versions/%v", url.PathEscape(subject), *version)
+		path = fmt.Sprintf("/subjects/%s/versions/%d", url.PathEscape(subject), *version)
 	} else {
 		path = fmt.Sprintf("/subjects/%s/versions/latest", url.PathEscape(subject))
 	}
 
 	var resCode int
 	var resBody []byte
-	if resCode, resBody, err = c.doRequest(ctx, "GET", path); err != nil {
-		err = fmt.Errorf("request failed for schema subject '%v': %v", subject, err)
+	if resCode, resBody, err = c.doRequest(ctx, http.MethodGet, path, nil); err != nil {
+		err = fmt.Errorf("request failed for schema subject %q: %s", subject, err)
 		c.mgr.Logger().Errorf(err.Error())
 		return
 	}
 
 	if resCode == http.StatusNotFound {
-		err = fmt.Errorf("schema subject '%v' not found by registry", subject)
+		err = fmt.Errorf("schema subject %q not found by registry", subject)
 		c.mgr.Logger().Errorf(err.Error())
 		return
 	}
 
 	if len(resBody) == 0 {
-		c.mgr.Logger().Errorf("request for schema subject '%v' returned an empty body", subject)
+		c.mgr.Logger().Errorf("request for schema subject %q returned an empty body", subject)
 		err = errors.New("schema request returned an empty body")
 		return
 	}
 
 	if err = json.Unmarshal(resBody, &resPayload); err != nil {
-		c.mgr.Logger().Errorf("failed to parse response for schema subject '%v': %v", subject, err)
+		c.mgr.Logger().Errorf("failed to parse response for schema subject %q: %s", subject, err)
 		return
 	}
 	return
+}
+
+// GetMode returns the mode of the Schema Registry instance.
+func (c *Client) GetMode(ctx context.Context) (string, error) {
+	var resCode int
+	var body []byte
+	var err error
+	if resCode, body, err = c.doRequest(ctx, http.MethodGet, "/mode", nil); err != nil {
+		return "", fmt.Errorf("request failed: %s", err)
+	}
+
+	if resCode != http.StatusOK {
+		return "", fmt.Errorf("request returned status: %d", resCode)
+	}
+
+	var payload struct {
+		Mode string
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return "", fmt.Errorf("failed to unmarshal response: %s", err)
+	}
+
+	return payload.Mode, nil
+}
+
+// GetSubjects returns the registered subjects.
+func (c *Client) GetSubjects(ctx context.Context) ([]string, error) {
+	var resCode int
+	var body []byte
+	var err error
+	if resCode, body, err = c.doRequest(ctx, http.MethodGet, "/subjects", nil); err != nil {
+		return nil, fmt.Errorf("request failed: %s", err)
+	}
+
+	if resCode != http.StatusOK {
+		return nil, fmt.Errorf("request returned status: %d", resCode)
+	}
+
+	var subjects []string
+	if err := json.Unmarshal(body, &subjects); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %s", err)
+	}
+
+	return subjects, nil
+}
+
+// GetVersionsForSubject returns the versions for a given subject.
+func (c *Client) GetVersionsForSubject(ctx context.Context, subject string) ([]int, error) {
+	path := fmt.Sprintf("/subjects/%s/versions", url.PathEscape(subject))
+	var resCode int
+	var body []byte
+	var err error
+	if resCode, body, err = c.doRequest(ctx, http.MethodGet, path, nil); err != nil {
+		return nil, fmt.Errorf("request failed: %s", err)
+	}
+
+	if resCode != http.StatusOK {
+		return nil, fmt.Errorf("request returned status: %d", resCode)
+	}
+
+	var versions []int
+	if err := json.Unmarshal(body, &versions); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %s", err)
+	}
+
+	return versions, nil
+}
+
+// CreateSchema creates a new schema for the given subject.
+func (c *Client) CreateSchema(ctx context.Context, subject string, data []byte) error {
+	path := fmt.Sprintf("/subjects/%s/versions", url.PathEscape(subject))
+
+	var resCode int
+	var err error
+	if resCode, _, err = c.doRequest(ctx, http.MethodPost, path, data); err != nil {
+		return fmt.Errorf("request failed: %s", err)
+	}
+
+	if resCode != http.StatusOK {
+		return fmt.Errorf("request returned status: %d", resCode)
+	}
+
+	return nil
 }
 
 type refWalkFn func(ctx context.Context, name string, info SchemaInfo) error
@@ -193,7 +276,7 @@ func (c *Client) walkReferencesTracked(ctx context.Context, seen map[string]int,
 	return nil
 }
 
-func (c *Client) doRequest(ctx context.Context, verb, reqPath string) (resCode int, resBody []byte, err error) {
+func (c *Client) doRequest(ctx context.Context, verb, reqPath string, body []byte) (resCode int, resBody []byte, err error) {
 	reqURL := *c.SchemaRegistryBaseURL
 	if reqURL.Path, err = url.JoinPath(reqURL.Path, reqPath); err != nil {
 		return
@@ -208,11 +291,21 @@ func (c *Client) doRequest(ctx context.Context, verb, reqPath string) (resCode i
 		}
 	}
 
+	var bodyReader io.Reader
+	if len(body) > 0 {
+		bodyReader = bytes.NewReader(body)
+	} else {
+		bodyReader = http.NoBody
+	}
 	var req *http.Request
-	if req, err = http.NewRequestWithContext(ctx, verb, reqURLString, http.NoBody); err != nil {
+	if req, err = http.NewRequestWithContext(ctx, verb, reqURLString, bodyReader); err != nil {
 		return
 	}
-	req.Header.Add("Accept", "application/vnd.schemaregistry.v1+json")
+	headerKey := "Accept"
+	if verb == http.MethodPost {
+		headerKey = "Content-Type"
+	}
+	req.Header.Add(headerKey, "application/vnd.schemaregistry.v1+json")
 	if err = c.requestSigner(c.mgr.FS(), req); err != nil {
 		return
 	}

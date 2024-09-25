@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 - Field `metadata_max_age` added to the `kafka_migrator` input. (@mihaitodor)
 - New experimental `cypher` output. (@rockwotj)
 - New experimental `couchbase` output. (@rockwotj)
+- Field `fetch_in_order` added to the `schema_registry` input. (@mihaitodor)
 
 ### Fixed
 

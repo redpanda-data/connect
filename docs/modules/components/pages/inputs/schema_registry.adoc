@@ -56,6 +56,7 @@ input:
     url: "" # No default (required)
     include_deleted: false
     subject_filter: ""
+    fetch_in_order: true
     tls:
       enabled: false
       skip_cert_verify: false
@@ -147,6 +148,16 @@ Include only subjects which match the regular expression filter. All subjects ar
 *Type*: `string`
 
 *Default*: `""`
+
+=== `fetch_in_order`
+
+Fetch all schemas on connect and sort them by ID. Should be set to `true` when schema references are used.
+
+
+*Type*: `bool`
+
+*Default*: `true`
+Requires version 4.37.0 or newer
 
 === `tls`
 

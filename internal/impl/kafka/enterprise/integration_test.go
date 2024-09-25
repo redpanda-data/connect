@@ -298,7 +298,9 @@ func TestSchemaRegistryIntegration(t *testing.T) {
 		name                       string
 		schema                     string
 		includeSoftDeletedSubjects bool
+		extraSubject               string
 		subjectFilter              string
+		schemaWithReference        string
 	}{
 		{
 			name:   "roundtrip",
@@ -312,7 +314,15 @@ func TestSchemaRegistryIntegration(t *testing.T) {
 		{
 			name:          "roundtrip with subject filter",
 			schema:        `{"name":"foo", "type": "string"}`,
-			subjectFilter: `\w+-\w+-\w+-\w+-\w+`,
+			extraSubject:  "foobar",
+			subjectFilter: `^\w+-\w+-\w+-\w+-\w+$`,
+		},
+		{
+			name:   "roundtrip with schema references",
+			schema: `{"name":"foo", "type": "string"}`,
+			// A UUID which always gets picked first when querying the `/subjects` endpoint.
+			extraSubject:        "ffffffff-ffff-ffff-ffff-ffffffffffff",
+			schemaWithReference: `{"name":"bar", "type": "record", "fields":[{"name":"data", "type": "foo"}]}`,
 		},
 	}
 
@@ -339,20 +349,27 @@ func TestSchemaRegistryIntegration(t *testing.T) {
 			u4, err := uuid.NewV4()
 			require.NoError(t, err)
 			subject := u4.String()
-			extraSubject := "foobar"
 
 			t.Cleanup(func() {
 				cleanupSubject(sourcePort, subject, false)
 				cleanupSubject(sourcePort, subject, true)
 				cleanupSubject(sinkPort, subject, false)
 				cleanupSubject(sinkPort, subject, true)
+
+				if test.extraSubject != "" {
+					cleanupSubject(sourcePort, test.extraSubject, false)
+					cleanupSubject(sourcePort, test.extraSubject, true)
+					cleanupSubject(sinkPort, test.extraSubject, false)
+					cleanupSubject(sinkPort, test.extraSubject, true)
+				}
 			})
 
 			postContentType := "application/vnd.schemaregistry.v1+json"
 			type payload struct {
-				Subject string `json:"subject,omitempty"`
-				Version int    `json:"version,omitempty"`
-				Schema  string `json:"schema"`
+				Subject    string           `json:"subject,omitempty"`
+				Version    int              `json:"version,omitempty"`
+				Schema     string           `json:"schema"`
+				References []map[string]any `json:"references,omitempty"`
 			}
 			body, err := json.Marshal(payload{Schema: test.schema})
 			require.NoError(t, err)
@@ -363,11 +380,13 @@ func TestSchemaRegistryIntegration(t *testing.T) {
 			resp, err := http.DefaultClient.Do(req)
 			require.NoError(t, err)
 			require.NoError(t, resp.Body.Close())
+			require.Equal(t, http.StatusOK, resp.StatusCode)
 
 			if test.subjectFilter != "" {
-				resp, err = http.DefaultClient.Post(fmt.Sprintf("http://localhost:%s/subjects/%s/versions", sourcePort, extraSubject), postContentType, bytes.NewReader(body))
+				resp, err = http.DefaultClient.Post(fmt.Sprintf("http://localhost:%s/subjects/%s/versions", sourcePort, test.extraSubject), postContentType, bytes.NewReader(body))
 				require.NoError(t, err)
 				require.NoError(t, resp.Body.Close())
+				require.Equal(t, http.StatusOK, resp.StatusCode)
 			}
 
 			if test.includeSoftDeletedSubjects {
@@ -376,6 +395,19 @@ func TestSchemaRegistryIntegration(t *testing.T) {
 				resp, err = http.DefaultClient.Do(req)
 				require.NoError(t, err)
 				require.NoError(t, resp.Body.Close())
+				require.Equal(t, http.StatusOK, resp.StatusCode)
+			}
+
+			if test.schemaWithReference != "" {
+				body, err := json.Marshal(payload{Schema: test.schemaWithReference, References: []map[string]any{{"name": "foo", "subject": subject, "version": 1}}})
+				require.NoError(t, err)
+				req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://localhost:%s/subjects/%s/versions", sourcePort, test.extraSubject), bytes.NewReader(body))
+				require.NoError(t, err)
+				req.Header.Set("Content-Type", postContentType)
+				resp, err := http.DefaultClient.Do(req)
+				require.NoError(t, err)
+				require.NoError(t, resp.Body.Close())
+				require.Equal(t, http.StatusOK, resp.StatusCode)
 			}
 
 			streamBuilder := service.NewStreamBuilder()
@@ -385,11 +417,17 @@ input:
     url: http://localhost:%s
     include_deleted: %t
     subject_filter: %s
+    fetch_in_order: %t
 output:
-  schema_registry:
-    url: http://localhost:%s
-    subject: ${! @schema_registry_subject }
-`, sourcePort, test.includeSoftDeletedSubjects, test.subjectFilter, sinkPort)))
+  fallback:
+    - schema_registry:
+        url: http://localhost:%s
+        subject: ${! @schema_registry_subject }
+        # Preserve schema order.
+        max_in_flight: 1
+    # Don't retry the same message multiple times so we do fail if schemas with references are sent in the wrong order
+    - drop: {}
+`, sourcePort, test.includeSoftDeletedSubjects, test.subjectFilter, test.schemaWithReference != "", sinkPort)))
 			require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
 
 			stream, err := streamBuilder.Build()
@@ -398,7 +436,8 @@ output:
 			ctx, done := context.WithTimeout(context.Background(), 3*time.Second)
 			defer done()
 
-			require.NoError(t, stream.Run(ctx))
+			err = stream.Run(ctx)
+			require.NoError(t, err)
 
 			resp, err = http.DefaultClient.Get(fmt.Sprintf("http://localhost:%s/subjects", sinkPort))
 			require.NoError(t, err)
@@ -408,7 +447,7 @@ output:
 			require.Equal(t, http.StatusOK, resp.StatusCode)
 			if test.subjectFilter != "" {
 				assert.Contains(t, string(body), subject)
-				assert.NotContains(t, string(body), extraSubject)
+				assert.NotContains(t, string(body), test.extraSubject)
 			}
 
 			resp, err = http.DefaultClient.Get(fmt.Sprintf("http://localhost:%s/subjects/%s/versions/1", sinkPort, subject))
@@ -423,6 +462,21 @@ output:
 			assert.Equal(t, subject, p.Subject)
 			assert.Equal(t, 1, p.Version)
 			assert.JSONEq(t, test.schema, p.Schema)
+
+			if test.schemaWithReference != "" {
+				resp, err = http.DefaultClient.Get(fmt.Sprintf("http://localhost:%s/subjects/%s/versions/1", sinkPort, test.extraSubject))
+				require.NoError(t, err)
+				body, err = io.ReadAll(resp.Body)
+				require.NoError(t, err)
+				require.NoError(t, resp.Body.Close())
+				require.Equal(t, http.StatusOK, resp.StatusCode)
+
+				var p payload
+				require.NoError(t, json.Unmarshal(body, &p))
+				assert.Equal(t, test.extraSubject, p.Subject)
+				assert.Equal(t, 1, p.Version)
+				assert.JSONEq(t, test.schemaWithReference, p.Schema)
+			}
 		})
 	}
 }
