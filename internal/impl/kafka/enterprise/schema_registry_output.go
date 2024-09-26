@@ -9,19 +9,16 @@
 package enterprise
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"fmt"
-	"io"
 	"io/fs"
 	"net/http"
-	"net/http/httputil"
 	"net/url"
 	"sync/atomic"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
 )
 
 const (
@@ -89,11 +86,9 @@ func init() {
 }
 
 type schemaRegistryOutput struct {
-	url           *url.URL
-	subject       *service.InterpolatedString
-	requestSigner func(fs.FS, *http.Request) error
+	subject *service.InterpolatedString
 
-	client    http.Client
+	client    *sr.Client
 	connected atomic.Bool
 	mgr       *service.Resources
 }
@@ -103,11 +98,12 @@ func outputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (o *s
 		mgr: mgr,
 	}
 
-	var u string
-	if u, err = pConf.FieldString(sriFieldURL); err != nil {
+	var srURLStr string
+	if srURLStr, err = pConf.FieldString(sriFieldURL); err != nil {
 		return
 	}
-	if o.url, err = url.Parse(u); err != nil {
+	var srURL *url.URL
+	if srURL, err = url.Parse(srURLStr); err != nil {
 		return nil, fmt.Errorf("failed to parse URL: %s", err)
 	}
 
@@ -115,7 +111,8 @@ func outputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (o *s
 		return
 	}
 
-	if o.requestSigner, err = pConf.HTTPRequestAuthSignerFromParsed(); err != nil {
+	var reqSigner func(f fs.FS, req *http.Request) error
+	if reqSigner, err = pConf.HTTPRequestAuthSignerFromParsed(); err != nil {
 		return nil, err
 	}
 
@@ -125,17 +122,11 @@ func outputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (o *s
 		return
 	}
 
-	o.client = http.Client{}
-	if tlsEnabled && tlsConf != nil {
-		if c, ok := http.DefaultTransport.(*http.Transport); ok {
-			cloned := c.Clone()
-			cloned.TLSClientConfig = tlsConf
-			o.client.Transport = cloned
-		} else {
-			o.client.Transport = &http.Transport{
-				TLSClientConfig: tlsConf,
-			}
-		}
+	if !tlsEnabled {
+		tlsConf = nil
+	}
+	if o.client, err = sr.NewClient(srURL.String(), reqSigner, tlsConf, mgr); err != nil {
+		return nil, fmt.Errorf("failed to create Schema Registry client: %s", err)
 	}
 
 	return
@@ -148,38 +139,13 @@ func (o *schemaRegistryOutput) Connect(ctx context.Context) error {
 		return nil
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, o.url.JoinPath("mode").String(), nil)
+	mode, err := o.client.GetMode(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to construct mode HTTP request: %s", err)
+		return fmt.Errorf("failed to fetch mode: %s", err)
 	}
 
-	if err = o.requestSigner(o.mgr.FS(), req); err != nil {
-		return fmt.Errorf("failed to sign request: %s", err)
-	}
-
-	resp, err := o.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to execute mode HTTP request: %s", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("received invalid status: %d", resp.StatusCode)
-	}
-
-	var payload struct {
-		Mode string
-	}
-	if data, err := io.ReadAll(resp.Body); err != nil {
-		return fmt.Errorf("failed to read mode HTTP request body: %s", err)
-	} else {
-		if err := json.Unmarshal(data, &payload); err != nil {
-			return fmt.Errorf("failed to unmarshal response: %s", err)
-		}
-	}
-
-	if payload.Mode != "READWRITE" && payload.Mode != "IMPORT" {
-		return fmt.Errorf("schema registry instance mode must be set to READWRITE or IMPORT instead of %q", payload.Mode)
+	if mode != "READWRITE" && mode != "IMPORT" {
+		return fmt.Errorf("schema registry instance mode must be set to READWRITE or IMPORT instead of %q", mode)
 	}
 
 	o.connected.Store(true)
@@ -198,35 +164,14 @@ func (o *schemaRegistryOutput) Write(ctx context.Context, m *service.Message) er
 		return fmt.Errorf("failed subject interpolation: %w", err)
 	}
 
-	var b []byte
-	if b, err = m.AsBytes(); err != nil {
+	var payload []byte
+	if payload, err = m.AsBytes(); err != nil {
 		return fmt.Errorf("failed to extract message bytes: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, o.url.JoinPath("subjects", subject, "versions").String(), bytes.NewReader(b))
+	err = o.client.CreateSchema(ctx, subject, payload)
 	if err != nil {
-		return fmt.Errorf("failed to construct request: %s", err)
-	}
-	req.Header.Set("Content-Type", "application/vnd.schemaregistry.v1+json")
-
-	if err = o.requestSigner(o.mgr.FS(), req); err != nil {
-		return fmt.Errorf("failed to sign request: %s", err)
-	}
-
-	resp, err := o.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to execute request: %s", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		if respData, err := httputil.DumpResponse(resp, true); err != nil {
-			return fmt.Errorf("failed to read response: %s", err)
-		} else {
-			o.mgr.Logger().Debugf("Failed to push data to SchemaRegistry with status %d: %s", resp.StatusCode, string(respData))
-		}
-
-		return fmt.Errorf("request returned status: %d", resp.StatusCode)
+		return fmt.Errorf("failed to create schema for subject %q: %s", subject, err)
 	}
 
 	return nil

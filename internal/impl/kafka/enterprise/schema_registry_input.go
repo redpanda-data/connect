@@ -11,22 +11,22 @@ package enterprise
 import (
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"fmt"
-	"io"
 	"io/fs"
 	"net/http"
 	"net/url"
 	"regexp"
-	"strconv"
+	"sort"
 	"sync"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
 )
 
 const (
 	sriFieldURL            = "url"
 	sriFieldIncludeDeleted = "include_deleted"
+	sriFieldFetchInOrder   = "fetch_in_order"
 	sriFieldSubjectFilter  = "subject_filter"
 	sriFieldTLS            = "tls"
 )
@@ -69,6 +69,7 @@ func schemaRegistryInputConfigFields() []*service.ConfigField {
 		service.NewStringField(sriFieldURL).Description("The base URL of the schema registry service."),
 		service.NewBoolField(sriFieldIncludeDeleted).Description("Include deleted entities.").Default(false).Advanced(),
 		service.NewStringField(sriFieldSubjectFilter).Description("Include only subjects which match the regular expression filter. All subjects are selected when not set.").Default("").Advanced(),
+		service.NewBoolField(sriFieldFetchInOrder).Description("Fetch all schemas on connect and sort them by ID. Should be set to `true` when schema references are used.").Default(true).Advanced().Version("4.37.0"),
 		service.NewTLSToggledField(sriFieldTLS),
 		service.NewAutoRetryNacksToggleField(),
 	},
@@ -90,17 +91,23 @@ func init() {
 	}
 }
 
-type schemaRegistryInput struct {
-	url           *url.URL
-	subjectFilter *regexp.Regexp
-	requestSigner func(fs.FS, *http.Request) error
+type schemaInfo struct {
+	sr.SchemaInfo
+	subject string
+	version int
+}
 
-	client    http.Client
+type schemaRegistryInput struct {
+	subjectFilter *regexp.Regexp
+	fetchInOrder  bool
+
+	client    *sr.Client
 	connMut   sync.Mutex
 	connected bool
 	subjects  []string
 	subject   string
 	versions  []int
+	schemas   []schemaInfo
 	mgr       *service.Resources
 }
 
@@ -109,11 +116,12 @@ func inputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (i *sc
 		mgr: mgr,
 	}
 
-	var u string
-	if u, err = pConf.FieldString(sriFieldURL); err != nil {
+	var srURLStr string
+	if srURLStr, err = pConf.FieldString(sriFieldURL); err != nil {
 		return
 	}
-	if i.url, err = url.Parse(u); err != nil {
+	var srURL *url.URL
+	if srURL, err = url.Parse(srURLStr); err != nil {
 		return nil, fmt.Errorf("failed to parse URL: %s", err)
 	}
 
@@ -122,9 +130,13 @@ func inputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (i *sc
 		return
 	}
 	if includeDeleted {
-		q := i.url.Query()
+		q := srURL.Query()
 		q.Add("deleted", "true")
-		i.url.RawQuery = q.Encode()
+		srURL.RawQuery = q.Encode()
+	}
+
+	if i.fetchInOrder, err = pConf.FieldBool(sriFieldFetchInOrder); err != nil {
+		return
 	}
 
 	var filter string
@@ -135,7 +147,8 @@ func inputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (i *sc
 		return nil, fmt.Errorf("failed to compile subject filter %q: %s", filter, err)
 	}
 
-	if i.requestSigner, err = pConf.HTTPRequestAuthSignerFromParsed(); err != nil {
+	var reqSigner func(f fs.FS, req *http.Request) error
+	if reqSigner, err = pConf.HTTPRequestAuthSignerFromParsed(); err != nil {
 		return nil, err
 	}
 
@@ -145,17 +158,11 @@ func inputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (i *sc
 		return
 	}
 
-	i.client = http.Client{}
-	if tlsEnabled && tlsConf != nil {
-		if c, ok := http.DefaultTransport.(*http.Transport); ok {
-			cloned := c.Clone()
-			cloned.TLSClientConfig = tlsConf
-			i.client.Transport = cloned
-		} else {
-			i.client.Transport = &http.Transport{
-				TLSClientConfig: tlsConf,
-			}
-		}
+	if !tlsEnabled {
+		tlsConf = nil
+	}
+	if i.client, err = sr.NewClient(srURL.String(), reqSigner, tlsConf, mgr); err != nil {
+		return nil, fmt.Errorf("failed to create Schema Registry client: %s", err)
 	}
 
 	return
@@ -167,20 +174,56 @@ func (i *schemaRegistryInput) Connect(ctx context.Context) error {
 	i.connMut.Lock()
 	defer i.connMut.Unlock()
 
-	data, err := i.doSchemaRegistryRequest(ctx, i.url.JoinPath("subjects").String())
+	subjects, err := i.client.GetSubjects(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to fetch subjects: %s", err)
-	}
-
-	var subjects []string
-	if err := json.Unmarshal(data, &subjects); err != nil {
-		return fmt.Errorf("failed to unmarshal HTTP response: %s", err)
 	}
 
 	i.subjects = make([]string, 0, len(subjects))
 	for _, s := range subjects {
 		if i.subjectFilter.MatchString(s) {
 			i.subjects = append(i.subjects, s)
+		}
+	}
+
+	if i.fetchInOrder {
+		schemas := map[int][]schemaInfo{}
+		for _, subject := range i.subjects {
+			var versions []int
+			if versions, err = i.client.GetVersionsForSubject(ctx, subject); err != nil {
+				return fmt.Errorf("failed to fetch versions for subject %q: %s", subject, err)
+			}
+			if len(versions) == 0 {
+				i.mgr.Logger().Infof("Subject %q does not contain any versions", subject)
+				continue
+			}
+
+			for _, version := range versions {
+				var schema sr.SchemaInfo
+				if schema, err = i.client.GetSchemaBySubjectAndVersion(ctx, subject, &version); err != nil {
+					return fmt.Errorf("failed to fetch schema version %d for subject %q: %s", version, subject, err)
+				}
+
+				si := schemaInfo{
+					SchemaInfo: schema,
+					subject:    subject,
+					version:    version,
+				}
+
+				schemas[schema.ID] = append(schemas[schema.ID], si)
+			}
+		}
+
+		// Sort schemas by ID to ensure that schemas with references are sent in the correct order.
+		schemaIDs := make([]int, 0, len(schemas))
+		for id := range schemas {
+			schemaIDs = append(schemaIDs, id)
+		}
+		sort.Ints(schemaIDs)
+
+		i.schemas = make([]schemaInfo, 0, len(schemas))
+		for _, id := range schemaIDs {
+			i.schemas = append(i.schemas, schemas[id]...)
 		}
 	}
 
@@ -196,94 +239,84 @@ func (i *schemaRegistryInput) Read(ctx context.Context) (*service.Message, servi
 		return nil, nil, service.ErrNotConnected
 	}
 
-	for {
-		if len(i.subjects) == 0 && len(i.versions) == 0 {
-			return nil, nil, service.ErrEndOfInput
-		}
+	var si schemaInfo
+	if !i.fetchInOrder {
+		for {
+			if len(i.subjects) == 0 && len(i.versions) == 0 {
+				return nil, nil, service.ErrEndOfInput
+			}
 
-		if len(i.versions) != 0 {
+			if len(i.versions) != 0 {
+				break
+			}
+
+			i.subject = i.subjects[0]
+
+			var err error
+			if i.versions, err = i.client.GetVersionsForSubject(ctx, i.subject); err != nil {
+				return nil, nil, fmt.Errorf("failed to fetch versions for subject %q: %s", i.subject, err)
+			}
+
+			i.subjects = i.subjects[1:]
+
+			if len(i.versions) == 0 {
+				i.mgr.Logger().Infof("Subject %q does not contain any versions", i.subject)
+				continue
+			}
+
 			break
 		}
 
-		i.subject = i.subjects[0]
+		version := i.versions[0]
+		defer func() {
+			i.versions = i.versions[1:]
+		}()
 
-		data, err := i.doSchemaRegistryRequest(ctx, i.url.JoinPath("subjects", i.subject, "versions").String())
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to fetch versions for subject %q: %s", i.subject, err)
+		var schema sr.SchemaInfo
+		var err error
+		if schema, err = i.client.GetSchemaBySubjectAndVersion(ctx, i.subject, &version); err != nil {
+			return nil, nil, fmt.Errorf("failed to fetch schema version %d for subject %q: %s", version, i.subject, err)
 		}
 
-		if err := json.Unmarshal(data, &i.versions); err != nil {
-			return nil, nil, fmt.Errorf("failed to unmarshal HTTP response: %s", err)
+		si.SchemaInfo = schema
+		si.subject = i.subject
+		si.version = version
+	} else {
+		if len(i.schemas) == 0 {
+			return nil, nil, service.ErrEndOfInput
 		}
 
-		i.subjects = i.subjects[1:]
-
-		if len(i.versions) == 0 {
-			i.mgr.Logger().Infof("Subject %q does not contain any versions", i.subject)
-			continue
-		}
-
-		break
+		si = i.schemas[0]
+		defer func() {
+			i.schemas = i.schemas[1:]
+		}()
 	}
 
-	version := i.versions[0]
-	defer func() {
-		i.versions = i.versions[1:]
-	}()
-
-	data, err := i.doSchemaRegistryRequest(ctx, i.url.JoinPath("subjects", i.subject, "versions", strconv.Itoa(version)).String())
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to fetch version %d for subject %q: %s", version, i.subject, err)
+	// Omit `subject` from the schema since the `/subjects/<subject>/versions` endpoint doesn't allow it as part of
+	// the payload we pass it along as metadata.
+	schema := map[string]any{
+		"id":      si.ID,
+		"version": si.version,
+		"schema":  si.Schema,
 	}
-
-	var structured map[string]any
-	if err := json.Unmarshal(data, &structured); err != nil {
-		return nil, nil, fmt.Errorf("failed to unmarshal response body: %s", err)
+	if si.Type != "" {
+		schema["type"] = si.Type
 	}
-
-	// Remove the subject key since the `/subjects/<subject>/versions` endpoint doesn't allow it as part of the
-	// payload and we pass it along as metadata.
-	delete(structured, "subject")
+	if len(si.References) > 0 {
+		schema["references"] = si.References
+	}
 
 	msg := service.NewMessage(nil)
-	msg.SetStructured(structured)
+	msg.SetStructured(schema)
 
-	msg.MetaSetMut("schema_registry_subject", i.subject)
-	msg.MetaSetMut("schema_registry_version", version)
+	msg.MetaSetMut("schema_registry_subject", si.subject)
+	msg.MetaSetMut("schema_registry_version", si.version)
 
 	return msg, func(ctx context.Context, err error) error {
 		// Nacks are handled by AutoRetryNacks because we don't have an explicit
 		// ack mechanism right now.
 		return nil
 	}, nil
-}
-
-func (i *schemaRegistryInput) doSchemaRegistryRequest(ctx context.Context, url string) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to construct request: %s", err)
-	}
-
-	if err = i.requestSigner(i.mgr.FS(), req); err != nil {
-		return nil, fmt.Errorf("failed to sign request: %s", err)
-	}
-
-	resp, err := i.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute request: %s", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("request returned status: %d", resp.StatusCode)
-	}
-
-	var body []byte
-	if body, err = io.ReadAll(resp.Body); err != nil {
-		return nil, fmt.Errorf("failed to read response body: %s", err)
-	}
-
-	return body, nil
 }
 
 func (i *schemaRegistryInput) Close(ctx context.Context) error {
