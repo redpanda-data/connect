@@ -187,7 +187,7 @@ func (i *schemaRegistryInput) Connect(ctx context.Context) error {
 	}
 
 	if i.fetchInOrder {
-		schemas := map[int]schemaInfo{}
+		schemas := map[int][]schemaInfo{}
 		for _, subject := range i.subjects {
 			var versions []int
 			if versions, err = i.client.GetVersionsForSubject(ctx, subject); err != nil {
@@ -204,11 +204,13 @@ func (i *schemaRegistryInput) Connect(ctx context.Context) error {
 					return fmt.Errorf("failed to fetch schema version %d for subject %q: %s", version, subject, err)
 				}
 
-				schemas[schema.ID] = schemaInfo{
+				si := schemaInfo{
 					SchemaInfo: schema,
 					subject:    subject,
 					version:    version,
 				}
+
+				schemas[schema.ID] = append(schemas[schema.ID], si)
 			}
 		}
 
@@ -221,7 +223,7 @@ func (i *schemaRegistryInput) Connect(ctx context.Context) error {
 
 		i.schemas = make([]schemaInfo, 0, len(schemas))
 		for _, id := range schemaIDs {
-			i.schemas = append(i.schemas, schemas[id])
+			i.schemas = append(i.schemas, schemas[id]...)
 		}
 	}
 
