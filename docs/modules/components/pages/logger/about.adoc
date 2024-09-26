@@ -28,7 +28,7 @@ logger:
   format: logfmt
   add_timestamp: false
   static_fields:
-    '@service': benthos
+    '@service': redpanda-connect
 ```
 
 --
@@ -46,7 +46,7 @@ logger:
   timestamp_name: time
   message_name: msg
   static_fields:
-    '@service': benthos
+    '@service': redpanda-connect
   file:
     path: ""
     rotate: false
@@ -136,7 +136,7 @@ A map of key/value pairs to add to each structured log.
 
 *Type*: `object`
 
-*Default*: `{"@service":"benthos"}`
+*Default*: `{"@service":"redpanda-connect"}`
 
 === `file`
 
