@@ -11,15 +11,16 @@ package pglogicalstream
 import (
 	"database/sql"
 	"fmt"
-	"log"
 
 	"github.com/jackc/pgx/v5/pgconn"
 	_ "github.com/lib/pq"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 type Snapshotter struct {
 	pgConnection *sql.DB
 	snapshotName string
+	logger       *service.Logger
 }
 
 func NewSnapshotter(dbConf pgconn.Config, snapshotName string) (*Snapshotter, error) {
@@ -38,6 +39,7 @@ func NewSnapshotter(dbConf pgconn.Config, snapshotName string) (*Snapshotter, er
 	return &Snapshotter{
 		pgConnection: pgConn,
 		snapshotName: snapshotName,
+		logger:       nil, // TODO
 	}, err
 }
 
@@ -56,14 +58,14 @@ func (s *Snapshotter) FindAvgRowSize(table string) sql.NullInt64 {
 	var avgRowSize sql.NullInt64
 
 	if rows, err := s.pgConnection.Query(fmt.Sprintf(`SELECT SUM(pg_column_size('%s.*')) / COUNT(*) FROM %s;`, table, table)); err != nil {
-		log.Fatal("Can get avg row size", err)
+		panic(fmt.Errorf("can get avg row size: %w", err)) // TODO
 	} else {
 		if rows.Next() {
 			if err = rows.Scan(&avgRowSize); err != nil {
-				log.Fatal("Can get avg row size", err)
+				panic(fmt.Errorf("can get avg row size: %w", err)) // TODO
 			}
 		} else {
-			log.Fatal("Can get avg row size; 0 rows returned")
+			panic("can get avg row size; 0 rows returned") // TODO
 		}
 	}
 
@@ -83,7 +85,7 @@ func (s *Snapshotter) CalculateBatchSize(availableMemory uint64, estimatedRowSiz
 
 func (s *Snapshotter) QuerySnapshotData(table string, pk string, limit, offset int) (rows *sql.Rows, err error) {
 	// fmt.Sprintf("SELECT * FROM %s ORDER BY %s LIMIT %d OFFSET %d;", table, pk, limit, offset)
-	log.WithPrefix("[pg-stream/snapshotter]").Info("Query snapshot", "table", table, "limit", limit, "offset", offset, "pk", pk)
+	s.logger.Infof("Query snapshot table: %v, limit: %v, offset: %v, pk: %v", table, limit, offset, pk)
 	return s.pgConnection.Query(fmt.Sprintf("SELECT * FROM %s ORDER BY %s LIMIT %d OFFSET %d;", table, pk, limit, offset))
 }
 

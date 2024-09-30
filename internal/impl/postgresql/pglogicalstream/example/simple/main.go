@@ -13,8 +13,9 @@ import (
 	"io/ioutil"
 	"log"
 
-	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream"
 	"gopkg.in/yaml.v3"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream"
 )
 
 func main() {

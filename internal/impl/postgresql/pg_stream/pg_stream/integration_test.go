@@ -12,7 +12,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 	"strings"
 	"sync"
 	"testing"
@@ -96,7 +95,7 @@ func TestIntegrationPgCDC(t *testing.T) {
 
 		return err
 	}); err != nil {
-		log.Fatalf("Could not connect to docker: %s", err)
+		panic(fmt.Errorf("could not connect to docker: %w", err))
 	}
 
 	fake := faker.New()

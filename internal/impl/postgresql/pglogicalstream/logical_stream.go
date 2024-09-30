@@ -16,7 +16,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 	"sync"
@@ -25,6 +24,8 @@ import (
 	"github.com/jackc/pglogrepl"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgproto3"
+	"github.com/redpanda-data/benthos/v4/public/service"
+
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/internal/helpers"
 )
 
@@ -53,7 +54,7 @@ type Stream struct {
 	separateChanges            bool
 	snapshotBatchSize          int
 	snapshotMemorySafetyFactor float64
-	logger                     *log.Logger
+	logger                     *service.Logger
 
 	m       sync.Mutex
 	stopped bool
@@ -112,7 +113,7 @@ func NewPgStream(config Config) (*Stream, error) {
 		snapshotBatchSize:          config.BatchSize,
 		tableNames:                 tableNames,
 		changeFilter:               NewChangeFilter(tableNames, config.DbSchema),
-		logger:                     log.WithPrefix("[pg-stream]"),
+		logger:                     nil, // TODO
 		m:                          sync.Mutex{},
 		stopped:                    false,
 	}
@@ -132,23 +133,23 @@ func NewPgStream(config Config) (*Stream, error) {
 	result = stream.pgConn.Exec(context.Background(), fmt.Sprintf("CREATE PUBLICATION pglog_stream_%s %s;", config.ReplicationSlotName, tablesSchemaFilter))
 	_, err = result.ReadAll()
 	if err != nil {
-		stream.logger.Fatalf("create publication error %s", err.Error())
+		panic(fmt.Errorf("create publication error %w", err)) // TODO
 	}
-	stream.logger.Info("Created Postgresql publication", "publication_name", config.ReplicationSlotName)
+	stream.logger.Infof("Created Postgresql publication %v %v", "publication_name", config.ReplicationSlotName)
 
 	sysident, err := pglogrepl.IdentifySystem(context.Background(), stream.pgConn)
 	if err != nil {
-		stream.logger.Fatalf("Failed to identify the system %s", err.Error())
+		panic(fmt.Errorf("failed to identify the system %w", err)) // TODO
 	}
 
-	stream.logger.Info("System identification result", "SystemID:", sysident.SystemID, "Timeline:", sysident.Timeline, "XLogPos:", sysident.XLogPos, "DBName:", sysident.DBName)
+	stream.logger.Infof("System identification result SystemID: %v Timeline: %v XLogPos: %v DBName: %v", sysident.SystemID, sysident.Timeline, sysident.XLogPos, sysident.DBName)
 
 	var freshlyCreatedSlot = false
 	var confirmedLSNFromDB string
 	// check is replication slot exist to get last restart SLN
 	connExecResult := stream.pgConn.Exec(context.TODO(), fmt.Sprintf("SELECT confirmed_flush_lsn FROM pg_replication_slots WHERE slot_name = '%s'", config.ReplicationSlotName))
 	if slotCheckResults, err := connExecResult.ReadAll(); err != nil {
-		stream.logger.Fatal(err)
+		panic(err) // TODO
 	} else {
 		if len(slotCheckResults) == 0 || len(slotCheckResults[0].Rows) == 0 {
 			// here we create a new replication slot because there is no slot found
@@ -158,14 +159,14 @@ func NewPgStream(config Config) (*Stream, error) {
 					SnapshotAction: "export",
 				})
 			if err != nil {
-				stream.logger.Fatalf("Failed to create replication slot for the database: %s", err.Error())
+				panic(fmt.Errorf("failed to create replication slot for the database: %w", err)) // TODO
 			}
 			stream.snapshotName = createSlotResult.SnapshotName
 			freshlyCreatedSlot = true
 		} else {
 			slotCheckRow := slotCheckResults[0].Rows[0]
 			confirmedLSNFromDB = string(slotCheckRow[0])
-			stream.logger.Info("Replication slot restart LSN extracted from DB", "LSN", confirmedLSNFromDB)
+			stream.logger.Infof("Replication slot restart LSN extracted from DB: LSN %v", confirmedLSNFromDB)
 		}
 	}
 
@@ -203,16 +204,16 @@ func (s *Stream) startLr() {
 	var err error
 	err = pglogrepl.StartReplication(context.Background(), s.pgConn, s.slotName, s.lsnrestart, pglogrepl.StartReplicationOptions{PluginArgs: pluginArguments})
 	if err != nil {
-		s.logger.Fatalf("Starting replication slot failed: %s", err.Error())
+		panic(fmt.Errorf("starting replication slot failed: %w", err)) // TODO
 	}
-	s.logger.Info("Started logical replication on slot", "slot-name", s.slotName)
+	s.logger.Infof("Started logical replication on slot slot-name: %v", s.slotName)
 }
 
 func (s *Stream) AckLSN(lsn string) {
 	var err error
 	s.clientXLogPos, err = pglogrepl.ParseLSN(lsn)
 	if err != nil {
-		s.logger.Fatalf("Failed to parse LSN for Acknowledge %s", err.Error())
+		panic(fmt.Errorf("failed to parse LSN for Acknowledge %w", err)) // TODO
 	}
 
 	err = pglogrepl.SendStandbyStatusUpdate(context.Background(), s.pgConn, pglogrepl.StandbyStatusUpdate{
@@ -222,7 +223,7 @@ func (s *Stream) AckLSN(lsn string) {
 	})
 
 	if err != nil {
-		s.logger.Fatalf("SendStandbyStatusUpdate failed: %s", err.Error())
+		panic(fmt.Errorf("sendStandbyStatusUpdate failed: %w", err)) // TODO
 	}
 	s.logger.Debugf("Sent Standby status message at LSN#%s", s.clientXLogPos.String())
 	s.nextStandbyMessageDeadline = time.Now().Add(s.standbyMessageTimeout)
@@ -242,7 +243,7 @@ func (s *Stream) streamMessagesAsync() {
 				})
 
 				if err != nil {
-					s.logger.Fatalf("SendStandbyStatusUpdate failed: %s", err.Error())
+					panic(fmt.Errorf("sendStandbyStatusUpdate failed: %w", err)) // TODO
 				}
 				s.logger.Debugf("Sent Standby status message at LSN#%s", s.clientXLogPos.String())
 				s.nextStandbyMessageDeadline = time.Now().Add(s.standbyMessageTimeout)
@@ -262,11 +263,11 @@ func (s *Stream) streamMessagesAsync() {
 					continue
 				}
 
-				s.logger.Fatalf("Failed to receive messages from PostgreSQL %s", err.Error())
+				panic(fmt.Errorf("failed to receive messages from PostgreSQL %w", err)) // TODO
 			}
 
 			if errMsg, ok := rawMsg.(*pgproto3.ErrorResponse); ok {
-				s.logger.Fatalf("Received broken Postgres WAL. Error: %+v", errMsg)
+				panic(fmt.Errorf("received broken Postgres WAL. Error: %+v", errMsg)) // TODO
 			}
 
 			msg, ok := rawMsg.(*pgproto3.CopyData)
@@ -279,7 +280,7 @@ func (s *Stream) streamMessagesAsync() {
 			case pglogrepl.PrimaryKeepaliveMessageByteID:
 				pkm, err := pglogrepl.ParsePrimaryKeepaliveMessage(msg.Data[1:])
 				if err != nil {
-					s.logger.Fatalf("ParsePrimaryKeepaliveMessage failed: %s", err.Error())
+					panic(fmt.Errorf("parsePrimaryKeepaliveMessage failed: %w", err)) // TODO
 				}
 
 				if pkm.ReplyRequested {
@@ -289,7 +290,7 @@ func (s *Stream) streamMessagesAsync() {
 			case pglogrepl.XLogDataByteID:
 				xld, err := pglogrepl.ParseXLogData(msg.Data[1:])
 				if err != nil {
-					s.logger.Fatalf("ParseXLogData failed: %s", err.Error())
+					panic(fmt.Errorf("parseXLogData failed: %w", err)) // TODO
 				}
 				clientXLogPos := xld.WALStart + pglogrepl.LSN(len(xld.WALData))
 				var changes WallMessage
@@ -326,7 +327,7 @@ func (s *Stream) processSnapshot() {
 	}()
 
 	for _, table := range s.tableNames {
-		s.logger.Info("Processing snapshot for table", "table", table)
+		s.logger.Infof("Processing snapshot for table: %v", table)
 
 		var (
 			avgRowSizeBytes sql.NullInt64
@@ -335,7 +336,7 @@ func (s *Stream) processSnapshot() {
 		avgRowSizeBytes = snapshotter.FindAvgRowSize(table)
 
 		batchSize := snapshotter.CalculateBatchSize(helpers.GetAvailableMemory(), uint64(avgRowSizeBytes.Int64))
-		s.logger.Info("Querying snapshot", "batch_side", batchSize, "available_memory", helpers.GetAvailableMemory(), "avg_row_size", avgRowSizeBytes.Int64)
+		s.logger.Infof("Querying snapshot batch_side: %v, available_memory: %v, avg_row_size: %v", batchSize, helpers.GetAvailableMemory(), avgRowSizeBytes.Int64)
 
 		tablePk, err := s.getPrimaryKeyColumn(table)
 		if err != nil {
@@ -345,13 +346,13 @@ func (s *Stream) processSnapshot() {
 		for {
 			var snapshotRows *sql.Rows
 			if snapshotRows, err = snapshotter.QuerySnapshotData(table, tablePk, batchSize, offset); err != nil {
-				log.Fatalf("Can't query snapshot data %v", err)
+				panic(fmt.Errorf("can't query snapshot data: %w", err)) // TODO
 			}
 
 			columnTypes, err := snapshotRows.ColumnTypes()
 			var columnTypesString = make([]string, len(columnTypes))
 			columnNames, err := snapshotRows.Columns()
-			for i, _ := range columnNames {
+			for i := range columnNames {
 				columnTypesString[i] = columnTypes[i].DatabaseTypeName()
 			}
 
@@ -387,7 +388,7 @@ func (s *Stream) processSnapshot() {
 				}
 
 				var columnValues = make([]interface{}, len(columnTypes))
-				for i, _ := range columnTypes {
+				for i := range columnTypes {
 					if z, ok := (scanArgs[i]).(*sql.NullBool); ok {
 						columnValues[i] = z.Bool
 						continue
@@ -465,7 +466,7 @@ func (s *Stream) LrMessageC() chan Wal2JsonChanges {
 
 // cleanUpOnFailure drops replication slot and publication if database snapshotting was failed for any reason
 func (s *Stream) cleanUpOnFailure() {
-	s.logger.Warn("Cleaning up resources on accident.", "replication-slot", s.slotName)
+	s.logger.Warnf("Cleaning up resources on accident: %v", s.slotName)
 	err := DropReplicationSlot(context.Background(), s.pgConn, s.slotName, DropReplicationSlotOptions{Wait: true})
 	if err != nil {
 		s.logger.Errorf("Failed to drop replication slot: %s", err.Error())
@@ -478,7 +479,7 @@ func (s *Stream) getPrimaryKeyColumn(tableName string) (string, error) {
 		SELECT a.attname
 		FROM   pg_index i
 		JOIN   pg_attribute a ON a.attrelid = i.indrelid
-							 AND a.attnum = ANY(i.indkey)
+							AND a.attnum = ANY(i.indkey)
 		WHERE  i.indrelid = '%s'::regclass
 		AND    i.indisprimary;
 	`, tableName)
