@@ -283,8 +283,7 @@ func nkeyOptionFromString(nkey string) (nats.Option, error) {
 	}
 
 	sigCB := func(nonce []byte) ([]byte, error) {
-		sig, _ := kp.Sign(nonce)
-		return sig, nil
+		return kp.Sign(nonce)
 	}
 
 	return nats.Nkey(string(pub), sigCB), nil
