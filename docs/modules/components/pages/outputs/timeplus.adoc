@@ -84,9 +84,64 @@ output:
 This output can send message to Timeplus Enterprise Cloud, Timeplus Enterprise (self-hosted) or directly to timeplusd.
 
 This output accepts structured message only. It also expects all message contains the same keys and matches the schema of stream. If the upstream source returns
-unstructured message such as string, please include a processors to contruct the strcuture message. Here is a short sample:
+unstructured message such as string, please refer to the examples.
 
-```yml
+== Examples
+
+[tabs]
+======
+To Timeplus Enterprise Cloud::
++
+--
+
+You will need to create API Key on Timeplus Enterprise Cloud Web console first and then set the `apikey` field.
+
+```yaml
+output:
+  timeplus:
+    workspace: my_workspace_id
+    stream: mystream
+    apikey: <Your API Key>```
+
+--
+To Timeplus Enterprise (self-hosted)::
++
+--
+
+For self-housted Timeplus Enterprise, you will need to specify the username and password as well as the URL of the App server
+
+```yaml
+output:
+  timeplus:
+    url: http://localhost:8000
+    workspace: my_workspace_id
+    stream: mystream
+    username: username
+    password: pw```
+
+--
+To Timeplusd::
++
+--
+
+This output writes to Timeplusd via HTTP so make sure you specify the HTTP port of the Timeplusd.
+
+```yaml
+output:
+  timeplus:
+    url: http://localhost:3218
+    stream: mystream
+    username: username
+    password: pw```
+
+--
+Unstructured message::
++
+--
+
+If the upstream source or pipeline returns unstructured message such as string, you can leverage the output processors to wrap it into a stucture message and then pass it to the output. This example create a strcutre mesasge with `raw` field and store the original string content into this field. You can modify the name of this `raw` field to whatever you want. Please make sure the destiation stream contains such field
+
+```yaml
 output:
   timeplus:
     workspace: my_workspace_id
@@ -96,39 +151,10 @@ output:
 	processors:
 	  - mapping: |
         root = {}
-        root.raw = content().string() # Make sure your stream contains a string type raw field
-```
+        root.raw = content().string()```
 
-A sample config to send the data to Timeplus Enterprise Cloud
-```yml
-output:
-  timeplus:
-    workspace: my_workspace_id
-    stream: mystream
-    apikey: <Api key genereated on web console>
-```
-
-A sample config to send the data to Timeplus Enterprise (self-hosted)
-```yml
-output:
-  timeplus:
-    url: http://localhost:8000
-    workspace: my_workspace_id
-    stream: mystream
-    username: username
-    password: pw
-```
-
-A sample config to send the data to timeplusd
-```yml
-output:
-  timeplus:
-    url: http://localhost:3218
-    stream: mystream
-    username: username
-    password: pw
-```
-
+--
+======
 
 == Fields
 

@@ -3,6 +3,7 @@ package timeplus
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sort"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -19,10 +20,42 @@ func init() {
 		Description(`
 This output can send message to Timeplus Enterprise Cloud, Timeplus Enterprise (self-hosted) or directly to timeplusd.
 
-This output accepts structured message only. It also expects all message contains the same keys and matches the schema of stream. If the upstream source returns
-unstructured message such as string, please include a processors to contruct the strcuture message. Here is a short sample:
-
-` + "```yml" + `
+This output accepts structured message only. It also expects all message contains the same keys and matches the schema of the destination stream. If the upstream source or pipeline returns
+unstructured message such as string, please refer to the "Unstructured message" example.`).
+		Example(
+			"To Timeplus Enterprise Cloud",
+			"You will need to create API Key on Timeplus Enterprise Cloud Web console first and then set the `apikey` field.",
+			`
+output:
+  timeplus:
+    workspace: my_workspace_id
+    stream: mystream
+    apikey: <Your API Key>`).
+		Example(
+			"To Timeplus Enterprise (self-hosted)",
+			"For self-housted Timeplus Enterprise, you will need to specify the username and password as well as the URL of the App server",
+			`
+output:
+  timeplus:
+    url: http://localhost:8000
+    workspace: my_workspace_id
+    stream: mystream
+    username: username
+    password: pw`).
+		Example(
+			"To Timeplusd",
+			"This output writes to Timeplusd via HTTP so make sure you specify the HTTP port of the Timeplusd.",
+			`
+output:
+  timeplus:
+    url: http://localhost:3218
+    stream: mystream
+    username: username
+    password: pw`).
+		Example(
+			"Unstructured message",
+			"If the upstream source or pipeline returns unstructured message such as string, you can leverage the output processors to wrap it into a stucture message and then pass it to the output. This example create a strcutre mesasge with `raw` field and store the original string content into this field. You can modify the name of this `raw` field to whatever you want. Please make sure the destiation stream contains such field",
+			`
 output:
   timeplus:
     workspace: my_workspace_id
@@ -30,42 +63,9 @@ output:
     apikey: <Api key genereated on web console>
 
 	processors:
-	  - mapping: |
+    - mapping: |
         root = {}
-        root.raw = content().string() # Make sure your stream contains a string type raw field
-` + "```" + `
-
-A sample config to send the data to Timeplus Enterprise Cloud
-` + "```yml" + `
-output:
-  timeplus:
-    workspace: my_workspace_id
-    stream: mystream
-    apikey: <Api key genereated on web console>
-` + "```" + `
-
-A sample config to send the data to Timeplus Enterprise (self-hosted)
-` + "```yml" + `
-output:
-  timeplus:
-    url: http://localhost:8000
-    workspace: my_workspace_id
-    stream: mystream
-    username: username
-    password: pw
-` + "```" + `
-
-A sample config to send the data to timeplusd
-` + "```yml" + `
-output:
-  timeplus:
-    url: http://localhost:3218
-    stream: mystream
-    username: username
-    password: pw
-` + "```" + `
-`)
-
+        root.raw = content().string()`)
 	outputConfigSpec.
 		Field(service.NewStringEnumField("target", http.TargetTimeplus, http.TargetTimeplusd).Default(http.TargetTimeplus).Description("The destination type, either Timeplus Enterprise or timeplusd")).
 		Field(service.NewURLField("url").Description("The url should always include schema and host.").Default("https://us-west-2.timeplus.cloud").Examples("http://localhost:8000", "http://127.0.0.1:3218")).
@@ -89,8 +89,6 @@ type timeplus struct {
 
 // Close implements service.Output
 func (t *timeplus) Close(context.Context) error {
-	// TODO: shall we wait for ongoing writes?
-	t.client = nil
 	return nil
 }
 
@@ -112,21 +110,18 @@ func (t *timeplus) WriteBatch(ctx context.Context, b service.MessageBatch) error
 	rows := [][]any{}
 
 	// Here we assume all messages have the same structure, same keys
-	// Currently we will just skip the message if it is invalid. Probably we should add a feature flag to not skip them by propagating the error
 	for _, msg := range b {
 		keys := []string{}
 		data := []any{}
 
 		msgStructure, err := msg.AsStructured()
 		if err != nil {
-			t.logger.Errorf("failed to get structured message %w, skipping this message", err)
-			continue
+			return fmt.Errorf("failed to get structured message %w, skipping this message", err)
 		}
 
 		msgJSON, OK := msgStructure.(map[string]any)
 		if !OK {
-			t.logger.Errorf("expect map[string]any, got %T, skipping this message", msgJSON)
-			continue
+			return fmt.Errorf("expect map[string]any, got %T, skipping this message", msgJSON)
 		}
 
 		for key := range msgJSON {
@@ -209,7 +204,7 @@ func newTimeplusOutput(conf *service.ParsedConfig, mgr *service.Resources) (out 
 
 	out = &timeplus{
 		logger: logger,
-		client: http.NewClient(logger, maxInFlight, target, baseURL, workspace, stream, apikey, username, password),
+		client: http.NewClient(logger, target, baseURL, workspace, stream, apikey, username, password),
 	}
 
 	return
