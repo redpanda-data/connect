@@ -40,6 +40,7 @@ label: ""
 ollama_chat:
   model: llama3.1 # No default (required)
   prompt: "" # No default (optional)
+  image: "" # No default (optional)
   response_format: text
   max_tokens: 0 # No default (optional)
   temperature: 0 # No default (optional)
@@ -61,6 +62,7 @@ ollama_chat:
   model: llama3.1 # No default (required)
   prompt: "" # No default (optional)
   system_prompt: "" # No default (optional)
+  image: "" # No default (optional)
   response_format: text
   max_tokens: 0 # No default (optional)
   temperature: 0 # No default (optional)
@@ -132,6 +134,15 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 *Type*: `string`
 
+
+=== `image`
+
+The image to submit along with the prompt to the model. The result should be a byte array.
+
+
+*Type*: `string`
+
+Requires version 4.38.0 or newer
 
 === `response_format`
 

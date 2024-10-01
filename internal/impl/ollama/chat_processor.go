@@ -15,6 +15,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/ollama/ollama/api"
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
@@ -22,6 +23,7 @@ const (
 	ocpFieldUserPrompt     = "prompt"
 	ocpFieldSystemPrompt   = "system_prompt"
 	ocpFieldResponseFormat = "response_format"
+	ocpFieldImage          = "image"
 	// Prediction options
 	ocpFieldMaxTokens        = "max_tokens"
 	ocpFieldNumKeep          = "num_keep"
@@ -66,6 +68,10 @@ For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ol
 			service.NewInterpolatedStringField(ocpFieldSystemPrompt).
 				Description("The system prompt to submit to the Ollama LLM.").
 				Advanced().
+				Optional(),
+			service.NewBloblangField(ocpFieldImage).
+				Description("The image to submit along with the prompt to the model. The result should be a byte array.").
+				Version("4.38.0").
 				Optional(),
 			service.NewStringEnumField(ocpFieldResponseFormat, "text", "json").
 				Description("The format of the response that the Ollama model generates. If specifying JSON output, then the `"+ocpFieldUserPrompt+"` should specify that the output should be in JSON as well.").
@@ -134,6 +140,13 @@ func makeOllamaCompletionProcessor(conf *service.ParsedConfig, mgr *service.Reso
 		}
 		p.systemPrompt = pf
 	}
+	if conf.Contains(ocpFieldImage) {
+		i, err := conf.FieldBloblang(ocpFieldImage)
+		if err != nil {
+			return nil, err
+		}
+		p.image = i
+	}
 	format, err := conf.FieldString(ocpFieldResponseFormat)
 	if err != nil {
 		return nil, err
@@ -160,6 +173,7 @@ type ollamaCompletionProcessor struct {
 	format       string
 	userPrompt   *service.InterpolatedString
 	systemPrompt *service.InterpolatedString
+	image        *bloblang.Executor
 }
 
 func (o *ollamaCompletionProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
@@ -175,7 +189,18 @@ func (o *ollamaCompletionProcessor) Process(ctx context.Context, msg *service.Me
 	if err != nil {
 		return nil, err
 	}
-	g, err := o.generateCompletion(ctx, sp, up)
+	var image []byte
+	if o.image != nil {
+		o, err := msg.BloblangQuery(o.image)
+		if err != nil {
+			return nil, fmt.Errorf("unable to execute bloblang for `%s`: %w", ocpFieldImage, err)
+		}
+		image, err = o.AsBytes()
+		if err != nil {
+			return nil, fmt.Errorf("unable to convert `%s` result to a byte array: %w", ocpFieldImage, err)
+		}
+	}
+	g, err := o.generateCompletion(ctx, sp, up, image)
 	if err != nil {
 		return nil, err
 	}
@@ -198,7 +223,7 @@ func (o *ollamaCompletionProcessor) computePrompt(msg *service.Message) (string,
 	return string(b), nil
 }
 
-func (o *ollamaCompletionProcessor) generateCompletion(ctx context.Context, systemPrompt, userPrompt string) (string, error) {
+func (o *ollamaCompletionProcessor) generateCompletion(ctx context.Context, systemPrompt, userPrompt string, image []byte) (string, error) {
 	var req api.ChatRequest
 	req.Model = o.model
 	req.Options = o.opts
@@ -209,9 +234,14 @@ func (o *ollamaCompletionProcessor) generateCompletion(ctx context.Context, syst
 			Content: systemPrompt,
 		})
 	}
+	var images []api.ImageData
+	if image != nil {
+		images = []api.ImageData{image}
+	}
 	req.Messages = append(req.Messages, api.Message{
 		Role:    "user",
 		Content: userPrompt,
+		Images:  images,
 	})
 	shouldStream := false
 	req.Stream = &shouldStream
