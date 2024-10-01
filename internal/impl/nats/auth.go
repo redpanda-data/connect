@@ -271,15 +271,15 @@ func loadFileContents(filename string, fs *service.FS) ([]byte, error) {
 func nkeyOptionFromString(nkey string) (nats.Option, error) {
 	kp, err := nkeys.ParseDecoratedNKey([]byte(nkey))
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse nkey")
+		return nil, errors.New("failed to parse nkey")
 	}
 
 	pub, err := kp.PublicKey()
 	if err != nil {
-		return nil, fmt.Errorf("failed to extract public key from nkey")
+		return nil, errors.New("failed to extract public key from nkey")
 	}
 	if !nkeys.IsValidPublicUserKey(pub) {
-		return nil, fmt.Errorf("invalid nkey user seed")
+		return nil, errors.New("invalid nkey user seed")
 	}
 
 	sigCB := func(nonce []byte) ([]byte, error) {
