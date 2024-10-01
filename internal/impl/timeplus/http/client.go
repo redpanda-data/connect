@@ -16,12 +16,17 @@ import (
 )
 
 const (
-	timeplusAPIVersion          = "v1beta2"
-	timeplusdDAPIVersion        = "v1"
-	TargetTimeplus       string = "timeplus"
-	TargetTimeplusd      string = "timeplusd"
+	timeplusAPIVersion   = "v1beta2"
+	timeplusdDAPIVersion = "v1"
+
+	// To Timeplus Enterprise
+	TargetTimeplus string = "timeplus"
+
+	// To timeplusd (or proton)
+	TargetTimeplusd string = "timeplusd"
 )
 
+// Timeplus Enterprise HTTP client. Always use `NewClient` to create it
 type Client struct {
 	logger    *service.Logger
 	ingestURL *url.URL
@@ -35,6 +40,7 @@ type tpIngest struct {
 	Data    [][]any  `json:"data" binding:"required"`
 }
 
+// Create a new Timeplus Enterprise HTTP client
 func NewClient(logger *service.Logger, maxInFlight int, target string, baseURL *url.URL, workspace, stream, apikey, username, password string) *Client {
 	ingestURL, _ := url.Parse(baseURL.String())
 
