@@ -6,7 +6,7 @@
 //
 // https://github.com/redpanda-data/connect/v4/blob/main/licenses/rcl.md
 
-package pg_stream
+package pgstream
 
 import (
 	"context"
@@ -55,6 +55,9 @@ var pgStreamConfigSpec = service.NewConfigSpec().
 		Description("Sets amout of memory that can be used to stream snapshot. If affects batch sizes. If we want to use only 25% of the memory available - put 0.25 factor. It will make initial streaming slower, but it will prevent your worker from OOM Kill").
 		Example(0.2).
 		Default(0.5)).
+	Field(service.NewStringEnumField("decoding_plugin", "pgoutput", "wal2json").Description("Specifies which decoding plugin to use when streaming data from PostgreSQL").
+		Example("pgoutput").
+		Default("pgoutput")).
 	Field(service.NewStringListField("tables").
 		Example(`
 			- my_table
@@ -66,7 +69,7 @@ var pgStreamConfigSpec = service.NewConfigSpec().
 		Example("my_test_slot").
 		Default(randomSlotName))
 
-func newPgStreamInput(conf *service.ParsedConfig) (s service.Input, err error) {
+func newPgStreamInput(conf *service.ParsedConfig, logger *service.Logger) (s service.Input, err error) {
 	var (
 		dbName                  string
 		dbPort                  int
@@ -79,6 +82,7 @@ func newPgStreamInput(conf *service.ParsedConfig) (s service.Input, err error) {
 		tables                  []string
 		streamSnapshot          bool
 		snapshotMemSafetyFactor float64
+		decodingPlugin          string
 	)
 
 	dbSchema, err = conf.FieldString("schema")
@@ -135,6 +139,11 @@ func newPgStreamInput(conf *service.ParsedConfig) (s service.Input, err error) {
 		return nil, err
 	}
 
+	decodingPlugin, err = conf.FieldString("decoding_plugin")
+	if err != nil {
+		return nil, err
+	}
+
 	snapshotMemSafetyFactor, err = conf.FieldFloat("snapshot_memory_safety_factor")
 	if err != nil {
 		return nil, err
@@ -163,17 +172,19 @@ func newPgStreamInput(conf *service.ParsedConfig) (s service.Input, err error) {
 		schema:                  dbSchema,
 		tls:                     pglogicalstream.TlsVerify(tlsSetting),
 		tables:                  tables,
+		decodingPlugin:          decodingPlugin,
+		logger:                  logger,
 	}), err
 }
 
 func init() {
 	rng, _ := codename.DefaultRNG()
-	randomSlotName = fmt.Sprintf("%s", strings.ReplaceAll(codename.Generate(rng, 5), "-", "_"))
+	randomSlotName = strings.ReplaceAll(codename.Generate(rng, 5), "-", "_")
 
 	err := service.RegisterInput(
 		"pg_stream", pgStreamConfigSpec,
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
-			return newPgStreamInput(conf)
+			return newPgStreamInput(conf, mgr.Logger())
 		})
 	if err != nil {
 		panic(err)
@@ -183,10 +194,10 @@ func init() {
 type pgStreamInput struct {
 	dbConfig                pgconn.Config
 	pglogicalStream         *pglogicalstream.Stream
-	redisUri                string
 	slotName                string
 	schema                  string
 	tables                  []string
+	decodingPlugin          string
 	streamSnapshot          bool
 	tls                     pglogicalstream.TlsVerify // none, require
 	snapshotMemSafetyFactor float64
@@ -202,14 +213,15 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 		DbTables:                   p.tables,
 		DbName:                     p.dbConfig.Database,
 		DbSchema:                   p.schema,
-		ReplicationSlotName:        fmt.Sprintf("rs_%s", p.slotName),
+		ReplicationSlotName:        "rs_" + p.slotName,
 		TlsVerify:                  p.tls,
 		StreamOldData:              p.streamSnapshot,
+		DecodingPlugin:             p.decodingPlugin,
 		SnapshotMemorySafetyFactor: p.snapshotMemSafetyFactor,
 		SeparateChanges:            true,
 	})
 	if err != nil {
-		panic(err)
+		return err
 	}
 	p.pglogicalStream = pgStream
 	return err
@@ -242,7 +254,10 @@ func (p *pgStreamInput) Read(ctx context.Context) (*service.Message, service.Ack
 			//message.ServerHeartbeat.
 
 			if message.Lsn != nil {
-				p.pglogicalStream.AckLSN(*message.Lsn)
+				if err := p.pglogicalStream.AckLSN(*message.Lsn); err != nil {
+					fmt.Println("Error while acking LSN", err)
+					return err
+				}
 			}
 			return nil
 		}, nil
