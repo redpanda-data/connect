@@ -110,16 +110,11 @@ func authConfToOptions(auth authConfig, fs *service.FS) []nats.Option {
 		}
 	}
 
-	// in case a nkey file content is provided, save to a tmp file and load it
 	if auth.NKey != "" {
-		if file, err := saveTempNkeyFile(auth.NKey); err != nil {
+		if opt, err := nkeyOptionFromString(auth.NKey); err != nil {
 			opts = append(opts, func(*nats.Options) error { return err })
 		} else {
-			if opt, err := nats.NkeyOptionFromSeed(file); err != nil {
-				opts = append(opts, func(*nats.Options) error { return err })
-			} else {
-				opts = append(opts, opt)
-			}
+			opts = append(opts, opt)
 		}
 	}
 
@@ -273,22 +268,24 @@ func loadFileContents(filename string, fs *service.FS) ([]byte, error) {
 	return io.ReadAll(f)
 }
 
-func saveTempNkeyFile(content string) (string, error) {
-	dir, err := os.MkdirTemp("", "nats")
+func nkeyOptionFromString(nkey string) (nats.Option, error) {
+	kp, err := nkeys.ParseDecoratedNKey([]byte(nkey))
 	if err != nil {
-		return "", err
+		return nil, fmt.Errorf("failed to parse nkey")
 	}
-	nkeyFile := filepath.Join(dir, "nkeys")
 
-	file, err := os.Create(nkeyFile)
+	pub, err := kp.PublicKey()
 	if err != nil {
-		return "", err
+		return nil, fmt.Errorf("failed to extract public key from nkey")
 	}
-	defer file.Close()
-
-	if _, err = file.WriteString(content); err != nil {
-		return "", err
+	if !nkeys.IsValidPublicUserKey(pub) {
+		return nil, fmt.Errorf("invalid nkey user seed")
 	}
 
-	return nkeyFile, nil
+	sigCB := func(nonce []byte) ([]byte, error) {
+		sig, _ := kp.Sign(nonce)
+		return sig, nil
+	}
+
+	return nats.Nkey(string(pub), sigCB), nil
 }
