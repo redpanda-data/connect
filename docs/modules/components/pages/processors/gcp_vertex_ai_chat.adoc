@@ -43,6 +43,7 @@ gcp_vertex_ai_chat:
   location: us-central1 # No default (optional)
   model: gemini-1.5-pro-001 # No default (required)
   prompt: "" # No default (optional)
+  attachment: "" # No default (optional)
   temperature: 0 # No default (optional)
   max_tokens: 0 # No default (optional)
   response_format: text
@@ -63,6 +64,7 @@ gcp_vertex_ai_chat:
   model: gemini-1.5-pro-001 # No default (required)
   prompt: "" # No default (optional)
   system_prompt: "" # No default (optional)
+  attachment: "" # No default (optional)
   temperature: 0 # No default (optional)
   max_tokens: 0 # No default (optional)
   response_format: text
@@ -150,6 +152,15 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 *Type*: `string`
 
+
+=== `attachment`
+
+Additional data like an image to send with the prompt to the model. The result of the mapping must be a byte array, and the content type is automatically detected.
+
+
+*Type*: `string`
+
+Requires version 4.38.0 or newer
 
 === `temperature`
 
