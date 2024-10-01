@@ -17,13 +17,19 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
+// Snapshotter is a structure that allows the creation of a snapshot of a database at a given point in time
+// At the time we initialize logical replication - we specify what we want to export the snapshot.
+// This snapshot exists until the connection that created the replication slot remains open.
+// Therefore Snapshotter opens another connection to the database and sets the transaction to the snapshot.
+// This allows you to read the data that was in the database at the time of the snapshot creation.
 type Snapshotter struct {
 	pgConnection *sql.DB
-	snapshotName string
 	logger       *service.Logger
+
+	snapshotName string
 }
 
-func NewSnapshotter(dbConf pgconn.Config, snapshotName string) (*Snapshotter, error) {
+func NewSnapshotter(dbConf pgconn.Config, snapshotName string, logger *service.Logger) (*Snapshotter, error) {
 	var sslMode = "none"
 	if dbConf.TLSConfig != nil {
 		sslMode = "require"
@@ -39,7 +45,7 @@ func NewSnapshotter(dbConf pgconn.Config, snapshotName string) (*Snapshotter, er
 	return &Snapshotter{
 		pgConnection: pgConn,
 		snapshotName: snapshotName,
-		logger:       nil, // TODO
+		logger:       logger,
 	}, err
 }
 
@@ -54,22 +60,22 @@ func (s *Snapshotter) Prepare() error {
 	return nil
 }
 
-func (s *Snapshotter) FindAvgRowSize(table string) sql.NullInt64 {
+func (s *Snapshotter) FindAvgRowSize(table string) (sql.NullInt64, error) {
 	var avgRowSize sql.NullInt64
 
 	if rows, err := s.pgConnection.Query(fmt.Sprintf(`SELECT SUM(pg_column_size('%s.*')) / COUNT(*) FROM %s;`, table, table)); err != nil {
-		panic(fmt.Errorf("can get avg row size: %w", err)) // TODO
+		return avgRowSize, fmt.Errorf("can get avg row size due to query failure: %w", err)
 	} else {
 		if rows.Next() {
 			if err = rows.Scan(&avgRowSize); err != nil {
-				panic(fmt.Errorf("can get avg row size: %w", err)) // TODO
+				return avgRowSize, fmt.Errorf("can get avg row size: %w", err)
 			}
 		} else {
-			panic("can get avg row size; 0 rows returned") // TODO
+			return avgRowSize, fmt.Errorf("can get avg row size; 0 rows returned")
 		}
 	}
 
-	return avgRowSize
+	return avgRowSize, nil
 }
 
 func (s *Snapshotter) CalculateBatchSize(availableMemory uint64, estimatedRowSize uint64) int {
@@ -80,11 +86,11 @@ func (s *Snapshotter) CalculateBatchSize(availableMemory uint64, estimatedRowSiz
 	if batchSize < 1 {
 		batchSize = 1
 	}
+
 	return batchSize
 }
 
 func (s *Snapshotter) QuerySnapshotData(table string, pk string, limit, offset int) (rows *sql.Rows, err error) {
-	// fmt.Sprintf("SELECT * FROM %s ORDER BY %s LIMIT %d OFFSET %d;", table, pk, limit, offset)
 	s.logger.Infof("Query snapshot table: %v, limit: %v, offset: %v, pk: %v", table, limit, offset, pk)
 	return s.pgConnection.Query(fmt.Sprintf("SELECT * FROM %s ORDER BY %s LIMIT %d OFFSET %d;", table, pk, limit, offset))
 }
