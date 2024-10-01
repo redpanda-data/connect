@@ -43,6 +43,7 @@ openai_chat_completion:
   model: gpt-4o # No default (required)
   prompt: "" # No default (optional)
   system_prompt: "" # No default (optional)
+  image: "" # No default (optional)
   max_tokens: 0 # No default (optional)
   temperature: 0 # No default (optional)
   user: "" # No default (optional)
@@ -66,6 +67,7 @@ openai_chat_completion:
   model: gpt-4o # No default (required)
   prompt: "" # No default (optional)
   system_prompt: "" # No default (optional)
+  image: "" # No default (optional)
   max_tokens: 0 # No default (optional)
   temperature: 0 # No default (optional)
   user: "" # No default (optional)
@@ -176,6 +178,16 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 *Type*: `string`
 
+
+=== `image`
+
+An image to send along with the prompt. The mapping result must be a byte array.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+
+*Type*: `string`
+
+Requires version 4.38.0 or newer
 
 === `max_tokens`
 
