@@ -356,7 +356,10 @@ func (e *Output) Connect(ctx context.Context) error {
 }
 
 func shouldRetry(s int) bool {
-	if s >= 500 && s <= 599 {
+	// Retry if the status code is 429 (Too Many Requests) or any 5xx server error.
+	// HTTP 429 indicates the elasticsearch cluster is rate-limiting the client and expects the client to backoff
+	// https://www.elastic.co/guide/en/elasticsearch/reference/current/tune-for-indexing-speed.html#multiple-workers-threads
+	if s == 429 || (s >= 500 && s <= 599) {
 		return true
 	}
 	return false
