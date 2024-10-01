@@ -286,5 +286,5 @@ func nkeyOptionFromString(nkey string) (nats.Option, error) {
 		return kp.Sign(nonce)
 	}
 
-	return nats.Nkey(string(pub), sigCB), nil
+	return nats.Nkey(pub, sigCB), nil
 }
