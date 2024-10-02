@@ -27,8 +27,6 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/internal/helpers"
 )
 
-var pluginArguments = []string{"\"pretty-print\" 'true'"}
-
 type Stream struct {
 	pgConn *pgconn.PgConn
 	// extra copy of db config is required to establish a new db connection
@@ -53,6 +51,7 @@ type Stream struct {
 	separateChanges            bool
 	snapshotBatchSize          int
 	decodingPlugin             DecodingPlugin
+	decodingPluginArguments    []string
 	snapshotMemorySafetyFactor float64
 	logger                     *service.Logger
 
@@ -117,6 +116,11 @@ func NewPgStream(config Config) (*Stream, error) {
 		decodingPlugin:             DecodingPluginFromString(config.DecodingPlugin),
 	}
 
+	for i, table := range tableNames {
+		tableNames[i] = fmt.Sprintf("%s.%s", config.DbSchema, table)
+	}
+
+	var pluginArguments = []string{}
 	if stream.decodingPlugin == "pgoutput" {
 		pluginArguments = []string{
 			"proto_version '1'",
@@ -125,14 +129,20 @@ func NewPgStream(config Config) (*Stream, error) {
 		}
 	}
 
+	if stream.decodingPlugin == "wal2json" {
+		tablesFilterRule := strings.Join(tableNames, ", ")
+		pluginArguments = []string{
+			"\"pretty-print\" 'true'",
+			"\"add-tables\"" + " " + fmt.Sprintf("'%s'", tablesFilterRule),
+		}
+	}
+
+	stream.decodingPluginArguments = pluginArguments
+
 	result := stream.pgConn.Exec(context.Background(), fmt.Sprintf("DROP PUBLICATION IF EXISTS pglog_stream_%s;", config.ReplicationSlotName))
 	_, err = result.ReadAll()
 	if err != nil {
 		return nil, err
-	}
-
-	for i, table := range tableNames {
-		tableNames[i] = fmt.Sprintf("%s.%s", config.DbSchema, table)
 	}
 
 	tablesSchemaFilter := fmt.Sprintf("FOR TABLE %s", strings.Join(tableNames, ","))
@@ -216,7 +226,7 @@ func NewPgStream(config Config) (*Stream, error) {
 
 func (s *Stream) startLr() error {
 	var err error
-	err = StartReplication(context.Background(), s.pgConn, s.slotName, s.lsnrestart, StartReplicationOptions{PluginArgs: pluginArguments})
+	err = StartReplication(context.Background(), s.pgConn, s.slotName, s.lsnrestart, StartReplicationOptions{PluginArgs: s.decodingPluginArguments})
 	if err != nil {
 		return err
 	}

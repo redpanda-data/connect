@@ -43,7 +43,6 @@ func TestIntegrationPgCDC(t *testing.T) {
 			"POSTGRES_USER=user_name",
 			"POSTGRES_DB=dbname",
 		},
-		ExposedPorts: []string{"5432"},
 		Cmd: []string{
 			"postgres",
 			"-c", "wal_level=logical",
@@ -106,7 +105,6 @@ func TestIntegrationPgCDC(t *testing.T) {
 	fake := faker.New()
 	for i := 0; i < 1000; i++ {
 		_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", fake.Address().City(), fake.Time().RFC1123(time.Now()))
-
 		_, err = db.Exec("INSERT INTO flights_non_streamed (name, created_at) VALUES ($1, $2);", fake.Address().City(), fake.Time().RFC1123(time.Now()))
 		require.NoError(t, err)
 	}
@@ -119,6 +117,7 @@ pg_stream:
     password: secret
     port: %s
     schema: public
+    decoding_plugin: wal2json
     tls: none
     stream_snapshot: true
     database: dbname
@@ -214,7 +213,7 @@ file:
 	}, time.Second*20, time.Millisecond*100)
 
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
-	t.Log("All the conditions are met 🎉", len(outMessages))
+	t.Log("All the conditions are met 🎉")
 
 	t.Cleanup(func() {
 		db.Close()
@@ -234,7 +233,6 @@ func TestIntegrationPgCDCForPgOutputPlugin(t *testing.T) {
 			"POSTGRES_USER=user_name",
 			"POSTGRES_DB=dbname",
 		},
-		ExposedPorts: []string{"5432"},
 		Cmd: []string{
 			"postgres",
 			"-c", "wal_level=logical",
@@ -277,7 +275,12 @@ func TestIntegrationPgCDCForPgOutputPlugin(t *testing.T) {
 		}
 
 		_, err = db.Exec("CREATE TABLE IF NOT EXISTS flights (id serial PRIMARY KEY, name VARCHAR(50), created_at TIMESTAMP);")
+		if err != nil {
+			return err
+		}
 
+		// flights_non_streamed is a control table with data that should not be streamed or queried by snapshot streaming
+		_, err = db.Exec("CREATE TABLE IF NOT EXISTS flights_non_streamed (id serial PRIMARY KEY, name VARCHAR(50), created_at TIMESTAMP);")
 		return err
 	}); err != nil {
 		panic(fmt.Errorf("could not connect to docker: %w", err))
@@ -343,6 +346,7 @@ file:
 
 	for i := 0; i < 10; i++ {
 		_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", fake.Address().City(), fake.Time().RFC1123(time.Now()))
+		_, err = db.Exec("INSERT INTO flights_non_streamed (name, created_at) VALUES ($1, $2);", fake.Address().City(), fake.Time().RFC1123(time.Now()))
 		require.NoError(t, err)
 	}
 
