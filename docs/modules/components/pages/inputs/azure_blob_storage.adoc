@@ -150,6 +150,7 @@ The storage account SAS token. This field is ignored if `storage_connection_stri
 === `container`
 
 The name of the container from which to download blobs.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
 
 *Type*: `string`
