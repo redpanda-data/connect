@@ -124,8 +124,8 @@ mongodb                   ,cache     ,MongoDB                   ,3.43.0  ,commun
 mongodb                   ,input     ,MongoDB                   ,3.64.0  ,community  ,n          ,n     ,n
 mongodb                   ,output    ,MongoDB                   ,3.43.0  ,community  ,n          ,n     ,n
 mongodb                   ,processor ,MongoDB                   ,3.43.0  ,community  ,n          ,n     ,n
-mqtt                      ,input     ,mqtt                      ,0.0.0   ,community  ,n          ,n     ,n
-mqtt                      ,output    ,mqtt                      ,0.0.0   ,community  ,n          ,n     ,n
+mqtt                      ,input     ,mqtt                      ,4.37.0  ,certified  ,n          ,n     ,n
+mqtt                      ,output    ,mqtt                      ,4.37.0  ,certified  ,n          ,n     ,n
 msgpack                   ,processor ,msgpack                   ,3.59.0  ,community  ,n          ,n     ,n
 multilevel                ,cache     ,Multilevel                ,0.0.0   ,certified  ,n          ,y     ,y
 mutation                  ,processor ,mutation                  ,4.5.0   ,certified  ,n          ,y     ,y
