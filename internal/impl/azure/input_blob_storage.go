@@ -51,16 +51,20 @@ type bsiConfig struct {
 }
 
 func bsiConfigFromParsed(pConf *service.ParsedConfig) (conf bsiConfig, err error) {
-	if conf.Container, err = pConf.FieldString(bsiFieldContainer); err != nil {
+	var containerSASToken bool
+	container, err := pConf.FieldInterpolatedString(bsiFieldContainer)
+	if err != nil {
 		return
 	}
-	var containerSASToken bool
-	if conf.client, containerSASToken, err = blobStorageClientFromParsed(pConf, conf.Container); err != nil {
+	if conf.client, containerSASToken, err = blobStorageClientFromParsed(pConf, container); err != nil {
 		return
 	}
 	if containerSASToken {
-		// when using a container SAS token, the container is already implicit
-		conf.Container = ""
+		// if using a container SAS token, the container is already implicit
+		container, _ = service.NewInterpolatedString("")
+	}
+	if conf.Container, err = container.TryString(service.NewMessage([]byte(""))); err != nil {
+		return
 	}
 	if conf.Prefix, err = pConf.FieldString(bsiFieldPrefix); err != nil {
 		return
@@ -119,7 +123,7 @@ This input adds the following metadata fields to each message:
 
 You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].`).
 		Fields(
-			service.NewStringField(bsiFieldContainer).
+			service.NewInterpolatedStringField(bsiFieldContainer).
 				Description("The name of the container from which to download blobs."),
 			service.NewStringField(bsiFieldPrefix).
 				Description("An optional path prefix, if set only objects with the prefix are consumed.").
@@ -367,7 +371,6 @@ func newAzureTargetBatchReader(ctx context.Context, conf bsiConfig) (*azureTarge
 		}
 		staticKeys.pager = pager
 	}
-
 	return &staticKeys, nil
 }
 

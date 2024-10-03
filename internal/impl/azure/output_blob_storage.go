@@ -49,11 +49,7 @@ func bsoConfigFromParsed(pConf *service.ParsedConfig) (conf bsoConfig, err error
 		return
 	}
 	var containerSASToken bool
-	c, err := conf.Container.TryString(service.NewMessage([]byte("")))
-	if err != nil {
-		return
-	}
-	if conf.client, containerSASToken, err = blobStorageClientFromParsed(pConf, c); err != nil {
+	if conf.client, containerSASToken, err = blobStorageClientFromParsed(pConf, conf.Container); err != nil {
 		return
 	}
 	if containerSASToken {

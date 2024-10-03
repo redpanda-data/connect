@@ -57,7 +57,7 @@ func azureComponentSpec(forBlobStorage bool) *service.ConfigSpec {
 	return spec
 }
 
-func blobStorageClientFromParsed(pConf *service.ParsedConfig, container string) (*azblob.Client, bool, error) {
+func blobStorageClientFromParsed(pConf *service.ParsedConfig, container *service.InterpolatedString) (*azblob.Client, bool, error) {
 	connectionString, err := pConf.FieldString(bscFieldStorageConnectionString)
 	if err != nil {
 		return nil, false, err
@@ -84,7 +84,7 @@ const (
 	blobEndpointExp = "https://%s.blob.core.windows.net"
 )
 
-func getBlobStorageClient(storageConnectionString, storageAccount, storageAccessKey, storageSASToken, container string) (*azblob.Client, bool, error) {
+func getBlobStorageClient(storageConnectionString, storageAccount, storageAccessKey, storageSASToken string, container *service.InterpolatedString) (*azblob.Client, bool, error) {
 	var client *azblob.Client
 	var err error
 	var containerSASToken bool
@@ -103,7 +103,11 @@ func getBlobStorageClient(storageConnectionString, storageAccount, storageAccess
 		if strings.HasPrefix(storageSASToken, "sp=") {
 			// container SAS token
 			containerSASToken = true
-			serviceURL = fmt.Sprintf("%s/%s?%s", fmt.Sprintf(blobEndpointExp, storageAccount), container, storageSASToken)
+			c, err := container.TryString(service.NewMessage([]byte("")))
+			if err != nil {
+				return nil, false, fmt.Errorf("error getting container: %w", err)
+			}
+			serviceURL = fmt.Sprintf("%s/%s?%s", fmt.Sprintf(blobEndpointExp, storageAccount), c, storageSASToken)
 		} else {
 			// storage account SAS token
 			serviceURL = fmt.Sprintf("%s/%s", fmt.Sprintf(blobEndpointExp, storageAccount), storageSASToken)
