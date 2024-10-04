@@ -22,6 +22,7 @@ type Config struct {
 	PgConnRuntimeParam string    `yaml:"pg_conn_options"`
 
 	ReplicationSlotName        string  `yaml:"replication_slot_name"`
+	TemporaryReplicationSlot   bool    `yaml:"temporary_replication_slot"`
 	StreamOldData              bool    `yaml:"stream_old_data"`
 	SeparateChanges            bool    `yaml:"separate_changes"`
 	SnapshotMemorySafetyFactor float64 `yaml:"snapshot_memory_safety_factor"`

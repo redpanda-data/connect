@@ -46,7 +46,6 @@ type Stream struct {
 	slotName                   string
 	schema                     string
 	tableNames                 []string
-	separateChanges            bool
 	snapshotBatchSize          int
 	decodingPlugin             DecodingPlugin
 	decodingPluginArguments    []string
@@ -117,7 +116,6 @@ func NewPgStream(config Config) (*Stream, error) {
 		slotName:                   config.ReplicationSlotName,
 		schema:                     config.DbSchema,
 		snapshotMemorySafetyFactor: config.SnapshotMemorySafetyFactor,
-		separateChanges:            config.SeparateChanges,
 		snapshotBatchSize:          config.BatchSize,
 		tableNames:                 tableNames,
 		logger:                     config.logger,
@@ -173,7 +171,7 @@ func NewPgStream(config Config) (*Stream, error) {
 			// here we create a new replication slot because there is no slot found
 			var createSlotResult CreateReplicationSlotResult
 			createSlotResult, err = CreateReplicationSlot(context.Background(), stream.pgConn, stream.slotName, stream.decodingPlugin.String(),
-				CreateReplicationSlotOptions{Temporary: false,
+				CreateReplicationSlotOptions{Temporary: config.TemporaryReplicationSlot,
 					SnapshotAction: "export",
 				})
 			if err != nil {

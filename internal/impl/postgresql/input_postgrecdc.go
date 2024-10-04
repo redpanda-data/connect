@@ -65,6 +65,7 @@ var pgStreamConfigSpec = service.NewConfigSpec().
 			- my_table_2
 		`).
 		Description("List of tables we have to create logical replication for")).
+	Field(service.NewBoolField("temporary_slot").Default(false)).
 	Field(service.NewStringField("slot_name").
 		Description("PostgeSQL logical replication slot name. You can create it manually before starting the sync. If not provided will be replaced with a random one").
 		Example("my_test_slot").
@@ -79,6 +80,7 @@ func newPgStreamInput(conf *service.ParsedConfig, logger *service.Logger) (s ser
 		dbUser                  string
 		dbPassword              string
 		dbSlotName              string
+		temporarySlot           bool
 		tlsSetting              string
 		tables                  []string
 		streamSnapshot          bool
@@ -93,6 +95,11 @@ func newPgStreamInput(conf *service.ParsedConfig, logger *service.Logger) (s ser
 	}
 
 	dbSlotName, err = conf.FieldString("slot_name")
+	if err != nil {
+		return nil, err
+	}
+
+	temporarySlot, err = conf.FieldBool("temporary_slot")
 	if err != nil {
 		return nil, err
 	}
@@ -185,6 +192,7 @@ func newPgStreamInput(conf *service.ParsedConfig, logger *service.Logger) (s ser
 		tables:                  tables,
 		decodingPlugin:          decodingPlugin,
 		logger:                  logger,
+		temporarySlot:           temporarySlot,
 	}), err
 }
 
@@ -208,6 +216,7 @@ type pgStreamInput struct {
 	pglogicalStream         *pglogicalstream.Stream
 	pgConnRuntimeParam      string
 	slotName                string
+	temporarySlot           bool
 	schema                  string
 	tables                  []string
 	decodingPlugin          string
@@ -229,9 +238,9 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 		ReplicationSlotName:        "rs_" + p.slotName,
 		TlsVerify:                  p.tls,
 		StreamOldData:              p.streamSnapshot,
+		TemporaryReplicationSlot:   p.temporarySlot,
 		DecodingPlugin:             p.decodingPlugin,
 		SnapshotMemorySafetyFactor: p.snapshotMemSafetyFactor,
-		SeparateChanges:            true,
 	})
 	if err != nil {
 		return err
