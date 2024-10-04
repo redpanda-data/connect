@@ -288,6 +288,23 @@ func DropReplicationSlot(ctx context.Context, conn *pgconn.PgConn, slotName stri
 	return err
 }
 
+func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName string, tables []string, dropIfExist bool) error {
+	result := conn.Exec(context.Background(), fmt.Sprintf("DROP PUBLICATION IF EXISTS %s;", publicationName))
+	if _, err := result.ReadAll(); err != nil {
+		return nil
+	}
+
+	tablesSchemaFilter := fmt.Sprintf("FOR TABLE %s", strings.Join(tables, ","))
+	if len(tables) == 0 {
+		tablesSchemaFilter = "FOR ALL TABLES"
+	}
+	result = conn.Exec(context.Background(), fmt.Sprintf("CREATE PUBLICATION %s %s;", publicationName, tablesSchemaFilter))
+	if _, err := result.ReadAll(); err != nil {
+		return err
+	}
+	return nil
+}
+
 type StartReplicationOptions struct {
 	Timeline   int32 // 0 means current server timeline
 	Mode       ReplicationMode

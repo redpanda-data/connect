@@ -10,13 +10,18 @@ package pglogicalstream
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
 	"fmt"
-	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgproto3"
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/ory/dockertest/v3"
+	"github.com/ory/dockertest/v3/docker"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -82,7 +87,7 @@ func (s *lsnSuite) TestValueInterface() {
 }
 
 const slotName = "pglogrepl_test"
-const outputPlugin = "test_decoding"
+const outputPlugin = "pgoutput"
 
 func closeConn(t testing.TB, conn *pgconn.PgConn) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -90,11 +95,59 @@ func closeConn(t testing.TB, conn *pgconn.PgConn) {
 	require.NoError(t, conn.Close(ctx))
 }
 
+func createDockerInstance(t *testing.T) (*dockertest.Pool, *dockertest.Resource, string) {
+	pool, err := dockertest.NewPool("")
+	require.NoError(t, err)
+
+	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
+		Repository: "postgres",
+		Tag:        "16",
+		Env: []string{
+			"POSTGRES_PASSWORD=secret",
+			"POSTGRES_USER=user_name",
+			"POSTGRES_DB=dbname",
+		},
+		Cmd: []string{
+			"postgres",
+			"-c", "wal_level=logical",
+		},
+	}, func(config *docker.HostConfig) {
+		config.AutoRemove = true
+		config.RestartPolicy = docker.RestartPolicy{Name: "no"}
+	})
+
+	require.NoError(t, err)
+	require.NoError(t, resource.Expire(120))
+
+	hostAndPort := resource.GetHostPort("5432/tcp")
+	hostAndPortSplited := strings.Split(hostAndPort, ":")
+	databaseURL := fmt.Sprintf("user=user_name password=secret dbname=dbname sslmode=disable host=%s port=%s replication=database", hostAndPortSplited[0], hostAndPortSplited[1])
+
+	var db *sql.DB
+	pool.MaxWait = 120 * time.Second
+	err = pool.Retry(func() error {
+		if db, err = sql.Open("postgres", databaseURL); err != nil {
+			return err
+		}
+
+		if err = db.Ping(); err != nil {
+			return err
+		}
+
+		return err
+	})
+	require.NoError(t, err)
+
+	return pool, resource, databaseURL
+}
+
 func TestIdentifySystem(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	pool, resource, dbUrl := createDockerInstance(t)
+	defer pool.Purge(resource)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*100)
 	defer cancel()
 
-	conn, err := pgconn.Connect(ctx, os.Getenv("PGLOGREPL_TEST_CONN_STRING"))
+	conn, err := pgconn.Connect(ctx, dbUrl)
 	require.NoError(t, err)
 	defer closeConn(t, conn)
 
@@ -107,47 +160,17 @@ func TestIdentifySystem(t *testing.T) {
 	assert.Greater(t, len(sysident.DBName), 0)
 }
 
-func TestGetHistoryFile(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-	defer cancel()
-
-	config, err := pgconn.ParseConfig(os.Getenv("PGLOGREPL_TEST_CONN_STRING"))
-	require.NoError(t, err)
-	config.RuntimeParams["replication"] = "on"
-
-	conn, err := pgconn.ConnectConfig(ctx, config)
-	require.NoError(t, err)
-	defer closeConn(t, conn)
-
-	sysident, err := IdentifySystem(ctx, conn)
-	require.NoError(t, err)
-
-	_, err = TimelineHistory(ctx, conn, 0)
-	require.Error(t, err)
-
-	_, err = TimelineHistory(ctx, conn, 1)
-	require.Error(t, err)
-
-	if sysident.Timeline > 1 {
-		// This test requires a Postgres with at least 1 timeline increase (promote, or recover)...
-		tlh, err := TimelineHistory(ctx, conn, sysident.Timeline)
-		require.NoError(t, err)
-
-		expectedFileName := fmt.Sprintf("%08X.history", sysident.Timeline)
-		assert.Equal(t, expectedFileName, tlh.FileName)
-		assert.Greater(t, len(tlh.Content), 0)
-	}
-}
-
 func TestCreateReplicationSlot(t *testing.T) {
+	pool, resource, dbUrl := createDockerInstance(t)
+	defer pool.Purge(resource)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
-	conn, err := pgconn.Connect(ctx, os.Getenv("PGLOGREPL_TEST_CONN_STRING"))
+	conn, err := pgconn.Connect(ctx, dbUrl)
 	require.NoError(t, err)
 	defer closeConn(t, conn)
 
-	result, err := CreateReplicationSlot(ctx, conn, slotName, outputPlugin, CreateReplicationSlotOptions{Temporary: true})
+	result, err := CreateReplicationSlot(ctx, conn, slotName, outputPlugin, CreateReplicationSlotOptions{Temporary: false, SnapshotAction: "export"})
 	require.NoError(t, err)
 
 	assert.Equal(t, slotName, result.SlotName)
@@ -155,45 +178,62 @@ func TestCreateReplicationSlot(t *testing.T) {
 }
 
 func TestDropReplicationSlot(t *testing.T) {
+	pool, resource, dbUrl := createDockerInstance(t)
+	defer pool.Purge(resource)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
-	conn, err := pgconn.Connect(ctx, os.Getenv("PGLOGREPL_TEST_CONN_STRING"))
+	conn, err := pgconn.Connect(ctx, dbUrl)
 	require.NoError(t, err)
 	defer closeConn(t, conn)
 
-	_, err = CreateReplicationSlot(ctx, conn, slotName, outputPlugin, CreateReplicationSlotOptions{Temporary: true})
+	_, err = CreateReplicationSlot(ctx, conn, slotName, outputPlugin, CreateReplicationSlotOptions{Temporary: false})
 	require.NoError(t, err)
 
 	err = DropReplicationSlot(ctx, conn, slotName, DropReplicationSlotOptions{})
 	require.NoError(t, err)
 
-	_, err = CreateReplicationSlot(ctx, conn, slotName, outputPlugin, CreateReplicationSlotOptions{Temporary: true})
+	_, err = CreateReplicationSlot(ctx, conn, slotName, outputPlugin, CreateReplicationSlotOptions{Temporary: false})
 	require.NoError(t, err)
 }
 
 func TestStartReplication(t *testing.T) {
+	pool, resource, dbUrl := createDockerInstance(t)
+	defer pool.Purge(resource)
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
-	conn, err := pgconn.Connect(ctx, os.Getenv("PGLOGREPL_TEST_CONN_STRING"))
+	conn, err := pgconn.Connect(ctx, dbUrl)
 	require.NoError(t, err)
 	defer closeConn(t, conn)
 
 	sysident, err := IdentifySystem(ctx, conn)
 	require.NoError(t, err)
 
-	_, err = CreateReplicationSlot(ctx, conn, slotName, outputPlugin, CreateReplicationSlotOptions{Temporary: true})
+	// create publication
+	publicationName := "test_publication"
+	err = CreatePublication(context.Background(), conn, publicationName, []string{}, true)
 	require.NoError(t, err)
 
-	err = StartReplication(ctx, conn, slotName, sysident.XLogPos, StartReplicationOptions{})
+	_, err = CreateReplicationSlot(ctx, conn, slotName, outputPlugin, CreateReplicationSlotOptions{Temporary: false, SnapshotAction: "export"})
+	require.NoError(t, err)
+
+	err = StartReplication(ctx, conn, slotName, sysident.XLogPos, StartReplicationOptions{
+		PluginArgs: []string{
+			"proto_version '1'",
+			"publication_names 'test_publication'",
+			"messages 'true'",
+		},
+		Mode: LogicalReplication,
+	})
 	require.NoError(t, err)
 
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 		defer cancel()
 
-		config, err := pgconn.ParseConfig(os.Getenv("PGLOGREPL_TEST_CONN_STRING"))
+		config, err := pgconn.ParseConfig(dbUrl)
 		require.NoError(t, err)
 		delete(config.RuntimeParams, "replication")
 
@@ -229,6 +269,9 @@ drop table t;
 		return pkm
 	}
 
+	relations := map[uint32]*RelationMessage{}
+	typeMap := pgtype.NewMap()
+
 	rxXLogData := func() XLogData {
 		var cdMsg *pgproto3.CopyData
 		// Discard keepalive messages
@@ -250,26 +293,59 @@ drop table t;
 
 	rxKeepAlive()
 	xld := rxXLogData()
-	assert.Equal(t, "BEGIN", string(xld.WALData[:5]))
+	begin, err := IsBeginMessage(xld.WALData)
+	require.NoError(t, err)
+	assert.Equal(t, true, begin)
+
 	xld = rxXLogData()
-	assert.Equal(t, "table public.t: INSERT: id[integer]:1 name[text]:'foo'", string(xld.WALData))
+	relationStreamMessage, err := DecodePgOutput(xld.WALData, relations, typeMap)
+	require.NoError(t, err)
+	assert.Nil(t, relationStreamMessage)
+
 	xld = rxXLogData()
-	assert.Equal(t, "table public.t: INSERT: id[integer]:2 name[text]:'bar'", string(xld.WALData))
+	streamMessage, err := DecodePgOutput(xld.WALData, relations, typeMap)
+	jsonData, err := json.Marshal(&streamMessage)
+	require.NoError(t, err)
+	assert.Equal(t, "{\"operation\":\"insert\",\"schema\":\"public\",\"table\":\"t\",\"data\":{\"id\":1,\"name\":\"foo\"}}", string(jsonData))
+
 	xld = rxXLogData()
-	assert.Equal(t, "table public.t: INSERT: id[integer]:3 name[text]:'baz'", string(xld.WALData))
+	streamMessage, err = DecodePgOutput(xld.WALData, relations, typeMap)
+	jsonData, err = json.Marshal(&streamMessage)
+	require.NoError(t, err)
+	assert.Equal(t, "{\"operation\":\"insert\",\"schema\":\"public\",\"table\":\"t\",\"data\":{\"id\":2,\"name\":\"bar\"}}", string(jsonData))
+
 	xld = rxXLogData()
-	assert.Equal(t, "table public.t: UPDATE: id[integer]:3 name[text]:'quz'", string(xld.WALData))
+	streamMessage, err = DecodePgOutput(xld.WALData, relations, typeMap)
+	jsonData, err = json.Marshal(&streamMessage)
+	require.NoError(t, err)
+	assert.Equal(t, "{\"operation\":\"insert\",\"schema\":\"public\",\"table\":\"t\",\"data\":{\"id\":3,\"name\":\"baz\"}}", string(jsonData))
+
 	xld = rxXLogData()
-	assert.Equal(t, "table public.t: DELETE: id[integer]:2", string(xld.WALData))
+	streamMessage, err = DecodePgOutput(xld.WALData, relations, typeMap)
+	jsonData, err = json.Marshal(&streamMessage)
+	require.NoError(t, err)
+	assert.Equal(t, "{\"operation\":\"update\",\"schema\":\"public\",\"table\":\"t\",\"data\":{\"id\":3,\"name\":\"quz\"}}", string(jsonData))
+
 	xld = rxXLogData()
-	assert.Equal(t, "COMMIT", string(xld.WALData[:6]))
+	streamMessage, err = DecodePgOutput(xld.WALData, relations, typeMap)
+	jsonData, err = json.Marshal(&streamMessage)
+	require.NoError(t, err)
+	assert.Equal(t, "{\"operation\":\"delete\",\"schema\":\"public\",\"table\":\"t\",\"data\":{\"id\":2,\"name\":null}}", string(jsonData))
+	xld = rxXLogData()
+
+	commit, err := IsCommitMessage(xld.WALData)
+	require.NoError(t, err)
+	assert.Equal(t, true, commit)
 }
 
 func TestSendStandbyStatusUpdate(t *testing.T) {
+	pool, resource, dbUrl := createDockerInstance(t)
+	defer pool.Purge(resource)
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
-	conn, err := pgconn.Connect(ctx, os.Getenv("PGLOGREPL_TEST_CONN_STRING"))
+	conn, err := pgconn.Connect(ctx, dbUrl)
 	require.NoError(t, err)
 	defer closeConn(t, conn)
 

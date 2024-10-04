@@ -11,14 +11,15 @@ package pglogicalstream
 import "github.com/redpanda-data/benthos/v4/public/service"
 
 type Config struct {
-	DbHost     string    `yaml:"db_host"`
-	DbPassword string    `yaml:"db_password"`
-	DbUser     string    `yaml:"db_user"`
-	DbPort     int       `yaml:"db_port"`
-	DbName     string    `yaml:"db_name"`
-	DbSchema   string    `yaml:"db_schema"`
-	DbTables   []string  `yaml:"db_tables"`
-	TlsVerify  TlsVerify `yaml:"tls_verify"`
+	DbHost             string    `yaml:"db_host"`
+	DbPassword         string    `yaml:"db_password"`
+	DbUser             string    `yaml:"db_user"`
+	DbPort             int       `yaml:"db_port"`
+	DbName             string    `yaml:"db_name"`
+	DbSchema           string    `yaml:"db_schema"`
+	DbTables           []string  `yaml:"db_tables"`
+	TlsVerify          TlsVerify `yaml:"tls_verify"`
+	PgConnRuntimeParam string    `yaml:"pg_conn_options"`
 
 	ReplicationSlotName        string  `yaml:"replication_slot_name"`
 	StreamOldData              bool    `yaml:"stream_old_data"`

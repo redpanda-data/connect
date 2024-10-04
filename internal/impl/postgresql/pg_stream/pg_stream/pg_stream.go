@@ -47,6 +47,7 @@ var pgStreamConfigSpec = service.NewConfigSpec().
 		Description("Defines whether benthos need to verify (skipinsecure) TLS configuration").
 		Example("none").
 		Default("none")).
+	Field(service.NewStringField("pg_conn_options").Default("")).
 	Field(service.NewBoolField("stream_snapshot").
 		Description("Set `true` if you want to receive all the data that currently exist in database").
 		Example(true).
@@ -83,6 +84,7 @@ func newPgStreamInput(conf *service.ParsedConfig, logger *service.Logger) (s ser
 		streamSnapshot          bool
 		snapshotMemSafetyFactor float64
 		decodingPlugin          string
+		pgConnOptions           string
 	)
 
 	dbSchema, err = conf.FieldString("schema")
@@ -149,6 +151,14 @@ func newPgStreamInput(conf *service.ParsedConfig, logger *service.Logger) (s ser
 		return nil, err
 	}
 
+	if pgConnOptions, err = conf.FieldString("pg_conn_options"); err != nil {
+		return nil, err
+	}
+
+	if pgConnOptions != "" {
+		pgConnOptions = fmt.Sprintf("options=%s", pgConnOptions)
+	}
+
 	pgconnConfig := pgconn.Config{
 		Host:     dbHost,
 		Port:     uint16(dbPort),
@@ -170,6 +180,7 @@ func newPgStreamInput(conf *service.ParsedConfig, logger *service.Logger) (s ser
 		snapshotMemSafetyFactor: snapshotMemSafetyFactor,
 		slotName:                dbSlotName,
 		schema:                  dbSchema,
+		pgConnRuntimeParam:      pgConnOptions,
 		tls:                     pglogicalstream.TlsVerify(tlsSetting),
 		tables:                  tables,
 		decodingPlugin:          decodingPlugin,
@@ -193,19 +204,21 @@ func init() {
 
 type pgStreamInput struct {
 	dbConfig                pgconn.Config
+	tls                     pglogicalstream.TlsVerify
 	pglogicalStream         *pglogicalstream.Stream
+	pgConnRuntimeParam      string
 	slotName                string
 	schema                  string
 	tables                  []string
 	decodingPlugin          string
 	streamSnapshot          bool
-	tls                     pglogicalstream.TlsVerify // none, require
 	snapshotMemSafetyFactor float64
 	logger                  *service.Logger
 }
 
 func (p *pgStreamInput) Connect(ctx context.Context) error {
 	pgStream, err := pglogicalstream.NewPgStream(pglogicalstream.Config{
+		PgConnRuntimeParam:         p.pgConnRuntimeParam,
 		DbHost:                     p.dbConfig.Host,
 		DbPassword:                 p.dbConfig.Password,
 		DbUser:                     p.dbConfig.User,

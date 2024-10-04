@@ -70,21 +70,28 @@ func NewPgStream(config Config) (*Stream, error) {
 		sslVerifyFull = "&sslmode=verify-full"
 	}
 
-	if cfg, err = pgconn.ParseConfig(fmt.Sprintf("postgres://%s:%s@%s:%d/%s?replication=database%s",
+	connectionParams := ""
+	if config.PgConnRuntimeParam != "" {
+		connectionParams = fmt.Sprintf("&%s", config.PgConnRuntimeParam)
+	}
+
+	q := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?replication=database%s%s",
 		config.DbUser,
 		config.DbPassword,
 		config.DbHost,
 		config.DbPort,
 		config.DbName,
 		sslVerifyFull,
-	)); err != nil {
+		connectionParams,
+	)
+
+	if cfg, err = pgconn.ParseConfig(q); err != nil {
 		return nil, err
 	}
 
 	if config.TlsVerify == TlsRequireVerify {
 		cfg.TLSConfig = &tls.Config{
 			InsecureSkipVerify: true,
-			ServerName:         config.DbHost,
 		}
 	} else {
 		cfg.TLSConfig = nil
@@ -92,6 +99,10 @@ func NewPgStream(config Config) (*Stream, error) {
 
 	dbConn, err := pgconn.ConnectConfig(context.Background(), cfg)
 	if err != nil {
+		return nil, err
+	}
+
+	if err = dbConn.Ping(context.Background()); err != nil {
 		return nil, err
 	}
 
@@ -139,17 +150,8 @@ func NewPgStream(config Config) (*Stream, error) {
 
 	stream.decodingPluginArguments = pluginArguments
 
-	result := stream.pgConn.Exec(context.Background(), fmt.Sprintf("DROP PUBLICATION IF EXISTS pglog_stream_%s;", config.ReplicationSlotName))
-	_, err = result.ReadAll()
-	if err != nil {
-		return nil, err
-	}
-
-	tablesSchemaFilter := fmt.Sprintf("FOR TABLE %s", strings.Join(tableNames, ","))
-	stream.logger.Infof("Create publication for table schemas with query %s", fmt.Sprintf("CREATE PUBLICATION pglog_stream_%s %s;", config.ReplicationSlotName, tablesSchemaFilter))
-	result = stream.pgConn.Exec(context.Background(), fmt.Sprintf("CREATE PUBLICATION pglog_stream_%s %s;", config.ReplicationSlotName, tablesSchemaFilter))
-	_, err = result.ReadAll()
-	if err != nil {
+	pubName := fmt.Sprintf("pglog_stream_%s", config.ReplicationSlotName)
+	if err = CreatePublication(context.Background(), stream.pgConn, pubName, tableNames, true); err != nil {
 		return nil, err
 	}
 

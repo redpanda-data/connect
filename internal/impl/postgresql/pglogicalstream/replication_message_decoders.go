@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/jackc/pgx/v5/pgtype"
 	"log"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // ----------------------------------------------------------------------------
@@ -36,9 +37,9 @@ func IsCommitMessage(WALData []byte) (bool, error) {
 // as a side effect it updates the relations map with any new relation metadata
 // When the relation is changes in the database, the relation message is sent
 // before the change message.
-func DecodePgOutput(WALData []byte, relations map[uint32]*RelationMessage, typeMap *pgtype.Map) (message *StreamMessageChanges, err error) {
+func DecodePgOutput(WALData []byte, relations map[uint32]*RelationMessage, typeMap *pgtype.Map) (*StreamMessageChanges, error) {
 	logicalMsg, err := Parse(WALData)
-	message = &StreamMessageChanges{}
+	message := &StreamMessageChanges{}
 
 	if err != nil {
 		return nil, err
@@ -75,13 +76,15 @@ func DecodePgOutput(WALData []byte, relations map[uint32]*RelationMessage, typeM
 				values[colName] = val
 			}
 		}
-
 		message.Data = values
 	case *UpdateMessage:
 		rel, ok := relations[logicalMsg.RelationID]
 		if !ok {
 			return nil, fmt.Errorf("unknown relation ID %d", logicalMsg.RelationID)
 		}
+		message.Operation = "update"
+		message.Schema = rel.Namespace
+		message.Table = rel.RelationName
 		values := map[string]interface{}{}
 		for idx, col := range logicalMsg.NewTuple.Columns {
 			colName := rel.Columns[idx].Name
@@ -99,13 +102,14 @@ func DecodePgOutput(WALData []byte, relations map[uint32]*RelationMessage, typeM
 			}
 		}
 		message.Data = values
-		//log.Printf("UPDATE %s.%s: SET %v", rel.Namespace, rel.RelationName, values)
 	case *DeleteMessage:
 		rel, ok := relations[logicalMsg.RelationID]
 		if !ok {
 			return nil, fmt.Errorf("unknown relation ID %d", logicalMsg.RelationID)
 		}
-
+		message.Operation = "delete"
+		message.Schema = rel.Namespace
+		message.Table = rel.RelationName
 		values := map[string]interface{}{}
 		for idx, col := range logicalMsg.OldTuple.Columns {
 			colName := rel.Columns[idx].Name
@@ -124,15 +128,11 @@ func DecodePgOutput(WALData []byte, relations map[uint32]*RelationMessage, typeM
 		}
 		message.Data = values
 	case *TruncateMessage:
-
 	case *TypeMessage:
 	case *OriginMessage:
-
 	case *LogicalDecodingMessage:
-		log.Printf("Logical decoding message: %q, %q", logicalMsg.Prefix, logicalMsg.Content)
 		return nil, nil
 	default:
-		log.Printf("Unknown message type in pgoutput stream: %T", logicalMsg)
 		return nil, nil
 	}
 
