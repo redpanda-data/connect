@@ -82,6 +82,7 @@ For more information, see the https://cloud.google.com/vertex-ai/docs[Vertex AI 
 			service.NewBloblangField(vaicpFieldAttachment).
 				Description("Additional data like an image to send with the prompt to the model. The result of the mapping must be a byte array, and the content type is automatically detected.").
 				Version("4.38.0").
+				Example(`root = this.image.decode("base64") # decode base64 encoded image`).
 				Optional(),
 			service.NewFloatField(vaicpFieldTemp).
 				Description("Controls the randomness of predications.").

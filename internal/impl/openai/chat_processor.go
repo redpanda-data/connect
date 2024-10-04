@@ -90,6 +90,7 @@ To learn more about chat completion, see the https://platform.openai.com/docs/gu
 			service.NewInterpolatedStringField(ocpFieldImage).
 				Description("An image to send along with the prompt. The mapping result must be a byte array.").
 				Version("4.38.0").
+				Example(`root = this.image.decode("base64") # decode base64 encoded image`).
 				Optional(),
 			service.NewIntField(ocpFieldMaxTokens).
 				Optional().
@@ -161,10 +162,32 @@ We generally recommend altering this or temperature but not both.`).
 				Description("Up to 4 sequences where the API will stop generating further tokens."),
 		).LintRule(`
       root = match {
-        this.exists("` + ocpFieldJSONSchema + `") && this.exists("` + ocpFieldSchemaRegistry + `") => ["cannot set both ` + "`" + ocpFieldJSONSchema + "`" + ` and ` + "`" + ocpFieldSchemaRegistry + "`" + `"]
-        this.response_format == "json_schema" && !this.exists("` + ocpFieldJSONSchema + `") && !this.exists("` + ocpFieldSchemaRegistry + `") => ["schema must be specified using either ` + "`" + ocpFieldJSONSchema + "`" + ` or ` + "`" + ocpFieldSchemaRegistry + "`" + `"]
+        this.exists("`+ocpFieldJSONSchema+`") && this.exists("`+ocpFieldSchemaRegistry+`") => ["cannot set both `+"`"+ocpFieldJSONSchema+"`"+` and `+"`"+ocpFieldSchemaRegistry+"`"+`"]
+        this.response_format == "json_schema" && !this.exists("`+ocpFieldJSONSchema+`") && !this.exists("`+ocpFieldSchemaRegistry+`") => ["schema must be specified using either `+"`"+ocpFieldJSONSchema+"`"+` or `+"`"+ocpFieldSchemaRegistry+"`"+`"]
       }
-    `)
+    `).
+		Example(
+			"Use GPT-4o analyze an image",
+			"This example fetches image URLs from stdin and has GPT-4o describe the image.",
+			`
+input:
+  stdin:
+    scanner:
+      lines: {}
+pipeline:
+  processors:
+    - http:
+        verb: GET
+        url: "${!content().string()}"
+    - openai_chat_completion:
+        model: gpt-4o
+        api_key: TODO
+        prompt: "Describe the following image"
+        image: "root = content()"
+output:
+  stdout:
+    codec: lines
+`)
 }
 
 func makeChatProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {

@@ -72,7 +72,8 @@ For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ol
 			service.NewBloblangField(ocpFieldImage).
 				Description("The image to submit along with the prompt to the model. The result should be a byte array.").
 				Version("4.38.0").
-				Optional(),
+				Optional().
+				Example(`root = this.image.decode("base64") # decode base64 encoded image`),
 			service.NewStringEnumField(ocpFieldResponseFormat, "text", "json").
 				Description("The format of the response that the Ollama model generates. If specifying JSON output, then the `"+ocpFieldUserPrompt+"` should specify that the output should be in JSON as well.").
 				Default("text"),
@@ -120,8 +121,28 @@ For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ol
 				Optional().
 				Advanced().
 				Description(`Sets the stop sequences to use. When this pattern is encountered the LLM stops generating text and returns the final response.`),
-		).Fields(commonFields()...)
-
+		).Fields(commonFields()...).
+		Example(
+			"Use Llava to analyze an image",
+			"This example fetches image URLs from stdin and has a multimodal LLM describe the image.",
+			`
+input:
+  stdin:
+    scanner:
+      lines: {}
+pipeline:
+  processors:
+    - http:
+        verb: GET
+        url: "${!content().string()}"
+    - ollama_chat:
+        model: llava
+        prompt: "Describe the following image"
+        image: "root = content()"
+output:
+  stdout:
+    codec: lines
+`)
 }
 
 func makeOllamaCompletionProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {

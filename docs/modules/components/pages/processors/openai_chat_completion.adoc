@@ -43,7 +43,7 @@ openai_chat_completion:
   model: gpt-4o # No default (required)
   prompt: "" # No default (optional)
   system_prompt: "" # No default (optional)
-  image: "" # No default (optional)
+  image: 'root = this.image.decode("base64") # decode base64 encoded image' # No default (optional)
   max_tokens: 0 # No default (optional)
   temperature: 0 # No default (optional)
   user: "" # No default (optional)
@@ -67,7 +67,7 @@ openai_chat_completion:
   model: gpt-4o # No default (required)
   prompt: "" # No default (optional)
   system_prompt: "" # No default (optional)
-  image: "" # No default (optional)
+  image: 'root = this.image.decode("base64") # decode base64 encoded image' # No default (optional)
   max_tokens: 0 # No default (optional)
   temperature: 0 # No default (optional)
   user: "" # No default (optional)
@@ -116,6 +116,39 @@ openai_chat_completion:
 This processor sends the contents of user prompts to the OpenAI API, which generates responses. By default, the processor submits the entire payload of each message as a string, unless you use the `prompt` configuration field to customize it.
 
 To learn more about chat completion, see the https://platform.openai.com/docs/guides/chat-completions[OpenAI API documentation^].
+
+== Examples
+
+[tabs]
+======
+Use GPT-4o analyze an image::
++
+--
+
+This example fetches image URLs from stdin and has GPT-4o describe the image.
+
+```yaml
+input:
+  stdin:
+    scanner:
+      lines: {}
+pipeline:
+  processors:
+    - http:
+        verb: GET
+        url: "${!content().string()}"
+    - openai_chat_completion:
+        model: gpt-4o
+        api_key: TODO
+        prompt: "Describe the following image"
+        image: "root = content()"
+output:
+  stdout:
+    codec: lines
+```
+
+--
+======
 
 == Fields
 
@@ -188,6 +221,12 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 *Type*: `string`
 
 Requires version 4.38.0 or newer
+
+```yml
+# Examples
+
+image: 'root = this.image.decode("base64") # decode base64 encoded image'
+```
 
 === `max_tokens`
 

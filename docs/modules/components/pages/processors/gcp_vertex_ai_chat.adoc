@@ -43,7 +43,7 @@ gcp_vertex_ai_chat:
   location: us-central1 # No default (optional)
   model: gemini-1.5-pro-001 # No default (required)
   prompt: "" # No default (optional)
-  attachment: "" # No default (optional)
+  attachment: 'root = this.image.decode("base64") # decode base64 encoded image' # No default (optional)
   temperature: 0 # No default (optional)
   max_tokens: 0 # No default (optional)
   response_format: text
@@ -64,7 +64,7 @@ gcp_vertex_ai_chat:
   model: gemini-1.5-pro-001 # No default (required)
   prompt: "" # No default (optional)
   system_prompt: "" # No default (optional)
-  attachment: "" # No default (optional)
+  attachment: 'root = this.image.decode("base64") # decode base64 encoded image' # No default (optional)
   temperature: 0 # No default (optional)
   max_tokens: 0 # No default (optional)
   response_format: text
@@ -161,6 +161,12 @@ Additional data like an image to send with the prompt to the model. The result o
 *Type*: `string`
 
 Requires version 4.38.0 or newer
+
+```yml
+# Examples
+
+attachment: 'root = this.image.decode("base64") # decode base64 encoded image'
+```
 
 === `temperature`
 
