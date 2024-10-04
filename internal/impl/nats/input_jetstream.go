@@ -101,8 +101,12 @@ xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
 			Description("Create the `stream` and `subject` if do not exist.").
 			Advanced().
 			Default(false)).
+		Field(service.NewIntField("num_replicas").
+			Description("The number of stream replicas, only supported in clustered mode and if the stream is created when `create_if_not_exists` is set to true. Defaults to 1, maximum is 5.").
+			Advanced().
+			Default(1)).
 		Field(service.NewStringEnumField("storage_type", "memory", "file").
-			Description("Storage type to use when the stream does not exist and is created when `create_if_not_exists` is set to true. Can be `memory` or `file` storage").
+			Description("Storage type to use when the stream does not exist and is created when `create_if_not_exists` is set to true. Can be `memory` or `file` storage.").
 			Advanced().
 			Default("memory")).
 		Field(service.NewDurationField("nak_delay").
@@ -149,6 +153,7 @@ type jetStreamReader struct {
 	nakDelayUntilHeader string
 	maxAckPending       int
 	createIfNotExists   bool
+	numReplicas         int
 	storageType         string
 
 	log *service.Logger
@@ -241,6 +246,14 @@ func newJetStreamReaderFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 	if conf.Contains("create_if_not_exists") {
 		if j.createIfNotExists, err = conf.FieldBool("create_if_not_exists"); err != nil {
 			return nil, err
+		}
+	}
+	if conf.Contains("num_replicas") {
+		if j.numReplicas, err = conf.FieldInt("num_replicas"); err != nil {
+			return nil, err
+		}
+		if j.numReplicas < 1 || j.numReplicas > 5 {
+			return nil, fmt.Errorf("num_replicas %d is invalid, it must be between 1 and 5", j.numReplicas)
 		}
 	}
 	if conf.Contains("storage_type") {
@@ -352,6 +365,7 @@ func (j *jetStreamReader) Connect(ctx context.Context) (err error) {
 			var natsErr *nats.APIError
 			if errors.As(err, &natsErr) {
 				if natsErr.ErrorCode == nats.JSErrCodeStreamNotFound {
+					// create stream and subject
 					_, err = jCtx.AddStream(&nats.StreamConfig{
 						Name: j.stream,
 						Subjects: func() []string {
@@ -366,10 +380,11 @@ func (j *jetStreamReader) Connect(ctx context.Context) (err error) {
 							}
 							return nats.MemoryStorage
 						}(),
+						Replicas: j.numReplicas,
 					})
 				}
 			} else if strings.Contains(err.Error(), "does not match consumer") {
-				// create subject to existent stream .stream
+				// create subject on existent stream
 				_, err = jCtx.UpdateStream(&nats.StreamConfig{
 					Name: j.stream,
 					Subjects: func() []string {
