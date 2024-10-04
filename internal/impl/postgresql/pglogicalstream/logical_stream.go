@@ -23,8 +23,6 @@ import (
 	"github.com/jackc/pgx/v5/pgproto3"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/redpanda-data/benthos/v4/public/service"
-
-	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/internal/helpers"
 )
 
 type Stream struct {
@@ -464,8 +462,9 @@ func (s *Stream) processSnapshot() {
 			os.Exit(1)
 		}
 
-		batchSize := snapshotter.CalculateBatchSize(helpers.GetAvailableMemory(), uint64(avgRowSizeBytes.Int64))
-		s.logger.Infof("Querying snapshot batch_side: %v, available_memory: %v, avg_row_size: %v", batchSize, helpers.GetAvailableMemory(), avgRowSizeBytes.Int64)
+		availableMemory := GetAvailableMemory()
+		batchSize := snapshotter.CalculateBatchSize(availableMemory, uint64(avgRowSizeBytes.Int64))
+		s.logger.Infof("Querying snapshot batch_side: %v, available_memory: %v, avg_row_size: %v", batchSize, availableMemory, avgRowSizeBytes.Int64)
 
 		tablePk, err := s.getPrimaryKeyColumn(table)
 		if err != nil {
