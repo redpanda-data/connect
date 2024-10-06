@@ -12,9 +12,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"unicode/utf8"
 
 	"cloud.google.com/go/vertexai/genai"
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"google.golang.org/api/option"
 )
@@ -26,6 +28,7 @@ const (
 	vaicpFieldLocation         = "location"
 	vaicpFieldPrompt           = "prompt"
 	vaicpFieldSystemPrompt     = "system_prompt"
+	vaicpFieldAttachment       = "attachment"
 	vaicpFieldTemp             = "temperature"
 	vaicpFieldTopP             = "top_p"
 	vaicpFieldTopK             = "top_k"
@@ -75,6 +78,11 @@ For more information, see the https://cloud.google.com/vertex-ai/docs[Vertex AI 
 			service.NewInterpolatedStringField(vaicpFieldSystemPrompt).
 				Description("The system prompt to submit to the Vertex AI LLM.").
 				Advanced().
+				Optional(),
+			service.NewBloblangField(vaicpFieldAttachment).
+				Description("Additional data like an image to send with the prompt to the model. The result of the mapping must be a byte array, and the content type is automatically detected.").
+				Version("4.38.0").
+				Example(`root = this.image.decode("base64") # decode base64 encoded image`).
 				Optional(),
 			service.NewFloatField(vaicpFieldTemp).
 				Description("Controls the randomness of predications.").
@@ -162,6 +170,12 @@ func newVertexAIProcessor(conf *service.ParsedConfig, mgr *service.Resources) (p
 			return
 		}
 	}
+	if conf.Contains(vaicpFieldAttachment) {
+		proc.attachment, err = conf.FieldBloblang(vaicpFieldAttachment)
+		if err != nil {
+			return
+		}
+	}
 	if conf.Contains(vaicpFieldTemp) {
 		var temp float64
 		temp, err = conf.FieldFloat(vaicpFieldTemp)
@@ -235,6 +249,7 @@ type vertexAIChatProcessor struct {
 
 	userPrompt       *service.InterpolatedString
 	systemPrompt     *service.InterpolatedString
+	attachment       *bloblang.Executor
 	temp             *float32
 	topP             *float32
 	topK             *int32
@@ -270,7 +285,23 @@ func (p *vertexAIChatProcessor) Process(ctx context.Context, msg *service.Messag
 	if err != nil {
 		return nil, fmt.Errorf("failed to compute prompt: %w", err)
 	}
-	resp, err := chat.SendMessage(ctx, genai.Text(prompt))
+	parts := []genai.Part{genai.Text(prompt)}
+	if p.attachment != nil {
+		v, err := msg.BloblangQuery(p.attachment)
+		if err != nil {
+			return nil, fmt.Errorf("unable to evaluate `%s`: %w", vaicpFieldAttachment, err)
+		}
+		i, err := v.AsBytes()
+		if err != nil {
+			return nil, fmt.Errorf("unable to convert `%s` to bytes: %w", vaicpFieldAttachment, err)
+		}
+		contentType := http.DetectContentType(i)
+		if contentType == "application/octet-stream" {
+			return nil, fmt.Errorf("unable to detect content-type of `%s`", vaicpFieldAttachment)
+		}
+		parts = append(parts, genai.Blob{MIMEType: contentType, Data: i})
+	}
+	resp, err := chat.SendMessage(ctx, parts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate response: %w", err)
 	}
@@ -280,7 +311,7 @@ func (p *vertexAIChatProcessor) Process(ctx context.Context, msg *service.Messag
 		}
 		return nil, errors.New("no candidate responses returned")
 	}
-	parts := resp.Candidates[0].Content.Parts
+	parts = resp.Candidates[0].Content.Parts
 	if len(parts) != 1 {
 		if resp.PromptFeedback != nil && resp.PromptFeedback.BlockReasonMessage != "" {
 			return nil, fmt.Errorf("response blocked due to: %s", resp.PromptFeedback.BlockReasonMessage)

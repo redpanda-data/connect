@@ -10,11 +10,15 @@ package openai
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"math"
+	"net/http"
 	"slices"
+	"strings"
 	"time"
 
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	oai "github.com/sashabaranov/go-openai"
 
@@ -24,6 +28,7 @@ import (
 const (
 	ocpFieldUserPrompt       = "prompt"
 	ocpFieldSystemPrompt     = "system_prompt"
+	ocpFieldImage            = "image"
 	ocpFieldMaxTokens        = "max_tokens"
 	ocpFieldTemp             = "temperature"
 	ocpFieldUser             = "user"
@@ -81,6 +86,11 @@ To learn more about chat completion, see the https://platform.openai.com/docs/gu
 				Optional(),
 			service.NewInterpolatedStringField(ocpFieldSystemPrompt).
 				Description("The system prompt to submit along with the user prompt.").
+				Optional(),
+			service.NewInterpolatedStringField(ocpFieldImage).
+				Description("An image to send along with the prompt. The mapping result must be a byte array.").
+				Version("4.38.0").
+				Example(`root = this.image.decode("base64") # decode base64 encoded image`).
 				Optional(),
 			service.NewIntField(ocpFieldMaxTokens).
 				Optional().
@@ -152,10 +162,32 @@ We generally recommend altering this or temperature but not both.`).
 				Description("Up to 4 sequences where the API will stop generating further tokens."),
 		).LintRule(`
       root = match {
-        this.exists("` + ocpFieldJSONSchema + `") && this.exists("` + ocpFieldSchemaRegistry + `") => ["cannot set both ` + "`" + ocpFieldJSONSchema + "`" + ` and ` + "`" + ocpFieldSchemaRegistry + "`" + `"]
-        this.response_format == "json_schema" && !this.exists("` + ocpFieldJSONSchema + `") && !this.exists("` + ocpFieldSchemaRegistry + `") => ["schema must be specified using either ` + "`" + ocpFieldJSONSchema + "`" + ` or ` + "`" + ocpFieldSchemaRegistry + "`" + `"]
+        this.exists("`+ocpFieldJSONSchema+`") && this.exists("`+ocpFieldSchemaRegistry+`") => ["cannot set both `+"`"+ocpFieldJSONSchema+"`"+` and `+"`"+ocpFieldSchemaRegistry+"`"+`"]
+        this.response_format == "json_schema" && !this.exists("`+ocpFieldJSONSchema+`") && !this.exists("`+ocpFieldSchemaRegistry+`") => ["schema must be specified using either `+"`"+ocpFieldJSONSchema+"`"+` or `+"`"+ocpFieldSchemaRegistry+"`"+`"]
       }
-    `)
+    `).
+		Example(
+			"Use GPT-4o analyze an image",
+			"This example fetches image URLs from stdin and has GPT-4o describe the image.",
+			`
+input:
+  stdin:
+    scanner:
+      lines: {}
+pipeline:
+  processors:
+    - http:
+        verb: GET
+        url: "${!content().string()}"
+    - openai_chat_completion:
+        model: gpt-4o
+        api_key: TODO
+        prompt: "Describe the following image"
+        image: "root = content()"
+output:
+  stdout:
+    codec: lines
+`)
 }
 
 func makeChatProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
@@ -173,6 +205,13 @@ func makeChatProcessor(conf *service.ParsedConfig, mgr *service.Resources) (serv
 	var sp *service.InterpolatedString
 	if conf.Contains(ocpFieldSystemPrompt) {
 		sp, err = conf.FieldInterpolatedString(ocpFieldSystemPrompt)
+		if err != nil {
+			return nil, err
+		}
+	}
+	var i *bloblang.Executor
+	if conf.Contains(ocpFieldImage) {
+		i, err = conf.FieldBloblang(ocpFieldImage)
 		if err != nil {
 			return nil, err
 		}
@@ -274,7 +313,22 @@ func makeChatProcessor(conf *service.ParsedConfig, mgr *service.Resources) (serv
 	default:
 		return nil, fmt.Errorf("unknown %s: %q", ocpFieldResponseFormat, v)
 	}
-	return &chatProcessor{b, up, sp, maxTokens, temp, user, topP, frequencyPenalty, presencePenalty, seed, stop, responseFormat, schemaProvider}, nil
+	return &chatProcessor{
+		b,
+		up,
+		sp,
+		i,
+		maxTokens,
+		temp,
+		user,
+		topP,
+		frequencyPenalty,
+		presencePenalty,
+		seed,
+		stop,
+		responseFormat,
+		schemaProvider,
+	}, nil
 }
 
 func newFixedSchemaProvider(conf *service.ParsedConfig) (jsonSchemaProvider, error) {
@@ -336,6 +390,7 @@ type chatProcessor struct {
 
 	userPrompt       *service.InterpolatedString
 	systemPrompt     *service.InterpolatedString
+	image            *bloblang.Executor
 	maxTokens        *int
 	temperature      *float32
 	user             *service.InterpolatedString
@@ -395,23 +450,44 @@ func (p *chatProcessor) Process(ctx context.Context, msg *service.Message) (serv
 			Content: s,
 		})
 	}
+	chatMsg := oai.ChatCompletionMessage{
+		Role: "user",
+	}
 	if p.userPrompt != nil {
 		s, err := p.userPrompt.TryString(msg)
 		if err != nil {
 			return nil, fmt.Errorf("%s interpolation error: %w", ocpFieldUserPrompt, err)
 		}
-		body.Messages = append(body.Messages, oai.ChatCompletionMessage{
-			Role:    "user",
-			Content: s,
-		})
+		chatMsg.Content = s
 	} else {
 		b, err := msg.AsBytes()
 		if err != nil {
 			return nil, err
 		}
+		chatMsg.Content = string(b)
+	}
+	body.Messages = append(body.Messages, chatMsg)
+	if p.image != nil {
+		i, err := msg.BloblangQuery(p.image)
+		if err != nil {
+			return nil, fmt.Errorf("%s execution error: %w", ocpFieldImage, err)
+		}
+		b, err := i.AsBytes()
+		if err != nil {
+			return nil, fmt.Errorf("%s conversion error: %w", ocpFieldImage, err)
+		}
+		mimeType := http.DetectContentType(b)
+		if !strings.HasPrefix(mimeType, "image/") {
+			return nil, fmt.Errorf("invalid %s data, detected mime type: %s", ocpFieldImage, mimeType)
+		}
 		body.Messages = append(body.Messages, oai.ChatCompletionMessage{
-			Role:    "user",
-			Content: string(b),
+			Role: "user",
+			MultiContent: []oai.ChatMessagePart{{
+				Type: oai.ChatMessagePartTypeImageURL,
+				ImageURL: &oai.ChatMessageImageURL{
+					URL: "data:" + mimeType + ";base64," + base64.StdEncoding.EncodeToString(b),
+				},
+			}},
 		})
 	}
 	resp, err := p.client.CreateChatCompletion(ctx, body)
