@@ -1,9 +1,8 @@
+---
 name: Upload rpk connect plugin to S3
-
 on:
   push:
-    branches:
-      - main
+    branches: [main]
     tags:
       # All runs triggered by tag will really push to S3.
       # Take care when adding more patterns here.
@@ -17,11 +16,9 @@ on:
       - '.github/actions/upload_managed_plugin/**'
       - '.goreleaser.yml'
   workflow_dispatch: {}
-
 env:
   # Do dry run in most cases, UNLESS the triggering event was a "tag".
   DRY_RUN: ${{ github.ref_type != 'tag' }}
-
 jobs:
   upload_rpk_connect_plugin:
     # Let's make this fast by using a beefy runner.
@@ -36,28 +33,23 @@ jobs:
         with:
           aws-region: ${{ vars.RP_AWS_CRED_REGION }}
           role-to-assume: arn:aws:iam::${{ secrets.RP_AWS_CRED_ACCOUNT_ID }}:role/${{ vars.RP_AWS_CRED_BASE_ROLE_NAME }}${{ github.event.repository.name }}
-
       - name: Get secrets from AWS Secrets Manager (for read/writing S3-backed plugins repo)
         uses: aws-actions/aws-secretsmanager-get-secrets@v2
         with:
           secret-ids: |
             ,sdlc/prod/github/rpk_plugin_publisher
           parse-json-secrets: true
-
       - uses: actions/checkout@v4
-
       - uses: actions/setup-go@v5
         with:
           go-version: 1.22.x
           check-latest: true
-
       - name: Build binaries (dry run / snapshot mode)
         if: ${{ env.DRY_RUN != 'false' }}
         uses: goreleaser/goreleaser-action@v6
         with:
           version: 1.26.2
           args: build --snapshot
-
       - name: Build binaries
         # Only one way to not dry run - see 'false'. All other cases, conservatively assume --dry-run
         if: ${{ env.DRY_RUN == 'false' }}
@@ -65,7 +57,6 @@ jobs:
         with:
           version: 1.26.2
           args: build
-
       - name: Upload connect plugin to S3
         uses: ./.github/actions/upload_managed_plugin
         with:
@@ -81,4 +72,3 @@ jobs:
           goarch: amd64,arm64
           repo_hostname: rpk-plugins.redpanda.com
           dry_run: ${{ env.DRY_RUN != 'false' }}
-
