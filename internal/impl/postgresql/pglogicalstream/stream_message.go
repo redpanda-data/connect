@@ -1,5 +1,7 @@
 package pglogicalstream
 
+// StreamMessageChanges represents the changes in a single message
+// Single message can have multiple changes
 type StreamMessageChanges struct {
 	Operation string `json:"operation"`
 	Schema    string `json:"schema"`
@@ -8,6 +10,7 @@ type StreamMessageChanges struct {
 	Data map[string]any `json:"data"`
 }
 
+// StreamMessage represents a single message after it has been decoded by the plugin
 type StreamMessage struct {
 	Lsn     *string                `json:"lsn"`
 	Changes []StreamMessageChanges `json:"changes"`

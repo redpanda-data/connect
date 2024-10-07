@@ -25,6 +25,8 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
+// Stream is a structure that represents a logical replication stream
+// It includes the connection to the database, the context for the stream, and snapshotting functionality
 type Stream struct {
 	pgConn *pgconn.PgConn
 	// extra copy of db config is required to establish a new db connection
@@ -56,6 +58,7 @@ type Stream struct {
 	stopped bool
 }
 
+// NewPgStream creates a new instance of the Stream struct
 func NewPgStream(config Config) (*Stream, error) {
 	var (
 		cfg *pgconn.Config
@@ -63,21 +66,21 @@ func NewPgStream(config Config) (*Stream, error) {
 	)
 
 	sslVerifyFull := ""
-	if config.TlsVerify == TlsRequireVerify {
+	if config.TLSVerify == TLSRequireVerify {
 		sslVerifyFull = "&sslmode=verify-full"
 	}
 
 	connectionParams := ""
 	if config.PgConnRuntimeParam != "" {
-		connectionParams = fmt.Sprintf("&%s", config.PgConnRuntimeParam)
+		connectionParams = "&" + config.PgConnRuntimeParam
 	}
 
 	q := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?replication=database%s%s",
-		config.DbUser,
-		config.DbPassword,
-		config.DbHost,
-		config.DbPort,
-		config.DbName,
+		config.DBUser,
+		config.DBPassword,
+		config.DBHost,
+		config.DBPort,
+		config.DBName,
 		sslVerifyFull,
 		connectionParams,
 	)
@@ -86,7 +89,7 @@ func NewPgStream(config Config) (*Stream, error) {
 		return nil, err
 	}
 
-	if config.TlsVerify == TlsRequireVerify {
+	if config.TLSVerify == TLSRequireVerify {
 		cfg.TLSConfig = &tls.Config{
 			InsecureSkipVerify: true,
 		}
@@ -104,9 +107,7 @@ func NewPgStream(config Config) (*Stream, error) {
 	}
 
 	var tableNames []string
-	for _, table := range config.DbTables {
-		tableNames = append(tableNames, table)
-	}
+	tableNames = append(tableNames, config.DBTables...)
 
 	stream := &Stream{
 		pgConn:                     dbConn,
@@ -114,17 +115,17 @@ func NewPgStream(config Config) (*Stream, error) {
 		messages:                   make(chan StreamMessage),
 		snapshotMessages:           make(chan StreamMessage, 100),
 		slotName:                   config.ReplicationSlotName,
-		schema:                     config.DbSchema,
+		schema:                     config.DBSchema,
 		snapshotMemorySafetyFactor: config.SnapshotMemorySafetyFactor,
 		snapshotBatchSize:          config.BatchSize,
 		tableNames:                 tableNames,
 		logger:                     config.logger,
 		m:                          sync.Mutex{},
-		decodingPlugin:             DecodingPluginFromString(config.DecodingPlugin),
+		decodingPlugin:             decodingPluginFromString(config.DecodingPlugin),
 	}
 
 	for i, table := range tableNames {
-		tableNames[i] = fmt.Sprintf("%s.%s", config.DbSchema, table)
+		tableNames[i] = fmt.Sprintf("%s.%s", config.DBSchema, table)
 	}
 
 	var pluginArguments = []string{}
@@ -146,7 +147,7 @@ func NewPgStream(config Config) (*Stream, error) {
 
 	stream.decodingPluginArguments = pluginArguments
 
-	pubName := fmt.Sprintf("pglog_stream_%s", config.ReplicationSlotName)
+	pubName := "pglog_stream_" + config.ReplicationSlotName
 	if err = CreatePublication(context.Background(), stream.pgConn, pubName, tableNames, true); err != nil {
 		return nil, err
 	}
@@ -207,7 +208,7 @@ func NewPgStream(config Config) (*Stream, error) {
 	stream.nextStandbyMessageDeadline = time.Now().Add(stream.standbyMessageTimeout)
 	stream.streamCtx, stream.streamCancel = context.WithCancel(context.Background())
 
-	if !freshlyCreatedSlot || config.StreamOldData == false {
+	if !freshlyCreatedSlot || !config.StreamOldData {
 		if err = stream.startLr(); err != nil {
 			return nil, err
 		}
@@ -223,16 +224,16 @@ func NewPgStream(config Config) (*Stream, error) {
 }
 
 func (s *Stream) startLr() error {
-	var err error
-	err = StartReplication(context.Background(), s.pgConn, s.slotName, s.lsnrestart, StartReplicationOptions{PluginArgs: s.decodingPluginArguments})
-	if err != nil {
+	if err := StartReplication(context.Background(), s.pgConn, s.slotName, s.lsnrestart, StartReplicationOptions{PluginArgs: s.decodingPluginArguments}); err != nil {
 		return err
 	}
-	s.logger.Infof("Started logical replication on slot slot-name: %v", s.slotName)
 
+	s.logger.Infof("Started logical replication on slot slot-name: %v", s.slotName)
 	return nil
 }
 
+// AckLSN acknowledges the LSN up to which the stream has processed the messages.
+// This makes Postgres to remove the WAL files that are no longer needed.
 func (s *Stream) AckLSN(lsn string) error {
 	var err error
 	s.clientXLogPos, err = ParseLSN(lsn)
@@ -280,7 +281,9 @@ func (s *Stream) streamMessagesAsync() {
 
 				if err != nil {
 					s.logger.Errorf("Failed to send Standby status message at LSN#%s: %v", s.clientXLogPos.String(), err)
-					s.Stop()
+					if err = s.Stop(); err != nil {
+						s.logger.Errorf("Failed to stop the stream: %v", err)
+					}
 					return
 				}
 				s.logger.Debugf("Sent Standby status message at LSN#%s", s.clientXLogPos.String())
@@ -302,13 +305,17 @@ func (s *Stream) streamMessagesAsync() {
 				}
 
 				s.logger.Errorf("Failed to receive messages from PostgreSQL: %v", err)
-				s.Stop()
+				if err = s.Stop(); err != nil {
+					s.logger.Errorf("Failed to stop the stream: %v", err)
+				}
 				return
 			}
 
 			if errMsg, ok := rawMsg.(*pgproto3.ErrorResponse); ok {
 				s.logger.Errorf("Received error message from Postgres: %v", errMsg)
-				s.Stop()
+				if err = s.Stop(); err != nil {
+					s.logger.Errorf("Failed to stop the stream: %v", err)
+				}
 				return
 			}
 
@@ -337,10 +344,12 @@ func (s *Stream) streamMessagesAsync() {
 				clientXLogPos := xld.WALStart + LSN(len(xld.WALData))
 
 				if s.decodingPlugin == "wal2json" {
-					message, err := DecodeWal2JsonChanges(clientXLogPos.String(), xld.WALData)
+					message, err := decodeWal2JsonChanges(clientXLogPos.String(), xld.WALData)
 					if err != nil {
 						s.logger.Errorf("decodeWal2JsonChanges failed: %w", err)
-						s.Stop()
+						if err = s.Stop(); err != nil {
+							s.logger.Errorf("Failed to stop the stream: %v", err)
+						}
 						return
 					}
 
@@ -351,7 +360,9 @@ func (s *Stream) streamMessagesAsync() {
 						if err = s.AckLSN(clientXLogPos.String()); err != nil {
 							// stop reading from replication slot
 							// if we can't acknowledge the LSN
-							s.Stop()
+							if err = s.Stop(); err != nil {
+								s.logger.Errorf("Failed to stop the stream: %v", err)
+							}
 							return
 						}
 					} else {
@@ -363,10 +374,12 @@ func (s *Stream) streamMessagesAsync() {
 					// message changes must be collected in the buffer in the context of the same transaction
 					// as single transaction can contain multiple changes
 					// and LSN ack will cause potential loss of changes
-					isBegin, err := IsBeginMessage(xld.WALData)
+					isBegin, err := isBeginMessage(xld.WALData)
 					if err != nil {
 						s.logger.Errorf("Failed to parse WAL data: %w", err)
-						s.Stop()
+						if err = s.Stop(); err != nil {
+							s.logger.Errorf("Failed to stop the stream: %v", err)
+						}
 						return
 					}
 
@@ -375,10 +388,12 @@ func (s *Stream) streamMessagesAsync() {
 					}
 
 					// parse changes inside the transaction
-					message, err := DecodePgOutput(xld.WALData, relations, typeMap)
+					message, err := decodePgOutput(xld.WALData, relations, typeMap)
 					if err != nil {
 						s.logger.Errorf("decodePgOutput failed: %w", err)
-						s.Stop()
+						if err = s.Stop(); err != nil {
+							s.logger.Errorf("Failed to stop the stream: %v", err)
+						}
 						return
 					}
 
@@ -386,10 +401,12 @@ func (s *Stream) streamMessagesAsync() {
 						pgoutputChanges = append(pgoutputChanges, *message)
 					}
 
-					isCommit, err := IsCommitMessage(xld.WALData)
+					isCommit, err := isCommitMessage(xld.WALData)
 					if err != nil {
 						s.logger.Errorf("Failed to parse WAL data: %w", err)
-						s.Stop()
+						if err = s.Stop(); err != nil {
+							s.logger.Errorf("Failed to stop the stream: %v", err)
+						}
 						return
 					}
 
@@ -400,7 +417,9 @@ func (s *Stream) streamMessagesAsync() {
 							if err = s.AckLSN(clientXLogPos.String()); err != nil {
 								// stop reading from replication slot
 								// if we can't acknowledge the LSN
-								s.Stop()
+								if err = s.Stop(); err != nil {
+									s.logger.Errorf("Failed to stop the stream: %v", err)
+								}
 								return
 							}
 						} else {
@@ -425,7 +444,7 @@ func (s *Stream) processSnapshot() {
 
 		os.Exit(1)
 	}
-	if err = snapshotter.Prepare(); err != nil {
+	if err = snapshotter.prepare(); err != nil {
 		s.logger.Errorf("Failed to prepare database snapshot. Probably snapshot is expired...: %v", err.Error())
 		if err = s.cleanUpOnFailure(); err != nil {
 			s.logger.Errorf("Failed to clean up resources on accident: %v", err.Error())
@@ -434,10 +453,10 @@ func (s *Stream) processSnapshot() {
 		os.Exit(1)
 	}
 	defer func() {
-		if err = snapshotter.ReleaseSnapshot(); err != nil {
+		if err = snapshotter.releaseSnapshot(); err != nil {
 			s.logger.Errorf("Failed to release database snapshot: %v", err.Error())
 		}
-		if err = snapshotter.CloseConn(); err != nil {
+		if err = snapshotter.closeConn(); err != nil {
 			s.logger.Errorf("Failed to close database connection: %v", err.Error())
 		}
 	}()
@@ -450,7 +469,7 @@ func (s *Stream) processSnapshot() {
 			offset          = 0
 		)
 
-		avgRowSizeBytes, err = snapshotter.FindAvgRowSize(table)
+		avgRowSizeBytes, err = snapshotter.findAvgRowSize(table)
 		if err != nil {
 			s.logger.Errorf("Failed to calculate average row size for table %v: %v", table, err.Error())
 			if err = s.cleanUpOnFailure(); err != nil {
@@ -460,8 +479,8 @@ func (s *Stream) processSnapshot() {
 			os.Exit(1)
 		}
 
-		availableMemory := GetAvailableMemory()
-		batchSize := snapshotter.CalculateBatchSize(availableMemory, uint64(avgRowSizeBytes.Int64))
+		availableMemory := getAvailableMemory()
+		batchSize := snapshotter.calculateBatchSize(availableMemory, uint64(avgRowSizeBytes.Int64))
 		s.logger.Infof("Querying snapshot batch_side: %v, available_memory: %v, avg_row_size: %v", batchSize, availableMemory, avgRowSizeBytes.Int64)
 
 		tablePk, err := s.getPrimaryKeyColumn(table)
@@ -476,8 +495,22 @@ func (s *Stream) processSnapshot() {
 
 		for {
 			var snapshotRows *sql.Rows
-			if snapshotRows, err = snapshotter.QuerySnapshotData(table, tablePk, batchSize, offset); err != nil {
-				panic(fmt.Errorf("can't query snapshot data: %w", err)) // TODO
+			if snapshotRows, err = snapshotter.querySnapshotData(table, tablePk, batchSize, offset); err != nil {
+				s.logger.Errorf("Failed to query snapshot for table %v: %v", table, err.Error())
+				if err = s.cleanUpOnFailure(); err != nil {
+					s.logger.Errorf("Failed to clean up resources on accident: %v", err.Error())
+				}
+
+				os.Exit(1)
+			}
+
+			if snapshotRows.Err() != nil {
+				s.logger.Errorf("Failed to query snapshot for table %v: %v", table, err.Error())
+				if err = s.cleanUpOnFailure(); err != nil {
+					s.logger.Errorf("Failed to clean up resources on accident: %v", err.Error())
+				}
+
+				os.Exit(1)
 			}
 
 			columnTypes, err := snapshotRows.ColumnTypes()
@@ -512,13 +545,10 @@ func (s *Stream) processSnapshot() {
 					switch v.DatabaseTypeName() {
 					case "VARCHAR", "TEXT", "UUID", "TIMESTAMP":
 						scanArgs[i] = new(sql.NullString)
-						break
 					case "BOOL":
 						scanArgs[i] = new(sql.NullBool)
-						break
 					case "INT4":
 						scanArgs[i] = new(sql.NullInt64)
-						break
 					default:
 						scanArgs[i] = new(sql.NullString)
 					}
@@ -598,10 +628,14 @@ func (s *Stream) processSnapshot() {
 	go s.streamMessagesAsync()
 }
 
+// SnapshotMessageC represents a message from the stream that are sent to the consumer on the snapshot processing stage
+// meaning these messages will have nil LSN field
 func (s *Stream) SnapshotMessageC() chan StreamMessage {
 	return s.snapshotMessages
 }
 
+// LrMessageC represents a message from the stream that are sent to the consumer on the logical replication stage
+// meaning these messages will have non-nil LSN field
 func (s *Stream) LrMessageC() chan StreamMessage {
 	return s.messages
 }
@@ -637,6 +671,7 @@ func (s *Stream) getPrimaryKeyColumn(tableName string) (string, error) {
 	return pkColName, nil
 }
 
+// Stop closes the stream conect and prevents from replication slot read
 func (s *Stream) Stop() error {
 	s.m.Lock()
 	s.stopped = true

@@ -12,7 +12,7 @@ import (
 // ----------------------------------------------------------------------------
 // PgOutput section
 
-func IsBeginMessage(WALData []byte) (bool, error) {
+func isBeginMessage(WALData []byte) (bool, error) {
 	logicalMsg, err := Parse(WALData)
 	if err != nil {
 		return false, err
@@ -22,7 +22,7 @@ func IsBeginMessage(WALData []byte) (bool, error) {
 	return ok, nil
 }
 
-func IsCommitMessage(WALData []byte) (bool, error) {
+func isCommitMessage(WALData []byte) (bool, error) {
 	logicalMsg, err := Parse(WALData)
 	if err != nil {
 		return false, err
@@ -32,12 +32,12 @@ func IsCommitMessage(WALData []byte) (bool, error) {
 	return ok, nil
 }
 
-// DecodePgOutput decodes a logical replication message in pgoutput format.
+// decodePgOutput decodes a logical replication message in pgoutput format.
 // It uses the provided relations map to look up the relation metadata for the
 // as a side effect it updates the relations map with any new relation metadata
 // When the relation is changes in the database, the relation message is sent
 // before the change message.
-func DecodePgOutput(WALData []byte, relations map[uint32]*RelationMessage, typeMap *pgtype.Map) (*StreamMessageChanges, error) {
+func decodePgOutput(WALData []byte, relations map[uint32]*RelationMessage, typeMap *pgtype.Map) (*StreamMessageChanges, error) {
 	logicalMsg, err := Parse(WALData)
 	message := &StreamMessageChanges{}
 
@@ -149,7 +149,7 @@ func decodeTextColumnData(mi *pgtype.Map, data []byte, dataType uint32) (interfa
 // ----------------------------------------------------------------------------
 // Wal2Json section
 
-type WallMessageWal2JSON struct {
+type walMessageWal2JSON struct {
 	Change []struct {
 		Kind         string        `json:"kind"`
 		Schema       string        `json:"schema"`
@@ -165,8 +165,8 @@ type WallMessageWal2JSON struct {
 	} `json:"change"`
 }
 
-func DecodeWal2JsonChanges(clientXLogPosition string, WALData []byte) (*StreamMessage, error) {
-	var changes WallMessageWal2JSON
+func decodeWal2JsonChanges(clientXLogPosition string, WALData []byte) (*StreamMessage, error) {
+	var changes walMessageWal2JSON
 	if err := json.NewDecoder(bytes.NewReader(WALData)).Decode(&changes); err != nil {
 		return nil, err
 	}

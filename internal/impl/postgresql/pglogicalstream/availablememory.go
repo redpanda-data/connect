@@ -10,7 +10,7 @@ package pglogicalstream
 
 import "runtime"
 
-func GetAvailableMemory() uint64 {
+func getAvailableMemory() uint64 {
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
 	// You can use memStats.Sys or another appropriate memory metric.

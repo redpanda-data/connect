@@ -10,7 +10,6 @@ package pglogicalstream
 
 import (
 	"encoding/binary"
-	"errors"
 	"math/rand"
 	"testing"
 	"time"
@@ -121,12 +120,6 @@ func (s *messageSuite) putMessageTestData(msg []byte) *LogicalDecodingMessage {
 	}
 }
 
-func (s *messageSuite) assertV1NotSupported(msg []byte) {
-	_, err := Parse(msg)
-	s.Error(err)
-	s.True(errors.Is(err, errMsgNotSupported))
-}
-
 func (s *messageSuite) createRelationTestData() ([]byte, *RelationMessage) {
 	relationID := uint32(rand.Int31())
 	namespace := "public"
@@ -175,7 +168,6 @@ func (s *messageSuite) createRelationTestData() ([]byte, *RelationMessage) {
 	bigEndian.PutUint32(msg[off:], 1184) // timestamptz
 	off += 4
 	bigEndian.PutUint32(msg[off:], uint32(noAtttypmod))
-	off += 4
 
 	expected := &RelationMessage{
 		RelationID:      relationID,
@@ -487,7 +479,7 @@ func (s *messageSuite) createDeleteTestDataTypeK() ([]byte, *DeleteMessage) {
 	off++
 	bigEndian.PutUint16(msg[off:], 1)
 	off += 2
-	off += s.putTupleColumn(msg[off:], 't', oldCol1Data)
+	s.putTupleColumn(msg[off:], 't', oldCol1Data)
 	expected := &DeleteMessage{
 		RelationID:   relationID,
 		OldTupleType: DeleteMessageTupleTypeKey,
@@ -525,7 +517,7 @@ func (s *messageSuite) createDeleteTestDataTypeO() ([]byte, *DeleteMessage) {
 	bigEndian.PutUint16(msg[off:], 2)
 	off += 2
 	off += s.putTupleColumn(msg[off:], 't', oldCol1Data)
-	off += s.putTupleColumn(msg[off:], 't', oldCol2Data)
+	s.putTupleColumn(msg[off:], 't', oldCol2Data)
 	expected := &DeleteMessage{
 		RelationID:   relationID,
 		OldTupleType: DeleteMessageTupleTypeOld,
@@ -574,16 +566,6 @@ func (s *messageSuite) createTruncateTestData() ([]byte, *TruncateMessage) {
 	}
 	expected.msgType = 'T'
 	return msg, expected
-}
-
-func (s *messageSuite) insertXid(msg []byte) ([]byte, uint32) {
-	msgV2 := make([]byte, 4+len(msg))
-	msgV2[0] = msg[0]
-	xid := s.newXid()
-	bigEndian.PutUint32(msgV2[1:], xid)
-	copy(msgV2[5:], msg[1:])
-
-	return msgV2, xid
 }
 
 func TestBeginMessageSuite(t *testing.T) {

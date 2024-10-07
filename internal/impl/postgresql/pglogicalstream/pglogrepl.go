@@ -32,14 +32,19 @@ import (
 )
 
 const (
-	XLogDataByteID                = 'w'
+	// XLogDataByteID is the byte ID for XLogData messages.
+	XLogDataByteID = 'w'
+	// PrimaryKeepaliveMessageByteID is the byte ID for PrimaryKeepaliveMessage messages.
 	PrimaryKeepaliveMessageByteID = 'k'
-	StandbyStatusUpdateByteID     = 'r'
+	// StandbyStatusUpdateByteID is the byte ID for StandbyStatusUpdate messages.
+	StandbyStatusUpdateByteID = 'r'
 )
 
+// ReplicationMode is the mode of replication to use.
 type ReplicationMode int
 
 const (
+	// LogicalReplication is the only replication mode supported by this plugin
 	LogicalReplication ReplicationMode = iota
 )
 
@@ -207,6 +212,7 @@ func ParseTimelineHistory(mrr *pgconn.MultiResultReader) (TimelineHistoryResult,
 	return thr, nil
 }
 
+// CreateReplicationSlotOptions are the options for the CREATE_REPLICATION_SLOT command. Including Mode, Temporary, and SnapshotAction.
 type CreateReplicationSlotOptions struct {
 	Temporary      bool
 	SnapshotAction string
@@ -273,6 +279,7 @@ func ParseCreateReplicationSlot(mrr *pgconn.MultiResultReader) (CreateReplicatio
 	return crsr, nil
 }
 
+// DropReplicationSlotOptions are options for the DROP_REPLICATION_SLOT command.
 type DropReplicationSlotOptions struct {
 	Wait bool
 }
@@ -288,13 +295,14 @@ func DropReplicationSlot(ctx context.Context, conn *pgconn.PgConn, slotName stri
 	return err
 }
 
+// CreatePublication creates a new PostgreSQL publication with the given name for a list of tables and drop if exists flag
 func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName string, tables []string, dropIfExist bool) error {
 	result := conn.Exec(context.Background(), fmt.Sprintf("DROP PUBLICATION IF EXISTS %s;", publicationName))
 	if _, err := result.ReadAll(); err != nil {
 		return nil
 	}
 
-	tablesSchemaFilter := fmt.Sprintf("FOR TABLE %s", strings.Join(tables, ","))
+	tablesSchemaFilter := "FOR TABLE " + strings.Join(tables, ",")
 	if len(tables) == 0 {
 		tablesSchemaFilter = "FOR ALL TABLES"
 	}
@@ -305,6 +313,10 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 	return nil
 }
 
+// StartReplicationOptions are the options for the START_REPLICATION command.
+// The Timeline field is optional and defaults to 0, which means the current server timeline.
+// The Mode field is required and must be either PhysicalReplication or LogicalReplication. ## PhysicalReplication is not supporter by this plugin, but still can be implemented
+// The PluginArgs field is optional and only used for LogicalReplication.
 type StartReplicationOptions struct {
 	Timeline   int32 // 0 means current server timeline
 	Mode       ReplicationMode
@@ -353,6 +365,7 @@ func StartReplication(ctx context.Context, conn *pgconn.PgConn, slotName string,
 	}
 }
 
+// PrimaryKeepaliveMessage is a message sent by the primary server to the replica server to keep the connection alive.
 type PrimaryKeepaliveMessage struct {
 	ServerWALEnd   LSN
 	ServerTime     time.Time
@@ -373,6 +386,7 @@ func ParsePrimaryKeepaliveMessage(buf []byte) (PrimaryKeepaliveMessage, error) {
 	return pkm, nil
 }
 
+// XLogData is a message sent by the primary server to the replica server containing WAL data.
 type XLogData struct {
 	WALStart     LSN
 	ServerWALEnd LSN
@@ -479,6 +493,7 @@ func SendStandbyCopyDone(_ context.Context, conn *pgconn.PgConn) (cdr *CopyDoneR
 				if lerr == nil {
 					lsn, lerr := ParseLSN(string(m.Values[1]))
 					if lerr == nil {
+						cdr = new(CopyDoneResult)
 						cdr.Timeline = int32(timeline)
 						cdr.LSN = lsn
 					}

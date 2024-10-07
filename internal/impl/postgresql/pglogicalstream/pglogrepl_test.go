@@ -142,31 +142,39 @@ func createDockerInstance(t *testing.T) (*dockertest.Pool, *dockertest.Resource,
 }
 
 func TestIdentifySystem(t *testing.T) {
-	pool, resource, dbUrl := createDockerInstance(t)
-	defer pool.Purge(resource)
+	pool, resource, dbURL := createDockerInstance(t)
+	defer func() {
+		err := pool.Purge(resource)
+		require.NoError(t, err)
+	}()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*100)
 	defer cancel()
 
-	conn, err := pgconn.Connect(ctx, dbUrl)
+	conn, err := pgconn.Connect(ctx, dbURL)
 	require.NoError(t, err)
 	defer closeConn(t, conn)
 
 	sysident, err := IdentifySystem(ctx, conn)
 	require.NoError(t, err)
 
-	assert.Greater(t, len(sysident.SystemID), 0)
-	assert.True(t, sysident.Timeline > 0)
-	assert.True(t, sysident.XLogPos > 0)
-	assert.Greater(t, len(sysident.DBName), 0)
+	assert.NotEmpty(t, sysident.SystemID, 0)
+	assert.Greater(t, sysident.Timeline, int32(0))
+
+	xlogPositionIsPositive := sysident.XLogPos > 0
+	assert.True(t, xlogPositionIsPositive)
+	assert.NotEmpty(t, sysident.DBName, 0)
 }
 
 func TestCreateReplicationSlot(t *testing.T) {
-	pool, resource, dbUrl := createDockerInstance(t)
-	defer pool.Purge(resource)
+	pool, resource, dbURL := createDockerInstance(t)
+	defer func() {
+		err := pool.Purge(resource)
+		require.NoError(t, err)
+	}()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
-	conn, err := pgconn.Connect(ctx, dbUrl)
+	conn, err := pgconn.Connect(ctx, dbURL)
 	require.NoError(t, err)
 	defer closeConn(t, conn)
 
@@ -178,12 +186,15 @@ func TestCreateReplicationSlot(t *testing.T) {
 }
 
 func TestDropReplicationSlot(t *testing.T) {
-	pool, resource, dbUrl := createDockerInstance(t)
-	defer pool.Purge(resource)
+	pool, resource, dbURL := createDockerInstance(t)
+	defer func() {
+		err := pool.Purge(resource)
+		require.NoError(t, err)
+	}()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
-	conn, err := pgconn.Connect(ctx, dbUrl)
+	conn, err := pgconn.Connect(ctx, dbURL)
 	require.NoError(t, err)
 	defer closeConn(t, conn)
 
@@ -198,13 +209,16 @@ func TestDropReplicationSlot(t *testing.T) {
 }
 
 func TestStartReplication(t *testing.T) {
-	pool, resource, dbUrl := createDockerInstance(t)
-	defer pool.Purge(resource)
+	pool, resource, dbURL := createDockerInstance(t)
+	defer func() {
+		err := pool.Purge(resource)
+		require.NoError(t, err)
+	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
-	conn, err := pgconn.Connect(ctx, dbUrl)
+	conn, err := pgconn.Connect(ctx, dbURL)
 	require.NoError(t, err)
 	defer closeConn(t, conn)
 
@@ -233,7 +247,7 @@ func TestStartReplication(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 		defer cancel()
 
-		config, err := pgconn.ParseConfig(dbUrl)
+		config, err := pgconn.ParseConfig(dbURL)
 		require.NoError(t, err)
 		delete(config.RuntimeParams, "replication")
 
@@ -293,59 +307,69 @@ drop table t;
 
 	rxKeepAlive()
 	xld := rxXLogData()
-	begin, err := IsBeginMessage(xld.WALData)
+	begin, err := isBeginMessage(xld.WALData)
 	require.NoError(t, err)
-	assert.Equal(t, true, begin)
+	assert.True(t, begin)
 
 	xld = rxXLogData()
-	relationStreamMessage, err := DecodePgOutput(xld.WALData, relations, typeMap)
+	var streamMessage *StreamMessageChanges
+	streamMessage, err = decodePgOutput(xld.WALData, relations, typeMap)
 	require.NoError(t, err)
-	assert.Nil(t, relationStreamMessage)
+	assert.Nil(t, streamMessage)
 
 	xld = rxXLogData()
-	streamMessage, err := DecodePgOutput(xld.WALData, relations, typeMap)
+	streamMessage, err = decodePgOutput(xld.WALData, relations, typeMap)
+	require.NoError(t, err)
 	jsonData, err := json.Marshal(&streamMessage)
 	require.NoError(t, err)
 	assert.Equal(t, "{\"operation\":\"insert\",\"schema\":\"public\",\"table\":\"t\",\"data\":{\"id\":1,\"name\":\"foo\"}}", string(jsonData))
 
 	xld = rxXLogData()
-	streamMessage, err = DecodePgOutput(xld.WALData, relations, typeMap)
+	streamMessage, err = decodePgOutput(xld.WALData, relations, typeMap)
+	require.NoError(t, err)
 	jsonData, err = json.Marshal(&streamMessage)
 	require.NoError(t, err)
 	assert.Equal(t, "{\"operation\":\"insert\",\"schema\":\"public\",\"table\":\"t\",\"data\":{\"id\":2,\"name\":\"bar\"}}", string(jsonData))
 
 	xld = rxXLogData()
-	streamMessage, err = DecodePgOutput(xld.WALData, relations, typeMap)
+	streamMessage, err = decodePgOutput(xld.WALData, relations, typeMap)
+	require.NoError(t, err)
 	jsonData, err = json.Marshal(&streamMessage)
 	require.NoError(t, err)
 	assert.Equal(t, "{\"operation\":\"insert\",\"schema\":\"public\",\"table\":\"t\",\"data\":{\"id\":3,\"name\":\"baz\"}}", string(jsonData))
 
 	xld = rxXLogData()
-	streamMessage, err = DecodePgOutput(xld.WALData, relations, typeMap)
+	streamMessage, err = decodePgOutput(xld.WALData, relations, typeMap)
+	require.NoError(t, err)
 	jsonData, err = json.Marshal(&streamMessage)
 	require.NoError(t, err)
 	assert.Equal(t, "{\"operation\":\"update\",\"schema\":\"public\",\"table\":\"t\",\"data\":{\"id\":3,\"name\":\"quz\"}}", string(jsonData))
 
 	xld = rxXLogData()
-	streamMessage, err = DecodePgOutput(xld.WALData, relations, typeMap)
+	streamMessage, err = decodePgOutput(xld.WALData, relations, typeMap)
+	require.NoError(t, err)
 	jsonData, err = json.Marshal(&streamMessage)
 	require.NoError(t, err)
 	assert.Equal(t, "{\"operation\":\"delete\",\"schema\":\"public\",\"table\":\"t\",\"data\":{\"id\":2,\"name\":null}}", string(jsonData))
 	xld = rxXLogData()
 
-	commit, err := IsCommitMessage(xld.WALData)
+	var commit bool
+	commit, err = isCommitMessage(xld.WALData)
 	require.NoError(t, err)
-	assert.Equal(t, true, commit)
+	assert.True(t, commit)
 }
 
 func TestSendStandbyStatusUpdate(t *testing.T) {
-	pool, resource, dbUrl := createDockerInstance(t)
-	defer pool.Purge(resource)
+	pool, resource, dbURL := createDockerInstance(t)
+	defer func() {
+		err := pool.Purge(resource)
+		require.NoError(t, err)
+	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
-	conn, err := pgconn.Connect(ctx, dbUrl)
+	conn, err := pgconn.Connect(ctx, dbURL)
 	require.NoError(t, err)
 	defer closeConn(t, conn)
 

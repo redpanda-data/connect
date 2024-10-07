@@ -163,7 +163,7 @@ func newPgStreamInput(conf *service.ParsedConfig, logger *service.Logger) (s ser
 	}
 
 	if pgConnOptions != "" {
-		pgConnOptions = fmt.Sprintf("options=%s", pgConnOptions)
+		pgConnOptions = "options=" + pgConnOptions
 	}
 
 	pgconnConfig := pgconn.Config{
@@ -188,7 +188,7 @@ func newPgStreamInput(conf *service.ParsedConfig, logger *service.Logger) (s ser
 		slotName:                dbSlotName,
 		schema:                  dbSchema,
 		pgConnRuntimeParam:      pgConnOptions,
-		tls:                     pglogicalstream.TlsVerify(tlsSetting),
+		tls:                     pglogicalstream.TLSVerify(tlsSetting),
 		tables:                  tables,
 		decodingPlugin:          decodingPlugin,
 		logger:                  logger,
@@ -212,7 +212,7 @@ func init() {
 
 type pgStreamInput struct {
 	dbConfig                pgconn.Config
-	tls                     pglogicalstream.TlsVerify
+	tls                     pglogicalstream.TLSVerify
 	pglogicalStream         *pglogicalstream.Stream
 	pgConnRuntimeParam      string
 	slotName                string
@@ -228,15 +228,15 @@ type pgStreamInput struct {
 func (p *pgStreamInput) Connect(ctx context.Context) error {
 	pgStream, err := pglogicalstream.NewPgStream(pglogicalstream.Config{
 		PgConnRuntimeParam:         p.pgConnRuntimeParam,
-		DbHost:                     p.dbConfig.Host,
-		DbPassword:                 p.dbConfig.Password,
-		DbUser:                     p.dbConfig.User,
-		DbPort:                     int(p.dbConfig.Port),
-		DbTables:                   p.tables,
-		DbName:                     p.dbConfig.Database,
-		DbSchema:                   p.schema,
+		DBHost:                     p.dbConfig.Host,
+		DBPassword:                 p.dbConfig.Password,
+		DBUser:                     p.dbConfig.User,
+		DBPort:                     int(p.dbConfig.Port),
+		DBTables:                   p.tables,
+		DBName:                     p.dbConfig.Database,
+		DBSchema:                   p.schema,
 		ReplicationSlotName:        "rs_" + p.slotName,
-		TlsVerify:                  p.tls,
+		TLSVerify:                  p.tls,
 		StreamOldData:              p.streamSnapshot,
 		TemporaryReplicationSlot:   p.temporarySlot,
 		DecodingPlugin:             p.decodingPlugin,
