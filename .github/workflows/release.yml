@@ -16,6 +16,11 @@ jobs:
     - name: Check Out Repo
       uses: actions/checkout@v4
 
+    - name: Add telemetry variables
+      env:
+        CONNECT_TELEMETRY_PRIV_KEY: ${{ secrets.TelemetryPrivateKey }}
+        CONNECT_TELEMETRY_DELAY: 1m
+
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
