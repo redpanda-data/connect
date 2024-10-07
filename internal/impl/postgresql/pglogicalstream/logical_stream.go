@@ -238,7 +238,10 @@ func (s *Stream) AckLSN(lsn string) error {
 	var err error
 	s.clientXLogPos, err = ParseLSN(lsn)
 	if err != nil {
-		panic(fmt.Errorf("failed to parse LSN for Acknowledge %w", err)) // TODO
+		s.logger.Errorf("Failed to parse LSN for Acknowledge: %v", err)
+		if err = s.Stop(); err != nil {
+			s.logger.Errorf("Failed to stop the stream: %v", err)
+		}
 	}
 
 	err = SendStandbyStatusUpdate(context.Background(), s.pgConn, StandbyStatusUpdate{
@@ -329,7 +332,10 @@ func (s *Stream) streamMessagesAsync() {
 			case PrimaryKeepaliveMessageByteID:
 				pkm, err := ParsePrimaryKeepaliveMessage(msg.Data[1:])
 				if err != nil {
-					panic(fmt.Errorf("parsePrimaryKeepaliveMessage failed: %w", err)) // TODO
+					s.logger.Errorf("Failed to parse PrimaryKeepaliveMessage: %v", err)
+					if err = s.Stop(); err != nil {
+						s.logger.Errorf("Failed to stop the stream: %v", err)
+					}
 				}
 
 				if pkm.ReplyRequested {
@@ -339,7 +345,10 @@ func (s *Stream) streamMessagesAsync() {
 			case XLogDataByteID:
 				xld, err := ParseXLogData(msg.Data[1:])
 				if err != nil {
-					panic(fmt.Errorf("parseXLogData failed: %w", err))
+					s.logger.Errorf("Failed to parse XLogData: %v", err)
+					if err = s.Stop(); err != nil {
+						s.logger.Errorf("Failed to stop the stream: %v", err)
+					}
 				}
 				clientXLogPos := xld.WALStart + LSN(len(xld.WALData))
 
