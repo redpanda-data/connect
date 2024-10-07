@@ -116,6 +116,18 @@ Finally, it's also possible to specify an explicit offset to consume from by add
 			Description("The period of time between each commit of the current partition offsets. Offsets are always committed during shutdown.").
 			Default("5s").
 			Advanced(),
+		service.NewDurationField("session_timeout").
+			Description("Sets how long a member in the group can go between heartbeats. If a member does not heartbeat in this timeout, the broker will remove the member from the group and initiate a rebalance.").
+			Default("45s").
+			Advanced(),
+		service.NewDurationField("heartbeat_period").
+			Description("HeartbeatInterval sets how long a group member goes between heartbeats to Kafka. Kafka uses heartbeats to ensure that a group member's session stays active. This value can be any value lower than the session timeout, but should be no higher than 1/3rd the session timeout.").
+			Default("3s").
+			Advanced(),		
+		service.NewDurationField("rebalance_timeout").
+			Description("Sets how long group members are allowed to take when a rebalance has begun. This timeout is how long all members are allowed to complete work and commit offsets, minus the time it took to detect the rebalance (from a heartbeat).").
+			Default("60s").
+			Advanced(),		
 		service.NewBoolField("start_from_oldest").
 			Description("Determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset. The setting is applied when creating a new consumer group or the saved offset no longer exists.").
 			Default(true).
@@ -156,21 +168,24 @@ type batchWithAckFn struct {
 
 // FranzKafkaReader implements a kafka reader using the franz-go library.
 type FranzKafkaReader struct {
-	SeedBrokers     []string
-	topics          []string
-	topicPartitions map[string]map[int32]kgo.Offset
-	clientID        string
-	rackID          string
-	consumerGroup   string
-	TLSConf         *tls.Config
-	saslConfs       []sasl.Mechanism
-	checkpointLimit int
-	startFromOldest bool
-	commitPeriod    time.Duration
-	regexPattern    bool
-	multiHeader     bool
-	batchPolicy     service.BatchPolicy
-	metadataMaxAge  time.Duration
+	SeedBrokers       []string
+	topics            []string
+	topicPartitions   map[string]map[int32]kgo.Offset
+	clientID          string
+	rackID            string
+	consumerGroup     string
+	TLSConf           *tls.Config
+	saslConfs         []sasl.Mechanism
+	checkpointLimit   int
+	startFromOldest   bool
+	commitPeriod      time.Duration
+	heartbeatPeriod   time.Duration
+	sessionTimeout    time.Duration
+	rebalanceTimeout  time.Duration
+	regexPattern      bool
+	multiHeader       bool
+	batchPolicy       service.BatchPolicy
+	metadataMaxAge    time.Duration
 
 	batchChan atomic.Value
 	res       *service.Resources
@@ -256,6 +271,18 @@ func NewFranzKafkaReaderFromConfig(conf *service.ParsedConfig, res *service.Reso
 	if f.commitPeriod, err = conf.FieldDuration("commit_period"); err != nil {
 		return nil, err
 	}
+
+	if f.sessionTimeout, err = conf.FieldDuration("session_timeout"); err != nil {
+		return nil, err
+	}
+
+	if f.heartbeatPeriod, err = conf.FieldDuration("heartbeat_period"); err != nil {
+		return nil, err
+	}
+
+	if f.rebalanceTimeout, err = conf.FieldDuration("rebalance_timeout"); err != nil {
+		return nil, err
+	}	
 
 	if f.batchPolicy, err = conf.FieldBatchPolicy("batching"); err != nil {
 		return nil, err
@@ -667,6 +694,9 @@ func (f *FranzKafkaReader) Connect(ctx context.Context) error {
 			}),
 			kgo.AutoCommitMarks(),
 			kgo.AutoCommitInterval(f.commitPeriod),
+			kgo.SessionTimeout(f.sessionTimeout),
+			kgo.HeartbeatInterval(f.heartbeatPeriod),
+			kgo.RebalanceTimeout(f.rebalanceTimeout),	    
 			kgo.WithLogger(&KGoLogger{f.log}),
 		)
 	}
