@@ -9,6 +9,11 @@ All notable changes to this project will be documented in this file.
 
 - Field `checksum_algorithm` added to the `aws_s3` output. (@dom-lee-naimuri)
 
+### Fixed
+
+- The `elasticsearch` output now performs retries for HTTP status code `429` (Too Many Requests). (@kahoowkh)
+- The docs for the `collection` field of the `mongodb` output now specify support for interpolation functions. (@mihaitodor)
+
 ## 4.37.0 - 2024-09-26
 
 ### Added
