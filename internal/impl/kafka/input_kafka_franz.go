@@ -121,7 +121,7 @@ Finally, it's also possible to specify an explicit offset to consume from by add
 			Default("45s").
 			Advanced(),
 		service.NewDurationField("heartbeat_period").
-			Description("HeartbeatInterval sets how long a group member goes between heartbeats to Kafka. Kafka uses heartbeats to ensure that a group member's session stays active. This value can be any value lower than the session timeout, but should be no higher than 1/3rd the session timeout.").
+			Description("Sets how long a group member goes between heartbeats to Kafka. Kafka uses heartbeats to ensure that a group member's session stays active. This value can be any value lower than the session timeout, but should be no higher than 1/3rd the session timeout.").
 			Default("3s").
 			Advanced(),
 		service.NewDurationField("rebalance_timeout").
