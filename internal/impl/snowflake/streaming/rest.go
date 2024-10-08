@@ -26,8 +26,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/golang-jwt/jwt"
 	"github.com/google/uuid"
+	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/periodic"
 )
 
@@ -60,7 +62,7 @@ type (
 		EndPoint string
 		// The Azure Storage Account (Azure only)
 		StorageAccount string
-		// GCS gives us back a presigned URL instead of a cred
+		// GCS gives us back a presigned URL instead of a cred (obsolete)
 		PresignedURL string
 		// Whether to encrypt/decrypt files on the stage
 		IsClientSideEncrypted bool
@@ -164,14 +166,15 @@ type (
 		// current hex-encoded max value, truncated down to 32 bytes
 		MinStrValue *string `json:"minStrValue"`
 		// current hex-encoded max value, truncated up to 32 bytes
-		MaxStrValue    *string `json:"maxStrValue"`
-		MinIntValue    int64   `json:"minIntValue"`
-		MaxIntValue    int64   `json:"maxIntValue"`
-		MinRealValue   float64 `json:"minRealValue"`
-		MaxRealValue   float64 `json:"maxRealValue"`
-		NullCount      int64   `json:"nullCount"`
-		DistinctValues int64   `json:"distinctValues"`
-		MaxLength      int64   `json:"maxLength"`
+		MaxStrValue  *string `json:"maxStrValue"`
+		MinIntValue  int64   `json:"minIntValue"`
+		MaxIntValue  int64   `json:"maxIntValue"`
+		MinRealValue float64 `json:"minRealValue"`
+		MaxRealValue float64 `json:"maxRealValue"`
+		NullCount    int64   `json:"nullCount"`
+		// Currently not tracked
+		DistinctValues int64 `json:"distinctValues"`
+		MaxLength      int64 `json:"maxLength"`
 		// collated columns do not support ingestion
 		// they are always null
 		Collation         *string `json:"collation"`
@@ -277,7 +280,7 @@ type restClient struct {
 	cachedJWT       atomic.Value
 }
 
-func newRestClient(account, user string, privateKey *rsa.PrivateKey) (c *restClient, err error) {
+func newRestClient(account, user string, privateKey *rsa.PrivateKey, logger *service.Logger) (c *restClient, err error) {
 	userAgent := fmt.Sprintf("RedpandaConnect/%v (%v-%v) %v/%v",
 		version,
 		runtime.GOOS,
@@ -294,8 +297,10 @@ func newRestClient(account, user string, privateKey *rsa.PrivateKey) (c *restCli
 			time.Hour-(2*time.Minute),
 			func() {
 				jwt, err := c.computeJWT()
+				// We've already done this once, and there is no external component here
+				// so this should never fail, but log just in case...
 				if err != nil {
-					// TODO: Log an error
+					logger.Errorf("unable to mint JWT for snowflake output: %s", err)
 					return
 				}
 				c.cachedJWT.Store(&jwt)
@@ -353,8 +358,7 @@ func (c *restClient) RegisterBlob(ctx context.Context, req registerBlobRequest) 
 
 const debugAPICalls = true
 
-func (c *restClient) doPost(ctx context.Context, url string, req any, resp any) (err error) {
-	// TODO: Retries
+func (c *restClient) doPost(ctx context.Context, url string, req any, resp any) error {
 	marshaller := json.Marshal
 	if debugAPICalls {
 		marshaller = func(v any) ([]byte, error) {
@@ -368,30 +372,37 @@ func (c *restClient) doPost(ctx context.Context, url string, req any, resp any) 
 	if debugAPICalls {
 		fmt.Printf("%s\n", b)
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(b))
+	b, err = backoff.RetryWithData(func() ([]byte, error) {
+		httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(b))
+		if err != nil {
+			return nil, fmt.Errorf("unable to make http request: %w", err)
+		}
+		httpReq.Header.Add("Content-Type", "application/json")
+		httpReq.Header.Add("Accept", "application/json")
+		httpReq.Header.Add("User-Agent", c.userAgent)
+		jwt := c.cachedJWT.Load().(*string)
+		httpReq.Header.Add("Authorization", "Bearer "+(*jwt))
+		httpReq.Header.Add("X-Snowflake-Authorization-Token-Type", "KEYPAIR_JWT")
+		r, err := c.client.Do(httpReq)
+		if err != nil {
+			return nil, fmt.Errorf("unable to perform http request: %w", err)
+		}
+		b, err = io.ReadAll(r.Body)
+		_ = r.Body.Close()
+		if err != nil {
+			return nil, fmt.Errorf("unable to read http response: %w", err)
+		}
+		if r.StatusCode != 200 {
+			return nil, fmt.Errorf("non successful status code (%d): %s", r.StatusCode, b)
+		}
+		return b, nil
+	}, backoff.NewExponentialBackOff(
+		backoff.WithInitialInterval(100*time.Millisecond),
+		backoff.WithMaxInterval(5*time.Second),
+		backoff.WithMaxElapsedTime(30*time.Second),
+	))
 	if err != nil {
-		return fmt.Errorf("unable to make http request: %w", err)
-	}
-	httpReq.Header.Add("Content-Type", "application/json")
-	httpReq.Header.Add("Accept", "application/json")
-	httpReq.Header.Add("User-Agent", c.userAgent)
-	jwt, err := c.computeJWT()
-	if err != nil {
-		return fmt.Errorf("unable to generate authentication token: %w", err)
-	}
-	httpReq.Header.Add("Authorization", "Bearer "+jwt)
-	httpReq.Header.Add("X-Snowflake-Authorization-Token-Type", "KEYPAIR_JWT")
-	r, err := c.client.Do(httpReq)
-	if err != nil {
-		return fmt.Errorf("unable to perform http request: %w", err)
-	}
-	defer r.Body.Close()
-	b, err = io.ReadAll(r.Body)
-	if err != nil {
-		return fmt.Errorf("unable to read http response: %w", err)
-	}
-	if r.StatusCode != 200 {
-		return fmt.Errorf("non successful status code (%d): %s", r.StatusCode, b)
+		return err
 	}
 	if debugAPICalls {
 		fmt.Printf("%s\n", b)
@@ -400,5 +411,5 @@ func (c *restClient) doPost(ctx context.Context, url string, req any, resp any) 
 	if err != nil {
 		return fmt.Errorf("invalid response: %w, full response: %s", err, b[:min(128, len(b))])
 	}
-	return
+	return err
 }

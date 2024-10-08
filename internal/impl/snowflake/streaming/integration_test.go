@@ -43,9 +43,10 @@ func TestSnowflake(t *testing.T) {
 		TableName:    "BABY_TABLE",
 	})
 	require.NoError(t, err)
-	err = channel.InsertRows(ctx, []any{
-		map[string]any{"A": 75, "B": "qux", "C": true},
-		//map[string]any{"A": 33, "B": "solid", "C": true},
+	err = channel.InsertRows(ctx, []map[string]any{
+		{"A": 41, "B": "qyz", "C": true},
+		{"A": 31, "B": "solid", "C": true},
+		{"A": 33, "B": "wow!", "C": true},
 	})
 	require.NoError(t, err)
 }

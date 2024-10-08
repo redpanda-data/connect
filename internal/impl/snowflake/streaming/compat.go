@@ -11,7 +11,6 @@
 package streaming
 
 import (
-	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/md5"
@@ -21,6 +20,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -36,7 +36,7 @@ func deriveKey(encryptionKey, diversifier string) ([]byte, error) {
 }
 
 // See Encyptor.encrypt in the Java SDK
-func encrypt(buf *bytes.Buffer, encryptionKey string, diversifier string, iv int64) ([]byte, error) {
+func encrypt(buf []byte, encryptionKey string, diversifier string, iv int64) ([]byte, error) {
 	// Derive the key from the diversifier and the original encryptionKey from server
 	key, err := deriveKey(encryptionKey, diversifier)
 	if err != nil {
@@ -52,14 +52,15 @@ func encrypt(buf *bytes.Buffer, encryptionKey string, diversifier string, iv int
 	binary.BigEndian.PutUint64(ivBytes[8:], uint64(iv))
 	stream := cipher.NewCTR(block, ivBytes)
 	// Actually do the encryption
-	encrypted := make([]byte, buf.Len())
-	stream.XORKeyStream(encrypted, buf.Bytes())
+	// TODO(perf): write in place?
+	encrypted := make([]byte, len(buf))
+	stream.XORKeyStream(encrypted, buf)
 	return encrypted, nil
 }
 
-func padBuffer(buf *bytes.Buffer, alignmentSize int) {
-	padding := alignmentSize - buf.Len()%alignmentSize
-	_, _ = buf.Write(make([]byte, padding))
+func padBuffer(buf []byte, alignmentSize int) []byte {
+	padding := alignmentSize - len(buf)%alignmentSize
+	return append(buf, make([]byte, padding)...)
 }
 
 func md5Hash(b []byte) string {
@@ -67,6 +68,9 @@ func md5Hash(b []byte) string {
 	return hex.EncodeToString(s[:])
 }
 
+// Generate the path for a blob when uploading to an internal snowflake table.
+//
+// Never change, this must exactly match the java SDK, don't think you can be fancy and change something.
 func generateBlobPath(clientPrefix string, threadID, counter int) string {
 	now := time.Now().UTC()
 	year := now.Year()
@@ -76,4 +80,34 @@ func generateBlobPath(clientPrefix string, threadID, counter int) string {
 	minute := now.Minute()
 	blobShortName := fmt.Sprintf("%s_%s_%d_%d.bdec", strconv.FormatInt(now.Unix(), 36), clientPrefix, threadID, counter)
 	return fmt.Sprintf("%d/%d/%d/%d/%d/%s", year, month, day, hour, minute, blobShortName)
+}
+
+// Get the filename from an above generated blobPath
+func getShortname(blobPath string) string {
+	idx := strings.LastIndexByte(blobPath, '/')
+	return blobPath[idx+1:]
+}
+
+// truncateBytesAsHex truncates an array of bytes up to 32 bytes and optionally increment the last byte(s).
+// More the one byte can be incremented in case it overflows.
+//
+// NOTE: This can mutate `bytes`
+func truncateBytesAsHex(bytes []byte, truncateUp bool) string {
+	const maxLobLen int = 32
+	if len(bytes) <= maxLobLen {
+		return hex.EncodeToString(bytes)
+	}
+	if truncateUp {
+		var i int
+		for i = maxLobLen - 1; i >= 0; i-- {
+			bytes[i]++
+			if bytes[i] != 0 {
+				break
+			}
+		}
+		if i < 0 {
+			return "Z"
+		}
+	}
+	return hex.EncodeToString(bytes[:maxLobLen])
 }
