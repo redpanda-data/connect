@@ -599,11 +599,12 @@ func (s *Stream) processSnapshot() {
 					columnValues[i] = scanArgs[i]
 				}
 
+				tableWithoutSchema := strings.Split(table, ".")[1]
 				snapshotChangePacket := StreamMessage{
 					Lsn: nil,
 					Changes: []StreamMessageChanges{
 						{
-							Table:     table,
+							Table:     tableWithoutSchema,
 							Operation: "insert",
 							Schema:    s.schema,
 							Data: func() map[string]any {
