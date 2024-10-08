@@ -61,6 +61,8 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[stri
 			n = parquet.Optional(n)
 		}
 		n = parquet.FieldID(n, id)
+		n = parquet.Encoded(n, &parquet.Plain)
+		n = parquet.Compressed(n, &parquet.Uncompressed)
 		// TODO: Use the unquoted name
 		groupNode[column.Name] = n
 		transformers[column.Name] = &dataTransformer{converter: converter, stats: &statsBuffer{columnId: id}}

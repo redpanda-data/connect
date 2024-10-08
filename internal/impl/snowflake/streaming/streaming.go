@@ -14,8 +14,12 @@ import (
 	"bytes"
 	"context"
 	"crypto/aes"
+	"crypto/md5"
 	"crypto/rsa"
+	"encoding/binary"
+	"encoding/hex"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -23,6 +27,8 @@ import (
 	gcs "cloud.google.com/go/storage"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/parquet-go/parquet-go"
+	"github.com/parquet-go/parquet-go/format"
+	"github.com/segmentio/encoding/thrift"
 	"golang.org/x/oauth2"
 	gcsopt "google.golang.org/api/option"
 )
@@ -175,18 +181,24 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, rows []map[s
 	}
 	blobPath := generateBlobPath(c.clientPrefix, 32, 0)
 	unencrypted, err := writeParquetFile(c.schema, rows, getShortname(blobPath))
-	unencryptedLen := len(unencrypted)
 	if err != nil {
 		return err
 	}
+	metadata, err := readParquetMetadata(unencrypted)
+	if err != nil {
+		return fmt.Errorf("unable to parse parquet metadata: %w", err)
+	}
+	os.WriteFile("latest_test.parquet", unencrypted, 0o644)
+	unencryptedLen := len(unencrypted)
 	unencrypted = padBuffer(unencrypted, aes.BlockSize)
 	encrypted, err := encrypt(unencrypted, c.encryptionInfo.encryptionKey, blobPath, 0)
 	if err != nil {
 		return err
 	}
 	uploadStartTime := time.Now()
+	fileMD5Hash := md5.Sum(encrypted)
 	err = backoff.Retry(func() error {
-		return uploader.upload(ctx, blobPath, encrypted)
+		return uploader.upload(ctx, blobPath, encrypted, fileMD5Hash[:])
 	}, backoff.WithMaxRetries(backoff.NewConstantBackOff(time.Second), 3))
 	if err != nil {
 		return err
@@ -199,7 +211,7 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, rows []map[s
 		Blobs: []blobMetadata{
 			{
 				Path:        blobPath,
-				MD5:         md5Hash(encrypted),
+				MD5:         hex.EncodeToString(fileMD5Hash[:]),
 				BDECVersion: 3,
 				BlobStats: blobStats{
 					FlushStartMs:     startTime.UnixMilli(),
@@ -208,16 +220,12 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, rows []map[s
 				},
 				Chunks: []chunkMetadata{
 					{
-						Database:         c.options.DatabaseName,
-						Schema:           c.options.SchemaName,
-						Table:            c.options.TableName,
-						ChunkStartOffset: 0,
-						ChunkLength:      int32(unencryptedLen),
-						// This is an estimate in the Java SDK, so we're going to be a
-						// bit loose here, not sure how important this is to get right.
-						// I suppose we could use the parquet metadata to get this
-						// information.
-						ChunkLengthUncompressed: int32(unencryptedLen),
+						Database:                c.options.DatabaseName,
+						Schema:                  c.options.SchemaName,
+						Table:                   c.options.TableName,
+						ChunkStartOffset:        0,
+						ChunkLength:             int32(unencryptedLen),
+						ChunkLengthUncompressed: totalUncompressedSize(metadata),
 						ChunkMD5:                md5Hash(encrypted[:unencryptedLen]),
 						EncryptionKeyID:         c.encryptionInfo.encryptionKeyID,
 						FirstInsertTimeInMillis: startTime.UnixMilli(),
@@ -305,15 +313,19 @@ func (u *gcsUploader) fullPath(path string) string {
 	return filepath.Join(u.pathPrefix, path)
 }
 
-func (u *gcsUploader) upload(ctx context.Context, path string, encrypted []byte) error {
+func (u *gcsUploader) upload(ctx context.Context, path string, encrypted, md5Hash []byte) error {
 	object := u.bucket.Object(u.fullPath(path))
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	ow := object.NewWriter(ctx)
-	_, err := ow.Write(encrypted)
-	if err != nil {
-		_ = ow.Close()
-		return err
+	ow.MD5 = md5Hash
+	for len(encrypted) > 0 {
+		n, err := ow.Write(encrypted)
+		if err != nil {
+			_ = ow.Close()
+			return err
+		}
+		encrypted = encrypted[n:]
 	}
 	return ow.Close()
 }
@@ -326,7 +338,7 @@ func writeParquetFile(schema *parquet.Schema, rows []map[string]any, primaryFile
 		parquet.CreatedBy("RedpandaConnect", version, "main"),
 		// Recommended by the Snowflake team to enable data page stats
 		parquet.DataPageStatistics(true),
-		parquet.Compression(&parquet.Gzip),
+		parquet.Compression(&parquet.Uncompressed),
 		parquet.KeyValueMetadata("primaryFileId", primaryFileID),
 	)
 	err := writeWithoutPanic(pw, rows)
@@ -360,4 +372,31 @@ func closeWithoutPanic[T any](pWtr *parquet.GenericWriter[T]) (err error) {
 
 	err = pWtr.Close()
 	return
+}
+
+func readParquetMetadata(parquetFile []byte) (metadata format.FileMetaData, err error) {
+	if len(parquetFile) < 8 {
+		return format.FileMetaData{}, fmt.Errorf("too small of parquet file: %d", len(parquetFile))
+	}
+	trailingBytes := parquetFile[len(parquetFile)-8:]
+	if string(trailingBytes[4:]) != "PAR1" {
+		return metadata, fmt.Errorf("missing magic bytes, got: %q", trailingBytes[4:])
+	}
+	footerSize := int(binary.LittleEndian.Uint32(trailingBytes))
+	if len(parquetFile) < footerSize+8 {
+		return metadata, fmt.Errorf("too small of parquet file: %d, footer size: %d", len(parquetFile), footerSize)
+	}
+	footerBytes := parquetFile[len(parquetFile)-(footerSize+8) : len(parquetFile)-8]
+	if err := thrift.Unmarshal(new(thrift.CompactProtocol), footerBytes, &metadata); err != nil {
+		return metadata, fmt.Errorf("unable to extract parquet metadata: %w", err)
+	}
+	return
+}
+
+func totalUncompressedSize(metadata format.FileMetaData) int32 {
+	var size int64
+	for _, rowGroup := range metadata.RowGroups {
+		size += rowGroup.TotalByteSize
+	}
+	return int32(size)
 }

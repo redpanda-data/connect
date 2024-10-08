@@ -32,7 +32,7 @@ func TestEncryption(t *testing.T) {
 }
 
 func mustHexDecode(s string) []byte {
-	decoded, err := hex.DecodeString("aa")
+	decoded, err := hex.DecodeString(s)
 	if err != nil {
 		panic(err)
 	}
