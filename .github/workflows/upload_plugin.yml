@@ -33,12 +33,6 @@ jobs:
         with:
           aws-region: ${{ vars.RP_AWS_CRED_REGION }}
           role-to-assume: arn:aws:iam::${{ secrets.RP_AWS_CRED_ACCOUNT_ID }}:role/${{ vars.RP_AWS_CRED_BASE_ROLE_NAME }}${{ github.event.repository.name }}
-      - name: Get secrets from AWS Secrets Manager (for read/writing S3-backed plugins repo)
-        uses: aws-actions/aws-secretsmanager-get-secrets@v2
-        with:
-          secret-ids: |
-            ,sdlc/prod/github/rpk_plugin_publisher
-          parse-json-secrets: true
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
@@ -60,8 +54,6 @@ jobs:
       - name: Upload connect plugin to S3
         uses: ./.github/actions/upload_managed_plugin
         with:
-          aws_access_key_id: ${{ env.RPK_PLUGIN_PUBLISHER_AWS_ACCESS_KEY_ID }}
-          aws_secret_access_key: ${{ env.RPK_PLUGIN_PUBLISHER_AWS_SECRET_ACCESS_KEY }}
           aws_region: "us-west-2"
           aws_s3_bucket: "rpk-plugins-repo"
           project_root_dir: ${{ github.workspace }}

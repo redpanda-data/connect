@@ -2,12 +2,6 @@
 name: upload-managed-plugin
 description: Upload binaries as rpk managed plugin
 inputs:
-  aws_access_key_id:
-    description: For accessing S3 bucket
-    required: true
-  aws_secret_access_key:
-    description: For accessing S3 bucket
-    required: true
   aws_region:
     description: For accessing S3 bucket
     required: true
@@ -41,12 +35,6 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Configure AWS Credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-access-key-id: ${{ inputs.aws_access_key_id }}
-        aws-secret-access-key: ${{ inputs.aws_secret_access_key }}
-        aws-region: ${{ inputs.aws_region }}
     - uses: actions/setup-python@v5
       with:
         python-version: '3.12'
