@@ -42,7 +42,7 @@ func outputSpec() *service.ConfigSpec {
 		Description(service.OutputPerformanceDocs(true, true)).
 		Fields(clientFields()...).
 		Fields(
-			service.NewStringField(moFieldCollection).
+			service.NewInterpolatedStringField(moFieldCollection).
 				Description("The name of the target collection."),
 			outputOperationDocs(OperationUpdateOne),
 			writeConcernDocs(),

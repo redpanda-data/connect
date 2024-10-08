@@ -164,6 +164,7 @@ The client application name.
 === `collection`
 
 The name of the target collection.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
 
 *Type*: `string`
