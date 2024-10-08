@@ -11,8 +11,10 @@
 package streaming
 
 import (
+	"crypto/aes"
 	"encoding/base64"
 	"encoding/hex"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -29,7 +31,7 @@ func TestEncryption(t *testing.T) {
 	require.Equal(t, expected, actual)
 }
 
-func MustHexDecode(s string) []byte {
+func mustHexDecode(s string) []byte {
 	decoded, err := hex.DecodeString("aa")
 	if err != nil {
 		panic(err)
@@ -43,36 +45,62 @@ func TestTruncateBytesAsHex(t *testing.T) {
 	require.Equal(t, "", truncateBytesAsHex([]byte{}, true))
 
 	// Test basic case
-	decoded := MustHexDecode("aa")
+	decoded := mustHexDecode("aa")
 	require.Equal(t, "aa", truncateBytesAsHex(decoded, false))
 	require.Equal(t, "aa", truncateBytesAsHex(decoded, true))
 
 	// Test exactly 32 bytes
-	decoded, _ = hex.DecodeString("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	decoded = mustHexDecode("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 	require.Equal(t, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", truncateBytesAsHex(decoded, false))
 	require.Equal(t, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", truncateBytesAsHex(decoded, true))
 
-	decoded, _ = hex.DecodeString("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	decoded = mustHexDecode("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 	require.Equal(t, "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", truncateBytesAsHex(decoded, false))
 	require.Equal(t, "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", truncateBytesAsHex(decoded, true))
 
 	// Test 1 truncate up
-	decoded, _ = hex.DecodeString("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	decoded = mustHexDecode("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 	require.Equal(t, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", truncateBytesAsHex(decoded, false))
 	require.Equal(t, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab", truncateBytesAsHex(decoded, true))
 
 	// Test one overflow
-	decoded, _ = hex.DecodeString("aaaaaaaaaaaaaaaaaaaaaaaaaaaaafffffffffffffffffffffffffffffffaaffffffff")
+	decoded = mustHexDecode("aaaaaaaaaaaaaaaaaaaaaaaaaaaaafffffffffffffffffffffffffffffffaaffffffff")
 	require.Equal(t, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaafffffffffffffffffffffffffffffffaaff", truncateBytesAsHex(decoded, false))
 	require.Equal(t, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaafffffffffffffffffffffffffffffffab00", truncateBytesAsHex(decoded, true))
 
 	// Test many overflow
-	decoded, _ = hex.DecodeString("aaaaaaaaaaaaaaaaaaaaaaaaaaaaafffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	decoded = mustHexDecode("aaaaaaaaaaaaaaaaaaaaaaaaaaaaafffffffffffffffffffffffffffffffffffffffffffffffffffff")
 	require.Equal(t, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaafffffffffffffffffffffffffffffffffff", truncateBytesAsHex(decoded, false))
 	require.Equal(t, "aaaaaaaaaaaaaaaaaaaaaaaaaaaab00000000000000000000000000000000000", truncateBytesAsHex(decoded, true))
 
 	// Test infinity
-	decoded, _ = hex.DecodeString("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcccccccccccc")
+	decoded = mustHexDecode("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffcccccccccccc")
 	require.Equal(t, "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", truncateBytesAsHex(decoded, false))
 	require.Equal(t, "Z", truncateBytesAsHex(decoded, true))
+}
+
+func mustBase64Decode(s string) []byte {
+	b, err := base64.StdEncoding.DecodeString(s)
+	if err != nil {
+		panic(err)
+	}
+	return b
+}
+
+// TestCompat takes each stage of transforms that are applied in the JavaSDK and ensures that this SDK is byte for byte the same.
+func TestCompat(t *testing.T) {
+	unpadded := mustBase64Decode("UEFSMRUAFUwVPhWUpsKLARwVBBUAFQYVCAAAH4sIAAAAAAAA/2NiYGBgZmZABT7ofABnJDzZJgAAABUAFSgVQhXlo/S6CRwVBBUAFQYVCAAAH4sIAAAAAAAA/2NiYGBgZmYGkoWlFVAKAA+YiDUUAAAAFQAVDhU2FZ/44TAcFQQVABUGFQgAAB+LCAAAAAAAAP9jYmBgYGZmBgB3cpG6BwAAABkRAhkYEAAAAAAAAAAAAAAAAAAAAEwZGBAAAAAAAAAAAAAAAAAAAABMFQIZFgAZFgQZJgAEABkRAhkYA3F1eBkYA3F1eBUCGRYAGRYEGSYABAAZEQIZGAEBGRgBARUCGRYAGRYEGSYABAAZHBYIFWwWAAAAGRwWdBVwFgAAGRYMABkcFuQBFWIWAAAAFQIZTEgEYmRlYxUGABUOFSAVAhgBQSUKFQAVTBUCHFwVABVMAAAAFQwlAhgBQiUANQQcHAAAABUAJQIYAUNVBgAWBBkcGTwmCBwVDhk1BggAGRgBQRUEFgQWehZsJgg8GBAAAAAAAAAAAAAAAAAAAABMGBAAAAAAAAAAAAAAAAAAAABMFgAoEAAAAAAAAAAAAAAAAAAAAEwYEAAAAAAAAAAAAAAAAAAAAEwAGRwVABUAFQIAPCkWBBkmAAQAABaaBBUUFsYCFWwAJnQcFQwZNQYIABkYAUIVBBYEFlYWcCZ0PBgDcXV4GANxdXgWACgDcXV4GANxdXgAGRwVABUAFQIAPBYMGRYEGSYABAAAFq4EFRoWsgMVOAAm5AEcFQAZNQYIABkYAUMVBBYEFjoWYibkATwYAQEYAQEWACgBARgBAQAZHBUAFQAVAgA8KRYEGSYABAAAFsgEFRYW6gMVMAAWigIWBCYIFr4CFAAAGVwYATEYAzIsNQAYATIYAzksOAAYATMYAzEsMQAYBXNmVmVyGAMxLDEAGA1wcmltYXJ5RmlsZUlkGENzbDFpejVfOVFqUVVKRDJZeGhrQ0hOZFZmUVR0dDBoR1JPR2tiMzdJTlIzM3BoRU00c0NDXzMwMDFfMzRfMC5iZGVjABhKcGFycXVldC1tciB2ZXJzaW9uIDEuMTQuMSAoYnVpbGQgOTdlZGU5NjgzNzc0MDBkMWQ3OWUzMTk2NjM2YmEzZGUzOTIxOTZiYSkZPBwAABwAABwAAABFAgAAUEFSMQ==")
+	actualPadded := padBuffer(slices.Clone(unpadded), aes.BlockSize)
+	padded := mustBase64Decode("UEFSMRUAFUwVPhWUpsKLARwVBBUAFQYVCAAAH4sIAAAAAAAA/2NiYGBgZmZABT7ofABnJDzZJgAAABUAFSgVQhXlo/S6CRwVBBUAFQYVCAAAH4sIAAAAAAAA/2NiYGBgZmYGkoWlFVAKAA+YiDUUAAAAFQAVDhU2FZ/44TAcFQQVABUGFQgAAB+LCAAAAAAAAP9jYmBgYGZmBgB3cpG6BwAAABkRAhkYEAAAAAAAAAAAAAAAAAAAAEwZGBAAAAAAAAAAAAAAAAAAAABMFQIZFgAZFgQZJgAEABkRAhkYA3F1eBkYA3F1eBUCGRYAGRYEGSYABAAZEQIZGAEBGRgBARUCGRYAGRYEGSYABAAZHBYIFWwWAAAAGRwWdBVwFgAAGRYMABkcFuQBFWIWAAAAFQIZTEgEYmRlYxUGABUOFSAVAhgBQSUKFQAVTBUCHFwVABVMAAAAFQwlAhgBQiUANQQcHAAAABUAJQIYAUNVBgAWBBkcGTwmCBwVDhk1BggAGRgBQRUEFgQWehZsJgg8GBAAAAAAAAAAAAAAAAAAAABMGBAAAAAAAAAAAAAAAAAAAABMFgAoEAAAAAAAAAAAAAAAAAAAAEwYEAAAAAAAAAAAAAAAAAAAAEwAGRwVABUAFQIAPCkWBBkmAAQAABaaBBUUFsYCFWwAJnQcFQwZNQYIABkYAUIVBBYEFlYWcCZ0PBgDcXV4GANxdXgWACgDcXV4GANxdXgAGRwVABUAFQIAPBYMGRYEGSYABAAAFq4EFRoWsgMVOAAm5AEcFQAZNQYIABkYAUMVBBYEFjoWYibkATwYAQEYAQEWACgBARgBAQAZHBUAFQAVAgA8KRYEGSYABAAAFsgEFRYW6gMVMAAWigIWBCYIFr4CFAAAGVwYATEYAzIsNQAYATIYAzksOAAYATMYAzEsMQAYBXNmVmVyGAMxLDEAGA1wcmltYXJ5RmlsZUlkGENzbDFpejVfOVFqUVVKRDJZeGhrQ0hOZFZmUVR0dDBoR1JPR2tiMzdJTlIzM3BoRU00c0NDXzMwMDFfMzRfMC5iZGVjABhKcGFycXVldC1tciB2ZXJzaW9uIDEuMTQuMSAoYnVpbGQgOTdlZGU5NjgzNzc0MDBkMWQ3OWUzMTk2NjM2YmEzZGUzOTIxOTZiYSkZPBwAABwAABwAAABFAgAAUEFSMQAAAAA=")
+	require.Equal(t, padded, actualPadded)
+	encryptionKey := "i3aoKhzaBpbgJ7NtZHagllmUxTDJEbcEObJg+OMbZio="
+	blobPath := "2024/10/8/14/1/sl1iz5_9QjQUJD2YxhkCHNdVfQTtt0hGROGkb37INR33phEM4sCC_3001_34_0.bdec"
+	actualEncrypted, err := encrypt(slices.Clone(padded), encryptionKey, blobPath, 0)
+	require.NoError(t, err)
+	encrypted := mustBase64Decode("ZBVRKvbk6yq2rtif+3FeYsuVP6bh0JSvaViL843qnI+Nqcvl74xBYaFQ0YKbxRTg2pBGW2VHDQOPk03Fbg7ENHJGJFbv0Dr7R1sMQyMyHXQdQMEknrpinkomPA04K5EnNlJTY21pDqL4xpTBdeZWzX0SPGvhwQnSCmMPvNWsdeTq5fnqtunNfJES9FwKvVU1DVGoOewOs/sR7j7/IjVkcK8YElO+pqAMbf8OqFsoeVpWcaroT5fxZiSMZQ6jBRoBSRAtkFi9WFwEW6eGq+iMu9CGccumSOb48wj4aa8EuyZRWYa5vDqnJYz76+ea91Akvp1+OKkoA7QTUY7iBi4emH8AdeRlG35F5O/JCbZ1sNUhEoJSTQfRID582lK1MRsVaxwamJw/2Ty3NG80S22dVV2ILhjl38GZjypJHihCFjkU8g9qkEvhuwNrEeK6xwWJ6DF+OtxE6PzVUdNgOWzwFxRMASayZWyAH/+1KCVCIbURS5lDbT/Mv+fEA6waKasgiynqAIw/1z2c39h+ThtxNKWVaZzENGOOjAWpaKTSxQ8UiaiSG7WBtFtAmYJlQ5mAJO+i133Xipv86mVJv8OudRoIzYM8pZMVIP/Y7RD3kCkP3IzGS9QDQOhC8aXomHcEaXK+Z9iCewe9T+atdUX18OSuEr9owcI0Eu7gvWnpRK5fWVRqi3i+uz/HdmKF0qcmEDTzuMs+PvUl84J9kJjR1Savr4UKmZlp3u/i+nXTx0zgrV/NtdX4eXJMeaCaP2AJfKQzY1UCSFZS/5mSzsRzk/R3SiFLee7caWq7HsAQEAdpMz2pvylSxS0YCxL5KivGk/sKAMjaDRvQpblO5zcKH+mFaTgehpVr4oqaIwdMVw5Q7aRrjol97zMNu95kdCk8m2vyFvZKLzk+WWVxK645fJYUE2v/B8M3H3phVDJqn4//gGsQG/xLdwBWFpI1W9GZq4F3qvAxeB3XldKV1IsgH+ygBkxAAvlexba3Qb+rWnE9B+KjX+r8u8qI1WIDObF71NQ0m/bDgCz1KhIyUaYUu7O++U4vUK/e2TD2nX5+m3m3DAxHQousdiodh1C5dr249v0GTcbnKlCNLOMRCLdB222Xd2pQPI5M7p0Dj+yNrecD6FlIeLavEJF3QvE6urwmO8nMaJJ3WmX+euCO1Yia1m5gFBVnaSGSI1RmqxAiSUQ=")
+	require.Equal(t, encrypted, actualEncrypted)
+	fileMD5Hash := "c211779e08513408f0a8b28a17c230b0"
+	require.Equal(t, md5Hash(actualEncrypted), fileMD5Hash)
+	chunkMD5Hash := "1ca9f885bedc25ded3abf3df045543be"
+	require.Equal(t, md5Hash(actualEncrypted[:len(unpadded)]), chunkMD5Hash)
 }

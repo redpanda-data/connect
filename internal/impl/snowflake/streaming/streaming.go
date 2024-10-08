@@ -180,7 +180,7 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, rows []map[s
 		return err
 	}
 	unencrypted = padBuffer(unencrypted, aes.BlockSize)
-	encrypted, err := encrypt(unencrypted, c.encryptionKey, blobPath, 0)
+	encrypted, err := encrypt(unencrypted, c.encryptionInfo.encryptionKey, blobPath, 0)
 	if err != nil {
 		return err
 	}
@@ -219,7 +219,7 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, rows []map[s
 						// information.
 						ChunkLengthUncompressed: int32(unencryptedLen),
 						ChunkMD5:                md5Hash(encrypted[:unencryptedLen]),
-						EncryptionKeyID:         c.encryptionKeyID,
+						EncryptionKeyID:         c.encryptionInfo.encryptionKeyID,
 						FirstInsertTimeInMillis: startTime.UnixMilli(),
 						LastInsertTimeInMillis:  startTime.UnixMilli(),
 						EPS: &epInfo{
