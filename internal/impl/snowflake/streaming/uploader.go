@@ -34,7 +34,7 @@ type uploader interface {
 	upload(ctx context.Context, path string, encrypted, md5Hash []byte) error
 }
 
-func newUploader(ctx context.Context, fileLocationInfo fileLocationInfo) (uploader, error) {
+func newUploader(fileLocationInfo fileLocationInfo) (uploader, error) {
 	switch fileLocationInfo.LocationType {
 	case "S3":
 		creds := fileLocationInfo.Creds
@@ -71,7 +71,10 @@ func newUploader(ctx context.Context, fileLocationInfo fileLocationInfo) (upload
 		}, nil
 	case "GCS":
 		accessToken := fileLocationInfo.Creds["GCS_ACCESS_TOKEN"]
-		client, err := gcs.NewClient(ctx, gcsopt.WithTokenSource(
+		// Even though the GCS uploader takes a context, it's not used because we configure
+		// static access token credentials. The context is only used for service account
+		// auth via the instance metadata server.
+		client, err := gcs.NewClient(context.Background(), gcsopt.WithTokenSource(
 			oauth2.StaticTokenSource(&oauth2.Token{
 				AccessToken: accessToken,
 				TokenType:   "Bearer",
