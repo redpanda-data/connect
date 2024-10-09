@@ -20,7 +20,6 @@ import (
 
 const (
 	otspFieldFile   = "file"
-	otspFieldModel  = "model"
 	otspFieldLang   = "language"
 	otspFieldPrompt = "prompt"
 	otspFieldFormat = "response_format"
