@@ -101,7 +101,6 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[stri
 		groupNode[column.Name] = n
 		transformers[column.Name] = &dataTransformer{converter: converter, stats: &statsBuffer{columnId: id}}
 	}
-	// parquet.PrintSchema(os.Stderr, "bdec", groupNode)
 	return parquet.NewSchema("bdec", groupNode), transformers, typeMetadata, nil
 }
 

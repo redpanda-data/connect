@@ -141,6 +141,7 @@ func (c *SnowflakeServiceClient) OpenChannel(ctx context.Context, opts ChannelOp
 			encryptionKey:   resp.EncryptionKey,
 		},
 		clientSequencer: resp.ClientSequencer,
+		rowSequencer:    resp.RowSequencer,
 		transformers:    transformers,
 		fileMetadata:    typeMetadata,
 	}
@@ -274,6 +275,7 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, rows []map[s
 		}
 		return fmt.Errorf("error response injesting data (%d): %s", channel.StatusCode, msg)
 	}
+	c.rowSequencer++
 	c.clientSequencer = channel.ClientSequencer
 	return nil
 }
