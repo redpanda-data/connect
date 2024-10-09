@@ -20,8 +20,10 @@ import (
 
 const (
 	otspFieldFile   = "file"
+	otspFieldModel  = "model"
 	otspFieldLang   = "language"
 	otspFieldPrompt = "prompt"
+	otspFieldFormat = "response_format"
 )
 
 func init() {
@@ -61,6 +63,11 @@ To learn more about audio transcription, see the: https://platform.openai.com/do
 				Description("Optional text to guide the model's style or continue a previous audio segment. The prompt should match the audio language.").
 				Optional().
 				Advanced(),
+			service.NewInterpolatedStringField(otspFieldFormat).
+				Description("The format of the output, in one of these options: json, text, srt, verbose_json, or vtt.").
+				Optional().
+				Default("json").
+				Advanced(),
 		)
 }
 
@@ -87,7 +94,14 @@ func makeTranscriptionProcessor(conf *service.ParsedConfig, mgr *service.Resourc
 			return nil, err
 		}
 	}
-	return &transcriptionProcessor{b, f, l, p}, nil
+	var t *service.InterpolatedString
+	if conf.Contains(otspFieldFormat) {
+		t, err = conf.FieldInterpolatedString(otspFieldFormat)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &transcriptionProcessor{b, f, l, p, t}, nil
 }
 
 type transcriptionProcessor struct {
@@ -96,6 +110,7 @@ type transcriptionProcessor struct {
 	file   *bloblang.Executor
 	lang   *service.InterpolatedString
 	prompt *service.InterpolatedString
+	format *service.InterpolatedString
 }
 
 func (p *transcriptionProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
@@ -124,6 +139,14 @@ func (p *transcriptionProcessor) Process(ctx context.Context, msg *service.Messa
 		}
 		body.Prompt = pr
 	}
+	if p.format != nil {
+		pr, err := p.prompt.TryString(msg)
+		if err != nil {
+			return nil, fmt.Errorf("%s interpolation error: %w", otspFieldFormat, err)
+		}
+		body.Prompt = pr
+	}
+
 	resp, err := p.client.CreateTranscription(ctx, body)
 	if err != nil {
 		return nil, err
