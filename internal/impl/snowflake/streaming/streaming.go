@@ -25,6 +25,8 @@ import (
 	"github.com/parquet-go/parquet-go"
 	"github.com/parquet-go/parquet-go/format"
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/periodic"
+	"github.com/redpanda-data/connect/v4/internal/typed"
 	"github.com/segmentio/encoding/thrift"
 )
 
@@ -42,14 +44,21 @@ type ClientOptions struct {
 	Logger *service.Logger
 }
 
+type stageUploaderResult struct {
+	uploader uploader
+	err      error
+}
+
 // SnowflakeServiceClient is a port from Java :)
 type SnowflakeServiceClient struct {
 	client           *restClient
 	clientPrefix     string
 	deploymentID     int64
-	stageLocation    fileLocationInfo
 	options          ClientOptions
 	requestIDCounter int
+
+	uploader          *typed.AtomicValue[stageUploaderResult]
+	uploadRefreshLoop *periodic.Periodic
 }
 
 func NewSnowflakeServiceClient(ctx context.Context, opts ClientOptions) (*SnowflakeServiceClient, error) {
@@ -62,7 +71,6 @@ func NewSnowflakeServiceClient(ctx context.Context, opts ClientOptions) (*Snowfl
 	if err != nil {
 		return nil, err
 	}
-	// TODO: Refresh periodically
 	resp, err := client.ConfigureClient(ctx, clientConfigureRequest{Role: opts.Role})
 	if err != nil {
 		return nil, err
@@ -70,16 +78,38 @@ func NewSnowflakeServiceClient(ctx context.Context, opts ClientOptions) (*Snowfl
 	if resp.StatusCode != responseSuccess {
 		return nil, fmt.Errorf("unable to initialize client - status: %d, message: %s", resp.StatusCode, resp.Message)
 	}
-	return &SnowflakeServiceClient{
-		client:        client,
-		clientPrefix:  fmt.Sprintf("%s_%d", resp.Prefix, resp.DeploymentID),
-		deploymentID:  resp.DeploymentID,
-		stageLocation: resp.StageLocation,
-		options:       opts,
-	}, nil
+	uploader, err := newUploader(resp.StageLocation)
+	if err != nil {
+		return nil, fmt.Errorf("unable to initialize stage uploader: %w", err)
+	}
+	uploaderAtomic := typed.NewAtomicValue(stageUploaderResult{
+		uploader: uploader,
+	})
+	ssc := &SnowflakeServiceClient{
+		client:       client,
+		clientPrefix: fmt.Sprintf("%s_%d", resp.Prefix, resp.DeploymentID),
+		deploymentID: resp.DeploymentID,
+		options:      opts,
+
+		uploader: uploaderAtomic,
+		// Tokens expire every hour, so refresh a bit before that
+		uploadRefreshLoop: periodic.New(time.Hour-2*time.Minute, func() {
+			resp, err := client.ConfigureClient(context.Background(), clientConfigureRequest{Role: opts.Role})
+			if err != nil {
+				uploaderAtomic.Store(stageUploaderResult{err: err})
+				return
+			}
+			// TODO: Do the other checks here that the Java SDK does (deploymentID, etc)
+			uploader, err := newUploader(resp.StageLocation)
+			uploaderAtomic.Store(stageUploaderResult{uploader: uploader, err: err})
+		}),
+	}
+	ssc.uploadRefreshLoop.Start()
+	return ssc, nil
 }
 
 func (c *SnowflakeServiceClient) Close() error {
+	c.uploadRefreshLoop.Stop()
 	c.client.Close()
 	return nil
 }
@@ -133,12 +163,12 @@ func (c *SnowflakeServiceClient) OpenChannel(ctx context.Context, opts ChannelOp
 		return nil, err
 	}
 	ch := &SnowflakeIngestionChannel{
-		options:       opts,
-		clientPrefix:  c.clientPrefix,
-		schema:        schema,
-		client:        c.client,
-		stageLocation: c.stageLocation,
-		role:          c.options.Role,
+		options:      opts,
+		clientPrefix: c.clientPrefix,
+		schema:       schema,
+		client:       c.client,
+		role:         c.options.Role,
+		uploader:     c.uploader,
 		encryptionInfo: &encryptionInfo{
 			encryptionKeyID: resp.EncryptionKeyID,
 			encryptionKey:   resp.EncryptionKey,
@@ -158,7 +188,7 @@ type SnowflakeIngestionChannel struct {
 	clientPrefix     string
 	schema           *parquet.Schema
 	client           *restClient
-	stageLocation    fileLocationInfo
+	uploader         *typed.AtomicValue[stageUploaderResult]
 	encryptionInfo   *encryptionInfo
 	clientSequencer  int64
 	rowSequencer     int64
@@ -177,14 +207,10 @@ func (c *SnowflakeIngestionChannel) nextRequestID() string {
 // then writes that file into the Snowflake table
 func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, rows []map[string]any) error {
 	startTime := time.Now()
-	// TODO: we need to fetch new staging creds every once in a while...
-	uploader, err := newUploader(ctx, c.stageLocation)
-	if err != nil {
-		return err
-	}
 	for _, t := range c.transformers {
 		t.stats.Reset()
 	}
+	var err error
 	for i, row := range rows {
 		transformed := make(map[string]any, len(c.transformers))
 		for k, v := range row {
@@ -220,14 +246,21 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, rows []map[s
 	if err != nil {
 		return err
 	}
+
 	uploadStartTime := time.Now()
 	fileMD5Hash := md5.Sum(encrypted)
+	uploaderResult := c.uploader.Load()
+	if uploaderResult.err != nil {
+		return fmt.Errorf("failed to acquire stage uploader: %w", uploaderResult.err)
+	}
+	uploader := uploaderResult.uploader
 	err = backoff.Retry(func() error {
 		return uploader.upload(ctx, blobPath, encrypted, fileMD5Hash[:])
 	}, backoff.WithMaxRetries(backoff.NewConstantBackOff(time.Second), 3))
 	if err != nil {
 		return err
 	}
+
 	uploadFinishTime := time.Now()
 	columnEpInfo := computeColumnEpInfo(c.transformers)
 	resp, err := c.client.RegisterBlob(ctx, registerBlobRequest{
