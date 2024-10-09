@@ -189,7 +189,7 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, rows []map[s
 		t.stats.Reset()
 	}
 	for i, row := range rows {
-		transformed := map[string]any{}
+		transformed := make(map[string]any, len(c.transformers))
 		for k, v := range row {
 			name := normalizeColumnName(k)
 			t, ok := c.transformers[name]
@@ -197,7 +197,7 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, rows []map[s
 				// Skip extra columns
 				continue
 			}
-			transformed[k], err = t.converter(t.stats, v)
+			transformed[name], err = t.converter(t.stats, v)
 			if err != nil {
 				return err
 			}
