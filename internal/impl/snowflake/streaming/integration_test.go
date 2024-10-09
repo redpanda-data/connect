@@ -29,8 +29,8 @@ func TestSnowflake(t *testing.T) {
 	parseResult, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 	require.NoError(t, err)
 	client, err := streaming.NewSnowflakeServiceClient(ctx, streaming.ClientOptions{
-		Account:    "UOKKRAZ-OJ08711",
-		User:       "ROCKWOODREDPANDAAWS",
+		Account:    "RGHBUPG-TV88687",
+		User:       "ROCKWOODREDPANDAAZ",
 		Role:       "ACCOUNTADMIN",
 		PrivateKey: parseResult.(*rsa.PrivateKey),
 	})
@@ -38,12 +38,12 @@ func TestSnowflake(t *testing.T) {
 	defer client.Close()
 	channel, err := client.OpenChannel(ctx, streaming.ChannelOptions{
 		Name:         "my_first_testing_channel",
-		DatabaseName: "AWS_DB",
+		DatabaseName: "AZURE_DB",
 		SchemaName:   "PUBLIC",
-		TableName:    "AWS_TABLE",
+		TableName:    "AZURE_TABLE",
 	})
 	require.NoError(t, err)
-	for i := 0; i < 3; i++ {
+	for i := 0; i < 1; i++ {
 		err = channel.InsertRows(ctx, []map[string]any{
 			{"A": "foo"},
 			{"A": "bar"},

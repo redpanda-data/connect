@@ -53,7 +53,7 @@ type (
 		LocationType string
 		// The container or bucket
 		Location string
-		// The path of the traget file
+		// The path of the target file
 		Path string
 		// The credentials required for the stage
 		Creds map[string]string
@@ -374,7 +374,7 @@ func (c *restClient) doPost(ctx context.Context, url string, req any, resp any) 
 	}
 	respBody, err := backoff.RetryNotifyWithData(func() ([]byte, error) {
 		if debugAPICalls {
-			c.logger.Tracef("making request to %s with body %s", url, reqBody)
+			fmt.Printf("making request to %s with body %s\n", url, reqBody)
 		}
 		httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(reqBody))
 		if errors.Is(err, context.Canceled) {
@@ -405,7 +405,7 @@ func (c *restClient) doPost(ctx context.Context, url string, req any, resp any) 
 			return nil, fmt.Errorf("non successful status code (%d): %s", r.StatusCode, reqBody)
 		}
 		if debugAPICalls {
-			c.logger.Tracef("got response to %s with body %s", url, respBody)
+			fmt.Printf("got response to %s with body %s\n", url, respBody)
 		}
 		return respBody, nil
 	},
