@@ -555,7 +555,6 @@ file:
 		require.NoError(t, err)
 		outMessagesMut.Lock()
 		outMessages = append(outMessages, string(msgBytes))
-		fmt.Println("Msg received", string(msgBytes))
 		outMessagesMut.Unlock()
 		return nil
 	}))

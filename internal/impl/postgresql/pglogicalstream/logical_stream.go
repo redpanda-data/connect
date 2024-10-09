@@ -59,6 +59,8 @@ type Stream struct {
 
 	m       sync.Mutex
 	stopped bool
+
+	consumedCallback chan bool
 }
 
 // NewPgStream creates a new instance of the Stream struct
@@ -123,6 +125,7 @@ func NewPgStream(config Config) (*Stream, error) {
 		streamUncomited:            config.StreamUncomited,
 		snapshotBatchSize:          config.BatchSize,
 		tableNames:                 tableNames,
+		consumedCallback:           make(chan bool),
 		lsnAckBuffer:               []string{},
 		logger:                     config.logger,
 		m:                          sync.Mutex{},
@@ -226,6 +229,10 @@ func NewPgStream(config Config) (*Stream, error) {
 	}
 
 	return stream, err
+}
+
+func (s *Stream) ConsumedCallback() chan bool {
+	return s.consumedCallback
 }
 
 func (s *Stream) startLr() error {
@@ -389,7 +396,6 @@ func (s *Stream) streamMessagesAsync() {
 				}
 
 				if s.decodingPlugin == "pgoutput" {
-					fmt.Println(string(xld.WALData))
 					if s.streamUncomited {
 						// parse changes inside the transaction
 						message, err := decodePgOutput(xld.WALData, relations, typeMap)
@@ -402,16 +408,6 @@ func (s *Stream) streamMessagesAsync() {
 						}
 
 						if message == nil {
-							if ok, _ := isBeginMessage(xld.WALData); ok {
-								fmt.Println("Begin message on ", clientXLogPos.String())
-							}
-
-							if ok, commit, _ := isCommitMessage(xld.WALData); ok {
-								fmt.Println("Commit message on ", clientXLogPos.String())
-								fmt.Println("Commit transaction end", commit.TransactionEndLSN.String())
-								clientXLogPos = commit.TransactionEndLSN
-							}
-
 							// 0 changes happened in the transaction
 							// or we received a change that are not supported/needed by the replication stream
 							if err = s.AckLSN(clientXLogPos.String()); err != nil {
@@ -424,10 +420,10 @@ func (s *Stream) streamMessagesAsync() {
 							}
 						} else {
 							lsn := clientXLogPos.String()
-							fmt.Println("Message on LSN", lsn)
 							s.messages <- StreamMessage{Lsn: &lsn, Changes: []StreamMessageChanges{
 								*message,
 							}}
+							<-s.consumedCallback
 						}
 					} else {
 						// message changes must be collected in the buffer in the context of the same transaction

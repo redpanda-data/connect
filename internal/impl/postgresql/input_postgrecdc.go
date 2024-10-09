@@ -12,7 +12,6 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
-	"fmt"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -72,7 +71,7 @@ var pgStreamConfigSpec = service.NewConfigSpec().
 		Example("my_test_slot").
 		Default(randomSlotName))
 
-func newPgStreamInput(conf *service.ParsedConfig, logger *service.Logger) (s service.Input, err error) {
+func newPgStreamInput(conf *service.ParsedConfig, logger *service.Logger, metrics *service.Metrics) (s service.Input, err error) {
 	var (
 		dbName                  string
 		dbPort                  int
@@ -198,9 +197,11 @@ func newPgStreamInput(conf *service.ParsedConfig, logger *service.Logger) (s ser
 		tls:                     pglogicalstream.TLSVerify(tlsSetting),
 		tables:                  tables,
 		decodingPlugin:          decodingPlugin,
-		logger:                  logger,
 		streamUncomited:         streamUncomited,
 		temporarySlot:           temporarySlot,
+
+		logger:  logger,
+		metrics: metrics,
 	}), err
 }
 
@@ -211,7 +212,7 @@ func init() {
 	err := service.RegisterInput(
 		"pg_stream", pgStreamConfigSpec,
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
-			return newPgStreamInput(conf, mgr.Logger())
+			return newPgStreamInput(conf, mgr.Logger(), mgr.Metrics())
 		})
 	if err != nil {
 		panic(err)
@@ -232,6 +233,7 @@ type pgStreamInput struct {
 	snapshotMemSafetyFactor float64
 	streamUncomited         bool
 	logger                  *service.Logger
+	metrics                 *service.Metrics
 }
 
 func (p *pgStreamInput) Connect(ctx context.Context) error {
@@ -287,10 +289,11 @@ func (p *pgStreamInput) Read(ctx context.Context) (*service.Message, service.Ack
 
 			if message.Lsn != nil {
 				if err := p.pglogicalStream.AckLSN(*message.Lsn); err != nil {
-					fmt.Println("Error while acking LSN", err)
 					return err
 				}
-				fmt.Println("Ack LSN", *message.Lsn)
+				if p.streamUncomited {
+					p.pglogicalStream.ConsumedCallback() <- true
+				}
 			}
 			return nil
 		}, nil
