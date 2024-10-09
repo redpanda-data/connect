@@ -155,6 +155,15 @@ func newSnowflakeStreamer(
 			return nil, err
 		}
 	}
+	var channelPrefix string
+	if conf.Contains(ssoFieldChannelPrefix) {
+		channelPrefix, err = conf.FieldString(ssoFieldChannelPrefix)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		channelPrefix = fmt.Sprintf("redpanda_connect_%s.%s.%s", db, schema, table)
+	}
 	client, err := streaming.NewSnowflakeServiceClient(
 		context.Background(),
 		streaming.ClientOptions{
@@ -162,15 +171,18 @@ func newSnowflakeStreamer(
 			User:       user,
 			Role:       role,
 			PrivateKey: rsaKey,
+			Logger:     mgr.Logger(),
 		})
 	if err != nil {
 		return nil, err
 	}
+	o.channelPrefix = channelPrefix
 	o.client = client
 	o.db = db
 	o.schema = schema
 	o.table = table
 	o.mapping = mapping
+	o.logger = mgr.Logger()
 	return o, nil
 }
 
@@ -182,6 +194,7 @@ type snowflakeStreamerOutput struct {
 	mu                               sync.Mutex // only for the demo
 	channelPrefix, db, schema, table string
 	mapping                          *bloblang.Executor
+	logger                           *service.Logger
 }
 
 func (o *snowflakeStreamerOutput) Connect(ctx context.Context) error {

@@ -19,7 +19,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -28,6 +27,7 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/parquet-go/parquet-go"
 	"github.com/parquet-go/parquet-go/format"
+	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/segmentio/encoding/thrift"
 	"golang.org/x/oauth2"
 	gcsopt "google.golang.org/api/option"
@@ -43,15 +43,18 @@ type ClientOptions struct {
 	Role string
 	// Private key for the user
 	PrivateKey *rsa.PrivateKey
+	// Logger for... logging?
+	Logger *service.Logger
 }
 
 // SnowflakeServiceClient is a port from Java :)
 type SnowflakeServiceClient struct {
-	client        *restClient
-	clientPrefix  string
-	deploymentID  int64
-	stageLocation fileLocationInfo
-	options       ClientOptions
+	client           *restClient
+	clientPrefix     string
+	deploymentID     int64
+	stageLocation    fileLocationInfo
+	options          ClientOptions
+	requestIDCounter int
 }
 
 func NewSnowflakeServiceClient(ctx context.Context, opts ClientOptions) (*SnowflakeServiceClient, error) {
@@ -59,7 +62,7 @@ func NewSnowflakeServiceClient(ctx context.Context, opts ClientOptions) (*Snowfl
 		opts.Account,
 		opts.User,
 		opts.PrivateKey,
-		nil,
+		opts.Logger,
 	)
 	if err != nil {
 		return nil, err
@@ -83,6 +86,12 @@ func NewSnowflakeServiceClient(ctx context.Context, opts ClientOptions) (*Snowfl
 func (c *SnowflakeServiceClient) Close() error {
 	c.client.Close()
 	return nil
+}
+
+func (c *SnowflakeServiceClient) nextRequestID() string {
+	rid := c.requestIDCounter
+	c.requestIDCounter++
+	return fmt.Sprintf("%s_%d", c.clientPrefix, rid)
 }
 
 // ChannelOptions the parameters to opening a channel using SnowflakeServiceClient
@@ -109,7 +118,7 @@ func (c *SnowflakeServiceClient) OpenChannel(ctx context.Context, opts ChannelOp
 		opts.DefaultTimeZone = time.UTC
 	}
 	resp, err := c.client.OpenChannel(ctx, openChannelRequest{
-		RequestID: fmt.Sprintf("%s_%d", c.clientPrefix, 1),
+		RequestID: c.nextRequestID(),
 		Role:      c.options.Role,
 		Channel:   opts.Name,
 		Database:  opts.DatabaseName,
@@ -148,17 +157,24 @@ func (c *SnowflakeServiceClient) OpenChannel(ctx context.Context, opts ChannelOp
 
 // SnowflakeIngestionChannel is a write connection to a single table in Snowflake
 type SnowflakeIngestionChannel struct {
-	options         ChannelOptions
-	role            string
-	clientPrefix    string
-	schema          *parquet.Schema
-	client          *restClient
-	stageLocation   fileLocationInfo
-	encryptionInfo  *encryptionInfo
-	clientSequencer int64
-	rowSequencer    int64
-	transformers    map[string]*dataTransformer
-	fileMetadata    map[string]string
+	options          ChannelOptions
+	role             string
+	clientPrefix     string
+	schema           *parquet.Schema
+	client           *restClient
+	stageLocation    fileLocationInfo
+	encryptionInfo   *encryptionInfo
+	clientSequencer  int64
+	rowSequencer     int64
+	transformers     map[string]*dataTransformer
+	fileMetadata     map[string]string
+	requestIDCounter int
+}
+
+func (c *SnowflakeIngestionChannel) nextRequestID() string {
+	rid := c.requestIDCounter
+	c.requestIDCounter++
+	return fmt.Sprintf("%s_%d", c.clientPrefix, rid)
 }
 
 // InsertRows creates a parquet file using the schema from the data,
@@ -180,7 +196,8 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, rows []map[s
 			}
 		}
 	}
-	blobPath := generateBlobPath(c.clientPrefix, 32, 0)
+	blobPath := generateBlobPath(c.clientPrefix, 32, c.requestIDCounter)
+	c.requestIDCounter++
 	c.fileMetadata["primaryFileId"] = getShortname(blobPath)
 	unencrypted, err := writeParquetFile(c.schema, rows, c.fileMetadata)
 	if err != nil {
@@ -190,7 +207,8 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, rows []map[s
 	if err != nil {
 		return fmt.Errorf("unable to parse parquet metadata: %w", err)
 	}
-	os.WriteFile("latest_test.parquet", unencrypted, 0o644)
+	// Uncomment out to debug parquet compat bugs...
+	// os.WriteFile("latest_test.parquet", unencrypted, 0o644)
 	unencryptedLen := len(unencrypted)
 	unencrypted = padBuffer(unencrypted, aes.BlockSize)
 	encrypted, err := encrypt(unencrypted, c.encryptionInfo.encryptionKey, blobPath, 0)
@@ -208,7 +226,7 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, rows []map[s
 	uploadFinishTime := time.Now()
 	columnEpInfo := computeColumnEpInfo(c.transformers)
 	resp, err := c.client.RegisterBlob(ctx, registerBlobRequest{
-		RequestID: fmt.Sprintf("%s_%d", c.clientPrefix, 2),
+		RequestID: c.nextRequestID(),
 		Role:      c.role,
 		Blobs: []blobMetadata{
 			{

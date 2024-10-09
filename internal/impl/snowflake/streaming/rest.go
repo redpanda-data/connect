@@ -18,6 +18,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -275,6 +276,7 @@ type restClient struct {
 	privateKey *rsa.PrivateKey
 	client     *http.Client
 	userAgent  string
+	logger     *service.Logger
 
 	authRefreshLoop *periodic.Periodic
 	cachedJWT       atomic.Value
@@ -293,6 +295,7 @@ func newRestClient(account, user string, privateKey *rsa.PrivateKey, logger *ser
 		client:     http.DefaultClient,
 		privateKey: privateKey,
 		userAgent:  userAgent,
+		logger:     logger,
 		authRefreshLoop: periodic.New(
 			time.Hour-(2*time.Minute),
 			func() {
@@ -365,16 +368,18 @@ func (c *restClient) doPost(ctx context.Context, url string, req any, resp any) 
 			return json.MarshalIndent(v, "", "  ")
 		}
 	}
-	b, err := marshaller(req)
+	reqBody, err := marshaller(req)
 	if err != nil {
 		return err
 	}
-	if debugAPICalls {
-		fmt.Printf("%s\n", b)
-	}
-	b, err = backoff.RetryWithData(func() ([]byte, error) {
-		httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(b))
-		if err != nil {
+	respBody, err := backoff.RetryNotifyWithData(func() ([]byte, error) {
+		if debugAPICalls {
+			c.logger.Tracef("making request to %s with body %s", url, reqBody)
+		}
+		httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(reqBody))
+		if errors.Is(err, context.Canceled) {
+			return nil, backoff.Permanent(err)
+		} else if err != nil {
 			return nil, fmt.Errorf("unable to make http request: %w", err)
 		}
 		httpReq.Header.Add("Content-Type", "application/json")
@@ -384,32 +389,43 @@ func (c *restClient) doPost(ctx context.Context, url string, req any, resp any) 
 		httpReq.Header.Add("Authorization", "Bearer "+(*jwt))
 		httpReq.Header.Add("X-Snowflake-Authorization-Token-Type", "KEYPAIR_JWT")
 		r, err := c.client.Do(httpReq)
-		if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return nil, backoff.Permanent(err)
+		} else if err != nil {
 			return nil, fmt.Errorf("unable to perform http request: %w", err)
 		}
-		b, err = io.ReadAll(r.Body)
+		respBody, err := io.ReadAll(r.Body)
 		_ = r.Body.Close()
-		if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return nil, backoff.Permanent(err)
+		} else if err != nil {
 			return nil, fmt.Errorf("unable to read http response: %w", err)
 		}
 		if r.StatusCode != 200 {
-			return nil, fmt.Errorf("non successful status code (%d): %s", r.StatusCode, b)
+			return nil, fmt.Errorf("non successful status code (%d): %s", r.StatusCode, reqBody)
 		}
-		return b, nil
-	}, backoff.NewExponentialBackOff(
-		backoff.WithInitialInterval(100*time.Millisecond),
-		backoff.WithMaxInterval(5*time.Second),
-		backoff.WithMaxElapsedTime(30*time.Second),
-	))
+		if debugAPICalls {
+			c.logger.Tracef("got response to %s with body %s", url, respBody)
+		}
+		return respBody, nil
+	},
+		backoff.WithContext(
+			backoff.WithMaxRetries(
+				backoff.NewConstantBackOff(100*time.Millisecond),
+				3,
+			),
+			ctx,
+		),
+		func(err error, _ time.Duration) {
+			c.logger.Debugf("failed request at %s: %s", url, err)
+		},
+	)
 	if err != nil {
 		return err
 	}
-	if debugAPICalls {
-		fmt.Printf("%s\n", b)
-	}
-	err = json.Unmarshal(b, resp)
+	err = json.Unmarshal(respBody, resp)
 	if err != nil {
-		return fmt.Errorf("invalid response: %w, full response: %s", err, b[:min(128, len(b))])
+		return fmt.Errorf("invalid response: %w, full response: %s", err, respBody[:min(128, len(respBody))])
 	}
 	return err
 }
