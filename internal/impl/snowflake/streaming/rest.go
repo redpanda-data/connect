@@ -32,6 +32,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/periodic"
+	"github.com/redpanda-data/connect/v4/internal/typed"
 )
 
 const (
@@ -279,7 +280,7 @@ type restClient struct {
 	logger     *service.Logger
 
 	authRefreshLoop *periodic.Periodic
-	cachedJWT       atomic.Value
+	cachedJWT       typed.AtomicValue[string]
 }
 
 func newRestClient(account, user string, privateKey *rsa.PrivateKey, logger *service.Logger) (c *restClient, err error) {
@@ -306,7 +307,7 @@ func newRestClient(account, user string, privateKey *rsa.PrivateKey, logger *ser
 					logger.Errorf("unable to mint JWT for snowflake output: %s", err)
 					return
 				}
-				c.cachedJWT.Store(&jwt)
+				c.cachedJWT.Store(jwt)
 			},
 		),
 	}
@@ -314,7 +315,7 @@ func newRestClient(account, user string, privateKey *rsa.PrivateKey, logger *ser
 	if err != nil {
 		return nil, err
 	}
-	c.cachedJWT.Store(&jwt)
+	c.cachedJWT.Store(jwt)
 	c.authRefreshLoop.Start()
 	return c, nil
 }
@@ -385,8 +386,8 @@ func (c *restClient) doPost(ctx context.Context, url string, req any, resp any) 
 		httpReq.Header.Add("Content-Type", "application/json")
 		httpReq.Header.Add("Accept", "application/json")
 		httpReq.Header.Add("User-Agent", c.userAgent)
-		jwt := c.cachedJWT.Load().(*string)
-		httpReq.Header.Add("Authorization", "Bearer "+(*jwt))
+		jwt := c.cachedJWT.Load()
+		httpReq.Header.Add("Authorization", "Bearer "+jwt)
 		httpReq.Header.Add("X-Snowflake-Authorization-Token-Type", "KEYPAIR_JWT")
 		r, err := c.client.Do(httpReq)
 		if errors.Is(err, context.Canceled) {
