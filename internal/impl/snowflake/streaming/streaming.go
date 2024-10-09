@@ -95,8 +95,6 @@ type ChannelOptions struct {
 	SchemaName string
 	// TableName is the name of the table
 	TableName string
-	// ContinueOnError if true, continue loading rows and return all errors in the response instead of aborting on the the first error
-	ContinueOnError bool
 	// The default timezone for TIMESTAMP_LTZ and TIMESTAMP_TZ columns, defaults to UTC
 	DefaultTimeZone *time.Location
 }

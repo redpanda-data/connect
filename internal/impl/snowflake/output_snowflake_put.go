@@ -415,9 +415,9 @@ func init() {
 
 //------------------------------------------------------------------------------
 
-// getPrivateKey reads and parses the private key
+// getPrivateKeyFromFile reads and parses the private key
 // Inspired from https://github.com/chanzuckerberg/terraform-provider-snowflake/blob/c07d5820bea7ac3d8a5037b0486c405fdf58420e/pkg/provider/provider.go#L367
-func getPrivateKey(f fs.FS, path, passphrase string) (*rsa.PrivateKey, error) {
+func getPrivateKeyFromFile(f fs.FS, path, passphrase string) (*rsa.PrivateKey, error) {
 	privateKeyBytes, err := service.ReadFile(f, path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read private key %s: %s", path, err)
@@ -425,7 +425,10 @@ func getPrivateKey(f fs.FS, path, passphrase string) (*rsa.PrivateKey, error) {
 	if len(privateKeyBytes) == 0 {
 		return nil, errors.New("private key is empty")
 	}
+	return getPrivateKey(privateKeyBytes, passphrase)
+}
 
+func getPrivateKey(privateKeyBytes []byte, passphrase string) (*rsa.PrivateKey, error) {
 	privateKeyBlock, _ := pem.Decode(privateKeyBytes)
 	if privateKeyBlock == nil {
 		return nil, errors.New("could not parse private key, key is not in PEM format")
@@ -659,7 +662,7 @@ func newSnowflakeWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 			}
 		}
 
-		if s.privateKey, err = getPrivateKey(mgr.FS(), privateKeyFile, privateKeyPass); err != nil {
+		if s.privateKey, err = getPrivateKeyFromFile(mgr.FS(), privateKeyFile, privateKeyPass); err != nil {
 			return nil, fmt.Errorf("failed to read private key: %s", err)
 		}
 
