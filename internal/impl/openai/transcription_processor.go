@@ -12,6 +12,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -138,12 +139,28 @@ func (p *transcriptionProcessor) Process(ctx context.Context, msg *service.Messa
 		}
 		body.Prompt = pr
 	}
+
 	if p.format != nil {
-		pr, err := p.prompt.TryString(msg)
+		t, err := p.format.TryString(msg)
 		if err != nil {
 			return nil, fmt.Errorf("%s interpolation error: %w", otspFieldFormat, err)
 		}
-		body.Prompt = pr
+
+		var format oai.AudioResponseFormat
+		switch strings.ToLower(t) {
+		case "verbose_json":
+			format = oai.AudioResponseFormatVerboseJSON
+		case "text":
+			format = oai.AudioResponseFormatText
+		case "vtt":
+			format = oai.AudioResponseFormatVTT
+		case "srt":
+			format = oai.AudioResponseFormatSRT
+		default:
+			format = oai.AudioResponseFormatJSON
+		}
+
+		body.Format = format
 	}
 
 	resp, err := p.client.CreateTranscription(ctx, body)
