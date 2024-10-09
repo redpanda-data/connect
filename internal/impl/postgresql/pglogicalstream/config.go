@@ -44,5 +44,8 @@ type Config struct {
 	// BatchSize is the batch size for streaming
 	BatchSize int `yaml:"batch_size"`
 
+	// StreamUncommitted is whether to stream uncommitted messages before receiving commit message
+	StreamUncomited bool `yaml:"stream_uncommitted"`
+
 	logger *service.Logger
 }

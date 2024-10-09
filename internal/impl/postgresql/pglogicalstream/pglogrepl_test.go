@@ -354,7 +354,7 @@ drop table t;
 	xld = rxXLogData()
 
 	var commit bool
-	commit, err = isCommitMessage(xld.WALData)
+	commit, _, err = isCommitMessage(xld.WALData)
 	require.NoError(t, err)
 	assert.True(t, commit)
 }

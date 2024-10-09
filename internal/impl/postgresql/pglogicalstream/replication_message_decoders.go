@@ -22,14 +22,14 @@ func isBeginMessage(WALData []byte) (bool, error) {
 	return ok, nil
 }
 
-func isCommitMessage(WALData []byte) (bool, error) {
+func isCommitMessage(WALData []byte) (bool, *CommitMessage, error) {
 	logicalMsg, err := Parse(WALData)
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
 
-	_, ok := logicalMsg.(*CommitMessage)
-	return ok, nil
+	m, ok := logicalMsg.(*CommitMessage)
+	return ok, m, nil
 }
 
 // decodePgOutput decodes a logical replication message in pgoutput format.

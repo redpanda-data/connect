@@ -47,6 +47,7 @@ var pgStreamConfigSpec = service.NewConfigSpec().
 		Description("Defines whether benthos need to verify (skipinsecure) TLS configuration").
 		Example("none").
 		Default("none")).
+	Field(service.NewBoolField("stream_uncomited").Default(false).Description("Defines whether you want to stream uncomitted messages before receiving commit message from postgres. This may lead to duplicated records after the the connector has been restarted")).
 	Field(service.NewStringField("pg_conn_options").Default("")).
 	Field(service.NewBoolField("stream_snapshot").
 		Description("Set `true` if you want to receive all the data that currently exist in database").
@@ -87,6 +88,7 @@ func newPgStreamInput(conf *service.ParsedConfig, logger *service.Logger) (s ser
 		snapshotMemSafetyFactor float64
 		decodingPlugin          string
 		pgConnOptions           string
+		streamUncomited         bool
 	)
 
 	dbSchema, err = conf.FieldString("schema")
@@ -148,6 +150,11 @@ func newPgStreamInput(conf *service.ParsedConfig, logger *service.Logger) (s ser
 		return nil, err
 	}
 
+	streamUncomited, err = conf.FieldBool("stream_uncomited")
+	if err != nil {
+		return nil, err
+	}
+
 	decodingPlugin, err = conf.FieldString("decoding_plugin")
 	if err != nil {
 		return nil, err
@@ -192,6 +199,7 @@ func newPgStreamInput(conf *service.ParsedConfig, logger *service.Logger) (s ser
 		tables:                  tables,
 		decodingPlugin:          decodingPlugin,
 		logger:                  logger,
+		streamUncomited:         streamUncomited,
 		temporarySlot:           temporarySlot,
 	}), err
 }
@@ -222,6 +230,7 @@ type pgStreamInput struct {
 	decodingPlugin          string
 	streamSnapshot          bool
 	snapshotMemSafetyFactor float64
+	streamUncomited         bool
 	logger                  *service.Logger
 }
 
@@ -239,6 +248,7 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 		TLSVerify:                  p.tls,
 		StreamOldData:              p.streamSnapshot,
 		TemporaryReplicationSlot:   p.temporarySlot,
+		StreamUncomited:            p.streamUncomited,
 		DecodingPlugin:             p.decodingPlugin,
 		SnapshotMemorySafetyFactor: p.snapshotMemSafetyFactor,
 	})
@@ -280,6 +290,7 @@ func (p *pgStreamInput) Read(ctx context.Context) (*service.Message, service.Ack
 					fmt.Println("Error while acking LSN", err)
 					return err
 				}
+				fmt.Println("Ack LSN", *message.Lsn)
 			}
 			return nil
 		}, nil

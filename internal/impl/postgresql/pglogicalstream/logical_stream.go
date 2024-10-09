@@ -53,6 +53,9 @@ type Stream struct {
 	decodingPluginArguments    []string
 	snapshotMemorySafetyFactor float64
 	logger                     *service.Logger
+	streamUncomited            bool
+
+	lsnAckBuffer []string
 
 	m       sync.Mutex
 	stopped bool
@@ -117,8 +120,10 @@ func NewPgStream(config Config) (*Stream, error) {
 		slotName:                   config.ReplicationSlotName,
 		schema:                     config.DBSchema,
 		snapshotMemorySafetyFactor: config.SnapshotMemorySafetyFactor,
+		streamUncomited:            config.StreamUncomited,
 		snapshotBatchSize:          config.BatchSize,
 		tableNames:                 tableNames,
+		lsnAckBuffer:               []string{},
 		logger:                     config.logger,
 		m:                          sync.Mutex{},
 		decodingPlugin:             decodingPluginFromString(config.DecodingPlugin),
@@ -235,18 +240,20 @@ func (s *Stream) startLr() error {
 // AckLSN acknowledges the LSN up to which the stream has processed the messages.
 // This makes Postgres to remove the WAL files that are no longer needed.
 func (s *Stream) AckLSN(lsn string) error {
-	var err error
-	s.clientXLogPos, err = ParseLSN(lsn)
+	clientXLogPos, err := ParseLSN(lsn)
 	if err != nil {
 		s.logger.Errorf("Failed to parse LSN for Acknowledge: %v", err)
 		if err = s.Stop(); err != nil {
 			s.logger.Errorf("Failed to stop the stream: %v", err)
 		}
+
+		return err
 	}
 
 	err = SendStandbyStatusUpdate(context.Background(), s.pgConn, StandbyStatusUpdate{
-		WALApplyPosition: s.clientXLogPos,
-		WALWritePosition: s.clientXLogPos,
+		WALApplyPosition: clientXLogPos,
+		WALWritePosition: clientXLogPos,
+		WALFlushPosition: clientXLogPos,
 		ReplyRequested:   true,
 	})
 
@@ -255,6 +262,8 @@ func (s *Stream) AckLSN(lsn string) error {
 		return err
 	}
 
+	// Update client XLogPos after we ack the message
+	s.clientXLogPos = clientXLogPos
 	s.logger.Debugf("Sent Standby status message at LSN#%s", s.clientXLogPos.String())
 	s.nextStandbyMessageDeadline = time.Now().Add(s.standbyMessageTimeout)
 
@@ -380,47 +389,29 @@ func (s *Stream) streamMessagesAsync() {
 				}
 
 				if s.decodingPlugin == "pgoutput" {
-					// message changes must be collected in the buffer in the context of the same transaction
-					// as single transaction can contain multiple changes
-					// and LSN ack will cause potential loss of changes
-					isBegin, err := isBeginMessage(xld.WALData)
-					if err != nil {
-						s.logger.Errorf("Failed to parse WAL data: %w", err)
-						if err = s.Stop(); err != nil {
-							s.logger.Errorf("Failed to stop the stream: %v", err)
+					fmt.Println(string(xld.WALData))
+					if s.streamUncomited {
+						// parse changes inside the transaction
+						message, err := decodePgOutput(xld.WALData, relations, typeMap)
+						if err != nil {
+							s.logger.Errorf("decodePgOutput failed: %w", err)
+							if err = s.Stop(); err != nil {
+								s.logger.Errorf("Failed to stop the stream: %v", err)
+							}
+							return
 						}
-						return
-					}
 
-					if isBegin {
-						pgoutputChanges = []StreamMessageChanges{}
-					}
+						if message == nil {
+							if ok, _ := isBeginMessage(xld.WALData); ok {
+								fmt.Println("Begin message on ", clientXLogPos.String())
+							}
 
-					// parse changes inside the transaction
-					message, err := decodePgOutput(xld.WALData, relations, typeMap)
-					if err != nil {
-						s.logger.Errorf("decodePgOutput failed: %w", err)
-						if err = s.Stop(); err != nil {
-							s.logger.Errorf("Failed to stop the stream: %v", err)
-						}
-						return
-					}
+							if ok, commit, _ := isCommitMessage(xld.WALData); ok {
+								fmt.Println("Commit message on ", clientXLogPos.String())
+								fmt.Println("Commit transaction end", commit.TransactionEndLSN.String())
+								clientXLogPos = commit.TransactionEndLSN
+							}
 
-					if message != nil {
-						pgoutputChanges = append(pgoutputChanges, *message)
-					}
-
-					isCommit, err := isCommitMessage(xld.WALData)
-					if err != nil {
-						s.logger.Errorf("Failed to parse WAL data: %w", err)
-						if err = s.Stop(); err != nil {
-							s.logger.Errorf("Failed to stop the stream: %v", err)
-						}
-						return
-					}
-
-					if isCommit {
-						if len(pgoutputChanges) == 0 {
 							// 0 changes happened in the transaction
 							// or we received a change that are not supported/needed by the replication stream
 							if err = s.AckLSN(clientXLogPos.String()); err != nil {
@@ -432,9 +423,69 @@ func (s *Stream) streamMessagesAsync() {
 								return
 							}
 						} else {
-							// send all collected changes
 							lsn := clientXLogPos.String()
-							s.messages <- StreamMessage{Lsn: &lsn, Changes: pgoutputChanges}
+							fmt.Println("Message on LSN", lsn)
+							s.messages <- StreamMessage{Lsn: &lsn, Changes: []StreamMessageChanges{
+								*message,
+							}}
+						}
+					} else {
+						// message changes must be collected in the buffer in the context of the same transaction
+						// as single transaction can contain multiple changes
+						// and LSN ack will cause potential loss of changes
+						isBegin, err := isBeginMessage(xld.WALData)
+						if err != nil {
+							s.logger.Errorf("Failed to parse WAL data: %w", err)
+							if err = s.Stop(); err != nil {
+								s.logger.Errorf("Failed to stop the stream: %v", err)
+							}
+							return
+						}
+
+						if isBegin {
+							pgoutputChanges = []StreamMessageChanges{}
+						}
+
+						// parse changes inside the transaction
+						message, err := decodePgOutput(xld.WALData, relations, typeMap)
+						if err != nil {
+							s.logger.Errorf("decodePgOutput failed: %w", err)
+							if err = s.Stop(); err != nil {
+								s.logger.Errorf("Failed to stop the stream: %v", err)
+							}
+							return
+						}
+
+						if message != nil {
+							pgoutputChanges = append(pgoutputChanges, *message)
+						}
+
+						isCommit, _, err := isCommitMessage(xld.WALData)
+						if err != nil {
+							s.logger.Errorf("Failed to parse WAL data: %w", err)
+							if err = s.Stop(); err != nil {
+								s.logger.Errorf("Failed to stop the stream: %v", err)
+							}
+							return
+						}
+
+						if isCommit {
+							if len(pgoutputChanges) == 0 {
+								// 0 changes happened in the transaction
+								// or we received a change that are not supported/needed by the replication stream
+								if err = s.AckLSN(clientXLogPos.String()); err != nil {
+									// stop reading from replication slot
+									// if we can't acknowledge the LSN
+									if err = s.Stop(); err != nil {
+										s.logger.Errorf("Failed to stop the stream: %v", err)
+									}
+									return
+								}
+							} else {
+								// send all collected changes
+								lsn := clientXLogPos.String()
+								s.messages <- StreamMessage{Lsn: &lsn, Changes: pgoutputChanges}
+							}
 						}
 					}
 				}
