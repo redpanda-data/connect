@@ -19,7 +19,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"maps"
 	"os"
 	"path/filepath"
 	"strings"

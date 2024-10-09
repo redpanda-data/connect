@@ -91,7 +91,7 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[stri
 		}
 		n = parquet.FieldID(n, id)
 		n = parquet.Encoded(n, &parquet.Plain)
-		n = parquet.Compressed(n, &parquet.Uncompressed)
+		n = parquet.Compressed(n, &parquet.Gzip)
 		typeMetadata[strconv.Itoa(id)] = fmt.Sprintf("%d,%d", logicalTypeOrdinal(column.LogicalType), physicalTypeOrdinal(column.PhysicalType))
 		if map[string]bool{"ARRAY": true, "OBJECT": true, "VARIANT": true}[strings.ToUpper(column.LogicalType)] {
 			// mark the column metadata as being an object json for the server side scanner
