@@ -128,3 +128,21 @@ func int64ToInt128Binary(v int64) [16]byte {
 	copy(be[overwriteLen:], bytes)
 	return be
 }
+
+// normalizeColumnName normalizes the column to the same as Snowflake's
+// internal representation. See LiteralQuoteUtils.unquoteColumnName in
+// the Java SDK for reference, although that code is quite hard to read.
+func normalizeColumnName(name string) string {
+	if strings.HasPrefix(name, `"`) && strings.HasSuffix(name, `"`) {
+		unquoted := name[1 : len(name)-1]
+		noDoubleQuotes := strings.ReplaceAll(unquoted, `""`, ``)
+		if !strings.ContainsRune(noDoubleQuotes, '"') {
+			return noDoubleQuotes
+		}
+		if !strings.ContainsRune(unquoted, '"') {
+			return unquoted
+		}
+		// fallthrough
+	}
+	return strings.ToUpper(strings.ReplaceAll(name, `\ `, ` `))
+}
