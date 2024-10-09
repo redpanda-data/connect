@@ -114,3 +114,22 @@ func TestInt64ToInt128Binary(t *testing.T) {
 	require.Equal(t, int64ToInt128Binary(math.MaxInt64), [16]byte{0, 0, 0, 0, 0, 0, 0, 0, 0x7F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF})
 	require.Equal(t, int64ToInt128Binary(math.MinInt64), [16]byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x80, 0, 0, 0, 0, 0, 0, 0})
 }
+
+func TestColumnNormalization(t *testing.T) {
+	require.Equal(t, "", normalizeColumnName(""))
+	require.Equal(t, "FOO", normalizeColumnName("foo"))
+	require.Equal(t, `bar`, normalizeColumnName(`"bar"`))
+	require.Equal(t, "'BAR'", normalizeColumnName(`'bar'`))
+	require.Equal(t, "BAR", normalizeColumnName(`bar`))
+	require.Equal(t, `C1`, normalizeColumnName(`"C1"`))
+	require.Equal(t, `how are you`, normalizeColumnName(`"how are you"`))
+	require.Equal(t, `HOW ARE YOU`, normalizeColumnName(`how are you`))
+	require.Equal(t, `how\ are\ you`, normalizeColumnName(`"how\ are\ you"`))
+	require.Equal(t, `HOW ARE YOU`, normalizeColumnName(`how\ are\ you`))
+	require.Equal(t, `"FOO`, normalizeColumnName(`"foo`))
+	require.Equal(t, `FOO"`, normalizeColumnName(`foo"`))
+	require.Equal(t, `FOO" BAR "BAZ`, normalizeColumnName(`foo" bar "baz`))
+	require.Equal(t, `"FOO \"BAZ"`, normalizeColumnName(`"foo \"baz"`))
+	require.Equal(t, `"FOO \"BAZ"`, normalizeColumnName(`"foo \"baz"`))
+	require.Equal(t, `"foo" bar "baz`, normalizeColumnName(`"foo"" bar ""baz"`))
+}

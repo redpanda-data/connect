@@ -23,6 +23,7 @@ import (
 type dataTransformerFn func(buf *statsBuffer, val any) (any, error)
 
 type dataTransformer struct {
+	name      string // raw name from API
 	converter dataTransformerFn
 	stats     *statsBuffer
 }
@@ -97,9 +98,13 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[stri
 			// mark the column metadata as being an object json for the server side scanner
 			typeMetadata[fmt.Sprintf("%d:obj_enc", id)] = "1"
 		}
-		// TODO: Use the unquoted name
-		groupNode[column.Name] = n
-		transformers[column.Name] = &dataTransformer{converter: converter, stats: &statsBuffer{columnId: id}}
+		name := normalizeColumnName(column.Name)
+		groupNode[name] = n
+		transformers[name] = &dataTransformer{
+			name:      column.Name,
+			converter: converter,
+			stats:     &statsBuffer{columnId: id},
+		}
 	}
 	return parquet.NewSchema("bdec", groupNode), transformers, typeMetadata, nil
 }
@@ -238,7 +243,7 @@ func incrementBinaryStat(buf *statsBuffer, val any) (any, error) {
 
 func computeColumnEpInfo(stats map[string]*dataTransformer) map[string]fileColumnProperties {
 	info := map[string]fileColumnProperties{}
-	for colName, transformer := range stats {
+	for _, transformer := range stats {
 		stat := transformer.stats
 		var minStrVal *string = nil
 		if stat.minStrVal != nil {
@@ -250,7 +255,7 @@ func computeColumnEpInfo(stats map[string]*dataTransformer) map[string]fileColum
 			s := truncateBytesAsHex(stat.maxStrVal, true)
 			maxStrVal = &s
 		}
-		info[colName] = fileColumnProperties{
+		info[transformer.name] = fileColumnProperties{
 			ColumnOrdinal:  int32(stat.columnId),
 			NullCount:      stat.nullCount,
 			MinStrValue:    minStrVal,
