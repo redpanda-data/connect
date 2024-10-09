@@ -14,11 +14,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
+	"net/url"
 	"path/filepath"
 	"strings"
 
 	gcs "cloud.google.com/go/storage"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
@@ -82,8 +85,45 @@ func newUploader(ctx context.Context, fileLocationInfo fileLocationInfo) (upload
 			bucket:     client.Bucket(bucket),
 			pathPrefix: prefix,
 		}, err
+	case "AZURE":
+		sasToken := fileLocationInfo.Creds["AZURE_SAS_TOKEN"]
+		urlString := fmt.Sprintf("https://%s.%s/%s", fileLocationInfo.StorageAccount, fileLocationInfo.EndPoint, sasToken)
+		u, err := url.Parse(urlString)
+		if err != nil {
+			return nil, fmt.Errorf("invalid azure blob storage url: %w", err)
+		}
+		client, err := azblob.NewClientWithNoCredential(u.String(), nil)
+		if err != nil {
+			return nil, fmt.Errorf("unable to create azure blob storage client: %w", err)
+		}
+		container, prefix, err := splitBucketAndPath(fileLocationInfo.Location)
+		if err != nil {
+			return nil, err
+		}
+		return &azureUploader{
+			client:     client,
+			container:  container,
+			pathPrefix: prefix,
+		}, nil
 	}
 	return nil, fmt.Errorf("unsupported location type: %s", fileLocationInfo.LocationType)
+}
+
+type azureUploader struct {
+	client                *azblob.Client
+	container, pathPrefix string
+}
+
+func (u *azureUploader) upload(ctx context.Context, path string, encrypted, md5Hash []byte) error {
+	// We upload in multiple parts, so we have to validate ourselves post upload 😒
+	resp, err := u.client.UploadBuffer(ctx, u.container, filepath.Join(u.pathPrefix, path), encrypted, nil)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(resp.ContentMD5, md5Hash) {
+		return fmt.Errorf("invalid md5 hash got: %s want: %s", hex.EncodeToString(resp.ContentMD5), md5Hash)
+	}
+	return nil
 }
 
 type s3Uploader struct {
