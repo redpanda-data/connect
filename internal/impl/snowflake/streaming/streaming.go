@@ -19,18 +19,13 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"path/filepath"
-	"strings"
 	"time"
 
-	gcs "cloud.google.com/go/storage"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/parquet-go/parquet-go"
 	"github.com/parquet-go/parquet-go/format"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/segmentio/encoding/thrift"
-	"golang.org/x/oauth2"
-	gcsopt "google.golang.org/api/option"
 )
 
 // ClientOptions
@@ -67,6 +62,7 @@ func NewSnowflakeServiceClient(ctx context.Context, opts ClientOptions) (*Snowfl
 	if err != nil {
 		return nil, err
 	}
+	// TODO: Refresh periodically
 	resp, err := client.ConfigureClient(ctx, clientConfigureRequest{Role: opts.Role})
 	if err != nil {
 		return nil, err
@@ -181,7 +177,8 @@ func (c *SnowflakeIngestionChannel) nextRequestID() string {
 // then writes that file into the Snowflake table
 func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, rows []map[string]any) error {
 	startTime := time.Now()
-	uploader, err := newGCSUploader(ctx, c.stageLocation)
+	// TODO: we need to fetch new staging creds every once in a while...
+	uploader, err := newUploader(ctx, c.stageLocation)
 	if err != nil {
 		return err
 	}
@@ -302,61 +299,6 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, rows []map[s
 	c.rowSequencer++
 	c.clientSequencer = channel.ClientSequencer
 	return nil
-}
-
-func splitBucketAndPath(stageLocation string) (string, string, error) {
-	bucketAndPath := strings.SplitN(stageLocation, "/", 2)
-	if len(bucketAndPath) != 2 {
-		return "", "", fmt.Errorf("unexpected stage location: %s", stageLocation)
-	}
-	return bucketAndPath[0], bucketAndPath[1], nil
-}
-
-func newGCSUploader(ctx context.Context, fileLocationInfo fileLocationInfo) (*gcsUploader, error) {
-	if fileLocationInfo.LocationType != "GCS" {
-		return nil, fmt.Errorf("unsupported location type: %s", fileLocationInfo.LocationType)
-	}
-	accessToken := fileLocationInfo.Creds["GCS_ACCESS_TOKEN"]
-	client, err := gcs.NewClient(ctx, gcsopt.WithTokenSource(
-		oauth2.StaticTokenSource(&oauth2.Token{
-			AccessToken: accessToken,
-			TokenType:   "Bearer",
-		}),
-	))
-	bucket, prefix, err := splitBucketAndPath(fileLocationInfo.Location)
-	if err != nil {
-		return nil, err
-	}
-	return &gcsUploader{
-		bucket:     client.Bucket(bucket),
-		pathPrefix: prefix,
-	}, err
-}
-
-type gcsUploader struct {
-	bucket     *gcs.BucketHandle
-	pathPrefix string
-}
-
-func (u *gcsUploader) fullPath(path string) string {
-	return filepath.Join(u.pathPrefix, path)
-}
-
-func (u *gcsUploader) upload(ctx context.Context, path string, encrypted, md5Hash []byte) error {
-	object := u.bucket.Object(u.fullPath(path))
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	ow := object.NewWriter(ctx)
-	ow.MD5 = md5Hash
-	for len(encrypted) > 0 {
-		n, err := ow.Write(encrypted)
-		if err != nil {
-			_ = ow.Close()
-			return err
-		}
-		encrypted = encrypted[n:]
-	}
-	return ow.Close()
 }
 
 func writeParquetFile(schema *parquet.Schema, rows []map[string]any, metadata map[string]string) ([]byte, error) {

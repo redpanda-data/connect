@@ -29,8 +29,8 @@ func TestSnowflake(t *testing.T) {
 	parseResult, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 	require.NoError(t, err)
 	client, err := streaming.NewSnowflakeServiceClient(ctx, streaming.ClientOptions{
-		Account:    "wqkfxqq-wi77362",
-		User:       "ROCKWOODREDPANDA",
+		Account:    "UOKKRAZ-OJ08711",
+		User:       "ROCKWOODREDPANDAAWS",
 		Role:       "ACCOUNTADMIN",
 		PrivateKey: parseResult.(*rsa.PrivateKey),
 	})
@@ -38,16 +38,19 @@ func TestSnowflake(t *testing.T) {
 	defer client.Close()
 	channel, err := client.OpenChannel(ctx, streaming.ChannelOptions{
 		Name:         "my_first_testing_channel",
-		DatabaseName: "BABY_DATABASE",
+		DatabaseName: "AWS_DB",
 		SchemaName:   "PUBLIC",
-		TableName:    "BABY_TABLE",
+		TableName:    "AWS_TABLE",
 	})
 	require.NoError(t, err)
 	for i := 0; i < 3; i++ {
 		err = channel.InsertRows(ctx, []map[string]any{
-			{"A": 0, "B": "qyz", "C": true},
-			{"A": 0, "B": "solid", "C": true},
-			{"A": -1, "B": "wow!", "C": true},
+			{"A": "foo"},
+			{"A": "bar"},
+			{"A": "baz"},
+			//{"A": 0, "B": "qyz", "C": true},
+			//{"A": 0, "B": "solid", "C": true},
+			//{"A": -1, "B": "wow!", "C": true},
 			//{"C1": "foo", "C2": "bar", "C3": "baz"},
 			//{"C1": "a", "C2": "b", "C3": "c"},
 			//{"C1": "1", "C2": "2", "C3": "3"},
