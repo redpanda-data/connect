@@ -112,19 +112,19 @@ type (
 		OffsetToken string `json:"offset_token,omitempty"`
 	}
 	columnMetadata struct {
-		Name         string `json:"name"`
-		Type         string `json:"type"`
-		LogicalType  string `json:"logical_type"`
-		PhysicalType string `json:"physical_type"`
-		Precision    int32  `json:"precision"`
-		Scale        int32  `json:"scale"`
-		ByteLength   int32  `json:"byte_length"`
-		Length       int32  `json:"length"`
-		Nullable     bool   `json:"nullable"`
-		Collation    string `json:"collation"`
+		Name         string  `json:"name"`
+		Type         string  `json:"type"`
+		LogicalType  string  `json:"logical_type"`
+		PhysicalType string  `json:"physical_type"`
+		Precision    *int32  `json:"precision"`
+		Scale        *int32  `json:"scale"`
+		ByteLength   *int32  `json:"byte_length"`
+		Length       *int32  `json:"length"`
+		Nullable     bool    `json:"nullable"`
+		Collation    *string `json:"collation"`
 		// The JSON serialization of Iceberg data type of the column,
 		// see https://iceberg.apache.org/spec/#appendix-c-json-serialization for more details.
-		SourceIcebergDataType string `json:"source_iceberg_data_type"`
+		SourceIcebergDataType *string `json:"source_iceberg_data_type"`
 		// The column ordinal is an internal id of the column used by server scanner for the column identification.
 		Ordinal int32 `json:"ordinal"`
 	}

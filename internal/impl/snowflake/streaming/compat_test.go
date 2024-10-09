@@ -14,6 +14,7 @@ import (
 	"crypto/aes"
 	"encoding/base64"
 	"encoding/hex"
+	"math"
 	"slices"
 	"testing"
 
@@ -103,4 +104,13 @@ func TestCompat(t *testing.T) {
 	require.Equal(t, md5Hash(actualEncrypted), fileMD5Hash)
 	chunkMD5Hash := "1ca9f885bedc25ded3abf3df045543be"
 	require.Equal(t, md5Hash(actualEncrypted[:len(unpadded)]), chunkMD5Hash)
+}
+
+func TestInt64ToInt128Binary(t *testing.T) {
+	require.Equal(t, int64ToInt128Binary(0), [16]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0})
+	require.Equal(t, int64ToInt128Binary(1), [16]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1})
+	require.Equal(t, int64ToInt128Binary(42), [16]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 42})
+	require.Equal(t, int64ToInt128Binary(-1), [16]byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF})
+	require.Equal(t, int64ToInt128Binary(math.MaxInt64), [16]byte{0, 0, 0, 0, 0, 0, 0, 0, 0x7F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF})
+	require.Equal(t, int64ToInt128Binary(math.MinInt64), [16]byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x80, 0, 0, 0, 0, 0, 0, 0})
 }

@@ -19,6 +19,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"math/bits"
 	"strconv"
 	"strings"
 	"time"
@@ -110,4 +111,20 @@ func truncateBytesAsHex(bytes []byte, truncateUp bool) string {
 		}
 	}
 	return hex.EncodeToString(bytes[:maxLobLen])
+}
+
+func int64ToInt128Binary(v int64) [16]byte {
+	var rawBytes [8]byte
+	binary.BigEndian.PutUint64(rawBytes[:], uint64(v))
+	bytesNeeded := (bits.Len64(uint64(v)) + 7) / 8
+	bytes := rawBytes[8-bytesNeeded:]
+	var be [16]byte
+	overwriteLen := 16 - len(bytes)
+	if v < 0 {
+		for i := 0; i < overwriteLen; i++ {
+			be[i] = 0xFF
+		}
+	}
+	copy(be[overwriteLen:], bytes)
+	return be
 }

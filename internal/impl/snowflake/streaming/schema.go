@@ -13,6 +13,7 @@ package streaming
 import (
 	"bytes"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/parquet-go/parquet-go"
@@ -26,19 +27,47 @@ type dataTransformer struct {
 	stats     *statsBuffer
 }
 
+func convertFixedType(column columnMetadata) (parquet.Node, dataTransformerFn, error) {
+	isDecimal := column.Scale != nil && column.Precision != nil
+	if (column.Scale != nil && *column.Scale != 0) || strings.ToUpper(column.PhysicalType) == "SB16" {
+		if isDecimal {
+			return parquet.Decimal(int(*column.Scale), int(*column.Precision), parquet.FixedLenByteArrayType(16)), incrementIntAsFixedArray16Stat, nil
+		}
+		return parquet.Leaf(parquet.FixedLenByteArrayType(16)), incrementBinaryStat, nil
+	}
+	var ptype parquet.Type
+	switch strings.ToUpper(column.PhysicalType) {
+	case "SB1":
+	case "SB2":
+	case "SB4":
+		ptype = parquet.Int32Type
+	case "SB8":
+		ptype = parquet.Int64Type
+	default:
+		return nil, nil, fmt.Errorf("unsupported physical column type: %s", column.PhysicalType)
+	}
+	if isDecimal {
+		return parquet.Decimal(int(*column.Scale), int(*column.Precision), ptype), incrementIntStat, nil
+	}
+	return parquet.Leaf(ptype), incrementIntStat, nil
+}
+
 // See ParquetTypeGenerator
-func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[string]*dataTransformer, error) {
+func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[string]*dataTransformer, map[string]string, error) {
 	groupNode := parquet.Group{}
 	transformers := map[string]*dataTransformer{}
+	typeMetadata := map[string]string{"sfVer": "1,1"}
+	var err error
 	for _, column := range columns {
 		id := int(column.Ordinal)
 		var n parquet.Node
 		var converter dataTransformerFn
 		switch strings.ToLower(column.LogicalType) {
 		case "fixed":
-			// TODO: It's not this simple :)
-			n = parquet.Leaf(parquet.Int64Type)
-			converter = incrementIntStat
+			n, converter, err = convertFixedType(column)
+			if err != nil {
+				return nil, nil, nil, err
+			}
 		case "text":
 			fallthrough
 		case "char":
@@ -55,7 +84,7 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[stri
 			n = parquet.Leaf(parquet.DoubleType)
 			converter = incrementDoubleStat
 		default:
-			return nil, nil, fmt.Errorf("unsupported logical column type: %s", column.LogicalType)
+			return nil, nil, nil, fmt.Errorf("unsupported logical column type: %s", column.LogicalType)
 		}
 		if column.Nullable {
 			n = parquet.Optional(n)
@@ -63,12 +92,17 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[stri
 		n = parquet.FieldID(n, id)
 		n = parquet.Encoded(n, &parquet.Plain)
 		n = parquet.Compressed(n, &parquet.Uncompressed)
+		typeMetadata[strconv.Itoa(id)] = fmt.Sprintf("%d,%d", logicalTypeOrdinal(column.LogicalType), physicalTypeOrdinal(column.PhysicalType))
+		if map[string]bool{"ARRAY": true, "OBJECT": true, "VARIANT": true}[strings.ToUpper(column.LogicalType)] {
+			// mark the column metadata as being an object json for the server side scanner
+			typeMetadata[fmt.Sprintf("%d:obj_enc", id)] = "1"
+		}
 		// TODO: Use the unquoted name
 		groupNode[column.Name] = n
 		transformers[column.Name] = &dataTransformer{converter: converter, stats: &statsBuffer{columnId: id}}
 	}
 	// parquet.PrintSchema(os.Stderr, "bdec", groupNode)
-	return parquet.NewSchema("bdec", groupNode), transformers, nil
+	return parquet.NewSchema("bdec", groupNode), transformers, typeMetadata, nil
 }
 
 type statsBuffer struct {
@@ -135,6 +169,26 @@ func incrementIntStat(buf *statsBuffer, val any) (any, error) {
 	buf.minIntVal = min(buf.minIntVal, v)
 	buf.maxIntVal = max(buf.maxIntVal, v)
 	return v, nil
+}
+
+func incrementIntAsFixedArray16Stat(buf *statsBuffer, val any) (any, error) {
+	if val == nil {
+		buf.nullCount++
+		return val, nil
+	}
+	v, err := bloblang.ValueAsInt64(val)
+	if err != nil {
+		return val, err
+	}
+	if buf.first {
+		buf.minIntVal = v
+		buf.maxIntVal = v
+		buf.first = false
+		return int64ToInt128Binary(v), nil
+	}
+	buf.minIntVal = min(buf.minIntVal, v)
+	buf.maxIntVal = max(buf.maxIntVal, v)
+	return int64ToInt128Binary(v), nil
 }
 
 func incrementDoubleStat(buf *statsBuffer, val any) (any, error) {
@@ -211,4 +265,62 @@ func computeColumnEpInfo(stats map[string]*dataTransformer) map[string]fileColum
 		}
 	}
 	return info
+}
+
+func physicalTypeOrdinal(str string) int {
+	switch strings.ToUpper(str) {
+	case "ROWINDEX":
+		return 9
+	case "DOUBLE":
+		return 7
+	case "SB1":
+		return 1
+	case "SB2":
+		return 2
+	case "SB4":
+		return 3
+	case "SB8":
+		return 4
+	case "SB16":
+		return 5
+	case "LOB":
+		return 8
+	case "ROW":
+		return 10
+	}
+	return -1
+}
+
+func logicalTypeOrdinal(str string) int {
+	switch strings.ToUpper(str) {
+	case "BOOLEAN":
+		return 1
+	case "NULL":
+		return 15
+	case "REAL":
+		return 8
+	case "FIXED":
+		return 2
+	case "TEXT":
+		return 9
+	case "BINARY":
+		return 10
+	case "DATE":
+		return 7
+	case "TIME":
+		return 6
+	case "TIMESTAMP_LTZ":
+		return 3
+	case "TIMESTAMP_NTZ":
+		return 4
+	case "TIMESTAMP_TZ":
+		return 5
+	case "ARRAY":
+		return 13
+	case "OBJECT":
+		return 12
+	case "VARIANT":
+		return 11
+	}
+	return -1
 }

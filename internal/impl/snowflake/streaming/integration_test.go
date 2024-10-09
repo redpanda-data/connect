@@ -40,13 +40,16 @@ func TestSnowflake(t *testing.T) {
 		Name:         "my_first_testing_channel",
 		DatabaseName: "BABY_DATABASE",
 		SchemaName:   "PUBLIC",
-		TableName:    "BABY_TABLE",
+		TableName:    "KID_TABLE",
 	})
 	require.NoError(t, err)
 	err = channel.InsertRows(ctx, []map[string]any{
-		{"A": 41, "B": "qyz", "C": true},
-		{"A": 31, "B": "solid", "C": true},
-		{"A": 33, "B": "wow!", "C": true},
+		// {"A": 41, "B": "qyz", "C": true},
+		// {"A": 31, "B": "solid", "C": true},
+		// {"A": 33, "B": "wow!", "C": true},
+		{"C1": "foo", "C2": "bar", "C3": "baz"},
+		{"C1": "a", "C2": "b", "C3": "c"},
+		{"C1": "1", "C2": "2", "C3": "3"},
 	})
 	require.NoError(t, err)
 }

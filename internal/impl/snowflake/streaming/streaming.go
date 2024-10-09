@@ -19,6 +19,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -125,7 +126,7 @@ func (c *SnowflakeServiceClient) OpenChannel(ctx context.Context, opts ChannelOp
 	if resp.StatusCode != responseSuccess {
 		return nil, fmt.Errorf("unable to open channel - status: %d, message: %s", resp.StatusCode, resp.Message)
 	}
-	schema, transformers, err := constructParquetSchema(resp.TableColumns)
+	schema, transformers, typeMetadata, err := constructParquetSchema(resp.TableColumns)
 	if err != nil {
 		return nil, err
 	}
@@ -142,6 +143,7 @@ func (c *SnowflakeServiceClient) OpenChannel(ctx context.Context, opts ChannelOp
 		},
 		clientSequencer: resp.ClientSequencer,
 		transformers:    transformers,
+		fileMetadata:    typeMetadata,
 	}
 	return ch, nil
 }
@@ -158,6 +160,7 @@ type SnowflakeIngestionChannel struct {
 	clientSequencer int64
 	rowSequencer    int64
 	transformers    map[string]*dataTransformer
+	fileMetadata    map[string]string
 }
 
 // InsertRows creates a parquet file using the schema from the data,
@@ -180,7 +183,8 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, rows []map[s
 		}
 	}
 	blobPath := generateBlobPath(c.clientPrefix, 32, 0)
-	unencrypted, err := writeParquetFile(c.schema, rows, getShortname(blobPath))
+	c.fileMetadata["primaryFileId"] = getShortname(blobPath)
+	unencrypted, err := writeParquetFile(c.schema, rows, c.fileMetadata)
 	if err != nil {
 		return err
 	}
@@ -330,7 +334,7 @@ func (u *gcsUploader) upload(ctx context.Context, path string, encrypted, md5Has
 	return ow.Close()
 }
 
-func writeParquetFile(schema *parquet.Schema, rows []map[string]any, primaryFileID string) ([]byte, error) {
+func writeParquetFile(schema *parquet.Schema, rows []map[string]any, metadata map[string]string) ([]byte, error) {
 	buf := &bytes.Buffer{}
 	pw := parquet.NewGenericWriter[map[string]any](
 		buf,
@@ -339,8 +343,10 @@ func writeParquetFile(schema *parquet.Schema, rows []map[string]any, primaryFile
 		// Recommended by the Snowflake team to enable data page stats
 		parquet.DataPageStatistics(true),
 		parquet.Compression(&parquet.Uncompressed),
-		parquet.KeyValueMetadata("primaryFileId", primaryFileID),
 	)
+	for k, v := range metadata {
+		pw.SetKeyValueMetadata(k, v)
+	}
 	err := writeWithoutPanic(pw, rows)
 	if err != nil {
 		return nil, err
