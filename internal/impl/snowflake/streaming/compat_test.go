@@ -131,5 +131,5 @@ func TestColumnNormalization(t *testing.T) {
 	require.Equal(t, `FOO" BAR "BAZ`, normalizeColumnName(`foo" bar "baz`))
 	require.Equal(t, `"FOO \"BAZ"`, normalizeColumnName(`"foo \"baz"`))
 	require.Equal(t, `"FOO \"BAZ"`, normalizeColumnName(`"foo \"baz"`))
-	require.Equal(t, `"foo" bar "baz`, normalizeColumnName(`"foo"" bar ""baz"`))
+	require.Equal(t, `foo" bar "baz`, normalizeColumnName(`"foo"" bar ""baz"`))
 }

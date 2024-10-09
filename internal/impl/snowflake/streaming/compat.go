@@ -137,7 +137,7 @@ func normalizeColumnName(name string) string {
 		unquoted := name[1 : len(name)-1]
 		noDoubleQuotes := strings.ReplaceAll(unquoted, `""`, ``)
 		if !strings.ContainsRune(noDoubleQuotes, '"') {
-			return noDoubleQuotes
+			return strings.ReplaceAll(unquoted, `""`, `"`)
 		}
 		if !strings.ContainsRune(unquoted, '"') {
 			return unquoted
