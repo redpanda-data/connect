@@ -6,13 +6,12 @@
 //
 // https://github.com/redpanda-data/connect/v4/blob/main/licenses/rcl.md
 
-package pg_stream
+package pgstream
 
 import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
-	"fmt"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -47,6 +46,8 @@ var pgStreamConfigSpec = service.NewConfigSpec().
 		Description("Defines whether benthos need to verify (skipinsecure) TLS configuration").
 		Example("none").
 		Default("none")).
+	Field(service.NewBoolField("stream_uncomited").Default(false).Description("Defines whether you want to stream uncomitted messages before receiving commit message from postgres. This may lead to duplicated records after the the connector has been restarted")).
+	Field(service.NewStringField("pg_conn_options").Default("")).
 	Field(service.NewBoolField("stream_snapshot").
 		Description("Set `true` if you want to receive all the data that currently exist in database").
 		Example(true).
@@ -55,18 +56,22 @@ var pgStreamConfigSpec = service.NewConfigSpec().
 		Description("Sets amout of memory that can be used to stream snapshot. If affects batch sizes. If we want to use only 25% of the memory available - put 0.25 factor. It will make initial streaming slower, but it will prevent your worker from OOM Kill").
 		Example(0.2).
 		Default(0.5)).
+	Field(service.NewStringEnumField("decoding_plugin", "pgoutput", "wal2json").Description("Specifies which decoding plugin to use when streaming data from PostgreSQL").
+		Example("pgoutput").
+		Default("pgoutput")).
 	Field(service.NewStringListField("tables").
 		Example(`
 			- my_table
 			- my_table_2
 		`).
 		Description("List of tables we have to create logical replication for")).
+	Field(service.NewBoolField("temporary_slot").Default(false)).
 	Field(service.NewStringField("slot_name").
 		Description("PostgeSQL logical replication slot name. You can create it manually before starting the sync. If not provided will be replaced with a random one").
 		Example("my_test_slot").
 		Default(randomSlotName))
 
-func newPgStreamInput(conf *service.ParsedConfig) (s service.Input, err error) {
+func newPgStreamInput(conf *service.ParsedConfig, logger *service.Logger, metrics *service.Metrics) (s service.Input, err error) {
 	var (
 		dbName                  string
 		dbPort                  int
@@ -75,10 +80,14 @@ func newPgStreamInput(conf *service.ParsedConfig) (s service.Input, err error) {
 		dbUser                  string
 		dbPassword              string
 		dbSlotName              string
+		temporarySlot           bool
 		tlsSetting              string
 		tables                  []string
 		streamSnapshot          bool
 		snapshotMemSafetyFactor float64
+		decodingPlugin          string
+		pgConnOptions           string
+		streamUncomited         bool
 	)
 
 	dbSchema, err = conf.FieldString("schema")
@@ -87,6 +96,11 @@ func newPgStreamInput(conf *service.ParsedConfig) (s service.Input, err error) {
 	}
 
 	dbSlotName, err = conf.FieldString("slot_name")
+	if err != nil {
+		return nil, err
+	}
+
+	temporarySlot, err = conf.FieldBool("temporary_slot")
 	if err != nil {
 		return nil, err
 	}
@@ -135,9 +149,27 @@ func newPgStreamInput(conf *service.ParsedConfig) (s service.Input, err error) {
 		return nil, err
 	}
 
+	streamUncomited, err = conf.FieldBool("stream_uncomited")
+	if err != nil {
+		return nil, err
+	}
+
+	decodingPlugin, err = conf.FieldString("decoding_plugin")
+	if err != nil {
+		return nil, err
+	}
+
 	snapshotMemSafetyFactor, err = conf.FieldFloat("snapshot_memory_safety_factor")
 	if err != nil {
 		return nil, err
+	}
+
+	if pgConnOptions, err = conf.FieldString("pg_conn_options"); err != nil {
+		return nil, err
+	}
+
+	if pgConnOptions != "" {
+		pgConnOptions = "options=" + pgConnOptions
 	}
 
 	pgconnConfig := pgconn.Config{
@@ -161,19 +193,26 @@ func newPgStreamInput(conf *service.ParsedConfig) (s service.Input, err error) {
 		snapshotMemSafetyFactor: snapshotMemSafetyFactor,
 		slotName:                dbSlotName,
 		schema:                  dbSchema,
-		tls:                     pglogicalstream.TlsVerify(tlsSetting),
+		pgConnRuntimeParam:      pgConnOptions,
+		tls:                     pglogicalstream.TLSVerify(tlsSetting),
 		tables:                  tables,
+		decodingPlugin:          decodingPlugin,
+		streamUncomited:         streamUncomited,
+		temporarySlot:           temporarySlot,
+
+		logger:  logger,
+		metrics: metrics,
 	}), err
 }
 
 func init() {
 	rng, _ := codename.DefaultRNG()
-	randomSlotName = fmt.Sprintf("%s", strings.ReplaceAll(codename.Generate(rng, 5), "-", "_"))
+	randomSlotName = strings.ReplaceAll(codename.Generate(rng, 5), "-", "_")
 
 	err := service.RegisterInput(
 		"pg_stream", pgStreamConfigSpec,
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
-			return newPgStreamInput(conf)
+			return newPgStreamInput(conf, mgr.Logger(), mgr.Metrics())
 		})
 	if err != nil {
 		panic(err)
@@ -182,34 +221,41 @@ func init() {
 
 type pgStreamInput struct {
 	dbConfig                pgconn.Config
+	tls                     pglogicalstream.TLSVerify
 	pglogicalStream         *pglogicalstream.Stream
-	redisUri                string
+	pgConnRuntimeParam      string
 	slotName                string
+	temporarySlot           bool
 	schema                  string
 	tables                  []string
+	decodingPlugin          string
 	streamSnapshot          bool
-	tls                     pglogicalstream.TlsVerify // none, require
 	snapshotMemSafetyFactor float64
+	streamUncomited         bool
 	logger                  *service.Logger
+	metrics                 *service.Metrics
 }
 
 func (p *pgStreamInput) Connect(ctx context.Context) error {
 	pgStream, err := pglogicalstream.NewPgStream(pglogicalstream.Config{
-		DbHost:                     p.dbConfig.Host,
-		DbPassword:                 p.dbConfig.Password,
-		DbUser:                     p.dbConfig.User,
-		DbPort:                     int(p.dbConfig.Port),
-		DbTables:                   p.tables,
-		DbName:                     p.dbConfig.Database,
-		DbSchema:                   p.schema,
-		ReplicationSlotName:        fmt.Sprintf("rs_%s", p.slotName),
-		TlsVerify:                  p.tls,
+		PgConnRuntimeParam:         p.pgConnRuntimeParam,
+		DBHost:                     p.dbConfig.Host,
+		DBPassword:                 p.dbConfig.Password,
+		DBUser:                     p.dbConfig.User,
+		DBPort:                     int(p.dbConfig.Port),
+		DBTables:                   p.tables,
+		DBName:                     p.dbConfig.Database,
+		DBSchema:                   p.schema,
+		ReplicationSlotName:        "rs_" + p.slotName,
+		TLSVerify:                  p.tls,
 		StreamOldData:              p.streamSnapshot,
+		TemporaryReplicationSlot:   p.temporarySlot,
+		StreamUncomited:            p.streamUncomited,
+		DecodingPlugin:             p.decodingPlugin,
 		SnapshotMemorySafetyFactor: p.snapshotMemSafetyFactor,
-		SeparateChanges:            true,
 	})
 	if err != nil {
-		panic(err)
+		return err
 	}
 	p.pglogicalStream = pgStream
 	return err
@@ -242,7 +288,12 @@ func (p *pgStreamInput) Read(ctx context.Context) (*service.Message, service.Ack
 			//message.ServerHeartbeat.
 
 			if message.Lsn != nil {
-				p.pglogicalStream.AckLSN(*message.Lsn)
+				if err := p.pglogicalStream.AckLSN(*message.Lsn); err != nil {
+					return err
+				}
+				if p.streamUncomited {
+					p.pglogicalStream.ConsumedCallback() <- true
+				}
 			}
 			return nil
 		}, nil
