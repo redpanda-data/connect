@@ -36,11 +36,16 @@ const (
 
 func snowflakeStreamingOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Beta().
 		Categories("Services").
 		Version("4.39.0").
-		Summary("FOO").
-		Description("BAR").
+		Summary("Ingest data into Snowflake using Snowpipe Streaming.").
+		Description(`
+Ingest data into Snowflake using Snowpipe Streaming.
+
+Authentication can be configured using a https://docs.snowflake.com/en/user-guide/key-pair-auth[RSA Key Pair^].
+
+There are https://docs.snowflake.com/en/user-guide/data-load-snowpipe-streaming-overview#limitations[limitations^] of what data types can be loaded into Snowflake using this method.
+`+service.OutputPerformanceDocs(true, true)).
 		Fields(
 			service.NewStringField(ssoFieldAccount).
 				Description(`Account name, which is the same as the https://docs.snowflake.com/en/user-guide/admin-account-identifier.html#where-are-account-identifiers-used[Account Identifier^].
@@ -48,21 +53,30 @@ func snowflakeStreamingOutputConfig() *service.ConfigSpec {
       the Account Identifier is formatted as `+"`<account_locator>.<region_id>.<cloud>`"+` and this field needs to be
       populated using the `+"`<account_locator>`"+` part.
 `),
-			service.NewStringField(ssoFieldUser).Description(""),
-			service.NewStringField(ssoFieldRole).Description("").Example("ACCOUNTADMIN"),
-			service.NewStringField(ssoFieldDB).Description("Database."),
-			service.NewStringField(ssoFieldSchema).Description("Schema."),
-			service.NewStringField(ssoFieldTable).Description("Table."),
-			service.NewStringField(ssoFieldKey).Description("The PEM encoded private SSH key.").Optional().Secret(),
-			service.NewStringField(ssoFieldKeyFile).Description("The path to a file containing the private SSH key.").Optional(),
-			service.NewStringField(ssoFieldKeyPass).Description("An optional private SSH key passphrase.").Optional().Secret(),
-			service.NewBloblangField(ssoFieldMapping).Description("").Optional(),
+			service.NewStringField(ssoFieldUser).Description("The user to run the Snowpipe Stream as. See https://docs.snowflake.com/en/user-guide/admin-user-management[Snowflake Documentation^] on how to create a user."),
+			service.NewStringField(ssoFieldRole).Description("The role for the `user` field. The role must have the https://docs.snowflake.com/en/user-guide/data-load-snowpipe-streaming-overview#required-access-privileges[required privileges^] to call the Snowpipe Streaming APIs. See https://docs.snowflake.com/en/user-guide/admin-user-management#user-roles[Snowflake Documentation^] for more information about roles.").Example("ACCOUNTADMIN"),
+			service.NewStringField(ssoFieldDB).Description("The Snowflake database to ingest data into."),
+			service.NewStringField(ssoFieldSchema).Description("The Snowflake schema to ingest data into."),
+			service.NewStringField(ssoFieldTable).Description("The Snowflake table to ingest data into."),
+			service.NewStringField(ssoFieldKey).Description("The PEM encoded private RSA key to use for authenticating with Snowflake. Either this or `private_key_file` must be specified.").Optional().Secret(),
+			service.NewStringField(ssoFieldKeyFile).Description("The file to load the private RSA key from. This should be a `.p8` PEM encoded file. Either this or `private_key` must be specified.").Optional(),
+			service.NewStringField(ssoFieldKeyPass).Description("The RSA key passphrase if the RSA key is encrypted.").Optional().Secret(),
+			service.NewBloblangField(ssoFieldMapping).Description("A bloblang mapping to execute on each message.").Optional(),
 			service.NewBatchPolicyField(ssoFieldBatching),
 			service.NewOutputMaxInFlightField(),
 			service.NewStringField(ssoFieldChannelPrefix).
+				Description(`The prefix to use when creating a channel name.
+Duplicate channel names will result in errors and prevent multiple instances of Redpanda Connect from writing at the same time.
+By default this will create a channel name that is based on the table FQN so there will only be a single stream per table.
+
+NOTE: There is a limit of 10,000 streams per table.`).
 				Optional().
 				Advanced(),
-		)
+		).LintRule(`
+root = match {
+  this.exists("private_key") && this.exists("private_key_file") => [ "both ` + "`private_key`" + ` and ` + "`private_key_file`" + ` can't be set simultaneously" ],
+}.
+`)
 }
 
 func init() {
@@ -122,7 +136,7 @@ func newSnowflakeStreamer(
 			return nil, err
 		}
 	} else {
-		return nil, fmt.Errorf("one of [%s, %s] is required", ssoFieldKey, ssoFieldKeyFile)
+		return nil, fmt.Errorf("one of `%s` or `%s` is required", ssoFieldKey, ssoFieldKeyFile)
 	}
 	account, err := conf.FieldString(ssoFieldAccount)
 	if err != nil {
@@ -162,6 +176,9 @@ func newSnowflakeStreamer(
 			return nil, err
 		}
 	} else {
+		// There is a limit of 10k channels, so we can't dynamically create them.
+		// The only other good default is to create one and only allow a single
+		// stream to write to a single table.
 		channelPrefix = fmt.Sprintf("redpanda_connect_%s.%s.%s", db, schema, table)
 	}
 	client, err := streaming.NewSnowflakeServiceClient(
