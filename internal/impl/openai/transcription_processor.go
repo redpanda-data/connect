@@ -11,6 +11,7 @@ package openai
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -156,8 +157,11 @@ func (p *transcriptionProcessor) Process(ctx context.Context, msg *service.Messa
 			format = oai.AudioResponseFormatVTT
 		case "srt":
 			format = oai.AudioResponseFormatSRT
-		default:
+		case "json":
 			format = oai.AudioResponseFormatJSON
+		default:
+			err = errors.New("invalid value")
+			return nil, fmt.Errorf("%s interpolation error: %w", otspFieldFormat, err)
 		}
 
 		body.Format = format
