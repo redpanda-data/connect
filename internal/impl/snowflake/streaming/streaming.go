@@ -11,23 +11,19 @@
 package streaming
 
 import (
-	"bytes"
 	"context"
 	"crypto/aes"
 	"crypto/md5"
 	"crypto/rsa"
-	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/parquet-go/parquet-go"
-	"github.com/parquet-go/parquet-go/format"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/periodic"
 	"github.com/redpanda-data/connect/v4/internal/typed"
-	"github.com/segmentio/encoding/thrift"
 )
 
 // ClientOptions
@@ -94,6 +90,7 @@ func NewSnowflakeServiceClient(ctx context.Context, opts ClientOptions) (*Snowfl
 		uploader: uploaderAtomic,
 		// Tokens expire every hour, so refresh a bit before that
 		uploadRefreshLoop: periodic.New(time.Hour-2*time.Minute, func() {
+			// TODO: cancel this configure client command if it's slow, right now it can block shutdown.
 			resp, err := client.ConfigureClient(context.Background(), clientConfigureRequest{Role: opts.Role})
 			if err != nil {
 				uploaderAtomic.Store(stageUploaderResult{err: err})
@@ -331,78 +328,6 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, rows []map[s
 	}
 	c.rowSequencer++
 	c.clientSequencer = channel.ClientSequencer
+	// TODO: we need to validate the offset moved forward...
 	return nil
-}
-
-func writeParquetFile(schema *parquet.Schema, rows []map[string]any, metadata map[string]string) ([]byte, error) {
-	buf := &bytes.Buffer{}
-	pw := parquet.NewGenericWriter[map[string]any](
-		buf,
-		schema,
-		parquet.CreatedBy("RedpandaConnect", version, "main"),
-		// Recommended by the Snowflake team to enable data page stats
-		parquet.DataPageStatistics(true),
-		parquet.Compression(&parquet.Uncompressed),
-	)
-	for k, v := range metadata {
-		pw.SetKeyValueMetadata(k, v)
-	}
-	err := writeWithoutPanic(pw, rows)
-	if err != nil {
-		return nil, err
-	}
-	err = closeWithoutPanic(pw)
-	if err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
-}
-
-func writeWithoutPanic[T any](pWtr *parquet.GenericWriter[T], rows []T) (err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err = fmt.Errorf("encoding panic: %v", r)
-		}
-	}()
-
-	_, err = pWtr.Write(rows)
-	return
-}
-
-func closeWithoutPanic[T any](pWtr *parquet.GenericWriter[T]) (err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err = fmt.Errorf("encoding panic: %v", r)
-		}
-	}()
-
-	err = pWtr.Close()
-	return
-}
-
-func readParquetMetadata(parquetFile []byte) (metadata format.FileMetaData, err error) {
-	if len(parquetFile) < 8 {
-		return format.FileMetaData{}, fmt.Errorf("too small of parquet file: %d", len(parquetFile))
-	}
-	trailingBytes := parquetFile[len(parquetFile)-8:]
-	if string(trailingBytes[4:]) != "PAR1" {
-		return metadata, fmt.Errorf("missing magic bytes, got: %q", trailingBytes[4:])
-	}
-	footerSize := int(binary.LittleEndian.Uint32(trailingBytes))
-	if len(parquetFile) < footerSize+8 {
-		return metadata, fmt.Errorf("too small of parquet file: %d, footer size: %d", len(parquetFile), footerSize)
-	}
-	footerBytes := parquetFile[len(parquetFile)-(footerSize+8) : len(parquetFile)-8]
-	if err := thrift.Unmarshal(new(thrift.CompactProtocol), footerBytes, &metadata); err != nil {
-		return metadata, fmt.Errorf("unable to extract parquet metadata: %w", err)
-	}
-	return
-}
-
-func totalUncompressedSize(metadata format.FileMetaData) int32 {
-	var size int64
-	for _, rowGroup := range metadata.RowGroups {
-		size += rowGroup.TotalByteSize
-	}
-	return int32(size)
 }
