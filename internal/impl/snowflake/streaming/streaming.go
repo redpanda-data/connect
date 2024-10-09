@@ -188,13 +188,21 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, rows []map[s
 	for _, t := range c.transformers {
 		t.stats.Reset()
 	}
-	for _, row := range rows {
-		for k, t := range c.transformers {
-			row[k], err = t.converter(t.stats, row[k])
+	for i, row := range rows {
+		transformed := map[string]any{}
+		for k, v := range row {
+			name := normalizeColumnName(k)
+			t, ok := c.transformers[name]
+			if !ok {
+				// Skip extra columns
+				continue
+			}
+			transformed[k], err = t.converter(t.stats, v)
 			if err != nil {
 				return err
 			}
 		}
+		rows[i] = transformed
 	}
 	blobPath := generateBlobPath(c.clientPrefix, 32, c.requestIDCounter)
 	c.requestIDCounter++
