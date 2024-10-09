@@ -107,7 +107,6 @@ func newSnowflakeStreamer(
 	conf *service.ParsedConfig,
 	mgr *service.Resources,
 ) (service.BatchOutput, error) {
-	o := &snowflakeStreamerOutput{}
 	keypass := ""
 	if conf.Contains(ssoFieldKeyPass) {
 		pass, err := conf.FieldString(ssoFieldKey)
@@ -193,6 +192,7 @@ func newSnowflakeStreamer(
 	if err != nil {
 		return nil, err
 	}
+	o := &snowflakeStreamerOutput{}
 	o.channelPrefix = channelPrefix
 	o.client = client
 	o.db = db
@@ -204,38 +204,58 @@ func newSnowflakeStreamer(
 }
 
 type snowflakeStreamerOutput struct {
-	client *streaming.SnowflakeServiceClient
-	// TODO: We need a pool of these really
-	channel *streaming.SnowflakeIngestionChannel
+	client            *streaming.SnowflakeServiceClient
+	channelPool       sync.Pool
+	channelCreationMu sync.Mutex
+	poolSize          int
 
-	mu                               sync.Mutex // only for the demo
 	channelPrefix, db, schema, table string
 	mapping                          *bloblang.Executor
 	logger                           *service.Logger
 }
 
-func (o *snowflakeStreamerOutput) Connect(ctx context.Context) error {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	if o.channel != nil {
-		return nil
-	}
-	channel, err := o.client.OpenChannel(ctx, streaming.ChannelOptions{
-		Name:         o.channelPrefix,
+func (o *snowflakeStreamerOutput) openChannel(ctx context.Context) (*streaming.SnowflakeIngestionChannel, error) {
+	o.channelCreationMu.Lock()
+	defer o.channelCreationMu.Unlock()
+	// Use a lock here instead of an atomic because this should not be called at steady state and it's better to limit
+	// creating extra channels when there is a limit of 10K.
+	name := fmt.Sprintf("%s_%d", o.channelPrefix, o.poolSize)
+	o.logger.Debugf("opening snowflake streaming channel: %s", name)
+	client, err := o.client.OpenChannel(ctx, streaming.ChannelOptions{
+		Name:         name,
 		DatabaseName: o.db,
 		SchemaName:   o.schema,
 		TableName:    o.table,
 	})
-	if err != nil {
-		return err
+	if err == nil {
+		o.poolSize++
 	}
-	o.channel = channel
+	return client, err
+}
+
+func (o *snowflakeStreamerOutput) Connect(ctx context.Context) error {
+	// Precreate a single channel so we know stuff works, otherwise we'll create them on demand.
+	c, err := o.openChannel(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to open snowflake streaming channel: %w", err)
+	}
+	o.channelPool.Put(c)
 	return nil
 }
 
+func messageToRow(msg *service.Message) (map[string]any, error) {
+	v, err := msg.AsStructured()
+	if err != nil {
+		return nil, fmt.Errorf("error extracting object from %s: %w", ssoFieldMapping, err)
+	}
+	row, ok := v.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("expected object, got: %T", v)
+	}
+	return row, nil
+}
+
 func (o *snowflakeStreamerOutput) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
-	o.mu.Lock()
-	defer o.mu.Unlock()
 	rows := make([]map[string]any, len(batch))
 	if o.mapping != nil {
 		exec := batch.BloblangExecutor(o.mapping)
@@ -244,34 +264,35 @@ func (o *snowflakeStreamerOutput) WriteBatch(ctx context.Context, batch service.
 			if err != nil {
 				return fmt.Errorf("error executing %s: %w", ssoFieldMapping, err)
 			}
-			v, err := msg.AsStructured()
+			row, err := messageToRow(msg)
 			if err != nil {
-				return fmt.Errorf("error extracting object from %s: %w", ssoFieldMapping, err)
-			}
-			row, ok := v.(map[string]any)
-			if !ok {
-				return fmt.Errorf("expected object, got: %T", v)
+				return err
 			}
 			rows[i] = row
 		}
 	} else {
 		for i, msg := range batch {
-			v, err := msg.AsStructured()
+			row, err := messageToRow(msg)
 			if err != nil {
-				return fmt.Errorf("error extracting object: %w", err)
-			}
-			row, ok := v.(map[string]any)
-			if !ok {
-				return fmt.Errorf("expected object, got: %T", v)
+				return err
 			}
 			rows[i] = row
 		}
 	}
-	return o.channel.InsertRows(ctx, rows)
+	var channel *streaming.SnowflakeIngestionChannel
+	if maybeChan := o.channelPool.Get(); maybeChan != nil {
+		channel = maybeChan.(*streaming.SnowflakeIngestionChannel)
+	} else {
+		var err error
+		if channel, err = o.openChannel(ctx); err != nil {
+			return fmt.Errorf("unable to open snowflake streaming channel: %w", err)
+		}
+	}
+	err := channel.InsertRows(ctx, rows)
+	o.channelPool.Put(channel)
+	return err
 }
 
 func (o *snowflakeStreamerOutput) Close(ctx context.Context) error {
-	o.mu.Lock()
-	defer o.mu.Unlock()
 	return o.client.Close()
 }
