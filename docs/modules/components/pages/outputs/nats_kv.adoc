@@ -377,6 +377,7 @@ This field contains sensitive information that usually shouldn't be added to a c
 
 *Type*: `string`
 
+Requires version 4.38.0 or newer
 
 ```yml
 # Examples
