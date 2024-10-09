@@ -62,6 +62,7 @@ nats_kv:
     client_certs: []
   auth:
     nkey_file: ./seed.nk # No default (optional)
+    nkey: '!!!SECRET_SCRUBBED!!!' # No default (optional)
     user_credentials_file: ./user.creds # No default (optional)
     user_jwt: "" # No default (optional)
     user_nkey_seed: "" # No default (optional)
@@ -92,7 +93,7 @@ See an https://docs.nats.io/running-a-nats-service/nats_admin/security/jwt[in-de
 
 The NATS server can use these NKeys in several ways for authentication. The simplest is for the server to be configured
 with a list of known public keys and for the clients to respond to the challenge by signing it with its private NKey
-configured in the `nkey_file` field.
+configured in the `nkey_file` or `nkey` field.
 
 https://docs.nats.io/running-a-nats-service/configuration/securing_nats/auth_intro/nkey_auth[More details^].
 
@@ -324,6 +325,25 @@ An optional file containing a NKey seed.
 # Examples
 
 nkey_file: ./seed.nk
+```
+
+=== `auth.nkey`
+
+The NKey seed.
+[CAUTION]
+====
+This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
+====
+
+
+
+*Type*: `string`
+
+
+```yml
+# Examples
+
+nkey: UDXU4RCSJNZOIQHZNWXHXORDPRTGNJAHAHFRGZNEEJCPQTT2M7NLCNF4
 ```
 
 === `auth.user_credentials_file`
