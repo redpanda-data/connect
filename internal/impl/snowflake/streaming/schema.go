@@ -12,10 +12,13 @@ package streaming
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/parquet-go/parquet-go"
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
@@ -73,22 +76,27 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[stri
 				return nil, nil, nil, err
 			}
 		case "array":
-			fallthrough
+			typeMetadata[fmt.Sprintf("%d:obj_enc", id)] = "1"
+			n = parquet.String()
+			converter = jsonArrayConverter{jsonConverter{binaryConverter{column.Nullable}}}
 		case "object":
-			fallthrough
+			typeMetadata[fmt.Sprintf("%d:obj_enc", id)] = "1"
+			n = parquet.String()
+			converter = jsonObjectConverter{jsonConverter{binaryConverter{column.Nullable}}}
 		case "variant":
 			typeMetadata[fmt.Sprintf("%d:obj_enc", id)] = "1"
-			fallthrough
+			n = parquet.String()
+			converter = jsonConverter{binaryConverter{column.Nullable}}
 		case "text":
 			fallthrough
 		case "char":
 			fallthrough
 		case "any":
-			fallthrough
-		case "binary":
 			n = parquet.String()
 			converter = binaryConverter{column.Nullable}
-
+		case "binary":
+			n = parquet.Leaf(parquet.ByteArrayType)
+			converter = binaryConverter{column.Nullable}
 		case "boolean":
 			n = parquet.Leaf(parquet.BooleanType)
 			converter = boolConverter{column.Nullable}
@@ -283,6 +291,70 @@ func (c binaryConverter) ValidateAndConvert(buf *statsBuffer, val any) (any, err
 		buf.maxStrVal = v
 	}
 	buf.maxStrLen = max(buf.maxStrLen, len(v))
+	return v, nil
+}
+
+type stringConverter struct {
+	binaryConverter
+}
+
+func (c stringConverter) ValidateAndConvert(buf *statsBuffer, val any) (any, error) {
+	v, err := c.binaryConverter.ValidateAndConvert(buf, val)
+	if err != nil {
+		return nil, err
+	}
+	if !utf8.Valid(v.([]byte)) {
+		return v, errors.New("invalid UTF8")
+	}
+	return v, err
+}
+
+type jsonConverter struct {
+	binaryConverter
+}
+
+var errInvalidJSON = errors.New("invalid json")
+
+func (c jsonConverter) ValidateAndConvert(buf *statsBuffer, val any) (any, error) {
+	v, err := c.binaryConverter.ValidateAndConvert(buf, val)
+	if err != nil {
+		return nil, err
+	}
+	if !json.Valid(v.([]byte)) {
+		return nil, errInvalidJSON
+	}
+	return v, nil
+}
+
+type jsonArrayConverter struct {
+	jsonConverter
+}
+
+func (c jsonArrayConverter) ValidateAndConvert(buf *statsBuffer, val any) (any, error) {
+	v, err := c.jsonConverter.ValidateAndConvert(buf, val)
+	if err != nil {
+		return nil, err
+	}
+	// Already valid JSON, so now we're just checking the first byte is a `[` so it's an array
+	if !bytes.HasPrefix(bytes.TrimSpace(v.([]byte)), []byte{'['}) {
+		return nil, errors.New("not a JSON array")
+	}
+	return v, nil
+}
+
+type jsonObjectConverter struct {
+	jsonConverter
+}
+
+func (c jsonObjectConverter) ValidateAndConvert(buf *statsBuffer, val any) (any, error) {
+	v, err := c.jsonConverter.ValidateAndConvert(buf, val)
+	if err != nil {
+		return nil, err
+	}
+	// Already valid JSON, so now we're just checking the first byte is a `{` so it's an object
+	if !bytes.HasPrefix(bytes.TrimSpace(v.([]byte)), []byte{'{'}) {
+		return nil, errors.New("not a JSON object")
+	}
 	return v, nil
 }
 
