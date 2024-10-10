@@ -63,6 +63,7 @@ input:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
+    source_capabilities: [] # No default (optional)
     sasl:
       mechanism: none
       user: ""
@@ -332,6 +333,28 @@ This field contains sensitive information that usually shouldn't be added to a c
 password: foo
 
 password: ${KEY_PASSWORD}
+```
+
+=== `source_capabilities`
+
+List of extension capabilities the receiver desires.
+
+
+*Type*: `array`
+
+
+```yml
+# Examples
+
+source_capabilities:
+  - queue
+
+source_capabilities:
+  - topic
+
+source_capabilities:
+  - queue
+  - topic
 ```
 
 === `sasl`
