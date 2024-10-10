@@ -12,6 +12,7 @@ package streaming
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -20,21 +21,23 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 )
 
-type dataTransformerFn func(buf *statsBuffer, val any) (any, error)
+type dataConverter interface {
+	ValidateAndConvert(buf *statsBuffer, val any) (any, error)
+}
 
 type dataTransformer struct {
 	name      string // raw name from API
-	converter dataTransformerFn
+	converter dataConverter
 	stats     *statsBuffer
 }
 
-func convertFixedType(column columnMetadata) (parquet.Node, dataTransformerFn, error) {
+func convertFixedType(column columnMetadata) (parquet.Node, dataConverter, error) {
 	isDecimal := column.Scale != nil && column.Precision != nil
 	if (column.Scale != nil && *column.Scale != 0) || strings.ToUpper(column.PhysicalType) == "SB16" {
 		if isDecimal {
-			return parquet.Decimal(int(*column.Scale), int(*column.Precision), parquet.FixedLenByteArrayType(16)), incrementIntAsFixedArray16Stat, nil
+			return parquet.Decimal(int(*column.Scale), int(*column.Precision), parquet.FixedLenByteArrayType(16)), sb16Converter{column.Nullable}, nil
 		}
-		return parquet.Leaf(parquet.FixedLenByteArrayType(16)), incrementIntAsFixedArray16Stat, nil
+		return parquet.Leaf(parquet.FixedLenByteArrayType(16)), sb16Converter{column.Nullable}, nil
 	}
 	var ptype parquet.Type
 	switch strings.ToUpper(column.PhysicalType) {
@@ -48,12 +51,10 @@ func convertFixedType(column columnMetadata) (parquet.Node, dataTransformerFn, e
 		return nil, nil, fmt.Errorf("unsupported physical column type: %s", column.PhysicalType)
 	}
 	if isDecimal {
-		return parquet.Decimal(int(*column.Scale), int(*column.Precision), ptype), incrementInt64Stat, nil
+		return parquet.Decimal(int(*column.Scale), int(*column.Precision), ptype), intConverter{column.Nullable}, nil
 	}
-	return parquet.Leaf(ptype), incrementInt64Stat, nil
+	return parquet.Leaf(ptype), intConverter{column.Nullable}, nil
 }
-
-var jsonEncoded = map[string]bool{"ARRAY": true, "OBJECT": true, "VARIANT": true}
 
 // See ParquetTypeGenerator
 func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[string]*dataTransformer, map[string]string, error) {
@@ -64,13 +65,20 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[stri
 	for _, column := range columns {
 		id := int(column.Ordinal)
 		var n parquet.Node
-		var converter dataTransformerFn
+		var converter dataConverter
 		switch strings.ToLower(column.LogicalType) {
 		case "fixed":
 			n, converter, err = convertFixedType(column)
 			if err != nil {
 				return nil, nil, nil, err
 			}
+		case "array":
+			fallthrough
+		case "object":
+			fallthrough
+		case "variant":
+			typeMetadata[fmt.Sprintf("%d:obj_enc", id)] = "1"
+			fallthrough
 		case "text":
 			fallthrough
 		case "char":
@@ -79,13 +87,14 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[stri
 			fallthrough
 		case "binary":
 			n = parquet.String()
-			converter = incrementBinaryStat
+			converter = binaryConverter{column.Nullable}
+
 		case "boolean":
 			n = parquet.Leaf(parquet.BooleanType)
-			converter = incrementBoolStat
+			converter = boolConverter{column.Nullable}
 		case "real":
 			n = parquet.Leaf(parquet.DoubleType)
-			converter = incrementDoubleStat
+			converter = doubleConverter{column.Nullable}
 		default:
 			return nil, nil, nil, fmt.Errorf("unsupported logical column type: %s", column.LogicalType)
 		}
@@ -97,10 +106,6 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[stri
 		// we might be able to tune this more.
 		n = parquet.Encoded(n, &parquet.Plain)
 		typeMetadata[strconv.Itoa(id)] = fmt.Sprintf("%d,%d", logicalTypeOrdinal(column.LogicalType), physicalTypeOrdinal(column.PhysicalType))
-		if jsonEncoded[strings.ToUpper(column.LogicalType)] {
-			// mark the column metadata as being an object json for the server side scanner
-			typeMetadata[fmt.Sprintf("%d:obj_enc", id)] = "1"
-		}
 		name := normalizeColumnName(column.Name)
 		groupNode[name] = n
 		transformers[name] = &dataTransformer{
@@ -134,8 +139,17 @@ func (s *statsBuffer) Reset() {
 	s.nullCount = 0
 }
 
-func incrementBoolStat(buf *statsBuffer, val any) (any, error) {
+var errNullValue = errors.New("unexpected null value")
+
+type boolConverter struct {
+	nullable bool
+}
+
+func (c boolConverter) ValidateAndConvert(buf *statsBuffer, val any) (any, error) {
 	if val == nil {
+		if !c.nullable {
+			return nil, errNullValue
+		}
 		buf.nullCount++
 		return val, nil
 	}
@@ -158,8 +172,15 @@ func incrementBoolStat(buf *statsBuffer, val any) (any, error) {
 	return v, nil
 }
 
-func incrementInt64Stat(buf *statsBuffer, val any) (any, error) {
+type intConverter struct {
+	nullable bool
+}
+
+func (c intConverter) ValidateAndConvert(buf *statsBuffer, val any) (any, error) {
 	if val == nil {
+		if !c.nullable {
+			return nil, errNullValue
+		}
 		buf.nullCount++
 		return val, nil
 	}
@@ -178,8 +199,15 @@ func incrementInt64Stat(buf *statsBuffer, val any) (any, error) {
 	return v, nil
 }
 
-func incrementIntAsFixedArray16Stat(buf *statsBuffer, val any) (any, error) {
+type sb16Converter struct {
+	nullable bool
+}
+
+func (c sb16Converter) ValidateAndConvert(buf *statsBuffer, val any) (any, error) {
 	if val == nil {
+		if !c.nullable {
+			return nil, errNullValue
+		}
 		buf.nullCount++
 		return val, nil
 	}
@@ -198,8 +226,15 @@ func incrementIntAsFixedArray16Stat(buf *statsBuffer, val any) (any, error) {
 	return int64ToInt128Binary(v), nil
 }
 
-func incrementDoubleStat(buf *statsBuffer, val any) (any, error) {
+type doubleConverter struct {
+	nullable bool
+}
+
+func (c doubleConverter) ValidateAndConvert(buf *statsBuffer, val any) (any, error) {
 	if val == nil {
+		if !c.nullable {
+			return nil, errNullValue
+		}
 		buf.nullCount++
 		return val, nil
 	}
@@ -218,8 +253,15 @@ func incrementDoubleStat(buf *statsBuffer, val any) (any, error) {
 	return v, nil
 }
 
-func incrementBinaryStat(buf *statsBuffer, val any) (any, error) {
+type binaryConverter struct {
+	nullable bool
+}
+
+func (c binaryConverter) ValidateAndConvert(buf *statsBuffer, val any) (any, error) {
 	if val == nil {
+		if !c.nullable {
+			return nil, errNullValue
+		}
 		buf.nullCount++
 		return val, nil
 	}
@@ -241,6 +283,36 @@ func incrementBinaryStat(buf *statsBuffer, val any) (any, error) {
 		buf.maxStrVal = v
 	}
 	buf.maxStrLen = max(buf.maxStrLen, len(v))
+	return v, nil
+}
+
+type timestampConverter struct {
+	nullable bool
+	scale    int
+	tz       bool
+}
+
+func (c timestampConverter) ValidateAndConvert(buf *statsBuffer, val any) (any, error) {
+	if val == nil {
+		if !c.nullable {
+			return nil, errNullValue
+		}
+		buf.nullCount++
+		return val, nil
+	}
+	t, err := bloblang.ValueAsTimestamp(val)
+	if err != nil {
+		return val, err
+	}
+	v := snowflakeTimestampInt(t, c.scale, c.tz)
+	if buf.first {
+		buf.minIntVal = v
+		buf.maxIntVal = v
+		buf.first = false
+		return v, nil
+	}
+	buf.minIntVal = min(buf.minIntVal, v)
+	buf.maxIntVal = max(buf.maxIntVal, v)
 	return v, nil
 }
 

@@ -128,8 +128,6 @@ type ChannelOptions struct {
 	SchemaName string
 	// TableName is the name of the table
 	TableName string
-	// The default timezone for TIMESTAMP_LTZ and TIMESTAMP_TZ columns, defaults to UTC
-	DefaultTimeZone *time.Location
 }
 
 type encryptionInfo struct {
@@ -139,9 +137,6 @@ type encryptionInfo struct {
 
 // OpenChannel creates a new or reuses a channel to load data into a Snowflake table.
 func (c *SnowflakeServiceClient) OpenChannel(ctx context.Context, opts ChannelOptions) (*SnowflakeIngestionChannel, error) {
-	if opts.DefaultTimeZone == nil {
-		opts.DefaultTimeZone = time.UTC
-	}
 	resp, err := c.client.openChannel(ctx, openChannelRequest{
 		RequestID: c.nextRequestID(),
 		Role:      c.options.Role,
@@ -243,7 +238,7 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 				// Skip extra columns
 				continue
 			}
-			transformed[name], err = t.converter(t.stats, v)
+			transformed[name], err = t.converter.ValidateAndConvert(t.stats, v)
 			if err != nil {
 				return stats, fmt.Errorf("invalid data for column %s: %w", k, err)
 			}

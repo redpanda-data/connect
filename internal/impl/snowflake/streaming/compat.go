@@ -146,3 +146,8 @@ func normalizeColumnName(name string) string {
 	}
 	return strings.ToUpper(strings.ReplaceAll(name, `\ `, ` `))
 }
+
+func snowflakeTimestampInt(t time.Time, scale int, includeTZ bool) int64 {
+	epoch := t.Unix()
+	return epoch
+}
