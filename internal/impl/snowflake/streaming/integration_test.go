@@ -17,9 +17,11 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -56,20 +58,62 @@ func TestSnowflake(t *testing.T) {
 	_, err = restClient.RunSQL(ctx, streaming.RunSQLRequest{
 		Database: channelOpts.DatabaseName,
 		Schema:   channelOpts.SchemaName,
-		Statement: fmt.Sprintf(`CREATE TABLE %s (
-      
-    );`, channelOpts.TableName),
+		Statement: fmt.Sprintf(`
+      DROP TABLE IF EXISTS %s;
+      CREATE TABLE %s (
+        A STRING,
+        B BOOLEAN
+      );`, channelOpts.TableName, channelOpts.TableName),
+		Parameters: map[string]string{
+			"MULTI_STATEMENT_COUNT": "0",
+		},
 	})
 	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, err = restClient.RunSQL(ctx, streaming.RunSQLRequest{
+			Database:  channelOpts.DatabaseName,
+			Schema:    channelOpts.SchemaName,
+			Statement: fmt.Sprintf(`DROP TABLE %s;`, channelOpts.TableName),
+		})
+		if err != nil {
+			t.Log("unable to cleanup table in SNOW:", err)
+		}
+	})
 	streamClient, err := streaming.NewSnowflakeServiceClient(ctx, clientOptions)
 	require.NoError(t, err)
 	defer streamClient.Close()
 	channel, err := streamClient.OpenChannel(ctx, channelOpts)
 	require.NoError(t, err)
-	for i := 0; i < 1; i++ {
-		_, err = channel.InsertRows(ctx, service.MessageBatch{
-			msg(`{"A": 188}`),
+	_, err = channel.InsertRows(ctx, service.MessageBatch{
+		msg(`{
+      "A": "bar",
+      "B": true
+    }`),
+		msg(`{
+      "A": "baz",
+      "B": "false"
+    }`),
+		msg(`{
+      "A": "foo",
+      "B": null
+    }`),
+	})
+	require.NoError(t, err)
+	require.EventuallyWithT(t, func(collect *assert.CollectT) {
+		// Always order by A so we get consistent ordering for our test
+		resp, err := restClient.RunSQL(ctx, streaming.RunSQLRequest{
+			Database:  channelOpts.DatabaseName,
+			Schema:    channelOpts.SchemaName,
+			Statement: fmt.Sprintf(`SELECT * FROM %s ORDER BY A;`, channelOpts.TableName),
 		})
-		require.NoError(t, err)
-	}
+		if !assert.NoError(collect, err) {
+			return
+		}
+		assert.Equal(collect, "00000", resp.SQLState)
+		assert.Equal(collect, [][]string{
+			{"bar", "true"},
+			{"baz", "false"},
+			{"foo", ""},
+		}, resp.Data)
+	}, 5*time.Second, time.Second)
 }
