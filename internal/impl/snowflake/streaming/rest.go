@@ -260,7 +260,7 @@ type restClient struct {
 	logger     *service.Logger
 
 	authRefreshLoop *periodic.Periodic
-	cachedJWT       typed.AtomicValue[string]
+	cachedJWT       *typed.AtomicValue[string]
 }
 
 func newRestClient(account, user string, privateKey *rsa.PrivateKey, logger *service.Logger) (c *restClient, err error) {
@@ -277,6 +277,7 @@ func newRestClient(account, user string, privateKey *rsa.PrivateKey, logger *ser
 		privateKey: privateKey,
 		userAgent:  userAgent,
 		logger:     logger,
+		cachedJWT:  typed.NewAtomicValue(""),
 		authRefreshLoop: periodic.New(
 			time.Hour-(2*time.Minute),
 			func() {
