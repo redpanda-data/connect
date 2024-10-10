@@ -16,9 +16,14 @@ import (
 	"os"
 	"testing"
 
+	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming"
 	"github.com/stretchr/testify/require"
 )
+
+func msg(s string) *service.Message {
+	return service.NewMessage([]byte(s))
+}
 
 func TestSnowflake(t *testing.T) {
 	ctx := context.Background()
@@ -44,16 +49,8 @@ func TestSnowflake(t *testing.T) {
 	})
 	require.NoError(t, err)
 	for i := 0; i < 1; i++ {
-		err = channel.InsertRows(ctx, []map[string]any{
-			{"A": "foo"},
-			{"A": "bar"},
-			{"A": "baz"},
-			//{"A": 0, "B": "qyz", "C": true},
-			//{"A": 0, "B": "solid", "C": true},
-			//{"A": -1, "B": "wow!", "C": true},
-			//{"C1": "foo", "C2": "bar", "C3": "baz"},
-			//{"C1": "a", "C2": "b", "C3": "c"},
-			//{"C1": "1", "C2": "2", "C3": "3"},
+		err = channel.InsertRows(ctx, service.MessageBatch{
+			msg(`{"A": 42}`),
 		})
 		require.NoError(t, err)
 	}
