@@ -445,7 +445,7 @@ func (c *SnowflakeRestClient) doPost(ctx context.Context, url string, req any, r
 			return nil, fmt.Errorf("unable to read http response: %w", err)
 		}
 		if r.StatusCode != 200 {
-			return nil, fmt.Errorf("non successful status code (%d): %s", r.StatusCode, reqBody)
+			return nil, fmt.Errorf("non successful status code (%d): %s", r.StatusCode, respBody)
 		}
 		if debugAPICalls {
 			fmt.Printf("got response to %s with body %s\n", url, respBody)
