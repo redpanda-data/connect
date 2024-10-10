@@ -243,41 +243,18 @@ func (o *snowflakeStreamerOutput) Connect(ctx context.Context) error {
 	return nil
 }
 
-func messageToRow(msg *service.Message) (map[string]any, error) {
-	v, err := msg.AsStructured()
-	if err != nil {
-		return nil, fmt.Errorf("error extracting object from %s: %w", ssoFieldMapping, err)
-	}
-	row, ok := v.(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("expected object, got: %T", v)
-	}
-	return row, nil
-}
-
 func (o *snowflakeStreamerOutput) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
-	rows := make([]map[string]any, len(batch))
 	if o.mapping != nil {
+		mapped := make(service.MessageBatch, len(batch))
 		exec := batch.BloblangExecutor(o.mapping)
 		for i := range batch {
 			msg, err := exec.Query(i)
 			if err != nil {
 				return fmt.Errorf("error executing %s: %w", ssoFieldMapping, err)
 			}
-			row, err := messageToRow(msg)
-			if err != nil {
-				return err
-			}
-			rows[i] = row
+			mapped[i] = msg
 		}
-	} else {
-		for i, msg := range batch {
-			row, err := messageToRow(msg)
-			if err != nil {
-				return err
-			}
-			rows[i] = row
-		}
+		batch = mapped
 	}
 	var channel *streaming.SnowflakeIngestionChannel
 	if maybeChan := o.channelPool.Get(); maybeChan != nil {
@@ -288,7 +265,7 @@ func (o *snowflakeStreamerOutput) WriteBatch(ctx context.Context, batch service.
 			return fmt.Errorf("unable to open snowflake streaming channel: %w", err)
 		}
 	}
-	err := channel.InsertRows(ctx, rows)
+	err := channel.InsertRows(ctx, batch)
 	o.channelPool.Put(channel)
 	return err
 }

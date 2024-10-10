@@ -199,16 +199,33 @@ func (c *SnowflakeIngestionChannel) nextRequestID() string {
 	return fmt.Sprintf("%s_%d", c.clientPrefix, rid)
 }
 
+func messageToRow(msg *service.Message) (map[string]any, error) {
+	v, err := msg.AsStructured()
+	if err != nil {
+		return nil, fmt.Errorf("error extracting object from message: %w", err)
+	}
+	row, ok := v.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("expected object, got: %T", v)
+	}
+	return row, nil
+}
+
 // InsertRows creates a parquet file using the schema from the data,
 // then writes that file into the Snowflake table
-func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, rows []map[string]any) error {
+func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch service.MessageBatch) error {
 	startTime := time.Now()
 	for _, t := range c.transformers {
 		t.stats.Reset()
 	}
 	var err error
-	for i, row := range rows {
+	rows := make([]map[string]any, len(batch))
+	for i, msg := range batch {
 		transformed := make(map[string]any, len(c.transformers))
+		row, err := messageToRow(msg)
+		if err != nil {
+			return err
+		}
 		for k, v := range row {
 			name := normalizeColumnName(k)
 			t, ok := c.transformers[name]
@@ -285,7 +302,7 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, rows []map[s
 						FirstInsertTimeInMillis: startTime.UnixMilli(),
 						LastInsertTimeInMillis:  startTime.UnixMilli(),
 						EPS: &epInfo{
-							Rows:    int64(len(rows)),
+							Rows:    metadata.NumRows,
 							Columns: columnEpInfo,
 						},
 						Channels: []channelMetadata{
