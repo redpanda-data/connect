@@ -17,6 +17,7 @@ import (
 	"crypto/rsa"
 	"encoding/hex"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
@@ -255,7 +256,7 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 		return fmt.Errorf("unable to parse parquet metadata: %w", err)
 	}
 	// Uncomment out to debug parquet compat bugs...
-	// os.WriteFile("latest_test.parquet", unencrypted, 0o644)
+	os.WriteFile("latest_test.parquet", unencrypted, 0o644)
 	unencryptedLen := len(unencrypted)
 	unencrypted = padBuffer(unencrypted, aes.BlockSize)
 	encrypted, err := encrypt(unencrypted, c.encryptionInfo.encryptionKey, blobPath, 0)
