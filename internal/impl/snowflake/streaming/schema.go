@@ -53,6 +53,8 @@ func convertFixedType(column columnMetadata) (parquet.Node, dataTransformerFn, e
 	return parquet.Leaf(ptype), incrementInt64Stat, nil
 }
 
+var jsonEncoded = map[string]bool{"ARRAY": true, "OBJECT": true, "VARIANT": true}
+
 // See ParquetTypeGenerator
 func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[string]*dataTransformer, map[string]string, error) {
 	groupNode := parquet.Group{}
@@ -91,10 +93,11 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[stri
 			n = parquet.Optional(n)
 		}
 		n = parquet.FieldID(n, id)
+		// Use plain encoding for now as there seems to be compatibility issues with the default settings
+		// we might be able to tune this more.
 		n = parquet.Encoded(n, &parquet.Plain)
-		n = parquet.Compressed(n, &parquet.Gzip)
 		typeMetadata[strconv.Itoa(id)] = fmt.Sprintf("%d,%d", logicalTypeOrdinal(column.LogicalType), physicalTypeOrdinal(column.PhysicalType))
-		if map[string]bool{"ARRAY": true, "OBJECT": true, "VARIANT": true}[strings.ToUpper(column.LogicalType)] {
+		if jsonEncoded[strings.ToUpper(column.LogicalType)] {
 			// mark the column metadata as being an object json for the server side scanner
 			typeMetadata[fmt.Sprintf("%d:obj_enc", id)] = "1"
 		}

@@ -200,6 +200,9 @@ func newSnowflakeStreamer(
 	o.table = table
 	o.mapping = mapping
 	o.logger = mgr.Logger()
+	o.buildTime = mgr.Metrics().NewTimer("build_output_latency_ns")
+	o.uploadTime = mgr.Metrics().NewTimer("upload_latency_ns")
+	o.compressedOutput = mgr.Metrics().NewCounter("compressed_output_size_bytes")
 	return o, nil
 }
 
@@ -208,6 +211,9 @@ type snowflakeStreamerOutput struct {
 	channelPool       sync.Pool
 	channelCreationMu sync.Mutex
 	poolSize          int
+	compressedOutput  *service.MetricCounter
+	uploadTime        *service.MetricTimer
+	buildTime         *service.MetricTimer
 
 	channelPrefix, db, schema, table string
 	mapping                          *bloblang.Executor
@@ -265,7 +271,10 @@ func (o *snowflakeStreamerOutput) WriteBatch(ctx context.Context, batch service.
 			return fmt.Errorf("unable to open snowflake streaming channel: %w", err)
 		}
 	}
-	err := channel.InsertRows(ctx, batch)
+	stats, err := channel.InsertRows(ctx, batch)
+	o.compressedOutput.Incr(int64(stats.CompressedOutputSize))
+	o.uploadTime.Timing(stats.UploadTime.Nanoseconds())
+	o.buildTime.Timing(stats.BuildTime.Nanoseconds())
 	o.channelPool.Put(channel)
 	return err
 }

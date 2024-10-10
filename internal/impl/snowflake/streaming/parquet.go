@@ -28,7 +28,7 @@ func writeParquetFile(schema *parquet.Schema, rows []map[string]any, metadata ma
 		parquet.CreatedBy("RedpandaConnect", version, "main"),
 		// Recommended by the Snowflake team to enable data page stats
 		parquet.DataPageStatistics(true),
-		parquet.Compression(&parquet.Uncompressed),
+		parquet.Compression(&parquet.Zstd),
 	)
 	for k, v := range metadata {
 		pw.SetKeyValueMetadata(k, v)
