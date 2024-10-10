@@ -17,6 +17,7 @@ import (
 	"crypto/rsa"
 	"encoding/hex"
 	"fmt"
+	"math/rand/v2"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
@@ -157,12 +158,12 @@ func (c *SnowflakeServiceClient) OpenChannel(ctx context.Context, opts ChannelOp
 		return nil, err
 	}
 	ch := &SnowflakeIngestionChannel{
-		options:      opts,
-		clientPrefix: c.clientPrefix,
-		schema:       schema,
-		client:       c.client,
-		role:         c.options.Role,
-		uploader:     c.uploader,
+		ChannelOptions: opts,
+		clientPrefix:   c.clientPrefix,
+		schema:         schema,
+		client:         c.client,
+		role:           c.options.Role,
+		uploader:       c.uploader,
 		encryptionInfo: &encryptionInfo{
 			encryptionKeyID: resp.EncryptionKeyID,
 			encryptionKey:   resp.EncryptionKey,
@@ -177,7 +178,7 @@ func (c *SnowflakeServiceClient) OpenChannel(ctx context.Context, opts ChannelOp
 
 // SnowflakeIngestionChannel is a write connection to a single table in Snowflake
 type SnowflakeIngestionChannel struct {
-	options          ChannelOptions
+	ChannelOptions
 	role             string
 	clientPrefix     string
 	schema           *parquet.Schema
@@ -245,7 +246,8 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 		}
 		rows[i] = transformed
 	}
-	blobPath := generateBlobPath(c.clientPrefix, 32, c.requestIDCounter)
+	fakeThreadID := rand.N(1000)
+	blobPath := generateBlobPath(c.clientPrefix, fakeThreadID, c.requestIDCounter)
 	c.requestIDCounter++
 	c.fileMetadata["primaryFileId"] = getShortname(blobPath)
 	unencrypted, err := writeParquetFile(c.schema, rows, c.fileMetadata)
@@ -296,9 +298,9 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 				},
 				Chunks: []chunkMetadata{
 					{
-						Database:                c.options.DatabaseName,
-						Schema:                  c.options.SchemaName,
-						Table:                   c.options.TableName,
+						Database:                c.DatabaseName,
+						Schema:                  c.SchemaName,
+						Table:                   c.TableName,
 						ChunkStartOffset:        0,
 						ChunkLength:             int32(unencryptedLen),
 						ChunkLengthUncompressed: totalUncompressedSize(metadata),
@@ -312,7 +314,7 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 						},
 						Channels: []channelMetadata{
 							{
-								Channel:          c.options.Name,
+								Channel:          c.Name,
 								ClientSequencer:  c.clientSequencer,
 								RowSequencer:     c.rowSequencer + 1,
 								StartOffsetToken: nil,
