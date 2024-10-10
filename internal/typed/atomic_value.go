@@ -28,7 +28,7 @@ type AtomicValue[T any] struct {
 // NewAtomicValue creates a new AtomicValue holding `v`.
 func NewAtomicValue[T any](v T) *AtomicValue[T] {
 	a := &AtomicValue[T]{}
-	a.val.Store(v)
+	a.Store(v)
 	return a
 }
 
