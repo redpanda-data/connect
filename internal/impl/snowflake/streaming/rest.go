@@ -24,7 +24,6 @@ import (
 	"net/http"
 	"runtime"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
@@ -250,25 +249,6 @@ type (
 		Message    string               `json:"message"`
 		Blobs      []blobRegisterStatus `json:"blobs"`
 	}
-	generatePresignedURLsRequest struct {
-		Role               string `json:"role"`
-		Table              string `json:"table"`
-		Database           string `json:"database"`
-		Schema             string `json:"schema"`
-		IsIceberg          bool   `json:"is_iceberg"`
-		Count              int32  `json:"count"`
-		TimeoutSeconds     int32  `json:"timeout_in_seconds"`
-		DeploymentGlobalID int64  `json:"deployment_global_id"`
-	}
-	presignedURLInfo struct {
-		FileName string `json:"file_name"`
-		URL      string `json:"url"`
-	}
-	generatePresignedURLsResponse struct {
-		StatusCode        int64              `json:"status_code"`
-		Message           string             `json:"message"`
-		PresignedURLInfos []presignedURLInfo `json:"presigned_url_infos"`
-	}
 )
 
 type restClient struct {
@@ -348,9 +328,21 @@ func (c *restClient) ConfigureClient(ctx context.Context, req clientConfigureReq
 	return
 }
 
+func (c *restClient) ChannelStatus(ctx context.Context, req batchChannelStatusRequest) (resp batchChannelStatusResponse, err error) {
+	requestID := uuid.NewString()
+	err = c.doPost(ctx, fmt.Sprintf("https://%s.snowflakecomputing.com/v1/streaming/channels/status?requestId=%s", c.account, requestID), req, &resp)
+	return
+}
+
 func (c *restClient) OpenChannel(ctx context.Context, req openChannelRequest) (resp openChannelResponse, err error) {
 	requestID := uuid.NewString()
 	err = c.doPost(ctx, fmt.Sprintf("https://%s.snowflakecomputing.com/v1/streaming/channels/open?requestId=%s", c.account, requestID), req, &resp)
+	return
+}
+
+func (c *restClient) DropChannel(ctx context.Context, req dropChannelRequest) (resp dropChannelResponse, err error) {
+	requestID := uuid.NewString()
+	err = c.doPost(ctx, fmt.Sprintf("https://%s.snowflakecomputing.com/v1/streaming/channels/drop?requestId=%s", c.account, requestID), req, &resp)
 	return
 }
 

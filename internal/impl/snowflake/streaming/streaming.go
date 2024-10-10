@@ -26,7 +26,7 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/typed"
 )
 
-// ClientOptions
+// ClientOptions is the options to create a Snowflake Snowpipe API Client
 type ClientOptions struct {
 	// Account name
 	Account string
@@ -57,6 +57,7 @@ type SnowflakeServiceClient struct {
 	uploadRefreshLoop *periodic.Periodic
 }
 
+// NewSnowflakeServiceClient creates a new API client for the Snowpipe Streaming API
 func NewSnowflakeServiceClient(ctx context.Context, opts ClientOptions) (*SnowflakeServiceClient, error) {
 	client, err := newRestClient(
 		opts.Account,
@@ -104,6 +105,7 @@ func NewSnowflakeServiceClient(ctx context.Context, opts ClientOptions) (*Snowfl
 	return ssc, nil
 }
 
+// Close closes the client and future requests have undefined behavior.
 func (c *SnowflakeServiceClient) Close() error {
 	c.uploadRefreshLoop.Stop()
 	c.client.Close()
@@ -135,6 +137,7 @@ type encryptionInfo struct {
 	encryptionKey   string
 }
 
+// OpenChannel creates a new or reuses a channel to load data into a Snowflake table.
 func (c *SnowflakeServiceClient) OpenChannel(ctx context.Context, opts ChannelOptions) (*SnowflakeIngestionChannel, error) {
 	if opts.DefaultTimeZone == nil {
 		opts.DefaultTimeZone = time.UTC
