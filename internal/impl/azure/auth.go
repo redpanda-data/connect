@@ -20,6 +20,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azfile/share"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
@@ -36,7 +38,7 @@ const (
 	bscFieldStorageConnectionString = "storage_connection_string"
 )
 
-func azureComponentSpec(forBlobStorage bool) *service.ConfigSpec {
+func azureComponentSpec() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
 		Categories("Services", "Azure").
 		Fields(
@@ -78,6 +80,29 @@ func blobStorageClientFromParsed(pConf *service.ParsedConfig, container *service
 		return nil, false, errors.New("invalid azure storage account credentials")
 	}
 	return getBlobStorageClient(connectionString, storageAccount, storageAccessKey, storageSASToken, container)
+}
+
+func fileShareClientFromParsed(pConf *service.ParsedConfig, shareName string) (*share.Client, bool, bool, string, string, error) {
+	connectionString, err := pConf.FieldString(bscFieldStorageConnectionString)
+	if err != nil {
+		return nil, false, false, "", "", err
+	}
+	storageAccount, err := pConf.FieldString(bscFieldStorageAccount)
+	if err != nil {
+		return nil, false, false, "", "", err
+	}
+	storageAccessKey, err := pConf.FieldString(bscFieldStorageAccessKey)
+	if err != nil {
+		return nil, false, false, "", "", err
+	}
+	storageSASToken, err := pConf.FieldString(bscFieldStorageSASToken)
+	if err != nil {
+		return nil, false, false, "", "", err
+	}
+	if storageAccount == "" && connectionString == "" {
+		return nil, false, false, "", "", errors.New("invalid azure storage account credentials")
+	}
+	return getFileShareClient(connectionString, storageAccount, storageAccessKey, storageSASToken, shareName)
 }
 
 const (
@@ -125,6 +150,55 @@ func getBlobStorageClient(storageConnectionString, storageAccount, storageAccess
 		return nil, false, fmt.Errorf("invalid azure storage account credentials: %v", err)
 	}
 	return client, containerSASToken, err
+}
+
+const (
+	fileEndpointExp = "https://%s.file.core.windows.net"
+)
+
+func getFileShareClient(storageConnectionString, storageAccount, storageAccessKey, storageSASToken, shareName string) (*share.Client, bool, bool, string, string, error) {
+	var (
+		client                            *share.Client
+		err                               error
+		usesStorageSASToken, fileSASToken bool
+	)
+	if len(storageConnectionString) > 0 {
+		storageConnectionString := parseStorageConnectionString(storageConnectionString, storageAccount)
+		client, err = share.NewClientFromConnectionString(storageConnectionString, shareName, nil)
+	} else if len(storageAccessKey) > 0 {
+		cred, credErr := share.NewSharedKeyCredential(storageAccount, storageAccessKey)
+		if credErr != nil {
+			return nil, false, false, "", "", fmt.Errorf("error creating shared key credential: %w", credErr)
+		}
+		serviceURL := fmt.Sprintf(fileEndpointExp, storageAccount)
+		client, err = share.NewClientWithSharedKeyCredential(serviceURL, cred, nil)
+	} else if len(storageSASToken) > 0 {
+		var serviceURL string
+		if strings.HasPrefix(storageSASToken, "sp=") {
+			// file share SAS token
+			fileSASToken = true
+			serviceURL = fmt.Sprintf("%s/%s?%s", fmt.Sprintf(fileEndpointExp, storageAccount), shareName, storageSASToken)
+		} else {
+			// storage account SAS token
+			usesStorageSASToken = true
+			serviceURL = fmt.Sprintf("%s/%s", fmt.Sprintf(fileEndpointExp, storageAccount), storageSASToken)
+		}
+		client, err = share.NewClientWithNoCredential(serviceURL, nil)
+		if usesStorageSASToken {
+			return client, fileSASToken, usesStorageSASToken, storageAccount, storageSASToken, err
+		}
+	} else {
+		cred, credErr := azidentity.NewDefaultAzureCredential(nil)
+		if credErr != nil {
+			return nil, false, false, "", "", fmt.Errorf("error getting default Azure credentials: %v", credErr)
+		}
+		serviceURL := fmt.Sprintf(fileEndpointExp, storageAccount)
+		client, err = share.NewClient(serviceURL, cred, nil)
+	}
+	if err != nil {
+		return nil, false, false, "", "", fmt.Errorf("invalid azure storage account credentials: %v", err)
+	}
+	return client, fileSASToken, usesStorageSASToken, "", "", err
 }
 
 // getEmulatorConnectionString returns the Azurite connection string for the provided service ports
