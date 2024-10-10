@@ -16,24 +16,27 @@ package typed
 
 import "sync/atomic"
 
-// A small type safe generic wrapper over atomic.Value
+// AtomicValue is a small type safe generic wrapper over atomic.Value
 //
 // Who doesn't like generics?
 type AtomicValue[T any] struct {
 	val *atomic.Value
 }
 
+// NewAtomicValue creates a new AtomicValue holding `v`.
 func NewAtomicValue[T any](v T) *AtomicValue[T] {
 	a := &AtomicValue[T]{}
 	a.val.Store(v)
 	return a
 }
 
+// Load returns the value set by the latest store.
 func (a *AtomicValue[T]) Load() T {
 	// This dereference is safe because we only create these with values
 	return *a.val.Load().(*T)
 }
 
+// Store sets the value of the atomic to `v`.
 func (a *AtomicValue[T]) Store(v T) {
 	a.val.Store(&v)
 }

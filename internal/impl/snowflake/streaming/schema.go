@@ -103,14 +103,14 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[stri
 		transformers[name] = &dataTransformer{
 			name:      column.Name,
 			converter: converter,
-			stats:     &statsBuffer{columnId: id},
+			stats:     &statsBuffer{columnID: id},
 		}
 	}
 	return parquet.NewSchema("bdec", groupNode), transformers, typeMetadata, nil
 }
 
 type statsBuffer struct {
-	columnId               int
+	columnID               int
 	minIntVal, maxIntVal   int64
 	minRealVal, maxRealVal float64
 	minStrVal, maxStrVal   []byte
@@ -256,7 +256,7 @@ func computeColumnEpInfo(stats map[string]*dataTransformer) map[string]fileColum
 			maxStrVal = &s
 		}
 		info[transformer.name] = fileColumnProperties{
-			ColumnOrdinal:  int32(stat.columnId),
+			ColumnOrdinal:  int32(stat.columnID),
 			NullCount:      stat.nullCount,
 			MinStrValue:    minStrVal,
 			MaxStrValue:    maxStrVal,
