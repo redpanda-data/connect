@@ -14,6 +14,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"os"
 	"testing"
 
@@ -37,24 +38,37 @@ func TestSnowflake(t *testing.T) {
 	require.NoError(t, err)
 	parseResult, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 	require.NoError(t, err)
-	client, err := streaming.NewSnowflakeServiceClient(ctx, streaming.ClientOptions{
+	clientOptions := streaming.ClientOptions{
 		Account:    "WQKFXQQ-WI77362",
 		User:       "ROCKWOODREDPANDA",
 		Role:       "ACCOUNTADMIN",
 		PrivateKey: parseResult.(*rsa.PrivateKey),
-	})
-	require.NoError(t, err)
-	defer client.Close()
-	channel, err := client.OpenChannel(ctx, streaming.ChannelOptions{
+	}
+	channelOpts := streaming.ChannelOptions{
 		Name:         "my_first_testing_channel",
 		DatabaseName: "BABY_DATABASE",
 		SchemaName:   "PUBLIC",
-		TableName:    "TEST_TABLE",
+		TableName:    "TEST_TABLE_KITCHEN_SINK",
+	}
+	restClient, err := streaming.NewRestClient(clientOptions.Account, clientOptions.User, clientOptions.PrivateKey, clientOptions.Logger)
+	require.NoError(t, err)
+	defer restClient.Close()
+	_, err = restClient.RunSQL(ctx, streaming.RunSQLRequest{
+		Database: channelOpts.DatabaseName,
+		Schema:   channelOpts.SchemaName,
+		Statement: fmt.Sprintf(`CREATE TABLE %s (
+      
+    );`, channelOpts.TableName),
 	})
 	require.NoError(t, err)
+	streamClient, err := streaming.NewSnowflakeServiceClient(ctx, clientOptions)
+	require.NoError(t, err)
+	defer streamClient.Close()
+	channel, err := streamClient.OpenChannel(ctx, channelOpts)
+	require.NoError(t, err)
 	for i := 0; i < 1; i++ {
-		err = channel.InsertRows(ctx, service.MessageBatch{
-			msg(`{"A": 42}`),
+		_, err = channel.InsertRows(ctx, service.MessageBatch{
+			msg(`{"A": 188}`),
 		})
 		require.NoError(t, err)
 	}
