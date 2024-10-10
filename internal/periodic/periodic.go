@@ -42,7 +42,9 @@ func New(duration time.Duration, work func()) *Periodic {
 	}
 }
 
-// New creates new background work that runs every `duration` and performs `work`.
+// NewWithContext creates new background work that runs every `duration` and performs `work`.
+//
+// Work is passed a context that is cancelled when the overall periodic is cancelled.
 func NewWithContext(duration time.Duration, work func(context.Context)) *Periodic {
 	return &Periodic{
 		duration: duration,

@@ -15,6 +15,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/url"
 	"path/filepath"
@@ -43,13 +44,13 @@ func newUploader(fileLocationInfo fileLocationInfo) (uploader, error) {
 		awsToken := creds["AWS_TOKEN"]
 		// TODO: Handle regional URLs
 		if fileLocationInfo.UseS3RegionalURL {
-			return nil, fmt.Errorf("S3 Regional URLs are not supported")
+			return nil, errors.New("S3 Regional URLs are not supported")
 		}
 		// TODO: Handle EndPoint, the Java SDK says this is only for Azure, but
 		// that doesn't seem to be the case from reading the Java JDBC driver,
 		// the Golang driver says this is used for FIPS in GovCloud.
 		if fileLocationInfo.EndPoint != "" {
-			return nil, fmt.Errorf("custom S3 endpoint is not supported")
+			return nil, errors.New("custom S3 endpoint is not supported")
 		}
 		client := s3.New(s3.Options{
 			Region: fileLocationInfo.Region,
@@ -80,6 +81,9 @@ func newUploader(fileLocationInfo fileLocationInfo) (uploader, error) {
 				TokenType:   "Bearer",
 			}),
 		))
+		if err != nil {
+			return nil, err
+		}
 		bucket, prefix, err := splitBucketAndPath(fileLocationInfo.Location)
 		if err != nil {
 			return nil, err
