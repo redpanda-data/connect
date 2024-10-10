@@ -18,9 +18,11 @@ import "sync/atomic"
 
 // AtomicValue is a small type safe generic wrapper over atomic.Value
 //
+// Must not be copied (use NewAtomicValue).
+//
 // Who doesn't like generics?
 type AtomicValue[T any] struct {
-	val *atomic.Value
+	val atomic.Value
 }
 
 // NewAtomicValue creates a new AtomicValue holding `v`.

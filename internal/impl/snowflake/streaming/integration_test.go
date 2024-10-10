@@ -13,6 +13,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"os"
 	"testing"
 
@@ -28,14 +29,17 @@ func msg(s string) *service.Message {
 func TestSnowflake(t *testing.T) {
 	ctx := context.Background()
 	privateKeyFile, err := os.ReadFile("./resources/rsa_key.p8")
+	if errors.Is(err, os.ErrNotExist) {
+		t.Skip("no RSA private key, skipping snowflake test")
+	}
 	require.NoError(t, err)
 	block, _ := pem.Decode(privateKeyFile)
 	require.NoError(t, err)
 	parseResult, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 	require.NoError(t, err)
 	client, err := streaming.NewSnowflakeServiceClient(ctx, streaming.ClientOptions{
-		Account:    "RGHBUPG-TV88687",
-		User:       "ROCKWOODREDPANDAAZ",
+		Account:    "WQKFXQQ-WI77362",
+		User:       "ROCKWOODREDPANDA",
 		Role:       "ACCOUNTADMIN",
 		PrivateKey: parseResult.(*rsa.PrivateKey),
 	})
@@ -43,9 +47,9 @@ func TestSnowflake(t *testing.T) {
 	defer client.Close()
 	channel, err := client.OpenChannel(ctx, streaming.ChannelOptions{
 		Name:         "my_first_testing_channel",
-		DatabaseName: "AZURE_DB",
+		DatabaseName: "BABY_DATABASE",
 		SchemaName:   "PUBLIC",
-		TableName:    "AZURE_TABLE",
+		TableName:    "TEST_TABLE",
 	})
 	require.NoError(t, err)
 	for i := 0; i < 1; i++ {
