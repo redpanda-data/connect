@@ -208,7 +208,8 @@ and it must be set to the `+"`<cloud>`"+` part of the Account Identifier
 `).Example("aws").Example("gcp").Example("azure").Optional()).
 		Field(service.NewStringField("user").Description("Username.")).
 		Field(service.NewStringField("password").Description("An optional password.").Optional().Secret()).
-		Field(service.NewStringField("private_key_file").Description("The path to a file containing the private SSH key.").Optional()).
+		Field(service.NewStringField("private_key").Description("The private SSH key. `private_key_pass` is required when using encrypted keys.").Optional().Secret()).
+		Field(service.NewStringField("private_key_file").Description("The path to a file containing the private SSH key. `private_key_pass` is required when using encrypted keys.").Optional()).
 		Field(service.NewStringField("private_key_pass").Description("An optional private SSH key passphrase.").Optional().Secret()).
 		Field(service.NewStringField("role").Description("Role.")).
 		Field(service.NewStringField("database").Description("Database.")).
@@ -229,13 +230,14 @@ and it must be set to the `+"`<cloud>`"+` part of the Account Identifier
 			string(CompressionTypeZstandard):  "Messages must be pre-compressed using the Zstandard algorithm. Default `file_extension`: `zst`.",
 		}).Description("Compression type.").Default(string(CompressionTypeAuto))).
 		Field(service.NewInterpolatedStringField("request_id").Description("Request ID. Will be assigned a random UUID (v4) string if not set or empty.").Optional().Default("").Version("v4.12.0")).
-		Field(service.NewInterpolatedStringField("snowpipe").Description(`An optional Snowpipe name. Use the `+"`<snowpipe>`"+` part from `+"`<database>.<schema>.<snowpipe>`"+`.`).Optional()).
+		Field(service.NewInterpolatedStringField("snowpipe").Description("An optional Snowpipe name. Use the `<snowpipe>` part from `<database>.<schema>.<snowpipe>`. `private_key` or `private_key_file` must be set when using this feature.").Optional()).
 		Field(service.NewBoolField("client_session_keep_alive").Description("Enable Snowflake keepalive mechanism to prevent the client session from expiring after 4 hours (error 390114).").Advanced().Default(false)).
 		Field(service.NewBatchPolicyField("batching")).
 		Field(service.NewIntField("max_in_flight").Description("The maximum number of parallel message batches to have in flight at any given time.").Default(1)).
 		LintRule(`root = match {
-  this.exists("password") && this.password != "" && this.exists("private_key_file") && this.private_key_file != "" => [ "both `+"`password`"+` and `+"`private_key_file`"+` can't be set simultaneously" ],
-  this.exists("snowpipe") && this.snowpipe != "" && (!this.exists("private_key_file") || this.private_key_file == "") => [ "`+"`private_key_file`"+` is required when setting `+"`snowpipe`"+`" ],
+  (!this.exists("password") || this.password == "") && (!this.exists("private_key") || this.private_key == "") && (!this.exists("private_key_file") || this.private_key_file == "") => [ "either `+"`password`"+` or `+"`private_key`"+` or `+"`private_key_file`"+` must be set" ],
+  this.exists("password") && this.password != "" && (this.exists("private_key") && this.private_key != "" || this.exists("private_key_file") && this.private_key_file != "") => [ "only one of `+"`password`"+`, `+"`private_key`"+` and `+"`private_key_file`"+` can be set" ],
+  this.exists("snowpipe") && this.snowpipe != "" && !((this.exists("private_key") && this.private_key != "") || (this.exists("private_key_file") && this.private_key_file != "")) => [ "either `+"`private_key`"+` or `+"`private_key_file`"+` must be set when using `+"`snowpipe`"+`" ],
 }`).
 		Example("Kafka / realtime brokers", "Upload message batches from realtime brokers such as Kafka persisting the batch partition and offsets in the stage path and filename similarly to the https://docs.snowflake.com/en/user-guide/kafka-connector-ts.html#step-1-view-the-copy-history-for-the-table[Kafka Connector scheme^] and call Snowpipe to load them into a table. When batching is configured at the input level, it is done per-partition.", `
 input:
@@ -415,9 +417,9 @@ func init() {
 
 //------------------------------------------------------------------------------
 
-// getPrivateKey reads and parses the private key
+// getPrivateKeyFromFile reads and parses the private key
 // Inspired from https://github.com/chanzuckerberg/terraform-provider-snowflake/blob/c07d5820bea7ac3d8a5037b0486c405fdf58420e/pkg/provider/provider.go#L367
-func getPrivateKey(f fs.FS, path, passphrase string) (*rsa.PrivateKey, error) {
+func getPrivateKeyFromFile(f fs.FS, path, passphrase string) (*rsa.PrivateKey, error) {
 	privateKeyBytes, err := service.ReadFile(f, path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read private key %s: %s", path, err)
@@ -425,7 +427,10 @@ func getPrivateKey(f fs.FS, path, passphrase string) (*rsa.PrivateKey, error) {
 	if len(privateKeyBytes) == 0 {
 		return nil, errors.New("private key is empty")
 	}
+	return getPrivateKey(privateKeyBytes, passphrase)
+}
 
+func getPrivateKey(privateKeyBytes []byte, passphrase string) (*rsa.PrivateKey, error) {
 	privateKeyBlock, _ := pem.Decode(privateKeyBytes)
 	if privateKeyBlock == nil {
 		return nil, errors.New("could not parse private key, key is not in PEM format")
@@ -433,7 +438,7 @@ func getPrivateKey(f fs.FS, path, passphrase string) (*rsa.PrivateKey, error) {
 
 	if privateKeyBlock.Type == "ENCRYPTED PRIVATE KEY" {
 		if passphrase == "" {
-			return nil, errors.New("private key requires a passphrase, but private_key_passphrase was not supplied")
+			return nil, errors.New("private key requires a passphrase, but private_key_pass was not supplied")
 		}
 
 		// Only keys encrypted with pbes2 http://oid-info.com/get/1.2.840.113549.1.5.13 are supported.
@@ -647,11 +652,6 @@ func newSnowflakeWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 
 	authenticator := gosnowflake.AuthTypeJwt
 	if password == "" {
-		var privateKeyFile string
-		if privateKeyFile, err = conf.FieldString("private_key_file"); err != nil {
-			return nil, fmt.Errorf("failed to parse private_key_file: %s", err)
-		}
-
 		var privateKeyPass string
 		if conf.Contains("private_key_pass") {
 			if privateKeyPass, err = conf.FieldString("private_key_pass"); err != nil {
@@ -659,8 +659,25 @@ func newSnowflakeWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 			}
 		}
 
-		if s.privateKey, err = getPrivateKey(mgr.FS(), privateKeyFile, privateKeyPass); err != nil {
-			return nil, fmt.Errorf("failed to read private key: %s", err)
+		var privateKey string
+		if conf.Contains("private_key") {
+			if privateKey, err = conf.FieldString("private_key"); err != nil {
+				return nil, fmt.Errorf("failed to parse private_key: %s", err)
+			}
+		}
+		if privateKey != "" {
+			if s.privateKey, err = getPrivateKey([]byte(privateKey), privateKeyPass); err != nil {
+				return nil, fmt.Errorf("failed to read private key: %s", err)
+			}
+		} else {
+			var privateKeyFile string
+			if privateKeyFile, err = conf.FieldString("private_key_file"); err != nil {
+				return nil, fmt.Errorf("failed to parse private_key_file: %s", err)
+			}
+
+			if s.privateKey, err = getPrivateKeyFromFile(mgr.FS(), privateKeyFile, privateKeyPass); err != nil {
+				return nil, fmt.Errorf("failed to read private key: %s", err)
+			}
 		}
 
 		if s.publicKeyFingerprint, err = calculatePublicKeyFingerprint(s.privateKey); err != nil {

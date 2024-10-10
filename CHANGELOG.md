@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Field `checksum_algorithm` added to the `aws_s3` output. (@dom-lee-naimuri)
+- Field `private_key` added to the `snowflake_put` output. (@mihaitodor)
 
 ### Fixed
 

@@ -44,6 +44,7 @@ output:
     cloud: aws # No default (optional)
     user: "" # No default (required)
     password: "" # No default (optional)
+    private_key: "" # No default (optional)
     private_key_file: "" # No default (optional)
     private_key_pass: "" # No default (optional)
     role: "" # No default (required)
@@ -80,6 +81,7 @@ output:
     cloud: aws # No default (optional)
     user: "" # No default (required)
     password: "" # No default (optional)
+    private_key: "" # No default (optional)
     private_key_file: "" # No default (optional)
     private_key_pass: "" # No default (optional)
     role: "" # No default (required)
@@ -517,9 +519,22 @@ This field contains sensitive information that usually shouldn't be added to a c
 *Type*: `string`
 
 
+=== `private_key`
+
+The private SSH key. `private_key_pass` is required when using encrypted keys.
+[CAUTION]
+====
+This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
+====
+
+
+
+*Type*: `string`
+
+
 === `private_key_file`
 
-The path to a file containing the private SSH key.
+The path to a file containing the private SSH key. `private_key_pass` is required when using encrypted keys.
 
 
 *Type*: `string`
@@ -669,7 +684,7 @@ Requires version v4.12.0 or newer
 
 === `snowpipe`
 
-An optional Snowpipe name. Use the `<snowpipe>` part from `<database>.<schema>.<snowpipe>`.
+An optional Snowpipe name. Use the `<snowpipe>` part from `<database>.<schema>.<snowpipe>`. `private_key` or `private_key_file` must be set when using this feature.
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
 
