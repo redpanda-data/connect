@@ -73,6 +73,7 @@ func authFieldSpec() *service.ConfigField {
 			Description("The NKey seed.").
 			Secret().
 			Optional().
+			Version("4.38.0").
 			Example("UDXU4RCSJNZOIQHZNWXHXORDPRTGNJAHAHFRGZNEEJCPQTT2M7NLCNF4"), // don't worry, this sample seed is from Nats offical doc
 		service.NewStringField("user_credentials_file").
 			Description("An optional file containing user credentials which consist of an user JWT and corresponding NKey seed.").
