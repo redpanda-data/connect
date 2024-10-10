@@ -17,7 +17,6 @@ import (
 	"crypto/rsa"
 	"encoding/hex"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
@@ -48,7 +47,7 @@ type stageUploaderResult struct {
 
 // SnowflakeServiceClient is a port from Java :)
 type SnowflakeServiceClient struct {
-	client           *restClient
+	client           *SnowflakeRestClient
 	clientPrefix     string
 	deploymentID     int64
 	options          ClientOptions
@@ -60,7 +59,7 @@ type SnowflakeServiceClient struct {
 
 // NewSnowflakeServiceClient creates a new API client for the Snowpipe Streaming API
 func NewSnowflakeServiceClient(ctx context.Context, opts ClientOptions) (*SnowflakeServiceClient, error) {
-	client, err := newRestClient(
+	client, err := NewRestClient(
 		opts.Account,
 		opts.User,
 		opts.PrivateKey,
@@ -69,7 +68,7 @@ func NewSnowflakeServiceClient(ctx context.Context, opts ClientOptions) (*Snowfl
 	if err != nil {
 		return nil, err
 	}
-	resp, err := client.ConfigureClient(ctx, clientConfigureRequest{Role: opts.Role})
+	resp, err := client.configureClient(ctx, clientConfigureRequest{Role: opts.Role})
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +91,7 @@ func NewSnowflakeServiceClient(ctx context.Context, opts ClientOptions) (*Snowfl
 		uploader: uploaderAtomic,
 		// Tokens expire every hour, so refresh a bit before that
 		uploadRefreshLoop: periodic.NewWithContext(time.Hour-2*time.Minute, func(ctx context.Context) {
-			resp, err := client.ConfigureClient(ctx, clientConfigureRequest{Role: opts.Role})
+			resp, err := client.configureClient(ctx, clientConfigureRequest{Role: opts.Role})
 			if err != nil {
 				uploaderAtomic.Store(stageUploaderResult{err: err})
 				return
@@ -143,7 +142,7 @@ func (c *SnowflakeServiceClient) OpenChannel(ctx context.Context, opts ChannelOp
 	if opts.DefaultTimeZone == nil {
 		opts.DefaultTimeZone = time.UTC
 	}
-	resp, err := c.client.OpenChannel(ctx, openChannelRequest{
+	resp, err := c.client.openChannel(ctx, openChannelRequest{
 		RequestID: c.nextRequestID(),
 		Role:      c.options.Role,
 		Channel:   opts.Name,
@@ -187,7 +186,7 @@ type SnowflakeIngestionChannel struct {
 	role             string
 	clientPrefix     string
 	schema           *parquet.Schema
-	client           *restClient
+	client           *SnowflakeRestClient
 	uploader         *typed.AtomicValue[stageUploaderResult]
 	encryptionInfo   *encryptionInfo
 	clientSequencer  int64
@@ -215,9 +214,16 @@ func messageToRow(msg *service.Message) (map[string]any, error) {
 	return row, nil
 }
 
+type InsertStats struct {
+	BuildTime            time.Duration
+	UploadTime           time.Duration
+	CompressedOutputSize int
+}
+
 // InsertRows creates a parquet file using the schema from the data,
 // then writes that file into the Snowflake table
-func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch service.MessageBatch) error {
+func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch service.MessageBatch) (InsertStats, error) {
+	stats := InsertStats{}
 	startTime := time.Now()
 	for _, t := range c.transformers {
 		t.stats.Reset()
@@ -228,7 +234,7 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 		transformed := make(map[string]any, len(c.transformers))
 		row, err := messageToRow(msg)
 		if err != nil {
-			return err
+			return stats, err
 		}
 		for k, v := range row {
 			name := normalizeColumnName(k)
@@ -239,7 +245,7 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 			}
 			transformed[name], err = t.converter(t.stats, v)
 			if err != nil {
-				return err
+				return stats, fmt.Errorf("invalid data for column %s: %w", k, err)
 			}
 		}
 		rows[i] = transformed
@@ -249,38 +255,38 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 	c.fileMetadata["primaryFileId"] = getShortname(blobPath)
 	unencrypted, err := writeParquetFile(c.schema, rows, c.fileMetadata)
 	if err != nil {
-		return err
+		return stats, err
 	}
 	metadata, err := readParquetMetadata(unencrypted)
 	if err != nil {
-		return fmt.Errorf("unable to parse parquet metadata: %w", err)
+		return stats, fmt.Errorf("unable to parse parquet metadata: %w", err)
 	}
 	// Uncomment out to debug parquet compat bugs...
-	os.WriteFile("latest_test.parquet", unencrypted, 0o644)
+	// os.WriteFile("latest_test.parquet", unencrypted, 0o644)
 	unencryptedLen := len(unencrypted)
 	unencrypted = padBuffer(unencrypted, aes.BlockSize)
 	encrypted, err := encrypt(unencrypted, c.encryptionInfo.encryptionKey, blobPath, 0)
 	if err != nil {
-		return err
+		return stats, err
 	}
 
 	uploadStartTime := time.Now()
 	fileMD5Hash := md5.Sum(encrypted)
 	uploaderResult := c.uploader.Load()
 	if uploaderResult.err != nil {
-		return fmt.Errorf("failed to acquire stage uploader: %w", uploaderResult.err)
+		return stats, fmt.Errorf("failed to acquire stage uploader: %w", uploaderResult.err)
 	}
 	uploader := uploaderResult.uploader
 	err = backoff.Retry(func() error {
 		return uploader.upload(ctx, blobPath, encrypted, fileMD5Hash[:])
 	}, backoff.WithMaxRetries(backoff.NewConstantBackOff(time.Second), 3))
 	if err != nil {
-		return err
+		return stats, err
 	}
 
 	uploadFinishTime := time.Now()
 	columnEpInfo := computeColumnEpInfo(c.transformers)
-	resp, err := c.client.RegisterBlob(ctx, registerBlobRequest{
+	resp, err := c.client.registerBlob(ctx, registerBlobRequest{
 		RequestID: c.nextRequestID(),
 		Role:      c.role,
 		Blobs: []blobMetadata{
@@ -325,18 +331,18 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 		},
 	})
 	if err != nil {
-		return err
+		return stats, err
 	}
 	if len(resp.Blobs) != 1 {
-		return fmt.Errorf("unexpected number of response blobs: %d", len(resp.Blobs))
+		return stats, fmt.Errorf("unexpected number of response blobs: %d", len(resp.Blobs))
 	}
 	status := resp.Blobs[0]
 	if len(status.Chunks) != 1 {
-		return fmt.Errorf("unexpected number of response blob chunks: %d", len(status.Chunks))
+		return stats, fmt.Errorf("unexpected number of response blob chunks: %d", len(status.Chunks))
 	}
 	chunk := status.Chunks[0]
 	if len(chunk.Channels) != 1 {
-		return fmt.Errorf("unexpected number of channels for blob chunk: %d", len(chunk.Channels))
+		return stats, fmt.Errorf("unexpected number of channels for blob chunk: %d", len(chunk.Channels))
 	}
 	channel := chunk.Channels[0]
 	if channel.StatusCode != 0 {
@@ -344,10 +350,13 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 		if msg == "" {
 			msg = "(no message)"
 		}
-		return fmt.Errorf("error response injesting data (%d): %s", channel.StatusCode, msg)
+		return stats, fmt.Errorf("error response injesting data (%d): %s", channel.StatusCode, msg)
 	}
 	c.rowSequencer++
 	c.clientSequencer = channel.ClientSequencer
+	stats.CompressedOutputSize = unencryptedLen
+	stats.BuildTime = uploadStartTime.Sub(startTime)
+	stats.UploadTime = uploadFinishTime.Sub(uploadStartTime)
 	// TODO: we need to validate the offset moved forward...
-	return nil
+	return stats, nil
 }

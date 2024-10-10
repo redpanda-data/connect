@@ -249,9 +249,43 @@ type (
 		Message    string               `json:"message"`
 		Blobs      []blobRegisterStatus `json:"blobs"`
 	}
+	RunSQLRequest struct {
+		Statement string `json:"statement"`
+		Timeout   int64  `json:"timeout"`
+		Database  string `json:"database,omitempty"`
+		Schema    string `json:"schema,omitempty"`
+		Warehouse string `json:"warehouse,omitempty"`
+		Role      string `json:"role,omitempty"`
+		// https://docs.snowflake.com/en/sql-reference/parameters
+		Parameters map[string]string `json:"parameters,omitempty"`
+	}
+	rowType struct {
+		Name      string `json:"name"`
+		Type      string `json:"type"`
+		Length    int64  `json:"length"`
+		Precision int64  `json:"precision"`
+		Scale     int64  `json:"scale"`
+		Nullable  bool   `json:"nullable"`
+	}
+	resultSetMetadata struct {
+		NumRows int64     `json:"numRows"`
+		Format  string    `json:"format"`
+		RowType []rowType `json:"rowType"`
+	}
+	RunSQLResponse struct {
+		ResultSetMetadata  resultSetMetadata `json:"resultSetMetaData"`
+		Data               [][]string        `json:"data"`
+		Code               string            `json:"code"`
+		StatementStatusURL string            `json:"statementStatusURL"`
+		SQLState           string            `json:"sqlState"`
+		StatementHandle    string            `json:"statementHandle"`
+		Message            string            `json:"message"`
+		CreatedOn          int64             `json:"createdOn"`
+	}
 )
 
-type restClient struct {
+// SnowflakeRestClient allows you to make REST API calls against Snowflake APIs.
+type SnowflakeRestClient struct {
 	account    string
 	user       string
 	privateKey *rsa.PrivateKey
@@ -263,14 +297,15 @@ type restClient struct {
 	cachedJWT       *typed.AtomicValue[string]
 }
 
-func newRestClient(account, user string, privateKey *rsa.PrivateKey, logger *service.Logger) (c *restClient, err error) {
+// NewRestClient creates a new REST client for the given parameters.
+func NewRestClient(account, user string, privateKey *rsa.PrivateKey, logger *service.Logger) (c *SnowflakeRestClient, err error) {
 	userAgent := fmt.Sprintf("RedpandaConnect/%v (%v-%v) %v/%v",
 		version,
 		runtime.GOOS,
 		runtime.GOARCH,
 		runtime.Compiler,
 		runtime.Version())
-	c = &restClient{
+	c = &SnowflakeRestClient{
 		account:    account,
 		user:       user,
 		client:     http.DefaultClient,
@@ -301,11 +336,12 @@ func newRestClient(account, user string, privateKey *rsa.PrivateKey, logger *ser
 	return c, nil
 }
 
-func (c *restClient) Close() {
+// Close stops the auth refresh loop for a REST client.
+func (c *SnowflakeRestClient) Close() {
 	c.authRefreshLoop.Stop()
 }
 
-func (c *restClient) computeJWT() (string, error) {
+func (c *SnowflakeRestClient) computeJWT() (string, error) {
 	pubBytes, err := x509.MarshalPKIXPublicKey(c.privateKey.Public())
 	if err != nil {
 		return "", err
@@ -323,31 +359,44 @@ func (c *restClient) computeJWT() (string, error) {
 	return token.SignedString(c.privateKey)
 }
 
-func (c *restClient) ConfigureClient(ctx context.Context, req clientConfigureRequest) (resp clientConfigureResponse, err error) {
+// RunSQL executes a series of SQL statements. It's expected that these statements execute in less than 45 seconds so
+// we don't have to handle async requests.
+func (c *SnowflakeRestClient) RunSQL(ctx context.Context, req RunSQLRequest) (resp RunSQLResponse, err error) {
+	requestID := uuid.NewString()
+	err = c.doPost(ctx, fmt.Sprintf("https://%s.snowflakecomputing.com/api/v2/statements?requestId=%s", c.account, requestID), req, &resp)
+	return
+}
+
+// configureClient configures a client for Snowpipe Streaming.
+func (c *SnowflakeRestClient) configureClient(ctx context.Context, req clientConfigureRequest) (resp clientConfigureResponse, err error) {
 	requestID := uuid.NewString()
 	err = c.doPost(ctx, fmt.Sprintf("https://%s.snowflakecomputing.com/v1/streaming/client/configure?requestId=%s", c.account, requestID), req, &resp)
 	return
 }
 
-func (c *restClient) ChannelStatus(ctx context.Context, req batchChannelStatusRequest) (resp batchChannelStatusResponse, err error) {
+// channelStatus returns the status of a given channel
+func (c *SnowflakeRestClient) channelStatus(ctx context.Context, req batchChannelStatusRequest) (resp batchChannelStatusResponse, err error) {
 	requestID := uuid.NewString()
 	err = c.doPost(ctx, fmt.Sprintf("https://%s.snowflakecomputing.com/v1/streaming/channels/status?requestId=%s", c.account, requestID), req, &resp)
 	return
 }
 
-func (c *restClient) OpenChannel(ctx context.Context, req openChannelRequest) (resp openChannelResponse, err error) {
+// openChannel opens a channel for writing
+func (c *SnowflakeRestClient) openChannel(ctx context.Context, req openChannelRequest) (resp openChannelResponse, err error) {
 	requestID := uuid.NewString()
 	err = c.doPost(ctx, fmt.Sprintf("https://%s.snowflakecomputing.com/v1/streaming/channels/open?requestId=%s", c.account, requestID), req, &resp)
 	return
 }
 
-func (c *restClient) DropChannel(ctx context.Context, req dropChannelRequest) (resp dropChannelResponse, err error) {
+// dropChannel drops a channel when it's no longer in use.
+func (c *SnowflakeRestClient) dropChannel(ctx context.Context, req dropChannelRequest) (resp dropChannelResponse, err error) {
 	requestID := uuid.NewString()
 	err = c.doPost(ctx, fmt.Sprintf("https://%s.snowflakecomputing.com/v1/streaming/channels/drop?requestId=%s", c.account, requestID), req, &resp)
 	return
 }
 
-func (c *restClient) RegisterBlob(ctx context.Context, req registerBlobRequest) (resp registerBlobResponse, err error) {
+// registerBlob registers a blob in object storage to be ingested into Snowflake.
+func (c *SnowflakeRestClient) registerBlob(ctx context.Context, req registerBlobRequest) (resp registerBlobResponse, err error) {
 	requestID := uuid.NewString()
 	err = c.doPost(ctx, fmt.Sprintf("https://%s.snowflakecomputing.com/v1/streaming/channels/write/blobs?requestId=%s", c.account, requestID), req, &resp)
 	return
@@ -355,7 +404,7 @@ func (c *restClient) RegisterBlob(ctx context.Context, req registerBlobRequest) 
 
 const debugAPICalls = true
 
-func (c *restClient) doPost(ctx context.Context, url string, req any, resp any) error {
+func (c *SnowflakeRestClient) doPost(ctx context.Context, url string, req any, resp any) error {
 	marshaller := json.Marshal
 	if debugAPICalls {
 		marshaller = func(v any) ([]byte, error) {
