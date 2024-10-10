@@ -34,7 +34,7 @@ func convertFixedType(column columnMetadata) (parquet.Node, dataTransformerFn, e
 		if isDecimal {
 			return parquet.Decimal(int(*column.Scale), int(*column.Precision), parquet.FixedLenByteArrayType(16)), incrementIntAsFixedArray16Stat, nil
 		}
-		return parquet.Leaf(parquet.FixedLenByteArrayType(16)), incrementBinaryStat, nil
+		return parquet.Leaf(parquet.FixedLenByteArrayType(16)), incrementIntAsFixedArray16Stat, nil
 	}
 	var ptype parquet.Type
 	switch strings.ToUpper(column.PhysicalType) {
@@ -48,9 +48,9 @@ func convertFixedType(column columnMetadata) (parquet.Node, dataTransformerFn, e
 		return nil, nil, fmt.Errorf("unsupported physical column type: %s", column.PhysicalType)
 	}
 	if isDecimal {
-		return parquet.Decimal(int(*column.Scale), int(*column.Precision), ptype), incrementIntStat, nil
+		return parquet.Decimal(int(*column.Scale), int(*column.Precision), ptype), incrementInt64Stat, nil
 	}
-	return parquet.Leaf(ptype), incrementIntStat, nil
+	return parquet.Leaf(ptype), incrementInt64Stat, nil
 }
 
 // See ParquetTypeGenerator
@@ -155,7 +155,7 @@ func incrementBoolStat(buf *statsBuffer, val any) (any, error) {
 	return v, nil
 }
 
-func incrementIntStat(buf *statsBuffer, val any) (any, error) {
+func incrementInt64Stat(buf *statsBuffer, val any) (any, error) {
 	if val == nil {
 		buf.nullCount++
 		return val, nil
