@@ -509,7 +509,6 @@ file:
 		require.NoError(t, err)
 		outMessagesMut.Lock()
 		outMessages = append(outMessages, string(msgBytes))
-		fmt.Println("Msg received", string(msgBytes))
 		outMessagesMut.Unlock()
 		return nil
 	}))
@@ -577,6 +576,182 @@ file:
 		defer outMessagesMut.Unlock()
 		return len(outMessages) == 10
 	}, time.Second*20, time.Millisecond*100)
+
+	require.NoError(t, streamOut.StopWithin(time.Second*10))
+	t.Log("All the conditions are met 🎉")
+
+	t.Cleanup(func() {
+		db.Close()
+	})
+}
+
+func bulkInsert(db *sql.DB, generateData func() (string, time.Time), totalInserts int) error {
+	const batchSize = 10000
+
+	for i := 0; i < totalInserts; i += batchSize {
+		end := i + batchSize
+		if end > totalInserts {
+			end = totalInserts
+		}
+
+		valueStrings := make([]string, 0, batchSize)
+		valueArgs := make([]interface{}, 0, batchSize*2)
+
+		for j := 0; j < end-i; j++ {
+			valueStrings = append(valueStrings, fmt.Sprintf("($%d, $%d)", j*2+1, j*2+2))
+			name, createdAt := generateData()
+			valueArgs = append(valueArgs, name, createdAt)
+		}
+
+		stmt := fmt.Sprintf("INSERT INTO flights (name, created_at) VALUES %s",
+			strings.Join(valueStrings, ","))
+
+		_, err := db.Exec(stmt, valueArgs...)
+		if err != nil {
+			return fmt.Errorf("bulk insert failed: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func TestIntegrationPgCDCForPgOutputStreamUncomitedPluginForNeonTech(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	fake := faker.New()
+	generateData := func() (string, time.Time) {
+		return fake.Address().City(), fake.Time().Time(time.Now())
+	}
+
+	databaseURL := "user=redpanda_owner password=MwDzur6AWUZ4 dbname=redpanda sslmode=require host=ep-holy-hill-a5zyhish.us-east-2.aws.neon.tech port=5432"
+
+	var (
+		db  *sql.DB
+		err error
+	)
+
+	db, err = sql.Open("postgres", databaseURL)
+	require.NoError(t, err)
+
+	err = db.Ping()
+	require.NoError(t, err)
+
+	var walLevel string
+	err = db.QueryRow("SHOW wal_level").Scan(&walLevel)
+	require.NoError(t, err)
+	require.Equal(t, "logical", walLevel)
+
+	_, err = db.Exec("DROP TABLE IF EXISTS flights")
+	require.NoError(t, err)
+
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS flights (id serial PRIMARY KEY, name VARCHAR(50), created_at TIMESTAMP);")
+	require.NoError(t, err)
+
+	err = bulkInsert(db, generateData, 100000)
+	require.NoError(t, err)
+
+	template := fmt.Sprintf(`
+pg_stream:
+    host: %s
+    slot_name: my_pg_slot_to_check_wal
+    user: redpanda_owner
+    password: MwDzur6AWUZ4
+    port: %s
+    schema: public
+    tls: require
+    stream_snapshot: true
+    stream_uncomited: true
+    database: redpanda
+    temporary_slot: false
+    pg_conn_options: "endpoint=ep-holy-hill-a5zyhish"
+    tables:
+       - flights
+`, "ep-holy-hill-a5zyhish.us-east-2.aws.neon.tech", "5432")
+
+	cacheConf := fmt.Sprintf(`
+label: pg_stream_cache
+file:
+    directory: %v
+`, tmpDir)
+
+	streamOutBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: OFF`))
+	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
+	require.NoError(t, streamOutBuilder.AddInputYAML(template))
+
+	var outMessages []string
+	var outMessagesMut sync.Mutex
+
+	require.NoError(t, streamOutBuilder.AddConsumerFunc(func(c context.Context, m *service.Message) error {
+		msgBytes, err := m.AsBytes()
+		require.NoError(t, err)
+		outMessagesMut.Lock()
+		outMessages = append(outMessages, string(msgBytes))
+		outMessagesMut.Unlock()
+		return nil
+	}))
+
+	streamOut, err := streamOutBuilder.Build()
+	require.NoError(t, err)
+
+	go func() {
+		_ = streamOut.Run(context.Background())
+	}()
+
+	assert.Eventually(t, func() bool {
+		outMessagesMut.Lock()
+		defer outMessagesMut.Unlock()
+		fmt.Println("Messages count", len(outMessages))
+		return len(outMessages) == 100000
+	}, time.Minute, time.Second)
+
+	err = bulkInsert(db, generateData, 100000)
+	require.NoError(t, err)
+
+	assert.Eventually(t, func() bool {
+		outMessagesMut.Lock()
+		defer outMessagesMut.Unlock()
+		fmt.Println("Messages count", len(outMessages))
+		return len(outMessages) == 200000
+	}, time.Minute, time.Second)
+
+	require.NoError(t, streamOut.StopWithin(time.Second*10))
+
+	// Starting stream for the same replication slot should continue from the last LSN
+	// Meaning we must not receive any old messages again
+
+	streamOutBuilder = service.NewStreamBuilder()
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: OFF`))
+	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
+	require.NoError(t, streamOutBuilder.AddInputYAML(template))
+
+	outMessages = []string{}
+	require.NoError(t, streamOutBuilder.AddConsumerFunc(func(c context.Context, m *service.Message) error {
+		msgBytes, err := m.AsBytes()
+		require.NoError(t, err)
+		outMessagesMut.Lock()
+		outMessages = append(outMessages, string(msgBytes))
+		outMessagesMut.Unlock()
+		return nil
+	}))
+
+	streamOut, err = streamOutBuilder.Build()
+	require.NoError(t, err)
+
+	go func() {
+		assert.NoError(t, streamOut.Run(context.Background()))
+	}()
+
+	time.Sleep(time.Second * 5)
+	err = bulkInsert(db, generateData, 10000)
+	require.NoError(t, err)
+
+	assert.Eventually(t, func() bool {
+		outMessagesMut.Lock()
+		defer outMessagesMut.Unlock()
+		fmt.Println("Messages", len(outMessages))
+		return len(outMessages) == 10000
+	}, time.Second*20, time.Second)
 
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
 	t.Log("All the conditions are met 🎉")
