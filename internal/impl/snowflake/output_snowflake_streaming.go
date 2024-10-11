@@ -72,11 +72,9 @@ By default this will create a channel name that is based on the table FQN so the
 NOTE: There is a limit of 10,000 streams per table.`).
 				Optional().
 				Advanced(),
-		).LintRule(`
-root = match {
+		).LintRule(`root = match {
   this.exists("private_key") && this.exists("private_key_file") => [ "both ` + "`private_key`" + ` and ` + "`private_key_file`" + ` can't be set simultaneously" ],
-}.
-`)
+}`)
 }
 
 func init() {
