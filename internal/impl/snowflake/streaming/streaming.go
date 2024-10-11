@@ -211,6 +211,7 @@ func messageToRow(msg *service.Message) (map[string]any, error) {
 	return row, nil
 }
 
+// InsertStats holds some basic statistics about the InsertRows operation
 type InsertStats struct {
 	BuildTime            time.Duration
 	UploadTime           time.Duration

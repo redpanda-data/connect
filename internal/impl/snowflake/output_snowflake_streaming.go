@@ -275,9 +275,7 @@ func (o *snowflakeStreamerOutput) WriteBatch(ctx context.Context, batch service.
 	o.compressedOutput.Incr(int64(stats.CompressedOutputSize))
 	o.uploadTime.Timing(stats.UploadTime.Nanoseconds())
 	o.buildTime.Timing(stats.BuildTime.Nanoseconds())
-	if err != nil {
-		// TODO: Reset the channel if there is an error
-	}
+	// TODO: Reset the channel if there is an error
 	o.channelPool.Put(channel)
 	return err
 }

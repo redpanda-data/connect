@@ -249,6 +249,7 @@ type (
 		Message    string               `json:"message"`
 		Blobs      []blobRegisterStatus `json:"blobs"`
 	}
+	// RunSQLRequest is the way to run a SQL statement
 	RunSQLRequest struct {
 		Statement string `json:"statement"`
 		Timeout   int64  `json:"timeout"`
@@ -259,7 +260,8 @@ type (
 		// https://docs.snowflake.com/en/sql-reference/parameters
 		Parameters map[string]string `json:"parameters,omitempty"`
 	}
-	rowType struct {
+	// RowType holds metadata for a row
+	RowType struct {
 		Name      string `json:"name"`
 		Type      string `json:"type"`
 		Length    int64  `json:"length"`
@@ -267,13 +269,15 @@ type (
 		Scale     int64  `json:"scale"`
 		Nullable  bool   `json:"nullable"`
 	}
-	resultSetMetadata struct {
+	// ResultSetMetadata holds metadata for the result set
+	ResultSetMetadata struct {
 		NumRows int64     `json:"numRows"`
 		Format  string    `json:"format"`
-		RowType []rowType `json:"rowType"`
+		RowType []RowType `json:"rowType"`
 	}
+	// RunSQLResponse is the completed SQL query response
 	RunSQLResponse struct {
-		ResultSetMetadata  resultSetMetadata `json:"resultSetMetaData"`
+		ResultSetMetadata  ResultSetMetadata `json:"resultSetMetaData"`
 		Data               [][]string        `json:"data"`
 		Code               string            `json:"code"`
 		StatementStatusURL string            `json:"statementStatusURL"`
