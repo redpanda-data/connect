@@ -12,6 +12,7 @@ import (
 	"context"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -62,7 +63,11 @@ func TestSnowflake(t *testing.T) {
       DROP TABLE IF EXISTS %s;
       CREATE TABLE %s (
         A STRING,
-        B BOOLEAN
+        B BOOLEAN,
+        C VARIANT,
+        D ARRAY,
+        E OBJECT,
+        F REAL
       );`, channelOpts.TableName, channelOpts.TableName),
 		Parameters: map[string]string{
 			"MULTI_STATEMENT_COUNT": "0",
@@ -87,15 +92,27 @@ func TestSnowflake(t *testing.T) {
 	_, err = channel.InsertRows(ctx, service.MessageBatch{
 		msg(`{
       "A": "bar",
-      "B": true
+      "B": true,
+      "C": {"foo": "bar"},
+      "D": [[42], null, {"A":"B"}],
+      "E": {"foo":"bar"},
+      "F": 3.14
     }`),
 		msg(`{
       "A": "baz",
-      "B": "false"
+      "B": "false",
+      "C": {"a":"b"},
+      "D": [1, 2, 3],
+      "E": {"foo":"baz"},
+      "F": 42.12345
     }`),
 		msg(`{
       "A": "foo",
-      "B": null
+      "B": null,
+      "C": [1, 2, 3],
+      "D": ["a", 9, "z"],
+      "E": {"baz":"qux"},
+      "F": -0.0
     }`),
 	})
 	require.NoError(t, err)
@@ -110,10 +127,32 @@ func TestSnowflake(t *testing.T) {
 			return
 		}
 		assert.Equal(collect, "00000", resp.SQLState)
-		assert.Equal(collect, [][]string{
-			{"bar", "true"},
-			{"baz", "false"},
-			{"foo", ""},
-		}, resp.Data)
+		expected := [][]string{
+			{`bar`, `true`, `{"foo":"bar"}`, `[[42], null, {"A":"B"}]`, `{"foo": "bar"}`, `3.14`},
+			{`baz`, `false`, `{"a":"b"}`, `[1, 2, 3]`, `{"foo":"baz"}`, `42.12345`},
+			{`foo`, ``, `[1, 2, 3]`, `["a", 9, "z"]`, `{"baz":"qux"}`, `-0.0`},
+		}
+		assert.Equal(collect, parseSnowflakeData(expected), parseSnowflakeData(resp.Data))
 	}, 5*time.Second, time.Second)
+}
+
+// parseSnowflakeData returns "json-ish" data that can be JSON or could be just a raw string.
+// We want to parse for the JSON rows have whitespace, so this gives us a more semantic comparison.
+func parseSnowflakeData(rawData [][]string) [][]any {
+	var parsedData [][]any
+	for _, rawRow := range rawData {
+		var parsedRow []any
+		for _, rawCol := range rawRow {
+			var parsedCol any
+			if rawCol != `` {
+				err := json.Unmarshal([]byte(rawCol), &parsedCol)
+				if err != nil {
+					parsedCol = rawCol
+				}
+			}
+			parsedRow = append(parsedRow, parsedCol)
+		}
+		parsedData = append(parsedData, parsedRow)
+	}
+	return parsedData
 }
