@@ -92,7 +92,7 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[stri
 			fallthrough
 		case "any":
 			n = parquet.String()
-			converter = binaryConverter{column.Nullable}
+			converter = stringConverter{binaryConverter{column.Nullable}}
 		case "binary":
 			n = parquet.Leaf(parquet.ByteArrayType)
 			converter = binaryConverter{column.Nullable}
