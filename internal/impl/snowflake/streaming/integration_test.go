@@ -67,7 +67,8 @@ func TestSnowflake(t *testing.T) {
         C VARIANT,
         D ARRAY,
         E OBJECT,
-        F REAL
+        F REAL,
+        G INT
       );`, channelOpts.TableName, channelOpts.TableName),
 		Parameters: map[string]string{
 			"MULTI_STATEMENT_COUNT": "0",
@@ -96,7 +97,8 @@ func TestSnowflake(t *testing.T) {
       "C": {"foo": "bar"},
       "D": [[42], null, {"A":"B"}],
       "E": {"foo":"bar"},
-      "F": 3.14
+      "F": 3.14,
+      "G": -1
     }`),
 		msg(`{
       "A": "baz",
@@ -104,7 +106,8 @@ func TestSnowflake(t *testing.T) {
       "C": {"a":"b"},
       "D": [1, 2, 3],
       "E": {"foo":"baz"},
-      "F": 42.12345
+      "F": 42.12345,
+      "G": 9
     }`),
 		msg(`{
       "A": "foo",
@@ -112,7 +115,8 @@ func TestSnowflake(t *testing.T) {
       "C": [1, 2, 3],
       "D": ["a", 9, "z"],
       "E": {"baz":"qux"},
-      "F": -0.0
+      "F": -0.0,
+      "G": 42
     }`),
 	})
 	require.NoError(t, err)
@@ -128,12 +132,12 @@ func TestSnowflake(t *testing.T) {
 		}
 		assert.Equal(collect, "00000", resp.SQLState)
 		expected := [][]string{
-			{`bar`, `true`, `{"foo":"bar"}`, `[[42], null, {"A":"B"}]`, `{"foo": "bar"}`, `3.14`},
-			{`baz`, `false`, `{"a":"b"}`, `[1, 2, 3]`, `{"foo":"baz"}`, `42.12345`},
-			{`foo`, ``, `[1, 2, 3]`, `["a", 9, "z"]`, `{"baz":"qux"}`, `-0.0`},
+			{`bar`, `true`, `{"foo":"bar"}`, `[[42], null, {"A":"B"}]`, `{"foo": "bar"}`, `3.14`, `-1`},
+			{`baz`, `false`, `{"a":"b"}`, `[1, 2, 3]`, `{"foo":"baz"}`, `42.12345`, `9`},
+			{`foo`, ``, `[1, 2, 3]`, `["a", 9, "z"]`, `{"baz":"qux"}`, `-0.0`, `42`},
 		}
 		assert.Equal(collect, parseSnowflakeData(expected), parseSnowflakeData(resp.Data))
-	}, 5*time.Second, time.Second)
+	}, 3*time.Second, time.Second)
 }
 
 // parseSnowflakeData returns "json-ish" data that can be JSON or could be just a raw string.
