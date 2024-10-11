@@ -12,12 +12,10 @@ package streaming
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
-	"unicode"
 	"unicode/utf8"
 
 	"github.com/parquet-go/parquet-go"
@@ -69,7 +67,8 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[stri
 		id := int(column.Ordinal)
 		var n parquet.Node
 		var converter dataConverter
-		switch strings.ToLower(column.LogicalType) {
+		logicalType := strings.ToLower(column.LogicalType)
+		switch logicalType {
 		case "fixed":
 			n, converter, err = convertFixedType(column)
 			if err != nil {
@@ -78,15 +77,15 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[stri
 		case "array":
 			typeMetadata[fmt.Sprintf("%d:obj_enc", id)] = "1"
 			n = parquet.String()
-			converter = jsonArrayConverter{jsonConverter{binaryConverter{column.Nullable}}}
+			converter = jsonArrayConverter{jsonConverter{column.Nullable}}
 		case "object":
 			typeMetadata[fmt.Sprintf("%d:obj_enc", id)] = "1"
 			n = parquet.String()
-			converter = jsonObjectConverter{jsonConverter{binaryConverter{column.Nullable}}}
+			converter = jsonObjectConverter{jsonConverter{column.Nullable}}
 		case "variant":
 			typeMetadata[fmt.Sprintf("%d:obj_enc", id)] = "1"
 			n = parquet.String()
-			converter = jsonConverter{binaryConverter{column.Nullable}}
+			converter = jsonConverter{column.Nullable}
 		case "text":
 			fallthrough
 		case "char":
@@ -103,6 +102,32 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[stri
 		case "real":
 			n = parquet.Leaf(parquet.DoubleType)
 			converter = doubleConverter{column.Nullable}
+		case "timestamp_ltz":
+			fallthrough
+		case "timestamp_ntz":
+			fallthrough
+		case "timestamp_tz":
+			if column.PhysicalType == "SB8" {
+				n = parquet.Leaf(parquet.Int64Type)
+			} else {
+				n = parquet.Leaf(parquet.FixedLenByteArrayType(16))
+			}
+			scale := 0
+			if column.Scale != nil {
+				scale = int(*column.Scale)
+			}
+			tz := logicalType != "timestamp_ntz"
+			converter = timestampConverter{column.Nullable, scale, tz}
+		case "time":
+			if column.PhysicalType == "SB8" {
+				n = parquet.Leaf(parquet.Int64Type)
+			} else {
+				n = parquet.Leaf(parquet.Int32Type)
+			}
+			converter = timeConverter{column.Nullable}
+		case "date":
+			n = parquet.Leaf(parquet.Int32Type)
+			converter = dateConverter{column.Nullable}
 		default:
 			return nil, nil, nil, fmt.Errorf("unsupported logical column type: %s", column.LogicalType)
 		}
@@ -310,19 +335,32 @@ func (c stringConverter) ValidateAndConvert(buf *statsBuffer, val any) (any, err
 }
 
 type jsonConverter struct {
-	binaryConverter
+	nullable bool
 }
 
-var errInvalidJSON = errors.New("invalid json")
-
 func (c jsonConverter) ValidateAndConvert(buf *statsBuffer, val any) (any, error) {
-	v, err := c.binaryConverter.ValidateAndConvert(buf, val)
-	if err != nil {
-		return nil, err
+	if val == nil {
+		if !c.nullable {
+			return nil, errNullValue
+		}
+		buf.nullCount++
+		return val, nil
 	}
-	if !json.Valid(v.([]byte)) {
-		return nil, errInvalidJSON
+	v := []byte(bloblang.ValueToString(val))
+	if buf.first {
+		buf.minStrVal = v
+		buf.maxStrVal = v
+		buf.maxStrLen = len(v)
+		buf.first = false
+		return v, nil
 	}
+	if bytes.Compare(v, buf.minStrVal) < 0 {
+		buf.minStrVal = v
+	}
+	if bytes.Compare(v, buf.maxStrVal) > 0 {
+		buf.maxStrVal = v
+	}
+	buf.maxStrLen = max(buf.maxStrLen, len(v))
 	return v, nil
 }
 
@@ -331,15 +369,12 @@ type jsonArrayConverter struct {
 }
 
 func (c jsonArrayConverter) ValidateAndConvert(buf *statsBuffer, val any) (any, error) {
-	v, err := c.jsonConverter.ValidateAndConvert(buf, val)
-	if err != nil {
-		return nil, err
+	if val != nil {
+		if _, ok := val.([]any); !ok {
+			return nil, errors.New("not a JSON array")
+		}
 	}
-	// Already valid JSON, so now we're just checking the first byte is a `[` so it's an array
-	if !bytes.HasPrefix(bytes.TrimSpace(v.([]byte)), []byte{'['}) {
-		return nil, errors.New("not a JSON array")
-	}
-	return v, nil
+	return c.jsonConverter.ValidateAndConvert(buf, val)
 }
 
 type jsonObjectConverter struct {
@@ -347,15 +382,12 @@ type jsonObjectConverter struct {
 }
 
 func (c jsonObjectConverter) ValidateAndConvert(buf *statsBuffer, val any) (any, error) {
-	v, err := c.jsonConverter.ValidateAndConvert(buf, val)
-	if err != nil {
-		return nil, err
+	if val != nil {
+		if _, ok := val.(map[string]any); !ok {
+			return nil, errors.New("not a JSON object")
+		}
 	}
-	// Already valid JSON, so now we're just checking the first byte is a `{` so it's an object
-	if !bytes.HasPrefix(bytes.TrimSpace(v.([]byte)), []byte{'{'}) {
-		return nil, errors.New("not a JSON object")
-	}
-	return v, nil
+	return c.jsonConverter.ValidateAndConvert(buf, val)
 }
 
 type timestampConverter struct {
@@ -386,6 +418,36 @@ func (c timestampConverter) ValidateAndConvert(buf *statsBuffer, val any) (any, 
 	buf.minIntVal = min(buf.minIntVal, v)
 	buf.maxIntVal = max(buf.maxIntVal, v)
 	return v, nil
+}
+
+type timeConverter struct {
+	nullable bool
+}
+
+func (c timeConverter) ValidateAndConvert(buf *statsBuffer, val any) (any, error) {
+	if val == nil {
+		if !c.nullable {
+			return nil, errNullValue
+		}
+		buf.nullCount++
+		return val, nil
+	}
+	return nil, errors.New("TIME columns not supported")
+}
+
+type dateConverter struct {
+	nullable bool
+}
+
+func (c dateConverter) ValidateAndConvert(buf *statsBuffer, val any) (any, error) {
+	if val == nil {
+		if !c.nullable {
+			return nil, errNullValue
+		}
+		buf.nullCount++
+		return val, nil
+	}
+	return nil, errors.New("DATE columns not supported")
 }
 
 func computeColumnEpInfo(stats map[string]*dataTransformer) map[string]fileColumnProperties {
