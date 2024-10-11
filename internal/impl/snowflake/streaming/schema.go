@@ -21,7 +21,20 @@ import (
 
 	"github.com/parquet-go/parquet-go"
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
+	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming/int128"
 )
+
+var pow10TableInt64 []int64
+
+func init() {
+	pow10TableInt64 = make([]int64, 19)
+	n := int64(1)
+	pow10TableInt64[0] = n
+	for i := range pow10TableInt64[1:] {
+		n = 10 * n
+		pow10TableInt64[i+1] = n
+	}
+}
 
 type dataConverter interface {
 	ValidateAndConvert(buf *statsBuffer, val any) (any, error)
@@ -446,12 +459,22 @@ func (c timeConverter) ValidateAndConvert(buf *statsBuffer, val any) (any, error
 	case string:
 		s = v
 	}
+	s = strings.TrimSpace(s)
 	var t time.Time
 	var err error
-	if s != "" {
-		t, err = time.Parse("15:04:05.000000000", s)
-	} else {
-		err = errors.ErrUnsupported
+	switch len(s) {
+	case len("15:04"):
+		t, err = time.Parse("15:04", s)
+	case len("15:04:05"):
+		t, err = time.Parse("15:04:05", s)
+	default:
+		// Allow up to 9 decimal places
+		padding := len(s) - len("15:04:05.")
+		if padding >= 0 {
+			t, err = time.Parse("15:04:05."+strings.Repeat("0", min(padding, 9)), s)
+		} else {
+			err = errors.ErrUnsupported
+		}
 	}
 	if err != nil {
 		t, err = bloblang.ValueAsTimestamp(val)
@@ -459,7 +482,12 @@ func (c timeConverter) ValidateAndConvert(buf *statsBuffer, val any) (any, error
 	if err != nil {
 		return nil, fmt.Errorf("unable to coerse TIME value from %v", val)
 	}
-	return t, nil
+	// 24 hours in nanoseconds fits within uint64, so we can't overflow
+	nanos := t.Hour()*int(time.Hour.Nanoseconds()) +
+		t.Minute()*int(time.Minute.Nanoseconds()) +
+		t.Second()*int(time.Second.Nanoseconds()) +
+		t.Nanosecond()
+	return int64(nanos) / pow10TableInt64[9-c.scale], nil
 }
 
 type dateConverter struct {
@@ -497,8 +525,8 @@ func computeColumnEpInfo(stats map[string]*dataTransformer) map[string]fileColum
 			MinStrValue:    minStrVal,
 			MaxStrValue:    maxStrVal,
 			MaxLength:      int64(stat.maxStrLen),
-			MinIntValue:    stat.minIntVal,
-			MaxIntValue:    stat.maxIntVal,
+			MinIntValue:    int128.Int64(stat.minIntVal),
+			MaxIntValue:    int128.Int64(stat.maxIntVal),
 			MinRealValue:   stat.minRealVal,
 			MaxRealValue:   stat.maxRealVal,
 			DistinctValues: -1,

@@ -228,34 +228,6 @@ func (c *SnowflakeServiceClient) DropChannel(ctx context.Context, opts ChannelOp
 	return nil
 }
 
-func (c *SnowflakeServiceClient) channelStatus(ctx context.Context, opts ChannelOptions) (OffsetToken, error) {
-	resp, err := c.client.channelStatus(ctx, batchChannelStatusRequest{
-		Role: c.options.Role,
-		Channels: []channelStatusRequest{
-			{
-				Name:     opts.Name,
-				Table:    opts.TableName,
-				Database: opts.DatabaseName,
-				Schema:   opts.SchemaName,
-			},
-		},
-	})
-	if err != nil {
-		return "", err
-	}
-	if resp.StatusCode != responseSuccess {
-		return "", fmt.Errorf("unable to status channel %s - status: %d, message: %s", opts.Name, resp.StatusCode, resp.Message)
-	}
-	if len(resp.Channels) != 1 {
-		return "", fmt.Errorf("failed to fetch channel %s, got %d channels in response", opts.Name, len(resp.Channels))
-	}
-	channel := resp.Channels[0]
-	if channel.StatusCode != responseSuccess {
-		return "", fmt.Errorf("unable to status channel %s - status: %d", opts.Name, resp.StatusCode)
-	}
-	return channel.PersistedRowSequencer, nil
-}
-
 // SnowflakeIngestionChannel is a write connection to a single table in Snowflake
 type SnowflakeIngestionChannel struct {
 	ChannelOptions
