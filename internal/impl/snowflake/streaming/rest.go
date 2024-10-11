@@ -84,7 +84,7 @@ type (
 		Database        string `json:"database"`
 		Schema          string `json:"schema"`
 		Name            string `json:"channel_name"`
-		ClientSequencer int64  `json:"client_sequencer"`
+		ClientSequencer *int64 `json:"client_sequencer,omitempty"`
 	}
 	batchChannelStatusRequest struct {
 		Role     string                 `json:"role"`
@@ -146,6 +146,7 @@ type (
 	dropChannelRequest struct {
 		RequestID string `json:"request_id"`
 		Role      string `json:"role"`
+		Channel   string `json:"channel"`
 		Table     string `json:"table"`
 		Database  string `json:"database"`
 		Schema    string `json:"schema"`

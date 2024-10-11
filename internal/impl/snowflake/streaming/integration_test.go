@@ -87,6 +87,12 @@ func TestSnowflake(t *testing.T) {
 	})
 	streamClient, err := streaming.NewSnowflakeServiceClient(ctx, clientOptions)
 	require.NoError(t, err)
+	t.Cleanup(func() {
+		err = streamClient.DropChannel(ctx, channelOpts)
+		if err != nil {
+			t.Log("unable to cleanup stream in SNOW:", err)
+		}
+	})
 	defer streamClient.Close()
 	channel, err := streamClient.OpenChannel(ctx, channelOpts)
 	require.NoError(t, err)
@@ -128,6 +134,7 @@ func TestSnowflake(t *testing.T) {
 			Statement: fmt.Sprintf(`SELECT * FROM %s ORDER BY A;`, channelOpts.TableName),
 		})
 		if !assert.NoError(collect, err) {
+			t.Logf("failed to scan table: %s", err)
 			return
 		}
 		assert.Equal(collect, "00000", resp.SQLState)
@@ -138,6 +145,7 @@ func TestSnowflake(t *testing.T) {
 		}
 		assert.Equal(collect, parseSnowflakeData(expected), parseSnowflakeData(resp.Data))
 	}, 3*time.Second, time.Second)
+
 }
 
 // parseSnowflakeData returns "json-ish" data that can be JSON or could be just a raw string.

@@ -18,7 +18,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/rand/v2"
-	"os"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
@@ -152,7 +151,7 @@ func (c *SnowflakeServiceClient) OpenChannel(ctx context.Context, opts ChannelOp
 		return nil, err
 	}
 	if resp.StatusCode != responseSuccess {
-		return nil, fmt.Errorf("unable to open channel - status: %d, message: %s", resp.StatusCode, resp.Message)
+		return nil, fmt.Errorf("unable to open channel %s - status: %d, message: %s", opts.Name, resp.StatusCode, resp.Message)
 	}
 	schema, transformers, typeMetadata, err := constructParquetSchema(resp.TableColumns)
 	if err != nil {
@@ -175,6 +174,86 @@ func (c *SnowflakeServiceClient) OpenChannel(ctx context.Context, opts ChannelOp
 		fileMetadata:    typeMetadata,
 	}
 	return ch, nil
+}
+
+// OffsetToken is the persisted client offset of a stream. This can be used to implement exactly-once
+// processing.
+type OffsetToken = string
+
+// ChannelStatus returns the offset token for a channel or an error
+func (c *SnowflakeServiceClient) ChannelStatus(ctx context.Context, opts ChannelOptions) (OffsetToken, error) {
+	resp, err := c.client.channelStatus(ctx, batchChannelStatusRequest{
+		Role: c.options.Role,
+		Channels: []channelStatusRequest{
+			{
+				Name:     opts.Name,
+				Table:    opts.TableName,
+				Database: opts.DatabaseName,
+				Schema:   opts.SchemaName,
+			},
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+	if resp.StatusCode != responseSuccess {
+		return "", fmt.Errorf("unable to status channel %s - status: %d, message: %s", opts.Name, resp.StatusCode, resp.Message)
+	}
+	if len(resp.Channels) != 1 {
+		return "", fmt.Errorf("failed to fetch channel %s, got %d channels in response", opts.Name, len(resp.Channels))
+	}
+	channel := resp.Channels[0]
+	if channel.StatusCode != responseSuccess {
+		return "", fmt.Errorf("unable to status channel %s - status: %d", opts.Name, resp.StatusCode)
+	}
+	return OffsetToken(channel.PersistedOffsetToken), nil
+}
+
+// DropChannel drops it like it's hot 🔥
+func (c *SnowflakeServiceClient) DropChannel(ctx context.Context, opts ChannelOptions) error {
+	resp, err := c.client.dropChannel(ctx, dropChannelRequest{
+		RequestID: c.nextRequestID(),
+		Role:      c.options.Role,
+		Channel:   opts.Name,
+		Table:     opts.TableName,
+		Database:  opts.DatabaseName,
+		Schema:    opts.SchemaName,
+	})
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != responseSuccess {
+		return fmt.Errorf("unable to drop channel %s - status: %d, message: %s", opts.Name, resp.StatusCode, resp.Message)
+	}
+	return nil
+}
+
+func (c *SnowflakeServiceClient) channelStatus(ctx context.Context, opts ChannelOptions) (OffsetToken, error) {
+	resp, err := c.client.channelStatus(ctx, batchChannelStatusRequest{
+		Role: c.options.Role,
+		Channels: []channelStatusRequest{
+			{
+				Name:     opts.Name,
+				Table:    opts.TableName,
+				Database: opts.DatabaseName,
+				Schema:   opts.SchemaName,
+			},
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+	if resp.StatusCode != responseSuccess {
+		return "", fmt.Errorf("unable to status channel %s - status: %d, message: %s", opts.Name, resp.StatusCode, resp.Message)
+	}
+	if len(resp.Channels) != 1 {
+		return "", fmt.Errorf("failed to fetch channel %s, got %d channels in response", opts.Name, len(resp.Channels))
+	}
+	channel := resp.Channels[0]
+	if channel.StatusCode != responseSuccess {
+		return "", fmt.Errorf("unable to status channel %s - status: %d", opts.Name, resp.StatusCode)
+	}
+	return channel.PersistedRowSequencer, nil
 }
 
 // SnowflakeIngestionChannel is a write connection to a single table in Snowflake
