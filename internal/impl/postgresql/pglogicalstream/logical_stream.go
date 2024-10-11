@@ -53,6 +53,7 @@ type Stream struct {
 	decodingPluginArguments    []string
 	snapshotMemorySafetyFactor float64
 	logger                     *service.Logger
+	monitor                    *Monitor
 	streamUncomited            bool
 
 	lsnAckBuffer []string
@@ -216,6 +217,12 @@ func NewPgStream(config Config) (*Stream, error) {
 	stream.nextStandbyMessageDeadline = time.Now().Add(stream.standbyMessageTimeout)
 	stream.streamCtx, stream.streamCancel = context.WithCancel(context.Background())
 
+	monitor, err := NewMonitor(cfg, stream.logger, tableNames, stream.slotName)
+	if err != nil {
+		return nil, err
+	}
+	stream.monitor = monitor
+
 	if !freshlyCreatedSlot || !config.StreamOldData {
 		if err = stream.startLr(); err != nil {
 			return nil, err
@@ -229,6 +236,12 @@ func NewPgStream(config Config) (*Stream, error) {
 	}
 
 	return stream, err
+}
+
+// GetProgress returns the progress of the stream.
+// including the % of snapsho messages processed and the WAL lag in bytes.
+func (s *Stream) GetProgress() *Report {
+	return s.monitor.Report()
 }
 
 func (s *Stream) ConsumedCallback() chan bool {
@@ -517,6 +530,16 @@ func (s *Stream) processSnapshot() {
 		}
 	}()
 
+	tableStats, err := snapshotter.GetRowsCountPerTable(s.tableNames)
+	if err != nil {
+		s.logger.Errorf("Failed to get table stats: %v", err.Error())
+		if err = s.cleanUpOnFailure(); err != nil {
+			s.logger.Errorf("Failed to clean up resources on accident: %v", err.Error())
+		}
+
+		os.Exit(1)
+	}
+
 	for _, table := range s.tableNames {
 		s.logger.Infof("Processing snapshot for table: %v", table)
 
@@ -733,6 +756,7 @@ func (s *Stream) Stop() error {
 	s.m.Lock()
 	s.stopped = true
 	s.m.Unlock()
+	s.monitor.Stop()
 
 	if s.pgConn != nil {
 		if s.streamCtx != nil {

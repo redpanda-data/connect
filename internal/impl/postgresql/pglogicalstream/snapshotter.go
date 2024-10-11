@@ -33,17 +33,7 @@ type Snapshotter struct {
 
 // NewSnapshotter creates a new Snapshotter instance
 func NewSnapshotter(dbConf pgconn.Config, snapshotName string, logger *service.Logger) (*Snapshotter, error) {
-	var sslMode string
-	if dbConf.TLSConfig != nil {
-		sslMode = "require"
-	} else {
-		sslMode = "disable"
-	}
-	connStr := fmt.Sprintf("user=%s password=%s host=%s port=%d dbname=%s sslmode=%s", dbConf.User,
-		dbConf.Password, dbConf.Host, dbConf.Port, dbConf.Database, sslMode,
-	)
-
-	pgConn, err := sql.Open("postgres", connStr)
+	pgConn, err := openPgConnectionFromConfig(dbConf)
 
 	return &Snapshotter{
 		pgConnection: pgConn,
@@ -61,6 +51,25 @@ func (s *Snapshotter) prepare() error {
 	}
 
 	return nil
+}
+
+func (s *Snapshotter) GetRowsCountPerTable(tableNames []string) (map[string]int, error) {
+	tables := make(map[string]int)
+	rows, err := s.pgConnection.Query("SELECT table_name, count(*) FROM information_schema.tables WHERE table_name in (?) GROUP BY table_name;", tableNames)
+	if err != nil {
+		return tables, err
+	}
+
+	for rows.Next() {
+		var tableName string
+		var count int
+		if err := rows.Scan(&tableName, &count); err != nil {
+			return tables, err
+		}
+		tables[tableName] = count
+	}
+
+	return tables, nil
 }
 
 func (s *Snapshotter) findAvgRowSize(table string) (sql.NullInt64, error) {

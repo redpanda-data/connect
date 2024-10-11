@@ -13,6 +13,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/lucasepe/codename"
@@ -187,6 +188,9 @@ func newPgStreamInput(conf *service.ParsedConfig, logger *service.Logger, metric
 		pgconnConfig.TLSConfig = nil
 	}
 
+	snapsotMetrics := metrics.NewGauge("snapshot_progress")
+	replicationLag := metrics.NewGauge("replication_lag")
+
 	return service.AutoRetryNacks(&pgStreamInput{
 		dbConfig:                pgconnConfig,
 		streamSnapshot:          streamSnapshot,
@@ -200,8 +204,10 @@ func newPgStreamInput(conf *service.ParsedConfig, logger *service.Logger, metric
 		streamUncomited:         streamUncomited,
 		temporarySlot:           temporarySlot,
 
-		logger:  logger,
-		metrics: metrics,
+		logger:          logger,
+		metrics:         metrics,
+		snapshotMetrics: snapsotMetrics,
+		replicationLag:  replicationLag,
 	}), err
 }
 
@@ -234,6 +240,10 @@ type pgStreamInput struct {
 	streamUncomited         bool
 	logger                  *service.Logger
 	metrics                 *service.Metrics
+	metricsTicker           *time.Ticker
+
+	snapshotMetrics *service.MetricGauge
+	replicationLag  *service.MetricGauge
 }
 
 func (p *pgStreamInput) Connect(ctx context.Context) error {
@@ -257,12 +267,22 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
+	p.metricsTicker = time.NewTicker(5 * time.Second)
 	p.pglogicalStream = pgStream
+
 	return err
 }
 
 func (p *pgStreamInput) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
+
 	select {
+	case <-p.metricsTicker.C:
+		progress := p.pglogicalStream.GetProgress()
+		for table, progress := range progress.TableProgress {
+			p.snapshotMetrics.Set(int64(progress), table)
+		}
+		p.replicationLag.Set(progress.WalLagInBytes)
 	case snapshotMessage := <-p.pglogicalStream.SnapshotMessageC():
 		var (
 			mb  []byte
