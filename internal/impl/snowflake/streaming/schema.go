@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/parquet-go/parquet-go"
@@ -124,7 +125,11 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[stri
 			} else {
 				n = parquet.Leaf(parquet.Int32Type)
 			}
-			converter = timeConverter{column.Nullable}
+			scale := 9
+			if column.Scale != nil {
+				scale = int(*column.Scale)
+			}
+			converter = timeConverter{column.Nullable, scale}
 		case "date":
 			n = parquet.Leaf(parquet.Int32Type)
 			converter = dateConverter{column.Nullable}
@@ -422,6 +427,7 @@ func (c timestampConverter) ValidateAndConvert(buf *statsBuffer, val any) (any, 
 
 type timeConverter struct {
 	nullable bool
+	scale    int
 }
 
 func (c timeConverter) ValidateAndConvert(buf *statsBuffer, val any) (any, error) {
@@ -432,7 +438,28 @@ func (c timeConverter) ValidateAndConvert(buf *statsBuffer, val any) (any, error
 		buf.nullCount++
 		return val, nil
 	}
-	return nil, errors.New("TIME columns not supported")
+
+	var s string
+	switch v := val.(type) {
+	case []byte:
+		s = string(v)
+	case string:
+		s = v
+	}
+	var t time.Time
+	var err error
+	if s != "" {
+		t, err = time.Parse("15:04:05.000000000", s)
+	} else {
+		err = errors.ErrUnsupported
+	}
+	if err != nil {
+		t, err = bloblang.ValueAsTimestamp(val)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("unable to coerse TIME value from %v", val)
+	}
+	return t, nil
 }
 
 type dateConverter struct {
