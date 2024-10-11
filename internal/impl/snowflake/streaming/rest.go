@@ -30,6 +30,7 @@ import (
 	"github.com/golang-jwt/jwt"
 	"github.com/google/uuid"
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming/int128"
 	"github.com/redpanda-data/connect/v4/internal/periodic"
 	"github.com/redpanda-data/connect/v4/internal/typed"
 )
@@ -168,12 +169,12 @@ type (
 		// current hex-encoded max value, truncated down to 32 bytes
 		MinStrValue *string `json:"minStrValue"`
 		// current hex-encoded max value, truncated up to 32 bytes
-		MaxStrValue  *string `json:"maxStrValue"`
-		MinIntValue  int64   `json:"minIntValue"`
-		MaxIntValue  int64   `json:"maxIntValue"`
-		MinRealValue float64 `json:"minRealValue"`
-		MaxRealValue float64 `json:"maxRealValue"`
-		NullCount    int64   `json:"nullCount"`
+		MaxStrValue  *string       `json:"maxStrValue"`
+		MinIntValue  int128.Int128 `json:"minIntValue"`
+		MaxIntValue  int128.Int128 `json:"maxIntValue"`
+		MinRealValue float64       `json:"minRealValue"`
+		MaxRealValue float64       `json:"maxRealValue"`
+		NullCount    int64         `json:"nullCount"`
 		// Currently not tracked
 		DistinctValues int64 `json:"distinctValues"`
 		MaxLength      int64 `json:"maxLength"`
