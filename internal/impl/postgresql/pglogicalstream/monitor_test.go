@@ -7,8 +7,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jaswdr/faker"
 	"github.com/ory/dockertest/v3"
 	"github.com/ory/dockertest/v3/docker"
+	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/stretchr/testify/require"
 )
 
@@ -56,16 +58,14 @@ func Test_MonitorReplorting(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = db.Exec("CREATE TABLE IF NOT EXISTS flights (id serial PRIMARY KEY, name VARCHAR(50), created_at TIMESTAMP);")
-	if err != nil {
-		return err
-	}
+	require.NoError(t, err)
 
 	fake := faker.New()
 	for i := 0; i < 1000; i++ {
 		_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", fake.Address().City(), fake.Time().RFC1123(time.Now()))
-		_, err = db.Exec("INSERT INTO flights_non_streamed (name, created_at) VALUES ($1, $2);", fake.Address().City(), fake.Time().RFC1123(time.Now()))
 		require.NoError(t, err)
 	}
 
-	mon := NewMonitor(conf *pgconn.Config, logger *service.Logger, tables []string, slotName string)
+	slotName := "test_slot"
+	mon := NewMonitor(db, logger*service.Logger, []string{"flights"}, slotName)
 }
