@@ -129,11 +129,12 @@ func ActivateExporter(identifier, version string, logger *service.Logger, schema
 			SetHeader("Accept", "application/json").
 			SetBaseURL(exportHost).
 			SetTimeout(10 * time.Second).
+			SetLogger(&logWrapper{l: logger}).
 			SetRetryCount(3),
 		JWTBuilder: josejwt.Signed(signer),
 	}
 
-	payload, err := extractPayload(identifier, schema, conf)
+	payload, err := extractPayload(identifier, logger, schema, conf)
 	if err != nil {
 		logger.With("error", err).Debug("Failed to create telemetry payload")
 		return

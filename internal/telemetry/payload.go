@@ -45,7 +45,7 @@ type payload struct {
 
 // All information sent during a telemetry export is extracted within this
 // function and stored within the payload.
-func extractPayload(identifier string, schema *service.ConfigSchema, conf *service.ParsedConfig) (*payload, error) {
+func extractPayload(identifier string, logger *service.Logger, schema *service.ConfigSchema, conf *service.ParsedConfig) (*payload, error) {
 	p := payload{ID: identifier, Uptime: 0}
 
 	rootValue, err := conf.FieldAny()
@@ -60,7 +60,7 @@ func extractPayload(identifier string, schema *service.ConfigSchema, conf *servi
 		})
 		return nil
 	}); err != nil {
-		return nil, fmt.Errorf("failed to walk config: %w", err)
+		logger.With("error", err).Debug("Failed to walk config")
 	}
 
 	return &p, nil
