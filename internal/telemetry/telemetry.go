@@ -18,18 +18,25 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
-	"fmt"
+	"errors"
 	"time"
 
 	"github.com/go-jose/go-jose/v3"
 	josejwt "github.com/go-jose/go-jose/v3/jwt"
 	"github.com/go-resty/resty/v2"
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	_ "embed"
 )
 
+// This embed captures our private JWT authentication key.
+//
+//go:embed key.pem
+var privateKey string
+
 var (
-	// This variable captures our private JWT authentication key.
-	PrivateKey string
+	// The host to deliver telemetry exports to.
+	ExportHost string
 
 	// The time period a Connect instance must be running before we begin
 	// exporting telemetry data.
@@ -40,6 +47,7 @@ var (
 )
 
 const (
+	defaultExportHost   = "https://m.rp.vectorized.io"
 	defaultExportDelay  = time.Hour * 24 * 7
 	defaultExportPeriod = time.Hour * 24
 )
@@ -51,7 +59,7 @@ func ParseRSAPrivateKeyFromPEM(key []byte) (*rsa.PrivateKey, error) {
 	// Parse PEM block
 	var block *pem.Block
 	if block, _ = pem.Decode(key); block == nil {
-		return nil, fmt.Errorf("cert must be pem encoded")
+		return nil, errors.New("cert must be pem encoded")
 	}
 
 	var parsedKey any
@@ -64,7 +72,7 @@ func ParseRSAPrivateKeyFromPEM(key []byte) (*rsa.PrivateKey, error) {
 	var pkey *rsa.PrivateKey
 	var ok bool
 	if pkey, ok = parsedKey.(*rsa.PrivateKey); !ok {
-		return nil, fmt.Errorf("not a RSA private key")
+		return nil, errors.New("not a RSA private key")
 	}
 
 	return pkey, nil
@@ -75,12 +83,12 @@ func ParseRSAPrivateKeyFromPEM(key []byte) (*rsa.PrivateKey, error) {
 func ActivateExporter(identifier, version string, logger *service.Logger, schema *service.ConfigSchema, conf *service.ParsedConfig) {
 	// If TLS information isn't present in the build then we do not send
 	// telemetry data.
-	if PrivateKey == "" {
+	if privateKey == "" {
 		return
 	}
 
 	// Parse private key for signing the JWT payload before sending it to our telemetry endpoint.
-	rsaPrivateKey, err := ParseRSAPrivateKeyFromPEM([]byte(PrivateKey))
+	rsaPrivateKey, err := ParseRSAPrivateKeyFromPEM([]byte(privateKey))
 	if err != nil {
 		logger.With("error", err).Debug("Failed to parse private key")
 		return
@@ -107,14 +115,19 @@ func ActivateExporter(identifier, version string, logger *service.Logger, schema
 		}
 	}
 
+	exportHost := defaultExportHost
+	if ExportHost != "" {
+		exportHost = ExportHost
+	}
+
 	tExporter := &telemetryExporter{
 		logger: logger,
 		Resty: resty.New().
-			SetHeader("User-Agent", fmt.Sprintf("RedpandaConnect/%s", version)).
+			SetHeader("User-Agent", "RedpandaConnect/"+version).
 			SetHeader("Accept-Encoding", "gzip").
 			SetHeader("Content-Type", "text/plain").
 			SetHeader("Accept", "application/json").
-			SetBaseURL("https://m.rp.vectorized.io").
+			SetBaseURL(exportHost).
 			SetTimeout(10 * time.Second).
 			SetRetryCount(3),
 		JWTBuilder: josejwt.Signed(signer),
@@ -146,7 +159,7 @@ func (t *telemetryExporter) export(p *payload) {
 
 	response, err := t.Resty.NewRequest().
 		SetBody(tokenStr).
-		Post("/telemetry")
+		Post("/connect/telemetry")
 	if err != nil {
 		t.logger.With("error", err).Debug("Failed to send request")
 		return
