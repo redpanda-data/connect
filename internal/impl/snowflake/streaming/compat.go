@@ -53,11 +53,9 @@ func encrypt(buf []byte, encryptionKey string, diversifier string, iv int64) ([]
 	ivBytes := make([]byte, aes.BlockSize)
 	binary.BigEndian.PutUint64(ivBytes[8:], uint64(iv))
 	stream := cipher.NewCTR(block, ivBytes)
-	// Actually do the encryption
-	// TODO(perf): write in place?
-	encrypted := make([]byte, len(buf))
-	stream.XORKeyStream(encrypted, buf)
-	return encrypted, nil
+	// Actually do the encryption in place
+	stream.XORKeyStream(buf, buf)
+	return buf, nil
 }
 
 func padBuffer(buf []byte, alignmentSize int) []byte {
