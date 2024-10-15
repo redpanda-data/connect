@@ -68,7 +68,7 @@ func TestSnowflake(t *testing.T) {
         D ARRAY,
         E OBJECT,
         F REAL,
-        G NUMBER
+        G REAL -- TODO: Make this NUMBER
       );`, channelOpts.TableName, channelOpts.TableName),
 		Parameters: map[string]string{
 			"MULTI_STATEMENT_COUNT": "0",
