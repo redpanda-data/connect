@@ -17,6 +17,7 @@ package azure
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 
@@ -25,6 +26,8 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/data/aztables"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azdatalake"
+	dlservice "github.com/Azure/azure-sdk-for-go/sdk/storage/azdatalake/service"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azqueue"
 )
 
@@ -80,8 +83,89 @@ func blobStorageClientFromParsed(pConf *service.ParsedConfig, container *service
 	return getBlobStorageClient(connectionString, storageAccount, storageAccessKey, storageSASToken, container)
 }
 
+func dlClientFromParsed(pConf *service.ParsedConfig, fsName *service.InterpolatedString) (*dlservice.Client, bool, error) {
+	connectionString, err := pConf.FieldString(bscFieldStorageConnectionString)
+	if err != nil {
+		return nil, false, err
+	}
+	storageAccount, err := pConf.FieldString(bscFieldStorageAccount)
+	if err != nil {
+		return nil, false, err
+	}
+	storageAccessKey, err := pConf.FieldString(bscFieldStorageAccessKey)
+	if err != nil {
+		return nil, false, err
+	}
+	storageSASToken, err := pConf.FieldString(bscFieldStorageSASToken)
+	if err != nil {
+		return nil, false, err
+	}
+	if storageAccount == "" && connectionString == "" {
+		return nil, false, errors.New("invalid azure storage account credentials")
+	}
+	return getDLClient(connectionString, storageAccount, storageAccessKey, storageSASToken, fsName)
+}
+
+func getDLClient(storageConnectionString, storageAccount, storageAccessKey, storageSASToken string, fsName *service.InterpolatedString) (*dlservice.Client, bool, error) {
+	if storageConnectionString != "" {
+		storageConnectionString := parseStorageConnectionString(storageConnectionString, storageAccount)
+		client, err := dlservice.NewClientFromConnectionString(storageConnectionString, nil)
+		if err != nil {
+			return nil, false, fmt.Errorf("creating new data lake file client from connection string: %w", err)
+		}
+		return client, false, nil
+	}
+
+	serviceURL := fmt.Sprintf(dfsEndpointExpr, storageAccount)
+
+	if storageAccessKey != "" {
+		cred, err := azdatalake.NewSharedKeyCredential(storageAccount, storageAccessKey)
+		if err != nil {
+			return nil, false, fmt.Errorf("creating new shared key credential: %w", err)
+		}
+		client, err := dlservice.NewClientWithSharedKeyCredential(serviceURL, cred, nil)
+		if err != nil {
+			return nil, false, fmt.Errorf("creating new client from shared key credential: %w", err)
+		}
+		return client, false, nil
+	}
+
+	if storageSASToken != "" {
+		var isFilesystemSASToken bool
+		if isServiceSASToken(storageSASToken) {
+			// container/filesystem scoped SAS token
+			isFilesystemSASToken = true
+			fsNameStr, err := fsName.TryString(service.NewMessage([]byte("")))
+			if err != nil {
+				return nil, false, fmt.Errorf("interpolating filesystem name: %w", err)
+			}
+			serviceURL = fmt.Sprintf("%s/%s?%s", serviceURL, fsNameStr, storageSASToken)
+		} else {
+			// storage account SAS token
+			serviceURL = fmt.Sprintf("%s?%s", serviceURL, storageSASToken)
+		}
+		client, err := dlservice.NewClientWithNoCredential(serviceURL, nil)
+		if err != nil {
+			return nil, false, fmt.Errorf("creating client with no credentials: %w", err)
+		}
+		return client, isFilesystemSASToken, nil
+	}
+
+	// default credentials
+	cred, err := azidentity.NewDefaultAzureCredential(nil)
+	if err != nil {
+		return nil, false, fmt.Errorf("getting default Azure credentials: %w", err)
+	}
+	client, err := dlservice.NewClient(serviceURL, cred, nil)
+	if err != nil {
+		return nil, false, fmt.Errorf("creating client from default credentials: %w", err)
+	}
+	return client, false, err
+}
+
 const (
 	blobEndpointExp = "https://%s.blob.core.windows.net"
+	dfsEndpointExpr = "https://%s.dfs.core.windows.net"
 )
 
 func getBlobStorageClient(storageConnectionString, storageAccount, storageAccessKey, storageSASToken string, container *service.InterpolatedString) (*azblob.Client, bool, error) {
@@ -289,4 +373,15 @@ func getTablesServiceClient(account, accessKey, connectionString, storageSASToke
 		client, err = aztables.NewServiceClient(serviceURL, cred, nil)
 	}
 	return client, err
+}
+
+func isServiceSASToken(token string) bool {
+	query, err := url.ParseQuery(token)
+	if err != nil {
+		return false
+	}
+	// 2024-10-09: `sr` parameter is present and required in service SAS tokens,
+	// and is not valid in storage account SAS tokens
+	// https://learn.microsoft.com/en-us/rest/api/storageservices/create-service-sas#specify-the-signed-resource-blob-storage-only
+	return query.Has("sr")
 }

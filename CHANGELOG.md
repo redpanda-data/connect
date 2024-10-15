@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - Field `checksum_algorithm` added to the `aws_s3` output. (@dom-lee-naimuri)
 - Field `nkey` added to `nats`, `nats_jetstream`, `nats_kv` and `nats_stream` components. (@ye11ow)
 - Field `private_key` added to the `snowflake_put` output. (@mihaitodor)
+- New `azure_data_lake_gen2` output. (@ooesili)
 
 ### Fixed
 
