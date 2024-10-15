@@ -9,6 +9,10 @@ All notable changes to this project will be documented in this file.
 
 - Field `checksum_algorithm` added to the `aws_s3` output. (@dom-lee-naimuri)
 
+### Changed
+
+- All components with a default `path` field value (such as the `aws_s3` output) containing the deprecated function `count` have now been changed to use the new function `counter`. This could potentially change behaviour in cases where multiple components are executing a mapping with a `count` function sharing the same of the old default count, and these counters need to cascade. This is an extremely unlikely scenario, but for all users of these components it is recommended that your `path` is defined explicitly, and in a future major version we will be removing the defaults.
+
 ## 4.37.0 - 2024-09-26
 
 ### Added
