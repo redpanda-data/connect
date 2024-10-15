@@ -49,10 +49,10 @@ If the `+"`storage_connection_string`"+` does not contain the `+"`AccountName`"+
 				Example(`messages-${!timestamp("2006")}`),
 			service.NewInterpolatedStringField(dloFieldPath).
 				Description("The path of each message to upload within the filesystem.").
-				Example(`${!count("files")}-${!timestamp_unix_nano()}.json`).
+				Example(`${!counter()}-${!timestamp_unix_nano()}.json`).
 				Example(`${!meta("kafka_key")}.json`).
 				Example(`${!json("doc.namespace")}/${!json("doc.id")}.json`).
-				Default(`${!count("files")}-${!timestamp_unix_nano()}.txt`),
+				Default(`${!counter()}-${!timestamp_unix_nano()}.txt`),
 			service.NewOutputMaxInFlightField(),
 		)
 }
