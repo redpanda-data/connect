@@ -51,7 +51,9 @@ jobs:
     - name: Write telemetry private key
       env:
         CONNECT_TELEMETRY_PRIV_KEY: ${{ secrets.TELEMETRY_PRIVATE_KEY }}
-      run: echo "$CONNECT_TELEMETRY_PRIV_KEY" > ./internal/telemetry/key.pem
+      run: |
+        git update-index --skip-worktree ./internal/telemetry/key.pem
+        echo "$CONNECT_TELEMETRY_PRIV_KEY" > ./internal/telemetry/key.pem
 
     - uses: actions/setup-python@v5
       with:
