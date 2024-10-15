@@ -22,6 +22,41 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
+func adlsSpec() *service.ConfigSpec {
+	return azureComponentSpec(true).
+		Beta().
+		Version("4.38.0").
+		Summary(`Sends message parts as files to an Azure Data Lake Gen2 filesystem. Each file is uploaded with the filename specified with the `+"`"+adlsFieldPath+"`"+` field.`).
+		Description(`
+In order to have a different path for each file you should use function
+interpolations described xref:configuration:interpolation.adoc#bloblang-queries[here], which are
+calculated per message of a batch.
+
+Supports multiple authentication methods but only one of the following is required:
+
+- `+"`storage_connection_string`"+`
+- `+"`storage_account` and `storage_access_key`"+`
+- `+"`storage_account` and `storage_sas_token`"+`
+- `+"`storage_account` to access via https://pkg.go.dev/github.com/Azure/azure-sdk-for-go/sdk/azidentity#DefaultAzureCredential[DefaultAzureCredential^]"+`
+
+If multiple are set then the `+"`storage_connection_string`"+` is given priority.
+
+If the `+"`storage_connection_string`"+` does not contain the `+"`AccountName`"+` parameter, please specify it in the
+`+"`storage_account`"+` field.`+service.OutputPerformanceDocs(true, false)).
+		Fields(
+			service.NewInterpolatedStringField(adlsFieldFilesystem).
+				Description("The ADLS filesystem name for uploading the messages to.").
+				Example(`messages-${!timestamp("2006")}`),
+			service.NewInterpolatedStringField(adlsFieldPath).
+				Description("The path of each message to upload within the filesystem.").
+				Example(`${!count("files")}-${!timestamp_unix_nano()}.json`).
+				Example(`${!meta("kafka_key")}.json`).
+				Example(`${!json("doc.namespace")}/${!json("doc.id")}.json`).
+				Default(`${!count("files")}-${!timestamp_unix_nano()}.txt`),
+			service.NewOutputMaxInFlightField(),
+		)
+}
+
 const (
 	// Azure Data Lake Storage Output Fields
 	adlsFieldFilesystem = "filesystem"
@@ -71,6 +106,7 @@ func adlsConfigFromParsed(pConf *service.ParsedConfig) (*adlsConfig, error) {
 		return nil, err
 	}
 	if isFilesystemSASToken {
+		// if using a container SAS token, the container is already implicit
 		conf.filesystem, _ = service.NewInterpolatedString("")
 	}
 	return &conf, nil
@@ -120,39 +156,4 @@ func (a *azureADLSWriter) Write(ctx context.Context, msg *service.Message) error
 
 func (a *azureADLSWriter) Close(ctx context.Context) error {
 	return nil
-}
-
-func adlsSpec() *service.ConfigSpec {
-	return azureComponentSpec(true).
-		Beta().
-		Version("4.37.0").
-		Summary(`Sends message parts as files to an Azure Data Lake Gen2 filesystem. Each file is uploaded with the filename specified with the `+"`"+adlsFieldPath+"`"+` field.`).
-		Description(`
-In order to have a different path for each file you should use function
-interpolations described xref:configuration:interpolation.adoc#bloblang-queries[here], which are
-calculated per message of a batch.
-
-Supports multiple authentication methods but only one of the following is required:
-
-- `+"`storage_connection_string`"+`
-- `+"`storage_account` and `storage_access_key`"+`
-- `+"`storage_account` and `storage_sas_token`"+`
-- `+"`storage_account` to access via https://pkg.go.dev/github.com/Azure/azure-sdk-for-go/sdk/azidentity#DefaultAzureCredential[DefaultAzureCredential^]"+`
-
-If multiple are set then the `+"`storage_connection_string`"+` is given priority.
-
-If the `+"`storage_connection_string`"+` does not contain the `+"`AccountName`"+` parameter, please specify it in the
-`+"`storage_account`"+` field.`+service.OutputPerformanceDocs(true, false)).
-		Fields(
-			service.NewInterpolatedStringField(adlsFieldFilesystem).
-				Description("The ADLS filesystem name for uploading the messages to.").
-				Example(`messages-${!timestamp("2006")}`),
-			service.NewInterpolatedStringField(adlsFieldPath).
-				Description("The path of each message to upload within the filesystem.").
-				Example(`${!count("files")}-${!timestamp_unix_nano()}.json`).
-				Example(`${!meta("kafka_key")}.json`).
-				Example(`${!json("doc.namespace")}/${!json("doc.id")}.json`).
-				Default(`${!count("files")}-${!timestamp_unix_nano()}.txt`),
-			service.NewOutputMaxInFlightField(),
-		)
 }

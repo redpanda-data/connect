@@ -17,7 +17,6 @@ package azure
 import (
 	"errors"
 	"fmt"
-	"log"
 	"net/url"
 	"os"
 	"strings"
@@ -144,7 +143,6 @@ func getADLSClient(storageConnectionString, storageAccount, storageAccessKey, st
 		} else {
 			// storage account SAS token
 			serviceURL = fmt.Sprintf("%s?%s", serviceURL, storageSASToken)
-			log.Println("serviceURL:", serviceURL)
 		}
 		client, err := dlservice.NewClientWithNoCredential(serviceURL, nil)
 		if err != nil {
