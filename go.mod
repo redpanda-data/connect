@@ -99,7 +99,7 @@ require (
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475
 	github.com/redis/go-redis/v9 v9.6.1
-	github.com/redpanda-data/benthos/v4 v4.38.1-0.20241007193918-d23bc7033960
+	github.com/redpanda-data/benthos/v4 v4.39.0
 	github.com/redpanda-data/connect/public/bundle/free/v4 v4.31.0
 	github.com/rs/xid v1.5.0
 	github.com/sashabaranov/go-openai v1.28.3
@@ -344,7 +344,7 @@ require (
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/segmentio/asm v1.2.0 // indirect
-	github.com/segmentio/encoding v0.4.0 // indirect
+	github.com/segmentio/encoding v0.4.0
 	github.com/segmentio/ksuid v1.0.4 // indirect
 	github.com/shirou/gopsutil/v3 v3.24.2 // indirect
 	github.com/shoenig/go-m1cpu v0.1.6 // indirect
@@ -373,7 +373,7 @@ require (
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	golang.org/x/mod v0.20.0 // indirect
-	golang.org/x/oauth2 v0.22.0 // indirect
+	golang.org/x/oauth2 v0.22.0
 	golang.org/x/sys v0.24.0 // indirect
 	golang.org/x/term v0.23.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
