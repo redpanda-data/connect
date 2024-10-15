@@ -25,7 +25,7 @@ component_type_dropdown::[]
 
 Sends message parts as files to an Azure Data Lake Gen2 filesystem. Each file is uploaded with the filename specified with the `path` field.
 
-Introduced in version 4.37.0.
+Introduced in version 4.38.0.
 
 ```yml
 # Config fields, showing default values
@@ -101,7 +101,7 @@ The storage account SAS token. This field is ignored if `storage_connection_stri
 
 === `filesystem`
 
-The ADLS filesystem name for uploading the messages to.
+The data lake storage filesystem name for uploading the messages to.
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
 

@@ -22,11 +22,11 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-func adlsSpec() *service.ConfigSpec {
+func dataLakeSpec() *service.ConfigSpec {
 	return azureComponentSpec(true).
 		Beta().
 		Version("4.38.0").
-		Summary(`Sends message parts as files to an Azure Data Lake Gen2 filesystem. Each file is uploaded with the filename specified with the `+"`"+adlsFieldPath+"`"+` field.`).
+		Summary(`Sends message parts as files to an Azure Data Lake Gen2 filesystem. Each file is uploaded with the filename specified with the `+"`"+dloFieldPath+"`"+` field.`).
 		Description(`
 In order to have a different path for each file you should use function
 interpolations described xref:configuration:interpolation.adoc#bloblang-queries[here], which are
@@ -44,10 +44,10 @@ If multiple are set then the `+"`storage_connection_string`"+` is given priority
 If the `+"`storage_connection_string`"+` does not contain the `+"`AccountName`"+` parameter, please specify it in the
 `+"`storage_account`"+` field.`+service.OutputPerformanceDocs(true, false)).
 		Fields(
-			service.NewInterpolatedStringField(adlsFieldFilesystem).
-				Description("The ADLS filesystem name for uploading the messages to.").
+			service.NewInterpolatedStringField(dloFieldFilesystem).
+				Description("The data lake storage filesystem name for uploading the messages to.").
 				Example(`messages-${!timestamp("2006")}`),
-			service.NewInterpolatedStringField(adlsFieldPath).
+			service.NewInterpolatedStringField(dloFieldPath).
 				Description("The path of each message to upload within the filesystem.").
 				Example(`${!count("files")}-${!timestamp_unix_nano()}.json`).
 				Example(`${!meta("kafka_key")}.json`).
@@ -59,27 +59,27 @@ If the `+"`storage_connection_string`"+` does not contain the `+"`AccountName`"+
 
 const (
 	// Azure Data Lake Storage Output Fields
-	adlsFieldFilesystem = "filesystem"
-	adlsFieldPath       = "path"
+	dloFieldFilesystem = "filesystem"
+	dloFieldPath       = "path"
 )
 
-type adlsConfig struct {
+type dloConfig struct {
 	client     *dlservice.Client
 	path       *service.InterpolatedString
 	filesystem *service.InterpolatedString
 }
 
 func init() {
-	err := service.RegisterOutput("azure_data_lake_gen2", adlsSpec(),
+	err := service.RegisterOutput("azure_data_lake_gen2", dataLakeSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.Output, mif int, err error) {
-			var pConf *adlsConfig
-			if pConf, err = adlsConfigFromParsed(conf); err != nil {
+			var pConf *dloConfig
+			if pConf, err = dloConfigFromParsed(conf); err != nil {
 				return
 			}
 			if mif, err = conf.FieldMaxInFlight(); err != nil {
 				return
 			}
-			if out, err = newAzureADLSWriter(pConf, mgr.Logger()); err != nil {
+			if out, err = newAzureDataLakeWriter(pConf, mgr.Logger()); err != nil {
 				return
 			}
 			return
@@ -89,19 +89,19 @@ func init() {
 	}
 }
 
-func adlsConfigFromParsed(pConf *service.ParsedConfig) (*adlsConfig, error) {
-	var conf adlsConfig
+func dloConfigFromParsed(pConf *service.ParsedConfig) (*dloConfig, error) {
+	var conf dloConfig
 	var err error
-	conf.filesystem, err = pConf.FieldInterpolatedString(adlsFieldFilesystem)
+	conf.filesystem, err = pConf.FieldInterpolatedString(dloFieldFilesystem)
 	if err != nil {
 		return nil, err
 	}
-	conf.path, err = pConf.FieldInterpolatedString(adlsFieldPath)
+	conf.path, err = pConf.FieldInterpolatedString(dloFieldPath)
 	if err != nil {
 		return nil, err
 	}
 	var isFilesystemSASToken bool
-	conf.client, isFilesystemSASToken, err = adlsClientFromParsed(pConf, conf.filesystem)
+	conf.client, isFilesystemSASToken, err = dlClientFromParsed(pConf, conf.filesystem)
 	if err != nil {
 		return nil, err
 	}
@@ -112,23 +112,23 @@ func adlsConfigFromParsed(pConf *service.ParsedConfig) (*adlsConfig, error) {
 	return &conf, nil
 }
 
-func newAzureADLSWriter(conf *adlsConfig, log *service.Logger) (*azureADLSWriter, error) {
-	return &azureADLSWriter{
+func newAzureDataLakeWriter(conf *dloConfig, log *service.Logger) (*azureDataLakeWriter, error) {
+	return &azureDataLakeWriter{
 		conf: conf,
 		log:  log,
 	}, nil
 }
 
-type azureADLSWriter struct {
-	conf *adlsConfig
+type azureDataLakeWriter struct {
+	conf *dloConfig
 	log  *service.Logger
 }
 
-func (a *azureADLSWriter) Connect(ctx context.Context) error {
+func (a *azureDataLakeWriter) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (a *azureADLSWriter) Write(ctx context.Context, msg *service.Message) error {
+func (a *azureDataLakeWriter) Write(ctx context.Context, msg *service.Message) error {
 	fsName, err := a.conf.filesystem.TryString(msg)
 	if err != nil {
 		return fmt.Errorf("interpolating filesystem name: %w", err)
@@ -154,6 +154,6 @@ func (a *azureADLSWriter) Write(ctx context.Context, msg *service.Message) error
 	return nil
 }
 
-func (a *azureADLSWriter) Close(ctx context.Context) error {
+func (a *azureDataLakeWriter) Close(ctx context.Context) error {
 	return nil
 }

@@ -83,7 +83,7 @@ func blobStorageClientFromParsed(pConf *service.ParsedConfig, container *service
 	return getBlobStorageClient(connectionString, storageAccount, storageAccessKey, storageSASToken, container)
 }
 
-func adlsClientFromParsed(pConf *service.ParsedConfig, fsName *service.InterpolatedString) (*dlservice.Client, bool, error) {
+func dlClientFromParsed(pConf *service.ParsedConfig, fsName *service.InterpolatedString) (*dlservice.Client, bool, error) {
 	connectionString, err := pConf.FieldString(bscFieldStorageConnectionString)
 	if err != nil {
 		return nil, false, err
@@ -103,15 +103,15 @@ func adlsClientFromParsed(pConf *service.ParsedConfig, fsName *service.Interpola
 	if storageAccount == "" && connectionString == "" {
 		return nil, false, errors.New("invalid azure storage account credentials")
 	}
-	return getADLSClient(connectionString, storageAccount, storageAccessKey, storageSASToken, fsName)
+	return getDLClient(connectionString, storageAccount, storageAccessKey, storageSASToken, fsName)
 }
 
-func getADLSClient(storageConnectionString, storageAccount, storageAccessKey, storageSASToken string, fsName *service.InterpolatedString) (*dlservice.Client, bool, error) {
+func getDLClient(storageConnectionString, storageAccount, storageAccessKey, storageSASToken string, fsName *service.InterpolatedString) (*dlservice.Client, bool, error) {
 	if storageConnectionString != "" {
 		storageConnectionString := parseStorageConnectionString(storageConnectionString, storageAccount)
 		client, err := dlservice.NewClientFromConnectionString(storageConnectionString, nil)
 		if err != nil {
-			return nil, false, fmt.Errorf("creating new ADLS file client from connection string: %w", err)
+			return nil, false, fmt.Errorf("creating new data lake file client from connection string: %w", err)
 		}
 		return client, false, nil
 	}
