@@ -234,6 +234,8 @@ func CreateReplicationSlot(
 	slotName string,
 	outputPlugin string,
 	options CreateReplicationSlotOptions,
+	version int,
+	snapshotter *Snapshotter,
 ) (CreateReplicationSlotResult, error) {
 	var temporaryString string
 	if options.Temporary {
@@ -245,12 +247,42 @@ func CreateReplicationSlot(
 	} else {
 		snapshotString = options.SnapshotAction
 	}
-	sql := fmt.Sprintf("CREATE_REPLICATION_SLOT %s %s %s %s %s", slotName, temporaryString, options.Mode, outputPlugin, snapshotString)
-	return ParseCreateReplicationSlot(conn.Exec(ctx, sql))
+
+	newPgCreateSlotCommand := fmt.Sprintf("CREATE_REPLICATION_SLOT %s %s %s %s %s", slotName, temporaryString, options.Mode, outputPlugin, snapshotString)
+	oldPgCreateSlotCommand := fmt.Sprintf("SELECT * FROM  pg_create_logical_replication_slot('%s', '%s', %v);", slotName, outputPlugin, temporaryString == "TEMPORARY")
+
+	var snapshotName string
+	if version > 14 {
+		result, err := ParseCreateReplicationSlot(conn.Exec(ctx, newPgCreateSlotCommand), version, snapshotName)
+		if err != nil {
+			return CreateReplicationSlotResult{}, err
+		}
+		snapshotter.setTransactionSnapshotName(result.SnapshotName)
+	}
+
+	var snapshotResponse SnapshotCreationResponse
+	if options.SnapshotAction == "export" {
+		var err error
+		snapshotResponse, err = snapshotter.initSnapshotTransaction()
+		if err != nil {
+			return CreateReplicationSlotResult{}, err
+		}
+		snapshotter.setTransactionSnapshotName(snapshotResponse.ExportedSnapshotName)
+	}
+
+	replicationSlotCreationResponse := conn.Exec(ctx, oldPgCreateSlotCommand)
+	_, err := replicationSlotCreationResponse.ReadAll()
+	if err != nil {
+		return CreateReplicationSlotResult{}, err
+	}
+
+	return CreateReplicationSlotResult{
+		SnapshotName: snapshotResponse.ExportedSnapshotName,
+	}, nil
 }
 
 // ParseCreateReplicationSlot parses the result of the CREATE_REPLICATION_SLOT command.
-func ParseCreateReplicationSlot(mrr *pgconn.MultiResultReader) (CreateReplicationSlotResult, error) {
+func ParseCreateReplicationSlot(mrr *pgconn.MultiResultReader, version int, snapshotName string) (CreateReplicationSlotResult, error) {
 	var crsr CreateReplicationSlotResult
 	results, err := mrr.ReadAll()
 	if err != nil {
@@ -267,14 +299,22 @@ func ParseCreateReplicationSlot(mrr *pgconn.MultiResultReader) (CreateReplicatio
 	}
 
 	row := result.Rows[0]
-	if len(row) != 4 {
-		return crsr, fmt.Errorf("expected 4 result columns, got %d", len(row))
+	if version > 14 {
+		if len(row) != 4 {
+			return crsr, fmt.Errorf("expected 4 result columns, got %d", len(row))
+		}
 	}
 
 	crsr.SlotName = string(row[0])
 	crsr.ConsistentPoint = string(row[1])
-	crsr.SnapshotName = string(row[2])
-	crsr.OutputPlugin = string(row[3])
+
+	if version > 14 {
+		crsr.SnapshotName = string(row[2])
+	} else {
+		crsr.SnapshotName = snapshotName
+	}
+
+	fmt.Println("Snapshot name", crsr.SnapshotName)
 
 	return crsr, nil
 }

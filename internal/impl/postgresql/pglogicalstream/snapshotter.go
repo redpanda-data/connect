@@ -19,57 +19,90 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
+type SnapshotCreationResponse struct {
+	ExportedSnapshotName string
+}
+
 // Snapshotter is a structure that allows the creation of a snapshot of a database at a given point in time
 // At the time we initialize logical replication - we specify what we want to export the snapshot.
 // This snapshot exists until the connection that created the replication slot remains open.
 // Therefore Snapshotter opens another connection to the database and sets the transaction to the snapshot.
 // This allows you to read the data that was in the database at the time of the snapshot creation.
 type Snapshotter struct {
-	pgConnection *sql.DB
-	logger       *service.Logger
+	pgConnection             *sql.DB
+	snapshotCreateConnection *sql.DB
+	logger                   *service.Logger
 
 	snapshotName string
+
+	version int
 }
 
 // NewSnapshotter creates a new Snapshotter instance
-func NewSnapshotter(dbConf pgconn.Config, snapshotName string, logger *service.Logger) (*Snapshotter, error) {
+func NewSnapshotter(dbConf pgconn.Config, logger *service.Logger, version int) (*Snapshotter, error) {
 	pgConn, err := openPgConnectionFromConfig(dbConf)
+	if err != nil {
+		return nil, err
+	}
+
+	snapshotCreateConnection, err := openPgConnectionFromConfig(dbConf)
+	if err != nil {
+		return nil, err
+	}
 
 	return &Snapshotter{
-		pgConnection: pgConn,
-		snapshotName: snapshotName,
-		logger:       logger,
-	}, err
+		pgConnection:             pgConn,
+		snapshotCreateConnection: snapshotCreateConnection,
+		logger:                   logger,
+		version:                  version,
+	}, nil
+}
+
+func (s *Snapshotter) initSnapshotTransaction() (SnapshotCreationResponse, error) {
+	if s.version >= 14 {
+		return SnapshotCreationResponse{}, errors.New("Snapshot is exported by default for versions above PG14")
+	}
+
+	var snapshotName sql.NullString
+
+	snapshotRow, err := s.pgConnection.Query(`BEGIN; SELECT pg_export_snapshot();`)
+	if err != nil {
+		return SnapshotCreationResponse{}, fmt.Errorf("Cant get exported snapshot for initial streaming", err)
+	}
+
+	if snapshotRow.Err() != nil {
+		return SnapshotCreationResponse{}, fmt.Errorf("can get avg row size due to query failure: %w", snapshotRow.Err())
+	}
+
+	if snapshotRow.Next() {
+		if err = snapshotRow.Scan(&snapshotName); err != nil {
+			return SnapshotCreationResponse{}, fmt.Errorf("Cant scan snapshot name into string: %w", err)
+		}
+	} else {
+		return SnapshotCreationResponse{}, errors.New("can get avg row size; 0 rows returned")
+	}
+
+	return SnapshotCreationResponse{ExportedSnapshotName: snapshotName.String}, nil
+}
+
+func (s *Snapshotter) setTransactionSnapshotName(snapshotName string) {
+	s.snapshotName = snapshotName
 }
 
 func (s *Snapshotter) prepare() error {
+	if s.snapshotName == "" {
+		return errors.New("Snapshot name is not set")
+	}
+
 	if _, err := s.pgConnection.Exec("BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ;"); err != nil {
 		return err
 	}
 	if _, err := s.pgConnection.Exec(fmt.Sprintf("SET TRANSACTION SNAPSHOT '%s';", s.snapshotName)); err != nil {
+		fmt.Println("Failed to prepare snapshot", err)
 		return err
 	}
 
 	return nil
-}
-
-func (s *Snapshotter) GetRowsCountPerTable(tableNames []string) (map[string]int, error) {
-	tables := make(map[string]int)
-	rows, err := s.pgConnection.Query("SELECT table_name, count(*) FROM information_schema.tables WHERE table_name in (?) GROUP BY table_name;", tableNames)
-	if err != nil {
-		return tables, err
-	}
-
-	for rows.Next() {
-		var tableName string
-		var count int
-		if err := rows.Scan(&tableName, &count); err != nil {
-			return tables, err
-		}
-		tables[tableName] = count
-	}
-
-	return tables, nil
 }
 
 func (s *Snapshotter) findAvgRowSize(table string) (sql.NullInt64, error) {
@@ -115,6 +148,12 @@ func (s *Snapshotter) querySnapshotData(table string, pk string, limit, offset i
 }
 
 func (s *Snapshotter) releaseSnapshot() error {
+	if s.version < 14 && s.snapshotCreateConnection != nil {
+		if _, err := s.snapshotCreateConnection.Exec("COMMIT;"); err != nil {
+			return err
+		}
+	}
+
 	_, err := s.pgConnection.Exec("COMMIT;")
 	return err
 }
@@ -122,6 +161,10 @@ func (s *Snapshotter) releaseSnapshot() error {
 func (s *Snapshotter) closeConn() error {
 	if s.pgConnection != nil {
 		return s.pgConnection.Close()
+	}
+
+	if s.snapshotCreateConnection != nil {
+		return s.snapshotCreateConnection.Close()
 	}
 
 	return nil

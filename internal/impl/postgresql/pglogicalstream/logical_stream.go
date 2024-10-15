@@ -55,6 +55,7 @@ type Stream struct {
 	logger                     *service.Logger
 	monitor                    *Monitor
 	streamUncomited            bool
+	snapshotter                *Snapshotter
 
 	lsnAckBuffer []string
 
@@ -137,12 +138,34 @@ func NewPgStream(config Config) (*Stream, error) {
 		tableNames[i] = fmt.Sprintf("%s.%s", config.DBSchema, table)
 	}
 
+	var version int
+	version, err = getPostgresVersion(*cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	snapshotter, err := NewSnapshotter(stream.dbConfig, stream.logger, version)
+	if err != nil {
+		if err != nil {
+			stream.logger.Errorf("Failed to open SQL connection to prepare snapshot: %v", err.Error())
+			if err = stream.cleanUpOnFailure(); err != nil {
+				stream.logger.Errorf("Failed to clean up resources on accident: %v", err.Error())
+			}
+
+			os.Exit(1)
+		}
+	}
+	stream.snapshotter = snapshotter
+
 	var pluginArguments = []string{}
 	if stream.decodingPlugin == "pgoutput" {
 		pluginArguments = []string{
 			"proto_version '1'",
 			fmt.Sprintf("publication_names 'pglog_stream_%s'", config.ReplicationSlotName),
-			"messages 'true'",
+		}
+
+		if version > 14 {
+			pluginArguments = append(pluginArguments, "messages 'true'")
 		}
 	}
 
@@ -156,19 +179,17 @@ func NewPgStream(config Config) (*Stream, error) {
 
 	stream.decodingPluginArguments = pluginArguments
 
+	// create snapshot transaction before creating a slot for older PostgreSQL versions to ensure consistency
+
 	pubName := "pglog_stream_" + config.ReplicationSlotName
 	if err = CreatePublication(context.Background(), stream.pgConn, pubName, tableNames, true); err != nil {
 		return nil, err
 	}
 
-	stream.logger.Infof("Created Postgresql publication %v %v", "publication_name", config.ReplicationSlotName)
-
 	sysident, err := IdentifySystem(context.Background(), stream.pgConn)
 	if err != nil {
 		return nil, err
 	}
-
-	stream.logger.Infof("System identification result SystemID: %v Timeline: %v XLogPos: %v DBName: %v", sysident.SystemID, sysident.Timeline, sysident.XLogPos, sysident.DBName)
 
 	var freshlyCreatedSlot = false
 	var confirmedLSNFromDB string
@@ -183,8 +204,10 @@ func NewPgStream(config Config) (*Stream, error) {
 			createSlotResult, err = CreateReplicationSlot(context.Background(), stream.pgConn, stream.slotName, stream.decodingPlugin.String(),
 				CreateReplicationSlotOptions{Temporary: config.TemporaryReplicationSlot,
 					SnapshotAction: "export",
-				})
+				}, version, stream.snapshotter)
 			if err != nil {
+				fmt.Println(err)
+				fmt.Println("Failed to create replication slot", err.Error())
 				return nil, err
 			}
 			stream.snapshotName = createSlotResult.SnapshotName
@@ -192,7 +215,6 @@ func NewPgStream(config Config) (*Stream, error) {
 		} else {
 			slotCheckRow := slotCheckResults[0].Rows[0]
 			confirmedLSNFromDB = string(slotCheckRow[0])
-			stream.logger.Infof("Replication slot restart LSN extracted from DB: LSN %v", confirmedLSNFromDB)
 		}
 	}
 
@@ -504,16 +526,7 @@ func (s *Stream) streamMessagesAsync() {
 }
 
 func (s *Stream) processSnapshot() {
-	snapshotter, err := NewSnapshotter(s.dbConfig, s.snapshotName, s.logger)
-	if err != nil {
-		s.logger.Errorf("Failed to open SQL connection to prepare snapshot: %v", err.Error())
-		if err = s.cleanUpOnFailure(); err != nil {
-			s.logger.Errorf("Failed to clean up resources on accident: %v", err.Error())
-		}
-
-		os.Exit(1)
-	}
-	if err = snapshotter.prepare(); err != nil {
+	if err := s.snapshotter.prepare(); err != nil {
 		s.logger.Errorf("Failed to prepare database snapshot. Probably snapshot is expired...: %v", err.Error())
 		if err = s.cleanUpOnFailure(); err != nil {
 			s.logger.Errorf("Failed to clean up resources on accident: %v", err.Error())
@@ -522,23 +535,13 @@ func (s *Stream) processSnapshot() {
 		os.Exit(1)
 	}
 	defer func() {
-		if err = snapshotter.releaseSnapshot(); err != nil {
+		if err := s.snapshotter.releaseSnapshot(); err != nil {
 			s.logger.Errorf("Failed to release database snapshot: %v", err.Error())
 		}
-		if err = snapshotter.closeConn(); err != nil {
+		if err := s.snapshotter.closeConn(); err != nil {
 			s.logger.Errorf("Failed to close database connection: %v", err.Error())
 		}
 	}()
-
-	tableStats, err := snapshotter.GetRowsCountPerTable(s.tableNames)
-	if err != nil {
-		s.logger.Errorf("Failed to get table stats: %v", err.Error())
-		if err = s.cleanUpOnFailure(); err != nil {
-			s.logger.Errorf("Failed to clean up resources on accident: %v", err.Error())
-		}
-
-		os.Exit(1)
-	}
 
 	for _, table := range s.tableNames {
 		s.logger.Infof("Processing snapshot for table: %v", table)
@@ -546,9 +549,10 @@ func (s *Stream) processSnapshot() {
 		var (
 			avgRowSizeBytes sql.NullInt64
 			offset          = 0
+			err             error
 		)
 
-		avgRowSizeBytes, err = snapshotter.findAvgRowSize(table)
+		avgRowSizeBytes, err = s.snapshotter.findAvgRowSize(table)
 		if err != nil {
 			s.logger.Errorf("Failed to calculate average row size for table %v: %v", table, err.Error())
 			if err = s.cleanUpOnFailure(); err != nil {
@@ -559,7 +563,7 @@ func (s *Stream) processSnapshot() {
 		}
 
 		availableMemory := getAvailableMemory()
-		batchSize := snapshotter.calculateBatchSize(availableMemory, uint64(avgRowSizeBytes.Int64))
+		batchSize := s.snapshotter.calculateBatchSize(availableMemory, uint64(avgRowSizeBytes.Int64))
 		s.logger.Infof("Querying snapshot batch_side: %v, available_memory: %v, avg_row_size: %v", batchSize, availableMemory, avgRowSizeBytes.Int64)
 
 		tablePk, err := s.getPrimaryKeyColumn(table)
@@ -574,7 +578,7 @@ func (s *Stream) processSnapshot() {
 
 		for {
 			var snapshotRows *sql.Rows
-			if snapshotRows, err = snapshotter.querySnapshotData(table, tablePk, batchSize, offset); err != nil {
+			if snapshotRows, err = s.snapshotter.querySnapshotData(table, tablePk, batchSize, offset); err != nil {
 				s.logger.Errorf("Failed to query snapshot for table %v: %v", table, err.Error())
 				if err = s.cleanUpOnFailure(); err != nil {
 					s.logger.Errorf("Failed to clean up resources on accident: %v", err.Error())
@@ -701,7 +705,7 @@ func (s *Stream) processSnapshot() {
 
 	}
 
-	if err = s.startLr(); err != nil {
+	if err := s.startLr(); err != nil {
 		s.logger.Errorf("Failed to start logical replication after snapshot: %v", err.Error())
 		os.Exit(1)
 	}

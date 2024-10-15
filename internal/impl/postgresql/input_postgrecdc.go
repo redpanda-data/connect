@@ -277,12 +277,6 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 func (p *pgStreamInput) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
 
 	select {
-	case <-p.metricsTicker.C:
-		progress := p.pglogicalStream.GetProgress()
-		for table, progress := range progress.TableProgress {
-			p.snapshotMetrics.Set(int64(progress), table)
-		}
-		p.replicationLag.Set(progress.WalLagInBytes)
 	case snapshotMessage := <-p.pglogicalStream.SnapshotMessageC():
 		var (
 			mb  []byte
@@ -291,7 +285,11 @@ func (p *pgStreamInput) Read(ctx context.Context) (*service.Message, service.Ack
 		if mb, err = json.Marshal(snapshotMessage); err != nil {
 			return nil, nil, err
 		}
-		return service.NewMessage(mb), func(ctx context.Context, err error) error {
+
+		connectMessage := service.NewMessage(mb)
+		connectMessage.MetaSet("table", snapshotMessage.Changes[0].Table)
+		connectMessage.MetaSet("operation", snapshotMessage.Changes[0].Operation)
+		return connectMessage, func(ctx context.Context, err error) error {
 			// Nacks are retried automatically when we use service.AutoRetryNacks
 			return nil
 		}, nil
@@ -303,10 +301,10 @@ func (p *pgStreamInput) Read(ctx context.Context) (*service.Message, service.Ack
 		if mb, err = json.Marshal(message); err != nil {
 			return nil, nil, err
 		}
-		return service.NewMessage(mb), func(ctx context.Context, err error) error {
-			// Nacks are retried automatically when we use service.AutoRetryNacks
-			//message.ServerHeartbeat.
-
+		connectMessage := service.NewMessage(mb)
+		connectMessage.MetaSet("table", message.Changes[0].Table)
+		connectMessage.MetaSet("operation", message.Changes[0].Operation)
+		return connectMessage, func(ctx context.Context, err error) error {
 			if message.Lsn != nil {
 				if err := p.pglogicalStream.AckLSN(*message.Lsn); err != nil {
 					return err

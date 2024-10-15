@@ -178,7 +178,7 @@ func TestCreateReplicationSlot(t *testing.T) {
 	require.NoError(t, err)
 	defer closeConn(t, conn)
 
-	result, err := CreateReplicationSlot(ctx, conn, slotName, outputPlugin, CreateReplicationSlotOptions{Temporary: false, SnapshotAction: "export"})
+	result, err := CreateReplicationSlot(ctx, conn, slotName, outputPlugin, CreateReplicationSlotOptions{Temporary: false, SnapshotAction: "export"}, 16, nil)
 	require.NoError(t, err)
 
 	assert.Equal(t, slotName, result.SlotName)
@@ -198,13 +198,13 @@ func TestDropReplicationSlot(t *testing.T) {
 	require.NoError(t, err)
 	defer closeConn(t, conn)
 
-	_, err = CreateReplicationSlot(ctx, conn, slotName, outputPlugin, CreateReplicationSlotOptions{Temporary: false})
+	_, err = CreateReplicationSlot(ctx, conn, slotName, outputPlugin, CreateReplicationSlotOptions{Temporary: false}, 16, nil)
 	require.NoError(t, err)
 
 	err = DropReplicationSlot(ctx, conn, slotName, DropReplicationSlotOptions{})
 	require.NoError(t, err)
 
-	_, err = CreateReplicationSlot(ctx, conn, slotName, outputPlugin, CreateReplicationSlotOptions{Temporary: false})
+	_, err = CreateReplicationSlot(ctx, conn, slotName, outputPlugin, CreateReplicationSlotOptions{Temporary: false}, 16, nil)
 	require.NoError(t, err)
 }
 
@@ -230,7 +230,7 @@ func TestStartReplication(t *testing.T) {
 	err = CreatePublication(context.Background(), conn, publicationName, []string{}, true)
 	require.NoError(t, err)
 
-	_, err = CreateReplicationSlot(ctx, conn, slotName, outputPlugin, CreateReplicationSlotOptions{Temporary: false, SnapshotAction: "export"})
+	_, err = CreateReplicationSlot(ctx, conn, slotName, outputPlugin, CreateReplicationSlotOptions{Temporary: false, SnapshotAction: "export"}, 16, nil)
 	require.NoError(t, err)
 
 	err = StartReplication(ctx, conn, slotName, sysident.XLogPos, StartReplicationOptions{
