@@ -29,7 +29,10 @@ import (
 	_ "embed"
 )
 
-// This embed captures our private JWT authentication key.
+// This embed captures our private JWT authentication key. Changes to this file
+// will not be indexed by git as we have run:
+//
+// `git update-index --skip-worktree key.pem`
 //
 //go:embed key.pem
 var privateKey string
