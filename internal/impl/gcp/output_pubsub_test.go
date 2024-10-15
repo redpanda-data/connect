@@ -93,7 +93,7 @@ func TestPubSubOutput_MessageAttr(t *testing.T) {
 	conf, err := newPubSubOutputConfig().ParseYAML(`
     project: sample-project
     topic: test
-    ordering_key: '${! content().string() }_${! count(content().string()) }'
+    ordering_key: '${! content().string() }_${! counter() }'
     metadata:
       exclude_prefixes:
         - drop_

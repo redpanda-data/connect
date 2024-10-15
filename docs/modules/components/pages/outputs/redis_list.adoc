@@ -327,7 +327,7 @@ key: ${! @.kafka_key )}
 
 key: ${! this.doc.id }
 
-key: ${! count("msgs") }
+key: ${! counter() }
 ```
 
 === `max_in_flight`

@@ -122,7 +122,7 @@ For example, if we wished to upload messages as a .tar.gz archive of documents w
 output:
   gcp_cloud_storage:
     bucket: TODO
-    path: ${!count("files")}-${!timestamp_unix_nano()}.tar.gz
+    path: ${!counter()}-${!timestamp_unix_nano()}.tar.gz
     batching:
       count: 100
       period: 10s
@@ -139,7 +139,7 @@ Alternatively, if we wished to upload JSON documents as a single large document 
 output:
   gcp_cloud_storage:
     bucket: TODO
-    path: ${!count("files")}-${!timestamp_unix_nano()}.json
+    path: ${!counter()}-${!timestamp_unix_nano()}.json
     batching:
       count: 100
       processors:
@@ -151,10 +151,10 @@ output:
 				Description("The bucket to upload messages to."),
 			service.NewInterpolatedStringField(csoFieldPath).
 				Description("The path of each message to upload.").
-				Example(`${!count("files")}-${!timestamp_unix_nano()}.txt`).
+				Example(`${!counter()}-${!timestamp_unix_nano()}.txt`).
 				Example(`${!meta("kafka_key")}.json`).
 				Example(`${!json("doc.namespace")}/${!json("doc.id")}.json`).
-				Default(`${!count("files")}-${!timestamp_unix_nano()}.txt`),
+				Default(`${!counter()}-${!timestamp_unix_nano()}.txt`),
 			service.NewInterpolatedStringField(csoFieldContentType).
 				Description("The content type to set for each object.").
 				Default("application/octet-stream"),
