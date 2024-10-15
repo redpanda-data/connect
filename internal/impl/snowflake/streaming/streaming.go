@@ -11,6 +11,7 @@
 package streaming
 
 import (
+	"bytes"
 	"context"
 	"crypto/aes"
 	"crypto/md5"
@@ -173,6 +174,7 @@ func (c *SnowflakeServiceClient) OpenChannel(ctx context.Context, opts ChannelOp
 		rowSequencer:    resp.RowSequencer,
 		transformers:    transformers,
 		fileMetadata:    typeMetadata,
+		buffer:          bytes.NewBuffer(nil),
 	}
 	return ch, nil
 }
@@ -207,7 +209,7 @@ func (c *SnowflakeServiceClient) ChannelStatus(ctx context.Context, opts Channel
 	if channel.StatusCode != responseSuccess {
 		return "", fmt.Errorf("unable to status channel %s - status: %d", opts.Name, resp.StatusCode)
 	}
-	return OffsetToken(channel.PersistedOffsetToken), nil
+	return channel.PersistedOffsetToken, nil
 }
 
 // DropChannel drops it like it's hot 🔥
@@ -243,6 +245,7 @@ type SnowflakeIngestionChannel struct {
 	transformers     map[string]*dataTransformer
 	fileMetadata     map[string]string
 	requestIDCounter int
+	buffer           *bytes.Buffer
 }
 
 func (c *SnowflakeIngestionChannel) nextRequestID() string {
@@ -304,10 +307,12 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 	blobPath := generateBlobPath(c.clientPrefix, fakeThreadID, c.requestIDCounter)
 	c.requestIDCounter++
 	c.fileMetadata["primaryFileId"] = getShortname(blobPath)
-	unencrypted, err := writeParquetFile(c.schema, rows, c.fileMetadata)
+	c.buffer.Reset()
+	err = writeParquetFile(c.buffer, c.schema, rows, c.fileMetadata)
 	if err != nil {
 		return stats, err
 	}
+	unencrypted := c.buffer.Bytes()
 	metadata, err := readParquetMetadata(unencrypted)
 	if err != nil {
 		return stats, fmt.Errorf("unable to parse parquet metadata: %w", err)

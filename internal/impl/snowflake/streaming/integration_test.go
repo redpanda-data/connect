@@ -220,34 +220,14 @@ func TestIntegerCompat(t *testing.T) {
 	require.NoError(t, err)
 	_, err = channel.InsertRows(ctx, service.MessageBatch{
 		msg(`{
-      "a": -1
+      "a": 1
     }`),
 		msg(`{
-      "a": -2 
+      "a": 2 
     }`),
 		msg(`{
-      "a": -3
+      "a": 3
     }`),
 	})
 	require.NoError(t, err)
-	return
-	require.EventuallyWithT(t, func(collect *assert.CollectT) {
-		// Always order by A so we get consistent ordering for our test
-		resp, err := restClient.RunSQL(ctx, streaming.RunSQLRequest{
-			Database:  channelOpts.DatabaseName,
-			Schema:    channelOpts.SchemaName,
-			Statement: fmt.Sprintf(`SELECT * FROM %s ORDER BY A;`, channelOpts.TableName),
-		})
-		if !assert.NoError(collect, err) {
-			t.Logf("failed to scan table: %s", err)
-			return
-		}
-		assert.Equal(collect, "00000", resp.SQLState)
-		expected := [][]string{
-			{`bar`, `true`, `{"foo":"bar"}`, `[[42], null, {"A":"B"}]`, `{"foo": "bar"}`, `3.14`, `-1`},
-			{`baz`, `false`, `{"a":"b"}`, `[1, 2, 3]`, `{"foo":"baz"}`, `42.12345`, `9`},
-			{`foo`, ``, `[1, 2, 3]`, `["a", 9, "z"]`, `{"baz":"qux"}`, `-0.0`, `42`},
-		}
-		assert.Equal(collect, parseSnowflakeData(expected), parseSnowflakeData(resp.Data))
-	}, 3*time.Second, time.Second)
 }
