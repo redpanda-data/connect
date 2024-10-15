@@ -176,7 +176,7 @@ The tags field allows you to specify key/value pairs to attach to objects as tag
 output:
   aws_s3:
     bucket: TODO
-    path: ${!count("files")}-${!timestamp_unix_nano()}.tar.gz
+    path: ${!counter()}-${!timestamp_unix_nano()}.tar.gz
     tags:
       Key1: Value1
       Timestamp: ${!meta("Timestamp")}
@@ -196,7 +196,7 @@ For example, if we wished to upload messages as a .tar.gz archive of documents w
 output:
   aws_s3:
     bucket: TODO
-    path: ${!count("files")}-${!timestamp_unix_nano()}.tar.gz
+    path: ${!counter()}-${!timestamp_unix_nano()}.tar.gz
     batching:
       count: 100
       period: 10s
@@ -213,7 +213,7 @@ Alternatively, if we wished to upload JSON documents as a single large document 
 output:
   aws_s3:
     bucket: TODO
-    path: ${!count("files")}-${!timestamp_unix_nano()}.json
+    path: ${!counter()}-${!timestamp_unix_nano()}.json
     batching:
       count: 100
       processors:
@@ -225,8 +225,8 @@ output:
 				Description("The bucket to upload messages to."),
 			service.NewInterpolatedStringField(s3oFieldPath).
 				Description("The path of each message to upload.").
-				Default(`${!count("files")}-${!timestamp_unix_nano()}.txt`).
-				Example(`${!count("files")}-${!timestamp_unix_nano()}.txt`).
+				Default(`${!counter()}-${!timestamp_unix_nano()}.txt`).
+				Example(`${!counter()}-${!timestamp_unix_nano()}.txt`).
 				Example(`${!meta("kafka_key")}.json`).
 				Example(`${!json("doc.namespace")}/${!json("doc.id")}.json`),
 			service.NewInterpolatedStringMapField(s3oFieldTags).

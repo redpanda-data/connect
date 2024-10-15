@@ -87,7 +87,7 @@ output:
     hosts: [ localhost:9000 ]
     user: root
     directory: /$ID
-    path: ${!count("$ID")}-${!timestamp_unix_nano()}.txt
+    path: ${!counter()}-${!timestamp_unix_nano()}.txt
     max_in_flight: $MAX_IN_FLIGHT
     batching:
       count: $OUTPUT_BATCH_COUNT

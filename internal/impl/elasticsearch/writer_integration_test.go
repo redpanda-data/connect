@@ -162,7 +162,7 @@ func testElasticNoIndex(urls []string, client *elastic.Client, t *testing.T) {
 
 	m := outputFromConf(t, `
 index: does_not_exist
-id: 'foo-${!count("noIndexTest")}'
+id: 'foo-${!counter()}'
 urls: %v
 max_retries: 1
 backoff:
@@ -289,7 +289,7 @@ func testElasticConnect(urls []string, client *elastic.Client, t *testing.T) {
 
 	m := outputFromConf(t, `
 index: test_conn_index
-id: 'foo-${!count("foo")}'
+id: 'foo-${!counter()}'
 urls: %v
 type: _doc
 sniff: false
@@ -336,7 +336,7 @@ func testElasticIndexInterpolation(urls []string, client *elastic.Client, t *tes
 
 	m := outputFromConf(t, `
 index: ${! @index }
-id: 'bar-${!count("bar")}'
+id: 'bar-${!counter()}'
 urls: %v
 type: _doc
 sniff: false
@@ -382,7 +382,7 @@ func testElasticBatch(urls []string, client *elastic.Client, t *testing.T) {
 
 	m := outputFromConf(t, `
 index: ${! @index }
-id: 'baz-${!count("baz")}'
+id: 'baz-${!counter()}'
 urls: %v
 type: _doc
 sniff: false
@@ -429,7 +429,7 @@ func testElasticBatchDelete(urls []string, client *elastic.Client, t *testing.T)
 
 	m := outputFromConf(t, `
 index: ${! @index }
-id: 'buz-${!count("elasticBatchDeleteMessages")}'
+id: 'buz-${!counter()}'
 urls: %v
 action: ${! @elastic_action }
 type: _doc

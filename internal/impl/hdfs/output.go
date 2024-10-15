@@ -50,7 +50,7 @@ func outputSpec() *service.ConfigSpec {
 				Description("A directory to store message files within. If the directory does not exist it will be created."),
 			service.NewInterpolatedStringField(oFieldPath).
 				Description("The path to upload messages as, interpolation functions should be used in order to generate unique file paths.").
-				Default(`${!count("files")}-${!timestamp_unix_nano()}.txt`),
+				Default(`${!counter()}-${!timestamp_unix_nano()}.txt`),
 			service.NewOutputMaxInFlightField(),
 			service.NewBatchPolicyField(oFieldBatching),
 		)

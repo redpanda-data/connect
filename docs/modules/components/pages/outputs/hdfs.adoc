@@ -40,7 +40,7 @@ output:
     hosts: [] # No default (required)
     user: ""
     directory: "" # No default (required)
-    path: ${!count("files")}-${!timestamp_unix_nano()}.txt
+    path: ${!counter()}-${!timestamp_unix_nano()}.txt
     max_in_flight: 64
     batching:
       count: 0
@@ -62,7 +62,7 @@ output:
     hosts: [] # No default (required)
     user: ""
     directory: "" # No default (required)
-    path: ${!count("files")}-${!timestamp_unix_nano()}.txt
+    path: ${!counter()}-${!timestamp_unix_nano()}.txt
     max_in_flight: 64
     batching:
       count: 0
@@ -123,7 +123,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 *Type*: `string`
 
-*Default*: `"${!count(\"files\")}-${!timestamp_unix_nano()}.txt"`
+*Default*: `"${!counter()}-${!timestamp_unix_nano()}.txt"`
 
 === `max_in_flight`
 

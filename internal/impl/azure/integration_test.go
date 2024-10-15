@@ -95,7 +95,7 @@ output:
     blob_type: BLOCK
     container: $VAR1-$ID
     max_in_flight: 1
-    path: $VAR2/${!count("$ID")}.txt
+    path: $VAR2/${!counter()}.txt
     public_access_level: PRIVATE
     storage_connection_string: $VAR3
 
@@ -123,7 +123,7 @@ output:
     blob_type: BLOCK
     container: $VAR1-$ID
     max_in_flight: 1
-    path: $VAR2/${!count("$ID")}.txt
+    path: $VAR2/${!counter()}.txt
     public_access_level: PRIVATE
     storage_connection_string: $VAR3
 
