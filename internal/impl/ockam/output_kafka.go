@@ -17,9 +17,11 @@ package ockam
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/twmb/franz-go/pkg/kgo"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
 )
@@ -51,13 +53,21 @@ func ockamKafkaOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Summary("Ockam").
 		Categories("Services").
-		Field(service.NewObjectField("kafka", append(
-			kafka.FranzKafkaOutputConfigFields(),
-			service.NewStringListField("seed_brokers").Optional().
-				Description("A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses.").
-				Example([]string{"localhost:9092"}).
-				Example([]string{"foo:9092", "bar:9092"}).
-				Example([]string{"foo:9092,bar:9092"}),
+		Field(service.NewObjectField("kafka", slices.Concat(
+			[]*service.ConfigField{
+				service.NewStringListField("seed_brokers").Optional().
+					Description("A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses.").
+					Example([]string{"localhost:9092"}).
+					Example([]string{"foo:9092", "bar:9092"}).
+					Example([]string{"foo:9092,bar:9092"}),
+				service.NewTLSToggledField("tls"),
+				service.NewIntField("max_in_flight").
+					Description("The maximum number of batches to be sending in parallel at any given time.").
+					Default(10),
+				service.NewBatchPolicyField("batching"),
+			},
+			kafka.FranzProducerFields(),
+			kafka.FranzWriterConfigFields(),
 		)...)).
 		Field(service.NewBoolField("disable_content_encryption").Default(false)).
 		Field(service.NewStringField("enrollment_ticket").Optional()).
@@ -74,7 +84,7 @@ func ockamKafkaOutputConfig() *service.ConfigSpec {
 //------------------------------------------------------------------------------
 
 type ockamKafkaOutput struct {
-	kafkaWriter *kafka.FranzKafkaWriter
+	kafkaWriter *kafka.FranzWriter
 	node        node
 }
 
@@ -160,11 +170,6 @@ func newOckamKafkaOutput(conf *service.ParsedConfig, log *service.Logger) (*ocka
 
 	// ---- Create Ockam Kafka Outlet ----
 
-	kafkaWriter, err := kafka.NewFranzKafkaWriterFromConfig(conf.Namespace("kafka"), log)
-	if err != nil {
-		return nil, err
-	}
-
 	if routeToKafkaOutlet == "self" {
 		// Use the first "seed_brokers" field item as the bootstrapServer argument for Ockam.
 		seedBrokers, err := conf.FieldStringList("kafka", "seed_brokers")
@@ -189,10 +194,37 @@ func newOckamKafkaOutput(conf *service.ParsedConfig, log *service.Logger) (*ocka
 		}
 	}
 
-	// Override the list of SeedBrokers that would be used by kafka_franz, set it to the address of the kafka inlet
-	kafkaWriter.SeedBrokers = []string{kafkaInletAddress}
-	// Disable TLS, kafka_franz writer will communicate in plaintext with the ockam kafka inlet
-	kafkaWriter.TLSConf = nil
+	clientOpts, err := kafka.FranzProducerOptsFromConfig(conf.Namespace("kafka"))
+	if err != nil {
+		return nil, err
+	}
+	clientOpts = append(clientOpts,
+		kgo.SeedBrokers(kafkaInletAddress),
+		kgo.AllowAutoTopicCreation(),
+	)
+
+	var client *kgo.Client
+	kafkaWriter, err := kafka.NewFranzWriterFromConfig(conf.Namespace("kafka"), func(fn kafka.FranzSharedClientUseFn) error {
+		if client == nil {
+			var err error
+			if client, err = kgo.NewClient(clientOpts...); err != nil {
+				return err
+			}
+		}
+		return fn(&kafka.FranzSharedClientInfo{
+			Client: client,
+		})
+	}, func(context.Context) error {
+		if client == nil {
+			return nil
+		}
+		client.Close()
+		client = nil
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
 
 	return &ockamKafkaOutput{kafkaWriter, *n}, nil
 }
