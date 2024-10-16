@@ -537,9 +537,7 @@ func (s *Stream) streamMessagesAsync() {
 }
 
 func (s *Stream) processSnapshot() {
-	// metricsCtx, cancel := context.WithCancel(context.Background())
 	if err := s.snapshotter.prepare(); err != nil {
-		// cancel()
 		s.logger.Errorf("Failed to prepare database snapshot. Probably snapshot is expired...: %v", err.Error())
 		if err = s.cleanUpOnFailure(); err != nil {
 			s.logger.Errorf("Failed to clean up resources on accident: %v", err.Error())
@@ -548,7 +546,6 @@ func (s *Stream) processSnapshot() {
 		os.Exit(1)
 	}
 	defer func() {
-		// cancel()
 		if err := s.snapshotter.releaseSnapshot(); err != nil {
 			s.logger.Errorf("Failed to release database snapshot: %v", err.Error())
 		}
@@ -556,6 +553,8 @@ func (s *Stream) processSnapshot() {
 			s.logger.Errorf("Failed to close database connection: %v", err.Error())
 		}
 	}()
+
+	s.logger.Infof("Starting snapshot processing")
 
 	for _, table := range s.tableNames {
 		s.logger.Infof("Processing snapshot for table: %v", table)
@@ -707,7 +706,9 @@ func (s *Stream) processSnapshot() {
 						},
 					},
 				}
-
+				s.monitor.UpdateSnapshotProgressForTable(tableWithoutSchema, rowsCount+offset)
+				tableProgress := s.monitor.GetSnapshotProgressForTable(tableWithoutSchema)
+				snapshotChangePacket.Changes[0].TableSnapshotProgress = &tableProgress
 				s.snapshotMessages <- snapshotChangePacket
 			}
 

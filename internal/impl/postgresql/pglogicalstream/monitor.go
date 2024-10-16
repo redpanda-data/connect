@@ -85,6 +85,12 @@ func NewMonitor(conf *pgconn.Config, logger *service.Logger, tables []string, sl
 	return m, nil
 }
 
+func (m *Monitor) GetSnapshotProgressForTable(table string) float64 {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	return m.snapshotProgress[table]
+}
+
 // UpdateSnapshotProgressForTable updates the snapshot ingestion progress for a given table
 func (m *Monitor) UpdateSnapshotProgressForTable(table string, position int) {
 	m.lock.Lock()

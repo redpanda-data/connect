@@ -12,7 +12,6 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
-	"fmt"
 	"strings"
 	"time"
 
@@ -291,7 +290,6 @@ func (p *pgStreamInput) Read(ctx context.Context) (*service.Message, service.Ack
 		connectMessage.MetaSet("table", snapshotMessage.Changes[0].Table)
 		connectMessage.MetaSet("operation", snapshotMessage.Changes[0].Operation)
 		if snapshotMessage.Changes[0].TableSnapshotProgress != nil {
-			fmt.Println("Table snapshot progress", *snapshotMessage.Changes[0].TableSnapshotProgress, snapshotMessage.Changes[0].Table)
 			p.snapshotMetrics.SetFloat64(*snapshotMessage.Changes[0].TableSnapshotProgress, snapshotMessage.Changes[0].Table)
 		}
 
