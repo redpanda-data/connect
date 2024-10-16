@@ -48,6 +48,13 @@ jobs:
     - name: Release Notes
       run: ./resources/scripts/release_notes.sh > ./release_notes.md
 
+    - name: Write telemetry private key
+      env:
+        CONNECT_TELEMETRY_PRIV_KEY: ${{ secrets.TELEMETRY_PRIVATE_KEY }}
+      run: |
+        git update-index --skip-worktree ./internal/telemetry/key.pem
+        echo "$CONNECT_TELEMETRY_PRIV_KEY" > ./internal/telemetry/key.pem
+
     - uses: actions/setup-python@v5
       with:
         python-version: '3.12'
@@ -130,6 +137,13 @@ jobs:
     - name: Install Buildx
       id: buildx
       uses: docker/setup-buildx-action@v3
+
+    - name: Write telemetry private key
+      env:
+        CONNECT_TELEMETRY_PRIV_KEY: ${{ secrets.TELEMETRY_PRIVATE_KEY }}
+      run: |
+        git update-index --skip-worktree ./internal/telemetry/key.pem
+        echo "$CONNECT_TELEMETRY_PRIV_KEY" > ./internal/telemetry/key.pem
 
     - name: Docker meta
       id: docker_meta

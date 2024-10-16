@@ -38,6 +38,12 @@ jobs:
         with:
           go-version: 1.22.x
           check-latest: true
+      - name: Write telemetry private key
+        env:
+          CONNECT_TELEMETRY_PRIV_KEY: ${{ secrets.TELEMETRY_PRIVATE_KEY }}
+        run: |
+          git update-index --skip-worktree ./internal/telemetry/key.pem
+          echo "$CONNECT_TELEMETRY_PRIV_KEY" > ./internal/telemetry/key.pem
       - name: Build binaries (dry run / snapshot mode)
         if: ${{ env.DRY_RUN != 'false' }}
         uses: goreleaser/goreleaser-action@v6
