@@ -29,6 +29,9 @@ builds:
       -X main.Version={{.Version}}
       -X main.DateBuilt={{.Date}}
       -X main.BinaryName=redpanda-connect
+      -X github.com/redpanda-data/connect/v4/internal/telemetry.ExportHost={{ if index .Env "CONNECT_TELEMETRY_HOST"  }}{{ .Env.CONNECT_TELEMETRY_HOST }}{{ else }}{{ end }}
+      -X github.com/redpanda-data/connect/v4/internal/telemetry.ExportDelay={{ if index .Env "CONNECT_TELEMETRY_DELAY"  }}{{ .Env.CONNECT_TELEMETRY_DELAY }}{{ else }}{{ end }}
+      -X github.com/redpanda-data/connect/v4/internal/telemetry.ExportPeriod={{ if index .Env "CONNECT_TELEMETRY_PERIOD"  }}{{ .Env.CONNECT_TELEMETRY_PERIOD }}{{ else }}{{ end }}
 
   - id: connect-cloud
     main: cmd/redpanda-connect-cloud/main.go

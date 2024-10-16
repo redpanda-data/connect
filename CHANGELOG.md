@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Anonymous telemetry data is now sent by Connect instances after running for >5 mins. Details about which data is sent, when it is sent, and how to disable it can be found in the [telemetry README](./internal/telemetry/README.md). (@Jeffail)
 - Field `checksum_algorithm` added to the `aws_s3` output. (@dom-lee-naimuri)
 - Field `nkey` added to `nats`, `nats_jetstream`, `nats_kv` and `nats_stream` components. (@ye11ow)
 - Field `private_key` added to the `snowflake_put` output. (@mihaitodor)

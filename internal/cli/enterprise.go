@@ -18,6 +18,7 @@ import (
 	"github.com/rs/xid"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka/enterprise"
+	"github.com/redpanda-data/connect/v4/internal/telemetry"
 )
 
 // InitEnterpriseCLI kicks off the benthos cli with a suite of options that adds
@@ -25,7 +26,9 @@ import (
 // abstracted into a separate package so that multiple distributions (classic
 // versus cloud) can reference the same code.
 func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.ConfigSchema, opts ...service.CLIOptFunc) {
-	rpLogger := enterprise.NewTopicLogger(xid.New().String())
+	instanceID := xid.New().String()
+
+	rpLogger := enterprise.NewTopicLogger(instanceID)
 	var fbLogger *service.Logger
 
 	opts = append(opts,
@@ -57,8 +60,11 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 			rpLogger.SetFallbackLogger(l)
 		}),
 		service.CLIOptAddTeeLogger(slog.New(rpLogger)),
-		service.CLIOptOnConfigParse(func(fn *service.ParsedConfig) error {
-			return rpLogger.InitOutputFromParsed(fn.Namespace("redpanda"))
+		service.CLIOptOnConfigParse(func(pConf *service.ParsedConfig) error {
+			// Kick off telemetry exporter.
+			telemetry.ActivateExporter(instanceID, version, fbLogger, schema, pConf)
+
+			return rpLogger.InitOutputFromParsed(pConf.Namespace("redpanda"))
 		}),
 		service.CLIOptOnStreamStart(func(s *service.RunningStreamSummary) error {
 			rpLogger.SetStreamSummary(s)
