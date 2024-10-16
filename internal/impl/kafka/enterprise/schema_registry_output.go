@@ -18,6 +18,7 @@ import (
 	"sync/atomic"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
 	"github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
 )
 
