@@ -11,6 +11,8 @@
 package streaming
 
 import (
+	"fmt"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -348,6 +350,46 @@ func TestDateConverter(t *testing.T) {
 		t.Run("", func(t *testing.T) {
 			c := &dateConverter{nullable: true}
 			runTestcase(t, c, tc)
+		})
+	}
+}
+
+func TestByteWidth(t *testing.T) {
+	tests := [][2]int64{
+		{0, 1},
+		{1, 1},
+		{-1, 1},
+		{-16, 1},
+		{16, 1},
+		{math.MaxInt8 - 1, 1},
+		{math.MaxInt8, 1},
+		{math.MaxInt8 + 1, 2},
+		{math.MinInt8 - 1, 2},
+		{math.MinInt8, 1},
+		{math.MinInt8 + 1, 1},
+		{math.MaxInt16 - 1, 2},
+		{math.MaxInt16, 2},
+		{math.MaxInt16 + 1, 4},
+		{math.MinInt16 - 1, 4},
+		{math.MinInt16, 2},
+		{math.MinInt16 + 1, 2},
+		{math.MaxInt32 - 1, 4},
+		{math.MaxInt32, 4},
+		{math.MaxInt32 + 1, 8},
+		{math.MinInt32 - 1, 8},
+		{math.MinInt32, 4},
+		{math.MinInt32 + 1, 4},
+		{math.MaxInt64 - 1, 8},
+		{math.MaxInt64, 8},
+		// {math.MaxInt64 + 1, 8},
+		// {math.MinInt64 - 1, 8},
+		{math.MinInt64, 8},
+		{math.MinInt64 + 1, 8},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(fmt.Sprintf("byteWidth(%d)", tc[0]), func(t *testing.T) {
+			require.Equal(t, int(tc[1]), byteWidth(tc[0]))
 		})
 	}
 }

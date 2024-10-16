@@ -14,6 +14,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -301,11 +302,11 @@ func (c sb16Converter) ValidateAndConvert(buf *statsBuffer, val any) (any, error
 		buf.minIntVal = v
 		buf.maxIntVal = v
 		buf.first = false
-		return int64ToInt128Binary(v), nil
+	} else {
+		buf.minIntVal = min(buf.minIntVal, v)
+		buf.maxIntVal = max(buf.maxIntVal, v)
 	}
-	buf.minIntVal = min(buf.minIntVal, v)
-	buf.maxIntVal = max(buf.maxIntVal, v)
-	return int64ToInt128Binary(v), nil
+	return packInteger(v), nil
 }
 
 type doubleConverter struct {
@@ -711,4 +712,50 @@ func logicalTypeOrdinal(str string) int {
 		return 11
 	}
 	return -1
+}
+
+func byteWidth(v int64) int {
+	if v < 0 {
+		switch {
+		case v >= math.MinInt8:
+			return 1
+		case v >= math.MinInt16:
+			return 2
+		case v >= math.MinInt32:
+			return 4
+		}
+		return 8
+	}
+	switch {
+	case v <= math.MaxInt8:
+		return 1
+	case v <= math.MaxInt16:
+		return 2
+	case v <= math.MaxInt32:
+		return 4
+	}
+	return 8
+}
+
+func packInteger(v int64) any {
+	if v < 0 {
+		switch {
+		case v >= math.MinInt8:
+			return int8(v)
+		case v >= math.MinInt16:
+			return int16(v)
+		case v >= math.MinInt32:
+			return int32(v)
+		}
+		return v
+	}
+	switch {
+	case v <= math.MaxInt8:
+		return int8(v)
+	case v <= math.MaxInt16:
+		return int16(v)
+	case v <= math.MaxInt32:
+		return int32(v)
+	}
+	return v
 }

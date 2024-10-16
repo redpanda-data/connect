@@ -112,10 +112,6 @@ func truncateBytesAsHex(bytes []byte, truncateUp bool) string {
 	return hex.EncodeToString(bytes[:maxLobLen])
 }
 
-func int64ToInt128Binary(v int64) [16]byte {
-	return int128.Int64(v).Bytes()
-}
-
 // normalizeColumnName normalizes the column to the same as Snowflake's
 // internal representation. See LiteralQuoteUtils.unquoteColumnName in
 // the Java SDK for reference, although that code is quite hard to read.

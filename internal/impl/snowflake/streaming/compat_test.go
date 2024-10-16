@@ -106,15 +106,6 @@ func TestCompat(t *testing.T) {
 	require.Equal(t, md5Hash(actualEncrypted[:len(unpadded)]), chunkMD5Hash)
 }
 
-func TestInt64ToInt128Binary(t *testing.T) {
-	require.Equal(t, [16]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, int64ToInt128Binary(0))
-	require.Equal(t, [16]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}, int64ToInt128Binary(1))
-	require.Equal(t, [16]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 42}, int64ToInt128Binary(42))
-	require.Equal(t, [16]byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}, int64ToInt128Binary(-1))
-	require.Equal(t, [16]byte{0, 0, 0, 0, 0, 0, 0, 0, 0x7F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}, int64ToInt128Binary(math.MaxInt64))
-	require.Equal(t, [16]byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x80, 0, 0, 0, 0, 0, 0, 0}, int64ToInt128Binary(math.MinInt64))
-}
-
 func TestColumnNormalization(t *testing.T) {
 	require.Equal(t, "", normalizeColumnName(""))
 	require.Equal(t, "FOO", normalizeColumnName("foo"))
