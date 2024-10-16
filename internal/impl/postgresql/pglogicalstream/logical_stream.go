@@ -402,10 +402,7 @@ func (s *Stream) streamMessagesAsync() {
 					}
 				}
 				clientXLogPos := xld.WALStart + LSN(len(xld.WALData))
-				fmt.Println("Accessing meterics")
 				metrics := s.monitor.Report()
-				fmt.Println("Accessing meterics", metrics)
-
 				if s.decodingPlugin == "wal2json" {
 					message, err := decodeWal2JsonChanges(clientXLogPos.String(), xld.WALData)
 					if err != nil {
@@ -429,7 +426,7 @@ func (s *Stream) streamMessagesAsync() {
 							return
 						}
 					} else {
-
+						message.WALLagBytes = &metrics.WalLagInBytes
 						s.messages <- *message
 					}
 				}
@@ -464,6 +461,8 @@ func (s *Stream) streamMessagesAsync() {
 								Changes: []StreamMessageChanges{
 									*message,
 								},
+								IsStreaming: true,
+								WALLagBytes: &metrics.WalLagInBytes,
 							}
 							<-s.consumedCallback
 						}
@@ -522,7 +521,12 @@ func (s *Stream) streamMessagesAsync() {
 							} else {
 								// send all collected changes
 								lsn := clientXLogPos.String()
-								s.messages <- StreamMessage{Lsn: &lsn, Changes: pgoutputChanges}
+								s.messages <- StreamMessage{
+									Lsn:         &lsn,
+									Changes:     pgoutputChanges,
+									IsStreaming: true,
+									WALLagBytes: &metrics.WalLagInBytes,
+								}
 							}
 						}
 					}

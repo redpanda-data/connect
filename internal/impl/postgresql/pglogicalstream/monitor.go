@@ -66,7 +66,21 @@ func NewMonitor(conf *pgconn.Config, logger *service.Logger, tables []string, sl
 	ctx, cancel := context.WithCancel(context.Background())
 	m.ctx = ctx
 	m.cancelTicker = cancel
-	m.ticker = time.NewTicker(5 * time.Second)
+	// hardocded duration to monitor slot lag
+	m.ticker = time.NewTicker(time.Second * 3)
+
+	go func() {
+		for {
+			select {
+			case <-m.ticker.C:
+				m.readReplicationLag()
+				break
+			case <-m.ctx.Done():
+				m.ticker.Stop()
+				return
+			}
+		}
+	}()
 
 	return m, nil
 }
@@ -111,19 +125,21 @@ func (m *Monitor) readTablesStat(tables []string) error {
 func (m *Monitor) readReplicationLag() {
 	result, err := m.dbConn.Query(`SELECT slot_name,
        pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn) AS lag_bytes
-       FROM pg_replication_slots WHERE slot_name = ?;`, m.slotName)
+       FROM pg_replication_slots WHERE slot_name = $1;`, m.slotName)
 	// calculate the replication lag in bytes
 	// replicationLagInBytes = latestLsn - confirmedLsn
-	if result.Err() != nil || err != nil {
+	if err != nil || result.Err() != nil {
 		m.logger.Errorf("Error reading replication lag: %v", err)
 		return
 	}
 
 	var slotName string
 	var lagbytes int64
-	if err = result.Scan(&slotName, &lagbytes); err != nil {
-		m.logger.Errorf("Error reading replication lag: %v", err)
-		return
+	for result.Next() {
+		if err = result.Scan(&slotName, &lagbytes); err != nil {
+			m.logger.Errorf("Error reading replication lag: %v", err)
+			return
+		}
 	}
 
 	m.replicationLagInBytes = lagbytes

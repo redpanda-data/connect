@@ -311,7 +311,6 @@ func (p *pgStreamInput) Read(ctx context.Context) (*service.Message, service.Ack
 		connectMessage.MetaSet("table", message.Changes[0].Table)
 		connectMessage.MetaSet("operation", message.Changes[0].Operation)
 		if message.WALLagBytes != nil {
-			fmt.Println("Wal lag", *message.WALLagBytes)
 			p.replicationLag.Set(*message.WALLagBytes)
 		}
 
