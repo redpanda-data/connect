@@ -16,7 +16,9 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"math"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -199,7 +201,7 @@ func TestIntegerCompat(t *testing.T) {
 		Schema:   channelOpts.SchemaName,
 		Statement: fmt.Sprintf(`
       DROP TABLE IF EXISTS %s;
-      CREATE TABLE %s (
+      CREATE TABLE IF NOT EXISTS %s (
         A NUMBER
       );`, channelOpts.TableName, channelOpts.TableName),
 		Parameters: map[string]string{
@@ -220,13 +222,13 @@ func TestIntegerCompat(t *testing.T) {
 	require.NoError(t, err)
 	_, err = channel.InsertRows(ctx, service.MessageBatch{
 		msg(`{
-      "a": 1
-    }`),
-		msg(`{
-      "a": 2 
-    }`),
-		msg(`{
       "a": 3
+    }`),
+		msg(`{
+      "a": -1
+    }`),
+		msg(`{
+      "a": ` + strconv.Itoa(math.MaxInt64) + ` 
     }`),
 	})
 	require.NoError(t, err)

@@ -308,9 +308,8 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 	c.fileMetadata["primaryFileId"] = getShortname(blobPath)
 	c.buffer.Reset()
 
-	// tighten sb16
-
-	err = writeParquetFile(c.buffer, c.schema, rows, c.fileMetadata)
+	schema, meta := narrowPhysicalTypes(c.schema, c.transformers, c.fileMetadata)
+	err = writeParquetFile(c.buffer, schema, rows, meta)
 	if err != nil {
 		return stats, err
 	}

@@ -22,8 +22,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming/int128"
 )
 
 func deriveKey(encryptionKey, diversifier string) ([]byte, error) {

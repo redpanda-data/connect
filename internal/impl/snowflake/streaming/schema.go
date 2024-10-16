@@ -14,6 +14,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"strconv"
 	"strings"
@@ -194,6 +195,36 @@ func constructParquetSchema(columns []columnMetadata) (parquetSchema, map[string
 		}
 	}
 	return parquet.NewSchema("bdec", groupNode), transformers, typeMetadata, nil
+}
+
+func narrowPhysicalTypes(
+	schema parquetSchema,
+	transformers map[string]*dataTransformer,
+	fileMetadata map[string]string) (parquetSchema, map[string]string) {
+	mapped := parquet.Group{}
+	mappedMeta := maps.Clone(fileMetadata)
+	for _, field := range schema.Fields() {
+		if field.Type().Kind() != parquet.FixedLenByteArray {
+			mapped[field.Name()] = field
+			continue
+		}
+		stats := transformers[field.Name()].stats
+		byteWidth := max(byteWidth(stats.maxIntVal), byteWidth(stats.minIntVal))
+		n := parquet.Int(byteWidth * 8)
+		if field.Type().LogicalType() != nil && field.Type().LogicalType().Decimal != nil {
+			d := field.Type().LogicalType().Decimal
+			n = parquet.Decimal(int(d.Scale), min(int(d.Precision), 3), n.Type())
+		}
+		if field.Optional() {
+			n = parquet.Optional(n)
+		}
+		n = parquet.FieldID(n, field.ID())
+		n = parquet.Compressed(n, field.Compression())
+		n = parquet.Encoded(n, field.Encoding())
+		mapped[field.Name()] = n
+		mappedMeta[strconv.Itoa(field.ID())] = fmt.Sprintf("%d,%d", logicalTypeOrdinal("FIXED"), physicalTypeOrdinal(fmt.Sprintf("SB%d", byteWidth)))
+	}
+	return parquet.NewSchema(schema.Name(), mapped), mappedMeta
 }
 
 type statsBuffer struct {
