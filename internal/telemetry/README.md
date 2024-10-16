@@ -3,7 +3,7 @@ Telemetry
 
 ## What is this for?
 
-Our main goal is to find out the frequency with which each plugin is used in production environments, as this helps us prioritise enhancements and bugs for various plugin families on our roadmap.
+Our main goal is to find out the frequency with which each plugin is used in production environments, as this helps us prioritise enhancements and bug fixes for various plugin families on our roadmap.
 
 Ideally, we'd also like to identify common patterns in plugin usage that may help us plan new work or identify gaps in our functionality. For example, if we were to see that almost all `aws_s3` outputs were paired with a `mutation` processor then we might conclude that embedding a mutation field into the plugin itself could be a useful feature.
 
