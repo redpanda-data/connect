@@ -15,79 +15,65 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/apache/arrow/go/v17/parquet"
-	"github.com/apache/arrow/go/v17/parquet/compress"
-	"github.com/apache/arrow/go/v17/parquet/file"
-	"github.com/apache/arrow/go/v17/parquet/metadata"
+	"github.com/parquet-go/parquet-go"
 	"github.com/parquet-go/parquet-go/format"
 	"github.com/segmentio/encoding/thrift"
 )
 
-type parquetColumnData struct {
-	values           any // some slice of values
-	definitionLevels []int16
-}
-
-func writeParquetFile(writer io.Writer, schema parquetSchema, data map[int32]parquetColumnData, md map[string]string) (err error) {
-	kvMeta := metadata.KeyValueMetadata{}
-	for k, v := range md {
-		if err := kvMeta.Append(k, v); err != nil {
-			return err
-		}
-	}
-	props := parquet.NewWriterProperties(
-		parquet.WithCreatedBy("RedpandaConnect latest (build main)"),
-		parquet.WithStats(true),
-		parquet.WithCompression(compress.Codecs.Zstd),
-		parquet.WithEncoding(parquet.Encodings.Plain),
-		parquet.WithVersion(parquet.V1_0),
-		parquet.WithDataPageVersion(parquet.DataPageV1),
-		parquet.WithDictionaryDefault(false),
-	)
-	pw := file.NewParquetWriter(
+func writeParquetFile(writer io.Writer, schema parquetSchema, rows []map[string]any, metadata map[string]string) (err error) {
+	pw := parquet.NewGenericWriter[map[string]any](
 		writer,
 		schema,
-		file.WithWriteMetadata(kvMeta),
-		file.WithWriterProps(props),
+		parquet.CreatedBy("RedpandaConnect", version, "main"),
+		// Recommended by the Snowflake team to enable data page stats
+		parquet.DataPageStatistics(true),
+		parquet.Compression(&parquet.Zstd),
 	)
+	for k, v := range metadata {
+		pw.SetKeyValueMetadata(k, v)
+	}
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("encoding panic: %v", r)
 		}
 	}()
-	rg := pw.AppendBufferedRowGroup()
-	var cw file.ColumnChunkWriter
-	for i := 0; i < rg.NumColumns(); i++ {
-		cw, err = rg.Column(i)
-		if err != nil {
-			return err
-		}
-		column := data[cw.Descr().SchemaNode().FieldID()]
-		switch vals := column.values.(type) {
-		case []parquet.FixedLenByteArray:
-			w := cw.(*file.FixedLenByteArrayColumnChunkWriter)
-			_, err = w.WriteBatch(vals, column.definitionLevels, nil)
-			if err != nil {
-				return
-			}
-		case []parquet.ByteArray:
-			w := cw.(*file.ByteArrayColumnChunkWriter)
-			_, err = w.WriteBatch(vals, column.definitionLevels, nil)
-			if err != nil {
-				return
-			}
-		}
-		err = cw.Close()
-		if err != nil {
-			return
-		}
-	}
-	err = rg.Close()
+	_, err = pw.Write(rows)
 	if err != nil {
 		return
 	}
 	err = pw.Close()
 	return
+}
+
+func hackRewriteParquetAsV1(parquetFile []byte) ([]byte, error) {
+	if len(parquetFile) < 8 {
+		return nil, fmt.Errorf("too small of parquet file: %d", len(parquetFile))
+	}
+	trailingBytes := parquetFile[len(parquetFile)-8:]
+	if string(trailingBytes[4:]) != "PAR1" {
+		return nil, fmt.Errorf("missing magic bytes, got: %q", trailingBytes[4:])
+	}
+	footerSize := int(binary.LittleEndian.Uint32(trailingBytes))
+	if len(parquetFile) < footerSize+8 {
+		return nil, fmt.Errorf("too small of parquet file: %d, footer size: %d", len(parquetFile), footerSize)
+	}
+	footerBytes := parquetFile[len(parquetFile)-(footerSize+8) : len(parquetFile)-8]
+	metadata := format.FileMetaData{}
+	protocol := new(thrift.CompactProtocol)
+	// TODO: Just rewrite in place without the marshal/unmarshal dance
+	if err := thrift.Unmarshal(protocol, footerBytes, &metadata); err != nil {
+		return nil, fmt.Errorf("unable to extract parquet metadata: %w", err)
+	}
+	metadata.Version = 1
+	b, err := thrift.Marshal(protocol, metadata)
+	if err != nil {
+		return nil, fmt.Errorf("unable to marshal metadata: %w", err)
+	}
+	if len(b) != len(footerBytes) {
+		return nil, fmt.Errorf("Change two bits and the serialized size changed! %d vs %d", len(b), footerSize)
+	}
+	copy(footerBytes, b)
+	return parquetFile, nil
 }
 
 func readParquetMetadata(parquetFile []byte) (metadata format.FileMetaData, err error) {

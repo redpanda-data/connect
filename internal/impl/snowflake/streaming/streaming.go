@@ -262,14 +262,7 @@ func messageToRow(msg *service.Message) (map[string]any, error) {
 	if !ok {
 		return nil, fmt.Errorf("expected object, got: %T", v)
 	}
-	// We need to do a translation of the map key, so that we don't miss any `null`
-	// values when iterating over the columns (because A and a map to the same
-	// column name).
-	mapped := make(map[string]any, len(row))
-	for name, val := range row {
-		mapped[normalizeColumnName(name)] = val
-	}
-	return mapped, nil
+	return row, nil
 }
 
 // InsertStats holds some basic statistics about the InsertRows operation
@@ -285,25 +278,29 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 	stats := InsertStats{}
 	startTime := time.Now()
 	var err error
-	columns := make(map[int32]parquetColumnData, len(c.transformers))
 	for _, transformer := range c.transformers {
 		transformer.stats.Reset()
 	}
-	for _, msg := range batch {
+	rows := make([]map[string]any, len(batch))
+	for i, msg := range batch {
+		transformed := make(map[string]any, len(c.transformers))
 		row, err := messageToRow(msg)
 		if err != nil {
 			return stats, err
 		}
-		for name, t := range c.transformers {
-			val := row[name] // will be `nil` if not present
-			if err := t.converter.ValidateAndConvert(t.stats, val); err != nil {
-				return stats, err
+		for k, v := range row {
+			name := normalizeColumnName(k)
+			t, ok := c.transformers[name]
+			if !ok {
+				// Skip extra columns
+				continue
+			}
+			transformed[name], err = t.converter.ValidateAndConvert(t.stats, v)
+			if err != nil {
+				return stats, fmt.Errorf("invalid data for column %s: %w", k, err)
 			}
 		}
-	}
-	// Flush each column now
-	for _, transformer := range c.transformers {
-		columns[transformer.stats.columnID] = transformer.converter.Finish()
+		rows[i] = transformed
 	}
 	fakeThreadID := rand.N(1000)
 	blobPath := generateBlobPath(c.clientPrefix, fakeThreadID, c.requestIDCounter)
@@ -311,7 +308,7 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 	c.fileMetadata["primaryFileId"] = getShortname(blobPath)
 	c.buffer.Reset()
 
-	err = writeParquetFile(c.buffer, c.schema, columns, c.fileMetadata)
+	err = writeParquetFile(c.buffer, c.schema, rows, c.fileMetadata)
 	if err != nil {
 		return stats, err
 	}

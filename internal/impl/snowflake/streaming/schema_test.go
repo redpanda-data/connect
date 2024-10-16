@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming/int128"
 	"github.com/stretchr/testify/require"
 )
 
@@ -115,12 +116,12 @@ func TestTimeConverter(t *testing.T) {
 func runTestcase(t *testing.T, dc dataConverter, tc validateTestCase) {
 	t.Helper()
 	s := statsBuffer{}
-	err := dc.ValidateAndConvert(&s, tc.input)
+	v, err := dc.ValidateAndConvert(&s, tc.input)
 	if tc.err {
-		require.Errorf(t, err, "instead got: %#v", nil)
+		require.Errorf(t, err, "instead got: %#v", v)
 	} else {
 		require.NoError(t, err)
-		require.Equal(t, tc.output, nil)
+		require.Equal(t, tc.output, v)
 	}
 }
 
@@ -182,14 +183,14 @@ func TestFixedConverter(t *testing.T) {
 	tests := []validateTestCase{
 		{
 			input:     12,
-			output:    int64(46920),
+			output:    int128.Int64(12).Bytes(),
 			precision: 2,
 		},
 	}
 	for _, tc := range tests {
 		tc := tc
 		t.Run("", func(t *testing.T) {
-			c := &intConverter{nullable: true, scale: tc.scale}
+			c := &sb16Converter{nullable: true, scale: tc.scale, precision: tc.precision}
 			runTestcase(t, c, tc)
 		})
 	}
