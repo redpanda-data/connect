@@ -62,7 +62,7 @@ output:
     stream: mystream
     apikey: <Api key genereated on web console>
 
-	processors:
+  processors:
     - mapping: |
         root = {}
         root.raw = content().string()`)
