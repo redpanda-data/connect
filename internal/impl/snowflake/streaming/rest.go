@@ -408,11 +408,9 @@ func (c *SnowflakeRestClient) registerBlob(ctx context.Context, req registerBlob
 	return
 }
 
-const debugAPICalls = false
-
 func (c *SnowflakeRestClient) doPost(ctx context.Context, url string, req any, resp any) error {
 	marshaller := json.Marshal
-	if debugAPICalls {
+	if debug {
 		marshaller = func(v any) ([]byte, error) {
 			return json.MarshalIndent(v, "", "  ")
 		}
@@ -422,7 +420,7 @@ func (c *SnowflakeRestClient) doPost(ctx context.Context, url string, req any, r
 		return err
 	}
 	respBody, err := backoff.RetryNotifyWithData(func() ([]byte, error) {
-		if debugAPICalls {
+		if debug {
 			fmt.Printf("making request to %s with body %s\n", url, reqBody)
 		}
 		httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(reqBody))
@@ -453,7 +451,7 @@ func (c *SnowflakeRestClient) doPost(ctx context.Context, url string, req any, r
 		if r.StatusCode != 200 {
 			return nil, fmt.Errorf("non successful status code (%d): %s", r.StatusCode, respBody)
 		}
-		if debugAPICalls {
+		if debug {
 			fmt.Printf("got response to %s with body %s\n", url, respBody)
 		}
 		return respBody, nil

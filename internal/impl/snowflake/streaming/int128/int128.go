@@ -17,8 +17,23 @@ package int128
 
 import (
 	"encoding/binary"
+	"math"
 	"math/big"
 	"math/bits"
+)
+
+// Common constant values for int128
+var (
+	MaxInt128 = Bytes([]byte{0x7F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF})
+	MinInt128 = Bytes([]byte{0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00})
+	MaxInt64  = Int64(math.MaxInt64)
+	MinInt64  = Int64(math.MinInt64)
+	MaxInt32  = Int64(math.MaxInt32)
+	MinInt32  = Int64(math.MinInt32)
+	MaxInt16  = Int64(math.MaxInt16)
+	MinInt16  = Int64(math.MinInt16)
+	MaxInt8   = Int64(math.MaxInt8)
+	MinInt8   = Int64(math.MinInt8)
 )
 
 // Int128 is a *signed* int128 type that is more efficent than big.Int

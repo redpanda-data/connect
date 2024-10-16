@@ -70,7 +70,9 @@ func TestSnowflake(t *testing.T) {
         D ARRAY,
         E OBJECT,
         F REAL,
-        G REAL -- TODO: Make this NUMBER
+        G NUMBER,
+        H TIME,
+        I DATE
       );`, channelOpts.TableName, channelOpts.TableName),
 		Parameters: map[string]string{
 			"MULTI_STATEMENT_COUNT": "0",
@@ -106,7 +108,9 @@ func TestSnowflake(t *testing.T) {
       "D": [[42], null, {"A":"B"}],
       "E": {"foo":"bar"},
       "F": 3.14,
-      "G": -1
+      "G": -1,
+      "H": "13:02:06",
+      "I": "2007/11/3"
     }`),
 		msg(`{
       "A": "baz",
@@ -115,7 +119,9 @@ func TestSnowflake(t *testing.T) {
       "D": [1, 2, 3],
       "E": {"foo":"baz"},
       "F": 42.12345,
-      "G": 9
+      "G": 9,
+      "H": "13:02:06.123456789",
+      "I": "3-04-2019"
     }`),
 		msg(`{
       "A": "foo",
@@ -124,7 +130,9 @@ func TestSnowflake(t *testing.T) {
       "D": ["a", 9, "z"],
       "E": {"baz":"qux"},
       "F": -0.0,
-      "G": 42
+      "G": 42,
+      "H": 1728680106,
+      "I": 1728680106
     }`),
 	})
 	require.NoError(t, err)
@@ -141,9 +149,9 @@ func TestSnowflake(t *testing.T) {
 		}
 		assert.Equal(collect, "00000", resp.SQLState)
 		expected := [][]string{
-			{`bar`, `true`, `{"foo":"bar"}`, `[[42], null, {"A":"B"}]`, `{"foo": "bar"}`, `3.14`, `-1`},
-			{`baz`, `false`, `{"a":"b"}`, `[1, 2, 3]`, `{"foo":"baz"}`, `42.12345`, `9`},
-			{`foo`, ``, `[1, 2, 3]`, `["a", 9, "z"]`, `{"baz":"qux"}`, `-0.0`, `42`},
+			{`bar`, `true`, `{"foo":"bar"}`, `[[42], null, {"A":"B"}]`, `{"foo": "bar"}`, `3.14`, `-1`, `46926`, `13820`},
+			{`baz`, `false`, `{"a":"b"}`, `[1, 2, 3]`, `{"foo":"baz"}`, `42.12345`, `9`, `46926.123456789`, `17959`},
+			{`foo`, ``, `[1, 2, 3]`, `["a", 9, "z"]`, `{"baz":"qux"}`, `-0.0`, `42`, `75306`, `20007`},
 		}
 		assert.Equal(collect, parseSnowflakeData(expected), parseSnowflakeData(resp.Data))
 	}, 3*time.Second, time.Second)
@@ -220,16 +228,25 @@ func TestIntegerCompat(t *testing.T) {
 	defer streamClient.Close()
 	channel, err := streamClient.OpenChannel(ctx, channelOpts)
 	require.NoError(t, err)
-	_, err = channel.InsertRows(ctx, service.MessageBatch{
-		msg(`{
-      "a": 3
-    }`),
-		msg(`{
-      "a": -1
-    }`),
-		msg(`{
-      "a": ` + strconv.Itoa(math.MaxInt64) + ` 
-    }`),
-	})
-	require.NoError(t, err)
+	rows := [][2]int{
+		{-1, 1},
+		{math.MinInt8, math.MaxInt8},
+		{math.MinInt16, math.MaxInt16},
+		{math.MinInt32, math.MaxInt32},
+		{math.MinInt64, math.MaxInt64},
+	}
+	for _, row := range rows {
+		_, err = channel.InsertRows(ctx, service.MessageBatch{
+			msg(`{
+        "a": ` + strconv.Itoa(row[0]) + ` 
+      }`),
+			msg(`{
+        "a": 0
+      }`),
+			msg(`{
+        "a": ` + strconv.Itoa(row[1]) + ` 
+      }`),
+		})
+		require.NoError(t, err)
+	}
 }

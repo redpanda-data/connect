@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"maps"
 	"math"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -47,6 +48,7 @@ type dataTransformer struct {
 	name      string // raw name from API
 	converter dataConverter
 	stats     *statsBuffer
+	column    *columnMetadata
 }
 
 func convertFixedType(column columnMetadata) (parquet.Node, dataConverter, error) {
@@ -118,11 +120,7 @@ func constructParquetSchema(columns []columnMetadata) (parquetSchema, map[string
 			typeMetadata[fmt.Sprintf("%d:obj_enc", id)] = "1"
 			n = parquet.String()
 			converter = jsonConverter{column.Nullable, maxJSONSize}
-		case "text":
-			fallthrough
-		case "char":
-			fallthrough
-		case "any":
+		case "any", "text", "char":
 			n = parquet.String()
 			byteLength := 16 * humanize.MiByte
 			if column.ByteLength != nil {
@@ -145,11 +143,7 @@ func constructParquetSchema(columns []columnMetadata) (parquetSchema, map[string
 		case "real":
 			n = parquet.Leaf(parquet.DoubleType)
 			converter = doubleConverter{column.Nullable}
-		case "timestamp_ltz":
-			fallthrough
-		case "timestamp_ntz":
-			fallthrough
-		case "timestamp_tz":
+		case "timestamp_tz", "timestamp_ltz", "timestamp_ntz":
 			if column.PhysicalType == "SB8" {
 				n = parquet.Leaf(parquet.Int64Type)
 			} else {
@@ -162,15 +156,17 @@ func constructParquetSchema(columns []columnMetadata) (parquetSchema, map[string
 			tz := logicalType != "timestamp_ntz"
 			converter = timestampConverter{column.Nullable, scale, tz}
 		case "time":
+			t := parquet.Int32Type
+			precision := 9
 			if column.PhysicalType == "SB8" {
-				n = parquet.Leaf(parquet.Int64Type)
-			} else {
-				n = parquet.Leaf(parquet.Int32Type)
+				t = parquet.Int64Type
+				precision = 18
 			}
 			scale := 9
 			if column.Scale != nil {
 				scale = int(*column.Scale)
 			}
+			n = parquet.Decimal(scale, precision, t)
 			converter = timeConverter{column.Nullable, scale}
 		case "date":
 			n = parquet.Leaf(parquet.Int32Type)
@@ -185,18 +181,25 @@ func constructParquetSchema(columns []columnMetadata) (parquetSchema, map[string
 		// Use plain encoding for now as there seems to be compatibility issues with the default settings
 		// we might be able to tune this more.
 		n = parquet.Encoded(n, &parquet.Plain)
-		typeMetadata[strconv.Itoa(id)] = fmt.Sprintf("%d,%d", logicalTypeOrdinal(column.LogicalType), physicalTypeOrdinal(column.PhysicalType))
+		typeMetadata[strconv.Itoa(id)] = fmt.Sprintf(
+			"%d,%d",
+			logicalTypeOrdinal(column.LogicalType),
+			physicalTypeOrdinal(column.PhysicalType),
+		)
 		name := normalizeColumnName(column.Name)
 		groupNode[name] = n
 		transformers[name] = &dataTransformer{
 			name:      column.Name,
 			converter: converter,
 			stats:     &statsBuffer{columnID: id},
+			column:    &column,
 		}
 	}
 	return parquet.NewSchema("bdec", groupNode), transformers, typeMetadata, nil
 }
 
+// So snowflake has a storage optimization where physical types are narrowed to the smallest possible storage
+// value, support that.
 func narrowPhysicalTypes(
 	schema parquetSchema,
 	transformers map[string]*dataTransformer,
@@ -204,7 +207,9 @@ func narrowPhysicalTypes(
 	mapped := parquet.Group{}
 	mappedMeta := maps.Clone(fileMetadata)
 	for _, field := range schema.Fields() {
-		if field.Type().Kind() != parquet.FixedLenByteArray {
+		name := field.Name()
+		t := transformers[name]
+		if !canCompatNumber(t.column) {
 			mapped[field.Name()] = field
 			continue
 		}
@@ -213,7 +218,11 @@ func narrowPhysicalTypes(
 		n := parquet.Int(byteWidth * 8)
 		if field.Type().LogicalType() != nil && field.Type().LogicalType().Decimal != nil {
 			d := field.Type().LogicalType().Decimal
-			n = parquet.Decimal(int(d.Scale), min(int(d.Precision), 3), n.Type())
+			n = parquet.Decimal(
+				int(d.Scale),
+				min(int(d.Precision), maxPrecisionForByteWidth(byteWidth)),
+				n.Type(),
+			)
 		}
 		if field.Optional() {
 			n = parquet.Optional(n)
@@ -222,7 +231,18 @@ func narrowPhysicalTypes(
 		n = parquet.Compressed(n, field.Compression())
 		n = parquet.Encoded(n, field.Encoding())
 		mapped[field.Name()] = n
-		mappedMeta[strconv.Itoa(field.ID())] = fmt.Sprintf("%d,%d", logicalTypeOrdinal("FIXED"), physicalTypeOrdinal(fmt.Sprintf("SB%d", byteWidth)))
+		mappedMeta[strconv.Itoa(field.ID())] = fmt.Sprintf(
+			"%d,%d",
+			logicalTypeOrdinal(t.column.LogicalType),
+			physicalTypeOrdinal(fmt.Sprintf("SB%d", byteWidth)),
+		)
+	}
+	if debug {
+		fmt.Println("=== original ===")
+		_ = parquet.PrintSchema(os.Stdout, schema.Name(), schema)
+		fmt.Println("\n=== mapped ===")
+		_ = parquet.PrintSchema(os.Stdout, schema.Name(), mapped)
+		fmt.Println()
 	}
 	return parquet.NewSchema(schema.Name(), mapped), mappedMeta
 }
@@ -304,11 +324,11 @@ func (c intConverter) ValidateAndConvert(buf *statsBuffer, val any) (any, error)
 		buf.minIntVal = v
 		buf.maxIntVal = v
 		buf.first = false
-		return v, nil
+	} else {
+		buf.minIntVal = min(buf.minIntVal, v)
+		buf.maxIntVal = max(buf.maxIntVal, v)
 	}
-	buf.minIntVal = min(buf.minIntVal, v)
-	buf.maxIntVal = max(buf.maxIntVal, v)
-	return v, nil
+	return packInteger(v), nil
 }
 
 type sb16Converter struct {
@@ -337,7 +357,8 @@ func (c sb16Converter) ValidateAndConvert(buf *statsBuffer, val any) (any, error
 		buf.minIntVal = min(buf.minIntVal, v)
 		buf.maxIntVal = max(buf.maxIntVal, v)
 	}
-	return packInteger(v), nil
+	val = packInteger(v)
+	return val, nil
 }
 
 type doubleConverter struct {
@@ -537,7 +558,7 @@ func (c timestampConverter) ValidateAndConvert(buf *statsBuffer, val any) (any, 
 		buf.minIntVal = min(buf.minIntVal, v)
 		buf.maxIntVal = max(buf.maxIntVal, v)
 	}
-	return v, nil
+	return packInteger(v), nil
 }
 
 type timeConverter struct {
@@ -589,7 +610,16 @@ func (c timeConverter) ValidateAndConvert(buf *statsBuffer, val any) (any, error
 		t.Minute()*int(time.Minute.Nanoseconds()) +
 		t.Second()*int(time.Second.Nanoseconds()) +
 		t.Nanosecond()
-	return int64(nanos) / pow10TableInt64[9-c.scale], nil
+	v := int64(nanos) / pow10TableInt64[9-c.scale]
+	if buf.first {
+		buf.minIntVal = v
+		buf.maxIntVal = v
+		buf.first = false
+	} else {
+		buf.minIntVal = min(buf.minIntVal, v)
+		buf.maxIntVal = max(buf.maxIntVal, v)
+	}
+	return packInteger(v), nil
 }
 
 type dateConverter struct {
@@ -654,7 +684,16 @@ func (c dateConverter) ValidateAndConvert(buf *statsBuffer, val any) (any, error
 	if t.Year() < -9999 || t.Year() > 9999 {
 		return nil, fmt.Errorf("DATE columns out of range, year: %d", t.Year())
 	}
-	return t.Unix() / int64(24*60*60), nil
+	v := t.Unix() / int64(24*60*60)
+	if buf.first {
+		buf.minIntVal = v
+		buf.maxIntVal = v
+		buf.first = false
+	} else {
+		buf.minIntVal = min(buf.minIntVal, v)
+		buf.maxIntVal = max(buf.maxIntVal, v)
+	}
+	return packInteger(v), nil
 }
 
 func computeColumnEpInfo(stats map[string]*dataTransformer) map[string]fileColumnProperties {
@@ -685,6 +724,18 @@ func computeColumnEpInfo(stats map[string]*dataTransformer) map[string]fileColum
 		}
 	}
 	return info
+}
+
+func canCompatNumber(column *columnMetadata) bool {
+	switch strings.ToLower(column.LogicalType) {
+	case "boolean", "date":
+		return false
+	}
+	switch strings.ToUpper(column.PhysicalType) {
+	case "SB1", "SB2", "SB4", "SB8", "SB16":
+		return true
+	}
+	return false
 }
 
 func physicalTypeOrdinal(str string) int {
@@ -789,4 +840,20 @@ func packInteger(v int64) any {
 		return int32(v)
 	}
 	return v
+}
+
+func maxPrecisionForByteWidth(byteWidth int) int {
+	switch byteWidth {
+	case 1:
+		return 3
+	case 2:
+		return 5
+	case 4:
+		return 9
+	case 8:
+		return 18
+	case 16:
+		return 38
+	}
+	panic(fmt.Errorf("unexpected byteWidth=%d", byteWidth))
 }

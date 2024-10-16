@@ -45,37 +45,6 @@ func writeParquetFile(writer io.Writer, schema parquetSchema, rows []map[string]
 	return
 }
 
-func hackRewriteParquetAsV1(parquetFile []byte) ([]byte, error) {
-	if len(parquetFile) < 8 {
-		return nil, fmt.Errorf("too small of parquet file: %d", len(parquetFile))
-	}
-	trailingBytes := parquetFile[len(parquetFile)-8:]
-	if string(trailingBytes[4:]) != "PAR1" {
-		return nil, fmt.Errorf("missing magic bytes, got: %q", trailingBytes[4:])
-	}
-	footerSize := int(binary.LittleEndian.Uint32(trailingBytes))
-	if len(parquetFile) < footerSize+8 {
-		return nil, fmt.Errorf("too small of parquet file: %d, footer size: %d", len(parquetFile), footerSize)
-	}
-	footerBytes := parquetFile[len(parquetFile)-(footerSize+8) : len(parquetFile)-8]
-	metadata := format.FileMetaData{}
-	protocol := new(thrift.CompactProtocol)
-	// TODO: Just rewrite in place without the marshal/unmarshal dance
-	if err := thrift.Unmarshal(protocol, footerBytes, &metadata); err != nil {
-		return nil, fmt.Errorf("unable to extract parquet metadata: %w", err)
-	}
-	metadata.Version = 1
-	b, err := thrift.Marshal(protocol, metadata)
-	if err != nil {
-		return nil, fmt.Errorf("unable to marshal metadata: %w", err)
-	}
-	if len(b) != len(footerBytes) {
-		return nil, fmt.Errorf("Change two bits and the serialized size changed! %d vs %d", len(b), footerSize)
-	}
-	copy(footerBytes, b)
-	return parquetFile, nil
-}
-
 func readParquetMetadata(parquetFile []byte) (metadata format.FileMetaData, err error) {
 	if len(parquetFile) < 8 {
 		return format.FileMetaData{}, fmt.Errorf("too small of parquet file: %d", len(parquetFile))
