@@ -123,7 +123,6 @@ func (m *Monitor) readTablesStat(tables []string) error {
 		results[tableWithoutSchema] = count
 	}
 
-	fmt.Println("Table stat", results)
 	m.tableStat = results
 	return nil
 }

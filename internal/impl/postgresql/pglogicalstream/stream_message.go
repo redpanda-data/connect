@@ -14,7 +14,7 @@ type StreamMessageChanges struct {
 	Operation             string   `json:"operation"`
 	Schema                string   `json:"schema"`
 	Table                 string   `json:"table"`
-	TableSnapshotProgress *float64 `json:"table_snapshot_progress"`
+	TableSnapshotProgress *float64 `json:"table_snapshot_progress,omitempty"`
 	// For deleted messages - there will be old changes if replica identity set to full or empty changes
 	Data map[string]any `json:"data"`
 }

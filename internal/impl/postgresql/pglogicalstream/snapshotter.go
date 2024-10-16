@@ -98,7 +98,6 @@ func (s *Snapshotter) prepare() error {
 		return err
 	}
 	if _, err := s.pgConnection.Exec(fmt.Sprintf("SET TRANSACTION SNAPSHOT '%s';", s.snapshotName)); err != nil {
-		fmt.Println("Failed to prepare snapshot", err)
 		return err
 	}
 

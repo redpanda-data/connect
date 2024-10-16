@@ -701,8 +701,6 @@ file:
 }
 
 func TestIntegrationPgMultiVersionsCDCForPgOutputStreamComittedPlugin(t *testing.T) {
-	// running tests in the look to test different PostgreSQL versions
-	t.Parallel()
 	for _, v := range []string{"17", "16", "15", "14", "13", "12", "11", "10"} {
 		tmpDir := t.TempDir()
 		pool, err := dockertest.NewPool("")

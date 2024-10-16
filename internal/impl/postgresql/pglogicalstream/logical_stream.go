@@ -206,8 +206,6 @@ func NewPgStream(config Config) (*Stream, error) {
 					SnapshotAction: "export",
 				}, version, stream.snapshotter)
 			if err != nil {
-				fmt.Println(err)
-				fmt.Println("Failed to create replication slot", err.Error())
 				return nil, err
 			}
 			stream.snapshotName = createSlotResult.SnapshotName
