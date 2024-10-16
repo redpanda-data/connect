@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
-	"github.com/parquet-go/parquet-go"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/periodic"
 	"github.com/redpanda-data/connect/v4/internal/typed"
@@ -236,7 +235,7 @@ type SnowflakeIngestionChannel struct {
 	ChannelOptions
 	role             string
 	clientPrefix     string
-	schema           *parquet.Schema
+	schema           parquetSchema
 	client           *SnowflakeRestClient
 	uploader         *typed.AtomicValue[stageUploaderResult]
 	encryptionInfo   *encryptionInfo
@@ -263,7 +262,14 @@ func messageToRow(msg *service.Message) (map[string]any, error) {
 	if !ok {
 		return nil, fmt.Errorf("expected object, got: %T", v)
 	}
-	return row, nil
+	// We need to do a translation of the map key, so that we don't miss any `null`
+	// values when iterating over the columns (because A and a map to the same
+	// column name).
+	mapped := make(map[string]any, len(row))
+	for name, val := range row {
+		mapped[normalizeColumnName(name)] = val
+	}
+	return mapped, nil
 }
 
 // InsertStats holds some basic statistics about the InsertRows operation
@@ -278,37 +284,34 @@ type InsertStats struct {
 func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch service.MessageBatch) (InsertStats, error) {
 	stats := InsertStats{}
 	startTime := time.Now()
-	for _, t := range c.transformers {
-		t.stats.Reset()
-	}
 	var err error
-	rows := make([]map[string]any, len(batch))
-	for i, msg := range batch {
-		transformed := make(map[string]any, len(c.transformers))
+	columns := make(map[int32]parquetColumnData, len(c.transformers))
+	for _, transformer := range c.transformers {
+		transformer.stats.Reset()
+	}
+	for _, msg := range batch {
 		row, err := messageToRow(msg)
 		if err != nil {
 			return stats, err
 		}
-		for k, v := range row {
-			name := normalizeColumnName(k)
-			t, ok := c.transformers[name]
-			if !ok {
-				// Skip extra columns
-				continue
-			}
-			transformed[name], err = t.converter.ValidateAndConvert(t.stats, v)
-			if err != nil {
-				return stats, fmt.Errorf("invalid data for column %s: %w", k, err)
+		for name, t := range c.transformers {
+			val := row[name] // will be `nil` if not present
+			if err := t.converter.ValidateAndConvert(t.stats, val); err != nil {
+				return stats, err
 			}
 		}
-		rows[i] = transformed
+	}
+	// Flush each column now
+	for _, transformer := range c.transformers {
+		columns[transformer.stats.columnID] = transformer.converter.Finish()
 	}
 	fakeThreadID := rand.N(1000)
 	blobPath := generateBlobPath(c.clientPrefix, fakeThreadID, c.requestIDCounter)
 	c.requestIDCounter++
 	c.fileMetadata["primaryFileId"] = getShortname(blobPath)
 	c.buffer.Reset()
-	err = writeParquetFile(c.buffer, c.schema, rows, c.fileMetadata)
+
+	err = writeParquetFile(c.buffer, c.schema, columns, c.fileMetadata)
 	if err != nil {
 		return stats, err
 	}

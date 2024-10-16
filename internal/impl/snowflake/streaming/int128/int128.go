@@ -84,6 +84,11 @@ func Neg(v Int128) Int128 {
 	return Sub(Int128{}, v)
 }
 
+// IsNegative is negative
+func (i Int128) IsNegative() bool {
+	return Less(i, Int128{})
+}
+
 // Shl returns a << i
 func Shl(v Int128, amt uint) Int128 {
 	n := amt - 64

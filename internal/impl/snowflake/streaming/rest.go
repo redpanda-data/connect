@@ -408,7 +408,7 @@ func (c *SnowflakeRestClient) registerBlob(ctx context.Context, req registerBlob
 	return
 }
 
-const debugAPICalls = true
+const debugAPICalls = false
 
 func (c *SnowflakeRestClient) doPost(ctx context.Context, url string, req any, resp any) error {
 	marshaller := json.Marshal
