@@ -257,7 +257,11 @@ func CreateReplicationSlot(
 		if err != nil {
 			return CreateReplicationSlotResult{}, err
 		}
-		snapshotter.setTransactionSnapshotName(result.SnapshotName)
+		if snapshotter != nil {
+			snapshotter.setTransactionSnapshotName(result.SnapshotName)
+		}
+
+		return result, nil
 	}
 
 	var snapshotResponse SnapshotCreationResponse
@@ -313,8 +317,6 @@ func ParseCreateReplicationSlot(mrr *pgconn.MultiResultReader, version int, snap
 	} else {
 		crsr.SnapshotName = snapshotName
 	}
-
-	fmt.Println("Snapshot name", crsr.SnapshotName)
 
 	return crsr, nil
 }

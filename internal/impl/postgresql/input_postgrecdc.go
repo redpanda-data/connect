@@ -12,6 +12,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
@@ -289,6 +290,11 @@ func (p *pgStreamInput) Read(ctx context.Context) (*service.Message, service.Ack
 		connectMessage := service.NewMessage(mb)
 		connectMessage.MetaSet("table", snapshotMessage.Changes[0].Table)
 		connectMessage.MetaSet("operation", snapshotMessage.Changes[0].Operation)
+		if snapshotMessage.Changes[0].TableSnapshotProgress != nil {
+			fmt.Println("Table snapshot progress", *snapshotMessage.Changes[0].TableSnapshotProgress, snapshotMessage.Changes[0].Table)
+			p.snapshotMetrics.SetFloat64(*snapshotMessage.Changes[0].TableSnapshotProgress, snapshotMessage.Changes[0].Table)
+		}
+
 		return connectMessage, func(ctx context.Context, err error) error {
 			// Nacks are retried automatically when we use service.AutoRetryNacks
 			return nil
@@ -304,6 +310,11 @@ func (p *pgStreamInput) Read(ctx context.Context) (*service.Message, service.Ack
 		connectMessage := service.NewMessage(mb)
 		connectMessage.MetaSet("table", message.Changes[0].Table)
 		connectMessage.MetaSet("operation", message.Changes[0].Operation)
+		if message.WALLagBytes != nil {
+			fmt.Println("Wal lag", *message.WALLagBytes)
+			p.replicationLag.Set(*message.WALLagBytes)
+		}
+
 		return connectMessage, func(ctx context.Context, err error) error {
 			if message.Lsn != nil {
 				if err := p.pglogicalStream.AckLSN(*message.Lsn); err != nil {

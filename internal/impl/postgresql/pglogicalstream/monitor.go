@@ -1,9 +1,18 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/connect/v4/blob/main/licenses/rcl.md
+
 package pglogicalstream
 
 import (
 	"context"
 	"database/sql"
 	"fmt"
+	"math"
 	"strings"
 	"sync"
 	"time"
@@ -28,8 +37,6 @@ type Monitor struct {
 	// finding the difference between the latest LSN and the last confirmed LSN for the replication slot
 	replicationLagInBytes int64
 
-	debounced func(f func())
-
 	dbConn       *sql.DB
 	slotName     string
 	logger       *service.Logger
@@ -39,8 +46,6 @@ type Monitor struct {
 }
 
 func NewMonitor(conf *pgconn.Config, logger *service.Logger, tables []string, slotName string) (*Monitor, error) {
-	// debounces is user to throttle locks on the monitor to prevent unnecessary updates that would affect the performance
-	debounced := NewDebouncer(100 * time.Millisecond)
 	dbConn, err := openPgConnectionFromConfig(*conf)
 	if err != nil {
 		return nil, err
@@ -49,7 +54,6 @@ func NewMonitor(conf *pgconn.Config, logger *service.Logger, tables []string, sl
 	m := &Monitor{
 		snapshotProgress:      map[string]float64{},
 		replicationLagInBytes: 0,
-		debounced:             debounced,
 		dbConn:                dbConn,
 		slotName:              slotName,
 		logger:                logger,
@@ -69,47 +73,37 @@ func NewMonitor(conf *pgconn.Config, logger *service.Logger, tables []string, sl
 
 // UpdateSnapshotProgressForTable updates the snapshot ingestion progress for a given table
 func (m *Monitor) UpdateSnapshotProgressForTable(table string, position int) {
-	storeSnapshotProgress := func() {
-		m.lock.Lock()
-		defer m.lock.Unlock()
-		m.snapshotProgress[table] = float64(position) / float64(m.tableStat[table]) * 100
-	}
-
-	m.debounced(storeSnapshotProgress)
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	m.snapshotProgress[table] = math.Round(float64(position) / float64(m.tableStat[table]) * 100)
 }
 
 // we need to read the tables stat to calculate the snapshot ingestion progress
 func (m *Monitor) readTablesStat(tables []string) error {
 	results := make(map[string]int64)
 
-	// Construct the query
-	queryParts := make([]string, len(tables))
-	for i, table := range tables {
-		queryParts[i] = fmt.Sprintf("SELECT '%s' AS table_name, COUNT(*) FROM %s", table, table)
-	}
-	query := strings.Join(queryParts, " UNION ALL ")
+	for _, table := range tables {
+		tableWithoutSchema := strings.Split(table, ".")[1]
+		query := fmt.Sprintf("SELECT COUNT(*) FROM %s", tableWithoutSchema)
 
-	// Execute the query
-	rows, err := m.dbConn.Query(query)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-
-	// Process the results
-	for rows.Next() {
-		var tableName string
 		var count int64
-		if err := rows.Scan(&tableName, &count); err != nil {
-			return err
+		err := m.dbConn.QueryRow(query).Scan(&count)
+
+		if err != nil {
+			// If the error is because the table doesn't exist, we'll set the count to 0
+			// and continue. You might want to log this situation.
+			if strings.Contains(err.Error(), "does not exist") {
+				results[tableWithoutSchema] = 0
+				continue
+			}
+			// For any other error, we'll return it
+			return fmt.Errorf("error counting rows in table %s: %w", tableWithoutSchema, err)
 		}
-		results[tableName] = count
+
+		results[tableWithoutSchema] = count
 	}
 
-	if err := rows.Err(); err != nil {
-		return err
-	}
-
+	fmt.Println("Table stat", results)
 	m.tableStat = results
 	return nil
 }

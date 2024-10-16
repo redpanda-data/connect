@@ -402,6 +402,9 @@ func (s *Stream) streamMessagesAsync() {
 					}
 				}
 				clientXLogPos := xld.WALStart + LSN(len(xld.WALData))
+				fmt.Println("Accessing meterics")
+				metrics := s.monitor.Report()
+				fmt.Println("Accessing meterics", metrics)
 
 				if s.decodingPlugin == "wal2json" {
 					message, err := decodeWal2JsonChanges(clientXLogPos.String(), xld.WALData)
@@ -426,6 +429,7 @@ func (s *Stream) streamMessagesAsync() {
 							return
 						}
 					} else {
+
 						s.messages <- *message
 					}
 				}
@@ -455,9 +459,12 @@ func (s *Stream) streamMessagesAsync() {
 							}
 						} else {
 							lsn := clientXLogPos.String()
-							s.messages <- StreamMessage{Lsn: &lsn, Changes: []StreamMessageChanges{
-								*message,
-							}}
+							s.messages <- StreamMessage{
+								Lsn: &lsn,
+								Changes: []StreamMessageChanges{
+									*message,
+								},
+							}
 							<-s.consumedCallback
 						}
 					} else {
@@ -526,7 +533,9 @@ func (s *Stream) streamMessagesAsync() {
 }
 
 func (s *Stream) processSnapshot() {
+	// metricsCtx, cancel := context.WithCancel(context.Background())
 	if err := s.snapshotter.prepare(); err != nil {
+		// cancel()
 		s.logger.Errorf("Failed to prepare database snapshot. Probably snapshot is expired...: %v", err.Error())
 		if err = s.cleanUpOnFailure(); err != nil {
 			s.logger.Errorf("Failed to clean up resources on accident: %v", err.Error())
@@ -535,6 +544,7 @@ func (s *Stream) processSnapshot() {
 		os.Exit(1)
 	}
 	defer func() {
+		// cancel()
 		if err := s.snapshotter.releaseSnapshot(); err != nil {
 			s.logger.Errorf("Failed to release database snapshot: %v", err.Error())
 		}
@@ -620,6 +630,7 @@ func (s *Stream) processSnapshot() {
 			}
 
 			count := len(columnTypes)
+
 			var rowsCount = 0
 			for snapshotRows.Next() {
 				rowsCount += 1

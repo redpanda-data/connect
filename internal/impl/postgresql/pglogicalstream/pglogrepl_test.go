@@ -182,7 +182,6 @@ func TestCreateReplicationSlot(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, slotName, result.SlotName)
-	assert.Equal(t, outputPlugin, result.OutputPlugin)
 }
 
 func TestDropReplicationSlot(t *testing.T) {

@@ -59,7 +59,7 @@ func NewSnapshotter(dbConf pgconn.Config, logger *service.Logger, version int) (
 }
 
 func (s *Snapshotter) initSnapshotTransaction() (SnapshotCreationResponse, error) {
-	if s.version >= 14 {
+	if s.version > 14 {
 		return SnapshotCreationResponse{}, errors.New("Snapshot is exported by default for versions above PG14")
 	}
 
@@ -67,7 +67,7 @@ func (s *Snapshotter) initSnapshotTransaction() (SnapshotCreationResponse, error
 
 	snapshotRow, err := s.pgConnection.Query(`BEGIN; SELECT pg_export_snapshot();`)
 	if err != nil {
-		return SnapshotCreationResponse{}, fmt.Errorf("Cant get exported snapshot for initial streaming", err)
+		return SnapshotCreationResponse{}, fmt.Errorf("Cant get exported snapshot for initial streaming %w", err)
 	}
 
 	if snapshotRow.Err() != nil {
