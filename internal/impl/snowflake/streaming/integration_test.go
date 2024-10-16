@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"slices"
 	"strconv"
 	"testing"
 	"time"
@@ -32,7 +33,8 @@ func msg(s string) *service.Message {
 	return service.NewMessage([]byte(s))
 }
 
-func TestSnowflake(t *testing.T) {
+func setup(t *testing.T) (*streaming.SnowflakeRestClient, *streaming.SnowflakeServiceClient) {
+	t.Helper()
 	ctx := context.Background()
 	privateKeyFile, err := os.ReadFile("./resources/rsa_key.p8")
 	if errors.Is(err, os.ErrNotExist) {
@@ -49,16 +51,25 @@ func TestSnowflake(t *testing.T) {
 		Role:       "ACCOUNTADMIN",
 		PrivateKey: parseResult.(*rsa.PrivateKey),
 	}
+	restClient, err := streaming.NewRestClient(clientOptions.Account, clientOptions.User, clientOptions.PrivateKey, clientOptions.Logger)
+	require.NoError(t, err)
+	t.Cleanup(restClient.Close)
+	streamClient, err := streaming.NewSnowflakeServiceClient(ctx, clientOptions)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = streamClient.Close() })
+	return restClient, streamClient
+}
+
+func TestSnowflake(t *testing.T) {
+	ctx := context.Background()
+	restClient, streamClient := setup(t)
 	channelOpts := streaming.ChannelOptions{
-		Name:         "my_first_testing_channel",
+		Name:         t.Name(),
 		DatabaseName: "BABY_DATABASE",
 		SchemaName:   "PUBLIC",
 		TableName:    "TEST_TABLE_KITCHEN_SINK",
 	}
-	restClient, err := streaming.NewRestClient(clientOptions.Account, clientOptions.User, clientOptions.PrivateKey, clientOptions.Logger)
-	require.NoError(t, err)
-	defer restClient.Close()
-	_, err = restClient.RunSQL(ctx, streaming.RunSQLRequest{
+	_, err := restClient.RunSQL(ctx, streaming.RunSQLRequest{
 		Database: channelOpts.DatabaseName,
 		Schema:   channelOpts.SchemaName,
 		Statement: fmt.Sprintf(`
@@ -80,24 +91,11 @@ func TestSnowflake(t *testing.T) {
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		_, err = restClient.RunSQL(ctx, streaming.RunSQLRequest{
-			Database:  channelOpts.DatabaseName,
-			Schema:    channelOpts.SchemaName,
-			Statement: fmt.Sprintf(`DROP TABLE %s;`, channelOpts.TableName),
-		})
-		if err != nil {
-			t.Log("unable to cleanup table in SNOW:", err)
-		}
-	})
-	streamClient, err := streaming.NewSnowflakeServiceClient(ctx, clientOptions)
-	require.NoError(t, err)
-	t.Cleanup(func() {
 		err = streamClient.DropChannel(ctx, channelOpts)
 		if err != nil {
 			t.Log("unable to cleanup stream in SNOW:", err)
 		}
 	})
-	defer streamClient.Close()
 	channel, err := streamClient.OpenChannel(ctx, channelOpts)
 	require.NoError(t, err)
 	_, err = channel.InsertRows(ctx, service.MessageBatch{
@@ -157,54 +155,16 @@ func TestSnowflake(t *testing.T) {
 	}, 3*time.Second, time.Second)
 }
 
-// parseSnowflakeData returns "json-ish" data that can be JSON or could be just a raw string.
-// We want to parse for the JSON rows have whitespace, so this gives us a more semantic comparison.
-func parseSnowflakeData(rawData [][]string) [][]any {
-	var parsedData [][]any
-	for _, rawRow := range rawData {
-		var parsedRow []any
-		for _, rawCol := range rawRow {
-			var parsedCol any
-			if rawCol != `` {
-				err := json.Unmarshal([]byte(rawCol), &parsedCol)
-				if err != nil {
-					parsedCol = rawCol
-				}
-			}
-			parsedRow = append(parsedRow, parsedCol)
-		}
-		parsedData = append(parsedData, parsedRow)
-	}
-	return parsedData
-}
-
 func TestIntegerCompat(t *testing.T) {
 	ctx := context.Background()
-	privateKeyFile, err := os.ReadFile("./resources/rsa_key.p8")
-	if errors.Is(err, os.ErrNotExist) {
-		t.Skip("no RSA private key, skipping snowflake test")
-	}
-	require.NoError(t, err)
-	block, _ := pem.Decode(privateKeyFile)
-	require.NoError(t, err)
-	parseResult, err := x509.ParsePKCS8PrivateKey(block.Bytes)
-	require.NoError(t, err)
-	clientOptions := streaming.ClientOptions{
-		Account:    "WQKFXQQ-WI77362",
-		User:       "ROCKWOODREDPANDA",
-		Role:       "ACCOUNTADMIN",
-		PrivateKey: parseResult.(*rsa.PrivateKey),
-	}
+	restClient, streamClient := setup(t)
 	channelOpts := streaming.ChannelOptions{
-		Name:         "my_first_testing_channel2",
+		Name:         t.Name(),
 		DatabaseName: "BABY_DATABASE",
 		SchemaName:   "PUBLIC",
-		TableName:    "TEST2_TABLE",
+		TableName:    "TEST_INT_TABLE",
 	}
-	restClient, err := streaming.NewRestClient(clientOptions.Account, clientOptions.User, clientOptions.PrivateKey, clientOptions.Logger)
-	require.NoError(t, err)
-	defer restClient.Close()
-	_, err = restClient.RunSQL(ctx, streaming.RunSQLRequest{
+	_, err := restClient.RunSQL(ctx, streaming.RunSQLRequest{
 		Database: channelOpts.DatabaseName,
 		Schema:   channelOpts.SchemaName,
 		Statement: fmt.Sprintf(`
@@ -217,17 +177,15 @@ func TestIntegerCompat(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	streamClient, err := streaming.NewSnowflakeServiceClient(ctx, clientOptions)
-	require.NoError(t, err)
 	t.Cleanup(func() {
 		err = streamClient.DropChannel(ctx, channelOpts)
 		if err != nil {
 			t.Log("unable to cleanup stream in SNOW:", err)
 		}
 	})
-	defer streamClient.Close()
 	channel, err := streamClient.OpenChannel(ctx, channelOpts)
 	require.NoError(t, err)
+	expectedInts := []int{}
 	rows := [][2]int{
 		{-1, 1},
 		{math.MinInt8, math.MaxInt8},
@@ -248,5 +206,197 @@ func TestIntegerCompat(t *testing.T) {
       }`),
 		})
 		require.NoError(t, err)
+		expectedInts = append(
+			expectedInts,
+			row[0],
+			0,
+			row[1],
+		)
 	}
+	slices.Sort(expectedInts)
+	expectedRows := [][]string{}
+	for _, i := range expectedInts {
+		expectedRows = append(expectedRows, []string{strconv.Itoa(i)})
+	}
+	require.EventuallyWithT(t, func(collect *assert.CollectT) {
+		// Always order by A so we get consistent ordering for our test
+		resp, err := restClient.RunSQL(ctx, streaming.RunSQLRequest{
+			Database:  channelOpts.DatabaseName,
+			Schema:    channelOpts.SchemaName,
+			Statement: fmt.Sprintf(`SELECT * FROM %s ORDER BY A;`, channelOpts.TableName),
+		})
+		if !assert.NoError(collect, err) {
+			t.Logf("failed to scan table: %s", err)
+			return
+		}
+		assert.Equal(collect, "00000", resp.SQLState)
+		assert.Equal(collect, parseSnowflakeData(expectedRows), parseSnowflakeData(resp.Data))
+	}, 3*time.Second, time.Second)
+}
+
+func TestTimeCompat(t *testing.T) {
+	ctx := context.Background()
+	restClient, streamClient := setup(t)
+	channelOpts := streaming.ChannelOptions{
+		Name:         t.Name(),
+		DatabaseName: "BABY_DATABASE",
+		SchemaName:   "PUBLIC",
+		TableName:    "TEST_TIME_TABLE",
+	}
+	_, err := restClient.RunSQL(ctx, streaming.RunSQLRequest{
+		Database: channelOpts.DatabaseName,
+		Schema:   channelOpts.SchemaName,
+		Statement: fmt.Sprintf(`
+      DROP TABLE IF EXISTS %s;
+      CREATE TABLE IF NOT EXISTS %s (
+        A TIME
+      );`, channelOpts.TableName, channelOpts.TableName),
+		Parameters: map[string]string{
+			"MULTI_STATEMENT_COUNT": "0",
+		},
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		err = streamClient.DropChannel(ctx, channelOpts)
+		if err != nil {
+			t.Log("unable to cleanup stream in SNOW:", err)
+		}
+	})
+	channel, err := streamClient.OpenChannel(ctx, channelOpts)
+	require.NoError(t, err)
+	rows := [][3]string{
+		{"00:00:00.00000", "00:00:00.00000001", "00:00:00.001"},
+		{"23:59:59.999999999", "12:00:00.1", "23:59:59.0"},
+	}
+	for _, row := range rows {
+		_, err = channel.InsertRows(ctx, service.MessageBatch{
+			msg(`{
+        "a": "` + row[0] + `"
+      }`),
+			msg(`{
+        "a": "` + row[1] + `"
+      }`),
+			msg(`{
+        "a": "` + row[2] + `"
+      }`),
+		})
+		require.NoError(t, err)
+	}
+	expectedResults := []float64{
+		0, 1e-08, 0.001,
+		43200.1, 86399, 86399.999999999,
+	}
+	expectedRows := [][]string{}
+	for _, i := range expectedResults {
+		expectedRows = append(expectedRows, []string{strconv.FormatFloat(i, 'E', -1, 64)})
+	}
+	require.EventuallyWithT(t, func(collect *assert.CollectT) {
+		// Always order by A so we get consistent ordering for our test
+		resp, err := restClient.RunSQL(ctx, streaming.RunSQLRequest{
+			Database:  channelOpts.DatabaseName,
+			Schema:    channelOpts.SchemaName,
+			Statement: fmt.Sprintf(`SELECT * FROM %s ORDER BY A;`, channelOpts.TableName),
+		})
+		if !assert.NoError(collect, err) {
+			t.Logf("failed to scan table: %s", err)
+			return
+		}
+		assert.Equal(collect, "00000", resp.SQLState)
+		assert.Equal(collect, parseSnowflakeData(expectedRows), parseSnowflakeData(resp.Data))
+	}, 3*time.Second, time.Second)
+}
+
+func TestDateCompat(t *testing.T) {
+	ctx := context.Background()
+	restClient, streamClient := setup(t)
+	channelOpts := streaming.ChannelOptions{
+		Name:         t.Name(),
+		DatabaseName: "BABY_DATABASE",
+		SchemaName:   "PUBLIC",
+		TableName:    "TEST_TIME_TABLE",
+	}
+	_, err := restClient.RunSQL(ctx, streaming.RunSQLRequest{
+		Database: channelOpts.DatabaseName,
+		Schema:   channelOpts.SchemaName,
+		Statement: fmt.Sprintf(`
+      DROP TABLE IF EXISTS %s;
+      CREATE TABLE IF NOT EXISTS %s (
+        A DATE
+      );`, channelOpts.TableName, channelOpts.TableName),
+		Parameters: map[string]string{
+			"MULTI_STATEMENT_COUNT": "0",
+		},
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		err = streamClient.DropChannel(ctx, channelOpts)
+		if err != nil {
+			t.Log("unable to cleanup stream in SNOW:", err)
+		}
+	})
+	channel, err := streamClient.OpenChannel(ctx, channelOpts)
+	require.NoError(t, err)
+	rows := [][3]string{
+		{"0001/10/15", "0001/01/01", "0001/01/02"},
+		{"1970/1/1", "1-2-1970", "12-30-1969"},
+		{"9999/12/25", "1600/10/10", "9999/12/26"},
+	}
+	for _, row := range rows {
+		_, err = channel.InsertRows(ctx, service.MessageBatch{
+			msg(`{
+        "a": "` + row[0] + `"
+      }`),
+			msg(`{
+        "a": "` + row[1] + `"
+      }`),
+			msg(`{
+        "a": "` + row[2] + `"
+      }`),
+		})
+		require.NoError(t, err)
+	}
+	expectedRows := [][]string{}
+	expectedResults := []int{
+		-719162, -719161, -718875,
+		-134857, -2, 0,
+		1, 2932890, 2932891,
+	}
+	for _, i := range expectedResults {
+		expectedRows = append(expectedRows, []string{strconv.Itoa(i)})
+	}
+	require.EventuallyWithT(t, func(collect *assert.CollectT) {
+		// Always order by A so we get consistent ordering for our test
+		resp, err := restClient.RunSQL(ctx, streaming.RunSQLRequest{
+			Database:  channelOpts.DatabaseName,
+			Schema:    channelOpts.SchemaName,
+			Statement: fmt.Sprintf(`SELECT * FROM %s ORDER BY A;`, channelOpts.TableName),
+		})
+		if !assert.NoError(collect, err) {
+			t.Logf("failed to scan table: %s", err)
+			return
+		}
+		assert.Equal(collect, "00000", resp.SQLState)
+		assert.Equal(collect, parseSnowflakeData(expectedRows), parseSnowflakeData(resp.Data))
+	}, 3*time.Second, time.Second)
+}
+
+// parseSnowflakeData returns "json-ish" data that can be JSON or could be just a raw string.
+// We want to parse for the JSON rows have whitespace, so this gives us a more semantic comparison.
+func parseSnowflakeData(rawData [][]string) [][]any {
+	var parsedData [][]any
+	for _, rawRow := range rawData {
+		var parsedRow []any
+		for _, rawCol := range rawRow {
+			var parsedCol any
+			if rawCol != `` {
+				err := json.Unmarshal([]byte(rawCol), &parsedCol)
+				if err != nil {
+					parsedCol = rawCol
+				}
+			}
+			parsedRow = append(parsedRow, parsedCol)
+		}
+		parsedData = append(parsedData, parsedRow)
+	}
+	return parsedData
 }

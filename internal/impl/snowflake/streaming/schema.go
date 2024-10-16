@@ -728,7 +728,7 @@ func computeColumnEpInfo(stats map[string]*dataTransformer) map[string]fileColum
 
 func canCompatNumber(column *columnMetadata) bool {
 	switch strings.ToLower(column.LogicalType) {
-	case "boolean", "date":
+	case "boolean":
 		return false
 	}
 	switch strings.ToUpper(column.PhysicalType) {
