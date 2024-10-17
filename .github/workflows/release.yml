@@ -139,9 +139,11 @@ jobs:
       uses: docker/setup-buildx-action@v3
 
     - name: Write telemetry private key
+      if: ${{ matrix.suffix == '' || matrix.suffix == '-cgo' }}
       env:
         CONNECT_TELEMETRY_PRIV_KEY: ${{ secrets.TELEMETRY_PRIVATE_KEY }}
       run: |
+        echo "Adding telemetry key"
         git update-index --skip-worktree ./internal/telemetry/key.pem
         echo "$CONNECT_TELEMETRY_PRIV_KEY" > ./internal/telemetry/key.pem
 
