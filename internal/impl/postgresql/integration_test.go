@@ -426,6 +426,107 @@ file:
 	})
 }
 
+func TestIntegrationPgStreamingFromRemoteDB(t *testing.T) {
+	t.Skip("This test requires a remote database to run. Aimed to test AWS")
+	tmpDir := t.TempDir()
+
+	// tables: users, products, orders, order_items
+
+	host := ""
+	user := ""
+	password := ""
+	dbname := ""
+	port := ""
+	sslmode := ""
+
+	template := fmt.Sprintf(`
+pg_stream:
+    host: %s
+    slot_name: test_slot_native_decoder
+    user: %s
+    password: %s
+    port: %s
+    schema: public
+    tls: %s
+    snapshot_batch_size: 100000
+    stream_snapshot: true
+    decoding_plugin: pgoutput
+    stream_uncomited: false
+    database: %s
+    tables:
+       - users
+       - products
+       - orders
+       - order_items
+`, host, user, password, port, sslmode, dbname)
+
+	cacheConf := fmt.Sprintf(`
+label: pg_stream_cache
+file:
+    directory: %v
+`, tmpDir)
+
+	streamOutBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: INFO`))
+	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
+	require.NoError(t, streamOutBuilder.AddInputYAML(template))
+
+	var outMessages int64
+	var outMessagesMut sync.Mutex
+
+	rc := NewRateCounter()
+
+	go func() {
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			fmt.Printf("Current rate: %.2f messages per second\n", rc.Rate())
+			fmt.Printf("Total messages: %d\n", outMessages)
+		}
+	}()
+
+	require.NoError(t, streamOutBuilder.AddConsumerFunc(func(c context.Context, m *service.Message) error {
+		mb, err := m.AsBytes()
+		fmt.Println(string(mb))
+		require.NoError(t, err)
+		outMessagesMut.Lock()
+		outMessages += 1
+		outMessagesMut.Unlock()
+		rc.Increment()
+		return nil
+	}))
+
+	streamOut, err := streamOutBuilder.Build()
+	require.NoError(t, err)
+
+	go func() {
+		fmt.Println("Starting stream")
+		_ = streamOut.Run(context.Background())
+	}()
+
+	assert.Eventually(t, func() bool {
+		outMessagesMut.Lock()
+		defer outMessagesMut.Unlock()
+		return outMessages == 28528761
+	}, time.Minute*15, time.Millisecond*100)
+
+	t.Log("Backfill conditioins are met 🎉")
+
+	// you need to start inserting the data somewhere in another place
+	time.Sleep(time.Second * 30)
+	outMessages = 0
+	assert.Eventually(t, func() bool {
+		outMessagesMut.Lock()
+		defer outMessagesMut.Unlock()
+		return outMessages == 1000000
+	}, time.Minute*15, time.Millisecond*100)
+
+	require.NoError(t, streamOut.StopWithin(time.Second*10))
+
+	require.NoError(t, streamOut.StopWithin(time.Second*10))
+}
+
 func TestIntegrationPgCDCForPgOutputStreamUncomitedPlugin(t *testing.T) {
 	tmpDir := t.TempDir()
 	pool, err := dockertest.NewPool("")

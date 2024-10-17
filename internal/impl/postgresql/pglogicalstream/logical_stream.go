@@ -104,10 +104,12 @@ func NewPgStream(config Config) (*Stream, error) {
 		cfg.TLSConfig = nil
 	}
 
+	fmt.Println("Connecting to database")
 	dbConn, err := pgconn.ConnectConfig(context.Background(), cfg)
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("Connected to database")
 
 	if err = dbConn.Ping(context.Background()); err != nil {
 		return nil, err
@@ -182,6 +184,7 @@ func NewPgStream(config Config) (*Stream, error) {
 	// create snapshot transaction before creating a slot for older PostgreSQL versions to ensure consistency
 
 	pubName := "pglog_stream_" + config.ReplicationSlotName
+	fmt.Println("Creating publication", pubName, "for tables", tableNames)
 	if err = CreatePublication(context.Background(), stream.pgConn, pubName, tableNames, true); err != nil {
 		return nil, err
 	}
@@ -243,6 +246,7 @@ func NewPgStream(config Config) (*Stream, error) {
 	}
 	stream.monitor = monitor
 
+	fmt.Println("Starting stream from LSN", stream.lsnrestart, "with clientXLogPos", stream.clientXLogPos, "and snapshot name", stream.snapshotName)
 	if !freshlyCreatedSlot || !config.StreamOldData {
 		if err = stream.startLr(); err != nil {
 			return nil, err
@@ -554,170 +558,181 @@ func (s *Stream) processSnapshot() {
 
 	s.logger.Infof("Starting snapshot processing")
 
+	var wg sync.WaitGroup
+
 	for _, table := range s.tableNames {
-		s.logger.Infof("Processing snapshot for table: %v", table)
+		wg.Add(1)
+		go func(tableName string) {
+			s.logger.Infof("Processing snapshot for table: %v", table)
 
-		var (
-			avgRowSizeBytes sql.NullInt64
-			offset          = 0
-			err             error
-		)
+			var (
+				avgRowSizeBytes sql.NullInt64
+				offset          = 0
+				err             error
+			)
 
-		avgRowSizeBytes, err = s.snapshotter.findAvgRowSize(table)
-		if err != nil {
-			s.logger.Errorf("Failed to calculate average row size for table %v: %v", table, err.Error())
-			if err = s.cleanUpOnFailure(); err != nil {
-				s.logger.Errorf("Failed to clean up resources on accident: %v", err.Error())
-			}
-
-			os.Exit(1)
-		}
-
-		availableMemory := getAvailableMemory()
-		batchSize := s.snapshotter.calculateBatchSize(availableMemory, uint64(avgRowSizeBytes.Int64))
-		s.logger.Infof("Querying snapshot batch_side: %v, available_memory: %v, avg_row_size: %v", batchSize, availableMemory, avgRowSizeBytes.Int64)
-
-		tablePk, err := s.getPrimaryKeyColumn(table)
-		if err != nil {
-			s.logger.Errorf("Failed to get primary key column for table %v: %v", table, err.Error())
-			if err = s.cleanUpOnFailure(); err != nil {
-				s.logger.Errorf("Failed to clean up resources on accident: %v", err.Error())
-			}
-
-			os.Exit(1)
-		}
-
-		for {
-			var snapshotRows *sql.Rows
-			if snapshotRows, err = s.snapshotter.querySnapshotData(table, tablePk, batchSize, offset); err != nil {
-				s.logger.Errorf("Failed to query snapshot for table %v: %v", table, err.Error())
-				if err = s.cleanUpOnFailure(); err != nil {
-					s.logger.Errorf("Failed to clean up resources on accident: %v", err.Error())
-				}
-
-				os.Exit(1)
-			}
-
-			if snapshotRows.Err() != nil {
-				s.logger.Errorf("Failed to query snapshot for table %v: %v", table, err.Error())
-				if err = s.cleanUpOnFailure(); err != nil {
-					s.logger.Errorf("Failed to clean up resources on accident: %v", err.Error())
-				}
-
-				os.Exit(1)
-			}
-
-			columnTypes, err := snapshotRows.ColumnTypes()
+			avgRowSizeBytes, err = s.snapshotter.findAvgRowSize(table)
 			if err != nil {
-				s.logger.Errorf("Failed to get column types for table %v: %v", table, err.Error())
+				s.logger.Errorf("Failed to calculate average row size for table %v: %v", table, err.Error())
 				if err = s.cleanUpOnFailure(); err != nil {
 					s.logger.Errorf("Failed to clean up resources on accident: %v", err.Error())
 				}
+
 				os.Exit(1)
 			}
 
-			var columnTypesString = make([]string, len(columnTypes))
-			columnNames, err := snapshotRows.Columns()
+			availableMemory := getAvailableMemory()
+			batchSize := s.snapshotter.calculateBatchSize(availableMemory, uint64(avgRowSizeBytes.Int64))
+			if s.snapshotBatchSize > 0 {
+				batchSize = s.snapshotBatchSize
+			}
+
+			s.logger.Infof("Querying snapshot batch_side: %v, available_memory: %v, avg_row_size: %v", batchSize, availableMemory, avgRowSizeBytes.Int64)
+
+			tablePk, err := s.getPrimaryKeyColumn(table)
 			if err != nil {
-				s.logger.Errorf("Failed to get column names for table %v: %v", table, err.Error())
+				s.logger.Errorf("Failed to get primary key column for table %v: %v", table, err.Error())
 				if err = s.cleanUpOnFailure(); err != nil {
 					s.logger.Errorf("Failed to clean up resources on accident: %v", err.Error())
 				}
+
 				os.Exit(1)
 			}
 
-			for i := range columnNames {
-				columnTypesString[i] = columnTypes[i].DatabaseTypeName()
-			}
-
-			count := len(columnTypes)
-
-			var rowsCount = 0
-			for snapshotRows.Next() {
-				rowsCount += 1
-				scanArgs := make([]interface{}, count)
-				for i, v := range columnTypes {
-					switch v.DatabaseTypeName() {
-					case "VARCHAR", "TEXT", "UUID", "TIMESTAMP":
-						scanArgs[i] = new(sql.NullString)
-					case "BOOL":
-						scanArgs[i] = new(sql.NullBool)
-					case "INT4":
-						scanArgs[i] = new(sql.NullInt64)
-					default:
-						scanArgs[i] = new(sql.NullString)
+			for {
+				var snapshotRows *sql.Rows
+				if snapshotRows, err = s.snapshotter.querySnapshotData(table, tablePk, batchSize, offset); err != nil {
+					s.logger.Errorf("Failed to query snapshot for table %v: %v", table, err.Error())
+					if err = s.cleanUpOnFailure(); err != nil {
+						s.logger.Errorf("Failed to clean up resources on accident: %v", err.Error())
 					}
+
+					os.Exit(1)
 				}
 
-				err := snapshotRows.Scan(scanArgs...)
+				if snapshotRows.Err() != nil {
+					s.logger.Errorf("Failed to query snapshot for table %v: %v", table, err.Error())
+					if err = s.cleanUpOnFailure(); err != nil {
+						s.logger.Errorf("Failed to clean up resources on accident: %v", err.Error())
+					}
 
+					os.Exit(1)
+				}
+
+				columnTypes, err := snapshotRows.ColumnTypes()
 				if err != nil {
-					s.logger.Errorf("Failed to scan row for table %v: %v", table, err.Error())
+					s.logger.Errorf("Failed to get column types for table %v: %v", table, err.Error())
 					if err = s.cleanUpOnFailure(); err != nil {
 						s.logger.Errorf("Failed to clean up resources on accident: %v", err.Error())
 					}
 					os.Exit(1)
 				}
 
-				var columnValues = make([]interface{}, len(columnTypes))
-				for i := range columnTypes {
-					if z, ok := (scanArgs[i]).(*sql.NullBool); ok {
-						columnValues[i] = z.Bool
-						continue
+				var columnTypesString = make([]string, len(columnTypes))
+				columnNames, err := snapshotRows.Columns()
+				if err != nil {
+					s.logger.Errorf("Failed to get column names for table %v: %v", table, err.Error())
+					if err = s.cleanUpOnFailure(); err != nil {
+						s.logger.Errorf("Failed to clean up resources on accident: %v", err.Error())
 					}
-					if z, ok := (scanArgs[i]).(*sql.NullString); ok {
-						columnValues[i] = z.String
-						continue
-					}
-					if z, ok := (scanArgs[i]).(*sql.NullInt64); ok {
-						columnValues[i] = z.Int64
-						continue
-					}
-					if z, ok := (scanArgs[i]).(*sql.NullFloat64); ok {
-						columnValues[i] = z.Float64
-						continue
-					}
-					if z, ok := (scanArgs[i]).(*sql.NullInt32); ok {
-						columnValues[i] = z.Int32
-						continue
-					}
-
-					columnValues[i] = scanArgs[i]
+					os.Exit(1)
 				}
 
-				tableWithoutSchema := strings.Split(table, ".")[1]
-				snapshotChangePacket := StreamMessage{
-					Lsn: nil,
-					Changes: []StreamMessageChanges{
-						{
-							Table:     tableWithoutSchema,
-							Operation: "insert",
-							Schema:    s.schema,
-							Data: func() map[string]any {
-								var data = make(map[string]any)
-								for i, cn := range columnNames {
-									data[cn] = columnValues[i]
-								}
+				for i := range columnNames {
+					columnTypesString[i] = columnTypes[i].DatabaseTypeName()
+				}
 
-								return data
-							}(),
+				count := len(columnTypes)
+
+				var rowsCount = 0
+				for snapshotRows.Next() {
+					rowsCount += 1
+					scanArgs := make([]interface{}, count)
+					for i, v := range columnTypes {
+						switch v.DatabaseTypeName() {
+						case "VARCHAR", "TEXT", "UUID", "TIMESTAMP":
+							scanArgs[i] = new(sql.NullString)
+						case "BOOL":
+							scanArgs[i] = new(sql.NullBool)
+						case "INT4":
+							scanArgs[i] = new(sql.NullInt64)
+						default:
+							scanArgs[i] = new(sql.NullString)
+						}
+					}
+
+					err := snapshotRows.Scan(scanArgs...)
+
+					if err != nil {
+						s.logger.Errorf("Failed to scan row for table %v: %v", table, err.Error())
+						if err = s.cleanUpOnFailure(); err != nil {
+							s.logger.Errorf("Failed to clean up resources on accident: %v", err.Error())
+						}
+						os.Exit(1)
+					}
+
+					var columnValues = make([]interface{}, len(columnTypes))
+					for i := range columnTypes {
+						if z, ok := (scanArgs[i]).(*sql.NullBool); ok {
+							columnValues[i] = z.Bool
+							continue
+						}
+						if z, ok := (scanArgs[i]).(*sql.NullString); ok {
+							columnValues[i] = z.String
+							continue
+						}
+						if z, ok := (scanArgs[i]).(*sql.NullInt64); ok {
+							columnValues[i] = z.Int64
+							continue
+						}
+						if z, ok := (scanArgs[i]).(*sql.NullFloat64); ok {
+							columnValues[i] = z.Float64
+							continue
+						}
+						if z, ok := (scanArgs[i]).(*sql.NullInt32); ok {
+							columnValues[i] = z.Int32
+							continue
+						}
+
+						columnValues[i] = scanArgs[i]
+					}
+
+					tableWithoutSchema := strings.Split(table, ".")[1]
+					snapshotChangePacket := StreamMessage{
+						Lsn: nil,
+						Changes: []StreamMessageChanges{
+							{
+								Table:     tableWithoutSchema,
+								Operation: "insert",
+								Schema:    s.schema,
+								Data: func() map[string]any {
+									var data = make(map[string]any)
+									for i, cn := range columnNames {
+										data[cn] = columnValues[i]
+									}
+
+									return data
+								}(),
+							},
 						},
-					},
+					}
+					s.monitor.UpdateSnapshotProgressForTable(tableWithoutSchema, rowsCount+offset)
+					tableProgress := s.monitor.GetSnapshotProgressForTable(tableWithoutSchema)
+					snapshotChangePacket.Changes[0].TableSnapshotProgress = &tableProgress
+					s.snapshotMessages <- snapshotChangePacket
 				}
-				s.monitor.UpdateSnapshotProgressForTable(tableWithoutSchema, rowsCount+offset)
-				tableProgress := s.monitor.GetSnapshotProgressForTable(tableWithoutSchema)
-				snapshotChangePacket.Changes[0].TableSnapshotProgress = &tableProgress
-				s.snapshotMessages <- snapshotChangePacket
+
+				offset += batchSize
+
+				if batchSize != rowsCount {
+					break
+				}
 			}
-
-			offset += batchSize
-
-			if batchSize != rowsCount {
-				break
-			}
-		}
-
+			wg.Done()
+		}(table)
 	}
+
+	wg.Wait()
 
 	if err := s.startLr(); err != nil {
 		s.logger.Errorf("Failed to start logical replication after snapshot: %v", err.Error())
@@ -771,6 +786,9 @@ func (s *Stream) getPrimaryKeyColumn(tableName string) (string, error) {
 
 // Stop closes the stream conect and prevents from replication slot read
 func (s *Stream) Stop() error {
+	if s == nil {
+		return nil
+	}
 	s.m.Lock()
 	s.stopped = true
 	s.m.Unlock()
@@ -779,7 +797,12 @@ func (s *Stream) Stop() error {
 	if s.pgConn != nil {
 		if s.streamCtx != nil {
 			s.streamCancel()
-			s.standbyCtxCancel()
+			// s.standbyCtxCancel is initialized later when starting reading from the replication slot.
+			// In case we failed to start replication of the process was shut down before starting the replication slot
+			// we need to check if the context is not nil before calling cancel
+			if s.standbyCtxCancel != nil {
+				s.standbyCtxCancel()
+			}
 		}
 		return s.pgConn.Close(context.Background())
 	}

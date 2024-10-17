@@ -56,7 +56,11 @@ var pgStreamConfigSpec = service.NewConfigSpec().
 	Field(service.NewFloatField("snapshot_memory_safety_factor").
 		Description("Sets amout of memory that can be used to stream snapshot. If affects batch sizes. If we want to use only 25% of the memory available - put 0.25 factor. It will make initial streaming slower, but it will prevent your worker from OOM Kill").
 		Example(0.2).
-		Default(0.5)).
+		Default(1)).
+	Field(service.NewIntField("snapshot_batch_size").
+		Description("Batch side for querying the snapshot").
+		Example(10000).
+		Default(0)).
 	Field(service.NewStringEnumField("decoding_plugin", "pgoutput", "wal2json").Description("Specifies which decoding plugin to use when streaming data from PostgreSQL").
 		Example("pgoutput").
 		Default("pgoutput")).
@@ -89,6 +93,7 @@ func newPgStreamInput(conf *service.ParsedConfig, logger *service.Logger, metric
 		decodingPlugin          string
 		pgConnOptions           string
 		streamUncomited         bool
+		snapshotBatchSize       int
 	)
 
 	dbSchema, err = conf.FieldString("schema")
@@ -165,6 +170,11 @@ func newPgStreamInput(conf *service.ParsedConfig, logger *service.Logger, metric
 		return nil, err
 	}
 
+	snapshotBatchSize, err = conf.FieldInt("snapshot_batch_size")
+	if err != nil {
+		return nil, err
+	}
+
 	if pgConnOptions, err = conf.FieldString("pg_conn_options"); err != nil {
 		return nil, err
 	}
@@ -203,6 +213,7 @@ func newPgStreamInput(conf *service.ParsedConfig, logger *service.Logger, metric
 		decodingPlugin:          decodingPlugin,
 		streamUncomited:         streamUncomited,
 		temporarySlot:           temporarySlot,
+		snapshotBatchSize:       snapshotBatchSize,
 
 		logger:          logger,
 		metrics:         metrics,
@@ -237,6 +248,7 @@ type pgStreamInput struct {
 	decodingPlugin          string
 	streamSnapshot          bool
 	snapshotMemSafetyFactor float64
+	snapshotBatchSize       int
 	streamUncomited         bool
 	logger                  *service.Logger
 	metrics                 *service.Metrics
@@ -258,6 +270,7 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 		DBSchema:                   p.schema,
 		ReplicationSlotName:        "rs_" + p.slotName,
 		TLSVerify:                  p.tls,
+		BatchSize:                  p.snapshotBatchSize,
 		StreamOldData:              p.streamSnapshot,
 		TemporaryReplicationSlot:   p.temporarySlot,
 		StreamUncomited:            p.streamUncomited,
