@@ -25,54 +25,62 @@ import (
 var randomSlotName string
 
 var pgStreamConfigSpec = service.NewConfigSpec().
-	Summary("Creates Postgres replication slot for CDC").
+	Summary("Creates a PostgreSQL replication slot for Change Data Capture (CDC)").
 	Field(service.NewStringField("host").
-		Description("PostgreSQL instance host").
+		Description("The hostname or IP address of the PostgreSQL instance.").
 		Example("123.0.0.1")).
 	Field(service.NewIntField("port").
-		Description("PostgreSQL instance port").
+		Description("The port number on which the PostgreSQL instance is listening.").
 		Example(5432).
 		Default(5432)).
 	Field(service.NewStringField("user").
-		Description("Username with permissions to start replication (RDS superuser)").
+		Description("Username of a user with replication permissions. For AWS RDS, this typically requires superuser privileges.").
 		Example("postgres"),
 	).
 	Field(service.NewStringField("password").
-		Description("PostgreSQL database password")).
+		Description("Password for the specified PostgreSQL user.")).
 	Field(service.NewStringField("schema").
-		Description("Schema that will be used to create replication")).
+		Description("The PostgreSQL schema from which to replicate data.")).
 	Field(service.NewStringField("database").
-		Description("PostgreSQL database name")).
+		Description("The name of the PostgreSQL database to connect to.")).
 	Field(service.NewStringEnumField("tls", "require", "none").
-		Description("Defines whether benthos need to verify (skipinsecure) TLS configuration").
+		Description("Specifies whether to use TLS for the database connection. Set to 'require' to enforce TLS, or 'none' to disable it.").
 		Example("none").
 		Default("none")).
-	Field(service.NewBoolField("stream_uncomited").Default(false).Description("Defines whether you want to stream uncomitted messages before receiving commit message from postgres. This may lead to duplicated records after the the connector has been restarted")).
-	Field(service.NewStringField("pg_conn_options").Default("")).
+	Field(service.NewBoolField("stream_uncomited").
+		Description("If set to true, the plugin will stream uncommitted transactions before receiving a commit message from PostgreSQL. This may result in duplicate records if the connector is restarted.").
+		Default(false)).
+	Field(service.NewStringField("pg_conn_options").
+		Description("Additional PostgreSQL connection options as a string. Refer to PostgreSQL documentation for available options.").
+		Default(""),
+	).
 	Field(service.NewBoolField("stream_snapshot").
-		Description("Set `true` if you want to receive all the data that currently exist in database").
+		Description("When set to true, the plugin will first stream a snapshot of all existing data in the database before streaming changes.").
 		Example(true).
 		Default(false)).
 	Field(service.NewFloatField("snapshot_memory_safety_factor").
-		Description("Sets amout of memory that can be used to stream snapshot. If affects batch sizes. If we want to use only 25% of the memory available - put 0.25 factor. It will make initial streaming slower, but it will prevent your worker from OOM Kill").
+		Description("Determines the fraction of available memory that can be used for streaming the snapshot. Values between 0 and 1 represent the percentage of memory to use. Lower values make initial streaming slower but help prevent out-of-memory errors.").
 		Example(0.2).
 		Default(1)).
 	Field(service.NewIntField("snapshot_batch_size").
-		Description("Batch side for querying the snapshot").
+		Description("The number of rows to fetch in each batch when querying the snapshot. A value of 0 lets the plugin determine the batch size based on `snapshot_memory_safety_factor` property.").
 		Example(10000).
 		Default(0)).
-	Field(service.NewStringEnumField("decoding_plugin", "pgoutput", "wal2json").Description("Specifies which decoding plugin to use when streaming data from PostgreSQL").
+	Field(service.NewStringEnumField("decoding_plugin", "pgoutput", "wal2json").
+		Description("Specifies the logical decoding plugin to use for streaming changes from PostgreSQL. 'pgoutput' is the native logical replication protocol, while 'wal2json' provides change data as JSON.").
 		Example("pgoutput").
 		Default("pgoutput")).
 	Field(service.NewStringListField("tables").
+		Description("A list of table names to include in the logical replication. Each table should be specified as a separate item.").
 		Example(`
 			- my_table
 			- my_table_2
-		`).
-		Description("List of tables we have to create logical replication for")).
-	Field(service.NewBoolField("temporary_slot").Default(false)).
+		`)).
+	Field(service.NewBoolField("temporary_slot").
+		Description("If set to true, creates a temporary replication slot that is automatically dropped when the connection is closed.").
+		Default(false)).
 	Field(service.NewStringField("slot_name").
-		Description("PostgeSQL logical replication slot name. You can create it manually before starting the sync. If not provided will be replaced with a random one").
+		Description("The name of the PostgreSQL logical replication slot to use. If not provided, a random name will be generated. You can create this slot manually before starting replication if desired.").
 		Example("my_test_slot").
 		Default(randomSlotName))
 
