@@ -232,18 +232,11 @@ func TestDiv(t *testing.T) {
 }
 
 func TestPow10(t *testing.T) {
-	require.Equal(t, [...]Int128{
-		Int64(1),
-		Int64(10),
-		Int64(100),
-		Int64(1000),
-		Int64(10000),
-		Int64(100000),
-		Int64(1000000),
-		Int64(10000000),
-		Int64(100000000),
-		Int64(1000000000),
-	}, Pow10Table)
+	expected := Int64(1)
+	for _, v := range Pow10Table {
+		require.Equal(t, expected, v)
+		expected = Mul(expected, Int64(10))
+	}
 }
 
 func TestCompare(t *testing.T) {
@@ -303,4 +296,9 @@ func TestParse(t *testing.T) {
 	// One more than max
 	_, ok = Parse("170141183460469231731687303715884105728")
 	require.False(t, ok)
+}
+
+func TestString(t *testing.T) {
+	require.Equal(t, "-170141183460469231731687303715884105728", MinInt128.String())
+	require.Equal(t, "170141183460469231731687303715884105727", MaxInt128.String())
 }
