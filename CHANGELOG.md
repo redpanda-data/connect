@@ -3,7 +3,7 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.38.0 - TBD
+## 4.38.0 - 2024-10-17
 
 ### Added
 
@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - Field `nkey` added to `nats`, `nats_jetstream`, `nats_kv` and `nats_stream` components. (@ye11ow)
 - Field `private_key` added to the `snowflake_put` output. (@mihaitodor)
 - New `azure_data_lake_gen2` output. (@ooesili)
+- New `timeplus` output. (@ye11ow)
 
 ### Fixed
 
