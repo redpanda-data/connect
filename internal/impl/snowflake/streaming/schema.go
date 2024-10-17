@@ -11,100 +11,76 @@
 package streaming
 
 import (
-	"bytes"
-	"errors"
 	"fmt"
 	"maps"
 	"math"
 	"os"
 	"strconv"
 	"strings"
-	"time"
-	"unicode/utf8"
 
 	"github.com/dustin/go-humanize"
 	"github.com/parquet-go/parquet-go"
-	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming/int128"
 )
 
-var pow10TableInt32 []int32
-var pow10TableInt64 []int64
-
-func init() {
-	{
-		pow10TableInt64 = make([]int64, 19)
-		n := int64(1)
-		pow10TableInt64[0] = n
-		for i := range pow10TableInt64[1:] {
-			n = 10 * n
-			pow10TableInt64[i+1] = n
-		}
-	}
-	{
-		pow10TableInt32 = make([]int32, 19)
-		n := int32(1)
-		pow10TableInt32[0] = n
-		for i := range pow10TableInt32[1:] {
-			n = 10 * n
-			pow10TableInt32[i+1] = n
-		}
-	}
-}
-
-type dataConverter interface {
-	ValidateAndConvert(buf *statsBuffer, val any) (any, error)
-}
-
 type dataTransformer struct {
-	name      string // raw name from API
 	converter dataConverter
 	stats     *statsBuffer
 	column    *columnMetadata
+	buf       typedBuffer
 }
 
 func convertFixedType(column columnMetadata) (parquet.Node, dataConverter, error) {
-	scale := 0
-	precision := 0
+	var scale int32
+	var precision int32
 	if column.Scale != nil {
-		scale = int(*column.Scale)
+		scale = *column.Scale
 	}
 	if column.Precision != nil {
-		precision = int(*column.Precision)
+		precision = *column.Precision
 	}
 	isDecimal := column.Scale != nil && column.Precision != nil
 	if (column.Scale != nil && *column.Scale != 0) || strings.ToUpper(column.PhysicalType) == "SB16" {
-		c := sb16Converter{nullable: column.Nullable, scale: scale, precision: precision}
+		c := numberConverter{nullable: column.Nullable, scale: scale, precision: precision}
 		if isDecimal {
-			return parquet.Decimal(scale, precision, parquet.FixedLenByteArrayType(16)), c, nil
+			return parquet.Decimal(int(scale), int(precision), parquet.FixedLenByteArrayType(16)), c, nil
 		}
 		return parquet.Leaf(parquet.FixedLenByteArrayType(16)), c, nil
 	}
 	var ptype parquet.Type
+	var defaultPrecision int32
 	switch strings.ToUpper(column.PhysicalType) {
 	case "SB1":
+		ptype = parquet.Int32Type
+		defaultPrecision = maxPrecisionForByteWidth(1)
 	case "SB2":
+		ptype = parquet.Int32Type
+		defaultPrecision = maxPrecisionForByteWidth(2)
 	case "SB4":
 		ptype = parquet.Int32Type
+		defaultPrecision = maxPrecisionForByteWidth(4)
 	case "SB8":
 		ptype = parquet.Int64Type
+		defaultPrecision = maxPrecisionForByteWidth(8)
 	default:
 		return nil, nil, fmt.Errorf("unsupported physical column type: %s", column.PhysicalType)
 	}
-	c := intConverter{nullable: column.Nullable, scale: scale, precision: precision}
+	validationPrecision := precision
+	if column.Precision == nil {
+		validationPrecision = defaultPrecision
+	}
+	c := numberConverter{nullable: column.Nullable, scale: scale, precision: validationPrecision}
 	if isDecimal {
-		return parquet.Decimal(scale, precision, ptype), c, nil
+		return parquet.Decimal(int(scale), int(precision), ptype), c, nil
 	}
 	return parquet.Leaf(ptype), c, nil
 }
-
-type parquetSchema = *parquet.Schema
 
 // maxJSONSize is the size that any kind of semi-structured data can be, which is 16MiB minus a small overhead
 const maxJSONSize = 16*humanize.MiByte - 64
 
 // See ParquetTypeGenerator
-func constructParquetSchema(columns []columnMetadata) (parquetSchema, map[string]*dataTransformer, map[string]string, error) {
+func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[string]*dataTransformer, map[string]string, error) {
 	groupNode := parquet.Group{}
 	transformers := map[string]*dataTransformer{}
 	typeMetadata := map[string]string{"sfVer": "1,1"}
@@ -139,7 +115,7 @@ func constructParquetSchema(columns []columnMetadata) (parquetSchema, map[string
 				byteLength = int(*column.ByteLength)
 			}
 			byteLength = min(byteLength, 16*humanize.MiByte)
-			converter = stringConverter{binaryConverter{column.Nullable, byteLength}}
+			converter = binaryConverter{nullable: column.Nullable, maxLength: byteLength, utf8: true}
 		case "binary":
 			n = parquet.Leaf(parquet.ByteArrayType)
 			// Why binary data defaults to 8MiB instead of the 16MiB for strings... ¯\_(ツ)_/¯
@@ -148,7 +124,7 @@ func constructParquetSchema(columns []columnMetadata) (parquetSchema, map[string
 				byteLength = int(*column.ByteLength)
 			}
 			byteLength = min(byteLength, 16*humanize.MiByte)
-			converter = binaryConverter{column.Nullable, byteLength}
+			converter = binaryConverter{nullable: column.Nullable, maxLength: byteLength}
 		case "boolean":
 			n = parquet.Leaf(parquet.BooleanType)
 			converter = boolConverter{column.Nullable}
@@ -161,9 +137,9 @@ func constructParquetSchema(columns []columnMetadata) (parquetSchema, map[string
 			} else {
 				n = parquet.Leaf(parquet.FixedLenByteArrayType(16))
 			}
-			scale := 0
+			var scale int32
 			if column.Scale != nil {
-				scale = int(*column.Scale)
+				scale = *column.Scale
 			}
 			tz := logicalType != "timestamp_ntz"
 			converter = timestampConverter{column.Nullable, scale, tz}
@@ -174,11 +150,11 @@ func constructParquetSchema(columns []columnMetadata) (parquetSchema, map[string
 				t = parquet.Int64Type
 				precision = 18
 			}
-			scale := 9
+			scale := int32(9)
 			if column.Scale != nil {
-				scale = int(*column.Scale)
+				scale = *column.Scale
 			}
-			n = parquet.Decimal(scale, precision, t)
+			n = parquet.Decimal(int(scale), precision, t)
 			converter = timeConverter{column.Nullable, scale}
 		case "date":
 			n = parquet.Leaf(parquet.Int32Type)
@@ -211,11 +187,11 @@ func constructParquetSchema(columns []columnMetadata) (parquetSchema, map[string
 }
 
 // So snowflake has a storage optimization where physical types are narrowed to the smallest possible storage
-// value, support that.
+// value, so after we collect stats, this narrows the schema to smallest possible numeric types.
 func narrowPhysicalTypes(
-	schema parquetSchema,
+	schema *parquet.Schema,
 	transformers map[string]*dataTransformer,
-	fileMetadata map[string]string) (parquetSchema, map[string]string) {
+	fileMetadata map[string]string) (*parquet.Schema, map[string]string) {
 	mapped := parquet.Group{}
 	mappedMeta := maps.Clone(fileMetadata)
 	for _, field := range schema.Fields() {
@@ -226,13 +202,13 @@ func narrowPhysicalTypes(
 			continue
 		}
 		stats := transformers[field.Name()].stats
-		byteWidth := max(byteWidth(stats.maxIntVal), byteWidth(stats.minIntVal))
+		byteWidth := max(int128.ByteWidth(stats.maxIntVal), int128.ByteWidth(stats.minIntVal))
 		n := parquet.Int(byteWidth * 8)
 		if field.Type().LogicalType() != nil && field.Type().LogicalType().Decimal != nil {
 			d := field.Type().LogicalType().Decimal
 			n = parquet.Decimal(
 				int(d.Scale),
-				min(int(d.Precision), maxPrecisionForByteWidth(byteWidth)),
+				int(min(d.Precision, maxPrecisionForByteWidth(byteWidth))),
 				n.Type(),
 			)
 		}
@@ -261,7 +237,7 @@ func narrowPhysicalTypes(
 
 type statsBuffer struct {
 	columnID               int
-	minIntVal, maxIntVal   int64
+	minIntVal, maxIntVal   int128.Int128
 	minRealVal, maxRealVal float64
 	minStrVal, maxStrVal   []byte
 	maxStrLen              int
@@ -271,441 +247,14 @@ type statsBuffer struct {
 
 func (s *statsBuffer) Reset() {
 	s.first = true
-	s.minIntVal = 0
-	s.maxIntVal = 0
+	s.minIntVal = int128.Int64(0)
+	s.maxIntVal = int128.Int64(0)
 	s.minRealVal = 0
 	s.maxRealVal = 0
 	s.minStrVal = nil
 	s.maxStrVal = nil
 	s.maxStrLen = 0
 	s.nullCount = 0
-}
-
-var errNullValue = errors.New("unexpected null value")
-
-type boolConverter struct {
-	nullable bool
-}
-
-func (c boolConverter) ValidateAndConvert(buf *statsBuffer, val any) (any, error) {
-	if val == nil {
-		if !c.nullable {
-			return nil, errNullValue
-		}
-		buf.nullCount++
-		return val, nil
-	}
-	v, err := bloblang.ValueAsBool(val)
-	if err != nil {
-		return val, err
-	}
-	var i int64 = 0
-	if v {
-		i = 1
-	}
-	if buf.first {
-		buf.minIntVal = i
-		buf.maxIntVal = i
-		buf.first = false
-		return v, nil
-	}
-	buf.minIntVal = min(buf.minIntVal, i)
-	buf.maxIntVal = max(buf.maxIntVal, i)
-	return v, nil
-}
-
-type intConverter struct {
-	nullable  bool
-	scale     int
-	precision int
-}
-
-func (c intConverter) ValidateAndConvert(buf *statsBuffer, val any) (any, error) {
-	if val == nil {
-		if !c.nullable {
-			return nil, errNullValue
-		}
-		buf.nullCount++
-		return val, nil
-	}
-	v, err := bloblang.ValueAsInt64(val)
-	if err != nil {
-		return val, err
-	}
-	if buf.first {
-		buf.minIntVal = v
-		buf.maxIntVal = v
-		buf.first = false
-	} else {
-		buf.minIntVal = min(buf.minIntVal, v)
-		buf.maxIntVal = max(buf.maxIntVal, v)
-	}
-	return packInteger(v), nil
-}
-
-type sb16Converter struct {
-	nullable  bool
-	scale     int
-	precision int
-}
-
-func (c sb16Converter) ValidateAndConvert(buf *statsBuffer, val any) (any, error) {
-	if val == nil {
-		if !c.nullable {
-			return nil, errNullValue
-		}
-		buf.nullCount++
-		return val, nil
-	}
-	v, err := bloblang.ValueAsInt64(val)
-	if err != nil {
-		return val, err
-	}
-	if buf.first {
-		buf.minIntVal = v
-		buf.maxIntVal = v
-		buf.first = false
-	} else {
-		buf.minIntVal = min(buf.minIntVal, v)
-		buf.maxIntVal = max(buf.maxIntVal, v)
-	}
-	val = packInteger(v)
-	return val, nil
-}
-
-type doubleConverter struct {
-	nullable bool
-}
-
-func (c doubleConverter) ValidateAndConvert(buf *statsBuffer, val any) (any, error) {
-	if val == nil {
-		if !c.nullable {
-			return nil, errNullValue
-		}
-		buf.nullCount++
-		return val, nil
-	}
-	v, err := bloblang.ValueAsFloat64(val)
-	if err != nil {
-		return val, err
-	}
-	if buf.first {
-		buf.minRealVal = v
-		buf.maxRealVal = v
-		buf.first = false
-		return v, nil
-	}
-	buf.minRealVal = min(buf.minRealVal, v)
-	buf.maxRealVal = max(buf.maxRealVal, v)
-	return v, nil
-}
-
-type binaryConverter struct {
-	nullable  bool
-	maxLength int
-}
-
-func (c binaryConverter) ValidateAndConvert(buf *statsBuffer, val any) (any, error) {
-	if val == nil {
-		if !c.nullable {
-			return val, errNullValue
-		}
-		buf.nullCount++
-		return val, nil
-	}
-	v, err := bloblang.ValueAsBytes(val)
-	if err != nil {
-		return val, err
-	}
-	if len(v) > c.maxLength {
-		return val, fmt.Errorf("value too long, length: %d, max: %d", len(v), c.maxLength)
-	}
-	if buf.first {
-		buf.minStrVal = v
-		buf.maxStrVal = v
-		buf.maxStrLen = len(v)
-		buf.first = false
-		return v, nil
-	}
-	if bytes.Compare(v, buf.minStrVal) < 0 {
-		buf.minStrVal = v
-	}
-	if bytes.Compare(v, buf.maxStrVal) > 0 {
-		buf.maxStrVal = v
-	}
-	buf.maxStrLen = max(buf.maxStrLen, len(v))
-	return v, nil
-}
-
-type stringConverter struct {
-	binaryConverter
-}
-
-func (c stringConverter) ValidateAndConvert(buf *statsBuffer, val any) (any, error) {
-	v, err := c.binaryConverter.ValidateAndConvert(buf, val)
-	if err != nil {
-		return nil, err
-	}
-	if !utf8.Valid(v.([]byte)) {
-		return v, errors.New("invalid UTF8")
-	}
-	return v, err
-}
-
-type jsonConverter struct {
-	nullable  bool
-	maxLength int
-}
-
-func (c jsonConverter) ValidateAndConvert(buf *statsBuffer, val any) (any, error) {
-	if val == nil {
-		if !c.nullable {
-			return nil, errNullValue
-		}
-		buf.nullCount++
-		return val, nil
-	}
-	v := []byte(bloblang.ValueToString(val))
-	if len(v) > c.maxLength {
-		return val, fmt.Errorf("value too long, length: %d, max: %d", len(v), c.maxLength)
-	}
-	if buf.first {
-		buf.minStrVal = v
-		buf.maxStrVal = v
-		buf.maxStrLen = len(v)
-		buf.first = false
-		return v, nil
-	}
-	if bytes.Compare(v, buf.minStrVal) < 0 {
-		buf.minStrVal = v
-	}
-	if bytes.Compare(v, buf.maxStrVal) > 0 {
-		buf.maxStrVal = v
-	}
-	buf.maxStrLen = max(buf.maxStrLen, len(v))
-	return v, nil
-}
-
-type jsonArrayConverter struct {
-	jsonConverter
-}
-
-func (c jsonArrayConverter) ValidateAndConvert(buf *statsBuffer, val any) (any, error) {
-	if val != nil {
-		if _, ok := val.([]any); !ok {
-			return nil, errors.New("not a JSON array")
-		}
-	}
-	return c.jsonConverter.ValidateAndConvert(buf, val)
-}
-
-type jsonObjectConverter struct {
-	jsonConverter
-}
-
-func (c jsonObjectConverter) ValidateAndConvert(buf *statsBuffer, val any) (any, error) {
-	if val != nil {
-		if _, ok := val.(map[string]any); !ok {
-			return nil, errors.New("not a JSON object")
-		}
-	}
-	return c.jsonConverter.ValidateAndConvert(buf, val)
-}
-
-type timestampConverter struct {
-	nullable bool
-	scale    int
-	tz       bool
-}
-
-var timestampFormats = []string{
-	time.DateTime,
-	"2006-01-02T15:04:05",
-	"2006-01-02 15:04:05.000",
-	"2006-01-02T15:04:05.000",
-	"2006-01-02T15:04:05.000",
-	"2006-01-02 15:04:05.000-0700",
-	"2006-01-02 15:04:05.000-07:00",
-}
-
-func (c timestampConverter) ValidateAndConvert(buf *statsBuffer, val any) (any, error) {
-	if val == nil {
-		if !c.nullable {
-			return nil, errNullValue
-		}
-		buf.nullCount++
-		return val, nil
-	}
-	var s string
-	switch v := val.(type) {
-	case []byte:
-		s = string(v)
-	case string:
-		s = v
-	}
-	var t time.Time
-	var err error
-	if s != "" {
-		for _, format := range timestampFormats {
-			t, err = time.Parse(format, s)
-			if err == nil {
-				break
-			}
-		}
-	} else {
-		err = errors.ErrUnsupported
-	}
-	if err != nil {
-		t, err = bloblang.ValueAsTimestamp(val)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("unable to coerse TIMESTAMP value from %v", val)
-	}
-	v := snowflakeTimestampInt(t, c.scale, c.tz).Int64()
-	if buf.first {
-		buf.minIntVal = v
-		buf.maxIntVal = v
-		buf.first = false
-	} else {
-		buf.minIntVal = min(buf.minIntVal, v)
-		buf.maxIntVal = max(buf.maxIntVal, v)
-	}
-	return packInteger(v), nil
-}
-
-type timeConverter struct {
-	nullable bool
-	scale    int
-}
-
-func (c timeConverter) ValidateAndConvert(buf *statsBuffer, val any) (any, error) {
-	if val == nil {
-		if !c.nullable {
-			return nil, errNullValue
-		}
-		buf.nullCount++
-		return val, nil
-	}
-
-	var s string
-	switch v := val.(type) {
-	case []byte:
-		s = string(v)
-	case string:
-		s = v
-	}
-	s = strings.TrimSpace(s)
-	var t time.Time
-	var err error
-	switch len(s) {
-	case len("15:04"):
-		t, err = time.Parse("15:04", s)
-	case len("15:04:05"):
-		t, err = time.Parse("15:04:05", s)
-	default:
-		// Allow up to 9 decimal places
-		padding := len(s) - len("15:04:05.")
-		if padding >= 0 {
-			t, err = time.Parse("15:04:05."+strings.Repeat("0", min(padding, 9)), s)
-		} else {
-			err = errors.ErrUnsupported
-		}
-	}
-	if err != nil {
-		t, err = bloblang.ValueAsTimestamp(val)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("unable to coerse TIME value from %v", val)
-	}
-	// 24 hours in nanoseconds fits within uint64, so we can't overflow
-	nanos := t.Hour()*int(time.Hour.Nanoseconds()) +
-		t.Minute()*int(time.Minute.Nanoseconds()) +
-		t.Second()*int(time.Second.Nanoseconds()) +
-		t.Nanosecond()
-	v := int64(nanos) / pow10TableInt64[9-c.scale]
-	if buf.first {
-		buf.minIntVal = v
-		buf.maxIntVal = v
-		buf.first = false
-	} else {
-		buf.minIntVal = min(buf.minIntVal, v)
-		buf.maxIntVal = max(buf.maxIntVal, v)
-	}
-	return packInteger(v), nil
-}
-
-type dateConverter struct {
-	nullable bool
-}
-
-// TODO(perf): have some way of sorting these by when they are used
-// as the format is likely the same for a given pipeline
-var dateFormats = []string{
-	"2006-01-02",
-	"2006-1-02",
-	"2006-01-2",
-	"2006-1-2",
-	"01-02-2006",
-	"01-2-2006",
-	"1-02-2006",
-	"1-2-2006",
-	"2006/01/02",
-	"2006/01/2",
-	"2006/1/02",
-	"2006/1/2",
-	"01/02/2006",
-	"1/02/2006",
-	"01/2/2006",
-	"1/2/2006",
-}
-
-func (c dateConverter) ValidateAndConvert(buf *statsBuffer, val any) (any, error) {
-	if val == nil {
-		if !c.nullable {
-			return nil, errNullValue
-		}
-		buf.nullCount++
-		return val, nil
-	}
-	var s string
-	switch v := val.(type) {
-	case []byte:
-		s = string(v)
-	case string:
-		s = v
-	}
-	var t time.Time
-	var err error
-	if s != "" {
-		for _, format := range dateFormats {
-			t, err = time.Parse(format, s)
-			if err == nil {
-				break
-			}
-		}
-	} else {
-		err = errors.ErrUnsupported
-	}
-	if err != nil {
-		t, err = bloblang.ValueAsTimestamp(val)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("unable to coerse DATE value from %v", val)
-	}
-	t = t.UTC()
-	if t.Year() < -9999 || t.Year() > 9999 {
-		return nil, fmt.Errorf("DATE columns out of range, year: %d", t.Year())
-	}
-	v := t.Unix() / int64(24*60*60)
-	if buf.first {
-		buf.minIntVal = v
-		buf.maxIntVal = v
-		buf.first = false
-	} else {
-		buf.minIntVal = min(buf.minIntVal, v)
-		buf.maxIntVal = max(buf.maxIntVal, v)
-	}
-	return packInteger(v), nil
 }
 
 func computeColumnEpInfo(stats map[string]*dataTransformer) map[string]fileColumnProperties {
@@ -728,8 +277,8 @@ func computeColumnEpInfo(stats map[string]*dataTransformer) map[string]fileColum
 			MinStrValue:    minStrVal,
 			MaxStrValue:    maxStrVal,
 			MaxLength:      int64(stat.maxStrLen),
-			MinIntValue:    int128.Int64(stat.minIntVal),
-			MaxIntValue:    int128.Int64(stat.maxIntVal),
+			MinIntValue:    stat.minIntVal,
+			MaxIntValue:    stat.maxIntVal,
 			MinRealValue:   stat.minRealVal,
 			MaxRealValue:   stat.maxRealVal,
 			DistinctValues: -1,
@@ -739,12 +288,10 @@ func computeColumnEpInfo(stats map[string]*dataTransformer) map[string]fileColum
 }
 
 func canCompatNumber(column *columnMetadata) bool {
-	switch strings.ToLower(column.LogicalType) {
-	case "boolean":
-		return false
-	}
+	// We leave out SB1 because it's already as small
+	// as possible and we'd have to special case booleans
 	switch strings.ToUpper(column.PhysicalType) {
-	case "SB1", "SB2", "SB4", "SB8", "SB16":
+	case "SB2", "SB4", "SB8", "SB16":
 		return true
 	}
 	return false
@@ -831,30 +378,7 @@ func byteWidth(v int64) int {
 	return 8
 }
 
-func packInteger(v int64) any {
-	if v < 0 {
-		switch {
-		case v >= math.MinInt8:
-			return int8(v)
-		case v >= math.MinInt16:
-			return int16(v)
-		case v >= math.MinInt32:
-			return int32(v)
-		}
-		return v
-	}
-	switch {
-	case v <= math.MaxInt8:
-		return int8(v)
-	case v <= math.MaxInt16:
-		return int16(v)
-	case v <= math.MaxInt32:
-		return int32(v)
-	}
-	return v
-}
-
-func maxPrecisionForByteWidth(byteWidth int) int {
+func maxPrecisionForByteWidth(byteWidth int) int32 {
 	switch byteWidth {
 	case 1:
 		return 3

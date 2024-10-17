@@ -291,9 +291,30 @@ func (i Int128) Bytes() [16]byte {
 	return b
 }
 
+// Bytes converts an Int128 into big endian bytes
+func (i Int128) AppendBytes(b []byte) []byte {
+	b = binary.BigEndian.AppendUint64(b[0:8], uint64(i.hi))
+	return binary.BigEndian.AppendUint64(b[8:16], i.lo)
+}
+
 // Int64 casts an Int128 to a int64 by truncating the bytes.
 func (i Int128) Int64() int64 {
 	return int64(i.lo)
+}
+
+// Int32 casts an Int128 to a int32 by truncating the bytes.
+func (i Int128) Int32() int32 {
+	return int32(i.lo)
+}
+
+// Int16 casts an Int128 to a int16 by truncating the bytes.
+func (i Int128) Int16() int16 {
+	return int16(i.lo)
+}
+
+// Int8 casts an Int128 to a int8 by truncating the bytes.
+func (i Int128) Int8() int8 {
+	return int8(i.lo)
 }
 
 func Min(a, b Int128) Int128 {
@@ -385,4 +406,28 @@ func bigInt(bi *big.Int) (n Int128, ok bool) {
 		n = Neg(n)
 	}
 	return
+}
+
+// ByteWidth returns the maximum number of bytes needed to store v
+func ByteWidth(v Int128) int {
+	if v.IsNegative() {
+		switch {
+		case !Less(v, MinInt8):
+			return 1
+		case !Less(v, MinInt16):
+			return 2
+		case !Less(v, MinInt32):
+			return 4
+		}
+		return 8
+	}
+	switch {
+	case !Greater(v, MaxInt8):
+		return 1
+	case !Greater(v, MaxInt16):
+		return 2
+	case !Greater(v, MaxInt32):
+		return 4
+	}
+	return 8
 }

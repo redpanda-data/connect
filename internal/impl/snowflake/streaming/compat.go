@@ -26,6 +26,32 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming/int128"
 )
 
+var (
+	pow10TableInt32 []int32
+	pow10TableInt64 []int64
+)
+
+func init() {
+	{
+		pow10TableInt64 = make([]int64, 19)
+		n := int64(1)
+		pow10TableInt64[0] = n
+		for i := range pow10TableInt64[1:] {
+			n = 10 * n
+			pow10TableInt64[i+1] = n
+		}
+	}
+	{
+		pow10TableInt32 = make([]int32, 19)
+		n := int32(1)
+		pow10TableInt32[0] = n
+		for i := range pow10TableInt32[1:] {
+			n = 10 * n
+			pow10TableInt32[i+1] = n
+		}
+	}
+}
+
 func deriveKey(encryptionKey, diversifier string) ([]byte, error) {
 	decodedKey, err := base64.StdEncoding.DecodeString(encryptionKey)
 	if err != nil {
@@ -133,7 +159,7 @@ func normalizeColumnName(name string) string {
 // snowflakeTimestampInt computes the same result as the logic in TimestampWrapper
 // in the Java SDK. It converts a timestamp to the integer representation that
 // is used internally within Snowflake.
-func snowflakeTimestampInt(t time.Time, scale int, includeTZ bool) int128.Int128 {
+func snowflakeTimestampInt(t time.Time, scale int32, includeTZ bool) int128.Int128 {
 	epoch := int128.Int64(t.Unix())
 	// this calculation is intentionally done at low resolution to truncate the nanoseconds
 	// according to our scale.

@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/parquet-go/parquet-go"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/periodic"
 	"github.com/redpanda-data/connect/v4/internal/typed"
@@ -237,7 +238,7 @@ type SnowflakeIngestionChannel struct {
 	ChannelOptions
 	role             string
 	clientPrefix     string
-	schema           parquetSchema
+	schema           *parquet.Schema
 	client           *SnowflakeRestClient
 	uploader         *typed.AtomicValue[stageUploaderResult]
 	encryptionInfo   *encryptionInfo
@@ -264,7 +265,57 @@ func messageToRow(msg *service.Message) (map[string]any, error) {
 	if !ok {
 		return nil, fmt.Errorf("expected object, got: %T", v)
 	}
-	return row, nil
+	mapped := make(map[string]any, len(row))
+	for k, v := range row {
+		mapped[normalizeColumnName(k)] = v
+	}
+	return mapped, nil
+}
+
+// TODO: If the memory pressure is too great from writing all
+// records buffered as a single row group, then consider
+// return some kind of iterator of chunks of rows that we can
+// then feed into the actual parquet construction process.
+//
+// If a single parquet file is too much, we can consider having multiple
+// parquet files in a single bdec file.
+func (c *SnowflakeIngestionChannel) constructRowGroup(
+	batch service.MessageBatch,
+) (parquet.RowGroup, *parquet.Schema, map[string]string, error) {
+	// Reset our data
+	for _, transformer := range c.transformers {
+		transformer.stats.Reset()
+		transformer.buf.Reset()
+	}
+	// First we need to shred our record into columns, snowflake's data model
+	// is thankfully a flat list of columns, so no dremel style record shredding
+	// is needed
+	for _, msg := range batch {
+		row, err := messageToRow(msg)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		// We **must** write a null, so iterate over the schema not the record,
+		// which might be sparse
+		for name, t := range c.transformers {
+			v := row[name]
+			err = t.converter.ValidateAndConvert(t.stats, v, t.buf)
+			if err != nil {
+				return nil, nil, nil, fmt.Errorf("invalid data for column %s: %w", name, err)
+			}
+		}
+	}
+	narrowed, updatedMetadata := narrowPhysicalTypes(c.schema, c.transformers, c.fileMetadata)
+	buffer := parquet.NewGenericBuffer[any](c.schema)
+	columns := buffer.ColumnBuffers()
+	// Write our columnar data to a buffer
+	for i, field := range narrowed.Fields() {
+		t := c.transformers[field.Name()]
+		if err := t.buf.WriteTo(columns[i]); err != nil {
+			return nil, nil, nil, err
+		}
+	}
+	return buffer, narrowed, updatedMetadata, nil
 }
 
 // InsertStats holds some basic statistics about the InsertRows operation
@@ -279,38 +330,15 @@ type InsertStats struct {
 func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch service.MessageBatch) (InsertStats, error) {
 	stats := InsertStats{}
 	startTime := time.Now()
-	var err error
-	for _, transformer := range c.transformers {
-		transformer.stats.Reset()
-	}
-	rows := make([]map[string]any, len(batch))
-	for i, msg := range batch {
-		transformed := make(map[string]any, len(c.transformers))
-		row, err := messageToRow(msg)
-		if err != nil {
-			return stats, err
-		}
-		for k, v := range row {
-			name := normalizeColumnName(k)
-			t, ok := c.transformers[name]
-			if !ok {
-				// Skip extra columns
-				continue
-			}
-			transformed[name], err = t.converter.ValidateAndConvert(t.stats, v)
-			if err != nil {
-				return stats, fmt.Errorf("invalid data for column %s: %w", k, err)
-			}
-		}
-		rows[i] = transformed
+	rows, schema, meta, err := c.constructRowGroup(batch)
+	if err != nil {
+		return stats, err
 	}
 	fakeThreadID := rand.N(1000)
 	blobPath := generateBlobPath(c.clientPrefix, fakeThreadID, c.requestIDCounter)
 	c.requestIDCounter++
-	c.fileMetadata["primaryFileId"] = getShortname(blobPath)
+	meta["primaryFileId"] = getShortname(blobPath)
 	c.buffer.Reset()
-
-	schema, meta := narrowPhysicalTypes(c.schema, c.transformers, c.fileMetadata)
 	err = writeParquetFile(c.buffer, schema, rows, meta)
 	if err != nil {
 		return stats, err

@@ -90,10 +90,10 @@ func fromPositiveFloat32(v float32, prec, scale int32) (Int128, error) {
 	return Int128{hi: int64(hi), lo: uint64(low)}, nil
 }
 
-// FromFloat32 returns a new Int128 constructed from the given float32
+// Float32 returns a new Int128 constructed from the given float32
 // value using the provided precision and scale. Will return an error if the
 // value cannot be accurately represented with the desired precision and scale.
-func FromFloat32(v float32, prec, scale int32) (Int128, error) {
+func Float32(v float32, prec, scale int32) (Int128, error) {
 	if v < 0 {
 		dec, err := fromPositiveFloat32(-v, prec, scale)
 		if err != nil {
@@ -104,10 +104,10 @@ func FromFloat32(v float32, prec, scale int32) (Int128, error) {
 	return fromPositiveFloat32(v, prec, scale)
 }
 
-// FromFloat64 returns a new Int128 constructed from the given float64
+// Float64 returns a new Int128 constructed from the given float64
 // value using the provided precision and scale. Will return an error if the
 // value cannot be accurately represented with the desired precision and scale.
-func FromFloat64(v float64, prec, scale int32) (Int128, error) {
+func Float64(v float64, prec, scale int32) (Int128, error) {
 	if v < 0 {
 		dec, err := fromPositiveFloat64(-v, prec, scale)
 		if err != nil {
@@ -122,7 +122,7 @@ var (
 	pt5 = big.NewFloat(0.5)
 )
 
-func FromString(v string, prec, scale int32) (n Int128, err error) {
+func String(v string, prec, scale int32) (n Int128, err error) {
 	// time for some math!
 	// Our input precision means "number of digits of precision" but the
 	// math/big library refers to precision in floating point terms

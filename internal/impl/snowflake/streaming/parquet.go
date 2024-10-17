@@ -20,7 +20,7 @@ import (
 	"github.com/segmentio/encoding/thrift"
 )
 
-func writeParquetFile(writer io.Writer, schema parquetSchema, rows []map[string]any, metadata map[string]string) (err error) {
+func writeParquetFile(writer io.Writer, schema *parquet.Schema, rows parquet.RowGroup, metadata map[string]string) (err error) {
 	pw := parquet.NewGenericWriter[map[string]any](
 		writer,
 		schema,
@@ -37,7 +37,7 @@ func writeParquetFile(writer io.Writer, schema parquetSchema, rows []map[string]
 			err = fmt.Errorf("encoding panic: %v", r)
 		}
 	}()
-	_, err = pw.Write(rows)
+	_, err = pw.WriteRowGroup(rows)
 	if err != nil {
 		return
 	}

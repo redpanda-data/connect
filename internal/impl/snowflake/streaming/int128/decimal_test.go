@@ -214,7 +214,7 @@ func TestDecimalFromFloat(t *testing.T) {
 	t.Run("float64", func(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(tt.expected, func(t *testing.T) {
-				n, err := FromFloat64(tt.val, tt.precision, tt.scale)
+				n, err := Float64(tt.val, tt.precision, tt.scale)
 				assert.NoError(t, err)
 
 				assert.Equal(t, tt.expected, big.NewFloat(n.Float64(tt.scale)).Text('f', int(tt.scale)))
@@ -225,20 +225,20 @@ func TestDecimalFromFloat(t *testing.T) {
 			// test entire float64 range
 			for scale := int32(-308); scale <= 308; scale++ {
 				val := math.Pow10(int(scale))
-				n, err := FromFloat64(val, 1, -scale)
+				n, err := Float64(val, 1, -scale)
 				assert.NoError(t, err)
 				assert.Equal(t, "1", n.bigInt().String())
 			}
 
 			for scale := int32(-307); scale <= 306; scale++ {
 				val := 123 * math.Pow10(int(scale))
-				n, err := FromFloat64(val, 2, -scale-1)
+				n, err := Float64(val, 2, -scale-1)
 				assert.NoError(t, err)
 				assert.Equal(t, "12", n.bigInt().String())
-				n, err = FromFloat64(val, 3, -scale)
+				n, err = Float64(val, 3, -scale)
 				assert.NoError(t, err)
 				assert.Equal(t, "123", n.bigInt().String())
-				n, err = FromFloat64(val, 4, -scale+1)
+				n, err = Float64(val, 4, -scale+1)
 				assert.NoError(t, err)
 				assert.Equal(t, "1230", n.bigInt().String())
 			}
@@ -248,7 +248,7 @@ func TestDecimalFromFloat(t *testing.T) {
 	t.Run("float32", func(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(tt.expected, func(t *testing.T) {
-				n, err := FromFloat32(float32(tt.val), tt.precision, tt.scale)
+				n, err := Float32(float32(tt.val), tt.precision, tt.scale)
 				assert.NoError(t, err)
 
 				assert.Equal(t, tt.expected, big.NewFloat(float64(n.Float32(tt.scale))).Text('f', int(tt.scale)))
@@ -259,20 +259,20 @@ func TestDecimalFromFloat(t *testing.T) {
 			// test entire float32 range
 			for scale := int32(-38); scale <= 38; scale++ {
 				val := float32(math.Pow10(int(scale)))
-				n, err := FromFloat32(val, 1, -scale)
+				n, err := Float32(val, 1, -scale)
 				assert.NoError(t, err)
 				assert.Equal(t, "1", n.bigInt().String())
 			}
 
 			for scale := int32(-37); scale <= 36; scale++ {
 				val := 123 * float32(math.Pow10(int(scale)))
-				n, err := FromFloat32(val, 2, -scale-1)
+				n, err := Float32(val, 2, -scale-1)
 				assert.NoError(t, err)
 				assert.Equal(t, "12", n.bigInt().String())
-				n, err = FromFloat32(val, 3, -scale)
+				n, err = Float32(val, 3, -scale)
 				assert.NoError(t, err)
 				assert.Equal(t, "123", n.bigInt().String())
-				n, err = FromFloat32(val, 4, -scale+1)
+				n, err = Float32(val, 4, -scale+1)
 				assert.NoError(t, err)
 				assert.Equal(t, "1230", n.bigInt().String())
 			}
@@ -313,7 +313,7 @@ func TestFromString(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("%s_%d", tt.s, tt.expectedScale), func(t *testing.T) {
-			n, err := FromString(tt.s, 37, tt.expectedScale)
+			n, err := String(tt.s, 37, tt.expectedScale)
 			assert.NoError(t, err)
 
 			ex := Int64(tt.expected)

@@ -17,6 +17,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/parquet-go/parquet-go"
+	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming/int128"
 	"github.com/stretchr/testify/require"
 )
 
@@ -24,8 +26,8 @@ type validateTestCase struct {
 	input     any
 	output    any
 	err       bool
-	scale     int
-	precision int
+	scale     int32
+	precision int32
 }
 
 func TestTimeConverter(t *testing.T) {
@@ -114,19 +116,7 @@ func TestTimeConverter(t *testing.T) {
 	}
 }
 
-func runTestcase(t *testing.T, dc dataConverter, tc validateTestCase) {
-	t.Helper()
-	s := statsBuffer{}
-	v, err := dc.ValidateAndConvert(&s, tc.input)
-	if tc.err {
-		require.Errorf(t, err, "instead got: %#v", v)
-	} else {
-		require.NoError(t, err)
-		require.Equal(t, tc.output, v)
-	}
-}
-
-func TestIntConverter(t *testing.T) {
+func TestNumberConverter(t *testing.T) {
 	tests := []validateTestCase{
 		{
 			input:     12,
@@ -158,7 +148,7 @@ func TestIntConverter(t *testing.T) {
 	for _, tc := range tests {
 		tc := tc
 		t.Run("", func(t *testing.T) {
-			c := &intConverter{nullable: true, scale: tc.scale, precision: tc.precision}
+			c := &numberConverter{nullable: true, scale: tc.scale, precision: tc.precision}
 			runTestcase(t, c, tc)
 		})
 	}
@@ -191,7 +181,7 @@ func TestFixedConverter(t *testing.T) {
 	for _, tc := range tests {
 		tc := tc
 		t.Run("", func(t *testing.T) {
-			c := &sb16Converter{nullable: true, scale: tc.scale, precision: tc.precision}
+			c := &numberConverter{nullable: true, scale: tc.scale, precision: tc.precision}
 			runTestcase(t, c, tc)
 		})
 	}
@@ -251,7 +241,7 @@ func TestStringConverter(t *testing.T) {
 	for _, tc := range tests {
 		tc := tc
 		t.Run("", func(t *testing.T) {
-			c := &stringConverter{binaryConverter{nullable: true, maxLength: 56}}
+			c := &binaryConverter{nullable: true, maxLength: 56, utf8: true}
 			runTestcase(t, c, tc)
 		})
 	}
@@ -391,4 +381,71 @@ func TestByteWidth(t *testing.T) {
 			require.Equal(t, int(tc[1]), byteWidth(tc[0]))
 		})
 	}
+}
+
+type testTypedBuffer struct {
+	output any
+}
+
+func (b *testTypedBuffer) WriteNull() {
+	b.output = nil
+}
+func (b *testTypedBuffer) WriteInt128(v int128.Int128) {
+	switch {
+	case !int128.Greater(v, int128.MaxInt64):
+		b.output = v
+	case !int128.Less(v, int128.MinInt64):
+		b.output = v
+	default:
+		b.output = packInteger(v.Int64())
+	}
+}
+
+func (b *testTypedBuffer) WriteBool(v bool) {
+	b.output = v
+}
+func (b *testTypedBuffer) WriteFloat64(v float64) {
+	b.output = v
+}
+func (b *testTypedBuffer) WriteBytes(v []byte) {
+	b.output = v
+}
+func (b *testTypedBuffer) WriteTo(parquet.ColumnBuffer) error {
+	panic("unimplemented")
+}
+
+func runTestcase(t *testing.T, dc dataConverter, tc validateTestCase) {
+	t.Helper()
+	s := statsBuffer{}
+	b := testTypedBuffer{}
+	err := dc.ValidateAndConvert(&s, tc.input, &b)
+	if tc.err {
+		require.Errorf(t, err, "instead got: %#v", b.output)
+	} else {
+		require.NoError(t, err)
+		require.Equal(t, tc.output, b.output)
+	}
+}
+
+func packInteger(v int64) any {
+	if v < 0 {
+		switch {
+		case v >= math.MinInt8:
+			return int8(v)
+		case v >= math.MinInt16:
+			return int16(v)
+		case v >= math.MinInt32:
+			return int32(v)
+		}
+		return v
+	}
+	switch {
+	case v <= math.MaxInt8:
+		return int8(v)
+	case v <= math.MaxInt16:
+		return int16(v)
+	case v <= math.MaxInt32:
+		return int32(v)
+	}
+	return v
 }
