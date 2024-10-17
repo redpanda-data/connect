@@ -25,7 +25,17 @@ import (
 var randomSlotName string
 
 var pgStreamConfigSpec = service.NewConfigSpec().
-	Summary("Creates a PostgreSQL replication slot for Change Data Capture (CDC)").
+	Beta().
+	Categories("Services").
+	Version("0.0.1").
+	Summary(`Creates a PostgreSQL replication slot for Change Data Capture (CDC)
+		== Metadata
+
+This input adds the following metadata fields to each message:
+- streaming (Indicates whether the message is part of a streaming operation or snapshot processing)
+- table (Name of the table that the message originated from)
+- operation (Type of operation that generated the message, such as INSERT, UPDATE, or DELETE)
+		`).
 	Field(service.NewStringField("host").
 		Description("The hostname or IP address of the PostgreSQL instance.").
 		Example("123.0.0.1")).
@@ -308,6 +318,7 @@ func (p *pgStreamInput) Read(ctx context.Context) (*service.Message, service.Ack
 		}
 
 		connectMessage := service.NewMessage(mb)
+		connectMessage.MetaSet("streaming", "false")
 		connectMessage.MetaSet("table", snapshotMessage.Changes[0].Table)
 		connectMessage.MetaSet("operation", snapshotMessage.Changes[0].Operation)
 		if snapshotMessage.Changes[0].TableSnapshotProgress != nil {
@@ -327,6 +338,7 @@ func (p *pgStreamInput) Read(ctx context.Context) (*service.Message, service.Ack
 			return nil, nil, err
 		}
 		connectMessage := service.NewMessage(mb)
+		connectMessage.MetaSet("streaming", "true")
 		connectMessage.MetaSet("table", message.Changes[0].Table)
 		connectMessage.MetaSet("operation", message.Changes[0].Operation)
 		if message.WALLagBytes != nil {
