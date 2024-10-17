@@ -19,6 +19,7 @@ type StreamMessageChanges struct {
 	Data map[string]any `json:"data"`
 }
 
+// StreamMessageMetrics represents the metrics of a stream. Passed to each message
 type StreamMessageMetrics struct {
 	WALLagBytes *int64 `json:"wal_lag_bytes"`
 	IsStreaming bool   `json:"is_streaming"`

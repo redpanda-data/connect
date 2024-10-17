@@ -369,6 +369,7 @@ file:
 
 	for i := 0; i < 10; i++ {
 		_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", fake.Address().City(), fake.Time().RFC1123(time.Now()))
+		require.NoError(t, err)
 		_, err = db.Exec("INSERT INTO flights_non_streamed (name, created_at) VALUES ($1, $2);", fake.Address().City(), fake.Time().RFC1123(time.Now()))
 		require.NoError(t, err)
 	}
@@ -605,6 +606,7 @@ file:
 
 	for i := 0; i < 10; i++ {
 		_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", fake.Address().City(), fake.Time().RFC1123(time.Now()))
+		require.NoError(t, err)
 		_, err = db.Exec("INSERT INTO flights_non_streamed (name, created_at) VALUES ($1, $2);", fake.Address().City(), fake.Time().RFC1123(time.Now()))
 		require.NoError(t, err)
 	}
@@ -743,6 +745,7 @@ file:
 
 		for i := 0; i < 1000; i++ {
 			_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", fake.Address().City(), fake.Time().RFC1123(time.Now()))
+			require.NoError(t, err)
 			_, err = db.Exec("INSERT INTO flights_non_streamed (name, created_at) VALUES ($1, $2);", fake.Address().City(), fake.Time().RFC1123(time.Now()))
 			require.NoError(t, err)
 		}
@@ -880,6 +883,7 @@ file:
 
 		for i := 0; i < 1000; i++ {
 			_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", fake.Address().City(), fake.Time().RFC1123(time.Now()))
+			require.NoError(t, err)
 			_, err = db.Exec("INSERT INTO flights_non_streamed (name, created_at) VALUES ($1, $2);", fake.Address().City(), fake.Time().RFC1123(time.Now()))
 			require.NoError(t, err)
 		}

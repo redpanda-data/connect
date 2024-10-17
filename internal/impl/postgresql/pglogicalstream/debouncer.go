@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-// New returns a debounced function that takes another functions as its argument.
+// NewDebouncer New returns a debounced function that takes another functions as its argument.
 // This function will be called when the debounced function stops being called
 // for the given duration.
 // The debounced function can be invoked with different functions, if needed,

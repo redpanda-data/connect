@@ -148,14 +148,12 @@ func NewPgStream(config Config) (*Stream, error) {
 
 	snapshotter, err := NewSnapshotter(stream.dbConfig, stream.logger, version)
 	if err != nil {
-		if err != nil {
-			stream.logger.Errorf("Failed to open SQL connection to prepare snapshot: %v", err.Error())
-			if err = stream.cleanUpOnFailure(); err != nil {
-				stream.logger.Errorf("Failed to clean up resources on accident: %v", err.Error())
-			}
-
-			os.Exit(1)
+		stream.logger.Errorf("Failed to open SQL connection to prepare snapshot: %v", err.Error())
+		if err = stream.cleanUpOnFailure(); err != nil {
+			stream.logger.Errorf("Failed to clean up resources on accident: %v", err.Error())
 		}
+
+		os.Exit(1)
 	}
 	stream.snapshotter = snapshotter
 
@@ -268,6 +266,7 @@ func (s *Stream) GetProgress() *Report {
 	return s.monitor.Report()
 }
 
+// ConsumedCallback returns a channel that is used to tell the plugin to commit consumed offset
 func (s *Stream) ConsumedCallback() chan bool {
 	return s.consumedCallback
 }

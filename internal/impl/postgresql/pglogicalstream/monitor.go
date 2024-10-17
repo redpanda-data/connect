@@ -21,11 +21,13 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
+// Report is a structure that contains the current state of the Monitor
 type Report struct {
 	WalLagInBytes int64
 	TableProgress map[string]float64
 }
 
+// Monitor is a structure that allows monitoring the progress of snapshot ingestion and replication lag
 type Monitor struct {
 	// tableStat contains numbers of rows for each table determined at the moment of the snapshot creation
 	// this is used to calculate snapshot ingestion progress
@@ -45,6 +47,7 @@ type Monitor struct {
 	ctx          context.Context
 }
 
+// NewMonitor creates a new Monitor instance
 func NewMonitor(conf *pgconn.Config, logger *service.Logger, tables []string, slotName string) (*Monitor, error) {
 	dbConn, err := openPgConnectionFromConfig(*conf)
 	if err != nil {
@@ -85,6 +88,7 @@ func NewMonitor(conf *pgconn.Config, logger *service.Logger, tables []string, sl
 	return m, nil
 }
 
+// GetSnapshotProgressForTable returns the snapshot ingestion progress for a given table
 func (m *Monitor) GetSnapshotProgressForTable(table string) float64 {
 	m.lock.Lock()
 	defer m.lock.Unlock()
@@ -104,7 +108,7 @@ func (m *Monitor) readTablesStat(tables []string) error {
 
 	for _, table := range tables {
 		tableWithoutSchema := strings.Split(table, ".")[1]
-		query := fmt.Sprintf("SELECT COUNT(*) FROM %s", tableWithoutSchema)
+		query := "SELECT COUNT(*) FROM %s" + tableWithoutSchema
 
 		var count int64
 		err := m.dbConn.QueryRow(query).Scan(&count)
@@ -150,6 +154,7 @@ func (m *Monitor) readReplicationLag() {
 	m.replicationLagInBytes = lagbytes
 }
 
+// Report returns a snapshot of the monitor's state
 func (m *Monitor) Report() *Report {
 	m.lock.Lock()
 	defer m.lock.Unlock()
@@ -161,19 +166,9 @@ func (m *Monitor) Report() *Report {
 	}
 }
 
+// Stop stops the monitor
 func (m *Monitor) Stop() {
 	m.cancelTicker()
 	m.ticker.Stop()
 	m.dbConn.Close()
-}
-
-func (m *Monitor) startSync() {
-	for {
-		select {
-		case <-m.ctx.Done():
-			return
-		case <-m.ticker.C:
-			m.readReplicationLag()
-		}
-	}
 }

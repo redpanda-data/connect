@@ -19,6 +19,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
+// SnapshotCreationResponse is a structure that contains the name of the snapshot that was created
 type SnapshotCreationResponse struct {
 	ExportedSnapshotName string
 }
@@ -60,14 +61,14 @@ func NewSnapshotter(dbConf pgconn.Config, logger *service.Logger, version int) (
 
 func (s *Snapshotter) initSnapshotTransaction() (SnapshotCreationResponse, error) {
 	if s.version > 14 {
-		return SnapshotCreationResponse{}, errors.New("Snapshot is exported by default for versions above PG14")
+		return SnapshotCreationResponse{}, errors.New("snapshot is exported by default for versions above PG14")
 	}
 
 	var snapshotName sql.NullString
 
 	snapshotRow, err := s.pgConnection.Query(`BEGIN; SELECT pg_export_snapshot();`)
 	if err != nil {
-		return SnapshotCreationResponse{}, fmt.Errorf("Cant get exported snapshot for initial streaming %w", err)
+		return SnapshotCreationResponse{}, fmt.Errorf("cant get exported snapshot for initial streaming %w", err)
 	}
 
 	if snapshotRow.Err() != nil {
@@ -76,10 +77,10 @@ func (s *Snapshotter) initSnapshotTransaction() (SnapshotCreationResponse, error
 
 	if snapshotRow.Next() {
 		if err = snapshotRow.Scan(&snapshotName); err != nil {
-			return SnapshotCreationResponse{}, fmt.Errorf("Cant scan snapshot name into string: %w", err)
+			return SnapshotCreationResponse{}, fmt.Errorf("cant scan snapshot name into string: %w", err)
 		}
 	} else {
-		return SnapshotCreationResponse{}, errors.New("can get avg row size; 0 rows returned")
+		return SnapshotCreationResponse{}, errors.New("cant get avg row size; 0 rows returned")
 	}
 
 	return SnapshotCreationResponse{ExportedSnapshotName: snapshotName.String}, nil
@@ -91,7 +92,7 @@ func (s *Snapshotter) setTransactionSnapshotName(snapshotName string) {
 
 func (s *Snapshotter) prepare() error {
 	if s.snapshotName == "" {
-		return errors.New("Snapshot name is not set")
+		return errors.New("snapshot name is not set")
 	}
 
 	if _, err := s.pgConnection.Exec("BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ;"); err != nil {
