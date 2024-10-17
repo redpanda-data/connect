@@ -11,6 +11,7 @@
 package int128
 
 import (
+	"fmt"
 	"math"
 	"testing"
 
@@ -301,4 +302,76 @@ func TestParse(t *testing.T) {
 func TestString(t *testing.T) {
 	require.Equal(t, "-170141183460469231731687303715884105728", MinInt128.String())
 	require.Equal(t, "170141183460469231731687303715884105727", MaxInt128.String())
+}
+
+func TestByteWidth(t *testing.T) {
+	tests := [][2]int64{
+		{0, 1},
+		{1, 1},
+		{-1, 1},
+		{-16, 1},
+		{16, 1},
+		{math.MaxInt8 - 1, 1},
+		{math.MaxInt8, 1},
+		{math.MaxInt8 + 1, 2},
+		{math.MinInt8 - 1, 2},
+		{math.MinInt8, 1},
+		{math.MinInt8 + 1, 1},
+		{math.MaxInt16 - 1, 2},
+		{math.MaxInt16, 2},
+		{math.MaxInt16 + 1, 4},
+		{math.MinInt16 - 1, 4},
+		{math.MinInt16, 2},
+		{math.MinInt16 + 1, 2},
+		{math.MaxInt32 - 1, 4},
+		{math.MaxInt32, 4},
+		{math.MaxInt32 + 1, 8},
+		{math.MinInt32 - 1, 8},
+		{math.MinInt32, 4},
+		{math.MinInt32 + 1, 4},
+		{math.MaxInt64 - 1, 8},
+		{math.MaxInt64, 8},
+		// {math.MaxInt64 + 1, 8},
+		// {math.MinInt64 - 1, 8},
+		{math.MinInt64, 8},
+		{math.MinInt64 + 1, 8},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(fmt.Sprintf("byteWidth(%d)", tc[0]), func(t *testing.T) {
+			require.Equal(t, int(tc[1]), ByteWidth(Int64(tc[0])))
+		})
+	}
+	require.Equal(t, 16, ByteWidth(Sub(MinInt64, Int64(1))))
+	require.Equal(t, 16, ByteWidth(MinInt128))
+	require.Equal(t, 16, ByteWidth(Add(MaxInt64, Int64(1))))
+	require.Equal(t, 16, ByteWidth(MaxInt128))
+}
+
+func TestIncreaseScaleBy(t *testing.T) {
+	type TestCase struct {
+		n        Int128
+		scale    int32
+		overflow bool
+	}
+	tests := []TestCase{
+		{MinInt64, 1, false},
+		{MaxInt64, 1, false},
+		{MaxInt64, 2, false},
+		{MinInt64, 2, false},
+		{MaxInt128, 1, true},
+		{MinInt128, 1, true},
+		{MinInt128, 0, false},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run("", func(t *testing.T) {
+			v, err := Rescale(tc.n, 0, tc.scale)
+			if tc.overflow {
+				require.Error(t, err, "but got: %v", v)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
 }

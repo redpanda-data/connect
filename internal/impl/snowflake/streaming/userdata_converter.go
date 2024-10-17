@@ -161,16 +161,21 @@ func (b *boolBuffer) WriteBool(v bool) {
 	b.buf = append(b.buf, v)
 }
 
-func (b *boolBuffer) WriteTo(col parquet.ColumnBuffer) {
+func (b *boolBuffer) WriteTo(col parquet.ColumnBuffer) error {
 	c := col.(parquet.BooleanWriter)
+	var err error
 	for i, def := range b.defLevels {
 		if i%2 == 0 {
-			c.WriteBooleans(b.buf[:i])
+			_, err = c.WriteBooleans(b.buf[:i])
 			b.buf = b.buf[i:]
 		} else {
-			col.WriteValues(make([]parquet.Value, def))
+			_, err = col.WriteValues(make([]parquet.Value, def))
+		}
+		if err != nil {
+			return err
 		}
 	}
+	return nil
 }
 
 func (b *boolBuffer) Reset() {
@@ -178,29 +183,34 @@ func (b *boolBuffer) Reset() {
 	b.buf = b.buf[:0]
 }
 
-type float64Buffer struct {
+type doubleBuffer struct {
 	*baseTypedBuffer
 	buf []float64
 }
 
-func (b *float64Buffer) WriteFloat64(v float64) {
+func (b *doubleBuffer) WriteFloat64(v float64) {
 	b.WriteNotNull()
 	b.buf = append(b.buf, v)
 }
 
-func (b *float64Buffer) WriteTo(col parquet.ColumnBuffer) {
+func (b *doubleBuffer) WriteTo(col parquet.ColumnBuffer) error {
 	c := col.(parquet.DoubleWriter)
+	var err error
 	for i, def := range b.defLevels {
 		if i%2 == 0 {
-			c.WriteDoubles(b.buf[:i])
+			_, err = c.WriteDoubles(b.buf[:i])
 			b.buf = b.buf[i:]
 		} else {
-			col.WriteValues(make([]parquet.Value, def))
+			_, err = col.WriteValues(make([]parquet.Value, def))
+		}
+		if err != nil {
+			return err
 		}
 	}
+	return nil
 }
 
-func (b *float64Buffer) Reset() {
+func (b *doubleBuffer) Reset() {
 	b.baseTypedBuffer.Reset()
 	b.buf = b.buf[:0]
 }
@@ -224,16 +234,21 @@ func (b *byteArrayBuffer) WriteBytes(v []byte) {
 	b.buf = append(b.buf, v...)
 }
 
-func (b *byteArrayBuffer) WriteTo(col parquet.ColumnBuffer) {
+func (b *byteArrayBuffer) WriteTo(col parquet.ColumnBuffer) error {
 	c := col.(parquet.ByteArrayWriter)
+	var err error
 	for i, def := range b.defLevels {
 		if i%2 == 0 {
-			c.WriteByteArrays(b.buf[:i])
+			_, err = c.WriteByteArrays(b.buf[:i])
 			b.buf = b.buf[i:]
 		} else {
-			col.WriteValues(make([]parquet.Value, def))
+			_, err = col.WriteValues(make([]parquet.Value, def))
+		}
+		if err != nil {
+			return err
 		}
 	}
+	return nil
 }
 
 func (b *byteArrayBuffer) Reset() {
@@ -300,24 +315,34 @@ func (c numberConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typ
 	switch t := val.(type) {
 	case int:
 		v = int128.Int64(int64(t))
+		v, err = int128.Rescale(v, 0, c.scale)
 	case int8:
 		v = int128.Int64(int64(t))
+		v, err = int128.Rescale(v, 0, c.scale)
 	case int16:
 		v = int128.Int64(int64(t))
+		v, err = int128.Rescale(v, 0, c.scale)
 	case int32:
 		v = int128.Int64(int64(t))
+		v, err = int128.Rescale(v, 0, c.scale)
 	case int64:
 		v = int128.Int64(int64(t))
+		v, err = int128.Rescale(v, 0, c.scale)
 	case uint:
 		v = int128.Uint64(uint64(t))
+		v, err = int128.Rescale(v, 0, c.scale)
 	case uint8:
 		v = int128.Uint64(uint64(t))
+		v, err = int128.Rescale(v, 0, c.scale)
 	case uint16:
 		v = int128.Uint64(uint64(t))
+		v, err = int128.Rescale(v, 0, c.scale)
 	case uint32:
 		v = int128.Uint64(uint64(t))
+		v, err = int128.Rescale(v, 0, c.scale)
 	case uint64:
 		v = int128.Uint64(t)
+		v, err = int128.Rescale(v, 0, c.scale)
 	case float32:
 		v, err = int128.Float32(t, c.precision, c.scale)
 	case float64:
@@ -329,9 +354,17 @@ func (c numberConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typ
 		var i int64
 		i, err = bloblang.ValueAsInt64(val)
 		v = int128.Int64(i)
+		v, err = int128.Rescale(v, 0, c.scale)
 	}
 	if err != nil {
 		return err
+	}
+	if !v.FitsInPrecision(c.precision) {
+		return fmt.Errorf(
+			"number (%s) does not fit within specified precision: %d",
+			v.String(),
+			c.precision,
+		)
 	}
 	if stats.first {
 		stats.minIntVal = v
@@ -480,9 +513,11 @@ func (c jsonObjectConverter) ValidateAndConvert(stats *statsBuffer, val any, buf
 }
 
 type timestampConverter struct {
-	nullable bool
-	scale    int32
-	tz       bool
+	nullable         bool
+	scale, precision int32
+	includeTZ        bool
+	trimTZ           bool
+	defaultTZ        *time.Location
 }
 
 var timestampFormats = []string{
@@ -491,8 +526,12 @@ var timestampFormats = []string{
 	"2006-01-02 15:04:05.000",
 	"2006-01-02T15:04:05.000",
 	"2006-01-02T15:04:05.000",
+	"2006-01-02T15:04:05.000-0700",
+	"2006-01-02T15:04:05.000-07:00",
 	"2006-01-02 15:04:05.000-0700",
 	"2006-01-02 15:04:05.000-07:00",
+	"2006-01-02 15:04:05.000000000-07:00",
+	"2006-01-02T15:04:05.000000000-07:00",
 }
 
 func (c timestampConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typedBuffer) error {
@@ -505,31 +544,40 @@ func (c timestampConverter) ValidateAndConvert(stats *statsBuffer, val any, buf 
 		return nil
 	}
 	var s string
+	var t time.Time
+	var err error
 	switch v := val.(type) {
 	case []byte:
 		s = string(v)
 	case string:
 		s = v
+	default:
+		t, err = bloblang.ValueAsTimestamp(val)
 	}
-	var t time.Time
-	var err error
 	if s != "" {
+		location := c.defaultTZ
+		if c.trimTZ {
+			location = time.UTC
+		}
 		for _, format := range timestampFormats {
-			t, err = time.Parse(format, s)
+			t, err = time.ParseInLocation(format, s, location)
 			if err == nil {
 				break
 			}
 		}
-	} else {
-		err = errors.ErrUnsupported
-	}
-	if err != nil {
-		t, err = bloblang.ValueAsTimestamp(val)
 	}
 	if err != nil {
 		return fmt.Errorf("unable to coerse TIMESTAMP value from %v", val)
 	}
-	v := snowflakeTimestampInt(t, c.scale, c.tz)
+	v := snowflakeTimestampInt(t, c.scale, c.includeTZ)
+	if !v.FitsInPrecision(c.precision) {
+		return fmt.Errorf(
+			"unable to fit timestamp (%s -> %s) within required precision: %v",
+			t.Format(time.RFC3339Nano),
+			v.String(),
+			c.precision,
+		)
+	}
 	if stats.first {
 		stats.minIntVal = v
 		stats.maxIntVal = v

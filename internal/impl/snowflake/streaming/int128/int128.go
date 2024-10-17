@@ -134,17 +134,9 @@ func Sub(a, b Int128) Int128 {
 
 // Mul computes a * b
 func Mul(a, b Int128) Int128 {
-	// algorithm is ported from absl::int128
-	a32 := a.lo >> 32
-	a00 := a.lo & 0xFFFFFFFF
-	b32 := b.lo >> 32
-	b00 := b.lo & 0xFFFFFFFF
-	hi := uint64(a.hi)*b.lo + a.lo*uint64(b.hi) + a32*b32
-	lo := a00 * b00
-	i := Int128{int64(hi), lo}
-	i = Add(i, Shl(Uint64(a32*b00), 32))
-	i = Add(i, Shl(Uint64(a00*b32), 32))
-	return i
+	hi, lo := bits.Mul64(a.lo, b.lo)
+	hi += (uint64(a.hi) * b.lo) + (a.lo * uint64(b.hi))
+	return Int128{hi: int64(hi), lo: lo}
 }
 
 func fls128(n Int128) int {
@@ -418,8 +410,10 @@ func ByteWidth(v Int128) int {
 			return 2
 		case !Less(v, MinInt32):
 			return 4
+		case !Less(v, MinInt64):
+			return 8
 		}
-		return 8
+		return 16
 	}
 	switch {
 	case !Greater(v, MaxInt8):
@@ -428,6 +422,8 @@ func ByteWidth(v Int128) int {
 		return 2
 	case !Greater(v, MaxInt32):
 		return 4
+	case !Greater(v, MaxInt64):
+		return 8
 	}
-	return 8
+	return 16
 }

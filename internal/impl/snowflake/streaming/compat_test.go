@@ -130,7 +130,7 @@ func TestSnowflakeTimestamp(t *testing.T) {
 	type TestCase struct {
 		timestamp string
 		value     int128.Int128
-		scale     int
+		scale     int32
 		tz        bool
 	}
 	cases := [...]TestCase{

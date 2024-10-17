@@ -30,6 +30,10 @@ import (
 // FitsInPrecision returns true or false if the value currently held by
 // n would fit within precision (0 < prec <= 38) without losing any data.
 func (n Int128) FitsInPrecision(prec int32) bool {
+	if prec == 0 {
+		// Precision 0 is valid in snowflake, even if it seems useless
+		return n == Int128{}
+	}
 	return Less(n.Abs(), Pow10Table[prec])
 }
 
@@ -219,6 +223,56 @@ func (n Int128) Float64(scale int32) float64 {
 		return -float64Positive(Neg(n), scale)
 	}
 	return float64Positive(n, scale)
+}
+
+func rescaleWouldCauseDataLoss(n Int128, deltaScale int32, multiplier Int128) (out Int128, loss bool) {
+	var (
+		value, result, remainder *big.Int
+	)
+	value = n.bigInt()
+	if deltaScale < 0 {
+		result, remainder = (&big.Int{}).QuoRem(value, multiplier.bigInt(), (&big.Int{}))
+		bi, ok := bigInt(result)
+		if !ok {
+			return out, true
+		}
+		return bi, remainder.Cmp(big.NewInt(0)) != 0
+	}
+
+	result = (&big.Int{}).Mul(value, multiplier.bigInt())
+	var ok bool
+	out, ok = bigInt(result)
+	if !ok {
+		return out, true
+	}
+	cmp := result.Cmp(value)
+	if n.IsNegative() {
+		loss = cmp == 1
+	} else {
+		loss = cmp == -1
+	}
+	return
+}
+
+// Rescale returns a new decimal128.Num with the value updated assuming
+// the current value is scaled to originalScale with the new value scaled
+// to newScale. If rescaling this way would cause data loss, an error is
+// returned instead.
+func Rescale(n Int128, originalScale, newScale int32) (out Int128, err error) {
+	if originalScale == newScale {
+		return n, nil
+	}
+
+	deltaScale := newScale - originalScale
+	absDeltaScale := int32(math.Abs(float64(deltaScale)))
+
+	multiplier := Pow10Table[absDeltaScale]
+	var wouldHaveLoss bool
+	out, wouldHaveLoss = rescaleWouldCauseDataLoss(n, deltaScale, multiplier)
+	if wouldHaveLoss {
+		err = fmt.Errorf("value (%s) out of range (scale=%d)", n.String(), deltaScale)
+	}
+	return
 }
 
 var (

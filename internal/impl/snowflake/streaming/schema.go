@@ -13,10 +13,10 @@ package streaming
 import (
 	"fmt"
 	"maps"
-	"math"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/parquet-go/parquet-go"
@@ -89,6 +89,7 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[stri
 		id := int(column.Ordinal)
 		var n parquet.Node
 		var converter dataConverter
+		var buffer typedBuffer
 		logicalType := strings.ToLower(column.LogicalType)
 		switch logicalType {
 		case "fixed":
@@ -96,18 +97,22 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[stri
 			if err != nil {
 				return nil, nil, nil, err
 			}
+			buffer = &int128Buffer{buf: []int128.Int128{}}
 		case "array":
 			typeMetadata[fmt.Sprintf("%d:obj_enc", id)] = "1"
 			n = parquet.String()
 			converter = jsonArrayConverter{jsonConverter{column.Nullable, maxJSONSize}}
+			buffer = &byteArrayBuffer{buf: []byte{}}
 		case "object":
 			typeMetadata[fmt.Sprintf("%d:obj_enc", id)] = "1"
 			n = parquet.String()
 			converter = jsonObjectConverter{jsonConverter{column.Nullable, maxJSONSize}}
+			buffer = &byteArrayBuffer{buf: []byte{}}
 		case "variant":
 			typeMetadata[fmt.Sprintf("%d:obj_enc", id)] = "1"
 			n = parquet.String()
 			converter = jsonConverter{column.Nullable, maxJSONSize}
+			buffer = &byteArrayBuffer{buf: []byte{}}
 		case "any", "text", "char":
 			n = parquet.String()
 			byteLength := 16 * humanize.MiByte
@@ -116,6 +121,7 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[stri
 			}
 			byteLength = min(byteLength, 16*humanize.MiByte)
 			converter = binaryConverter{nullable: column.Nullable, maxLength: byteLength, utf8: true}
+			buffer = &byteArrayBuffer{buf: []byte{}}
 		case "binary":
 			n = parquet.Leaf(parquet.ByteArrayType)
 			// Why binary data defaults to 8MiB instead of the 16MiB for strings... ¯\_(ツ)_/¯
@@ -125,12 +131,15 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[stri
 			}
 			byteLength = min(byteLength, 16*humanize.MiByte)
 			converter = binaryConverter{nullable: column.Nullable, maxLength: byteLength}
+			buffer = &byteArrayBuffer{buf: []byte{}}
 		case "boolean":
 			n = parquet.Leaf(parquet.BooleanType)
 			converter = boolConverter{column.Nullable}
+			buffer = &boolBuffer{buf: []bool{}}
 		case "real":
 			n = parquet.Leaf(parquet.DoubleType)
 			converter = doubleConverter{column.Nullable}
+			buffer = &doubleBuffer{buf: []float64{}}
 		case "timestamp_tz", "timestamp_ltz", "timestamp_ntz":
 			if column.PhysicalType == "SB8" {
 				n = parquet.Leaf(parquet.Int64Type)
@@ -141,8 +150,14 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[stri
 			if column.Scale != nil {
 				scale = *column.Scale
 			}
-			tz := logicalType != "timestamp_ntz"
-			converter = timestampConverter{column.Nullable, scale, tz}
+			converter = timestampConverter{
+				nullable:  column.Nullable,
+				scale:     scale,
+				includeTZ: logicalType == "timestamp_tz",
+				trimTZ:    logicalType == "timestamp_ntz",
+				defaultTZ: time.UTC,
+			}
+			buffer = &int128Buffer{buf: []int128.Int128{}}
 		case "time":
 			t := parquet.Int32Type
 			precision := 9
@@ -156,9 +171,11 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[stri
 			}
 			n = parquet.Decimal(int(scale), precision, t)
 			converter = timeConverter{column.Nullable, scale}
+			buffer = &int128Buffer{buf: []int128.Int128{}}
 		case "date":
 			n = parquet.Leaf(parquet.Int32Type)
 			converter = dateConverter{column.Nullable}
+			buffer = &int128Buffer{buf: []int128.Int128{}}
 		default:
 			return nil, nil, nil, fmt.Errorf("unsupported logical column type: %s", column.LogicalType)
 		}
@@ -177,10 +194,10 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[stri
 		name := normalizeColumnName(column.Name)
 		groupNode[name] = n
 		transformers[name] = &dataTransformer{
-			name:      column.Name,
 			converter: converter,
 			stats:     &statsBuffer{columnID: id},
 			column:    &column,
+			buf:       buffer,
 		}
 	}
 	return parquet.NewSchema("bdec", groupNode), transformers, typeMetadata, nil
@@ -271,7 +288,7 @@ func computeColumnEpInfo(stats map[string]*dataTransformer) map[string]fileColum
 			s := truncateBytesAsHex(stat.maxStrVal, true)
 			maxStrVal = &s
 		}
-		info[transformer.name] = fileColumnProperties{
+		info[transformer.column.Name] = fileColumnProperties{
 			ColumnOrdinal:  int32(stat.columnID),
 			NullCount:      stat.nullCount,
 			MinStrValue:    minStrVal,
@@ -353,29 +370,6 @@ func logicalTypeOrdinal(str string) int {
 		return 11
 	}
 	return -1
-}
-
-func byteWidth(v int64) int {
-	if v < 0 {
-		switch {
-		case v >= math.MinInt8:
-			return 1
-		case v >= math.MinInt16:
-			return 2
-		case v >= math.MinInt32:
-			return 4
-		}
-		return 8
-	}
-	switch {
-	case v <= math.MaxInt8:
-		return 1
-	case v <= math.MaxInt16:
-		return 2
-	case v <= math.MaxInt32:
-		return 4
-	}
-	return 8
 }
 
 func maxPrecisionForByteWidth(byteWidth int) int32 {

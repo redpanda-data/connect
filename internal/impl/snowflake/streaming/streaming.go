@@ -359,6 +359,7 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 	}
 	uploadStartTime := time.Now()
 	fileMD5Hash := md5.Sum(encrypted)
+	return stats, err
 	uploaderResult := c.uploader.Load()
 	if uploaderResult.err != nil {
 		return stats, fmt.Errorf("failed to acquire stage uploader: %w", uploaderResult.err)
