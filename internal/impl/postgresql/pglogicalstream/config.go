@@ -8,23 +8,44 @@
 
 package pglogicalstream
 
-type TlsVerify string
+import "github.com/redpanda-data/benthos/v4/public/service"
 
-const TlsNoVerify TlsVerify = "none"
-const TlsRequireVerify TlsVerify = "require"
-
+// Config is the configuration for the pglogicalstream plugin
 type Config struct {
-	DbHost                     string    `yaml:"db_host"`
-	DbPassword                 string    `yaml:"db_password"`
-	DbUser                     string    `yaml:"db_user"`
-	DbPort                     int       `yaml:"db_port"`
-	DbName                     string    `yaml:"db_name"`
-	DbSchema                   string    `yaml:"db_schema"`
-	DbTables                   []string  `yaml:"db_tables"`
-	ReplicationSlotName        string    `yaml:"replication_slot_name"`
-	TlsVerify                  TlsVerify `yaml:"tls_verify"`
-	StreamOldData              bool      `yaml:"stream_old_data"`
-	SeparateChanges            bool      `yaml:"separate_changes"`
-	SnapshotMemorySafetyFactor float64   `yaml:"snapshot_memory_safety_factor"`
-	BatchSize                  int       `yaml:"batch_size"`
+	// DbHost is the host of the PostgreSQL instance
+	DBHost string `yaml:"db_host"`
+	// DbPassword is the password for the PostgreSQL instance
+	DBPassword string `yaml:"db_password"`
+	// DbUser is the user for the PostgreSQL instance
+	DBUser string `yaml:"db_user"`
+	// DbPort is the port of the PostgreSQL instance
+	DBPort int `yaml:"db_port"`
+	// DbName is the name of the database to connect to
+	DBName string `yaml:"db_name"`
+	// DbSchema is the schema to stream changes from
+	DBSchema string `yaml:"db_schema"`
+	// DbTables is the tables to stream changes from
+	DBTables []string `yaml:"db_tables"`
+	// TlsVerify is the TLS verification configuration
+	TLSVerify TLSVerify `yaml:"tls_verify"`
+	// PgConnRuntimeParam is the runtime parameter for the PostgreSQL connection
+	PgConnRuntimeParam string `yaml:"pg_conn_options"`
+
+	// ReplicationSlotName is the name of the replication slot to use
+	ReplicationSlotName string `yaml:"replication_slot_name"`
+	// TemporaryReplicationSlot is whether to use a temporary replication slot
+	TemporaryReplicationSlot bool `yaml:"temporary_replication_slot"`
+	// StreamOldData is whether to stream all existing data
+	StreamOldData bool `yaml:"stream_old_data"`
+	// SnapshotMemorySafetyFactor is the memory safety factor for streaming snapshot
+	SnapshotMemorySafetyFactor float64 `yaml:"snapshot_memory_safety_factor"`
+	// DecodingPlugin is the decoding plugin to use
+	DecodingPlugin string `yaml:"decoding_plugin"`
+	// BatchSize is the batch size for streaming
+	BatchSize int `yaml:"batch_size"`
+
+	// StreamUncommitted is whether to stream uncommitted messages before receiving commit message
+	StreamUncomited bool `yaml:"stream_uncommitted"`
+
+	logger *service.Logger
 }

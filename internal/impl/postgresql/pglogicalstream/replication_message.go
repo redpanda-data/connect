@@ -106,7 +106,7 @@ func (m *baseMessage) SetType(t MessageType) {
 // Decode parse src into message struct. The src must contain the complete message starts after
 // the first message type byte.
 func (m *baseMessage) Decode(_ []byte) error {
-	return fmt.Errorf("message decode not implemented")
+	return errors.New("message decode not implemented")
 }
 
 func (m *baseMessage) lengthError(name string, expectedLen, actualLen int) error {
