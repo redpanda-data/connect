@@ -83,7 +83,10 @@ func TestSnowflake(t *testing.T) {
         F REAL,
         G NUMBER,
         H TIME,
-        I DATE
+        I DATE,
+        J TIMESTAMP_LTZ,
+        K TIMESTAMP_NTZ,
+        L TIMESTAMP_TZ
       );`, channelOpts.TableName, channelOpts.TableName),
 		Parameters: map[string]string{
 			"MULTI_STATEMENT_COUNT": "0",
@@ -108,7 +111,10 @@ func TestSnowflake(t *testing.T) {
       "F": 3.14,
       "G": -1,
       "H": "13:02:06",
-      "I": "2007/11/3"
+      "I": "2007/11/3",
+      "J": "2024-01-01 12:00:00.000 -0800",
+      "K": "2024-01-01 12:00:00.000 -0800",
+      "L": "2024-01-01 12:00:00.000 -0800"
     }`),
 		msg(`{
       "A": "baz",
@@ -119,7 +125,10 @@ func TestSnowflake(t *testing.T) {
       "F": 42.12345,
       "G": 9,
       "H": "13:02:06.123456789",
-      "I": "3-04-2019"
+      "I": "3-04-2019",
+      "J": "2024-01-02 12:00:00.000 -0800",
+      "K": "2024-01-01 12:00:00.000 -0800",
+      "L": "2024-01-01 12:00:00.000 -0800"
     }`),
 		msg(`{
       "A": "foo",
@@ -130,7 +139,10 @@ func TestSnowflake(t *testing.T) {
       "F": -0.0,
       "G": 42,
       "H": 1728680106,
-      "I": 1728680106
+      "I": 1728680106,
+      "J": "2024-01-03 12:00:00.000 -0800",
+      "K": "2024-01-01 12:00:00.000 -0800",
+      "L": "2024-01-01 12:00:00.000 -0800"
     }`),
 	})
 	require.NoError(t, err)

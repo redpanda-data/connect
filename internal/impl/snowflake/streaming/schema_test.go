@@ -17,7 +17,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming/int128"
 	"github.com/stretchr/testify/require"
 )
 
@@ -185,7 +184,7 @@ func TestFixedConverter(t *testing.T) {
 	tests := []validateTestCase{
 		{
 			input:     12,
-			output:    int128.Int64(12).Bytes(),
+			output:    int8(12),
 			precision: 2,
 		},
 	}
@@ -322,19 +321,19 @@ func TestDateConverter(t *testing.T) {
 	tests := []validateTestCase{
 		{
 			input:  "1970-1-10",
-			output: int64(9),
+			output: int8(9),
 		},
 		{
 			input:  1674478926,
-			output: int64(19380),
+			output: int16(19380),
 		},
 		{
 			input:  "1967-06-23",
-			output: int64(-923),
+			output: int16(-923),
 		},
 		{
 			input:  "2020-07-21",
-			output: int64(18464),
+			output: int16(18464),
 		},
 		{
 			input: time.Time{}.AddDate(10_000, 0, 0),

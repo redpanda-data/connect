@@ -16,7 +16,9 @@ import (
 	"encoding/hex"
 	"slices"
 	"testing"
+	"time"
 
+	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming/int128"
 	"github.com/stretchr/testify/require"
 )
 
@@ -122,4 +124,64 @@ func TestColumnNormalization(t *testing.T) {
 	require.Equal(t, `"FOO \"BAZ"`, normalizeColumnName(`"foo \"baz"`))
 	require.Equal(t, `"FOO \"BAZ"`, normalizeColumnName(`"foo \"baz"`))
 	require.Equal(t, `foo" bar "baz`, normalizeColumnName(`"foo"" bar ""baz"`))
+}
+
+func TestSnowflakeTimestamp(t *testing.T) {
+	type TestCase struct {
+		timestamp string
+		value     int128.Int128
+		scale     int
+		tz        bool
+	}
+	cases := [...]TestCase{
+		{
+			timestamp: "2021-01-01 01:00:00.123",
+			value:     int128.Int64(1609462800123000000),
+			scale:     9,
+		},
+		{
+			timestamp: "1971-01-01 00:00:00.001",
+			value:     int128.Mul(int128.Int64(31536000001), int128.Int64(1000000)),
+			scale:     9,
+		},
+		{
+			timestamp: "1971-01-01 00:00:00.000",
+			value:     int128.Mul(int128.Int64(31536000000), int128.Int64(1000000)),
+			scale:     9,
+		},
+		{
+			timestamp: "2021-01-01 01:00:00.123",
+			value:     int128.Int64(1609462800123000000),
+			scale:     9,
+		},
+		{
+			timestamp: "2021-01-01 01:00:00.123",
+			value:     int128.Int64(16094628001230),
+			scale:     4,
+		},
+		{
+			timestamp: "2021-01-01 01:00:00.123+01:00",
+			value:     int128.Int64(263693795348153820),
+			scale:     4,
+			tz:        true,
+		},
+		{
+			timestamp: "2021-01-01 01:00:00.123+01:00",
+			value:     int128.MustParse("26369379534815232001500"),
+			scale:     9,
+			tz:        true,
+		},
+	}
+	for _, c := range cases {
+		c := c
+		t.Run("", func(t *testing.T) {
+			layout := "2006-01-02 15:04:05.000"
+			if c.tz {
+				layout = "2006-01-02 15:04:05.000-07:00"
+			}
+			parsed, err := time.Parse(layout, c.timestamp)
+			require.NoError(t, err)
+			require.Equal(t, c.value, snowflakeTimestampInt(parsed, c.scale, c.tz))
+		})
+	}
 }

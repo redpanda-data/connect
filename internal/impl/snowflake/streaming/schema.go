@@ -28,15 +28,27 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming/int128"
 )
 
+var pow10TableInt32 []int32
 var pow10TableInt64 []int64
 
 func init() {
-	pow10TableInt64 = make([]int64, 19)
-	n := int64(1)
-	pow10TableInt64[0] = n
-	for i := range pow10TableInt64[1:] {
-		n = 10 * n
-		pow10TableInt64[i+1] = n
+	{
+		pow10TableInt64 = make([]int64, 19)
+		n := int64(1)
+		pow10TableInt64[0] = n
+		for i := range pow10TableInt64[1:] {
+			n = 10 * n
+			pow10TableInt64[i+1] = n
+		}
+	}
+	{
+		pow10TableInt32 = make([]int32, 19)
+		n := int32(1)
+		pow10TableInt32[0] = n
+		for i := range pow10TableInt32[1:] {
+			n = 10 * n
+			pow10TableInt32[i+1] = n
+		}
 	}
 }
 
@@ -549,7 +561,7 @@ func (c timestampConverter) ValidateAndConvert(buf *statsBuffer, val any) (any, 
 	if err != nil {
 		return nil, fmt.Errorf("unable to coerse TIMESTAMP value from %v", val)
 	}
-	v := snowflakeTimestampInt(t, c.scale, c.tz)
+	v := snowflakeTimestampInt(t, c.scale, c.tz).Int64()
 	if buf.first {
 		buf.minIntVal = v
 		buf.maxIntVal = v

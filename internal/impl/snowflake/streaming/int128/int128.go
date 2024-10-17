@@ -17,6 +17,7 @@ package int128
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math"
 	"math/big"
 	"math/bits"
@@ -34,7 +35,20 @@ var (
 	MinInt16  = Int64(math.MinInt16)
 	MaxInt8   = Int64(math.MaxInt8)
 	MinInt8   = Int64(math.MinInt8)
+
+	// For Snowflake, we need to do some quick multiplication to scale numbers
+	// to make that fast we precompute some powers of 10 in a lookup table.
+	Pow10Table = [10]Int128{}
 )
+
+func init() {
+	n := Int64(1)
+	Pow10Table[0] = n
+	for i := range Pow10Table[1:] {
+		n = Mul(n, Int64(10))
+		Pow10Table[i+1] = n
+	}
+}
 
 // Int128 is a *signed* int128 type that is more efficent than big.Int
 //
@@ -94,6 +108,73 @@ func Mul(a, b Int128) Int128 {
 	return i
 }
 
+func fls128(n Int128) int {
+	if n.hi != 0 {
+		return 127 - bits.LeadingZeros64(uint64(n.hi))
+	}
+	return 64 - bits.LeadingZeros64(n.lo)
+}
+
+// Div computes a / b
+//
+// Division by zero panics
+func Div(dividend, divisor Int128) Int128 {
+	// algorithm is ported from absl::int128
+	if divisor == (Int128{}) {
+		panic("int128 division by zero")
+	}
+	negateQuotient := (dividend.hi < 0) != (divisor.hi < 0)
+	if dividend.IsNegative() {
+		dividend = Neg(dividend)
+	}
+	if divisor.IsNegative() {
+		divisor = Neg(divisor)
+	}
+	if divisor == dividend {
+		return Int64(1)
+	}
+	if uGt(divisor, dividend) {
+		return Int128{}
+	}
+	denominator := divisor
+	var quotient Int128
+	shift := fls128(dividend) - fls128(denominator)
+	denominator = Shl(denominator, uint(shift))
+	// Uses shift-subtract algorithm to divide dividend by denominator. The
+	// remainder will be left in dividend.
+	for i := 0; i <= shift; i++ {
+		quotient = Shl(quotient, 1)
+		if uGt(dividend, denominator) {
+			dividend = Sub(dividend, denominator)
+			quotient = Or(quotient, Int64(1))
+		}
+		denominator = uShr(denominator, 1)
+	}
+	if negateQuotient {
+		quotient = Neg(quotient)
+	}
+	return quotient
+}
+
+// uShr is unsigned shift right (no sign extending)
+func uShr(v Int128, amt uint) Int128 {
+	n := amt - 64
+	m := 64 - amt
+	return Int128{
+		hi: int64(uint64(v.hi) >> amt),
+		lo: v.lo>>amt | uint64(v.hi)>>n | uint64(v.hi)<<m,
+	}
+}
+
+// uGt is unsigned greater than comparison
+func uGt(a, b Int128) bool {
+	if a.hi == b.hi {
+		return a.lo >= b.lo
+	} else {
+		return uint64(a.hi) >= uint64(b.hi)
+	}
+}
+
 // Neg computes -v
 func Neg(v Int128) Int128 {
 	return Sub(Int128{}, v)
@@ -111,6 +192,14 @@ func Shl(v Int128, amt uint) Int128 {
 	return Int128{
 		hi: v.hi<<amt | int64(v.lo<<n) | int64(v.lo>>m),
 		lo: v.lo << amt,
+	}
+}
+
+// Or returns a | i
+func Or(a Int128, b Int128) Int128 {
+	return Int128{
+		hi: a.hi | b.hi,
+		lo: a.lo | b.lo,
 	}
 }
 
@@ -155,12 +244,49 @@ func (i Int128) Int64() int64 {
 	return int64(i.lo)
 }
 
+// MustParse converted a base 10 formatted string into an Int128
+// and panics otherwise
+//
+// Only use for testing.
+func MustParse(str string) Int128 {
+	n, ok := Parse(str)
+	if !ok {
+		panic(fmt.Sprintf("unable to parse %q into Int128", str))
+	}
+	return n
+}
+
+// Parse converted a base 10 formatted string into an Int128
+//
+// Not fast, but simple
+func Parse(str string) (n Int128, ok bool) {
+	var bi *big.Int
+	bi, ok = big.NewInt(0).SetString(str, 10)
+	if !ok {
+		return
+	}
+	// Check for what would be overflow
+	if bi.Cmp(MinInt128.bigInt()) < 0 {
+		ok = false
+		return
+	} else if bi.Cmp(MaxInt128.bigInt()) > 0 {
+		ok = false
+		return
+	}
+	b := make([]byte, 16)
+	b = bi.FillBytes(b)
+	n = Bytes(b)
+	if bi.Sign() < 0 {
+		n = Neg(n)
+	}
+	return
+}
+
 // String returns the number as base 10 formatted string.
 //
 // This is not fast but it isn't on a hot path.
 func (i Int128) String() string {
-	v, _ := i.MarshalJSON()
-	return string(v)
+	return string(i.bigInt().Append(nil, 10))
 }
 
 // MarshalJSON implements JSON serialization of
@@ -169,9 +295,13 @@ func (i Int128) String() string {
 //
 // This is not fast but it isn't on a hot path.
 func (i Int128) MarshalJSON() ([]byte, error) {
+	return i.bigInt().Append(nil, 10), nil
+}
+
+func (i Int128) bigInt() *big.Int {
 	hi := big.NewInt(i.hi)
 	hi = hi.Lsh(hi, 64)
 	lo := &big.Int{}
 	lo.SetUint64(i.lo)
-	return hi.Or(hi, lo).Append(nil, 10), nil
+	return hi.Or(hi, lo)
 }
