@@ -12,7 +12,6 @@ package streaming
 
 import (
 	"bytes"
-	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -33,227 +32,122 @@ type typedBuffer interface {
 	WriteFloat64(float64)
 	WriteBytes([]byte) // should never be nil
 
-	WriteTo(parquet.ColumnBuffer) error
-	Reset()
+	// Prepare for writing values to the following matrix.
+	// Must be called before writing, and Flush must be
+	// called after.
+	// The matrix size must be pre-allocated to be the size of
+	// the data that will be written - this buffer will not modify
+	// the size of the data.
+	Prepare(matrix []parquet.Value, columnIndex, rowWidth int)
+	// Flush the values using the specific type to matrix
+	// most types of buffers don't support changing the type at
+	// flush time, except for integer types which are narrowed
+	// to use the minimum amount of storage.
+	Flush(parquet.Type) error
 }
 
-type baseTypedBuffer struct {
-	defLevels   []int
-	currentDef  *int
-	writingNull bool
+type typedBufferImpl struct {
+	matrix      []parquet.Value
+	columnIndex int
+	rowWidth    int
+	currentRow  int
 }
 
-func (b *baseTypedBuffer) WriteNull() {
-	if b.writingNull {
-		*b.currentDef = *b.currentDef + 1
-		return
-	}
-	b.defLevels = append(b.defLevels, 1)
-	b.writingNull = true
-	b.currentDef = &b.defLevels[len(b.defLevels)-1]
+func (b *typedBufferImpl) WriteValue(v parquet.Value) {
+	b.matrix[(b.currentRow*b.rowWidth)+b.columnIndex] = v
+	b.currentRow++
 }
-func (b *baseTypedBuffer) WriteNotNull() {
-	if !b.writingNull {
-		*b.currentDef = *b.currentDef + 1
-		return
-	}
-	b.defLevels = append(b.defLevels, 1)
-	b.writingNull = false
-	b.currentDef = &b.defLevels[len(b.defLevels)-1]
+func (b *typedBufferImpl) WriteNull() {
+	b.WriteValue(parquet.NullValue())
 }
-func (*baseTypedBuffer) WriteInt128(int128.Int128) {
-	panic("unexpected type")
+func (b *typedBufferImpl) WriteInt128(v int128.Int128) {
+	b.WriteValue(parquet.FixedLenByteArrayValue(v.Bytes()))
 }
-func (*baseTypedBuffer) WriteBool(bool) {
-	panic("unexpected type")
+func (b *typedBufferImpl) WriteBool(v bool) {
+	b.WriteValue(parquet.BooleanValue(v))
 }
-func (*baseTypedBuffer) WriteFloat64(float64) {
-	panic("unexpected type")
+func (b *typedBufferImpl) WriteFloat64(v float64) {
+	b.WriteValue(parquet.DoubleValue(v))
 }
-func (*baseTypedBuffer) WriteBytes([]byte) {
-	panic("unexpected type")
+func (b *typedBufferImpl) WriteBytes(v []byte) {
+	b.WriteValue(parquet.ByteArrayValue(v))
 }
-func (b *baseTypedBuffer) Reset() {
-	if b.defLevels == nil {
-		b.defLevels = []int{0}
-	}
-	b.defLevels = b.defLevels[:1]
-	b.currentDef = &b.defLevels[0]
-	b.writingNull = false
+func (b *typedBufferImpl) Prepare(matrix []parquet.Value, columnIndex, rowWidth int) {
+	b.currentRow = 0
+	b.matrix = matrix
+	b.columnIndex = columnIndex
+	b.rowWidth = rowWidth
+}
+func (b *typedBufferImpl) Flush(parquet.Type) error {
+	return nil
 }
 
+// int128Buffer is special in that it holds values out then
+// writes them in flush using a specific type.
+// We hold null values as int128.MaxInt128 because that's
+// outside the valid range for what is representable in
+// Snowflake (which supports up to 38 bits of precision and
+// max int128 is greater than that).
 type int128Buffer struct {
-	*baseTypedBuffer
-	buf []int128.Int128
+	matrix      []parquet.Value
+	columnIndex int
+	rowWidth    int
+	ints        []int128.Int128
 }
 
 func (b *int128Buffer) WriteInt128(v int128.Int128) {
-	b.WriteNotNull()
-	b.buf = append(b.buf, v)
+	b.ints = append(b.ints, v)
 }
-
-func (b *int128Buffer) Reset() {
-	b.baseTypedBuffer.Reset()
-	b.buf = b.buf[:0]
+func (b *int128Buffer) WriteNull() {
+	b.ints = append(b.ints, int128.MaxInt128)
 }
-
-// WriteTo for numeric types is more tricky because we need to narrow
-// the underlying column type to save storage in snowflake
-func (b *int128Buffer) WriteTo(col parquet.ColumnBuffer) error {
-	// TODO: Consider pooling these buffers for writeChunk
-	var writeChunk func([]int128.Int128) error
-	switch c := col.(type) {
-	case parquet.Int32Writer:
-		buf := []int32{}
-		writeChunk = func(vals []int128.Int128) error {
-			buf = buf[:0]
-			for _, v := range vals {
-				buf = append(buf, int32(v.Int64()))
+func (b *int128Buffer) WriteBool(bool) {
+	panic("invalid value")
+}
+func (b *int128Buffer) WriteFloat64(float64) {
+	panic("invalid value")
+}
+func (b *int128Buffer) WriteBytes(v []byte) {
+	panic("invalid value")
+}
+func (b *int128Buffer) Prepare(matrix []parquet.Value, columnIndex, rowWidth int) {
+	b.matrix = matrix
+	b.columnIndex = columnIndex
+	b.rowWidth = rowWidth
+	if b.ints != nil {
+		b.ints = b.ints[:0]
+	}
+}
+func (b *int128Buffer) Flush(t parquet.Type) error {
+	switch t.Kind() {
+	case parquet.Int32Type.Kind():
+		for i, n := range b.ints {
+			var v parquet.Value // zero value is null
+			if n != int128.MaxInt128 {
+				v = parquet.Int32Value(int32(n.Int64()))
 			}
-			_, err := c.WriteInt32s(buf)
-			return err
+			b.matrix[(i*b.rowWidth)+b.columnIndex] = v
 		}
-	case parquet.Int64Writer:
-		buf := []int64{}
-		writeChunk = func(vals []int128.Int128) error {
-			buf = buf[:0]
-			for _, v := range vals {
-				buf = append(buf, v.Int64())
+	case parquet.Int64Type.Kind():
+		for i, n := range b.ints {
+			var v parquet.Value
+			if n != int128.MaxInt128 {
+				v = parquet.Int64Value(n.Int64())
 			}
-			_, err := c.WriteInt64s(buf)
-			return err
+			b.matrix[(i*b.rowWidth)+b.columnIndex] = v
 		}
-	case parquet.FixedLenByteArrayWriter:
-		buf := []byte{}
-		writeChunk = func(vals []int128.Int128) error {
-			buf = buf[:0]
-			for _, v := range vals {
-				buf = v.AppendBytes(buf)
+	case parquet.FixedLenByteArrayType(16).Kind():
+		for i, n := range b.ints {
+			var v parquet.Value
+			if n != int128.MaxInt128 {
+				v = parquet.FixedLenByteArrayValue(n.Bytes())
 			}
-			_, err := c.WriteFixedLenByteArrays(buf)
-			return err
+			b.matrix[(i*b.rowWidth)+b.columnIndex] = v
 		}
 	default:
-		return fmt.Errorf("unknown narrowed column type: %T", col)
-	}
-	var err error
-	for i, def := range b.defLevels {
-		if i%2 == 0 {
-			err = writeChunk(b.buf[:i])
-			b.buf = b.buf[i:]
-		} else {
-			_, err = col.WriteValues(make([]parquet.Value, def))
-		}
-		if err != nil {
-			return err
-		}
+		return fmt.Errorf("unexpected narrowed integer type: %s", t.String())
 	}
 	return nil
-}
-
-type boolBuffer struct {
-	*baseTypedBuffer
-	buf []bool
-}
-
-func (b *boolBuffer) WriteBool(v bool) {
-	b.WriteNotNull()
-	b.buf = append(b.buf, v)
-}
-
-func (b *boolBuffer) WriteTo(col parquet.ColumnBuffer) error {
-	c := col.(parquet.BooleanWriter)
-	var err error
-	for i, def := range b.defLevels {
-		if i%2 == 0 {
-			_, err = c.WriteBooleans(b.buf[:i])
-			b.buf = b.buf[i:]
-		} else {
-			_, err = col.WriteValues(make([]parquet.Value, def))
-		}
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (b *boolBuffer) Reset() {
-	b.baseTypedBuffer.Reset()
-	b.buf = b.buf[:0]
-}
-
-type doubleBuffer struct {
-	*baseTypedBuffer
-	buf []float64
-}
-
-func (b *doubleBuffer) WriteFloat64(v float64) {
-	b.WriteNotNull()
-	b.buf = append(b.buf, v)
-}
-
-func (b *doubleBuffer) WriteTo(col parquet.ColumnBuffer) error {
-	c := col.(parquet.DoubleWriter)
-	var err error
-	for i, def := range b.defLevels {
-		if i%2 == 0 {
-			_, err = c.WriteDoubles(b.buf[:i])
-			b.buf = b.buf[i:]
-		} else {
-			_, err = col.WriteValues(make([]parquet.Value, def))
-		}
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (b *doubleBuffer) Reset() {
-	b.baseTypedBuffer.Reset()
-	b.buf = b.buf[:0]
-}
-
-type byteArrayBuffer struct {
-	*baseTypedBuffer
-	buf []byte
-}
-
-func (b *byteArrayBuffer) WriteBytes(v []byte) {
-	if !b.writingNull {
-		*b.currentDef = *b.currentDef + len(v) + 4
-	} else {
-		b.defLevels = append(b.defLevels, len(v)+4)
-		b.writingNull = false
-		b.currentDef = &b.defLevels[len(b.defLevels)-1]
-	}
-
-	// These need to be written in PLAIN encoding
-	b.buf = binary.LittleEndian.AppendUint32(b.buf, uint32(len(v)))
-	b.buf = append(b.buf, v...)
-}
-
-func (b *byteArrayBuffer) WriteTo(col parquet.ColumnBuffer) error {
-	c := col.(parquet.ByteArrayWriter)
-	var err error
-	for i, def := range b.defLevels {
-		if i%2 == 0 {
-			_, err = c.WriteByteArrays(b.buf[:i])
-			b.buf = b.buf[i:]
-		} else {
-			_, err = col.WriteValues(make([]parquet.Value, def))
-		}
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (b *byteArrayBuffer) Reset() {
-	b.baseTypedBuffer.Reset()
-	b.buf = b.buf[:0]
 }
 
 type dataConverter interface {

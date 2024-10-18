@@ -443,10 +443,10 @@ func (b *testTypedBuffer) WriteFloat64(v float64) {
 func (b *testTypedBuffer) WriteBytes(v []byte) {
 	b.output = v
 }
-func (b *testTypedBuffer) WriteTo(parquet.ColumnBuffer) error {
-	panic("unimplemented")
+func (b *testTypedBuffer) Flush(parquet.Type) error {
+	return nil
 }
-func (b *testTypedBuffer) Reset() {
+func (b *testTypedBuffer) Prepare([]parquet.Value, int, int) {
 	b.output = nil
 }
 

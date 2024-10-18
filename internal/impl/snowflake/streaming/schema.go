@@ -97,22 +97,22 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[stri
 			if err != nil {
 				return nil, nil, nil, err
 			}
-			buffer = &int128Buffer{buf: []int128.Int128{}}
+			buffer = &int128Buffer{}
 		case "array":
 			typeMetadata[fmt.Sprintf("%d:obj_enc", id)] = "1"
 			n = parquet.String()
 			converter = jsonArrayConverter{jsonConverter{column.Nullable, maxJSONSize}}
-			buffer = &byteArrayBuffer{buf: []byte{}}
+			buffer = &typedBufferImpl{}
 		case "object":
 			typeMetadata[fmt.Sprintf("%d:obj_enc", id)] = "1"
 			n = parquet.String()
 			converter = jsonObjectConverter{jsonConverter{column.Nullable, maxJSONSize}}
-			buffer = &byteArrayBuffer{buf: []byte{}}
+			buffer = &typedBufferImpl{}
 		case "variant":
 			typeMetadata[fmt.Sprintf("%d:obj_enc", id)] = "1"
 			n = parquet.String()
 			converter = jsonConverter{column.Nullable, maxJSONSize}
-			buffer = &byteArrayBuffer{buf: []byte{}}
+			buffer = &typedBufferImpl{}
 		case "any", "text", "char":
 			n = parquet.String()
 			byteLength := 16 * humanize.MiByte
@@ -121,7 +121,7 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[stri
 			}
 			byteLength = min(byteLength, 16*humanize.MiByte)
 			converter = binaryConverter{nullable: column.Nullable, maxLength: byteLength, utf8: true}
-			buffer = &byteArrayBuffer{buf: []byte{}}
+			buffer = &typedBufferImpl{}
 		case "binary":
 			n = parquet.Leaf(parquet.ByteArrayType)
 			// Why binary data defaults to 8MiB instead of the 16MiB for strings... ¯\_(ツ)_/¯
@@ -131,15 +131,15 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[stri
 			}
 			byteLength = min(byteLength, 16*humanize.MiByte)
 			converter = binaryConverter{nullable: column.Nullable, maxLength: byteLength}
-			buffer = &byteArrayBuffer{buf: []byte{}}
+			buffer = &typedBufferImpl{}
 		case "boolean":
 			n = parquet.Leaf(parquet.BooleanType)
 			converter = boolConverter{column.Nullable}
-			buffer = &boolBuffer{buf: []bool{}}
+			buffer = &typedBufferImpl{}
 		case "real":
 			n = parquet.Leaf(parquet.DoubleType)
 			converter = doubleConverter{column.Nullable}
-			buffer = &doubleBuffer{buf: []float64{}}
+			buffer = &typedBufferImpl{}
 		case "timestamp_tz", "timestamp_ltz", "timestamp_ntz":
 			if column.PhysicalType == "SB8" {
 				n = parquet.Leaf(parquet.Int64Type)
@@ -157,7 +157,7 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[stri
 				trimTZ:    logicalType == "timestamp_ntz",
 				defaultTZ: time.UTC,
 			}
-			buffer = &int128Buffer{buf: []int128.Int128{}}
+			buffer = &int128Buffer{}
 		case "time":
 			t := parquet.Int32Type
 			precision := 9
@@ -171,11 +171,11 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[stri
 			}
 			n = parquet.Decimal(int(scale), precision, t)
 			converter = timeConverter{column.Nullable, scale}
-			buffer = &int128Buffer{buf: []int128.Int128{}}
+			buffer = &int128Buffer{}
 		case "date":
 			n = parquet.Leaf(parquet.Int32Type)
 			converter = dateConverter{column.Nullable}
-			buffer = &int128Buffer{buf: []int128.Int128{}}
+			buffer = &int128Buffer{}
 		default:
 			return nil, nil, nil, fmt.Errorf("unsupported logical column type: %s", column.LogicalType)
 		}

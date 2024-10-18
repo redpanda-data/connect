@@ -375,3 +375,15 @@ func TestIncreaseScaleBy(t *testing.T) {
 		})
 	}
 }
+
+func TestFitsInPrec(t *testing.T) {
+	// Examples from snowflake documentation
+	snowflakeNumberMax := "+99999999999999999999999999999999999999"
+	snowflakeNumberMin := "-99999999999999999999999999999999999999"
+	require.True(t, MustParse(snowflakeNumberMax).FitsInPrecision(38), snowflakeNumberMax)
+	require.True(t, MustParse(snowflakeNumberMin).FitsInPrecision(38), snowflakeNumberMin)
+	snowflakeNumberTiny := "1.2e-36"
+	n, err := String(snowflakeNumberTiny, 38, 37)
+	require.NoError(t, err)
+	require.True(t, n.FitsInPrecision(38), snowflakeNumberTiny)
+}

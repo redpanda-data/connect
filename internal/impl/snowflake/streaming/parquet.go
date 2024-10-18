@@ -17,19 +17,112 @@ import (
 
 	"github.com/parquet-go/parquet-go"
 	"github.com/parquet-go/parquet-go/format"
+	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/segmentio/encoding/thrift"
 )
 
-func writeParquetFile(writer io.Writer, schema *parquet.Schema, rows parquet.RowGroup, metadata map[string]string) (err error) {
+type parquetFileData struct {
+	schema   *parquet.Schema
+	rows     []parquet.Row
+	metadata map[string]string
+}
+
+func messageToRow(msg *service.Message) (map[string]any, error) {
+	v, err := msg.AsStructured()
+	if err != nil {
+		return nil, fmt.Errorf("error extracting object from message: %w", err)
+	}
+	row, ok := v.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("expected object, got: %T", v)
+	}
+	mapped := make(map[string]any, len(row))
+	for k, v := range row {
+		mapped[normalizeColumnName(k)] = v
+	}
+	return mapped, nil
+}
+
+// TODO: If the memory pressure is too great from writing all
+// records buffered as a single row group, then consider
+// return some kind of iterator of chunks of rows that we can
+// then feed into the actual parquet construction process.
+//
+// If a single parquet file is too much, we can consider having multiple
+// parquet files in a single bdec file.
+func constructRowGroup(
+	batch service.MessageBatch,
+	schema *parquet.Schema,
+	transformers map[string]*dataTransformer,
+	fileMetadata map[string]string,
+) (parquetFileData, error) {
+	// We write all of our data in a columnar fashion, but need to pivot that data so that we can feed it into
+	// out parquet library (which sadly will redo the pivot - maybe we need a lower level abstraction...).
+	// So create a massive matrix that we will write stuff in columnar form, but then we don't need to move any
+	// data to create rows of the data via an in-place transpose operation.
+	//
+	// TODO: Consider caching/pooling this matrix as I expect many are similarily sized.
+	matrix := make([]parquet.Value, len(batch)*len(schema.Fields()))
+	rowWidth := len(schema.Fields())
+	for idx, field := range schema.Fields() {
+		// The column index is consistent between two schemas that are the same because the schema fields are always
+		// in sorted order.
+		columnIndex := idx
+		t := transformers[field.Name()]
+		t.buf.Prepare(matrix, columnIndex, rowWidth)
+		t.stats.Reset()
+	}
+	// First we need to shred our record into columns, snowflake's data model
+	// is thankfully a flat list of columns, so no dremel style record shredding
+	// is needed
+	for _, msg := range batch {
+		row, err := messageToRow(msg)
+		if err != nil {
+			return parquetFileData{}, err
+		}
+		// We **must** write a null, so iterate over the schema not the record,
+		// which might be sparse
+		for name, t := range transformers {
+			v := row[name]
+			err = t.converter.ValidateAndConvert(t.stats, v, t.buf)
+			if err != nil {
+				return parquetFileData{}, fmt.Errorf("invalid data for column %s: %w", name, err)
+			}
+		}
+	}
+	// Snowflake has an optimization that we narrow the physical storage for integer based types
+	// based on the maximum precision required for each row
+	narrowed, updatedMetadata := narrowPhysicalTypes(schema, transformers, fileMetadata)
+	for _, field := range narrowed.Fields() {
+		t := transformers[field.Name()]
+		if err := t.buf.Flush(field.Type()); err != nil {
+			return parquetFileData{}, err
+		}
+	}
+	// Now all our values have been written to each buffer - here is where we do our matrix
+	// transpose mentioned above
+	rows := make([]parquet.Row, len(batch))
+	for i := range rows {
+		rowStart := i * rowWidth
+		rows[i] = matrix[rowStart : rowStart+rowWidth]
+	}
+	return parquetFileData{
+		rows:     rows,
+		schema:   narrowed,
+		metadata: updatedMetadata,
+	}, nil
+}
+
+func writeParquetFile(writer io.Writer, data parquetFileData) (err error) {
 	pw := parquet.NewGenericWriter[map[string]any](
 		writer,
-		schema,
+		data.schema,
 		parquet.CreatedBy("RedpandaConnect", version, "main"),
 		// Recommended by the Snowflake team to enable data page stats
 		parquet.DataPageStatistics(true),
 		parquet.Compression(&parquet.Zstd),
 	)
-	for k, v := range metadata {
+	for k, v := range data.metadata {
 		pw.SetKeyValueMetadata(k, v)
 	}
 	defer func() {
@@ -37,7 +130,7 @@ func writeParquetFile(writer io.Writer, schema *parquet.Schema, rows parquet.Row
 			err = fmt.Errorf("encoding panic: %v", r)
 		}
 	}()
-	_, err = pw.WriteRowGroup(rows)
+	_, err = pw.WriteRows(data.rows)
 	if err != nil {
 		return
 	}

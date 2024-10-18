@@ -276,8 +276,8 @@ func Bytes(b []byte) Int128 {
 }
 
 // Bytes converts an Int128 into big endian bytes
-func (i Int128) Bytes() [16]byte {
-	b := [16]byte{}
+func (i Int128) Bytes() []byte {
+	b := make([]byte, 16)
 	binary.BigEndian.PutUint64(b[0:8], uint64(i.hi))
 	binary.BigEndian.PutUint64(b[8:16], i.lo)
 	return b

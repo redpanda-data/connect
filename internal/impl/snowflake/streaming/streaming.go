@@ -256,68 +256,6 @@ func (c *SnowflakeIngestionChannel) nextRequestID() string {
 	return fmt.Sprintf("%s_%d", c.clientPrefix, rid)
 }
 
-func messageToRow(msg *service.Message) (map[string]any, error) {
-	v, err := msg.AsStructured()
-	if err != nil {
-		return nil, fmt.Errorf("error extracting object from message: %w", err)
-	}
-	row, ok := v.(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("expected object, got: %T", v)
-	}
-	mapped := make(map[string]any, len(row))
-	for k, v := range row {
-		mapped[normalizeColumnName(k)] = v
-	}
-	return mapped, nil
-}
-
-// TODO: If the memory pressure is too great from writing all
-// records buffered as a single row group, then consider
-// return some kind of iterator of chunks of rows that we can
-// then feed into the actual parquet construction process.
-//
-// If a single parquet file is too much, we can consider having multiple
-// parquet files in a single bdec file.
-func (c *SnowflakeIngestionChannel) constructRowGroup(
-	batch service.MessageBatch,
-) (parquet.RowGroup, *parquet.Schema, map[string]string, error) {
-	// Reset our data
-	for _, transformer := range c.transformers {
-		transformer.stats.Reset()
-		transformer.buf.Reset()
-	}
-	// First we need to shred our record into columns, snowflake's data model
-	// is thankfully a flat list of columns, so no dremel style record shredding
-	// is needed
-	for _, msg := range batch {
-		row, err := messageToRow(msg)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		// We **must** write a null, so iterate over the schema not the record,
-		// which might be sparse
-		for name, t := range c.transformers {
-			v := row[name]
-			err = t.converter.ValidateAndConvert(t.stats, v, t.buf)
-			if err != nil {
-				return nil, nil, nil, fmt.Errorf("invalid data for column %s: %w", name, err)
-			}
-		}
-	}
-	narrowed, updatedMetadata := narrowPhysicalTypes(c.schema, c.transformers, c.fileMetadata)
-	buffer := parquet.NewGenericBuffer[any](c.schema)
-	columns := buffer.ColumnBuffers()
-	// Write our columnar data to a buffer
-	for i, field := range narrowed.Fields() {
-		t := c.transformers[field.Name()]
-		if err := t.buf.WriteTo(columns[i]); err != nil {
-			return nil, nil, nil, err
-		}
-	}
-	return buffer, narrowed, updatedMetadata, nil
-}
-
 // InsertStats holds some basic statistics about the InsertRows operation
 type InsertStats struct {
 	BuildTime            time.Duration
@@ -330,16 +268,17 @@ type InsertStats struct {
 func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch service.MessageBatch) (InsertStats, error) {
 	stats := InsertStats{}
 	startTime := time.Now()
-	rows, schema, meta, err := c.constructRowGroup(batch)
+	data, err := constructRowGroup(batch, c.schema, c.transformers, c.fileMetadata)
 	if err != nil {
 		return stats, err
 	}
 	fakeThreadID := rand.N(1000)
 	blobPath := generateBlobPath(c.clientPrefix, fakeThreadID, c.requestIDCounter)
 	c.requestIDCounter++
-	meta["primaryFileId"] = getShortname(blobPath)
+	// This is extra metadata that is required for functionality in snowflake.
+	data.metadata["primaryFileId"] = getShortname(blobPath)
 	c.buffer.Reset()
-	err = writeParquetFile(c.buffer, schema, rows, meta)
+	err = writeParquetFile(c.buffer, data)
 	if err != nil {
 		return stats, err
 	}
