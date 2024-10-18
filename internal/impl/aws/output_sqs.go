@@ -50,7 +50,7 @@ const (
 )
 
 type sqsoConfig struct {
-	URL                    string
+	URL                    *service.InterpolatedString
 	MessageGroupID         *service.InterpolatedString
 	MessageDeduplicationID *service.InterpolatedString
 	DelaySeconds           *service.InterpolatedString
@@ -61,7 +61,7 @@ type sqsoConfig struct {
 }
 
 func sqsoConfigFromParsed(pConf *service.ParsedConfig) (conf sqsoConfig, err error) {
-	if conf.URL, err = pConf.FieldString(sqsoFieldURL); err != nil {
+	if conf.URL, err = pConf.FieldInterpolatedString(sqsoFieldURL); err != nil {
 		return
 	}
 	if pConf.Contains(sqsoFieldMessageGroupID) {
@@ -106,7 +106,7 @@ The fields `+"`message_group_id`, `message_deduplication_id` and `delay_seconds`
 
 By default Redpanda Connect will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more in xref:guides:cloud/aws.adoc[].`+service.OutputPerformanceDocs(true, true)).
 		Fields(
-			service.NewStringField(sqsoFieldURL).Description("The URL of the target SQS queue."),
+			service.NewInterpolatedStringField(sqsoFieldURL).Description("The URL of the target SQS queue."),
 			service.NewInterpolatedStringField(sqsoFieldMessageGroupID).
 				Description("An optional group ID to set for messages.").
 				Optional(),
@@ -270,8 +270,10 @@ func (a *sqsWriter) WriteBatch(ctx context.Context, batch service.MessageBatch) 
 
 	backOff := a.conf.backoffCtor()
 
-	entries := []types.SendMessageBatchRequestEntry{}
+	entries := map[string][]types.SendMessageBatchRequestEntry{}
 	attrMap := map[string]sqsAttributes{}
+
+	urlExecutor := batch.InterpolationExecutor(a.conf.URL)
 
 	for i := 0; i < len(batch); i++ {
 		id := strconv.Itoa(i)
@@ -282,7 +284,11 @@ func (a *sqsWriter) WriteBatch(ctx context.Context, batch service.MessageBatch) 
 
 		attrMap[id] = attrs
 
-		entries = append(entries, types.SendMessageBatchRequestEntry{
+		url, err := urlExecutor.TryString(i)
+		if err != nil {
+			return fmt.Errorf("error interpolating %s: %w", sqsoFieldURL, err)
+		}
+		entries[url] = append(entries[url], types.SendMessageBatchRequestEntry{
 			Id:                     &id,
 			MessageBody:            attrs.content,
 			MessageAttributes:      attrs.attrMap,
@@ -292,8 +298,25 @@ func (a *sqsWriter) WriteBatch(ctx context.Context, batch service.MessageBatch) 
 		})
 	}
 
+	for url, entries := range entries {
+		backOff.Reset()
+		if err := a.writeChunk(ctx, url, entries, attrMap, backOff); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (a *sqsWriter) writeChunk(
+	ctx context.Context,
+	url string,
+	entries []types.SendMessageBatchRequestEntry,
+	attrMap map[string]sqsAttributes,
+	backOff backoff.BackOff,
+) error {
 	input := &sqs.SendMessageBatchInput{
-		QueueUrl: aws.String(a.conf.URL),
+		QueueUrl: &url,
 		Entries:  entries,
 	}
 
