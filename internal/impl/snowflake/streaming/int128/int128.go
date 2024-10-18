@@ -217,11 +217,11 @@ func Neg(n Int128) Int128 {
 }
 
 // Abs computes v < 0 ? -v : v
-func (n Int128) Abs() Int128 {
-	if n.IsNegative() {
-		return Neg(n)
+func (i Int128) Abs() Int128 {
+	if i.IsNegative() {
+		return Neg(i)
 	}
-	return n
+	return i
 }
 
 // IsNegative returns true if `i` is negative
@@ -283,7 +283,7 @@ func (i Int128) Bytes() []byte {
 	return b
 }
 
-// Bytes converts an Int128 into big endian bytes
+// AppendBytes converts an Int128 into big endian bytes
 func (i Int128) AppendBytes(b []byte) []byte {
 	b = binary.BigEndian.AppendUint64(b[0:8], uint64(i.hi))
 	return binary.BigEndian.AppendUint64(b[8:16], i.lo)
@@ -309,6 +309,7 @@ func (i Int128) Int8() int8 {
 	return int8(i.lo)
 }
 
+// Min computes min(a, b)
 func Min(a, b Int128) Int128 {
 	if Less(a, b) {
 		return a
@@ -317,6 +318,7 @@ func Min(a, b Int128) Int128 {
 	}
 }
 
+// Max computes min(a, b)
 func Max(a, b Int128) Int128 {
 	if Greater(a, b) {
 		return a

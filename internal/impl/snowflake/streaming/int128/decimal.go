@@ -29,12 +29,12 @@ import (
 
 // FitsInPrecision returns true or false if the value currently held by
 // n would fit within precision (0 < prec <= 38) without losing any data.
-func (n Int128) FitsInPrecision(prec int32) bool {
+func (i Int128) FitsInPrecision(prec int32) bool {
 	if prec == 0 {
 		// Precision 0 is valid in snowflake, even if it seems useless
-		return n == Int128{}
+		return i == Int128{}
 	}
-	return Less(n.Abs(), Pow10Table[prec])
+	return Less(i.Abs(), Pow10Table[prec])
 }
 
 func scalePositiveFloat64(v float64, prec, scale int32) (float64, error) {
@@ -126,6 +126,7 @@ var (
 	pt5 = big.NewFloat(0.5)
 )
 
+// String converts a string into an Int128 as long as it fits within the given precision and scale.
 func String(v string, prec, scale int32) (n Int128, err error) {
 	// time for some math!
 	// Our input precision means "number of digits of precision" but the
@@ -167,7 +168,7 @@ func String(v string, prec, scale int32) (n Int128, err error) {
 		val, _ := out.Int(&tmp)
 		n, ok = bigInt(val)
 		if !ok {
-			err = fmt.Errorf("value out of range")
+			err = fmt.Errorf("value out of range: %s", v)
 			return
 		}
 		n = Div(n, Pow10Table[-scale])
@@ -188,7 +189,7 @@ func String(v string, prec, scale int32) (n Int128, err error) {
 		val, _ := out.Int(&tmp)
 		n, ok = bigInt(val)
 		if !ok {
-			err = fmt.Errorf("value out of range")
+			err = fmt.Errorf("value out of range: %s", v)
 			return
 		}
 	}
@@ -199,10 +200,10 @@ func String(v string, prec, scale int32) (n Int128, err error) {
 	return
 }
 
-// ToFloat32 returns a float32 value representative of this Int128,
+// Float32 returns a float32 value representative of this Int128,
 // but with the given scale.
-func (n Int128) Float32(scale int32) float32 {
-	return float32(n.Float64(scale))
+func (i Int128) Float32(scale int32) float32 {
+	return float32(i.Float64(scale))
 }
 
 func float64Positive(n Int128, scale int32) float64 {
@@ -218,11 +219,11 @@ func float64Positive(n Int128, scale int32) float64 {
 
 // Float64 returns a float64 value representative of this Int128,
 // but with the given scale.
-func (n Int128) Float64(scale int32) float64 {
-	if n.hi < 0 {
-		return -float64Positive(Neg(n), scale)
+func (i Int128) Float64(scale int32) float64 {
+	if i.hi < 0 {
+		return -float64Positive(Neg(i), scale)
 	}
-	return float64Positive(n, scale)
+	return float64Positive(i, scale)
 }
 
 func rescaleWouldCauseDataLoss(n Int128, deltaScale int32, multiplier Int128) (out Int128, loss bool) {

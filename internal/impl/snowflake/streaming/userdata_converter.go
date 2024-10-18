@@ -163,7 +163,7 @@ func (c numberConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typ
 		v = int128.Int64(int64(t))
 		v, err = int128.Rescale(v, 0, c.scale)
 	case int64:
-		v = int128.Int64(int64(t))
+		v = int128.Int64(t)
 		v, err = int128.Rescale(v, 0, c.scale)
 	case uint:
 		v = int128.Uint64(uint64(t))
@@ -190,6 +190,9 @@ func (c numberConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typ
 		// fallback to the good error message that bloblang provides
 		var i int64
 		i, err = bloblang.ValueAsInt64(val)
+		if err != nil {
+			return err
+		}
 		v = int128.Int64(i)
 		v, err = int128.Rescale(v, 0, c.scale)
 	}

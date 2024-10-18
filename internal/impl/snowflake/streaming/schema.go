@@ -12,8 +12,6 @@ package streaming
 
 import (
 	"fmt"
-	"maps"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -90,6 +88,7 @@ const maxJSONSize = 16*humanize.MiByte - 64
 func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[string]*dataTransformer, map[string]string, error) {
 	groupNode := parquet.Group{}
 	transformers := map[string]*dataTransformer{}
+	// Don't write the sfVer key as it allows us to not have to narrow the numeric types in parquet.
 	typeMetadata := map[string]string{ /*"sfVer": "1,1"*/ }
 	var err error
 	for _, column := range columns {
@@ -217,60 +216,6 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[stri
 	return parquet.NewSchema("bdec", groupNode), transformers, typeMetadata, nil
 }
 
-// So snowflake has a storage optimization where physical types are narrowed to the smallest possible storage
-// value, so after we collect stats, this narrows the schema to smallest possible numeric types.
-func narrowPhysicalTypes(
-	schema *parquet.Schema,
-	transformers map[string]*dataTransformer,
-	fileMetadata map[string]string) (*parquet.Schema, map[string]string) {
-	mapped := parquet.Group{}
-	mappedMeta := maps.Clone(fileMetadata)
-	for _, field := range schema.Fields() {
-		name := field.Name()
-		t := transformers[name]
-		if !canCompatNumber(t.column) {
-			mapped[field.Name()] = field
-			continue
-		}
-		stats := transformers[field.Name()].stats
-		byteWidth := max(int128.ByteWidth(stats.maxIntVal), int128.ByteWidth(stats.minIntVal))
-		if byteWidth == 16 {
-			// Keep it the same, as it didn't change
-			mapped[field.Name()] = field
-			continue
-		}
-		n := parquet.Int(byteWidth * 8)
-		if field.Type().LogicalType() != nil && field.Type().LogicalType().Decimal != nil {
-			d := field.Type().LogicalType().Decimal
-			n = parquet.Decimal(
-				int(d.Scale),
-				int(min(d.Precision, maxPrecisionForByteWidth(byteWidth))),
-				n.Type(),
-			)
-		}
-		if field.Optional() {
-			n = parquet.Optional(n)
-		}
-		n = parquet.FieldID(n, field.ID())
-		n = parquet.Compressed(n, field.Compression())
-		n = parquet.Encoded(n, field.Encoding())
-		mapped[field.Name()] = n
-		mappedMeta[strconv.Itoa(field.ID())] = fmt.Sprintf(
-			"%d,%d",
-			logicalTypeOrdinal(t.column.LogicalType),
-			physicalTypeOrdinal(fmt.Sprintf("SB%d", byteWidth)),
-		)
-	}
-	if debug {
-		fmt.Println("=== original ===")
-		_ = parquet.PrintSchema(os.Stdout, schema.Name(), schema)
-		fmt.Println("\n=== mapped ===")
-		_ = parquet.PrintSchema(os.Stdout, schema.Name(), mapped)
-		fmt.Println()
-	}
-	return parquet.NewSchema(schema.Name(), mapped), mappedMeta
-}
-
 type statsBuffer struct {
 	columnID               int
 	minIntVal, maxIntVal   int128.Int128
@@ -321,20 +266,6 @@ func computeColumnEpInfo(stats map[string]*dataTransformer) map[string]fileColum
 		}
 	}
 	return info
-}
-
-func canCompatNumber(column *columnMetadata) bool {
-	switch strings.ToUpper(column.LogicalType) {
-	case "TIMESTAMP_LTZ":
-		return false
-	}
-	// We leave out SB1 because it's already as small
-	// as possible and we'd have to special case booleans
-	switch strings.ToUpper(column.PhysicalType) {
-	case "SB2", "SB4", "SB8", "SB16":
-		return true
-	}
-	return false
 }
 
 func physicalTypeOrdinal(str string) int {
