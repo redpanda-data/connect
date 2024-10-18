@@ -52,23 +52,24 @@ func TestNarrowingInt128(t *testing.T) {
 				Scale:        ptr.Int32(0),
 				Nullable:     true,
 			},
-			buf: &int128Buffer{},
+			buf: &int32Buffer{},
 		},
 	}
-	data, err := constructRowGroup(
+	schema := parquet.NewSchema("bdec", inputDataSchema)
+	rows, err := constructRowGroup(
 		batch,
-		parquet.NewSchema("bdec", inputDataSchema),
+		schema,
 		transformers,
-		map[string]string{
-			"1": "2,5",
-		})
+	)
 	require.NoError(t, err)
-	err = writeParquetFile(b, data)
+	err = writeParquetFile(b, parquetFileData{
+		schema, rows, nil,
+	})
 	require.NoError(t, err)
 	actual, err := readGeneric(
 		bytes.NewReader(b.Bytes()),
 		int64(b.Len()),
-		data.schema,
+		parquet.NewSchema("bdec", inputDataSchema),
 	)
 	require.NoError(t, err)
 	require.Equal(t, []map[string]any{

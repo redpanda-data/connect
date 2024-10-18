@@ -110,11 +110,11 @@ func TestSnowflake(t *testing.T) {
       "E": {"foo":"bar"},
       "F": 3.14,
       "G": -1,
-      "H": "13:02:06",
-      "I": "2007/11/3",
-      "J": "2024-01-01 12:00:00.000 -0800",
-      "K": "2024-01-01 12:00:00.000 -0800",
-      "L": "2024-01-01 12:00:00.000 -0800"
+      "H": "2024-01-01T13:02:06Z",
+      "I": "2007-11-03T00:00:00Z",
+      "J": "2024-01-01T12:00:00.000Z",
+      "K": "2024-01-01T12:00:00.000-08:00",
+      "L": "2024-01-01T12:00:00.000-08:00"
     }`),
 		msg(`{
       "A": "baz",
@@ -124,11 +124,11 @@ func TestSnowflake(t *testing.T) {
       "E": {"foo":"baz"},
       "F": 42.12345,
       "G": 9,
-      "H": "13:02:06.123456789",
-      "I": "3-04-2019",
-      "J": "2024-01-02 12:00:00.000 -0800",
-      "K": "2024-01-01 12:00:00.000 -0800",
-      "L": "2024-01-01 12:00:00.000 -0800"
+      "H": "2024-01-02T13:02:06.123456789Z",
+      "I": "2019-03-04T00:00:00.12345Z",
+      "J": "1970-01-02T12:00:00.000Z",
+      "K": "2024-01-01T12:00:00.000-08:00",
+      "L": "2024-01-01T12:00:00.000-08:00"
     }`),
 		msg(`{
       "A": "foo",
@@ -140,9 +140,9 @@ func TestSnowflake(t *testing.T) {
       "G": 42,
       "H": 1728680106,
       "I": 1728680106,
-      "J": "2024-01-03 12:00:00.000 -0800",
-      "K": "2024-01-01 12:00:00.000 -0800",
-      "L": "2024-01-01 12:00:00.000 -0800"
+      "J": "2024-01-03T12:00:00.000-08:00",
+      "K": "2024-01-01T12:00:00.000-08:00",
+      "L": "2024-01-01T12:00:00.000-08:00"
     }`),
 	})
 	require.NoError(t, err)
@@ -152,6 +152,11 @@ func TestSnowflake(t *testing.T) {
 			Database:  channelOpts.DatabaseName,
 			Schema:    channelOpts.SchemaName,
 			Statement: fmt.Sprintf(`SELECT * FROM %s ORDER BY A;`, channelOpts.TableName),
+			Parameters: map[string]string{
+				"TIMESTAMP_OUTPUT_FORMAT": "YYYY-MM-DD HH24:MI:SS.FF3 TZHTZM",
+				"DATE_OUTPUT_FORMAT":      "YYYY-MM-DD",
+				"TIME_OUTPUT_FORMAT":      "HH24:MI:SS",
+			},
 		})
 		if !assert.NoError(collect, err) {
 			t.Logf("failed to scan table: %s", err)
@@ -159,9 +164,48 @@ func TestSnowflake(t *testing.T) {
 		}
 		assert.Equal(collect, "00000", resp.SQLState)
 		expected := [][]string{
-			{`bar`, `true`, `{"foo":"bar"}`, `[[42], null, {"A":"B"}]`, `{"foo": "bar"}`, `3.14`, `-1`, `46926`, `13820`},
-			{`baz`, `false`, `{"a":"b"}`, `[1, 2, 3]`, `{"foo":"baz"}`, `42.12345`, `9`, `46926.123456789`, `17959`},
-			{`foo`, ``, `[1, 2, 3]`, `["a", 9, "z"]`, `{"baz":"qux"}`, `-0.0`, `42`, `75306`, `20007`},
+			{
+				`bar`,
+				`true`,
+				`{"foo":"bar"}`,
+				`[[42], null, {"A":"B"}]`,
+				`{"foo": "bar"}`,
+				`3.14`,
+				`-1`,
+				`13:02:06`,
+				`2007-11-03`,
+				`-1832551390-01-03 00:00:00.000 -0800`,
+				`2024-01-01 20:00:00.000`,
+				`2024-01-01 12:00:00.000 -0800`,
+			},
+			{
+				`baz`,
+				`false`,
+				`{"a":"b"}`,
+				`[1, 2, 3]`,
+				`{"foo":"baz"}`,
+				`42.12345`,
+				`9`,
+				`13:02:06`,
+				`2019-03-04`,
+				`-1832551390-01-05 00:00:00.000 -0800`,
+				`2024-01-01 20:00:00.000`,
+				`2024-01-01 12:00:00.000 -0800`,
+			},
+			{
+				`foo`,
+				``,
+				`[1, 2, 3]`,
+				`["a", 9, "z"]`,
+				`{"baz":"qux"}`,
+				`-0.0`,
+				`42`,
+				`20:55:06`,
+				`2024-10-11`,
+				`-1832551390-01-08 00:00:00.000 -0800`,
+				`2024-01-01 20:00:00.000`,
+				`2024-01-01 12:00:00.000 -0800`,
+			},
 		}
 		assert.Equal(collect, parseSnowflakeData(expected), parseSnowflakeData(resp.Data))
 	}, 3*time.Second, time.Second)
@@ -308,6 +352,9 @@ func TestTimeCompat(t *testing.T) {
 			Database:  channelOpts.DatabaseName,
 			Schema:    channelOpts.SchemaName,
 			Statement: fmt.Sprintf(`SELECT * FROM %s ORDER BY A;`, channelOpts.TableName),
+			Parameters: map[string]string{
+				"TIME_OUTPUT_FORMAT": "HH24:MI:SS",
+			},
 		})
 		if !assert.NoError(collect, err) {
 			t.Logf("failed to scan table: %s", err)
@@ -382,6 +429,9 @@ func TestDateCompat(t *testing.T) {
 			Database:  channelOpts.DatabaseName,
 			Schema:    channelOpts.SchemaName,
 			Statement: fmt.Sprintf(`SELECT * FROM %s ORDER BY A;`, channelOpts.TableName),
+			Parameters: map[string]string{
+				"DATE_OUTPUT_FORMAT": "YYYY-MM-DD",
+			},
 		})
 		if !assert.NoError(collect, err) {
 			t.Logf("failed to scan table: %s", err)

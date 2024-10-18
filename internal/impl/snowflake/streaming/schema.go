@@ -30,7 +30,7 @@ type dataTransformer struct {
 	buf       typedBuffer
 }
 
-func convertFixedType(column columnMetadata) (parquet.Node, dataConverter, error) {
+func convertFixedType(column columnMetadata) (parquet.Node, dataConverter, typedBuffer, error) {
 	var scale int32
 	var precision int32
 	if column.Scale != nil {
@@ -42,28 +42,35 @@ func convertFixedType(column columnMetadata) (parquet.Node, dataConverter, error
 	isDecimal := column.Scale != nil && column.Precision != nil
 	if (column.Scale != nil && *column.Scale != 0) || strings.ToUpper(column.PhysicalType) == "SB16" {
 		c := numberConverter{nullable: column.Nullable, scale: scale, precision: precision}
+		b := &typedBufferImpl{}
+		t := parquet.FixedLenByteArrayType(16)
 		if isDecimal {
-			return parquet.Decimal(int(scale), int(precision), parquet.FixedLenByteArrayType(16)), c, nil
+			return parquet.Decimal(int(scale), int(precision), t), c, b, nil
 		}
-		return parquet.Leaf(parquet.FixedLenByteArrayType(16)), c, nil
+		return parquet.Leaf(t), c, b, nil
 	}
 	var ptype parquet.Type
 	var defaultPrecision int32
+	var buffer typedBuffer
 	switch strings.ToUpper(column.PhysicalType) {
 	case "SB1":
 		ptype = parquet.Int32Type
 		defaultPrecision = maxPrecisionForByteWidth(1)
+		buffer = &int32Buffer{}
 	case "SB2":
 		ptype = parquet.Int32Type
 		defaultPrecision = maxPrecisionForByteWidth(2)
+		buffer = &int32Buffer{}
 	case "SB4":
 		ptype = parquet.Int32Type
 		defaultPrecision = maxPrecisionForByteWidth(4)
+		buffer = &int32Buffer{}
 	case "SB8":
 		ptype = parquet.Int64Type
 		defaultPrecision = maxPrecisionForByteWidth(8)
+		buffer = &int64Buffer{}
 	default:
-		return nil, nil, fmt.Errorf("unsupported physical column type: %s", column.PhysicalType)
+		return nil, nil, nil, fmt.Errorf("unsupported physical column type: %s", column.PhysicalType)
 	}
 	validationPrecision := precision
 	if column.Precision == nil {
@@ -71,9 +78,9 @@ func convertFixedType(column columnMetadata) (parquet.Node, dataConverter, error
 	}
 	c := numberConverter{nullable: column.Nullable, scale: scale, precision: validationPrecision}
 	if isDecimal {
-		return parquet.Decimal(int(scale), int(precision), ptype), c, nil
+		return parquet.Decimal(int(scale), int(precision), ptype), c, buffer, nil
 	}
-	return parquet.Leaf(ptype), c, nil
+	return parquet.Leaf(ptype), c, buffer, nil
 }
 
 // maxJSONSize is the size that any kind of semi-structured data can be, which is 16MiB minus a small overhead
@@ -83,7 +90,7 @@ const maxJSONSize = 16*humanize.MiByte - 64
 func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[string]*dataTransformer, map[string]string, error) {
 	groupNode := parquet.Group{}
 	transformers := map[string]*dataTransformer{}
-	typeMetadata := map[string]string{"sfVer": "1,1"}
+	typeMetadata := map[string]string{ /*"sfVer": "1,1"*/ }
 	var err error
 	for _, column := range columns {
 		id := int(column.Ordinal)
@@ -93,11 +100,10 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[stri
 		logicalType := strings.ToLower(column.LogicalType)
 		switch logicalType {
 		case "fixed":
-			n, converter, err = convertFixedType(column)
+			n, converter, buffer, err = convertFixedType(column)
 			if err != nil {
 				return nil, nil, nil, err
 			}
-			buffer = &int128Buffer{}
 		case "array":
 			typeMetadata[fmt.Sprintf("%d:obj_enc", id)] = "1"
 			n = parquet.String()
@@ -141,29 +147,38 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[stri
 			converter = doubleConverter{column.Nullable}
 			buffer = &typedBufferImpl{}
 		case "timestamp_tz", "timestamp_ltz", "timestamp_ntz":
+			var scale, precision int32
 			if column.PhysicalType == "SB8" {
 				n = parquet.Leaf(parquet.Int64Type)
+				precision = maxPrecisionForByteWidth(8)
+				buffer = &int64Buffer{}
 			} else {
 				n = parquet.Leaf(parquet.FixedLenByteArrayType(16))
+				precision = maxPrecisionForByteWidth(16)
+				buffer = &typedBufferImpl{}
 			}
-			var scale int32
 			if column.Scale != nil {
 				scale = *column.Scale
 			}
+			// The server always returns 0 precision for timestamp columns,
+			// the Java SDK also seems to not validate precision of timestamps
+			// so ignore it and use the default precision for the column type
 			converter = timestampConverter{
 				nullable:  column.Nullable,
 				scale:     scale,
+				precision: precision,
 				includeTZ: logicalType == "timestamp_tz",
 				trimTZ:    logicalType == "timestamp_ntz",
 				defaultTZ: time.UTC,
 			}
-			buffer = &int128Buffer{}
 		case "time":
 			t := parquet.Int32Type
 			precision := 9
+			buffer = &int32Buffer{}
 			if column.PhysicalType == "SB8" {
 				t = parquet.Int64Type
 				precision = 18
+				buffer = &int64Buffer{}
 			}
 			scale := int32(9)
 			if column.Scale != nil {
@@ -171,11 +186,10 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[stri
 			}
 			n = parquet.Decimal(int(scale), precision, t)
 			converter = timeConverter{column.Nullable, scale}
-			buffer = &int128Buffer{}
 		case "date":
 			n = parquet.Leaf(parquet.Int32Type)
 			converter = dateConverter{column.Nullable}
-			buffer = &int128Buffer{}
+			buffer = &int32Buffer{}
 		default:
 			return nil, nil, nil, fmt.Errorf("unsupported logical column type: %s", column.LogicalType)
 		}
@@ -220,6 +234,11 @@ func narrowPhysicalTypes(
 		}
 		stats := transformers[field.Name()].stats
 		byteWidth := max(int128.ByteWidth(stats.maxIntVal), int128.ByteWidth(stats.minIntVal))
+		if byteWidth == 16 {
+			// Keep it the same, as it didn't change
+			mapped[field.Name()] = field
+			continue
+		}
 		n := parquet.Int(byteWidth * 8)
 		if field.Type().LogicalType() != nil && field.Type().LogicalType().Decimal != nil {
 			d := field.Type().LogicalType().Decimal
@@ -305,6 +324,10 @@ func computeColumnEpInfo(stats map[string]*dataTransformer) map[string]fileColum
 }
 
 func canCompatNumber(column *columnMetadata) bool {
+	switch strings.ToUpper(column.LogicalType) {
+	case "TIMESTAMP_LTZ":
+		return false
+	}
 	// We leave out SB1 because it's already as small
 	// as possible and we'd have to special case booleans
 	switch strings.ToUpper(column.PhysicalType) {

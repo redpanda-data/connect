@@ -32,57 +32,52 @@ type validateTestCase struct {
 func TestTimeConverter(t *testing.T) {
 	tests := []validateTestCase{
 		{
-			input:  "13:02",
+			input:  "2020-01-01T13:02:00.0Z",
 			output: 46920,
 			scale:  0,
 		},
 		{
-			input:  "13:02   ",
-			output: 46920,
-			scale:  0,
-		},
-		{
-			input:  "13:02:06",
+			input:  "2020-01-01T13:02:06.0Z",
 			output: 46926,
 			scale:  0,
 		},
 		{
-			input:  "13:02:06",
+			input:  "2020-01-01T13:02:06Z",
 			output: 469260,
 			scale:  1,
 		},
 		{
-			input:  "13:02:06",
+			input:  "2020-01-01T13:02:06Z",
 			output: 46926000000000,
 			scale:  9,
 		},
 		{
-			input:  "13:02:06.1234",
+			input:  "2020-01-01T13:02:06.1234Z",
 			output: 46926,
 			scale:  0,
 		},
 		{
-			input:  "13:02:06.1234",
+			input:  "2020-01-01T13:02:06.1234Z",
 			output: 469261,
 			scale:  1,
 		},
 		{
-			input:  "13:02:06.1234",
+			input:  "2020-01-01T13:02:06.1234Z",
 			output: 46926123400000,
 			scale:  9,
 		},
 		{
-			input:  "13:02:06.123456789",
+			input:  "2020-01-01T13:02:06.123456789Z",
 			output: 46926,
 			scale:  0,
 		},
 		{
-			input:  "13:02:06.123456789",
+			input:  "2020-01-01T13:02:06.123456789Z",
 			output: 469261,
 			scale:  1,
 		},
 		{
-			input:  "13:02:06.123456789",
+			input:  "2020-01-01T13:02:06.123456789Z",
 			output: 46926123456789,
 			scale:  9,
 		},
@@ -181,6 +176,10 @@ func TestRealConverter(t *testing.T) {
 			input:  12345.54321,
 			output: 12345.54321,
 		},
+		{
+			input:  3.415,
+			output: 3.415,
+		},
 	}
 	for _, tc := range tests {
 		tc := tc
@@ -266,19 +265,19 @@ func TestStringConverter(t *testing.T) {
 func TestTimestampNTZConverter(t *testing.T) {
 	tests := []validateTestCase{
 		{
-			input:     "2013-04-28 20:57:00",
+			input:     "2013-04-28T20:57:00.0Z",
 			output:    1367182620,
 			scale:     0,
 			precision: 18,
 		},
 		{
-			input:     "2013-04-28T20:57:01.000",
+			input:     "2013-04-28T20:57:01.000Z",
 			output:    1367182621000,
 			scale:     3,
 			precision: 18,
 		},
 		{
-			input:     "2013-04-28T20:57:01.000",
+			input:     "2013-04-28T20:57:01.000Z",
 			output:    1367182621,
 			scale:     0,
 			precision: 18,
@@ -290,7 +289,7 @@ func TestTimestampNTZConverter(t *testing.T) {
 			precision: 18,
 		},
 		{
-			input:     "2022-09-18T22:05:07.123456789",
+			input:     "2022-09-18T22:05:07.123456789Z",
 			output:    1663538707123456789,
 			scale:     9,
 			precision: 38,
@@ -302,7 +301,7 @@ func TestTimestampNTZConverter(t *testing.T) {
 			precision: 38,
 		},
 		{
-			input:     "2013-04-28T20:57:01.000",
+			input:     "2013-04-28T20:57:01.000Z",
 			output:    1367182621000,
 			scale:     3,
 			precision: 18,
@@ -329,8 +328,8 @@ func TestTimestampNTZConverter(t *testing.T) {
 func TestTimestampTZConverter(t *testing.T) {
 	tests := []validateTestCase{
 		{
-			input:     "2013-04-28T20:57:01.000",
-			output:    22400155992065200,
+			input:     "2013-04-28T20:57:01.000Z",
+			output:    22399920062465440,
 			scale:     3,
 			precision: 18,
 		},
@@ -356,7 +355,19 @@ func TestTimestampTZConverter(t *testing.T) {
 func TestTimestampLTZConverter(t *testing.T) {
 	tests := []validateTestCase{
 		{
-			input:     "2013-04-28 20:57:00",
+			input:     "2013-04-28T20:57:00Z",
+			output:    1367182620,
+			scale:     0,
+			precision: 18,
+		},
+		{
+			input:     "2013-04-28T20:57:00Z",
+			output:    136718262000,
+			scale:     2,
+			precision: 18,
+		},
+		{
+			input:     "2013-04-28T20:57:00Z",
 			err:       true,
 			scale:     0,
 			precision: 9, // Mor precision needed
@@ -383,7 +394,7 @@ func TestTimestampLTZConverter(t *testing.T) {
 func TestDateConverter(t *testing.T) {
 	tests := []validateTestCase{
 		{
-			input:  "1970-1-10",
+			input:  "1970-01-10T00:00:00Z",
 			output: 9,
 		},
 		{
@@ -391,11 +402,11 @@ func TestDateConverter(t *testing.T) {
 			output: 19380,
 		},
 		{
-			input:  "1967-06-23",
+			input:  "1967-06-23T00:00:00Z",
 			output: -923,
 		},
 		{
-			input:  "2020-07-21",
+			input:  "2020-07-21T00:00:00Z",
 			output: 18464,
 		},
 		{
@@ -443,12 +454,10 @@ func (b *testTypedBuffer) WriteFloat64(v float64) {
 func (b *testTypedBuffer) WriteBytes(v []byte) {
 	b.output = v
 }
-func (b *testTypedBuffer) Flush(parquet.Type) error {
-	return nil
-}
 func (b *testTypedBuffer) Prepare([]parquet.Value, int, int) {
 	b.output = nil
 }
+func (b *testTypedBuffer) Reset() {}
 
 func runTestcase(t *testing.T, dc dataConverter, tc validateTestCase) {
 	t.Helper()

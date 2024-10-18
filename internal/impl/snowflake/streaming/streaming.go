@@ -29,7 +29,7 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/typed"
 )
 
-const debug = false
+const debug = true
 
 // ClientOptions is the options to create a Snowflake Snowpipe API Client
 type ClientOptions struct {
@@ -268,7 +268,7 @@ type InsertStats struct {
 func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch service.MessageBatch) (InsertStats, error) {
 	stats := InsertStats{}
 	startTime := time.Now()
-	data, err := constructRowGroup(batch, c.schema, c.transformers, c.fileMetadata)
+	rows, err := constructRowGroup(batch, c.schema, c.transformers)
 	if err != nil {
 		return stats, err
 	}
@@ -276,9 +276,13 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 	blobPath := generateBlobPath(c.clientPrefix, fakeThreadID, c.requestIDCounter)
 	c.requestIDCounter++
 	// This is extra metadata that is required for functionality in snowflake.
-	data.metadata["primaryFileId"] = getShortname(blobPath)
+	c.fileMetadata["primaryFileId"] = getShortname(blobPath)
 	c.buffer.Reset()
-	err = writeParquetFile(c.buffer, data)
+	err = writeParquetFile(c.buffer, parquetFileData{
+		schema:   c.schema,
+		rows:     rows,
+		metadata: c.fileMetadata,
+	})
 	if err != nil {
 		return stats, err
 	}
@@ -287,7 +291,7 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 	if err != nil {
 		return stats, fmt.Errorf("unable to parse parquet metadata: %w", err)
 	}
-	if debug {
+	if debug || true {
 		_ = os.WriteFile("latest_test.parquet", unencrypted, 0o644)
 	}
 	unencryptedLen := len(unencrypted)
@@ -298,7 +302,6 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 	}
 	uploadStartTime := time.Now()
 	fileMD5Hash := md5.Sum(encrypted)
-	return stats, err
 	uploaderResult := c.uploader.Load()
 	if uploaderResult.err != nil {
 		return stats, fmt.Errorf("failed to acquire stage uploader: %w", uploaderResult.err)

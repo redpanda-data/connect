@@ -15,7 +15,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -33,17 +32,12 @@ type typedBuffer interface {
 	WriteBytes([]byte) // should never be nil
 
 	// Prepare for writing values to the following matrix.
-	// Must be called before writing, and Flush must be
-	// called after.
+	// Must be called before writing
 	// The matrix size must be pre-allocated to be the size of
 	// the data that will be written - this buffer will not modify
 	// the size of the data.
 	Prepare(matrix []parquet.Value, columnIndex, rowWidth int)
-	// Flush the values using the specific type to matrix
-	// most types of buffers don't support changing the type at
-	// flush time, except for integer types which are narrowed
-	// to use the minimum amount of storage.
-	Flush(parquet.Type) error
+	Reset()
 }
 
 type typedBufferImpl struct {
@@ -61,16 +55,16 @@ func (b *typedBufferImpl) WriteNull() {
 	b.WriteValue(parquet.NullValue())
 }
 func (b *typedBufferImpl) WriteInt128(v int128.Int128) {
-	b.WriteValue(parquet.FixedLenByteArrayValue(v.Bytes()))
+	b.WriteValue(parquet.FixedLenByteArrayValue(v.Bytes()).Level(0, 1, b.columnIndex))
 }
 func (b *typedBufferImpl) WriteBool(v bool) {
-	b.WriteValue(parquet.BooleanValue(v))
+	b.WriteValue(parquet.BooleanValue(v).Level(0, 1, b.columnIndex))
 }
 func (b *typedBufferImpl) WriteFloat64(v float64) {
-	b.WriteValue(parquet.DoubleValue(v))
+	b.WriteValue(parquet.DoubleValue(v).Level(0, 1, b.columnIndex))
 }
 func (b *typedBufferImpl) WriteBytes(v []byte) {
-	b.WriteValue(parquet.ByteArrayValue(v))
+	b.WriteValue(parquet.ByteArrayValue(v).Level(0, 1, b.columnIndex))
 }
 func (b *typedBufferImpl) Prepare(matrix []parquet.Value, columnIndex, rowWidth int) {
 	b.currentRow = 0
@@ -78,76 +72,24 @@ func (b *typedBufferImpl) Prepare(matrix []parquet.Value, columnIndex, rowWidth 
 	b.columnIndex = columnIndex
 	b.rowWidth = rowWidth
 }
-func (b *typedBufferImpl) Flush(parquet.Type) error {
-	return nil
+func (b *typedBufferImpl) Reset() {
+	b.Prepare(nil, 0, 0)
 }
 
-// int128Buffer is special in that it holds values out then
-// writes them in flush using a specific type.
-// We hold null values as int128.MaxInt128 because that's
-// outside the valid range for what is representable in
-// Snowflake (which supports up to 38 bits of precision and
-// max int128 is greater than that).
-type int128Buffer struct {
-	matrix      []parquet.Value
-	columnIndex int
-	rowWidth    int
-	ints        []int128.Int128
+type int64Buffer struct {
+	typedBufferImpl
 }
 
-func (b *int128Buffer) WriteInt128(v int128.Int128) {
-	b.ints = append(b.ints, v)
+func (b *int64Buffer) WriteInt128(v int128.Int128) {
+	b.WriteValue(parquet.Int64Value(v.Int64()).Level(0, 1, b.columnIndex))
 }
-func (b *int128Buffer) WriteNull() {
-	b.ints = append(b.ints, int128.MaxInt128)
+
+type int32Buffer struct {
+	typedBufferImpl
 }
-func (b *int128Buffer) WriteBool(bool) {
-	panic("invalid value")
-}
-func (b *int128Buffer) WriteFloat64(float64) {
-	panic("invalid value")
-}
-func (b *int128Buffer) WriteBytes(v []byte) {
-	panic("invalid value")
-}
-func (b *int128Buffer) Prepare(matrix []parquet.Value, columnIndex, rowWidth int) {
-	b.matrix = matrix
-	b.columnIndex = columnIndex
-	b.rowWidth = rowWidth
-	if b.ints != nil {
-		b.ints = b.ints[:0]
-	}
-}
-func (b *int128Buffer) Flush(t parquet.Type) error {
-	switch t.Kind() {
-	case parquet.Int32Type.Kind():
-		for i, n := range b.ints {
-			var v parquet.Value // zero value is null
-			if n != int128.MaxInt128 {
-				v = parquet.Int32Value(int32(n.Int64()))
-			}
-			b.matrix[(i*b.rowWidth)+b.columnIndex] = v
-		}
-	case parquet.Int64Type.Kind():
-		for i, n := range b.ints {
-			var v parquet.Value
-			if n != int128.MaxInt128 {
-				v = parquet.Int64Value(n.Int64())
-			}
-			b.matrix[(i*b.rowWidth)+b.columnIndex] = v
-		}
-	case parquet.FixedLenByteArrayType(16).Kind():
-		for i, n := range b.ints {
-			var v parquet.Value
-			if n != int128.MaxInt128 {
-				v = parquet.FixedLenByteArrayValue(n.Bytes())
-			}
-			b.matrix[(i*b.rowWidth)+b.columnIndex] = v
-		}
-	default:
-		return fmt.Errorf("unexpected narrowed integer type: %s", t.String())
-	}
-	return nil
+
+func (b *int32Buffer) WriteInt128(v int128.Int128) {
+	b.WriteValue(parquet.Int32Value(int32(v.Int64())).Level(0, 1, b.columnIndex))
 }
 
 type dataConverter interface {
@@ -414,20 +356,6 @@ type timestampConverter struct {
 	defaultTZ        *time.Location
 }
 
-var timestampFormats = []string{
-	time.DateTime,
-	"2006-01-02T15:04:05",
-	"2006-01-02 15:04:05.000",
-	"2006-01-02T15:04:05.000",
-	"2006-01-02T15:04:05.000",
-	"2006-01-02T15:04:05.000-0700",
-	"2006-01-02T15:04:05.000-07:00",
-	"2006-01-02 15:04:05.000-0700",
-	"2006-01-02 15:04:05.000-07:00",
-	"2006-01-02 15:04:05.000000000-07:00",
-	"2006-01-02T15:04:05.000000000-07:00",
-}
-
 func (c timestampConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typedBuffer) error {
 	if val == nil {
 		if !c.nullable {
@@ -447,21 +375,19 @@ func (c timestampConverter) ValidateAndConvert(stats *statsBuffer, val any, buf 
 		s = v
 	default:
 		t, err = bloblang.ValueAsTimestamp(val)
+		if err != nil {
+			return err
+		}
 	}
 	if s != "" {
 		location := c.defaultTZ
-		if c.trimTZ {
-			location = time.UTC
-		}
-		for _, format := range timestampFormats {
-			t, err = time.ParseInLocation(format, s, location)
-			if err == nil {
-				break
-			}
+		t, err = time.ParseInLocation(time.RFC3339Nano, s, location)
+		if err != nil {
+			return fmt.Errorf("unable to parse timestamp value from %q", s)
 		}
 	}
-	if err != nil {
-		return fmt.Errorf("unable to coerse TIMESTAMP value from %v", val)
+	if c.trimTZ {
+		t = t.UTC()
 	}
 	v := snowflakeTimestampInt(t, c.scale, c.includeTZ)
 	if !v.FitsInPrecision(c.precision) {
@@ -498,36 +424,9 @@ func (c timeConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typed
 		buf.WriteNull()
 		return nil
 	}
-
-	var s string
-	switch v := val.(type) {
-	case []byte:
-		s = string(v)
-	case string:
-		s = v
-	}
-	s = strings.TrimSpace(s)
-	var t time.Time
-	var err error
-	switch len(s) {
-	case len("15:04"):
-		t, err = time.Parse("15:04", s)
-	case len("15:04:05"):
-		t, err = time.Parse("15:04:05", s)
-	default:
-		// Allow up to 9 decimal places
-		padding := len(s) - len("15:04:05.")
-		if padding >= 0 {
-			t, err = time.Parse("15:04:05."+strings.Repeat("0", min(padding, 9)), s)
-		} else {
-			err = errors.ErrUnsupported
-		}
-	}
+	t, err := bloblang.ValueAsTimestamp(val)
 	if err != nil {
-		t, err = bloblang.ValueAsTimestamp(val)
-	}
-	if err != nil {
-		return fmt.Errorf("unable to coerse TIME value from %v", val)
+		return err
 	}
 	// 24 hours in nanoseconds fits within uint64, so we can't overflow
 	nanos := t.Hour()*int(time.Hour.Nanoseconds()) +
@@ -552,28 +451,6 @@ type dateConverter struct {
 	nullable bool
 }
 
-// TODO(perf): have some way of sorting these by when they are used
-// as the format is likely the same for a given pipeline
-// Or punt to a user having to configure a format
-var dateFormats = []string{
-	"2006-01-02",
-	"2006-1-02",
-	"2006-01-2",
-	"2006-1-2",
-	"01-02-2006",
-	"01-2-2006",
-	"1-02-2006",
-	"1-2-2006",
-	"2006/01/02",
-	"2006/01/2",
-	"2006/1/02",
-	"2006/1/2",
-	"01/02/2006",
-	"1/02/2006",
-	"01/2/2006",
-	"1/2/2006",
-}
-
 func (c dateConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typedBuffer) error {
 	if val == nil {
 		if !c.nullable {
@@ -583,30 +460,9 @@ func (c dateConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typed
 		buf.WriteNull()
 		return nil
 	}
-	var s string
-	switch v := val.(type) {
-	case []byte:
-		s = string(v)
-	case string:
-		s = v
-	}
-	var t time.Time
-	var err error
-	if s != "" {
-		for _, format := range dateFormats {
-			t, err = time.Parse(format, s)
-			if err == nil {
-				break
-			}
-		}
-	} else {
-		err = errors.ErrUnsupported
-	}
+	t, err := bloblang.ValueAsTimestamp(val)
 	if err != nil {
-		t, err = bloblang.ValueAsTimestamp(val)
-	}
-	if err != nil {
-		return fmt.Errorf("unable to coerse DATE value from %v", val)
+		return err
 	}
 	t = t.UTC()
 	if t.Year() < -9999 || t.Year() > 9999 {

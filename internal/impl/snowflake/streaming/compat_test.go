@@ -131,6 +131,7 @@ func TestSnowflakeTimestamp(t *testing.T) {
 		timestamp string
 		value     int128.Int128
 		scale     int32
+		keepTZ    bool
 		tz        bool
 	}
 	cases := [...]TestCase{
@@ -163,12 +164,28 @@ func TestSnowflakeTimestamp(t *testing.T) {
 			timestamp: "2021-01-01 01:00:00.123+01:00",
 			value:     int128.Int64(263693795348153820),
 			scale:     4,
+			keepTZ:    true,
 			tz:        true,
 		},
 		{
 			timestamp: "2021-01-01 01:00:00.123+01:00",
 			value:     int128.MustParse("26369379534815232001500"),
 			scale:     9,
+			keepTZ:    true,
+			tz:        true,
+		},
+		{
+			timestamp: "2024-01-01 12:00:00.000-08:00",
+			value:     int128.MustParse("1704139200000000000"),
+			scale:     9,
+			keepTZ:    true,
+			tz:        false,
+		},
+		{
+			timestamp: "2024-01-01 12:00:00.000-08:00",
+			value:     int128.MustParse("27920616652800000000960"),
+			scale:     9,
+			keepTZ:    true,
 			tz:        true,
 		},
 	}
@@ -176,7 +193,7 @@ func TestSnowflakeTimestamp(t *testing.T) {
 		c := c
 		t.Run("", func(t *testing.T) {
 			layout := "2006-01-02 15:04:05.000"
-			if c.tz {
+			if c.keepTZ {
 				layout = "2006-01-02 15:04:05.000-07:00"
 			}
 			parsed, err := time.Parse(layout, c.timestamp)

@@ -21,12 +21,6 @@ import (
 	"github.com/segmentio/encoding/thrift"
 )
 
-type parquetFileData struct {
-	schema   *parquet.Schema
-	rows     []parquet.Row
-	metadata map[string]string
-}
-
 func messageToRow(msg *service.Message) (map[string]any, error) {
 	v, err := msg.AsStructured()
 	if err != nil {
@@ -54,8 +48,7 @@ func constructRowGroup(
 	batch service.MessageBatch,
 	schema *parquet.Schema,
 	transformers map[string]*dataTransformer,
-	fileMetadata map[string]string,
-) (parquetFileData, error) {
+) ([]parquet.Row, error) {
 	// We write all of our data in a columnar fashion, but need to pivot that data so that we can feed it into
 	// out parquet library (which sadly will redo the pivot - maybe we need a lower level abstraction...).
 	// So create a massive matrix that we will write stuff in columnar form, but then we don't need to move any
@@ -78,7 +71,7 @@ func constructRowGroup(
 	for _, msg := range batch {
 		row, err := messageToRow(msg)
 		if err != nil {
-			return parquetFileData{}, err
+			return nil, err
 		}
 		// We **must** write a null, so iterate over the schema not the record,
 		// which might be sparse
@@ -86,17 +79,8 @@ func constructRowGroup(
 			v := row[name]
 			err = t.converter.ValidateAndConvert(t.stats, v, t.buf)
 			if err != nil {
-				return parquetFileData{}, fmt.Errorf("invalid data for column %s: %w", name, err)
+				return nil, fmt.Errorf("invalid data for column %s: %w", name, err)
 			}
-		}
-	}
-	// Snowflake has an optimization that we narrow the physical storage for integer based types
-	// based on the maximum precision required for each row
-	narrowed, updatedMetadata := narrowPhysicalTypes(schema, transformers, fileMetadata)
-	for _, field := range narrowed.Fields() {
-		t := transformers[field.Name()]
-		if err := t.buf.Flush(field.Type()); err != nil {
-			return parquetFileData{}, err
 		}
 	}
 	// Now all our values have been written to each buffer - here is where we do our matrix
@@ -106,11 +90,13 @@ func constructRowGroup(
 		rowStart := i * rowWidth
 		rows[i] = matrix[rowStart : rowStart+rowWidth]
 	}
-	return parquetFileData{
-		rows:     rows,
-		schema:   narrowed,
-		metadata: updatedMetadata,
-	}, nil
+	return rows, nil
+}
+
+type parquetFileData struct {
+	schema   *parquet.Schema
+	rows     []parquet.Row
+	metadata map[string]string
 }
 
 func writeParquetFile(writer io.Writer, data parquetFileData) (err error) {
