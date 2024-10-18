@@ -42,6 +42,24 @@ func snowflakeStreamingOutputConfig() *service.ConfigSpec {
 		Description(`
 Ingest data into Snowflake using Snowpipe Streaming.
 
+[%header,format=dsv]
+|===
+Snowflake column type:Allowed format in Redpanda Connect
+CHAR, VARCHAR:string
+BINARY:[]byte
+NUMBER:any numeric type, string
+FLOAT:any numeric type
+BOOLEAN:bool,any numeric type,string parsable according to `+"`strconv.ParseBool`"+`
+TIME:unix or RFC 3339 with nanoseconds timestamps
+DATE:unix or RFC 3339 with nanoseconds timestamps
+DATE:unix or RFC 3339 with nanoseconds timestamps
+VARIANT,ARRAY,OBJECT:any data type is converted into JSON
+GEOGRAPHY: Not supported
+GEOMETRY: Not supported
+|===
+
+For TIMESTAMP, TIME and DATE columns, you can parse different string formats using a bloblang `+"`"+ssoFieldMapping+"`"+`.
+
 Authentication can be configured using a https://docs.snowflake.com/en/user-guide/key-pair-auth[RSA Key Pair^].
 
 There are https://docs.snowflake.com/en/user-guide/data-load-snowpipe-streaming-overview#limitations[limitations^] of what data types can be loaded into Snowflake using this method.

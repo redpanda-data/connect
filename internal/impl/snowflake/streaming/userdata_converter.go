@@ -18,6 +18,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/Jeffail/gabs/v2"
 	"github.com/parquet-go/parquet-go"
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming/int128"
@@ -300,7 +301,7 @@ func (c jsonConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typed
 		buf.WriteNull()
 		return nil
 	}
-	v := []byte(bloblang.ValueToString(val))
+	v := gabs.Wrap(val).Bytes()
 	if len(v) > c.maxLength {
 		return fmt.Errorf("value too long, length: %d, max: %d", len(v), c.maxLength)
 	}
