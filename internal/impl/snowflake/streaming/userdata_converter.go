@@ -184,6 +184,8 @@ func (c numberConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typ
 		v, err = int128.Float32(t, c.precision, c.scale)
 	case float64:
 		v, err = int128.Float64(t, c.precision, c.scale)
+	case string:
+		v, err = int128.String(t, c.precision, c.scale)
 	case json.Number:
 		v, err = int128.String(t.String(), c.precision, c.scale)
 	default:
