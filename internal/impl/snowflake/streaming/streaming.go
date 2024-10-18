@@ -291,7 +291,7 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 	if err != nil {
 		return stats, fmt.Errorf("unable to parse parquet metadata: %w", err)
 	}
-	if debug || true {
+	if debug {
 		_ = os.WriteFile("latest_test.parquet", unencrypted, 0o644)
 	}
 	unencryptedLen := len(unencrypted)
