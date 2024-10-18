@@ -29,7 +29,7 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/typed"
 )
 
-const debug = true
+const debug = false
 
 // ClientOptions is the options to create a Snowflake Snowpipe API Client
 type ClientOptions struct {
