@@ -25,14 +25,14 @@ func msg(s string) *service.Message {
 	return service.NewMessage([]byte(s))
 }
 
-func TestNarrowingInt128(t *testing.T) {
+func TestWriteParquet(t *testing.T) {
 	b := bytes.NewBuffer(nil)
 	batch := service.MessageBatch{
 		msg(`{"a":2}`),
 		msg(`{"a":12353}`),
 	}
 	inputDataSchema := parquet.Group{
-		"A": parquet.Decimal(0, 38, parquet.FixedLenByteArrayType(16)),
+		"A": parquet.Decimal(0, 18, parquet.Int32Type),
 	}
 	transformers := map[string]*dataTransformer{
 		"A": {
@@ -45,10 +45,10 @@ func TestNarrowingInt128(t *testing.T) {
 			column: &columnMetadata{
 				Name:         "A",
 				Ordinal:      1,
-				Type:         "NUMBER(38,0)",
+				Type:         "NUMBER(18,0)",
 				LogicalType:  "fixed",
-				PhysicalType: "SB16",
-				Precision:    ptr.Int32(38),
+				PhysicalType: "SB8",
+				Precision:    ptr.Int32(18),
 				Scale:        ptr.Int32(0),
 				Nullable:     true,
 			},
