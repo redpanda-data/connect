@@ -270,7 +270,7 @@ func (a *sqsWriter) WriteBatch(ctx context.Context, batch service.MessageBatch) 
 
 	backOff := a.conf.backoffCtor()
 
-	entries := []types.SendMessageBatchRequestEntry{}
+	entries := map[string][]types.SendMessageBatchRequestEntry{}
 	attrMap := map[string]sqsAttributes{}
 
 	for i := 0; i < len(batch); i++ {
@@ -282,7 +282,7 @@ func (a *sqsWriter) WriteBatch(ctx context.Context, batch service.MessageBatch) 
 
 		attrMap[id] = attrs
 
-		entries = append(entries, types.SendMessageBatchRequestEntry{
+		entries[a.conf.URL] = append(entries[a.conf.URL], types.SendMessageBatchRequestEntry{
 			Id:                     &id,
 			MessageBody:            attrs.content,
 			MessageAttributes:      attrs.attrMap,
@@ -292,8 +292,25 @@ func (a *sqsWriter) WriteBatch(ctx context.Context, batch service.MessageBatch) 
 		})
 	}
 
+	for url, entries := range entries {
+		backOff.Reset()
+		if err := a.writeChunk(ctx, url, entries, attrMap, backOff); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (a *sqsWriter) writeChunk(
+	ctx context.Context,
+	url string,
+	entries []types.SendMessageBatchRequestEntry,
+	attrMap map[string]sqsAttributes,
+	backOff backoff.BackOff,
+) error {
 	input := &sqs.SendMessageBatchInput{
-		QueueUrl: aws.String(a.conf.URL),
+		QueueUrl: &url,
 		Entries:  entries,
 	}
 
