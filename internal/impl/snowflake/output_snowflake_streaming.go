@@ -13,7 +13,9 @@ import (
 	"crypto/rsa"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
+	"github.com/dustin/go-humanize"
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming"
@@ -216,9 +218,9 @@ func newSnowflakeStreamer(
 	o.table = table
 	o.mapping = mapping
 	o.logger = mgr.Logger()
-	o.buildTime = mgr.Metrics().NewTimer("build_output_latency_ns")
-	o.uploadTime = mgr.Metrics().NewTimer("upload_latency_ns")
-	o.compressedOutput = mgr.Metrics().NewCounter("compressed_output_size_bytes")
+	o.buildTime = mgr.Metrics().NewTimer("snowflake_build_output_latency_ns")
+	o.uploadTime = mgr.Metrics().NewTimer("snowflake_upload_latency_ns")
+	o.compressedOutput = mgr.Metrics().NewCounter("snowflake_compressed_output_size_bytes")
 	return o, nil
 }
 
