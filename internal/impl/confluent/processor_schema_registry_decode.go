@@ -33,6 +33,8 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
 )
 
+const protoJSONMarshalerField = "protojson_marshaler_opts"
+
 func schemaRegistryDecoderConfig() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
 		Beta().
@@ -65,7 +67,17 @@ This processor decodes protobuf messages to JSON documents, you can read more ab
 		Field(service.NewBoolField("avro_raw_json").
 			Description("Whether Avro messages should be decoded into normal JSON (\"json that meets the expectations of regular internet json\") rather than https://avro.apache.org/docs/current/specification/_print/#json-encoding[Avro JSON^]. If `true` the schema returned from the subject should be decoded as https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull[standard json^] instead of as https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodec[avro json^]. There is a https://github.com/linkedin/goavro/blob/5ec5a5ee7ec82e16e6e2b438d610e1cab2588393/union.go#L224-L249[comment in goavro^], the https://github.com/linkedin/goavro[underlining library used for avro serialization^], that explains in more detail the difference between the standard json and avro json.").
 			Advanced().Default(false)).
-		Field(service.NewURLField("url").Description("The base URL of the schema registry service."))
+		Field(service.NewURLField("url").Description("The base URL of the schema registry service.")).
+		Fields(
+			service.NewObjectField(protoJSONMarshalerField,
+				service.NewBoolField("emit_defaults").
+					Description("specifies whether to render fields with zero values.").
+					Default(false).
+					Advanced(),
+			).
+				Description("Configuration options for the protojson marshaler.").
+				Advanced(),
+		)
 
 	for _, f := range service.NewHTTPRequestAuthSignerFields() {
 		spec = spec.Field(f.Version("4.7.0"))
@@ -88,8 +100,9 @@ func init() {
 //------------------------------------------------------------------------------
 
 type schemaRegistryDecoder struct {
-	avroRawJSON bool
-	client      *sr.Client
+	avroRawJSON           bool
+	protoJSONEmitDefaults bool
+	client                *sr.Client
 
 	schemas    map[int]*cachedSchemaDecoder
 	cacheMut   sync.RWMutex
@@ -117,7 +130,15 @@ func newSchemaRegistryDecoderFromConfig(conf *service.ParsedConfig, mgr *service
 	if err != nil {
 		return nil, err
 	}
-	return newSchemaRegistryDecoder(urlStr, authSigner, tlsConf, avroRawJSON, mgr)
+
+	protoJSONMarshalerConf := conf.Namespace(protoJSONMarshalerField)
+
+	protoJSONEmitDefaults, err := protoJSONMarshalerConf.FieldBool("emit_defaults")
+	if err != nil {
+		return nil, err
+	}
+
+	return newSchemaRegistryDecoder(urlStr, authSigner, tlsConf, avroRawJSON, protoJSONEmitDefaults, mgr)
 }
 
 func newSchemaRegistryDecoder(
@@ -125,14 +146,16 @@ func newSchemaRegistryDecoder(
 	reqSigner func(f fs.FS, req *http.Request) error,
 	tlsConf *tls.Config,
 	avroRawJSON bool,
+	protoJSONEmitsDefaults bool,
 	mgr *service.Resources,
 ) (*schemaRegistryDecoder, error) {
 	s := &schemaRegistryDecoder{
-		avroRawJSON: avroRawJSON,
-		schemas:     map[int]*cachedSchemaDecoder{},
-		shutSig:     shutdown.NewSignaller(),
-		logger:      mgr.Logger(),
-		mgr:         mgr,
+		avroRawJSON:           avroRawJSON,
+		protoJSONEmitDefaults: protoJSONEmitsDefaults,
+		schemas:               map[int]*cachedSchemaDecoder{},
+		shutSig:               shutdown.NewSignaller(),
+		logger:                mgr.Logger(),
+		mgr:                   mgr,
 	}
 	var err error
 	if s.client, err = sr.NewClient(urlStr, reqSigner, tlsConf, mgr); err != nil {
