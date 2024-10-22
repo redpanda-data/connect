@@ -16,8 +16,10 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/rs/xid"
+	"github.com/urfave/cli/v2"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka/enterprise"
+	"github.com/redpanda-data/connect/v4/internal/secrets"
 	"github.com/redpanda-data/connect/v4/internal/telemetry"
 )
 
@@ -30,6 +32,10 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 
 	rpLogger := enterprise.NewTopicLogger(instanceID)
 	var fbLogger *service.Logger
+
+	secretLookupFn := func(ctx context.Context, key string) (string, bool) {
+		return os.LookupEnv(key)
+	}
 
 	opts = append(opts,
 		service.CLIOptSetVersion(version, dateBuilt),
@@ -69,6 +75,30 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 		service.CLIOptOnStreamStart(func(s *service.RunningStreamSummary) error {
 			rpLogger.SetStreamSummary(s)
 			return nil
+		}),
+
+		// Secrets management
+		service.CLIOptCustomRunFlags([]cli.Flag{
+			&cli.StringSliceFlag{
+				Name:  "secrets",
+				Usage: "Attempt to load secrets from a provided URN. If a referenced secret isn't identified using the provided method then environment variables will also be looked up, you can disable this behaviour with the --disable-env-lookup flag.",
+			},
+			&cli.BoolFlag{
+				Name:  "disable-env-lookup",
+				Usage: "Disable the ability for configs to interpolate environment variables with ${FOO} syntax",
+			},
+		}, func(c *cli.Context) error {
+			disableEnvLookup := c.Bool("disable-env-lookup")
+			secretsURNs := c.StringSlice("secrets")
+			if len(secretsURNs) > 0 {
+				var err error
+				secretLookupFn, err = secrets.ParseLookupURNs(c.Context, slog.New(rpLogger), disableEnvLookup, secretsURNs...)
+				return err
+			}
+			return nil
+		}),
+		service.CLIOptSetEnvVarLookup(func(ctx context.Context, key string) (string, bool) {
+			return secretLookupFn(ctx, key)
 		}),
 	)
 

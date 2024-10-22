@@ -1,0 +1,86 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package secrets
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	"net/url"
+	"os"
+)
+
+// LookupFn defines the common closure that a secrets management client provides
+// and is then fed into a Redpanda Connect cli constructor.
+type LookupFn func(context.Context, string) (string, bool)
+
+type lookupTiers []LookupFn
+
+func (l lookupTiers) Lookup(ctx context.Context, key string) (string, bool) {
+	for _, fn := range l {
+		if v, ok := fn(ctx, key); ok {
+			return v, ok
+		}
+		if ctx.Err() != nil {
+			break
+		}
+	}
+	return "", false
+}
+
+// ParseLookupURNs attempts to parse a series of secrets lookup solutions
+// defined as URNs and returns a single lookup func for obtaining secrets from
+// them in the order provided.
+//
+// A toggle can be provided that determines whether environment variables should
+// be considered the last look up option, in which case if all others fail to
+// provide a secret then an environment variable under the key is returned if
+// found.
+func ParseLookupURNs(ctx context.Context, logger *slog.Logger, disableEnvLookup bool, secretsMgmtUrns ...string) (LookupFn, error) {
+	var tiers lookupTiers
+
+	for _, urn := range secretsMgmtUrns {
+		tier, err := parseSecretsLookupURN(ctx, logger, urn)
+		if err != nil {
+			return nil, err
+		}
+		tiers = append(tiers, tier)
+	}
+
+	if !disableEnvLookup {
+		tiers = append(tiers, func(ctx context.Context, key string) (string, bool) {
+			return os.LookupEnv(key)
+		})
+	}
+	return tiers.Lookup, nil
+}
+
+func parseSecretsLookupURN(ctx context.Context, logger *slog.Logger, urn string) (LookupFn, error) {
+	u, err := url.Parse(urn)
+	if err != nil {
+		return nil, err
+	}
+
+	switch u.Scheme {
+	case "test":
+		return func(ctx context.Context, key string) (string, bool) {
+			return key + " " + u.Host, true
+		}, nil
+	case "redis":
+		return newRedisSecretsLookup(ctx, logger, u)
+	default:
+		return nil, fmt.Errorf("secrets scheme %v not recognized", u.Scheme)
+	}
+}
