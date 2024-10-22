@@ -146,66 +146,6 @@ func fls128(n Int128) int {
 	return 64 - bits.LeadingZeros64(n.lo)
 }
 
-// Div computes a / b
-//
-// Division by zero panics
-func Div(dividend, divisor Int128) Int128 {
-	// algorithm is ported from absl::int128
-	if divisor == (Int128{}) {
-		panic("int128 division by zero")
-	}
-	negateQuotient := (dividend.hi < 0) != (divisor.hi < 0)
-	if dividend.IsNegative() {
-		dividend = Neg(dividend)
-	}
-	if divisor.IsNegative() {
-		divisor = Neg(divisor)
-	}
-	if divisor == dividend {
-		return Int64(1)
-	}
-	if uGt(divisor, dividend) {
-		return Int128{}
-	}
-	denominator := divisor
-	var quotient Int128
-	shift := fls128(dividend) - fls128(denominator)
-	denominator = Shl(denominator, uint(shift))
-	// Uses shift-subtract algorithm to divide dividend by denominator. The
-	// remainder will be left in dividend.
-	for i := 0; i <= shift; i++ {
-		quotient = Shl(quotient, 1)
-		if uGt(dividend, denominator) {
-			dividend = Sub(dividend, denominator)
-			quotient = Or(quotient, Int64(1))
-		}
-		denominator = uShr(denominator, 1)
-	}
-	if negateQuotient {
-		quotient = Neg(quotient)
-	}
-	return quotient
-}
-
-// uShr is unsigned shift right (no sign extending)
-func uShr(v Int128, amt uint) Int128 {
-	n := amt - 64
-	m := 64 - amt
-	return Int128{
-		hi: int64(uint64(v.hi) >> amt),
-		lo: v.lo>>amt | uint64(v.hi)>>n | uint64(v.hi)<<m,
-	}
-}
-
-// uGt is unsigned greater than comparison
-func uGt(a, b Int128) bool {
-	if a.hi == b.hi {
-		return a.lo >= b.lo
-	} else {
-		return uint64(a.hi) >= uint64(b.hi)
-	}
-}
-
 // Neg computes -v
 func Neg(n Int128) Int128 {
 	n.lo = ^n.lo + 1
