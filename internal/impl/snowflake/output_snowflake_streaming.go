@@ -12,6 +12,7 @@ import (
 	"context"
 	"crypto/rsa"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
@@ -191,7 +192,7 @@ func newSnowflakeStreamer(
 		// There is a limit of 10k channels, so we can't dynamically create them.
 		// The only other good default is to create one and only allow a single
 		// stream to write to a single table.
-		channelPrefix = fmt.Sprintf("redpanda_connect_%s.%s.%s", db, schema, table)
+		channelPrefix = fmt.Sprintf("Redpanda_Connect_%s.%s.%s", db, schema, table)
 	}
 	client, err := streaming.NewSnowflakeServiceClient(
 		context.Background(),
@@ -202,6 +203,7 @@ func newSnowflakeStreamer(
 			PrivateKey:     rsaKey,
 			Logger:         mgr.Logger(),
 			ConnectVersion: mgr.EngineVersion(),
+			Application:    strings.TrimPrefix(channelPrefix, "Redpanda_Connect_"),
 		})
 	if err != nil {
 		return nil, err

@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -290,6 +291,7 @@ type (
 type SnowflakeRestClient struct {
 	account    string
 	user       string
+	app        string
 	privateKey *rsa.PrivateKey
 	client     *http.Client
 	userAgent  string
@@ -300,7 +302,7 @@ type SnowflakeRestClient struct {
 }
 
 // NewRestClient creates a new REST client for the given parameters.
-func NewRestClient(account, user, version string, privateKey *rsa.PrivateKey, logger *service.Logger) (c *SnowflakeRestClient, err error) {
+func NewRestClient(account, user, version, app string, privateKey *rsa.PrivateKey, logger *service.Logger) (c *SnowflakeRestClient, err error) {
 	version = strings.TrimLeft(version, "v")
 	splits := strings.SplitN(version, "-", 2)
 	if len(splits) > 1 {
@@ -314,6 +316,7 @@ func NewRestClient(account, user, version string, privateKey *rsa.PrivateKey, lo
 		privateKey: privateKey,
 		userAgent:  userAgent,
 		logger:     logger,
+		app:        url.QueryEscape(app),
 		cachedJWT:  typed.NewAtomicValue(""),
 		authRefreshLoop: periodic.New(
 			time.Hour-(2*time.Minute),
@@ -365,42 +368,42 @@ func (c *SnowflakeRestClient) computeJWT() (string, error) {
 // we don't have to handle async requests.
 func (c *SnowflakeRestClient) RunSQL(ctx context.Context, req RunSQLRequest) (resp RunSQLResponse, err error) {
 	requestID := uuid.NewString()
-	err = c.doPost(ctx, fmt.Sprintf("https://%s.snowflakecomputing.com/api/v2/statements?application=Redpanda_Connect&requestId=%s", c.account, requestID), req, &resp)
+	err = c.doPost(ctx, fmt.Sprintf("https://%s.snowflakecomputing.com/api/v2/statements?application=%s&requestId=%s", c.account, c.app, requestID), req, &resp)
 	return
 }
 
 // configureClient configures a client for Snowpipe Streaming.
 func (c *SnowflakeRestClient) configureClient(ctx context.Context, req clientConfigureRequest) (resp clientConfigureResponse, err error) {
 	requestID := uuid.NewString()
-	err = c.doPost(ctx, fmt.Sprintf("https://%s.snowflakecomputing.com/v1/streaming/client/configure?application=Redpanda_Connect&requestId=%s", c.account, requestID), req, &resp)
+	err = c.doPost(ctx, fmt.Sprintf("https://%s.snowflakecomputing.com/v1/streaming/client/configure?application=%s&requestId=%s", c.account, c.app, requestID), req, &resp)
 	return
 }
 
 // channelStatus returns the status of a given channel
 func (c *SnowflakeRestClient) channelStatus(ctx context.Context, req batchChannelStatusRequest) (resp batchChannelStatusResponse, err error) {
 	requestID := uuid.NewString()
-	err = c.doPost(ctx, fmt.Sprintf("https://%s.snowflakecomputing.com/v1/streaming/channels/status?application=Redpanda_Connect&requestId=%s", c.account, requestID), req, &resp)
+	err = c.doPost(ctx, fmt.Sprintf("https://%s.snowflakecomputing.com/v1/streaming/channels/status?application=%s&requestId=%s", c.account, c.app, requestID), req, &resp)
 	return
 }
 
 // openChannel opens a channel for writing
 func (c *SnowflakeRestClient) openChannel(ctx context.Context, req openChannelRequest) (resp openChannelResponse, err error) {
 	requestID := uuid.NewString()
-	err = c.doPost(ctx, fmt.Sprintf("https://%s.snowflakecomputing.com/v1/streaming/channels/open?application=Redpanda_Connect&requestId=%s", c.account, requestID), req, &resp)
+	err = c.doPost(ctx, fmt.Sprintf("https://%s.snowflakecomputing.com/v1/streaming/channels/open?application=%s&requestId=%s", c.account, c.app, requestID), req, &resp)
 	return
 }
 
 // dropChannel drops a channel when it's no longer in use.
 func (c *SnowflakeRestClient) dropChannel(ctx context.Context, req dropChannelRequest) (resp dropChannelResponse, err error) {
 	requestID := uuid.NewString()
-	err = c.doPost(ctx, fmt.Sprintf("https://%s.snowflakecomputing.com/v1/streaming/channels/drop?application=Redpanda_Connect&requestId=%s", c.account, requestID), req, &resp)
+	err = c.doPost(ctx, fmt.Sprintf("https://%s.snowflakecomputing.com/v1/streaming/channels/drop?application=%s&requestId=%s", c.account, c.app, requestID), req, &resp)
 	return
 }
 
 // registerBlob registers a blob in object storage to be ingested into Snowflake.
 func (c *SnowflakeRestClient) registerBlob(ctx context.Context, req registerBlobRequest) (resp registerBlobResponse, err error) {
 	requestID := uuid.NewString()
-	err = c.doPost(ctx, fmt.Sprintf("https://%s.snowflakecomputing.com/v1/streaming/channels/write/blobs?application=Redpanda_Connect&requestId=%s", c.account, requestID), req, &resp)
+	err = c.doPost(ctx, fmt.Sprintf("https://%s.snowflakecomputing.com/v1/streaming/channels/write/blobs?application=%s&requestId=%s", c.account, c.app, requestID), req, &resp)
 	return
 }
 
