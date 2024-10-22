@@ -404,6 +404,13 @@ func (c *SnowflakeRestClient) registerBlob(ctx context.Context, req registerBlob
 	return
 }
 
+func debugf(l *service.Logger, msg string, args ...any) {
+	if debug {
+		fmt.Printf("%s\n", fmt.Sprintf(msg, args...))
+	}
+	l.Tracef(msg, args...)
+}
+
 func (c *SnowflakeRestClient) doPost(ctx context.Context, url string, req any, resp any) error {
 	marshaller := json.Marshal
 	if debug {
@@ -416,9 +423,7 @@ func (c *SnowflakeRestClient) doPost(ctx context.Context, url string, req any, r
 		return err
 	}
 	respBody, err := backoff.RetryNotifyWithData(func() ([]byte, error) {
-		if debug {
-			fmt.Printf("making request to %s with body %s\n", url, reqBody)
-		}
+		debugf(c.logger, "making request to %s with body %s", url, reqBody)
 		httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(reqBody))
 		if errors.Is(err, context.Canceled) {
 			return nil, backoff.Permanent(err)
@@ -447,9 +452,7 @@ func (c *SnowflakeRestClient) doPost(ctx context.Context, url string, req any, r
 		if r.StatusCode != 200 {
 			return nil, fmt.Errorf("non successful status code (%d): %s", r.StatusCode, respBody)
 		}
-		if debug {
-			fmt.Printf("got response to %s with body %s\n", url, respBody)
-		}
+		debugf(c.logger, "got response to %s with body %s", url, respBody)
 		return respBody, nil
 	},
 		backoff.WithContext(
@@ -460,7 +463,7 @@ func (c *SnowflakeRestClient) doPost(ctx context.Context, url string, req any, r
 			ctx,
 		),
 		func(err error, _ time.Duration) {
-			c.logger.Debugf("failed request at %s: %s", url, err)
+			debugf(c.logger, "failed request at %s: %s", url, err)
 		},
 	)
 	if err != nil {
