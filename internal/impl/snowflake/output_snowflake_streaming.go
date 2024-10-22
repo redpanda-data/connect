@@ -302,11 +302,18 @@ func (o *snowflakeStreamerOutput) WriteBatch(ctx context.Context, batch service.
 		reopened, reopenErr := o.openChannel(ctx, channel.Name, channel.ID)
 		if reopenErr == nil {
 			o.channelPool.Put(reopened)
-			return nil
 		} else {
 			o.logger.Warnf("unable to reopen channel %q after failure: %v", channel.Name, reopenErr)
+			// Keep around the same channel just in case so we don't keep creating new channels.
+			o.channelPool.Put(channel)
 		}
+		return err
 	}
+	polls, err := channel.WaitUntilCommitted(ctx)
+	if err == nil {
+		o.logger.Tracef("batch committed in snowflake after %d polls", polls)
+	}
+	o.channelPool.Put(channel)
 	return err
 }
 

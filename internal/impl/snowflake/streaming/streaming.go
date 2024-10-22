@@ -389,7 +389,7 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 		return stats, fmt.Errorf("unexpected number of channels for blob chunk: %d", len(chunk.Channels))
 	}
 	channel := chunk.Channels[0]
-	if channel.StatusCode != 0 {
+	if channel.StatusCode != responseSuccess {
 		msg := channel.Message
 		if msg == "" {
 			msg = "(no message)"
@@ -401,6 +401,57 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 	stats.CompressedOutputSize = unencryptedLen
 	stats.BuildTime = uploadStartTime.Sub(startTime)
 	stats.UploadTime = uploadFinishTime.Sub(uploadStartTime)
-	// TODO: we need to validate the offset moved forward...
-	return stats, nil
+	return stats, err
+}
+
+// WaitUntilCommitted waits until all the data in the channel has been committed
+// along with how many polls it took to get that.
+func (c *SnowflakeIngestionChannel) WaitUntilCommitted(ctx context.Context) (int, error) {
+	var polls int
+	err := backoff.Retry(func() error {
+		polls++
+		resp, err := c.client.channelStatus(ctx, batchChannelStatusRequest{
+			Role: c.role,
+			Channels: []channelStatusRequest{
+				{
+					Table:           c.TableName,
+					Database:        c.DatabaseName,
+					Schema:          c.SchemaName,
+					Name:            c.Name,
+					ClientSequencer: &c.clientSequencer,
+				},
+			},
+		})
+		if err != nil {
+			return err
+		}
+		if resp.StatusCode != responseSuccess {
+			msg := resp.Message
+			if msg == "" {
+				msg = "(no message)"
+			}
+			return fmt.Errorf("error fetching channel status (%d): %s", resp.StatusCode, msg)
+		}
+		if len(resp.Channels) != 1 {
+			return fmt.Errorf("unexpected number of channels for status request: %d", len(resp.Channels))
+		}
+		status := resp.Channels[0]
+		if status.PersistedClientSequencer != c.clientSequencer {
+			return backoff.Permanent(fmt.Errorf("unexpected number of channels for status request: %d", len(resp.Channels)))
+		}
+		if status.PersistedRowSequencer < c.rowSequencer {
+			return fmt.Errorf("row sequencer not yet committed: %d < %d", status.PersistedRowSequencer, c.rowSequencer)
+		}
+		return nil
+	}, backoff.WithContext(
+		// 1, 10, 100, 1000, 1000, ...
+		backoff.NewExponentialBackOff(
+			backoff.WithInitialInterval(time.Millisecond),
+			backoff.WithMultiplier(10),
+			backoff.WithMaxInterval(time.Second),
+			backoff.WithMaxElapsedTime(10*time.Minute),
+		),
+		ctx,
+	))
+	return polls, err
 }

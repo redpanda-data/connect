@@ -91,8 +91,8 @@ type (
 	channelStatusResponse struct {
 		StatusCode               int64  `json:"status_code"`
 		PersistedOffsetToken     string `json:"persisted_offset_token"`
-		PersistedClientSequencer string `json:"persisted_client_sequencer"`
-		PersistedRowSequencer    string `json:"persisted_row_sequencer"`
+		PersistedClientSequencer int64  `json:"persisted_client_sequencer"`
+		PersistedRowSequencer    int64  `json:"persisted_row_sequencer"`
 	}
 	batchChannelStatusResponse struct {
 		StatusCode int64                   `json:"status_code"`
