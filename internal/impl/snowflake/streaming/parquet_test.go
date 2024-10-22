@@ -62,7 +62,7 @@ func TestWriteParquet(t *testing.T) {
 		transformers,
 	)
 	require.NoError(t, err)
-	err = writeParquetFile(b, parquetFileData{
+	err = writeParquetFile(b, "latest", parquetFileData{
 		schema, rows, nil,
 	})
 	require.NoError(t, err)

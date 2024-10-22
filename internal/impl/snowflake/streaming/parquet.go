@@ -99,11 +99,11 @@ type parquetFileData struct {
 	metadata map[string]string
 }
 
-func writeParquetFile(writer io.Writer, data parquetFileData) (err error) {
+func writeParquetFile(writer io.Writer, rpcnVersion string, data parquetFileData) (err error) {
 	pw := parquet.NewGenericWriter[map[string]any](
 		writer,
 		data.schema,
-		parquet.CreatedBy("RedpandaConnect", version, "main"),
+		parquet.CreatedBy("RedpandaConnect", rpcnVersion, "unknown"),
 		// Recommended by the Snowflake team to enable data page stats
 		parquet.DataPageStatistics(true),
 		parquet.Compression(&parquet.Zstd),

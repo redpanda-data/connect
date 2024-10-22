@@ -100,12 +100,9 @@ BINARY:[]byte
 NUMBER:any numeric type, string
 FLOAT:any numeric type
 BOOLEAN:bool,any numeric type,string parsable according to `strconv.ParseBool`
-TIME:unix or RFC 3339 with nanoseconds timestamps
-DATE:unix or RFC 3339 with nanoseconds timestamps
-DATE:unix or RFC 3339 with nanoseconds timestamps
+TIME,DATE,TIMESTAMP:unix or RFC 3339 with nanoseconds timestamps
 VARIANT,ARRAY,OBJECT:any data type is converted into JSON
-GEOGRAPHY: Not supported
-GEOMETRY: Not supported
+GEOGRAPHY,GEOMETRY: Not supported
 |===
 
 For TIMESTAMP, TIME and DATE columns, you can parse different string formats using a bloblang `mapping`.
@@ -345,7 +342,7 @@ The prefix to use when creating a channel name.
 Duplicate channel names will result in errors and prevent multiple instances of Redpanda Connect from writing at the same time.
 By default this will create a channel name that is based on the table FQN so there will only be a single stream per table.
 
-NOTE: There is a limit of 10,000 streams per table.
+NOTE: There is a limit of 10,000 streams per table - if using more than 10k streams please reach out to Snowflake support.
 
 
 *Type*: `string`

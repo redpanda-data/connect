@@ -13,9 +13,7 @@ import (
 	"crypto/rsa"
 	"fmt"
 	"sync"
-	"sync/atomic"
 
-	"github.com/dustin/go-humanize"
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming"
@@ -52,12 +50,9 @@ BINARY:[]byte
 NUMBER:any numeric type, string
 FLOAT:any numeric type
 BOOLEAN:bool,any numeric type,string parsable according to `+"`strconv.ParseBool`"+`
-TIME:unix or RFC 3339 with nanoseconds timestamps
-DATE:unix or RFC 3339 with nanoseconds timestamps
-DATE:unix or RFC 3339 with nanoseconds timestamps
+TIME,DATE,TIMESTAMP:unix or RFC 3339 with nanoseconds timestamps
 VARIANT,ARRAY,OBJECT:any data type is converted into JSON
-GEOGRAPHY: Not supported
-GEOMETRY: Not supported
+GEOGRAPHY,GEOMETRY: Not supported
 |===
 
 For TIMESTAMP, TIME and DATE columns, you can parse different string formats using a bloblang `+"`"+ssoFieldMapping+"`"+`.
@@ -201,12 +196,12 @@ func newSnowflakeStreamer(
 	client, err := streaming.NewSnowflakeServiceClient(
 		context.Background(),
 		streaming.ClientOptions{
-			Account:         account,
-			User:            user,
-			Role:            role,
-			PrivateKey:      rsaKey,
-			Logger:          mgr.Logger(),
-			RedpandaVersion: mgr.EngineVersion(),
+			Account:        account,
+			User:           user,
+			Role:           role,
+			PrivateKey:     rsaKey,
+			Logger:         mgr.Logger(),
+			ConnectVersion: mgr.EngineVersion(),
 		})
 	if err != nil {
 		return nil, err

@@ -44,8 +44,8 @@ type ClientOptions struct {
 	// Private key for the user
 	PrivateKey *rsa.PrivateKey
 	// Logger for... logging?
-	Logger          *service.Logger
-	RedpandaVersion string
+	Logger         *service.Logger
+	ConnectVersion string
 }
 
 type stageUploaderResult struct {
@@ -70,7 +70,7 @@ func NewSnowflakeServiceClient(ctx context.Context, opts ClientOptions) (*Snowfl
 	client, err := NewRestClient(
 		opts.Account,
 		opts.User,
-		opts.RedpandaVersion,
+		opts.ConnectVersion,
 		opts.PrivateKey,
 		opts.Logger,
 	)
@@ -171,6 +171,7 @@ func (c *SnowflakeServiceClient) OpenChannel(ctx context.Context, opts ChannelOp
 		ChannelOptions: opts,
 		clientPrefix:   c.clientPrefix,
 		schema:         schema,
+		version:        c.options.ConnectVersion,
 		client:         c.client,
 		role:           c.options.Role,
 		uploader:       c.uploader,
@@ -245,6 +246,7 @@ type SnowflakeIngestionChannel struct {
 	ChannelOptions
 	role            string
 	clientPrefix    string
+	version         string
 	schema          *parquet.Schema
 	client          *SnowflakeRestClient
 	uploader        *typed.AtomicValue[stageUploaderResult]
@@ -288,7 +290,7 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 	// This is extra metadata that is required for functionality in snowflake.
 	c.fileMetadata["primaryFileId"] = path.Base(blobPath)
 	c.buffer.Reset()
-	err = writeParquetFile(c.buffer, parquetFileData{
+	err = writeParquetFile(c.buffer, c.version, parquetFileData{
 		schema:   c.schema,
 		rows:     rows,
 		metadata: c.fileMetadata,
