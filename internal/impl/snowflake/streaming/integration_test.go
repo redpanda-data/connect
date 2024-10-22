@@ -33,6 +33,14 @@ func msg(s string) *service.Message {
 	return service.NewMessage([]byte(s))
 }
 
+func envOr(name, dflt string) string {
+	val := os.Getenv(name)
+	if val != "" {
+		return val
+	}
+	return dflt
+}
+
 func setup(t *testing.T) (*streaming.SnowflakeRestClient, *streaming.SnowflakeServiceClient) {
 	t.Helper()
 	ctx := context.Background()
@@ -46,8 +54,8 @@ func setup(t *testing.T) (*streaming.SnowflakeRestClient, *streaming.SnowflakeSe
 	parseResult, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 	require.NoError(t, err)
 	clientOptions := streaming.ClientOptions{
-		Account:        "WQKFXQQ-WI77362",
-		User:           "ROCKWOODREDPANDA",
+		Account:        envOr("SNOWFLAKE_ACCOUNT", "WQKFXQQ-WI77362"),
+		User:           envOr("SNOWFLAKE_USER", "ROCKWOODREDPANDA"),
 		Role:           "ACCOUNTADMIN",
 		PrivateKey:     parseResult.(*rsa.PrivateKey),
 		ConnectVersion: "v4.0.0-dev",
@@ -74,7 +82,7 @@ func TestSnowflake(t *testing.T) {
 	restClient, streamClient := setup(t)
 	channelOpts := streaming.ChannelOptions{
 		Name:         t.Name(),
-		DatabaseName: "BABY_DATABASE",
+		DatabaseName: envOr("SNOWFLAKE_DB", "BABY_DATABASE"),
 		SchemaName:   "PUBLIC",
 		TableName:    "TEST_TABLE_KITCHEN_SINK",
 	}
@@ -225,7 +233,7 @@ func TestIntegerCompat(t *testing.T) {
 	restClient, streamClient := setup(t)
 	channelOpts := streaming.ChannelOptions{
 		Name:         t.Name(),
-		DatabaseName: "BABY_DATABASE",
+		DatabaseName: envOr("SNOWFLAKE_DB", "BABY_DATABASE"),
 		SchemaName:   "PUBLIC",
 		TableName:    "TEST_INT_TABLE",
 	}
