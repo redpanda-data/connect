@@ -336,8 +336,6 @@ func maxPrecisionForByteWidth(byteWidth int) int32 {
 		return 9
 	case 8:
 		return 18
-	case 16:
-		return 38
 	}
-	panic(fmt.Errorf("unexpected byteWidth=%d", byteWidth))
+	return 38
 }

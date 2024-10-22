@@ -108,12 +108,6 @@ func generateBlobPath(clientPrefix string, threadID, counter int) string {
 	return fmt.Sprintf("%d/%d/%d/%d/%d/%s", year, month, day, hour, minute, blobShortName)
 }
 
-// Get the filename from an above generated blobPath
-func getShortname(blobPath string) string {
-	idx := strings.LastIndexByte(blobPath, '/')
-	return blobPath[idx+1:]
-}
-
 // truncateBytesAsHex truncates an array of bytes up to 32 bytes and optionally increment the last byte(s).
 // More the one byte can be incremented in case it overflows.
 //

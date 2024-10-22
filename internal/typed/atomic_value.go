@@ -22,6 +22,7 @@ import "sync/atomic"
 //
 // Who doesn't like generics?
 type AtomicValue[T any] struct {
+	noCopy
 	val atomic.Value
 }
 
@@ -42,3 +43,14 @@ func (a *AtomicValue[T]) Load() T {
 func (a *AtomicValue[T]) Store(v T) {
 	a.val.Store(&v)
 }
+
+// noCopy may be embedded into structs which must not be copied
+// after the first use.
+//
+// See https://golang.org/issues/8005#issuecomment-190753527
+// for details.
+type noCopy struct{}
+
+// Lock is a no-op used by -copylocks checker from `go vet`.
+func (*noCopy) Lock()   {}
+func (*noCopy) UnLock() {}

@@ -21,7 +21,7 @@ import (
 
 // Periodic holds a background goroutine that can do periodic work.
 //
-// The work here cannot communicate errors directly, so it much
+// The work here cannot communicate errors directly, so it must
 // communicate with channels or swallow errors.
 //
 // NOTE: It's expected that Start and Stop are called on the same

@@ -201,26 +201,28 @@ func newSnowflakeStreamer(
 	client, err := streaming.NewSnowflakeServiceClient(
 		context.Background(),
 		streaming.ClientOptions{
-			Account:    account,
-			User:       user,
-			Role:       role,
-			PrivateKey: rsaKey,
-			Logger:     mgr.Logger(),
+			Account:         account,
+			User:            user,
+			Role:            role,
+			PrivateKey:      rsaKey,
+			Logger:          mgr.Logger(),
+			RedpandaVersion: mgr.EngineVersion(),
 		})
 	if err != nil {
 		return nil, err
 	}
-	o := &snowflakeStreamerOutput{}
-	o.channelPrefix = channelPrefix
-	o.client = client
-	o.db = db
-	o.schema = schema
-	o.table = table
-	o.mapping = mapping
-	o.logger = mgr.Logger()
-	o.buildTime = mgr.Metrics().NewTimer("snowflake_build_output_latency_ns")
-	o.uploadTime = mgr.Metrics().NewTimer("snowflake_upload_latency_ns")
-	o.compressedOutput = mgr.Metrics().NewCounter("snowflake_compressed_output_size_bytes")
+	o := &snowflakeStreamerOutput{
+		channelPrefix:    channelPrefix,
+		client:           client,
+		db:               db,
+		schema:           schema,
+		table:            table,
+		mapping:          mapping,
+		logger:           mgr.Logger(),
+		buildTime:        mgr.Metrics().NewTimer("snowflake_build_output_latency_ns"),
+		uploadTime:       mgr.Metrics().NewTimer("snowflake_upload_latency_ns"),
+		compressedOutput: mgr.Metrics().NewCounter("snowflake_compressed_output_size_bytes"),
+	}
 	return o, nil
 }
 
@@ -239,10 +241,10 @@ type snowflakeStreamerOutput struct {
 }
 
 func (o *snowflakeStreamerOutput) openChannel(ctx context.Context) (*streaming.SnowflakeIngestionChannel, error) {
-	o.channelCreationMu.Lock()
-	defer o.channelCreationMu.Unlock()
 	// Use a lock here instead of an atomic because this should not be called at steady state and it's better to limit
 	// creating extra channels when there is a limit of 10K.
+	o.channelCreationMu.Lock()
+	defer o.channelCreationMu.Unlock()
 	name := fmt.Sprintf("%s_%d", o.channelPrefix, o.poolSize)
 	o.logger.Debugf("opening snowflake streaming channel: %s", name)
 	client, err := o.client.OpenChannel(ctx, streaming.ChannelOptions{

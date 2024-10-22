@@ -39,9 +39,6 @@ const (
 	responseSuccess         = 0
 	responseErrRetryRequest = 10
 	responseErrQueueFull    = 7
-
-	// TODO: figure out how to plumb this down
-	version = "4.38.0"
 )
 
 type (
@@ -304,7 +301,7 @@ type SnowflakeRestClient struct {
 }
 
 // NewRestClient creates a new REST client for the given parameters.
-func NewRestClient(account, user string, privateKey *rsa.PrivateKey, logger *service.Logger) (c *SnowflakeRestClient, err error) {
+func NewRestClient(account, user, version string, privateKey *rsa.PrivateKey, logger *service.Logger) (c *SnowflakeRestClient, err error) {
 	userAgent := fmt.Sprintf("RedpandaConnect/%v (%v-%v) %v/%v",
 		version,
 		runtime.GOOS,

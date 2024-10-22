@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"os"
+	"path"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
@@ -42,7 +43,8 @@ type ClientOptions struct {
 	// Private key for the user
 	PrivateKey *rsa.PrivateKey
 	// Logger for... logging?
-	Logger *service.Logger
+	Logger          *service.Logger
+	RedpandaVersion string
 }
 
 type stageUploaderResult struct {
@@ -67,6 +69,7 @@ func NewSnowflakeServiceClient(ctx context.Context, opts ClientOptions) (*Snowfl
 	client, err := NewRestClient(
 		opts.Account,
 		opts.User,
+		opts.RedpandaVersion,
 		opts.PrivateKey,
 		opts.Logger,
 	)
@@ -183,7 +186,7 @@ func (c *SnowflakeServiceClient) OpenChannel(ctx context.Context, opts ChannelOp
 
 // OffsetToken is the persisted client offset of a stream. This can be used to implement exactly-once
 // processing.
-type OffsetToken = string
+type OffsetToken string
 
 // ChannelStatus returns the offset token for a channel or an error
 func (c *SnowflakeServiceClient) ChannelStatus(ctx context.Context, opts ChannelOptions) (OffsetToken, error) {
@@ -211,7 +214,7 @@ func (c *SnowflakeServiceClient) ChannelStatus(ctx context.Context, opts Channel
 	if channel.StatusCode != responseSuccess {
 		return "", fmt.Errorf("unable to status channel %s - status: %d", opts.Name, resp.StatusCode)
 	}
-	return channel.PersistedOffsetToken, nil
+	return OffsetToken(channel.PersistedOffsetToken), nil
 }
 
 // DropChannel drops it like it's hot 🔥
@@ -276,7 +279,7 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 	blobPath := generateBlobPath(c.clientPrefix, fakeThreadID, c.requestIDCounter)
 	c.requestIDCounter++
 	// This is extra metadata that is required for functionality in snowflake.
-	c.fileMetadata["primaryFileId"] = getShortname(blobPath)
+	c.fileMetadata["primaryFileId"] = path.Base(blobPath)
 	c.buffer.Reset()
 	err = writeParquetFile(c.buffer, parquetFileData{
 		schema:   c.schema,
