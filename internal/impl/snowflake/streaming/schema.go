@@ -218,7 +218,7 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[stri
 
 type statsBuffer struct {
 	columnID               int
-	minIntVal, maxIntVal   int128.Int128
+	minIntVal, maxIntVal   int128.Num
 	minRealVal, maxRealVal float64
 	minStrVal, maxStrVal   []byte
 	maxStrLen              int
@@ -228,8 +228,8 @@ type statsBuffer struct {
 
 func (s *statsBuffer) Reset() {
 	s.first = true
-	s.minIntVal = int128.Int64(0)
-	s.maxIntVal = int128.Int64(0)
+	s.minIntVal = int128.FromInt64(0)
+	s.maxIntVal = int128.FromInt64(0)
 	s.minRealVal = 0
 	s.maxRealVal = 0
 	s.minStrVal = nil

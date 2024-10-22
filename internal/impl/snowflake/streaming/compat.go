@@ -153,14 +153,14 @@ func normalizeColumnName(name string) string {
 // snowflakeTimestampInt computes the same result as the logic in TimestampWrapper
 // in the Java SDK. It converts a timestamp to the integer representation that
 // is used internally within Snowflake.
-func snowflakeTimestampInt(t time.Time, scale int32, includeTZ bool) int128.Int128 {
-	epoch := int128.Int64(t.Unix())
+func snowflakeTimestampInt(t time.Time, scale int32, includeTZ bool) int128.Num {
+	epoch := int128.FromInt64(t.Unix())
 	// this calculation is intentionally done at low resolution to truncate the nanoseconds
 	// according to our scale.
 	fraction := (int32(t.Nanosecond()) / pow10TableInt32[9-scale]) * pow10TableInt32[9-scale]
 	timeInNanos := int128.Add(
 		int128.Mul(epoch, int128.Pow10Table[9]),
-		int128.Int64(int64(fraction)),
+		int128.FromInt64(int64(fraction)),
 	)
 	scaledTime := int128.Div(timeInNanos, int128.Pow10Table[9-scale])
 	if includeTZ {
@@ -169,7 +169,7 @@ func snowflakeTimestampInt(t time.Time, scale int32, includeTZ bool) int128.Int1
 		offsetMinutes += 1440
 		scaledTime = int128.Shl(scaledTime, 14)
 		const tzMask = (1 << 14) - 1
-		scaledTime = int128.Add(scaledTime, int128.Int64(int64(offsetMinutes&tzMask)))
+		scaledTime = int128.Add(scaledTime, int128.FromInt64(int64(offsetMinutes&tzMask)))
 	}
 	return scaledTime
 }

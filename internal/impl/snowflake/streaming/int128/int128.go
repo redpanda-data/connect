@@ -25,40 +25,40 @@ import (
 
 // Common constant values for int128
 var (
-	MaxInt128 = Bytes([]byte{0x7F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF})
-	MinInt128 = Bytes([]byte{0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00})
-	MaxInt64  = Int64(math.MaxInt64)
-	MinInt64  = Int64(math.MinInt64)
-	MaxInt32  = Int64(math.MaxInt32)
-	MinInt32  = Int64(math.MinInt32)
-	MaxInt16  = Int64(math.MaxInt16)
-	MinInt16  = Int64(math.MinInt16)
-	MaxInt8   = Int64(math.MaxInt8)
-	MinInt8   = Int64(math.MinInt8)
+	MaxInt128 = FromBigEndian([]byte{0x7F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF})
+	MinInt128 = FromBigEndian([]byte{0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00})
+	MaxInt64  = FromInt64(math.MaxInt64)
+	MinInt64  = FromInt64(math.MinInt64)
+	MaxInt32  = FromInt64(math.MaxInt32)
+	MinInt32  = FromInt64(math.MinInt32)
+	MaxInt16  = FromInt64(math.MaxInt16)
+	MinInt16  = FromInt64(math.MinInt16)
+	MaxInt8   = FromInt64(math.MaxInt8)
+	MinInt8   = FromInt64(math.MinInt8)
 
 	// For Snowflake, we need to do some quick multiplication to scale numbers
 	// to make that fast we precompute some powers of 10 in a lookup table.
-	Pow10Table = [...]Int128{
-		Uint64(1e00),
-		Uint64(1e01),
-		Uint64(1e02),
-		Uint64(1e03),
-		Uint64(1e04),
-		Uint64(1e05),
-		Uint64(1e06),
-		Uint64(1e07),
-		Uint64(1e08),
-		Uint64(1e09),
-		Uint64(1e10),
-		Uint64(1e11),
-		Uint64(1e12),
-		Uint64(1e13),
-		Uint64(1e14),
-		Uint64(1e15),
-		Uint64(1e16),
-		Uint64(1e17),
-		Uint64(1e18),
-		Uint64(1e19),
+	Pow10Table = [...]Num{
+		FromUint64(1e00),
+		FromUint64(1e01),
+		FromUint64(1e02),
+		FromUint64(1e03),
+		FromUint64(1e04),
+		FromUint64(1e05),
+		FromUint64(1e06),
+		FromUint64(1e07),
+		FromUint64(1e08),
+		FromUint64(1e09),
+		FromUint64(1e10),
+		FromUint64(1e11),
+		FromUint64(1e12),
+		FromUint64(1e13),
+		FromUint64(1e14),
+		FromUint64(1e15),
+		FromUint64(1e16),
+		FromUint64(1e17),
+		FromUint64(1e18),
+		FromUint64(1e19),
 		New(5, 7766279631452241920),
 		New(54, 3875820019684212736),
 		New(542, 1864712049423024128),
@@ -81,65 +81,65 @@ var (
 	}
 )
 
-// Int128 is a *signed* int128 type that is more efficent than big.Int
+// Num is a *signed* int128 type that is more efficent than big.Int
 //
 // Default value is 0
-type Int128 struct {
+type Num struct {
 	hi int64
 	lo uint64
 }
 
 // New constructs an Int128 from two 64 bit integers.
-func New(hi int64, lo uint64) Int128 {
-	return Int128{
+func New(hi int64, lo uint64) Num {
+	return Num{
 		hi: hi,
 		lo: lo,
 	}
 }
 
-// Int64 casts an signed int64 to uint128
-func Int64(v int64) Int128 {
+// FromInt64 casts an signed int64 to uint128
+func FromInt64(v int64) Num {
 	hi := int64(0)
 	// sign extend
 	if v < 0 {
 		hi = ^hi
 	}
-	return Int128{
+	return Num{
 		hi: hi,
 		lo: uint64(v),
 	}
 }
 
-// Uint64 casts an unsigned int64 to uint128
-func Uint64(v uint64) Int128 {
-	return Int128{
+// FromUint64 casts an unsigned int64 to uint128
+func FromUint64(v uint64) Num {
+	return Num{
 		hi: 0,
 		lo: v,
 	}
 }
 
 // Add computes a + b
-func Add(a, b Int128) Int128 {
+func Add(a, b Num) Num {
 	lo, carry := bits.Add64(a.lo, b.lo, 0)
 	hi, _ := bits.Add64(uint64(a.hi), uint64(b.hi), carry)
-	return Int128{int64(hi), lo}
+	return Num{int64(hi), lo}
 }
 
 // Sub computes a - b
-func Sub(a, b Int128) Int128 {
+func Sub(a, b Num) Num {
 	lo, carry := bits.Sub64(a.lo, b.lo, 0)
 	hi, _ := bits.Sub64(uint64(a.hi), uint64(b.hi), carry)
-	return Int128{int64(hi), lo}
+	return Num{int64(hi), lo}
 }
 
 // Mul computes a * b
-func Mul(a, b Int128) Int128 {
+func Mul(a, b Num) Num {
 	hi, lo := bits.Mul64(a.lo, b.lo)
 	hi += (uint64(a.hi) * b.lo) + (a.lo * uint64(b.hi))
-	return Int128{hi: int64(hi), lo: lo}
+	return Num{hi: int64(hi), lo: lo}
 }
 
-func fls128(n Int128) int {
+func fls128(n Num) int {
 	if n.hi != 0 {
 		return 127 - bits.LeadingZeros64(uint64(n.hi))
 	}
@@ -147,7 +147,7 @@ func fls128(n Int128) int {
 }
 
 // Neg computes -v
-func Neg(n Int128) Int128 {
+func Neg(n Num) Num {
 	n.lo = ^n.lo + 1
 	n.hi = ^n.hi
 	if n.lo == 0 {
@@ -157,7 +157,7 @@ func Neg(n Int128) Int128 {
 }
 
 // Abs computes v < 0 ? -v : v
-func (i Int128) Abs() Int128 {
+func (i Num) Abs() Num {
 	if i.IsNegative() {
 		return Neg(i)
 	}
@@ -165,30 +165,30 @@ func (i Int128) Abs() Int128 {
 }
 
 // IsNegative returns true if `i` is negative
-func (i Int128) IsNegative() bool {
+func (i Num) IsNegative() bool {
 	return i.hi < 0
 }
 
 // Shl returns a << i
-func Shl(v Int128, amt uint) Int128 {
+func Shl(v Num, amt uint) Num {
 	n := amt - 64
 	m := 64 - amt
-	return Int128{
+	return Num{
 		hi: v.hi<<amt | int64(v.lo<<n) | int64(v.lo>>m),
 		lo: v.lo << amt,
 	}
 }
 
 // Or returns a | i
-func Or(a Int128, b Int128) Int128 {
-	return Int128{
+func Or(a Num, b Num) Num {
+	return Num{
 		hi: a.hi | b.hi,
 		lo: a.lo | b.lo,
 	}
 }
 
 // Less returns a < b
-func Less(a, b Int128) bool {
+func Less(a, b Num) bool {
 	if a.hi == b.hi {
 		return a.lo < b.lo
 	} else {
@@ -197,7 +197,7 @@ func Less(a, b Int128) bool {
 }
 
 // Greater returns a > b
-func Greater(a, b Int128) bool {
+func Greater(a, b Num) bool {
 	if a.hi == b.hi {
 		return a.lo > b.lo
 	} else {
@@ -205,52 +205,52 @@ func Greater(a, b Int128) bool {
 	}
 }
 
-// Bytes converts bi endian bytes to Int128
-func Bytes(b []byte) Int128 {
+// FromBigEndian converts bi endian bytes to Int128
+func FromBigEndian(b []byte) Num {
 	hi := int64(binary.BigEndian.Uint64(b[0:8]))
 	lo := binary.BigEndian.Uint64(b[8:16])
-	return Int128{
+	return Num{
 		hi: hi,
 		lo: lo,
 	}
 }
 
-// Bytes converts an Int128 into big endian bytes
-func (i Int128) Bytes() []byte {
+// ToBigEndian converts an Int128 into big endian bytes
+func (i Num) ToBigEndian() []byte {
 	b := make([]byte, 16)
 	binary.BigEndian.PutUint64(b[0:8], uint64(i.hi))
 	binary.BigEndian.PutUint64(b[8:16], i.lo)
 	return b
 }
 
-// AppendBytes converts an Int128 into big endian bytes
-func (i Int128) AppendBytes(b []byte) []byte {
+// AppendBigEndian converts an Int128 into big endian bytes
+func (i Num) AppendBigEndian(b []byte) []byte {
 	b = binary.BigEndian.AppendUint64(b[0:8], uint64(i.hi))
 	return binary.BigEndian.AppendUint64(b[8:16], i.lo)
 }
 
-// Int64 casts an Int128 to a int64 by truncating the bytes.
-func (i Int128) Int64() int64 {
+// ToInt64 casts an Int128 to a int64 by truncating the bytes.
+func (i Num) ToInt64() int64 {
 	return int64(i.lo)
 }
 
-// Int32 casts an Int128 to a int32 by truncating the bytes.
-func (i Int128) Int32() int32 {
+// ToInt32 casts an Int128 to a int32 by truncating the bytes.
+func (i Num) ToInt32() int32 {
 	return int32(i.lo)
 }
 
-// Int16 casts an Int128 to a int16 by truncating the bytes.
-func (i Int128) Int16() int16 {
+// ToInt16 casts an Int128 to a int16 by truncating the bytes.
+func (i Num) ToInt16() int16 {
 	return int16(i.lo)
 }
 
-// Int8 casts an Int128 to a int8 by truncating the bytes.
-func (i Int128) Int8() int8 {
+// ToInt8 casts an Int128 to a int8 by truncating the bytes.
+func (i Num) ToInt8() int8 {
 	return int8(i.lo)
 }
 
 // Min computes min(a, b)
-func Min(a, b Int128) Int128 {
+func Min(a, b Num) Num {
 	if Less(a, b) {
 		return a
 	} else {
@@ -259,7 +259,7 @@ func Min(a, b Int128) Int128 {
 }
 
 // Max computes min(a, b)
-func Max(a, b Int128) Int128 {
+func Max(a, b Num) Num {
 	if Greater(a, b) {
 		return a
 	} else {
@@ -271,7 +271,7 @@ func Max(a, b Int128) Int128 {
 // and panics otherwise
 //
 // Only use for testing.
-func MustParse(str string) Int128 {
+func MustParse(str string) Num {
 	n, ok := Parse(str)
 	if !ok {
 		panic(fmt.Sprintf("unable to parse %q into Int128", str))
@@ -282,7 +282,7 @@ func MustParse(str string) Int128 {
 // Parse converted a base 10 formatted string into an Int128
 //
 // Not fast, but simple
-func Parse(str string) (n Int128, ok bool) {
+func Parse(str string) (n Num, ok bool) {
 	var bi *big.Int
 	bi, ok = big.NewInt(0).SetString(str, 10)
 	if !ok {
@@ -294,7 +294,7 @@ func Parse(str string) (n Int128, ok bool) {
 // String returns the number as base 10 formatted string.
 //
 // This is not fast but it isn't on a hot path.
-func (i Int128) String() string {
+func (i Num) String() string {
 	return string(i.bigInt().Append(nil, 10))
 }
 
@@ -303,11 +303,11 @@ func (i Int128) String() string {
 // Java SDK with Jackson.
 //
 // This is not fast but it isn't on a hot path.
-func (i Int128) MarshalJSON() ([]byte, error) {
+func (i Num) MarshalJSON() ([]byte, error) {
 	return i.bigInt().Append(nil, 10), nil
 }
 
-func (i Int128) bigInt() *big.Int {
+func (i Num) bigInt() *big.Int {
 	hi := big.NewInt(i.hi) // Preserves sign
 	hi = hi.Lsh(hi, 64)
 	lo := &big.Int{}
@@ -320,7 +320,7 @@ var (
 	minBigInt128 = MinInt128.bigInt()
 )
 
-func bigInt(bi *big.Int) (n Int128, ok bool) {
+func bigInt(bi *big.Int) (n Num, ok bool) {
 	// One cannot check BitLen here because that misses that MinInt128
 	// requires 128 bits along with other out of range values. Instead
 	// the better check is to explicitly compare our allowed bounds
@@ -343,7 +343,7 @@ func bigInt(bi *big.Int) (n Int128, ok bool) {
 }
 
 // ByteWidth returns the maximum number of bytes needed to store v
-func ByteWidth(v Int128) int {
+func ByteWidth(v Num) int {
 	if v.IsNegative() {
 		switch {
 		case !Less(v, MinInt8):

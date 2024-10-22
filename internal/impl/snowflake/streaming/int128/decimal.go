@@ -29,10 +29,10 @@ import (
 
 // FitsInPrecision returns true or false if the value currently held by
 // n would fit within precision (0 < prec <= 38) without losing any data.
-func (i Int128) FitsInPrecision(prec int32) bool {
+func (i Num) FitsInPrecision(prec int32) bool {
 	if prec == 0 {
 		// Precision 0 is valid in snowflake, even if it seems useless
-		return i == Int128{}
+		return i == Num{}
 	}
 	return Less(i.Abs(), Pow10Table[prec])
 }
@@ -54,15 +54,15 @@ func scalePositiveFloat64(v float64, prec, scale int32) (float64, error) {
 	return v, nil
 }
 
-func fromPositiveFloat64(v float64, prec, scale int32) (Int128, error) {
+func fromPositiveFloat64(v float64, prec, scale int32) (Num, error) {
 	v, err := scalePositiveFloat64(v, prec, scale)
 	if err != nil {
-		return Int128{}, err
+		return Num{}, err
 	}
 
 	hi := math.Floor(math.Ldexp(v, -64))
 	low := v - math.Ldexp(hi, 64)
-	return Int128{hi: int64(hi), lo: uint64(low)}, nil
+	return Num{hi: int64(hi), lo: uint64(low)}, nil
 }
 
 // this has to exist despite sharing some code with fromPositiveFloat64
@@ -83,21 +83,21 @@ func fromPositiveFloat64(v float64, prec, scale int32) (Int128, error) {
 //	FromFloat32(v, 20, 4)
 //
 // because float64(v) == 1844674629206016 rather than 1844674600000000
-func fromPositiveFloat32(v float32, prec, scale int32) (Int128, error) {
+func fromPositiveFloat32(v float32, prec, scale int32) (Num, error) {
 	val, err := scalePositiveFloat64(float64(v), prec, scale)
 	if err != nil {
-		return Int128{}, err
+		return Num{}, err
 	}
 
 	hi := float32(math.Floor(math.Ldexp(float64(float32(val)), -64)))
 	low := float32(val) - float32(math.Ldexp(float64(hi), 64))
-	return Int128{hi: int64(hi), lo: uint64(low)}, nil
+	return Num{hi: int64(hi), lo: uint64(low)}, nil
 }
 
-// Float32 returns a new Int128 constructed from the given float32
+// FromFloat32 returns a new Int128 constructed from the given float32
 // value using the provided precision and scale. Will return an error if the
 // value cannot be accurately represented with the desired precision and scale.
-func Float32(v float32, prec, scale int32) (Int128, error) {
+func FromFloat32(v float32, prec, scale int32) (Num, error) {
 	if v < 0 {
 		dec, err := fromPositiveFloat32(-v, prec, scale)
 		if err != nil {
@@ -108,10 +108,10 @@ func Float32(v float32, prec, scale int32) (Int128, error) {
 	return fromPositiveFloat32(v, prec, scale)
 }
 
-// Float64 returns a new Int128 constructed from the given float64
+// FromFloat64 returns a new Int128 constructed from the given float64
 // value using the provided precision and scale. Will return an error if the
 // value cannot be accurately represented with the desired precision and scale.
-func Float64(v float64, prec, scale int32) (Int128, error) {
+func FromFloat64(v float64, prec, scale int32) (Num, error) {
 	if v < 0 {
 		dec, err := fromPositiveFloat64(-v, prec, scale)
 		if err != nil {
@@ -126,8 +126,8 @@ var (
 	pt5 = big.NewFloat(0.5)
 )
 
-// String converts a string into an Int128 as long as it fits within the given precision and scale.
-func String(v string, prec, scale int32) (n Int128, err error) {
+// FromString converts a string into an Int128 as long as it fits within the given precision and scale.
+func FromString(v string, prec, scale int32) (n Num, err error) {
 	// time for some math!
 	// Our input precision means "number of digits of precision" but the
 	// math/big library refers to precision in floating point terms
@@ -200,13 +200,13 @@ func String(v string, prec, scale int32) (n Int128, err error) {
 	return
 }
 
-// Float32 returns a float32 value representative of this Int128,
+// ToFloat32 returns a float32 value representative of this Int128,
 // but with the given scale.
-func (i Int128) Float32(scale int32) float32 {
-	return float32(i.Float64(scale))
+func (i Num) ToFloat32(scale int32) float32 {
+	return float32(i.ToFloat64(scale))
 }
 
-func float64Positive(n Int128, scale int32) float64 {
+func float64Positive(n Num, scale int32) float64 {
 	const twoTo64 float64 = 1.8446744073709552e+19
 	x := float64(n.hi) * twoTo64
 	x += float64(n.lo)
@@ -217,16 +217,16 @@ func float64Positive(n Int128, scale int32) float64 {
 	return x * math.Pow10(-int(scale))
 }
 
-// Float64 returns a float64 value representative of this Int128,
+// ToFloat64 returns a float64 value representative of this Int128,
 // but with the given scale.
-func (i Int128) Float64(scale int32) float64 {
+func (i Num) ToFloat64(scale int32) float64 {
 	if i.hi < 0 {
 		return -float64Positive(Neg(i), scale)
 	}
 	return float64Positive(i, scale)
 }
 
-func rescaleWouldCauseDataLoss(n Int128, deltaScale int32, multiplier Int128) (out Int128, loss bool) {
+func rescaleWouldCauseDataLoss(n Num, deltaScale int32, multiplier Num) (out Num, loss bool) {
 	var (
 		value, result, remainder *big.Int
 	)
@@ -259,7 +259,7 @@ func rescaleWouldCauseDataLoss(n Int128, deltaScale int32, multiplier Int128) (o
 // the current value is scaled to originalScale with the new value scaled
 // to newScale. If rescaling this way would cause data loss, an error is
 // returned instead.
-func Rescale(n Int128, originalScale, newScale int32) (out Int128, err error) {
+func Rescale(n Num, originalScale, newScale int32) (out Num, err error) {
 	if originalScale == newScale {
 		return n, nil
 	}

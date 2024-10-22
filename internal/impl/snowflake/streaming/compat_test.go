@@ -129,7 +129,7 @@ func TestColumnNormalization(t *testing.T) {
 func TestSnowflakeTimestamp(t *testing.T) {
 	type TestCase struct {
 		timestamp string
-		value     int128.Int128
+		value     int128.Num
 		scale     int32
 		keepTZ    bool
 		tz        bool
@@ -137,32 +137,32 @@ func TestSnowflakeTimestamp(t *testing.T) {
 	cases := [...]TestCase{
 		{
 			timestamp: "2021-01-01 01:00:00.123",
-			value:     int128.Int64(1609462800123000000),
+			value:     int128.FromInt64(1609462800123000000),
 			scale:     9,
 		},
 		{
 			timestamp: "1971-01-01 00:00:00.001",
-			value:     int128.Mul(int128.Int64(31536000001), int128.Int64(1000000)),
+			value:     int128.Mul(int128.FromInt64(31536000001), int128.FromInt64(1000000)),
 			scale:     9,
 		},
 		{
 			timestamp: "1971-01-01 00:00:00.000",
-			value:     int128.Mul(int128.Int64(31536000000), int128.Int64(1000000)),
+			value:     int128.Mul(int128.FromInt64(31536000000), int128.FromInt64(1000000)),
 			scale:     9,
 		},
 		{
 			timestamp: "2021-01-01 01:00:00.123",
-			value:     int128.Int64(1609462800123000000),
+			value:     int128.FromInt64(1609462800123000000),
 			scale:     9,
 		},
 		{
 			timestamp: "2021-01-01 01:00:00.123",
-			value:     int128.Int64(16094628001230),
+			value:     int128.FromInt64(16094628001230),
 			scale:     4,
 		},
 		{
 			timestamp: "2021-01-01 01:00:00.123+01:00",
-			value:     int128.Int64(263693795348153820),
+			value:     int128.FromInt64(263693795348153820),
 			scale:     4,
 			keepTZ:    true,
 			tz:        true,

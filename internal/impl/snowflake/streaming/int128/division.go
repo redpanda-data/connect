@@ -20,9 +20,9 @@ package int128
 // Div computes a / b
 //
 // Division by zero panics
-func Div(dividend, divisor Int128) Int128 {
+func Div(dividend, divisor Num) Num {
 	// algorithm is ported from absl::int128
-	if divisor == (Int128{}) {
+	if divisor == (Num{}) {
 		panic("int128 division by zero")
 	}
 	negateQuotient := (dividend.hi < 0) != (divisor.hi < 0)
@@ -33,13 +33,13 @@ func Div(dividend, divisor Int128) Int128 {
 		divisor = Neg(divisor)
 	}
 	if divisor == dividend {
-		return Int64(1)
+		return FromInt64(1)
 	}
 	if uGt(divisor, dividend) {
-		return Int128{}
+		return Num{}
 	}
 	denominator := divisor
-	var quotient Int128
+	var quotient Num
 	shift := fls128(dividend) - fls128(denominator)
 	denominator = Shl(denominator, uint(shift))
 	// Uses shift-subtract algorithm to divide dividend by denominator. The
@@ -48,7 +48,7 @@ func Div(dividend, divisor Int128) Int128 {
 		quotient = Shl(quotient, 1)
 		if uGt(dividend, denominator) {
 			dividend = Sub(dividend, denominator)
-			quotient = Or(quotient, Int64(1))
+			quotient = Or(quotient, FromInt64(1))
 		}
 		denominator = uShr(denominator, 1)
 	}
@@ -59,17 +59,17 @@ func Div(dividend, divisor Int128) Int128 {
 }
 
 // uShr is unsigned shift right (no sign extending)
-func uShr(v Int128, amt uint) Int128 {
+func uShr(v Num, amt uint) Num {
 	n := amt - 64
 	m := 64 - amt
-	return Int128{
+	return Num{
 		hi: int64(uint64(v.hi) >> amt),
 		lo: v.lo>>amt | uint64(v.hi)>>n | uint64(v.hi)<<m,
 	}
 }
 
 // uGt is unsigned greater than comparison
-func uGt(a, b Int128) bool {
+func uGt(a, b Num) bool {
 	if a.hi == b.hi {
 		return a.lo >= b.lo
 	} else {

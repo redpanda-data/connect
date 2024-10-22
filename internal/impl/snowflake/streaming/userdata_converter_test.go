@@ -434,14 +434,14 @@ type testTypedBuffer struct {
 func (b *testTypedBuffer) WriteNull() {
 	b.output = nil
 }
-func (b *testTypedBuffer) WriteInt128(v int128.Int128) {
+func (b *testTypedBuffer) WriteInt128(v int128.Num) {
 	switch {
 	case int128.Less(v, int128.MinInt64):
 		b.output = v
 	case int128.Greater(v, int128.MaxInt64):
 		b.output = v
 	default:
-		b.output = int(v.Int64())
+		b.output = int(v.ToInt64())
 	}
 }
 

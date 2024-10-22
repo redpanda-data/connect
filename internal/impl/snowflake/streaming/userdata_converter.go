@@ -27,7 +27,7 @@ import (
 // typedBuffer is the buffer that holds columnar data before we write to the parquet file
 type typedBuffer interface {
 	WriteNull()
-	WriteInt128(int128.Int128)
+	WriteInt128(int128.Num)
 	WriteBool(bool)
 	WriteFloat64(float64)
 	WriteBytes([]byte) // should never be nil
@@ -55,8 +55,8 @@ func (b *typedBufferImpl) WriteValue(v parquet.Value) {
 func (b *typedBufferImpl) WriteNull() {
 	b.WriteValue(parquet.NullValue())
 }
-func (b *typedBufferImpl) WriteInt128(v int128.Int128) {
-	b.WriteValue(parquet.FixedLenByteArrayValue(v.Bytes()).Level(0, 1, b.columnIndex))
+func (b *typedBufferImpl) WriteInt128(v int128.Num) {
+	b.WriteValue(parquet.FixedLenByteArrayValue(v.ToBigEndian()).Level(0, 1, b.columnIndex))
 }
 func (b *typedBufferImpl) WriteBool(v bool) {
 	b.WriteValue(parquet.BooleanValue(v).Level(0, 1, b.columnIndex))
@@ -81,16 +81,16 @@ type int64Buffer struct {
 	typedBufferImpl
 }
 
-func (b *int64Buffer) WriteInt128(v int128.Int128) {
-	b.WriteValue(parquet.Int64Value(v.Int64()).Level(0, 1, b.columnIndex))
+func (b *int64Buffer) WriteInt128(v int128.Num) {
+	b.WriteValue(parquet.Int64Value(v.ToInt64()).Level(0, 1, b.columnIndex))
 }
 
 type int32Buffer struct {
 	typedBufferImpl
 }
 
-func (b *int32Buffer) WriteInt128(v int128.Int128) {
-	b.WriteValue(parquet.Int32Value(int32(v.Int64())).Level(0, 1, b.columnIndex))
+func (b *int32Buffer) WriteInt128(v int128.Num) {
+	b.WriteValue(parquet.Int32Value(int32(v.ToInt64())).Level(0, 1, b.columnIndex))
 }
 
 type dataConverter interface {
@@ -116,9 +116,9 @@ func (c boolConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typed
 	if err != nil {
 		return err
 	}
-	i := int128.Uint64(0)
+	i := int128.FromUint64(0)
 	if v {
-		i = int128.Uint64(1)
+		i = int128.FromUint64(1)
 	}
 	if stats.first {
 		stats.minIntVal = i
@@ -147,47 +147,47 @@ func (c numberConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typ
 		buf.WriteNull()
 		return nil
 	}
-	var v int128.Int128
+	var v int128.Num
 	var err error
 	switch t := val.(type) {
 	case int:
-		v = int128.Int64(int64(t))
+		v = int128.FromInt64(int64(t))
 		v, err = int128.Rescale(v, 0, c.scale)
 	case int8:
-		v = int128.Int64(int64(t))
+		v = int128.FromInt64(int64(t))
 		v, err = int128.Rescale(v, 0, c.scale)
 	case int16:
-		v = int128.Int64(int64(t))
+		v = int128.FromInt64(int64(t))
 		v, err = int128.Rescale(v, 0, c.scale)
 	case int32:
-		v = int128.Int64(int64(t))
+		v = int128.FromInt64(int64(t))
 		v, err = int128.Rescale(v, 0, c.scale)
 	case int64:
-		v = int128.Int64(t)
+		v = int128.FromInt64(t)
 		v, err = int128.Rescale(v, 0, c.scale)
 	case uint:
-		v = int128.Uint64(uint64(t))
+		v = int128.FromUint64(uint64(t))
 		v, err = int128.Rescale(v, 0, c.scale)
 	case uint8:
-		v = int128.Uint64(uint64(t))
+		v = int128.FromUint64(uint64(t))
 		v, err = int128.Rescale(v, 0, c.scale)
 	case uint16:
-		v = int128.Uint64(uint64(t))
+		v = int128.FromUint64(uint64(t))
 		v, err = int128.Rescale(v, 0, c.scale)
 	case uint32:
-		v = int128.Uint64(uint64(t))
+		v = int128.FromUint64(uint64(t))
 		v, err = int128.Rescale(v, 0, c.scale)
 	case uint64:
-		v = int128.Uint64(t)
+		v = int128.FromUint64(t)
 		v, err = int128.Rescale(v, 0, c.scale)
 	case float32:
-		v, err = int128.Float32(t, c.precision, c.scale)
+		v, err = int128.FromFloat32(t, c.precision, c.scale)
 	case float64:
-		v, err = int128.Float64(t, c.precision, c.scale)
+		v, err = int128.FromFloat64(t, c.precision, c.scale)
 	case string:
-		v, err = int128.String(t, c.precision, c.scale)
+		v, err = int128.FromString(t, c.precision, c.scale)
 	case json.Number:
-		v, err = int128.String(t.String(), c.precision, c.scale)
+		v, err = int128.FromString(t.String(), c.precision, c.scale)
 	default:
 		// fallback to the good error message that bloblang provides
 		var i int64
@@ -195,7 +195,7 @@ func (c numberConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typ
 		if err != nil {
 			return err
 		}
-		v = int128.Int64(i)
+		v = int128.FromInt64(i)
 		v, err = int128.Rescale(v, 0, c.scale)
 	}
 	if err != nil {
@@ -439,7 +439,7 @@ func (c timeConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typed
 		t.Minute()*int(time.Minute.Nanoseconds()) +
 		t.Second()*int(time.Second.Nanoseconds()) +
 		t.Nanosecond()
-	v := int128.Int64(int64(nanos) / pow10TableInt64[9-c.scale])
+	v := int128.FromInt64(int64(nanos) / pow10TableInt64[9-c.scale])
 	if stats.first {
 		stats.minIntVal = v
 		stats.maxIntVal = v
@@ -474,7 +474,7 @@ func (c dateConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typed
 	if t.Year() < -9999 || t.Year() > 9999 {
 		return fmt.Errorf("DATE columns out of range, year: %d", t.Year())
 	}
-	v := int128.Int64(t.Unix() / int64(24*60*60))
+	v := int128.FromInt64(t.Unix() / int64(24*60*60))
 	if stats.first {
 		stats.minIntVal = v
 		stats.maxIntVal = v
