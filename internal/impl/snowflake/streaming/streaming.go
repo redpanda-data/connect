@@ -101,7 +101,7 @@ func NewSnowflakeServiceClient(ctx context.Context, opts ClientOptions) (*Snowfl
 
 		uploader: uploaderAtomic,
 		// Tokens expire every hour, so refresh a bit before that
-		uploadRefreshLoop: periodic.NewWithContext(time.Hour-2*time.Minute, func(ctx context.Context) {
+		uploadRefreshLoop: periodic.NewWithContext(time.Hour-(2*time.Minute), func(ctx context.Context) {
 			resp, err := client.configureClient(ctx, clientConfigureRequest{Role: opts.Role})
 			if err != nil {
 				uploaderAtomic.Store(stageUploaderResult{err: err})
