@@ -301,6 +301,11 @@ type SnowflakeRestClient struct {
 
 // NewRestClient creates a new REST client for the given parameters.
 func NewRestClient(account, user, version string, privateKey *rsa.PrivateKey, logger *service.Logger) (c *SnowflakeRestClient, err error) {
+	version = strings.TrimLeft(version, "v")
+	splits := strings.SplitN(version, "-", 2)
+	if len(splits) > 1 {
+		version = splits[0]
+	}
 	userAgent := fmt.Sprintf("RedpandaConnect/%v", version)
 	c = &SnowflakeRestClient{
 		account:    account,
