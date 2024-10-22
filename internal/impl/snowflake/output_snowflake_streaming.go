@@ -89,7 +89,7 @@ There are https://docs.snowflake.com/en/user-guide/data-load-snowpipe-streaming-
 Duplicate channel names will result in errors and prevent multiple instances of Redpanda Connect from writing at the same time.
 By default this will create a channel name that is based on the table FQN so there will only be a single stream per table.
 
-NOTE: There is a limit of 10,000 streams per table.`).
+NOTE: There is a limit of 10,000 streams per table - if using more than 10k streams please reach out to Snowflake support.`).
 				Optional().
 				Advanced(),
 		).LintRule(`root = match {
