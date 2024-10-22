@@ -18,5 +18,5 @@ import (
 
 func TestDebugModeDisabled(t *testing.T) {
 	// So I can't forget to disable this!
-	require.Equal(t, false, debug)
+	require.False(t, debug)
 }
