@@ -304,11 +304,18 @@ type SnowflakeRestClient struct {
 // NewRestClient creates a new REST client for the given parameters.
 func NewRestClient(account, user, version, app string, privateKey *rsa.PrivateKey, logger *service.Logger) (c *SnowflakeRestClient, err error) {
 	version = strings.TrimLeft(version, "v")
+	// Drop any -rc suffix, Snowflake doesn't like it
 	splits := strings.SplitN(version, "-", 2)
 	if len(splits) > 1 {
 		version = splits[0]
 	}
+	if version == "" {
+		// We can't use a major version <2 so just use 99 as the unknown version
+		// this should only show up in development, not released binaries
+		version = "99.0.0"
+	}
 	userAgent := fmt.Sprintf("RedpandaConnect/%v", version)
+	debugf(logger, "making snowflake HTTP requests using User-Agent: %s", userAgent)
 	c = &SnowflakeRestClient{
 		account:    account,
 		user:       user,

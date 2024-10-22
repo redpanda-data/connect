@@ -18,8 +18,6 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/parquet-go/parquet-go"
-	"github.com/parquet-go/parquet-go/deprecated"
-	"github.com/parquet-go/parquet-go/format"
 	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming/int128"
 )
 
@@ -218,32 +216,6 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[stri
 		}
 	}
 	return parquet.NewSchema("bdec", groupNode), transformers, typeMetadata, nil
-}
-
-type timestampType struct {
-	parquet.Type
-	timestamp format.TimestampType
-}
-
-func (n *timestampType) String() string {
-	return fmt.Sprintf("%s (%s)", n.Type.String(), n.timestamp.String())
-}
-
-func (n *timestampType) LogicalType() *format.LogicalType {
-	return &format.LogicalType{Timestamp: &n.timestamp}
-}
-
-func (n *timestampType) ConvertedType() *deprecated.ConvertedType {
-	var ct deprecated.ConvertedType
-	switch {
-	case n.timestamp.Unit.Micros != nil:
-		ct = deprecated.TimestampMicros
-	case n.timestamp.Unit.Millis != nil:
-		ct = deprecated.TimestampMillis
-	default:
-		return nil
-	}
-	return &ct
 }
 
 type statsBuffer struct {

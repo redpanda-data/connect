@@ -64,14 +64,14 @@ func setup(t *testing.T) (*streaming.SnowflakeRestClient, *streaming.SnowflakeSe
 		User:           envOr("SNOWFLAKE_USER", "ROCKWOODREDPANDA"),
 		Role:           "ACCOUNTADMIN",
 		PrivateKey:     parseResult.(*rsa.PrivateKey),
-		ConnectVersion: "v4.0.0-dev",
+		ConnectVersion: "",
 		Application:    "development",
 	}
 	restClient, err := streaming.NewRestClient(
 		clientOptions.Account,
 		clientOptions.User,
-		"v4.0.0-dev",
-		"Redpanda_Connect_development",
+		clientOptions.ConnectVersion,
+		"Redpanda_Connect_"+clientOptions.Application,
 		clientOptions.PrivateKey,
 		clientOptions.Logger,
 	)
