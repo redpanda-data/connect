@@ -18,8 +18,8 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"slices"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -31,6 +31,12 @@ import (
 
 func msg(s string) *service.Message {
 	return service.NewMessage([]byte(s))
+}
+
+func structuredMsg(v any) *service.Message {
+	msg := service.NewMessage(nil)
+	msg.SetStructured(v)
+	return msg
 }
 
 func envOr(name, dflt string) string {
@@ -77,7 +83,7 @@ func setup(t *testing.T) (*streaming.SnowflakeRestClient, *streaming.SnowflakeSe
 	return restClient, streamClient
 }
 
-func TestSnowflake(t *testing.T) {
+func TestAllSnowflakeDatatypes(t *testing.T) {
 	ctx := context.Background()
 	restClient, streamClient := setup(t)
 	channelOpts := streaming.ChannelOptions{
@@ -144,8 +150,8 @@ func TestSnowflake(t *testing.T) {
       "H": "2024-01-02T13:02:06.123456789Z",
       "I": "2019-03-04T00:00:00.12345Z",
       "J": "1970-01-02T12:00:00.000Z",
-      "K": "2024-01-01T12:00:00.000-08:00",
-      "L": "2024-01-01T12:00:00.000-08:00"
+      "K": "2024-02-01T12:00:00.000-08:00",
+      "L": "2024-01-01T12:00:01.000-08:00"
     }`),
 		msg(`{
       "A": "foo",
@@ -158,17 +164,80 @@ func TestSnowflake(t *testing.T) {
       "H": 1728680106,
       "I": 1728680106,
       "J": "2024-01-03T12:00:00.000-08:00",
-      "K": "2024-01-01T12:00:00.000-08:00",
-      "L": "2024-01-01T12:00:00.000-08:00"
+      "K": "2024-01-01T13:00:00.000-08:00",
+      "L": "2024-01-01T12:30:00.000-08:00"
     }`),
 	})
 	require.NoError(t, err)
+	time.Sleep(time.Second)
+	// Always order by A so we get consistent ordering for our test
+	resp, err := restClient.RunSQL(ctx, streaming.RunSQLRequest{
+		Database:  channelOpts.DatabaseName,
+		Schema:    channelOpts.SchemaName,
+		Statement: fmt.Sprintf(`SELECT * FROM %s ORDER BY A;`, channelOpts.TableName),
+		Parameters: map[string]string{
+			"TIMESTAMP_OUTPUT_FORMAT": "YYYY-MM-DD HH24:MI:SS.FF3 TZHTZM",
+			"DATE_OUTPUT_FORMAT":      "YYYY-MM-DD",
+			"TIME_OUTPUT_FORMAT":      "HH24:MI:SS",
+		},
+	})
+	assert.Equal(t, "00000", resp.SQLState)
+	expected := [][]string{
+		{
+			`bar`,
+			`true`,
+			`{"foo":"bar"}`,
+			`[[42], null, {"A":"B"}]`,
+			`{"foo": "bar"}`,
+			`3.14`,
+			`-1`,
+			`13:02:06`,
+			`2007-11-03`,
+			`2024-01-01 04:00:00.000 -0800`,
+			`2024-01-01 20:00:00.000`,
+			`2024-01-01 12:00:00.000 -0800`,
+		},
+		{
+			`baz`,
+			`false`,
+			`{"a":"b"}`,
+			`[1, 2, 3]`,
+			`{"foo":"baz"}`,
+			`42.12345`,
+			`9`,
+			`13:02:06`,
+			`2019-03-04`,
+			`1970-01-02 04:00:00.000 -0800`,
+			`2024-02-01 20:00:00.000`,
+			`2024-01-01 12:00:01.000 -0800`,
+		},
+		{
+			`foo`,
+			``,
+			`[1, 2, 3]`,
+			`["a", 9, "z"]`,
+			`{"baz":"qux"}`,
+			`-0.0`,
+			`42`,
+			`20:55:06`,
+			`2024-10-11`,
+			`2024-01-03 12:00:00.000 -0800`,
+			`2024-01-01 21:00:00.000`,
+			`2024-01-01 12:30:00.000 -0800`,
+		},
+	}
+	assert.Equal(t, parseSnowflakeData(expected), parseSnowflakeData(resp.Data))
 	require.EventuallyWithT(t, func(collect *assert.CollectT) {
-		// Always order by A so we get consistent ordering for our test
+		// Make sure stats are written correctly by doing a query that only needs to read from epInfo
 		resp, err := restClient.RunSQL(ctx, streaming.RunSQLRequest{
-			Database:  channelOpts.DatabaseName,
-			Schema:    channelOpts.SchemaName,
-			Statement: fmt.Sprintf(`SELECT * FROM %s ORDER BY A;`, channelOpts.TableName),
+			Database: channelOpts.DatabaseName,
+			Schema:   channelOpts.SchemaName,
+			Statement: fmt.Sprintf(`SELECT 
+          MAX(A), MAX(B), MAX(C),
+                          MAX(F),
+          MAX(G), MAX(H), MAX(I),
+          MAX(J), MAX(K), MAX(L)
+          FROM %s`, channelOpts.TableName),
 			Parameters: map[string]string{
 				"TIMESTAMP_OUTPUT_FORMAT": "YYYY-MM-DD HH24:MI:SS.FF3 TZHTZM",
 				"DATE_OUTPUT_FORMAT":      "YYYY-MM-DD",
@@ -182,46 +251,16 @@ func TestSnowflake(t *testing.T) {
 		assert.Equal(collect, "00000", resp.SQLState)
 		expected := [][]string{
 			{
-				`bar`,
-				`true`,
-				`{"foo":"bar"}`,
-				`[[42], null, {"A":"B"}]`,
-				`{"foo": "bar"}`,
-				`3.14`,
-				`-1`,
-				`13:02:06`,
-				`2007-11-03`,
-				`-1832551390-01-03 00:00:00.000 -0800`,
-				`2024-01-01 20:00:00.000`,
-				`2024-01-01 12:00:00.000 -0800`,
-			},
-			{
-				`baz`,
-				`false`,
-				`{"a":"b"}`,
-				`[1, 2, 3]`,
-				`{"foo":"baz"}`,
-				`42.12345`,
-				`9`,
-				`13:02:06`,
-				`2019-03-04`,
-				`-1832551390-01-05 00:00:00.000 -0800`,
-				`2024-01-01 20:00:00.000`,
-				`2024-01-01 12:00:00.000 -0800`,
-			},
-			{
 				`foo`,
-				``,
+				`true`,
 				`[1, 2, 3]`,
-				`["a", 9, "z"]`,
-				`{"baz":"qux"}`,
-				`-0.0`,
+				`42.12345`,
 				`42`,
 				`20:55:06`,
 				`2024-10-11`,
-				`-1832551390-01-08 00:00:00.000 -0800`,
-				`2024-01-01 20:00:00.000`,
-				`2024-01-01 12:00:00.000 -0800`,
+				`2024-01-03 12:00:00.000 -0800`,
+				`2024-02-01 20:00:00.000`,
+				`2024-01-01 12:30:00.000 -0800`,
 			},
 		}
 		assert.Equal(collect, parseSnowflakeData(expected), parseSnowflakeData(resp.Data))
@@ -243,7 +282,10 @@ func TestIntegerCompat(t *testing.T) {
 		Statement: fmt.Sprintf(`
       DROP TABLE IF EXISTS %s;
       CREATE TABLE IF NOT EXISTS %s (
-        A NUMBER
+        A NUMBER,
+        B NUMBER(38, 8),
+        C NUMBER(18, 0),
+        D NUMBER(28, 8)
       );`, channelOpts.TableName, channelOpts.TableName),
 		Parameters: map[string]string{
 			"MULTI_STATEMENT_COUNT": "0",
@@ -258,39 +300,26 @@ func TestIntegerCompat(t *testing.T) {
 	})
 	channel, err := streamClient.OpenChannel(ctx, channelOpts)
 	require.NoError(t, err)
-	expectedInts := []int{}
-	rows := [][2]int{
-		{-1, 1},
-		{math.MinInt8, math.MaxInt8},
-		{math.MinInt16, math.MaxInt16},
-		{math.MinInt32, math.MaxInt32},
-		{math.MinInt64, math.MaxInt64},
-	}
-	for _, row := range rows {
-		_, err = channel.InsertRows(ctx, service.MessageBatch{
-			msg(`{
-        "a": ` + strconv.Itoa(row[0]) + ` 
-      }`),
-			msg(`{
-        "a": 0
-      }`),
-			msg(`{
-        "a": ` + strconv.Itoa(row[1]) + ` 
-      }`),
-		})
-		require.NoError(t, err)
-		expectedInts = append(
-			expectedInts,
-			row[0],
-			0,
-			row[1],
-		)
-	}
-	slices.Sort(expectedInts)
-	expectedRows := [][]string{}
-	for _, i := range expectedInts {
-		expectedRows = append(expectedRows, []string{strconv.Itoa(i)})
-	}
+	_, err = channel.InsertRows(ctx, service.MessageBatch{
+		structuredMsg(map[string]any{
+			"a": math.MinInt64,
+			"b": math.MinInt8,
+			"c": math.MaxInt32,
+			"d": math.MinInt8,
+		}),
+		structuredMsg(map[string]any{
+			"a": 0,
+			"b": "0.12345678",
+			"c": 0,
+		}),
+		structuredMsg(map[string]any{
+			"a": math.MaxInt64,
+			"b": math.MaxInt8,
+			"c": math.MaxInt16,
+			"d": "1234.12345678",
+		}),
+	})
+	require.NoError(t, err)
 	require.EventuallyWithT(t, func(collect *assert.CollectT) {
 		// Always order by A so we get consistent ordering for our test
 		resp, err := restClient.RunSQL(ctx, streaming.RunSQLRequest{
@@ -303,7 +332,160 @@ func TestIntegerCompat(t *testing.T) {
 			return
 		}
 		assert.Equal(collect, "00000", resp.SQLState)
-		assert.Equal(collect, parseSnowflakeData(expectedRows), parseSnowflakeData(resp.Data))
+		itoa := strconv.Itoa
+		assert.Equal(collect, parseSnowflakeData([][]string{
+			{itoa(math.MinInt64), itoa(math.MinInt8), itoa(math.MaxInt32), itoa(math.MinInt8)},
+			{"0", "0.12345678", "0", ""},
+			{itoa(math.MaxInt64), itoa(math.MaxInt8), itoa(math.MaxInt16), "1234.12345678"},
+		}), parseSnowflakeData(resp.Data))
+	}, 3*time.Second, time.Second)
+}
+
+func TestTimestampCompat(t *testing.T) {
+	ctx := context.Background()
+	restClient, streamClient := setup(t)
+	channelOpts := streaming.ChannelOptions{
+		Name:         t.Name(),
+		DatabaseName: envOr("SNOWFLAKE_DB", "BABY_DATABASE"),
+		SchemaName:   "PUBLIC",
+		TableName:    "TEST_TIMESTAMP_TABLE",
+	}
+	var columnDefs []string
+	var columnNames []string
+	for _, tsType := range []string{"_NTZ", "_TZ", "_LTZ"} {
+		for precision := range make([]int, 10) {
+			name := fmt.Sprintf("TS%s_%d", tsType, precision)
+			columnNames = append(columnNames, name)
+			columnDefs = append(columnDefs, name+fmt.Sprintf(" TIMESTAMP%s(%d)", tsType, precision))
+		}
+	}
+	_, err := restClient.RunSQL(ctx, streaming.RunSQLRequest{
+		Database: channelOpts.DatabaseName,
+		Schema:   channelOpts.SchemaName,
+		Statement: fmt.Sprintf(`
+      DROP TABLE IF EXISTS %s;
+      CREATE TABLE IF NOT EXISTS %s (
+        %s
+      );`, channelOpts.TableName, channelOpts.TableName, strings.Join(columnDefs, ", ")),
+		Parameters: map[string]string{
+			"MULTI_STATEMENT_COUNT": "0",
+		},
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		err = streamClient.DropChannel(ctx, channelOpts)
+		if err != nil {
+			t.Log("unable to cleanup stream in SNOW:", err)
+		}
+	})
+	channel, err := streamClient.OpenChannel(ctx, channelOpts)
+	require.NoError(t, err)
+	timestamps1 := map[string]any{}
+	timestamps2 := map[string]any{}
+	easternTz, err := time.LoadLocation("America/New_York")
+	require.NoError(t, err)
+	for _, col := range columnNames {
+		timestamps1[col] = time.Date(
+			2024, 1, 01,
+			12, 30, 05,
+			int(time.Nanosecond+time.Microsecond+time.Millisecond),
+			time.UTC,
+		)
+		timestamps2[col] = time.Date(
+			2024, 1, 01,
+			20, 45, 55,
+			int(time.Nanosecond+time.Microsecond+time.Millisecond),
+			easternTz,
+		)
+	}
+	_, err = channel.InsertRows(ctx, service.MessageBatch{
+		structuredMsg(timestamps1),
+		structuredMsg(timestamps2),
+		msg(`{}`), // all nulls
+	})
+	require.NoError(t, err)
+	expectedRows := [][]string{
+		{
+			"2024-01-01 12:30:05.000",
+			"2024-01-01 12:30:05.000",
+			"2024-01-01 12:30:05.000",
+			"2024-01-01 12:30:05.001",
+			"2024-01-01 12:30:05.001",
+			"2024-01-01 12:30:05.001",
+			"2024-01-01 12:30:05.001",
+			"2024-01-01 12:30:05.001",
+			"2024-01-01 12:30:05.001",
+			"2024-01-01 12:30:05.001",
+			"2024-01-01 12:30:05. Z",
+			"2024-01-01 12:30:05.0 Z",
+			"2024-01-01 12:30:05.00 Z",
+			"2024-01-01 12:30:05.001 Z",
+			"2024-01-01 12:30:05.0010 Z",
+			"2024-01-01 12:30:05.00100 Z",
+			"2024-01-01 12:30:05.001001 Z",
+			"2024-01-01 12:30:05.0010010 Z",
+			"2024-01-01 12:30:05.00100100 Z",
+			"2024-01-01 12:30:05.001001001 Z",
+			"2024-01-01 04:30:05. -0800",
+			"2024-01-01 04:30:05.0 -0800",
+			"2024-01-01 04:30:05.00 -0800",
+			"2024-01-01 04:30:05.001 -0800",
+			"2024-01-01 04:30:05.0010 -0800",
+			"2024-01-01 04:30:05.00100 -0800",
+			"2024-01-01 04:30:05.001001 -0800",
+			"2024-01-01 04:30:05.0010010 -0800",
+			"2024-01-01 04:30:05.00100100 -0800",
+			"2024-01-01 04:30:05.001001001 -0800",
+		},
+		{
+			"2024-01-02 01:45:55.000",
+			"2024-01-02 01:45:55.000",
+			"2024-01-02 01:45:55.000",
+			"2024-01-02 01:45:55.001",
+			"2024-01-02 01:45:55.001",
+			"2024-01-02 01:45:55.001",
+			"2024-01-02 01:45:55.001",
+			"2024-01-02 01:45:55.001",
+			"2024-01-02 01:45:55.001",
+			"2024-01-02 01:45:55.001",
+			"2024-01-01 20:45:55. -0500",
+			"2024-01-01 20:45:55.0 -0500",
+			"2024-01-01 20:45:55.00 -0500",
+			"2024-01-01 20:45:55.001 -0500",
+			"2024-01-01 20:45:55.0010 -0500",
+			"2024-01-01 20:45:55.00100 -0500",
+			"2024-01-01 20:45:55.001001 -0500",
+			"2024-01-01 20:45:55.0010010 -0500",
+			"2024-01-01 20:45:55.00100100 -0500",
+			"2024-01-01 20:45:55.001001001 -0500",
+			"2024-01-01 17:45:55. -0800",
+			"2024-01-01 17:45:55.0 -0800",
+			"2024-01-01 17:45:55.00 -0800",
+			"2024-01-01 17:45:55.001 -0800",
+			"2024-01-01 17:45:55.0010 -0800",
+			"2024-01-01 17:45:55.00100 -0800",
+			"2024-01-01 17:45:55.001001 -0800",
+			"2024-01-01 17:45:55.0010010 -0800",
+			"2024-01-01 17:45:55.00100100 -0800",
+			"2024-01-01 17:45:55.001001001 -0800",
+		},
+		make([]string, 30),
+	}
+	require.EventuallyWithT(t, func(collect *assert.CollectT) {
+		resp, err := restClient.RunSQL(ctx, streaming.RunSQLRequest{
+			Database:  channelOpts.DatabaseName,
+			Schema:    channelOpts.SchemaName,
+			Statement: fmt.Sprintf(`SELECT * FROM %s ORDER BY TS_NTZ_9;`, channelOpts.TableName),
+			Parameters: map[string]string{
+				"TIMESTAMP_OUTPUT_FORMAT": "YYYY-MM-DD HH24:MI:SS.FF TZHTZM",
+			},
+		})
+		if !assert.NoError(t, err) {
+			t.Logf("failed to scan table: %s", err)
+			return
+		}
+		assert.Equal(t, "00000", resp.SQLState)
+		assert.Equal(t, parseSnowflakeData(expectedRows), parseSnowflakeData(resp.Data))
 	}, 3*time.Second, time.Second)
 }
 

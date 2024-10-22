@@ -18,6 +18,8 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/parquet-go/parquet-go"
+	"github.com/parquet-go/parquet-go/deprecated"
+	"github.com/parquet-go/parquet-go/format"
 	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming/int128"
 )
 
@@ -147,12 +149,13 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[stri
 			buffer = &typedBufferImpl{}
 		case "timestamp_tz", "timestamp_ltz", "timestamp_ntz":
 			var scale, precision int32
+			var pt parquet.Type
 			if column.PhysicalType == "SB8" {
-				n = parquet.Leaf(parquet.Int64Type)
+				pt = parquet.Int64Type
 				precision = maxPrecisionForByteWidth(8)
 				buffer = &int64Buffer{}
 			} else {
-				n = parquet.Leaf(parquet.FixedLenByteArrayType(16))
+				pt = parquet.FixedLenByteArrayType(16)
 				precision = maxPrecisionForByteWidth(16)
 				buffer = &typedBufferImpl{}
 			}
@@ -162,6 +165,7 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[stri
 			// The server always returns 0 precision for timestamp columns,
 			// the Java SDK also seems to not validate precision of timestamps
 			// so ignore it and use the default precision for the column type
+			n = parquet.Decimal(int(scale), int(precision), pt)
 			converter = timestampConverter{
 				nullable:  column.Nullable,
 				scale:     scale,
@@ -214,6 +218,32 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[stri
 		}
 	}
 	return parquet.NewSchema("bdec", groupNode), transformers, typeMetadata, nil
+}
+
+type timestampType struct {
+	parquet.Type
+	timestamp format.TimestampType
+}
+
+func (n *timestampType) String() string {
+	return fmt.Sprintf("%s (%s)", n.Type.String(), n.timestamp.String())
+}
+
+func (n *timestampType) LogicalType() *format.LogicalType {
+	return &format.LogicalType{Timestamp: &n.timestamp}
+}
+
+func (n *timestampType) ConvertedType() *deprecated.ConvertedType {
+	var ct deprecated.ConvertedType
+	switch {
+	case n.timestamp.Unit.Micros != nil:
+		ct = deprecated.TimestampMicros
+	case n.timestamp.Unit.Millis != nil:
+		ct = deprecated.TimestampMillis
+	default:
+		return nil
+	}
+	return &ct
 }
 
 type statsBuffer struct {
