@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"runtime"
 	"strings"
 	"time"
 
@@ -302,12 +301,7 @@ type SnowflakeRestClient struct {
 
 // NewRestClient creates a new REST client for the given parameters.
 func NewRestClient(account, user, version string, privateKey *rsa.PrivateKey, logger *service.Logger) (c *SnowflakeRestClient, err error) {
-	userAgent := fmt.Sprintf("RedpandaConnect/%v (%v-%v) %v/%v",
-		version,
-		runtime.GOOS,
-		runtime.GOARCH,
-		runtime.Compiler,
-		runtime.Version())
+	userAgent := fmt.Sprintf("RedpandaConnect/%v", version)
 	c = &SnowflakeRestClient{
 		account:    account,
 		user:       user,

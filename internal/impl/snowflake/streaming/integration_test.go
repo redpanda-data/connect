@@ -46,15 +46,16 @@ func setup(t *testing.T) (*streaming.SnowflakeRestClient, *streaming.SnowflakeSe
 	parseResult, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 	require.NoError(t, err)
 	clientOptions := streaming.ClientOptions{
-		Account:    "WQKFXQQ-WI77362",
-		User:       "ROCKWOODREDPANDA",
-		Role:       "ACCOUNTADMIN",
-		PrivateKey: parseResult.(*rsa.PrivateKey),
+		Account:        "WQKFXQQ-WI77362",
+		User:           "ROCKWOODREDPANDA",
+		Role:           "ACCOUNTADMIN",
+		PrivateKey:     parseResult.(*rsa.PrivateKey),
+		ConnectVersion: "v0.0.0-dev",
 	}
 	restClient, err := streaming.NewRestClient(
 		clientOptions.Account,
 		clientOptions.User,
-		"test-version",
+		"v0.0.0-dev",
 		clientOptions.PrivateKey,
 		clientOptions.Logger,
 	)
