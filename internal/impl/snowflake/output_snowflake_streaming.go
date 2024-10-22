@@ -248,6 +248,7 @@ func (o *snowflakeStreamerOutput) openChannel(ctx context.Context) (*streaming.S
 	name := fmt.Sprintf("%s_%d", o.channelPrefix, o.poolSize)
 	o.logger.Debugf("opening snowflake streaming channel: %s", name)
 	client, err := o.client.OpenChannel(ctx, streaming.ChannelOptions{
+		ID:           int16(o.poolSize),
 		Name:         name,
 		DatabaseName: o.db,
 		SchemaName:   o.schema,

@@ -21,6 +21,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"path"
+	"sync/atomic"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
@@ -58,7 +59,7 @@ type SnowflakeServiceClient struct {
 	clientPrefix     string
 	deploymentID     int64
 	options          ClientOptions
-	requestIDCounter int
+	requestIDCounter *atomic.Int64
 
 	uploader          *typed.AtomicValue[stageUploaderResult]
 	uploadRefreshLoop *periodic.Periodic
@@ -108,6 +109,7 @@ func NewSnowflakeServiceClient(ctx context.Context, opts ClientOptions) (*Snowfl
 			uploader, err := newUploader(resp.StageLocation)
 			uploaderAtomic.Store(stageUploaderResult{uploader: uploader, err: err})
 		}),
+		requestIDCounter: &atomic.Int64{},
 	}
 	ssc.uploadRefreshLoop.Start()
 	return ssc, nil
@@ -121,13 +123,14 @@ func (c *SnowflakeServiceClient) Close() error {
 }
 
 func (c *SnowflakeServiceClient) nextRequestID() string {
-	rid := c.requestIDCounter
-	c.requestIDCounter++
+	rid := c.requestIDCounter.Add(1)
 	return fmt.Sprintf("%s_%d", c.clientPrefix, rid)
 }
 
 // ChannelOptions the parameters to opening a channel using SnowflakeServiceClient
 type ChannelOptions struct {
+	// ID of this channel, should be unique per channel
+	ID int16
 	// Name is the name of the channel
 	Name string
 	// DatabaseName is the name of the database
@@ -175,11 +178,12 @@ func (c *SnowflakeServiceClient) OpenChannel(ctx context.Context, opts ChannelOp
 			encryptionKeyID: resp.EncryptionKeyID,
 			encryptionKey:   resp.EncryptionKey,
 		},
-		clientSequencer: resp.ClientSequencer,
-		rowSequencer:    resp.RowSequencer,
-		transformers:    transformers,
-		fileMetadata:    typeMetadata,
-		buffer:          bytes.NewBuffer(nil),
+		clientSequencer:  resp.ClientSequencer,
+		rowSequencer:     resp.RowSequencer,
+		transformers:     transformers,
+		fileMetadata:     typeMetadata,
+		buffer:           bytes.NewBuffer(nil),
+		requestIDCounter: c.requestIDCounter,
 	}
 	return ch, nil
 }
@@ -239,23 +243,24 @@ func (c *SnowflakeServiceClient) DropChannel(ctx context.Context, opts ChannelOp
 // SnowflakeIngestionChannel is a write connection to a single table in Snowflake
 type SnowflakeIngestionChannel struct {
 	ChannelOptions
-	role             string
-	clientPrefix     string
-	schema           *parquet.Schema
-	client           *SnowflakeRestClient
-	uploader         *typed.AtomicValue[stageUploaderResult]
-	encryptionInfo   *encryptionInfo
-	clientSequencer  int64
-	rowSequencer     int64
-	transformers     map[string]*dataTransformer
-	fileMetadata     map[string]string
-	requestIDCounter int
-	buffer           *bytes.Buffer
+	role            string
+	clientPrefix    string
+	schema          *parquet.Schema
+	client          *SnowflakeRestClient
+	uploader        *typed.AtomicValue[stageUploaderResult]
+	encryptionInfo  *encryptionInfo
+	clientSequencer int64
+	rowSequencer    int64
+	transformers    map[string]*dataTransformer
+	fileMetadata    map[string]string
+	buffer          *bytes.Buffer
+	// This is shared among the various open channels to get some uniqueness
+	// when naming bdec files
+	requestIDCounter *atomic.Int64
 }
 
 func (c *SnowflakeIngestionChannel) nextRequestID() string {
-	rid := c.requestIDCounter
-	c.requestIDCounter++
+	rid := c.requestIDCounter.Add(1)
 	return fmt.Sprintf("%s_%d", c.clientPrefix, rid)
 }
 
@@ -275,9 +280,11 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 	if err != nil {
 		return stats, err
 	}
-	fakeThreadID := rand.N(1000)
-	blobPath := generateBlobPath(c.clientPrefix, fakeThreadID, c.requestIDCounter)
-	c.requestIDCounter++
+	// Prevent multiple channels from having the same bdec file (it must be unique)
+	// so add the ID of the channel in the upper 16 bits and then get 48 bits of
+	// randomness outside that.
+	fakeThreadID := (int(c.ID) << 48) | rand.N(1<<48)
+	blobPath := generateBlobPath(c.clientPrefix, fakeThreadID, int(c.requestIDCounter.Add(1)))
 	// This is extra metadata that is required for functionality in snowflake.
 	c.fileMetadata["primaryFileId"] = path.Base(blobPath)
 	c.buffer.Reset()
