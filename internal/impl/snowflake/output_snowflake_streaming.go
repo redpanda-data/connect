@@ -237,29 +237,33 @@ type snowflakeStreamerOutput struct {
 	logger                           *service.Logger
 }
 
-func (o *snowflakeStreamerOutput) openChannel(ctx context.Context) (*streaming.SnowflakeIngestionChannel, error) {
+func (o *snowflakeStreamerOutput) openNewChannel(ctx context.Context) (*streaming.SnowflakeIngestionChannel, error) {
 	// Use a lock here instead of an atomic because this should not be called at steady state and it's better to limit
 	// creating extra channels when there is a limit of 10K.
 	o.channelCreationMu.Lock()
 	defer o.channelCreationMu.Unlock()
 	name := fmt.Sprintf("%s_%d", o.channelPrefix, o.poolSize)
-	o.logger.Debugf("opening snowflake streaming channel: %s", name)
-	client, err := o.client.OpenChannel(ctx, streaming.ChannelOptions{
-		ID:           int16(o.poolSize),
-		Name:         name,
-		DatabaseName: o.db,
-		SchemaName:   o.schema,
-		TableName:    o.table,
-	})
+	client, err := o.openChannel(ctx, name, int16(o.poolSize))
 	if err == nil {
 		o.poolSize++
 	}
 	return client, err
 }
 
+func (o *snowflakeStreamerOutput) openChannel(ctx context.Context, name string, id int16) (*streaming.SnowflakeIngestionChannel, error) {
+	o.logger.Debugf("opening snowflake streaming channel: %s", name)
+	return o.client.OpenChannel(ctx, streaming.ChannelOptions{
+		ID:           id,
+		Name:         name,
+		DatabaseName: o.db,
+		SchemaName:   o.schema,
+		TableName:    o.table,
+	})
+}
+
 func (o *snowflakeStreamerOutput) Connect(ctx context.Context) error {
 	// Precreate a single channel so we know stuff works, otherwise we'll create them on demand.
-	c, err := o.openChannel(ctx)
+	c, err := o.openNewChannel(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to open snowflake streaming channel: %w", err)
 	}
@@ -285,7 +289,7 @@ func (o *snowflakeStreamerOutput) WriteBatch(ctx context.Context, batch service.
 		channel = maybeChan.(*streaming.SnowflakeIngestionChannel)
 	} else {
 		var err error
-		if channel, err = o.openChannel(ctx); err != nil {
+		if channel, err = o.openNewChannel(ctx); err != nil {
 			return fmt.Errorf("unable to open snowflake streaming channel: %w", err)
 		}
 	}
@@ -293,8 +297,16 @@ func (o *snowflakeStreamerOutput) WriteBatch(ctx context.Context, batch service.
 	o.compressedOutput.Incr(int64(stats.CompressedOutputSize))
 	o.uploadTime.Timing(stats.UploadTime.Nanoseconds())
 	o.buildTime.Timing(stats.BuildTime.Nanoseconds())
-	// TODO: Reset the channel if there is an error
-	o.channelPool.Put(channel)
+	// If there is some kind of failure, try to reopen the channel
+	if err != nil {
+		reopened, reopenErr := o.openChannel(ctx, channel.Name, channel.ID)
+		if reopenErr == nil {
+			o.channelPool.Put(reopened)
+			return nil
+		} else {
+			o.logger.Warnf("unable to reopen channel %q after failure: %v", channel.Name, reopenErr)
+		}
+	}
 	return err
 }
 
