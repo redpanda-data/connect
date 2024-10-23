@@ -56,6 +56,9 @@ output:
   schema_registry:
     url: "" # No default (required)
     subject: "" # No default (required)
+    backfill_dependencies: true
+    translate_ids: true
+    input_resource: schema_registry_input
     tls:
       enabled: false
       skip_cert_verify: false
@@ -140,6 +143,33 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 *Type*: `string`
 
+
+=== `backfill_dependencies`
+
+Backfill schema references and previous versions.
+
+
+*Type*: `bool`
+
+*Default*: `true`
+
+=== `translate_ids`
+
+Translate schema IDs.
+
+
+*Type*: `bool`
+
+*Default*: `true`
+
+=== `input_resource`
+
+The label of the schema_registry input from which to read source schemas.
+
+
+*Type*: `string`
+
+*Default*: `"schema_registry_input"`
 
 === `tls`
 

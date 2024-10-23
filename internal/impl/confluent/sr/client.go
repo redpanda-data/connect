@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -78,10 +79,10 @@ func NewClient(
 
 // SchemaInfo is the information about a schema stored in the registry.
 type SchemaInfo struct {
-	ID         int               `json:"id"`
-	Type       string            `json:"schemaType"`
+	ID         int               `json:"id,omitempty"`
+	Type       string            `json:"schemaType,omitempty"`
 	Schema     string            `json:"schema"`
-	References []SchemaReference `json:"references"`
+	References []SchemaReference `json:"references,omitempty"`
 }
 
 // SchemaReference is a reference to another schema within the registry.
@@ -93,11 +94,21 @@ type SchemaReference struct {
 	Version int    `json:"version"`
 }
 
-// GetSchemaByID gets a schema by it's global identifier.
-func (c *Client) GetSchemaByID(ctx context.Context, id int) (resPayload SchemaInfo, err error) {
+// GetSchemaByID gets a schema by its global identifier.
+func (c *Client) GetSchemaByID(ctx context.Context, id int) (SchemaInfo, error) {
+	return c.GetSchemaByIDAndSubject(ctx, id, "")
+}
+
+// GetSchemaByIDAndSubject gets a schema by its global identifier scoped to the provided subject.
+func (c *Client) GetSchemaByIDAndSubject(ctx context.Context, id int, subject string) (resPayload SchemaInfo, err error) {
+	reqPath := fmt.Sprintf("/schemas/ids/%d", id)
+	var reqQuery string
+	if subject != "" {
+		reqQuery += "subject=" + url.PathEscape(subject)
+	}
 	var resCode int
-	var resBody []byte
-	if resCode, resBody, err = c.doRequest(ctx, http.MethodGet, fmt.Sprintf("/schemas/ids/%d", id), nil); err != nil {
+	var body []byte
+	if resCode, body, err = c.doRequest(ctx, http.MethodGet, reqPath, reqQuery, nil); err != nil {
 		err = fmt.Errorf("request failed for schema '%d': %s", id, err)
 		c.mgr.Logger().Errorf(err.Error())
 		return
@@ -109,20 +120,62 @@ func (c *Client) GetSchemaByID(ctx context.Context, id int) (resPayload SchemaIn
 		return
 	}
 
-	if len(resBody) == 0 {
+	if len(body) == 0 {
 		c.mgr.Logger().Errorf("request for schema '%d' returned an empty body", id)
 		err = errors.New("schema request returned an empty body")
 		return
 	}
 
-	if err = json.Unmarshal(resBody, &resPayload); err != nil {
+	if err = json.Unmarshal(body, &resPayload); err != nil {
 		c.mgr.Logger().Errorf("failed to parse response for schema '%d': %s", id, err)
 		return
 	}
 	return
 }
 
-// GetSchemaBySubjectAndVersion returns the schema by it's subject and optional version. A `nil` version returns the latest schema.
+// GetLatestSchemaVersionForSchemaIDAndSubject gets the latest version of a schema by its global identifier scoped to the provided subject.
+func (c *Client) GetLatestSchemaVersionForSchemaIDAndSubject(ctx context.Context, id int, subject string) (versionID int, err error) {
+	reqPath := fmt.Sprintf("/schemas/ids/%d/versions", id)
+	var resCode int
+	var body []byte
+	if resCode, body, err = c.doRequest(ctx, http.MethodGet, reqPath, "", nil); err != nil {
+		err = fmt.Errorf("request failed for schema ID '%d': %s", id, err)
+		c.mgr.Logger().Errorf(err.Error())
+		return
+	}
+
+	if resCode == http.StatusNotFound {
+		err = fmt.Errorf("schema ID '%d' not found by registry", id)
+		c.mgr.Logger().Errorf(err.Error())
+		return
+	}
+
+	type subjectVersion struct {
+		Subject string `json:"subject"`
+		Version int    `json:"version"`
+	}
+
+	var payload []subjectVersion
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return 0, fmt.Errorf("failed to unmarshal response for schema ID %d: %s", id, err)
+	}
+
+	versions := []int{}
+	for _, sv := range payload {
+		if sv.Subject == subject {
+			versions = append(versions, sv.Version)
+		}
+	}
+
+	if len(versions) > 0 {
+		slices.Sort(versions)
+		return versions[len(versions)-1], nil
+	}
+
+	return 0, fmt.Errorf("no schema versions found for ID %d and subject %q", id, subject)
+}
+
+// GetSchemaBySubjectAndVersion returns the schema by its subject and optional version. A `nil` version returns the latest schema.
 func (c *Client) GetSchemaBySubjectAndVersion(ctx context.Context, subject string, version *int) (resPayload SchemaInfo, err error) {
 	var path string
 	if version != nil {
@@ -132,8 +185,8 @@ func (c *Client) GetSchemaBySubjectAndVersion(ctx context.Context, subject strin
 	}
 
 	var resCode int
-	var resBody []byte
-	if resCode, resBody, err = c.doRequest(ctx, http.MethodGet, path, nil); err != nil {
+	var body []byte
+	if resCode, body, err = c.doRequest(ctx, http.MethodGet, path, "", nil); err != nil {
 		err = fmt.Errorf("request failed for schema subject %q: %s", subject, err)
 		c.mgr.Logger().Errorf(err.Error())
 		return
@@ -145,13 +198,13 @@ func (c *Client) GetSchemaBySubjectAndVersion(ctx context.Context, subject strin
 		return
 	}
 
-	if len(resBody) == 0 {
+	if len(body) == 0 {
 		c.mgr.Logger().Errorf("request for schema subject %q returned an empty body", subject)
 		err = errors.New("schema request returned an empty body")
 		return
 	}
 
-	if err = json.Unmarshal(resBody, &resPayload); err != nil {
+	if err = json.Unmarshal(body, &resPayload); err != nil {
 		c.mgr.Logger().Errorf("failed to parse response for schema subject %q: %s", subject, err)
 		return
 	}
@@ -163,7 +216,7 @@ func (c *Client) GetMode(ctx context.Context) (string, error) {
 	var resCode int
 	var body []byte
 	var err error
-	if resCode, body, err = c.doRequest(ctx, http.MethodGet, "/mode", nil); err != nil {
+	if resCode, body, err = c.doRequest(ctx, http.MethodGet, "/mode", "", nil); err != nil {
 		return "", fmt.Errorf("request failed: %s", err)
 	}
 
@@ -186,7 +239,7 @@ func (c *Client) GetSubjects(ctx context.Context) ([]string, error) {
 	var resCode int
 	var body []byte
 	var err error
-	if resCode, body, err = c.doRequest(ctx, http.MethodGet, "/subjects", nil); err != nil {
+	if resCode, body, err = c.doRequest(ctx, http.MethodGet, "/subjects", "", nil); err != nil {
 		return nil, fmt.Errorf("request failed: %s", err)
 	}
 
@@ -208,7 +261,7 @@ func (c *Client) GetVersionsForSubject(ctx context.Context, subject string) ([]i
 	var resCode int
 	var body []byte
 	var err error
-	if resCode, body, err = c.doRequest(ctx, http.MethodGet, path, nil); err != nil {
+	if resCode, body, err = c.doRequest(ctx, http.MethodGet, path, "", nil); err != nil {
 		return nil, fmt.Errorf("request failed: %s", err)
 	}
 
@@ -225,20 +278,28 @@ func (c *Client) GetVersionsForSubject(ctx context.Context, subject string) ([]i
 }
 
 // CreateSchema creates a new schema for the given subject.
-func (c *Client) CreateSchema(ctx context.Context, subject string, data []byte) error {
+func (c *Client) CreateSchema(ctx context.Context, subject string, data []byte) (int, error) {
 	path := fmt.Sprintf("/subjects/%s/versions", url.PathEscape(subject))
 
 	var resCode int
+	var body []byte
 	var err error
-	if resCode, _, err = c.doRequest(ctx, http.MethodPost, path, data); err != nil {
-		return fmt.Errorf("request failed: %s", err)
+	if resCode, body, err = c.doRequest(ctx, http.MethodPost, path, "", data); err != nil {
+		return 0, fmt.Errorf("request failed: %s", err)
 	}
 
 	if resCode != http.StatusOK {
-		return fmt.Errorf("request returned status: %d", resCode)
+		return 0, fmt.Errorf("request returned status: %d", resCode)
 	}
 
-	return nil
+	var payload struct {
+		ID int
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return 0, fmt.Errorf("failed to unmarshal response: %s", err)
+	}
+
+	return payload.ID, nil
 }
 
 type refWalkFn func(ctx context.Context, name string, info SchemaInfo) error
@@ -276,11 +337,12 @@ func (c *Client) walkReferencesTracked(ctx context.Context, seen map[string]int,
 	return nil
 }
 
-func (c *Client) doRequest(ctx context.Context, verb, reqPath string, body []byte) (resCode int, resBody []byte, err error) {
+func (c *Client) doRequest(ctx context.Context, verb, reqPath string, reqQuery string, body []byte) (resCode int, resBody []byte, err error) {
 	reqURL := *c.SchemaRegistryBaseURL
 	if reqURL.Path, err = url.JoinPath(reqURL.Path, reqPath); err != nil {
 		return
 	}
+	reqURL.RawQuery = reqQuery
 
 	reqURLString := reqURL.String()
 	if match := escapedSepRegexp.MatchString(reqPath); match {
