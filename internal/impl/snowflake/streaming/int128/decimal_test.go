@@ -335,8 +335,7 @@ func TestFromStringFast(t *testing.T) {
 		"11",
 		"11.1",
 		"12345.12345",
-		"99999999999999999999999999999999999999",
-		"-99999999999999999999999999999999999999",
+		"999999999999999999999999999999999999.9",
 	}
 
 	for _, str := range tests {
@@ -380,26 +379,41 @@ func TestFromStringFast(t *testing.T) {
 		assert.Error(t, err, "got: %v", v)
 		v, err = fromStringFast("9"+strings.Repeat("0", 39), 38, 38)
 		assert.Error(t, err, "got: %v", v)
+		v, err = fromStringFast("76063353390654101946871725586039877751.7", 38, 1)
+		assert.Error(t, err, "got: %v", v)
+		v, err = fromStringFast("99999999999999999999999999999999999999.9", 38, 1)
+		assert.Error(t, err, "got: %v", v)
+		v, err = fromStringFast("999999999999999999999999999999999999.9", 38, 3)
+		assert.Error(t, err, "got: %v", v)
+		for i := 1; i <= 38; i++ {
+			v, err = fromStringFast(strings.Repeat("9", 38), 38, int32(i))
+			assert.Error(t, err, "got: %v", v)
+		}
 	})
 }
 
 func TestFromStringFastVsSlowRandomized(t *testing.T) {
-	for i := 0; i < 100; i++ {
-		precision := rand.N(37) + 2
+	for i := 0; i < 1000; i++ {
+		precision := rand.N(36) + 2
 		scale := rand.N(precision - 1)
 		str := ""
 		for j := 0; j < precision; j++ {
 			str += strconv.Itoa(rand.N(10))
 		}
-		str += "."
-		for j := 0; j < scale; j++ {
-			str += strconv.Itoa(rand.N(10))
+		if scale > 0 {
+			str += "."
+			for j := 0; j < scale; j++ {
+				str += strconv.Itoa(rand.N(10))
+			}
 		}
 		fastN, fastErr := fromStringFast(str, int32(precision), int32(scale))
+		if fastErr == errFallbackNeeded {
+			continue
+		}
 		slowN, slowErr := fromStringSlow(str, int32(precision), int32(scale))
-		require.Equal(t, slowErr == nil, fastErr == nil, "%s: slowErr=%v, fastErr=%v", str, slowErr, fastErr)
+		require.Equal(t, slowErr == nil, fastErr == nil, "%s (scale=%d,precision=%d): slowErr=%v, fastErr=%v", str, scale, precision, slowErr, fastErr)
 		if slowErr == nil && fastErr == nil {
-			require.Equal(t, fastN, slowN, "%s: %s vs %s", str, fastN, slowN)
+			require.Equal(t, fastN, slowN, "%s (scale=%d,precision=%d): %s vs %s", str, scale, precision, fastN, slowN)
 		}
 	}
 }
@@ -411,7 +425,7 @@ func BenchmarkParsing(b *testing.B) {
 		"11.1",
 		"12345.12345",
 		"99999999999999999999999999999999999999",
-		"-99999999999999999999999999999999999999",
+		"-9999999999999999999999999999999999999",
 		"1234567890.1234567890",
 	}
 	for _, test := range tests {

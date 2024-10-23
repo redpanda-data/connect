@@ -145,10 +145,11 @@ var errFallbackNeeded = errors.New("fallback to slowpath needed")
 // A parsing fast path
 func fromStringFast(s string, prec, scale int32) (n Num, err error) {
 	sLen := int32(len(s))
-	// Plus two is for negative signs and decimal points
-	// since we're using int128 and our max precision is 38, we know we're
-	// not going to risk overflow at 40 digits.
-	if sLen == 0 || sLen > 40 {
+	// Even though there could be decimal points or negative/positive signs
+	// we need to limit the length of the string to prevent overflow.
+	//
+	// Using numbers this large is probably rare anyways.
+	if sLen == 0 || sLen > 38 {
 		err = errFallbackNeeded
 		return
 	}

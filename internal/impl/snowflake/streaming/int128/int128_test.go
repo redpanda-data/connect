@@ -382,6 +382,7 @@ func TestFitsInPrec(t *testing.T) {
 	snowflakeNumberMin := "-99999999999999999999999999999999999999"
 	require.True(t, MustParse(snowflakeNumberMax).FitsInPrecision(38), snowflakeNumberMax)
 	require.True(t, MustParse(snowflakeNumberMin).FitsInPrecision(38), snowflakeNumberMin)
+	require.True(t, MustParse("80068800064664092541968040996862354605").FitsInPrecision(38), "80068800064664092541968040996862354605")
 	snowflakeNumberTiny := "1.2e-36"
 	n, err := FromString(snowflakeNumberTiny, 38, 37)
 	require.NoError(t, err)
