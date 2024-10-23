@@ -417,10 +417,17 @@ func init() {
 
 //------------------------------------------------------------------------------
 
+func wipeSlice(b []byte) {
+	for i := range b {
+		b[i] = '~'
+	}
+}
+
 // getPrivateKeyFromFile reads and parses the private key
 // Inspired from https://github.com/chanzuckerberg/terraform-provider-snowflake/blob/c07d5820bea7ac3d8a5037b0486c405fdf58420e/pkg/provider/provider.go#L367
 func getPrivateKeyFromFile(f fs.FS, path, passphrase string) (*rsa.PrivateKey, error) {
 	privateKeyBytes, err := service.ReadFile(f, path)
+	defer wipeSlice(privateKeyBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read private key %s: %s", path, err)
 	}

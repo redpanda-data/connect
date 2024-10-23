@@ -218,6 +218,7 @@ sftp                      ,output    ,sftp                      ,3.39.0  ,certif
 skip_bom                  ,scanner   ,skip_bom                  ,0.0.0   ,certified  ,n          ,y     ,y
 sleep                     ,processor ,sleep                     ,0.0.0   ,certified  ,n          ,y     ,y
 snowflake_put             ,output    ,Snowflake                 ,4.0.0   ,enterprise ,n          ,y     ,y
+snowflake_streaming       ,output    ,Snowflake Streaming       ,4.39.0  ,enterprise ,n          ,y     ,y
 socket                    ,input     ,Socket                    ,0.0.0   ,certified  ,n          ,n     ,n
 socket                    ,output    ,Socket                    ,0.0.0   ,certified  ,n          ,n     ,n
 socket_server             ,input     ,socket_server             ,0.0.0   ,certified  ,n          ,n     ,n
