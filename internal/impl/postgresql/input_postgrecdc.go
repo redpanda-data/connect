@@ -217,6 +217,8 @@ func newPgStreamInput(conf *service.ParsedConfig, logger *service.Logger, metric
 
 	snapsotMetrics := metrics.NewGauge("snapshot_progress")
 	replicationLag := metrics.NewGauge("replication_lag")
+	snapshotMessageRate := metrics.NewGauge("snapshot_message_rate")
+	snapshotRateCounter := NewRateCounter()
 
 	return service.AutoRetryNacks(&pgStreamInput{
 		dbConfig:                pgconnConfig,
@@ -231,6 +233,8 @@ func newPgStreamInput(conf *service.ParsedConfig, logger *service.Logger, metric
 		streamUncomited:         streamUncomited,
 		temporarySlot:           temporarySlot,
 		snapshotBatchSize:       snapshotBatchSize,
+		snapshotMessageRate:     snapshotMessageRate,
+		snapshotRateCounter:     snapshotRateCounter,
 
 		logger:          logger,
 		metrics:         metrics,
@@ -270,8 +274,10 @@ type pgStreamInput struct {
 	logger                  *service.Logger
 	metrics                 *service.Metrics
 
-	snapshotMetrics *service.MetricGauge
-	replicationLag  *service.MetricGauge
+	snapshotRateCounter *RateCounter
+	snapshotMessageRate *service.MetricGauge
+	snapshotMetrics     *service.MetricGauge
+	replicationLag      *service.MetricGauge
 }
 
 func (p *pgStreamInput) Connect(ctx context.Context) error {
@@ -303,7 +309,6 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 }
 
 func (p *pgStreamInput) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
-
 	select {
 	case snapshotMessage := <-p.pglogicalStream.SnapshotMessageC():
 		var (
@@ -321,6 +326,8 @@ func (p *pgStreamInput) Read(ctx context.Context) (*service.Message, service.Ack
 		if snapshotMessage.Changes[0].TableSnapshotProgress != nil {
 			p.snapshotMetrics.SetFloat64(*snapshotMessage.Changes[0].TableSnapshotProgress, snapshotMessage.Changes[0].Table)
 		}
+
+		p.snapshotMessageRate.SetFloat64(p.snapshotRateCounter.Rate())
 
 		return connectMessage, func(ctx context.Context, err error) error {
 			// Nacks are retried automatically when we use service.AutoRetryNacks
