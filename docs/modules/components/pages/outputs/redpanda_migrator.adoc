@@ -92,6 +92,8 @@ output:
     input_resource: redpanda_migrator_input
     replication_factor_override: true
     replication_factor: 3
+    translate_schema_ids: true
+    schema_registry_output_resource: schema_registry_output
     partitioner: "" # No default (optional)
     idempotent_write: true
     compression: "" # No default (optional)
@@ -769,6 +771,24 @@ Replication factor for created topics. This is only used when `replication_facto
 *Type*: `int`
 
 *Default*: `3`
+
+=== `translate_schema_ids`
+
+Translate schema IDs.
+
+
+*Type*: `bool`
+
+*Default*: `true`
+
+=== `schema_registry_output_resource`
+
+The label of the schema_registry output to use for fetching schema IDs.
+
+
+*Type*: `string`
+
+*Default*: `"schema_registry_output"`
 
 === `partitioner`
 

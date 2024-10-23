@@ -11,6 +11,7 @@ package enterprise
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -30,6 +31,8 @@ const (
 	sriFieldFetchInOrder   = "fetch_in_order"
 	sriFieldSubjectFilter  = "subject_filter"
 	sriFieldTLS            = "tls"
+
+	sriResourceDefaultLabel = "schema_registry_input"
 )
 
 //------------------------------------------------------------------------------
@@ -92,12 +95,6 @@ func init() {
 	}
 }
 
-type schemaInfo struct {
-	sr.SchemaInfo
-	subject string
-	version int
-}
-
 type schemaRegistryInput struct {
 	subjectFilter *regexp.Regexp
 	fetchInOrder  bool
@@ -108,7 +105,7 @@ type schemaRegistryInput struct {
 	subjects  []string
 	subject   string
 	versions  []int
-	schemas   []schemaInfo
+	schemas   []schemaDetails
 	mgr       *service.Resources
 }
 
@@ -166,6 +163,12 @@ func inputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (i *sc
 		return nil, fmt.Errorf("failed to create Schema Registry client: %s", err)
 	}
 
+	if label := mgr.Label(); label != "" {
+		mgr.SetGeneric(mgr.Label(), i)
+	} else {
+		mgr.SetGeneric(sriResourceDefaultLabel, i)
+	}
+
 	return
 }
 
@@ -188,7 +191,7 @@ func (i *schemaRegistryInput) Connect(ctx context.Context) error {
 	}
 
 	if i.fetchInOrder {
-		schemas := map[int][]schemaInfo{}
+		schemas := map[int][]schemaDetails{}
 		for _, subject := range i.subjects {
 			var versions []int
 			if versions, err = i.client.GetVersionsForSubject(ctx, subject); err != nil {
@@ -205,10 +208,10 @@ func (i *schemaRegistryInput) Connect(ctx context.Context) error {
 					return fmt.Errorf("failed to fetch schema version %d for subject %q: %s", version, subject, err)
 				}
 
-				si := schemaInfo{
+				si := schemaDetails{
 					SchemaInfo: schema,
-					subject:    subject,
-					version:    version,
+					Subject:    subject,
+					Version:    version,
 				}
 
 				schemas[schema.ID] = append(schemas[schema.ID], si)
@@ -222,7 +225,7 @@ func (i *schemaRegistryInput) Connect(ctx context.Context) error {
 		}
 		sort.Ints(schemaIDs)
 
-		i.schemas = make([]schemaInfo, 0, len(schemas))
+		i.schemas = make([]schemaDetails, 0, len(schemas))
 		for _, id := range schemaIDs {
 			i.schemas = append(i.schemas, schemas[id]...)
 		}
@@ -240,7 +243,7 @@ func (i *schemaRegistryInput) Read(ctx context.Context) (*service.Message, servi
 		return nil, nil, service.ErrNotConnected
 	}
 
-	var si schemaInfo
+	var si schemaDetails
 	if !i.fetchInOrder {
 		for {
 			if len(i.subjects) == 0 && len(i.versions) == 0 {
@@ -280,8 +283,8 @@ func (i *schemaRegistryInput) Read(ctx context.Context) (*service.Message, servi
 		}
 
 		si.SchemaInfo = schema
-		si.subject = i.subject
-		si.version = version
+		si.Subject = i.subject
+		si.Version = version
 	} else {
 		if len(i.schemas) == 0 {
 			return nil, nil, service.ErrEndOfInput
@@ -293,25 +296,15 @@ func (i *schemaRegistryInput) Read(ctx context.Context) (*service.Message, servi
 		}()
 	}
 
-	// Omit `subject` from the schema since the `/subjects/<subject>/versions` endpoint doesn't allow it as part of
-	// the payload we pass it along as metadata.
-	schema := map[string]any{
-		"id":      si.ID,
-		"version": si.version,
-		"schema":  si.Schema,
-	}
-	if si.Type != "" {
-		schema["type"] = si.Type
-	}
-	if len(si.References) > 0 {
-		schema["references"] = si.References
+	schema, err := json.Marshal(si)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to marshal schema to json for subject %q version %d: %s", i.subject, si.Version, err)
 	}
 
-	msg := service.NewMessage(nil)
-	msg.SetStructured(schema)
+	msg := service.NewMessage(schema)
 
-	msg.MetaSetMut("schema_registry_subject", si.subject)
-	msg.MetaSetMut("schema_registry_version", si.version)
+	msg.MetaSetMut("schema_registry_subject", si.Subject)
+	msg.MetaSetMut("schema_registry_version", si.Version)
 
 	return msg, func(ctx context.Context, err error) error {
 		// Nacks are handled by AutoRetryNacks because we don't have an explicit
