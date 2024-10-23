@@ -152,34 +152,34 @@ func (c numberConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typ
 	switch t := val.(type) {
 	case int:
 		v = int128.FromInt64(int64(t))
-		v, err = int128.Rescale(v, 0, c.scale)
+		v, err = int128.Rescale(v, c.precision, c.scale)
 	case int8:
 		v = int128.FromInt64(int64(t))
-		v, err = int128.Rescale(v, 0, c.scale)
+		v, err = int128.Rescale(v, c.precision, c.scale)
 	case int16:
 		v = int128.FromInt64(int64(t))
-		v, err = int128.Rescale(v, 0, c.scale)
+		v, err = int128.Rescale(v, c.precision, c.scale)
 	case int32:
 		v = int128.FromInt64(int64(t))
-		v, err = int128.Rescale(v, 0, c.scale)
+		v, err = int128.Rescale(v, c.precision, c.scale)
 	case int64:
 		v = int128.FromInt64(t)
-		v, err = int128.Rescale(v, 0, c.scale)
+		v, err = int128.Rescale(v, c.precision, c.scale)
 	case uint:
 		v = int128.FromUint64(uint64(t))
-		v, err = int128.Rescale(v, 0, c.scale)
+		v, err = int128.Rescale(v, c.precision, c.scale)
 	case uint8:
 		v = int128.FromUint64(uint64(t))
-		v, err = int128.Rescale(v, 0, c.scale)
+		v, err = int128.Rescale(v, c.precision, c.scale)
 	case uint16:
 		v = int128.FromUint64(uint64(t))
-		v, err = int128.Rescale(v, 0, c.scale)
+		v, err = int128.Rescale(v, c.precision, c.scale)
 	case uint32:
 		v = int128.FromUint64(uint64(t))
-		v, err = int128.Rescale(v, 0, c.scale)
+		v, err = int128.Rescale(v, c.precision, c.scale)
 	case uint64:
 		v = int128.FromUint64(t)
-		v, err = int128.Rescale(v, 0, c.scale)
+		v, err = int128.Rescale(v, c.precision, c.scale)
 	case float32:
 		v, err = int128.FromFloat32(t, c.precision, c.scale)
 	case float64:
@@ -196,17 +196,10 @@ func (c numberConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typ
 			return err
 		}
 		v = int128.FromInt64(i)
-		v, err = int128.Rescale(v, 0, c.scale)
+		v, err = int128.Rescale(v, c.precision, c.scale)
 	}
 	if err != nil {
 		return err
-	}
-	if !v.FitsInPrecision(c.precision) {
-		return fmt.Errorf(
-			"number (%s) does not fit within specified precision: %d",
-			v.String(),
-			c.precision,
-		)
 	}
 	if stats.first {
 		stats.minIntVal = v

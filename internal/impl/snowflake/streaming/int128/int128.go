@@ -35,6 +35,8 @@ var (
 	MinInt16  = FromInt64(math.MinInt16)
 	MaxInt8   = FromInt64(math.MaxInt8)
 	MinInt8   = FromInt64(math.MinInt8)
+	one       = FromUint64(1)
+	ten       = FromUint64(10)
 
 	// For Snowflake, we need to do some quick multiplication to scale numbers
 	// to make that fast we precompute some powers of 10 in a lookup table.

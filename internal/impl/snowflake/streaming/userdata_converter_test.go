@@ -22,6 +22,7 @@ import (
 )
 
 type validateTestCase struct {
+	name      string
 	input     any
 	output    any
 	err       bool
@@ -113,48 +114,78 @@ func TestTimeConverter(t *testing.T) {
 func TestNumberConverter(t *testing.T) {
 	tests := []validateTestCase{
 		{
+			name:      "Number(2, 0)",
 			input:     12,
 			output:    12,
 			precision: 2,
 		},
 		{
+			name:      "Number(4, 0)",
 			input:     1234,
 			output:    1234,
 			precision: 4,
 		},
 		{
+			name:      "Number(9, 0)",
 			input:     123456789,
 			output:    123456789,
 			precision: 9,
 		},
 		{
+			name:      "Number(18, 0)",
 			input:     123456789987654321,
 			output:    123456789987654321,
 			precision: 18,
 		},
 		{
+			name:      "Number(38, 0)",
 			input:     json.Number("91234567899876543219876543211234567891"),
 			output:    int128.MustParse("91234567899876543219876543211234567891"),
 			precision: 38,
 		},
 		{
+			name:      "Number(38, 37)",
+			input:     json.Number("9.1234567899876543219876543211234567891"),
+			output:    int128.MustParse("91234567899876543219876543211234567891"),
+			precision: 38,
+			scale:     37,
+		},
+		{
+			name:      "Number(38, 28)",
+			input:     json.Number("9123456789.9876543219876543211234567891"),
+			output:    int128.MustParse("91234567899876543219876543211234567891"),
+			precision: 38,
+			scale:     28,
+		},
+		{
+			name:      "Number(19, 0) Error",
 			input:     json.Number("91234567899876543219876543211234567891"),
 			err:       true,
 			precision: 19, // too small
 		},
 		{
+			name:      "Number(19, 4)",
 			input:     json.Number("123.4321"),
 			output:    1234321,
 			scale:     4,
 			precision: 19,
 		},
 		{
+			name:      "Number(19, 10)",
+			input:     json.Number("123.4321"),
+			output:    1234321000000,
+			scale:     10,
+			precision: 19,
+		},
+		{
+			name:      "Number(26, 4)",
 			input:     123456789987654321,
 			output:    int128.MustParse("1234567899876543210000"),
 			scale:     4,
-			precision: 25,
+			precision: 26,
 		},
 		{
+			name:      "Number(19, 4) Error",
 			input:     123456789987654321,
 			err:       true,
 			scale:     4,
@@ -163,8 +194,12 @@ func TestNumberConverter(t *testing.T) {
 	}
 	for _, tc := range tests {
 		tc := tc
-		t.Run("", func(t *testing.T) {
-			c := &numberConverter{nullable: true, scale: tc.scale, precision: tc.precision}
+		t.Run(tc.name, func(t *testing.T) {
+			c := &numberConverter{
+				nullable:  true,
+				scale:     tc.scale,
+				precision: tc.precision,
+			}
 			runTestcase(t, c, tc)
 		})
 	}

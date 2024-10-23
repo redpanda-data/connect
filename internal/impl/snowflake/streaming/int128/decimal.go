@@ -22,6 +22,7 @@
 package int128
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -33,6 +34,10 @@ func (i Num) FitsInPrecision(prec int32) bool {
 	if prec == 0 {
 		// Precision 0 is valid in snowflake, even if it seems useless
 		return i == Num{}
+	}
+	// The abs call does nothing for this value, so we need to handle it properly
+	if i == MinInt128 {
+		return false
 	}
 	return Less(i.Abs(), Pow10Table[prec])
 }
@@ -128,36 +133,86 @@ var (
 
 // FromString converts a string into an Int128 as long as it fits within the given precision and scale.
 func FromString(v string, prec, scale int32) (n Num, err error) {
-	// time for some math!
-	// Our input precision means "number of digits of precision" but the
-	// math/big library refers to precision in floating point terms
-	// where it refers to the "number of bits of precision in the mantissa".
-	// So we need to figure out how many bits we should use for precision,
-	// based on the input precision. Too much precision and we aren't rounding
-	// when we should. Too little precision and we round when we shouldn't.
-	//
-	// In general, the number of decimal digits you get from a given number
-	// of bits will be:
-	//
-	//	digits = log[base 10](2^nbits)
-	//
-	// it thus follows that:
-	//
-	//	digits = nbits * log[base 10](2)
-	//  nbits = digits / log[base 10](2)
-	//
-	// So we need to account for our scale since we're going to be multiplying
-	// by 10^scale in order to get the integral value we're actually going to use
-	// So to get our number of bits we do:
-	//
-	// 	(prec + scale + 1) / log[base10](2)
-	//
-	// Finally, we still have a sign bit, so we -1 to account for the sign bit.
-	// Aren't floating point numbers fun?
-	var precInBits = uint(math.Round(float64(prec+scale+1)/math.Log10(2))) + 1
+	n, err = fromStringFast(v, prec, scale)
+	if err != nil {
+		n, err = fromStringSlow(v, prec, scale)
+	}
+	return
+}
 
+var errFallbackNeeded = errors.New("fallback to slowpath needed")
+
+// A parsing fast path
+func fromStringFast(s string, prec, scale int32) (n Num, err error) {
+	sLen := int32(len(s))
+	// Plus two is for negative signs and decimal points
+	// since we're using int128 and our max precision is 38, we know we're
+	// not going to risk overflow at 40 digits.
+	if sLen == 0 || sLen > 40 {
+		err = errFallbackNeeded
+		return
+	}
+	s0 := s
+	if s[0] == '-' || s[0] == '+' {
+		s = s[1:]
+		if len(s) == 0 {
+			err = errFallbackNeeded
+			return
+		}
+	}
+
+	// The value between '.' - '0'
+	// we can't write that expression because
+	// go is strict about overflow in constants
+	const dotMinusZero = 254
+	for i, ch := range []byte(s) {
+		ch -= '0'
+		if ch > 9 {
+			if ch == dotMinusZero {
+				s = s[i+1:]
+				goto fraction
+			}
+			return n, errFallbackNeeded
+		}
+		n = Add(Mul(n, ten), FromUint64(uint64(ch)))
+	}
+finish:
+	if s0[0] == '-' {
+		n = Neg(n)
+	}
+	// Rescale validates the the new number fits within the precision
+	n, err = Rescale(n, prec, scale)
+	return
+fraction:
+	for i, ch := range []byte(s) {
+		ch -= '0'
+		if ch > 9 {
+			return n, errFallbackNeeded
+		}
+		if scale == 0 {
+			// Round!
+			if ch >= 5 {
+				n = Add(n, one)
+			}
+			// We need to validate the rest of the number is valid
+			// ie is not scientific notation
+			for _, ch := range []byte(s[i+1:]) {
+				ch -= '0'
+				if ch > 9 {
+					return n, errFallbackNeeded
+				}
+			}
+			break
+		}
+		n = Add(Mul(n, ten), FromUint64(uint64(ch)))
+		scale--
+	}
+	goto finish
+}
+
+func fromStringSlow(v string, prec, scale int32) (n Num, err error) {
 	var out *big.Float
-	out, _, err = big.ParseFloat(v, 10, 128, big.ToNearestEven)
+	out, _, err = big.ParseFloat(v, 10, 128, big.ToNearestAway)
 	if err != nil {
 		return
 	}
@@ -173,20 +228,26 @@ func FromString(v string, prec, scale int32) (n Num, err error) {
 		}
 		n = Div(n, Pow10Table[-scale])
 	} else {
-		// Since we're going to truncate this to get an integer, we need to round
-		// the value instead because of edge cases so that we match how other implementations
-		// (e.g. C++) handles Decimal values. So if we're negative we'll subtract 0.5 and if
-		// we're positive we'll add 0.5.
-		p := (&big.Float{}).SetInt(Pow10Table[scale].bigInt())
-		out.SetPrec(precInBits).Mul(out, p)
-		if out.Signbit() {
-			out.Sub(out, pt5)
-		} else {
-			out.Add(out, pt5)
-		}
-
+		p := (&big.Float{}).SetPrec(128).SetInt(Pow10Table[scale].bigInt())
+		out = out.Mul(out, p)
 		var tmp big.Int
 		val, _ := out.Int(&tmp)
+		// Round by subtracting the whole number so we only have the
+		// fractional bit left, then compare it to 0.5, then adjust
+		// the whole number according to IEEE RoundTiesToAway rounding
+		// mode, which is to round away from zero if the fractional
+		// part is |>=0.5|.
+		p = p.SetInt(val)
+		out = out.Sub(out, p)
+		if out.Signbit() {
+			if out.Cmp(pt5) <= 0 {
+				val = val.Sub(val, big.NewInt(1))
+			}
+		} else {
+			if out.Cmp(pt5) >= 0 {
+				val = val.Add(val, big.NewInt(1))
+			}
+		}
 		n, ok = bigInt(val)
 		if !ok {
 			err = fmt.Errorf("value out of range: %s", v)
@@ -195,7 +256,7 @@ func FromString(v string, prec, scale int32) (n Num, err error) {
 	}
 
 	if !n.FitsInPrecision(prec) {
-		err = fmt.Errorf("val %v doesn't fit in precision %d", n, prec)
+		err = fmt.Errorf("val %s doesn't fit in precision %d", n.String(), prec)
 	}
 	return
 }
@@ -226,53 +287,15 @@ func (i Num) ToFloat64(scale int32) float64 {
 	return float64Positive(i, scale)
 }
 
-func rescaleWouldCauseDataLoss(n Num, deltaScale int32, multiplier Num) (out Num, loss bool) {
-	var (
-		value, result, remainder *big.Int
-	)
-	value = n.bigInt()
-	if deltaScale < 0 {
-		result, remainder = (&big.Int{}).QuoRem(value, multiplier.bigInt(), (&big.Int{}))
-		bi, ok := bigInt(result)
-		if !ok {
-			return out, true
-		}
-		return bi, remainder.Cmp(big.NewInt(0)) != 0
+// Rescale returns a new number such that it is scaled to |scale| (the current
+// scale is assumed to be zero). It also validates that the scaled value fits
+// within the specified precision.
+func Rescale(n Num, precision, scale int32) (out Num, err error) {
+	if !n.FitsInPrecision(precision - scale) {
+		err = fmt.Errorf("value (%s) out of range (precision=%d,scale=%d)", n.String(), precision, scale)
+		return
 	}
-
-	result = (&big.Int{}).Mul(value, multiplier.bigInt())
-	var ok bool
-	out, ok = bigInt(result)
-	if !ok {
-		return out, true
-	}
-	cmp := result.Cmp(value)
-	if n.IsNegative() {
-		loss = cmp == 1
-	} else {
-		loss = cmp == -1
-	}
-	return
-}
-
-// Rescale returns a new decimal128.Num with the value updated assuming
-// the current value is scaled to originalScale with the new value scaled
-// to newScale. If rescaling this way would cause data loss, an error is
-// returned instead.
-func Rescale(n Num, originalScale, newScale int32) (out Num, err error) {
-	if originalScale == newScale {
-		return n, nil
-	}
-
-	deltaScale := newScale - originalScale
-	absDeltaScale := int32(math.Abs(float64(deltaScale)))
-
-	multiplier := Pow10Table[absDeltaScale]
-	var wouldHaveLoss bool
-	out, wouldHaveLoss = rescaleWouldCauseDataLoss(n, deltaScale, multiplier)
-	if wouldHaveLoss {
-		err = fmt.Errorf("value (%s) out of range (scale=%d)", n.String(), deltaScale)
-	}
+	out = Mul(n, Pow10Table[scale])
 	return
 }
 

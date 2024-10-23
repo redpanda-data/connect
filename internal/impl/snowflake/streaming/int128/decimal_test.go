@@ -25,9 +25,13 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"math/rand/v2"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func ulps64(actual, expected float64) int64 {
@@ -317,7 +321,137 @@ func TestFromString(t *testing.T) {
 			assert.NoError(t, err)
 
 			ex := FromInt64(tt.expected)
-			assert.Equal(t, ex, n)
+			assert.Equal(t, ex, n, "got: %s, want: %d", n.String(), tt.expected)
 		})
 	}
+}
+
+func TestFromStringFast(t *testing.T) {
+	tests := []string{
+		"0",
+		"0924535.11610",
+		"480754368.9554427",
+		"1",
+		"11",
+		"11.1",
+		"12345.12345",
+		"99999999999999999999999999999999999999",
+		"-99999999999999999999999999999999999999",
+	}
+
+	for _, str := range tests {
+		str := str
+		digitCount, leadingDigits := computeDecimalParameters(str)
+		t.Run(str, func(t *testing.T) {
+			cases := 0
+			for prec := int32(38); prec >= digitCount; prec-- {
+				maxScale := prec - leadingDigits
+				for scale := maxScale; scale >= 0; scale-- {
+					actual, actualErr := fromStringFast(str, prec, scale)
+					assert.NoError(t, actualErr)
+					expected, expectedErr := fromStringSlow(str, prec, scale)
+					assert.NoError(t, expectedErr)
+					assert.Equal(
+						t,
+						expected,
+						actual,
+						"NUMBER(%d, %d): want: %s, got: %s",
+						prec, scale,
+						expected.String(),
+						actual.String(),
+					)
+					cases++
+				}
+			}
+		})
+	}
+	// Try to stress some edge cases where we could overflow but result in something
+	// valid after
+	t.Run("OverflowEdgeCase", func(t *testing.T) {
+		v, err := fromStringFast(strings.Repeat("9", 40), 38, 0)
+		assert.Error(t, err, "got: %v", v)
+		v, err = fromStringFast(strings.Repeat("9", 40), 38, 37)
+		assert.Error(t, err, "got: %v", v)
+		v, err = fromStringFast(strings.Repeat("9", 40), 38, 38)
+		assert.Error(t, err, "got: %v", v)
+		v, err = fromStringFast("9"+strings.Repeat("0", 39), 38, 0)
+		assert.Error(t, err, "got: %v", v)
+		v, err = fromStringFast("9"+strings.Repeat("0", 39), 38, 37)
+		assert.Error(t, err, "got: %v", v)
+		v, err = fromStringFast("9"+strings.Repeat("0", 39), 38, 38)
+		assert.Error(t, err, "got: %v", v)
+	})
+}
+
+func TestFromStringFastVsSlowRandomized(t *testing.T) {
+	for i := 0; i < 100; i++ {
+		precision := rand.N(37) + 2
+		scale := rand.N(precision - 1)
+		str := ""
+		for j := 0; j < precision; j++ {
+			str += strconv.Itoa(rand.N(10))
+		}
+		str += "."
+		for j := 0; j < scale; j++ {
+			str += strconv.Itoa(rand.N(10))
+		}
+		fastN, fastErr := fromStringFast(str, int32(precision), int32(scale))
+		slowN, slowErr := fromStringSlow(str, int32(precision), int32(scale))
+		require.Equal(t, slowErr == nil, fastErr == nil)
+		if slowErr == nil && fastErr == nil {
+			require.Equal(t, fastN, slowN, "%s: %s vs %s", str, fastN, slowN)
+		}
+	}
+}
+
+func BenchmarkParsing(b *testing.B) {
+	tests := []string{
+		"1",
+		"11",
+		"11.1",
+		"12345.12345",
+		"99999999999999999999999999999999999999",
+		"-99999999999999999999999999999999999999",
+		"1234567890.1234567890",
+	}
+	for _, test := range tests {
+		test := test
+		digitCount, leadingDigits := computeDecimalParameters(test)
+		scale := digitCount - leadingDigits
+		b.Run("fast_"+test, func(b *testing.B) {
+			b.SetBytes(int64(len(test)))
+			for i := 0; i < b.N; i++ {
+				_, err := fromStringFast(test, digitCount, scale)
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+		b.Run("slow_"+test, func(b *testing.B) {
+			b.SetBytes(int64(len(test)))
+			for i := 0; i < b.N; i++ {
+				_, err := fromStringSlow(test, digitCount, scale)
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
+func computeDecimalParameters(str string) (digitCount int32, leadingDigits int32) {
+	foundFraction := false
+	for _, r := range str {
+		if r == '.' {
+			foundFraction = true
+			continue
+		}
+		if r != '-' {
+			digitCount++
+			if !foundFraction {
+				leadingDigits++
+			}
+		}
+	}
+	return
 }

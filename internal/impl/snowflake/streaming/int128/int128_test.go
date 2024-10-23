@@ -361,14 +361,14 @@ func TestIncreaseScaleBy(t *testing.T) {
 		{MinInt64, 2, false},
 		{MaxInt128, 1, true},
 		{MinInt128, 1, true},
-		{MinInt128, 0, false},
+		{MinInt128, 0, true},
 	}
 	for _, tc := range tests {
 		tc := tc
 		t.Run("", func(t *testing.T) {
-			v, err := Rescale(tc.n, 0, tc.scale)
+			v, err := Rescale(tc.n, 38, tc.scale)
 			if tc.overflow {
-				require.Error(t, err, "but got: %v", v)
+				require.Error(t, err, "got: %v, err: %v", v)
 			} else {
 				require.NoError(t, err)
 			}
