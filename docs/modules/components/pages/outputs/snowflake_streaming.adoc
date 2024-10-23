@@ -118,6 +118,10 @@ This output benefits from sending multiple messages in flight in parallel for im
 
 This output benefits from sending messages as a batch for improved performance. Batches can be formed at both the input and output level. You can find out more xref:configuration:batching.adoc[in this doc].
 
+It is recommended that each batches results in at least 16MiB of compressed output being written to Snowflake.
+You can monitor the output batch size using the `snowflake_compressed_output_size_bytes` metric.
+
+
 == Fields
 
 === `account`
@@ -341,6 +345,8 @@ The maximum number of messages to have in flight at a given time. Increase this 
 The prefix to use when creating a channel name.
 Duplicate channel names will result in errors and prevent multiple instances of Redpanda Connect from writing at the same time.
 By default this will create a channel name that is based on the table FQN so there will only be a single stream per table.
+
+At most `max_in_flight` channels will be opened.
 
 NOTE: There is a limit of 10,000 streams per table - if using more than 10k streams please reach out to Snowflake support.
 

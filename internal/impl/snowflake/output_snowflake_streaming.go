@@ -61,7 +61,11 @@ For TIMESTAMP, TIME and DATE columns, you can parse different string formats usi
 Authentication can be configured using a https://docs.snowflake.com/en/user-guide/key-pair-auth[RSA Key Pair^].
 
 There are https://docs.snowflake.com/en/user-guide/data-load-snowpipe-streaming-overview#limitations[limitations^] of what data types can be loaded into Snowflake using this method.
-`+service.OutputPerformanceDocs(true, true)).
+`+service.OutputPerformanceDocs(true, true)+`
+
+It is recommended that each batches results in at least 16MiB of compressed output being written to Snowflake.
+You can monitor the output batch size using the `+"`snowflake_compressed_output_size_bytes`"+` metric.
+`).
 		Fields(
 			service.NewStringField(ssoFieldAccount).
 				Description(`Account name, which is the same as the https://docs.snowflake.com/en/user-guide/admin-account-identifier.html#where-are-account-identifiers-used[Account Identifier^].
@@ -84,6 +88,8 @@ There are https://docs.snowflake.com/en/user-guide/data-load-snowpipe-streaming-
 				Description(`The prefix to use when creating a channel name.
 Duplicate channel names will result in errors and prevent multiple instances of Redpanda Connect from writing at the same time.
 By default this will create a channel name that is based on the table FQN so there will only be a single stream per table.
+
+At most `+"`max_in_flight`"+` channels will be opened.
 
 NOTE: There is a limit of 10,000 streams per table - if using more than 10k streams please reach out to Snowflake support.`).
 				Optional().
