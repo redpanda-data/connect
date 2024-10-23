@@ -122,6 +122,10 @@ type franzSharedClientKeyType int
 var franzSharedClientKey franzSharedClientKeyType
 
 func getSharedClientRegister(res *service.Resources) *franzSharedClientRegister {
+	// Note: we avoid allocating `.clients` here because it would be unused in
+	// the majority of calls. The real world impact of this "optimisation"
+	// hasn't been tested, and so it might be worth adding it in favour of
+	// removing the `r.clients == nil` checks above.
 	reg, _ := res.GetOrSetGeneric(franzSharedClientKey, &franzSharedClientRegister{})
 	return reg.(*franzSharedClientRegister)
 }

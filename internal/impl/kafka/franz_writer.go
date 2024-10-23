@@ -178,29 +178,29 @@ func FranzProducerOptsFromConfig(conf *service.ParsedConfig) ([]kgo.Opt, error) 
 //------------------------------------------------------------------------------
 
 const (
-	rwFieldTopic     = "topic"
-	rwFieldKey       = "key"
-	rwFieldPartition = "partition"
-	rwFieldMetadata  = "metadata"
-	rwFieldTimestamp = "timestamp"
+	kfwFieldTopic     = "topic"
+	kfwFieldKey       = "key"
+	kfwFieldPartition = "partition"
+	kfwFieldMetadata  = "metadata"
+	kfwFieldTimestamp = "timestamp"
 )
 
 // FranzWriterConfigFields returns a slice of config fields specifically for
 // customising data written to a Kafka broker.
 func FranzWriterConfigFields() []*service.ConfigField {
 	return []*service.ConfigField{
-		service.NewInterpolatedStringField(rwFieldTopic).
+		service.NewInterpolatedStringField(kfwFieldTopic).
 			Description("A topic to write messages to."),
-		service.NewInterpolatedStringField(rwFieldKey).
+		service.NewInterpolatedStringField(kfwFieldKey).
 			Description("An optional key to populate for each message.").Optional(),
-		service.NewInterpolatedStringField(rwFieldPartition).
+		service.NewInterpolatedStringField(kfwFieldPartition).
 			Description("An optional explicit partition to set for each message. This field is only relevant when the `partitioner` is set to `manual`. The provided interpolation string must be a valid integer.").
 			Example(`${! meta("partition") }`).
 			Optional(),
-		service.NewMetadataFilterField(rwFieldMetadata).
+		service.NewMetadataFilterField(kfwFieldMetadata).
 			Description("Determine which (if any) metadata values should be added to messages as headers.").
 			Optional(),
-		service.NewInterpolatedStringField(rwFieldTimestamp).
+		service.NewInterpolatedStringField(kfwFieldTimestamp).
 			Description("An optional timestamp to set for each message. When left empty, the current timestamp is used.").
 			Example(`${! timestamp_unix() }`).
 			Example(`${! metadata("kafka_timestamp_unix") }`).
@@ -231,30 +231,30 @@ func NewFranzWriterFromConfig(conf *service.ParsedConfig, accessClientFn func(Fr
 	}
 
 	var err error
-	if w.Topic, err = conf.FieldInterpolatedString(rwFieldTopic); err != nil {
+	if w.Topic, err = conf.FieldInterpolatedString(kfwFieldTopic); err != nil {
 		return nil, err
 	}
 
-	if conf.Contains(rwFieldKey) {
-		if w.Key, err = conf.FieldInterpolatedString(rwFieldKey); err != nil {
+	if conf.Contains(kfwFieldKey) {
+		if w.Key, err = conf.FieldInterpolatedString(kfwFieldKey); err != nil {
 			return nil, err
 		}
 	}
 
-	if rawStr, _ := conf.FieldString(rwFieldPartition); rawStr != "" {
-		if w.Partition, err = conf.FieldInterpolatedString(rwFieldPartition); err != nil {
+	if rawStr, _ := conf.FieldString(kfwFieldPartition); rawStr != "" {
+		if w.Partition, err = conf.FieldInterpolatedString(kfwFieldPartition); err != nil {
 			return nil, err
 		}
 	}
 
-	if conf.Contains(rwFieldMetadata) {
-		if w.MetaFilter, err = conf.FieldMetadataFilter(rwFieldMetadata); err != nil {
+	if conf.Contains(kfwFieldMetadata) {
+		if w.MetaFilter, err = conf.FieldMetadataFilter(kfwFieldMetadata); err != nil {
 			return nil, err
 		}
 	}
 
-	if conf.Contains(rwFieldTimestamp) {
-		if w.Timestamp, err = conf.FieldInterpolatedString(rwFieldTimestamp); err != nil {
+	if conf.Contains(kfwFieldTimestamp) {
+		if w.Timestamp, err = conf.FieldInterpolatedString(kfwFieldTimestamp); err != nil {
 			return nil, err
 		}
 	}

@@ -159,6 +159,11 @@ func NewRedpandaMigratorWriterFromConfig(conf *service.ParsedConfig, mgr *servic
 	}
 
 	var err error
+
+	// NOTE: We do not provide closures for client access and yielding because
+	// this writer is only used for its BatchToRecords method. If we ever expand
+	// in order to use this as a full writer then we need to provide a full
+	// suite of arguments here.
 	if w.recordConverter, err = kafka.NewFranzWriterFromConfig(conf, nil, nil); err != nil {
 		return nil, err
 	}

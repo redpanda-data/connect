@@ -23,8 +23,7 @@ func redpandaOutputConfig() *service.ConfigSpec {
 		Summary("TODO").
 		Fields(kafka.FranzWriterConfigFields()...).
 		Fields(
-			service.NewIntField(roFieldMaxInFlight).
-				Description("The maximum number of batches to be sending in parallel at any given time.").
+			service.NewOutputMaxInFlightField().
 				Default(10),
 			service.NewBatchPolicyField(roFieldBatching),
 		).
@@ -65,8 +64,7 @@ redpanda:
 }
 
 const (
-	roFieldMaxInFlight = "max_in_flight"
-	roFieldBatching    = "batching"
+	roFieldBatching = "batching"
 )
 
 func init() {
@@ -77,7 +75,7 @@ func init() {
 			maxInFlight int,
 			err error,
 		) {
-			if maxInFlight, err = conf.FieldInt(roFieldMaxInFlight); err != nil {
+			if maxInFlight, err = conf.FieldMaxInFlight(); err != nil {
 				return
 			}
 			if batchPolicy, err = conf.FieldBatchPolicy(roFieldBatching); err != nil {

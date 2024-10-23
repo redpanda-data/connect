@@ -224,7 +224,7 @@ timestamp: ${! metadata("kafka_timestamp_unix") }
 
 === `max_in_flight`
 
-The maximum number of batches to be sending in parallel at any given time.
+The maximum number of messages to have in flight at a given time. Increase this to improve throughput.
 
 
 *Type*: `int`
