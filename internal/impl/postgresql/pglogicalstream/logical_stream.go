@@ -19,6 +19,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/panjf2000/ants/v2"
+
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgproto3"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -95,6 +97,7 @@ func NewPgStream(config Config) (*Stream, error) {
 	if cfg, err = pgconn.ParseConfig(q); err != nil {
 		return nil, err
 	}
+	cfg.Password = config.DBPassword
 
 	if config.TLSVerify == TLSRequireVerify {
 		cfg.TLSConfig = &tls.Config{
@@ -104,12 +107,10 @@ func NewPgStream(config Config) (*Stream, error) {
 		cfg.TLSConfig = nil
 	}
 
-	fmt.Println("Connecting to database")
 	dbConn, err := pgconn.ConnectConfig(context.Background(), cfg)
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("Connected to database")
 
 	if err = dbConn.Ping(context.Background()); err != nil {
 		return nil, err
@@ -598,9 +599,48 @@ func (s *Stream) processSnapshot() {
 				os.Exit(1)
 			}
 
+			type RawMessage struct {
+				ColumnNames  []string
+				ColumnValues []interface{}
+				TableName    string
+			}
+
+			var pwg sync.WaitGroup
+			p, _ := ants.NewPoolWithFunc(batchSize/4, func(i interface{}) {
+				m := i.(RawMessage)
+
+				snapshotChangePacket := StreamMessage{
+					Lsn: nil,
+					Changes: []StreamMessageChanges{
+						{
+							Table:     m.TableName,
+							Operation: "insert",
+							Schema:    s.schema,
+							Data: func() map[string]any {
+								var data = make(map[string]any)
+								for i, cn := range m.ColumnNames {
+									data[cn] = m.ColumnValues[i]
+								}
+								return data
+							}(),
+						},
+					},
+				}
+
+				tableProgress := s.monitor.GetSnapshotProgressForTable(m.TableName)
+				snapshotChangePacket.Changes[0].TableSnapshotProgress = &tableProgress
+
+				s.snapshotMessages <- snapshotChangePacket
+
+				pwg.Done()
+			}, ants.WithPreAlloc(true))
+			defer p.Release()
+
 			for {
 				var snapshotRows *sql.Rows
+				queryStart := time.Now()
 				if snapshotRows, err = s.snapshotter.querySnapshotData(table, tablePk, batchSize, offset); err != nil {
+					s.logger.Errorf("Failed to query snapshot data for table %v: %v", table, err.Error())
 					s.logger.Errorf("Failed to query snapshot for table %v: %v", table, err.Error())
 					if err = s.cleanUpOnFailure(); err != nil {
 						s.logger.Errorf("Failed to clean up resources on accident: %v", err.Error())
@@ -609,7 +649,11 @@ func (s *Stream) processSnapshot() {
 					os.Exit(1)
 				}
 
+				queryDuration := time.Since(queryStart)
+				fmt.Printf("Query duration: %v %s \n", queryDuration, tableName)
+
 				if snapshotRows.Err() != nil {
+					s.logger.Errorf("Failed to get snapshot data for table %v: %v", table, snapshotRows.Err().Error())
 					s.logger.Errorf("Failed to query snapshot for table %v: %v", table, err.Error())
 					if err = s.cleanUpOnFailure(); err != nil {
 						s.logger.Errorf("Failed to clean up resources on accident: %v", err.Error())
@@ -620,6 +664,7 @@ func (s *Stream) processSnapshot() {
 
 				columnTypes, err := snapshotRows.ColumnTypes()
 				if err != nil {
+					fmt.Println("Failed to get column types")
 					s.logger.Errorf("Failed to get column types for table %v: %v", table, err.Error())
 					if err = s.cleanUpOnFailure(); err != nil {
 						s.logger.Errorf("Failed to clean up resources on accident: %v", err.Error())
@@ -627,9 +672,9 @@ func (s *Stream) processSnapshot() {
 					os.Exit(1)
 				}
 
-				var columnTypesString = make([]string, len(columnTypes))
 				columnNames, err := snapshotRows.Columns()
 				if err != nil {
+					fmt.Println("Failed to get column names")
 					s.logger.Errorf("Failed to get column names for table %v: %v", table, err.Error())
 					if err = s.cleanUpOnFailure(); err != nil {
 						s.logger.Errorf("Failed to clean up resources on accident: %v", err.Error())
@@ -637,32 +682,18 @@ func (s *Stream) processSnapshot() {
 					os.Exit(1)
 				}
 
-				for i := range columnNames {
-					columnTypesString[i] = columnTypes[i].DatabaseTypeName()
-				}
-
-				count := len(columnTypes)
-
 				var rowsCount = 0
+				rowsStart := time.Now()
+
+				tableWithoutSchema := strings.Split(table, ".")[1]
 				for snapshotRows.Next() {
 					rowsCount += 1
-					scanArgs := make([]interface{}, count)
-					for i, v := range columnTypes {
-						switch v.DatabaseTypeName() {
-						case "VARCHAR", "TEXT", "UUID", "TIMESTAMP":
-							scanArgs[i] = new(sql.NullString)
-						case "BOOL":
-							scanArgs[i] = new(sql.NullBool)
-						case "INT4":
-							scanArgs[i] = new(sql.NullInt64)
-						default:
-							scanArgs[i] = new(sql.NullString)
-						}
-					}
 
+					scanArgs, valueGetters := s.snapshotter.prepareScannersAndGetters(columnTypes)
 					err := snapshotRows.Scan(scanArgs...)
 
 					if err != nil {
+						fmt.Println("Failed to scan row")
 						s.logger.Errorf("Failed to scan row for table %v: %v", table, err.Error())
 						if err = s.cleanUpOnFailure(); err != nil {
 							s.logger.Errorf("Failed to clean up resources on accident: %v", err.Error())
@@ -670,56 +701,28 @@ func (s *Stream) processSnapshot() {
 						os.Exit(1)
 					}
 
-					var columnValues = make([]interface{}, len(columnTypes))
-					for i := range columnTypes {
-						if z, ok := (scanArgs[i]).(*sql.NullBool); ok {
-							columnValues[i] = z.Bool
-							continue
-						}
-						if z, ok := (scanArgs[i]).(*sql.NullString); ok {
-							columnValues[i] = z.String
-							continue
-						}
-						if z, ok := (scanArgs[i]).(*sql.NullInt64); ok {
-							columnValues[i] = z.Int64
-							continue
-						}
-						if z, ok := (scanArgs[i]).(*sql.NullFloat64); ok {
-							columnValues[i] = z.Float64
-							continue
-						}
-						if z, ok := (scanArgs[i]).(*sql.NullInt32); ok {
-							columnValues[i] = z.Int32
-							continue
-						}
-
-						columnValues[i] = scanArgs[i]
+					columnValues := make([]interface{}, len(columnTypes))
+					for i, getter := range valueGetters {
+						columnValues[i] = getter(scanArgs[i])
 					}
 
-					tableWithoutSchema := strings.Split(table, ".")[1]
-					snapshotChangePacket := StreamMessage{
-						Lsn: nil,
-						Changes: []StreamMessageChanges{
-							{
-								Table:     tableWithoutSchema,
-								Operation: "insert",
-								Schema:    s.schema,
-								Data: func() map[string]any {
-									var data = make(map[string]any)
-									for i, cn := range columnNames {
-										data[cn] = columnValues[i]
-									}
-
-									return data
-								}(),
-							},
-						},
+					if rowsCount%100 == 0 {
+						s.monitor.UpdateSnapshotProgressForTable(tableWithoutSchema, rowsCount+offset)
 					}
-					s.monitor.UpdateSnapshotProgressForTable(tableWithoutSchema, rowsCount+offset)
-					tableProgress := s.monitor.GetSnapshotProgressForTable(tableWithoutSchema)
-					snapshotChangePacket.Changes[0].TableSnapshotProgress = &tableProgress
-					s.snapshotMessages <- snapshotChangePacket
+
+					pwg.Add(1)
+					_ = p.Invoke(RawMessage{
+						TableName:    tableWithoutSchema,
+						ColumnNames:  columnNames,
+						ColumnValues: columnValues,
+					})
 				}
+
+				// waiting for batch to be processed
+				pwg.Wait()
+
+				batchEnd := time.Since(rowsStart)
+				fmt.Printf("Batch duration: %v %s \n", batchEnd, tableName)
 
 				offset += batchSize
 

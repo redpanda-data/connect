@@ -428,17 +428,17 @@ file:
 }
 
 func TestIntegrationPgStreamingFromRemoteDB(t *testing.T) {
-	t.Skip("This test requires a remote database to run. Aimed to test AWS")
+	// t.Skip("This test requires a remote database to run. Aimed to test remote databases")
 	tmpDir := t.TempDir()
 
 	// tables: users, products, orders, order_items
 
-	host := ""
-	user := ""
-	password := ""
-	dbname := ""
-	port := ""
-	sslmode := ""
+	host := "localhost"
+	user := "postgres"
+	password := "postgres"
+	dbname := "postgres"
+	port := "5432"
+	sslmode := "none"
 
 	template := fmt.Sprintf(`
 pg_stream:
@@ -453,6 +453,7 @@ pg_stream:
     stream_snapshot: true
     decoding_plugin: pgoutput
     stream_uncomited: false
+    temporary_slot: true
     database: %s
     tables:
        - users
@@ -488,8 +489,7 @@ file:
 	}()
 
 	require.NoError(t, streamOutBuilder.AddConsumerFunc(func(c context.Context, m *service.Message) error {
-		mb, err := m.AsBytes()
-		fmt.Println(string(mb))
+		_, err := m.AsBytes()
 		require.NoError(t, err)
 		outMessagesMut.Lock()
 		outMessages += 1
@@ -509,13 +509,13 @@ file:
 	assert.Eventually(t, func() bool {
 		outMessagesMut.Lock()
 		defer outMessagesMut.Unlock()
-		return outMessages == 28528761
+		return outMessages == 200000
 	}, time.Minute*15, time.Millisecond*100)
 
 	t.Log("Backfill conditioins are met 🎉")
 
 	// you need to start inserting the data somewhere in another place
-	time.Sleep(time.Second * 30)
+	time.Sleep(time.Minute * 30)
 	outMessages = 0
 	assert.Eventually(t, func() bool {
 		outMessagesMut.Lock()
@@ -575,7 +575,7 @@ file:
 `, tmpDir)
 
 	streamOutBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: OFF`))
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: INFO`))
 	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
 	require.NoError(t, streamOutBuilder.AddInputYAML(template))
 

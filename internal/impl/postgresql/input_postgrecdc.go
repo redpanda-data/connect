@@ -13,7 +13,6 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"strings"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/lucasepe/codename"
@@ -270,7 +269,6 @@ type pgStreamInput struct {
 	streamUncomited         bool
 	logger                  *service.Logger
 	metrics                 *service.Metrics
-	metricsTicker           *time.Ticker
 
 	snapshotMetrics *service.MetricGauge
 	replicationLag  *service.MetricGauge
@@ -299,7 +297,6 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 		return err
 	}
 
-	p.metricsTicker = time.NewTicker(5 * time.Second)
 	p.pglogicalStream = pgStream
 
 	return err

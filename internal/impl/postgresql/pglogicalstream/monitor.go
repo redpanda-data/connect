@@ -108,7 +108,7 @@ func (m *Monitor) readTablesStat(tables []string) error {
 
 	for _, table := range tables {
 		tableWithoutSchema := strings.Split(table, ".")[1]
-		query := "SELECT COUNT(*) FROM %s" + tableWithoutSchema
+		query := "SELECT COUNT(*) FROM " + tableWithoutSchema
 
 		var count int64
 		err := m.dbConn.QueryRow(query).Scan(&count)

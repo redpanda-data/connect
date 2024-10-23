@@ -70,4 +70,5 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/twitter"
 	_ "github.com/redpanda-data/connect/v4/public/components/wasm"
 	_ "github.com/redpanda-data/connect/v4/public/components/zeromq"
+	_ "github.com/redpanda-data/connect/v4/public/components/postgresql"
 )

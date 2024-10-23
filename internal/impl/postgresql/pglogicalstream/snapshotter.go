@@ -130,6 +130,30 @@ func (s *Snapshotter) findAvgRowSize(table string) (sql.NullInt64, error) {
 	return avgRowSize, nil
 }
 
+func (s *Snapshotter) prepareScannersAndGetters(columnTypes []*sql.ColumnType) ([]interface{}, []func(interface{}) interface{}) {
+	scanArgs := make([]interface{}, len(columnTypes))
+	valueGetters := make([]func(interface{}) interface{}, len(columnTypes))
+
+	for i, v := range columnTypes {
+		switch v.DatabaseTypeName() {
+		case "VARCHAR", "TEXT", "UUID", "TIMESTAMP":
+			scanArgs[i] = new(sql.NullString)
+			valueGetters[i] = func(v interface{}) interface{} { return v.(*sql.NullString).String }
+		case "BOOL":
+			scanArgs[i] = new(sql.NullBool)
+			valueGetters[i] = func(v interface{}) interface{} { return v.(*sql.NullBool).Bool }
+		case "INT4":
+			scanArgs[i] = new(sql.NullInt64)
+			valueGetters[i] = func(v interface{}) interface{} { return v.(*sql.NullInt64).Int64 }
+		default:
+			scanArgs[i] = new(sql.NullString)
+			valueGetters[i] = func(v interface{}) interface{} { return v.(*sql.NullString).String }
+		}
+	}
+
+	return scanArgs, valueGetters
+}
+
 func (s *Snapshotter) calculateBatchSize(availableMemory uint64, estimatedRowSize uint64) int {
 	// Adjust this factor based on your system's memory constraints.
 	// This example uses a safety factor of 0.8 to leave some memory headroom.
