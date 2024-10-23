@@ -397,7 +397,7 @@ func TestFromStringFastVsSlowRandomized(t *testing.T) {
 		}
 		fastN, fastErr := fromStringFast(str, int32(precision), int32(scale))
 		slowN, slowErr := fromStringSlow(str, int32(precision), int32(scale))
-		require.Equal(t, slowErr == nil, fastErr == nil)
+		require.Equal(t, slowErr == nil, fastErr == nil, "%s: slowErr=%v, fastErr=%v", str, slowErr, fastErr)
 		if slowErr == nil && fastErr == nil {
 			require.Equal(t, fastN, slowN, "%s: %s vs %s", str, fastN, slowN)
 		}

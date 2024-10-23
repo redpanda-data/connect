@@ -295,6 +295,10 @@ func Rescale(n Num, precision, scale int32) (out Num, err error) {
 		err = fmt.Errorf("value (%s) out of range (precision=%d,scale=%d)", n.String(), precision, scale)
 		return
 	}
+	if scale == 0 {
+		out = n
+		return
+	}
 	out = Mul(n, Pow10Table[scale])
 	return
 }
