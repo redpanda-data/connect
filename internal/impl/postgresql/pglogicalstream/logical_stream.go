@@ -560,17 +560,6 @@ func (s *Stream) processSnapshot() {
 
 	var wg sync.WaitGroup
 
-	_ = make([]byte, 100<<20)
-
-	var objPool = sync.Pool{
-		New: func() interface{} {
-			return &StreamMessage{
-				Lsn:     nil,
-				Changes: make([]StreamMessageChanges, 1),
-			}
-		},
-	}
-
 	for _, table := range s.tableNames {
 		wg.Add(1)
 		go func(tableName string) {
@@ -619,26 +608,29 @@ func (s *Stream) processSnapshot() {
 			var pwg sync.WaitGroup
 			p, _ := ants.NewPoolWithFunc(batchSize/4, func(i interface{}) {
 				m := i.(RawMessage)
-				snapshotChangePacket := objPool.Get().(*StreamMessage)
-				defer objPool.Put(snapshotChangePacket)
 
-				snapshotChangePacket.Changes[0] = StreamMessageChanges{
-					Table:     m.TableName,
-					Operation: "insert",
-					Schema:    s.schema,
-					Data: func() map[string]any {
-						var data = make(map[string]any)
-						for i, cn := range m.ColumnNames {
-							data[cn] = m.ColumnValues[i]
-						}
-						return data
-					}(),
+				snapshotChangePacket := StreamMessage{
+					Lsn: nil,
+					Changes: []StreamMessageChanges{
+						{
+							Table:     m.TableName,
+							Operation: "insert",
+							Schema:    s.schema,
+							Data: func() map[string]any {
+								var data = make(map[string]any)
+								for i, cn := range m.ColumnNames {
+									data[cn] = m.ColumnValues[i]
+								}
+								return data
+							}(),
+						},
+					},
 				}
 
 				tableProgress := s.monitor.GetSnapshotProgressForTable(m.TableName)
 				snapshotChangePacket.Changes[0].TableSnapshotProgress = &tableProgress
 
-				s.snapshotMessages <- *snapshotChangePacket
+				s.snapshotMessages <- snapshotChangePacket
 
 				pwg.Done()
 			}, ants.WithPreAlloc(true))

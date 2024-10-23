@@ -470,7 +470,6 @@ file:
 
 	streamOutBuilder := service.NewStreamBuilder()
 	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: INFO`))
-	streamOutBuilder.SetThreads(4)
 	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
 	require.NoError(t, streamOutBuilder.AddInputYAML(template))
 
