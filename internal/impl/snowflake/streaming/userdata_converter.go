@@ -427,6 +427,7 @@ func (c timeConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typed
 	if err != nil {
 		return err
 	}
+	t = t.In(time.UTC)
 	// 24 hours in nanoseconds fits within uint64, so we can't overflow
 	nanos := t.Hour()*int(time.Hour.Nanoseconds()) +
 		t.Minute()*int(time.Minute.Nanoseconds()) +
