@@ -90,4 +90,5 @@ func (p *Periodic) Stop() {
 	p.cancel()
 	<-p.done
 	p.done = nil
+	p.cancel = nil
 }
