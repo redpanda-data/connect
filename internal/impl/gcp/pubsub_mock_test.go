@@ -27,6 +27,12 @@ type mockPubSubClient struct {
 
 var _ pubsubClient = &mockPubSubClient{}
 
+func (c *mockPubSubClient) Close() error {
+	args := c.Called()
+
+	return args.Error(0)
+}
+
 func (c *mockPubSubClient) Topic(id string, settings *pubsub.PublishSettings) pubsubTopic {
 	args := c.Called(id)
 

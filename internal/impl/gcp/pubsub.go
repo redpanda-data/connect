@@ -20,8 +20,13 @@ import (
 	"cloud.google.com/go/pubsub"
 )
 
+var (
+	_ pubsubClient = (*airGappedPubsubClient)(nil)
+)
+
 type pubsubClient interface {
 	Topic(id string, settings *pubsub.PublishSettings) pubsubTopic
+	Close() error
 }
 
 type pubsubTopic interface {
@@ -37,6 +42,10 @@ type publishResult interface {
 
 type airGappedPubsubClient struct {
 	c *pubsub.Client
+}
+
+func (ac *airGappedPubsubClient) Close() error {
+	return ac.c.Close()
 }
 
 func (ac *airGappedPubsubClient) Topic(id string, settings *pubsub.PublishSettings) pubsubTopic {
