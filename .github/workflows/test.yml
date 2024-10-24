@@ -40,7 +40,9 @@ jobs:
       run: make test
 
     - name: Fmt
-      run: make fmt && test -z "$(git ls-files --others --modified --exclude-standard)" || { >&2 echo "Unformatted files detected. This can be fixed with 'make fmt'."; exit 1; }
+      run: |
+        go install golang.org/x/tools/cmd/goimports@latest
+        make fmt && test -z "$(git ls-files --others --modified --exclude-standard)" || { >&2 echo "Unformatted files detected. This can be fixed with 'make fmt'."; exit 1; }
 
   golangci-lint:
     if: ${{ github.repository == 'redpanda-data/connect' || github.event_name != 'schedule' }}
