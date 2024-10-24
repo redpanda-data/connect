@@ -36,8 +36,11 @@ func UpdateID(msg []byte, id int) error {
 	if len(msg) < 5 {
 		return errors.New("message is empty or too small")
 	}
+	if msg[0] != 0 {
+		return fmt.Errorf("serialization format version number %v not supported", msg[0])
+	}
 
-	binary.BigEndian.PutUint32(msg, uint32(id))
+	binary.BigEndian.PutUint32(msg[1:5], uint32(id))
 
 	return nil
 }
