@@ -18,8 +18,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming/int128"
 	"github.com/stretchr/testify/require"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming/int128"
 )
 
 func TestEncryption(t *testing.T) {

@@ -24,9 +24,10 @@ import (
 	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming"
 )
 
 func msg(s string) *service.Message {
