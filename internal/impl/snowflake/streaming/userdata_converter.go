@@ -21,6 +21,7 @@ import (
 	"github.com/Jeffail/gabs/v2"
 	"github.com/parquet-go/parquet-go"
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
+
 	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming/int128"
 )
 

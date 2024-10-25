@@ -30,6 +30,7 @@ import (
 	"github.com/golang-jwt/jwt"
 	"github.com/google/uuid"
 	"github.com/redpanda-data/benthos/v4/public/service"
+
 	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming/int128"
 	"github.com/redpanda-data/connect/v4/internal/periodic"
 	"github.com/redpanda-data/connect/v4/internal/typed"
