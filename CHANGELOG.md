@@ -9,10 +9,13 @@ All notable changes to this project will be documented in this file.
 
 - New `timeplus` input. (@ye11ow)
 - New `snowflake_streaming` output. (@rockwotj)
+- Redpanda Connect will now use an optional `/etc/redpanda/connector_list.yaml` config to determine which connectors are available to run. (@Jeffail)
+- (Benthos) Field `follow_redirects` added to the `http` processor. (@ooesili)
 
 ### Changed
 
 - The `aws_sqs` output field `url` now supports interpolation functions. (@rockwotj)
+- (Benthos) CLI `--set` flags can now mutate array values indexed from the end via negative integers. E.g. `--set 'foo.-1=meow'` would set the last index of the array `foo` to the value of `meow`. (@Jeffail)
 
 ## 4.38.0 - 2024-10-17
 
