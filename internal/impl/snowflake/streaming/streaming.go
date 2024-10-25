@@ -27,6 +27,7 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/parquet-go/parquet-go"
 	"github.com/redpanda-data/benthos/v4/public/service"
+
 	"github.com/redpanda-data/connect/v4/internal/periodic"
 	"github.com/redpanda-data/connect/v4/internal/typed"
 )

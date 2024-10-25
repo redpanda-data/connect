@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
 	"github.com/redpanda-data/connect/v4/internal/impl/timeplus/driver"
 	"github.com/redpanda-data/connect/v4/internal/impl/timeplus/http"
 )
