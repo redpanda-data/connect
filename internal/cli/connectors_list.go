@@ -14,18 +14,18 @@ import (
 	"os"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
-
-const connectorListPath = "/etc/redpanda/connector_list.yaml"
 
 type connectorsList struct {
 	Allow []string `yaml:"allow"`
 	Deny  []string `yaml:"deny"`
 }
 
-func applyConnectorsList(s *service.ConfigSchema) (bool, error) {
-	cListBytes, err := os.ReadFile(connectorListPath)
+// ApplyConnectorsList attempts to read a path (if the file exists) and modifies
+// the provided schema according to its contents.
+func ApplyConnectorsList(path string, s *service.ConfigSchema) (bool, error) {
+	cListBytes, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return false, nil
