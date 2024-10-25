@@ -19,8 +19,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/panjf2000/ants/v2"
-
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgproto3"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -45,7 +43,6 @@ type Stream struct {
 	standbyMessageTimeout      time.Duration
 	nextStandbyMessageDeadline time.Time
 	messages                   chan StreamMessage
-	snapshotMessages           chan StreamMessage
 	snapshotName               string
 	slotName                   string
 	schema                     string
@@ -58,6 +55,7 @@ type Stream struct {
 	monitor                    *Monitor
 	streamUncomited            bool
 	snapshotter                *Snapshotter
+	transactionAckChan         chan string
 
 	lsnAckBuffer []string
 
@@ -123,7 +121,6 @@ func NewPgStream(config Config) (*Stream, error) {
 		pgConn:                     dbConn,
 		dbConfig:                   *cfg,
 		messages:                   make(chan StreamMessage),
-		snapshotMessages:           make(chan StreamMessage, 100),
 		slotName:                   config.ReplicationSlotName,
 		schema:                     config.DBSchema,
 		snapshotMemorySafetyFactor: config.SnapshotMemorySafetyFactor,
@@ -131,6 +128,7 @@ func NewPgStream(config Config) (*Stream, error) {
 		snapshotBatchSize:          config.BatchSize,
 		tableNames:                 tableNames,
 		consumedCallback:           make(chan bool),
+		transactionAckChan:         make(chan string),
 		lsnAckBuffer:               []string{},
 		logger:                     config.logger,
 		m:                          sync.Mutex{},
@@ -294,6 +292,8 @@ func (s *Stream) AckLSN(lsn string) error {
 		return err
 	}
 
+	fmt.Println("Ack LSN", lsn, "clientXLogPos")
+
 	err = SendStandbyStatusUpdate(context.Background(), s.pgConn, StandbyStatusUpdate{
 		WALApplyPosition: clientXLogPos,
 		WALWritePosition: clientXLogPos,
@@ -445,28 +445,46 @@ func (s *Stream) streamMessagesAsync() {
 							return
 						}
 
-						if message == nil {
-							// 0 changes happened in the transaction
-							// or we received a change that are not supported/needed by the replication stream
-							if err = s.AckLSN(clientXLogPos.String()); err != nil {
-								// stop reading from replication slot
-								// if we can't acknowledge the LSN
-								if err = s.Stop(); err != nil {
-									s.logger.Errorf("Failed to stop the stream: %v", err)
-								}
-								return
+						fmt.Println("Receive pg message", message)
+
+						isCommit, _, err := isCommitMessage(xld.WALData)
+						if err != nil {
+							s.logger.Errorf("Failed to parse WAL data: %w", err)
+							if err = s.Stop(); err != nil {
+								s.logger.Errorf("Failed to stop the stream: %v", err)
 							}
-						} else {
-							lsn := clientXLogPos.String()
-							s.messages <- StreamMessage{
-								Lsn: &lsn,
-								Changes: []StreamMessageChanges{
-									*message,
-								},
-								IsStreaming: true,
-								WALLagBytes: &metrics.WalLagInBytes,
-							}
+							return
+						}
+
+						// when receiving a commit message, we need to acknowledge the LSN
+						// but we must wait for benthos to flush the messages before we can do that
+						if isCommit {
+							s.transactionAckChan <- clientXLogPos.String()
 							<-s.consumedCallback
+						} else {
+							if message == nil {
+								// 0 changes happened in the transaction
+								// or we received a change that are not supported/needed by the replication stream
+								if err = s.AckLSN(clientXLogPos.String()); err != nil {
+									// stop reading from replication slot
+									// if we can't acknowledge the LSN
+									if err = s.Stop(); err != nil {
+										s.logger.Errorf("Failed to stop the stream: %v", err)
+									}
+									return
+								}
+							} else {
+								lsn := clientXLogPos.String()
+								fmt.Println("Pushed uncomited message to stream", lsn, message)
+								s.messages <- StreamMessage{
+									Lsn: &lsn,
+									Changes: []StreamMessageChanges{
+										*message,
+									},
+									IsStreaming: true,
+									WALLagBytes: &metrics.WalLagInBytes,
+								}
+							}
 						}
 					} else {
 						// message changes must be collected in the buffer in the context of the same transaction
@@ -538,6 +556,14 @@ func (s *Stream) streamMessagesAsync() {
 	}
 }
 
+func (s *Stream) AckTxChan() chan string {
+	return s.transactionAckChan
+}
+
+func (s *Stream) ConfigrmAckTxChan() chan bool {
+	return s.consumedCallback
+}
+
 func (s *Stream) processSnapshot() {
 	if err := s.snapshotter.prepare(); err != nil {
 		s.logger.Errorf("Failed to prepare database snapshot. Probably snapshot is expired...: %v", err.Error())
@@ -567,46 +593,6 @@ func (s *Stream) processSnapshot() {
 		ValueGetters []func(interface{}) interface{}
 		TableName    string
 	}
-
-	var pwg sync.WaitGroup
-	p, _ := ants.NewPoolWithFunc(2000, func(i interface{}) {
-		m := i.(RawMessage)
-
-		columnValues := make([]interface{}, len(m.ColumnTypes))
-		for i, getter := range m.ValueGetters {
-			columnValues[i] = getter(m.ScanArgs[i])
-		}
-
-		snapshotChangePacket := StreamMessage{
-			Lsn: nil,
-			Changes: []StreamMessageChanges{
-				{
-					Table:     m.TableName,
-					Operation: "insert",
-					Schema:    s.schema,
-					Data: func() map[string]any {
-						var data = make(map[string]any)
-						for i, cn := range m.ColumnNames {
-							data[cn] = columnValues[i]
-						}
-						return data
-					}(),
-				},
-			},
-		}
-
-		if m.RowsCount%100 == 0 {
-			s.monitor.UpdateSnapshotProgressForTable(m.TableName, m.RowsCount+m.Offset)
-		}
-
-		tableProgress := s.monitor.GetSnapshotProgressForTable(m.TableName)
-		snapshotChangePacket.Changes[0].TableSnapshotProgress = &tableProgress
-
-		s.snapshotMessages <- snapshotChangePacket
-
-		pwg.Done()
-	}, ants.WithPreAlloc(true))
-	defer p.Release()
 
 	var wg sync.WaitGroup
 
@@ -677,7 +663,6 @@ func (s *Stream) processSnapshot() {
 
 				columnTypes, err := snapshotRows.ColumnTypes()
 				if err != nil {
-					fmt.Println("Failed to get column types")
 					s.logger.Errorf("Failed to get column types for table %v: %v", table, err.Error())
 					if err = s.cleanUpOnFailure(); err != nil {
 						s.logger.Errorf("Failed to clean up resources on accident: %v", err.Error())
@@ -687,7 +672,6 @@ func (s *Stream) processSnapshot() {
 
 				columnNames, err := snapshotRows.Columns()
 				if err != nil {
-					fmt.Println("Failed to get column names")
 					s.logger.Errorf("Failed to get column names for table %v: %v", table, err.Error())
 					if err = s.cleanUpOnFailure(); err != nil {
 						s.logger.Errorf("Failed to clean up resources on accident: %v", err.Error())
@@ -698,6 +682,7 @@ func (s *Stream) processSnapshot() {
 				var rowsCount = 0
 				rowsStart := time.Now()
 				totalScanDuration := time.Duration(0)
+				totalWaitingFromBenthos := time.Duration(0)
 
 				tableWithoutSchema := strings.Split(table, ".")[1]
 				for snapshotRows.Next() {
@@ -718,21 +703,41 @@ func (s *Stream) processSnapshot() {
 						os.Exit(1)
 					}
 
-					pwg.Add(1)
-					_ = p.Invoke(RawMessage{
-						ColumnTypes:  columnTypes,
-						RowsCount:    rowsCount,
-						TableName:    tableWithoutSchema,
-						ColumnNames:  columnNames,
-						ScanArgs:     scanArgs,
-						ValueGetters: valueGetters,
-						Offset:       offset,
-					})
+					var data = make(map[string]any)
+					for i, getter := range valueGetters {
+						data[columnNames[i]] = getter(scanArgs[i])
+					}
+
+					snapshotChangePacket := StreamMessage{
+						Lsn: nil,
+						Changes: []StreamMessageChanges{
+							{
+								Table:     tableWithoutSchema,
+								Operation: "insert",
+								Schema:    s.schema,
+								Data:      data,
+							},
+						},
+					}
+
+					if rowsCount%100 == 0 {
+						s.monitor.UpdateSnapshotProgressForTable(tableWithoutSchema, rowsCount+offset)
+					}
+
+					tableProgress := s.monitor.GetSnapshotProgressForTable(tableWithoutSchema)
+					snapshotChangePacket.Changes[0].TableSnapshotProgress = &tableProgress
+					snapshotChangePacket.IsStreaming = false
+
+					waitingFromBenthos := time.Now()
+					s.messages <- snapshotChangePacket
+					totalWaitingFromBenthos += time.Since(waitingFromBenthos)
+
 				}
 
 				batchEnd := time.Since(rowsStart)
 				fmt.Printf("Batch duration: %v %s \n", batchEnd, tableName)
 				fmt.Println("Scan duration", totalScanDuration, tableName)
+				fmt.Println("Waiting from benthos duration", totalWaitingFromBenthos, tableName)
 
 				offset += batchSize
 
@@ -744,9 +749,6 @@ func (s *Stream) processSnapshot() {
 		}(table)
 	}
 
-	// waiting for batch to be processed
-	pwg.Wait()
-
 	wg.Wait()
 
 	if err := s.startLr(); err != nil {
@@ -756,15 +758,9 @@ func (s *Stream) processSnapshot() {
 	go s.streamMessagesAsync()
 }
 
-// SnapshotMessageC represents a message from the stream that are sent to the consumer on the snapshot processing stage
-// meaning these messages will have nil LSN field
-func (s *Stream) SnapshotMessageC() chan StreamMessage {
-	return s.snapshotMessages
-}
-
 // LrMessageC represents a message from the stream that are sent to the consumer on the logical replication stage
 // meaning these messages will have non-nil LSN field
-func (s *Stream) LrMessageC() chan StreamMessage {
+func (s *Stream) Messages() chan StreamMessage {
 	return s.messages
 }
 

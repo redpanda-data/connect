@@ -488,8 +488,8 @@ file:
 		}
 	}()
 
-	require.NoError(t, streamOutBuilder.AddConsumerFunc(func(c context.Context, m *service.Message) error {
-		_, err := m.AsBytes()
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
+		_, err := mb[0].AsBytes()
 		require.NoError(t, err)
 		outMessagesMut.Lock()
 		outMessages += 1
