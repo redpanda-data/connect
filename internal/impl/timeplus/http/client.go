@@ -3,7 +3,6 @@ package http
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -44,23 +43,8 @@ type tpIngest struct {
 func NewClient(logger *service.Logger, target string, baseURL *url.URL, workspace, stream, apikey, username, password string) *Client {
 	ingestURL, _ := url.Parse(baseURL.String())
 
-	header := http.Header{}
-	header.Add("Content-Type", "application/json")
-
-	if len(username)+len(password) > 0 {
-		auth := username + ":" + password
-		header.Add("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(auth)))
-
-		logger = logger.With("auth_method", "basic")
-	}
-
 	if target == TargetTimeplus {
 		ingestURL.Path = path.Join(ingestURL.Path, workspace, "api", timeplusAPIVersion, "streams", stream, "ingest")
-
-		if len(apikey) > 0 {
-			header.Add("X-Api-Key", apikey)
-			logger = logger.With("auth_method", "apikey")
-		}
 	} else if target == TargetTimeplusd {
 		ingestURL.Path = path.Join(ingestURL.Path, "timeplusd", timeplusdDAPIVersion, "ingest", "streams", stream)
 	}
@@ -68,8 +52,18 @@ func NewClient(logger *service.Logger, target string, baseURL *url.URL, workspac
 	logger = logger.With("target", TargetTimeplusd).With("host", ingestURL.Host).With("ingest_url", ingestURL.RequestURI())
 	logger.Info("timeplus http client created")
 
+	return &Client{
+		logger,
+		ingestURL,
+		NewHeader(apikey, username, password),
+		newDefaultClient(),
+	}
+}
+
+// We may want to allow the user to configure this in the future. But for now, the default option should be fine.
+func newDefaultClient() *http.Client {
 	// We may want to allow the user to configure this in the future. But for now, the default option should be fine.
-	httpClient := &http.Client{
+	return &http.Client{
 		Timeout: 10 * time.Second,
 		Transport: &http.Transport{
 			Dial: (&net.Dialer{
@@ -77,13 +71,6 @@ func NewClient(logger *service.Logger, target string, baseURL *url.URL, workspac
 			}).Dial,
 			TLSHandshakeTimeout: 10 * time.Second,
 		},
-	}
-
-	return &Client{
-		logger,
-		ingestURL,
-		header,
-		httpClient,
 	}
 }
 
