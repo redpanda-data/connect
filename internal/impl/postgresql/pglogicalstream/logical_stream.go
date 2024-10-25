@@ -19,8 +19,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/panjf2000/ants/v2"
-
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgproto3"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -568,48 +566,7 @@ func (s *Stream) processSnapshot() {
 		TableName    string
 	}
 
-	var pwg sync.WaitGroup
-	p, _ := ants.NewPoolWithFunc(2000, func(i interface{}) {
-		m := i.(RawMessage)
-
-		columnValues := make([]interface{}, len(m.ColumnTypes))
-		for i, getter := range m.ValueGetters {
-			columnValues[i] = getter(m.ScanArgs[i])
-		}
-
-		snapshotChangePacket := StreamMessage{
-			Lsn: nil,
-			Changes: []StreamMessageChanges{
-				{
-					Table:     m.TableName,
-					Operation: "insert",
-					Schema:    s.schema,
-					Data: func() map[string]any {
-						var data = make(map[string]any)
-						for i, cn := range m.ColumnNames {
-							data[cn] = columnValues[i]
-						}
-						return data
-					}(),
-				},
-			},
-		}
-
-		if m.RowsCount%100 == 0 {
-			s.monitor.UpdateSnapshotProgressForTable(m.TableName, m.RowsCount+m.Offset)
-		}
-
-		tableProgress := s.monitor.GetSnapshotProgressForTable(m.TableName)
-		snapshotChangePacket.Changes[0].TableSnapshotProgress = &tableProgress
-
-		s.snapshotMessages <- snapshotChangePacket
-
-		pwg.Done()
-	}, ants.WithPreAlloc(true))
-	defer p.Release()
-
 	var wg sync.WaitGroup
-
 	for _, table := range s.tableNames {
 		wg.Add(1)
 		go func(tableName string) {
@@ -651,7 +608,6 @@ func (s *Stream) processSnapshot() {
 
 			for {
 				var snapshotRows *sql.Rows
-				queryStart := time.Now()
 				if snapshotRows, err = s.snapshotter.querySnapshotData(table, tablePk, batchSize, offset); err != nil {
 					s.logger.Errorf("Failed to query snapshot data for table %v: %v", table, err.Error())
 					s.logger.Errorf("Failed to query snapshot for table %v: %v", table, err.Error())
@@ -661,9 +617,6 @@ func (s *Stream) processSnapshot() {
 
 					os.Exit(1)
 				}
-
-				queryDuration := time.Since(queryStart)
-				fmt.Printf("Query duration: %v %s \n", queryDuration, tableName)
 
 				if snapshotRows.Err() != nil {
 					s.logger.Errorf("Failed to get snapshot data for table %v: %v", table, snapshotRows.Err().Error())
@@ -696,21 +649,15 @@ func (s *Stream) processSnapshot() {
 				}
 
 				var rowsCount = 0
-				rowsStart := time.Now()
-				totalScanDuration := time.Duration(0)
 
 				tableWithoutSchema := strings.Split(table, ".")[1]
 				for snapshotRows.Next() {
 					rowsCount += 1
 
-					scanStart := time.Now()
 					scanArgs, valueGetters := s.snapshotter.prepareScannersAndGetters(columnTypes)
 					err := snapshotRows.Scan(scanArgs...)
-					scanEnd := time.Since(scanStart)
-					totalScanDuration += scanEnd
 
 					if err != nil {
-						fmt.Println("Failed to scan row")
 						s.logger.Errorf("Failed to scan row for table %v: %v", table, err.Error())
 						if err = s.cleanUpOnFailure(); err != nil {
 							s.logger.Errorf("Failed to clean up resources on accident: %v", err.Error())
@@ -718,21 +665,38 @@ func (s *Stream) processSnapshot() {
 						os.Exit(1)
 					}
 
-					pwg.Add(1)
-					_ = p.Invoke(RawMessage{
-						ColumnTypes:  columnTypes,
-						RowsCount:    rowsCount,
-						TableName:    tableWithoutSchema,
-						ColumnNames:  columnNames,
-						ScanArgs:     scanArgs,
-						ValueGetters: valueGetters,
-						Offset:       offset,
-					})
-				}
+					columnValues := make([]interface{}, len(columnTypes))
+					for i, getter := range valueGetters {
+						columnValues[i] = getter(scanArgs[i])
+					}
 
-				batchEnd := time.Since(rowsStart)
-				fmt.Printf("Batch duration: %v %s \n", batchEnd, tableName)
-				fmt.Println("Scan duration", totalScanDuration, tableName)
+					snapshotChangePacket := StreamMessage{
+						Lsn: nil,
+						Changes: []StreamMessageChanges{
+							{
+								Table:     tableWithoutSchema,
+								Operation: "insert",
+								Schema:    s.schema,
+								Data: func() map[string]any {
+									var data = make(map[string]any)
+									for i, cn := range columnNames {
+										data[cn] = columnValues[i]
+									}
+									return data
+								}(),
+							},
+						},
+					}
+
+					if rowsCount%100 == 0 {
+						s.monitor.UpdateSnapshotProgressForTable(tableName, rowsCount+offset)
+					}
+
+					tableProgress := s.monitor.GetSnapshotProgressForTable(tableWithoutSchema)
+					snapshotChangePacket.Changes[0].TableSnapshotProgress = &tableProgress
+
+					s.snapshotMessages <- snapshotChangePacket
+				}
 
 				offset += batchSize
 
@@ -743,9 +707,6 @@ func (s *Stream) processSnapshot() {
 			wg.Done()
 		}(table)
 	}
-
-	// waiting for batch to be processed
-	pwg.Wait()
 
 	wg.Wait()
 

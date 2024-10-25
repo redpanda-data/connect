@@ -428,7 +428,7 @@ file:
 }
 
 func TestIntegrationPgStreamingFromRemoteDB(t *testing.T) {
-	// t.Skip("This test requires a remote database to run. Aimed to test remote databases")
+	t.Skip("This test requires a remote database to run. Aimed to test remote databases")
 	tmpDir := t.TempDir()
 
 	// tables: users, products, orders, order_items
