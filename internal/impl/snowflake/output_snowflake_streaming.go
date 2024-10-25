@@ -129,7 +129,7 @@ func newSnowflakeStreamer(
 ) (service.BatchOutput, error) {
 	keypass := ""
 	if conf.Contains(ssoFieldKeyPass) {
-		pass, err := conf.FieldString(ssoFieldKey)
+		pass, err := conf.FieldString(ssoFieldKeyPass)
 		if err != nil {
 			return nil, err
 		}
