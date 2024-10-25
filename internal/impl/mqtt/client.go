@@ -47,7 +47,7 @@ const (
 func clientFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewURLListField(msFieldClientURLs).
-			Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
+			Description("A list of URLs to connect to. The format should be `scheme://host:port` where `scheme` is one of `tcp`, `ssl`, or `ws`, `host` is the ip-address (or hostname) and `port` is the port on which the broker is accepting connections. If an item of the list contains commas it will be expanded into multiple URLs.").
 			Example([]string{"tcp://localhost:1883"}),
 		service.NewStringField(msFieldClientClientID).
 			Description("An identifier for the client connection.").
