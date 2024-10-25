@@ -15,8 +15,6 @@
 package main
 
 import (
-	"github.com/redpanda-data/benthos/v4/public/service"
-
 	"github.com/redpanda-data/connect/v4/internal/cli"
 	"github.com/redpanda-data/connect/v4/public/schema"
 
@@ -37,5 +35,5 @@ var (
 
 func main() {
 	schema := schema.CloudAI(Version, DateBuilt)
-	cli.InitEnterpriseCLI(BinaryName, Version, DateBuilt, schema, service.CLIOptSetEnvironment(schema.Environment()))
+	cli.InitEnterpriseCLI(BinaryName, Version, DateBuilt, schema)
 }

@@ -21,6 +21,8 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/telemetry"
 )
 
+const connectorListPath = "/etc/redpanda/connector_list.yaml"
+
 // InitEnterpriseCLI kicks off the benthos cli with a suite of options that adds
 // all of the enterprise functionality of Redpanda Connect. This has been
 // abstracted into a separate package so that multiple distributions (classic
@@ -30,6 +32,12 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 
 	rpLogger := enterprise.NewTopicLogger(instanceID)
 	var fbLogger *service.Logger
+
+	cListApplied, err := ApplyConnectorsList(connectorListPath, schema)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err.Error())
+		os.Exit(1)
+	}
 
 	opts = append(opts,
 		service.CLIOptSetVersion(version, dateBuilt),
@@ -55,8 +63,12 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 		service.CLIOptSetMainSchemaFrom(func() *service.ConfigSchema {
 			return schema
 		}),
+		service.CLIOptSetEnvironment(schema.Environment()),
 		service.CLIOptOnLoggerInit(func(l *service.Logger) {
 			fbLogger = l
+			if cListApplied {
+				fbLogger.Infof("Successfully applied connectors allow/deny list from '%v'", connectorListPath)
+			}
 			rpLogger.SetFallbackLogger(l)
 		}),
 		service.CLIOptAddTeeLogger(slog.New(rpLogger)),
