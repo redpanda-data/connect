@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - New `timeplus` input. (@ye11ow)
+- New `snowflake_streaming` output. (@rockwotj)
 
 ### Changed
 
