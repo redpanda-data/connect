@@ -31,6 +31,12 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 	rpLogger := enterprise.NewTopicLogger(instanceID)
 	var fbLogger *service.Logger
 
+	cListApplied, err := applyConnectorsList(schema)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err.Error())
+		os.Exit(1)
+	}
+
 	opts = append(opts,
 		service.CLIOptSetVersion(version, dateBuilt),
 		service.CLIOptSetBinaryName(binaryName),
@@ -55,8 +61,12 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 		service.CLIOptSetMainSchemaFrom(func() *service.ConfigSchema {
 			return schema
 		}),
+		service.CLIOptSetEnvironment(schema.Environment()),
 		service.CLIOptOnLoggerInit(func(l *service.Logger) {
 			fbLogger = l
+			if cListApplied {
+				fbLogger.Infof("Successfully applied connectors allow/deny list from '%v'", connectorListPath)
+			}
 			rpLogger.SetFallbackLogger(l)
 		}),
 		service.CLIOptAddTeeLogger(slog.New(rpLogger)),
