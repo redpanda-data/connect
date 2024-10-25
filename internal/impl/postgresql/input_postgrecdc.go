@@ -215,7 +215,7 @@ func newPgStreamInput(conf *service.ParsedConfig, logger *service.Logger, metric
 		pgconnConfig.TLSConfig = nil
 	}
 
-	snapsotMetrics := metrics.NewGauge("snapshot_progress")
+	snapsotMetrics := metrics.NewGauge("snapshot_progress", "table")
 	replicationLag := metrics.NewGauge("replication_lag")
 	snapshotMessageRate := metrics.NewGauge("snapshot_message_rate")
 	snapshotRateCounter := NewRateCounter()
