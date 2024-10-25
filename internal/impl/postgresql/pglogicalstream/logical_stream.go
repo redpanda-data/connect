@@ -556,16 +556,6 @@ func (s *Stream) processSnapshot() {
 
 	s.logger.Infof("Starting snapshot processing")
 
-	type RawMessage struct {
-		RowsCount    int
-		Offset       int
-		ColumnTypes  []*sql.ColumnType
-		ColumnNames  []string
-		ScanArgs     []interface{}
-		ValueGetters []func(interface{}) interface{}
-		TableName    string
-	}
-
 	var wg sync.WaitGroup
 	for _, table := range s.tableNames {
 		wg.Add(1)
