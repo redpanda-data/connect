@@ -40,5 +40,5 @@ Telemetry data is sent from an instance of Redpanda Connect that has been runnin
 
 ## How do I avoid it?
 
-Any custom build of Redpanda Connect will not send this data, as it is only included in the build artifacts published by us either through Github releases or our official Docker images. You can also prevent telemetry by blocking the internet traffic, Redpanda Connect will continue operating as normal if it is unable to deliver telemetry data.
+Any custom build of Redpanda Connect will not send this data, as it is only included in the build artifacts published by us either through Github releases or our official Docker images. You can also prevent telemetry with the cli flag `--disable-telemetry`, where Redpanda Connect will continue operating as normal without sending any telemetry data.
 

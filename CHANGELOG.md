@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file.
 - New `snowflake_streaming` output. (@rockwotj)
 - Redpanda Connect will now use an optional `/etc/redpanda/connector_list.yaml` config to determine which connectors are available to run. (@Jeffail)
 - (Benthos) Field `follow_redirects` added to the `http` processor. (@ooesili)
+- New CLI flag `--secrets` added. (@Jeffail)
+- New CLI flag `--disable-telemetry` added. (@Jeffail)
 
 ### Changed
 
