@@ -56,6 +56,7 @@ type Stream struct {
 	streamUncomited            bool
 	snapshotter                *Snapshotter
 	transactionAckChan         chan string
+	transactionBeginChan       chan bool
 
 	lsnAckBuffer []string
 
@@ -129,6 +130,7 @@ func NewPgStream(config Config) (*Stream, error) {
 		tableNames:                 tableNames,
 		consumedCallback:           make(chan bool),
 		transactionAckChan:         make(chan string),
+		transactionBeginChan:       make(chan bool),
 		lsnAckBuffer:               []string{},
 		logger:                     config.logger,
 		m:                          sync.Mutex{},
@@ -292,8 +294,6 @@ func (s *Stream) AckLSN(lsn string) error {
 		return err
 	}
 
-	fmt.Println("Ack LSN", lsn, "clientXLogPos")
-
 	err = SendStandbyStatusUpdate(context.Background(), s.pgConn, StandbyStatusUpdate{
 		WALApplyPosition: clientXLogPos,
 		WALWritePosition: clientXLogPos,
@@ -445,8 +445,6 @@ func (s *Stream) streamMessagesAsync() {
 							return
 						}
 
-						fmt.Println("Receive pg message", message)
-
 						isCommit, _, err := isCommitMessage(xld.WALData)
 						if err != nil {
 							s.logger.Errorf("Failed to parse WAL data: %w", err)
@@ -456,13 +454,26 @@ func (s *Stream) streamMessagesAsync() {
 							return
 						}
 
+						isBegin, err := isBeginMessage(xld.WALData)
+						if err != nil {
+							s.logger.Errorf("Failed to parse WAL data: %w", err)
+							if err = s.Stop(); err != nil {
+								s.logger.Errorf("Failed to stop the stream: %v", err)
+							}
+							return
+						}
+
+						if isBegin {
+							s.transactionBeginChan <- true
+						}
+
 						// when receiving a commit message, we need to acknowledge the LSN
 						// but we must wait for benthos to flush the messages before we can do that
 						if isCommit {
 							s.transactionAckChan <- clientXLogPos.String()
 							<-s.consumedCallback
 						} else {
-							if message == nil {
+							if message == nil && (!isBegin && !isCommit) {
 								// 0 changes happened in the transaction
 								// or we received a change that are not supported/needed by the replication stream
 								if err = s.AckLSN(clientXLogPos.String()); err != nil {
@@ -473,9 +484,8 @@ func (s *Stream) streamMessagesAsync() {
 									}
 									return
 								}
-							} else {
+							} else if message != nil {
 								lsn := clientXLogPos.String()
-								fmt.Println("Pushed uncomited message to stream", lsn, message)
 								s.messages <- StreamMessage{
 									Lsn: &lsn,
 									Changes: []StreamMessageChanges{
@@ -554,6 +564,10 @@ func (s *Stream) streamMessagesAsync() {
 			}
 		}
 	}
+}
+
+func (s *Stream) TxBeginChan() chan bool {
+	return s.transactionBeginChan
 }
 
 func (s *Stream) AckTxChan() chan string {
@@ -741,7 +755,7 @@ func (s *Stream) processSnapshot() {
 
 				offset += batchSize
 
-				if batchSize != rowsCount {
+				if rowsCount < batchSize {
 					break
 				}
 			}

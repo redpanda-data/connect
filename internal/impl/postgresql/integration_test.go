@@ -202,19 +202,18 @@ file:
 `, tmpDir)
 
 	streamOutBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: OFF`))
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: INFO`))
 	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
 	require.NoError(t, streamOutBuilder.AddInputYAML(template))
 
-	var outMessages []string
-	var outMessagesMut sync.Mutex
-
-	require.NoError(t, streamOutBuilder.AddConsumerFunc(func(c context.Context, m *service.Message) error {
-		msgBytes, err := m.AsBytes()
+	var outBatches []string
+	var outBatchMut sync.Mutex
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
+		msgBytes, err := mb[0].AsBytes()
 		require.NoError(t, err)
-		outMessagesMut.Lock()
-		outMessages = append(outMessages, string(msgBytes))
-		outMessagesMut.Unlock()
+		outBatchMut.Lock()
+		outBatches = append(outBatches, string(msgBytes))
+		outBatchMut.Unlock()
 		return nil
 	}))
 
@@ -226,9 +225,9 @@ file:
 	}()
 
 	assert.Eventually(t, func() bool {
-		outMessagesMut.Lock()
-		defer outMessagesMut.Unlock()
-		return len(outMessages) == 1000
+		outBatchMut.Lock()
+		defer outBatchMut.Unlock()
+		return len(outBatches) == 1000
 	}, time.Second*25, time.Millisecond*100)
 
 	for i := 0; i < 1000; i++ {
@@ -238,10 +237,10 @@ file:
 	}
 
 	assert.Eventually(t, func() bool {
-		outMessagesMut.Lock()
-		defer outMessagesMut.Unlock()
-		return len(outMessages) == 2000
-	}, time.Second*25, time.Millisecond*100)
+		outBatchMut.Lock()
+		defer outBatchMut.Unlock()
+		return len(outBatches) == 2000
+	}, time.Second, time.Millisecond*100)
 
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
 
@@ -253,13 +252,13 @@ file:
 	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
 	require.NoError(t, streamOutBuilder.AddInputYAML(template))
 
-	outMessages = []string{}
-	require.NoError(t, streamOutBuilder.AddConsumerFunc(func(c context.Context, m *service.Message) error {
-		msgBytes, err := m.AsBytes()
+	outBatches = []string{}
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
+		msgBytes, err := mb[0].AsBytes()
 		require.NoError(t, err)
-		outMessagesMut.Lock()
-		outMessages = append(outMessages, string(msgBytes))
-		outMessagesMut.Unlock()
+		outBatchMut.Lock()
+		outBatches = append(outBatches, string(msgBytes))
+		outBatchMut.Unlock()
 		return nil
 	}))
 
@@ -277,9 +276,9 @@ file:
 	}
 
 	assert.Eventually(t, func() bool {
-		outMessagesMut.Lock()
-		defer outMessagesMut.Unlock()
-		return len(outMessages) == 50
+		outBatchMut.Lock()
+		defer outBatchMut.Unlock()
+		return len(outBatches) == 50
 	}, time.Second*20, time.Millisecond*100)
 
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
@@ -342,15 +341,14 @@ file:
 	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
 	require.NoError(t, streamOutBuilder.AddInputYAML(template))
 
-	var outMessages []string
-	var outMessagesMut sync.Mutex
-
-	require.NoError(t, streamOutBuilder.AddConsumerFunc(func(c context.Context, m *service.Message) error {
-		msgBytes, err := m.AsBytes()
+	var outBatches []string
+	var outBatchMut sync.Mutex
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
+		msgBytes, err := mb[0].AsBytes()
 		require.NoError(t, err)
-		outMessagesMut.Lock()
-		outMessages = append(outMessages, string(msgBytes))
-		outMessagesMut.Unlock()
+		outBatchMut.Lock()
+		outBatches = append(outBatches, string(msgBytes))
+		outBatchMut.Unlock()
 		return nil
 	}))
 
@@ -362,9 +360,9 @@ file:
 	}()
 
 	assert.Eventually(t, func() bool {
-		outMessagesMut.Lock()
-		defer outMessagesMut.Unlock()
-		return len(outMessages) == 10
+		outBatchMut.Lock()
+		defer outBatchMut.Unlock()
+		return len(outBatches) == 10
 	}, time.Second*25, time.Millisecond*100)
 
 	for i := 0; i < 10; i++ {
@@ -375,9 +373,9 @@ file:
 	}
 
 	assert.Eventually(t, func() bool {
-		outMessagesMut.Lock()
-		defer outMessagesMut.Unlock()
-		return len(outMessages) == 20
+		outBatchMut.Lock()
+		defer outBatchMut.Unlock()
+		return len(outBatches) == 20
 	}, time.Second*25, time.Millisecond*100)
 
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
@@ -390,13 +388,13 @@ file:
 	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
 	require.NoError(t, streamOutBuilder.AddInputYAML(template))
 
-	outMessages = []string{}
+	outBatches = []string{}
 	require.NoError(t, streamOutBuilder.AddConsumerFunc(func(c context.Context, m *service.Message) error {
 		msgBytes, err := m.AsBytes()
 		require.NoError(t, err)
-		outMessagesMut.Lock()
-		outMessages = append(outMessages, string(msgBytes))
-		outMessagesMut.Unlock()
+		outBatchMut.Lock()
+		outBatches = append(outBatches, string(msgBytes))
+		outBatchMut.Unlock()
 		return nil
 	}))
 
@@ -414,9 +412,9 @@ file:
 	}
 
 	assert.Eventually(t, func() bool {
-		outMessagesMut.Lock()
-		defer outMessagesMut.Unlock()
-		return len(outMessages) == 10
+		outBatchMut.Lock()
+		defer outBatchMut.Unlock()
+		return len(outBatches) == 10
 	}, time.Second*20, time.Millisecond*100)
 
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
@@ -428,7 +426,7 @@ file:
 }
 
 func TestIntegrationPgStreamingFromRemoteDB(t *testing.T) {
-	// t.Skip("This test requires a remote database to run. Aimed to test remote databases")
+	t.Skip("This test requires a remote database to run. Aimed to test remote databases")
 	tmpDir := t.TempDir()
 
 	// tables: users, products, orders, order_items
@@ -502,7 +500,6 @@ file:
 	require.NoError(t, err)
 
 	go func() {
-		fmt.Println("Starting stream")
 		_ = streamOut.Run(context.Background())
 	}()
 
@@ -546,7 +543,7 @@ func TestIntegrationPgCDCForPgOutputStreamUncomitedPlugin(t *testing.T) {
 	hostAndPortSplited := strings.Split(hostAndPort, ":")
 
 	fake := faker.New()
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 10000; i++ {
 		_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", fake.Address().City(), fake.Time().RFC1123(time.Now()))
 		require.NoError(t, err)
 	}
@@ -560,6 +557,7 @@ pg_stream:
     port: %s
     schema: public
     tls: none
+    snapshot_batch_size: 100
     stream_snapshot: true
     decoding_plugin: pgoutput
     stream_uncomited: true
@@ -579,15 +577,14 @@ file:
 	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
 	require.NoError(t, streamOutBuilder.AddInputYAML(template))
 
-	var outMessages []string
-	var outMessagesMut sync.Mutex
-
-	require.NoError(t, streamOutBuilder.AddConsumerFunc(func(c context.Context, m *service.Message) error {
-		msgBytes, err := m.AsBytes()
+	var outBatches []string
+	var outBatchMut sync.Mutex
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
+		msgBytes, err := mb[0].AsBytes()
 		require.NoError(t, err)
-		outMessagesMut.Lock()
-		outMessages = append(outMessages, string(msgBytes))
-		outMessagesMut.Unlock()
+		outBatchMut.Lock()
+		outBatches = append(outBatches, string(msgBytes))
+		outBatchMut.Unlock()
 		return nil
 	}))
 
@@ -599,9 +596,9 @@ file:
 	}()
 
 	assert.Eventually(t, func() bool {
-		outMessagesMut.Lock()
-		defer outMessagesMut.Unlock()
-		return len(outMessages) == 10
+		outBatchMut.Lock()
+		defer outBatchMut.Unlock()
+		return len(outBatches) == 10000
 	}, time.Second*25, time.Millisecond*100)
 
 	for i := 0; i < 10; i++ {
@@ -612,9 +609,9 @@ file:
 	}
 
 	assert.Eventually(t, func() bool {
-		outMessagesMut.Lock()
-		defer outMessagesMut.Unlock()
-		return len(outMessages) == 20
+		outBatchMut.Lock()
+		defer outBatchMut.Unlock()
+		return len(outBatches) == 10010
 	}, time.Second*25, time.Millisecond*100)
 
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
@@ -627,13 +624,13 @@ file:
 	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
 	require.NoError(t, streamOutBuilder.AddInputYAML(template))
 
-	outMessages = []string{}
+	outBatches = []string{}
 	require.NoError(t, streamOutBuilder.AddConsumerFunc(func(c context.Context, m *service.Message) error {
 		msgBytes, err := m.AsBytes()
 		require.NoError(t, err)
-		outMessagesMut.Lock()
-		outMessages = append(outMessages, string(msgBytes))
-		outMessagesMut.Unlock()
+		outBatchMut.Lock()
+		outBatches = append(outBatches, string(msgBytes))
+		outBatchMut.Unlock()
 		return nil
 	}))
 
@@ -651,9 +648,9 @@ file:
 	}
 
 	assert.Eventually(t, func() bool {
-		outMessagesMut.Lock()
-		defer outMessagesMut.Unlock()
-		return len(outMessages) == 10
+		outBatchMut.Lock()
+		defer outBatchMut.Unlock()
+		return len(outBatches) == 10
 	}, time.Second*20, time.Millisecond*100)
 
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
@@ -718,15 +715,14 @@ file:
 		require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
 		require.NoError(t, streamOutBuilder.AddInputYAML(template))
 
-		var outMessages []string
-		var outMessagesMut sync.Mutex
-
-		require.NoError(t, streamOutBuilder.AddConsumerFunc(func(c context.Context, m *service.Message) error {
-			msgBytes, err := m.AsBytes()
+		var outBatches []string
+		var outBatchMut sync.Mutex
+		require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
+			msgBytes, err := mb[0].AsBytes()
 			require.NoError(t, err)
-			outMessagesMut.Lock()
-			outMessages = append(outMessages, string(msgBytes))
-			outMessagesMut.Unlock()
+			outBatchMut.Lock()
+			outBatches = append(outBatches, string(msgBytes))
+			outBatchMut.Unlock()
 			return nil
 		}))
 
@@ -738,9 +734,9 @@ file:
 		}()
 
 		assert.Eventually(t, func() bool {
-			outMessagesMut.Lock()
-			defer outMessagesMut.Unlock()
-			return len(outMessages) == 1000
+			outBatchMut.Lock()
+			defer outBatchMut.Unlock()
+			return len(outBatches) == 1000
 		}, time.Second*25, time.Millisecond*100)
 
 		for i := 0; i < 1000; i++ {
@@ -751,9 +747,9 @@ file:
 		}
 
 		assert.Eventually(t, func() bool {
-			outMessagesMut.Lock()
-			defer outMessagesMut.Unlock()
-			return len(outMessages) == 2000
+			outBatchMut.Lock()
+			defer outBatchMut.Unlock()
+			return len(outBatches) == 2000
 		}, time.Second*25, time.Millisecond*100)
 
 		require.NoError(t, streamOut.StopWithin(time.Second*10))
@@ -766,13 +762,13 @@ file:
 		require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
 		require.NoError(t, streamOutBuilder.AddInputYAML(template))
 
-		outMessages = []string{}
+		outBatches = []string{}
 		require.NoError(t, streamOutBuilder.AddConsumerFunc(func(c context.Context, m *service.Message) error {
 			msgBytes, err := m.AsBytes()
 			require.NoError(t, err)
-			outMessagesMut.Lock()
-			outMessages = append(outMessages, string(msgBytes))
-			outMessagesMut.Unlock()
+			outBatchMut.Lock()
+			outBatches = append(outBatches, string(msgBytes))
+			outBatchMut.Unlock()
 			return nil
 		}))
 
@@ -790,9 +786,9 @@ file:
 		}
 
 		assert.Eventually(t, func() bool {
-			outMessagesMut.Lock()
-			defer outMessagesMut.Unlock()
-			return len(outMessages) == 1000
+			outBatchMut.Lock()
+			defer outBatchMut.Unlock()
+			return len(outBatches) == 1000
 		}, time.Second*20, time.Millisecond*100)
 
 		require.NoError(t, streamOut.StopWithin(time.Second*10))

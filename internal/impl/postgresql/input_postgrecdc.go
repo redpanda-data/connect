@@ -12,10 +12,10 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
-	"fmt"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Jeffail/checkpoint"
@@ -105,6 +105,7 @@ This input adds the following metadata fields to each message:
 		Description("The name of the PostgreSQL logical replication slot to use. If not provided, a random name will be generated. You can create this slot manually before starting replication if desired.").
 		Example("my_test_slot").
 		Default(randomSlotName)).
+	Field(service.NewAutoRetryNacksToggleField()).
 	Field(service.NewBatchPolicyField("batching").Advanced())
 
 func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s service.BatchInput, err error) {
@@ -271,6 +272,8 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		metrics:         mgr.Metrics(),
 		snapshotMetrics: snapsotMetrics,
 		replicationLag:  replicationLag,
+		inTxState:       atomic.Bool{},
+		releaseTrxChan:  make(chan bool),
 	}
 
 	r, err := service.AutoRetryNacksBatchedToggled(conf, i)
@@ -321,25 +324,30 @@ type pgStreamInput struct {
 	snapshotMessageRate *service.MetricGauge
 	snapshotMetrics     *service.MetricGauge
 	replicationLag      *service.MetricGauge
+
+	pendingTrx     *string
+	releaseTrxChan chan bool
+	inTxState      atomic.Bool
 }
 
 func (p *pgStreamInput) Connect(ctx context.Context) error {
 	pgStream, err := pglogicalstream.NewPgStream(pglogicalstream.Config{
-		PgConnRuntimeParam:         p.pgConnRuntimeParam,
-		DBHost:                     p.dbConfig.Host,
-		DBPassword:                 p.dbConfig.Password,
-		DBUser:                     p.dbConfig.User,
-		DBPort:                     int(p.dbConfig.Port),
-		DBTables:                   p.tables,
-		DBName:                     p.dbConfig.Database,
-		DBSchema:                   p.schema,
-		ReplicationSlotName:        "rs_" + p.slotName,
-		TLSVerify:                  p.tls,
-		BatchSize:                  p.snapshotBatchSize,
-		StreamOldData:              p.streamSnapshot,
-		TemporaryReplicationSlot:   p.temporarySlot,
-		StreamUncomited:            p.streamUncomited,
-		DecodingPlugin:             p.decodingPlugin,
+		PgConnRuntimeParam:       p.pgConnRuntimeParam,
+		DBHost:                   p.dbConfig.Host,
+		DBPassword:               p.dbConfig.Password,
+		DBUser:                   p.dbConfig.User,
+		DBPort:                   int(p.dbConfig.Port),
+		DBTables:                 p.tables,
+		DBName:                   p.dbConfig.Database,
+		DBSchema:                 p.schema,
+		ReplicationSlotName:      "rs_" + p.slotName,
+		TLSVerify:                p.tls,
+		BatchSize:                p.snapshotBatchSize,
+		StreamOldData:            p.streamSnapshot,
+		TemporaryReplicationSlot: p.temporarySlot,
+		StreamUncomited:          p.streamUncomited,
+		DecodingPlugin:           p.decodingPlugin,
+
 		SnapshotMemorySafetyFactor: p.snapshotMemSafetyFactor,
 	})
 	if err != nil {
@@ -363,12 +371,8 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 		}()
 
 		var nextTimedBatchChan <-chan time.Time
-		var flushBatch func(context.Context, chan<- asyncMessage, service.MessageBatch, *int64) bool
-		if p.checkpointLimit > 1 {
-			flushBatch = p.asyncCheckpointer()
-		} else {
-			flushBatch = p.syncCheckpointer()
-		}
+		var flushBatch func(context.Context, chan<- asyncMessage, service.MessageBatch, *int64, *chan bool) bool
+		flushBatch = p.asyncCheckpointer()
 
 		// offsets are nilable since we don't provide offset tracking during the snapshot phase
 		var latestOffset *int64
@@ -383,35 +387,42 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 					break
 				}
 
-				if !flushBatch(ctx, p.msgChan, flushedBatch, latestOffset) {
+				if !flushBatch(ctx, p.msgChan, flushedBatch, latestOffset, nil) {
 					break
 				}
+			case _, open := <-p.pglogicalStream.TxBeginChan():
+				if !open {
+					p.logger.Debugf("TxBeginChan closed, exiting...")
+					break
+				}
+
+				p.logger.Debugf("Entering transaction state. Stop messages from ack until we receive commit message...")
+				p.inTxState.Store(true)
+
 				// TrxCommit LSN must be acked when all the bessages in the batch are processed
 			case trxCommitLsn, open := <-p.pglogicalStream.AckTxChan():
 				if !open {
 					break
 				}
 
-				fmt.Println("trxCommitLsn", trxCommitLsn)
-				fmt.Println("Force flushing the batch")
+				p.cMut.Lock()
+				p.cMut.Unlock()
+
 				flushedBatch, err := batchPolicy.Flush(ctx)
 				if err != nil {
 					p.mgr.Logger().Debugf("Flush batch error: %w", err)
 					break
 				}
 
-				if !flushBatch(ctx, p.msgChan, flushedBatch, latestOffset) {
+				callbackChan := make(chan bool)
+				if !flushBatch(ctx, p.msgChan, flushedBatch, latestOffset, &callbackChan) {
 					break
 				}
 
-				time.Sleep(time.Second)
-
-				if err = p.pglogicalStream.AckLSN(trxCommitLsn); err != nil {
-					p.mgr.Logger().Errorf("Failed to ack LSN: %v", err)
-					break
-				}
-
+				<-callbackChan
+				p.pglogicalStream.AckLSN(trxCommitLsn)
 				p.pglogicalStream.ConsumedCallback() <- true
+
 			case message, open := <-p.pglogicalStream.Messages():
 				if !open {
 					break
@@ -428,13 +439,8 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 					}
 					latestOffset = &parsedLSN
 				}
-
 				if mb, err = json.Marshal(message); err != nil {
 					break
-				}
-
-				if message.IsStreaming {
-					fmt.Println("Message received", string(mb))
 				}
 
 				batchMsg := service.NewMessage(mb)
@@ -460,9 +466,18 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 						p.mgr.Logger().Debugf("Flush batch error: %w", err)
 						break
 					}
-					if !flushBatch(ctx, p.msgChan, flushedBatch, latestOffset) {
-						break
+					if message.IsStreaming {
+						callbackChan := make(chan bool)
+						if !flushBatch(ctx, p.msgChan, flushedBatch, latestOffset, &callbackChan) {
+							break
+						}
+						<-callbackChan
+					} else {
+						if !flushBatch(ctx, p.msgChan, flushedBatch, latestOffset, nil) {
+							break
+						}
 					}
+
 				}
 			case <-ctx.Done():
 				p.pglogicalStream.Stop()
@@ -473,12 +488,18 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 	return err
 }
 
-func (p *pgStreamInput) asyncCheckpointer() func(context.Context, chan<- asyncMessage, service.MessageBatch, *int64) bool {
+func (p *pgStreamInput) asyncCheckpointer() func(context.Context, chan<- asyncMessage, service.MessageBatch, *int64, *chan bool) bool {
 	cp := checkpoint.NewCapped[*int64](int64(p.checkpointLimit))
-	return func(ctx context.Context, c chan<- asyncMessage, msg service.MessageBatch, lsn *int64) bool {
+	return func(ctx context.Context, c chan<- asyncMessage, msg service.MessageBatch, lsn *int64, txCommitConfirmChan *chan bool) bool {
 		if msg == nil {
+			if txCommitConfirmChan != nil {
+				go func() {
+					*txCommitConfirmChan <- true
+				}()
+			}
 			return true
 		}
+
 		resolveFn, err := cp.Track(ctx, lsn, int64(len(msg)))
 		if err != nil {
 			if ctx.Err() == nil {
@@ -486,6 +507,7 @@ func (p *pgStreamInput) asyncCheckpointer() func(context.Context, chan<- asyncMe
 			}
 			return false
 		}
+
 		select {
 		case c <- asyncMessage{
 			msg: msg,
@@ -496,8 +518,10 @@ func (p *pgStreamInput) asyncCheckpointer() func(context.Context, chan<- asyncMe
 				}
 				p.cMut.Lock()
 				if lsn != nil {
-					fmt.Println("Acking LSN from chackpointer", *lsn)
 					p.pglogicalStream.AckLSN(Int64ToLSN(*lsn))
+					if txCommitConfirmChan != nil {
+						*txCommitConfirmChan <- true
+					}
 				}
 				p.cMut.Unlock()
 				return nil
@@ -506,47 +530,7 @@ func (p *pgStreamInput) asyncCheckpointer() func(context.Context, chan<- asyncMe
 		case <-ctx.Done():
 			return false
 		}
-		return true
-	}
-}
 
-func (p *pgStreamInput) syncCheckpointer() func(context.Context, chan<- asyncMessage, service.MessageBatch, *int64) bool {
-	ackedChan := make(chan error)
-	return func(ctx context.Context, c chan<- asyncMessage, msg service.MessageBatch, lsn *int64) bool {
-		if msg == nil {
-			return true
-		}
-		select {
-		case c <- asyncMessage{
-			msg: msg,
-			ackFn: func(ctx context.Context, res error) error {
-				resErr := res
-				if resErr == nil {
-					p.cMut.Lock()
-					if lsn != nil {
-						p.pglogicalStream.AckLSN(Int64ToLSN(*lsn))
-					}
-					p.cMut.Unlock()
-				}
-				select {
-				case ackedChan <- resErr:
-				case <-ctx.Done():
-				}
-				return nil
-			},
-		}:
-			select {
-			case resErr := <-ackedChan:
-				if resErr != nil {
-					p.mgr.Logger().Errorf("Received error from message batch: %v, shutting down consumer.\n", resErr)
-					return false
-				}
-			case <-ctx.Done():
-				return false
-			}
-		case <-ctx.Done():
-			return false
-		}
 		return true
 	}
 }
