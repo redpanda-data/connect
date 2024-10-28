@@ -42,7 +42,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 	}
 
 	secretLookupFn := func(ctx context.Context, key string) (string, bool) {
-		return os.LookupEnv(key)
+		return "", false
 	}
 
 	opts = append(opts,
@@ -93,23 +93,15 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 		service.CLIOptCustomRunFlags([]cli.Flag{
 			&cli.StringSliceFlag{
 				Name:  "secrets",
-				Usage: "Attempt to load secrets from a provided URN. If a referenced secret isn't identified using the provided method then environment variables will also be looked up, you can disable this behaviour with the --disable-env-lookup flag.",
-			},
-			&cli.BoolFlag{
-				Name:  "disable-env-lookup",
-				Usage: "Disable the ability for configs to interpolate environment variables with ${FOO} syntax",
+				Usage: "Attempt to load secrets from a provided URN. If more than one entry is specified they will be attempted in order until a value is found. Environment variable lookups are specified with the URN `env:`, which by default is the only entry. In order to disable all secret lookups specify a single entry of `none:`.",
+				Value: cli.NewStringSlice("env:"),
 			},
 		}, func(c *cli.Context) error {
-			disableEnvLookup := c.Bool("disable-env-lookup")
 			secretsURNs := c.StringSlice("secrets")
 			if len(secretsURNs) > 0 {
 				var err error
-				secretLookupFn, err = secrets.ParseLookupURNs(c.Context, slog.New(rpLogger), disableEnvLookup, secretsURNs...)
+				secretLookupFn, err = secrets.ParseLookupURNs(c.Context, slog.New(rpLogger), secretsURNs...)
 				return err
-			} else if disableEnvLookup {
-				secretLookupFn = func(context.Context, string) (string, bool) {
-					return "", false
-				}
 			}
 			return nil
 		}),

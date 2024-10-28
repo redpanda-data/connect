@@ -42,7 +42,7 @@ func (l lookupTiers) Lookup(ctx context.Context, key string) (string, bool) {
 // be considered the last look up option, in which case if all others fail to
 // provide a secret then an environment variable under the key is returned if
 // found.
-func ParseLookupURNs(ctx context.Context, logger *slog.Logger, disableEnvLookup bool, secretsMgmtUrns ...string) (LookupFn, error) {
+func ParseLookupURNs(ctx context.Context, logger *slog.Logger, secretsMgmtUrns ...string) (LookupFn, error) {
 	var tiers lookupTiers
 
 	for _, urn := range secretsMgmtUrns {
@@ -53,11 +53,6 @@ func ParseLookupURNs(ctx context.Context, logger *slog.Logger, disableEnvLookup 
 		tiers = append(tiers, tier)
 	}
 
-	if !disableEnvLookup {
-		tiers = append(tiers, func(ctx context.Context, key string) (string, bool) {
-			return os.LookupEnv(key)
-		})
-	}
 	return tiers.Lookup, nil
 }
 
@@ -74,6 +69,14 @@ func parseSecretsLookupURN(ctx context.Context, logger *slog.Logger, urn string)
 		}, nil
 	case "redis":
 		return newRedisSecretsLookup(ctx, logger, u)
+	case "env":
+		return func(ctx context.Context, key string) (string, bool) {
+			return os.LookupEnv(key)
+		}, nil
+	case "none":
+		return func(ctx context.Context, key string) (string, bool) {
+			return "", false
+		}, nil
 	default:
 		return nil, fmt.Errorf("secrets scheme %v not recognized", u.Scheme)
 	}
