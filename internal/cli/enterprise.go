@@ -45,6 +45,8 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 		return "", false
 	}
 
+	var disableTelemetry bool
+
 	opts = append(opts,
 		service.CLIOptSetVersion(version, dateBuilt),
 		service.CLIOptSetBinaryName(binaryName),
@@ -80,8 +82,9 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 		service.CLIOptAddTeeLogger(slog.New(rpLogger)),
 		service.CLIOptOnConfigParse(func(pConf *service.ParsedConfig) error {
 			// Kick off telemetry exporter.
-			telemetry.ActivateExporter(instanceID, version, fbLogger, schema, pConf)
-
+			if !disableTelemetry {
+				telemetry.ActivateExporter(instanceID, version, fbLogger, schema, pConf)
+			}
 			return rpLogger.InitOutputFromParsed(pConf.Namespace("redpanda"))
 		}),
 		service.CLIOptOnStreamStart(func(s *service.RunningStreamSummary) error {
@@ -96,12 +99,18 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 				Usage: "Attempt to load secrets from a provided URN. If more than one entry is specified they will be attempted in order until a value is found. Environment variable lookups are specified with the URN `env:`, which by default is the only entry. In order to disable all secret lookups specify a single entry of `none:`.",
 				Value: cli.NewStringSlice("env:"),
 			},
+			&cli.BoolFlag{
+				Name:  "disable-telemetry",
+				Usage: "Disable anonymous telemetry from being emitted by this Connect instance.",
+			},
 		}, func(c *cli.Context) error {
-			secretsURNs := c.StringSlice("secrets")
-			if len(secretsURNs) > 0 {
+			disableTelemetry = c.Bool("disable-telemetry")
+
+			if secretsURNs := c.StringSlice("secrets"); len(secretsURNs) > 0 {
 				var err error
-				secretLookupFn, err = secrets.ParseLookupURNs(c.Context, slog.New(rpLogger), secretsURNs...)
-				return err
+				if secretLookupFn, err = secrets.ParseLookupURNs(c.Context, slog.New(rpLogger), secretsURNs...); err != nil {
+					return err
+				}
 			}
 			return nil
 		}),
