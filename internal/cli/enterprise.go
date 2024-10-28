@@ -16,8 +16,10 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/rs/xid"
+	"github.com/urfave/cli/v2"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka/enterprise"
+	"github.com/redpanda-data/connect/v4/internal/secrets"
 	"github.com/redpanda-data/connect/v4/internal/telemetry"
 )
 
@@ -37,6 +39,10 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err.Error())
 		os.Exit(1)
+	}
+
+	secretLookupFn := func(ctx context.Context, key string) (string, bool) {
+		return "", false
 	}
 
 	opts = append(opts,
@@ -81,6 +87,26 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 		service.CLIOptOnStreamStart(func(s *service.RunningStreamSummary) error {
 			rpLogger.SetStreamSummary(s)
 			return nil
+		}),
+
+		// Secrets management
+		service.CLIOptCustomRunFlags([]cli.Flag{
+			&cli.StringSliceFlag{
+				Name:  "secrets",
+				Usage: "Attempt to load secrets from a provided URN. If more than one entry is specified they will be attempted in order until a value is found. Environment variable lookups are specified with the URN `env:`, which by default is the only entry. In order to disable all secret lookups specify a single entry of `none:`.",
+				Value: cli.NewStringSlice("env:"),
+			},
+		}, func(c *cli.Context) error {
+			secretsURNs := c.StringSlice("secrets")
+			if len(secretsURNs) > 0 {
+				var err error
+				secretLookupFn, err = secrets.ParseLookupURNs(c.Context, slog.New(rpLogger), secretsURNs...)
+				return err
+			}
+			return nil
+		}),
+		service.CLIOptSetEnvVarLookup(func(ctx context.Context, key string) (string, bool) {
+			return secretLookupFn(ctx, key)
 		}),
 	)
 
