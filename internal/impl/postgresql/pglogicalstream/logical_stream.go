@@ -454,26 +454,13 @@ func (s *Stream) streamMessagesAsync() {
 							return
 						}
 
-						isBegin, err := isBeginMessage(xld.WALData)
-						if err != nil {
-							s.logger.Errorf("Failed to parse WAL data: %w", err)
-							if err = s.Stop(); err != nil {
-								s.logger.Errorf("Failed to stop the stream: %v", err)
-							}
-							return
-						}
-
-						if isBegin {
-							s.transactionBeginChan <- true
-						}
-
 						// when receiving a commit message, we need to acknowledge the LSN
 						// but we must wait for benthos to flush the messages before we can do that
 						if isCommit {
 							s.transactionAckChan <- clientXLogPos.String()
 							<-s.consumedCallback
 						} else {
-							if message == nil && (!isBegin && !isCommit) {
+							if message == nil && !isCommit {
 								// 0 changes happened in the transaction
 								// or we received a change that are not supported/needed by the replication stream
 								if err = s.AckLSN(clientXLogPos.String()); err != nil {
@@ -566,16 +553,9 @@ func (s *Stream) streamMessagesAsync() {
 	}
 }
 
-func (s *Stream) TxBeginChan() chan bool {
-	return s.transactionBeginChan
-}
-
+// AckTxChan returns the transaction ack channel
 func (s *Stream) AckTxChan() chan string {
 	return s.transactionAckChan
-}
-
-func (s *Stream) ConfigrmAckTxChan() chan bool {
-	return s.consumedCallback
 }
 
 func (s *Stream) processSnapshot() {
@@ -597,16 +577,6 @@ func (s *Stream) processSnapshot() {
 	}()
 
 	s.logger.Infof("Starting snapshot processing")
-
-	type RawMessage struct {
-		RowsCount    int
-		Offset       int
-		ColumnTypes  []*sql.ColumnType
-		ColumnNames  []string
-		ScanArgs     []interface{}
-		ValueGetters []func(interface{}) interface{}
-		TableName    string
-	}
 
 	var wg sync.WaitGroup
 
@@ -772,8 +742,7 @@ func (s *Stream) processSnapshot() {
 	go s.streamMessagesAsync()
 }
 
-// LrMessageC represents a message from the stream that are sent to the consumer on the logical replication stage
-// meaning these messages will have non-nil LSN field
+// Messages is a channel that can be used to consume messages from the plugin. It will contain LSN nil for snapshot messages
 func (s *Stream) Messages() chan StreamMessage {
 	return s.messages
 }

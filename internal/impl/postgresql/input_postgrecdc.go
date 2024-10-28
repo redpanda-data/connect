@@ -325,7 +325,6 @@ type pgStreamInput struct {
 	snapshotMetrics     *service.MetricGauge
 	replicationLag      *service.MetricGauge
 
-	pendingTrx     *string
 	releaseTrxChan chan bool
 	inTxState      atomic.Bool
 }
@@ -371,8 +370,7 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 		}()
 
 		var nextTimedBatchChan <-chan time.Time
-		var flushBatch func(context.Context, chan<- asyncMessage, service.MessageBatch, *int64, *chan bool) bool
-		flushBatch = p.asyncCheckpointer()
+		flushBatch := p.asyncCheckpointer()
 
 		// offsets are nilable since we don't provide offset tracking during the snapshot phase
 		var latestOffset *int64
@@ -390,14 +388,6 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 				if !flushBatch(ctx, p.msgChan, flushedBatch, latestOffset, nil) {
 					break
 				}
-			case _, open := <-p.pglogicalStream.TxBeginChan():
-				if !open {
-					p.logger.Debugf("TxBeginChan closed, exiting...")
-					break
-				}
-
-				p.logger.Debugf("Entering transaction state. Stop messages from ack until we receive commit message...")
-				p.inTxState.Store(true)
 
 				// TrxCommit LSN must be acked when all the bessages in the batch are processed
 			case trxCommitLsn, open := <-p.pglogicalStream.AckTxChan():
@@ -420,7 +410,11 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 				}
 
 				<-callbackChan
-				p.pglogicalStream.AckLSN(trxCommitLsn)
+				if err = p.pglogicalStream.AckLSN(trxCommitLsn); err != nil {
+					p.mgr.Logger().Errorf("Failed to ack LSN: %v", err)
+					break
+				}
+
 				p.pglogicalStream.ConsumedCallback() <- true
 
 			case message, open := <-p.pglogicalStream.Messages():
@@ -480,7 +474,9 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 
 				}
 			case <-ctx.Done():
-				p.pglogicalStream.Stop()
+				if err = p.pglogicalStream.Stop(); err != nil {
+					p.logger.Errorf("Failed to stop pglogical stream: %v", err)
+				}
 			}
 		}
 	}()
@@ -517,13 +513,15 @@ func (p *pgStreamInput) asyncCheckpointer() func(context.Context, chan<- asyncMe
 					return nil
 				}
 				p.cMut.Lock()
+				defer p.cMut.Unlock()
 				if lsn != nil {
-					p.pglogicalStream.AckLSN(Int64ToLSN(*lsn))
+					if err = p.pglogicalStream.AckLSN(Int64ToLSN(*lsn)); err != nil {
+						return err
+					}
 					if txCommitConfirmChan != nil {
 						*txCommitConfirmChan <- true
 					}
 				}
-				p.cMut.Unlock()
 				return nil
 			},
 		}:
