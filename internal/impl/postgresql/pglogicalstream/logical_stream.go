@@ -43,7 +43,6 @@ type Stream struct {
 	standbyMessageTimeout      time.Duration
 	nextStandbyMessageDeadline time.Time
 	messages                   chan StreamMessage
-	snapshotMessages           chan StreamMessage
 	snapshotName               string
 	slotName                   string
 	schema                     string
@@ -56,6 +55,8 @@ type Stream struct {
 	monitor                    *Monitor
 	streamUncomited            bool
 	snapshotter                *Snapshotter
+	transactionAckChan         chan string
+	transactionBeginChan       chan bool
 
 	lsnAckBuffer []string
 
@@ -121,7 +122,6 @@ func NewPgStream(config Config) (*Stream, error) {
 		pgConn:                     dbConn,
 		dbConfig:                   *cfg,
 		messages:                   make(chan StreamMessage),
-		snapshotMessages:           make(chan StreamMessage, 100),
 		slotName:                   config.ReplicationSlotName,
 		schema:                     config.DBSchema,
 		snapshotMemorySafetyFactor: config.SnapshotMemorySafetyFactor,
@@ -129,6 +129,8 @@ func NewPgStream(config Config) (*Stream, error) {
 		snapshotBatchSize:          config.BatchSize,
 		tableNames:                 tableNames,
 		consumedCallback:           make(chan bool),
+		transactionAckChan:         make(chan string),
+		transactionBeginChan:       make(chan bool),
 		lsnAckBuffer:               []string{},
 		logger:                     config.logger,
 		m:                          sync.Mutex{},
@@ -443,28 +445,43 @@ func (s *Stream) streamMessagesAsync() {
 							return
 						}
 
-						if message == nil {
-							// 0 changes happened in the transaction
-							// or we received a change that are not supported/needed by the replication stream
-							if err = s.AckLSN(clientXLogPos.String()); err != nil {
-								// stop reading from replication slot
-								// if we can't acknowledge the LSN
-								if err = s.Stop(); err != nil {
-									s.logger.Errorf("Failed to stop the stream: %v", err)
-								}
-								return
+						isCommit, _, err := isCommitMessage(xld.WALData)
+						if err != nil {
+							s.logger.Errorf("Failed to parse WAL data: %w", err)
+							if err = s.Stop(); err != nil {
+								s.logger.Errorf("Failed to stop the stream: %v", err)
 							}
-						} else {
-							lsn := clientXLogPos.String()
-							s.messages <- StreamMessage{
-								Lsn: &lsn,
-								Changes: []StreamMessageChanges{
-									*message,
-								},
-								IsStreaming: true,
-								WALLagBytes: &metrics.WalLagInBytes,
-							}
+							return
+						}
+
+						// when receiving a commit message, we need to acknowledge the LSN
+						// but we must wait for benthos to flush the messages before we can do that
+						if isCommit {
+							s.transactionAckChan <- clientXLogPos.String()
 							<-s.consumedCallback
+						} else {
+							if message == nil && !isCommit {
+								// 0 changes happened in the transaction
+								// or we received a change that are not supported/needed by the replication stream
+								if err = s.AckLSN(clientXLogPos.String()); err != nil {
+									// stop reading from replication slot
+									// if we can't acknowledge the LSN
+									if err = s.Stop(); err != nil {
+										s.logger.Errorf("Failed to stop the stream: %v", err)
+									}
+									return
+								}
+							} else if message != nil {
+								lsn := clientXLogPos.String()
+								s.messages <- StreamMessage{
+									Lsn: &lsn,
+									Changes: []StreamMessageChanges{
+										*message,
+									},
+									IsStreaming: true,
+									WALLagBytes: &metrics.WalLagInBytes,
+								}
+							}
 						}
 					} else {
 						// message changes must be collected in the buffer in the context of the same transaction
@@ -536,6 +553,11 @@ func (s *Stream) streamMessagesAsync() {
 	}
 }
 
+// AckTxChan returns the transaction ack channel
+func (s *Stream) AckTxChan() chan string {
+	return s.transactionAckChan
+}
+
 func (s *Stream) processSnapshot() {
 	if err := s.snapshotter.prepare(); err != nil {
 		s.logger.Errorf("Failed to prepare database snapshot. Probably snapshot is expired...: %v", err.Error())
@@ -557,6 +579,7 @@ func (s *Stream) processSnapshot() {
 	s.logger.Infof("Starting snapshot processing")
 
 	var wg sync.WaitGroup
+
 	for _, table := range s.tableNames {
 		wg.Add(1)
 		go func(tableName string) {
@@ -598,6 +621,7 @@ func (s *Stream) processSnapshot() {
 
 			for {
 				var snapshotRows *sql.Rows
+				queryStart := time.Now()
 				if snapshotRows, err = s.snapshotter.querySnapshotData(table, tablePk, batchSize, offset); err != nil {
 					s.logger.Errorf("Failed to query snapshot data for table %v: %v", table, err.Error())
 					s.logger.Errorf("Failed to query snapshot for table %v: %v", table, err.Error())
@@ -607,6 +631,9 @@ func (s *Stream) processSnapshot() {
 
 					os.Exit(1)
 				}
+
+				queryDuration := time.Since(queryStart)
+				fmt.Printf("Query duration: %v %s \n", queryDuration, tableName)
 
 				if snapshotRows.Err() != nil {
 					s.logger.Errorf("Failed to get snapshot data for table %v: %v", table, snapshotRows.Err().Error())
@@ -620,7 +647,6 @@ func (s *Stream) processSnapshot() {
 
 				columnTypes, err := snapshotRows.ColumnTypes()
 				if err != nil {
-					fmt.Println("Failed to get column types")
 					s.logger.Errorf("Failed to get column types for table %v: %v", table, err.Error())
 					if err = s.cleanUpOnFailure(); err != nil {
 						s.logger.Errorf("Failed to clean up resources on accident: %v", err.Error())
@@ -630,7 +656,6 @@ func (s *Stream) processSnapshot() {
 
 				columnNames, err := snapshotRows.Columns()
 				if err != nil {
-					fmt.Println("Failed to get column names")
 					s.logger.Errorf("Failed to get column names for table %v: %v", table, err.Error())
 					if err = s.cleanUpOnFailure(); err != nil {
 						s.logger.Errorf("Failed to clean up resources on accident: %v", err.Error())
@@ -639,15 +664,22 @@ func (s *Stream) processSnapshot() {
 				}
 
 				var rowsCount = 0
+				rowsStart := time.Now()
+				totalScanDuration := time.Duration(0)
+				totalWaitingFromBenthos := time.Duration(0)
 
 				tableWithoutSchema := strings.Split(table, ".")[1]
 				for snapshotRows.Next() {
 					rowsCount += 1
 
+					scanStart := time.Now()
 					scanArgs, valueGetters := s.snapshotter.prepareScannersAndGetters(columnTypes)
 					err := snapshotRows.Scan(scanArgs...)
+					scanEnd := time.Since(scanStart)
+					totalScanDuration += scanEnd
 
 					if err != nil {
+						fmt.Println("Failed to scan row")
 						s.logger.Errorf("Failed to scan row for table %v: %v", table, err.Error())
 						if err = s.cleanUpOnFailure(); err != nil {
 							s.logger.Errorf("Failed to clean up resources on accident: %v", err.Error())
@@ -655,9 +687,9 @@ func (s *Stream) processSnapshot() {
 						os.Exit(1)
 					}
 
-					columnValues := make([]interface{}, len(columnTypes))
+					var data = make(map[string]any)
 					for i, getter := range valueGetters {
-						columnValues[i] = getter(scanArgs[i])
+						data[columnNames[i]] = getter(scanArgs[i])
 					}
 
 					snapshotChangePacket := StreamMessage{
@@ -667,30 +699,33 @@ func (s *Stream) processSnapshot() {
 								Table:     tableWithoutSchema,
 								Operation: "insert",
 								Schema:    s.schema,
-								Data: func() map[string]any {
-									var data = make(map[string]any)
-									for i, cn := range columnNames {
-										data[cn] = columnValues[i]
-									}
-									return data
-								}(),
+								Data:      data,
 							},
 						},
 					}
 
 					if rowsCount%100 == 0 {
-						s.monitor.UpdateSnapshotProgressForTable(tableName, rowsCount+offset)
+						s.monitor.UpdateSnapshotProgressForTable(tableWithoutSchema, rowsCount+offset)
 					}
 
 					tableProgress := s.monitor.GetSnapshotProgressForTable(tableWithoutSchema)
 					snapshotChangePacket.Changes[0].TableSnapshotProgress = &tableProgress
+					snapshotChangePacket.IsStreaming = false
 
-					s.snapshotMessages <- snapshotChangePacket
+					waitingFromBenthos := time.Now()
+					s.messages <- snapshotChangePacket
+					totalWaitingFromBenthos += time.Since(waitingFromBenthos)
+
 				}
+
+				batchEnd := time.Since(rowsStart)
+				fmt.Printf("Batch duration: %v %s \n", batchEnd, tableName)
+				fmt.Println("Scan duration", totalScanDuration, tableName)
+				fmt.Println("Waiting from benthos duration", totalWaitingFromBenthos, tableName)
 
 				offset += batchSize
 
-				if batchSize != rowsCount {
+				if rowsCount < batchSize {
 					break
 				}
 			}
@@ -707,15 +742,8 @@ func (s *Stream) processSnapshot() {
 	go s.streamMessagesAsync()
 }
 
-// SnapshotMessageC represents a message from the stream that are sent to the consumer on the snapshot processing stage
-// meaning these messages will have nil LSN field
-func (s *Stream) SnapshotMessageC() chan StreamMessage {
-	return s.snapshotMessages
-}
-
-// LrMessageC represents a message from the stream that are sent to the consumer on the logical replication stage
-// meaning these messages will have non-nil LSN field
-func (s *Stream) LrMessageC() chan StreamMessage {
+// Messages is a channel that can be used to consume messages from the plugin. It will contain LSN nil for snapshot messages
+func (s *Stream) Messages() chan StreamMessage {
 	return s.messages
 }
 
