@@ -107,6 +107,11 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 				secretLookupFn, err = secrets.ParseLookupURNs(c.Context, slog.New(rpLogger), disableEnvLookup, secretsURNs...)
 				return err
 			}
+			if disableEnvLookup {
+				secretLookupFn = func(context.Context, string) (string, bool) {
+					return "", false
+				}
+			}
 			return nil
 		}),
 		service.CLIOptSetEnvVarLookup(func(ctx context.Context, key string) (string, bool) {
