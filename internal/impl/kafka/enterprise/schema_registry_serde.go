@@ -10,6 +10,7 @@ package enterprise
 
 import "github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
 
+// schemaDetails is a struct that contains the schema info along with a subject and a version associated with it.
 type schemaDetails struct {
 	sr.SchemaInfo
 	// The `Subject` field is omitted from the schema info payload since the `/subjects/<Subject>/versions` endpoint
