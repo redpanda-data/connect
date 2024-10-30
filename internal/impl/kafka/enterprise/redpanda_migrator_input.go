@@ -77,6 +77,10 @@ root = if $has_topic_partitions {
   } else if this.regexp_topics {
     "this input does not support both regular expression topics and explicit topic partitions"
   }
+} else {
+  if this.consumer_group.or("") == "" {
+    "a consumer group is mandatory when not using explicit topic partitions"
+  }
 }
 `)
 }
@@ -278,8 +282,10 @@ func NewRedpandaMigratorReaderFromConfig(conf *service.ParsedConfig, mgr *servic
 		return nil, err
 	}
 
-	if r.consumerGroup, err = conf.FieldString("consumer_group"); err != nil {
-		return nil, err
+	if conf.Contains("consumer_group") {
+		if r.consumerGroup, err = conf.FieldString("consumer_group"); err != nil {
+			return nil, err
+		}
 	}
 
 	if r.batchSize, err = conf.FieldInt("batch_size"); err != nil {
