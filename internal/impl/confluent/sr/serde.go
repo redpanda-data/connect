@@ -20,19 +20,9 @@ import (
 	"fmt"
 )
 
-// ExtractID extracts the schema ID from a raw message.
-func ExtractID(msg []byte) (int, error) {
-	if len(msg) < 5 {
-		return 0, errors.New("message is empty or too small")
-	}
-	if msg[0] != 0 {
-		return 0, fmt.Errorf("serialization format version number %v not supported", msg[0])
-	}
-	return int(binary.BigEndian.Uint32(msg[1:5])), nil
-}
-
 // UpdateID updates the schema ID in a raw message.
 func UpdateID(msg []byte, id int) error {
+	// TODO: Remove this once https://github.com/twmb/franz-go/pull/851 is merged.
 	if len(msg) < 5 {
 		return errors.New("message is empty or too small")
 	}

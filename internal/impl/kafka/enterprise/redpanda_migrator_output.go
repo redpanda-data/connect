@@ -15,6 +15,7 @@ import (
 	"sync"
 
 	"github.com/twmb/franz-go/pkg/kgo"
+	franz_sr "github.com/twmb/franz-go/pkg/sr"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
@@ -272,9 +273,10 @@ func (w *RedpandaMigratorWriter) WriteBatch(ctx context.Context, b service.Messa
 		return err
 	}
 
+	var ch franz_sr.ConfluentHeader
 	if w.translateSchemaIDs {
 		for recordIdx, record := range records {
-			schemaID, err := sr.ExtractID(record.Value)
+			schemaID, _, err := ch.DecodeID(record.Value)
 			if err != nil {
 				return fmt.Errorf("failed to extract schema ID from message index %d for topic %q: %s", recordIdx, record.Topic, err)
 			}

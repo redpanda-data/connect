@@ -273,7 +273,7 @@ func TestSchemaRegistryDecodeAvro(t *testing.T) {
 		{
 			name:        "non-empty magic byte",
 			input:       "\x06\x00\x00\x00\x03\x06foo\x02\x06foo\x06bar",
-			errContains: "version number 6 not supported",
+			errContains: "5 byte header for value is missing or does not have 0 magic byte",
 		},
 		{
 			name:        "non-existing schema",
@@ -376,7 +376,7 @@ func TestSchemaRegistryDecodeAvroRawJson(t *testing.T) {
 		{
 			name:        "non-empty magic byte",
 			input:       "\x06\x00\x00\x00\x03\x06foo\x02\x06foo\x06bar",
-			errContains: "version number 6 not supported",
+			errContains: "5 byte header for value is missing or does not have 0 magic byte",
 		},
 		{
 			name:        "non-existing schema",

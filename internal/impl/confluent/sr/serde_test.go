@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/twmb/franz-go/pkg/sr"
 )
 
 func TestUpdateIDRoundtrip(t *testing.T) {
@@ -40,16 +41,17 @@ func TestUpdateIDRoundtrip(t *testing.T) {
 			name:       "fails to update message if it's too small",
 			msg:        make([]byte, 3),
 			errUpdate:  "message is empty or too small",
-			errExtract: "message is empty or too small",
+			errExtract: "5 byte header for value is missing or does not have 0 magic byte",
 		},
 		{
 			name:       "fails to extract ID from invalid message",
 			msg:        []byte("foobar"),
 			errUpdate:  "serialization format version number 102 not supported",
-			errExtract: "serialization format version number 102 not supported",
+			errExtract: "5 byte header for value is missing or does not have 0 magic byte",
 		},
 	}
 
+	var ch sr.ConfluentHeader
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			err := UpdateID(test.msg, test.id)
@@ -59,7 +61,7 @@ func TestUpdateIDRoundtrip(t *testing.T) {
 				assert.Contains(t, err.Error(), test.errUpdate)
 			}
 
-			extractedID, err := ExtractID(test.msg)
+			extractedID, _, err := ch.DecodeID(test.msg)
 			if test.errExtract == "" {
 				assert.NoError(t, err)
 				assert.Equal(t, dummyID, extractedID)

@@ -17,9 +17,7 @@ package confluent
 import (
 	"context"
 	"crypto/tls"
-	"encoding/binary"
 	"errors"
-	"fmt"
 	"io/fs"
 	"net/http"
 	"sync"
@@ -158,7 +156,8 @@ func (s *schemaRegistryDecoder) Process(ctx context.Context, msg *service.Messag
 		return nil, errors.New("unable to reference message as bytes")
 	}
 
-	id, remaining, err := extractID(b)
+	var ch franz_sr.ConfluentHeader
+	id, remaining, err := ch.DecodeID(b)
 	if err != nil {
 		return nil, err
 	}
@@ -196,20 +195,6 @@ type schemaDecoder func(m *service.Message) error
 type cachedSchemaDecoder struct {
 	lastUsedUnixSeconds int64
 	decoder             schemaDecoder
-}
-
-func extractID(b []byte) (id int, remaining []byte, err error) {
-	if len(b) == 0 {
-		err = errors.New("message is empty")
-		return
-	}
-	if b[0] != 0 {
-		err = fmt.Errorf("serialization format version number %v not supported", b[0])
-		return
-	}
-	id = int(binary.BigEndian.Uint32(b[1:5]))
-	remaining = b[5:]
-	return
 }
 
 const (

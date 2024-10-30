@@ -9,7 +9,6 @@
 package enterprise_test
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -17,7 +16,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"strconv"
 	"testing"
 	"time"
@@ -343,42 +341,29 @@ func startSchemaRegistry(t *testing.T, pool *dockertest.Pool) int {
 	return port
 }
 
-func createSchema(t *testing.T, port int, subject string, schema string, references []map[string]any) {
+func createSchema(t *testing.T, port int, subject string, schema string, references []franz_sr.SchemaReference) {
 	t.Helper()
 
-	type payload struct {
-		Subject    string           `json:"subject,omitempty"`
-		Version    int              `json:"version,omitempty"`
-		Schema     string           `json:"schema"`
-		References []map[string]any `json:"references,omitempty"`
-	}
-	body, err := json.Marshal(payload{Schema: schema, References: references})
+	client, err := franz_sr.NewClient(franz_sr.URLs(fmt.Sprintf("http://localhost:%d", port)))
 	require.NoError(t, err)
-	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://localhost:%d/subjects/%s/versions", port, subject), bytes.NewReader(body))
-	require.NoError(t, err)
-	req.Header.Set("Content-Type", "application/vnd.schemaregistry.v1+json")
 
-	resp, err := http.DefaultClient.Do(req)
+	_, err = client.CreateSchema(context.Background(), subject, franz_sr.Schema{Schema: schema, References: references})
 	require.NoError(t, err)
-	require.NoError(t, resp.Body.Close())
-	require.Equal(t, http.StatusOK, resp.StatusCode)
 }
 
 func deleteSubject(t *testing.T, port int, subject string, hardDelete bool) {
 	t.Helper()
 
-	u, err := url.Parse(fmt.Sprintf("http://localhost:%d/subjects/%s", port, subject))
+	client, err := franz_sr.NewClient(franz_sr.URLs(fmt.Sprintf("http://localhost:%d", port)))
 	require.NoError(t, err)
+
+	deleteMode := franz_sr.SoftDelete
 	if hardDelete {
-		q := u.Query()
-		q.Add("permanent", "true")
-		u.RawQuery = q.Encode()
+		deleteMode = franz_sr.HardDelete
 	}
-	req, err := http.NewRequest(http.MethodDelete, u.String(), nil)
+
+	_, err = client.DeleteSubject(context.Background(), subject, franz_sr.DeleteHow(deleteMode))
 	require.NoError(t, err)
-	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err)
-	require.NoError(t, resp.Body.Close())
 }
 
 func TestSchemaRegistryIntegration(t *testing.T) {
@@ -430,17 +415,23 @@ func TestSchemaRegistryIntegration(t *testing.T) {
 			subject := u4.String()
 
 			t.Cleanup(func() {
-				deleteSubject(t, sourcePort, subject, false)
-				deleteSubject(t, sourcePort, subject, true)
-				deleteSubject(t, destinationPort, subject, false)
-				deleteSubject(t, destinationPort, subject, true)
-
+				// Clean up the extraSubject first since it may contain schemas with references.
 				if test.extraSubject != "" {
 					deleteSubject(t, sourcePort, test.extraSubject, false)
 					deleteSubject(t, sourcePort, test.extraSubject, true)
-					deleteSubject(t, destinationPort, test.extraSubject, false)
-					deleteSubject(t, destinationPort, test.extraSubject, true)
+					if test.subjectFilter == "" {
+						deleteSubject(t, destinationPort, test.extraSubject, false)
+						deleteSubject(t, destinationPort, test.extraSubject, true)
+					}
 				}
+
+				if !test.includeSoftDeletedSubjects {
+					deleteSubject(t, sourcePort, subject, false)
+				}
+				deleteSubject(t, sourcePort, subject, true)
+
+				deleteSubject(t, destinationPort, subject, false)
+				deleteSubject(t, destinationPort, subject, true)
 			})
 
 			createSchema(t, sourcePort, subject, test.schema, nil)
@@ -450,16 +441,11 @@ func TestSchemaRegistryIntegration(t *testing.T) {
 			}
 
 			if test.includeSoftDeletedSubjects {
-				req, err := http.NewRequest(http.MethodDelete, fmt.Sprintf("http://localhost:%d/subjects/%s", sourcePort, subject), nil)
-				require.NoError(t, err)
-				resp, err := http.DefaultClient.Do(req)
-				require.NoError(t, err)
-				require.NoError(t, resp.Body.Close())
-				require.Equal(t, http.StatusOK, resp.StatusCode)
+				deleteSubject(t, sourcePort, subject, false)
 			}
 
 			if test.schemaWithReference != "" {
-				createSchema(t, sourcePort, test.extraSubject, test.schemaWithReference, []map[string]any{{"name": "foo", "subject": subject, "version": 1}})
+				createSchema(t, sourcePort, test.extraSubject, test.schemaWithReference, []franz_sr.SchemaReference{{Name: "foo", Subject: subject, Version: 1}})
 			}
 
 			streamBuilder := service.NewStreamBuilder()
@@ -549,7 +535,7 @@ func TestSchemaRegistryIDTranslationIntegration(t *testing.T) {
 
 	// Create a schema under subject `bar` which references the second schema under `foo`.
 	createSchema(t, sourcePort, "bar", `{"name":"bar", "type": "record", "fields":[{"name":"data", "type": "foo"}]}`,
-		[]map[string]any{{"name": "foo", "subject": "foo", "version": 2}},
+		[]franz_sr.SchemaReference{{Name: "foo", Subject: "foo", Version: 2}},
 	)
 
 	// Create a schema at the destination which will have ID 1 so we can check that the ID translation works
