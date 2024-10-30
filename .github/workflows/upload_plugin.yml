@@ -48,14 +48,12 @@ jobs:
         if: ${{ env.DRY_RUN != 'false' }}
         uses: goreleaser/goreleaser-action@v6
         with:
-          version: latest
           args: build --snapshot
       - name: Build binaries
         # Only one way to not dry run - see 'false'. All other cases, conservatively assume --dry-run
         if: ${{ env.DRY_RUN == 'false' }}
         uses: goreleaser/goreleaser-action@v6
         with:
-          version: latest
           args: build
       - name: Upload connect plugin to S3
         uses: ./.github/actions/upload_managed_plugin

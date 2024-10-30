@@ -65,7 +65,6 @@ jobs:
     - name: GoReleaser
       uses: goreleaser/goreleaser-action@v6
       with:
-        version: latest
         args: release --release-notes=./release_notes.md --timeout 120m
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
