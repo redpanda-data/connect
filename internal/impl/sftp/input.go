@@ -53,6 +53,7 @@ func sftpInputSpec() *service.ConfigSpec {
 This input adds the following metadata fields to each message:
 
 - sftp_path
+- sftp_modification_time
 
 You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].`).
 		Fields(
@@ -295,6 +296,8 @@ func (s *sftpReader) ReadBatch(ctx context.Context) (service.MessageBatch, servi
 
 	for _, part := range parts {
 		part.MetaSetMut("sftp_path", currentPath)
+		fileInfo, _ := s.client.Stat(currentPath)
+		part.MetaSetMut("sftp_modification_time", fileInfo.ModTime())
 	}
 
 	return parts, func(ctx context.Context, res error) error {
