@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/twmb/franz-go/pkg/sr"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -29,15 +30,14 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
-	"github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
 	"github.com/redpanda-data/connect/v4/internal/impl/protobuf"
 )
 
-func (s *schemaRegistryDecoder) getProtobufDecoder(ctx context.Context, info sr.SchemaInfo) (schemaDecoder, error) {
+func (s *schemaRegistryDecoder) getProtobufDecoder(ctx context.Context, schema sr.Schema) (schemaDecoder, error) {
 	regMap := map[string]string{
-		".": info.Schema,
+		".": schema.Schema,
 	}
-	if err := s.client.WalkReferences(ctx, info.References, func(ctx context.Context, name string, si sr.SchemaInfo) error {
+	if err := s.client.WalkReferences(ctx, schema.References, func(ctx context.Context, name string, si sr.Schema) error {
 		regMap[name] = si.Schema
 		return nil
 	}); err != nil {
@@ -97,11 +97,11 @@ func (s *schemaRegistryDecoder) getProtobufDecoder(ctx context.Context, info sr.
 	}, nil
 }
 
-func (s *schemaRegistryEncoder) getProtobufEncoder(ctx context.Context, info sr.SchemaInfo) (schemaEncoder, error) {
+func (s *schemaRegistryEncoder) getProtobufEncoder(ctx context.Context, schema sr.Schema) (schemaEncoder, error) {
 	regMap := map[string]string{
-		".": info.Schema,
+		".": schema.Schema,
 	}
-	if err := s.client.WalkReferences(ctx, info.References, func(ctx context.Context, name string, si sr.SchemaInfo) error {
+	if err := s.client.WalkReferences(ctx, schema.References, func(ctx context.Context, name string, si sr.Schema) error {
 		regMap[name] = si.Schema
 		return nil
 	}); err != nil {

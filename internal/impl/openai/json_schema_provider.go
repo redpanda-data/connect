@@ -70,7 +70,7 @@ func (p *dynamicSchemaProvider) GetJSONSchema(ctx context.Context) (*oai.ChatCom
 		return nil, fmt.Errorf("unable to load latest schema for subject %q: %w", p.subject, err)
 	}
 	var schema jsonschema.Definition
-	if err := json.Unmarshal([]byte(info.Schema), &schema); err != nil {
+	if err := json.Unmarshal([]byte(info.Schema.Schema), &schema); err != nil {
 		return nil, fmt.Errorf("unable to parse json schema from schema with ID=%d", info.ID)
 	}
 	name := fmt.Sprintf("%s%d", p.namePrefix, info.ID)

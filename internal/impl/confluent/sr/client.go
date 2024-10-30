@@ -113,16 +113,8 @@ func NewClient(
 	}, nil
 }
 
-// SchemaInfo is the information about a schema stored in the registry.
-type SchemaInfo struct {
-	ID         int                  `json:"id,omitempty"`
-	Type       sr.SchemaType        `json:"schemaType,omitempty"`
-	Schema     string               `json:"schema"`
-	References []sr.SchemaReference `json:"references,omitempty"`
-}
-
 // GetSchemaByID gets a schema by its global identifier.
-func (c *Client) GetSchemaByID(ctx context.Context, id int, includeDeleted bool) (SchemaInfo, error) {
+func (c *Client) GetSchemaByID(ctx context.Context, id int, includeDeleted bool) (sr.Schema, error) {
 	// TODO: Maybe consider adding a `SchemaByIDAndSubject()` API which passes the subject as part of the request query.
 
 	if includeDeleted {
@@ -131,14 +123,9 @@ func (c *Client) GetSchemaByID(ctx context.Context, id int, includeDeleted bool)
 
 	schema, err := c.clientSR.SchemaByID(ctx, id)
 	if err != nil {
-		return SchemaInfo{}, fmt.Errorf("schema %d not found by registry: %s", id, err)
+		return sr.Schema{}, fmt.Errorf("schema %d not found by registry: %s", id, err)
 	}
-	return SchemaInfo{
-		ID:         id,
-		Type:       schema.Type,
-		Schema:     schema.Schema,
-		References: schema.References,
-	}, nil
+	return schema, nil
 }
 
 // GetLatestSchemaVersionForSchemaIDAndSubject gets the latest version of a schema by its global identifier scoped to the provided subject.
@@ -164,7 +151,7 @@ func (c *Client) GetLatestSchemaVersionForSchemaIDAndSubject(ctx context.Context
 }
 
 // GetSchemaBySubjectAndVersion returns the schema by its subject and optional version. A `nil` version returns the latest schema.
-func (c *Client) GetSchemaBySubjectAndVersion(ctx context.Context, subject string, version *int, includeDeleted bool) (SchemaInfo, error) {
+func (c *Client) GetSchemaBySubjectAndVersion(ctx context.Context, subject string, version *int, includeDeleted bool) (sr.SubjectSchema, error) {
 	if includeDeleted {
 		ctx = sr.WithParams(ctx, sr.ShowDeleted)
 	}
@@ -178,15 +165,10 @@ func (c *Client) GetSchemaBySubjectAndVersion(ctx context.Context, subject strin
 		schema, err = c.clientSR.SchemaByVersion(ctx, subject, -1)
 	}
 	if err != nil {
-		return SchemaInfo{}, err
+		return sr.SubjectSchema{}, err
 	}
 
-	return SchemaInfo{
-		ID:         schema.ID,
-		Type:       schema.Type,
-		Schema:     schema.Schema.Schema,
-		References: schema.References,
-	}, nil
+	return schema, nil
 }
 
 // GetMode returns the mode of the Schema Registry instance.
@@ -228,7 +210,7 @@ func (c *Client) CreateSchema(ctx context.Context, subject string, schema sr.Sch
 	return ss.ID, nil
 }
 
-type refWalkFn func(ctx context.Context, name string, info SchemaInfo) error
+type refWalkFn func(ctx context.Context, name string, info sr.Schema) error
 
 // WalkReferences goes through the provided schema info and for each reference
 // the provided closure is called recursively, which means each reference obtained
@@ -252,7 +234,7 @@ func (c *Client) walkReferencesTracked(ctx context.Context, seen map[string]int,
 		if err != nil {
 			return err
 		}
-		if err := fn(ctx, ref.Name, info); err != nil {
+		if err := fn(ctx, ref.Name, info.Schema); err != nil {
 			return err
 		}
 		seen[ref.Name] = ref.Version

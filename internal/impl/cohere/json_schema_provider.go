@@ -65,7 +65,7 @@ func (p *dynamicSchemaProvider) GetJSONSchema(ctx context.Context) (jsonSchema, 
 		return nil, fmt.Errorf("unable to load latest schema for subject %q: %w", p.subject, err)
 	}
 	var schema jsonSchema
-	if err := json.Unmarshal([]byte(info.Schema), &schema); err != nil {
+	if err := json.Unmarshal([]byte(info.Schema.Schema), &schema); err != nil {
 		return nil, fmt.Errorf("unable to parse json schema from schema with ID=%d", info.ID)
 	}
 	p.cached = schema

@@ -211,7 +211,7 @@ func (o *schemaRegistryOutput) Write(ctx context.Context, m *service.Message) er
 		return fmt.Errorf("failed to extract message bytes: %s", err)
 	}
 
-	var sd schemaDetails
+	var sd franz_sr.SubjectSchema
 	if err := json.Unmarshal(payload, &sd); err != nil {
 		return fmt.Errorf("failed to unmarshal schema details: %s", err)
 	}
@@ -249,13 +249,13 @@ func (o *schemaRegistryOutput) GetDestinationSchemaID(ctx context.Context, id in
 		return -1, fmt.Errorf("failed to get schema for ID %d and subject %q: %s", id, subject, err)
 	}
 
-	schema.ID = id
 	return o.getOrCreateSchemaID(
 		ctx,
-		schemaDetails{
-			SchemaInfo: schema,
-			Subject:    subject,
-			Version:    latestVersion,
+		franz_sr.SubjectSchema{
+			Subject: subject,
+			Version: latestVersion,
+			ID:      id,
+			Schema:  schema,
 		},
 	)
 }
@@ -270,69 +270,69 @@ type schemaLineageCacheKey struct {
 
 // getOrCreateSchemaID attempts to fetch the schema ID for the provided schema subject and payload from the cache or the
 // configured Schema Registry output if present. Otherwise, it creates it, caches it and returns the generated ID.
-func (o *schemaRegistryOutput) getOrCreateSchemaID(ctx context.Context, sd schemaDetails) (int, error) {
+func (o *schemaRegistryOutput) getOrCreateSchemaID(ctx context.Context, ss franz_sr.SubjectSchema) (int, error) {
 	key := schemaLineageCacheKey{
-		id:        sd.ID,
-		versionID: sd.Version,
-		subject:   sd.Subject,
+		id:        ss.ID,
+		versionID: ss.Version,
+		subject:   ss.Subject,
 	}
 	if destinationID, ok := o.schemaLineageCache.Load(key); ok {
 		return destinationID.(int), nil
 	}
 
 	if o.backfillDependencies {
-		if err := o.createSchemaDeps(ctx, sd, true); err != nil {
-			return 0, fmt.Errorf("failed to backfill dependencies for schema with subject %q and version %d: %s", sd.Subject, sd.Version, err)
+		if err := o.createSchemaDeps(ctx, ss, true); err != nil {
+			return 0, fmt.Errorf("failed to backfill dependencies for schema with subject %q and version %d: %s", ss.Subject, ss.Version, err)
 		}
 	}
 
-	return o.createSchema(ctx, key, sd)
+	return o.createSchema(ctx, key, ss)
 }
 
 // createSchemaDeps creates and caches all the dependencies of the current schema (both references and previous versions).
-func (o *schemaRegistryOutput) createSchemaDeps(ctx context.Context, sd schemaDetails, backfillPrevVersions bool) error {
+func (o *schemaRegistryOutput) createSchemaDeps(ctx context.Context, ss franz_sr.SubjectSchema, backfillPrevVersions bool) error {
 	key := schemaLineageCacheKey{
-		id:        sd.ID,
-		versionID: sd.Version,
-		subject:   sd.Subject,
+		id:        ss.ID,
+		versionID: ss.Version,
+		subject:   ss.Subject,
 	}
 	if _, ok := o.schemaLineageCache.Load(key); ok {
 		return nil
 	}
 
 	// Backfill references recursively.
-	for _, ref := range sd.References {
+	for _, ref := range ss.References {
 		schema, err := o.inputClient.GetSchemaBySubjectAndVersion(ctx, ref.Subject, &ref.Version, false)
 		if err != nil {
 			return fmt.Errorf("failed to get schema for subject %q with version %d: %s", ref.Subject, ref.Version, err)
 		}
 
-		if err := o.createSchemaDeps(ctx, schemaDetails{SchemaInfo: schema, Subject: ref.Subject, Version: ref.Version}, true); err != nil {
+		if err := o.createSchemaDeps(ctx, schema, true); err != nil {
 			return fmt.Errorf("failed to create schema dependencies: %s", err)
 		}
 	}
 
 	// Backfill previous schema versions in ascending order.
-	if sd.Version > 1 && backfillPrevVersions {
-		versions, err := o.inputClient.GetVersionsForSubject(ctx, sd.Subject, false)
+	if ss.Version > 1 && backfillPrevVersions {
+		versions, err := o.inputClient.GetVersionsForSubject(ctx, ss.Subject, false)
 		if err != nil {
-			return fmt.Errorf("failed to get schema versions for subject %q: %s", sd.Subject, err)
+			return fmt.Errorf("failed to get schema versions for subject %q: %s", ss.Subject, err)
 		}
 
 		slices.Sort(versions)
 		for _, version := range versions {
-			schema, err := o.inputClient.GetSchemaBySubjectAndVersion(ctx, sd.Subject, &version, false)
+			schema, err := o.inputClient.GetSchemaBySubjectAndVersion(ctx, ss.Subject, &version, false)
 			if err != nil {
-				return fmt.Errorf("failed to get schema for subject %q with version %d: %s", sd.Subject, version, err)
+				return fmt.Errorf("failed to get schema for subject %q with version %d: %s", ss.Subject, version, err)
 			}
 
-			if err := o.createSchemaDeps(ctx, schemaDetails{SchemaInfo: schema, Subject: sd.Subject, Version: version}, false); err != nil {
+			if err := o.createSchemaDeps(ctx, schema, false); err != nil {
 				return fmt.Errorf("failed to create schema dependencies: %s", err)
 			}
 		}
 	}
 
-	if _, err := o.createSchema(ctx, key, sd); err != nil {
+	if _, err := o.createSchema(ctx, key, ss); err != nil {
 		return fmt.Errorf("failed to create schema: %s", err)
 	}
 
@@ -340,24 +340,18 @@ func (o *schemaRegistryOutput) createSchemaDeps(ctx context.Context, sd schemaDe
 }
 
 // createSchema creates and caches the provided schema.
-func (o *schemaRegistryOutput) createSchema(ctx context.Context, key schemaLineageCacheKey, sd schemaDetails) (int, error) {
+func (o *schemaRegistryOutput) createSchema(ctx context.Context, key schemaLineageCacheKey, ss franz_sr.SubjectSchema) (int, error) {
 	if destinationID, ok := o.schemaLineageCache.Load(key); ok {
 		return destinationID.(int), nil
-	}
-
-	schema := franz_sr.Schema{
-		Type:       sd.Type,
-		Schema:     sd.Schema,
-		References: sd.References,
 	}
 
 	// TODO: Use `CreateSchemaWithID()` when `translate_ids: false` after https://github.com/twmb/franz-go/pull/849
 	// is merged.
 
 	// This should return the destination ID without an error if the schema already exists.
-	destinationID, err := o.client.CreateSchema(ctx, sd.Subject, schema)
+	destinationID, err := o.client.CreateSchema(ctx, ss.Subject, ss.Schema)
 	if err != nil {
-		return 0, fmt.Errorf("failed to create schema for subject %q and version %d: %s", sd.Subject, sd.Version, err)
+		return 0, fmt.Errorf("failed to create schema for subject %q and version %d: %s", ss.Subject, ss.Version, err)
 	}
 
 	// Cache the schema along with the destination ID.

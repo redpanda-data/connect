@@ -23,6 +23,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	franz_sr "github.com/twmb/franz-go/pkg/sr"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
@@ -50,7 +51,7 @@ func TestSchemaRegistryClient_GetSchemaBySubjectAndVersion(t *testing.T) {
 		name                    string
 		schemaRegistryServerURL string
 		args                    args
-		wantResPayload          sr.SchemaInfo
+		wantResPayload          franz_sr.SubjectSchema
 		wantErr                 assert.ErrorAssertionFunc
 	}{
 		{
@@ -60,9 +61,9 @@ func TestSchemaRegistryClient_GetSchemaBySubjectAndVersion(t *testing.T) {
 				subject: "foo",
 				version: nil,
 			},
-			wantResPayload: sr.SchemaInfo{
+			wantResPayload: franz_sr.SubjectSchema{
 				ID:     3,
-				Schema: testSchema,
+				Schema: franz_sr.Schema{Schema: testSchema},
 			},
 			wantErr: assert.NoError,
 		},
@@ -73,9 +74,9 @@ func TestSchemaRegistryClient_GetSchemaBySubjectAndVersion(t *testing.T) {
 				subject: "main/common",
 				version: nil,
 			},
-			wantResPayload: sr.SchemaInfo{
+			wantResPayload: franz_sr.SubjectSchema{
 				ID:     3,
-				Schema: testSchema,
+				Schema: franz_sr.Schema{Schema: testSchema},
 			},
 			wantErr: assert.NoError,
 		},
@@ -86,9 +87,9 @@ func TestSchemaRegistryClient_GetSchemaBySubjectAndVersion(t *testing.T) {
 				subject: "foo",
 				version: &version,
 			},
-			wantResPayload: sr.SchemaInfo{
+			wantResPayload: franz_sr.SubjectSchema{
 				ID:     3,
-				Schema: testSchema,
+				Schema: franz_sr.Schema{Schema: testSchema},
 			},
 			wantErr: assert.NoError,
 		},
@@ -99,9 +100,9 @@ func TestSchemaRegistryClient_GetSchemaBySubjectAndVersion(t *testing.T) {
 				subject: "main/common",
 				version: &version,
 			},
-			wantResPayload: sr.SchemaInfo{
+			wantResPayload: franz_sr.SubjectSchema{
 				ID:     3,
-				Schema: testSchema,
+				Schema: franz_sr.Schema{Schema: testSchema},
 			},
 			wantErr: assert.NoError,
 		},
@@ -114,7 +115,6 @@ func TestSchemaRegistryClient_GetSchemaBySubjectAndVersion(t *testing.T) {
 				}
 				return nil, errors.New("nope")
 			})
-
 			c, err := sr.NewClient(urlStr, noopReqSign, nil, service.MockResources())
 			require.NoError(t, err)
 

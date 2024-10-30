@@ -20,6 +20,8 @@ import (
 	"sort"
 	"sync"
 
+	franz_sr "github.com/twmb/franz-go/pkg/sr"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
@@ -106,7 +108,7 @@ type schemaRegistryInput struct {
 	subjects  []string
 	subject   string
 	versions  []int
-	schemas   []schemaDetails
+	schemas   []franz_sr.SubjectSchema
 	mgr       *service.Resources
 }
 
@@ -186,7 +188,7 @@ func (i *schemaRegistryInput) Connect(ctx context.Context) error {
 	}
 
 	if i.fetchInOrder {
-		schemas := map[int][]schemaDetails{}
+		schemas := map[int][]franz_sr.SubjectSchema{}
 		for _, subject := range i.subjects {
 			var versions []int
 			if versions, err = i.client.GetVersionsForSubject(ctx, subject, i.includeDeleted); err != nil {
@@ -198,18 +200,12 @@ func (i *schemaRegistryInput) Connect(ctx context.Context) error {
 			}
 
 			for _, version := range versions {
-				var schema sr.SchemaInfo
+				var schema franz_sr.SubjectSchema
 				if schema, err = i.client.GetSchemaBySubjectAndVersion(ctx, subject, &version, i.includeDeleted); err != nil {
 					return fmt.Errorf("failed to fetch schema version %d for subject %q: %s", version, subject, err)
 				}
 
-				si := schemaDetails{
-					SchemaInfo: schema,
-					Subject:    subject,
-					Version:    version,
-				}
-
-				schemas[schema.ID] = append(schemas[schema.ID], si)
+				schemas[schema.ID] = append(schemas[schema.ID], schema)
 			}
 		}
 
@@ -220,7 +216,7 @@ func (i *schemaRegistryInput) Connect(ctx context.Context) error {
 		}
 		sort.Ints(schemaIDs)
 
-		i.schemas = make([]schemaDetails, 0, len(schemas))
+		i.schemas = make([]franz_sr.SubjectSchema, 0, len(schemas))
 		for _, id := range schemaIDs {
 			i.schemas = append(i.schemas, schemas[id]...)
 		}
@@ -238,7 +234,7 @@ func (i *schemaRegistryInput) Read(ctx context.Context) (*service.Message, servi
 		return nil, nil, service.ErrNotConnected
 	}
 
-	var si schemaDetails
+	var si franz_sr.SubjectSchema
 	if !i.fetchInOrder {
 		for {
 			if len(i.subjects) == 0 && len(i.versions) == 0 {
@@ -271,15 +267,10 @@ func (i *schemaRegistryInput) Read(ctx context.Context) (*service.Message, servi
 			i.versions = i.versions[1:]
 		}()
 
-		var schema sr.SchemaInfo
 		var err error
-		if schema, err = i.client.GetSchemaBySubjectAndVersion(ctx, i.subject, &version, i.includeDeleted); err != nil {
+		if si, err = i.client.GetSchemaBySubjectAndVersion(ctx, i.subject, &version, i.includeDeleted); err != nil {
 			return nil, nil, fmt.Errorf("failed to fetch schema version %d for subject %q: %s", version, i.subject, err)
 		}
-
-		si.SchemaInfo = schema
-		si.Subject = i.subject
-		si.Version = version
 	} else {
 		if len(i.schemas) == 0 {
 			return nil, nil, service.ErrEndOfInput

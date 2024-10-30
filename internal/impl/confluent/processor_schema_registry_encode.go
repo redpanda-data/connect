@@ -329,11 +329,11 @@ func (s *schemaRegistryEncoder) getLatestEncoder(subject string) (schemaEncoder,
 	var encoder schemaEncoder
 	switch resPayload.Type {
 	case franz_sr.TypeProtobuf:
-		encoder, err = s.getProtobufEncoder(ctx, resPayload)
+		encoder, err = s.getProtobufEncoder(ctx, resPayload.Schema)
 	case franz_sr.TypeJSON:
-		encoder, err = s.getJSONEncoder(ctx, resPayload)
+		encoder, err = s.getJSONEncoder(ctx, resPayload.Schema)
 	default:
-		encoder, err = s.getAvroEncoder(ctx, resPayload)
+		encoder, err = s.getAvroEncoder(ctx, resPayload.Schema)
 	}
 	if err != nil {
 		return nil, 0, err
