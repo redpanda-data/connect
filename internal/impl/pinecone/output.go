@@ -46,7 +46,8 @@ func outputSpec() *service.ConfigSpec {
 			service.NewOutputMaxInFlightField(),
 			service.NewBatchPolicyField(poFieldBatching),
 			service.NewStringField(poFieldHost).
-				Description("The host for the Pinecone index."),
+				Description("The host for the Pinecone index.").
+				LintRule(`root = if this.has_prefix("https://") { ["host field must be a FQDN not a URL (remove the https:// prefix)"] }`),
 			service.NewStringField(poFieldAPIKey).
 				Secret().
 				Description("The Pinecone api key."),
