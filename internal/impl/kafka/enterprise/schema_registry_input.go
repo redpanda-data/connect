@@ -96,8 +96,9 @@ func init() {
 }
 
 type schemaRegistryInput struct {
-	subjectFilter *regexp.Regexp
-	fetchInOrder  bool
+	subjectFilter  *regexp.Regexp
+	fetchInOrder   bool
+	includeDeleted bool
 
 	client    *sr.Client
 	connMut   sync.Mutex
@@ -123,14 +124,8 @@ func inputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (i *sc
 		return nil, fmt.Errorf("failed to parse URL: %s", err)
 	}
 
-	var includeDeleted bool
-	if includeDeleted, err = pConf.FieldBool(sriFieldIncludeDeleted); err != nil {
+	if i.includeDeleted, err = pConf.FieldBool(sriFieldIncludeDeleted); err != nil {
 		return
-	}
-	if includeDeleted {
-		q := srURL.Query()
-		q.Add("deleted", "true")
-		srURL.RawQuery = q.Encode()
 	}
 
 	if i.fetchInOrder, err = pConf.FieldBool(sriFieldFetchInOrder); err != nil {
@@ -178,7 +173,7 @@ func (i *schemaRegistryInput) Connect(ctx context.Context) error {
 	i.connMut.Lock()
 	defer i.connMut.Unlock()
 
-	subjects, err := i.client.GetSubjects(ctx)
+	subjects, err := i.client.GetSubjects(ctx, i.includeDeleted)
 	if err != nil {
 		return fmt.Errorf("failed to fetch subjects: %s", err)
 	}
@@ -194,7 +189,7 @@ func (i *schemaRegistryInput) Connect(ctx context.Context) error {
 		schemas := map[int][]schemaDetails{}
 		for _, subject := range i.subjects {
 			var versions []int
-			if versions, err = i.client.GetVersionsForSubject(ctx, subject); err != nil {
+			if versions, err = i.client.GetVersionsForSubject(ctx, subject, i.includeDeleted); err != nil {
 				return fmt.Errorf("failed to fetch versions for subject %q: %s", subject, err)
 			}
 			if len(versions) == 0 {
@@ -204,7 +199,7 @@ func (i *schemaRegistryInput) Connect(ctx context.Context) error {
 
 			for _, version := range versions {
 				var schema sr.SchemaInfo
-				if schema, err = i.client.GetSchemaBySubjectAndVersion(ctx, subject, &version); err != nil {
+				if schema, err = i.client.GetSchemaBySubjectAndVersion(ctx, subject, &version, i.includeDeleted); err != nil {
 					return fmt.Errorf("failed to fetch schema version %d for subject %q: %s", version, subject, err)
 				}
 
@@ -257,7 +252,7 @@ func (i *schemaRegistryInput) Read(ctx context.Context) (*service.Message, servi
 			i.subject = i.subjects[0]
 
 			var err error
-			if i.versions, err = i.client.GetVersionsForSubject(ctx, i.subject); err != nil {
+			if i.versions, err = i.client.GetVersionsForSubject(ctx, i.subject, i.includeDeleted); err != nil {
 				return nil, nil, fmt.Errorf("failed to fetch versions for subject %q: %s", i.subject, err)
 			}
 
@@ -278,7 +273,7 @@ func (i *schemaRegistryInput) Read(ctx context.Context) (*service.Message, servi
 
 		var schema sr.SchemaInfo
 		var err error
-		if schema, err = i.client.GetSchemaBySubjectAndVersion(ctx, i.subject, &version); err != nil {
+		if schema, err = i.client.GetSchemaBySubjectAndVersion(ctx, i.subject, &version, i.includeDeleted); err != nil {
 			return nil, nil, fmt.Errorf("failed to fetch schema version %d for subject %q: %s", version, i.subject, err)
 		}
 

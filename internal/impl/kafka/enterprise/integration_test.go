@@ -30,13 +30,13 @@ import (
 	"github.com/twmb/franz-go/pkg/kerr"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
+	franz_sr "github.com/twmb/franz-go/pkg/sr"
 	"google.golang.org/protobuf/encoding/protojson"
 
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
-	"github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka/enterprise"
 	"github.com/redpanda-data/connect/v4/internal/protoconnect"
 )
@@ -381,14 +381,6 @@ func deleteSubject(t *testing.T, port int, subject string, hardDelete bool) {
 	require.NoError(t, resp.Body.Close())
 }
 
-// schemaDetails is an alternative to enterprise.schemaDetails which does not omit the Subject field when deserialising
-// from JSON.
-type schemaDetails struct {
-	sr.SchemaInfo
-	Subject string
-	Version int
-}
-
 func TestSchemaRegistryIntegration(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
@@ -517,13 +509,11 @@ output:
 			require.NoError(t, resp.Body.Close())
 			require.Equal(t, http.StatusOK, resp.StatusCode)
 
-			var sd schemaDetails
+			var sd franz_sr.SubjectSchema
 			require.NoError(t, json.Unmarshal(body, &sd))
 			assert.Equal(t, subject, sd.Subject)
 			assert.Equal(t, 1, sd.Version)
-			s, err := json.Marshal(sd.Schema)
-			require.NoError(t, err)
-			assert.JSONEq(t, test.schema, string(s))
+			assert.JSONEq(t, test.schema, sd.Schema.Schema)
 
 			if test.schemaWithReference != "" {
 				resp, err = http.DefaultClient.Get(fmt.Sprintf("http://localhost:%d/subjects/%s/versions/1", destinationPort, test.extraSubject))
@@ -533,13 +523,11 @@ output:
 				require.NoError(t, resp.Body.Close())
 				require.Equal(t, http.StatusOK, resp.StatusCode)
 
-				var sd schemaDetails
+				var sd franz_sr.SubjectSchema
 				require.NoError(t, json.Unmarshal(body, &sd))
 				assert.Equal(t, test.extraSubject, sd.Subject)
 				assert.Equal(t, 1, sd.Version)
-				s, err := json.Marshal(sd.Schema)
-				require.NoError(t, err)
-				assert.JSONEq(t, test.schema, string(s))
+				assert.JSONEq(t, test.schemaWithReference, sd.Schema.Schema)
 			}
 		})
 	}
@@ -604,7 +592,7 @@ output:
 		subject            string
 		version            int
 		expectedID         int
-		expectedReferences []sr.SchemaReference
+		expectedReferences []franz_sr.SchemaReference
 	}{
 		{
 			subject:    "foo",
@@ -620,7 +608,7 @@ output:
 			subject:            "bar",
 			version:            1,
 			expectedID:         4,
-			expectedReferences: []sr.SchemaReference{{Name: "foo", Subject: "foo", Version: 2}},
+			expectedReferences: []franz_sr.SchemaReference{{Name: "foo", Subject: "foo", Version: 2}},
 		},
 	}
 
@@ -632,7 +620,7 @@ output:
 			require.NoError(t, err)
 			require.Equal(t, http.StatusOK, resp.StatusCode)
 
-			var sd schemaDetails
+			var sd franz_sr.SubjectSchema
 			require.NoError(t, json.Unmarshal(body, &sd))
 			require.NoError(t, resp.Body.Close())
 

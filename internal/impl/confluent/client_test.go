@@ -118,7 +118,7 @@ func TestSchemaRegistryClient_GetSchemaBySubjectAndVersion(t *testing.T) {
 			c, err := sr.NewClient(urlStr, noopReqSign, nil, service.MockResources())
 			require.NoError(t, err)
 
-			gotResPayload, err := c.GetSchemaBySubjectAndVersion(ctx, tt.args.subject, tt.args.version)
+			gotResPayload, err := c.GetSchemaBySubjectAndVersion(ctx, tt.args.subject, tt.args.version, false)
 			if !tt.wantErr(t, err, fmt.Sprintf("GetSchemaBySubjectAndVersion(%v, %v, %v)", ctx, tt.args.subject, tt.args.version)) {
 				return
 			}

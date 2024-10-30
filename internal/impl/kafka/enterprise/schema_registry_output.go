@@ -20,8 +20,9 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/redpanda-data/benthos/v4/public/service"
+	franz_sr "github.com/twmb/franz-go/pkg/sr"
 
+	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
 )
 
@@ -29,7 +30,6 @@ const (
 	sroFieldURL                  = "url"
 	sroFieldSubject              = "subject"
 	sroFieldBackfillDependencies = "backfill_dependencies"
-	sroFieldTranslateIDs         = "translate_ids"
 	sroFieldInputResource        = "input_resource"
 	sroFieldTLS                  = "tls"
 
@@ -72,7 +72,6 @@ func schemaRegistryOutputConfigFields() []*service.ConfigField {
 		service.NewStringField(sroFieldURL).Description("The base URL of the schema registry service."),
 		service.NewInterpolatedStringField(sroFieldSubject).Description("Subject."),
 		service.NewBoolField(sroFieldBackfillDependencies).Description("Backfill schema references and previous versions.").Default(true).Advanced(),
-		service.NewBoolField(sroFieldTranslateIDs).Description("Translate schema IDs.").Default(true).Advanced(),
 		service.NewStringField(sroFieldInputResource).
 			Description("The label of the schema_registry input from which to read source schemas.").
 			Default(sriResourceDefaultLabel).
@@ -102,7 +101,6 @@ func init() {
 type schemaRegistryOutput struct {
 	subject              *service.InterpolatedString
 	backfillDependencies bool
-	translateIDs         bool
 	inputResource        string
 
 	client      *sr.Client
@@ -135,11 +133,7 @@ func outputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (o *s
 		return
 	}
 
-	if o.translateIDs, err = pConf.FieldBool(sroFieldTranslateIDs); err != nil {
-		return
-	}
-
-	if o.backfillDependencies || o.translateIDs {
+	if o.backfillDependencies {
 		if o.inputResource, err = pConf.FieldString(sroFieldInputResource); err != nil {
 			return nil, err
 		}
@@ -188,7 +182,7 @@ func (o *schemaRegistryOutput) Connect(ctx context.Context) error {
 		return fmt.Errorf("schema registry instance mode must be set to READWRITE or IMPORT instead of %q", mode)
 	}
 
-	if o.backfillDependencies || o.translateIDs {
+	if o.backfillDependencies {
 		if res, ok := o.mgr.GetGeneric(o.inputResource); ok {
 			o.inputClient = res.(*schemaRegistryInput).client
 		} else {
@@ -245,14 +239,14 @@ func (o *schemaRegistryOutput) Close(_ context.Context) error {
 // GetDestinationSchemaID attempts to fetch the schema ID for the provided source schema ID and subject. It will first
 // migrate it to the destination Schema Registry if it doesn't exist there yet.
 func (o *schemaRegistryOutput) GetDestinationSchemaID(ctx context.Context, id int, subject string) (int, error) {
-	schema, err := o.inputClient.GetSchemaByIDAndSubject(ctx, id, subject)
+	schema, err := o.inputClient.GetSchemaByID(ctx, id, false)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get schema for ID %d and subject %q: %s", id, subject, err)
+		return -1, fmt.Errorf("failed to get schema for ID %d and subject %q: %s", id, subject, err)
 	}
 
 	latestVersion, err := o.inputClient.GetLatestSchemaVersionForSchemaIDAndSubject(ctx, id, subject)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get schema for ID %d and subject %q: %s", id, subject, err)
+		return -1, fmt.Errorf("failed to get schema for ID %d and subject %q: %s", id, subject, err)
 	}
 
 	schema.ID = id
@@ -308,7 +302,7 @@ func (o *schemaRegistryOutput) createSchemaDeps(ctx context.Context, sd schemaDe
 
 	// Backfill references recursively.
 	for _, ref := range sd.References {
-		schema, err := o.inputClient.GetSchemaBySubjectAndVersion(ctx, ref.Subject, &ref.Version)
+		schema, err := o.inputClient.GetSchemaBySubjectAndVersion(ctx, ref.Subject, &ref.Version, false)
 		if err != nil {
 			return fmt.Errorf("failed to get schema for subject %q with version %d: %s", ref.Subject, ref.Version, err)
 		}
@@ -320,14 +314,14 @@ func (o *schemaRegistryOutput) createSchemaDeps(ctx context.Context, sd schemaDe
 
 	// Backfill previous schema versions in ascending order.
 	if sd.Version > 1 && backfillPrevVersions {
-		versions, err := o.inputClient.GetVersionsForSubject(ctx, sd.Subject)
+		versions, err := o.inputClient.GetVersionsForSubject(ctx, sd.Subject, false)
 		if err != nil {
 			return fmt.Errorf("failed to get schema versions for subject %q: %s", sd.Subject, err)
 		}
 
 		slices.Sort(versions)
 		for _, version := range versions {
-			schema, err := o.inputClient.GetSchemaBySubjectAndVersion(ctx, sd.Subject, &version)
+			schema, err := o.inputClient.GetSchemaBySubjectAndVersion(ctx, sd.Subject, &version, false)
 			if err != nil {
 				return fmt.Errorf("failed to get schema for subject %q with version %d: %s", sd.Subject, version, err)
 			}
@@ -351,22 +345,17 @@ func (o *schemaRegistryOutput) createSchema(ctx context.Context, key schemaLinea
 		return destinationID.(int), nil
 	}
 
-	if o.translateIDs {
-		// Remove the ID from the schema to ensure that a new ID is allocated for it.
-		sd.ID = 0
-
-		// TODO: Should we also remove the version ID? I guess it's unlikely the new schemas we're trying to push are
-		// compatible with any existing ones anyway, so it's probably better to just emit an error if the version ID
-		// exists already.
+	schema := franz_sr.Schema{
+		Type:       sd.Type,
+		Schema:     sd.Schema,
+		References: sd.References,
 	}
 
-	payload, err := json.Marshal(sd)
-	if err != nil {
-		return 0, fmt.Errorf("failed to marshal schema with subject %q and version %d: %s", sd.Subject, sd.Version, err)
-	}
+	// TODO: Use `CreateSchemaWithID()` when `translate_ids: false` after https://github.com/twmb/franz-go/pull/849
+	// is merged.
 
 	// This should return the destination ID without an error if the schema already exists.
-	destinationID, err := o.client.CreateSchema(ctx, sd.Subject, payload)
+	destinationID, err := o.client.CreateSchema(ctx, sd.Subject, schema)
 	if err != nil {
 		return 0, fmt.Errorf("failed to create schema for subject %q and version %d: %s", sd.Subject, sd.Version, err)
 	}

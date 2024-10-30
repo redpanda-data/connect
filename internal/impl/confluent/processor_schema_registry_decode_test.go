@@ -278,12 +278,12 @@ func TestSchemaRegistryDecodeAvro(t *testing.T) {
 		{
 			name:        "non-existing schema",
 			input:       "\x00\x00\x00\x00\x06\x06foo\x02\x06foo\x06bar",
-			errContains: "schema '6' not found by registry",
+			errContains: "schema 6 not found by registry: not found",
 		},
 		{
 			name:        "server fails",
 			input:       "\x00\x00\x00\x00\x05\x06foo\x02\x06foo\x06bar",
-			errContains: "request failed for schema '5'",
+			errContains: "schema 5 not found by registry: nope",
 		},
 	}
 
@@ -381,12 +381,12 @@ func TestSchemaRegistryDecodeAvroRawJson(t *testing.T) {
 		{
 			name:        "non-existing schema",
 			input:       "\x00\x00\x00\x00\x06\x06foo\x02\x06foo\x06bar",
-			errContains: "schema '6' not found by registry",
+			errContains: "schema 6 not found by registry: not found",
 		},
 		{
 			name:        "server fails",
 			input:       "\x00\x00\x00\x00\x05\x06foo\x02\x06foo\x06bar",
-			errContains: "request failed for schema '5'",
+			errContains: "schema 5 not found by registry: nope",
 		},
 	}
 
