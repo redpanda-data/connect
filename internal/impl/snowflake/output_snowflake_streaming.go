@@ -96,8 +96,75 @@ NOTE: There is a limit of 10,000 streams per table - if using more than 10k stre
 				Optional().
 				Advanced(),
 		).LintRule(`root = match {
-  this.exists("private_key") && this.exists("private_key_file") => [ "both ` + "`private_key`" + ` and ` + "`private_key_file`" + ` can't be set simultaneously" ],
-}`)
+  this.exists("private_key") && this.exists("private_key_file") => [ "both `+"`private_key`"+` and `+"`private_key_file`"+` can't be set simultaneously" ],
+}`).
+		Example(
+			"Ingesting data from Redpanda",
+			`How to ingest data from Redpanda with consumer groups, decode the schema using the schema registry, then write the corresponding data into Snowflake.`,
+			`
+input:
+  kafka_franz:
+    seed_brokers: ["redpanda.example.com:9092"]
+    topics: ["my_topic_going_to_snow"]
+    consumer_group: "redpanda_connect_to_snowflake"
+    tls: {enabled: true}
+    sasl:
+      - mechanism: SCRAM-SHA-256
+        username: MY_USER_NAME
+        password: "${TODO}"
+pipeline:
+  processors:
+    - schema_registry_decode:
+        url: "redpanda.example.com:8081"
+        basic_auth:
+          enabled: true
+          username: MY_USER_NAME
+          password: "${TODO}"
+output:
+  snowflake_streaming:
+    account: "MYSNOW-ACCOUNT"
+    user: MYUSER
+    role: ACCOUNTADMIN
+    database: "MYDATABASE"
+    schema: "PUBLIC"
+    table: "MYTABLE"
+    private_key_file: "my/private/key.p8"
+    # By default there is only a single channel per output table allowed
+    # if we want to have multiple Redpanda Connect streams writing data
+    # then we need a unique channel prefix per stream. We'll use the host
+    # name to get unique prefixes in this example.
+    channel_prefix: "snowflake-channel-for-${HOST}"`,
+		).
+		Example(
+			"HTTP Sidecar to push data to Snowflake",
+			`This example demonstrates how to create an HTTP server input that can recieve HTTP PUT requests
+with JSON payloads, that are buffered locally then written to Snowflake in batches.
+
+NOTE: This example uses a buffer to respond to the HTTP request immediately, so it's possible that failures to deliver data could result in data loss.
+See the documentation about xref:components:buffers/memory.adoc[buffers] for more information, or remove the buffer entirely to respond to the HTTP request only once the data is written to Snowflake.`,
+			`
+input:
+  http_server:
+    path: /snowflake
+buffer:
+  memory:
+    # Max inflight data before applying backpressure
+    limit: 524288000 # 50MiB
+    # Batching policy, influences how large the generated files sent to Snowflake are
+    batch_policy:
+      enabled: true
+      byte_size: 33554432 # 32MiB
+      period: "10s"
+output:
+  snowflake_streaming:
+    account: "MYSNOW-ACCOUNT"
+    user: MYUSER
+    role: ACCOUNTADMIN
+    database: "MYDATABASE"
+    schema: "PUBLIC"
+    table: "MYTABLE"
+    private_key_file: "my/private/key.p8"`,
+		)
 }
 
 func init() {
