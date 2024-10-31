@@ -89,9 +89,9 @@ func Test_secretManager_lookup(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			parsedUrl, err := url.Parse(tt.args.url)
+			parsedURL, err := url.Parse(tt.args.url)
 			require.NoError(t, err)
-			loookup, err := newSecretManager(context.Background(), slog.Default(), parsedUrl, func(ctx context.Context, logger *slog.Logger, url *url.URL) (secretAPI, error) {
+			loookup, err := newSecretManager(context.Background(), slog.Default(), parsedURL, func(ctx context.Context, logger *slog.Logger, url *url.URL) (secretAPI, error) {
 				return &fakeSecretManager{
 					secrets: tt.args.secrets,
 				}, nil

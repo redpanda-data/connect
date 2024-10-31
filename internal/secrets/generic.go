@@ -53,7 +53,7 @@ func (s *secretManager) lookup(_ context.Context, key string) (string, bool) {
 		return value, true
 	}
 
-	return getJsonValue(value, parts[1])
+	return getJSONValue(value, parts[1])
 }
 
 func newSecretManager(ctx context.Context, logger *slog.Logger, url *url.URL, createSecretsManagerFn createSecretsManagerFn) (LookupFn, error) {
@@ -73,7 +73,7 @@ func trimLeftSlash(path string) string {
 	return strings.TrimPrefix(path, "/")
 }
 
-func getJsonValue(json string, field string) (string, bool) {
+func getJSONValue(json string, field string) (string, bool) {
 	result := gjson.Get(json, field)
 	return result.String(), result.Exists()
 }
