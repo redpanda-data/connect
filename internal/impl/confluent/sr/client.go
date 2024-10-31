@@ -115,8 +115,6 @@ func NewClient(
 
 // GetSchemaByID gets a schema by its global identifier.
 func (c *Client) GetSchemaByID(ctx context.Context, id int, includeDeleted bool) (sr.Schema, error) {
-	// TODO: Maybe consider adding a `SchemaByIDAndSubject()` API which passes the subject as part of the request query.
-
 	if includeDeleted {
 		ctx = sr.WithParams(ctx, sr.ShowDeleted)
 	}
@@ -126,6 +124,11 @@ func (c *Client) GetSchemaByID(ctx context.Context, id int, includeDeleted bool)
 		return sr.Schema{}, fmt.Errorf("schema %d not found by registry: %s", id, err)
 	}
 	return schema, nil
+}
+
+// GetSchemaByIDAndSubject gets a schema by its global identifier.
+func (c *Client) GetSchemaByIDAndSubject(ctx context.Context, id int, subject string, includeDeleted bool) (sr.Schema, error) {
+	return c.GetSchemaByID(sr.WithParams(ctx, sr.Subject(subject)), id, includeDeleted)
 }
 
 // GetLatestSchemaVersionForSchemaIDAndSubject gets the latest version of a schema by its global identifier scoped to the provided subject.

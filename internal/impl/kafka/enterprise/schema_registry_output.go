@@ -239,7 +239,7 @@ func (o *schemaRegistryOutput) Close(_ context.Context) error {
 // GetDestinationSchemaID attempts to fetch the schema ID for the provided source schema ID and subject. It will first
 // migrate it to the destination Schema Registry if it doesn't exist there yet.
 func (o *schemaRegistryOutput) GetDestinationSchemaID(ctx context.Context, id int, subject string) (int, error) {
-	schema, err := o.inputClient.GetSchemaByID(ctx, id, false)
+	schema, err := o.inputClient.GetSchemaByIDAndSubject(ctx, id, subject, false)
 	if err != nil {
 		return -1, fmt.Errorf("failed to get schema for ID %d and subject %q: %s", id, subject, err)
 	}
