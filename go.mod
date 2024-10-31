@@ -29,6 +29,7 @@ require (
 	github.com/authzed/authzed-go v1.0.0
 	github.com/authzed/grpcutil v0.0.0-20240123194739-2ea1e3d2d98b
 	github.com/aws/aws-lambda-go v1.47.0
+	github.com/aws/aws-sdk-go v1.50.36
 	github.com/aws/aws-sdk-go-v2 v1.30.4
 	github.com/aws/aws-sdk-go-v2/config v1.27.27
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.27
@@ -116,6 +117,7 @@ require (
 	github.com/testcontainers/testcontainers-go/modules/ollama v0.32.0
 	github.com/testcontainers/testcontainers-go/modules/qdrant v0.32.0
 	github.com/tetratelabs/wazero v1.7.3
+	github.com/tidwall/gjson v1.18.0
 	github.com/timeplus-io/proton-go-driver/v2 v2.0.17
 	github.com/trinodb/trino-go-client v0.315.0
 	github.com/twmb/franz-go v1.17.1
@@ -161,6 +163,8 @@ require (
 	github.com/onsi/gomega v1.34.2 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
 	github.com/samber/lo v1.47.0 // indirect
+	github.com/tidwall/match v1.1.1 // indirect
+	github.com/tidwall/pretty v1.2.1 // indirect
 )
 
 require (
