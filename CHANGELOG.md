@@ -14,6 +14,10 @@ All notable changes to this project will be documented in this file.
 - New CLI flag `--secrets` added. (@Jeffail)
 - New CLI flag `--disable-telemetry` added. (@Jeffail)
 
+### Fixed
+
+- The `kafka`, `kafka_franz` and `redpanda_migrator` outputs no longer waste CPU for large batches. (@rockwotj)
+
 ### Changed
 
 - The `aws_sqs` output field `url` now supports interpolation functions. (@rockwotj)
