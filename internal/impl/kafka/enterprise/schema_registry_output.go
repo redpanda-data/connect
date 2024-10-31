@@ -38,7 +38,7 @@ const (
 
 //------------------------------------------------------------------------------
 
-func outputSpec() *service.ConfigSpec {
+func schemaRegistryOutputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Beta().
 		Version("4.32.2").
@@ -84,7 +84,7 @@ func schemaRegistryOutputConfigFields() []*service.ConfigField {
 }
 
 func init() {
-	err := service.RegisterOutput("schema_registry", outputSpec(),
+	err := service.RegisterOutput("schema_registry", schemaRegistryOutputSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.Output, maxInFlight int, err error) {
 			if maxInFlight, err = conf.FieldMaxInFlight(); err != nil {
 				return
@@ -351,7 +351,7 @@ func (o *schemaRegistryOutput) createSchema(ctx context.Context, key schemaLinea
 	// This should return the destination ID without an error if the schema already exists.
 	destinationID, err := o.client.CreateSchema(ctx, ss.Subject, ss.Schema)
 	if err != nil {
-		return 0, fmt.Errorf("failed to create schema for subject %q and version %d: %s", ss.Subject, ss.Version, err)
+		return -1, fmt.Errorf("failed to create schema for subject %q and version %d: %s", ss.Subject, ss.Version, err)
 	}
 
 	// Cache the schema along with the destination ID.
