@@ -8,10 +8,14 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - New `pg_stream` input supporting change data capture (CDC) from PostgreSQL (@le-vlad)
+- Field `metadata_max_age` added to the `redpanda_migrator_offsets` output. (@mihaitodor)
 
 ### Changed
 
 - `snowflake_streaming` with `schema_evolution.enabled` set to true can now autocreate tables.
+- Fields `translate_schema_ids` and `schema_registry_output_resource` added to the `redpanda_migrator` output. (@mihaitodor)
+- Fields `backfill_dependencies` and `input_resource` added to the `schema_registry` output. (@mihaitodor)
+- The `schema_registry` input and output and the `schema_registry_encode` and `schema_registry_decode` processors now use the `github.com/twmb/franz-go/pkg/sr` SchemaRegistry client. (@mihaitodor)
 
 ## 4.39.0 - 2024-11-07
 
