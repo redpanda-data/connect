@@ -18,13 +18,10 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/parquet-go/parquet-go"
-
-	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming/int128"
 )
 
 type dataTransformer struct {
 	converter dataConverter
-	stats     *statsBuffer
 	column    *columnMetadata
 	buf       typedBuffer
 	name      string
@@ -213,64 +210,11 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, []*dataT
 		transformers[idx] = &dataTransformer{
 			name:      name,
 			converter: converter,
-			stats:     &statsBuffer{columnID: id},
 			column:    &column,
 			buf:       buffer,
 		}
 	}
 	return parquet.NewSchema("bdec", groupNode), transformers, typeMetadata, nil
-}
-
-type statsBuffer struct {
-	columnID               int
-	minIntVal, maxIntVal   int128.Num
-	minRealVal, maxRealVal float64
-	minStrVal, maxStrVal   []byte
-	maxStrLen              int
-	nullCount              int64
-	first                  bool
-}
-
-func (s *statsBuffer) Reset() {
-	s.first = true
-	s.minIntVal = int128.FromInt64(0)
-	s.maxIntVal = int128.FromInt64(0)
-	s.minRealVal = 0
-	s.maxRealVal = 0
-	s.minStrVal = nil
-	s.maxStrVal = nil
-	s.maxStrLen = 0
-	s.nullCount = 0
-}
-
-func computeColumnEpInfo(stats []*dataTransformer) map[string]fileColumnProperties {
-	info := map[string]fileColumnProperties{}
-	for _, transformer := range stats {
-		stat := transformer.stats
-		var minStrVal *string = nil
-		if stat.minStrVal != nil {
-			s := truncateBytesAsHex(stat.minStrVal, false)
-			minStrVal = &s
-		}
-		var maxStrVal *string = nil
-		if stat.maxStrVal != nil {
-			s := truncateBytesAsHex(stat.maxStrVal, true)
-			maxStrVal = &s
-		}
-		info[transformer.column.Name] = fileColumnProperties{
-			ColumnOrdinal:  int32(stat.columnID),
-			NullCount:      stat.nullCount,
-			MinStrValue:    minStrVal,
-			MaxStrValue:    maxStrVal,
-			MaxLength:      int64(stat.maxStrLen),
-			MinIntValue:    stat.minIntVal,
-			MaxIntValue:    stat.maxIntVal,
-			MinRealValue:   stat.minRealVal,
-			MaxRealValue:   stat.maxRealVal,
-			DistinctValues: -1,
-		}
-	}
-	return info
 }
 
 func physicalTypeOrdinal(str string) int {

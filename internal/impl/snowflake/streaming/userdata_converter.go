@@ -133,10 +133,10 @@ func (c boolConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typed
 	if v {
 		i = int128.FromUint64(1)
 	}
-	if stats.first {
+	if !stats.hasData {
 		stats.minIntVal = i
 		stats.maxIntVal = i
-		stats.first = false
+		stats.hasData = true
 	} else {
 		stats.minIntVal = int128.Min(stats.minIntVal, i)
 		stats.maxIntVal = int128.Max(stats.maxIntVal, i)
@@ -214,10 +214,10 @@ func (c numberConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typ
 	if err != nil {
 		return err
 	}
-	if stats.first {
+	if !stats.hasData {
 		stats.minIntVal = v
 		stats.maxIntVal = v
-		stats.first = false
+		stats.hasData = true
 	} else {
 		stats.minIntVal = int128.Min(stats.minIntVal, v)
 		stats.maxIntVal = int128.Max(stats.maxIntVal, v)
@@ -243,10 +243,10 @@ func (c doubleConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typ
 	if err != nil {
 		return err
 	}
-	if stats.first {
+	if !stats.hasData {
 		stats.minRealVal = v
 		stats.maxRealVal = v
-		stats.first = false
+		stats.hasData = true
 	} else {
 		stats.minRealVal = min(stats.minRealVal, v)
 		stats.maxRealVal = max(stats.maxRealVal, v)
@@ -297,11 +297,11 @@ func (c binaryConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typ
 	if c.utf8 && !utf8.Valid(v) {
 		return errors.New("invalid UTF8")
 	}
-	if stats.first {
+	if !stats.hasData {
 		stats.minStrVal = v
 		stats.maxStrVal = v
 		stats.maxStrLen = len(v)
-		stats.first = false
+		stats.hasData = true
 	} else {
 		if bytes.Compare(v, stats.minStrVal) < 0 {
 			stats.minStrVal = v
@@ -333,11 +333,11 @@ func (c jsonConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typed
 	if len(v) > c.maxLength {
 		return fmt.Errorf("value too long, length: %d, max: %d", len(v), c.maxLength)
 	}
-	if stats.first {
+	if !stats.hasData {
 		stats.minStrVal = v
 		stats.maxStrVal = v
 		stats.maxStrLen = len(v)
-		stats.first = false
+		stats.hasData = true
 	} else {
 		if bytes.Compare(v, stats.minStrVal) < 0 {
 			stats.minStrVal = v
@@ -427,10 +427,10 @@ func (c timestampConverter) ValidateAndConvert(stats *statsBuffer, val any, buf 
 			c.precision,
 		)
 	}
-	if stats.first {
+	if !stats.hasData {
 		stats.minIntVal = v
 		stats.maxIntVal = v
-		stats.first = false
+		stats.hasData = true
 	} else {
 		stats.minIntVal = int128.Min(stats.minIntVal, v)
 		stats.maxIntVal = int128.Max(stats.maxIntVal, v)
@@ -464,10 +464,10 @@ func (c timeConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typed
 		t.Second()*int(time.Second.Nanoseconds()) +
 		t.Nanosecond()
 	v := int128.FromInt64(int64(nanos) / pow10TableInt64[9-c.scale])
-	if stats.first {
+	if !stats.hasData {
 		stats.minIntVal = v
 		stats.maxIntVal = v
-		stats.first = false
+		stats.hasData = true
 	} else {
 		stats.minIntVal = int128.Min(stats.minIntVal, v)
 		stats.maxIntVal = int128.Max(stats.maxIntVal, v)
@@ -499,10 +499,10 @@ func (c dateConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typed
 		return fmt.Errorf("DATE columns out of range, year: %d", t.Year())
 	}
 	v := int128.FromInt64(t.Unix() / int64(24*60*60))
-	if stats.first {
+	if !stats.hasData {
 		stats.minIntVal = v
 		stats.maxIntVal = v
-		stats.first = false
+		stats.hasData = true
 	} else {
 		stats.minIntVal = int128.Min(stats.minIntVal, v)
 		stats.maxIntVal = int128.Max(stats.maxIntVal, v)

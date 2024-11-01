@@ -279,11 +279,11 @@ type InsertStats struct {
 // InsertRows creates a parquet file using the schema from the data,
 // then writes that file into the Snowflake table
 func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch service.MessageBatch) (InsertStats, error) {
-	stats := InsertStats{}
+	insertStats := InsertStats{}
 	startTime := time.Now()
-	rows, err := constructRowGroup(batch, c.schema, c.transformers)
+	rows, dataStats, err := constructRowGroup(batch, c.schema, c.transformers)
 	if err != nil {
-		return stats, err
+		return insertStats, err
 	}
 	// Prevent multiple channels from having the same bdec file (it must be unique)
 	// so add the ID of the channel in the upper 16 bits and then get 48 bits of
@@ -299,12 +299,12 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 		metadata: c.fileMetadata,
 	})
 	if err != nil {
-		return stats, err
+		return insertStats, err
 	}
 	unencrypted := c.buffer.Bytes()
 	metadata, err := readParquetMetadata(unencrypted)
 	if err != nil {
-		return stats, fmt.Errorf("unable to parse parquet metadata: %w", err)
+		return insertStats, fmt.Errorf("unable to parse parquet metadata: %w", err)
 	}
 	if debug {
 		_ = os.WriteFile("latest_test.parquet", unencrypted, 0o644)
@@ -313,24 +313,24 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 	unencrypted = padBuffer(unencrypted, aes.BlockSize)
 	encrypted, err := encrypt(unencrypted, c.encryptionInfo.encryptionKey, blobPath, 0)
 	if err != nil {
-		return stats, err
+		return insertStats, err
 	}
 	uploadStartTime := time.Now()
 	fileMD5Hash := md5.Sum(encrypted)
 	uploaderResult := c.uploader.Load()
 	if uploaderResult.err != nil {
-		return stats, fmt.Errorf("failed to acquire stage uploader: %w", uploaderResult.err)
+		return insertStats, fmt.Errorf("failed to acquire stage uploader: %w", uploaderResult.err)
 	}
 	uploader := uploaderResult.uploader
 	err = backoff.Retry(func() error {
 		return uploader.upload(ctx, blobPath, encrypted, fileMD5Hash[:])
 	}, backoff.WithMaxRetries(backoff.NewConstantBackOff(time.Second), 3))
 	if err != nil {
-		return stats, err
+		return insertStats, err
 	}
 
 	uploadFinishTime := time.Now()
-	columnEpInfo := computeColumnEpInfo(c.transformers)
+	columnEpInfo := computeColumnEpInfo(c.transformers, dataStats)
 	resp, err := c.client.registerBlob(ctx, registerBlobRequest{
 		RequestID: c.nextRequestID(),
 		Role:      c.role,
@@ -376,18 +376,18 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 		},
 	})
 	if err != nil {
-		return stats, err
+		return insertStats, err
 	}
 	if len(resp.Blobs) != 1 {
-		return stats, fmt.Errorf("unexpected number of response blobs: %d", len(resp.Blobs))
+		return insertStats, fmt.Errorf("unexpected number of response blobs: %d", len(resp.Blobs))
 	}
 	status := resp.Blobs[0]
 	if len(status.Chunks) != 1 {
-		return stats, fmt.Errorf("unexpected number of response blob chunks: %d", len(status.Chunks))
+		return insertStats, fmt.Errorf("unexpected number of response blob chunks: %d", len(status.Chunks))
 	}
 	chunk := status.Chunks[0]
 	if len(chunk.Channels) != 1 {
-		return stats, fmt.Errorf("unexpected number of channels for blob chunk: %d", len(chunk.Channels))
+		return insertStats, fmt.Errorf("unexpected number of channels for blob chunk: %d", len(chunk.Channels))
 	}
 	channel := chunk.Channels[0]
 	if channel.StatusCode != responseSuccess {
@@ -395,14 +395,14 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 		if msg == "" {
 			msg = "(no message)"
 		}
-		return stats, fmt.Errorf("error response injesting data (%d): %s", channel.StatusCode, msg)
+		return insertStats, fmt.Errorf("error response injesting data (%d): %s", channel.StatusCode, msg)
 	}
 	c.rowSequencer++
 	c.clientSequencer = channel.ClientSequencer
-	stats.CompressedOutputSize = unencryptedLen
-	stats.BuildTime = uploadStartTime.Sub(startTime)
-	stats.UploadTime = uploadFinishTime.Sub(uploadStartTime)
-	return stats, err
+	insertStats.CompressedOutputSize = unencryptedLen
+	insertStats.BuildTime = uploadStartTime.Sub(startTime)
+	insertStats.UploadTime = uploadFinishTime.Sub(uploadStartTime)
+	return insertStats, err
 }
 
 // WaitUntilCommitted waits until all the data in the channel has been committed

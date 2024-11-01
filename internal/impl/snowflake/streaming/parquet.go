@@ -56,7 +56,7 @@ func constructRowGroup(
 	batch service.MessageBatch,
 	schema *parquet.Schema,
 	transformers []*dataTransformer,
-) ([]parquet.Row, error) {
+) ([]parquet.Row, []*statsBuffer, error) {
 	// We write all of our data in a columnar fashion, but need to pivot that data so that we can feed it into
 	// out parquet library (which sadly will redo the pivot - maybe we need a lower level abstraction...).
 	// So create a massive matrix that we will write stuff in columnar form, but then we don't need to move any
@@ -66,13 +66,14 @@ func constructRowGroup(
 	rowWidth := len(schema.Fields())
 	matrix := make([]parquet.Value, len(batch)*rowWidth)
 	nameToPosition := make(map[string]int, rowWidth)
+	stats := make([]*statsBuffer, rowWidth)
 	for idx, t := range transformers {
 		leaf, ok := schema.Lookup(t.name)
 		if !ok {
-			return nil, fmt.Errorf("invariant failed: unable to find column %q", t.name)
+			return nil, nil, fmt.Errorf("invariant failed: unable to find column %q", t.name)
 		}
 		t.buf.Prepare(matrix, leaf.ColumnIndex, rowWidth)
-		t.stats.Reset()
+		stats[idx] = &statsBuffer{}
 		nameToPosition[t.name] = idx
 	}
 	// First we need to shred our record into columns, snowflake's data model
@@ -82,14 +83,15 @@ func constructRowGroup(
 	for _, msg := range batch {
 		err := messageToRow(msg, row, nameToPosition)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		for i, v := range row {
 			t := transformers[i]
-			err = t.converter.ValidateAndConvert(t.stats, v, t.buf)
+			s := stats[i]
+			err = t.converter.ValidateAndConvert(s, v, t.buf)
 			if err != nil {
 				// TODO(schema): if this is a null value err then we can evolve the schema to mark it null.
-				return nil, fmt.Errorf("invalid data for column %s: %w", t.name, err)
+				return nil, nil, fmt.Errorf("invalid data for column %s: %w", t.name, err)
 			}
 			// reset the column as nil for the next row
 			row[i] = nil
@@ -102,7 +104,7 @@ func constructRowGroup(
 		rowStart := i * rowWidth
 		rows[i] = matrix[rowStart : rowStart+rowWidth]
 	}
-	return rows, nil
+	return rows, stats, nil
 }
 
 type parquetFileData struct {

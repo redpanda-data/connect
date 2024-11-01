@@ -18,6 +18,7 @@ import (
 	"github.com/aws/smithy-go/ptr"
 	"github.com/parquet-go/parquet-go"
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming/int128"
 	"github.com/stretchr/testify/require"
 )
 
@@ -42,7 +43,6 @@ func TestWriteParquet(t *testing.T) {
 				scale:     0,
 				precision: 38,
 			},
-			stats: &statsBuffer{columnID: 1},
 			column: &columnMetadata{
 				Name:         "A",
 				Ordinal:      1,
@@ -57,7 +57,7 @@ func TestWriteParquet(t *testing.T) {
 		},
 	}
 	schema := parquet.NewSchema("bdec", inputDataSchema)
-	rows, err := constructRowGroup(
+	rows, stats, err := constructRowGroup(
 		batch,
 		schema,
 		transformers,
@@ -77,6 +77,13 @@ func TestWriteParquet(t *testing.T) {
 		{"A": int32(2)},
 		{"A": int32(12353)},
 	}, actual)
+	require.Equal(t, []*statsBuffer{
+		{
+			minIntVal: int128.FromInt64(2),
+			maxIntVal: int128.FromInt64(12353),
+			hasData:   true,
+		},
+	}, stats)
 }
 
 func readGeneric(r io.ReaderAt, size int64, schema *parquet.Schema) (rows []map[string]any, err error) {
