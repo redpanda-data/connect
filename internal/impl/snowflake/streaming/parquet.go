@@ -11,9 +11,9 @@
 package streaming
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
-	"io"
 
 	"github.com/parquet-go/parquet-go"
 	"github.com/parquet-go/parquet-go/format"
@@ -45,13 +45,6 @@ func messageToRow(msg *service.Message, out []any, nameToPosition map[string]int
 	return nil
 }
 
-// TODO: If the memory pressure is too great from writing all
-// records buffered as a single row group, then consider
-// return some kind of iterator of chunks of rows that we can
-// then feed into the actual parquet construction process.
-//
-// If a single parquet file is too much, we can consider having multiple
-// parquet files in a single bdec file.
 func constructRowGroup(
 	batch service.MessageBatch,
 	schema *parquet.Schema,
@@ -67,12 +60,14 @@ func constructRowGroup(
 	matrix := make([]parquet.Value, len(batch)*rowWidth)
 	nameToPosition := make(map[string]int, rowWidth)
 	stats := make([]*statsBuffer, rowWidth)
+	buffers := make([]typedBuffer, rowWidth)
 	for idx, t := range transformers {
 		leaf, ok := schema.Lookup(t.name)
 		if !ok {
 			return nil, nil, fmt.Errorf("invariant failed: unable to find column %q", t.name)
 		}
-		t.buf.Prepare(matrix, leaf.ColumnIndex, rowWidth)
+		buffers[idx] = t.bufferFactory()
+		buffers[idx].Prepare(matrix, leaf.ColumnIndex, rowWidth)
 		stats[idx] = &statsBuffer{}
 		nameToPosition[t.name] = idx
 	}
@@ -88,7 +83,8 @@ func constructRowGroup(
 		for i, v := range row {
 			t := transformers[i]
 			s := stats[i]
-			err = t.converter.ValidateAndConvert(s, v, t.buf)
+			b := buffers[i]
+			err = t.converter.ValidateAndConvert(s, v, b)
 			if err != nil {
 				// TODO(schema): if this is a null value err then we can evolve the schema to mark it null.
 				return nil, nil, fmt.Errorf("invalid data for column %s: %w", t.name, err)
@@ -113,9 +109,10 @@ type parquetFileData struct {
 	metadata map[string]string
 }
 
-func writeParquetFile(writer io.Writer, rpcnVersion string, data parquetFileData) (err error) {
-	pw := parquet.NewGenericWriter[map[string]any](
-		writer,
+func writeParquetFile(rpcnVersion string, data parquetFileData) (out []byte, err error) {
+	b := bytes.NewBuffer(nil)
+	pw := parquet.NewGenericWriter[any](
+		b,
 		data.schema,
 		parquet.CreatedBy("RedpandaConnect", rpcnVersion, "unknown"),
 		// Recommended by the Snowflake team to enable data page stats
@@ -135,6 +132,7 @@ func writeParquetFile(writer io.Writer, rpcnVersion string, data parquetFileData
 		return
 	}
 	err = pw.Close()
+	out = b.Bytes()
 	return
 }
 

@@ -27,7 +27,6 @@ func msg(s string) *service.Message {
 }
 
 func TestWriteParquet(t *testing.T) {
-	b := bytes.NewBuffer(nil)
 	batch := service.MessageBatch{
 		msg(`{"a":2}`),
 		msg(`{"a":12353}`),
@@ -53,7 +52,7 @@ func TestWriteParquet(t *testing.T) {
 				Scale:        ptr.Int32(0),
 				Nullable:     true,
 			},
-			buf: &int32Buffer{},
+			bufferFactory: int32TypedBufferFactory,
 		},
 	}
 	schema := parquet.NewSchema("bdec", inputDataSchema)
@@ -63,13 +62,13 @@ func TestWriteParquet(t *testing.T) {
 		transformers,
 	)
 	require.NoError(t, err)
-	err = writeParquetFile(b, "latest", parquetFileData{
+	b, err := writeParquetFile("latest", parquetFileData{
 		schema, rows, nil,
 	})
 	require.NoError(t, err)
 	actual, err := readGeneric(
-		bytes.NewReader(b.Bytes()),
-		int64(b.Len()),
+		bytes.NewReader(b),
+		int64(len(b)),
 		parquet.NewSchema("bdec", inputDataSchema),
 	)
 	require.NoError(t, err)

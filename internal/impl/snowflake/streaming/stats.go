@@ -68,7 +68,7 @@ func computeColumnEpInfo(transformers []*dataTransformer, stats []*statsBuffer) 
 			maxStrVal = &s
 		}
 		info[transformer.column.Name] = fileColumnProperties{
-			ColumnOrdinal:  int32(transformer.column.Ordinal),
+			ColumnOrdinal:  transformer.column.Ordinal,
 			NullCount:      stat.nullCount,
 			MinStrValue:    minStrVal,
 			MaxStrValue:    maxStrVal,

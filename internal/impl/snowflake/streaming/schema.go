@@ -21,13 +21,13 @@ import (
 )
 
 type dataTransformer struct {
-	converter dataConverter
-	column    *columnMetadata
-	buf       typedBuffer
-	name      string
+	converter     dataConverter
+	column        *columnMetadata
+	bufferFactory typedBufferFactory
+	name          string
 }
 
-func convertFixedType(column columnMetadata) (parquet.Node, dataConverter, typedBuffer, error) {
+func convertFixedType(column columnMetadata) (parquet.Node, dataConverter, typedBufferFactory, error) {
 	var scale int32
 	var precision int32
 	if column.Scale != nil {
@@ -39,7 +39,7 @@ func convertFixedType(column columnMetadata) (parquet.Node, dataConverter, typed
 	isDecimal := column.Scale != nil && column.Precision != nil
 	if (column.Scale != nil && *column.Scale != 0) || strings.ToUpper(column.PhysicalType) == "SB16" {
 		c := numberConverter{nullable: column.Nullable, scale: scale, precision: precision}
-		b := &typedBufferImpl{}
+		b := defaultTypedBufferFactory
 		t := parquet.FixedLenByteArrayType(16)
 		if isDecimal {
 			return parquet.Decimal(int(scale), int(precision), t), c, b, nil
@@ -48,24 +48,24 @@ func convertFixedType(column columnMetadata) (parquet.Node, dataConverter, typed
 	}
 	var ptype parquet.Type
 	var defaultPrecision int32
-	var buffer typedBuffer
+	var bufferFactory typedBufferFactory
 	switch strings.ToUpper(column.PhysicalType) {
 	case "SB1":
 		ptype = parquet.Int32Type
 		defaultPrecision = maxPrecisionForByteWidth(1)
-		buffer = &int32Buffer{}
+		bufferFactory = int32TypedBufferFactory
 	case "SB2":
 		ptype = parquet.Int32Type
 		defaultPrecision = maxPrecisionForByteWidth(2)
-		buffer = &int32Buffer{}
+		bufferFactory = int32TypedBufferFactory
 	case "SB4":
 		ptype = parquet.Int32Type
 		defaultPrecision = maxPrecisionForByteWidth(4)
-		buffer = &int32Buffer{}
+		bufferFactory = int32TypedBufferFactory
 	case "SB8":
 		ptype = parquet.Int64Type
 		defaultPrecision = maxPrecisionForByteWidth(8)
-		buffer = &int64Buffer{}
+		bufferFactory = int64TypedBufferFactory
 	default:
 		return nil, nil, nil, fmt.Errorf("unsupported physical column type: %s", column.PhysicalType)
 	}
@@ -75,9 +75,9 @@ func convertFixedType(column columnMetadata) (parquet.Node, dataConverter, typed
 	}
 	c := numberConverter{nullable: column.Nullable, scale: scale, precision: validationPrecision}
 	if isDecimal {
-		return parquet.Decimal(int(scale), int(precision), ptype), c, buffer, nil
+		return parquet.Decimal(int(scale), int(precision), ptype), c, bufferFactory, nil
 	}
-	return parquet.Leaf(ptype), c, buffer, nil
+	return parquet.Leaf(ptype), c, bufferFactory, nil
 }
 
 // maxJSONSize is the size that any kind of semi-structured data can be, which is 16MiB minus a small overhead
@@ -94,11 +94,11 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, []*dataT
 		id := int(column.Ordinal)
 		var n parquet.Node
 		var converter dataConverter
-		var buffer typedBuffer
+		var bufferFactory typedBufferFactory = defaultTypedBufferFactory
 		logicalType := strings.ToLower(column.LogicalType)
 		switch logicalType {
 		case "fixed":
-			n, converter, buffer, err = convertFixedType(column)
+			n, converter, bufferFactory, err = convertFixedType(column)
 			if err != nil {
 				return nil, nil, nil, err
 			}
@@ -106,17 +106,14 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, []*dataT
 			typeMetadata[fmt.Sprintf("%d:obj_enc", id)] = "1"
 			n = parquet.String()
 			converter = jsonArrayConverter{jsonConverter{column.Nullable, maxJSONSize}}
-			buffer = &typedBufferImpl{}
 		case "object":
 			typeMetadata[fmt.Sprintf("%d:obj_enc", id)] = "1"
 			n = parquet.String()
 			converter = jsonObjectConverter{jsonConverter{column.Nullable, maxJSONSize}}
-			buffer = &typedBufferImpl{}
 		case "variant":
 			typeMetadata[fmt.Sprintf("%d:obj_enc", id)] = "1"
 			n = parquet.String()
 			converter = jsonConverter{column.Nullable, maxJSONSize}
-			buffer = &typedBufferImpl{}
 		case "any", "text", "char":
 			n = parquet.String()
 			byteLength := 16 * humanize.MiByte
@@ -125,7 +122,6 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, []*dataT
 			}
 			byteLength = min(byteLength, 16*humanize.MiByte)
 			converter = binaryConverter{nullable: column.Nullable, maxLength: byteLength, utf8: true}
-			buffer = &typedBufferImpl{}
 		case "binary":
 			n = parquet.Leaf(parquet.ByteArrayType)
 			// Why binary data defaults to 8MiB instead of the 16MiB for strings... ¯\_(ツ)_/¯
@@ -135,26 +131,22 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, []*dataT
 			}
 			byteLength = min(byteLength, 16*humanize.MiByte)
 			converter = binaryConverter{nullable: column.Nullable, maxLength: byteLength}
-			buffer = &typedBufferImpl{}
 		case "boolean":
 			n = parquet.Leaf(parquet.BooleanType)
 			converter = boolConverter{column.Nullable}
-			buffer = &typedBufferImpl{}
 		case "real":
 			n = parquet.Leaf(parquet.DoubleType)
 			converter = doubleConverter{column.Nullable}
-			buffer = &typedBufferImpl{}
 		case "timestamp_tz", "timestamp_ltz", "timestamp_ntz":
 			var scale, precision int32
 			var pt parquet.Type
 			if column.PhysicalType == "SB8" {
 				pt = parquet.Int64Type
 				precision = maxPrecisionForByteWidth(8)
-				buffer = &int64Buffer{}
+				bufferFactory = int64TypedBufferFactory
 			} else {
 				pt = parquet.FixedLenByteArrayType(16)
 				precision = maxPrecisionForByteWidth(16)
-				buffer = &typedBufferImpl{}
 			}
 			if column.Scale != nil {
 				scale = *column.Scale
@@ -174,11 +166,11 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, []*dataT
 		case "time":
 			t := parquet.Int32Type
 			precision := 9
-			buffer = &int32Buffer{}
+			bufferFactory = int32TypedBufferFactory
 			if column.PhysicalType == "SB8" {
 				t = parquet.Int64Type
 				precision = 18
-				buffer = &int64Buffer{}
+				bufferFactory = int64TypedBufferFactory
 			}
 			scale := int32(9)
 			if column.Scale != nil {
@@ -189,7 +181,7 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, []*dataT
 		case "date":
 			n = parquet.Leaf(parquet.Int32Type)
 			converter = dateConverter{column.Nullable}
-			buffer = &int32Buffer{}
+			bufferFactory = int32TypedBufferFactory
 		default:
 			return nil, nil, nil, fmt.Errorf("unsupported logical column type: %s", column.LogicalType)
 		}
@@ -208,10 +200,10 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, []*dataT
 		name := normalizeColumnName(column.Name)
 		groupNode[name] = n
 		transformers[idx] = &dataTransformer{
-			name:      name,
-			converter: converter,
-			column:    &column,
-			buf:       buffer,
+			name:          name,
+			converter:     converter,
+			column:        &column,
+			bufferFactory: bufferFactory,
 		}
 	}
 	return parquet.NewSchema("bdec", groupNode), transformers, typeMetadata, nil

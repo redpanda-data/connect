@@ -11,7 +11,6 @@
 package streaming
 
 import (
-	"bytes"
 	"context"
 	"crypto/aes"
 	"crypto/md5"
@@ -26,7 +25,9 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/parquet-go/parquet-go"
+	"github.com/parquet-go/parquet-go/format"
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/redpanda-data/connect/v4/internal/periodic"
 	"github.com/redpanda-data/connect/v4/internal/typed"
@@ -186,7 +187,6 @@ func (c *SnowflakeServiceClient) OpenChannel(ctx context.Context, opts ChannelOp
 		rowSequencer:     resp.RowSequencer,
 		transformers:     transformers,
 		fileMetadata:     typeMetadata,
-		buffer:           bytes.NewBuffer(nil),
 		requestIDCounter: c.requestIDCounter,
 	}
 	return ch, nil
@@ -258,7 +258,6 @@ type SnowflakeIngestionChannel struct {
 	rowSequencer    int64
 	transformers    []*dataTransformer
 	fileMetadata    map[string]string
-	buffer          *bytes.Buffer
 	// This is shared among the various open channels to get some uniqueness
 	// when naming bdec files
 	requestIDCounter *atomic.Int64
@@ -276,68 +275,119 @@ type InsertStats struct {
 	CompressedOutputSize int
 }
 
+type bdecPart struct {
+	unencryptedLen  int
+	parquetFile     []byte
+	parquetMetadata format.FileMetaData
+	stats           []*statsBuffer
+}
+
+func (c *SnowflakeIngestionChannel) constructBdecPart(batch service.MessageBatch, metadata map[string]string) (bdecPart, error) {
+	wg := &errgroup.Group{}
+	type rowGroup struct {
+		rows  []parquet.Row
+		stats []*statsBuffer
+	}
+	rowGroups := []rowGroup{}
+	const maxRowGroupSize = 50_000
+	for i := 0; i < len(batch); i += maxRowGroupSize {
+		end := min(maxRowGroupSize, len(batch[i:]))
+		j := len(rowGroups)
+		rowGroups = append(rowGroups, rowGroup{})
+		chunk := batch[i : i+end]
+		wg.Go(func() error {
+			rows, stats, err := constructRowGroup(chunk, c.schema, c.transformers)
+			rowGroups[j] = rowGroup{rows, stats}
+			return err
+		})
+	}
+	if err := wg.Wait(); err != nil {
+		return bdecPart{}, err
+	}
+	allRows := make([]parquet.Row, 0, len(batch))
+	combinedStats := make([]*statsBuffer, len(c.schema.Fields()))
+	for i := range combinedStats {
+		combinedStats[i] = &statsBuffer{}
+	}
+	for _, rg := range rowGroups {
+		allRows = append(allRows, rg.rows...)
+		for i, s := range combinedStats {
+			combinedStats[i] = mergeStats(s, rg.stats[i])
+		}
+	}
+	// TODO(perf): It would be really nice to be able to compress in parallel,
+	// that actually ends up taking quite of bit of CPU.
+	buf, err := writeParquetFile(c.version, parquetFileData{
+		schema:   c.schema,
+		rows:     allRows,
+		metadata: metadata,
+	})
+	if err != nil {
+		return bdecPart{}, err
+	}
+	fileMetadata, err := readParquetMetadata(buf)
+	if err != nil {
+		return bdecPart{}, fmt.Errorf("unable to parse parquet metadata: %w", err)
+	}
+	return bdecPart{
+		unencryptedLen:  len(buf),
+		parquetFile:     buf,
+		parquetMetadata: fileMetadata,
+		stats:           combinedStats,
+	}, err
+}
+
 // InsertRows creates a parquet file using the schema from the data,
 // then writes that file into the Snowflake table
 func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch service.MessageBatch) (InsertStats, error) {
 	insertStats := InsertStats{}
-	startTime := time.Now()
-	rows, dataStats, err := constructRowGroup(batch, c.schema, c.transformers)
-	if err != nil {
-		return insertStats, err
+	if len(batch) == 0 {
+		return insertStats, nil
 	}
-	// Prevent multiple channels from having the same bdec file (it must be unique)
-	// so add the ID of the channel in the upper 16 bits and then get 48 bits of
-	// randomness outside that.
+
+	startTime := time.Now()
+	// Prevent multiple channels from having the same bdec file (it must be globally unique)
+	// so add the ID of the channel in the upper 16 bits and then get 48 bits of randomness outside that.
 	fakeThreadID := (int(c.ID) << 48) | rand.N(1<<48)
 	blobPath := generateBlobPath(c.clientPrefix, fakeThreadID, int(c.requestIDCounter.Add(1)))
 	// This is extra metadata that is required for functionality in snowflake.
 	c.fileMetadata["primaryFileId"] = path.Base(blobPath)
-	c.buffer.Reset()
-	err = writeParquetFile(c.buffer, c.version, parquetFileData{
-		schema:   c.schema,
-		rows:     rows,
-		metadata: c.fileMetadata,
-	})
+	part, err := c.constructBdecPart(batch, c.fileMetadata)
 	if err != nil {
 		return insertStats, err
-	}
-	unencrypted := c.buffer.Bytes()
-	metadata, err := readParquetMetadata(unencrypted)
-	if err != nil {
-		return insertStats, fmt.Errorf("unable to parse parquet metadata: %w", err)
 	}
 	if debug {
-		_ = os.WriteFile("latest_test.parquet", unencrypted, 0o644)
+		_ = os.WriteFile("latest_test.parquet", part.parquetFile, 0o644)
 	}
-	unencryptedLen := len(unencrypted)
-	unencrypted = padBuffer(unencrypted, aes.BlockSize)
-	encrypted, err := encrypt(unencrypted, c.encryptionInfo.encryptionKey, blobPath, 0)
+
+	unencrypted := padBuffer(part.parquetFile, aes.BlockSize)
+	part.parquetFile, err = encrypt(unencrypted, c.encryptionInfo.encryptionKey, blobPath, 0)
 	if err != nil {
 		return insertStats, err
 	}
+
 	uploadStartTime := time.Now()
-	fileMD5Hash := md5.Sum(encrypted)
 	uploaderResult := c.uploader.Load()
 	if uploaderResult.err != nil {
 		return insertStats, fmt.Errorf("failed to acquire stage uploader: %w", uploaderResult.err)
 	}
 	uploader := uploaderResult.uploader
+	fullMD5Hash := md5.Sum(part.parquetFile)
 	err = backoff.Retry(func() error {
-		return uploader.upload(ctx, blobPath, encrypted, fileMD5Hash[:])
+		return uploader.upload(ctx, blobPath, part.parquetFile, fullMD5Hash[:])
 	}, backoff.WithMaxRetries(backoff.NewConstantBackOff(time.Second), 3))
 	if err != nil {
 		return insertStats, err
 	}
 
 	uploadFinishTime := time.Now()
-	columnEpInfo := computeColumnEpInfo(c.transformers, dataStats)
 	resp, err := c.client.registerBlob(ctx, registerBlobRequest{
 		RequestID: c.nextRequestID(),
 		Role:      c.role,
 		Blobs: []blobMetadata{
 			{
 				Path:        blobPath,
-				MD5:         hex.EncodeToString(fileMD5Hash[:]),
+				MD5:         hex.EncodeToString(fullMD5Hash[:]),
 				BDECVersion: 3,
 				BlobStats: blobStats{
 					FlushStartMs:     startTime.UnixMilli(),
@@ -350,15 +400,15 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 						Schema:                  c.SchemaName,
 						Table:                   c.TableName,
 						ChunkStartOffset:        0,
-						ChunkLength:             int32(unencryptedLen),
-						ChunkLengthUncompressed: totalUncompressedSize(metadata),
-						ChunkMD5:                md5Hash(encrypted[:unencryptedLen]),
+						ChunkLength:             int32(part.unencryptedLen),
+						ChunkLengthUncompressed: totalUncompressedSize(part.parquetMetadata),
+						ChunkMD5:                md5Hash(part.parquetFile[:part.unencryptedLen]),
 						EncryptionKeyID:         c.encryptionInfo.encryptionKeyID,
 						FirstInsertTimeInMillis: startTime.UnixMilli(),
 						LastInsertTimeInMillis:  startTime.UnixMilli(),
 						EPS: &epInfo{
-							Rows:    metadata.NumRows,
-							Columns: columnEpInfo,
+							Rows:    part.parquetMetadata.NumRows,
+							Columns: computeColumnEpInfo(c.transformers, part.stats),
 						},
 						Channels: []channelMetadata{
 							{
@@ -399,7 +449,7 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 	}
 	c.rowSequencer++
 	c.clientSequencer = channel.ClientSequencer
-	insertStats.CompressedOutputSize = unencryptedLen
+	insertStats.CompressedOutputSize = part.unencryptedLen
 	insertStats.BuildTime = uploadStartTime.Sub(startTime)
 	insertStats.UploadTime = uploadFinishTime.Sub(uploadStartTime)
 	return insertStats, err

@@ -26,6 +26,8 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming/int128"
 )
 
+type typedBufferFactory func() typedBuffer
+
 // typedBuffer is the buffer that holds columnar data before we write to the parquet file
 type typedBuffer interface {
 	WriteNull()
@@ -40,7 +42,6 @@ type typedBuffer interface {
 	// the data that will be written - this buffer will not modify
 	// the size of the data.
 	Prepare(matrix []parquet.Value, columnIndex, rowWidth int)
-	Reset()
 }
 
 type typedBufferImpl struct {
@@ -86,9 +87,8 @@ func (b *typedBufferImpl) Prepare(matrix []parquet.Value, columnIndex, rowWidth 
 		b.scratch = b.scratch[:0]
 	}
 }
-func (b *typedBufferImpl) Reset() {
-	b.Prepare(nil, 0, 0)
-}
+
+var defaultTypedBufferFactory = typedBufferFactory(func() typedBuffer { return &typedBufferImpl{} })
 
 type int64Buffer struct {
 	typedBufferImpl
@@ -97,6 +97,8 @@ type int64Buffer struct {
 func (b *int64Buffer) WriteInt128(v int128.Num) {
 	b.WriteValue(parquet.Int64Value(v.ToInt64()).Level(0, 1, b.columnIndex))
 }
+
+var int64TypedBufferFactory = typedBufferFactory(func() typedBuffer { return &int64Buffer{} })
 
 type int32Buffer struct {
 	typedBufferImpl
@@ -109,6 +111,8 @@ func (b *int32Buffer) WriteInt128(v int128.Num) {
 type dataConverter interface {
 	ValidateAndConvert(stats *statsBuffer, val any, buf typedBuffer) error
 }
+
+var int32TypedBufferFactory = typedBufferFactory(func() typedBuffer { return &int32Buffer{} })
 
 var errNullValue = errors.New("unexpected null value")
 
