@@ -1,12 +1,7 @@
+---
 name: upload-managed-plugin
 description: Upload binaries as rpk managed plugin
 inputs:
-  aws_access_key_id:
-    description: For accessing S3 bucket
-    required: true
-  aws_secret_access_key:
-    description: For accessing S3 bucket
-    required: true
   aws_region:
     description: For accessing S3 bucket
     required: true
@@ -37,26 +32,16 @@ inputs:
   dry_run:
     description: Dry run means skipping writes to S3 ("true" or "false")
     required: true
-
 runs:
   using: "composite"
   steps:
-    - name: Configure AWS Credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-access-key-id: ${{ inputs.aws_access_key_id }}
-        aws-secret-access-key: ${{ inputs.aws_secret_access_key }}
-        aws-region: ${{ inputs.aws_region }}
-
     - uses: actions/setup-python@v5
       with:
         python-version: '3.12'
-
     - name: install deps
       working-directory: resources/plugin_uploader
       shell: bash
       run: pip install -r requirements.txt
-
     - name: Upload archives
       working-directory: resources/plugin_uploader
       shell: bash
@@ -72,7 +57,6 @@ runs:
           --goos=${{ inputs.goos }} \
           --goarch=${{ inputs.goarch }} \
           $DRY_RUN_FLAG
-
     - name: Upload manifest
       working-directory: resources/plugin_uploader
       shell: bash

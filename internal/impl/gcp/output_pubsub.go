@@ -300,7 +300,9 @@ func (out *pubsubOutput) Close(_ context.Context) error {
 		out.clientCancel()
 	}
 
-	return nil
+	err := out.client.Close()
+	out.client = nil
+	return err
 }
 
 func (out *pubsubOutput) writeMessage(ctx context.Context, cachedTopics map[string]pubsubTopic, msg *service.Message) (publishResult, error) {

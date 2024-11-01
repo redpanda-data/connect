@@ -40,6 +40,7 @@ const (
 	s3oFieldForcePathStyleURLs      = "force_path_style_urls"
 	s3oFieldPath                    = "path"
 	s3oFieldTags                    = "tags"
+	s3oFieldChecksumAlgorithm       = "checksum_algorithm"
 	s3oFieldContentType             = "content_type"
 	s3oFieldContentEncoding         = "content_encoding"
 	s3oFieldCacheControl            = "cache_control"
@@ -68,6 +69,7 @@ type s3oConfig struct {
 	ContentType             *service.InterpolatedString
 	ContentEncoding         *service.InterpolatedString
 	CacheControl            *service.InterpolatedString
+	ChecksumAlgorithm       string
 	ContentDisposition      *service.InterpolatedString
 	ContentLanguage         *service.InterpolatedString
 	ContentMD5              *service.InterpolatedString
@@ -126,6 +128,9 @@ func s3oConfigFromParsed(pConf *service.ParsedConfig) (conf s3oConfig, err error
 	if conf.ContentMD5, err = pConf.FieldInterpolatedString(s3oFieldContentMD5); err != nil {
 		return
 	}
+	if conf.ChecksumAlgorithm, err = pConf.FieldString(s3oFieldChecksumAlgorithm); err != nil {
+		return
+	}
 	if conf.WebsiteRedirectLocation, err = pConf.FieldInterpolatedString(s3oFieldWebsiteRedirectLocation); err != nil {
 		return
 	}
@@ -171,7 +176,7 @@ The tags field allows you to specify key/value pairs to attach to objects as tag
 output:
   aws_s3:
     bucket: TODO
-    path: ${!count("files")}-${!timestamp_unix_nano()}.tar.gz
+    path: ${!counter()}-${!timestamp_unix_nano()}.tar.gz
     tags:
       Key1: Value1
       Timestamp: ${!meta("Timestamp")}
@@ -191,7 +196,7 @@ For example, if we wished to upload messages as a .tar.gz archive of documents w
 output:
   aws_s3:
     bucket: TODO
-    path: ${!count("files")}-${!timestamp_unix_nano()}.tar.gz
+    path: ${!counter()}-${!timestamp_unix_nano()}.tar.gz
     batching:
       count: 100
       period: 10s
@@ -208,7 +213,7 @@ Alternatively, if we wished to upload JSON documents as a single large document 
 output:
   aws_s3:
     bucket: TODO
-    path: ${!count("files")}-${!timestamp_unix_nano()}.json
+    path: ${!counter()}-${!timestamp_unix_nano()}.json
     batching:
       count: 100
       processors:
@@ -220,8 +225,8 @@ output:
 				Description("The bucket to upload messages to."),
 			service.NewInterpolatedStringField(s3oFieldPath).
 				Description("The path of each message to upload.").
-				Default(`${!count("files")}-${!timestamp_unix_nano()}.txt`).
-				Example(`${!count("files")}-${!timestamp_unix_nano()}.txt`).
+				Default(`${!counter()}-${!timestamp_unix_nano()}.txt`).
+				Example(`${!counter()}-${!timestamp_unix_nano()}.txt`).
 				Example(`${!meta("kafka_key")}.json`).
 				Example(`${!json("doc.namespace")}/${!json("doc.id")}.json`),
 			service.NewInterpolatedStringMapField(s3oFieldTags).
@@ -268,6 +273,12 @@ output:
 				Advanced(),
 			service.NewStringField(s3oFieldKMSKeyID).
 				Description("An optional server side encryption key.").
+				Default("").
+				Advanced(),
+			service.NewStringEnumField(s3oFieldChecksumAlgorithm,
+				"CRC32", "CRC32C", "SHA1", "SHA256",
+			).
+				Description("The algorithm used to create the checksum for each object.").
 				Default("").
 				Advanced(),
 			service.NewStringField(s3oFieldServerSideEncryption).
@@ -446,6 +457,10 @@ func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg service.MessageBat
 		if a.conf.KMSKeyID != "" {
 			uploadInput.ServerSideEncryption = types.ServerSideEncryptionAwsKms
 			uploadInput.SSEKMSKeyId = &a.conf.KMSKeyID
+		}
+
+		if a.conf.ChecksumAlgorithm != "" {
+			uploadInput.ChecksumAlgorithm = types.ChecksumAlgorithm(a.conf.ChecksumAlgorithm)
 		}
 
 		// NOTE: This overrides the ServerSideEncryption set above. We need this to preserve

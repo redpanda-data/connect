@@ -3,6 +3,46 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.39.0 - TBD
+
+### Added
+
+- New `timeplus` input. (@ye11ow)
+- New `snowflake_streaming` output. (@rockwotj)
+- Redpanda Connect will now use an optional `/etc/redpanda/connector_list.yaml` config to determine which connectors are available to run. (@Jeffail)
+- (Benthos) Field `follow_redirects` added to the `http` processor. (@ooesili)
+- New CLI flag `--secrets` added. (@Jeffail)
+- New CLI flag `--disable-telemetry` added. (@Jeffail)
+
+### Fixed
+
+- The `kafka`, `kafka_franz` and `redpanda_migrator` outputs no longer waste CPU for large batches. (@rockwotj)
+
+### Changed
+
+- The `aws_sqs` output field `url` now supports interpolation functions. (@rockwotj)
+- (Benthos) CLI `--set` flags can now mutate array values indexed from the end via negative integers. E.g. `--set 'foo.-1=meow'` would set the last index of the array `foo` to the value of `meow`. (@Jeffail)
+
+## 4.38.0 - 2024-10-17
+
+### Added
+
+- Anonymous telemetry data is now sent by Connect instances after running for >5 mins. Details about which data is sent, when it is sent, and how to disable it can be found in the [telemetry README](./internal/telemetry/README.md). (@Jeffail)
+- Field `checksum_algorithm` added to the `aws_s3` output. (@dom-lee-naimuri)
+- Field `nkey` added to `nats`, `nats_jetstream`, `nats_kv` and `nats_stream` components. (@ye11ow)
+- Field `private_key` added to the `snowflake_put` output. (@mihaitodor)
+- New `azure_data_lake_gen2` output. (@ooesili)
+- New `timeplus` output. (@ye11ow)
+
+### Fixed
+
+- The `elasticsearch` output now performs retries for HTTP status code `429` (Too Many Requests). (@kahoowkh)
+- The docs for the `collection` field of the `mongodb` output now specify support for interpolation functions. (@mihaitodor)
+
+### Changed
+
+- All components with a default `path` field value (such as the `aws_s3` output) containing the deprecated function `count` have now been changed to use the new function `counter`. This could potentially change behaviour in cases where multiple components are executing a mapping with a `count` function sharing the same of the old default count, and these counters need to cascade. This is an extremely unlikely scenario, but for all users of these components it is recommended that your `path` is defined explicitly, and in a future major version we will be removing the defaults.
+
 ## 4.37.0 - 2024-09-26
 
 ### Added

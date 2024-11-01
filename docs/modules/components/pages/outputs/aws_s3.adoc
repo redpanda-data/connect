@@ -40,7 +40,7 @@ output:
   label: ""
   aws_s3:
     bucket: "" # No default (required)
-    path: ${!count("files")}-${!timestamp_unix_nano()}.txt
+    path: ${!counter()}-${!timestamp_unix_nano()}.txt
     tags: {}
     content_type: application/octet-stream
     metadata:
@@ -64,7 +64,7 @@ output:
   label: ""
   aws_s3:
     bucket: "" # No default (required)
-    path: ${!count("files")}-${!timestamp_unix_nano()}.txt
+    path: ${!counter()}-${!timestamp_unix_nano()}.txt
     tags: {}
     content_type: application/octet-stream
     content_encoding: ""
@@ -77,6 +77,7 @@ output:
       exclude_prefixes: []
     storage_class: STANDARD
     kms_key_id: ""
+    checksum_algorithm: ""
     server_side_encryption: ""
     force_path_style_urls: false
     max_in_flight: 64
@@ -116,7 +117,7 @@ The tags field allows you to specify key/value pairs to attach to objects as tag
 output:
   aws_s3:
     bucket: TODO
-    path: ${!count("files")}-${!timestamp_unix_nano()}.tar.gz
+    path: ${!counter()}-${!timestamp_unix_nano()}.tar.gz
     tags:
       Key1: Value1
       Timestamp: ${!meta("Timestamp")}
@@ -136,7 +137,7 @@ For example, if we wished to upload messages as a .tar.gz archive of documents w
 output:
   aws_s3:
     bucket: TODO
-    path: ${!count("files")}-${!timestamp_unix_nano()}.tar.gz
+    path: ${!counter()}-${!timestamp_unix_nano()}.tar.gz
     batching:
       count: 100
       period: 10s
@@ -153,7 +154,7 @@ Alternatively, if we wished to upload JSON documents as a single large document 
 output:
   aws_s3:
     bucket: TODO
-    path: ${!count("files")}-${!timestamp_unix_nano()}.json
+    path: ${!counter()}-${!timestamp_unix_nano()}.json
     batching:
       count: 100
       processors:
@@ -183,12 +184,12 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 *Type*: `string`
 
-*Default*: `"${!count(\"files\")}-${!timestamp_unix_nano()}.txt"`
+*Default*: `"${!counter()}-${!timestamp_unix_nano()}.txt"`
 
 ```yml
 # Examples
 
-path: ${!count("files")}-${!timestamp_unix_nano()}.txt
+path: ${!counter()}-${!timestamp_unix_nano()}.txt
 
 path: ${!meta("kafka_key")}.json
 
@@ -328,6 +329,22 @@ An optional server side encryption key.
 *Type*: `string`
 
 *Default*: `""`
+
+=== `checksum_algorithm`
+
+The algorithm used to create the checksum for each object.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+Options:
+`CRC32`
+, `CRC32C`
+, `SHA1`
+, `SHA256`
+.
 
 === `server_side_encryption`
 

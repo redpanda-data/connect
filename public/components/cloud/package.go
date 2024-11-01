@@ -29,6 +29,7 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/kafka/enterprise"
 	_ "github.com/redpanda-data/connect/v4/public/components/maxmind"
 	_ "github.com/redpanda-data/connect/v4/public/components/memcached"
+	_ "github.com/redpanda-data/connect/v4/public/components/mqtt"
 	_ "github.com/redpanda-data/connect/v4/public/components/msgpack"
 	_ "github.com/redpanda-data/connect/v4/public/components/nats"
 	_ "github.com/redpanda-data/connect/v4/public/components/openai"
@@ -39,11 +40,13 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/pure"
 	_ "github.com/redpanda-data/connect/v4/public/components/pure/extended"
 	_ "github.com/redpanda-data/connect/v4/public/components/qdrant"
+	_ "github.com/redpanda-data/connect/v4/public/components/questdb"
 	_ "github.com/redpanda-data/connect/v4/public/components/redis"
 	_ "github.com/redpanda-data/connect/v4/public/components/sftp"
 	_ "github.com/redpanda-data/connect/v4/public/components/snowflake"
 	_ "github.com/redpanda-data/connect/v4/public/components/splunk"
 	_ "github.com/redpanda-data/connect/v4/public/components/sql/base"
+	_ "github.com/redpanda-data/connect/v4/public/components/timeplus"
 
 	// Import all (supported) sql drivers.
 	_ "github.com/go-sql-driver/mysql"

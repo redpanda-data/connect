@@ -181,7 +181,7 @@ output:
     endpoint: http://localhost:$PORT
     force_path_style_urls: true
     region: eu-west-1
-    path: ${!count("$ID")}.txt
+    path: ${!counter()}.txt
     credentials:
       id: xxxxx
       secret: xxxxx
@@ -232,7 +232,7 @@ output:
     endpoint: http://localhost:$PORT
     force_path_style_urls: true
     region: eu-west-1
-    path: ${!count("$ID")}.txt
+    path: ${!counter()}.txt
     credentials:
       id: xxxxx
       secret: xxxxx
@@ -287,7 +287,7 @@ output:
     endpoint: http://localhost:$PORT
     force_path_style_urls: true
     region: eu-west-1
-    path: ${!count("$ID")}.txt
+    path: ${!counter()}.txt
     credentials:
       id: xxxxx
       secret: xxxxx
@@ -342,7 +342,7 @@ output:
     endpoint: http://localhost:$PORT
     force_path_style_urls: true
     region: eu-west-1
-    path: ${!count("$ID")}.txt
+    path: ${!counter()}.txt
     credentials:
       id: xxxxx
       secret: xxxxx

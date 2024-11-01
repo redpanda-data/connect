@@ -237,7 +237,7 @@ It's possible to enable AWS connectivity with this output using the `+"`aws`"+` 
 				Default(""),
 			service.NewInterpolatedStringField(esoFieldID).
 				Description("The ID for indexed messages. Interpolation should be used in order to create a unique ID for each message.").
-				Default(`${!count("elastic_ids")}-${!timestamp_unix()}`),
+				Default(`${!counter()}-${!timestamp_unix()}`),
 			service.NewInterpolatedStringField(esoFieldType).
 				Description("The document mapping type. This field is required for versions of elasticsearch earlier than 6.0.0, but are invalid for versions 7.0.0 or later.").
 				Default(""),
@@ -296,7 +296,7 @@ output:
     sniff: false
     healthcheck: false
     index: "my-elasticsearch-index"
-    id: my-document-id-${!count("elastic_ids")}-${!timestamp_unix()}
+    id: my-document-id-${!counter()}-${!timestamp_unix()}
     api_key: "${ELASTIC_CLOUD_API_KEY}"
 `)
 }
@@ -356,7 +356,10 @@ func (e *Output) Connect(ctx context.Context) error {
 }
 
 func shouldRetry(s int) bool {
-	if s >= 500 && s <= 599 {
+	// Retry if the status code is 429 (Too Many Requests) or any 5xx server error.
+	// HTTP 429 indicates the elasticsearch cluster is rate-limiting the client and expects the client to backoff
+	// https://www.elastic.co/guide/en/elasticsearch/reference/current/tune-for-indexing-speed.html#multiple-workers-threads
+	if s == 429 || (s >= 500 && s <= 599) {
 		return true
 	}
 	return false

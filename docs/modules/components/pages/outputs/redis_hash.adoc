@@ -342,7 +342,7 @@ key: ${! @.kafka_key )}
 
 key: ${! this.doc.id }
 
-key: ${! count("msgs") }
+key: ${! counter() }
 ```
 
 === `walk_metadata`

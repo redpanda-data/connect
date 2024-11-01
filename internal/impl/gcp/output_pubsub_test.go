@@ -49,6 +49,7 @@ func TestPubSubOutput(t *testing.T) {
 
 	client.On("Topic", "test_foo").Return(fooTopic).Once()
 	client.On("Topic", "test_bar").Return(barTopic).Once()
+	client.On("Close").Return(nil).Once()
 
 	fooMsgA := service.NewMessage([]byte("foo_a"))
 	fooResA := &mockPublishResult{}
@@ -93,7 +94,7 @@ func TestPubSubOutput_MessageAttr(t *testing.T) {
 	conf, err := newPubSubOutputConfig().ParseYAML(`
     project: sample-project
     topic: test
-    ordering_key: '${! content().string() }_${! count(content().string()) }'
+    ordering_key: '${! content().string() }_${! counter() }'
     metadata:
       exclude_prefixes:
         - drop_
@@ -114,6 +115,7 @@ func TestPubSubOutput_MessageAttr(t *testing.T) {
 	fooTopic.On("Publish", "foo", mock.AnythingOfType("*pubsub.Message")).Return(fooMsgA).Once()
 
 	client.On("Topic", "test").Return(fooTopic).Once()
+	client.On("Close").Return(nil).Once()
 
 	out, err := newPubSubOutput(conf)
 	require.NoError(t, err, "failed to create output")
@@ -169,6 +171,7 @@ func TestPubSubOutput_MissingTopic(t *testing.T) {
 
 	client.On("Topic", "test_foo").Return(fooTopic).Once()
 	client.On("Topic", "test_bar").Return(barTopic).Once()
+	client.On("Close").Return(nil).Once()
 
 	out, err := newPubSubOutput(conf)
 	require.NoError(t, err, "failed to create output")
@@ -240,6 +243,7 @@ func TestPubSubOutput_PublishErrors(t *testing.T) {
 
 	client.On("Topic", "test_foo").Return(fooTopic).Once()
 	client.On("Topic", "test_bar").Return(barTopic).Once()
+	client.On("Close").Return(nil).Once()
 
 	fooMsgA := service.NewMessage([]byte("foo_a"))
 	fooResA := &mockPublishResult{}

@@ -46,7 +46,7 @@ func redisListOutputConfig() *service.ConfigSpec {
 		Fields(
 			service.NewInterpolatedStringField(loFieldKey).
 				Description("The key for each message, function interpolations can be optionally used to create a unique key per message.").
-				Examples("some_list", "${! @.kafka_key )}", "${! this.doc.id }", "${! count(\"msgs\") }"),
+				Examples("some_list", "${! @.kafka_key )}", "${! this.doc.id }", "${! counter() }"),
 			service.NewOutputMaxInFlightField(),
 			service.NewBatchPolicyField(loFieldBatching),
 			service.NewStringEnumField("command", string(rPush), string(lPush)).

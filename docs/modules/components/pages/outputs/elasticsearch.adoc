@@ -39,7 +39,7 @@ output:
   elasticsearch:
     urls: [] # No default (required)
     index: "" # No default (required)
-    id: ${!count("elastic_ids")}-${!timestamp_unix()}
+    id: ${!counter()}-${!timestamp_unix()}
     type: ""
     api_key: "" # No default (optional)
     max_in_flight: 64
@@ -64,7 +64,7 @@ output:
     index: "" # No default (required)
     action: index
     pipeline: ""
-    id: ${!count("elastic_ids")}-${!timestamp_unix()}
+    id: ${!counter()}-${!timestamp_unix()}
     type: ""
     routing: ""
     sniff: true
@@ -141,7 +141,7 @@ output:
     sniff: false
     healthcheck: false
     index: "my-elasticsearch-index"
-    id: my-document-id-${!count("elastic_ids")}-${!timestamp_unix()}
+    id: my-document-id-${!counter()}-${!timestamp_unix()}
     api_key: "${ELASTIC_CLOUD_API_KEY}"
 ```
 
@@ -202,7 +202,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 *Type*: `string`
 
-*Default*: `"${!count(\"elastic_ids\")}-${!timestamp_unix()}"`
+*Default*: `"${!counter()}-${!timestamp_unix()}"`
 
 === `type`
 

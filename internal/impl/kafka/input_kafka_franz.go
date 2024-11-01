@@ -67,6 +67,10 @@ root = if $has_topic_partitions {
   } else if this.regexp_topics {
     "this input does not support both regular expression topics and explicit topic partitions"
   }
+} else {
+  if this.consumer_group.or("") == "" {
+    "a consumer group is mandatory when not using explicit topic partitions"
+  }
 }
 `)
 }
@@ -245,8 +249,10 @@ func NewFranzKafkaReaderFromConfig(conf *service.ParsedConfig, res *service.Reso
 		return nil, err
 	}
 
-	if f.consumerGroup, err = conf.FieldString("consumer_group"); err != nil {
-		return nil, err
+	if conf.Contains("consumer_group") {
+		if f.consumerGroup, err = conf.FieldString("consumer_group"); err != nil {
+			return nil, err
+		}
 	}
 
 	if f.checkpointLimit, err = conf.FieldInt("checkpoint_limit"); err != nil {

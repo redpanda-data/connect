@@ -505,17 +505,28 @@ func (k *kafkaWriter) WriteBatch(ctx context.Context, msg service.MessageBatch) 
 		return service.ErrNotConnected
 	}
 
+	topicExecutor := msg.InterpolationExecutor(k.topic)
+	keyExecutor := msg.InterpolationExecutor(k.key)
+	var partitionExecutor *service.MessageBatchInterpolationExecutor
+	if k.partition != nil {
+		partitionExecutor = msg.InterpolationExecutor(k.partition)
+	}
+	var timestampExecutor *service.MessageBatchInterpolationExecutor
+	if k.timestamp != nil {
+		timestampExecutor = msg.InterpolationExecutor(k.timestamp)
+	}
+
 	boff := k.backoffCtor()
 
 	userDefinedHeaders := k.buildUserDefinedHeaders(k.staticHeaders)
 	msgs := []*sarama.ProducerMessage{}
 
 	for i := 0; i < len(msg); i++ {
-		key, err := msg.TryInterpolatedBytes(i, k.key)
+		key, err := keyExecutor.TryBytes(i)
 		if err != nil {
 			return fmt.Errorf("key interpolation error: %w", err)
 		}
-		topic, err := msg.TryInterpolatedString(i, k.topic)
+		topic, err := topicExecutor.TryString(i)
 		if err != nil {
 			return fmt.Errorf("topic interpolation error: %w", err)
 		}
@@ -543,8 +554,8 @@ func (k *kafkaWriter) WriteBatch(ctx context.Context, msg service.MessageBatch) 
 		// partitioner.  Although samara will (currently) ignore the partition
 		// field when not using a manual partitioner, we should only set it when
 		// we explicitly want that.
-		if k.partition != nil {
-			partitionString, err := msg.TryInterpolatedString(i, k.partition)
+		if partitionExecutor != nil {
+			partitionString, err := partitionExecutor.TryString(i)
 			if err != nil {
 				return fmt.Errorf("partition interpolation error: %w", err)
 			}
@@ -563,8 +574,8 @@ func (k *kafkaWriter) WriteBatch(ctx context.Context, msg service.MessageBatch) 
 			nextMsg.Partition = int32(partitionInt)
 		}
 
-		if k.timestamp != nil {
-			if tsStr, err := msg.TryInterpolatedString(i, k.timestamp); err != nil {
+		if timestampExecutor != nil {
+			if tsStr, err := timestampExecutor.TryString(i); err != nil {
 				return fmt.Errorf("timestamp interpolation error: %w", err)
 			} else {
 				if ts, err := strconv.ParseInt(tsStr, 10, 64); err != nil {

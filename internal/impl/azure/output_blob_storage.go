@@ -49,11 +49,7 @@ func bsoConfigFromParsed(pConf *service.ParsedConfig) (conf bsoConfig, err error
 		return
 	}
 	var containerSASToken bool
-	c, err := conf.Container.TryString(service.NewMessage([]byte("")))
-	if err != nil {
-		return
-	}
-	if conf.client, containerSASToken, err = blobStorageClientFromParsed(pConf, c); err != nil {
+	if conf.client, containerSASToken, err = blobStorageClientFromParsed(pConf, conf.Container); err != nil {
 		return
 	}
 	if containerSASToken {
@@ -99,10 +95,10 @@ If the `+"`storage_connection_string`"+` does not contain the `+"`AccountName`"+
 				Example(`messages-${!timestamp("2006")}`),
 			service.NewInterpolatedStringField(bsoFieldPath).
 				Description("The path of each message to upload.").
-				Example(`${!count("files")}-${!timestamp_unix_nano()}.json`).
+				Example(`${!counter()}-${!timestamp_unix_nano()}.json`).
 				Example(`${!meta("kafka_key")}.json`).
 				Example(`${!json("doc.namespace")}/${!json("doc.id")}.json`).
-				Default(`${!count("files")}-${!timestamp_unix_nano()}.txt`),
+				Default(`${!counter()}-${!timestamp_unix_nano()}.txt`),
 			service.NewInterpolatedStringEnumField(bsoFieldBlobType, "BLOCK", "APPEND").
 				Description("Block and Append blobs are comprized of blocks, and each blob can support up to 50,000 blocks. The default value is `+\"`BLOCK`\"+`.`").
 				Advanced().

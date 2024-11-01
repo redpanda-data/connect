@@ -161,7 +161,7 @@ func testOpenSearchNoIndex(urls []string, client *os.Client, t *testing.T) {
 
 	m := outputFromConf(t, `
 index: does_not_exist
-id: 'foo-${!count("noIndexTest")}'
+id: 'foo-${!counter()}'
 urls: %v
 action: index
 `, urls)
@@ -284,7 +284,7 @@ func testOpenSearchConnect(urls []string, client *os.Client, t *testing.T) {
 
 	m := outputFromConf(t, `
 index: test_conn_index
-id: 'foo-${!count("foo")}'
+id: 'foo-${!counter()}'
 urls: %v
 action: index
 `, urls)
@@ -325,7 +325,7 @@ func testOpenSearchIndexInterpolation(urls []string, client *os.Client, t *testi
 
 	m := outputFromConf(t, `
 index: ${! @index }
-id: 'bar-${!count("bar")}'
+id: 'bar-${!counter()}'
 urls: %v
 action: index
 `, urls)
@@ -365,7 +365,7 @@ func testOpenSearchBatch(urls []string, client *os.Client, t *testing.T) {
 
 	m := outputFromConf(t, `
 index: ${! @index }
-id: 'baz-${!count("baz")}'
+id: 'baz-${!counter()}'
 urls: %v
 action: index
 `, urls)

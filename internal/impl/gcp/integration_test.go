@@ -103,7 +103,7 @@ func TestIntegrationGCP(t *testing.T) {
 output:
   gcp_cloud_storage:
     bucket: $VAR1-$ID
-    path: $VAR2/${!count("$ID")}.txt
+    path: $VAR2/${!counter()}.txt
     max_in_flight: 1
     collision_mode: overwrite
 
