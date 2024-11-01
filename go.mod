@@ -92,7 +92,6 @@ require (
 	github.com/opensearch-project/opensearch-go/v3 v3.1.0
 	github.com/ory/dockertest/v3 v3.11.0
 	github.com/oschwald/geoip2-golang v1.11.0
-	github.com/panjf2000/ants/v2 v2.10.0
 	github.com/parquet-go/parquet-go v0.23.0
 	github.com/pebbe/zmq4 v1.2.11
 	github.com/pinecone-io/go-pinecone v1.0.0
@@ -153,6 +152,7 @@ require (
 	cloud.google.com/go/longrunning v0.5.9 // indirect
 	github.com/containerd/platforms v0.2.1 // indirect
 	github.com/hamba/avro/v2 v2.22.2-0.20240625062549-66aad10411d9 // indirect
+	github.com/jackc/puddle/v2 v2.2.1 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect

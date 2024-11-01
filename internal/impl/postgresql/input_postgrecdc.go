@@ -13,17 +13,36 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/Jeffail/checkpoint"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/lucasepe/codename"
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream"
+)
+
+const (
+	fieldHost                    = "host"
+	fieldPort                    = "port"
+	fieldUser                    = "user"
+	fieldPass                    = "password"
+	fieldSchema                  = "schema"
+	fieldDatabase                = "database"
+	fieldTls                     = "tls"
+	fieldStreamUncomitted        = "stream_uncomitted"
+	fieldPgConnOptions           = "pg_conn_options"
+	fieldStreamSnapshot          = "stream_snapshot"
+	fieldSnapshotMemSafetyFactor = "snapshot_memory_safety_factor"
+	fieldSnapshotBatchSize       = "snapshot_batch_size"
+	fieldDecodingPlugin          = "decoding_plugin"
+	fieldTables                  = "tables"
+	fieldCheckpointLimit         = "checkpoint_limit"
+	fieldTemporarySlot           = "temporary_slot"
+	fieldSlotName                = "slot_name"
+	fieldBatching                = "batching"
 )
 
 var randomSlotName string
@@ -45,68 +64,69 @@ This input adds the following metadata fields to each message:
 - table (Name of the table that the message originated from)
 - operation (Type of operation that generated the message, such as INSERT, UPDATE, or DELETE)
 		`).
-	Field(service.NewStringField("host").
+	Field(service.NewStringField(fieldHost).
 		Description("The hostname or IP address of the PostgreSQL instance.").
 		Example("123.0.0.1")).
-	Field(service.NewIntField("port").
+	Field(service.NewIntField(fieldPort).
 		Description("The port number on which the PostgreSQL instance is listening.").
 		Example(5432).
 		Default(5432)).
-	Field(service.NewStringField("user").
+	Field(service.NewStringField(fieldUser).
 		Description("Username of a user with replication permissions. For AWS RDS, this typically requires superuser privileges.").
 		Example("postgres"),
 	).
-	Field(service.NewStringField("password").
+	Field(service.NewStringField(fieldPass).
 		Description("Password for the specified PostgreSQL user.")).
-	Field(service.NewStringField("schema").
+	Field(service.NewStringField(fieldSchema).
 		Description("The PostgreSQL schema from which to replicate data.")).
-	Field(service.NewStringField("database").
+	Field(service.NewStringField(fieldDatabase).
 		Description("The name of the PostgreSQL database to connect to.")).
-	Field(service.NewStringEnumField("tls", "require", "none").
+	Field(service.NewTLSToggledField(fieldTls).
 		Description("Specifies whether to use TLS for the database connection. Set to 'require' to enforce TLS, or 'none' to disable it.").
-		Example("none").
-		Default("none")).
-	Field(service.NewBoolField("stream_uncomited").
+		Default(nil)).
+	Field(service.NewBoolField(fieldStreamUncomitted).
 		Description("If set to true, the plugin will stream uncommitted transactions before receiving a commit message from PostgreSQL. This may result in duplicate records if the connector is restarted.").
 		Default(false)).
-	Field(service.NewStringField("pg_conn_options").
+	Field(service.NewStringField(fieldPgConnOptions).
 		Description("Additional PostgreSQL connection options as a string. Refer to PostgreSQL documentation for available options.").
 		Default(""),
 	).
-	Field(service.NewBoolField("stream_snapshot").
+	Field(service.NewBoolField(fieldStreamSnapshot).
 		Description("When set to true, the plugin will first stream a snapshot of all existing data in the database before streaming changes.").
 		Example(true).
 		Default(false)).
-	Field(service.NewFloatField("snapshot_memory_safety_factor").
+	Field(service.NewFloatField(fieldSnapshotMemSafetyFactor).
 		Description("Determines the fraction of available memory that can be used for streaming the snapshot. Values between 0 and 1 represent the percentage of memory to use. Lower values make initial streaming slower but help prevent out-of-memory errors.").
 		Example(0.2).
 		Default(1)).
-	Field(service.NewIntField("snapshot_batch_size").
+	Field(service.NewIntField(fieldSnapshotBatchSize).
 		Description("The number of rows to fetch in each batch when querying the snapshot. A value of 0 lets the plugin determine the batch size based on `snapshot_memory_safety_factor` property.").
 		Example(10000).
 		Default(0)).
-	Field(service.NewStringEnumField("decoding_plugin", "pgoutput", "wal2json").
-		Description("Specifies the logical decoding plugin to use for streaming changes from PostgreSQL. 'pgoutput' is the native logical replication protocol, while 'wal2json' provides change data as JSON.").
+	Field(service.NewStringEnumField(fieldDecodingPlugin, "pgoutput", "wal2json").
+		Description(`Specifies the logical decoding plugin to use for streaming changes from PostgreSQL. 'pgoutput' is the native logical replication protocol, while 'wal2json' provides change data as JSON.
+		Important: No matter which plugin you choose, the data will be converted to JSON before sending it to Benthos.
+		`).
 		Example("pgoutput").
 		Default("pgoutput")).
-	Field(service.NewStringListField("tables").
+	Field(service.NewStringListField(fieldTables).
 		Description("A list of table names to include in the logical replication. Each table should be specified as a separate item.").
 		Example(`
 			- my_table
 			- my_table_2
 		`)).
-	Field(service.NewIntField("checkpoint_limit").
-		Description("The maximum number of messages of the same topic and partition that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level to work on individual partitions. Any given offset will not be committed unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
+	Field(service.NewIntField(fieldCheckpointLimit).
+		Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given LSN will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
 		Version("3.33.0").Default(1024)).
-	Field(service.NewBoolField("temporary_slot").
+	Field(service.NewBoolField(fieldTemporarySlot).
 		Description("If set to true, creates a temporary replication slot that is automatically dropped when the connection is closed.").
 		Default(false)).
-	Field(service.NewStringField("slot_name").
+	Field(service.NewStringField(fieldSlotName).
 		Description("The name of the PostgreSQL logical replication slot to use. If not provided, a random name will be generated. You can create this slot manually before starting replication if desired.").
 		Example("my_test_slot").
 		Default(randomSlotName)).
 	Field(service.NewAutoRetryNacksToggleField()).
-	Field(service.NewBatchPolicyField("batching").Advanced())
+	Field(service.NewBatchPolicyField(fieldBatching))
 
 func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s service.BatchInput, err error) {
 	var (
@@ -118,7 +138,6 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		dbPassword              string
 		dbSlotName              string
 		temporarySlot           bool
-		tlsSetting              string
 		tables                  []string
 		streamSnapshot          bool
 		snapshotMemSafetyFactor float64
@@ -130,90 +149,86 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		batching                service.BatchPolicy
 	)
 
-	dbSchema, err = conf.FieldString("schema")
+	dbSchema, err = conf.FieldString(fieldSchema)
 	if err != nil {
 		return nil, err
 	}
 
-	dbSlotName, err = conf.FieldString("slot_name")
+	dbSlotName, err = conf.FieldString(fieldSlotName)
 	if err != nil {
 		return nil, err
 	}
 
-	temporarySlot, err = conf.FieldBool("temporary_slot")
+	temporarySlot, err = conf.FieldBool(fieldTemporarySlot)
 	if err != nil {
 		return nil, err
 	}
 
-	if dbSlotName == "" {
-		dbSlotName = randomSlotName
-	}
-
-	dbPassword, err = conf.FieldString("password")
+	dbPassword, err = conf.FieldString(fieldPass)
 	if err != nil {
 		return nil, err
 	}
 
-	dbUser, err = conf.FieldString("user")
+	dbUser, err = conf.FieldString(fieldUser)
 	if err != nil {
 		return nil, err
 	}
 
-	tlsSetting, err = conf.FieldString("tls")
+	tlsConf, tlsEnabled, err := conf.FieldTLSToggled(fieldTls)
 	if err != nil {
 		return nil, err
 	}
 
-	dbName, err = conf.FieldString("database")
+	dbName, err = conf.FieldString(fieldDatabase)
 	if err != nil {
 		return nil, err
 	}
 
-	dbHost, err = conf.FieldString("host")
+	dbHost, err = conf.FieldString(fieldHost)
 	if err != nil {
 		return nil, err
 	}
 
-	dbPort, err = conf.FieldInt("port")
+	dbPort, err = conf.FieldInt(fieldPort)
 	if err != nil {
 		return nil, err
 	}
 
-	tables, err = conf.FieldStringList("tables")
+	tables, err = conf.FieldStringList(fieldTables)
 	if err != nil {
 		return nil, err
 	}
 
-	if checkpointLimit, err = conf.FieldInt("checkpoint_limit"); err != nil {
+	if checkpointLimit, err = conf.FieldInt(fieldCheckpointLimit); err != nil {
 		return nil, err
 	}
 
-	streamSnapshot, err = conf.FieldBool("stream_snapshot")
+	streamSnapshot, err = conf.FieldBool(fieldStreamSnapshot)
 	if err != nil {
 		return nil, err
 	}
 
-	streamUncomited, err = conf.FieldBool("stream_uncomited")
+	streamUncomited, err = conf.FieldBool(fieldStreamUncomitted)
 	if err != nil {
 		return nil, err
 	}
 
-	decodingPlugin, err = conf.FieldString("decoding_plugin")
+	decodingPlugin, err = conf.FieldString(fieldDecodingPlugin)
 	if err != nil {
 		return nil, err
 	}
 
-	snapshotMemSafetyFactor, err = conf.FieldFloat("snapshot_memory_safety_factor")
+	snapshotMemSafetyFactor, err = conf.FieldFloat(fieldSnapshotMemSafetyFactor)
 	if err != nil {
 		return nil, err
 	}
 
-	snapshotBatchSize, err = conf.FieldInt("snapshot_batch_size")
+	snapshotBatchSize, err = conf.FieldInt(fieldSnapshotBatchSize)
 	if err != nil {
 		return nil, err
 	}
 
-	if pgConnOptions, err = conf.FieldString("pg_conn_options"); err != nil {
+	if pgConnOptions, err = conf.FieldString(fieldPgConnOptions); err != nil {
 		return nil, err
 	}
 
@@ -221,31 +236,28 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		pgConnOptions = "options=" + pgConnOptions
 	}
 
-	if batching, err = conf.FieldBatchPolicy("batching"); err != nil {
+	if batching, err = conf.FieldBatchPolicy(fieldBatching); err != nil {
 		return nil, err
 	} else if batching.IsNoop() {
 		batching.Count = 1
 	}
 
 	pgconnConfig := pgconn.Config{
-		Host:     dbHost,
-		Port:     uint16(dbPort),
-		Database: dbName,
-		User:     dbUser,
-		TLSConfig: &tls.Config{
-			InsecureSkipVerify: true,
-		},
-		Password: dbPassword,
+		Host:      dbHost,
+		Port:      uint16(dbPort),
+		Database:  dbName,
+		User:      dbUser,
+		TLSConfig: tlsConf,
+		Password:  dbPassword,
 	}
 
-	if tlsSetting == "none" {
+	if !tlsEnabled {
 		pgconnConfig.TLSConfig = nil
+		tlsConf = nil
 	}
 
 	snapsotMetrics := mgr.Metrics().NewGauge("snapshot_progress", "table")
 	replicationLag := mgr.Metrics().NewGauge("replication_lag_bytes")
-	snapshotMessageRate := mgr.Metrics().NewGauge("snapshot_message_rate")
-	snapshotRateCounter := NewRateCounter()
 
 	i := &pgStreamInput{
 		dbConfig:                pgconnConfig,
@@ -254,14 +266,12 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		slotName:                dbSlotName,
 		schema:                  dbSchema,
 		pgConnRuntimeParam:      pgConnOptions,
-		tls:                     pglogicalstream.TLSVerify(tlsSetting),
+		tls:                     tlsConf,
 		tables:                  tables,
 		decodingPlugin:          decodingPlugin,
 		streamUncomited:         streamUncomited,
 		temporarySlot:           temporarySlot,
 		snapshotBatchSize:       snapshotBatchSize,
-		snapshotMessageRate:     snapshotMessageRate,
-		snapshotRateCounter:     snapshotRateCounter,
 		batching:                batching,
 		checkpointLimit:         checkpointLimit,
 		cMut:                    sync.Mutex{},
@@ -285,9 +295,6 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 }
 
 func init() {
-	rng, _ := codename.DefaultRNG()
-	randomSlotName = strings.ReplaceAll(codename.Generate(rng, 5), "-", "_")
-
 	err := service.RegisterBatchInput(
 		"pg_stream", pgStreamConfigSpec,
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
@@ -300,7 +307,7 @@ func init() {
 
 type pgStreamInput struct {
 	dbConfig                pgconn.Config
-	tls                     pglogicalstream.TLSVerify
+	tls                     *tls.Config
 	pglogicalStream         *pglogicalstream.Stream
 	pgConnRuntimeParam      string
 	slotName                string
@@ -330,7 +337,7 @@ type pgStreamInput struct {
 }
 
 func (p *pgStreamInput) Connect(ctx context.Context) error {
-	pgStream, err := pglogicalstream.NewPgStream(pglogicalstream.Config{
+	pgStream, err := pglogicalstream.NewPgStream(ctx, &pglogicalstream.Config{
 		PgConnRuntimeParam:       p.pgConnRuntimeParam,
 		DBHost:                   p.dbConfig.Host,
 		DBPassword:               p.dbConfig.Password,
@@ -340,7 +347,7 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 		DBName:                   p.dbConfig.Database,
 		DBSchema:                 p.schema,
 		ReplicationSlotName:      "rs_" + p.slotName,
-		TLSVerify:                p.tls,
+		TLSConfig:                p.tls,
 		BatchSize:                p.snapshotBatchSize,
 		StreamOldData:            p.streamSnapshot,
 		TemporaryReplicationSlot: p.temporarySlot,
@@ -389,7 +396,7 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 					break
 				}
 
-				// TrxCommit LSN must be acked when all the bessages in the batch are processed
+				// TrxCommit LSN must be acked when all the messages in the batch are processed
 			case trxCommitLsn, open := <-p.pglogicalStream.AckTxChan():
 				if !open {
 					break
@@ -449,9 +456,6 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 				if message.WALLagBytes != nil {
 					p.replicationLag.Set(*message.WALLagBytes)
 				}
-
-				p.snapshotRateCounter.Increment()
-				p.snapshotMessageRate.SetFloat64(p.snapshotRateCounter.Rate())
 
 				if batchPolicy.Add(batchMsg) {
 					nextTimedBatchChan = nil

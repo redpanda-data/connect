@@ -14,24 +14,21 @@ import (
 	"regexp"
 	"strconv"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/stdlib"
 )
 
-func openPgConnectionFromConfig(dbConf pgconn.Config) (*sql.DB, error) {
-	var sslMode string
-	if dbConf.TLSConfig != nil {
-		sslMode = "require"
-	} else {
-		sslMode = "disable"
-	}
-	connStr := fmt.Sprintf("user=%s password=%s host=%s port=%d dbname=%s sslmode=%s", dbConf.User,
-		dbConf.Password, dbConf.Host, dbConf.Port, dbConf.Database, sslMode,
-	)
+func openPgConnectionFromConfig(dbConf *pgconn.Config) (*sql.DB, error) {
+	conf, _ := pgx.ParseConfig("")
+	delete(dbConf.RuntimeParams, "replication")
+	conf.Config = *dbConf
+	connStr := stdlib.RegisterConnConfig(conf)
 
-	return sql.Open("postgres", connStr)
+	return sql.Open("pgx", connStr)
 }
 
-func getPostgresVersion(connConfig pgconn.Config) (int, error) {
+func getPostgresVersion(connConfig *pgconn.Config) (int, error) {
 	conn, err := openPgConnectionFromConfig(connConfig)
 	if err != nil {
 		return 0, fmt.Errorf("failed to connect to the database: %w", err)

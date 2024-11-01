@@ -49,7 +49,7 @@ type Monitor struct {
 
 // NewMonitor creates a new Monitor instance
 func NewMonitor(conf *pgconn.Config, logger *service.Logger, tables []string, slotName string) (*Monitor, error) {
-	dbConn, err := openPgConnectionFromConfig(*conf)
+	dbConn, err := openPgConnectionFromConfig(conf)
 	if err != nil {
 		return nil, err
 	}

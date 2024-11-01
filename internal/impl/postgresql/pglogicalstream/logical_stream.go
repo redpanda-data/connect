@@ -10,7 +10,6 @@ package pglogicalstream
 
 import (
 	"context"
-	"crypto/tls"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -22,6 +21,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgproto3"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/lucasepe/codename"
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
@@ -31,7 +31,7 @@ type Stream struct {
 	pgConn *pgconn.PgConn
 	// extra copy of db config is required to establish a new db connection
 	// which is required to take snapshot data
-	dbConfig     pgconn.Config
+	dbConfig     *pgconn.Config
 	streamCtx    context.Context
 	streamCancel context.CancelFunc
 
@@ -67,44 +67,35 @@ type Stream struct {
 }
 
 // NewPgStream creates a new instance of the Stream struct
-func NewPgStream(config Config) (*Stream, error) {
+func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	var (
 		cfg *pgconn.Config
 		err error
 	)
-
-	sslVerifyFull := ""
-	if config.TLSVerify == TLSRequireVerify {
-		sslVerifyFull = "&sslmode=verify-full"
-	}
 
 	connectionParams := ""
 	if config.PgConnRuntimeParam != "" {
 		connectionParams = "&" + config.PgConnRuntimeParam
 	}
 
-	q := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?replication=database%s%s",
+	// intentiolly omit password to support password with special characters
+	// a new lines below cfg.Password = config.DBPassword
+	// we also need to use pgconn.ParseConfig since we are going to use this pased config to connect to the database for snapshot
+	// pgx panics when connection is not created via PaseConfig method
+	q := fmt.Sprintf("postgres://%s@%s:%d/%s?replication=database%s",
 		config.DBUser,
-		config.DBPassword,
 		config.DBHost,
 		config.DBPort,
 		config.DBName,
-		sslVerifyFull,
 		connectionParams,
 	)
 
 	if cfg, err = pgconn.ParseConfig(q); err != nil {
 		return nil, err
 	}
-	cfg.Password = config.DBPassword
 
-	if config.TLSVerify == TLSRequireVerify {
-		cfg.TLSConfig = &tls.Config{
-			InsecureSkipVerify: true,
-		}
-	} else {
-		cfg.TLSConfig = nil
-	}
+	cfg.Password = config.DBPassword
+	cfg.TLSConfig = config.TLSConfig
 
 	dbConn, err := pgconn.ConnectConfig(context.Background(), cfg)
 	if err != nil {
@@ -118,9 +109,14 @@ func NewPgStream(config Config) (*Stream, error) {
 	var tableNames []string
 	tableNames = append(tableNames, config.DBTables...)
 
+	if config.ReplicationSlotName == "" {
+		rng, _ := codename.DefaultRNG()
+		config.ReplicationSlotName = strings.ReplaceAll(codename.Generate(rng, 5), "-", "_")
+	}
+
 	stream := &Stream{
 		pgConn:                     dbConn,
-		dbConfig:                   *cfg,
+		dbConfig:                   cfg,
 		messages:                   make(chan StreamMessage),
 		slotName:                   config.ReplicationSlotName,
 		schema:                     config.DBSchema,
@@ -142,7 +138,7 @@ func NewPgStream(config Config) (*Stream, error) {
 	}
 
 	var version int
-	version, err = getPostgresVersion(*cfg)
+	version, err = getPostgresVersion(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -180,30 +176,29 @@ func NewPgStream(config Config) (*Stream, error) {
 
 	stream.decodingPluginArguments = pluginArguments
 
-	// create snapshot transaction before creating a slot for older PostgreSQL versions to ensure consistency
-
 	pubName := "pglog_stream_" + config.ReplicationSlotName
-	fmt.Println("Creating publication", pubName, "for tables", tableNames)
-	if err = CreatePublication(context.Background(), stream.pgConn, pubName, tableNames, true); err != nil {
+	stream.logger.Debugf("Creating publication %s for tables: %s", pubName, tableNames)
+	if err = CreatePublication(ctx, stream.pgConn, pubName, tableNames, true); err != nil {
 		return nil, err
 	}
 
-	sysident, err := IdentifySystem(context.Background(), stream.pgConn)
+	sysident, err := IdentifySystem(ctx, stream.pgConn)
 	if err != nil {
 		return nil, err
 	}
 
 	var freshlyCreatedSlot = false
 	var confirmedLSNFromDB string
+	var outputPlugin string
 	// check is replication slot exist to get last restart SLN
-	connExecResult := stream.pgConn.Exec(context.TODO(), fmt.Sprintf("SELECT confirmed_flush_lsn FROM pg_replication_slots WHERE slot_name = '%s'", config.ReplicationSlotName))
+	connExecResult := stream.pgConn.Exec(ctx, fmt.Sprintf("SELECT confirmed_flush_lsn, plugin FROM pg_replication_slots WHERE slot_name = '%s'", config.ReplicationSlotName))
 	if slotCheckResults, err := connExecResult.ReadAll(); err != nil {
 		return nil, err
 	} else {
 		if len(slotCheckResults) == 0 || len(slotCheckResults[0].Rows) == 0 {
 			// here we create a new replication slot because there is no slot found
 			var createSlotResult CreateReplicationSlotResult
-			createSlotResult, err = CreateReplicationSlot(context.Background(), stream.pgConn, stream.slotName, stream.decodingPlugin.String(),
+			createSlotResult, err = CreateReplicationSlot(ctx, stream.pgConn, stream.slotName, stream.decodingPlugin.String(),
 				CreateReplicationSlotOptions{Temporary: config.TemporaryReplicationSlot,
 					SnapshotAction: "export",
 				}, version, stream.snapshotter)
@@ -215,10 +210,13 @@ func NewPgStream(config Config) (*Stream, error) {
 		} else {
 			slotCheckRow := slotCheckResults[0].Rows[0]
 			confirmedLSNFromDB = string(slotCheckRow[0])
+			outputPlugin = string(slotCheckRow[1])
 		}
 	}
 
-	// TODO:: check decoding plugin and replication slot plugin should match
+	if !freshlyCreatedSlot && outputPlugin != stream.decodingPlugin.String() {
+		return nil, fmt.Errorf("Replication slot %s already exists with different output plugin: %s", config.ReplicationSlotName, outputPlugin)
+	}
 
 	var lsnrestart LSN
 	if freshlyCreatedSlot {
@@ -245,7 +243,7 @@ func NewPgStream(config Config) (*Stream, error) {
 	}
 	stream.monitor = monitor
 
-	fmt.Println("Starting stream from LSN", stream.lsnrestart, "with clientXLogPos", stream.clientXLogPos, "and snapshot name", stream.snapshotName)
+	stream.logger.Debugf("Starting stream from LSN %s with clientXLogPos %s and snapshot name %s", stream.lsnrestart.String(), stream.clientXLogPos.String(), stream.snapshotName)
 	if !freshlyCreatedSlot || !config.StreamOldData {
 		if err = stream.startLr(); err != nil {
 			return nil, err
@@ -633,7 +631,7 @@ func (s *Stream) processSnapshot() {
 				}
 
 				queryDuration := time.Since(queryStart)
-				fmt.Printf("Query duration: %v %s \n", queryDuration, tableName)
+				s.logger.Debugf("Query duration: %v %s \n", queryDuration, tableName)
 
 				if snapshotRows.Err() != nil {
 					s.logger.Errorf("Failed to get snapshot data for table %v: %v", table, snapshotRows.Err().Error())
@@ -679,7 +677,6 @@ func (s *Stream) processSnapshot() {
 					totalScanDuration += scanEnd
 
 					if err != nil {
-						fmt.Println("Failed to scan row")
 						s.logger.Errorf("Failed to scan row for table %v: %v", table, err.Error())
 						if err = s.cleanUpOnFailure(); err != nil {
 							s.logger.Errorf("Failed to clean up resources on accident: %v", err.Error())
@@ -719,9 +716,9 @@ func (s *Stream) processSnapshot() {
 				}
 
 				batchEnd := time.Since(rowsStart)
-				fmt.Printf("Batch duration: %v %s \n", batchEnd, tableName)
-				fmt.Println("Scan duration", totalScanDuration, tableName)
-				fmt.Println("Waiting from benthos duration", totalWaitingFromBenthos, tableName)
+				s.logger.Debugf("Batch duration: %v %s \n", batchEnd, tableName)
+				s.logger.Debugf("Scan duration %v %s\n", totalScanDuration, tableName)
+				s.logger.Debugf("Waiting from benthos duration %v %s\n", totalWaitingFromBenthos, tableName)
 
 				offset += batchSize
 

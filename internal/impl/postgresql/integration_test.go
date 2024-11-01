@@ -34,7 +34,7 @@ func ResourceWithPostgreSQLVersion(t *testing.T, pool *dockertest.Pool, version 
 		Repository: "postgres",
 		Tag:        version,
 		Env: []string{
-			"POSTGRES_PASSWORD=secret",
+			"POSTGRES_PASSWORD=l]YLSc|4[i56%{gY",
 			"POSTGRES_USER=user_name",
 			"POSTGRES_DB=dbname",
 		},
@@ -56,7 +56,8 @@ func ResourceWithPostgreSQLVersion(t *testing.T, pool *dockertest.Pool, version 
 
 	hostAndPort := resource.GetHostPort("5432/tcp")
 	hostAndPortSplited := strings.Split(hostAndPort, ":")
-	databaseURL := fmt.Sprintf("user=user_name password=secret dbname=dbname sslmode=disable host=%s port=%s", hostAndPortSplited[0], hostAndPortSplited[1])
+	password := "l]YLSc|4[i56%{gY"
+	databaseURL := fmt.Sprintf("user=user_name password=%s dbname=dbname sslmode=disable host=%s port=%s", password, hostAndPortSplited[0], hostAndPortSplited[1])
 
 	var db *sql.DB
 	pool.MaxWait = 120 * time.Second
@@ -109,7 +110,7 @@ func TestIntegrationPgCDC(t *testing.T) {
 		Repository: "usedatabrew/pgwal2json",
 		Tag:        "16",
 		Env: []string{
-			"POSTGRES_PASSWORD=secret",
+			"POSTGRES_PASSWORD=l]YLSc|4[i56%{gY",
 			"POSTGRES_USER=user_name",
 			"POSTGRES_DB=dbname",
 		},
@@ -131,7 +132,8 @@ func TestIntegrationPgCDC(t *testing.T) {
 
 	hostAndPort := resource.GetHostPort("5432/tcp")
 	hostAndPortSplited := strings.Split(hostAndPort, ":")
-	databaseURL := fmt.Sprintf("user=user_name password=secret dbname=dbname sslmode=disable host=%s port=%s", hostAndPortSplited[0], hostAndPortSplited[1])
+	password := "l]YLSc|4[i56%{gY"
+	databaseURL := fmt.Sprintf("user=user_name password=%s dbname=dbname sslmode=disable host=%s port=%s", password, hostAndPortSplited[0], hostAndPortSplited[1])
 
 	var db *sql.DB
 
@@ -184,16 +186,15 @@ pg_stream:
     host: %s
     slot_name: test_slot
     user: user_name
-    password: secret
+    password: %s
     port: %s
     schema: public
     decoding_plugin: wal2json
-    tls: none
     stream_snapshot: true
     database: dbname
     tables:
        - flights
-`, hostAndPortSplited[0], hostAndPortSplited[1])
+`, hostAndPortSplited[0], password, hostAndPortSplited[1])
 
 	cacheConf := fmt.Sprintf(`
 label: pg_stream_cache
@@ -305,6 +306,7 @@ func TestIntegrationPgCDCForPgOutputPlugin(t *testing.T) {
 
 	hostAndPort := resource.GetHostPort("5432/tcp")
 	hostAndPortSplited := strings.Split(hostAndPort, ":")
+	password := "l]YLSc|4[i56%{gY"
 
 	require.NoError(t, err)
 
@@ -319,7 +321,7 @@ pg_stream:
     host: %s
     slot_name: test_slot_native_decoder
     user: user_name
-    password: secret
+    password: %s
     port: %s
     schema: public
     tls: none
@@ -328,7 +330,7 @@ pg_stream:
     database: dbname
     tables:
        - flights
-`, hostAndPortSplited[0], hostAndPortSplited[1])
+`, hostAndPortSplited[0], password, hostAndPortSplited[1])
 
 	cacheConf := fmt.Sprintf(`
 label: pg_stream_cache
@@ -450,7 +452,7 @@ pg_stream:
     snapshot_batch_size: 100000
     stream_snapshot: true
     decoding_plugin: pgoutput
-    stream_uncomited: false
+    stream_uncomitted: false
     temporary_slot: true
     database: %s
     tables:
@@ -541,6 +543,7 @@ func TestIntegrationPgCDCForPgOutputStreamUncomitedPlugin(t *testing.T) {
 
 	hostAndPort := resource.GetHostPort("5432/tcp")
 	hostAndPortSplited := strings.Split(hostAndPort, ":")
+	password := "l]YLSc|4[i56%{gY"
 
 	fake := faker.New()
 	for i := 0; i < 10000; i++ {
@@ -553,18 +556,17 @@ pg_stream:
     host: %s
     slot_name: test_slot_native_decoder
     user: user_name
-    password: secret
+    password: %s
     port: %s
     schema: public
-    tls: none
     snapshot_batch_size: 100
     stream_snapshot: true
     decoding_plugin: pgoutput
-    stream_uncomited: true
+    stream_uncomitted: true
     database: dbname
     tables:
        - flights
-`, hostAndPortSplited[0], hostAndPortSplited[1])
+`, hostAndPortSplited[0], password, hostAndPortSplited[1])
 
 	cacheConf := fmt.Sprintf(`
 label: pg_stream_cache
@@ -592,7 +594,8 @@ file:
 	require.NoError(t, err)
 
 	go func() {
-		_ = streamOut.Run(context.Background())
+		err = streamOut.Run(context.Background())
+		require.NoError(t, err)
 	}()
 
 	assert.Eventually(t, func() bool {
@@ -680,6 +683,7 @@ func TestIntegrationPgMultiVersionsCDCForPgOutputStreamUncomitedPlugin(t *testin
 
 		hostAndPort := resource.GetHostPort("5432/tcp")
 		hostAndPortSplited := strings.Split(hostAndPort, ":")
+		password := "l]YLSc|4[i56%{gY"
 
 		fake := faker.New()
 		for i := 0; i < 1000; i++ {
@@ -692,17 +696,16 @@ pg_stream:
     host: %s
     slot_name: test_slot_native_decoder
     user: user_name
-    password: secret
+    password: %s
     port: %s
     schema: public
-    tls: none
     stream_snapshot: true
     decoding_plugin: pgoutput
-    stream_uncomited: true
+    stream_uncomitted: true
     database: dbname
     tables:
        - flights
-`, hostAndPortSplited[0], hostAndPortSplited[1])
+`, hostAndPortSplited[0], password, hostAndPortSplited[1])
 
 		cacheConf := fmt.Sprintf(`
 label: pg_stream_cache
@@ -817,6 +820,7 @@ func TestIntegrationPgMultiVersionsCDCForPgOutputStreamComittedPlugin(t *testing
 
 		hostAndPort := resource.GetHostPort("5432/tcp")
 		hostAndPortSplited := strings.Split(hostAndPort, ":")
+		password := "l]YLSc|4[i56%{gY"
 
 		fake := faker.New()
 		for i := 0; i < 1000; i++ {
@@ -829,17 +833,16 @@ pg_stream:
     host: %s
     slot_name: test_slot_native_decoder
     user: user_name
-    password: secret
+    password: %s
     port: %s
     schema: public
-    tls: none
     stream_snapshot: true
     decoding_plugin: pgoutput
-    stream_uncomited: false
+    stream_uncomitted: false
     database: dbname
     tables:
        - flights
-`, hostAndPortSplited[0], hostAndPortSplited[1])
+`, hostAndPortSplited[0], password, hostAndPortSplited[1])
 
 		cacheConf := fmt.Sprintf(`
 label: pg_stream_cache

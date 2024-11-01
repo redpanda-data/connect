@@ -8,7 +8,11 @@
 
 package pglogicalstream
 
-import "github.com/redpanda-data/benthos/v4/public/service"
+import (
+	"crypto/tls"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
+)
 
 // Config is the configuration for the pglogicalstream plugin
 type Config struct {
@@ -26,8 +30,8 @@ type Config struct {
 	DBSchema string `yaml:"db_schema"`
 	// DbTables is the tables to stream changes from
 	DBTables []string `yaml:"db_tables"`
-	// TlsVerify is the TLS verification configuration
-	TLSVerify TLSVerify `yaml:"tls_verify"`
+	// TLSConfig is the TLS verification configuration
+	TLSConfig *tls.Config `yaml:"tls"`
 	// PgConnRuntimeParam is the runtime parameter for the PostgreSQL connection
 	PgConnRuntimeParam string `yaml:"pg_conn_options"`
 

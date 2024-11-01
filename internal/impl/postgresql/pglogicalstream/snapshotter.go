@@ -40,7 +40,7 @@ type Snapshotter struct {
 }
 
 // NewSnapshotter creates a new Snapshotter instance
-func NewSnapshotter(dbConf pgconn.Config, logger *service.Logger, version int) (*Snapshotter, error) {
+func NewSnapshotter(dbConf *pgconn.Config, logger *service.Logger, version int) (*Snapshotter, error) {
 	pgConn, err := openPgConnectionFromConfig(dbConf)
 	if err != nil {
 		return nil, err
