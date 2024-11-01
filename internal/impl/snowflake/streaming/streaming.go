@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/dustin/go-humanize"
 	"github.com/parquet-go/parquet-go"
 	"github.com/parquet-go/parquet-go/format"
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -271,6 +272,8 @@ func (c *SnowflakeIngestionChannel) nextRequestID() string {
 // InsertStats holds some basic statistics about the InsertRows operation
 type InsertStats struct {
 	BuildTime            time.Duration
+	ConvertTime          time.Duration
+	SerializeTime        time.Duration
 	UploadTime           time.Duration
 	CompressedOutputSize int
 }
@@ -280,6 +283,8 @@ type bdecPart struct {
 	parquetFile     []byte
 	parquetMetadata format.FileMetaData
 	stats           []*statsBuffer
+	convertTime     time.Duration
+	serializeTime   time.Duration
 }
 
 func (c *SnowflakeIngestionChannel) constructBdecPart(batch service.MessageBatch, metadata map[string]string) (bdecPart, error) {
@@ -290,6 +295,7 @@ func (c *SnowflakeIngestionChannel) constructBdecPart(batch service.MessageBatch
 	}
 	rowGroups := []rowGroup{}
 	const maxRowGroupSize = 50_000
+	convertStart := time.Now()
 	for i := 0; i < len(batch); i += maxRowGroupSize {
 		end := min(maxRowGroupSize, len(batch[i:]))
 		j := len(rowGroups)
@@ -304,6 +310,7 @@ func (c *SnowflakeIngestionChannel) constructBdecPart(batch service.MessageBatch
 	if err := wg.Wait(); err != nil {
 		return bdecPart{}, err
 	}
+	convertDone := time.Now()
 	allRows := make([]parquet.Row, 0, len(batch))
 	combinedStats := make([]*statsBuffer, len(c.schema.Fields()))
 	for i := range combinedStats {
@@ -329,11 +336,14 @@ func (c *SnowflakeIngestionChannel) constructBdecPart(batch service.MessageBatch
 	if err != nil {
 		return bdecPart{}, fmt.Errorf("unable to parse parquet metadata: %w", err)
 	}
+	done := time.Now()
 	return bdecPart{
 		unencryptedLen:  len(buf),
 		parquetFile:     buf,
 		parquetMetadata: fileMetadata,
 		stats:           combinedStats,
+		convertTime:     convertDone.Sub(convertStart),
+		serializeTime:   done.Sub(convertDone),
 	}, err
 }
 
@@ -452,6 +462,8 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 	insertStats.CompressedOutputSize = part.unencryptedLen
 	insertStats.BuildTime = uploadStartTime.Sub(startTime)
 	insertStats.UploadTime = uploadFinishTime.Sub(uploadStartTime)
+	insertStats.ConvertTime = part.convertTime
+	insertStats.SerializeTime = part.serializeTime
 	return insertStats, err
 }
 

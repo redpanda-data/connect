@@ -331,6 +331,8 @@ func newSnowflakeStreamer(
 		logger:           mgr.Logger(),
 		buildTime:        mgr.Metrics().NewTimer("snowflake_build_output_latency_ns"),
 		uploadTime:       mgr.Metrics().NewTimer("snowflake_upload_latency_ns"),
+		convertTime:      mgr.Metrics().NewTimer("snowflake_convert_latency_ns"),
+		serializeTime:    mgr.Metrics().NewTimer("snowflake_serialize_latency_ns"),
 		compressedOutput: mgr.Metrics().NewCounter("snowflake_compressed_output_size_bytes"),
 		initStatementsFn: initStatementsFn,
 	}
@@ -345,6 +347,8 @@ type snowflakeStreamerOutput struct {
 	compressedOutput  *service.MetricCounter
 	uploadTime        *service.MetricTimer
 	buildTime         *service.MetricTimer
+	convertTime       *service.MetricTimer
+	serializeTime     *service.MetricTimer
 
 	channelPrefix, db, schema, table string
 	mapping                          *bloblang.Executor
@@ -416,9 +420,13 @@ func (o *snowflakeStreamerOutput) WriteBatch(ctx context.Context, batch service.
 		}
 	}
 	stats, err := channel.InsertRows(ctx, batch)
-	o.compressedOutput.Incr(int64(stats.CompressedOutputSize))
-	o.uploadTime.Timing(stats.UploadTime.Nanoseconds())
-	o.buildTime.Timing(stats.BuildTime.Nanoseconds())
+	if err == nil {
+		o.compressedOutput.Incr(int64(stats.CompressedOutputSize))
+		o.uploadTime.Timing(stats.UploadTime.Nanoseconds())
+		o.buildTime.Timing(stats.BuildTime.Nanoseconds())
+		o.convertTime.Timing(stats.ConvertTime.Nanoseconds())
+		o.serializeTime.Timing(stats.SerializeTime.Nanoseconds())
+	}
 	// If there is some kind of failure, try to reopen the channel
 	if err != nil {
 		reopened, reopenErr := o.openChannel(ctx, channel.Name, channel.ID)
