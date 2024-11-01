@@ -256,7 +256,7 @@ type SnowflakeIngestionChannel struct {
 	encryptionInfo  *encryptionInfo
 	clientSequencer int64
 	rowSequencer    int64
-	transformers    map[string]*dataTransformer
+	transformers    []*dataTransformer
 	fileMetadata    map[string]string
 	buffer          *bytes.Buffer
 	// This is shared among the various open channels to get some uniqueness

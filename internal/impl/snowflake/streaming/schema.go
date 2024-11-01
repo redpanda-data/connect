@@ -27,6 +27,7 @@ type dataTransformer struct {
 	stats     *statsBuffer
 	column    *columnMetadata
 	buf       typedBuffer
+	name      string
 }
 
 func convertFixedType(column columnMetadata) (parquet.Node, dataConverter, typedBuffer, error) {
@@ -86,13 +87,13 @@ func convertFixedType(column columnMetadata) (parquet.Node, dataConverter, typed
 const maxJSONSize = 16*humanize.MiByte - 64
 
 // See ParquetTypeGenerator
-func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[string]*dataTransformer, map[string]string, error) {
+func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, []*dataTransformer, map[string]string, error) {
 	groupNode := parquet.Group{}
-	transformers := map[string]*dataTransformer{}
+	transformers := make([]*dataTransformer, len(columns))
 	// Don't write the sfVer key as it allows us to not have to narrow the numeric types in parquet.
 	typeMetadata := map[string]string{ /*"sfVer": "1,1"*/ }
 	var err error
-	for _, column := range columns {
+	for idx, column := range columns {
 		id := int(column.Ordinal)
 		var n parquet.Node
 		var converter dataConverter
@@ -209,7 +210,8 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, map[stri
 		)
 		name := normalizeColumnName(column.Name)
 		groupNode[name] = n
-		transformers[name] = &dataTransformer{
+		transformers[idx] = &dataTransformer{
+			name:      name,
 			converter: converter,
 			stats:     &statsBuffer{columnID: id},
 			column:    &column,
@@ -241,7 +243,7 @@ func (s *statsBuffer) Reset() {
 	s.nullCount = 0
 }
 
-func computeColumnEpInfo(stats map[string]*dataTransformer) map[string]fileColumnProperties {
+func computeColumnEpInfo(stats []*dataTransformer) map[string]fileColumnProperties {
 	info := map[string]fileColumnProperties{}
 	for _, transformer := range stats {
 		stat := transformer.stats

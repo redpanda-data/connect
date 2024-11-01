@@ -21,7 +21,10 @@ import (
 	"github.com/segmentio/encoding/thrift"
 )
 
-func messageToRow(msg *service.Message, out map[string]any) error {
+// messageToRow converts a message into columnar form using the provided name to index mapping.
+// We have to materialize the column into a row so that we can know if a column is null - the
+// msg can be sparse, but the row must not be sparse.
+func messageToRow(msg *service.Message, out []any, nameToPosition map[string]int) error {
 	v, err := msg.AsStructured()
 	if err != nil {
 		return fmt.Errorf("error extracting object from message: %w", err)
@@ -31,7 +34,13 @@ func messageToRow(msg *service.Message, out map[string]any) error {
 		return fmt.Errorf("expected object, got: %T", v)
 	}
 	for k, v := range row {
-		out[normalizeColumnName(k)] = v
+		idx, ok := nameToPosition[normalizeColumnName(k)]
+		if !ok {
+			// TODO(schema): Unknown column, we just skip it.
+			// In the future we may evolve the schema based on the new data.
+			continue
+		}
+		out[idx] = v
 	}
 	return nil
 }
@@ -46,7 +55,7 @@ func messageToRow(msg *service.Message, out map[string]any) error {
 func constructRowGroup(
 	batch service.MessageBatch,
 	schema *parquet.Schema,
-	transformers map[string]*dataTransformer,
+	transformers []*dataTransformer,
 ) ([]parquet.Row, error) {
 	// We write all of our data in a columnar fashion, but need to pivot that data so that we can feed it into
 	// out parquet library (which sadly will redo the pivot - maybe we need a lower level abstraction...).
@@ -54,34 +63,36 @@ func constructRowGroup(
 	// data to create rows of the data via an in-place transpose operation.
 	//
 	// TODO: Consider caching/pooling this matrix as I expect many are similarily sized.
-	matrix := make([]parquet.Value, len(batch)*len(schema.Fields()))
 	rowWidth := len(schema.Fields())
-	for idx, field := range schema.Fields() {
-		// The column index is consistent between two schemas that are the same because the schema fields are always
-		// in sorted order.
-		columnIndex := idx
-		t := transformers[field.Name()]
-		t.buf.Prepare(matrix, columnIndex, rowWidth)
+	matrix := make([]parquet.Value, len(batch)*rowWidth)
+	nameToPosition := make(map[string]int, rowWidth)
+	for idx, t := range transformers {
+		leaf, ok := schema.Lookup(t.name)
+		if !ok {
+			return nil, fmt.Errorf("invariant failed: unable to find column %q", t.name)
+		}
+		t.buf.Prepare(matrix, leaf.ColumnIndex, rowWidth)
 		t.stats.Reset()
+		nameToPosition[t.name] = idx
 	}
 	// First we need to shred our record into columns, snowflake's data model
 	// is thankfully a flat list of columns, so no dremel style record shredding
 	// is needed
-	row := map[string]any{}
+	row := make([]any, rowWidth)
 	for _, msg := range batch {
-		clear(row)
-		err := messageToRow(msg, row)
+		err := messageToRow(msg, row, nameToPosition)
 		if err != nil {
 			return nil, err
 		}
-		// We **must** write a null, so iterate over the schema not the record,
-		// which might be sparse
-		for name, t := range transformers {
-			v := row[name]
+		for i, v := range row {
+			t := transformers[i]
 			err = t.converter.ValidateAndConvert(t.stats, v, t.buf)
 			if err != nil {
-				return nil, fmt.Errorf("invalid data for column %s: %w", name, err)
+				// TODO(schema): if this is a null value err then we can evolve the schema to mark it null.
+				return nil, fmt.Errorf("invalid data for column %s: %w", t.name, err)
 			}
+			// reset the column as nil for the next row
+			row[i] = nil
 		}
 	}
 	// Now all our values have been written to each buffer - here is where we do our matrix

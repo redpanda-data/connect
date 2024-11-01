@@ -34,8 +34,9 @@ func TestWriteParquet(t *testing.T) {
 	inputDataSchema := parquet.Group{
 		"A": parquet.Decimal(0, 18, parquet.Int32Type),
 	}
-	transformers := map[string]*dataTransformer{
-		"A": {
+	transformers := []*dataTransformer{
+		{
+			name: "A",
 			converter: numberConverter{
 				nullable:  true,
 				scale:     0,
