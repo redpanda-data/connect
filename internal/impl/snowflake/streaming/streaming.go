@@ -73,7 +73,7 @@ func NewSnowflakeServiceClient(ctx context.Context, opts ClientOptions) (*Snowfl
 		opts.Account,
 		opts.User,
 		opts.ConnectVersion,
-		"Redpanda_Connect_"+opts.Application,
+		opts.Application,
 		opts.PrivateKey,
 		opts.Logger,
 	)
