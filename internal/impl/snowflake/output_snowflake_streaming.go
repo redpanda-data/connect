@@ -419,16 +419,16 @@ func (o *snowflakeStreamerOutput) WriteBatch(ctx context.Context, batch service.
 			return fmt.Errorf("unable to open snowflake streaming channel: %w", err)
 		}
 	}
+	o.logger.Debugf("inserting rows using channel %s", channel.Name)
 	stats, err := channel.InsertRows(ctx, batch)
 	if err == nil {
+		o.logger.Debugf("done inserting rows using channel %s, stats: %+v", channel.Name, stats)
 		o.compressedOutput.Incr(int64(stats.CompressedOutputSize))
 		o.uploadTime.Timing(stats.UploadTime.Nanoseconds())
 		o.buildTime.Timing(stats.BuildTime.Nanoseconds())
 		o.convertTime.Timing(stats.ConvertTime.Nanoseconds())
 		o.serializeTime.Timing(stats.SerializeTime.Nanoseconds())
-	}
-	// If there is some kind of failure, try to reopen the channel
-	if err != nil {
+	} else {
 		reopened, reopenErr := o.openChannel(ctx, channel.Name, channel.ID)
 		if reopenErr == nil {
 			o.channelPool.Put(reopened)
