@@ -11,7 +11,6 @@
 package streaming
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -137,14 +136,7 @@ func (c boolConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typed
 	if v {
 		i = int128.FromUint64(1)
 	}
-	if !stats.hasData {
-		stats.minIntVal = i
-		stats.maxIntVal = i
-		stats.hasData = true
-	} else {
-		stats.minIntVal = int128.Min(stats.minIntVal, i)
-		stats.maxIntVal = int128.Max(stats.maxIntVal, i)
-	}
+	stats.UpdateIntStats(i)
 	buf.WriteBool(v)
 	return nil
 }
@@ -218,14 +210,7 @@ func (c numberConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typ
 	if err != nil {
 		return err
 	}
-	if !stats.hasData {
-		stats.minIntVal = v
-		stats.maxIntVal = v
-		stats.hasData = true
-	} else {
-		stats.minIntVal = int128.Min(stats.minIntVal, v)
-		stats.maxIntVal = int128.Max(stats.maxIntVal, v)
-	}
+	stats.UpdateIntStats(v)
 	buf.WriteInt128(v)
 	return nil
 }
@@ -247,14 +232,7 @@ func (c doubleConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typ
 	if err != nil {
 		return err
 	}
-	if !stats.hasData {
-		stats.minRealVal = v
-		stats.maxRealVal = v
-		stats.hasData = true
-	} else {
-		stats.minRealVal = min(stats.minRealVal, v)
-		stats.maxRealVal = max(stats.maxRealVal, v)
-	}
+	stats.UpdateFloat64Stats(v)
 	buf.WriteFloat64(v)
 	return nil
 }
@@ -301,20 +279,7 @@ func (c binaryConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typ
 	if c.utf8 && !utf8.Valid(v) {
 		return errors.New("invalid UTF8")
 	}
-	if !stats.hasData {
-		stats.minStrVal = v
-		stats.maxStrVal = v
-		stats.maxStrLen = len(v)
-		stats.hasData = true
-	} else {
-		if bytes.Compare(v, stats.minStrVal) < 0 {
-			stats.minStrVal = v
-		}
-		if bytes.Compare(v, stats.maxStrVal) > 0 {
-			stats.maxStrVal = v
-		}
-		stats.maxStrLen = max(stats.maxStrLen, len(v))
-	}
+	stats.UpdateBytesStats(v)
 	buf.WriteBytes(v)
 	return nil
 }
@@ -337,20 +302,7 @@ func (c jsonConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typed
 	if len(v) > c.maxLength {
 		return fmt.Errorf("value too long, length: %d, max: %d", len(v), c.maxLength)
 	}
-	if !stats.hasData {
-		stats.minStrVal = v
-		stats.maxStrVal = v
-		stats.maxStrLen = len(v)
-		stats.hasData = true
-	} else {
-		if bytes.Compare(v, stats.minStrVal) < 0 {
-			stats.minStrVal = v
-		}
-		if bytes.Compare(v, stats.maxStrVal) > 0 {
-			stats.maxStrVal = v
-		}
-		stats.maxStrLen = max(stats.maxStrLen, len(v))
-	}
+	stats.UpdateBytesStats(v)
 	buf.WriteBytes(v)
 	return nil
 }
@@ -431,14 +383,7 @@ func (c timestampConverter) ValidateAndConvert(stats *statsBuffer, val any, buf 
 			c.precision,
 		)
 	}
-	if !stats.hasData {
-		stats.minIntVal = v
-		stats.maxIntVal = v
-		stats.hasData = true
-	} else {
-		stats.minIntVal = int128.Min(stats.minIntVal, v)
-		stats.maxIntVal = int128.Max(stats.maxIntVal, v)
-	}
+	stats.UpdateIntStats(v)
 	buf.WriteInt128(v)
 	return nil
 }
@@ -468,15 +413,7 @@ func (c timeConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typed
 		t.Second()*int(time.Second.Nanoseconds()) +
 		t.Nanosecond()
 	v := int128.FromInt64(int64(nanos) / pow10TableInt64[9-c.scale])
-	if !stats.hasData {
-		stats.minIntVal = v
-		stats.maxIntVal = v
-		stats.hasData = true
-	} else {
-		stats.minIntVal = int128.Min(stats.minIntVal, v)
-		stats.maxIntVal = int128.Max(stats.maxIntVal, v)
-	}
-	// TODO(perf): consider switching to int64 buffers so more stuff can fit in cache
+	stats.UpdateIntStats(v)
 	buf.WriteInt128(v)
 	return nil
 }
@@ -503,15 +440,7 @@ func (c dateConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typed
 		return fmt.Errorf("DATE columns out of range, year: %d", t.Year())
 	}
 	v := int128.FromInt64(t.Unix() / int64(24*60*60))
-	if !stats.hasData {
-		stats.minIntVal = v
-		stats.maxIntVal = v
-		stats.hasData = true
-	} else {
-		stats.minIntVal = int128.Min(stats.minIntVal, v)
-		stats.maxIntVal = int128.Max(stats.maxIntVal, v)
-	}
-	// TODO(perf): consider switching to int64 buffers so more stuff can fit in cache
+	stats.UpdateIntStats(v)
 	buf.WriteInt128(v)
 	return nil
 }

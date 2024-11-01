@@ -25,6 +25,45 @@ type statsBuffer struct {
 	hasData                bool
 }
 
+func (s *statsBuffer) UpdateIntStats(v int128.Num) {
+	if !s.hasData {
+		s.minIntVal = v
+		s.maxIntVal = v
+		s.hasData = true
+	} else {
+		s.minIntVal = int128.Min(s.minIntVal, v)
+		s.maxIntVal = int128.Max(s.maxIntVal, v)
+	}
+}
+
+func (s *statsBuffer) UpdateFloat64Stats(v float64) {
+	if !s.hasData {
+		s.minRealVal = v
+		s.maxRealVal = v
+		s.hasData = true
+	} else {
+		s.minRealVal = min(s.minRealVal, v)
+		s.maxRealVal = max(s.maxRealVal, v)
+	}
+}
+
+func (s *statsBuffer) UpdateBytesStats(v []byte) {
+	if !s.hasData {
+		s.minStrVal = v
+		s.maxStrVal = v
+		s.maxStrLen = len(v)
+		s.hasData = true
+	} else {
+		if bytes.Compare(v, s.minStrVal) < 0 {
+			s.minStrVal = v
+		}
+		if bytes.Compare(v, s.maxStrVal) > 0 {
+			s.maxStrVal = v
+		}
+		s.maxStrLen = max(s.maxStrLen, len(v))
+	}
+}
+
 func mergeStats(a, b *statsBuffer) *statsBuffer {
 	c := &statsBuffer{hasData: true}
 	switch {
