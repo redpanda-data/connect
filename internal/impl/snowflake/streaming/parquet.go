@@ -21,20 +21,19 @@ import (
 	"github.com/segmentio/encoding/thrift"
 )
 
-func messageToRow(msg *service.Message) (map[string]any, error) {
+func messageToRow(msg *service.Message, out map[string]any) error {
 	v, err := msg.AsStructured()
 	if err != nil {
-		return nil, fmt.Errorf("error extracting object from message: %w", err)
+		return fmt.Errorf("error extracting object from message: %w", err)
 	}
 	row, ok := v.(map[string]any)
 	if !ok {
-		return nil, fmt.Errorf("expected object, got: %T", v)
+		return fmt.Errorf("expected object, got: %T", v)
 	}
-	mapped := make(map[string]any, len(row))
 	for k, v := range row {
-		mapped[normalizeColumnName(k)] = v
+		out[normalizeColumnName(k)] = v
 	}
-	return mapped, nil
+	return nil
 }
 
 // TODO: If the memory pressure is too great from writing all
@@ -68,8 +67,10 @@ func constructRowGroup(
 	// First we need to shred our record into columns, snowflake's data model
 	// is thankfully a flat list of columns, so no dremel style record shredding
 	// is needed
+	row := map[string]any{}
 	for _, msg := range batch {
-		row, err := messageToRow(msg)
+		clear(row)
+		err := messageToRow(msg, row)
 		if err != nil {
 			return nil, err
 		}

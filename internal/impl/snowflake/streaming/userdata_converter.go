@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"time"
 	"unicode/utf8"
+	"unsafe"
 
 	"github.com/Jeffail/gabs/v2"
 	"github.com/parquet-go/parquet-go"
@@ -47,6 +48,13 @@ type typedBufferImpl struct {
 	columnIndex int
 	rowWidth    int
 	currentRow  int
+
+	// For int128 we don't make a bunch of small allocs,
+	// but append to this existing buffer a bunch, this
+	// saves GC pressure. We could optimize copies and
+	// reallocations, but this is simpler and seems to
+	// be effective for now.
+	scratch []byte
 }
 
 func (b *typedBufferImpl) WriteValue(v parquet.Value) {
@@ -57,7 +65,8 @@ func (b *typedBufferImpl) WriteNull() {
 	b.WriteValue(parquet.NullValue())
 }
 func (b *typedBufferImpl) WriteInt128(v int128.Num) {
-	b.WriteValue(parquet.FixedLenByteArrayValue(v.ToBigEndian()).Level(0, 1, b.columnIndex))
+	b.scratch = v.AppendBigEndian(b.scratch)
+	b.WriteValue(parquet.FixedLenByteArrayValue(b.scratch[len(b.scratch)-16:]).Level(0, 1, b.columnIndex))
 }
 func (b *typedBufferImpl) WriteBool(v bool) {
 	b.WriteValue(parquet.BooleanValue(v).Level(0, 1, b.columnIndex))
@@ -73,6 +82,9 @@ func (b *typedBufferImpl) Prepare(matrix []parquet.Value, columnIndex, rowWidth 
 	b.matrix = matrix
 	b.columnIndex = columnIndex
 	b.rowWidth = rowWidth
+	if b.scratch != nil {
+		b.scratch = b.scratch[:0]
+	}
 }
 func (b *typedBufferImpl) Reset() {
 	b.Prepare(nil, 0, 0)
@@ -258,9 +270,26 @@ func (c binaryConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typ
 		buf.WriteNull()
 		return nil
 	}
-	v, err := bloblang.ValueAsBytes(val)
-	if err != nil {
-		return err
+	var v []byte
+	switch t := val.(type) {
+	case string:
+		if t != "" {
+			// We don't modify this byte slice at all, so this is safe to grab the bytes
+			// without making a copy.
+			// Also make sure this isn't an empty string because it's undefined what the
+			// value is.
+			v = unsafe.Slice(unsafe.StringData(t), len(t))
+		} else {
+			v = []byte{}
+		}
+	case []byte:
+		v = t
+	default:
+		b, err := bloblang.ValueAsBytes(val)
+		if err != nil {
+			return err
+		}
+		v = b
 	}
 	if len(v) > c.maxLength {
 		return fmt.Errorf("value too long, length: %d, max: %d", len(v), c.maxLength)
