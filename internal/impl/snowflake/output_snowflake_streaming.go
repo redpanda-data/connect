@@ -21,19 +21,20 @@ import (
 )
 
 const (
-	ssoFieldAccount       = "account"
-	ssoFieldUser          = "user"
-	ssoFieldRole          = "role"
-	ssoFieldDB            = "database"
-	ssoFieldSchema        = "schema"
-	ssoFieldTable         = "table"
-	ssoFieldKey           = "private_key"
-	ssoFieldKeyFile       = "private_key_file"
-	ssoFieldKeyPass       = "private_key_pass"
-	ssoFieldInitStatement = "init_statement"
-	ssoFieldBatching      = "batching"
-	ssoFieldChannelPrefix = "channel_prefix"
-	ssoFieldMapping       = "mapping"
+	ssoFieldAccount          = "account"
+	ssoFieldUser             = "user"
+	ssoFieldRole             = "role"
+	ssoFieldDB               = "database"
+	ssoFieldSchema           = "schema"
+	ssoFieldTable            = "table"
+	ssoFieldKey              = "private_key"
+	ssoFieldKeyFile          = "private_key_file"
+	ssoFieldKeyPass          = "private_key_pass"
+	ssoFieldInitStatement    = "init_statement"
+	ssoFieldBatching         = "batching"
+	ssoFieldChannelPrefix    = "channel_prefix"
+	ssoFieldMapping          = "mapping"
+	ssoFieldBuildParallelism = "build_parallelism"
 )
 
 func snowflakeStreamingOutputConfig() *service.ConfigSpec {
@@ -91,6 +92,7 @@ CREATE TABLE IF NOT EXISTS mytable (amount NUMBER);
 ALTER TABLE t1 ALTER COLUMN c1 DROP NOT NULL;
 ALTER TABLE t1 ADD COLUMN a2 NUMBER;
 `),
+			service.NewIntField(ssoFieldBuildParallelism).Description("The maximum amount of parallelism to use when building the output for Snowflake. The metric to watch to see if you need to change this is `snowflake_build_output_latency_ns`.").Default(1).Advanced(),
 			service.NewBatchPolicyField(ssoFieldBatching),
 			service.NewOutputMaxInFlightField(),
 			service.NewStringField(ssoFieldChannelPrefix).
@@ -266,6 +268,10 @@ func newSnowflakeStreamer(
 			return nil, err
 		}
 	}
+	buildParallelism, err := conf.FieldInt(ssoFieldBuildParallelism)
+	if err != nil {
+		return nil, err
+	}
 	var channelPrefix string
 	if conf.Contains(ssoFieldChannelPrefix) {
 		channelPrefix, err = conf.FieldString(ssoFieldChannelPrefix)
@@ -335,6 +341,7 @@ func newSnowflakeStreamer(
 		serializeTime:    mgr.Metrics().NewTimer("snowflake_serialize_latency_ns"),
 		compressedOutput: mgr.Metrics().NewCounter("snowflake_compressed_output_size_bytes"),
 		initStatementsFn: initStatementsFn,
+		buildParallelism: buildParallelism,
 	}
 	return o, nil
 }
@@ -349,6 +356,7 @@ type snowflakeStreamerOutput struct {
 	buildTime         *service.MetricTimer
 	convertTime       *service.MetricTimer
 	serializeTime     *service.MetricTimer
+	buildParallelism  int
 
 	channelPrefix, db, schema, table string
 	mapping                          *bloblang.Executor
@@ -372,11 +380,12 @@ func (o *snowflakeStreamerOutput) openNewChannel(ctx context.Context) (*streamin
 func (o *snowflakeStreamerOutput) openChannel(ctx context.Context, name string, id int16) (*streaming.SnowflakeIngestionChannel, error) {
 	o.logger.Debugf("opening snowflake streaming channel: %s", name)
 	return o.client.OpenChannel(ctx, streaming.ChannelOptions{
-		ID:           id,
-		Name:         name,
-		DatabaseName: o.db,
-		SchemaName:   o.schema,
-		TableName:    o.table,
+		ID:               id,
+		Name:             name,
+		DatabaseName:     o.db,
+		SchemaName:       o.schema,
+		TableName:        o.table,
+		BuildParallelism: o.buildParallelism,
 	})
 }
 

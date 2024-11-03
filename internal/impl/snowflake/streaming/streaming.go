@@ -143,6 +143,8 @@ type ChannelOptions struct {
 	SchemaName string
 	// TableName is the name of the table
 	TableName string
+	// The max parallelism used to build parquet files and convert message batches into rows.
+	BuildParallelism int
 }
 
 type encryptionInfo struct {
@@ -288,6 +290,7 @@ type bdecPart struct {
 
 func (c *SnowflakeIngestionChannel) constructBdecPart(batch service.MessageBatch, metadata map[string]string) (bdecPart, error) {
 	wg := &errgroup.Group{}
+	wg.SetLimit(c.BuildParallelism)
 	type rowGroup struct {
 		rows  []parquet.Row
 		stats []*statsBuffer
@@ -363,7 +366,7 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 	c.fileMetadata["primaryFileId"] = path.Base(blobPath)
 	part, err := c.constructBdecPart(batch, c.fileMetadata)
 	if err != nil {
-		return insertStats, err
+		return insertStats, fmt.Errorf("unable to construct output: %w", err)
 	}
 	if debug {
 		_ = os.WriteFile("latest_test.parquet", part.parquetFile, 0o644)
@@ -372,7 +375,7 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 	unencrypted := padBuffer(part.parquetFile, aes.BlockSize)
 	part.parquetFile, err = encrypt(unencrypted, c.encryptionInfo.encryptionKey, blobPath, 0)
 	if err != nil {
-		return insertStats, err
+		return insertStats, fmt.Errorf("unable to encrypt output: %w", err)
 	}
 
 	uploadStartTime := time.Now()
@@ -386,7 +389,7 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 		return uploader.upload(ctx, blobPath, part.parquetFile, fullMD5Hash[:])
 	}, backoff.WithMaxRetries(backoff.NewConstantBackOff(time.Second), 3))
 	if err != nil {
-		return insertStats, err
+		return insertStats, fmt.Errorf("unable to upload to storage: %w", err)
 	}
 
 	uploadFinishTime := time.Now()
@@ -435,7 +438,7 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 		},
 	})
 	if err != nil {
-		return insertStats, err
+		return insertStats, fmt.Errorf("registering output failed: %w", err)
 	}
 	if len(resp.Blobs) != 1 {
 		return insertStats, fmt.Errorf("unexpected number of response blobs: %d", len(resp.Blobs))
