@@ -60,6 +60,7 @@ func TestWriteParquet(t *testing.T) {
 		batch,
 		schema,
 		transformers,
+		false,
 	)
 	require.NoError(t, err)
 	b, err := writeParquetFile("latest", parquetFileData{
