@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -21,7 +22,6 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgproto3"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/lucasepe/codename"
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
@@ -68,60 +68,29 @@ type Stream struct {
 
 // NewPgStream creates a new instance of the Stream struct
 func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
-	var (
-		cfg *pgconn.Config
-		err error
-	)
-
-	connectionParams := ""
-	if config.PgConnRuntimeParam != "" {
-		connectionParams = "&" + config.PgConnRuntimeParam
-	}
-
-	// intentiolly omit password to support password with special characters
-	// a new lines below cfg.Password = config.DBPassword
-	// we also need to use pgconn.ParseConfig since we are going to use this pased config to connect to the database for snapshot
-	// pgx panics when connection is not created via PaseConfig method
-	q := fmt.Sprintf("postgres://%s@%s:%d/%s?replication=database%s",
-		config.DBUser,
-		config.DBHost,
-		config.DBPort,
-		config.DBName,
-		connectionParams,
-	)
-
-	if cfg, err = pgconn.ParseConfig(q); err != nil {
-		return nil, err
-	}
-
-	cfg.Password = config.DBPassword
-	cfg.TLSConfig = config.TLSConfig
-
-	dbConn, err := pgconn.ConnectConfig(context.Background(), cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	if err = dbConn.Ping(context.Background()); err != nil {
-		return nil, err
-	}
-
-	var tableNames []string
-	tableNames = append(tableNames, config.DBTables...)
-
 	if config.ReplicationSlotName == "" {
 		return nil, errors.New("missing replication slot name")
 	}
 
+	dbConn, err := pgconn.ConnectConfig(ctx, config.DBConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = dbConn.Ping(ctx); err != nil {
+		return nil, err
+	}
+
+	tableNames := slices.Clone(config.DBTables)
 	stream := &Stream{
 		pgConn:                     dbConn,
-		dbConfig:                   cfg,
+		dbConfig:                   config.DBConfig,
 		messages:                   make(chan StreamMessage),
 		slotName:                   config.ReplicationSlotName,
-		schema:                     config.DBSchema,
 		snapshotMemorySafetyFactor: config.SnapshotMemorySafetyFactor,
-		streamUncomited:            config.StreamUncomited,
+		streamUncomited:            config.StreamUncommitted,
 		snapshotBatchSize:          config.BatchSize,
+		schema:                     config.DBSchema,
 		tableNames:                 tableNames,
 		consumedCallback:           make(chan bool),
 		transactionAckChan:         make(chan string),
@@ -137,7 +106,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	}
 
 	var version int
-	version, err = getPostgresVersion(cfg)
+	version, err = getPostgresVersion(config.DBConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -148,8 +117,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		if err = stream.cleanUpOnFailure(); err != nil {
 			stream.logger.Errorf("Failed to clean up resources on accident: %v", err.Error())
 		}
-
-		os.Exit(1)
+		return nil, err
 	}
 	stream.snapshotter = snapshotter
 
@@ -163,20 +131,22 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		if version > 14 {
 			pluginArguments = append(pluginArguments, "messages 'true'")
 		}
-	}
-
-	if stream.decodingPlugin == "wal2json" {
+	} else if stream.decodingPlugin == "wal2json" {
 		tablesFilterRule := strings.Join(tableNames, ", ")
 		pluginArguments = []string{
 			"\"pretty-print\" 'true'",
 			"\"add-tables\"" + " " + fmt.Sprintf("'%s'", tablesFilterRule),
 		}
+	} else {
+		return nil, fmt.Errorf("unknown decoding plugin: %q", stream.decodingPlugin)
 	}
 
 	stream.decodingPluginArguments = pluginArguments
 
 	pubName := "pglog_stream_" + config.ReplicationSlotName
 	stream.logger.Debugf("Creating publication %s for tables: %s", pubName, tableNames)
+	// QUESTION: Do we always want to drop existing publications? Does that stop old connect streams that
+	// are using the same replication slot name?
 	if err = CreatePublication(ctx, stream.pgConn, pubName, tableNames, true); err != nil {
 		return nil, err
 	}
@@ -190,27 +160,33 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	var confirmedLSNFromDB string
 	var outputPlugin string
 	// check is replication slot exist to get last restart SLN
-	connExecResult := stream.pgConn.Exec(ctx, fmt.Sprintf("SELECT confirmed_flush_lsn, plugin FROM pg_replication_slots WHERE slot_name = '%s'", config.ReplicationSlotName))
-	if slotCheckResults, err := connExecResult.ReadAll(); err != nil {
-		return nil, err
-	} else {
-		if len(slotCheckResults) == 0 || len(slotCheckResults[0].Rows) == 0 {
-			// here we create a new replication slot because there is no slot found
-			var createSlotResult CreateReplicationSlotResult
-			createSlotResult, err = CreateReplicationSlot(ctx, stream.pgConn, stream.slotName, stream.decodingPlugin.String(),
-				CreateReplicationSlotOptions{Temporary: config.TemporaryReplicationSlot,
-					SnapshotAction: "export",
-				}, version, stream.snapshotter)
-			if err != nil {
-				return nil, err
-			}
-			stream.snapshotName = createSlotResult.SnapshotName
-			freshlyCreatedSlot = true
-		} else {
-			slotCheckRow := slotCheckResults[0].Rows[0]
-			confirmedLSNFromDB = string(slotCheckRow[0])
-			outputPlugin = string(slotCheckRow[1])
+	connExecResult := stream.pgConn.ExecParams(
+		ctx,
+		"SELECT confirmed_flush_lsn, plugin FROM pg_replication_slots WHERE slot_name = $1",
+		[][]byte{[]byte(config.ReplicationSlotName)},
+		nil,
+		nil,
+		nil,
+	).Read()
+	if connExecResult.Err != nil {
+		return nil, connExecResult.Err
+	}
+	if len(connExecResult.Rows) == 0 {
+		// here we create a new replication slot because there is no slot found
+		var createSlotResult CreateReplicationSlotResult
+		createSlotResult, err = CreateReplicationSlot(ctx, stream.pgConn, stream.slotName, stream.decodingPlugin.String(),
+			CreateReplicationSlotOptions{Temporary: config.TemporaryReplicationSlot,
+				SnapshotAction: "export",
+			}, version, stream.snapshotter)
+		if err != nil {
+			return nil, err
 		}
+		stream.snapshotName = createSlotResult.SnapshotName
+		freshlyCreatedSlot = true
+	} else {
+		slotCheckRow := connExecResult.Rows[0]
+		confirmedLSNFromDB = string(slotCheckRow[0])
+		outputPlugin = string(slotCheckRow[1])
 	}
 
 	if !freshlyCreatedSlot && outputPlugin != stream.decodingPlugin.String() {
@@ -236,7 +212,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	stream.nextStandbyMessageDeadline = time.Now().Add(stream.standbyMessageTimeout)
 	stream.streamCtx, stream.streamCancel = context.WithCancel(context.Background())
 
-	monitor, err := NewMonitor(cfg, stream.logger, tableNames, stream.slotName)
+	monitor, err := NewMonitor(config.DBConfig, stream.logger, tableNames, stream.slotName)
 	if err != nil {
 		return nil, err
 	}

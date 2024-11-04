@@ -10,7 +10,6 @@ package pgstream
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"strconv"
 	"sync"
@@ -26,19 +25,13 @@ import (
 )
 
 const (
-	fieldHost                    = "host"
-	fieldPort                    = "port"
-	fieldUser                    = "user"
-	fieldPass                    = "password"
-	fieldSchema                  = "schema"
-	fieldDatabase                = "database"
-	fieldTLS                     = "tls"
+	fieldDSN                     = "dsn"
 	fieldStreamUncommitted       = "stream_uncomitted"
-	fieldPgConnOptions           = "pg_conn_options"
 	fieldStreamSnapshot          = "stream_snapshot"
 	fieldSnapshotMemSafetyFactor = "snapshot_memory_safety_factor"
 	fieldSnapshotBatchSize       = "snapshot_batch_size"
 	fieldDecodingPlugin          = "decoding_plugin"
+	fieldSchema                  = "schema"
 	fieldTables                  = "tables"
 	fieldCheckpointLimit         = "checkpoint_limit"
 	fieldTemporarySlot           = "temporary_slot"
@@ -66,33 +59,12 @@ This input adds the following metadata fields to each message:
 - table (Name of the table that the message originated from)
 - operation (Type of operation that generated the message, such as INSERT, UPDATE, or DELETE)
 		`).
-	Field(service.NewStringField(fieldHost).
-		Description("The hostname or IP address of the PostgreSQL instance.").
-		Example("123.0.0.1")).
-	Field(service.NewIntField(fieldPort).
-		Description("The port number on which the PostgreSQL instance is listening.").
-		Example(5432).
-		Default(5432)).
-	Field(service.NewStringField(fieldUser).
-		Description("Username of a user with replication permissions. For AWS RDS, this typically requires superuser privileges.").
-		Example("postgres"),
-	).
-	Field(service.NewStringField(fieldPass).
-		Description("Password for the specified PostgreSQL user.")).
-	Field(service.NewStringField(fieldSchema).
-		Description("The PostgreSQL schema from which to replicate data.")).
-	Field(service.NewStringField(fieldDatabase).
-		Description("The name of the PostgreSQL database to connect to.")).
-	Field(service.NewTLSToggledField(fieldTLS).
-		Description("Specifies whether to use TLS for the database connection. Set to 'require' to enforce TLS, or 'none' to disable it.").
-		Default(nil)).
+	Field(service.NewStringField(fieldDSN).
+		Description("The Data Source Name for the PostgreSQL database in the form of `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]`. Please note that Postgres enforces SSL by default, you can override this with the parameter `sslmode=disable` if required.").
+		Example("postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable")).
 	Field(service.NewBoolField(fieldStreamUncommitted).
 		Description("If set to true, the plugin will stream uncommitted transactions before receiving a commit message from PostgreSQL. This may result in duplicate records if the connector is restarted.").
 		Default(false)).
-	Field(service.NewStringField(fieldPgConnOptions).
-		Description("Additional PostgreSQL connection options as a string. Refer to PostgreSQL documentation for available options.").
-		Default(""),
-	).
 	Field(service.NewBoolField(fieldStreamSnapshot).
 		Description("When set to true, the plugin will first stream a snapshot of all existing data in the database before streaming changes.").
 		Example(true).
@@ -111,6 +83,9 @@ This input adds the following metadata fields to each message:
 		`).
 		Example("pgoutput").
 		Default("pgoutput")).
+	Field(service.NewStringField(fieldSchema).
+		Description("The PostgreSQL schema from which to replicate data.").
+		Example("public")).
 	Field(service.NewStringListField(fieldTables).
 		Description("A list of table names to include in the logical replication. Each table should be specified as a separate item.").
 		Example(`
@@ -132,26 +107,21 @@ This input adds the following metadata fields to each message:
 
 func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s service.BatchInput, err error) {
 	var (
-		dbName                  string
-		dbPort                  int
-		dbHost                  string
-		dbSchema                string
-		dbUser                  string
-		dbPassword              string
+		dsn                     string
 		dbSlotName              string
 		temporarySlot           bool
+		schema                  string
 		tables                  []string
 		streamSnapshot          bool
 		snapshotMemSafetyFactor float64
 		decodingPlugin          string
-		pgConnOptions           string
-		streamUncomited         bool
+		streamUncommitted       bool
 		snapshotBatchSize       int
 		checkpointLimit         int
 		batching                service.BatchPolicy
 	)
 
-	dbSchema, err = conf.FieldString(fieldSchema)
+	dsn, err = conf.FieldString(fieldDSN)
 	if err != nil {
 		return nil, err
 	}
@@ -170,32 +140,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		return nil, err
 	}
 
-	dbPassword, err = conf.FieldString(fieldPass)
-	if err != nil {
-		return nil, err
-	}
-
-	dbUser, err = conf.FieldString(fieldUser)
-	if err != nil {
-		return nil, err
-	}
-
-	tlsConf, tlsEnabled, err := conf.FieldTLSToggled(fieldTLS)
-	if err != nil {
-		return nil, err
-	}
-
-	dbName, err = conf.FieldString(fieldDatabase)
-	if err != nil {
-		return nil, err
-	}
-
-	dbHost, err = conf.FieldString(fieldHost)
-	if err != nil {
-		return nil, err
-	}
-
-	dbPort, err = conf.FieldInt(fieldPort)
+	schema, err = conf.FieldString(fieldSchema)
 	if err != nil {
 		return nil, err
 	}
@@ -214,7 +159,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		return nil, err
 	}
 
-	streamUncomited, err = conf.FieldBool(fieldStreamUncommitted)
+	streamUncommitted, err = conf.FieldBool(fieldStreamUncommitted)
 	if err != nil {
 		return nil, err
 	}
@@ -234,33 +179,16 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		return nil, err
 	}
 
-	if pgConnOptions, err = conf.FieldString(fieldPgConnOptions); err != nil {
-		return nil, err
-	}
-
-	if pgConnOptions != "" {
-		pgConnOptions = "options=" + pgConnOptions
-	}
-
 	if batching, err = conf.FieldBatchPolicy(fieldBatching); err != nil {
 		return nil, err
 	} else if batching.IsNoop() {
 		batching.Count = 1
 	}
 
-	pgconnConfig := pgconn.Config{
-		Host:      dbHost,
-		Port:      uint16(dbPort),
-		Database:  dbName,
-		User:      dbUser,
-		TLSConfig: tlsConf,
-		Password:  dbPassword,
-	}
-
-	if !tlsEnabled {
-		pgconnConfig.TLSConfig = nil
-		tlsConf = nil
-	}
+	pgconnConfig, err := pgconn.ParseConfigWithOptions(dsn, pgconn.ParseConfigOptions{
+		// Don't support dynamic reading of password
+		GetSSLPassword: func(context.Context) string { return "" },
+	})
 
 	snapsotMetrics := mgr.Metrics().NewGauge("snapshot_progress", "table")
 	replicationLag := mgr.Metrics().NewGauge("replication_lag_bytes")
@@ -270,12 +198,10 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		streamSnapshot:          streamSnapshot,
 		snapshotMemSafetyFactor: snapshotMemSafetyFactor,
 		slotName:                dbSlotName,
-		schema:                  dbSchema,
-		pgConnRuntimeParam:      pgConnOptions,
-		tls:                     tlsConf,
+		schema:                  schema,
 		tables:                  tables,
 		decodingPlugin:          decodingPlugin,
-		streamUncomited:         streamUncomited,
+		streamUncommitted:       streamUncommitted,
 		temporarySlot:           temporarySlot,
 		snapshotBatchSize:       snapshotBatchSize,
 		batching:                batching,
@@ -312,10 +238,8 @@ func init() {
 }
 
 type pgStreamInput struct {
-	dbConfig                pgconn.Config
-	tls                     *tls.Config
+	dbConfig                *pgconn.Config
 	pglogicalStream         *pglogicalstream.Stream
-	pgConnRuntimeParam      string
 	slotName                string
 	temporarySlot           bool
 	schema                  string
@@ -324,7 +248,7 @@ type pgStreamInput struct {
 	streamSnapshot          bool
 	snapshotMemSafetyFactor float64
 	snapshotBatchSize       int
-	streamUncomited         bool
+	streamUncommitted       bool
 	logger                  *service.Logger
 	mgr                     *service.Resources
 	metrics                 *service.Metrics
@@ -344,20 +268,14 @@ type pgStreamInput struct {
 
 func (p *pgStreamInput) Connect(ctx context.Context) error {
 	pgStream, err := pglogicalstream.NewPgStream(ctx, &pglogicalstream.Config{
-		PgConnRuntimeParam:       p.pgConnRuntimeParam,
-		DBHost:                   p.dbConfig.Host,
-		DBPassword:               p.dbConfig.Password,
-		DBUser:                   p.dbConfig.User,
-		DBPort:                   int(p.dbConfig.Port),
-		DBTables:                 p.tables,
-		DBName:                   p.dbConfig.Database,
+		DBConfig:                 p.dbConfig,
 		DBSchema:                 p.schema,
+		DBTables:                 p.tables,
 		ReplicationSlotName:      "rs_" + p.slotName,
-		TLSConfig:                p.tls,
 		BatchSize:                p.snapshotBatchSize,
 		StreamOldData:            p.streamSnapshot,
 		TemporaryReplicationSlot: p.temporarySlot,
-		StreamUncomited:          p.streamUncomited,
+		StreamUncommitted:        p.streamUncommitted,
 		DecodingPlugin:           p.decodingPlugin,
 
 		SnapshotMemorySafetyFactor: p.snapshotMemSafetyFactor,
