@@ -88,10 +88,11 @@ func TestAllSnowflakeDatatypes(t *testing.T) {
 	ctx := context.Background()
 	restClient, streamClient := setup(t)
 	channelOpts := streaming.ChannelOptions{
-		Name:         t.Name(),
-		DatabaseName: envOr("SNOWFLAKE_DB", "BABY_DATABASE"),
-		SchemaName:   "PUBLIC",
-		TableName:    "TEST_TABLE_KITCHEN_SINK",
+		Name:             t.Name(),
+		DatabaseName:     envOr("SNOWFLAKE_DB", "BABY_DATABASE"),
+		SchemaName:       "PUBLIC",
+		TableName:        "TEST_TABLE_KITCHEN_SINK",
+		BuildParallelism: 1,
 	}
 	_, err := restClient.RunSQL(ctx, streaming.RunSQLRequest{
 		Database: channelOpts.DatabaseName,

@@ -11,9 +11,9 @@
 package streaming
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
-	"io"
 
 	"github.com/parquet-go/parquet-go"
 	"github.com/parquet-go/parquet-go/format"
@@ -21,66 +21,76 @@ import (
 	"github.com/segmentio/encoding/thrift"
 )
 
-func messageToRow(msg *service.Message) (map[string]any, error) {
+// messageToRow converts a message into columnar form using the provided name to index mapping.
+// We have to materialize the column into a row so that we can know if a column is null - the
+// msg can be sparse, but the row must not be sparse.
+func messageToRow(msg *service.Message, out []any, nameToPosition map[string]int) error {
 	v, err := msg.AsStructured()
 	if err != nil {
-		return nil, fmt.Errorf("error extracting object from message: %w", err)
+		return fmt.Errorf("error extracting object from message: %w", err)
 	}
 	row, ok := v.(map[string]any)
 	if !ok {
-		return nil, fmt.Errorf("expected object, got: %T", v)
+		return fmt.Errorf("expected object, got: %T", v)
 	}
-	mapped := make(map[string]any, len(row))
 	for k, v := range row {
-		mapped[normalizeColumnName(k)] = v
+		idx, ok := nameToPosition[normalizeColumnName(k)]
+		if !ok {
+			// TODO(schema): Unknown column, we just skip it.
+			// In the future we may evolve the schema based on the new data.
+			continue
+		}
+		out[idx] = v
 	}
-	return mapped, nil
+	return nil
 }
 
-// TODO: If the memory pressure is too great from writing all
-// records buffered as a single row group, then consider
-// return some kind of iterator of chunks of rows that we can
-// then feed into the actual parquet construction process.
-//
-// If a single parquet file is too much, we can consider having multiple
-// parquet files in a single bdec file.
 func constructRowGroup(
 	batch service.MessageBatch,
 	schema *parquet.Schema,
-	transformers map[string]*dataTransformer,
-) ([]parquet.Row, error) {
+	transformers []*dataTransformer,
+) ([]parquet.Row, []*statsBuffer, error) {
 	// We write all of our data in a columnar fashion, but need to pivot that data so that we can feed it into
 	// out parquet library (which sadly will redo the pivot - maybe we need a lower level abstraction...).
 	// So create a massive matrix that we will write stuff in columnar form, but then we don't need to move any
 	// data to create rows of the data via an in-place transpose operation.
 	//
 	// TODO: Consider caching/pooling this matrix as I expect many are similarily sized.
-	matrix := make([]parquet.Value, len(batch)*len(schema.Fields()))
 	rowWidth := len(schema.Fields())
-	for idx, field := range schema.Fields() {
-		// The column index is consistent between two schemas that are the same because the schema fields are always
-		// in sorted order.
-		columnIndex := idx
-		t := transformers[field.Name()]
-		t.buf.Prepare(matrix, columnIndex, rowWidth)
-		t.stats.Reset()
+	matrix := make([]parquet.Value, len(batch)*rowWidth)
+	nameToPosition := make(map[string]int, rowWidth)
+	stats := make([]*statsBuffer, rowWidth)
+	buffers := make([]typedBuffer, rowWidth)
+	for idx, t := range transformers {
+		leaf, ok := schema.Lookup(t.name)
+		if !ok {
+			return nil, nil, fmt.Errorf("invariant failed: unable to find column %q", t.name)
+		}
+		buffers[idx] = t.bufferFactory()
+		buffers[idx].Prepare(matrix, leaf.ColumnIndex, rowWidth)
+		stats[idx] = &statsBuffer{}
+		nameToPosition[t.name] = idx
 	}
 	// First we need to shred our record into columns, snowflake's data model
 	// is thankfully a flat list of columns, so no dremel style record shredding
 	// is needed
+	row := make([]any, rowWidth)
 	for _, msg := range batch {
-		row, err := messageToRow(msg)
+		err := messageToRow(msg, row, nameToPosition)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		// We **must** write a null, so iterate over the schema not the record,
-		// which might be sparse
-		for name, t := range transformers {
-			v := row[name]
-			err = t.converter.ValidateAndConvert(t.stats, v, t.buf)
+		for i, v := range row {
+			t := transformers[i]
+			s := stats[i]
+			b := buffers[i]
+			err = t.converter.ValidateAndConvert(s, v, b)
 			if err != nil {
-				return nil, fmt.Errorf("invalid data for column %s: %w", name, err)
+				// TODO(schema): if this is a null value err then we can evolve the schema to mark it null.
+				return nil, nil, fmt.Errorf("invalid data for column %s: %w", t.name, err)
 			}
+			// reset the column as nil for the next row
+			row[i] = nil
 		}
 	}
 	// Now all our values have been written to each buffer - here is where we do our matrix
@@ -90,7 +100,7 @@ func constructRowGroup(
 		rowStart := i * rowWidth
 		rows[i] = matrix[rowStart : rowStart+rowWidth]
 	}
-	return rows, nil
+	return rows, stats, nil
 }
 
 type parquetFileData struct {
@@ -99,9 +109,10 @@ type parquetFileData struct {
 	metadata map[string]string
 }
 
-func writeParquetFile(writer io.Writer, rpcnVersion string, data parquetFileData) (err error) {
-	pw := parquet.NewGenericWriter[map[string]any](
-		writer,
+func writeParquetFile(rpcnVersion string, data parquetFileData) (out []byte, err error) {
+	b := bytes.NewBuffer(nil)
+	pw := parquet.NewGenericWriter[any](
+		b,
 		data.schema,
 		parquet.CreatedBy("RedpandaConnect", rpcnVersion, "unknown"),
 		// Recommended by the Snowflake team to enable data page stats
@@ -121,6 +132,7 @@ func writeParquetFile(writer io.Writer, rpcnVersion string, data parquetFileData
 		return
 	}
 	err = pw.Close()
+	out = b.Bytes()
 	return
 }
 

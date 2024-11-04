@@ -21,19 +21,20 @@ import (
 )
 
 const (
-	ssoFieldAccount       = "account"
-	ssoFieldUser          = "user"
-	ssoFieldRole          = "role"
-	ssoFieldDB            = "database"
-	ssoFieldSchema        = "schema"
-	ssoFieldTable         = "table"
-	ssoFieldKey           = "private_key"
-	ssoFieldKeyFile       = "private_key_file"
-	ssoFieldKeyPass       = "private_key_pass"
-	ssoFieldInitStatement = "init_statement"
-	ssoFieldBatching      = "batching"
-	ssoFieldChannelPrefix = "channel_prefix"
-	ssoFieldMapping       = "mapping"
+	ssoFieldAccount          = "account"
+	ssoFieldUser             = "user"
+	ssoFieldRole             = "role"
+	ssoFieldDB               = "database"
+	ssoFieldSchema           = "schema"
+	ssoFieldTable            = "table"
+	ssoFieldKey              = "private_key"
+	ssoFieldKeyFile          = "private_key_file"
+	ssoFieldKeyPass          = "private_key_pass"
+	ssoFieldInitStatement    = "init_statement"
+	ssoFieldBatching         = "batching"
+	ssoFieldChannelPrefix    = "channel_prefix"
+	ssoFieldMapping          = "mapping"
+	ssoFieldBuildParallelism = "build_parallelism"
 )
 
 func snowflakeStreamingOutputConfig() *service.ConfigSpec {
@@ -91,6 +92,7 @@ CREATE TABLE IF NOT EXISTS mytable (amount NUMBER);
 ALTER TABLE t1 ALTER COLUMN c1 DROP NOT NULL;
 ALTER TABLE t1 ADD COLUMN a2 NUMBER;
 `),
+			service.NewIntField(ssoFieldBuildParallelism).Description("The maximum amount of parallelism to use when building the output for Snowflake. The metric to watch to see if you need to change this is `snowflake_build_output_latency_ns`.").Default(1).Advanced(),
 			service.NewBatchPolicyField(ssoFieldBatching),
 			service.NewOutputMaxInFlightField(),
 			service.NewStringField(ssoFieldChannelPrefix).
@@ -266,6 +268,10 @@ func newSnowflakeStreamer(
 			return nil, err
 		}
 	}
+	buildParallelism, err := conf.FieldInt(ssoFieldBuildParallelism)
+	if err != nil {
+		return nil, err
+	}
 	var channelPrefix string
 	if conf.Contains(ssoFieldChannelPrefix) {
 		channelPrefix, err = conf.FieldString(ssoFieldChannelPrefix)
@@ -331,8 +337,11 @@ func newSnowflakeStreamer(
 		logger:           mgr.Logger(),
 		buildTime:        mgr.Metrics().NewTimer("snowflake_build_output_latency_ns"),
 		uploadTime:       mgr.Metrics().NewTimer("snowflake_upload_latency_ns"),
+		convertTime:      mgr.Metrics().NewTimer("snowflake_convert_latency_ns"),
+		serializeTime:    mgr.Metrics().NewTimer("snowflake_serialize_latency_ns"),
 		compressedOutput: mgr.Metrics().NewCounter("snowflake_compressed_output_size_bytes"),
 		initStatementsFn: initStatementsFn,
+		buildParallelism: buildParallelism,
 	}
 	return o, nil
 }
@@ -345,6 +354,9 @@ type snowflakeStreamerOutput struct {
 	compressedOutput  *service.MetricCounter
 	uploadTime        *service.MetricTimer
 	buildTime         *service.MetricTimer
+	convertTime       *service.MetricTimer
+	serializeTime     *service.MetricTimer
+	buildParallelism  int
 
 	channelPrefix, db, schema, table string
 	mapping                          *bloblang.Executor
@@ -368,11 +380,12 @@ func (o *snowflakeStreamerOutput) openNewChannel(ctx context.Context) (*streamin
 func (o *snowflakeStreamerOutput) openChannel(ctx context.Context, name string, id int16) (*streaming.SnowflakeIngestionChannel, error) {
 	o.logger.Debugf("opening snowflake streaming channel: %s", name)
 	return o.client.OpenChannel(ctx, streaming.ChannelOptions{
-		ID:           id,
-		Name:         name,
-		DatabaseName: o.db,
-		SchemaName:   o.schema,
-		TableName:    o.table,
+		ID:               id,
+		Name:             name,
+		DatabaseName:     o.db,
+		SchemaName:       o.schema,
+		TableName:        o.table,
+		BuildParallelism: o.buildParallelism,
 	})
 }
 
@@ -415,12 +428,16 @@ func (o *snowflakeStreamerOutput) WriteBatch(ctx context.Context, batch service.
 			return fmt.Errorf("unable to open snowflake streaming channel: %w", err)
 		}
 	}
+	o.logger.Debugf("inserting rows using channel %s", channel.Name)
 	stats, err := channel.InsertRows(ctx, batch)
-	o.compressedOutput.Incr(int64(stats.CompressedOutputSize))
-	o.uploadTime.Timing(stats.UploadTime.Nanoseconds())
-	o.buildTime.Timing(stats.BuildTime.Nanoseconds())
-	// If there is some kind of failure, try to reopen the channel
-	if err != nil {
+	if err == nil {
+		o.logger.Debugf("done inserting rows using channel %s, stats: %+v", channel.Name, stats)
+		o.compressedOutput.Incr(int64(stats.CompressedOutputSize))
+		o.uploadTime.Timing(stats.UploadTime.Nanoseconds())
+		o.buildTime.Timing(stats.BuildTime.Nanoseconds())
+		o.convertTime.Timing(stats.ConvertTime.Nanoseconds())
+		o.serializeTime.Timing(stats.SerializeTime.Nanoseconds())
+	} else {
 		reopened, reopenErr := o.openChannel(ctx, channel.Name, channel.ID)
 		if reopenErr == nil {
 			o.channelPool.Put(reopened)

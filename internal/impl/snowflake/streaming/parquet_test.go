@@ -18,6 +18,7 @@ import (
 	"github.com/aws/smithy-go/ptr"
 	"github.com/parquet-go/parquet-go"
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming/int128"
 	"github.com/stretchr/testify/require"
 )
 
@@ -26,7 +27,6 @@ func msg(s string) *service.Message {
 }
 
 func TestWriteParquet(t *testing.T) {
-	b := bytes.NewBuffer(nil)
 	batch := service.MessageBatch{
 		msg(`{"a":2}`),
 		msg(`{"a":12353}`),
@@ -34,14 +34,14 @@ func TestWriteParquet(t *testing.T) {
 	inputDataSchema := parquet.Group{
 		"A": parquet.Decimal(0, 18, parquet.Int32Type),
 	}
-	transformers := map[string]*dataTransformer{
-		"A": {
+	transformers := []*dataTransformer{
+		{
+			name: "A",
 			converter: numberConverter{
 				nullable:  true,
 				scale:     0,
 				precision: 38,
 			},
-			stats: &statsBuffer{columnID: 1},
 			column: &columnMetadata{
 				Name:         "A",
 				Ordinal:      1,
@@ -52,23 +52,23 @@ func TestWriteParquet(t *testing.T) {
 				Scale:        ptr.Int32(0),
 				Nullable:     true,
 			},
-			buf: &int32Buffer{},
+			bufferFactory: int32TypedBufferFactory,
 		},
 	}
 	schema := parquet.NewSchema("bdec", inputDataSchema)
-	rows, err := constructRowGroup(
+	rows, stats, err := constructRowGroup(
 		batch,
 		schema,
 		transformers,
 	)
 	require.NoError(t, err)
-	err = writeParquetFile(b, "latest", parquetFileData{
+	b, err := writeParquetFile("latest", parquetFileData{
 		schema, rows, nil,
 	})
 	require.NoError(t, err)
 	actual, err := readGeneric(
-		bytes.NewReader(b.Bytes()),
-		int64(b.Len()),
+		bytes.NewReader(b),
+		int64(len(b)),
 		parquet.NewSchema("bdec", inputDataSchema),
 	)
 	require.NoError(t, err)
@@ -76,6 +76,13 @@ func TestWriteParquet(t *testing.T) {
 		{"A": int32(2)},
 		{"A": int32(12353)},
 	}, actual)
+	require.Equal(t, []*statsBuffer{
+		{
+			minIntVal: int128.FromInt64(2),
+			maxIntVal: int128.FromInt64(12353),
+			hasData:   true,
+		},
+	}, stats)
 }
 
 func readGeneric(r io.ReaderAt, size int64, schema *parquet.Schema) (rows []map[string]any, err error) {
