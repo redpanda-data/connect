@@ -249,14 +249,21 @@ type (
 		Message    string               `json:"message"`
 		Blobs      []blobRegisterStatus `json:"blobs"`
 	}
+	BindingValue struct {
+		// The binding data type, generally TEXT is what you want
+		// see: https://docs.snowflake.com/en/developer-guide/sql-api/submitting-requests#using-bind-variables-in-a-statement
+		Type  string `json:"type"`
+		Value string `json:"value"`
+	}
 	// RunSQLRequest is the way to run a SQL statement
 	RunSQLRequest struct {
-		Statement string `json:"statement"`
-		Timeout   int64  `json:"timeout"`
-		Database  string `json:"database,omitempty"`
-		Schema    string `json:"schema,omitempty"`
-		Warehouse string `json:"warehouse,omitempty"`
-		Role      string `json:"role,omitempty"`
+		Statement string                  `json:"statement"`
+		Timeout   int64                   `json:"timeout"`
+		Database  string                  `json:"database,omitempty"`
+		Schema    string                  `json:"schema,omitempty"`
+		Warehouse string                  `json:"warehouse,omitempty"`
+		Role      string                  `json:"role,omitempty"`
+		Bindings  map[string]BindingValue `json:"bindings,omitempty"`
 		// https://docs.snowflake.com/en/sql-reference/parameters
 		Parameters map[string]string `json:"parameters,omitempty"`
 	}
