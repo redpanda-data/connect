@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - (Benthos) Field `follow_redirects` added to the `http` processor. (@ooesili)
 - New CLI flag `--secrets` added. (@Jeffail)
 - New CLI flag `--disable-telemetry` added. (@Jeffail)
+- New experimental `spicedb` watch input.
 
 ### Fixed
 
