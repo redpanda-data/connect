@@ -13,6 +13,11 @@ All notable changes to this project will be documented in this file.
 - (Benthos) Field `follow_redirects` added to the `http` processor. (@ooesili)
 - New CLI flag `--secrets` added. (@Jeffail)
 - New CLI flag `--disable-telemetry` added. (@Jeffail)
+- New experimental `spicedb` watch input.
+
+### Fixed
+
+- The `kafka`, `kafka_franz` and `redpanda_migrator` outputs no longer waste CPU for large batches. (@rockwotj)
 
 ### Changed
 

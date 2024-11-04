@@ -11,12 +11,12 @@
 package streaming
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 	"unicode/utf8"
+	"unsafe"
 
 	"github.com/Jeffail/gabs/v2"
 	"github.com/parquet-go/parquet-go"
@@ -24,6 +24,8 @@ import (
 
 	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming/int128"
 )
+
+type typedBufferFactory func() typedBuffer
 
 // typedBuffer is the buffer that holds columnar data before we write to the parquet file
 type typedBuffer interface {
@@ -39,7 +41,6 @@ type typedBuffer interface {
 	// the data that will be written - this buffer will not modify
 	// the size of the data.
 	Prepare(matrix []parquet.Value, columnIndex, rowWidth int)
-	Reset()
 }
 
 type typedBufferImpl struct {
@@ -47,6 +48,13 @@ type typedBufferImpl struct {
 	columnIndex int
 	rowWidth    int
 	currentRow  int
+
+	// For int128 we don't make a bunch of small allocs,
+	// but append to this existing buffer a bunch, this
+	// saves GC pressure. We could optimize copies and
+	// reallocations, but this is simpler and seems to
+	// be effective for now.
+	scratch []byte
 }
 
 func (b *typedBufferImpl) WriteValue(v parquet.Value) {
@@ -57,7 +65,8 @@ func (b *typedBufferImpl) WriteNull() {
 	b.WriteValue(parquet.NullValue())
 }
 func (b *typedBufferImpl) WriteInt128(v int128.Num) {
-	b.WriteValue(parquet.FixedLenByteArrayValue(v.ToBigEndian()).Level(0, 1, b.columnIndex))
+	b.scratch = v.AppendBigEndian(b.scratch)
+	b.WriteValue(parquet.FixedLenByteArrayValue(b.scratch[len(b.scratch)-16:]).Level(0, 1, b.columnIndex))
 }
 func (b *typedBufferImpl) WriteBool(v bool) {
 	b.WriteValue(parquet.BooleanValue(v).Level(0, 1, b.columnIndex))
@@ -73,10 +82,12 @@ func (b *typedBufferImpl) Prepare(matrix []parquet.Value, columnIndex, rowWidth 
 	b.matrix = matrix
 	b.columnIndex = columnIndex
 	b.rowWidth = rowWidth
+	if b.scratch != nil {
+		b.scratch = b.scratch[:0]
+	}
 }
-func (b *typedBufferImpl) Reset() {
-	b.Prepare(nil, 0, 0)
-}
+
+var defaultTypedBufferFactory = typedBufferFactory(func() typedBuffer { return &typedBufferImpl{} })
 
 type int64Buffer struct {
 	typedBufferImpl
@@ -85,6 +96,8 @@ type int64Buffer struct {
 func (b *int64Buffer) WriteInt128(v int128.Num) {
 	b.WriteValue(parquet.Int64Value(v.ToInt64()).Level(0, 1, b.columnIndex))
 }
+
+var int64TypedBufferFactory = typedBufferFactory(func() typedBuffer { return &int64Buffer{} })
 
 type int32Buffer struct {
 	typedBufferImpl
@@ -97,6 +110,8 @@ func (b *int32Buffer) WriteInt128(v int128.Num) {
 type dataConverter interface {
 	ValidateAndConvert(stats *statsBuffer, val any, buf typedBuffer) error
 }
+
+var int32TypedBufferFactory = typedBufferFactory(func() typedBuffer { return &int32Buffer{} })
 
 var errNullValue = errors.New("unexpected null value")
 
@@ -121,14 +136,7 @@ func (c boolConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typed
 	if v {
 		i = int128.FromUint64(1)
 	}
-	if stats.first {
-		stats.minIntVal = i
-		stats.maxIntVal = i
-		stats.first = false
-	} else {
-		stats.minIntVal = int128.Min(stats.minIntVal, i)
-		stats.maxIntVal = int128.Max(stats.maxIntVal, i)
-	}
+	stats.UpdateIntStats(i)
 	buf.WriteBool(v)
 	return nil
 }
@@ -202,14 +210,7 @@ func (c numberConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typ
 	if err != nil {
 		return err
 	}
-	if stats.first {
-		stats.minIntVal = v
-		stats.maxIntVal = v
-		stats.first = false
-	} else {
-		stats.minIntVal = int128.Min(stats.minIntVal, v)
-		stats.maxIntVal = int128.Max(stats.maxIntVal, v)
-	}
+	stats.UpdateIntStats(v)
 	buf.WriteInt128(v)
 	return nil
 }
@@ -231,14 +232,7 @@ func (c doubleConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typ
 	if err != nil {
 		return err
 	}
-	if stats.first {
-		stats.minRealVal = v
-		stats.maxRealVal = v
-		stats.first = false
-	} else {
-		stats.minRealVal = min(stats.minRealVal, v)
-		stats.maxRealVal = max(stats.maxRealVal, v)
-	}
+	stats.UpdateFloat64Stats(v)
 	buf.WriteFloat64(v)
 	return nil
 }
@@ -258,9 +252,26 @@ func (c binaryConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typ
 		buf.WriteNull()
 		return nil
 	}
-	v, err := bloblang.ValueAsBytes(val)
-	if err != nil {
-		return err
+	var v []byte
+	switch t := val.(type) {
+	case string:
+		if t != "" {
+			// We don't modify this byte slice at all, so this is safe to grab the bytes
+			// without making a copy.
+			// Also make sure this isn't an empty string because it's undefined what the
+			// value is.
+			v = unsafe.Slice(unsafe.StringData(t), len(t))
+		} else {
+			v = []byte{}
+		}
+	case []byte:
+		v = t
+	default:
+		b, err := bloblang.ValueAsBytes(val)
+		if err != nil {
+			return err
+		}
+		v = b
 	}
 	if len(v) > c.maxLength {
 		return fmt.Errorf("value too long, length: %d, max: %d", len(v), c.maxLength)
@@ -268,20 +279,7 @@ func (c binaryConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typ
 	if c.utf8 && !utf8.Valid(v) {
 		return errors.New("invalid UTF8")
 	}
-	if stats.first {
-		stats.minStrVal = v
-		stats.maxStrVal = v
-		stats.maxStrLen = len(v)
-		stats.first = false
-	} else {
-		if bytes.Compare(v, stats.minStrVal) < 0 {
-			stats.minStrVal = v
-		}
-		if bytes.Compare(v, stats.maxStrVal) > 0 {
-			stats.maxStrVal = v
-		}
-		stats.maxStrLen = max(stats.maxStrLen, len(v))
-	}
+	stats.UpdateBytesStats(v)
 	buf.WriteBytes(v)
 	return nil
 }
@@ -304,20 +302,7 @@ func (c jsonConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typed
 	if len(v) > c.maxLength {
 		return fmt.Errorf("value too long, length: %d, max: %d", len(v), c.maxLength)
 	}
-	if stats.first {
-		stats.minStrVal = v
-		stats.maxStrVal = v
-		stats.maxStrLen = len(v)
-		stats.first = false
-	} else {
-		if bytes.Compare(v, stats.minStrVal) < 0 {
-			stats.minStrVal = v
-		}
-		if bytes.Compare(v, stats.maxStrVal) > 0 {
-			stats.maxStrVal = v
-		}
-		stats.maxStrLen = max(stats.maxStrLen, len(v))
-	}
+	stats.UpdateBytesStats(v)
 	buf.WriteBytes(v)
 	return nil
 }
@@ -398,14 +383,7 @@ func (c timestampConverter) ValidateAndConvert(stats *statsBuffer, val any, buf 
 			c.precision,
 		)
 	}
-	if stats.first {
-		stats.minIntVal = v
-		stats.maxIntVal = v
-		stats.first = false
-	} else {
-		stats.minIntVal = int128.Min(stats.minIntVal, v)
-		stats.maxIntVal = int128.Max(stats.maxIntVal, v)
-	}
+	stats.UpdateIntStats(v)
 	buf.WriteInt128(v)
 	return nil
 }
@@ -435,15 +413,7 @@ func (c timeConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typed
 		t.Second()*int(time.Second.Nanoseconds()) +
 		t.Nanosecond()
 	v := int128.FromInt64(int64(nanos) / pow10TableInt64[9-c.scale])
-	if stats.first {
-		stats.minIntVal = v
-		stats.maxIntVal = v
-		stats.first = false
-	} else {
-		stats.minIntVal = int128.Min(stats.minIntVal, v)
-		stats.maxIntVal = int128.Max(stats.maxIntVal, v)
-	}
-	// TODO(perf): consider switching to int64 buffers so more stuff can fit in cache
+	stats.UpdateIntStats(v)
 	buf.WriteInt128(v)
 	return nil
 }
@@ -470,15 +440,7 @@ func (c dateConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typed
 		return fmt.Errorf("DATE columns out of range, year: %d", t.Year())
 	}
 	v := int128.FromInt64(t.Unix() / int64(24*60*60))
-	if stats.first {
-		stats.minIntVal = v
-		stats.maxIntVal = v
-		stats.first = false
-	} else {
-		stats.minIntVal = int128.Min(stats.minIntVal, v)
-		stats.maxIntVal = int128.Max(stats.maxIntVal, v)
-	}
-	// TODO(perf): consider switching to int64 buffers so more stuff can fit in cache
+	stats.UpdateIntStats(v)
 	buf.WriteInt128(v)
 	return nil
 }

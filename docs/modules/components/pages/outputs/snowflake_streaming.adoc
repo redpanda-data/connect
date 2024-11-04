@@ -49,6 +49,8 @@ output:
     private_key_file: "" # No default (optional)
     private_key_pass: "" # No default (optional)
     mapping: "" # No default (optional)
+    init_statement: | # No default (optional)
+      CREATE TABLE IF NOT EXISTS mytable (amount NUMBER);
     batching:
       count: 0
       byte_size: 0
@@ -77,6 +79,9 @@ output:
     private_key_file: "" # No default (optional)
     private_key_pass: "" # No default (optional)
     mapping: "" # No default (optional)
+    init_statement: | # No default (optional)
+      CREATE TABLE IF NOT EXISTS mytable (amount NUMBER);
+    build_parallelism: 1
     batching:
       count: 0
       byte_size: 0
@@ -153,6 +158,11 @@ pipeline:
           password: "${TODO}"
 output:
   snowflake_streaming:
+    # By default there is only a single channel per output table allowed
+    # if we want to have multiple Redpanda Connect streams writing data
+    # then we need a unique channel prefix per stream. We'll use the host
+    # name to get unique prefixes in this example.
+    channel_prefix: "snowflake-channel-for-${HOST}"
     account: "MYSNOW-ACCOUNT"
     user: MYUSER
     role: ACCOUNTADMIN
@@ -160,11 +170,7 @@ output:
     schema: "PUBLIC"
     table: "MYTABLE"
     private_key_file: "my/private/key.p8"
-    # By default there is only a single channel per output table allowed
-    # if we want to have multiple Redpanda Connect streams writing data
-    # then we need a unique channel prefix per stream. We'll use the host
-    # name to get unique prefixes in this example.
-    channel_prefix: "snowflake-channel-for-${HOST}"```
+```
 
 --
 HTTP Sidecar to push data to Snowflake::
@@ -198,7 +204,8 @@ output:
     database: "MYDATABASE"
     schema: "PUBLIC"
     table: "MYTABLE"
-    private_key_file: "my/private/key.p8"```
+    private_key_file: "my/private/key.p8"
+```
 
 --
 ======
@@ -309,6 +316,34 @@ A bloblang mapping to execute on each message.
 
 *Type*: `string`
 
+
+=== `init_statement`
+
+Optional SQL statements to execute immediately upon the first connection. This is a useful way to initialize tables before processing data. Care should be taken to ensure that the statement is idempotent, and therefore would not cause issues when run multiple times after service restarts.
+
+
+*Type*: `string`
+
+
+```yml
+# Examples
+
+init_statement: |2
+  CREATE TABLE IF NOT EXISTS mytable (amount NUMBER);
+
+init_statement: |2
+  ALTER TABLE t1 ALTER COLUMN c1 DROP NOT NULL;
+  ALTER TABLE t1 ADD COLUMN a2 NUMBER;
+```
+
+=== `build_parallelism`
+
+The maximum amount of parallelism to use when building the output for Snowflake. The metric to watch to see if you need to change this is `snowflake_build_output_latency_ns`.
+
+
+*Type*: `int`
+
+*Default*: `1`
 
 === `batching`
 

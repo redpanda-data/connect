@@ -12,7 +12,6 @@ import (
 	"context"
 	"crypto/rsa"
 	"fmt"
-	"strings"
 	"sync"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
@@ -22,18 +21,20 @@ import (
 )
 
 const (
-	ssoFieldAccount       = "account"
-	ssoFieldUser          = "user"
-	ssoFieldRole          = "role"
-	ssoFieldDB            = "database"
-	ssoFieldSchema        = "schema"
-	ssoFieldTable         = "table"
-	ssoFieldKey           = "private_key"
-	ssoFieldKeyFile       = "private_key_file"
-	ssoFieldKeyPass       = "private_key_pass"
-	ssoFieldBatching      = "batching"
-	ssoFieldChannelPrefix = "channel_prefix"
-	ssoFieldMapping       = "mapping"
+	ssoFieldAccount          = "account"
+	ssoFieldUser             = "user"
+	ssoFieldRole             = "role"
+	ssoFieldDB               = "database"
+	ssoFieldSchema           = "schema"
+	ssoFieldTable            = "table"
+	ssoFieldKey              = "private_key"
+	ssoFieldKeyFile          = "private_key_file"
+	ssoFieldKeyPass          = "private_key_pass"
+	ssoFieldInitStatement    = "init_statement"
+	ssoFieldBatching         = "batching"
+	ssoFieldChannelPrefix    = "channel_prefix"
+	ssoFieldMapping          = "mapping"
+	ssoFieldBuildParallelism = "build_parallelism"
 )
 
 func snowflakeStreamingOutputConfig() *service.ConfigSpec {
@@ -83,6 +84,15 @@ You can monitor the output batch size using the `+"`snowflake_compressed_output_
 			service.NewStringField(ssoFieldKeyFile).Description("The file to load the private RSA key from. This should be a `.p8` PEM encoded file. Either this or `private_key` must be specified.").Optional(),
 			service.NewStringField(ssoFieldKeyPass).Description("The RSA key passphrase if the RSA key is encrypted.").Optional().Secret(),
 			service.NewBloblangField(ssoFieldMapping).Description("A bloblang mapping to execute on each message.").Optional(),
+			service.NewStringField(ssoFieldInitStatement).Description(`
+Optional SQL statements to execute immediately upon the first connection. This is a useful way to initialize tables before processing data. Care should be taken to ensure that the statement is idempotent, and therefore would not cause issues when run multiple times after service restarts.
+`).Optional().Example(`
+CREATE TABLE IF NOT EXISTS mytable (amount NUMBER);
+`).Example(`
+ALTER TABLE t1 ALTER COLUMN c1 DROP NOT NULL;
+ALTER TABLE t1 ADD COLUMN a2 NUMBER;
+`),
+			service.NewIntField(ssoFieldBuildParallelism).Description("The maximum amount of parallelism to use when building the output for Snowflake. The metric to watch to see if you need to change this is `snowflake_build_output_latency_ns`.").Default(1).Advanced(),
 			service.NewBatchPolicyField(ssoFieldBatching),
 			service.NewOutputMaxInFlightField(),
 			service.NewStringField(ssoFieldChannelPrefix).
@@ -122,6 +132,11 @@ pipeline:
           password: "${TODO}"
 output:
   snowflake_streaming:
+    # By default there is only a single channel per output table allowed
+    # if we want to have multiple Redpanda Connect streams writing data
+    # then we need a unique channel prefix per stream. We'll use the host
+    # name to get unique prefixes in this example.
+    channel_prefix: "snowflake-channel-for-${HOST}"
     account: "MYSNOW-ACCOUNT"
     user: MYUSER
     role: ACCOUNTADMIN
@@ -129,11 +144,7 @@ output:
     schema: "PUBLIC"
     table: "MYTABLE"
     private_key_file: "my/private/key.p8"
-    # By default there is only a single channel per output table allowed
-    # if we want to have multiple Redpanda Connect streams writing data
-    # then we need a unique channel prefix per stream. We'll use the host
-    # name to get unique prefixes in this example.
-    channel_prefix: "snowflake-channel-for-${HOST}"`,
+`,
 		).
 		Example(
 			"HTTP Sidecar to push data to Snowflake",
@@ -163,7 +174,8 @@ output:
     database: "MYDATABASE"
     schema: "PUBLIC"
     table: "MYTABLE"
-    private_key_file: "my/private/key.p8"`,
+    private_key_file: "my/private/key.p8"
+`,
 		)
 }
 
@@ -256,6 +268,10 @@ func newSnowflakeStreamer(
 			return nil, err
 		}
 	}
+	buildParallelism, err := conf.FieldInt(ssoFieldBuildParallelism)
+	if err != nil {
+		return nil, err
+	}
 	var channelPrefix string
 	if conf.Contains(ssoFieldChannelPrefix) {
 		channelPrefix, err = conf.FieldString(ssoFieldChannelPrefix)
@@ -268,6 +284,35 @@ func newSnowflakeStreamer(
 		// stream to write to a single table.
 		channelPrefix = fmt.Sprintf("Redpanda_Connect_%s.%s.%s", db, schema, table)
 	}
+	var initStatementsFn func(context.Context) error
+	if conf.Contains(ssoFieldInitStatement) {
+		initStatements, err := conf.FieldString(ssoFieldInitStatement)
+		if err != nil {
+			return nil, err
+		}
+		initStatementsFn = func(ctx context.Context) error {
+			c, err := streaming.NewRestClient(account, user, mgr.EngineVersion(), channelPrefix, rsaKey, mgr.Logger())
+			if err != nil {
+				return err
+			}
+			defer c.Close()
+			_, err = c.RunSQL(ctx, streaming.RunSQLRequest{
+				Statement: initStatements,
+				// Currently we set of timeout of 30 seconds so that we don't have to handle async operations
+				// that need polling to wait until they finish (results are made async when execution is longer
+				// than 45 seconds).
+				Timeout:  30,
+				Database: db,
+				Schema:   schema,
+				Role:     role,
+				// Auto determine the number of statements
+				Parameters: map[string]string{
+					"MULTI_STATEMENT_COUNT": "0",
+				},
+			})
+			return err
+		}
+	}
 	client, err := streaming.NewSnowflakeServiceClient(
 		context.Background(),
 		streaming.ClientOptions{
@@ -277,7 +322,7 @@ func newSnowflakeStreamer(
 			PrivateKey:     rsaKey,
 			Logger:         mgr.Logger(),
 			ConnectVersion: mgr.EngineVersion(),
-			Application:    strings.TrimPrefix(channelPrefix, "Redpanda_Connect_"),
+			Application:    channelPrefix,
 		})
 	if err != nil {
 		return nil, err
@@ -292,7 +337,11 @@ func newSnowflakeStreamer(
 		logger:           mgr.Logger(),
 		buildTime:        mgr.Metrics().NewTimer("snowflake_build_output_latency_ns"),
 		uploadTime:       mgr.Metrics().NewTimer("snowflake_upload_latency_ns"),
+		convertTime:      mgr.Metrics().NewTimer("snowflake_convert_latency_ns"),
+		serializeTime:    mgr.Metrics().NewTimer("snowflake_serialize_latency_ns"),
 		compressedOutput: mgr.Metrics().NewCounter("snowflake_compressed_output_size_bytes"),
+		initStatementsFn: initStatementsFn,
+		buildParallelism: buildParallelism,
 	}
 	return o, nil
 }
@@ -305,10 +354,14 @@ type snowflakeStreamerOutput struct {
 	compressedOutput  *service.MetricCounter
 	uploadTime        *service.MetricTimer
 	buildTime         *service.MetricTimer
+	convertTime       *service.MetricTimer
+	serializeTime     *service.MetricTimer
+	buildParallelism  int
 
 	channelPrefix, db, schema, table string
 	mapping                          *bloblang.Executor
 	logger                           *service.Logger
+	initStatementsFn                 func(context.Context) error
 }
 
 func (o *snowflakeStreamerOutput) openNewChannel(ctx context.Context) (*streaming.SnowflakeIngestionChannel, error) {
@@ -327,15 +380,23 @@ func (o *snowflakeStreamerOutput) openNewChannel(ctx context.Context) (*streamin
 func (o *snowflakeStreamerOutput) openChannel(ctx context.Context, name string, id int16) (*streaming.SnowflakeIngestionChannel, error) {
 	o.logger.Debugf("opening snowflake streaming channel: %s", name)
 	return o.client.OpenChannel(ctx, streaming.ChannelOptions{
-		ID:           id,
-		Name:         name,
-		DatabaseName: o.db,
-		SchemaName:   o.schema,
-		TableName:    o.table,
+		ID:               id,
+		Name:             name,
+		DatabaseName:     o.db,
+		SchemaName:       o.schema,
+		TableName:        o.table,
+		BuildParallelism: o.buildParallelism,
 	})
 }
 
 func (o *snowflakeStreamerOutput) Connect(ctx context.Context) error {
+	if o.initStatementsFn != nil {
+		if err := o.initStatementsFn(ctx); err != nil {
+			return err
+		}
+		// We've already executed our init statement, we don't need to do that anymore
+		o.initStatementsFn = nil
+	}
 	// Precreate a single channel so we know stuff works, otherwise we'll create them on demand.
 	c, err := o.openNewChannel(ctx)
 	if err != nil {
@@ -367,12 +428,16 @@ func (o *snowflakeStreamerOutput) WriteBatch(ctx context.Context, batch service.
 			return fmt.Errorf("unable to open snowflake streaming channel: %w", err)
 		}
 	}
+	o.logger.Debugf("inserting rows using channel %s", channel.Name)
 	stats, err := channel.InsertRows(ctx, batch)
-	o.compressedOutput.Incr(int64(stats.CompressedOutputSize))
-	o.uploadTime.Timing(stats.UploadTime.Nanoseconds())
-	o.buildTime.Timing(stats.BuildTime.Nanoseconds())
-	// If there is some kind of failure, try to reopen the channel
-	if err != nil {
+	if err == nil {
+		o.logger.Debugf("done inserting rows using channel %s, stats: %+v", channel.Name, stats)
+		o.compressedOutput.Incr(int64(stats.CompressedOutputSize))
+		o.uploadTime.Timing(stats.UploadTime.Nanoseconds())
+		o.buildTime.Timing(stats.BuildTime.Nanoseconds())
+		o.convertTime.Timing(stats.ConvertTime.Nanoseconds())
+		o.serializeTime.Timing(stats.SerializeTime.Nanoseconds())
+	} else {
 		reopened, reopenErr := o.openChannel(ctx, channel.Name, channel.ID)
 		if reopenErr == nil {
 			o.channelPool.Put(reopened)

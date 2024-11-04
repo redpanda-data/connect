@@ -433,10 +433,24 @@ func (w *RedpandaMigratorWriter) WriteBatch(ctx context.Context, b service.Messa
 		return service.ErrNotConnected
 	}
 
+	topicExecutor := b.InterpolationExecutor(w.topic)
+	var keyExecutor *service.MessageBatchInterpolationExecutor
+	if w.key != nil {
+		keyExecutor = b.InterpolationExecutor(w.key)
+	}
+	var partitionExecutor *service.MessageBatchInterpolationExecutor
+	if w.partition != nil {
+		partitionExecutor = b.InterpolationExecutor(w.partition)
+	}
+	var timestampExecutor *service.MessageBatchInterpolationExecutor
+	if w.timestamp != nil {
+		timestampExecutor = b.InterpolationExecutor(w.timestamp)
+	}
+
 	records := make([]*kgo.Record, 0, len(b))
 	for i, msg := range b {
 		var topic string
-		if topic, err = b.TryInterpolatedString(i, w.topic); err != nil {
+		if topic, err = topicExecutor.TryString(i); err != nil {
 			return fmt.Errorf("topic interpolation error: %w", err)
 		}
 
@@ -470,13 +484,13 @@ func (w *RedpandaMigratorWriter) WriteBatch(ctx context.Context, b service.Messa
 		if record.Value, err = msg.AsBytes(); err != nil {
 			return
 		}
-		if w.key != nil {
-			if record.Key, err = b.TryInterpolatedBytes(i, w.key); err != nil {
+		if keyExecutor != nil {
+			if record.Key, err = keyExecutor.TryBytes(i); err != nil {
 				return fmt.Errorf("key interpolation error: %w", err)
 			}
 		}
-		if w.partition != nil {
-			partStr, err := b.TryInterpolatedString(i, w.partition)
+		if partitionExecutor != nil {
+			partStr, err := partitionExecutor.TryString(i)
 			if err != nil {
 				return fmt.Errorf("partition interpolation error: %w", err)
 			}
@@ -493,8 +507,8 @@ func (w *RedpandaMigratorWriter) WriteBatch(ctx context.Context, b service.Messa
 			})
 			return nil
 		})
-		if w.timestamp != nil {
-			if tsStr, err := b.TryInterpolatedString(i, w.timestamp); err != nil {
+		if timestampExecutor != nil {
+			if tsStr, err := timestampExecutor.TryString(i); err != nil {
 				return fmt.Errorf("timestamp interpolation error: %w", err)
 			} else {
 				if ts, err := strconv.ParseInt(tsStr, 10, 64); err != nil {

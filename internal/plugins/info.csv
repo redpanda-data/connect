@@ -222,6 +222,7 @@ snowflake_streaming       ,output    ,Snowflake Streaming       ,4.39.0  ,enterp
 socket                    ,input     ,Socket                    ,0.0.0   ,certified  ,n          ,n     ,n
 socket                    ,output    ,Socket                    ,0.0.0   ,certified  ,n          ,n     ,n
 socket_server             ,input     ,socket_server             ,0.0.0   ,certified  ,n          ,n     ,n
+spicedb_watch             ,input     ,spicedb_watch             ,0.0.0   ,community  ,n          ,y     ,y
 split                     ,processor ,split                     ,0.0.0   ,certified  ,n          ,y     ,y
 splunk                    ,input     ,Splunk                    ,4.30.0  ,enterprise ,n          ,y     ,y
 splunk_hec                ,output    ,Splunk                    ,4.30.0  ,enterprise ,n          ,y     ,y

@@ -324,7 +324,7 @@ func NewRestClient(account, user, version, app string, privateKey *rsa.PrivateKe
 		privateKey: privateKey,
 		userAgent:  userAgent,
 		logger:     logger,
-		app:        url.QueryEscape(app),
+		app:        url.QueryEscape("Redpanda_Connect_" + strings.TrimPrefix(app, "Redpanda_Connect_")),
 		cachedJWT:  typed.NewAtomicValue(""),
 		authRefreshLoop: periodic.New(
 			time.Hour-(2*time.Minute),
