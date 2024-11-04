@@ -160,7 +160,7 @@ func quoteColumnName(name string) string {
 	// be any double quotes inside the string that need escaped.
 	quoted.Grow(len(name) + 2)
 	quoted.WriteByte('"')
-	for _, r := range name {
+	for _, r := range strings.ToUpper(name) {
 		if r == '"' {
 			quoted.WriteString(`""`)
 		} else {

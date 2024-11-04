@@ -64,6 +64,12 @@ func (e MissingColumnError) ColumnName() string {
 	return quoteColumnName(e.columnName)
 }
 
+// The raw name of the new column - DO NOT USE IN SQL!
+// This is the more intutitve name for users in the mapping function
+func (e MissingColumnError) RawName() string {
+	return e.columnName
+}
+
 // ColumnName returns the value that was associated with the missing column
 func (e MissingColumnError) Value() any {
 	return e.val

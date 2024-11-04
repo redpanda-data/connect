@@ -129,11 +129,12 @@ func TestColumnNormalization(t *testing.T) {
 
 func TestColumnQuoting(t *testing.T) {
 	require.Equal(t, `""`, quoteColumnName(""))
-	require.Equal(t, `"foo"`, quoteColumnName("foo"))
-	require.Equal(t, `"""bar"""`, quoteColumnName(`"bar"`))
-	require.Equal(t, `"foo bar"`, quoteColumnName(`foo bar`))
-	require.Equal(t, `"foo\ bar"`, quoteColumnName(`foo\ bar`))
-	require.Equal(t, `"foo""bar"`, quoteColumnName(`foo"bar`))
+	require.Equal(t, `"FOO"`, quoteColumnName("foo"))
+	require.Equal(t, `"""BAR"""`, quoteColumnName(`"bar"`))
+	require.Equal(t, `"FOO BAR"`, quoteColumnName(`foo bar`))
+	require.Equal(t, `"FOO\ BAR"`, quoteColumnName(`foo\ bar`))
+	require.Equal(t, `"FOO""BAR"`, quoteColumnName(`foo"bar`))
+	require.Equal(t, `"FOO""BAR1"`, quoteColumnName(`foo"bar1`))
 	require.Equal(t, `""""""""""`, quoteColumnName(`""""`))
 }
 
