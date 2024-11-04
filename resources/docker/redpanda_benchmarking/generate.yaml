@@ -1,0 +1,25 @@
+http:
+  enabled: false
+
+input:
+  generate:
+    interval: ""
+    count: 100_000_000
+    batch_size: 20
+    mapping: |
+      root.ID = counter()
+      root.Name = [ "frosty", "spot", "oodles" ].index(random_int() % 3)
+      root.Gooeyness = (random_int() % 100) / 100
+
+output:
+  redpanda:
+    seed_brokers: [ localhost:9092 ]
+    topic: testing_a
+    # max_in_flight: 1 # Ensures ordering from the generate input
+
+metrics:
+  prometheus:
+    push_interval: 1s
+    push_job_name: benthos_push
+    push_url: "http://localhost:9091"
+
