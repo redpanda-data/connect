@@ -21,16 +21,13 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
-func franzKafkaInputConfig() *service.ConfigSpec {
+func redpandaInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Beta().
 		Categories("Services").
-		Version("3.61.0").
 		Summary(`A Kafka input using the https://github.com/twmb/franz-go[Franz Kafka client library^].`).
 		Description(`
 When a consumer group is specified this input consumes one or more topics where partitions will automatically balance across any other connected clients with the same consumer group. When a consumer group is not specified topics can either be consumed in their entirety or with explicit partitions.
-
-This input often out-performs the traditional ` + "`kafka`" + ` input as well as providing more useful logs and error messages.
 
 == Metadata
 
@@ -46,7 +43,7 @@ This input adds the following metadata fields to each message:
 - All record headers
 ` + "```" + `
 `).
-		Fields(FranzKafkaInputConfigFields()...).
+		Fields(redpandaInputConfigFields()...).
 		LintRule(`
 let has_topic_partitions = this.topics.any(t -> t.contains(":"))
 root = if $has_topic_partitions {
@@ -63,13 +60,11 @@ root = if $has_topic_partitions {
 `)
 }
 
-// FranzKafkaInputConfigFields returns the full suite of config fields for a
-// kafka input using the franz-go client library.
-func FranzKafkaInputConfigFields() []*service.ConfigField {
+func redpandaInputConfigFields() []*service.ConfigField {
 	return slices.Concat(
 		FranzConnectionFields(),
 		FranzConsumerFields(),
-		FranzReaderUnorderedConfigFields(),
+		FranzReaderOrderedConfigFields(),
 		[]*service.ConfigField{
 			service.NewAutoRetryNacksToggleField(),
 		},
@@ -77,7 +72,7 @@ func FranzKafkaInputConfigFields() []*service.ConfigField {
 }
 
 func init() {
-	err := service.RegisterBatchInput("kafka_franz", franzKafkaInputConfig(),
+	err := service.RegisterBatchInput("redpanda", redpandaInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
 			tmpOpts, err := FranzConnectionOptsFromConfig(conf, mgr.Logger())
 			if err != nil {
@@ -90,7 +85,7 @@ func init() {
 			}
 			clientOpts = append(clientOpts, tmpOpts...)
 
-			rdr, err := NewFranzReaderUnorderedFromConfig(conf, mgr, clientOpts...)
+			rdr, err := NewFranzReaderOrderedFromConfig(conf, mgr, clientOpts...)
 			if err != nil {
 				return nil, err
 			}
