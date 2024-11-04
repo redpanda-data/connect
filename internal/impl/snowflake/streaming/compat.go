@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming/int128"
 )
@@ -147,6 +148,21 @@ func normalizeColumnName(name string) string {
 		}
 		// fallthrough
 	}
+	// Fast path for common data that doesn't have escape characters
+	// this assumes the names of the columns are NOT already uppercase
+	// as in that case it'd be better not to alloc at all, but that
+	// doesn't seem likely nor does it seem to save that much perf.
+	transformed := []byte(name)
+	for i, c := range transformed {
+		if 'a' <= c && c <= 'z' {
+			c -= 'a' - 'A'
+			transformed[i] = c
+		} else if c >= utf8.RuneSelf || c == '\\' {
+			goto fallback
+		}
+	}
+	return string(transformed)
+fallback:
 	return strings.ToUpper(strings.ReplaceAll(name, `\ `, ` `))
 }
 
