@@ -40,7 +40,7 @@ var (
 
 func main() {
 	schema := schema.Cloud(Version, DateBuilt)
-	if os.Args[1] != "run" {
+	if len(os.Args) > 1 && os.Args[1] != "run" {
 		cli.InitEnterpriseCLI(BinaryName, Version, DateBuilt, schema)
 		return
 	}
