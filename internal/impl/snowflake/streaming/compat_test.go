@@ -15,6 +15,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -125,6 +126,25 @@ func TestColumnNormalization(t *testing.T) {
 	require.Equal(t, `"FOO \"BAZ"`, normalizeColumnName(`"foo \"baz"`))
 	require.Equal(t, `"FOO \"BAZ"`, normalizeColumnName(`"foo \"baz"`))
 	require.Equal(t, `foo" bar "baz`, normalizeColumnName(`"foo"" bar ""baz"`))
+}
+
+func BenchmarkColumnNormalization(b *testing.B) {
+	makeBench := func(name string) func(b *testing.B) {
+		return func(b *testing.B) {
+			var normalized string
+			for i := 0; i < b.N; i++ {
+				normalized = normalizeColumnName(name)
+			}
+			b.SetBytes(int64(len(normalized)))
+		}
+	}
+	b.Run("snake_case", makeBench("foo_bar"))
+	b.Run("camelCase", makeBench("fooBar"))
+	b.Run("upper", makeBench("FOOBAR"))
+	b.Run("small", makeBench("a"))
+	b.Run("large", makeBench(strings.Repeat("a", 128)))
+	// Appently this is German for "fuel oil recoil absorber"
+	b.Run("unicode", makeBench("heizölrückstoßabdämpfung"))
 }
 
 func TestSnowflakeTimestamp(t *testing.T) {
