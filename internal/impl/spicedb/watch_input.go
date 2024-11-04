@@ -23,6 +23,7 @@ import (
 
 	"github.com/Jeffail/shutdown"
 	v1 "github.com/authzed/authzed-go/proto/authzed/api/v1"
+	"github.com/dustin/go-humanize"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"google.golang.org/protobuf/encoding/protojson"
 )
@@ -65,6 +66,12 @@ Ideally this cache should be persisted across restarts.
 				Default("").
 				Example("t_your_token_here_1234567deadbeef").
 				Secret(),
+			service.NewStringField("max_receive_message_bytes").
+				Description("Maximum message size in bytes the SpiceDB client can receive.").
+				Advanced().
+				Default("4MB").
+				Example("100MB").
+				Example("50mib"),
 			service.NewStringField("cache").
 				Description("A cache resource to use for performing unread message backfills, the ID of the last message received will be stored in this cache and used for subsequent requests."),
 			service.NewStringField("cache_key").
@@ -105,6 +112,15 @@ func newWatchInput(pConf *service.ParsedConfig, mgr *service.Resources) (*watchI
 	}
 	if in.clientConfig.bearerToken, err = pConf.FieldString("bearer_token"); err != nil {
 		return nil, err
+	}
+	var maxReceiveMessageBytesStr string
+	if maxReceiveMessageBytesStr, err = pConf.FieldString("max_receive_message_bytes"); err != nil {
+		return nil, err
+	}
+	if maxReceiveMessageSizeInBytes, err := humanize.ParseBytes(maxReceiveMessageBytesStr); err != nil {
+		return nil, err
+	} else {
+		in.clientConfig.maxReceiveMessageSizeInBytes = int(maxReceiveMessageSizeInBytes)
 	}
 	if in.clientConfig.tlsConf, _, err = pConf.FieldTLSToggled("tls"); err != nil {
 		return nil, err

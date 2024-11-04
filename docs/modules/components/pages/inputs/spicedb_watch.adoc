@@ -54,7 +54,7 @@ input:
   spicedb_watch:
     endpoint: grpc.authzed.com:443 # No default (required)
     bearer_token: ""
-    tls_enabled: true
+    max_receive_message_bytes: 4MB
     cache: "" # No default (required)
     cache_key: authzed.com/spicedb/watch/last_zed_token
     tls:
@@ -118,14 +118,22 @@ This field contains sensitive information that usually shouldn't be added to a c
 bearer_token: t_your_token_here_1234567deadbeef
 ```
 
-=== `tls_enabled`
+=== `max_receive_message_bytes`
 
-Whether to enable TLS for the connection.
+Maximum message size in bytes the SpiceDB client can receive.
 
 
-*Type*: `bool`
+*Type*: `string`
 
-*Default*: `true`
+*Default*: `"4MB"`
+
+```yml
+# Examples
+
+max_receive_message_bytes: 100MB
+
+max_receive_message_bytes: 50mib
+```
 
 === `cache`
 
