@@ -6,6 +6,7 @@ require (
 	cloud.google.com/go/aiplatform v1.68.0
 	cloud.google.com/go/bigquery v1.62.0
 	cloud.google.com/go/pubsub v1.42.0
+	cloud.google.com/go/secretmanager v1.13.3
 	cloud.google.com/go/storage v1.43.0
 	cloud.google.com/go/vertexai v0.12.0
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.14.0
