@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/checkpoint"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/redpanda-data/benthos/v4/public/service"
 
@@ -31,8 +32,8 @@ const (
 	fieldPass                    = "password"
 	fieldSchema                  = "schema"
 	fieldDatabase                = "database"
-	fieldTls                     = "tls"
-	fieldStreamUncomitted        = "stream_uncomitted"
+	fieldTLS                     = "tls"
+	fieldStreamUncommitted       = "stream_uncomitted"
 	fieldPgConnOptions           = "pg_conn_options"
 	fieldStreamSnapshot          = "stream_snapshot"
 	fieldSnapshotMemSafetyFactor = "snapshot_memory_safety_factor"
@@ -45,8 +46,6 @@ const (
 	fieldBatching                = "batching"
 )
 
-var randomSlotName string
-
 type asyncMessage struct {
 	msg   service.MessageBatch
 	ackFn service.AckFunc
@@ -55,12 +54,15 @@ type asyncMessage struct {
 var pgStreamConfigSpec = service.NewConfigSpec().
 	Beta().
 	Categories("Services").
-	Version("0.0.1").
-	Summary(`Creates a PostgreSQL replication slot for Change Data Capture (CDC)
-		== Metadata
+	Version("4.39.0").
+	Summary(`Streams changes from a PostgreSQL database using logical replication.`).
+	Description(`Streams changes from a PostgreSQL database for Change Data Capture (CDC).
+Additionally, if ` + "`" + fieldStreamSnapshot + "`" + ` is set to true, then the existing data in the database is also streamed too.
+
+== Metadata
 
 This input adds the following metadata fields to each message:
-- streaming (Indicates whether the message is part of a streaming operation or snapshot processing)
+- streaming (Boolean indicating whether the message is part of a streaming operation or snapshot processing)
 - table (Name of the table that the message originated from)
 - operation (Type of operation that generated the message, such as INSERT, UPDATE, or DELETE)
 		`).
@@ -81,10 +83,10 @@ This input adds the following metadata fields to each message:
 		Description("The PostgreSQL schema from which to replicate data.")).
 	Field(service.NewStringField(fieldDatabase).
 		Description("The name of the PostgreSQL database to connect to.")).
-	Field(service.NewTLSToggledField(fieldTls).
+	Field(service.NewTLSToggledField(fieldTLS).
 		Description("Specifies whether to use TLS for the database connection. Set to 'require' to enforce TLS, or 'none' to disable it.").
 		Default(nil)).
-	Field(service.NewBoolField(fieldStreamUncomitted).
+	Field(service.NewBoolField(fieldStreamUncommitted).
 		Description("If set to true, the plugin will stream uncommitted transactions before receiving a commit message from PostgreSQL. This may result in duplicate records if the connector is restarted.").
 		Default(false)).
 	Field(service.NewStringField(fieldPgConnOptions).
@@ -124,7 +126,7 @@ This input adds the following metadata fields to each message:
 	Field(service.NewStringField(fieldSlotName).
 		Description("The name of the PostgreSQL logical replication slot to use. If not provided, a random name will be generated. You can create this slot manually before starting replication if desired.").
 		Example("my_test_slot").
-		Default(randomSlotName)).
+		Default("")).
 	Field(service.NewAutoRetryNacksToggleField()).
 	Field(service.NewBatchPolicyField(fieldBatching))
 
@@ -158,6 +160,10 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	if err != nil {
 		return nil, err
 	}
+	// Set the default to be a random string
+	if dbSlotName == "" {
+		dbSlotName = uuid.NewString()
+	}
 
 	temporarySlot, err = conf.FieldBool(fieldTemporarySlot)
 	if err != nil {
@@ -174,7 +180,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		return nil, err
 	}
 
-	tlsConf, tlsEnabled, err := conf.FieldTLSToggled(fieldTls)
+	tlsConf, tlsEnabled, err := conf.FieldTLSToggled(fieldTLS)
 	if err != nil {
 		return nil, err
 	}
@@ -208,7 +214,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		return nil, err
 	}
 
-	streamUncomited, err = conf.FieldBool(fieldStreamUncomitted)
+	streamUncomited, err = conf.FieldBool(fieldStreamUncommitted)
 	if err != nil {
 		return nil, err
 	}

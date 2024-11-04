@@ -110,8 +110,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	tableNames = append(tableNames, config.DBTables...)
 
 	if config.ReplicationSlotName == "" {
-		rng, _ := codename.DefaultRNG()
-		config.ReplicationSlotName = strings.ReplaceAll(codename.Generate(rng, 5), "-", "_")
+		return nil, errors.New("missing replication slot name")
 	}
 
 	stream := &Stream{
