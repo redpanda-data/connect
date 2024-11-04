@@ -18,8 +18,9 @@ import (
 	"github.com/aws/smithy-go/ptr"
 	"github.com/parquet-go/parquet-go"
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming/int128"
 	"github.com/stretchr/testify/require"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming/int128"
 )
 
 func msg(s string) *service.Message {
