@@ -40,6 +40,11 @@ var (
 
 func main() {
 	schema := schema.Cloud(Version, DateBuilt)
+	if os.Args[1] != "run" {
+		cli.InitEnterpriseCLI(BinaryName, Version, DateBuilt, schema)
+		return
+	}
+
 	status := protohealth.NewEndpoint(2999)
 	errC := make(chan error)
 	sigC := make(chan os.Signal, 1)
