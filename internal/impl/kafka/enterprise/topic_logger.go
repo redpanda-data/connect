@@ -10,17 +10,14 @@ package enterprise
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"log/slog"
-	"math"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
 
-	"github.com/dustin/go-humanize"
 	"github.com/twmb/franz-go/pkg/kgo"
-	"github.com/twmb/franz-go/pkg/sasl"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
@@ -31,51 +28,34 @@ const (
 	statusTickerDuration = time.Second * 30
 	topicMetaKey         = "__connect_topic"
 	keyMetaKey           = "__connect_key"
+
+	sharedGlobalRedpandaClientKey = "__redpanda_global"
 )
 
 // TopicLoggerFields returns the topic logger config fields.
 func TopicLoggerFields() []*service.ConfigField {
-	return []*service.ConfigField{
-		service.NewStringField("pipeline_id").
-			Description("An optional identifier for the pipeline, this will be present in logs and status updates sent to topics.").
-			Default(""),
-		service.NewStringListField("seed_brokers").
-			Description("A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses.").
-			Optional().
-			Example([]string{"localhost:9092"}).
-			Example([]string{"foo:9092", "bar:9092"}).
-			Example([]string{"foo:9092,bar:9092"}),
-		service.NewStringField("logs_topic").
-			Description("A topic to send process logs to.").
-			Default("").
-			Example("__redpanda.connect.logs"),
-		service.NewStringEnumField("logs_level", "debug", "info", "warn", "error").
-			Default("info"),
-		service.NewStringField("status_topic").
-			Description("A topic to send status updates to.").
-			Default("").
-			Example("__redpanda.connect.status"),
-		service.NewStringField("client_id").
-			Description("An identifier for the client connection.").
-			Default("benthos").
-			Advanced(),
-		service.NewStringField("rack_id").
-			Description("A rack identifier for this client.").
-			Default("").
-			Advanced(),
-		service.NewDurationField("timeout").
-			Description("The maximum period of time to wait for message sends before abandoning the request and retrying").
-			Default("10s").
-			Advanced(),
-		service.NewStringField("max_message_bytes").
-			Description("The maximum space in bytes than an individual message may take, messages larger than this value will be rejected. This field corresponds to Kafka's `max.message.bytes`.").
-			Advanced().
-			Default("1MB").
-			Example("100MB").
-			Example("50mib"),
-		service.NewTLSToggledField("tls"),
-		kafka.SASLFields(),
-	}
+	return slices.Concat(
+		kafka.FranzConnectionFields(),
+		[]*service.ConfigField{
+			service.NewStringField("pipeline_id").
+				Description("An optional identifier for the pipeline, this will be present in logs and status updates sent to topics.").
+				Default(""),
+			service.NewStringField("logs_topic").
+				Description("A topic to send process logs to.").
+				Default("").
+				Example("__redpanda.connect.logs"),
+			service.NewStringEnumField("logs_level", "debug", "info", "warn", "error").
+				Default("info"),
+			service.NewStringField("status_topic").
+				Description("A topic to send status updates to.").
+				Default("").
+				Example("__redpanda.connect.status"),
+
+			// Deprecated
+			service.NewStringField("rack_id").Deprecated(),
+		},
+		kafka.FranzProducerFields(),
+	)
 }
 
 // TopicLogger provides a mechanism for sending service-wide logs into a kafka
@@ -280,120 +260,37 @@ loop:
 //------------------------------------------------------------------------------
 
 type franzTopicLoggerWriter struct {
-	seedBrokers      []string
-	clientID         string
-	rackID           string
-	tlsConf          *tls.Config
-	saslConfs        []sasl.Mechanism
-	partitioner      kgo.Partitioner
-	timeout          time.Duration
-	produceMaxBytes  int32
-	compressionPrefs []kgo.CompressionCodec
-
-	client *kgo.Client
+	connDetails *kafka.FranzConnectionDetails
+	clientOpts  []kgo.Opt
+	client      *kgo.Client
 
 	log *service.Logger
+	mgr *service.Resources
 }
 
 func newTopicLoggerWriterFromConfig(conf *service.ParsedConfig, log *service.Logger) (*franzTopicLoggerWriter, error) {
 	f := franzTopicLoggerWriter{
 		log: log,
+		mgr: conf.Resources(),
 	}
 
-	if !conf.Contains("seed_brokers") {
+	if testList, _ := conf.FieldStringList("seed_brokers"); len(testList) == 0 {
 		return nil, nil
 	}
 
-	brokerList, err := conf.FieldStringList("seed_brokers")
-	if err != nil {
+	var err error
+	if f.connDetails, err = kafka.FranzConnectionDetailsFromConfig(conf, log); err != nil {
 		return nil, err
 	}
-	for _, b := range brokerList {
-		f.seedBrokers = append(f.seedBrokers, strings.Split(b, ",")...)
-	}
-	if len(brokerList) == 0 {
-		return nil, nil
-	}
+	f.clientOpts = f.connDetails.FranzOpts()
 
-	if f.timeout, err = conf.FieldDuration("timeout"); err != nil {
+	var tmpOpts []kgo.Opt
+	if tmpOpts, err = kafka.FranzProducerOptsFromConfig(conf); err != nil {
 		return nil, err
 	}
+	f.clientOpts = append(f.clientOpts, tmpOpts...)
 
-	maxBytesStr, err := conf.FieldString("max_message_bytes")
-	if err != nil {
-		return nil, err
-	}
-	maxBytes, err := humanize.ParseBytes(maxBytesStr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse max_message_bytes: %w", err)
-	}
-	if maxBytes > uint64(math.MaxInt32) {
-		return nil, fmt.Errorf("invalid max_message_bytes, must not exceed %v", math.MaxInt32)
-	}
-	f.produceMaxBytes = int32(maxBytes)
-
-	if conf.Contains("compression") {
-		cStr, err := conf.FieldString("compression")
-		if err != nil {
-			return nil, err
-		}
-
-		var c kgo.CompressionCodec
-		switch cStr {
-		case "lz4":
-			c = kgo.Lz4Compression()
-		case "gzip":
-			c = kgo.GzipCompression()
-		case "snappy":
-			c = kgo.SnappyCompression()
-		case "zstd":
-			c = kgo.ZstdCompression()
-		case "none":
-			c = kgo.NoCompression()
-		default:
-			return nil, fmt.Errorf("compression codec %v not recognised", cStr)
-		}
-		f.compressionPrefs = append(f.compressionPrefs, c)
-	}
-
-	f.partitioner = kgo.StickyKeyPartitioner(nil)
-	if conf.Contains("partitioner") {
-		partStr, err := conf.FieldString("partitioner")
-		if err != nil {
-			return nil, err
-		}
-		switch partStr {
-		case "murmur2_hash":
-			f.partitioner = kgo.StickyKeyPartitioner(nil)
-		case "round_robin":
-			f.partitioner = kgo.RoundRobinPartitioner()
-		case "least_backup":
-			f.partitioner = kgo.LeastBackupPartitioner()
-		case "manual":
-			f.partitioner = kgo.ManualPartitioner()
-		default:
-			return nil, fmt.Errorf("unknown partitioner: %v", partStr)
-		}
-	}
-
-	if f.clientID, err = conf.FieldString("client_id"); err != nil {
-		return nil, err
-	}
-
-	if f.rackID, err = conf.FieldString("rack_id"); err != nil {
-		return nil, err
-	}
-
-	tlsConf, tlsEnabled, err := conf.FieldTLSToggled("tls")
-	if err != nil {
-		return nil, err
-	}
-	if tlsEnabled {
-		f.tlsConf = tlsConf
-	}
-	if f.saslConfs, err = kafka.SASLMechanismsFromConfig(conf); err != nil {
-		return nil, err
-	}
+	f.clientOpts = append(f.clientOpts, kgo.AllowAutoTopicCreation()) // TODO: Configure this?
 
 	return &f, nil
 }
@@ -405,29 +302,15 @@ func (f *franzTopicLoggerWriter) Connect(ctx context.Context) error {
 		return nil
 	}
 
-	clientOpts := []kgo.Opt{
-		kgo.SeedBrokers(f.seedBrokers...),
-		kgo.SASL(f.saslConfs...),
-		kgo.AllowAutoTopicCreation(), // TODO: Configure this
-		kgo.ProducerBatchMaxBytes(f.produceMaxBytes),
-		kgo.ProduceRequestTimeout(f.timeout),
-		kgo.ClientID(f.clientID),
-		kgo.Rack(f.rackID),
-		kgo.WithLogger(&kafka.KGoLogger{L: f.log}),
-	}
-	if f.tlsConf != nil {
-		clientOpts = append(clientOpts, kgo.DialTLSConfig(f.tlsConf))
-	}
-	if f.partitioner != nil {
-		clientOpts = append(clientOpts, kgo.RecordPartitioner(f.partitioner))
-	}
-	if len(f.compressionPrefs) > 0 {
-		clientOpts = append(clientOpts, kgo.ProducerBatchCompression(f.compressionPrefs...))
-	}
-
-	cl, err := kgo.NewClient(clientOpts...)
+	cl, err := kgo.NewClient(f.clientOpts...)
 	if err != nil {
 		return err
+	}
+	if err := kafka.FranzSharedClientSet(sharedGlobalRedpandaClientKey, &kafka.FranzSharedClientInfo{
+		Client:      cl,
+		ConnDetails: f.connDetails,
+	}, f.mgr); err != nil {
+		return fmt.Errorf("failed to store global redpanda client: %w", err)
 	}
 
 	f.client = cl
@@ -469,6 +352,7 @@ func (f *franzTopicLoggerWriter) disconnect() {
 	if f.client == nil {
 		return
 	}
+	_, _ = kafka.FranzSharedClientPop(sharedGlobalRedpandaClientKey, f.mgr)
 	f.client.Close()
 	f.client = nil
 }

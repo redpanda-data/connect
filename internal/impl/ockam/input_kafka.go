@@ -17,9 +17,11 @@ package ockam
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/twmb/franz-go/pkg/kgo"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
 )
@@ -43,13 +45,17 @@ func ockamKafkaInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Summary("Ockam").
 		Categories("Services").
-		Field(service.NewObjectField("kafka", append(
-			kafka.FranzKafkaInputConfigFields(),
-			service.NewStringListField("seed_brokers").Optional().
-				Description("A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses.").
-				Example([]string{"localhost:9092"}).
-				Example([]string{"foo:9092", "bar:9092"}).
-				Example([]string{"foo:9092,bar:9092"}),
+		Field(service.NewObjectField("kafka", slices.Concat(
+			[]*service.ConfigField{
+				service.NewStringListField("seed_brokers").Optional().
+					Description("A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses.").
+					Example([]string{"localhost:9092"}).
+					Example([]string{"foo:9092", "bar:9092"}).
+					Example([]string{"foo:9092,bar:9092"}),
+				service.NewTLSToggledField("tls"),
+			},
+			kafka.FranzConsumerFields(),
+			kafka.FranzReaderUnorderedConfigFields(),
 		)...)).
 		Field(service.NewBoolField("disable_content_encryption").Default(false)).
 		Field(service.NewStringField("enrollment_ticket").Optional()).
@@ -68,7 +74,7 @@ func ockamKafkaInputConfig() *service.ConfigSpec {
 
 type ockamKafkaInput struct {
 	node        node
-	kafkaReader *kafka.FranzKafkaReader
+	kafkaReader *kafka.FranzReaderUnordered
 }
 
 func newOckamKafkaInput(conf *service.ParsedConfig, mgr *service.Resources) (*ockamKafkaInput, error) {
@@ -157,12 +163,6 @@ func newOckamKafkaInput(conf *service.ParsedConfig, mgr *service.Resources) (*oc
 		return nil, err
 	}
 
-	// ---- Create Ockam Kafka Outlet if necessary ----
-	kafkaReader, err := kafka.NewFranzKafkaReaderFromConfig(conf.Namespace("kafka"), mgr)
-	if err != nil {
-		return nil, err
-	}
-
 	if routeToKafkaOutlet == "self" {
 		// TODO: Handle other tls fields in kafka franz
 		_, tls, err := conf.FieldTLSToggled("kafka", "tls")
@@ -187,10 +187,19 @@ func newOckamKafkaInput(conf *service.ParsedConfig, mgr *service.Resources) (*oc
 		}
 	}
 
-	// Override the list of SeedBrokers that would be used by kafka_franz, set it to the address of the kafka inlet
-	kafkaReader.SeedBrokers = []string{kafkaInletAddress}
-	// Disable TLS, kafka_franz writer will communicate in plaintext with the Ockam kafka inlet
-	kafkaReader.TLSConf = nil
+	// ---- Create Ockam Kafka Outlet if necessary ----
+	clientOpts, err := kafka.FranzConsumerOptsFromConfig(conf.Namespace("kafka"))
+	if err != nil {
+		return nil, err
+	}
+	clientOpts = append(clientOpts,
+		kgo.SeedBrokers(kafkaInletAddress),
+	)
+
+	kafkaReader, err := kafka.NewFranzReaderUnorderedFromConfig(conf.Namespace("kafka"), mgr, clientOpts...)
+	if err != nil {
+		return nil, err
+	}
 
 	return &ockamKafkaInput{*n, kafkaReader}, nil
 }
