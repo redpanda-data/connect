@@ -150,6 +150,27 @@ func normalizeColumnName(name string) string {
 	return strings.ToUpper(strings.ReplaceAll(name, `\ `, ` `))
 }
 
+// quoteColumnName escapes an object identifier according to the
+// rules in Snowflake.
+//
+// https://docs.snowflake.com/en/sql-reference/identifiers-syntax
+func quoteColumnName(name string) string {
+	var quoted strings.Builder
+	// Default to assume we're just going to add quotes and there won't
+	// be any double quotes inside the string that need escaped.
+	quoted.Grow(len(name) + 2)
+	quoted.WriteByte('"')
+	for _, r := range name {
+		if r == '"' {
+			quoted.WriteString(`""`)
+		} else {
+			quoted.WriteRune(r)
+		}
+	}
+	quoted.WriteByte('"')
+	return quoted.String()
+}
+
 // snowflakeTimestampInt computes the same result as the logic in TimestampWrapper
 // in the Java SDK. It converts a timestamp to the integer representation that
 // is used internally within Snowflake.

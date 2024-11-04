@@ -32,6 +32,7 @@ type NonNullColumnError struct {
 
 // ColumnName returns the column name with the NOT NULL constraint
 func (e NonNullColumnError) ColumnName() string {
+	// This name comes directly from the Snowflake API so I hope this is properly quoted...
 	return e.columnName
 }
 
@@ -57,10 +58,10 @@ type MissingColumnError struct {
 
 // ColumnName returns the column name of the data that was not in the table
 //
-// NOTE that this isn't escaped, so it's important that we don't just inject
-// it directly in the query.
+// NOTE this is escaped, so it's valid to use this directly in a SQL statement
+// but I wish that Snowflake would just allow `identifier` for ALTER column.
 func (e MissingColumnError) ColumnName() string {
-	return e.columnName
+	return quoteColumnName(e.columnName)
 }
 
 // ColumnName returns the value that was associated with the missing column
