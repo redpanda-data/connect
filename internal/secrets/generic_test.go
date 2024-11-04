@@ -105,7 +105,7 @@ func Test_secretManager_lookup(t *testing.T) {
 	}
 }
 
-func (f *fakeSecretManager) getSecretValue(key string) (string, bool) {
+func (f *fakeSecretManager) getSecretValue(_ context.Context, key string) (string, bool) {
 	value, ok := f.secrets[key]
 	return value, ok
 }

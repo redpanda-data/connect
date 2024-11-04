@@ -32,8 +32,8 @@ func newAWSSecretsManager(_ context.Context, logger *slog.Logger, url *url.URL) 
 	}, nil
 }
 
-func (a *awsSecretsManager) getSecretValue(key string) (string, bool) {
-	value, err := a.client.GetSecretValue(&secretsmanager.GetSecretValueInput{
+func (a *awsSecretsManager) getSecretValue(ctx context.Context, key string) (string, bool) {
+	value, err := a.client.GetSecretValueWithContext(ctx, &secretsmanager.GetSecretValueInput{
 		SecretId: &key,
 	})
 	if err != nil {

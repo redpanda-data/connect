@@ -26,7 +26,7 @@ import (
 const secretPrefix = "secrets."
 
 type secretAPI interface {
-	getSecretValue(string) (string, bool)
+	getSecretValue(context.Context, string) (string, bool)
 }
 
 type createSecretsManagerFn func(ctx context.Context, logger *slog.Logger, url *url.URL) (secretAPI, error)
@@ -36,7 +36,7 @@ type secretManager struct {
 	prefix    string
 }
 
-func (s *secretManager) lookup(_ context.Context, key string) (string, bool) {
+func (s *secretManager) lookup(ctx context.Context, key string) (string, bool) {
 	if !strings.HasPrefix(key, secretPrefix) {
 		return "", false
 	}
@@ -44,7 +44,7 @@ func (s *secretManager) lookup(_ context.Context, key string) (string, bool) {
 	parts := strings.SplitN(key, ".", 2)
 
 	secretName := s.prefix + parts[0]
-	value, found := s.secretAPI.getSecretValue(secretName)
+	value, found := s.secretAPI.getSecretValue(ctx, secretName)
 	if !found {
 		return "", false
 	}
@@ -63,14 +63,10 @@ func newSecretManager(ctx context.Context, logger *slog.Logger, url *url.URL, cr
 	}
 	secretManager := &secretManager{
 		secretAPI: secretsManager,
-		prefix:    trimLeftSlash(url.Path),
+		prefix:    strings.TrimPrefix(url.Path, "/"),
 	}
 
 	return secretManager.lookup, nil
-}
-
-func trimLeftSlash(path string) string {
-	return strings.TrimPrefix(path, "/")
 }
 
 func getJSONValue(json string, field string) (string, bool) {
