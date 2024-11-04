@@ -11,6 +11,7 @@ package pgstream
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -189,6 +190,12 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		// Don't support dynamic reading of password
 		GetSSLPassword: func(context.Context) string { return "" },
 	})
+	if err != nil {
+		return nil, err
+	}
+	// This is required for postgres to understand we're interested in replication.
+	// https://github.com/jackc/pglogrepl/issues/6
+	pgconnConfig.RuntimeParams["replication"] = "database"
 
 	snapsotMetrics := mgr.Metrics().NewGauge("snapshot_progress", "table")
 	replicationLag := mgr.Metrics().NewGauge("replication_lag_bytes")
@@ -268,20 +275,20 @@ type pgStreamInput struct {
 
 func (p *pgStreamInput) Connect(ctx context.Context) error {
 	pgStream, err := pglogicalstream.NewPgStream(ctx, &pglogicalstream.Config{
-		DBConfig:                 p.dbConfig,
-		DBSchema:                 p.schema,
-		DBTables:                 p.tables,
-		ReplicationSlotName:      "rs_" + p.slotName,
-		BatchSize:                p.snapshotBatchSize,
-		StreamOldData:            p.streamSnapshot,
-		TemporaryReplicationSlot: p.temporarySlot,
-		StreamUncommitted:        p.streamUncommitted,
-		DecodingPlugin:           p.decodingPlugin,
-
+		DBConfig:                   p.dbConfig,
+		DBSchema:                   p.schema,
+		DBTables:                   p.tables,
+		ReplicationSlotName:        "rs_" + p.slotName,
+		BatchSize:                  p.snapshotBatchSize,
+		StreamOldData:              p.streamSnapshot,
+		TemporaryReplicationSlot:   p.temporarySlot,
+		StreamUncommitted:          p.streamUncommitted,
+		DecodingPlugin:             p.decodingPlugin,
 		SnapshotMemorySafetyFactor: p.snapshotMemSafetyFactor,
+		Logger:                     p.logger,
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to create replication stream: %w", err)
 	}
 
 	p.pglogicalStream = pgStream

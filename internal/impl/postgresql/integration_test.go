@@ -183,18 +183,14 @@ func TestIntegrationPgCDC(t *testing.T) {
 
 	template := fmt.Sprintf(`
 pg_stream:
-    host: %s
+    dsn: %s
     slot_name: test_slot
-    user: user_name
-    password: %s
-    port: %s
-    schema: public
     decoding_plugin: wal2json
     stream_snapshot: true
-    database: dbname
+    schema: public
     tables:
        - flights
-`, hostAndPortSplited[0], password, hostAndPortSplited[1])
+`, databaseURL)
 
 	cacheConf := fmt.Sprintf(`
 label: pg_stream_cache
@@ -316,21 +312,17 @@ func TestIntegrationPgCDCForPgOutputPlugin(t *testing.T) {
 		require.NoError(t, err)
 	}
 
+	databaseURL := fmt.Sprintf("user=user_name password=%s dbname=dbname sslmode=disable host=%s port=%s", password, hostAndPortSplited[0], hostAndPortSplited[1])
 	template := fmt.Sprintf(`
 pg_stream:
-    host: %s
+    dsn: %s
     slot_name: test_slot_native_decoder
-    user: user_name
-    password: %s
-    port: %s
-    schema: public
-    tls: none
     stream_snapshot: true
     decoding_plugin: pgoutput
-    database: dbname
+    schema: public
     tables:
        - flights
-`, hostAndPortSplited[0], password, hostAndPortSplited[1])
+`, databaseURL)
 
 	cacheConf := fmt.Sprintf(`
 label: pg_stream_cache
@@ -433,34 +425,22 @@ func TestIntegrationPgStreamingFromRemoteDB(t *testing.T) {
 
 	// tables: users, products, orders, order_items
 
-	host := "localhost"
-	user := "postgres"
-	password := "postgres"
-	dbname := "postgres"
-	port := "5432"
-	sslmode := "none"
-
 	template := fmt.Sprintf(`
 pg_stream:
-    host: %s
+    dsn: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
     slot_name: test_slot_native_decoder
-    user: %s
-    password: %s
-    port: %s
-    schema: public
-    tls: %s
     snapshot_batch_size: 100000
     stream_snapshot: true
     decoding_plugin: pgoutput
     stream_uncomitted: false
     temporary_slot: true
-    database: %s
+    schema: public
     tables:
        - users
        - products
        - orders
        - order_items
-`, host, user, password, port, sslmode, dbname)
+`)
 
 	cacheConf := fmt.Sprintf(`
 label: pg_stream_cache
@@ -527,7 +507,7 @@ file:
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
 }
 
-func TestIntegrationPgCDCForPgOutputStreamUncomitedPlugin(t *testing.T) {
+func TestIntegrationPgCDCForPgOutputStreamUncommittedPlugin(t *testing.T) {
 	tmpDir := t.TempDir()
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
@@ -551,22 +531,19 @@ func TestIntegrationPgCDCForPgOutputStreamUncomitedPlugin(t *testing.T) {
 		require.NoError(t, err)
 	}
 
+	databaseURL := fmt.Sprintf("user=user_name password=%s dbname=dbname sslmode=disable host=%s port=%s", password, hostAndPortSplited[0], hostAndPortSplited[1])
 	template := fmt.Sprintf(`
 pg_stream:
-    host: %s
+    dsn: %s
     slot_name: test_slot_native_decoder
-    user: user_name
-    password: %s
-    port: %s
-    schema: public
     snapshot_batch_size: 100
     stream_snapshot: true
     decoding_plugin: pgoutput
     stream_uncomitted: true
-    database: dbname
+    schema: public
     tables:
        - flights
-`, hostAndPortSplited[0], password, hostAndPortSplited[1])
+`, databaseURL)
 
 	cacheConf := fmt.Sprintf(`
 label: pg_stream_cache
@@ -691,21 +668,18 @@ func TestIntegrationPgMultiVersionsCDCForPgOutputStreamUncomitedPlugin(t *testin
 			require.NoError(t, err)
 		}
 
+		databaseURL := fmt.Sprintf("user=user_name password=%s dbname=dbname sslmode=disable host=%s port=%s", password, hostAndPortSplited[0], hostAndPortSplited[1])
 		template := fmt.Sprintf(`
 pg_stream:
-    host: %s
+    dsn: %s
     slot_name: test_slot_native_decoder
-    user: user_name
-    password: %s
-    port: %s
-    schema: public
     stream_snapshot: true
     decoding_plugin: pgoutput
     stream_uncomitted: true
-    database: dbname
+    schema: public
     tables:
        - flights
-`, hostAndPortSplited[0], password, hostAndPortSplited[1])
+`, databaseURL)
 
 		cacheConf := fmt.Sprintf(`
 label: pg_stream_cache
@@ -828,21 +802,18 @@ func TestIntegrationPgMultiVersionsCDCForPgOutputStreamComittedPlugin(t *testing
 			require.NoError(t, err)
 		}
 
+		databaseURL := fmt.Sprintf("user=user_name password=%s dbname=dbname sslmode=disable host=%s port=%s", password, hostAndPortSplited[0], hostAndPortSplited[1])
 		template := fmt.Sprintf(`
 pg_stream:
-    host: %s
+    dsn: %s
     slot_name: test_slot_native_decoder
-    user: user_name
-    password: %s
-    port: %s
-    schema: public
     stream_snapshot: true
     decoding_plugin: pgoutput
     stream_uncomitted: false
-    database: dbname
+    schema: public
     tables:
        - flights
-`, hostAndPortSplited[0], password, hostAndPortSplited[1])
+`, databaseURL)
 
 		cacheConf := fmt.Sprintf(`
 label: pg_stream_cache

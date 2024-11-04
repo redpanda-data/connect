@@ -36,5 +36,5 @@ type Config struct {
 	// StreamUncommitted is whether to stream uncommitted messages before receiving commit message
 	StreamUncommitted bool
 
-	logger *service.Logger
+	Logger *service.Logger
 }
