@@ -54,7 +54,8 @@ func TestIntegration(t *testing.T) {
 	uri := fmt.Sprintf("127.0.0.1:%s", resource.GetPort("50051/tcp"))
 	confYaml := fmt.Sprintf(`
 endpoint: %s
-tls_enabled: false
+tls:
+  enabled: false
 cache: test_cache
 `, uri)
 

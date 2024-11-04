@@ -65,15 +65,13 @@ Ideally this cache should be persisted across restarts.
 				Default("").
 				Example("t_your_token_here_1234567deadbeef").
 				Secret(),
-			service.NewBoolField("tls_enabled").
-				Description("Whether to enable TLS for the connection.").
-				Default(true),
 			service.NewStringField("cache").
 				Description("A cache resource to use for performing unread message backfills, the ID of the last message received will be stored in this cache and used for subsequent requests."),
 			service.NewStringField("cache_key").
 				Description("The key identifier used when storing the ID of the last message received.").
 				Default("authzed.com/spicedb/watch/last_zed_token").
 				Advanced(),
+			service.NewTLSToggledField("tls"),
 		)
 }
 
@@ -108,7 +106,7 @@ func newWatchInput(pConf *service.ParsedConfig, mgr *service.Resources) (*watchI
 	if in.clientConfig.bearerToken, err = pConf.FieldString("bearer_token"); err != nil {
 		return nil, err
 	}
-	if in.clientConfig.enableTLS, err = pConf.FieldBool("tls_enabled"); err != nil {
+	if in.clientConfig.tlsConf, _, err = pConf.FieldTLSToggled("tls"); err != nil {
 		return nil, err
 	}
 	if in.cache, err = pConf.FieldString("cache"); err != nil {

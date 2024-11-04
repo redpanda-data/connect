@@ -27,16 +27,14 @@ import (
 type clientConfig struct {
 	endpoint    string
 	bearerToken string
-	enableTLS   bool
+	tlsConf     *tls.Config
 }
 
 // load v1 client
 func (cc *clientConfig) loadSpiceDBClient() (*authzed.Client, error) {
 	creds := insecure.NewCredentials()
-	if cc.enableTLS {
-		creds = credentials.NewTLS(&tls.Config{
-			MinVersion: tls.VersionTLS12,
-		})
+	if cc.tlsConf != nil {
+		creds = credentials.NewTLS(cc.tlsConf)
 	}
 	opts := []grpc.DialOption{
 		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(40 * 1024 * 1024)),
@@ -44,7 +42,7 @@ func (cc *clientConfig) loadSpiceDBClient() (*authzed.Client, error) {
 	}
 	if cc.bearerToken != "" {
 		tokenOpt := grpcutil.WithInsecureBearerToken(cc.bearerToken)
-		if cc.enableTLS {
+		if cc.tlsConf != nil {
 			tokenOpt = grpcutil.WithBearerToken(cc.bearerToken)
 		}
 		opts = append(opts, tokenOpt)
