@@ -9,47 +9,33 @@
 package pglogicalstream
 
 import (
-	"crypto/tls"
-
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 // Config is the configuration for the pglogicalstream plugin
 type Config struct {
-	// DbHost is the host of the PostgreSQL instance
-	DBHost string `yaml:"db_host"`
-	// DbPassword is the password for the PostgreSQL instance
-	DBPassword string `yaml:"db_password"`
-	// DbUser is the user for the PostgreSQL instance
-	DBUser string `yaml:"db_user"`
-	// DbPort is the port of the PostgreSQL instance
-	DBPort int `yaml:"db_port"`
-	// DbName is the name of the database to connect to
-	DBName string `yaml:"db_name"`
-	// DbSchema is the schema to stream changes from
-	DBSchema string `yaml:"db_schema"`
+	// DBConfig is the configuration to connect to the database with
+	DBConfig *pgconn.Config
+	DBRawDSN string
+	// The DB schema to lookup tables in
+	DBSchema string
 	// DbTables is the tables to stream changes from
-	DBTables []string `yaml:"db_tables"`
-	// TLSConfig is the TLS verification configuration
-	TLSConfig *tls.Config `yaml:"tls"`
-	// PgConnRuntimeParam is the runtime parameter for the PostgreSQL connection
-	PgConnRuntimeParam string `yaml:"pg_conn_options"`
-
+	DBTables []string
 	// ReplicationSlotName is the name of the replication slot to use
-	ReplicationSlotName string `yaml:"replication_slot_name"`
+	ReplicationSlotName string
 	// TemporaryReplicationSlot is whether to use a temporary replication slot
-	TemporaryReplicationSlot bool `yaml:"temporary_replication_slot"`
+	TemporaryReplicationSlot bool
 	// StreamOldData is whether to stream all existing data
-	StreamOldData bool `yaml:"stream_old_data"`
+	StreamOldData bool
 	// SnapshotMemorySafetyFactor is the memory safety factor for streaming snapshot
-	SnapshotMemorySafetyFactor float64 `yaml:"snapshot_memory_safety_factor"`
+	SnapshotMemorySafetyFactor float64
 	// DecodingPlugin is the decoding plugin to use
-	DecodingPlugin string `yaml:"decoding_plugin"`
+	DecodingPlugin string
 	// BatchSize is the batch size for streaming
-	BatchSize int `yaml:"batch_size"`
-
+	BatchSize int
 	// StreamUncommitted is whether to stream uncommitted messages before receiving commit message
-	StreamUncommitted bool `yaml:"stream_uncommitted"`
+	StreamUncommitted bool
 
-	logger *service.Logger
+	Logger *service.Logger
 }

@@ -17,7 +17,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
@@ -48,8 +47,8 @@ type Monitor struct {
 }
 
 // NewMonitor creates a new Monitor instance
-func NewMonitor(conf *pgconn.Config, logger *service.Logger, tables []string, slotName string) (*Monitor, error) {
-	dbConn, err := openPgConnectionFromConfig(conf)
+func NewMonitor(dbDSN string, logger *service.Logger, tables []string, slotName string) (*Monitor, error) {
+	dbConn, err := openPgConnectionFromConfig(dbDSN)
 	if err != nil {
 		return nil, err
 	}

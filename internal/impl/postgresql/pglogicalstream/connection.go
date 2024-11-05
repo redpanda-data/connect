@@ -13,23 +13,14 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
-
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/stdlib"
 )
 
-func openPgConnectionFromConfig(dbConf *pgconn.Config) (*sql.DB, error) {
-	conf, _ := pgx.ParseConfig("")
-	delete(dbConf.RuntimeParams, "replication")
-	conf.Config = *dbConf
-	connStr := stdlib.RegisterConnConfig(conf)
-
-	return sql.Open("pgx", connStr)
+func openPgConnectionFromConfig(dbDSN string) (*sql.DB, error) {
+	return sql.Open("postgres", dbDSN)
 }
 
-func getPostgresVersion(connConfig *pgconn.Config) (int, error) {
-	conn, err := openPgConnectionFromConfig(connConfig)
+func getPostgresVersion(dbDSN string) (int, error) {
+	conn, err := openPgConnectionFromConfig(dbDSN)
 	if err != nil {
 		return 0, fmt.Errorf("failed to connect to the database: %w", err)
 	}

@@ -14,7 +14,6 @@ import (
 
 	"errors"
 
-	"github.com/jackc/pgx/v5/pgconn"
 	_ "github.com/lib/pq"
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -40,13 +39,13 @@ type Snapshotter struct {
 }
 
 // NewSnapshotter creates a new Snapshotter instance
-func NewSnapshotter(dbConf *pgconn.Config, logger *service.Logger, version int) (*Snapshotter, error) {
-	pgConn, err := openPgConnectionFromConfig(dbConf)
+func NewSnapshotter(dbDSN string, logger *service.Logger, version int) (*Snapshotter, error) {
+	pgConn, err := openPgConnectionFromConfig(dbDSN)
 	if err != nil {
 		return nil, err
 	}
 
-	snapshotCreateConnection, err := openPgConnectionFromConfig(dbConf)
+	snapshotCreateConnection, err := openPgConnectionFromConfig(dbDSN)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +67,7 @@ func (s *Snapshotter) initSnapshotTransaction() (SnapshotCreationResponse, error
 
 	snapshotRow, err := s.pgConnection.Query(`BEGIN; SELECT pg_export_snapshot();`)
 	if err != nil {
-		return SnapshotCreationResponse{}, fmt.Errorf("cant get exported snapshot for initial streaming %w", err)
+		return SnapshotCreationResponse{}, fmt.Errorf("cant get exported snapshot for initial streaming %w pg version: %d", err, s.version)
 	}
 
 	if snapshotRow.Err() != nil {
