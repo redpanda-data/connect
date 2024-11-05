@@ -28,10 +28,7 @@ import (
 // Stream is a structure that represents a logical replication stream
 // It includes the connection to the database, the context for the stream, and snapshotting functionality
 type Stream struct {
-	pgConn *pgconn.PgConn
-	// pgDsn is used for creating golang PG Connection
-	// as using pgconn.Config for golang doesn't support multiple queries in the prepared statement for Postgres Version <= 14
-	pgDsn        string
+	pgConn       *pgconn.PgConn
 	streamCtx    context.Context
 	streamCancel context.CancelFunc
 
@@ -120,7 +117,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	}
 	stream.snapshotter = snapshotter
 
-	var pluginArguments = []string{}
+	var pluginArguments []string
 	if stream.decodingPlugin == "pgoutput" {
 		pluginArguments = []string{
 			"proto_version '1'",
@@ -224,7 +221,11 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	} else {
 		// New messages will be streamed after the snapshot has been processed.
 		// stream.startLr() and stream.streamMessagesAsync() will be called inside stream.processSnapshot()
-		go stream.processSnapshot(context.Background())
+		go func() {
+			if err := stream.processSnapshot(ctx); err != nil {
+				stream.logger.Errorf("Failed to process snapshot: %v", err.Error())
+			}
+		}()
 	}
 
 	return stream, err

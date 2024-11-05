@@ -12,7 +12,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	"strings"
 	"sync"
 	"testing"
@@ -23,6 +22,7 @@ import (
 	_ "github.com/redpanda-data/benthos/v4/public/components/io"
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -429,7 +429,7 @@ func TestIntegrationPgStreamingFromRemoteDB(t *testing.T) {
 
 	// tables: users, products, orders, order_items
 
-	template := fmt.Sprintf(`
+	template := `
 pg_stream:
     dsn: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
     slot_name: test_slot_native_decoder
@@ -444,7 +444,7 @@ pg_stream:
        - products
        - orders
        - order_items
-`)
+`
 
 	cacheConf := fmt.Sprintf(`
 label: pg_stream_cache

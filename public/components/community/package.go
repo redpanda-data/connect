@@ -54,6 +54,7 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/opensearch"
 	_ "github.com/redpanda-data/connect/v4/public/components/otlp"
 	_ "github.com/redpanda-data/connect/v4/public/components/pinecone"
+	_ "github.com/redpanda-data/connect/v4/public/components/postgresql"
 	_ "github.com/redpanda-data/connect/v4/public/components/prometheus"
 	_ "github.com/redpanda-data/connect/v4/public/components/pulsar"
 	_ "github.com/redpanda-data/connect/v4/public/components/pure"
@@ -71,5 +72,4 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/twitter"
 	_ "github.com/redpanda-data/connect/v4/public/components/wasm"
 	_ "github.com/redpanda-data/connect/v4/public/components/zeromq"
-	_ "github.com/redpanda-data/connect/v4/public/components/postgresql"
 )

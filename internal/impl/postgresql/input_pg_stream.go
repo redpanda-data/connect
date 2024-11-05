@@ -261,7 +261,6 @@ type pgStreamInput struct {
 	streamUncommitted       bool
 	logger                  *service.Logger
 	mgr                     *service.Resources
-	metrics                 *service.Metrics
 	cMut                    sync.Mutex
 	msgChan                 chan asyncMessage
 	batching                service.BatchPolicy
