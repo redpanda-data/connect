@@ -12,6 +12,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	"strings"
 	"sync"
 	"testing"
@@ -101,6 +102,8 @@ func ResourceWithPostgreSQLVersion(t *testing.T, pool *dockertest.Pool, version 
 }
 
 func TestIntegrationPgCDC(t *testing.T) {
+	integration.CheckSkip(t)
+
 	tmpDir := t.TempDir()
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
@@ -287,6 +290,7 @@ file:
 }
 
 func TestIntegrationPgCDCForPgOutputPlugin(t *testing.T) {
+	integration.CheckSkip(t)
 	tmpDir := t.TempDir()
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
@@ -495,6 +499,7 @@ file:
 }
 
 func TestIntegrationPgCDCForPgOutputStreamUncommittedPlugin(t *testing.T) {
+	integration.CheckSkip(t)
 	tmpDir := t.TempDir()
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
@@ -629,6 +634,7 @@ file:
 }
 
 func TestIntegrationPgMultiVersionsCDCForPgOutputStreamUncomitedPlugin(t *testing.T) {
+	integration.CheckSkip(t)
 	// running tests in the look to test different PostgreSQL versions
 	t.Parallel()
 	for _, v := range []string{"17", "16", "15", "14", "13", "12", "11", "10"} {
@@ -765,6 +771,7 @@ file:
 }
 
 func TestIntegrationPgMultiVersionsCDCForPgOutputStreamComittedPlugin(t *testing.T) {
+	integration.CheckSkip(t)
 	for _, v := range []string{"17", "16", "15", "14", "13", "12", "11", "10"} {
 		tmpDir := t.TempDir()
 		pool, err := dockertest.NewPool("")
