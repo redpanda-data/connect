@@ -571,8 +571,8 @@ func (o *snowflakeStreamerOutput) MigrateMissingColumn(ctx context.Context, col 
 	}
 	o.logger.Infof("identified new schema - attempting to alter table to add column: %s %s", col.ColumnName(), columnType)
 	_, err = o.restClient.RunSQL(ctx, streaming.RunSQLRequest{
-		// This looks very scary and it *should*. This is prone to SQL injection attacks. The column name here
-		// comes directly from the Snowflake API so it better be escaped correctly. This is also why we need to
+		// This looks very scary and it *should*. This is prone to SQL injection attacks. The column name is
+		// quoted according to the rules in Snowflake's documentation. This is also why we need to
 		// validate the data type, so that you can't sneak an injection attack in there.
 		Statement: fmt.Sprintf(`ALTER TABLE IDENTIFIER(?)
     ADD COLUMN IF NOT EXISTS %s %s

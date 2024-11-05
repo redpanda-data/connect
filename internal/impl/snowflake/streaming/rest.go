@@ -249,6 +249,7 @@ type (
 		Message    string               `json:"message"`
 		Blobs      []blobRegisterStatus `json:"blobs"`
 	}
+	// BindingValue is a value available as a binding variable in a SQL statement.
 	BindingValue struct {
 		// The binding data type, generally TEXT is what you want
 		// see: https://docs.snowflake.com/en/developer-guide/sql-api/submitting-requests#using-bind-variables-in-a-statement
