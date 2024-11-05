@@ -152,6 +152,8 @@ require (
 
 require (
 	cloud.google.com/go/longrunning v0.6.0 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/keyvault/azsecrets v0.12.0 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/keyvault/internal v0.7.1 // indirect
 	github.com/certifi/gocertifi v0.0.0-20210507211836-431795d63e8d // indirect
 	github.com/containerd/platforms v0.2.1 // indirect
 	github.com/envoyproxy/protoc-gen-validate v1.1.0 // indirect

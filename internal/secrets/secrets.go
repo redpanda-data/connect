@@ -71,6 +71,8 @@ func parseSecretsLookupURN(ctx context.Context, logger *slog.Logger, urn string)
 		return newSecretManager(ctx, logger, u, newAWSSecretsManager)
 	case "gcp":
 		return newSecretManager(ctx, logger, u, newGCPSecretsManager)
+	case "az":
+		return newSecretManager(ctx, logger, u, newAzSecretsManager)
 	case "redis":
 		return newRedisSecretsLookup(ctx, logger, u)
 	case "env":
