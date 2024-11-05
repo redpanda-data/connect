@@ -11,12 +11,10 @@ package pglogicalstream
 import (
 	"database/sql"
 	"fmt"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jaswdr/faker"
 	"github.com/ory/dockertest/v3"
 	"github.com/ory/dockertest/v3/docker"
@@ -77,16 +75,9 @@ func Test_MonitorReplorting(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	portUint64, err := strconv.ParseUint(hostAndPortSplited[1], 10, 10)
 	require.NoError(t, err)
 	slotName := "test_slot"
-	mon, err := NewMonitor(&pgconn.Config{
-		Host:     hostAndPortSplited[0],
-		Port:     uint16(portUint64),
-		User:     "user_name",
-		Password: "secret",
-		Database: "dbname",
-	}, &service.Logger{}, []string{"flights"}, slotName)
+	mon, err := NewMonitor(databaseURL, &service.Logger{}, []string{"flights"}, slotName)
 	require.NoError(t, err)
 	require.NotNil(t, mon)
 }
