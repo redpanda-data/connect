@@ -53,7 +53,7 @@ type Stream struct {
 	snapshotMemorySafetyFactor float64
 	logger                     *service.Logger
 	monitor                    *Monitor
-	streamUncomited            bool
+	streamUncommitted          bool
 	snapshotter                *Snapshotter
 	transactionAckChan         chan string
 	transactionBeginChan       chan bool
@@ -121,7 +121,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		slotName:                   config.ReplicationSlotName,
 		schema:                     config.DBSchema,
 		snapshotMemorySafetyFactor: config.SnapshotMemorySafetyFactor,
-		streamUncomited:            config.StreamUncomited,
+		streamUncommitted:          config.StreamUncommitted,
 		snapshotBatchSize:          config.BatchSize,
 		tableNames:                 tableNames,
 		consumedCallback:           make(chan bool),
@@ -432,7 +432,7 @@ func (s *Stream) streamMessagesAsync() {
 				}
 
 				if s.decodingPlugin == "pgoutput" {
-					if s.streamUncomited {
+					if s.streamUncommitted {
 						// parse changes inside the transaction
 						message, err := decodePgOutput(xld.WALData, relations, typeMap)
 						if err != nil {

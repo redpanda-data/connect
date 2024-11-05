@@ -1,45 +1,18 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/connect/v4/blob/main/licenses/rcl.md
+
 package pgstream
 
 import (
 	"fmt"
 	"strconv"
 	"strings"
-	"sync"
-	"sync/atomic"
-	"time"
 )
-
-// RateCounter is used to measure the rate of invocations
-type RateCounter struct {
-	count       int64
-	lastChecked time.Time
-	mutex       sync.Mutex
-}
-
-// NewRateCounter creates a new RateCounter
-func NewRateCounter() *RateCounter {
-	return &RateCounter{
-		lastChecked: time.Now(),
-	}
-}
-
-// Increment increases the counter by 1
-func (rc *RateCounter) Increment() {
-	atomic.AddInt64(&rc.count, 1)
-}
-
-// Rate calculates the current rate of invocations per second
-func (rc *RateCounter) Rate() float64 {
-	rc.mutex.Lock()
-	defer rc.mutex.Unlock()
-
-	now := time.Now()
-	duration := now.Sub(rc.lastChecked).Seconds()
-	count := atomic.SwapInt64(&rc.count, 0)
-	rc.lastChecked = now
-
-	return float64(count) / duration
-}
 
 // LSNToInt64 converts a PostgreSQL LSN string to int64
 func LSNToInt64(lsn string) (int64, error) {

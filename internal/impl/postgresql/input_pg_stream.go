@@ -10,7 +10,6 @@ package pgstream
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"strconv"
 	"sync"
@@ -32,7 +31,7 @@ const (
 	fieldSchema                  = "schema"
 	fieldDatabase                = "database"
 	fieldTls                     = "tls"
-	fieldStreamUncomitted        = "stream_uncomitted"
+	fieldStreamUncommitted       = "stream_uncommitted"
 	fieldPgConnOptions           = "pg_conn_options"
 	fieldStreamSnapshot          = "stream_snapshot"
 	fieldSnapshotMemSafetyFactor = "snapshot_memory_safety_factor"
@@ -45,8 +44,6 @@ const (
 	fieldBatching                = "batching"
 )
 
-var randomSlotName string
-
 type asyncMessage struct {
 	msg   service.MessageBatch
 	ackFn service.AckFunc
@@ -55,18 +52,18 @@ type asyncMessage struct {
 var pgStreamConfigSpec = service.NewConfigSpec().
 	Beta().
 	Categories("Services").
-	Version("0.0.1").
+	Version("v4.39.0").
 	Summary(`Creates a PostgreSQL replication slot for Change Data Capture (CDC)
-		== Metadata
+== Metadata
 
 This input adds the following metadata fields to each message:
-- streaming (Indicates whether the message is part of a streaming operation or snapshot processing)
+- is_streaming (Indicates whether the message is part of a streaming operation or snapshot processing)
 - table (Name of the table that the message originated from)
 - operation (Type of operation that generated the message, such as INSERT, UPDATE, or DELETE)
 		`).
 	Field(service.NewStringField(fieldHost).
 		Description("The hostname or IP address of the PostgreSQL instance.").
-		Example("123.0.0.1")).
+		Example("127.0.0.1")).
 	Field(service.NewIntField(fieldPort).
 		Description("The port number on which the PostgreSQL instance is listening.").
 		Example(5432).
@@ -84,7 +81,7 @@ This input adds the following metadata fields to each message:
 	Field(service.NewTLSToggledField(fieldTls).
 		Description("Specifies whether to use TLS for the database connection. Set to 'require' to enforce TLS, or 'none' to disable it.").
 		Default(nil)).
-	Field(service.NewBoolField(fieldStreamUncomitted).
+	Field(service.NewBoolField(fieldStreamUncommitted).
 		Description("If set to true, the plugin will stream uncommitted transactions before receiving a commit message from PostgreSQL. This may result in duplicate records if the connector is restarted.").
 		Default(false)).
 	Field(service.NewStringField(fieldPgConnOptions).
@@ -105,7 +102,7 @@ This input adds the following metadata fields to each message:
 		Default(0)).
 	Field(service.NewStringEnumField(fieldDecodingPlugin, "pgoutput", "wal2json").
 		Description(`Specifies the logical decoding plugin to use for streaming changes from PostgreSQL. 'pgoutput' is the native logical replication protocol, while 'wal2json' provides change data as JSON.
-		Important: No matter which plugin you choose, the data will be converted to JSON before sending it to Benthos.
+		Important: No matter which plugin you choose, the data will be converted to JSON before sending it to Connect.
 		`).
 		Example("pgoutput").
 		Default("pgoutput")).
@@ -117,14 +114,14 @@ This input adds the following metadata fields to each message:
 		`)).
 	Field(service.NewIntField(fieldCheckpointLimit).
 		Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given LSN will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
-		Version("3.33.0").Default(1024)).
+		Default(1024)).
 	Field(service.NewBoolField(fieldTemporarySlot).
 		Description("If set to true, creates a temporary replication slot that is automatically dropped when the connection is closed.").
 		Default(false)).
 	Field(service.NewStringField(fieldSlotName).
 		Description("The name of the PostgreSQL logical replication slot to use. If not provided, a random name will be generated. You can create this slot manually before starting replication if desired.").
 		Example("my_test_slot").
-		Default(randomSlotName)).
+		Default(nil)).
 	Field(service.NewAutoRetryNacksToggleField()).
 	Field(service.NewBatchPolicyField(fieldBatching))
 
@@ -143,7 +140,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		snapshotMemSafetyFactor float64
 		decodingPlugin          string
 		pgConnOptions           string
-		streamUncomited         bool
+		streamUncommitted       bool
 		snapshotBatchSize       int
 		checkpointLimit         int
 		batching                service.BatchPolicy
@@ -174,7 +171,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		return nil, err
 	}
 
-	tlsConf, tlsEnabled, err := conf.FieldTLSToggled(fieldTls)
+	tlsConf, _, err := conf.FieldTLSToggled(fieldTls)
 	if err != nil {
 		return nil, err
 	}
@@ -208,7 +205,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		return nil, err
 	}
 
-	streamUncomited, err = conf.FieldBool(fieldStreamUncomitted)
+	streamUncommitted, err = conf.FieldBool(fieldStreamUncommitted)
 	if err != nil {
 		return nil, err
 	}
@@ -242,7 +239,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		batching.Count = 1
 	}
 
-	pgconnConfig := pgconn.Config{
+	pgConnConfig := pgconn.Config{
 		Host:      dbHost,
 		Port:      uint16(dbPort),
 		Database:  dbName,
@@ -251,25 +248,19 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		Password:  dbPassword,
 	}
 
-	if !tlsEnabled {
-		pgconnConfig.TLSConfig = nil
-		tlsConf = nil
-	}
-
-	snapsotMetrics := mgr.Metrics().NewGauge("snapshot_progress", "table")
+	snapshotMetrics := mgr.Metrics().NewGauge("snapshot_progress", "table")
 	replicationLag := mgr.Metrics().NewGauge("replication_lag_bytes")
 
 	i := &pgStreamInput{
-		dbConfig:                pgconnConfig,
+		dbConfig:                pgConnConfig,
 		streamSnapshot:          streamSnapshot,
 		snapshotMemSafetyFactor: snapshotMemSafetyFactor,
 		slotName:                dbSlotName,
 		schema:                  dbSchema,
 		pgConnRuntimeParam:      pgConnOptions,
-		tls:                     tlsConf,
 		tables:                  tables,
 		decodingPlugin:          decodingPlugin,
-		streamUncomited:         streamUncomited,
+		streamUncommitted:       streamUncommitted,
 		temporarySlot:           temporarySlot,
 		snapshotBatchSize:       snapshotBatchSize,
 		batching:                batching,
@@ -279,8 +270,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 
 		mgr:             mgr,
 		logger:          mgr.Logger(),
-		metrics:         mgr.Metrics(),
-		snapshotMetrics: snapsotMetrics,
+		snapshotMetrics: snapshotMetrics,
 		replicationLag:  replicationLag,
 		inTxState:       atomic.Bool{},
 		releaseTrxChan:  make(chan bool),
@@ -307,8 +297,7 @@ func init() {
 
 type pgStreamInput struct {
 	dbConfig                pgconn.Config
-	tls                     *tls.Config
-	pglogicalStream         *pglogicalstream.Stream
+	pgLogicalStream         *pglogicalstream.Stream
 	pgConnRuntimeParam      string
 	slotName                string
 	temporarySlot           bool
@@ -318,7 +307,7 @@ type pgStreamInput struct {
 	streamSnapshot          bool
 	snapshotMemSafetyFactor float64
 	snapshotBatchSize       int
-	streamUncomited         bool
+	streamUncommitted       bool
 	logger                  *service.Logger
 	mgr                     *service.Resources
 	metrics                 *service.Metrics
@@ -327,10 +316,8 @@ type pgStreamInput struct {
 	batching                service.BatchPolicy
 	checkpointLimit         int
 
-	snapshotRateCounter *RateCounter
-	snapshotMessageRate *service.MetricGauge
-	snapshotMetrics     *service.MetricGauge
-	replicationLag      *service.MetricGauge
+	snapshotMetrics *service.MetricGauge
+	replicationLag  *service.MetricGauge
 
 	releaseTrxChan chan bool
 	inTxState      atomic.Bool
@@ -338,34 +325,32 @@ type pgStreamInput struct {
 
 func (p *pgStreamInput) Connect(ctx context.Context) error {
 	pgStream, err := pglogicalstream.NewPgStream(ctx, &pglogicalstream.Config{
-		PgConnRuntimeParam:       p.pgConnRuntimeParam,
-		DBHost:                   p.dbConfig.Host,
-		DBPassword:               p.dbConfig.Password,
-		DBUser:                   p.dbConfig.User,
-		DBPort:                   int(p.dbConfig.Port),
-		DBTables:                 p.tables,
-		DBName:                   p.dbConfig.Database,
-		DBSchema:                 p.schema,
-		ReplicationSlotName:      "rs_" + p.slotName,
-		TLSConfig:                p.tls,
-		BatchSize:                p.snapshotBatchSize,
-		StreamOldData:            p.streamSnapshot,
-		TemporaryReplicationSlot: p.temporarySlot,
-		StreamUncomited:          p.streamUncomited,
-		DecodingPlugin:           p.decodingPlugin,
-
+		PgConnRuntimeParam:         p.pgConnRuntimeParam,
+		DBHost:                     p.dbConfig.Host,
+		DBPassword:                 p.dbConfig.Password,
+		DBUser:                     p.dbConfig.User,
+		DBPort:                     int(p.dbConfig.Port),
+		DBTables:                   p.tables,
+		DBName:                     p.dbConfig.Database,
+		DBSchema:                   p.schema,
+		ReplicationSlotName:        "rs_" + p.slotName,
+		BatchSize:                  p.snapshotBatchSize,
+		StreamOldData:              p.streamSnapshot,
+		TemporaryReplicationSlot:   p.temporarySlot,
+		StreamUncommitted:          p.streamUncommitted,
+		DecodingPlugin:             p.decodingPlugin,
 		SnapshotMemorySafetyFactor: p.snapshotMemSafetyFactor,
 	})
 	if err != nil {
 		return err
 	}
 
-	p.pglogicalStream = pgStream
+	p.pgLogicalStream = pgStream
 
 	go func() {
 		batchPolicy, err := p.batching.NewBatcher(p.mgr)
 		if err != nil {
-			p.logger.Errorf("Failed to initialise batch policy: %v, falling back to no policy.\n", err)
+			p.logger.Errorf("Failed to initialise batch policy: %v, falling back to no policy.", err)
 			conf := service.BatchPolicy{Count: 1}
 			if batchPolicy, err = conf.NewBatcher(p.mgr); err != nil {
 				panic(err)
@@ -384,11 +369,13 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 
 		for {
 			select {
+			case <-ctx.Done():
+				return
 			case <-nextTimedBatchChan:
 				nextTimedBatchChan = nil
 				flushedBatch, err := batchPolicy.Flush(ctx)
 				if err != nil {
-					p.mgr.Logger().Debugf("Timed flush batch error: %w", err)
+					p.logger.Debugf("Timed flush batch error: %w", err)
 					break
 				}
 
@@ -397,17 +384,14 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 				}
 
 				// TrxCommit LSN must be acked when all the messages in the batch are processed
-			case trxCommitLsn, open := <-p.pglogicalStream.AckTxChan():
+			case trxCommitLsn, open := <-p.pgLogicalStream.AckTxChan():
 				if !open {
 					break
 				}
 
-				p.cMut.Lock()
-				p.cMut.Unlock()
-
 				flushedBatch, err := batchPolicy.Flush(ctx)
 				if err != nil {
-					p.mgr.Logger().Debugf("Flush batch error: %w", err)
+					p.logger.Debugf("Flush batch error: %w", err)
 					break
 				}
 
@@ -417,14 +401,14 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 				}
 
 				<-callbackChan
-				if err = p.pglogicalStream.AckLSN(trxCommitLsn); err != nil {
-					p.mgr.Logger().Errorf("Failed to ack LSN: %v", err)
+				if err = p.pgLogicalStream.AckLSN(trxCommitLsn); err != nil {
+					p.logger.Errorf("Failed to ack LSN: %v", err)
 					break
 				}
 
-				p.pglogicalStream.ConsumedCallback() <- true
+				p.pgLogicalStream.ConsumedCallback() <- true
 
-			case message, open := <-p.pglogicalStream.Messages():
+			case message, open := <-p.pgLogicalStream.Messages():
 				if !open {
 					break
 				}
@@ -440,6 +424,12 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 					}
 					latestOffset = &parsedLSN
 				}
+
+				if len(message.Changes) == 0 {
+					p.logger.Debugf("Received empty message on LSN: %v", message.Lsn)
+					continue
+				}
+
 				if mb, err = json.Marshal(message); err != nil {
 					break
 				}
@@ -461,7 +451,7 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 					nextTimedBatchChan = nil
 					flushedBatch, err := batchPolicy.Flush(ctx)
 					if err != nil {
-						p.mgr.Logger().Debugf("Flush batch error: %w", err)
+						p.logger.Debugf("Flush batch error: %w", err)
 						break
 					}
 					if message.IsStreaming {
@@ -478,7 +468,7 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 
 				}
 			case <-ctx.Done():
-				if err = p.pglogicalStream.Stop(); err != nil {
+				if err = p.pgLogicalStream.Stop(); err != nil {
 					p.logger.Errorf("Failed to stop pglogical stream: %v", err)
 				}
 			}
@@ -503,7 +493,7 @@ func (p *pgStreamInput) asyncCheckpointer() func(context.Context, chan<- asyncMe
 		resolveFn, err := cp.Track(ctx, lsn, int64(len(msg)))
 		if err != nil {
 			if ctx.Err() == nil {
-				p.mgr.Logger().Errorf("Failed to checkpoint offset: %v\n", err)
+				p.logger.Errorf("Failed to checkpoint offset: %v", err)
 			}
 			return false
 		}
@@ -519,7 +509,7 @@ func (p *pgStreamInput) asyncCheckpointer() func(context.Context, chan<- asyncMe
 				p.cMut.Lock()
 				defer p.cMut.Unlock()
 				if lsn != nil {
-					if err = p.pglogicalStream.AckLSN(Int64ToLSN(*lsn)); err != nil {
+					if err = p.pgLogicalStream.AckLSN(Int64ToLSN(*lsn)); err != nil {
 						return err
 					}
 					if txCommitConfirmChan != nil {
@@ -559,8 +549,8 @@ func (p *pgStreamInput) ReadBatch(ctx context.Context) (service.MessageBatch, se
 }
 
 func (p *pgStreamInput) Close(ctx context.Context) error {
-	if p.pglogicalStream != nil {
-		return p.pglogicalStream.Stop()
+	if p.pgLogicalStream != nil {
+		return p.pgLogicalStream.Stop()
 	}
 	return nil
 }

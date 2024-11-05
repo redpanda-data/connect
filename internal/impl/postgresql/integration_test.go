@@ -324,7 +324,6 @@ pg_stream:
     password: %s
     port: %s
     schema: public
-    tls: none
     stream_snapshot: true
     decoding_plugin: pgoutput
     database: dbname
@@ -438,7 +437,6 @@ func TestIntegrationPgStreamingFromRemoteDB(t *testing.T) {
 	password := "postgres"
 	dbname := "postgres"
 	port := "5432"
-	sslmode := "none"
 
 	template := fmt.Sprintf(`
 pg_stream:
@@ -448,7 +446,6 @@ pg_stream:
     password: %s
     port: %s
     schema: public
-    tls: %s
     snapshot_batch_size: 100000
     stream_snapshot: true
     decoding_plugin: pgoutput
@@ -460,7 +457,7 @@ pg_stream:
        - products
        - orders
        - order_items
-`, host, user, password, port, sslmode, dbname)
+`, host, user, password, port, dbname)
 
 	cacheConf := fmt.Sprintf(`
 label: pg_stream_cache
@@ -476,25 +473,12 @@ file:
 	var outMessages int64
 	var outMessagesMut sync.Mutex
 
-	rc := NewRateCounter()
-
-	go func() {
-		ticker := time.NewTicker(time.Second)
-		defer ticker.Stop()
-
-		for range ticker.C {
-			fmt.Printf("Current rate: %.2f messages per second\n", rc.Rate())
-			fmt.Printf("Total messages: %d\n", outMessages)
-		}
-	}()
-
 	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
 		_, err := mb[0].AsBytes()
 		require.NoError(t, err)
 		outMessagesMut.Lock()
 		outMessages += 1
 		outMessagesMut.Unlock()
-		rc.Increment()
 		return nil
 	}))
 
