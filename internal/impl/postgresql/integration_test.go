@@ -449,7 +449,7 @@ pg_stream:
     snapshot_batch_size: 100000
     stream_snapshot: true
     decoding_plugin: pgoutput
-    stream_uncomitted: false
+    stream_uncommitted: false
     temporary_slot: true
     database: %s
     tables:
@@ -546,7 +546,7 @@ pg_stream:
     snapshot_batch_size: 100
     stream_snapshot: true
     decoding_plugin: pgoutput
-    stream_uncomitted: true
+    stream_uncommitted: true
     database: dbname
     tables:
        - flights
@@ -685,7 +685,7 @@ pg_stream:
     schema: public
     stream_snapshot: true
     decoding_plugin: pgoutput
-    stream_uncomitted: true
+    stream_uncommitted: true
     database: dbname
     tables:
        - flights
@@ -822,7 +822,7 @@ pg_stream:
     schema: public
     stream_snapshot: true
     decoding_plugin: pgoutput
-    stream_uncomitted: false
+    stream_uncommitted: false
     database: dbname
     tables:
        - flights
