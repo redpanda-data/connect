@@ -377,11 +377,10 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 		}()
 
 		var nextTimedBatchChan <-chan time.Time
-		flushBatch := p.asyncCheckpointer()
 
 		// offsets are nilable since we don't provide offset tracking during the snapshot phase
 		var latestOffset *int64
-
+		cp := checkpoint.NewCapped[*int64](int64(p.checkpointLimit))
 		for {
 			select {
 			case <-nextTimedBatchChan:
@@ -392,7 +391,7 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 					break
 				}
 
-				if !flushBatch(ctx, p.msgChan, flushedBatch, latestOffset, nil) {
+				if !p.flushBatch(ctx, cp, flushedBatch, latestOffset, false) {
 					break
 				}
 
@@ -411,12 +410,10 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 					break
 				}
 
-				callbackChan := make(chan bool)
-				if !flushBatch(ctx, p.msgChan, flushedBatch, latestOffset, &callbackChan) {
+				if !p.flushBatch(ctx, cp, flushedBatch, latestOffset, true) {
 					break
 				}
 
-				<-callbackChan
 				if err = p.pglogicalStream.AckLSN(trxCommitLsn); err != nil {
 					p.mgr.Logger().Errorf("Failed to ack LSN: %v", err)
 					break
@@ -465,13 +462,11 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 						break
 					}
 					if message.IsStreaming {
-						callbackChan := make(chan bool)
-						if !flushBatch(ctx, p.msgChan, flushedBatch, latestOffset, &callbackChan) {
+						if !p.flushBatch(ctx, cp, flushedBatch, latestOffset, true) {
 							break
 						}
-						<-callbackChan
 					} else {
-						if !flushBatch(ctx, p.msgChan, flushedBatch, latestOffset, nil) {
+						if !p.flushBatch(ctx, cp, flushedBatch, latestOffset, false) {
 							break
 						}
 					}
@@ -488,53 +483,51 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 	return err
 }
 
-func (p *pgStreamInput) asyncCheckpointer() func(context.Context, chan<- asyncMessage, service.MessageBatch, *int64, *chan bool) bool {
-	cp := checkpoint.NewCapped[*int64](int64(p.checkpointLimit))
-	return func(ctx context.Context, c chan<- asyncMessage, msg service.MessageBatch, lsn *int64, txCommitConfirmChan *chan bool) bool {
-		if msg == nil {
-			if txCommitConfirmChan != nil {
-				go func() {
-					*txCommitConfirmChan <- true
-				}()
-			}
-			return true
-		}
-
-		resolveFn, err := cp.Track(ctx, lsn, int64(len(msg)))
-		if err != nil {
-			if ctx.Err() == nil {
-				p.mgr.Logger().Errorf("Failed to checkpoint offset: %v\n", err)
-			}
-			return false
-		}
-
-		select {
-		case c <- asyncMessage{
-			msg: msg,
-			ackFn: func(ctx context.Context, res error) error {
-				maxOffset := resolveFn()
-				if maxOffset == nil {
-					return nil
-				}
-				p.cMut.Lock()
-				defer p.cMut.Unlock()
-				if lsn != nil {
-					if err = p.pglogicalStream.AckLSN(Int64ToLSN(*lsn)); err != nil {
-						return err
-					}
-					if txCommitConfirmChan != nil {
-						*txCommitConfirmChan <- true
-					}
-				}
-				return nil
-			},
-		}:
-		case <-ctx.Done():
-			return false
-		}
-
+func (p *pgStreamInput) flushBatch(ctx context.Context, checkpointer *checkpoint.Capped[*int64], msg service.MessageBatch, lsn *int64, waitForCommit bool) bool {
+	if msg == nil {
 		return true
 	}
+
+	resolveFn, err := checkpointer.Track(ctx, lsn, int64(len(msg)))
+	if err != nil {
+		if ctx.Err() == nil {
+			p.mgr.Logger().Errorf("Failed to checkpoint offset: %v\n", err)
+		}
+		return false
+	}
+
+	commitChan := make(chan bool)
+	if !waitForCommit {
+		close(commitChan)
+	}
+	select {
+	case p.msgChan <- asyncMessage{
+		msg: msg,
+		ackFn: func(ctx context.Context, res error) error {
+			maxOffset := resolveFn()
+			if maxOffset == nil {
+				return nil
+			}
+			p.cMut.Lock()
+			defer p.cMut.Unlock()
+			if lsn != nil {
+				if err = p.pglogicalStream.AckLSN(Int64ToLSN(*lsn)); err != nil {
+					return err
+				}
+				if waitForCommit {
+					close(commitChan)
+				}
+			}
+			return nil
+		},
+	}:
+	case <-ctx.Done():
+		return false
+	}
+
+	<-commitChan
+
+	return true
 }
 
 func (p *pgStreamInput) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
