@@ -32,12 +32,3 @@ func decodingPluginFromString(plugin string) DecodingPlugin {
 func (d DecodingPlugin) String() string {
 	return string(d)
 }
-
-// TLSVerify is a type for the TLS verification mode
-type TLSVerify string
-
-// TLSNoVerify is the value for no TLS verification
-const TLSNoVerify TLSVerify = "none"
-
-// TLSRequireVerify is the value for TLS verification with a CA
-const TLSRequireVerify TLSVerify = "require"
