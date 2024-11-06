@@ -6,13 +6,14 @@ require (
 	cloud.google.com/go/aiplatform v1.68.0
 	cloud.google.com/go/bigquery v1.62.0
 	cloud.google.com/go/pubsub v1.42.0
-	cloud.google.com/go/secretmanager v1.13.3
+	cloud.google.com/go/secretmanager v1.14.0
 	cloud.google.com/go/storage v1.43.0
 	cloud.google.com/go/vertexai v0.12.0
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.14.0
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.7.0
 	github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos v1.0.3
 	github.com/Azure/azure-sdk-for-go/sdk/data/aztables v1.2.0
+	github.com/Azure/azure-sdk-for-go/sdk/keyvault/azsecrets v0.12.0
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.4.1
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azdatalake v1.2.1
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azqueue v1.0.0
@@ -30,7 +31,6 @@ require (
 	github.com/authzed/authzed-go v1.0.0
 	github.com/authzed/grpcutil v0.0.0-20240123194739-2ea1e3d2d98b
 	github.com/aws/aws-lambda-go v1.47.0
-	github.com/aws/aws-sdk-go v1.50.36
 	github.com/aws/aws-sdk-go-v2 v1.32.3
 	github.com/aws/aws-sdk-go-v2/config v1.27.27
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.27
@@ -43,6 +43,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/kinesis v1.29.3
 	github.com/aws/aws-sdk-go-v2/service/lambda v1.56.3
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.58.3
+	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.34.3
 	github.com/aws/aws-sdk-go-v2/service/sns v1.31.3
 	github.com/aws/aws-sdk-go-v2/service/sqs v1.34.3
 	github.com/aws/aws-sdk-go-v2/service/sts v1.30.3
@@ -152,10 +153,8 @@ require (
 
 require (
 	cloud.google.com/go/longrunning v0.6.0 // indirect
-	github.com/Azure/azure-sdk-for-go/sdk/keyvault/azsecrets v0.12.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/keyvault/internal v0.7.1 // indirect
 	github.com/certifi/gocertifi v0.0.0-20210507211836-431795d63e8d // indirect
-	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.34.3 // indirect
 	github.com/containerd/platforms v0.2.1 // indirect
 	github.com/envoyproxy/protoc-gen-validate v1.1.0 // indirect
 	github.com/hamba/avro/v2 v2.22.2-0.20240625062549-66aad10411d9 // indirect
