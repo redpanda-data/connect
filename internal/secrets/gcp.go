@@ -51,11 +51,7 @@ func (g *gcpSecretsManager) checkSecretExists(ctx context.Context, key string) b
 	_, err := g.client.GetSecret(ctx, &secretmanagerpb.GetSecretRequest{
 		Name: g.getSecretID(key),
 	})
-	if err != nil {
-		return false
-	}
-
-	return true
+	return err == nil
 }
 
 func (g *gcpSecretsManager) getLatestSecretID(key string) string {

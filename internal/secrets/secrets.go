@@ -23,12 +23,12 @@ type LookupFn func(context.Context, string) (string, bool)
 // ExistsFn checks secret presence without retrieving its secret value
 type ExistsFn func(context.Context, string) bool
 
-type SecretProvider struct {
+type secretProvider struct {
 	lookupFn LookupFn
 	existsFn ExistsFn
 }
 
-type lookupTiers []SecretProvider
+type lookupTiers []secretProvider
 
 func (l lookupTiers) Lookup(ctx context.Context, key string) (string, bool) {
 	for _, sp := range l {
@@ -83,7 +83,7 @@ func ParseLookupURNs(ctx context.Context, logger *slog.Logger, secretsMgmtUrns .
 		if err != nil {
 			return nil, nil, err
 		}
-		tiers = append(tiers, SecretProvider{
+		tiers = append(tiers, secretProvider{
 			lookupFn: lookupFn,
 			existsFn: existsFn,
 		})
