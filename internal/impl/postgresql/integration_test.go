@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jaswdr/faker"
+	"github.com/go-faker/faker/v4"
 	_ "github.com/lib/pq"
 	_ "github.com/redpanda-data/benthos/v4/public/components/io"
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
@@ -29,6 +29,21 @@ import (
 	"github.com/ory/dockertest/v3"
 	"github.com/ory/dockertest/v3/docker"
 )
+
+type FakeFlightRecord struct {
+	RealAddress faker.RealAddress `faker:"real_address"`
+	CreatedAt   int64             `fake:"unix_time"`
+}
+
+func GetFakeFlightRecord() FakeFlightRecord {
+	flightRecord := FakeFlightRecord{}
+	err := faker.FakeData(&flightRecord)
+	if err != nil {
+		panic(err)
+	}
+
+	return flightRecord
+}
 
 func ResourceWithPostgreSQLVersion(t *testing.T, pool *dockertest.Pool, version string) (*dockertest.Resource, *sql.DB, error) {
 	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
@@ -177,10 +192,10 @@ func TestIntegrationPgCDC(t *testing.T) {
 		panic(fmt.Errorf("could not connect to docker: %w", err))
 	}
 
-	fake := faker.New()
 	for i := 0; i < 1000; i++ {
-		_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", fake.Address().City(), fake.Time().RFC1123(time.Now()))
-		_, err = db.Exec("INSERT INTO flights_non_streamed (name, created_at) VALUES ($1, $2);", fake.Address().City(), fake.Time().RFC1123(time.Now()))
+		f := GetFakeFlightRecord()
+		_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
+		_, err = db.Exec("INSERT INTO flights_non_streamed (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 		require.NoError(t, err)
 	}
 
@@ -231,8 +246,9 @@ file:
 	}, time.Second*25, time.Millisecond*100)
 
 	for i := 0; i < 1000; i++ {
-		_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", fake.Address().City(), fake.Time().RFC1123(time.Now()))
-		_, err = db.Exec("INSERT INTO flights_non_streamed (name, created_at) VALUES ($1, $2);", fake.Address().City(), fake.Time().RFC1123(time.Now()))
+		f := GetFakeFlightRecord()
+		_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
+		_, err = db.Exec("INSERT INTO flights_non_streamed (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 		require.NoError(t, err)
 	}
 
@@ -271,7 +287,8 @@ file:
 
 	time.Sleep(time.Second * 5)
 	for i := 0; i < 50; i++ {
-		_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", fake.Address().City(), fake.Time().RFC1123(time.Now()))
+		f := GetFakeFlightRecord()
+		_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 		require.NoError(t, err)
 	}
 
@@ -310,9 +327,9 @@ func TestIntegrationPgCDCForPgOutputPlugin(t *testing.T) {
 
 	require.NoError(t, err)
 
-	fake := faker.New()
 	for i := 0; i < 10; i++ {
-		_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", fake.Address().City(), fake.Time().RFC1123(time.Now()))
+		f := GetFakeFlightRecord()
+		_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 		require.NoError(t, err)
 	}
 
@@ -364,9 +381,10 @@ file:
 	}, time.Second*25, time.Millisecond*100)
 
 	for i := 0; i < 10; i++ {
-		_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", fake.Address().City(), fake.Time().RFC1123(time.Now()))
+		f := GetFakeFlightRecord()
+		_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 		require.NoError(t, err)
-		_, err = db.Exec("INSERT INTO flights_non_streamed (name, created_at) VALUES ($1, $2);", fake.Address().City(), fake.Time().RFC1123(time.Now()))
+		_, err = db.Exec("INSERT INTO flights_non_streamed (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 		require.NoError(t, err)
 	}
 
@@ -405,7 +423,8 @@ file:
 
 	time.Sleep(time.Second * 5)
 	for i := 0; i < 10; i++ {
-		_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", fake.Address().City(), fake.Time().RFC1123(time.Now()))
+		f := GetFakeFlightRecord()
+		_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 		require.NoError(t, err)
 	}
 
@@ -517,9 +536,9 @@ func TestIntegrationPgCDCForPgOutputStreamUncommittedPlugin(t *testing.T) {
 	hostAndPortSplited := strings.Split(hostAndPort, ":")
 	password := "l]YLSc|4[i56%{gY"
 
-	fake := faker.New()
 	for i := 0; i < 10000; i++ {
-		_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", fake.Address().City(), fake.Time().RFC1123(time.Now()))
+		f := GetFakeFlightRecord()
+		_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 		require.NoError(t, err)
 	}
 
@@ -574,9 +593,10 @@ file:
 	}, time.Second*25, time.Millisecond*100)
 
 	for i := 0; i < 10; i++ {
-		_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", fake.Address().City(), fake.Time().RFC1123(time.Now()))
+		f := GetFakeFlightRecord()
+		_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 		require.NoError(t, err)
-		_, err = db.Exec("INSERT INTO flights_non_streamed (name, created_at) VALUES ($1, $2);", fake.Address().City(), fake.Time().RFC1123(time.Now()))
+		_, err = db.Exec("INSERT INTO flights_non_streamed (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 		require.NoError(t, err)
 	}
 
@@ -615,7 +635,8 @@ file:
 
 	time.Sleep(time.Second * 5)
 	for i := 0; i < 10; i++ {
-		_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", fake.Address().City(), fake.Time().RFC1123(time.Now()))
+		f := GetFakeFlightRecord()
+		_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 		require.NoError(t, err)
 	}
 
@@ -655,9 +676,9 @@ func TestIntegrationPgMultiVersionsCDCForPgOutputStreamUncomitedPlugin(t *testin
 		hostAndPortSplited := strings.Split(hostAndPort, ":")
 		password := "l]YLSc|4[i56%{gY"
 
-		fake := faker.New()
 		for i := 0; i < 1000; i++ {
-			_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", fake.Address().City(), fake.Time().RFC1123(time.Now()))
+			f := GetFakeFlightRecord()
+			_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 			require.NoError(t, err)
 		}
 
@@ -710,9 +731,10 @@ file:
 		}, time.Second*25, time.Millisecond*100)
 
 		for i := 0; i < 1000; i++ {
-			_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", fake.Address().City(), fake.Time().RFC1123(time.Now()))
+			f := GetFakeFlightRecord()
+			_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 			require.NoError(t, err)
-			_, err = db.Exec("INSERT INTO flights_non_streamed (name, created_at) VALUES ($1, $2);", fake.Address().City(), fake.Time().RFC1123(time.Now()))
+			_, err = db.Exec("INSERT INTO flights_non_streamed (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 			require.NoError(t, err)
 		}
 
@@ -751,7 +773,8 @@ file:
 
 		time.Sleep(time.Second * 5)
 		for i := 0; i < 1000; i++ {
-			_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", fake.Address().City(), fake.Time().RFC1123(time.Now()))
+			f := GetFakeFlightRecord()
+			_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 			require.NoError(t, err)
 		}
 
@@ -790,9 +813,9 @@ func TestIntegrationPgMultiVersionsCDCForPgOutputStreamComittedPlugin(t *testing
 		hostAndPortSplited := strings.Split(hostAndPort, ":")
 		password := "l]YLSc|4[i56%{gY"
 
-		fake := faker.New()
 		for i := 0; i < 1000; i++ {
-			_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", fake.Address().City(), fake.Time().RFC1123(time.Now()))
+			f := GetFakeFlightRecord()
+			_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 			require.NoError(t, err)
 		}
 
@@ -846,9 +869,10 @@ file:
 		}, time.Second*25, time.Millisecond*100)
 
 		for i := 0; i < 1000; i++ {
-			_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", fake.Address().City(), fake.Time().RFC1123(time.Now()))
+			f := GetFakeFlightRecord()
+			_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 			require.NoError(t, err)
-			_, err = db.Exec("INSERT INTO flights_non_streamed (name, created_at) VALUES ($1, $2);", fake.Address().City(), fake.Time().RFC1123(time.Now()))
+			_, err = db.Exec("INSERT INTO flights_non_streamed (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 			require.NoError(t, err)
 		}
 
@@ -887,7 +911,8 @@ file:
 
 		time.Sleep(time.Second * 5)
 		for i := 0; i < 1000; i++ {
-			_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", fake.Address().City(), fake.Time().RFC1123(time.Now()))
+			f := GetFakeFlightRecord()
+			_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 			require.NoError(t, err)
 		}
 

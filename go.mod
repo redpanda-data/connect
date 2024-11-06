@@ -71,7 +71,6 @@ require (
 	github.com/influxdata/influxdb1-client v0.0.0-20220302092344-a9ab5670611c
 	github.com/jackc/pgx/v4 v4.18.3
 	github.com/jackc/pgx/v5 v5.6.0
-	github.com/jaswdr/faker v1.19.1
 	github.com/jhump/protoreflect v1.16.0
 	github.com/lib/pq v1.10.9
 	github.com/linkedin/goavro/v2 v2.13.0
