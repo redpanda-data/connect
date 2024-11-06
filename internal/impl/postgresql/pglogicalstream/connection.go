@@ -15,6 +15,8 @@ import (
 	"strconv"
 )
 
+var re = regexp.MustCompile(`^(\d+)`)
+
 func openPgConnectionFromConfig(dbDSN string) (*sql.DB, error) {
 	return sql.Open("postgres", dbDSN)
 }
@@ -31,8 +33,6 @@ func getPostgresVersion(dbDSN string) (int, error) {
 		return 0, fmt.Errorf("failed to execute query: %w", err)
 	}
 
-	// Extract the major version number
-	re := regexp.MustCompile(`^(\d+)`)
 	match := re.FindStringSubmatch(versionString)
 	if len(match) < 2 {
 		return 0, fmt.Errorf("failed to parse version string: %s", versionString)

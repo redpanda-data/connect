@@ -27,7 +27,7 @@ import (
 
 const (
 	fieldDSN                     = "dsn"
-	fieldStreamUncommitted       = "stream_uncomitted"
+	fieldStreamUncommitted       = "stream_uncommitted"
 	fieldStreamSnapshot          = "stream_snapshot"
 	fieldSnapshotMemSafetyFactor = "snapshot_memory_safety_factor"
 	fieldSnapshotBatchSize       = "snapshot_batch_size"
@@ -36,6 +36,8 @@ const (
 	fieldTables                  = "tables"
 	fieldCheckpointLimit         = "checkpoint_limit"
 	fieldTemporarySlot           = "temporary_slot"
+	fieldPgStandbyTimeout        = "pg_standby_timeout_sec"
+	fieldWalMonitorIntervalSec   = "pg_wal_monitor_interval_sec"
 	fieldSlotName                = "slot_name"
 	fieldBatching                = "batching"
 )
@@ -103,6 +105,14 @@ This input adds the following metadata fields to each message:
 		Description("The name of the PostgreSQL logical replication slot to use. If not provided, a random name will be generated. You can create this slot manually before starting replication if desired.").
 		Example("my_test_slot").
 		Default("")).
+	Field(service.NewIntField(fieldPgStandbyTimeout).
+		Description("Int field that specifies default standby timeout for PostgreSQL replication connection").
+		Example(10).
+		Default(10)).
+	Field(service.NewIntField(fieldWalMonitorIntervalSec).
+		Description("Int field stat specifies ticker interval for WAL monitoring. Used to fetch replication slot lag").
+		Example(3).
+		Default(3)).
 	Field(service.NewAutoRetryNacksToggleField()).
 	Field(service.NewBatchPolicyField(fieldBatching))
 
@@ -119,6 +129,8 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		streamUncommitted       bool
 		snapshotBatchSize       int
 		checkpointLimit         int
+		walMonitorIntervalSec   int
+		pgStandbyTimeoutSec     int
 		batching                service.BatchPolicy
 	)
 
@@ -186,6 +198,16 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		batching.Count = 1
 	}
 
+	pgStandbyTimeoutSec, err = conf.FieldInt(fieldPgStandbyTimeout)
+	if err != nil {
+		return nil, err
+	}
+
+	walMonitorIntervalSec, err = conf.FieldInt(fieldWalMonitorIntervalSec)
+	if err != nil {
+		return nil, err
+	}
+
 	pgConnConfig, err := pgconn.ParseConfigWithOptions(dsn, pgconn.ParseConfigOptions{
 		// Don't support dynamic reading of password
 		GetSSLPassword: func(context.Context) string { return "" },
@@ -216,6 +238,8 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		snapshotBatchSize:       snapshotBatchSize,
 		batching:                batching,
 		checkpointLimit:         checkpointLimit,
+		pgStandbyTimeoutSec:     pgStandbyTimeoutSec,
+		walMonitorIntervalSec:   walMonitorIntervalSec,
 		cMut:                    sync.Mutex{},
 		msgChan:                 make(chan asyncMessage),
 
@@ -251,6 +275,8 @@ type pgStreamInput struct {
 	dbRawDSN                string
 	pgLogicalStream         *pglogicalstream.Stream
 	slotName                string
+	pgStandbyTimeoutSec     int
+	walMonitorIntervalSec   int
 	temporarySlot           bool
 	schema                  string
 	tables                  []string
@@ -287,6 +313,8 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 		StreamUncommitted:          p.streamUncommitted,
 		DecodingPlugin:             p.decodingPlugin,
 		SnapshotMemorySafetyFactor: p.snapshotMemSafetyFactor,
+		PgStandbyTimeoutSec:        p.pgStandbyTimeoutSec,
+		WalMonitorIntervalSec:      p.walMonitorIntervalSec,
 		Logger:                     p.logger,
 	})
 	if err != nil {

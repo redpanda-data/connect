@@ -38,4 +38,7 @@ type Config struct {
 	StreamUncommitted bool
 
 	Logger *service.Logger
+
+	PgStandbyTimeoutSec   int
+	WalMonitorIntervalSec int
 }

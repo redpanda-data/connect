@@ -531,7 +531,7 @@ pg_stream:
     snapshot_batch_size: 100
     stream_snapshot: true
     decoding_plugin: pgoutput
-    stream_uncomitted: true
+    stream_uncommitted: true
     schema: public
     tables:
        - flights
@@ -668,7 +668,7 @@ pg_stream:
     slot_name: test_slot_native_decoder
     stream_snapshot: true
     decoding_plugin: pgoutput
-    stream_uncomitted: true
+    stream_uncommitted: true
     schema: public
     tables:
        - flights
@@ -803,7 +803,7 @@ pg_stream:
     slot_name: test_slot_native_decoder
     stream_snapshot: true
     decoding_plugin: pgoutput
-    stream_uncomitted: false
+    stream_uncommitted: false
     schema: public
     tables:
        - flights

@@ -77,7 +77,7 @@ func Test_MonitorReplorting(t *testing.T) {
 
 	require.NoError(t, err)
 	slotName := "test_slot"
-	mon, err := NewMonitor(databaseURL, &service.Logger{}, []string{"flights"}, slotName)
+	mon, err := NewMonitor(databaseURL, &service.Logger{}, []string{"flights"}, slotName, 1)
 	require.NoError(t, err)
 	require.NotNil(t, mon)
 }

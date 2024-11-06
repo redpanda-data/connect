@@ -47,7 +47,7 @@ type Monitor struct {
 }
 
 // NewMonitor creates a new Monitor instance
-func NewMonitor(dbDSN string, logger *service.Logger, tables []string, slotName string) (*Monitor, error) {
+func NewMonitor(dbDSN string, logger *service.Logger, tables []string, slotName string, intervalSec int) (*Monitor, error) {
 	dbConn, err := openPgConnectionFromConfig(dbDSN)
 	if err != nil {
 		return nil, err
@@ -69,7 +69,7 @@ func NewMonitor(dbDSN string, logger *service.Logger, tables []string, slotName 
 	m.ctx = ctx
 	m.cancelTicker = cancel
 	// hardocded duration to monitor slot lag
-	m.ticker = time.NewTicker(time.Second * 3)
+	m.ticker = time.NewTicker(time.Second * time.Duration(intervalSec))
 
 	go func() {
 		for {

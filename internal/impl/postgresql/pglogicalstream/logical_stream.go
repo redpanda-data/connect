@@ -201,11 +201,11 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		stream.clientXLogPos = lsnrestart
 	}
 
-	stream.standbyMessageTimeout = time.Second * 10
+	stream.standbyMessageTimeout = time.Duration(config.PgStandbyTimeoutSec) * time.Second
 	stream.nextStandbyMessageDeadline = time.Now().Add(stream.standbyMessageTimeout)
 	stream.streamCtx, stream.streamCancel = context.WithCancel(context.Background())
 
-	monitor, err := NewMonitor(config.DBRawDSN, stream.logger, tableNames, stream.slotName)
+	monitor, err := NewMonitor(config.DBRawDSN, stream.logger, tableNames, stream.slotName, config.WalMonitorIntervalSec)
 	if err != nil {
 		return nil, err
 	}
