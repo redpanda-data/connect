@@ -45,6 +45,30 @@ func (a *awsSecretsManager) getSecretValue(ctx context.Context, key string) (str
 	return *value.SecretString, true
 }
 
+func (a *awsSecretsManager) checkSecretExists(ctx context.Context, key string) bool {
+	secrets, err := a.client.ListSecrets(ctx, &secretsmanager.ListSecretsInput{
+		Filters: []types.Filter{
+			{
+				// this is a prefix check
+				Key:    types.FilterNameStringTypeName,
+				Values: []string{key},
+			},
+		},
+	})
+	if err != nil {
+		return false
+	}
+
+	// we need to make sure a secret with this specific key exists
+	for _, secret := range secrets.SecretList {
+		if *secret.Name == key {
+			return true
+		}
+	}
+
+	return false
+}
+
 func getRegion(host string) string {
 	endpoint := strings.TrimPrefix(host, "secretsmanager.")
 	region := strings.TrimSuffix(endpoint, ".amazonaws.com")

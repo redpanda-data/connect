@@ -34,15 +34,20 @@ func (r *redisSecretsClient) lookup(ctx context.Context, key string) (string, bo
 	return res, true
 }
 
-func newRedisSecretsLookup(ctx context.Context, logger *slog.Logger, url *url.URL) (LookupFn, error) {
+func (r *redisSecretsClient) exists(ctx context.Context, key string) bool {
+	_, found := r.lookup(ctx, key)
+	return found
+}
+
+func newRedisSecretsLookup(ctx context.Context, logger *slog.Logger, url *url.URL) (LookupFn, ExistsFn, error) {
 	opts, err := redis.ParseURL(url.String())
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	r := &redisSecretsClient{
 		logger: logger,
 		client: redis.NewClient(opts),
 	}
-	return r.lookup, nil
+	return r.lookup, r.exists, nil
 }

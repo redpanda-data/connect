@@ -23,10 +23,12 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+// prefix used to reference secrets from external secret managers, to differentiate them from environment variables
 const secretPrefix = "secrets."
 
 type secretAPI interface {
 	getSecretValue(context.Context, string) (string, bool)
+	checkSecretExists(context.Context, string) bool
 }
 
 type createSecretsManagerFn func(ctx context.Context, logger *slog.Logger, url *url.URL) (secretAPI, error)
@@ -37,36 +39,58 @@ type secretManager struct {
 }
 
 func (s *secretManager) lookup(ctx context.Context, key string) (string, bool) {
-	if !strings.HasPrefix(key, secretPrefix) {
+	secretName, field, ok := s.trimPrefixAndSplit(key)
+	if !ok {
 		return "", false
 	}
-	key = strings.TrimPrefix(key, secretPrefix)
-	parts := strings.SplitN(key, ".", 2)
 
-	secretName := s.prefix + parts[0]
 	value, found := s.secretAPI.getSecretValue(ctx, secretName)
 	if !found {
 		return "", false
 	}
 
-	if len(parts) == 1 {
+	if field == "" {
 		return value, true
 	}
 
-	return getJSONValue(value, parts[1])
+	return getJSONValue(value, field)
 }
 
-func newSecretManager(ctx context.Context, logger *slog.Logger, url *url.URL, createSecretsManagerFn createSecretsManagerFn) (LookupFn, error) {
+func (s *secretManager) exists(ctx context.Context, key string) bool {
+	secretName, _, ok := s.trimPrefixAndSplit(key)
+	if !ok {
+		return false
+	}
+
+	return s.secretAPI.checkSecretExists(ctx, secretName)
+}
+
+func newSecretManager(ctx context.Context, logger *slog.Logger, url *url.URL, createSecretsManagerFn createSecretsManagerFn) (LookupFn, ExistsFn, error) {
 	secretsManager, err := createSecretsManagerFn(ctx, logger, url)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	secretManager := &secretManager{
 		secretAPI: secretsManager,
 		prefix:    strings.TrimPrefix(url.Path, "/"),
 	}
 
-	return secretManager.lookup, nil
+	return secretManager.lookup, secretManager.exists, nil
+}
+
+// trims the secret prefix and returns full secret ID with JSON field reference
+func (s *secretManager) trimPrefixAndSplit(key string) (string, string, bool) {
+	if !strings.HasPrefix(key, secretPrefix) {
+		return "", "", false
+	}
+
+	key = strings.TrimPrefix(key, secretPrefix)
+	if strings.Contains(key, ".") {
+		parts := strings.SplitN(key, ".", 2)
+		return s.prefix + parts[0], parts[1], true
+	}
+
+	return s.prefix + key, "", true
 }
 
 func getJSONValue(json string, field string) (string, bool) {

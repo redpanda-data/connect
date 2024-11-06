@@ -91,12 +91,15 @@ func Test_secretManager_lookup(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			parsedURL, err := url.Parse(tt.args.url)
 			require.NoError(t, err)
-			loookup, err := newSecretManager(context.Background(), slog.Default(), parsedURL, func(ctx context.Context, logger *slog.Logger, url *url.URL) (secretAPI, error) {
+			loookup, exists, err := newSecretManager(context.Background(), slog.Default(), parsedURL, func(ctx context.Context, logger *slog.Logger, url *url.URL) (secretAPI, error) {
 				return &fakeSecretManager{
 					secrets: tt.args.secrets,
 				}, nil
 			})
 			require.NoError(t, err)
+
+			gotExists := exists(context.Background(), tt.args.key)
+			assert.Equalf(t, tt.wantExists, gotExists, "exists(%v, %v)", context.Background(), tt.args.key)
 
 			gotValue, gotExists := loookup(context.Background(), tt.args.key)
 			assert.Equalf(t, tt.wantValue, gotValue, "lookup(%v, %v)", context.Background(), tt.args.key)
@@ -108,4 +111,9 @@ func Test_secretManager_lookup(t *testing.T) {
 func (f *fakeSecretManager) getSecretValue(_ context.Context, key string) (string, bool) {
 	value, ok := f.secrets[key]
 	return value, ok
+}
+
+func (f *fakeSecretManager) checkSecretExists(_ context.Context, key string) bool {
+	_, ok := f.secrets[key]
+	return ok
 }

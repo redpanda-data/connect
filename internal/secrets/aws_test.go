@@ -39,7 +39,7 @@ func Test_getRegion(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equalf(t, tt.want, *getRegion(tt.args.host), "getRegion(%v)", tt.args.host)
+			assert.Equalf(t, tt.want, getRegion(tt.args.host), "getRegion(%v)", tt.args.host)
 		})
 	}
 }

@@ -33,7 +33,7 @@ func newGCPSecretsManager(ctx context.Context, logger *slog.Logger, url *url.URL
 
 func (g *gcpSecretsManager) getSecretValue(ctx context.Context, key string) (string, bool) {
 	resp, err := g.client.AccessSecretVersion(ctx, &secretmanagerpb.AccessSecretVersionRequest{
-		Name: g.getSecretID(key),
+		Name: g.getLatestSecretID(key),
 	})
 
 	if err != nil {
@@ -47,6 +47,21 @@ func (g *gcpSecretsManager) getSecretValue(ctx context.Context, key string) (str
 	return value, true
 }
 
+func (g *gcpSecretsManager) checkSecretExists(ctx context.Context, key string) bool {
+	_, err := g.client.GetSecret(ctx, &secretmanagerpb.GetSecretRequest{
+		Name: g.getSecretID(key),
+	})
+	if err != nil {
+		return false
+	}
+
+	return true
+}
+
+func (g *gcpSecretsManager) getLatestSecretID(key string) string {
+	return fmt.Sprintf("%v/versions/latest", g.getSecretID(key))
+}
+
 func (g *gcpSecretsManager) getSecretID(key string) string {
-	return fmt.Sprintf("projects/%v/secrets/%v/versions/latest", g.projectID, key)
+	return fmt.Sprintf("projects/%v/secrets/%v", g.projectID, key)
 }

@@ -108,7 +108,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 
 			if secretsURNs := c.StringSlice("secrets"); len(secretsURNs) > 0 {
 				var err error
-				if secretLookupFn, err = secrets.ParseLookupURNs(c.Context, slog.New(rpLogger), secretsURNs...); err != nil {
+				if secretLookupFn, _, err = secrets.ParseLookupURNs(c.Context, slog.New(rpLogger), secretsURNs...); err != nil {
 					return err
 				}
 			}

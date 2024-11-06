@@ -12,6 +12,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+const latestVersion = ""
+
 type azSecretsManager struct {
 	client *azsecrets.Client
 	logger *slog.Logger
@@ -35,7 +37,7 @@ func newAzSecretsManager(_ context.Context, logger *slog.Logger, url *url.URL) (
 }
 
 func (a *azSecretsManager) getSecretValue(ctx context.Context, key string) (string, bool) {
-	resp, err := a.client.GetSecret(ctx, key, "", nil)
+	resp, err := a.client.GetSecret(ctx, key, latestVersion, nil)
 
 	if err != nil {
 		if status.Code(err) != codes.NotFound {
@@ -45,4 +47,14 @@ func (a *azSecretsManager) getSecretValue(ctx context.Context, key string) (stri
 	}
 
 	return *resp.Value, true
+}
+
+func (a *azSecretsManager) checkSecretExists(ctx context.Context, key string) bool {
+	pager := a.client.NewListSecretVersionsPager(key, nil)
+	if !pager.More() {
+		return false
+	}
+
+	page, err := pager.NextPage(ctx)
+	return err == nil && len(page.Value) > 0
 }
