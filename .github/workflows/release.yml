@@ -26,7 +26,7 @@ jobs:
       uses: aws-actions/aws-secretsmanager-get-secrets@v2
       with:
         secret-ids: |
-          ,sdlc/prod/github/cloudsmith_api_key
+          ,sdlc/prod/github/cloudsmith
         parse-json-secrets: true
 
     - name: Free up some disk space on ubuntu
