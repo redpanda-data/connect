@@ -65,6 +65,7 @@ input:
     stream: "" # No default (optional)
     bind: false # No default (optional)
     deliver: all
+    nak_delay: 1m # No default (optional)
     ack_wait: 30s
     max_ack_pending: 1024
     tls:
@@ -241,6 +242,21 @@ Determines which messages to deliver when consuming without a durable subscriber
 | Deliver starting from now, not taking into account any previous messages.
 
 |===
+
+=== `nak_delay`
+
+An optional delay duration on redelivering a message when negatively acknowledged.
+
+*Type*: `string`
+
+```yml
+# Examples
+
+nak_delay: 10s
+
+nak_delay: 5m
+```
+
 
 === `ack_wait`
 

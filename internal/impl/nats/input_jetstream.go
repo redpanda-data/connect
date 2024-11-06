@@ -86,6 +86,11 @@ xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
 		}).
 			Description("Determines which messages to deliver when consuming without a durable subscriber.").
 			Default("all")).
+		Field(service.NewDurationField("nak_delay").
+			Description("An optional delay duration on redelivering a message when negatively acknowledged.").
+			Example("1m").
+			Advanced().
+			Optional()).
 		Field(service.NewStringField("ack_wait").
 			Description("The maximum amount of time NATS server should wait for an ack from consumer.").
 			Advanced().
@@ -127,6 +132,7 @@ type jetStreamReader struct {
 	pull          bool
 	durable       string
 	ackWait       time.Duration
+	nakDelay      time.Duration
 	maxAckPending int
 
 	log *service.Logger
@@ -204,7 +210,11 @@ func newJetStreamReaderFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 			return nil, errors.New("subject and stream is empty")
 		}
 	}
-
+	if conf.Contains("nak_delay") {
+		if j.nakDelay, err = conf.FieldDuration("nak_delay"); err != nil {
+			return nil, err
+		}
+	}
 	ackWaitStr, err := conf.FieldString("ack_wait")
 	if err != nil {
 		return nil, err
@@ -341,7 +351,7 @@ func (j *jetStreamReader) Read(ctx context.Context) (*service.Message, service.A
 			// TODO: Any errors need capturing here to signal a lost connection?
 			return nil, nil, err
 		}
-		return convertMessage(nmsg)
+		return convertMessage(nmsg, j.nakDelay)
 	}
 
 	for {
@@ -362,7 +372,8 @@ func (j *jetStreamReader) Read(ctx context.Context) (*service.Message, service.A
 		if len(msgs) == 0 {
 			continue
 		}
-		return convertMessage(msgs[0])
+
+		return convertMessage(msgs[0], j.nakDelay)
 	}
 }
 
@@ -379,7 +390,7 @@ func (j *jetStreamReader) Close(ctx context.Context) error {
 	return nil
 }
 
-func convertMessage(m *nats.Msg) (*service.Message, service.AckFunc, error) {
+func convertMessage(m *nats.Msg, nakDelay time.Duration) (*service.Message, service.AckFunc, error) {
 	msg := service.NewMessage(m.Data)
 	msg.MetaSet("nats_subject", m.Subject)
 
@@ -403,6 +414,9 @@ func convertMessage(m *nats.Msg) (*service.Message, service.AckFunc, error) {
 	return msg, func(ctx context.Context, res error) error {
 		if res == nil {
 			return m.Ack()
+		}
+		if nakDelay > 0 {
+			return m.NakWithDelay(nakDelay)
 		}
 		return m.Nak()
 	}, nil
