@@ -127,6 +127,17 @@ func TestColumnNormalization(t *testing.T) {
 	require.Equal(t, `foo" bar "baz`, normalizeColumnName(`"foo"" bar ""baz"`))
 }
 
+func TestColumnQuoting(t *testing.T) {
+	require.Equal(t, `""`, quoteColumnName(""))
+	require.Equal(t, `"FOO"`, quoteColumnName("foo"))
+	require.Equal(t, `"""BAR"""`, quoteColumnName(`"bar"`))
+	require.Equal(t, `"FOO BAR"`, quoteColumnName(`foo bar`))
+	require.Equal(t, `"FOO\ BAR"`, quoteColumnName(`foo\ bar`))
+	require.Equal(t, `"FOO""BAR"`, quoteColumnName(`foo"bar`))
+	require.Equal(t, `"FOO""BAR1"`, quoteColumnName(`foo"bar1`))
+	require.Equal(t, `""""""""""`, quoteColumnName(`""""`))
+}
+
 func TestSnowflakeTimestamp(t *testing.T) {
 	type TestCase struct {
 		timestamp string

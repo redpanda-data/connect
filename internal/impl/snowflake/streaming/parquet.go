@@ -13,6 +13,7 @@ package streaming
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 
 	"github.com/parquet-go/parquet-go"
@@ -24,7 +25,7 @@ import (
 // messageToRow converts a message into columnar form using the provided name to index mapping.
 // We have to materialize the column into a row so that we can know if a column is null - the
 // msg can be sparse, but the row must not be sparse.
-func messageToRow(msg *service.Message, out []any, nameToPosition map[string]int) error {
+func messageToRow(msg *service.Message, out []any, nameToPosition map[string]int, allowExtraProperties bool) error {
 	v, err := msg.AsStructured()
 	if err != nil {
 		return fmt.Errorf("error extracting object from message: %w", err)
@@ -36,8 +37,9 @@ func messageToRow(msg *service.Message, out []any, nameToPosition map[string]int
 	for k, v := range row {
 		idx, ok := nameToPosition[normalizeColumnName(k)]
 		if !ok {
-			// TODO(schema): Unknown column, we just skip it.
-			// In the future we may evolve the schema based on the new data.
+			if !allowExtraProperties && v != nil {
+				return MissingColumnError{columnName: k, val: v}
+			}
 			continue
 		}
 		out[idx] = v
@@ -49,6 +51,7 @@ func constructRowGroup(
 	batch service.MessageBatch,
 	schema *parquet.Schema,
 	transformers []*dataTransformer,
+	allowExtraProperties bool,
 ) ([]parquet.Row, []*statsBuffer, error) {
 	// We write all of our data in a columnar fashion, but need to pivot that data so that we can feed it into
 	// out parquet library (which sadly will redo the pivot - maybe we need a lower level abstraction...).
@@ -76,7 +79,7 @@ func constructRowGroup(
 	// is needed
 	row := make([]any, rowWidth)
 	for _, msg := range batch {
-		err := messageToRow(msg, row, nameToPosition)
+		err := messageToRow(msg, row, nameToPosition, allowExtraProperties)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -86,7 +89,11 @@ func constructRowGroup(
 			b := buffers[i]
 			err = t.converter.ValidateAndConvert(s, v, b)
 			if err != nil {
-				// TODO(schema): if this is a null value err then we can evolve the schema to mark it null.
+				if errors.Is(err, errNullValue) {
+					return nil, nil, NonNullColumnError{t.column.Name}
+				}
+				// There is not special typed error for a validation error, there really isn't
+				// anything we can do about it.
 				return nil, nil, fmt.Errorf("invalid data for column %s: %w", t.name, err)
 			}
 			// reset the column as nil for the next row
