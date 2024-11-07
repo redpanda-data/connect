@@ -128,7 +128,6 @@ func TestColumnNormalization(t *testing.T) {
 	require.Equal(t, `foo" bar "baz`, normalizeColumnName(`"foo"" bar ""baz"`))
 }
 
-
 func BenchmarkColumnNormalization(b *testing.B) {
 	makeBench := func(name string) func(b *testing.B) {
 		return func(b *testing.B) {
