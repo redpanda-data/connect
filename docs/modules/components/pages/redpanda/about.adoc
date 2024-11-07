@@ -26,8 +26,8 @@ Common::
 ```yaml
 # Common config fields, showing default values
 redpanda:
+  seed_brokers: [] # No default (required)
   pipeline_id: ""
-  seed_brokers: [] # No default (optional)
   logs_topic: ""
   logs_level: info
   status_topic: ""
@@ -41,15 +41,8 @@ Advanced::
 ```yaml
 # All config fields, showing default values
 redpanda:
-  pipeline_id: ""
-  seed_brokers: [] # No default (optional)
-  logs_topic: ""
-  logs_level: info
-  status_topic: ""
+  seed_brokers: [] # No default (required)
   client_id: benthos
-  rack_id: ""
-  timeout: 10s
-  max_message_bytes: 1MB
   tls:
     enabled: false
     skip_cert_verify: false
@@ -58,21 +51,23 @@ redpanda:
     root_cas_file: ""
     client_certs: []
   sasl: [] # No default (optional)
+  metadata_max_age: 5m
+  pipeline_id: ""
+  logs_topic: ""
+  logs_level: info
+  status_topic: ""
+  partitioner: "" # No default (optional)
+  idempotent_write: true
+  compression: "" # No default (optional)
+  timeout: 10s
+  max_message_bytes: 1MB
+  broker_write_max_bytes: 100MB
 ```
 --
 ======
 == Fields
 
 The schema of the `redpanda` section is as follows:
-
-=== `pipeline_id`
-
-An optional identifier for the pipeline, this will be present in logs and status updates sent to topics.
-
-
-*Type*: `string`
-
-*Default*: `""`
 
 === `seed_brokers`
 
@@ -96,52 +91,6 @@ seed_brokers:
   - foo:9092,bar:9092
 ```
 
-=== `logs_topic`
-
-A topic to send process logs to.
-
-
-*Type*: `string`
-
-*Default*: `""`
-
-```yml
-# Examples
-
-logs_topic: __redpanda.connect.logs
-```
-
-=== `logs_level`
-
-Sorry! This field is missing documentation.
-
-
-*Type*: `string`
-
-*Default*: `"info"`
-
-Options:
-`debug`
-, `info`
-, `warn`
-, `error`
-.
-
-=== `status_topic`
-
-A topic to send status updates to.
-
-
-*Type*: `string`
-
-*Default*: `""`
-
-```yml
-# Examples
-
-status_topic: __redpanda.connect.status
-```
-
 === `client_id`
 
 An identifier for the client connection.
@@ -150,41 +99,6 @@ An identifier for the client connection.
 *Type*: `string`
 
 *Default*: `"benthos"`
-
-=== `rack_id`
-
-A rack identifier for this client.
-
-
-*Type*: `string`
-
-*Default*: `""`
-
-=== `timeout`
-
-The maximum period of time to wait for message sends before abandoning the request and retrying
-
-
-*Type*: `string`
-
-*Default*: `"10s"`
-
-=== `max_message_bytes`
-
-The maximum space in bytes than an individual message may take, messages larger than this value will be rejected. This field corresponds to Kafka's `max.message.bytes`.
-
-
-*Type*: `string`
-
-*Default*: `"1MB"`
-
-```yml
-# Examples
-
-max_message_bytes: 100MB
-
-max_message_bytes: 50mib
-```
 
 === `tls`
 
@@ -531,4 +445,158 @@ An external ID to provide when assuming a role.
 *Type*: `string`
 
 *Default*: `""`
+
+=== `metadata_max_age`
+
+The maximum age of metadata before it is refreshed.
+
+
+*Type*: `string`
+
+*Default*: `"5m"`
+
+=== `pipeline_id`
+
+An optional identifier for the pipeline, this will be present in logs and status updates sent to topics.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `logs_topic`
+
+A topic to send process logs to.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+```yml
+# Examples
+
+logs_topic: __redpanda.connect.logs
+```
+
+=== `logs_level`
+
+Sorry! This field is missing documentation.
+
+
+*Type*: `string`
+
+*Default*: `"info"`
+
+Options:
+`debug`
+, `info`
+, `warn`
+, `error`
+.
+
+=== `status_topic`
+
+A topic to send status updates to.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+```yml
+# Examples
+
+status_topic: __redpanda.connect.status
+```
+
+=== `partitioner`
+
+Override the default murmur2 hashing partitioner.
+
+
+*Type*: `string`
+
+
+|===
+| Option | Summary
+
+| `least_backup`
+| Chooses the least backed up partition (the partition with the fewest amount of buffered records). Partitions are selected per batch.
+| `manual`
+| Manually select a partition for each message, requires the field `partition` to be specified.
+| `murmur2_hash`
+| Kafka's default hash algorithm that uses a 32-bit murmur2 hash of the key to compute which partition the record will be on.
+| `round_robin`
+| Round-robin's messages through all available partitions. This algorithm has lower throughput and causes higher CPU load on brokers, but can be useful if you want to ensure an even distribution of records to partitions.
+
+|===
+
+=== `idempotent_write`
+
+Enable the idempotent write producer option. This requires the `IDEMPOTENT_WRITE` permission on `CLUSTER` and can be disabled if this permission is not available.
+
+
+*Type*: `bool`
+
+*Default*: `true`
+
+=== `compression`
+
+Optionally set an explicit compression type. The default preference is to use snappy when the broker supports it, and fall back to none if not.
+
+
+*Type*: `string`
+
+
+Options:
+`lz4`
+, `snappy`
+, `gzip`
+, `none`
+, `zstd`
+.
+
+=== `timeout`
+
+The maximum period of time to wait for message sends before abandoning the request and retrying
+
+
+*Type*: `string`
+
+*Default*: `"10s"`
+
+=== `max_message_bytes`
+
+The maximum space in bytes than an individual message may take, messages larger than this value will be rejected. This field corresponds to Kafka's `max.message.bytes`.
+
+
+*Type*: `string`
+
+*Default*: `"1MB"`
+
+```yml
+# Examples
+
+max_message_bytes: 100MB
+
+max_message_bytes: 50mib
+```
+
+=== `broker_write_max_bytes`
+
+The upper bound for the number of bytes written to a broker connection in a single write. This field corresponds to Kafka's `socket.request.max.bytes`.
+
+
+*Type*: `string`
+
+*Default*: `"100MB"`
+
+```yml
+# Examples
+
+broker_write_max_bytes: 128MB
+
+broker_write_max_bytes: 50mib
+```
 
