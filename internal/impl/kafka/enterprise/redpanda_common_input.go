@@ -9,6 +9,9 @@
 package enterprise
 
 import (
+	"slices"
+	"time"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/twmb/franz-go/pkg/kgo"
 
@@ -20,8 +23,15 @@ func redpandaCommonInputConfig() *service.ConfigSpec {
 		Beta().
 		Categories("Services").
 		Summary("Consumes data from a Redpanda (Kafka) broker, using credentials defined in a common top-level `redpanda` config block.").
-		Fields(kafka.FranzConsumerFields()...).
-		Field(service.NewAutoRetryNacksToggleField()).
+		Fields(
+			slices.Concat(
+				kafka.FranzConsumerFields(),
+				kafka.FranzReaderOrderedConfigFields(),
+				[]*service.ConfigField{
+					service.NewAutoRetryNacksToggleField(),
+				},
+			)...,
+		).
 		Description(`
 When a consumer group is specified this input consumes one or more topics where partitions will automatically balance across any other connected clients with the same consumer group. When a consumer group is not specified topics can either be consumed in their entirety or with explicit partitions.
 
@@ -83,18 +93,27 @@ root = if $has_topic_partitions {
 func init() {
 	err := service.RegisterBatchInput("redpanda_common", redpandaCommonInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
-			tmpOpts, err := kafka.FranzConnectionOptsFromConfig(conf, mgr.Logger())
+			tmpOpts, err := kafka.FranzConsumerOptsFromConfig(conf)
 			if err != nil {
 				return nil, err
 			}
-			clientOpts := append([]kgo.Opt{}, tmpOpts...)
 
-			if tmpOpts, err = kafka.FranzConsumerOptsFromConfig(conf); err != nil {
-				return nil, err
-			}
-			clientOpts = append(clientOpts, tmpOpts...)
-
-			rdr, err := kafka.NewFranzReaderOrderedFromConfig(conf, mgr, clientOpts...)
+			rdr, err := kafka.NewFranzReaderOrderedFromConfig(conf, mgr, func() (clientOpts []kgo.Opt, err error) {
+				// Make multiple attempts here just to allow the redpanda logger
+				// to initialise in the background. Otherwise we get an annoying
+				// log.
+				for i := 0; i < 20; i++ {
+					if err = kafka.FranzSharedClientUse(sharedGlobalRedpandaClientKey, mgr, func(details *kafka.FranzSharedClientInfo) error {
+						clientOpts = append(clientOpts, details.ConnDetails.FranzOpts()...)
+						return nil
+					}); err == nil {
+						clientOpts = append(clientOpts, tmpOpts...)
+						return
+					}
+					time.Sleep(time.Millisecond * 100)
+				}
+				return
+			})
 			if err != nil {
 				return nil, err
 			}

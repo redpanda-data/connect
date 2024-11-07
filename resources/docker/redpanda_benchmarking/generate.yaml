@@ -12,10 +12,12 @@ input:
       root.Gooeyness = (random_int() % 100) / 100
 
 output:
-  redpanda:
-    seed_brokers: [ localhost:9092 ]
+  redpanda_common:
     topic: testing_a
     # max_in_flight: 1 # Ensures ordering from the generate input
+
+redpanda:
+    seed_brokers: [ localhost:9092 ]
 
 metrics:
   prometheus:

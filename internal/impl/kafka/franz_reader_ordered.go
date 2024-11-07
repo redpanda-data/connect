@@ -59,7 +59,7 @@ func FranzReaderOrderedConfigFields() []*service.ConfigField {
 
 // FranzReaderOrdered implements a kafka reader using the franz-go library.
 type FranzReaderOrdered struct {
-	clientOpts []kgo.Opt
+	clientOpts func() ([]kgo.Opt, error)
 
 	partState *partitionState
 
@@ -76,7 +76,7 @@ type FranzReaderOrdered struct {
 
 // NewFranzReaderOrderedFromConfig attempts to instantiate a new
 // FranzReaderOrdered reader from a parsed config.
-func NewFranzReaderOrderedFromConfig(conf *service.ParsedConfig, res *service.Resources, opts ...kgo.Opt) (*FranzReaderOrdered, error) {
+func NewFranzReaderOrderedFromConfig(conf *service.ParsedConfig, res *service.Resources, optsFn func() ([]kgo.Opt, error)) (*FranzReaderOrdered, error) {
 	readBackOff := backoff.NewExponentialBackOff()
 	readBackOff.InitialInterval = time.Millisecond
 	readBackOff.MaxInterval = time.Millisecond * 100
@@ -87,8 +87,8 @@ func NewFranzReaderOrderedFromConfig(conf *service.ParsedConfig, res *service.Re
 		res:         res,
 		log:         res.Logger(),
 		shutSig:     shutdown.NewSignaller(),
+		clientOpts:  optsFn,
 	}
-	f.clientOpts = append(f.clientOpts, opts...)
 
 	f.consumerGroup, _ = conf.FieldString(kroFieldConsumerGroup)
 
@@ -331,6 +331,11 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 		return service.ErrEndOfInput
 	}
 
+	clientOpts, err := f.clientOpts()
+	if err != nil {
+		return err
+	}
+
 	var cl *kgo.Client
 	commitFn := func(r *kgo.Record) {}
 	if f.consumerGroup != "" {
@@ -343,9 +348,6 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 	}
 
 	checkpoints := newPartitionState(commitFn)
-
-	var clientOpts []kgo.Opt
-	clientOpts = append(clientOpts, f.clientOpts...)
 
 	if f.consumerGroup != "" {
 		clientOpts = append(clientOpts,
@@ -374,7 +376,6 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 		)
 	}
 
-	var err error
 	if cl, err = kgo.NewClient(clientOpts...); err != nil {
 		return err
 	}

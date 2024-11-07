@@ -116,7 +116,9 @@ func init() {
 			}
 			clientOpts = append(clientOpts, tmpOpts...)
 
-			rdr, err := NewFranzReaderOrderedFromConfig(conf, mgr, clientOpts...)
+			rdr, err := NewFranzReaderOrderedFromConfig(conf, mgr, func() ([]kgo.Opt, error) {
+				return clientOpts, nil
+			})
 			if err != nil {
 				return nil, err
 			}

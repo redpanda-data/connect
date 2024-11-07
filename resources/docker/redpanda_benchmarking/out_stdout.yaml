@@ -8,21 +8,10 @@ input:
     auto_replay_nacks: false
     partition_buffer_bytes: 1KiB
 
-pipeline:
-  processors:
-    - sleep:
-        duration: 1ns
-
 output:
-  fallback:
-    - redpanda_common:
-        topic: testing_b
-    - stdout: {}
-      processors:
-        - mapping: |
-            root = "Uh oh: %v failed to deliver due to: %v".format(content().string(), @fallback_error)
+  stdout: {}
 
-redpanda_common:
+redpanda:
   seed_brokers: [ localhost:9092 ]
 
 metrics:
