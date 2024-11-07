@@ -34,7 +34,7 @@ func CtxOnTriggerSignal(ctx context.Context, fn func()) context.Context {
 // TriggerSignal will call any closures associated with the provided context on
 // trigger signal. This should be called by components that are able to
 // distinguish between the dispatch of a message and the delivery, and should be
-// called once the dispatch has occured, and is safe to call on any context any
+// called once the dispatch has occurred, and is safe to call on any context any
 // number of times.
 func TriggerSignal(ctx context.Context) {
 	v, ok := ctx.Value(triggerKey).(triggerType)

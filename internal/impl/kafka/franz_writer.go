@@ -378,7 +378,7 @@ func (w *FranzWriter) WriteBatch(ctx context.Context, b service.MessageBatch) er
 	})
 }
 
-// Close does nothing as this component doesn't own the client.
+// Close calls into the provided yield client func.
 func (w *FranzWriter) Close(ctx context.Context) error {
 	return w.yieldClientFn(ctx)
 }

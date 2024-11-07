@@ -73,6 +73,7 @@ This input adds the following metadata fields to each message:
 - kafka_topic
 - kafka_partition
 - kafka_offset
+- kafka_timestamp
 - kafka_timestamp_unix
 - kafka_tombstone_message
 - All record headers

@@ -108,7 +108,7 @@ output:
     key: ${! @id }
 
 redpanda:
-  seed_brokers: [ "127.0.0.1:9093" ]
+  seed_brokers: [ "127.0.0.1:9092" ]
   tls:
     enabled: true
   sasl:

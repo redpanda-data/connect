@@ -17,6 +17,7 @@ package kafka
 import (
 	"context"
 	"slices"
+	"sync"
 
 	"github.com/twmb/franz-go/pkg/kgo"
 
@@ -87,8 +88,12 @@ func init() {
 			clientOpts = append(clientOpts, kgo.AllowAutoTopicCreation()) // TODO: Configure this?
 
 			var client *kgo.Client
+			var clientMut sync.Mutex
 
 			output, err = NewFranzWriterFromConfig(conf, func(fn FranzSharedClientUseFn) error {
+				clientMut.Lock()
+				defer clientMut.Unlock()
+
 				if client == nil {
 					var err error
 					if client, err = kgo.NewClient(clientOpts...); err != nil {
@@ -100,6 +105,9 @@ func init() {
 					ConnDetails: connDetails,
 				})
 			}, func(context.Context) error {
+				clientMut.Lock()
+				defer clientMut.Unlock()
+
 				if client == nil {
 					return nil
 				}
