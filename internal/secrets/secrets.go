@@ -15,6 +15,8 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
+
+	"github.com/redpanda-data/common-go/secrets"
 )
 
 // LookupFn defines the common closure that a secrets management client provides
