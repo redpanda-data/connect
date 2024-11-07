@@ -338,8 +338,6 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 		cp := checkpoint.NewCapped[*int64](int64(p.checkpointLimit))
 		for {
 			select {
-			case <-ctx.Done():
-				return
 			case <-nextTimedBatchChan:
 				nextTimedBatchChan = nil
 				flushedBatch, err := batchPolicy.Flush(ctx)
@@ -436,6 +434,7 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 				if err = p.pgLogicalStream.Stop(); err != nil {
 					p.logger.Errorf("Failed to stop pglogical stream: %v", err)
 				}
+				return
 			}
 		}
 	}()
