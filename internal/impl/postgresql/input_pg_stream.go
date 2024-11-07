@@ -322,17 +322,11 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 	}
 
 	p.pgLogicalStream = pgStream
-
+	batchPolicy, err := p.batching.NewBatcher(p.mgr)
+	if err != nil {
+		return err
+	}
 	go func() {
-		batchPolicy, err := p.batching.NewBatcher(p.mgr)
-		if err != nil {
-			p.logger.Errorf("Failed to initialise batch policy: %v, falling back to no policy.", err)
-			conf := service.BatchPolicy{Count: 1}
-			if batchPolicy, err = conf.NewBatcher(p.mgr); err != nil {
-				panic(err)
-			}
-		}
-
 		defer func() {
 			batchPolicy.Close(context.Background())
 		}()
