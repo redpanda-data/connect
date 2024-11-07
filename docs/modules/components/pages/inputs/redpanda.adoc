@@ -1,5 +1,5 @@
-= kafka_franz
-:type: output
+= redpanda
+:type: input
 :status: beta
 :categories: ["Services"]
 
@@ -23,9 +23,7 @@
 component_type_dropdown::[]
 
 
-A Kafka output using the https://github.com/twmb/franz-go[Franz Kafka client library^].
-
-Introduced in version 3.61.0.
+A Kafka input using the https://github.com/twmb/franz-go[Franz Kafka client library^].
 
 
 [tabs]
@@ -36,22 +34,14 @@ Common::
 
 ```yml
 # Common config fields, showing default values
-output:
+input:
   label: ""
-  kafka_franz:
+  redpanda:
     seed_brokers: [] # No default (required)
-    topic: "" # No default (required)
-    key: "" # No default (optional)
-    partition: ${! meta("partition") } # No default (optional)
-    metadata:
-      include_prefixes: []
-      include_patterns: []
-    max_in_flight: 10
-    batching:
-      count: 0
-      byte_size: 0
-      period: ""
-      check: ""
+    topics: [] # No default (required)
+    regexp_topics: false
+    consumer_group: "" # No default (optional)
+    auto_replay_nacks: true
 ```
 
 --
@@ -61,9 +51,9 @@ Advanced::
 
 ```yml
 # All config fields, showing default values
-output:
+input:
   label: ""
-  kafka_franz:
+  redpanda:
     seed_brokers: [] # No default (required)
     client_id: benthos
     tls:
@@ -75,34 +65,69 @@ output:
       client_certs: []
     sasl: [] # No default (optional)
     metadata_max_age: 5m
-    topic: "" # No default (required)
-    key: "" # No default (optional)
-    partition: ${! meta("partition") } # No default (optional)
-    metadata:
-      include_prefixes: []
-      include_patterns: []
-    timestamp: ${! timestamp_unix() } # No default (optional)
-    max_in_flight: 10
-    batching:
-      count: 0
-      byte_size: 0
-      period: ""
-      check: ""
-      processors: [] # No default (optional)
-    partitioner: "" # No default (optional)
-    idempotent_write: true
-    compression: "" # No default (optional)
-    timeout: 10s
-    max_message_bytes: 1MB
-    broker_write_max_bytes: 100MB
+    topics: [] # No default (required)
+    regexp_topics: false
+    rack_id: ""
+    start_from_oldest: true
+    fetch_max_bytes: 50MiB
+    fetch_min_bytes: 1B
+    fetch_max_partition_bytes: 1MiB
+    consumer_group: "" # No default (optional)
+    commit_period: 5s
+    partition_buffer_bytes: 1MB
+    auto_replay_nacks: true
 ```
 
 --
 ======
 
-Writes a batch of messages to Kafka brokers and waits for acknowledgement before propagating it back to the input.
+When a consumer group is specified this input consumes one or more topics where partitions will automatically balance across any other connected clients with the same consumer group. When a consumer group is not specified topics can either be consumed in their entirety or with explicit partitions.
 
-This output often out-performs the traditional `kafka` output as well as providing more useful logs and error messages.
+== Delivery Guarantees
+
+When using consumer groups the offsets of "delivered" records will be committed automatically and continuously, and in the event of restarts these committed offsets will be used in order to resume from where the input left off. Redpanda Connect guarantees at least once delivery by ensuring that records are only considerd to be delivered when all configured outputs that the record is routed to have confirmed delivery.
+
+== Ordering
+
+In order to preserve ordering of topic partitions, records consumed from each partition are processed and delivered in the order that they are received, and only one batch of records of a given partition will ever be processed at a time. This means that parallel processing can only occur when multiple topic partitions are being consumed, but ensures that data is processed in a sequential order as determined from the source partition.
+
+However, one way in which the order of records can be mixed is when delivery errors occur and error handling mechanisms kick in. Redpanda Connect always leans towards at least once delivery unless instructed otherwise, and this includes reattempting delivery of data when the ordering of that data can no longer be guaranteed.
+
+For example, a batch of records may have been sent to an output broker and only a subset of records were delivered, in this case Redpanda Connect by default will reattempt to deliver the records that failed, even though these failed records may have come before records that were previously delivered successfully.
+
+In order to avoid this scenario you must specify in your configuration an alternative way to handle delivery errors in the form of a xref:components:outputs/fallback.adoc[`fallback`] output. It is good practice to also disable the field `auto_retry_nacks` by setting it to `false` when you've added an explicit fallback output as this will improve the throughput of your pipeline. For example, the following config avoids ordering issues by specifying a fallback output into a DLQ topic, which is also retried indefinitely as a way to apply back pressure during connectivity issues:
+
+```yaml
+output:
+  fallback:
+    - redpanda:
+        seed_brokers: [ localhost:9092 ]
+        topic: foo
+    - retry:
+        output:
+          redpanda:
+            seed_brokers: [ localhost:9092 ]
+            topic: foo_dlq
+```
+
+== Batching
+
+Records are processed and delivered from each partition in batches as received from brokers. These batch sizes are therefore dynamically sized in order to optimise throughput, but can be tuned with the config fields `fetch_max_partition_bytes` and `fetch_max_bytes`. Batches can be further broken down using the xref:components:processors/split.adoc[`split`] processor.
+
+== Metadata
+
+This input adds the following metadata fields to each message:
+
+```text
+- kafka_key
+- kafka_topic
+- kafka_partition
+- kafka_offset
+- kafka_timestamp_unix
+- kafka_timestamp
+- kafka_tombstone_message
+- All record headers
+```
 
 
 == Fields
@@ -493,305 +518,130 @@ The maximum age of metadata before it is refreshed.
 
 *Default*: `"5m"`
 
-=== `topic`
+=== `topics`
 
-A topic to write messages to.
-This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+A list of topics to consume from. Multiple comma separated topics can be listed in a single element. When a `consumer_group` is specified partitions are automatically distributed across consumers of a topic, otherwise all partitions are consumed.
 
+Alternatively, it's possible to specify explicit partitions to consume from with a colon after the topic name, e.g. `foo:0` would consume the partition 0 of the topic foo. This syntax supports ranges, e.g. `foo:0-10` would consume partitions 0 through to 10 inclusive.
 
-*Type*: `string`
-
-
-=== `key`
-
-An optional key to populate for each message.
-This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
-
-
-*Type*: `string`
-
-
-=== `partition`
-
-An optional explicit partition to set for each message. This field is only relevant when the `partitioner` is set to `manual`. The provided interpolation string must be a valid integer.
-This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
-
-
-*Type*: `string`
-
-
-```yml
-# Examples
-
-partition: ${! meta("partition") }
-```
-
-=== `metadata`
-
-Determine which (if any) metadata values should be added to messages as headers.
-
-
-*Type*: `object`
-
-
-=== `metadata.include_prefixes`
-
-Provide a list of explicit metadata key prefixes to match against.
+Finally, it's also possible to specify an explicit offset to consume from by adding another colon after the partition, e.g. `foo:0:10` would consume the partition 0 of the topic foo starting from the offset 10. If the offset is not present (or remains unspecified) then the field `start_from_oldest` determines which offset to start from.
 
 
 *Type*: `array`
 
-*Default*: `[]`
 
 ```yml
 # Examples
 
-include_prefixes:
-  - foo_
-  - bar_
+topics:
+  - foo
+  - bar
 
-include_prefixes:
-  - kafka_
+topics:
+  - things.*
 
-include_prefixes:
-  - content-
+topics:
+  - foo,bar
+
+topics:
+  - foo:0
+  - bar:1
+  - bar:3
+
+topics:
+  - foo:0,bar:1,bar:3
+
+topics:
+  - foo:0-5
 ```
 
-=== `metadata.include_patterns`
+=== `regexp_topics`
 
-Provide a list of explicit metadata key regular expression (re2) patterns to match against.
-
-
-*Type*: `array`
-
-*Default*: `[]`
-
-```yml
-# Examples
-
-include_patterns:
-  - .*
-
-include_patterns:
-  - _timestamp_unix$
-```
-
-=== `timestamp`
-
-An optional timestamp to set for each message. When left empty, the current timestamp is used.
-This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+Whether listed topics should be interpreted as regular expression patterns for matching multiple topics. When topics are specified with explicit partitions this field must remain set to `false`.
 
 
-*Type*: `string`
+*Type*: `bool`
 
+*Default*: `false`
 
-```yml
-# Examples
+=== `rack_id`
 
-timestamp: ${! timestamp_unix() }
-
-timestamp: ${! metadata("kafka_timestamp_unix") }
-```
-
-=== `max_in_flight`
-
-The maximum number of batches to be sending in parallel at any given time.
-
-
-*Type*: `int`
-
-*Default*: `10`
-
-=== `batching`
-
-Allows you to configure a xref:configuration:batching.adoc[batching policy].
-
-
-*Type*: `object`
-
-
-```yml
-# Examples
-
-batching:
-  byte_size: 5000
-  count: 0
-  period: 1s
-
-batching:
-  count: 10
-  period: 1s
-
-batching:
-  check: this.contains("END BATCH")
-  count: 0
-  period: 1m
-```
-
-=== `batching.count`
-
-A number of messages at which the batch should be flushed. If `0` disables count based batching.
-
-
-*Type*: `int`
-
-*Default*: `0`
-
-=== `batching.byte_size`
-
-An amount of bytes at which the batch should be flushed. If `0` disables size based batching.
-
-
-*Type*: `int`
-
-*Default*: `0`
-
-=== `batching.period`
-
-A period in which an incomplete batch should be flushed regardless of its size.
+A rack specifies where the client is physically located and changes fetch requests to consume from the closest replica as opposed to the leader replica.
 
 
 *Type*: `string`
 
 *Default*: `""`
 
-```yml
-# Examples
+=== `start_from_oldest`
 
-period: 1s
-
-period: 1m
-
-period: 500ms
-```
-
-=== `batching.check`
-
-A xref:guides:bloblang/about.adoc[Bloblang query] that should return a boolean value indicating whether a message should end a batch.
-
-
-*Type*: `string`
-
-*Default*: `""`
-
-```yml
-# Examples
-
-check: this.type == "end_of_transaction"
-```
-
-=== `batching.processors`
-
-A list of xref:components:processors/about.adoc[processors] to apply to a batch as it is flushed. This allows you to aggregate and archive the batch however you see fit. Please note that all resulting messages are flushed as a single batch, therefore splitting the batch into smaller batches using these processors is a no-op.
-
-
-*Type*: `array`
-
-
-```yml
-# Examples
-
-processors:
-  - archive:
-      format: concatenate
-
-processors:
-  - archive:
-      format: lines
-
-processors:
-  - archive:
-      format: json_array
-```
-
-=== `partitioner`
-
-Override the default murmur2 hashing partitioner.
-
-
-*Type*: `string`
-
-
-|===
-| Option | Summary
-
-| `least_backup`
-| Chooses the least backed up partition (the partition with the fewest amount of buffered records). Partitions are selected per batch.
-| `manual`
-| Manually select a partition for each message, requires the field `partition` to be specified.
-| `murmur2_hash`
-| Kafka's default hash algorithm that uses a 32-bit murmur2 hash of the key to compute which partition the record will be on.
-| `round_robin`
-| Round-robin's messages through all available partitions. This algorithm has lower throughput and causes higher CPU load on brokers, but can be useful if you want to ensure an even distribution of records to partitions.
-
-|===
-
-=== `idempotent_write`
-
-Enable the idempotent write producer option. This requires the `IDEMPOTENT_WRITE` permission on `CLUSTER` and can be disabled if this permission is not available.
+Determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset. The setting is applied when creating a new consumer group or the saved offset no longer exists.
 
 
 *Type*: `bool`
 
 *Default*: `true`
 
-=== `compression`
+=== `fetch_max_bytes`
 
-Optionally set an explicit compression type. The default preference is to use snappy when the broker supports it, and fall back to none if not.
+Sets the maximum amount of bytes a broker will try to send during a fetch. Note that brokers may not obey this limit if it has records larger than this limit. This is the equivalent to the Java fetch.max.bytes setting.
+
+
+*Type*: `string`
+
+*Default*: `"50MiB"`
+
+=== `fetch_min_bytes`
+
+Sets the minimum amount of bytes a broker will try to send during a fetch. This is the equivalent to the Java fetch.min.bytes setting.
+
+
+*Type*: `string`
+
+*Default*: `"1B"`
+
+=== `fetch_max_partition_bytes`
+
+Sets the maximum amount of bytes that will be consumed for a single partition in a fetch request. Note that if a single batch is larger than this number, that batch will still be returned so the client can make progress. This is the equivalent to the Java fetch.max.partition.bytes setting.
+
+
+*Type*: `string`
+
+*Default*: `"1MiB"`
+
+=== `consumer_group`
+
+An optional consumer group to consume as. When specified the partitions of specified topics are automatically distributed across consumers sharing a consumer group, and partition offsets are automatically committed and resumed under this name. Consumer groups are not supported when specifying explicit partitions to consume from in the `topics` field.
 
 
 *Type*: `string`
 
 
-Options:
-`lz4`
-, `snappy`
-, `gzip`
-, `none`
-, `zstd`
-.
+=== `commit_period`
 
-=== `timeout`
-
-The maximum period of time to wait for message sends before abandoning the request and retrying
+The period of time between each commit of the current partition offsets. Offsets are always committed during shutdown.
 
 
 *Type*: `string`
 
-*Default*: `"10s"`
+*Default*: `"5s"`
 
-=== `max_message_bytes`
+=== `partition_buffer_bytes`
 
-The maximum space in bytes than an individual message may take, messages larger than this value will be rejected. This field corresponds to Kafka's `max.message.bytes`.
+A buffer size (in bytes) for each consumed partition, allowing records to be queued internally before flushing. Increasing this may improve throughput at the cost of higher memory utilisation. Note that each buffer can grow slightly beyond this value.
 
 
 *Type*: `string`
 
 *Default*: `"1MB"`
 
-```yml
-# Examples
+=== `auto_replay_nacks`
 
-max_message_bytes: 100MB
-
-max_message_bytes: 50mib
-```
-
-=== `broker_write_max_bytes`
-
-The upper bound for the number of bytes written to a broker connection in a single write. This field corresponds to Kafka's `socket.request.max.bytes`.
+Whether messages that are rejected (nacked) at the output level should be automatically replayed indefinitely, eventually resulting in back pressure if the cause of the rejections is persistent. If set to `false` these messages will instead be deleted. Disabling auto replays can greatly improve memory efficiency of high throughput streams as the original shape of the data can be discarded immediately upon consumption and mutation.
 
 
-*Type*: `string`
+*Type*: `bool`
 
-*Default*: `"100MB"`
-
-```yml
-# Examples
-
-broker_write_max_bytes: 128MB
-
-broker_write_max_bytes: 50mib
-```
+*Default*: `true`
 
 

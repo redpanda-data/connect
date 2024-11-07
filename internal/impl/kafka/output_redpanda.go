@@ -17,6 +17,7 @@ package kafka
 import (
 	"context"
 	"slices"
+	"sync"
 
 	"github.com/twmb/franz-go/pkg/kgo"
 
@@ -24,25 +25,18 @@ import (
 )
 
 const (
-	kfoFieldMaxInFlight = "max_in_flight"
-	kfoFieldBatching    = "batching"
-
-	// Deprecated
-	kfoFieldRackID = "rack_id"
+	roFieldMaxInFlight = "max_in_flight"
 )
 
-func franzKafkaOutputConfig() *service.ConfigSpec {
+func redpandaOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Beta().
 		Categories("Services").
-		Version("3.61.0").
 		Summary("A Kafka output using the https://github.com/twmb/franz-go[Franz Kafka client library^].").
 		Description(`
 Writes a batch of messages to Kafka brokers and waits for acknowledgement before propagating it back to the input.
-
-This output often out-performs the traditional ` + "`kafka`" + ` output as well as providing more useful logs and error messages.
 `).
-		Fields(FranzKafkaOutputConfigFields()...).
+		Fields(redpandaOutputConfigFields()...).
 		LintRule(`
 root = if this.partitioner == "manual" {
 if this.partition.or("") == "" {
@@ -53,37 +47,28 @@ if this.partition.or("") == "" {
 }`)
 }
 
-// FranzKafkaOutputConfigFields returns the full suite of config fields for a
-// kafka output using the franz-go client library.
-func FranzKafkaOutputConfigFields() []*service.ConfigField {
+func redpandaOutputConfigFields() []*service.ConfigField {
 	return slices.Concat(
 		FranzConnectionFields(),
 		FranzWriterConfigFields(),
 		[]*service.ConfigField{
-			service.NewIntField(kfoFieldMaxInFlight).
+			service.NewIntField(roFieldMaxInFlight).
 				Description("The maximum number of batches to be sending in parallel at any given time.").
-				Default(10),
-			service.NewBatchPolicyField(kfoFieldBatching),
-
-			// Deprecated
-			service.NewStringField(kfoFieldRackID).Deprecated(),
+				Default(256),
 		},
 		FranzProducerFields(),
 	)
 }
 
 func init() {
-	err := service.RegisterBatchOutput("kafka_franz", franzKafkaOutputConfig(),
+	err := service.RegisterBatchOutput("redpanda", redpandaOutputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (
 			output service.BatchOutput,
 			batchPolicy service.BatchPolicy,
 			maxInFlight int,
 			err error,
 		) {
-			if maxInFlight, err = conf.FieldInt(kfoFieldMaxInFlight); err != nil {
-				return
-			}
-			if batchPolicy, err = conf.FieldBatchPolicy(kfoFieldBatching); err != nil {
+			if maxInFlight, err = conf.FieldInt(roFieldMaxInFlight); err != nil {
 				return
 			}
 
@@ -103,8 +88,12 @@ func init() {
 			clientOpts = append(clientOpts, kgo.AllowAutoTopicCreation()) // TODO: Configure this?
 
 			var client *kgo.Client
+			var clientMut sync.Mutex
 
 			output, err = NewFranzWriterFromConfig(conf, func(fn FranzSharedClientUseFn) error {
+				clientMut.Lock()
+				defer clientMut.Unlock()
+
 				if client == nil {
 					var err error
 					if client, err = kgo.NewClient(clientOpts...); err != nil {
@@ -116,6 +105,9 @@ func init() {
 					ConnDetails: connDetails,
 				})
 			}, func(context.Context) error {
+				clientMut.Lock()
+				defer clientMut.Unlock()
+
 				if client == nil {
 					return nil
 				}

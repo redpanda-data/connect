@@ -13,7 +13,10 @@ All notable changes to this project will be documented in this file.
 - (Benthos) Field `follow_redirects` added to the `http` processor. (@ooesili)
 - New CLI flag `--secrets` added. (@Jeffail)
 - New CLI flag `--disable-telemetry` added. (@Jeffail)
-- New experimental `spicedb` watch input.
+- New experimental `spicedb` watch input. (@simon0191)
+- New `redpanda_common` input and output. (@Jeffail)
+- New `redpanda` input and output. (@Jeffail)
+- New `snowflake_streaming` output. (@rockwotj)
 
 ### Fixed
 
