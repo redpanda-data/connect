@@ -249,7 +249,7 @@ func TestProtobufErrors(t *testing.T) {
 			message:    "testing.Person",
 			importPath: "../../../config/test/protobuf/schema",
 			input:      `{"firstName":5,"lastName":"quaye","email":"caleb@myspace.com"}`,
-			output:     "invalid value for string type: 5",
+			output:     "invalid value for string field firstName: 5",
 		},
 	}
 
