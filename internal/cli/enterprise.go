@@ -18,8 +18,8 @@ import (
 	"github.com/rs/xid"
 	"github.com/urfave/cli/v2"
 
-	"github.com/redpanda-data/common-go/secrets"
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka/enterprise"
+	"github.com/redpanda-data/connect/v4/internal/secrets"
 	"github.com/redpanda-data/connect/v4/internal/telemetry"
 )
 
@@ -108,7 +108,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 
 			if secretsURNs := c.StringSlice("secrets"); len(secretsURNs) > 0 {
 				var err error
-				if secretLookupFn, _, err = secrets.ParseLookupURNs(c.Context, slog.New(rpLogger), secretsURNs...); err != nil {
+				if secretLookupFn, err = secrets.ParseLookupURNs(c.Context, slog.New(rpLogger), secretsURNs...); err != nil {
 					return err
 				}
 			}

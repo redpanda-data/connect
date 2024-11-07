@@ -62,18 +62,12 @@ func TestIntegrationRedis(t *testing.T) {
 
 	require.NoError(t, client.Set(ctx, "bar", "meow", time.Minute).Err())
 
-	secretsLookup, secretsExists, err := parseSecretsLookupURN(ctx, slog.Default(), urlStr)
+	secretsLookup, err := parseSecretsLookupURN(ctx, slog.Default(), urlStr)
 	require.NoError(t, err)
-
-	exists := secretsExists(ctx, "foo")
-	assert.False(t, exists)
 
 	v, exists := secretsLookup(ctx, "foo")
 	assert.False(t, exists)
 	assert.Equal(t, "", v)
-
-	exists = secretsExists(ctx, "bar")
-	assert.True(t, exists)
 
 	v, exists = secretsLookup(ctx, "bar")
 	assert.True(t, exists)

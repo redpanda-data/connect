@@ -11,6 +11,7 @@ package secrets
 import (
 	"context"
 	"fmt"
+	"github.com/redpanda-data/common-go/secrets"
 	"log/slog"
 	"net/url"
 	"os"
@@ -20,19 +21,11 @@ import (
 // and is then fed into a Redpanda Connect cli constructor.
 type LookupFn func(context.Context, string) (string, bool)
 
-// ExistsFn checks secret presence without retrieving its secret value
-type ExistsFn func(context.Context, string) bool
-
-type secretProvider struct {
-	lookupFn LookupFn
-	existsFn ExistsFn
-}
-
-type lookupTiers []secretProvider
+type lookupTiers []LookupFn
 
 func (l lookupTiers) Lookup(ctx context.Context, key string) (string, bool) {
-	for _, sp := range l {
-		if v, ok := sp.lookupFn(ctx, key); ok {
+	for _, fn := range l {
+		if v, ok := fn(ctx, key); ok {
 			return v, ok
 		}
 		if ctx.Err() != nil {
@@ -40,31 +33,6 @@ func (l lookupTiers) Lookup(ctx context.Context, key string) (string, bool) {
 		}
 	}
 	return "", false
-}
-
-func (l lookupTiers) Exists(ctx context.Context, key string) bool {
-	for _, sp := range l {
-		if sp.existsFn(ctx, key) {
-			return true
-		}
-		if ctx.Err() != nil {
-			break
-		}
-	}
-	return false
-}
-
-func constantExistsFn(result bool) ExistsFn {
-	return func(ctx context.Context, key string) bool {
-		return result
-	}
-}
-
-func defaultExistsFn(lookupFn func(string) (string, bool)) ExistsFn {
-	return func(_ context.Context, key string) bool {
-		_, found := lookupFn(key)
-		return found
-	}
 }
 
 // ParseLookupURNs attempts to parse a series of secrets lookup solutions
@@ -75,47 +43,57 @@ func defaultExistsFn(lookupFn func(string) (string, bool)) ExistsFn {
 // be considered the last look up option, in which case if all others fail to
 // provide a secret then an environment variable under the key is returned if
 // found.
-func ParseLookupURNs(ctx context.Context, logger *slog.Logger, secretsMgmtUrns ...string) (LookupFn, ExistsFn, error) {
+func ParseLookupURNs(ctx context.Context, logger *slog.Logger, secretsMgmtUrns ...string) (LookupFn, error) {
 	var tiers lookupTiers
 
 	for _, urn := range secretsMgmtUrns {
-		lookupFn, existsFn, err := parseSecretsLookupURN(ctx, logger, urn)
+		tier, err := parseSecretsLookupURN(ctx, logger, urn)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
-		tiers = append(tiers, secretProvider{
-			lookupFn: lookupFn,
-			existsFn: existsFn,
-		})
+		tiers = append(tiers, tier)
 	}
 
-	return tiers.Lookup, tiers.Exists, nil
+	return tiers.Lookup, nil
 }
 
-func parseSecretsLookupURN(ctx context.Context, logger *slog.Logger, urn string) (LookupFn, ExistsFn, error) {
+func parseSecretsLookupURN(ctx context.Context, logger *slog.Logger, urn string) (LookupFn, error) {
 	u, err := url.Parse(urn)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	switch u.Scheme {
 	case "test":
 		return func(ctx context.Context, key string) (string, bool) {
-				return key + " " + u.Host, true
-			},
-			constantExistsFn(true), nil
+			return key + " " + u.Host, true
+		}, nil
 	case "redis":
 		return newRedisSecretsLookup(ctx, logger, u)
 	case "env":
 		return func(ctx context.Context, key string) (string, bool) {
 			return os.LookupEnv(key)
-		}, defaultExistsFn(os.LookupEnv), nil
+		}, nil
+	case "aws":
+		provider, err := secrets.NewSecretProvider(ctx, logger, u, secrets.NewAWSSecretsManager)
+		return func(ctx context.Context, key string) (string, bool) {
+			return provider.GetSecretValue(ctx, key)
+		}, err
+	case "gcp":
+		provider, err := secrets.NewSecretProvider(ctx, logger, u, secrets.NewGCPSecretsManager)
+		return func(ctx context.Context, key string) (string, bool) {
+			return provider.GetSecretValue(ctx, key)
+		}, err
+	case "az":
+		provider, err := secrets.NewSecretProvider(ctx, logger, u, secrets.NewAzSecretsManager)
+		return func(ctx context.Context, key string) (string, bool) {
+			return provider.GetSecretValue(ctx, key)
+		}, err
 	case "none":
 		return func(ctx context.Context, key string) (string, bool) {
-				return "", false
-			},
-			constantExistsFn(false), nil
+			return "", false
+		}, nil
 	default:
-		return nil, nil, fmt.Errorf("secrets scheme %v not recognized", u.Scheme)
+		return nil, fmt.Errorf("secrets scheme %v not recognized", u.Scheme)
 	}
 }
