@@ -11,10 +11,10 @@ package secrets
 import (
 	"context"
 	"fmt"
-	"github.com/redpanda-data/common-go/secrets"
 	"log/slog"
 	"net/url"
 	"os"
+	"strings"
 
 	"github.com/redpanda-data/common-go/secrets"
 )
@@ -64,6 +64,7 @@ func parseSecretsLookupURN(ctx context.Context, logger *slog.Logger, urn string)
 	if err != nil {
 		return nil, err
 	}
+	path := strings.TrimPrefix(u.Path, "/")
 
 	switch u.Scheme {
 	case "test":
@@ -77,20 +78,23 @@ func parseSecretsLookupURN(ctx context.Context, logger *slog.Logger, urn string)
 			return os.LookupEnv(key)
 		}, nil
 	case "aws":
-		provider, err := secrets.NewSecretProvider(ctx, logger, u, secrets.NewAWSSecretsManager)
-		return func(ctx context.Context, key string) (string, bool) {
-			return provider.GetSecretValue(ctx, key)
-		}, err
+		secretsManager, err := secrets.NewAWSSecretsManager(ctx, logger, u.Host)
+		if err != nil {
+			return nil, err
+		}
+		return lookupFn(secrets.NewSecretProvider, secretsManager, path)
 	case "gcp":
-		provider, err := secrets.NewSecretProvider(ctx, logger, u, secrets.NewGCPSecretsManager)
-		return func(ctx context.Context, key string) (string, bool) {
-			return provider.GetSecretValue(ctx, key)
-		}, err
+		secretsManager, err := secrets.NewGCPSecretsManager(ctx, logger, u.Host)
+		if err != nil {
+			return nil, err
+		}
+		return lookupFn(secrets.NewSecretProvider, secretsManager, path)
 	case "az":
-		provider, err := secrets.NewSecretProvider(ctx, logger, u, secrets.NewAzSecretsManager)
-		return func(ctx context.Context, key string) (string, bool) {
-			return provider.GetSecretValue(ctx, key)
-		}, err
+		secretsManager, err := secrets.NewAzSecretsManager(logger, "https://"+u.Host)
+		if err != nil {
+			return nil, err
+		}
+		return lookupFn(secrets.NewSecretProvider, secretsManager, path)
 	case "none":
 		return func(ctx context.Context, key string) (string, bool) {
 			return "", false
@@ -98,4 +102,15 @@ func parseSecretsLookupURN(ctx context.Context, logger *slog.Logger, urn string)
 	default:
 		return nil, fmt.Errorf("secrets scheme %v not recognized", u.Scheme)
 	}
+}
+
+func lookupFn(providerFn secrets.SecretProviderFn, secretsManager secrets.SecretAPI, prefix string) (LookupFn, error) {
+	provider, err := providerFn(secretsManager, prefix)
+	if err != nil {
+		return nil, err
+	}
+
+	return func(ctx context.Context, key string) (string, bool) {
+		return provider.GetSecretValue(ctx, key)
+	}, nil
 }
