@@ -11,7 +11,9 @@ package snowflake
 import (
 	"context"
 	"crypto/rsa"
+	"errors"
 	"fmt"
+	"regexp"
 	"sync"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
@@ -21,20 +23,32 @@ import (
 )
 
 const (
-	ssoFieldAccount          = "account"
-	ssoFieldUser             = "user"
-	ssoFieldRole             = "role"
-	ssoFieldDB               = "database"
-	ssoFieldSchema           = "schema"
-	ssoFieldTable            = "table"
-	ssoFieldKey              = "private_key"
-	ssoFieldKeyFile          = "private_key_file"
-	ssoFieldKeyPass          = "private_key_pass"
-	ssoFieldInitStatement    = "init_statement"
-	ssoFieldBatching         = "batching"
-	ssoFieldChannelPrefix    = "channel_prefix"
-	ssoFieldMapping          = "mapping"
-	ssoFieldBuildParallelism = "build_parallelism"
+	ssoFieldAccount                             = "account"
+	ssoFieldUser                                = "user"
+	ssoFieldRole                                = "role"
+	ssoFieldDB                                  = "database"
+	ssoFieldSchema                              = "schema"
+	ssoFieldTable                               = "table"
+	ssoFieldKey                                 = "private_key"
+	ssoFieldKeyFile                             = "private_key_file"
+	ssoFieldKeyPass                             = "private_key_pass"
+	ssoFieldInitStatement                       = "init_statement"
+	ssoFieldBatching                            = "batching"
+	ssoFieldChannelPrefix                       = "channel_prefix"
+	ssoFieldMapping                             = "mapping"
+	ssoFieldBuildParallelism                    = "build_parallelism"
+	ssoFieldSchemaEvolution                     = "schema_evolution"
+	ssoFieldSchemaEvolutionEnabled              = "enabled"
+	ssoFieldSchemaEvolutionNewColumnTypeMapping = "new_column_type_mapping"
+
+	defaultSchemaEvolutionNewColumnMapping = `root = match this.value.type() {
+  this == "string" => "STRING"
+  this == "bytes" => "BINARY"
+  this == "number" => "DOUBLE"
+  this == "bool" => "BOOLEAN"
+  this == "timestamp" => "TIMESTAMP"
+  _ => "VARIANT"
+}`
 )
 
 func snowflakeStreamingOutputConfig() *service.ConfigSpec {
@@ -70,11 +84,8 @@ You can monitor the output batch size using the `+"`snowflake_compressed_output_
 `).
 		Fields(
 			service.NewStringField(ssoFieldAccount).
-				Description(`Account name, which is the same as the https://docs.snowflake.com/en/user-guide/admin-account-identifier.html#where-are-account-identifiers-used[Account Identifier^].
-      However, when using an https://docs.snowflake.com/en/user-guide/admin-account-identifier.html#using-an-account-locator-as-an-identifier[Account Locator^],
-      the Account Identifier is formatted as `+"`<account_locator>.<region_id>.<cloud>`"+` and this field needs to be
-      populated using the `+"`<account_locator>`"+` part.
-`).Example("AAAAAAA-AAAAAAA"),
+				Description(`The Snowflake https://docs.snowflake.com/en/user-guide/admin-account-identifier.html#using-an-account-locator-as-an-identifier[Account name^]. Which should be formatted as `+"`<orgname>-<account_name>`"+` where `+"`<orgname>`"+` is the name of your Snowflake organization and `+"`<account_name>`"+` is the unique name of your account within your organization.
+`).Example("ORG-ACCOUNT"),
 			service.NewStringField(ssoFieldUser).Description("The user to run the Snowpipe Stream as. See https://docs.snowflake.com/en/user-guide/admin-user-management[Snowflake Documentation^] on how to create a user."),
 			service.NewStringField(ssoFieldRole).Description("The role for the `user` field. The role must have the https://docs.snowflake.com/en/user-guide/data-load-snowpipe-streaming-overview#required-access-privileges[required privileges^] to call the Snowpipe Streaming APIs. See https://docs.snowflake.com/en/user-guide/admin-user-management#user-roles[Snowflake Documentation^] for more information about roles.").Example("ACCOUNTADMIN"),
 			service.NewStringField(ssoFieldDB).Description("The Snowflake database to ingest data into."),
@@ -92,6 +103,13 @@ CREATE TABLE IF NOT EXISTS mytable (amount NUMBER);
 ALTER TABLE t1 ALTER COLUMN c1 DROP NOT NULL;
 ALTER TABLE t1 ADD COLUMN a2 NUMBER;
 `),
+			service.NewObjectField(ssoFieldSchemaEvolution,
+				service.NewBoolField(ssoFieldSchemaEvolutionEnabled).Description("Whether schema evolution is enabled."),
+				service.NewBloblangField(ssoFieldSchemaEvolutionNewColumnTypeMapping).Description(`
+The mapping function from Redpanda Connect type to column type in Snowflake. Overriding this can allow for customization of the datatype if there is specific information that you know about the data types in use. This mapping should result in the `+"`root`"+` variable being assigned a string with the data type for the new column in Snowflake.
+
+The input to this mapping is an object with the value and the name of the new column, for example: `+"`"+`{"value": 42.3, "name":"new_data_field"}`+`"`).Default(defaultSchemaEvolutionNewColumnMapping),
+			).Description(`Options to control schema evolution within the pipeline as new columns are added to the pipeline.`).Optional(),
 			service.NewIntField(ssoFieldBuildParallelism).Description("The maximum amount of parallelism to use when building the output for Snowflake. The metric to watch to see if you need to change this is `snowflake_build_output_latency_ns`.").Default(1).Advanced(),
 			service.NewBatchPolicyField(ssoFieldBatching),
 			service.NewOutputMaxInFlightField(),
@@ -144,6 +162,8 @@ output:
     schema: "PUBLIC"
     table: "MYTABLE"
     private_key_file: "my/private/key.p8"
+    schema_evolution:
+      enabled: true
 `,
 		).
 		Example(
@@ -268,6 +288,17 @@ func newSnowflakeStreamer(
 			return nil, err
 		}
 	}
+	var schemaEvolutionMapping *bloblang.Executor
+	if conf.Contains(ssoFieldSchemaEvolution, ssoFieldSchemaEvolutionEnabled) {
+		enabled, err := conf.FieldBool(ssoFieldSchemaEvolution, ssoFieldSchemaEvolutionEnabled)
+		if err == nil && enabled {
+			schemaEvolutionMapping, err = conf.FieldBloblang(ssoFieldSchemaEvolution, ssoFieldSchemaEvolutionNewColumnTypeMapping)
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	buildParallelism, err := conf.FieldInt(ssoFieldBuildParallelism)
 	if err != nil {
 		return nil, err
@@ -284,19 +315,14 @@ func newSnowflakeStreamer(
 		// stream to write to a single table.
 		channelPrefix = fmt.Sprintf("Redpanda_Connect_%s.%s.%s", db, schema, table)
 	}
-	var initStatementsFn func(context.Context) error
+	var initStatementsFn func(context.Context, *streaming.SnowflakeRestClient) error
 	if conf.Contains(ssoFieldInitStatement) {
 		initStatements, err := conf.FieldString(ssoFieldInitStatement)
 		if err != nil {
 			return nil, err
 		}
-		initStatementsFn = func(ctx context.Context) error {
-			c, err := streaming.NewRestClient(account, user, mgr.EngineVersion(), channelPrefix, rsaKey, mgr.Logger())
-			if err != nil {
-				return err
-			}
-			defer c.Close()
-			_, err = c.RunSQL(ctx, streaming.RunSQLRequest{
+		initStatementsFn = func(ctx context.Context, client *streaming.SnowflakeRestClient) error {
+			_, err = client.RunSQL(ctx, streaming.RunSQLRequest{
 				Statement: initStatements,
 				// Currently we set of timeout of 30 seconds so that we don't have to handle async operations
 				// that need polling to wait until they finish (results are made async when execution is longer
@@ -313,6 +339,10 @@ func newSnowflakeStreamer(
 			return err
 		}
 	}
+	restClient, err := streaming.NewRestClient(account, user, mgr.EngineVersion(), channelPrefix, rsaKey, mgr.Logger())
+	if err != nil {
+		return nil, fmt.Errorf("unable to create rest API client: %w", err)
+	}
 	client, err := streaming.NewSnowflakeServiceClient(
 		context.Background(),
 		streaming.ClientOptions{
@@ -328,40 +358,46 @@ func newSnowflakeStreamer(
 		return nil, err
 	}
 	o := &snowflakeStreamerOutput{
-		channelPrefix:    channelPrefix,
-		client:           client,
-		db:               db,
-		schema:           schema,
-		table:            table,
-		mapping:          mapping,
-		logger:           mgr.Logger(),
-		buildTime:        mgr.Metrics().NewTimer("snowflake_build_output_latency_ns"),
-		uploadTime:       mgr.Metrics().NewTimer("snowflake_upload_latency_ns"),
-		convertTime:      mgr.Metrics().NewTimer("snowflake_convert_latency_ns"),
-		serializeTime:    mgr.Metrics().NewTimer("snowflake_serialize_latency_ns"),
-		compressedOutput: mgr.Metrics().NewCounter("snowflake_compressed_output_size_bytes"),
-		initStatementsFn: initStatementsFn,
-		buildParallelism: buildParallelism,
+		channelPrefix:          channelPrefix,
+		client:                 client,
+		db:                     db,
+		schema:                 schema,
+		table:                  table,
+		role:                   role,
+		mapping:                mapping,
+		logger:                 mgr.Logger(),
+		buildTime:              mgr.Metrics().NewTimer("snowflake_build_output_latency_ns"),
+		uploadTime:             mgr.Metrics().NewTimer("snowflake_upload_latency_ns"),
+		convertTime:            mgr.Metrics().NewTimer("snowflake_convert_latency_ns"),
+		serializeTime:          mgr.Metrics().NewTimer("snowflake_serialize_latency_ns"),
+		compressedOutput:       mgr.Metrics().NewCounter("snowflake_compressed_output_size_bytes"),
+		initStatementsFn:       initStatementsFn,
+		buildParallelism:       buildParallelism,
+		schemaEvolutionMapping: schemaEvolutionMapping,
+		restClient:             restClient,
 	}
 	return o, nil
 }
 
 type snowflakeStreamerOutput struct {
-	client            *streaming.SnowflakeServiceClient
-	channelPool       sync.Pool
-	channelCreationMu sync.Mutex
-	poolSize          int
-	compressedOutput  *service.MetricCounter
-	uploadTime        *service.MetricTimer
-	buildTime         *service.MetricTimer
-	convertTime       *service.MetricTimer
-	serializeTime     *service.MetricTimer
-	buildParallelism  int
+	client                 *streaming.SnowflakeServiceClient
+	channelPool            sync.Pool
+	channelCreationMu      sync.Mutex
+	poolSize               int
+	compressedOutput       *service.MetricCounter
+	uploadTime             *service.MetricTimer
+	buildTime              *service.MetricTimer
+	convertTime            *service.MetricTimer
+	serializeTime          *service.MetricTimer
+	buildParallelism       int
+	schemaEvolutionMapping *bloblang.Executor
 
-	channelPrefix, db, schema, table string
-	mapping                          *bloblang.Executor
-	logger                           *service.Logger
-	initStatementsFn                 func(context.Context) error
+	schemaMigrationMu                      sync.RWMutex
+	channelPrefix, db, schema, table, role string
+	mapping                                *bloblang.Executor
+	logger                                 *service.Logger
+	initStatementsFn                       func(context.Context, *streaming.SnowflakeRestClient) error
+	restClient                             *streaming.SnowflakeRestClient
 }
 
 func (o *snowflakeStreamerOutput) openNewChannel(ctx context.Context) (*streaming.SnowflakeIngestionChannel, error) {
@@ -380,19 +416,20 @@ func (o *snowflakeStreamerOutput) openNewChannel(ctx context.Context) (*streamin
 func (o *snowflakeStreamerOutput) openChannel(ctx context.Context, name string, id int16) (*streaming.SnowflakeIngestionChannel, error) {
 	o.logger.Debugf("opening snowflake streaming channel: %s", name)
 	return o.client.OpenChannel(ctx, streaming.ChannelOptions{
-		ID:               id,
-		Name:             name,
-		DatabaseName:     o.db,
-		SchemaName:       o.schema,
-		TableName:        o.table,
-		BuildParallelism: o.buildParallelism,
+		ID:                      id,
+		Name:                    name,
+		DatabaseName:            o.db,
+		SchemaName:              o.schema,
+		TableName:               o.table,
+		BuildParallelism:        o.buildParallelism,
+		StrictSchemaEnforcement: o.schemaEvolutionMapping != nil,
 	})
 }
 
 func (o *snowflakeStreamerOutput) Connect(ctx context.Context) error {
 	if o.initStatementsFn != nil {
-		if err := o.initStatementsFn(ctx); err != nil {
-			return err
+		if err := o.initStatementsFn(ctx, o.restClient); err != nil {
+			return fmt.Errorf("unable to run initialization statement: %w", err)
 		}
 		// We've already executed our init statement, we don't need to do that anymore
 		o.initStatementsFn = nil
@@ -419,6 +456,29 @@ func (o *snowflakeStreamerOutput) WriteBatch(ctx context.Context, batch service.
 		}
 		batch = mapped
 	}
+	var err error
+	// We only migrate one column at a time, so tolerate up to 10 schema
+	// migrations for a single batch before giving up. This protects against
+	// any bugs over infinitely looping.
+	for i := 0; i < 10; i++ {
+		err = o.WriteBatchInternal(ctx, batch)
+		if err == nil {
+			return nil
+		}
+		migrationErr := schemaMigrationNeededError{}
+		if !errors.As(err, &migrationErr) {
+			break
+		}
+		if err := migrationErr.migrator(ctx); err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+func (o *snowflakeStreamerOutput) WriteBatchInternal(ctx context.Context, batch service.MessageBatch) error {
+	o.schemaMigrationMu.RLock()
+	defer o.schemaMigrationMu.RUnlock()
 	var channel *streaming.SnowflakeIngestionChannel
 	if maybeChan := o.channelPool.Get(); maybeChan != nil {
 		channel = maybeChan.(*streaming.SnowflakeIngestionChannel)
@@ -438,6 +498,31 @@ func (o *snowflakeStreamerOutput) WriteBatch(ctx context.Context, batch service.
 		o.convertTime.Timing(stats.ConvertTime.Nanoseconds())
 		o.serializeTime.Timing(stats.SerializeTime.Nanoseconds())
 	} else {
+		// Only evolve the schema if requested.
+		if o.schemaEvolutionMapping != nil {
+			nullColumnErr := streaming.NonNullColumnError{}
+			if errors.As(err, &nullColumnErr) {
+				// put the channel back so that we can reopen it along with the rest of the channels to
+				// pick up the new schema.
+				o.channelPool.Put(channel)
+				// Return an error so that we release our read lock and can take the write lock
+				// to forcibly reopen all our channels to get a new schema.
+				return schemaMigrationNeededError{
+					migrator: func(ctx context.Context) error {
+						return o.MigrateNotNullColumn(ctx, nullColumnErr)
+					},
+				}
+			}
+			missingColumnErr := streaming.MissingColumnError{}
+			if errors.As(err, &missingColumnErr) {
+				o.channelPool.Put(channel)
+				return schemaMigrationNeededError{
+					migrator: func(ctx context.Context) error {
+						return o.MigrateMissingColumn(ctx, missingColumnErr)
+					},
+				}
+			}
+		}
 		reopened, reopenErr := o.openChannel(ctx, channel.Name, channel.ID)
 		if reopenErr == nil {
 			o.channelPool.Put(reopened)
@@ -456,6 +541,128 @@ func (o *snowflakeStreamerOutput) WriteBatch(ctx context.Context, batch service.
 	return err
 }
 
+type schemaMigrationNeededError struct {
+	migrator func(ctx context.Context) error
+}
+
+func (schemaMigrationNeededError) Error() string {
+	return "schema migration was required and the operation needs to be retried after the migration"
+}
+
+func (o *snowflakeStreamerOutput) MigrateMissingColumn(ctx context.Context, col streaming.MissingColumnError) error {
+	o.schemaMigrationMu.Lock()
+	defer o.schemaMigrationMu.Unlock()
+	msg := service.NewMessage(nil)
+	msg.SetStructuredMut(map[string]any{
+		"name":  col.RawName(),
+		"value": col.Value(),
+	})
+	out, err := msg.BloblangQuery(o.schemaEvolutionMapping)
+	if err != nil {
+		return fmt.Errorf("unable to compute new column type for %s: %w", col.ColumnName(), err)
+	}
+	v, err := out.AsBytes()
+	if err != nil {
+		return fmt.Errorf("unable to extract result from new column type mapping for %s: %w", col.ColumnName(), err)
+	}
+	columnType := string(v)
+	if err := validateColumnType(columnType); err != nil {
+		return err
+	}
+	o.logger.Infof("identified new schema - attempting to alter table to add column: %s %s", col.ColumnName(), columnType)
+	err = o.RunSQLMigration(
+		ctx,
+		// This looks very scary and it *should*. This is prone to SQL injection attacks. The column name is
+		// quoted according to the rules in Snowflake's documentation. This is also why we need to
+		// validate the data type, so that you can't sneak an injection attack in there.
+		fmt.Sprintf(`ALTER TABLE IDENTIFIER(?)
+    ADD COLUMN IF NOT EXISTS %s %s
+      COMMENT 'column created by schema evolution from Redpanda Connect'`,
+			col.ColumnName(),
+			columnType,
+		),
+	)
+	if err != nil {
+		o.logger.Warnf("unable to add new column, this maybe due to a race with another request, error: %s", err)
+	}
+	return o.ReopenAllChannels(ctx)
+}
+
+func (o *snowflakeStreamerOutput) MigrateNotNullColumn(ctx context.Context, col streaming.NonNullColumnError) error {
+	o.schemaMigrationMu.Lock()
+	defer o.schemaMigrationMu.Unlock()
+	o.logger.Infof("identified new schema - attempting to alter table to remove null constraint on column: %s", col.ColumnName())
+	err := o.RunSQLMigration(
+		ctx,
+		// This looks very scary and it *should*. This is prone to SQL injection attacks. The column name here
+		// comes directly from the Snowflake API so it better not have a SQL injection :)
+		fmt.Sprintf(`ALTER TABLE IDENTIFIER(?) ALTER
+      %s DROP NOT NULL,
+      %s COMMENT 'column altered to be nullable by schema evolution from Redpanda Connect'`,
+			col.ColumnName(),
+			col.ColumnName(),
+		),
+	)
+	if err != nil {
+		o.logger.Warnf("unable to mark column %s as null, this maybe due to a race with another request, error: %s", col.ColumnName(), err)
+	}
+	return o.ReopenAllChannels(ctx)
+}
+
+func (o *snowflakeStreamerOutput) RunSQLMigration(ctx context.Context, statement string) error {
+	_, err := o.restClient.RunSQL(ctx, streaming.RunSQLRequest{
+		Statement: statement,
+		// Currently we set of timeout of 30 seconds so that we don't have to handle async operations
+		// that need polling to wait until they finish (results are made async when execution is longer
+		// than 45 seconds).
+		Timeout:  30,
+		Database: o.db,
+		Schema:   o.schema,
+		Role:     o.role,
+		Bindings: map[string]streaming.BindingValue{
+			"1": {Type: "TEXT", Value: o.table},
+		},
+	})
+	return err
+}
+
+// ReopenAllChannels should be called while holding schemaMigrationMu so that
+// all channels are actually processed
+func (o *snowflakeStreamerOutput) ReopenAllChannels(ctx context.Context) error {
+	all := []*streaming.SnowflakeIngestionChannel{}
+	for {
+		maybeChan := o.channelPool.Get()
+		if maybeChan == nil {
+			break
+		}
+		channel := maybeChan.(*streaming.SnowflakeIngestionChannel)
+		reopened, reopenErr := o.openChannel(ctx, channel.Name, channel.ID)
+		if reopenErr == nil {
+			channel = reopened
+		} else {
+			o.logger.Warnf("unable to reopen channel %q schema migration: %v", channel.Name, reopenErr)
+			// Keep the existing channel so we don't reopen channels, but instead retry later.
+		}
+		all = append(all, channel)
+	}
+	for _, c := range all {
+		o.channelPool.Put(c)
+	}
+	return nil
+}
+
 func (o *snowflakeStreamerOutput) Close(ctx context.Context) error {
+	o.restClient.Close()
 	return o.client.Close()
+}
+
+// This doesn't need to fully match, but be enough to prevent SQL injection as well as
+// catch common errors.
+var validColumnTypeRegex = regexp.MustCompile(`^\s*(?i:NUMBER|DECIMAL|NUMERIC|INT|INTEGER|BIGINT|SMALLINT|TINYINT|BYTEINT|FLOAT|FLOAT4|FLOAT8|DOUBLE|DOUBLE\s+PRECISION|REAL|VARCHAR|CHAR|CHARACTER|STRING|TEXT|BINARY|VARBINARY|BOOLEAN|DATE|DATETIME|TIME|TIMESTAMP|TIMESTAMP_LTZ|TIMESTAMP_NTZ|TIMESTAMP_TZ|VARIANT|OBJECT|ARRAY)\s*(?:\(\s*\d+\s*\)|\(\s*\d+\s*,\s*\d+\s*\))?\s*$`)
+
+func validateColumnType(v string) error {
+	if validColumnTypeRegex.MatchString(v) {
+		return nil
+	}
+	return fmt.Errorf("invalid Snowflake column data type: %s", v)
 }

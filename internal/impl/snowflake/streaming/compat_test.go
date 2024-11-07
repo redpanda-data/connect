@@ -128,6 +128,7 @@ func TestColumnNormalization(t *testing.T) {
 	require.Equal(t, `foo" bar "baz`, normalizeColumnName(`"foo"" bar ""baz"`))
 }
 
+
 func BenchmarkColumnNormalization(b *testing.B) {
 	makeBench := func(name string) func(b *testing.B) {
 		return func(b *testing.B) {
@@ -145,6 +146,17 @@ func BenchmarkColumnNormalization(b *testing.B) {
 	b.Run("large", makeBench(strings.Repeat("a", 128)))
 	// Appently this is German for "fuel oil recoil absorber"
 	b.Run("unicode", makeBench("heizölrückstoßabdämpfung"))
+}
+
+func TestColumnQuoting(t *testing.T) {
+	require.Equal(t, `""`, quoteColumnName(""))
+	require.Equal(t, `"FOO"`, quoteColumnName("foo"))
+	require.Equal(t, `"""BAR"""`, quoteColumnName(`"bar"`))
+	require.Equal(t, `"FOO BAR"`, quoteColumnName(`foo bar`))
+	require.Equal(t, `"FOO\ BAR"`, quoteColumnName(`foo\ bar`))
+	require.Equal(t, `"FOO""BAR"`, quoteColumnName(`foo"bar`))
+	require.Equal(t, `"FOO""BAR1"`, quoteColumnName(`foo"bar1`))
+	require.Equal(t, `""""""""""`, quoteColumnName(`""""`))
 }
 
 func TestSnowflakeTimestamp(t *testing.T) {

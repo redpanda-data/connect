@@ -15,7 +15,14 @@
 package main
 
 import (
+	"context"
+	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
+
 	"github.com/redpanda-data/connect/v4/internal/cli"
+	"github.com/redpanda-data/connect/v4/internal/protohealth"
 	"github.com/redpanda-data/connect/v4/public/schema"
 
 	// Only import a subset of components for execution.
@@ -33,5 +40,30 @@ var (
 
 func main() {
 	schema := schema.Cloud(Version, DateBuilt)
+	if len(os.Args) > 1 && os.Args[1] != "run" {
+		cli.InitEnterpriseCLI(BinaryName, Version, DateBuilt, schema)
+		return
+	}
+
+	status := protohealth.NewEndpoint(2999)
+	errC := make(chan error)
+	sigC := make(chan os.Signal, 1)
+	signal.Notify(sigC, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		errC <- status.Run(context.Background())
+	}()
 	cli.InitEnterpriseCLI(BinaryName, Version, DateBuilt, schema)
+	select {
+	case <-sigC:
+		// External termination should not cause the pipeline to be killed
+		fmt.Println("received interrupt signal, not marking as complete")
+		return
+	default:
+	}
+	fmt.Println("exited without interrupt signal, marking as complete")
+	status.MarkDone()
+	select {
+	case <-errC:
+	case <-sigC:
+	}
 }
