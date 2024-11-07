@@ -563,34 +563,25 @@ func (o *snowflakeStreamerOutput) MigrateMissingColumn(ctx context.Context, col 
 	}
 	v, err := out.AsBytes()
 	if err != nil {
-		return fmt.Errorf("unable to compute new column type for %s: %w", col.ColumnName(), err)
+		return fmt.Errorf("unable to extract result from new column type mapping for %s: %w", col.ColumnName(), err)
 	}
 	columnType := string(v)
 	if err := validateColumnType(columnType); err != nil {
 		return err
 	}
 	o.logger.Infof("identified new schema - attempting to alter table to add column: %s %s", col.ColumnName(), columnType)
-	_, err = o.restClient.RunSQL(ctx, streaming.RunSQLRequest{
+	err = o.RunSQLMigration(
+		ctx,
 		// This looks very scary and it *should*. This is prone to SQL injection attacks. The column name is
 		// quoted according to the rules in Snowflake's documentation. This is also why we need to
 		// validate the data type, so that you can't sneak an injection attack in there.
-		Statement: fmt.Sprintf(`ALTER TABLE IDENTIFIER(?)
+		fmt.Sprintf(`ALTER TABLE IDENTIFIER(?)
     ADD COLUMN IF NOT EXISTS %s %s
       COMMENT 'column created by schema evolution from Redpanda Connect'`,
 			col.ColumnName(),
 			columnType,
 		),
-		// Currently we set of timeout of 30 seconds so that we don't have to handle async operations
-		// that need polling to wait until they finish (results are made async when execution is longer
-		// than 45 seconds).
-		Timeout:  30,
-		Database: o.db,
-		Schema:   o.schema,
-		Role:     o.role,
-		Bindings: map[string]streaming.BindingValue{
-			"1": {Type: "TEXT", Value: o.table},
-		},
-	})
+	)
 	if err != nil {
 		o.logger.Warnf("unable to add new column, this maybe due to a race with another request, error: %s", err)
 	}
@@ -601,15 +592,26 @@ func (o *snowflakeStreamerOutput) MigrateNotNullColumn(ctx context.Context, col 
 	o.schemaMigrationMu.Lock()
 	defer o.schemaMigrationMu.Unlock()
 	o.logger.Infof("identified new schema - attempting to alter table to remove null constraint on column: %s", col.ColumnName())
-	_, err := o.restClient.RunSQL(ctx, streaming.RunSQLRequest{
+	err := o.RunSQLMigration(
+		ctx,
 		// This looks very scary and it *should*. This is prone to SQL injection attacks. The column name here
 		// comes directly from the Snowflake API so it better not have a SQL injection :)
-		Statement: fmt.Sprintf(`ALTER TABLE IDENTIFIER(?) ALTER
+		fmt.Sprintf(`ALTER TABLE IDENTIFIER(?) ALTER
       %s DROP NOT NULL,
       %s COMMENT 'column altered to be nullable by schema evolution from Redpanda Connect'`,
 			col.ColumnName(),
 			col.ColumnName(),
 		),
+	)
+	if err != nil {
+		o.logger.Warnf("unable to mark column %s as null, this maybe due to a race with another request, error: %s", col.ColumnName(), err)
+	}
+	return o.ReopenAllChannels(ctx)
+}
+
+func (o *snowflakeStreamerOutput) RunSQLMigration(ctx context.Context, statement string) error {
+	_, err := o.restClient.RunSQL(ctx, streaming.RunSQLRequest{
+		Statement: statement,
 		// Currently we set of timeout of 30 seconds so that we don't have to handle async operations
 		// that need polling to wait until they finish (results are made async when execution is longer
 		// than 45 seconds).
@@ -621,10 +623,7 @@ func (o *snowflakeStreamerOutput) MigrateNotNullColumn(ctx context.Context, col 
 			"1": {Type: "TEXT", Value: o.table},
 		},
 	})
-	if err != nil {
-		o.logger.Warnf("unable to mark column %s as null, this maybe due to a race with another request, error: %s", col.ColumnName(), err)
-	}
-	return o.ReopenAllChannels(ctx)
+	return err
 }
 
 // ReopenAllChannels should be called while holding schemaMigrationMu so that

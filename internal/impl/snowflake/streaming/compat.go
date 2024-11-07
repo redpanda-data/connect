@@ -157,7 +157,7 @@ func normalizeColumnName(name string) string {
 func quoteColumnName(name string) string {
 	var quoted strings.Builder
 	// Default to assume we're just going to add quotes and there won't
-	// be any double quotes inside the string that need escaped.
+	// be any double quotes inside the string that needs escaped.
 	quoted.Grow(len(name) + 2)
 	quoted.WriteByte('"')
 	for _, r := range strings.ToUpper(name) {

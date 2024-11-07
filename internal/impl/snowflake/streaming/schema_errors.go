@@ -13,7 +13,7 @@ package streaming
 import "fmt"
 
 // SchemaMismatchError occurs when the user provided data has data that
-// doesn't match the schema *and* the table can be evolved to accomidate
+// doesn't match the schema *and* the table can be evolved to accommodate
 //
 // This can be used as a mechanism to evolve the schema dynamically.
 type SchemaMismatchError interface {
