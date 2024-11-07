@@ -16,18 +16,19 @@ package kafka
 
 import (
 	"context"
-	"crypto/tls"
-	"fmt"
-	"math"
-	"strconv"
-	"strings"
-	"time"
+	"slices"
 
-	"github.com/dustin/go-humanize"
 	"github.com/twmb/franz-go/pkg/kgo"
-	"github.com/twmb/franz-go/pkg/sasl"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+)
+
+const (
+	kfoFieldMaxInFlight = "max_in_flight"
+	kfoFieldBatching    = "batching"
+
+	// Deprecated
+	kfoFieldRackID = "rack_id"
 )
 
 func franzKafkaOutputConfig() *service.ConfigSpec {
@@ -55,76 +56,20 @@ if this.partition.or("") == "" {
 // FranzKafkaOutputConfigFields returns the full suite of config fields for a
 // kafka output using the franz-go client library.
 func FranzKafkaOutputConfigFields() []*service.ConfigField {
-	return []*service.ConfigField{
-		service.NewStringListField("seed_brokers").
-			Description("A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses.").
-			Example([]string{"localhost:9092"}).
-			Example([]string{"foo:9092", "bar:9092"}).
-			Example([]string{"foo:9092,bar:9092"}),
-		service.NewInterpolatedStringField("topic").
-			Description("A topic to write messages to."),
-		service.NewInterpolatedStringField("key").
-			Description("An optional key to populate for each message.").Optional(),
-		service.NewStringAnnotatedEnumField("partitioner", map[string]string{
-			"murmur2_hash": "Kafka's default hash algorithm that uses a 32-bit murmur2 hash of the key to compute which partition the record will be on.",
-			"round_robin":  "Round-robin's messages through all available partitions. This algorithm has lower throughput and causes higher CPU load on brokers, but can be useful if you want to ensure an even distribution of records to partitions.",
-			"least_backup": "Chooses the least backed up partition (the partition with the fewest amount of buffered records). Partitions are selected per batch.",
-			"manual":       "Manually select a partition for each message, requires the field `partition` to be specified.",
-		}).
-			Description("Override the default murmur2 hashing partitioner.").
-			Advanced().Optional(),
-		service.NewInterpolatedStringField("partition").
-			Description("An optional explicit partition to set for each message. This field is only relevant when the `partitioner` is set to `manual`. The provided interpolation string must be a valid integer.").
-			Example(`${! meta("partition") }`).
-			Optional(),
-		service.NewStringField("client_id").
-			Description("An identifier for the client connection.").
-			Default("benthos").
-			Advanced(),
-		service.NewStringField("rack_id").
-			Description("A rack identifier for this client.").
-			Default("").
-			Advanced(),
-		service.NewBoolField("idempotent_write").
-			Description("Enable the idempotent write producer option. This requires the `IDEMPOTENT_WRITE` permission on `CLUSTER` and can be disabled if this permission is not available.").
-			Default(true).
-			Advanced(),
-		service.NewMetadataFilterField("metadata").
-			Description("Determine which (if any) metadata values should be added to messages as headers.").
-			Optional(),
-		service.NewIntField("max_in_flight").
-			Description("The maximum number of batches to be sending in parallel at any given time.").
-			Default(10),
-		service.NewDurationField("timeout").
-			Description("The maximum period of time to wait for message sends before abandoning the request and retrying").
-			Default("10s").
-			Advanced(),
-		service.NewBatchPolicyField("batching"),
-		service.NewStringField("max_message_bytes").
-			Description("The maximum space in bytes than an individual message may take, messages larger than this value will be rejected. This field corresponds to Kafka's `max.message.bytes`.").
-			Advanced().
-			Default("1MB").
-			Example("100MB").
-			Example("50mib"),
-		service.NewStringField("broker_write_max_bytes").
-			Description("The upper bound for the number of bytes written to a broker connection in a single write. This field corresponds to Kafka's `socket.request.max.bytes`.").
-			Advanced().
-			Default("100MB").
-			Example("128MB").
-			Example("50mib"),
-		service.NewStringEnumField("compression", "lz4", "snappy", "gzip", "none", "zstd").
-			Description("Optionally set an explicit compression type. The default preference is to use snappy when the broker supports it, and fall back to none if not.").
-			Optional().
-			Advanced(),
-		service.NewTLSToggledField("tls"),
-		SASLFields(),
-		service.NewInterpolatedStringField("timestamp").
-			Description("An optional timestamp to set for each message. When left empty, the current timestamp is used.").
-			Example(`${! timestamp_unix() }`).
-			Example(`${! metadata("kafka_timestamp_unix") }`).
-			Optional().
-			Advanced(),
-	}
+	return slices.Concat(
+		FranzConnectionFields(),
+		FranzWriterConfigFields(),
+		[]*service.ConfigField{
+			service.NewIntField(kfoFieldMaxInFlight).
+				Description("The maximum number of batches to be sending in parallel at any given time.").
+				Default(10),
+			service.NewBatchPolicyField(kfoFieldBatching),
+
+			// Deprecated
+			service.NewStringField(kfoFieldRackID).Deprecated(),
+		},
+		FranzProducerFields(),
+	)
 }
 
 func init() {
@@ -135,315 +80,52 @@ func init() {
 			maxInFlight int,
 			err error,
 		) {
-			if maxInFlight, err = conf.FieldInt("max_in_flight"); err != nil {
+			if maxInFlight, err = conf.FieldInt(kfoFieldMaxInFlight); err != nil {
 				return
 			}
-			if batchPolicy, err = conf.FieldBatchPolicy("batching"); err != nil {
+			if batchPolicy, err = conf.FieldBatchPolicy(kfoFieldBatching); err != nil {
 				return
 			}
-			output, err = NewFranzKafkaWriterFromConfig(conf, mgr.Logger())
+
+			var tmpOpts, clientOpts []kgo.Opt
+
+			var connDetails *FranzConnectionDetails
+			if connDetails, err = FranzConnectionDetailsFromConfig(conf, mgr.Logger()); err != nil {
+				return
+			}
+			clientOpts = append(clientOpts, connDetails.FranzOpts()...)
+
+			if tmpOpts, err = FranzProducerOptsFromConfig(conf); err != nil {
+				return
+			}
+			clientOpts = append(clientOpts, tmpOpts...)
+
+			clientOpts = append(clientOpts, kgo.AllowAutoTopicCreation()) // TODO: Configure this?
+
+			var client *kgo.Client
+
+			output, err = NewFranzWriterFromConfig(conf, func(fn FranzSharedClientUseFn) error {
+				if client == nil {
+					var err error
+					if client, err = kgo.NewClient(clientOpts...); err != nil {
+						return err
+					}
+				}
+				return fn(&FranzSharedClientInfo{
+					Client:      client,
+					ConnDetails: connDetails,
+				})
+			}, func(context.Context) error {
+				if client == nil {
+					return nil
+				}
+				client.Close()
+				client = nil
+				return nil
+			})
 			return
 		})
 	if err != nil {
 		panic(err)
 	}
-}
-
-//------------------------------------------------------------------------------
-
-// FranzKafkaWriter implements a kafka writer using the franz-go library.
-type FranzKafkaWriter struct {
-	SeedBrokers         []string
-	topic               *service.InterpolatedString
-	key                 *service.InterpolatedString
-	partition           *service.InterpolatedString
-	timestamp           *service.InterpolatedString
-	clientID            string
-	rackID              string
-	idempotentWrite     bool
-	TLSConf             *tls.Config
-	saslConfs           []sasl.Mechanism
-	metaFilter          *service.MetadataFilter
-	partitioner         kgo.Partitioner
-	timeout             time.Duration
-	produceMaxBytes     int32
-	brokerWriteMaxBytes int32
-	compressionPrefs    []kgo.CompressionCodec
-
-	client *kgo.Client
-
-	log *service.Logger
-}
-
-// NewFranzKafkaWriterFromConfig attempts to instantiate a FranzKafkaWriter from
-// a parsed config.
-func NewFranzKafkaWriterFromConfig(conf *service.ParsedConfig, log *service.Logger) (*FranzKafkaWriter, error) {
-	f := FranzKafkaWriter{
-		log: log,
-	}
-
-	brokerList, err := conf.FieldStringList("seed_brokers")
-	if err != nil {
-		return nil, err
-	}
-	for _, b := range brokerList {
-		f.SeedBrokers = append(f.SeedBrokers, strings.Split(b, ",")...)
-	}
-
-	if f.topic, err = conf.FieldInterpolatedString("topic"); err != nil {
-		return nil, err
-	}
-
-	if conf.Contains("key") {
-		if f.key, err = conf.FieldInterpolatedString("key"); err != nil {
-			return nil, err
-		}
-	}
-
-	if conf.Contains("partition") {
-		if rawStr, _ := conf.FieldString("partition"); rawStr != "" {
-			if f.partition, err = conf.FieldInterpolatedString("partition"); err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	if f.timeout, err = conf.FieldDuration("timeout"); err != nil {
-		return nil, err
-	}
-
-	maxMessageBytesStr, err := conf.FieldString("max_message_bytes")
-	if err != nil {
-		return nil, err
-	}
-	maxMessageBytes, err := humanize.ParseBytes(maxMessageBytesStr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse max_message_bytes: %w", err)
-	}
-	if maxMessageBytes > uint64(math.MaxInt32) {
-		return nil, fmt.Errorf("invalid max_message_bytes, must not exceed %v", math.MaxInt32)
-	}
-	f.produceMaxBytes = int32(maxMessageBytes)
-	brokerWriteMaxBytesStr, err := conf.FieldString("broker_write_max_bytes")
-	if err != nil {
-		return nil, err
-	}
-	brokerWriteMaxBytes, err := humanize.ParseBytes(brokerWriteMaxBytesStr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse broker_write_max_bytes: %w", err)
-	}
-	if brokerWriteMaxBytes > 1<<30 {
-		return nil, fmt.Errorf("invalid broker_write_max_bytes, must not exceed %v", 1<<30)
-	}
-	f.brokerWriteMaxBytes = int32(brokerWriteMaxBytes)
-
-	if conf.Contains("compression") {
-		cStr, err := conf.FieldString("compression")
-		if err != nil {
-			return nil, err
-		}
-
-		var c kgo.CompressionCodec
-		switch cStr {
-		case "lz4":
-			c = kgo.Lz4Compression()
-		case "gzip":
-			c = kgo.GzipCompression()
-		case "snappy":
-			c = kgo.SnappyCompression()
-		case "zstd":
-			c = kgo.ZstdCompression()
-		case "none":
-			c = kgo.NoCompression()
-		default:
-			return nil, fmt.Errorf("compression codec %v not recognised", cStr)
-		}
-		f.compressionPrefs = append(f.compressionPrefs, c)
-	}
-
-	f.partitioner = kgo.StickyKeyPartitioner(nil)
-	if conf.Contains("partitioner") {
-		partStr, err := conf.FieldString("partitioner")
-		if err != nil {
-			return nil, err
-		}
-		switch partStr {
-		case "murmur2_hash":
-			f.partitioner = kgo.StickyKeyPartitioner(nil)
-		case "round_robin":
-			f.partitioner = kgo.RoundRobinPartitioner()
-		case "least_backup":
-			f.partitioner = kgo.LeastBackupPartitioner()
-		case "manual":
-			f.partitioner = kgo.ManualPartitioner()
-		default:
-			return nil, fmt.Errorf("unknown partitioner: %v", partStr)
-		}
-	}
-
-	if f.clientID, err = conf.FieldString("client_id"); err != nil {
-		return nil, err
-	}
-
-	if f.rackID, err = conf.FieldString("rack_id"); err != nil {
-		return nil, err
-	}
-
-	if f.idempotentWrite, err = conf.FieldBool("idempotent_write"); err != nil {
-		return nil, err
-	}
-
-	if conf.Contains("metadata") {
-		if f.metaFilter, err = conf.FieldMetadataFilter("metadata"); err != nil {
-			return nil, err
-		}
-	}
-
-	tlsConf, tlsEnabled, err := conf.FieldTLSToggled("tls")
-	if err != nil {
-		return nil, err
-	}
-	if tlsEnabled {
-		f.TLSConf = tlsConf
-	}
-	if f.saslConfs, err = SASLMechanismsFromConfig(conf); err != nil {
-		return nil, err
-	}
-
-	if conf.Contains("timestamp") {
-		if f.timestamp, err = conf.FieldInterpolatedString("timestamp"); err != nil {
-			return nil, err
-		}
-	}
-
-	return &f, nil
-}
-
-//------------------------------------------------------------------------------
-
-// Connect to the target seed brokers.
-func (f *FranzKafkaWriter) Connect(ctx context.Context) error {
-	if f.client != nil {
-		return nil
-	}
-
-	clientOpts := []kgo.Opt{
-		kgo.SeedBrokers(f.SeedBrokers...),
-		kgo.SASL(f.saslConfs...),
-		kgo.AllowAutoTopicCreation(), // TODO: Configure this
-		kgo.ProducerBatchMaxBytes(f.produceMaxBytes),
-		kgo.BrokerMaxWriteBytes(f.brokerWriteMaxBytes),
-		kgo.ProduceRequestTimeout(f.timeout),
-		kgo.ClientID(f.clientID),
-		kgo.Rack(f.rackID),
-		kgo.WithLogger(&KGoLogger{f.log}),
-	}
-	if f.TLSConf != nil {
-		clientOpts = append(clientOpts, kgo.DialTLSConfig(f.TLSConf))
-	}
-	if f.partitioner != nil {
-		clientOpts = append(clientOpts, kgo.RecordPartitioner(f.partitioner))
-	}
-	if !f.idempotentWrite {
-		clientOpts = append(clientOpts, kgo.DisableIdempotentWrite())
-	}
-	if len(f.compressionPrefs) > 0 {
-		clientOpts = append(clientOpts, kgo.ProducerBatchCompression(f.compressionPrefs...))
-	}
-
-	cl, err := kgo.NewClient(clientOpts...)
-	if err != nil {
-		return err
-	}
-
-	f.client = cl
-	return nil
-}
-
-// WriteBatch attempts to write a batch of messages to the target topics.
-func (f *FranzKafkaWriter) WriteBatch(ctx context.Context, b service.MessageBatch) (err error) {
-	if f.client == nil {
-		return service.ErrNotConnected
-	}
-
-	topicExecutor := b.InterpolationExecutor(f.topic)
-	var keyExecutor *service.MessageBatchInterpolationExecutor
-	if f.key != nil {
-		keyExecutor = b.InterpolationExecutor(f.key)
-	}
-	var partitionExecutor *service.MessageBatchInterpolationExecutor
-	if f.partition != nil {
-		partitionExecutor = b.InterpolationExecutor(f.partition)
-	}
-	var timestampExecutor *service.MessageBatchInterpolationExecutor
-	if f.timestamp != nil {
-		timestampExecutor = b.InterpolationExecutor(f.timestamp)
-	}
-
-	records := make([]*kgo.Record, 0, len(b))
-	for i, msg := range b {
-		var topic string
-		if topic, err = topicExecutor.TryString(i); err != nil {
-			return fmt.Errorf("topic interpolation error: %w", err)
-		}
-
-		record := &kgo.Record{Topic: topic}
-		if record.Value, err = msg.AsBytes(); err != nil {
-			return
-		}
-		if keyExecutor != nil {
-			if record.Key, err = keyExecutor.TryBytes(i); err != nil {
-				return fmt.Errorf("key interpolation error: %w", err)
-			}
-		}
-		if partitionExecutor != nil {
-			partStr, err := partitionExecutor.TryString(i)
-			if err != nil {
-				return fmt.Errorf("partition interpolation error: %w", err)
-			}
-			partInt, err := strconv.Atoi(partStr)
-			if err != nil {
-				return fmt.Errorf("partition parse error: %w", err)
-			}
-			record.Partition = int32(partInt)
-		}
-		_ = f.metaFilter.Walk(msg, func(key, value string) error {
-			record.Headers = append(record.Headers, kgo.RecordHeader{
-				Key:   key,
-				Value: []byte(value),
-			})
-			return nil
-		})
-		if timestampExecutor != nil {
-			if tsStr, err := timestampExecutor.TryString(i); err != nil {
-				return fmt.Errorf("timestamp interpolation error: %w", err)
-			} else {
-				if ts, err := strconv.ParseInt(tsStr, 10, 64); err != nil {
-					return fmt.Errorf("failed to parse timestamp: %w", err)
-				} else {
-					record.Timestamp = time.Unix(ts, 0)
-				}
-			}
-		}
-		records = append(records, record)
-	}
-
-	// TODO: This is very cool and allows us to easily return granular errors,
-	// so we should honor travis by doing it.
-	err = f.client.ProduceSync(ctx, records...).FirstErr()
-	return
-}
-
-func (f *FranzKafkaWriter) disconnect() {
-	if f.client == nil {
-		return
-	}
-	f.client.Close()
-	f.client = nil
-}
-
-// Close underlying connections.
-func (f *FranzKafkaWriter) Close(ctx context.Context) error {
-	f.disconnect()
-	return nil
 }

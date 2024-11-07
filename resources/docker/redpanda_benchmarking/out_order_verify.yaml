@@ -1,0 +1,36 @@
+http:
+  enabled: false
+
+input:
+  redpanda:
+    seed_brokers: [ localhost:9092 ]
+    consumer_group: cg_a
+    topics: [ testing_b ]
+    auto_replay_nacks: false
+
+output:
+  drop: {}
+  processors:
+    - for_each:
+      - mapping: |
+          let count = counter(min: this.ID)
+          root.mismatch = if $count != this.ID {
+            "expected %v, got %v".format($count, this.ID)
+          }
+      - while:
+          check: 'this.mismatch != null'
+          processors:
+            - log:
+                level: WARN
+                message: "Blocking pipeline after ordering mismatch detected: ${! this.mismatch }"
+            - sleep:
+                duration: 1m
+
+metrics:
+  prometheus:
+    push_interval: 1s
+    push_job_name: benthos_push
+    push_url: "http://localhost:9091"
+
+shutdown_timeout: 1s
+

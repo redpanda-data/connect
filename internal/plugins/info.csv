@@ -192,6 +192,10 @@ redis_scan                ,input     ,Redis                     ,4.27.0  ,certif
 redis_script              ,processor ,Redis Script              ,4.11.0  ,certified  ,n          ,y     ,y
 redis_streams             ,input     ,Redis Streams             ,0.0.0   ,certified  ,n          ,y     ,y
 redis_streams             ,output    ,Redis Streams             ,0.0.0   ,certified  ,n          ,y     ,y
+redpanda                  ,input     ,redpanda                  ,4.39.0  ,certified  ,n          ,y     ,y
+redpanda                  ,output    ,redpanda                  ,4.39.0  ,certified  ,n          ,y     ,y
+redpanda_common           ,input     ,redpanda_common           ,4.39.0  ,enterprise ,n          ,y     ,y
+redpanda_common           ,output    ,redpanda_common           ,4.39.0  ,enterprise ,n          ,y     ,y
 redpanda_data_transform   ,processor ,redpanda_data_transform   ,4.31.0  ,certified  ,n          ,n     ,n
 redpanda_migrator         ,input     ,redpanda_migrator         ,4.37.0  ,enterprise ,n          ,y     ,y
 redpanda_migrator         ,output    ,redpanda_migrator         ,4.37.0  ,enterprise ,n          ,y     ,y

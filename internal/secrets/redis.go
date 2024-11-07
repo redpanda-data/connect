@@ -34,7 +34,7 @@ func (r *redisSecretsClient) lookup(ctx context.Context, key string) (string, bo
 	return res, true
 }
 
-func newRedisSecretsLookup(ctx context.Context, logger *slog.Logger, url *url.URL) (LookupFn, error) {
+func newRedisSecretsLookup(_ context.Context, logger *slog.Logger, url *url.URL) (LookupFn, error) {
 	opts, err := redis.ParseURL(url.String())
 	if err != nil {
 		return nil, err

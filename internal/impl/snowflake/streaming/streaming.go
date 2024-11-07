@@ -145,6 +145,8 @@ type ChannelOptions struct {
 	TableName string
 	// The max parallelism used to build parquet files and convert message batches into rows.
 	BuildParallelism int
+	// If set to true, don't ignore extra columns in user data, but raise an error.
+	StrictSchemaEnforcement bool
 }
 
 type encryptionInfo struct {
@@ -304,7 +306,7 @@ func (c *SnowflakeIngestionChannel) constructBdecPart(batch service.MessageBatch
 		rowGroups = append(rowGroups, rowGroup{})
 		chunk := batch[i : i+end]
 		wg.Go(func() error {
-			rows, stats, err := constructRowGroup(chunk, c.schema, c.transformers)
+			rows, stats, err := constructRowGroup(chunk, c.schema, c.transformers, !c.StrictSchemaEnforcement)
 			rowGroups[j] = rowGroup{rows, stats}
 			return err
 		})

@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming/int128"
 )
@@ -147,7 +148,59 @@ func normalizeColumnName(name string) string {
 		}
 		// fallthrough
 	}
-	return strings.ToUpper(strings.ReplaceAll(name, `\ `, ` `))
+	// Add a fast path if there is no escaping note that this is an optimized version of
+	//   strings.ToUpper(strings.ReplaceAll(name, `\ `, ` `))
+	// which indeed we fallback to that if we get unicode or any escaped spaces.
+
+	// First check to see if the name is already normalized, in that case we can save
+	// an alloc however most strings I assume are in snake or camel casing so those
+	// will likely just check the first byte in this loop then bail, so this extra
+	// loop allows for still optimizing performance over just calling into the stdlib.
+	hasLower := false
+	for _, c := range []byte(name) {
+		if 'a' <= c && c <= 'z' {
+			hasLower = true
+			break // must alloc
+		} else if c >= utf8.RuneSelf || c == '\\' {
+			// Fallback
+			return strings.ToUpper(strings.ReplaceAll(name, `\ `, ` `))
+		}
+	}
+	if !hasLower {
+		return name
+	}
+	transformed := []byte(name)
+	for i, c := range transformed {
+		if 'a' <= c && c <= 'z' {
+			c -= 'a' - 'A'
+			transformed[i] = c
+		} else if c >= utf8.RuneSelf || c == '\\' {
+			// Fallback
+			return strings.ToUpper(strings.ReplaceAll(name, `\ `, ` `))
+		}
+	}
+	return string(transformed)
+}
+
+// quoteColumnName escapes an object identifier according to the
+// rules in Snowflake.
+//
+// https://docs.snowflake.com/en/sql-reference/identifiers-syntax
+func quoteColumnName(name string) string {
+	var quoted strings.Builder
+	// Default to assume we're just going to add quotes and there won't
+	// be any double quotes inside the string that needs escaped.
+	quoted.Grow(len(name) + 2)
+	quoted.WriteByte('"')
+	for _, r := range strings.ToUpper(name) {
+		if r == '"' {
+			quoted.WriteString(`""`)
+		} else {
+			quoted.WriteRune(r)
+		}
+	}
+	quoted.WriteByte('"')
+	return quoted.String()
 }
 
 // snowflakeTimestampInt computes the same result as the logic in TimestampWrapper

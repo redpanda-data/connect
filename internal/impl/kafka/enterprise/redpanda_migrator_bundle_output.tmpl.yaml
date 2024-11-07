@@ -44,7 +44,13 @@ mapping: |
       "partition": "${! metadata(\"kafka_partition\").or(throw(\"missing kafka_partition metadata\")) }",
       "partitioner": "manual",
       "timestamp": "${! metadata(\"kafka_timestamp_unix\").or(timestamp_unix()) }",
-      "max_in_flight": $rpMigratorMaxInFlight
+      "max_in_flight": $rpMigratorMaxInFlight,
+      "metadata": {
+        "include_patterns": [
+          # Exclude metadata fields which start with `kafka_`
+          "^(?:[^k].*|k[^a].*|ka[^f].*|kaf[^k].*|kafk[^a].*|kafka[^_].*)"
+        ]
+      }
     }
   )
 
@@ -72,6 +78,9 @@ mapping: |
             output:
               fallback:
                 - redpanda_migrator: %s
+                  processors:
+                    - mapping: |
+                        meta input_label = deleted()
                 # TODO: Use a DLQ
                 - drop: {}
                   processors:
@@ -113,6 +122,9 @@ mapping: |
             output:
               fallback:
                 - redpanda_migrator: %s
+                  processors:
+                    - mapping: |
+                        meta input_label = deleted()
                 # TODO: Use a DLQ
                 - drop: {}
                   processors:
@@ -157,6 +169,12 @@ tests:
                       - 127.0.0.1:9092
                     timestamp: ${! metadata("kafka_timestamp_unix").or(timestamp_unix()) }
                     topic: ${! metadata("kafka_topic").or(throw("missing kafka_topic metadata")) }
+                    metadata:
+                      include_patterns:
+                        -  ^(?:[^k].*|k[^a].*|ka[^f].*|kaf[^k].*|kafk[^a].*|kafka[^_].*)
+                  processors:
+                    - mapping: |
+                        meta input_label = deleted()
                 - drop: {}
                   processors:
                     - log:
@@ -213,6 +231,12 @@ tests:
                       - 127.0.0.1:9092
                     timestamp: ${! metadata("kafka_timestamp_unix").or(timestamp_unix()) }
                     topic: ${! metadata("kafka_topic").or(throw("missing kafka_topic metadata")) }
+                    metadata:
+                      include_patterns:
+                        -  ^(?:[^k].*|k[^a].*|ka[^f].*|kaf[^k].*|kafk[^a].*|kafka[^_].*)
+                  processors:
+                    - mapping: |
+                        meta input_label = deleted()
                 - drop: {}
                   processors:
                     - log:

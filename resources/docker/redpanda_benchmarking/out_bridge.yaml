@@ -1,0 +1,33 @@
+http:
+  enabled: false
+
+input:
+  redpanda_common:
+    consumer_group: cg_d
+    topics: [ testing_a ]
+    auto_replay_nacks: false
+    partition_buffer_bytes: 1KiB
+
+pipeline:
+  processors:
+    - sleep:
+        duration: 1ns
+
+output:
+  fallback:
+    - redpanda_common:
+        topic: testing_b
+    - stdout: {}
+      processors:
+        - mapping: |
+            root = "Uh oh: %v failed to deliver due to: %v".format(content().string(), @fallback_error)
+
+redpanda_common:
+  seed_brokers: [ localhost:9092 ]
+
+metrics:
+  prometheus:
+    push_interval: 1s
+    push_job_name: benthos_push
+    push_url: "http://localhost:9091"
+

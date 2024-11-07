@@ -1,0 +1,75 @@
+volumes:
+ prometheus_data: {}
+ grafana_data: {}
+
+services:
+  jaeger:
+    image: jaegertracing/all-in-one
+    ports:
+      - 6831:6831/udp
+      - 16686:16686
+
+  prometheus:
+    image: prom/prometheus
+    volumes:
+      - ./prometheus/:/etc/prometheus/
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    ports:
+      - 9090:9090
+
+  traefik:
+    image: "traefik"
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "80:80"
+      - "8080:8080"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+
+  pushgateway:
+    image: prom/pushgateway
+    ports:
+      - 9091:9091
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.whoami.rule=Host(`push.localhost`)"
+      - "traefik.http.routers.whoami.entrypoints=web"
+      - "traefik.http.routers.whoami.middlewares=secured"
+      - "traefik.http.middlewares.secured.basicauth.users=foo:$$2y$$05$$zwyVyaTBE.hdSl8Xs./bJuv3nrlIgiFCsHNDvnWy4C3GRnR4L5cl6"
+
+  grafana:
+    image: grafana/grafana
+    depends_on:
+      - prometheus
+    ports:
+      - 3000:3000
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning/:/etc/grafana/provisioning/
+    env_file:
+      - ./grafana/config.monitoring
+
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda
+    ports:
+      - 8081:8081
+      - 8082:8082
+      - 9092:9092
+    command:
+      - 'redpanda start'
+      - '--smp 1'
+      - '--overprovisioned'
+      - '--kafka-addr 0.0.0.0:9092'
+      - '--advertise-kafka-addr localhost:9092'
+      - '--pandaproxy-addr 0.0.0.0:8082'
+      - '--advertise-pandaproxy-addr localhost:8082'
+
