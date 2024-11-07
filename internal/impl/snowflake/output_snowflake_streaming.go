@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 	"sync"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
@@ -315,6 +316,14 @@ func newSnowflakeStreamer(
 		// stream to write to a single table.
 		channelPrefix = fmt.Sprintf("Redpanda_Connect_%s.%s.%s", db, schema, table)
 	}
+
+	// Normalize role, db and schema as they are case-sensitive in the API calls.
+	// Maybe we should use the golang SQL driver for SQL statements so we don't have
+	// to handle this, instead of the REST API directly.
+	role = strings.ToUpper(role)
+	db = strings.ToUpper(db)
+	schema = strings.ToUpper(schema)
+
 	var initStatementsFn func(context.Context, *streaming.SnowflakeRestClient) error
 	if conf.Contains(ssoFieldInitStatement) {
 		initStatements, err := conf.FieldString(ssoFieldInitStatement)
