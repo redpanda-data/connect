@@ -76,5 +76,3 @@ file:
 
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
 }
-
-// mysqldump --host=public-vultr-prod-a70dc516-1330-488a-bf57-712a3d91be58-vultr-pr.vultrdb.com --port=16751 --user=vultradmin --password=AVNS_fgGkgy43bJw3NzNwDCV --master-data --single-transaction --skip-lock-tables --compact --skip-opt --quick --no-create-info --skip-extended-insert --skip-tz-utc --hex-blob --column-statistics=0 defaultdb users
