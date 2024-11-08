@@ -294,7 +294,7 @@ func startSchemaRegistry(t *testing.T, pool *dockertest.Pool) int {
 		Repository:   "redpandadata/redpanda",
 		Tag:          "latest",
 		Hostname:     "redpanda",
-		ExposedPorts: []string{"8081"},
+		ExposedPorts: []string{"8081/tcp"},
 		Cmd: []string{
 			"redpanda",
 			"start",
@@ -305,7 +305,6 @@ func startSchemaRegistry(t *testing.T, pool *dockertest.Pool) int {
 		},
 	}
 
-	pool.MaxWait = time.Minute
 	resource, err := pool.RunWithOptions(options)
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -372,6 +371,7 @@ func TestSchemaRegistryIntegration(t *testing.T) {
 
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
+	pool.MaxWait = time.Minute
 
 	tests := []struct {
 		name                       string
