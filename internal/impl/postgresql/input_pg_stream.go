@@ -368,7 +368,7 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 					break
 				}
 
-				if !p.flushBatch(ctx, cp, flushedBatch, latestOffset, false) {
+				if err := p.flushBatch(ctx, cp, flushedBatch, latestOffset, false); err != nil {
 					break
 				}
 
@@ -384,7 +384,7 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 					break
 				}
 
-				if !p.flushBatch(ctx, cp, flushedBatch, latestOffset, true) {
+				if err = p.flushBatch(ctx, cp, flushedBatch, latestOffset, true); err != nil {
 					break
 				}
 
@@ -440,16 +440,10 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 						p.logger.Debugf("Flush batch error: %w", err)
 						break
 					}
-					if message.Mode == pglogicalstream.StreamModeStreaming {
-						if !p.flushBatch(ctx, cp, flushedBatch, latestOffset, true) {
-							break
-						}
-					} else {
-						if !p.flushBatch(ctx, cp, flushedBatch, latestOffset, false) {
-							break
-						}
+					waitForCommit := message.Mode == pglogicalstream.StreamModeStreaming
+					if err := p.flushBatch(ctx, cp, flushedBatch, latestOffset, waitForCommit); err != nil {
+						break
 					}
-
 				}
 			case <-ctx.Done():
 				if err = p.pgLogicalStream.Stop(); err != nil {
@@ -463,9 +457,9 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 	return err
 }
 
-func (p *pgStreamInput) flushBatch(ctx context.Context, checkpointer *checkpoint.Capped[*int64], msg service.MessageBatch, lsn *int64, waitForCommit bool) bool {
+func (p *pgStreamInput) flushBatch(ctx context.Context, checkpointer *checkpoint.Capped[*int64], msg service.MessageBatch, lsn *int64, waitForCommit bool) error {
 	if msg == nil {
-		return true
+		return nil
 	}
 
 	resolveFn, err := checkpointer.Track(ctx, lsn, int64(len(msg)))
@@ -473,41 +467,38 @@ func (p *pgStreamInput) flushBatch(ctx context.Context, checkpointer *checkpoint
 		if ctx.Err() == nil {
 			p.mgr.Logger().Errorf("Failed to checkpoint offset: %v\n", err)
 		}
-		return false
+		return err
 	}
 
-	commitChan := make(chan bool)
-	if !waitForCommit {
-		close(commitChan)
+	var wg sync.WaitGroup
+	if waitForCommit {
+		wg.Add(1)
+	}
+	ackFn := func(ctx context.Context, res error) error {
+		if waitForCommit {
+			defer wg.Done()
+		}
+		maxOffset := resolveFn()
+		if maxOffset == nil {
+			return nil
+		}
+		p.cMut.Lock()
+		defer p.cMut.Unlock()
+		if lsn == nil {
+			return nil
+		}
+		if err = p.pgLogicalStream.AckLSN(Int64ToLSN(*lsn)); err != nil {
+			return err
+		}
+		return nil
 	}
 	select {
-	case p.msgChan <- asyncMessage{
-		msg: msg,
-		ackFn: func(ctx context.Context, res error) error {
-			maxOffset := resolveFn()
-			if maxOffset == nil {
-				return nil
-			}
-			p.cMut.Lock()
-			defer p.cMut.Unlock()
-			if lsn != nil {
-				if err = p.pgLogicalStream.AckLSN(Int64ToLSN(*lsn)); err != nil {
-					return err
-				}
-				if waitForCommit {
-					close(commitChan)
-				}
-			}
-			return nil
-		},
-	}:
+	case p.msgChan <- asyncMessage{msg: msg, ackFn: ackFn}:
 	case <-ctx.Done():
-		return false
+		return ctx.Err()
 	}
-
-	<-commitChan
-
-	return true
+	wg.Wait() // Noop if !waitForCommit
+	return nil
 }
 
 func (p *pgStreamInput) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {

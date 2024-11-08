@@ -154,8 +154,6 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	var outputPlugin string
 	// check is replication slot exist to get last restart SLN
 
-	// TODO: There should be a helper method for this that also validates the parameters to fmt here are not possible to cause SQL injection.
-	// this means we either escape or we validate it's only alphanumeric and `-_`
 	connExecResult, err := stream.pgConn.Exec(
 		ctx,
 		fmt.Sprintf("SELECT confirmed_flush_lsn, plugin FROM pg_replication_slots WHERE slot_name = '%s'",
