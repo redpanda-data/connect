@@ -144,7 +144,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 
 	pubName := "pglog_stream_" + config.ReplicationSlotName
 	stream.logger.Infof("Creating publication %s for tables: %s", pubName, tableNames)
-	if err = CreatePublication(ctx, stream.pgConn, pubName, tableNames, true); err != nil {
+	if err = CreatePublication(ctx, stream.pgConn, pubName, tableNames); err != nil {
 		return nil, err
 	}
 	sysident, err := IdentifySystem(ctx, stream.pgConn)
