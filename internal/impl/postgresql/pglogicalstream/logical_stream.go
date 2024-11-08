@@ -22,6 +22,7 @@ import (
 	"github.com/jackc/pgx/v5/pgproto3"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -43,7 +44,8 @@ type Stream struct {
 	snapshotName               string
 	slotName                   string
 	schema                     string
-	tableNames                 []string
+	// includes schema
+	tableQualifiedName         []string
 	snapshotBatchSize          int
 	decodingPlugin             DecodingPlugin
 	decodingPluginArguments    []string
@@ -87,7 +89,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		streamUncommitted:          config.StreamUncommitted,
 		snapshotBatchSize:          config.BatchSize,
 		schema:                     config.DBSchema,
-		tableNames:                 tableNames,
+		tableQualifiedName:         tableNames,
 		consumedCallback:           make(chan bool),
 		transactionAckChan:         make(chan string),
 		transactionBeginChan:       make(chan bool),
@@ -121,6 +123,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	if stream.decodingPlugin == "pgoutput" {
 		pluginArguments = []string{
 			"proto_version '1'",
+			// Sprintf is safe because we validate ReplicationSlotName is alphanumeric in the config
 			fmt.Sprintf("publication_names 'pglog_stream_%s'", config.ReplicationSlotName),
 		}
 
@@ -131,7 +134,8 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		tablesFilterRule := strings.Join(tableNames, ", ")
 		pluginArguments = []string{
 			"\"pretty-print\" 'true'",
-			"\"add-tables\"" + " " + fmt.Sprintf("'%s'", tablesFilterRule),
+			// TODO: Validate this is escaped properly
+			fmt.Sprintf(`"add-tables" '%s'`, tablesFilterRule),
 		}
 	} else {
 		return nil, fmt.Errorf("unknown decoding plugin: %q", stream.decodingPlugin)
@@ -154,11 +158,11 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	var outputPlugin string
 	// check is replication slot exist to get last restart SLN
 
-	connExecResult, err := stream.pgConn.Exec(
-		ctx,
-		fmt.Sprintf("SELECT confirmed_flush_lsn, plugin FROM pg_replication_slots WHERE slot_name = '%s'",
-			config.ReplicationSlotName),
-	).ReadAll()
+	s, err := sanitize.SanitizeSQL("SELECT confirmed_flush_lsn, plugin FROM pg_replication_slots WHERE slot_name = $1", config.ReplicationSlotName)
+	if err != nil {
+		return nil, err
+	}
+	connExecResult, err := stream.pgConn.Exec(ctx, s).ReadAll()
 	if err != nil {
 		return nil, err
 	}
@@ -547,7 +551,7 @@ func (s *Stream) processSnapshot(ctx context.Context) error {
 
 	var wg errgroup.Group
 
-	for _, table := range s.tableNames {
+	for _, table := range s.tableQualifiedName {
 		tableName := table
 		wg.Go(func() (err error) {
 			s.logger.Infof("Processing snapshot for table: %v", table)
@@ -710,14 +714,17 @@ func (s *Stream) cleanUpOnFailure(ctx context.Context) error {
 }
 
 func (s *Stream) getPrimaryKeyColumn(tableName string) (string, error) {
-	q := fmt.Sprintf(`
+	q, err := sanitize.SanitizeSQL(`
 		SELECT a.attname
 		FROM   pg_index i
 		JOIN   pg_attribute a ON a.attrelid = i.indrelid
 							AND a.attnum = ANY(i.indkey)
-		WHERE  i.indrelid = '%s'::regclass
+		WHERE  i.indrelid = $1::regclass
 		AND    i.indisprimary;
 	`, tableName)
+	if err != nil {
+		return "", err
+	}
 
 	reader := s.pgConn.Exec(context.Background(), q)
 	data, err := reader.ReadAll()
