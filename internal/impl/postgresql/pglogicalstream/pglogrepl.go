@@ -338,7 +338,7 @@ func DropReplicationSlot(ctx context.Context, conn *pgconn.PgConn, slotName stri
 }
 
 // CreatePublication creates a new PostgreSQL publication with the given name for a list of tables and drop if exists flag
-func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName string, tables []string, dropIfExist bool) error {
+func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName string, tables []string) error {
 	result := conn.Exec(ctx, fmt.Sprintf("DROP PUBLICATION IF EXISTS %s;", publicationName))
 	if _, err := result.ReadAll(); err != nil {
 		return nil

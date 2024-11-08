@@ -226,7 +226,7 @@ func TestStartReplication(t *testing.T) {
 
 	// create publication
 	publicationName := "test_publication"
-	err = CreatePublication(context.Background(), conn, publicationName, []string{}, true)
+	err = CreatePublication(context.Background(), conn, publicationName, []string{})
 	require.NoError(t, err)
 
 	_, err = CreateReplicationSlot(ctx, conn, slotName, outputPlugin, CreateReplicationSlotOptions{Temporary: false, SnapshotAction: "export"}, 16, nil)
