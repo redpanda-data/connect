@@ -13,13 +13,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
+	"time"
+
 	"github.com/Jeffail/checkpoint"
 	"github.com/go-mysql-org/go-mysql/canal"
 	mysqlReplications "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/go-sql-driver/mysql"
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"sync"
 )
 
 const (
@@ -66,6 +68,7 @@ type mysqlStreamInput struct {
 	mysqlConfig *mysql.Config
 	canal.DummyEventHandler
 	startBinLogPosition *mysqlReplications.Position
+	currentLogPosition  *mysqlReplications.Position
 
 	dsn            string
 	tables         []string
@@ -81,7 +84,8 @@ type mysqlStreamInput struct {
 
 func newMySQLStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s service.BatchInput, err error) {
 	streamInput := mysqlStreamInput{
-		logger: mgr.Logger(),
+		logger:  mgr.Logger(),
+		msgChan: make(chan asyncMessage),
 	}
 
 	if streamInput.dsn, err = conf.FieldString(fieldMySQLDSN); err != nil {
@@ -112,7 +116,7 @@ func newMySQLStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s 
 			binLogPositionBytes, cErr := c.Get(context.Background(), binLogCacheKey)
 			if err != nil {
 				if !errors.Is(cErr, service.ErrKeyNotFound) {
-					mgr.Logger().With("error", cErr.Error()).Error("Failed to obtain cursor cache item.")
+					mgr.Logger().Errorf("failed to obtain cursor cache item. %v", cErr)
 				}
 				return
 			}
@@ -132,6 +136,8 @@ func newMySQLStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s 
 
 	i := &streamInput
 
+	mgr.Logger().Info("Starting MySQL stream input")
+
 	r, err := service.AutoRetryNacksBatchedToggled(conf, i)
 	if err != nil {
 		return nil, err
@@ -144,7 +150,9 @@ func init() {
 	err := service.RegisterBatchInput(
 		"mysql_stream", mysqlStreamConfigSpec,
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
-			return newMySQLStreamInput(conf, mgr)
+			s, err := newMySQLStreamInput(conf, mgr)
+			fmt.Println("New service", err)
+			return s, err
 		})
 	if err != nil {
 		panic(err)
@@ -155,10 +163,12 @@ func init() {
 
 func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 	canalConfig := canal.NewDefaultConfig()
+	canalConfig.Flavor = i.flavor
 	canalConfig.Addr = i.mysqlConfig.Addr
 	canalConfig.User = i.mysqlConfig.User
 	canalConfig.Password = i.mysqlConfig.Passwd
 	canalConfig.Dump.TableDB = i.mysqlConfig.DBName
+	fmt.Println(i.mysqlConfig.Passwd, i.mysqlConfig.User, i.mysqlConfig.Addr, i.mysqlConfig.DBName)
 
 	// Parse and set additional parameters
 	canalConfig.Charset = i.mysqlConfig.Collation
@@ -172,9 +182,7 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-
-	// register event handler
-	c.SetEventHandler(i)
+	c.AddDumpTables(i.mysqlConfig.DBName, i.tables...)
 
 	i.canal = c
 	go i.startMySQLSync()
@@ -182,11 +190,15 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 }
 
 func (i *mysqlStreamInput) startMySQLSync() {
+	i.canal.SetEventHandler(i)
+	fmt.Println("Starting MySQL sync")
 	// If we require snapshot streaming && we don't have a binlog position cache
 	// initiate default run for Canal to process snapshot and start incremental sync of binlog
 	if i.streamSnapshot && i.startBinLogPosition == nil {
 		// Doesn't work at the moment
+		fmt.Println("Run binglo sync....")
 		if err := i.canal.Run(); err != nil {
+			fmt.Println("Mysql stream error: ", err)
 			panic(err)
 		}
 	} else {
@@ -196,6 +208,7 @@ func (i *mysqlStreamInput) startMySQLSync() {
 			coords = *i.startBinLogPosition
 		}
 
+		i.currentLogPosition = &coords
 		if err := i.canal.RunFrom(coords); err != nil {
 			panic(err)
 		}
@@ -239,6 +252,10 @@ func (i *mysqlStreamInput) flushBatch(ctx context.Context, checkpointer *checkpo
 }
 
 func (i *mysqlStreamInput) onMessage(e *canal.RowsEvent, params ProcessEventParams) error {
+	i.cMut.Lock()
+	i.currentLogPosition.Pos = e.Header.LogPos
+	i.cMut.Unlock()
+
 	for i := params.initValue; i < len(e.Rows); i += params.incrementValue {
 		message := map[string]any{}
 		for i, v := range e.Rows[i] {
@@ -247,6 +264,10 @@ func (i *mysqlStreamInput) onMessage(e *canal.RowsEvent, params ProcessEventPara
 
 		fmt.Println("mysql row", message)
 	}
+
+	// update cache checkpoint
+	fmt.Println("Log position.....", i.currentLogPosition.Pos, i.currentLogPosition.Name)
+
 	return nil
 }
 
@@ -257,6 +278,8 @@ func (i *mysqlStreamInput) ReadBatch(ctx context.Context) (service.MessageBatch,
 	if msgChan == nil {
 		return nil, nil, service.ErrNotConnected
 	}
+
+	time.Sleep(time.Second * 10)
 
 	select {
 	case m, open := <-msgChan:

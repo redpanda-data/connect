@@ -9,10 +9,72 @@
 package mysql
 
 import (
-	"github.com/redpanda-data/benthos/v4/public/service/integration"
+	"context"
+	"fmt"
+	"os"
+	"sync"
 	"testing"
+	"time"
+
+	_ "github.com/redpanda-data/benthos/v4/public/components/io"
+	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
+	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestIntegrationMySQLCDC(t *testing.T) {
-	integration.CheckSkip(t)
+	mysqlDsn := os.Getenv("LOCAL_MYSQL_DSN")
+	tmpDir := t.TempDir()
+
+	fmt.Println("TMP Ditr: ", tmpDir)
+	template := fmt.Sprintf(`
+mysql_stream:
+  dsn: %s
+  stream_snapshot: false
+  checkpoint_key: binlogpos
+  tables:
+    - users
+  checkpoint_key: foocache
+  flavor: mysql
+`, mysqlDsn)
+
+	cacheConf := fmt.Sprintf(`
+label: mysql_stream_cache
+file:
+  directory: %v`, tmpDir)
+
+	streamOutBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: INFO`))
+	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
+	require.NoError(t, streamOutBuilder.AddInputYAML(template))
+
+	var outBatches []string
+	var outBatchMut sync.Mutex
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
+		msgBytes, err := mb[0].AsBytes()
+		require.NoError(t, err)
+		outBatchMut.Lock()
+		outBatches = append(outBatches, string(msgBytes))
+		outBatchMut.Unlock()
+		return nil
+	}))
+
+	streamOut, err := streamOutBuilder.Build()
+	require.NoError(t, err)
+
+	go func() {
+		err = streamOut.Run(context.Background())
+		require.NoError(t, err)
+	}()
+
+	assert.Eventually(t, func() bool {
+		outBatchMut.Lock()
+		defer outBatchMut.Unlock()
+		return len(outBatches) == 10000
+	}, time.Minute*5, time.Millisecond*100)
+
+	require.NoError(t, streamOut.StopWithin(time.Second*10))
 }
+
+// mysqldump --host=public-vultr-prod-a70dc516-1330-488a-bf57-712a3d91be58-vultr-pr.vultrdb.com --port=16751 --user=vultradmin --password=AVNS_fgGkgy43bJw3NzNwDCV --master-data --single-transaction --skip-lock-tables --compact --skip-opt --quick --no-create-info --skip-extended-insert --skip-tz-utc --hex-blob --column-statistics=0 defaultdb users
