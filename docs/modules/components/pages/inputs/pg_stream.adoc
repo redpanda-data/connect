@@ -133,7 +133,7 @@ If set to true, the plugin will stream uncommitted transactions before receiving
 
 === `stream_snapshot`
 
-When set to true, the plugin will first stream a snapshot of all existing data in the database before streaming changes.
+When set to true, the plugin will first stream a snapshot of all existing data in the database before streaming changes. In order to use this the tables that are being snapshot MUST have a primary key set so that reading from the table can be parallelized.
 
 
 *Type*: `bool`
