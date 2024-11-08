@@ -57,7 +57,7 @@ Additionally, if ` + "`" + fieldStreamSnapshot + "`" + ` is set to true, then th
 == Metadata
 
 This input adds the following metadata fields to each message:
-- is_streaming (Boolean indicating whether the message is part of a streaming operation or snapshot processing)
+- mode (Either "streaming" or "snapshot" indicating whether the message is part of a streaming operation or snapshot processing)
 - table (Name of the table that the message originated from)
 - operation (Type of operation that generated the message, such as INSERT, UPDATE, or DELETE)
 		`).
