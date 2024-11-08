@@ -12,7 +12,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -401,8 +400,7 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 
 				batchMsg := service.NewMessage(mb)
 
-				streaming := strconv.FormatBool(message.IsStreaming)
-				batchMsg.MetaSet("streaming", streaming)
+				batchMsg.MetaSet("mode", string(message.Mode))
 				batchMsg.MetaSet("table", message.Changes[0].Table)
 				batchMsg.MetaSet("operation", message.Changes[0].Operation)
 				if message.Changes[0].TableSnapshotProgress != nil {
@@ -419,7 +417,7 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 						p.logger.Debugf("Flush batch error: %w", err)
 						break
 					}
-					if message.IsStreaming {
+					if message.Mode == pglogicalstream.StreamModeStreaming {
 						if !p.flushBatch(ctx, cp, flushedBatch, latestOffset, true) {
 							break
 						}

@@ -448,7 +448,7 @@ func (s *Stream) streamMessagesAsync() {
 									Changes: []StreamMessageChanges{
 										*message,
 									},
-									IsStreaming: true,
+									Mode:        StreamModeStreaming,
 									WALLagBytes: &metrics.WalLagInBytes,
 								}
 							}
@@ -511,7 +511,7 @@ func (s *Stream) streamMessagesAsync() {
 								s.messages <- StreamMessage{
 									Lsn:         &lsn,
 									Changes:     pgoutputChanges,
-									IsStreaming: true,
+									Mode:        StreamModeStreaming,
 									WALLagBytes: &metrics.WalLagInBytes,
 								}
 							}
@@ -661,7 +661,7 @@ func (s *Stream) processSnapshot(ctx context.Context) error {
 
 					tableProgress := s.monitor.GetSnapshotProgressForTable(tableWithoutSchema)
 					snapshotChangePacket.Changes[0].TableSnapshotProgress = &tableProgress
-					snapshotChangePacket.IsStreaming = false
+					snapshotChangePacket.Mode = StreamModeSnapshot
 
 					waitingFromBenthos := time.Now()
 					s.messages <- snapshotChangePacket

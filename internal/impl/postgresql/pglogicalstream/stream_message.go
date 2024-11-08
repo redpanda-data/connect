@@ -25,10 +25,17 @@ type StreamMessageMetrics struct {
 	IsStreaming bool   `json:"is_streaming"`
 }
 
+type StreamMode string
+
+const (
+	StreamModeStreaming StreamMode = "streaming"
+	StreamModeSnapshot  StreamMode = "snapshot"
+)
+
 // StreamMessage represents a single message after it has been decoded by the plugin
 type StreamMessage struct {
 	Lsn         *string                `json:"lsn"`
 	Changes     []StreamMessageChanges `json:"changes"`
-	IsStreaming bool                   `json:"is_streaming"`
+	Mode        StreamMode             `json:"mode"`
 	WALLagBytes *int64                 `json:"wal_lag_bytes"`
 }
