@@ -12,6 +12,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -147,6 +148,10 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		dbSlotName = uuid.NewString()
 	}
 
+	if err := validateSimpleString(dbSlotName); err != nil {
+		return nil, fmt.Errorf("invalid slot_name: %w", err)
+	}
+
 	temporarySlot, err = conf.FieldBool(fieldTemporarySlot)
 	if err != nil {
 		return nil, err
@@ -256,6 +261,24 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	}
 
 	return conf.WrapBatchInputExtractTracingSpanMapping("pg_stream", r)
+}
+
+// validateSimpleString ensures we aren't vuln to SQL injection
+func validateSimpleString(s string) error {
+	for _, b := range []byte(s) {
+		isDigit := b >= '0' && b <= '9'
+		isLower := b >= 'a' && b <= 'z'
+		isUpper := b >= 'A' && b <= 'Z'
+		isDelimiter := b == '_' || b == '-'
+		if !isDigit && !isLower && !isUpper && !isDelimiter {
+			return fmt.Errorf("invalid postgres identifier %q", s)
+		}
+	}
+	// See: https://github.com/jackc/pgx/security/advisories/GHSA-m7wr-2xf7-cm9p
+	if strings.Contains(s, "--") {
+		return fmt.Errorf("invalid postgres identifier %q", s)
+	}
+	return nil
 }
 
 func init() {
