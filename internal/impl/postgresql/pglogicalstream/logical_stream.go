@@ -81,6 +81,9 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	}
 
 	tableNames := slices.Clone(config.DBTables)
+	for i, table := range tableNames {
+		tableNames[i] = fmt.Sprintf("%s.%s", config.DBSchema, table)
+	}
 	stream := &Stream{
 		pgConn:                     dbConn,
 		messages:                   make(chan StreamMessage),
@@ -97,10 +100,6 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		logger:                     config.Logger,
 		m:                          sync.Mutex{},
 		decodingPlugin:             decodingPluginFromString(config.DecodingPlugin),
-	}
-
-	for i, table := range tableNames {
-		tableNames[i] = fmt.Sprintf("%s.%s", config.DBSchema, table)
 	}
 
 	var version int

@@ -475,6 +475,13 @@ func (p *pgStreamInput) flushBatch(ctx context.Context, checkpointer *checkpoint
 		wg.Add(1)
 	}
 	ackFn := func(ctx context.Context, res error) error {
+		// This waits for *THIS MESSAGE* to get acked, which is
+		// not when we actually ack this LSN because of out of order
+		// processing might cause another message to actually resolve
+		// the proper checkpointer to commit.
+		//
+		// This waitForCommit business probably needs to happen inside
+		// the ack stream not here.
 		if waitForCommit {
 			defer wg.Done()
 		}

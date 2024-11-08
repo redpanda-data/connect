@@ -344,6 +344,7 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 		return nil
 	}
 
+	// TODO(rockwood): We need to validate the tables don't contain a SQL injection attack
 	tablesSchemaFilter := "FOR TABLE " + strings.Join(tables, ",")
 	if len(tables) == 0 {
 		tablesSchemaFilter = "FOR ALL TABLES"
