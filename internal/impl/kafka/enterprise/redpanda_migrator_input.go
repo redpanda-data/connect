@@ -10,20 +10,17 @@ package enterprise
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"regexp"
 	"slices"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/Jeffail/shutdown"
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
-	"github.com/twmb/franz-go/pkg/sasl"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
@@ -32,6 +29,17 @@ import (
 
 const (
 	rpriDefaultLabel = "redpanda_migrator_input"
+)
+
+const (
+	rmiFieldConsumerGroup             = "consumer_group"
+	rmiFieldCommitPeriod              = "commit_period"
+	rmiFieldMultiHeader               = "multi_header"
+	rmiFieldBatchSize                 = "batch_size"
+	rmiFieldTopicLagRefreshPeriod     = "topic_lag_refresh_period"
+	rmiFieldOutputResource            = "output_resource"
+	rmiFieldReplicationFactorOverride = "replication_factor_override"
+	rmiFieldReplicationFactor         = "replication_factor"
 )
 
 func redpandaMigratorInputConfig() *service.ConfigSpec {
@@ -77,6 +85,10 @@ root = if $has_topic_partitions {
   } else if this.regexp_topics {
     "this input does not support both regular expression topics and explicit topic partitions"
   }
+} else {
+  if this.consumer_group.or("") == "" {
+    "a consumer group is mandatory when not using explicit topic partitions"
+  }
 }
 `)
 }
@@ -84,79 +96,44 @@ root = if $has_topic_partitions {
 // RedpandaMigratorInputConfigFields returns the full suite of config fields for a `redpanda_migrator` input using the
 // franz-go client library.
 func RedpandaMigratorInputConfigFields() []*service.ConfigField {
-	return []*service.ConfigField{
-		service.NewStringListField("seed_brokers").
-			Description("A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses.").
-			Example([]string{"localhost:9092"}).
-			Example([]string{"foo:9092", "bar:9092"}).
-			Example([]string{"foo:9092,bar:9092"}),
-		service.NewStringListField("topics").
-			Description(`
-A list of topics to consume from. Multiple comma separated topics can be listed in a single element. When a ` + "`consumer_group`" + ` is specified partitions are automatically distributed across consumers of a topic, otherwise all partitions are consumed.
-
-Alternatively, it's possible to specify explicit partitions to consume from with a colon after the topic name, e.g. ` + "`foo:0`" + ` would consume the partition 0 of the topic foo. This syntax supports ranges, e.g. ` + "`foo:0-10`" + ` would consume partitions 0 through to 10 inclusive.
-
-Finally, it's also possible to specify an explicit offset to consume from by adding another colon after the partition, e.g. ` + "`foo:0:10`" + ` would consume the partition 0 of the topic foo starting from the offset 10. If the offset is not present (or remains unspecified) then the field ` + "`start_from_oldest`" + ` determines which offset to start from.`).
-			Example([]string{"foo", "bar"}).
-			Example([]string{"things.*"}).
-			Example([]string{"foo,bar"}).
-			Example([]string{"foo:0", "bar:1", "bar:3"}).
-			Example([]string{"foo:0,bar:1,bar:3"}).
-			Example([]string{"foo:0-5"}),
-		service.NewBoolField("regexp_topics").
-			Description("Whether listed topics should be interpreted as regular expression patterns for matching multiple topics. When topics are specified with explicit partitions this field must remain set to `false`.").
-			Default(false),
-		service.NewStringField("consumer_group").
-			Description("An optional consumer group to consume as. When specified the partitions of specified topics are automatically distributed across consumers sharing a consumer group, and partition offsets are automatically committed and resumed under this name. Consumer groups are not supported when specifying explicit partitions to consume from in the `topics` field.").
-			Optional(),
-		service.NewStringField("client_id").
-			Description("An identifier for the client connection.").
-			Default("benthos").
-			Advanced(),
-		service.NewStringField("rack_id").
-			Description("A rack identifier for this client.").
-			Default("").
-			Advanced(),
-		service.NewIntField("batch_size").
-			Description("The maximum number of messages that should be accumulated into each batch.").
-			Default(1024).
-			Advanced(),
-		service.NewAutoRetryNacksToggleField(),
-		service.NewDurationField("commit_period").
-			Description("The period of time between each commit of the current partition offsets. Offsets are always committed during shutdown.").
-			Default("5s").
-			Advanced(),
-		service.NewBoolField("start_from_oldest").
-			Description("Determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset. The setting is applied when creating a new consumer group or the saved offset no longer exists.").
-			Default(true).
-			Advanced(),
-		service.NewTLSToggledField("tls"),
-		kafka.SASLFields(),
-		service.NewBoolField("multi_header").Description("Decode headers into lists to allow handling of multiple values with the same key").Default(false).Advanced(),
-		service.NewBatchPolicyField("batching").
-			Description("Allows you to configure a xref:configuration:batching.adoc[batching policy] that applies to individual topic partitions in order to batch messages together before flushing them for processing. Batching can be beneficial for performance as well as useful for windowed processing, and doing so this way preserves the ordering of topic partitions.").
-			Advanced(),
-		service.NewDurationField("topic_lag_refresh_period").
-			Description("The period of time between each topic lag refresh cycle.").
-			Default("5s").
-			Advanced(),
-		service.NewStringField("output_resource").
-			Description("The label of the redpanda_migrator output in which the currently selected topics need to be created before attempting to read messages.").
-			Default(rproDefaultLabel).
-			Advanced(),
-		service.NewBoolField("replication_factor_override").
-			Description("Use the specified replication factor when creating topics.").
-			Default(true).
-			Advanced(),
-		service.NewIntField("replication_factor").
-			Description("Replication factor for created topics. This is only used when `replication_factor_override` is set to `true`.").
-			Default(3).
-			Advanced(),
-		service.NewDurationField("metadata_max_age").
-			Description("The maximum age of metadata before it is refreshed.").
-			Default("5m").
-			Advanced(),
-	}
+	return slices.Concat(
+		kafka.FranzConnectionFields(),
+		kafka.FranzConsumerFields(),
+		[]*service.ConfigField{
+			service.NewStringField(rmiFieldConsumerGroup).
+				Description("An optional consumer group to consume as. When specified the partitions of specified topics are automatically distributed across consumers sharing a consumer group, and partition offsets are automatically committed and resumed under this name. Consumer groups are not supported when specifying explicit partitions to consume from in the `topics` field.").
+				Optional(),
+			service.NewDurationField(rmiFieldCommitPeriod).
+				Description("The period of time between each commit of the current partition offsets. Offsets are always committed during shutdown.").
+				Default("5s").
+				Advanced(),
+			service.NewBoolField(rmiFieldMultiHeader).
+				Description("Decode headers into lists to allow handling of multiple values with the same key").
+				Default(false).
+				Advanced(),
+			service.NewIntField(rmiFieldBatchSize).
+				Description("The maximum number of messages that should be accumulated into each batch.").
+				Default(1024).
+				Advanced(),
+			service.NewAutoRetryNacksToggleField(),
+			service.NewDurationField(rmiFieldTopicLagRefreshPeriod).
+				Description("The period of time between each topic lag refresh cycle.").
+				Default("5s").
+				Advanced(),
+			service.NewStringField(rmiFieldOutputResource).
+				Description("The label of the redpanda_migrator output in which the currently selected topics need to be created before attempting to read messages.").
+				Default(rproDefaultLabel).
+				Advanced(),
+			service.NewBoolField(rmiFieldReplicationFactorOverride).
+				Description("Use the specified replication factor when creating topics.").
+				Default(true).
+				Advanced(),
+			service.NewIntField(rmiFieldReplicationFactor).
+				Description("Replication factor for created topics. This is only used when `replication_factor_override` is set to `true`.").
+				Default(3).
+				Advanced(),
+		},
+	)
 }
 
 func init() {
@@ -177,26 +154,21 @@ func init() {
 
 // RedpandaMigratorReader implements a kafka reader using the franz-go library.
 type RedpandaMigratorReader struct {
-	SeedBrokers               []string
-	topics                    []string
-	topicPatterns             []*regexp.Regexp
-	topicPartitions           map[string]map[int32]kgo.Offset
-	clientID                  string
-	rackID                    string
+	clientDetails   *kafka.FranzConnectionDetails
+	consumerDetails *kafka.FranzConsumerDetails
+
+	clientLabel string
+
+	topicPatterns []*regexp.Regexp
+
 	consumerGroup             string
-	TLSConf                   *tls.Config
-	saslConfs                 []sasl.Mechanism
-	batchSize                 int
-	startFromOldest           bool
 	commitPeriod              time.Duration
-	regexPattern              bool
 	multiHeader               bool
-	batchPolicy               service.BatchPolicy
-	metadataMaxAge            time.Duration
+	batchSize                 int
 	topicLagRefreshPeriod     time.Duration
+	outputResource            string
 	replicationFactorOverride bool
 	replicationFactor         int
-	outputResource            string
 
 	connMut             sync.Mutex
 	readMut             sync.Mutex
@@ -218,50 +190,18 @@ func NewRedpandaMigratorReaderFromConfig(conf *service.ParsedConfig, mgr *servic
 		topicLagGauge: mgr.Metrics().NewGauge("input_redpanda_migrator_lag", "topic", "partition"),
 	}
 
-	brokerList, err := conf.FieldStringList("seed_brokers")
-	if err != nil {
+	var err error
+
+	if r.clientDetails, err = kafka.FranzConnectionDetailsFromConfig(conf, mgr.Logger()); err != nil {
 		return nil, err
 	}
-	for _, b := range brokerList {
-		r.SeedBrokers = append(r.SeedBrokers, strings.Split(b, ",")...)
-	}
-
-	if r.startFromOldest, err = conf.FieldBool("start_from_oldest"); err != nil {
+	if r.consumerDetails, err = kafka.FranzConsumerDetailsFromConfig(conf); err != nil {
 		return nil, err
 	}
 
-	topicList, err := conf.FieldStringList("topics")
-	if err != nil {
-		return nil, err
-	}
-
-	var defaultOffset int64 = -1
-	if r.startFromOldest {
-		defaultOffset = -2
-	}
-
-	var topicPartitions map[string]map[int32]int64
-	if r.topics, topicPartitions, err = kafka.ParseTopics(topicList, defaultOffset, true); err != nil {
-		return nil, err
-	}
-	if len(topicPartitions) > 0 {
-		r.topicPartitions = map[string]map[int32]kgo.Offset{}
-		for topic, partitions := range topicPartitions {
-			partMap := map[int32]kgo.Offset{}
-			for part, offset := range partitions {
-				partMap[part] = kgo.NewOffset().At(offset)
-			}
-			r.topicPartitions[topic] = partMap
-		}
-	}
-
-	if r.regexPattern, err = conf.FieldBool("regexp_topics"); err != nil {
-		return nil, err
-	}
-
-	if r.regexPattern {
-		r.topicPatterns = make([]*regexp.Regexp, 0, len(r.topics))
-		for _, topic := range r.topics {
+	if r.consumerDetails.RegexPattern {
+		r.topicPatterns = make([]*regexp.Regexp, 0, len(r.consumerDetails.Topics))
+		for _, topic := range r.consumerDetails.Topics {
 			tp, err := regexp.Compile(topic)
 			if err != nil {
 				return nil, fmt.Errorf("failed to compile topic regex %q: %s", topic, err)
@@ -270,97 +210,49 @@ func NewRedpandaMigratorReaderFromConfig(conf *service.ParsedConfig, mgr *servic
 		}
 	}
 
-	if r.clientID, err = conf.FieldString("client_id"); err != nil {
+	if conf.Contains(rmiFieldConsumerGroup) {
+		if r.consumerGroup, err = conf.FieldString(rmiFieldConsumerGroup); err != nil {
+			return nil, err
+		}
+	}
+
+	if r.batchSize, err = conf.FieldInt(rmiFieldBatchSize); err != nil {
 		return nil, err
 	}
 
-	if r.rackID, err = conf.FieldString("rack_id"); err != nil {
+	if r.commitPeriod, err = conf.FieldDuration(rmiFieldCommitPeriod); err != nil {
 		return nil, err
 	}
 
-	if r.consumerGroup, err = conf.FieldString("consumer_group"); err != nil {
+	if r.multiHeader, err = conf.FieldBool(rmiFieldMultiHeader); err != nil {
 		return nil, err
 	}
 
-	if r.batchSize, err = conf.FieldInt("batch_size"); err != nil {
+	if r.topicLagRefreshPeriod, err = conf.FieldDuration(rmiFieldTopicLagRefreshPeriod); err != nil {
 		return nil, err
 	}
 
-	if r.commitPeriod, err = conf.FieldDuration("commit_period"); err != nil {
+	if r.replicationFactorOverride, err = conf.FieldBool(rmiFieldReplicationFactorOverride); err != nil {
 		return nil, err
 	}
 
-	if r.batchPolicy, err = conf.FieldBatchPolicy("batching"); err != nil {
+	if r.replicationFactor, err = conf.FieldInt(rmiFieldReplicationFactor); err != nil {
 		return nil, err
 	}
 
-	tlsConf, tlsEnabled, err := conf.FieldTLSToggled("tls")
-	if err != nil {
-		return nil, err
-	}
-	if tlsEnabled {
-		r.TLSConf = tlsConf
-	}
-	if r.multiHeader, err = conf.FieldBool("multi_header"); err != nil {
-		return nil, err
-	}
-	if r.saslConfs, err = kafka.SASLMechanismsFromConfig(conf); err != nil {
+	if r.outputResource, err = conf.FieldString(rmiFieldOutputResource); err != nil {
 		return nil, err
 	}
 
-	if r.metadataMaxAge, err = conf.FieldDuration("metadata_max_age"); err != nil {
-		return nil, err
-	}
-
-	if r.topicLagRefreshPeriod, err = conf.FieldDuration("topic_lag_refresh_period"); err != nil {
-		return nil, err
-	}
-
-	if r.replicationFactorOverride, err = conf.FieldBool("replication_factor_override"); err != nil {
-		return nil, err
-	}
-
-	if r.replicationFactor, err = conf.FieldInt("replication_factor"); err != nil {
-		return nil, err
-	}
-
-	if r.outputResource, err = conf.FieldString("output_resource"); err != nil {
-		return nil, err
-	}
-
-	if label := mgr.Label(); label != "" {
-		mgr.SetGeneric(mgr.Label(), &r)
-	} else {
-		mgr.SetGeneric(rpriDefaultLabel, &r)
+	if r.clientLabel = mgr.Label(); r.clientLabel == "" {
+		r.clientLabel = rpriDefaultLabel
 	}
 
 	return &r, nil
 }
 
 func (r *RedpandaMigratorReader) recordToMessage(record *kgo.Record) *service.Message {
-	msg := service.NewMessage(record.Value)
-	msg.MetaSetMut("kafka_key", record.Key)
-	msg.MetaSetMut("kafka_topic", record.Topic)
-	msg.MetaSetMut("kafka_partition", int(record.Partition))
-	msg.MetaSetMut("kafka_offset", int(record.Offset))
-	msg.MetaSetMut("kafka_timestamp_unix", record.Timestamp.Unix())
-	msg.MetaSetMut("kafka_tombstone_message", record.Value == nil)
-	if r.multiHeader {
-		// in multi header mode we gather headers so we can encode them as lists
-		headers := map[string][]any{}
-
-		for _, hdr := range record.Headers {
-			headers[hdr.Key] = append(headers[hdr.Key], string(hdr.Value))
-		}
-
-		for key, values := range headers {
-			msg.MetaSetMut(key, values)
-		}
-	} else {
-		for _, hdr := range record.Headers {
-			msg.MetaSetMut(hdr.Key, string(hdr.Value))
-		}
-	}
+	msg := kafka.FranzRecordToMessageV0(record, r.multiHeader)
 
 	lag := int64(0)
 	if val, ok := r.topicLagCache.Load(fmt.Sprintf("%s_%d", record.Topic, record.Partition)); ok {
@@ -393,41 +285,17 @@ func (r *RedpandaMigratorReader) Connect(ctx context.Context) error {
 		return service.ErrEndOfInput
 	}
 
-	var initialOffset kgo.Offset
-	if r.startFromOldest {
-		initialOffset = kgo.NewOffset().AtStart()
-	} else {
-		initialOffset = kgo.NewOffset().AtEnd()
-	}
-
-	clientOpts := []kgo.Opt{
-		kgo.SeedBrokers(r.SeedBrokers...),
-		kgo.ConsumeTopics(r.topics...),
-		kgo.ConsumePartitions(r.topicPartitions),
-		kgo.ConsumeResetOffset(initialOffset),
-		kgo.SASL(r.saslConfs...),
-		kgo.ConsumerGroup(r.consumerGroup),
-		kgo.ClientID(r.clientID),
-		kgo.Rack(r.rackID),
-		kgo.MetadataMaxAge(r.metadataMaxAge),
-	}
-
+	clientOpts := append([]kgo.Opt{}, r.clientDetails.FranzOpts()...)
+	clientOpts = append(clientOpts, r.consumerDetails.FranzOpts()...)
 	if r.consumerGroup != "" {
 		clientOpts = append(clientOpts,
 			// TODO: Do we need to do anything in `kgo.OnPartitionsRevoked()` / `kgo.OnPartitionsLost()`
+			kgo.ConsumerGroup(r.consumerGroup),
 			kgo.AutoCommitMarks(),
 			kgo.BlockRebalanceOnPoll(),
 			kgo.AutoCommitInterval(r.commitPeriod),
 			kgo.WithLogger(&kafka.KGoLogger{L: r.mgr.Logger()}),
 		)
-	}
-
-	if r.TLSConf != nil {
-		clientOpts = append(clientOpts, kgo.DialTLSConfig(r.TLSConf))
-	}
-
-	if r.regexPattern {
-		clientOpts = append(clientOpts, kgo.ConsumeRegex())
 	}
 
 	var err error
@@ -438,6 +306,13 @@ func (r *RedpandaMigratorReader) Connect(ctx context.Context) error {
 	// Check connectivity to cluster
 	if err = r.client.Ping(ctx); err != nil {
 		return fmt.Errorf("failed to connect to cluster: %s", err)
+	}
+
+	if err = kafka.FranzSharedClientSet(r.clientLabel, &kafka.FranzSharedClientInfo{
+		Client:      r.client,
+		ConnDetails: r.clientDetails,
+	}, r.mgr); err != nil {
+		r.mgr.Logger().With("error", err).Warn("Failed to store client connection for sharing")
 	}
 
 	go func() {
@@ -530,7 +405,7 @@ func (r *RedpandaMigratorReader) ReadBatch(ctx context.Context) (service.Message
 
 	// TODO: Is there a way to get the actual selected topics instead of all of them?
 	topics := r.client.GetConsumeTopics()
-	if r.regexPattern {
+	if r.consumerDetails.RegexPattern {
 		topics = slices.DeleteFunc(topics, func(topic string) bool {
 			for _, tp := range r.topicPatterns {
 				if tp.MatchString(topic) {
@@ -543,21 +418,14 @@ func (r *RedpandaMigratorReader) ReadBatch(ctx context.Context) (service.Message
 
 	if len(topics) > 0 {
 		r.mgr.Logger().Debugf("Consuming from topics: %s", topics)
-	} else if r.regexPattern {
+	} else if r.consumerDetails.RegexPattern {
 		r.mgr.Logger().Warn("No matching topics found")
 	}
 
 	if !r.outputTopicsCreated {
-		var output *RedpandaMigratorWriter
-		if res, ok := r.mgr.GetGeneric(r.outputResource); ok {
-			output = res.(*RedpandaMigratorWriter)
-		} else {
-			r.mgr.Logger().Debugf("Writer for topic destination %q not found", r.outputResource)
-		}
-
-		if output != nil {
+		if err := kafka.FranzSharedClientUse(r.outputResource, r.mgr, func(details *kafka.FranzSharedClientInfo) error {
 			for _, topic := range topics {
-				if err := createTopic(ctx, topic, r.replicationFactorOverride, r.replicationFactor, r.client, output.client); err != nil && err != errTopicAlreadyExists {
+				if err := createTopic(ctx, topic, r.replicationFactorOverride, r.replicationFactor, r.client, details.Client); err != nil && err != errTopicAlreadyExists {
 					// We could end up attempting to create a topic which doesn't have any messages in it, so if that
 					// fails, we can just log an error and carry on. If it does contain messages, the output will
 					// attempt to create it again anyway and will trigger and error if it can't.
@@ -570,13 +438,17 @@ func (r *RedpandaMigratorReader) ReadBatch(ctx context.Context) (service.Message
 					} else {
 						r.mgr.Logger().Infof("Created topic %q in output cluster", topic)
 					}
-					if err := createACLs(ctx, topic, r.client, output.client); err != nil {
+					if err := createACLs(ctx, topic, r.client, details.Client); err != nil {
 						r.mgr.Logger().Errorf("Failed to create ACLs for topic %q: %s", topic, err)
 					}
 				}
 			}
+			r.outputTopicsCreated = true
+			return nil
+		}); err != nil {
+			r.mgr.Logger().With("error", err, "resource", r.outputResource).Warn("Failed to access shared client for given resource identifier")
 		}
-		r.outputTopicsCreated = true
+
 	}
 
 	resBatch := make(service.MessageBatch, 0, fetches.NumRecords())
@@ -611,6 +483,8 @@ func (r *RedpandaMigratorReader) Close(ctx context.Context) error {
 	go func() {
 		r.shutSig.TriggerSoftStop()
 		if r.client != nil {
+			_, _ = kafka.FranzSharedClientPop(r.clientLabel, r.mgr)
+
 			r.client.Close()
 			r.client = nil
 

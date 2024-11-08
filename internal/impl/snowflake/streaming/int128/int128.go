@@ -227,8 +227,8 @@ func (i Num) ToBigEndian() []byte {
 
 // AppendBigEndian converts an Int128 into big endian bytes
 func (i Num) AppendBigEndian(b []byte) []byte {
-	b = binary.BigEndian.AppendUint64(b[0:8], uint64(i.hi))
-	return binary.BigEndian.AppendUint64(b[8:16], i.lo)
+	b = binary.BigEndian.AppendUint64(b, uint64(i.hi))
+	return binary.BigEndian.AppendUint64(b, i.lo)
 }
 
 // ToInt64 casts an Int128 to a int64 by truncating the bytes.

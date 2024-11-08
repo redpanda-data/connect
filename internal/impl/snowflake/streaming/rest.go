@@ -249,14 +249,22 @@ type (
 		Message    string               `json:"message"`
 		Blobs      []blobRegisterStatus `json:"blobs"`
 	}
+	// BindingValue is a value available as a binding variable in a SQL statement.
+	BindingValue struct {
+		// The binding data type, generally TEXT is what you want
+		// see: https://docs.snowflake.com/en/developer-guide/sql-api/submitting-requests#using-bind-variables-in-a-statement
+		Type  string `json:"type"`
+		Value string `json:"value"`
+	}
 	// RunSQLRequest is the way to run a SQL statement
 	RunSQLRequest struct {
-		Statement string `json:"statement"`
-		Timeout   int64  `json:"timeout"`
-		Database  string `json:"database,omitempty"`
-		Schema    string `json:"schema,omitempty"`
-		Warehouse string `json:"warehouse,omitempty"`
-		Role      string `json:"role,omitempty"`
+		Statement string                  `json:"statement"`
+		Timeout   int64                   `json:"timeout"`
+		Database  string                  `json:"database,omitempty"`
+		Schema    string                  `json:"schema,omitempty"`
+		Warehouse string                  `json:"warehouse,omitempty"`
+		Role      string                  `json:"role,omitempty"`
+		Bindings  map[string]BindingValue `json:"bindings,omitempty"`
 		// https://docs.snowflake.com/en/sql-reference/parameters
 		Parameters map[string]string `json:"parameters,omitempty"`
 	}
@@ -324,7 +332,7 @@ func NewRestClient(account, user, version, app string, privateKey *rsa.PrivateKe
 		privateKey: privateKey,
 		userAgent:  userAgent,
 		logger:     logger,
-		app:        url.QueryEscape(app),
+		app:        url.QueryEscape("Redpanda_Connect_" + strings.TrimPrefix(app, "Redpanda_Connect_")),
 		cachedJWT:  typed.NewAtomicValue(""),
 		authRefreshLoop: periodic.New(
 			time.Hour-(2*time.Minute),

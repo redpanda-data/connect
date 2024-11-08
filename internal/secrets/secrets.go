@@ -14,6 +14,9 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
+	"strings"
+
+	"github.com/redpanda-data/common-go/secrets"
 )
 
 // LookupFn defines the common closure that a secrets management client provides
@@ -61,6 +64,7 @@ func parseSecretsLookupURN(ctx context.Context, logger *slog.Logger, urn string)
 	if err != nil {
 		return nil, err
 	}
+	path := strings.TrimPrefix(u.Path, "/")
 
 	switch u.Scheme {
 	case "test":
@@ -73,6 +77,24 @@ func parseSecretsLookupURN(ctx context.Context, logger *slog.Logger, urn string)
 		return func(ctx context.Context, key string) (string, bool) {
 			return os.LookupEnv(key)
 		}, nil
+	case "aws":
+		secretsManager, err := secrets.NewAWSSecretsManager(ctx, logger, u.Host)
+		if err != nil {
+			return nil, err
+		}
+		return lookupFn(secrets.NewSecretProvider, secretsManager, path)
+	case "gcp":
+		secretsManager, err := secrets.NewGCPSecretsManager(ctx, logger, u.Host)
+		if err != nil {
+			return nil, err
+		}
+		return lookupFn(secrets.NewSecretProvider, secretsManager, path)
+	case "az":
+		secretsManager, err := secrets.NewAzSecretsManager(logger, "https://"+u.Host)
+		if err != nil {
+			return nil, err
+		}
+		return lookupFn(secrets.NewSecretProvider, secretsManager, path)
 	case "none":
 		return func(ctx context.Context, key string) (string, bool) {
 			return "", false
@@ -80,4 +102,15 @@ func parseSecretsLookupURN(ctx context.Context, logger *slog.Logger, urn string)
 	default:
 		return nil, fmt.Errorf("secrets scheme %v not recognized", u.Scheme)
 	}
+}
+
+func lookupFn(providerFn secrets.SecretProviderFn, secretsManager secrets.SecretAPI, prefix string) (LookupFn, error) {
+	provider, err := providerFn(secretsManager, prefix)
+	if err != nil {
+		return nil, err
+	}
+
+	return func(ctx context.Context, key string) (string, bool) {
+		return provider.GetSecretValue(ctx, key)
+	}, nil
 }
