@@ -69,7 +69,7 @@ This input adds the following metadata fields to each message:
 		Description("If set to true, the plugin will stream uncommitted transactions before receiving a commit message from PostgreSQL. This may result in duplicate records if the connector is restarted.").
 		Default(false)).
 	Field(service.NewBoolField(fieldStreamSnapshot).
-		Description("When set to true, the plugin will first stream a snapshot of all existing data in the database before streaming changes.").
+		Description("When set to true, the plugin will first stream a snapshot of all existing data in the database before streaming changes. In order to use this the tables that are being snapshot MUST have a primary key set so that reading from the table can be parallelized.").
 		Example(true).
 		Default(false)).
 	Field(service.NewFloatField(fieldSnapshotMemSafetyFactor).

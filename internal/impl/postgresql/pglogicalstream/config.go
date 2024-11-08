@@ -23,6 +23,8 @@ type Config struct {
 	// DbTables is the tables to stream changes from
 	DBTables []string
 	// ReplicationSlotName is the name of the replication slot to use
+	//
+	// MUST BE SQL INJECTION FREE
 	ReplicationSlotName string
 	// TemporaryReplicationSlot is whether to use a temporary replication slot
 	TemporaryReplicationSlot bool
