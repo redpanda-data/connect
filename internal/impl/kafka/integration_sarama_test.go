@@ -17,7 +17,6 @@ package kafka_test
 import (
 	"context"
 	"fmt"
-	"runtime"
 	"strconv"
 	"sync"
 	"testing"
@@ -54,9 +53,9 @@ func TestIntegrationSaramaCheckpointOneLockUp(t *testing.T) {
 		Repository:   "redpandadata/redpanda",
 		Tag:          "latest",
 		Hostname:     "redpanda",
-		ExposedPorts: []string{"9092"},
+		ExposedPorts: []string{"9092/tcp"},
 		PortBindings: map[docker.Port][]docker.PortBinding{
-			"9092/tcp": {{HostIP: "", HostPort: kafkaPortStr}},
+			"9092/tcp": {{HostIP: "", HostPort: kafkaPortStr + "/tcp"}},
 		},
 		Cmd: []string{
 			"redpanda",
@@ -217,9 +216,9 @@ func TestIntegrationSaramaRedpanda(t *testing.T) {
 		Repository:   "redpandadata/redpanda",
 		Tag:          "latest",
 		Hostname:     "redpanda",
-		ExposedPorts: []string{"9092"},
+		ExposedPorts: []string{"9092/tcp"},
 		PortBindings: map[docker.Port][]docker.PortBinding{
-			"9092/tcp": {{HostIP: "", HostPort: kafkaPortStr}},
+			"9092/tcp": {{HostIP: "", HostPort: kafkaPortStr + "/tcp"}},
 		},
 		Cmd: []string{
 			"redpanda",
@@ -453,9 +452,6 @@ input:
 
 func TestIntegrationSaramaOld(t *testing.T) {
 	integration.CheckSkip(t)
-	if runtime.GOOS == "darwin" {
-		t.Skip("skipping test on macos")
-	}
 
 	t.Parallel()
 
@@ -472,9 +468,9 @@ func TestIntegrationSaramaOld(t *testing.T) {
 	kafkaResource, err := pool.RunWithOptions(&dockertest.RunOptions{
 		Repository:   "bitnami/kafka",
 		Tag:          "latest",
-		ExposedPorts: []string{"9092"},
+		ExposedPorts: []string{"9092/tcp"},
 		PortBindings: map[docker.Port][]docker.PortBinding{
-			"9092/tcp": {{HostIP: "", HostPort: kafkaPortStr}},
+			"9092/tcp": {{HostIP: "", HostPort: kafkaPortStr + "/tcp"}},
 		},
 		Env: []string{
 			"KAFKA_CFG_NODE_ID=0",
@@ -683,9 +679,9 @@ func TestIntegrationSaramaOutputFixedTimestamp(t *testing.T) {
 		Repository:   "redpandadata/redpanda",
 		Tag:          "latest",
 		Hostname:     "redpanda",
-		ExposedPorts: []string{"9092"},
+		ExposedPorts: []string{"9092/tcp"},
 		PortBindings: map[docker.Port][]docker.PortBinding{
-			"9092/tcp": {{HostIP: "", HostPort: kafkaPortStr}},
+			"9092/tcp": {{HostIP: "", HostPort: kafkaPortStr + "/tcp"}},
 		},
 		Cmd: []string{
 			"redpanda",
