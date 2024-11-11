@@ -503,10 +503,12 @@ func (s *Stream) processSnapshot(ctx context.Context) error {
 				return err
 			}
 
+			var lastPkVal interface{}
+
 			for {
 				var snapshotRows *sql.Rows
 				queryStart := time.Now()
-				if snapshotRows, err = s.snapshotter.querySnapshotData(table, tablePk, batchSize, offset); err != nil {
+				if snapshotRows, err = s.snapshotter.querySnapshotData(table, lastPkVal, tablePk, batchSize); err != nil {
 					s.logger.Errorf("Failed to query snapshot data for table %v: %v", table, err.Error())
 					s.logger.Errorf("Failed to query snapshot for table %v: %v", table, err.Error())
 					return err
@@ -556,6 +558,9 @@ func (s *Stream) processSnapshot(ctx context.Context) error {
 					var data = make(map[string]any)
 					for i, getter := range valueGetters {
 						data[columnNames[i]] = getter(scanArgs[i])
+						if columnNames[i] == tablePk {
+							lastPkVal = getter(scanArgs[i])
+						}
 					}
 
 					snapshotChangePacket := StreamMessage{
