@@ -17,7 +17,6 @@ import (
 
 	"github.com/ollama/ollama/api"
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go/modules/ollama"
@@ -39,7 +38,7 @@ func createCompletionProcessorForTest(t *testing.T, addr string) *ollamaCompleti
 }
 
 func TestOllamaCompletionIntegration(t *testing.T) {
-	integration.CheckSkip(t)
+	// integration.CheckSkip(t)
 
 	ctx := context.Background()
 	ollamaContainer, err := ollama.Run(ctx, "ollama/ollama:0.2.5")

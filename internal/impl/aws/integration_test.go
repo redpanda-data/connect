@@ -73,7 +73,7 @@ func getLocalStack(t testing.TB) (port string) {
 }
 
 func TestIntegration(t *testing.T) {
-	integration.CheckSkip(t)
+	// integration.CheckSkip(t)
 	t.Parallel()
 
 	servicePort := getLocalStack(t)

@@ -200,7 +200,7 @@ kafka:
 }
 
 func TestIntegrationSaramaRedpanda(t *testing.T) {
-	integration.CheckSkip(t)
+	// integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -452,7 +452,7 @@ input:
 }
 
 func TestIntegrationSaramaOld(t *testing.T) {
-	integration.CheckSkip(t)
+	// integration.CheckSkip(t)
 	if runtime.GOOS == "darwin" {
 		t.Skip("skipping test on macos")
 	}
@@ -668,7 +668,7 @@ input:
 }
 
 func TestIntegrationSaramaOutputFixedTimestamp(t *testing.T) {
-	integration.CheckSkip(t)
+	// integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")

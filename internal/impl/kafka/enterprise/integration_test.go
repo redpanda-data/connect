@@ -92,7 +92,7 @@ func readNKafkaMessages(ctx context.Context, t testing.TB, address, topic string
 }
 
 func TestIntegration(t *testing.T) {
-	integration.CheckSkip(t)
+	// integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -288,7 +288,7 @@ max_message_bytes: 1MB
 }
 
 func TestSchemaRegistryIntegration(t *testing.T) {
-	integration.CheckSkip(t)
+	// integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")

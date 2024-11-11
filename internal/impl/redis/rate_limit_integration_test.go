@@ -26,12 +26,10 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
 
 func TestIntegrationRedisRateLimit(t *testing.T) {
-	integration.CheckSkip(t)
+	// integration.CheckSkip(t)
 
 	pool, err := dockertest.NewPool("")
 	if err != nil {

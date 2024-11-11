@@ -30,7 +30,7 @@ import (
 )
 
 func TestIntegrationCassandra(t *testing.T) {
-	integration.CheckSkip(t)
+	// integration.CheckSkip(t)
 
 	t.Parallel()
 

@@ -28,6 +28,7 @@ package sanitize
 import (
 	"bytes"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -39,6 +40,7 @@ import (
 // argument placeholder.
 type Part any
 
+// Query represents a SQL query that consists of []Part
 type Query struct {
 	Parts []Part
 }
@@ -49,6 +51,7 @@ type Query struct {
 // https://github.com/jackc/pgx/issues/1380
 const replacementcharacterwidth = 3
 
+// Sanitize sanitizes a SQL query
 func (q *Query) Sanitize(args ...any) (string, error) {
 	argUse := make([]bool, len(args))
 	buf := &bytes.Buffer{}
@@ -62,11 +65,11 @@ func (q *Query) Sanitize(args ...any) (string, error) {
 			argIdx := part - 1
 
 			if argIdx < 0 {
-				return "", fmt.Errorf("first sql argument must be > 0")
+				return "", errors.New("first sql argument must be > 0")
 			}
 
 			if argIdx >= len(args) {
-				return "", fmt.Errorf("insufficient arguments")
+				return "", errors.New("insufficient arguments")
 			}
 			arg := args[argIdx]
 			switch arg := arg.(type) {
@@ -79,9 +82,9 @@ func (q *Query) Sanitize(args ...any) (string, error) {
 			case bool:
 				str = strconv.FormatBool(arg)
 			case []byte:
-				str = QuoteBytes(arg)
+				str = quoteBytes(arg)
 			case string:
-				str = QuoteString(arg)
+				str = quoteString(arg)
 			case time.Time:
 				str = arg.Truncate(time.Microsecond).Format("'2006-01-02 15:04:05.999999999Z07:00:00'")
 			default:
@@ -106,6 +109,7 @@ func (q *Query) Sanitize(args ...any) (string, error) {
 	return buf.String(), nil
 }
 
+// NewQuery parses a SQL query string and returns a Query object.
 func NewQuery(sql string) (*Query, error) {
 	l := &sqlLexer{
 		src:     sql,
@@ -121,11 +125,11 @@ func NewQuery(sql string) (*Query, error) {
 	return query, nil
 }
 
-func QuoteString(str string) string {
+func quoteString(str string) string {
 	return "'" + strings.ReplaceAll(str, "'", "''") + "'"
 }
 
-func QuoteBytes(buf []byte) string {
+func quoteBytes(buf []byte) string {
 	return `'\x` + hex.EncodeToString(buf) + "'"
 }
 
@@ -344,10 +348,10 @@ func multilineCommentState(l *sqlLexer) stateFn {
 	}
 }
 
-// SanitizeSQL replaces placeholder values with args. It quotes and escapes args
+// SQLQuery replaces placeholder values with args. It quotes and escapes args
 // as necessary. This function is only safe when standard_conforming_strings is
 // on.
-func SanitizeSQL(sql string, args ...any) (string, error) {
+func SQLQuery(sql string, args ...any) (string, error) {
 	query, err := NewQuery(sql)
 	if err != nil {
 		return "", err

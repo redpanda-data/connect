@@ -29,7 +29,7 @@ import (
 )
 
 func TestIntegrationCache(t *testing.T) {
-	integration.CheckSkip(t)
+	// integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")

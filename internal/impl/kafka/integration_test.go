@@ -62,7 +62,7 @@ func createKafkaTopic(ctx context.Context, address, id string, partitions int32)
 }
 
 func TestIntegrationKafka(t *testing.T) {
-	integration.CheckSkip(t)
+	// integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -269,7 +269,7 @@ func createKafkaTopicSasl(address, id string, partitions int32) error {
 }
 
 func TestIntegrationKafkaSasl(t *testing.T) {
-	integration.CheckSkip(t)
+	// integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -380,7 +380,7 @@ input:
 }
 
 func TestIntegrationKafkaOutputFixedTimestamp(t *testing.T) {
-	integration.CheckSkip(t)
+	// integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")

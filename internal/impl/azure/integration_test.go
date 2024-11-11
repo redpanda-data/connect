@@ -44,7 +44,7 @@ import (
 )
 
 func TestIntegrationAzure(t *testing.T) {
-	integration.CheckSkip(t)
+	// integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -277,7 +277,7 @@ input:
 }
 
 func TestIntegrationCosmosDB(t *testing.T) {
-	integration.CheckSkip(t)
+	// integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")

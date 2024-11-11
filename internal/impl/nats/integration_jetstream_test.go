@@ -29,7 +29,7 @@ import (
 )
 
 func TestIntegrationNatsJetstream(t *testing.T) {
-	integration.CheckSkip(t)
+	// integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -99,7 +99,7 @@ input:
 }
 
 func TestIntegrationNatsPullConsumer(t *testing.T) {
-	integration.CheckSkip(t)
+	// integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")

@@ -55,7 +55,7 @@ var elasticIndex = `{
 func TestIntegrationElasticsearchAWS(t *testing.T) {
 	t.Skip("Struggling to get localstack es to work, maybe one day")
 
-	integration.CheckSkip(t)
+	// integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")

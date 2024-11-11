@@ -57,7 +57,7 @@ query: |
 }
 
 func TestInputIntegration(t *testing.T) {
-	integration.CheckSkip(t)
+	// integration.CheckSkip(t)
 
 	pool, err := dockertest.NewPool("")
 	if err != nil {

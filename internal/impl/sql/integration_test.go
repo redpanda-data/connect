@@ -29,7 +29,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
 	isql "github.com/redpanda-data/connect/v4/internal/impl/sql"
 
@@ -564,7 +563,7 @@ func testSuite(t *testing.T, driver, dsn string, createTableFn func(string) (str
 }
 
 func TestIntegrationClickhouse(t *testing.T) {
-	integration.CheckSkip(t)
+	// integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -619,7 +618,7 @@ func TestIntegrationClickhouse(t *testing.T) {
 }
 
 func TestIntegrationOldClickhouse(t *testing.T) {
-	integration.CheckSkip(t)
+	// integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -674,7 +673,7 @@ func TestIntegrationOldClickhouse(t *testing.T) {
 }
 
 func TestIntegrationPostgres(t *testing.T) {
-	integration.CheckSkip(t)
+	// integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -735,7 +734,7 @@ func TestIntegrationPostgres(t *testing.T) {
 }
 
 func TestIntegrationPostgresVector(t *testing.T) {
-	integration.CheckSkip(t)
+	// integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -846,7 +845,7 @@ suffix: ORDER BY embedding <-> '[3,1,2]' LIMIT 1
 }
 
 func TestIntegrationMySQL(t *testing.T) {
-	integration.CheckSkip(t)
+	// integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -910,7 +909,7 @@ func TestIntegrationMySQL(t *testing.T) {
 }
 
 func TestIntegrationMSSQL(t *testing.T) {
-	integration.CheckSkip(t)
+	// integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -971,7 +970,7 @@ func TestIntegrationMSSQL(t *testing.T) {
 }
 
 func TestIntegrationSQLite(t *testing.T) {
-	integration.CheckSkip(t)
+	// integration.CheckSkip(t)
 	t.Parallel()
 
 	var db *sql.DB
@@ -1014,7 +1013,7 @@ func TestIntegrationSQLite(t *testing.T) {
 }
 
 func TestIntegrationOracle(t *testing.T) {
-	integration.CheckSkip(t)
+	// integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -1076,7 +1075,7 @@ func TestIntegrationOracle(t *testing.T) {
 }
 
 func TestIntegrationTrino(t *testing.T) {
-	integration.CheckSkip(t)
+	// integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -1137,7 +1136,7 @@ create table %s (
 }
 
 func TestIntegrationCosmosDB(t *testing.T) {
-	integration.CheckSkip(t)
+	// integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")

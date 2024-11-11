@@ -25,11 +25,14 @@ type StreamMessageMetrics struct {
 	IsStreaming bool   `json:"is_streaming"`
 }
 
+// StreamMode represents the mode of the stream at the time of the message
 type StreamMode string
 
 const (
+	// StreamModeStreaming indicates that the stream is in streaming mode
 	StreamModeStreaming StreamMode = "streaming"
-	StreamModeSnapshot  StreamMode = "snapshot"
+	// StreamModeSnapshot indicates that the stream is in snapshot mode
+	StreamModeSnapshot StreamMode = "snapshot"
 )
 
 // StreamMessage represents a single message after it has been decoded by the plugin

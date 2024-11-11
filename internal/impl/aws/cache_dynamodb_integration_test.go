@@ -93,7 +93,7 @@ func createTable(ctx context.Context, t testing.TB, dynamoPort, id string) error
 }
 
 func TestIntegrationDynamoDBCache(t *testing.T) {
-	integration.CheckSkip(t)
+	// integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")

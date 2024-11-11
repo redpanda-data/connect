@@ -34,7 +34,7 @@ func TestInfluxIntegration(t *testing.T) {
 		t.Skip("skipping test on macos")
 	}
 
-	integration.CheckSkip(t)
+	// integration.CheckSkip(t)
 
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")

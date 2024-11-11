@@ -20,7 +20,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgproto3"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
 	"golang.org/x/sync/errgroup"
@@ -157,7 +156,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	var outputPlugin string
 	// check is replication slot exist to get last restart SLN
 
-	s, err := sanitize.SanitizeSQL("SELECT confirmed_flush_lsn, plugin FROM pg_replication_slots WHERE slot_name = $1", config.ReplicationSlotName)
+	s, err := sanitize.SQLQuery("SELECT confirmed_flush_lsn, plugin FROM pg_replication_slots WHERE slot_name = $1", config.ReplicationSlotName)
 	if err != nil {
 		return nil, err
 	}
@@ -286,9 +285,20 @@ func (s *Stream) AckLSN(lsn string) error {
 }
 
 func (s *Stream) streamMessagesAsync() {
-	relations := map[uint32]*RelationMessage{}
-	typeMap := pgtype.NewMap()
-	pgoutputChanges := []StreamMessageChanges{}
+	var handler PluginHandler
+	switch s.decodingPlugin {
+	case "wal2json":
+		handler = NewWal2JsonPluginHandler(s.messages, s.monitor)
+	case "pgoutput":
+		handler = NewPgOutputPluginHandler(s.messages, s.streamUncommitted, s.monitor, s.consumedCallback, s.transactionAckChan)
+	default:
+		s.logger.Error("Invalid decoding plugin. Cant find needed handler implementation")
+		if err := s.Stop(); err != nil {
+			s.logger.Errorf("Failed to stop the stream: %v", err)
+		}
+
+		return
+	}
 
 	for {
 		select {
@@ -366,6 +376,8 @@ func (s *Stream) streamMessagesAsync() {
 					s.nextStandbyMessageDeadline = time.Time{}
 				}
 
+			// XLogDataByteID is the message type for the actual WAL data
+			// It will cause the stream to process WAL changes and create the corresponding messages
 			case XLogDataByteID:
 				xld, err := ParseXLogData(msg.Data[1:])
 				if err != nil {
@@ -375,10 +387,8 @@ func (s *Stream) streamMessagesAsync() {
 					}
 				}
 				clientXLogPos := xld.WALStart + LSN(len(xld.WALData))
-				metrics := s.monitor.Report()
 				if s.decodingPlugin == "wal2json" {
-					message, err := decodeWal2JsonChanges(clientXLogPos.String(), xld.WALData)
-					if err != nil {
+					if err = handler.Handle(clientXLogPos, xld); err != nil {
 						s.logger.Errorf("decodeWal2JsonChanges failed: %w", err)
 						if err = s.Stop(); err != nil {
 							s.logger.Errorf("Failed to stop the stream: %v", err)
@@ -386,137 +396,37 @@ func (s *Stream) streamMessagesAsync() {
 						return
 					}
 
-					if message == nil || len(message.Changes) == 0 {
-						// automatic ack for empty changes
-						// basically mean that the client is up-to-date,
-						// but we still need to acknowledge the LSN for standby
-						if err = s.AckLSN(clientXLogPos.String()); err != nil {
-							// stop reading from replication slot
-							// if we can't acknowledge the LSN
-							if err = s.Stop(); err != nil {
-								s.logger.Errorf("Failed to stop the stream: %v", err)
-							}
-							return
+					// automatic ack for empty changes
+					// basically mean that the client is up-to-date,
+					// but we still need to acknowledge the LSN for standby
+					if err = s.AckLSN(clientXLogPos.String()); err != nil {
+						// stop reading from replication slot
+						// if we can't acknowledge the LSN
+						if err = s.Stop(); err != nil {
+							s.logger.Errorf("Failed to stop the stream: %v", err)
 						}
-					} else {
-						message.WALLagBytes = &metrics.WalLagInBytes
-						s.messages <- *message
+						return
 					}
 				}
 
 				if s.decodingPlugin == "pgoutput" {
-					if s.streamUncommitted {
-						// parse changes inside the transaction
-						message, err := decodePgOutput(xld.WALData, relations, typeMap)
-						if err != nil {
-							s.logger.Errorf("decodePgOutput failed: %w", err)
-							if err = s.Stop(); err != nil {
-								s.logger.Errorf("Failed to stop the stream: %v", err)
-							}
-							return
+					if err = handler.Handle(clientXLogPos, xld); err != nil {
+						s.logger.Errorf("decodePgOutputChanges failed: %w", err)
+						if err = s.Stop(); err != nil {
+							s.logger.Errorf("Failed to stop the stream: %v", err)
 						}
+					}
 
-						isCommit, _, err := isCommitMessage(xld.WALData)
-						if err != nil {
-							s.logger.Errorf("Failed to parse WAL data: %w", err)
-							if err = s.Stop(); err != nil {
-								s.logger.Errorf("Failed to stop the stream: %v", err)
-							}
-							return
+					// automatic ack for empty changes
+					// basically mean that the client is up-to-date,
+					// but we still need to acknowledge the LSN for standby
+					if err = s.AckLSN(clientXLogPos.String()); err != nil {
+						// stop reading from replication slot
+						// if we can't acknowledge the LSN
+						if err = s.Stop(); err != nil {
+							s.logger.Errorf("Failed to stop the stream: %v", err)
 						}
-
-						// when receiving a commit message, we need to acknowledge the LSN
-						// but we must wait for benthos to flush the messages before we can do that
-						if isCommit {
-							s.transactionAckChan <- clientXLogPos.String()
-							<-s.consumedCallback
-						} else {
-							if message == nil && !isCommit {
-								// 0 changes happened in the transaction
-								// or we received a change that are not supported/needed by the replication stream
-								if err = s.AckLSN(clientXLogPos.String()); err != nil {
-									// stop reading from replication slot
-									// if we can't acknowledge the LSN
-									if err = s.Stop(); err != nil {
-										s.logger.Errorf("Failed to stop the stream: %v", err)
-									}
-									return
-								}
-							} else if message != nil {
-								lsn := clientXLogPos.String()
-								s.messages <- StreamMessage{
-									Lsn: &lsn,
-									Changes: []StreamMessageChanges{
-										*message,
-									},
-									Mode:        StreamModeStreaming,
-									WALLagBytes: &metrics.WalLagInBytes,
-								}
-							}
-						}
-					} else {
-						// message changes must be collected in the buffer in the context of the same transaction
-						// as single transaction can contain multiple changes
-						// and LSN ack will cause potential loss of changes
-						isBegin, err := isBeginMessage(xld.WALData)
-						if err != nil {
-							s.logger.Errorf("Failed to parse WAL data: %w", err)
-							if err = s.Stop(); err != nil {
-								s.logger.Errorf("Failed to stop the stream: %v", err)
-							}
-							return
-						}
-
-						if isBegin {
-							pgoutputChanges = []StreamMessageChanges{}
-						}
-
-						// parse changes inside the transaction
-						message, err := decodePgOutput(xld.WALData, relations, typeMap)
-						if err != nil {
-							s.logger.Errorf("decodePgOutput failed: %w", err)
-							if err = s.Stop(); err != nil {
-								s.logger.Errorf("Failed to stop the stream: %v", err)
-							}
-							return
-						}
-
-						if message != nil {
-							pgoutputChanges = append(pgoutputChanges, *message)
-						}
-
-						isCommit, _, err := isCommitMessage(xld.WALData)
-						if err != nil {
-							s.logger.Errorf("Failed to parse WAL data: %w", err)
-							if err = s.Stop(); err != nil {
-								s.logger.Errorf("Failed to stop the stream: %v", err)
-							}
-							return
-						}
-
-						if isCommit {
-							if len(pgoutputChanges) == 0 {
-								// 0 changes happened in the transaction
-								// or we received a change that are not supported/needed by the replication stream
-								if err = s.AckLSN(clientXLogPos.String()); err != nil {
-									// stop reading from replication slot
-									// if we can't acknowledge the LSN
-									if err = s.Stop(); err != nil {
-										s.logger.Errorf("Failed to stop the stream: %v", err)
-									}
-									return
-								}
-							} else {
-								// send all collected changes
-								lsn := clientXLogPos.String()
-								s.messages <- StreamMessage{
-									Lsn:         &lsn,
-									Changes:     pgoutputChanges,
-									Mode:        StreamModeStreaming,
-									WALLagBytes: &metrics.WalLagInBytes,
-								}
-							}
-						}
+						return
 					}
 				}
 			}
@@ -713,7 +623,7 @@ func (s *Stream) cleanUpOnFailure(ctx context.Context) error {
 }
 
 func (s *Stream) getPrimaryKeyColumn(tableName string) (string, error) {
-	q, err := sanitize.SanitizeSQL(`
+	q, err := sanitize.SQLQuery(`
 		SELECT a.attname
 		FROM   pg_index i
 		JOIN   pg_attribute a ON a.attrelid = i.indrelid

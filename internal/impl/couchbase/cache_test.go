@@ -27,7 +27,7 @@ import (
 )
 
 func TestIntegrationCouchbaseCache(t *testing.T) {
-	integration.CheckSkip(t)
+	// integration.CheckSkip(t)
 
 	servicePort := requireCouchbase(t)
 

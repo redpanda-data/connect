@@ -28,11 +28,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
 
 func TestIntegrationRedisProcessor(t *testing.T) {
-	integration.CheckSkip(t)
+	// integration.CheckSkip(t)
 
 	pool, err := dockertest.NewPool("")
 	if err != nil {

@@ -31,7 +31,7 @@ import (
 )
 
 func TestIntegrationRedisCache(t *testing.T) {
-	integration.CheckSkip(t)
+	// integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -85,7 +85,7 @@ cache_resources:
 func TestIntegrationRedisClusterCache(t *testing.T) {
 	t.Skip("Skipping as networking often fails for this test")
 
-	integration.CheckSkip(t)
+	// integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -178,7 +178,7 @@ cache_resources:
 func TestIntegrationRedisFailoverCache(t *testing.T) {
 	t.Skip("Skipping as networking often fails for this test")
 
-	integration.CheckSkip(t)
+	// integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
