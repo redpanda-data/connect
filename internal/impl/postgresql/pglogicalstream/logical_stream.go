@@ -503,7 +503,7 @@ func (s *Stream) processSnapshot(ctx context.Context) error {
 				return err
 			}
 
-			var lastPkVal interface{}
+			var lastPkVal any
 
 			for {
 				var snapshotRows *sql.Rows

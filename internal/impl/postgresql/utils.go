@@ -23,12 +23,12 @@ func LSNToInt64(lsn string) (int64, error) {
 	}
 
 	// Parse both segments as hex with uint64 first
-	upper, err := strconv.ParseUint(parts[0], 16, 64)
+	upper, err := strconv.ParseUint(parts[0], 16, 32)
 	if err != nil {
 		return 0, fmt.Errorf("failed to parse upper part: %w", err)
 	}
 
-	lower, err := strconv.ParseUint(parts[1], 16, 64)
+	lower, err := strconv.ParseUint(parts[1], 16, 32)
 	if err != nil {
 		return 0, fmt.Errorf("failed to parse lower part: %w", err)
 	}

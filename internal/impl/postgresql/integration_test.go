@@ -12,6 +12,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	"strings"
 	"sync"
 	"testing"
