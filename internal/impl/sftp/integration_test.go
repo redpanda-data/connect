@@ -35,8 +35,8 @@ var (
 	sftpPassword = "pass"
 )
 
-func TestIntegration(t *testing.T) {
-	// integration.CheckSkip(t)
+func TestIntegrationSFTP(t *testing.T) {
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")

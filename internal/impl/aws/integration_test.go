@@ -47,7 +47,7 @@ func getLocalStack(t testing.TB) (port string) {
 		ExposedPorts: []string{port + "/tcp"},
 		PortBindings: map[docker.Port][]docker.PortBinding{
 			docker.Port(port + "/tcp"): {
-				docker.PortBinding{HostIP: "", HostPort: port},
+				docker.PortBinding{HostIP: "", HostPort: port + "/tcp"},
 			},
 		},
 		Env: []string{
@@ -72,8 +72,8 @@ func getLocalStack(t testing.TB) (port string) {
 	return
 }
 
-func TestIntegration(t *testing.T) {
-	// integration.CheckSkip(t)
+func TestIntegrationAWS(t *testing.T) {
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	servicePort := getLocalStack(t)

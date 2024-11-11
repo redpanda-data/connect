@@ -52,7 +52,7 @@ func TestIntegrationMongoDB(t *testing.T) {
 			"MONGO_INITDB_ROOT_USERNAME=mongoadmin",
 			"MONGO_INITDB_ROOT_PASSWORD=secret",
 		},
-		ExposedPorts: []string{"27017"},
+		ExposedPorts: []string{"27017/tcp"},
 	})
 	require.NoError(t, err)
 

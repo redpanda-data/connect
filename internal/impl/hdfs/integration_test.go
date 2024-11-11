@@ -24,12 +24,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
 
 func TestIntegrationHDFS(t *testing.T) {
-	// integration.CheckSkip(t)
-	// t.Skip() // Skip until we fix the static port bindings
+	integration.CheckSkip(t)
+
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -41,12 +42,12 @@ func TestIntegrationHDFS(t *testing.T) {
 		Repository:   "cybermaggedon/hadoop",
 		Tag:          "2.8.2",
 		Hostname:     "localhost",
-		ExposedPorts: []string{"9000", "50075", "50070", "50010"},
+		ExposedPorts: []string{"9000/tcp", "50075/tcp", "50070/tcp", "50010/tcp"},
 		PortBindings: map[docker.Port][]docker.PortBinding{
-			"9000/tcp":  {{HostIP: "", HostPort: "9000"}},
-			"50070/tcp": {{HostIP: "", HostPort: "50070"}},
-			"50075/tcp": {{HostIP: "", HostPort: "50075"}},
-			"50010/tcp": {{HostIP: "", HostPort: "50010"}},
+			"9000/tcp":  {{HostIP: "", HostPort: "9000/tcp"}},
+			"50070/tcp": {{HostIP: "", HostPort: "50070/tcp"}},
+			"50075/tcp": {{HostIP: "", HostPort: "50075/tcp"}},
+			"50010/tcp": {{HostIP: "", HostPort: "50010/tcp"}},
 		},
 	}
 	resource, err := pool.RunWithOptions(options)

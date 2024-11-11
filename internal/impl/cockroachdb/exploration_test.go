@@ -46,7 +46,7 @@ func TestIntegrationExploration(t *testing.T) {
 		Repository:   "cockroachdb/cockroach",
 		Tag:          "latest",
 		Cmd:          []string{"start-single-node", "--insecure"},
-		ExposedPorts: []string{"8080", "26257"},
+		ExposedPorts: []string{"8080/tcp", "26257/tcp"},
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() {

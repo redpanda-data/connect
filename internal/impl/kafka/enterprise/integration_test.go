@@ -91,8 +91,8 @@ func readNKafkaMessages(ctx context.Context, t testing.TB, address, topic string
 	return
 }
 
-func TestIntegration(t *testing.T) {
-	// integration.CheckSkip(t)
+func TestKafkaEnterpriseIntegration(t *testing.T) {
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -106,9 +106,9 @@ func TestIntegration(t *testing.T) {
 		Repository:   "redpandadata/redpanda",
 		Tag:          "latest",
 		Hostname:     "redpanda",
-		ExposedPorts: []string{"9092"},
+		ExposedPorts: []string{"9092/tcp"},
 		PortBindings: map[docker.Port][]docker.PortBinding{
-			"9092/tcp": {{HostIP: "", HostPort: kafkaPortStr}},
+			"9092/tcp": {{HostIP: "", HostPort: kafkaPortStr + "/tcp"}},
 		},
 		Cmd: []string{
 			"redpanda",
@@ -288,7 +288,7 @@ max_message_bytes: 1MB
 }
 
 func TestSchemaRegistryIntegration(t *testing.T) {
-	// integration.CheckSkip(t)
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
