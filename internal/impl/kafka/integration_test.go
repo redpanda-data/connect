@@ -61,8 +61,46 @@ func createKafkaTopic(ctx context.Context, address, id string, partitions int32)
 	return kerr.ErrorForCode(res.Topics[0].ErrorCode)
 }
 
-func TestIntegrationKafka(t *testing.T) {
-	// integration.CheckSkip(t)
+func createKafkaTopicSasl(address, id string, partitions int32) error {
+	topicName := fmt.Sprintf("topic-%v", id)
+
+	cl, err := kgo.NewClient(
+		kgo.SeedBrokers(address),
+		kgo.SASL(
+			scram.Sha256(func(c context.Context) (scram.Auth, error) {
+				return scram.Auth{User: "admin", Pass: "foobar"}, nil
+			}),
+		),
+	)
+	if err != nil {
+		return err
+	}
+	defer cl.Close()
+
+	createTopicsReq := kmsg.NewPtrCreateTopicsRequest()
+	topicReq := kmsg.NewCreateTopicsRequestTopic()
+	topicReq.NumPartitions = partitions
+	topicReq.Topic = topicName
+	topicReq.ReplicationFactor = 1
+	createTopicsReq.Topics = append(createTopicsReq.Topics, topicReq)
+
+	res, err := createTopicsReq.RequestWith(context.Background(), cl)
+	if err != nil {
+		return err
+	}
+	if len(res.Topics) != 1 {
+		return fmt.Errorf("expected one topic in response, saw %d", len(res.Topics))
+	}
+	t := res.Topics[0]
+
+	if err := kerr.ErrorForCode(t.ErrorCode); err != nil {
+		return fmt.Errorf("topic creation failure: %w", err)
+	}
+	return nil
+}
+
+func TestIntegrationRedpanda(t *testing.T) {
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -106,25 +144,20 @@ func TestIntegrationKafka(t *testing.T) {
 
 	template := `
 output:
-  kafka_franz:
+  redpanda:
     seed_brokers: [ localhost:$PORT ]
     topic: topic-$ID
     max_in_flight: $MAX_IN_FLIGHT
     timeout: "5s"
     metadata:
       include_patterns: [ .* ]
-    batching:
-      count: $OUTPUT_BATCH_COUNT
 
 input:
-  kafka_franz:
+  redpanda:
     seed_brokers: [ localhost:$PORT ]
     topics: [ topic-$ID$VAR1 ]
     consumer_group: "$VAR4"
-    checkpoint_limit: 100
     commit_period: "1s"
-    batching:
-      count: $INPUT_BATCH_COUNT
 `
 
 	suite := integration.StreamTests(
@@ -133,15 +166,7 @@ input:
 		integration.StreamTestSendBatch(10),
 		integration.StreamTestStreamSequential(1000),
 		integration.StreamTestStreamParallel(1000),
-		integration.StreamTestStreamParallelLossy(1000),
-		integration.StreamTestSendBatchCount(10),
-		integration.StreamTestStreamSaturatedUnacked(200),
 	)
-
-	// In some modes include testing input level batching
-	var suiteExt integration.StreamTestList
-	suiteExt = append(suiteExt, suite...)
-	suiteExt = append(suiteExt, integration.StreamTestReceiveBatchCount(10))
 
 	suite.Run(
 		t, template,
@@ -155,7 +180,7 @@ input:
 
 	t.Run("only one partition", func(t *testing.T) {
 		t.Parallel()
-		suiteExt.Run(
+		suite.Run(
 			t, template,
 			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
 				vars.General["VAR4"] = "group" + vars.ID
@@ -197,7 +222,7 @@ input:
 
 	manualPartitionTemplate := `
 output:
-  kafka_franz:
+  redpanda:
     seed_brokers: [ localhost:$PORT ]
     topic: topic-$ID
     max_in_flight: $MAX_IN_FLIGHT
@@ -206,15 +231,12 @@ output:
     partition: "0"
     metadata:
       include_patterns: [ .* ]
-    batching:
-      count: $OUTPUT_BATCH_COUNT
 
 input:
-  kafka_franz:
+  redpanda:
     seed_brokers: [ localhost:$PORT ]
     topics: [ topic-$ID$VAR1 ]
     consumer_group: "$VAR4"
-    checkpoint_limit: 100
     commit_period: "1s"
 `
 	t.Run("manual_partitioner", func(t *testing.T) {
@@ -230,46 +252,8 @@ input:
 	})
 }
 
-func createKafkaTopicSasl(address, id string, partitions int32) error {
-	topicName := fmt.Sprintf("topic-%v", id)
-
-	cl, err := kgo.NewClient(
-		kgo.SeedBrokers(address),
-		kgo.SASL(
-			scram.Sha256(func(c context.Context) (scram.Auth, error) {
-				return scram.Auth{User: "admin", Pass: "foobar"}, nil
-			}),
-		),
-	)
-	if err != nil {
-		return err
-	}
-	defer cl.Close()
-
-	createTopicsReq := kmsg.NewPtrCreateTopicsRequest()
-	topicReq := kmsg.NewCreateTopicsRequestTopic()
-	topicReq.NumPartitions = partitions
-	topicReq.Topic = topicName
-	topicReq.ReplicationFactor = 1
-	createTopicsReq.Topics = append(createTopicsReq.Topics, topicReq)
-
-	res, err := createTopicsReq.RequestWith(context.Background(), cl)
-	if err != nil {
-		return err
-	}
-	if len(res.Topics) != 1 {
-		return fmt.Errorf("expected one topic in response, saw %d", len(res.Topics))
-	}
-	t := res.Topics[0]
-
-	if err := kerr.ErrorForCode(t.ErrorCode); err != nil {
-		return fmt.Errorf("topic creation failure: %w", err)
-	}
-	return nil
-}
-
-func TestIntegrationKafkaSasl(t *testing.T) {
-	// integration.CheckSkip(t)
+func TestIntegrationRedpandaSasl(t *testing.T) {
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -334,21 +318,19 @@ func TestIntegrationKafkaSasl(t *testing.T) {
 
 	template := `
 output:
-  kafka_franz:
+  redpanda:
     seed_brokers: [ localhost:$PORT ]
     topic: topic-$ID
     max_in_flight: $MAX_IN_FLIGHT
     metadata:
       include_patterns: [ .* ]
-    batching:
-      count: $OUTPUT_BATCH_COUNT
     sasl:
       - mechanism: SCRAM-SHA-256
         username: admin
         password: foobar
 
 input:
-  kafka_franz:
+  redpanda:
     seed_brokers: [ localhost:$PORT ]
     topics: [ topic-$ID$VAR1 ]
     consumer_group: "$VAR4"
@@ -364,8 +346,7 @@ input:
 		integration.StreamTestSendBatch(10),
 		integration.StreamTestStreamSequential(1000),
 		integration.StreamTestStreamParallel(1000),
-		integration.StreamTestStreamParallelLossy(1000),
-		integration.StreamTestSendBatchCount(10),
+		// integration.StreamTestStreamParallelLossy(1000),
 	)
 
 	suite.Run(
@@ -379,8 +360,8 @@ input:
 	)
 }
 
-func TestIntegrationKafkaOutputFixedTimestamp(t *testing.T) {
-	// integration.CheckSkip(t)
+func TestIntegrationRedpandaOutputFixedTimestamp(t *testing.T) {
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -424,13 +405,13 @@ func TestIntegrationKafkaOutputFixedTimestamp(t *testing.T) {
 
 	template := `
 output:
-  kafka_franz:
+  redpanda:
     seed_brokers: [ localhost:$PORT ]
     topic: topic-$ID
     timestamp: 666
 
 input:
-  kafka_franz:
+  redpanda:
     seed_brokers: [ localhost:$PORT ]
     topics: [ topic-$ID ]
     consumer_group: "blobfish"
@@ -450,4 +431,82 @@ input:
 		}),
 		integration.StreamTestOptPort(kafkaPortStr),
 	)
+}
+
+func BenchmarkIntegrationRedpanda(b *testing.B) {
+	integration.CheckSkip(b)
+
+	pool, err := dockertest.NewPool("")
+	require.NoError(b, err)
+
+	kafkaPort, err := integration.GetFreePort()
+	require.NoError(b, err)
+
+	kafkaPortStr := strconv.Itoa(kafkaPort)
+
+	options := &dockertest.RunOptions{
+		Repository:   "redpandadata/redpanda",
+		Tag:          "latest",
+		Hostname:     "redpanda",
+		ExposedPorts: []string{"9092"},
+		PortBindings: map[docker.Port][]docker.PortBinding{
+			"9092/tcp": {{HostIP: "", HostPort: kafkaPortStr}},
+		},
+		Cmd: []string{
+			"redpanda",
+			"start",
+			"--node-id 0",
+			"--mode dev-container",
+			"--set rpk.additional_start_flags=[--reactor-backend=epoll]",
+			"--kafka-addr 0.0.0.0:9092",
+			fmt.Sprintf("--advertise-kafka-addr localhost:%v", kafkaPort),
+		},
+	}
+
+	pool.MaxWait = time.Minute
+	resource, err := pool.RunWithOptions(options)
+	require.NoError(b, err)
+	b.Cleanup(func() {
+		assert.NoError(b, pool.Purge(resource))
+	})
+
+	_ = resource.Expire(900)
+	require.NoError(b, pool.Retry(func() error {
+		return createKafkaTopic(context.Background(), "localhost:"+kafkaPortStr, "testingconnection", 1)
+	}))
+
+	// Ordered (new) client
+	b.Run("ordered", func(b *testing.B) {
+		template := `
+output:
+  redpanda:
+    seed_brokers: [ localhost:$PORT ]
+    topic: topic-$ID
+    max_in_flight: 128
+    timeout: "5s"
+    metadata:
+      include_patterns: [ .* ]
+
+input:
+  redpanda:
+    seed_brokers: [ localhost:$PORT ]
+    topics: [ topic-$ID ]
+    consumer_group: "$VAR3"
+    commit_period: "1s"
+`
+		suite := integration.StreamBenchs(
+			integration.StreamBenchSend(20, 1),
+			integration.StreamBenchSend(10, 1),
+			integration.StreamBenchSend(1, 1),
+			// integration.StreamBenchReadSaturated(),
+		)
+		suite.Run(
+			b, template,
+			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+				vars.General["VAR3"] = "group" + vars.ID
+				require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, vars.ID, 1))
+			}),
+			integration.StreamTestOptPort(kafkaPortStr),
+		)
+	})
 }

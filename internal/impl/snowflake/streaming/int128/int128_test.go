@@ -11,8 +11,10 @@
 package int128
 
 import (
+	"crypto/rand"
 	"fmt"
 	"math"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -387,4 +389,18 @@ func TestFitsInPrec(t *testing.T) {
 	n, err := FromString(snowflakeNumberTiny, 38, 37)
 	require.NoError(t, err)
 	require.True(t, n.FitsInPrecision(38), snowflakeNumberTiny)
+}
+
+func TestToBytes(t *testing.T) {
+	for i := 0; i < 100; i++ {
+		input := make([]byte, 16)
+		_, err := rand.Read(input)
+		require.NoError(t, err)
+		n := FromBigEndian(input)
+		require.Equal(t, input, n.ToBigEndian())
+		require.Equal(t, input, n.AppendBigEndian(nil))
+		cloned := slices.Clone(input)
+		require.Equal(t, input, n.AppendBigEndian(cloned)[16:32])
+		require.Equal(t, input, cloned) // Make sure cloned isn't mutated
+	}
 }

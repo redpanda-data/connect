@@ -193,6 +193,10 @@ redis_scan                ,input     ,Redis                     ,4.27.0  ,certif
 redis_script              ,processor ,Redis Script              ,4.11.0  ,certified  ,n          ,y     ,y
 redis_streams             ,input     ,Redis Streams             ,0.0.0   ,certified  ,n          ,y     ,y
 redis_streams             ,output    ,Redis Streams             ,0.0.0   ,certified  ,n          ,y     ,y
+redpanda                  ,input     ,redpanda                  ,4.39.0  ,certified  ,n          ,y     ,y
+redpanda                  ,output    ,redpanda                  ,4.39.0  ,certified  ,n          ,y     ,y
+redpanda_common           ,input     ,redpanda_common           ,4.39.0  ,enterprise ,n          ,y     ,y
+redpanda_common           ,output    ,redpanda_common           ,4.39.0  ,enterprise ,n          ,y     ,y
 redpanda_data_transform   ,processor ,redpanda_data_transform   ,4.31.0  ,certified  ,n          ,n     ,n
 redpanda_migrator         ,input     ,redpanda_migrator         ,4.37.0  ,enterprise ,n          ,y     ,y
 redpanda_migrator         ,output    ,redpanda_migrator         ,4.37.0  ,enterprise ,n          ,y     ,y
@@ -223,6 +227,7 @@ snowflake_streaming       ,output    ,Snowflake Streaming       ,4.39.0  ,enterp
 socket                    ,input     ,Socket                    ,0.0.0   ,certified  ,n          ,n     ,n
 socket                    ,output    ,Socket                    ,0.0.0   ,certified  ,n          ,n     ,n
 socket_server             ,input     ,socket_server             ,0.0.0   ,certified  ,n          ,n     ,n
+spicedb_watch             ,input     ,spicedb_watch             ,0.0.0   ,community  ,n          ,y     ,y
 split                     ,processor ,split                     ,0.0.0   ,certified  ,n          ,y     ,y
 splunk                    ,input     ,Splunk                    ,4.30.0  ,enterprise ,n          ,y     ,y
 splunk_hec                ,output    ,Splunk                    ,4.30.0  ,enterprise ,n          ,y     ,y

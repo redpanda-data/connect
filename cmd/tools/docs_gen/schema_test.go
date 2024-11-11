@@ -21,12 +21,16 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
+	"github.com/redpanda-data/connect/v4/public/schema"
+
 	_ "github.com/redpanda-data/connect/v4/public/components/all"
 )
 
 func TestComponentExamples(t *testing.T) {
-	env := service.GlobalEnvironment()
-	linter := env.FullConfigSchema("", "").NewStreamConfigLinter()
+	sch := schema.Standard("", "")
+	env := sch.Environment()
+
+	linter := sch.NewStreamConfigLinter()
 	linter.SetRejectDeprecated(true)
 	linter.SetSkipEnvVarCheck(true)
 
