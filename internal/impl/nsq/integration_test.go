@@ -22,7 +22,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
 
-func TestIntegration(t *testing.T) {
+func TestIntegrationNSQ(t *testing.T) {
 	t.Parallel()
 
 	{

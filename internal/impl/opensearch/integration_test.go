@@ -50,7 +50,7 @@ func outputFromConf(t testing.TB, confStr string, args ...any) *opensearch.Outpu
 	return o
 }
 
-func TestIntegration(t *testing.T) {
+func TestIntegrationOpensearch(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
@@ -131,7 +131,7 @@ func TestIntegration(t *testing.T) {
 	})
 
 	t.Run("TestOpenSearchErrorHandling", func(te *testing.T) {
-		testOpenSearchErrorHandling(urls, client, te)
+		testOpenSearchErrorHandling(urls, te)
 	})
 
 	t.Run("TestOpenSearchConnect", func(te *testing.T) {
@@ -252,7 +252,7 @@ action: index
 	}
 }
 
-func testOpenSearchErrorHandling(urls []string, client *os.Client, t *testing.T) {
+func testOpenSearchErrorHandling(urls []string, t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
