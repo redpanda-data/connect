@@ -37,7 +37,7 @@ input:
 `
 
 func TestIntegrationBeanstalkdOpenClose(t *testing.T) {
-	// integration.CheckSkip(t)
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -65,7 +65,7 @@ func TestIntegrationBeanstalkdOpenClose(t *testing.T) {
 }
 
 func TestIntegrationBeanstalkdSendBatch(t *testing.T) {
-	// integration.CheckSkip(t)
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -93,7 +93,7 @@ func TestIntegrationBeanstalkdSendBatch(t *testing.T) {
 }
 
 func TestIntegrationBeanstalkdStreamSequential(t *testing.T) {
-	// integration.CheckSkip(t)
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -121,7 +121,7 @@ func TestIntegrationBeanstalkdStreamSequential(t *testing.T) {
 }
 
 func TestIntegrationBeanstalkdStreamParallel(t *testing.T) {
-	// integration.CheckSkip(t)
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")

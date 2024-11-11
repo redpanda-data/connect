@@ -32,7 +32,7 @@ import (
 )
 
 func TestIntegrationGCPPubSub(t *testing.T) {
-	// integration.CheckSkip(t)
+	integration.CheckSkip(t)
 
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)

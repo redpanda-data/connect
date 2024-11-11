@@ -31,7 +31,7 @@ import (
 )
 
 func TestIntegrationAzureServiceBus(t *testing.T) {
-	// integration.CheckSkip(t)
+	integration.CheckSkip(t)
 
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")

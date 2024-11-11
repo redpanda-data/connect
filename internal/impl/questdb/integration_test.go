@@ -35,7 +35,7 @@ import (
 func TestIntegrationQuestDB(t *testing.T) {
 	ctx := context.Background()
 
-	// integration.CheckSkip(t)
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")

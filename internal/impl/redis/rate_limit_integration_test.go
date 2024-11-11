@@ -29,7 +29,7 @@ import (
 )
 
 func TestIntegrationRedisRateLimit(t *testing.T) {
-	// integration.CheckSkip(t)
+	integration.CheckSkip(t)
 
 	pool, err := dockertest.NewPool("")
 	if err != nil {

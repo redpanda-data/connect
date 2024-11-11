@@ -45,7 +45,7 @@ func createGCPCloudStorageBucket(var1, id string) error {
 }
 
 func TestIntegrationGCP(t *testing.T) {
-	// integration.CheckSkip(t)
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")

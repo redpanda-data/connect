@@ -25,7 +25,7 @@ import (
 )
 
 func TestIntegrationZMQ(t *testing.T) {
-	// integration.CheckSkip(t)
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	template := `

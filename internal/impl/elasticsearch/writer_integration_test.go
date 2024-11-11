@@ -47,7 +47,7 @@ func outputFromConf(t testing.TB, confStr string, args ...any) *elasticsearch.Ou
 }
 
 func TestIntegrationWriter(t *testing.T) {
-	// integration.CheckSkip(t)
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")

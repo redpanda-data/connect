@@ -117,7 +117,7 @@ couchbase:
 }
 
 func TestIntegrationCouchbaseProcessor(t *testing.T) {
-	// integration.CheckSkip(t)
+	integration.CheckSkip(t)
 
 	servicePort := requireCouchbase(t)
 

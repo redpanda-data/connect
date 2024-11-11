@@ -38,7 +38,7 @@ func createCompletionProcessorForTest(t *testing.T, addr string) *ollamaCompleti
 }
 
 func TestOllamaCompletionIntegration(t *testing.T) {
-	// integration.CheckSkip(t)
+	integration.CheckSkip(t)
 
 	ctx := context.Background()
 	ollamaContainer, err := ollama.Run(ctx, "ollama/ollama:0.2.5")

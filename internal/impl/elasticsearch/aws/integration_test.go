@@ -56,7 +56,7 @@ func TestIntegrationElasticsearchAWS(t *testing.T) {
 	// TODO: Fix this test after migrating to the new Elasticsearch client libs.
 	t.Skip("Struggling to get localstack es to work, maybe one day")
 
-	// integration.CheckSkip(t)
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")

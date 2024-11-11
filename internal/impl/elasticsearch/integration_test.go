@@ -50,7 +50,7 @@ var elasticIndex = `{
 }`
 
 func TestIntegrationElasticsearchV8(t *testing.T) {
-	// integration.CheckSkip(t)
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -133,7 +133,7 @@ output:
 }
 
 func TestIntegrationElasticsearchV7(t *testing.T) {
-	// integration.CheckSkip(t)
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
