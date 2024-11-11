@@ -55,6 +55,7 @@ type Stream struct {
 	snapshotter                *Snapshotter
 	transactionAckChan         chan string
 	transactionBeginChan       chan bool
+	maxParallelSnapshotTables  int
 
 	lsnAckBuffer []string
 
@@ -96,6 +97,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		transactionAckChan:         make(chan string),
 		transactionBeginChan:       make(chan bool),
 		lsnAckBuffer:               []string{},
+		maxParallelSnapshotTables:  config.MaxParallelSnapshotTables,
 		logger:                     config.Logger,
 		m:                          sync.Mutex{},
 		decodingPlugin:             decodingPluginFromString(config.DecodingPlugin),
@@ -457,15 +459,17 @@ func (s *Stream) processSnapshot(ctx context.Context) error {
 	}()
 
 	s.logger.Infof("Starting snapshot processing")
-
+	sem := make(chan struct{}, s.maxParallelSnapshotTables)
 	var wg errgroup.Group
 
 	for _, table := range s.tableQualifiedName {
 		tableName := table
+		sem <- struct{}{}
 		wg.Go(func() (err error) {
 			s.logger.Infof("Processing snapshot for table: %v", table)
 
 			defer func() {
+				defer func() { <-sem }()
 				if err != nil {
 					if cleanupErr := s.cleanUpOnFailure(ctx); cleanupErr != nil {
 						s.logger.Errorf("Failed to clean up resources on accident: %v", cleanupErr.Error())

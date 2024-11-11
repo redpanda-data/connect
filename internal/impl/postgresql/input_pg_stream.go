@@ -26,20 +26,21 @@ import (
 )
 
 const (
-	fieldDSN                     = "dsn"
-	fieldStreamUncommitted       = "stream_uncommitted"
-	fieldStreamSnapshot          = "stream_snapshot"
-	fieldSnapshotMemSafetyFactor = "snapshot_memory_safety_factor"
-	fieldSnapshotBatchSize       = "snapshot_batch_size"
-	fieldDecodingPlugin          = "decoding_plugin"
-	fieldSchema                  = "schema"
-	fieldTables                  = "tables"
-	fieldCheckpointLimit         = "checkpoint_limit"
-	fieldTemporarySlot           = "temporary_slot"
-	fieldPgStandbyTimeout        = "pg_standby_timeout_sec"
-	fieldWalMonitorIntervalSec   = "pg_wal_monitor_interval_sec"
-	fieldSlotName                = "slot_name"
-	fieldBatching                = "batching"
+	fieldDSN                       = "dsn"
+	fieldStreamUncommitted         = "stream_uncommitted"
+	fieldStreamSnapshot            = "stream_snapshot"
+	fieldSnapshotMemSafetyFactor   = "snapshot_memory_safety_factor"
+	fieldSnapshotBatchSize         = "snapshot_batch_size"
+	fieldDecodingPlugin            = "decoding_plugin"
+	fieldSchema                    = "schema"
+	fieldTables                    = "tables"
+	fieldCheckpointLimit           = "checkpoint_limit"
+	fieldTemporarySlot             = "temporary_slot"
+	fieldPgStandbyTimeout          = "pg_standby_timeout_sec"
+	fieldWalMonitorIntervalSec     = "pg_wal_monitor_interval_sec"
+	fieldSlotName                  = "slot_name"
+	fieldBatching                  = "batching"
+	fieldMaxParallelSnapshotTables = "max_parallel_snapshot_tables"
 )
 
 type asyncMessage struct {
@@ -113,34 +114,36 @@ This input adds the following metadata fields to each message:
 		Description("Int field stat specifies ticker interval for WAL monitoring. Used to fetch replication slot lag").
 		Example(3).
 		Default(3)).
+	Field(service.NewIntField(fieldMaxParallelSnapshotTables).
+		Description("Int specifies a number of tables that will be processed in parallel during the snapshot processing stage").
+		Default(1)).
 	Field(service.NewAutoRetryNacksToggleField()).
 	Field(service.NewBatchPolicyField(fieldBatching))
 
 func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s service.BatchInput, err error) {
 	var (
-		dsn                     string
-		dbSlotName              string
-		temporarySlot           bool
-		schema                  string
-		tables                  []string
-		streamSnapshot          bool
-		snapshotMemSafetyFactor float64
-		decodingPlugin          string
-		streamUncommitted       bool
-		snapshotBatchSize       int
-		checkpointLimit         int
-		walMonitorIntervalSec   int
-		pgStandbyTimeoutSec     int
-		batching                service.BatchPolicy
+		dsn                       string
+		dbSlotName                string
+		temporarySlot             bool
+		schema                    string
+		tables                    []string
+		streamSnapshot            bool
+		snapshotMemSafetyFactor   float64
+		decodingPlugin            string
+		streamUncommitted         bool
+		snapshotBatchSize         int
+		checkpointLimit           int
+		walMonitorIntervalSec     int
+		maxParallelSnapshotTables int
+		pgStandbyTimeoutSec       int
+		batching                  service.BatchPolicy
 	)
 
-	dsn, err = conf.FieldString(fieldDSN)
-	if err != nil {
+	if dsn, err = conf.FieldString(fieldDSN); err != nil {
 		return nil, err
 	}
 
-	dbSlotName, err = conf.FieldString(fieldSlotName)
-	if err != nil {
+	if dbSlotName, err = conf.FieldString(fieldSlotName); err != nil {
 		return nil, err
 	}
 	// Set the default to be a random string
@@ -152,18 +155,15 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		return nil, fmt.Errorf("invalid slot_name: %w", err)
 	}
 
-	temporarySlot, err = conf.FieldBool(fieldTemporarySlot)
-	if err != nil {
+	if temporarySlot, err = conf.FieldBool(fieldTemporarySlot); err != nil {
 		return nil, err
 	}
 
-	schema, err = conf.FieldString(fieldSchema)
-	if err != nil {
+	if schema, err = conf.FieldString(fieldSchema); err != nil {
 		return nil, err
 	}
 
-	tables, err = conf.FieldStringList(fieldTables)
-	if err != nil {
+	if tables, err = conf.FieldStringList(fieldTables); err != nil {
 		return nil, err
 	}
 
@@ -171,28 +171,23 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		return nil, err
 	}
 
-	streamSnapshot, err = conf.FieldBool(fieldStreamSnapshot)
-	if err != nil {
+	if streamSnapshot, err = conf.FieldBool(fieldStreamSnapshot); err != nil {
 		return nil, err
 	}
 
-	streamUncommitted, err = conf.FieldBool(fieldStreamUncommitted)
-	if err != nil {
+	if streamUncommitted, err = conf.FieldBool(fieldStreamUncommitted); err != nil {
 		return nil, err
 	}
 
-	decodingPlugin, err = conf.FieldString(fieldDecodingPlugin)
-	if err != nil {
+	if decodingPlugin, err = conf.FieldString(fieldDecodingPlugin); err != nil {
 		return nil, err
 	}
 
-	snapshotMemSafetyFactor, err = conf.FieldFloat(fieldSnapshotMemSafetyFactor)
-	if err != nil {
+	if snapshotMemSafetyFactor, err = conf.FieldFloat(fieldSnapshotMemSafetyFactor); err != nil {
 		return nil, err
 	}
 
-	snapshotBatchSize, err = conf.FieldInt(fieldSnapshotBatchSize)
-	if err != nil {
+	if snapshotBatchSize, err = conf.FieldInt(fieldSnapshotBatchSize); err != nil {
 		return nil, err
 	}
 
@@ -202,13 +197,15 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		batching.Count = 1
 	}
 
-	pgStandbyTimeoutSec, err = conf.FieldInt(fieldPgStandbyTimeout)
-	if err != nil {
+	if pgStandbyTimeoutSec, err = conf.FieldInt(fieldPgStandbyTimeout); err != nil {
 		return nil, err
 	}
 
-	walMonitorIntervalSec, err = conf.FieldInt(fieldWalMonitorIntervalSec)
-	if err != nil {
+	if walMonitorIntervalSec, err = conf.FieldInt(fieldWalMonitorIntervalSec); err != nil {
+		return nil, err
+	}
+
+	if maxParallelSnapshotTables, err = conf.FieldInt(fieldMaxParallelSnapshotTables); err != nil {
 		return nil, err
 	}
 
@@ -230,22 +227,23 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		dbConfig: pgConnConfig,
 		// dbRawDSN is used for creating golang PG Connection
 		// as using pgconn.Config for golang doesn't support multiple queries in the prepared statement for Postgres Version <= 14
-		dbRawDSN:                dsn,
-		streamSnapshot:          streamSnapshot,
-		snapshotMemSafetyFactor: snapshotMemSafetyFactor,
-		slotName:                dbSlotName,
-		schema:                  schema,
-		tables:                  tables,
-		decodingPlugin:          decodingPlugin,
-		streamUncommitted:       streamUncommitted,
-		temporarySlot:           temporarySlot,
-		snapshotBatchSize:       snapshotBatchSize,
-		batching:                batching,
-		checkpointLimit:         checkpointLimit,
-		pgStandbyTimeoutSec:     pgStandbyTimeoutSec,
-		walMonitorIntervalSec:   walMonitorIntervalSec,
-		cMut:                    sync.Mutex{},
-		msgChan:                 make(chan asyncMessage),
+		dbRawDSN:                  dsn,
+		streamSnapshot:            streamSnapshot,
+		snapshotMemSafetyFactor:   snapshotMemSafetyFactor,
+		slotName:                  dbSlotName,
+		schema:                    schema,
+		tables:                    tables,
+		decodingPlugin:            decodingPlugin,
+		streamUncommitted:         streamUncommitted,
+		temporarySlot:             temporarySlot,
+		snapshotBatchSize:         snapshotBatchSize,
+		batching:                  batching,
+		checkpointLimit:           checkpointLimit,
+		pgStandbyTimeoutSec:       pgStandbyTimeoutSec,
+		walMonitorIntervalSec:     walMonitorIntervalSec,
+		maxParallelSnapshotTables: maxParallelSnapshotTables,
+		cMut:                      sync.Mutex{},
+		msgChan:                   make(chan asyncMessage),
 
 		mgr:             mgr,
 		logger:          mgr.Logger(),
@@ -293,26 +291,27 @@ func init() {
 }
 
 type pgStreamInput struct {
-	dbConfig                *pgconn.Config
-	dbRawDSN                string
-	pgLogicalStream         *pglogicalstream.Stream
-	slotName                string
-	pgStandbyTimeoutSec     int
-	walMonitorIntervalSec   int
-	temporarySlot           bool
-	schema                  string
-	tables                  []string
-	decodingPlugin          string
-	streamSnapshot          bool
-	snapshotMemSafetyFactor float64
-	snapshotBatchSize       int
-	streamUncommitted       bool
-	logger                  *service.Logger
-	mgr                     *service.Resources
-	cMut                    sync.Mutex
-	msgChan                 chan asyncMessage
-	batching                service.BatchPolicy
-	checkpointLimit         int
+	dbConfig                  *pgconn.Config
+	dbRawDSN                  string
+	pgLogicalStream           *pglogicalstream.Stream
+	slotName                  string
+	pgStandbyTimeoutSec       int
+	walMonitorIntervalSec     int
+	temporarySlot             bool
+	schema                    string
+	tables                    []string
+	decodingPlugin            string
+	streamSnapshot            bool
+	snapshotMemSafetyFactor   float64
+	snapshotBatchSize         int
+	streamUncommitted         bool
+	maxParallelSnapshotTables int
+	logger                    *service.Logger
+	mgr                       *service.Resources
+	cMut                      sync.Mutex
+	msgChan                   chan asyncMessage
+	batching                  service.BatchPolicy
+	checkpointLimit           int
 
 	snapshotMetrics *service.MetricGauge
 	replicationLag  *service.MetricGauge
@@ -337,6 +336,7 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 		SnapshotMemorySafetyFactor: p.snapshotMemSafetyFactor,
 		PgStandbyTimeoutSec:        p.pgStandbyTimeoutSec,
 		WalMonitorIntervalSec:      p.walMonitorIntervalSec,
+		MaxParallelSnapshotTables:  p.maxParallelSnapshotTables,
 		Logger:                     p.logger,
 	})
 	if err != nil {

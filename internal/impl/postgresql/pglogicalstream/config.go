@@ -41,6 +41,7 @@ type Config struct {
 
 	Logger *service.Logger
 
-	PgStandbyTimeoutSec   int
-	WalMonitorIntervalSec int
+	PgStandbyTimeoutSec       int
+	WalMonitorIntervalSec     int
+	MaxParallelSnapshotTables int
 }
