@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/Jeffail/checkpoint"
@@ -224,33 +223,33 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	replicationLag := mgr.Metrics().NewGauge("postgres_replication_lag_bytes")
 
 	i := &pgStreamInput{
-		dbConfig: pgConnConfig,
-		// dbRawDSN is used for creating golang PG Connection
-		// as using pgconn.Config for golang doesn't support multiple queries in the prepared statement for Postgres Version <= 14
-		dbRawDSN:                  dsn,
-		streamSnapshot:            streamSnapshot,
-		snapshotMemSafetyFactor:   snapshotMemSafetyFactor,
-		slotName:                  dbSlotName,
-		schema:                    schema,
-		tables:                    tables,
-		decodingPlugin:            decodingPlugin,
-		streamUncommitted:         streamUncommitted,
-		temporarySlot:             temporarySlot,
-		snapshotBatchSize:         snapshotBatchSize,
-		batching:                  batching,
-		checkpointLimit:           checkpointLimit,
-		pgStandbyTimeout:          pgStandbyTimeout,
-		walMonitorInterval:        walMonitorInterval,
-		maxParallelSnapshotTables: maxParallelSnapshotTables,
-		cMut:                      sync.Mutex{},
-		msgChan:                   make(chan asyncMessage),
+		streamConfig: &pglogicalstream.Config{
+			DBConfig: pgConnConfig,
+			DBRawDSN: dsn,
+			DBSchema: schema,
+			DBTables: tables,
+
+			ReplicationSlotName:        "rs_" + dbSlotName,
+			BatchSize:                  snapshotBatchSize,
+			StreamOldData:              streamSnapshot,
+			TemporaryReplicationSlot:   temporarySlot,
+			StreamUncommitted:          streamUncommitted,
+			DecodingPlugin:             decodingPlugin,
+			SnapshotMemorySafetyFactor: snapshotMemSafetyFactor,
+			PgStandbyTimeout:           pgStandbyTimeout,
+			WalMonitorInterval:         walMonitorInterval,
+			MaxParallelSnapshotTables:  maxParallelSnapshotTables,
+			Logger:                     mgr.Logger(),
+		},
+		batching:        batching,
+		checkpointLimit: checkpointLimit,
+		cMut:            sync.Mutex{},
+		msgChan:         make(chan asyncMessage),
 
 		mgr:             mgr,
 		logger:          mgr.Logger(),
 		snapshotMetrics: snapshotMetrics,
 		replicationLag:  replicationLag,
-		inTxState:       atomic.Bool{},
-		releaseTrxChan:  make(chan bool),
 	}
 
 	r, err := service.AutoRetryNacksBatchedToggled(conf, i)
@@ -291,54 +290,21 @@ func init() {
 }
 
 type pgStreamInput struct {
-	dbConfig                  *pgconn.Config
-	dbRawDSN                  string
-	pgLogicalStream           *pglogicalstream.Stream
-	slotName                  string
-	pgStandbyTimeout          time.Duration
-	walMonitorInterval        time.Duration
-	temporarySlot             bool
-	schema                    string
-	tables                    []string
-	decodingPlugin            string
-	streamSnapshot            bool
-	snapshotMemSafetyFactor   float64
-	snapshotBatchSize         int
-	streamUncommitted         bool
-	maxParallelSnapshotTables int
-	logger                    *service.Logger
-	mgr                       *service.Resources
-	cMut                      sync.Mutex
-	msgChan                   chan asyncMessage
-	batching                  service.BatchPolicy
-	checkpointLimit           int
+	streamConfig    *pglogicalstream.Config
+	pgLogicalStream *pglogicalstream.Stream
+	logger          *service.Logger
+	mgr             *service.Resources
+	cMut            sync.Mutex
+	msgChan         chan asyncMessage
+	batching        service.BatchPolicy
+	checkpointLimit int
 
 	snapshotMetrics *service.MetricGauge
 	replicationLag  *service.MetricGauge
-
-	releaseTrxChan chan bool
-	inTxState      atomic.Bool
 }
 
 func (p *pgStreamInput) Connect(ctx context.Context) error {
-	pgStream, err := pglogicalstream.NewPgStream(ctx, &pglogicalstream.Config{
-		DBConfig: p.dbConfig,
-		DBRawDSN: p.dbRawDSN,
-		DBSchema: p.schema,
-		DBTables: p.tables,
-
-		ReplicationSlotName:        "rs_" + p.slotName,
-		BatchSize:                  p.snapshotBatchSize,
-		StreamOldData:              p.streamSnapshot,
-		TemporaryReplicationSlot:   p.temporarySlot,
-		StreamUncommitted:          p.streamUncommitted,
-		DecodingPlugin:             p.decodingPlugin,
-		SnapshotMemorySafetyFactor: p.snapshotMemSafetyFactor,
-		PgStandbyTimeout:           p.pgStandbyTimeout,
-		WalMonitorInterval:         p.walMonitorInterval,
-		MaxParallelSnapshotTables:  p.maxParallelSnapshotTables,
-		Logger:                     p.logger,
-	})
+	pgStream, err := pglogicalstream.NewPgStream(ctx, p.streamConfig)
 	if err != nil {
 		return fmt.Errorf("unable to create replication stream: %w", err)
 	}
