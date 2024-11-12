@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -422,6 +423,14 @@ func (o *snowflakeStreamerOutput) openNewChannel(ctx context.Context) (*streamin
 	return client, err
 }
 
+func (o *snowflakeStreamerOutput) schemaEvolutionEnabled() bool {
+	return o.schemaEvolutionMapping != nil
+}
+
+func (o *snowflakeStreamerOutput) hasOpenedChannels() bool {
+	return o.poolSize > 0
+}
+
 func (o *snowflakeStreamerOutput) openChannel(ctx context.Context, name string, id int16) (*streaming.SnowflakeIngestionChannel, error) {
 	o.logger.Debugf("opening snowflake streaming channel: %s", name)
 	return o.client.OpenChannel(ctx, streaming.ChannelOptions{
@@ -431,7 +440,7 @@ func (o *snowflakeStreamerOutput) openChannel(ctx context.Context, name string, 
 		SchemaName:              o.schema,
 		TableName:               o.table,
 		BuildParallelism:        o.buildParallelism,
-		StrictSchemaEnforcement: o.schemaEvolutionMapping != nil,
+		StrictSchemaEnforcement: o.schemaEvolutionEnabled(),
 	})
 }
 
@@ -446,10 +455,46 @@ func (o *snowflakeStreamerOutput) Connect(ctx context.Context) error {
 	// Precreate a single channel so we know stuff works, otherwise we'll create them on demand.
 	c, err := o.openNewChannel(ctx)
 	if err != nil {
+		// It's possible we couldn't open the channel because the table doesn't exist - let's check that.
+		autoCreate, autoCreateErr := o.WillAutoCreateTable(ctx)
+		// If we know we don't have an output table and schema evolution is enabled, then don't create
+		// any channels - we'll do it lazily after we can create the table (which we need data for).
+		if autoCreateErr == nil && autoCreate {
+			o.logger.Debug("determined table does not exist, waiting to auto-create the table until we have data")
+			return nil
+		}
+
 		return fmt.Errorf("unable to open snowflake streaming channel: %w", err)
 	}
 	o.channelPool.Put(c)
 	return nil
+}
+
+func (o *snowflakeStreamerOutput) WillAutoCreateTable(ctx context.Context) (bool, error) {
+	if !o.schemaEvolutionEnabled() {
+		return false, nil
+	}
+	resp, err := o.restClient.RunSQL(ctx, streaming.RunSQLRequest{
+		Statement: `SELECT NOT to_boolean(count(1)) FROM INFORMATION_SCHEMA.TABLES where table_schema = ? AND table_name = ?`,
+		// Currently we set of timeout of 30 seconds so that we don't have to handle async operations
+		// that need polling to wait until they finish (results are made async when execution is longer
+		// than 45 seconds).
+		Timeout:  30,
+		Database: o.db,
+		Schema:   "INFORMATION_SCHEMA",
+		Role:     o.role,
+		Bindings: map[string]streaming.BindingValue{
+			"1": {Type: "TEXT", Value: o.schema},
+			"2": {Type: "TEXT", Value: o.table},
+		},
+	})
+	if err != nil {
+		return false, err
+	}
+	if len(resp.Data) != 1 && len(resp.Data[0]) != 1 {
+		return false, errors.New("unknown error determining if the table exists")
+	}
+	return strconv.ParseBool(resp.Data[0][0])
 }
 
 func (o *snowflakeStreamerOutput) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
@@ -464,6 +509,16 @@ func (o *snowflakeStreamerOutput) WriteBatch(ctx context.Context, batch service.
 			mapped[i] = msg
 		}
 		batch = mapped
+	}
+	if !o.hasOpenedChannels() {
+		if len(batch) == 0 {
+			return nil
+		}
+		if err := o.CreateOutputTable(ctx, batch); err != nil {
+			return err
+		}
+		// We're not connected so tell the framework to call connect to re-connect to open our channel
+		return service.ErrNotConnected
 	}
 	var err error
 	// We only migrate one column at a time, so tolerate up to 10 schema
@@ -508,7 +563,7 @@ func (o *snowflakeStreamerOutput) WriteBatchInternal(ctx context.Context, batch 
 		o.serializeTime.Timing(stats.SerializeTime.Nanoseconds())
 	} else {
 		// Only evolve the schema if requested.
-		if o.schemaEvolutionMapping != nil {
+		if o.schemaEvolutionEnabled() {
 			nullColumnErr := streaming.NonNullColumnError{}
 			if errors.As(err, &nullColumnErr) {
 				// put the channel back so that we can reopen it along with the rest of the channels to
@@ -558,9 +613,7 @@ func (schemaMigrationNeededError) Error() string {
 	return "schema migration was required and the operation needs to be retried after the migration"
 }
 
-func (o *snowflakeStreamerOutput) MigrateMissingColumn(ctx context.Context, col streaming.MissingColumnError) error {
-	o.schemaMigrationMu.Lock()
-	defer o.schemaMigrationMu.Unlock()
+func (o *snowflakeStreamerOutput) ComputeMissingColumnType(col streaming.MissingColumnError) (string, error) {
 	msg := service.NewMessage(nil)
 	msg.SetStructuredMut(map[string]any{
 		"name":  col.RawName(),
@@ -568,14 +621,24 @@ func (o *snowflakeStreamerOutput) MigrateMissingColumn(ctx context.Context, col 
 	})
 	out, err := msg.BloblangQuery(o.schemaEvolutionMapping)
 	if err != nil {
-		return fmt.Errorf("unable to compute new column type for %s: %w", col.ColumnName(), err)
+		return "", fmt.Errorf("unable to compute new column type for %s: %w", col.ColumnName(), err)
 	}
 	v, err := out.AsBytes()
 	if err != nil {
-		return fmt.Errorf("unable to extract result from new column type mapping for %s: %w", col.ColumnName(), err)
+		return "", fmt.Errorf("unable to extract result from new column type mapping for %s: %w", col.ColumnName(), err)
 	}
 	columnType := string(v)
 	if err := validateColumnType(columnType); err != nil {
+		return "", err
+	}
+	return columnType, nil
+}
+
+func (o *snowflakeStreamerOutput) MigrateMissingColumn(ctx context.Context, col streaming.MissingColumnError) error {
+	o.schemaMigrationMu.Lock()
+	defer o.schemaMigrationMu.Unlock()
+	columnType, err := o.ComputeMissingColumnType(col)
+	if err != nil {
 		return err
 	}
 	o.logger.Infof("identified new schema - attempting to alter table to add column: %s %s", col.ColumnName(), columnType)
@@ -616,6 +679,43 @@ func (o *snowflakeStreamerOutput) MigrateNotNullColumn(ctx context.Context, col 
 		o.logger.Warnf("unable to mark column %s as null, this maybe due to a race with another request, error: %s", col.ColumnName(), err)
 	}
 	return o.ReopenAllChannels(ctx)
+}
+
+func (o *snowflakeStreamerOutput) CreateOutputTable(ctx context.Context, batch service.MessageBatch) error {
+	o.schemaMigrationMu.Lock()
+	defer o.schemaMigrationMu.Unlock()
+	if len(batch) == 0 {
+		return errors.New("cannot create a table from an empty batch")
+	}
+	o.logger.Infof("identified write to non-existing table - attempting to create table: %s", o.table)
+	msg := batch[0] // we assume messages are uniform - otherwise normal schema evolution will be able to evolve the table.
+	v, err := msg.AsStructured()
+	if err != nil {
+		return err
+	}
+	row, ok := v.(map[string]any)
+	if !ok {
+		return fmt.Errorf("unable to extract row from column, expected object but got: %T", v)
+	}
+	columns := []string{}
+	for k, v := range row {
+		col := streaming.NewMissingColumnError(k, v)
+		colType, err := o.ComputeMissingColumnType(col)
+		if err != nil {
+			return err
+		}
+		columns = append(columns, fmt.Sprintf("%s %s", col.ColumnName(), colType))
+	}
+	return o.RunSQLMigration(
+		ctx,
+		// This looks very scary and it *should*. This is prone to SQL injection attacks. The column name is
+		// quoted according to the rules in Snowflake's documentation (via col.ColumnName()). This is also why we need to
+		// validate the data type, so that you can't sneak an injection attack in there.
+		fmt.Sprintf(
+			`CREATE TABLE IF NOT EXISTS IDENTIFIER(?) (%s) COMMENT = 'table created via schema evolution from Redpanda Connect'`,
+			strings.Join(columns, ", "),
+		),
+	)
 }
 
 func (o *snowflakeStreamerOutput) RunSQLMigration(ctx context.Context, statement string) error {

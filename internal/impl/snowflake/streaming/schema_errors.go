@@ -56,6 +56,11 @@ type MissingColumnError struct {
 	val        any
 }
 
+// NewMissingColumnError creates a new MissingColumnError object
+func NewMissingColumnError(rawName string, val any) MissingColumnError {
+	return MissingColumnError{rawName, val}
+}
+
 // ColumnName returns the column name of the data that was not in the table
 //
 // NOTE this is escaped, so it's valid to use this directly in a SQL statement
