@@ -34,7 +34,7 @@ type Stream struct {
 
 	standbyCtxCancel context.CancelFunc
 
-	clientXLogPos LSN
+	clientXLogPos *watermark[LSN]
 
 	standbyMessageTimeout      time.Duration
 	nextStandbyMessageDeadline time.Time
@@ -195,9 +195,9 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	}
 
 	if freshlyCreatedSlot {
-		stream.clientXLogPos = sysident.XLogPos
+		stream.clientXLogPos = newWatermark(sysident.XLogPos)
 	} else {
-		stream.clientXLogPos = lsnrestart
+		stream.clientXLogPos = newWatermark(lsnrestart)
 	}
 
 	stream.standbyMessageTimeout = time.Duration(config.PgStandbyTimeoutSec) * time.Second
@@ -210,7 +210,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	}
 	stream.monitor = monitor
 
-	stream.logger.Debugf("Starting stream from LSN %s with clientXLogPos %s and snapshot name %s", lsnrestart.String(), stream.clientXLogPos.String(), stream.snapshotName)
+	stream.logger.Debugf("Starting stream from LSN %s with clientXLogPos %s and snapshot name %s", lsnrestart.String(), stream.clientXLogPos.Get().String(), stream.snapshotName)
 	if !freshlyCreatedSlot || !config.StreamOldData {
 		if err = stream.startLr(lsnrestart); err != nil {
 			return nil, err
@@ -271,13 +271,13 @@ func (s *Stream) AckLSN(lsn string) error {
 	})
 
 	if err != nil {
-		s.logger.Errorf("Failed to send Standby status message at LSN#%s: %v", s.clientXLogPos.String(), err)
+		s.logger.Errorf("Failed to send Standby status message at LSN#%s: %v", clientXLogPos.String(), err)
 		return err
 	}
 
 	// Update client XLogPos after we ack the message
-	s.clientXLogPos = clientXLogPos
-	s.logger.Debugf("Sent Standby status message at LSN#%s", s.clientXLogPos.String())
+	s.clientXLogPos.Set(clientXLogPos)
+	s.logger.Debugf("Sent Standby status message at LSN#%s", clientXLogPos.String())
 	s.nextStandbyMessageDeadline = time.Now().Add(s.standbyMessageTimeout)
 
 	return nil
@@ -311,18 +311,19 @@ func (s *Stream) streamMessagesAsync() {
 					return
 				}
 
+				pos := s.clientXLogPos.Get()
 				err := SendStandbyStatusUpdate(context.Background(), s.pgConn, StandbyStatusUpdate{
-					WALWritePosition: s.clientXLogPos,
+					WALWritePosition: pos,
 				})
 
 				if err != nil {
-					s.logger.Errorf("Failed to send Standby status message at LSN#%s: %v", s.clientXLogPos.String(), err)
+					s.logger.Errorf("Failed to send Standby status message at LSN#%s: %v", pos.String(), err)
 					if err = s.Stop(); err != nil {
 						s.logger.Errorf("Failed to stop the stream: %v", err)
 					}
 					return
 				}
-				s.logger.Debugf("Sent Standby status message at LSN#%s", s.clientXLogPos.String())
+				s.logger.Debugf("Sent Standby status message at LSN#%s", pos.String())
 				s.nextStandbyMessageDeadline = time.Now().Add(s.standbyMessageTimeout)
 			}
 
