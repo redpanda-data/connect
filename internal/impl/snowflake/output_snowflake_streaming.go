@@ -334,7 +334,7 @@ func newSnowflakeStreamer(
 		initStatementsFn = func(ctx context.Context, client *streaming.SnowflakeRestClient) error {
 			_, err = client.RunSQL(ctx, streaming.RunSQLRequest{
 				Statement: initStatements,
-				// Currently we set of timeout of 30 seconds so that we don't have to handle async operations
+				// Currently we set a of timeout of 30 seconds so that we don't have to handle async operations
 				// that need polling to wait until they finish (results are made async when execution is longer
 				// than 45 seconds).
 				Timeout:  30,
@@ -721,7 +721,7 @@ func (o *snowflakeStreamerOutput) CreateOutputTable(ctx context.Context, batch s
 func (o *snowflakeStreamerOutput) RunSQLMigration(ctx context.Context, statement string) error {
 	_, err := o.restClient.RunSQL(ctx, streaming.RunSQLRequest{
 		Statement: statement,
-		// Currently we set of timeout of 30 seconds so that we don't have to handle async operations
+		// Currently we set a of timeout of 30 seconds so that we don't have to handle async operations
 		// that need polling to wait until they finish (results are made async when execution is longer
 		// than 45 seconds).
 		Timeout:  30,
