@@ -83,7 +83,7 @@ This input adds the following metadata fields to each message:
 		Default(0)).
 	Field(service.NewStringEnumField(fieldDecodingPlugin, "pgoutput", "wal2json").
 		Description(`Specifies the logical decoding plugin to use for streaming changes from PostgreSQL. 'pgoutput' is the native logical replication protocol, while 'wal2json' provides change data as JSON.
-		Important: No matter which plugin you choose, the data will be converted to JSON before sending it to Connect.
+Important: No matter which plugin you choose, the data will be converted to JSON before sending it to Connect.
 		`).
 		Example("pgoutput").
 		Default("pgoutput")).
@@ -220,8 +220,8 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	// https://github.com/jackc/pglogrepl/issues/6
 	pgConnConfig.RuntimeParams["replication"] = "database"
 
-	snapshotMetrics := mgr.Metrics().NewGauge("snapshot_progress", "table")
-	replicationLag := mgr.Metrics().NewGauge("replication_lag_bytes")
+	snapshotMetrics := mgr.Metrics().NewGauge("postgres_snapshot_progress", "table")
+	replicationLag := mgr.Metrics().NewGauge("postgres_replication_lag_bytes")
 
 	i := &pgStreamInput{
 		dbConfig: pgConnConfig,
