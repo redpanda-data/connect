@@ -300,134 +300,132 @@ func (s *Stream) streamMessagesAsync() {
 	}
 
 	for {
-		select {
-		case <-s.streamCtx.Done():
-			s.logger.Warn("Stream was cancelled...exiting...")
+		if s.streamCtx.Err() != nil {
+			s.logger.Debug("Stream was cancelled... exiting...")
 			return
-		default:
-			if time.Now().After(s.nextStandbyMessageDeadline) {
-				if s.pgConn.IsClosed() {
-					s.logger.Warn("Postgres connection is closed...stop reading from replication slot")
-					return
-				}
-
-				pos := s.clientXLogPos.Get()
-				err := SendStandbyStatusUpdate(context.Background(), s.pgConn, StandbyStatusUpdate{
-					WALWritePosition: pos,
-				})
-
-				if err != nil {
-					s.logger.Errorf("Failed to send Standby status message at LSN#%s: %v", pos.String(), err)
-					if err = s.Stop(); err != nil {
-						s.logger.Errorf("Failed to stop the stream: %v", err)
-					}
-					return
-				}
-				s.logger.Debugf("Sent Standby status message at LSN#%s", pos.String())
-				s.nextStandbyMessageDeadline = time.Now().Add(s.standbyMessageTimeout)
-			}
-
-			ctx, cancel := context.WithDeadline(context.Background(), s.nextStandbyMessageDeadline)
-			rawMsg, err := s.pgConn.ReceiveMessage(ctx)
-			s.standbyCtxCancel = cancel
-
-			if err != nil && (errors.Is(err, context.Canceled) || s.stopped) {
-				s.logger.Warn("Service was interrupted....stop reading from replication slot")
+		}
+		if time.Now().After(s.nextStandbyMessageDeadline) {
+			if s.pgConn.IsClosed() {
+				s.logger.Warn("Postgres connection is closed...stop reading from replication slot")
 				return
 			}
+
+			pos := s.clientXLogPos.Get()
+			err := SendStandbyStatusUpdate(context.Background(), s.pgConn, StandbyStatusUpdate{
+				WALWritePosition: pos,
+			})
 
 			if err != nil {
-				if pgconn.Timeout(err) {
-					continue
-				}
-
-				s.logger.Errorf("Failed to receive messages from PostgreSQL: %v", err)
+				s.logger.Errorf("Failed to send Standby status message at LSN#%s: %v", pos.String(), err)
 				if err = s.Stop(); err != nil {
 					s.logger.Errorf("Failed to stop the stream: %v", err)
 				}
 				return
 			}
+			s.logger.Debugf("Sent Standby status message at LSN#%s", pos.String())
+			s.nextStandbyMessageDeadline = time.Now().Add(s.standbyMessageTimeout)
+		}
 
-			if errMsg, ok := rawMsg.(*pgproto3.ErrorResponse); ok {
-				s.logger.Errorf("Received error message from Postgres: %v", errMsg)
-				if err = s.Stop(); err != nil {
-					s.logger.Errorf("Failed to stop the stream: %v", err)
-				}
-				return
-			}
+		ctx, cancel := context.WithDeadline(context.Background(), s.nextStandbyMessageDeadline)
+		rawMsg, err := s.pgConn.ReceiveMessage(ctx)
+		s.standbyCtxCancel = cancel
 
-			msg, ok := rawMsg.(*pgproto3.CopyData)
-			if !ok {
-				s.logger.Warnf("Received unexpected message: %T\n", rawMsg)
+		if err != nil && (errors.Is(err, context.Canceled) || s.stopped) {
+			s.logger.Warn("Service was interrupted....stop reading from replication slot")
+			return
+		}
+
+		if err != nil {
+			if pgconn.Timeout(err) {
 				continue
 			}
 
-			switch msg.Data[0] {
-			case PrimaryKeepaliveMessageByteID:
-				pkm, err := ParsePrimaryKeepaliveMessage(msg.Data[1:])
-				if err != nil {
-					s.logger.Errorf("Failed to parse PrimaryKeepaliveMessage: %v", err)
+			s.logger.Errorf("Failed to receive messages from PostgreSQL: %v", err)
+			if err = s.Stop(); err != nil {
+				s.logger.Errorf("Failed to stop the stream: %v", err)
+			}
+			return
+		}
+
+		if errMsg, ok := rawMsg.(*pgproto3.ErrorResponse); ok {
+			s.logger.Errorf("Received error message from Postgres: %v", errMsg)
+			if err = s.Stop(); err != nil {
+				s.logger.Errorf("Failed to stop the stream: %v", err)
+			}
+			return
+		}
+
+		msg, ok := rawMsg.(*pgproto3.CopyData)
+		if !ok {
+			s.logger.Warnf("Received unexpected message: %T\n", rawMsg)
+			continue
+		}
+
+		switch msg.Data[0] {
+		case PrimaryKeepaliveMessageByteID:
+			pkm, err := ParsePrimaryKeepaliveMessage(msg.Data[1:])
+			if err != nil {
+				s.logger.Errorf("Failed to parse PrimaryKeepaliveMessage: %v", err)
+				if err = s.Stop(); err != nil {
+					s.logger.Errorf("Failed to stop the stream: %v", err)
+				}
+			}
+
+			if pkm.ReplyRequested {
+				s.nextStandbyMessageDeadline = time.Time{}
+			}
+
+		// XLogDataByteID is the message type for the actual WAL data
+		// It will cause the stream to process WAL changes and create the corresponding messages
+		case XLogDataByteID:
+			xld, err := ParseXLogData(msg.Data[1:])
+			if err != nil {
+				s.logger.Errorf("Failed to parse XLogData: %v", err)
+				if err = s.Stop(); err != nil {
+					s.logger.Errorf("Failed to stop the stream: %v", err)
+				}
+			}
+			clientXLogPos := xld.WALStart + LSN(len(xld.WALData))
+			if s.decodingPlugin == "wal2json" {
+				if err = handler.Handle(clientXLogPos, xld); err != nil {
+					s.logger.Errorf("decodeWal2JsonChanges failed: %w", err)
+					if err = s.Stop(); err != nil {
+						s.logger.Errorf("Failed to stop the stream: %v", err)
+					}
+					return
+				}
+
+				// automatic ack for empty changes
+				// basically mean that the client is up-to-date,
+				// but we still need to acknowledge the LSN for standby
+				if err = s.AckLSN(clientXLogPos.String()); err != nil {
+					// stop reading from replication slot
+					// if we can't acknowledge the LSN
+					if err = s.Stop(); err != nil {
+						s.logger.Errorf("Failed to stop the stream: %v", err)
+					}
+					return
+				}
+			}
+
+			if s.decodingPlugin == "pgoutput" {
+				if err = handler.Handle(clientXLogPos, xld); err != nil {
+					s.logger.Errorf("decodePgOutputChanges failed: %w", err)
 					if err = s.Stop(); err != nil {
 						s.logger.Errorf("Failed to stop the stream: %v", err)
 					}
 				}
 
-				if pkm.ReplyRequested {
-					s.nextStandbyMessageDeadline = time.Time{}
-				}
-
-			// XLogDataByteID is the message type for the actual WAL data
-			// It will cause the stream to process WAL changes and create the corresponding messages
-			case XLogDataByteID:
-				xld, err := ParseXLogData(msg.Data[1:])
-				if err != nil {
-					s.logger.Errorf("Failed to parse XLogData: %v", err)
+				// automatic ack for empty changes
+				// basically mean that the client is up-to-date,
+				// but we still need to acknowledge the LSN for standby
+				if err = s.AckLSN(clientXLogPos.String()); err != nil {
+					// stop reading from replication slot
+					// if we can't acknowledge the LSN
 					if err = s.Stop(); err != nil {
 						s.logger.Errorf("Failed to stop the stream: %v", err)
 					}
-				}
-				clientXLogPos := xld.WALStart + LSN(len(xld.WALData))
-				if s.decodingPlugin == "wal2json" {
-					if err = handler.Handle(clientXLogPos, xld); err != nil {
-						s.logger.Errorf("decodeWal2JsonChanges failed: %w", err)
-						if err = s.Stop(); err != nil {
-							s.logger.Errorf("Failed to stop the stream: %v", err)
-						}
-						return
-					}
-
-					// automatic ack for empty changes
-					// basically mean that the client is up-to-date,
-					// but we still need to acknowledge the LSN for standby
-					if err = s.AckLSN(clientXLogPos.String()); err != nil {
-						// stop reading from replication slot
-						// if we can't acknowledge the LSN
-						if err = s.Stop(); err != nil {
-							s.logger.Errorf("Failed to stop the stream: %v", err)
-						}
-						return
-					}
-				}
-
-				if s.decodingPlugin == "pgoutput" {
-					if err = handler.Handle(clientXLogPos, xld); err != nil {
-						s.logger.Errorf("decodePgOutputChanges failed: %w", err)
-						if err = s.Stop(); err != nil {
-							s.logger.Errorf("Failed to stop the stream: %v", err)
-						}
-					}
-
-					// automatic ack for empty changes
-					// basically mean that the client is up-to-date,
-					// but we still need to acknowledge the LSN for standby
-					if err = s.AckLSN(clientXLogPos.String()); err != nil {
-						// stop reading from replication slot
-						// if we can't acknowledge the LSN
-						if err = s.Stop(); err != nil {
-							s.logger.Errorf("Failed to stop the stream: %v", err)
-						}
-						return
-					}
+					return
 				}
 			}
 		}
