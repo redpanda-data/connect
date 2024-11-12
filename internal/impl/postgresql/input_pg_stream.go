@@ -36,8 +36,8 @@ const (
 	fieldTables                    = "tables"
 	fieldCheckpointLimit           = "checkpoint_limit"
 	fieldTemporarySlot             = "temporary_slot"
-	fieldPgStandbyTimeout          = "pg_standby_timeout_sec"
-	fieldWalMonitorIntervalSec     = "pg_wal_monitor_interval_sec"
+	fieldPgStandbyTimeout          = "pg_standby_timeout"
+	fieldWalMonitorInterval        = "pg_wal_monitor_interval"
 	fieldSlotName                  = "slot_name"
 	fieldBatching                  = "batching"
 	fieldMaxParallelSnapshotTables = "max_parallel_snapshot_tables"
@@ -106,14 +106,14 @@ Important: No matter which plugin you choose, the data will be converted to JSON
 		Description("The name of the PostgreSQL logical replication slot to use. If not provided, a random name will be generated. You can create this slot manually before starting replication if desired.").
 		Example("my_test_slot").
 		Default("")).
-	Field(service.NewIntField(fieldPgStandbyTimeout).
-		Description("Int field that specifies default standby timeout for PostgreSQL replication connection").
-		Example(10).
-		Default(10)).
-	Field(service.NewIntField(fieldWalMonitorIntervalSec).
-		Description("Int field stat specifies ticker interval for WAL monitoring. Used to fetch replication slot lag").
-		Example(3).
-		Default(3)).
+	Field(service.NewDurationField(fieldPgStandbyTimeout).
+		Description("Specify the standby timeout before refreshing an idle connection.").
+		Example(30 * time.Second).
+		Default(10 * time.Second)).
+	Field(service.NewDurationField(fieldWalMonitorInterval).
+		Description("How often to report changes to the replication lag.").
+		Example(6 * time.Second).
+		Default(3 * time.Second)).
 	Field(service.NewIntField(fieldMaxParallelSnapshotTables).
 		Description("Int specifies a number of tables that will be processed in parallel during the snapshot processing stage").
 		Default(1)).
@@ -133,9 +133,9 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		streamUncommitted         bool
 		snapshotBatchSize         int
 		checkpointLimit           int
-		walMonitorIntervalSec     int
+		walMonitorInterval        time.Duration
 		maxParallelSnapshotTables int
-		pgStandbyTimeoutSec       int
+		pgStandbyTimeout          time.Duration
 		batching                  service.BatchPolicy
 	)
 
@@ -197,11 +197,11 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		batching.Count = 1
 	}
 
-	if pgStandbyTimeoutSec, err = conf.FieldInt(fieldPgStandbyTimeout); err != nil {
+	if pgStandbyTimeout, err = conf.FieldDuration(fieldPgStandbyTimeout); err != nil {
 		return nil, err
 	}
 
-	if walMonitorIntervalSec, err = conf.FieldInt(fieldWalMonitorIntervalSec); err != nil {
+	if walMonitorInterval, err = conf.FieldDuration(fieldWalMonitorInterval); err != nil {
 		return nil, err
 	}
 
@@ -239,8 +239,8 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		snapshotBatchSize:         snapshotBatchSize,
 		batching:                  batching,
 		checkpointLimit:           checkpointLimit,
-		pgStandbyTimeoutSec:       pgStandbyTimeoutSec,
-		walMonitorIntervalSec:     walMonitorIntervalSec,
+		pgStandbyTimeout:          pgStandbyTimeout,
+		walMonitorInterval:        walMonitorInterval,
 		maxParallelSnapshotTables: maxParallelSnapshotTables,
 		cMut:                      sync.Mutex{},
 		msgChan:                   make(chan asyncMessage),
@@ -295,8 +295,8 @@ type pgStreamInput struct {
 	dbRawDSN                  string
 	pgLogicalStream           *pglogicalstream.Stream
 	slotName                  string
-	pgStandbyTimeoutSec       int
-	walMonitorIntervalSec     int
+	pgStandbyTimeout          time.Duration
+	walMonitorInterval        time.Duration
 	temporarySlot             bool
 	schema                    string
 	tables                    []string
@@ -334,8 +334,8 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 		StreamUncommitted:          p.streamUncommitted,
 		DecodingPlugin:             p.decodingPlugin,
 		SnapshotMemorySafetyFactor: p.snapshotMemSafetyFactor,
-		PgStandbyTimeoutSec:        p.pgStandbyTimeoutSec,
-		WalMonitorIntervalSec:      p.walMonitorIntervalSec,
+		PgStandbyTimeout:           p.pgStandbyTimeout,
+		WalMonitorInterval:         p.walMonitorInterval,
 		MaxParallelSnapshotTables:  p.maxParallelSnapshotTables,
 		Logger:                     p.logger,
 	})
