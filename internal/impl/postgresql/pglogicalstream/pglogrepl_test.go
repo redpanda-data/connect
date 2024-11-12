@@ -207,6 +207,88 @@ func TestDropReplicationSlot(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestCreatePublication(t *testing.T) {
+	pool, resource, dbURL := createDockerInstance(t)
+	defer func() {
+		err := pool.Purge(resource)
+		require.NoError(t, err)
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+
+	conn, err := pgconn.Connect(ctx, dbURL)
+	require.NoError(t, err)
+	defer closeConn(t, conn)
+
+	publicationName := "test_publication"
+	err = CreatePublication(context.Background(), conn, publicationName, []string{})
+	require.NoError(t, err)
+
+	tables, forAllTables, err := GetPublicationTables(context.Background(), conn, publicationName)
+	require.NoError(t, err)
+	assert.Empty(t, tables)
+	assert.True(t, forAllTables)
+
+	multiReader := conn.Exec(context.Background(), "CREATE TABLE test_table (id serial PRIMARY KEY, name text);")
+	_, err = multiReader.ReadAll()
+	require.NoError(t, err)
+
+	publicationWithTables := "test_pub_with_tables"
+	err = CreatePublication(context.Background(), conn, publicationWithTables, []string{"test_table"})
+	require.NoError(t, err)
+
+	tables, forAllTables, err = GetPublicationTables(context.Background(), conn, publicationName)
+	require.NoError(t, err)
+	assert.NotEmpty(t, tables)
+	assert.Contains(t, tables, "test_table")
+	assert.False(t, forAllTables)
+
+	// add more tables to publication
+	multiReader = conn.Exec(context.Background(), "CREATE TABLE test_table2 (id serial PRIMARY KEY, name text);")
+	_, err = multiReader.ReadAll()
+	require.NoError(t, err)
+
+	// Pass more tables to the publication
+	err = CreatePublication(context.Background(), conn, publicationWithTables, []string{
+		"test_table2",
+		"test_table",
+	})
+	require.NoError(t, err)
+
+	tables, forAllTables, err = GetPublicationTables(context.Background(), conn, publicationWithTables)
+	require.NoError(t, err)
+	assert.NotEmpty(t, tables)
+	assert.Contains(t, tables, "test_table")
+	assert.Contains(t, tables, "test_table2")
+	assert.False(t, forAllTables)
+
+	// Removing one table from the publication
+	err = CreatePublication(context.Background(), conn, publicationWithTables, []string{
+		"test_table",
+	})
+	require.NoError(t, err)
+
+	tables, forAllTables, err = GetPublicationTables(context.Background(), conn, publicationWithTables)
+	require.NoError(t, err)
+	assert.NotEmpty(t, tables)
+	assert.Contains(t, tables, "test_table")
+	assert.False(t, forAllTables)
+
+	// Add one table and remove one at the same time
+	err = CreatePublication(context.Background(), conn, publicationWithTables, []string{
+		"test_table2",
+	})
+	require.NoError(t, err)
+
+	tables, forAllTables, err = GetPublicationTables(context.Background(), conn, publicationWithTables)
+	require.NoError(t, err)
+	assert.NotEmpty(t, tables)
+	assert.Contains(t, tables, "test_table2")
+	assert.False(t, forAllTables)
+
+}
+
 func TestStartReplication(t *testing.T) {
 	pool, resource, dbURL := createDockerInstance(t)
 	defer func() {

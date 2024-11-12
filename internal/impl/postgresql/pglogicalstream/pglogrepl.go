@@ -22,6 +22,7 @@ import (
 	"database/sql/driver"
 	"encoding/binary"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -29,6 +30,7 @@ import (
 	"github.com/jackc/pgio"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgproto3"
+	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
 )
 
 const (
@@ -339,21 +341,118 @@ func DropReplicationSlot(ctx context.Context, conn *pgconn.PgConn, slotName stri
 
 // CreatePublication creates a new PostgreSQL publication with the given name for a list of tables and drop if exists flag
 func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName string, tables []string) error {
-	result := conn.Exec(ctx, fmt.Sprintf("DROP PUBLICATION IF EXISTS %s;", publicationName))
-	if _, err := result.ReadAll(); err != nil {
+	// Check if publication exists
+	pubQuery, err := sanitize.SQLQuery(`
+			SELECT pubname, puballtables
+			FROM pg_publication
+			WHERE pubname = $1;
+		`, publicationName)
+	if err != nil {
+		return fmt.Errorf("failed to sanitize publication query: %w", err)
+	}
+
+	result := conn.Exec(ctx, pubQuery)
+
+	rows, err := result.ReadAll()
+	if err != nil {
+		return fmt.Errorf("failed to check publication existence: %w", err)
+	}
+
+	tablesClause := "FOR ALL TABLES"
+	if len(tables) > 0 {
+		// TODO: Implement proper SQL injection protection, potentially using parameterized queries
+		// or a SQL query builder that handles proper escaping
+		tablesClause = "FOR TABLE " + strings.Join(tables, ",")
+	}
+
+	if len(rows) == 0 || len(rows[0].Rows) == 0 {
+		// Publication doesn't exist, create new one
+		result = conn.Exec(ctx, fmt.Sprintf("CREATE PUBLICATION %s %s;", publicationName, tablesClause))
+		if _, err := result.ReadAll(); err != nil {
+			return fmt.Errorf("failed to create publication: %w", err)
+		}
+
 		return nil
 	}
 
-	// TODO(rockwood): We need to validate the tables don't contain a SQL injection attack
-	tablesSchemaFilter := "FOR TABLE " + strings.Join(tables, ",")
-	if len(tables) == 0 {
-		tablesSchemaFilter = "FOR ALL TABLES"
+	// assuming publication already exists
+	// get a list of tables in the publication
+	pubTables, forAllTables, err := GetPublicationTables(ctx, conn, publicationName)
+	if err != nil {
+		return fmt.Errorf("failed to get publication tables: %w", err)
 	}
-	result = conn.Exec(ctx, fmt.Sprintf("CREATE PUBLICATION %s %s;", publicationName, tablesSchemaFilter))
-	if _, err := result.ReadAll(); err != nil {
-		return err
+
+	// list of tables to publish is empty and publication is for all tables
+	// no update is needed
+	if forAllTables && len(pubTables) == 0 {
+		return nil
 	}
+
+	var tablesToRemoveFromPublication = []string{}
+	var tablesToAddToPublication = []string{}
+	for _, table := range tables {
+		if !slices.Contains[[]string, string](pubTables, table) {
+			tablesToAddToPublication = append(tablesToAddToPublication, table)
+		}
+	}
+
+	for _, table := range pubTables {
+		if !slices.Contains[[]string, string](tables, table) {
+			tablesToRemoveFromPublication = append(tablesToRemoveFromPublication, table)
+		}
+	}
+
+	// remove tables from publication
+	for _, dropTable := range tablesToRemoveFromPublication {
+		result = conn.Exec(ctx, fmt.Sprintf("ALTER PUBLICATION %s DROP TABLE %s;", publicationName, dropTable))
+		if _, err := result.ReadAll(); err != nil {
+			return fmt.Errorf("failed to remove table from publication: %w", err)
+		}
+	}
+
+	// add tables to publication
+	for _, addTable := range tablesToAddToPublication {
+		result = conn.Exec(ctx, fmt.Sprintf("ALTER PUBLICATION %s ADD TABLE %s;", publicationName, addTable))
+		if _, err := result.ReadAll(); err != nil {
+			return fmt.Errorf("failed to add table to publication: %w", err)
+		}
+	}
+
 	return nil
+}
+
+// GetPublicationTables returns a list of tables currently in the publication
+// Arguments, in order: list of the tables, exist for all tables, errror
+func GetPublicationTables(ctx context.Context, conn *pgconn.PgConn, publicationName string) ([]string, bool, error) {
+	query, err := sanitize.SQLQuery(`
+		SELECT DISTINCT
+			tablename as table_name
+		FROM pg_publication_tables
+		WHERE pubname = $1
+		ORDER BY table_name;
+	`, publicationName)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to get publication tables: %w", err)
+	}
+
+	// Get specific tables in the publication
+	result := conn.Exec(ctx, query)
+
+	rows, err := result.ReadAll()
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to get publication tables: %w", err)
+	}
+
+	if len(rows) == 0 || len(rows[0].Rows) == 0 {
+		return nil, true, nil // Publication exists and is for all tables
+	}
+
+	tables := make([]string, 0, len(rows))
+	for _, row := range rows[0].Rows {
+		tables = append(tables, string(row[0]))
+	}
+
+	return tables, false, nil
 }
 
 // StartReplicationOptions are the options for the START_REPLICATION command.
