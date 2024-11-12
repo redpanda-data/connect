@@ -107,12 +107,12 @@ Important: No matter which plugin you choose, the data will be converted to JSON
 		Default("")).
 	Field(service.NewDurationField(fieldPgStandbyTimeout).
 		Description("Specify the standby timeout before refreshing an idle connection.").
-		Example(30 * time.Second).
-		Default(10 * time.Second)).
+		Example("30s").
+		Default("10s")).
 	Field(service.NewDurationField(fieldWalMonitorInterval).
 		Description("How often to report changes to the replication lag.").
-		Example(6 * time.Second).
-		Default(3 * time.Second)).
+		Example("6s").
+		Default("3s")).
 	Field(service.NewIntField(fieldMaxParallelSnapshotTables).
 		Description("Int specifies a number of tables that will be processed in parallel during the snapshot processing stage").
 		Default(1)).
