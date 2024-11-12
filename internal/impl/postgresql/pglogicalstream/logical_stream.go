@@ -35,7 +35,6 @@ type Stream struct {
 	standbyCtxCancel context.CancelFunc
 
 	clientXLogPos LSN
-	lsnrestart    LSN
 
 	standbyMessageTimeout      time.Duration
 	nextStandbyMessageDeadline time.Time
@@ -195,8 +194,6 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		lsnrestart, _ = ParseLSN(confirmedLSNFromDB)
 	}
 
-	stream.lsnrestart = lsnrestart
-
 	if freshlyCreatedSlot {
 		stream.clientXLogPos = sysident.XLogPos
 	} else {
@@ -213,9 +210,9 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	}
 	stream.monitor = monitor
 
-	stream.logger.Debugf("Starting stream from LSN %s with clientXLogPos %s and snapshot name %s", stream.lsnrestart.String(), stream.clientXLogPos.String(), stream.snapshotName)
+	stream.logger.Debugf("Starting stream from LSN %s with clientXLogPos %s and snapshot name %s", lsnrestart.String(), stream.clientXLogPos.String(), stream.snapshotName)
 	if !freshlyCreatedSlot || !config.StreamOldData {
-		if err = stream.startLr(); err != nil {
+		if err = stream.startLr(lsnrestart); err != nil {
 			return nil, err
 		}
 
@@ -224,7 +221,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		// New messages will be streamed after the snapshot has been processed.
 		// stream.startLr() and stream.streamMessagesAsync() will be called inside stream.processSnapshot()
 		go func() {
-			if err := stream.processSnapshot(ctx); err != nil {
+			if err := stream.processSnapshot(ctx, lsnrestart); err != nil {
 				stream.logger.Errorf("Failed to process snapshot: %v", err.Error())
 			}
 		}()
@@ -244,8 +241,8 @@ func (s *Stream) ConsumedCallback() chan bool {
 	return s.consumedCallback
 }
 
-func (s *Stream) startLr() error {
-	if err := StartReplication(context.Background(), s.pgConn, s.slotName, s.lsnrestart, StartReplicationOptions{PluginArgs: s.decodingPluginArguments}); err != nil {
+func (s *Stream) startLr(lsnStart LSN) error {
+	if err := StartReplication(context.Background(), s.pgConn, s.slotName, lsnStart, StartReplicationOptions{PluginArgs: s.decodingPluginArguments}); err != nil {
 		return err
 	}
 
@@ -441,7 +438,7 @@ func (s *Stream) AckTxChan() chan string {
 	return s.transactionAckChan
 }
 
-func (s *Stream) processSnapshot(ctx context.Context) error {
+func (s *Stream) processSnapshot(ctx context.Context, lsnStart LSN) error {
 	if err := s.snapshotter.prepare(); err != nil {
 		s.logger.Errorf("Failed to prepare database snapshot. Probably snapshot is expired...: %v", err.Error())
 		if err = s.cleanUpOnFailure(ctx); err != nil {
@@ -608,7 +605,7 @@ func (s *Stream) processSnapshot(ctx context.Context) error {
 		return err
 	}
 
-	if err := s.startLr(); err != nil {
+	if err := s.startLr(lsnStart); err != nil {
 		s.logger.Errorf("Failed to start logical replication after snapshot: %v", err.Error())
 		return err
 	}
