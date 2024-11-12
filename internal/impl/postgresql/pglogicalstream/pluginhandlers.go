@@ -56,8 +56,7 @@ type PgOutputPluginHandler struct {
 	typeMap           *pgtype.Map
 	pgoutputChanges   []StreamMessageChanges
 
-	consumedCallback   chan bool
-	transactionAckChan chan string
+	lsnWatermark *watermark[LSN]
 }
 
 // NewPgOutputPluginHandler creates a new PgOutputPluginHandler
@@ -65,18 +64,16 @@ func NewPgOutputPluginHandler(
 	messages chan StreamMessage,
 	streamUncommitted bool,
 	monitor *Monitor,
-	consumedCallback chan bool,
-	transactionAckChan chan string,
+	lsnWatermark *watermark[LSN],
 ) *PgOutputPluginHandler {
 	return &PgOutputPluginHandler{
-		messages:           messages,
-		monitor:            monitor,
-		streamUncommitted:  streamUncommitted,
-		relations:          map[uint32]*RelationMessage{},
-		typeMap:            pgtype.NewMap(),
-		pgoutputChanges:    []StreamMessageChanges{},
-		consumedCallback:   consumedCallback,
-		transactionAckChan: transactionAckChan,
+		messages:          messages,
+		monitor:           monitor,
+		streamUncommitted: streamUncommitted,
+		relations:         map[uint32]*RelationMessage{},
+		typeMap:           pgtype.NewMap(),
+		pgoutputChanges:   []StreamMessageChanges{},
+		lsnWatermark:      lsnWatermark,
 	}
 }
 
@@ -95,10 +92,11 @@ func (p *PgOutputPluginHandler) Handle(clientXLogPos LSN, xld XLogData) error {
 		}
 
 		// when receiving a commit message, we need to acknowledge the LSN
-		// but we must wait for benthos to flush the messages before we can do that
+		// but we must wait for connect to flush the messages before we can do that
 		if isCommit {
-			p.transactionAckChan <- clientXLogPos.String()
-			<-p.consumedCallback
+			p.lsnWatermark.WaitFor(func(lsn LSN) bool {
+				return lsn >= clientXLogPos
+			})
 		} else {
 			if message == nil && !isCommit {
 				return nil

@@ -52,16 +52,10 @@ type Stream struct {
 	monitor                    *Monitor
 	streamUncommitted          bool
 	snapshotter                *Snapshotter
-	transactionAckChan         chan string
-	transactionBeginChan       chan bool
 	maxParallelSnapshotTables  int
-
-	lsnAckBuffer []string
 
 	m       sync.Mutex
 	stopped bool
-
-	consumedCallback chan bool
 }
 
 // NewPgStream creates a new instance of the Stream struct
@@ -92,10 +86,6 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		snapshotBatchSize:          config.BatchSize,
 		schema:                     config.DBSchema,
 		tableQualifiedName:         tableNames,
-		consumedCallback:           make(chan bool),
-		transactionAckChan:         make(chan string),
-		transactionBeginChan:       make(chan bool),
-		lsnAckBuffer:               []string{},
 		maxParallelSnapshotTables:  config.MaxParallelSnapshotTables,
 		logger:                     config.Logger,
 		m:                          sync.Mutex{},
@@ -236,11 +226,6 @@ func (s *Stream) GetProgress() *Report {
 	return s.monitor.Report()
 }
 
-// ConsumedCallback returns a channel that is used to tell the plugin to commit consumed offset
-func (s *Stream) ConsumedCallback() chan bool {
-	return s.consumedCallback
-}
-
 func (s *Stream) startLr(lsnStart LSN) error {
 	if err := StartReplication(context.Background(), s.pgConn, s.slotName, lsnStart, StartReplicationOptions{PluginArgs: s.decodingPluginArguments}); err != nil {
 		return err
@@ -289,7 +274,7 @@ func (s *Stream) streamMessagesAsync() {
 	case "wal2json":
 		handler = NewWal2JsonPluginHandler(s.messages, s.monitor)
 	case "pgoutput":
-		handler = NewPgOutputPluginHandler(s.messages, s.streamUncommitted, s.monitor, s.consumedCallback, s.transactionAckChan)
+		handler = NewPgOutputPluginHandler(s.messages, s.streamUncommitted, s.monitor, s.clientXLogPos)
 	default:
 		s.logger.Error("Invalid decoding plugin. Cant find needed handler implementation")
 		if err := s.Stop(); err != nil {
@@ -430,11 +415,6 @@ func (s *Stream) streamMessagesAsync() {
 			}
 		}
 	}
-}
-
-// AckTxChan returns the transaction ack channel
-func (s *Stream) AckTxChan() chan string {
-	return s.transactionAckChan
 }
 
 func (s *Stream) processSnapshot(ctx context.Context, lsnStart LSN) error {

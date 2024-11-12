@@ -368,32 +368,9 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 					break
 				}
 
-				if err := p.flushBatch(ctx, cp, flushedBatch, latestOffset, false); err != nil {
+				if err := p.flushBatch(ctx, cp, flushedBatch, latestOffset); err != nil {
 					break
 				}
-
-				// TrxCommit LSN must be acked when all the messages in the batch are processed
-			case trxCommitLsn, open := <-p.pgLogicalStream.AckTxChan():
-				if !open {
-					break
-				}
-
-				flushedBatch, err := batchPolicy.Flush(ctx)
-				if err != nil {
-					p.logger.Debugf("Flush batch error: %w", err)
-					break
-				}
-
-				if err = p.flushBatch(ctx, cp, flushedBatch, latestOffset, true); err != nil {
-					break
-				}
-
-				if err = p.pgLogicalStream.AckLSN(trxCommitLsn); err != nil {
-					p.logger.Errorf("Failed to ack LSN: %v", err)
-					break
-				}
-
-				p.pgLogicalStream.ConsumedCallback() <- true
 
 			case message, open := <-p.pgLogicalStream.Messages():
 				if !open {
@@ -440,8 +417,7 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 						p.logger.Debugf("Flush batch error: %w", err)
 						break
 					}
-					waitForCommit := message.Mode == pglogicalstream.StreamModeStreaming
-					if err := p.flushBatch(ctx, cp, flushedBatch, latestOffset, waitForCommit); err != nil {
+					if err := p.flushBatch(ctx, cp, flushedBatch, latestOffset); err != nil {
 						break
 					}
 				}
@@ -457,7 +433,7 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 	return err
 }
 
-func (p *pgStreamInput) flushBatch(ctx context.Context, checkpointer *checkpoint.Capped[*int64], msg service.MessageBatch, lsn *int64, waitForCommit bool) error {
+func (p *pgStreamInput) flushBatch(ctx context.Context, checkpointer *checkpoint.Capped[*int64], msg service.MessageBatch, lsn *int64) error {
 	if msg == nil {
 		return nil
 	}
@@ -470,21 +446,7 @@ func (p *pgStreamInput) flushBatch(ctx context.Context, checkpointer *checkpoint
 		return err
 	}
 
-	var wg sync.WaitGroup
-	if waitForCommit {
-		wg.Add(1)
-	}
 	ackFn := func(ctx context.Context, res error) error {
-		// This waits for *THIS MESSAGE* to get acked, which is
-		// not when we actually ack this LSN because of out of order
-		// processing might cause another message to actually resolve
-		// the proper checkpointer to commit.
-		//
-		// This waitForCommit business probably needs to happen inside
-		// the ack stream not here.
-		if waitForCommit {
-			defer wg.Done()
-		}
 		maxOffset := resolveFn()
 		if maxOffset == nil {
 			return nil
@@ -504,7 +466,6 @@ func (p *pgStreamInput) flushBatch(ctx context.Context, checkpointer *checkpoint
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-	wg.Wait() // Noop if !waitForCommit
 	return nil
 }
 
