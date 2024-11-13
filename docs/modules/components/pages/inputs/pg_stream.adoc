@@ -50,8 +50,8 @@ input:
     checkpoint_limit: 1024
     temporary_slot: false
     slot_name: ""
-    pg_standby_timeout_sec: 10
-    pg_wal_monitor_interval_sec: 3
+    pg_standby_timeout: 10s
+    pg_wal_monitor_interval: 3s
     max_parallel_snapshot_tables: 1
     auto_replay_nacks: true
     batching:
@@ -82,8 +82,8 @@ input:
     checkpoint_limit: 1024
     temporary_slot: false
     slot_name: ""
-    pg_standby_timeout_sec: 10
-    pg_wal_monitor_interval_sec: 3
+    pg_standby_timeout: 10s
+    pg_wal_monitor_interval: 3s
     max_parallel_snapshot_tables: 1
     auto_replay_nacks: true
     batching:
@@ -181,7 +181,7 @@ snapshot_batch_size: 10000
 === `decoding_plugin`
 
 Specifies the logical decoding plugin to use for streaming changes from PostgreSQL. 'pgoutput' is the native logical replication protocol, while 'wal2json' provides change data as JSON.
-		Important: No matter which plugin you choose, the data will be converted to JSON before sending it to Connect.
+Important: No matter which plugin you choose, the data will be converted to JSON before sending it to Connect.
 
 
 *Type*: `string`
@@ -263,34 +263,34 @@ The name of the PostgreSQL logical replication slot to use. If not provided, a r
 slot_name: my_test_slot
 ```
 
-=== `pg_standby_timeout_sec`
+=== `pg_standby_timeout`
 
-Int field that specifies default standby timeout for PostgreSQL replication connection
+Specify the standby timeout before refreshing an idle connection.
 
 
-*Type*: `int`
+*Type*: `string`
 
-*Default*: `10`
+*Default*: `"10s"`
 
 ```yml
 # Examples
 
-pg_standby_timeout_sec: 10
+pg_standby_timeout: 30s
 ```
 
-=== `pg_wal_monitor_interval_sec`
+=== `pg_wal_monitor_interval`
 
-Int field stat specifies ticker interval for WAL monitoring. Used to fetch replication slot lag
+How often to report changes to the replication lag.
 
 
-*Type*: `int`
+*Type*: `string`
 
-*Default*: `3`
+*Default*: `"3s"`
 
 ```yml
 # Examples
 
-pg_wal_monitor_interval_sec: 3
+pg_wal_monitor_interval: 6s
 ```
 
 === `max_parallel_snapshot_tables`
