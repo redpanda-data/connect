@@ -40,5 +40,5 @@ type StreamMessage struct {
 	Lsn         *string                `json:"lsn"`
 	Changes     []StreamMessageChanges `json:"changes"`
 	Mode        StreamMode             `json:"mode"`
-	WALLagBytes *int64                 `json:"wal_lag_bytes"`
+	WALLagBytes *int64                 `json:"wal_lag_bytes,omitempty"`
 }

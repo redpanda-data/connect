@@ -9,6 +9,8 @@
 package pglogicalstream
 
 import (
+	"time"
+
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -41,7 +43,7 @@ type Config struct {
 
 	Logger *service.Logger
 
-	PgStandbyTimeoutSec       int
-	WalMonitorIntervalSec     int
+	PgStandbyTimeout          time.Duration
+	WalMonitorInterval        time.Duration
 	MaxParallelSnapshotTables int
 }

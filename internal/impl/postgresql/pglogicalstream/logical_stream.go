@@ -22,6 +22,7 @@ import (
 	"github.com/jackc/pgx/v5/pgproto3"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
+	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/watermark"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -34,8 +35,7 @@ type Stream struct {
 
 	standbyCtxCancel context.CancelFunc
 
-	clientXLogPos LSN
-	lsnrestart    LSN
+	clientXLogPos *watermark.Value[LSN]
 
 	standbyMessageTimeout      time.Duration
 	nextStandbyMessageDeadline time.Time
@@ -53,16 +53,10 @@ type Stream struct {
 	monitor                    *Monitor
 	streamUncommitted          bool
 	snapshotter                *Snapshotter
-	transactionAckChan         chan string
-	transactionBeginChan       chan bool
 	maxParallelSnapshotTables  int
-
-	lsnAckBuffer []string
 
 	m       sync.Mutex
 	stopped bool
-
-	consumedCallback chan bool
 }
 
 // NewPgStream creates a new instance of the Stream struct
@@ -93,10 +87,6 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		snapshotBatchSize:          config.BatchSize,
 		schema:                     config.DBSchema,
 		tableQualifiedName:         tableNames,
-		consumedCallback:           make(chan bool),
-		transactionAckChan:         make(chan string),
-		transactionBeginChan:       make(chan bool),
-		lsnAckBuffer:               []string{},
 		maxParallelSnapshotTables:  config.MaxParallelSnapshotTables,
 		logger:                     config.Logger,
 		m:                          sync.Mutex{},
@@ -195,27 +185,25 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		lsnrestart, _ = ParseLSN(confirmedLSNFromDB)
 	}
 
-	stream.lsnrestart = lsnrestart
-
 	if freshlyCreatedSlot {
-		stream.clientXLogPos = sysident.XLogPos
+		stream.clientXLogPos = watermark.New(sysident.XLogPos)
 	} else {
-		stream.clientXLogPos = lsnrestart
+		stream.clientXLogPos = watermark.New(lsnrestart)
 	}
 
-	stream.standbyMessageTimeout = time.Duration(config.PgStandbyTimeoutSec) * time.Second
+	stream.standbyMessageTimeout = config.PgStandbyTimeout
 	stream.nextStandbyMessageDeadline = time.Now().Add(stream.standbyMessageTimeout)
 	stream.streamCtx, stream.streamCancel = context.WithCancel(context.Background())
 
-	monitor, err := NewMonitor(config.DBRawDSN, stream.logger, tableNames, stream.slotName, config.WalMonitorIntervalSec)
+	monitor, err := NewMonitor(config.DBRawDSN, stream.logger, tableNames, stream.slotName, config.WalMonitorInterval)
 	if err != nil {
 		return nil, err
 	}
 	stream.monitor = monitor
 
-	stream.logger.Debugf("Starting stream from LSN %s with clientXLogPos %s and snapshot name %s", stream.lsnrestart.String(), stream.clientXLogPos.String(), stream.snapshotName)
+	stream.logger.Debugf("Starting stream from LSN %s with clientXLogPos %s and snapshot name %s", lsnrestart.String(), stream.clientXLogPos.Get().String(), stream.snapshotName)
 	if !freshlyCreatedSlot || !config.StreamOldData {
-		if err = stream.startLr(); err != nil {
+		if err = stream.startLr(lsnrestart); err != nil {
 			return nil, err
 		}
 
@@ -224,7 +212,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		// New messages will be streamed after the snapshot has been processed.
 		// stream.startLr() and stream.streamMessagesAsync() will be called inside stream.processSnapshot()
 		go func() {
-			if err := stream.processSnapshot(ctx); err != nil {
+			if err := stream.processSnapshot(ctx, lsnrestart); err != nil {
 				stream.logger.Errorf("Failed to process snapshot: %v", err.Error())
 			}
 		}()
@@ -239,13 +227,8 @@ func (s *Stream) GetProgress() *Report {
 	return s.monitor.Report()
 }
 
-// ConsumedCallback returns a channel that is used to tell the plugin to commit consumed offset
-func (s *Stream) ConsumedCallback() chan bool {
-	return s.consumedCallback
-}
-
-func (s *Stream) startLr() error {
-	if err := StartReplication(context.Background(), s.pgConn, s.slotName, s.lsnrestart, StartReplicationOptions{PluginArgs: s.decodingPluginArguments}); err != nil {
+func (s *Stream) startLr(lsnStart LSN) error {
+	if err := StartReplication(context.Background(), s.pgConn, s.slotName, lsnStart, StartReplicationOptions{PluginArgs: s.decodingPluginArguments}); err != nil {
 		return err
 	}
 
@@ -274,13 +257,13 @@ func (s *Stream) AckLSN(lsn string) error {
 	})
 
 	if err != nil {
-		s.logger.Errorf("Failed to send Standby status message at LSN#%s: %v", s.clientXLogPos.String(), err)
+		s.logger.Errorf("Failed to send Standby status message at LSN#%s: %v", clientXLogPos.String(), err)
 		return err
 	}
 
 	// Update client XLogPos after we ack the message
-	s.clientXLogPos = clientXLogPos
-	s.logger.Debugf("Sent Standby status message at LSN#%s", s.clientXLogPos.String())
+	s.clientXLogPos.Set(clientXLogPos)
+	s.logger.Debugf("Sent Standby status message at LSN#%s", clientXLogPos.String())
 	s.nextStandbyMessageDeadline = time.Now().Add(s.standbyMessageTimeout)
 
 	return nil
@@ -292,7 +275,7 @@ func (s *Stream) streamMessagesAsync() {
 	case "wal2json":
 		handler = NewWal2JsonPluginHandler(s.messages, s.monitor)
 	case "pgoutput":
-		handler = NewPgOutputPluginHandler(s.messages, s.streamUncommitted, s.monitor, s.consumedCallback, s.transactionAckChan)
+		handler = NewPgOutputPluginHandler(s.messages, s.streamUncommitted, s.monitor, s.clientXLogPos)
 	default:
 		s.logger.Error("Invalid decoding plugin. Cant find needed handler implementation")
 		if err := s.Stop(); err != nil {
@@ -303,145 +286,109 @@ func (s *Stream) streamMessagesAsync() {
 	}
 
 	for {
-		select {
-		case <-s.streamCtx.Done():
-			s.logger.Warn("Stream was cancelled...exiting...")
+		if s.streamCtx.Err() != nil {
+			s.logger.Debug("Stream was cancelled... exiting...")
 			return
-		default:
-			if time.Now().After(s.nextStandbyMessageDeadline) {
-				if s.pgConn.IsClosed() {
-					s.logger.Warn("Postgres connection is closed...stop reading from replication slot")
-					return
-				}
-
-				err := SendStandbyStatusUpdate(context.Background(), s.pgConn, StandbyStatusUpdate{
-					WALWritePosition: s.clientXLogPos,
-				})
-
-				if err != nil {
-					s.logger.Errorf("Failed to send Standby status message at LSN#%s: %v", s.clientXLogPos.String(), err)
-					if err = s.Stop(); err != nil {
-						s.logger.Errorf("Failed to stop the stream: %v", err)
-					}
-					return
-				}
-				s.logger.Debugf("Sent Standby status message at LSN#%s", s.clientXLogPos.String())
-				s.nextStandbyMessageDeadline = time.Now().Add(s.standbyMessageTimeout)
-			}
-
-			ctx, cancel := context.WithDeadline(context.Background(), s.nextStandbyMessageDeadline)
-			rawMsg, err := s.pgConn.ReceiveMessage(ctx)
-			s.standbyCtxCancel = cancel
-
-			if err != nil && (errors.Is(err, context.Canceled) || s.stopped) {
-				s.logger.Warn("Service was interrupted....stop reading from replication slot")
+		}
+		if time.Now().After(s.nextStandbyMessageDeadline) {
+			if s.pgConn.IsClosed() {
+				s.logger.Warn("Postgres connection is closed...stop reading from replication slot")
 				return
 			}
+
+			pos := s.clientXLogPos.Get()
+			err := SendStandbyStatusUpdate(context.Background(), s.pgConn, StandbyStatusUpdate{
+				WALWritePosition: pos,
+			})
 
 			if err != nil {
-				if pgconn.Timeout(err) {
-					continue
-				}
-
-				s.logger.Errorf("Failed to receive messages from PostgreSQL: %v", err)
+				s.logger.Errorf("Failed to send Standby status message at LSN#%s: %v", pos.String(), err)
 				if err = s.Stop(); err != nil {
 					s.logger.Errorf("Failed to stop the stream: %v", err)
 				}
 				return
 			}
+			s.logger.Debugf("Sent Standby status message at LSN#%s", pos.String())
+			s.nextStandbyMessageDeadline = time.Now().Add(s.standbyMessageTimeout)
+		}
 
-			if errMsg, ok := rawMsg.(*pgproto3.ErrorResponse); ok {
-				s.logger.Errorf("Received error message from Postgres: %v", errMsg)
-				if err = s.Stop(); err != nil {
-					s.logger.Errorf("Failed to stop the stream: %v", err)
-				}
-				return
-			}
+		ctx, cancel := context.WithDeadline(context.Background(), s.nextStandbyMessageDeadline)
+		rawMsg, err := s.pgConn.ReceiveMessage(ctx)
+		s.standbyCtxCancel = cancel
 
-			msg, ok := rawMsg.(*pgproto3.CopyData)
-			if !ok {
-				s.logger.Warnf("Received unexpected message: %T\n", rawMsg)
+		if err != nil && (errors.Is(err, context.Canceled) || s.stopped) {
+			s.logger.Warn("Service was interrupted....stop reading from replication slot")
+			return
+		}
+
+		if err != nil {
+			if pgconn.Timeout(err) {
 				continue
 			}
 
-			switch msg.Data[0] {
-			case PrimaryKeepaliveMessageByteID:
-				pkm, err := ParsePrimaryKeepaliveMessage(msg.Data[1:])
-				if err != nil {
-					s.logger.Errorf("Failed to parse PrimaryKeepaliveMessage: %v", err)
-					if err = s.Stop(); err != nil {
-						s.logger.Errorf("Failed to stop the stream: %v", err)
-					}
+			s.logger.Errorf("Failed to receive messages from PostgreSQL: %v", err)
+			if err = s.Stop(); err != nil {
+				s.logger.Errorf("Failed to stop the stream: %v", err)
+			}
+			return
+		}
+
+		if errMsg, ok := rawMsg.(*pgproto3.ErrorResponse); ok {
+			s.logger.Errorf("Received error message from Postgres: %v", errMsg)
+			if err = s.Stop(); err != nil {
+				s.logger.Errorf("Failed to stop the stream: %v", err)
+			}
+			return
+		}
+
+		msg, ok := rawMsg.(*pgproto3.CopyData)
+		if !ok {
+			s.logger.Warnf("Received unexpected message: %T\n", rawMsg)
+			continue
+		}
+
+		switch msg.Data[0] {
+		case PrimaryKeepaliveMessageByteID:
+			pkm, err := ParsePrimaryKeepaliveMessage(msg.Data[1:])
+			if err != nil {
+				s.logger.Errorf("Failed to parse PrimaryKeepaliveMessage: %v", err)
+				if err = s.Stop(); err != nil {
+					s.logger.Errorf("Failed to stop the stream: %v", err)
 				}
+			}
 
-				if pkm.ReplyRequested {
-					s.nextStandbyMessageDeadline = time.Time{}
+			if pkm.ReplyRequested {
+				s.nextStandbyMessageDeadline = time.Time{}
+			}
+
+		// XLogDataByteID is the message type for the actual WAL data
+		// It will cause the stream to process WAL changes and create the corresponding messages
+		case XLogDataByteID:
+			xld, err := ParseXLogData(msg.Data[1:])
+			if err != nil {
+				s.logger.Errorf("Failed to parse XLogData: %v", err)
+				if err = s.Stop(); err != nil {
+					s.logger.Errorf("Failed to stop the stream: %v", err)
 				}
-
-			// XLogDataByteID is the message type for the actual WAL data
-			// It will cause the stream to process WAL changes and create the corresponding messages
-			case XLogDataByteID:
-				xld, err := ParseXLogData(msg.Data[1:])
-				if err != nil {
-					s.logger.Errorf("Failed to parse XLogData: %v", err)
-					if err = s.Stop(); err != nil {
-						s.logger.Errorf("Failed to stop the stream: %v", err)
-					}
+			}
+			clientXLogPos := xld.WALStart + LSN(len(xld.WALData))
+			commit, err := handler.Handle(s.streamCtx, clientXLogPos, xld)
+			if err != nil {
+				s.logger.Errorf("decodePgOutputChanges failed: %w", err)
+				if err = s.Stop(); err != nil {
+					s.logger.Errorf("Failed to stop the stream: %v", err)
 				}
-				clientXLogPos := xld.WALStart + LSN(len(xld.WALData))
-				if s.decodingPlugin == "wal2json" {
-					if err = handler.Handle(clientXLogPos, xld); err != nil {
-						s.logger.Errorf("decodeWal2JsonChanges failed: %w", err)
-						if err = s.Stop(); err != nil {
-							s.logger.Errorf("Failed to stop the stream: %v", err)
-						}
-						return
-					}
-
-					// automatic ack for empty changes
-					// basically mean that the client is up-to-date,
-					// but we still need to acknowledge the LSN for standby
-					if err = s.AckLSN(clientXLogPos.String()); err != nil {
-						// stop reading from replication slot
-						// if we can't acknowledge the LSN
-						if err = s.Stop(); err != nil {
-							s.logger.Errorf("Failed to stop the stream: %v", err)
-						}
-						return
-					}
-				}
-
-				if s.decodingPlugin == "pgoutput" {
-					if err = handler.Handle(clientXLogPos, xld); err != nil {
-						s.logger.Errorf("decodePgOutputChanges failed: %w", err)
-						if err = s.Stop(); err != nil {
-							s.logger.Errorf("Failed to stop the stream: %v", err)
-						}
-					}
-
-					// automatic ack for empty changes
-					// basically mean that the client is up-to-date,
-					// but we still need to acknowledge the LSN for standby
-					if err = s.AckLSN(clientXLogPos.String()); err != nil {
-						// stop reading from replication slot
-						// if we can't acknowledge the LSN
-						if err = s.Stop(); err != nil {
-							s.logger.Errorf("Failed to stop the stream: %v", err)
-						}
-						return
-					}
+			} else if commit {
+				// This is a hack and we probably should not do it
+				if err = s.AckLSN(clientXLogPos.String()); err != nil {
+					s.logger.Errorf("Failed to ack commit message: %v", err)
 				}
 			}
 		}
 	}
 }
 
-// AckTxChan returns the transaction ack channel
-func (s *Stream) AckTxChan() chan string {
-	return s.transactionAckChan
-}
-
-func (s *Stream) processSnapshot(ctx context.Context) error {
+func (s *Stream) processSnapshot(ctx context.Context, lsnStart LSN) error {
 	if err := s.snapshotter.prepare(); err != nil {
 		s.logger.Errorf("Failed to prepare database snapshot. Probably snapshot is expired...: %v", err.Error())
 		if err = s.cleanUpOnFailure(ctx); err != nil {
@@ -608,7 +555,7 @@ func (s *Stream) processSnapshot(ctx context.Context) error {
 		return err
 	}
 
-	if err := s.startLr(); err != nil {
+	if err := s.startLr(lsnStart); err != nil {
 		s.logger.Errorf("Failed to start logical replication after snapshot: %v", err.Error())
 		return err
 	}

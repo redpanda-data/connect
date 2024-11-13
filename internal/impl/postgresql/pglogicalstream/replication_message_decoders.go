@@ -185,6 +185,7 @@ func decodeWal2JsonChanges(clientXLogPosition string, WALData []byte) (*StreamMe
 	message := &StreamMessage{
 		Lsn:     &clientXLogPosition,
 		Changes: []StreamMessageChanges{},
+		Mode:    StreamModeStreaming,
 	}
 
 	for _, change := range changes.Change {
