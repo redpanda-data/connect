@@ -82,11 +82,11 @@ type PgOutputBufferedPluginHandler struct {
 // NewPgOutputPluginHandler creates a new PgOutputPluginHandler
 func NewPgOutputPluginHandler(
 	messages chan StreamMessage,
-	streamUncommitted bool,
+	batchTransactions bool,
 	monitor *Monitor,
 	lsnWatermark *watermark.Value[LSN],
 ) PluginHandler {
-	if streamUncommitted {
+	if batchTransactions {
 		return &PgOutputUnbufferedPluginHandler{
 			messages:     messages,
 			monitor:      monitor,

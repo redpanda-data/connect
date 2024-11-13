@@ -52,7 +52,7 @@ type Stream struct {
 	snapshotMemorySafetyFactor float64
 	logger                     *service.Logger
 	monitor                    *Monitor
-	streamUncommitted          bool
+	batchTransactions          bool
 	snapshotter                *Snapshotter
 	maxParallelSnapshotTables  int
 }
@@ -96,7 +96,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		errors:                     make(chan error, 1),
 		slotName:                   config.ReplicationSlotName,
 		snapshotMemorySafetyFactor: config.SnapshotMemorySafetyFactor,
-		streamUncommitted:          config.StreamUncommitted,
+		batchTransactions:          config.BatchTransactions,
 		snapshotBatchSize:          config.BatchSize,
 		schema:                     config.DBSchema,
 		tableQualifiedName:         tableNames,
@@ -319,7 +319,7 @@ func (s *Stream) AckLSN(ctx context.Context, lsn string) error {
 	)
 
 	if err != nil {
-		return fmt.Errorf("Failed to send Standby status message at LSN %s: %w", clientXLogPos.String(), err)
+		return fmt.Errorf("failed to send Standby status message at LSN %s: %w", clientXLogPos.String(), err)
 	}
 
 	// Update client XLogPos after we ack the message
@@ -336,7 +336,7 @@ func (s *Stream) streamMessages() error {
 	case "wal2json":
 		handler = NewWal2JsonPluginHandler(s.messages, s.monitor)
 	case "pgoutput":
-		handler = NewPgOutputPluginHandler(s.messages, s.streamUncommitted, s.monitor, s.clientXLogPos)
+		handler = NewPgOutputPluginHandler(s.messages, s.batchTransactions, s.monitor, s.clientXLogPos)
 	default:
 		return fmt.Errorf("invalid decoding plugin: %q", s.decodingPlugin)
 	}
@@ -447,7 +447,7 @@ func (s *Stream) processSnapshot() error {
 
 			avgRowSizeBytes, err = s.snapshotter.findAvgRowSize(table)
 			if err != nil {
-				return fmt.Errorf("Failed to calculate average row size for table %v: %w", table, err)
+				return fmt.Errorf("failed to calculate average row size for table %v: %w", table, err)
 			}
 
 			availableMemory := getAvailableMemory()

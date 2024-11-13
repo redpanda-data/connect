@@ -25,7 +25,7 @@ import (
 
 const (
 	fieldDSN                       = "dsn"
-	fieldStreamUncommitted         = "stream_uncommitted"
+	fieldBatchTransactions         = "batch_transactions"
 	fieldStreamSnapshot            = "stream_snapshot"
 	fieldSnapshotMemSafetyFactor   = "snapshot_memory_safety_factor"
 	fieldSnapshotBatchSize         = "snapshot_batch_size"
@@ -66,9 +66,9 @@ This input adds the following metadata fields to each message:
 	Field(service.NewStringField(fieldDSN).
 		Description("The Data Source Name for the PostgreSQL database in the form of `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]`. Please note that Postgres enforces SSL by default, you can override this with the parameter `sslmode=disable` if required.").
 		Example("postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable")).
-	Field(service.NewBoolField(fieldStreamUncommitted).
-		Description("If set to true, the plugin will stream uncommitted transactions before receiving a commit message from PostgreSQL. This may result in duplicate records if the connector is restarted.").
-		Default(false)).
+	Field(service.NewBoolField(fieldBatchTransactions).
+		Description("When set to true, transactions are batched into a single message. Note that this setting has no effect when using wal2json").
+		Default(true)).
 	Field(service.NewBoolField(fieldStreamSnapshot).
 		Description("When set to true, the plugin will first stream a snapshot of all existing data in the database before streaming changes. In order to use this the tables that are being snapshot MUST have a primary key set so that reading from the table can be parallelized.").
 		Example(true).
@@ -130,7 +130,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		streamSnapshot            bool
 		snapshotMemSafetyFactor   float64
 		decodingPlugin            string
-		streamUncommitted         bool
+		batchTransactions         bool
 		snapshotBatchSize         int
 		checkpointLimit           int
 		walMonitorInterval        time.Duration
@@ -178,7 +178,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		return nil, err
 	}
 
-	if streamUncommitted, err = conf.FieldBool(fieldStreamUncommitted); err != nil {
+	if batchTransactions, err = conf.FieldBool(fieldBatchTransactions); err != nil {
 		return nil, err
 	}
 
@@ -237,7 +237,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 			BatchSize:                  snapshotBatchSize,
 			StreamOldData:              streamSnapshot,
 			TemporaryReplicationSlot:   temporarySlot,
-			StreamUncommitted:          streamUncommitted,
+			BatchTransactions:          batchTransactions,
 			DecodingPlugin:             decodingPlugin,
 			SnapshotMemorySafetyFactor: snapshotMemSafetyFactor,
 			PgStandbyTimeout:           pgStandbyTimeout,
