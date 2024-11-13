@@ -595,7 +595,7 @@ func (o *snowflakeStreamerOutput) WriteBatchInternal(ctx context.Context, batch 
 			// Keep around the same channel just in case so we don't keep creating new channels.
 			o.channelPool.Put(channel)
 		}
-		return err
+		return wrapInsertError(err)
 	}
 	polls, err := channel.WaitUntilCommitted(ctx)
 	if err == nil {
@@ -774,4 +774,11 @@ func validateColumnType(v string) error {
 		return nil
 	}
 	return fmt.Errorf("invalid Snowflake column data type: %s", v)
+}
+
+func wrapInsertError(err error) error {
+	if errors.Is(err, streaming.InvalidTimestampFormatError{}) {
+		return fmt.Errorf("%w; if a custom format is required use a `%s` and bloblang functions `ts_parse` or `ts_strftime` to convert a custom format into a timestamp", err, ssoFieldMapping)
+	}
+	return err
 }
