@@ -122,20 +122,18 @@ func (p *PgOutputUnbufferedPluginHandler) Handle(ctx context.Context, clientXLog
 		case <-ctx.Done():
 			return false, ctx.Err()
 		}
-	} else {
-		if message == nil && !isCommit {
-			return false, nil
-		} else if message != nil {
-			lsn := clientXLogPos.String()
-			p.lastEmitted = clientXLogPos
-			p.messages <- StreamMessage{
-				Lsn: &lsn,
-				Changes: []StreamMessageChanges{
-					*message,
-				},
-				Mode:        StreamModeStreaming,
-				WALLagBytes: &p.monitor.Report().WalLagInBytes,
-			}
+	}
+
+	if message != nil {
+		lsn := clientXLogPos.String()
+		p.lastEmitted = clientXLogPos
+		p.messages <- StreamMessage{
+			Lsn: &lsn,
+			Changes: []StreamMessageChanges{
+				*message,
+			},
+			Mode:        StreamModeStreaming,
+			WALLagBytes: &p.monitor.Report().WalLagInBytes,
 		}
 	}
 
@@ -171,18 +169,18 @@ func (p *PgOutputBufferedPluginHandler) Handle(ctx context.Context, clientXLogPo
 		return false, err
 	}
 
-	if isCommit {
-		if len(p.pgoutputChanges) == 0 {
-			return false, nil
-		} else {
-			// send all collected changes
-			lsn := clientXLogPos.String()
-			p.messages <- StreamMessage{
-				Lsn:         &lsn,
-				Changes:     p.pgoutputChanges,
-				Mode:        StreamModeStreaming,
-				WALLagBytes: &p.monitor.Report().WalLagInBytes,
-			}
+	if !isCommit {
+		return false, nil
+	}
+
+	if len(p.pgoutputChanges) >= 0 {
+		// send all collected changes
+		lsn := clientXLogPos.String()
+		p.messages <- StreamMessage{
+			Lsn:         &lsn,
+			Changes:     p.pgoutputChanges,
+			Mode:        StreamModeStreaming,
+			WALLagBytes: &p.monitor.Report().WalLagInBytes,
 		}
 	}
 
