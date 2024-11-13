@@ -82,9 +82,13 @@ type mysqlStreamInput struct {
 	batching         service.BatchPolicy
 	batchPolicy      *service.Batcher
 	checkPointLimit  int
+	lastGtid         *string
 
 	logger *service.Logger
 	res    *service.Resources
+
+	streaCtx context.Context
+	cp       *checkpoint.Capped[*int64]
 }
 
 const binLogCacheKey = "mysql_binlog_position"
@@ -95,6 +99,7 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 		rawMessageEvents: make(chan MessageEvent),
 		msgChan:          make(chan asyncMessage),
 		res:              res,
+		streaCtx:         context.Background(),
 	}
 
 	var batching service.BatchPolicy
@@ -150,6 +155,7 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 	}
 
 	i := &streamInput
+	i.cp = checkpoint.NewCapped[*int64](int64(i.checkPointLimit))
 
 	res.Logger().Info("Starting MySQL stream input")
 
@@ -217,12 +223,10 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 func (i *mysqlStreamInput) readMessages(ctx context.Context) error {
 	var nextTimedBatchChan <-chan time.Time
 	var latestPos *mysqlReplications.Position
-	cp := checkpoint.NewCapped[*int64](int64(i.checkPointLimit))
 
 	for {
 		select {
 		case <-ctx.Done():
-			fmt.Println("Stop reading....")
 			return nil
 		case <-nextTimedBatchChan:
 			nextTimedBatchChan = nil
@@ -232,13 +236,12 @@ func (i *mysqlStreamInput) readMessages(ctx context.Context) error {
 				break
 			}
 
-			if ok := i.flushBatch(ctx, cp, flushedBatch, latestPos); !ok {
+			if ok := i.flushBatch(ctx, i.cp, flushedBatch, latestPos); !ok {
 				break
 			}
 		case me := <-i.rawMessageEvents:
 			row, err := json.Marshal(me.Row)
 			if err != nil {
-				fmt.Println("Error marshalling row: ", err)
 				return err
 			}
 
@@ -257,7 +260,7 @@ func (i *mysqlStreamInput) readMessages(ctx context.Context) error {
 					i.logger.Debugf("Flush batch error: %w", err)
 					break
 				}
-				if ok := i.flushBatch(ctx, cp, flushedBatch, latestPos); !ok {
+				if ok := i.flushBatch(ctx, i.cp, flushedBatch, latestPos); !ok {
 					break
 				}
 			} else {
@@ -418,18 +421,23 @@ func (i *mysqlStreamInput) Close(ctx context.Context) error {
 
 func (i *mysqlStreamInput) OnRotate(eh *replication.EventHeader, re *replication.RotateEvent) error {
 	i.mutex.Lock()
+	flushedBatch, err := i.batchPolicy.Flush(i.streaCtx)
+	if err != nil {
+		i.logger.Debugf("Flush batch error: %w", err)
+		return err
+	}
+
+	if ok := i.flushBatch(i.streaCtx, i.cp, flushedBatch, i.currentLogPosition); !ok {
+		return errors.New("failed to flush batch")
+	}
+
 	i.currentLogPosition.Pos = uint32(re.Position)
 	i.currentLogPosition.Name = string(re.NextLogName)
 	i.mutex.Unlock()
 
 	return nil
 }
-func (i *mysqlStreamInput) OnTableChanged(*replication.EventHeader, string, string) error {
-	return nil
-}
-func (i *mysqlStreamInput) OnDDL(*replication.EventHeader, mysqlReplications.Position, *replication.QueryEvent) error {
-	return nil
-}
+
 func (i *mysqlStreamInput) OnRow(e *canal.RowsEvent) error {
 	switch e.Action {
 	case canal.InsertAction:
@@ -443,20 +451,12 @@ func (i *mysqlStreamInput) OnRow(e *canal.RowsEvent) error {
 	}
 }
 
-func (i *mysqlStreamInput) OnXID(*replication.EventHeader, mysqlReplications.Position) error {
-	return nil
-}
-func (i *mysqlStreamInput) OnGTID(*replication.EventHeader, mysqlReplications.BinlogGTIDEvent) error {
-	return nil
-}
 func (i *mysqlStreamInput) OnPosSynced(eh *replication.EventHeader, pos mysqlReplications.Position, gtid mysqlReplications.GTIDSet, synced bool) error {
 	i.mutex.Lock()
 	i.currentLogPosition = &pos
 	i.mutex.Unlock()
 
-	i.syncBinlogPosition(context.Background())
-
-	return nil
+	return i.syncBinlogPosition(context.Background())
 }
 
 // --- MySQL Canal handler methods end ----
