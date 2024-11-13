@@ -11,7 +11,6 @@ package mysql
 import (
 	"context"
 	"fmt"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -24,25 +23,23 @@ import (
 )
 
 func TestIntegrationMySQLCDC(t *testing.T) {
-	mysqlDsn := os.Getenv("LOCAL_MYSQL_DSN")
+	mysqlDsn := "vultradmin:AVNS_fgGkgy43bJw3NzNwDCV@tcp(public-vultr-prod-a70dc516-1330-488a-bf57-712a3d91be58-vultr-pr.vultrdb.com:16751)/defaultdb"
 	tmpDir := t.TempDir()
 
-	fmt.Println("TMP Ditr: ", tmpDir)
 	template := fmt.Sprintf(`
 mysql_stream:
   dsn: %s
   stream_snapshot: false
-  checkpoint_key: binlogpos
+  checkpoint_key: foocache
   tables:
     - users
-  checkpoint_key: foocache
   flavor: mysql
 `, mysqlDsn)
 
 	cacheConf := fmt.Sprintf(`
-label: mysql_stream_cache
+label: foocache
 file:
-  directory: %v`, tmpDir)
+  directory: %s`, tmpDir)
 
 	streamOutBuilder := service.NewStreamBuilder()
 	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: INFO`))
@@ -55,6 +52,7 @@ file:
 		msgBytes, err := mb[0].AsBytes()
 		require.NoError(t, err)
 		outBatchMut.Lock()
+		fmt.Println(string(msgBytes))
 		outBatches = append(outBatches, string(msgBytes))
 		outBatchMut.Unlock()
 		return nil
@@ -76,3 +74,5 @@ file:
 
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
 }
+
+// mysql://vultradmin:AVNS_fgGkgy43bJw3NzNwDCV@tcp(vultr-prod-a70dc516-1330-488a-bf57-712a3d91be58-vultr-prod-6745.vultrdb.com:16751)/defaultdb
