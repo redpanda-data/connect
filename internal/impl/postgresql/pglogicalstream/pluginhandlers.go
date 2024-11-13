@@ -10,6 +10,7 @@ package pglogicalstream
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/watermark"
@@ -17,7 +18,8 @@ import (
 
 // PluginHandler is an interface that must be implemented by all plugin handlers
 type PluginHandler interface {
-	Handle(ctx context.Context, clientXLogPos LSN, xld XLogData) error
+	// returns true if we need to ack the clientXLogPos
+	Handle(ctx context.Context, clientXLogPos LSN, xld XLogData) (bool, error)
 }
 
 // Wal2JsonPluginHandler is a handler for wal2json output plugin
@@ -35,12 +37,12 @@ func NewWal2JsonPluginHandler(messages chan StreamMessage, monitor *Monitor) *Wa
 }
 
 // Handle handles the wal2json output
-func (w *Wal2JsonPluginHandler) Handle(_ context.Context, clientXLogPos LSN, xld XLogData) error {
+func (w *Wal2JsonPluginHandler) Handle(_ context.Context, clientXLogPos LSN, xld XLogData) (bool, error) {
 	// get current stream metrics
 	metrics := w.monitor.Report()
 	message, err := decodeWal2JsonChanges(clientXLogPos.String(), xld.WALData)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	if message != nil && len(message.Changes) > 0 {
@@ -48,7 +50,7 @@ func (w *Wal2JsonPluginHandler) Handle(_ context.Context, clientXLogPos LSN, xld
 		w.messages <- *message
 	}
 
-	return nil
+	return false, nil
 }
 
 // PgOutputPluginHandler is a handler for pgoutput output plugin
@@ -61,6 +63,7 @@ type PgOutputPluginHandler struct {
 	typeMap           *pgtype.Map
 	pgoutputChanges   []StreamMessageChanges
 
+	lastEmitted  LSN
 	lsnWatermark *watermark.Value[LSN]
 }
 
@@ -78,37 +81,40 @@ func NewPgOutputPluginHandler(
 		relations:         map[uint32]*RelationMessage{},
 		typeMap:           pgtype.NewMap(),
 		pgoutputChanges:   []StreamMessageChanges{},
+		lastEmitted:       lsnWatermark.Get(),
 		lsnWatermark:      lsnWatermark,
 	}
 }
 
 // Handle handles the pgoutput output
-func (p *PgOutputPluginHandler) Handle(ctx context.Context, clientXLogPos LSN, xld XLogData) error {
+func (p *PgOutputPluginHandler) Handle(ctx context.Context, clientXLogPos LSN, xld XLogData) (bool, error) {
 	if p.streamUncommitted {
 		// parse changes inside the transaction
 		message, err := decodePgOutput(xld.WALData, p.relations, p.typeMap)
 		if err != nil {
-			return err
+			return false, err
 		}
 
 		isCommit, _, err := isCommitMessage(xld.WALData)
 		if err != nil {
-			return err
+			return false, err
 		}
 
 		// when receiving a commit message, we need to acknowledge the LSN
 		// but we must wait for connect to flush the messages before we can do that
 		if isCommit {
 			select {
-			case <-p.lsnWatermark.WaitFor(clientXLogPos):
+			case <-p.lsnWatermark.WaitFor(p.lastEmitted):
+				return true, nil
 			case <-ctx.Done():
-				return ctx.Err()
+				return false, ctx.Err()
 			}
 		} else {
 			if message == nil && !isCommit {
-				return nil
+				return false, nil
 			} else if message != nil {
 				lsn := clientXLogPos.String()
+				p.lastEmitted = clientXLogPos
 				p.messages <- StreamMessage{
 					Lsn: &lsn,
 					Changes: []StreamMessageChanges{
@@ -125,7 +131,7 @@ func (p *PgOutputPluginHandler) Handle(ctx context.Context, clientXLogPos LSN, x
 		// and LSN ack will cause potential loss of changes
 		isBegin, err := isBeginMessage(xld.WALData)
 		if err != nil {
-			return err
+			return false, err
 		}
 
 		if isBegin {
@@ -135,7 +141,7 @@ func (p *PgOutputPluginHandler) Handle(ctx context.Context, clientXLogPos LSN, x
 		// parse changes inside the transaction
 		message, err := decodePgOutput(xld.WALData, p.relations, p.typeMap)
 		if err != nil {
-			return err
+			return false, err
 		}
 
 		if message != nil {
@@ -144,12 +150,12 @@ func (p *PgOutputPluginHandler) Handle(ctx context.Context, clientXLogPos LSN, x
 
 		isCommit, _, err := isCommitMessage(xld.WALData)
 		if err != nil {
-			return err
+			return false, err
 		}
 
 		if isCommit {
 			if len(p.pgoutputChanges) == 0 {
-				return nil
+				return false, nil
 			} else {
 				// send all collected changes
 				lsn := clientXLogPos.String()
@@ -163,5 +169,5 @@ func (p *PgOutputPluginHandler) Handle(ctx context.Context, clientXLogPos LSN, x
 		}
 	}
 
-	return nil
+	return false, nil
 }

@@ -372,46 +372,16 @@ func (s *Stream) streamMessagesAsync() {
 				}
 			}
 			clientXLogPos := xld.WALStart + LSN(len(xld.WALData))
-			if s.decodingPlugin == "wal2json" {
-				if err = handler.Handle(s.streamCtx, clientXLogPos, xld); err != nil {
-					s.logger.Errorf("decodeWal2JsonChanges failed: %w", err)
-					if err = s.Stop(); err != nil {
-						s.logger.Errorf("Failed to stop the stream: %v", err)
-					}
-					return
+			commit, err := handler.Handle(s.streamCtx, clientXLogPos, xld)
+			if err != nil {
+				s.logger.Errorf("decodePgOutputChanges failed: %w", err)
+				if err = s.Stop(); err != nil {
+					s.logger.Errorf("Failed to stop the stream: %v", err)
 				}
-
-				// automatic ack for empty changes
-				// basically mean that the client is up-to-date,
-				// but we still need to acknowledge the LSN for standby
+			} else if commit {
+				// This is a hack and we probably should not do it
 				if err = s.AckLSN(clientXLogPos.String()); err != nil {
-					// stop reading from replication slot
-					// if we can't acknowledge the LSN
-					if err = s.Stop(); err != nil {
-						s.logger.Errorf("Failed to stop the stream: %v", err)
-					}
-					return
-				}
-			}
-
-			if s.decodingPlugin == "pgoutput" {
-				if err = handler.Handle(s.streamCtx, clientXLogPos, xld); err != nil {
-					s.logger.Errorf("decodePgOutputChanges failed: %w", err)
-					if err = s.Stop(); err != nil {
-						s.logger.Errorf("Failed to stop the stream: %v", err)
-					}
-				}
-
-				// automatic ack for empty changes
-				// basically mean that the client is up-to-date,
-				// but we still need to acknowledge the LSN for standby
-				if err = s.AckLSN(clientXLogPos.String()); err != nil {
-					// stop reading from replication slot
-					// if we can't acknowledge the LSN
-					if err = s.Stop(); err != nil {
-						s.logger.Errorf("Failed to stop the stream: %v", err)
-					}
-					return
+					s.logger.Errorf("Failed to ack commit message: %v", err)
 				}
 			}
 		}
