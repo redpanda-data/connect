@@ -322,8 +322,13 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 		// offsets are nilable since we don't provide offset tracking during the snapshot phase
 		var latestOffset *int64
 		cp := checkpoint.NewCapped[*int64](int64(p.checkpointLimit))
-		for {
+		for ctx.Err() != nil {
 			select {
+			case <-ctx.Done():
+				if err = p.pgLogicalStream.Stop(); err != nil {
+					p.logger.Errorf("Failed to stop pglogical stream: %v", err)
+				}
+				return
 			case <-nextTimedBatchChan:
 				nextTimedBatchChan = nil
 				flushedBatch, err := batchPolicy.Flush(ctx)
@@ -358,7 +363,8 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 					continue
 				}
 
-				if mb, err = json.Marshal(message); err != nil {
+				// TODO this should only be the message
+				if mb, err = json.Marshal(message.Changes); err != nil {
 					break
 				}
 
@@ -384,12 +390,12 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 					if err := p.flushBatch(ctx, cp, flushedBatch, latestOffset); err != nil {
 						break
 					}
+				} else {
+					d, ok := batchPolicy.UntilNext()
+					if ok {
+						nextTimedBatchChan = time.After(d)
+					}
 				}
-			case <-ctx.Done():
-				if err = p.pgLogicalStream.Stop(); err != nil {
-					p.logger.Errorf("Failed to stop pglogical stream: %v", err)
-				}
-				return
 			}
 		}
 	}()
