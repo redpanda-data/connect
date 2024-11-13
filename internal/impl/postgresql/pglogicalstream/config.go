@@ -38,8 +38,9 @@ type Config struct {
 	DecodingPlugin string
 	// BatchSize is the batch size for streaming
 	BatchSize int
-	// StreamUncommitted is whether to stream uncommitted messages before receiving commit message
-	StreamUncommitted bool
+	// BatchTransactions is whether to buffer transactions as an entire single message or to send
+	// each row in a transaction as a message. This has no effect for wal2json.
+	BatchTransactions bool
 
 	Logger *service.Logger
 
