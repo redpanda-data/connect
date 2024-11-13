@@ -17,8 +17,8 @@ import (
 	"time"
 
 	"github.com/Jeffail/checkpoint"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/matoous/go-nanoid/v2"
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream"
@@ -147,7 +147,10 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	}
 	// Set the default to be a random string
 	if dbSlotName == "" {
-		dbSlotName = uuid.NewString()
+		dbSlotName, err = gonanoid.Generate("0123456789ABCDEFGHJKMNPQRSTVWXYZ", 32)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if err := validateSimpleString(dbSlotName); err != nil {
@@ -266,14 +269,10 @@ func validateSimpleString(s string) error {
 		isDigit := b >= '0' && b <= '9'
 		isLower := b >= 'a' && b <= 'z'
 		isUpper := b >= 'A' && b <= 'Z'
-		isDelimiter := b == '_' || b == '-'
+		isDelimiter := b == '_'
 		if !isDigit && !isLower && !isUpper && !isDelimiter {
 			return fmt.Errorf("invalid postgres identifier %q", s)
 		}
-	}
-	// See: https://github.com/jackc/pgx/security/advisories/GHSA-m7wr-2xf7-cm9p
-	if strings.Contains(s, "--") {
-		return fmt.Errorf("invalid postgres identifier %q", s)
 	}
 	return nil
 }
