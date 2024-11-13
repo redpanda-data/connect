@@ -40,7 +40,7 @@ input:
   label: ""
   pg_stream:
     dsn: postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable # No default (required)
-    stream_uncommitted: false
+    batch_transactions: true
     stream_snapshot: false
     snapshot_memory_safety_factor: 1
     snapshot_batch_size: 0
@@ -72,7 +72,7 @@ input:
   label: ""
   pg_stream:
     dsn: postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable # No default (required)
-    stream_uncommitted: false
+    batch_transactions: true
     stream_snapshot: false
     snapshot_memory_safety_factor: 1
     snapshot_batch_size: 0
@@ -124,14 +124,14 @@ The Data Source Name for the PostgreSQL database in the form of `postgres://[use
 dsn: postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable
 ```
 
-=== `stream_uncommitted`
+=== `batch_transactions`
 
-If set to true, the plugin will stream uncommitted transactions before receiving a commit message from PostgreSQL. This may result in duplicate records if the connector is restarted.
+When set to true, transactions are batched into a single message. Note that this setting has no effect when using wal2json
 
 
 *Type*: `bool`
 
-*Default*: `false`
+*Default*: `true`
 
 === `stream_snapshot`
 
