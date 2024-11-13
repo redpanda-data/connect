@@ -13,8 +13,9 @@ package watermark_test
 import (
 	"testing"
 
-	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/watermark"
 	"github.com/stretchr/testify/require"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/watermark"
 )
 
 func TestWatermark(t *testing.T) {

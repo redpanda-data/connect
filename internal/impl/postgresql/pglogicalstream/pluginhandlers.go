@@ -12,6 +12,7 @@ import (
 	"context"
 
 	"github.com/jackc/pgx/v5/pgtype"
+
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/watermark"
 )
 

@@ -21,9 +21,10 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgproto3"
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"golang.org/x/sync/errgroup"
+
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/watermark"
-	"golang.org/x/sync/errgroup"
 )
 
 // Stream is a structure that represents a logical replication stream

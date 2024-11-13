@@ -17,7 +17,7 @@ import (
 
 	"github.com/Jeffail/checkpoint"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/matoous/go-nanoid/v2"
+	gonanoid "github.com/matoous/go-nanoid/v2"
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream"
