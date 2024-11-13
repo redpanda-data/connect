@@ -8,11 +8,16 @@
 
 package pglogicalstream
 
-import "github.com/jackc/pgx/v5/pgtype"
+import (
+	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/watermark"
+)
 
 // PluginHandler is an interface that must be implemented by all plugin handlers
 type PluginHandler interface {
-	Handle(clientXLogPos LSN, xld XLogData) error
+	Handle(ctx context.Context, clientXLogPos LSN, xld XLogData) error
 }
 
 // Wal2JsonPluginHandler is a handler for wal2json output plugin
@@ -30,7 +35,7 @@ func NewWal2JsonPluginHandler(messages chan StreamMessage, monitor *Monitor) *Wa
 }
 
 // Handle handles the wal2json output
-func (w *Wal2JsonPluginHandler) Handle(clientXLogPos LSN, xld XLogData) error {
+func (w *Wal2JsonPluginHandler) Handle(_ context.Context, clientXLogPos LSN, xld XLogData) error {
 	// get current stream metrics
 	metrics := w.monitor.Report()
 	message, err := decodeWal2JsonChanges(clientXLogPos.String(), xld.WALData)
@@ -56,7 +61,7 @@ type PgOutputPluginHandler struct {
 	typeMap           *pgtype.Map
 	pgoutputChanges   []StreamMessageChanges
 
-	lsnWatermark *watermark[LSN]
+	lsnWatermark *watermark.Value[LSN]
 }
 
 // NewPgOutputPluginHandler creates a new PgOutputPluginHandler
@@ -64,7 +69,7 @@ func NewPgOutputPluginHandler(
 	messages chan StreamMessage,
 	streamUncommitted bool,
 	monitor *Monitor,
-	lsnWatermark *watermark[LSN],
+	lsnWatermark *watermark.Value[LSN],
 ) *PgOutputPluginHandler {
 	return &PgOutputPluginHandler{
 		messages:          messages,
@@ -78,7 +83,7 @@ func NewPgOutputPluginHandler(
 }
 
 // Handle handles the pgoutput output
-func (p *PgOutputPluginHandler) Handle(clientXLogPos LSN, xld XLogData) error {
+func (p *PgOutputPluginHandler) Handle(ctx context.Context, clientXLogPos LSN, xld XLogData) error {
 	if p.streamUncommitted {
 		// parse changes inside the transaction
 		message, err := decodePgOutput(xld.WALData, p.relations, p.typeMap)
@@ -94,9 +99,11 @@ func (p *PgOutputPluginHandler) Handle(clientXLogPos LSN, xld XLogData) error {
 		// when receiving a commit message, we need to acknowledge the LSN
 		// but we must wait for connect to flush the messages before we can do that
 		if isCommit {
-			p.lsnWatermark.WaitFor(func(lsn LSN) bool {
-				return lsn >= clientXLogPos
-			})
+			select {
+			case <-p.lsnWatermark.WaitFor(clientXLogPos):
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 		} else {
 			if message == nil && !isCommit {
 				return nil

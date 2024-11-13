@@ -22,6 +22,7 @@ import (
 	"github.com/jackc/pgx/v5/pgproto3"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
+	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/watermark"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -34,7 +35,7 @@ type Stream struct {
 
 	standbyCtxCancel context.CancelFunc
 
-	clientXLogPos *watermark[LSN]
+	clientXLogPos *watermark.Value[LSN]
 
 	standbyMessageTimeout      time.Duration
 	nextStandbyMessageDeadline time.Time
@@ -185,9 +186,9 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	}
 
 	if freshlyCreatedSlot {
-		stream.clientXLogPos = newWatermark(sysident.XLogPos)
+		stream.clientXLogPos = watermark.New(sysident.XLogPos)
 	} else {
-		stream.clientXLogPos = newWatermark(lsnrestart)
+		stream.clientXLogPos = watermark.New(lsnrestart)
 	}
 
 	stream.standbyMessageTimeout = config.PgStandbyTimeout
@@ -372,7 +373,7 @@ func (s *Stream) streamMessagesAsync() {
 			}
 			clientXLogPos := xld.WALStart + LSN(len(xld.WALData))
 			if s.decodingPlugin == "wal2json" {
-				if err = handler.Handle(clientXLogPos, xld); err != nil {
+				if err = handler.Handle(s.streamCtx, clientXLogPos, xld); err != nil {
 					s.logger.Errorf("decodeWal2JsonChanges failed: %w", err)
 					if err = s.Stop(); err != nil {
 						s.logger.Errorf("Failed to stop the stream: %v", err)
@@ -394,7 +395,7 @@ func (s *Stream) streamMessagesAsync() {
 			}
 
 			if s.decodingPlugin == "pgoutput" {
-				if err = handler.Handle(clientXLogPos, xld); err != nil {
+				if err = handler.Handle(s.streamCtx, clientXLogPos, xld); err != nil {
 					s.logger.Errorf("decodePgOutputChanges failed: %w", err)
 					if err = s.Stop(); err != nil {
 						s.logger.Errorf("Failed to stop the stream: %v", err)
