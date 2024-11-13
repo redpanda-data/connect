@@ -106,6 +106,7 @@ func (m *Monitor) readTablesStat(tables []string) error {
 
 	for _, table := range tables {
 		tableWithoutSchema := strings.Split(table, ".")[1]
+		// TODO(le-vlad): Implement proper SQL injection protection
 		query := "SELECT COUNT(*) FROM " + tableWithoutSchema
 
 		var count int64

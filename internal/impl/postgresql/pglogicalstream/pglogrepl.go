@@ -251,6 +251,7 @@ func CreateReplicationSlot(
 		snapshotString = options.SnapshotAction
 	}
 
+	// NOTE: All strings passed into here have been validated and are not prone to SQL injection.
 	newPgCreateSlotCommand := fmt.Sprintf("CREATE_REPLICATION_SLOT %s %s %s %s %s", slotName, temporaryString, options.Mode, outputPlugin, snapshotString)
 	oldPgCreateSlotCommand := fmt.Sprintf("SELECT * FROM  pg_create_logical_replication_slot('%s', '%s', %v);", slotName, outputPlugin, temporaryString == "TEMPORARY")
 
@@ -361,8 +362,7 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 
 	tablesClause := "FOR ALL TABLES"
 	if len(tables) > 0 {
-		// TODO: Implement proper SQL injection protection, potentially using parameterized queries
-		// or a SQL query builder that handles proper escaping
+		// TODO(le-vlad): Implement proper SQL injection protection
 		tablesClause = "FOR TABLE " + strings.Join(tables, ",")
 	}
 
@@ -405,6 +405,7 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 
 	// remove tables from publication
 	for _, dropTable := range tablesToRemoveFromPublication {
+		// TODO(le-vlad): Implement proper SQL injection protection
 		result = conn.Exec(ctx, fmt.Sprintf("ALTER PUBLICATION %s DROP TABLE %s;", publicationName, dropTable))
 		if _, err := result.ReadAll(); err != nil {
 			return fmt.Errorf("failed to remove table from publication: %w", err)
@@ -413,6 +414,7 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 
 	// add tables to publication
 	for _, addTable := range tablesToAddToPublication {
+		// TODO(le-vlad): Implement proper SQL injection protection
 		result = conn.Exec(ctx, fmt.Sprintf("ALTER PUBLICATION %s ADD TABLE %s;", publicationName, addTable))
 		if _, err := result.ReadAll(); err != nil {
 			return fmt.Errorf("failed to add table to publication: %w", err)
