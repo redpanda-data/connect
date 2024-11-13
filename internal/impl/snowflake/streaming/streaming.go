@@ -156,6 +156,9 @@ type encryptionInfo struct {
 
 // OpenChannel creates a new or reuses a channel to load data into a Snowflake table.
 func (c *SnowflakeServiceClient) OpenChannel(ctx context.Context, opts ChannelOptions) (*SnowflakeIngestionChannel, error) {
+	if opts.BuildParallelism <= 0 {
+		return nil, fmt.Errorf("invalid build parallelism: %d", opts.BuildParallelism)
+	}
 	resp, err := c.client.openChannel(ctx, openChannelRequest{
 		RequestID: c.nextRequestID(),
 		Role:      c.options.Role,

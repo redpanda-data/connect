@@ -323,7 +323,7 @@ func NewRestClient(account, user, version, app string, privateKey *rsa.PrivateKe
 		// this should only show up in development, not released binaries
 		version = "99.0.0"
 	}
-	userAgent := fmt.Sprintf("RedpandaConnect/%v", version)
+	userAgent := fmt.Sprintf("RedpandaConnect_SnowpipeStreamingSDK/%v", version)
 	debugf(logger, "making snowflake HTTP requests using User-Agent: %s", userAgent)
 	c = &SnowflakeRestClient{
 		account:    account,

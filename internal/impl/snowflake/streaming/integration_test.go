@@ -273,10 +273,11 @@ func TestIntegerCompat(t *testing.T) {
 	ctx := context.Background()
 	restClient, streamClient := setup(t)
 	channelOpts := streaming.ChannelOptions{
-		Name:         t.Name(),
-		DatabaseName: envOr("SNOWFLAKE_DB", "BABY_DATABASE"),
-		SchemaName:   "PUBLIC",
-		TableName:    "TEST_INT_TABLE",
+		Name:             t.Name(),
+		DatabaseName:     envOr("SNOWFLAKE_DB", "BABY_DATABASE"),
+		SchemaName:       "PUBLIC",
+		TableName:        "TEST_INT_TABLE",
+		BuildParallelism: 1,
 	}
 	_, err := restClient.RunSQL(ctx, streaming.RunSQLRequest{
 		Database: channelOpts.DatabaseName,
@@ -347,10 +348,11 @@ func TestTimestampCompat(t *testing.T) {
 	ctx := context.Background()
 	restClient, streamClient := setup(t)
 	channelOpts := streaming.ChannelOptions{
-		Name:         t.Name(),
-		DatabaseName: envOr("SNOWFLAKE_DB", "BABY_DATABASE"),
-		SchemaName:   "PUBLIC",
-		TableName:    "TEST_TIMESTAMP_TABLE",
+		Name:             t.Name(),
+		DatabaseName:     envOr("SNOWFLAKE_DB", "BABY_DATABASE"),
+		SchemaName:       "PUBLIC",
+		TableName:        "TEST_TIMESTAMP_TABLE",
+		BuildParallelism: 1,
 	}
 	var columnDefs []string
 	var columnNames []string
