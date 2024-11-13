@@ -8,6 +8,31 @@
 
 package mysql
 
+import "github.com/go-mysql-org/go-mysql/mysql"
+
 type ProcessEventParams struct {
 	initValue, incrementValue int
+}
+
+type MessageOperation string
+
+const (
+	MessageOperationInsert MessageOperation = "insert"
+	MessageOperationUpdate MessageOperation = "update"
+	MessageOperationDelete MessageOperation = "delete"
+)
+
+type MessageType string
+
+const (
+	MessageTypeEvent     MessageType = "snapshot"
+	MessageTypeStreaming MessageType = "streaming"
+)
+
+type MessageEvent struct {
+	Row       map[string]any   `json:"row"`
+	Table     string           `json:"table"`
+	Operation MessageOperation `json:"operation"`
+	Type      MessageType      `json:"type"`
+	Position  *mysql.Position  `json:"position"`
 }

@@ -63,30 +63,41 @@ type asyncMessage struct {
 }
 
 type mysqlStreamInput struct {
-	// canal represents mysql binlog listener connection
+	mutex sync.Mutex
+	// canal stands for mysql binlog listener connection
 	canal       *canal.Canal
 	mysqlConfig *mysql.Config
 	canal.DummyEventHandler
 	startBinLogPosition *mysqlReplications.Position
 	currentLogPosition  *mysqlReplications.Position
+	binLogCache         string
 
 	dsn            string
 	tables         []string
 	flavor         string
 	streamSnapshot bool
 
-	cMut     sync.Mutex
-	msgChan  chan asyncMessage
-	batching service.BatchPolicy
+	rawMessageEvents chan MessageEvent
+	msgChan          chan asyncMessage
+	batching         service.BatchPolicy
+	batchPolicy      *service.Batcher
+	checkPointLimit  int
 
 	logger *service.Logger
+	res    *service.Resources
 }
 
-func newMySQLStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s service.BatchInput, err error) {
+const binLogCacheKey = "mysql_binlog_position"
+
+func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s service.BatchInput, err error) {
 	streamInput := mysqlStreamInput{
-		logger:  mgr.Logger(),
-		msgChan: make(chan asyncMessage),
+		logger:           res.Logger(),
+		rawMessageEvents: make(chan MessageEvent),
+		msgChan:          make(chan asyncMessage),
+		res:              res,
 	}
+
+	var batching service.BatchPolicy
 
 	if streamInput.dsn, err = conf.FieldString(fieldMySQLDSN); err != nil {
 		return nil, err
@@ -109,34 +120,51 @@ func newMySQLStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s 
 		return nil, err
 	}
 
-	if binLogCacheKey, err := conf.FieldString(fieldCheckpointKey); err != nil {
+	if streamInput.checkPointLimit, err = conf.FieldInt(fieldCheckpointLimit); err != nil {
+		return nil, err
+	}
+
+	if streamInput.binLogCache, err = conf.FieldString(fieldCheckpointKey); err != nil {
 		return nil, err
 	} else {
-		if err := mgr.AccessCache(context.Background(), binLogCacheKey, func(c service.Cache) {
+		if err := res.AccessCache(context.Background(), streamInput.binLogCache, func(c service.Cache) {
 			binLogPositionBytes, cErr := c.Get(context.Background(), binLogCacheKey)
 			if err != nil {
 				if !errors.Is(cErr, service.ErrKeyNotFound) {
-					mgr.Logger().Errorf("failed to obtain cursor cache item. %v", cErr)
+					res.Logger().Errorf("failed to obtain cursor cache item. %v", cErr)
 				}
 				return
 			}
 
 			var storedMySQLBinLogPosition mysqlReplications.Position
 			if err = json.Unmarshal(binLogPositionBytes, &storedMySQLBinLogPosition); err != nil {
-				mgr.Logger().With("error", err.Error()).Error("Failed to unmarshal stored binlog position.")
+				res.Logger().With("error", err.Error()).Error("Failed to unmarshal stored binlog position.")
 				return
 			}
 
 			streamInput.startBinLogPosition = &storedMySQLBinLogPosition
-			binLogCacheKey = string(binLogPositionBytes)
 		}); err != nil {
-			mgr.Logger().With("error", err.Error()).Error("Failed to access cursor cache.")
+
+			res.Logger().With("error", err.Error()).Error("Failed to access cursor cache.")
 		}
 	}
 
 	i := &streamInput
 
-	mgr.Logger().Info("Starting MySQL stream input")
+	res.Logger().Info("Starting MySQL stream input")
+
+	if batching, err = conf.FieldBatchPolicy(fieldBatching); err != nil {
+		return nil, err
+	} else if batching.IsNoop() {
+		batching.Count = 1
+	}
+
+	i.batching = batching
+	if i.batchPolicy, err = i.batching.NewBatcher(res); err != nil {
+		return nil, err
+	} else if batching.IsNoop() {
+		batching.Count = 1
+	}
 
 	r, err := service.AutoRetryNacksBatchedToggled(conf, i)
 	if err != nil {
@@ -150,9 +178,7 @@ func init() {
 	err := service.RegisterBatchInput(
 		"mysql_stream", mysqlStreamConfigSpec,
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
-			s, err := newMySQLStreamInput(conf, mgr)
-			fmt.Println("New service", err)
-			return s, err
+			return newMySQLStreamInput(conf, mgr)
 		})
 	if err != nil {
 		panic(err)
@@ -168,7 +194,6 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 	canalConfig.User = i.mysqlConfig.User
 	canalConfig.Password = i.mysqlConfig.Passwd
 	canalConfig.Dump.TableDB = i.mysqlConfig.DBName
-	fmt.Println(i.mysqlConfig.Passwd, i.mysqlConfig.User, i.mysqlConfig.Addr, i.mysqlConfig.DBName)
 
 	// Parse and set additional parameters
 	canalConfig.Charset = i.mysqlConfig.Collation
@@ -185,20 +210,74 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 	c.AddDumpTables(i.mysqlConfig.DBName, i.tables...)
 
 	i.canal = c
-	go i.startMySQLSync()
+	go i.startMySQLSync(ctx)
 	return nil
 }
 
-func (i *mysqlStreamInput) startMySQLSync() {
+func (i *mysqlStreamInput) readMessages(ctx context.Context) error {
+	var nextTimedBatchChan <-chan time.Time
+	var latestPos *mysqlReplications.Position
+	cp := checkpoint.NewCapped[*int64](int64(i.checkPointLimit))
+
+	for {
+		select {
+		case <-ctx.Done():
+			fmt.Println("Stop reading....")
+			return nil
+		case <-nextTimedBatchChan:
+			nextTimedBatchChan = nil
+			flushedBatch, err := i.batchPolicy.Flush(ctx)
+			if err != nil {
+				i.logger.Debugf("Timed flush batch error: %w", err)
+				break
+			}
+
+			if ok := i.flushBatch(ctx, cp, flushedBatch, latestPos); !ok {
+				break
+			}
+		case me := <-i.rawMessageEvents:
+			row, err := json.Marshal(me.Row)
+			if err != nil {
+				fmt.Println("Error marshalling row: ", err)
+				return err
+			}
+
+			mb := service.NewMessage(row)
+			mb.MetaSet("operation", string(me.Operation))
+			mb.MetaSet("table", me.Table)
+			mb.MetaSet("type", string(me.Type))
+			if me.Position != nil {
+				latestPos = me.Position
+			}
+
+			if i.batchPolicy.Add(mb) {
+				nextTimedBatchChan = nil
+				flushedBatch, err := i.batchPolicy.Flush(ctx)
+				if err != nil {
+					i.logger.Debugf("Flush batch error: %w", err)
+					break
+				}
+				if ok := i.flushBatch(ctx, cp, flushedBatch, latestPos); !ok {
+					break
+				}
+			} else {
+				d, ok := i.batchPolicy.UntilNext()
+				if ok {
+					nextTimedBatchChan = time.After(d)
+				}
+			}
+		}
+	}
+}
+
+func (i *mysqlStreamInput) startMySQLSync(ctx context.Context) {
 	i.canal.SetEventHandler(i)
-	fmt.Println("Starting MySQL sync")
+	go i.readMessages(ctx)
 	// If we require snapshot streaming && we don't have a binlog position cache
 	// initiate default run for Canal to process snapshot and start incremental sync of binlog
 	if i.streamSnapshot && i.startBinLogPosition == nil {
 		// Doesn't work at the moment
-		fmt.Println("Run binglo sync....")
 		if err := i.canal.Run(); err != nil {
-			fmt.Println("Mysql stream error: ", err)
 			panic(err)
 		}
 	} else {
@@ -215,12 +294,13 @@ func (i *mysqlStreamInput) startMySQLSync() {
 	}
 }
 
-func (i *mysqlStreamInput) flushBatch(ctx context.Context, checkpointer *checkpoint.Capped[*int64], msg service.MessageBatch, lsn *int64) bool {
+func (i *mysqlStreamInput) flushBatch(ctx context.Context, checkpointer *checkpoint.Capped[*int64], msg service.MessageBatch, binLogPos *mysqlReplications.Position) bool {
 	if msg == nil {
 		return true
 	}
 
-	resolveFn, err := checkpointer.Track(ctx, lsn, int64(len(msg)))
+	posInInt := int64(binLogPos.Pos)
+	resolveFn, err := checkpointer.Track(ctx, &posInInt, int64(len(msg)))
 	if err != nil {
 		if ctx.Err() == nil {
 			i.logger.Errorf("Failed to checkpoint offset: %v\n", err)
@@ -236,10 +316,10 @@ func (i *mysqlStreamInput) flushBatch(ctx context.Context, checkpointer *checkpo
 			if maxOffset == nil {
 				return nil
 			}
-			i.cMut.Lock()
-			defer i.cMut.Unlock()
 
-			// todo;; store offset
+			if err := i.syncBinlogPosition(context.Background()); err != nil {
+				return err
+			}
 
 			return nil
 		},
@@ -252,34 +332,67 @@ func (i *mysqlStreamInput) flushBatch(ctx context.Context, checkpointer *checkpo
 }
 
 func (i *mysqlStreamInput) onMessage(e *canal.RowsEvent, params ProcessEventParams) error {
-	i.cMut.Lock()
+	i.mutex.Lock()
 	i.currentLogPosition.Pos = e.Header.LogPos
-	i.cMut.Unlock()
+	i.mutex.Unlock()
 
-	for i := params.initValue; i < len(e.Rows); i += params.incrementValue {
+	for pi := params.initValue; pi < len(e.Rows); pi += params.incrementValue {
 		message := map[string]any{}
-		for i, v := range e.Rows[i] {
+		for i, v := range e.Rows[pi] {
 			message[e.Table.Columns[i].Name] = v
 		}
 
-		fmt.Println("mysql row", message)
+		i.rawMessageEvents <- MessageEvent{
+			Row:       message,
+			Operation: MessageOperation(e.Action),
+			Type:      MessageTypeStreaming,
+			Table:     e.Table.Name,
+			Position:  i.currentLogPosition,
+		}
 	}
-
-	// update cache checkpoint
-	fmt.Println("Log position.....", i.currentLogPosition.Pos, i.currentLogPosition.Name)
 
 	return nil
 }
 
+func (i *mysqlStreamInput) syncBinlogPosition(ctx context.Context) error {
+	i.mutex.Lock()
+	defer i.mutex.Unlock()
+
+	if i.currentLogPosition == nil {
+		i.logger.Warn("No current bingLog position")
+		return errors.New("no current binlog position")
+	}
+
+	var (
+		positionInByte []byte
+		err            error
+	)
+	if positionInByte, err = json.Marshal(*i.currentLogPosition); err != nil {
+		i.logger.Errorf("Failed to marshal binlog position: %v", err)
+		return err
+	}
+
+	var cErr error
+	if err := i.res.AccessCache(ctx, i.binLogCache, func(c service.Cache) {
+		cErr = c.Set(ctx, binLogCacheKey, positionInByte, nil)
+		if cErr != nil {
+			i.logger.Errorf("Failed to store binlog position: %v", cErr)
+		}
+	}); err != nil {
+		fmt.Println("Access cache error", err)
+		return err
+	}
+
+	return cErr
+}
+
 func (i *mysqlStreamInput) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
-	i.cMut.Lock()
+	i.mutex.Lock()
 	msgChan := i.msgChan
-	i.cMut.Unlock()
+	i.mutex.Unlock()
 	if msgChan == nil {
 		return nil, nil, service.ErrNotConnected
 	}
-
-	time.Sleep(time.Second * 10)
 
 	select {
 	case m, open := <-msgChan:
@@ -294,6 +407,7 @@ func (i *mysqlStreamInput) ReadBatch(ctx context.Context) (service.MessageBatch,
 }
 
 func (i *mysqlStreamInput) Close(ctx context.Context) error {
+	i.canal.SyncedPosition()
 	i.canal.Close()
 	return nil
 }
@@ -302,7 +416,12 @@ func (i *mysqlStreamInput) Close(ctx context.Context) error {
 
 // --- MySQL Canal handler methods ----
 
-func (i *mysqlStreamInput) OnRotate(*replication.EventHeader, *replication.RotateEvent) error {
+func (i *mysqlStreamInput) OnRotate(eh *replication.EventHeader, re *replication.RotateEvent) error {
+	i.mutex.Lock()
+	i.currentLogPosition.Pos = uint32(re.Position)
+	i.currentLogPosition.Name = string(re.NextLogName)
+	i.mutex.Unlock()
+
 	return nil
 }
 func (i *mysqlStreamInput) OnTableChanged(*replication.EventHeader, string, string) error {
@@ -330,7 +449,13 @@ func (i *mysqlStreamInput) OnXID(*replication.EventHeader, mysqlReplications.Pos
 func (i *mysqlStreamInput) OnGTID(*replication.EventHeader, mysqlReplications.BinlogGTIDEvent) error {
 	return nil
 }
-func (i *mysqlStreamInput) OnPosSynced(*replication.EventHeader, mysqlReplications.Position, mysqlReplications.GTIDSet, bool) error {
+func (i *mysqlStreamInput) OnPosSynced(eh *replication.EventHeader, pos mysqlReplications.Position, gtid mysqlReplications.GTIDSet, synced bool) error {
+	i.mutex.Lock()
+	i.currentLogPosition = &pos
+	i.mutex.Unlock()
+
+	i.syncBinlogPosition(context.Background())
+
 	return nil
 }
 
