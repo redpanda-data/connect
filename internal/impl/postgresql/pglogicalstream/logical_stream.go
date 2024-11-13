@@ -267,9 +267,9 @@ func (s *Stream) AckLSN(lsn string) error {
 	}
 
 	err = SendStandbyStatusUpdate(context.Background(), s.pgConn, StandbyStatusUpdate{
-		WALApplyPosition: clientXLogPos,
-		WALWritePosition: clientXLogPos,
-		WALFlushPosition: clientXLogPos,
+		WALApplyPosition: clientXLogPos + 1,
+		WALWritePosition: clientXLogPos + 1,
+		WALFlushPosition: clientXLogPos + 1,
 		ReplyRequested:   true,
 	})
 
