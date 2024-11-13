@@ -10,7 +10,6 @@ package pglogicalstream
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/watermark"
@@ -53,18 +52,26 @@ func (w *Wal2JsonPluginHandler) Handle(_ context.Context, clientXLogPos LSN, xld
 	return false, nil
 }
 
-// PgOutputPluginHandler is a handler for pgoutput output plugin
-type PgOutputPluginHandler struct {
+// PgOutputUnbufferedPluginHandler is a native output handler that emits each message as it's received.
+type PgOutputUnbufferedPluginHandler struct {
 	messages chan StreamMessage
 	monitor  *Monitor
 
-	streamUncommitted bool
-	relations         map[uint32]*RelationMessage
-	typeMap           *pgtype.Map
-	pgoutputChanges   []StreamMessageChanges
+	relations map[uint32]*RelationMessage
+	typeMap   *pgtype.Map
 
 	lastEmitted  LSN
 	lsnWatermark *watermark.Value[LSN]
+}
+
+// PgOutputBufferedPluginHandler is a native output handler that buffers and emits each transaction together
+type PgOutputBufferedPluginHandler struct {
+	messages chan StreamMessage
+	monitor  *Monitor
+
+	relations       map[uint32]*RelationMessage
+	typeMap         *pgtype.Map
+	pgoutputChanges []StreamMessageChanges
 }
 
 // NewPgOutputPluginHandler creates a new PgOutputPluginHandler
@@ -73,98 +80,108 @@ func NewPgOutputPluginHandler(
 	streamUncommitted bool,
 	monitor *Monitor,
 	lsnWatermark *watermark.Value[LSN],
-) *PgOutputPluginHandler {
-	return &PgOutputPluginHandler{
-		messages:          messages,
-		monitor:           monitor,
-		streamUncommitted: streamUncommitted,
-		relations:         map[uint32]*RelationMessage{},
-		typeMap:           pgtype.NewMap(),
-		pgoutputChanges:   []StreamMessageChanges{},
-		lastEmitted:       lsnWatermark.Get(),
-		lsnWatermark:      lsnWatermark,
+) PluginHandler {
+	if streamUncommitted {
+		return &PgOutputUnbufferedPluginHandler{
+			messages:     messages,
+			monitor:      monitor,
+			relations:    map[uint32]*RelationMessage{},
+			typeMap:      pgtype.NewMap(),
+			lastEmitted:  lsnWatermark.Get(),
+			lsnWatermark: lsnWatermark,
+		}
+	}
+	return &PgOutputBufferedPluginHandler{
+		messages:        messages,
+		monitor:         monitor,
+		relations:       map[uint32]*RelationMessage{},
+		typeMap:         pgtype.NewMap(),
+		pgoutputChanges: []StreamMessageChanges{},
 	}
 }
 
 // Handle handles the pgoutput output
-func (p *PgOutputPluginHandler) Handle(ctx context.Context, clientXLogPos LSN, xld XLogData) (bool, error) {
-	if p.streamUncommitted {
-		// parse changes inside the transaction
-		message, err := decodePgOutput(xld.WALData, p.relations, p.typeMap)
-		if err != nil {
-			return false, err
-		}
+func (p *PgOutputUnbufferedPluginHandler) Handle(ctx context.Context, clientXLogPos LSN, xld XLogData) (bool, error) {
+	// parse changes inside the transaction
+	message, err := decodePgOutput(xld.WALData, p.relations, p.typeMap)
+	if err != nil {
+		return false, err
+	}
 
-		isCommit, _, err := isCommitMessage(xld.WALData)
-		if err != nil {
-			return false, err
-		}
+	isCommit, _, err := isCommitMessage(xld.WALData)
+	if err != nil {
+		return false, err
+	}
 
-		// when receiving a commit message, we need to acknowledge the LSN
-		// but we must wait for connect to flush the messages before we can do that
-		if isCommit {
-			select {
-			case <-p.lsnWatermark.WaitFor(p.lastEmitted):
-				return true, nil
-			case <-ctx.Done():
-				return false, ctx.Err()
-			}
-		} else {
-			if message == nil && !isCommit {
-				return false, nil
-			} else if message != nil {
-				lsn := clientXLogPos.String()
-				p.lastEmitted = clientXLogPos
-				p.messages <- StreamMessage{
-					Lsn: &lsn,
-					Changes: []StreamMessageChanges{
-						*message,
-					},
-					Mode:        StreamModeStreaming,
-					WALLagBytes: &p.monitor.Report().WalLagInBytes,
-				}
-			}
+	// when receiving a commit message, we need to acknowledge the LSN
+	// but we must wait for connect to flush the messages before we can do that
+	if isCommit {
+		select {
+		case <-p.lsnWatermark.WaitFor(p.lastEmitted):
+			return true, nil
+		case <-ctx.Done():
+			return false, ctx.Err()
 		}
 	} else {
-		// message changes must be collected in the buffer in the context of the same transaction
-		// as single transaction can contain multiple changes
-		// and LSN ack will cause potential loss of changes
-		isBegin, err := isBeginMessage(xld.WALData)
-		if err != nil {
-			return false, err
+		if message == nil && !isCommit {
+			return false, nil
+		} else if message != nil {
+			lsn := clientXLogPos.String()
+			p.lastEmitted = clientXLogPos
+			p.messages <- StreamMessage{
+				Lsn: &lsn,
+				Changes: []StreamMessageChanges{
+					*message,
+				},
+				Mode:        StreamModeStreaming,
+				WALLagBytes: &p.monitor.Report().WalLagInBytes,
+			}
 		}
+	}
 
-		if isBegin {
-			p.pgoutputChanges = []StreamMessageChanges{}
-		}
+	return false, nil
+}
 
-		// parse changes inside the transaction
-		message, err := decodePgOutput(xld.WALData, p.relations, p.typeMap)
-		if err != nil {
-			return false, err
-		}
+// Handle handles the pgoutput output
+func (p *PgOutputBufferedPluginHandler) Handle(ctx context.Context, clientXLogPos LSN, xld XLogData) (bool, error) {
+	// message changes must be collected in the buffer in the context of the same transaction
+	// as single transaction can contain multiple changes
+	// and LSN ack will cause potential loss of changes
+	isBegin, err := isBeginMessage(xld.WALData)
+	if err != nil {
+		return false, err
+	}
 
-		if message != nil {
-			p.pgoutputChanges = append(p.pgoutputChanges, *message)
-		}
+	if isBegin {
+		p.pgoutputChanges = []StreamMessageChanges{}
+	}
 
-		isCommit, _, err := isCommitMessage(xld.WALData)
-		if err != nil {
-			return false, err
-		}
+	// parse changes inside the transaction
+	message, err := decodePgOutput(xld.WALData, p.relations, p.typeMap)
+	if err != nil {
+		return false, err
+	}
 
-		if isCommit {
-			if len(p.pgoutputChanges) == 0 {
-				return false, nil
-			} else {
-				// send all collected changes
-				lsn := clientXLogPos.String()
-				p.messages <- StreamMessage{
-					Lsn:         &lsn,
-					Changes:     p.pgoutputChanges,
-					Mode:        StreamModeStreaming,
-					WALLagBytes: &p.monitor.Report().WalLagInBytes,
-				}
+	if message != nil {
+		p.pgoutputChanges = append(p.pgoutputChanges, *message)
+	}
+
+	isCommit, _, err := isCommitMessage(xld.WALData)
+	if err != nil {
+		return false, err
+	}
+
+	if isCommit {
+		if len(p.pgoutputChanges) == 0 {
+			return false, nil
+		} else {
+			// send all collected changes
+			lsn := clientXLogPos.String()
+			p.messages <- StreamMessage{
+				Lsn:         &lsn,
+				Changes:     p.pgoutputChanges,
+				Mode:        StreamModeStreaming,
+				WALLagBytes: &p.monitor.Report().WalLagInBytes,
 			}
 		}
 	}
