@@ -102,7 +102,7 @@ func init() {
 type schemaRegistryOutput struct {
 	subject              *service.InterpolatedString
 	backfillDependencies bool
-	inputResource        string
+	inputResource        srResourceKey
 
 	client      *sr.Client
 	inputClient *sr.Client
@@ -135,9 +135,11 @@ func outputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (o *s
 	}
 
 	if o.backfillDependencies {
-		if o.inputResource, err = pConf.FieldString(sroFieldInputResource); err != nil {
+		var res string
+		if res, err = pConf.FieldString(sroFieldInputResource); err != nil {
 			return nil, err
 		}
+		o.inputResource = srResourceKey(res)
 	}
 
 	var reqSigner func(f fs.FS, req *http.Request) error
@@ -159,9 +161,9 @@ func outputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (o *s
 	}
 
 	if label := mgr.Label(); label != "" {
-		mgr.SetGeneric(mgr.Label(), o)
+		mgr.SetGeneric(srResourceKey(mgr.Label()), o)
 	} else {
-		mgr.SetGeneric(sroResourceDefaultLabel, o)
+		mgr.SetGeneric(srResourceKey(sroResourceDefaultLabel), o)
 	}
 
 	return

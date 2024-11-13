@@ -148,7 +148,7 @@ type RedpandaMigratorWriter struct {
 	replicationFactor            int
 	translateSchemaIDs           bool
 	inputResource                string
-	schemaRegistryOutputResource string
+	schemaRegistryOutputResource srResourceKey
 
 	clientDetails *kafka.FranzConnectionDetails
 	clientOpts    []kgo.Opt
@@ -208,9 +208,11 @@ func NewRedpandaMigratorWriterFromConfig(conf *service.ParsedConfig, mgr *servic
 	}
 
 	if w.translateSchemaIDs {
-		if w.schemaRegistryOutputResource, err = conf.FieldString(rmoFieldSchemaRegistryOutputResource); err != nil {
+		var res string
+		if res, err = conf.FieldString(rmoFieldSchemaRegistryOutputResource); err != nil {
 			return nil, err
 		}
+		w.schemaRegistryOutputResource = srResourceKey(res)
 	}
 
 	if w.clientLabel = mgr.Label(); w.clientLabel == "" {

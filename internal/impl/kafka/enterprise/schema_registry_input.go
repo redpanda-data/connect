@@ -161,9 +161,9 @@ func inputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (i *sc
 	}
 
 	if label := mgr.Label(); label != "" {
-		mgr.SetGeneric(mgr.Label(), i)
+		mgr.SetGeneric(srResourceKey(mgr.Label()), i)
 	} else {
-		mgr.SetGeneric(sriResourceDefaultLabel, i)
+		mgr.SetGeneric(srResourceKey(sriResourceDefaultLabel), i)
 	}
 
 	return
