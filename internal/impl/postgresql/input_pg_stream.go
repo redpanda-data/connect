@@ -358,7 +358,7 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 			)
 
 			if len(message.Changes) == 0 {
-				p.logger.Errorf("received empty message (LSN=%s)", message.Lsn)
+				p.logger.Errorf("received empty message (LSN=%v)", message.Lsn)
 				break
 			}
 
