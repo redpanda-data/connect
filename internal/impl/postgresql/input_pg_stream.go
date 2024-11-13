@@ -12,10 +12,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/Jeffail/checkpoint"
+	"github.com/Jeffail/shutdown"
 	"github.com/jackc/pgx/v5/pgconn"
 	gonanoid "github.com/matoous/go-nanoid/v2"
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -245,14 +245,17 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		},
 		batching:        batching,
 		checkpointLimit: checkpointLimit,
-		cMut:            sync.Mutex{},
 		msgChan:         make(chan asyncMessage),
 
 		mgr:             mgr,
 		logger:          mgr.Logger(),
 		snapshotMetrics: snapshotMetrics,
 		replicationLag:  replicationLag,
+		stopSig:         shutdown.NewSignaller(),
 	}
+
+	// Has stopped is how we notify that we're not connected. This will get reset at connection time.
+	i.stopSig.TriggerHasStopped()
 
 	r, err := service.AutoRetryNacksBatchedToggled(conf, i)
 	if err != nil {
@@ -292,13 +295,13 @@ type pgStreamInput struct {
 	pgLogicalStream *pglogicalstream.Stream
 	logger          *service.Logger
 	mgr             *service.Resources
-	cMut            sync.Mutex
 	msgChan         chan asyncMessage
 	batching        service.BatchPolicy
 	checkpointLimit int
 
 	snapshotMetrics *service.MetricGauge
 	replicationLag  *service.MetricGauge
+	stopSig         *shutdown.Signaller
 }
 
 func (p *pgStreamInput) Connect(ctx context.Context) error {
@@ -308,112 +311,118 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 	}
 
 	p.pgLogicalStream = pgStream
-	batchPolicy, err := p.batching.NewBatcher(p.mgr)
+	batcher, err := p.batching.NewBatcher(p.mgr)
 	if err != nil {
 		return err
 	}
-	go func() {
-		defer func() {
-			batchPolicy.Close(context.Background())
-		}()
-
-		var nextTimedBatchChan <-chan time.Time
-
-		// offsets are nilable since we don't provide offset tracking during the snapshot phase
-		var latestOffset *int64
-		cp := checkpoint.NewCapped[*int64](int64(p.checkpointLimit))
-		for ctx.Err() != nil {
-			select {
-			case <-ctx.Done():
-				if err = p.pgLogicalStream.Stop(); err != nil {
-					p.logger.Errorf("Failed to stop pglogical stream: %v", err)
-				}
-				return
-			case <-nextTimedBatchChan:
-				nextTimedBatchChan = nil
-				flushedBatch, err := batchPolicy.Flush(ctx)
-				if err != nil {
-					p.logger.Debugf("Timed flush batch error: %w", err)
-					break
-				}
-
-				if err := p.flushBatch(ctx, cp, flushedBatch, latestOffset); err != nil {
-					break
-				}
-
-			case message, open := <-p.pgLogicalStream.Messages():
-				if !open {
-					break
-				}
-				var (
-					mb  []byte
-					err error
-				)
-				if message.Lsn != nil {
-					parsedLSN, err := LSNToInt64(*message.Lsn)
-					if err != nil {
-						p.logger.Errorf("Failed to parse LSN: %v", err)
-						break
-					}
-					latestOffset = &parsedLSN
-				}
-
-				if len(message.Changes) == 0 {
-					p.logger.Debugf("Received empty message on LSN: %v", message.Lsn)
-					continue
-				}
-
-				// TODO this should only be the message
-				if mb, err = json.Marshal(message.Changes); err != nil {
-					break
-				}
-
-				batchMsg := service.NewMessage(mb)
-
-				batchMsg.MetaSet("mode", string(message.Mode))
-				batchMsg.MetaSet("table", message.Changes[0].Table)
-				batchMsg.MetaSet("operation", message.Changes[0].Operation)
-				if message.Changes[0].TableSnapshotProgress != nil {
-					p.snapshotMetrics.SetFloat64(*message.Changes[0].TableSnapshotProgress, message.Changes[0].Table)
-				}
-				if message.WALLagBytes != nil {
-					p.replicationLag.Set(*message.WALLagBytes)
-				}
-
-				if batchPolicy.Add(batchMsg) {
-					nextTimedBatchChan = nil
-					flushedBatch, err := batchPolicy.Flush(ctx)
-					if err != nil {
-						p.logger.Debugf("Flush batch error: %w", err)
-						break
-					}
-					if err := p.flushBatch(ctx, cp, flushedBatch, latestOffset); err != nil {
-						break
-					}
-				} else {
-					d, ok := batchPolicy.UntilNext()
-					if ok {
-						nextTimedBatchChan = time.After(d)
-					}
-				}
-			}
-		}
-	}()
-
+	// Reset our stop signal
+	p.stopSig = shutdown.NewSignaller()
+	go p.processStream(batcher)
 	return err
 }
 
-func (p *pgStreamInput) flushBatch(ctx context.Context, checkpointer *checkpoint.Capped[*int64], msg service.MessageBatch, lsn *int64) error {
-	if msg == nil {
+func (p *pgStreamInput) processStream(batcher *service.Batcher) {
+	ctx, _ := p.stopSig.SoftStopCtx(context.Background())
+	defer func() {
+		ctx, _ := p.stopSig.HardStopCtx(context.Background())
+		if err := batcher.Close(ctx); err != nil {
+			p.logger.Errorf("uneable to close batcher: %v", err)
+		}
+		p.stopSig.TriggerHasStopped()
+	}()
+
+	var nextTimedBatchChan <-chan time.Time
+
+	// offsets are nilable since we don't provide offset tracking during the snapshot phase
+	cp := checkpoint.NewCapped[*int64](int64(p.checkpointLimit))
+	for !p.stopSig.IsSoftStopSignalled() {
+		select {
+		case <-nextTimedBatchChan:
+			nextTimedBatchChan = nil
+			flushedBatch, err := batcher.Flush(ctx)
+			if err != nil {
+				p.logger.Debugf("timed flush batch error: %v", err)
+				break
+			}
+			if err := p.flushBatch(ctx, cp, flushedBatch); err != nil {
+				p.logger.Debugf("failed to flush batch: %v", err)
+				break
+			}
+
+		case message := <-p.pgLogicalStream.Messages():
+			var (
+				mb  []byte
+				err error
+			)
+
+			if len(message.Changes) == 0 {
+				p.logger.Errorf("received empty message (LSN=%v)", message.Lsn)
+				break
+			}
+
+			// TODO this should only be the message
+			if mb, err = json.Marshal(message.Changes); err != nil {
+				break
+			}
+
+			batchMsg := service.NewMessage(mb)
+
+			batchMsg.MetaSet("mode", string(message.Mode))
+			batchMsg.MetaSet("table", message.Changes[0].Table)
+			batchMsg.MetaSet("operation", message.Changes[0].Operation)
+			if message.Lsn != nil {
+				batchMsg.MetaSet("lsn", *message.Lsn)
+			}
+			if message.Changes[0].TableSnapshotProgress != nil {
+				p.snapshotMetrics.SetFloat64(*message.Changes[0].TableSnapshotProgress, message.Changes[0].Table)
+			}
+			if message.WALLagBytes != nil {
+				p.replicationLag.Set(*message.WALLagBytes)
+			}
+
+			if batcher.Add(batchMsg) {
+				nextTimedBatchChan = nil
+				flushedBatch, err := batcher.Flush(ctx)
+				if err != nil {
+					p.logger.Debugf("error flushing batch: %v", err)
+					break
+				}
+				if err := p.flushBatch(ctx, cp, flushedBatch); err != nil {
+					p.logger.Debugf("failed to flush batch: %v", err)
+					break
+				}
+			} else {
+				d, ok := batcher.UntilNext()
+				if ok {
+					nextTimedBatchChan = time.After(d)
+				}
+			}
+		}
+	}
+}
+
+func (p *pgStreamInput) flushBatch(
+	ctx context.Context,
+	checkpointer *checkpoint.Capped[*int64],
+	batch service.MessageBatch,
+) error {
+	if batch == nil {
 		return nil
 	}
 
-	resolveFn, err := checkpointer.Track(ctx, lsn, int64(len(msg)))
-	if err != nil {
-		if ctx.Err() == nil {
-			p.mgr.Logger().Errorf("Failed to checkpoint offset: %v\n", err)
+	var lsn *int64
+	lastMsg := batch[len(batch)-1]
+	lsnStr, ok := lastMsg.MetaGet("lsn")
+	if ok {
+		parsed, err := LSNToInt64(lsnStr)
+		if err != nil {
+			return fmt.Errorf("unable to extract LSN from last message in batch: %w", err)
 		}
-		return err
+		lsn = &parsed
+	}
+	resolveFn, err := checkpointer.Track(ctx, lsn, int64(len(batch)))
+	if err != nil {
+		return fmt.Errorf("unable to checkpoint: %w", err)
 	}
 
 	ackFn := func(ctx context.Context, res error) error {
@@ -421,18 +430,17 @@ func (p *pgStreamInput) flushBatch(ctx context.Context, checkpointer *checkpoint
 		if maxOffset == nil {
 			return nil
 		}
-		p.cMut.Lock()
-		defer p.cMut.Unlock()
+		lsn := *maxOffset
 		if lsn == nil {
 			return nil
 		}
-		if err = p.pgLogicalStream.AckLSN(Int64ToLSN(*lsn)); err != nil {
-			return err
+		if err = p.pgLogicalStream.AckLSN(ctx, Int64ToLSN(*lsn)); err != nil {
+			return fmt.Errorf("unable to ack LSN to postgres: %w", err)
 		}
 		return nil
 	}
 	select {
-	case p.msgChan <- asyncMessage{msg: msg, ackFn: ackFn}:
+	case p.msgChan <- asyncMessage{msg: batch, ackFn: ackFn}:
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -440,29 +448,32 @@ func (p *pgStreamInput) flushBatch(ctx context.Context, checkpointer *checkpoint
 }
 
 func (p *pgStreamInput) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
-	p.cMut.Lock()
-	msgChan := p.msgChan
-	p.cMut.Unlock()
-	if msgChan == nil {
-		return nil, nil, service.ErrNotConnected
-	}
-
 	select {
-	case m, open := <-msgChan:
-		if !open {
-			return nil, nil, service.ErrNotConnected
-		}
+	case m := <-p.msgChan:
 		return m.msg, m.ackFn, nil
+	case <-p.stopSig.HasStoppedChan():
+		return nil, nil, service.ErrNotConnected
 	case <-ctx.Done():
-
+		return nil, nil, ctx.Err()
 	}
-
-	return nil, nil, ctx.Err()
 }
 
 func (p *pgStreamInput) Close(ctx context.Context) error {
+	p.stopSig.TriggerSoftStop()
+	select {
+	case <-ctx.Done():
+	case <-p.stopSig.HasStoppedChan():
+	}
 	if p.pgLogicalStream != nil {
-		return p.pgLogicalStream.Stop()
+		if err := p.pgLogicalStream.Stop(ctx); err != nil {
+			return err
+		}
+	}
+	p.stopSig.TriggerHardStop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-p.stopSig.HasStoppedChan():
 	}
 	return nil
 }

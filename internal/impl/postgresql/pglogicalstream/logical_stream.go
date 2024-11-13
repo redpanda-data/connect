@@ -239,11 +239,11 @@ func (s *Stream) startLr(lsnStart LSN) error {
 
 // AckLSN acknowledges the LSN up to which the stream has processed the messages.
 // This makes Postgres to remove the WAL files that are no longer needed.
-func (s *Stream) AckLSN(lsn string) error {
+func (s *Stream) AckLSN(ctx context.Context, lsn string) error {
 	clientXLogPos, err := ParseLSN(lsn)
 	if err != nil {
 		s.logger.Errorf("Failed to parse LSN for Acknowledge: %v", err)
-		if err = s.Stop(); err != nil {
+		if err = s.Stop(ctx); err != nil {
 			s.logger.Errorf("Failed to stop the stream: %v", err)
 		}
 
@@ -279,7 +279,7 @@ func (s *Stream) streamMessagesAsync() {
 		handler = NewPgOutputPluginHandler(s.messages, s.streamUncommitted, s.monitor, s.clientXLogPos)
 	default:
 		s.logger.Error("Invalid decoding plugin. Cant find needed handler implementation")
-		if err := s.Stop(); err != nil {
+		if err := s.Stop(context.TODO()); err != nil {
 			s.logger.Errorf("Failed to stop the stream: %v", err)
 		}
 
@@ -304,7 +304,7 @@ func (s *Stream) streamMessagesAsync() {
 
 			if err != nil {
 				s.logger.Errorf("Failed to send Standby status message at LSN#%s: %v", pos.String(), err)
-				if err = s.Stop(); err != nil {
+				if err = s.Stop(context.TODO()); err != nil {
 					s.logger.Errorf("Failed to stop the stream: %v", err)
 				}
 				return
@@ -328,7 +328,7 @@ func (s *Stream) streamMessagesAsync() {
 			}
 
 			s.logger.Errorf("Failed to receive messages from PostgreSQL: %v", err)
-			if err = s.Stop(); err != nil {
+			if err = s.Stop(context.TODO()); err != nil {
 				s.logger.Errorf("Failed to stop the stream: %v", err)
 			}
 			return
@@ -336,7 +336,7 @@ func (s *Stream) streamMessagesAsync() {
 
 		if errMsg, ok := rawMsg.(*pgproto3.ErrorResponse); ok {
 			s.logger.Errorf("Received error message from Postgres: %v", errMsg)
-			if err = s.Stop(); err != nil {
+			if err = s.Stop(context.TODO()); err != nil {
 				s.logger.Errorf("Failed to stop the stream: %v", err)
 			}
 			return
@@ -353,7 +353,7 @@ func (s *Stream) streamMessagesAsync() {
 			pkm, err := ParsePrimaryKeepaliveMessage(msg.Data[1:])
 			if err != nil {
 				s.logger.Errorf("Failed to parse PrimaryKeepaliveMessage: %v", err)
-				if err = s.Stop(); err != nil {
+				if err = s.Stop(context.TODO()); err != nil {
 					s.logger.Errorf("Failed to stop the stream: %v", err)
 				}
 			}
@@ -368,7 +368,7 @@ func (s *Stream) streamMessagesAsync() {
 			xld, err := ParseXLogData(msg.Data[1:])
 			if err != nil {
 				s.logger.Errorf("Failed to parse XLogData: %v", err)
-				if err = s.Stop(); err != nil {
+				if err = s.Stop(context.TODO()); err != nil {
 					s.logger.Errorf("Failed to stop the stream: %v", err)
 				}
 			}
@@ -376,12 +376,12 @@ func (s *Stream) streamMessagesAsync() {
 			commit, err := handler.Handle(s.streamCtx, clientXLogPos, xld)
 			if err != nil {
 				s.logger.Errorf("decodePgOutputChanges failed: %w", err)
-				if err = s.Stop(); err != nil {
+				if err = s.Stop(context.TODO()); err != nil {
 					s.logger.Errorf("Failed to stop the stream: %v", err)
 				}
 			} else if commit {
 				// This is a hack and we probably should not do it
-				if err = s.AckLSN(clientXLogPos.String()); err != nil {
+				if err = s.AckLSN(context.TODO(), clientXLogPos.String()); err != nil {
 					s.logger.Errorf("Failed to ack commit message: %v", err)
 				}
 			}
@@ -604,7 +604,7 @@ func (s *Stream) getPrimaryKeyColumn(tableName string) (string, error) {
 }
 
 // Stop closes the stream conect and prevents from replication slot read
-func (s *Stream) Stop() error {
+func (s *Stream) Stop(ctx context.Context) error {
 	if s == nil {
 		return nil
 	}
