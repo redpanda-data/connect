@@ -79,3 +79,14 @@ func (e MissingColumnError) Value() any {
 func (e MissingColumnError) Error() string {
 	return fmt.Sprintf("new data %+v with the name %q does not have an associated column", e.val, e.columnName)
 }
+
+// InvalidTimestampFormatError is when a timestamp column has a string value not in RFC3339 format.
+type InvalidTimestampFormatError struct {
+	columnType string
+	val        string
+}
+
+// Error implements the error interface
+func (e InvalidTimestampFormatError) Error() string {
+	return fmt.Sprintf("unable to parse %s value from %q - string time values must be in RFC 3339 format", e.columnType, e.val)
+}
