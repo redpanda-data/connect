@@ -39,6 +39,8 @@ const (
 	fieldSlotName                  = "slot_name"
 	fieldBatching                  = "batching"
 	fieldMaxParallelSnapshotTables = "max_parallel_snapshot_tables"
+
+	shutdownTimeout = 5 * time.Second
 )
 
 type asyncMessage struct {
@@ -292,7 +294,6 @@ func init() {
 
 type pgStreamInput struct {
 	streamConfig    *pglogicalstream.Config
-	pgLogicalStream *pglogicalstream.Stream
 	logger          *service.Logger
 	mgr             *service.Resources
 	msgChan         chan asyncMessage
@@ -309,24 +310,25 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("unable to create replication stream: %w", err)
 	}
-
-	p.pgLogicalStream = pgStream
 	batcher, err := p.batching.NewBatcher(p.mgr)
 	if err != nil {
 		return err
 	}
 	// Reset our stop signal
 	p.stopSig = shutdown.NewSignaller()
-	go p.processStream(batcher)
+	go p.processStream(pgStream, batcher)
 	return err
 }
 
-func (p *pgStreamInput) processStream(batcher *service.Batcher) {
+func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher *service.Batcher) {
 	ctx, _ := p.stopSig.SoftStopCtx(context.Background())
 	defer func() {
 		ctx, _ := p.stopSig.HardStopCtx(context.Background())
 		if err := batcher.Close(ctx); err != nil {
-			p.logger.Errorf("uneable to close batcher: %v", err)
+			p.logger.Errorf("unable to close batcher: %v", err)
+		}
+		if err := pgStream.Stop(ctx); err != nil {
+			p.logger.Errorf("unable to stop replication stream: %v", err)
 		}
 		p.stopSig.TriggerHasStopped()
 	}()
@@ -344,12 +346,12 @@ func (p *pgStreamInput) processStream(batcher *service.Batcher) {
 				p.logger.Debugf("timed flush batch error: %v", err)
 				break
 			}
-			if err := p.flushBatch(ctx, cp, flushedBatch); err != nil {
+			if err := p.flushBatch(ctx, pgStream, cp, flushedBatch); err != nil {
 				p.logger.Debugf("failed to flush batch: %v", err)
 				break
 			}
 
-		case message := <-p.pgLogicalStream.Messages():
+		case message := <-pgStream.Messages():
 			var (
 				mb  []byte
 				err error
@@ -387,7 +389,7 @@ func (p *pgStreamInput) processStream(batcher *service.Batcher) {
 					p.logger.Debugf("error flushing batch: %v", err)
 					break
 				}
-				if err := p.flushBatch(ctx, cp, flushedBatch); err != nil {
+				if err := p.flushBatch(ctx, pgStream, cp, flushedBatch); err != nil {
 					p.logger.Debugf("failed to flush batch: %v", err)
 					break
 				}
@@ -403,6 +405,7 @@ func (p *pgStreamInput) processStream(batcher *service.Batcher) {
 
 func (p *pgStreamInput) flushBatch(
 	ctx context.Context,
+	pgStream *pglogicalstream.Stream,
 	checkpointer *checkpoint.Capped[*int64],
 	batch service.MessageBatch,
 ) error {
@@ -434,7 +437,7 @@ func (p *pgStreamInput) flushBatch(
 		if lsn == nil {
 			return nil
 		}
-		if err = p.pgLogicalStream.AckLSN(ctx, Int64ToLSN(*lsn)); err != nil {
+		if err = pgStream.AckLSN(ctx, Int64ToLSN(*lsn)); err != nil {
 			return fmt.Errorf("unable to ack LSN to postgres: %w", err)
 		}
 		return nil
@@ -462,17 +465,14 @@ func (p *pgStreamInput) Close(ctx context.Context) error {
 	p.stopSig.TriggerSoftStop()
 	select {
 	case <-ctx.Done():
+	case <-time.After(shutdownTimeout):
 	case <-p.stopSig.HasStoppedChan():
-	}
-	if p.pgLogicalStream != nil {
-		if err := p.pgLogicalStream.Stop(ctx); err != nil {
-			return err
-		}
 	}
 	p.stopSig.TriggerHardStop()
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
+	case <-time.After(shutdownTimeout):
 	case <-p.stopSig.HasStoppedChan():
 	}
 	return nil
