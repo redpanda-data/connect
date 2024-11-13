@@ -37,7 +37,7 @@ func NewWal2JsonPluginHandler(messages chan StreamMessage, monitor *Monitor) *Wa
 }
 
 // Handle handles the wal2json output
-func (w *Wal2JsonPluginHandler) Handle(_ context.Context, clientXLogPos LSN, xld XLogData) (bool, error) {
+func (w *Wal2JsonPluginHandler) Handle(ctx context.Context, clientXLogPos LSN, xld XLogData) (bool, error) {
 	// get current stream metrics
 	metrics := w.monitor.Report()
 	message, err := decodeWal2JsonChanges(clientXLogPos.String(), xld.WALData)
@@ -47,7 +47,11 @@ func (w *Wal2JsonPluginHandler) Handle(_ context.Context, clientXLogPos LSN, xld
 
 	if message != nil && len(message.Changes) > 0 {
 		message.WALLagBytes = &metrics.WalLagInBytes
-		w.messages <- *message
+		select {
+		case w.messages <- *message:
+		case <-ctx.Done():
+			return false, ctx.Err()
+		}
 	}
 
 	return false, nil
@@ -127,14 +131,19 @@ func (p *PgOutputUnbufferedPluginHandler) Handle(ctx context.Context, clientXLog
 
 	if message != nil {
 		lsn := clientXLogPos.String()
-		p.lastEmitted = clientXLogPos
-		p.messages <- StreamMessage{
+		msg := StreamMessage{
 			Lsn: &lsn,
 			Changes: []StreamMessageChanges{
 				*message,
 			},
 			Mode:        StreamModeStreaming,
 			WALLagBytes: &p.monitor.Report().WalLagInBytes,
+		}
+		select {
+		case p.messages <- msg:
+			p.lastEmitted = clientXLogPos
+		case <-ctx.Done():
+			return false, ctx.Err()
 		}
 	}
 
@@ -177,11 +186,16 @@ func (p *PgOutputBufferedPluginHandler) Handle(ctx context.Context, clientXLogPo
 	if len(p.pgoutputChanges) >= 0 {
 		// send all collected changes
 		lsn := clientXLogPos.String()
-		p.messages <- StreamMessage{
+		msg := StreamMessage{
 			Lsn:         &lsn,
 			Changes:     p.pgoutputChanges,
 			Mode:        StreamModeStreaming,
 			WALLagBytes: &p.monitor.Report().WalLagInBytes,
+		}
+		select {
+		case p.messages <- msg:
+		case <-ctx.Done():
+			return false, ctx.Err()
 		}
 	}
 

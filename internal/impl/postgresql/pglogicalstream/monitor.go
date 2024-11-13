@@ -165,8 +165,8 @@ func (m *Monitor) Report() *Report {
 }
 
 // Stop stops the monitor
-func (m *Monitor) Stop() {
+func (m *Monitor) Stop() error {
 	m.cancelTicker()
 	m.ticker.Stop()
-	m.dbConn.Close()
+	return m.dbConn.Close()
 }

@@ -325,10 +325,11 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 	defer func() {
 		ctx, _ := p.stopSig.HardStopCtx(context.Background())
 		if err := batcher.Close(ctx); err != nil {
-			p.logger.Errorf("unable to close batcher: %v", err)
+			p.logger.Errorf("unable to close batcher: %s", err)
 		}
+		// TODO(rockwood): We should wait for outstanding acks to be completed (best effort)
 		if err := pgStream.Stop(ctx); err != nil {
-			p.logger.Errorf("unable to stop replication stream: %v", err)
+			p.logger.Errorf("unable to stop replication stream: %s", err)
 		}
 		p.stopSig.TriggerHasStopped()
 	}()
@@ -343,14 +344,13 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 			nextTimedBatchChan = nil
 			flushedBatch, err := batcher.Flush(ctx)
 			if err != nil {
-				p.logger.Debugf("timed flush batch error: %v", err)
+				p.logger.Debugf("timed flush batch error: %s", err)
 				break
 			}
 			if err := p.flushBatch(ctx, pgStream, cp, flushedBatch); err != nil {
-				p.logger.Debugf("failed to flush batch: %v", err)
+				p.logger.Debugf("failed to flush batch: %s", err)
 				break
 			}
-
 		case message := <-pgStream.Messages():
 			var (
 				mb  []byte
@@ -358,7 +358,7 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 			)
 
 			if len(message.Changes) == 0 {
-				p.logger.Errorf("received empty message (LSN=%v)", message.Lsn)
+				p.logger.Errorf("received empty message (LSN=%s)", message.Lsn)
 				break
 			}
 
@@ -386,11 +386,11 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				nextTimedBatchChan = nil
 				flushedBatch, err := batcher.Flush(ctx)
 				if err != nil {
-					p.logger.Debugf("error flushing batch: %v", err)
+					p.logger.Debugf("error flushing batch: %s", err)
 					break
 				}
 				if err := p.flushBatch(ctx, pgStream, cp, flushedBatch); err != nil {
-					p.logger.Debugf("failed to flush batch: %v", err)
+					p.logger.Debugf("failed to flush batch: %s", err)
 					break
 				}
 			} else {
@@ -399,6 +399,12 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 					nextTimedBatchChan = time.After(d)
 				}
 			}
+		case err := <-pgStream.Errors():
+			p.logger.Warnf("logical replication stream error: %s", err)
+			// If the stream has internally errored then we should stop and restart processing
+			p.stopSig.TriggerSoftStop()
+		case <-p.stopSig.SoftStopChan():
+			p.logger.Debug("soft stop triggered, stopping logical replication stream")
 		}
 	}
 }
