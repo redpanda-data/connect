@@ -60,6 +60,9 @@ func NewMonitor(
 	if err != nil {
 		return nil, err
 	}
+	if interval <= 0 {
+		return nil, fmt.Errorf("invalid monitoring interval: %s", interval.String())
+	}
 
 	m := &Monitor{
 		snapshotProgress:      map[string]float64{},
