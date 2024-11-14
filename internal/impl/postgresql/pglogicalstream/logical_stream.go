@@ -221,7 +221,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	stream.standbyMessageTimeout = config.PgStandbyTimeout
 	stream.nextStandbyMessageDeadline = time.Now().Add(stream.standbyMessageTimeout)
 
-	monitor, err := NewMonitor(config.DBRawDSN, stream.logger, tableNames, stream.slotName, config.WalMonitorInterval)
+	monitor, err := NewMonitor(ctx, config.DBRawDSN, stream.logger, tableNames, stream.slotName, config.WalMonitorInterval)
 	if err != nil {
 		return nil, err
 	}
