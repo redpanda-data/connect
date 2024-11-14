@@ -282,11 +282,7 @@ func validateSimpleString(s string) error {
 }
 
 func init() {
-	err := service.RegisterBatchInput(
-		"pg_stream", pgStreamConfigSpec,
-		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
-			return newPgStreamInput(conf, mgr)
-		})
+	err := service.RegisterBatchInput("pg_stream", pgStreamConfigSpec, newPgStreamInput)
 	if err != nil {
 		panic(err)
 	}

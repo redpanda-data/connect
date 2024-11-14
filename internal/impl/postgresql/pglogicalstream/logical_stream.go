@@ -216,12 +216,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	} else {
 		lsnrestart, _ = ParseLSN(confirmedLSNFromDB)
 	}
-
-	if freshlyCreatedSlot {
-		stream.clientXLogPos = watermark.New(sysident.XLogPos)
-	} else {
-		stream.clientXLogPos = watermark.New(lsnrestart)
-	}
+	stream.clientXLogPos = watermark.New(lsnrestart)
 
 	stream.standbyMessageTimeout = config.PgStandbyTimeout
 	stream.nextStandbyMessageDeadline = time.Now().Add(stream.standbyMessageTimeout)

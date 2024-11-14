@@ -26,6 +26,7 @@ func getPostgresVersion(dbDSN string) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("failed to connect to the database: %w", err)
 	}
+	defer conn.Close()
 
 	var versionString string
 	err = conn.QueryRow("SHOW server_version").Scan(&versionString)
