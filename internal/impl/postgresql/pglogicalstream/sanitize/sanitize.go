@@ -33,8 +33,12 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 )
+
+// MaxIdentifierLength is PostgreSQL's maximum identifier length
+const MaxIdentifierLength = 63
 
 // Part is either a string or an int. A string is raw SQL. An int is a
 // argument placeholder.
@@ -357,4 +361,30 @@ func SQLQuery(sql string, args ...any) (string, error) {
 		return "", err
 	}
 	return query.Sanitize(args...)
+}
+
+// ValidatePostgresIdentifier checks if a string is a valid PostgreSQL identifier
+// This follows PostgreSQL's standard naming rules
+func ValidatePostgresIdentifier(name string) error {
+	if len(name) == 0 {
+		return errors.New("empty identifier is not allowed")
+	}
+
+	if len(name) > MaxIdentifierLength {
+		return fmt.Errorf("identifier length exceeds maximum of %d characters", MaxIdentifierLength)
+	}
+
+	// First character must be a letter or underscore
+	if !unicode.IsLetter(rune(name[0])) && name[0] != '_' {
+		return errors.New("identifier must start with a letter or underscore")
+	}
+
+	// Subsequent characters must be letters, numbers, underscores, or dots
+	for i, char := range name {
+		if !unicode.IsLetter(char) && !unicode.IsDigit(char) && char != '_' && char != '.' {
+			return fmt.Errorf("invalid character '%c' at position %d in identifier '%s'", char, i, name)
+		}
+	}
+
+	return nil
 }

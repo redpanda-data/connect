@@ -88,6 +88,10 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 
 	tableNames := slices.Clone(config.DBTables)
 	for i, table := range tableNames {
+		if err := sanitize.ValidatePostgresIdentifier(table); err != nil {
+			return nil, fmt.Errorf("invalid table name %q: %w", table, err)
+		}
+
 		tableNames[i] = fmt.Sprintf("%s.%s", config.DBSchema, table)
 	}
 	stream := &Stream{

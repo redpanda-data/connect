@@ -21,6 +21,7 @@ import (
 	"context"
 	"database/sql/driver"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -253,7 +254,7 @@ func CreateReplicationSlot(
 
 	// NOTE: All strings passed into here have been validated and are not prone to SQL injection.
 	newPgCreateSlotCommand := fmt.Sprintf("CREATE_REPLICATION_SLOT %s %s %s %s %s", slotName, temporaryString, options.Mode, outputPlugin, snapshotString)
-	oldPgCreateSlotCommand := fmt.Sprintf("SELECT * FROM  pg_create_logical_replication_slot('%s', '%s', %v);", slotName, outputPlugin, temporaryString == "TEMPORARY")
+	oldPgCreateSlotCommand := fmt.Sprintf("SELECT * FROM pg_create_logical_replication_slot('%s', '%s', %v);", slotName, outputPlugin, temporaryString == "TEMPORARY")
 
 	var snapshotName string
 	if version > 14 {
@@ -353,6 +354,17 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 		return fmt.Errorf("failed to sanitize publication query: %w", err)
 	}
 
+	// Since we need to pass table names without quoting, we need to validate it
+	for _, table := range tables {
+		if err := sanitize.ValidatePostgresIdentifier(table); err != nil {
+			return errors.New("invalid table name")
+		}
+	}
+	// the same for publication name
+	if err := sanitize.ValidatePostgresIdentifier(publicationName); err != nil {
+		return errors.New("invalid publication name")
+	}
+
 	result := conn.Exec(ctx, pubQuery)
 
 	rows, err := result.ReadAll()
@@ -362,13 +374,27 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 
 	tablesClause := "FOR ALL TABLES"
 	if len(tables) > 0 {
-		// TODO(le-vlad): Implement proper SQL injection protection
-		tablesClause = "FOR TABLE " + strings.Join(tables, ",")
+		// quotedTables := make([]string, len(tables))
+		// for i, table := range tables {
+		// 	// Use sanitize.SQLIdentifier to properly quote and escape table names
+		// 	quoted, err := sanitize.SQLIdentifier(table)
+		// 	if err != nil {
+		// 		return fmt.Errorf("invalid table name %q: %w", table, err)
+		// 	}
+		// 	quotedTables[i] = quoted
+		// }
+		tablesClause = "FOR TABLE " + strings.Join(tables, ", ")
 	}
 
 	if len(rows) == 0 || len(rows[0].Rows) == 0 {
+		// tablesClause is sanitized, so we can safely interpolate it into the query
+		sq, err := sanitize.SQLQuery(fmt.Sprintf("CREATE PUBLICATION %s %s;", publicationName, tablesClause))
+		fmt.Print(sq)
+		if err != nil {
+			return fmt.Errorf("failed to sanitize publication creation query: %w", err)
+		}
 		// Publication doesn't exist, create new one
-		result = conn.Exec(ctx, fmt.Sprintf("CREATE PUBLICATION %s %s;", publicationName, tablesClause))
+		result = conn.Exec(ctx, sq)
 		if _, err := result.ReadAll(); err != nil {
 			return fmt.Errorf("failed to create publication: %w", err)
 		}
@@ -405,8 +431,11 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 
 	// remove tables from publication
 	for _, dropTable := range tablesToRemoveFromPublication {
-		// TODO(le-vlad): Implement proper SQL injection protection
-		result = conn.Exec(ctx, fmt.Sprintf("ALTER PUBLICATION %s DROP TABLE %s;", publicationName, dropTable))
+		sq, err := sanitize.SQLQuery(fmt.Sprintf("ALTER PUBLICATION %s DROP TABLE %s;", publicationName, dropTable))
+		if err != nil {
+			return fmt.Errorf("failed to sanitize drop table query: %w", err)
+		}
+		result = conn.Exec(ctx, sq)
 		if _, err := result.ReadAll(); err != nil {
 			return fmt.Errorf("failed to remove table from publication: %w", err)
 		}
@@ -414,8 +443,11 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 
 	// add tables to publication
 	for _, addTable := range tablesToAddToPublication {
-		// TODO(le-vlad): Implement proper SQL injection protection
-		result = conn.Exec(ctx, fmt.Sprintf("ALTER PUBLICATION %s ADD TABLE %s;", publicationName, addTable))
+		sq, err := sanitize.SQLQuery(fmt.Sprintf("ALTER PUBLICATION %s ADD TABLE %s;", publicationName, addTable))
+		if err != nil {
+			return fmt.Errorf("failed to sanitize add table query: %w", err)
+		}
+		result = conn.Exec(ctx, sq)
 		if _, err := result.ReadAll(); err != nil {
 			return fmt.Errorf("failed to add table to publication: %w", err)
 		}

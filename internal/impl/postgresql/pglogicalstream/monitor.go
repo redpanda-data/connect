@@ -20,6 +20,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
+	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
 	"github.com/redpanda-data/connect/v4/internal/periodic"
 )
 
@@ -99,11 +100,15 @@ func (m *Monitor) readTablesStat(ctx context.Context, tables []string) error {
 
 	for _, table := range tables {
 		tableWithoutSchema := strings.Split(table, ".")[1]
-		// TODO(le-vlad): Implement proper SQL injection protection
-		query := "SELECT COUNT(*) FROM " + tableWithoutSchema
+		err := sanitize.ValidatePostgresIdentifier(tableWithoutSchema)
+
+		if err != nil {
+			return fmt.Errorf("error sanitizing query: %w", err)
+		}
 
 		var count int64
-		err := m.dbConn.QueryRowContext(ctx, query).Scan(&count)
+		// tableWithoutSchema has been validated so its safe to use in the query
+		err = m.dbConn.QueryRowContext(ctx, "SELECT COUNT(*) FROM %s"+tableWithoutSchema).Scan(&count)
 
 		if err != nil {
 			// If the error is because the table doesn't exist, we'll set the count to 0

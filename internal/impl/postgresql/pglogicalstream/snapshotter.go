@@ -16,6 +16,7 @@ import (
 
 	_ "github.com/lib/pq"
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
 )
 
 // SnapshotCreationResponse is a structure that contains the name of the snapshot that was created
@@ -97,8 +98,13 @@ func (s *Snapshotter) prepare() error {
 	if _, err := s.pgConnection.Exec("BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ;"); err != nil {
 		return err
 	}
-	// TODO(le-vlad): Implement proper SQL injection protection
-	if _, err := s.pgConnection.Exec(fmt.Sprintf("SET TRANSACTION SNAPSHOT '%s';", s.snapshotName)); err != nil {
+
+	sq, err := sanitize.SQLQuery("SET TRANSACTION SNAPSHOT $1;", s.snapshotName)
+	if err != nil {
+		return err
+	}
+
+	if _, err := s.pgConnection.Exec(sq); err != nil {
 		return err
 	}
 
@@ -111,7 +117,8 @@ func (s *Snapshotter) findAvgRowSize(table string) (sql.NullInt64, error) {
 		rows       *sql.Rows
 		err        error
 	)
-	// TODO(le-vlad): Implement proper SQL injection protection
+
+	// table is validated to be correct pg identifier, so we can use it directly
 	if rows, err = s.pgConnection.Query(fmt.Sprintf(`SELECT SUM(pg_column_size('%s.*')) / COUNT(*) FROM %s;`, table, table)); err != nil {
 		return avgRowSize, fmt.Errorf("can get avg row size due to query failure: %w", err)
 	}
@@ -170,11 +177,22 @@ func (s *Snapshotter) calculateBatchSize(availableMemory uint64, estimatedRowSiz
 func (s *Snapshotter) querySnapshotData(table string, lastSeenPk any, pk string, limit int) (rows *sql.Rows, err error) {
 	s.logger.Infof("Query snapshot table: %v, limit: %v, lastSeenPkVal: %v, pk: %v", table, limit, lastSeenPk, pk)
 	if lastSeenPk == nil {
-		// TODO(le-vlad): Implement proper SQL injection protection
-		return s.pgConnection.Query(fmt.Sprintf("SELECT * FROM %s ORDER BY %s LIMIT $1;", table, pk), limit)
+		// NOTE: All strings passed into here have been validated or derived from the code/database, therefore not prone to SQL injection.
+		sq, err := sanitize.SQLQuery(fmt.Sprintf("SELECT * FROM %s ORDER BY %s LIMIT %d;", table, pk, limit))
+		if err != nil {
+			return nil, err
+		}
+
+		return s.pgConnection.Query(sq)
 	}
-	// TODO(le-vlad): Implement proper SQL injection protection
-	return s.pgConnection.Query(fmt.Sprintf("SELECT * FROM %s WHERE %s > $1 ORDER BY %s LIMIT $2;", table, pk, pk), lastSeenPk, limit)
+
+	// NOTE: All strings passed into here have been validated or derived from the code/database, therefore not prone to SQL injection.
+	sq, err := sanitize.SQLQuery(fmt.Sprintf("SELECT * FROM %s WHERE %s > %s ORDER BY %s LIMIT %d;", table, pk, lastSeenPk, pk, limit))
+	if err != nil {
+		return nil, err
+	}
+
+	return s.pgConnection.Query(sq)
 }
 
 func (s *Snapshotter) releaseSnapshot() error {

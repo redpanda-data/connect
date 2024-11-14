@@ -352,7 +352,7 @@ file:
 `, tmpDir)
 
 	streamOutBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: OFF`))
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: INFO`))
 	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
 	require.NoError(t, streamOutBuilder.AddInputYAML(template))
 
@@ -455,7 +455,7 @@ pg_stream:
     snapshot_batch_size: 100000
     stream_snapshot: true
     decoding_plugin: pgoutput
-    stream_uncommitted: false
+    batch_transactions: false
     temporary_slot: true
     schema: public
     tables:
@@ -550,7 +550,7 @@ pg_stream:
     snapshot_batch_size: 100
     stream_snapshot: true
     decoding_plugin: pgoutput
-    stream_uncommitted: true
+    batch_transactions: true
     schema: public
     tables:
        - flights
@@ -689,7 +689,7 @@ pg_stream:
     slot_name: test_slot_native_decoder
     stream_snapshot: true
     decoding_plugin: pgoutput
-    stream_uncommitted: true
+    batch_transactions: true
     schema: public
     tables:
        - flights
@@ -826,7 +826,7 @@ pg_stream:
     slot_name: test_slot_native_decoder
     stream_snapshot: true
     decoding_plugin: pgoutput
-    stream_uncommitted: false
+    batch_transactions: false
     schema: public
     tables:
        - flights
