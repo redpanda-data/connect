@@ -27,75 +27,77 @@ import (
 )
 
 func TestIntegrationMySQLCDC(t *testing.T) {
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
+	var mysqlTestVersions = []string{"8.0", "9.0", "9.1"}
+	for _, version := range mysqlTestVersions {
+		pool, err := dockertest.NewPool("")
+		require.NoError(t, err)
 
-	pool.MaxWait = time.Minute
+		pool.MaxWait = time.Minute
 
-	// MySQL specific environment variables
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository: "mysql",
-		Tag:        "9.1",
-		Env: []string{
-			"MYSQL_ROOT_PASSWORD=password",
-			"MYSQL_DATABASE=testdb",
-		},
-		Cmd: []string{
-			"--server-id=1",
-			"--log-bin=mysql-bin",
-			"--binlog-format=ROW",
-			"--binlog-row-image=FULL",
-			"--log-slave-updates=ON",
-		},
-		ExposedPorts: []string{"3306/tcp"},
-	}, func(config *docker.HostConfig) {
-		// set AutoRemove to true so that stopped container goes away by itself
-		config.AutoRemove = true
-		config.RestartPolicy = docker.RestartPolicy{
-			Name: "no",
-		}
-	})
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
+		// MySQL specific environment variables
+		resource, err := pool.RunWithOptions(&dockertest.RunOptions{
+			Repository: "mysql",
+			Tag:        version,
+			Env: []string{
+				"MYSQL_ROOT_PASSWORD=password",
+				"MYSQL_DATABASE=testdb",
+			},
+			Cmd: []string{
+				"--server-id=1",
+				"--log-bin=mysql-bin",
+				"--binlog-format=ROW",
+				"--binlog-row-image=FULL",
+				"--log-slave-updates=ON",
+			},
+			ExposedPorts: []string{"3306/tcp"},
+		}, func(config *docker.HostConfig) {
+			// set AutoRemove to true so that stopped container goes away by itself
+			config.AutoRemove = true
+			config.RestartPolicy = docker.RestartPolicy{
+				Name: "no",
+			}
+		})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			assert.NoError(t, pool.Purge(resource))
+		})
 
-	port := resource.GetPort("3306/tcp")
-	dsn := fmt.Sprintf(
-		"root:password@tcp(localhost:%s)/testdb?parseTime=true&timeout=30s&readTimeout=30s&writeTimeout=30s&multiStatements=true",
-		port,
-	)
+		port := resource.GetPort("3306/tcp")
+		dsn := fmt.Sprintf(
+			"root:password@tcp(localhost:%s)/testdb?parseTime=true&timeout=30s&readTimeout=30s&writeTimeout=30s&multiStatements=true",
+			port,
+		)
 
-	var db *sql.DB
-	err = pool.Retry(func() error {
-		var err error
-		db, err = sql.Open("mysql", dsn)
-		if err != nil {
-			return err
-		}
+		var db *sql.DB
+		err = pool.Retry(func() error {
+			var err error
+			db, err = sql.Open("mysql", dsn)
+			if err != nil {
+				return err
+			}
 
-		db.SetMaxOpenConns(10)
-		db.SetMaxIdleConns(5)
-		db.SetConnMaxLifetime(time.Minute * 5)
+			db.SetMaxOpenConns(10)
+			db.SetMaxIdleConns(5)
+			db.SetConnMaxLifetime(time.Minute * 5)
 
-		if err != nil {
-			return err
-		}
+			if err != nil {
+				return err
+			}
 
-		return db.Ping()
-	})
-	require.NoError(t, err)
+			return db.Ping()
+		})
+		require.NoError(t, err)
 
-	// Create table
-	_, err = db.Exec(`
+		// Create table
+		_, err = db.Exec(`
     CREATE TABLE IF NOT EXISTS foo (
         a INT PRIMARY KEY
     )
 `)
-	require.NoError(t, err)
-	tmpDir := t.TempDir()
+		require.NoError(t, err)
+		tmpDir := t.TempDir()
 
-	template := fmt.Sprintf(`
+		template := fmt.Sprintf(`
 mysql_stream:
   dsn: %s
   stream_snapshot: false
@@ -105,85 +107,86 @@ mysql_stream:
   flavor: mysql
 `, dsn)
 
-	cacheConf := fmt.Sprintf(`
+		cacheConf := fmt.Sprintf(`
 label: foocache
 file:
   directory: %s`, tmpDir)
 
-	streamOutBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: INFO`))
-	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
-	require.NoError(t, streamOutBuilder.AddInputYAML(template))
+		streamOutBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: INFO`))
+		require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
+		require.NoError(t, streamOutBuilder.AddInputYAML(template))
 
-	var outBatches []string
-	var outBatchMut sync.Mutex
-	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
-		msgBytes, err := mb[0].AsBytes()
+		var outBatches []string
+		var outBatchMut sync.Mutex
+		require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
+			msgBytes, err := mb[0].AsBytes()
+			require.NoError(t, err)
+			outBatchMut.Lock()
+			outBatches = append(outBatches, string(msgBytes))
+			outBatchMut.Unlock()
+			return nil
+		}))
+
+		streamOut, err := streamOutBuilder.Build()
 		require.NoError(t, err)
-		outBatchMut.Lock()
-		outBatches = append(outBatches, string(msgBytes))
-		outBatchMut.Unlock()
-		return nil
-	}))
 
-	streamOut, err := streamOutBuilder.Build()
-	require.NoError(t, err)
+		go func() {
+			err = streamOut.Run(context.Background())
+			require.NoError(t, err)
+		}()
 
-	go func() {
-		err = streamOut.Run(context.Background())
+		time.Sleep(time.Second * 5)
+		for i := 0; i < 1000; i++ {
+			// Insert 10000 rows
+			if _, err = db.Exec("INSERT INTO foo VALUES (?)", i); err != nil {
+				require.NoError(t, err)
+			}
+		}
+
+		assert.Eventually(t, func() bool {
+			outBatchMut.Lock()
+			defer outBatchMut.Unlock()
+			return len(outBatches) == 1000
+		}, time.Minute*5, time.Millisecond*100)
+
+		require.NoError(t, streamOut.StopWithin(time.Second*10))
+
+		streamOutBuilder = service.NewStreamBuilder()
+		require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: INFO`))
+		require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
+		require.NoError(t, streamOutBuilder.AddInputYAML(template))
+
+		outBatches = nil
+		require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
+			msgBytes, err := mb[0].AsBytes()
+			require.NoError(t, err)
+			outBatchMut.Lock()
+			outBatches = append(outBatches, string(msgBytes))
+			outBatchMut.Unlock()
+			return nil
+		}))
+
+		streamOut, err = streamOutBuilder.Build()
 		require.NoError(t, err)
-	}()
 
-	time.Sleep(time.Second * 5)
-	for i := 0; i < 1000; i++ {
-		// Insert 10000 rows
-		if _, err = db.Exec("INSERT INTO foo VALUES (?)", i); err != nil {
+		time.Sleep(time.Second)
+		for i := 1001; i < 2001; i++ {
+			_, err = db.Exec("INSERT INTO foo VALUES (?)", i)
 			require.NoError(t, err)
 		}
+
+		go func() {
+			err = streamOut.Run(context.Background())
+			require.NoError(t, err)
+		}()
+
+		assert.Eventually(t, func() bool {
+			outBatchMut.Lock()
+			defer outBatchMut.Unlock()
+			return len(outBatches) == 1000
+		}, time.Minute*5, time.Millisecond*100)
+
+		require.NoError(t, streamOut.StopWithin(time.Second*10))
 	}
-
-	assert.Eventually(t, func() bool {
-		outBatchMut.Lock()
-		defer outBatchMut.Unlock()
-		return len(outBatches) == 1000
-	}, time.Minute*5, time.Millisecond*100)
-
-	require.NoError(t, streamOut.StopWithin(time.Second*10))
-
-	streamOutBuilder = service.NewStreamBuilder()
-	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: INFO`))
-	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
-	require.NoError(t, streamOutBuilder.AddInputYAML(template))
-
-	outBatches = nil
-	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
-		msgBytes, err := mb[0].AsBytes()
-		require.NoError(t, err)
-		outBatchMut.Lock()
-		outBatches = append(outBatches, string(msgBytes))
-		outBatchMut.Unlock()
-		return nil
-	}))
-
-	streamOut, err = streamOutBuilder.Build()
-	require.NoError(t, err)
-
-	time.Sleep(time.Second)
-	for i := 1001; i < 2001; i++ {
-		_, err = db.Exec("INSERT INTO foo VALUES (?)", i)
-		require.NoError(t, err)
-	}
-
-	go func() {
-		err = streamOut.Run(context.Background())
-		require.NoError(t, err)
-	}()
-
-	assert.Eventually(t, func() bool {
-		outBatchMut.Lock()
-		defer outBatchMut.Unlock()
-		return len(outBatches) == 1000
-	}, time.Minute*5, time.Millisecond*100)
-
-	require.NoError(t, streamOut.StopWithin(time.Second*10))
 }
