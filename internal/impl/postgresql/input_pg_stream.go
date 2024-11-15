@@ -345,7 +345,7 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				break
 			}
 
-			// TODO this should only be the message
+			// TODO(rockwood): this should only be the message
 			if mb, err = json.Marshal(message.Changes); err != nil {
 				break
 			}
@@ -398,7 +398,7 @@ func (p *pgStreamInput) flushBatch(
 	checkpointer *checkpoint.Capped[*int64],
 	batch service.MessageBatch,
 ) error {
-	if batch == nil {
+	if len(batch) == 0 {
 		return nil
 	}
 
