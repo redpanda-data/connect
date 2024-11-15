@@ -11,6 +11,7 @@ package pglogicalstream
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"errors"
 
@@ -174,11 +175,13 @@ func (s *Snapshotter) calculateBatchSize(availableMemory uint64, estimatedRowSiz
 	return batchSize
 }
 
-func (s *Snapshotter) querySnapshotData(table string, lastSeenPk any, pk string, limit int) (rows *sql.Rows, err error) {
-	s.logger.Infof("Query snapshot table: %v, limit: %v, lastSeenPkVal: %v, pk: %v", table, limit, lastSeenPk, pk)
+func (s *Snapshotter) querySnapshotData(table string, lastSeenPk *map[string]any, pksOrderBy string, limit int) (rows *sql.Rows, err error) {
+
+	s.logger.Infof("Query snapshot table: %v, limit: %v, lastSeenPkVal: %v, pk: %v", table, limit, lastSeenPk, pksOrderBy)
+
 	if lastSeenPk == nil {
 		// NOTE: All strings passed into here have been validated or derived from the code/database, therefore not prone to SQL injection.
-		sq, err := sanitize.SQLQuery(fmt.Sprintf("SELECT * FROM %s ORDER BY %s LIMIT %d;", table, pk, limit))
+		sq, err := sanitize.SQLQuery(fmt.Sprintf("SELECT * FROM %s ORDER BY %s LIMIT %d;", table, pksOrderBy, limit))
 		if err != nil {
 			return nil, err
 		}
@@ -186,8 +189,22 @@ func (s *Snapshotter) querySnapshotData(table string, lastSeenPk any, pk string,
 		return s.pgConnection.Query(sq)
 	}
 
+	var (
+		placeholders      []string
+		lastSeenPksValues []any
+		i                 = 1
+	)
+
+	for _, v := range *lastSeenPk {
+		placeholders = append(placeholders, fmt.Sprintf("$%d", i))
+		i++
+		lastSeenPksValues = append(lastSeenPksValues, v)
+	}
+
+	lastSeenPlaceHolders := "(" + strings.Join(placeholders, ", ") + ")"
+
 	// NOTE: All strings passed into here have been validated or derived from the code/database, therefore not prone to SQL injection.
-	sq, err := sanitize.SQLQuery(fmt.Sprintf("SELECT * FROM %s WHERE %s > %s ORDER BY %s LIMIT %d;", table, pk, lastSeenPk, pk, limit))
+	sq, err := sanitize.SQLQuery(fmt.Sprintf("SELECT * FROM %s WHERE %s > %s ORDER BY %s LIMIT %d;", table, pksOrderBy, lastSeenPlaceHolders, pksOrderBy, limit), lastSeenPksValues...)
 	if err != nil {
 		return nil, err
 	}

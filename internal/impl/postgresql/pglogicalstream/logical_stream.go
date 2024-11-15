@@ -438,18 +438,34 @@ func (s *Stream) processSnapshot() error {
 
 			s.logger.Debugf("Querying snapshot batch_side: %v, available_memory: %v, avg_row_size: %v", batchSize, availableMemory, avgRowSizeBytes.Int64)
 
-			tablePk, err := s.getPrimaryKeyColumn(table)
+			tablePks, pksSlice, err := s.getPrimaryKeyColumn(table)
 			if err != nil {
 				return fmt.Errorf("failed to get primary key column for table %v: %w", table, err)
 			}
 
-			var lastPkVal any
+			if len(tablePks) == 0 {
+				return fmt.Errorf("failed to get primary key column for table %s", table)
+			}
+
+			tablePksOrderByStatement := strings.Join(pksSlice, ", ")
+			if len(tablePks) > 1 {
+				tablePksOrderByStatement = "(" + tablePksOrderByStatement + ")"
+			}
+
+			var lastPkVals = map[string]any{}
 
 			for {
 				var snapshotRows *sql.Rows
 				queryStart := time.Now()
-				if snapshotRows, err = s.snapshotter.querySnapshotData(table, lastPkVal, tablePk, batchSize); err != nil {
-					return fmt.Errorf("failed to query snapshot data for table %v: %w", table, err)
+				if offset == 0 {
+					lastPkVals = make(map[string]any)
+					if snapshotRows, err = s.snapshotter.querySnapshotData(table, nil, tablePksOrderByStatement, batchSize); err != nil {
+						return fmt.Errorf("failed to query snapshot data for table %v: %w", table, err)
+					}
+				} else {
+					if snapshotRows, err = s.snapshotter.querySnapshotData(table, &lastPkVals, tablePksOrderByStatement, batchSize); err != nil {
+						return fmt.Errorf("failed to query snapshot data for table %v: %w", table, err)
+					}
 				}
 
 				queryDuration := time.Since(queryStart)
@@ -491,8 +507,8 @@ func (s *Stream) processSnapshot() error {
 					var data = make(map[string]any)
 					for i, getter := range valueGetters {
 						data[columnNames[i]] = getter(scanArgs[i])
-						if columnNames[i] == tablePk {
-							lastPkVal = getter(scanArgs[i])
+						if _, ok := tablePks[columnNames[i]]; ok {
+							lastPkVals[columnNames[i]] = getter(scanArgs[i])
 						}
 					}
 
@@ -553,29 +569,44 @@ func (s *Stream) Errors() chan error {
 	return s.errors
 }
 
-func (s *Stream) getPrimaryKeyColumn(tableName string) (string, error) {
-	// TODO(le-vlad): support composite primary keys
+func (s *Stream) getPrimaryKeyColumn(tableName string) (map[string]any, []string, error) {
+	/// Query to get all primary key columns in their correct order
 	q, err := sanitize.SQLQuery(`
-		SELECT a.attname
-		FROM   pg_index i
-		JOIN   pg_attribute a ON a.attrelid = i.indrelid
-							AND a.attnum = ANY(i.indkey)
-		WHERE  i.indrelid = $1::regclass
-		AND    i.indisprimary;
-	`, tableName)
+        SELECT a.attname
+        FROM   pg_index i
+        JOIN   pg_attribute a ON a.attrelid = i.indrelid
+            AND a.attnum = ANY(i.indkey)
+        WHERE  i.indrelid = $1::regclass
+        AND    i.indisprimary
+        ORDER BY array_position(i.indkey, a.attnum);
+    `, tableName)
+
 	if err != nil {
-		return "", err
+		return nil, nil, fmt.Errorf("failed to sanitize query: %w", err)
 	}
 
 	reader := s.pgConn.Exec(context.Background(), q)
 	data, err := reader.ReadAll()
 	if err != nil {
-		return "", err
+		return nil, nil, fmt.Errorf("failed to read query results: %w", err)
 	}
 
-	pkResultRow := data[0].Rows[0]
-	pkColName := string(pkResultRow[0])
-	return pkColName, nil
+	if len(data) == 0 || len(data[0].Rows) == 0 {
+		return nil, nil, fmt.Errorf("no primary key found for table %s", tableName)
+	}
+
+	// Extract all primary key column names
+	pkColumns := make([]string, len(data[0].Rows))
+	for i, row := range data[0].Rows {
+		pkColumns[i] = string(row[0])
+	}
+
+	var pksMap = make(map[string]any)
+	for _, pk := range pkColumns {
+		pksMap[pk] = nil
+	}
+
+	return pksMap, pkColumns, nil
 }
 
 // Stop closes the stream (hopefully gracefully)

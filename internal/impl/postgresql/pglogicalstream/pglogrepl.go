@@ -389,7 +389,6 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 	if len(rows) == 0 || len(rows[0].Rows) == 0 {
 		// tablesClause is sanitized, so we can safely interpolate it into the query
 		sq, err := sanitize.SQLQuery(fmt.Sprintf("CREATE PUBLICATION %s %s;", publicationName, tablesClause))
-		fmt.Print(sq)
 		if err != nil {
 			return fmt.Errorf("failed to sanitize publication creation query: %w", err)
 		}
