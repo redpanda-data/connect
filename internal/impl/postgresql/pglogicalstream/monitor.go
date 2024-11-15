@@ -108,7 +108,7 @@ func (m *Monitor) readTablesStat(ctx context.Context, tables []string) error {
 
 		var count int64
 		// tableWithoutSchema has been validated so its safe to use in the query
-		err = m.dbConn.QueryRowContext(ctx, "SELECT COUNT(*) FROM %s"+tableWithoutSchema).Scan(&count)
+		err = m.dbConn.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+tableWithoutSchema).Scan(&count)
 
 		if err != nil {
 			// If the error is because the table doesn't exist, we'll set the count to 0

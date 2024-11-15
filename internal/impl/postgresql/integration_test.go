@@ -116,196 +116,6 @@ func ResourceWithPostgreSQLVersion(t *testing.T, pool *dockertest.Pool, version 
 	return resource, db, nil
 }
 
-func TestIntegrationPgCDC(t *testing.T) {
-	integration.CheckSkip(t)
-
-	tmpDir := t.TempDir()
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
-
-	// Use custom PostgreSQL image with wal2json plugin compiled in
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository: "usedatabrew/pgwal2json",
-		Tag:        "16",
-		Env: []string{
-			"POSTGRES_PASSWORD=l]YLSc|4[i56%{gY",
-			"POSTGRES_USER=user_name",
-			"POSTGRES_DB=dbname",
-		},
-		Cmd: []string{
-			"postgres",
-			"-c", "wal_level=logical",
-		},
-	}, func(config *docker.HostConfig) {
-		config.AutoRemove = true
-		config.RestartPolicy = docker.RestartPolicy{Name: "no"}
-	})
-
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
-
-	require.NoError(t, resource.Expire(120))
-
-	hostAndPort := resource.GetHostPort("5432/tcp")
-	hostAndPortSplited := strings.Split(hostAndPort, ":")
-	password := "l]YLSc|4[i56%{gY"
-	databaseURL := fmt.Sprintf("user=user_name password=%s dbname=dbname sslmode=disable host=%s port=%s", password, hostAndPortSplited[0], hostAndPortSplited[1])
-
-	var db *sql.DB
-
-	pool.MaxWait = 120 * time.Second
-	if err = pool.Retry(func() error {
-		if db, err = sql.Open("postgres", databaseURL); err != nil {
-			return err
-		}
-
-		if err = db.Ping(); err != nil {
-			return err
-		}
-
-		var walLevel string
-		if err = db.QueryRow("SHOW wal_level").Scan(&walLevel); err != nil {
-			return err
-		}
-
-		var pgConfig string
-		if err = db.QueryRow("SHOW config_file").Scan(&pgConfig); err != nil {
-			return err
-		}
-
-		if walLevel != "logical" {
-			return fmt.Errorf("wal_level is not logical")
-		}
-
-		_, err = db.Exec("CREATE TABLE IF NOT EXISTS flights (id serial PRIMARY KEY, name VARCHAR(50), created_at TIMESTAMP);")
-		if err != nil {
-			return err
-		}
-
-		// flights_non_streamed is a control table with data that should not be streamed or queried by snapshot streaming
-		_, err = db.Exec("CREATE TABLE IF NOT EXISTS flights_non_streamed (id serial PRIMARY KEY, name VARCHAR(50), created_at TIMESTAMP);")
-
-		return err
-	}); err != nil {
-		panic(fmt.Errorf("could not connect to docker: %w", err))
-	}
-
-	for i := 0; i < 1000; i++ {
-		f := GetFakeFlightRecord()
-		_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
-		_, err = db.Exec("INSERT INTO flights_non_streamed (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
-		require.NoError(t, err)
-	}
-
-	template := fmt.Sprintf(`
-pg_stream:
-    dsn: %s
-    slot_name: test_slot
-    decoding_plugin: wal2json
-    stream_snapshot: true
-    schema: public
-    tables:
-       - flights
-`, databaseURL)
-
-	cacheConf := fmt.Sprintf(`
-label: pg_stream_cache
-file:
-    directory: %v
-`, tmpDir)
-
-	streamOutBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: INFO`))
-	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
-	require.NoError(t, streamOutBuilder.AddInputYAML(template))
-
-	var outBatches []string
-	var outBatchMut sync.Mutex
-	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
-		msgBytes, err := mb[0].AsBytes()
-		require.NoError(t, err)
-		outBatchMut.Lock()
-		outBatches = append(outBatches, string(msgBytes))
-		outBatchMut.Unlock()
-		return nil
-	}))
-
-	streamOut, err := streamOutBuilder.Build()
-	require.NoError(t, err)
-
-	go func() {
-		_ = streamOut.Run(context.Background())
-	}()
-
-	assert.Eventually(t, func() bool {
-		outBatchMut.Lock()
-		defer outBatchMut.Unlock()
-		return len(outBatches) == 1000
-	}, time.Second*25, time.Millisecond*100)
-
-	for i := 0; i < 1000; i++ {
-		f := GetFakeFlightRecord()
-		_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
-		_, err = db.Exec("INSERT INTO flights_non_streamed (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
-		require.NoError(t, err)
-	}
-
-	assert.Eventually(t, func() bool {
-		outBatchMut.Lock()
-		defer outBatchMut.Unlock()
-		return len(outBatches) == 2000
-	}, time.Second, time.Millisecond*100)
-
-	require.NoError(t, streamOut.StopWithin(time.Second*10))
-
-	// Starting stream for the same replication slot should continue from the last LSN
-	// Meaning we must not receive any old messages again
-
-	streamOutBuilder = service.NewStreamBuilder()
-	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: OFF`))
-	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
-	require.NoError(t, streamOutBuilder.AddInputYAML(template))
-
-	outBatches = []string{}
-	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
-		msgBytes, err := mb[0].AsBytes()
-		require.NoError(t, err)
-		outBatchMut.Lock()
-		outBatches = append(outBatches, string(msgBytes))
-		outBatchMut.Unlock()
-		return nil
-	}))
-
-	streamOut, err = streamOutBuilder.Build()
-	require.NoError(t, err)
-
-	go func() {
-		assert.NoError(t, streamOut.Run(context.Background()))
-	}()
-
-	time.Sleep(time.Second * 5)
-	for i := 0; i < 50; i++ {
-		f := GetFakeFlightRecord()
-		_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
-		require.NoError(t, err)
-	}
-
-	assert.Eventually(t, func() bool {
-		outBatchMut.Lock()
-		defer outBatchMut.Unlock()
-		return len(outBatches) == 50
-	}, time.Second*20, time.Millisecond*100)
-
-	require.NoError(t, streamOut.StopWithin(time.Second*10))
-	t.Log("All the conditions are met 🎉")
-
-	t.Cleanup(func() {
-		db.Close()
-	})
-}
-
 func TestIntegrationPgCDCForPgOutputPlugin(t *testing.T) {
 	integration.CheckSkip(t)
 	tmpDir := t.TempDir()
@@ -339,7 +149,6 @@ pg_stream:
     dsn: %s
     slot_name: test_slot_native_decoder
     stream_snapshot: true
-    decoding_plugin: pgoutput
     schema: public
     tables:
        - flights
@@ -454,7 +263,6 @@ pg_stream:
     slot_name: test_slot_native_decoder
     snapshot_batch_size: 100000
     stream_snapshot: true
-    decoding_plugin: pgoutput
     batch_transactions: false
     temporary_slot: true
     schema: public
@@ -549,7 +357,6 @@ pg_stream:
     slot_name: test_slot_native_decoder
     snapshot_batch_size: 100
     stream_snapshot: true
-    decoding_plugin: pgoutput
     batch_transactions: true
     schema: public
     tables:
@@ -688,7 +495,6 @@ pg_stream:
     dsn: %s
     slot_name: test_slot_native_decoder
     stream_snapshot: true
-    decoding_plugin: pgoutput
     batch_transactions: true
     schema: public
     tables:
@@ -825,7 +631,6 @@ pg_stream:
     dsn: %s
     slot_name: test_slot_native_decoder
     stream_snapshot: true
-    decoding_plugin: pgoutput
     batch_transactions: false
     schema: public
     tables:

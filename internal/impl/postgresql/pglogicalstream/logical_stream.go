@@ -27,6 +27,8 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/watermark"
 )
 
+const decodingPlugin = "pgoutput"
+
 // Stream is a structure that represents a logical replication stream
 // It includes the connection to the database, the context for the stream, and snapshotting functionality
 type Stream struct {
@@ -47,7 +49,6 @@ type Stream struct {
 	// includes schema
 	tableQualifiedName         []string
 	snapshotBatchSize          int
-	decodingPlugin             DecodingPlugin
 	decodingPluginArguments    []string
 	snapshotMemorySafetyFactor float64
 	logger                     *service.Logger
@@ -106,7 +107,6 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		tableQualifiedName:         tableNames,
 		maxParallelSnapshotTables:  config.MaxParallelSnapshotTables,
 		logger:                     config.Logger,
-		decodingPlugin:             decodingPluginFromString(config.DecodingPlugin),
 		shutSig:                    shutdown.NewSignaller(),
 	}
 
@@ -127,26 +127,14 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		}
 	})
 
-	var pluginArguments []string
-	if stream.decodingPlugin == "pgoutput" {
-		pluginArguments = []string{
-			"proto_version '1'",
-			// Sprintf is safe because we validate ReplicationSlotName is alphanumeric in the config
-			fmt.Sprintf("publication_names 'pglog_stream_%s'", config.ReplicationSlotName),
-		}
+	pluginArguments := []string{
+		"proto_version '1'",
+		// Sprintf is safe because we validate ReplicationSlotName is alphanumeric in the config
+		fmt.Sprintf("publication_names 'pglog_stream_%s'", config.ReplicationSlotName),
+	}
 
-		if version > 14 {
-			pluginArguments = append(pluginArguments, "messages 'true'")
-		}
-	} else if stream.decodingPlugin == "wal2json" {
-		tablesFilterRule := strings.Join(tableNames, ", ")
-		pluginArguments = []string{
-			"\"pretty-print\" 'true'",
-			// TODO: Validate this is escaped properly
-			fmt.Sprintf(`"add-tables" '%s'`, tablesFilterRule),
-		}
-	} else {
-		return nil, fmt.Errorf("unknown decoding plugin: %q", stream.decodingPlugin)
+	if version > 14 {
+		pluginArguments = append(pluginArguments, "messages 'true'")
 	}
 
 	stream.decodingPluginArguments = pluginArguments
@@ -185,7 +173,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 			ctx,
 			stream.pgConn,
 			stream.slotName,
-			stream.decodingPlugin.String(),
+			decodingPlugin,
 			CreateReplicationSlotOptions{
 				Temporary:      config.TemporaryReplicationSlot,
 				SnapshotAction: "export",
@@ -210,7 +198,8 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		outputPlugin = string(slotCheckRow[1])
 	}
 
-	if !freshlyCreatedSlot && outputPlugin != stream.decodingPlugin.String() {
+	// handling a case when replication slot already exists but with different output plugin created manually
+	if !freshlyCreatedSlot && outputPlugin != decodingPlugin {
 		return nil, fmt.Errorf("replication slot %s already exists with different output plugin: %s", config.ReplicationSlotName, outputPlugin)
 	}
 
@@ -330,15 +319,7 @@ func (s *Stream) AckLSN(ctx context.Context, lsn string) error {
 }
 
 func (s *Stream) streamMessages() error {
-	var handler PluginHandler
-	switch s.decodingPlugin {
-	case "wal2json":
-		handler = NewWal2JsonPluginHandler(s.messages, s.monitor)
-	case "pgoutput":
-		handler = NewPgOutputPluginHandler(s.messages, s.batchTransactions, s.monitor, s.clientXLogPos)
-	default:
-		return fmt.Errorf("invalid decoding plugin: %q", s.decodingPlugin)
-	}
+	handler := NewPgOutputPluginHandler(s.messages, s.batchTransactions, s.monitor, s.clientXLogPos)
 
 	ctx, _ := s.shutSig.SoftStopCtx(context.Background())
 	for !s.shutSig.IsSoftStopSignalled() {

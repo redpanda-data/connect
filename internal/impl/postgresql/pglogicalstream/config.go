@@ -34,12 +34,10 @@ type Config struct {
 	StreamOldData bool
 	// SnapshotMemorySafetyFactor is the memory safety factor for streaming snapshot
 	SnapshotMemorySafetyFactor float64
-	// DecodingPlugin is the decoding plugin to use
-	DecodingPlugin string
 	// BatchSize is the batch size for streaming
 	BatchSize int
 	// BatchTransactions is whether to buffer transactions as an entire single message or to send
-	// each row in a transaction as a message. This has no effect for wal2json.
+	// each row in a transaction as a message.
 	BatchTransactions bool
 
 	Logger *service.Logger

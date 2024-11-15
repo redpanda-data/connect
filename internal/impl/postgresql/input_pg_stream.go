@@ -29,7 +29,6 @@ const (
 	fieldStreamSnapshot            = "stream_snapshot"
 	fieldSnapshotMemSafetyFactor   = "snapshot_memory_safety_factor"
 	fieldSnapshotBatchSize         = "snapshot_batch_size"
-	fieldDecodingPlugin            = "decoding_plugin"
 	fieldSchema                    = "schema"
 	fieldTables                    = "tables"
 	fieldCheckpointLimit           = "checkpoint_limit"
@@ -67,7 +66,7 @@ This input adds the following metadata fields to each message:
 		Description("The Data Source Name for the PostgreSQL database in the form of `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]`. Please note that Postgres enforces SSL by default, you can override this with the parameter `sslmode=disable` if required.").
 		Example("postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable")).
 	Field(service.NewBoolField(fieldBatchTransactions).
-		Description("When set to true, transactions are batched into a single message. Note that this setting has no effect when using wal2json").
+		Description("When set to true, transactions are batched into a single message.").
 		Default(true)).
 	Field(service.NewBoolField(fieldStreamSnapshot).
 		Description("When set to true, the plugin will first stream a snapshot of all existing data in the database before streaming changes. In order to use this the tables that are being snapshot MUST have a primary key set so that reading from the table can be parallelized.").
@@ -81,12 +80,6 @@ This input adds the following metadata fields to each message:
 		Description("The number of rows to fetch in each batch when querying the snapshot. A value of 0 lets the plugin determine the batch size based on `snapshot_memory_safety_factor` property.").
 		Example(10000).
 		Default(0)).
-	Field(service.NewStringEnumField(fieldDecodingPlugin, "pgoutput", "wal2json").
-		Description(`Specifies the logical decoding plugin to use for streaming changes from PostgreSQL. 'pgoutput' is the native logical replication protocol, while 'wal2json' provides change data as JSON.
-Important: No matter which plugin you choose, the data will be converted to JSON before sending it to Connect.
-		`).
-		Example("pgoutput").
-		Default("pgoutput")).
 	Field(service.NewStringField(fieldSchema).
 		Description("The PostgreSQL schema from which to replicate data.").
 		Example("public")).
@@ -129,7 +122,6 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		tables                    []string
 		streamSnapshot            bool
 		snapshotMemSafetyFactor   float64
-		decodingPlugin            string
 		batchTransactions         bool
 		snapshotBatchSize         int
 		checkpointLimit           int
@@ -179,10 +171,6 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	}
 
 	if batchTransactions, err = conf.FieldBool(fieldBatchTransactions); err != nil {
-		return nil, err
-	}
-
-	if decodingPlugin, err = conf.FieldString(fieldDecodingPlugin); err != nil {
 		return nil, err
 	}
 
@@ -238,7 +226,6 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 			StreamOldData:              streamSnapshot,
 			TemporaryReplicationSlot:   temporarySlot,
 			BatchTransactions:          batchTransactions,
-			DecodingPlugin:             decodingPlugin,
 			SnapshotMemorySafetyFactor: snapshotMemSafetyFactor,
 			PgStandbyTimeout:           pgStandbyTimeout,
 			WalMonitorInterval:         walMonitorInterval,

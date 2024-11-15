@@ -22,41 +22,6 @@ type PluginHandler interface {
 	Handle(ctx context.Context, clientXLogPos LSN, xld XLogData) (bool, error)
 }
 
-// Wal2JsonPluginHandler is a handler for wal2json output plugin
-type Wal2JsonPluginHandler struct {
-	messages chan StreamMessage
-	monitor  *Monitor
-}
-
-// NewWal2JsonPluginHandler creates a new Wal2JsonPluginHandler
-func NewWal2JsonPluginHandler(messages chan StreamMessage, monitor *Monitor) *Wal2JsonPluginHandler {
-	return &Wal2JsonPluginHandler{
-		messages: messages,
-		monitor:  monitor,
-	}
-}
-
-// Handle handles the wal2json output
-func (w *Wal2JsonPluginHandler) Handle(ctx context.Context, clientXLogPos LSN, xld XLogData) (bool, error) {
-	// get current stream metrics
-	metrics := w.monitor.Report()
-	message, err := decodeWal2JsonChanges(clientXLogPos.String(), xld.WALData)
-	if err != nil {
-		return false, err
-	}
-
-	if message != nil && len(message.Changes) > 0 {
-		message.WALLagBytes = &metrics.WalLagInBytes
-		select {
-		case w.messages <- *message:
-		case <-ctx.Done():
-			return false, ctx.Err()
-		}
-	}
-
-	return false, nil
-}
-
 // PgOutputUnbufferedPluginHandler is a native output handler that emits each message as it's received.
 type PgOutputUnbufferedPluginHandler struct {
 	messages chan StreamMessage

@@ -9,8 +9,6 @@
 package pglogicalstream
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"log"
 
@@ -152,70 +150,4 @@ func decodeTextColumnData(mi *pgtype.Map, data []byte, dataType uint32) (interfa
 		return dt.Codec.DecodeValue(mi, dataType, pgtype.TextFormatCode, data)
 	}
 	return string(data), nil
-}
-
-// ----------------------------------------------------------------------------
-// Wal2Json section
-
-type walMessageWal2JSON struct {
-	Change []struct {
-		Kind         string        `json:"kind"`
-		Schema       string        `json:"schema"`
-		Table        string        `json:"table"`
-		Columnnames  []string      `json:"columnnames"`
-		Columntypes  []string      `json:"columntypes"`
-		Columnvalues []interface{} `json:"columnvalues"`
-		Oldkeys      struct {
-			Keynames  []string      `json:"keynames"`
-			Keytypes  []string      `json:"keytypes"`
-			Keyvalues []interface{} `json:"keyvalues"`
-		} `json:"oldkeys"`
-	} `json:"change"`
-}
-
-func decodeWal2JsonChanges(clientXLogPosition string, WALData []byte) (*StreamMessage, error) {
-	var changes walMessageWal2JSON
-	if err := json.NewDecoder(bytes.NewReader(WALData)).Decode(&changes); err != nil {
-		return nil, err
-	}
-
-	if len(changes.Change) == 0 {
-		return nil, nil
-	}
-	message := &StreamMessage{
-		Lsn:     &clientXLogPosition,
-		Changes: []StreamMessageChanges{},
-		Mode:    StreamModeStreaming,
-	}
-
-	for _, change := range changes.Change {
-		if change.Kind == "" {
-			continue
-		}
-
-		messageChange := StreamMessageChanges{
-			Operation: change.Kind,
-			Schema:    change.Schema,
-			Table:     change.Table,
-			Data:      make(map[string]any),
-		}
-
-		if change.Kind == "delete" {
-			for i, keyName := range change.Oldkeys.Keynames {
-				if len(change.Columnvalues) == 0 {
-					break
-				}
-
-				messageChange.Data[keyName] = change.Oldkeys.Keyvalues[i]
-			}
-		} else {
-			for i, columnName := range change.Columnnames {
-				messageChange.Data[columnName] = change.Columnvalues[i]
-			}
-		}
-
-		message.Changes = append(message.Changes, messageChange)
-	}
-
-	return message, nil
 }
