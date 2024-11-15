@@ -179,11 +179,11 @@ func (s *Snapshotter) calculateBatchSize(availableMemory uint64, estimatedRowSiz
 
 func (s *Snapshotter) querySnapshotData(ctx context.Context, table string, lastSeenPk map[string]any, pkColumns []string, limit int) (rows *sql.Rows, err error) {
 
-	s.logger.Infof("Query snapshot table: %v, limit: %v, lastSeenPkVal: %v, pk: %v", table, limit, lastSeenPk, pkColumns)
+	s.logger.Debugf("Query snapshot table: %v, limit: %v, lastSeenPkVal: %v, pk: %v", table, limit, lastSeenPk, pkColumns)
 
 	if lastSeenPk == nil {
 		// NOTE: All strings passed into here have been validated or derived from the code/database, therefore not prone to SQL injection.
-		sq, err := sanitize.SQLQuery(fmt.Sprintf("SELECT * FROM %s ORDER BY %s LIMIT %d;", table, pkColumns, limit))
+		sq, err := sanitize.SQLQuery(fmt.Sprintf("SELECT * FROM %s ORDER BY %s LIMIT %d;", table, strings.Join(pkColumns, ", "), limit))
 		if err != nil {
 			return nil, err
 		}
@@ -207,7 +207,7 @@ func (s *Snapshotter) querySnapshotData(ctx context.Context, table string, lastS
 	pkAsTuple := "(" + strings.Join(pkColumns, ", ") + ")"
 
 	// NOTE: All strings passed into here have been validated or derived from the code/database, therefore not prone to SQL injection.
-	sq, err := sanitize.SQLQuery(fmt.Sprintf("SELECT * FROM %s WHERE %s > %s ORDER BY %s LIMIT %d;", table, pkAsTuple, lastSeenPlaceHolders, pkColumns, limit), lastSeenPksValues...)
+	sq, err := sanitize.SQLQuery(fmt.Sprintf("SELECT * FROM %s WHERE %s > %s ORDER BY %s LIMIT %d;", table, pkAsTuple, lastSeenPlaceHolders, strings.Join(pkColumns, ", "), limit), lastSeenPksValues...)
 	if err != nil {
 		return nil, err
 	}
