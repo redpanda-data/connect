@@ -48,7 +48,7 @@ func makeBatch(args ...string) service.MessageBatch {
 	return batch
 }
 
-func TestIntegration(t *testing.T) {
+func TestIntegrationCypher(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 

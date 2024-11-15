@@ -47,9 +47,9 @@ func TestIntegrationFranz(t *testing.T) {
 		Repository:   "redpandadata/redpanda",
 		Tag:          "latest",
 		Hostname:     "redpanda",
-		ExposedPorts: []string{"9092"},
+		ExposedPorts: []string{"9092/tcp"},
 		PortBindings: map[docker.Port][]docker.PortBinding{
-			"9092/tcp": {{HostIP: "", HostPort: kafkaPortStr}},
+			"9092/tcp": {{HostIP: "", HostPort: kafkaPortStr + "/tcp"}},
 		},
 		Cmd: []string{
 			"redpanda",
@@ -216,9 +216,9 @@ func TestIntegrationFranzSasl(t *testing.T) {
 		Repository:   "redpandadata/redpanda",
 		Tag:          "latest",
 		Hostname:     "redpanda",
-		ExposedPorts: []string{"9092"},
+		ExposedPorts: []string{"9092/tcp"},
 		PortBindings: map[docker.Port][]docker.PortBinding{
-			"9092/tcp": {{HostIP: "", HostPort: kafkaPortStr}},
+			"9092/tcp": {{HostIP: "", HostPort: kafkaPortStr + "/tcp"}},
 		},
 		Cmd: []string{
 			"redpanda",
@@ -327,9 +327,9 @@ func TestIntegrationFranzOutputFixedTimestamp(t *testing.T) {
 		Repository:   "redpandadata/redpanda",
 		Tag:          "latest",
 		Hostname:     "redpanda",
-		ExposedPorts: []string{"9092"},
+		ExposedPorts: []string{"9092/tcp"},
 		PortBindings: map[docker.Port][]docker.PortBinding{
-			"9092/tcp": {{HostIP: "", HostPort: kafkaPortStr}},
+			"9092/tcp": {{HostIP: "", HostPort: kafkaPortStr + "/tcp"}},
 		},
 		Cmd: []string{
 			"redpanda",
@@ -399,9 +399,9 @@ func BenchmarkIntegrationFranz(b *testing.B) {
 		Repository:   "redpandadata/redpanda",
 		Tag:          "latest",
 		Hostname:     "redpanda",
-		ExposedPorts: []string{"9092"},
+		ExposedPorts: []string{"9092/tcp"},
 		PortBindings: map[docker.Port][]docker.PortBinding{
-			"9092/tcp": {{HostIP: "", HostPort: kafkaPortStr}},
+			"9092/tcp": {{HostIP: "", HostPort: kafkaPortStr + "/tcp"}},
 		},
 		Cmd: []string{
 			"redpanda",

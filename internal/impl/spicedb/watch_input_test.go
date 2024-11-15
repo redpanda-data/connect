@@ -28,7 +28,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
-func TestIntegration(t *testing.T) {
+func TestIntegrationSpiceDB(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 	ctx := context.Background()
@@ -67,22 +67,22 @@ cache: test_cache
 	err = pool.Retry(func() error {
 		r, err := client.WriteSchema(ctx, &v1.WriteSchemaRequest{
 			Schema: `
-	definition user {}
-	 
-	definition document {
-			relation writer: user
-			relation reader: user
-	 
-			/**
-			 * edit determines whether a user can edit the document
-			 */
-			permission edit = writer
-	 
-			/**
-			 * view determines whether a user can view the document
-			 */
-			permission view = reader + writer
-	}`,
+definition user {}
+
+definition document {
+	relation writer: user
+	relation reader: user
+
+	/**
+	* edit determines whether a user can edit the document
+	*/
+	permission edit = writer
+
+	/**
+	* view determines whether a user can view the document
+	*/
+	permission view = reader + writer
+}`,
 		})
 		if err != nil {
 			return err

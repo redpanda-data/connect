@@ -56,6 +56,11 @@ type MissingColumnError struct {
 	val        any
 }
 
+// NewMissingColumnError creates a new MissingColumnError object
+func NewMissingColumnError(rawName string, val any) MissingColumnError {
+	return MissingColumnError{rawName, val}
+}
+
 // ColumnName returns the column name of the data that was not in the table
 //
 // NOTE this is escaped, so it's valid to use this directly in a SQL statement
@@ -78,4 +83,15 @@ func (e MissingColumnError) Value() any {
 // Error implements the error interface
 func (e MissingColumnError) Error() string {
 	return fmt.Sprintf("new data %+v with the name %q does not have an associated column", e.val, e.columnName)
+}
+
+// InvalidTimestampFormatError is when a timestamp column has a string value not in RFC3339 format.
+type InvalidTimestampFormatError struct {
+	columnType string
+	val        string
+}
+
+// Error implements the error interface
+func (e InvalidTimestampFormatError) Error() string {
+	return fmt.Sprintf("unable to parse %s value from %q - string time values must be in RFC 3339 format", e.columnType, e.val)
 }

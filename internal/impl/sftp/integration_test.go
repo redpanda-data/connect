@@ -35,7 +35,7 @@ var (
 	sftpPassword = "pass"
 )
 
-func TestIntegration(t *testing.T) {
+func TestIntegrationSFTP(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 

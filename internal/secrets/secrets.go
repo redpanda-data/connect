@@ -78,7 +78,7 @@ func parseSecretsLookupURN(ctx context.Context, logger *slog.Logger, urn string)
 			return os.LookupEnv(key)
 		}, nil
 	case "aws":
-		secretsManager, err := secrets.NewAWSSecretsManager(ctx, logger, u.Host)
+		secretsManager, err := secrets.NewAWSSecretsManager(ctx, logger, u.Host, u.Query().Get("role"))
 		if err != nil {
 			return nil, err
 		}

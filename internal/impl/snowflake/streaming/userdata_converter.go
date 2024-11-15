@@ -368,7 +368,7 @@ func (c timestampConverter) ValidateAndConvert(stats *statsBuffer, val any, buf 
 		location := c.defaultTZ
 		t, err = time.ParseInLocation(time.RFC3339Nano, s, location)
 		if err != nil {
-			return fmt.Errorf("unable to parse timestamp value from %q", s)
+			return InvalidTimestampFormatError{"timestamp", s}
 		}
 	}
 	if c.trimTZ {
@@ -404,6 +404,9 @@ func (c timeConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typed
 	}
 	t, err := bloblang.ValueAsTimestamp(val)
 	if err != nil {
+		if s, ok := val.(string); ok {
+			return InvalidTimestampFormatError{"time", s}
+		}
 		return err
 	}
 	t = t.In(time.UTC)
@@ -433,6 +436,9 @@ func (c dateConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typed
 	}
 	t, err := bloblang.ValueAsTimestamp(val)
 	if err != nil {
+		if s, ok := val.(string); ok {
+			return InvalidTimestampFormatError{"date", s}
+		}
 		return err
 	}
 	t = t.UTC()
