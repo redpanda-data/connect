@@ -9,6 +9,7 @@
 package pglogicalstream
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strings"
@@ -112,7 +113,7 @@ func (s *Snapshotter) prepare() error {
 	return nil
 }
 
-func (s *Snapshotter) findAvgRowSize(table string) (sql.NullInt64, error) {
+func (s *Snapshotter) findAvgRowSize(ctx context.Context, table string) (sql.NullInt64, error) {
 	var (
 		avgRowSize sql.NullInt64
 		rows       *sql.Rows
@@ -120,7 +121,7 @@ func (s *Snapshotter) findAvgRowSize(table string) (sql.NullInt64, error) {
 	)
 
 	// table is validated to be correct pg identifier, so we can use it directly
-	if rows, err = s.pgConnection.Query(fmt.Sprintf(`SELECT SUM(pg_column_size('%s.*')) / COUNT(*) FROM %s;`, table, table)); err != nil {
+	if rows, err = s.pgConnection.QueryContext(ctx, fmt.Sprintf(`SELECT SUM(pg_column_size('%s.*')) / COUNT(*) FROM %s;`, table, table)); err != nil {
 		return avgRowSize, fmt.Errorf("can get avg row size due to query failure: %w", err)
 	}
 
@@ -175,18 +176,18 @@ func (s *Snapshotter) calculateBatchSize(availableMemory uint64, estimatedRowSiz
 	return batchSize
 }
 
-func (s *Snapshotter) querySnapshotData(table string, lastSeenPk *map[string]any, pksOrderBy string, limit int) (rows *sql.Rows, err error) {
+func (s *Snapshotter) querySnapshotData(ctx context.Context, table string, lastSeenPk map[string]any, pkColumns []string, limit int) (rows *sql.Rows, err error) {
 
-	s.logger.Infof("Query snapshot table: %v, limit: %v, lastSeenPkVal: %v, pk: %v", table, limit, lastSeenPk, pksOrderBy)
+	s.logger.Infof("Query snapshot table: %v, limit: %v, lastSeenPkVal: %v, pk: %v", table, limit, lastSeenPk, pkColumns)
 
 	if lastSeenPk == nil {
 		// NOTE: All strings passed into here have been validated or derived from the code/database, therefore not prone to SQL injection.
-		sq, err := sanitize.SQLQuery(fmt.Sprintf("SELECT * FROM %s ORDER BY %s LIMIT %d;", table, pksOrderBy, limit))
+		sq, err := sanitize.SQLQuery(fmt.Sprintf("SELECT * FROM %s ORDER BY %s LIMIT %d;", table, pkColumns, limit))
 		if err != nil {
 			return nil, err
 		}
 
-		return s.pgConnection.Query(sq)
+		return s.pgConnection.QueryContext(ctx, sq)
 	}
 
 	var (
@@ -195,21 +196,22 @@ func (s *Snapshotter) querySnapshotData(table string, lastSeenPk *map[string]any
 		i                 = 1
 	)
 
-	for _, v := range *lastSeenPk {
+	for _, col := range pkColumns {
 		placeholders = append(placeholders, fmt.Sprintf("$%d", i))
 		i++
-		lastSeenPksValues = append(lastSeenPksValues, v)
+		lastSeenPksValues = append(lastSeenPksValues, lastSeenPk[col])
 	}
 
 	lastSeenPlaceHolders := "(" + strings.Join(placeholders, ", ") + ")"
+	pkAsTuple := "(" + strings.Join(pkColumns, ", ") + ")"
 
 	// NOTE: All strings passed into here have been validated or derived from the code/database, therefore not prone to SQL injection.
-	sq, err := sanitize.SQLQuery(fmt.Sprintf("SELECT * FROM %s WHERE %s > %s ORDER BY %s LIMIT %d;", table, pksOrderBy, lastSeenPlaceHolders, pksOrderBy, limit), lastSeenPksValues...)
+	sq, err := sanitize.SQLQuery(fmt.Sprintf("SELECT * FROM %s WHERE %s > %s ORDER BY %s LIMIT %d;", table, pkAsTuple, lastSeenPlaceHolders, pkColumns, limit), lastSeenPksValues...)
 	if err != nil {
 		return nil, err
 	}
 
-	return s.pgConnection.Query(sq)
+	return s.pgConnection.QueryContext(ctx, sq)
 }
 
 func (s *Snapshotter) releaseSnapshot() error {

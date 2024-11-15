@@ -425,7 +425,9 @@ func (s *Stream) processSnapshot() error {
 				offset          = 0
 			)
 
-			avgRowSizeBytes, err = s.snapshotter.findAvgRowSize(table)
+			ctx, _ := s.shutSig.SoftStopCtx(context.Background())
+
+			avgRowSizeBytes, err = s.snapshotter.findAvgRowSize(ctx, table)
 			if err != nil {
 				return fmt.Errorf("failed to calculate average row size for table %v: %w", table, err)
 			}
@@ -438,18 +440,13 @@ func (s *Stream) processSnapshot() error {
 
 			s.logger.Debugf("Querying snapshot batch_side: %v, available_memory: %v, avg_row_size: %v", batchSize, availableMemory, avgRowSizeBytes.Int64)
 
-			tablePks, pksSlice, err := s.getPrimaryKeyColumn(table)
+			lastPrimaryKey, primaryKeyColumns, err := s.getPrimaryKeyColumn(ctx, table)
 			if err != nil {
 				return fmt.Errorf("failed to get primary key column for table %v: %w", table, err)
 			}
 
-			if len(tablePks) == 0 {
+			if len(lastPrimaryKey) == 0 {
 				return fmt.Errorf("failed to get primary key column for table %s", table)
-			}
-
-			tablePksOrderByStatement := strings.Join(pksSlice, ", ")
-			if len(tablePks) > 1 {
-				tablePksOrderByStatement = "(" + tablePksOrderByStatement + ")"
 			}
 
 			var lastPkVals = map[string]any{}
@@ -458,18 +455,16 @@ func (s *Stream) processSnapshot() error {
 				var snapshotRows *sql.Rows
 				queryStart := time.Now()
 				if offset == 0 {
-					lastPkVals = make(map[string]any)
-					if snapshotRows, err = s.snapshotter.querySnapshotData(table, nil, tablePksOrderByStatement, batchSize); err != nil {
-						return fmt.Errorf("failed to query snapshot data for table %v: %w", table, err)
-					}
+					snapshotRows, err = s.snapshotter.querySnapshotData(ctx, table, nil, primaryKeyColumns, batchSize)
 				} else {
-					if snapshotRows, err = s.snapshotter.querySnapshotData(table, &lastPkVals, tablePksOrderByStatement, batchSize); err != nil {
-						return fmt.Errorf("failed to query snapshot data for table %v: %w", table, err)
-					}
+					snapshotRows, err = s.snapshotter.querySnapshotData(ctx, table, lastPkVals, primaryKeyColumns, batchSize)
+				}
+				if err != nil {
+					return fmt.Errorf("failed to query snapshot data for table %v: %w", table, err)
 				}
 
 				queryDuration := time.Since(queryStart)
-				s.logger.Debugf("Query duration: %v %s \n", queryDuration, tableName)
+				s.logger.Tracef("Query duration: %v %s \n", queryDuration, tableName)
 
 				if snapshotRows.Err() != nil {
 					return fmt.Errorf("failed to get snapshot data for table %v: %w", table, snapshotRows.Err())
@@ -507,7 +502,7 @@ func (s *Stream) processSnapshot() error {
 					var data = make(map[string]any)
 					for i, getter := range valueGetters {
 						data[columnNames[i]] = getter(scanArgs[i])
-						if _, ok := tablePks[columnNames[i]]; ok {
+						if _, ok := lastPrimaryKey[columnNames[i]]; ok {
 							lastPkVals[columnNames[i]] = getter(scanArgs[i])
 						}
 					}
@@ -569,7 +564,7 @@ func (s *Stream) Errors() chan error {
 	return s.errors
 }
 
-func (s *Stream) getPrimaryKeyColumn(tableName string) (map[string]any, []string, error) {
+func (s *Stream) getPrimaryKeyColumn(ctx context.Context, tableName string) (map[string]any, []string, error) {
 	/// Query to get all primary key columns in their correct order
 	q, err := sanitize.SQLQuery(`
         SELECT a.attname
@@ -585,7 +580,7 @@ func (s *Stream) getPrimaryKeyColumn(tableName string) (map[string]any, []string
 		return nil, nil, fmt.Errorf("failed to sanitize query: %w", err)
 	}
 
-	reader := s.pgConn.Exec(context.Background(), q)
+	reader := s.pgConn.Exec(ctx, q)
 	data, err := reader.ReadAll()
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to read query results: %w", err)
