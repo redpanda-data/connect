@@ -44,7 +44,6 @@ input:
     stream_snapshot: false
     snapshot_memory_safety_factor: 1
     snapshot_batch_size: 0
-    decoding_plugin: pgoutput
     schema: public # No default (required)
     tables: [] # No default (required)
     checkpoint_limit: 1024
@@ -76,7 +75,6 @@ input:
     stream_snapshot: false
     snapshot_memory_safety_factor: 1
     snapshot_batch_size: 0
-    decoding_plugin: pgoutput
     schema: public # No default (required)
     tables: [] # No default (required)
     checkpoint_limit: 1024
@@ -126,7 +124,7 @@ dsn: postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable
 
 === `batch_transactions`
 
-When set to true, transactions are batched into a single message. Note that this setting has no effect when using wal2json
+When set to true, transactions are batched into a single message.
 
 
 *Type*: `bool`
@@ -176,27 +174,6 @@ The number of rows to fetch in each batch when querying the snapshot. A value of
 # Examples
 
 snapshot_batch_size: 10000
-```
-
-=== `decoding_plugin`
-
-Specifies the logical decoding plugin to use for streaming changes from PostgreSQL. 'pgoutput' is the native logical replication protocol, while 'wal2json' provides change data as JSON.
-Important: No matter which plugin you choose, the data will be converted to JSON before sending it to Connect.
-
-
-*Type*: `string`
-
-*Default*: `"pgoutput"`
-
-Options:
-`pgoutput`
-, `wal2json`
-.
-
-```yml
-# Examples
-
-decoding_plugin: pgoutput
 ```
 
 === `schema`
