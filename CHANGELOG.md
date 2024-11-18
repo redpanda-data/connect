@@ -3,6 +3,16 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.40.0 - TBD
+
+### Added
+
+- New `pg_stream` input supporting change data capture (CDC) from PostgreSQL (@le-vlad)
+
+### Changed
+
+- `snowflake_streaming` with `schema_evolution.enabled` set to true can now autocreate tables.
+
 ## 4.39.0 - 2024-11-07
 
 ### Added
