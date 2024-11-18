@@ -24,10 +24,9 @@ import (
 
 	"github.com/ory/dockertest/v3"
 	"github.com/redis/go-redis/v9"
+	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
 
 func TestIntegrationRedisRateLimit(t *testing.T) {

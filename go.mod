@@ -72,6 +72,7 @@ require (
 	github.com/gosimple/slug v1.14.0
 	github.com/influxdata/influxdb1-client v0.0.0-20220302092344-a9ab5670611c
 	github.com/jackc/pgx/v4 v4.18.3
+	github.com/jackc/pgx/v5 v5.6.0
 	github.com/jhump/protoreflect v1.16.0
 	github.com/lib/pq v1.10.9
 	github.com/linkedin/goavro/v2 v2.13.0
@@ -302,7 +303,7 @@ require (
 	github.com/itchyny/timefmt-go v0.1.6 // indirect
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
 	github.com/jackc/pgconn v1.14.3
-	github.com/jackc/pgio v1.0.0 // indirect
+	github.com/jackc/pgio v1.0.0
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgproto3/v2 v2.3.3 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
