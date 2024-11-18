@@ -138,6 +138,7 @@ Options:
 , `snowflake`
 , `trino`
 , `gocosmos`
+, `spanner`
 .
 
 === `dsn`
