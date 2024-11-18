@@ -25,7 +25,7 @@ const (
 type MessageType string
 
 const (
-	MessageTypeEvent     MessageType = "snapshot"
+	MessageTypeSnapshot  MessageType = "snapshot"
 	MessageTypeStreaming MessageType = "streaming"
 )
 
