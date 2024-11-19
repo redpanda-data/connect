@@ -95,6 +95,7 @@ type mysqlStreamInput struct {
 	msgChan               chan asyncMessage
 	batching              service.BatchPolicy
 	batchPolicy           *service.Batcher
+	tablesFilterMap       map[string]bool
 	checkPointLimit       int
 	lastGtid              *string
 
@@ -189,6 +190,11 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 	i := &streamInput
 	i.cp = checkpoint.NewCapped[*int64](int64(i.checkPointLimit))
 
+	i.tablesFilterMap = map[string]bool{}
+	for _, table := range i.tables {
+		i.tablesFilterMap[table] = true
+	}
+
 	res.Logger().Info("Starting MySQL stream input")
 
 	if batching, err = conf.FieldBatchPolicy(fieldBatching); err != nil {
@@ -231,7 +237,6 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 	canalConfig.Addr = i.mysqlConfig.Addr
 	canalConfig.User = i.mysqlConfig.User
 	canalConfig.Password = i.mysqlConfig.Passwd
-	canalConfig.Dump.TableDB = i.mysqlConfig.DBName
 	// resetting dump path since we are doing snapshot manually
 	// this is required since canal will try to prepare dumper on init stage
 	canalConfig.Dump.ExecutionPath = ""
@@ -602,6 +607,10 @@ func (i *mysqlStreamInput) OnRotate(eh *replication.EventHeader, re *replication
 }
 
 func (i *mysqlStreamInput) OnRow(e *canal.RowsEvent) error {
+	if _, ok := i.tablesFilterMap[e.Table.Name]; !ok {
+		return nil
+	}
+
 	switch e.Action {
 	case canal.InsertAction:
 		return i.onMessage(e, ProcessEventParams{initValue: 0, incrementValue: 1})
