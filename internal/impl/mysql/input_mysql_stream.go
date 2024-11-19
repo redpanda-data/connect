@@ -232,6 +232,9 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 	canalConfig.User = i.mysqlConfig.User
 	canalConfig.Password = i.mysqlConfig.Passwd
 	canalConfig.Dump.TableDB = i.mysqlConfig.DBName
+	// resetting dump path since we are doing snapshot manually
+	// this is required since canal will try to prepare dumper on init stage
+	canalConfig.Dump.ExecutionPath = ""
 
 	// Parse and set additional parameters
 	canalConfig.Charset = i.mysqlConfig.Collation
@@ -566,8 +569,11 @@ func (i *mysqlStreamInput) ReadBatch(ctx context.Context) (service.MessageBatch,
 func (i *mysqlStreamInput) Close(ctx context.Context) error {
 	fmt.Println("Close has been called")
 	i.shutSig.TriggerHardStop()
-	i.canal.SyncedPosition()
-	i.canal.Close()
+	if i.canal != nil {
+		i.canal.SyncedPosition()
+		i.canal.Close()
+	}
+
 	i.snapshot.releaseSnapshot(ctx)
 	return nil
 }
