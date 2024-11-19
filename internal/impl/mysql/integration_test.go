@@ -292,7 +292,6 @@ file:
 	var outBatchMut sync.Mutex
 	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
 		msgBytes, err := mb[0].AsBytes()
-		fmt.Println(string(msgBytes))
 		require.NoError(t, err)
 		outBatchMut.Lock()
 		outBatches = append(outBatches, string(msgBytes))
@@ -440,7 +439,6 @@ file:
 	var outBatchMut sync.Mutex
 	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
 		msgBytes, err := mb[0].AsBytes()
-		fmt.Println(string(msgBytes))
 		require.NoError(t, err)
 		outBatchMut.Lock()
 		outBatches = append(outBatches, string(msgBytes))
