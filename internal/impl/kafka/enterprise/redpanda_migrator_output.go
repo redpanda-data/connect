@@ -60,14 +60,8 @@ ACL migration adheres to the following principles:
 - Only topic ACLs are migrated, group ACLs are not migrated
 `).
 		Fields(RedpandaMigratorOutputConfigFields()...).
-		LintRule(`
-root = if this.partitioner == "manual" {
-if this.partition.or("") == "" {
-"a partition must be specified when the partitioner is set to manual"
-}
-} else if this.partition.or("") != "" {
-"a partition cannot be specified unless the partitioner is set to manual"
-}`).Example("Transfer data", "Writes messages to the configured broker and creates topics and topic ACLs if they don't exist. It also ensures that the message order is preserved.", `
+		LintRule(kafka.FranzWriterConfigLints()).
+		Example("Transfer data", "Writes messages to the configured broker and creates topics and topic ACLs if they don't exist. It also ensures that the message order is preserved.", `
 output:
   redpanda_migrator:
     seed_brokers: [ "127.0.0.1:9093" ]
@@ -75,7 +69,7 @@ output:
     key: ${! metadata("kafka_key") }
     partitioner: manual
     partition: ${! metadata("kafka_partition").or(throw("missing kafka_partition metadata")) }
-    timestamp: ${! metadata("kafka_timestamp_unix").or(timestamp_unix()) }
+    timestamp_ms: ${! metadata("kafka_timestamp_ms").or(timestamp_unix_milli()) }
     input_resource: redpanda_migrator_input
     max_in_flight: 1
 `)
