@@ -22,6 +22,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/ory/dockertest/v3"
 	"github.com/ory/dockertest/v3/docker"
+	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -141,7 +142,9 @@ func createDockerInstance(t *testing.T) (*dockertest.Pool, *dockertest.Resource,
 	return pool, resource, databaseURL
 }
 
-func TestIdentifySystem(t *testing.T) {
+func TestIntegrationIdentifySystem(t *testing.T) {
+	integration.CheckSkip(t)
+
 	pool, resource, dbURL := createDockerInstance(t)
 	defer func() {
 		err := pool.Purge(resource)
@@ -165,7 +168,9 @@ func TestIdentifySystem(t *testing.T) {
 	assert.NotEmpty(t, sysident.DBName, 0)
 }
 
-func TestCreateReplicationSlot(t *testing.T) {
+func TestIntegrationCreateReplicationSlot(t *testing.T) {
+	integration.CheckSkip(t)
+
 	pool, resource, dbURL := createDockerInstance(t)
 	defer func() {
 		err := pool.Purge(resource)
@@ -184,7 +189,9 @@ func TestCreateReplicationSlot(t *testing.T) {
 	assert.Equal(t, slotName, result.SlotName)
 }
 
-func TestDropReplicationSlot(t *testing.T) {
+func TestIntegrationDropReplicationSlot(t *testing.T) {
+	integration.CheckSkip(t)
+
 	pool, resource, dbURL := createDockerInstance(t)
 	defer func() {
 		err := pool.Purge(resource)
@@ -207,7 +214,9 @@ func TestDropReplicationSlot(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestCreatePublication(t *testing.T) {
+func TestIntegrationCreatePublication(t *testing.T) {
+	integration.CheckSkip(t)
+
 	pool, resource, dbURL := createDockerInstance(t)
 	defer func() {
 		err := pool.Purge(resource)
@@ -289,7 +298,9 @@ func TestCreatePublication(t *testing.T) {
 
 }
 
-func TestStartReplication(t *testing.T) {
+func TestIntegrationStartReplication(t *testing.T) {
+	integration.CheckSkip(t)
+
 	pool, resource, dbURL := createDockerInstance(t)
 	defer func() {
 		err := pool.Purge(resource)
@@ -440,7 +451,9 @@ drop table t;
 	assert.True(t, commit)
 }
 
-func TestSendStandbyStatusUpdate(t *testing.T) {
+func TestIntegrationSendStandbyStatusUpdate(t *testing.T) {
+	integration.CheckSkip(t)
+
 	pool, resource, dbURL := createDockerInstance(t)
 	defer func() {
 		err := pool.Purge(resource)
