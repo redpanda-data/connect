@@ -30,7 +30,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/redpanda-data/connect/v4/internal/periodic"
+	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 	"github.com/redpanda-data/connect/v4/internal/typed"
 )
 
@@ -66,7 +66,7 @@ type SnowflakeServiceClient struct {
 	requestIDCounter *atomic.Int64
 
 	uploader          *typed.AtomicValue[stageUploaderResult]
-	uploadRefreshLoop *periodic.Periodic
+	uploadRefreshLoop *asyncroutine.Periodic
 }
 
 // NewSnowflakeServiceClient creates a new API client for the Snowpipe Streaming API
@@ -104,7 +104,7 @@ func NewSnowflakeServiceClient(ctx context.Context, opts ClientOptions) (*Snowfl
 
 		uploader: uploaderAtomic,
 		// Tokens expire every hour, so refresh a bit before that
-		uploadRefreshLoop: periodic.NewWithContext(time.Hour-(2*time.Minute), func(ctx context.Context) {
+		uploadRefreshLoop: asyncroutine.NewPeriodicWithContext(time.Hour-(2*time.Minute), func(ctx context.Context) {
 			resp, err := client.configureClient(ctx, clientConfigureRequest{Role: opts.Role})
 			if err != nil {
 				uploaderAtomic.Store(stageUploaderResult{err: err})

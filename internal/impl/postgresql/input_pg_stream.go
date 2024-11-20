@@ -20,8 +20,8 @@ import (
 	gonanoid "github.com/matoous/go-nanoid/v2"
 	"github.com/redpanda-data/benthos/v4/public/service"
 
+	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream"
-	"github.com/redpanda-data/connect/v4/internal/periodic"
 )
 
 const (
@@ -305,7 +305,7 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 }
 
 func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher *service.Batcher) {
-	monitorLoop := periodic.New(p.streamConfig.WalMonitorInterval, func() {
+	monitorLoop := asyncroutine.NewPeriodic(p.streamConfig.WalMonitorInterval, func() {
 		// Periodically collect stats
 		report := pgStream.GetProgress()
 		for name, progress := range report.TableProgress {

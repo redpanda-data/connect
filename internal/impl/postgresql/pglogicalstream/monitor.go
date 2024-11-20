@@ -20,8 +20,8 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
+	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
-	"github.com/redpanda-data/connect/v4/internal/periodic"
 )
 
 // Report is a structure that contains the current state of the Monitor
@@ -45,7 +45,7 @@ type Monitor struct {
 	dbConn   *sql.DB
 	slotName string
 	logger   *service.Logger
-	loop     *periodic.Periodic
+	loop     *asyncroutine.Periodic
 }
 
 // NewMonitor creates a new Monitor instance
@@ -72,7 +72,7 @@ func NewMonitor(
 		slotName:              slotName,
 		logger:                logger,
 	}
-	m.loop = periodic.NewWithContext(interval, m.readReplicationLag)
+	m.loop = asyncroutine.NewPeriodicWithContext(interval, m.readReplicationLag)
 	if err = m.readTablesStat(ctx, tables); err != nil {
 		return nil, err
 	}
