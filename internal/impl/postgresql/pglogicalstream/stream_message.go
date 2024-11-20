@@ -8,16 +8,6 @@
 
 package pglogicalstream
 
-// StreamMessageChanges represents the changes in a single message
-// Single message can have multiple changes
-type StreamMessageChanges struct {
-	Operation string `json:"operation"`
-	Schema    string `json:"schema"`
-	Table     string `json:"table"`
-	// For deleted messages - there will be old changes if replica identity set to full or empty changes
-	Data map[string]any `json:"data"`
-}
-
 // StreamMode represents the mode of the stream at the time of the message
 type StreamMode string
 
@@ -28,9 +18,29 @@ const (
 	StreamModeSnapshot StreamMode = "snapshot"
 )
 
-// StreamMessage represents a single message after it has been decoded by the plugin
+// OpType is the type of operation from the database
+type OpType string
+
+const (
+	// InsertOpType is a database insert
+	InsertOpType OpType = "insert"
+	// UpdateOpType is a database update
+	UpdateOpType OpType = "update"
+	// DeleteOpType is a database delete
+	DeleteOpType OpType = "delete"
+	// BeginOpType is a database transaction begin
+	BeginOpType OpType = "begin"
+	// CommitOpType is a database transaction commit
+	CommitOpType OpType = "commit"
+)
+
+// StreamMessage represents a single change from the database
 type StreamMessage struct {
-	Lsn     *string                `json:"lsn"`
-	Changes []StreamMessageChanges `json:"changes"`
-	Mode    StreamMode             `json:"mode"`
+	Lsn       *string    `json:"lsn"`
+	Operation OpType     `json:"operation"`
+	Schema    string     `json:"schema"`
+	Table     string     `json:"table"`
+	Mode      StreamMode `json:"mode"`
+	// For deleted messages - there will be old changes if replica identity set to full or empty changes
+	Data any `json:"data"`
 }

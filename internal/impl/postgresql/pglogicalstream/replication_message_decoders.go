@@ -10,7 +10,6 @@ package pglogicalstream
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -18,14 +17,14 @@ import (
 // ----------------------------------------------------------------------------
 // PgOutput section
 
-func isBeginMessage(WALData []byte) (bool, error) {
+func isBeginMessage(WALData []byte) (bool, *BeginMessage, error) {
 	logicalMsg, err := Parse(WALData)
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
 
-	_, ok := logicalMsg.(*BeginMessage)
-	return ok, nil
+	m, ok := logicalMsg.(*BeginMessage)
+	return ok, m, nil
 }
 
 func isCommitMessage(WALData []byte) (bool, *CommitMessage, error) {
@@ -43,9 +42,9 @@ func isCommitMessage(WALData []byte) (bool, *CommitMessage, error) {
 // as a side effect it updates the relations map with any new relation metadata
 // When the relation is changes in the database, the relation message is sent
 // before the change message.
-func decodePgOutput(WALData []byte, relations map[uint32]*RelationMessage, typeMap *pgtype.Map) (*StreamMessageChanges, error) {
+func decodePgOutput(WALData []byte, relations map[uint32]*RelationMessage, typeMap *pgtype.Map) (*StreamMessage, error) {
 	logicalMsg, err := Parse(WALData)
-	message := &StreamMessageChanges{}
+	message := &StreamMessage{Mode: StreamModeStreaming}
 
 	if err != nil {
 		return nil, err
@@ -55,18 +54,20 @@ func decodePgOutput(WALData []byte, relations map[uint32]*RelationMessage, typeM
 		relations[logicalMsg.RelationID] = logicalMsg
 		return nil, nil
 	case *BeginMessage:
-		return nil, nil
+		message.Operation = BeginOpType
+		return message, nil
 	case *CommitMessage:
-		return nil, nil
+		message.Operation = CommitOpType
+		return message, nil
 	case *InsertMessage:
 		rel, ok := relations[logicalMsg.RelationID]
 		if !ok {
 			return nil, fmt.Errorf("unknown relation ID %d", logicalMsg.RelationID)
 		}
-		message.Operation = "insert"
+		message.Operation = InsertOpType
 		message.Schema = rel.Namespace
 		message.Table = rel.RelationName
-		values := map[string]interface{}{}
+		values := map[string]any{}
 		for idx, col := range logicalMsg.Tuple.Columns {
 			colName := rel.Columns[idx].Name
 			switch col.DataType {
@@ -77,7 +78,7 @@ func decodePgOutput(WALData []byte, relations map[uint32]*RelationMessage, typeM
 			case 't': //text
 				val, err := decodeTextColumnData(typeMap, col.Data, rel.Columns[idx].DataType)
 				if err != nil {
-					return nil, err
+					return nil, fmt.Errorf("unable to decode column data: %w", err)
 				}
 				values[colName] = val
 			}
@@ -88,10 +89,10 @@ func decodePgOutput(WALData []byte, relations map[uint32]*RelationMessage, typeM
 		if !ok {
 			return nil, fmt.Errorf("unknown relation ID %d", logicalMsg.RelationID)
 		}
-		message.Operation = "update"
+		message.Operation = UpdateOpType
 		message.Schema = rel.Namespace
 		message.Table = rel.RelationName
-		values := map[string]interface{}{}
+		values := map[string]any{}
 		for idx, col := range logicalMsg.NewTuple.Columns {
 			colName := rel.Columns[idx].Name
 			switch col.DataType {
@@ -102,7 +103,7 @@ func decodePgOutput(WALData []byte, relations map[uint32]*RelationMessage, typeM
 			case 't': //text
 				val, err := decodeTextColumnData(typeMap, col.Data, rel.Columns[idx].DataType)
 				if err != nil {
-					log.Fatalln("error decoding column data:", err)
+					return nil, fmt.Errorf("unable to decode column data: %w", err)
 				}
 				values[colName] = val
 			}
@@ -113,10 +114,10 @@ func decodePgOutput(WALData []byte, relations map[uint32]*RelationMessage, typeM
 		if !ok {
 			return nil, fmt.Errorf("unknown relation ID %d", logicalMsg.RelationID)
 		}
-		message.Operation = "delete"
+		message.Operation = DeleteOpType
 		message.Schema = rel.Namespace
 		message.Table = rel.RelationName
-		values := map[string]interface{}{}
+		values := map[string]any{}
 		for idx, col := range logicalMsg.OldTuple.Columns {
 			colName := rel.Columns[idx].Name
 			switch col.DataType {
@@ -127,7 +128,7 @@ func decodePgOutput(WALData []byte, relations map[uint32]*RelationMessage, typeM
 			case 't': //text
 				val, err := decodeTextColumnData(typeMap, col.Data, rel.Columns[idx].DataType)
 				if err != nil {
-					log.Fatalln("error decoding column data:", err)
+					return nil, fmt.Errorf("unable to decode column data: %w", err)
 				}
 				values[colName] = val
 			}
