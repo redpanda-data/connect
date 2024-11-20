@@ -597,7 +597,10 @@ func asSchemaMigrationError(o *snowflakeStreamerOutput, err error) (schemaMigrat
 		// to forcibly reopen all our channels to get a new schema.
 		return schemaMigrationNeededError{
 			migrator: func(ctx context.Context) error {
-				return o.MigrateNotNullColumn(ctx, nullColumnErr)
+				if err := o.MigrateNotNullColumn(ctx, nullColumnErr); err != nil {
+					return err
+				}
+				return o.ReopenAllChannels(ctx)
 			},
 		}, true
 	}
@@ -605,7 +608,10 @@ func asSchemaMigrationError(o *snowflakeStreamerOutput, err error) (schemaMigrat
 	if errors.As(err, &missingColumnErr) {
 		return schemaMigrationNeededError{
 			migrator: func(ctx context.Context) error {
-				return o.MigrateMissingColumn(ctx, missingColumnErr)
+				if err := o.MigrateMissingColumn(ctx, missingColumnErr); err != nil {
+					return err
+				}
+				return o.ReopenAllChannels(ctx)
 			},
 		}, true
 	}
@@ -619,7 +625,7 @@ func asSchemaMigrationError(o *snowflakeStreamerOutput, err error) (schemaMigrat
 						return err
 					}
 				}
-				return nil
+				return o.ReopenAllChannels(ctx)
 			},
 		}, true
 	}
@@ -678,7 +684,7 @@ func (o *snowflakeStreamerOutput) MigrateMissingColumn(ctx context.Context, col 
 	if err != nil {
 		o.logger.Warnf("unable to add new column, this maybe due to a race with another request, error: %s", err)
 	}
-	return o.ReopenAllChannels(ctx)
+	return nil
 }
 
 func (o *snowflakeStreamerOutput) MigrateNotNullColumn(ctx context.Context, col streaming.NonNullColumnError) error {
@@ -699,7 +705,7 @@ func (o *snowflakeStreamerOutput) MigrateNotNullColumn(ctx context.Context, col 
 	if err != nil {
 		o.logger.Warnf("unable to mark column %s as null, this maybe due to a race with another request, error: %s", col.ColumnName(), err)
 	}
-	return o.ReopenAllChannels(ctx)
+	return nil
 }
 
 func (o *snowflakeStreamerOutput) CreateOutputTable(ctx context.Context, batch service.MessageBatch) error {
