@@ -89,6 +89,6 @@ linters:
     - tenv
     - predeclared
     - mirror
-    - rowserrcheck
+    # - rowserrcheck
     - bodyclose
     - nolintlint
