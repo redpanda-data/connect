@@ -23,10 +23,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/capped"
-	"github.com/redpanda-data/connect/v4/internal/typed"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/capped"
+	"github.com/redpanda-data/connect/v4/internal/typed"
 )
 
 type foo struct {
