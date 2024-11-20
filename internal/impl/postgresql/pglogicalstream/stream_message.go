@@ -11,18 +11,11 @@ package pglogicalstream
 // StreamMessageChanges represents the changes in a single message
 // Single message can have multiple changes
 type StreamMessageChanges struct {
-	Operation             string   `json:"operation"`
-	Schema                string   `json:"schema"`
-	Table                 string   `json:"table"`
-	TableSnapshotProgress *float64 `json:"table_snapshot_progress,omitempty"`
+	Operation string `json:"operation"`
+	Schema    string `json:"schema"`
+	Table     string `json:"table"`
 	// For deleted messages - there will be old changes if replica identity set to full or empty changes
 	Data map[string]any `json:"data"`
-}
-
-// StreamMessageMetrics represents the metrics of a stream. Passed to each message
-type StreamMessageMetrics struct {
-	WALLagBytes *int64 `json:"wal_lag_bytes"`
-	IsStreaming bool   `json:"is_streaming"`
 }
 
 // StreamMode represents the mode of the stream at the time of the message
@@ -37,8 +30,7 @@ const (
 
 // StreamMessage represents a single message after it has been decoded by the plugin
 type StreamMessage struct {
-	Lsn         *string                `json:"lsn"`
-	Changes     []StreamMessageChanges `json:"changes"`
-	Mode        StreamMode             `json:"mode"`
-	WALLagBytes *int64                 `json:"wal_lag_bytes,omitempty"`
+	Lsn     *string                `json:"lsn"`
+	Changes []StreamMessageChanges `json:"changes"`
+	Mode    StreamMode             `json:"mode"`
 }
