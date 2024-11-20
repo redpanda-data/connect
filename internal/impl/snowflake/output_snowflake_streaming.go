@@ -21,6 +21,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
 
+	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/capped"
 	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming"
 )
 
@@ -318,6 +319,11 @@ func newSnowflakeStreamer(
 		channelPrefix = fmt.Sprintf("Redpanda_Connect_%s.%s.%s", db, schema, table)
 	}
 
+	maxInFlight, err := conf.FieldMaxInFlight()
+	if err != nil {
+		return nil, err
+	}
+
 	// Normalize role, db and schema as they are case-sensitive in the API calls.
 	// Maybe we should use the golang SQL driver for SQL statements so we don't have
 	// to handle this, instead of the REST API directly.
@@ -386,14 +392,13 @@ func newSnowflakeStreamer(
 		schemaEvolutionMapping: schemaEvolutionMapping,
 		restClient:             restClient,
 	}
+	o.channelPool = capped.NewPool(maxInFlight, o.openNewChannel)
 	return o, nil
 }
 
 type snowflakeStreamerOutput struct {
 	client                 *streaming.SnowflakeServiceClient
-	channelPool            sync.Pool
-	channelCreationMu      sync.Mutex
-	poolSize               int
+	channelPool            capped.Pool[*streaming.SnowflakeIngestionChannel]
 	compressedOutput       *service.MetricCounter
 	uploadTime             *service.MetricTimer
 	buildTime              *service.MetricTimer
@@ -411,16 +416,9 @@ type snowflakeStreamerOutput struct {
 }
 
 func (o *snowflakeStreamerOutput) openNewChannel(ctx context.Context) (*streaming.SnowflakeIngestionChannel, error) {
-	// Use a lock here instead of an atomic because this should not be called at steady state and it's better to limit
-	// creating extra channels when there is a limit of 10K.
-	o.channelCreationMu.Lock()
-	defer o.channelCreationMu.Unlock()
-	name := fmt.Sprintf("%s_%d", o.channelPrefix, o.poolSize)
-	client, err := o.openChannel(ctx, name, int16(o.poolSize))
-	if err == nil {
-		o.poolSize++
-	}
-	return client, err
+	id := o.channelPool.Size()
+	name := fmt.Sprintf("%s_%d", o.channelPrefix, id)
+	return o.openChannel(ctx, name, int16(id))
 }
 
 func (o *snowflakeStreamerOutput) schemaEvolutionEnabled() bool {
@@ -428,7 +426,7 @@ func (o *snowflakeStreamerOutput) schemaEvolutionEnabled() bool {
 }
 
 func (o *snowflakeStreamerOutput) hasOpenedChannels() bool {
-	return o.poolSize > 0
+	return o.channelPool.Size() > 0
 }
 
 func (o *snowflakeStreamerOutput) openChannel(ctx context.Context, name string, id int16) (*streaming.SnowflakeIngestionChannel, error) {
@@ -453,21 +451,22 @@ func (o *snowflakeStreamerOutput) Connect(ctx context.Context) error {
 		o.initStatementsFn = nil
 	}
 	// Precreate a single channel so we know stuff works, otherwise we'll create them on demand.
-	c, err := o.openNewChannel(ctx)
-	if err != nil {
-		// It's possible we couldn't open the channel because the table doesn't exist - let's check that.
-		autoCreate, autoCreateErr := o.WillAutoCreateTable(ctx)
-		// If we know we don't have an output table and schema evolution is enabled, then don't create
-		// any channels - we'll do it lazily after we can create the table (which we need data for).
-		if autoCreateErr == nil && autoCreate {
-			o.logger.Debug("determined table does not exist, waiting to auto-create the table until we have data")
-			return nil
-		}
-
-		return fmt.Errorf("unable to open snowflake streaming channel: %w", err)
+	c, err := o.channelPool.Acquire(ctx)
+	if err == nil {
+		// We succeeded! Put the channel back and move on.
+		o.channelPool.Release(c)
+		return nil
 	}
-	o.channelPool.Put(c)
-	return nil
+	// It's possible we couldn't open the channel because the table doesn't exist - let's check that.
+	autoCreate, autoCreateErr := o.WillAutoCreateTable(ctx)
+	// If we know we don't have an output table and schema evolution is enabled, then don't create
+	// any channels - we'll do it lazily after we can create the table (which we need data for).
+	if autoCreateErr == nil && autoCreate {
+		o.logger.Debug("determined table does not exist, waiting to auto-create the table until we have data")
+		return nil
+	}
+
+	return fmt.Errorf("unable to open snowflake streaming channel: %w", err)
 }
 
 func (o *snowflakeStreamerOutput) WillAutoCreateTable(ctx context.Context) (bool, error) {
@@ -543,50 +542,44 @@ func (o *snowflakeStreamerOutput) WriteBatch(ctx context.Context, batch service.
 func (o *snowflakeStreamerOutput) WriteBatchInternal(ctx context.Context, batch service.MessageBatch) error {
 	o.schemaMigrationMu.RLock()
 	defer o.schemaMigrationMu.RUnlock()
-	var channel *streaming.SnowflakeIngestionChannel
-	if maybeChan := o.channelPool.Get(); maybeChan != nil {
-		channel = maybeChan.(*streaming.SnowflakeIngestionChannel)
-	} else {
-		var err error
-		if channel, err = o.openNewChannel(ctx); err != nil {
-			return fmt.Errorf("unable to open snowflake streaming channel: %w", err)
-		}
+	channel, err := o.channelPool.Acquire(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to open snowflake streaming channel: %w", err)
 	}
 	o.logger.Debugf("inserting rows using channel %s", channel.Name)
 	stats, err := channel.InsertRows(ctx, batch)
-	if err == nil {
-		o.logger.Debugf("done inserting rows using channel %s, stats: %+v", channel.Name, stats)
-		o.compressedOutput.Incr(int64(stats.CompressedOutputSize))
-		o.uploadTime.Timing(stats.UploadTime.Nanoseconds())
-		o.buildTime.Timing(stats.BuildTime.Nanoseconds())
-		o.convertTime.Timing(stats.ConvertTime.Nanoseconds())
-		o.serializeTime.Timing(stats.SerializeTime.Nanoseconds())
-	} else {
+	if err != nil {
 		// Only evolve the schema if requested.
 		if o.schemaEvolutionEnabled() {
 			schemaErr, ok := asSchemaMigrationError(o, err)
 			if ok {
 				// put the channel back so that we can reopen it along with the rest of the channels to
 				// pick up the new schema.
-				o.channelPool.Put(channel)
+				o.channelPool.Release(channel)
 				return schemaErr
 			}
 		}
 		reopened, reopenErr := o.openChannel(ctx, channel.Name, channel.ID)
 		if reopenErr == nil {
-			o.channelPool.Put(reopened)
+			o.channelPool.Release(reopened)
 		} else {
 			o.logger.Warnf("unable to reopen channel %q after failure: %v", channel.Name, reopenErr)
-			// Keep around the same channel just in case so we don't keep creating new channels.
-			o.channelPool.Put(channel)
+			// Keep around the same channel so retry opening later
+			o.channelPool.Release(channel)
 		}
 		return wrapInsertError(err)
 	}
+	o.logger.Debugf("done inserting rows using channel %s, stats: %+v", channel.Name, stats)
+	o.compressedOutput.Incr(int64(stats.CompressedOutputSize))
+	o.uploadTime.Timing(stats.UploadTime.Nanoseconds())
+	o.buildTime.Timing(stats.BuildTime.Nanoseconds())
+	o.convertTime.Timing(stats.ConvertTime.Nanoseconds())
+	o.serializeTime.Timing(stats.SerializeTime.Nanoseconds())
 	polls, err := channel.WaitUntilCommitted(ctx)
 	if err == nil {
 		o.logger.Tracef("batch committed in snowflake after %d polls", polls)
 	}
-	o.channelPool.Put(channel)
+	o.channelPool.Release(channel)
 	return err
 }
 
@@ -597,6 +590,8 @@ func asSchemaMigrationError(o *snowflakeStreamerOutput, err error) (schemaMigrat
 		// to forcibly reopen all our channels to get a new schema.
 		return schemaMigrationNeededError{
 			migrator: func(ctx context.Context) error {
+				o.schemaMigrationMu.Lock()
+				defer o.schemaMigrationMu.Unlock()
 				if err := o.MigrateNotNullColumn(ctx, nullColumnErr); err != nil {
 					return err
 				}
@@ -608,6 +603,8 @@ func asSchemaMigrationError(o *snowflakeStreamerOutput, err error) (schemaMigrat
 	if errors.As(err, &missingColumnErr) {
 		return schemaMigrationNeededError{
 			migrator: func(ctx context.Context) error {
+				o.schemaMigrationMu.Lock()
+				defer o.schemaMigrationMu.Unlock()
 				if err := o.MigrateMissingColumn(ctx, missingColumnErr); err != nil {
 					return err
 				}
@@ -619,6 +616,8 @@ func asSchemaMigrationError(o *snowflakeStreamerOutput, err error) (schemaMigrat
 	if errors.As(err, &batchErr) {
 		return schemaMigrationNeededError{
 			migrator: func(ctx context.Context) error {
+				o.schemaMigrationMu.Lock()
+				defer o.schemaMigrationMu.Unlock()
 				for _, missingCol := range batchErr.Errors {
 					// TODO(rockwood): Consider a batch SQL statement that adds N columns at a time
 					if err := o.MigrateMissingColumn(ctx, missingCol); err != nil {
@@ -662,8 +661,6 @@ func (o *snowflakeStreamerOutput) ComputeMissingColumnType(col streaming.Missing
 }
 
 func (o *snowflakeStreamerOutput) MigrateMissingColumn(ctx context.Context, col streaming.MissingColumnError) error {
-	o.schemaMigrationMu.Lock()
-	defer o.schemaMigrationMu.Unlock()
 	columnType, err := o.ComputeMissingColumnType(col)
 	if err != nil {
 		return err
@@ -688,8 +685,6 @@ func (o *snowflakeStreamerOutput) MigrateMissingColumn(ctx context.Context, col 
 }
 
 func (o *snowflakeStreamerOutput) MigrateNotNullColumn(ctx context.Context, col streaming.NonNullColumnError) error {
-	o.schemaMigrationMu.Lock()
-	defer o.schemaMigrationMu.Unlock()
 	o.logger.Infof("identified new schema - attempting to alter table to remove null constraint on column: %s", col.ColumnName())
 	err := o.RunSQLMigration(
 		ctx,
@@ -767,11 +762,10 @@ func (o *snowflakeStreamerOutput) RunSQLMigration(ctx context.Context, statement
 func (o *snowflakeStreamerOutput) ReopenAllChannels(ctx context.Context) error {
 	all := []*streaming.SnowflakeIngestionChannel{}
 	for {
-		maybeChan := o.channelPool.Get()
-		if maybeChan == nil {
+		channel, ok := o.channelPool.TryAcquireExisting()
+		if !ok {
 			break
 		}
-		channel := maybeChan.(*streaming.SnowflakeIngestionChannel)
 		reopened, reopenErr := o.openChannel(ctx, channel.Name, channel.ID)
 		if reopenErr == nil {
 			channel = reopened
@@ -782,7 +776,7 @@ func (o *snowflakeStreamerOutput) ReopenAllChannels(ctx context.Context) error {
 		all = append(all, channel)
 	}
 	for _, c := range all {
-		o.channelPool.Put(c)
+		o.channelPool.Release(c)
 	}
 	return nil
 }

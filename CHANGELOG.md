@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 - Field `metadata_max_age` added to the `redpanda_migrator_offsets` output. (@mihaitodor)
 - Field `kafka_timestamp_ms` added to the `kafka`, `kafka_franz`, `redpanda`, `redpanda_common` and `redpanda_migrator` outputs. (@mihaitodor)
 
+### Fixed
+
+- Addresses an issue where `snowflake_streaming` could create more channels than configured. (@rockwotj)
+
 ### Changed
 
 - `snowflake_streaming` with `schema_evolution.enabled` set to true can now autocreate tables.
