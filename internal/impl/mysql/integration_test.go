@@ -81,10 +81,6 @@ func TestIntegrationMySQLCDC(t *testing.T) {
 			db.SetMaxIdleConns(5)
 			db.SetConnMaxLifetime(time.Minute * 5)
 
-			if err != nil {
-				return err
-			}
-
 			return db.Ping()
 		})
 		require.NoError(t, err)
@@ -244,10 +240,6 @@ func TestIntegrationMySQLSnapshotAndCDC(t *testing.T) {
 		db.SetMaxIdleConns(5)
 		db.SetConnMaxLifetime(time.Minute * 5)
 
-		if err != nil {
-			return err
-		}
-
 		return db.Ping()
 	})
 	require.NoError(t, err)
@@ -376,10 +368,6 @@ func TestIntegrationMySQLCDCWithCompositePrimaryKeys(t *testing.T) {
 		db.SetMaxIdleConns(5)
 		db.SetConnMaxLifetime(time.Minute * 5)
 
-		if err != nil {
-			return err
-		}
-
 		return db.Ping()
 	})
 	require.NoError(t, err)
@@ -392,6 +380,7 @@ func TestIntegrationMySQLCDCWithCompositePrimaryKeys(t *testing.T) {
         PRIMARY KEY (a, b)
     )
 `)
+	require.NoError(t, err)
 
 	// Create controll table to ensure we don't stream it
 	_, err = db.Exec(`

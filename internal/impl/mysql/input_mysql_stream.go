@@ -37,8 +37,6 @@ const (
 	fieldCheckpointKey             = "checkpoint_key"
 	fieldCheckpointLimit           = "checkpoint_limit"
 	fieldFlavor                    = "flavor"
-
-	shutdownTimeout = 5 * time.Second
 )
 
 var mysqlStreamConfigSpec = service.NewConfigSpec().
@@ -97,7 +95,6 @@ type mysqlStreamInput struct {
 	batchPolicy           *service.Batcher
 	tablesFilterMap       map[string]bool
 	checkPointLimit       int
-	lastGtid              *string
 
 	logger *service.Logger
 	res    *service.Resources
@@ -286,7 +283,7 @@ func (i *mysqlStreamInput) readMessages(ctx context.Context) {
 				break
 			}
 
-			if ok := i.flushBatch(ctx, i.cp, flushedBatch, latestPos); !ok {
+			if !i.flushBatch(ctx, i.cp, flushedBatch, latestPos) {
 				break
 			}
 		case me := <-i.rawMessageEvents:
@@ -310,7 +307,7 @@ func (i *mysqlStreamInput) readMessages(ctx context.Context) {
 					i.logger.Debugf("Flush batch error: %w", err)
 					break
 				}
-				if ok := i.flushBatch(ctx, i.cp, flushedBatch, latestPos); !ok {
+				if !i.flushBatch(ctx, i.cp, flushedBatch, latestPos) {
 					break
 				}
 			} else {
@@ -340,7 +337,11 @@ func (i *mysqlStreamInput) startMySQLSync(ctx context.Context) {
 			return
 		}
 
-		defer i.snapshot.releaseSnapshot(ctx)
+		defer func() {
+			if err = i.snapshot.releaseSnapshot(ctx); err != nil {
+				i.logger.Errorf("Failed to properly release snapshot %v", err)
+			}
+		}()
 		i.logger.Debugf("Starting snapshot while holding binglog pos on: %v", startPos)
 		var wg errgroup.Group
 		wg.SetLimit(i.snapshotMaxParallelTables)
@@ -494,12 +495,12 @@ func (i *mysqlStreamInput) flushBatch(ctx context.Context, checkpointer *checkpo
 	return true
 }
 
-func (i *mysqlStreamInput) onMessage(e *canal.RowsEvent, params ProcessEventParams) error {
+func (i *mysqlStreamInput) onMessage(e *canal.RowsEvent, initValue, incrementValue int) error {
 	i.mutex.Lock()
 	i.currentLogPosition.Pos = e.Header.LogPos
 	i.mutex.Unlock()
 
-	for pi := params.initValue; pi < len(e.Rows); pi += params.incrementValue {
+	for pi := initValue; pi < len(e.Rows); pi += incrementValue {
 		message := map[string]any{}
 		for i, v := range e.Rows[pi] {
 			message[e.Table.Columns[i].Name] = v
@@ -572,15 +573,12 @@ func (i *mysqlStreamInput) ReadBatch(ctx context.Context) (service.MessageBatch,
 }
 
 func (i *mysqlStreamInput) Close(ctx context.Context) error {
-	fmt.Println("Close has been called")
-	i.shutSig.TriggerHardStop()
 	if i.canal != nil {
 		i.canal.SyncedPosition()
 		i.canal.Close()
 	}
 
-	i.snapshot.releaseSnapshot(ctx)
-	return nil
+	return i.snapshot.releaseSnapshot(ctx)
 }
 
 // ---- Redpanda Connect specific methods end----
@@ -613,11 +611,11 @@ func (i *mysqlStreamInput) OnRow(e *canal.RowsEvent) error {
 
 	switch e.Action {
 	case canal.InsertAction:
-		return i.onMessage(e, ProcessEventParams{initValue: 0, incrementValue: 1})
+		return i.onMessage(e, 0, 1)
 	case canal.DeleteAction:
-		return i.onMessage(e, ProcessEventParams{initValue: 0, incrementValue: 1})
+		return i.onMessage(e, 0, 1)
 	case canal.UpdateAction:
-		return i.onMessage(e, ProcessEventParams{initValue: 1, incrementValue: 2})
+		return i.onMessage(e, 1, 2)
 	default:
 		return errors.New("invalid rows action")
 	}

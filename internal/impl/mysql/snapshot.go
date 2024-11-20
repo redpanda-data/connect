@@ -18,6 +18,8 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
+// Snapshot represents a structure that prepares a transaction
+// and creates mysql consistent snapshot inside the transaction
 type Snapshot struct {
 	db *sql.DB
 	tx *sql.Tx
@@ -29,6 +31,7 @@ type Snapshot struct {
 	ctx    context.Context
 }
 
+// NewSnapshot creates new snapshot instance
 func NewSnapshot(ctx context.Context, logger *service.Logger, db *sql.DB) *Snapshot {
 	return &Snapshot{
 		db:     db,
@@ -61,13 +64,18 @@ func (s *Snapshot) prepareSnapshot(ctx context.Context) (*mysql.Position, error)
 
 	// Execute START TRANSACTION WITH CONSISTENT SNAPSHOT
 	if _, err := s.tx.ExecContext(ctx, "START TRANSACTION WITH CONSISTENT SNAPSHOT"); err != nil {
-		s.tx.Rollback()
+		if rErr := s.tx.Rollback(); rErr != nil {
+			return nil, rErr
+		}
+
 		return nil, fmt.Errorf("failed to start consistent snapshot: %v", err)
 	}
 
 	// 2. Acquire global read lock (minimizing lock time)
 	if _, err := s.lockConn.ExecContext(ctx, "FLUSH TABLES WITH READ LOCK"); err != nil {
-		s.tx.Rollback()
+		if rErr := s.tx.Rollback(); rErr != nil {
+			return nil, rErr
+		}
 		return nil, fmt.Errorf("failed to acquire global read lock: %v", err)
 	}
 
@@ -75,14 +83,21 @@ func (s *Snapshot) prepareSnapshot(ctx context.Context) (*mysql.Position, error)
 	pos, err := s.getCurrentBinlogPosition()
 	if err != nil {
 		// Make sure to release the lock if we fail
-		s.lockConn.ExecContext(ctx, "UNLOCK TABLES")
-		s.tx.Rollback()
+		if _, eErr := s.lockConn.ExecContext(ctx, "UNLOCK TABLES"); eErr != nil {
+			return nil, eErr
+		}
+
+		if rErr := s.tx.Rollback(); rErr != nil {
+			return nil, rErr
+		}
 		return nil, fmt.Errorf("failed to get binlog position: %v", err)
 	}
 
 	// 4. Release the global read lock immediately
 	if _, err := s.lockConn.ExecContext(ctx, "UNLOCK TABLES"); err != nil {
-		s.tx.Rollback()
+		if rErr := s.tx.Rollback(); rErr != nil {
+			return nil, rErr
+		}
 		return nil, fmt.Errorf("failed to release global read lock: %v", err)
 	}
 
@@ -91,7 +106,7 @@ func (s *Snapshot) prepareSnapshot(ctx context.Context) (*mysql.Position, error)
 
 func (s *Snapshot) getRowsCount(table string) (int, error) {
 	var count int
-	if err := s.tx.QueryRowContext(s.ctx, fmt.Sprintf("SELECT COUNT(*) FROM %s", table)).Scan(&count); err != nil {
+	if err := s.tx.QueryRowContext(s.ctx, "SELECT COUNT(*) FROM "+table).Scan(&count); err != nil {
 		return 0, fmt.Errorf("failed to get row count: %v", err)
 	}
 	return count, nil
@@ -125,7 +140,7 @@ WHERE TABLE_NAME = '%s' AND CONSTRAINT_NAME = 'PRIMARY';
 
 func (s *Snapshot) querySnapshotTable(table string, pk []string, lastSeenPkVal *map[string]any, limit int) (*sql.Rows, error) {
 	snapshotQueryParts := []string{
-		fmt.Sprintf("SELECT * FROM %s ", table),
+		"SELECT * FROM " + table,
 	}
 
 	if lastSeenPkVal == nil {
@@ -154,23 +169,25 @@ func (s *Snapshot) querySnapshotTable(table string, pk []string, lastSeenPkVal *
 
 func (s *Snapshot) buildOrderByClause(pk []string) string {
 	if len(pk) == 1 {
-		return fmt.Sprintf("ORDER BY %s", pk[0])
+		return "ORDER BY " + pk[0]
 	}
 
-	return fmt.Sprintf("ORDER BY %s", strings.Join(pk, ", "))
+	return "ORDER BY " + strings.Join(pk, ", ")
 }
 
 func (s *Snapshot) getCurrentBinlogPosition() (mysql.Position, error) {
 	var (
-		position        uint32
-		file            string
-		binlogDoDb      interface{}
-		binlogIgnoreDb  interface{}
+		position uint32
+		file     string
+		// binlogDoDB, binlogIgnoreDB intentionally non-used
+		// required to scan response
+		binlogDoDB      interface{}
+		binlogIgnoreDB  interface{}
 		executedGtidSet interface{}
 	)
 
 	row := s.snapshotConn.QueryRowContext(context.Background(), "SHOW MASTER STATUS")
-	if err := row.Scan(&file, &position, &binlogDoDb, &binlogIgnoreDb, &executedGtidSet); err != nil {
+	if err := row.Scan(&file, &position, &binlogDoDB, &binlogIgnoreDB, &executedGtidSet); err != nil {
 		return mysql.Position{}, err
 	}
 
