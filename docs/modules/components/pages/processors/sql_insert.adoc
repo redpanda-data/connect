@@ -61,6 +61,7 @@ sql_insert:
   args_mapping: root = [ this.cat.meow, this.doc.woofs[0] ] # No default (required)
   prefix: "" # No default (optional)
   suffix: ON CONFLICT (name) DO NOTHING # No default (optional)
+  options: [] # No default (optional)
   init_files: [] # No default (optional)
   init_statement: | # No default (optional)
     CREATE TABLE IF NOT EXISTS some_table (
@@ -262,6 +263,22 @@ An optional suffix to append to the insert query.
 # Examples
 
 suffix: ON CONFLICT (name) DO NOTHING
+```
+
+=== `options`
+
+A list of keyword options to add before the INTO clause of the query.
+
+
+*Type*: `array`
+
+
+```yml
+# Examples
+
+options:
+  - DELAYED
+  - IGNORE
 ```
 
 === `init_files`
