@@ -107,7 +107,7 @@ func TestAvroReferences(t *testing.T) {
 			encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, true, time.Minute*10, time.Minute, service.MockResources())
 			require.NoError(t, err)
 
-			decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, true, service.MockResources())
+			decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, true, false, service.MockResources())
 			require.NoError(t, err)
 
 			t.Cleanup(func() {
