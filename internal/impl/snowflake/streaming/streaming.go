@@ -206,7 +206,7 @@ func (c *SnowflakeServiceClient) OpenChannel(ctx context.Context, opts ChannelOp
 		ChannelOptions: opts,
 		clientPrefix:   c.clientPrefix,
 		schema:         schema,
-		version:        c.options.ConnectVersion,
+		parquetWriter:  newParquetWriter(c.options.ConnectVersion, schema),
 		client:         c.client,
 		role:           c.options.Role,
 		uploader:       c.uploader,
@@ -281,7 +281,7 @@ type SnowflakeIngestionChannel struct {
 	ChannelOptions
 	role            string
 	clientPrefix    string
-	version         string
+	parquetWriter   *parquetWriter
 	schema          *parquet.Schema
 	client          *SnowflakeRestClient
 	uploader        *typed.AtomicValue[stageUploaderResult]
@@ -358,11 +358,7 @@ func (c *SnowflakeIngestionChannel) constructBdecPart(batch service.MessageBatch
 	}
 	// TODO(perf): It would be really nice to be able to compress in parallel,
 	// that actually ends up taking quite of bit of CPU.
-	buf, err := writeParquetFile(c.version, parquetFileData{
-		schema:   c.schema,
-		rows:     allRows,
-		metadata: metadata,
-	})
+	buf, err := c.parquetWriter.WriteFile(allRows, metadata)
 	if err != nil {
 		return bdecPart{}, err
 	}

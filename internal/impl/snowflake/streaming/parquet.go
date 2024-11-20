@@ -114,36 +114,46 @@ func constructRowGroup(
 	return rows, stats, nil
 }
 
-type parquetFileData struct {
-	schema   *parquet.Schema
-	rows     []parquet.Row
-	metadata map[string]string
+type parquetWriter struct {
+	b *bytes.Buffer
+	w *parquet.GenericWriter[any]
 }
 
-func writeParquetFile(rpcnVersion string, data parquetFileData) (out []byte, err error) {
+func newParquetWriter(rpcnVersion string, schema *parquet.Schema) *parquetWriter {
 	b := bytes.NewBuffer(nil)
-	pw := parquet.NewGenericWriter[any](
+	w := parquet.NewGenericWriter[any](
 		b,
-		data.schema,
+		schema,
 		parquet.CreatedBy("RedpandaConnect", rpcnVersion, "unknown"),
 		// Recommended by the Snowflake team to enable data page stats
 		parquet.DataPageStatistics(true),
 		parquet.Compression(&parquet.Zstd),
+		parquet.WriteBufferSize(0),
 	)
-	for k, v := range data.metadata {
-		pw.SetKeyValueMetadata(k, v)
+	return &parquetWriter{b, w}
+}
+
+// WriteFile writes a new parquet file using the rows and metadata.
+//
+// NOTE: metadata is sticky - if you want the next file to remove metadata you need to set the value to the empty string
+// to actually remove it. In the usage of this method in this package, the metadata keys are all always the same.
+func (w *parquetWriter) WriteFile(rows []parquet.Row, metadata map[string]string) (out []byte, err error) {
+	for k, v := range metadata {
+		w.w.SetKeyValueMetadata(k, v)
 	}
+	w.b.Reset()
+	w.w.Reset(w.b)
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("encoding panic: %v", r)
 		}
 	}()
-	_, err = pw.WriteRows(data.rows)
+	_, err = w.w.WriteRows(rows)
 	if err != nil {
 		return
 	}
-	err = pw.Close()
-	out = b.Bytes()
+	err = w.w.Close()
+	out = w.b.Bytes()
 	return
 }
 
