@@ -88,11 +88,11 @@ func TestAllSnowflakeDatatypes(t *testing.T) {
 	ctx := context.Background()
 	restClient, streamClient := setup(t)
 	channelOpts := streaming.ChannelOptions{
-		Name:             t.Name(),
-		DatabaseName:     envOr("SNOWFLAKE_DB", "BABY_DATABASE"),
-		SchemaName:       "PUBLIC",
-		TableName:        "TEST_TABLE_KITCHEN_SINK",
-		BuildParallelism: 1,
+		Name:         t.Name(),
+		DatabaseName: envOr("SNOWFLAKE_DB", "BABY_DATABASE"),
+		SchemaName:   "PUBLIC",
+		TableName:    "TEST_TABLE_KITCHEN_SINK",
+		BuildOptions: streaming.BuildOptions{Parallelism: 1, ChunkSize: 50_000},
 	}
 	_, err := restClient.RunSQL(ctx, streaming.RunSQLRequest{
 		Database: channelOpts.DatabaseName,
@@ -273,11 +273,11 @@ func TestIntegerCompat(t *testing.T) {
 	ctx := context.Background()
 	restClient, streamClient := setup(t)
 	channelOpts := streaming.ChannelOptions{
-		Name:             t.Name(),
-		DatabaseName:     envOr("SNOWFLAKE_DB", "BABY_DATABASE"),
-		SchemaName:       "PUBLIC",
-		TableName:        "TEST_INT_TABLE",
-		BuildParallelism: 1,
+		Name:         t.Name(),
+		DatabaseName: envOr("SNOWFLAKE_DB", "BABY_DATABASE"),
+		SchemaName:   "PUBLIC",
+		TableName:    "TEST_INT_TABLE",
+		BuildOptions: streaming.BuildOptions{Parallelism: 1, ChunkSize: 50_000},
 	}
 	_, err := restClient.RunSQL(ctx, streaming.RunSQLRequest{
 		Database: channelOpts.DatabaseName,
@@ -348,11 +348,11 @@ func TestTimestampCompat(t *testing.T) {
 	ctx := context.Background()
 	restClient, streamClient := setup(t)
 	channelOpts := streaming.ChannelOptions{
-		Name:             t.Name(),
-		DatabaseName:     envOr("SNOWFLAKE_DB", "BABY_DATABASE"),
-		SchemaName:       "PUBLIC",
-		TableName:        "TEST_TIMESTAMP_TABLE",
-		BuildParallelism: 1,
+		Name:         t.Name(),
+		DatabaseName: envOr("SNOWFLAKE_DB", "BABY_DATABASE"),
+		SchemaName:   "PUBLIC",
+		TableName:    "TEST_TIMESTAMP_TABLE",
+		BuildOptions: streaming.BuildOptions{Parallelism: 1, ChunkSize: 50_000},
 	}
 	var columnDefs []string
 	var columnNames []string

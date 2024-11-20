@@ -39,7 +39,10 @@ const (
 	ssoFieldBatching                            = "batching"
 	ssoFieldChannelPrefix                       = "channel_prefix"
 	ssoFieldMapping                             = "mapping"
-	ssoFieldBuildParallelism                    = "build_parallelism"
+	ssoFieldBuildOpts                           = "build_options"
+	ssoFieldBuildParallelismLegacy              = "build_parallelism"
+	ssoFieldBuildParallelism                    = "parallelism"
+	ssoFieldBuildChunkSize                      = "chunk_size"
 	ssoFieldSchemaEvolution                     = "schema_evolution"
 	ssoFieldSchemaEvolutionEnabled              = "enabled"
 	ssoFieldSchemaEvolutionNewColumnTypeMapping = "new_column_type_mapping"
@@ -113,7 +116,11 @@ The mapping function from Redpanda Connect type to column type in Snowflake. Ove
 
 The input to this mapping is an object with the value and the name of the new column, for example: `+"`"+`{"value": 42.3, "name":"new_data_field"}`+`"`).Default(defaultSchemaEvolutionNewColumnMapping),
 			).Description(`Options to control schema evolution within the pipeline as new columns are added to the pipeline.`).Optional(),
-			service.NewIntField(ssoFieldBuildParallelism).Description("The maximum amount of parallelism to use when building the output for Snowflake. The metric to watch to see if you need to change this is `snowflake_build_output_latency_ns`.").Default(1).Advanced(),
+			service.NewIntField(ssoFieldBuildParallelism).Description("The maximum amount of parallelism to use when building the output for Snowflake. The metric to watch to see if you need to change this is `snowflake_build_output_latency_ns`.").Optional().Advanced().Deprecated(),
+			service.NewObjectField(ssoFieldBuildOpts,
+				service.NewIntField(ssoFieldBuildParallelism).Description("The maximum amount of parallelism to use.").Default(1),
+				service.NewIntField(ssoFieldBuildChunkSize).Description("The number of rows to chunk for parallelization.").Default(50_000),
+			).Advanced().Description("Options to optimize the time to build output data that is sent to Snowflake. The metric to watch to see if you need to change this is `snowflake_build_output_latency_ns`."),
 			service.NewBatchPolicyField(ssoFieldBatching),
 			service.NewOutputMaxInFlightField().Default(4),
 			service.NewStringField(ssoFieldChannelPrefix).
@@ -302,10 +309,22 @@ func newSnowflakeStreamer(
 		}
 	}
 
-	buildParallelism, err := conf.FieldInt(ssoFieldBuildParallelism)
+	var buildOpts streaming.BuildOptions
+	buildOpts.Parallelism, err = conf.FieldInt(ssoFieldBuildOpts, ssoFieldBuildParallelism)
 	if err != nil {
 		return nil, err
 	}
+	buildOpts.ChunkSize, err = conf.FieldInt(ssoFieldBuildOpts, ssoFieldBuildChunkSize)
+	if err != nil {
+		return nil, err
+	}
+	if conf.Contains(ssoFieldBuildParallelismLegacy) {
+		buildOpts.Parallelism, err = conf.FieldInt(ssoFieldBuildParallelismLegacy)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	var channelPrefix string
 	if conf.Contains(ssoFieldChannelPrefix) {
 		channelPrefix, err = conf.FieldString(ssoFieldChannelPrefix)
@@ -388,7 +407,7 @@ func newSnowflakeStreamer(
 		serializeTime:          mgr.Metrics().NewTimer("snowflake_serialize_latency_ns"),
 		compressedOutput:       mgr.Metrics().NewCounter("snowflake_compressed_output_size_bytes"),
 		initStatementsFn:       initStatementsFn,
-		buildParallelism:       buildParallelism,
+		buildOpts:              buildOpts,
 		schemaEvolutionMapping: schemaEvolutionMapping,
 		restClient:             restClient,
 	}
@@ -404,7 +423,7 @@ type snowflakeStreamerOutput struct {
 	buildTime              *service.MetricTimer
 	convertTime            *service.MetricTimer
 	serializeTime          *service.MetricTimer
-	buildParallelism       int
+	buildOpts              streaming.BuildOptions
 	schemaEvolutionMapping *bloblang.Executor
 
 	schemaMigrationMu                      sync.RWMutex
@@ -437,7 +456,7 @@ func (o *snowflakeStreamerOutput) openChannel(ctx context.Context, name string, 
 		DatabaseName:            o.db,
 		SchemaName:              o.schema,
 		TableName:               o.table,
-		BuildParallelism:        o.buildParallelism,
+		BuildOptions:            o.buildOpts,
 		StrictSchemaEnforcement: o.schemaEvolutionEnabled(),
 	})
 }

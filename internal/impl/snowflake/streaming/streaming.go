@@ -155,6 +155,14 @@ func (c *SnowflakeServiceClient) registerBlobs(ctx context.Context, metadata []b
 	return resp.Blobs, nil
 }
 
+// BuildOptions is the options for building a parquet file
+type BuildOptions struct {
+	// The maximum parallelism
+	Parallelism int
+	// The number of rows to chunk for parallelism
+	ChunkSize int
+}
+
 // ChannelOptions the parameters to opening a channel using SnowflakeServiceClient
 type ChannelOptions struct {
 	// ID of this channel, should be unique per channel
@@ -168,7 +176,7 @@ type ChannelOptions struct {
 	// TableName is the name of the table
 	TableName string
 	// The max parallelism used to build parquet files and convert message batches into rows.
-	BuildParallelism int
+	BuildOptions BuildOptions
 	// If set to true, don't ignore extra columns in user data, but raise an error.
 	StrictSchemaEnforcement bool
 }
@@ -180,8 +188,11 @@ type encryptionInfo struct {
 
 // OpenChannel creates a new or reuses a channel to load data into a Snowflake table.
 func (c *SnowflakeServiceClient) OpenChannel(ctx context.Context, opts ChannelOptions) (*SnowflakeIngestionChannel, error) {
-	if opts.BuildParallelism <= 0 {
-		return nil, fmt.Errorf("invalid build parallelism: %d", opts.BuildParallelism)
+	if opts.BuildOptions.Parallelism <= 0 {
+		return nil, fmt.Errorf("invalid build parallelism: %d", opts.BuildOptions.Parallelism)
+	}
+	if opts.BuildOptions.ChunkSize <= 0 {
+		return nil, fmt.Errorf("invalid build chunk size: %d", opts.BuildOptions.ChunkSize)
 	}
 	resp, err := c.client.openChannel(ctx, openChannelRequest{
 		RequestID: c.nextRequestID(),
@@ -322,16 +333,16 @@ type bdecPart struct {
 
 func (c *SnowflakeIngestionChannel) constructBdecPart(batch service.MessageBatch, metadata map[string]string) (bdecPart, error) {
 	wg := &errgroup.Group{}
-	wg.SetLimit(c.BuildParallelism)
+	wg.SetLimit(c.BuildOptions.Parallelism)
 	type rowGroup struct {
 		rows  []parquet.Row
 		stats []*statsBuffer
 	}
 	rowGroups := []rowGroup{}
-	const maxRowGroupSize = 50_000
+	maxChunkSize := c.BuildOptions.ChunkSize
 	convertStart := time.Now()
-	for i := 0; i < len(batch); i += maxRowGroupSize {
-		end := min(maxRowGroupSize, len(batch[i:]))
+	for i := 0; i < len(batch); i += maxChunkSize {
+		end := min(maxChunkSize, len(batch[i:]))
 		j := len(rowGroups)
 		rowGroups = append(rowGroups, rowGroup{})
 		chunk := batch[i : i+end]
