@@ -16,6 +16,7 @@ import (
 	"crypto/md5"
 	"crypto/rsa"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"os"
@@ -507,7 +508,7 @@ func (c *SnowflakeIngestionChannel) WaitUntilCommitted(ctx context.Context) (int
 		}
 		status := resp.Channels[0]
 		if status.PersistedClientSequencer != c.clientSequencer {
-			return backoff.Permanent(fmt.Errorf("unexpected number of channels for status request: %d", len(resp.Channels)))
+			return backoff.Permanent(errors.New("channel client seqno has advanced - another process has reopened this channel"))
 		}
 		if status.PersistedRowSequencer < c.rowSequencer {
 			return fmt.Errorf("row sequencer not yet committed: %d < %d", status.PersistedRowSequencer, c.rowSequencer)
