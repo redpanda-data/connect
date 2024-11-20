@@ -711,7 +711,7 @@ output:
   kafka:
     addresses: [ localhost:$PORT ]
     topic: topic-$ID
-    timestamp: 666
+    timestamp_ms: 1000000000000
 
 input:
   kafka:
@@ -720,7 +720,7 @@ input:
     consumer_group: "blobfish"
   processors:
     - mapping: |
-        root = if metadata("kafka_timestamp_unix") != 666 { "error: invalid timestamp" }
+        root = if metadata("kafka_timestamp_ms") != 1000000000000 { "error: invalid timestamp" }
 `
 
 	suite := integration.StreamTests(

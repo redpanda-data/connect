@@ -16,7 +16,6 @@ package kafka
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -214,7 +213,7 @@ func FranzRecordToMessageV0(record *kgo.Record, multiHeader bool) *service.Messa
 	msg.MetaSetMut("kafka_partition", int(record.Partition))
 	msg.MetaSetMut("kafka_offset", int(record.Offset))
 	msg.MetaSetMut("kafka_timestamp_unix", record.Timestamp.Unix())
-	msg.MetaSetMut("kafka_timestamp", record.Timestamp.Format(time.RFC3339Nano))
+	msg.MetaSetMut("kafka_timestamp_ms", record.Timestamp.UnixMilli())
 	msg.MetaSetMut("kafka_tombstone_message", record.Value == nil)
 	if multiHeader {
 		// in multi header mode we gather headers so we can encode them as lists
@@ -245,7 +244,7 @@ func FranzRecordToMessageV1(record *kgo.Record) *service.Message {
 	msg.MetaSetMut("kafka_partition", int(record.Partition))
 	msg.MetaSetMut("kafka_offset", int(record.Offset))
 	msg.MetaSetMut("kafka_timestamp_unix", record.Timestamp.Unix())
-	msg.MetaSetMut("kafka_timestamp", record.Timestamp.Format(time.RFC3339Nano))
+	msg.MetaSetMut("kafka_timestamp_ms", record.Timestamp.UnixMilli())
 	msg.MetaSetMut("kafka_tombstone_message", record.Value == nil)
 
 	headers := map[string][]any{}

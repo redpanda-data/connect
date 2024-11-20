@@ -16,6 +16,7 @@ package kafka
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"slices"
@@ -204,11 +205,12 @@ func FranzProducerOptsFromConfig(conf *service.ParsedConfig) ([]kgo.Opt, error) 
 //------------------------------------------------------------------------------
 
 const (
-	kfwFieldTopic     = "topic"
-	kfwFieldKey       = "key"
-	kfwFieldPartition = "partition"
-	kfwFieldMetadata  = "metadata"
-	kfwFieldTimestamp = "timestamp"
+	kfwFieldTopic       = "topic"
+	kfwFieldKey         = "key"
+	kfwFieldPartition   = "partition"
+	kfwFieldMetadata    = "metadata"
+	kfwFieldTimestamp   = "timestamp"
+	kfwFieldTimestampMs = "timestamp_ms"
 )
 
 // FranzWriterConfigFields returns a slice of config fields specifically for
@@ -231,17 +233,34 @@ func FranzWriterConfigFields() []*service.ConfigField {
 			Example(`${! timestamp_unix() }`).
 			Example(`${! metadata("kafka_timestamp_unix") }`).
 			Optional().
+			Advanced().
+			Deprecated(),
+		service.NewInterpolatedStringField(kfwFieldTimestampMs).
+			Description("An optional timestamp to set for each message expressed in milliseconds. When left empty, the current timestamp is used.").
+			Example(`${! timestamp_unix_milli() }`).
+			Example(`${! metadata("kafka_timestamp_ms") }`).
+			Optional().
 			Advanced(),
 	}
 }
 
+// FranzWriterConfigLints returns the linter rules for a the writer config.
+func FranzWriterConfigLints() string {
+	return `root = match {
+  this.partitioner == "manual" && this.partition.or("") == "" => "a partition must be specified when the partitioner is set to manual"
+  this.partitioner != "manual" && this.partition.or("") != "" => "a partition cannot be specified unless the partitioner is set to manual"
+  this.timestamp.or("") != "" && this.timestamp_ms.or("") != "" => "both timestamp and timestamp_ms cannot be specified simultaneously"
+}`
+}
+
 // FranzWriter implements a Kafka writer using the franz-go library.
 type FranzWriter struct {
-	Topic      *service.InterpolatedString
-	Key        *service.InterpolatedString
-	Partition  *service.InterpolatedString
-	Timestamp  *service.InterpolatedString
-	MetaFilter *service.MetadataFilter
+	Topic         *service.InterpolatedString
+	Key           *service.InterpolatedString
+	Partition     *service.InterpolatedString
+	Timestamp     *service.InterpolatedString
+	IsTimestampMs bool
+	MetaFilter    *service.MetadataFilter
 
 	accessClientFn func(FranzSharedClientUseFn) error
 	yieldClientFn  func(context.Context) error
@@ -279,11 +298,23 @@ func NewFranzWriterFromConfig(conf *service.ParsedConfig, accessClientFn func(Fr
 		}
 	}
 
+	if conf.Contains(kfwFieldTimestamp) && conf.Contains(kfwFieldTimestampMs) {
+		return nil, errors.New("cannot specify both timestamp and timestamp_ms fields")
+	}
+
 	if conf.Contains(kfwFieldTimestamp) {
 		if w.Timestamp, err = conf.FieldInterpolatedString(kfwFieldTimestamp); err != nil {
 			return nil, err
 		}
 	}
+
+	if conf.Contains(kfwFieldTimestampMs) {
+		if w.Timestamp, err = conf.FieldInterpolatedString(kfwFieldTimestampMs); err != nil {
+			return nil, err
+		}
+		w.IsTimestampMs = true
+	}
+
 	return &w, nil
 }
 
@@ -347,7 +378,11 @@ func (w *FranzWriter) BatchToRecords(ctx context.Context, b service.MessageBatch
 				if ts, err := strconv.ParseInt(tsStr, 10, 64); err != nil {
 					return nil, fmt.Errorf("failed to parse timestamp: %w", err)
 				} else {
-					record.Timestamp = time.Unix(ts, 0)
+					if w.IsTimestampMs {
+						record.Timestamp = time.UnixMilli(ts)
+					} else {
+						record.Timestamp = time.Unix(ts, 0)
+					}
 				}
 			}
 		}

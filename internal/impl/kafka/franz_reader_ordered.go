@@ -250,7 +250,7 @@ func (c *partitionState) pop() *batchWithAckFn {
 	return nil
 }
 
-func (c *partitionState) addRecords(ctx context.Context, topic string, partition int32, batch *batchWithRecords, bufferSize uint64) (pauseFetch bool) {
+func (c *partitionState) addRecords(topic string, partition int32, batch *batchWithRecords, bufferSize uint64) (pauseFetch bool) {
 	c.mut.Lock()
 	defer c.mut.Unlock()
 
@@ -288,7 +288,7 @@ func (c *partitionState) pauseFetch(topic string, partition int32, limit uint64)
 	return partTracker.pauseFetch(limit)
 }
 
-func (c *partitionState) removeTopicPartitions(ctx context.Context, m map[string][]int32) {
+func (c *partitionState) removeTopicPartitions(m map[string][]int32) {
 	c.mut.Lock()
 	defer c.mut.Unlock()
 
@@ -355,17 +355,17 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 				if commitErr := c.CommitMarkedOffsets(rctx); commitErr != nil {
 					f.log.Errorf("Commit error on partition revoke: %v", commitErr)
 				}
-				checkpoints.removeTopicPartitions(rctx, m)
+				checkpoints.removeTopicPartitions(m)
 			}),
-			kgo.OnPartitionsLost(func(rctx context.Context, _ *kgo.Client, m map[string][]int32) {
+			kgo.OnPartitionsLost(func(_ context.Context, _ *kgo.Client, m map[string][]int32) {
 				// No point trying to commit our offsets, just clean up our topic map
-				checkpoints.removeTopicPartitions(rctx, m)
+				checkpoints.removeTopicPartitions(m)
 			}),
-			kgo.OnPartitionsAssigned(func(rctx context.Context, _ *kgo.Client, m map[string][]int32) {
+			kgo.OnPartitionsAssigned(func(_ context.Context, _ *kgo.Client, m map[string][]int32) {
 				for topic, parts := range m {
 					for _, part := range parts {
 						// Adds the partition to our checkpointer
-						checkpoints.addRecords(rctx, topic, part, nil, f.cacheLimit)
+						checkpoints.addRecords(topic, part, nil, f.cacheLimit)
 					}
 				}
 			}),
@@ -435,7 +435,7 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 			pauseTopicPartitions := map[string][]int32{}
 			fetches.EachPartition(func(p kgo.FetchTopicPartition) {
 				if len(p.Records) > 0 {
-					if checkpoints.addRecords(closeCtx, p.Topic, p.Partition, f.recordsToBatch(p.Records), f.cacheLimit) {
+					if checkpoints.addRecords(p.Topic, p.Partition, f.recordsToBatch(p.Records), f.cacheLimit) {
 						pauseTopicPartitions[p.Topic] = append(pauseTopicPartitions[p.Topic], p.Partition)
 					}
 				}

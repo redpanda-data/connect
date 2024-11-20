@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - New `pg_stream` input supporting change data capture (CDC) from PostgreSQL (@le-vlad)
 - Field `metadata_max_age` added to the `redpanda_migrator_offsets` output. (@mihaitodor)
+- Field `kafka_timestamp_ms` added to the `kafka`, `kafka_franz`, `redpanda`, `redpanda_common` and `redpanda_migrator` outputs. (@mihaitodor)
 
 ### Changed
 
@@ -16,6 +17,8 @@ All notable changes to this project will be documented in this file.
 - Fields `translate_schema_ids` and `schema_registry_output_resource` added to the `redpanda_migrator` output. (@mihaitodor)
 - Fields `backfill_dependencies` and `input_resource` added to the `schema_registry` output. (@mihaitodor)
 - The `schema_registry` input and output and the `schema_registry_encode` and `schema_registry_decode` processors now use the `github.com/twmb/franz-go/pkg/sr` SchemaRegistry client. (@mihaitodor)
+- Metadata field `kafka_timestamp_ms` added to the `kafka`, `kafka_franz`, `redpanda`, `redpanda_common` and `redpanda_migrator` inputs now contains a unix timestamp with millisecond precision. (@mihaitodor)
+- Metadata field `kafka_timestamp` removed from the `kafka`, `kafka_franz`, `redpanda`, `redpanda_common` and `redpanda_migrator` inputs. (@mihaitodor)
 
 ## 4.39.0 - 2024-11-07
 
