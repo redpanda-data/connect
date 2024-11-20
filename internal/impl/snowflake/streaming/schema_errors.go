@@ -10,15 +10,35 @@
 
 package streaming
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 // SchemaMismatchError occurs when the user provided data has data that
 // doesn't match the schema *and* the table can be evolved to accommodate
 //
 // This can be used as a mechanism to evolve the schema dynamically.
 type SchemaMismatchError interface {
+	error
 	ColumnName() string
 	Value() any
+}
+
+var _ error = BatchSchemaMismatchError[SchemaMismatchError]{}
+
+// BatchSchemaMismatchError is when multiple schema mismatch errors happen at once
+type BatchSchemaMismatchError[T SchemaMismatchError] struct {
+	Errors []T
+}
+
+// Error implements the error interface
+func (e BatchSchemaMismatchError[T]) Error() string {
+	errs := []error{}
+	for _, err := range e.Errors {
+		errs = append(errs, err)
+	}
+	return errors.Join(errs...).Error()
 }
 
 var _ error = NonNullColumnError{}
