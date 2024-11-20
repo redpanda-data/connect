@@ -523,10 +523,6 @@ func (s *Stream) processSnapshot() error {
 						s.monitor.UpdateSnapshotProgressForTable(tableWithoutSchema, rowsCount+offset)
 					}
 
-					tableProgress := s.monitor.GetSnapshotProgressForTable(tableWithoutSchema)
-					snapshotChangePacket.Changes[0].TableSnapshotProgress = &tableProgress
-					snapshotChangePacket.Mode = StreamModeSnapshot
-
 					waitingFromBenthos := time.Now()
 					select {
 					case s.messages <- snapshotChangePacket:
