@@ -67,6 +67,8 @@ type SnowflakeServiceClient struct {
 
 	uploader          *typed.AtomicValue[stageUploaderResult]
 	uploadRefreshLoop *asyncroutine.Periodic
+
+	flusher *asyncroutine.Batcher[blobMetadata, blobRegisterStatus]
 }
 
 // NewSnowflakeServiceClient creates a new API client for the Snowpipe Streaming API
@@ -116,6 +118,11 @@ func NewSnowflakeServiceClient(ctx context.Context, opts ClientOptions) (*Snowfl
 		}),
 		requestIDCounter: &atomic.Int64{},
 	}
+	// Flush up to 100 blobs at once, that seems like a fairly high upper bound
+	ssc.flusher, err = asyncroutine.NewBatcher(100, ssc.registerBlobs)
+	if err != nil {
+		return nil, err
+	}
 	ssc.uploadRefreshLoop.Start()
 	return ssc, nil
 }
@@ -130,6 +137,22 @@ func (c *SnowflakeServiceClient) Close() error {
 func (c *SnowflakeServiceClient) nextRequestID() string {
 	rid := c.requestIDCounter.Add(1)
 	return fmt.Sprintf("%s_%d", c.clientPrefix, rid)
+}
+
+func (c *SnowflakeServiceClient) registerBlobs(ctx context.Context, metadata []blobMetadata) ([]blobRegisterStatus, error) {
+	req := registerBlobRequest{
+		RequestID: c.nextRequestID(),
+		Role:      c.options.Role,
+		Blobs:     metadata,
+	}
+	resp, err := c.client.registerBlob(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != responseSuccess {
+		return nil, fmt.Errorf("unable to register blobs - status: %d, message: %s", resp.StatusCode, resp.Message)
+	}
+	return resp.Blobs, nil
 }
 
 // ChannelOptions the parameters to opening a channel using SnowflakeServiceClient
@@ -191,6 +214,7 @@ func (c *SnowflakeServiceClient) OpenChannel(ctx context.Context, opts ChannelOp
 			encryptionKeyID: resp.EncryptionKeyID,
 			encryptionKey:   resp.EncryptionKey,
 		},
+		flusher:          c.flusher,
 		clientSequencer:  resp.ClientSequencer,
 		rowSequencer:     resp.RowSequencer,
 		transformers:     transformers,
@@ -261,6 +285,7 @@ type SnowflakeIngestionChannel struct {
 	schema          *parquet.Schema
 	client          *SnowflakeRestClient
 	uploader        *typed.AtomicValue[stageUploaderResult]
+	flusher         *asyncroutine.Batcher[blobMetadata, blobRegisterStatus]
 	encryptionInfo  *encryptionInfo
 	clientSequencer int64
 	rowSequencer    int64
@@ -282,6 +307,7 @@ type InsertStats struct {
 	ConvertTime          time.Duration
 	SerializeTime        time.Duration
 	UploadTime           time.Duration
+	RegisterTime         time.Duration
 	CompressedOutputSize int
 }
 
@@ -399,45 +425,40 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 	}
 
 	uploadFinishTime := time.Now()
-	resp, err := c.client.registerBlob(ctx, registerBlobRequest{
-		RequestID: c.nextRequestID(),
-		Role:      c.role,
-		Blobs: []blobMetadata{
+
+	resp, err := c.flusher.Submit(ctx, blobMetadata{
+		Path:        blobPath,
+		MD5:         hex.EncodeToString(fullMD5Hash[:]),
+		BDECVersion: 3,
+		BlobStats: blobStats{
+			FlushStartMs:     startTime.UnixMilli(),
+			BuildDurationMs:  uploadStartTime.UnixMilli() - startTime.UnixMilli(),
+			UploadDurationMs: uploadFinishTime.UnixMilli() - uploadStartTime.UnixMilli(),
+		},
+		Chunks: []chunkMetadata{
 			{
-				Path:        blobPath,
-				MD5:         hex.EncodeToString(fullMD5Hash[:]),
-				BDECVersion: 3,
-				BlobStats: blobStats{
-					FlushStartMs:     startTime.UnixMilli(),
-					BuildDurationMs:  uploadStartTime.UnixMilli() - startTime.UnixMilli(),
-					UploadDurationMs: uploadFinishTime.UnixMilli() - uploadStartTime.UnixMilli(),
+				Database:                c.DatabaseName,
+				Schema:                  c.SchemaName,
+				Table:                   c.TableName,
+				ChunkStartOffset:        0,
+				ChunkLength:             int32(part.unencryptedLen),
+				ChunkLengthUncompressed: totalUncompressedSize(part.parquetMetadata),
+				ChunkMD5:                md5Hash(part.parquetFile[:part.unencryptedLen]),
+				EncryptionKeyID:         c.encryptionInfo.encryptionKeyID,
+				FirstInsertTimeInMillis: startTime.UnixMilli(),
+				LastInsertTimeInMillis:  startTime.UnixMilli(),
+				EPS: &epInfo{
+					Rows:    part.parquetMetadata.NumRows,
+					Columns: computeColumnEpInfo(c.transformers, part.stats),
 				},
-				Chunks: []chunkMetadata{
+				Channels: []channelMetadata{
 					{
-						Database:                c.DatabaseName,
-						Schema:                  c.SchemaName,
-						Table:                   c.TableName,
-						ChunkStartOffset:        0,
-						ChunkLength:             int32(part.unencryptedLen),
-						ChunkLengthUncompressed: totalUncompressedSize(part.parquetMetadata),
-						ChunkMD5:                md5Hash(part.parquetFile[:part.unencryptedLen]),
-						EncryptionKeyID:         c.encryptionInfo.encryptionKeyID,
-						FirstInsertTimeInMillis: startTime.UnixMilli(),
-						LastInsertTimeInMillis:  startTime.UnixMilli(),
-						EPS: &epInfo{
-							Rows:    part.parquetMetadata.NumRows,
-							Columns: computeColumnEpInfo(c.transformers, part.stats),
-						},
-						Channels: []channelMetadata{
-							{
-								Channel:          c.Name,
-								ClientSequencer:  c.clientSequencer,
-								RowSequencer:     c.rowSequencer + 1,
-								StartOffsetToken: nil,
-								EndOffsetToken:   nil,
-								OffsetToken:      nil,
-							},
-						},
+						Channel:          c.Name,
+						ClientSequencer:  c.clientSequencer,
+						RowSequencer:     c.rowSequencer + 1,
+						StartOffsetToken: nil,
+						EndOffsetToken:   nil,
+						OffsetToken:      nil,
 					},
 				},
 			},
@@ -446,14 +467,10 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 	if err != nil {
 		return insertStats, fmt.Errorf("registering output failed: %w", err)
 	}
-	if len(resp.Blobs) != 1 {
-		return insertStats, fmt.Errorf("unexpected number of response blobs: %d", len(resp.Blobs))
+	if len(resp.Chunks) != 1 {
+		return insertStats, fmt.Errorf("unexpected number of response blob chunks: %d", len(resp.Chunks))
 	}
-	status := resp.Blobs[0]
-	if len(status.Chunks) != 1 {
-		return insertStats, fmt.Errorf("unexpected number of response blob chunks: %d", len(status.Chunks))
-	}
-	chunk := status.Chunks[0]
+	chunk := resp.Chunks[0]
 	if len(chunk.Channels) != 1 {
 		return insertStats, fmt.Errorf("unexpected number of channels for blob chunk: %d", len(chunk.Channels))
 	}
@@ -463,13 +480,14 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 		if msg == "" {
 			msg = "(no message)"
 		}
-		return insertStats, fmt.Errorf("error response injesting data (%d): %s", channel.StatusCode, msg)
+		return insertStats, fmt.Errorf("error response ingesting data (%d): %s", channel.StatusCode, msg)
 	}
 	c.rowSequencer++
 	c.clientSequencer = channel.ClientSequencer
 	insertStats.CompressedOutputSize = part.unencryptedLen
 	insertStats.BuildTime = uploadStartTime.Sub(startTime)
 	insertStats.UploadTime = uploadFinishTime.Sub(uploadStartTime)
+	insertStats.RegisterTime = time.Now().Sub(uploadFinishTime)
 	insertStats.ConvertTime = part.convertTime
 	insertStats.SerializeTime = part.serializeTime
 	return insertStats, err
