@@ -569,7 +569,7 @@ func (o *snowflakeStreamerOutput) WriteBatchInternal(ctx context.Context, batch 
 		}
 		return wrapInsertError(err)
 	}
-	o.logger.Debugf("done inserting rows using channel %s, stats: %+v", channel.Name, stats)
+	o.logger.Debugf("done inserting %d rows using channel %s, stats: %+v", len(batch), channel.Name, stats)
 	o.compressedOutput.Incr(int64(stats.CompressedOutputSize))
 	o.uploadTime.Timing(stats.UploadTime.Nanoseconds())
 	o.buildTime.Timing(stats.BuildTime.Nanoseconds())
