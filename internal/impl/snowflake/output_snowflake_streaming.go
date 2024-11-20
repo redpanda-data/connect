@@ -114,7 +114,7 @@ The input to this mapping is an object with the value and the name of the new co
 			).Description(`Options to control schema evolution within the pipeline as new columns are added to the pipeline.`).Optional(),
 			service.NewIntField(ssoFieldBuildParallelism).Description("The maximum amount of parallelism to use when building the output for Snowflake. The metric to watch to see if you need to change this is `snowflake_build_output_latency_ns`.").Default(1).Advanced(),
 			service.NewBatchPolicyField(ssoFieldBatching),
-			service.NewOutputMaxInFlightField(),
+			service.NewOutputMaxInFlightField().Default(4),
 			service.NewStringField(ssoFieldChannelPrefix).
 				Description(`The prefix to use when creating a channel name.
 Duplicate channel names will result in errors and prevent multiple instances of Redpanda Connect from writing at the same time.
