@@ -36,6 +36,7 @@ azure_table_storage       ,output    ,azure_table_storage       ,3.36.0  ,certif
 batched                   ,input     ,batched                   ,4.11.0  ,certified  ,n          ,y     ,y
 beanstalkd                ,input     ,beanstalkd                ,4.7.0   ,community  ,n          ,n     ,n
 beanstalkd                ,output    ,beanstalkd                ,4.7.0   ,community  ,n          ,n     ,n
+benchmark                 ,processor ,benchmark                 ,4.40.0  ,certified  ,n          ,y     ,y
 bloblang                  ,processor ,bloblang                  ,0.0.0   ,certified  ,n          ,y     ,y
 bounds_check              ,processor ,bounds_check              ,0.0.0   ,certified  ,n          ,y     ,y
 branch                    ,processor ,branch                    ,0.0.0   ,certified  ,n          ,y     ,y
