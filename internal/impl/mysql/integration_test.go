@@ -23,11 +23,13 @@ import (
 	_ "github.com/redpanda-data/benthos/v4/public/components/io"
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestIntegrationMySQLCDC(t *testing.T) {
+	integration.CheckSkip(t)
 	var mysqlTestVersions = []string{"8.0", "9.0", "9.1"}
 	for _, version := range mysqlTestVersions {
 		pool, err := dockertest.NewPool("")
@@ -189,6 +191,7 @@ file:
 }
 
 func TestIntegrationMySQLSnapshotAndCDC(t *testing.T) {
+	integration.CheckSkip(t)
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
 
@@ -317,6 +320,7 @@ file:
 }
 
 func TestIntegrationMySQLCDCWithCompositePrimaryKeys(t *testing.T) {
+	integration.CheckSkip(t)
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
 
