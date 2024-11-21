@@ -44,6 +44,7 @@ ollama_chat:
   response_format: text
   max_tokens: 0 # No default (optional)
   temperature: 0 # No default (optional)
+  save_prompt_metadata: false
   runner:
     context_size: 0 # No default (optional)
     batch_size: 0 # No default (optional)
@@ -74,6 +75,7 @@ ollama_chat:
   presence_penalty: 0 # No default (optional)
   frequency_penalty: 0 # No default (optional)
   stop: [] # No default (optional)
+  save_prompt_metadata: false
   runner:
     context_size: 0 # No default (optional)
     batch_size: 0 # No default (optional)
@@ -281,6 +283,15 @@ Sets the stop sequences to use. When this pattern is encountered the LLM stops g
 
 *Type*: `array`
 
+
+=== `save_prompt_metadata`
+
+If enabled the prompt is saved as @prompt metadata on the output message.
+
+
+*Type*: `bool`
+
+*Default*: `false`
 
 === `runner`
 
