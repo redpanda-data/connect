@@ -131,6 +131,7 @@ func NewSnowflakeServiceClient(ctx context.Context, opts ClientOptions) (*Snowfl
 func (c *SnowflakeServiceClient) Close() error {
 	c.uploadRefreshLoop.Stop()
 	c.client.Close()
+	c.flusher.Close()
 	return nil
 }
 
