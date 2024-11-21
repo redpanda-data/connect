@@ -15,31 +15,31 @@ import (
 )
 
 var (
-	ErrEmptyTableName        = errors.New("empty table name")
-	ErrInvalidTableLength    = errors.New("invalid table length")
-	ErrInvalidTableStartChar = errors.New("invalid start char in mysql table name")
-	ErrInvalidTableName      = errors.New("invalid table name")
+	errEmptyTableName        = errors.New("empty table name")
+	errInvalidTableLength    = errors.New("invalid table length")
+	errInvalidTableStartChar = errors.New("invalid start char in mysql table name")
+	errInvalidTableName      = errors.New("invalid table name")
 )
 
 func validateTableName(tableName string) error {
 	// Check if empty
 	if tableName == "" {
-		return ErrEmptyTableName
+		return errEmptyTableName
 	}
 
 	// Check length
 	if utf8.RuneCountInString(tableName) > 64 {
-		return ErrInvalidTableLength
+		return errInvalidTableLength
 	}
 
 	// Check if starts with a valid character
 	if matched, _ := regexp.MatchString(`^[a-zA-Z_]`, tableName); !matched {
-		return ErrInvalidTableStartChar
+		return errInvalidTableStartChar
 	}
 
 	// Check if contains only valid characters
 	if matched, _ := regexp.MatchString(`^[a-zA-Z0-9_$]+$`, tableName); !matched {
-		return ErrInvalidTableName
+		return errInvalidTableName
 	}
 
 	return nil
