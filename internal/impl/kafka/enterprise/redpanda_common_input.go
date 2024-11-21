@@ -119,7 +119,7 @@ func init() {
 					time.Sleep(time.Millisecond * 100)
 				}
 				return
-			})
+			}, nil)
 			if err != nil {
 				return nil, err
 			}

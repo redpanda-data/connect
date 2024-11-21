@@ -57,15 +57,18 @@ func FranzReaderOrderedConfigFields() []*service.ConfigField {
 
 //------------------------------------------------------------------------------
 
+type RecordToMessageFn func(record *kgo.Record) (*service.Message, error)
+
 // FranzReaderOrdered implements a kafka reader using the franz-go library.
 type FranzReaderOrdered struct {
 	clientOpts func() ([]kgo.Opt, error)
 
 	partState *partitionState
 
-	consumerGroup string
-	commitPeriod  time.Duration
-	cacheLimit    uint64
+	consumerGroup     string
+	commitPeriod      time.Duration
+	cacheLimit        uint64
+	recordToMessageFn RecordToMessageFn
 
 	readBackOff backoff.BackOff
 
@@ -76,18 +79,22 @@ type FranzReaderOrdered struct {
 
 // NewFranzReaderOrderedFromConfig attempts to instantiate a new
 // FranzReaderOrdered reader from a parsed config.
-func NewFranzReaderOrderedFromConfig(conf *service.ParsedConfig, res *service.Resources, optsFn func() ([]kgo.Opt, error)) (*FranzReaderOrdered, error) {
+func NewFranzReaderOrderedFromConfig(conf *service.ParsedConfig, res *service.Resources, optsFn func() ([]kgo.Opt, error), recordToMessageFn RecordToMessageFn) (*FranzReaderOrdered, error) {
 	readBackOff := backoff.NewExponentialBackOff()
 	readBackOff.InitialInterval = time.Millisecond
 	readBackOff.MaxInterval = time.Millisecond * 100
 	readBackOff.MaxElapsedTime = 0
 
+	if recordToMessageFn == nil {
+		recordToMessageFn = func(record *kgo.Record) (*service.Message, error) { return FranzRecordToMessageV1(record), nil }
+	}
 	f := FranzReaderOrdered{
-		readBackOff: readBackOff,
-		res:         res,
-		log:         res.Logger(),
-		shutSig:     shutdown.NewSignaller(),
-		clientOpts:  optsFn,
+		readBackOff:       readBackOff,
+		res:               res,
+		log:               res.Logger(),
+		shutSig:           shutdown.NewSignaller(),
+		clientOpts:        optsFn,
+		recordToMessageFn: recordToMessageFn,
 	}
 
 	f.consumerGroup, _ = conf.FieldString(kroFieldConsumerGroup)
@@ -114,8 +121,13 @@ func (f *FranzReaderOrdered) recordsToBatch(records []*kgo.Record) *batchWithRec
 	var length uint64
 	var batch service.MessageBatch
 	for _, r := range records {
+		record, err := f.recordToMessageFn(r)
+		if err != nil {
+			f.log.Debugf("Failed to convert kafka record to message: %s", err)
+			continue
+		}
 		length += uint64(len(r.Value) + len(r.Key))
-		batch = append(batch, FranzRecordToMessageV1(r))
+		batch = append(batch, record)
 		// The record lives on for checkpointing, but we don't need the contents
 		// going forward so discard these. This looked fine to me but could
 		// potentially be a source of problems so treat this as sus.
@@ -435,7 +447,11 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 			pauseTopicPartitions := map[string][]int32{}
 			fetches.EachPartition(func(p kgo.FetchTopicPartition) {
 				if len(p.Records) > 0 {
-					if checkpoints.addRecords(p.Topic, p.Partition, f.recordsToBatch(p.Records), f.cacheLimit) {
+					batch := f.recordsToBatch(p.Records)
+					if len(batch.b) == 0 {
+						return
+					}
+					if checkpoints.addRecords(p.Topic, p.Partition, batch, f.cacheLimit) {
 						pauseTopicPartitions[p.Topic] = append(pauseTopicPartitions[p.Topic], p.Partition)
 					}
 				}
