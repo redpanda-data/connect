@@ -21,6 +21,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream"
+	"github.com/redpanda-data/connect/v4/internal/periodic"
 )
 
 const (
@@ -304,6 +305,16 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 }
 
 func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher *service.Batcher) {
+	monitorLoop := periodic.New(p.streamConfig.WalMonitorInterval, func() {
+		// Periodically collect stats
+		report := pgStream.GetProgress()
+		for name, progress := range report.TableProgress {
+			p.snapshotMetrics.SetFloat64(progress, name)
+		}
+		p.replicationLag.Set(report.WalLagInBytes)
+	})
+	monitorLoop.Start()
+	defer monitorLoop.Stop()
 	ctx, _ := p.stopSig.SoftStopCtx(context.Background())
 	defer func() {
 		ctx, _ := p.stopSig.HardStopCtx(context.Background())
@@ -358,13 +369,6 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 			if message.Lsn != nil {
 				batchMsg.MetaSet("lsn", *message.Lsn)
 			}
-			if message.Changes[0].TableSnapshotProgress != nil {
-				p.snapshotMetrics.SetFloat64(*message.Changes[0].TableSnapshotProgress, message.Changes[0].Table)
-			}
-			if message.WALLagBytes != nil {
-				p.replicationLag.Set(*message.WALLagBytes)
-			}
-
 			if batcher.Add(batchMsg) {
 				nextTimedBatchChan = nil
 				flushedBatch, err := batcher.Flush(ctx)

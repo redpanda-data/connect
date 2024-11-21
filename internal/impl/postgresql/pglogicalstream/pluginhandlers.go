@@ -97,10 +97,9 @@ func (p *PgOutputUnbufferedPluginHandler) Handle(ctx context.Context, clientXLog
 	if message != nil {
 		lsn := clientXLogPos.String()
 		msg := StreamMessage{
-			Lsn:         &lsn,
-			Changes:     []StreamMessageChanges{*message},
-			Mode:        StreamModeStreaming,
-			WALLagBytes: &p.monitor.Report().WalLagInBytes,
+			Lsn:     &lsn,
+			Changes: []StreamMessageChanges{*message},
+			Mode:    StreamModeStreaming,
 		}
 		select {
 		case p.messages <- msg:
@@ -150,10 +149,9 @@ func (p *PgOutputBufferedPluginHandler) Handle(ctx context.Context, clientXLogPo
 		// send all collected changes
 		lsn := clientXLogPos.String()
 		msg := StreamMessage{
-			Lsn:         &lsn,
-			Changes:     p.pgoutputChanges,
-			Mode:        StreamModeStreaming,
-			WALLagBytes: &p.monitor.Report().WalLagInBytes,
+			Lsn:     &lsn,
+			Changes: p.pgoutputChanges,
+			Mode:    StreamModeStreaming,
 		}
 		select {
 		case p.messages <- msg:

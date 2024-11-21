@@ -43,7 +43,7 @@ mapping: |
       "key": "${! metadata(\"kafka_key\") }",
       "partition": "${! metadata(\"kafka_partition\").or(throw(\"missing kafka_partition metadata\")) }",
       "partitioner": "manual",
-      "timestamp": "${! metadata(\"kafka_timestamp_unix\").or(timestamp_unix()) }",
+      "timestamp_ms": "${! metadata(\"kafka_timestamp_ms\").or(timestamp_unix_milli()) }",
       "max_in_flight": $rpMigratorMaxInFlight,
       "metadata": {
         "include_patterns": [
@@ -167,7 +167,7 @@ tests:
                     partitioner: manual
                     seed_brokers:
                       - 127.0.0.1:9092
-                    timestamp: ${! metadata("kafka_timestamp_unix").or(timestamp_unix()) }
+                    timestamp_ms: ${! metadata("kafka_timestamp_ms").or(timestamp_unix_milli()) }
                     topic: ${! metadata("kafka_topic").or(throw("missing kafka_topic metadata")) }
                     metadata:
                       include_patterns:
@@ -229,7 +229,7 @@ tests:
                     partitioner: manual
                     seed_brokers:
                       - 127.0.0.1:9092
-                    timestamp: ${! metadata("kafka_timestamp_unix").or(timestamp_unix()) }
+                    timestamp_ms: ${! metadata("kafka_timestamp_ms").or(timestamp_unix_milli()) }
                     topic: ${! metadata("kafka_topic").or(throw("missing kafka_topic metadata")) }
                     metadata:
                       include_patterns:
