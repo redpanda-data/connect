@@ -50,32 +50,32 @@ func TestValidateTableName(t *testing.T) {
 		{
 			name:        "Empty table name",
 			tableName:   "",
-			expectedErr: ErrEmptyTableName,
+			expectedErr: errEmptyTableName,
 		},
 		{
 			name:        "Table name starting with number",
 			tableName:   "2users",
-			expectedErr: ErrInvalidTableStartChar,
+			expectedErr: errInvalidTableStartChar,
 		},
 		{
 			name:        "Table name with special characters",
 			tableName:   "users@table",
-			expectedErr: ErrInvalidTableName,
+			expectedErr: errInvalidTableName,
 		},
 		{
 			name:        "Table name with spaces",
 			tableName:   "user table",
-			expectedErr: ErrInvalidTableName,
+			expectedErr: errInvalidTableName,
 		},
 		{
 			name:        "Table name with hyphens",
 			tableName:   "user-table",
-			expectedErr: ErrInvalidTableName,
+			expectedErr: errInvalidTableName,
 		},
 		{
 			name:        "Too long table name",
 			tableName:   strings.Repeat("a", 65),
-			expectedErr: ErrInvalidTableLength,
+			expectedErr: errInvalidTableLength,
 		},
 	}
 
