@@ -38,6 +38,7 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka/enterprise"
 	"github.com/redpanda-data/connect/v4/internal/license"
 	"github.com/redpanda-data/connect/v4/internal/protoconnect"
+	_ "github.com/redpanda-data/connect/v4/public/components/confluent"
 )
 
 func createKafkaTopic(ctx context.Context, address, id string, partitions int32) error {
@@ -97,57 +98,24 @@ func TestKafkaEnterpriseIntegration(t *testing.T) {
 
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
-
-	kafkaPort, err := integration.GetFreePort()
-	require.NoError(t, err)
-
-	kafkaPortStr := strconv.Itoa(kafkaPort)
-	options := &dockertest.RunOptions{
-		Repository:   "redpandadata/redpanda",
-		Tag:          "latest",
-		Hostname:     "redpanda",
-		ExposedPorts: []string{"9092/tcp"},
-		PortBindings: map[docker.Port][]docker.PortBinding{
-			"9092/tcp": {{HostIP: "", HostPort: kafkaPortStr + "/tcp"}},
-		},
-		Cmd: []string{
-			"redpanda",
-			"start",
-			"--node-id 0",
-			"--mode dev-container",
-			"--set rpk.additional_start_flags=[--reactor-backend=epoll]",
-			"--kafka-addr 0.0.0.0:9092",
-			fmt.Sprintf("--advertise-kafka-addr localhost:%v", kafkaPort),
-		},
-	}
-
-	brokerAddr := "localhost:" + kafkaPortStr
-
 	pool.MaxWait = time.Minute
-	resource, err := pool.RunWithOptions(options)
+
+	container, err := startRedpanda(t, pool, true, true)
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
 
 	ctx, done := context.WithTimeout(context.Background(), time.Minute*3)
 	defer done()
 
-	_ = resource.Expire(900)
-	require.NoError(t, pool.Retry(func() error {
-		return createKafkaTopic(ctx, brokerAddr, "testingconnection", 1)
-	}))
-
 	t.Run("test_logs_happy", func(t *testing.T) {
-		testLogsHappy(ctx, t, brokerAddr)
+		testLogsHappy(ctx, t, container.brokerAddr)
 	})
 
 	t.Run("test_status_happy", func(t *testing.T) {
-		testStatusHappy(ctx, t, brokerAddr)
+		testStatusHappy(ctx, t, container.brokerAddr)
 	})
 
 	t.Run("test_logs_close_flush", func(t *testing.T) {
-		testLogsCloseFlush(ctx, t, brokerAddr)
+		testLogsCloseFlush(ctx, t, container.brokerAddr)
 	})
 }
 
@@ -293,74 +261,20 @@ max_message_bytes: 1MB
 	assert.Equal(t, "buz", string(outRecords[1].Key))
 }
 
-func startSchemaRegistry(t *testing.T, pool *dockertest.Pool) int {
-	// TODO: Generalise this helper for the other Kafka tests here which use Redpanda...
+func createSchema(t *testing.T, url string, subject string, schema string, references []franz_sr.SchemaReference) {
 	t.Helper()
 
-	options := &dockertest.RunOptions{
-		Repository:   "redpandadata/redpanda",
-		Tag:          "latest",
-		Hostname:     "redpanda",
-		ExposedPorts: []string{"8081/tcp"},
-		Cmd: []string{
-			"redpanda",
-			"start",
-			"--node-id 0",
-			"--mode dev-container",
-			"--set rpk.additional_start_flags=[--reactor-backend=epoll]",
-			"--schema-registry-addr 0.0.0.0:8081",
-		},
-	}
-
-	resource, err := pool.RunWithOptions(options)
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
-
-	port, err := strconv.Atoi(resource.GetPort("8081/tcp"))
-	require.NoError(t, err)
-
-	_ = resource.Expire(900)
-	require.NoError(t, pool.Retry(func() error {
-		ctx, done := context.WithTimeout(context.Background(), 3*time.Second)
-		defer done()
-
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("http://localhost:%d/subjects", port), nil)
-		if err != nil {
-			return err
-		}
-
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			return err
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			return errors.New("invalid status")
-		}
-
-		return nil
-	}))
-
-	return port
-}
-
-func createSchema(t *testing.T, port int, subject string, schema string, references []franz_sr.SchemaReference) {
-	t.Helper()
-
-	client, err := franz_sr.NewClient(franz_sr.URLs(fmt.Sprintf("http://localhost:%d", port)))
+	client, err := franz_sr.NewClient(franz_sr.URLs(url))
 	require.NoError(t, err)
 
 	_, err = client.CreateSchema(context.Background(), subject, franz_sr.Schema{Schema: schema, References: references})
 	require.NoError(t, err)
 }
 
-func deleteSubject(t *testing.T, port int, subject string, hardDelete bool) {
+func deleteSubject(t *testing.T, url string, subject string, hardDelete bool) {
 	t.Helper()
 
-	client, err := franz_sr.NewClient(franz_sr.URLs(fmt.Sprintf("http://localhost:%d", port)))
+	client, err := franz_sr.NewClient(franz_sr.URLs(url))
 	require.NoError(t, err)
 
 	deleteMode := franz_sr.SoftDelete
@@ -412,8 +326,10 @@ func TestSchemaRegistryIntegration(t *testing.T) {
 		},
 	}
 
-	sourcePort := startSchemaRegistry(t, pool)
-	destinationPort := startSchemaRegistry(t, pool)
+	source, err := startRedpanda(t, pool, false, true)
+	require.NoError(t, err)
+	destination, err := startRedpanda(t, pool, false, true)
+	require.NoError(t, err)
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -424,55 +340,55 @@ func TestSchemaRegistryIntegration(t *testing.T) {
 			t.Cleanup(func() {
 				// Clean up the extraSubject first since it may contain schemas with references.
 				if test.extraSubject != "" {
-					deleteSubject(t, sourcePort, test.extraSubject, false)
-					deleteSubject(t, sourcePort, test.extraSubject, true)
+					deleteSubject(t, source.schemaRegistryURL, test.extraSubject, false)
+					deleteSubject(t, source.schemaRegistryURL, test.extraSubject, true)
 					if test.subjectFilter == "" {
-						deleteSubject(t, destinationPort, test.extraSubject, false)
-						deleteSubject(t, destinationPort, test.extraSubject, true)
+						deleteSubject(t, destination.schemaRegistryURL, test.extraSubject, false)
+						deleteSubject(t, destination.schemaRegistryURL, test.extraSubject, true)
 					}
 				}
 
 				if !test.includeSoftDeletedSubjects {
-					deleteSubject(t, sourcePort, subject, false)
+					deleteSubject(t, source.schemaRegistryURL, subject, false)
 				}
-				deleteSubject(t, sourcePort, subject, true)
+				deleteSubject(t, source.schemaRegistryURL, subject, true)
 
-				deleteSubject(t, destinationPort, subject, false)
-				deleteSubject(t, destinationPort, subject, true)
+				deleteSubject(t, destination.schemaRegistryURL, subject, false)
+				deleteSubject(t, destination.schemaRegistryURL, subject, true)
 			})
 
-			createSchema(t, sourcePort, subject, test.schema, nil)
+			createSchema(t, source.schemaRegistryURL, subject, test.schema, nil)
 
 			if test.subjectFilter != "" {
-				createSchema(t, sourcePort, test.extraSubject, test.schema, nil)
+				createSchema(t, source.schemaRegistryURL, test.extraSubject, test.schema, nil)
 			}
 
 			if test.includeSoftDeletedSubjects {
-				deleteSubject(t, sourcePort, subject, false)
+				deleteSubject(t, source.schemaRegistryURL, subject, false)
 			}
 
 			if test.schemaWithReference != "" {
-				createSchema(t, sourcePort, test.extraSubject, test.schemaWithReference, []franz_sr.SchemaReference{{Name: "foo", Subject: subject, Version: 1}})
+				createSchema(t, source.schemaRegistryURL, test.extraSubject, test.schemaWithReference, []franz_sr.SchemaReference{{Name: "foo", Subject: subject, Version: 1}})
 			}
 
 			streamBuilder := service.NewStreamBuilder()
 			require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
 input:
   schema_registry:
-    url: http://localhost:%d
+    url: %s
     include_deleted: %t
     subject_filter: %s
     fetch_in_order: %t
 output:
   fallback:
     - schema_registry:
-        url: http://localhost:%d
+        url: %s
         subject: ${! @schema_registry_subject }
         # Preserve schema order.
         max_in_flight: 1
     # Don't retry the same message multiple times so we do fail if schemas with references are sent in the wrong order
     - drop: {}
-`, sourcePort, test.includeSoftDeletedSubjects, test.subjectFilter, test.schemaWithReference != "", destinationPort)))
+`, source.schemaRegistryURL, test.includeSoftDeletedSubjects, test.subjectFilter, test.schemaWithReference != "", destination.schemaRegistryURL)))
 			require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
 
 			stream, err := streamBuilder.Build()
@@ -486,7 +402,7 @@ output:
 			err = stream.Run(ctx)
 			require.NoError(t, err)
 
-			resp, err := http.DefaultClient.Get(fmt.Sprintf("http://localhost:%d/subjects", destinationPort))
+			resp, err := http.DefaultClient.Get(fmt.Sprintf("%s/subjects", destination.schemaRegistryURL))
 			require.NoError(t, err)
 			body, err := io.ReadAll(resp.Body)
 			require.NoError(t, err)
@@ -497,7 +413,7 @@ output:
 				assert.NotContains(t, string(body), test.extraSubject)
 			}
 
-			resp, err = http.DefaultClient.Get(fmt.Sprintf("http://localhost:%d/subjects/%s/versions/1", destinationPort, subject))
+			resp, err = http.DefaultClient.Get(fmt.Sprintf("%s/subjects/%s/versions/1", destination.schemaRegistryURL, subject))
 			require.NoError(t, err)
 			body, err = io.ReadAll(resp.Body)
 			require.NoError(t, err)
@@ -511,7 +427,7 @@ output:
 			assert.JSONEq(t, test.schema, sd.Schema.Schema)
 
 			if test.schemaWithReference != "" {
-				resp, err = http.DefaultClient.Get(fmt.Sprintf("http://localhost:%d/subjects/%s/versions/1", destinationPort, test.extraSubject))
+				resp, err = http.DefaultClient.Get(fmt.Sprintf("%s/subjects/%s/versions/1", destination.schemaRegistryURL, test.extraSubject))
 				require.NoError(t, err)
 				body, err = io.ReadAll(resp.Body)
 				require.NoError(t, err)
@@ -534,22 +450,25 @@ func TestSchemaRegistryIDTranslationIntegration(t *testing.T) {
 
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
+	pool.MaxWait = time.Minute
 
-	sourcePort := startSchemaRegistry(t, pool)
-	destinationPort := startSchemaRegistry(t, pool)
+	source, err := startRedpanda(t, pool, false, true)
+	require.NoError(t, err)
+	destination, err := startRedpanda(t, pool, false, true)
+	require.NoError(t, err)
 
 	// Create two schemas under subject `foo`.
-	createSchema(t, sourcePort, "foo", `{"name":"foo", "type": "record", "fields":[{"name":"str", "type": "string"}]}`, nil)
-	createSchema(t, sourcePort, "foo", `{"name":"foo", "type": "record", "fields":[{"name":"str", "type": "string"}, {"name":"num", "type": "int", "default": 42}]}`, nil)
+	createSchema(t, source.schemaRegistryURL, "foo", `{"name":"foo", "type": "record", "fields":[{"name":"str", "type": "string"}]}`, nil)
+	createSchema(t, source.schemaRegistryURL, "foo", `{"name":"foo", "type": "record", "fields":[{"name":"str", "type": "string"}, {"name":"num", "type": "int", "default": 42}]}`, nil)
 
 	// Create a schema under subject `bar` which references the second schema under `foo`.
-	createSchema(t, sourcePort, "bar", `{"name":"bar", "type": "record", "fields":[{"name":"data", "type": "foo"}]}`,
+	createSchema(t, source.schemaRegistryURL, "bar", `{"name":"bar", "type": "record", "fields":[{"name":"data", "type": "foo"}]}`,
 		[]franz_sr.SchemaReference{{Name: "foo", Subject: "foo", Version: 2}},
 	)
 
 	// Create a schema at the destination which will have ID 1 so we can check that the ID translation works
 	// correctly.
-	createSchema(t, destinationPort, "baz", `{"name":"baz", "type": "record", "fields":[{"name":"num", "type": "int"}]}`, nil)
+	createSchema(t, destination.schemaRegistryURL, "baz", `{"name":"baz", "type": "record", "fields":[{"name":"num", "type": "int"}]}`, nil)
 
 	// Use a Stream with a mapping filter to send only the schema with the reference to the destination in order
 	// to force the output to backfill the rest of the schemas.
@@ -557,20 +476,20 @@ func TestSchemaRegistryIDTranslationIntegration(t *testing.T) {
 	require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
 input:
   schema_registry:
-    url: http://localhost:%d
+    url: %s
   processors:
     - mapping: |
         if this.id != 3 { root = deleted() }
 output:
   fallback:
     - schema_registry:
-        url: http://localhost:%d
+        url: %s
         subject: ${! @schema_registry_subject }
         # Preserve schema order.
         max_in_flight: 1
     # Don't retry the same message multiple times so we do fail if schemas with references are sent in the wrong order
     - drop: {}
-`, sourcePort, destinationPort)))
+`, source.schemaRegistryURL, destination.schemaRegistryURL)))
 	require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
 
 	stream, err := streamBuilder.Build()
@@ -611,7 +530,7 @@ output:
 
 	for _, test := range tests {
 		t.Run("", func(t *testing.T) {
-			resp, err := http.DefaultClient.Get(fmt.Sprintf("http://localhost:%d/subjects/%s/versions/%d", destinationPort, test.subject, test.version))
+			resp, err := http.DefaultClient.Get(fmt.Sprintf("%s/subjects/%s/versions/%d", destination.schemaRegistryURL, test.subject, test.version))
 			require.NoError(t, err)
 			body, err := io.ReadAll(resp.Body)
 			require.NoError(t, err)
@@ -625,4 +544,351 @@ output:
 			assert.Equal(t, test.expectedReferences, sd.References)
 		})
 	}
+}
+
+type redpandaEndpoints struct {
+	brokerAddr        string
+	schemaRegistryURL string
+}
+
+// TODO: Add option to disable auto topic creation in Redpanda.
+// TODO: Generalise this helper for the other Kafka tests here which use Redpanda.
+func startRedpanda(t *testing.T, pool *dockertest.Pool, exposeBroker bool, autocreateTopics bool) (redpandaEndpoints, error) {
+	t.Helper()
+
+	cmd := []string{
+		"redpanda",
+		"start",
+		"--node-id 0",
+		"--mode dev-container",
+		"--set rpk.additional_start_flags=[--reactor-backend=epoll]",
+		"--schema-registry-addr 0.0.0.0:8081",
+	}
+
+	if !autocreateTopics {
+		cmd = append(cmd, "--set redpanda.auto_create_topics_enabled=false")
+	}
+
+	// Expose Schema Registry and Admin API by default. The Admin API is required for health checks.
+	exposedPorts := []string{"8081/tcp", "9644/tcp"}
+	var portBindings map[docker.Port][]docker.PortBinding
+	// portBindings := map[docker.Port][]docker.PortBinding{
+	// 	docker.Port("8081/tcp"): {{HostPort: "6666/tcp"}},
+	// 	docker.Port("9644/tcp"): {{HostPort: "6667/tcp"}},
+	// }
+	var kafkaPort string
+	if exposeBroker {
+		brokerPort, err := integration.GetFreePort()
+		if err != nil {
+			return redpandaEndpoints{}, fmt.Errorf("failed to start container: %s", err)
+		}
+
+		// Note: Schema Registry uses `--advertise-kafka-addr` to talk to the broker, so we need to use the same port for `--kafka-addr`.
+		// TODO: Ensure we don't stomp over some ports which are already in use inside the container.
+		cmd = append(cmd, fmt.Sprintf("--kafka-addr 0.0.0.0:%d", brokerPort), fmt.Sprintf("--advertise-kafka-addr localhost:%d", brokerPort))
+
+		kafkaPort = fmt.Sprintf("%d/tcp", brokerPort)
+		exposedPorts = append(exposedPorts, kafkaPort)
+		portBindings = map[docker.Port][]docker.PortBinding{docker.Port(kafkaPort): {{HostPort: kafkaPort}}}
+	}
+
+	options := &dockertest.RunOptions{
+		Repository:   "redpandadata/redpanda",
+		Tag:          "latest",
+		Hostname:     "redpanda",
+		Cmd:          cmd,
+		ExposedPorts: exposedPorts,
+		PortBindings: portBindings,
+	}
+
+	resource, err := pool.RunWithOptions(options)
+	if err != nil {
+		return redpandaEndpoints{}, fmt.Errorf("failed to start container: %s", err)
+	}
+
+	if err := resource.Expire(900); err != nil {
+		return redpandaEndpoints{}, fmt.Errorf("failed to set container expiry period: %s", err)
+	}
+
+	t.Cleanup(func() {
+		assert.NoError(t, pool.Purge(resource))
+	})
+
+	require.NoError(t, pool.Retry(func() error {
+		ctx, done := context.WithTimeout(context.Background(), 3*time.Second)
+		defer done()
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("http://localhost:%s/v1/cluster/health_overview", resource.GetPort("9644/tcp")), nil)
+		if err != nil {
+			return fmt.Errorf("failed to create request: %s", err)
+		}
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return fmt.Errorf("failed to execute request: %s", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return errors.New("invalid status")
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("failed to read response body: %s", err)
+		}
+
+		var res struct {
+			IsHealthy bool `json:"is_healthy"`
+		}
+
+		if err := json.Unmarshal(body, &res); err != nil {
+			return fmt.Errorf("failed to unmarshal response body: %s", err)
+		}
+
+		if !res.IsHealthy {
+			return errors.New("unhealthy")
+		}
+
+		return nil
+	}))
+
+	return redpandaEndpoints{
+		brokerAddr:        fmt.Sprintf("localhost:%s", resource.GetPort(kafkaPort)),
+		schemaRegistryURL: fmt.Sprintf("http://localhost:%s", resource.GetPort("8081/tcp")),
+	}, nil
+}
+
+func TestRedpandaMigratorIntegration(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Parallel()
+
+	pool, err := dockertest.NewPool("")
+	require.NoError(t, err)
+	pool.MaxWait = time.Minute
+
+	source, err := startRedpanda(t, pool, true, true)
+	require.NoError(t, err)
+	destination, err := startRedpanda(t, pool, true, false)
+	require.NoError(t, err)
+
+	dummyTopic := "test"
+
+	// Create a schema associated with the test topic
+	createSchema(t, source.schemaRegistryURL, dummyTopic, fmt.Sprintf(`{"name":"%s", "type": "record", "fields":[{"name":"test", "type": "string"}]}`, dummyTopic), nil)
+
+	// Produce one message
+	streamBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
+pipeline:
+  processors:
+    - schema_registry_encode:
+        url: %s
+        subject: %s
+        avro_raw_json: true
+output:
+  kafka_franz:
+    seed_brokers: [ %s ]
+    topic: %s
+`, source.schemaRegistryURL, dummyTopic, source.brokerAddr, dummyTopic)))
+	require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
+
+	inFunc, err := streamBuilder.AddProducerFunc()
+	require.NoError(t, err)
+
+	stream, err := streamBuilder.Build()
+	require.NoError(t, err)
+
+	license.InjectTestService(stream.Resources())
+
+	ctx, done := context.WithTimeout(context.Background(), 3*time.Second)
+	t.Cleanup(done)
+
+	go func() {
+		require.NoError(t, inFunc(ctx, service.NewMessage([]byte(`{"test":"foobar"}`))))
+
+		require.NoError(t, stream.StopWithin(1*time.Second))
+	}()
+
+	err = stream.Run(ctx)
+	require.NoError(t, err)
+
+	// Read the message using a consumer group
+	dummyConsumerGroup := "test"
+
+	streamBuilder = service.NewStreamBuilder()
+	require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
+input:
+  kafka_franz:
+    seed_brokers: [ %s ]
+    topics: [ %s ]
+    consumer_group: %s
+    start_from_oldest: true
+  processors:
+    - schema_registry_decode:
+        url: %s
+        avro_raw_json: true
+`, source.brokerAddr, dummyTopic, dummyConsumerGroup, source.schemaRegistryURL)))
+	require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
+
+	recvChan := make(chan struct{}, 1)
+	err = streamBuilder.AddConsumerFunc(func(ctx context.Context, m *service.Message) error {
+		b, err := m.AsBytes()
+		require.NoError(t, err)
+		assert.Equal(t, `{"test":"foobar"}`, string(b))
+
+		close(recvChan)
+		return nil
+	})
+	require.NoError(t, err)
+
+	stream, err = streamBuilder.Build()
+	require.NoError(t, err)
+
+	license.InjectTestService(stream.Resources())
+
+	ctx, done = context.WithTimeout(context.Background(), 10*time.Second)
+	t.Cleanup(done)
+
+	go func() {
+		<-recvChan
+
+		require.NoError(t, stream.StopWithin(5*time.Second))
+	}()
+
+	err = stream.Run(ctx)
+	require.NoError(t, err)
+
+	// Run the Redpanda Migrator bundle
+	streamBuilder = service.NewStreamBuilder()
+	require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
+input:
+  redpanda_migrator_bundle:
+    redpanda_migrator:
+      seed_brokers: [ %s ]
+      topics: [ %s ]
+      consumer_group: %s
+      start_from_oldest: true
+      replication_factor_override: true
+      replication_factor: -1
+    schema_registry:
+      url: %s
+
+output:
+  redpanda_migrator_bundle:
+    redpanda_migrator:
+      seed_brokers: [ %s ]
+      replication_factor_override: true
+      replication_factor: -1
+    schema_registry:
+      url: %s
+`, source.brokerAddr, dummyTopic, dummyConsumerGroup, source.schemaRegistryURL, destination.brokerAddr, destination.schemaRegistryURL)))
+	// require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
+
+	stream, err = streamBuilder.Build()
+	require.NoError(t, err)
+
+	license.InjectTestService(stream.Resources())
+
+	ctx, done = context.WithTimeout(context.Background(), 30*time.Second)
+
+	t.Log("Running migrator")
+
+	// Run stream in the background and shut it down when the test is finished
+	migratorCloseChan := make(chan struct{})
+	go func() {
+		err = stream.Run(ctx)
+		require.NoError(t, err)
+
+		close(migratorCloseChan)
+	}()
+	t.Cleanup(func() {
+		done()
+		<-migratorCloseChan
+	})
+
+	// Produce one message
+	streamBuilder = service.NewStreamBuilder()
+	require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
+pipeline:
+  processors:
+    - schema_registry_encode:
+        url: %s
+        subject: %s
+        avro_raw_json: true
+output:
+  kafka_franz:
+    seed_brokers: [ %s ]
+    topic: %s
+`, source.schemaRegistryURL, dummyTopic, source.brokerAddr, dummyTopic)))
+	require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
+
+	inFunc, err = streamBuilder.AddProducerFunc()
+	require.NoError(t, err)
+
+	stream, err = streamBuilder.Build()
+	require.NoError(t, err)
+
+	license.InjectTestService(stream.Resources())
+
+	ctx, done = context.WithTimeout(context.Background(), 3*time.Second)
+	t.Cleanup(done)
+
+	go func() {
+		require.NoError(t, inFunc(ctx, service.NewMessage([]byte(`{"test":"foobar"}`))))
+
+		require.NoError(t, stream.StopWithin(1*time.Second))
+	}()
+
+	err = stream.Run(ctx)
+	require.NoError(t, err)
+
+	t.Log("Produced message")
+	time.Sleep(5 * time.Hour) //////////////////////////////// TODOOOOOOOOOOOOOOOOOOOO
+
+	// Read the message using a consumer group
+	streamBuilder = service.NewStreamBuilder()
+	require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
+input:
+  kafka_franz:
+    seed_brokers: [ %s ]
+    topics: [ %s ]
+    consumer_group: %s
+    start_from_oldest: true
+  processors:
+    - schema_registry_decode:
+        url: %s
+        avro_raw_json: true
+`, destination.brokerAddr, dummyTopic, dummyConsumerGroup, destination.schemaRegistryURL)))
+	require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
+
+	recvChan = make(chan struct{})
+	err = streamBuilder.AddConsumerFunc(func(ctx context.Context, m *service.Message) error {
+		b, err := m.AsBytes()
+		require.NoError(t, err)
+		assert.Equal(t, `{"test":"foobar"}`, string(b))
+
+		close(recvChan)
+		return nil
+	})
+	require.NoError(t, err)
+
+	stream, err = streamBuilder.Build()
+	require.NoError(t, err)
+
+	license.InjectTestService(stream.Resources())
+
+	ctx, done = context.WithTimeout(context.Background(), 5*time.Second)
+	t.Cleanup(done)
+
+	go func() {
+		<-recvChan
+
+		require.NoError(t, stream.StopWithin(3*time.Second))
+	}()
+
+	err = stream.Run(ctx)
+	require.NoError(t, err)
+
+	t.Log("Read message")
 }

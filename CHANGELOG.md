@@ -58,6 +58,16 @@ All notable changes to this project will be documented in this file.
 - The `redpanda_migrator` input no longer converts the kafka key to string. (@mihaitodor)
 - Field `multi_header` for the `redpanda_migrator` input is now deprecated. (@mihaitodor)
 
+### Added
+
+- New `redpanda_migrator_offsets` input. (@mihaitodor)
+- Fields `offset_topic`, `offset_group`, `offset_partition`, `offset_commit_timestamp` and `offset_metadata` added to the `redpanda_migrator_offsets` output. (@mihaitodor)
+- Fields `kafka_key` and `max_in_flight` for the `redpanda_migrator_offsets` output are now deprecated. (@mihaitodor)
+
+### Changed
+
+- The `kafka_key` and `max_in_flight` fields of the `redpanda_migrator_offsets` output have been deprecated.
+
 ## 4.43.0 - 2024-12-05
 
 ### Changed
@@ -75,7 +85,7 @@ All notable changes to this project will be documented in this file.
 
 - Add support for `spanner` driver to SQL plugins. (@yufeng-deng)
 - Add support for complex database types (JSONB, TEXT[], INET, TSVECTOR, TSRANGE, POINT, INTEGER[]) for `pg_stream` input. (@le-vlad)
-- Add support for Parquet files to `bigquery` output (@rockwotj)
+- Add support for Parquet files to `bigquery` output. (@rockwotj)
 - (Benthos) New `exists` operator added to the `cache` processor. (@mihaitodor)
 - New CLI flag `redpanda-license` added as an alternative way to specify a Redpanda license. (@Jeffail)
 

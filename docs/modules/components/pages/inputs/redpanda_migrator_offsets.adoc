@@ -1,5 +1,5 @@
 = redpanda_migrator_offsets
-:type: output
+:type: input
 :status: beta
 :categories: ["Services"]
 
@@ -25,7 +25,7 @@ component_type_dropdown::[]
 
 Redpanda Migrator consumer group offsets output using the https://github.com/twmb/franz-go[Franz Kafka client library^].
 
-Introduced in version 4.37.0.
+Introduced in version 4.44.0.
 
 
 [tabs]
@@ -36,15 +36,14 @@ Common::
 
 ```yml
 # Common config fields, showing default values
-output:
+input:
   label: ""
   redpanda_migrator_offsets:
     seed_brokers: [] # No default (required)
-    offset_topic: ${! @kafka_offset_topic }
-    offset_group: ${! @kafka_offset_group }
-    offset_partition: ${! @kafka_offset_partition }
-    offset_commit_timestamp: ${! @kafka_offset_commit_timestamp }
-    offset_metadata: ${! @kafka_offset_metadata }
+    topics: [] # No default (required)
+    regexp_topics: false
+    consumer_group: "" # No default (optional)
+    auto_replay_nacks: true
 ```
 
 --
@@ -54,7 +53,7 @@ Advanced::
 
 ```yml
 # All config fields, showing default values
-output:
+input:
   label: ""
   redpanda_migrator_offsets:
     seed_brokers: [] # No default (required)
@@ -68,25 +67,42 @@ output:
       client_certs: []
     sasl: [] # No default (optional)
     metadata_max_age: 5m
-    offset_topic: ${! @kafka_offset_topic }
-    offset_group: ${! @kafka_offset_group }
-    offset_partition: ${! @kafka_offset_partition }
-    offset_commit_timestamp: ${! @kafka_offset_commit_timestamp }
-    offset_metadata: ${! @kafka_offset_metadata }
-    timeout: 10s
-    max_message_bytes: 1MB
-    broker_write_max_bytes: 100MB
-    max_retries: 0
-    backoff:
-      initial_interval: 1s
-      max_interval: 5s
-      max_elapsed_time: 30s
+    topics: [] # No default (required)
+    regexp_topics: false
+    rack_id: ""
+    fetch_max_bytes: 50MiB
+    fetch_min_bytes: 1B
+    fetch_max_partition_bytes: 1MiB
+    consumer_group: "" # No default (optional)
+    commit_period: 5s
+    partition_buffer_bytes: 1MB
+    auto_replay_nacks: true
 ```
 
 --
 ======
 
-This output can be used in combination with the `kafka_franz` input that is configured to read the `__consumer_offsets` topic.
+TODO: Description
+
+== Metadata
+
+This input adds the following metadata fields to each message:
+
+```text
+- kafka_key
+- kafka_topic
+- kafka_partition
+- kafka_offset
+- kafka_timestamp_unix
+- kafka_timestamp_ms
+- kafka_tombstone_message
+- kafka_offset_topic
+- kafka_offset_group
+- kafka_offset_partition
+- kafka_offset_commit_timestamp
+- kafka_offset_metadata
+```
+
 
 == Fields
 
@@ -476,141 +492,106 @@ The maximum age of metadata before it is refreshed.
 
 *Default*: `"5m"`
 
-=== `offset_topic`
+=== `topics`
 
-Kafka offset topic.
-This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
-
-
-*Type*: `string`
-
-*Default*: `"${! @kafka_offset_topic }"`
-
-=== `offset_group`
-
-Kafka offset group.
-This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+A list of topics to consume from. Multiple comma separated topics can be listed in a single element. When a `consumer_group` is specified partitions are automatically distributed across consumers of a topic, otherwise all partitions are consumed.
 
 
-*Type*: `string`
+*Type*: `array`
 
-*Default*: `"${! @kafka_offset_group }"`
-
-=== `offset_partition`
-
-Kafka offset partition.
-This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
-
-
-*Type*: `string`
-
-*Default*: `"${! @kafka_offset_partition }"`
-
-=== `offset_commit_timestamp`
-
-Kafka offset commit timestamp.
-This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
-
-
-*Type*: `string`
-
-*Default*: `"${! @kafka_offset_commit_timestamp }"`
-
-=== `offset_metadata`
-
-Kafka offset metadata value.
-This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
-
-
-*Type*: `string`
-
-*Default*: `"${! @kafka_offset_metadata }"`
-
-=== `timeout`
-
-The maximum period of time to wait for message sends before abandoning the request and retrying
-
-
-*Type*: `string`
-
-*Default*: `"10s"`
-
-=== `max_message_bytes`
-
-The maximum space in bytes than an individual message may take, messages larger than this value will be rejected. This field corresponds to Kafka's `max.message.bytes`.
-
-
-*Type*: `string`
-
-*Default*: `"1MB"`
 
 ```yml
 # Examples
 
-max_message_bytes: 100MB
+topics:
+  - foo
+  - bar
 
-max_message_bytes: 50mib
+topics:
+  - things.*
+
+topics:
+  - foo,bar
 ```
 
-=== `broker_write_max_bytes`
+=== `regexp_topics`
 
-The upper bound for the number of bytes written to a broker connection in a single write. This field corresponds to Kafka's `socket.request.max.bytes`.
+Whether listed topics should be interpreted as regular expression patterns for matching multiple topics.
+
+
+*Type*: `bool`
+
+*Default*: `false`
+
+=== `rack_id`
+
+A rack specifies where the client is physically located and changes fetch requests to consume from the closest replica as opposed to the leader replica.
 
 
 *Type*: `string`
 
-*Default*: `"100MB"`
+*Default*: `""`
 
-```yml
-# Examples
+=== `fetch_max_bytes`
 
-broker_write_max_bytes: 128MB
-
-broker_write_max_bytes: 50mib
-```
-
-=== `max_retries`
-
-The maximum number of retries before giving up on the request. If set to zero there is no discrete limit.
-
-
-*Type*: `int`
-
-*Default*: `0`
-
-=== `backoff`
-
-Control time intervals between retry attempts.
-
-
-*Type*: `object`
-
-
-=== `backoff.initial_interval`
-
-The initial period to wait between retry attempts.
+Sets the maximum amount of bytes a broker will try to send during a fetch. Note that brokers may not obey this limit if it has records larger than this limit. This is the equivalent to the Java fetch.max.bytes setting.
 
 
 *Type*: `string`
 
-*Default*: `"1s"`
+*Default*: `"50MiB"`
 
-=== `backoff.max_interval`
+=== `fetch_min_bytes`
 
-The maximum period to wait between retry attempts.
+Sets the minimum amount of bytes a broker will try to send during a fetch. This is the equivalent to the Java fetch.min.bytes setting.
+
+
+*Type*: `string`
+
+*Default*: `"1B"`
+
+=== `fetch_max_partition_bytes`
+
+Sets the maximum amount of bytes that will be consumed for a single partition in a fetch request. Note that if a single batch is larger than this number, that batch will still be returned so the client can make progress. This is the equivalent to the Java fetch.max.partition.bytes setting.
+
+
+*Type*: `string`
+
+*Default*: `"1MiB"`
+
+=== `consumer_group`
+
+An optional consumer group to consume as. When specified the partitions of specified topics are automatically distributed across consumers sharing a consumer group, and partition offsets are automatically committed and resumed under this name. Consumer groups are not supported when specifying explicit partitions to consume from in the `topics` field.
+
+
+*Type*: `string`
+
+
+=== `commit_period`
+
+The period of time between each commit of the current partition offsets. Offsets are always committed during shutdown.
 
 
 *Type*: `string`
 
 *Default*: `"5s"`
 
-=== `backoff.max_elapsed_time`
+=== `partition_buffer_bytes`
 
-The maximum period to wait before retry attempts are abandoned. If zero then no limit is used.
+A buffer size (in bytes) for each consumed partition, allowing records to be queued internally before flushing. Increasing this may improve throughput at the cost of higher memory utilisation. Note that each buffer can grow slightly beyond this value.
 
 
 *Type*: `string`
 
-*Default*: `"30s"`
+*Default*: `"1MB"`
+
+=== `auto_replay_nacks`
+
+Whether messages that are rejected (nacked) at the output level should be automatically replayed indefinitely, eventually resulting in back pressure if the cause of the rejections is persistent. If set to `false` these messages will instead be deleted. Disabling auto replays can greatly improve memory efficiency of high throughput streams as the original shape of the data can be discarded immediately upon consumption and mutation.
+
+
+*Type*: `bool`
+
+*Default*: `true`
 
 

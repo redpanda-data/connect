@@ -38,7 +38,7 @@ fields:
 mapping: |
   #!blobl
 
-  let redpandaMigratorOffsets = this.redpanda_migrator.with("seed_brokers", "consumer_group", "client_id", "rack_id", "tls", "sasl").assign({"topics": ["__consumer_offsets"]})
+  let redpandaMigratorOffsets = this.redpanda_migrator.with("seed_brokers", "topics", "regexp_topics", "consumer_group", "client_id", "rack_id", "fetch_max_bytes", "fetch_min_bytes", "fetch_max_partition_bytes", "tls", "sasl")
 
   root = if this.redpanda_migrator.length() == 0 {
     throw("the redpanda_migrator input must be configured")
@@ -63,7 +63,7 @@ mapping: |
                 - redpanda_migrator: %s
                   processors:
                     - mapping: meta input_label = "redpanda_migrator"
-                - kafka_franz: %s
+                - redpanda_migrator_offsets: %s
                   processors:
                     - mapping: meta input_label = "redpanda_migrator_offsets"
     """.format(this.schema_registry.string(), this.redpanda_migrator.string(), $redpandaMigratorOffsets.string()).parse_yaml()
@@ -86,7 +86,7 @@ mapping: |
           - redpanda_migrator: %s
             processors:
               - mapping: meta input_label = "redpanda_migrator"
-          - kafka_franz: %s
+          - redpanda_migrator_offsets: %s
             processors:
               - mapping: meta input_label = "redpanda_migrator_offsets"
     """.format(this.schema_registry.string(), this.redpanda_migrator.string(), $redpandaMigratorOffsets.string()).parse_yaml()
@@ -97,7 +97,7 @@ mapping: |
           - redpanda_migrator: %s
             processors:
               - mapping: meta input_label = "redpanda_migrator"
-          - kafka_franz: %s
+          - redpanda_migrator_offsets: %s
             processors:
               - mapping: meta input_label = "redpanda_migrator_offsets"
     """.format(this.redpanda_migrator.string(), $redpandaMigratorOffsets.string()).parse_yaml()
@@ -137,9 +137,9 @@ tests:
               consumer_group: "migrator"
             processors:
               - mapping: meta input_label = "redpanda_migrator"
-          - kafka_franz:
+          - redpanda_migrator_offsets:
               seed_brokers: [ "127.0.0.1:9092" ]
-              topics: [ "__consumer_offsets" ]
+              topics: [ "foobar" ]
               consumer_group: "migrator"
             processors:
               - mapping: meta input_label = "redpanda_migrator_offsets"
@@ -177,9 +177,9 @@ tests:
                     consumer_group: "migrator"
                   processors:
                     - mapping: meta input_label = "redpanda_migrator"
-                - kafka_franz:
+                - redpanda_migrator_offsets:
                     seed_brokers: [ "127.0.0.1:9092" ]
-                    topics: [ "__consumer_offsets" ]
+                    topics: [ "foobar" ]
                     consumer_group: "migrator"
                   processors:
                     - mapping: meta input_label = "redpanda_migrator_offsets"
@@ -200,9 +200,9 @@ tests:
               consumer_group: "migrator"
             processors:
               - mapping: meta input_label = "redpanda_migrator"
-          - kafka_franz:
+          - redpanda_migrator_offsets:
               seed_brokers: [ "127.0.0.1:9092" ]
-              topics: [ "__consumer_offsets" ]
+              topics: [ "foobar" ]
               consumer_group: "migrator"
             processors:
               - mapping: meta input_label = "redpanda_migrator_offsets"
