@@ -13,6 +13,10 @@ All notable changes to this project will be documented in this file.
 - (Benthos) New Bloblang method `timestamp`. (@mihaitodor)
 - (Benthos) New `benchmark` processor. (@ooesili)
 
+### Fixed
+
+- Addresses an issue where `snowflake_streaming` could create more channels than configured. (@rockwotj)
+
 ### Changed
 
 - The `snowflake_streaming` output with `schema_evolution.enabled` set to true can now autocreate tables. (@rockwotj)
