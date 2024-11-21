@@ -37,6 +37,8 @@ const (
 	fieldCheckpointKey             = "checkpoint_key"
 	fieldCheckpointLimit           = "checkpoint_limit"
 	fieldFlavor                    = "flavor"
+
+	shutdownTimeout = 5 * time.Second
 )
 
 var mysqlStreamConfigSpec = service.NewConfigSpec().
@@ -189,6 +191,9 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 
 	i.tablesFilterMap = map[string]bool{}
 	for _, table := range i.tables {
+		if err = validateTableName(table); err != nil {
+			return nil, err
+		}
 		i.tablesFilterMap[table] = true
 	}
 
@@ -318,6 +323,7 @@ func (i *mysqlStreamInput) readMessages(ctx context.Context) {
 			}
 		case err := <-i.errors:
 			i.logger.Warnf("stream error: %s", err)
+			i.shutSig.TriggerSoftStop()
 			// If the stream has errored then we should stop and restart processing
 			return
 		}
@@ -573,6 +579,13 @@ func (i *mysqlStreamInput) ReadBatch(ctx context.Context) (service.MessageBatch,
 }
 
 func (i *mysqlStreamInput) Close(ctx context.Context) error {
+	i.shutSig.TriggerSoftStop()
+	select {
+	case <-ctx.Done():
+	case <-time.After(shutdownTimeout):
+	case <-i.shutSig.HasStoppedChan():
+	}
+	i.shutSig.TriggerHardStop()
 	if i.canal != nil {
 		i.canal.SyncedPosition()
 		i.canal.Close()
