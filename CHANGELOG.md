@@ -3,17 +3,19 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.40.0 - TBD
+## 4.40.0 - 2024-11-21
 
 ### Added
 
-- New `pg_stream` input supporting change data capture (CDC) from PostgreSQL (@le-vlad)
+- New `pg_stream` input supporting change data capture (CDC) from PostgreSQL. (@le-vlad)
 - Field `metadata_max_age` added to the `redpanda_migrator_offsets` output. (@mihaitodor)
 - Field `kafka_timestamp_ms` added to the `kafka`, `kafka_franz`, `redpanda`, `redpanda_common` and `redpanda_migrator` outputs. (@mihaitodor)
+- (Benthos) New Bloblang method `timestamp`. (@mihaitodor)
+- (Benthos) New `benchmark` processor. (@ooesili)
 
 ### Changed
 
-- `snowflake_streaming` with `schema_evolution.enabled` set to true can now autocreate tables.
+- The `snowflake_streaming` output with `schema_evolution.enabled` set to true can now autocreate tables. (@rockwotj)
 - Fields `translate_schema_ids` and `schema_registry_output_resource` added to the `redpanda_migrator` output. (@mihaitodor)
 - Fields `backfill_dependencies` and `input_resource` added to the `schema_registry` output. (@mihaitodor)
 - The `schema_registry` input and output and the `schema_registry_encode` and `schema_registry_decode` processors now use the `github.com/twmb/franz-go/pkg/sr` SchemaRegistry client. (@mihaitodor)
