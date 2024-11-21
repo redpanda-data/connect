@@ -399,12 +399,12 @@ drop table t;
 
 	rxKeepAlive()
 	xld := rxXLogData()
-	begin, err := isBeginMessage(xld.WALData)
+	begin, _, err := isBeginMessage(xld.WALData)
 	require.NoError(t, err)
 	assert.True(t, begin)
 
 	xld = rxXLogData()
-	var streamMessage *StreamMessageChanges
+	var streamMessage *StreamMessage
 	streamMessage, err = decodePgOutput(xld.WALData, relations, typeMap)
 	require.NoError(t, err)
 	assert.Nil(t, streamMessage)
@@ -414,39 +414,38 @@ drop table t;
 	require.NoError(t, err)
 	jsonData, err := json.Marshal(&streamMessage)
 	require.NoError(t, err)
-	assert.Equal(t, "{\"operation\":\"insert\",\"schema\":\"public\",\"table\":\"t\",\"data\":{\"id\":1,\"name\":\"foo\"}}", string(jsonData))
+	assert.JSONEq(t, `{"operation":"insert","schema":"public","table":"t","mode":"streaming","lsn":null,"data":{"id":1, "name":"foo"}}`, string(jsonData))
 
 	xld = rxXLogData()
 	streamMessage, err = decodePgOutput(xld.WALData, relations, typeMap)
 	require.NoError(t, err)
 	jsonData, err = json.Marshal(&streamMessage)
 	require.NoError(t, err)
-	assert.Equal(t, "{\"operation\":\"insert\",\"schema\":\"public\",\"table\":\"t\",\"data\":{\"id\":2,\"name\":\"bar\"}}", string(jsonData))
+	assert.JSONEq(t, `{"operation":"insert","schema":"public","table":"t","mode":"streaming","lsn":null,"data":{"id":2,"name":"bar"}}`, string(jsonData))
 
 	xld = rxXLogData()
 	streamMessage, err = decodePgOutput(xld.WALData, relations, typeMap)
 	require.NoError(t, err)
 	jsonData, err = json.Marshal(&streamMessage)
 	require.NoError(t, err)
-	assert.Equal(t, "{\"operation\":\"insert\",\"schema\":\"public\",\"table\":\"t\",\"data\":{\"id\":3,\"name\":\"baz\"}}", string(jsonData))
+	assert.JSONEq(t, `{"operation":"insert","schema":"public","table":"t","mode":"streaming","lsn":null,"data":{"id":3,"name":"baz"}}`, string(jsonData))
 
 	xld = rxXLogData()
 	streamMessage, err = decodePgOutput(xld.WALData, relations, typeMap)
 	require.NoError(t, err)
 	jsonData, err = json.Marshal(&streamMessage)
 	require.NoError(t, err)
-	assert.Equal(t, "{\"operation\":\"update\",\"schema\":\"public\",\"table\":\"t\",\"data\":{\"id\":3,\"name\":\"quz\"}}", string(jsonData))
+	assert.JSONEq(t, `{"operation":"update","schema":"public","table":"t","mode":"streaming","lsn":null,"data":{"id":3,"name":"quz"}}`, string(jsonData))
 
 	xld = rxXLogData()
 	streamMessage, err = decodePgOutput(xld.WALData, relations, typeMap)
 	require.NoError(t, err)
 	jsonData, err = json.Marshal(&streamMessage)
 	require.NoError(t, err)
-	assert.Equal(t, "{\"operation\":\"delete\",\"schema\":\"public\",\"table\":\"t\",\"data\":{\"id\":2,\"name\":null}}", string(jsonData))
+	assert.JSONEq(t, `{"operation":"delete","schema":"public","table":"t","mode":"streaming","lsn":null,"data":{"id":2,"name":null}}`, string(jsonData))
 	xld = rxXLogData()
 
-	var commit bool
-	commit, _, err = isCommitMessage(xld.WALData)
+	commit, _, err := isCommitMessage(xld.WALData)
 	require.NoError(t, err)
 	assert.True(t, commit)
 }

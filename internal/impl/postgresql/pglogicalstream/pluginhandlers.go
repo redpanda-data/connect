@@ -30,43 +30,26 @@ type PgOutputUnbufferedPluginHandler struct {
 	relations map[uint32]*RelationMessage
 	typeMap   *pgtype.Map
 
-	lastEmitted  LSN
-	lsnWatermark *watermark.Value[LSN]
-}
-
-// PgOutputBufferedPluginHandler is a native output handler that buffers and emits each transaction together
-type PgOutputBufferedPluginHandler struct {
-	messages chan StreamMessage
-	monitor  *Monitor
-
-	relations       map[uint32]*RelationMessage
-	typeMap         *pgtype.Map
-	pgoutputChanges []StreamMessageChanges
+	lastEmitted       LSN
+	lsnWatermark      *watermark.Value[LSN]
+	includeTxnMarkers bool
 }
 
 // NewPgOutputPluginHandler creates a new PgOutputPluginHandler
 func NewPgOutputPluginHandler(
 	messages chan StreamMessage,
-	batchTransactions bool,
 	monitor *Monitor,
 	lsnWatermark *watermark.Value[LSN],
+	includeTxnMarkers bool,
 ) PluginHandler {
-	if batchTransactions {
-		return &PgOutputUnbufferedPluginHandler{
-			messages:     messages,
-			monitor:      monitor,
-			relations:    map[uint32]*RelationMessage{},
-			typeMap:      pgtype.NewMap(),
-			lastEmitted:  lsnWatermark.Get(),
-			lsnWatermark: lsnWatermark,
-		}
-	}
-	return &PgOutputBufferedPluginHandler{
-		messages:        messages,
-		monitor:         monitor,
-		relations:       map[uint32]*RelationMessage{},
-		typeMap:         pgtype.NewMap(),
-		pgoutputChanges: []StreamMessageChanges{},
+	return &PgOutputUnbufferedPluginHandler{
+		messages:          messages,
+		monitor:           monitor,
+		relations:         map[uint32]*RelationMessage{},
+		typeMap:           pgtype.NewMap(),
+		lastEmitted:       lsnWatermark.Get(),
+		lsnWatermark:      lsnWatermark,
+		includeTxnMarkers: includeTxnMarkers,
 	}
 }
 
@@ -77,87 +60,33 @@ func (p *PgOutputUnbufferedPluginHandler) Handle(ctx context.Context, clientXLog
 	if err != nil {
 		return false, err
 	}
-
-	isCommit, _, err := isCommitMessage(xld.WALData)
-	if err != nil {
-		return false, err
-	}
-
-	// when receiving a commit message, we need to acknowledge the LSN
-	// but we must wait for connect to flush the messages before we can do that
-	if isCommit {
-		select {
-		case <-p.lsnWatermark.WaitFor(p.lastEmitted):
-			return true, nil
-		case <-ctx.Done():
-			return false, ctx.Err()
-		}
-	}
-
-	if message != nil {
-		lsn := clientXLogPos.String()
-		msg := StreamMessage{
-			Lsn:     &lsn,
-			Changes: []StreamMessageChanges{*message},
-			Mode:    StreamModeStreaming,
-		}
-		select {
-		case p.messages <- msg:
-			p.lastEmitted = clientXLogPos
-		case <-ctx.Done():
-			return false, ctx.Err()
-		}
-	}
-
-	return false, nil
-}
-
-// Handle handles the pgoutput output
-func (p *PgOutputBufferedPluginHandler) Handle(ctx context.Context, clientXLogPos LSN, xld XLogData) (bool, error) {
-	// message changes must be collected in the buffer in the context of the same transaction
-	// as single transaction can contain multiple changes
-	// and LSN ack will cause potential loss of changes
-	isBegin, err := isBeginMessage(xld.WALData)
-	if err != nil {
-		return false, err
-	}
-
-	if isBegin {
-		p.pgoutputChanges = []StreamMessageChanges{}
-	}
-
-	// parse changes inside the transaction
-	message, err := decodePgOutput(xld.WALData, p.relations, p.typeMap)
-	if err != nil {
-		return false, err
-	}
-
-	if message != nil {
-		p.pgoutputChanges = append(p.pgoutputChanges, *message)
-	}
-
-	isCommit, _, err := isCommitMessage(xld.WALData)
-	if err != nil {
-		return false, err
-	}
-
-	if !isCommit {
+	if message == nil {
 		return false, nil
 	}
 
-	if len(p.pgoutputChanges) > 0 {
-		// send all collected changes
-		lsn := clientXLogPos.String()
-		msg := StreamMessage{
-			Lsn:     &lsn,
-			Changes: p.pgoutputChanges,
-			Mode:    StreamModeStreaming,
+	if !p.includeTxnMarkers {
+		switch message.Operation {
+		case CommitOpType:
+			// when receiving a commit message, we need to acknowledge the LSN
+			// but we must wait for connect to flush the messages before we can do that
+			select {
+			case <-p.lsnWatermark.WaitFor(p.lastEmitted):
+				return true, nil
+			case <-ctx.Done():
+				return false, ctx.Err()
+			}
+		case BeginOpType:
+			return false, nil
 		}
-		select {
-		case p.messages <- msg:
-		case <-ctx.Done():
-			return false, ctx.Err()
-		}
+	}
+
+	lsn := clientXLogPos.String()
+	message.Lsn = &lsn
+	select {
+	case p.messages <- *message:
+		p.lastEmitted = clientXLogPos
+	case <-ctx.Done():
+		return false, ctx.Err()
 	}
 
 	return false, nil
