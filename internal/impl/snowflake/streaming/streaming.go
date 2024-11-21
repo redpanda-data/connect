@@ -308,11 +308,6 @@ type SnowflakeIngestionChannel struct {
 	requestIDCounter *atomic.Int64
 }
 
-func (c *SnowflakeIngestionChannel) nextRequestID() string {
-	rid := c.requestIDCounter.Add(1)
-	return fmt.Sprintf("%s_%d", c.clientPrefix, rid)
-}
-
 // InsertStats holds some basic statistics about the InsertRows operation
 type InsertStats struct {
 	BuildTime            time.Duration
@@ -495,7 +490,7 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 	insertStats.CompressedOutputSize = part.unencryptedLen
 	insertStats.BuildTime = uploadStartTime.Sub(startTime)
 	insertStats.UploadTime = uploadFinishTime.Sub(uploadStartTime)
-	insertStats.RegisterTime = time.Now().Sub(uploadFinishTime)
+	insertStats.RegisterTime = time.Since(uploadFinishTime)
 	insertStats.ConvertTime = part.convertTime
 	insertStats.SerializeTime = part.serializeTime
 	return insertStats, err
