@@ -57,7 +57,7 @@ func (c *runOllamaConfig) lookPath(file string) (string, error) {
 func (c *runOllamaConfig) downloadOllama(ctx context.Context, path string) error {
 	var url string
 	if c.downloadURL == "" {
-		const baseURL string = "https://github.com/ollama/ollama/releases/download/v0.4.0/ollama"
+		const baseURL string = "https://github.com/ollama/ollama/releases/download/v0.4.3/ollama"
 		switch runtime.GOOS {
 		case "darwin":
 			// They ship an universal executable for darwin
@@ -82,38 +82,57 @@ func (c *runOllamaConfig) downloadOllama(ctx context.Context, path string) error
 	if resp.StatusCode != 200 {
 		return fmt.Errorf("failed to download ollama binary: status_code=%d", resp.StatusCode)
 	}
-	var binary io.Reader = resp.Body
-	if strings.HasSuffix(url, ".tgz") {
-		gz, err := gzip.NewReader(resp.Body)
+
+	if !strings.HasSuffix(url, ".tgz") {
+		if err := c.fs.MkdirAll(filepath.Join(path, "bin"), 0777); err != nil {
+			return err
+		}
+		ollama, err := c.fs.OpenFile(filepath.Join(path, "bin/ollama"), os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0755)
 		if err != nil {
-			return fmt.Errorf("unable to read tarball for ollama binary download: %w", err)
+			return fmt.Errorf("unable to create file for ollama binary download: %w", err)
 		}
-		reader := tar.NewReader(gz)
-		for {
-			header, err := reader.Next()
-			if err == io.EOF {
-				return fmt.Errorf("unable to find ollama binary within tarball at %s", url)
-			} else if err != nil {
-				return fmt.Errorf("unable to read tarball at %s: %w", url, err)
-			}
-			if !header.FileInfo().Mode().IsRegular() || header.Name != "./bin/ollama" {
-				continue
-			}
-			binary = reader
-			break
+		defer ollama.Close()
+		w, ok := (ollama).(io.Writer)
+		if !ok {
+			return errors.New("unable to download ollama binary to filesystem")
 		}
+		_, err = io.Copy(w, resp.Body)
+		return err
 	}
-	ollama, err := c.fs.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0755)
+	gz, err := gzip.NewReader(resp.Body)
 	if err != nil {
-		return fmt.Errorf("unable to create file for ollama binary download: %w", err)
+		return fmt.Errorf("unable to read tarball for ollama binary download: %w", err)
 	}
-	defer ollama.Close()
-	w, ok := (ollama).(io.Writer)
-	if !ok {
-		return errors.New("unable to download ollama binary to filesystem")
+	reader := tar.NewReader(gz)
+	for {
+		header, err := reader.Next()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return fmt.Errorf("unable to read tarball at %s: %w", url, err)
+		}
+		if !header.FileInfo().Mode().IsRegular() {
+			continue
+		}
+		fullpath := filepath.Join(path, header.Name)
+		c.logger.Tracef("extracting file to %s", fullpath)
+		if err := c.fs.MkdirAll(filepath.Dir(fullpath), 0777); err != nil {
+			return err
+		}
+		file, err := c.fs.OpenFile(fullpath, os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0755)
+		if err != nil {
+			return fmt.Errorf("unable to create file for ollama binary download: %w", err)
+		}
+		defer file.Close()
+		w, ok := (file).(io.Writer)
+		if !ok {
+			return errors.New("unable to download ollama binary to filesystem")
+		}
+		if _, err := io.Copy(w, reader); err != nil {
+			return err
+		}
 	}
-	_, err = io.Copy(w, binary)
-	return err
+	return nil
 }
 
 var ollamaProcess = singleton.New(singleton.Config[*exec.Cmd]{
@@ -124,14 +143,14 @@ var ollamaProcess = singleton.New(singleton.Config[*exec.Cmd]{
 		}
 		serverPath, err := cfg.lookPath("ollama")
 		if errors.Is(err, exec.ErrNotFound) {
-			serverPath = path.Join(cfg.cacheDir, "ollama")
+			serverPath = path.Join(cfg.cacheDir, "bin/ollama")
 			if err := os.MkdirAll(cfg.cacheDir, 0777); err != nil {
 				return nil, err
 			}
 			if _, err = os.Stat(serverPath); errors.Is(err, os.ErrNotExist) {
 				err = backoff.Retry(func() error {
 					cfg.logger.Infof("downloading ollama to %s", serverPath)
-					return cfg.downloadOllama(ctx, serverPath)
+					return cfg.downloadOllama(ctx, cfg.cacheDir)
 				}, backoff.WithMaxRetries(backoff.NewConstantBackOff(time.Second), 3))
 			}
 			if err != nil {
