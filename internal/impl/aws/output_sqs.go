@@ -132,6 +132,7 @@ By default Redpanda Connect will use a shared credentials file when connecting t
 			service.NewIntField(sqsoFieldMaxRecordsCount).
 				Description("Customize the maximum number of records delivered in a single SQS request. This value must be greater than 0 but no greater than 10.").
 				Default(10).
+				LintRule(`if this <= 0 || this > 10 { "this field must be >0 and <=10" } `).
 				Advanced(),
 		).
 		Fields(config.SessionFields()...).
