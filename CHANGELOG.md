@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.41.0 - TBD
+
+### Added
+
+- Field `max_records_per_request` added to the `aws_sqs` output. (@Jeffail)
+
 ## 4.40.0 - 2024-11-21
 
 ### Added
