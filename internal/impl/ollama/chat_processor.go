@@ -184,6 +184,10 @@ func makeOllamaCompletionProcessor(conf *service.ParsedConfig, mgr *service.Reso
 	} else {
 		return nil, fmt.Errorf("invalid %s: %q", ocpFieldResponseFormat, format)
 	}
+	p.savePrompt, err = conf.FieldBool(ocpFieldEmitPromptMetadata)
+	if err != nil {
+		return nil, err
+	}
 	b, err := newBaseProcessor(conf, mgr)
 	if err != nil {
 		return nil, err
