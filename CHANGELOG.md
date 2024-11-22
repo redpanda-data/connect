@@ -11,7 +11,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- The `-cgo` suffixed docker images are no longer built and pushed along with the regular images. This decision was made due to low demand, and the unacceptable cadence with which the image base (Debian) receives security updates. It is still possible to create your own builds using the same methods as before.
+- The `-cgo` suffixed docker images are no longer built and pushed along with the regular images. This decision was made due to low demand, and the unacceptable cadence with which the image base (Debian) receives security updates. It is still possible to create your own CGO builds with the command `CGO_ENABLED=1 make TAGS=x_benthos_extra redpanda-connect`.
 
 ## 4.40.0 - 2024-11-21
 
