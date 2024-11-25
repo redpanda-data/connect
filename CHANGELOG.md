@@ -3,15 +3,19 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.41.0 - TBD
+## 4.41.0 - 2024-11-25
 
 ### Added
 
 - Field `max_records_per_request` added to the `aws_sqs` output. (@Jeffail)
 
+### Fixed
+
+- (Benthos) Fixed an issue where running a CLI with a custom environment would cause imported templates to be rejected. (@Jeffail)
+
 ### Changed
 
-- The `-cgo` suffixed docker images are no longer built and pushed along with the regular images. This decision was made due to low demand, and the unacceptable cadence with which the image base (Debian) receives security updates. It is still possible to create your own CGO builds with the command `CGO_ENABLED=1 make TAGS=x_benthos_extra redpanda-connect`.
+- The `-cgo` suffixed docker images are no longer built and pushed along with the regular images. This decision was made due to low demand, and the unacceptable cadence with which the image base (Debian) receives security updates. It is still possible to create your own CGO builds with the command `CGO_ENABLED=1 make TAGS=x_benthos_extra redpanda-connect`. (@Jeffail)
 
 ## 4.40.0 - 2024-11-21
 
