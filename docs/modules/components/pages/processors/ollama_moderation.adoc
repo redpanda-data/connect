@@ -25,7 +25,7 @@ component_type_dropdown::[]
 
 Generates responses to messages in a chat conversation, using the Ollama API.
 
-Introduced in version 4.41.0.
+Introduced in version 4.42.0.
 
 
 [tabs]

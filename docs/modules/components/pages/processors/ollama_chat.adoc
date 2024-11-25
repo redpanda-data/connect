@@ -286,7 +286,7 @@ Sets the stop sequences to use. When this pattern is encountered the LLM stops g
 
 === `save_prompt_metadata`
 
-If enabled the prompt is saved as @prompt metadata on the output message.
+If enabled the prompt is saved as @prompt metadata on the output message. If system_prompt is used it's also saved as @system_prompt
 
 
 *Type*: `bool`

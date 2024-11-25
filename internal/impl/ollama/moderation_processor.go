@@ -42,7 +42,7 @@ func ollamaModerationProcessorConfig() *service.ConfigSpec {
 By default, the processor starts and runs a locally installed Ollama server. Alternatively, to use an already running Ollama server, add your server details to the `+"`"+bopFieldServerAddress+"`"+` field. You can https://ollama.com/download[download and install Ollama from the Ollama website^].
 
 For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ollama documentation^].`).
-		Version("4.41.0").
+		Version("4.42.0").
 		Fields(
 			service.NewStringAnnotatedEnumField(bopFieldModel, map[string]string{
 				"llama-guard3": "When using llama-guard3, two pieces of metadata is added: @safe with the value of `yes` or `no` and the second being @category for the safety category violation. For more information see the https://ollama.com/library/llama-guard3[Llama Guard 3 Model Card].",
@@ -111,11 +111,11 @@ type ollamaModerationProcessor struct {
 func (o *ollamaModerationProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
 	p, err := o.prompt.TryString(msg)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("interpolation error for %s: %w", ompFieldUserPrompt, err)
 	}
 	r, err := o.response.TryString(msg)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("interpolation error for %s: %w", ompFieldAssistantResponse, err)
 	}
 	g, err := o.generateCompletion(ctx, p, r)
 	if err != nil {

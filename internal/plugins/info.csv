@@ -155,7 +155,7 @@ ockam_kafka               ,input     ,ockam_kafka               ,0.0.0   ,commun
 ockam_kafka               ,output    ,ockam_kafka               ,0.0.0   ,community  ,n          ,n     ,n
 ollama_chat               ,processor ,ollama_chat               ,4.32.0  ,enterprise ,n          ,n     ,y
 ollama_embeddings         ,processor ,ollama_embeddings         ,4.32.0  ,enterprise ,n          ,n     ,y
-ollama_moderation         ,processor ,ollama_moderation         ,0.0.0   ,enterprise ,n          ,n     ,y
+ollama_moderation         ,processor ,ollama_moderation         ,4.42.0  ,enterprise ,n          ,n     ,y
 open_telemetry_collector  ,tracer    ,open_telemetry_collector  ,0.0.0   ,community  ,n          ,n     ,n
 openai_chat_completion    ,processor ,openai_chat_completion    ,4.32.0  ,enterprise ,n          ,y     ,y
 openai_embeddings         ,processor ,openai_embeddings         ,4.32.0  ,enterprise ,n          ,y     ,y

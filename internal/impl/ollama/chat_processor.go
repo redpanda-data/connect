@@ -124,7 +124,7 @@ For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ol
 				Description(`Sets the stop sequences to use. When this pattern is encountered the LLM stops generating text and returns the final response.`),
 			service.NewBoolField(ocpFieldEmitPromptMetadata).
 				Default(false).
-				Description(`If enabled the prompt is saved as @prompt metadata on the output message.`),
+				Description(`If enabled the prompt is saved as @prompt metadata on the output message. If system_prompt is used it's also saved as @system_prompt`),
 		).Fields(commonFields()...).
 		Example(
 			"Use Llava to analyze an image",
