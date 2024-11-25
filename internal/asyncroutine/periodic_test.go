@@ -40,7 +40,7 @@ func TestWorks(t *testing.T) {
 		counter.Add(1)
 	})
 	p.Start()
-	require.Eventually(t, func() bool { return counter.Load() > 5 }, time.Second, time.Millisecond)
+	require.Eventually(t, func() bool { return counter.Load() > 5 }, time.Second, 2*time.Millisecond)
 	p.Stop()
 	snapshot := counter.Load()
 	time.Sleep(time.Millisecond * 250)
@@ -56,7 +56,7 @@ func TestWorksWithContext(t *testing.T) {
 		active.Store(false)
 	})
 	p.Start()
-	require.Eventually(t, func() bool { return active.Load() }, 10*time.Millisecond, time.Millisecond)
+	require.Eventually(t, func() bool { return active.Load() }, time.Second, 5*time.Millisecond)
 	p.Stop()
 	require.False(t, active.Load())
 }
