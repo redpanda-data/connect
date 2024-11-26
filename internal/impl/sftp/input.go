@@ -376,61 +376,62 @@ type watcherPathProvider struct {
 }
 
 func (w *watcherPathProvider) Next(ctx context.Context, client *sftp.Client) (string, error) {
-	if len(w.expandedPaths) > 0 {
-		nextPath := w.expandedPaths[0]
-		w.expandedPaths = w.expandedPaths[1:]
-		return nextPath, nil
-	}
-
-	if waitFor := time.Until(w.nextPoll); w.nextPoll.IsZero() || waitFor > 0 {
-		w.nextPoll = time.Now().Add(w.pollInterval)
-		select {
-		case <-time.After(waitFor):
-		case <-ctx.Done():
-			return "", ctx.Err()
+	for {
+		if len(w.expandedPaths) > 0 {
+			nextPath := w.expandedPaths[0]
+			w.expandedPaths = w.expandedPaths[1:]
+			return nextPath, nil
 		}
-	}
 
-	if cerr := w.mgr.AccessCache(ctx, w.cacheName, func(cache service.Cache) {
-		for _, p := range w.targetPaths {
-			paths, err := client.Glob(p)
-			if err != nil {
-				w.mgr.Logger().With("error", err, "path", p).Warn("Failed to scan files from path")
-				continue
+		if waitFor := time.Until(w.nextPoll); w.nextPoll.IsZero() || waitFor > 0 {
+			w.nextPoll = time.Now().Add(w.pollInterval)
+			select {
+			case <-time.After(waitFor):
+			case <-ctx.Done():
+				return "", ctx.Err()
 			}
+		}
 
-			for _, path := range paths {
-				info, err := client.Stat(path)
+		if cerr := w.mgr.AccessCache(ctx, w.cacheName, func(cache service.Cache) {
+			for _, p := range w.targetPaths {
+				paths, err := client.Glob(p)
 				if err != nil {
-					w.mgr.Logger().With("error", err, "path", path).Warn("Failed to stat path")
-					continue
-				}
-				if time.Since(info.ModTime()) < w.minAge {
+					w.mgr.Logger().With("error", err, "path", p).Warn("Failed to scan files from path")
 					continue
 				}
 
-				// We process it if the marker is a pending symbol (!) and we're
-				// polling for the first time, or if the path isn't found in the
-				// cache.
-				//
-				// If we got an unexpected error obtaining a marker for this
-				// path from the cache then we skip that path because the
-				// watcher will eventually poll again, and the cache.Get
-				// operation will re-run.
-				if v, err := cache.Get(ctx, path); errors.Is(err, service.ErrKeyNotFound) || (!w.followUpPoll && string(v) == "!") {
-					w.expandedPaths = append(w.expandedPaths, path)
-					if err = cache.Set(ctx, path, []byte("!"), nil); err != nil {
-						// Mark the file target as pending so that we do not reprocess it
-						w.mgr.Logger().With("error", err, "path", path).Warn("Failed to mark path as pending")
+				for _, path := range paths {
+					info, err := client.Stat(path)
+					if err != nil {
+						w.mgr.Logger().With("error", err, "path", path).Warn("Failed to stat path")
+						continue
+					}
+					if time.Since(info.ModTime()) < w.minAge {
+						continue
+					}
+
+					// We process it if the marker is a pending symbol (!) and we're
+					// polling for the first time, or if the path isn't found in the
+					// cache.
+					//
+					// If we got an unexpected error obtaining a marker for this
+					// path from the cache then we skip that path because the
+					// watcher will eventually poll again, and the cache.Get
+					// operation will re-run.
+					if v, err := cache.Get(ctx, path); errors.Is(err, service.ErrKeyNotFound) || (!w.followUpPoll && string(v) == "!") {
+						w.expandedPaths = append(w.expandedPaths, path)
+						if err = cache.Set(ctx, path, []byte("!"), nil); err != nil {
+							// Mark the file target as pending so that we do not reprocess it
+							w.mgr.Logger().With("error", err, "path", path).Warn("Failed to mark path as pending")
+						}
 					}
 				}
 			}
+		}); cerr != nil {
+			return "", fmt.Errorf("error obtaining cache: %v", cerr)
 		}
-	}); cerr != nil {
-		return "", fmt.Errorf("error obtaining cache: %v", cerr)
+		w.followUpPoll = true
 	}
-	w.followUpPoll = true
-	return w.Next(ctx, client)
 }
 
 func (w *watcherPathProvider) Ack(ctx context.Context, name string, err error) (outErr error) {
