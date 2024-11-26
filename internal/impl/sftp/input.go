@@ -369,7 +369,7 @@ func (w *watcherPathProvider) Next(ctx context.Context, client *sftp.Client) (st
 		return nextPath, nil
 	}
 
-	if waitFor := time.Until(w.nextPoll); waitFor > 0 {
+	if waitFor := time.Until(w.nextPoll); w.nextPoll.IsZero() || waitFor > 0 {
 		w.nextPoll = time.Now().Add(w.pollInterval)
 		select {
 		case <-time.After(waitFor):
