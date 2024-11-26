@@ -239,28 +239,47 @@ func (o *schemaRegistryOutput) Close(_ context.Context) error {
 
 //------------------------------------------------------------------------------
 
-// GetDestinationSchemaID attempts to fetch the schema ID for the provided source schema ID and subject. It will first
-// migrate it to the destination Schema Registry if it doesn't exist there yet.
-func (o *schemaRegistryOutput) GetDestinationSchemaID(ctx context.Context, id int, subject string) (int, error) {
-	schema, err := o.inputClient.GetSchemaByIDAndSubject(ctx, id, subject, false)
+// GetDestinationSchemaID attempts to fetch the schema ID for the provided source schema ID. It will first migrate it to
+// the destination Schema Registry if it doesn't exist there yet.
+func (o *schemaRegistryOutput) GetDestinationSchemaID(ctx context.Context, id int) (int, error) {
+	schema, err := o.inputClient.GetSchemaByID(ctx, id, false)
 	if err != nil {
-		return -1, fmt.Errorf("failed to get schema for ID %d and subject %q: %s", id, subject, err)
+		return -1, fmt.Errorf("failed to get schema for ID %d: %s", id, err)
 	}
 
-	latestVersion, err := o.inputClient.GetLatestSchemaVersionForSchemaIDAndSubject(ctx, id, subject)
+	schemaSubjects, err := o.inputClient.GetSubjectsBySchemaID(ctx, id, false)
 	if err != nil {
-		return -1, fmt.Errorf("failed to get schema for ID %d and subject %q: %s", id, subject, err)
+		return -1, fmt.Errorf("failed to get subjects for schema ID %d: %s", id, err)
 	}
 
-	return o.getOrCreateSchemaID(
-		ctx,
-		franz_sr.SubjectSchema{
-			Subject: subject,
-			Version: latestVersion,
-			ID:      id,
-			Schema:  schema,
-		},
-	)
+	if len(schemaSubjects) == 0 {
+		return -1, fmt.Errorf("no subjects found for schema ID %d", id)
+	}
+
+	// Register the schema with all the subjects it's associated with in the source Schema Registry. Each call should
+	// return the same destination schema ID.
+	var destinationID int
+	for _, subject := range schemaSubjects {
+		latestVersion, err := o.inputClient.GetLatestSchemaVersionForSchemaIDAndSubject(ctx, id, subject)
+		if err != nil {
+			return -1, fmt.Errorf("failed to get schema for ID %d and subject %q: %s", id, subject, err)
+		}
+
+		destinationID, err = o.getOrCreateSchemaID(
+			ctx,
+			franz_sr.SubjectSchema{
+				Subject: subject,
+				Version: latestVersion,
+				ID:      id,
+				Schema:  schema,
+			},
+		)
+		if err != nil {
+			return -1, fmt.Errorf("failed to get destination schema ID for source schema ID %d, subject %q and version %d: %s", id, subject, latestVersion, err)
+		}
+	}
+
+	return destinationID, nil
 }
 
 // schemaLineageCacheKey is used as a lightweight key for the schema ID map cache so we don't store the full schemas in

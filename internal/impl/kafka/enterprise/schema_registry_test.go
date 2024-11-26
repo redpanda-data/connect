@@ -70,6 +70,10 @@ func TestSchemaRegistry(t *testing.T) {
 				output = dummySchema
 			case "/schemas/ids/2":
 				output = dummySchemaWithRef
+			case "/schemas/ids/1/subjects":
+				output = []string{"foo"}
+			case "/schemas/ids/2/subjects":
+				output = []string{"bar"}
 			case "/schemas/ids/1/versions":
 				output = []map[string]any{{"subject": "foo", "version": 1}}
 			case "/schemas/ids/2/versions":
@@ -97,7 +101,6 @@ func TestSchemaRegistry(t *testing.T) {
 
 	inputConf, err := schemaRegistryInputSpec().ParseYAML(fmt.Sprintf(`
 url: %s
-subject: foo
 `, ts.URL), nil)
 	require.NoError(t, err)
 
@@ -139,10 +142,10 @@ subject: ${! @schema_registry_subject }
 
 	// Ensure that the written schemas are correctly returned.
 	// TODO: Use a secondary test server for the writer so we can check that they're actually written.
-	destID, err := writer.GetDestinationSchemaID(ctx, 1, "foo")
+	destID, err := writer.GetDestinationSchemaID(ctx, 1)
 	require.NoError(t, err)
 	assert.Equal(t, 1, destID)
-	destID, err = writer.GetDestinationSchemaID(ctx, 2, "bar")
+	destID, err = writer.GetDestinationSchemaID(ctx, 2)
 	require.NoError(t, err)
 	assert.Equal(t, 2, destID)
 }
