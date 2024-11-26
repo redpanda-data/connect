@@ -395,8 +395,8 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 	startTime := time.Now()
 	// Prevent multiple channels from having the same bdec file (it must be globally unique)
 	// so add the ID of the channel in the upper 16 bits and then get 48 bits of randomness outside that.
-	fakeThreadID := (int(c.ID) << 48) | rand.N(1<<48)
-	blobPath := generateBlobPath(c.clientPrefix, fakeThreadID, int(c.requestIDCounter.Add(1)))
+	fakeThreadID := (int64(c.ID) << 48) | rand.Int64N(1<<48)
+	blobPath := generateBlobPath(c.clientPrefix, fakeThreadID, c.requestIDCounter.Add(1))
 	// This is extra metadata that is required for functionality in snowflake.
 	c.fileMetadata["primaryFileId"] = path.Base(blobPath)
 	part, err := c.constructBdecPart(batch, c.fileMetadata)

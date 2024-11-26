@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.42.0 - TBD
+
+### Added
+
+- Add support for `spanner` driver to SQL plugins. (@yufeng-deng)
+
 ## 4.41.0 - 2024-11-25
 
 ### Added
