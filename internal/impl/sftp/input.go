@@ -174,11 +174,62 @@ func newSFTPReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources)
 }
 
 func (s *sftpReader) Connect(ctx context.Context) (err error) {
+	file, nextPath, skip, err := s.seekNextPath(ctx)
+	if err != nil {
+		return err
+	}
+	if skip {
+		return nil
+	}
+
+	details := service.NewScannerSourceDetails()
+	details.SetName(nextPath)
+	if s.scanner, err = s.scannerCtor.Create(file, func(ctx context.Context, aErr error) (outErr error) {
+		_ = s.pathProvider.Ack(ctx, nextPath, aErr)
+		if aErr != nil {
+			s.log.Errorf("skipping delete on finish: %s", aErr)
+			return nil
+		}
+		if s.deleteOnFinish {
+			s.scannerMut.Lock()
+			client := s.client
+			if client == nil {
+				if client, outErr = s.creds.GetClient(s.mgr.FS(), s.address); outErr != nil {
+					outErr = fmt.Errorf("obtain private client: %w", outErr)
+				}
+				defer func() {
+					_ = client.Close()
+				}()
+			}
+			if outErr == nil {
+				if outErr = client.Remove(nextPath); outErr != nil {
+					outErr = fmt.Errorf("remove %v: %w", nextPath, outErr)
+				}
+			}
+			s.scannerMut.Unlock()
+		}
+		return
+	}, details); err != nil {
+		_ = file.Close()
+		_ = s.pathProvider.Ack(ctx, nextPath, err)
+		return err
+	}
+
+	s.scannerMut.Lock()
+	s.currentPath = nextPath
+	s.scannerMut.Unlock()
+
+	s.log.Debugf("Consuming from file '%v'", nextPath)
+	return
+}
+
+func (s *sftpReader) seekNextPath(ctx context.Context) (file *sftp.File, nextPath string, skip bool, err error) {
 	s.scannerMut.Lock()
 	defer s.scannerMut.Unlock()
 
 	if s.scanner != nil {
-		return nil
+		skip = true
+		return
 	}
 
 	if s.client == nil {
@@ -191,8 +242,6 @@ func (s *sftpReader) Connect(ctx context.Context) (err error) {
 		s.pathProvider = s.getFilePathProvider(ctx)
 	}
 
-	var nextPath string
-	var file *sftp.File
 	for {
 		if nextPath, err = s.pathProvider.Next(ctx, s.client); err != nil {
 			if errors.Is(err, sftp.ErrSshFxConnectionLost) {
@@ -223,45 +272,9 @@ func (s *sftpReader) Connect(ctx context.Context) (err error) {
 				_ = s.pathProvider.Ack(ctx, nextPath, err)
 			}
 		} else {
-			break
+			return
 		}
 	}
-
-	details := service.NewScannerSourceDetails()
-	details.SetName(nextPath)
-	if s.scanner, err = s.scannerCtor.Create(file, func(ctx context.Context, aErr error) (outErr error) {
-		_ = s.pathProvider.Ack(ctx, nextPath, aErr)
-		if aErr != nil {
-			return nil
-		}
-		if s.deleteOnFinish {
-			s.scannerMut.Lock()
-			client := s.client
-			if client == nil {
-				if client, outErr = s.creds.GetClient(s.mgr.FS(), s.address); outErr != nil {
-					outErr = fmt.Errorf("obtain private client: %w", outErr)
-				}
-				defer func() {
-					_ = client.Close()
-				}()
-			}
-			if outErr == nil {
-				if outErr = client.Remove(nextPath); outErr != nil {
-					outErr = fmt.Errorf("remove %v: %w", nextPath, outErr)
-				}
-			}
-			s.scannerMut.Unlock()
-		}
-		return
-	}, details); err != nil {
-		_ = file.Close()
-		_ = s.pathProvider.Ack(ctx, nextPath, err)
-		return err
-	}
-	s.currentPath = nextPath
-
-	s.log.Debugf("Consuming from file '%v'", nextPath)
-	return
 }
 
 func (s *sftpReader) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
