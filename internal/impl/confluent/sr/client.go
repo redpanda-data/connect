@@ -126,9 +126,13 @@ func (c *Client) GetSchemaByID(ctx context.Context, id int, includeDeleted bool)
 	return schema, nil
 }
 
-// GetSchemaByIDAndSubject gets a schema by its global identifier.
-func (c *Client) GetSchemaByIDAndSubject(ctx context.Context, id int, subject string, includeDeleted bool) (sr.Schema, error) {
-	return c.GetSchemaByID(sr.WithParams(ctx, sr.Subject(subject)), id, includeDeleted)
+// GetSubjectsBySchemaID returns the registered subjects for a given schema ID.
+func (c *Client) GetSubjectsBySchemaID(ctx context.Context, id int, includeDeleted bool) ([]string, error) {
+	if includeDeleted {
+		ctx = sr.WithParams(ctx, sr.ShowDeleted)
+	}
+
+	return c.clientSR.SubjectsByID(ctx, id)
 }
 
 // GetLatestSchemaVersionForSchemaIDAndSubject gets the latest version of a schema by its global identifier scoped to the provided subject.

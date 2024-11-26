@@ -9,6 +9,10 @@ All notable changes to this project will be documented in this file.
 
 - Add support for `spanner` driver to SQL plugins. (@yufeng-deng)
 
+### Changed
+
+- The `redpanda_migrator` output now registers destination schemas with all the subjects associated with the source schema ID extracted from each message. (@mihaitodor)
+
 ## 4.41.0 - 2024-11-25
 
 ### Added

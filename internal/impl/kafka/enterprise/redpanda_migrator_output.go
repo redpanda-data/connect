@@ -274,14 +274,14 @@ func (w *RedpandaMigratorWriter) WriteBatch(ctx context.Context, b service.Messa
 		for recordIdx, record := range records {
 			schemaID, _, err := ch.DecodeID(record.Value)
 			if err != nil {
-				return fmt.Errorf("failed to extract schema ID from message index %d for topic %q: %s", recordIdx, record.Topic, err)
+				return fmt.Errorf("failed to extract schema ID from message index %d: %s", recordIdx, err)
 			}
 
 			var destSchemaID int
 			if cachedID, ok := w.schemaIDCache.Load(schemaID); !ok {
-				destSchemaID, err = w.schemaRegistryOutput.GetDestinationSchemaID(ctx, schemaID, record.Topic)
+				destSchemaID, err = w.schemaRegistryOutput.GetDestinationSchemaID(ctx, schemaID)
 				if err != nil {
-					return fmt.Errorf("failed to fetch destination schema ID from message index %d for topic %q: %s", recordIdx, record.Topic, err)
+					return fmt.Errorf("failed to fetch destination schema ID from message index %d: %s", recordIdx, err)
 				}
 				w.schemaIDCache.Store(schemaID, destSchemaID)
 			} else {
@@ -290,7 +290,7 @@ func (w *RedpandaMigratorWriter) WriteBatch(ctx context.Context, b service.Messa
 
 			err = sr.UpdateID(record.Value, destSchemaID)
 			if err != nil {
-				return fmt.Errorf("failed to extract schema ID from message index %d for topic %q: %s", recordIdx, record.Topic, err)
+				return fmt.Errorf("failed to update schema ID in message index %d: %s", recordIdx, err)
 			}
 		}
 	}
