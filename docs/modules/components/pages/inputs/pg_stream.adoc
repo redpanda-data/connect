@@ -40,7 +40,7 @@ input:
   label: ""
   pg_stream:
     dsn: postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable # No default (required)
-    batch_transactions: true
+    include_transaction_markers: false
     stream_snapshot: false
     snapshot_memory_safety_factor: 1
     snapshot_batch_size: 0
@@ -71,7 +71,7 @@ input:
   label: ""
   pg_stream:
     dsn: postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable # No default (required)
-    batch_transactions: true
+    include_transaction_markers: false
     stream_snapshot: false
     snapshot_memory_safety_factor: 1
     snapshot_batch_size: 0
@@ -103,7 +103,7 @@ Additionally, if `stream_snapshot` is set to true, then the existing data in the
 This input adds the following metadata fields to each message:
 - mode (Either "streaming" or "snapshot" indicating whether the message is part of a streaming operation or snapshot processing)
 - table (Name of the table that the message originated from)
-- operation (Type of operation that generated the message, such as INSERT, UPDATE, or DELETE)
+- operation (Type of operation that generated the message: "insert", "update", or "delete". This will also be "begin" and "commit" if `include_transaction_markers` is enabled)
 		
 
 == Fields
@@ -122,14 +122,14 @@ The Data Source Name for the PostgreSQL database in the form of `postgres://[use
 dsn: postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable
 ```
 
-=== `batch_transactions`
+=== `include_transaction_markers`
 
-When set to true, transactions are batched into a single message.
+When set to true, empty messages with operation types BEGIN and COMMIT are generated for the beginning and end of each transaction. Messages with operation metadata set to "begin" or "commit" will have null message payloads.
 
 
 *Type*: `bool`
 
-*Default*: `true`
+*Default*: `false`
 
 === `stream_snapshot`
 

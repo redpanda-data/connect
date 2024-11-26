@@ -9,7 +9,6 @@
 package enterprise_test
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -17,7 +16,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"strconv"
 	"testing"
 	"time"
@@ -30,6 +28,7 @@ import (
 	"github.com/twmb/franz-go/pkg/kerr"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
+	franz_sr "github.com/twmb/franz-go/pkg/sr"
 	"google.golang.org/protobuf/encoding/protojson"
 
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
@@ -287,12 +286,92 @@ max_message_bytes: 1MB
 	assert.Equal(t, "buz", string(outRecords[1].Key))
 }
 
+func startSchemaRegistry(t *testing.T, pool *dockertest.Pool) int {
+	// TODO: Generalise this helper for the other Kafka tests here which use Redpanda...
+	t.Helper()
+
+	options := &dockertest.RunOptions{
+		Repository:   "redpandadata/redpanda",
+		Tag:          "latest",
+		Hostname:     "redpanda",
+		ExposedPorts: []string{"8081/tcp"},
+		Cmd: []string{
+			"redpanda",
+			"start",
+			"--node-id 0",
+			"--mode dev-container",
+			"--set rpk.additional_start_flags=[--reactor-backend=epoll]",
+			"--schema-registry-addr 0.0.0.0:8081",
+		},
+	}
+
+	resource, err := pool.RunWithOptions(options)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		assert.NoError(t, pool.Purge(resource))
+	})
+
+	port, err := strconv.Atoi(resource.GetPort("8081/tcp"))
+	require.NoError(t, err)
+
+	_ = resource.Expire(900)
+	require.NoError(t, pool.Retry(func() error {
+		ctx, done := context.WithTimeout(context.Background(), 3*time.Second)
+		defer done()
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("http://localhost:%d/subjects", port), nil)
+		if err != nil {
+			return err
+		}
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return errors.New("invalid status")
+		}
+
+		return nil
+	}))
+
+	return port
+}
+
+func createSchema(t *testing.T, port int, subject string, schema string, references []franz_sr.SchemaReference) {
+	t.Helper()
+
+	client, err := franz_sr.NewClient(franz_sr.URLs(fmt.Sprintf("http://localhost:%d", port)))
+	require.NoError(t, err)
+
+	_, err = client.CreateSchema(context.Background(), subject, franz_sr.Schema{Schema: schema, References: references})
+	require.NoError(t, err)
+}
+
+func deleteSubject(t *testing.T, port int, subject string, hardDelete bool) {
+	t.Helper()
+
+	client, err := franz_sr.NewClient(franz_sr.URLs(fmt.Sprintf("http://localhost:%d", port)))
+	require.NoError(t, err)
+
+	deleteMode := franz_sr.SoftDelete
+	if hardDelete {
+		deleteMode = franz_sr.HardDelete
+	}
+
+	_, err = client.DeleteSubject(context.Background(), subject, franz_sr.DeleteHow(deleteMode))
+	require.NoError(t, err)
+}
+
 func TestSchemaRegistryIntegration(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
+	pool.MaxWait = time.Minute
 
 	tests := []struct {
 		name                       string
@@ -327,22 +406,7 @@ func TestSchemaRegistryIntegration(t *testing.T) {
 	}
 
 	sourcePort := startSchemaRegistry(t, pool)
-	sinkPort := startSchemaRegistry(t, pool)
-
-	cleanupSubject := func(port, subject string, hardDelete bool) {
-		u, err := url.Parse(fmt.Sprintf("http://localhost:%s/subjects/%s", port, subject))
-		require.NoError(t, err)
-		if hardDelete {
-			q := u.Query()
-			q.Add("permanent", "true")
-			u.RawQuery = q.Encode()
-		}
-		req, err := http.NewRequest(http.MethodDelete, u.String(), nil)
-		require.NoError(t, err)
-		resp, err := http.DefaultClient.Do(req)
-		require.NoError(t, err)
-		require.NoError(t, resp.Body.Close())
-	}
+	destinationPort := startSchemaRegistry(t, pool)
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -351,83 +415,57 @@ func TestSchemaRegistryIntegration(t *testing.T) {
 			subject := u4.String()
 
 			t.Cleanup(func() {
-				cleanupSubject(sourcePort, subject, false)
-				cleanupSubject(sourcePort, subject, true)
-				cleanupSubject(sinkPort, subject, false)
-				cleanupSubject(sinkPort, subject, true)
-
+				// Clean up the extraSubject first since it may contain schemas with references.
 				if test.extraSubject != "" {
-					cleanupSubject(sourcePort, test.extraSubject, false)
-					cleanupSubject(sourcePort, test.extraSubject, true)
-					cleanupSubject(sinkPort, test.extraSubject, false)
-					cleanupSubject(sinkPort, test.extraSubject, true)
+					deleteSubject(t, sourcePort, test.extraSubject, false)
+					deleteSubject(t, sourcePort, test.extraSubject, true)
+					if test.subjectFilter == "" {
+						deleteSubject(t, destinationPort, test.extraSubject, false)
+						deleteSubject(t, destinationPort, test.extraSubject, true)
+					}
 				}
+
+				if !test.includeSoftDeletedSubjects {
+					deleteSubject(t, sourcePort, subject, false)
+				}
+				deleteSubject(t, sourcePort, subject, true)
+
+				deleteSubject(t, destinationPort, subject, false)
+				deleteSubject(t, destinationPort, subject, true)
 			})
 
-			postContentType := "application/vnd.schemaregistry.v1+json"
-			type payload struct {
-				Subject    string           `json:"subject,omitempty"`
-				Version    int              `json:"version,omitempty"`
-				Schema     string           `json:"schema"`
-				References []map[string]any `json:"references,omitempty"`
-			}
-			body, err := json.Marshal(payload{Schema: test.schema})
-			require.NoError(t, err)
-			req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://localhost:%s/subjects/%s/versions", sourcePort, subject), bytes.NewReader(body))
-			require.NoError(t, err)
-			req.Header.Set("Content-Type", postContentType)
-
-			resp, err := http.DefaultClient.Do(req)
-			require.NoError(t, err)
-			require.NoError(t, resp.Body.Close())
-			require.Equal(t, http.StatusOK, resp.StatusCode)
+			createSchema(t, sourcePort, subject, test.schema, nil)
 
 			if test.subjectFilter != "" {
-				resp, err = http.DefaultClient.Post(fmt.Sprintf("http://localhost:%s/subjects/%s/versions", sourcePort, test.extraSubject), postContentType, bytes.NewReader(body))
-				require.NoError(t, err)
-				require.NoError(t, resp.Body.Close())
-				require.Equal(t, http.StatusOK, resp.StatusCode)
+				createSchema(t, sourcePort, test.extraSubject, test.schema, nil)
 			}
 
 			if test.includeSoftDeletedSubjects {
-				req, err := http.NewRequest(http.MethodDelete, fmt.Sprintf("http://localhost:%s/subjects/%s", sourcePort, subject), nil)
-				require.NoError(t, err)
-				resp, err = http.DefaultClient.Do(req)
-				require.NoError(t, err)
-				require.NoError(t, resp.Body.Close())
-				require.Equal(t, http.StatusOK, resp.StatusCode)
+				deleteSubject(t, sourcePort, subject, false)
 			}
 
 			if test.schemaWithReference != "" {
-				body, err := json.Marshal(payload{Schema: test.schemaWithReference, References: []map[string]any{{"name": "foo", "subject": subject, "version": 1}}})
-				require.NoError(t, err)
-				req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://localhost:%s/subjects/%s/versions", sourcePort, test.extraSubject), bytes.NewReader(body))
-				require.NoError(t, err)
-				req.Header.Set("Content-Type", postContentType)
-				resp, err := http.DefaultClient.Do(req)
-				require.NoError(t, err)
-				require.NoError(t, resp.Body.Close())
-				require.Equal(t, http.StatusOK, resp.StatusCode)
+				createSchema(t, sourcePort, test.extraSubject, test.schemaWithReference, []franz_sr.SchemaReference{{Name: "foo", Subject: subject, Version: 1}})
 			}
 
 			streamBuilder := service.NewStreamBuilder()
 			require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
 input:
   schema_registry:
-    url: http://localhost:%s
+    url: http://localhost:%d
     include_deleted: %t
     subject_filter: %s
     fetch_in_order: %t
 output:
   fallback:
     - schema_registry:
-        url: http://localhost:%s
+        url: http://localhost:%d
         subject: ${! @schema_registry_subject }
         # Preserve schema order.
         max_in_flight: 1
     # Don't retry the same message multiple times so we do fail if schemas with references are sent in the wrong order
     - drop: {}
-`, sourcePort, test.includeSoftDeletedSubjects, test.subjectFilter, test.schemaWithReference != "", sinkPort)))
+`, sourcePort, test.includeSoftDeletedSubjects, test.subjectFilter, test.schemaWithReference != "", destinationPort)))
 			require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
 
 			stream, err := streamBuilder.Build()
@@ -439,9 +477,9 @@ output:
 			err = stream.Run(ctx)
 			require.NoError(t, err)
 
-			resp, err = http.DefaultClient.Get(fmt.Sprintf("http://localhost:%s/subjects", sinkPort))
+			resp, err := http.DefaultClient.Get(fmt.Sprintf("http://localhost:%d/subjects", destinationPort))
 			require.NoError(t, err)
-			body, err = io.ReadAll(resp.Body)
+			body, err := io.ReadAll(resp.Body)
 			require.NoError(t, err)
 			require.NoError(t, resp.Body.Close())
 			require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -450,87 +488,130 @@ output:
 				assert.NotContains(t, string(body), test.extraSubject)
 			}
 
-			resp, err = http.DefaultClient.Get(fmt.Sprintf("http://localhost:%s/subjects/%s/versions/1", sinkPort, subject))
+			resp, err = http.DefaultClient.Get(fmt.Sprintf("http://localhost:%d/subjects/%s/versions/1", destinationPort, subject))
 			require.NoError(t, err)
 			body, err = io.ReadAll(resp.Body)
 			require.NoError(t, err)
 			require.NoError(t, resp.Body.Close())
 			require.Equal(t, http.StatusOK, resp.StatusCode)
 
-			var p payload
-			require.NoError(t, json.Unmarshal(body, &p))
-			assert.Equal(t, subject, p.Subject)
-			assert.Equal(t, 1, p.Version)
-			assert.JSONEq(t, test.schema, p.Schema)
+			var sd franz_sr.SubjectSchema
+			require.NoError(t, json.Unmarshal(body, &sd))
+			assert.Equal(t, subject, sd.Subject)
+			assert.Equal(t, 1, sd.Version)
+			assert.JSONEq(t, test.schema, sd.Schema.Schema)
 
 			if test.schemaWithReference != "" {
-				resp, err = http.DefaultClient.Get(fmt.Sprintf("http://localhost:%s/subjects/%s/versions/1", sinkPort, test.extraSubject))
+				resp, err = http.DefaultClient.Get(fmt.Sprintf("http://localhost:%d/subjects/%s/versions/1", destinationPort, test.extraSubject))
 				require.NoError(t, err)
 				body, err = io.ReadAll(resp.Body)
 				require.NoError(t, err)
 				require.NoError(t, resp.Body.Close())
 				require.Equal(t, http.StatusOK, resp.StatusCode)
 
-				var p payload
-				require.NoError(t, json.Unmarshal(body, &p))
-				assert.Equal(t, test.extraSubject, p.Subject)
-				assert.Equal(t, 1, p.Version)
-				assert.JSONEq(t, test.schemaWithReference, p.Schema)
+				var sd franz_sr.SubjectSchema
+				require.NoError(t, json.Unmarshal(body, &sd))
+				assert.Equal(t, test.extraSubject, sd.Subject)
+				assert.Equal(t, 1, sd.Version)
+				assert.JSONEq(t, test.schemaWithReference, sd.Schema.Schema)
 			}
 		})
 	}
 }
 
-func startSchemaRegistry(t *testing.T, pool *dockertest.Pool) string {
-	// TODO: Generalise this helper for the other Kafka tests here which use Redpanda...
-	t.Helper()
+func TestSchemaRegistryIDTranslationIntegration(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Parallel()
 
-	options := &dockertest.RunOptions{
-		Repository:   "redpandadata/redpanda",
-		Tag:          "latest",
-		Hostname:     "redpanda",
-		ExposedPorts: []string{"8081"},
-		Cmd: []string{
-			"redpanda",
-			"start",
-			"--node-id 0",
-			"--mode dev-container",
-			"--set rpk.additional_start_flags=[--reactor-backend=epoll]",
-			"--schema-registry-addr 0.0.0.0:8081",
+	pool, err := dockertest.NewPool("")
+	require.NoError(t, err)
+
+	sourcePort := startSchemaRegistry(t, pool)
+	destinationPort := startSchemaRegistry(t, pool)
+
+	// Create two schemas under subject `foo`.
+	createSchema(t, sourcePort, "foo", `{"name":"foo", "type": "record", "fields":[{"name":"str", "type": "string"}]}`, nil)
+	createSchema(t, sourcePort, "foo", `{"name":"foo", "type": "record", "fields":[{"name":"str", "type": "string"}, {"name":"num", "type": "int", "default": 42}]}`, nil)
+
+	// Create a schema under subject `bar` which references the second schema under `foo`.
+	createSchema(t, sourcePort, "bar", `{"name":"bar", "type": "record", "fields":[{"name":"data", "type": "foo"}]}`,
+		[]franz_sr.SchemaReference{{Name: "foo", Subject: "foo", Version: 2}},
+	)
+
+	// Create a schema at the destination which will have ID 1 so we can check that the ID translation works
+	// correctly.
+	createSchema(t, destinationPort, "baz", `{"name":"baz", "type": "record", "fields":[{"name":"num", "type": "int"}]}`, nil)
+
+	// Use a Stream with a mapping filter to send only the schema with the reference to the destination in order
+	// to force the output to backfill the rest of the schemas.
+	streamBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
+input:
+  schema_registry:
+    url: http://localhost:%d
+  processors:
+    - mapping: |
+        if this.id != 3 { root = deleted() }
+output:
+  fallback:
+    - schema_registry:
+        url: http://localhost:%d
+        subject: ${! @schema_registry_subject }
+        # Preserve schema order.
+        max_in_flight: 1
+    # Don't retry the same message multiple times so we do fail if schemas with references are sent in the wrong order
+    - drop: {}
+`, sourcePort, destinationPort)))
+	require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
+
+	stream, err := streamBuilder.Build()
+	require.NoError(t, err)
+
+	ctx, done := context.WithTimeout(context.Background(), 3*time.Second)
+	defer done()
+
+	err = stream.Run(ctx)
+	require.NoError(t, err)
+
+	// Check that the schemas were backfilled correctly.
+	tests := []struct {
+		subject            string
+		version            int
+		expectedID         int
+		expectedReferences []franz_sr.SchemaReference
+	}{
+		{
+			subject:    "foo",
+			version:    1,
+			expectedID: 2,
+		},
+		{
+			subject:    "foo",
+			version:    2,
+			expectedID: 3,
+		},
+		{
+			subject:            "bar",
+			version:            1,
+			expectedID:         4,
+			expectedReferences: []franz_sr.SchemaReference{{Name: "foo", Subject: "foo", Version: 2}},
 		},
 	}
 
-	pool.MaxWait = time.Minute
-	resource, err := pool.RunWithOptions(options)
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
+	for _, test := range tests {
+		t.Run("", func(t *testing.T) {
+			resp, err := http.DefaultClient.Get(fmt.Sprintf("http://localhost:%d/subjects/%s/versions/%d", destinationPort, test.subject, test.version))
+			require.NoError(t, err)
+			body, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	port := resource.GetPort("8081/tcp")
+			var sd franz_sr.SubjectSchema
+			require.NoError(t, json.Unmarshal(body, &sd))
+			require.NoError(t, resp.Body.Close())
 
-	_ = resource.Expire(900)
-	require.NoError(t, pool.Retry(func() error {
-		ctx, done := context.WithTimeout(context.Background(), 3*time.Second)
-		defer done()
-
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("http://localhost:%s/subjects", port), nil)
-		if err != nil {
-			return err
-		}
-
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			return err
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			return errors.New("invalid status")
-		}
-
-		return nil
-	}))
-
-	return port
+			assert.Equal(t, test.expectedID, sd.ID)
+			assert.Equal(t, test.expectedReferences, sd.References)
+		})
+	}
 }

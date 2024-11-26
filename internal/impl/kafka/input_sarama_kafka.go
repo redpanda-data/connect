@@ -72,6 +72,7 @@ This input adds the following metadata fields to each message:
 - kafka_partition
 - kafka_offset
 - kafka_lag
+- kafka_timestamp_ms
 - kafka_timestamp_unix
 - kafka_tombstone_message
 - All existing message headers (version 0.11+)
@@ -417,6 +418,7 @@ func dataToPart(highestOffset int64, data *sarama.ConsumerMessage, multiHeader b
 	part.MetaSetMut("kafka_topic", data.Topic)
 	part.MetaSetMut("kafka_offset", int(data.Offset))
 	part.MetaSetMut("kafka_lag", lag)
+	part.MetaSetMut("kafka_timestamp_ms", data.Timestamp.UnixMilli())
 	part.MetaSetMut("kafka_timestamp_unix", data.Timestamp.Unix())
 	part.MetaSetMut("kafka_tombstone_message", data.Value == nil)
 
@@ -526,7 +528,7 @@ func (k *kafkaReader) Connect(ctx context.Context) error {
 	if len(k.topicPartitions) > 0 {
 		return k.connectExplicitTopics(ctx, k.saramConf)
 	}
-	return k.connectBalancedTopics(ctx, k.saramConf)
+	return k.connectBalancedTopics(k.saramConf)
 }
 
 // ReadBatch attempts to read a message from a kafkaReader topic.

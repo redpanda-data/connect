@@ -20,12 +20,13 @@ import (
 	gonanoid "github.com/matoous/go-nanoid/v2"
 	"github.com/redpanda-data/benthos/v4/public/service"
 
+	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream"
 )
 
 const (
 	fieldDSN                       = "dsn"
-	fieldBatchTransactions         = "batch_transactions"
+	fieldIncludeTxnMarkers         = "include_transaction_markers"
 	fieldStreamSnapshot            = "stream_snapshot"
 	fieldSnapshotMemSafetyFactor   = "snapshot_memory_safety_factor"
 	fieldSnapshotBatchSize         = "snapshot_batch_size"
@@ -60,14 +61,14 @@ Additionally, if ` + "`" + fieldStreamSnapshot + "`" + ` is set to true, then th
 This input adds the following metadata fields to each message:
 - mode (Either "streaming" or "snapshot" indicating whether the message is part of a streaming operation or snapshot processing)
 - table (Name of the table that the message originated from)
-- operation (Type of operation that generated the message, such as INSERT, UPDATE, or DELETE)
+- operation (Type of operation that generated the message: "insert", "update", or "delete". This will also be "begin" and "commit" if ` + "`" + fieldIncludeTxnMarkers + "`" + ` is enabled)
 		`).
 	Field(service.NewStringField(fieldDSN).
 		Description("The Data Source Name for the PostgreSQL database in the form of `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]`. Please note that Postgres enforces SSL by default, you can override this with the parameter `sslmode=disable` if required.").
 		Example("postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable")).
-	Field(service.NewBoolField(fieldBatchTransactions).
-		Description("When set to true, transactions are batched into a single message.").
-		Default(true)).
+	Field(service.NewBoolField(fieldIncludeTxnMarkers).
+		Description(`When set to true, empty messages with operation types BEGIN and COMMIT are generated for the beginning and end of each transaction. Messages with operation metadata set to "begin" or "commit" will have null message payloads.`).
+		Default(false)).
 	Field(service.NewBoolField(fieldStreamSnapshot).
 		Description("When set to true, the plugin will first stream a snapshot of all existing data in the database before streaming changes. In order to use this the tables that are being snapshot MUST have a primary key set so that reading from the table can be parallelized.").
 		Example(true).
@@ -121,8 +122,8 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		schema                    string
 		tables                    []string
 		streamSnapshot            bool
+		includeTxnMarkers         bool
 		snapshotMemSafetyFactor   float64
-		batchTransactions         bool
 		snapshotBatchSize         int
 		checkpointLimit           int
 		walMonitorInterval        time.Duration
@@ -154,6 +155,10 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		return nil, err
 	}
 
+	if includeTxnMarkers, err = conf.FieldBool(fieldIncludeTxnMarkers); err != nil {
+		return nil, err
+	}
+
 	if schema, err = conf.FieldString(fieldSchema); err != nil {
 		return nil, err
 	}
@@ -167,10 +172,6 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	}
 
 	if streamSnapshot, err = conf.FieldBool(fieldStreamSnapshot); err != nil {
-		return nil, err
-	}
-
-	if batchTransactions, err = conf.FieldBool(fieldBatchTransactions); err != nil {
 		return nil, err
 	}
 
@@ -221,11 +222,11 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 			DBSchema: schema,
 			DBTables: tables,
 
+			IncludeTxnMarkers:          includeTxnMarkers,
 			ReplicationSlotName:        "rs_" + dbSlotName,
 			BatchSize:                  snapshotBatchSize,
 			StreamOldData:              streamSnapshot,
 			TemporaryReplicationSlot:   temporarySlot,
-			BatchTransactions:          batchTransactions,
 			SnapshotMemorySafetyFactor: snapshotMemSafetyFactor,
 			PgStandbyTimeout:           pgStandbyTimeout,
 			WalMonitorInterval:         walMonitorInterval,
@@ -304,6 +305,16 @@ func (p *pgStreamInput) Connect(ctx context.Context) error {
 }
 
 func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher *service.Batcher) {
+	monitorLoop := asyncroutine.NewPeriodic(p.streamConfig.WalMonitorInterval, func() {
+		// Periodically collect stats
+		report := pgStream.GetProgress()
+		for name, progress := range report.TableProgress {
+			p.snapshotMetrics.SetFloat64(progress, name)
+		}
+		p.replicationLag.Set(report.WalLagInBytes)
+	})
+	monitorLoop.Start()
+	defer monitorLoop.Stop()
 	ctx, _ := p.stopSig.SoftStopCtx(context.Background())
 	defer func() {
 		ctx, _ := p.stopSig.HardStopCtx(context.Background())
@@ -339,32 +350,17 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				mb  []byte
 				err error
 			)
-
-			if len(message.Changes) == 0 {
-				p.logger.Errorf("received empty message (LSN=%v)", message.Lsn)
+			if mb, err = json.Marshal(message.Data); err != nil {
+				p.logger.Errorf("failure to marshal message: %s", err)
 				break
 			}
-
-			// TODO(rockwood): this should only be the message
-			if mb, err = json.Marshal(message.Changes); err != nil {
-				break
-			}
-
 			batchMsg := service.NewMessage(mb)
-
 			batchMsg.MetaSet("mode", string(message.Mode))
-			batchMsg.MetaSet("table", message.Changes[0].Table)
-			batchMsg.MetaSet("operation", message.Changes[0].Operation)
+			batchMsg.MetaSet("table", message.Table)
+			batchMsg.MetaSet("operation", string(message.Operation))
 			if message.Lsn != nil {
 				batchMsg.MetaSet("lsn", *message.Lsn)
 			}
-			if message.Changes[0].TableSnapshotProgress != nil {
-				p.snapshotMetrics.SetFloat64(*message.Changes[0].TableSnapshotProgress, message.Changes[0].Table)
-			}
-			if message.WALLagBytes != nil {
-				p.replicationLag.Set(*message.WALLagBytes)
-			}
-
 			if batcher.Add(batchMsg) {
 				nextTimedBatchChan = nil
 				flushedBatch, err := batcher.Flush(ctx)

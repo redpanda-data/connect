@@ -27,14 +27,7 @@ func redpandaCommonOutputConfig() *service.ConfigSpec {
 				Default(10),
 			service.NewBatchPolicyField(roFieldBatching),
 		).
-		LintRule(`
-root = if this.partitioner == "manual" {
-if this.partition.or("") == "" {
-"a partition must be specified when the partitioner is set to manual"
-}
-} else if this.partition.or("") != "" {
-"a partition cannot be specified unless the partitioner is set to manual"
-}`).
+		LintRule(kafka.FranzWriterConfigLints()).
 		Example("Simple Output", "Data is generated and written to a topic bar, targetting the cluster configured within the redpanda block at the bottom. This is useful as it allows us to configure TLS and SASL only once for potentially multiple inputs and outputs.", `
 input:
   generate:

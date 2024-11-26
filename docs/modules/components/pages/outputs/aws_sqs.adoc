@@ -76,6 +76,7 @@ output:
       period: ""
       check: ""
       processors: [] # No default (optional)
+    max_records_per_request: 10
     region: ""
     endpoint: ""
     credentials:
@@ -275,6 +276,15 @@ processors:
   - archive:
       format: json_array
 ```
+
+=== `max_records_per_request`
+
+Customize the maximum number of records delivered in a single SQS request. This value must be greater than 0 but no greater than 10.
+
+
+*Type*: `int`
+
+*Default*: `10`
 
 === `region`
 

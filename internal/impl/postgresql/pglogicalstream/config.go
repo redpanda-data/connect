@@ -36,9 +36,8 @@ type Config struct {
 	SnapshotMemorySafetyFactor float64
 	// BatchSize is the batch size for streaming
 	BatchSize int
-	// BatchTransactions is whether to buffer transactions as an entire single message or to send
-	// each row in a transaction as a message.
-	BatchTransactions bool
+	// If true, include BEGIN and COMMIT messages in the stream
+	IncludeTxnMarkers bool
 
 	Logger *service.Logger
 

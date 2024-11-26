@@ -55,6 +55,11 @@ func sqlInsertOutputConfig() *service.ConfigSpec {
 			Optional().
 			Advanced().
 			Example("ON CONFLICT (name) DO NOTHING")).
+		Field(service.NewStringListField("options").
+			Description("A list of keyword options to add before the INTO clause of the query.").
+			Optional().
+			Advanced().
+			Example([]string{"DELAYED", "IGNORE"})).
 		Field(service.NewIntField("max_in_flight").
 			Description("The maximum number of inserts to run in parallel.").
 			Default(64))
@@ -196,6 +201,14 @@ func newSQLInsertOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 			return nil, err
 		}
 		s.builder = s.builder.Suffix(suffixStr)
+	}
+
+	if conf.Contains("options") {
+		options, err := conf.FieldStringList("options")
+		if err != nil {
+			return nil, err
+		}
+		s.builder = s.builder.Options(options...)
 	}
 
 	if s.connSettings, err = connSettingsFromParsed(conf, mgr); err != nil {

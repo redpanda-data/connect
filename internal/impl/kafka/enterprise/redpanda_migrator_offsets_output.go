@@ -10,24 +10,25 @@ package enterprise
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
-	"math"
-	"strings"
+	"slices"
 	"sync"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
-	"github.com/dustin/go-humanize"
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
-	"github.com/twmb/franz-go/pkg/sasl"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
 	"github.com/redpanda-data/connect/v4/internal/retries"
+)
+
+const (
+	rmooFieldMaxInFlight = "max_in_flight"
+	rmooFieldKafkaKey    = "kafka_key"
 )
 
 func redpandaMigratorOffsetsOutputConfig() *service.ConfigSpec {
@@ -36,7 +37,6 @@ func redpandaMigratorOffsetsOutputConfig() *service.ConfigSpec {
 		Categories("Services").
 		Version("4.37.0").
 		Summary("Redpanda Migrator consumer group offsets output using the https://github.com/twmb/franz-go[Franz Kafka client library^].").
-		// TODO
 		Description("This output can be used in combination with the `kafka_franz` input that is configured to read the `__consumer_offsets` topic.").
 		Fields(RedpandaMigratorOffsetsOutputConfigFields()...)
 }
@@ -44,42 +44,17 @@ func redpandaMigratorOffsetsOutputConfig() *service.ConfigSpec {
 // RedpandaMigratorOffsetsOutputConfigFields returns the full suite of config fields for a redpanda_migrator_offsets output using the
 // franz-go client library.
 func RedpandaMigratorOffsetsOutputConfigFields() []*service.ConfigField {
-	return append(
+	return slices.Concat(
+		kafka.FranzConnectionFields(),
 		[]*service.ConfigField{
-			service.NewStringListField("seed_brokers").
-				Description("A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses.").
-				Example([]string{"localhost:9092"}).
-				Example([]string{"foo:9092", "bar:9092"}).
-				Example([]string{"foo:9092,bar:9092"}),
-			service.NewInterpolatedStringField("kafka_key").
+			service.NewInterpolatedStringField(rmooFieldKafkaKey).
 				Description("Kafka key.").Default("${! @kafka_key }"),
-			service.NewStringField("client_id").
-				Description("An identifier for the client connection.").
-				Default("benthos").
-				Advanced(),
-			service.NewIntField("max_in_flight").
+			service.NewIntField(rmooFieldMaxInFlight).
 				Description("The maximum number of batches to be sending in parallel at any given time.").
 				Default(1),
-			service.NewDurationField("timeout").
-				Description("The maximum period of time to wait for message sends before abandoning the request and retrying").
-				Default("10s").
-				Advanced(),
-			service.NewStringField("max_message_bytes").
-				Description("The maximum space in bytes than an individual message may take, messages larger than this value will be rejected. This field corresponds to Kafka's `max.message.bytes`.").
-				Advanced().
-				Default("1MB").
-				Example("100MB").
-				Example("50mib"),
-			service.NewStringField("broker_write_max_bytes").
-				Description("The upper bound for the number of bytes written to a broker connection in a single write. This field corresponds to Kafka's `socket.request.max.bytes`.").
-				Advanced().
-				Default("100MB").
-				Example("128MB").
-				Example("50mib"),
-			service.NewTLSToggledField("tls"),
-			kafka.SASLFields(),
 		},
-		retries.CommonRetryBackOffFields(0, "1s", "5s", "30s")...,
+		kafka.FranzProducerLimitsFields(),
+		retries.CommonRetryBackOffFields(0, "1s", "5s", "30s"),
 	)
 }
 
@@ -90,7 +65,7 @@ func init() {
 			maxInFlight int,
 			err error,
 		) {
-			if maxInFlight, err = conf.FieldInt("max_in_flight"); err != nil {
+			if maxInFlight, err = conf.FieldInt(rmooFieldMaxInFlight); err != nil {
 				return
 			}
 			output, err = NewRedpandaMigratorOffsetsWriterFromConfig(conf, mgr)
@@ -105,15 +80,10 @@ func init() {
 
 // RedpandaMigratorOffsetsWriter implements a Redpanda Migrator offsets writer using the franz-go library.
 type RedpandaMigratorOffsetsWriter struct {
-	SeedBrokers         []string
-	kafkaKey            *service.InterpolatedString
-	clientID            string
-	TLSConf             *tls.Config
-	saslConfs           []sasl.Mechanism
-	timeout             time.Duration
-	produceMaxBytes     int32
-	brokerWriteMaxBytes int32
-	backoffCtor         func() backoff.BackOff
+	clientDetails *kafka.FranzConnectionDetails
+	clientOpts    []kgo.Opt
+	kafkaKey      *service.InterpolatedString
+	backoffCtor   func() backoff.BackOff
 
 	connMut sync.Mutex
 	client  *kadm.Client
@@ -127,61 +97,19 @@ func NewRedpandaMigratorOffsetsWriterFromConfig(conf *service.ParsedConfig, mgr 
 		mgr: mgr,
 	}
 
-	brokerList, err := conf.FieldStringList("seed_brokers")
-	if err != nil {
-		return nil, err
-	}
-	for _, b := range brokerList {
-		w.SeedBrokers = append(w.SeedBrokers, strings.Split(b, ",")...)
-	}
-
-	if w.kafkaKey, err = conf.FieldInterpolatedString("kafka_key"); err != nil {
+	var err error
+	if w.clientDetails, err = kafka.FranzConnectionDetailsFromConfig(conf, mgr.Logger()); err != nil {
 		return nil, err
 	}
 
-	if w.timeout, err = conf.FieldDuration("timeout"); err != nil {
+	if w.kafkaKey, err = conf.FieldInterpolatedString(rmooFieldKafkaKey); err != nil {
 		return nil, err
 	}
 
-	maxMessageBytesStr, err := conf.FieldString("max_message_bytes")
-	if err != nil {
-		return nil, err
-	}
-	maxMessageBytes, err := humanize.ParseBytes(maxMessageBytesStr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse max_message_bytes: %w", err)
-	}
-	if maxMessageBytes > uint64(math.MaxInt32) {
-		return nil, fmt.Errorf("invalid max_message_bytes, must not exceed %v", math.MaxInt32)
-	}
-	w.produceMaxBytes = int32(maxMessageBytes)
-	brokerWriteMaxBytesStr, err := conf.FieldString("broker_write_max_bytes")
-	if err != nil {
-		return nil, err
-	}
-	brokerWriteMaxBytes, err := humanize.ParseBytes(brokerWriteMaxBytesStr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse broker_write_max_bytes: %w", err)
-	}
-	if brokerWriteMaxBytes > 1<<30 {
-		return nil, fmt.Errorf("invalid broker_write_max_bytes, must not exceed %v", 1<<30)
-	}
-	w.brokerWriteMaxBytes = int32(brokerWriteMaxBytes)
-
-	if w.clientID, err = conf.FieldString("client_id"); err != nil {
+	if w.clientOpts, err = kafka.FranzProducerLimitsOptsFromConfig(conf); err != nil {
 		return nil, err
 	}
 
-	tlsConf, tlsEnabled, err := conf.FieldTLSToggled("tls")
-	if err != nil {
-		return nil, err
-	}
-	if tlsEnabled {
-		w.TLSConf = tlsConf
-	}
-	if w.saslConfs, err = kafka.SASLMechanismsFromConfig(conf); err != nil {
-		return nil, err
-	}
 	if w.backoffCtor, err = retries.CommonRetryBackOffCtorFromParsed(conf); err != nil {
 		return nil, err
 	}
@@ -200,17 +128,16 @@ func (w *RedpandaMigratorOffsetsWriter) Connect(ctx context.Context) error {
 		return nil
 	}
 
-	clientOpts := []kgo.Opt{
-		kgo.SeedBrokers(w.SeedBrokers...),
-		kgo.SASL(w.saslConfs...),
-		kgo.ProducerBatchMaxBytes(w.produceMaxBytes),
-		kgo.BrokerMaxWriteBytes(w.brokerWriteMaxBytes),
-		kgo.ProduceRequestTimeout(w.timeout),
-		kgo.ClientID(w.clientID),
-		kgo.WithLogger(&kafka.KGoLogger{L: w.mgr.Logger()}),
-	}
-	if w.TLSConf != nil {
-		clientOpts = append(clientOpts, kgo.DialTLSConfig(w.TLSConf))
+	clientOpts := slices.Concat(
+		w.clientOpts,
+		[]kgo.Opt{
+			kgo.SeedBrokers(w.clientDetails.SeedBrokers...),
+			kgo.SASL(w.clientDetails.SASL...),
+			kgo.ClientID(w.clientDetails.ClientID),
+			kgo.WithLogger(&kafka.KGoLogger{L: w.mgr.Logger()}),
+		})
+	if w.clientDetails.TLSConf != nil {
+		clientOpts = append(clientOpts, kgo.DialTLSConfig(w.clientDetails.TLSConf))
 	}
 
 	var err error
@@ -271,6 +198,7 @@ func (w *RedpandaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.
 			return fmt.Errorf("listed offsets returned and error: %s", err)
 		}
 
+		// TODO: Add metadata to offsets!
 		offsets := listedOffsets.Offsets()
 		offsets.KeepFunc(func(o kadm.Offset) bool {
 			return o.Partition == key.Partition

@@ -42,7 +42,7 @@ aws_bedrock_chat:
   prompt: "" # No default (optional)
   system_prompt: "" # No default (optional)
   max_tokens: 0 # No default (optional)
-  stop: 0 # No default (optional)
+  temperature: 0 # No default (optional)
 ```
 
 --
@@ -68,8 +68,8 @@ aws_bedrock_chat:
   prompt: "" # No default (optional)
   system_prompt: "" # No default (optional)
   max_tokens: 0 # No default (optional)
-  stop: 0 # No default (optional)
-  temperature: [] # No default (optional)
+  temperature: 0 # No default (optional)
+  stop: [] # No default (optional)
   top_p: 0 # No default (optional)
 ```
 
@@ -222,7 +222,7 @@ The maximum number of tokens to allow in the generated response.
 *Type*: `int`
 
 
-=== `stop`
+=== `temperature`
 
 The likelihood of the model selecting higher-probability options while generating a response. A lower value makes the model omre likely to choose higher-probability options, while a higher value makes the model more likely to choose lower-probability options.
 
@@ -230,7 +230,7 @@ The likelihood of the model selecting higher-probability options while generatin
 *Type*: `float`
 
 
-=== `temperature`
+=== `stop`
 
 A list of stop sequences. A stop sequence is a sequence of characters that causes the model to stop generating the response.
 

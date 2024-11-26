@@ -15,25 +15,27 @@ import (
 	"sync"
 
 	"github.com/twmb/franz-go/pkg/kgo"
+	franz_sr "github.com/twmb/franz-go/pkg/sr"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
+	"github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
 )
 
 const (
-	rproDefaultLabel = "redpanda_migrator_output"
-)
-
-const (
-	rmoFieldMaxInFlight       = "max_in_flight"
-	rmoFieldBatching          = "batching"
-	rmoFieldInputResource     = "input_resource"
-	rmoFieldRepFactorOverride = "replication_factor_override"
-	rmoFieldRepFactor         = "replication_factor"
+	rmoFieldMaxInFlight                  = "max_in_flight"
+	rmoFieldBatching                     = "batching"
+	rmoFieldInputResource                = "input_resource"
+	rmoFieldRepFactorOverride            = "replication_factor_override"
+	rmoFieldRepFactor                    = "replication_factor"
+	rmoFieldTranslateSchemaIDs           = "translate_schema_ids"
+	rmoFieldSchemaRegistryOutputResource = "schema_registry_output_resource"
 
 	// Deprecated
 	rmoFieldRackID = "rack_id"
+
+	rmoResourceDefaultLabel = "redpanda_migrator_output"
 )
 
 func redpandaMigratorOutputConfig() *service.ConfigSpec {
@@ -58,14 +60,8 @@ ACL migration adheres to the following principles:
 - Only topic ACLs are migrated, group ACLs are not migrated
 `).
 		Fields(RedpandaMigratorOutputConfigFields()...).
-		LintRule(`
-root = if this.partitioner == "manual" {
-if this.partition.or("") == "" {
-"a partition must be specified when the partitioner is set to manual"
-}
-} else if this.partition.or("") != "" {
-"a partition cannot be specified unless the partitioner is set to manual"
-}`).Example("Transfer data", "Writes messages to the configured broker and creates topics and topic ACLs if they don't exist. It also ensures that the message order is preserved.", `
+		LintRule(kafka.FranzWriterConfigLints()).
+		Example("Transfer data", "Writes messages to the configured broker and creates topics and topic ACLs if they don't exist. It also ensures that the message order is preserved.", `
 output:
   redpanda_migrator:
     seed_brokers: [ "127.0.0.1:9093" ]
@@ -73,7 +69,7 @@ output:
     key: ${! metadata("kafka_key") }
     partitioner: manual
     partition: ${! metadata("kafka_partition").or(throw("missing kafka_partition metadata")) }
-    timestamp: ${! metadata("kafka_timestamp_unix").or(timestamp_unix()) }
+    timestamp_ms: ${! metadata("kafka_timestamp_ms").or(timestamp_unix_milli()) }
     input_resource: redpanda_migrator_input
     max_in_flight: 1
 `)
@@ -92,7 +88,7 @@ func RedpandaMigratorOutputConfigFields() []*service.ConfigField {
 			service.NewBatchPolicyField(rmoFieldBatching),
 			service.NewStringField(rmoFieldInputResource).
 				Description("The label of the redpanda_migrator input from which to read the configurations for topics and ACLs which need to be created.").
-				Default(rpriDefaultLabel).
+				Default(rmiResourceDefaultLabel).
 				Advanced(),
 			service.NewBoolField(rmoFieldRepFactorOverride).
 				Description("Use the specified replication factor when creating topics.").
@@ -101,6 +97,11 @@ func RedpandaMigratorOutputConfigFields() []*service.ConfigField {
 			service.NewIntField(rmoFieldRepFactor).
 				Description("Replication factor for created topics. This is only used when `replication_factor_override` is set to `true`.").
 				Default(3).
+				Advanced(),
+			service.NewBoolField(rmoFieldTranslateSchemaIDs).Description("Translate schema IDs.").Default(true).Advanced(),
+			service.NewStringField(rmoFieldSchemaRegistryOutputResource).
+				Description("The label of the schema_registry output to use for fetching schema IDs.").
+				Default(sroResourceDefaultLabel).
 				Advanced(),
 
 			// Deprecated
@@ -136,16 +137,21 @@ func init() {
 
 // RedpandaMigratorWriter implements a Kafka writer using the franz-go library.
 type RedpandaMigratorWriter struct {
-	recordConverter           *kafka.FranzWriter
-	replicationFactorOverride bool
-	replicationFactor         int
-	inputResource             string
+	recordConverter              *kafka.FranzWriter
+	replicationFactorOverride    bool
+	replicationFactor            int
+	translateSchemaIDs           bool
+	inputResource                string
+	schemaRegistryOutputResource srResourceKey
 
 	clientDetails *kafka.FranzConnectionDetails
 	clientOpts    []kgo.Opt
 	connMut       sync.Mutex
 	client        *kgo.Client
 	topicCache    sync.Map
+	// Stores the source to destination SchemaID mapping.
+	schemaIDCache        sync.Map
+	schemaRegistryOutput *schemaRegistryOutput
 
 	clientLabel string
 
@@ -191,8 +197,20 @@ func NewRedpandaMigratorWriterFromConfig(conf *service.ParsedConfig, mgr *servic
 		return nil, err
 	}
 
+	if w.translateSchemaIDs, err = conf.FieldBool(rmoFieldTranslateSchemaIDs); err != nil {
+		return nil, err
+	}
+
+	if w.translateSchemaIDs {
+		var res string
+		if res, err = conf.FieldString(rmoFieldSchemaRegistryOutputResource); err != nil {
+			return nil, err
+		}
+		w.schemaRegistryOutputResource = srResourceKey(res)
+	}
+
 	if w.clientLabel = mgr.Label(); w.clientLabel == "" {
-		w.clientLabel = rproDefaultLabel
+		w.clientLabel = rmoResourceDefaultLabel
 	}
 
 	return &w, nil
@@ -226,6 +244,14 @@ func (w *RedpandaMigratorWriter) Connect(ctx context.Context) error {
 		w.mgr.Logger().With("error", err).Warn("Failed to store client connection for sharing")
 	}
 
+	if w.translateSchemaIDs {
+		if res, ok := w.mgr.GetGeneric(w.schemaRegistryOutputResource); ok {
+			w.schemaRegistryOutput = res.(*schemaRegistryOutput)
+		} else {
+			return fmt.Errorf("schema_registry output resource %q not found", w.schemaRegistryOutputResource)
+		}
+	}
+
 	return nil
 }
 
@@ -241,6 +267,32 @@ func (w *RedpandaMigratorWriter) WriteBatch(ctx context.Context, b service.Messa
 	records, err := w.recordConverter.BatchToRecords(ctx, b)
 	if err != nil {
 		return err
+	}
+
+	var ch franz_sr.ConfluentHeader
+	if w.translateSchemaIDs {
+		for recordIdx, record := range records {
+			schemaID, _, err := ch.DecodeID(record.Value)
+			if err != nil {
+				return fmt.Errorf("failed to extract schema ID from message index %d: %s", recordIdx, err)
+			}
+
+			var destSchemaID int
+			if cachedID, ok := w.schemaIDCache.Load(schemaID); !ok {
+				destSchemaID, err = w.schemaRegistryOutput.GetDestinationSchemaID(ctx, schemaID)
+				if err != nil {
+					return fmt.Errorf("failed to fetch destination schema ID from message index %d: %s", recordIdx, err)
+				}
+				w.schemaIDCache.Store(schemaID, destSchemaID)
+			} else {
+				destSchemaID = cachedID.(int)
+			}
+
+			err = sr.UpdateID(record.Value, destSchemaID)
+			if err != nil {
+				return fmt.Errorf("failed to update schema ID in message index %d: %s", recordIdx, err)
+			}
+		}
 	}
 
 	if err := kafka.FranzSharedClientUse(w.inputResource, w.mgr, func(details *kafka.FranzSharedClientInfo) error {

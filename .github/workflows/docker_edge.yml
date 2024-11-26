@@ -71,10 +71,3 @@ jobs:
         push: true
         tags: redpandadata/connect:edge-cloud
 
-    - name: Build and push CGO
-      uses: docker/build-push-action@v6
-      with:
-        context: ./
-        file: ./resources/docker/Dockerfile.cgo
-        push: true
-        tags: redpandadata/connect:edge-cgo

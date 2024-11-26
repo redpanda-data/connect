@@ -43,14 +43,7 @@ Writes a batch of messages to Kafka brokers and waits for acknowledgement before
 This output often out-performs the traditional ` + "`kafka`" + ` output as well as providing more useful logs and error messages.
 `).
 		Fields(FranzKafkaOutputConfigFields()...).
-		LintRule(`
-root = if this.partitioner == "manual" {
-if this.partition.or("") == "" {
-"a partition must be specified when the partitioner is set to manual"
-}
-} else if this.partition.or("") != "" {
-"a partition cannot be specified unless the partitioner is set to manual"
-}`)
+		LintRule(FranzWriterConfigLints())
 }
 
 // FranzKafkaOutputConfigFields returns the full suite of config fields for a

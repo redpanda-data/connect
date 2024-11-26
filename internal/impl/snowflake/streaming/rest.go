@@ -31,8 +31,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/redpanda-data/benthos/v4/public/service"
 
+	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming/int128"
-	"github.com/redpanda-data/connect/v4/internal/periodic"
 	"github.com/redpanda-data/connect/v4/internal/typed"
 )
 
@@ -306,7 +306,7 @@ type SnowflakeRestClient struct {
 	userAgent  string
 	logger     *service.Logger
 
-	authRefreshLoop *periodic.Periodic
+	authRefreshLoop *asyncroutine.Periodic
 	cachedJWT       *typed.AtomicValue[string]
 }
 
@@ -334,7 +334,7 @@ func NewRestClient(account, user, version, app string, privateKey *rsa.PrivateKe
 		logger:     logger,
 		app:        url.QueryEscape("Redpanda_Connect_" + strings.TrimPrefix(app, "Redpanda_Connect_")),
 		cachedJWT:  typed.NewAtomicValue(""),
-		authRefreshLoop: periodic.New(
+		authRefreshLoop: asyncroutine.NewPeriodic(
 			time.Hour-(2*time.Minute),
 			func() {
 				jwt, err := c.computeJWT()

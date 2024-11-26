@@ -1,4 +1,4 @@
-.PHONY: all deps docker docker-cgo clean test test-race test-integration fmt lint install
+.PHONY: all deps docker clean test test-race test-integration fmt lint install
 
 TAGS ?=
 
@@ -48,9 +48,6 @@ docker-tags:
 docker-rc-tags:
 	@echo "latest,$(VER_CUT),$(VER_MAJOR)-$(VER_RC)" > .tags
 
-docker-cgo-tags:
-	@echo "latest-cgo,$(VER_CUT)-cgo,$(VER_MAJOR).$(VER_MINOR)-cgo,$(VER_MAJOR)-cgo" > .tags
-
 docker:
 	@docker build -f ./resources/docker/Dockerfile . -t $(DOCKER_IMAGE):$(VER_CUT)
 	@docker tag $(DOCKER_IMAGE):$(VER_CUT) $(DOCKER_IMAGE):latest
@@ -62,10 +59,6 @@ docker-cloud:
 docker-ai:
 	@docker build -f ./resources/docker/Dockerfile.ai . -t $(DOCKER_IMAGE):$(VER_CUT)-ai
 	@docker tag $(DOCKER_IMAGE):$(VER_CUT)-ai $(DOCKER_IMAGE):latest-ai
-
-docker-cgo:
-	@docker build -f ./resources/docker/Dockerfile.cgo . -t $(DOCKER_IMAGE):$(VER_CUT)-cgo
-	@docker tag $(DOCKER_IMAGE):$(VER_CUT)-cgo $(DOCKER_IMAGE):latest-cgo
 
 fmt:
 	@go list -f {{.Dir}} ./... | xargs -I{} gofmt -w -s {}

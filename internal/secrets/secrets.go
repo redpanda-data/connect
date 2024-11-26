@@ -19,6 +19,8 @@ import (
 	"github.com/redpanda-data/common-go/secrets"
 )
 
+const trimPrefixParam = "trimPrefix"
+
 // LookupFn defines the common closure that a secrets management client provides
 // and is then fed into a Redpanda Connect cli constructor.
 type LookupFn func(context.Context, string) (string, bool)
@@ -82,19 +84,19 @@ func parseSecretsLookupURN(ctx context.Context, logger *slog.Logger, urn string)
 		if err != nil {
 			return nil, err
 		}
-		return lookupFn(secrets.NewSecretProvider, secretsManager, path)
+		return lookupFn(secrets.NewSecretProvider, secretsManager, path, u.Query().Get(trimPrefixParam))
 	case "gcp":
 		secretsManager, err := secrets.NewGCPSecretsManager(ctx, logger, u.Host)
 		if err != nil {
 			return nil, err
 		}
-		return lookupFn(secrets.NewSecretProvider, secretsManager, path)
+		return lookupFn(secrets.NewSecretProvider, secretsManager, path, u.Query().Get(trimPrefixParam))
 	case "az":
 		secretsManager, err := secrets.NewAzSecretsManager(logger, "https://"+u.Host)
 		if err != nil {
 			return nil, err
 		}
-		return lookupFn(secrets.NewSecretProvider, secretsManager, path)
+		return lookupFn(secrets.NewSecretProvider, secretsManager, path, u.Query().Get(trimPrefixParam))
 	case "none":
 		return func(ctx context.Context, key string) (string, bool) {
 			return "", false
@@ -104,8 +106,8 @@ func parseSecretsLookupURN(ctx context.Context, logger *slog.Logger, urn string)
 	}
 }
 
-func lookupFn(providerFn secrets.SecretProviderFn, secretsManager secrets.SecretAPI, prefix string) (LookupFn, error) {
-	provider, err := providerFn(secretsManager, prefix)
+func lookupFn(providerFn secrets.SecretProviderFn, secretsManager secrets.SecretAPI, prefix string, trimPrefix string) (LookupFn, error) {
+	provider, err := providerFn(secretsManager, prefix, trimPrefix)
 	if err != nil {
 		return nil, err
 	}

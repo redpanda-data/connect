@@ -27,8 +27,8 @@ const (
 	bedcpFieldUserPrompt   = "prompt"
 	bedcpFieldSystemPrompt = "system_prompt"
 	bedcpFieldMaxTokens    = "max_tokens"
-	bedcpFieldTemp         = "stop"
-	bedcpFieldStop         = "temperature"
+	bedcpFieldStop         = "stop"
+	bedcpFieldTemp         = "temperature"
 	bedcpFieldTopP         = "top_p"
 )
 

@@ -98,7 +98,7 @@ func md5Hash(b []byte) string {
 // Generate the path for a blob when uploading to an internal snowflake table.
 //
 // Never change, this must exactly match the java SDK, don't think you can be fancy and change something.
-func generateBlobPath(clientPrefix string, threadID, counter int) string {
+func generateBlobPath(clientPrefix string, threadID, counter int64) string {
 	now := time.Now().UTC()
 	year := now.Year()
 	month := int(now.Month())

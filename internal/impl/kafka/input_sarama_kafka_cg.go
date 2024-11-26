@@ -113,7 +113,7 @@ func (k *kafkaReader) ConsumeClaim(sess sarama.ConsumerGroupSession, claim saram
 
 //------------------------------------------------------------------------------
 
-func (k *kafkaReader) connectBalancedTopics(ctx context.Context, config *sarama.Config) error {
+func (k *kafkaReader) connectBalancedTopics(config *sarama.Config) error {
 	// Start a new consumer group
 	group, err := sarama.NewConsumerGroup(k.addresses, k.consumerGroup, config)
 	if err != nil {

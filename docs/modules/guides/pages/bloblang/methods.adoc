@@ -1899,6 +1899,22 @@ root.id = this.id.string()
 # Out: {"id":"228930314431312345"}
 ```
 
+=== `timestamp`
+
+Attempt to parse a value into a timestamp. An optional argument can be provided, in which case if the value cannot be parsed into a timestamp the argument will be returned instead.
+
+==== Parameters
+
+*`default`* &lt;(optional) timestamp&gt; An optional value to yield if the target cannot be parsed as a timestamp.  
+
+==== Examples
+
+
+```coffeescript
+root.foo = this.ts.timestamp()
+root.bar = this.none.timestamp(1234567890.timestamp())
+```
+
 === `type`
 
 Returns the type of a value as a string, providing one of the following values: `string`, `bytes`, `number`, `bool`, `timestamp`, `array`, `object` or `null`.

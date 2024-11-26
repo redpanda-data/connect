@@ -80,11 +80,6 @@ jobs:
             suffix: ""
             platform: linux/amd64,linux/arm64
             file: ./resources/docker/Dockerfile
-          - flavor: cgo
-            latest: false
-            suffix: -cgo
-            platform: linux/amd64
-            file: ./resources/docker/Dockerfile.cgo
           - flavor: cloud
             latest: false
             suffix: -cloud
@@ -138,7 +133,7 @@ jobs:
       uses: docker/setup-buildx-action@v3
 
     - name: Write telemetry private key
-      if: ${{ matrix.suffix == '' || matrix.suffix == '-cgo' }}
+      if: ${{ matrix.suffix == '' }}
       env:
         CONNECT_TELEMETRY_PRIV_KEY: ${{ secrets.TELEMETRY_PRIVATE_KEY }}
       run: |

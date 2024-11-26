@@ -112,7 +112,7 @@ output:
       initial_interval: 3s
       max_interval: 10s
       max_elapsed_time: 30s
-    timestamp: ${! timestamp_unix() } # No default (optional)
+    timestamp_ms: ${! timestamp_unix_milli() } # No default (optional)
 ```
 
 --
@@ -831,9 +831,9 @@ max_elapsed_time: 1m
 max_elapsed_time: 1h
 ```
 
-=== `timestamp`
+=== `timestamp_ms`
 
-An optional timestamp to set for each message. When left empty, the current timestamp is used.
+An optional timestamp to set for each message expressed in milliseconds. When left empty, the current timestamp is used.
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
 
@@ -843,9 +843,9 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 ```yml
 # Examples
 
-timestamp: ${! timestamp_unix() }
+timestamp_ms: ${! timestamp_unix_milli() }
 
-timestamp: ${! metadata("kafka_timestamp_unix") }
+timestamp_ms: ${! metadata("kafka_timestamp_ms") }
 ```
 
 

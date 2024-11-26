@@ -20,27 +20,28 @@ import (
 	"fmt"
 
 	"github.com/linkedin/goavro/v2"
+	franz_sr "github.com/twmb/franz-go/pkg/sr"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
 )
 
-func resolveAvroReferences(ctx context.Context, client *sr.Client, info sr.SchemaInfo) (string, error) {
-	if len(info.References) == 0 {
-		return info.Schema, nil
+func resolveAvroReferences(ctx context.Context, client *sr.Client, schema franz_sr.Schema) (string, error) {
+	if len(schema.References) == 0 {
+		return schema.Schema, nil
 	}
 
 	refsMap := map[string]string{}
-	if err := client.WalkReferences(ctx, info.References, func(ctx context.Context, name string, info sr.SchemaInfo) error {
-		refsMap[name] = info.Schema
+	if err := client.WalkReferences(ctx, schema.References, func(ctx context.Context, name string, schema franz_sr.Schema) error {
+		refsMap[name] = schema.Schema
 		return nil
 	}); err != nil {
 		return "", nil
 	}
 
 	schemaDry := []string{}
-	if err := json.Unmarshal([]byte(info.Schema), &schemaDry); err != nil {
+	if err := json.Unmarshal([]byte(schema.Schema), &schemaDry); err != nil {
 		return "", fmt.Errorf("failed to parse root schema as enum: %w", err)
 	}
 
@@ -61,19 +62,19 @@ func resolveAvroReferences(ctx context.Context, client *sr.Client, info sr.Schem
 	return string(schemaHydratedBytes), nil
 }
 
-func (s *schemaRegistryEncoder) getAvroEncoder(ctx context.Context, info sr.SchemaInfo) (schemaEncoder, error) {
-	schema, err := resolveAvroReferences(ctx, s.client, info)
+func (s *schemaRegistryEncoder) getAvroEncoder(ctx context.Context, schema franz_sr.Schema) (schemaEncoder, error) {
+	schemaSpec, err := resolveAvroReferences(ctx, s.client, schema)
 	if err != nil {
 		return nil, err
 	}
 
 	var codec *goavro.Codec
 	if s.avroRawJSON {
-		if codec, err = goavro.NewCodecForStandardJSONFull(schema); err != nil {
+		if codec, err = goavro.NewCodecForStandardJSONFull(schemaSpec); err != nil {
 			return nil, err
 		}
 	} else {
-		if codec, err = goavro.NewCodec(schema); err != nil {
+		if codec, err = goavro.NewCodec(schemaSpec); err != nil {
 			return nil, err
 		}
 	}
@@ -99,17 +100,17 @@ func (s *schemaRegistryEncoder) getAvroEncoder(ctx context.Context, info sr.Sche
 	}, nil
 }
 
-func (s *schemaRegistryDecoder) getAvroDecoder(ctx context.Context, info sr.SchemaInfo) (schemaDecoder, error) {
-	schema, err := resolveAvroReferences(ctx, s.client, info)
+func (s *schemaRegistryDecoder) getAvroDecoder(ctx context.Context, schema franz_sr.Schema) (schemaDecoder, error) {
+	schemaSpec, err := resolveAvroReferences(ctx, s.client, schema)
 	if err != nil {
 		return nil, err
 	}
 
 	var codec *goavro.Codec
 	if s.avroRawJSON {
-		codec, err = goavro.NewCodecForStandardJSONFull(schema)
+		codec, err = goavro.NewCodecForStandardJSONFull(schemaSpec)
 	} else {
-		codec, err = goavro.NewCodec(schema)
+		codec, err = goavro.NewCodec(schemaSpec)
 	}
 	if err != nil {
 		return nil, err

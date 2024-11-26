@@ -64,27 +64,29 @@ func TestWriteParquet(t *testing.T) {
 		false,
 	)
 	require.NoError(t, err)
-	b, err := writeParquetFile("latest", parquetFileData{
-		schema, rows, nil,
-	})
-	require.NoError(t, err)
-	actual, err := readGeneric(
-		bytes.NewReader(b),
-		int64(len(b)),
-		parquet.NewSchema("bdec", inputDataSchema),
-	)
-	require.NoError(t, err)
-	require.Equal(t, []map[string]any{
-		{"A": int32(2)},
-		{"A": int32(12353)},
-	}, actual)
-	require.Equal(t, []*statsBuffer{
-		{
-			minIntVal: int128.FromInt64(2),
-			maxIntVal: int128.FromInt64(12353),
-			hasData:   true,
-		},
-	}, stats)
+	w := newParquetWriter("latest", schema)
+	// Ensure that a parquet writer correctly resets it's state
+	for range 4 {
+		b, err := w.WriteFile(rows, nil)
+		require.NoError(t, err)
+		actual, err := readGeneric(
+			bytes.NewReader(b),
+			int64(len(b)),
+			parquet.NewSchema("bdec", inputDataSchema),
+		)
+		require.NoError(t, err)
+		require.Equal(t, []map[string]any{
+			{"A": int32(2)},
+			{"A": int32(12353)},
+		}, actual)
+		require.Equal(t, []*statsBuffer{
+			{
+				minIntVal: int128.FromInt64(2),
+				maxIntVal: int128.FromInt64(12353),
+				hasData:   true,
+			},
+		}, stats)
+	}
 }
 
 func readGeneric(r io.ReaderAt, size int64, schema *parquet.Schema) (rows []map[string]any, err error) {

@@ -25,16 +25,17 @@ const (
 	ocpFieldResponseFormat = "response_format"
 	ocpFieldImage          = "image"
 	// Prediction options
-	ocpFieldMaxTokens        = "max_tokens"
-	ocpFieldNumKeep          = "num_keep"
-	ocpFieldSeed             = "seed"
-	ocpFieldTopK             = "top_k"
-	ocpFieldTopP             = "top_p"
-	ocpFieldTemp             = "temperature"
-	ocpFieldRepeatPenalty    = "repeat_penalty"
-	ocpFieldPresencePenalty  = "presence_penalty"
-	ocpFieldFrequencyPenalty = "frequency_penalty"
-	ocpFieldStop             = "stop"
+	ocpFieldMaxTokens          = "max_tokens"
+	ocpFieldNumKeep            = "num_keep"
+	ocpFieldSeed               = "seed"
+	ocpFieldTopK               = "top_k"
+	ocpFieldTopP               = "top_p"
+	ocpFieldTemp               = "temperature"
+	ocpFieldRepeatPenalty      = "repeat_penalty"
+	ocpFieldPresencePenalty    = "presence_penalty"
+	ocpFieldFrequencyPenalty   = "frequency_penalty"
+	ocpFieldStop               = "stop"
+	ocpFieldEmitPromptMetadata = "save_prompt_metadata"
 )
 
 func init() {
@@ -121,6 +122,9 @@ For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ol
 				Optional().
 				Advanced().
 				Description(`Sets the stop sequences to use. When this pattern is encountered the LLM stops generating text and returns the final response.`),
+			service.NewBoolField(ocpFieldEmitPromptMetadata).
+				Default(false).
+				Description(`If enabled the prompt is saved as @prompt metadata on the output message. If system_prompt is used it's also saved as @system_prompt`),
 		).Fields(commonFields()...).
 		Example(
 			"Use Llava to analyze an image",
@@ -180,6 +184,10 @@ func makeOllamaCompletionProcessor(conf *service.ParsedConfig, mgr *service.Reso
 	} else {
 		return nil, fmt.Errorf("invalid %s: %q", ocpFieldResponseFormat, format)
 	}
+	p.savePrompt, err = conf.FieldBool(ocpFieldEmitPromptMetadata)
+	if err != nil {
+		return nil, err
+	}
 	b, err := newBaseProcessor(conf, mgr)
 	if err != nil {
 		return nil, err
@@ -195,6 +203,7 @@ type ollamaCompletionProcessor struct {
 	userPrompt   *service.InterpolatedString
 	systemPrompt *service.InterpolatedString
 	image        *bloblang.Executor
+	savePrompt   bool
 }
 
 func (o *ollamaCompletionProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
@@ -227,6 +236,12 @@ func (o *ollamaCompletionProcessor) Process(ctx context.Context, msg *service.Me
 	}
 	m := msg.Copy()
 	m.SetBytes([]byte(g))
+	if o.savePrompt {
+		if sp != "" {
+			m.MetaSet("system_prompt", sp)
+		}
+		m.MetaSet("prompt", up)
+	}
 	return service.MessageBatch{m}, nil
 }
 

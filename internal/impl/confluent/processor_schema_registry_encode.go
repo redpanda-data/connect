@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/shutdown"
+	franz_sr "github.com/twmb/franz-go/pkg/sr"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
@@ -319,7 +320,7 @@ func (s *schemaRegistryEncoder) getLatestEncoder(subject string) (schemaEncoder,
 	ctx, done := context.WithTimeout(context.Background(), time.Second*5)
 	defer done()
 
-	resPayload, err := s.client.GetSchemaBySubjectAndVersion(ctx, subject, nil)
+	resPayload, err := s.client.GetSchemaBySubjectAndVersion(ctx, subject, nil, false)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -328,14 +329,12 @@ func (s *schemaRegistryEncoder) getLatestEncoder(subject string) (schemaEncoder,
 
 	var encoder schemaEncoder
 	switch resPayload.Type {
-	case "PROTOBUF":
-		encoder, err = s.getProtobufEncoder(ctx, resPayload)
-	case "", "AVRO":
-		encoder, err = s.getAvroEncoder(ctx, resPayload)
-	case "JSON":
-		encoder, err = s.getJSONEncoder(ctx, resPayload)
+	case franz_sr.TypeProtobuf:
+		encoder, err = s.getProtobufEncoder(ctx, resPayload.Schema)
+	case franz_sr.TypeJSON:
+		encoder, err = s.getJSONEncoder(ctx, resPayload.Schema)
 	default:
-		err = fmt.Errorf("schema type %v not supported", resPayload.Type)
+		encoder, err = s.getAvroEncoder(ctx, resPayload.Schema)
 	}
 	if err != nil {
 		return nil, 0, err

@@ -45,8 +45,7 @@ const (
 	sqsoFieldDelaySeconds    = "delay_seconds"
 	sqsoFieldMetadata        = "metadata"
 	sqsoFieldBatching        = "batching"
-
-	sqsMaxRecordsCount = 10
+	sqsoFieldMaxRecordsCount = "max_records_per_request"
 )
 
 type sqsoConfig struct {
@@ -54,6 +53,8 @@ type sqsoConfig struct {
 	MessageGroupID         *service.InterpolatedString
 	MessageDeduplicationID *service.InterpolatedString
 	DelaySeconds           *service.InterpolatedString
+
+	MaxRecordsCount int
 
 	Metadata    *service.MetadataExcludeFilter
 	aconf       aws.Config
@@ -86,6 +87,13 @@ func sqsoConfigFromParsed(pConf *service.ParsedConfig) (conf sqsoConfig, err err
 		return
 	}
 	if conf.backoffCtor, err = retries.CommonRetryBackOffCtorFromParsed(pConf); err != nil {
+		return
+	}
+	if conf.MaxRecordsCount, err = pConf.FieldInt(sqsoFieldMaxRecordsCount); err != nil {
+		return
+	}
+	if conf.MaxRecordsCount <= 0 || conf.MaxRecordsCount > 10 {
+		err = errors.New("field " + sqsoFieldMaxRecordsCount + " must be >0 and <= 10")
 		return
 	}
 	return
@@ -121,6 +129,11 @@ By default Redpanda Connect will use a shared credentials file when connecting t
 			service.NewMetadataExcludeFilterField(snsoFieldMetadata).
 				Description("Specify criteria for which metadata values are sent as headers."),
 			service.NewBatchPolicyField(koFieldBatching),
+			service.NewIntField(sqsoFieldMaxRecordsCount).
+				Description("Customize the maximum number of records delivered in a single SQS request. This value must be greater than 0 but no greater than 10.").
+				Default(10).
+				LintRule(`if this <= 0 || this > 10 { "this field must be >0 and <=10" } `).
+				Advanced(),
 		).
 		Fields(config.SessionFields()...).
 		Fields(retries.CommonRetryBackOffFields(0, "1s", "5s", "30s")...)
@@ -321,8 +334,8 @@ func (a *sqsWriter) writeChunk(
 	}
 
 	// trim input length to max sqs batch size
-	if len(entries) > sqsMaxRecordsCount {
-		input.Entries, entries = entries[:sqsMaxRecordsCount], entries[sqsMaxRecordsCount:]
+	if len(entries) > a.conf.MaxRecordsCount {
+		input.Entries, entries = entries[:a.conf.MaxRecordsCount], entries[a.conf.MaxRecordsCount:]
 	} else {
 		entries = nil
 	}
@@ -385,8 +398,8 @@ func (a *sqsWriter) writeChunk(
 
 		// add remaining records to batch
 		l := len(input.Entries)
-		if n := len(entries); n > 0 && l < sqsMaxRecordsCount {
-			if remaining := sqsMaxRecordsCount - l; remaining < n {
+		if n := len(entries); n > 0 && l < a.conf.MaxRecordsCount {
+			if remaining := a.conf.MaxRecordsCount - l; remaining < n {
 				input.Entries, entries = append(input.Entries, entries[:remaining]...), entries[remaining:]
 			} else {
 				input.Entries, entries = append(input.Entries, entries...), nil

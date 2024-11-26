@@ -96,6 +96,7 @@ Options:
 , `snowflake`
 , `trino`
 , `gocosmos`
+, `spanner`
 .
 
 === `data_source_name`

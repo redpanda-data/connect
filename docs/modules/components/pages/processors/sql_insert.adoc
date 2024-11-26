@@ -61,6 +61,7 @@ sql_insert:
   args_mapping: root = [ this.cat.meow, this.doc.woofs[0] ] # No default (required)
   prefix: "" # No default (optional)
   suffix: ON CONFLICT (name) DO NOTHING # No default (optional)
+  options: [] # No default (optional)
   init_files: [] # No default (optional)
   init_statement: | # No default (optional)
     CREATE TABLE IF NOT EXISTS some_table (
@@ -130,6 +131,7 @@ Options:
 , `snowflake`
 , `trino`
 , `gocosmos`
+, `spanner`
 .
 
 === `dsn`
@@ -138,7 +140,7 @@ A Data Source Name to identify the target database.
 
 ==== Drivers
 
-:driver-support: mysql=certified, postgres=certified, clickhouse=community, mssql=community, sqlite=certified, oracle=certified, snowflake=community, trino=community, gocosmos=community
+:driver-support: mysql=certified, postgres=certified, clickhouse=community, mssql=community, sqlite=certified, oracle=certified, snowflake=community, trino=community, gocosmos=community, spanner=community
 
 The following is a list of supported drivers, their placeholder style, and their respective DSN formats:
 
@@ -171,6 +173,9 @@ The following is a list of supported drivers, their placeholder style, and their
 
 | `gocosmos` 
 | https://pkg.go.dev/github.com/microsoft/gocosmos#readme-example-usage[`AccountEndpoint=<cosmosdb-endpoint>;AccountKey=<cosmosdb-account-key>[;TimeoutMs=<timeout-in-ms>\][;Version=<cosmosdb-api-version>\][;DefaultDb/Db=<db-name>\][;AutoId=<true/false>\][;InsecureSkipVerify=<true/false>\]`^] 
+
+| `spanner` 
+| projects/[PROJECT]/instances/[INSTANCE]/databases/[DATABASE] 
 |===
 
 Please note that the `postgres` driver enforces SSL by default, you can override this with the parameter `sslmode=disable` if required.
@@ -262,6 +267,22 @@ An optional suffix to append to the insert query.
 # Examples
 
 suffix: ON CONFLICT (name) DO NOTHING
+```
+
+=== `options`
+
+A list of keyword options to add before the INTO clause of the query.
+
+
+*Type*: `array`
+
+
+```yml
+# Examples
+
+options:
+  - DELAYED
+  - IGNORE
 ```
 
 === `init_files`

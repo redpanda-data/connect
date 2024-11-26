@@ -58,6 +58,7 @@ const (
 	oskFieldMaxRetries                   = "max_retries"
 	oskFieldBackoff                      = "backoff"
 	oskFieldTimestamp                    = "timestamp"
+	oskFieldTimestampMs                  = "timestamp_ms"
 )
 
 // OSKConfigSpec creates a new config spec for a kafka output.
@@ -171,6 +172,13 @@ Unfortunately this error message will appear for a wide range of connection prob
 				Example(`${! timestamp_unix() }`).
 				Example(`${! metadata("kafka_timestamp_unix") }`).
 				Optional().
+				Advanced().
+				Deprecated(),
+			service.NewInterpolatedStringField(oskFieldTimestampMs).
+				Description("An optional timestamp to set for each message expressed in milliseconds. When left empty, the current timestamp is used.").
+				Example(`${! timestamp_unix_milli() }`).
+				Example(`${! metadata("kafka_timestamp_ms") }`).
+				Optional().
 				Advanced(),
 		)
 }
@@ -205,6 +213,7 @@ type kafkaWriter struct {
 	topic         *service.InterpolatedString
 	partition     *service.InterpolatedString
 	timestamp     *service.InterpolatedString
+	isTimestampMs bool
 	staticHeaders map[string]string
 	metaFilter    *service.MetadataExcludeFilter
 	retryAsBatch  bool
@@ -316,10 +325,21 @@ func NewKafkaWriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources
 		return nil, err
 	}
 
-	if conf.Contains("timestamp") {
-		if k.timestamp, err = conf.FieldInterpolatedString("timestamp"); err != nil {
+	if conf.Contains(oskFieldTimestamp) && conf.Contains(oskFieldTimestampMs) {
+		return nil, errors.New("cannot specify both timestamp and timestamp_ms fields")
+	}
+
+	if conf.Contains(oskFieldTimestamp) {
+		if k.timestamp, err = conf.FieldInterpolatedString(oskFieldTimestamp); err != nil {
 			return nil, err
 		}
+	}
+
+	if conf.Contains(oskFieldTimestampMs) {
+		if k.timestamp, err = conf.FieldInterpolatedString(oskFieldTimestampMs); err != nil {
+			return nil, err
+		}
+		k.isTimestampMs = true
 	}
 
 	return &k, nil
@@ -581,7 +601,11 @@ func (k *kafkaWriter) WriteBatch(ctx context.Context, msg service.MessageBatch) 
 				if ts, err := strconv.ParseInt(tsStr, 10, 64); err != nil {
 					return fmt.Errorf("failed to parse timestamp: %w", err)
 				} else {
-					nextMsg.Timestamp = time.Unix(ts, 0)
+					if k.isTimestampMs {
+						nextMsg.Timestamp = time.UnixMilli(ts)
+					} else {
+						nextMsg.Timestamp = time.Unix(ts, 0)
+					}
 				}
 			}
 		}

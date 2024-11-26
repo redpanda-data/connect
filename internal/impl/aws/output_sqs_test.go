@@ -153,7 +153,8 @@ func TestSQSRetries(t *testing.T) {
 		backoffCtor: func() backoff.BackOff {
 			return backoff.NewExponentialBackOff()
 		},
-		aconf: conf,
+		aconf:           conf,
+		MaxRecordsCount: 10,
 	}, service.MockResources())
 	require.NoError(t, err)
 
@@ -226,7 +227,8 @@ func TestSQSSendLimit(t *testing.T) {
 		backoffCtor: func() backoff.BackOff {
 			return backoff.NewExponentialBackOff()
 		},
-		aconf: conf,
+		aconf:           conf,
+		MaxRecordsCount: 10,
 	}, service.MockResources())
 	require.NoError(t, err)
 
@@ -300,7 +302,8 @@ func TestSQSMultipleQueues(t *testing.T) {
 		backoffCtor: func() backoff.BackOff {
 			return backoff.NewExponentialBackOff()
 		},
-		aconf: conf,
+		aconf:           conf,
+		MaxRecordsCount: 10,
 	}, service.MockResources())
 	require.NoError(t, err)
 

@@ -109,6 +109,7 @@ tests:
       redpanda_migrator:
         seed_brokers: [ "127.0.0.1:9092" ]
         topics: [ "foobar" ]
+        consumer_group: "migrator"
       schema_registry:
         url: http://localhost:8081
 
@@ -133,11 +134,13 @@ tests:
           - redpanda_migrator:
               seed_brokers: [ "127.0.0.1:9092" ]
               topics: [ "foobar" ]
+              consumer_group: "migrator"
             processors:
               - mapping: meta input_label = "redpanda_migrator"
           - kafka_franz:
               seed_brokers: [ "127.0.0.1:9092" ]
               topics: [ "__consumer_offsets" ]
+              consumer_group: "migrator"
             processors:
               - mapping: meta input_label = "redpanda_migrator_offsets"
 
@@ -146,6 +149,7 @@ tests:
       redpanda_migrator:
         seed_brokers: [ "127.0.0.1:9092" ]
         topics: [ "foobar" ]
+        consumer_group: "migrator"
       schema_registry:
         url: http://localhost:8081
 
@@ -168,15 +172,15 @@ tests:
           - broker:
               inputs:
                 - redpanda_migrator:
-                    seed_brokers:
-                      - 127.0.0.1:9092
-                    topics:
-                      - foobar
+                    seed_brokers: [ "127.0.0.1:9092" ]
+                    topics: [ "foobar" ]
+                    consumer_group: "migrator"
                   processors:
                     - mapping: meta input_label = "redpanda_migrator"
                 - kafka_franz:
                     seed_brokers: [ "127.0.0.1:9092" ]
                     topics: [ "__consumer_offsets" ]
+                    consumer_group: "migrator"
                   processors:
                     - mapping: meta input_label = "redpanda_migrator_offsets"
 
@@ -185,19 +189,20 @@ tests:
       redpanda_migrator:
         seed_brokers: [ "127.0.0.1:9092" ]
         topics: [ "foobar" ]
+        consumer_group: "migrator"
 
     expected:
       broker:
         inputs:
           - redpanda_migrator:
-              seed_brokers:
-                - 127.0.0.1:9092
-              topics:
-                - foobar
+              seed_brokers: [ "127.0.0.1:9092" ]
+              topics: [ "foobar" ]
+              consumer_group: "migrator"
             processors:
               - mapping: meta input_label = "redpanda_migrator"
           - kafka_franz:
               seed_brokers: [ "127.0.0.1:9092" ]
               topics: [ "__consumer_offsets" ]
+              consumer_group: "migrator"
             processors:
               - mapping: meta input_label = "redpanda_migrator_offsets"

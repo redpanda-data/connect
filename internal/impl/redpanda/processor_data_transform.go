@@ -69,7 +69,7 @@ You can find out about how transforms work here: https://docs.redpanda.com/curre
 		Field(service.NewInterpolatedStringField(dtpFieldTimestamp).
 			Description("An optional timestamp to set for each message. When left empty, the current timestamp is used.").
 			Example(`${! timestamp_unix() }`).
-			Example(`${! metadata("kafka_timestamp_unix") }`).
+			Example(`${! metadata("kafka_timestamp_ms") }`).
 			Optional().
 			Advanced()).
 		Field(service.NewDurationField(dtpFieldTimeout).
