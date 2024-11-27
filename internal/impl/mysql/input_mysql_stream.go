@@ -36,7 +36,6 @@ const (
 	fieldBatching                  = "batching"
 	fieldCheckpointKey             = "checkpoint_key"
 	fieldCheckpointLimit           = "checkpoint_limit"
-	fieldFlavor                    = "flavor"
 
 	shutdownTimeout = 5 * time.Second
 )
@@ -51,21 +50,18 @@ var mysqlStreamConfigSpec = service.NewConfigSpec().
 			Description("A list of tables to stream from the database.").
 			Example([]string{"table1", "table2"}),
 		service.NewStringField(fieldCheckpointKey).
-			Description("The key to store the last processed binlog position."),
-		service.NewStringField(fieldFlavor).
-			Description("The flavor of MySQL to connect to.").
-			Example("mysql"),
-		service.NewBoolField(fieldMaxSnapshotParallelTables).
+			Description("A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current latest BinLog Position that has been successfully delivered, this allows RedPanda Connect to continue from that BinLog Position upon restart, rather than consume the entire state of the table.\""),
+		service.NewIntField(fieldMaxSnapshotParallelTables).
 			Description("Int specifies a number of tables to be streamed in parallel when taking a snapshot. If set to true, the connector will stream all tables in parallel. Otherwise, it will stream tables one by one.").
 			Default(1),
 		service.NewIntField(fieldSnapshotMaxBatchSize).
 			Description("The maximum number of rows to be streamed in a single batch when taking a snapshot.").
 			Default(1000),
 		service.NewBoolField(fieldStreamSnapshot).
-			Description("If set to true, the connector will query all the existing data as a part of snapshot procerss. Otherwise, it will start from the current binlog position."),
+			Description("If set to true, the connector will query all the existing data as a part of snapshot process. Otherwise, it will start from the current binlog position."),
 		service.NewAutoRetryNacksToggleField(),
 		service.NewIntField(fieldCheckpointLimit).
-			Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given LSN will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
+			Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given BinLog Position will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
 			Default(1024),
 		service.NewBatchPolicyField(fieldBatching),
 	)
@@ -87,7 +83,6 @@ type mysqlStreamInput struct {
 
 	dsn            string
 	tables         []string
-	flavor         string
 	streamSnapshot bool
 
 	rawMessageEvents      chan MessageEvent
@@ -141,10 +136,6 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 		return nil, err
 	}
 
-	if streamInput.flavor, err = conf.FieldString(fieldFlavor); err != nil {
-		return nil, err
-	}
-
 	if streamInput.streamSnapshot, err = conf.FieldBool(fieldStreamSnapshot); err != nil {
 		return nil, err
 	}
@@ -163,27 +154,6 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 
 	if streamInput.binLogCache, err = conf.FieldString(fieldCheckpointKey); err != nil {
 		return nil, err
-	} else {
-		if err := res.AccessCache(context.Background(), streamInput.binLogCache, func(c service.Cache) {
-			binLogPositionBytes, cErr := c.Get(context.Background(), binLogCacheKey)
-			if err != nil {
-				if !errors.Is(cErr, service.ErrKeyNotFound) {
-					res.Logger().Errorf("failed to obtain cursor cache item. %v", cErr)
-				}
-				return
-			}
-
-			var storedMySQLBinLogPosition mysqlReplications.Position
-			if err = json.Unmarshal(binLogPositionBytes, &storedMySQLBinLogPosition); err != nil {
-				res.Logger().With("error", err.Error()).Error("Failed to unmarshal stored binlog position.")
-				return
-			}
-
-			streamInput.startBinLogPosition = &storedMySQLBinLogPosition
-		}); err != nil {
-
-			res.Logger().With("error", err.Error()).Error("Failed to access cursor cache.")
-		}
 	}
 
 	i := &streamInput
@@ -235,7 +205,7 @@ func init() {
 
 func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 	canalConfig := canal.NewDefaultConfig()
-	canalConfig.Flavor = i.flavor
+	canalConfig.Flavor = mysqlReplications.DEFAULT_FLAVOR
 	canalConfig.Addr = i.mysqlConfig.Addr
 	canalConfig.User = i.mysqlConfig.User
 	canalConfig.Password = i.mysqlConfig.Passwd
@@ -250,6 +220,26 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 	}
 	canalConfig.ParseTime = true
 	canalConfig.IncludeTableRegex = i.tables
+
+	if err := i.res.AccessCache(context.Background(), i.binLogCache, func(c service.Cache) {
+		binLogPositionBytes, cErr := c.Get(context.Background(), binLogCacheKey)
+		if cErr != nil {
+			if !errors.Is(cErr, service.ErrKeyNotFound) {
+				i.logger.Errorf("failed to obtain cursor cache item. %v", cErr)
+			}
+			return
+		}
+
+		var storedMySQLBinLogPosition mysqlReplications.Position
+		if err := json.Unmarshal(binLogPositionBytes, &storedMySQLBinLogPosition); err != nil {
+			i.logger.With("error", err.Error()).Error("Failed to unmarshal stored binlog position.")
+			return
+		}
+
+		i.startBinLogPosition = &storedMySQLBinLogPosition
+	}); err != nil {
+		i.logger.With("error", err.Error()).Error("Failed to access cursor cache.")
+	}
 
 	c, err := canal.NewCanal(canalConfig)
 	if err != nil {
@@ -274,9 +264,8 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 
 func (i *mysqlStreamInput) readMessages(ctx context.Context) {
 	var nextTimedBatchChan <-chan time.Time
-	var latestPos *mysqlReplications.Position
 
-	for !i.shutSig.IsHasStoppedSignalled() {
+	for !i.shutSig.IsSoftStopSignalled() {
 		select {
 		case <-ctx.Done():
 			return
@@ -288,7 +277,7 @@ func (i *mysqlStreamInput) readMessages(ctx context.Context) {
 				break
 			}
 
-			if !i.flushBatch(ctx, i.cp, flushedBatch, latestPos) {
+			if !i.flushBatch(ctx, i.cp, flushedBatch, i.currentLogPosition) {
 				break
 			}
 		case me := <-i.rawMessageEvents:
@@ -302,7 +291,9 @@ func (i *mysqlStreamInput) readMessages(ctx context.Context) {
 			mb.MetaSet("table", me.Table)
 			mb.MetaSet("type", string(me.Type))
 			if me.Position != nil {
-				latestPos = me.Position
+				i.mutex.Lock()
+				i.currentLogPosition = me.Position
+				i.mutex.Unlock()
 			}
 
 			if i.batchPolicy.Add(mb) {
@@ -312,7 +303,7 @@ func (i *mysqlStreamInput) readMessages(ctx context.Context) {
 					i.logger.Debugf("Flush batch error: %w", err)
 					break
 				}
-				if !i.flushBatch(ctx, i.cp, flushedBatch, latestPos) {
+				if !i.flushBatch(ctx, i.cp, flushedBatch, i.currentLogPosition) {
 					break
 				}
 			} else {
@@ -336,7 +327,6 @@ func (i *mysqlStreamInput) startMySQLSync(ctx context.Context) {
 	// If we require snapshot streaming && we don't have a binlog position cache
 	// initiate default run for Canal to process snapshot and start incremental sync of binlog
 	if i.streamSnapshot && i.startBinLogPosition == nil {
-		// Doesn't work at the moment
 		startPos, err := i.snapshot.prepareSnapshot(ctx)
 		if err != nil {
 			i.errors <- err
@@ -487,7 +477,7 @@ func (i *mysqlStreamInput) flushBatch(ctx context.Context, checkpointer *checkpo
 				return nil
 			}
 
-			if err := i.syncBinlogPosition(context.Background()); err != nil {
+			if err := i.syncBinlogPosition(ctx); err != nil {
 				return err
 			}
 

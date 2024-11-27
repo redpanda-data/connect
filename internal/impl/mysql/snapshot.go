@@ -117,7 +117,8 @@ func (s *Snapshot) getTablePrimaryKeys(table string) ([]string, error) {
 	rows, err := s.tx.QueryContext(s.ctx, fmt.Sprintf(`
 SELECT COLUMN_NAME
 FROM information_schema.KEY_COLUMN_USAGE
-WHERE TABLE_NAME = '%s' AND CONSTRAINT_NAME = 'PRIMARY';
+WHERE TABLE_NAME = '%s' AND CONSTRAINT_NAME = 'PRIMARY'
+ORDER BY ORDINAL_POSITION;
   `, table))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get primary key: %v", err)
