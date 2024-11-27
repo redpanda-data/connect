@@ -103,7 +103,6 @@ mysql_stream:
   checkpoint_key: foocache
   tables:
     - foo
-  flavor: mysql
 `, dsn)
 
 		cacheConf := fmt.Sprintf(`
@@ -270,7 +269,6 @@ mysql_stream:
   checkpoint_key: foocache
   tables:
     - foo
-  flavor: mysql
 `, dsn)
 
 	cacheConf := fmt.Sprintf(`
@@ -415,7 +413,6 @@ mysql_stream:
   checkpoint_key: foocache
   tables:
     - foo
-  flavor: mysql
 `, dsn)
 
 	cacheConf := fmt.Sprintf(`
