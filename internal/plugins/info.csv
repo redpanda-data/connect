@@ -170,7 +170,7 @@ parquet                   ,processor ,parquet                   ,3.62.0  ,commun
 parquet_decode            ,processor ,parquet_decode            ,4.4.0   ,certified  ,n          ,y     ,y
 parquet_encode            ,processor ,parquet_encode            ,4.4.0   ,certified  ,n          ,y     ,y
 parse_log                 ,processor ,parse_log                 ,0.0.0   ,community  ,n          ,y     ,y
-pg_stream                 ,input     ,pg_stream                 ,0.0.0   ,community  ,n          ,n     ,n
+pg_stream                 ,input     ,pg_stream                 ,0.0.0   ,enterprise ,n          ,y     ,y
 pinecone                  ,output    ,pinecone                  ,4.31.0  ,certified  ,n          ,y     ,y
 processors                ,processor ,processors                ,0.0.0   ,certified  ,n          ,y     ,y
 prometheus                ,metric    ,prometheus                ,0.0.0   ,certified  ,n          ,y     ,y
