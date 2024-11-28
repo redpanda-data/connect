@@ -157,7 +157,7 @@ func decodeTextColumnData(mi *pgtype.Map, data []byte, dataType uint32) (interfa
 
 		if dt.Name == "uuid" {
 			typesValueForUUID := val.([16]uint8)
-			return uuid.UUID(typesValueForUUID).String(), err
+			return uuid.UUID(typesValueForUUID).String(), nil
 		}
 
 		if dt.Name == "tsrange" {
