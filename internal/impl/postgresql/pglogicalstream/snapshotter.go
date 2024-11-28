@@ -13,8 +13,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"github.com/jackc/pgtype"
 	"strings"
+
+	"github.com/jackc/pgtype"
 
 	"errors"
 
@@ -175,8 +176,14 @@ func (s *Snapshotter) prepareScannersAndGetters(columnTypes []*sql.ColumnType) (
 		case "INET":
 			scanArgs[i] = new(sql.NullString)
 			valueGetters[i] = func(v interface{}) interface{} {
-				payload := v.(*sql.NullString).String
-				return formatIP(payload)
+				inet := pgtype.Inet{}
+				val := v.(*sql.NullString).String
+				if err := inet.Scan(val); err != nil {
+					s.logger.Warnf("Failed to scan array of INT4 values: %v", err)
+					return nil
+				}
+
+				return inet.IPNet.String()
 			}
 		case "TSRANGE":
 			scanArgs[i] = new(sql.NullString)

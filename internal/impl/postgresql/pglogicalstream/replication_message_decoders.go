@@ -10,10 +10,11 @@ package pglogicalstream
 
 import (
 	"fmt"
+	"log"
+
 	"github.com/google/uuid"
 	pgtypes "github.com/jackc/pgtype"
 	"github.com/jackc/pgx/v5/pgtype"
-	"log"
 )
 
 // ----------------------------------------------------------------------------
