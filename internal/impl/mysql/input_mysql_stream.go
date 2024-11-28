@@ -258,7 +258,7 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 	snapshot := NewSnapshot(ctx, i.logger, db)
 	i.snapshot = snapshot
 
-	go i.startMySQLSync(ctx)
+	go i.startMySQLSync()
 	return nil
 }
 
@@ -321,7 +321,9 @@ func (i *mysqlStreamInput) readMessages(ctx context.Context) {
 	}
 }
 
-func (i *mysqlStreamInput) startMySQLSync(ctx context.Context) {
+func (i *mysqlStreamInput) startMySQLSync() {
+	ctx, _ := i.shutSig.SoftStopCtx(context.Background())
+
 	i.canal.SetEventHandler(i)
 	go i.readMessages(ctx)
 	// If we require snapshot streaming && we don't have a binlog position cache
