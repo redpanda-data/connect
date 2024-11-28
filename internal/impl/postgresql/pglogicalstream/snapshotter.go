@@ -11,7 +11,9 @@ package pglogicalstream
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"github.com/jackc/pgtype"
 	"strings"
 
 	"errors"
@@ -156,6 +158,63 @@ func (s *Snapshotter) prepareScannersAndGetters(columnTypes []*sql.ColumnType) (
 		case "INT4":
 			scanArgs[i] = new(sql.NullInt64)
 			valueGetters[i] = func(v interface{}) interface{} { return v.(*sql.NullInt64).Int64 }
+		case "JSONB":
+			scanArgs[i] = new(sql.NullString)
+			valueGetters[i] = func(v interface{}) interface{} {
+				payload := v.(*sql.NullString).String
+				if payload == "" {
+					return nil
+				}
+				var dst any
+				if err := json.Unmarshal([]byte(v.(*sql.NullString).String), &dst); err != nil {
+					s.logger.Warnf("Failed to unmarshal JSONB value: %v", err)
+				}
+
+				return dst
+			}
+		case "INET":
+			scanArgs[i] = new(sql.NullString)
+			valueGetters[i] = func(v interface{}) interface{} {
+				payload := v.(*sql.NullString).String
+				return formatIP(payload)
+			}
+		case "TSRANGE":
+			scanArgs[i] = new(sql.NullString)
+			valueGetters[i] = func(v interface{}) interface{} {
+				newArray := pgtype.Tsrange{}
+				val := v.(*sql.NullString).String
+				if err := newArray.Scan(val); err != nil {
+					s.logger.Warnf("Failed to scan array of TEXT values: %v", err)
+					return nil
+				}
+
+				vv, _ := newArray.Value()
+				return vv
+			}
+		case "_INT4":
+			scanArgs[i] = new(sql.NullString)
+			valueGetters[i] = func(v interface{}) interface{} {
+				newArray := pgtype.Int4Array{}
+				val := v.(*sql.NullString).String
+				if err := newArray.Scan(val); err != nil {
+					s.logger.Warnf("Failed to scan array of INT4 values: %v", err)
+					return nil
+				}
+
+				return newArray.Elements
+			}
+		case "_TEXT":
+			scanArgs[i] = new(sql.NullString)
+			valueGetters[i] = func(v interface{}) interface{} {
+				newArray := pgtype.TextArray{}
+				val := v.(*sql.NullString).String
+				if err := newArray.Scan(val); err != nil {
+					s.logger.Warnf("Failed to scan array of TEXT values: %v", err)
+					return nil
+				}
+
+				return newArray.Elements
+			}
 		default:
 			scanArgs[i] = new(sql.NullString)
 			valueGetters[i] = func(v interface{}) interface{} { return v.(*sql.NullString).String }

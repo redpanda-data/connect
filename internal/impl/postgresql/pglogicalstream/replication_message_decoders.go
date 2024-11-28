@@ -11,6 +11,7 @@ package pglogicalstream
 import (
 	"fmt"
 	"github.com/google/uuid"
+	pgtypes "github.com/jackc/pgtype"
 	"github.com/jackc/pgx/v5/pgtype"
 	"log"
 )
@@ -155,6 +156,16 @@ func decodeTextColumnData(mi *pgtype.Map, data []byte, dataType uint32) (interfa
 		if dt.Name == "uuid" {
 			typesValueForUUID := val.([16]uint8)
 			return uuid.UUID(typesValueForUUID).String(), err
+		}
+
+		if dt.Name == "tsrange" {
+			newArray := pgtypes.Tsrange{}
+			if err := newArray.Scan(data); err != nil {
+				return nil, err
+			}
+
+			vv, _ := newArray.Value()
+			return vv, err
 		}
 
 		return val, err
