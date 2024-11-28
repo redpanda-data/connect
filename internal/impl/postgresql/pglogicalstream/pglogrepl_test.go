@@ -22,6 +22,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/ory/dockertest/v3"
 	"github.com/ory/dockertest/v3/docker"
+	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -141,7 +142,9 @@ func createDockerInstance(t *testing.T) (*dockertest.Pool, *dockertest.Resource,
 	return pool, resource, databaseURL
 }
 
-func TestIdentifySystem(t *testing.T) {
+func TestIntegrationIdentifySystem(t *testing.T) {
+	integration.CheckSkip(t)
+
 	pool, resource, dbURL := createDockerInstance(t)
 	defer func() {
 		err := pool.Purge(resource)
@@ -165,7 +168,9 @@ func TestIdentifySystem(t *testing.T) {
 	assert.NotEmpty(t, sysident.DBName, 0)
 }
 
-func TestCreateReplicationSlot(t *testing.T) {
+func TestIntegrationCreateReplicationSlot(t *testing.T) {
+	integration.CheckSkip(t)
+
 	pool, resource, dbURL := createDockerInstance(t)
 	defer func() {
 		err := pool.Purge(resource)
@@ -184,7 +189,9 @@ func TestCreateReplicationSlot(t *testing.T) {
 	assert.Equal(t, slotName, result.SlotName)
 }
 
-func TestDropReplicationSlot(t *testing.T) {
+func TestIntegrationDropReplicationSlot(t *testing.T) {
+	integration.CheckSkip(t)
+
 	pool, resource, dbURL := createDockerInstance(t)
 	defer func() {
 		err := pool.Purge(resource)
@@ -207,7 +214,9 @@ func TestDropReplicationSlot(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestCreatePublication(t *testing.T) {
+func TestIntegrationCreatePublication(t *testing.T) {
+	integration.CheckSkip(t)
+
 	pool, resource, dbURL := createDockerInstance(t)
 	defer func() {
 		err := pool.Purge(resource)
@@ -289,7 +298,9 @@ func TestCreatePublication(t *testing.T) {
 
 }
 
-func TestStartReplication(t *testing.T) {
+func TestIntegrationStartReplication(t *testing.T) {
+	integration.CheckSkip(t)
+
 	pool, resource, dbURL := createDockerInstance(t)
 	defer func() {
 		err := pool.Purge(resource)
@@ -388,12 +399,12 @@ drop table t;
 
 	rxKeepAlive()
 	xld := rxXLogData()
-	begin, err := isBeginMessage(xld.WALData)
+	begin, _, err := isBeginMessage(xld.WALData)
 	require.NoError(t, err)
 	assert.True(t, begin)
 
 	xld = rxXLogData()
-	var streamMessage *StreamMessageChanges
+	var streamMessage *StreamMessage
 	streamMessage, err = decodePgOutput(xld.WALData, relations, typeMap)
 	require.NoError(t, err)
 	assert.Nil(t, streamMessage)
@@ -403,44 +414,45 @@ drop table t;
 	require.NoError(t, err)
 	jsonData, err := json.Marshal(&streamMessage)
 	require.NoError(t, err)
-	assert.Equal(t, "{\"operation\":\"insert\",\"schema\":\"public\",\"table\":\"t\",\"data\":{\"id\":1,\"name\":\"foo\"}}", string(jsonData))
+	assert.JSONEq(t, `{"operation":"insert","schema":"public","table":"t","mode":"streaming","lsn":null,"data":{"id":1, "name":"foo"}}`, string(jsonData))
 
 	xld = rxXLogData()
 	streamMessage, err = decodePgOutput(xld.WALData, relations, typeMap)
 	require.NoError(t, err)
 	jsonData, err = json.Marshal(&streamMessage)
 	require.NoError(t, err)
-	assert.Equal(t, "{\"operation\":\"insert\",\"schema\":\"public\",\"table\":\"t\",\"data\":{\"id\":2,\"name\":\"bar\"}}", string(jsonData))
+	assert.JSONEq(t, `{"operation":"insert","schema":"public","table":"t","mode":"streaming","lsn":null,"data":{"id":2,"name":"bar"}}`, string(jsonData))
 
 	xld = rxXLogData()
 	streamMessage, err = decodePgOutput(xld.WALData, relations, typeMap)
 	require.NoError(t, err)
 	jsonData, err = json.Marshal(&streamMessage)
 	require.NoError(t, err)
-	assert.Equal(t, "{\"operation\":\"insert\",\"schema\":\"public\",\"table\":\"t\",\"data\":{\"id\":3,\"name\":\"baz\"}}", string(jsonData))
+	assert.JSONEq(t, `{"operation":"insert","schema":"public","table":"t","mode":"streaming","lsn":null,"data":{"id":3,"name":"baz"}}`, string(jsonData))
 
 	xld = rxXLogData()
 	streamMessage, err = decodePgOutput(xld.WALData, relations, typeMap)
 	require.NoError(t, err)
 	jsonData, err = json.Marshal(&streamMessage)
 	require.NoError(t, err)
-	assert.Equal(t, "{\"operation\":\"update\",\"schema\":\"public\",\"table\":\"t\",\"data\":{\"id\":3,\"name\":\"quz\"}}", string(jsonData))
+	assert.JSONEq(t, `{"operation":"update","schema":"public","table":"t","mode":"streaming","lsn":null,"data":{"id":3,"name":"quz"}}`, string(jsonData))
 
 	xld = rxXLogData()
 	streamMessage, err = decodePgOutput(xld.WALData, relations, typeMap)
 	require.NoError(t, err)
 	jsonData, err = json.Marshal(&streamMessage)
 	require.NoError(t, err)
-	assert.Equal(t, "{\"operation\":\"delete\",\"schema\":\"public\",\"table\":\"t\",\"data\":{\"id\":2,\"name\":null}}", string(jsonData))
+	assert.JSONEq(t, `{"operation":"delete","schema":"public","table":"t","mode":"streaming","lsn":null,"data":{"id":2,"name":null}}`, string(jsonData))
 	xld = rxXLogData()
 
-	var commit bool
-	commit, _, err = isCommitMessage(xld.WALData)
+	commit, _, err := isCommitMessage(xld.WALData)
 	require.NoError(t, err)
 	assert.True(t, commit)
 }
 
-func TestSendStandbyStatusUpdate(t *testing.T) {
+func TestIntegrationSendStandbyStatusUpdate(t *testing.T) {
+	integration.CheckSkip(t)
+
 	pool, resource, dbURL := createDockerInstance(t)
 	defer func() {
 		err := pool.Purge(resource)

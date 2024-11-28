@@ -16,8 +16,10 @@ package kafka
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -40,26 +42,10 @@ const (
 	kfwFieldBrokerWriteMaxBytes = "broker_write_max_bytes"
 )
 
-// FranzProducerFields returns a slice of fields specifically for customising
-// producer behaviour via the franz-go library.
-func FranzProducerFields() []*service.ConfigField {
+// FranzProducerLimitsFields returns a slice of fields specifically for
+// customising producer limits via the franz-go library.
+func FranzProducerLimitsFields() []*service.ConfigField {
 	return []*service.ConfigField{
-		service.NewStringAnnotatedEnumField(kfwFieldPartitioner, map[string]string{
-			"murmur2_hash": "Kafka's default hash algorithm that uses a 32-bit murmur2 hash of the key to compute which partition the record will be on.",
-			"round_robin":  "Round-robin's messages through all available partitions. This algorithm has lower throughput and causes higher CPU load on brokers, but can be useful if you want to ensure an even distribution of records to partitions.",
-			"least_backup": "Chooses the least backed up partition (the partition with the fewest amount of buffered records). Partitions are selected per batch.",
-			"manual":       "Manually select a partition for each message, requires the field `partition` to be specified.",
-		}).
-			Description("Override the default murmur2 hashing partitioner.").
-			Advanced().Optional(),
-		service.NewBoolField(kfwFieldIdempotentWrite).
-			Description("Enable the idempotent write producer option. This requires the `IDEMPOTENT_WRITE` permission on `CLUSTER` and can be disabled if this permission is not available.").
-			Default(true).
-			Advanced(),
-		service.NewStringEnumField(kfwFieldCompression, "lz4", "snappy", "gzip", "none", "zstd").
-			Description("Optionally set an explicit compression type. The default preference is to use snappy when the broker supports it, and fall back to none if not.").
-			Optional().
-			Advanced(),
 		service.NewDurationField(kfwFieldTimeout).
 			Description("The maximum period of time to wait for message sends before abandoning the request and retrying").
 			Default("10s").
@@ -79,9 +65,35 @@ func FranzProducerFields() []*service.ConfigField {
 	}
 }
 
-// FranzProducerOptsFromConfig returns a slice of franz-go client opts from a
-// parsed config.
-func FranzProducerOptsFromConfig(conf *service.ParsedConfig) ([]kgo.Opt, error) {
+// FranzProducerFields returns a slice of fields specifically for customising
+// producer behaviour via the franz-go library.
+func FranzProducerFields() []*service.ConfigField {
+	return slices.Concat(
+		[]*service.ConfigField{
+			service.NewStringAnnotatedEnumField(kfwFieldPartitioner, map[string]string{
+				"murmur2_hash": "Kafka's default hash algorithm that uses a 32-bit murmur2 hash of the key to compute which partition the record will be on.",
+				"round_robin":  "Round-robin's messages through all available partitions. This algorithm has lower throughput and causes higher CPU load on brokers, but can be useful if you want to ensure an even distribution of records to partitions.",
+				"least_backup": "Chooses the least backed up partition (the partition with the fewest amount of buffered records). Partitions are selected per batch.",
+				"manual":       "Manually select a partition for each message, requires the field `partition` to be specified.",
+			}).
+				Description("Override the default murmur2 hashing partitioner.").
+				Advanced().Optional(),
+			service.NewBoolField(kfwFieldIdempotentWrite).
+				Description("Enable the idempotent write producer option. This requires the `IDEMPOTENT_WRITE` permission on `CLUSTER` and can be disabled if this permission is not available.").
+				Default(true).
+				Advanced(),
+			service.NewStringEnumField(kfwFieldCompression, "lz4", "snappy", "gzip", "none", "zstd").
+				Description("Optionally set an explicit compression type. The default preference is to use snappy when the broker supports it, and fall back to none if not.").
+				Optional().
+				Advanced(),
+		},
+		FranzProducerLimitsFields(),
+	)
+}
+
+// FranzProducerLimitsOptsFromConfig returns a slice of franz-go client opts for
+// customising producer limits from a parsed config.
+func FranzProducerLimitsOptsFromConfig(conf *service.ParsedConfig) ([]kgo.Opt, error) {
 	var opts []kgo.Opt
 
 	maxMessageBytesStr, err := conf.FieldString(kfwFieldMaxMessageBytes)
@@ -109,6 +121,24 @@ func FranzProducerOptsFromConfig(conf *service.ParsedConfig) ([]kgo.Opt, error) 
 		return nil, fmt.Errorf("invalid broker_write_max_bytes, must not exceed %v", 1<<30)
 	}
 	opts = append(opts, kgo.BrokerMaxWriteBytes(int32(brokerWriteMaxBytes)))
+
+	timeout, err := conf.FieldDuration(kfwFieldTimeout)
+	if err != nil {
+		return nil, err
+	}
+	opts = append(opts, kgo.ProduceRequestTimeout(timeout))
+
+	return opts, nil
+}
+
+// FranzProducerOptsFromConfig returns a slice of franz-go client opts from a
+// parsed config.
+func FranzProducerOptsFromConfig(conf *service.ParsedConfig) ([]kgo.Opt, error) {
+	var opts []kgo.Opt
+	var err error
+	if opts, err = FranzProducerLimitsOptsFromConfig(conf); err != nil {
+		return nil, err
+	}
 
 	var compressionPrefs []kgo.CompressionCodec
 	if conf.Contains(kfwFieldCompression) {
@@ -169,23 +199,18 @@ func FranzProducerOptsFromConfig(conf *service.ParsedConfig) ([]kgo.Opt, error) 
 		opts = append(opts, kgo.DisableIdempotentWrite())
 	}
 
-	timeout, err := conf.FieldDuration(kfwFieldTimeout)
-	if err != nil {
-		return nil, err
-	}
-	opts = append(opts, kgo.ProduceRequestTimeout(timeout))
-
 	return opts, nil
 }
 
 //------------------------------------------------------------------------------
 
 const (
-	kfwFieldTopic     = "topic"
-	kfwFieldKey       = "key"
-	kfwFieldPartition = "partition"
-	kfwFieldMetadata  = "metadata"
-	kfwFieldTimestamp = "timestamp"
+	kfwFieldTopic       = "topic"
+	kfwFieldKey         = "key"
+	kfwFieldPartition   = "partition"
+	kfwFieldMetadata    = "metadata"
+	kfwFieldTimestamp   = "timestamp"
+	kfwFieldTimestampMs = "timestamp_ms"
 )
 
 // FranzWriterConfigFields returns a slice of config fields specifically for
@@ -208,17 +233,34 @@ func FranzWriterConfigFields() []*service.ConfigField {
 			Example(`${! timestamp_unix() }`).
 			Example(`${! metadata("kafka_timestamp_unix") }`).
 			Optional().
+			Advanced().
+			Deprecated(),
+		service.NewInterpolatedStringField(kfwFieldTimestampMs).
+			Description("An optional timestamp to set for each message expressed in milliseconds. When left empty, the current timestamp is used.").
+			Example(`${! timestamp_unix_milli() }`).
+			Example(`${! metadata("kafka_timestamp_ms") }`).
+			Optional().
 			Advanced(),
 	}
 }
 
+// FranzWriterConfigLints returns the linter rules for a the writer config.
+func FranzWriterConfigLints() string {
+	return `root = match {
+  this.partitioner == "manual" && this.partition.or("") == "" => "a partition must be specified when the partitioner is set to manual"
+  this.partitioner != "manual" && this.partition.or("") != "" => "a partition cannot be specified unless the partitioner is set to manual"
+  this.timestamp.or("") != "" && this.timestamp_ms.or("") != "" => "both timestamp and timestamp_ms cannot be specified simultaneously"
+}`
+}
+
 // FranzWriter implements a Kafka writer using the franz-go library.
 type FranzWriter struct {
-	Topic      *service.InterpolatedString
-	Key        *service.InterpolatedString
-	Partition  *service.InterpolatedString
-	Timestamp  *service.InterpolatedString
-	MetaFilter *service.MetadataFilter
+	Topic         *service.InterpolatedString
+	Key           *service.InterpolatedString
+	Partition     *service.InterpolatedString
+	Timestamp     *service.InterpolatedString
+	IsTimestampMs bool
+	MetaFilter    *service.MetadataFilter
 
 	accessClientFn func(FranzSharedClientUseFn) error
 	yieldClientFn  func(context.Context) error
@@ -256,11 +298,23 @@ func NewFranzWriterFromConfig(conf *service.ParsedConfig, accessClientFn func(Fr
 		}
 	}
 
+	if conf.Contains(kfwFieldTimestamp) && conf.Contains(kfwFieldTimestampMs) {
+		return nil, errors.New("cannot specify both timestamp and timestamp_ms fields")
+	}
+
 	if conf.Contains(kfwFieldTimestamp) {
 		if w.Timestamp, err = conf.FieldInterpolatedString(kfwFieldTimestamp); err != nil {
 			return nil, err
 		}
 	}
+
+	if conf.Contains(kfwFieldTimestampMs) {
+		if w.Timestamp, err = conf.FieldInterpolatedString(kfwFieldTimestampMs); err != nil {
+			return nil, err
+		}
+		w.IsTimestampMs = true
+	}
+
 	return &w, nil
 }
 
@@ -324,7 +378,11 @@ func (w *FranzWriter) BatchToRecords(ctx context.Context, b service.MessageBatch
 				if ts, err := strconv.ParseInt(tsStr, 10, 64); err != nil {
 					return nil, fmt.Errorf("failed to parse timestamp: %w", err)
 				} else {
-					record.Timestamp = time.Unix(ts, 0)
+					if w.IsTimestampMs {
+						record.Timestamp = time.UnixMilli(ts)
+					} else {
+						record.Timestamp = time.Unix(ts, 0)
+					}
 				}
 			}
 		}

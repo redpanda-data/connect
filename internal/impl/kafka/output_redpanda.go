@@ -37,14 +37,7 @@ func redpandaOutputConfig() *service.ConfigSpec {
 Writes a batch of messages to Kafka brokers and waits for acknowledgement before propagating it back to the input.
 `).
 		Fields(redpandaOutputConfigFields()...).
-		LintRule(`
-root = if this.partitioner == "manual" {
-if this.partition.or("") == "" {
-"a partition must be specified when the partitioner is set to manual"
-}
-} else if this.partition.or("") != "" {
-"a partition cannot be specified unless the partitioner is set to manual"
-}`)
+		LintRule(FranzWriterConfigLints())
 }
 
 func redpandaOutputConfigFields() []*service.ConfigField {

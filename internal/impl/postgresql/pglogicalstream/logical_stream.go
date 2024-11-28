@@ -43,9 +43,10 @@ type Stream struct {
 	messages                   chan StreamMessage
 	errors                     chan error
 
-	snapshotName string
-	slotName     string
-	schema       string
+	includeTxnMarkers bool
+	snapshotName      string
+	slotName          string
+	schema            string
 	// includes schema
 	tableQualifiedName         []string
 	snapshotBatchSize          int
@@ -53,7 +54,6 @@ type Stream struct {
 	snapshotMemorySafetyFactor float64
 	logger                     *service.Logger
 	monitor                    *Monitor
-	batchTransactions          bool
 	snapshotter                *Snapshotter
 	maxParallelSnapshotTables  int
 }
@@ -101,13 +101,13 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		errors:                     make(chan error, 1),
 		slotName:                   config.ReplicationSlotName,
 		snapshotMemorySafetyFactor: config.SnapshotMemorySafetyFactor,
-		batchTransactions:          config.BatchTransactions,
 		snapshotBatchSize:          config.BatchSize,
 		schema:                     config.DBSchema,
 		tableQualifiedName:         tableNames,
 		maxParallelSnapshotTables:  config.MaxParallelSnapshotTables,
 		logger:                     config.Logger,
 		shutSig:                    shutdown.NewSignaller(),
+		includeTxnMarkers:          config.IncludeTxnMarkers,
 	}
 
 	var version int
@@ -319,7 +319,7 @@ func (s *Stream) AckLSN(ctx context.Context, lsn string) error {
 }
 
 func (s *Stream) streamMessages() error {
-	handler := NewPgOutputPluginHandler(s.messages, s.batchTransactions, s.monitor, s.clientXLogPos)
+	handler := NewPgOutputPluginHandler(s.messages, s.monitor, s.clientXLogPos, s.includeTxnMarkers)
 
 	ctx, _ := s.shutSig.SoftStopCtx(context.Background())
 	for !s.shutSig.IsSoftStopSignalled() {
@@ -344,7 +344,6 @@ func (s *Stream) streamMessages() error {
 		hitStandbyTimeout := errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil
 		if err != nil {
 			if hitStandbyTimeout || pgconn.Timeout(err) {
-				s.logger.Info("continue")
 				continue
 			}
 			return fmt.Errorf("failed to receive messages from Postgres: %w", err)
@@ -508,24 +507,18 @@ func (s *Stream) processSnapshot() error {
 					}
 
 					snapshotChangePacket := StreamMessage{
-						Lsn: nil,
-						Changes: []StreamMessageChanges{
-							{
-								Table:     tableWithoutSchema,
-								Operation: "insert",
-								Schema:    s.schema,
-								Data:      data,
-							},
-						},
+						Lsn:       nil,
+						Mode:      StreamModeSnapshot,
+						Operation: InsertOpType,
+
+						Table:  tableWithoutSchema,
+						Schema: s.schema,
+						Data:   data,
 					}
 
 					if rowsCount%100 == 0 {
 						s.monitor.UpdateSnapshotProgressForTable(tableWithoutSchema, rowsCount+offset)
 					}
-
-					tableProgress := s.monitor.GetSnapshotProgressForTable(tableWithoutSchema)
-					snapshotChangePacket.Changes[0].TableSnapshotProgress = &tableProgress
-					snapshotChangePacket.Mode = StreamModeSnapshot
 
 					waitingFromBenthos := time.Now()
 					select {

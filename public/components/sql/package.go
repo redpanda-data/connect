@@ -26,6 +26,7 @@ import (
 	_ "github.com/ClickHouse/clickhouse-go/v2"
 	_ "github.com/denisenkom/go-mssqldb"
 	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/googleapis/go-sql-spanner"
 	_ "github.com/lib/pq"
 	_ "github.com/microsoft/gocosmos"
 	_ "github.com/sijms/go-ora/v2"

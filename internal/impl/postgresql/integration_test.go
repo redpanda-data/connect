@@ -82,6 +82,10 @@ func ResourceWithPostgreSQLVersion(t *testing.T, pool *dockertest.Pool, version 
 			return err
 		}
 
+		t.Cleanup(func() {
+			_ = db.Close()
+		})
+
 		if err = db.Ping(); err != nil {
 			return err
 		}
@@ -141,7 +145,8 @@ func ResourceWithPostgreSQLVersion(t *testing.T, pool *dockertest.Pool, version 
 	return resource, db, nil
 }
 
-func TestIntegrationPgCDCForPgOutputPlugin(t *testing.T) {
+func TestIntegrationPostgresNoTxnMarkers(t *testing.T) {
+	t.Parallel()
 	integration.CheckSkip(t)
 	tmpDir := t.TempDir()
 	pool, err := dockertest.NewPool("")
@@ -223,10 +228,10 @@ file:
 		require.NoError(t, err)
 	}
 
-	assert.Eventually(t, func() bool {
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		outBatchMut.Lock()
 		defer outBatchMut.Unlock()
-		return len(outBatches) == 20
+		assert.Len(c, outBatches, 20, "got: %#v", outBatches)
 	}, time.Second*25, time.Millisecond*100)
 
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
@@ -263,18 +268,13 @@ file:
 		require.NoError(t, err)
 	}
 
-	assert.Eventually(t, func() bool {
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		outBatchMut.Lock()
 		defer outBatchMut.Unlock()
-		return len(outBatches) == 10
+		assert.Len(c, outBatches, 10, "got: %#v", outBatches)
 	}, time.Second*20, time.Millisecond*100)
 
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
-	t.Log("All the conditions are met 🎉")
-
-	t.Cleanup(func() {
-		db.Close()
-	})
 }
 
 func TestIntegrationPgStreamingFromRemoteDB(t *testing.T) {
@@ -289,7 +289,7 @@ pg_stream:
     slot_name: test_slot_native_decoder
     snapshot_batch_size: 100000
     stream_snapshot: true
-    batch_transactions: false
+    include_transaction_markers: false
     temporary_slot: true
     schema: public
     tables:
@@ -351,7 +351,8 @@ file:
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
 }
 
-func TestIntegrationPgCDCForPgOutputStreamUncommittedPlugin(t *testing.T) {
+func TestIntegrationPostgresIncludeTxnMarkers(t *testing.T) {
+	t.Parallel()
 	integration.CheckSkip(t)
 	tmpDir := t.TempDir()
 	pool, err := dockertest.NewPool("")
@@ -383,7 +384,7 @@ pg_stream:
     slot_name: test_slot_native_decoder
     snapshot_batch_size: 100
     stream_snapshot: true
-    batch_transactions: true
+    include_transaction_markers: true
     schema: public
     tables:
        - flights
@@ -436,7 +437,7 @@ file:
 	assert.Eventually(t, func() bool {
 		outBatchMut.Lock()
 		defer outBatchMut.Unlock()
-		return len(outBatches) == 10010
+		return len(outBatches) == 10030
 	}, time.Second*25, time.Millisecond*100)
 
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
@@ -476,15 +477,10 @@ file:
 	assert.Eventually(t, func() bool {
 		outBatchMut.Lock()
 		defer outBatchMut.Unlock()
-		return len(outBatches) == 10
+		return len(outBatches) == 30
 	}, time.Second*20, time.Millisecond*100)
 
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
-	t.Log("All the conditions are met 🎉")
-
-	t.Cleanup(func() {
-		db.Close()
-	})
 }
 
 func TestIntegrationPgCDCForPgOutputStreamComplexTypesPlugin(t *testing.T) {
@@ -599,284 +595,140 @@ file:
 	require.Equal(t, messageWithComplexTypes, strings.Replace(lastMessage, ":2", ":1", 1))
 
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
-	t.Log("All the conditions are met 🎉")
-
-	t.Cleanup(func() {
-		db.Close()
-	})
 }
 
-func TestIntegrationPgMultiVersionsCDCForPgOutputStreamUncomitedPlugin(t *testing.T) {
+func TestIntegrationMultiplePostgresVersions(t *testing.T) {
 	integration.CheckSkip(t)
 	// running tests in the look to test different PostgreSQL versions
-	t.Parallel()
-	for _, v := range []string{"17", "16", "15", "14", "13", "12", "11", "10"} {
-		tmpDir := t.TempDir()
-		pool, err := dockertest.NewPool("")
-		require.NoError(t, err)
-
-		var (
-			resource *dockertest.Resource
-			db       *sql.DB
-		)
-
-		resource, db, err = ResourceWithPostgreSQLVersion(t, pool, v)
-		require.NoError(t, err)
-		require.NoError(t, resource.Expire(120))
-
-		hostAndPort := resource.GetHostPort("5432/tcp")
-		hostAndPortSplited := strings.Split(hostAndPort, ":")
-		password := "l]YLSc|4[i56%{gY"
-
-		for i := 0; i < 1000; i++ {
-			f := GetFakeFlightRecord()
-			_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
+	for _, version := range []string{"17", "16", "15", "14", "13", "12", "11", "10"} {
+		v := version
+		t.Run(version, func(t *testing.T) {
+			t.Parallel()
+			tmpDir := t.TempDir()
+			pool, err := dockertest.NewPool("")
 			require.NoError(t, err)
-		}
 
-		databaseURL := fmt.Sprintf("user=user_name password=%s dbname=dbname sslmode=disable host=%s port=%s", password, hostAndPortSplited[0], hostAndPortSplited[1])
-		template := fmt.Sprintf(`
+			var (
+				resource *dockertest.Resource
+				db       *sql.DB
+			)
+
+			resource, db, err = ResourceWithPostgreSQLVersion(t, pool, v)
+			require.NoError(t, err)
+			require.NoError(t, resource.Expire(120))
+
+			hostAndPort := resource.GetHostPort("5432/tcp")
+			hostAndPortSplited := strings.Split(hostAndPort, ":")
+			password := "l]YLSc|4[i56%{gY"
+
+			for i := 0; i < 1000; i++ {
+				f := GetFakeFlightRecord()
+				_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
+				require.NoError(t, err)
+			}
+
+			databaseURL := fmt.Sprintf("user=user_name password=%s dbname=dbname sslmode=disable host=%s port=%s", password, hostAndPortSplited[0], hostAndPortSplited[1])
+			template := fmt.Sprintf(`
 pg_stream:
     dsn: %s
     slot_name: test_slot_native_decoder
     stream_snapshot: true
-    batch_transactions: true
+    include_transaction_markers: false
     schema: public
     tables:
        - flights
 `, databaseURL)
 
-		cacheConf := fmt.Sprintf(`
+			cacheConf := fmt.Sprintf(`
 label: pg_stream_cache
 file:
     directory: %v
 `, tmpDir)
 
-		streamOutBuilder := service.NewStreamBuilder()
-		require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: INFO`))
-		require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
-		require.NoError(t, streamOutBuilder.AddInputYAML(template))
+			streamOutBuilder := service.NewStreamBuilder()
+			require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: INFO`))
+			require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
+			require.NoError(t, streamOutBuilder.AddInputYAML(template))
 
-		var outBatches []string
-		var outBatchMut sync.Mutex
-		require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
-			msgBytes, err := mb[0].AsBytes()
+			var outBatches []string
+			var outBatchMut sync.Mutex
+			require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
+				msgBytes, err := mb[0].AsBytes()
+				require.NoError(t, err)
+				outBatchMut.Lock()
+				outBatches = append(outBatches, string(msgBytes))
+				outBatchMut.Unlock()
+				return nil
+			}))
+
+			streamOut, err := streamOutBuilder.Build()
 			require.NoError(t, err)
-			outBatchMut.Lock()
-			outBatches = append(outBatches, string(msgBytes))
-			outBatchMut.Unlock()
-			return nil
-		}))
 
-		streamOut, err := streamOutBuilder.Build()
-		require.NoError(t, err)
+			go func() {
+				_ = streamOut.Run(context.Background())
+			}()
 
-		go func() {
-			_ = streamOut.Run(context.Background())
-		}()
+			assert.Eventually(t, func() bool {
+				outBatchMut.Lock()
+				defer outBatchMut.Unlock()
+				return len(outBatches) == 1000
+			}, time.Second*15, time.Millisecond*100)
 
-		assert.Eventually(t, func() bool {
-			outBatchMut.Lock()
-			defer outBatchMut.Unlock()
-			return len(outBatches) == 1000
-		}, time.Second*25, time.Millisecond*100)
+			for i := 0; i < 1000; i++ {
+				f := GetFakeFlightRecord()
+				_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
+				require.NoError(t, err)
+				_, err = db.Exec("INSERT INTO flights_non_streamed (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
+				require.NoError(t, err)
+			}
 
-		for i := 0; i < 1000; i++ {
-			f := GetFakeFlightRecord()
-			_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
+			assert.EventuallyWithT(t, func(c *assert.CollectT) {
+				outBatchMut.Lock()
+				defer outBatchMut.Unlock()
+				assert.Len(c, outBatches, 2000, "got: %d", len(outBatches))
+			}, time.Second*15, time.Millisecond*100)
+
+			require.NoError(t, streamOut.StopWithin(time.Second*10))
+
+			// Starting stream for the same replication slot should continue from the last LSN
+			// Meaning we must not receive any old messages again
+
+			streamOutBuilder = service.NewStreamBuilder()
+			require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: INFO`))
+			require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
+			require.NoError(t, streamOutBuilder.AddInputYAML(template))
+
+			outBatches = []string{}
+			require.NoError(t, streamOutBuilder.AddConsumerFunc(func(c context.Context, m *service.Message) error {
+				msgBytes, err := m.AsBytes()
+				require.NoError(t, err)
+				outBatchMut.Lock()
+				outBatches = append(outBatches, string(msgBytes))
+				outBatchMut.Unlock()
+				return nil
+			}))
+
+			streamOut, err = streamOutBuilder.Build()
 			require.NoError(t, err)
-			_, err = db.Exec("INSERT INTO flights_non_streamed (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
-			require.NoError(t, err)
-		}
 
-		assert.Eventually(t, func() bool {
-			outBatchMut.Lock()
-			defer outBatchMut.Unlock()
-			return len(outBatches) == 2000
-		}, time.Second*25, time.Millisecond*100)
+			go func() {
+				assert.NoError(t, streamOut.Run(context.Background()))
+			}()
 
-		require.NoError(t, streamOut.StopWithin(time.Second*10))
+			time.Sleep(time.Second * 5)
+			for i := 0; i < 1000; i++ {
+				f := GetFakeFlightRecord()
+				_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
+				require.NoError(t, err)
+			}
 
-		// Starting stream for the same replication slot should continue from the last LSN
-		// Meaning we must not receive any old messages again
+			assert.EventuallyWithT(t, func(c *assert.CollectT) {
+				outBatchMut.Lock()
+				defer outBatchMut.Unlock()
+				assert.Len(c, outBatches, 1000, "got: %d", len(outBatches))
+			}, time.Second*10, time.Millisecond*100)
 
-		streamOutBuilder = service.NewStreamBuilder()
-		require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: INFO`))
-		require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
-		require.NoError(t, streamOutBuilder.AddInputYAML(template))
-
-		outBatches = []string{}
-		require.NoError(t, streamOutBuilder.AddConsumerFunc(func(c context.Context, m *service.Message) error {
-			msgBytes, err := m.AsBytes()
-			require.NoError(t, err)
-			outBatchMut.Lock()
-			outBatches = append(outBatches, string(msgBytes))
-			outBatchMut.Unlock()
-			return nil
-		}))
-
-		streamOut, err = streamOutBuilder.Build()
-		require.NoError(t, err)
-
-		go func() {
-			assert.NoError(t, streamOut.Run(context.Background()))
-		}()
-
-		time.Sleep(time.Second * 5)
-		for i := 0; i < 1000; i++ {
-			f := GetFakeFlightRecord()
-			_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
-			require.NoError(t, err)
-		}
-
-		assert.Eventually(t, func() bool {
-			outBatchMut.Lock()
-			defer outBatchMut.Unlock()
-			return len(outBatches) == 1000
-		}, time.Second*20, time.Millisecond*100)
-
-		require.NoError(t, streamOut.StopWithin(time.Second*10))
-		t.Log("All the conditions are met 🎉")
-
-		t.Cleanup(func() {
-			db.Close()
-		})
-	}
-}
-
-func TestIntegrationPgMultiVersionsCDCForPgOutputStreamComittedPlugin(t *testing.T) {
-	integration.CheckSkip(t)
-	for _, v := range []string{"17", "16", "15", "14", "13", "12", "11", "10"} {
-		tmpDir := t.TempDir()
-		pool, err := dockertest.NewPool("")
-		require.NoError(t, err)
-
-		var (
-			resource *dockertest.Resource
-			db       *sql.DB
-		)
-
-		resource, db, err = ResourceWithPostgreSQLVersion(t, pool, v)
-		require.NoError(t, err)
-		require.NoError(t, resource.Expire(120))
-
-		hostAndPort := resource.GetHostPort("5432/tcp")
-		hostAndPortSplited := strings.Split(hostAndPort, ":")
-		password := "l]YLSc|4[i56%{gY"
-
-		for i := 0; i < 1000; i++ {
-			f := GetFakeFlightRecord()
-			_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
-			require.NoError(t, err)
-		}
-
-		databaseURL := fmt.Sprintf("user=user_name password=%s dbname=dbname sslmode=disable host=%s port=%s", password, hostAndPortSplited[0], hostAndPortSplited[1])
-		template := fmt.Sprintf(`
-pg_stream:
-    dsn: %s
-    slot_name: test_slot_native_decoder
-    stream_snapshot: true
-    batch_transactions: false
-    schema: public
-    tables:
-       - flights
-`, databaseURL)
-
-		cacheConf := fmt.Sprintf(`
-label: pg_stream_cache
-file:
-    directory: %v
-`, tmpDir)
-
-		streamOutBuilder := service.NewStreamBuilder()
-		require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: INFO`))
-		require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
-		require.NoError(t, streamOutBuilder.AddInputYAML(template))
-
-		var outMessages []string
-		var outMessagesMut sync.Mutex
-
-		require.NoError(t, streamOutBuilder.AddConsumerFunc(func(c context.Context, m *service.Message) error {
-			msgBytes, err := m.AsBytes()
-			require.NoError(t, err)
-			outMessagesMut.Lock()
-			outMessages = append(outMessages, string(msgBytes))
-			outMessagesMut.Unlock()
-			return nil
-		}))
-
-		streamOut, err := streamOutBuilder.Build()
-		require.NoError(t, err)
-
-		go func() {
-			_ = streamOut.Run(context.Background())
-		}()
-
-		assert.Eventually(t, func() bool {
-			outMessagesMut.Lock()
-			defer outMessagesMut.Unlock()
-			return len(outMessages) == 1000
-		}, time.Second*25, time.Millisecond*100)
-
-		for i := 0; i < 1000; i++ {
-			f := GetFakeFlightRecord()
-			_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
-			require.NoError(t, err)
-			_, err = db.Exec("INSERT INTO flights_non_streamed (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
-			require.NoError(t, err)
-		}
-
-		assert.Eventually(t, func() bool {
-			outMessagesMut.Lock()
-			defer outMessagesMut.Unlock()
-			return len(outMessages) == 2000
-		}, time.Second*25, time.Millisecond*100)
-
-		require.NoError(t, streamOut.StopWithin(time.Second*10))
-
-		// Starting stream for the same replication slot should continue from the last LSN
-		// Meaning we must not receive any old messages again
-
-		streamOutBuilder = service.NewStreamBuilder()
-		require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: INFO`))
-		require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
-		require.NoError(t, streamOutBuilder.AddInputYAML(template))
-
-		outMessages = []string{}
-		require.NoError(t, streamOutBuilder.AddConsumerFunc(func(c context.Context, m *service.Message) error {
-			msgBytes, err := m.AsBytes()
-			require.NoError(t, err)
-			outMessagesMut.Lock()
-			outMessages = append(outMessages, string(msgBytes))
-			outMessagesMut.Unlock()
-			return nil
-		}))
-
-		streamOut, err = streamOutBuilder.Build()
-		require.NoError(t, err)
-
-		go func() {
-			assert.NoError(t, streamOut.Run(context.Background()))
-		}()
-
-		time.Sleep(time.Second * 5)
-		for i := 0; i < 1000; i++ {
-			f := GetFakeFlightRecord()
-			_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
-			require.NoError(t, err)
-		}
-
-		assert.Eventually(t, func() bool {
-			outMessagesMut.Lock()
-			defer outMessagesMut.Unlock()
-			return len(outMessages) == 1000
-		}, time.Second*20, time.Millisecond*100)
-
-		require.NoError(t, streamOut.StopWithin(time.Second*10))
-		t.Log("All the conditions are met 🎉")
-
-		t.Cleanup(func() {
-			db.Close()
+			require.NoError(t, streamOut.StopWithin(time.Second*10))
 		})
 	}
 }

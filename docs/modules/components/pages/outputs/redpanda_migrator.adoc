@@ -81,7 +81,7 @@ output:
     metadata:
       include_prefixes: []
       include_patterns: []
-    timestamp: ${! timestamp_unix() } # No default (optional)
+    timestamp_ms: ${! timestamp_unix_milli() } # No default (optional)
     max_in_flight: 10
     batching:
       count: 0
@@ -92,6 +92,8 @@ output:
     input_resource: redpanda_migrator_input
     replication_factor_override: true
     replication_factor: 3
+    translate_schema_ids: true
+    schema_registry_output_resource: schema_registry_output
     partitioner: "" # No default (optional)
     idempotent_write: true
     compression: "" # No default (optional)
@@ -136,7 +138,7 @@ output:
     key: ${! metadata("kafka_key") }
     partitioner: manual
     partition: ${! metadata("kafka_partition").or(throw("missing kafka_partition metadata")) }
-    timestamp: ${! metadata("kafka_timestamp_unix").or(timestamp_unix()) }
+    timestamp_ms: ${! metadata("kafka_timestamp_ms").or(timestamp_unix_milli()) }
     input_resource: redpanda_migrator_input
     max_in_flight: 1
 ```
@@ -615,9 +617,9 @@ include_patterns:
   - _timestamp_unix$
 ```
 
-=== `timestamp`
+=== `timestamp_ms`
 
-An optional timestamp to set for each message. When left empty, the current timestamp is used.
+An optional timestamp to set for each message expressed in milliseconds. When left empty, the current timestamp is used.
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
 
@@ -627,9 +629,9 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 ```yml
 # Examples
 
-timestamp: ${! timestamp_unix() }
+timestamp_ms: ${! timestamp_unix_milli() }
 
-timestamp: ${! metadata("kafka_timestamp_unix") }
+timestamp_ms: ${! metadata("kafka_timestamp_ms") }
 ```
 
 === `max_in_flight`
@@ -769,6 +771,24 @@ Replication factor for created topics. This is only used when `replication_facto
 *Type*: `int`
 
 *Default*: `3`
+
+=== `translate_schema_ids`
+
+Translate schema IDs.
+
+
+*Type*: `bool`
+
+*Default*: `true`
+
+=== `schema_registry_output_resource`
+
+The label of the schema_registry output to use for fetching schema IDs.
+
+
+*Type*: `string`
+
+*Default*: `"schema_registry_output"`
 
 === `partitioner`
 

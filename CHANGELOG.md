@@ -3,15 +3,52 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.40.0 - TBD
+## 4.42.0 - TBD
 
 ### Added
 
-- New `pg_stream` input supporting change data capture (CDC) from PostgreSQL (@le-vlad)
+- Add support for `spanner` driver to SQL plugins. (@yufeng-deng)
 
 ### Changed
 
-- `snowflake_streaming` with `schema_evolution.enabled` set to true can now autocreate tables.
+- The `redpanda_migrator` output now registers destination schemas with all the subjects associated with the source schema ID extracted from each message. (@mihaitodor)
+
+## 4.41.0 - 2024-11-25
+
+### Added
+
+- Field `max_records_per_request` added to the `aws_sqs` output. (@Jeffail)
+
+### Fixed
+
+- (Benthos) Fixed an issue where running a CLI with a custom environment would cause imported templates to be rejected. (@Jeffail)
+
+### Changed
+
+- The `-cgo` suffixed docker images are no longer built and pushed along with the regular images. This decision was made due to low demand, and the unacceptable cadence with which the image base (Debian) receives security updates. It is still possible to create your own CGO builds with the command `CGO_ENABLED=1 make TAGS=x_benthos_extra redpanda-connect`. (@Jeffail)
+
+## 4.40.0 - 2024-11-21
+
+### Added
+
+- New `pg_stream` input supporting change data capture (CDC) from PostgreSQL. (@le-vlad)
+- Field `metadata_max_age` added to the `redpanda_migrator_offsets` output. (@mihaitodor)
+- Field `kafka_timestamp_ms` added to the `kafka`, `kafka_franz`, `redpanda`, `redpanda_common` and `redpanda_migrator` outputs. (@mihaitodor)
+- (Benthos) New Bloblang method `timestamp`. (@mihaitodor)
+- (Benthos) New `benchmark` processor. (@ooesili)
+
+### Fixed
+
+- Addresses an issue where `snowflake_streaming` could create more channels than configured. (@rockwotj)
+
+### Changed
+
+- The `snowflake_streaming` output with `schema_evolution.enabled` set to true can now autocreate tables. (@rockwotj)
+- Fields `translate_schema_ids` and `schema_registry_output_resource` added to the `redpanda_migrator` output. (@mihaitodor)
+- Fields `backfill_dependencies` and `input_resource` added to the `schema_registry` output. (@mihaitodor)
+- The `schema_registry` input and output and the `schema_registry_encode` and `schema_registry_decode` processors now use the `github.com/twmb/franz-go/pkg/sr` SchemaRegistry client. (@mihaitodor)
+- Metadata field `kafka_timestamp_ms` added to the `kafka`, `kafka_franz`, `redpanda`, `redpanda_common` and `redpanda_migrator` inputs now contains a unix timestamp with millisecond precision. (@mihaitodor)
+- Metadata field `kafka_timestamp` removed from the `kafka`, `kafka_franz`, `redpanda`, `redpanda_common` and `redpanda_migrator` inputs. (@mihaitodor)
 
 ## 4.39.0 - 2024-11-07
 

@@ -16,6 +16,7 @@ import (
 	"crypto/md5"
 	"crypto/rsa"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"os"
@@ -29,7 +30,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/redpanda-data/connect/v4/internal/periodic"
+	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 	"github.com/redpanda-data/connect/v4/internal/typed"
 )
 
@@ -65,7 +66,9 @@ type SnowflakeServiceClient struct {
 	requestIDCounter *atomic.Int64
 
 	uploader          *typed.AtomicValue[stageUploaderResult]
-	uploadRefreshLoop *periodic.Periodic
+	uploadRefreshLoop *asyncroutine.Periodic
+
+	flusher *asyncroutine.Batcher[blobMetadata, blobRegisterStatus]
 }
 
 // NewSnowflakeServiceClient creates a new API client for the Snowpipe Streaming API
@@ -103,7 +106,7 @@ func NewSnowflakeServiceClient(ctx context.Context, opts ClientOptions) (*Snowfl
 
 		uploader: uploaderAtomic,
 		// Tokens expire every hour, so refresh a bit before that
-		uploadRefreshLoop: periodic.NewWithContext(time.Hour-(2*time.Minute), func(ctx context.Context) {
+		uploadRefreshLoop: asyncroutine.NewPeriodicWithContext(time.Hour-(2*time.Minute), func(ctx context.Context) {
 			resp, err := client.configureClient(ctx, clientConfigureRequest{Role: opts.Role})
 			if err != nil {
 				uploaderAtomic.Store(stageUploaderResult{err: err})
@@ -115,6 +118,11 @@ func NewSnowflakeServiceClient(ctx context.Context, opts ClientOptions) (*Snowfl
 		}),
 		requestIDCounter: &atomic.Int64{},
 	}
+	// Flush up to 100 blobs at once, that seems like a fairly high upper bound
+	ssc.flusher, err = asyncroutine.NewBatcher(100, ssc.registerBlobs)
+	if err != nil {
+		return nil, err
+	}
 	ssc.uploadRefreshLoop.Start()
 	return ssc, nil
 }
@@ -123,12 +131,37 @@ func NewSnowflakeServiceClient(ctx context.Context, opts ClientOptions) (*Snowfl
 func (c *SnowflakeServiceClient) Close() error {
 	c.uploadRefreshLoop.Stop()
 	c.client.Close()
+	c.flusher.Close()
 	return nil
 }
 
 func (c *SnowflakeServiceClient) nextRequestID() string {
 	rid := c.requestIDCounter.Add(1)
 	return fmt.Sprintf("%s_%d", c.clientPrefix, rid)
+}
+
+func (c *SnowflakeServiceClient) registerBlobs(ctx context.Context, metadata []blobMetadata) ([]blobRegisterStatus, error) {
+	req := registerBlobRequest{
+		RequestID: c.nextRequestID(),
+		Role:      c.options.Role,
+		Blobs:     metadata,
+	}
+	resp, err := c.client.registerBlob(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != responseSuccess {
+		return nil, fmt.Errorf("unable to register blobs - status: %d, message: %s", resp.StatusCode, resp.Message)
+	}
+	return resp.Blobs, nil
+}
+
+// BuildOptions is the options for building a parquet file
+type BuildOptions struct {
+	// The maximum parallelism
+	Parallelism int
+	// The number of rows to chunk for parallelism
+	ChunkSize int
 }
 
 // ChannelOptions the parameters to opening a channel using SnowflakeServiceClient
@@ -144,7 +177,7 @@ type ChannelOptions struct {
 	// TableName is the name of the table
 	TableName string
 	// The max parallelism used to build parquet files and convert message batches into rows.
-	BuildParallelism int
+	BuildOptions BuildOptions
 	// If set to true, don't ignore extra columns in user data, but raise an error.
 	StrictSchemaEnforcement bool
 }
@@ -156,8 +189,11 @@ type encryptionInfo struct {
 
 // OpenChannel creates a new or reuses a channel to load data into a Snowflake table.
 func (c *SnowflakeServiceClient) OpenChannel(ctx context.Context, opts ChannelOptions) (*SnowflakeIngestionChannel, error) {
-	if opts.BuildParallelism <= 0 {
-		return nil, fmt.Errorf("invalid build parallelism: %d", opts.BuildParallelism)
+	if opts.BuildOptions.Parallelism <= 0 {
+		return nil, fmt.Errorf("invalid build parallelism: %d", opts.BuildOptions.Parallelism)
+	}
+	if opts.BuildOptions.ChunkSize <= 0 {
+		return nil, fmt.Errorf("invalid build chunk size: %d", opts.BuildOptions.ChunkSize)
 	}
 	resp, err := c.client.openChannel(ctx, openChannelRequest{
 		RequestID: c.nextRequestID(),
@@ -182,7 +218,7 @@ func (c *SnowflakeServiceClient) OpenChannel(ctx context.Context, opts ChannelOp
 		ChannelOptions: opts,
 		clientPrefix:   c.clientPrefix,
 		schema:         schema,
-		version:        c.options.ConnectVersion,
+		parquetWriter:  newParquetWriter(c.options.ConnectVersion, schema),
 		client:         c.client,
 		role:           c.options.Role,
 		uploader:       c.uploader,
@@ -190,6 +226,7 @@ func (c *SnowflakeServiceClient) OpenChannel(ctx context.Context, opts ChannelOp
 			encryptionKeyID: resp.EncryptionKeyID,
 			encryptionKey:   resp.EncryptionKey,
 		},
+		flusher:          c.flusher,
 		clientSequencer:  resp.ClientSequencer,
 		rowSequencer:     resp.RowSequencer,
 		transformers:     transformers,
@@ -256,10 +293,11 @@ type SnowflakeIngestionChannel struct {
 	ChannelOptions
 	role            string
 	clientPrefix    string
-	version         string
+	parquetWriter   *parquetWriter
 	schema          *parquet.Schema
 	client          *SnowflakeRestClient
 	uploader        *typed.AtomicValue[stageUploaderResult]
+	flusher         *asyncroutine.Batcher[blobMetadata, blobRegisterStatus]
 	encryptionInfo  *encryptionInfo
 	clientSequencer int64
 	rowSequencer    int64
@@ -270,17 +308,13 @@ type SnowflakeIngestionChannel struct {
 	requestIDCounter *atomic.Int64
 }
 
-func (c *SnowflakeIngestionChannel) nextRequestID() string {
-	rid := c.requestIDCounter.Add(1)
-	return fmt.Sprintf("%s_%d", c.clientPrefix, rid)
-}
-
 // InsertStats holds some basic statistics about the InsertRows operation
 type InsertStats struct {
 	BuildTime            time.Duration
 	ConvertTime          time.Duration
 	SerializeTime        time.Duration
 	UploadTime           time.Duration
+	RegisterTime         time.Duration
 	CompressedOutputSize int
 }
 
@@ -295,16 +329,16 @@ type bdecPart struct {
 
 func (c *SnowflakeIngestionChannel) constructBdecPart(batch service.MessageBatch, metadata map[string]string) (bdecPart, error) {
 	wg := &errgroup.Group{}
-	wg.SetLimit(c.BuildParallelism)
+	wg.SetLimit(c.BuildOptions.Parallelism)
 	type rowGroup struct {
 		rows  []parquet.Row
 		stats []*statsBuffer
 	}
 	rowGroups := []rowGroup{}
-	const maxRowGroupSize = 50_000
+	maxChunkSize := c.BuildOptions.ChunkSize
 	convertStart := time.Now()
-	for i := 0; i < len(batch); i += maxRowGroupSize {
-		end := min(maxRowGroupSize, len(batch[i:]))
+	for i := 0; i < len(batch); i += maxChunkSize {
+		end := min(maxChunkSize, len(batch[i:]))
 		j := len(rowGroups)
 		rowGroups = append(rowGroups, rowGroup{})
 		chunk := batch[i : i+end]
@@ -331,11 +365,7 @@ func (c *SnowflakeIngestionChannel) constructBdecPart(batch service.MessageBatch
 	}
 	// TODO(perf): It would be really nice to be able to compress in parallel,
 	// that actually ends up taking quite of bit of CPU.
-	buf, err := writeParquetFile(c.version, parquetFileData{
-		schema:   c.schema,
-		rows:     allRows,
-		metadata: metadata,
-	})
+	buf, err := c.parquetWriter.WriteFile(allRows, metadata)
 	if err != nil {
 		return bdecPart{}, err
 	}
@@ -365,8 +395,8 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 	startTime := time.Now()
 	// Prevent multiple channels from having the same bdec file (it must be globally unique)
 	// so add the ID of the channel in the upper 16 bits and then get 48 bits of randomness outside that.
-	fakeThreadID := (int(c.ID) << 48) | rand.N(1<<48)
-	blobPath := generateBlobPath(c.clientPrefix, fakeThreadID, int(c.requestIDCounter.Add(1)))
+	fakeThreadID := (int64(c.ID) << 48) | rand.Int64N(1<<48)
+	blobPath := generateBlobPath(c.clientPrefix, fakeThreadID, c.requestIDCounter.Add(1))
 	// This is extra metadata that is required for functionality in snowflake.
 	c.fileMetadata["primaryFileId"] = path.Base(blobPath)
 	part, err := c.constructBdecPart(batch, c.fileMetadata)
@@ -398,45 +428,40 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 	}
 
 	uploadFinishTime := time.Now()
-	resp, err := c.client.registerBlob(ctx, registerBlobRequest{
-		RequestID: c.nextRequestID(),
-		Role:      c.role,
-		Blobs: []blobMetadata{
+
+	resp, err := c.flusher.Submit(ctx, blobMetadata{
+		Path:        blobPath,
+		MD5:         hex.EncodeToString(fullMD5Hash[:]),
+		BDECVersion: 3,
+		BlobStats: blobStats{
+			FlushStartMs:     startTime.UnixMilli(),
+			BuildDurationMs:  uploadStartTime.UnixMilli() - startTime.UnixMilli(),
+			UploadDurationMs: uploadFinishTime.UnixMilli() - uploadStartTime.UnixMilli(),
+		},
+		Chunks: []chunkMetadata{
 			{
-				Path:        blobPath,
-				MD5:         hex.EncodeToString(fullMD5Hash[:]),
-				BDECVersion: 3,
-				BlobStats: blobStats{
-					FlushStartMs:     startTime.UnixMilli(),
-					BuildDurationMs:  uploadStartTime.UnixMilli() - startTime.UnixMilli(),
-					UploadDurationMs: uploadFinishTime.UnixMilli() - uploadStartTime.UnixMilli(),
+				Database:                c.DatabaseName,
+				Schema:                  c.SchemaName,
+				Table:                   c.TableName,
+				ChunkStartOffset:        0,
+				ChunkLength:             int32(part.unencryptedLen),
+				ChunkLengthUncompressed: totalUncompressedSize(part.parquetMetadata),
+				ChunkMD5:                md5Hash(part.parquetFile[:part.unencryptedLen]),
+				EncryptionKeyID:         c.encryptionInfo.encryptionKeyID,
+				FirstInsertTimeInMillis: startTime.UnixMilli(),
+				LastInsertTimeInMillis:  startTime.UnixMilli(),
+				EPS: &epInfo{
+					Rows:    part.parquetMetadata.NumRows,
+					Columns: computeColumnEpInfo(c.transformers, part.stats),
 				},
-				Chunks: []chunkMetadata{
+				Channels: []channelMetadata{
 					{
-						Database:                c.DatabaseName,
-						Schema:                  c.SchemaName,
-						Table:                   c.TableName,
-						ChunkStartOffset:        0,
-						ChunkLength:             int32(part.unencryptedLen),
-						ChunkLengthUncompressed: totalUncompressedSize(part.parquetMetadata),
-						ChunkMD5:                md5Hash(part.parquetFile[:part.unencryptedLen]),
-						EncryptionKeyID:         c.encryptionInfo.encryptionKeyID,
-						FirstInsertTimeInMillis: startTime.UnixMilli(),
-						LastInsertTimeInMillis:  startTime.UnixMilli(),
-						EPS: &epInfo{
-							Rows:    part.parquetMetadata.NumRows,
-							Columns: computeColumnEpInfo(c.transformers, part.stats),
-						},
-						Channels: []channelMetadata{
-							{
-								Channel:          c.Name,
-								ClientSequencer:  c.clientSequencer,
-								RowSequencer:     c.rowSequencer + 1,
-								StartOffsetToken: nil,
-								EndOffsetToken:   nil,
-								OffsetToken:      nil,
-							},
-						},
+						Channel:          c.Name,
+						ClientSequencer:  c.clientSequencer,
+						RowSequencer:     c.rowSequencer + 1,
+						StartOffsetToken: nil,
+						EndOffsetToken:   nil,
+						OffsetToken:      nil,
 					},
 				},
 			},
@@ -445,14 +470,10 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 	if err != nil {
 		return insertStats, fmt.Errorf("registering output failed: %w", err)
 	}
-	if len(resp.Blobs) != 1 {
-		return insertStats, fmt.Errorf("unexpected number of response blobs: %d", len(resp.Blobs))
+	if len(resp.Chunks) != 1 {
+		return insertStats, fmt.Errorf("unexpected number of response blob chunks: %d", len(resp.Chunks))
 	}
-	status := resp.Blobs[0]
-	if len(status.Chunks) != 1 {
-		return insertStats, fmt.Errorf("unexpected number of response blob chunks: %d", len(status.Chunks))
-	}
-	chunk := status.Chunks[0]
+	chunk := resp.Chunks[0]
 	if len(chunk.Channels) != 1 {
 		return insertStats, fmt.Errorf("unexpected number of channels for blob chunk: %d", len(chunk.Channels))
 	}
@@ -462,13 +483,14 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 		if msg == "" {
 			msg = "(no message)"
 		}
-		return insertStats, fmt.Errorf("error response injesting data (%d): %s", channel.StatusCode, msg)
+		return insertStats, fmt.Errorf("error response ingesting data (%d): %s", channel.StatusCode, msg)
 	}
 	c.rowSequencer++
 	c.clientSequencer = channel.ClientSequencer
 	insertStats.CompressedOutputSize = part.unencryptedLen
 	insertStats.BuildTime = uploadStartTime.Sub(startTime)
 	insertStats.UploadTime = uploadFinishTime.Sub(uploadStartTime)
+	insertStats.RegisterTime = time.Since(uploadFinishTime)
 	insertStats.ConvertTime = part.convertTime
 	insertStats.SerializeTime = part.serializeTime
 	return insertStats, err
@@ -507,7 +529,7 @@ func (c *SnowflakeIngestionChannel) WaitUntilCommitted(ctx context.Context) (int
 		}
 		status := resp.Channels[0]
 		if status.PersistedClientSequencer != c.clientSequencer {
-			return backoff.Permanent(fmt.Errorf("unexpected number of channels for status request: %d", len(resp.Channels)))
+			return backoff.Permanent(errors.New("channel client seqno has advanced - another process has reopened this channel"))
 		}
 		if status.PersistedRowSequencer < c.rowSequencer {
 			return fmt.Errorf("row sequencer not yet committed: %d < %d", status.PersistedRowSequencer, c.rowSequencer)

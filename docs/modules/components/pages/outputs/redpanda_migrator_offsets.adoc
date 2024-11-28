@@ -55,12 +55,7 @@ output:
   label: ""
   redpanda_migrator_offsets:
     seed_brokers: [] # No default (required)
-    kafka_key: ${! @kafka_key }
     client_id: benthos
-    max_in_flight: 1
-    timeout: 10s
-    max_message_bytes: 1MB
-    broker_write_max_bytes: 100MB
     tls:
       enabled: false
       skip_cert_verify: false
@@ -69,6 +64,12 @@ output:
       root_cas_file: ""
       client_certs: []
     sasl: [] # No default (optional)
+    metadata_max_age: 5m
+    kafka_key: ${! @kafka_key }
+    max_in_flight: 1
+    timeout: 10s
+    max_message_bytes: 1MB
+    broker_write_max_bytes: 100MB
     max_retries: 0
     backoff:
       initial_interval: 1s
@@ -105,16 +106,6 @@ seed_brokers:
   - foo:9092,bar:9092
 ```
 
-=== `kafka_key`
-
-Kafka key.
-This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
-
-
-*Type*: `string`
-
-*Default*: `"${! @kafka_key }"`
-
 === `client_id`
 
 An identifier for the client connection.
@@ -123,58 +114,6 @@ An identifier for the client connection.
 *Type*: `string`
 
 *Default*: `"benthos"`
-
-=== `max_in_flight`
-
-The maximum number of batches to be sending in parallel at any given time.
-
-
-*Type*: `int`
-
-*Default*: `1`
-
-=== `timeout`
-
-The maximum period of time to wait for message sends before abandoning the request and retrying
-
-
-*Type*: `string`
-
-*Default*: `"10s"`
-
-=== `max_message_bytes`
-
-The maximum space in bytes than an individual message may take, messages larger than this value will be rejected. This field corresponds to Kafka's `max.message.bytes`.
-
-
-*Type*: `string`
-
-*Default*: `"1MB"`
-
-```yml
-# Examples
-
-max_message_bytes: 100MB
-
-max_message_bytes: 50mib
-```
-
-=== `broker_write_max_bytes`
-
-The upper bound for the number of bytes written to a broker connection in a single write. This field corresponds to Kafka's `socket.request.max.bytes`.
-
-
-*Type*: `string`
-
-*Default*: `"100MB"`
-
-```yml
-# Examples
-
-broker_write_max_bytes: 128MB
-
-broker_write_max_bytes: 50mib
-```
 
 === `tls`
 
@@ -521,6 +460,77 @@ An external ID to provide when assuming a role.
 *Type*: `string`
 
 *Default*: `""`
+
+=== `metadata_max_age`
+
+The maximum age of metadata before it is refreshed.
+
+
+*Type*: `string`
+
+*Default*: `"5m"`
+
+=== `kafka_key`
+
+Kafka key.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+
+*Type*: `string`
+
+*Default*: `"${! @kafka_key }"`
+
+=== `max_in_flight`
+
+The maximum number of batches to be sending in parallel at any given time.
+
+
+*Type*: `int`
+
+*Default*: `1`
+
+=== `timeout`
+
+The maximum period of time to wait for message sends before abandoning the request and retrying
+
+
+*Type*: `string`
+
+*Default*: `"10s"`
+
+=== `max_message_bytes`
+
+The maximum space in bytes than an individual message may take, messages larger than this value will be rejected. This field corresponds to Kafka's `max.message.bytes`.
+
+
+*Type*: `string`
+
+*Default*: `"1MB"`
+
+```yml
+# Examples
+
+max_message_bytes: 100MB
+
+max_message_bytes: 50mib
+```
+
+=== `broker_write_max_bytes`
+
+The upper bound for the number of bytes written to a broker connection in a single write. This field corresponds to Kafka's `socket.request.max.bytes`.
+
+
+*Type*: `string`
+
+*Default*: `"100MB"`
+
+```yml
+# Examples
+
+broker_write_max_bytes: 128MB
+
+broker_write_max_bytes: 50mib
+```
 
 === `max_retries`
 

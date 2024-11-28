@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package periodic
+package asyncroutine
 
 import (
 	"context"
@@ -34,18 +34,18 @@ type Periodic struct {
 	done   chan any
 }
 
-// New creates new background work that runs every `duration` and performs `work`.
-func New(duration time.Duration, work func()) *Periodic {
+// NewPeriodic creates new background work that runs every `duration` and performs `work`.
+func NewPeriodic(duration time.Duration, work func()) *Periodic {
 	return &Periodic{
 		duration: duration,
 		work:     func(context.Context) { work() },
 	}
 }
 
-// NewWithContext creates new background work that runs every `duration` and performs `work`.
+// NewPeriodicWithContext creates new background work that runs every `duration` and performs `work`.
 //
 // Work is passed a context that is cancelled when the overall periodic is cancelled.
-func NewWithContext(duration time.Duration, work func(context.Context)) *Periodic {
+func NewPeriodicWithContext(duration time.Duration, work func(context.Context)) *Periodic {
 	return &Periodic{
 		duration: duration,
 		work:     work,

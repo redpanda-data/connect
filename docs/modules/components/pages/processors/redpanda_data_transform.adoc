@@ -221,7 +221,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 timestamp: ${! timestamp_unix() }
 
-timestamp: ${! metadata("kafka_timestamp_unix") }
+timestamp: ${! metadata("kafka_timestamp_ms") }
 ```
 
 === `timeout`

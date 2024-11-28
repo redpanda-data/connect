@@ -28,10 +28,6 @@ import (
 )
 
 const (
-	rpriDefaultLabel = "redpanda_migrator_input"
-)
-
-const (
 	rmiFieldConsumerGroup             = "consumer_group"
 	rmiFieldCommitPeriod              = "commit_period"
 	rmiFieldMultiHeader               = "multi_header"
@@ -40,6 +36,8 @@ const (
 	rmiFieldOutputResource            = "output_resource"
 	rmiFieldReplicationFactorOverride = "replication_factor_override"
 	rmiFieldReplicationFactor         = "replication_factor"
+
+	rmiResourceDefaultLabel = "redpanda_migrator_input"
 )
 
 func redpandaMigratorInputConfig() *service.ConfigSpec {
@@ -71,6 +69,7 @@ This input adds the following metadata fields to each message:
 - kafka_partition
 - kafka_offset
 - kafka_lag
+- kafka_timestamp_ms
 - kafka_timestamp_unix
 - kafka_tombstone_message
 - All record headers
@@ -122,7 +121,7 @@ func RedpandaMigratorInputConfigFields() []*service.ConfigField {
 				Advanced(),
 			service.NewStringField(rmiFieldOutputResource).
 				Description("The label of the redpanda_migrator output in which the currently selected topics need to be created before attempting to read messages.").
-				Default(rproDefaultLabel).
+				Default(rmoResourceDefaultLabel).
 				Advanced(),
 			service.NewBoolField(rmiFieldReplicationFactorOverride).
 				Description("Use the specified replication factor when creating topics.").
@@ -245,7 +244,7 @@ func NewRedpandaMigratorReaderFromConfig(conf *service.ParsedConfig, mgr *servic
 	}
 
 	if r.clientLabel = mgr.Label(); r.clientLabel == "" {
-		r.clientLabel = rpriDefaultLabel
+		r.clientLabel = rmiResourceDefaultLabel
 	}
 
 	return &r, nil

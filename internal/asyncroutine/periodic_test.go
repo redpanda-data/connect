@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package periodic
+package asyncroutine
 
 import (
 	"context"
@@ -25,7 +25,7 @@ import (
 
 func TestCancellation(t *testing.T) {
 	counter := atomic.Int32{}
-	p := New(time.Hour, func() {
+	p := NewPeriodic(time.Hour, func() {
 		counter.Add(1)
 	})
 	p.Start()
@@ -36,11 +36,11 @@ func TestCancellation(t *testing.T) {
 
 func TestWorks(t *testing.T) {
 	counter := atomic.Int32{}
-	p := New(time.Millisecond, func() {
+	p := NewPeriodic(time.Millisecond, func() {
 		counter.Add(1)
 	})
 	p.Start()
-	require.Eventually(t, func() bool { return counter.Load() > 5 }, time.Second, time.Millisecond)
+	require.Eventually(t, func() bool { return counter.Load() > 5 }, time.Second, 2*time.Millisecond)
 	p.Stop()
 	snapshot := counter.Load()
 	time.Sleep(time.Millisecond * 250)
@@ -49,14 +49,14 @@ func TestWorks(t *testing.T) {
 
 func TestWorksWithContext(t *testing.T) {
 	active := atomic.Bool{}
-	p := NewWithContext(time.Millisecond, func(ctx context.Context) {
+	p := NewPeriodicWithContext(time.Millisecond, func(ctx context.Context) {
 		active.Store(true)
 		// Block until context is cancelled
 		<-ctx.Done()
 		active.Store(false)
 	})
 	p.Start()
-	require.Eventually(t, func() bool { return active.Load() }, 10*time.Millisecond, time.Millisecond)
+	require.Eventually(t, func() bool { return active.Load() }, time.Second, 5*time.Millisecond)
 	p.Stop()
 	require.False(t, active.Load())
 }

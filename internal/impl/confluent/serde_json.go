@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 
+	franz_sr "github.com/twmb/franz-go/pkg/sr"
 	"github.com/xeipuuv/gojsonschema"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -25,36 +26,36 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
 )
 
-func resolveJSONSchema(ctx context.Context, client *sr.Client, info sr.SchemaInfo) (*gojsonschema.Schema, error) {
+func resolveJSONSchema(ctx context.Context, client *sr.Client, schema franz_sr.Schema) (*gojsonschema.Schema, error) {
 	sl := gojsonschema.NewSchemaLoader()
 
-	if len(info.References) == 0 {
+	if len(schema.References) == 0 {
 		if err := sl.AddSchemas(); err != nil {
 			return nil, fmt.Errorf("failed to parse root schema: %w", err)
 		}
 
-		return sl.Compile(gojsonschema.NewStringLoader(info.Schema))
+		return sl.Compile(gojsonschema.NewStringLoader(schema.Schema))
 	}
 
-	if err := client.WalkReferences(ctx, info.References, func(ctx context.Context, name string, info sr.SchemaInfo) error {
-		return sl.AddSchemas(gojsonschema.NewStringLoader(info.Schema))
+	if err := client.WalkReferences(ctx, schema.References, func(ctx context.Context, name string, schema franz_sr.Schema) error {
+		return sl.AddSchemas(gojsonschema.NewStringLoader(schema.Schema))
 	}); err != nil {
 		return nil, err
 	}
 
-	return sl.Compile(gojsonschema.NewStringLoader(info.Schema))
+	return sl.Compile(gojsonschema.NewStringLoader(schema.Schema))
 }
 
-func (s *schemaRegistryEncoder) getJSONEncoder(ctx context.Context, info sr.SchemaInfo) (schemaEncoder, error) {
-	return getJSONTranscoder(ctx, s.client, info)
+func (s *schemaRegistryEncoder) getJSONEncoder(ctx context.Context, schema franz_sr.Schema) (schemaEncoder, error) {
+	return getJSONTranscoder(ctx, s.client, schema)
 }
 
-func (s *schemaRegistryDecoder) getJSONDecoder(ctx context.Context, info sr.SchemaInfo) (schemaDecoder, error) {
-	return getJSONTranscoder(ctx, s.client, info)
+func (s *schemaRegistryDecoder) getJSONDecoder(ctx context.Context, schema franz_sr.Schema) (schemaDecoder, error) {
+	return getJSONTranscoder(ctx, s.client, schema)
 }
 
-func getJSONTranscoder(ctx context.Context, cl *sr.Client, info sr.SchemaInfo) (func(m *service.Message) error, error) {
-	sch, err := resolveJSONSchema(ctx, cl, info)
+func getJSONTranscoder(ctx context.Context, cl *sr.Client, schema franz_sr.Schema) (func(m *service.Message) error, error) {
+	sch, err := resolveJSONSchema(ctx, cl, schema)
 	if err != nil {
 		return nil, err
 	}

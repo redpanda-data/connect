@@ -56,7 +56,12 @@ If the insert fails to execute then the message will still remain unchanged and 
 			Description("An optional suffix to append to the insert query.").
 			Optional().
 			Advanced().
-			Example("ON CONFLICT (name) DO NOTHING"))
+			Example("ON CONFLICT (name) DO NOTHING")).
+		Field(service.NewStringListField("options").
+			Description("A list of keyword options to add before the INTO clause of the query.").
+			Optional().
+			Advanced().
+			Example([]string{"DELAYED", "IGNORE"}))
 
 	for _, f := range connFields() {
 		spec = spec.Field(f)
@@ -185,6 +190,14 @@ func NewSQLInsertProcessorFromConfig(conf *service.ParsedConfig, mgr *service.Re
 			return nil, err
 		}
 		s.builder = s.builder.Suffix(suffixStr)
+	}
+
+	if conf.Contains("options") {
+		options, err := conf.FieldStringList("options")
+		if err != nil {
+			return nil, err
+		}
+		s.builder = s.builder.Options(options...)
 	}
 
 	connSettings, err := connSettingsFromParsed(conf, mgr)
