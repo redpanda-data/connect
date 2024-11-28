@@ -168,7 +168,7 @@ func (s *Snapshotter) prepareScannersAndGetters(columnTypes []*sql.ColumnType) (
 				}
 				var dst any
 				if err := json.Unmarshal([]byte(v.(*sql.NullString).String), &dst); err != nil {
-					s.logger.Warnf("Failed to unmarshal JSONB value: %v", err)
+					return nil, err
 				}
 
 				return dst, nil
