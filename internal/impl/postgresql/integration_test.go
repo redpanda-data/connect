@@ -531,7 +531,7 @@ pg_stream:
     slot_name: test_slot_native_decoder
     snapshot_batch_size: 100
     stream_snapshot: true
-    batch_transactions: true
+    include_transaction_markers: false
     schema: public
     tables:
        - complex_types_example
