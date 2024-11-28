@@ -17,6 +17,7 @@ package avro
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"io"
 
 	"github.com/linkedin/goavro/v2"
@@ -115,14 +116,22 @@ func (c *avroScanner) NextBatch(ctx context.Context) (service.MessageBatch, erro
 		return nil, io.EOF
 	}
 
+	if !c.ocf.Scan() {
+		err := c.ocf.Err()
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan OCF file: %s", err)
+		}
+		return nil, io.EOF
+	}
+
 	datum, err := c.ocf.Read()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read OCF datum: %s", err)
 	}
 
 	jb, err := c.avroCodec.TextualFromNative(nil, datum)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to decode OCF datum to JSON: %s", err)
 	}
 	return service.MessageBatch{service.NewMessage(jb)}, nil
 }

@@ -12,7 +12,8 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- Fixed `pg_stream` issue with discrepancies between replication and snapshot streaming for `UUID` type (@le-vlad)
+- Fixed `pg_stream` issue with discrepancies between replication and snapshot streaming for `UUID` type. (@le-vlad)
+- Fixed `avro` scanner bug introduced in v4.25.0. (@mihaitodor)
 
 ### Changed
 
