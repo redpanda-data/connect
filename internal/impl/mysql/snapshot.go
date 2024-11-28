@@ -54,7 +54,7 @@ func (s *Snapshot) prepareSnapshot(ctx context.Context) (*mysql.Position, error)
 		return nil, fmt.Errorf("failed to create snapshot connection: %v", err)
 	}
 
-	// 1. Start a consistent snapshot transaction
+	// Start a consistent snapshot transaction
 	s.tx, err = s.snapshotConn.BeginTx(ctx, &sql.TxOptions{
 		Isolation: sql.LevelRepeatableRead,
 	})
@@ -62,7 +62,14 @@ func (s *Snapshot) prepareSnapshot(ctx context.Context) (*mysql.Position, error)
 		return nil, fmt.Errorf("failed to start transaction: %v", err)
 	}
 
-	// Execute START TRANSACTION WITH CONSISTENT SNAPSHOT
+	/*
+		START TRANSACTION WITH CONSISTENT SNAPSHOT ensures a consistent view of database state
+		when reading historical data during CDC initialization. Without it, concurrent writes
+		could create inconsistencies between binlog position and table snapshots, potentially
+		missing or duplicating events. The snapshot prevents other transactions from modifying
+		the data being read, maintaining referential integrity across tables while capturing
+		the initial state.
+	*/
 	if _, err := s.tx.ExecContext(ctx, "START TRANSACTION WITH CONSISTENT SNAPSHOT"); err != nil {
 		if rErr := s.tx.Rollback(); rErr != nil {
 			return nil, rErr
@@ -71,7 +78,14 @@ func (s *Snapshot) prepareSnapshot(ctx context.Context) (*mysql.Position, error)
 		return nil, fmt.Errorf("failed to start consistent snapshot: %v", err)
 	}
 
-	// 2. Acquire global read lock (minimizing lock time)
+	/*
+		FLUSH TABLES WITH READ LOCK is executed after CONSISTENT SNAPSHOT to:
+		1. Force MySQL to flush all data from memory to disk
+		2. Prevent any writes to tables while we read the binlog position
+
+		This lock MUST be released quickly to avoid blocking other connections. Only use it
+		to capture the binlog coordinates, then release immediately with UNLOCK TABLES.
+	*/
 	if _, err := s.lockConn.ExecContext(ctx, "FLUSH TABLES WITH READ LOCK"); err != nil {
 		if rErr := s.tx.Rollback(); rErr != nil {
 			return nil, rErr
@@ -79,7 +93,7 @@ func (s *Snapshot) prepareSnapshot(ctx context.Context) (*mysql.Position, error)
 		return nil, fmt.Errorf("failed to acquire global read lock: %v", err)
 	}
 
-	// 3. Get binary log position (while locked)
+	// Get binary log position (while locked)
 	pos, err := s.getCurrentBinlogPosition()
 	if err != nil {
 		// Make sure to release the lock if we fail
@@ -93,7 +107,7 @@ func (s *Snapshot) prepareSnapshot(ctx context.Context) (*mysql.Position, error)
 		return nil, fmt.Errorf("failed to get binlog position: %v", err)
 	}
 
-	// 4. Release the global read lock immediately
+	// Release the global read lock immediately after getting the binlog position
 	if _, err := s.lockConn.ExecContext(ctx, "UNLOCK TABLES"); err != nil {
 		if rErr := s.tx.Rollback(); rErr != nil {
 			return nil, rErr
