@@ -10,9 +10,9 @@ package pglogicalstream
 
 import (
 	"fmt"
-	"log"
-
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
+	"log"
 )
 
 // ----------------------------------------------------------------------------
@@ -147,7 +147,18 @@ func decodePgOutput(WALData []byte, relations map[uint32]*RelationMessage, typeM
 
 func decodeTextColumnData(mi *pgtype.Map, data []byte, dataType uint32) (interface{}, error) {
 	if dt, ok := mi.TypeForOID(dataType); ok {
-		return dt.Codec.DecodeValue(mi, dataType, pgtype.TextFormatCode, data)
+		val, err := dt.Codec.DecodeValue(mi, dataType, pgtype.TextFormatCode, data)
+		if err != nil {
+			return val, err
+		}
+
+		if dt.Name == "uuid" {
+			typesValueForUUID := val.([16]uint8)
+			return uuid.UUID(typesValueForUUID).String(), err
+		}
+
+		return val, err
 	}
+
 	return string(data), nil
 }
