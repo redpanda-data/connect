@@ -11,8 +11,11 @@ package pglogicalstream
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/jackc/pgtype"
 
 	"errors"
 
@@ -141,24 +144,83 @@ func (s *Snapshotter) findAvgRowSize(ctx context.Context, table string) (sql.Nul
 	return avgRowSize, nil
 }
 
-func (s *Snapshotter) prepareScannersAndGetters(columnTypes []*sql.ColumnType) ([]interface{}, []func(interface{}) interface{}) {
+func (s *Snapshotter) prepareScannersAndGetters(columnTypes []*sql.ColumnType) ([]interface{}, []func(interface{}) (interface{}, error)) {
 	scanArgs := make([]interface{}, len(columnTypes))
-	valueGetters := make([]func(interface{}) interface{}, len(columnTypes))
+	valueGetters := make([]func(interface{}) (interface{}, error), len(columnTypes))
 
 	for i, v := range columnTypes {
 		switch v.DatabaseTypeName() {
 		case "VARCHAR", "TEXT", "UUID", "TIMESTAMP":
 			scanArgs[i] = new(sql.NullString)
-			valueGetters[i] = func(v interface{}) interface{} { return v.(*sql.NullString).String }
+			valueGetters[i] = func(v interface{}) (interface{}, error) { return v.(*sql.NullString).String, nil }
 		case "BOOL":
 			scanArgs[i] = new(sql.NullBool)
-			valueGetters[i] = func(v interface{}) interface{} { return v.(*sql.NullBool).Bool }
+			valueGetters[i] = func(v interface{}) (interface{}, error) { return v.(*sql.NullBool).Bool, nil }
 		case "INT4":
 			scanArgs[i] = new(sql.NullInt64)
-			valueGetters[i] = func(v interface{}) interface{} { return v.(*sql.NullInt64).Int64 }
+			valueGetters[i] = func(v interface{}) (interface{}, error) { return v.(*sql.NullInt64).Int64, nil }
+		case "JSONB":
+			scanArgs[i] = new(sql.NullString)
+			valueGetters[i] = func(v interface{}) (interface{}, error) {
+				payload := v.(*sql.NullString).String
+				if payload == "" {
+					return payload, nil
+				}
+				var dst any
+				if err := json.Unmarshal([]byte(v.(*sql.NullString).String), &dst); err != nil {
+					return nil, err
+				}
+
+				return dst, nil
+			}
+		case "INET":
+			scanArgs[i] = new(sql.NullString)
+			valueGetters[i] = func(v interface{}) (interface{}, error) {
+				inet := pgtype.Inet{}
+				val := v.(*sql.NullString).String
+				if err := inet.Scan(val); err != nil {
+					return nil, err
+				}
+
+				return inet.IPNet.String(), nil
+			}
+		case "TSRANGE":
+			scanArgs[i] = new(sql.NullString)
+			valueGetters[i] = func(v interface{}) (interface{}, error) {
+				newArray := pgtype.Tsrange{}
+				val := v.(*sql.NullString).String
+				if err := newArray.Scan(val); err != nil {
+					return nil, err
+				}
+
+				vv, _ := newArray.Value()
+				return vv, nil
+			}
+		case "_INT4":
+			scanArgs[i] = new(sql.NullString)
+			valueGetters[i] = func(v interface{}) (interface{}, error) {
+				newArray := pgtype.Int4Array{}
+				val := v.(*sql.NullString).String
+				if err := newArray.Scan(val); err != nil {
+					return nil, err
+				}
+
+				return newArray.Elements, nil
+			}
+		case "_TEXT":
+			scanArgs[i] = new(sql.NullString)
+			valueGetters[i] = func(v interface{}) (interface{}, error) {
+				newArray := pgtype.TextArray{}
+				val := v.(*sql.NullString).String
+				if err := newArray.Scan(val); err != nil {
+					return nil, err
+				}
+
+				return newArray.Elements, nil
+			}
 		default:
 			scanArgs[i] = new(sql.NullString)
-			valueGetters[i] = func(v interface{}) interface{} { return v.(*sql.NullString).String }
+			valueGetters[i] = func(v interface{}) (interface{}, error) { return v.(*sql.NullString).String, nil }
 		}
 	}
 

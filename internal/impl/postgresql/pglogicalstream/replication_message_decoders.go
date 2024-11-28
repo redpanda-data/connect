@@ -9,8 +9,11 @@
 package pglogicalstream
 
 import (
+	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
+	pgtypes "github.com/jackc/pgtype"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -148,7 +151,32 @@ func decodePgOutput(WALData []byte, relations map[uint32]*RelationMessage, typeM
 
 func decodeTextColumnData(mi *pgtype.Map, data []byte, dataType uint32) (interface{}, error) {
 	if dt, ok := mi.TypeForOID(dataType); ok {
-		return dt.Codec.DecodeValue(mi, dataType, pgtype.TextFormatCode, data)
+		val, err := dt.Codec.DecodeValue(mi, dataType, pgtype.TextFormatCode, data)
+		if err != nil {
+			return val, err
+		}
+
+		if dt.Name == "uuid" {
+			typesValueForUUID, ok := val.([16]uint8)
+			if !ok {
+				return nil, errors.New("unable to convert uuid to string. type casting failed")
+			}
+
+			return uuid.UUID(typesValueForUUID).String(), nil
+		}
+
+		if dt.Name == "tsrange" {
+			newArray := pgtypes.Tsrange{}
+			if err := newArray.Scan(data); err != nil {
+				return nil, err
+			}
+
+			vv, _ := newArray.Value()
+			return vv, err
+		}
+
+		return val, err
 	}
+
 	return string(data), nil
 }

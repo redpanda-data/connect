@@ -109,6 +109,22 @@ func ResourceWithPostgreSQLVersion(t *testing.T, pool *dockertest.Pool, version 
 			return err
 		}
 
+		// Creating table with complex PG types
+		_, err = db.Exec(`CREATE TABLE complex_types_example (
+			id SERIAL PRIMARY KEY,
+			json_data JSONB,
+			tags TEXT[],
+			ip_addr INET,
+			search_text TSVECTOR,
+			time_range TSRANGE,
+			location POINT,
+			uuid_col UUID,
+			int_array INTEGER[]
+		);`)
+		if err != nil {
+			return err
+		}
+
 		_, err = db.Exec(`
 			CREATE TABLE IF NOT EXISTS flights_composite_pks (
 				id serial, seq integer, name VARCHAR(50), created_at TIMESTAMP,
@@ -463,6 +479,120 @@ file:
 		defer outBatchMut.Unlock()
 		return len(outBatches) == 30
 	}, time.Second*20, time.Millisecond*100)
+
+	require.NoError(t, streamOut.StopWithin(time.Second*10))
+}
+
+func TestIntegrationPgCDCForPgOutputStreamComplexTypesPlugin(t *testing.T) {
+	integration.CheckSkip(t)
+	tmpDir := t.TempDir()
+	pool, err := dockertest.NewPool("")
+	require.NoError(t, err)
+
+	var (
+		resource *dockertest.Resource
+		db       *sql.DB
+	)
+
+	resource, db, err = ResourceWithPostgreSQLVersion(t, pool, "16")
+	require.NoError(t, err)
+	require.NoError(t, resource.Expire(120))
+
+	hostAndPort := resource.GetHostPort("5432/tcp")
+	hostAndPortSplited := strings.Split(hostAndPort, ":")
+	password := "l]YLSc|4[i56%{gY"
+
+	// inserting data
+	_, err = db.Exec(`INSERT INTO complex_types_example (
+		json_data,
+		tags,
+		ip_addr,
+		search_text,
+		time_range,
+		location,
+		uuid_col,
+		int_array
+	) VALUES (
+		'{"name": "test", "value": 42}'::jsonb,
+		ARRAY['tag1', 'tag2', 'tag3'],
+		'192.168.1.1',
+		to_tsvector('english', 'The quick brown fox jumps over the lazy dog'),
+		tsrange('2024-01-01', '2024-12-31'),
+		point(45.5, -122.6),
+		'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+		ARRAY[1, 2, 3, 4, 5]
+	);`)
+	require.NoError(t, err)
+
+	databaseURL := fmt.Sprintf("user=user_name password=%s dbname=dbname sslmode=disable host=%s port=%s", password, hostAndPortSplited[0], hostAndPortSplited[1])
+	template := fmt.Sprintf(`
+pg_stream:
+    dsn: %s
+    slot_name: test_slot_native_decoder
+    snapshot_batch_size: 100
+    stream_snapshot: true
+    include_transaction_markers: false
+    schema: public
+    tables:
+       - complex_types_example
+`, databaseURL)
+
+	cacheConf := fmt.Sprintf(`
+label: pg_stream_cache
+file:
+    directory: %v
+`, tmpDir)
+
+	streamOutBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: INFO`))
+	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
+	require.NoError(t, streamOutBuilder.AddInputYAML(template))
+
+	var outBatches []string
+	var outBatchMut sync.Mutex
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
+		msgBytes, err := mb[0].AsBytes()
+		require.NoError(t, err)
+		outBatchMut.Lock()
+		outBatches = append(outBatches, string(msgBytes))
+		outBatchMut.Unlock()
+		return nil
+	}))
+
+	streamOut, err := streamOutBuilder.Build()
+	require.NoError(t, err)
+
+	go func() {
+		err = streamOut.Run(context.Background())
+		require.NoError(t, err)
+	}()
+
+	assert.Eventually(t, func() bool {
+		outBatchMut.Lock()
+		defer outBatchMut.Unlock()
+		return len(outBatches) == 1
+	}, time.Second*25, time.Millisecond*100)
+
+	messageWithComplexTypes := outBatches[0]
+
+	// producing change to non-complex type to trigger replication and receive updated row so we can check the complex types again
+	// but after they have been produced by replication to ensure the consistency
+	_, err = db.Exec("UPDATE complex_types_example SET id = 2 WHERE id = 1")
+	require.NoError(t, err)
+
+	assert.Eventually(t, func() bool {
+		outBatchMut.Lock()
+		defer outBatchMut.Unlock()
+		return len(outBatches) == 2
+	}, time.Second*25, time.Millisecond*100)
+
+	// replacing update with insert to remove replication messages type differences
+	// so we will be checking only the data
+	lastMessage := outBatches[len(outBatches)-1]
+	lastMessage = strings.Replace(lastMessage, "update", "insert", 1)
+	messageWithComplexTypes = strings.Replace(messageWithComplexTypes, "\"table_snapshot_progress\":0,", "", 1)
+
+	require.Equal(t, messageWithComplexTypes, strings.Replace(lastMessage, ":2", ":1", 1))
 
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
 }

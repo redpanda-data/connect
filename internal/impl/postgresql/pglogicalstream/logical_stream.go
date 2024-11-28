@@ -500,9 +500,14 @@ func (s *Stream) processSnapshot() error {
 
 					var data = make(map[string]any)
 					for i, getter := range valueGetters {
-						data[columnNames[i]] = getter(scanArgs[i])
+						if data[columnNames[i]], err = getter(scanArgs[i]); err != nil {
+							return err
+						}
+
 						if _, ok := lastPrimaryKey[columnNames[i]]; ok {
-							lastPkVals[columnNames[i]] = getter(scanArgs[i])
+							if lastPkVals[columnNames[i]], err = getter(scanArgs[i]); err != nil {
+								return err
+							}
 						}
 					}
 
