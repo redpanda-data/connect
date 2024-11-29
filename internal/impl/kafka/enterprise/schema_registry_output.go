@@ -25,6 +25,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 const (
@@ -87,6 +88,10 @@ func schemaRegistryOutputConfigFields() []*service.ConfigField {
 func init() {
 	err := service.RegisterOutput("schema_registry", schemaRegistryOutputSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.Output, maxInFlight int, err error) {
+			if err = license.CheckRunningEnterprise(mgr); err != nil {
+				return
+			}
+
 			if maxInFlight, err = conf.FieldMaxInFlight(); err != nil {
 				return
 			}

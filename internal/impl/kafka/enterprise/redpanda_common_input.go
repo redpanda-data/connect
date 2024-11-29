@@ -16,6 +16,7 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 func redpandaCommonInputConfig() *service.ConfigSpec {
@@ -94,6 +95,10 @@ root = if $has_topic_partitions {
 func init() {
 	err := service.RegisterBatchInput("redpanda_common", redpandaCommonInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
+			if err := license.CheckRunningEnterprise(mgr); err != nil {
+				return nil, err
+			}
+
 			tmpOpts, err := kafka.FranzConsumerOptsFromConfig(conf)
 			if err != nil {
 				return nil, err

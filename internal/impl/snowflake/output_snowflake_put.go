@@ -35,6 +35,8 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 const (
@@ -401,6 +403,10 @@ func init() {
 			maxInFlight int,
 			err error,
 		) {
+			if err = license.CheckRunningEnterprise(mgr); err != nil {
+				return
+			}
+
 			if maxInFlight, err = conf.FieldInt("max_in_flight"); err != nil {
 				return
 			}

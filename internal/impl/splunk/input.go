@@ -22,6 +22,8 @@ import (
 
 	"github.com/Jeffail/shutdown"
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 const (
@@ -53,6 +55,10 @@ func inputSpec() *service.ConfigSpec {
 func init() {
 	err := service.RegisterInput("splunk", inputSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
+			if err := license.CheckRunningEnterprise(mgr); err != nil {
+				return nil, err
+			}
+
 			i, err := inputFromParsed(conf, mgr.Logger())
 			if err != nil {
 				return nil, err

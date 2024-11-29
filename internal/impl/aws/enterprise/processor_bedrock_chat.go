@@ -20,6 +20,7 @@ import (
 
 	"github.com/redpanda-data/connect/v4/internal/impl/aws"
 	"github.com/redpanda-data/connect/v4/internal/impl/aws/config"
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 const (
@@ -76,6 +77,10 @@ For more information, see the https://docs.aws.amazon.com/bedrock/latest/usergui
 }
 
 func newBedrockChatProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+	if err := license.CheckRunningEnterprise(mgr); err != nil {
+		return nil, err
+	}
+
 	aconf, err := aws.GetSession(context.Background(), conf)
 	if err != nil {
 		return nil, err

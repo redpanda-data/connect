@@ -21,6 +21,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/twmb/franz-go/pkg/sr"
+
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 func TestSchemaRegistry(t *testing.T) {
@@ -98,6 +100,7 @@ func TestSchemaRegistry(t *testing.T) {
 	t.Cleanup(ts.Close)
 
 	mgr := service.MockResources()
+	license.InjectTestService(mgr)
 
 	inputConf, err := schemaRegistryInputSpec().ParseYAML(fmt.Sprintf(`
 url: %s

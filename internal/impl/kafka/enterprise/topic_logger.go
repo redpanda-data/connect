@@ -22,6 +22,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 const (
@@ -118,6 +119,12 @@ func (l *TopicLogger) InitOutputFromParsed(pConf *service.ParsedConfig) error {
 
 	if l.statusTopic, err = pConf.FieldString("status_topic"); err != nil {
 		return err
+	}
+
+	if l.logsTopic != "" || l.statusTopic != "" {
+		if err := license.CheckRunningEnterprise(pConf.Resources()); err != nil {
+			return fmt.Errorf("unable to send logs or status updates to redpanda: %w", err)
+		}
 	}
 
 	lvlStr, err := pConf.FieldString("logs_level")

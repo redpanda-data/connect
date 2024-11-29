@@ -16,9 +16,12 @@ import (
 	"time"
 
 	"github.com/ory/dockertest/v3"
+	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/redpanda-data/connect/v4/internal/license"
 
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 )
@@ -135,6 +138,10 @@ input:
 			integration.StreamTestOptVarSet("VAR1", serviceInputPort),
 			integration.StreamTestOptVarSet("VAR2", serviceOutputPort),
 			integration.StreamTestOptVarSet("VAR3", dummySplunkPassword),
+			integration.StreamTestOptOnResourcesInit(func(res *service.Resources) error {
+				license.InjectTestService(res)
+				return nil
+			}),
 		)
 	})
 }
