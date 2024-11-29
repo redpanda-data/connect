@@ -40,7 +40,7 @@ func CheckRunningEnterprise(res *service.Resources) error {
 		return err
 	}
 	if !l.AllowsEnterpriseFeatures() {
-		return errors.New("this feature requires a valid enterprise license <TODO URL>")
+		return errors.New("this feature requires a valid enterprise license https://docs.redpanda.com/current/get-started/licenses/")
 	}
 	return nil
 }
