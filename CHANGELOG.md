@@ -3,13 +3,14 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.42.0 - TBD
+## 4.42.0 - 2024-12-02
 
 ### Added
 
 - Add support for `spanner` driver to SQL plugins. (@yufeng-deng)
 - Add support for complex database types (JSONB, TEXT[], INET, TSVECTOR, TSRANGE, POINT, INTEGER[]) for `pg_stream` input. (@le-vlad)
 - Add support for Parquet files to `bigquery` output (@rockwotj)
+- (Benthos) New `exists` operator added to the `cache` processor. (@mihaitodor)
 
 ### Fixed
 

@@ -177,6 +177,7 @@ Options:
 , `add`
 , `get`
 , `delete`
+, `exists`
 .
 
 === `key`
@@ -240,4 +241,9 @@ can be detected with xref:configuration:error_handling.adoc[processor error hand
 
 Delete a key and its contents from the cache. If the key does not exist the
 action is a no-op and will not fail with an error.
+
+=== `exists`
+
+Check if a given key exists in the cache and replace the original message payload
+with `true` or `false`.
 
