@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - Add support for `spanner` driver to SQL plugins. (@yufeng-deng)
 - Add support for complex database types (JSONB, TEXT[], INET, TSVECTOR, TSRANGE, POINT, INTEGER[]) for `pg_stream` input. (@le-vlad)
+- Add support for Parquet files to `bigquery` output (@rockwotj)
 
 ### Fixed
 
