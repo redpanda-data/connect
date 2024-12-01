@@ -1,0 +1,55 @@
+name: schedule
+type: input
+status: experimental
+summary: Reads an input based on a schedule
+
+fields:
+  - name: interval
+    type: string
+    default: "5s"
+    description: |-
+      The time interval at which inputs should be read,
+      expressed either as a duration string or as a cron expression.
+      - The duration can be set as defined in https://pkg.go.dev/time#ParseDuration
+        Examples:
+          5s (every 5 seconds starting from now)
+          1h30 (every 1 hour and 30 minutes starting from now)
+      - The cron expression can be set as defined in https://pkg.go.dev/github.com/robfig/cron
+        You can specify a timezone by prefixing the expression with TZ=<location name>,
+        where the location name corresponds to a file within the IANA Time Zone database.
+        Examples:
+          0 0 * * * * (every hour)
+          */15 * * * * * (at 0, 15, 30, 45 seconds of each minute)
+          @every 15s (every 15 seconds starting from now)
+
+  - name: input
+    type: unknown
+    description: An input to read from
+
+mapping: |-
+  #!blobl
+  # Normalize duration to the equivalent cron expression
+  let is_duration = this.interval.parse_duration().or(0) > 0
+  let interval = if $is_duration { "@every " + this.interval } else { this.interval }
+
+  root.read_until = {
+    "restart_input": true,
+    "check": false,
+    "input": {
+      "sequence": {
+        "inputs": [
+          this.input,
+          {
+            "generate": {
+              "count": 1,
+              "interval": $interval,
+              "mapping": """root = "" """,
+            },
+            "processors": [
+                { "mapping": "root = deleted()" } # Get rid of the message produced by the `generate` input
+            ]
+          }
+        ]
+      }
+    }
+  }
