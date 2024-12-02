@@ -20,6 +20,8 @@ import (
 	"net/http/httputil"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 const (
@@ -84,6 +86,10 @@ func outputSpec() *service.ConfigSpec {
 func init() {
 	err := service.RegisterBatchOutput("splunk_hec", outputSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPolicy service.BatchPolicy, maxInFlight int, err error) {
+			if err = license.CheckRunningEnterprise(mgr); err != nil {
+				return
+			}
+
 			if maxInFlight, err = conf.FieldMaxInFlight(); err != nil {
 				return
 			}

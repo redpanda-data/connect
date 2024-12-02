@@ -14,6 +14,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 func redpandaCommonOutputConfig() *service.ConfigSpec {
@@ -68,6 +69,10 @@ func init() {
 			maxInFlight int,
 			err error,
 		) {
+			if err = license.CheckRunningEnterprise(mgr); err != nil {
+				return
+			}
+
 			if maxInFlight, err = conf.FieldMaxInFlight(); err != nil {
 				return
 			}

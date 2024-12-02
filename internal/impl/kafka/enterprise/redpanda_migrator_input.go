@@ -25,6 +25,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 const (
@@ -138,6 +139,10 @@ func RedpandaMigratorInputConfigFields() []*service.ConfigField {
 func init() {
 	err := service.RegisterBatchInput("redpanda_migrator", redpandaMigratorInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
+			if err := license.CheckRunningEnterprise(mgr); err != nil {
+				return nil, err
+			}
+
 			rdr, err := NewRedpandaMigratorReaderFromConfig(conf, mgr)
 			if err != nil {
 				return nil, err

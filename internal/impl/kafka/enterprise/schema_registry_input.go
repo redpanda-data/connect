@@ -25,6 +25,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 const (
@@ -86,6 +87,10 @@ func schemaRegistryInputConfigFields() []*service.ConfigField {
 func init() {
 	err := service.RegisterInput("schema_registry", schemaRegistryInputSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
+			if err := license.CheckRunningEnterprise(mgr); err != nil {
+				return nil, err
+			}
+
 			i, err := inputFromParsed(conf, mgr)
 			if err != nil {
 				return nil, err

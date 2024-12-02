@@ -16,6 +16,8 @@ import (
 	cohere "github.com/cohere-ai/cohere-go/v2"
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 const (
@@ -87,6 +89,10 @@ output:
 }
 
 func makeEmbeddingsProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+	if err := license.CheckRunningEnterprise(mgr); err != nil {
+		return nil, err
+	}
+
 	b, err := newBaseProcessor(conf)
 	if err != nil {
 		return nil, err

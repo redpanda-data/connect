@@ -36,6 +36,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka/enterprise"
+	"github.com/redpanda-data/connect/v4/internal/license"
 	"github.com/redpanda-data/connect/v4/internal/protoconnect"
 )
 
@@ -166,6 +167,8 @@ max_message_bytes: 1MB
 `, brokerAddr, logsTopic, statusTopic), nil)
 	require.NoError(t, err)
 
+	license.InjectTestService(conf.Resources())
+
 	logger := enterprise.NewTopicLogger("foo")
 	require.NoError(t, logger.InitOutputFromParsed(conf))
 
@@ -212,6 +215,8 @@ status_topic: %v
 max_message_bytes: 1MB
 `, brokerAddr, logsTopic, statusTopic), nil)
 	require.NoError(t, err)
+
+	license.InjectTestService(conf.Resources())
 
 	logger := enterprise.NewTopicLogger("foo")
 	require.NoError(t, logger.InitOutputFromParsed(conf))
@@ -261,6 +266,8 @@ status_topic: %v
 max_message_bytes: 1MB
 `, brokerAddr, logsTopic, statusTopic), nil)
 	require.NoError(t, err)
+
+	license.InjectTestService(conf.Resources())
 
 	logger := enterprise.NewTopicLogger("baz")
 	require.NoError(t, logger.InitOutputFromParsed(conf))
@@ -471,6 +478,8 @@ output:
 			stream, err := streamBuilder.Build()
 			require.NoError(t, err)
 
+			license.InjectTestService(stream.Resources())
+
 			ctx, done := context.WithTimeout(context.Background(), 3*time.Second)
 			defer done()
 
@@ -566,6 +575,8 @@ output:
 
 	stream, err := streamBuilder.Build()
 	require.NoError(t, err)
+
+	license.InjectTestService(stream.Resources())
 
 	ctx, done := context.WithTimeout(context.Background(), 3*time.Second)
 	defer done()

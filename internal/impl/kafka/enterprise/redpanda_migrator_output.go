@@ -21,6 +21,7 @@ import (
 
 	"github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 const (
@@ -119,6 +120,10 @@ func init() {
 			maxInFlight int,
 			err error,
 		) {
+			if err = license.CheckRunningEnterprise(mgr); err != nil {
+				return
+			}
+
 			if maxInFlight, err = conf.FieldInt(rmoFieldMaxInFlight); err != nil {
 				return
 			}

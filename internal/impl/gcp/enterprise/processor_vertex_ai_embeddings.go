@@ -16,6 +16,8 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
+	"github.com/redpanda-data/connect/v4/internal/license"
+
 	aiplatform "cloud.google.com/go/aiplatform/apiv1"
 	"cloud.google.com/go/aiplatform/apiv1/aiplatformpb"
 	"cloud.google.com/go/vertexai/genai"
@@ -88,6 +90,10 @@ For more information, see the https://cloud.google.com/vertex-ai/generative-ai/d
 }
 
 func newVertexAIEmbeddingsProcessor(conf *service.ParsedConfig, mgr *service.Resources) (p service.Processor, err error) {
+	if err = license.CheckRunningEnterprise(mgr); err != nil {
+		return
+	}
+
 	ctx := context.Background()
 	proc := &vertexAIEmbeddingsProcessor{}
 	var project string

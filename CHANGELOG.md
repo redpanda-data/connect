@@ -3,13 +3,15 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.42.0 - TBD
+## 4.42.0 - 2024-12-02
 
 ### Added
 
 - Add support for `spanner` driver to SQL plugins. (@yufeng-deng)
 - Add support for complex database types (JSONB, TEXT[], INET, TSVECTOR, TSRANGE, POINT, INTEGER[]) for `pg_stream` input. (@le-vlad)
 - Add support for Parquet files to `bigquery` output (@rockwotj)
+- (Benthos) New `exists` operator added to the `cache` processor. (@mihaitodor)
+- New CLI flag `redpanda-license` added as an alternative way to specify a Redpanda license. (@Jeffail)
 
 ### Fixed
 
@@ -19,6 +21,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - The `redpanda_migrator` output now registers destination schemas with all the subjects associated with the source schema ID extracted from each message. (@mihaitodor)
+- Enterprise features will now only run when a valid Redpanda license is present. More information can be found at [the licenses getting started guide](https://docs.redpanda.com/current/get-started/licenses/). (@Jeffail)
 
 ## 4.41.0 - 2024-11-25
 

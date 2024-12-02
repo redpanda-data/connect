@@ -19,6 +19,8 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"google.golang.org/api/option"
+
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 const (
@@ -122,6 +124,10 @@ For more information, see the https://cloud.google.com/vertex-ai/docs[Vertex AI 
 }
 
 func newVertexAIProcessor(conf *service.ParsedConfig, mgr *service.Resources) (p service.Processor, err error) {
+	if err = license.CheckRunningEnterprise(mgr); err != nil {
+		return
+	}
+
 	ctx := context.Background()
 	proc := &vertexAIChatProcessor{}
 	var project string
