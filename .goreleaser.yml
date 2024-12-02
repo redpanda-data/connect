@@ -124,6 +124,6 @@ publishers:
   - name: Publish Linux packages to Cloudsmith
     ids:
       - connect-linux-pkgs
-    cmd: ./resources/scripts/push_pkg_to_cloudsmith.sh {{ .ArtifactPath }}
+    cmd: ./resources/scripts/push_pkg_to_cloudsmith.sh {{ .ArtifactPath }} {{ .Version }}
     env:
       - CLOUDSMITH_API_KEY={{ .Env.CLOUDSMITH_API_KEY }}
