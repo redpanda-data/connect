@@ -109,6 +109,11 @@ func (s *Service) readAndValidateLicense() (RedpandaLicense, error) {
 		if license, err = s.validateLicense(licenseBytes); err != nil {
 			return RedpandaLicense{}, fmt.Errorf("failed to validate license: %w", err)
 		}
+		if license.Type == 0 {
+			// If the license is a trial then we reject it because connect does
+			// not support trials.
+			return RedpandaLicense{}, errors.New("trial license detected, Redpanda Connect does not support enterprise license trials")
+		}
 	} else {
 		// An open source license is the final fall back.
 		year := time.Hour * 24 * 365
