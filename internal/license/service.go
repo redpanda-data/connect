@@ -157,9 +157,9 @@ func (s *Service) readLicense() (licenseFileContents []byte, err error) {
 			return nil, fmt.Errorf("failed to read default path license file: %w", err)
 		}
 		return nil, nil
-	} else {
-		s.logger.Debug("Loaded Redpanda Enterprise license from default file path")
 	}
+
+	s.logger.Debug("Loaded Redpanda Enterprise license from default file path")
 	return
 }
 
