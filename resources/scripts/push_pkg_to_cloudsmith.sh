@@ -40,7 +40,7 @@ else
     version=$PKG_VERSION
 fi
 
-GA_VERSION_PATTERN='^\d+\.\d+\.\d+$'
+GA_VERSION_PATTERN='^[0-9]+\.[0-9]+\.[0-9]+$'
 if [[ $version =~ $GA_VERSION_PATTERN ]]; then
   repo="redpanda"
 else
