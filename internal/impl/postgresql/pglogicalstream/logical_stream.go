@@ -299,9 +299,7 @@ func (s *Stream) AckLSN(ctx context.Context, lsn string) error {
 		ctx,
 		s.pgConn,
 		StandbyStatusUpdate{
-			WALApplyPosition: clientXLogPos + 1,
 			WALWritePosition: clientXLogPos + 1,
-			WALFlushPosition: clientXLogPos + 1,
 			ReplyRequested:   true,
 		},
 	)
@@ -330,7 +328,7 @@ func (s *Stream) streamMessages() error {
 				ctx,
 				s.pgConn,
 				StandbyStatusUpdate{
-					WALWritePosition: pos,
+					WALWritePosition: pos + 1,
 				},
 			)
 			if err != nil {
