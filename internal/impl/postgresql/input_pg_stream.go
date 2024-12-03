@@ -48,12 +48,13 @@ type asyncMessage struct {
 	ackFn service.AckFunc
 }
 
-var pgStreamConfigSpec = service.NewConfigSpec().
-	Beta().
-	Categories("Services").
-	Version("4.39.0").
-	Summary(`Streams changes from a PostgreSQL database using logical replication.`).
-	Description(`Streams changes from a PostgreSQL database for Change Data Capture (CDC).
+func newPostgresCDCConfig() *service.ConfigSpec {
+	return service.NewConfigSpec().
+		Beta().
+		Categories("Services").
+		Version("4.39.0").
+		Summary(`Streams changes from a PostgreSQL database using logical replication.`).
+		Description(`Streams changes from a PostgreSQL database for Change Data Capture (CDC).
 Additionally, if ` + "`" + fieldStreamSnapshot + "`" + ` is set to true, then the existing data in the database is also streamed too.
 
 == Metadata
@@ -63,56 +64,57 @@ This input adds the following metadata fields to each message:
 - table (Name of the table that the message originated from)
 - operation (Type of operation that generated the message: "insert", "update", or "delete". This will also be "begin" and "commit" if ` + "`" + fieldIncludeTxnMarkers + "`" + ` is enabled)
 		`).
-	Field(service.NewStringField(fieldDSN).
-		Description("The Data Source Name for the PostgreSQL database in the form of `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]`. Please note that Postgres enforces SSL by default, you can override this with the parameter `sslmode=disable` if required.").
-		Example("postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable")).
-	Field(service.NewBoolField(fieldIncludeTxnMarkers).
-		Description(`When set to true, empty messages with operation types BEGIN and COMMIT are generated for the beginning and end of each transaction. Messages with operation metadata set to "begin" or "commit" will have null message payloads.`).
-		Default(false)).
-	Field(service.NewBoolField(fieldStreamSnapshot).
-		Description("When set to true, the plugin will first stream a snapshot of all existing data in the database before streaming changes. In order to use this the tables that are being snapshot MUST have a primary key set so that reading from the table can be parallelized.").
-		Example(true).
-		Default(false)).
-	Field(service.NewFloatField(fieldSnapshotMemSafetyFactor).
-		Description("Determines the fraction of available memory that can be used for streaming the snapshot. Values between 0 and 1 represent the percentage of memory to use. Lower values make initial streaming slower but help prevent out-of-memory errors.").
-		Example(0.2).
-		Default(1)).
-	Field(service.NewIntField(fieldSnapshotBatchSize).
-		Description("The number of rows to fetch in each batch when querying the snapshot. A value of 0 lets the plugin determine the batch size based on `snapshot_memory_safety_factor` property.").
-		Example(10000).
-		Default(0)).
-	Field(service.NewStringField(fieldSchema).
-		Description("The PostgreSQL schema from which to replicate data.").
-		Example("public")).
-	Field(service.NewStringListField(fieldTables).
-		Description("A list of table names to include in the logical replication. Each table should be specified as a separate item.").
-		Example(`
+		Field(service.NewStringField(fieldDSN).
+			Description("The Data Source Name for the PostgreSQL database in the form of `postgres://[user[:password]@][netloc][:port][/dbname][?param1=value1&...]`. Please note that Postgres enforces SSL by default, you can override this with the parameter `sslmode=disable` if required.").
+			Example("postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable")).
+		Field(service.NewBoolField(fieldIncludeTxnMarkers).
+			Description(`When set to true, empty messages with operation types BEGIN and COMMIT are generated for the beginning and end of each transaction. Messages with operation metadata set to "begin" or "commit" will have null message payloads.`).
+			Default(false)).
+		Field(service.NewBoolField(fieldStreamSnapshot).
+			Description("When set to true, the plugin will first stream a snapshot of all existing data in the database before streaming changes. In order to use this the tables that are being snapshot MUST have a primary key set so that reading from the table can be parallelized.").
+			Example(true).
+			Default(false)).
+		Field(service.NewFloatField(fieldSnapshotMemSafetyFactor).
+			Description("Determines the fraction of available memory that can be used for streaming the snapshot. Values between 0 and 1 represent the percentage of memory to use. Lower values make initial streaming slower but help prevent out-of-memory errors.").
+			Example(0.2).
+			Default(1)).
+		Field(service.NewIntField(fieldSnapshotBatchSize).
+			Description("The number of rows to fetch in each batch when querying the snapshot. A value of 0 lets the plugin determine the batch size based on `snapshot_memory_safety_factor` property.").
+			Example(10000).
+			Default(0)).
+		Field(service.NewStringField(fieldSchema).
+			Description("The PostgreSQL schema from which to replicate data.").
+			Example("public")).
+		Field(service.NewStringListField(fieldTables).
+			Description("A list of table names to include in the logical replication. Each table should be specified as a separate item.").
+			Example(`
 			- my_table
 			- my_table_2
 		`)).
-	Field(service.NewIntField(fieldCheckpointLimit).
-		Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given LSN will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
-		Default(1024)).
-	Field(service.NewBoolField(fieldTemporarySlot).
-		Description("If set to true, creates a temporary replication slot that is automatically dropped when the connection is closed.").
-		Default(false)).
-	Field(service.NewStringField(fieldSlotName).
-		Description("The name of the PostgreSQL logical replication slot to use. If not provided, a random name will be generated. You can create this slot manually before starting replication if desired.").
-		Example("my_test_slot").
-		Default("")).
-	Field(service.NewDurationField(fieldPgStandbyTimeout).
-		Description("Specify the standby timeout before refreshing an idle connection.").
-		Example("30s").
-		Default("10s")).
-	Field(service.NewDurationField(fieldWalMonitorInterval).
-		Description("How often to report changes to the replication lag.").
-		Example("6s").
-		Default("3s")).
-	Field(service.NewIntField(fieldMaxParallelSnapshotTables).
-		Description("Int specifies a number of tables that will be processed in parallel during the snapshot processing stage").
-		Default(1)).
-	Field(service.NewAutoRetryNacksToggleField()).
-	Field(service.NewBatchPolicyField(fieldBatching))
+		Field(service.NewIntField(fieldCheckpointLimit).
+			Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given LSN will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
+			Default(1024)).
+		Field(service.NewBoolField(fieldTemporarySlot).
+			Description("If set to true, creates a temporary replication slot that is automatically dropped when the connection is closed.").
+			Default(false)).
+		Field(service.NewStringField(fieldSlotName).
+			Description("The name of the PostgreSQL logical replication slot to use. If not provided, a random name will be generated. You can create this slot manually before starting replication if desired.").
+			Example("my_test_slot").
+			Default("")).
+		Field(service.NewDurationField(fieldPgStandbyTimeout).
+			Description("Specify the standby timeout before refreshing an idle connection.").
+			Example("30s").
+			Default("10s")).
+		Field(service.NewDurationField(fieldWalMonitorInterval).
+			Description("How often to report changes to the replication lag.").
+			Example("6s").
+			Default("3s")).
+		Field(service.NewIntField(fieldMaxParallelSnapshotTables).
+			Description("Int specifies a number of tables that will be processed in parallel during the snapshot processing stage").
+			Default(1)).
+		Field(service.NewAutoRetryNacksToggleField()).
+		Field(service.NewBatchPolicyField(fieldBatching))
+}
 
 func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s service.BatchInput, err error) {
 	var (
@@ -270,7 +272,12 @@ func validateSimpleString(s string) error {
 }
 
 func init() {
-	err := service.RegisterBatchInput("pg_stream", pgStreamConfigSpec, newPgStreamInput)
+	err := service.RegisterBatchInput("postgres_cdc", newPostgresCDCConfig(), newPgStreamInput)
+	if err != nil {
+		panic(err)
+	}
+	// Legacy naming
+	err = service.RegisterBatchInput("pg_stream", newPostgresCDCConfig().Deprecated(), newPgStreamInput)
 	if err != nil {
 		panic(err)
 	}

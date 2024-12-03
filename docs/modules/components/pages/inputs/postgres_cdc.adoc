@@ -1,6 +1,6 @@
-= pg_stream
+= postgres_cdc
 :type: input
-:status: deprecated
+:status: beta
 :categories: ["Services"]
 
 
@@ -23,11 +23,6 @@
 component_type_dropdown::[]
 
 
-[WARNING]
-.Deprecated
-====
-This component is deprecated and will be removed in the next major version release. Please consider moving onto <<alternatives,alternative components>>.
-====
 Streams changes from a PostgreSQL database using logical replication.
 
 Introduced in version 4.39.0.
@@ -43,7 +38,7 @@ Common::
 # Common config fields, showing default values
 input:
   label: ""
-  pg_stream:
+  postgres_cdc:
     dsn: postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable # No default (required)
     include_transaction_markers: false
     stream_snapshot: false
@@ -74,7 +69,7 @@ Advanced::
 # All config fields, showing default values
 input:
   label: ""
-  pg_stream:
+  postgres_cdc:
     dsn: postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable # No default (required)
     include_transaction_markers: false
     stream_snapshot: false
