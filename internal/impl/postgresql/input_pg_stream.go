@@ -338,7 +338,7 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 	var nextTimedBatchChan <-chan time.Time
 
 	// offsets are nilable since we don't provide offset tracking during the snapshot phase
-	cp := checkpoint.NewCapped[*int64](int64(p.checkpointLimit))
+	cp := checkpoint.NewCapped[*string](int64(p.checkpointLimit))
 	for !p.stopSig.IsSoftStopSignalled() {
 		select {
 		case <-nextTimedBatchChan:
@@ -398,22 +398,18 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 func (p *pgStreamInput) flushBatch(
 	ctx context.Context,
 	pgStream *pglogicalstream.Stream,
-	checkpointer *checkpoint.Capped[*int64],
+	checkpointer *checkpoint.Capped[*string],
 	batch service.MessageBatch,
 ) error {
 	if len(batch) == 0 {
 		return nil
 	}
 
-	var lsn *int64
+	var lsn *string
 	lastMsg := batch[len(batch)-1]
 	lsnStr, ok := lastMsg.MetaGet("lsn")
 	if ok {
-		parsed, err := LSNToInt64(lsnStr)
-		if err != nil {
-			return fmt.Errorf("unable to extract LSN from last message in batch: %w", err)
-		}
-		lsn = &parsed
+		lsn = &lsnStr
 	}
 	resolveFn, err := checkpointer.Track(ctx, lsn, int64(len(batch)))
 	if err != nil {
@@ -425,11 +421,11 @@ func (p *pgStreamInput) flushBatch(
 		if maxOffset == nil {
 			return nil
 		}
-		lsn := *maxOffset
-		if lsn == nil {
+		maxLSN := *maxOffset
+		if maxLSN == nil {
 			return nil
 		}
-		if err = pgStream.AckLSN(ctx, Int64ToLSN(*lsn)); err != nil {
+		if err = pgStream.AckLSN(ctx, *maxLSN); err != nil {
 			return fmt.Errorf("unable to ack LSN to postgres: %w", err)
 		}
 		return nil
