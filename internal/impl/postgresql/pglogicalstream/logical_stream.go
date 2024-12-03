@@ -512,7 +512,7 @@ func (s *Stream) processSnapshot() error {
 					}
 
 					snapshotChangePacket := StreamMessage{
-						Lsn:       nil,
+						LSN:       nil,
 						Mode:      StreamModeSnapshot,
 						Operation: InsertOpType,
 

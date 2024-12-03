@@ -81,7 +81,7 @@ func (p *PgOutputUnbufferedPluginHandler) Handle(ctx context.Context, clientXLog
 	}
 
 	lsn := clientXLogPos.String()
-	message.Lsn = &lsn
+	message.LSN = &lsn
 	select {
 	case p.messages <- *message:
 		p.lastEmitted = clientXLogPos

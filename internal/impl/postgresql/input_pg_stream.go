@@ -365,8 +365,8 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 			batchMsg.MetaSet("mode", string(message.Mode))
 			batchMsg.MetaSet("table", message.Table)
 			batchMsg.MetaSet("operation", string(message.Operation))
-			if message.Lsn != nil {
-				batchMsg.MetaSet("lsn", *message.Lsn)
+			if message.LSN != nil {
+				batchMsg.MetaSet("lsn", *message.LSN)
 			}
 			if batcher.Add(batchMsg) {
 				nextTimedBatchChan = nil
