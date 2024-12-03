@@ -65,3 +65,36 @@ jobs:
       with:
         version: v1.61.0
         args: --timeout 30m cmd/... internal/... public/...
+
+  test-push-to-cloudsmith:
+    if: ${{ github.repository == 'redpanda-data/connect' || github.event_name != 'schedule' }}
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Mock cloudsmith cli
+      run: |
+        echo '#!/bin/bash' >cloudsmith
+        echo "echo \$@" >>cloudsmith
+        chmod +x cloudsmith
+        mv cloudsmith /usr/local/bin/
+
+    - name: Test GA
+      env:
+        CLOUDSMITH_API_KEY: thisisatest
+      run: |
+        test $(./resources/scripts/push_pkg_to_cloudsmith.sh artifact.deb 0.0.0 \
+          | grep "push deb redpanda/redpanda/" | wc -l) -eq 1
+        test $(./resources/scripts/push_pkg_to_cloudsmith.sh artifact.deb v0.0.0 \
+          | grep "push deb redpanda/redpanda/" | wc -l) -eq 1
+
+    - name: Test RC
+      env:
+        CLOUDSMITH_API_KEY: thisisatest
+      run: |
+        test $(./resources/scripts/push_pkg_to_cloudsmith.sh artifact.deb 0.0.0-rc1 \
+          | grep "push deb redpanda/redpanda-unstable/" | wc -l) -eq 1
+        test $(./resources/scripts/push_pkg_to_cloudsmith.sh artifact.deb v0.0.0-rc1 \
+          | grep "push deb redpanda/redpanda-unstable/" | wc -l) -eq 1
