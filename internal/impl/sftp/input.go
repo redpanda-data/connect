@@ -187,7 +187,6 @@ func (s *sftpReader) Connect(ctx context.Context) (err error) {
 	if s.scanner, err = s.scannerCtor.Create(file, func(ctx context.Context, aErr error) (outErr error) {
 		_ = s.pathProvider.Ack(ctx, nextPath, aErr)
 		if aErr != nil {
-			s.log.Errorf("skipping delete on finish: %s", aErr)
 			return nil
 		}
 		if s.deleteOnFinish {
@@ -223,7 +222,7 @@ func (s *sftpReader) Connect(ctx context.Context) (err error) {
 	return
 }
 
-func (s *sftpReader) seekNextPath(ctx context.Context) (file *sftp.File, nextPath string, skip bool, err error) {
+func (s *sftpReader) initState(ctx context.Context) (client *sftp.Client, pathProvider pathProvider, skip bool, err error) {
 	s.scannerMut.Lock()
 	defer s.scannerMut.Unlock()
 
@@ -242,11 +241,22 @@ func (s *sftpReader) seekNextPath(ctx context.Context) (file *sftp.File, nextPat
 		s.pathProvider = s.getFilePathProvider(ctx)
 	}
 
+	return s.client, s.pathProvider, false, nil
+}
+
+func (s *sftpReader) seekNextPath(ctx context.Context) (file *sftp.File, nextPath string, skip bool, err error) {
+	client, pathProvider, skip, err := s.initState(ctx)
+	if err != nil || skip {
+		return
+	}
+
 	for {
-		if nextPath, err = s.pathProvider.Next(ctx, s.client); err != nil {
+		if nextPath, err = pathProvider.Next(ctx, client); err != nil {
 			if errors.Is(err, sftp.ErrSshFxConnectionLost) {
-				_ = s.client.Close()
+				_ = client.Close()
+				s.scannerMut.Lock()
 				s.client = nil
+				s.scannerMut.Unlock()
 				return
 			}
 			if errors.Is(err, errEndOfPaths) {
@@ -255,21 +265,23 @@ func (s *sftpReader) seekNextPath(ctx context.Context) (file *sftp.File, nextPat
 			return
 		}
 
-		if file, err = s.client.Open(nextPath); err != nil {
+		if file, err = client.Open(nextPath); err != nil {
 			if errors.Is(err, sftp.ErrSshFxConnectionLost) {
-				_ = s.client.Close()
+				_ = client.Close()
+				s.scannerMut.Lock()
 				s.client = nil
+				s.scannerMut.Unlock()
 			}
 
 			s.log.With("path", nextPath, "err", err.Error()).Warn("Unable to open previously identified file")
 			if os.IsNotExist(err) {
 				// If we failed to open the file because it no longer exists
 				// then we can "ack" the path as we're done with it.
-				_ = s.pathProvider.Ack(ctx, nextPath, nil)
+				_ = pathProvider.Ack(ctx, nextPath, nil)
 			} else {
 				// Otherwise we "nack" it with the error as we'll want to
 				// reprocess it again later.
-				_ = s.pathProvider.Ack(ctx, nextPath, err)
+				_ = pathProvider.Ack(ctx, nextPath, err)
 			}
 		} else {
 			return
@@ -310,9 +322,7 @@ func (s *sftpReader) ReadBatch(ctx context.Context) (service.MessageBatch, servi
 		part.MetaSetMut("sftp_path", currentPath)
 	}
 
-	return parts, func(ctx context.Context, res error) error {
-		return codecAckFn(ctx, res)
-	}, nil
+	return parts, codecAckFn, nil
 }
 
 func (s *sftpReader) Close(ctx context.Context) error {
