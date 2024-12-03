@@ -493,6 +493,71 @@ func TestTimestampCompat(t *testing.T) {
 	}, 3*time.Second, time.Second)
 }
 
+func TestChannelReopenFails(t *testing.T) {
+	ctx := context.Background()
+	restClient, streamClient := setup(t)
+	channelOpts := streaming.ChannelOptions{
+		Name:         t.Name(),
+		DatabaseName: envOr("SNOWFLAKE_DB", "BABY_DATABASE"),
+		SchemaName:   "PUBLIC",
+		TableName:    "TEST_CHANNEL_TABLE",
+		BuildOptions: streaming.BuildOptions{Parallelism: 1, ChunkSize: 50_000},
+	}
+	_, err := restClient.RunSQL(ctx, streaming.RunSQLRequest{
+		Database: channelOpts.DatabaseName,
+		Schema:   channelOpts.SchemaName,
+		Statement: fmt.Sprintf(`
+      DROP TABLE IF EXISTS %s;
+      CREATE TABLE IF NOT EXISTS %s (
+        A NUMBER
+      );`, channelOpts.TableName, channelOpts.TableName),
+		Parameters: map[string]string{
+			"MULTI_STATEMENT_COUNT": "0",
+		},
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		err = streamClient.DropChannel(ctx, channelOpts)
+		if err != nil {
+			t.Log("unable to cleanup stream in SNOW:", err)
+		}
+	})
+	channelA, err := streamClient.OpenChannel(ctx, channelOpts)
+	require.NoError(t, err)
+	channelB, err := streamClient.OpenChannel(ctx, channelOpts)
+	require.NoError(t, err)
+	_, err = channelA.InsertRows(ctx, service.MessageBatch{
+		structuredMsg(map[string]any{"a": math.MinInt64}),
+		structuredMsg(map[string]any{"a": 0}),
+		structuredMsg(map[string]any{"a": math.MaxInt64}),
+	})
+	require.Error(t, err)
+	_, err = channelB.InsertRows(ctx, service.MessageBatch{
+		structuredMsg(map[string]any{"a": math.MinInt64}),
+		structuredMsg(map[string]any{"a": 0}),
+		structuredMsg(map[string]any{"a": math.MaxInt64}),
+	})
+	require.EventuallyWithT(t, func(collect *assert.CollectT) {
+		// Always order by A so we get consistent ordering for our test
+		resp, err := restClient.RunSQL(ctx, streaming.RunSQLRequest{
+			Database:  channelOpts.DatabaseName,
+			Schema:    channelOpts.SchemaName,
+			Statement: fmt.Sprintf(`SELECT * FROM %s ORDER BY A;`, channelOpts.TableName),
+		})
+		if !assert.NoError(collect, err) {
+			t.Logf("failed to scan table: %s", err)
+			return
+		}
+		assert.Equal(collect, "00000", resp.SQLState)
+		itoa := strconv.Itoa
+		assert.Equal(collect, parseSnowflakeData([][]string{
+			{itoa(math.MinInt64)},
+			{"0"},
+			{itoa(math.MaxInt64)},
+		}), parseSnowflakeData(resp.Data))
+	}, 3*time.Second, time.Second)
+}
+
 // parseSnowflakeData returns "json-ish" data that can be JSON or could be just a raw string.
 // We want to parse for the JSON rows have whitespace, so this gives us a more semantic comparison.
 func parseSnowflakeData(rawData [][]string) [][]any {
