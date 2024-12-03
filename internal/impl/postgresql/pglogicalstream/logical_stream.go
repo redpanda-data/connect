@@ -20,6 +20,7 @@ import (
 	"github.com/Jeffail/shutdown"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgproto3"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"golang.org/x/sync/errgroup"
 
@@ -319,7 +320,8 @@ func (s *Stream) AckLSN(ctx context.Context, lsn string) error {
 }
 
 func (s *Stream) streamMessages() error {
-	handler := NewPgOutputPluginHandler(s.messages, s.monitor, s.clientXLogPos, s.includeTxnMarkers)
+	relations := map[uint32]*RelationMessage{}
+	typeMap := pgtype.NewMap()
 
 	ctx, _ := s.shutSig.SoftStopCtx(context.Background())
 	for !s.shutSig.IsSoftStopSignalled() {
@@ -382,19 +384,42 @@ func (s *Stream) streamMessages() error {
 				return fmt.Errorf("failed to parse XLogData: %w", err)
 			}
 			clientXLogPos := xld.WALStart + LSN(len(xld.WALData))
-			commit, err := handler.Handle(ctx, clientXLogPos, xld)
+			err = s.processChange(ctx, clientXLogPos, xld, relations, typeMap)
 			if err != nil {
 				return fmt.Errorf("decoding postgres changes failed: %w", err)
-			} else if commit {
-				// This is a hack and we probably should not do it
-				if err = s.AckLSN(ctx, clientXLogPos.String()); err != nil {
-					s.logger.Warnf("Failed to ack commit message LSN: %v", err)
-				}
 			}
 		}
 	}
 	// clean shutdown, return nil
 	return nil
+}
+
+// Handle handles the pgoutput output
+func (s *Stream) processChange(ctx context.Context, clientXLogPos LSN, xld XLogData, relations map[uint32]*RelationMessage, typeMap *pgtype.Map) error {
+	// parse changes inside the transaction
+	message, err := decodePgOutput(xld.WALData, relations, typeMap)
+	if err != nil {
+		return err
+	}
+	if message == nil {
+		return nil
+	}
+
+	if !s.includeTxnMarkers {
+		switch message.Operation {
+		case BeginOpType, CommitOpType:
+			return nil
+		}
+	}
+
+	lsn := clientXLogPos.String()
+	message.LSN = &lsn
+	select {
+	case s.messages <- *message:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (s *Stream) processSnapshot() error {
