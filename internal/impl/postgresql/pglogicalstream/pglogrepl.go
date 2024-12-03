@@ -66,7 +66,7 @@ type LSN uint64
 
 // String formats the LSN value into the XXX/XXX format which is the text format used by PostgreSQL.
 func (lsn LSN) String() string {
-	return fmt.Sprintf("%X/%X", uint32(lsn>>32), uint32(lsn))
+	return fmt.Sprintf("%08X/%08X", uint32(lsn>>32), uint32(lsn))
 }
 
 func (lsn *LSN) decodeText(src string) error {

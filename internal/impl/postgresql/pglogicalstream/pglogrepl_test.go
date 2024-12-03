@@ -13,6 +13,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -50,7 +52,7 @@ func (s *lsnSuite) NoError(err error) {
 
 func (s *lsnSuite) TestScannerInterface() {
 	var lsn LSN
-	lsnText := "16/B374D848"
+	lsnText := "00000016/B374D848"
 	lsnUint64 := uint64(97500059720)
 	var err error
 
@@ -84,7 +86,7 @@ func (s *lsnSuite) TestValueInterface() {
 	s.NoError(err)
 	lsnStr, ok := driverValue.(string)
 	s.R().True(ok)
-	s.Equal("16/B374D848", lsnStr)
+	s.Equal("00000016/B374D848", lsnStr)
 }
 
 const slotName = "pglogrepl_test"
@@ -471,4 +473,35 @@ func TestIntegrationSendStandbyStatusUpdate(t *testing.T) {
 
 	err = SendStandbyStatusUpdate(ctx, conn, StandbyStatusUpdate{WALWritePosition: sysident.XLogPos})
 	require.NoError(t, err)
+}
+
+func TestLSNStringLexicographicalOrder(t *testing.T) {
+	ordered := []uint64{
+		0,
+		1,
+		42,
+		math.MaxInt16 - 1,
+		math.MaxInt16,
+		math.MaxInt16 + 1,
+		math.MaxInt32 - 1,
+		math.MaxInt32,
+		math.MaxInt32 + 1,
+		math.MaxInt64 - 1,
+		math.MaxInt64,
+		math.MaxInt64 + 1,
+		math.MaxUint64 - 1,
+		math.MaxUint64,
+	}
+	slices.SortFunc(ordered, func(a, b uint64) int {
+		aStr := LSN(a).String()
+		bStr := LSN(b).String()
+		if aStr < bStr {
+			return -1
+		} else if aStr > bStr {
+			return 1
+		} else {
+			return 0
+		}
+	})
+	require.IsIncreasing(t, ordered)
 }
