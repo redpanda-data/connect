@@ -25,7 +25,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
-	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/watermark"
 )
 
 const decodingPlugin = "pgoutput"
@@ -37,7 +36,7 @@ type Stream struct {
 
 	shutSig *shutdown.Signaller
 
-	clientXLogPos *watermark.Value[LSN]
+	clientXLogPos LSN
 
 	standbyMessageTimeout      time.Duration
 	nextStandbyMessageDeadline time.Time
@@ -210,7 +209,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	} else {
 		lsnrestart, _ = ParseLSN(confirmedLSNFromDB)
 	}
-	stream.clientXLogPos = watermark.New(lsnrestart)
+	stream.clientXLogPos = lsnrestart
 
 	stream.standbyMessageTimeout = config.PgStandbyTimeout
 	stream.nextStandbyMessageDeadline = time.Now().Add(stream.standbyMessageTimeout)
@@ -226,7 +225,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		}
 	})
 
-	stream.logger.Debugf("starting stream from LSN %s with clientXLogPos %s and snapshot name %s", lsnrestart.String(), stream.clientXLogPos.Get().String(), stream.snapshotName)
+	stream.logger.Debugf("starting stream from LSN %s with clientXLogPos %s and snapshot name %s", lsnrestart.String(), stream.clientXLogPos.String(), stream.snapshotName)
 	// TODO(le-vlad): if snapshot processing is restarted we will just skip right to streaming...
 	if !freshlyCreatedSlot || !config.StreamOldData {
 		if err = stream.startLr(ctx, lsnrestart); err != nil {
@@ -312,7 +311,7 @@ func (s *Stream) AckLSN(ctx context.Context, lsn string) error {
 	}
 
 	// Update client XLogPos after we ack the message
-	s.clientXLogPos.Set(clientXLogPos)
+	s.clientXLogPos = clientXLogPos
 	s.logger.Debugf("Sent Standby status message at LSN#%s", clientXLogPos.String())
 	s.nextStandbyMessageDeadline = time.Now().Add(s.standbyMessageTimeout)
 
@@ -326,7 +325,7 @@ func (s *Stream) streamMessages() error {
 	ctx, _ := s.shutSig.SoftStopCtx(context.Background())
 	for !s.shutSig.IsSoftStopSignalled() {
 		if time.Now().After(s.nextStandbyMessageDeadline) {
-			pos := s.clientXLogPos.Get()
+			pos := s.clientXLogPos
 			err := SendStandbyStatusUpdate(
 				ctx,
 				s.pgConn,
