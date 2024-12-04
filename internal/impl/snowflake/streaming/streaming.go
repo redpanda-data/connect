@@ -229,6 +229,7 @@ func (c *SnowflakeServiceClient) OpenChannel(ctx context.Context, opts ChannelOp
 		flusher:          c.flusher,
 		clientSequencer:  resp.ClientSequencer,
 		rowSequencer:     resp.RowSequencer,
+		offsetToken:      resp.OffsetToken,
 		transformers:     transformers,
 		fileMetadata:     typeMetadata,
 		requestIDCounter: c.requestIDCounter,
@@ -301,6 +302,7 @@ type SnowflakeIngestionChannel struct {
 	encryptionInfo  *encryptionInfo
 	clientSequencer int64
 	rowSequencer    int64
+	offsetToken     *OffsetToken
 	transformers    []*dataTransformer
 	fileMetadata    map[string]string
 	// This is shared among the various open channels to get some uniqueness
@@ -386,7 +388,7 @@ func (c *SnowflakeIngestionChannel) constructBdecPart(batch service.MessageBatch
 
 // InsertRows creates a parquet file using the schema from the data,
 // then writes that file into the Snowflake table
-func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch service.MessageBatch) (InsertStats, error) {
+func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch service.MessageBatch, offsetToken *OffsetToken) (InsertStats, error) {
 	insertStats := InsertStats{}
 	if len(batch) == 0 {
 		return insertStats, nil
@@ -461,7 +463,7 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 						RowSequencer:     c.rowSequencer + 1,
 						StartOffsetToken: nil,
 						EndOffsetToken:   nil,
-						OffsetToken:      nil,
+						OffsetToken:      offsetToken,
 					},
 				},
 			},
@@ -487,6 +489,7 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 	}
 	c.rowSequencer++
 	c.clientSequencer = channel.ClientSequencer
+	c.offsetToken = offsetToken
 	insertStats.CompressedOutputSize = part.unencryptedLen
 	insertStats.BuildTime = uploadStartTime.Sub(startTime)
 	insertStats.UploadTime = uploadFinishTime.Sub(uploadStartTime)
@@ -546,4 +549,9 @@ func (c *SnowflakeIngestionChannel) WaitUntilCommitted(ctx context.Context) (int
 		ctx,
 	))
 	return polls, err
+}
+
+// LatestOffsetToken is the latest offset token written to the channel (not required to be persisted yet).
+func (c *SnowflakeIngestionChannel) LatestOffsetToken() *OffsetToken {
+	return c.offsetToken
 }

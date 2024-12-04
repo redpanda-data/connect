@@ -39,6 +39,8 @@ const (
 	ssoFieldInitStatement                       = "init_statement"
 	ssoFieldBatching                            = "batching"
 	ssoFieldChannelPrefix                       = "channel_prefix"
+	ssoFieldChannelName                         = "channel_name"
+	ssoFieldOffsetToken                         = "offset_token"
 	ssoFieldMapping                             = "mapping"
 	ssoFieldBuildOpts                           = "build_options"
 	ssoFieldBuildParallelismLegacy              = "build_parallelism"
@@ -119,23 +121,53 @@ The input to this mapping is an object with the value and the name of the new co
 			).Description(`Options to control schema evolution within the pipeline as new columns are added to the pipeline.`).Optional(),
 			service.NewIntField(ssoFieldBuildParallelism).Description("The maximum amount of parallelism to use when building the output for Snowflake. The metric to watch to see if you need to change this is `snowflake_build_output_latency_ns`.").Optional().Advanced().Deprecated(),
 			service.NewObjectField(ssoFieldBuildOpts,
-				service.NewIntField(ssoFieldBuildParallelism).Description("The maximum amount of parallelism to use.").Default(1).LintRule(`root = if this < 1 { ["field must be positive"] }`),
-				service.NewIntField(ssoFieldBuildChunkSize).Description("The number of rows to chunk for parallelization.").Default(50_000).LintRule(`root = if this < 1 { ["field must be positive"] }`),
+				service.NewIntField(ssoFieldBuildParallelism).Description("The maximum amount of parallelism to use.").Default(1).LintRule(`root = if this < 1 { ["parallelism must be positive"] }`),
+				service.NewIntField(ssoFieldBuildChunkSize).Description("The number of rows to chunk for parallelization.").Default(50_000).LintRule(`root = if this < 1 { ["chunk_size must be positive"] }`),
 			).Advanced().Description("Options to optimize the time to build output data that is sent to Snowflake. The metric to watch to see if you need to change this is `snowflake_build_output_latency_ns`."),
 			service.NewBatchPolicyField(ssoFieldBatching),
 			service.NewOutputMaxInFlightField().Default(4),
 			service.NewStringField(ssoFieldChannelPrefix).
 				Description(`The prefix to use when creating a channel name.
 Duplicate channel names will result in errors and prevent multiple instances of Redpanda Connect from writing at the same time.
-By default this will create a channel name that is based on the table FQN so there will only be a single stream per table.
+By default if neither `+"`"+ssoFieldChannelPrefix+"`or `"+ssoFieldChannelName+` is specified then the output will create a channel name that is based on the table FQN so there will only be a single stream per table.
 
 At most `+"`max_in_flight`"+` channels will be opened.
+
+This option is mutually exclusive with `+"`"+ssoFieldChannelName+"`"+`.
 
 NOTE: There is a limit of 10,000 streams per table - if using more than 10k streams please reach out to Snowflake support.`).
 				Optional().
 				Advanced(),
-		).LintRule(`root = match {
+			service.NewInterpolatedStringField(ssoFieldChannelName).
+				Description(`The channel name to use.
+Duplicate channel names will result in errors and prevent multiple instances of Redpanda Connect from writing at the same time.
+Note that batches are partitioned by this field, so you may end up with smaller batches if every message in a batch does not belong
+to the same channel. It's recommended to batch at the input level to ensure that batches contain messages for the same channel if using
+an input that is partitioned (such as an Apache Kafka topic).
+
+This option is mutually exclusive with `+"`"+ssoFieldChannelPrefix+"`"+`.
+
+NOTE: There is a limit of 10,000 streams per table - if using more than 10k streams please reach out to Snowflake support.`).
+				Optional().
+				Advanced(),
+			service.NewInterpolatedStringField(ssoFieldOffsetToken).
+				Description(`The offset token to use for exactly once delivery of data in the pipeline. When data is sent on a channel, each message in a batch's offset token
+is compared to the latest token for a channel. If the offset token is lexicographically less than the latest in the channel, it's assumed the message is a duplicate and
+is dropped. This means it is *very important* to have ordered delivery to the output, any out of order messages to the output will be seen as duplicates and dropped.
+Specifically this means that retried messages could be seen as duplicates if later messages have succeeded in the meantime, so in most circumstances a dead letter queue
+output should be employed for failed messages.
+
+Lastly, it's assumed that messages within a batch are in increasing order by offset token.
+
+For more information about offset tokens, see https://docs.snowflake.com/en/user-guide/data-load-snowpipe-streaming-overview#offset-tokens[^Snowflake Documentation]`).
+				Optional().
+				Advanced(),
+		).
+		LintRule(`root = match {
   this.exists("private_key") && this.exists("private_key_file") => [ "both `+"`private_key`"+` and `+"`private_key_file`"+` can't be set simultaneously" ],
+}`).
+		LintRule(`root = match {
+  this.exists("channel_prefix") && this.exists("channel_name") => [ "both `+"`channel_prefix`"+` and `+"`channel_name`"+` can't be set simultaneously" ],
 }`).
 		Example(
 			"Ingesting data from Redpanda",
@@ -336,11 +368,31 @@ func newSnowflakeStreamer(
 		if err != nil {
 			return nil, err
 		}
-	} else {
+	} else if !conf.Contains(ssoFieldChannelName) {
 		// There is a limit of 10k channels, so we can't dynamically create them.
 		// The only other good default is to create one and only allow a single
 		// stream to write to a single table.
 		channelPrefix = fmt.Sprintf("Redpanda_Connect_%s.%s.%s", db, schema, table)
+	}
+
+	var channelName *service.InterpolatedString
+	if conf.Contains(ssoFieldChannelName) {
+		channelName, err = conf.FieldInterpolatedString(ssoFieldChannelName)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if (channelName != nil) && (len(channelPrefix) > 0) {
+		return nil, fmt.Errorf("only one of `%s` or `%s` can be specified", ssoFieldChannelName, ssoFieldChannelPrefix)
+	}
+
+	var offsetToken *service.InterpolatedString
+	if conf.Contains(ssoFieldOffsetToken) {
+		offsetToken, err = conf.FieldInterpolatedString(ssoFieldOffsetToken)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	maxInFlight, err := conf.FieldMaxInFlight()
@@ -397,7 +449,8 @@ func newSnowflakeStreamer(
 	if err != nil {
 		return nil, err
 	}
-	o := &snowflakeStreamerOutput{
+	// TODO(rockwood): support channel name...
+	o := &snowpipePooledOutput{
 		channelPrefix:          channelPrefix,
 		client:                 client,
 		db:                     db,
@@ -415,14 +468,17 @@ func newSnowflakeStreamer(
 		buildOpts:              buildOpts,
 		schemaEvolutionMapping: schemaEvolutionMapping,
 		restClient:             restClient,
+		offsetToken:            offsetToken,
 	}
-	o.channelPool = capped.NewPool(maxInFlight, o.openNewChannel)
+	if channelName == nil {
+		o.channelPool = pool.NewCapped(maxInFlight, o.openNewChannel)
+	}
 	return o, nil
 }
 
-type snowflakeStreamerOutput struct {
+type snowpipePooledOutput struct {
 	client                 *streaming.SnowflakeServiceClient
-	channelPool            capped.Pool[*streaming.SnowflakeIngestionChannel]
+	channelPool            pool.Capped[*streaming.SnowflakeIngestionChannel]
 	compressedOutput       *service.MetricCounter
 	uploadTime             *service.MetricTimer
 	buildTime              *service.MetricTimer
@@ -433,27 +489,28 @@ type snowflakeStreamerOutput struct {
 
 	schemaMigrationMu                      sync.RWMutex
 	channelPrefix, db, schema, table, role string
+	offsetToken                            *service.InterpolatedString
 	mapping                                *bloblang.Executor
 	logger                                 *service.Logger
 	initStatementsFn                       func(context.Context, *streaming.SnowflakeRestClient) error
 	restClient                             *streaming.SnowflakeRestClient
 }
 
-func (o *snowflakeStreamerOutput) openNewChannel(ctx context.Context) (*streaming.SnowflakeIngestionChannel, error) {
+func (o *snowpipePooledOutput) openNewChannel(ctx context.Context) (*streaming.SnowflakeIngestionChannel, error) {
 	id := o.channelPool.Size()
 	name := fmt.Sprintf("%s_%d", o.channelPrefix, id)
 	return o.openChannel(ctx, name, int16(id))
 }
 
-func (o *snowflakeStreamerOutput) schemaEvolutionEnabled() bool {
+func (o *snowpipePooledOutput) schemaEvolutionEnabled() bool {
 	return o.schemaEvolutionMapping != nil
 }
 
-func (o *snowflakeStreamerOutput) hasOpenedChannels() bool {
+func (o *snowpipePooledOutput) hasOpenedChannels() bool {
 	return o.channelPool.Size() > 0
 }
 
-func (o *snowflakeStreamerOutput) openChannel(ctx context.Context, name string, id int16) (*streaming.SnowflakeIngestionChannel, error) {
+func (o *snowpipePooledOutput) openChannel(ctx context.Context, name string, id int16) (*streaming.SnowflakeIngestionChannel, error) {
 	o.logger.Debugf("opening snowflake streaming channel: %s", name)
 	return o.client.OpenChannel(ctx, streaming.ChannelOptions{
 		ID:                      id,
@@ -466,7 +523,7 @@ func (o *snowflakeStreamerOutput) openChannel(ctx context.Context, name string, 
 	})
 }
 
-func (o *snowflakeStreamerOutput) Connect(ctx context.Context) error {
+func (o *snowpipePooledOutput) Connect(ctx context.Context) error {
 	if o.initStatementsFn != nil {
 		if err := o.initStatementsFn(ctx, o.restClient); err != nil {
 			return fmt.Errorf("unable to run initialization statement: %w", err)
@@ -474,6 +531,7 @@ func (o *snowflakeStreamerOutput) Connect(ctx context.Context) error {
 		// We've already executed our init statement, we don't need to do that anymore
 		o.initStatementsFn = nil
 	}
+
 	// Precreate a single channel so we know stuff works, otherwise we'll create them on demand.
 	c, err := o.channelPool.Acquire(ctx)
 	if err == nil {
@@ -486,41 +544,14 @@ func (o *snowflakeStreamerOutput) Connect(ctx context.Context) error {
 	// If we know we don't have an output table and schema evolution is enabled, then don't create
 	// any channels - we'll do it lazily after we can create the table (which we need data for).
 	if autoCreateErr == nil && autoCreate {
-		o.logger.Debug("determined table does not exist, waiting to auto-create the table until we have data")
+		o.logger.Debug("determined table does not exist, will auto-create the table when data to sent to the output")
 		return nil
 	}
 
 	return fmt.Errorf("unable to open snowflake streaming channel: %w", err)
 }
 
-func (o *snowflakeStreamerOutput) WillAutoCreateTable(ctx context.Context) (bool, error) {
-	if !o.schemaEvolutionEnabled() {
-		return false, nil
-	}
-	resp, err := o.restClient.RunSQL(ctx, streaming.RunSQLRequest{
-		Statement: `SELECT NOT to_boolean(count(1)) FROM INFORMATION_SCHEMA.TABLES where table_schema = ? AND table_name = ?`,
-		// Currently we set of timeout of 30 seconds so that we don't have to handle async operations
-		// that need polling to wait until they finish (results are made async when execution is longer
-		// than 45 seconds).
-		Timeout:  30,
-		Database: o.db,
-		Schema:   "INFORMATION_SCHEMA",
-		Role:     o.role,
-		Bindings: map[string]streaming.BindingValue{
-			"1": {Type: "TEXT", Value: o.schema},
-			"2": {Type: "TEXT", Value: o.table},
-		},
-	})
-	if err != nil {
-		return false, err
-	}
-	if len(resp.Data) != 1 && len(resp.Data[0]) != 1 {
-		return false, errors.New("unknown error determining if the table exists")
-	}
-	return strconv.ParseBool(resp.Data[0][0])
-}
-
-func (o *snowflakeStreamerOutput) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
+func (o *snowpipePooledOutput) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
 	if o.mapping != nil {
 		mapped := make(service.MessageBatch, len(batch))
 		exec := batch.BloblangExecutor(o.mapping)
@@ -563,7 +594,7 @@ func (o *snowflakeStreamerOutput) WriteBatch(ctx context.Context, batch service.
 	return err
 }
 
-func (o *snowflakeStreamerOutput) WriteBatchInternal(ctx context.Context, batch service.MessageBatch) error {
+func (o *snowpipePooledOutput) WriteBatchInternal(ctx context.Context, batch service.MessageBatch) error {
 	o.schemaMigrationMu.RLock()
 	defer o.schemaMigrationMu.RUnlock()
 	channel, err := o.channelPool.Acquire(ctx)
@@ -571,7 +602,7 @@ func (o *snowflakeStreamerOutput) WriteBatchInternal(ctx context.Context, batch 
 		return fmt.Errorf("unable to open snowflake streaming channel: %w", err)
 	}
 	o.logger.Debugf("inserting rows using channel %s", channel.Name)
-	stats, err := channel.InsertRows(ctx, batch)
+	stats, err := channel.InsertRows(ctx, batch, nil)
 	if err != nil {
 		// Only evolve the schema if requested.
 		if o.schemaEvolutionEnabled() {
@@ -607,7 +638,34 @@ func (o *snowflakeStreamerOutput) WriteBatchInternal(ctx context.Context, batch 
 	return err
 }
 
-func asSchemaMigrationError(o *snowflakeStreamerOutput, err error) (schemaMigrationNeededError, bool) {
+func (o *snowpipePooledOutput) WillAutoCreateTable(ctx context.Context) (bool, error) {
+	if !o.schemaEvolutionEnabled() {
+		return false, nil
+	}
+	resp, err := o.restClient.RunSQL(ctx, streaming.RunSQLRequest{
+		Statement: `SELECT NOT to_boolean(count(1)) FROM INFORMATION_SCHEMA.TABLES where table_schema = ? AND table_name = ?`,
+		// Currently we set of timeout of 30 seconds so that we don't have to handle async operations
+		// that need polling to wait until they finish (results are made async when execution is longer
+		// than 45 seconds).
+		Timeout:  30,
+		Database: o.db,
+		Schema:   "INFORMATION_SCHEMA",
+		Role:     o.role,
+		Bindings: map[string]streaming.BindingValue{
+			"1": {Type: "TEXT", Value: o.schema},
+			"2": {Type: "TEXT", Value: o.table},
+		},
+	})
+	if err != nil {
+		return false, err
+	}
+	if len(resp.Data) != 1 && len(resp.Data[0]) != 1 {
+		return false, errors.New("unknown error determining if the table exists")
+	}
+	return strconv.ParseBool(resp.Data[0][0])
+}
+
+func asSchemaMigrationError(o *snowpipePooledOutput, err error) (schemaMigrationNeededError, bool) {
 	nullColumnErr := streaming.NonNullColumnError{}
 	if errors.As(err, &nullColumnErr) {
 		// Return an error so that we release our read lock and can take the write lock
@@ -663,7 +721,7 @@ func (schemaMigrationNeededError) Error() string {
 	return "schema migration was required and the operation needs to be retried after the migration"
 }
 
-func (o *snowflakeStreamerOutput) ComputeMissingColumnType(col streaming.MissingColumnError) (string, error) {
+func (o *snowpipePooledOutput) ComputeMissingColumnType(col streaming.MissingColumnError) (string, error) {
 	msg := service.NewMessage(nil)
 	msg.SetStructuredMut(map[string]any{
 		"name":  col.RawName(),
@@ -684,7 +742,7 @@ func (o *snowflakeStreamerOutput) ComputeMissingColumnType(col streaming.Missing
 	return columnType, nil
 }
 
-func (o *snowflakeStreamerOutput) MigrateMissingColumn(ctx context.Context, col streaming.MissingColumnError) error {
+func (o *snowpipePooledOutput) MigrateMissingColumn(ctx context.Context, col streaming.MissingColumnError) error {
 	columnType, err := o.ComputeMissingColumnType(col)
 	if err != nil {
 		return err
@@ -708,7 +766,7 @@ func (o *snowflakeStreamerOutput) MigrateMissingColumn(ctx context.Context, col 
 	return nil
 }
 
-func (o *snowflakeStreamerOutput) MigrateNotNullColumn(ctx context.Context, col streaming.NonNullColumnError) error {
+func (o *snowpipePooledOutput) MigrateNotNullColumn(ctx context.Context, col streaming.NonNullColumnError) error {
 	o.logger.Infof("identified new schema - attempting to alter table to remove null constraint on column: %s", col.ColumnName())
 	err := o.RunSQLMigration(
 		ctx,
@@ -727,7 +785,7 @@ func (o *snowflakeStreamerOutput) MigrateNotNullColumn(ctx context.Context, col 
 	return nil
 }
 
-func (o *snowflakeStreamerOutput) CreateOutputTable(ctx context.Context, batch service.MessageBatch) error {
+func (o *snowpipePooledOutput) CreateOutputTable(ctx context.Context, batch service.MessageBatch) error {
 	o.schemaMigrationMu.Lock()
 	defer o.schemaMigrationMu.Unlock()
 	if len(batch) == 0 {
@@ -764,7 +822,7 @@ func (o *snowflakeStreamerOutput) CreateOutputTable(ctx context.Context, batch s
 	)
 }
 
-func (o *snowflakeStreamerOutput) RunSQLMigration(ctx context.Context, statement string) error {
+func (o *snowpipePooledOutput) RunSQLMigration(ctx context.Context, statement string) error {
 	_, err := o.restClient.RunSQL(ctx, streaming.RunSQLRequest{
 		Statement: statement,
 		// Currently we set a of timeout of 30 seconds so that we don't have to handle async operations
@@ -783,7 +841,7 @@ func (o *snowflakeStreamerOutput) RunSQLMigration(ctx context.Context, statement
 
 // ReopenAllChannels should be called while holding schemaMigrationMu so that
 // all channels are actually processed
-func (o *snowflakeStreamerOutput) ReopenAllChannels(ctx context.Context) error {
+func (o *snowpipePooledOutput) ReopenAllChannels(ctx context.Context) error {
 	all := []*streaming.SnowflakeIngestionChannel{}
 	for {
 		channel, ok := o.channelPool.TryAcquireExisting()
@@ -805,7 +863,7 @@ func (o *snowflakeStreamerOutput) ReopenAllChannels(ctx context.Context) error {
 	return nil
 }
 
-func (o *snowflakeStreamerOutput) Close(ctx context.Context) error {
+func (o *snowpipePooledOutput) Close(ctx context.Context) error {
 	o.restClient.Close()
 	return o.client.Close()
 }
