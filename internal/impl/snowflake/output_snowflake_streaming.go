@@ -157,7 +157,8 @@ is dropped. This means it is *very important* to have ordered delivery to the ou
 Specifically this means that retried messages could be seen as duplicates if later messages have succeeded in the meantime, so in most circumstances a dead letter queue
 output should be employed for failed messages.
 
-Lastly, it's assumed that messages within a batch are in increasing order by offset token.
+NOTE: It's assumed that messages within a batch are in increasing order by offset token, additionally if you're using a numeric value as an offset token, make sure to pad
+      the value so that it's lexicographically ordered in it's string representation, since offset tokens are compared in string form.
 
 For more information about offset tokens, see https://docs.snowflake.com/en/user-guide/data-load-snowpipe-streaming-overview#offset-tokens[^Snowflake Documentation]`).
 				Optional().
@@ -470,11 +471,16 @@ func newSnowflakeStreamer(
 		restClient:             restClient,
 		offsetToken:            offsetToken,
 	}
-	if channelName == nil {
-		o.channelPool = pool.NewCapped(maxInFlight, o.openNewChannel)
-	}
+	o.channelPool = pool.NewCapped(maxInFlight, o.openNewChannel)
+	mgr.SetGeneric(SnowflakeClientResourceForTesting, restClient)
 	return o, nil
 }
+
+type snowflakeClientForTesting string
+
+// SnowflakeClientResourceForTesting is a key that can be used to access the REST client for the snowflake output
+// which can remove boilerplate from tests to setup a new REST client.
+const SnowflakeClientResourceForTesting snowflakeClientForTesting = "SnowflakeClientResourceForTesting"
 
 type snowpipePooledOutput struct {
 	client                 *streaming.SnowflakeServiceClient
@@ -552,6 +558,9 @@ func (o *snowpipePooledOutput) Connect(ctx context.Context) error {
 }
 
 func (o *snowpipePooledOutput) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
+	if len(batch) == 0 {
+		return nil
+	}
 	if o.mapping != nil {
 		mapped := make(service.MessageBatch, len(batch))
 		exec := batch.BloblangExecutor(o.mapping)
@@ -565,9 +574,6 @@ func (o *snowpipePooledOutput) WriteBatch(ctx context.Context, batch service.Mes
 		batch = mapped
 	}
 	if !o.hasOpenedChannels() {
-		if len(batch) == 0 {
-			return nil
-		}
 		if err := o.CreateOutputTable(ctx, batch); err != nil {
 			return err
 		}
@@ -594,6 +600,41 @@ func (o *snowpipePooledOutput) WriteBatch(ctx context.Context, batch service.Mes
 	return err
 }
 
+func (o *snowpipePooledOutput) preprocessForExactlyOnce(channel *streaming.SnowflakeIngestionChannel, batch service.MessageBatch) (service.MessageBatch, *streaming.OffsetTokenRange, error) {
+	latest := channel.LatestOffsetToken()
+	exec := batch.InterpolationExecutor(o.offsetToken)
+	firstRawToken, err := exec.TryString(0)
+	if err != nil {
+		return nil, nil, err
+	}
+	lastRawToken, err := exec.TryString(len(batch) - 1)
+	if err != nil {
+		return nil, nil, err
+	}
+	// Common case, all data is new
+	if latest == nil || firstRawToken > string(*latest) {
+		return batch, &streaming.OffsetTokenRange{Start: streaming.OffsetToken(firstRawToken), End: streaming.OffsetToken(lastRawToken)}, nil
+	}
+	// We need to filter out data that is too old.
+	filteredBatch := make(service.MessageBatch, 0, len(batch))
+	var rawToken string
+	for i := range batch {
+		rawToken, err = exec.TryString(i)
+		if err != nil {
+			return nil, nil, err
+		}
+		if rawToken <= string(*latest) {
+			continue
+		}
+		filteredBatch = append(filteredBatch, batch[i])
+	}
+	if len(filteredBatch) == 0 {
+		return filteredBatch, nil, nil
+	}
+	// This is a lazy way to compute the bounds, but filtering should be a rare operation.
+	return o.preprocessForExactlyOnce(channel, filteredBatch)
+}
+
 func (o *snowpipePooledOutput) WriteBatchInternal(ctx context.Context, batch service.MessageBatch) error {
 	o.schemaMigrationMu.RLock()
 	defer o.schemaMigrationMu.RUnlock()
@@ -601,8 +642,18 @@ func (o *snowpipePooledOutput) WriteBatchInternal(ctx context.Context, batch ser
 	if err != nil {
 		return fmt.Errorf("unable to open snowflake streaming channel: %w", err)
 	}
-	o.logger.Debugf("inserting rows using channel %s", channel.Name)
-	stats, err := channel.InsertRows(ctx, batch, nil)
+	var offsets *streaming.OffsetTokenRange
+	if o.offsetToken != nil {
+		batch, offsets, err = o.preprocessForExactlyOnce(channel, batch)
+		if err != nil || len(batch) == 0 {
+			o.channelPool.Release(channel)
+			return err
+		}
+		o.logger.Debugf("inserting rows using channel %s at offsets: %+v", channel.Name, *offsets)
+	} else {
+		o.logger.Debugf("inserting rows using channel %s", channel.Name)
+	}
+	stats, err := channel.InsertRows(ctx, batch, offsets)
 	if err != nil {
 		// Only evolve the schema if requested.
 		if o.schemaEvolutionEnabled() {
