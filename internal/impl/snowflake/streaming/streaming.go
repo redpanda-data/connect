@@ -386,9 +386,28 @@ func (c *SnowflakeIngestionChannel) constructBdecPart(batch service.MessageBatch
 	}, err
 }
 
+// OffsetTokenRange is the range of offsets for the data being written.
+type OffsetTokenRange struct {
+	Start, End OffsetToken
+}
+
+func (r *OffsetTokenRange) start() *OffsetToken {
+	if r == nil {
+		return nil
+	}
+	return &r.Start
+}
+
+func (r *OffsetTokenRange) end() *OffsetToken {
+	if r == nil {
+		return nil
+	}
+	return &r.End
+}
+
 // InsertRows creates a parquet file using the schema from the data,
 // then writes that file into the Snowflake table
-func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch service.MessageBatch, offsetToken *OffsetToken) (InsertStats, error) {
+func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch service.MessageBatch, offsets *OffsetTokenRange) (InsertStats, error) {
 	insertStats := InsertStats{}
 	if len(batch) == 0 {
 		return insertStats, nil
@@ -461,9 +480,9 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 						Channel:          c.Name,
 						ClientSequencer:  c.clientSequencer,
 						RowSequencer:     c.rowSequencer + 1,
-						StartOffsetToken: nil,
-						EndOffsetToken:   nil,
-						OffsetToken:      offsetToken,
+						StartOffsetToken: offsets.start(),
+						EndOffsetToken:   offsets.end(),
+						OffsetToken:      nil,
 					},
 				},
 			},
@@ -489,7 +508,7 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 	}
 	c.rowSequencer++
 	c.clientSequencer = channel.ClientSequencer
-	c.offsetToken = offsetToken
+	c.offsetToken = offsets.end()
 	insertStats.CompressedOutputSize = part.unencryptedLen
 	insertStats.BuildTime = uploadStartTime.Sub(startTime)
 	insertStats.UploadTime = uploadFinishTime.Sub(uploadStartTime)
