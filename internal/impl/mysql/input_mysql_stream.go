@@ -72,11 +72,12 @@ type asyncMessage struct {
 }
 
 type mysqlStreamInput struct {
+	canal.DummyEventHandler
+
 	mutex sync.Mutex
 	// canal stands for mysql binlog listener connection
-	canal       *canal.Canal
-	mysqlConfig *mysql.Config
-	canal.DummyEventHandler
+	canal               *canal.Canal
+	mysqlConfig         *mysql.Config
 	startBinLogPosition *mysqlReplications.Position
 	currentLogPosition  *mysqlReplications.Position
 	binLogCache         string
@@ -115,7 +116,6 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 		snapshotMessageEvents: make(chan MessageEvent),
 		msgChan:               make(chan asyncMessage),
 		res:                   res,
-		streamCtx:             context.Background(),
 
 		errors:  make(chan error, 1),
 		shutSig: shutdown.NewSignaller(),
@@ -182,17 +182,19 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 		batching.Count = 1
 	}
 
+	i.streamCtx, _ = i.shutSig.SoftStopCtx(context.Background())
+
 	r, err := service.AutoRetryNacksBatchedToggled(conf, i)
 	if err != nil {
 		return nil, err
 	}
 
-	return conf.WrapBatchInputExtractTracingSpanMapping("mysql_stream", r)
+	return conf.WrapBatchInputExtractTracingSpanMapping("mysql_cdc", r)
 }
 
 func init() {
 	err := service.RegisterBatchInput(
-		"mysql_stream", mysqlStreamConfigSpec,
+		"mysql_cdc", mysqlStreamConfigSpec,
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
 			return newMySQLStreamInput(conf, mgr)
 		})
@@ -335,24 +337,12 @@ func (i *mysqlStreamInput) startMySQLSync() {
 			return
 		}
 
-		defer func() {
-			if err = i.snapshot.releaseSnapshot(ctx); err != nil {
-				i.logger.Errorf("Failed to properly release snapshot %v", err)
-			}
-		}()
 		i.logger.Debugf("Starting snapshot while holding binglog pos on: %v", startPos)
 		var wg errgroup.Group
 		wg.SetLimit(i.snapshotMaxParallelTables)
 
 		for _, table := range i.tables {
 			wg.Go(func() (err error) {
-				rowsCount, err := i.snapshot.getRowsCount(table)
-				if err != nil {
-					return err
-				}
-
-				i.logger.Debugf("Rows count for table %s is %d", table, rowsCount)
-
 				tablePks, err := i.snapshot.getTablePrimaryKeys(table)
 				if err != nil {
 					return err
@@ -366,7 +356,7 @@ func (i *mysqlStreamInput) startMySQLSync() {
 					lastSeenPksValues[pk] = nil
 				}
 
-				for numRowsProcessed < rowsCount {
+				for {
 					var batchRows *sql.Rows
 					if numRowsProcessed == 0 {
 						batchRows, err = i.snapshot.querySnapshotTable(table, tablePks, nil, i.fieldSnapshotMaxBatchSize)
@@ -380,8 +370,10 @@ func (i *mysqlStreamInput) startMySQLSync() {
 						}
 					}
 
+					var batchRowsCount int
 					for batchRows.Next() {
 						numRowsProcessed++
+						batchRowsCount++
 
 						columns, err := batchRows.Columns()
 						if err != nil {
@@ -417,6 +409,10 @@ func (i *mysqlStreamInput) startMySQLSync() {
 							Position:  nil,
 						}
 					}
+
+					if batchRowsCount < i.fieldSnapshotMaxBatchSize {
+						break
+					}
 				}
 
 				return nil
@@ -427,18 +423,28 @@ func (i *mysqlStreamInput) startMySQLSync() {
 			i.errors <- fmt.Errorf("snapshot processing failed: %w", err)
 		}
 
+		if err = i.snapshot.releaseSnapshot(ctx); err != nil {
+			i.logger.Errorf("Failed to properly release snapshot %v", err)
+		}
+
+		i.mutex.Lock()
+		i.currentLogPosition = startPos
+		i.mutex.Unlock()
+
 		i.logger.Infof("Snapshot is done...Running CDC from BingLog: %s  on pos: %d", startPos.Name, startPos.Pos)
 		if err := i.canal.RunFrom(*startPos); err != nil {
 			i.errors <- fmt.Errorf("failed to start streaming: %v", err)
 		}
 	} else {
 		coords, _ := i.canal.GetMasterPos()
+		i.mutex.Lock()
 		// starting from the last stored binlog position
 		if i.startBinLogPosition != nil {
 			coords = *i.startBinLogPosition
 		}
 
 		i.currentLogPosition = &coords
+		i.mutex.Lock()
 		if err := i.canal.RunFrom(coords); err != nil {
 			i.errors <- fmt.Errorf("failed to start streaming: %v", err)
 		}
@@ -464,7 +470,7 @@ func (i *mysqlStreamInput) flushBatch(ctx context.Context, checkpointer *checkpo
 		return false
 	}
 
-	lastMsg := batch[len(batch)-1]
+	lastMessage := batch[len(batch)-1]
 
 	select {
 	case i.msgChan <- asyncMessage{
@@ -475,11 +481,12 @@ func (i *mysqlStreamInput) flushBatch(ctx context.Context, checkpointer *checkpo
 				return nil
 			}
 
-			if msgType, ok := lastMsg.MetaGet("type"); ok && msgType == "snapshot" {
+			// do not call checkpoint if the last message in the batch is a snapshot
+			if msgType, ok := lastMessage.MetaGet("type"); ok && msgType == "snapshot" {
 				return nil
 			}
 
-			if err := i.syncBinlogPosition(ctx); err != nil {
+			if err := i.syncBinlogPosition(ctx, *maxOffset); err != nil {
 				return err
 			}
 
@@ -516,13 +523,17 @@ func (i *mysqlStreamInput) onMessage(e *canal.RowsEvent, initValue, incrementVal
 	return nil
 }
 
-func (i *mysqlStreamInput) syncBinlogPosition(ctx context.Context) error {
+func (i *mysqlStreamInput) syncBinlogPosition(ctx context.Context, binLogPos *int64) error {
 	i.mutex.Lock()
 	defer i.mutex.Unlock()
 
 	if i.currentLogPosition == nil {
 		i.logger.Warn("No current bingLog position")
 		return errors.New("no current binlog position")
+	}
+
+	if binLogPos != nil {
+		i.currentLogPosition.Pos = uint32(*binLogPos)
 	}
 
 	var (
@@ -583,7 +594,7 @@ func (i *mysqlStreamInput) Close(ctx context.Context) error {
 		i.canal.Close()
 	}
 
-	return i.snapshot.releaseSnapshot(ctx)
+	return i.snapshot.close()
 }
 
 // ---- Redpanda Connect specific methods end----
@@ -613,7 +624,6 @@ func (i *mysqlStreamInput) OnRow(e *canal.RowsEvent) error {
 	if _, ok := i.tablesFilterMap[e.Table.Name]; !ok {
 		return nil
 	}
-
 	switch e.Action {
 	case canal.InsertAction:
 		return i.onMessage(e, 0, 1)
@@ -624,14 +634,6 @@ func (i *mysqlStreamInput) OnRow(e *canal.RowsEvent) error {
 	default:
 		return errors.New("invalid rows action")
 	}
-}
-
-func (i *mysqlStreamInput) OnPosSynced(eh *replication.EventHeader, pos mysqlReplications.Position, gtid mysqlReplications.GTIDSet, synced bool) error {
-	i.mutex.Lock()
-	i.currentLogPosition = &pos
-	i.mutex.Unlock()
-
-	return i.syncBinlogPosition(context.Background())
 }
 
 // --- MySQL Canal handler methods end ----
