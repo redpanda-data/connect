@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
-	"github.com/dgraph-io/ristretto"
+	"github.com/dgraph-io/ristretto/v2"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -79,7 +79,7 @@ func newRistrettoCacheFromConfig(conf *service.ParsedConfig) (*ristrettoCache, e
 
 type ristrettoCache struct {
 	defaultTTL time.Duration
-	cache      *ristretto.Cache
+	cache      *ristretto.Cache[string, []byte]
 
 	retriesEnabled bool
 	boffPool       sync.Pool
@@ -87,7 +87,7 @@ type ristrettoCache struct {
 }
 
 func newRistrettoCache(defaultTTL time.Duration, retriesEnabled bool, backOff *backoff.ExponentialBackOff) (*ristrettoCache, error) {
-	cache, err := ristretto.NewCache(&ristretto.Config{
+	cache, err := ristretto.NewCache(&ristretto.Config[string, []byte]{
 		NumCounters: 1e7,     // number of keys to track frequency of (10M).
 		MaxCost:     1 << 30, // maximum cost of cache (1GB).
 		BufferItems: 64,      // number of keys per Get buffer.
@@ -117,7 +117,7 @@ func (r *ristrettoCache) Get(ctx context.Context, key string) ([]byte, error) {
 	for {
 		res, ok := r.cache.Get(key)
 		if ok {
-			return res.([]byte), nil
+			return res, nil
 		}
 
 		if r.retriesEnabled {
