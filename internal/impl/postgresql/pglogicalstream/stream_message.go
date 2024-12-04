@@ -36,7 +36,7 @@ const (
 
 // StreamMessage represents a single change from the database
 type StreamMessage struct {
-	Lsn       *string    `json:"lsn"`
+	LSN       *string    `json:"lsn"`
 	Operation OpType     `json:"operation"`
 	Schema    string     `json:"schema"`
 	Table     string     `json:"table"`
