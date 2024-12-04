@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package capped_test
+package pool_test
 
 import (
 	"context"
@@ -26,7 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/capped"
+	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/pool"
 	"github.com/redpanda-data/connect/v4/internal/typed"
 )
 
@@ -36,7 +36,7 @@ type foo struct {
 
 func TestReuse(t *testing.T) {
 	foos := []*foo{{1}, {2}, {3}}
-	p := capped.NewPool(len(foos), func(context.Context) (*foo, error) {
+	p := pool.NewCapped(len(foos), func(context.Context) (*foo, error) {
 		return nil, errors.New("")
 	})
 	for _, f := range foos {
@@ -57,7 +57,7 @@ func TestReuse(t *testing.T) {
 
 func TestAcquire(t *testing.T) {
 	numCreated := 0
-	p := capped.NewPool(5, func(context.Context) (foo, error) {
+	p := pool.NewCapped(5, func(context.Context) (foo, error) {
 		numCreated++
 		return foo{}, nil
 	})
@@ -94,7 +94,7 @@ func TestAcquire(t *testing.T) {
 }
 
 func TestCtorCancellation(t *testing.T) {
-	p := capped.NewPool(5, func(ctx context.Context) (any, error) {
+	p := pool.NewCapped(5, func(ctx context.Context) (any, error) {
 		<-ctx.Done()
 		return nil, ctx.Err()
 	})
@@ -109,7 +109,7 @@ func TestCtorCancellation(t *testing.T) {
 
 func TestRandomized(t *testing.T) {
 	var created atomic.Int64
-	p := capped.NewPool(5, func(ctx context.Context) (*foo, error) {
+	p := pool.NewCapped(5, func(ctx context.Context) (*foo, error) {
 		created.Add(1)
 		return &foo{}, nil
 	})
