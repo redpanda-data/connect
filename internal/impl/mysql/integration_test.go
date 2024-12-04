@@ -97,7 +97,7 @@ func TestIntegrationMySQLCDC(t *testing.T) {
 		tmpDir := t.TempDir()
 
 		template := fmt.Sprintf(`
-mysql_stream:
+mysql_cdc:
   dsn: %s
   stream_snapshot: false
   checkpoint_key: foocache
@@ -262,7 +262,7 @@ func TestIntegrationMySQLSnapshotAndCDC(t *testing.T) {
 	}
 
 	template := fmt.Sprintf(`
-mysql_stream:
+mysql_cdc:
   dsn: %s
   stream_snapshot: true
   snapshot_max_batch_size: 500
@@ -406,7 +406,7 @@ func TestIntegrationMySQLCDCWithCompositePrimaryKeys(t *testing.T) {
 	}
 
 	template := fmt.Sprintf(`
-mysql_stream:
+mysql_cdc:
   dsn: %s
   stream_snapshot: true
   snapshot_max_batch_size: 500

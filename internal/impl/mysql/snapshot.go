@@ -58,6 +58,7 @@ func (s *Snapshot) prepareSnapshot(ctx context.Context) (*mysql.Position, error)
 	s.tx, err = s.snapshotConn.BeginTx(ctx, &sql.TxOptions{
 		Isolation: sql.LevelRepeatableRead,
 	})
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to start transaction: %v", err)
 	}
@@ -116,14 +117,6 @@ func (s *Snapshot) prepareSnapshot(ctx context.Context) (*mysql.Position, error)
 	}
 
 	return &pos, nil
-}
-
-func (s *Snapshot) getRowsCount(table string) (int, error) {
-	var count int
-	if err := s.tx.QueryRowContext(s.ctx, "SELECT COUNT(*) FROM "+table).Scan(&count); err != nil {
-		return 0, fmt.Errorf("failed to get row count: %v", err)
-	}
-	return count, nil
 }
 
 func (s *Snapshot) getTablePrimaryKeys(table string) ([]string, error) {
@@ -219,12 +212,18 @@ func (s *Snapshot) releaseSnapshot(ctx context.Context) error {
 		}
 	}
 
+	// reset transaction
+	s.tx = nil
+	return nil
+}
+
+func (s *Snapshot) close() error {
 	if s.lockConn != nil {
-		s.lockConn.Close()
+		return s.lockConn.Close()
 	}
 
 	if s.snapshotConn != nil {
-		s.snapshotConn.Close()
+		return s.snapshotConn.Close()
 	}
 
 	return nil
