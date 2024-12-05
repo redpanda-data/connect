@@ -84,7 +84,7 @@ func setup(t *testing.T) (*streaming.SnowflakeRestClient, *streaming.SnowflakeSe
 	t.Cleanup(restClient.Close)
 	streamClient, err := streaming.NewSnowflakeServiceClient(ctx, clientOptions)
 	require.NoError(t, err)
-	t.Cleanup(func() { _ = streamClient.Close() })
+	t.Cleanup(streamClient.Close)
 	return restClient, streamClient
 }
 
