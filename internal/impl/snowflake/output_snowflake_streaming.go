@@ -615,41 +615,6 @@ func (o *snowpipePooledOutput) WriteBatch(ctx context.Context, batch service.Mes
 	return err
 }
 
-func (o *snowpipePooledOutput) preprocessForExactlyOnce(channel *streaming.SnowflakeIngestionChannel, batch service.MessageBatch) (service.MessageBatch, *streaming.OffsetTokenRange, error) {
-	latest := channel.LatestOffsetToken()
-	exec := batch.InterpolationExecutor(o.offsetToken)
-	firstRawToken, err := exec.TryString(0)
-	if err != nil {
-		return nil, nil, err
-	}
-	lastRawToken, err := exec.TryString(len(batch) - 1)
-	if err != nil {
-		return nil, nil, err
-	}
-	// Common case, all data is new
-	if latest == nil || firstRawToken > string(*latest) {
-		return batch, &streaming.OffsetTokenRange{Start: streaming.OffsetToken(firstRawToken), End: streaming.OffsetToken(lastRawToken)}, nil
-	}
-	// We need to filter out data that is too old.
-	filteredBatch := make(service.MessageBatch, 0, len(batch))
-	var rawToken string
-	for i := range batch {
-		rawToken, err = exec.TryString(i)
-		if err != nil {
-			return nil, nil, err
-		}
-		if rawToken <= string(*latest) {
-			continue
-		}
-		filteredBatch = append(filteredBatch, batch[i])
-	}
-	if len(filteredBatch) == 0 {
-		return filteredBatch, nil, nil
-	}
-	// This is a lazy way to compute the bounds, but filtering should be a rare operation.
-	return o.preprocessForExactlyOnce(channel, filteredBatch)
-}
-
 func (o *snowpipePooledOutput) WriteBatchInternal(ctx context.Context, batch service.MessageBatch) error {
 	o.schemaMigrationMu.RLock()
 	defer o.schemaMigrationMu.RUnlock()
@@ -659,7 +624,7 @@ func (o *snowpipePooledOutput) WriteBatchInternal(ctx context.Context, batch ser
 	}
 	var offsets *streaming.OffsetTokenRange
 	if o.offsetToken != nil {
-		batch, offsets, err = o.preprocessForExactlyOnce(channel, batch)
+		batch, offsets, err = preprocessForExactlyOnce(channel, o.offsetToken, batch)
 		if err != nil || len(batch) == 0 {
 			o.channelPool.Release(channel)
 			return err
@@ -787,6 +752,45 @@ func (o *snowpipePooledOutput) asSchemaMigrationError(err error) (schemaMigratio
 		}, true
 	}
 	return schemaMigrationNeededError{}, false
+}
+
+func preprocessForExactlyOnce(
+	channel *streaming.SnowflakeIngestionChannel,
+	offsetTokenMapping *service.InterpolatedString,
+	batch service.MessageBatch,
+) (service.MessageBatch, *streaming.OffsetTokenRange, error) {
+	latest := channel.LatestOffsetToken()
+	exec := batch.InterpolationExecutor(offsetTokenMapping)
+	firstRawToken, err := exec.TryString(0)
+	if err != nil {
+		return nil, nil, err
+	}
+	lastRawToken, err := exec.TryString(len(batch) - 1)
+	if err != nil {
+		return nil, nil, err
+	}
+	// Common case, all data is new
+	if latest == nil || firstRawToken > string(*latest) {
+		return batch, &streaming.OffsetTokenRange{Start: streaming.OffsetToken(firstRawToken), End: streaming.OffsetToken(lastRawToken)}, nil
+	}
+	// We need to filter out data that is too old.
+	filteredBatch := make(service.MessageBatch, 0, len(batch))
+	var rawToken string
+	for i := range batch {
+		rawToken, err = exec.TryString(i)
+		if err != nil {
+			return nil, nil, err
+		}
+		if rawToken <= string(*latest) {
+			continue
+		}
+		filteredBatch = append(filteredBatch, batch[i])
+	}
+	if len(filteredBatch) == 0 {
+		return filteredBatch, nil, nil
+	}
+	// This is a lazy way to compute the bounds, but filtering should be a rare operation.
+	return preprocessForExactlyOnce(channel, offsetTokenMapping, filteredBatch)
 }
 
 func wrapInsertError(err error) error {
