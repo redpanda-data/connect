@@ -595,29 +595,36 @@ func (o *snowpipePooledOutput) WriteBatch(ctx context.Context, batch service.Mes
 		// We're not connected so tell the framework to call connect to re-connect to open our channel
 		return service.ErrNotConnected
 	}
-	var err error
+	var writeErr error
 	// We only migrate one column at a time, so tolerate up to 10 schema
 	// migrations for a single batch before giving up. This protects against
 	// any bugs over infinitely looping.
 	for i := 0; i < 10; i++ {
-		err = o.WriteBatchInternal(ctx, batch)
-		if err == nil {
+		o.schemaMigrationMu.RLock()
+		writeErr = o.WriteBatchInternal(ctx, batch)
+		o.schemaMigrationMu.RUnlock()
+		if writeErr == nil {
 			return nil
 		}
-		migrationErr := schemaMigrationNeededError{}
-		if !errors.As(err, &migrationErr) {
+		needsMigrationErr := schemaMigrationNeededError{}
+		if !errors.As(writeErr, &needsMigrationErr) {
 			break
 		}
-		if err := migrationErr.migrator(ctx); err != nil {
+		o.schemaMigrationMu.Lock()
+		migrateErr := needsMigrationErr.runMigration(ctx, o.schemaEvolver)
+		o.schemaMigrationMu.Unlock()
+		if migrateErr != nil {
+			return migrateErr
+		}
+		// After a migration we need to reopen all our channels
+		if err := o.ReopenAllChannels(ctx); err != nil {
 			return err
 		}
 	}
-	return err
+	return writeErr
 }
 
 func (o *snowpipePooledOutput) WriteBatchInternal(ctx context.Context, batch service.MessageBatch) error {
-	o.schemaMigrationMu.RLock()
-	defer o.schemaMigrationMu.RUnlock()
 	channel, err := o.channelPool.Acquire(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to open snowflake streaming channel: %w", err)
@@ -637,7 +644,7 @@ func (o *snowpipePooledOutput) WriteBatchInternal(ctx context.Context, batch ser
 	if err != nil {
 		// Only evolve the schema if requested.
 		if o.schemaEvolutionEnabled() {
-			schemaErr, ok := o.asSchemaMigrationError(err)
+			schemaErr, ok := asSchemaMigrationError(err)
 			if ok {
 				// put the channel back so that we can reopen it along with the rest of the channels to
 				// pick up the new schema.
@@ -699,55 +706,43 @@ func (o *snowpipePooledOutput) Close(ctx context.Context) error {
 }
 
 type schemaMigrationNeededError struct {
-	migrator func(ctx context.Context) error
+	runMigration func(ctx context.Context, evolver *snowpipeSchemaEvolver) error
 }
 
 func (schemaMigrationNeededError) Error() string {
 	return "schema migration was required and the operation needs to be retried after the migration"
 }
 
-func (o *snowpipePooledOutput) asSchemaMigrationError(err error) (schemaMigrationNeededError, bool) {
+func asSchemaMigrationError(err error) (schemaMigrationNeededError, bool) {
 	nullColumnErr := streaming.NonNullColumnError{}
 	if errors.As(err, &nullColumnErr) {
 		// Return an error so that we release our read lock and can take the write lock
 		// to forcibly reopen all our channels to get a new schema.
 		return schemaMigrationNeededError{
-			migrator: func(ctx context.Context) error {
-				o.schemaMigrationMu.Lock()
-				defer o.schemaMigrationMu.Unlock()
-				if err := o.schemaEvolver.MigrateNotNullColumn(ctx, nullColumnErr); err != nil {
-					return err
-				}
-				return o.ReopenAllChannels(ctx)
+			runMigration: func(ctx context.Context, evolver *snowpipeSchemaEvolver) error {
+				return evolver.MigrateNotNullColumn(ctx, nullColumnErr)
 			},
 		}, true
 	}
 	missingColumnErr := streaming.MissingColumnError{}
 	if errors.As(err, &missingColumnErr) {
 		return schemaMigrationNeededError{
-			migrator: func(ctx context.Context) error {
-				o.schemaMigrationMu.Lock()
-				defer o.schemaMigrationMu.Unlock()
-				if err := o.schemaEvolver.MigrateMissingColumn(ctx, missingColumnErr); err != nil {
-					return err
-				}
-				return o.ReopenAllChannels(ctx)
+			runMigration: func(ctx context.Context, evolver *snowpipeSchemaEvolver) error {
+				return evolver.MigrateMissingColumn(ctx, missingColumnErr)
 			},
 		}, true
 	}
 	batchErr := streaming.BatchSchemaMismatchError[streaming.MissingColumnError]{}
 	if errors.As(err, &batchErr) {
 		return schemaMigrationNeededError{
-			migrator: func(ctx context.Context) error {
-				o.schemaMigrationMu.Lock()
-				defer o.schemaMigrationMu.Unlock()
+			runMigration: func(ctx context.Context, evolver *snowpipeSchemaEvolver) error {
 				for _, missingCol := range batchErr.Errors {
 					// TODO(rockwood): Consider a batch SQL statement that adds N columns at a time
-					if err := o.schemaEvolver.MigrateMissingColumn(ctx, missingCol); err != nil {
+					if err := evolver.MigrateMissingColumn(ctx, missingCol); err != nil {
 						return err
 					}
 				}
-				return o.ReopenAllChannels(ctx)
+				return nil
 			},
 		}, true
 	}
