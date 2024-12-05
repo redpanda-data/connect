@@ -43,16 +43,21 @@ func TestIndexedAcquire(t *testing.T) {
 		b, err := p.Acquire(ctx, strconv.Itoa(i))
 		require.NoError(t, err)
 		require.Len(t, created, i)
-		p.Release(ctx, strconv.Itoa(i), b)
+		p.Release(strconv.Itoa(i), b)
 	}
 	for i := 1; i <= 5; i++ {
 		b, err := p.Acquire(ctx, strconv.Itoa(i))
 		require.NoError(t, err)
 		require.Len(t, created, 5)
-		p.Release(ctx, strconv.Itoa(i), b)
+		p.Release(strconv.Itoa(i), b)
 	}
-	cancel()
 	_, err := p.Acquire(ctx, "1")
+	require.NoError(t, err)
+	go func() {
+		time.Sleep(5 * time.Millisecond)
+		cancel()
+	}()
+	_, err = p.Acquire(ctx, "1")
 	require.Error(t, err)
 }
 
