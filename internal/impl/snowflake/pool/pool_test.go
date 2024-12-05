@@ -130,6 +130,7 @@ func TestRandomized(t *testing.T) {
 	// Technically possible to only create one if unlikely
 	// this test is mostly for -race detection anyways.
 	require.Greater(t, int(created.Load()), 1)
+	require.LessOrEqual(t, int(created.Load()), 5)
 	require.Equal(t, int(created.Load()), p.Size())
 	t.Logf("created %d objects in the pool", p.Size())
 }
