@@ -580,12 +580,10 @@ func (s *Stream) processSnapshot() error {
 
 					snapshotChangePacket := StreamMessage{
 						LSN:       nil,
-						Mode:      StreamModeSnapshot,
-						Operation: InsertOpType,
-
-						Table:  tableWithoutSchema,
-						Schema: s.schema,
-						Data:   data,
+						Operation: ReadOpType,
+						Table:     tableWithoutSchema,
+						Schema:    s.schema,
+						Data:      data,
 					}
 
 					if rowsCount%100 == 0 {
