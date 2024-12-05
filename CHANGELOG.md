@@ -9,6 +9,10 @@ All notable changes to this project will be documented in this file.
 
 - The `pg_stream` input has been renamed to `postgres_cdc`. The old name will continue to function as an alias. (@rockwotj)
 
+### Fixed
+
+- The `redpanda_migrator_bundle` output no longer attempts to translate schema IDs when a schema registry is not configured. (@mihaitodor)
+
 ## 4.42.0 - 2024-12-02
 
 ### Added
