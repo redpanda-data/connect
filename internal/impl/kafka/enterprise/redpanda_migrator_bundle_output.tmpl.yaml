@@ -50,7 +50,8 @@ mapping: |
           # Exclude metadata fields which start with `kafka_`
           "^(?:[^k].*|k[^a].*|ka[^f].*|kaf[^k].*|kafk[^a].*|kafka[^_].*)"
         ]
-      }
+      },
+      "translate_schema_ids": this.schema_registry.length() != 0
     }
   )
 
@@ -172,6 +173,7 @@ tests:
                     metadata:
                       include_patterns:
                         -  ^(?:[^k].*|k[^a].*|ka[^f].*|kaf[^k].*|kafk[^a].*|kafka[^_].*)
+                    translate_schema_ids: true
                   processors:
                     - mapping: |
                         meta input_label = deleted()
@@ -234,6 +236,7 @@ tests:
                     metadata:
                       include_patterns:
                         -  ^(?:[^k].*|k[^a].*|ka[^f].*|kaf[^k].*|kafk[^a].*|kafka[^_].*)
+                    translate_schema_ids: false
                   processors:
                     - mapping: |
                         meta input_label = deleted()
