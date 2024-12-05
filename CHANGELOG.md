@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - The `pg_stream` input has been renamed to `postgres_cdc`. The old name will continue to function as an alias. (@rockwotj)
+- The `postgres_cdc` input no longer emits `mode` metadata and instead snapshot reads set `operation` metadata to be `read` instead of `insert`. (@rockwotj)
 
 ## 4.42.0 - 2024-12-02
 
