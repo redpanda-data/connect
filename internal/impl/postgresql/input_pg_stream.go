@@ -22,6 +22,7 @@ import (
 
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream"
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 const (
@@ -133,6 +134,10 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		pgStandbyTimeout          time.Duration
 		batching                  service.BatchPolicy
 	)
+
+	if err := license.CheckRunningEnterprise(mgr); err != nil {
+		return nil, err
+	}
 
 	if dsn, err = conf.FieldString(fieldDSN); err != nil {
 		return nil, err

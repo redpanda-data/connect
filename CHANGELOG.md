@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.43.0 - 2024-12-05
+
+### Changed
+
+- The `pg_stream` input has been renamed to `postgres_cdc`. The old name will continue to function as an alias. (@rockwotj)
+
 ## 4.42.0 - 2024-12-02
 
 ### Added
