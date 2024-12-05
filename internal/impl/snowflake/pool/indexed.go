@@ -19,6 +19,7 @@ import (
 )
 
 type (
+	// Indexed is essentially a pool where each object in the pool is explicitly retrivied by name.
 	Indexed[T any] interface {
 		// Acquire gets a named object T out of the pool if available, otherwise will create a new
 		// item using the given name.
@@ -26,9 +27,9 @@ type (
 		// is only ever returned if creating the object in the pool fails.
 		Acquire(ctx context.Context, name string) (T, error)
 		// Return the object back to the pool to be used.
-		Release(ctx context.Context, name string, item T)
+		Release(name string, item T)
 		// Keys returns the keys or names of all items in the indexed pool
-		Keys(context.Context) []string
+		Keys() []string
 	}
 	indexedImpl[T any] struct {
 		ctor  func(context.Context, string) (T, error)
@@ -39,6 +40,7 @@ type (
 
 var _ Indexed[any] = &indexedImpl[any]{}
 
+// NewIndexed creates a new Indexed pool that uses the following constructor to create new items.
 func NewIndexed[T any](ctor func(context.Context, string) (T, error)) Indexed[T] {
 	i := &indexedImpl[T]{
 		ctor:  ctor,
@@ -84,14 +86,14 @@ func (p *indexedImpl[T]) Acquire(ctx context.Context, name string) (item T, err 
 	return item, err
 }
 
-func (p *indexedImpl[T]) Release(ctx context.Context, name string, item T) {
-	p.lock(ctx)
+func (p *indexedImpl[T]) Release(name string, item T) {
+	_ = p.lock(context.Background())
 	defer p.unlock()
 	p.items[name] <- item
 }
 
-func (p *indexedImpl[T]) Keys(ctx context.Context) (keys []string) {
-	p.lock(ctx)
+func (p *indexedImpl[T]) Keys() (keys []string) {
+	_ = p.lock(context.Background())
 	defer p.unlock()
 	for k := range p.items {
 		keys = append(keys, k)
