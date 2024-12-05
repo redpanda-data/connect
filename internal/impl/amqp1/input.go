@@ -75,6 +75,13 @@ func amqp1InputSpec() *service.ConfigSpec {
 				Default(64).
 				Advanced(),
 			service.NewTLSToggledField(tlsField),
+			service.NewStringListField(sourceCapsField).
+				Description("List of extension capabilities the receiver desires.").
+				Optional().
+				Advanced().
+				Example([]string{"queue"}).
+				Example([]string{"topic"}).
+				Example([]string{"queue", "topic"}),
 			saslFieldSpec(),
 		).LintRule(`
 root = if this.url.or("") == "" && this.urls.or([]).length() == 0 {
@@ -101,7 +108,9 @@ type amqp1Reader struct {
 	renewLock  bool
 	getHeader  bool
 	credit     int // max_in_flight
+	srcCaps    []string
 	connOpts   *amqp.ConnOptions
+	recvOpts   *amqp.ReceiverOptions
 	log        *service.Logger
 
 	m    sync.RWMutex
@@ -112,6 +121,7 @@ func amqp1ReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (
 	a := amqp1Reader{
 		log:      mgr.Logger(),
 		connOpts: &amqp.ConnOptions{},
+		recvOpts: &amqp.ReceiverOptions{},
 	}
 
 	urlStrs, err := conf.FieldStringList(urlsField)
@@ -135,7 +145,6 @@ func amqp1ReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (
 		}
 
 		a.urls = append(a.urls, singleURL)
-
 	}
 
 	if a.sourceAddr, err = conf.FieldString(sourceAddrField); err != nil {
@@ -153,6 +162,7 @@ func amqp1ReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (
 	if a.credit, err = conf.FieldInt(creditField); err != nil {
 		return nil, err
 	}
+	a.recvOpts.Credit = int32(a.credit)
 
 	if err := saslOptFnsFromParsed(conf, a.connOpts); err != nil {
 		return nil, err
@@ -164,6 +174,14 @@ func amqp1ReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (
 	}
 	if enabled {
 		a.connOpts.TLSConfig = tlsConf
+	}
+
+	a.srcCaps, err = conf.FieldStringList(sourceCapsField)
+	if err != nil {
+		return nil, err
+	}
+	if len(a.srcCaps) != 0 {
+		a.recvOpts.SourceCapabilities = a.srcCaps
 	}
 
 	return &a, nil
@@ -194,9 +212,7 @@ func (a *amqp1Reader) Connect(ctx context.Context) (err error) {
 	}
 
 	// Create a receiver
-	if conn.receiver, err = conn.session.NewReceiver(ctx, a.sourceAddr, &amqp.ReceiverOptions{
-		Credit: int32(a.credit),
-	}); err != nil {
+	if conn.receiver, err = conn.session.NewReceiver(ctx, a.sourceAddr, a.recvOpts); err != nil {
 		_ = conn.Close(ctx)
 		return
 	}
