@@ -470,11 +470,7 @@ func newSnowflakeStreamer(
 		role:             role,
 		mapping:          mapping,
 		logger:           mgr.Logger(),
-		buildTime:        mgr.Metrics().NewTimer("snowflake_build_output_latency_ns"),
-		uploadTime:       mgr.Metrics().NewTimer("snowflake_upload_latency_ns"),
-		convertTime:      mgr.Metrics().NewTimer("snowflake_convert_latency_ns"),
-		serializeTime:    mgr.Metrics().NewTimer("snowflake_serialize_latency_ns"),
-		compressedOutput: mgr.Metrics().NewCounter("snowflake_compressed_output_size_bytes"),
+		metrics:          newSnowpipeMetrics(mgr.Metrics()),
 		initStatementsFn: initStatementsFn,
 		buildOpts:        buildOpts,
 		restClient:       restClient,
@@ -493,14 +489,10 @@ type snowflakeClientForTesting string
 const SnowflakeClientResourceForTesting snowflakeClientForTesting = "SnowflakeClientResourceForTesting"
 
 type snowpipePooledOutput struct {
-	client           *streaming.SnowflakeServiceClient
-	channelPool      pool.Capped[*streaming.SnowflakeIngestionChannel]
-	compressedOutput *service.MetricCounter
-	uploadTime       *service.MetricTimer
-	buildTime        *service.MetricTimer
-	convertTime      *service.MetricTimer
-	serializeTime    *service.MetricTimer
-	buildOpts        streaming.BuildOptions
+	client      *streaming.SnowflakeServiceClient
+	channelPool pool.Capped[*streaming.SnowflakeIngestionChannel]
+	metrics     *snowpipeMetrics
+	buildOpts   streaming.BuildOptions
 
 	schemaMigrationMu                      sync.RWMutex
 	channelPrefix, db, schema, table, role string
@@ -663,11 +655,7 @@ func (o *snowpipePooledOutput) WriteBatchInternal(ctx context.Context, batch ser
 		return wrapInsertError(err)
 	}
 	o.logger.Debugf("done inserting %d rows using channel %s, stats: %+v", len(batch), channel.Name, stats)
-	o.compressedOutput.Incr(int64(stats.CompressedOutputSize))
-	o.uploadTime.Timing(stats.UploadTime.Nanoseconds())
-	o.buildTime.Timing(stats.BuildTime.Nanoseconds())
-	o.convertTime.Timing(stats.ConvertTime.Nanoseconds())
-	o.serializeTime.Timing(stats.SerializeTime.Nanoseconds())
+	o.metrics.Report(stats)
 	polls, err := channel.WaitUntilCommitted(ctx)
 	if err == nil {
 		o.logger.Tracef("batch committed in snowflake after %d polls", polls)
