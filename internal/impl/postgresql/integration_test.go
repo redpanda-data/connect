@@ -26,6 +26,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/redpanda-data/connect/v4/internal/license"
+
 	"github.com/ory/dockertest/v3"
 	"github.com/ory/dockertest/v3/docker"
 )
@@ -210,6 +212,8 @@ file:
 	streamOut, err := streamOutBuilder.Build()
 	require.NoError(t, err)
 
+	license.InjectTestService(streamOut.Resources())
+
 	go func() {
 		_ = streamOut.Run(context.Background())
 	}()
@@ -256,6 +260,8 @@ file:
 
 	streamOut, err = streamOutBuilder.Build()
 	require.NoError(t, err)
+
+	license.InjectTestService(streamOut.Resources())
 
 	go func() {
 		assert.NoError(t, streamOut.Run(context.Background()))
@@ -324,6 +330,8 @@ file:
 
 	streamOut, err := streamOutBuilder.Build()
 	require.NoError(t, err)
+
+	license.InjectTestService(streamOut.Resources())
 
 	go func() {
 		_ = streamOut.Run(context.Background())
@@ -415,6 +423,8 @@ file:
 	streamOut, err := streamOutBuilder.Build()
 	require.NoError(t, err)
 
+	license.InjectTestService(streamOut.Resources())
+
 	go func() {
 		err = streamOut.Run(context.Background())
 		require.NoError(t, err)
@@ -462,6 +472,8 @@ file:
 
 	streamOut, err = streamOutBuilder.Build()
 	require.NoError(t, err)
+
+	license.InjectTestService(streamOut.Resources())
 
 	go func() {
 		assert.NoError(t, streamOut.Run(context.Background()))
@@ -562,12 +574,14 @@ file:
 	streamOut, err := streamOutBuilder.Build()
 	require.NoError(t, err)
 
+	license.InjectTestService(streamOut.Resources())
+
 	go func() {
 		err = streamOut.Run(context.Background())
 		require.NoError(t, err)
 	}()
 
-	assert.Eventually(t, func() bool {
+	require.Eventually(t, func() bool {
 		outBatchMut.Lock()
 		defer outBatchMut.Unlock()
 		return len(outBatches) == 1
@@ -664,6 +678,8 @@ file:
 			streamOut, err := streamOutBuilder.Build()
 			require.NoError(t, err)
 
+			license.InjectTestService(streamOut.Resources())
+
 			go func() {
 				_ = streamOut.Run(context.Background())
 			}()
@@ -710,6 +726,8 @@ file:
 
 			streamOut, err = streamOutBuilder.Build()
 			require.NoError(t, err)
+
+			license.InjectTestService(streamOut.Resources())
 
 			go func() {
 				assert.NoError(t, streamOut.Run(context.Background()))
