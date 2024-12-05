@@ -75,7 +75,7 @@ type snowpipeSchemaEvolver struct {
 
 func (o *snowpipeSchemaEvolver) DoesTableExist(ctx context.Context) (bool, error) {
 	resp, err := o.restClient.RunSQL(ctx, streaming.RunSQLRequest{
-		Statement: `SELECT to_boolean(count(1)) FROM INFORMATION_SCHEMA.TABLES where table_schema = ? AND table_name = ?`,
+		Statement: `SELECT to_boolean(count(1)) FROM INFORMATION_SCHEMA.TABLES where UPPER(table_schema) = UPPER(?) AND UPPER(table_name) = UPPER(?)`,
 		// Currently we set of timeout of 30 seconds so that we don't have to handle async operations
 		// that need polling to wait until they finish (results are made async when execution is longer
 		// than 45 seconds).
