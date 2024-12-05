@@ -21,6 +21,50 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming"
 )
 
+type schemaMigrationNeededError struct {
+	runMigration func(ctx context.Context, evolver *snowpipeSchemaEvolver) error
+}
+
+func (schemaMigrationNeededError) Error() string {
+	return "schema migration was required and the operation needs to be retried after the migration"
+}
+
+func asSchemaMigrationError(err error) (schemaMigrationNeededError, bool) {
+	nullColumnErr := streaming.NonNullColumnError{}
+	if errors.As(err, &nullColumnErr) {
+		// Return an error so that we release our read lock and can take the write lock
+		// to forcibly reopen all our channels to get a new schema.
+		return schemaMigrationNeededError{
+			runMigration: func(ctx context.Context, evolver *snowpipeSchemaEvolver) error {
+				return evolver.MigrateNotNullColumn(ctx, nullColumnErr)
+			},
+		}, true
+	}
+	missingColumnErr := streaming.MissingColumnError{}
+	if errors.As(err, &missingColumnErr) {
+		return schemaMigrationNeededError{
+			runMigration: func(ctx context.Context, evolver *snowpipeSchemaEvolver) error {
+				return evolver.MigrateMissingColumn(ctx, missingColumnErr)
+			},
+		}, true
+	}
+	batchErr := streaming.BatchSchemaMismatchError[streaming.MissingColumnError]{}
+	if errors.As(err, &batchErr) {
+		return schemaMigrationNeededError{
+			runMigration: func(ctx context.Context, evolver *snowpipeSchemaEvolver) error {
+				for _, missingCol := range batchErr.Errors {
+					// TODO(rockwood): Consider a batch SQL statement that adds N columns at a time
+					if err := evolver.MigrateMissingColumn(ctx, missingCol); err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+		}, true
+	}
+	return schemaMigrationNeededError{}, false
+}
+
 type snowpipeSchemaEvolver struct {
 	schemaEvolutionMapping *bloblang.Executor
 	logger                 *service.Logger
@@ -29,9 +73,9 @@ type snowpipeSchemaEvolver struct {
 	db, schema, table, role string
 }
 
-func (o *snowpipeSchemaEvolver) WillAutoCreateTable(ctx context.Context) (bool, error) {
+func (o *snowpipeSchemaEvolver) DoesTableExist(ctx context.Context) (bool, error) {
 	resp, err := o.restClient.RunSQL(ctx, streaming.RunSQLRequest{
-		Statement: `SELECT NOT to_boolean(count(1)) FROM INFORMATION_SCHEMA.TABLES where table_schema = ? AND table_name = ?`,
+		Statement: `SELECT to_boolean(count(1)) FROM INFORMATION_SCHEMA.TABLES where table_schema = ? AND table_name = ?`,
 		// Currently we set of timeout of 30 seconds so that we don't have to handle async operations
 		// that need polling to wait until they finish (results are made async when execution is longer
 		// than 45 seconds).
