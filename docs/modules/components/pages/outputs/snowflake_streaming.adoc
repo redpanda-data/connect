@@ -114,6 +114,8 @@ output:
       processors: [] # No default (optional)
     max_in_flight: 4
     channel_prefix: "" # No default (optional)
+    channel_name: "" # No default (optional)
+    offset_token: "" # No default (optional)
 ```
 
 --
@@ -527,11 +529,48 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 The prefix to use when creating a channel name.
 Duplicate channel names will result in errors and prevent multiple instances of Redpanda Connect from writing at the same time.
-By default this will create a channel name that is based on the table FQN so there will only be a single stream per table.
+By default if neither `channel_prefix`or `channel_name is specified then the output will create a channel name that is based on the table FQN so there will only be a single stream per table.
 
 At most `max_in_flight` channels will be opened.
 
+This option is mutually exclusive with `channel_name`.
+
 NOTE: There is a limit of 10,000 streams per table - if using more than 10k streams please reach out to Snowflake support.
+
+
+*Type*: `string`
+
+
+=== `channel_name`
+
+The channel name to use.
+Duplicate channel names will result in errors and prevent multiple instances of Redpanda Connect from writing at the same time.
+Note that batches are partitioned by this field, so you may end up with smaller batches if every message in a batch does not belong
+to the same channel. It's recommended to batch at the input level to ensure that batches contain messages for the same channel if using
+an input that is partitioned (such as an Apache Kafka topic).
+
+This option is mutually exclusive with `channel_prefix`.
+
+NOTE: There is a limit of 10,000 streams per table - if using more than 10k streams please reach out to Snowflake support.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+
+*Type*: `string`
+
+
+=== `offset_token`
+
+The offset token to use for exactly once delivery of data in the pipeline. When data is sent on a channel, each message in a batch's offset token
+is compared to the latest token for a channel. If the offset token is lexicographically less than the latest in the channel, it's assumed the message is a duplicate and
+is dropped. This means it is *very important* to have ordered delivery to the output, any out of order messages to the output will be seen as duplicates and dropped.
+Specifically this means that retried messages could be seen as duplicates if later messages have succeeded in the meantime, so in most circumstances a dead letter queue
+output should be employed for failed messages.
+
+NOTE: It's assumed that messages within a batch are in increasing order by offset token, additionally if you're using a numeric value as an offset token, make sure to pad
+      the value so that it's lexicographically ordered in it's string representation, since offset tokens are compared in string form.
+
+For more information about offset tokens, see https://docs.snowflake.com/en/user-guide/data-load-snowpipe-streaming-overview#offset-tokens[^Snowflake Documentation]
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
 
 *Type*: `string`
