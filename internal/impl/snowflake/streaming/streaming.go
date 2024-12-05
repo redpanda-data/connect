@@ -128,11 +128,10 @@ func NewSnowflakeServiceClient(ctx context.Context, opts ClientOptions) (*Snowfl
 }
 
 // Close closes the client and future requests have undefined behavior.
-func (c *SnowflakeServiceClient) Close() error {
+func (c *SnowflakeServiceClient) Close() {
 	c.uploadRefreshLoop.Stop()
 	c.client.Close()
 	c.flusher.Close()
-	return nil
 }
 
 func (c *SnowflakeServiceClient) nextRequestID() string {

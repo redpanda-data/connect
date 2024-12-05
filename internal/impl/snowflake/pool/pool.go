@@ -38,6 +38,7 @@ type (
 		Release(T)
 		// Size returns the number of items the pool has *created* (which may be all in use).
 		Size() int
+		Reset()
 	}
 	cappedImpl[T any] struct {
 		ctor      func(context.Context) (T, error)
@@ -104,4 +105,17 @@ func (p *cappedImpl[T]) Release(item T) {
 
 func (p *cappedImpl[T]) Size() int {
 	return int(p.allocated.Load())
+}
+
+func (p *cappedImpl[T]) Reset() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.allocated.Store(0)
+	for {
+		select {
+		case <-p.queued:
+		default:
+			return
+		}
+	}
 }
