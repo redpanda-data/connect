@@ -253,7 +253,7 @@ func (w *RedpandaMigratorWriter) Connect(ctx context.Context) error {
 		if res, ok := w.mgr.GetGeneric(w.schemaRegistryOutputResource); ok {
 			w.schemaRegistryOutput = res.(*schemaRegistryOutput)
 		} else {
-			return fmt.Errorf("schema_registry output resource %q not found", w.schemaRegistryOutputResource)
+			w.mgr.Logger().Warnf("schema_registry output resource %q not found; skipping schema ID translation", w.schemaRegistryOutputResource)
 		}
 	}
 
@@ -275,7 +275,7 @@ func (w *RedpandaMigratorWriter) WriteBatch(ctx context.Context, b service.Messa
 	}
 
 	var ch franz_sr.ConfluentHeader
-	if w.translateSchemaIDs {
+	if w.translateSchemaIDs && w.schemaRegistryOutput != nil {
 		for recordIdx, record := range records {
 			schemaID, _, err := ch.DecodeID(record.Value)
 			if err != nil {
