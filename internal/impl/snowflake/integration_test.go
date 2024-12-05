@@ -73,6 +73,24 @@ func RunStreamInBackground(t *testing.T, stream *service.Stream) {
 	})
 }
 
+func RunSQLQuery(t *testing.T, stream *service.Stream, sql string) [][]string {
+	t.Helper()
+	resource, ok := stream.Resources().GetGeneric(snowflake.SnowflakeClientResourceForTesting)
+	require.True(t, ok)
+	client, ok := resource.(*streaming.SnowflakeRestClient)
+	require.True(t, ok)
+	resp, err := client.RunSQL(context.Background(), streaming.RunSQLRequest{
+		Statement: sql,
+		Database:  EnvOrDefault("SNOWFLAKE_DB", "BABY_DATABASE"),
+		Schema:    "PUBLIC",
+		Role:      "ACCOUNTADMIN",
+		Timeout:   30,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "00000", resp.SQLState)
+	return resp.Data
+}
+
 func TestIntegrationExactlyOnceDelivery(t *testing.T) {
 	integration.CheckSkip(t)
 	produce, stream := SetupSnowflakeStream(t, `
@@ -111,19 +129,11 @@ snowflake_streaming:
 		{"foo": "qux", "token": 3},
 		{"foo": "zoom", "token": 4},
 	})))
-	resource, ok := stream.Resources().GetGeneric(snowflake.SnowflakeClientResourceForTesting)
-	require.True(t, ok)
-	client, ok := resource.(*streaming.SnowflakeRestClient)
-	require.True(t, ok)
-	resp, err := client.RunSQL(context.Background(), streaming.RunSQLRequest{
-		Statement: `SELECT foo, token FROM integration_test_exactly_once ORDER BY token`,
-		Database:  EnvOrDefault("SNOWFLAKE_DB", "BABY_DATABASE"),
-		Schema:    "PUBLIC",
-		Role:      "ACCOUNTADMIN",
-		Timeout:   30,
-	})
-	require.NoError(t, err)
-	require.Equal(t, "00000", resp.SQLState)
+	rows := RunSQLQuery(
+		t,
+		stream,
+		`SELECT foo, token FROM integration_test_exactly_once ORDER BY token`,
+	)
 	require.Equal(t, [][]string{
 		{"bar", "1"},
 		{"baz", "2"},
@@ -131,5 +141,5 @@ snowflake_streaming:
 		{"zoom", "4"},
 		{"thud", "5"},
 		{"zing", "6"},
-	}, resp.Data)
+	}, rows)
 }
