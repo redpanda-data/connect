@@ -106,9 +106,9 @@ Additionally, if `stream_snapshot` is set to true, then the existing data in the
 == Metadata
 
 This input adds the following metadata fields to each message:
-- mode (Either "streaming" or "snapshot" indicating whether the message is part of a streaming operation or snapshot processing)
 - table (Name of the table that the message originated from)
-- operation (Type of operation that generated the message: "insert", "update", or "delete". This will also be "begin" and "commit" if `include_transaction_markers` is enabled)
+- operation (Type of operation that generated the message: "read", "insert", "update", or "delete". "read" is from messages that are read in the initial snapshot phase. This will also be "begin" and "commit" if `include_transaction_markers` is enabled)
+- lsn (the log sequence number in postgres)
 		
 
 == Fields
