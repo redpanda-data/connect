@@ -12,10 +12,8 @@ package snowflake_test
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"os"
-	"strings"
 	"sync"
 	"testing"
 
@@ -36,7 +34,7 @@ func EnvOrDefault(name, fallback string) string {
 	return value
 }
 
-func Batch(rows ...map[string]any) service.MessageBatch {
+func Batch(rows []map[string]any) service.MessageBatch {
 	var batch service.MessageBatch
 	for _, row := range rows {
 		msg := service.NewMessage(nil)
@@ -75,7 +73,7 @@ func RunStreamInBackground(t *testing.T, stream *service.Stream) {
 	})
 }
 
-func TestExactlyOnceDelivery(t *testing.T) {
+func TestIntegrationExactlyOnceDelivery(t *testing.T) {
 	integration.CheckSkip(t)
 	produce, stream := SetupSnowflakeStream(t, `
 label: snowpipe_streaming
@@ -93,26 +91,26 @@ snowflake_streaming:
   offset_token: "${!this.token}"
   schema_evolution:
     enabled: true
-    `)
+`)
 	RunStreamInBackground(t, stream)
-	require.NoError(t, produce(context.Background(), Batch(
-		map[string]any{"foo": "bar", "token": 1},
-		map[string]any{"foo": "baz", "token": 2},
-		map[string]any{"foo": "qux", "token": 3},
-		map[string]any{"foo": "zoom", "token": 4},
-	)))
-	require.NoError(t, produce(context.Background(), Batch(
-		map[string]any{"foo": "qux", "token": 3},
-		map[string]any{"foo": "zoom", "token": 4},
-		map[string]any{"foo": "thud", "token": 5},
-		map[string]any{"foo": "zing", "token": 6},
-	)))
-	require.NoError(t, produce(context.Background(), Batch(
-		map[string]any{"foo": "bar", "token": 1},
-		map[string]any{"foo": "baz", "token": 2},
-		map[string]any{"foo": "qux", "token": 3},
-		map[string]any{"foo": "zoom", "token": 4},
-	)))
+	require.NoError(t, produce(context.Background(), Batch([]map[string]any{
+		{"foo": "bar", "token": 1},
+		{"foo": "baz", "token": 2},
+		{"foo": "qux", "token": 3},
+		{"foo": "zoom", "token": 4},
+	})))
+	require.NoError(t, produce(context.Background(), Batch([]map[string]any{
+		{"foo": "qux", "token": 3},
+		{"foo": "zoom", "token": 4},
+		{"foo": "thud", "token": 5},
+		{"foo": "zing", "token": 6},
+	})))
+	require.NoError(t, produce(context.Background(), Batch([]map[string]any{
+		{"foo": "bar", "token": 1},
+		{"foo": "baz", "token": 2},
+		{"foo": "qux", "token": 3},
+		{"foo": "zoom", "token": 4},
+	})))
 	resource, ok := stream.Resources().GetGeneric(snowflake.SnowflakeClientResourceForTesting)
 	require.True(t, ok)
 	client, ok := resource.(*streaming.SnowflakeRestClient)
