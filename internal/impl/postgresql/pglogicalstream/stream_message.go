@@ -22,6 +22,8 @@ const (
 type OpType string
 
 const (
+	// ReadOpType is a snapshot read
+	ReadOpType OpType = "read"
 	// InsertOpType is a database insert
 	InsertOpType OpType = "insert"
 	// UpdateOpType is a database update
@@ -36,11 +38,10 @@ const (
 
 // StreamMessage represents a single change from the database
 type StreamMessage struct {
-	LSN       *string    `json:"lsn"`
-	Operation OpType     `json:"operation"`
-	Schema    string     `json:"schema"`
-	Table     string     `json:"table"`
-	Mode      StreamMode `json:"mode"`
+	LSN       *string `json:"lsn"`
+	Operation OpType  `json:"operation"`
+	Schema    string  `json:"schema"`
+	Table     string  `json:"table"`
 	// For deleted messages - there will be old changes if replica identity set to full or empty changes
 	Data any `json:"data"`
 }

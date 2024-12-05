@@ -47,7 +47,7 @@ func isCommitMessage(WALData []byte) (bool, *CommitMessage, error) {
 // before the change message.
 func decodePgOutput(WALData []byte, relations map[uint32]*RelationMessage, typeMap *pgtype.Map) (*StreamMessage, error) {
 	logicalMsg, err := Parse(WALData)
-	message := &StreamMessage{Mode: StreamModeStreaming}
+	message := &StreamMessage{}
 
 	if err != nil {
 		return nil, err
