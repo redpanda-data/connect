@@ -51,7 +51,7 @@ mapping: |
           "^(?:[^k].*|k[^a].*|ka[^f].*|kaf[^k].*|kafk[^a].*|kafka[^_].*)"
         ]
       },
-      "translate_schema_ids": this.schema_registry.length() != 0
+      "translate_schema_ids": this.redpanda_migrator.translate_schema_ids.or(true) && this.schema_registry.length() != 0
     }
   )
 
@@ -150,6 +150,140 @@ tests:
     config:
       redpanda_migrator:
         seed_brokers: [ "127.0.0.1:9092" ]
+        max_in_flight: 1
+      schema_registry:
+        url: http://localhost:8081
+        max_in_flight: 1
+
+    expected:
+      switch:
+        cases:
+          - check: metadata("input_label") == "redpanda_migrator"
+            output:
+              fallback:
+                - redpanda_migrator:
+                    key: ${! metadata("kafka_key") }
+                    max_in_flight: 1
+                    partition: ${! metadata("kafka_partition").or(throw("missing kafka_partition metadata")) }
+                    partitioner: manual
+                    seed_brokers:
+                      - 127.0.0.1:9092
+                    timestamp_ms: ${! metadata("kafka_timestamp_ms").or(timestamp_unix_milli()) }
+                    topic: ${! metadata("kafka_topic").or(throw("missing kafka_topic metadata")) }
+                    metadata:
+                      include_patterns:
+                        -  ^(?:[^k].*|k[^a].*|ka[^f].*|kaf[^k].*|kafk[^a].*|kafka[^_].*)
+                    translate_schema_ids: true
+                  processors:
+                    - mapping: |
+                        meta input_label = deleted()
+                - drop: {}
+                  processors:
+                    - log:
+                        message: |
+                          Dropping message: ${! content() } / ${! metadata() }
+          - check: metadata("input_label") == "redpanda_migrator_offsets"
+            output:
+              fallback:
+                - redpanda_migrator_offsets:
+                    seed_brokers:
+                      - 127.0.0.1:9092
+                - drop: {}
+                  processors:
+                    - log:
+                        message: |
+                          Dropping message: ${! content() } / ${! metadata() }
+          - check: metadata("input_label") == "schema_registry"
+            output:
+              fallback:
+                - schema_registry:
+                    subject: ${! @schema_registry_subject }
+                    url: http://localhost:8081
+                    max_in_flight: 1
+                - switch:
+                    cases:
+                      - check: '@fallback_error == "request returned status: 422"'
+                        output:
+                          drop: {}
+                          processors:
+                            - log:
+                                message: |
+                                  Subject '${! @schema_registry_subject }' version ${! @schema_registry_version } already has schema: ${! content() }
+                      - output:
+                          reject: ${! @fallback_error }
+
+  - name: Migrate messages, offsets and schemas but skip schema ID translation
+    config:
+      redpanda_migrator:
+        seed_brokers: [ "127.0.0.1:9092" ]
+        translate_schema_ids: false
+        max_in_flight: 1
+      schema_registry:
+        url: http://localhost:8081
+        max_in_flight: 1
+
+    expected:
+      switch:
+        cases:
+          - check: metadata("input_label") == "redpanda_migrator"
+            output:
+              fallback:
+                - redpanda_migrator:
+                    key: ${! metadata("kafka_key") }
+                    max_in_flight: 1
+                    partition: ${! metadata("kafka_partition").or(throw("missing kafka_partition metadata")) }
+                    partitioner: manual
+                    seed_brokers:
+                      - 127.0.0.1:9092
+                    timestamp_ms: ${! metadata("kafka_timestamp_ms").or(timestamp_unix_milli()) }
+                    topic: ${! metadata("kafka_topic").or(throw("missing kafka_topic metadata")) }
+                    metadata:
+                      include_patterns:
+                        -  ^(?:[^k].*|k[^a].*|ka[^f].*|kaf[^k].*|kafk[^a].*|kafka[^_].*)
+                    translate_schema_ids: false
+                  processors:
+                    - mapping: |
+                        meta input_label = deleted()
+                - drop: {}
+                  processors:
+                    - log:
+                        message: |
+                          Dropping message: ${! content() } / ${! metadata() }
+          - check: metadata("input_label") == "redpanda_migrator_offsets"
+            output:
+              fallback:
+                - redpanda_migrator_offsets:
+                    seed_brokers:
+                      - 127.0.0.1:9092
+                - drop: {}
+                  processors:
+                    - log:
+                        message: |
+                          Dropping message: ${! content() } / ${! metadata() }
+          - check: metadata("input_label") == "schema_registry"
+            output:
+              fallback:
+                - schema_registry:
+                    subject: ${! @schema_registry_subject }
+                    url: http://localhost:8081
+                    max_in_flight: 1
+                - switch:
+                    cases:
+                      - check: '@fallback_error == "request returned status: 422"'
+                        output:
+                          drop: {}
+                          processors:
+                            - log:
+                                message: |
+                                  Subject '${! @schema_registry_subject }' version ${! @schema_registry_version } already has schema: ${! content() }
+                      - output:
+                          reject: ${! @fallback_error }
+
+  - name: Migrate messages, offsets and schemas and do schema ID translation when requested explicitly
+    config:
+      redpanda_migrator:
+        seed_brokers: [ "127.0.0.1:9092" ]
+        translate_schema_ids: true
         max_in_flight: 1
       schema_registry:
         url: http://localhost:8081
