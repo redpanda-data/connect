@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -589,7 +590,7 @@ type snowpipeStreamingOutput struct {
 	schemaEvolver    *snowpipeSchemaEvolver
 
 	mu                 sync.RWMutex
-	needsTableCreation bool // Set during Connect
+	needsTableCreation atomic.Bool // Set during Connect
 
 	impl service.BatchOutput
 }
@@ -610,8 +611,8 @@ func (o *snowpipeStreamingOutput) Connect(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("unable to open snowflake streaming channel: %w", err)
 		}
-		o.needsTableCreation = !tableExists
-		if o.needsTableCreation {
+		o.needsTableCreation.Store(!tableExists)
+		if o.needsTableCreation.Load() {
 			o.logger.Info("determined that table is missing and will be auto created")
 			return nil
 		}
@@ -635,46 +636,58 @@ func (o *snowpipeStreamingOutput) WriteBatch(ctx context.Context, batch service.
 		}
 		batch = mapped
 	}
-	if o.needsTableCreation {
+	if o.needsTableCreation.Load() { // Check outside of lock
 		o.mu.Lock()
 		defer o.mu.Unlock()
-		if err := o.schemaEvolver.CreateOutputTable(ctx, batch); err != nil {
-			return err
+		if o.needsTableCreation.Load() {
+			if err := o.schemaEvolver.CreateOutputTable(ctx, batch); err != nil {
+				return err
+			}
+			if err := o.impl.Connect(ctx); err != nil {
+				return err
+			}
+			o.needsTableCreation.Store(false)
 		}
-		// We're not connected so tell the framework to call connect to re-connect to open our channel
-		return service.ErrNotConnected
+		// Now we can proceed writing
 	}
-	var writeErr error
+	var err error
 	// We only migrate one column at a time, so tolerate up to 10 schema
 	// migrations for a single batch before giving up. This protects against
 	// any bugs over infinitely looping.
 	for i := 0; i < 10; i++ {
 		o.mu.RLock()
-		writeErr = o.impl.WriteBatch(ctx, batch)
+		err = o.impl.WriteBatch(ctx, batch)
 		o.mu.RUnlock()
-		if writeErr == nil {
+		if err == nil {
 			return nil
 		}
 		needsMigrationErr := schemaMigrationNeededError{}
-		if !errors.As(writeErr, &needsMigrationErr) {
-			break
+		if !errors.As(err, &needsMigrationErr) {
+			return err
 		}
 		o.mu.Lock()
-		migrateErr := needsMigrationErr.runMigration(ctx, o.schemaEvolver)
+		migrateErr := o.runMigration(ctx, needsMigrationErr)
 		o.mu.Unlock()
 		if migrateErr != nil {
 			return migrateErr
 		}
-		// After a migration we need to reopen all our channels
-		// so close and reopen our impl
-		if err := o.impl.Close(ctx); err != nil {
-			return err
-		}
-		if err := o.impl.Connect(ctx); err != nil {
-			return err
-		}
 	}
-	return writeErr
+	return err
+}
+
+func (o *snowpipeStreamingOutput) runMigration(ctx context.Context, needsMigrationErr schemaMigrationNeededError) error {
+	if err := needsMigrationErr.runMigration(ctx, o.schemaEvolver); err != nil {
+		return err
+	}
+	// After a migration we need to reopen all our channels
+	// so close and reopen our impl
+	if err := o.impl.Close(ctx); err != nil {
+		return err
+	}
+	if err := o.impl.Connect(ctx); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (o *snowpipeStreamingOutput) Close(ctx context.Context) error {
