@@ -41,7 +41,7 @@ type (
 		Reset()
 	}
 	cappedImpl[T any] struct {
-		ctor      func(context.Context) (T, error)
+		ctor      func(context.Context, int) (T, error)
 		queued    chan T
 		allocated atomic.Int64
 		mu        sync.Mutex
@@ -51,7 +51,7 @@ type (
 var _ Capped[any] = &cappedImpl[any]{}
 
 // NewCapped constructs a new pool that will create up to `capacity` elements using `ctor`.
-func NewCapped[T any](capacity int, ctor func(context.Context) (T, error)) Capped[T] {
+func NewCapped[T any](capacity int, ctor func(context.Context, int) (T, error)) Capped[T] {
 	return &cappedImpl[T]{
 		ctor:   ctor,
 		queued: make(chan T, capacity),
@@ -69,11 +69,12 @@ func (p *cappedImpl[T]) Acquire(ctx context.Context) (T, error) {
 	}
 	p.mu.Lock()
 	// since we grabbed the lock we could have hit our cap
-	if p.Size() >= cap(p.queued) {
+	id := p.Size()
+	if id >= cap(p.queued) {
 		p.mu.Unlock()
 		return p.acquireWait(ctx)
 	}
-	item, err := p.ctor(ctx)
+	item, err := p.ctor(ctx, id)
 	if err == nil {
 		p.allocated.Add(1)
 	}
