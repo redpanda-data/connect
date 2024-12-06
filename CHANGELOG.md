@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.44.0 - TBD
+
+### Fixed
+
+- Trial Redpanda Enterprise licenses are now considered valid. (@Jeffail)
+
 ## 4.43.0 - 2024-12-05
 
 ### Changed

@@ -33,6 +33,11 @@ var licensePublicKeyPem []byte
 
 const defaultLicenseFilepath = "/etc/redpanda/redpanda.license"
 
+var openSourceLicense = RedpandaLicense{
+	Type:   -1,
+	Expiry: time.Now().Add(time.Hour * 24 * 365 * 10).Unix(),
+}
+
 // Service is the license service.
 type Service struct {
 	logger        *service.Logger
@@ -101,30 +106,18 @@ func InjectTestService(res *service.Resources) {
 func (s *Service) readAndValidateLicense() (RedpandaLicense, error) {
 	licenseBytes, err := s.readLicense()
 	if err != nil {
-		return RedpandaLicense{}, err
+		return openSourceLicense, err
 	}
 
-	var license RedpandaLicense
+	license := openSourceLicense
 	if len(licenseBytes) > 0 {
 		if license, err = s.validateLicense(licenseBytes); err != nil {
-			return RedpandaLicense{}, fmt.Errorf("failed to validate license: %w", err)
-		}
-		if license.Type == 0 {
-			// If the license is a trial then we reject it because connect does
-			// not support trials.
-			return RedpandaLicense{}, errors.New("trial license detected, Redpanda Connect does not support enterprise license trials")
-		}
-	} else {
-		// An open source license is the final fall back.
-		year := time.Hour * 24 * 365
-		license = RedpandaLicense{
-			Expiry: time.Now().Add(10 * year).Unix(),
-			Type:   -1,
+			return openSourceLicense, fmt.Errorf("failed to validate license: %w", err)
 		}
 	}
 
 	if err := license.CheckExpiry(); err != nil {
-		return RedpandaLicense{}, err
+		return openSourceLicense, err
 	}
 
 	s.logger.With(
@@ -175,11 +168,11 @@ func (s *Service) validateLicense(license []byte) (RedpandaLicense, error) {
 	block, _ := pem.Decode(publicKeyBytes)
 	publicKey, err := x509.ParsePKIXPublicKey(block.Bytes)
 	if err != nil {
-		return RedpandaLicense{}, fmt.Errorf("failed to parse public key: %w", err)
+		return openSourceLicense, fmt.Errorf("failed to parse public key: %w", err)
 	}
 	publicKeyRSA, ok := publicKey.(*rsa.PublicKey)
 	if !ok {
-		return RedpandaLicense{}, errors.New("failed to parse public key, expected dateFormat is not RSA")
+		return openSourceLicense, errors.New("failed to parse public key, expected dateFormat is not RSA")
 	}
 
 	// Trim Whitespace and Linebreaks for input license
@@ -188,7 +181,7 @@ func (s *Service) validateLicense(license []byte) (RedpandaLicense, error) {
 	// 2. Split license contents by delimiter
 	splitParts := bytes.Split(license, []byte("."))
 	if len(splitParts) != 2 {
-		return RedpandaLicense{}, errors.New("failed to split license contents by delimiter")
+		return openSourceLicense, errors.New("failed to split license contents by delimiter")
 	}
 
 	licenseDataEncoded := splitParts[0]
@@ -196,24 +189,24 @@ func (s *Service) validateLicense(license []byte) (RedpandaLicense, error) {
 
 	licenseData, err := base64.StdEncoding.DecodeString(string(licenseDataEncoded))
 	if err != nil {
-		return RedpandaLicense{}, fmt.Errorf("failed to decode license data: %w", err)
+		return openSourceLicense, fmt.Errorf("failed to decode license data: %w", err)
 	}
 
 	signature, err := base64.StdEncoding.DecodeString(string(signatureEncoded))
 	if err != nil {
-		return RedpandaLicense{}, fmt.Errorf("failed to decode license signature: %w", err)
+		return openSourceLicense, fmt.Errorf("failed to decode license signature: %w", err)
 	}
 	hash := sha256.Sum256(licenseDataEncoded)
 
 	// 3. Verify license contents with static public key
 	if err := rsa.VerifyPKCS1v15(publicKeyRSA, crypto.SHA256, hash[:], signature); err != nil {
-		return RedpandaLicense{}, fmt.Errorf("failed to verify license signature: %w", err)
+		return openSourceLicense, fmt.Errorf("failed to verify license signature: %w", err)
 	}
 
 	// 4. If license contents seem to be legit, we will continue unpacking the license
 	var rpLicense RedpandaLicense
 	if err := json.Unmarshal(licenseData, &rpLicense); err != nil {
-		return RedpandaLicense{}, fmt.Errorf("failed to unmarshal license data: %w", err)
+		return openSourceLicense, fmt.Errorf("failed to unmarshal license data: %w", err)
 	}
 
 	return rpLicense, nil
