@@ -36,7 +36,7 @@ type foo struct {
 
 func TestReuse(t *testing.T) {
 	foos := []*foo{{1}, {2}, {3}}
-	p := pool.NewCapped(len(foos), func(context.Context) (*foo, error) {
+	p := pool.NewCapped(len(foos), func(context.Context, int) (*foo, error) {
 		return nil, errors.New("")
 	})
 	for _, f := range foos {
@@ -57,7 +57,8 @@ func TestReuse(t *testing.T) {
 
 func TestAcquire(t *testing.T) {
 	numCreated := 0
-	p := pool.NewCapped(5, func(context.Context) (foo, error) {
+	p := pool.NewCapped(5, func(ctx context.Context, id int) (foo, error) {
+		require.Equal(t, id, numCreated)
 		numCreated++
 		return foo{}, nil
 	})
@@ -94,7 +95,7 @@ func TestAcquire(t *testing.T) {
 }
 
 func TestCtorCancellation(t *testing.T) {
-	p := pool.NewCapped(5, func(ctx context.Context) (any, error) {
+	p := pool.NewCapped(5, func(ctx context.Context, id int) (any, error) {
 		<-ctx.Done()
 		return nil, ctx.Err()
 	})
@@ -109,9 +110,9 @@ func TestCtorCancellation(t *testing.T) {
 
 func TestRandomized(t *testing.T) {
 	var created atomic.Int64
-	p := pool.NewCapped(5, func(ctx context.Context) (*foo, error) {
+	p := pool.NewCapped(5, func(ctx context.Context, id int) (*foo, error) {
 		created.Add(1)
-		return &foo{}, nil
+		return &foo{id}, nil
 	})
 	var wg sync.WaitGroup
 	for i := 0; i < 25; i++ {
