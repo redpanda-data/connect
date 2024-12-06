@@ -555,8 +555,7 @@ func newSnowflakeStreamer(
 			offsetToken:            offsetToken,
 			schemaMigrationEnabled: schemaEvolver != nil,
 		}
-		pooled.channelPool = pool.NewCapped(maxInFlight, func(ctx context.Context) (*streaming.SnowflakeIngestionChannel, error) {
-			id := pooled.channelPool.Size()
+		pooled.channelPool = pool.NewCapped(maxInFlight, func(ctx context.Context, id int) (*streaming.SnowflakeIngestionChannel, error) {
 			name := fmt.Sprintf("%s_%d", pooled.channelPrefix, id)
 			return pooled.openChannel(ctx, name, int16(id))
 		})
