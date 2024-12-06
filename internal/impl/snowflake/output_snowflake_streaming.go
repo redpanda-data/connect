@@ -11,6 +11,8 @@ package snowflake
 import (
 	"context"
 	"crypto/rsa"
+	"crypto/sha256"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"strings"
@@ -139,9 +141,9 @@ NOTE: There is a limit of 10,000 streams per table - if using more than 10k stre
 			service.NewInterpolatedStringField(ssoFieldChannelName).
 				Description(`The channel name to use.
 Duplicate channel names will result in errors and prevent multiple instances of Redpanda Connect from writing at the same time.
-Note that batches are partitioned by this field, so you may end up with smaller batches if every message in a batch does not belong
-to the same channel. It's recommended to batch at the input level to ensure that batches contain messages for the same channel if using
-an input that is partitioned (such as an Apache Kafka topic).
+Note that batches are assumed to all contain messages for the same channel, so this interpolation is only executed on the first
+message in each batch. It's recommended to batch at the input level to ensure that batches contain messages for the same channel
+if using an input that is partitioned (such as an Apache Kafka topic).
 
 This option is mutually exclusive with `+"`"+ssoFieldChannelPrefix+"`"+`.
 
@@ -169,19 +171,61 @@ For more information about offset tokens, see https://docs.snowflake.com/en/user
   this.exists("channel_prefix") && this.exists("channel_name") => [ "both `+"`channel_prefix`"+` and `+"`channel_name`"+` can't be set simultaneously" ],
 }`).
 		Example(
-			"Ingesting data from Redpanda",
-			`How to ingest data from Redpanda with consumer groups, decode the schema using the schema registry, then write the corresponding data into Snowflake.`,
+			"Exactly once CDC into Snowflake",
+			`How to send data from a PostgreSQL table into Snowflake exactly once using Postgres Logical Replication.
+
+NOTE: If attempting to do exactly-once it's important that rows are delivered in order to the output. Be sure to read the documentation for offset_token first.
+Removing the offset_token is a safer option that will instruct Redpanda Connect to use it's default at-least-once delivery model instead.`,
 			`
 input:
-  kafka_franz:
-    seed_brokers: ["redpanda.example.com:9092"]
+  postgres_cdc:
+    dsn: postgres://foouser:foopass@localhost:5432/foodb
+    schema: "public"
+    tables: ["my_pg_table"]
+    # We want very large batches - each batch will be sent to Snowflake individually
+    # so to optimize query performance we want as big of files as we have memory for
+    batching:
+      count: 50000
+      period: 45s
+    # Prevent multiple batches from being in flight at once, so that we never send
+    # batch while another batch is being retried, this is important to ensure that
+    # the Snowflake Snowpipe Streaming channel does not see older data - as it will
+    # assume that the older data is already committed.
+    checkpoint_limit: 1
+output:
+  snowflake_streaming:
+    # We use the log sequence number in the WAL from Postgres to ensure we
+    # only upload data exactly once, these are already lexicographically
+    # ordered.
+    offset_token: "${!@lsn}"
+    # Since we're sending a single ordered log, we can only send on thing
+    # at a time to ensure that we're properly incrementing our offset_token
+    # and only using a single channel at a time.
+    max_in_flight: 1
+    account: "MYSNOW-ACCOUNT"
+    user: MYUSER
+    role: ACCOUNTADMIN
+    database: "MYDATABASE"
+    schema: "PUBLIC"
+    table: "MY_PG_TABLE"
+    private_key_file: "my/private/key.p8"
+`).
+		Example(
+			"Ingesting data exactly once from Redpanda",
+			`How to ingest data from Redpanda with consumer groups, decode the schema using the schema registry, then write the corresponding data into Snowflake exactly once.
+
+NOTE: If attempting to do exactly-once it's important that records are delivered in order to the output and correctly partitioned. Be sure to read the documentation for 
+channel_name and offset_token first. Removing the offset_token is a safer option that will instruct Redpanda Connect to use it's default at-least-once delivery model instead.`,
+			`
+input:
+  redpanda_common:
     topics: ["my_topic_going_to_snow"]
     consumer_group: "redpanda_connect_to_snowflake"
-    tls: {enabled: true}
-    sasl:
-      - mechanism: SCRAM-SHA-256
-        username: MY_USER_NAME
-        password: "${TODO}"
+    # We want very large batches - each batch will be sent to Snowflake individually
+    # so to optimize query performance we want as big of files as we have memory for
+    fetch_max_bytes: 100MiB
+    fetch_min_bytes: 50MiB
+    partition_buffer_bytes: 100MiB
 pipeline:
   processors:
     - schema_registry_decode:
@@ -191,25 +235,34 @@ pipeline:
           username: MY_USER_NAME
           password: "${TODO}"
 output:
-  snowflake_streaming:
-    # By default there is only a single channel per output table allowed
-    # if we want to have multiple Redpanda Connect streams writing data
-    # then we need a unique channel prefix per stream. We'll use the host
-    # name to get unique prefixes in this example.
-    channel_prefix: "snowflake-channel-for-${HOST}"
-    account: "MYSNOW-ACCOUNT"
-    user: MYUSER
-    role: ACCOUNTADMIN
-    database: "MYDATABASE"
-    schema: "PUBLIC"
-    table: "MYTABLE"
-    private_key_file: "my/private/key.p8"
-    schema_evolution:
-      enabled: true
+  fallback:
+    - snowflake_streaming:
+        # To ensure that we write an ordered stream each partition in kafka gets it's own
+        # channel.
+        channel_name: "partition-${!@kafka_partition}"
+        # Ensure that our offsets are lexicographically sorted by padding with
+        # leading zeros
+        offset_token: offset-${!"%016X".format(@kafka_offset)}
+        account: "MYSNOW-ACCOUNT"
+        user: MYUSER
+        role: ACCOUNTADMIN
+        database: "MYDATABASE"
+        schema: "PUBLIC"
+        table: "MYTABLE"
+        private_key_file: "my/private/key.p8"
+        schema_evolution:
+          enabled: true
+    # In order to prevent delivery orders from messing with the order of delivered records
+    # it's important that failures are immediately sent to a dead letter queue and not retried
+    # to Snowflake. See the ordering documentation for the "redpanda" input for more details.
+    - retry:
+        output:
+          redpanda_common:
+            topic: "dead_letter_queue"
 `,
 		).
 		Example(
-			"HTTP Sidecar to push data to Snowflake",
+			"HTTP Server to push data to Snowflake",
 			`This example demonstrates how to create an HTTP server input that can recieve HTTP PUT requests
 with JSON payloads, that are buffered locally then written to Snowflake in batches.
 
@@ -237,6 +290,13 @@ output:
     schema: "PUBLIC"
     table: "MYTABLE"
     private_key_file: "my/private/key.p8"
+    # By default there is only a single channel per output table allowed
+    # if we want to have multiple Redpanda Connect streams writing data
+    # then we need a unique channel prefix per stream. We'll use the host
+    # name to get unique prefixes in this example.
+    channel_prefix: "snowflake-channel-for-${HOST}"
+    schema_evolution:
+      enabled: true
 `,
 		)
 }
@@ -460,21 +520,48 @@ func newSnowflakeStreamer(
 			role:                   role,
 		}
 	}
-	// TODO(rockwood): support channel name...
-	impl := &snowpipePooledOutput{
-		channelPrefix:          channelPrefix,
-		client:                 client,
-		db:                     db,
-		schema:                 schema,
-		table:                  table,
-		role:                   role,
-		logger:                 mgr.Logger(),
-		metrics:                newSnowpipeMetrics(mgr.Metrics()),
-		buildOpts:              buildOpts,
-		offsetToken:            offsetToken,
-		schemaMigrationEnabled: schemaEvolver != nil,
+	var impl service.BatchOutput
+	if channelName != nil {
+		indexed := &snowpipeIndexedOutput{
+			channelName:            channelName,
+			client:                 client,
+			db:                     db,
+			schema:                 schema,
+			table:                  table,
+			role:                   role,
+			logger:                 mgr.Logger(),
+			metrics:                newSnowpipeMetrics(mgr.Metrics()),
+			buildOpts:              buildOpts,
+			offsetToken:            offsetToken,
+			schemaMigrationEnabled: schemaEvolver != nil,
+		}
+		indexed.channelPool = pool.NewIndexed(func(ctx context.Context, name string) (*streaming.SnowflakeIngestionChannel, error) {
+			hash := sha256.Sum256([]byte(name))
+			id := binary.BigEndian.Uint16(hash[:])
+			return indexed.openChannel(ctx, name, int16(id))
+		})
+		impl = indexed
+	} else {
+		pooled := &snowpipePooledOutput{
+			channelPrefix:          channelPrefix,
+			client:                 client,
+			db:                     db,
+			schema:                 schema,
+			table:                  table,
+			role:                   role,
+			logger:                 mgr.Logger(),
+			metrics:                newSnowpipeMetrics(mgr.Metrics()),
+			buildOpts:              buildOpts,
+			offsetToken:            offsetToken,
+			schemaMigrationEnabled: schemaEvolver != nil,
+		}
+		pooled.channelPool = pool.NewCapped(maxInFlight, func(ctx context.Context) (*streaming.SnowflakeIngestionChannel, error) {
+			id := pooled.channelPool.Size()
+			name := fmt.Sprintf("%s_%d", pooled.channelPrefix, id)
+			return pooled.openChannel(ctx, name, int16(id))
+		})
+		impl = pooled
 	}
-	impl.channelPool = pool.NewCapped(maxInFlight, impl.openNewChannel)
 	foo := &snowpipeStreamingOutput{
 		initStatementsFn: initStatementsFn,
 		restClient:       restClient,
@@ -612,12 +699,6 @@ type snowpipePooledOutput struct {
 	schemaMigrationEnabled                 bool
 }
 
-func (o *snowpipePooledOutput) openNewChannel(ctx context.Context) (*streaming.SnowflakeIngestionChannel, error) {
-	id := o.channelPool.Size()
-	name := fmt.Sprintf("%s_%d", o.channelPrefix, id)
-	return o.openChannel(ctx, name, int16(id))
-}
-
 func (o *snowpipePooledOutput) openChannel(ctx context.Context, name string, id int16) (*streaming.SnowflakeIngestionChannel, error) {
 	o.logger.Debugf("opening snowflake streaming channel: %s", name)
 	return o.client.OpenChannel(ctx, streaming.ChannelOptions{
@@ -691,6 +772,93 @@ func (o *snowpipePooledOutput) WriteBatch(ctx context.Context, batch service.Mes
 }
 
 func (o *snowpipePooledOutput) Close(ctx context.Context) error {
+	o.channelPool.Reset()
+	return nil
+}
+
+type snowpipeIndexedOutput struct {
+	client      *streaming.SnowflakeServiceClient
+	channelPool pool.Indexed[*streaming.SnowflakeIngestionChannel]
+	metrics     *snowpipeMetrics
+	buildOpts   streaming.BuildOptions
+
+	db, schema, table, role  string
+	offsetToken, channelName *service.InterpolatedString
+	logger                   *service.Logger
+	schemaMigrationEnabled   bool
+}
+
+func (o *snowpipeIndexedOutput) openChannel(ctx context.Context, name string, id int16) (*streaming.SnowflakeIngestionChannel, error) {
+	o.logger.Debugf("opening snowflake streaming channel: %s", name)
+	return o.client.OpenChannel(ctx, streaming.ChannelOptions{
+		ID:                      id,
+		Name:                    name,
+		DatabaseName:            o.db,
+		SchemaName:              o.schema,
+		TableName:               o.table,
+		BuildOptions:            o.buildOpts,
+		StrictSchemaEnforcement: o.schemaMigrationEnabled,
+	})
+}
+
+func (o *snowpipeIndexedOutput) Connect(ctx context.Context) error {
+	// Unlike the pooled output, we cannot guess what channels are used ahead of time.
+	return nil
+}
+
+func (o *snowpipeIndexedOutput) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
+	channelName, err := batch.TryInterpolatedString(0, o.channelName)
+	if err != nil {
+		return fmt.Errorf("error executing %s: %w", ssoFieldChannelName, err)
+	}
+	channel, err := o.channelPool.Acquire(ctx, channelName)
+	if err != nil {
+		return fmt.Errorf("unable to open snowflake streaming channel: %w", err)
+	}
+	var offsets *streaming.OffsetTokenRange
+	if o.offsetToken != nil {
+		batch, offsets, err = preprocessForExactlyOnce(channel, o.offsetToken, batch)
+		if err != nil || len(batch) == 0 {
+			o.channelPool.Release(channel.Name, channel)
+			return err
+		}
+		o.logger.Debugf("inserting rows using channel %s at offsets: %+v", channel.Name, *offsets)
+	} else {
+		o.logger.Debugf("inserting rows using channel %s", channel.Name)
+	}
+	stats, err := channel.InsertRows(ctx, batch, offsets)
+	if err != nil {
+		// Only evolve the schema if requested.
+		if o.schemaMigrationEnabled {
+			schemaErr, ok := asSchemaMigrationError(err)
+			if ok {
+				// put the channel back so that we can reopen it along with the rest of the channels to
+				// pick up the new schema.
+				o.channelPool.Release(channel.Name, channel)
+				return schemaErr
+			}
+		}
+		reopened, reopenErr := o.openChannel(ctx, channel.Name, channel.ID)
+		if reopenErr == nil {
+			o.channelPool.Release(channel.Name, reopened)
+		} else {
+			o.logger.Warnf("unable to reopen channel %q after failure: %v", channel.Name, reopenErr)
+			// Keep around the same channel so retry opening later
+			o.channelPool.Release(channel.Name, channel)
+		}
+		return wrapInsertError(err)
+	}
+	o.logger.Debugf("done inserting %d rows using channel %s, stats: %+v", len(batch), channel.Name, stats)
+	o.metrics.Report(stats)
+	polls, err := channel.WaitUntilCommitted(ctx)
+	if err == nil {
+		o.logger.Tracef("batch committed in snowflake after %d polls", polls)
+	}
+	o.channelPool.Release(channel.Name, channel)
+	return err
+}
+
+func (o *snowpipeIndexedOutput) Close(ctx context.Context) error {
 	o.channelPool.Reset()
 	return nil
 }
