@@ -72,6 +72,16 @@ func TestLicenseEnterpriseValidation(t *testing.T) {
 			IsEnterprise: false,
 		},
 		{
+			Name: "open source license",
+			License: RedpandaLicense{
+				Version:      3,
+				Organization: "meow",
+				Type:         -1,
+				Expiry:       time.Now().Add(time.Hour).Unix(),
+			},
+			IsEnterprise: false,
+		},
+		{
 			Name: "free trial license",
 			License: RedpandaLicense{
 				Version:      3,
@@ -79,7 +89,7 @@ func TestLicenseEnterpriseValidation(t *testing.T) {
 				Type:         0,
 				Expiry:       time.Now().Add(time.Hour).Unix(),
 			},
-			IsEnterprise: false,
+			IsEnterprise: true,
 		},
 		{
 			Name: "enterprise license",
@@ -199,7 +209,7 @@ func TestLicenseEnterpriseExplicit(t *testing.T) {
 	_, license = createLicense(t, RedpandaLicense{
 		Version:      3,
 		Organization: "meow",
-		Type:         0,
+		Type:         -1,
 		Expiry:       time.Now().Add(time.Hour).Unix(),
 	})
 	require.NoError(t, os.WriteFile(tmpAlsoBadLicensePath, []byte(license), 0o777))

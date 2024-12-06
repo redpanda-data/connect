@@ -27,7 +27,9 @@ type RedpandaLicense struct {
 
 // AllowsEnterpriseFeatures returns true if license type allows enterprise features.
 func (r *RedpandaLicense) AllowsEnterpriseFeatures() bool {
-	return r.Type == 1
+	// Right now any enterprise or trial license that was valid when we started
+	// is considered valid here.
+	return r.Type == 1 || r.Type == 0
 }
 
 func typeDisplayName(t int) string {
