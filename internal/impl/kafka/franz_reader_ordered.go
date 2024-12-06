@@ -57,6 +57,7 @@ func FranzReaderOrderedConfigFields() []*service.ConfigField {
 
 //------------------------------------------------------------------------------
 
+// RecordToMessageFn is a function that converts a Kafka record into a Message.
 type RecordToMessageFn func(record *kgo.Record) (*service.Message, error)
 
 // FranzReaderOrdered implements a kafka reader using the franz-go library.

@@ -168,7 +168,7 @@ func init() {
 					return nil, fmt.Errorf("failed to decode record key: %s", err)
 				}
 
-				isExpectedTopic := false
+				var isExpectedTopic bool
 				if len(topicPatterns) > 0 {
 					isExpectedTopic = slices.ContainsFunc(topicPatterns, func(tp *regexp.Regexp) bool {
 						return tp.MatchString(key.Topic)
