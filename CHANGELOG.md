@@ -54,6 +54,7 @@ All notable changes to this project will be documented in this file.
 
 - Trial Redpanda Enterprise licenses are now considered valid. (@Jeffail)
 - The `redpanda_migrator_bundle` output now skips schema ID translation when `translate_schema_ids: false` and `schema_registry` is configured. (@mihaitodor)
+- The `redpanda_migrator` output no longer rejects messages if it can't perform schema ID translation. (@mihaitodor)
 
 ## 4.43.0 - 2024-12-05
 
