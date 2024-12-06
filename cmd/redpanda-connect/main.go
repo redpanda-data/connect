@@ -27,7 +27,7 @@ var (
 	// DateBuilt date built set at compile time.
 	DateBuilt string
 	// BinaryName binary name.
-	BinaryName string = "redpanda-connect"
+	BinaryName string = "rpk connect"
 )
 
 func main() {
