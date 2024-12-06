@@ -20,10 +20,11 @@ import (
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
+	"github.com/stretchr/testify/require"
+
 	"github.com/redpanda-data/connect/v4/internal/impl/snowflake"
 	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming"
 	"github.com/redpanda-data/connect/v4/internal/license"
-	"github.com/stretchr/testify/require"
 )
 
 func EnvOrDefault(name, fallback string) string {
