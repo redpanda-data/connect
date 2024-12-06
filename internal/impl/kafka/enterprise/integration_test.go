@@ -713,6 +713,55 @@ output:
 	err = stream.Run(ctx)
 	require.NoError(t, err)
 
+	// Run the Redpanda Migrator bundle
+	streamBuilder = service.NewStreamBuilder()
+	require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
+input:
+  redpanda_migrator_bundle:
+    redpanda_migrator:
+      seed_brokers: [ %s ]
+      topics: [ %s ]
+      consumer_group: blobfish
+      start_from_oldest: true
+      replication_factor_override: true
+      replication_factor: -1
+    schema_registry:
+      url: %s
+
+output:
+  redpanda_migrator_bundle:
+    redpanda_migrator:
+      seed_brokers: [ %s ]
+      replication_factor_override: true
+      replication_factor: -1
+    schema_registry:
+      url: %s
+`, source.brokerAddr, dummyTopic, source.schemaRegistryURL, destination.brokerAddr, destination.schemaRegistryURL)))
+	// require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
+
+	stream, err = streamBuilder.Build()
+	require.NoError(t, err)
+
+	license.InjectTestService(stream.Resources())
+
+	t.Log("Running migrator")
+
+	// Run stream in the background and shut it down when the test is finished
+	migratorCloseChan := make(chan struct{})
+	go func() {
+		err = stream.Run(context.Background())
+		require.NoError(t, err)
+
+		close(migratorCloseChan)
+	}()
+	t.Cleanup(func() {
+		require.NoError(t, stream.StopWithin(3*time.Second))
+
+		<-migratorCloseChan
+	})
+
+	time.Sleep(10 * time.Second)
+
 	// Read the message using a consumer group
 	dummyConsumerGroup := "test"
 
@@ -759,53 +808,7 @@ input:
 	err = stream.Run(ctx)
 	require.NoError(t, err)
 
-	// Run the Redpanda Migrator bundle
-	streamBuilder = service.NewStreamBuilder()
-	require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
-input:
-  redpanda_migrator_bundle:
-    redpanda_migrator:
-      seed_brokers: [ %s ]
-      topics: [ %s ]
-      consumer_group: %s
-      start_from_oldest: true
-      replication_factor_override: true
-      replication_factor: -1
-    schema_registry:
-      url: %s
-
-output:
-  redpanda_migrator_bundle:
-    redpanda_migrator:
-      seed_brokers: [ %s ]
-      replication_factor_override: true
-      replication_factor: -1
-    schema_registry:
-      url: %s
-`, source.brokerAddr, dummyTopic, dummyConsumerGroup, source.schemaRegistryURL, destination.brokerAddr, destination.schemaRegistryURL)))
-	// require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
-
-	stream, err = streamBuilder.Build()
-	require.NoError(t, err)
-
-	license.InjectTestService(stream.Resources())
-
-	ctx, done = context.WithTimeout(context.Background(), 30*time.Second)
-
-	t.Log("Running migrator")
-
-	// Run stream in the background and shut it down when the test is finished
-	migratorCloseChan := make(chan struct{})
-	go func() {
-		err = stream.Run(ctx)
-		require.NoError(t, err)
-
-		close(migratorCloseChan)
-	}()
-	t.Cleanup(func() {
-		done()
-		<-migratorCloseChan
-	})
+	time.Sleep(10 * time.Second)
 
 	// Produce one message
 	streamBuilder = service.NewStreamBuilder()
@@ -844,7 +847,7 @@ output:
 	require.NoError(t, err)
 
 	t.Log("Produced message")
-	time.Sleep(5 * time.Hour) //////////////////////////////// TODOOOOOOOOOOOOOOOOOOOO
+	time.Sleep(10 * time.Second) //////////////////////////////// TODOOOOOOOOOOOOOOOOOOOO
 
 	// Read the message using a consumer group
 	streamBuilder = service.NewStreamBuilder()
