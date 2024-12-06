@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Trial Redpanda Enterprise licenses are now considered valid. (@Jeffail)
+- The `redpanda_migrator` output no longer rejects messages if it can't perform schema ID translation. (@mihaitodor)
 
 ## 4.43.0 - 2024-12-05
 
