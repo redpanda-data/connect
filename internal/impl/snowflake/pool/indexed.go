@@ -28,8 +28,8 @@ type (
 		Acquire(ctx context.Context, name string) (T, error)
 		// Return the object back to the pool to be used.
 		Release(name string, item T)
-		// Keys returns the keys or names of all items in the indexed pool
-		Keys() []string
+		// Reset all items in the pool
+		Reset()
 	}
 	indexedImpl[T any] struct {
 		ctor  func(context.Context, string) (T, error)
@@ -92,11 +92,8 @@ func (p *indexedImpl[T]) Release(name string, item T) {
 	p.items[name] <- item
 }
 
-func (p *indexedImpl[T]) Keys() (keys []string) {
+func (p *indexedImpl[T]) Reset() {
 	_ = p.lock(context.Background())
-	defer p.unlock()
-	for k := range p.items {
-		keys = append(keys, k)
-	}
-	return
+	clear(p.items)
+	p.unlock()
 }
