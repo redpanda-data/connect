@@ -77,13 +77,13 @@ input:
     fetch_max_partition_bytes: 1MiB
     consumer_group: "" # No default (optional)
     commit_period: 5s
-    multi_header: false
     batch_size: 1024
     auto_replay_nacks: true
     topic_lag_refresh_period: 5s
     output_resource: redpanda_migrator_output
     replication_factor_override: true
     replication_factor: 3
+    multi_header: false
 ```
 
 --
@@ -623,15 +623,6 @@ The period of time between each commit of the current partition offsets. Offsets
 
 *Default*: `"5s"`
 
-=== `multi_header`
-
-Decode headers into lists to allow handling of multiple values with the same key
-
-
-*Type*: `bool`
-
-*Default*: `false`
-
 === `batch_size`
 
 The maximum number of messages that should be accumulated into each batch.
@@ -685,5 +676,14 @@ Replication factor for created topics. This is only used when `replication_facto
 *Type*: `int`
 
 *Default*: `3`
+
+=== `multi_header`
+
+Decode headers into lists to allow handling of multiple values with the same key
+
+
+*Type*: `bool`
+
+*Default*: `false`
 
 

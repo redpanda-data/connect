@@ -31,12 +31,14 @@ import (
 const (
 	rmiFieldConsumerGroup             = "consumer_group"
 	rmiFieldCommitPeriod              = "commit_period"
-	rmiFieldMultiHeader               = "multi_header"
 	rmiFieldBatchSize                 = "batch_size"
 	rmiFieldTopicLagRefreshPeriod     = "topic_lag_refresh_period"
 	rmiFieldOutputResource            = "output_resource"
 	rmiFieldReplicationFactorOverride = "replication_factor_override"
 	rmiFieldReplicationFactor         = "replication_factor"
+
+	// Deprecated
+	rmiFieldMultiHeader = "multi_header"
 
 	rmiResourceDefaultLabel = "redpanda_migrator_input"
 )
@@ -107,10 +109,6 @@ func RedpandaMigratorInputConfigFields() []*service.ConfigField {
 				Description("The period of time between each commit of the current partition offsets. Offsets are always committed during shutdown.").
 				Default("5s").
 				Advanced(),
-			service.NewBoolField(rmiFieldMultiHeader).
-				Description("Decode headers into lists to allow handling of multiple values with the same key").
-				Default(false).
-				Advanced(),
 			service.NewIntField(rmiFieldBatchSize).
 				Description("The maximum number of messages that should be accumulated into each batch.").
 				Default(1024).
@@ -131,6 +129,12 @@ func RedpandaMigratorInputConfigFields() []*service.ConfigField {
 			service.NewIntField(rmiFieldReplicationFactor).
 				Description("Replication factor for created topics. This is only used when `replication_factor_override` is set to `true`.").
 				Default(3).
+				Advanced(),
+
+			// Deprecated
+			service.NewBoolField(rmiFieldMultiHeader).
+				Description("Decode headers into lists to allow handling of multiple values with the same key").
+				Default(false).
 				Advanced(),
 		},
 	)
@@ -167,7 +171,6 @@ type RedpandaMigratorReader struct {
 
 	consumerGroup             string
 	commitPeriod              time.Duration
-	multiHeader               bool
 	batchSize                 int
 	topicLagRefreshPeriod     time.Duration
 	outputResource            string
@@ -228,10 +231,6 @@ func NewRedpandaMigratorReaderFromConfig(conf *service.ParsedConfig, mgr *servic
 		return nil, err
 	}
 
-	if r.multiHeader, err = conf.FieldBool(rmiFieldMultiHeader); err != nil {
-		return nil, err
-	}
-
 	if r.topicLagRefreshPeriod, err = conf.FieldDuration(rmiFieldTopicLagRefreshPeriod); err != nil {
 		return nil, err
 	}
@@ -256,7 +255,7 @@ func NewRedpandaMigratorReaderFromConfig(conf *service.ParsedConfig, mgr *servic
 }
 
 func (r *RedpandaMigratorReader) recordToMessage(record *kgo.Record) *service.Message {
-	msg := kafka.FranzRecordToMessageV0(record, r.multiHeader)
+	msg := kafka.FranzRecordToMessageV1(record)
 
 	lag := int64(0)
 	if val, ok := r.topicLagCache.Load(fmt.Sprintf("%s_%d", record.Topic, record.Partition)); ok {
