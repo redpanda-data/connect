@@ -9,6 +9,8 @@ All notable changes to this project will be documented in this file.
 
 - Trial Redpanda Enterprise licenses are now considered valid. (@Jeffail)
 - The `redpanda_migrator` output no longer rejects messages if it can't perform schema ID translation. (@mihaitodor)
+- The `redpanda_migrator` input no longer converts the kafka key to string. (@mihaitodor)
+- Field `multi_header` for the `redpanda_migrator` input is now deprecated. (@mihaitodor)
 
 ## 4.43.0 - 2024-12-05
 
