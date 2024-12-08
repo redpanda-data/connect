@@ -179,7 +179,7 @@ func init() {
 					})
 				}
 				if !isExpectedTopic {
-					return nil, fmt.Errorf("skipping updates for the %q topic: %s", key.Topic, err)
+					return nil, fmt.Errorf("skipping updates for topic %q", key.Topic)
 				}
 
 				offsetCommitValue := kmsg.NewOffsetCommitValue()
