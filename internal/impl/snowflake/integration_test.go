@@ -144,3 +144,61 @@ snowflake_streaming:
 		{"zing", "6"},
 	}, rows)
 }
+
+func TestIntegrationNamedChannels(t *testing.T) {
+	integration.CheckSkip(t)
+	produce, stream := SetupSnowflakeStream(t, `
+label: snowpipe_streaming
+snowflake_streaming:
+  account: "${SNOWFLAKE_ACCOUNT:WQKFXQQ-WI77362}"
+  user: "${SNOWFLAKE_USER:ROCKWOODREDPANDA}"
+  role: ACCOUNTADMIN
+  database: "${SNOWFLAKE_DB:BABY_DATABASE}"
+  schema: PUBLIC
+  table: integration_test_named_channels
+  init_statement: |
+    DROP TABLE IF EXISTS integration_test_named_channels;
+  private_key_file: "${SNOWFLAKE_PRIVATE_KEY:./streaming/resources/rsa_key.p8}"
+  max_in_flight: 1
+  offset_token: "${!this.token}"
+  channel_name: "${!this.channel}"
+  schema_evolution:
+    enabled: true
+`)
+	RunStreamInBackground(t, stream)
+	require.NoError(t, produce(context.Background(), Batch([]map[string]any{
+		{"foo": "bar", "token": 1, "channel": "foo"},
+		{"foo": "baz", "token": 2, "channel": "foo"},
+		{"foo": "qux", "token": 3, "channel": "foo"},
+		{"foo": "zoom", "token": 4, "channel": "foo"},
+	})))
+	require.NoError(t, produce(context.Background(), Batch([]map[string]any{
+		{"foo": "qux", "token": 3, "channel": "bar"},
+		{"foo": "zoom", "token": 4, "channel": "bar"},
+		{"foo": "thud", "token": 5, "channel": "bar"},
+		{"foo": "zing", "token": 6, "channel": "bar"},
+	})))
+	require.NoError(t, produce(context.Background(), Batch([]map[string]any{
+		{"foo": "thud", "token": 5, "channel": "bar"},
+		{"foo": "zing", "token": 6, "channel": "bar"},
+		{"foo": "bizz", "token": 7, "channel": "bar"},
+		{"foo": "bang", "token": 8, "channel": "bar"},
+	})))
+	rows := RunSQLQuery(
+		t,
+		stream,
+		`SELECT foo, token, channel FROM integration_test_named_channels ORDER BY channel, token`,
+	)
+	require.Equal(t, [][]string{
+		{"qux", "3", "bar"},
+		{"zoom", "4", "bar"},
+		{"thud", "5", "bar"},
+		{"zing", "6", "bar"},
+		{"bizz", "7", "bar"},
+		{"bang", "8", "bar"},
+		{"bar", "1", "foo"},
+		{"baz", "2", "foo"},
+		{"qux", "3", "foo"},
+		{"zoom", "4", "foo"},
+	}, rows)
+}
