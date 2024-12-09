@@ -170,7 +170,14 @@ docker run --rm \
 
 ## Contributing
 
-Contributions are welcome, please [read the guidelines](CONTRIBUTING.md).
+Contributions are welcome! To prevent CI errors, please always make sure a pull request has been:
+
+- Unit tested with `make test`
+- Linted with `make lint`
+- Formatted with `make fmt`
+
+Note: most integration tests need to spin up Docker containers, so they are skipped by `make test`. You can trigger
+them individually via `go test -run "^Test.*Integration.*$" ./internal/impl/<connector directory>/...`.
 
 [inputs]: https://docs.redpanda.com/redpanda-connect/components/inputs/about
 [about-categories]: https://docs.redpanda.com/redpanda-connect/about#components
