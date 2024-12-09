@@ -564,6 +564,7 @@ func newSnowflakeStreamer(
 	}
 	foo := &snowpipeStreamingOutput{
 		initStatementsFn: initStatementsFn,
+		client:           client,
 		restClient:       restClient,
 		mapping:          mapping,
 		logger:           mgr.Logger(),
@@ -637,16 +638,8 @@ func (o *snowpipeStreamingOutput) WriteBatch(ctx context.Context, batch service.
 		batch = mapped
 	}
 	if o.needsTableCreation.Load() { // Check outside of lock
-		o.mu.Lock()
-		defer o.mu.Unlock()
-		if o.needsTableCreation.Load() {
-			if err := o.schemaEvolver.CreateOutputTable(ctx, batch); err != nil {
-				return err
-			}
-			if err := o.impl.Connect(ctx); err != nil {
-				return err
-			}
-			o.needsTableCreation.Store(false)
+		if err := o.createTable(ctx, batch); err != nil {
+			return err
 		}
 		// Now we can proceed writing
 	}
@@ -675,6 +668,22 @@ func (o *snowpipeStreamingOutput) WriteBatch(ctx context.Context, batch service.
 	return err
 }
 
+func (o *snowpipeStreamingOutput) createTable(ctx context.Context, batch service.MessageBatch) error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if !o.needsTableCreation.Load() {
+		return nil
+	}
+	if err := o.schemaEvolver.CreateOutputTable(ctx, batch); err != nil {
+		return err
+	}
+	if err := o.impl.Connect(ctx); err != nil {
+		return err
+	}
+	o.needsTableCreation.Store(false)
+	return nil
+}
+
 func (o *snowpipeStreamingOutput) runMigration(ctx context.Context, needsMigrationErr schemaMigrationNeededError) error {
 	if err := needsMigrationErr.runMigration(ctx, o.schemaEvolver); err != nil {
 		return err
@@ -694,8 +703,8 @@ func (o *snowpipeStreamingOutput) Close(ctx context.Context) error {
 	if err := o.impl.Close(ctx); err != nil {
 		return err
 	}
-	o.restClient.Close()
 	o.client.Close()
+	o.restClient.Close()
 	return nil
 }
 
