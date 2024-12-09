@@ -41,13 +41,13 @@ func newSpannerChangeStreamInputConfig() *service.ConfigSpec {
 		Version("3.43.0").
 		Categories("Services", "GCP").
 		Summary("Creates an input that consumes from a spanner change stream.").
-		Field(service.NewStringField("partition_dsn")).
-		Field(service.NewStringField("partition_table")).
-		Field(service.NewBoolField("use_in_mememory_partition").Description("use an in memory partition table for tracking the partitions").Default(false)).
-		Field(service.NewStringField("stream_dsn").Optional().Default("")).
-		Field(service.NewStringField("stream_id").Description("The name of the change stream to track").Default("")).
-		Field(service.NewIntField("start_time_epoch").Optional().Description("Microsecond accurate epoch timestamp to start reading from").Default(0)).
-		Field(service.NewStringListField("allowed_mod_types").Default([]string{"INSERT", "UPDATE", "DELETE"}))
+		Field(service.NewStringField("stream_dsn").Description("Required field to use to connect to spanner for the change stream.").Example("projects/<project_id>/instances/<instance_id>/databases/<database_id>")).
+		Field(service.NewStringField("stream_id").Description("Required name of the change stream to track.").Default("")).
+		Field(service.NewIntField("start_time_epoch").Advanced().Optional().Default(0).Description("Optional microsecond accurate epoch timestamp to start reading from. If empty time.Now() will be used.")).
+		Field(service.NewStringField("partition_dsn").Optional().Description("Field used to set the DSN for the metadata partition table, can be the same as stream_dsn.").Example("projects/<project_id>/instances/<instance_id>/databases/<database_id>")).
+		Field(service.NewStringField("partition_table").Optional().Description("Name of the table to create/use in spanner to track change stream partition metadata.")).
+		Field(service.NewBoolField("use_in_mememory_partition").Description("use an in memory partition table for tracking the partitions.").Default(false)).
+		Field(service.NewStringListField("allowed_mod_types").Advanced().Description("Mod types to allow through when reading the change stream, default all.").Default([]string{"INSERT", "UPDATE", "DELETE"}))
 }
 
 func newSpannerStreamInput(conf *service.ParsedConfig, log *service.Logger) (out *spannerStreamInput, err error) {
@@ -58,23 +58,23 @@ func newSpannerStreamInput(conf *service.ParsedConfig, log *service.Logger) (out
 		log:           log,
 		shutdownSig:   shutdown.NewSignaller(),
 	}
-	out.partitionDSN, err = conf.FieldString("partition_dsn")
-	if err != nil {
+	if out.partitionDSN, err = conf.FieldString("partition_dsn"); err != nil {
 		return
 	}
 
-	out.partitionTable, err = conf.FieldString("partition_table")
-	if err != nil {
+	if out.partitionTable, err = conf.FieldString("partition_table"); err != nil {
 		return
 	}
 
-	out.streamDSN, err = conf.FieldString("stream_dsn")
-	if err != nil {
+	if out.streamDSN, err = conf.FieldString("stream_dsn"); err != nil {
 		return
 	}
 
-	out.streamID, err = conf.FieldString("stream_id")
-	if err != nil {
+	if out.streamID, err = conf.FieldString("stream_id"); err != nil {
+		return
+	}
+
+	if out.allowedModTypes, err = conf.FieldStringList("allowed_mod_types"); err != nil {
 		return
 	}
 
@@ -95,10 +95,6 @@ func newSpannerStreamInput(conf *service.ParsedConfig, log *service.Logger) (out
 		}(startTimeEpoch)
 	}
 
-	out.allowedModTypes, err = conf.FieldStringList("allowed_mod_types")
-	if err != nil {
-		return
-	}
 	if !useInMemPartition && slices.Contains([]string{out.partitionDSN, out.partitionTable, out.streamDSN, out.streamID}, "") {
 		return nil, errors.New("partition_dsn, partition_table, stream_dsn, and stream_id must be set")
 	} else if slices.Contains([]string{out.streamDSN, out.streamID}, "") {
@@ -110,7 +106,7 @@ func newSpannerStreamInput(conf *service.ParsedConfig, log *service.Logger) (out
 
 func init() {
 	err := service.RegisterInput(
-		"spanner_change_stream", newSpannerChangeStreamInputConfig(),
+		"gcp_spanner_change_stream", newSpannerChangeStreamInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 			return newSpannerStreamInput(conf, mgr.Logger())
 		})

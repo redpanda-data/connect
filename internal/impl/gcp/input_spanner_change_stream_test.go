@@ -48,6 +48,9 @@ func TestGCPSpannerChangeStreamInput_Read(t *testing.T) {
 	proc, err := newSpannerStreamInput(parsed, nil)
 	require.NoError(t, err)
 
+	mockStreamReader := &mockStreamReader{}
+	proc.reader = mockStreamReader
+
 	dataChangeRecord := &model.DataChangeRecord{
 		CommitTimestamp:                      time.Now(),
 		RecordSequence:                       "0000001",
@@ -105,7 +108,7 @@ func TestGCPSpannerChangeStreamInput_Connect(t *testing.T) {
 	mockStreamReader := &mockStreamReader{}
 	proc.reader = mockStreamReader
 
-	mockStreamReader.On("Stream", ctx, mock.Anything).Once().Return(nil)
+	mockStreamReader.On("Stream", mock.AnythingOfType("*context.cancelCtx"), mock.Anything).Once().Return(nil)
 	defer mockStreamReader.AssertExpectations(t)
 
 	err = proc.Connect(ctx)
@@ -136,7 +139,7 @@ func TestGCPSpannerChangeStreamInput_Close(t *testing.T) {
 	defer mockStreamReader.AssertExpectations(t)
 	proc.reader = mockStreamReader
 
-	mockStreamReader.On("Stream", ctx, mock.Anything).Once().Return(nil)
+	mockStreamReader.On("Stream", mock.AnythingOfType("*context.cancelCtx"), mock.Anything).Once().Return(nil)
 
 	mockStreamReader.On("Close", mock.Anything).Once().Return(nil)
 
