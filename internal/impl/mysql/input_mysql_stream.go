@@ -97,7 +97,7 @@ type mysqlStreamInput struct {
 
 	rawMessageEvents chan MessageEvent
 	msgChan          chan asyncMessage
-	cp               *checkpoint.Capped[*Position]
+	cp               *checkpoint.Capped[*position]
 
 	shutSig *shutdown.Signaller
 }
@@ -148,7 +148,7 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 	}
 
 	i := &streamInput
-	i.cp = checkpoint.NewCapped[*Position](int64(i.checkPointLimit))
+	i.cp = checkpoint.NewCapped[*position](int64(i.checkPointLimit))
 
 	i.tablesFilterMap = map[string]bool{}
 	for _, table := range i.tables {
@@ -204,6 +204,7 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 	}
 	// Parse time values as time.Time values not strings
 	canalConfig.ParseTime = true
+	// canalConfig.Logger
 
 	for _, table := range i.tables {
 		canalConfig.IncludeTableRegex = append(canalConfig.IncludeTableRegex, regexp.QuoteMeta(table))
@@ -223,7 +224,10 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 	}
 
 	pos, err := i.getCachedBinlogPosition(ctx)
-	// create snapshot instance
+	if err != nil {
+		return fmt.Errorf("unable to get cached binlog position: %w", err)
+	}
+	// create snapshot instance if we were requested and haven't finished it before.
 	var snapshot *Snapshot
 	if i.streamSnapshot && pos == nil {
 		snapshot = NewSnapshot(i.logger, db)
@@ -248,18 +252,24 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (i *mysqlStreamInput) startMySQLSync(ctx context.Context, pos *Position, snapshot *Snapshot) error {
+func (i *mysqlStreamInput) startMySQLSync(ctx context.Context, pos *position, snapshot *Snapshot) error {
 	// If we are given a snapshot, then we need to read it.
 	if snapshot != nil {
 		startPos, err := snapshot.prepareSnapshot(ctx)
 		if err != nil {
+			_ = snapshot.close()
 			return fmt.Errorf("unable to prepare snapshot: %w", err)
 		}
 		if err = i.readSnapshot(ctx, snapshot); err != nil {
+			_ = snapshot.close()
 			return fmt.Errorf("failed reading snapshot: %w", err)
 		}
 		if err = snapshot.releaseSnapshot(ctx); err != nil {
+			_ = snapshot.close()
 			return fmt.Errorf("unable to release snapshot: %w", err)
+		}
+		if err = snapshot.close(); err != nil {
+			return fmt.Errorf("unable to close snapshot: %w", err)
 		}
 		pos = startPos
 	} else if pos == nil {
@@ -270,6 +280,7 @@ func (i *mysqlStreamInput) startMySQLSync(ctx context.Context, pos *Position, sn
 		pos = &coords
 	}
 	i.logger.Infof("starting MySQL CDC stream from binlog %s at offset %d", pos.Name, pos.Pos)
+	i.currentBinlogName = pos.Name
 	i.canal.SetEventHandler(i)
 	if err := i.canal.RunFrom(*pos); err != nil {
 		return fmt.Errorf("failed to start streaming: %w", err)
@@ -396,7 +407,7 @@ func (i *mysqlStreamInput) readMessages(ctx context.Context) error {
 
 func (i *mysqlStreamInput) flushBatch(
 	ctx context.Context,
-	checkpointer *checkpoint.Capped[*Position],
+	checkpointer *checkpoint.Capped[*position],
 	batch service.MessageBatch,
 ) error {
 	if len(batch) == 0 {
@@ -405,7 +416,7 @@ func (i *mysqlStreamInput) flushBatch(
 
 	lastMsg := batch[len(batch)-1]
 	strPosition, ok := lastMsg.MetaGet("binlog_position")
-	var binLogPos *Position
+	var binLogPos *position
 	if ok {
 		pos, err := parseBinlogPosition(strPosition)
 		if err != nil {
@@ -484,7 +495,7 @@ func (i *mysqlStreamInput) Close(ctx context.Context) error {
 
 // ---- cache methods start ----
 
-func (i *mysqlStreamInput) getCachedBinlogPosition(ctx context.Context) (*Position, error) {
+func (i *mysqlStreamInput) getCachedBinlogPosition(ctx context.Context) (*position, error) {
 	var (
 		cacheVal []byte
 		cErr     error
@@ -504,7 +515,7 @@ func (i *mysqlStreamInput) getCachedBinlogPosition(ctx context.Context) (*Positi
 	return &pos, err
 }
 
-func (i *mysqlStreamInput) setCachedBinlogPosition(ctx context.Context, binLogPos Position) error {
+func (i *mysqlStreamInput) setCachedBinlogPosition(ctx context.Context, binLogPos position) error {
 	var cErr error
 	if err := i.res.AccessCache(ctx, i.binLogCache, func(c service.Cache) {
 		cErr = c.Set(
@@ -535,7 +546,7 @@ func (i *mysqlStreamInput) OnRow(e *canal.RowsEvent) error {
 	if _, ok := i.tablesFilterMap[e.Table.Name]; !ok {
 		return nil
 	}
-	i.logger.Infof("got rows (action=%s, rows=%d)", e.Action, len(e.Rows))
+	// i.logger.Infof("got rows (action=%s, rows=%d)", e.Action, len(e.Rows))
 	switch e.Action {
 	case canal.InsertAction:
 		return i.onMessage(e, 0, 1)
@@ -558,7 +569,7 @@ func (i *mysqlStreamInput) onMessage(e *canal.RowsEvent, initValue, incrementVal
 			Row:       message,
 			Operation: MessageOperation(e.Action),
 			Table:     e.Table.Name,
-			Position:  &Position{Name: i.currentBinlogName, Pos: e.Header.LogPos},
+			Position:  &position{Name: i.currentBinlogName, Pos: e.Header.LogPos},
 		}
 	}
 	return nil

@@ -16,7 +16,7 @@ import (
 	"github.com/go-mysql-org/go-mysql/mysql"
 )
 
-type Position = mysql.Position
+type position = mysql.Position
 
 // MessageOperation is a string type specifying message opration
 type MessageOperation string
@@ -37,15 +37,15 @@ type MessageEvent struct {
 	Row       map[string]any   `json:"row"`
 	Table     string           `json:"table"`
 	Operation MessageOperation `json:"operation"`
-	Position  *Position        `json:"position"`
+	Position  *position        `json:"position"`
 }
 
-func binlogPositionToString(pos Position) string {
+func binlogPositionToString(pos position) string {
 	// Pad the position so this string is lexicographically ordered.
 	return fmt.Sprintf("%s@%08X", pos.Name, pos.Pos)
 }
 
-func parseBinlogPosition(str string) (pos Position, err error) {
+func parseBinlogPosition(str string) (pos position, err error) {
 	idx := strings.LastIndexByte(str, '@')
 	if idx == -1 {
 		err = fmt.Errorf("invalid binlog string: %s", str)
