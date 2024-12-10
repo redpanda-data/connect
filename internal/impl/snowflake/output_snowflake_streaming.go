@@ -241,7 +241,7 @@ output:
         # To ensure that we write an ordered stream each partition in kafka gets it's own
         # channel.
         channel_name: "partition-${!@kafka_partition}"
-        # Ensure that our offsets are lexicographically sorted by padding with
+        # Ensure that our offsets are lexicographically sorted in string form by padding with
         # leading zeros
         offset_token: offset-${!"%016X".format(@kafka_offset)}
         account: "MYSNOW-ACCOUNT"
