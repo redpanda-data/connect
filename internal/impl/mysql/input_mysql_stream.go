@@ -22,6 +22,7 @@ import (
 	"github.com/Jeffail/shutdown"
 	"github.com/go-mysql-org/go-mysql/canal"
 	"github.com/go-mysql-org/go-mysql/replication"
+	"github.com/go-mysql-org/go-mysql/schema"
 	"github.com/go-sql-driver/mysql"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"golang.org/x/sync/errgroup"
@@ -333,8 +334,15 @@ func (i *mysqlStreamInput) readSnapshot(ctx context.Context, snapshot *Snapshot)
 					return err
 				}
 
+				types, err := batchRows.ColumnTypes()
+				if err != nil {
+					batchRows.Close()
+					return err
+				}
+
 				row := map[string]any{}
 				for idx, value := range values {
+					_ = types[idx] // TODO decode based on type
 					row[columns[idx]] = value
 					if _, ok := lastSeenPksValues[columns[idx]]; ok {
 						lastSeenPksValues[columns[idx]] = value
@@ -480,12 +488,10 @@ func (i *mysqlStreamInput) Close(ctx context.Context) error {
 	case <-i.shutSig.HasStoppedChan():
 	}
 	i.shutSig.TriggerHardStop()
-	if i.canal != nil {
-		i.canal.Close()
-	}
 	select {
 	case <-ctx.Done():
 	case <-time.After(shutdownTimeout):
+		i.logger.Error("failed to shutdown mysql_cdc within the timeout")
 	case <-i.shutSig.HasStoppedChan():
 	}
 	return nil
@@ -503,12 +509,13 @@ func (i *mysqlStreamInput) getCachedBinlogPosition(ctx context.Context) (*positi
 	if err := i.res.AccessCache(ctx, i.binLogCache, func(c service.Cache) {
 		cacheVal, cErr = c.Get(ctx, i.binLogCacheKey)
 	}); err != nil {
-		return nil, fmt.Errorf("unable to access cache: %w", err)
+		return nil, fmt.Errorf("unable to access cache for reading: %w", err)
 	}
-	if cErr != nil {
-		return nil, fmt.Errorf("unable persist checkpoint to cache: %w", cErr)
-	}
-	if cacheVal == nil {
+	if errors.Is(cErr, service.ErrKeyNotFound) {
+		return nil, nil
+	} else if cErr != nil {
+		return nil, fmt.Errorf("unable read checkpoint from cache: %w", cErr)
+	} else if cacheVal == nil {
 		return nil, nil
 	}
 	pos, err := parseBinlogPosition(string(cacheVal))
@@ -525,7 +532,7 @@ func (i *mysqlStreamInput) setCachedBinlogPosition(ctx context.Context, binLogPo
 			nil,
 		)
 	}); err != nil {
-		return fmt.Errorf("unable to access cache: %w", err)
+		return fmt.Errorf("unable to access cache for writing: %w", err)
 	}
 	if cErr != nil {
 		return fmt.Errorf("unable persist checkpoint to cache: %w", cErr)
@@ -563,7 +570,32 @@ func (i *mysqlStreamInput) onMessage(e *canal.RowsEvent, initValue, incrementVal
 	for pi := initValue; pi < len(e.Rows); pi += incrementValue {
 		message := map[string]any{}
 		for i, v := range e.Rows[pi] {
-			message[e.Table.Columns[i].Name] = v
+			col := e.Table.Columns[i]
+			switch col.Type {
+			// TODO(cdc): support more column types
+			case schema.TYPE_ENUM:
+				if col.EnumValues != nil {
+					ordinal, ok := v.(int64)
+					if !ok {
+						return fmt.Errorf("expected int value for enum column got: %T", v)
+					}
+					if ordinal < 1 || int(ordinal) > len(col.EnumValues) {
+						return fmt.Errorf("enum ordinal out of range: %d when there are %d variants", ordinal, len(col.EnumValues))
+					}
+					v = col.EnumValues[ordinal-1]
+				}
+			case schema.TYPE_JSON:
+				s, ok := v.(string)
+				if !ok {
+					return fmt.Errorf("expected string value for json column got: %T", v)
+				}
+				var decoded any
+				if err := json.Unmarshal([]byte(s), &decoded); err != nil {
+					return err
+				}
+				v = decoded
+			}
+			message[col.Name] = v
 		}
 		i.rawMessageEvents <- MessageEvent{
 			Row:       message,
