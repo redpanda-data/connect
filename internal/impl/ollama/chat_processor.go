@@ -12,8 +12,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"unicode/utf8"
 
+	"github.com/Jeffail/gabs/v2"
 	"github.com/ollama/ollama/api"
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -38,6 +40,19 @@ const (
 	ocpFieldFrequencyPenalty   = "frequency_penalty"
 	ocpFieldStop               = "stop"
 	ocpFieldEmitPromptMetadata = "save_prompt_metadata"
+	ocpFieldMaxToolCalls       = "max_tool_calls"
+
+	// Tool options
+	ocpFieldTool                     = "tools"
+	ocpToolFieldName                 = "name"
+	ocpToolFieldDesc                 = "description"
+	ocpToolFieldParams               = "parameters"
+	ocpToolParamFieldRequired        = "required"
+	ocpToolParamFieldProps           = "properties"
+	ocpToolParamPropFieldType        = "type"
+	ocpToolParamPropFieldDescription = "description"
+	ocpToolParamPropFieldEnum        = "enum"
+	ocpToolFieldPipeline             = "processors"
 )
 
 func init() {
@@ -127,6 +142,27 @@ For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ol
 			service.NewBoolField(ocpFieldEmitPromptMetadata).
 				Default(false).
 				Description(`If enabled the prompt is saved as @prompt metadata on the output message. If system_prompt is used it's also saved as @system_prompt`),
+			service.NewIntField(ocpFieldMaxToolCalls).
+				Default(3).
+				Advanced().
+				Description(`The maximum number of sequential tool calls.`).
+				LintRule(`root = if this <= 0 { ["field must be greater than zero"] }`),
+			service.NewObjectListField(
+				ocpFieldTool,
+				service.NewStringField(ocpToolFieldName).Description("The name of this tool."),
+				service.NewStringField(ocpToolFieldDesc).Description("A description of this tool, the LLM uses this to decide if the tool should be used."),
+				service.NewObjectField(
+					ocpToolFieldParams,
+					service.NewStringListField(ocpToolParamFieldRequired).Default([]string{}).Description("The required parameters for this pipeline."),
+					service.NewObjectMapField(
+						ocpToolParamFieldProps,
+						service.NewStringField(ocpToolParamPropFieldType).Description("The type of this parameter."),
+						service.NewStringField(ocpToolParamPropFieldDescription).Description("A description of this parameter."),
+						service.NewStringListField(ocpToolParamPropFieldEnum).Default([]string{}).Description("Specifies that the this parameter is an enum and only these specific values should be used."),
+					),
+				),
+				service.NewProcessorListField(ocpToolFieldPipeline).Description("The pipeline to execute when the LLM uses this tool.").Optional(),
+			).Description("The tools to allow the LLM to invoke. This allows building subpipelines that the LLM can choose to invoke to execute agentic-like actions."),
 		).Fields(commonFields()...).
 		Example(
 			"Use Llava to analyze an image",
@@ -186,7 +222,7 @@ func makeOllamaCompletionProcessor(conf *service.ParsedConfig, mgr *service.Reso
 		p.format = "json"
 	} else if format == "text" {
 		// This is the default
-		p.format = ""
+		p.format = "text"
 	} else {
 		return nil, fmt.Errorf("invalid %s: %q", ocpFieldResponseFormat, format)
 	}
@@ -194,12 +230,79 @@ func makeOllamaCompletionProcessor(conf *service.ParsedConfig, mgr *service.Reso
 	if err != nil {
 		return nil, err
 	}
+	p.maxToolCalls, err = conf.FieldInt(ocpFieldMaxToolCalls)
+	if err != nil {
+		return nil, err
+	}
+	if conf.Contains(ocpFieldTool) {
+		tools, err := conf.FieldObjectList(ocpFieldTool)
+		if err != nil {
+			return nil, err
+		}
+		for _, toolConf := range tools {
+			t := api.Tool{Type: "function"}
+			t.Function.Name, err = toolConf.FieldString(ocpToolFieldName)
+			if err != nil {
+				return nil, err
+			}
+			t.Function.Description, err = toolConf.FieldString(ocpToolFieldDesc)
+			if err != nil {
+				return nil, err
+			}
+			t.Function.Parameters.Type = "object"
+			paramsConf := toolConf.Namespace(ocpToolFieldParams)
+			t.Function.Parameters.Required, err = paramsConf.FieldStringList(ocpToolParamFieldRequired)
+			if err != nil {
+				return nil, err
+			}
+			propsConf, err := paramsConf.FieldObjectMap(ocpToolParamFieldProps)
+			if err != nil {
+				return nil, err
+			}
+			type toolParam = struct {
+				Type        string   `json:"type"`
+				Description string   `json:"description"`
+				Enum        []string `json:"enum,omitempty"`
+			}
+			t.Function.Parameters.Properties = map[string]toolParam{}
+			for name, paramConf := range propsConf {
+				paramType, err := paramConf.FieldString(ocpToolParamPropFieldType)
+				if err != nil {
+					return nil, err
+				}
+				desc, err := paramConf.FieldString(ocpToolParamPropFieldDescription)
+				if err != nil {
+					return nil, err
+				}
+				enum, err := paramConf.FieldStringList(ocpToolParamPropFieldEnum)
+				if err != nil {
+					return nil, err
+				}
+				t.Function.Parameters.Properties[name] = toolParam{
+					Type:        paramType,
+					Description: desc,
+					Enum:        enum,
+				}
+			}
+
+			pipeline, err := toolConf.FieldProcessorList(ocpToolFieldPipeline)
+			if err != nil {
+				return nil, err
+			}
+			p.tools = append(p.tools, tool{t, pipeline})
+		}
+	}
 	b, err := newBaseProcessor(conf, mgr)
 	if err != nil {
 		return nil, err
 	}
 	p.baseOllamaProcessor = b
 	return &p, nil
+}
+
+type tool struct {
+	spec     api.Tool
+	pipeline []*service.OwnedProcessor
 }
 
 type ollamaCompletionProcessor struct {
@@ -210,6 +313,8 @@ type ollamaCompletionProcessor struct {
 	systemPrompt *service.InterpolatedString
 	image        *bloblang.Executor
 	savePrompt   bool
+	maxToolCalls int
+	tools        []tool
 }
 
 func (o *ollamaCompletionProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
@@ -287,14 +392,82 @@ func (o *ollamaCompletionProcessor) generateCompletion(ctx context.Context, syst
 	})
 	shouldStream := false
 	req.Stream = &shouldStream
-	var g string
-	err := o.client.Chat(ctx, &req, func(resp api.ChatResponse) error {
-		g = resp.Message.Content
-		return nil
-	})
-	return g, err
+	for _, t := range o.tools {
+		req.Tools = append(req.Tools, t.spec)
+	}
+	// Allow up to N iterations of calling tools
+	for range o.maxToolCalls + 1 {
+		var resp api.ChatResponse
+		o.logger.Tracef("making LLM chat request messages: %s", gabs.Wrap(req.Messages).EncodeJSON())
+		err := o.client.Chat(ctx, &req, func(r api.ChatResponse) error {
+			resp = r
+			return nil
+		})
+		if err != nil {
+			return "", err
+		}
+		if len(resp.Message.ToolCalls) == 0 {
+			return resp.Message.Content, nil
+		}
+		for _, toolCall := range resp.Message.ToolCalls {
+			o.logger.Debugf("LLM requested tool %s with arguments: %s", toolCall.Function.Name, toolCall.Function.Arguments.String())
+			idx := slices.IndexFunc(o.tools, func(t tool) bool { return t.spec.Function.Name == toolCall.Function.Name })
+			if idx < 0 {
+				return "", fmt.Errorf("unknown tool call requested: %s", toolCall.Function.Name)
+			}
+			pipeline := o.tools[idx].pipeline
+			msg := service.NewMessage(nil)
+			msg.SetStructuredMut(map[string]any(toolCall.Function.Arguments))
+			output, err := service.ExecuteProcessors(ctx, pipeline, service.MessageBatch{msg})
+			if err != nil {
+				return "", fmt.Errorf("error calling tool %s: %w", toolCall.Function.Name, err)
+			}
+			resp, err := combineToSingleMessage(output)
+			if err != nil {
+				return "", fmt.Errorf("error processing pipeline %s output: %w", toolCall.Function.Name, err)
+			}
+			o.logger.Debugf("Tool %s response: %s", toolCall.Function.Name, resp)
+			req.Messages = append(req.Messages, api.Message{Role: "tool", Content: resp})
+		}
+	}
+	return "", fmt.Errorf("model did not finish after %d function calls", o.maxToolCalls)
+}
+
+func combineToSingleMessage(batches []service.MessageBatch) (string, error) {
+	msgs := []any{}
+	for _, batch := range batches {
+		for _, msg := range batch {
+			if err := msg.GetError(); err != nil {
+				return "", fmt.Errorf("pipeline resulted in message with error: %w", err)
+			}
+			if msg.HasStructured() {
+				v, err := msg.AsStructured()
+				if err != nil {
+					return "", fmt.Errorf("unable to extract JSON result: %w", err)
+				}
+				msgs = append(msgs, v)
+			} else {
+				b, err := msg.AsBytes()
+				if err != nil {
+					return "", fmt.Errorf("unable to extract raw bytes result: %w", err)
+				}
+				msgs = append(msgs, string(b))
+			}
+		}
+	}
+	if len(msgs) == 1 {
+		return bloblang.ValueToString(msgs[0]), nil
+	}
+	return bloblang.ValueToString(msgs), nil
 }
 
 func (o *ollamaCompletionProcessor) Close(ctx context.Context) error {
+	for _, tool := range o.tools {
+		for _, processor := range tool.pipeline {
+			if err := processor.Close(ctx); err != nil {
+				return err
+			}
+		}
+	}
 	return o.baseOllamaProcessor.Close(ctx)
 }

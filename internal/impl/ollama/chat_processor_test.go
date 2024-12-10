@@ -42,7 +42,7 @@ func TestOllamaCompletionIntegration(t *testing.T) {
 	integration.CheckSkip(t)
 
 	ctx := context.Background()
-	ollamaContainer, err := ollama.Run(ctx, "ollama/ollama:0.2.5")
+	ollamaContainer, err := ollama.Run(ctx, "ollama/ollama:0.5.1")
 	assert.NoError(t, err)
 	defer func() {
 		if err := ollamaContainer.Terminate(ctx); err != nil {
