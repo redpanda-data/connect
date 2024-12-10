@@ -107,7 +107,7 @@ type mysqlStreamInput struct {
 	fieldSnapshotMaxBatchSize int
 }
 
-const binLogCacheKey = "mysql_binlog_position"
+const binLogCacheKey = "ysql_binlog_position"
 
 func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s service.BatchInput, err error) {
 	streamInput := mysqlStreamInput{
@@ -166,8 +166,6 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 		}
 		i.tablesFilterMap[table] = true
 	}
-
-	res.Logger().Info("Starting MySQL stream input")
 
 	if batching, err = conf.FieldBatchPolicy(fieldBatching); err != nil {
 		return nil, err
