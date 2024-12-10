@@ -350,3 +350,288 @@ file:
 	}, time.Minute*5, time.Millisecond*100)
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
 }
+
+func TestIntegrationMySQLCDCAllTypes(t *testing.T) {
+	dsn, db := setupTestWithMySQLVersion(t, "8.0")
+	// Create table
+	db.Exec(`
+    CREATE TABLE all_data_types (
+    -- Numeric Data Types
+    tinyint_col TINYINT,
+    smallint_col SMALLINT,
+    mediumint_col MEDIUMINT,
+    int_col INT,
+    bigint_col BIGINT,
+    decimal_col DECIMAL(10, 2),
+    numeric_col NUMERIC(10, 2),
+    float_col FLOAT,
+    double_col DOUBLE,
+
+    -- Date and Time Data Types
+    date_col DATE,
+    datetime_col DATETIME,
+    timestamp_col TIMESTAMP,
+    time_col TIME,
+    year_col YEAR,
+
+    -- String Data Types
+    char_col CHAR(10),
+    varchar_col VARCHAR(255),
+    binary_col BINARY(10),
+    varbinary_col VARBINARY(255),
+    tinyblob_col TINYBLOB,
+    blob_col BLOB,
+    mediumblob_col MEDIUMBLOB,
+    longblob_col LONGBLOB,
+    tinytext_col TINYTEXT,
+    text_col TEXT,
+    mediumtext_col MEDIUMTEXT,
+    longtext_col LONGTEXT,
+    enum_col ENUM('option1', 'option2', 'option3'),
+    set_col SET('a', 'b', 'c', 'd')
+
+    -- TODO(cdc): Spatial Data Types
+    -- geometry_col GEOMETRY,
+    -- point_col POINT,
+    -- linestring_col LINESTRING,
+    -- polygon_col POLYGON,
+    -- multipoint_col MULTIPOINT,
+    -- multilinestring_col MULTILINESTRING,
+    -- multipolygon_col MULTIPOLYGON,
+    -- geometrycollection_col GEOMETRYCOLLECTION
+);
+`)
+
+	db.Exec(`
+INSERT INTO all_data_types (
+    tinyint_col,
+    smallint_col,
+    mediumint_col,
+    int_col,
+    bigint_col,
+    decimal_col,
+    numeric_col,
+    float_col,
+    double_col,
+    date_col,
+    datetime_col,
+    timestamp_col,
+    time_col,
+    year_col,
+    char_col,
+    varchar_col,
+    binary_col,
+    varbinary_col,
+    tinyblob_col,
+    blob_col,
+    mediumblob_col,
+    longblob_col,
+    tinytext_col,
+    text_col,
+    mediumtext_col,
+    longtext_col,
+    enum_col,
+    set_col
+) VALUES (
+    127,                    -- tinyint_col
+    32767,                  -- smallint_col
+    8388607,                -- mediumint_col
+    2147483647,             -- int_col
+    9223372036854775807,    -- bigint_col
+    12345.67,               -- decimal_col
+    98765.43,               -- numeric_col
+    3.14,                   -- float_col
+    2.718281828,            -- double_col
+    '2024-12-10',           -- date_col
+    '2024-12-10 15:30:45',  -- datetime_col
+    CURRENT_TIMESTAMP,      -- timestamp_col
+    '15:30:45',             -- time_col
+    2024,                   -- year_col
+    'char_data',            -- char_col
+    'varchar_data',         -- varchar_col
+    BINARY('binary'),       -- binary_col
+    BINARY('varbinary'),    -- varbinary_col
+    'small blob',           -- tinyblob_col
+    'regular blob',         -- blob_col
+    'medium blob',          -- mediumblob_col
+    'large blob',           -- longblob_col
+    'tiny text',            -- tinytext_col
+    'regular text',         -- text_col
+    'medium text',          -- mediumtext_col
+    'large text',           -- longtext_col
+    'option1',              -- enum_col
+    'a,b'                   -- set_col
+);
+
+    `)
+
+	template := fmt.Sprintf(`
+mysql_cdc:
+  dsn: %s
+  stream_snapshot: true
+  snapshot_max_batch_size: 500
+  checkpoint_cache: memcache
+  tables:
+    - foo
+`, dsn)
+
+	cacheConf := `
+label: memcache
+memory: {}
+`
+
+	streamOutBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: DEBUG`))
+	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
+	require.NoError(t, streamOutBuilder.AddInputYAML(template))
+
+	var outBatches []string
+	var outBatchMut sync.Mutex
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
+		msgBytes, err := mb[0].AsBytes()
+		require.NoError(t, err)
+		outBatchMut.Lock()
+		outBatches = append(outBatches, string(msgBytes))
+		outBatchMut.Unlock()
+		return nil
+	}))
+
+	streamOut, err := streamOutBuilder.Build()
+	require.NoError(t, err)
+
+	go func() {
+		err = streamOut.Run(context.Background())
+		require.NoError(t, err)
+	}()
+
+	time.Sleep(time.Second * 5)
+
+	db.Exec(`
+    INSERT INTO all_data_types (
+    tinyint_col,
+    smallint_col,
+    mediumint_col,
+    int_col,
+    bigint_col,
+    decimal_col,
+    numeric_col,
+    float_col,
+    double_col,
+    date_col,
+    datetime_col,
+    timestamp_col,
+    time_col,
+    year_col,
+    char_col,
+    varchar_col,
+    binary_col,
+    varbinary_col,
+    tinyblob_col,
+    blob_col,
+    mediumblob_col,
+    longblob_col,
+    tinytext_col,
+    text_col,
+    mediumtext_col,
+    longtext_col,
+    enum_col,
+    set_col
+) VALUES (
+    -128,                   -- tinyint_col
+    -32768,                 -- smallint_col
+    -8388608,               -- mediumint_col
+    -2147483648,            -- int_col
+    -9223372036854775808,   -- bigint_col
+    54321.12,               -- decimal_col
+    87654.21,               -- numeric_col
+    1.618,                  -- float_col
+    3.141592653,            -- double_col
+    '2023-01-01',           -- date_col
+    '2023-01-01 12:00:00',  -- datetime_col
+    '2023-01-01 12:00:00',  -- timestamp_col
+    '23:59:59',             -- time_col
+    2023,                   -- year_col
+    'example',              -- char_col
+    'another_example',      -- varchar_col
+    BINARY('fixed'),        -- binary_col
+    BINARY('dynamic'),      -- varbinary_col
+    'tiny_blob_value',      -- tinyblob_col
+    'blob_value',           -- blob_col
+    'medium_blob_value',    -- mediumblob_col
+    'long_blob_value',      -- longblob_col
+    'tiny_text_value',      -- tinytext_col
+    'text_value',           -- text_col
+    'medium_text_value',    -- mediumtext_col
+    'long_text_value',      -- longtext_col
+    'option2',              -- enum_col
+    'b,c'                   -- set_col
+);`)
+
+	assert.Eventually(t, func() bool {
+		outBatchMut.Lock()
+		defer outBatchMut.Unlock()
+		return len(outBatches) == 2
+	}, time.Minute*5, time.Millisecond*100)
+	require.NoError(t, streamOut.StopWithin(time.Second*10))
+
+	require.JSONEq(t, outBatches[0], `{
+  "tinyint_col": 127,
+  "smallint_col": 32767,
+  "mediumint_col": 8388607,
+  "int_col": 2147483647,
+  "bigint_col": 9223372036854775807,
+  "decimal_col": 12345.67,
+  "numeric_col": 98765.43,
+  "float_col": 3.14,
+  "double_col": 2.718281828,
+  "date_col": "2024-12-10",
+  "datetime_col": "2024-12-10 15:30:45",
+  "timestamp_col": "2024-12-10 15:30:45",
+  "time_col": "15:30:45",
+  "year_col": 2024,
+  "char_col": "char_data",
+  "varchar_col": "varchar_data",
+  "binary_col": "binary",
+  "varbinary_col": "varbinary",
+  "tinyblob_col": "small blob",
+  "blob_col": "regular blob",
+  "mediumblob_col": "medium blob",
+  "longblob_col": "large blob",
+  "tinytext_col": "tiny text",
+  "text_col": "regular text",
+  "mediumtext_col": "medium text",
+  "longtext_col": "large text",
+  "enum_col": "option1",
+  "set_col": ["a", "b"]
+}`)
+	require.JSONEq(t, outBatches[1], `{
+  "tinyint_col": -128,
+  "smallint_col": -32768,
+  "mediumint_col": -8388608,
+  "int_col": -2147483648,
+  "bigint_col": -9223372036854775808,
+  "decimal_col": 54321.12,
+  "numeric_col": 87654.21,
+  "float_col": 1.618,
+  "double_col": 3.141592653,
+  "date_col": "2023-01-01",
+  "datetime_col": "2023-01-01 12:00:00",
+  "timestamp_col": "2023-01-01 12:00:00",
+  "time_col": "23:59:59",
+  "year_col": 2023,
+  "char_col": "example",
+  "varchar_col": "another_example",
+  "binary_col": "fixed",
+  "varbinary_col": "dynamic",
+  "tinyblob_col": "tiny_blob_value",
+  "blob_col": "blob_value",
+  "mediumblob_col": "medium_blob_value",
+  "longblob_col": "long_blob_value",
+  "tinytext_col": "tiny_text_value",
+  "text_col": "text_value",
+  "mediumtext_col": "medium_text_value",
+  "longtext_col": "long_text_value",
+  "enum_col": "option2",
+  "set_col": ["b", "c"]
+}`)
+}
