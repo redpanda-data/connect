@@ -137,6 +137,7 @@ type (
 		Channel             string           `json:"channel"`
 		ClientSequencer     int64            `json:"client_sequencer"`
 		RowSequencer        int64            `json:"row_sequencer"`
+		OffsetToken         *OffsetToken     `json:"offset_token"`
 		TableColumns        []columnMetadata `json:"table_columns"`
 		EncryptionKey       string           `json:"encryption_key"`
 		EncryptionKeyID     int64            `json:"encryption_key_id"`
@@ -187,13 +188,13 @@ type (
 		Columns map[string]fileColumnProperties `json:"columns"`
 	}
 	channelMetadata struct {
-		Channel          string  `json:"channel_name"`
-		ClientSequencer  int64   `json:"client_sequencer"`
-		RowSequencer     int64   `json:"row_sequencer"`
-		StartOffsetToken *string `json:"start_offset_token"`
-		EndOffsetToken   *string `json:"end_offset_token"`
+		Channel          string       `json:"channel_name"`
+		ClientSequencer  int64        `json:"client_sequencer"`
+		RowSequencer     int64        `json:"row_sequencer"`
+		StartOffsetToken *OffsetToken `json:"start_offset_token"`
+		EndOffsetToken   *OffsetToken `json:"end_offset_token"`
 		// In the JavaSDK this is always just the end offset version
-		OffsetToken *string `json:"offset_token"`
+		OffsetToken *OffsetToken `json:"offset_token"`
 	}
 	chunkMetadata struct {
 		Database                string            `json:"database"`

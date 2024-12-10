@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package capped_test
+package pool_test
 
 import (
 	"context"
@@ -26,7 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/capped"
+	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/pool"
 	"github.com/redpanda-data/connect/v4/internal/typed"
 )
 
@@ -36,7 +36,7 @@ type foo struct {
 
 func TestReuse(t *testing.T) {
 	foos := []*foo{{1}, {2}, {3}}
-	p := capped.NewPool(len(foos), func(context.Context) (*foo, error) {
+	p := pool.NewCapped(len(foos), func(context.Context, int) (*foo, error) {
 		return nil, errors.New("")
 	})
 	for _, f := range foos {
@@ -57,7 +57,8 @@ func TestReuse(t *testing.T) {
 
 func TestAcquire(t *testing.T) {
 	numCreated := 0
-	p := capped.NewPool(5, func(context.Context) (foo, error) {
+	p := pool.NewCapped(5, func(ctx context.Context, id int) (foo, error) {
+		require.Equal(t, id, numCreated)
 		numCreated++
 		return foo{}, nil
 	})
@@ -94,7 +95,7 @@ func TestAcquire(t *testing.T) {
 }
 
 func TestCtorCancellation(t *testing.T) {
-	p := capped.NewPool(5, func(ctx context.Context) (any, error) {
+	p := pool.NewCapped(5, func(ctx context.Context, id int) (any, error) {
 		<-ctx.Done()
 		return nil, ctx.Err()
 	})
@@ -109,9 +110,9 @@ func TestCtorCancellation(t *testing.T) {
 
 func TestRandomized(t *testing.T) {
 	var created atomic.Int64
-	p := capped.NewPool(5, func(ctx context.Context) (*foo, error) {
+	p := pool.NewCapped(5, func(ctx context.Context, id int) (*foo, error) {
 		created.Add(1)
-		return &foo{}, nil
+		return &foo{id}, nil
 	})
 	var wg sync.WaitGroup
 	for i := 0; i < 25; i++ {
@@ -130,6 +131,7 @@ func TestRandomized(t *testing.T) {
 	// Technically possible to only create one if unlikely
 	// this test is mostly for -race detection anyways.
 	require.Greater(t, int(created.Load()), 1)
+	require.LessOrEqual(t, int(created.Load()), 5)
 	require.Equal(t, int(created.Load()), p.Size())
 	t.Logf("created %d objects in the pool", p.Size())
 }
