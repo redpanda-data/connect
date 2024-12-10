@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
@@ -38,7 +37,7 @@ func NewSnapshot(logger *service.Logger, db *sql.DB) *Snapshot {
 	}
 }
 
-func (s *Snapshot) prepareSnapshot(ctx context.Context) (*mysql.Position, error) {
+func (s *Snapshot) prepareSnapshot(ctx context.Context) (*Position, error) {
 	var err error
 	// Create a separate connection for FTWRL
 	s.lockConn, err = s.db.Conn(ctx)
@@ -181,23 +180,23 @@ func (s *Snapshot) buildOrderByClause(pk []string) string {
 	return "ORDER BY " + strings.Join(pk, ", ")
 }
 
-func (s *Snapshot) getCurrentBinlogPosition(ctx context.Context) (mysql.Position, error) {
+func (s *Snapshot) getCurrentBinlogPosition(ctx context.Context) (Position, error) {
 	var (
 		position uint32
 		file     string
 		// binlogDoDB, binlogIgnoreDB intentionally non-used
 		// required to scan response
-		binlogDoDB      interface{}
-		binlogIgnoreDB  interface{}
-		executedGtidSet interface{}
+		binlogDoDB      any
+		binlogIgnoreDB  any
+		executedGtidSet any
 	)
 
 	row := s.snapshotConn.QueryRowContext(ctx, "SHOW MASTER STATUS")
 	if err := row.Scan(&file, &position, &binlogDoDB, &binlogIgnoreDB, &executedGtidSet); err != nil {
-		return mysql.Position{}, err
+		return Position{}, err
 	}
 
-	return mysql.Position{
+	return Position{
 		Name: file,
 		Pos:  position,
 	}, nil
