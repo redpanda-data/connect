@@ -327,7 +327,6 @@ file:
 		outBatchMut.Unlock()
 		return nil
 	}))
-	fmt.Println(outBatches)
 
 	streamOut, err := streamOutBuilder.Build()
 	require.NoError(t, err)
