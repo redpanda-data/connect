@@ -92,13 +92,12 @@ type mysqlStreamInput struct {
 	tables         []string
 	streamSnapshot bool
 
-	rawMessageEvents      chan MessageEvent
-	snapshotMessageEvents chan MessageEvent
-	msgChan               chan asyncMessage
-	batching              service.BatchPolicy
-	batchPolicy           *service.Batcher
-	tablesFilterMap       map[string]bool
-	checkPointLimit       int
+	rawMessageEvents chan MessageEvent
+	msgChan          chan asyncMessage
+	batching         service.BatchPolicy
+	batchPolicy      *service.Batcher
+	tablesFilterMap  map[string]bool
+	checkPointLimit  int
 
 	logger *service.Logger
 	res    *service.Resources
@@ -115,11 +114,10 @@ type mysqlStreamInput struct {
 
 func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s service.BatchInput, err error) {
 	streamInput := mysqlStreamInput{
-		logger:                res.Logger(),
-		rawMessageEvents:      make(chan MessageEvent),
-		snapshotMessageEvents: make(chan MessageEvent),
-		msgChan:               make(chan asyncMessage),
-		res:                   res,
+		logger:           res.Logger(),
+		rawMessageEvents: make(chan MessageEvent),
+		msgChan:          make(chan asyncMessage),
+		res:              res,
 
 		errors:  make(chan error, 1),
 		shutSig: shutdown.NewSignaller(),
@@ -167,7 +165,7 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 	}
 
 	i := &streamInput
-	i.cp = checkpoint.NewCapped[*int64](int64(i.checkPointLimit))
+	i.cp = checkpoint.NewCapped[*mysqlcdc.Position](int64(i.checkPointLimit))
 
 	i.tablesFilterMap = map[string]bool{}
 	for _, table := range i.tables {
@@ -302,8 +300,7 @@ func (i *mysqlStreamInput) readMessages(ctx context.Context) {
 				i.mutex.Lock()
 				i.currentLogPosition = me.Position
 				i.mutex.Unlock()
-				// Lexicographically ordered
-				mb.MetaSet("binlog_position", me.Position.String())
+				mb.MetaSet("binlog_position", binlogPositionToString(*me.Position))
 			}
 
 			if i.batchPolicy.Add(mb) {
@@ -526,7 +523,7 @@ func (i *mysqlStreamInput) syncBinlogPosition(ctx context.Context, binLogPos mys
 		err            error
 	)
 	if positionInByte, err = json.Marshal(binLogPos); err != nil {
-		return fmt.Errorf("unable to serialize checkpoint: ", err)
+		return fmt.Errorf("unable to serialize checkpoint: %w ", err)
 	}
 	var cErr error
 	if err := i.res.AccessCache(ctx, i.binLogCache, func(c service.Cache) {
@@ -541,18 +538,8 @@ func (i *mysqlStreamInput) syncBinlogPosition(ctx context.Context, binLogPos mys
 }
 
 func (i *mysqlStreamInput) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
-	i.mutex.Lock()
-	msgChan := i.msgChan
-	i.mutex.Unlock()
-	if msgChan == nil {
-		return nil, nil, service.ErrNotConnected
-	}
-
 	select {
-	case m, open := <-msgChan:
-		if !open {
-			return nil, nil, service.ErrNotConnected
-		}
+	case m := <-i.msgChan:
 		return m.msg, m.ackFn, nil
 	case <-i.shutSig.HasStoppedChan():
 		return nil, nil, service.ErrNotConnected

@@ -8,7 +8,13 @@
 
 package mysql
 
-import "github.com/go-mysql-org/go-mysql/mysql"
+import (
+	"fmt"
+	"strconv"
+	"strings"
+
+	"github.com/go-mysql-org/go-mysql/mysql"
+)
 
 // MessageOperation is a string type specifying message opration
 type MessageOperation string
@@ -30,4 +36,25 @@ type MessageEvent struct {
 	Table     string           `json:"table"`
 	Operation MessageOperation `json:"operation"`
 	Position  *mysql.Position  `json:"position"`
+}
+
+func binlogPositionToString(pos mysql.Position) string {
+	// Pad the position so this string is lexicographically ordered.
+	return fmt.Sprintf("%s@%08X", pos.Name, pos.Pos)
+}
+
+func parseBinlogPosition(str string) (pos mysql.Position, err error) {
+	idx := strings.LastIndexByte(str, '@')
+	if idx == -1 {
+		err = fmt.Errorf("invalid binlog string: %s", str)
+		return
+	}
+	pos.Name = str[:idx]
+	var offset uint64
+	offset, err = strconv.ParseUint(str[idx+1:], 16, 32)
+	pos.Pos = uint32(offset)
+	if err != nil {
+		err = fmt.Errorf("invalid binlog string offset: %w", err)
+	}
+	return
 }
