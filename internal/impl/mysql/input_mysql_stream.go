@@ -20,7 +20,7 @@ import (
 	"github.com/Jeffail/checkpoint"
 	"github.com/Jeffail/shutdown"
 	"github.com/go-mysql-org/go-mysql/canal"
-	mysqlReplications "github.com/go-mysql-org/go-mysql/mysql"
+	mysqlcdc "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/go-sql-driver/mysql"
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -82,8 +82,8 @@ type mysqlStreamInput struct {
 	// canal stands for mysql binlog listener connection
 	canal               *canal.Canal
 	mysqlConfig         *mysql.Config
-	startBinLogPosition *mysqlReplications.Position
-	currentLogPosition  *mysqlReplications.Position
+	startBinLogPosition *mysqlcdc.Position
+	currentLogPosition  *mysqlcdc.Position
 	binLogCache         string
 	binLogCacheKey      string
 
@@ -210,7 +210,7 @@ func init() {
 
 func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 	canalConfig := canal.NewDefaultConfig()
-	canalConfig.Flavor = mysqlReplications.DEFAULT_FLAVOR
+	canalConfig.Flavor = mysqlcdc.DEFAULT_FLAVOR
 	canalConfig.Addr = i.mysqlConfig.Addr
 	canalConfig.User = i.mysqlConfig.User
 	canalConfig.Password = i.mysqlConfig.Passwd
@@ -235,7 +235,7 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 			return
 		}
 
-		var storedMySQLBinLogPosition mysqlReplications.Position
+		var storedMySQLBinLogPosition mysqlcdc.Position
 		if err := json.Unmarshal(binLogPositionBytes, &storedMySQLBinLogPosition); err != nil {
 			i.logger.With("error", err.Error()).Error("Failed to unmarshal stored binlog position.")
 			return
@@ -451,7 +451,7 @@ func (i *mysqlStreamInput) startMySQLSync() {
 	}
 }
 
-func (i *mysqlStreamInput) flushBatch(ctx context.Context, checkpointer *checkpoint.Capped[*int64], batch service.MessageBatch, binLogPos *mysqlReplications.Position) error {
+func (i *mysqlStreamInput) flushBatch(ctx context.Context, checkpointer *checkpoint.Capped[*int64], batch service.MessageBatch, binLogPos *mysqlcdc.Position) error {
 	if len(batch) == 0 {
 		return nil
 	}
