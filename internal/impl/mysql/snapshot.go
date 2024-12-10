@@ -203,7 +203,7 @@ func (s *Snapshot) getCurrentBinlogPosition(ctx context.Context) (mysql.Position
 	}, nil
 }
 
-func (s *Snapshot) releaseSnapshot(ctx context.Context) error {
+func (s *Snapshot) releaseSnapshot(_ context.Context) error {
 	if s.tx != nil {
 		if err := s.tx.Commit(); err != nil {
 			return fmt.Errorf("failed to commit transaction: %v", err)
