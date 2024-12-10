@@ -342,8 +342,11 @@ func (i *mysqlStreamInput) readSnapshot(ctx context.Context, snapshot *Snapshot)
 
 				row := map[string]any{}
 				for idx, value := range values {
-					_ = types[idx] // TODO decode based on type
-					row[columns[idx]] = value
+					v, err := mapSnapshotMessageColumn(value, types[idx])
+					if err != nil {
+						return err
+					}
+					row[columns[idx]] = v
 					if _, ok := lastSeenPksValues[columns[idx]]; ok {
 						lastSeenPksValues[columns[idx]] = value
 					}
@@ -363,6 +366,10 @@ func (i *mysqlStreamInput) readSnapshot(ctx context.Context, snapshot *Snapshot)
 		}
 	}
 	return nil
+}
+
+func mapSnapshotMessageColumn(v any, _ *sql.ColumnType) (any, error) {
+	return v, nil
 }
 
 func (i *mysqlStreamInput) readMessages(ctx context.Context) error {
@@ -571,29 +578,9 @@ func (i *mysqlStreamInput) onMessage(e *canal.RowsEvent, initValue, incrementVal
 		message := map[string]any{}
 		for i, v := range e.Rows[pi] {
 			col := e.Table.Columns[i]
-			switch col.Type {
-			// TODO(cdc): support more column types
-			case schema.TYPE_ENUM:
-				if col.EnumValues != nil {
-					ordinal, ok := v.(int64)
-					if !ok {
-						return fmt.Errorf("expected int value for enum column got: %T", v)
-					}
-					if ordinal < 1 || int(ordinal) > len(col.EnumValues) {
-						return fmt.Errorf("enum ordinal out of range: %d when there are %d variants", ordinal, len(col.EnumValues))
-					}
-					v = col.EnumValues[ordinal-1]
-				}
-			case schema.TYPE_JSON:
-				s, ok := v.(string)
-				if !ok {
-					return fmt.Errorf("expected string value for json column got: %T", v)
-				}
-				var decoded any
-				if err := json.Unmarshal([]byte(s), &decoded); err != nil {
-					return err
-				}
-				v = decoded
+			v, err := mapMessageColumn(v, col)
+			if err != nil {
+				return err
 			}
 			message[col.Name] = v
 		}
@@ -605,6 +592,33 @@ func (i *mysqlStreamInput) onMessage(e *canal.RowsEvent, initValue, incrementVal
 		}
 	}
 	return nil
+}
+
+func mapMessageColumn(v any, col schema.TableColumn) (any, error) {
+	switch col.Type {
+	// TODO(cdc): support more column types
+	case schema.TYPE_ENUM:
+		ordinal, ok := v.(int64)
+		if !ok {
+			return nil, fmt.Errorf("expected int value for enum column got: %T", v)
+		}
+		if ordinal < 1 || int(ordinal) > len(col.EnumValues) {
+			return nil, fmt.Errorf("enum ordinal out of range: %d when there are %d variants", ordinal, len(col.EnumValues))
+		}
+		return col.EnumValues[ordinal-1], nil
+	case schema.TYPE_JSON:
+		s, ok := v.(string)
+		if !ok {
+			return nil, fmt.Errorf("expected string value for json column got: %T", v)
+		}
+		var decoded any
+		if err := json.Unmarshal([]byte(s), &decoded); err != nil {
+			return nil, err
+		}
+		return decoded, nil
+	default:
+		return v, nil
+	}
 }
 
 // --- MySQL Canal handler methods end ----
