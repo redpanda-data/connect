@@ -37,7 +37,7 @@ func NewSnapshot(logger *service.Logger, db *sql.DB) *Snapshot {
 	}
 }
 
-func (s *Snapshot) prepareSnapshot(ctx context.Context) (*Position, error) {
+func (s *Snapshot) prepareSnapshot(ctx context.Context) (*position, error) {
 	var err error
 	// Create a separate connection for FTWRL
 	s.lockConn, err = s.db.Conn(ctx)
@@ -180,10 +180,10 @@ func (s *Snapshot) buildOrderByClause(pk []string) string {
 	return "ORDER BY " + strings.Join(pk, ", ")
 }
 
-func (s *Snapshot) getCurrentBinlogPosition(ctx context.Context) (Position, error) {
+func (s *Snapshot) getCurrentBinlogPosition(ctx context.Context) (position, error) {
 	var (
-		position uint32
-		file     string
+		offset uint32
+		file   string
 		// binlogDoDB, binlogIgnoreDB intentionally non-used
 		// required to scan response
 		binlogDoDB      any
@@ -192,13 +192,13 @@ func (s *Snapshot) getCurrentBinlogPosition(ctx context.Context) (Position, erro
 	)
 
 	row := s.snapshotConn.QueryRowContext(ctx, "SHOW MASTER STATUS")
-	if err := row.Scan(&file, &position, &binlogDoDB, &binlogIgnoreDB, &executedGtidSet); err != nil {
-		return Position{}, err
+	if err := row.Scan(&file, &offset, &binlogDoDB, &binlogIgnoreDB, &executedGtidSet); err != nil {
+		return position{}, err
 	}
 
-	return Position{
+	return position{
 		Name: file,
-		Pos:  position,
+		Pos:  offset,
 	}, nil
 }
 

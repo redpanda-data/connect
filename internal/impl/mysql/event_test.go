@@ -17,7 +17,7 @@ import (
 )
 
 func TestBinlogString(t *testing.T) {
-	good := []Position{
+	good := []position{
 		{Name: "log.0000", Pos: 32},
 		{Name: "log@0000", Pos: 32},
 		{Name: "log.09999999", Pos: 0},
