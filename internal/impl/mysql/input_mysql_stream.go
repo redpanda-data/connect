@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"sync"
 	"time"
 
@@ -224,7 +225,10 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 		canalConfig.TLSConfig = i.mysqlConfig.TLS
 	}
 	canalConfig.ParseTime = true
-	canalConfig.IncludeTableRegex = i.tables
+
+	for _, table := range i.tables {
+		canalConfig.IncludeTableRegex = append(canalConfig.IncludeTableRegex, regexp.QuoteMeta(table))
+	}
 
 	if err := i.res.AccessCache(ctx, i.binLogCache, func(c service.Cache) {
 		binLogPositionBytes, cErr := c.Get(ctx, i.binLogCacheKey)
@@ -382,8 +386,8 @@ func (i *mysqlStreamInput) startMySQLSync() {
 							return err
 						}
 
-						values := make([]interface{}, len(columns))
-						valuePtrs := make([]interface{}, len(columns))
+						values := make([]any, len(columns))
+						valuePtrs := make([]any, len(columns))
 						for i := range values {
 							valuePtrs[i] = &values[i]
 						}

@@ -14,7 +14,7 @@ import "github.com/go-mysql-org/go-mysql/mysql"
 type MessageOperation string
 
 const (
-	// MessageOperationInsert represents read from snapshot
+	// MessageOperationRead represents read from snapshot
 	MessageOperationRead MessageOperation = "read"
 	// MessageOperationInsert represents insert statement in mysql binlog
 	MessageOperationInsert MessageOperation = "insert"
