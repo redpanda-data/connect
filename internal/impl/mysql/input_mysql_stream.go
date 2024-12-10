@@ -286,7 +286,7 @@ func (i *mysqlStreamInput) readMessages(ctx context.Context) {
 				break
 			}
 
-			if !i.flushBatch(ctx, i.cp, flushedBatch, i.currentLogPosition) {
+			if err := i.flushBatch(ctx, i.cp, flushedBatch, i.currentLogPosition); err != nil {
 				break
 			}
 		case me := <-i.rawMessageEvents:
@@ -313,7 +313,7 @@ func (i *mysqlStreamInput) readMessages(ctx context.Context) {
 					i.logger.Debugf("Flush batch error: %w", err)
 					break
 				}
-				if !i.flushBatch(ctx, i.cp, flushedBatch, i.currentLogPosition) {
+				if err := i.flushBatch(ctx, i.cp, flushedBatch, i.currentLogPosition); err != nil {
 					break
 				}
 			} else {
@@ -455,9 +455,9 @@ func (i *mysqlStreamInput) startMySQLSync() {
 	}
 }
 
-func (i *mysqlStreamInput) flushBatch(ctx context.Context, checkpointer *checkpoint.Capped[*int64], batch service.MessageBatch, binLogPos *mysqlReplications.Position) bool {
-	if batch == nil {
-		return true
+func (i *mysqlStreamInput) flushBatch(ctx context.Context, checkpointer *checkpoint.Capped[*int64], batch service.MessageBatch, binLogPos *mysqlReplications.Position) error {
+	if len(batch) == 0 {
+		return nil
 	}
 
 	var intPos *int64
@@ -468,10 +468,7 @@ func (i *mysqlStreamInput) flushBatch(ctx context.Context, checkpointer *checkpo
 
 	resolveFn, err := checkpointer.Track(ctx, intPos, int64(len(batch)))
 	if err != nil {
-		if ctx.Err() == nil {
-			i.logger.Errorf("Failed to checkpoint offset: %v\n", err)
-		}
-		return false
+		return fmt.Errorf("failed to track checkpoint for batch: %w", err)
 	}
 
 	select {
@@ -494,11 +491,10 @@ func (i *mysqlStreamInput) flushBatch(ctx context.Context, checkpointer *checkpo
 			return i.syncBinlogPosition(ctx, offset)
 		},
 	}:
+		return nil
 	case <-ctx.Done():
-		return false
+		return ctx.Err()
 	}
-
-	return true
 }
 
 func (i *mysqlStreamInput) onMessage(e *canal.RowsEvent, initValue, incrementValue int) error {
@@ -609,8 +605,8 @@ func (i *mysqlStreamInput) OnRotate(eh *replication.EventHeader, re *replication
 		return err
 	}
 
-	if ok := i.flushBatch(i.streamCtx, i.cp, flushedBatch, i.currentLogPosition); !ok {
-		return errors.New("failed to flush batch")
+	if err := i.flushBatch(i.streamCtx, i.cp, flushedBatch, i.currentLogPosition); err != nil {
+		return fmt.Errorf("failed to flush batch: %w", err)
 	}
 
 	i.currentLogPosition.Pos = uint32(re.Position)
