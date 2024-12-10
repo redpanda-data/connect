@@ -105,7 +105,7 @@ type mysqlStreamInput struct {
 
 	streamCtx context.Context
 	errors    chan error
-	cp        *checkpoint.Capped[*int64]
+	cp        *checkpoint.Capped[*mysqlcdc.Position]
 
 	snapshot                  *Snapshot
 	shutSig                   *shutdown.Signaller
@@ -455,18 +455,17 @@ func (i *mysqlStreamInput) startMySQLSync() {
 	}
 }
 
-func (i *mysqlStreamInput) flushBatch(ctx context.Context, checkpointer *checkpoint.Capped[*int64], batch service.MessageBatch, binLogPos *mysqlcdc.Position) error {
+func (i *mysqlStreamInput) flushBatch(
+	ctx context.Context,
+	checkpointer *checkpoint.Capped[*mysqlcdc.Position],
+	batch service.MessageBatch,
+	binLogPos *mysqlcdc.Position,
+) error {
 	if len(batch) == 0 {
 		return nil
 	}
 
-	var intPos *int64
-	if binLogPos != nil {
-		posInInt := int64(binLogPos.Pos)
-		intPos = &posInInt
-	}
-
-	resolveFn, err := checkpointer.Track(ctx, intPos, int64(len(batch)))
+	resolveFn, err := checkpointer.Track(ctx, binLogPos, int64(len(batch)))
 	if err != nil {
 		return fmt.Errorf("failed to track checkpoint for batch: %w", err)
 	}
@@ -488,7 +487,7 @@ func (i *mysqlStreamInput) flushBatch(ctx context.Context, checkpointer *checkpo
 			if offset == nil {
 				return nil
 			}
-			return i.syncBinlogPosition(ctx, offset)
+			return i.syncBinlogPosition(ctx, *offset)
 		},
 	}:
 		return nil
@@ -519,40 +518,26 @@ func (i *mysqlStreamInput) onMessage(e *canal.RowsEvent, initValue, incrementVal
 	return nil
 }
 
-func (i *mysqlStreamInput) syncBinlogPosition(ctx context.Context, binLogPos *int64) error {
+func (i *mysqlStreamInput) syncBinlogPosition(ctx context.Context, binLogPos mysqlcdc.Position) error {
 	i.mutex.Lock()
 	defer i.mutex.Unlock()
-
-	if i.currentLogPosition == nil {
-		i.logger.Warn("No current bingLog position")
-		return errors.New("no current binlog position")
-	}
-
-	if binLogPos != nil {
-		i.currentLogPosition.Pos = uint32(*binLogPos)
-	}
-
 	var (
 		positionInByte []byte
 		err            error
 	)
-	if positionInByte, err = json.Marshal(*i.currentLogPosition); err != nil {
-		i.logger.Errorf("Failed to marshal binlog position: %v", err)
-		return err
+	if positionInByte, err = json.Marshal(binLogPos); err != nil {
+		return fmt.Errorf("unable to serialize checkpoint: ", err)
 	}
-
 	var cErr error
 	if err := i.res.AccessCache(ctx, i.binLogCache, func(c service.Cache) {
 		cErr = c.Set(ctx, i.binLogCacheKey, positionInByte, nil)
-		if cErr != nil {
-			i.logger.Errorf("Failed to store binlog position: %v", cErr)
-		}
 	}); err != nil {
-		i.logger.Errorf("Access cache error %v", err)
-		return err
+		return fmt.Errorf("unable to access cache: %w", err)
 	}
-
-	return cErr
+	if cErr != nil {
+		return fmt.Errorf("unable persist checkpoint to cache: %w", cErr)
+	}
+	return nil
 }
 
 func (i *mysqlStreamInput) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
@@ -586,10 +571,8 @@ func (i *mysqlStreamInput) Close(ctx context.Context) error {
 	}
 	i.shutSig.TriggerHardStop()
 	if i.canal != nil {
-		i.canal.SyncedPosition()
 		i.canal.Close()
 	}
-
 	return i.snapshot.close()
 }
 
