@@ -100,7 +100,7 @@ func TestIntegrationMySQLCDC(t *testing.T) {
 mysql_cdc:
   dsn: %s
   stream_snapshot: false
-  checkpoint_key: foocache
+  checkpoint_cache: foocache
   tables:
     - foo
 `, dsn)
@@ -266,7 +266,7 @@ mysql_cdc:
   dsn: %s
   stream_snapshot: true
   snapshot_max_batch_size: 500
-  checkpoint_key: foocache
+  checkpoint_cache: foocache
   tables:
     - foo
 `, dsn)
@@ -410,7 +410,7 @@ mysql_cdc:
   dsn: %s
   stream_snapshot: true
   snapshot_max_batch_size: 500
-  checkpoint_key: foocache
+  checkpoint_cache: foocache
   tables:
     - foo
 `, dsn)
