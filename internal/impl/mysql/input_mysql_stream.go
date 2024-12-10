@@ -351,7 +351,7 @@ func (i *mysqlStreamInput) startMySQLSync() {
 
 		for _, table := range i.tables {
 			wg.Go(func() (err error) {
-				tablePks, err := i.snapshot.getTablePrimaryKeys(table)
+				tablePks, err := i.snapshot.getTablePrimaryKeys(ctx, table)
 				if err != nil {
 					return err
 				}
@@ -367,9 +367,9 @@ func (i *mysqlStreamInput) startMySQLSync() {
 				for {
 					var batchRows *sql.Rows
 					if numRowsProcessed == 0 {
-						batchRows, err = i.snapshot.querySnapshotTable(table, tablePks, nil, i.fieldSnapshotMaxBatchSize)
+						batchRows, err = i.snapshot.querySnapshotTable(ctx, table, tablePks, nil, i.fieldSnapshotMaxBatchSize)
 					} else {
-						batchRows, err = i.snapshot.querySnapshotTable(table, tablePks, &lastSeenPksValues, i.fieldSnapshotMaxBatchSize)
+						batchRows, err = i.snapshot.querySnapshotTable(ctx, table, tablePks, &lastSeenPksValues, i.fieldSnapshotMaxBatchSize)
 					}
 					if err != nil {
 						return err
@@ -474,27 +474,24 @@ func (i *mysqlStreamInput) flushBatch(ctx context.Context, checkpointer *checkpo
 		return false
 	}
 
-	lastMessage := batch[len(batch)-1]
-
 	select {
 	case i.msgChan <- asyncMessage{
 		msg: batch,
 		ackFn: func(ctx context.Context, res error) error {
 			maxOffset := resolveFn()
+			// Nothing to commit, this wasn't the latest message
 			if maxOffset == nil {
 				return nil
 			}
-
-			// do not call checkpoint if the last message in the batch is a snapshot
-			if msgType, ok := lastMessage.MetaGet("type"); ok && msgType == "snapshot" {
+			offset := *maxOffset
+			// This has no offset - it's a snapshot message
+			// TODO(rockwood): We should be storing the primary key for
+			// each table in the snapshot so we can properly resume the
+			// primary key scan.
+			if offset == nil {
 				return nil
 			}
-
-			if err := i.syncBinlogPosition(ctx, *maxOffset); err != nil {
-				return err
-			}
-
-			return nil
+			return i.syncBinlogPosition(ctx, offset)
 		},
 	}:
 	case <-ctx.Done():
