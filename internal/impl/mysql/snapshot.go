@@ -28,14 +28,12 @@ type Snapshot struct {
 	snapshotConn *sql.Conn
 
 	logger *service.Logger
-	ctx    context.Context
 }
 
 // NewSnapshot creates new snapshot instance
-func NewSnapshot(ctx context.Context, logger *service.Logger, db *sql.DB) *Snapshot {
+func NewSnapshot(logger *service.Logger, db *sql.DB) *Snapshot {
 	return &Snapshot{
 		db:     db,
-		ctx:    ctx,
 		logger: logger,
 	}
 }
@@ -95,7 +93,7 @@ func (s *Snapshot) prepareSnapshot(ctx context.Context) (*mysql.Position, error)
 	}
 
 	// Get binary log position (while locked)
-	pos, err := s.getCurrentBinlogPosition()
+	pos, err := s.getCurrentBinlogPosition(ctx)
 	if err != nil {
 		// Make sure to release the lock if we fail
 		if _, eErr := s.lockConn.ExecContext(ctx, "UNLOCK TABLES"); eErr != nil {
@@ -119,9 +117,9 @@ func (s *Snapshot) prepareSnapshot(ctx context.Context) (*mysql.Position, error)
 	return &pos, nil
 }
 
-func (s *Snapshot) getTablePrimaryKeys(table string) ([]string, error) {
+func (s *Snapshot) getTablePrimaryKeys(ctx context.Context, table string) ([]string, error) {
 	// Get primary key columns for the table
-	rows, err := s.tx.QueryContext(s.ctx, fmt.Sprintf(`
+	rows, err := s.tx.QueryContext(ctx, fmt.Sprintf(`
 SELECT COLUMN_NAME
 FROM information_schema.KEY_COLUMN_USAGE
 WHERE TABLE_NAME = '%s' AND CONSTRAINT_NAME = 'PRIMARY'
@@ -146,7 +144,7 @@ ORDER BY ORDINAL_POSITION;
 	return pks, nil
 }
 
-func (s *Snapshot) querySnapshotTable(table string, pk []string, lastSeenPkVal *map[string]any, limit int) (*sql.Rows, error) {
+func (s *Snapshot) querySnapshotTable(ctx context.Context, table string, pk []string, lastSeenPkVal *map[string]any, limit int) (*sql.Rows, error) {
 	snapshotQueryParts := []string{
 		"SELECT * FROM " + table,
 	}
@@ -157,7 +155,7 @@ func (s *Snapshot) querySnapshotTable(table string, pk []string, lastSeenPkVal *
 		snapshotQueryParts = append(snapshotQueryParts, "LIMIT ?")
 		q := strings.Join(snapshotQueryParts, " ")
 		s.logger.Infof("Querying snapshot: %s", q)
-		return s.tx.QueryContext(s.ctx, strings.Join(snapshotQueryParts, " "), limit)
+		return s.tx.QueryContext(ctx, strings.Join(snapshotQueryParts, " "), limit)
 	}
 
 	var lastSeenPkVals []any
@@ -172,7 +170,7 @@ func (s *Snapshot) querySnapshotTable(table string, pk []string, lastSeenPkVal *
 	snapshotQueryParts = append(snapshotQueryParts, fmt.Sprintf("LIMIT %d", limit))
 	q := strings.Join(snapshotQueryParts, " ")
 	s.logger.Infof("Querying snapshot: %s", q)
-	return s.tx.QueryContext(s.ctx, q, lastSeenPkVals...)
+	return s.tx.QueryContext(ctx, q, lastSeenPkVals...)
 }
 
 func (s *Snapshot) buildOrderByClause(pk []string) string {
@@ -183,7 +181,7 @@ func (s *Snapshot) buildOrderByClause(pk []string) string {
 	return "ORDER BY " + strings.Join(pk, ", ")
 }
 
-func (s *Snapshot) getCurrentBinlogPosition() (mysql.Position, error) {
+func (s *Snapshot) getCurrentBinlogPosition(ctx context.Context) (mysql.Position, error) {
 	var (
 		position uint32
 		file     string
@@ -194,7 +192,7 @@ func (s *Snapshot) getCurrentBinlogPosition() (mysql.Position, error) {
 		executedGtidSet interface{}
 	)
 
-	row := s.snapshotConn.QueryRowContext(context.Background(), "SHOW MASTER STATUS")
+	row := s.snapshotConn.QueryRowContext(ctx, "SHOW MASTER STATUS")
 	if err := row.Scan(&file, &position, &binlogDoDB, &binlogIgnoreDB, &executedGtidSet); err != nil {
 		return mysql.Position{}, err
 	}

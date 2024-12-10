@@ -264,7 +264,7 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 	}
 
 	// create snapshot instance
-	snapshot := NewSnapshot(ctx, i.logger, db)
+	snapshot := NewSnapshot(i.logger, db)
 	i.snapshot = snapshot
 
 	go i.startMySQLSync()
