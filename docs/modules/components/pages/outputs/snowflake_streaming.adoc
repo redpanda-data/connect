@@ -42,9 +42,9 @@ output:
     account: ORG-ACCOUNT # No default (required)
     user: "" # No default (required)
     role: ACCOUNTADMIN # No default (required)
-    database: "" # No default (required)
-    schema: "" # No default (required)
-    table: "" # No default (required)
+    database: MY_DATABASE # No default (required)
+    schema: PUBLIC # No default (required)
+    table: MY_TABLE # No default (required)
     private_key: "" # No default (optional)
     private_key_file: "" # No default (optional)
     private_key_pass: "" # No default (optional)
@@ -83,9 +83,9 @@ output:
     account: ORG-ACCOUNT # No default (required)
     user: "" # No default (required)
     role: ACCOUNTADMIN # No default (required)
-    database: "" # No default (required)
-    schema: "" # No default (required)
-    table: "" # No default (required)
+    database: MY_DATABASE # No default (required)
+    schema: PUBLIC # No default (required)
+    table: MY_TABLE # No default (required)
     private_key: "" # No default (optional)
     private_key_file: "" # No default (optional)
     private_key_pass: "" # No default (optional)
@@ -113,9 +113,9 @@ output:
       check: ""
       processors: [] # No default (optional)
     max_in_flight: 4
-    channel_prefix: "" # No default (optional)
-    channel_name: "" # No default (optional)
-    offset_token: "" # No default (optional)
+    channel_prefix: channel-${HOST} # No default (optional)
+    channel_name: partition-${!@kafka_partition} # No default (optional)
+    offset_token: offset-${!"%016X".format(@kafka_offset)} # No default (optional)
 ```
 
 --
@@ -347,6 +347,12 @@ The Snowflake database to ingest data into.
 *Type*: `string`
 
 
+```yml
+# Examples
+
+database: MY_DATABASE
+```
+
 === `schema`
 
 The Snowflake schema to ingest data into.
@@ -355,6 +361,12 @@ The Snowflake schema to ingest data into.
 *Type*: `string`
 
 
+```yml
+# Examples
+
+schema: PUBLIC
+```
+
 === `table`
 
 The Snowflake table to ingest data into.
@@ -362,6 +374,12 @@ The Snowflake table to ingest data into.
 
 *Type*: `string`
 
+
+```yml
+# Examples
+
+table: MY_TABLE
+```
 
 === `private_key`
 
@@ -604,6 +622,12 @@ NOTE: There is a limit of 10,000 streams per table - if using more than 10k stre
 *Type*: `string`
 
 
+```yml
+# Examples
+
+channel_prefix: channel-${HOST}
+```
+
 === `channel_name`
 
 The channel name to use.
@@ -620,6 +644,12 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 *Type*: `string`
 
+
+```yml
+# Examples
+
+channel_name: partition-${!@kafka_partition}
+```
 
 === `offset_token`
 
@@ -638,5 +668,13 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 *Type*: `string`
 
+
+```yml
+# Examples
+
+offset_token: offset-${!"%016X".format(@kafka_offset)}
+
+offset_token: postgres-${!@lsn}
+```
 
 
