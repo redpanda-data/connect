@@ -14,6 +14,8 @@ import "github.com/go-mysql-org/go-mysql/mysql"
 type MessageOperation string
 
 const (
+	// MessageOperationInsert represents read from snapshot
+	MessageOperationRead MessageOperation = "read"
 	// MessageOperationInsert represents insert statement in mysql binlog
 	MessageOperationInsert MessageOperation = "insert"
 	// MessageOperationUpdate represents update statement in mysql binlog
@@ -22,21 +24,10 @@ const (
 	MessageOperationDelete MessageOperation = "delete"
 )
 
-// MessageType is a base string type defining a type of the message
-type MessageType string
-
-const (
-	// MessageTypeSnapshot occures when plugin is processing existing snapshot data
-	MessageTypeSnapshot MessageType = "snapshot"
-	// MessageTypeStreaming occures when plugin is processing data from the binlog
-	MessageTypeStreaming MessageType = "streaming"
-)
-
 // MessageEvent represents a message from mysql cdc plugin
 type MessageEvent struct {
 	Row       map[string]any   `json:"row"`
 	Table     string           `json:"table"`
 	Operation MessageOperation `json:"operation"`
-	Type      MessageType      `json:"type"`
 	Position  *mysql.Position  `json:"position"`
 }
