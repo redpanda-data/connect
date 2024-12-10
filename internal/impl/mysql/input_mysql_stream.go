@@ -35,6 +35,7 @@ const (
 	fieldSnapshotMaxBatchSize      = "snapshot_max_batch_size"
 	fieldBatching                  = "batching"
 	fieldCheckpointKey             = "checkpoint_key"
+	fieldCheckpointCache           = "checkpoint_cache"
 	fieldCheckpointLimit           = "checkpoint_limit"
 
 	shutdownTimeout = 5 * time.Second
@@ -49,8 +50,11 @@ var mysqlStreamConfigSpec = service.NewConfigSpec().
 		service.NewStringListField(fieldMySQLTables).
 			Description("A list of tables to stream from the database.").
 			Example([]string{"table1", "table2"}),
+		service.NewStringField(fieldCheckpointCache).
+			Description("A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current latest BinLog Position that has been successfully delivered, this allows Redpanda Connect to continue from that BinLog Position upon restart, rather than consume the entire state of the table.\""),
 		service.NewStringField(fieldCheckpointKey).
-			Description("A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current latest BinLog Position that has been successfully delivered, this allows RedPanda Connect to continue from that BinLog Position upon restart, rather than consume the entire state of the table.\""),
+			Description("The key to use to store the snapshot position in `"+fieldCheckpointCache+"`. An alternative key can be provided if multiple CDC inputs share the same cache.").
+			Default("mysql_binlog_position"),
 		service.NewIntField(fieldMaxSnapshotParallelTables).
 			Description("Int specifies a number of tables to be streamed in parallel when taking a snapshot. If set to true, the connector will stream all tables in parallel. Otherwise, it will stream tables one by one.").
 			Default(1),
@@ -81,6 +85,7 @@ type mysqlStreamInput struct {
 	startBinLogPosition *mysqlReplications.Position
 	currentLogPosition  *mysqlReplications.Position
 	binLogCache         string
+	binLogCacheKey      string
 
 	dsn            string
 	tables         []string
@@ -106,8 +111,6 @@ type mysqlStreamInput struct {
 	snapshotMaxParallelTables int
 	fieldSnapshotMaxBatchSize int
 }
-
-const binLogCacheKey = "ysql_binlog_position"
 
 func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s service.BatchInput, err error) {
 	streamInput := mysqlStreamInput{
@@ -152,7 +155,13 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 		return nil, err
 	}
 
-	if streamInput.binLogCache, err = conf.FieldString(fieldCheckpointKey); err != nil {
+	if streamInput.binLogCache, err = conf.FieldString(fieldCheckpointCache); err != nil {
+		return nil, err
+	}
+	if !conf.Resources().HasCache(streamInput.binLogCache) {
+		return nil, fmt.Errorf("unknown cache resource: %s", streamInput.binLogCache)
+	}
+	if streamInput.binLogCacheKey, err = conf.FieldString(fieldCheckpointKey); err != nil {
 		return nil, err
 	}
 
@@ -221,8 +230,8 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 	canalConfig.ParseTime = true
 	canalConfig.IncludeTableRegex = i.tables
 
-	if err := i.res.AccessCache(context.Background(), i.binLogCache, func(c service.Cache) {
-		binLogPositionBytes, cErr := c.Get(context.Background(), binLogCacheKey)
+	if err := i.res.AccessCache(ctx, i.binLogCache, func(c service.Cache) {
+		binLogPositionBytes, cErr := c.Get(ctx, i.binLogCacheKey)
 		if cErr != nil {
 			if !errors.Is(cErr, service.ErrKeyNotFound) {
 				i.logger.Errorf("failed to obtain cursor cache item. %v", cErr)
@@ -358,14 +367,11 @@ func (i *mysqlStreamInput) startMySQLSync() {
 					var batchRows *sql.Rows
 					if numRowsProcessed == 0 {
 						batchRows, err = i.snapshot.querySnapshotTable(table, tablePks, nil, i.fieldSnapshotMaxBatchSize)
-						if err != nil {
-							return err
-						}
 					} else {
 						batchRows, err = i.snapshot.querySnapshotTable(table, tablePks, &lastSeenPksValues, i.fieldSnapshotMaxBatchSize)
-						if err != nil {
-							return err
-						}
+					}
+					if err != nil {
+						return err
 					}
 
 					var batchRowsCount int
@@ -545,7 +551,7 @@ func (i *mysqlStreamInput) syncBinlogPosition(ctx context.Context, binLogPos *in
 
 	var cErr error
 	if err := i.res.AccessCache(ctx, i.binLogCache, func(c service.Cache) {
-		cErr = c.Set(ctx, binLogCacheKey, positionInByte, nil)
+		cErr = c.Set(ctx, i.binLogCacheKey, positionInByte, nil)
 		if cErr != nil {
 			i.logger.Errorf("Failed to store binlog position: %v", cErr)
 		}
