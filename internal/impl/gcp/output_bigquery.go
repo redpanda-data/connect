@@ -421,7 +421,7 @@ func (g *gcpBigQueryOutput) WriteBatch(ctx context.Context, batch service.Messag
 		}
 		for idx, job := range jobs {
 			status, err := job.Wait(ctx)
-			if err == nil {
+			if err != nil {
 				setErr(idx, fmt.Errorf("error while waiting on bigquery job: %w", err))
 				continue
 			}
@@ -429,7 +429,10 @@ func (g *gcpBigQueryOutput) WriteBatch(ctx context.Context, batch service.Messag
 				setErr(idx, err)
 			}
 		}
-		return batchErr
+		if batchErr != nil {
+			return batchErr
+		}
+		return nil
 	}
 
 	var data bytes.Buffer
