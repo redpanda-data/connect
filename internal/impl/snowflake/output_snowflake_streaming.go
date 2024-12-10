@@ -98,9 +98,9 @@ You can monitor the output batch size using the `+"`snowflake_compressed_output_
 `).Example("ORG-ACCOUNT"),
 			service.NewStringField(ssoFieldUser).Description("The user to run the Snowpipe Stream as. See https://docs.snowflake.com/en/user-guide/admin-user-management[Snowflake Documentation^] on how to create a user."),
 			service.NewStringField(ssoFieldRole).Description("The role for the `user` field. The role must have the https://docs.snowflake.com/en/user-guide/data-load-snowpipe-streaming-overview#required-access-privileges[required privileges^] to call the Snowpipe Streaming APIs. See https://docs.snowflake.com/en/user-guide/admin-user-management#user-roles[Snowflake Documentation^] for more information about roles.").Example("ACCOUNTADMIN"),
-			service.NewStringField(ssoFieldDB).Description("The Snowflake database to ingest data into."),
-			service.NewStringField(ssoFieldSchema).Description("The Snowflake schema to ingest data into."),
-			service.NewStringField(ssoFieldTable).Description("The Snowflake table to ingest data into."),
+			service.NewStringField(ssoFieldDB).Description("The Snowflake database to ingest data into.").Example("MY_DATABASE"),
+			service.NewStringField(ssoFieldSchema).Description("The Snowflake schema to ingest data into.").Example("PUBLIC"),
+			service.NewStringField(ssoFieldTable).Description("The Snowflake table to ingest data into.").Example("MY_TABLE"),
 			service.NewStringField(ssoFieldKey).Description("The PEM encoded private RSA key to use for authenticating with Snowflake. Either this or `private_key_file` must be specified.").Optional().Secret(),
 			service.NewStringField(ssoFieldKeyFile).Description("The file to load the private RSA key from. This should be a `.p8` PEM encoded file. Either this or `private_key` must be specified.").Optional(),
 			service.NewStringField(ssoFieldKeyPass).Description("The RSA key passphrase if the RSA key is encrypted.").Optional().Secret(),
@@ -138,7 +138,8 @@ This option is mutually exclusive with `+"`"+ssoFieldChannelName+"`"+`.
 
 NOTE: There is a limit of 10,000 streams per table - if using more than 10k streams please reach out to Snowflake support.`).
 				Optional().
-				Advanced(),
+				Advanced().
+				Example(`channel-${HOST}`),
 			service.NewInterpolatedStringField(ssoFieldChannelName).
 				Description(`The channel name to use.
 Duplicate channel names will result in errors and prevent multiple instances of Redpanda Connect from writing at the same time.
@@ -150,7 +151,8 @@ This option is mutually exclusive with `+"`"+ssoFieldChannelPrefix+"`"+`.
 
 NOTE: There is a limit of 10,000 streams per table - if using more than 10k streams please reach out to Snowflake support.`).
 				Optional().
-				Advanced(),
+				Advanced().
+				Examples(`partition-${!@kafka_partition}`),
 			service.NewInterpolatedStringField(ssoFieldOffsetToken).
 				Description(`The offset token to use for exactly once delivery of data in the pipeline. When data is sent on a channel, each message in a batch's offset token
 is compared to the latest token for a channel. If the offset token is lexicographically less than the latest in the channel, it's assumed the message is a duplicate and
@@ -163,7 +165,8 @@ NOTE: It's assumed that messages within a batch are in increasing order by offse
 
 For more information about offset tokens, see https://docs.snowflake.com/en/user-guide/data-load-snowpipe-streaming-overview#offset-tokens[^Snowflake Documentation]`).
 				Optional().
-				Advanced(),
+				Advanced().
+				Examples(`offset-${!"%016X".format(@kafka_offset)}`, `postgres-${!@lsn}`),
 		).
 		LintRule(`root = match {
   this.exists("private_key") && this.exists("private_key_file") => [ "both `+"`private_key`"+` and `+"`private_key_file`"+` can't be set simultaneously" ],
