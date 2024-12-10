@@ -200,11 +200,7 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 }
 
 func init() {
-	err := service.RegisterBatchInput(
-		"mysql_cdc", mysqlStreamConfigSpec,
-		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
-			return newMySQLStreamInput(conf, mgr)
-		})
+	err := service.RegisterBatchInput("mysql_cdc", mysqlStreamConfigSpec, newMySQLStreamInput)
 	if err != nil {
 		panic(err)
 	}
@@ -598,7 +594,7 @@ func (i *mysqlStreamInput) Close(ctx context.Context) error {
 // --- MySQL Canal handler methods ----
 
 func (i *mysqlStreamInput) OnRotate(eh *replication.EventHeader, re *replication.RotateEvent) error {
-	i.mutex.Lock()
+	i.mutex.Lock() // seems sketch
 	flushedBatch, err := i.batchPolicy.Flush(i.streamCtx)
 	if err != nil {
 		i.logger.Debugf("Flush batch error: %w", err)
