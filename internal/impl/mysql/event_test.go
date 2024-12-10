@@ -13,12 +13,11 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/stretchr/testify/require"
 )
 
 func TestBinlogString(t *testing.T) {
-	good := []mysql.Position{
+	good := []Position{
 		{Name: "log.0000", Pos: 32},
 		{Name: "log@0000", Pos: 32},
 		{Name: "log.09999999", Pos: 0},
