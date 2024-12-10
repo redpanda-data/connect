@@ -298,11 +298,12 @@ func (i *mysqlStreamInput) readMessages(ctx context.Context) {
 			mb := service.NewMessage(row)
 			mb.MetaSet("operation", string(me.Operation))
 			mb.MetaSet("table", me.Table)
-			mb.MetaSet("type", string(me.Type))
 			if me.Position != nil {
 				i.mutex.Lock()
 				i.currentLogPosition = me.Position
 				i.mutex.Unlock()
+				// Lexicographically ordered
+				mb.MetaSet("binlog_position", me.Position.String())
 			}
 
 			if i.batchPolicy.Add(mb) {
@@ -407,8 +408,7 @@ func (i *mysqlStreamInput) startMySQLSync() {
 						// build message
 						i.rawMessageEvents <- MessageEvent{
 							Row:       row,
-							Operation: MessageOperationInsert,
-							Type:      MessageTypeSnapshot,
+							Operation: MessageOperationRead,
 							Table:     table,
 							Position:  nil,
 						}
@@ -518,7 +518,6 @@ func (i *mysqlStreamInput) onMessage(e *canal.RowsEvent, initValue, incrementVal
 		i.rawMessageEvents <- MessageEvent{
 			Row:       message,
 			Operation: MessageOperation(e.Action),
-			Type:      MessageTypeStreaming,
 			Table:     e.Table.Name,
 			Position:  i.currentLogPosition,
 		}
