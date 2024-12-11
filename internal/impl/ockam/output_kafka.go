@@ -221,7 +221,7 @@ func newOckamKafkaOutput(conf *service.ParsedConfig, log *service.Logger) (*ocka
 		client.Close()
 		client = nil
 		return nil
-	})
+	}, nil, nil)
 	if err != nil {
 		return nil, err
 	}

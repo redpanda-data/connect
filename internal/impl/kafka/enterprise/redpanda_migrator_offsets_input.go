@@ -194,7 +194,7 @@ func init() {
 				msg.MetaSetMut("kafka_offset_metadata", offsetCommitValue.Metadata)
 
 				return msg, nil
-			})
+			}, nil, nil)
 			if err != nil {
 				return nil, err
 			}

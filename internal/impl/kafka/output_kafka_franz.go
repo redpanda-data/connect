@@ -115,7 +115,7 @@ func init() {
 				client.Close()
 				client = nil
 				return nil
-			})
+			}, nil, nil)
 			return
 		})
 	if err != nil {

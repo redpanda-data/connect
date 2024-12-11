@@ -60,7 +60,7 @@ ACL migration adheres to the following principles:
 - `+"`ALLOW ALL`"+` ACLs for topics are downgraded to `+"`ALLOW READ`"+`
 - Only topic ACLs are migrated, group ACLs are not migrated
 `).
-		Fields(RedpandaMigratorOutputConfigFields()...).
+		Fields(redpandaMigratorOutputConfigFields()...).
 		LintRule(kafka.FranzWriterConfigLints()).
 		Example("Transfer data", "Writes messages to the configured broker and creates topics and topic ACLs if they don't exist. It also ensures that the message order is preserved.", `
 output:
@@ -76,17 +76,14 @@ output:
 `)
 }
 
-// RedpandaMigratorOutputConfigFields returns the full suite of config fields for a `redpanda_migrator` output using
-// the franz-go client library.
-func RedpandaMigratorOutputConfigFields() []*service.ConfigField {
+func redpandaMigratorOutputConfigFields() []*service.ConfigField {
 	return slices.Concat(
 		kafka.FranzConnectionFields(),
 		kafka.FranzWriterConfigFields(),
 		[]*service.ConfigField{
 			service.NewIntField(rmoFieldMaxInFlight).
 				Description("The maximum number of batches to be sending in parallel at any given time.").
-				Default(10),
-			service.NewBatchPolicyField(rmoFieldBatching),
+				Default(256),
 			service.NewStringField(rmoFieldInputResource).
 				Description("The label of the redpanda_migrator input from which to read the configurations for topics and ACLs which need to be created.").
 				Default(rmiResourceDefaultLabel).
@@ -107,6 +104,7 @@ func RedpandaMigratorOutputConfigFields() []*service.ConfigField {
 
 			// Deprecated
 			service.NewStringField(rmoFieldRackID).Deprecated(),
+			service.NewBatchPolicyField(rmoFieldBatching).Deprecated(),
 		},
 		kafka.FranzProducerFields(),
 	)
@@ -127,220 +125,169 @@ func init() {
 			if maxInFlight, err = conf.FieldInt(rmoFieldMaxInFlight); err != nil {
 				return
 			}
-			if batchPolicy, err = conf.FieldBatchPolicy(rmoFieldBatching); err != nil {
+
+			var inputResource string
+			if inputResource, err = conf.FieldString(rmoFieldInputResource); err != nil {
 				return
 			}
-			output, err = NewRedpandaMigratorWriterFromConfig(conf, mgr)
+
+			var replicationFactorOverride bool
+			if replicationFactorOverride, err = conf.FieldBool(rmoFieldRepFactorOverride); err != nil {
+				return
+			}
+
+			var replicationFactor int
+			if replicationFactor, err = conf.FieldInt(rmoFieldRepFactor); err != nil {
+				return
+			}
+
+			var translateSchemaIDs bool
+			if translateSchemaIDs, err = conf.FieldBool(rmoFieldTranslateSchemaIDs); err != nil {
+				return
+			}
+
+			var schemaRegistryOutputResource srResourceKey
+			if translateSchemaIDs {
+				var res string
+				if res, err = conf.FieldString(rmoFieldSchemaRegistryOutputResource); err != nil {
+					return
+				}
+				schemaRegistryOutputResource = srResourceKey(res)
+			}
+
+			var clientLabel string
+			if clientLabel = mgr.Label(); clientLabel == "" {
+				clientLabel = rmoResourceDefaultLabel
+			}
+
+			var tmpOpts, clientOpts []kgo.Opt
+
+			var connDetails *kafka.FranzConnectionDetails
+			if connDetails, err = kafka.FranzConnectionDetailsFromConfig(conf, mgr.Logger()); err != nil {
+				return
+			}
+			clientOpts = append(clientOpts, connDetails.FranzOpts()...)
+
+			if tmpOpts, err = kafka.FranzProducerOptsFromConfig(conf); err != nil {
+				return
+			}
+			clientOpts = append(clientOpts, tmpOpts...)
+
+			clientOpts = append(clientOpts, kgo.AllowAutoTopicCreation()) // TODO: Configure this?
+
+			var client *kgo.Client
+			var clientMut sync.Mutex
+			// Stores the source to destination SchemaID mapping.
+			var schemaIDCache sync.Map
+			var topicCache sync.Map
+			output, err = kafka.NewFranzWriterFromConfig(conf,
+				func(fn kafka.FranzSharedClientUseFn) error {
+					clientMut.Lock()
+					defer clientMut.Unlock()
+
+					if client == nil {
+						var err error
+						if client, err = kgo.NewClient(clientOpts...); err != nil {
+							return err
+						}
+					}
+
+					return fn(&kafka.FranzSharedClientInfo{
+						Client:      client,
+						ConnDetails: connDetails,
+					})
+				},
+				func(context.Context) error {
+					clientMut.Lock()
+					defer clientMut.Unlock()
+
+					if client == nil {
+						return nil
+					}
+
+					_, _ = kafka.FranzSharedClientPop(clientLabel, mgr)
+
+					client.Close()
+					client = nil
+					return nil
+				},
+				func(client *kgo.Client) {
+					if err = kafka.FranzSharedClientSet(clientLabel, &kafka.FranzSharedClientInfo{
+						Client: client,
+					}, mgr); err != nil {
+						mgr.Logger().With("error", err).Warn("Failed to store client connection for sharing")
+					}
+				},
+				func(ctx context.Context, client *kgo.Client, records []*kgo.Record) error {
+					if translateSchemaIDs {
+
+						if res, ok := mgr.GetGeneric(schemaRegistryOutputResource); ok {
+							srOutput := res.(*schemaRegistryOutput)
+
+							var ch franz_sr.ConfluentHeader
+							for recordIdx, record := range records {
+								schemaID, _, err := ch.DecodeID(record.Value)
+								if err != nil {
+									mgr.Logger().Warnf("Failed to extract schema ID from message index %d on topic %q: %s", recordIdx, record.Topic, err)
+									continue
+								}
+
+								var destSchemaID int
+								if cachedID, ok := schemaIDCache.Load(schemaID); !ok {
+									destSchemaID, err = srOutput.GetDestinationSchemaID(ctx, schemaID)
+									if err != nil {
+										mgr.Logger().Warnf("Failed to fetch destination schema ID from message index %d on topic %q: %s", recordIdx, record.Topic, err)
+										continue
+									}
+									schemaIDCache.Store(schemaID, destSchemaID)
+								} else {
+									destSchemaID = cachedID.(int)
+								}
+
+								err = sr.UpdateID(record.Value, destSchemaID)
+								if err != nil {
+									mgr.Logger().Warnf("Failed to update schema ID in message index %d on topic %s: %q", recordIdx, record.Topic, err)
+									continue
+								}
+							}
+						} else {
+							mgr.Logger().Warnf("schema_registry output resource %q not found; skipping schema ID translation", schemaRegistryOutputResource)
+							return nil
+						}
+
+					}
+
+					// Once we get here, the input should already be initialised and its pre-flight hook should have
+					// been called already. Thus, we don't need to loop until the input is ready.
+					if err := kafka.FranzSharedClientUse(inputResource, mgr, func(details *kafka.FranzSharedClientInfo) error {
+						for _, record := range records {
+							if _, ok := topicCache.Load(record.Topic); !ok {
+								if err := createTopic(ctx, record.Topic, replicationFactorOverride, replicationFactor, details.Client, client); err != nil && err != errTopicAlreadyExists {
+									return fmt.Errorf("failed to create topic %q: %s", record.Topic, err)
+								} else {
+									if err == errTopicAlreadyExists {
+										mgr.Logger().Debugf("Topic %q already exists", record.Topic)
+									} else {
+										mgr.Logger().Infof("Created topic %q", record.Topic)
+									}
+									if err := createACLs(ctx, record.Topic, details.Client, client); err != nil {
+										mgr.Logger().Errorf("Failed to create ACLs for topic %q: %s", record.Topic, err)
+									}
+
+									topicCache.Store(record.Topic, struct{}{})
+								}
+							}
+						}
+						return nil
+					}); err != nil {
+						mgr.Logger().With("error", err, "resource", inputResource).Warn("Failed to access shared client for given resource identifier")
+					}
+
+					return nil
+				})
 			return
 		})
 	if err != nil {
 		panic(err)
 	}
-}
-
-//------------------------------------------------------------------------------
-
-// RedpandaMigratorWriter implements a Kafka writer using the franz-go library.
-type RedpandaMigratorWriter struct {
-	recordConverter              *kafka.FranzWriter
-	replicationFactorOverride    bool
-	replicationFactor            int
-	translateSchemaIDs           bool
-	inputResource                string
-	schemaRegistryOutputResource srResourceKey
-
-	clientDetails *kafka.FranzConnectionDetails
-	clientOpts    []kgo.Opt
-	connMut       sync.Mutex
-	client        *kgo.Client
-	topicCache    sync.Map
-	// Stores the source to destination SchemaID mapping.
-	schemaIDCache        sync.Map
-	schemaRegistryOutput *schemaRegistryOutput
-
-	clientLabel string
-
-	mgr *service.Resources
-}
-
-// NewRedpandaMigratorWriterFromConfig attempts to instantiate a RedpandaMigratorWriter from a parsed config.
-func NewRedpandaMigratorWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*RedpandaMigratorWriter, error) {
-	w := RedpandaMigratorWriter{
-		mgr: mgr,
-	}
-
-	var err error
-
-	// NOTE: We do not provide closures for client access and yielding because
-	// this writer is only used for its BatchToRecords method. If we ever expand
-	// in order to use this as a full writer then we need to provide a full
-	// suite of arguments here.
-	if w.recordConverter, err = kafka.NewFranzWriterFromConfig(conf, nil, nil); err != nil {
-		return nil, err
-	}
-
-	if w.clientDetails, err = kafka.FranzConnectionDetailsFromConfig(conf, mgr.Logger()); err != nil {
-		return nil, err
-	}
-	w.clientOpts = w.clientDetails.FranzOpts()
-
-	var tmpOpts []kgo.Opt
-	if tmpOpts, err = kafka.FranzProducerOptsFromConfig(conf); err != nil {
-		return nil, err
-	}
-	w.clientOpts = append(w.clientOpts, tmpOpts...)
-
-	if w.inputResource, err = conf.FieldString(rmoFieldInputResource); err != nil {
-		return nil, err
-	}
-
-	if w.replicationFactorOverride, err = conf.FieldBool(rmoFieldRepFactorOverride); err != nil {
-		return nil, err
-	}
-
-	if w.replicationFactor, err = conf.FieldInt(rmoFieldRepFactor); err != nil {
-		return nil, err
-	}
-
-	if w.translateSchemaIDs, err = conf.FieldBool(rmoFieldTranslateSchemaIDs); err != nil {
-		return nil, err
-	}
-
-	if w.translateSchemaIDs {
-		var res string
-		if res, err = conf.FieldString(rmoFieldSchemaRegistryOutputResource); err != nil {
-			return nil, err
-		}
-		w.schemaRegistryOutputResource = srResourceKey(res)
-	}
-
-	if w.clientLabel = mgr.Label(); w.clientLabel == "" {
-		w.clientLabel = rmoResourceDefaultLabel
-	}
-
-	return &w, nil
-}
-
-//------------------------------------------------------------------------------
-
-// Connect to the target seed brokers.
-func (w *RedpandaMigratorWriter) Connect(ctx context.Context) error {
-	w.connMut.Lock()
-	defer w.connMut.Unlock()
-
-	if w.client != nil {
-		return nil
-	}
-
-	var err error
-	if w.client, err = kgo.NewClient(w.clientOpts...); err != nil {
-		return err
-	}
-
-	// Check connectivity to cluster
-	if err := w.client.Ping(ctx); err != nil {
-		return fmt.Errorf("failed to connect to cluster: %s", err)
-	}
-
-	if err = kafka.FranzSharedClientSet(w.clientLabel, &kafka.FranzSharedClientInfo{
-		Client:      w.client,
-		ConnDetails: w.clientDetails,
-	}, w.mgr); err != nil {
-		w.mgr.Logger().With("error", err).Warn("Failed to store client connection for sharing")
-	}
-
-	if w.translateSchemaIDs {
-		if res, ok := w.mgr.GetGeneric(w.schemaRegistryOutputResource); ok {
-			w.schemaRegistryOutput = res.(*schemaRegistryOutput)
-		} else {
-			w.mgr.Logger().Warnf("schema_registry output resource %q not found; skipping schema ID translation", w.schemaRegistryOutputResource)
-		}
-	}
-
-	return nil
-}
-
-// WriteBatch attempts to write a batch of messages to the target topics.
-func (w *RedpandaMigratorWriter) WriteBatch(ctx context.Context, b service.MessageBatch) error {
-	w.connMut.Lock()
-	defer w.connMut.Unlock()
-
-	if w.client == nil {
-		return service.ErrNotConnected
-	}
-
-	records, err := w.recordConverter.BatchToRecords(ctx, b)
-	if err != nil {
-		return err
-	}
-
-	var ch franz_sr.ConfluentHeader
-	if w.translateSchemaIDs && w.schemaRegistryOutput != nil {
-		for recordIdx, record := range records {
-			schemaID, _, err := ch.DecodeID(record.Value)
-			if err != nil {
-				w.mgr.Logger().Warnf("Failed to extract schema ID from message index %d on topic %q: %s", recordIdx, record.Topic, err)
-				continue
-			}
-
-			var destSchemaID int
-			if cachedID, ok := w.schemaIDCache.Load(schemaID); !ok {
-				destSchemaID, err = w.schemaRegistryOutput.GetDestinationSchemaID(ctx, schemaID)
-				if err != nil {
-					w.mgr.Logger().Warnf("Failed to fetch destination schema ID from message index %d on topic %q: %s", recordIdx, record.Topic, err)
-					continue
-				}
-				w.schemaIDCache.Store(schemaID, destSchemaID)
-			} else {
-				destSchemaID = cachedID.(int)
-			}
-
-			err = sr.UpdateID(record.Value, destSchemaID)
-			if err != nil {
-				w.mgr.Logger().Warnf("Failed to update schema ID in message index %d on topic %s: %q", recordIdx, record.Topic, err)
-				continue
-			}
-		}
-	}
-
-	if err := kafka.FranzSharedClientUse(w.inputResource, w.mgr, func(details *kafka.FranzSharedClientInfo) error {
-		for _, record := range records {
-			if _, ok := w.topicCache.Load(record.Topic); !ok {
-				if err := createTopic(ctx, record.Topic, w.replicationFactorOverride, w.replicationFactor, details.Client, w.client); err != nil && err != errTopicAlreadyExists {
-					return fmt.Errorf("failed to create topic %q: %s", record.Topic, err)
-				} else {
-					if err == errTopicAlreadyExists {
-						w.mgr.Logger().Debugf("Topic %q already exists", record.Topic)
-					} else {
-						w.mgr.Logger().Infof("Created topic %q", record.Topic)
-					}
-					if err := createACLs(ctx, record.Topic, details.Client, w.client); err != nil {
-						w.mgr.Logger().Errorf("Failed to create ACLs for topic %q: %s", record.Topic, err)
-					}
-
-					w.topicCache.Store(record.Topic, struct{}{})
-				}
-			}
-		}
-		return nil
-	}); err != nil {
-		w.mgr.Logger().With("error", err, "resource", w.inputResource).Warn("Failed to access shared client for given resource identifier")
-	}
-
-	return w.client.ProduceSync(ctx, records...).FirstErr()
-}
-
-func (w *RedpandaMigratorWriter) disconnect() {
-	if w.client == nil {
-		return
-	}
-	_, _ = kafka.FranzSharedClientPop(w.clientLabel, w.mgr)
-	w.client.Close()
-	w.client = nil
-}
-
-// Close underlying connections.
-func (w *RedpandaMigratorWriter) Close(ctx context.Context) error {
-	w.disconnect()
-	return nil
 }
