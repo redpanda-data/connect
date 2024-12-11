@@ -76,6 +76,7 @@ input:
     consumer_group: "" # No default (optional)
     commit_period: 5s
     partition_buffer_bytes: 1MB
+    topic_lag_refresh_period: 5s
     auto_replay_nacks: true
 ```
 
@@ -584,6 +585,15 @@ A buffer size (in bytes) for each consumed partition, allowing records to be que
 *Type*: `string`
 
 *Default*: `"1MB"`
+
+=== `topic_lag_refresh_period`
+
+The period of time between each topic lag refresh cycle.
+
+
+*Type*: `string`
+
+*Default*: `"5s"`
 
 === `auto_replay_nacks`
 

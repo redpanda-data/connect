@@ -678,8 +678,9 @@ func TestRedpandaMigratorIntegration(t *testing.T) {
 	createSchema(t, source.schemaRegistryURL, dummyTopic, fmt.Sprintf(`{"name":"%s", "type": "record", "fields":[{"name":"test", "type": "string"}]}`, dummyTopic), nil)
 
 	// Produce one message
-	streamBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
+	{
+		streamBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
 pipeline:
   processors:
     - schema_registry_encode:
@@ -691,31 +692,33 @@ output:
     seed_brokers: [ %s ]
     topic: %s
 `, source.schemaRegistryURL, dummyTopic, source.brokerAddr, dummyTopic)))
-	require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
+		require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
 
-	inFunc, err := streamBuilder.AddProducerFunc()
-	require.NoError(t, err)
+		inFunc, err := streamBuilder.AddProducerFunc()
+		require.NoError(t, err)
 
-	stream, err := streamBuilder.Build()
-	require.NoError(t, err)
+		stream, err := streamBuilder.Build()
+		require.NoError(t, err)
 
-	license.InjectTestService(stream.Resources())
+		license.InjectTestService(stream.Resources())
 
-	ctx, done := context.WithTimeout(context.Background(), 3*time.Second)
-	t.Cleanup(done)
+		ctx, done := context.WithTimeout(context.Background(), 3*time.Second)
+		t.Cleanup(done)
 
-	go func() {
-		require.NoError(t, inFunc(ctx, service.NewMessage([]byte(`{"test":"foobar"}`))))
+		go func() {
+			require.NoError(t, inFunc(ctx, service.NewMessage([]byte(`{"test":"foobar"}`))))
 
-		require.NoError(t, stream.StopWithin(1*time.Second))
-	}()
+			require.NoError(t, stream.StopWithin(2*time.Second))
+		}()
 
-	err = stream.Run(ctx)
-	require.NoError(t, err)
+		err = stream.Run(ctx)
+		require.NoError(t, err)
+	}
 
 	// Run the Redpanda Migrator bundle
-	streamBuilder = service.NewStreamBuilder()
-	require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
+	{
+		streamBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
 input:
   redpanda_migrator_bundle:
     redpanda_migrator:
@@ -727,6 +730,11 @@ input:
       replication_factor: -1
     schema_registry:
       url: %s
+  processors:
+    - log:
+        message: meta ${! @ }
+    - log:
+        message: content ${! content() }
 
 output:
   redpanda_migrator_bundle:
@@ -737,38 +745,40 @@ output:
     schema_registry:
       url: %s
 `, source.brokerAddr, dummyTopic, source.schemaRegistryURL, destination.brokerAddr, destination.schemaRegistryURL)))
-	// require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
+		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
 
-	stream, err = streamBuilder.Build()
-	require.NoError(t, err)
-
-	license.InjectTestService(stream.Resources())
-
-	t.Log("Running migrator")
-
-	// Run stream in the background and shut it down when the test is finished
-	migratorCloseChan := make(chan struct{})
-	go func() {
-		err = stream.Run(context.Background())
+		stream, err := streamBuilder.Build()
 		require.NoError(t, err)
 
-		close(migratorCloseChan)
-	}()
-	t.Cleanup(func() {
-		require.NoError(t, stream.StopWithin(3*time.Second))
+		license.InjectTestService(stream.Resources())
 
-		<-migratorCloseChan
-	})
+		// Run stream in the background and shut it down when the test is finished
+		migratorCloseChan := make(chan struct{})
+		go func() {
+			err = stream.Run(context.Background())
+			require.NoError(t, err)
 
+			t.Log("Migrator shut down")
+
+			close(migratorCloseChan)
+		}()
+		t.Cleanup(func() {
+			require.NoError(t, stream.StopWithin(3*time.Second))
+
+			<-migratorCloseChan
+		})
+	}
+
+	// Wait for Migrator to sync the existing message
 	time.Sleep(10 * time.Second)
 
-	// Read the message using a consumer group
+	// Read the message from source using a consumer group
 	dummyConsumerGroup := "test"
-
-	streamBuilder = service.NewStreamBuilder()
-	require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
+	{
+		streamBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
 input:
-  kafka_franz:
+  redpanda:
     seed_brokers: [ %s ]
     topics: [ %s ]
     consumer_group: %s
@@ -778,41 +788,44 @@ input:
         url: %s
         avro_raw_json: true
 `, source.brokerAddr, dummyTopic, dummyConsumerGroup, source.schemaRegistryURL)))
-	require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
+		require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
 
-	recvChan := make(chan struct{}, 1)
-	err = streamBuilder.AddConsumerFunc(func(ctx context.Context, m *service.Message) error {
-		b, err := m.AsBytes()
+		recvChan := make(chan struct{})
+		err = streamBuilder.AddConsumerFunc(func(ctx context.Context, m *service.Message) error {
+			b, err := m.AsBytes()
+			require.NoError(t, err)
+
+			assert.Equal(t, `{"test":"foobar"}`, string(b))
+
+			close(recvChan)
+			return nil
+		})
 		require.NoError(t, err)
-		assert.Equal(t, `{"test":"foobar"}`, string(b))
 
-		close(recvChan)
-		return nil
-	})
-	require.NoError(t, err)
+		stream, err := streamBuilder.Build()
+		require.NoError(t, err)
 
-	stream, err = streamBuilder.Build()
-	require.NoError(t, err)
+		license.InjectTestService(stream.Resources())
 
-	license.InjectTestService(stream.Resources())
+		ctx, done := context.WithTimeout(context.Background(), 5*time.Second)
+		t.Cleanup(done)
 
-	ctx, done = context.WithTimeout(context.Background(), 10*time.Second)
-	t.Cleanup(done)
+		go func() {
+			require.NoError(t, stream.Run(ctx))
+		}()
 
-	go func() {
 		<-recvChan
-
-		require.NoError(t, stream.StopWithin(5*time.Second))
-	}()
-
-	err = stream.Run(ctx)
-	require.NoError(t, err)
+		require.NoError(t, stream.StopWithin(3*time.Second))
+	}
 
 	time.Sleep(10 * time.Second)
+	t.Log("Finished reading message foobar with CG")
+	// Wait for Migrator to sync the consumer group
 
-	// Produce one message
-	streamBuilder = service.NewStreamBuilder()
-	require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
+	// Produce one message in the source
+	{
+		streamBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
 pipeline:
   processors:
     - schema_registry_encode:
@@ -824,74 +837,78 @@ output:
     seed_brokers: [ %s ]
     topic: %s
 `, source.schemaRegistryURL, dummyTopic, source.brokerAddr, dummyTopic)))
-	require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
+		require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
 
-	inFunc, err = streamBuilder.AddProducerFunc()
-	require.NoError(t, err)
+		inFunc, err := streamBuilder.AddProducerFunc()
+		require.NoError(t, err)
 
-	stream, err = streamBuilder.Build()
-	require.NoError(t, err)
+		stream, err := streamBuilder.Build()
+		require.NoError(t, err)
 
-	license.InjectTestService(stream.Resources())
+		license.InjectTestService(stream.Resources())
 
-	ctx, done = context.WithTimeout(context.Background(), 3*time.Second)
-	t.Cleanup(done)
+		ctx, done := context.WithTimeout(context.Background(), 5*time.Second)
+		t.Cleanup(done)
 
-	go func() {
-		require.NoError(t, inFunc(ctx, service.NewMessage([]byte(`{"test":"foobar"}`))))
+		go func() {
+			require.NoError(t, inFunc(ctx, service.NewMessage([]byte(`{"test":"barfoo"}`))))
 
-		require.NoError(t, stream.StopWithin(1*time.Second))
-	}()
+			require.NoError(t, stream.StopWithin(3*time.Second))
+		}()
 
-	err = stream.Run(ctx)
-	require.NoError(t, err)
+		require.NoError(t, stream.Run(ctx))
+	}
 
-	t.Log("Produced message")
-	time.Sleep(10 * time.Second) //////////////////////////////// TODOOOOOOOOOOOOOOOOOOOO
+	// Wait for Migrator to sync consumer groups and the new message
+	time.Sleep(30 * time.Second)
+	t.Log("Finished producing barfoo in source")
 
-	// Read the message using a consumer group
-	streamBuilder = service.NewStreamBuilder()
-	require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
+	t.Log("Source broker: " + source.brokerAddr)
+	t.Log("Dest broker: " + destination.brokerAddr)
+
+	// Read the new message from the destination using a consumer group
+	{
+		streamBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
 input:
   kafka_franz:
     seed_brokers: [ %s ]
     topics: [ %s ]
     consumer_group: %s
-    start_from_oldest: true
+    start_from_oldest: false
   processors:
     - schema_registry_decode:
         url: %s
         avro_raw_json: true
-`, destination.brokerAddr, dummyTopic, dummyConsumerGroup, destination.schemaRegistryURL)))
-	require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
+`, source.brokerAddr, dummyTopic, dummyConsumerGroup, source.schemaRegistryURL)))
+		require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
 
-	recvChan = make(chan struct{})
-	err = streamBuilder.AddConsumerFunc(func(ctx context.Context, m *service.Message) error {
-		b, err := m.AsBytes()
+		recvChan := make(chan struct{})
+		err = streamBuilder.AddConsumerFunc(func(ctx context.Context, m *service.Message) error {
+			b, err := m.AsBytes()
+			require.NoError(t, err)
+			assert.Equal(t, `{"test":"barfoo"}`, string(b))
+
+			close(recvChan)
+			return nil
+		})
 		require.NoError(t, err)
-		assert.Equal(t, `{"test":"foobar"}`, string(b))
 
-		close(recvChan)
-		return nil
-	})
-	require.NoError(t, err)
+		stream, err := streamBuilder.Build()
+		require.NoError(t, err)
 
-	stream, err = streamBuilder.Build()
-	require.NoError(t, err)
+		license.InjectTestService(stream.Resources())
 
-	license.InjectTestService(stream.Resources())
+		ctx, done := context.WithTimeout(context.Background(), 5*time.Second)
+		t.Cleanup(done)
 
-	ctx, done = context.WithTimeout(context.Background(), 5*time.Second)
-	t.Cleanup(done)
+		go func() {
+			require.NoError(t, stream.Run(ctx))
+		}()
 
-	go func() {
 		<-recvChan
-
 		require.NoError(t, stream.StopWithin(3*time.Second))
-	}()
 
-	err = stream.Run(ctx)
-	require.NoError(t, err)
-
-	t.Log("Read message")
+		t.Log("Read message")
+	}
 }

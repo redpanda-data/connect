@@ -56,17 +56,21 @@ All notable changes to this project will be documented in this file.
 - The `redpanda_migrator_bundle` output now skips schema ID translation when `translate_schema_ids: false` and `schema_registry` is configured. (@mihaitodor)
 - The `redpanda_migrator` output no longer rejects messages if it can't perform schema ID translation. (@mihaitodor)
 - The `redpanda_migrator` input no longer converts the kafka key to string. (@mihaitodor)
-- Field `multi_header` for the `redpanda_migrator` input is now deprecated. (@mihaitodor)
 
 ### Added
 
 - New `redpanda_migrator_offsets` input. (@mihaitodor)
 - Fields `offset_topic`, `offset_group`, `offset_partition`, `offset_commit_timestamp` and `offset_metadata` added to the `redpanda_migrator_offsets` output. (@mihaitodor)
 - Fields `kafka_key` and `max_in_flight` for the `redpanda_migrator_offsets` output are now deprecated. (@mihaitodor)
+- Fields `batching` for the `redpanda_migrator` output is now deprecated. (@mihaitodor)
+- Field `topic_lag_refresh_period` added to the `redpanda` and `redpanda_common` inputs. (@mihaitodor)
+- Metric `redpanda_lag` now emitted by the `redpanda` and `redpanda_common` inputs. (@mihaitodor)
+- Metadata `kafka_lag` now emitted by the `redpanda` and `redpanda_common` inputs. (@mihaitodor)
 
 ### Changed
 
 - The `kafka_key` and `max_in_flight` fields of the `redpanda_migrator_offsets` output have been deprecated.
+- Fields `batch_size` and `multi_header` for the `redpanda_migrator` input are now deprecated. (@mihaitodor)
 
 ## 4.43.0 - 2024-12-05
 

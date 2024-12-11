@@ -81,7 +81,7 @@ func init() {
 			}
 			output, err = kafka.NewFranzWriterFromConfig(conf, func(fn kafka.FranzSharedClientUseFn) error {
 				return kafka.FranzSharedClientUse(sharedGlobalRedpandaClientKey, mgr, fn)
-			}, func(context.Context) error { return nil })
+			}, func(context.Context) error { return nil }, nil, nil)
 			return
 		})
 	if err != nil {

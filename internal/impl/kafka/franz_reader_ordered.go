@@ -17,6 +17,8 @@ package kafka
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -24,17 +26,20 @@ import (
 	"github.com/Jeffail/checkpoint"
 	"github.com/Jeffail/shutdown"
 	"github.com/cenkalti/backoff/v4"
+	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
+	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 	"github.com/redpanda-data/connect/v4/internal/dispatch"
 )
 
 const (
-	kroFieldConsumerGroup   = "consumer_group"
-	kroFieldCommitPeriod    = "commit_period"
-	kroFieldPartitionBuffer = "partition_buffer_bytes"
+	kroFieldConsumerGroup         = "consumer_group"
+	kroFieldCommitPeriod          = "commit_period"
+	kroFieldPartitionBuffer       = "partition_buffer_bytes"
+	kroFieldTopicLagRefreshPeriod = "topic_lag_refresh_period"
 )
 
 // FranzReaderOrderedConfigFields returns config fields for customising the
@@ -52,26 +57,40 @@ func FranzReaderOrderedConfigFields() []*service.ConfigField {
 			Description("A buffer size (in bytes) for each consumed partition, allowing records to be queued internally before flushing. Increasing this may improve throughput at the cost of higher memory utilisation. Note that each buffer can grow slightly beyond this value.").
 			Default("1MB").
 			Advanced(),
+		service.NewDurationField(kroFieldTopicLagRefreshPeriod).
+			Description("The period of time between each topic lag refresh cycle.").
+			Default("5s").
+			Advanced(),
 	}
 }
 
 //------------------------------------------------------------------------------
 
-// RecordToMessageFn is a function that converts a Kafka record into a Message.
-type RecordToMessageFn func(record *kgo.Record) (*service.Message, error)
+// recordToMessageFn is a function that converts a Kafka record into a Message.
+type recordToMessageFn func(record *kgo.Record) (*service.Message, error)
+
+// preflightHookFn is a function which is executed once before the first batch of messages is emitted.
+type preflightHookFn func(ctx context.Context, res *service.Resources, client *kgo.Client)
 
 // FranzReaderOrdered implements a kafka reader using the franz-go library.
 type FranzReaderOrdered struct {
 	clientOpts func() ([]kgo.Opt, error)
 
-	partState *partitionState
+	partState             *partitionState
+	lagUpdater            *asyncroutine.Periodic
+	topicLagGauge         *service.MetricGauge
+	topicLagCache         sync.Map
+	preflightHookExecuted bool
+	client                *kgo.Client
 
-	consumerGroup     string
-	commitPeriod      time.Duration
-	cacheLimit        uint64
-	recordToMessageFn RecordToMessageFn
-
-	readBackOff backoff.BackOff
+	consumerGroup         string
+	commitPeriod          time.Duration
+	topicLagRefreshPeriod time.Duration
+	cacheLimit            uint64
+	recordToMessageFn     recordToMessageFn
+	preflightHookFn       preflightHookFn
+	closeHookFn           func(res *service.Resources)
+	readBackOff           backoff.BackOff
 
 	res     *service.Resources
 	log     *service.Logger
@@ -80,7 +99,7 @@ type FranzReaderOrdered struct {
 
 // NewFranzReaderOrderedFromConfig attempts to instantiate a new
 // FranzReaderOrdered reader from a parsed config.
-func NewFranzReaderOrderedFromConfig(conf *service.ParsedConfig, res *service.Resources, optsFn func() ([]kgo.Opt, error), recordToMessageFn RecordToMessageFn) (*FranzReaderOrdered, error) {
+func NewFranzReaderOrderedFromConfig(conf *service.ParsedConfig, res *service.Resources, optsFn func() ([]kgo.Opt, error), recordToMessageFn recordToMessageFn, preflightHookFn preflightHookFn, closeHookFn func(res *service.Resources)) (*FranzReaderOrdered, error) {
 	readBackOff := backoff.NewExponentialBackOff()
 	readBackOff.InitialInterval = time.Millisecond
 	readBackOff.MaxInterval = time.Millisecond * 100
@@ -95,7 +114,10 @@ func NewFranzReaderOrderedFromConfig(conf *service.ParsedConfig, res *service.Re
 		log:               res.Logger(),
 		shutSig:           shutdown.NewSignaller(),
 		clientOpts:        optsFn,
+		topicLagGauge:     res.Metrics().NewGauge("redpanda_lag", "topic", "partition"),
 		recordToMessageFn: recordToMessageFn,
+		preflightHookFn:   preflightHookFn,
+		closeHookFn:       closeHookFn,
 	}
 
 	f.consumerGroup, _ = conf.FieldString(kroFieldConsumerGroup)
@@ -106,6 +128,10 @@ func NewFranzReaderOrderedFromConfig(conf *service.ParsedConfig, res *service.Re
 	}
 
 	if f.commitPeriod, err = conf.FieldDuration(kroFieldCommitPeriod); err != nil {
+		return nil, err
+	}
+
+	if f.topicLagRefreshPeriod, err = conf.FieldDuration(kroFieldTopicLagRefreshPeriod); err != nil {
 		return nil, err
 	}
 
@@ -122,13 +148,20 @@ func (f *FranzReaderOrdered) recordsToBatch(records []*kgo.Record) *batchWithRec
 	var length uint64
 	var batch service.MessageBatch
 	for _, r := range records {
-		record, err := f.recordToMessageFn(r)
+		msg, err := f.recordToMessageFn(r)
 		if err != nil {
 			f.log.Debugf("Failed to convert kafka record to message: %s", err)
 			continue
 		}
 		length += uint64(len(r.Value) + len(r.Key))
-		batch = append(batch, record)
+		batch = append(batch, msg)
+
+		lag := int64(0)
+		if val, ok := f.topicLagCache.Load(fmt.Sprintf("%s_%d", r.Topic, r.Partition)); ok {
+			lag = val.(int64)
+		}
+		msg.MetaSetMut("kafka_lag", lag)
+
 		// The record lives on for checkpointing, but we don't need the contents
 		// going forward so discard these. This looked fine to me but could
 		// potentially be a source of problems so treat this as sus.
@@ -349,14 +382,13 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 		return err
 	}
 
-	var cl *kgo.Client
 	commitFn := func(r *kgo.Record) {}
 	if f.consumerGroup != "" {
 		commitFn = func(r *kgo.Record) {
-			if cl == nil {
+			if f.client == nil {
 				return
 			}
-			cl.MarkCommitRecords(r)
+			f.client.MarkCommitRecords(r)
 		}
 	}
 
@@ -389,13 +421,50 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 		)
 	}
 
-	if cl, err = kgo.NewClient(clientOpts...); err != nil {
+	if f.client, err = kgo.NewClient(clientOpts...); err != nil {
 		return err
 	}
 
+	// Check connectivity to cluster
+	if err = f.client.Ping(ctx); err != nil {
+		return fmt.Errorf("failed to connect to cluster: %s", err)
+	}
+
+	if f.lagUpdater != nil {
+		f.lagUpdater.Stop()
+	}
+	adminClient := kadm.NewClient(f.client)
+	f.lagUpdater = asyncroutine.NewPeriodic(f.topicLagRefreshPeriod, func() {
+		ctx, done := context.WithTimeout(context.Background(), f.topicLagRefreshPeriod)
+		defer done()
+
+		lags, err := adminClient.Lag(ctx, f.consumerGroup)
+		if err != nil {
+			f.log.Debugf("Failed to fetch group lags: %s", err)
+		}
+
+		lags.Each(func(gl kadm.DescribedGroupLag) {
+			for _, gl := range gl.Lag {
+				for _, pl := range gl {
+					lag := pl.Lag
+					if lag < 0 {
+						lag = 0
+					}
+
+					f.topicLagGauge.Set(lag, pl.Topic, strconv.Itoa(int(pl.Partition)))
+					f.topicLagCache.Store(fmt.Sprintf("%s_%d", pl.Topic, pl.Partition), lag)
+				}
+			}
+		})
+	})
+	f.lagUpdater.Start()
+
 	go func() {
 		defer func() {
-			cl.Close()
+			if f.closeHookFn != nil {
+				f.closeHookFn(f.res)
+			}
+			f.client.Close()
 			if f.shutSig.IsSoftStopSignalled() {
 				f.shutSig.TriggerHasStopped()
 			}
@@ -412,7 +481,7 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 			// In this case we don't want to actually resume any of them yet so
 			// I add a forced timeout to deal with it.
 			stallCtx, pollDone := context.WithTimeout(closeCtx, time.Second)
-			fetches := cl.PollFetches(stallCtx)
+			fetches := f.client.PollFetches(stallCtx)
 			pollDone()
 
 			if errs := fetches.Errors(); len(errs) > 0 {
@@ -437,7 +506,7 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 				}
 
 				if nonTemporalErr {
-					cl.Close()
+					f.client.Close()
 					return
 				}
 			}
@@ -449,6 +518,7 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 			fetches.EachPartition(func(p kgo.FetchTopicPartition) {
 				if len(p.Records) > 0 {
 					batch := f.recordsToBatch(p.Records)
+					// TODO: do we have to ack?
 					if len(batch.b) == 0 {
 						return
 					}
@@ -457,11 +527,11 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 					}
 				}
 			})
-			_ = cl.PauseFetchPartitions(pauseTopicPartitions)
+			_ = f.client.PauseFetchPartitions(pauseTopicPartitions)
 
 		noActivePartitions:
 			for {
-				pausedPartitionTopics := cl.PauseFetchPartitions(nil)
+				pausedPartitionTopics := f.client.PauseFetchPartitions(nil)
 
 				// Walk all the disabled topic partitions and check whether any
 				// of them can be resumed.
@@ -474,7 +544,7 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 					}
 				}
 				if len(resumeTopicPartitions) > 0 {
-					cl.ResumeFetchPartitions(resumeTopicPartitions)
+					f.client.ResumeFetchPartitions(resumeTopicPartitions)
 				}
 
 				if len(f.consumerGroup) == 0 || len(resumeTopicPartitions) > 0 || checkpoints.tallyActivePartitions(pausedPartitionTopics) > 0 {
@@ -496,6 +566,11 @@ func (f *FranzReaderOrdered) ReadBatch(ctx context.Context) (service.MessageBatc
 
 	for {
 		if mAck := f.partState.pop(); mAck != nil {
+			if f.preflightHookFn != nil && !f.preflightHookExecuted {
+				f.preflightHookFn(ctx, f.res, f.client)
+				f.preflightHookExecuted = true
+			}
+
 			f.readBackOff.Reset()
 			return mAck.batch, func(ctx context.Context, res error) error {
 				// Res will always be nil because we initialize with service.AutoRetryNacks
