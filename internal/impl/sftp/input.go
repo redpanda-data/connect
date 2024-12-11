@@ -121,13 +121,14 @@ type sftpReader struct {
 	watcherPollInterval time.Duration
 	watcherMinAge       time.Duration
 
-	pathProvider pathProvider
-
 	// State
-	scannerMut  sync.Mutex
-	client      *sftp.Client
-	scanner     codec.DeprecatedFallbackStream
-	currentPath string
+	clientLock sync.Mutex
+	client     *sftp.Client
+
+	pathProvider pathProvider
+	scanner      codec.DeprecatedFallbackStream
+	currentPath  string
+	pendingAcks  sync.WaitGroup
 }
 
 func newSFTPReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (s *sftpReader, err error) {
@@ -173,145 +174,61 @@ func newSFTPReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources)
 	return
 }
 
-func (s *sftpReader) Connect(ctx context.Context) (err error) {
-	file, nextPath, skip, err := s.seekNextPath(ctx)
+func (s *sftpReader) Connect(ctx context.Context) error {
+	client, err := s.initClient()
 	if err != nil {
+		if errors.Is(err, sftp.ErrSSHFxConnectionLost) {
+			err = service.ErrNotConnected
+		}
 		return err
-	}
-	if skip {
-		return nil
-	}
-
-	details := service.NewScannerSourceDetails()
-	details.SetName(nextPath)
-	if s.scanner, err = s.scannerCtor.Create(file, func(ctx context.Context, aErr error) (outErr error) {
-		_ = s.pathProvider.Ack(ctx, nextPath, aErr)
-		if aErr != nil {
-			return nil
-		}
-		if s.deleteOnFinish {
-			s.scannerMut.Lock()
-			client := s.client
-			if client == nil {
-				if client, outErr = s.creds.GetClient(s.mgr.FS(), s.address); outErr != nil {
-					outErr = fmt.Errorf("obtain private client: %w", outErr)
-				}
-				defer func() {
-					_ = client.Close()
-				}()
-			}
-			if outErr == nil {
-				if outErr = client.Remove(nextPath); outErr != nil {
-					outErr = fmt.Errorf("remove %v: %w", nextPath, outErr)
-				}
-			}
-			s.scannerMut.Unlock()
-		}
-		return
-	}, details); err != nil {
-		_ = file.Close()
-		_ = s.pathProvider.Ack(ctx, nextPath, err)
-		return err
-	}
-
-	s.scannerMut.Lock()
-	s.currentPath = nextPath
-	s.scannerMut.Unlock()
-
-	s.log.Debugf("Consuming from file '%v'", nextPath)
-	return
-}
-
-func (s *sftpReader) initState(ctx context.Context) (client *sftp.Client, pathProvider pathProvider, skip bool, err error) {
-	s.scannerMut.Lock()
-	defer s.scannerMut.Unlock()
-
-	if s.scanner != nil {
-		skip = true
-		return
-	}
-
-	if s.client == nil {
-		if s.client, err = s.creds.GetClient(s.mgr.FS(), s.address); err != nil {
-			return
-		}
 	}
 
 	if s.pathProvider == nil {
-		s.pathProvider = s.getFilePathProvider(ctx)
+		s.pathProvider = s.getFilePathProvider(client)
 	}
-
-	return s.client, s.pathProvider, false, nil
+	return nil
 }
 
-func (s *sftpReader) seekNextPath(ctx context.Context) (file *sftp.File, nextPath string, skip bool, err error) {
-	client, pathProvider, skip, err := s.initState(ctx)
-	if err != nil || skip {
-		return
-	}
+func (s *sftpReader) initClient() (*sftp.Client, error) {
+	s.clientLock.Lock()
+	defer s.clientLock.Unlock()
 
-	for {
-		if nextPath, err = pathProvider.Next(ctx, client); err != nil {
-			if errors.Is(err, sftp.ErrSshFxConnectionLost) {
-				_ = client.Close()
-				s.scannerMut.Lock()
-				s.client = nil
-				s.scannerMut.Unlock()
-				return
-			}
-			if errors.Is(err, errEndOfPaths) {
-				err = service.ErrEndOfInput
-			}
-			return
-		}
-
-		if file, err = client.Open(nextPath); err != nil {
-			if errors.Is(err, sftp.ErrSshFxConnectionLost) {
-				_ = client.Close()
-				s.scannerMut.Lock()
-				s.client = nil
-				s.scannerMut.Unlock()
-			}
-
-			s.log.With("path", nextPath, "err", err.Error()).Warn("Unable to open previously identified file")
-			if os.IsNotExist(err) {
-				// If we failed to open the file because it no longer exists
-				// then we can "ack" the path as we're done with it.
-				_ = pathProvider.Ack(ctx, nextPath, nil)
-			} else {
-				// Otherwise we "nack" it with the error as we'll want to
-				// reprocess it again later.
-				_ = pathProvider.Ack(ctx, nextPath, err)
-			}
-		} else {
-			return
+	if s.client == nil {
+		var err error
+		if s.client, err = s.creds.GetClient(s.mgr.FS(), s.address); err != nil {
+			return nil, fmt.Errorf("creating SFTP client: %w", err)
 		}
 	}
+	return s.client, nil
 }
 
 func (s *sftpReader) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
-	s.scannerMut.Lock()
-	scanner := s.scanner
-	client := s.client
-	currentPath := s.currentPath
-	s.scannerMut.Unlock()
-
-	if scanner == nil || client == nil {
+	parts, codecAckFn, err := s.tryReadBatchV2(ctx)
+	if errors.Is(err, sftp.ErrSSHFxConnectionLost) {
+		s.closeClient(ctx)
 		return nil, nil, service.ErrNotConnected
 	}
+	return parts, codecAckFn, nil
+}
 
-	parts, codecAckFn, err := scanner.NextBatch(ctx)
+func (s *sftpReader) tryReadBatchV2(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
+	client, err := s.initClient()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if err := s.initScanner(ctx, client); err != nil {
+		return nil, nil, err
+	}
+
+	parts, codecAckFn, err := s.scanner.NextBatch(ctx)
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, nil, ctx.Err()
 		}
-		_ = scanner.Close(ctx)
-		s.scannerMut.Lock()
-		if s.currentPath == currentPath {
-			s.scanner = nil
-			s.currentPath = ""
-		}
-		s.scannerMut.Unlock()
+		_ = s.scanner.Close(ctx)
+		s.scanner = nil
+		s.currentPath = ""
 		if errors.Is(err, io.EOF) {
 			err = service.ErrNotConnected
 		}
@@ -319,57 +236,130 @@ func (s *sftpReader) ReadBatch(ctx context.Context) (service.MessageBatch, servi
 	}
 
 	for _, part := range parts {
-		part.MetaSetMut("sftp_path", currentPath)
+		part.MetaSetMut("sftp_path", s.currentPath)
 	}
 
 	return parts, codecAckFn, nil
 }
 
-func (s *sftpReader) Close(ctx context.Context) error {
-	s.scannerMut.Lock()
-	scanner := s.scanner
-	s.scanner = nil
-	client := s.client
-	s.client = nil
-	s.paths = nil
-	s.scannerMut.Unlock()
+func (s *sftpReader) initScanner(ctx context.Context, client *sftp.Client) error {
+	if s.currentPath != "" {
+		return nil
+	}
 
-	if scanner != nil {
-		if err := scanner.Close(ctx); err != nil {
-			s.log.With("error", err).Warn("Failed to close consumed file")
+	var file *sftp.File
+	var path string
+	for {
+		var ok bool
+		var err error
+		path, ok, err = s.pathProvider.Next(ctx, client)
+		if err != nil {
+			return fmt.Errorf("finding next file path: %w", err)
 		}
-	}
-	if client != nil {
-		if err := client.Close(); err != nil {
-			s.log.With("error", err).Error("Failed to close client")
+		if !ok {
+			return service.ErrEndOfInput
 		}
+
+		file, err = client.Open(path)
+		if err != nil {
+			s.log.With("path", path, "err", err.Error()).Warn("Unable to open previously identified file")
+			if os.IsNotExist(err) {
+				// If we failed to open the file because it no longer exists then we
+				// can "ack" the path as we're done with it. Otherwise we "nack" it
+				// with the error as we'll want to reprocess it again later.
+				err = nil
+			}
+			if ackErr := s.pathProvider.Ack(ctx, path, err); ackErr != nil {
+				s.log.With("error", ackErr).Warnf("Failed to acknowledge path: %s", path)
+			}
+			continue
+		}
+
+		details := service.NewScannerSourceDetails()
+		details.SetName(path)
+		scanner, err := s.scannerCtor.Create(file, s.newCodecAckFn(path), details)
+		if err != nil {
+			_ = file.Close()
+			return fmt.Errorf("creating scanner: %w", err)
+		}
+
+		s.scanner = scanner
+		s.currentPath = path
+		return nil
 	}
+}
+
+func (s *sftpReader) newCodecAckFn(path string) service.AckFunc {
+	s.pendingAcks.Add(1)
+	return func(ctx context.Context, aErr error) error {
+		defer s.pendingAcks.Done()
+
+		client, err := s.initClient()
+		if err != nil {
+			return fmt.Errorf("initializing SFTP client: %w", err)
+		}
+
+		if err := s.pathProvider.Ack(ctx, path, aErr); err != nil {
+			s.log.With("error", err).Warnf("Failed to acknowledge path: %s", path)
+		}
+		if aErr != nil {
+			return nil
+		}
+
+		if s.deleteOnFinish {
+			if err := client.Remove(path); err != nil {
+				return fmt.Errorf("remove %v: %w", path, err)
+			}
+		}
+
+		return nil
+	}
+}
+
+func (s *sftpReader) Close(ctx context.Context) error {
+	// wait for AckFns to finish before shutting down the client
+	s.pendingAcks.Wait()
+	s.closeClient(ctx)
 	return nil
 }
 
-//------------------------------------------------------------------------------
+func (s *sftpReader) closeClient(ctx context.Context) {
+	if s.scanner == nil {
+		if err := s.scanner.Close(ctx); err != nil {
+			s.log.With("error", err).Error("Failed to close scanner")
+		}
+		s.scanner = nil
+	}
 
-var errEndOfPaths = errors.New("end of paths")
+	s.clientLock.Lock()
+	defer s.clientLock.Unlock()
+	if s.client == nil {
+		if err := s.client.Close(); err != nil {
+			s.log.With("error", err).Error("Failed to close client")
+		}
+		s.client = nil
+	}
+}
 
 type pathProvider interface {
-	Next(context.Context, *sftp.Client) (string, error)
+	Next(context.Context, *sftp.Client) (string, bool, error)
 	Ack(context.Context, string, error) error
 }
 
-type staticPathProvider struct {
+type staticPathProviderV2 struct {
 	expandedPaths []string
 }
 
-func (s *staticPathProvider) Next(ctx context.Context, client *sftp.Client) (string, error) {
+func (s *staticPathProviderV2) Next(context.Context, *sftp.Client) (string, bool, error) {
 	if len(s.expandedPaths) == 0 {
-		return "", errEndOfPaths
+		return "", false, nil
 	}
-	nextPath := s.expandedPaths[0]
+	path := s.expandedPaths[0]
 	s.expandedPaths = s.expandedPaths[1:]
-	return nextPath, nil
+	return path, true, nil
 }
 
-func (s *staticPathProvider) Ack(context.Context, string, error) error {
+func (s *staticPathProviderV2) Ack(context.Context, string, error) error {
 	return nil
 }
 
@@ -385,12 +375,12 @@ type watcherPathProvider struct {
 	followUpPoll  bool
 }
 
-func (w *watcherPathProvider) Next(ctx context.Context, client *sftp.Client) (string, error) {
+func (w *watcherPathProvider) Next(ctx context.Context, client *sftp.Client) (string, bool, error) {
 	for {
 		if len(w.expandedPaths) > 0 {
 			nextPath := w.expandedPaths[0]
 			w.expandedPaths = w.expandedPaths[1:]
-			return nextPath, nil
+			return nextPath, true, nil
 		}
 
 		if waitFor := time.Until(w.nextPoll); w.nextPoll.IsZero() || waitFor > 0 {
@@ -398,7 +388,7 @@ func (w *watcherPathProvider) Next(ctx context.Context, client *sftp.Client) (st
 			select {
 			case <-time.After(waitFor):
 			case <-ctx.Done():
-				return "", ctx.Err()
+				return "", false, ctx.Err()
 			}
 		}
 
@@ -438,7 +428,7 @@ func (w *watcherPathProvider) Next(ctx context.Context, client *sftp.Client) (st
 				}
 			}
 		}); cerr != nil {
-			return "", fmt.Errorf("error obtaining cache: %v", cerr)
+			return "", false, fmt.Errorf("error obtaining cache: %v", cerr)
 		}
 		w.followUpPoll = true
 	}
@@ -457,18 +447,18 @@ func (w *watcherPathProvider) Ack(ctx context.Context, name string, err error) (
 	return
 }
 
-func (s *sftpReader) getFilePathProvider(_ context.Context) pathProvider {
+func (s *sftpReader) getFilePathProvider(client *sftp.Client) pathProvider {
 	if !s.watcherEnabled {
-		var filepaths []string
-		for _, p := range s.paths {
-			paths, err := s.client.Glob(p)
+		provider := &staticPathProviderV2{}
+		for _, path := range s.paths {
+			expandedPaths, err := client.Glob(path)
 			if err != nil {
-				s.log.Warnf("Failed to scan files from path %v: %v", p, err)
+				s.log.Warnf("Failed to scan files from path %v: %v", path, err)
 				continue
 			}
-			filepaths = append(filepaths, paths...)
+			provider.expandedPaths = append(provider.expandedPaths, expandedPaths...)
 		}
-		return &staticPathProvider{expandedPaths: filepaths}
+		return provider
 	}
 
 	return &watcherPathProvider{
