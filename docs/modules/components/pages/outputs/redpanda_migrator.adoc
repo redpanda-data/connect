@@ -46,12 +46,7 @@ output:
     metadata:
       include_prefixes: []
       include_patterns: []
-    max_in_flight: 10
-    batching:
-      count: 0
-      byte_size: 0
-      period: ""
-      check: ""
+    max_in_flight: 256
 ```
 
 --
@@ -82,13 +77,7 @@ output:
       include_prefixes: []
       include_patterns: []
     timestamp_ms: ${! timestamp_unix_milli() } # No default (optional)
-    max_in_flight: 10
-    batching:
-      count: 0
-      byte_size: 0
-      period: ""
-      check: ""
-      processors: [] # No default (optional)
+    max_in_flight: 256
     input_resource: redpanda_migrator_input
     replication_factor_override: true
     replication_factor: 3
@@ -641,109 +630,7 @@ The maximum number of batches to be sending in parallel at any given time.
 
 *Type*: `int`
 
-*Default*: `10`
-
-=== `batching`
-
-Allows you to configure a xref:configuration:batching.adoc[batching policy].
-
-
-*Type*: `object`
-
-
-```yml
-# Examples
-
-batching:
-  byte_size: 5000
-  count: 0
-  period: 1s
-
-batching:
-  count: 10
-  period: 1s
-
-batching:
-  check: this.contains("END BATCH")
-  count: 0
-  period: 1m
-```
-
-=== `batching.count`
-
-A number of messages at which the batch should be flushed. If `0` disables count based batching.
-
-
-*Type*: `int`
-
-*Default*: `0`
-
-=== `batching.byte_size`
-
-An amount of bytes at which the batch should be flushed. If `0` disables size based batching.
-
-
-*Type*: `int`
-
-*Default*: `0`
-
-=== `batching.period`
-
-A period in which an incomplete batch should be flushed regardless of its size.
-
-
-*Type*: `string`
-
-*Default*: `""`
-
-```yml
-# Examples
-
-period: 1s
-
-period: 1m
-
-period: 500ms
-```
-
-=== `batching.check`
-
-A xref:guides:bloblang/about.adoc[Bloblang query] that should return a boolean value indicating whether a message should end a batch.
-
-
-*Type*: `string`
-
-*Default*: `""`
-
-```yml
-# Examples
-
-check: this.type == "end_of_transaction"
-```
-
-=== `batching.processors`
-
-A list of xref:components:processors/about.adoc[processors] to apply to a batch as it is flushed. This allows you to aggregate and archive the batch however you see fit. Please note that all resulting messages are flushed as a single batch, therefore splitting the batch into smaller batches using these processors is a no-op.
-
-
-*Type*: `array`
-
-
-```yml
-# Examples
-
-processors:
-  - archive:
-      format: concatenate
-
-processors:
-  - archive:
-      format: lines
-
-processors:
-  - archive:
-      format: json_array
-```
+*Default*: `256`
 
 === `input_resource`
 
