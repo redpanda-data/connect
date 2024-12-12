@@ -122,13 +122,13 @@ type sftpReader struct {
 	watcherMinAge       time.Duration
 
 	// State
-	clientLock sync.Mutex
-	client     *sftp.Client
+	stateLock   sync.Mutex
+	client      *sftp.Client
+	scanner     codec.DeprecatedFallbackStream
+	currentPath string
+	closed      bool
 
 	pathProvider pathProvider
-	scanner      codec.DeprecatedFallbackStream
-	currentPath  string
-	pendingAcks  sync.WaitGroup
 }
 
 func newSFTPReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (s *sftpReader, err error) {
@@ -175,13 +175,17 @@ func newSFTPReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources)
 }
 
 func (s *sftpReader) Connect(ctx context.Context) error {
-	client, err := s.initClient()
+	s.stateLock.Lock()
+	defer s.stateLock.Unlock()
+
+	client, cleanup, err := s.initClient()
 	if err != nil {
 		if errors.Is(err, sftp.ErrSSHFxConnectionLost) {
 			err = service.ErrNotConnected
 		}
 		return err
 	}
+	defer cleanup()
 
 	if s.pathProvider == nil {
 		s.pathProvider = s.getFilePathProvider(client)
@@ -189,33 +193,41 @@ func (s *sftpReader) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (s *sftpReader) initClient() (*sftp.Client, error) {
-	s.clientLock.Lock()
-	defer s.clientLock.Unlock()
-
+func (s *sftpReader) initClient() (*sftp.Client, func(), error) {
 	if s.client == nil {
 		var err error
 		if s.client, err = s.creds.GetClient(s.mgr.FS(), s.address); err != nil {
-			return nil, fmt.Errorf("creating SFTP client: %w", err)
+			return nil, nil, fmt.Errorf("initializing SFTP client: %w", err)
 		}
 	}
-	return s.client, nil
+
+	cleanup := func() {}
+	if s.closed {
+		cleanup = s.closeClient
+	}
+
+	return s.client, cleanup, nil
 }
 
 func (s *sftpReader) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
+	s.stateLock.Lock()
+	defer s.stateLock.Unlock()
+
 	parts, codecAckFn, err := s.tryReadBatchV2(ctx)
 	if errors.Is(err, sftp.ErrSSHFxConnectionLost) {
-		s.closeClient(ctx)
+		s.closeScanner(ctx)
+		s.closeClient()
 		return nil, nil, service.ErrNotConnected
 	}
 	return parts, codecAckFn, nil
 }
 
 func (s *sftpReader) tryReadBatchV2(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
-	client, err := s.initClient()
+	client, cleanup, err := s.initClient()
 	if err != nil {
 		return nil, nil, err
 	}
+	defer cleanup()
 
 	if err := s.initScanner(ctx, client); err != nil {
 		return nil, nil, err
@@ -243,7 +255,7 @@ func (s *sftpReader) tryReadBatchV2(ctx context.Context) (service.MessageBatch, 
 }
 
 func (s *sftpReader) initScanner(ctx context.Context, client *sftp.Client) error {
-	if s.currentPath != "" {
+	if s.scanner != nil {
 		return nil
 	}
 
@@ -290,14 +302,9 @@ func (s *sftpReader) initScanner(ctx context.Context, client *sftp.Client) error
 }
 
 func (s *sftpReader) newCodecAckFn(path string) service.AckFunc {
-	s.pendingAcks.Add(1)
 	return func(ctx context.Context, aErr error) error {
-		defer s.pendingAcks.Done()
-
-		client, err := s.initClient()
-		if err != nil {
-			return fmt.Errorf("initializing SFTP client: %w", err)
-		}
+		s.stateLock.Lock()
+		defer s.stateLock.Unlock()
 
 		if err := s.pathProvider.Ack(ctx, path, aErr); err != nil {
 			s.log.With("error", err).Warnf("Failed to acknowledge path: %s", path)
@@ -307,6 +314,12 @@ func (s *sftpReader) newCodecAckFn(path string) service.AckFunc {
 		}
 
 		if s.deleteOnFinish {
+			client, cleanup, err := s.initClient()
+			if err != nil {
+				return err
+			}
+			defer cleanup()
+
 			if err := client.Remove(path); err != nil {
 				return fmt.Errorf("remove %v: %w", path, err)
 			}
@@ -317,22 +330,26 @@ func (s *sftpReader) newCodecAckFn(path string) service.AckFunc {
 }
 
 func (s *sftpReader) Close(ctx context.Context) error {
-	// wait for AckFns to finish before shutting down the client
-	s.pendingAcks.Wait()
-	s.closeClient(ctx)
+	s.stateLock.Lock()
+	defer s.stateLock.Unlock()
+
+	s.closeScanner(ctx)
+	s.closeClient()
+	s.closed = true
 	return nil
 }
 
-func (s *sftpReader) closeClient(ctx context.Context) {
-	if s.scanner == nil {
+func (s *sftpReader) closeScanner(ctx context.Context) {
+	if s.scanner != nil {
 		if err := s.scanner.Close(ctx); err != nil {
 			s.log.With("error", err).Error("Failed to close scanner")
 		}
 		s.scanner = nil
+		s.currentPath = ""
 	}
+}
 
-	s.clientLock.Lock()
-	defer s.clientLock.Unlock()
+func (s *sftpReader) closeClient() {
 	if s.client == nil {
 		if err := s.client.Close(); err != nil {
 			s.log.With("error", err).Error("Failed to close client")
