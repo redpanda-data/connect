@@ -213,7 +213,7 @@ func (s *sftpReader) ReadBatch(ctx context.Context) (service.MessageBatch, servi
 	s.stateLock.Lock()
 	defer s.stateLock.Unlock()
 
-	parts, codecAckFn, err := s.tryReadBatchV2(ctx)
+	parts, codecAckFn, err := s.tryReadBatch(ctx)
 	if errors.Is(err, sftp.ErrSSHFxConnectionLost) {
 		s.closeScanner(ctx)
 		s.closeClient()
@@ -222,7 +222,7 @@ func (s *sftpReader) ReadBatch(ctx context.Context) (service.MessageBatch, servi
 	return parts, codecAckFn, nil
 }
 
-func (s *sftpReader) tryReadBatchV2(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
+func (s *sftpReader) tryReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
 	client, cleanup, err := s.initClient()
 	if err != nil {
 		return nil, nil, err
@@ -363,11 +363,11 @@ type pathProvider interface {
 	Ack(context.Context, string, error) error
 }
 
-type staticPathProviderV2 struct {
+type staticPathProvider struct {
 	expandedPaths []string
 }
 
-func (s *staticPathProviderV2) Next(context.Context, *sftp.Client) (string, bool, error) {
+func (s *staticPathProvider) Next(context.Context, *sftp.Client) (string, bool, error) {
 	if len(s.expandedPaths) == 0 {
 		return "", false, nil
 	}
@@ -376,7 +376,7 @@ func (s *staticPathProviderV2) Next(context.Context, *sftp.Client) (string, bool
 	return path, true, nil
 }
 
-func (s *staticPathProviderV2) Ack(context.Context, string, error) error {
+func (s *staticPathProvider) Ack(context.Context, string, error) error {
 	return nil
 }
 
@@ -466,7 +466,7 @@ func (w *watcherPathProvider) Ack(ctx context.Context, name string, err error) (
 
 func (s *sftpReader) getFilePathProvider(client *sftp.Client) pathProvider {
 	if !s.watcherEnabled {
-		provider := &staticPathProviderV2{}
+		provider := &staticPathProvider{}
 		for _, path := range s.paths {
 			expandedPaths, err := client.Glob(path)
 			if err != nil {
