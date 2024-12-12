@@ -233,10 +233,11 @@ func TestIntegrationCreatePublication(t *testing.T) {
 	defer closeConn(t, conn)
 
 	publicationName := "test_publication"
-	err = CreatePublication(context.Background(), conn, publicationName, []string{})
+	schema := "public"
+	err = CreatePublication(context.Background(), conn, publicationName, schema, []string{})
 	require.NoError(t, err)
 
-	tables, forAllTables, err := GetPublicationTables(context.Background(), conn, publicationName)
+	tables, forAllTables, err := GetPublicationTables(context.Background(), conn, publicationName, schema)
 	require.NoError(t, err)
 	assert.Empty(t, tables)
 	assert.True(t, forAllTables)
@@ -246,58 +247,93 @@ func TestIntegrationCreatePublication(t *testing.T) {
 	require.NoError(t, err)
 
 	publicationWithTables := "test_pub_with_tables"
-	err = CreatePublication(context.Background(), conn, publicationWithTables, []string{"test_table"})
+	err = CreatePublication(context.Background(), conn, publicationWithTables, schema, []string{"test_table"})
 	require.NoError(t, err)
 
-	tables, forAllTables, err = GetPublicationTables(context.Background(), conn, publicationName)
+	tables, forAllTables, err = GetPublicationTables(context.Background(), conn, publicationName, schema)
 	require.NoError(t, err)
 	assert.NotEmpty(t, tables)
 	assert.Contains(t, tables, "test_table")
 	assert.False(t, forAllTables)
 
-	// add more tables to publication
+	// Add more tables to publication
 	multiReader = conn.Exec(context.Background(), "CREATE TABLE test_table2 (id serial PRIMARY KEY, name text);")
 	_, err = multiReader.ReadAll()
 	require.NoError(t, err)
 
 	// Pass more tables to the publication
-	err = CreatePublication(context.Background(), conn, publicationWithTables, []string{
+	err = CreatePublication(context.Background(), conn, publicationWithTables, schema, []string{
 		"test_table2",
 		"test_table",
 	})
 	require.NoError(t, err)
 
-	tables, forAllTables, err = GetPublicationTables(context.Background(), conn, publicationWithTables)
+	tables, forAllTables, err = GetPublicationTables(context.Background(), conn, publicationWithTables, schema)
 	require.NoError(t, err)
 	assert.NotEmpty(t, tables)
 	assert.Contains(t, tables, "test_table")
 	assert.Contains(t, tables, "test_table2")
 	assert.False(t, forAllTables)
 
-	// Removing one table from the publication
-	err = CreatePublication(context.Background(), conn, publicationWithTables, []string{
+	// Remove one table from the publication
+	err = CreatePublication(context.Background(), conn, publicationWithTables, schema, []string{
 		"test_table",
 	})
 	require.NoError(t, err)
 
-	tables, forAllTables, err = GetPublicationTables(context.Background(), conn, publicationWithTables)
+	tables, forAllTables, err = GetPublicationTables(context.Background(), conn, publicationWithTables, schema)
 	require.NoError(t, err)
 	assert.NotEmpty(t, tables)
 	assert.Contains(t, tables, "test_table")
 	assert.False(t, forAllTables)
 
 	// Add one table and remove one at the same time
-	err = CreatePublication(context.Background(), conn, publicationWithTables, []string{
+	err = CreatePublication(context.Background(), conn, publicationWithTables, schema, []string{
 		"test_table2",
 	})
 	require.NoError(t, err)
 
-	tables, forAllTables, err = GetPublicationTables(context.Background(), conn, publicationWithTables)
+	tables, forAllTables, err = GetPublicationTables(context.Background(), conn, publicationWithTables, schema)
 	require.NoError(t, err)
 	assert.NotEmpty(t, tables)
 	assert.Contains(t, tables, "test_table2")
 	assert.False(t, forAllTables)
 
+	// Create a schema with a quoted identifier
+	caseSensitiveSchema := `"FooBar"`
+	multiReader = conn.Exec(context.Background(), fmt.Sprintf("CREATE SCHEMA %s;", caseSensitiveSchema))
+	_, err = multiReader.ReadAll()
+	require.NoError(t, err)
+
+	caseSensitiveTable := `"Foo"`
+	multiReader = conn.Exec(context.Background(), fmt.Sprintf("CREATE TABLE %s.%s (id serial PRIMARY KEY, name text);", caseSensitiveSchema, caseSensitiveTable))
+	_, err = multiReader.ReadAll()
+	require.NoError(t, err)
+
+	caseSensitiveTable2 := `"Bar"`
+	multiReader = conn.Exec(context.Background(), fmt.Sprintf("CREATE TABLE %s.%s (id serial PRIMARY KEY, name text);", caseSensitiveSchema, caseSensitiveTable2))
+	_, err = multiReader.ReadAll()
+	require.NoError(t, err)
+
+	// Pass tables to the schema with quoted identifiers
+	publicationQuotedIdentifiers := "quoted_identifiers"
+	err = CreatePublication(context.Background(), conn, publicationQuotedIdentifiers, caseSensitiveSchema, []string{
+		caseSensitiveSchema + "." + caseSensitiveTable,
+		caseSensitiveSchema + "." + caseSensitiveTable2,
+	})
+	require.NoError(t, err)
+
+	// Remove one table with a quoted identifier from the publication
+	err = CreatePublication(context.Background(), conn, publicationQuotedIdentifiers, caseSensitiveSchema, []string{
+		caseSensitiveSchema + "." + caseSensitiveTable,
+	})
+	require.NoError(t, err)
+
+	tables, forAllTables, err = GetPublicationTables(context.Background(), conn, publicationQuotedIdentifiers, caseSensitiveSchema)
+	require.NoError(t, err)
+	assert.NotEmpty(t, tables)
+	assert.Contains(t, tables, "Foo")
+	assert.False(t, forAllTables)
 }
 
 func TestIntegrationStartReplication(t *testing.T) {
@@ -321,7 +357,8 @@ func TestIntegrationStartReplication(t *testing.T) {
 
 	// create publication
 	publicationName := "test_publication"
-	err = CreatePublication(context.Background(), conn, publicationName, []string{})
+	schema := "public"
+	err = CreatePublication(context.Background(), conn, publicationName, schema, []string{})
 	require.NoError(t, err)
 
 	_, err = CreateReplicationSlot(ctx, conn, slotName, outputPlugin, CreateReplicationSlotOptions{Temporary: false, SnapshotAction: "export"}, 16, nil)
@@ -416,35 +453,35 @@ drop table t;
 	require.NoError(t, err)
 	jsonData, err := json.Marshal(&streamMessage)
 	require.NoError(t, err)
-	assert.JSONEq(t, `{"operation":"insert","schema":"public","table":"t","mode":"streaming","lsn":null,"data":{"id":1, "name":"foo"}}`, string(jsonData))
+	assert.JSONEq(t, `{"operation":"insert","schema":"public","table":"t","lsn":null,"data":{"id":1, "name":"foo"}}`, string(jsonData))
 
 	xld = rxXLogData()
 	streamMessage, err = decodePgOutput(xld.WALData, relations, typeMap)
 	require.NoError(t, err)
 	jsonData, err = json.Marshal(&streamMessage)
 	require.NoError(t, err)
-	assert.JSONEq(t, `{"operation":"insert","schema":"public","table":"t","mode":"streaming","lsn":null,"data":{"id":2,"name":"bar"}}`, string(jsonData))
+	assert.JSONEq(t, `{"operation":"insert","schema":"public","table":"t","lsn":null,"data":{"id":2,"name":"bar"}}`, string(jsonData))
 
 	xld = rxXLogData()
 	streamMessage, err = decodePgOutput(xld.WALData, relations, typeMap)
 	require.NoError(t, err)
 	jsonData, err = json.Marshal(&streamMessage)
 	require.NoError(t, err)
-	assert.JSONEq(t, `{"operation":"insert","schema":"public","table":"t","mode":"streaming","lsn":null,"data":{"id":3,"name":"baz"}}`, string(jsonData))
+	assert.JSONEq(t, `{"operation":"insert","schema":"public","table":"t","lsn":null,"data":{"id":3,"name":"baz"}}`, string(jsonData))
 
 	xld = rxXLogData()
 	streamMessage, err = decodePgOutput(xld.WALData, relations, typeMap)
 	require.NoError(t, err)
 	jsonData, err = json.Marshal(&streamMessage)
 	require.NoError(t, err)
-	assert.JSONEq(t, `{"operation":"update","schema":"public","table":"t","mode":"streaming","lsn":null,"data":{"id":3,"name":"quz"}}`, string(jsonData))
+	assert.JSONEq(t, `{"operation":"update","schema":"public","table":"t","lsn":null,"data":{"id":3,"name":"quz"}}`, string(jsonData))
 
 	xld = rxXLogData()
 	streamMessage, err = decodePgOutput(xld.WALData, relations, typeMap)
 	require.NoError(t, err)
 	jsonData, err = json.Marshal(&streamMessage)
 	require.NoError(t, err)
-	assert.JSONEq(t, `{"operation":"delete","schema":"public","table":"t","mode":"streaming","lsn":null,"data":{"id":2,"name":null}}`, string(jsonData))
+	assert.JSONEq(t, `{"operation":"delete","schema":"public","table":"t","lsn":null,"data":{"id":2,"name":null}}`, string(jsonData))
 	xld = rxXLogData()
 
 	commit, _, err := isCommitMessage(xld.WALData)

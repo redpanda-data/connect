@@ -366,6 +366,18 @@ func SQLQuery(sql string, args ...any) (string, error) {
 // ValidatePostgresIdentifier checks if a string is a valid PostgreSQL identifier
 // This follows PostgreSQL's standard naming rules
 func ValidatePostgresIdentifier(name string) error {
+	if parts := strings.Split(name, "."); len(parts) == 2 {
+		if err := ValidatePostgresIdentifier(parts[0]); err != nil {
+			return fmt.Errorf("invalid schema identifier: %s", err)
+		}
+		name = parts[1]
+	}
+
+	// Strip quotes if they are present
+	if strings.HasPrefix(name, "\"") && strings.HasSuffix(name, "\"") {
+		name = strings.Trim(name, "\"")
+	}
+
 	if len(name) == 0 {
 		return errors.New("empty identifier is not allowed")
 	}

@@ -343,7 +343,7 @@ func DropReplicationSlot(ctx context.Context, conn *pgconn.PgConn, slotName stri
 }
 
 // CreatePublication creates a new PostgreSQL publication with the given name for a list of tables and drop if exists flag
-func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName string, tables []string) error {
+func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName string, schema string, tables []string) error {
 	// Check if publication exists
 	pubQuery, err := sanitize.SQLQuery(`
 			SELECT pubname, puballtables
@@ -403,7 +403,7 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 
 	// assuming publication already exists
 	// get a list of tables in the publication
-	pubTables, forAllTables, err := GetPublicationTables(ctx, conn, publicationName)
+	pubTables, forAllTables, err := GetPublicationTables(ctx, conn, publicationName, schema)
 	if err != nil {
 		return fmt.Errorf("failed to get publication tables: %w", err)
 	}
@@ -430,7 +430,7 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 
 	// remove tables from publication
 	for _, dropTable := range tablesToRemoveFromPublication {
-		sq, err := sanitize.SQLQuery(fmt.Sprintf("ALTER PUBLICATION %s DROP TABLE %s;", publicationName, dropTable))
+		sq, err := sanitize.SQLQuery(fmt.Sprintf(`ALTER PUBLICATION %s DROP TABLE %s."%s";`, publicationName, schema, dropTable))
 		if err != nil {
 			return fmt.Errorf("failed to sanitize drop table query: %w", err)
 		}
@@ -457,14 +457,15 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 
 // GetPublicationTables returns a list of tables currently in the publication
 // Arguments, in order: list of the tables, exist for all tables, errror
-func GetPublicationTables(ctx context.Context, conn *pgconn.PgConn, publicationName string) ([]string, bool, error) {
+func GetPublicationTables(ctx context.Context, conn *pgconn.PgConn, publicationName, schema string) ([]string, bool, error) {
 	query, err := sanitize.SQLQuery(`
 		SELECT DISTINCT
 			tablename as table_name
 		FROM pg_publication_tables
 		WHERE pubname = $1
+		AND schemaname = $2
 		ORDER BY table_name;
-	`, publicationName)
+	`, publicationName, strings.Trim(schema, "\""))
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to get publication tables: %w", err)
 	}
