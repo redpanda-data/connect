@@ -52,6 +52,9 @@ docker:
 	@docker build -f ./resources/docker/Dockerfile . -t $(DOCKER_IMAGE):$(VER_CUT)
 	@docker tag $(DOCKER_IMAGE):$(VER_CUT) $(DOCKER_IMAGE):latest
 
+docker-fips:
+	@docker build -f ./resources/docker/Dockerfile.fips . -t $(DOCKER_IMAGE):$(VER_CUT)-fips
+
 docker-cloud:
 	@docker build -f ./resources/docker/Dockerfile.cloud . -t $(DOCKER_IMAGE):$(VER_CUT)-cloud
 	@docker tag $(DOCKER_IMAGE):$(VER_CUT)-cloud $(DOCKER_IMAGE):latest-cloud

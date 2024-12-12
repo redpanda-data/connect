@@ -1,0 +1,59 @@
+# Copyright 2024 Redpanda Data, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# https://github.com/microsoft/go/blob/microsoft/main/eng/doc/fips/README.md
+
+FROM mcr.microsoft.com/oss/go/microsoft/golang:1.22-fips-cbl-mariner2.0 AS build
+
+ENV CGO_ENABLED=1
+ENV GOOS=linux
+ENV GOEXPERIMENT=systemcrypto
+RUN useradd -u 10001 connect
+
+WORKDIR /go/src/github.com/redpanda-data/connect/
+# Update dependencies: On unchanged dependencies, cached layer will be reused
+COPY go.* /go/src/github.com/redpanda-data/connect/
+RUN go mod download
+
+# Build
+COPY . /go/src/github.com/redpanda-data/connect/
+# Tag timetzdata required for busybox base image:
+# https://github.com/benthosdev/benthos/issues/897
+RUN make TAGS="timetzdata" redpanda-connect
+
+# Pack
+# FROM debian:bullseye
+FROM mcr.microsoft.com/oss/go/microsoft/golang:1.22-fips-cbl-mariner2.0
+
+LABEL maintainer="Ashley Jeffs <ash@jeffail.uk>"
+
+WORKDIR /
+
+# RUN apt-get update && apt-get install -y --no-install-recommends libzmq3-dev
+
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=build /etc/passwd /etc/passwd
+COPY --from=build /go/src/github.com/redpanda-data/connect/target/bin/redpanda-connect .
+COPY ./config/docker.yaml /connect.yaml
+
+USER connect
+
+EXPOSE 4195
+
+ENV FIPS=1
+
+ENTRYPOINT ["/redpanda-connect"]
+
+CMD ["run", "/connect.yaml"]
+
