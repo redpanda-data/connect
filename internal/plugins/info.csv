@@ -206,7 +206,7 @@ redpanda_migrator         ,input     ,redpanda_migrator         ,4.37.0  ,enterp
 redpanda_migrator         ,output    ,redpanda_migrator         ,4.37.0  ,enterprise ,n          ,y     ,y
 redpanda_migrator_bundle  ,input     ,redpanda_migrator_bundle  ,4.37.0  ,enterprise ,n          ,y     ,y
 redpanda_migrator_bundle  ,output    ,redpanda_migrator_bundle  ,4.37.0  ,enterprise ,n          ,y     ,y
-redpanda_migrator_offsets ,input     ,redpanda_migrator_offsets ,4.40.0  ,enterprise ,n          ,y     ,y
+redpanda_migrator_offsets ,input     ,redpanda_migrator_offsets ,4.45.0  ,enterprise ,n          ,y     ,y
 redpanda_migrator_offsets ,output    ,redpanda_migrator_offsets ,4.37.0  ,enterprise ,n          ,y     ,y
 reject                    ,output    ,reject                    ,0.0.0   ,certified  ,n          ,y     ,y
 reject_errored            ,output    ,reject_errored            ,0.0.0   ,certified  ,n          ,y     ,y
