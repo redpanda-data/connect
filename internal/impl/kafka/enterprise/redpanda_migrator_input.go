@@ -182,6 +182,7 @@ func init() {
 
 					// Make multiple attempts until the output connects in the background.
 					// TODO: It would be nicer to somehow get notified when the output is ready.
+				loop:
 					for {
 						if err = kafka.FranzSharedClientUse(outputResource, res, func(details *kafka.FranzSharedClientInfo) error {
 							for _, topic := range topics {
@@ -208,7 +209,11 @@ func init() {
 							break
 						}
 
-						time.Sleep(time.Millisecond * 100)
+						select {
+						case <-time.After(100 * time.Millisecond):
+						case <-ctx.Done():
+							break loop
+						}
 					}
 				},
 				func(res *service.Resources) {
