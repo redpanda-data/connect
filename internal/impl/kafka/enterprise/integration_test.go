@@ -551,7 +551,6 @@ type redpandaEndpoints struct {
 	schemaRegistryURL string
 }
 
-// TODO: Add option to disable auto topic creation in Redpanda.
 // TODO: Generalise this helper for the other Kafka tests here which use Redpanda.
 func startRedpanda(t *testing.T, pool *dockertest.Pool, exposeBroker bool, autocreateTopics bool) (redpandaEndpoints, error) {
 	t.Helper()
@@ -572,10 +571,6 @@ func startRedpanda(t *testing.T, pool *dockertest.Pool, exposeBroker bool, autoc
 	// Expose Schema Registry and Admin API by default. The Admin API is required for health checks.
 	exposedPorts := []string{"8081/tcp", "9644/tcp"}
 	var portBindings map[docker.Port][]docker.PortBinding
-	// portBindings := map[docker.Port][]docker.PortBinding{
-	// 	docker.Port("8081/tcp"): {{HostPort: "6666/tcp"}},
-	// 	docker.Port("9644/tcp"): {{HostPort: "6667/tcp"}},
-	// }
 	var kafkaPort string
 	if exposeBroker {
 		brokerPort, err := integration.GetFreePort()
@@ -659,6 +654,154 @@ func startRedpanda(t *testing.T, pool *dockertest.Pool, exposeBroker bool, autoc
 	}, nil
 }
 
+func produceMessage(t *testing.T, rpe redpandaEndpoints, topic, message string) {
+	streamBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
+pipeline:
+  processors:
+    - schema_registry_encode:
+        url: %s
+        subject: %s
+        avro_raw_json: true
+output:
+  kafka_franz:
+    seed_brokers: [ %s ]
+    topic: %s
+`, rpe.schemaRegistryURL, topic, rpe.brokerAddr, topic)))
+	require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
+
+	inFunc, err := streamBuilder.AddProducerFunc()
+	require.NoError(t, err)
+
+	stream, err := streamBuilder.Build()
+	require.NoError(t, err)
+
+	license.InjectTestService(stream.Resources())
+
+	ctx, done := context.WithTimeout(context.Background(), 5*time.Second)
+	t.Cleanup(done)
+
+	go func() {
+		require.NoError(t, inFunc(ctx, service.NewMessage([]byte(message))))
+
+		require.NoError(t, stream.StopWithin(3*time.Second))
+	}()
+
+	err = stream.Run(ctx)
+	require.NoError(t, err)
+}
+
+func readMessageWithCG(t *testing.T, rpe redpandaEndpoints, topic, consumerGroup, message string) {
+	streamBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
+input:
+  kafka_franz:
+    seed_brokers: [ %s ]
+    topics: [ %s ]
+    consumer_group: %s
+    start_from_oldest: true
+  processors:
+    - schema_registry_decode:
+        url: %s
+        avro_raw_json: true
+`, rpe.brokerAddr, topic, consumerGroup, rpe.schemaRegistryURL)))
+	require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
+
+	recvChan := make(chan struct{})
+	err := streamBuilder.AddConsumerFunc(func(ctx context.Context, m *service.Message) error {
+		b, err := m.AsBytes()
+		require.NoError(t, err)
+
+		assert.Equal(t, message, string(b))
+
+		close(recvChan)
+		return nil
+	})
+	require.NoError(t, err)
+
+	stream, err := streamBuilder.Build()
+	require.NoError(t, err)
+
+	license.InjectTestService(stream.Resources())
+
+	ctx, done := context.WithTimeout(context.Background(), 5*time.Second)
+	t.Cleanup(done)
+
+	go func() {
+		require.NoError(t, stream.Run(ctx))
+	}()
+
+	<-recvChan
+	require.NoError(t, stream.StopWithin(3*time.Second))
+}
+
+func runMigratorBundle(t *testing.T, source, destination redpandaEndpoints, topic string) {
+	streamBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
+input:
+  redpanda_migrator_bundle:
+    redpanda_migrator:
+      seed_brokers: [ %s ]
+      topics: [ %s ]
+      consumer_group: migrator_consumer_group
+      start_from_oldest: true
+      replication_factor_override: true
+      replication_factor: -1
+    schema_registry:
+      url: %s
+  processors:
+    - switch:
+        - check: '@input_label == "redpanda_migrator_offsets"'
+          processors:
+            - log:
+                message: Migrating offset
+                fields:
+                  kafka_offset_topic: ${! @kafka_offset_topic }
+                  kafka_offset_group: ${! @kafka_offset_group }
+                  kafka_offset: ${! @kafka_offset }
+        - check: '@input_label == "redpanda_migrator"'
+          processors:
+            - branch:
+                processors:
+                  - schema_registry_decode:
+                      url: %s
+                      avro_raw_json: true
+                  - log:
+                      message: 'Migrating message: ${! content() }'
+
+output:
+  redpanda_migrator_bundle:
+    redpanda_migrator:
+      seed_brokers: [ %s ]
+      replication_factor_override: true
+      replication_factor: -1
+    schema_registry:
+      url: %s
+`, source.brokerAddr, topic, source.schemaRegistryURL, source.schemaRegistryURL, destination.brokerAddr, destination.schemaRegistryURL)))
+	require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
+
+	stream, err := streamBuilder.Build()
+	require.NoError(t, err)
+
+	license.InjectTestService(stream.Resources())
+
+	// Run stream in the background and shut it down when the test is finished
+	migratorCloseChan := make(chan struct{})
+	go func() {
+		err = stream.Run(context.Background())
+		require.NoError(t, err)
+
+		t.Log("Migrator shut down")
+
+		close(migratorCloseChan)
+	}()
+	t.Cleanup(func() {
+		require.NoError(t, stream.StopWithin(3*time.Second))
+
+		<-migratorCloseChan
+	})
+}
+
 func TestRedpandaMigratorIntegration(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
@@ -672,243 +815,42 @@ func TestRedpandaMigratorIntegration(t *testing.T) {
 	destination, err := startRedpanda(t, pool, true, false)
 	require.NoError(t, err)
 
+	t.Logf("Source broker: %s", source.brokerAddr)
+	t.Logf("Destination broker: %s", destination.brokerAddr)
+
 	dummyTopic := "test"
 
 	// Create a schema associated with the test topic
 	createSchema(t, source.schemaRegistryURL, dummyTopic, fmt.Sprintf(`{"name":"%s", "type": "record", "fields":[{"name":"test", "type": "string"}]}`, dummyTopic), nil)
 
 	// Produce one message
-	{
-		streamBuilder := service.NewStreamBuilder()
-		require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
-pipeline:
-  processors:
-    - schema_registry_encode:
-        url: %s
-        subject: %s
-        avro_raw_json: true
-output:
-  kafka_franz:
-    seed_brokers: [ %s ]
-    topic: %s
-`, source.schemaRegistryURL, dummyTopic, source.brokerAddr, dummyTopic)))
-		require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
-
-		inFunc, err := streamBuilder.AddProducerFunc()
-		require.NoError(t, err)
-
-		stream, err := streamBuilder.Build()
-		require.NoError(t, err)
-
-		license.InjectTestService(stream.Resources())
-
-		ctx, done := context.WithTimeout(context.Background(), 3*time.Second)
-		t.Cleanup(done)
-
-		go func() {
-			require.NoError(t, inFunc(ctx, service.NewMessage([]byte(`{"test":"foobar"}`))))
-
-			require.NoError(t, stream.StopWithin(2*time.Second))
-		}()
-
-		err = stream.Run(ctx)
-		require.NoError(t, err)
-	}
+	dummyMessage := `{"test":"foo"}`
+	produceMessage(t, source, dummyTopic, dummyMessage)
 
 	// Run the Redpanda Migrator bundle
-	{
-		streamBuilder := service.NewStreamBuilder()
-		require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
-input:
-  redpanda_migrator_bundle:
-    redpanda_migrator:
-      seed_brokers: [ %s ]
-      topics: [ %s ]
-      consumer_group: blobfish
-      start_from_oldest: true
-      replication_factor_override: true
-      replication_factor: -1
-    schema_registry:
-      url: %s
-  processors:
-    - log:
-        message: meta ${! @ }
-    - log:
-        message: content ${! content() }
-
-output:
-  redpanda_migrator_bundle:
-    redpanda_migrator:
-      seed_brokers: [ %s ]
-      replication_factor_override: true
-      replication_factor: -1
-    schema_registry:
-      url: %s
-`, source.brokerAddr, dummyTopic, source.schemaRegistryURL, destination.brokerAddr, destination.schemaRegistryURL)))
-		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
-
-		stream, err := streamBuilder.Build()
-		require.NoError(t, err)
-
-		license.InjectTestService(stream.Resources())
-
-		// Run stream in the background and shut it down when the test is finished
-		migratorCloseChan := make(chan struct{})
-		go func() {
-			err = stream.Run(context.Background())
-			require.NoError(t, err)
-
-			t.Log("Migrator shut down")
-
-			close(migratorCloseChan)
-		}()
-		t.Cleanup(func() {
-			require.NoError(t, stream.StopWithin(3*time.Second))
-
-			<-migratorCloseChan
-		})
-	}
+	runMigratorBundle(t, source, destination, dummyTopic)
 
 	// Wait for Migrator to sync the existing message
-	time.Sleep(10 * time.Second)
+	time.Sleep(3 * time.Second)
+	t.Log("Migrator started")
 
+	dummyCG := "foobar_consumer_group"
 	// Read the message from source using a consumer group
-	dummyConsumerGroup := "test"
-	{
-		streamBuilder := service.NewStreamBuilder()
-		require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
-input:
-  redpanda:
-    seed_brokers: [ %s ]
-    topics: [ %s ]
-    consumer_group: %s
-    start_from_oldest: true
-  processors:
-    - schema_registry_decode:
-        url: %s
-        avro_raw_json: true
-`, source.brokerAddr, dummyTopic, dummyConsumerGroup, source.schemaRegistryURL)))
-		require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
+	readMessageWithCG(t, source, dummyTopic, dummyCG, dummyMessage)
 
-		recvChan := make(chan struct{})
-		err = streamBuilder.AddConsumerFunc(func(ctx context.Context, m *service.Message) error {
-			b, err := m.AsBytes()
-			require.NoError(t, err)
+	// Wait for Migrator to sync the consumer group offsets
+	time.Sleep(3 * time.Second)
+	t.Logf("Finished reading first message from source with consumer group %q", dummyCG)
 
-			assert.Equal(t, `{"test":"foobar"}`, string(b))
+	// Produce one more message in the source
+	dummyMessage = `{"test":"bar"}`
+	produceMessage(t, source, dummyTopic, dummyMessage)
 
-			close(recvChan)
-			return nil
-		})
-		require.NoError(t, err)
-
-		stream, err := streamBuilder.Build()
-		require.NoError(t, err)
-
-		license.InjectTestService(stream.Resources())
-
-		ctx, done := context.WithTimeout(context.Background(), 5*time.Second)
-		t.Cleanup(done)
-
-		go func() {
-			require.NoError(t, stream.Run(ctx))
-		}()
-
-		<-recvChan
-		require.NoError(t, stream.StopWithin(3*time.Second))
-	}
-
-	time.Sleep(10 * time.Second)
-	t.Log("Finished reading message foobar with CG")
-	// Wait for Migrator to sync the consumer group
-
-	// Produce one message in the source
-	{
-		streamBuilder := service.NewStreamBuilder()
-		require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
-pipeline:
-  processors:
-    - schema_registry_encode:
-        url: %s
-        subject: %s
-        avro_raw_json: true
-output:
-  kafka_franz:
-    seed_brokers: [ %s ]
-    topic: %s
-`, source.schemaRegistryURL, dummyTopic, source.brokerAddr, dummyTopic)))
-		require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
-
-		inFunc, err := streamBuilder.AddProducerFunc()
-		require.NoError(t, err)
-
-		stream, err := streamBuilder.Build()
-		require.NoError(t, err)
-
-		license.InjectTestService(stream.Resources())
-
-		ctx, done := context.WithTimeout(context.Background(), 5*time.Second)
-		t.Cleanup(done)
-
-		go func() {
-			require.NoError(t, inFunc(ctx, service.NewMessage([]byte(`{"test":"barfoo"}`))))
-
-			require.NoError(t, stream.StopWithin(3*time.Second))
-		}()
-
-		require.NoError(t, stream.Run(ctx))
-	}
-
-	// Wait for Migrator to sync consumer groups and the new message
-	time.Sleep(30 * time.Second)
-	t.Log("Finished producing barfoo in source")
-
-	t.Log("Source broker: " + source.brokerAddr)
-	t.Log("Dest broker: " + destination.brokerAddr)
+	// Wait for Migrator to sync the new message
+	time.Sleep(3 * time.Second)
+	t.Log("Finished producing second message in source")
 
 	// Read the new message from the destination using a consumer group
-	{
-		streamBuilder := service.NewStreamBuilder()
-		require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
-input:
-  kafka_franz:
-    seed_brokers: [ %s ]
-    topics: [ %s ]
-    consumer_group: %s
-    start_from_oldest: false
-  processors:
-    - schema_registry_decode:
-        url: %s
-        avro_raw_json: true
-`, source.brokerAddr, dummyTopic, dummyConsumerGroup, source.schemaRegistryURL)))
-		require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
-
-		recvChan := make(chan struct{})
-		err = streamBuilder.AddConsumerFunc(func(ctx context.Context, m *service.Message) error {
-			b, err := m.AsBytes()
-			require.NoError(t, err)
-			assert.Equal(t, `{"test":"barfoo"}`, string(b))
-
-			close(recvChan)
-			return nil
-		})
-		require.NoError(t, err)
-
-		stream, err := streamBuilder.Build()
-		require.NoError(t, err)
-
-		license.InjectTestService(stream.Resources())
-
-		ctx, done := context.WithTimeout(context.Background(), 5*time.Second)
-		t.Cleanup(done)
-
-		go func() {
-			require.NoError(t, stream.Run(ctx))
-		}()
-
-		<-recvChan
-		require.NoError(t, stream.StopWithin(3*time.Second))
-
-		t.Log("Read message")
-	}
+	readMessageWithCG(t, source, dummyTopic, dummyCG, dummyMessage)
+	t.Logf("Finished reading second message from destination with consumer group %q", dummyCG)
 }

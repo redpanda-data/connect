@@ -94,8 +94,6 @@ func init() {
 				return nil, err
 			}
 
-			clientOpts = append(clientOpts, kgo.ClientID("xxxxxxxxxxxxxxxxxxxxxx"))
-
 			var topics []string
 			if topicList, err := conf.FieldStringList(rmoiFieldTopics); err != nil {
 				return nil, err
