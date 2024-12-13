@@ -127,10 +127,11 @@ func ResourceWithPostgreSQLVersion(t *testing.T, pool *dockertest.Pool, version 
 			return err
 		}
 
+		// This table explicitly uses identifiers that need quoting to ensure we work with those correctly.
 		_, err = db.Exec(`
 			CREATE TABLE IF NOT EXISTS "FlightsCompositePK" (
-				id serial, seq integer, name VARCHAR(50), created_at TIMESTAMP,
-				PRIMARY KEY (id, seq)
+				"ID" serial, "Seq" integer, "Name" VARCHAR(50), "CreatedAt" TIMESTAMP,
+				PRIMARY KEY ("ID", "Seq")
 			);`)
 		if err != nil {
 			return err
@@ -171,7 +172,7 @@ func TestIntegrationPostgresNoTxnMarkers(t *testing.T) {
 
 	for i := 0; i < 10; i++ {
 		f := GetFakeFlightRecord()
-		_, err = db.Exec(`INSERT INTO "FlightsCompositePK" (seq, name, created_at) VALUES ($1, $2, $3);`, i, f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
+		_, err = db.Exec(`INSERT INTO "FlightsCompositePK" ("Seq", "Name", "CreatedAt") VALUES ($1, $2, $3);`, i, f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 		require.NoError(t, err)
 	}
 
@@ -194,7 +195,7 @@ file:
 `, tmpDir)
 
 	streamOutBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: INFO`))
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: TRACE`))
 	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
 	require.NoError(t, streamOutBuilder.AddInputYAML(template))
 
@@ -226,7 +227,7 @@ file:
 
 	for i := 10; i < 20; i++ {
 		f := GetFakeFlightRecord()
-		_, err = db.Exec(`INSERT INTO "FlightsCompositePK" (seq, name, created_at) VALUES ($1, $2, $3);`, i, f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
+		_, err = db.Exec(`INSERT INTO "FlightsCompositePK" ("Seq", "Name", "CreatedAt") VALUES ($1, $2, $3);`, i, f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 		require.NoError(t, err)
 		_, err = db.Exec(`INSERT INTO flights_non_streamed (name, created_at) VALUES ($1, $2);`, f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 		require.NoError(t, err)
@@ -270,7 +271,7 @@ file:
 	time.Sleep(time.Second * 5)
 	for i := 20; i < 30; i++ {
 		f := GetFakeFlightRecord()
-		_, err = db.Exec(`INSERT INTO "FlightsCompositePK" (seq, name, created_at) VALUES ($1, $2, $3);`, i, f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
+		_, err = db.Exec(`INSERT INTO "FlightsCompositePK" ("Seq", "Name", "CreatedAt") VALUES ($1, $2, $3);`, i, f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 		require.NoError(t, err)
 	}
 

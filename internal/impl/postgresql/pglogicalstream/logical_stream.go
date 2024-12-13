@@ -566,14 +566,15 @@ func (s *Stream) processSnapshot() error {
 
 					var data = make(map[string]any)
 					for i, getter := range valueGetters {
-						if data[columnNames[i]], err = getter(scanArgs[i]); err != nil {
+						col := columnNames[i]
+						var val any
+						if val, err = getter(scanArgs[i]); err != nil {
 							return err
 						}
-
-						if _, ok := lastPrimaryKey[columnNames[i]]; ok {
-							if lastPkVals[columnNames[i]], err = getter(scanArgs[i]); err != nil {
-								return err
-							}
+						data[col] = val
+						normalized := sanitize.QuotePostgresIdentifier(col)
+						if _, ok := lastPrimaryKey[normalized]; ok {
+							lastPkVals[normalized] = val
 						}
 					}
 
@@ -655,7 +656,8 @@ func (s *Stream) getPrimaryKeyColumn(ctx context.Context, table TableFQN) (map[s
 	// Extract all primary key column names
 	pkColumns := make([]string, len(data[0].Rows))
 	for i, row := range data[0].Rows {
-		pkColumns[i] = string(row[0])
+		// Postgres gives us back normalized identifiers here - we need to quote them.
+		pkColumns[i] = sanitize.QuotePostgresIdentifier(string(row[0]))
 	}
 
 	var pksMap = make(map[string]any)
