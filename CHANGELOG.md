@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## 4.44.0 - TBD
 
+### Added
+
+- Go API: New `public/license` package added to allow custom programmatic instantiations of Redpanda Connect to run enterprise license components. (@Jeffail)
+
 ### Fixed
 
 - `gcp_bigquery` output with parquet format no longer returns errors incorrectly. (@rockwotj)
