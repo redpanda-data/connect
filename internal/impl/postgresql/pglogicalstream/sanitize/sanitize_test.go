@@ -24,10 +24,12 @@
 package sanitize_test
 
 import (
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewQuery(t *testing.T) {
@@ -248,5 +250,41 @@ func TestQuerySanitize(t *testing.T) {
 		if err == nil || err.Error() != tt.expected {
 			t.Errorf("%d. expected error %v, got %v", i, tt.expected, err)
 		}
+	}
+}
+
+func TestIdentifierValidation(t *testing.T) {
+	successfulTests := []string{
+		`"FooBar"`,
+		`"Foo""Bar"`,
+		`"Foo""""Bar"`,
+		`_Foobar`,
+		strings.Repeat("a", 63),
+	}
+
+	for _, i := range successfulTests {
+		i := i
+		t.Run(i, func(t *testing.T) {
+			require.NoError(t, sanitize.ValidatePostgresIdentifier(i))
+		})
+	}
+
+	errorTests := []string{
+		``,
+		`"`,
+		`""`,
+		`"""`,
+		`"foo"""bar"`,
+		`"foo"bar"`,
+		`"foobar""`,
+		`""foobar""`,
+		strings.Repeat("a", 64),
+	}
+
+	for _, i := range errorTests {
+		i := i
+		t.Run(i, func(t *testing.T) {
+			require.Error(t, sanitize.ValidatePostgresIdentifier(i))
+		})
 	}
 }

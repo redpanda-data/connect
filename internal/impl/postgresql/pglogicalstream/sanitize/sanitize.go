@@ -366,24 +366,36 @@ func SQLQuery(sql string, args ...any) (string, error) {
 // ValidatePostgresIdentifier checks if a string is a valid PostgreSQL identifier
 // This follows PostgreSQL's standard naming rules
 func ValidatePostgresIdentifier(name string) error {
-	if parts := strings.Split(name, "."); len(parts) == 2 {
-		if err := ValidatePostgresIdentifier(parts[0]); err != nil {
-			return fmt.Errorf("invalid schema identifier: %s", err)
-		}
-		name = parts[1]
-	}
-
-	// Strip quotes if they are present
-	if strings.HasPrefix(name, "\"") && strings.HasSuffix(name, "\"") {
-		name = strings.Trim(name, "\"")
-	}
-
 	if len(name) == 0 {
 		return errors.New("empty identifier is not allowed")
 	}
 
+	// It's not fully clear to me if the max here is before or after unescaping the quotes.
+	// We'll just play it safe and validate before quotes, it seems unlikely folks are using large
+	// identifiers.
 	if len(name) > MaxIdentifierLength {
 		return fmt.Errorf("identifier length exceeds maximum of %d characters", MaxIdentifierLength)
+	}
+
+	// Handle quoted identifiers.
+	if strings.HasPrefix(name, `"`) && strings.HasSuffix(name, `"`) && len(name) >= 2 {
+		name := name[1 : len(name)-1]
+		if name == "" {
+			return errors.New("quoted identifiers cannot be empty")
+		}
+		for i := 0; i < len(name); i++ {
+			if name[i] != '"' {
+				continue
+			}
+			if i+1 >= len(name) {
+				return fmt.Errorf("invalid quoted identifier: %s", name)
+			}
+			if name[i+1] != '"' {
+				return fmt.Errorf("invalid quoted identifier: %s", name)
+			}
+			i++ // Skip over the next character to handle triple quotes
+		}
+		return nil
 	}
 
 	// First character must be a letter or underscore
@@ -397,6 +409,8 @@ func ValidatePostgresIdentifier(name string) error {
 			return fmt.Errorf("invalid character '%c' at position %d in identifier '%s'", char, i, name)
 		}
 	}
+
+	// TODO(cdc): We should also ensure that this is not a reserved keyword.
 
 	return nil
 }
