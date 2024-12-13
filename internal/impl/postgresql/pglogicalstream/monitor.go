@@ -21,23 +21,22 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
-	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
 )
 
 // Report is a structure that contains the current state of the Monitor
 type Report struct {
 	WalLagInBytes int64
-	TableProgress map[string]float64
+	TableProgress map[TableFQN]float64
 }
 
 // Monitor is a structure that allows monitoring the progress of snapshot ingestion and replication lag
 type Monitor struct {
 	// tableStat contains numbers of rows for each table determined at the moment of the snapshot creation
 	// this is used to calculate snapshot ingestion progress
-	tableStat map[string]int64
+	tableStat map[TableFQN]int64
 	lock      sync.Mutex
 	// snapshotProgress is a map of table names to the percentage of rows ingested from the snapshot
-	snapshotProgress map[string]float64
+	snapshotProgress map[TableFQN]float64
 	// replicationLagInBytes is the replication lag in bytes measured by
 	// finding the difference between the latest LSN and the last confirmed LSN for the replication slot
 	replicationLagInBytes int64
@@ -53,7 +52,7 @@ func NewMonitor(
 	ctx context.Context,
 	dbDSN string,
 	logger *service.Logger,
-	tables []string,
+	tables []TableFQN,
 	slotName string,
 	interval time.Duration,
 ) (*Monitor, error) {
@@ -66,7 +65,7 @@ func NewMonitor(
 	}
 
 	m := &Monitor{
-		snapshotProgress:      map[string]float64{},
+		snapshotProgress:      map[TableFQN]float64{},
 		replicationLagInBytes: 0,
 		dbConn:                dbConn,
 		slotName:              slotName,
@@ -81,40 +80,32 @@ func NewMonitor(
 }
 
 // UpdateSnapshotProgressForTable updates the snapshot ingestion progress for a given table
-func (m *Monitor) UpdateSnapshotProgressForTable(table string, position int) {
+func (m *Monitor) UpdateSnapshotProgressForTable(table TableFQN, position int) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	m.snapshotProgress[table] = math.Round(float64(position) / float64(m.tableStat[table]) * 100)
 }
 
 // we need to read the tables stat to calculate the snapshot ingestion progress
-func (m *Monitor) readTablesStat(ctx context.Context, tables []string) error {
-	results := make(map[string]int64)
+func (m *Monitor) readTablesStat(ctx context.Context, tables []TableFQN) error {
+	results := make(map[TableFQN]int64)
 
 	for _, table := range tables {
-		tableWithoutSchema := strings.Split(table, ".")[1]
-		err := sanitize.ValidatePostgresIdentifier(tableWithoutSchema)
-
-		if err != nil {
-			return fmt.Errorf("error sanitizing query: %w", err)
-		}
-
 		var count int64
-		// tableWithoutSchema has been validated so its safe to use in the query
-		err = m.dbConn.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+tableWithoutSchema).Scan(&count)
+		err := m.dbConn.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+table.String()).Scan(&count)
 
 		if err != nil {
 			// If the error is because the table doesn't exist, we'll set the count to 0
 			// and continue. You might want to log this situation.
 			if strings.Contains(err.Error(), "does not exist") {
-				results[tableWithoutSchema] = 0
+				results[table] = 0
 				continue
 			}
 			// For any other error, we'll return it
-			return fmt.Errorf("error counting rows in table %s: %w", tableWithoutSchema, err)
+			return fmt.Errorf("error counting rows in table %s: %w", table, err)
 		}
 
-		results[tableWithoutSchema] = count
+		results[table] = count
 	}
 
 	m.tableStat = results

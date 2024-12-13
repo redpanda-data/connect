@@ -128,7 +128,7 @@ func ResourceWithPostgreSQLVersion(t *testing.T, pool *dockertest.Pool, version 
 		}
 
 		_, err = db.Exec(`
-			CREATE TABLE IF NOT EXISTS flights_composite_pks (
+			CREATE TABLE IF NOT EXISTS "FlightsCompositePK" (
 				id serial, seq integer, name VARCHAR(50), created_at TIMESTAMP,
 				PRIMARY KEY (id, seq)
 			);`)
@@ -171,7 +171,7 @@ func TestIntegrationPostgresNoTxnMarkers(t *testing.T) {
 
 	for i := 0; i < 10; i++ {
 		f := GetFakeFlightRecord()
-		_, err = db.Exec("INSERT INTO flights_composite_pks (seq, name, created_at) VALUES ($1, $2, $3);", i, f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
+		_, err = db.Exec(`INSERT INTO "FlightsCompositePK" (seq, name, created_at) VALUES ($1, $2, $3);`, i, f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 		require.NoError(t, err)
 	}
 
@@ -184,7 +184,7 @@ pg_stream:
     snapshot_batch_size: 5
     schema: public
     tables:
-       - flights_composite_pks
+       - '"FlightsCompositePK"'
 `, databaseURL)
 
 	cacheConf := fmt.Sprintf(`
@@ -226,9 +226,9 @@ file:
 
 	for i := 10; i < 20; i++ {
 		f := GetFakeFlightRecord()
-		_, err = db.Exec("INSERT INTO flights_composite_pks (seq, name, created_at) VALUES ($1, $2, $3);", i, f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
+		_, err = db.Exec(`INSERT INTO "FlightsCompositePK" (seq, name, created_at) VALUES ($1, $2, $3);`, i, f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 		require.NoError(t, err)
-		_, err = db.Exec("INSERT INTO flights_non_streamed (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
+		_, err = db.Exec(`INSERT INTO flights_non_streamed (name, created_at) VALUES ($1, $2);`, f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 		require.NoError(t, err)
 	}
 
@@ -270,7 +270,7 @@ file:
 	time.Sleep(time.Second * 5)
 	for i := 20; i < 30; i++ {
 		f := GetFakeFlightRecord()
-		_, err = db.Exec("INSERT INTO flights_composite_pks (seq, name, created_at) VALUES ($1, $2, $3);", i, f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
+		_, err = db.Exec(`INSERT INTO "FlightsCompositePK" (seq, name, created_at) VALUES ($1, $2, $3);`, i, f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 		require.NoError(t, err)
 	}
 

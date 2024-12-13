@@ -363,6 +363,24 @@ func SQLQuery(sql string, args ...any) (string, error) {
 	return query.Sanitize(args...)
 }
 
+// QuotePostgresIdentifier returns the valid escaped identifier.
+func QuotePostgresIdentifier(name string) string {
+	var quoted strings.Builder
+	// Default to assume we're just going to add quotes and there won't
+	// be any double quotes inside the string that needs escaped.
+	quoted.Grow(len(name) + 2)
+	quoted.WriteByte('"')
+	for _, r := range name {
+		if r == '"' {
+			quoted.WriteString(`""`)
+		} else {
+			quoted.WriteRune(r)
+		}
+	}
+	quoted.WriteByte('"')
+	return quoted.String()
+}
+
 // ValidatePostgresIdentifier checks if a string is a valid PostgreSQL identifier
 // This follows PostgreSQL's standard naming rules
 func ValidatePostgresIdentifier(name string) error {

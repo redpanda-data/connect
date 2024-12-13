@@ -321,7 +321,7 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 		// Periodically collect stats
 		report := pgStream.GetProgress()
 		for name, progress := range report.TableProgress {
-			p.snapshotMetrics.SetFloat64(progress, name)
+			p.snapshotMetrics.SetFloat64(progress, name.String())
 		}
 		p.replicationLag.Set(report.WalLagInBytes)
 	})

@@ -233,11 +233,11 @@ func TestIntegrationCreatePublication(t *testing.T) {
 	defer closeConn(t, conn)
 
 	publicationName := "test_publication"
-	schema := "public"
-	err = CreatePublication(context.Background(), conn, publicationName, schema, []string{})
+	schema := `"public"`
+	err = CreatePublication(context.Background(), conn, publicationName, []TableFQN{})
 	require.NoError(t, err)
 
-	tables, forAllTables, err := GetPublicationTables(context.Background(), conn, publicationName, schema)
+	tables, forAllTables, err := GetPublicationTables(context.Background(), conn, publicationName)
 	require.NoError(t, err)
 	assert.Empty(t, tables)
 	assert.True(t, forAllTables)
@@ -247,13 +247,14 @@ func TestIntegrationCreatePublication(t *testing.T) {
 	require.NoError(t, err)
 
 	publicationWithTables := "test_pub_with_tables"
-	err = CreatePublication(context.Background(), conn, publicationWithTables, schema, []string{"test_table"})
+	err = CreatePublication(context.Background(), conn, publicationWithTables, []TableFQN{{schema, `"test_table"`}})
 	require.NoError(t, err)
 
-	tables, forAllTables, err = GetPublicationTables(context.Background(), conn, publicationName, schema)
+	tables, forAllTables, err = GetPublicationTables(context.Background(), conn, publicationName)
 	require.NoError(t, err)
 	assert.NotEmpty(t, tables)
-	assert.Contains(t, tables, "test_table")
+	assert.Len(t, tables, 1)
+	assert.Contains(t, tables, TableFQN{schema, `"test_table"`})
 	assert.False(t, forAllTables)
 
 	// Add more tables to publication
@@ -262,41 +263,43 @@ func TestIntegrationCreatePublication(t *testing.T) {
 	require.NoError(t, err)
 
 	// Pass more tables to the publication
-	err = CreatePublication(context.Background(), conn, publicationWithTables, schema, []string{
-		"test_table2",
-		"test_table",
+	err = CreatePublication(context.Background(), conn, publicationWithTables, []TableFQN{
+		{schema, "test_table2"},
+		{schema, "test_table"},
 	})
 	require.NoError(t, err)
 
-	tables, forAllTables, err = GetPublicationTables(context.Background(), conn, publicationWithTables, schema)
+	tables, forAllTables, err = GetPublicationTables(context.Background(), conn, publicationWithTables)
 	require.NoError(t, err)
 	assert.NotEmpty(t, tables)
-	assert.Contains(t, tables, "test_table")
-	assert.Contains(t, tables, "test_table2")
+	assert.Len(t, tables, 2)
+	assert.Contains(t, tables, TableFQN{schema, `"test_table"`})
+	assert.Contains(t, tables, TableFQN{schema, `"test_table2"`})
 	assert.False(t, forAllTables)
 
 	// Remove one table from the publication
-	err = CreatePublication(context.Background(), conn, publicationWithTables, schema, []string{
-		"test_table",
+	err = CreatePublication(context.Background(), conn, publicationWithTables, []TableFQN{
+		{schema, "test_table"},
 	})
 	require.NoError(t, err)
 
-	tables, forAllTables, err = GetPublicationTables(context.Background(), conn, publicationWithTables, schema)
+	tables, forAllTables, err = GetPublicationTables(context.Background(), conn, publicationWithTables)
 	require.NoError(t, err)
 	assert.NotEmpty(t, tables)
-	assert.Contains(t, tables, "test_table")
+	assert.Len(t, tables, 1)
+	assert.Contains(t, tables, TableFQN{schema, `"test_table"`})
 	assert.False(t, forAllTables)
 
 	// Add one table and remove one at the same time
-	err = CreatePublication(context.Background(), conn, publicationWithTables, schema, []string{
-		"test_table2",
+	err = CreatePublication(context.Background(), conn, publicationWithTables, []TableFQN{
+		{schema, "test_table2"},
 	})
 	require.NoError(t, err)
 
-	tables, forAllTables, err = GetPublicationTables(context.Background(), conn, publicationWithTables, schema)
+	tables, forAllTables, err = GetPublicationTables(context.Background(), conn, publicationWithTables)
 	require.NoError(t, err)
 	assert.NotEmpty(t, tables)
-	assert.Contains(t, tables, "test_table2")
+	assert.Contains(t, tables, TableFQN{schema, `"test_table2"`})
 	assert.False(t, forAllTables)
 
 	// Create a schema with a quoted identifier
@@ -317,22 +320,22 @@ func TestIntegrationCreatePublication(t *testing.T) {
 
 	// Pass tables to the schema with quoted identifiers
 	publicationQuotedIdentifiers := "quoted_identifiers"
-	err = CreatePublication(context.Background(), conn, publicationQuotedIdentifiers, caseSensitiveSchema, []string{
-		caseSensitiveSchema + "." + caseSensitiveTable,
-		caseSensitiveSchema + "." + caseSensitiveTable2,
+	err = CreatePublication(context.Background(), conn, publicationQuotedIdentifiers, []TableFQN{
+		{caseSensitiveSchema, caseSensitiveTable},
+		{caseSensitiveSchema, caseSensitiveTable2},
 	})
 	require.NoError(t, err)
 
 	// Remove one table with a quoted identifier from the publication
-	err = CreatePublication(context.Background(), conn, publicationQuotedIdentifiers, caseSensitiveSchema, []string{
-		caseSensitiveSchema + "." + caseSensitiveTable,
+	err = CreatePublication(context.Background(), conn, publicationQuotedIdentifiers, []TableFQN{
+		{caseSensitiveSchema, caseSensitiveTable},
 	})
 	require.NoError(t, err)
 
-	tables, forAllTables, err = GetPublicationTables(context.Background(), conn, publicationQuotedIdentifiers, caseSensitiveSchema)
+	tables, forAllTables, err = GetPublicationTables(context.Background(), conn, publicationQuotedIdentifiers)
 	require.NoError(t, err)
-	assert.NotEmpty(t, tables)
-	assert.Contains(t, tables, "Foo")
+	assert.Len(t, tables, 1)
+	assert.Contains(t, tables, TableFQN{`"FooBar"`, `"Foo"`})
 	assert.False(t, forAllTables)
 }
 
@@ -357,8 +360,7 @@ func TestIntegrationStartReplication(t *testing.T) {
 
 	// create publication
 	publicationName := "test_publication"
-	schema := "public"
-	err = CreatePublication(context.Background(), conn, publicationName, schema, []string{})
+	err = CreatePublication(context.Background(), conn, publicationName, []TableFQN{})
 	require.NoError(t, err)
 
 	_, err = CreateReplicationSlot(ctx, conn, slotName, outputPlugin, CreateReplicationSlotOptions{Temporary: false, SnapshotAction: "export"}, 16, nil)
