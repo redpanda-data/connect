@@ -8,7 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - `gcp_bigquery` output with parquet format no longer returns errors incorrectly. (@rockwotj)
-- `postgres_cdc` input now allows quoted identifiers for the table names. (@mihaitodor)
+- `postgres_cdc` input now allows quoted identifiers for the table names. (@mihaitodor, @rockwotj)
 
 ## 4.43.1 - 2024-12-09
 
