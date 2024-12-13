@@ -1,0 +1,101 @@
+# This example shows how to periodically poll postgres and fetch a series of records
+# saving a cursor in postgres of the last poll.
+input:
+  generate:
+    interval: '@every 5s'
+    mapping: 'root = {}'
+pipeline:
+  processors:
+    # Our cron has kicked off again - let's restart from our last cached
+    # version.
+    - cache:
+        resource: cached_pgstate
+        operator: get
+        key: table_cursor
+    # get operator results in an error if not found,
+    # so set our default by catching the error
+    - catch:
+        - mapping: 'root.id = -1'
+    # Now we can do our periodic poll
+    - sql_select:
+        driver: "postgres"
+        dsn: "postgres://me:foobar@localhost:5432"
+        table: my_table
+        columns: ["*"]
+        where: 'id > ?'
+        args_mapping: root = [this.id]
+    # Break each row from the sql_select into it's own message within
+    # a single batch.
+    - unarchive:
+        format: json_array
+    # TODO: Insert your actual pipeline starting here
+    - mapping:
+        root.fetched = this
+
+output:
+  broker:
+    # Send each processed message to each output sequentially.
+    pattern: fan_out_sequential
+    outputs:
+      - stdout: {} # TODO: Do your actual output
+      # It's important that the last thing we do is save our state
+      # This allows at-least-once delivery semantics.
+      - processors:
+          # *Assuming* your processing is in order and the output is atomic
+          # then we only need to save the ID of the last message in the cache.
+          - select_parts:
+              parts: [-1]
+          - mapping: |
+              root.id = this.fetched.id
+        cache:
+          target: cached_pgstate
+          key: table_cursor
+          max_in_flight: 1
+
+cache_resources:
+  # Use a multilevel cache so that only the first poll needs to
+  # hit postgres.
+  - label: cached_pgstate
+    multilevel: [ inmem, pgstate ]
+
+  - label: inmem
+    memory:
+      # disable TTL
+      compaction_interval: ''
+
+  - label: pgstate
+    sql:
+      driver: "postgres"
+      dsn: "postgres://me:foobar@localhost:5432"
+      table: redpanda_connect_state
+      key_column: key
+      value_column: val
+      set_suffix: ON CONFLICT(key) DO UPDATE SET val=excluded.val
+      init_statement: |
+        CREATE TABLE IF NOT EXISTS redpanda_connect_state (
+          key bytea PRIMARY KEY,
+          val bytea 
+        );
+
+
+# You can use the below configuration to generate some data into 
+# postgres to see the above pipeline working.
+
+# input:
+#   generate:
+#     interval: '@every 1s'
+#     mapping: 'root = {"foo": uuid_v4(), "ts": now()}'
+# output:
+#   sql_insert:
+#     driver: postgres
+#     dsn: "postgres://me:foobar@localhost:5432"
+#     init_statement: |
+#       CREATE TABLE IF NOT EXISTS my_table (
+#         id serial NOT NULL,
+#         foo text,
+#         ts text,
+#         primary key (id)
+#       );
+#     table: my_table
+#     columns: [foo, ts]
+#     args_mapping: root = [this.foo, this.ts]
