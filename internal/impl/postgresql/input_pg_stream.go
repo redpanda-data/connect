@@ -85,13 +85,11 @@ This input adds the following metadata fields to each message:
 			Default(0)).
 		Field(service.NewStringField(fieldSchema).
 			Description("The PostgreSQL schema from which to replicate data.").
-			Example("public")).
+			Examples("public", `"MyCaseSensitiveSchemaNeedingQuotes"`),
+		).
 		Field(service.NewStringListField(fieldTables).
 			Description("A list of table names to include in the logical replication. Each table should be specified as a separate item.").
-			Example(`
-			- my_table
-			- my_table_2
-		`)).
+			Example([]string{"my_table_1", `"MyCaseSensitiveTableNeedingQuotes"`})).
 		Field(service.NewIntField(fieldCheckpointLimit).
 			Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given LSN will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
 			Default(1024)).
