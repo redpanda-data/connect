@@ -24,6 +24,7 @@
 package sanitize_test
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -255,18 +256,31 @@ func TestQuerySanitize(t *testing.T) {
 }
 
 func TestIdentifierValidation(t *testing.T) {
-	successfulTests := []string{
+	quoted := []string{
 		`"FooBar"`,
 		`"Foo""Bar"`,
 		`"Foo""""Bar"`,
+	}
+
+	for _, i := range quoted {
+		i := i
+		t.Run(i, func(t *testing.T) {
+			_, err := sanitize.NormalizePostgresIdentifier(i)
+			require.NoError(t, err)
+		})
+	}
+
+	unquoted := []string{
 		`_Foobar`,
 		strings.Repeat("a", 63),
 	}
 
-	for _, i := range successfulTests {
+	for _, i := range unquoted {
 		i := i
 		t.Run(i, func(t *testing.T) {
-			require.NoError(t, sanitize.ValidatePostgresIdentifier(i))
+			normalized, err := sanitize.NormalizePostgresIdentifier(i)
+			require.NoError(t, err)
+			require.Equal(t, strconv.Quote(strings.ToLower(i)), normalized)
 		})
 	}
 
@@ -285,7 +299,8 @@ func TestIdentifierValidation(t *testing.T) {
 	for _, i := range errorTests {
 		i := i
 		t.Run(i, func(t *testing.T) {
-			require.Error(t, sanitize.ValidatePostgresIdentifier(i))
+			_, err := sanitize.NormalizePostgresIdentifier(i)
+			require.Error(t, err)
 		})
 	}
 }

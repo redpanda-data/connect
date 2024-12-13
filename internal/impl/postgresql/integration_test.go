@@ -648,9 +648,13 @@ pg_stream:
     slot_name: test_slot_native_decoder
     stream_snapshot: true
     include_transaction_markers: false
-    schema: public
+     # This is intentionally with uppercase - we want to validate
+     # we treat identifiers the same as Postgres Queries.
+    schema: PuBliC
     tables:
-       - flights
+       # This is intentionally with uppercase - we want to validate
+       # we treat identifiers the same as Postgres Queries.
+       - FLIGHTS
 `, databaseURL)
 
 			cacheConf := fmt.Sprintf(`

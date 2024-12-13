@@ -86,16 +86,18 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		return nil, err
 	}
 
-	if err := sanitize.ValidatePostgresIdentifier(config.DBSchema); err != nil {
+	schema, err := sanitize.NormalizePostgresIdentifier(config.DBSchema)
+	if err != nil {
 		return nil, fmt.Errorf("invalid schema name %q: %w", config.DBSchema, err)
 	}
 
 	tables := []TableFQN{}
 	for _, table := range config.DBTables {
-		if err := sanitize.ValidatePostgresIdentifier(table); err != nil {
+		normalized, err := sanitize.NormalizePostgresIdentifier(table)
+		if err != nil {
 			return nil, fmt.Errorf("invalid table name %q: %w", table, err)
 		}
-		tables = append(tables, TableFQN{Schema: config.DBSchema, Table: table})
+		tables = append(tables, TableFQN{Schema: schema, Table: normalized})
 	}
 	stream := &Stream{
 		pgConn:                     dbConn,
