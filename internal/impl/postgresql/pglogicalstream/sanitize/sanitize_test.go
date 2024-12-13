@@ -24,8 +24,12 @@
 package sanitize_test
 
 import (
+	"strconv"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
 )
@@ -248,5 +252,55 @@ func TestQuerySanitize(t *testing.T) {
 		if err == nil || err.Error() != tt.expected {
 			t.Errorf("%d. expected error %v, got %v", i, tt.expected, err)
 		}
+	}
+}
+
+func TestIdentifierValidation(t *testing.T) {
+	quoted := []string{
+		`"FooBar"`,
+		`"Foo""Bar"`,
+		`"Foo""""Bar"`,
+	}
+
+	for _, i := range quoted {
+		i := i
+		t.Run(i, func(t *testing.T) {
+			_, err := sanitize.NormalizePostgresIdentifier(i)
+			require.NoError(t, err)
+		})
+	}
+
+	unquoted := []string{
+		`_Foobar`,
+		strings.Repeat("a", 63),
+	}
+
+	for _, i := range unquoted {
+		i := i
+		t.Run(i, func(t *testing.T) {
+			normalized, err := sanitize.NormalizePostgresIdentifier(i)
+			require.NoError(t, err)
+			require.Equal(t, strconv.Quote(strings.ToLower(i)), normalized)
+		})
+	}
+
+	errorTests := []string{
+		``,
+		`"`,
+		`""`,
+		`"""`,
+		`"foo"""bar"`,
+		`"foo"bar"`,
+		`"foobar""`,
+		`""foobar""`,
+		strings.Repeat("a", 64),
+	}
+
+	for _, i := range errorTests {
+		i := i
+		t.Run(i, func(t *testing.T) {
+			_, err := sanitize.NormalizePostgresIdentifier(i)
+			require.Error(t, err)
+		})
 	}
 }

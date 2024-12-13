@@ -7,3 +7,18 @@
 // https://github.com/redpanda-data/connect/v4/blob/main/licenses/rcl.md
 
 package pglogicalstream
+
+import "fmt"
+
+// TableFQN is both a table name AND a schema name
+//
+// TableFQN should always be SAFE and validated before creating
+type TableFQN struct {
+	Schema string
+	Table  string
+}
+
+// String satifies the Stringer interface
+func (t TableFQN) String() string {
+	return fmt.Sprintf("%s.%s", t.Schema, t.Table)
+}

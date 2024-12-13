@@ -363,28 +363,72 @@ func SQLQuery(sql string, args ...any) (string, error) {
 	return query.Sanitize(args...)
 }
 
-// ValidatePostgresIdentifier checks if a string is a valid PostgreSQL identifier
+// QuotePostgresIdentifier returns the valid escaped identifier.
+func QuotePostgresIdentifier(name string) string {
+	var quoted strings.Builder
+	// Default to assume we're just going to add quotes and there won't
+	// be any double quotes inside the string that needs escaped.
+	quoted.Grow(len(name) + 2)
+	quoted.WriteByte('"')
+	for _, r := range name {
+		if r == '"' {
+			quoted.WriteString(`""`)
+		} else {
+			quoted.WriteRune(r)
+		}
+	}
+	quoted.WriteByte('"')
+	return quoted.String()
+}
+
+// NormalizePostgresIdentifier checks if a string is a valid PostgreSQL identifier
 // This follows PostgreSQL's standard naming rules
-func ValidatePostgresIdentifier(name string) error {
+func NormalizePostgresIdentifier(name string) (string, error) {
 	if len(name) == 0 {
-		return errors.New("empty identifier is not allowed")
+		return "", errors.New("empty identifier is not allowed")
 	}
 
+	// It's not fully clear to me if the max here is before or after unescaping the quotes.
+	// We'll just play it safe and validate before quotes, it seems unlikely folks are using large
+	// identifiers.
 	if len(name) > MaxIdentifierLength {
-		return fmt.Errorf("identifier length exceeds maximum of %d characters", MaxIdentifierLength)
+		return "", fmt.Errorf("identifier length exceeds maximum of %d characters", MaxIdentifierLength)
+	}
+
+	// Handle quoted identifiers.
+	if strings.HasPrefix(name, `"`) && strings.HasSuffix(name, `"`) && len(name) >= 2 {
+		unquoted := name[1 : len(name)-1]
+		if unquoted == "" {
+			return "", errors.New("quoted identifiers cannot be empty")
+		}
+		for i := 0; i < len(unquoted); i++ {
+			if unquoted[i] != '"' {
+				continue
+			}
+			if i+1 >= len(unquoted) {
+				return "", fmt.Errorf("invalid quoted identifier: %s", unquoted)
+			}
+			if unquoted[i+1] != '"' {
+				return "", fmt.Errorf("invalid quoted identifier: %s", unquoted)
+			}
+			i++ // Skip over the next character to handle triple quotes
+		}
+		return name, nil
 	}
 
 	// First character must be a letter or underscore
 	if !unicode.IsLetter(rune(name[0])) && name[0] != '_' {
-		return errors.New("identifier must start with a letter or underscore")
+		return "", errors.New("identifier must start with a letter or underscore")
 	}
 
 	// Subsequent characters must be letters, numbers, underscores, or dots
 	for i, char := range name {
 		if !unicode.IsLetter(char) && !unicode.IsDigit(char) && char != '_' && char != '.' {
-			return fmt.Errorf("invalid character '%c' at position %d in identifier '%s'", char, i, name)
+			return "", fmt.Errorf("invalid character '%c' at position %d in identifier '%s'", char, i, name)
 		}
 	}
 
-	return nil
+	// TODO(cdc): We should also ensure that this is not a reserved keyword.
+
+	return QuotePostgresIdentifier(strings.ToLower(name)), nil
 }

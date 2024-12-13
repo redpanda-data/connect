@@ -117,7 +117,7 @@ func (s *Snapshotter) prepare() error {
 	return nil
 }
 
-func (s *Snapshotter) findAvgRowSize(ctx context.Context, table string) (sql.NullInt64, error) {
+func (s *Snapshotter) findAvgRowSize(ctx context.Context, table TableFQN) (sql.NullInt64, error) {
 	var (
 		avgRowSize sql.NullInt64
 		rows       *sql.Rows
@@ -144,24 +144,24 @@ func (s *Snapshotter) findAvgRowSize(ctx context.Context, table string) (sql.Nul
 	return avgRowSize, nil
 }
 
-func (s *Snapshotter) prepareScannersAndGetters(columnTypes []*sql.ColumnType) ([]interface{}, []func(interface{}) (interface{}, error)) {
-	scanArgs := make([]interface{}, len(columnTypes))
-	valueGetters := make([]func(interface{}) (interface{}, error), len(columnTypes))
+func (s *Snapshotter) prepareScannersAndGetters(columnTypes []*sql.ColumnType) ([]any, []func(any) (any, error)) {
+	scanArgs := make([]any, len(columnTypes))
+	valueGetters := make([]func(any) (any, error), len(columnTypes))
 
 	for i, v := range columnTypes {
 		switch v.DatabaseTypeName() {
 		case "VARCHAR", "TEXT", "UUID", "TIMESTAMP":
 			scanArgs[i] = new(sql.NullString)
-			valueGetters[i] = func(v interface{}) (interface{}, error) { return v.(*sql.NullString).String, nil }
+			valueGetters[i] = func(v any) (any, error) { return v.(*sql.NullString).String, nil }
 		case "BOOL":
 			scanArgs[i] = new(sql.NullBool)
-			valueGetters[i] = func(v interface{}) (interface{}, error) { return v.(*sql.NullBool).Bool, nil }
+			valueGetters[i] = func(v any) (any, error) { return v.(*sql.NullBool).Bool, nil }
 		case "INT4":
 			scanArgs[i] = new(sql.NullInt64)
-			valueGetters[i] = func(v interface{}) (interface{}, error) { return v.(*sql.NullInt64).Int64, nil }
+			valueGetters[i] = func(v any) (any, error) { return v.(*sql.NullInt64).Int64, nil }
 		case "JSONB":
 			scanArgs[i] = new(sql.NullString)
-			valueGetters[i] = func(v interface{}) (interface{}, error) {
+			valueGetters[i] = func(v any) (any, error) {
 				payload := v.(*sql.NullString).String
 				if payload == "" {
 					return payload, nil
@@ -175,7 +175,7 @@ func (s *Snapshotter) prepareScannersAndGetters(columnTypes []*sql.ColumnType) (
 			}
 		case "INET":
 			scanArgs[i] = new(sql.NullString)
-			valueGetters[i] = func(v interface{}) (interface{}, error) {
+			valueGetters[i] = func(v any) (any, error) {
 				inet := pgtype.Inet{}
 				val := v.(*sql.NullString).String
 				if err := inet.Scan(val); err != nil {
@@ -186,7 +186,7 @@ func (s *Snapshotter) prepareScannersAndGetters(columnTypes []*sql.ColumnType) (
 			}
 		case "TSRANGE":
 			scanArgs[i] = new(sql.NullString)
-			valueGetters[i] = func(v interface{}) (interface{}, error) {
+			valueGetters[i] = func(v any) (any, error) {
 				newArray := pgtype.Tsrange{}
 				val := v.(*sql.NullString).String
 				if err := newArray.Scan(val); err != nil {
@@ -198,7 +198,7 @@ func (s *Snapshotter) prepareScannersAndGetters(columnTypes []*sql.ColumnType) (
 			}
 		case "_INT4":
 			scanArgs[i] = new(sql.NullString)
-			valueGetters[i] = func(v interface{}) (interface{}, error) {
+			valueGetters[i] = func(v any) (any, error) {
 				newArray := pgtype.Int4Array{}
 				val := v.(*sql.NullString).String
 				if err := newArray.Scan(val); err != nil {
@@ -209,7 +209,7 @@ func (s *Snapshotter) prepareScannersAndGetters(columnTypes []*sql.ColumnType) (
 			}
 		case "_TEXT":
 			scanArgs[i] = new(sql.NullString)
-			valueGetters[i] = func(v interface{}) (interface{}, error) {
+			valueGetters[i] = func(v any) (any, error) {
 				newArray := pgtype.TextArray{}
 				val := v.(*sql.NullString).String
 				if err := newArray.Scan(val); err != nil {
@@ -220,7 +220,7 @@ func (s *Snapshotter) prepareScannersAndGetters(columnTypes []*sql.ColumnType) (
 			}
 		default:
 			scanArgs[i] = new(sql.NullString)
-			valueGetters[i] = func(v interface{}) (interface{}, error) { return v.(*sql.NullString).String, nil }
+			valueGetters[i] = func(v any) (any, error) { return v.(*sql.NullString).String, nil }
 		}
 	}
 
@@ -239,13 +239,13 @@ func (s *Snapshotter) calculateBatchSize(availableMemory uint64, estimatedRowSiz
 	return batchSize
 }
 
-func (s *Snapshotter) querySnapshotData(ctx context.Context, table string, lastSeenPk map[string]any, pkColumns []string, limit int) (rows *sql.Rows, err error) {
+func (s *Snapshotter) querySnapshotData(ctx context.Context, table TableFQN, lastSeenPk map[string]any, pkColumns []string, limit int) (rows *sql.Rows, err error) {
 
 	s.logger.Debugf("Query snapshot table: %v, limit: %v, lastSeenPkVal: %v, pk: %v", table, limit, lastSeenPk, pkColumns)
 
 	if lastSeenPk == nil {
 		// NOTE: All strings passed into here have been validated or derived from the code/database, therefore not prone to SQL injection.
-		sq, err := sanitize.SQLQuery(fmt.Sprintf("SELECT * FROM %s ORDER BY %s LIMIT %d;", table, strings.Join(pkColumns, ", "), limit))
+		sq, err := sanitize.SQLQuery(fmt.Sprintf("SELECT * FROM %s ORDER BY %s LIMIT %d;", table.String(), strings.Join(pkColumns, ", "), limit))
 		if err != nil {
 			return nil, err
 		}
@@ -269,7 +269,7 @@ func (s *Snapshotter) querySnapshotData(ctx context.Context, table string, lastS
 	pkAsTuple := "(" + strings.Join(pkColumns, ", ") + ")"
 
 	// NOTE: All strings passed into here have been validated or derived from the code/database, therefore not prone to SQL injection.
-	sq, err := sanitize.SQLQuery(fmt.Sprintf("SELECT * FROM %s WHERE %s > %s ORDER BY %s LIMIT %d;", table, pkAsTuple, lastSeenPlaceHolders, strings.Join(pkColumns, ", "), limit), lastSeenPksValues...)
+	sq, err := sanitize.SQLQuery(fmt.Sprintf("SELECT * FROM %s WHERE %s > %s ORDER BY %s LIMIT %d;", table.String(), pkAsTuple, lastSeenPlaceHolders, strings.Join(pkColumns, ", "), limit), lastSeenPksValues...)
 	if err != nil {
 		return nil, err
 	}

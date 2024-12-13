@@ -21,7 +21,6 @@ import (
 	"context"
 	"database/sql/driver"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -343,7 +342,7 @@ func DropReplicationSlot(ctx context.Context, conn *pgconn.PgConn, slotName stri
 }
 
 // CreatePublication creates a new PostgreSQL publication with the given name for a list of tables and drop if exists flag
-func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName string, tables []string) error {
+func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName string, tables []TableFQN) error {
 	// Check if publication exists
 	pubQuery, err := sanitize.SQLQuery(`
 			SELECT pubname, puballtables
@@ -352,17 +351,6 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 		`, publicationName)
 	if err != nil {
 		return fmt.Errorf("failed to sanitize publication query: %w", err)
-	}
-
-	// Since we need to pass table names without quoting, we need to validate it
-	for _, table := range tables {
-		if err := sanitize.ValidatePostgresIdentifier(table); err != nil {
-			return errors.New("invalid table name")
-		}
-	}
-	// the same for publication name
-	if err := sanitize.ValidatePostgresIdentifier(publicationName); err != nil {
-		return errors.New("invalid publication name")
 	}
 
 	result := conn.Exec(ctx, pubQuery)
@@ -374,16 +362,13 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 
 	tablesClause := "FOR ALL TABLES"
 	if len(tables) > 0 {
-		// quotedTables := make([]string, len(tables))
-		// for i, table := range tables {
-		// 	// Use sanitize.SQLIdentifier to properly quote and escape table names
-		// 	quoted, err := sanitize.SQLIdentifier(table)
-		// 	if err != nil {
-		// 		return fmt.Errorf("invalid table name %q: %w", table, err)
-		// 	}
-		// 	quotedTables[i] = quoted
-		// }
-		tablesClause = "FOR TABLE " + strings.Join(tables, ", ")
+		tablesClause = "FOR TABLE "
+		for i, table := range tables {
+			if i > 0 {
+				tablesClause += ", "
+			}
+			tablesClause += table.String()
+		}
 	}
 
 	if len(rows) == 0 || len(rows[0].Rows) == 0 {
@@ -414,8 +399,8 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 		return nil
 	}
 
-	var tablesToRemoveFromPublication = []string{}
-	var tablesToAddToPublication = []string{}
+	var tablesToRemoveFromPublication = []TableFQN{}
+	var tablesToAddToPublication = []TableFQN{}
 	for _, table := range tables {
 		if !slices.Contains(pubTables, table) {
 			tablesToAddToPublication = append(tablesToAddToPublication, table)
@@ -430,7 +415,7 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 
 	// remove tables from publication
 	for _, dropTable := range tablesToRemoveFromPublication {
-		sq, err := sanitize.SQLQuery(fmt.Sprintf("ALTER PUBLICATION %s DROP TABLE %s;", publicationName, dropTable))
+		sq, err := sanitize.SQLQuery(fmt.Sprintf(`ALTER PUBLICATION %s DROP TABLE %s;`, publicationName, dropTable.String()))
 		if err != nil {
 			return fmt.Errorf("failed to sanitize drop table query: %w", err)
 		}
@@ -442,7 +427,7 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 
 	// add tables to publication
 	for _, addTable := range tablesToAddToPublication {
-		sq, err := sanitize.SQLQuery(fmt.Sprintf("ALTER PUBLICATION %s ADD TABLE %s;", publicationName, addTable))
+		sq, err := sanitize.SQLQuery(fmt.Sprintf("ALTER PUBLICATION %s ADD TABLE %s;", publicationName, addTable.String()))
 		if err != nil {
 			return fmt.Errorf("failed to sanitize add table query: %w", err)
 		}
@@ -457,13 +442,14 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 
 // GetPublicationTables returns a list of tables currently in the publication
 // Arguments, in order: list of the tables, exist for all tables, errror
-func GetPublicationTables(ctx context.Context, conn *pgconn.PgConn, publicationName string) ([]string, bool, error) {
+func GetPublicationTables(ctx context.Context, conn *pgconn.PgConn, publicationName string) ([]TableFQN, bool, error) {
 	query, err := sanitize.SQLQuery(`
 		SELECT DISTINCT
-			tablename as table_name
+		tablename as table_name,
+		schemaname as schema_name
 		FROM pg_publication_tables
 		WHERE pubname = $1
-		ORDER BY table_name;
+		ORDER BY schema_name, table_name;
 	`, publicationName)
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to get publication tables: %w", err)
@@ -481,9 +467,13 @@ func GetPublicationTables(ctx context.Context, conn *pgconn.PgConn, publicationN
 		return nil, true, nil // Publication exists and is for all tables
 	}
 
-	tables := make([]string, 0, len(rows))
+	tables := make([]TableFQN, 0, len(rows))
 	for _, row := range rows[0].Rows {
-		tables = append(tables, string(row[0]))
+		// These come from postgres so they are valid, but we have to quote them
+		// to prevent normalization
+		table := sanitize.QuotePostgresIdentifier(string(row[0]))
+		schema := sanitize.QuotePostgresIdentifier(string(row[1]))
+		tables = append(tables, TableFQN{Table: table, Schema: schema})
 	}
 
 	return tables, false, nil

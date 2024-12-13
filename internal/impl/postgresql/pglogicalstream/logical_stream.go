@@ -13,8 +13,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"slices"
-	"strings"
 	"sync"
 	"time"
 
@@ -46,12 +44,10 @@ type Stream struct {
 	messages                   chan StreamMessage
 	errors                     chan error
 
-	includeTxnMarkers bool
-	snapshotName      string
-	slotName          string
-	schema            string
-	// includes schema
-	tableQualifiedName         []string
+	includeTxnMarkers          bool
+	snapshotName               string
+	slotName                   string
+	tables                     []TableFQN
 	snapshotBatchSize          int
 	decodingPluginArguments    []string
 	snapshotMemorySafetyFactor float64
@@ -90,13 +86,18 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		return nil, err
 	}
 
-	tableNames := slices.Clone(config.DBTables)
-	for i, table := range tableNames {
-		if err := sanitize.ValidatePostgresIdentifier(table); err != nil {
+	schema, err := sanitize.NormalizePostgresIdentifier(config.DBSchema)
+	if err != nil {
+		return nil, fmt.Errorf("invalid schema name %q: %w", config.DBSchema, err)
+	}
+
+	tables := []TableFQN{}
+	for _, table := range config.DBTables {
+		normalized, err := sanitize.NormalizePostgresIdentifier(table)
+		if err != nil {
 			return nil, fmt.Errorf("invalid table name %q: %w", table, err)
 		}
-
-		tableNames[i] = fmt.Sprintf("%s.%s", config.DBSchema, table)
+		tables = append(tables, TableFQN{Schema: schema, Table: normalized})
 	}
 	stream := &Stream{
 		pgConn:                     dbConn,
@@ -105,8 +106,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		slotName:                   config.ReplicationSlotName,
 		snapshotMemorySafetyFactor: config.SnapshotMemorySafetyFactor,
 		snapshotBatchSize:          config.BatchSize,
-		schema:                     config.DBSchema,
-		tableQualifiedName:         tableNames,
+		tables:                     tables,
 		maxParallelSnapshotTables:  config.MaxParallelSnapshotTables,
 		logger:                     config.Logger,
 		shutSig:                    shutdown.NewSignaller(),
@@ -143,8 +143,8 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	stream.decodingPluginArguments = pluginArguments
 
 	pubName := "pglog_stream_" + config.ReplicationSlotName
-	stream.logger.Infof("Creating publication %s for tables: %s", pubName, tableNames)
-	if err = CreatePublication(ctx, stream.pgConn, pubName, tableNames); err != nil {
+	stream.logger.Infof("Creating publication %s for tables: %s", pubName, tables)
+	if err = CreatePublication(ctx, stream.pgConn, pubName, tables); err != nil {
 		return nil, err
 	}
 	cleanups = append(cleanups, func() {
@@ -219,7 +219,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	stream.standbyMessageTimeout = config.PgStandbyTimeout
 	stream.nextStandbyMessageDeadline = time.Now().Add(stream.standbyMessageTimeout)
 
-	monitor, err := NewMonitor(ctx, config.DBRawDSN, stream.logger, tableNames, stream.slotName, config.WalMonitorInterval)
+	monitor, err := NewMonitor(ctx, config.DBRawDSN, stream.logger, tables, stream.slotName, config.WalMonitorInterval)
 	if err != nil {
 		return nil, err
 	}
@@ -481,7 +481,7 @@ func (s *Stream) processSnapshot() error {
 	var wg errgroup.Group
 	wg.SetLimit(s.maxParallelSnapshotTables)
 
-	for _, table := range s.tableQualifiedName {
+	for _, table := range s.tables {
 		tableName := table
 		wg.Go(func() (err error) {
 			s.logger.Debugf("Processing snapshot for table: %v", table)
@@ -551,7 +551,6 @@ func (s *Stream) processSnapshot() error {
 				totalScanDuration := time.Duration(0)
 				totalWaitingFromBenthos := time.Duration(0)
 
-				tableWithoutSchema := strings.Split(table, ".")[1]
 				for snapshotRows.Next() {
 					rowsCount += 1
 
@@ -567,27 +566,28 @@ func (s *Stream) processSnapshot() error {
 
 					var data = make(map[string]any)
 					for i, getter := range valueGetters {
-						if data[columnNames[i]], err = getter(scanArgs[i]); err != nil {
+						col := columnNames[i]
+						var val any
+						if val, err = getter(scanArgs[i]); err != nil {
 							return err
 						}
-
-						if _, ok := lastPrimaryKey[columnNames[i]]; ok {
-							if lastPkVals[columnNames[i]], err = getter(scanArgs[i]); err != nil {
-								return err
-							}
+						data[col] = val
+						normalized := sanitize.QuotePostgresIdentifier(col)
+						if _, ok := lastPrimaryKey[normalized]; ok {
+							lastPkVals[normalized] = val
 						}
 					}
 
 					snapshotChangePacket := StreamMessage{
 						LSN:       nil,
 						Operation: ReadOpType,
-						Table:     tableWithoutSchema,
-						Schema:    s.schema,
+						Table:     table.Table,
+						Schema:    table.Schema,
 						Data:      data,
 					}
 
 					if rowsCount%100 == 0 {
-						s.monitor.UpdateSnapshotProgressForTable(tableWithoutSchema, rowsCount+offset)
+						s.monitor.UpdateSnapshotProgressForTable(table, rowsCount+offset)
 					}
 
 					waitingFromBenthos := time.Now()
@@ -627,7 +627,7 @@ func (s *Stream) Errors() chan error {
 	return s.errors
 }
 
-func (s *Stream) getPrimaryKeyColumn(ctx context.Context, tableName string) (map[string]any, []string, error) {
+func (s *Stream) getPrimaryKeyColumn(ctx context.Context, table TableFQN) (map[string]any, []string, error) {
 	/// Query to get all primary key columns in their correct order
 	q, err := sanitize.SQLQuery(`
         SELECT a.attname
@@ -637,7 +637,7 @@ func (s *Stream) getPrimaryKeyColumn(ctx context.Context, tableName string) (map
         WHERE  i.indrelid = $1::regclass
         AND    i.indisprimary
         ORDER BY array_position(i.indkey, a.attnum);
-    `, tableName)
+    `, table.String())
 
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to sanitize query: %w", err)
@@ -650,13 +650,14 @@ func (s *Stream) getPrimaryKeyColumn(ctx context.Context, tableName string) (map
 	}
 
 	if len(data) == 0 || len(data[0].Rows) == 0 {
-		return nil, nil, fmt.Errorf("no primary key found for table %s", tableName)
+		return nil, nil, fmt.Errorf("no primary key found for table %s", table)
 	}
 
 	// Extract all primary key column names
 	pkColumns := make([]string, len(data[0].Rows))
 	for i, row := range data[0].Rows {
-		pkColumns[i] = string(row[0])
+		// Postgres gives us back normalized identifiers here - we need to quote them.
+		pkColumns[i] = sanitize.QuotePostgresIdentifier(string(row[0]))
 	}
 
 	var pksMap = make(map[string]any)

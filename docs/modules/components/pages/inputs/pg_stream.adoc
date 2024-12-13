@@ -193,6 +193,8 @@ The PostgreSQL schema from which to replicate data.
 # Examples
 
 schema: public
+
+schema: '"MyCaseSensitiveSchemaNeedingQuotes"'
 ```
 
 === `tables`
@@ -206,10 +208,9 @@ A list of table names to include in the logical replication. Each table should b
 ```yml
 # Examples
 
-tables: |2-
-  			- my_table
-  			- my_table_2
-  		
+tables:
+  - my_table_1
+  - '"MyCaseSensitiveTableNeedingQuotes"'
 ```
 
 === `checkpoint_limit`
