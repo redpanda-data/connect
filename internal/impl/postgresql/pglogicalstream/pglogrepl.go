@@ -445,8 +445,8 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 func GetPublicationTables(ctx context.Context, conn *pgconn.PgConn, publicationName string) ([]TableFQN, bool, error) {
 	query, err := sanitize.SQLQuery(`
 		SELECT DISTINCT
-			tablename as table_name,
-      schemaname as schema_name
+		tablename as table_name,
+		schemaname as schema_name
 		FROM pg_publication_tables
 		WHERE pubname = $1
 		ORDER BY schema_name, table_name;
