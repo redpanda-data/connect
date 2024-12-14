@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.45.0 - TBD
+
+### Added
+
+- `avro` scanner now emits metadata for the Avro schema it used along with the schema fingerprint (@rockwotj)
+
 ## 4.44.0 - 2024-12-13
 
 ### Added
