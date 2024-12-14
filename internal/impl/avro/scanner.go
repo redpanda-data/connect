@@ -48,6 +48,8 @@ For example, the union schema ` + "`[\"null\",\"string\",\"Foo\"]`, where `Foo`"
 - a ` + "`Foo` instance as `{\"Foo\": {...}}`, where `{...}` indicates the JSON encoding of a `Foo`" + ` instance.
 
 However, it is possible to instead create documents in https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull[standard/raw JSON format^] by setting the field ` + "<<avro_raw_json,`avro_raw_json`>> to `true`" + `.
+
+This scanner also emits the canonical Avro schema as ` + "`@avro_schema`" + ` metadata, along with the schema's fingerprint available via ` + "`@avro_schema_fingerprint`" + `.
 `).
 		Fields(
 			service.NewBoolField(sFieldRawJSON).
@@ -133,7 +135,10 @@ func (c *avroScanner) NextBatch(ctx context.Context) (service.MessageBatch, erro
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode OCF datum to JSON: %s", err)
 	}
-	return service.MessageBatch{service.NewMessage(jb)}, nil
+	msg := service.NewMessage(jb)
+	msg.MetaSetMut("avro_schema", c.avroCodec.CanonicalSchema())
+	msg.MetaSetMut("avro_schema_fingerprint", c.avroCodec.Rabin)
+	return service.MessageBatch{msg}, nil
 }
 
 func (c *avroScanner) Close(ctx context.Context) error {
