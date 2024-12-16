@@ -1,4 +1,4 @@
-= gcp_spanner_change_stream
+= gcp_spanner_cdc
 :type: input
 :status: beta
 :categories: ["Services","GCP"]
@@ -38,12 +38,12 @@ Common::
 # Common config fields, showing default values
 input:
   label: ""
-  gcp_spanner_change_stream:
+  gcp_spanner_cdc:
     stream_dsn: projects/<project_id>/instances/<instance_id>/databases/<database_id> # No default (required)
     stream_id: ""
     partition_dsn: projects/<project_id>/instances/<instance_id>/databases/<database_id> # No default (optional)
     partition_table: "" # No default (optional)
-    use_in_mememory_partition: false
+    use_in_memory_partition: false
 ```
 
 --
@@ -55,13 +55,13 @@ Advanced::
 # All config fields, showing default values
 input:
   label: ""
-  gcp_spanner_change_stream:
+  gcp_spanner_cdc:
     stream_dsn: projects/<project_id>/instances/<instance_id>/databases/<database_id> # No default (required)
     stream_id: ""
     start_time_epoch: 0
     partition_dsn: projects/<project_id>/instances/<instance_id>/databases/<database_id> # No default (optional)
     partition_table: "" # No default (optional)
-    use_in_mememory_partition: false
+    use_in_memory_partition: false
     allowed_mod_types:
       - INSERT
       - UPDATE
@@ -127,7 +127,7 @@ Name of the table to create/use in spanner to track change stream partition meta
 *Type*: `string`
 
 
-=== `use_in_mememory_partition`
+=== `use_in_memory_partition`
 
 use an in memory partition table for tracking the partitions.
 
