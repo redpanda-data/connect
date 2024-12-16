@@ -47,9 +47,9 @@ type ClientOptions struct {
 	// Private key for the user
 	PrivateKey *rsa.PrivateKey
 	// Logger for... logging?
-	Logger         *service.Logger
+	Logger *service.Logger
+	// Connect version for the User-Agent in Snowflake
 	ConnectVersion string
-	Application    string
 }
 
 type stageUploaderResult struct {
@@ -77,7 +77,6 @@ func NewSnowflakeServiceClient(ctx context.Context, opts ClientOptions) (*Snowfl
 		opts.Account,
 		opts.User,
 		opts.ConnectVersion,
-		opts.Application,
 		opts.PrivateKey,
 		opts.Logger,
 	)
