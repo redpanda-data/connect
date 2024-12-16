@@ -65,6 +65,8 @@ For example, the union schema `["null","string","Foo"]`, where `Foo` is a record
 
 However, it is possible to instead create documents in https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull[standard/raw JSON format^] by setting the field <<avro_raw_json,`avro_raw_json`>> to `true`.
 
+This scanner also emits the canonical Avro schema as `@avro_schema` metadata, along with the schema's fingerprint available via `@avro_schema_fingerprint`.
+
 
 == Fields
 
