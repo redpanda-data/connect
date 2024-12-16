@@ -65,44 +65,44 @@ func newSpannerStreamInput(conf *service.ParsedConfig, log *service.Logger) (out
 		// there is still the chance that we could lose changes though.
 		changeChannel: make(chan *spannercdc.DataChangeRecord, 1),
 		log:           log,
-		shutdownSig:   shutdown.NewSignaller(),
+		stopSig:       shutdown.NewSignaller(),
 	}
 	if out.partitionDSN, err = conf.FieldString(partitionDSN); err != nil {
-		return
+		return nil, err
 	}
 
 	if out.partitionTable, err = conf.FieldString(partitionTable); err != nil {
-		return
+		return nil, err
 	}
 
 	if out.streamDSN, err = conf.FieldString(streamDSN); err != nil {
-		return
+		return nil, err
 	}
 
 	if out.streamID, err = conf.FieldString(streamID); err != nil {
-		return
+		return nil, err
 	}
 
 	if out.allowedModTypes, err = conf.FieldStringList(allowedModTypes); err != nil {
-		return
+		return nil, err
 	}
 	for _, modType := range out.allowedModTypes {
 		if !slices.ContainsFunc(spannercdc.AllModTypes, func(s spannercdc.ModType) bool {
 			return modType == string(s)
 		}) {
 			err = errors.New("allowed_mod_types must be one of INSERT, UPDATE, DELETE")
-			return
+			return nil, err
 		}
 	}
 
 	useInMemPartition, err := conf.FieldBool(useInMemPartition)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	startTimeEpoch, err := conf.FieldInt(startTimeEpoch)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	if startTimeEpoch > 0 {
@@ -118,14 +118,18 @@ func newSpannerStreamInput(conf *service.ParsedConfig, log *service.Logger) (out
 		return nil, fmt.Errorf("%s, and %s must be set", streamDSN, streamID)
 	}
 	out.useInMemPartition = useInMemPartition
+
 	return
 }
 
 func init() {
 	err := service.RegisterInput(
-		"gcp_spanner_cdc", newSpannerCDCInputConfig(),
-		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
-			return newSpannerStreamInput(conf, mgr.Logger())
+		"gcp_spanner_cdc", newSpannerCDCInputConfig(), func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
+			streamInput, err := newSpannerStreamInput(conf, mgr.Logger())
+			if err != nil {
+				return nil, err
+			}
+			return conf.WrapInputExtractTracingSpanMapping("gcp_spanner_cdc", service.AutoRetryNacks(streamInput))
 		})
 	if err != nil {
 		panic(err)
@@ -147,11 +151,12 @@ type spannerStreamInput struct {
 	// create a channel to pass from connection to read.
 	changeChannel chan *spannercdc.DataChangeRecord
 	log           *service.Logger
-	shutdownSig   *shutdown.Signaller
+	stopSig       *shutdown.Signaller
 }
 
 func (i *spannerStreamInput) Connect(ctx context.Context) (err error) {
-	jobctx, _ := i.shutdownSig.SoftStopCtx(context.Background())
+	i.stopSig = shutdown.NewSignaller()
+	jobctx, _ := i.stopSig.SoftStopCtx(context.Background())
 
 	if i.streamClient == nil {
 		i.streamClient, err = newDatabase(jobctx, i.streamDSN)
@@ -169,22 +174,32 @@ func (i *spannerStreamInput) Connect(ctx context.Context) (err error) {
 		if rerr := i.reader.Stream(jobctx, i.changeChannel); rerr != nil {
 			i.log.Errorf("Subscription error: %v\n", rerr)
 			close(i.changeChannel)
-			panic(rerr)
 		}
 	}()
 	return nil
 }
 
 func (i *spannerStreamInput) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
-	msg := <-i.changeChannel
-	data, err := json.Marshal(msg)
-	if err != nil {
-		return nil, nil, err
+	select {
+	case msg := <-i.changeChannel:
+		data, err := json.Marshal(msg)
+		if err != nil {
+			return nil, nil, err
+		}
+		messageOut := service.NewMessage(data)
+		messageOut.MetaSet("tabe", msg.TableName)
+		messageOut.MetaSet("transaction_tag", msg.TransactionTag)
+		messageOut.MetaSet("mod_type", string(msg.ModType))
+		messageOut.MetaSet("commit_timestamp", msg.CommitTimestamp.Format(time.RFC3339Nano))
+		return messageOut, func(ctx context.Context, err error) error {
+			// Nacks are retried automatically when we use service.AutoRetryNacks
+			return nil
+		}, nil
+	case <-i.stopSig.HasStoppedChan():
+		return nil, nil, service.ErrNotConnected
+	case <-ctx.Done():
+		return nil, nil, ctx.Err()
 	}
-	return service.NewMessage(data), func(ctx context.Context, err error) error {
-		// Nacks are retried automatically when we use service.AutoRetryNacks
-		return nil
-	}, nil
 }
 
 func (i *spannerStreamInput) Close(_ context.Context) error {
