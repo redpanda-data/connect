@@ -3,6 +3,29 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.45.0 - TBD
+
+### Fixed
+
+- The `redpanda_migrator_bundle` output now skips schema ID translation when `translate_schema_ids: false` and `schema_registry` is configured. (@mihaitodor)
+- The `redpanda_migrator` output no longer rejects messages if it can't perform schema ID translation. (@mihaitodor)
+- The `redpanda_migrator` input no longer converts the kafka key to string. (@mihaitodor)
+
+### Added
+
+- New `redpanda_migrator_offsets` input. (@mihaitodor)
+- Fields `offset_topic`, `offset_group`, `offset_partition`, `offset_commit_timestamp` and `offset_metadata` added to the `redpanda_migrator_offsets` output. (@mihaitodor)
+- Fields `kafka_key` and `max_in_flight` for the `redpanda_migrator_offsets` output are now deprecated. (@mihaitodor)
+- Fields `batching` for the `redpanda_migrator` output is now deprecated. (@mihaitodor)
+- Field `topic_lag_refresh_period` added to the `redpanda` and `redpanda_common` inputs. (@mihaitodor)
+- Metric `redpanda_lag` now emitted by the `redpanda` and `redpanda_common` inputs. (@mihaitodor)
+- Metadata `kafka_lag` now emitted by the `redpanda` and `redpanda_common` inputs. (@mihaitodor)
+
+### Changed
+
+- The `kafka_key` and `max_in_flight` fields of the `redpanda_migrator_offsets` output are now deprecated. (@mihaitodor)
+- Fields `batch_size` and `multi_header` for the `redpanda_migrator` input are now deprecated. (@mihaitodor)
+
 ## 4.44.0 - 2024-12-13
 
 ### Added
@@ -38,7 +61,7 @@ All notable changes to this project will be documented in this file.
 
 - Add support for `spanner` driver to SQL plugins. (@yufeng-deng)
 - Add support for complex database types (JSONB, TEXT[], INET, TSVECTOR, TSRANGE, POINT, INTEGER[]) for `pg_stream` input. (@le-vlad)
-- Add support for Parquet files to `bigquery` output (@rockwotj)
+- Add support for Parquet files to `bigquery` output. (@rockwotj)
 - (Benthos) New `exists` operator added to the `cache` processor. (@mihaitodor)
 - New CLI flag `redpanda-license` added as an alternative way to specify a Redpanda license. (@Jeffail)
 
