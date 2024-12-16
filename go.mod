@@ -3,7 +3,7 @@ module github.com/redpanda-data/connect/v4
 replace github.com/99designs/keyring => github.com/Jeffail/keyring v1.2.3
 
 require (
-	cloud.google.com/go/aiplatform v1.68.0
+	cloud.google.com/go/aiplatform v1.69.0
 	cloud.google.com/go/bigquery v1.64.0
 	cloud.google.com/go/pubsub v1.45.1
 	cloud.google.com/go/spanner v1.73.0
@@ -26,7 +26,6 @@ require (
 	github.com/Masterminds/squirrel v1.5.4
 	github.com/PaesslerAG/gval v1.2.2
 	github.com/PaesslerAG/jsonpath v0.1.1
-	github.com/anicoll/screamer v0.0.0-20241206035431-9ba919b54dfd
 	github.com/apache/pulsar-client-go v0.13.1
 	github.com/authzed/authzed-go v1.0.0
 	github.com/authzed/grpcutil v0.0.0-20240123194739-2ea1e3d2d98b
@@ -117,7 +116,7 @@ require (
 	github.com/smira/go-statsd v1.3.3
 	github.com/snowflakedb/gosnowflake v1.11.0
 	github.com/sourcegraph/conc v0.3.0
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.10.0
 	github.com/testcontainers/testcontainers-go/modules/ollama v0.32.0
 	github.com/testcontainers/testcontainers-go/modules/qdrant v0.32.0
 	github.com/tetratelabs/wazero v1.7.3
@@ -143,13 +142,13 @@ require (
 	go.opentelemetry.io/otel/sdk v1.29.0
 	go.opentelemetry.io/otel/trace v1.29.0
 	go.uber.org/multierr v1.11.0
-	golang.org/x/crypto v0.28.0
+	golang.org/x/crypto v0.30.0
 	golang.org/x/exp v0.0.0-20241009180824-f66d83c29e7c
-	golang.org/x/net v0.30.0
-	golang.org/x/sync v0.9.0
-	golang.org/x/text v0.19.0
-	google.golang.org/api v0.205.0
-	google.golang.org/protobuf v1.35.1
+	golang.org/x/net v0.32.0
+	golang.org/x/sync v0.10.0
+	golang.org/x/text v0.21.0
+	google.golang.org/api v0.211.0
+	google.golang.org/protobuf v1.35.2
 	modernc.org/sqlite v1.32.0
 )
 
@@ -187,8 +186,8 @@ require (
 
 require (
 	cloud.google.com/go v0.116.0 // indirect
-	cloud.google.com/go/auth v0.10.1 // indirect
-	cloud.google.com/go/auth/oauth2adapt v0.2.5 // indirect
+	cloud.google.com/go/auth v0.12.1 // indirect
+	cloud.google.com/go/auth/oauth2adapt v0.2.6 // indirect
 	cloud.google.com/go/compute/metadata v0.5.2 // indirect
 	cloud.google.com/go/iam v1.2.2 // indirect
 	cloud.google.com/go/trace v1.11.2 // indirect
@@ -293,7 +292,7 @@ require (
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/google/uuid v1.6.0
 	github.com/googleapis/enterprise-certificate-proxy v0.3.4 // indirect
-	github.com/googleapis/gax-go/v2 v2.13.0 // indirect
+	github.com/googleapis/gax-go/v2 v2.14.0 // indirect
 	github.com/gorilla/css v1.0.1 // indirect
 	github.com/gorilla/handlers v1.5.2 // indirect
 	github.com/gorilla/mux v1.8.1 // indirect
@@ -407,16 +406,16 @@ require (
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	golang.org/x/mod v0.21.0 // indirect
-	golang.org/x/oauth2 v0.23.0
-	golang.org/x/sys v0.26.0 // indirect
-	golang.org/x/term v0.25.0 // indirect
-	golang.org/x/time v0.7.0 // indirect
+	golang.org/x/oauth2 v0.24.0
+	golang.org/x/sys v0.28.0 // indirect
+	golang.org/x/term v0.27.0 // indirect
+	golang.org/x/time v0.8.0 // indirect
 	golang.org/x/tools v0.26.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
-	google.golang.org/genproto v0.0.0-20241113202542-65e8d215514f // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20241104194629-dd2ea8efbc28 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20241113202542-65e8d215514f // indirect
-	google.golang.org/grpc v1.68.0
+	google.golang.org/genproto v0.0.0-20241118233622-e639e219e697 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20241118233622-e639e219e697 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20241206012308-a4fef0638583 // indirect
+	google.golang.org/grpc v1.68.1
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/jcmturner/aescts.v1 v1.0.1 // indirect
 	gopkg.in/jcmturner/dnsutils.v1 v1.0.1 // indirect

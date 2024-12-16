@@ -17,8 +17,9 @@ package gcp
 import (
 	"context"
 
-	"github.com/anicoll/screamer/pkg/model"
 	"github.com/stretchr/testify/mock"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/gcp/spannercdc"
 )
 
 type mockStreamReader struct {
@@ -27,7 +28,7 @@ type mockStreamReader struct {
 
 var _ streamReader = &mockStreamReader{}
 
-func (mt *mockStreamReader) Stream(ctx context.Context, channel chan<- *model.DataChangeRecord) error {
+func (mt *mockStreamReader) Stream(ctx context.Context, channel chan<- *spannercdc.DataChangeRecord) error {
 	args := mt.Called(ctx, channel)
 
 	return args.Error(0)

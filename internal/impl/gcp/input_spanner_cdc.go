@@ -24,66 +24,83 @@ import (
 
 	"cloud.google.com/go/spanner"
 	"github.com/Jeffail/shutdown"
-	"github.com/anicoll/screamer/pkg/model"
-	"github.com/anicoll/screamer/pkg/partitionstorage"
-	"github.com/anicoll/screamer/pkg/screamer"
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/gcp/spannercdc"
+)
+
+const (
+	partitionDSN      string = "partition_dsn"
+	streamDSN         string = "stream_dsn"
+	streamID          string = "stream_id"
+	partitionTable    string = "partition_table"
+	startTimeEpoch    string = "start_time_epoch"
+	useInMemPartition string = "use_in_memory_partition"
+	allowedModTypes   string = "allowed_mod_types"
 )
 
 type streamReader interface {
-	Stream(ctx context.Context, channel chan<- *model.DataChangeRecord) error
+	Stream(ctx context.Context, channel chan<- *spannercdc.DataChangeRecord) error
 	Close() error
 }
 
-func newSpannerChangeStreamInputConfig() *service.ConfigSpec {
+func newSpannerCDCInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Beta().
 		Version("3.43.0").
 		Categories("Services", "GCP").
 		Summary("Creates an input that consumes from a spanner change stream.").
-		Field(service.NewStringField("stream_dsn").Description("Required field to use to connect to spanner for the change stream.").Example("projects/<project_id>/instances/<instance_id>/databases/<database_id>")).
-		Field(service.NewStringField("stream_id").Description("Required name of the change stream to track.").Default("")).
-		Field(service.NewIntField("start_time_epoch").Advanced().Optional().Default(0).Description("Optional microsecond accurate epoch timestamp to start reading from. If empty time.Now() will be used.")).
-		Field(service.NewStringField("partition_dsn").Optional().Description("Field used to set the DSN for the metadata partition table, can be the same as stream_dsn.").Example("projects/<project_id>/instances/<instance_id>/databases/<database_id>")).
-		Field(service.NewStringField("partition_table").Optional().Description("Name of the table to create/use in spanner to track change stream partition metadata.")).
-		Field(service.NewBoolField("use_in_mememory_partition").Description("use an in memory partition table for tracking the partitions.").Default(false)).
-		Field(service.NewStringListField("allowed_mod_types").Advanced().Description("Mod types to allow through when reading the change stream, default all.").Default([]string{"INSERT", "UPDATE", "DELETE"}))
+		Field(service.NewStringField(streamDSN).Description("Required field to use to connect to spanner for the change stream.").Example("projects/<project_id>/instances/<instance_id>/databases/<database_id>")).
+		Field(service.NewStringField(streamID).Description("Required name of the change stream to track.").Default("")).
+		Field(service.NewIntField(startTimeEpoch).Advanced().Optional().Default(0).Description("Optional microsecond accurate epoch timestamp to start reading from. If empty time.Now() will be used.")).
+		Field(service.NewStringField(partitionDSN).Optional().Description("Field used to set the DSN for the metadata partition table, can be the same as stream_dsn.").Example("projects/<project_id>/instances/<instance_id>/databases/<database_id>")).
+		Field(service.NewStringField(partitionTable).Optional().Description("Name of the table to create/use in spanner to track change stream partition metadata.")).
+		Field(service.NewBoolField(useInMemPartition).Description("use an in memory partition table for tracking the partitions.").Default(false)).
+		Field(service.NewStringListField(allowedModTypes).Advanced().Description("Mod types to allow through when reading the change stream, default all.").Default([]string{spannercdc.ModTypeINSERT, spannercdc.ModTypeUPDATE, spannercdc.ModTypeDELETE}))
 }
 
 func newSpannerStreamInput(conf *service.ParsedConfig, log *service.Logger) (out *spannerStreamInput, err error) {
 	out = &spannerStreamInput{
 		// not buffered to prevent the cursor from getting too far ahead.
 		// there is still the chance that we could lose changes though.
-		changeChannel: make(chan *model.DataChangeRecord, 1),
+		changeChannel: make(chan *spannercdc.DataChangeRecord, 1),
 		log:           log,
 		shutdownSig:   shutdown.NewSignaller(),
 	}
-	if out.partitionDSN, err = conf.FieldString("partition_dsn"); err != nil {
+	if out.partitionDSN, err = conf.FieldString(partitionDSN); err != nil {
 		return
 	}
 
-	if out.partitionTable, err = conf.FieldString("partition_table"); err != nil {
+	if out.partitionTable, err = conf.FieldString(partitionTable); err != nil {
 		return
 	}
 
-	if out.streamDSN, err = conf.FieldString("stream_dsn"); err != nil {
+	if out.streamDSN, err = conf.FieldString(streamDSN); err != nil {
 		return
 	}
 
-	if out.streamID, err = conf.FieldString("stream_id"); err != nil {
+	if out.streamID, err = conf.FieldString(streamID); err != nil {
 		return
 	}
 
-	if out.allowedModTypes, err = conf.FieldStringList("allowed_mod_types"); err != nil {
+	if out.allowedModTypes, err = conf.FieldStringList(allowedModTypes); err != nil {
 		return
 	}
+	for _, modType := range out.allowedModTypes {
+		if !slices.ContainsFunc(spannercdc.AllModTypes, func(s spannercdc.ModType) bool {
+			return modType == string(s)
+		}) {
+			err = errors.New("allowed_mod_types must be one of INSERT, UPDATE, DELETE")
+			return
+		}
+	}
 
-	useInMemPartition, err := conf.FieldBool("use_in_mememory_partition")
+	useInMemPartition, err := conf.FieldBool(useInMemPartition)
 	if err != nil {
 		return
 	}
 
-	startTimeEpoch, err := conf.FieldInt("start_time_epoch")
+	startTimeEpoch, err := conf.FieldInt(startTimeEpoch)
 	if err != nil {
 		return
 	}
@@ -96,17 +113,17 @@ func newSpannerStreamInput(conf *service.ParsedConfig, log *service.Logger) (out
 	}
 
 	if !useInMemPartition && slices.Contains([]string{out.partitionDSN, out.partitionTable, out.streamDSN, out.streamID}, "") {
-		return nil, errors.New("partition_dsn, partition_table, stream_dsn, and stream_id must be set")
+		return nil, fmt.Errorf("%s, %s, %s, and %s must be set", partitionDSN, partitionTable, streamDSN, streamID)
 	} else if slices.Contains([]string{out.streamDSN, out.streamID}, "") {
-		return nil, errors.New("stream_dsn, and stream_id must be set")
+		return nil, fmt.Errorf("%s, and %s must be set", streamDSN, streamID)
 	}
-	out.usePartitionTable = !useInMemPartition
+	out.useInMemPartition = useInMemPartition
 	return
 }
 
 func init() {
 	err := service.RegisterInput(
-		"gcp_spanner_change_stream", newSpannerChangeStreamInputConfig(),
+		"gcp_spanner_cdc", newSpannerCDCInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 			return newSpannerStreamInput(conf, mgr.Logger())
 		})
@@ -123,15 +140,14 @@ type spannerStreamInput struct {
 	streamID          string
 	partitionDSN      string
 	partitionTable    string
-	usePartitionTable bool
+	useInMemPartition bool
 	startTime         *time.Time
 	allowedModTypes   []string
 	reader            streamReader
 	// create a channel to pass from connection to read.
-	changeChannel chan *model.DataChangeRecord
-
-	log         *service.Logger
-	shutdownSig *shutdown.Signaller
+	changeChannel chan *spannercdc.DataChangeRecord
+	log           *service.Logger
+	shutdownSig   *shutdown.Signaller
 }
 
 func (i *spannerStreamInput) Connect(ctx context.Context) (err error) {
@@ -144,7 +160,7 @@ func (i *spannerStreamInput) Connect(ctx context.Context) (err error) {
 		}
 	}
 	if i.reader == nil {
-		i.reader, err = newStreamer(jobctx, i.streamClient, i.streamID, i.partitionDSN, i.partitionTable, i.usePartitionTable, i.allowedModTypes, i.startTime)
+		i.reader, err = newStreamer(jobctx, i.streamClient, i.streamID, i.partitionDSN, i.partitionTable, i.useInMemPartition, i.allowedModTypes, i.startTime)
 		if err != nil {
 			return err
 		}
@@ -172,7 +188,6 @@ func (i *spannerStreamInput) Read(ctx context.Context) (*service.Message, servic
 }
 
 func (i *spannerStreamInput) Close(_ context.Context) error {
-	close(i.changeChannel)
 	if i.reader != nil {
 		return i.reader.Close()
 	}
@@ -184,14 +199,14 @@ func (i *spannerStreamInput) Close(_ context.Context) error {
 type streamerDB struct {
 	streamID, partitionTable            string
 	changeStreamClient, partitionClient *db
-	subscriber                          *screamer.Subscriber
+	subscriber                          *spannercdc.Subscriber
 	allowedModTypes                     []string
 }
 
 func newStreamer(ctx context.Context,
 	changestreamClient *db,
 	streamID, partitionDSN, partitionTable string,
-	usePartitionTable bool,
+	useInMemPartition bool,
 	modTypes []string,
 	startTime *time.Time,
 ) (streamReader, error) {
@@ -202,16 +217,16 @@ func newStreamer(ctx context.Context,
 		changeStreamClient: changestreamClient,
 	}
 
-	var pStorage screamer.PartitionStorage = partitionstorage.NewInmemory()
+	var pStorage spannercdc.PartitionStorage = spannercdc.NewInmemory()
 	// only use DB meta partition table if explicitly enabled.
-	if usePartitionTable {
+	if !useInMemPartition {
 		partitionClient, err := newDatabase(ctx, partitionDSN)
 		if err != nil {
 			return nil, err
 		}
 		streamer.partitionClient = partitionClient
 
-		spannerPartitionStorage := partitionstorage.NewSpanner(partitionClient.client, partitionTable)
+		spannerPartitionStorage := spannercdc.NewSpanner(partitionClient.client, partitionTable)
 		if err := spannerPartitionStorage.CreateTableIfNotExists(ctx); err != nil {
 			return nil, err
 		}
@@ -219,12 +234,12 @@ func newStreamer(ctx context.Context,
 		pStorage = spannerPartitionStorage
 	}
 
-	options := []screamer.Option{}
+	options := []spannercdc.Option{}
 	// if provided with a specific startime. use that.
 	if startTime != nil {
-		options = append(options, screamer.WithStartTimestamp(*startTime))
+		options = append(options, spannercdc.WithStartTimestamp(*startTime))
 	}
-	subscriber := screamer.NewSubscriber(streamer.changeStreamClient.client, streamID, pStorage, options...)
+	subscriber := spannercdc.NewSubscriber(streamer.changeStreamClient.client, streamID, pStorage, options...)
 
 	streamer.subscriber = subscriber
 
@@ -233,8 +248,8 @@ func newStreamer(ctx context.Context,
 
 // Stream provides a stream of change records from a Spanner database configured stream to your provided channel.
 // Stream is blocking unless the provided context is cancelled or an error occurs.
-func (s *streamerDB) Stream(ctx context.Context, channel chan<- *model.DataChangeRecord) error {
-	return s.subscriber.SubscribeFunc(ctx, func(dcr *model.DataChangeRecord) error {
+func (s *streamerDB) Stream(ctx context.Context, channel chan<- *spannercdc.DataChangeRecord) error {
+	return s.subscriber.SubscribeFunc(ctx, func(dcr *spannercdc.DataChangeRecord) error {
 		if slices.Contains(s.allowedModTypes, string(dcr.ModType)) {
 			channel <- dcr
 		}

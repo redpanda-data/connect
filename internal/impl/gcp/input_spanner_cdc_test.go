@@ -21,10 +21,11 @@ import (
 	"time"
 
 	"cloud.google.com/go/spanner/spannertest"
-	"github.com/anicoll/screamer/pkg/model"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/gcp/spannercdc"
 )
 
 var testSpannerStreamInputYAML = `
@@ -40,7 +41,7 @@ allowed_mod_types:
 `
 
 func TestGCPSpannerChangeStreamInput_Read(t *testing.T) {
-	spec := newSpannerChangeStreamInputConfig()
+	spec := newSpannerCDCInputConfig()
 
 	parsed, err := spec.ParseYAML(testSpannerStreamInputYAML, nil)
 	require.NoError(t, err)
@@ -51,24 +52,24 @@ func TestGCPSpannerChangeStreamInput_Read(t *testing.T) {
 	mockStreamReader := &mockStreamReader{}
 	proc.reader = mockStreamReader
 
-	dataChangeRecord := &model.DataChangeRecord{
+	dataChangeRecord := &spannercdc.DataChangeRecord{
 		CommitTimestamp:                      time.Now(),
 		RecordSequence:                       "0000001",
 		ServerTransactionID:                  uuid.NewString(),
 		IsLastRecordInTransactionInPartition: true,
 		TableName:                            "test_table",
-		ColumnTypes: []*model.ColumnType{
-			{Name: "ID", Type: model.Type{Code: model.TypeCode_INT64}},
-			{Name: "Value", Type: model.Type{Code: model.TypeCode_STRING}},
+		ColumnTypes: []*spannercdc.ColumnType{
+			{Name: "ID", Type: spannercdc.Type{Code: spannercdc.TypeCodeINT64}},
+			{Name: "Value", Type: spannercdc.Type{Code: spannercdc.TypeCodeSTRING}},
 		},
-		Mods: []*model.Mod{
+		Mods: []*spannercdc.Mod{
 			{
 				Keys:      map[string]interface{}{},
 				NewValues: map[string]interface{}{},
 				OldValues: map[string]interface{}{},
 			},
 		},
-		ModType:                         model.ModType_INSERT,
+		ModType:                         spannercdc.ModTypeINSERT,
 		NumberOfRecordsInTransaction:    1,
 		NumberOfPartitionsInTransaction: 2,
 	}
@@ -88,7 +89,7 @@ func TestGCPSpannerChangeStreamInput_Read(t *testing.T) {
 }
 
 func TestGCPSpannerChangeStreamInput_Connect(t *testing.T) {
-	spec := newSpannerChangeStreamInputConfig()
+	spec := newSpannerCDCInputConfig()
 	ctx, cancel := context.WithCancel(context.Background())
 
 	parsed, err := spec.ParseYAML(testSpannerStreamInputYAML, nil)
@@ -118,7 +119,7 @@ func TestGCPSpannerChangeStreamInput_Connect(t *testing.T) {
 }
 
 func TestGCPSpannerChangeStreamInput_Close(t *testing.T) {
-	spec := newSpannerChangeStreamInputConfig()
+	spec := newSpannerCDCInputConfig()
 	ctx, cancel := context.WithCancel(context.Background())
 
 	parsed, err := spec.ParseYAML(testSpannerStreamInputYAML, nil)
