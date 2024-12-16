@@ -38,7 +38,7 @@ fields:
 mapping: |
   #!blobl
 
-  let redpandaMigratorOffsets = this.redpanda_migrator.with("seed_brokers", "topics", "regexp_topics", "consumer_group", "client_id", "rack_id", "fetch_max_bytes", "fetch_min_bytes", "fetch_max_partition_bytes", "tls", "sasl")
+  let redpandaMigratorOffsets = this.redpanda_migrator.with("seed_brokers", "topics", "regexp_topics", "consumer_group", "topic_lag_refresh_period", "client_id", "rack_id", "tls", "sasl")
 
   root = if this.redpanda_migrator.length() == 0 {
     throw("the redpanda_migrator input must be configured")

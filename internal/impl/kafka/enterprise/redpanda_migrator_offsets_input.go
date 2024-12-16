@@ -24,20 +24,17 @@ import (
 
 const (
 	// Consumer fields
-	rmoiFieldTopics                 = "topics"
-	rmoiFieldRegexpTopics           = "regexp_topics"
-	rmoiFieldRackID                 = "rack_id"
-	rmoiFieldFetchMaxBytes          = "fetch_max_bytes"
-	rmoiFieldFetchMinBytes          = "fetch_min_bytes"
-	rmoiFieldFetchMaxPartitionBytes = "fetch_max_partition_bytes"
+	rmoiFieldTopics       = "topics"
+	rmoiFieldRegexpTopics = "regexp_topics"
+	rmoiFieldRackID       = "rack_id"
 )
 
 func redpandaMigratorOffsetsInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Beta().
 		Categories("Services").
-		Version("4.44.0").
-		Summary(`Redpanda Migrator consumer group offsets output using the https://github.com/twmb/franz-go[Franz Kafka client library^].`).
+		Version("4.45.0").
+		Summary(`Redpanda Migrator consumer group offsets input using the https://github.com/twmb/franz-go[Franz Kafka client library^].`).
 		Description(`
 TODO: Description
 
@@ -81,18 +78,6 @@ A list of topics to consume from. Multiple comma separated topics can be listed 
 				Description("A rack specifies where the client is physically located and changes fetch requests to consume from the closest replica as opposed to the leader replica.").
 				Default("").
 				Advanced(),
-			service.NewStringField(rmoiFieldFetchMaxBytes).
-				Description("Sets the maximum amount of bytes a broker will try to send during a fetch. Note that brokers may not obey this limit if it has records larger than this limit. This is the equivalent to the Java fetch.max.bytes setting.").
-				Advanced().
-				Default("50MiB"),
-			service.NewStringField(rmoiFieldFetchMinBytes).
-				Description("Sets the minimum amount of bytes a broker will try to send during a fetch. This is the equivalent to the Java fetch.min.bytes setting.").
-				Advanced().
-				Default("1B"),
-			service.NewStringField(rmoiFieldFetchMaxPartitionBytes).
-				Description("Sets the maximum amount of bytes that will be consumed for a single partition in a fetch request. Note that if a single batch is larger than this number, that batch will still be returned so the client can make progress. This is the equivalent to the Java fetch.max.partition.bytes setting.").
-				Advanced().
-				Default("1MiB"),
 		},
 		kafka.FranzReaderOrderedConfigFields(),
 		[]*service.ConfigField{
@@ -104,13 +89,12 @@ A list of topics to consume from. Multiple comma separated topics can be listed 
 func init() {
 	err := service.RegisterBatchInput("redpanda_migrator_offsets", redpandaMigratorOffsetsInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
-			tmpOpts, err := kafka.FranzConnectionOptsFromConfig(conf, mgr.Logger())
+			clientOpts, err := kafka.FranzConnectionOptsFromConfig(conf, mgr.Logger())
 			if err != nil {
 				return nil, err
 			}
-			clientOpts := append([]kgo.Opt{}, tmpOpts...)
 
-			d := kafka.FranzConsumerDetails{}
+			clientOpts = append(clientOpts, kgo.ClientID("xxxxxxxxxxxxxxxxxxxxxx"))
 
 			var topics []string
 			if topicList, err := conf.FieldStringList(rmoiFieldTopics); err != nil {
@@ -139,23 +123,20 @@ func init() {
 				}
 			}
 
-			if d.RackID, err = conf.FieldString(rmoiFieldRackID); err != nil {
+			var rackID string
+			if rackID, err = conf.FieldString(rmoiFieldRackID); err != nil {
 				return nil, err
 			}
+			clientOpts = append(clientOpts, kgo.Rack(rackID))
 
-			if d.FetchMaxBytes, err = kafka.BytesFromStrFieldAsInt32(rmoiFieldFetchMaxBytes, conf); err != nil {
-				return nil, err
-			}
-			if d.FetchMinBytes, err = kafka.BytesFromStrFieldAsInt32(rmoiFieldFetchMinBytes, conf); err != nil {
-				return nil, err
-			}
-			if d.FetchMaxPartitionBytes, err = kafka.BytesFromStrFieldAsInt32(rmoiFieldFetchMaxPartitionBytes, conf); err != nil {
-				return nil, err
-			}
+			// Configure `start_from_oldest: true`
+			// This is probably not necessary since `__consumer_offsets` is a compacted topic
+			clientOpts = append(clientOpts, kgo.ConsumeResetOffset(kgo.NewOffset().AtStart()))
 
 			// Consume messages from the `__consumer_offsets` topic
-			d.Topics = []string{`__consumer_offsets`}
-			clientOpts = append(clientOpts, d.FranzOpts()...)
+			clientOpts = append(clientOpts, kgo.ConsumeTopics("__consumer_offsets"))
+
+			clientOpts = append(clientOpts, kgo.WithLogger(&kafka.KGoLogger{L: mgr.Logger()}))
 
 			rdr, err := kafka.NewFranzReaderOrderedFromConfig(conf, mgr, func() ([]kgo.Opt, error) {
 				return clientOpts, nil
