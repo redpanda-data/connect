@@ -84,6 +84,8 @@ func decodePgOutput(WALData []byte, relations map[uint32]*RelationMessage, typeM
 					return nil, fmt.Errorf("unable to decode column data: %w", err)
 				}
 				values[colName] = val
+			default:
+				return nil, fmt.Errorf("unable to decode column data, unknown data type: %d", col.DataType)
 			}
 		}
 		message.Data = values
@@ -149,7 +151,10 @@ func decodePgOutput(WALData []byte, relations map[uint32]*RelationMessage, typeM
 	return message, nil
 }
 
-func decodeTextColumnData(mi *pgtype.Map, data []byte, dataType uint32) (interface{}, error) {
+func decodeTextColumnData(mi *pgtype.Map, data []byte, dataType uint32) (any, error) {
+	if data == nil {
+		return nil, nil
+	}
 	if dt, ok := mi.TypeForOID(dataType); ok {
 		val, err := dt.Codec.DecodeValue(mi, dataType, pgtype.TextFormatCode, data)
 		if err != nil {
@@ -177,6 +182,5 @@ func decodeTextColumnData(mi *pgtype.Map, data []byte, dataType uint32) (interfa
 
 		return val, err
 	}
-
 	return string(data), nil
 }

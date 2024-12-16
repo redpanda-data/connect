@@ -569,7 +569,7 @@ func (s *Stream) processSnapshot() error {
 						col := columnNames[i]
 						var val any
 						if val, err = getter(scanArgs[i]); err != nil {
-							return err
+							return fmt.Errorf("unable to decode column %s: %w", col, err)
 						}
 						data[col] = val
 						normalized := sanitize.QuotePostgresIdentifier(col)
