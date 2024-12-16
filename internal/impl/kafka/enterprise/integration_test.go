@@ -704,6 +704,10 @@ input:
     - schema_registry_decode:
         url: %s
         avro_raw_json: true
+output:
+  # Need to use drop explicitly with SetYAML(). Otherwise, the output will be inproc
+  # (or stdout if we import github.com/redpanda-data/benthos/v4/public/components/io)
+  drop: {}
 `, rpe.brokerAddr, topic, consumerGroup, rpe.schemaRegistryURL)))
 	require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
 
@@ -743,7 +747,7 @@ input:
     redpanda_migrator:
       seed_brokers: [ %s ]
       topics: [ %s ]
-      consumer_group: migrator_consumer_group
+      consumer_group: migrator_cg
       start_from_oldest: true
       replication_factor_override: true
       replication_factor: -1
@@ -754,11 +758,14 @@ input:
         - check: '@input_label == "redpanda_migrator_offsets"'
           processors:
             - log:
-                message: Migrating offset
+                message: Migrating Kafka offset
                 fields:
-                  kafka_offset_topic: ${! @kafka_offset_topic }
-                  kafka_offset_group: ${! @kafka_offset_group }
-                  kafka_offset: ${! @kafka_offset }
+                  kafka_offset_topic:            ${! @kafka_offset_topic }
+                  kafka_offset_group:            ${! @kafka_offset_group }
+                  kafka_offset_partition:        ${! @kafka_offset_partition }
+                  kafka_offset_commit_timestamp: ${! @kafka_offset_commit_timestamp }
+                  kafka_offset_metadata:         ${! @kafka_offset_metadata }
+                  kafka_offset:                  ${! @kafka_offset } # This is just the offset of the __consumer_offsets topic
         - check: '@input_label == "redpanda_migrator"'
           processors:
             - branch:
@@ -767,7 +774,13 @@ input:
                       url: %s
                       avro_raw_json: true
                   - log:
-                      message: 'Migrating message: ${! content() }'
+                      message: 'Migrating Kafka message: ${! content() }'
+        - check: '@input_label == "schema_registry"'
+          processors:
+            - branch:
+                processors:
+                  - log:
+                      message: 'Migrating Schema Registry schema: ${! content() }'
 
 output:
   redpanda_migrator_bundle:
@@ -786,19 +799,19 @@ output:
 	license.InjectTestService(stream.Resources())
 
 	// Run stream in the background and shut it down when the test is finished
-	migratorCloseChan := make(chan struct{})
+	closeChan := make(chan struct{})
 	go func() {
 		err = stream.Run(context.Background())
 		require.NoError(t, err)
 
 		t.Log("Migrator shut down")
 
-		close(migratorCloseChan)
+		close(closeChan)
 	}()
 	t.Cleanup(func() {
 		require.NoError(t, stream.StopWithin(3*time.Second))
 
-		<-migratorCloseChan
+		<-closeChan
 	})
 }
 
@@ -826,31 +839,26 @@ func TestRedpandaMigratorIntegration(t *testing.T) {
 	// Produce one message
 	dummyMessage := `{"test":"foo"}`
 	produceMessage(t, source, dummyTopic, dummyMessage)
+	t.Log("Finished producing first message in source")
 
 	// Run the Redpanda Migrator bundle
 	runMigratorBundle(t, source, destination, dummyTopic)
-
-	// Wait for Migrator to sync the existing message
-	time.Sleep(3 * time.Second)
+	time.Sleep(2 * time.Second)
 	t.Log("Migrator started")
 
-	dummyCG := "foobar_consumer_group"
+	dummyCG := "foobar_cg"
 	// Read the message from source using a consumer group
 	readMessageWithCG(t, source, dummyTopic, dummyCG, dummyMessage)
-
-	// Wait for Migrator to sync the consumer group offsets
-	time.Sleep(3 * time.Second)
+	time.Sleep(2 * time.Second)
 	t.Logf("Finished reading first message from source with consumer group %q", dummyCG)
 
 	// Produce one more message in the source
 	dummyMessage = `{"test":"bar"}`
 	produceMessage(t, source, dummyTopic, dummyMessage)
-
-	// Wait for Migrator to sync the new message
-	time.Sleep(3 * time.Second)
+	time.Sleep(2 * time.Second)
 	t.Log("Finished producing second message in source")
 
 	// Read the new message from the destination using a consumer group
-	readMessageWithCG(t, source, dummyTopic, dummyCG, dummyMessage)
+	readMessageWithCG(t, destination, dummyTopic, dummyCG, dummyMessage)
 	t.Logf("Finished reading second message from destination with consumer group %q", dummyCG)
 }
