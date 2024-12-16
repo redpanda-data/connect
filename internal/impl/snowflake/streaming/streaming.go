@@ -440,7 +440,13 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 	uploader := uploaderResult.uploader
 	fullMD5Hash := md5.Sum(part.parquetFile)
 	err = backoff.Retry(func() error {
-		return uploader.upload(ctx, blobPath, part.parquetFile, fullMD5Hash[:])
+		return uploader.upload(ctx, blobPath, part.parquetFile, fullMD5Hash[:], map[string]string{
+			"ingestclientname": "RedpandaConnect_SnowpipeStreamingSDK",
+			"ingestclientkey":  c.clientPrefix,
+			// TODO(rockwood): It's not clear what this digest is used for,
+			// so we omit it so that we don't have to compute both the sha and md5
+			// "sfc-digest":       string(sha256.Sum256(part.parquetFile)[:]),
+		})
 	}, backoff.WithMaxRetries(backoff.NewConstantBackOff(time.Second), 3))
 	if err != nil {
 		return insertStats, fmt.Errorf("unable to upload to storage: %w", err)

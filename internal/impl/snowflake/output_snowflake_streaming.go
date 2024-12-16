@@ -507,7 +507,6 @@ func newSnowflakeStreamer(
 			PrivateKey:     rsaKey,
 			Logger:         mgr.Logger(),
 			ConnectVersion: mgr.EngineVersion(),
-			Application:    channelPrefix,
 		})
 	if err != nil {
 		return nil, err
