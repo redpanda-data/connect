@@ -23,6 +23,10 @@ WORKDIR /go/src/github.com/redpanda-data/connect/
 COPY go.* /go/src/github.com/redpanda-data/connect/
 RUN go mod download
 
+
+RUN go get -u golang.org/x/crypto@v0.31.0
+RUN go get -u golang.org/x/crypto/ssh@v0.31.0
+
 # Build
 COPY . /go/src/github.com/redpanda-data/connect/
 # Tag timetzdata required for busybox base image:
