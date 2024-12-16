@@ -31,13 +31,11 @@ import (
 var testSpannerStreamInputYAML = `
 stream_dsn: "projects/test-project/instances/test-instance/databases/test-db"
 stream_id: "OutboxStream"
-use_in_mememory_partition: true
+use_in_memory_partition: true
 partition_dsn: "projects/test/instances/test/databases/test-events-md" # optional default ""
 partition_table: "meta_partitions_table" # optional default ""
 allowed_mod_types:
   - "INSERT"
-  - "UPDATE"
-  - "DELETE"
 `
 
 func TestGCPSpannerChangeStreamInput_Read(t *testing.T) {
