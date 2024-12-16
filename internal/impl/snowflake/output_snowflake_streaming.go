@@ -494,7 +494,7 @@ func newSnowflakeStreamer(
 			return err
 		}
 	}
-	restClient, err := streaming.NewRestClient(account, user, mgr.EngineVersion(), channelPrefix, rsaKey, mgr.Logger())
+	restClient, err := streaming.NewRestClient(account, user, mgr.EngineVersion(), rsaKey, mgr.Logger())
 	if err != nil {
 		return nil, fmt.Errorf("unable to create rest API client: %w", err)
 	}

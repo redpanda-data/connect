@@ -76,7 +76,6 @@ func setup(t *testing.T) (*streaming.SnowflakeRestClient, *streaming.SnowflakeSe
 		clientOptions.Account,
 		clientOptions.User,
 		clientOptions.ConnectVersion,
-		"Redpanda_Connect_"+clientOptions.Application,
 		clientOptions.PrivateKey,
 		clientOptions.Logger,
 	)
