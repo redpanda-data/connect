@@ -606,10 +606,10 @@ file:
 
 	// replacing update with insert to remove replication messages type differences
 	// so we will be checking only the data
-	require.JSONEq(t, outBatches[0], `{"id":1, "int_array":[1, 2, 3, 4, 5], "ip_addr":"192.168.1.1/32", "json_data":{"name":"test", "value":42}, "location": "(45.5,-122.6)", "search_text":"'brown':3 'dog':9 'fox':4 'jump':5 'lazi':8 'quick':2", "tags":["tag1", "tag2", "tag3"], "time_range": "[2024-01-01 00:00:00,2024-12-31 00:00:00)", "uuid_col":"a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"}`)
-	require.JSONEq(t, outBatches[1], `{"id":2, "int_array":null, "ip_addr":null, "json_data":{"nested":null}, "location":null, "search_text":null, "tags":null, "time_range":null, "uuid_col":null}`)
-	require.JSONEq(t, outBatches[2], `{"id":3, "int_array":[1, 2, 3, 4, 5], "ip_addr":"192.168.1.1/32", "json_data":{"name":"test", "value":42}, "location": "(45.5,-122.6)", "search_text":"'brown':3 'dog':9 'fox':4 'jump':5 'lazi':8 'quick':2", "tags":["tag1", "tag2", "tag3"], "time_range": "[2024-01-01 00:00:00,2024-12-31 00:00:00)", "uuid_col":"a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"}`)
-	require.JSONEq(t, outBatches[3], `{"id":4, "int_array":null, "ip_addr":null, "json_data":{"nested":null}, "location":null, "search_text":null, "tags":null, "time_range":null, "uuid_col":null}`)
+	require.JSONEq(t, `{"id":1, "int_array":[1, 2, 3, 4, 5], "ip_addr":"192.168.1.1/32", "json_data":{"name":"test", "value":42}, "location": "(45.5,-122.6)", "search_text":"'brown':3 'dog':9 'fox':4 'jump':5 'lazi':8 'quick':2", "tags":["tag1", "tag2", "tag3"], "time_range": "[2024-01-01 00:00:00,2024-12-31 00:00:00)", "uuid_col":"a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"}`, outBatches[0])
+	require.JSONEq(t, `{"id":2, "int_array":null, "ip_addr":null, "json_data":{"nested":null}, "location":null, "search_text":null, "tags":null, "time_range":null, "uuid_col":null}`, outBatches[1])
+	require.JSONEq(t, `{"id":3, "int_array":[1, 2, 3, 4, 5], "ip_addr":"192.168.1.1/32", "json_data":{"name":"test", "value":42}, "location": "(45.5,-122.6)", "search_text":"'brown':3 'dog':9 'fox':4 'jump':5 'lazi':8 'quick':2", "tags":["tag1", "tag2", "tag3"], "time_range": "[2024-01-01 00:00:00,2024-12-31 00:00:00)", "uuid_col":"a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"}`, outBatches[2])
+	require.JSONEq(t, `{"id":4, "int_array":null, "ip_addr":null, "json_data":{"nested":null}, "location":null, "search_text":null, "tags":null, "time_range":null, "uuid_col":null}`, outBatches[3])
 
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
 }
