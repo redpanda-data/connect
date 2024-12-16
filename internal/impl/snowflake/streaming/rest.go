@@ -310,7 +310,7 @@ type SnowflakeRestClient struct {
 }
 
 // NewRestClient creates a new REST client for the given parameters.
-func NewRestClient(account, user, version, app string, privateKey *rsa.PrivateKey, logger *service.Logger) (c *SnowflakeRestClient, err error) {
+func NewRestClient(account, user, version string, privateKey *rsa.PrivateKey, logger *service.Logger) (c *SnowflakeRestClient, err error) {
 	version = strings.TrimLeft(version, "v")
 	// Drop any -rc suffix, Snowflake doesn't like it
 	splits := strings.SplitN(version, "-", 2)

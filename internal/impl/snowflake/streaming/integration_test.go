@@ -70,7 +70,6 @@ func setup(t *testing.T) (*streaming.SnowflakeRestClient, *streaming.SnowflakeSe
 		Role:           "ACCOUNTADMIN",
 		PrivateKey:     parseResult.(*rsa.PrivateKey),
 		ConnectVersion: "",
-		Application:    "development",
 	}
 	restClient, err := streaming.NewRestClient(
 		clientOptions.Account,
