@@ -1,6 +1,7 @@
 module github.com/redpanda-data/connect/v4
 
 replace github.com/99designs/keyring => github.com/Jeffail/keyring v1.2.3
+replace golang.org/x/crypto => golang.org/x/crypto v0.31.0
 
 require (
 	cloud.google.com/go/aiplatform v1.68.0
