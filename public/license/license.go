@@ -38,5 +38,5 @@ func LocateLicense(res *service.Resources, opts ...LocateLicenseOptFunc) {
 // from a slice of bytes and, if successful, stores it within the provided
 // resources pointer for enterprise components to reference.
 func StoreCustomLicenseBytes(res *service.Resources, licenseBytes []byte) error {
-	return license.InjectCustomLicenseBytes(res, licenseBytes)
+	return license.InjectCustomLicenseBytes(res, license.Config{}, licenseBytes)
 }

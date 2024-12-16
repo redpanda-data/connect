@@ -106,10 +106,11 @@ func InjectTestService(res *service.Resources) {
 // InjectCustomLicenseBytes attempts to parse a Redpanda Enterprise license
 // from a slice of bytes and, if successful, stores it within the provided
 // resources pointer for enterprise components to reference.
-func InjectCustomLicenseBytes(res *service.Resources, licenseBytes []byte) error {
+func InjectCustomLicenseBytes(res *service.Resources, conf Config, licenseBytes []byte) error {
 	s := &Service{
 		logger:        res.Logger(),
 		loadedLicense: &atomic.Pointer[RedpandaLicense]{},
+		conf:          conf,
 	}
 
 	license, err := s.validateLicense(licenseBytes)
@@ -128,6 +129,7 @@ func InjectCustomLicenseBytes(res *service.Resources, licenseBytes []byte) error
 	).Debug("Successfully loaded Redpanda license")
 
 	s.loadedLicense.Store(&license)
+	setSharedService(res, s)
 	return nil
 }
 

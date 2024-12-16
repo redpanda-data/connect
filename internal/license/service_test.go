@@ -249,3 +249,21 @@ func TestLicenseEnterpriseNoLicense(t *testing.T) {
 
 	assert.False(t, loaded.AllowsEnterpriseFeatures())
 }
+
+func TestInjectedLicense(t *testing.T) {
+	key, lic := createLicense(t, RedpandaLicense{
+		Version: 1,
+		Type:    1,
+		Expiry:  time.Now().Add(time.Hour).Unix(),
+	})
+
+	res := service.MockResources()
+	require.NoError(t, InjectCustomLicenseBytes(res, Config{
+		customPublicKeyPem: key,
+	}, []byte(lic)))
+
+	loaded, err := LoadFromResources(res)
+	require.NoError(t, err)
+
+	assert.True(t, loaded.AllowsEnterpriseFeatures())
+}
