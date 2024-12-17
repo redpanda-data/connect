@@ -121,13 +121,14 @@ type sftpReader struct {
 	watcherPollInterval time.Duration
 	watcherMinAge       time.Duration
 
-	pathProvider pathProvider
-
 	// State
-	scannerMut  sync.Mutex
+	stateLock   sync.Mutex
 	client      *sftp.Client
 	scanner     codec.DeprecatedFallbackStream
 	currentPath string
+	closed      bool
+
+	pathProvider pathProvider
 }
 
 func newSFTPReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (s *sftpReader, err error) {
@@ -173,120 +174,73 @@ func newSFTPReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources)
 	return
 }
 
-func (s *sftpReader) Connect(ctx context.Context) (err error) {
-	s.scannerMut.Lock()
-	defer s.scannerMut.Unlock()
+func (s *sftpReader) Connect(ctx context.Context) error {
+	s.stateLock.Lock()
+	defer s.stateLock.Unlock()
 
-	if s.scanner != nil {
-		return nil
-	}
-
-	if s.client == nil {
-		if s.client, err = s.creds.GetClient(s.mgr.FS(), s.address); err != nil {
-			return
+	client, cleanup, err := s.initClient()
+	if err != nil {
+		if errors.Is(err, sftp.ErrSSHFxConnectionLost) {
+			err = service.ErrNotConnected
 		}
-	}
-
-	if s.pathProvider == nil {
-		s.pathProvider = s.getFilePathProvider(ctx)
-	}
-
-	var nextPath string
-	var file *sftp.File
-	for {
-		if nextPath, err = s.pathProvider.Next(ctx, s.client); err != nil {
-			if errors.Is(err, sftp.ErrSshFxConnectionLost) {
-				_ = s.client.Close()
-				s.client = nil
-				return
-			}
-			if errors.Is(err, errEndOfPaths) {
-				err = service.ErrEndOfInput
-			}
-			return
-		}
-
-		if file, err = s.client.Open(nextPath); err != nil {
-			if errors.Is(err, sftp.ErrSshFxConnectionLost) {
-				_ = s.client.Close()
-				s.client = nil
-			}
-
-			s.log.With("path", nextPath, "err", err.Error()).Warn("Unable to open previously identified file")
-			if os.IsNotExist(err) {
-				// If we failed to open the file because it no longer exists
-				// then we can "ack" the path as we're done with it.
-				_ = s.pathProvider.Ack(ctx, nextPath, nil)
-			} else {
-				// Otherwise we "nack" it with the error as we'll want to
-				// reprocess it again later.
-				_ = s.pathProvider.Ack(ctx, nextPath, err)
-			}
-		} else {
-			break
-		}
-	}
-
-	details := service.NewScannerSourceDetails()
-	details.SetName(nextPath)
-	if s.scanner, err = s.scannerCtor.Create(file, func(ctx context.Context, aErr error) (outErr error) {
-		_ = s.pathProvider.Ack(ctx, nextPath, aErr)
-		if aErr != nil {
-			return nil
-		}
-		if s.deleteOnFinish {
-			s.scannerMut.Lock()
-			client := s.client
-			if client == nil {
-				if client, outErr = s.creds.GetClient(s.mgr.FS(), s.address); outErr != nil {
-					outErr = fmt.Errorf("obtain private client: %w", outErr)
-				}
-				defer func() {
-					_ = client.Close()
-				}()
-			}
-			if outErr == nil {
-				if outErr = client.Remove(nextPath); outErr != nil {
-					outErr = fmt.Errorf("remove %v: %w", nextPath, outErr)
-				}
-			}
-			s.scannerMut.Unlock()
-		}
-		return
-	}, details); err != nil {
-		_ = file.Close()
-		_ = s.pathProvider.Ack(ctx, nextPath, err)
 		return err
 	}
-	s.currentPath = nextPath
+	defer cleanup()
 
-	s.log.Debugf("Consuming from file '%v'", nextPath)
-	return
+	if s.pathProvider == nil {
+		s.pathProvider = s.getFilePathProvider(client)
+	}
+	return nil
+}
+
+func (s *sftpReader) initClient() (*sftp.Client, func(), error) {
+	if s.client == nil {
+		var err error
+		if s.client, err = s.creds.GetClient(s.mgr.FS(), s.address); err != nil {
+			return nil, nil, fmt.Errorf("initializing SFTP client: %w", err)
+		}
+	}
+
+	cleanup := func() {}
+	if s.closed {
+		cleanup = s.closeClient
+	}
+
+	return s.client, cleanup, nil
 }
 
 func (s *sftpReader) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
-	s.scannerMut.Lock()
-	scanner := s.scanner
-	client := s.client
-	currentPath := s.currentPath
-	s.scannerMut.Unlock()
+	s.stateLock.Lock()
+	defer s.stateLock.Unlock()
 
-	if scanner == nil || client == nil {
+	parts, codecAckFn, err := s.tryReadBatchV2(ctx)
+	if errors.Is(err, sftp.ErrSSHFxConnectionLost) {
+		s.closeScanner(ctx)
+		s.closeClient()
 		return nil, nil, service.ErrNotConnected
 	}
+	return parts, codecAckFn, nil
+}
 
-	parts, codecAckFn, err := scanner.NextBatch(ctx)
+func (s *sftpReader) tryReadBatchV2(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
+	client, cleanup, err := s.initClient()
+	if err != nil {
+		return nil, nil, err
+	}
+	defer cleanup()
+
+	if err := s.initScanner(ctx, client); err != nil {
+		return nil, nil, err
+	}
+
+	parts, codecAckFn, err := s.scanner.NextBatch(ctx)
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, nil, ctx.Err()
 		}
-		_ = scanner.Close(ctx)
-		s.scannerMut.Lock()
-		if s.currentPath == currentPath {
-			s.scanner = nil
-			s.currentPath = ""
-		}
-		s.scannerMut.Unlock()
+		_ = s.scanner.Close(ctx)
+		s.scanner = nil
+		s.currentPath = ""
 		if errors.Is(err, io.EOF) {
 			err = service.ErrNotConnected
 		}
@@ -294,59 +248,135 @@ func (s *sftpReader) ReadBatch(ctx context.Context) (service.MessageBatch, servi
 	}
 
 	for _, part := range parts {
-		part.MetaSetMut("sftp_path", currentPath)
+		part.MetaSetMut("sftp_path", s.currentPath)
 	}
 
-	return parts, func(ctx context.Context, res error) error {
-		return codecAckFn(ctx, res)
-	}, nil
+	return parts, codecAckFn, nil
+}
+
+func (s *sftpReader) initScanner(ctx context.Context, client *sftp.Client) error {
+	if s.scanner != nil {
+		return nil
+	}
+
+	var file *sftp.File
+	var path string
+	for {
+		var ok bool
+		var err error
+		path, ok, err = s.pathProvider.Next(ctx, client)
+		if err != nil {
+			return fmt.Errorf("finding next file path: %w", err)
+		}
+		if !ok {
+			return service.ErrEndOfInput
+		}
+
+		file, err = client.Open(path)
+		if err != nil {
+			s.log.With("path", path, "err", err.Error()).Warn("Unable to open previously identified file")
+			if os.IsNotExist(err) {
+				// If we failed to open the file because it no longer exists then we
+				// can "ack" the path as we're done with it. Otherwise we "nack" it
+				// with the error as we'll want to reprocess it again later.
+				err = nil
+			}
+			if ackErr := s.pathProvider.Ack(ctx, path, err); ackErr != nil {
+				s.log.With("error", ackErr).Warnf("Failed to acknowledge path: %s", path)
+			}
+			continue
+		}
+
+		details := service.NewScannerSourceDetails()
+		details.SetName(path)
+		scanner, err := s.scannerCtor.Create(file, s.newCodecAckFn(path), details)
+		if err != nil {
+			_ = file.Close()
+			return fmt.Errorf("creating scanner: %w", err)
+		}
+
+		s.scanner = scanner
+		s.currentPath = path
+		return nil
+	}
+}
+
+func (s *sftpReader) newCodecAckFn(path string) service.AckFunc {
+	return func(ctx context.Context, aErr error) error {
+		s.stateLock.Lock()
+		defer s.stateLock.Unlock()
+
+		if err := s.pathProvider.Ack(ctx, path, aErr); err != nil {
+			s.log.With("error", err).Warnf("Failed to acknowledge path: %s", path)
+		}
+		if aErr != nil {
+			return nil
+		}
+
+		if s.deleteOnFinish {
+			client, cleanup, err := s.initClient()
+			if err != nil {
+				return err
+			}
+			defer cleanup()
+
+			if err := client.Remove(path); err != nil {
+				return fmt.Errorf("remove %v: %w", path, err)
+			}
+		}
+
+		return nil
+	}
 }
 
 func (s *sftpReader) Close(ctx context.Context) error {
-	s.scannerMut.Lock()
-	scanner := s.scanner
-	s.scanner = nil
-	client := s.client
-	s.client = nil
-	s.paths = nil
-	s.scannerMut.Unlock()
+	s.stateLock.Lock()
+	defer s.stateLock.Unlock()
 
-	if scanner != nil {
-		if err := scanner.Close(ctx); err != nil {
-			s.log.With("error", err).Warn("Failed to close consumed file")
-		}
-	}
-	if client != nil {
-		if err := client.Close(); err != nil {
-			s.log.With("error", err).Error("Failed to close client")
-		}
-	}
+	s.closeScanner(ctx)
+	s.closeClient()
+	s.closed = true
 	return nil
 }
 
-//------------------------------------------------------------------------------
+func (s *sftpReader) closeScanner(ctx context.Context) {
+	if s.scanner != nil {
+		if err := s.scanner.Close(ctx); err != nil {
+			s.log.With("error", err).Error("Failed to close scanner")
+		}
+		s.scanner = nil
+		s.currentPath = ""
+	}
+}
 
-var errEndOfPaths = errors.New("end of paths")
+func (s *sftpReader) closeClient() {
+	if s.client == nil {
+		if err := s.client.Close(); err != nil {
+			s.log.With("error", err).Error("Failed to close client")
+		}
+		s.client = nil
+	}
+}
 
 type pathProvider interface {
-	Next(context.Context, *sftp.Client) (string, error)
+	Next(context.Context, *sftp.Client) (string, bool, error)
 	Ack(context.Context, string, error) error
 }
 
-type staticPathProvider struct {
+type staticPathProviderV2 struct {
 	expandedPaths []string
 }
 
-func (s *staticPathProvider) Next(ctx context.Context, client *sftp.Client) (string, error) {
+func (s *staticPathProviderV2) Next(context.Context, *sftp.Client) (string, bool, error) {
 	if len(s.expandedPaths) == 0 {
-		return "", errEndOfPaths
+		return "", false, nil
 	}
-	nextPath := s.expandedPaths[0]
+	path := s.expandedPaths[0]
 	s.expandedPaths = s.expandedPaths[1:]
-	return nextPath, nil
+	return path, true, nil
 }
 
-func (s *staticPathProvider) Ack(context.Context, string, error) error {
+func (s *staticPathProviderV2) Ack(context.Context, string, error) error {
 	return nil
 }
 
@@ -362,62 +392,63 @@ type watcherPathProvider struct {
 	followUpPoll  bool
 }
 
-func (w *watcherPathProvider) Next(ctx context.Context, client *sftp.Client) (string, error) {
-	if len(w.expandedPaths) > 0 {
-		nextPath := w.expandedPaths[0]
-		w.expandedPaths = w.expandedPaths[1:]
-		return nextPath, nil
-	}
-
-	if waitFor := time.Until(w.nextPoll); waitFor > 0 {
-		w.nextPoll = time.Now().Add(w.pollInterval)
-		select {
-		case <-time.After(waitFor):
-		case <-ctx.Done():
-			return "", ctx.Err()
+func (w *watcherPathProvider) Next(ctx context.Context, client *sftp.Client) (string, bool, error) {
+	for {
+		if len(w.expandedPaths) > 0 {
+			nextPath := w.expandedPaths[0]
+			w.expandedPaths = w.expandedPaths[1:]
+			return nextPath, true, nil
 		}
-	}
 
-	if cerr := w.mgr.AccessCache(ctx, w.cacheName, func(cache service.Cache) {
-		for _, p := range w.targetPaths {
-			paths, err := client.Glob(p)
-			if err != nil {
-				w.mgr.Logger().With("error", err, "path", p).Warn("Failed to scan files from path")
-				continue
+		if waitFor := time.Until(w.nextPoll); w.nextPoll.IsZero() || waitFor > 0 {
+			w.nextPoll = time.Now().Add(w.pollInterval)
+			select {
+			case <-time.After(waitFor):
+			case <-ctx.Done():
+				return "", false, ctx.Err()
 			}
+		}
 
-			for _, path := range paths {
-				info, err := client.Stat(path)
+		if cerr := w.mgr.AccessCache(ctx, w.cacheName, func(cache service.Cache) {
+			for _, p := range w.targetPaths {
+				paths, err := client.Glob(p)
 				if err != nil {
-					w.mgr.Logger().With("error", err, "path", path).Warn("Failed to stat path")
-					continue
-				}
-				if time.Since(info.ModTime()) < w.minAge {
+					w.mgr.Logger().With("error", err, "path", p).Warn("Failed to scan files from path")
 					continue
 				}
 
-				// We process it if the marker is a pending symbol (!) and we're
-				// polling for the first time, or if the path isn't found in the
-				// cache.
-				//
-				// If we got an unexpected error obtaining a marker for this
-				// path from the cache then we skip that path because the
-				// watcher will eventually poll again, and the cache.Get
-				// operation will re-run.
-				if v, err := cache.Get(ctx, path); errors.Is(err, service.ErrKeyNotFound) || (!w.followUpPoll && string(v) == "!") {
-					w.expandedPaths = append(w.expandedPaths, path)
-					if err = cache.Set(ctx, path, []byte("!"), nil); err != nil {
-						// Mark the file target as pending so that we do not reprocess it
-						w.mgr.Logger().With("error", err, "path", path).Warn("Failed to mark path as pending")
+				for _, path := range paths {
+					info, err := client.Stat(path)
+					if err != nil {
+						w.mgr.Logger().With("error", err, "path", path).Warn("Failed to stat path")
+						continue
+					}
+					if time.Since(info.ModTime()) < w.minAge {
+						continue
+					}
+
+					// We process it if the marker is a pending symbol (!) and we're
+					// polling for the first time, or if the path isn't found in the
+					// cache.
+					//
+					// If we got an unexpected error obtaining a marker for this
+					// path from the cache then we skip that path because the
+					// watcher will eventually poll again, and the cache.Get
+					// operation will re-run.
+					if v, err := cache.Get(ctx, path); errors.Is(err, service.ErrKeyNotFound) || (!w.followUpPoll && string(v) == "!") {
+						w.expandedPaths = append(w.expandedPaths, path)
+						if err = cache.Set(ctx, path, []byte("!"), nil); err != nil {
+							// Mark the file target as pending so that we do not reprocess it
+							w.mgr.Logger().With("error", err, "path", path).Warn("Failed to mark path as pending")
+						}
 					}
 				}
 			}
+		}); cerr != nil {
+			return "", false, fmt.Errorf("error obtaining cache: %v", cerr)
 		}
-	}); cerr != nil {
-		return "", fmt.Errorf("error obtaining cache: %v", cerr)
+		w.followUpPoll = true
 	}
-	w.followUpPoll = true
-	return w.Next(ctx, client)
 }
 
 func (w *watcherPathProvider) Ack(ctx context.Context, name string, err error) (outErr error) {
@@ -433,18 +464,18 @@ func (w *watcherPathProvider) Ack(ctx context.Context, name string, err error) (
 	return
 }
 
-func (s *sftpReader) getFilePathProvider(_ context.Context) pathProvider {
+func (s *sftpReader) getFilePathProvider(client *sftp.Client) pathProvider {
 	if !s.watcherEnabled {
-		var filepaths []string
-		for _, p := range s.paths {
-			paths, err := s.client.Glob(p)
+		provider := &staticPathProviderV2{}
+		for _, path := range s.paths {
+			expandedPaths, err := client.Glob(path)
 			if err != nil {
-				s.log.Warnf("Failed to scan files from path %v: %v", p, err)
+				s.log.Warnf("Failed to scan files from path %v: %v", path, err)
 				continue
 			}
-			filepaths = append(filepaths, paths...)
+			provider.expandedPaths = append(provider.expandedPaths, expandedPaths...)
 		}
-		return &staticPathProvider{expandedPaths: filepaths}
+		return provider
 	}
 
 	return &watcherPathProvider{
