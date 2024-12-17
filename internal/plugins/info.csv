@@ -84,6 +84,7 @@ gcp_cloud_storage         ,output    ,GCP Cloud Storage         ,3.43.0  ,certif
 gcp_cloudtrace            ,tracer    ,GCP Cloud Trace           ,4.2.0   ,certified  ,n          ,y     ,y
 gcp_pubsub                ,input     ,GCP PubSub                ,0.0.0   ,certified  ,n          ,y     ,y
 gcp_pubsub                ,output    ,GCP PubSub                ,0.0.0   ,certified  ,n          ,y     ,y
+gcp_spanner_change_stream ,input     ,gcp_spanner_change_stream ,0.0.0   ,community  ,n          ,n     ,n
 gcp_vertex_ai_chat        ,processor ,GCP Vertex AI             ,4.34.0  ,enterprise ,n          ,y     ,y
 gcp_vertex_ai_embeddings  ,processor ,gcp_vertex_ai_embeddings  ,4.37.0  ,enterprise ,n          ,y     ,y
 generate                  ,input     ,generate                  ,3.40.0  ,certified  ,n          ,y     ,y
