@@ -537,6 +537,9 @@ func TestIntegrationPgCDCForPgOutputStreamComplexTypesPlugin(t *testing.T) {
 	);`)
 	require.NoError(t, err)
 
+	_, err = db.Exec(`INSERT INTO complex_types_example (json_data) VALUES ('{"nested":null}'::jsonb);`)
+	require.NoError(t, err)
+
 	databaseURL := fmt.Sprintf("user=user_name password=%s dbname=dbname sslmode=disable host=%s port=%s", password, hostAndPortSplited[0], hostAndPortSplited[1])
 	template := fmt.Sprintf(`
 pg_stream:
@@ -557,7 +560,7 @@ file:
 `, tmpDir)
 
 	streamOutBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: INFO`))
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: TRACE`))
 	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
 	require.NoError(t, streamOutBuilder.AddInputYAML(template))
 
@@ -585,29 +588,28 @@ file:
 	require.Eventually(t, func() bool {
 		outBatchMut.Lock()
 		defer outBatchMut.Unlock()
-		return len(outBatches) == 1
+		return len(outBatches) == 2
 	}, time.Second*25, time.Millisecond*100)
-
-	messageWithComplexTypes := outBatches[0]
 
 	// producing change to non-complex type to trigger replication and receive updated row so we can check the complex types again
 	// but after they have been produced by replication to ensure the consistency
-	_, err = db.Exec("UPDATE complex_types_example SET id = 2 WHERE id = 1")
+	_, err = db.Exec("UPDATE complex_types_example SET id = 3 WHERE id = 1")
+	require.NoError(t, err)
+	_, err = db.Exec("UPDATE complex_types_example SET id = 4 WHERE id = 2")
 	require.NoError(t, err)
 
 	assert.Eventually(t, func() bool {
 		outBatchMut.Lock()
 		defer outBatchMut.Unlock()
-		return len(outBatches) == 2
+		return len(outBatches) == 4
 	}, time.Second*25, time.Millisecond*100)
 
 	// replacing update with insert to remove replication messages type differences
 	// so we will be checking only the data
-	lastMessage := outBatches[len(outBatches)-1]
-	lastMessage = strings.Replace(lastMessage, "update", "insert", 1)
-	messageWithComplexTypes = strings.Replace(messageWithComplexTypes, "\"table_snapshot_progress\":0,", "", 1)
-
-	require.Equal(t, messageWithComplexTypes, strings.Replace(lastMessage, ":2", ":1", 1))
+	require.JSONEq(t, `{"id":1, "int_array":[1, 2, 3, 4, 5], "ip_addr":"192.168.1.1/32", "json_data":{"name":"test", "value":42}, "location": "(45.5,-122.6)", "search_text":"'brown':3 'dog':9 'fox':4 'jump':5 'lazi':8 'quick':2", "tags":["tag1", "tag2", "tag3"], "time_range": "[2024-01-01 00:00:00,2024-12-31 00:00:00)", "uuid_col":"a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"}`, outBatches[0])
+	require.JSONEq(t, `{"id":2, "int_array":null, "ip_addr":null, "json_data":{"nested":null}, "location":null, "search_text":null, "tags":null, "time_range":null, "uuid_col":null}`, outBatches[1])
+	require.JSONEq(t, `{"id":3, "int_array":[1, 2, 3, 4, 5], "ip_addr":"192.168.1.1/32", "json_data":{"name":"test", "value":42}, "location": "(45.5,-122.6)", "search_text":"'brown':3 'dog':9 'fox':4 'jump':5 'lazi':8 'quick':2", "tags":["tag1", "tag2", "tag3"], "time_range": "[2024-01-01 00:00:00,2024-12-31 00:00:00)", "uuid_col":"a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"}`, outBatches[2])
+	require.JSONEq(t, `{"id":4, "int_array":null, "ip_addr":null, "json_data":{"nested":null}, "location":null, "search_text":null, "tags":null, "time_range":null, "uuid_col":null}`, outBatches[3])
 
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
 }
