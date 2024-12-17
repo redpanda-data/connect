@@ -370,6 +370,7 @@ schema: PUBLIC
 === `table`
 
 The Snowflake table to ingest data into.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
 
 *Type*: `string`
