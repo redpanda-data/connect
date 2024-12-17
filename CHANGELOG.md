@@ -10,6 +10,9 @@ All notable changes to this project will be documented in this file.
 - `avro` scanner now emits metadata for the Avro schema it used along with the schema fingerprint. (@rockwotj)
 - Field `content_type` added to the `amqp_1` output. (@timo102)
 - `kafka_franz`, `ockam_kafka`, `redpanda`, `redpanda_common`, `redpanda_migrator` now support `fetch_max_wait` configuration field.
+- `snowpipe_streaming` now supports interpolating table names (@rockwotj)
+- `snowpipe_streaming` now supports interpolating channel names (@rockwotj)
+- `snowpipe_streaming` now supports exactly once delivery using `offset_token` (@rockwotj)
 
 ### Fixed
 
