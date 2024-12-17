@@ -42,7 +42,7 @@ output:
       - processors:
           # We only need to save the max ID of the batch in the cache.
           - mapping: |
-              root.id = json('id').from_all().max()
+              root.id = json("id").from_all().max()
         cache:
           target: cached_pgstate
           key: table_cursor
