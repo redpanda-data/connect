@@ -10,6 +10,8 @@ input:
     # this might be massive, but might be required for foreign key constraints
     batching:
       check: '@operation == "commit"'
+      # This window should be large enough that you recieve transactions in it, otherwise
+      # you could see partial transactions downstream.
       period: 10s
       processors:
         # But drop the placeholder messages for start/end transaction
@@ -24,27 +26,30 @@ output:
   switch:
     strict_mode: true
     cases:
-      - check: '@operation == "read" || @operation == "insert"'
-        output:
-          sql_insert:
-            driver: postgres
-            dsn: postgres://me:foobar@localhost:5432?sslmode=disable
-            table: my_dst_table
-            columns: [id, foo, bar]
-            args_mapping: root = [this.id, this.foo, this.bar]
-            init_statement: |
-              CREATE TABLE IF NOT EXISTS my_dst_table (
-                id serial PRIMARY KEY,
-                foo text,
-                bar timestamp
-              );
-      - check: '@operation == "update"'
+      - check: '@operation != "delete"'
         output:
           sql_raw:
             driver: postgres
             dsn: postgres://me:foobar@localhost:5432?sslmode=disable
-            query: UPDATE my_dst_table SET foo = $1, bar = $2 WHERE id = $3
-            args_mapping: root = [this.foo, this.bar, this.id]
+            args_mapping: root = [this.id, this.foo, this.bar]
+            query: |
+              MERGE INTO journey_apps3_cdc AS old
+              USING (SELECT
+                $1 id,
+                $2 foo,
+                $3 bar
+              ) AS new
+              ON new.id = old.id
+              WHEN MATCHED THEN
+                UPDATE SET
+                  name = case when new.updated_at > old.updated_at OR old.updated_at is null THEN new.name ELSE old.name END,
+                  updated_at = greatest(new.updated_at, old.updated_at)
+              WHEN NOT MATCHED THEN
+                INSERT (id, name, updated_at) VALUES (
+                  new.id,
+                  new.name,
+                  new.updated_at
+                );
       - check: '@operation == "delete"'
         output:
           sql_raw:
