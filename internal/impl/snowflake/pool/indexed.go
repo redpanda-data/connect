@@ -30,6 +30,8 @@ type (
 		Release(name string, item T)
 		// Reset all items in the pool
 		Reset()
+		// Get all the keys in the pool
+		Keys() []string
 	}
 	indexedImpl[T any] struct {
 		ctor  func(context.Context, string) (T, error)
@@ -96,4 +98,14 @@ func (p *indexedImpl[T]) Reset() {
 	_ = p.lock(context.Background())
 	clear(p.items)
 	p.unlock()
+}
+
+func (p *indexedImpl[T]) Keys() []string {
+	keys := []string{}
+	_ = p.lock(context.Background())
+	for k := range p.items {
+		keys = append(keys, k)
+	}
+	p.unlock()
+	return keys
 }
