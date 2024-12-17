@@ -588,7 +588,7 @@ func newSnowflakeStreamer(
 			table: dynamicTable,
 			byTable: pool.NewIndexed(func(ctx context.Context, table string) (service.BatchOutput, error) {
 				schemaEvolver, impl := makeImpl(table)
-				return &snowpipeStreamingOutput{
+				o := &snowpipeStreamingOutput{
 					initStatementsFn: nil,
 					client:           nil,
 					restClient:       nil,
@@ -597,7 +597,11 @@ func newSnowflakeStreamer(
 					schemaEvolver:    schemaEvolver,
 
 					impl: impl,
-				}, nil
+				}
+				if err := o.Connect(ctx); err != nil {
+					return nil, err
+				}
+				return o, nil
 			}),
 			initStatementsFn: initStatementsFn,
 			client:           client,
