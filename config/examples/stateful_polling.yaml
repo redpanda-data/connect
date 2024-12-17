@@ -22,6 +22,7 @@ pipeline:
         dsn: "postgres://me:foobar@localhost:5432"
         table: my_table
         columns: ["*"]
+        suffix: 'ORDER BY id ASC'
         where: 'id > ?'
         args_mapping: root = [this.id]
     # Break each row from the sql_select into it's own message within
@@ -29,8 +30,6 @@ pipeline:
     - unarchive:
         format: json_array
     # TODO: Insert your actual pipeline starting here
-    - mapping:
-        root.fetched = this
 
 output:
   broker:
@@ -41,12 +40,9 @@ output:
       # It's important that the last thing we do is save our state
       # This allows at-least-once delivery semantics.
       - processors:
-          # *Assuming* your processing is in order and the output is atomic
-          # then we only need to save the ID of the last message in the cache.
-          - select_parts:
-              parts: [-1]
+          # We only need to save the max ID of the batch in the cache.
           - mapping: |
-              root.id = this.fetched.id
+              root.id = json('id').from_all().max()
         cache:
           target: cached_pgstate
           key: table_cursor
@@ -73,8 +69,8 @@ cache_resources:
       set_suffix: ON CONFLICT(key) DO UPDATE SET val=excluded.val
       init_statement: |
         CREATE TABLE IF NOT EXISTS redpanda_connect_state (
-          key bytea PRIMARY KEY,
-          val bytea 
+          key varchar(64) PRIMARY KEY,
+          val jsonb
         );
 
 
