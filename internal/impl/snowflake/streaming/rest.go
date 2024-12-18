@@ -37,8 +37,9 @@ import (
 
 const (
 	responseSuccess         = 0
-	responseErrRetryRequest = 10
+	responseTableNotExist   = 4
 	responseErrQueueFull    = 7
+	responseErrRetryRequest = 10
 )
 
 type (
@@ -464,6 +465,10 @@ func (c *SnowflakeRestClient) doPost(ctx context.Context, url string, req any, r
 			return nil, fmt.Errorf("unable to read http response: %w", err)
 		}
 		if r.StatusCode != 200 {
+			var restErr APIError
+			if unmarshalErr := json.Unmarshal(respBody, &restErr); unmarshalErr == nil && restErr.StatusCode != responseSuccess {
+				return nil, restErr
+			}
 			return nil, fmt.Errorf("non successful status code (%d): %s", r.StatusCode, respBody)
 		}
 		debugf(c.logger, "got response to %s with body %s", url, respBody)

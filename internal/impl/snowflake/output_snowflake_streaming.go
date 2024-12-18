@@ -17,7 +17,6 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-	"sync/atomic"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -686,8 +685,7 @@ type snowpipeStreamingOutput struct {
 	logger           *service.Logger
 	schemaEvolver    *snowpipeSchemaEvolver
 
-	mu                 sync.RWMutex
-	needsTableCreation atomic.Bool // Set during Connect
+	mu sync.RWMutex
 
 	impl service.BatchOutput
 }
@@ -699,20 +697,6 @@ func (o *snowpipeStreamingOutput) Connect(ctx context.Context) error {
 		}
 		// We've already executed our init statement, we don't need to do that anymore
 		o.initStatementsFn = nil
-	}
-	// If schema migration is enabled we need to create the table first
-	if o.schemaEvolver != nil {
-		tableExists, err := o.schemaEvolver.DoesTableExist(ctx)
-		// If we know we don't have an output table and schema evolution is enabled, then don't create
-		// any channels - we'll do it lazily after we can create the table (which we need data for).
-		if err != nil {
-			return fmt.Errorf("unable to open snowflake streaming channel: %w", err)
-		}
-		o.needsTableCreation.Store(!tableExists)
-		if o.needsTableCreation.Load() {
-			o.logger.Info("determined that table is missing and will be auto created")
-			return nil
-		}
 	}
 	return o.impl.Connect(ctx)
 }
@@ -733,12 +717,6 @@ func (o *snowpipeStreamingOutput) WriteBatch(ctx context.Context, batch service.
 		}
 		batch = mapped
 	}
-	if o.needsTableCreation.Load() { // Check outside of lock
-		if err := o.createTable(ctx, batch); err != nil {
-			return err
-		}
-		// Now we can proceed writing
-	}
 	var err error
 	// We only migrate one column at a time, so tolerate up to 10 schema
 	// migrations for a single batch before giving up. This protects against
@@ -749,6 +727,15 @@ func (o *snowpipeStreamingOutput) WriteBatch(ctx context.Context, batch service.
 		o.mu.RUnlock()
 		if err == nil {
 			return nil
+		}
+		if o.schemaEvolver == nil {
+			return err
+		}
+		if streaming.IsTableNotExistsError(err) {
+			if err := o.createTable(ctx, batch); err != nil {
+				return err
+			}
+			continue // If creating the table succeeded, retry
 		}
 		needsMigrationErr := schemaMigrationNeededError{}
 		if !errors.As(err, &needsMigrationErr) {
@@ -767,16 +754,12 @@ func (o *snowpipeStreamingOutput) WriteBatch(ctx context.Context, batch service.
 func (o *snowpipeStreamingOutput) createTable(ctx context.Context, batch service.MessageBatch) error {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	if !o.needsTableCreation.Load() {
-		return nil
-	}
 	if err := o.schemaEvolver.CreateOutputTable(ctx, batch); err != nil {
 		return err
 	}
 	if err := o.impl.Connect(ctx); err != nil {
 		return err
 	}
-	o.needsTableCreation.Store(false)
 	return nil
 }
 
@@ -834,13 +817,6 @@ func (o *snowpipePooledOutput) openChannel(ctx context.Context, name string, id 
 }
 
 func (o *snowpipePooledOutput) Connect(ctx context.Context) error {
-	// Precreate a single channel so we know stuff works, otherwise we'll create them on demand.
-	c, err := o.channelPool.Acquire(ctx)
-	if err != nil {
-		return fmt.Errorf("unable to open snowflake streaming channel: %w", err)
-	}
-	// We succeeded! Put the channel back and move on.
-	o.channelPool.Release(c)
 	return nil
 }
 
@@ -923,7 +899,6 @@ func (o *snowpipeIndexedOutput) openChannel(ctx context.Context, name string, id
 }
 
 func (o *snowpipeIndexedOutput) Connect(ctx context.Context) error {
-	// Unlike the pooled output, we cannot guess what channels are used ahead of time.
 	return nil
 }
 

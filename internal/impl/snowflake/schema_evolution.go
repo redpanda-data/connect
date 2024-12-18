@@ -13,7 +13,6 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
@@ -72,30 +71,6 @@ type snowpipeSchemaEvolver struct {
 	// The evolver does not close nor own this rest client.
 	restClient              *streaming.SnowflakeRestClient
 	db, schema, table, role string
-}
-
-func (o *snowpipeSchemaEvolver) DoesTableExist(ctx context.Context) (bool, error) {
-	resp, err := o.restClient.RunSQL(ctx, streaming.RunSQLRequest{
-		Statement: `SELECT to_boolean(count(1)) FROM INFORMATION_SCHEMA.TABLES where UPPER(table_schema) = UPPER(?) AND UPPER(table_name) = UPPER(?)`,
-		// Currently we set of timeout of 30 seconds so that we don't have to handle async operations
-		// that need polling to wait until they finish (results are made async when execution is longer
-		// than 45 seconds).
-		Timeout:  30,
-		Database: o.db,
-		Schema:   "INFORMATION_SCHEMA",
-		Role:     o.role,
-		Bindings: map[string]streaming.BindingValue{
-			"1": {Type: "TEXT", Value: o.schema},
-			"2": {Type: "TEXT", Value: o.table},
-		},
-	})
-	if err != nil {
-		return false, err
-	}
-	if len(resp.Data) != 1 && len(resp.Data[0]) != 1 {
-		return false, errors.New("unknown error determining if the table exists")
-	}
-	return strconv.ParseBool(resp.Data[0][0])
 }
 
 func (o *snowpipeSchemaEvolver) ComputeMissingColumnType(col streaming.MissingColumnError) (string, error) {
