@@ -47,7 +47,6 @@ This processor is implemented using the https://github.com/dop251/goja[github.co
 === `code`
 
 An inline JavaScript program to run. One of `code` or `file` must be defined.
-This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
 
 *Type*: `string`
@@ -56,7 +55,6 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 === `file`
 
 A file containing a JavaScript program to run. One of `code` or `file` must be defined.
-This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
 
 *Type*: `string`

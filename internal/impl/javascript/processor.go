@@ -73,10 +73,10 @@ Although technically possible, it is recommended that you do not rely on the glo
 == Functions
 `+description.String()+`
 `).
-		Field(service.NewInterpolatedStringField(codeField).
+		Field(service.NewStringField(codeField).
 			Description("An inline JavaScript program to run. One of `"+codeField+"` or `"+fileField+"` must be defined.").
 			Optional()).
-		Field(service.NewInterpolatedStringField(fileField).
+		Field(service.NewStringField(fileField).
 			Description("A file containing a JavaScript program to run. One of `"+codeField+"` or `"+fileField+"` must be defined.").
 			Optional()).
 		Field(service.NewStringListField(includeField).
@@ -174,7 +174,7 @@ func newJavascriptProcessorFromConfig(conf *service.ParsedConfig, mgr *service.R
 	code, _ := conf.FieldString(codeField)
 	file, _ := conf.FieldString(fileField)
 	if file == "" && code == "" {
-		return nil, fmt.Errorf("either a `%v` or `%v` must be specified", codeField, fileField)
+		return nil, fmt.Errorf("either a `%s` or `%s` must be specified", codeField, fileField)
 	}
 
 	filename := "main.js"
@@ -182,7 +182,7 @@ func newJavascriptProcessorFromConfig(conf *service.ParsedConfig, mgr *service.R
 		// Open file and read code
 		codeBytes, err := service.ReadFile(mgr.FS(), file)
 		if err != nil {
-			return nil, fmt.Errorf("failed to open target file: %w", err)
+			return nil, fmt.Errorf("failed to open target file: %s", err)
 		}
 		filename = file
 		code = string(codeBytes)
@@ -190,7 +190,7 @@ func newJavascriptProcessorFromConfig(conf *service.ParsedConfig, mgr *service.R
 
 	program, err := goja.Compile(filename, code, false)
 	if err != nil {
-		return nil, fmt.Errorf("failed to compile javascript code: %v", err)
+		return nil, fmt.Errorf("failed to compile javascript code: %s", err)
 	}
 
 	logger := mgr.Logger()
