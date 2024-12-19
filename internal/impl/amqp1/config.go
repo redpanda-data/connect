@@ -42,6 +42,15 @@ const (
 	targetAddrField  = "target_address"
 	appPropsMapField = "application_properties_map"
 	metaFilterField  = "metadata"
+	contentTypeField = "content_type"
+)
+
+// Content Type Options
+const (
+	// Data section with opaque binary data
+	amqpContentTypeOpaqueBinary = "opaque_binary"
+	// Single AMQP string value
+	amqpContentTypeString = "string"
 )
 
 // ErrSASLMechanismNotSupported is returned if a SASL mechanism was not recognised.
