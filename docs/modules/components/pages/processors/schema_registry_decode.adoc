@@ -50,6 +50,8 @@ label: ""
 schema_registry_decode:
   avro_raw_json: false
   url: "" # No default (required)
+  protojson_marshaler_opts:
+    emit_defaults: false
   oauth:
     enabled: false
     consumer_key: ""
@@ -119,6 +121,23 @@ The base URL of the schema registry service.
 
 *Type*: `string`
 
+
+=== `protojson_marshaler_opts`
+
+Configuration options for the protojson marshaler.
+
+
+*Type*: `object`
+
+
+=== `protojson_marshaler_opts.emit_defaults`
+
+specifies whether to render fields with zero values.
+
+
+*Type*: `bool`
+
+*Default*: `false`
 
 === `oauth`
 
