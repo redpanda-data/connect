@@ -23,6 +23,7 @@ import (
 
 	gcs "cloud.google.com/go/storage"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blockblob"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
@@ -32,7 +33,7 @@ import (
 )
 
 type uploader interface {
-	upload(ctx context.Context, path string, encrypted, md5Hash []byte) error
+	upload(ctx context.Context, path string, encrypted, md5Hash []byte, metadata map[string]string) error
 }
 
 func newUploader(fileLocationInfo fileLocationInfo) (uploader, error) {
@@ -121,9 +122,15 @@ type azureUploader struct {
 	container, pathPrefix string
 }
 
-func (u *azureUploader) upload(ctx context.Context, path string, encrypted, md5Hash []byte) error {
+func (u *azureUploader) upload(ctx context.Context, path string, encrypted, md5Hash []byte, metadata map[string]string) error {
 	// We upload in multiple parts, so we have to validate ourselves post upload 😒
-	resp, err := u.client.UploadBuffer(ctx, u.container, filepath.Join(u.pathPrefix, path), encrypted, nil)
+	md := map[string]*string{}
+	for k, v := range metadata {
+		val := v
+		md[k] = &val
+	}
+	o := blockblob.UploadBufferOptions{Metadata: md}
+	resp, err := u.client.UploadBuffer(ctx, u.container, filepath.Join(u.pathPrefix, path), encrypted, &o)
 	if err != nil {
 		return err
 	}
@@ -138,11 +145,12 @@ type s3Uploader struct {
 	bucket, pathPrefix string
 }
 
-func (u *s3Uploader) upload(ctx context.Context, path string, encrypted, md5Hash []byte) error {
+func (u *s3Uploader) upload(ctx context.Context, path string, encrypted, md5Hash []byte, metadata map[string]string) error {
 	input := &s3.PutObjectInput{
 		Bucket:     &u.bucket,
 		Key:        aws.String(filepath.Join(u.pathPrefix, path)),
 		Body:       bytes.NewReader(encrypted),
+		Metadata:   metadata,
 		ContentMD5: aws.String(base64.StdEncoding.EncodeToString(md5Hash)),
 	}
 	_, err := u.client.Upload(ctx, input)
@@ -154,11 +162,12 @@ type gcsUploader struct {
 	pathPrefix string
 }
 
-func (u *gcsUploader) upload(ctx context.Context, path string, encrypted, md5Hash []byte) error {
+func (u *gcsUploader) upload(ctx context.Context, path string, encrypted, md5Hash []byte, metadata map[string]string) error {
 	object := u.bucket.Object(filepath.Join(u.pathPrefix, path))
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	ow := object.NewWriter(ctx)
+	ow.Metadata = metadata
 	ow.MD5 = md5Hash
 	for len(encrypted) > 0 {
 		n, err := ow.Write(encrypted)

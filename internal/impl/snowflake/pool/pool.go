@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package capped
+package pool
 
 import (
 	"context"
@@ -21,11 +21,11 @@ import (
 )
 
 type (
-	// Pool is an object that reuses existing objects in a manner similar to sync.Pool,
+	// Capped is an object that reuses existing objects in a manner similar to sync.Pool,
 	// but it's more strict than sync.Pool in that it will support a fixed upper bound
 	// of items. If the cap has been reached then we will wait for one to become available.
 	// Constructing new items is sequential in that only one will be created at a time.
-	Pool[T any] interface {
+	Capped[T any] interface {
 		// Acquire gets an object T out of the pool if available, otherwise will create a new item.
 		// The context can be used to abort waiting for an item from the queue, otherwise an error
 		// is only ever returned if creating the object in the pool fails.
@@ -38,26 +38,27 @@ type (
 		Release(T)
 		// Size returns the number of items the pool has *created* (which may be all in use).
 		Size() int
+		Reset()
 	}
-	poolImpl[T any] struct {
-		ctor      func(context.Context) (T, error)
+	cappedImpl[T any] struct {
+		ctor      func(context.Context, int) (T, error)
 		queued    chan T
 		allocated atomic.Int64
 		mu        sync.Mutex
 	}
 )
 
-var _ Pool[any] = &poolImpl[any]{}
+var _ Capped[any] = &cappedImpl[any]{}
 
-// NewPool constructs a new pool that will create up to `capacity` elements using `ctor`.
-func NewPool[T any](capacity int, ctor func(context.Context) (T, error)) Pool[T] {
-	return &poolImpl[T]{
+// NewCapped constructs a new pool that will create up to `capacity` elements using `ctor`.
+func NewCapped[T any](capacity int, ctor func(context.Context, int) (T, error)) Capped[T] {
+	return &cappedImpl[T]{
 		ctor:   ctor,
 		queued: make(chan T, capacity),
 	}
 }
 
-func (p *poolImpl[T]) Acquire(ctx context.Context) (T, error) {
+func (p *cappedImpl[T]) Acquire(ctx context.Context) (T, error) {
 	item, ok := p.TryAcquireExisting()
 	if ok {
 		return item, nil
@@ -68,11 +69,12 @@ func (p *poolImpl[T]) Acquire(ctx context.Context) (T, error) {
 	}
 	p.mu.Lock()
 	// since we grabbed the lock we could have hit our cap
-	if p.Size() >= cap(p.queued) {
+	id := p.Size()
+	if id >= cap(p.queued) {
 		p.mu.Unlock()
 		return p.acquireWait(ctx)
 	}
-	item, err := p.ctor(ctx)
+	item, err := p.ctor(ctx, id)
 	if err == nil {
 		p.allocated.Add(1)
 	}
@@ -80,7 +82,7 @@ func (p *poolImpl[T]) Acquire(ctx context.Context) (T, error) {
 	return item, err
 }
 
-func (p *poolImpl[T]) acquireWait(ctx context.Context) (item T, err error) {
+func (p *cappedImpl[T]) acquireWait(ctx context.Context) (item T, err error) {
 	select {
 	case item = <-p.queued:
 	case <-ctx.Done():
@@ -89,7 +91,7 @@ func (p *poolImpl[T]) acquireWait(ctx context.Context) (item T, err error) {
 	return
 }
 
-func (p *poolImpl[T]) TryAcquireExisting() (item T, ok bool) {
+func (p *cappedImpl[T]) TryAcquireExisting() (item T, ok bool) {
 	select {
 	case item = <-p.queued:
 		ok = true
@@ -98,10 +100,23 @@ func (p *poolImpl[T]) TryAcquireExisting() (item T, ok bool) {
 	return
 }
 
-func (p *poolImpl[T]) Release(item T) {
+func (p *cappedImpl[T]) Release(item T) {
 	p.queued <- item
 }
 
-func (p *poolImpl[T]) Size() int {
+func (p *cappedImpl[T]) Size() int {
 	return int(p.allocated.Load())
+}
+
+func (p *cappedImpl[T]) Reset() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.allocated.Store(0)
+	for {
+		select {
+		case <-p.queued:
+		default:
+			return
+		}
+	}
 }
