@@ -37,11 +37,15 @@ const (
 	azureRenewLockField   = "azure_renew_lock"
 	getMessageHeaderField = "read_header"
 	creditField           = "credit"
+	sourceCapsField       = "source_capabilities"
 
 	// Output
 	targetAddrField  = "target_address"
 	appPropsMapField = "application_properties_map"
 	metaFilterField  = "metadata"
+	persistentField  = "persistent"
+	targetCapsField  = "target_capabilities"
+	messagePropsTo   = "message_properties_to"
 )
 
 // ErrSASLMechanismNotSupported is returned if a SASL mechanism was not recognised.
