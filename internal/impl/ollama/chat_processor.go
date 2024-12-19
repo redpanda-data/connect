@@ -411,6 +411,7 @@ func (o *ollamaCompletionProcessor) generateCompletion(ctx context.Context, syst
 		if len(resp.Message.ToolCalls) == 0 {
 			return resp.Message.Content, nil
 		}
+		req.Messages = append(req.Messages, resp.Message)
 		for _, toolCall := range resp.Message.ToolCalls {
 			o.logger.Debugf("LLM requested tool %s with arguments: %s", toolCall.Function.Name, toolCall.Function.Arguments.String())
 			idx := slices.IndexFunc(o.tools, func(t tool) bool { return t.spec.Function.Name == toolCall.Function.Name })
