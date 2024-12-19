@@ -68,6 +68,11 @@ This output benefits from sending multiple messages in flight in parallel for im
 			saslFieldSpec(),
 			service.NewMetadataExcludeFilterField(metaFilterField).
 				Description("Specify criteria for which metadata values are attached to messages as headers."),
+			service.NewStringEnumField(contentTypeField,
+				amqpContentTypeOpaqueBinary, amqpContentTypeString).
+				Description("Define the message body content type.\n\nThe option `string` will transfer the message as an AMQP value of type string. Consider choosing the option `string` if your intention is to transfer UTF-8 string messages (like JSON messages) to the destination.").
+				Advanced().
+				Default(amqpContentTypeOpaqueBinary),
 		).LintRule(`
 root = if this.url.or("") == "" && this.urls.or([]).length() == 0 {
   "field 'urls' must be set"
@@ -105,6 +110,7 @@ type amqp1Writer struct {
 	metaFilter               *service.MetadataExcludeFilter
 	applicationPropertiesMap *bloblang.Executor
 	connOpts                 *amqp.ConnOptions
+	contentType              string
 
 	log      *service.Logger
 	connLock sync.RWMutex
@@ -164,6 +170,11 @@ func amqp1WriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (
 	if a.metaFilter, err = conf.FieldMetadataExcludeFilter(metaFilterField); err != nil {
 		return nil, err
 	}
+
+	if a.contentType, err = conf.FieldString(contentTypeField); err != nil {
+		return nil, err
+	}
+
 	return &a, nil
 }
 
@@ -248,7 +259,16 @@ func (a *amqp1Writer) Write(ctx context.Context, msg *service.Message) error {
 		return err
 	}
 
-	m := amqp.NewMessage(mBytes)
+	m := &amqp.Message{}
+
+	switch a.contentType {
+	case amqpContentTypeOpaqueBinary:
+		m.Data = [][]byte{mBytes}
+	case amqpContentTypeString:
+		m.Value = string(mBytes)
+	default:
+		return fmt.Errorf("invalid content type specified: %s", a.contentType)
+	}
 
 	if a.applicationPropertiesMap != nil {
 		mapMsg, err := msg.BloblangQuery(a.applicationPropertiesMap)

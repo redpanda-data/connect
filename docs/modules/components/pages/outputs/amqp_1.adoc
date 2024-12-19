@@ -71,6 +71,7 @@ output:
       password: ""
     metadata:
       exclude_prefixes: []
+    content_type: opaque_binary
 ```
 
 --
@@ -384,5 +385,21 @@ Provide a list of explicit metadata key prefixes to be excluded when adding meta
 *Type*: `array`
 
 *Default*: `[]`
+
+=== `content_type`
+
+Define the message body content type.
+
+The option `string` will transfer the message as an AMQP value of type string. Consider choosing the option `string` if your intention is to transfer UTF-8 string messages (like JSON messages) to the destination.
+
+
+*Type*: `string`
+
+*Default*: `"opaque_binary"`
+
+Options:
+`opaque_binary`
+, `string`
+.
 
 
