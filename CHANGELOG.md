@@ -9,6 +9,10 @@ All notable changes to this project will be documented in this file.
 
 - `avro` scanner now emits metadata for the Avro schema it used along with the schema fingerprint (@rockwotj)
 
+### Fixed
+
+- The `code` and `file` fields on the `javascript` processor docs no longer erroneously mention interpolation support. (@mihaitodor)
+
 ## 4.44.0 - 2024-12-13
 
 ### Added
