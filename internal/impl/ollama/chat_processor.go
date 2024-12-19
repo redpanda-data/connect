@@ -10,6 +10,7 @@ package ollama
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -219,10 +220,9 @@ func makeOllamaCompletionProcessor(conf *service.ParsedConfig, mgr *service.Reso
 		return nil, err
 	}
 	if format == "json" {
-		p.format = "json"
+		p.format = json.RawMessage(`"json"`)
 	} else if format == "text" {
-		// This is the default
-		p.format = "text"
+		p.format = nil
 	} else {
 		return nil, fmt.Errorf("invalid %s: %q", ocpFieldResponseFormat, format)
 	}
@@ -308,7 +308,7 @@ type tool struct {
 type ollamaCompletionProcessor struct {
 	*baseOllamaProcessor
 
-	format       string
+	format       json.RawMessage
 	userPrompt   *service.InterpolatedString
 	systemPrompt *service.InterpolatedString
 	image        *bloblang.Executor
@@ -374,7 +374,9 @@ func (o *ollamaCompletionProcessor) generateCompletion(ctx context.Context, syst
 	var req api.ChatRequest
 	req.Model = o.model
 	req.Options = o.opts
-	req.Format = o.format
+	if o.format != nil {
+		req.Format = o.format
+	}
 	if systemPrompt != "" {
 		req.Messages = append(req.Messages, api.Message{
 			Role:    "system",
