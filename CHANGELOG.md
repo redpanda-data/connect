@@ -8,6 +8,9 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - `avro` scanner now emits metadata for the Avro schema it used along with the schema fingerprint (@rockwotj)
+- `snowpipe_streaming` now supports interpolating table names (@rockwotj)
+- `snowpipe_streaming` now supports interpolating channel names (@rockwotj)
+- `snowpipe_streaming` now supports exactly once delivery using `offset_token` (@rockwotj)
 
 ### Fixed
 
