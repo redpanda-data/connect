@@ -419,8 +419,17 @@ func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mapper
 				return s.Time, nil
 			}
 		case "TINYINT", "SMALLINT", "MEDIUMINT", "INT", "BIGINT", "YEAR":
-			val = new(sql.Null[int])
-			mapper = snapshotValueMapper[int]
+			val = new(sql.NullInt64)
+			mapper = func(v any) (any, error) {
+				s, ok := v.(*sql.NullInt64)
+				if !ok {
+					return nil, fmt.Errorf("expected %T got %T", int64(0), v)
+				}
+				if !s.Valid {
+					return nil, nil
+				}
+				return int(s.Int64), nil
+			}
 		case "DECIMAL", "NUMERIC":
 			val = new(sql.NullString)
 			mapper = stringMapping(func(s string) (any, error) {
