@@ -444,7 +444,7 @@ INSERT INTO all_data_types (
     2.718281828,            -- double_col
     '2024-12-10',           -- date_col
     '2024-12-10 15:30:45',  -- datetime_col
-    CURRENT_TIMESTAMP,      -- timestamp_col
+    '2024-12-10 15:30:46',  -- timestamp_col
     '15:30:45',             -- time_col
     2024,                   -- year_col
     'char_data',            -- char_col
@@ -584,19 +584,19 @@ memory: {}
   "numeric_col": 98765.43,
   "float_col": 3.14,
   "double_col": 2.718281828,
-  "date_col": "2024-12-10",
-  "datetime_col": "2024-12-10 15:30:45",
-  "timestamp_col": "2024-12-10 15:30:45",
+  "date_col": "2024-12-10T00:00:00Z",
+  "datetime_col": "2024-12-10T15:30:45Z",
+  "timestamp_col": "2024-12-10T15:30:46Z",
   "time_col": "15:30:45",
   "year_col": 2024,
   "char_col": "char_data",
   "varchar_col": "varchar_data",
-  "binary_col": "binary",
-  "varbinary_col": "varbinary",
-  "tinyblob_col": "small blob",
-  "blob_col": "regular blob",
-  "mediumblob_col": "medium blob",
-  "longblob_col": "large blob",
+  "binary_col": "YmluYXJ5AAAAAA==",
+  "varbinary_col": "dmFyYmluYXJ5",
+  "tinyblob_col": "c21hbGwgYmxvYg==",
+  "blob_col": "cmVndWxhciBibG9i",
+  "mediumblob_col": "bWVkaXVtIGJsb2I=",
+  "longblob_col": "bGFyZ2UgYmxvYg==",
   "tinytext_col": "tiny text",
   "text_col": "regular text",
   "mediumtext_col": "medium text",

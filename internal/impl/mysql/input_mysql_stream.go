@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -316,37 +317,34 @@ func (i *mysqlStreamInput) readSnapshot(ctx context.Context, snapshot *Snapshot)
 			if err != nil {
 				return err
 			}
+
+			types, err := batchRows.ColumnTypes()
+			if err != nil {
+				_ = batchRows.Close()
+				return err
+			}
+
+			values, mappers := prepSnapshotScannerAndMappers(types)
+
+			columns, err := batchRows.Columns()
+			if err != nil {
+				_ = batchRows.Close()
+				return err
+			}
+
 			var batchRowsCount int
 			for batchRows.Next() {
 				numRowsProcessed++
 				batchRowsCount++
 
-				columns, err := batchRows.Columns()
-				if err != nil {
-					_ = batchRows.Close()
-					return err
-				}
-
-				values := make([]any, len(columns))
-				valuePtrs := make([]any, len(columns))
-				for i := range values {
-					valuePtrs[i] = &values[i]
-				}
-
-				if err := batchRows.Scan(valuePtrs...); err != nil {
-					_ = batchRows.Close()
-					return err
-				}
-
-				types, err := batchRows.ColumnTypes()
-				if err != nil {
+				if err := batchRows.Scan(values...); err != nil {
 					_ = batchRows.Close()
 					return err
 				}
 
 				row := map[string]any{}
 				for idx, value := range values {
-					v, err := mapSnapshotMessageColumn(value, types[idx])
+					v, err := mappers[idx](value)
 					if err != nil {
 						return err
 					}
@@ -376,10 +374,68 @@ func (i *mysqlStreamInput) readSnapshot(ctx context.Context, snapshot *Snapshot)
 	return nil
 }
 
-func mapSnapshotMessageColumn(v any, _ *sql.ColumnType) (any, error) {
-	return v, nil
+func snapshotValueMapper[T any](v any) (any, error) {
+	s, ok := v.(*sql.Null[T])
+	if !ok {
+		var e T
+		return nil, fmt.Errorf("expected %T got %T", e, v)
+	}
+	if !s.Valid {
+		return nil, nil
+	}
+	return s.V, nil
 }
 
+func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mappers []func(any) (any, error)) {
+
+	for _, col := range cols {
+		var val any
+		var mapper func(any) (any, error)
+		switch col.DatabaseTypeName() {
+		case "BINARY", "VARBINARY", "TINYBLOB", "BLOB", "MEDIUMBLOB", "LONGBLOB":
+			val = new(sql.Null[[]byte])
+			mapper = snapshotValueMapper[[]byte]
+		case "DATETIME", "TIMESTAMP":
+			val = new(sql.NullTime)
+			mapper = func(v any) (any, error) {
+				s, ok := v.(*sql.NullTime)
+				if !ok {
+					return nil, fmt.Errorf("expected %T got %T", time.Time{}, v)
+				}
+				if !s.Valid {
+					return nil, nil
+				}
+				return s.Time, nil
+			}
+		case "TINYINT", "SMALLINT", "MEDIUMINT", "INT", "BIGINT", "YEAR":
+			val = new(sql.Null[int])
+			mapper = snapshotValueMapper[int]
+		case "FLOAT", "DOUBLE", "DECIMAL", "NUMERIC":
+			val = new(sql.Null[float64])
+			mapper = snapshotValueMapper[float64]
+		case "SET":
+			val = new(sql.Null[string])
+			mapper = func(v any) (any, error) {
+				s, ok := v.(*sql.Null[string])
+				if !ok {
+					return nil, fmt.Errorf("expected %T got %T", "", v)
+				}
+				if !s.Valid {
+					return nil, nil
+				}
+				// This might be a little simplistic, we may need to handle escaped values
+				// here...
+				return strings.Split(s.V, ","), nil
+			}
+		default:
+			val = new(sql.Null[string])
+			mapper = snapshotValueMapper[string]
+		}
+		values = append(values, val)
+		mappers = append(mappers, mapper)
+	}
+	return
+}
 func (i *mysqlStreamInput) readMessages(ctx context.Context) error {
 	var nextTimedBatchChan <-chan time.Time
 	for {
