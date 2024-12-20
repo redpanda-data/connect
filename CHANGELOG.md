@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - `avro` scanner now emits metadata for the Avro schema it used along with the schema fingerprint (@rockwotj)
+- New `mysql_cdc` input supporting change data capture (CDC) from MySQL. (@rockwotj, @le-vlad)
 
 ### Fixed
 
