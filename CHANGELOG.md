@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - The `code` and `file` fields on the `javascript` processor docs no longer erroneously mention interpolation support. (@mihaitodor)
+- The `postgres_cdc` now correctly handles `null` values. (@rockwotj)
 
 ## 4.44.0 - 2024-12-13
 

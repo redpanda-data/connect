@@ -152,17 +152,39 @@ func (s *Snapshotter) prepareScannersAndGetters(columnTypes []*sql.ColumnType) (
 		switch v.DatabaseTypeName() {
 		case "VARCHAR", "TEXT", "UUID", "TIMESTAMP":
 			scanArgs[i] = new(sql.NullString)
-			valueGetters[i] = func(v any) (any, error) { return v.(*sql.NullString).String, nil }
+			valueGetters[i] = func(v any) (any, error) {
+				str := v.(*sql.NullString)
+				if !str.Valid {
+					return nil, nil
+				}
+				return str.String, nil
+			}
 		case "BOOL":
 			scanArgs[i] = new(sql.NullBool)
-			valueGetters[i] = func(v any) (any, error) { return v.(*sql.NullBool).Bool, nil }
+			valueGetters[i] = func(v any) (any, error) {
+				val := v.(*sql.NullBool)
+				if !val.Valid {
+					return nil, nil
+				}
+				return val.Bool, nil
+			}
 		case "INT4":
 			scanArgs[i] = new(sql.NullInt64)
-			valueGetters[i] = func(v any) (any, error) { return v.(*sql.NullInt64).Int64, nil }
+			valueGetters[i] = func(v any) (any, error) {
+				val := v.(*sql.NullInt64)
+				if !val.Valid {
+					return nil, nil
+				}
+				return val.Int64, nil
+			}
 		case "JSONB":
 			scanArgs[i] = new(sql.NullString)
 			valueGetters[i] = func(v any) (any, error) {
-				payload := v.(*sql.NullString).String
+				str := v.(*sql.NullString)
+				if !str.Valid {
+					return nil, nil
+				}
+				payload := str.String
 				if payload == "" {
 					return payload, nil
 				}
@@ -177,8 +199,11 @@ func (s *Snapshotter) prepareScannersAndGetters(columnTypes []*sql.ColumnType) (
 			scanArgs[i] = new(sql.NullString)
 			valueGetters[i] = func(v any) (any, error) {
 				inet := pgtype.Inet{}
-				val := v.(*sql.NullString).String
-				if err := inet.Scan(val); err != nil {
+				val := v.(*sql.NullString)
+				if !val.Valid {
+					return nil, nil
+				}
+				if err := inet.Scan(val.String); err != nil {
 					return nil, err
 				}
 
@@ -188,8 +213,11 @@ func (s *Snapshotter) prepareScannersAndGetters(columnTypes []*sql.ColumnType) (
 			scanArgs[i] = new(sql.NullString)
 			valueGetters[i] = func(v any) (any, error) {
 				newArray := pgtype.Tsrange{}
-				val := v.(*sql.NullString).String
-				if err := newArray.Scan(val); err != nil {
+				val := v.(*sql.NullString)
+				if !val.Valid {
+					return nil, nil
+				}
+				if err := newArray.Scan(val.String); err != nil {
 					return nil, err
 				}
 
@@ -200,8 +228,11 @@ func (s *Snapshotter) prepareScannersAndGetters(columnTypes []*sql.ColumnType) (
 			scanArgs[i] = new(sql.NullString)
 			valueGetters[i] = func(v any) (any, error) {
 				newArray := pgtype.Int4Array{}
-				val := v.(*sql.NullString).String
-				if err := newArray.Scan(val); err != nil {
+				val := v.(*sql.NullString)
+				if !val.Valid {
+					return nil, nil
+				}
+				if err := newArray.Scan(val.String); err != nil {
 					return nil, err
 				}
 
@@ -211,8 +242,11 @@ func (s *Snapshotter) prepareScannersAndGetters(columnTypes []*sql.ColumnType) (
 			scanArgs[i] = new(sql.NullString)
 			valueGetters[i] = func(v any) (any, error) {
 				newArray := pgtype.TextArray{}
-				val := v.(*sql.NullString).String
-				if err := newArray.Scan(val); err != nil {
+				val := v.(*sql.NullString)
+				if !val.Valid {
+					return nil, nil
+				}
+				if err := newArray.Scan(val.String); err != nil {
 					return nil, err
 				}
 
@@ -220,7 +254,13 @@ func (s *Snapshotter) prepareScannersAndGetters(columnTypes []*sql.ColumnType) (
 			}
 		default:
 			scanArgs[i] = new(sql.NullString)
-			valueGetters[i] = func(v any) (any, error) { return v.(*sql.NullString).String, nil }
+			valueGetters[i] = func(v any) (any, error) {
+				val := v.(*sql.NullString)
+				if !val.Valid {
+					return nil, nil
+				}
+				return val.String, nil
+			}
 		}
 	}
 
