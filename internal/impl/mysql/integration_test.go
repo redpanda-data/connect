@@ -357,7 +357,7 @@ func TestIntegrationMySQLCDCAllTypes(t *testing.T) {
 	db.Exec(`
     CREATE TABLE all_data_types (
     -- Numeric Data Types
-    tinyint_col TINYINT,
+    tinyint_col TINYINT PRIMARY KEY,
     smallint_col SMALLINT,
     mediumint_col MEDIUMINT,
     int_col INT,
@@ -472,7 +472,7 @@ mysql_cdc:
   snapshot_max_batch_size: 500
   checkpoint_cache: memcache
   tables:
-    - foo
+    - all_data_types
 `, dsn)
 
 	cacheConf := `
@@ -571,7 +571,7 @@ memory: {}
 		outBatchMut.Lock()
 		defer outBatchMut.Unlock()
 		return len(outBatches) == 2
-	}, time.Minute*5, time.Millisecond*100)
+	}, time.Second*30, time.Millisecond*100)
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
 
 	require.JSONEq(t, outBatches[0], `{

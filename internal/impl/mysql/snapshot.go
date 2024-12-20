@@ -136,8 +136,11 @@ ORDER BY ORDINAL_POSITION;
 		if err := rows.Scan(&pk); err != nil {
 			return nil, err
 		}
-
 		pks = append(pks, pk)
+	}
+
+	if len(pks) == 0 {
+		return nil, fmt.Errorf("unable to find primary key for table %s - does the table exist and does it have a primary key set?", table)
 	}
 
 	return pks, nil
@@ -215,13 +218,22 @@ func (s *Snapshot) releaseSnapshot(_ context.Context) error {
 }
 
 func (s *Snapshot) close() error {
-	if s.lockConn != nil {
-		return s.lockConn.Close()
+	if s.tx != nil {
+		if err := s.tx.Rollback(); err != nil {
+			return fmt.Errorf("unable to rollback transaction: %w", err)
+		}
+		s.tx = nil
 	}
-
-	if s.snapshotConn != nil {
-		return s.snapshotConn.Close()
+	for _, conn := range []*sql.Conn{s.lockConn, s.snapshotConn} {
+		if conn == nil {
+			continue
+		}
+		if err := conn.Close(); err != nil {
+			return fmt.Errorf("unable to close connection: %w", err)
+		}
 	}
-
+	if err := s.db.Close(); err != nil {
+		return fmt.Errorf("unable to close db: %w", err)
+	}
 	return nil
 }

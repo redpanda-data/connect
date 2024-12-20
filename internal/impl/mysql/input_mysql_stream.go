@@ -219,11 +219,6 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 
 	i.canal = c
 
-	db, err := sql.Open("mysql", i.dsn)
-	if err != nil {
-		return err
-	}
-
 	pos, err := i.getCachedBinlogPosition(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to get cached binlog position: %w", err)
@@ -231,6 +226,10 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 	// create snapshot instance if we were requested and haven't finished it before.
 	var snapshot *Snapshot
 	if i.streamSnapshot && pos == nil {
+		db, err := sql.Open("mysql", i.dsn)
+		if err != nil {
+			return err
+		}
 		snapshot = NewSnapshot(i.logger, db)
 	}
 
