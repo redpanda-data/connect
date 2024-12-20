@@ -582,7 +582,7 @@ memory: {}
 	}, time.Second*30, time.Millisecond*100)
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
 
-	require.JSONEq(t, outBatches[0], `{
+	require.JSONEq(t, `{
   "tinyint_col": 127,
   "smallint_col": 32767,
   "mediumint_col": 8388607,
@@ -612,8 +612,8 @@ memory: {}
   "enum_col": "option1",
   "set_col": ["a", "b"],
   "json_col": {"foo":5, "bar":[1, 2, 3]}
-}`)
-	require.JSONEq(t, outBatches[1], `{
+}`, outBatches[0])
+	require.JSONEq(t, `{
   "tinyint_col": -128,
   "smallint_col": -32768,
   "mediumint_col": -8388608,
@@ -643,5 +643,5 @@ memory: {}
   "enum_col": "option2",
   "set_col": ["b", "c"],
   "json_col": {"foo":-1,"bar":[3,2,1]} 
-}`)
+}`, outBatches[1])
 }
