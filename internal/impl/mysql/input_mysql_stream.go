@@ -239,6 +239,11 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 	go func() {
 		ctx, _ := sig.SoftStopCtx(context.Background())
 		wg, ctx := errgroup.WithContext(ctx)
+		wg.Go(func() error {
+			<-ctx.Done()
+			i.canal.Close()
+			return nil
+		})
 		wg.Go(func() error { return i.readMessages(ctx) })
 		wg.Go(func() error { return i.startMySQLSync(ctx, pos, snapshot) })
 		if err := wg.Wait(); err != nil && !errors.Is(err, context.Canceled) {
@@ -318,7 +323,7 @@ func (i *mysqlStreamInput) readSnapshot(ctx context.Context, snapshot *Snapshot)
 
 				columns, err := batchRows.Columns()
 				if err != nil {
-					batchRows.Close()
+					_ = batchRows.Close()
 					return err
 				}
 
@@ -329,13 +334,13 @@ func (i *mysqlStreamInput) readSnapshot(ctx context.Context, snapshot *Snapshot)
 				}
 
 				if err := batchRows.Scan(valuePtrs...); err != nil {
-					batchRows.Close()
+					_ = batchRows.Close()
 					return err
 				}
 
 				types, err := batchRows.ColumnTypes()
 				if err != nil {
-					batchRows.Close()
+					_ = batchRows.Close()
 					return err
 				}
 
@@ -351,11 +356,15 @@ func (i *mysqlStreamInput) readSnapshot(ctx context.Context, snapshot *Snapshot)
 					}
 				}
 
-				i.rawMessageEvents <- MessageEvent{
+				select {
+				case i.rawMessageEvents <- MessageEvent{
 					Row:       row,
 					Operation: MessageOperationRead,
 					Table:     table,
 					Position:  nil,
+				}:
+				case <-ctx.Done():
+					return ctx.Err()
 				}
 			}
 			// TODO(cdc): Save checkpoint
