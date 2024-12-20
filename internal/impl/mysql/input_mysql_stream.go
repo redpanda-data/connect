@@ -387,7 +387,18 @@ func snapshotValueMapper[T any](v any) (any, error) {
 }
 
 func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mappers []func(any) (any, error)) {
-
+	stringMapping := func(mapper func(s string) (any, error)) func(any) (any, error) {
+		return func(v any) (any, error) {
+			s, ok := v.(*sql.NullString)
+			if !ok {
+				return nil, fmt.Errorf("expected %T got %T", "", v)
+			}
+			if !s.Valid {
+				return nil, nil
+			}
+			return mapper(s.String)
+		}
+	}
 	for _, col := range cols {
 		var val any
 		var mapper func(any) (any, error)
@@ -410,23 +421,31 @@ func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mapper
 		case "TINYINT", "SMALLINT", "MEDIUMINT", "INT", "BIGINT", "YEAR":
 			val = new(sql.Null[int])
 			mapper = snapshotValueMapper[int]
-		case "FLOAT", "DOUBLE", "DECIMAL", "NUMERIC":
+		case "DECIMAL", "NUMERIC":
+			val = new(sql.NullString)
+			mapper = stringMapping(func(s string) (any, error) {
+				return json.Number(s), nil
+			})
+		case "FLOAT", "DOUBLE":
 			val = new(sql.Null[float64])
 			mapper = snapshotValueMapper[float64]
 		case "SET":
-			val = new(sql.Null[string])
-			mapper = func(v any) (any, error) {
-				s, ok := v.(*sql.Null[string])
-				if !ok {
-					return nil, fmt.Errorf("expected %T got %T", "", v)
-				}
-				if !s.Valid {
-					return nil, nil
-				}
+			val = new(sql.NullString)
+			mapper = stringMapping(func(s string) (any, error) {
 				// This might be a little simplistic, we may need to handle escaped values
 				// here...
-				return strings.Split(s.V, ","), nil
-			}
+				out := []any{}
+				for _, elem := range strings.Split(s, ",") {
+					out = append(out, elem)
+				}
+				return out, nil
+			})
+		case "JSON":
+			val = new(sql.NullString)
+			mapper = stringMapping(func(s string) (v any, err error) {
+				err = json.Unmarshal([]byte(s), &v)
+				return
+			})
 		default:
 			val = new(sql.Null[string])
 			mapper = snapshotValueMapper[string]
@@ -660,7 +679,30 @@ func (i *mysqlStreamInput) onMessage(e *canal.RowsEvent, initValue, incrementVal
 
 func mapMessageColumn(v any, col schema.TableColumn) (any, error) {
 	switch col.Type {
-	// TODO(cdc): support more column types
+	case schema.TYPE_DECIMAL:
+		s, ok := v.(string)
+		if !ok {
+			return nil, fmt.Errorf("expected string value for decimal column got: %T", v)
+		}
+		return json.Number(s), nil
+	case schema.TYPE_SET:
+		bitset, ok := v.(int64)
+		if !ok {
+			return nil, fmt.Errorf("expected int value for set column got: %T", v)
+		}
+		out := []any{}
+		for i, element := range col.SetValues {
+			if (bitset>>i)&1 == 1 {
+				out = append(out, element)
+			}
+		}
+		return out, nil
+	case schema.TYPE_DATE:
+		date, ok := v.(string)
+		if !ok {
+			return nil, fmt.Errorf("expected string value for date column got: %T", v)
+		}
+		return time.Parse("2006-01-02", date)
 	case schema.TYPE_ENUM:
 		ordinal, ok := v.(int64)
 		if !ok {
@@ -680,6 +722,29 @@ func mapMessageColumn(v any, col schema.TableColumn) (any, error) {
 			return nil, err
 		}
 		return decoded, nil
+	case schema.TYPE_STRING:
+		// Blob types should come through as binary, but are marked type 5,
+		// instead skip them here and have those fallthrough to the binary case.
+		if !strings.Contains(col.RawType, "blob") {
+			if s, ok := v.(string); ok {
+				return s, nil
+			}
+			s, ok := v.([]byte)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type for STRING column: %T", v)
+			}
+			return string(s), nil
+		}
+		fallthrough
+	case schema.TYPE_BINARY:
+		if s, ok := v.([]byte); ok {
+			return s, nil
+		}
+		s, ok := v.(string)
+		if !ok {
+			return nil, fmt.Errorf("unexpected type for BINARY column: %T", v)
+		}
+		return []byte(s), nil
 	default:
 		return v, nil
 	}

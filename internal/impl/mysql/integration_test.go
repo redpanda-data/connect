@@ -362,7 +362,7 @@ func TestIntegrationMySQLCDCAllTypes(t *testing.T) {
     mediumint_col MEDIUMINT,
     int_col INT,
     bigint_col BIGINT,
-    decimal_col DECIMAL(10, 2),
+    decimal_col DECIMAL(38, 2),
     numeric_col NUMERIC(10, 2),
     float_col FLOAT,
     double_col DOUBLE,
@@ -388,7 +388,8 @@ func TestIntegrationMySQLCDCAllTypes(t *testing.T) {
     mediumtext_col MEDIUMTEXT,
     longtext_col LONGTEXT,
     enum_col ENUM('option1', 'option2', 'option3'),
-    set_col SET('a', 'b', 'c', 'd')
+    set_col SET('a', 'b', 'c', 'd'),
+    json_col JSON
 
     -- TODO(cdc): Spatial Data Types
     -- geometry_col GEOMETRY,
@@ -431,14 +432,15 @@ INSERT INTO all_data_types (
     mediumtext_col,
     longtext_col,
     enum_col,
-    set_col
+    set_col,
+    json_col
 ) VALUES (
     127,                    -- tinyint_col
     32767,                  -- smallint_col
     8388607,                -- mediumint_col
     2147483647,             -- int_col
     9223372036854775807,    -- bigint_col
-    12345.67,               -- decimal_col
+    999999999999999999999999999999999999.99, -- decimal_col
     98765.43,               -- numeric_col
     3.14,                   -- float_col
     2.718281828,            -- double_col
@@ -460,7 +462,8 @@ INSERT INTO all_data_types (
     'medium text',          -- mediumtext_col
     'large text',           -- longtext_col
     'option1',              -- enum_col
-    'a,b'                   -- set_col
+    'a,b',                  -- set_col
+    '{"foo":5,"bar":[1,2,3]}' -- json_col
 );
 
     `)
@@ -535,14 +538,15 @@ memory: {}
     mediumtext_col,
     longtext_col,
     enum_col,
-    set_col
+    set_col,
+    json_col
 ) VALUES (
     -128,                   -- tinyint_col
     -32768,                 -- smallint_col
     -8388608,               -- mediumint_col
     -2147483648,            -- int_col
     -9223372036854775808,   -- bigint_col
-    54321.12,               -- decimal_col
+    888888888888888888888888888888888888.88, -- decimal_col
     87654.21,               -- numeric_col
     1.618,                  -- float_col
     3.141592653,            -- double_col
@@ -564,7 +568,8 @@ memory: {}
     'medium_text_value',    -- mediumtext_col
     'long_text_value',      -- longtext_col
     'option2',              -- enum_col
-    'b,c'                   -- set_col
+    'b,c',                   -- set_col
+    '{"foo":-1,"bar":[3,2,1]}' -- json_col
 );`)
 
 	assert.Eventually(t, func() bool {
@@ -580,7 +585,7 @@ memory: {}
   "mediumint_col": 8388607,
   "int_col": 2147483647,
   "bigint_col": 9223372036854775807,
-  "decimal_col": 12345.67,
+  "decimal_col": 999999999999999999999999999999999999.99,
   "numeric_col": 98765.43,
   "float_col": 3.14,
   "double_col": 2.718281828,
@@ -602,7 +607,8 @@ memory: {}
   "mediumtext_col": "medium text",
   "longtext_col": "large text",
   "enum_col": "option1",
-  "set_col": ["a", "b"]
+  "set_col": ["a", "b"],
+  "json_col": {"foo":5, "bar":[1, 2, 3]}
 }`)
 	require.JSONEq(t, outBatches[1], `{
   "tinyint_col": -128,
@@ -610,28 +616,29 @@ memory: {}
   "mediumint_col": -8388608,
   "int_col": -2147483648,
   "bigint_col": -9223372036854775808,
-  "decimal_col": 54321.12,
+  "decimal_col": 888888888888888888888888888888888888.88,
   "numeric_col": 87654.21,
   "float_col": 1.618,
   "double_col": 3.141592653,
-  "date_col": "2023-01-01",
-  "datetime_col": "2023-01-01 12:00:00",
-  "timestamp_col": "2023-01-01 12:00:00",
+  "date_col": "2023-01-01T00:00:00Z",
+  "datetime_col": "2023-01-01T12:00:00Z",
+  "timestamp_col": "2023-01-01T12:00:00Z",
   "time_col": "23:59:59",
   "year_col": 2023,
   "char_col": "example",
   "varchar_col": "another_example",
-  "binary_col": "fixed",
-  "varbinary_col": "dynamic",
-  "tinyblob_col": "tiny_blob_value",
-  "blob_col": "blob_value",
-  "mediumblob_col": "medium_blob_value",
-  "longblob_col": "long_blob_value",
+  "binary_col": "Zml4ZWQ=",
+  "varbinary_col": "ZHluYW1pYw==",
+  "tinyblob_col": "dGlueV9ibG9iX3ZhbHVl",
+  "blob_col": "YmxvYl92YWx1ZQ==",
+  "mediumblob_col": "bWVkaXVtX2Jsb2JfdmFsdWU=",
+  "longblob_col": "bG9uZ19ibG9iX3ZhbHVl",
   "tinytext_col": "tiny_text_value",
   "text_col": "text_value",
   "mediumtext_col": "medium_text_value",
   "longtext_col": "long_text_value",
   "enum_col": "option2",
-  "set_col": ["b", "c"]
+  "set_col": ["b", "c"],
+  "json_col": {"foo":-1,"bar":[3,2,1]} 
 }`)
 }
