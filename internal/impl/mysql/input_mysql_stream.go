@@ -652,13 +652,13 @@ func (i *mysqlStreamInput) OnRow(e *canal.RowsEvent) error {
 	if _, ok := i.tablesFilterMap[e.Table.Name]; !ok {
 		return nil
 	}
-	// i.logger.Infof("got rows (action=%s, rows=%d)", e.Action, len(e.Rows))
 	switch e.Action {
 	case canal.InsertAction:
 		return i.onMessage(e, 0, 1)
 	case canal.DeleteAction:
 		return i.onMessage(e, 0, 1)
 	case canal.UpdateAction:
+		// Updates send both the new and old data - we only emit the new data.
 		return i.onMessage(e, 1, 2)
 	default:
 		return errors.New("invalid rows action")
@@ -687,6 +687,9 @@ func (i *mysqlStreamInput) onMessage(e *canal.RowsEvent, initValue, incrementVal
 }
 
 func mapMessageColumn(v any, col schema.TableColumn) (any, error) {
+	if v == nil {
+		return v, nil
+	}
 	switch col.Type {
 	case schema.TYPE_DECIMAL:
 		s, ok := v.(string)
