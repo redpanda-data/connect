@@ -16,6 +16,7 @@ package kafka
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -53,6 +54,7 @@ const (
 	kfrFieldFetchMaxBytes          = "fetch_max_bytes"
 	kfrFieldFetchMinBytes          = "fetch_min_bytes"
 	kfrFieldFetchMaxPartitionBytes = "fetch_max_partition_bytes"
+	kfrFieldFetchMaxWait           = "fetch_max_wait"
 )
 
 // FranzConsumerFields returns a slice of fields specifically for customising
@@ -87,6 +89,10 @@ Finally, it's also possible to specify an explicit offset to consume from by add
 			Description("Sets the maximum amount of bytes a broker will try to send during a fetch. Note that brokers may not obey this limit if it has records larger than this limit. This is the equivalent to the Java fetch.max.bytes setting.").
 			Advanced().
 			Default("50MiB"),
+		service.NewDurationField(kfrFieldFetchMaxWait).
+			Description("Sets the maximum amount of time a broker will wait for a fetch response to hit the minimum number of required bytes. This is the equivalent to the Java fetch.max.wait.ms setting.").
+			Advanced().
+			Default("5s"),
 		service.NewStringField(kfrFieldFetchMinBytes).
 			Description("Sets the minimum amount of bytes a broker will try to send during a fetch. This is the equivalent to the Java fetch.min.bytes setting.").
 			Advanced().
@@ -109,6 +115,7 @@ type FranzConsumerDetails struct {
 	FetchMinBytes          int32
 	FetchMaxBytes          int32
 	FetchMaxPartitionBytes int32
+	FetchMaxWait           time.Duration
 }
 
 // FranzConsumerDetailsFromConfig returns a summary of kafka consumer
@@ -171,6 +178,10 @@ func FranzConsumerDetailsFromConfig(conf *service.ParsedConfig) (*FranzConsumerD
 		return nil, err
 	}
 
+	if d.FetchMaxWait, err = conf.FieldDuration(kfrFieldFetchMaxWait); err != nil {
+		return nil, err
+	}
+
 	return &d, nil
 }
 
@@ -185,6 +196,7 @@ func (d *FranzConsumerDetails) FranzOpts() []kgo.Opt {
 		kgo.FetchMaxBytes(d.FetchMaxBytes),
 		kgo.FetchMinBytes(d.FetchMinBytes),
 		kgo.FetchMaxPartitionBytes(d.FetchMaxPartitionBytes),
+		kgo.FetchMaxWait(d.FetchMaxWait),
 	}
 
 	if d.RegexPattern {
