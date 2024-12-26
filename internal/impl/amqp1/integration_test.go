@@ -36,7 +36,13 @@ func TestIntegrationAMQP1(t *testing.T) {
 	require.NoError(t, err)
 
 	pool.MaxWait = time.Second * 30
-	resource, err := pool.Run("rmohr/activemq", "latest", nil)
+	resource, err := pool.Run("apache/activemq-classic",
+		"latest",
+		[]string{
+			"ACTIVEMQ_CONNECTION_USER=guest",
+			"ACTIVEMQ_CONNECTION_PASSWORD=guest",
+		},
+	)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		assert.NoError(t, pool.Purge(resource))

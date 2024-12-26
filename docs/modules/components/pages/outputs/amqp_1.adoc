@@ -388,9 +388,7 @@ Provide a list of explicit metadata key prefixes to be excluded when adding meta
 
 === `content_type`
 
-Define the message body content type.
-
-The option `string` will transfer the message as an AMQP value of type string. Consider choosing the option `string` if your intention is to transfer UTF-8 string messages (like JSON messages) to the destination.
+Specify the message body content type. The option `string` will transfer the message as an AMQP value of type string. Consider choosing the option `string` if your intention is to transfer UTF-8 string messages (like JSON messages) to the destination.
 
 
 *Type*: `string`
