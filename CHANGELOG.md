@@ -7,7 +7,8 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- `avro` scanner now emits metadata for the Avro schema it used along with the schema fingerprint (@rockwotj)
+- `avro` scanner now emits metadata for the Avro schema it used along with the schema fingerprint. (@rockwotj)
+- Field `content_type` added to the `amqp_1` output. (@timo102)
 
 ### Fixed
 
