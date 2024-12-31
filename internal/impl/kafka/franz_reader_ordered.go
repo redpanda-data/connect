@@ -66,15 +66,21 @@ func FranzReaderOrderedConfigFields() []*service.ConfigField {
 
 //------------------------------------------------------------------------------
 
+// clientOptsFn is a function for setting Kafka client options.
+type clientOptsFn func() ([]kgo.Opt, error)
+
 // recordToMessageFn is a function that converts a Kafka record into a Message.
 type recordToMessageFn func(record *kgo.Record) (*service.Message, error)
 
 // preflightHookFn is a function which is executed once before the first batch of messages is emitted.
 type preflightHookFn func(ctx context.Context, res *service.Resources, client *kgo.Client)
 
+// closeHookFn is a function which is executed when the Kafka client gets closed.
+type closeHookFn func(res *service.Resources)
+
 // FranzReaderOrdered implements a kafka reader using the franz-go library.
 type FranzReaderOrdered struct {
-	clientOpts func() ([]kgo.Opt, error)
+	clientOptsFn clientOptsFn
 
 	partState             *partitionState
 	lagUpdater            *asyncroutine.Periodic
@@ -89,7 +95,7 @@ type FranzReaderOrdered struct {
 	cacheLimit            uint64
 	recordToMessageFn     recordToMessageFn
 	preflightHookFn       preflightHookFn
-	closeHookFn           func(res *service.Resources)
+	closeHookFn           closeHookFn
 	readBackOff           backoff.BackOff
 
 	res     *service.Resources
@@ -99,7 +105,7 @@ type FranzReaderOrdered struct {
 
 // NewFranzReaderOrderedFromConfig attempts to instantiate a new
 // FranzReaderOrdered reader from a parsed config.
-func NewFranzReaderOrderedFromConfig(conf *service.ParsedConfig, res *service.Resources, optsFn func() ([]kgo.Opt, error), recordToMessageFn recordToMessageFn, preflightHookFn preflightHookFn, closeHookFn func(res *service.Resources)) (*FranzReaderOrdered, error) {
+func NewFranzReaderOrderedFromConfig(conf *service.ParsedConfig, res *service.Resources, clientOptsFn clientOptsFn, recordToMessageFn recordToMessageFn, preflightHookFn preflightHookFn, closeHookFn closeHookFn) (*FranzReaderOrdered, error) {
 	readBackOff := backoff.NewExponentialBackOff()
 	readBackOff.InitialInterval = time.Millisecond
 	readBackOff.MaxInterval = time.Millisecond * 100
@@ -113,7 +119,7 @@ func NewFranzReaderOrderedFromConfig(conf *service.ParsedConfig, res *service.Re
 		res:               res,
 		log:               res.Logger(),
 		shutSig:           shutdown.NewSignaller(),
-		clientOpts:        optsFn,
+		clientOptsFn:      clientOptsFn,
 		topicLagGauge:     res.Metrics().NewGauge("redpanda_lag", "topic", "partition"),
 		recordToMessageFn: recordToMessageFn,
 		preflightHookFn:   preflightHookFn,
@@ -377,7 +383,7 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 		return service.ErrEndOfInput
 	}
 
-	clientOpts, err := f.clientOpts()
+	clientOpts, err := f.clientOptsFn()
 	if err != nil {
 		return err
 	}
