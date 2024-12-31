@@ -10,6 +10,7 @@ package enterprise
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"time"
 
@@ -164,7 +165,14 @@ func init() {
 				func() ([]kgo.Opt, error) {
 					return clientOpts, nil
 				},
-				nil,
+				func(record *kgo.Record) (*service.Message, error) {
+					if record.Value == nil {
+						// Skip tombstone messages.
+						return nil, errors.New("tombstone message")
+					}
+
+					return kafka.FranzRecordToMessageV1(record), nil
+				},
 				func(ctx context.Context, res *service.Resources, client *kgo.Client) {
 					if err = kafka.FranzSharedClientSet(clientLabel, &kafka.FranzSharedClientInfo{
 						Client: client,
