@@ -755,7 +755,7 @@ input:
       url: %s
   processors:
     - switch:
-        - check: '@input_label == "redpanda_migrator_offsets"'
+        - check: '@input_label == "redpanda_migrator_offsets_input"'
           processors:
             - log:
                 message: Migrating Kafka offset
@@ -766,7 +766,7 @@ input:
                   kafka_offset_commit_timestamp: ${! @kafka_offset_commit_timestamp }
                   kafka_offset_metadata:         ${! @kafka_offset_metadata }
                   kafka_offset:                  ${! @kafka_offset } # This is just the offset of the __consumer_offsets topic
-        - check: '@input_label == "redpanda_migrator"'
+        - check: '@input_label == "redpanda_migrator_input"'
           processors:
             - branch:
                 processors:
@@ -775,7 +775,7 @@ input:
                       avro_raw_json: true
                   - log:
                       message: 'Migrating Kafka message: ${! content() }'
-        - check: '@input_label == "schema_registry"'
+        - check: '@input_label == "schema_registry_input"'
           processors:
             - branch:
                 processors:
