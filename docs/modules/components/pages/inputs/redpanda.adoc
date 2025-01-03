@@ -70,6 +70,7 @@ input:
     rack_id: ""
     start_from_oldest: true
     fetch_max_bytes: 50MiB
+    fetch_max_wait: 5s
     fetch_min_bytes: 1B
     fetch_max_partition_bytes: 1MiB
     consumer_group: "" # No default (optional)
@@ -590,6 +591,15 @@ Sets the maximum amount of bytes a broker will try to send during a fetch. Note 
 *Type*: `string`
 
 *Default*: `"50MiB"`
+
+=== `fetch_max_wait`
+
+Sets the maximum amount of time a broker will wait for a fetch response to hit the minimum number of required bytes. This is the equivalent to the Java fetch.max.wait.ms setting.
+
+
+*Type*: `string`
+
+*Default*: `"5s"`
 
 === `fetch_min_bytes`
 
