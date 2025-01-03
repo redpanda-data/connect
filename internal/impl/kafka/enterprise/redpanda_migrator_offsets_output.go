@@ -12,13 +12,13 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
-	"github.com/twmb/franz-go/pkg/kmsg"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
@@ -28,8 +28,15 @@ import (
 )
 
 const (
-	rmooFieldMaxInFlight = "max_in_flight"
+	rmooFieldOffsetTopic           = "offset_topic"
+	rmooFieldOffsetGroup           = "offset_group"
+	rmooFieldOffsetPartition       = "offset_partition"
+	rmooFieldOffsetCommitTimestamp = "offset_commit_timestamp"
+	rmooFieldOffsetMetadata        = "offset_metadata"
+
+	// Deprecated fields
 	rmooFieldKafkaKey    = "kafka_key"
+	rmooFieldMaxInFlight = "max_in_flight"
 )
 
 func redpandaMigratorOffsetsOutputConfig() *service.ConfigSpec {
@@ -39,20 +46,32 @@ func redpandaMigratorOffsetsOutputConfig() *service.ConfigSpec {
 		Version("4.37.0").
 		Summary("Redpanda Migrator consumer group offsets output using the https://github.com/twmb/franz-go[Franz Kafka client library^].").
 		Description("This output can be used in combination with the `kafka_franz` input that is configured to read the `__consumer_offsets` topic.").
-		Fields(RedpandaMigratorOffsetsOutputConfigFields()...)
+		Fields(redpandaMigratorOffsetsOutputConfigFields()...)
 }
 
-// RedpandaMigratorOffsetsOutputConfigFields returns the full suite of config fields for a redpanda_migrator_offsets output using the
+// redpandaMigratorOffsetsOutputConfigFields returns the full suite of config fields for a redpanda_migrator_offsets output using the
 // franz-go client library.
-func RedpandaMigratorOffsetsOutputConfigFields() []*service.ConfigField {
+func redpandaMigratorOffsetsOutputConfigFields() []*service.ConfigField {
 	return slices.Concat(
 		kafka.FranzConnectionFields(),
 		[]*service.ConfigField{
+			service.NewInterpolatedStringField(rmooFieldOffsetTopic).
+				Description("Kafka offset topic.").Default("${! @kafka_offset_topic }"),
+			service.NewInterpolatedStringField(rmooFieldOffsetGroup).
+				Description("Kafka offset group.").Default("${! @kafka_offset_group }"),
+			service.NewInterpolatedStringField(rmooFieldOffsetPartition).
+				Description("Kafka offset partition.").Default("${! @kafka_offset_partition }"),
+			service.NewInterpolatedStringField(rmooFieldOffsetCommitTimestamp).
+				Description("Kafka offset commit timestamp.").Default("${! @kafka_offset_commit_timestamp }"),
+			service.NewInterpolatedStringField(rmooFieldOffsetMetadata).
+				Description("Kafka offset metadata value.").Default(`${! @kafka_offset_metadata }`),
+
+			// Deprecated fields
 			service.NewInterpolatedStringField(rmooFieldKafkaKey).
-				Description("Kafka key.").Default("${! @kafka_key }"),
+				Description("Kafka key.").Default("${! @kafka_key }").Deprecated(),
 			service.NewIntField(rmooFieldMaxInFlight).
 				Description("The maximum number of batches to be sending in parallel at any given time.").
-				Default(1),
+				Default(1).Deprecated(),
 		},
 		kafka.FranzProducerLimitsFields(),
 		retries.CommonRetryBackOffFields(0, "1s", "5s", "30s"),
@@ -70,10 +89,9 @@ func init() {
 				return
 			}
 
-			if maxInFlight, err = conf.FieldInt(rmooFieldMaxInFlight); err != nil {
-				return
-			}
-			output, err = NewRedpandaMigratorOffsetsWriterFromConfig(conf, mgr)
+			maxInFlight = 1
+
+			output, err = newRedpandaMigratorOffsetsWriterFromConfig(conf, mgr)
 			return
 		})
 	if err != nil {
@@ -83,12 +101,16 @@ func init() {
 
 //------------------------------------------------------------------------------
 
-// RedpandaMigratorOffsetsWriter implements a Redpanda Migrator offsets writer using the franz-go library.
-type RedpandaMigratorOffsetsWriter struct {
-	clientDetails *kafka.FranzConnectionDetails
-	clientOpts    []kgo.Opt
-	kafkaKey      *service.InterpolatedString
-	backoffCtor   func() backoff.BackOff
+// redpandaMigratorOffsetsWriter implements a Redpanda Migrator offsets writer using the franz-go library.
+type redpandaMigratorOffsetsWriter struct {
+	clientDetails         *kafka.FranzConnectionDetails
+	clientOpts            []kgo.Opt
+	offsetTopic           *service.InterpolatedString
+	offsetGroup           *service.InterpolatedString
+	offsetPartition       *service.InterpolatedString
+	offsetCommitTimestamp *service.InterpolatedString
+	offsetMetadata        *service.InterpolatedString
+	backoffCtor           func() backoff.BackOff
 
 	connMut sync.Mutex
 	client  *kadm.Client
@@ -96,9 +118,9 @@ type RedpandaMigratorOffsetsWriter struct {
 	mgr *service.Resources
 }
 
-// NewRedpandaMigratorOffsetsWriterFromConfig attempts to instantiate a RedpandaMigratorOffsetsWriter from a parsed config.
-func NewRedpandaMigratorOffsetsWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*RedpandaMigratorOffsetsWriter, error) {
-	w := RedpandaMigratorOffsetsWriter{
+// newRedpandaMigratorOffsetsWriterFromConfig attempts to instantiate a redpandaMigratorOffsetsWriter from a parsed config.
+func newRedpandaMigratorOffsetsWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (*redpandaMigratorOffsetsWriter, error) {
+	w := redpandaMigratorOffsetsWriter{
 		mgr: mgr,
 	}
 
@@ -107,7 +129,23 @@ func NewRedpandaMigratorOffsetsWriterFromConfig(conf *service.ParsedConfig, mgr 
 		return nil, err
 	}
 
-	if w.kafkaKey, err = conf.FieldInterpolatedString(rmooFieldKafkaKey); err != nil {
+	if w.offsetTopic, err = conf.FieldInterpolatedString(rmooFieldOffsetTopic); err != nil {
+		return nil, err
+	}
+
+	if w.offsetGroup, err = conf.FieldInterpolatedString(rmooFieldOffsetGroup); err != nil {
+		return nil, err
+	}
+
+	if w.offsetPartition, err = conf.FieldInterpolatedString(rmooFieldOffsetPartition); err != nil {
+		return nil, err
+	}
+
+	if w.offsetCommitTimestamp, err = conf.FieldInterpolatedString(rmooFieldOffsetCommitTimestamp); err != nil {
+		return nil, err
+	}
+
+	if w.offsetMetadata, err = conf.FieldInterpolatedString(rmooFieldOffsetMetadata); err != nil {
 		return nil, err
 	}
 
@@ -125,7 +163,7 @@ func NewRedpandaMigratorOffsetsWriterFromConfig(conf *service.ParsedConfig, mgr 
 //------------------------------------------------------------------------------
 
 // Connect to the target seed brokers.
-func (w *RedpandaMigratorOffsetsWriter) Connect(ctx context.Context) error {
+func (w *redpandaMigratorOffsetsWriter) Connect(ctx context.Context) error {
 	w.connMut.Lock()
 	defer w.connMut.Unlock()
 
@@ -162,7 +200,7 @@ func (w *RedpandaMigratorOffsetsWriter) Connect(ctx context.Context) error {
 }
 
 // Write attempts to write a message to the output cluster.
-func (w *RedpandaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.Message) error {
+func (w *redpandaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.Message) error {
 	w.connMut.Lock()
 	defer w.connMut.Unlock()
 
@@ -170,46 +208,71 @@ func (w *RedpandaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.
 		return service.ErrNotConnected
 	}
 
-	var kafkaKey []byte
+	var topic string
 	var err error
-	// TODO: The `kafka_key` metadata field is cast from `[]byte` to string in the `kafka_franz` input, which is wrong.
-	if kafkaKey, err = w.kafkaKey.TryBytes(msg); err != nil {
-		return fmt.Errorf("failed to extract kafka key: %w", err)
+	if topic, err = w.offsetTopic.TryString(msg); err != nil {
+		return fmt.Errorf("failed to extract offset topic: %s", err)
 	}
 
-	key := kmsg.NewOffsetCommitKey()
-	// Check the version to ensure that we process only offset commit keys
-	if err := key.ReadFrom(kafkaKey); err != nil || (key.Version != 0 && key.Version != 1) {
-		return nil
+	var group string
+	if group, err = w.offsetGroup.TryString(msg); err != nil {
+		return fmt.Errorf("failed to extract offset group: %s", err)
 	}
 
-	msgBytes, err := msg.AsBytes()
-	if err != nil {
-		return fmt.Errorf("failed to get message bytes: %s", err)
+	var offsetPartition int32
+	if p, err := w.offsetPartition.TryString(msg); err != nil {
+		return fmt.Errorf("failed to extract offset partition: %s", err)
+	} else {
+		i, err := strconv.Atoi(p)
+		if err != nil {
+			return fmt.Errorf("failed to parse offset partition: %s", err)
+		}
+		offsetPartition = int32(i)
 	}
 
-	val := kmsg.NewOffsetCommitValue()
-	if err := val.ReadFrom(msgBytes); err != nil {
-		return fmt.Errorf("failed to decode offset commit value: %s", err)
+	var offsetCommitTimestamp int64
+	if t, err := w.offsetCommitTimestamp.TryString(msg); err != nil {
+		return fmt.Errorf("failed to extract offset commit timestamp: %s", err)
+	} else {
+		offsetCommitTimestamp, err = strconv.ParseInt(t, 10, 64)
+		if err != nil {
+			return fmt.Errorf("failed to parse offset partition: %s", err)
+		}
+	}
+
+	var offsetMetadata string
+	if w.offsetMetadata != nil {
+		if offsetMetadata, err = w.offsetMetadata.TryString(msg); err != nil {
+			return fmt.Errorf("failed to extract offset metadata: %w", err)
+		}
 	}
 
 	updateConsumerOffsets := func() error {
-		listedOffsets, err := w.client.ListOffsetsAfterMilli(ctx, val.CommitTimestamp, key.Topic)
+		listedOffsets, err := w.client.ListOffsetsAfterMilli(ctx, offsetCommitTimestamp, topic)
 		if err != nil {
 			return fmt.Errorf("failed to translate consumer offsets: %s", err)
 		}
 
 		if err := listedOffsets.Error(); err != nil {
-			return fmt.Errorf("listed offsets returned and error: %s", err)
+			return fmt.Errorf("listed offsets error: %s", err)
 		}
 
-		// TODO: Add metadata to offsets!
 		offsets := listedOffsets.Offsets()
-		offsets.KeepFunc(func(o kadm.Offset) bool {
-			return o.Partition == key.Partition
-		})
+		// Logic extracted from offsets.KeepFunc() and adjusted to set the metadata.
+		for topic, partitionOffsets := range offsets {
+			for partition, offset := range partitionOffsets {
+				if offset.Partition != offsetPartition {
+					delete(partitionOffsets, partition)
+				}
+				offset.Metadata = offsetMetadata
+				partitionOffsets[partition] = offset
+			}
+			if len(partitionOffsets) == 0 {
+				delete(offsets, topic)
+			}
+		}
 
-		offsetResponses, err := w.client.CommitOffsets(ctx, key.Group, offsets)
+		offsetResponses, err := w.client.CommitOffsets(ctx, group, offsets)
 		if err != nil {
 			return fmt.Errorf("failed to commit consumer offsets: %s", err)
 		}
@@ -223,6 +286,7 @@ func (w *RedpandaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.
 
 	backOff := w.backoffCtor()
 	for {
+		// TODO: Use `dispatch.TriggerSignal()` to consume new messages while `updateConsumerOffsets()` is running.
 		err := updateConsumerOffsets()
 		if err == nil {
 			break
@@ -230,7 +294,7 @@ func (w *RedpandaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.
 
 		wait := backOff.NextBackOff()
 		if wait == backoff.Stop {
-			return fmt.Errorf("failed to update consumer offsets for topic %q and partition %d: %s", key.Topic, key.Partition, err)
+			return fmt.Errorf("failed to update consumer offsets for topic %q and partition %d: %s", topic, offsetPartition, err)
 		}
 
 		time.Sleep(wait)
@@ -240,7 +304,7 @@ func (w *RedpandaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.
 }
 
 // Close underlying connections.
-func (w *RedpandaMigratorOffsetsWriter) Close(ctx context.Context) error {
+func (w *redpandaMigratorOffsetsWriter) Close(ctx context.Context) error {
 	w.connMut.Lock()
 	defer w.connMut.Unlock()
 
