@@ -440,7 +440,11 @@ func (a *awsSQSReader) deleteMessages(ctx context.Context, msgs ...sqsMessageHan
 			return err
 		}
 		for _, fail := range response.Failed {
-			a.log.Errorf("Failed to delete consumed SQS message '%v', response code: %v\n", *fail.Id, *fail.Code)
+			msg := "(no message)"
+			if fail.Message != nil {
+				msg = *fail.Message
+			}
+			a.log.Errorf("Failed to delete consumed SQS message '%v', response code: %v, message: %q, sender fault: %v", *fail.Id, *fail.Code, msg, fail.SenderFault)
 		}
 	}
 	return nil
@@ -479,7 +483,11 @@ func (a *awsSQSReader) updateVisibilityMessages(ctx context.Context, timeout int
 			return err
 		}
 		for _, fail := range response.Failed {
-			a.log.Debugf("Failed to update consumed SQS message '%v' visibility, response code: %v\n", *fail.Id, *fail.Code)
+			msg := "(no message)"
+			if fail.Message != nil {
+				msg = *fail.Message
+			}
+			a.log.Debugf("Failed to update consumed SQS message '%v' visibility, response code: %v, message: %q, sender fault: %v", *fail.Id, *fail.Code, msg, fail.SenderFault)
 		}
 	}
 	return nil
