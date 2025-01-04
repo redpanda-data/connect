@@ -277,9 +277,12 @@ type FranzWriter struct {
 	onWriteHookFn   onWriteHookFn
 }
 
-// NewFranzWriterFromConfig uses a parsed config to extract customisation for
-// writing data to a Kafka broker. A closure function must be provided that is
-// responsible for granting access to a connected client.
+// NewFranzWriterFromConfig uses a parsed config to extract customisation for writing data to a Kafka broker. A closure
+// function must be provided that is responsible for granting access to a connected client.
+// Optional parameters:
+// - `onConnectHookFn` is a function that is executed when the Kafka client is successfully connected. It can be set to
+// `nil`.
+// - `onWriteHookFn` is a function which is executed before each batch of messages is written. It can be set to `nil`.
 func NewFranzWriterFromConfig(conf *service.ParsedConfig, accessClientFn accessClientFn, yieldClientFn yieldClientFn, onConnectHookFn func(client *kgo.Client), onWriteHookFn onWriteHookFn) (*FranzWriter, error) {
 	w := FranzWriter{
 		accessClientFn:  accessClientFn,

@@ -128,7 +128,6 @@ func init() {
 			clientOpts = append(clientOpts, kgo.Rack(rackID))
 
 			// Configure `start_from_oldest: true`
-			// This is probably not necessary since `__consumer_offsets` is a compacted topic
 			clientOpts = append(clientOpts, kgo.ConsumeResetOffset(kgo.NewOffset().AtStart()))
 
 			// Consume messages from the `__consumer_offsets` topic
@@ -147,16 +146,18 @@ func init() {
 					return nil, fmt.Errorf("failed to decode record key: %s", err)
 				}
 
-				var isExpectedTopic bool
-				if len(topicPatterns) > 0 {
-					isExpectedTopic = slices.ContainsFunc(topicPatterns, func(tp *regexp.Regexp) bool {
-						return tp.MatchString(key.Topic)
-					})
-				} else {
-					isExpectedTopic = slices.ContainsFunc(topics, func(t string) bool {
-						return t == key.Topic
+				matchesTopic := func(topic string) bool {
+					if len(topicPatterns) > 0 {
+						return slices.ContainsFunc(topicPatterns, func(tp *regexp.Regexp) bool {
+							return tp.MatchString(topic)
+						})
+					}
+					return slices.ContainsFunc(topics, func(t string) bool {
+						return t == topic
 					})
 				}
+
+				isExpectedTopic := matchesTopic(key.Topic)
 				if !isExpectedTopic {
 					return nil, fmt.Errorf("skipping updates for topic %q", key.Topic)
 				}
