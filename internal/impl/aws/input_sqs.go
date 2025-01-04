@@ -39,6 +39,7 @@ const (
 	sqsiFieldDeleteMessage       = "delete_message"
 	sqsiFieldResetVisibility     = "reset_visibility"
 	sqsiFieldMaxNumberOfMessages = "max_number_of_messages"
+	sqsiFieldMaxOutstanding      = "max_outstanding_messages"
 
 	sqsiAttributeNameVisibilityTimeout = "VisibilityTimeout"
 )
@@ -49,6 +50,7 @@ type sqsiConfig struct {
 	DeleteMessage       bool
 	ResetVisibility     bool
 	MaxNumberOfMessages int
+	MaxOutstanding      int
 }
 
 func sqsiConfigFromParsed(pConf *service.ParsedConfig) (conf sqsiConfig, err error) {
@@ -65,6 +67,9 @@ func sqsiConfigFromParsed(pConf *service.ParsedConfig) (conf sqsiConfig, err err
 		return
 	}
 	if conf.MaxNumberOfMessages, err = pConf.FieldInt(sqsiFieldMaxNumberOfMessages); err != nil {
+		return
+	}
+	if conf.MaxOutstanding, err = pConf.FieldInt(sqsiFieldMaxOutstanding); err != nil {
 		return
 	}
 	return
@@ -110,7 +115,10 @@ xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].`
 				Description("The maximum number of messages to return on one poll. Valid values: 1 to 10.").
 				Default(10).
 				Advanced(),
-			service.NewIntField("wait_time_seconds").
+			service.NewIntField(sqsiFieldMaxOutstanding).
+				Description("The maximum number of outstanding pending messages to be consumed at a given time.").
+				Default(100),
+			service.NewIntField(sqsiFieldWaitTimeSeconds).
 				Description("Whether to set the wait time. Enabling this activates long-polling. Valid values: 0 to 20.").
 				Default(0).
 				Advanced(),
@@ -182,7 +190,9 @@ func (a *awsSQSReader) Connect(ctx context.Context) error {
 
 	ift := &sqsInFlightTracker{
 		handles: map[string]sqsInFlightHandle{},
+		limit:   a.conf.MaxOutstanding,
 	}
+	ift.l = sync.NewCond(&ift.m)
 
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -203,7 +213,9 @@ type sqsInFlightHandle struct {
 
 type sqsInFlightTracker struct {
 	handles map[string]sqsInFlightHandle
+	limit   int
 	m       sync.Mutex
+	l       *sync.Cond
 }
 
 func (t *sqsInFlightTracker) PullToRefresh() (handles []sqsMessageHandle, timeoutSeconds int) {
@@ -230,11 +242,27 @@ func (t *sqsInFlightTracker) Remove(id string) {
 	t.m.Lock()
 	defer t.m.Unlock()
 	delete(t.handles, id)
+	t.l.Signal()
 }
 
-func (t *sqsInFlightTracker) AddNew(messages ...types.Message) {
+func (t *sqsInFlightTracker) Clear() {
 	t.m.Lock()
 	defer t.m.Unlock()
+	clear(t.handles)
+	t.l.Signal()
+}
+
+func (t *sqsInFlightTracker) AddNew(ctx context.Context, messages ...types.Message) {
+	t.m.Lock()
+	defer t.m.Unlock()
+
+	// Treat this as a soft limit, we can burst over, but we should be able to make progress.
+	for len(t.handles) >= t.limit {
+		if ctx.Err() != nil {
+			return
+		}
+		t.l.Wait()
+	}
 
 	for _, m := range messages {
 		if m.MessageId == nil || m.ReceiptHandle == nil {
@@ -268,6 +296,7 @@ func flushMapToHandles(m map[string]string) (s []sqsMessageHandle) {
 
 func (a *awsSQSReader) ackLoop(wg *sync.WaitGroup, inFlightTracker *sqsInFlightTracker) {
 	defer wg.Done()
+	defer inFlightTracker.Clear()
 
 	closeNowCtx, done := a.closeSignal.HardStopCtx(context.Background())
 	defer done()
@@ -380,7 +409,7 @@ func (a *awsSQSReader) readLoop(wg *sync.WaitGroup, inFlightTracker *sqsInFlight
 			return
 		}
 		if len(res.Messages) > 0 {
-			inFlightTracker.AddNew(res.Messages...)
+			inFlightTracker.AddNew(closeAtLeisureCtx, res.Messages...)
 			pendingMsgs = append(pendingMsgs, res.Messages...)
 		}
 		if len(res.Messages) > 0 || a.conf.WaitTimeSeconds > 0 {
