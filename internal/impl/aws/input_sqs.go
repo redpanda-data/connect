@@ -446,6 +446,9 @@ type sqsMessageHandle struct {
 }
 
 func (a *awsSQSReader) deleteMessages(ctx context.Context, msgs ...sqsMessageHandle) error {
+	if !a.conf.DeleteMessage {
+		return nil
+	}
 	for len(msgs) > 0 {
 		input := sqs.DeleteMessageBatchInput{
 			QueueUrl: aws.String(a.conf.URL),
@@ -573,9 +576,6 @@ func (a *awsSQSReader) Read(ctx context.Context) (*service.Message, service.AckF
 		}
 
 		if res == nil {
-			if !a.conf.DeleteMessage {
-				return nil
-			}
 			select {
 			case <-rctx.Done():
 				return rctx.Err()
