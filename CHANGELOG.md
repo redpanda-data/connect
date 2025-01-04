@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- `aws_sqs` now has a `max_outstanding` field to prevent unbounded memory usage. (@rockwotj)
 - `avro` scanner now emits metadata for the Avro schema it used along with the schema fingerprint. (@rockwotj)
 - Field `content_type` added to the `amqp_1` output. (@timo102)
 - `kafka_franz`, `ockam_kafka`, `redpanda`, `redpanda_common`, `redpanda_migrator` now support `fetch_max_wait` configuration field.

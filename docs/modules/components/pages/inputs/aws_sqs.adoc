@@ -38,6 +38,7 @@ input:
   label: ""
   aws_sqs:
     url: "" # No default (required)
+    max_outstanding_messages: 100
 ```
 
 --
@@ -54,6 +55,7 @@ input:
     delete_message: true
     reset_visibility: true
     max_number_of_messages: 10
+    max_outstanding_messages: 100
     wait_time_seconds: 0
     region: ""
     endpoint: ""
@@ -126,6 +128,15 @@ The maximum number of messages to return on one poll. Valid values: 1 to 10.
 *Type*: `int`
 
 *Default*: `10`
+
+=== `max_outstanding_messages`
+
+The maximum number of outstanding pending messages to be consumed at a given time.
+
+
+*Type*: `int`
+
+*Default*: `100`
 
 === `wait_time_seconds`
 
