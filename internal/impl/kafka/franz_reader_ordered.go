@@ -103,8 +103,13 @@ type FranzReaderOrdered struct {
 	shutSig *shutdown.Signaller
 }
 
-// NewFranzReaderOrderedFromConfig attempts to instantiate a new
-// FranzReaderOrdered reader from a parsed config.
+// NewFranzReaderOrderedFromConfig attempts to instantiate a new FranzReaderOrdered reader from a parsed config.
+// Optional parameters:
+// - `recordToMessageFn` is a function that converts a Kafka record into a Message. If set to `nil`,
+// `FranzRecordToMessageV1` is used instead.
+// - `preflightHookFn` is a function which is executed once before the first batch of messages is emitted. It can be
+// set to `nil`.
+// - `closeHookFn` is a function which is executed when the Kafka client gets closed. It can be set to `nil`.
 func NewFranzReaderOrderedFromConfig(conf *service.ParsedConfig, res *service.Resources, clientOptsFn clientOptsFn, recordToMessageFn recordToMessageFn, preflightHookFn preflightHookFn, closeHookFn closeHookFn) (*FranzReaderOrdered, error) {
 	readBackOff := backoff.NewExponentialBackOff()
 	readBackOff.InitialInterval = time.Millisecond
@@ -440,8 +445,8 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 		f.lagUpdater.Stop()
 	}
 	adminClient := kadm.NewClient(f.client)
-	f.lagUpdater = asyncroutine.NewPeriodic(f.topicLagRefreshPeriod, func() {
-		ctx, done := context.WithTimeout(context.Background(), f.topicLagRefreshPeriod)
+	f.lagUpdater = asyncroutine.NewPeriodicWithContext(f.topicLagRefreshPeriod, func(ctx context.Context) {
+		ctx, done := context.WithTimeout(ctx, f.topicLagRefreshPeriod)
 		defer done()
 
 		lags, err := adminClient.Lag(ctx, f.consumerGroup)
@@ -522,15 +527,17 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 
 			pauseTopicPartitions := map[string][]int32{}
 			fetches.EachPartition(func(p kgo.FetchTopicPartition) {
-				if len(p.Records) > 0 {
-					batch := f.recordsToBatch(p.Records)
-					// TODO: do we have to ack?
-					if len(batch.b) == 0 {
-						return
-					}
-					if checkpoints.addRecords(p.Topic, p.Partition, batch, f.cacheLimit) {
-						pauseTopicPartitions[p.Topic] = append(pauseTopicPartitions[p.Topic], p.Partition)
-					}
+				if len(p.Records) == 0 {
+					return
+				}
+
+				batch := f.recordsToBatch(p.Records)
+				if len(batch.b) == 0 {
+					return
+				}
+
+				if checkpoints.addRecords(p.Topic, p.Partition, batch, f.cacheLimit) {
+					pauseTopicPartitions[p.Topic] = append(pauseTopicPartitions[p.Topic], p.Partition)
 				}
 			})
 			_ = f.client.PauseFetchPartitions(pauseTopicPartitions)
