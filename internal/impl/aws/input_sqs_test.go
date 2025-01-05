@@ -17,7 +17,6 @@ package aws
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"testing"
 	"time"
 
@@ -88,10 +87,6 @@ func (m *mockSqsInput) ReceiveMessage(context.Context, *sqs.ReceiveMessageInput,
 	return &sqs.ReceiveMessageOutput{Messages: messages}, nil
 }
 
-func (m *mockSqsInput) GetQueueAttributes(input *sqs.GetQueueAttributesInput) (*sqs.GetQueueAttributesOutput, error) {
-	return &sqs.GetQueueAttributesOutput{Attributes: map[string]string{sqsiAttributeNameVisibilityTimeout: strconv.Itoa(int(m.queueTimeout))}}, nil
-}
-
 func (m *mockSqsInput) ChangeMessageVisibilityBatch(ctx context.Context, input *sqs.ChangeMessageVisibilityBatchInput, opts ...func(*sqs.Options)) (*sqs.ChangeMessageVisibilityBatchOutput, error) {
 	<-m.mtx
 	defer func() { m.mtx <- struct{}{} }()
@@ -159,6 +154,7 @@ func TestSQSInput(t *testing.T) {
 			ResetVisibility:     true,
 			MaxNumberOfMessages: 10,
 			MaxOutstanding:      100,
+			MessageTimeout:      30 * time.Second,
 		},
 		conf,
 		nil,
@@ -179,7 +175,7 @@ func TestSQSInput(t *testing.T) {
 	err = r.Connect(tCtx)
 	require.NoError(t, err)
 
-	receivedMessages := make([]types.Message, 0, expectedMessages)
+	receivedMessages := make([]sqsMessage, 0, expectedMessages)
 
 	// Check that all messages are received from the reader
 	require.Eventually(t, func() bool {
@@ -193,7 +189,7 @@ func TestSQSInput(t *testing.T) {
 			}
 		}
 		return len(receivedMessages) == expectedMessages
-	}, 30*time.Second, time.Second)
+	}, 30*time.Second, 100*time.Millisecond)
 
 	// Wait over the defined queue timeout and check that messages have not been received again
 	time.Sleep(time.Duration(mockInput.queueTimeout+5) * time.Second)
@@ -210,7 +206,9 @@ func TestSQSInput(t *testing.T) {
 
 	// Ack all messages and ensure that they are deleted from SQS
 	for _, message := range receivedMessages {
-		r.ackMessagesChan <- sqsMessageHandle{id: *message.MessageId, receiptHandle: *message.ReceiptHandle}
+		if message.handle != nil {
+			r.ackMessagesChan <- message.handle
+		}
 	}
 
 	require.Eventually(t, func() bool {
@@ -219,7 +217,7 @@ func TestSQSInput(t *testing.T) {
 			msgsLen = len(mockInput.messages)
 		})
 		return msgsLen == 0
-	}, 5*time.Second, time.Second)
+	}, 5*time.Second, 100*time.Millisecond)
 }
 
 func TestSQSInputBatchAck(t *testing.T) {
@@ -249,6 +247,7 @@ func TestSQSInputBatchAck(t *testing.T) {
 			ResetVisibility:     true,
 			MaxNumberOfMessages: 10,
 			MaxOutstanding:      100,
+			MessageTimeout:      30 * time.Second,
 		},
 		conf,
 		nil,
