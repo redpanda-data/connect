@@ -19,7 +19,7 @@ import (
 )
 
 type (
-	// Indexed is essentially a pool where each object in the pool is explicitly retrivied by name.
+	// Indexed is essentially a pool where each object in the pool is explicitly retrieved by name.
 	Indexed[T any] interface {
 		// Acquire gets a named object T out of the pool if available, otherwise will create a new
 		// item using the given name.
@@ -103,9 +103,9 @@ func (p *indexedImpl[T]) Reset() {
 func (p *indexedImpl[T]) Keys() []string {
 	keys := []string{}
 	_ = p.lock(context.Background())
+	defer p.unlock()
 	for k := range p.items {
 		keys = append(keys, k)
 	}
-	p.unlock()
 	return keys
 }

@@ -25,7 +25,7 @@ type SchemaMismatchError interface {
 	Value() any
 }
 
-var _ error = BatchSchemaMismatchError[SchemaMismatchError]{}
+var _ error = &BatchSchemaMismatchError[SchemaMismatchError]{}
 
 // BatchSchemaMismatchError is when multiple schema mismatch errors happen at once
 type BatchSchemaMismatchError[T SchemaMismatchError] struct {
@@ -33,7 +33,7 @@ type BatchSchemaMismatchError[T SchemaMismatchError] struct {
 }
 
 // Error implements the error interface
-func (e BatchSchemaMismatchError[T]) Error() string {
+func (e *BatchSchemaMismatchError[T]) Error() string {
 	errs := []error{}
 	for _, err := range e.Errors {
 		errs = append(errs, err)
@@ -41,8 +41,8 @@ func (e BatchSchemaMismatchError[T]) Error() string {
 	return errors.Join(errs...).Error()
 }
 
-var _ error = NonNullColumnError{}
-var _ SchemaMismatchError = NonNullColumnError{}
+var _ error = &NonNullColumnError{}
+var _ SchemaMismatchError = &NonNullColumnError{}
 
 // NonNullColumnError occurs when a column with a NOT NULL constraint
 // gets a value with a `NULL` value.
@@ -51,23 +51,23 @@ type NonNullColumnError struct {
 }
 
 // ColumnName returns the column name with the NOT NULL constraint
-func (e NonNullColumnError) ColumnName() string {
+func (e *NonNullColumnError) ColumnName() string {
 	// This name comes directly from the Snowflake API so I hope this is properly quoted...
 	return e.columnName
 }
 
 // Value returns nil
-func (e NonNullColumnError) Value() any {
+func (e *NonNullColumnError) Value() any {
 	return nil
 }
 
 // Error implements the error interface
-func (e NonNullColumnError) Error() string {
+func (e *NonNullColumnError) Error() string {
 	return fmt.Sprintf("column %q has a NOT NULL constraint and recieved a nil value", e.columnName)
 }
 
-var _ error = MissingColumnError{}
-var _ SchemaMismatchError = MissingColumnError{}
+var _ error = &MissingColumnError{}
+var _ SchemaMismatchError = &MissingColumnError{}
 
 // MissingColumnError occurs when a column that is not in the table is
 // found on a record
@@ -77,31 +77,31 @@ type MissingColumnError struct {
 }
 
 // NewMissingColumnError creates a new MissingColumnError object
-func NewMissingColumnError(rawName string, val any) MissingColumnError {
-	return MissingColumnError{rawName, val}
+func NewMissingColumnError(rawName string, val any) *MissingColumnError {
+	return &MissingColumnError{rawName, val}
 }
 
 // ColumnName returns the column name of the data that was not in the table
 //
 // NOTE this is escaped, so it's valid to use this directly in a SQL statement
 // but I wish that Snowflake would just allow `identifier` for ALTER column.
-func (e MissingColumnError) ColumnName() string {
+func (e *MissingColumnError) ColumnName() string {
 	return quoteColumnName(e.columnName)
 }
 
 // RawName is the unquoted name of the new column - DO NOT USE IN SQL!
 // This is the more intutitve name for users in the mapping function
-func (e MissingColumnError) RawName() string {
+func (e *MissingColumnError) RawName() string {
 	return e.columnName
 }
 
 // Value returns the value that was associated with the missing column
-func (e MissingColumnError) Value() any {
+func (e *MissingColumnError) Value() any {
 	return e.val
 }
 
 // Error implements the error interface
-func (e MissingColumnError) Error() string {
+func (e *MissingColumnError) Error() string {
 	return fmt.Sprintf("new data %+v with the name %q does not have an associated column", e.val, e.columnName)
 }
 
@@ -112,6 +112,6 @@ type InvalidTimestampFormatError struct {
 }
 
 // Error implements the error interface
-func (e InvalidTimestampFormatError) Error() string {
+func (e *InvalidTimestampFormatError) Error() string {
 	return fmt.Sprintf("unable to parse %s value from %q - string time values must be in RFC 3339 format", e.columnType, e.val)
 }

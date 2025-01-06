@@ -25,32 +25,32 @@ type schemaMigrationNeededError struct {
 	runMigration func(ctx context.Context, evolver *snowpipeSchemaEvolver) error
 }
 
-func (schemaMigrationNeededError) Error() string {
+func (*schemaMigrationNeededError) Error() string {
 	return "schema migration was required and the operation needs to be retried after the migration"
 }
 
-func asSchemaMigrationError(err error) (schemaMigrationNeededError, bool) {
-	nullColumnErr := streaming.NonNullColumnError{}
+func asSchemaMigrationError(err error) (*schemaMigrationNeededError, bool) {
+	var nullColumnErr *streaming.NonNullColumnError
 	if errors.As(err, &nullColumnErr) {
 		// Return an error so that we release our read lock and can take the write lock
 		// to forcibly reopen all our channels to get a new schema.
-		return schemaMigrationNeededError{
+		return &schemaMigrationNeededError{
 			runMigration: func(ctx context.Context, evolver *snowpipeSchemaEvolver) error {
 				return evolver.MigrateNotNullColumn(ctx, nullColumnErr)
 			},
 		}, true
 	}
-	missingColumnErr := streaming.MissingColumnError{}
+	var missingColumnErr *streaming.MissingColumnError
 	if errors.As(err, &missingColumnErr) {
-		return schemaMigrationNeededError{
+		return &schemaMigrationNeededError{
 			runMigration: func(ctx context.Context, evolver *snowpipeSchemaEvolver) error {
 				return evolver.MigrateMissingColumn(ctx, missingColumnErr)
 			},
 		}, true
 	}
-	batchErr := streaming.BatchSchemaMismatchError[streaming.MissingColumnError]{}
+	var batchErr *streaming.BatchSchemaMismatchError[*streaming.MissingColumnError]
 	if errors.As(err, &batchErr) {
-		return schemaMigrationNeededError{
+		return &schemaMigrationNeededError{
 			runMigration: func(ctx context.Context, evolver *snowpipeSchemaEvolver) error {
 				for _, missingCol := range batchErr.Errors {
 					// TODO(rockwood): Consider a batch SQL statement that adds N columns at a time
@@ -62,7 +62,7 @@ func asSchemaMigrationError(err error) (schemaMigrationNeededError, bool) {
 			},
 		}, true
 	}
-	return schemaMigrationNeededError{}, false
+	return nil, false
 }
 
 type snowpipeSchemaEvolver struct {
@@ -73,7 +73,7 @@ type snowpipeSchemaEvolver struct {
 	db, schema, table, role string
 }
 
-func (o *snowpipeSchemaEvolver) ComputeMissingColumnType(col streaming.MissingColumnError) (string, error) {
+func (o *snowpipeSchemaEvolver) ComputeMissingColumnType(col *streaming.MissingColumnError) (string, error) {
 	msg := service.NewMessage(nil)
 	msg.SetStructuredMut(map[string]any{
 		"name":  col.RawName(),
@@ -94,7 +94,7 @@ func (o *snowpipeSchemaEvolver) ComputeMissingColumnType(col streaming.MissingCo
 	return columnType, nil
 }
 
-func (o *snowpipeSchemaEvolver) MigrateMissingColumn(ctx context.Context, col streaming.MissingColumnError) error {
+func (o *snowpipeSchemaEvolver) MigrateMissingColumn(ctx context.Context, col *streaming.MissingColumnError) error {
 	columnType, err := o.ComputeMissingColumnType(col)
 	if err != nil {
 		return err
@@ -113,12 +113,12 @@ func (o *snowpipeSchemaEvolver) MigrateMissingColumn(ctx context.Context, col st
 		),
 	)
 	if err != nil {
-		o.logger.Warnf("unable to add new column, this maybe due to a race with another request, error: %s", err)
+		o.logger.Warnf("unable to add new column %s, this maybe due to a race with another request, error: %s", col.ColumnName(), err)
 	}
 	return nil
 }
 
-func (o *snowpipeSchemaEvolver) MigrateNotNullColumn(ctx context.Context, col streaming.NonNullColumnError) error {
+func (o *snowpipeSchemaEvolver) MigrateNotNullColumn(ctx context.Context, col *streaming.NonNullColumnError) error {
 	o.logger.Infof("identified new schema - attempting to alter table to remove null constraint on column: %s", col.ColumnName())
 	err := o.RunSQLMigration(
 		ctx,

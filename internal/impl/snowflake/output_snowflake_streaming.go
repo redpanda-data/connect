@@ -129,7 +129,7 @@ The input to this mapping is an object with the value and the name of the new co
 			service.NewStringField(ssoFieldChannelPrefix).
 				Description(`The prefix to use when creating a channel name.
 Duplicate channel names will result in errors and prevent multiple instances of Redpanda Connect from writing at the same time.
-By default if neither `+"`"+ssoFieldChannelPrefix+"`or `"+ssoFieldChannelName+` is specified then the output will create a channel name that is based on the table FQN so there will only be a single stream per table.
+By default if neither `+"`"+ssoFieldChannelPrefix+"` or `"+ssoFieldChannelName+` is specified then the output will create a channel name that is based on the table FQN so there will only be a single stream per table.
 
 At most `+"`max_in_flight`"+` channels will be opened.
 
@@ -191,7 +191,7 @@ input:
       count: 50000
       period: 45s
     # Prevent multiple batches from being in flight at once, so that we never send
-    # batch while another batch is being retried, this is important to ensure that
+    # a batch while another batch is being retried, this is important to ensure that
     # the Snowflake Snowpipe Streaming channel does not see older data - as it will
     # assume that the older data is already committed.
     checkpoint_limit: 1
@@ -201,7 +201,7 @@ output:
     # only upload data exactly once, these are already lexicographically
     # ordered.
     offset_token: "${!@lsn}"
-    # Since we're sending a single ordered log, we can only send on thing
+    # Since we're sending a single ordered log, we can only send one thing
     # at a time to ensure that we're properly incrementing our offset_token
     # and only using a single channel at a time.
     max_in_flight: 1
@@ -217,8 +217,8 @@ output:
 			"Ingesting data exactly once from Redpanda",
 			`How to ingest data from Redpanda with consumer groups, decode the schema using the schema registry, then write the corresponding data into Snowflake exactly once.
 
-NOTE: If attempting to do exactly-once it's important that records are delivered in order to the output and correctly partitioned. Be sure to read the documentation for 
-channel_name and offset_token first. Removing the offset_token is a safer option that will instruct Redpanda Connect to use it's default at-least-once delivery model instead.`,
+NOTE: If attempting to do exactly-once its important that records are delivered in order to the output and correctly partitioned. Be sure to read the documentation for 
+channel_name and offset_token first. Removing the offset_token is a safer option that will instruct Redpanda Connect to use its default at-least-once delivery model instead.`,
 			`
 input:
   redpanda_common:
@@ -240,7 +240,7 @@ pipeline:
 output:
   fallback:
     - snowflake_streaming:
-        # To ensure that we write an ordered stream each partition in kafka gets it's own
+        # To ensure that we write an ordered stream each partition in kafka gets its own
         # channel.
         channel_name: "partition-${!@kafka_partition}"
         # Ensure that our offsets are lexicographically sorted in string form by padding with
@@ -737,7 +737,7 @@ func (o *snowpipeStreamingOutput) WriteBatch(ctx context.Context, batch service.
 			}
 			continue // If creating the table succeeded, retry
 		}
-		needsMigrationErr := schemaMigrationNeededError{}
+		needsMigrationErr := &schemaMigrationNeededError{}
 		if !errors.As(err, &needsMigrationErr) {
 			return err
 		}
@@ -763,7 +763,8 @@ func (o *snowpipeStreamingOutput) createTable(ctx context.Context, batch service
 	return nil
 }
 
-func (o *snowpipeStreamingOutput) runMigration(ctx context.Context, needsMigrationErr schemaMigrationNeededError) error {
+// runMigration requires the migration lock being held.
+func (o *snowpipeStreamingOutput) runMigration(ctx context.Context, needsMigrationErr *schemaMigrationNeededError) error {
 	if err := needsMigrationErr.runMigration(ctx, o.schemaEvolver); err != nil {
 		return err
 	}
@@ -999,7 +1000,7 @@ func preprocessForExactlyOnce(
 }
 
 func wrapInsertError(err error) error {
-	if errors.Is(err, streaming.InvalidTimestampFormatError{}) {
+	if errors.Is(err, &streaming.InvalidTimestampFormatError{}) {
 		return fmt.Errorf("%w; if a custom format is required use a `%s` and bloblang functions `ts_parse` or `ts_strftime` to convert a custom format into a timestamp", err, ssoFieldMapping)
 	}
 	return err

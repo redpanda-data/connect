@@ -40,6 +40,8 @@ const (
 	responseTableNotExist   = 4
 	responseErrQueueFull    = 7
 	responseErrRetryRequest = 10
+
+	partnerID = "RedpandaConnect_SnowpipeStreamingSDK"
 )
 
 type (
@@ -448,7 +450,7 @@ func (c *SnowflakeRestClient) doPost(ctx context.Context, url string, req any, r
 		}
 		httpReq.Header.Set("Content-Type", "application/json")
 		httpReq.Header.Set("Accept", "application/json")
-		httpReq.Header.Set("User-Agent", fmt.Sprintf("RedpandaConnect_SnowpipeStreamingSDK/%v", c.version))
+		httpReq.Header.Set("User-Agent", fmt.Sprintf(partnerID+"/%v", c.version))
 		httpReq.Header.Set("X-Snowflake-Authorization-Token-Type", "KEYPAIR_JWT")
 		httpReq.Header.Set("Authorization", "Bearer "+c.cachedJWT.Load())
 		r, err := c.client.Do(httpReq)
@@ -467,7 +469,7 @@ func (c *SnowflakeRestClient) doPost(ctx context.Context, url string, req any, r
 		if r.StatusCode != 200 {
 			var restErr APIError
 			if unmarshalErr := json.Unmarshal(respBody, &restErr); unmarshalErr == nil && restErr.StatusCode != responseSuccess {
-				return nil, restErr
+				return nil, &restErr
 			}
 			return nil, fmt.Errorf("non successful status code (%d): %s", r.StatusCode, respBody)
 		}

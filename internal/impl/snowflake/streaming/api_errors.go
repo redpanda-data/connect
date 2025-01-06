@@ -21,10 +21,10 @@ type APIError struct {
 	Message    string `json:"message"`
 }
 
-var _ error = APIError{}
+var _ error = &APIError{}
 
 // Error statisfies the Error interface
-func (e APIError) Error() string {
+func (e *APIError) Error() string {
 	msg := e.Message
 	if msg == "" {
 		msg = "(no message)"
@@ -34,6 +34,6 @@ func (e APIError) Error() string {
 
 // IsTableNotExistsError returns true if the table does not exist (or the user is not authorized to see it).
 func IsTableNotExistsError(err error) bool {
-	var restErr APIError
+	var restErr *APIError
 	return errors.As(err, &restErr) && restErr.StatusCode == responseTableNotExist
 }
