@@ -38,7 +38,11 @@ fields:
 mapping: |
   #!blobl
 
-  let redpandaMigratorOffsets = this.redpanda_migrator.with("seed_brokers", "consumer_group", "client_id", "rack_id", "tls", "sasl").assign({"topics": ["__consumer_offsets"]})
+  let labelPrefix = @label.not_empty().or("redpanda_migrator_bundle")
+
+  let redpandaMigrator = this.redpanda_migrator.assign({"output_resource": "%s_redpanda_migrator_output".format($labelPrefix)})
+
+  let redpandaMigratorOffsets = this.redpanda_migrator.with("seed_brokers", "topics", "regexp_topics", "consumer_group", "topic_lag_refresh_period", "client_id", "rack_id", "tls", "sasl")
 
   root = if this.redpanda_migrator.length() == 0 {
     throw("the redpanda_migrator input must be configured")
@@ -48,9 +52,10 @@ mapping: |
         inputs:
           - sequence:
               inputs:
-                - schema_registry: %s
+                - label: %s_schema_registry_input
+                  schema_registry: %s
                   processors:
-                    - mapping: meta input_label = "schema_registry"
+                    - mapping: meta input_label = "schema_registry_input"
                 - generate:
                     count: 1
                     mapping: root = ""
@@ -60,22 +65,25 @@ mapping: |
                     - mapping: root = deleted()
           - broker:
               inputs:
-                - redpanda_migrator: %s
+                - label: %s_redpanda_migrator_input
+                  redpanda_migrator: %s
                   processors:
-                    - mapping: meta input_label = "redpanda_migrator"
-                - kafka_franz: %s
+                    - mapping: meta input_label = "redpanda_migrator_input"
+                - label: %s_redpanda_migrator_offsets_input
+                  redpanda_migrator_offsets: %s
                   processors:
-                    - mapping: meta input_label = "redpanda_migrator_offsets"
-    """.format(this.schema_registry.string(), this.redpanda_migrator.string(), $redpandaMigratorOffsets.string()).parse_yaml()
+                    - mapping: meta input_label = "redpanda_migrator_offsets_input"
+    """.format($labelPrefix, this.schema_registry.string(), $labelPrefix, $redpandaMigrator.string(), $labelPrefix, $redpandaMigratorOffsets.string()).parse_yaml()
   } else if this.schema_registry.length() > 0 {
     """
       broker:
         inputs:
           - sequence:
               inputs:
-                - schema_registry: %s
+                - label: %s_schema_registry_input
+                  schema_registry: %s
                   processors:
-                    - mapping: meta input_label = "schema_registry"
+                    - mapping: meta input_label = "schema_registry_input"
                 - generate:
                     count: 1
                     mapping: root = ""
@@ -83,24 +91,28 @@ mapping: |
                     - log:
                         message: Finished importing schemas
                     - mapping: root = deleted()
-          - redpanda_migrator: %s
+          - label: %s_redpanda_migrator_input
+            redpanda_migrator: %s
             processors:
-              - mapping: meta input_label = "redpanda_migrator"
-          - kafka_franz: %s
+              - mapping: meta input_label = "redpanda_migrator_input"
+          - label: %s_redpanda_migrator_offsets_input
+            redpanda_migrator_offsets: %s
             processors:
-              - mapping: meta input_label = "redpanda_migrator_offsets"
-    """.format(this.schema_registry.string(), this.redpanda_migrator.string(), $redpandaMigratorOffsets.string()).parse_yaml()
+              - mapping: meta input_label = "redpanda_migrator_offsets_input"
+    """.format($labelPrefix, this.schema_registry.string(), $labelPrefix, $redpandaMigrator.string(), $labelPrefix, $redpandaMigratorOffsets.string()).parse_yaml()
   } else {
     """
       broker:
         inputs:
-          - redpanda_migrator: %s
+          - label: %s_redpanda_migrator_input
+            redpanda_migrator: %s
             processors:
-              - mapping: meta input_label = "redpanda_migrator"
-          - kafka_franz: %s
+              - mapping: meta input_label = "redpanda_migrator_input"
+          - label: %s_redpanda_migrator_offsets_input
+            redpanda_migrator_offsets: %s
             processors:
-              - mapping: meta input_label = "redpanda_migrator_offsets"
-    """.format(this.redpanda_migrator.string(), $redpandaMigratorOffsets.string()).parse_yaml()
+              - mapping: meta input_label = "redpanda_migrator_offsets_input"
+    """.format($labelPrefix, $redpandaMigrator.string(), $labelPrefix, $redpandaMigratorOffsets.string()).parse_yaml()
   }
 
 tests:
@@ -121,7 +133,8 @@ tests:
           - sequence:
               inputs:
                 - processors:
-                    - mapping: meta input_label = "schema_registry"
+                    - mapping: meta input_label = "schema_registry_input"
+                  label: redpanda_migrator_bundle_schema_registry_input
                   schema_registry:
                      url: http://localhost:8081
                 - generate:
@@ -131,18 +144,21 @@ tests:
                     - log:
                         message: Finished importing schemas
                     - mapping: root = deleted()
-          - redpanda_migrator:
+          - label: redpanda_migrator_bundle_redpanda_migrator_input
+            redpanda_migrator:
+              seed_brokers: [ "127.0.0.1:9092" ]
+              topics: [ "foobar" ]
+              consumer_group: "migrator"
+              output_resource: redpanda_migrator_bundle_redpanda_migrator_output
+            processors:
+              - mapping: meta input_label = "redpanda_migrator_input"
+          - label: redpanda_migrator_bundle_redpanda_migrator_offsets_input
+            redpanda_migrator_offsets:
               seed_brokers: [ "127.0.0.1:9092" ]
               topics: [ "foobar" ]
               consumer_group: "migrator"
             processors:
-              - mapping: meta input_label = "redpanda_migrator"
-          - kafka_franz:
-              seed_brokers: [ "127.0.0.1:9092" ]
-              topics: [ "__consumer_offsets" ]
-              consumer_group: "migrator"
-            processors:
-              - mapping: meta input_label = "redpanda_migrator_offsets"
+              - mapping: meta input_label = "redpanda_migrator_offsets_input"
 
   - name: Migrate schemas first, then messages and offsets
     config:
@@ -159,7 +175,8 @@ tests:
           - sequence:
               inputs:
                 - processors:
-                    - mapping: meta input_label = "schema_registry"
+                    - mapping: meta input_label = "schema_registry_input"
+                  label: redpanda_migrator_bundle_schema_registry_input
                   schema_registry:
                      url: http://localhost:8081
                 - generate:
@@ -171,18 +188,21 @@ tests:
                     - mapping: root = deleted()
           - broker:
               inputs:
-                - redpanda_migrator:
+                - label: redpanda_migrator_bundle_redpanda_migrator_input
+                  redpanda_migrator:
+                    seed_brokers: [ "127.0.0.1:9092" ]
+                    topics: [ "foobar" ]
+                    consumer_group: "migrator"
+                    output_resource: redpanda_migrator_bundle_redpanda_migrator_output
+                  processors:
+                    - mapping: meta input_label = "redpanda_migrator_input"
+                - label: redpanda_migrator_bundle_redpanda_migrator_offsets_input
+                  redpanda_migrator_offsets:
                     seed_brokers: [ "127.0.0.1:9092" ]
                     topics: [ "foobar" ]
                     consumer_group: "migrator"
                   processors:
-                    - mapping: meta input_label = "redpanda_migrator"
-                - kafka_franz:
-                    seed_brokers: [ "127.0.0.1:9092" ]
-                    topics: [ "__consumer_offsets" ]
-                    consumer_group: "migrator"
-                  processors:
-                    - mapping: meta input_label = "redpanda_migrator_offsets"
+                    - mapping: meta input_label = "redpanda_migrator_offsets_input"
 
   - name: Migrate messages and offsets without schemas
     config:
@@ -194,15 +214,18 @@ tests:
     expected:
       broker:
         inputs:
-          - redpanda_migrator:
+          - label: redpanda_migrator_bundle_redpanda_migrator_input
+            redpanda_migrator:
+              seed_brokers: [ "127.0.0.1:9092" ]
+              topics: [ "foobar" ]
+              consumer_group: "migrator"
+              output_resource: redpanda_migrator_bundle_redpanda_migrator_output
+            processors:
+              - mapping: meta input_label = "redpanda_migrator_input"
+          - label: redpanda_migrator_bundle_redpanda_migrator_offsets_input
+            redpanda_migrator_offsets:
               seed_brokers: [ "127.0.0.1:9092" ]
               topics: [ "foobar" ]
               consumer_group: "migrator"
             processors:
-              - mapping: meta input_label = "redpanda_migrator"
-          - kafka_franz:
-              seed_brokers: [ "127.0.0.1:9092" ]
-              topics: [ "__consumer_offsets" ]
-              consumer_group: "migrator"
-            processors:
-              - mapping: meta input_label = "redpanda_migrator_offsets"
+              - mapping: meta input_label = "redpanda_migrator_offsets_input"

@@ -40,8 +40,11 @@ output:
   label: ""
   redpanda_migrator_offsets:
     seed_brokers: [] # No default (required)
-    kafka_key: ${! @kafka_key }
-    max_in_flight: 1
+    offset_topic: ${! @kafka_offset_topic }
+    offset_group: ${! @kafka_offset_group }
+    offset_partition: ${! @kafka_offset_partition }
+    offset_commit_timestamp: ${! @kafka_offset_commit_timestamp }
+    offset_metadata: ${! @kafka_offset_metadata }
 ```
 
 --
@@ -65,8 +68,11 @@ output:
       client_certs: []
     sasl: [] # No default (optional)
     metadata_max_age: 5m
-    kafka_key: ${! @kafka_key }
-    max_in_flight: 1
+    offset_topic: ${! @kafka_offset_topic }
+    offset_group: ${! @kafka_offset_group }
+    offset_partition: ${! @kafka_offset_partition }
+    offset_commit_timestamp: ${! @kafka_offset_commit_timestamp }
+    offset_metadata: ${! @kafka_offset_metadata }
     timeout: 10s
     max_message_bytes: 1MB
     broker_write_max_bytes: 100MB
@@ -470,24 +476,55 @@ The maximum age of metadata before it is refreshed.
 
 *Default*: `"5m"`
 
-=== `kafka_key`
+=== `offset_topic`
 
-Kafka key.
+Kafka offset topic.
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
 
 *Type*: `string`
 
-*Default*: `"${! @kafka_key }"`
+*Default*: `"${! @kafka_offset_topic }"`
 
-=== `max_in_flight`
+=== `offset_group`
 
-The maximum number of batches to be sending in parallel at any given time.
+Kafka offset group.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
 
-*Type*: `int`
+*Type*: `string`
 
-*Default*: `1`
+*Default*: `"${! @kafka_offset_group }"`
+
+=== `offset_partition`
+
+Kafka offset partition.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+
+*Type*: `string`
+
+*Default*: `"${! @kafka_offset_partition }"`
+
+=== `offset_commit_timestamp`
+
+Kafka offset commit timestamp.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+
+*Type*: `string`
+
+*Default*: `"${! @kafka_offset_commit_timestamp }"`
+
+=== `offset_metadata`
+
+Kafka offset metadata value.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+
+*Type*: `string`
+
+*Default*: `"${! @kafka_offset_metadata }"`
 
 === `timeout`
 
