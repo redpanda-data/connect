@@ -452,7 +452,6 @@ func (a *awsSQSReader) readLoop(wg *sync.WaitGroup, inFlightTracker *sqsInFlight
 			return
 		}
 		if len(res.Messages) > 0 {
-			a.log.Tracef("adding new msgs (n=%v, t=%v)", len(res.Messages), inFlightTracker.Size())
 			for _, msg := range res.Messages {
 				var handle *sqsMessageHandle
 				if msg.MessageId != nil && msg.ReceiptHandle != nil {
