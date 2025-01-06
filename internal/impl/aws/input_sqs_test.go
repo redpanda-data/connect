@@ -17,6 +17,8 @@ package aws
 import (
 	"context"
 	"fmt"
+	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -34,15 +36,15 @@ import (
 type mockSqsInput struct {
 	sqsAPI
 
-	mtx          chan struct{}
+	mtx          sync.Mutex
 	queueTimeout int32
 	messages     []types.Message
 	mesTimeouts  map[string]int32
 }
 
 func (m *mockSqsInput) do(fn func()) {
-	<-m.mtx
-	defer func() { m.mtx <- struct{}{} }()
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
 	fn()
 }
 
@@ -53,7 +55,7 @@ func (m *mockSqsInput) TimeoutLoop(ctx context.Context) {
 	for {
 		select {
 		case <-t.C:
-			<-m.mtx
+			m.mtx.Lock()
 
 			for mesID, timeout := range m.mesTimeouts {
 				timeout = timeout - 1
@@ -64,7 +66,7 @@ func (m *mockSqsInput) TimeoutLoop(ctx context.Context) {
 				}
 			}
 
-			m.mtx <- struct{}{}
+			m.mtx.Unlock()
 		case <-ctx.Done():
 			return
 		}
@@ -72,8 +74,8 @@ func (m *mockSqsInput) TimeoutLoop(ctx context.Context) {
 }
 
 func (m *mockSqsInput) ReceiveMessage(context.Context, *sqs.ReceiveMessageInput, ...func(*sqs.Options)) (*sqs.ReceiveMessageOutput, error) {
-	<-m.mtx
-	defer func() { m.mtx <- struct{}{} }()
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
 
 	messages := make([]types.Message, 0, len(m.messages))
 
@@ -88,8 +90,8 @@ func (m *mockSqsInput) ReceiveMessage(context.Context, *sqs.ReceiveMessageInput,
 }
 
 func (m *mockSqsInput) ChangeMessageVisibilityBatch(ctx context.Context, input *sqs.ChangeMessageVisibilityBatchInput, opts ...func(*sqs.Options)) (*sqs.ChangeMessageVisibilityBatchOutput, error) {
-	<-m.mtx
-	defer func() { m.mtx <- struct{}{} }()
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
 
 	for _, entry := range input.Entries {
 		if _, found := m.mesTimeouts[*entry.Id]; found {
@@ -103,16 +105,14 @@ func (m *mockSqsInput) ChangeMessageVisibilityBatch(ctx context.Context, input *
 }
 
 func (m *mockSqsInput) DeleteMessageBatch(ctx context.Context, input *sqs.DeleteMessageBatchInput, opts ...func(*sqs.Options)) (*sqs.DeleteMessageBatchOutput, error) {
-	<-m.mtx
-	defer func() { m.mtx <- struct{}{} }()
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
 
 	for _, entry := range input.Entries {
 		delete(m.mesTimeouts, *entry.Id)
-		for i, message := range m.messages {
-			if *entry.Id == *message.MessageId {
-				m.messages = append(m.messages[:i], m.messages[i+1:]...)
-			}
-		}
+		m.messages = slices.DeleteFunc(m.messages, func(msg types.Message) bool {
+			return *entry.Id == *msg.MessageId
+		})
 	}
 
 	return &sqs.DeleteMessageBatchOutput{}, nil
@@ -154,7 +154,7 @@ func TestSQSInput(t *testing.T) {
 			ResetVisibility:     true,
 			MaxNumberOfMessages: 10,
 			MaxOutstanding:      100,
-			MessageTimeout:      30 * time.Second,
+			MessageTimeout:      10 * time.Second,
 		},
 		conf,
 		nil,
@@ -162,12 +162,10 @@ func TestSQSInput(t *testing.T) {
 	require.NoError(t, err)
 
 	mockInput := &mockSqsInput{
-		mtx:          make(chan struct{}, 1),
 		queueTimeout: 10,
 		messages:     messages,
 		mesTimeouts:  make(map[string]int32, expectedMessages),
 	}
-	mockInput.mtx <- struct{}{}
 	r.sqs = mockInput
 	go mockInput.TimeoutLoop(tCtx)
 
@@ -247,7 +245,7 @@ func TestSQSInputBatchAck(t *testing.T) {
 			ResetVisibility:     true,
 			MaxNumberOfMessages: 10,
 			MaxOutstanding:      100,
-			MessageTimeout:      30 * time.Second,
+			MessageTimeout:      10 * time.Second,
 		},
 		conf,
 		nil,
@@ -255,12 +253,10 @@ func TestSQSInputBatchAck(t *testing.T) {
 	require.NoError(t, err)
 
 	mockInput := &mockSqsInput{
-		mtx:          make(chan struct{}, 1),
 		queueTimeout: 10,
 		messages:     messages,
 		mesTimeouts:  make(map[string]int32, expectedMessages),
 	}
-	mockInput.mtx <- struct{}{}
 	r.sqs = mockInput
 	go mockInput.TimeoutLoop(tCtx)
 
