@@ -318,7 +318,12 @@ func (a *awsSQSReader) ackLoop(wg *sync.WaitGroup, inFlightTracker *sqsInFlightT
 			}
 		} else {
 			if err := a.resetMessages(closeNowCtx, handles...); err != nil {
-				a.log.Errorf("Failed to reset the visibility timeout of messages: %v", err)
+				// Downgrade this to Info level - it's not really an error, it's just going to take longer
+				// to reset the visibility so the messages might be delayed is all. It's possible for delays
+				// if this succeeds anyways as it might be racing with the refresh loop. Fixing that
+				// would mean moving nacks to the refresh loop, but I don't think this will be a big deal in
+				// practice.
+				a.log.Infof("Failed to reset the visibility timeout of messages: %v", err)
 			}
 		}
 	}
