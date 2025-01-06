@@ -231,13 +231,13 @@ func (t *sqsInFlightTracker) PullToRefresh(limit int) []*sqsMessageHandle {
 	t.m.Lock()
 	defer t.m.Unlock()
 
-	handles := make([]*sqsMessageHandle, 0, len(t.handles))
+	handles := make([]*sqsMessageHandle, 0, limit)
 	now := time.Now()
 	// Pull the front of our fifo until we reach our limit or we reach elements that do not
 	// need to be refreshed
 	for e := t.fifo.Front(); e != nil && len(handles) < limit; e = t.fifo.Front() {
 		v := e.Value.(*sqsMessageHandle)
-		if v.deadline.Sub(now) < (t.timeout / 2) {
+		if v.deadline.Sub(now) > (t.timeout / 2) {
 			break
 		}
 		handles = append(handles, v)
@@ -333,33 +333,24 @@ ackLoop:
 	for {
 		select {
 		case h := <-a.ackMessagesChan:
-			a.log.Debugf("[ackloop] acking msg '%s' (pa=%v, pn=%v, t=%v)", h.id, len(pendingAcks), len(pendingNacks), inFlightTracker.Size())
-			t := time.Now()
 			pendingAcks = append(pendingAcks, h)
 			inFlightTracker.Remove(h.id)
 			if len(pendingAcks) >= a.conf.MaxNumberOfMessages {
 				flushFinishedHandles(pendingAcks, true)
 				pendingAcks = pendingAcks[:0]
 			}
-			a.log.Debugf("[ackloop] done handling ack (d=%v, pa=%v t=%v)", time.Since(t), len(pendingAcks), inFlightTracker.Size())
 		case h := <-a.nackMessagesChan:
-			a.log.Debugf("[ackloop] nacking msg '%s' (pa=%v, pn=%v, t=%v)", h.id, len(pendingAcks), len(pendingNacks), inFlightTracker.Size())
-			t := time.Now()
 			pendingNacks = append(pendingNacks, h)
 			inFlightTracker.Remove(h.id)
 			if len(pendingNacks) >= a.conf.MaxNumberOfMessages {
 				flushFinishedHandles(pendingNacks, false)
 				pendingNacks = pendingNacks[:0]
 			}
-			a.log.Debugf("[ackloop] done handling nack (d=%v, pn=%v t=%v)", time.Since(t), len(pendingNacks), inFlightTracker.Size())
 		case <-flushTimer.C:
-			a.log.Debugf("[ackloop] flushing all (pa=%v, pn=%v, t=%v)", len(pendingAcks), len(pendingNacks), inFlightTracker.Size())
-			t := time.Now()
 			flushFinishedHandles(pendingAcks, true)
 			pendingAcks = pendingAcks[:0]
 			flushFinishedHandles(pendingNacks, false)
 			pendingNacks = pendingNacks[:0]
-			a.log.Debugf("[ackloop] flushed all (d=%v, t=%v)", time.Since(t), inFlightTracker.Size())
 		case <-a.closeSignal.SoftStopChan():
 			break ackLoop
 		}
@@ -383,7 +374,6 @@ func (a *awsSQSReader) refreshLoop(wg *sync.WaitGroup, inFlightTracker *sqsInFli
 				// There is nothing to refresh, return and sleep for a second
 				return
 			}
-			a.log.Debugf("[refreshloop] refreshing messages (n=%v t=%v)", len(currentHandles), inFlightTracker.Size())
 			err := a.updateVisibilityMessages(closeNowCtx, int(a.conf.MessageTimeout.Seconds()), currentHandles...)
 			if err == nil {
 				continue
