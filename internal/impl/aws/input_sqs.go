@@ -15,6 +15,7 @@
 package aws
 
 import (
+	"container/list"
 	"context"
 	"errors"
 	"fmt"
@@ -198,7 +199,8 @@ func (a *awsSQSReader) Connect(ctx context.Context) error {
 	}
 
 	ift := &sqsInFlightTracker{
-		handles: map[string]*sqsMessageHandle{},
+		handles: map[string]*list.Element{},
+		fifo:    list.New(),
 		limit:   a.conf.MaxOutstanding,
 		timeout: a.conf.MessageTimeout,
 	}
@@ -216,28 +218,31 @@ func (a *awsSQSReader) Connect(ctx context.Context) error {
 }
 
 type sqsInFlightTracker struct {
-	handles map[string]*sqsMessageHandle
+	handles map[string]*list.Element
+	fifo    *list.List // contains *sqsMessageHandle
 	limit   int
 	timeout time.Duration
 	m       sync.Mutex
 	l       *sync.Cond
 }
 
-func (t *sqsInFlightTracker) PullToRefresh() []*sqsMessageHandle {
+func (t *sqsInFlightTracker) PullToRefresh(limit int) []*sqsMessageHandle {
 	t.m.Lock()
 	defer t.m.Unlock()
 
 	handles := make([]*sqsMessageHandle, 0, len(t.handles))
 	now := time.Now()
-	for _, v := range t.handles {
-		// Only update messages when we get to half the timeout
-		//
-		// This prevents N^2 refresh behavior.
+	// Pull the front of our fifo until we reach our limit or we reach elements that do not
+	// need to be refreshed
+	for e := t.fifo.Front(); e != nil && len(handles) < limit; e = t.fifo.Front() {
+		v := e.Value.(*sqsMessageHandle)
 		if v.deadline.Sub(now) < (t.timeout / 2) {
-			continue
+			break
 		}
 		handles = append(handles, v)
 		v.deadline = now.Add(t.timeout)
+		// Keep our fifo in deadline sorted order
+		t.fifo.MoveToBack(e)
 	}
 	return handles
 }
@@ -251,7 +256,11 @@ func (t *sqsInFlightTracker) Size() int {
 func (t *sqsInFlightTracker) Remove(id string) {
 	t.m.Lock()
 	defer t.m.Unlock()
-	delete(t.handles, id)
+	entry, ok := t.handles[id]
+	if ok {
+		t.fifo.Remove(entry)
+		delete(t.handles, id)
+	}
 	t.l.Signal()
 }
 
@@ -266,6 +275,7 @@ func (t *sqsInFlightTracker) Clear() {
 	t.m.Lock()
 	defer t.m.Unlock()
 	clear(t.handles)
+	t.fifo = list.New()
 	t.l.Signal()
 }
 
@@ -285,7 +295,8 @@ func (t *sqsInFlightTracker) AddNew(ctx context.Context, messages ...sqsMessage)
 		if m.handle == nil {
 			continue
 		}
-		t.handles[m.handle.id] = m.handle
+		e := t.fifo.PushBack(m.handle)
+		t.handles[m.handle.id] = e
 	}
 }
 
@@ -317,28 +328,34 @@ func (a *awsSQSReader) ackLoop(wg *sync.WaitGroup, inFlightTracker *sqsInFlightT
 			return
 		}
 		defer refreshLock.Unlock()
-		currentHandles := inFlightTracker.PullToRefresh()
-		if len(currentHandles) == 0 {
-			return
-		}
-		err := a.updateVisibilityMessages(closeNowCtx, int(a.conf.MessageTimeout.Seconds()), currentHandles...)
-		if err == nil {
-			return
-		}
-		partialErr := &batchUpdateVisibilityError{}
-		if errors.As(err, &partialErr) {
-			for _, fail := range partialErr.entries {
-				if !inFlightTracker.IsTracking(*fail.Id) {
-					continue
-				}
-				msg := "(no message)"
-				if fail.Message != nil {
-					msg = *fail.Message
-				}
-				a.log.Debugf("Failed to update SQS message '%v', response code: %v, message: %q, sender fault: %v", *fail.Id, *fail.Code, msg, fail.SenderFault)
+		for {
+			// updateVisibilityMessages can only make an API request with 10 messages at most, so grab 10 then refresh to prevent
+			// an issue where we grab a ton of messages and they are acked before we actual make the API call. Note that this scenario
+			// can still happen because we refresh async with acking, but this makes it a lot less likely.
+			currentHandles := inFlightTracker.PullToRefresh(10)
+			if len(currentHandles) == 0 {
+				return
 			}
-		} else {
-			a.log.Debugf("Failed to update messages visibility timeout: %v", err)
+			err := a.updateVisibilityMessages(closeNowCtx, int(a.conf.MessageTimeout.Seconds()), currentHandles...)
+			if err == nil {
+				continue
+			}
+			partialErr := &batchUpdateVisibilityError{}
+			if errors.As(err, &partialErr) {
+				for _, fail := range partialErr.entries {
+					// Mitigate erroneous log statements due to the race described above by making sure we're still tracking the message
+					if !inFlightTracker.IsTracking(*fail.Id) {
+						continue
+					}
+					msg := "(no message)"
+					if fail.Message != nil {
+						msg = *fail.Message
+					}
+					a.log.Debugf("Failed to update SQS message '%v', response code: %v, message: %q, sender fault: %v", *fail.Id, *fail.Code, msg, fail.SenderFault)
+				}
+			} else {
+				a.log.Debugf("Failed to update messages visibility timeout: %v", err)
+			}
 		}
 	}
 
