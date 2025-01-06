@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 
 - The `code` and `file` fields on the `javascript` processor docs no longer erroneously mention interpolation support. (@mihaitodor)
 - The `postgres_cdc` now correctly handles `null` values. (@rockwotj)
+- Fix an issue in `aws_sqs` with refreshing in-flight message leases which could prevent acks from processed. (@rockwotj)
 
 ## 4.44.0 - 2024-12-13
 
