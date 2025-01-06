@@ -207,9 +207,10 @@ func (a *awsSQSReader) Connect(ctx context.Context) error {
 	ift.l = sync.NewCond(&ift.m)
 
 	var wg sync.WaitGroup
-	wg.Add(2)
+	wg.Add(3)
 	go a.readLoop(&wg, ift)
 	go a.ackLoop(&wg, ift)
+	go a.refreshLoop(&wg, ift)
 	go func() {
 		wg.Wait()
 		a.closeSignal.TriggerHasStopped()
@@ -322,43 +323,6 @@ func (a *awsSQSReader) ackLoop(wg *sync.WaitGroup, inFlightTracker *sqsInFlightT
 		}
 	}
 
-	var refreshLock sync.Mutex // This should probably be another seperate loop...
-	refreshCurrentHandles := func() {
-		if !refreshLock.TryLock() {
-			return
-		}
-		defer refreshLock.Unlock()
-		for {
-			// updateVisibilityMessages can only make an API request with 10 messages at most, so grab 10 then refresh to prevent
-			// an issue where we grab a ton of messages and they are acked before we actual make the API call. Note that this scenario
-			// can still happen because we refresh async with acking, but this makes it a lot less likely.
-			currentHandles := inFlightTracker.PullToRefresh(10)
-			if len(currentHandles) == 0 {
-				return
-			}
-			err := a.updateVisibilityMessages(closeNowCtx, int(a.conf.MessageTimeout.Seconds()), currentHandles...)
-			if err == nil {
-				continue
-			}
-			partialErr := &batchUpdateVisibilityError{}
-			if errors.As(err, &partialErr) {
-				for _, fail := range partialErr.entries {
-					// Mitigate erroneous log statements due to the race described above by making sure we're still tracking the message
-					if !inFlightTracker.IsTracking(*fail.Id) {
-						continue
-					}
-					msg := "(no message)"
-					if fail.Message != nil {
-						msg = *fail.Message
-					}
-					a.log.Debugf("Failed to update SQS message '%v', response code: %v, message: %q, sender fault: %v", *fail.Id, *fail.Code, msg, fail.SenderFault)
-				}
-			} else {
-				a.log.Debugf("Failed to update messages visibility timeout: %v", err)
-			}
-		}
-	}
-
 	flushTimer := time.NewTicker(time.Second)
 	defer flushTimer.Stop()
 
@@ -395,7 +359,6 @@ ackLoop:
 			pendingAcks = pendingAcks[:0]
 			flushFinishedHandles(pendingNacks, false)
 			pendingNacks = pendingNacks[:0]
-			go refreshCurrentHandles()
 			a.log.Debugf("[ackloop] flushed all (d=%v, t=%v)", time.Since(t), inFlightTracker.Size())
 		case <-a.closeSignal.SoftStopChan():
 			break ackLoop
@@ -404,6 +367,54 @@ ackLoop:
 
 	flushFinishedHandles(pendingAcks, true)
 	flushFinishedHandles(pendingNacks, false)
+}
+
+func (a *awsSQSReader) refreshLoop(wg *sync.WaitGroup, inFlightTracker *sqsInFlightTracker) {
+	defer wg.Done()
+	closeNowCtx, done := a.closeSignal.HardStopCtx(context.Background())
+	defer done()
+	refreshCurrentHandles := func() {
+		for !a.closeSignal.IsSoftStopSignalled() {
+			// updateVisibilityMessages can only make an API request with 10 messages at most, so grab 10 then refresh to prevent
+			// an issue where we grab a ton of messages and they are acked before we actual make the API call. Note that this scenario
+			// can still happen because we refresh async with acking, but this makes it a lot less likely.
+			currentHandles := inFlightTracker.PullToRefresh(10)
+			if len(currentHandles) == 0 {
+				// There is nothing to refresh, return and sleep for a second
+				return
+			}
+			a.log.Debugf("[refreshloop] refreshing messages (n=%v t=%v)", len(currentHandles), inFlightTracker.Size())
+			err := a.updateVisibilityMessages(closeNowCtx, int(a.conf.MessageTimeout.Seconds()), currentHandles...)
+			if err == nil {
+				continue
+			}
+			partialErr := &batchUpdateVisibilityError{}
+			if errors.As(err, &partialErr) {
+				for _, fail := range partialErr.entries {
+					// Mitigate erroneous log statements due to the race described above by making sure we're still tracking the message
+					if !inFlightTracker.IsTracking(*fail.Id) {
+						continue
+					}
+					msg := "(no message)"
+					if fail.Message != nil {
+						msg = *fail.Message
+					}
+					a.log.Debugf("Failed to update SQS message '%v', response code: %v, message: %q, sender fault: %v", *fail.Id, *fail.Code, msg, fail.SenderFault)
+				}
+			} else {
+				a.log.Debugf("Failed to update messages visibility timeout: %v", err)
+			}
+		}
+	}
+
+	for {
+		select {
+		case <-time.After(time.Second):
+			refreshCurrentHandles()
+		case <-a.closeSignal.SoftStopChan():
+			return
+		}
+	}
 }
 
 func (a *awsSQSReader) readLoop(wg *sync.WaitGroup, inFlightTracker *sqsInFlightTracker) {
