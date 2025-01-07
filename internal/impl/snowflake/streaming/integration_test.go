@@ -30,6 +30,10 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming"
 )
 
+func ptr[T any](v T) *T {
+	return &v
+}
+
 func msg(s string) *service.Message {
 	return service.NewMessage([]byte(s))
 }
@@ -66,13 +70,11 @@ func setup(t *testing.T) (*streaming.SnowflakeRestClient, *streaming.SnowflakeSe
 		Role:           "ACCOUNTADMIN",
 		PrivateKey:     parseResult.(*rsa.PrivateKey),
 		ConnectVersion: "",
-		Application:    "development",
 	}
 	restClient, err := streaming.NewRestClient(
 		clientOptions.Account,
 		clientOptions.User,
 		clientOptions.ConnectVersion,
-		"Redpanda_Connect_"+clientOptions.Application,
 		clientOptions.PrivateKey,
 		clientOptions.Logger,
 	)
@@ -80,7 +82,7 @@ func setup(t *testing.T) (*streaming.SnowflakeRestClient, *streaming.SnowflakeSe
 	t.Cleanup(restClient.Close)
 	streamClient, err := streaming.NewSnowflakeServiceClient(ctx, clientOptions)
 	require.NoError(t, err)
-	t.Cleanup(func() { _ = streamClient.Close() })
+	t.Cleanup(streamClient.Close)
 	return restClient, streamClient
 }
 
@@ -169,7 +171,7 @@ func TestAllSnowflakeDatatypes(t *testing.T) {
       "K": "2024-01-01T13:00:00.000-08:00",
       "L": "2024-01-01T12:30:00.000-08:00"
     }`),
-	})
+	}, nil)
 	require.NoError(t, err)
 	time.Sleep(time.Second)
 	// Always order by A so we get consistent ordering for our test
@@ -321,7 +323,7 @@ func TestIntegerCompat(t *testing.T) {
 			"c": math.MaxInt16,
 			"d": "1234.12345678",
 		}),
-	})
+	}, nil)
 	require.NoError(t, err)
 	require.EventuallyWithT(t, func(collect *assert.CollectT) {
 		// Always order by A so we get consistent ordering for our test
@@ -406,7 +408,7 @@ func TestTimestampCompat(t *testing.T) {
 		structuredMsg(timestamps1),
 		structuredMsg(timestamps2),
 		msg(`{}`), // all nulls
-	})
+	}, nil)
 	require.NoError(t, err)
 	expectedRows := [][]string{
 		{
@@ -490,6 +492,143 @@ func TestTimestampCompat(t *testing.T) {
 		}
 		assert.Equal(t, "00000", resp.SQLState)
 		assert.Equal(t, parseSnowflakeData(expectedRows), parseSnowflakeData(resp.Data))
+	}, 3*time.Second, time.Second)
+}
+
+func TestChannelReopenFails(t *testing.T) {
+	ctx := context.Background()
+	restClient, streamClient := setup(t)
+	channelOpts := streaming.ChannelOptions{
+		Name:         t.Name(),
+		DatabaseName: envOr("SNOWFLAKE_DB", "BABY_DATABASE"),
+		SchemaName:   "PUBLIC",
+		TableName:    "TEST_CHANNEL_TABLE",
+		BuildOptions: streaming.BuildOptions{Parallelism: 1, ChunkSize: 50_000},
+	}
+	_, err := restClient.RunSQL(ctx, streaming.RunSQLRequest{
+		Database: channelOpts.DatabaseName,
+		Schema:   channelOpts.SchemaName,
+		Statement: fmt.Sprintf(`
+      DROP TABLE IF EXISTS %s;
+      CREATE TABLE IF NOT EXISTS %s (
+        A NUMBER
+      );`, channelOpts.TableName, channelOpts.TableName),
+		Parameters: map[string]string{
+			"MULTI_STATEMENT_COUNT": "0",
+		},
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		err = streamClient.DropChannel(ctx, channelOpts)
+		if err != nil {
+			t.Log("unable to cleanup stream in SNOW:", err)
+		}
+	})
+	channelA, err := streamClient.OpenChannel(ctx, channelOpts)
+	require.NoError(t, err)
+	channelB, err := streamClient.OpenChannel(ctx, channelOpts)
+	require.NoError(t, err)
+	_, err = channelA.InsertRows(ctx, service.MessageBatch{
+		structuredMsg(map[string]any{"a": math.MinInt64}),
+		structuredMsg(map[string]any{"a": 0}),
+		structuredMsg(map[string]any{"a": math.MaxInt64}),
+	}, nil)
+	require.Error(t, err)
+	_, err = channelB.InsertRows(ctx, service.MessageBatch{
+		structuredMsg(map[string]any{"a": math.MinInt64}),
+		structuredMsg(map[string]any{"a": 0}),
+		structuredMsg(map[string]any{"a": math.MaxInt64}),
+	}, nil)
+	require.EventuallyWithT(t, func(collect *assert.CollectT) {
+		// Always order by A so we get consistent ordering for our test
+		resp, err := restClient.RunSQL(ctx, streaming.RunSQLRequest{
+			Database:  channelOpts.DatabaseName,
+			Schema:    channelOpts.SchemaName,
+			Statement: fmt.Sprintf(`SELECT * FROM %s ORDER BY A;`, channelOpts.TableName),
+		})
+		if !assert.NoError(collect, err) {
+			t.Logf("failed to scan table: %s", err)
+			return
+		}
+		assert.Equal(collect, "00000", resp.SQLState)
+		itoa := strconv.Itoa
+		assert.Equal(collect, parseSnowflakeData([][]string{
+			{itoa(math.MinInt64)},
+			{"0"},
+			{itoa(math.MaxInt64)},
+		}), parseSnowflakeData(resp.Data))
+	}, 3*time.Second, time.Second)
+}
+
+func TestChannelOffsetToken(t *testing.T) {
+	ctx := context.Background()
+	restClient, streamClient := setup(t)
+	channelOpts := streaming.ChannelOptions{
+		Name:         t.Name(),
+		DatabaseName: envOr("SNOWFLAKE_DB", "BABY_DATABASE"),
+		SchemaName:   "PUBLIC",
+		TableName:    "TEST_OFFSET_TOKEN_TABLE",
+		BuildOptions: streaming.BuildOptions{Parallelism: 1, ChunkSize: 50_000},
+	}
+	_, err := restClient.RunSQL(ctx, streaming.RunSQLRequest{
+		Database: channelOpts.DatabaseName,
+		Schema:   channelOpts.SchemaName,
+		Statement: fmt.Sprintf(`
+      DROP TABLE IF EXISTS %s;
+      CREATE TABLE IF NOT EXISTS %s (
+        A NUMBER
+      );`, channelOpts.TableName, channelOpts.TableName),
+		Parameters: map[string]string{
+			"MULTI_STATEMENT_COUNT": "0",
+		},
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		err = streamClient.DropChannel(ctx, channelOpts)
+		if err != nil {
+			t.Log("unable to cleanup stream in SNOW:", err)
+		}
+	})
+	channelA, err := streamClient.OpenChannel(ctx, channelOpts)
+	require.NoError(t, err)
+	require.Nil(t, channelA.LatestOffsetToken())
+	_, err = channelA.InsertRows(ctx, service.MessageBatch{
+		structuredMsg(map[string]any{"a": math.MinInt64}),
+		structuredMsg(map[string]any{"a": 0}),
+		structuredMsg(map[string]any{"a": math.MaxInt64}),
+	}, &streaming.OffsetTokenRange{Start: "3", End: "5"})
+	require.NoError(t, err)
+	require.EqualValues(t, ptr(streaming.OffsetToken("5")), channelA.LatestOffsetToken())
+	_, err = channelA.InsertRows(ctx, service.MessageBatch{
+		structuredMsg(map[string]any{"a": -1}),
+		structuredMsg(map[string]any{"a": 0}),
+		structuredMsg(map[string]any{"a": 1}),
+	}, &streaming.OffsetTokenRange{Start: "0", End: "2"})
+	require.NoError(t, err)
+	require.Equal(t, ptr(streaming.OffsetToken("2")), channelA.LatestOffsetToken())
+	channelB, err := streamClient.OpenChannel(ctx, channelOpts)
+	require.Equal(t, ptr(streaming.OffsetToken("2")), channelB.LatestOffsetToken())
+	require.EventuallyWithT(t, func(collect *assert.CollectT) {
+		// Always order by A so we get consistent ordering for our test
+		resp, err := restClient.RunSQL(ctx, streaming.RunSQLRequest{
+			Database:  channelOpts.DatabaseName,
+			Schema:    channelOpts.SchemaName,
+			Statement: fmt.Sprintf(`SELECT * FROM %s ORDER BY A;`, channelOpts.TableName),
+		})
+		if !assert.NoError(collect, err) {
+			t.Logf("failed to scan table: %s", err)
+			return
+		}
+		assert.Equal(collect, "00000", resp.SQLState)
+		itoa := strconv.Itoa
+		assert.Equal(collect, parseSnowflakeData([][]string{
+			{itoa(math.MinInt64)},
+			{"-1"},
+			{"0"},
+			{"0"},
+			{"1"},
+			{itoa(math.MaxInt64)},
+		}), parseSnowflakeData(resp.Data))
 	}, 3*time.Second, time.Second)
 }
 

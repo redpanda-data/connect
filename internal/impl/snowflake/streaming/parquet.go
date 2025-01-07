@@ -34,19 +34,19 @@ func messageToRow(msg *service.Message, out []any, nameToPosition map[string]int
 	if !ok {
 		return fmt.Errorf("expected object, got: %T", v)
 	}
-	var missingColumns []MissingColumnError
+	var missingColumns []*MissingColumnError
 	for k, v := range row {
 		idx, ok := nameToPosition[normalizeColumnName(k)]
 		if !ok {
 			if !allowExtraProperties && v != nil {
-				missingColumns = append(missingColumns, MissingColumnError{columnName: k, val: v})
+				missingColumns = append(missingColumns, &MissingColumnError{columnName: k, val: v})
 			}
 			continue
 		}
 		out[idx] = v
 	}
 	if len(missingColumns) > 0 {
-		return BatchSchemaMismatchError[MissingColumnError]{missingColumns}
+		return &BatchSchemaMismatchError[*MissingColumnError]{missingColumns}
 	}
 	return nil
 }
@@ -94,7 +94,7 @@ func constructRowGroup(
 			err = t.converter.ValidateAndConvert(s, v, b)
 			if err != nil {
 				if errors.Is(err, errNullValue) {
-					return nil, nil, NonNullColumnError{t.column.Name}
+					return nil, nil, &NonNullColumnError{t.column.Name}
 				}
 				// There is not special typed error for a validation error, there really isn't
 				// anything we can do about it.

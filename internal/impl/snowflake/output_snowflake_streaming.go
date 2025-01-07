@@ -11,17 +11,17 @@ package snowflake
 import (
 	"context"
 	"crypto/rsa"
+	"crypto/sha256"
+	"encoding/binary"
 	"errors"
 	"fmt"
-	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
 
-	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/capped"
+	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/pool"
 	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
@@ -39,6 +39,8 @@ const (
 	ssoFieldInitStatement                       = "init_statement"
 	ssoFieldBatching                            = "batching"
 	ssoFieldChannelPrefix                       = "channel_prefix"
+	ssoFieldChannelName                         = "channel_name"
+	ssoFieldOffsetToken                         = "offset_token"
 	ssoFieldMapping                             = "mapping"
 	ssoFieldBuildOpts                           = "build_options"
 	ssoFieldBuildParallelismLegacy              = "build_parallelism"
@@ -95,9 +97,9 @@ You can monitor the output batch size using the `+"`snowflake_compressed_output_
 `).Example("ORG-ACCOUNT"),
 			service.NewStringField(ssoFieldUser).Description("The user to run the Snowpipe Stream as. See https://docs.snowflake.com/en/user-guide/admin-user-management[Snowflake Documentation^] on how to create a user."),
 			service.NewStringField(ssoFieldRole).Description("The role for the `user` field. The role must have the https://docs.snowflake.com/en/user-guide/data-load-snowpipe-streaming-overview#required-access-privileges[required privileges^] to call the Snowpipe Streaming APIs. See https://docs.snowflake.com/en/user-guide/admin-user-management#user-roles[Snowflake Documentation^] for more information about roles.").Example("ACCOUNTADMIN"),
-			service.NewStringField(ssoFieldDB).Description("The Snowflake database to ingest data into."),
-			service.NewStringField(ssoFieldSchema).Description("The Snowflake schema to ingest data into."),
-			service.NewStringField(ssoFieldTable).Description("The Snowflake table to ingest data into."),
+			service.NewStringField(ssoFieldDB).Description("The Snowflake database to ingest data into.").Example("MY_DATABASE"),
+			service.NewStringField(ssoFieldSchema).Description("The Snowflake schema to ingest data into.").Example("PUBLIC"),
+			service.NewInterpolatedStringField(ssoFieldTable).Description("The Snowflake table to ingest data into.").Example("MY_TABLE"),
 			service.NewStringField(ssoFieldKey).Description("The PEM encoded private RSA key to use for authenticating with Snowflake. Either this or `private_key_file` must be specified.").Optional().Secret(),
 			service.NewStringField(ssoFieldKeyFile).Description("The file to load the private RSA key from. This should be a `.p8` PEM encoded file. Either this or `private_key` must be specified.").Optional(),
 			service.NewStringField(ssoFieldKeyPass).Description("The RSA key passphrase if the RSA key is encrypted.").Optional().Secret(),
@@ -119,38 +121,114 @@ The input to this mapping is an object with the value and the name of the new co
 			).Description(`Options to control schema evolution within the pipeline as new columns are added to the pipeline.`).Optional(),
 			service.NewIntField(ssoFieldBuildParallelism).Description("The maximum amount of parallelism to use when building the output for Snowflake. The metric to watch to see if you need to change this is `snowflake_build_output_latency_ns`.").Optional().Advanced().Deprecated(),
 			service.NewObjectField(ssoFieldBuildOpts,
-				service.NewIntField(ssoFieldBuildParallelism).Description("The maximum amount of parallelism to use.").Default(1),
-				service.NewIntField(ssoFieldBuildChunkSize).Description("The number of rows to chunk for parallelization.").Default(50_000),
+				service.NewIntField(ssoFieldBuildParallelism).Description("The maximum amount of parallelism to use.").Default(1).LintRule(`root = if this < 1 { ["parallelism must be positive"] }`),
+				service.NewIntField(ssoFieldBuildChunkSize).Description("The number of rows to chunk for parallelization.").Default(50_000).LintRule(`root = if this < 1 { ["chunk_size must be positive"] }`),
 			).Advanced().Description("Options to optimize the time to build output data that is sent to Snowflake. The metric to watch to see if you need to change this is `snowflake_build_output_latency_ns`."),
 			service.NewBatchPolicyField(ssoFieldBatching),
 			service.NewOutputMaxInFlightField().Default(4),
 			service.NewStringField(ssoFieldChannelPrefix).
 				Description(`The prefix to use when creating a channel name.
 Duplicate channel names will result in errors and prevent multiple instances of Redpanda Connect from writing at the same time.
-By default this will create a channel name that is based on the table FQN so there will only be a single stream per table.
+By default if neither `+"`"+ssoFieldChannelPrefix+"` or `"+ssoFieldChannelName+` is specified then the output will create a channel name that is based on the table FQN so there will only be a single stream per table.
 
 At most `+"`max_in_flight`"+` channels will be opened.
 
+This option is mutually exclusive with `+"`"+ssoFieldChannelName+"`"+`.
+
 NOTE: There is a limit of 10,000 streams per table - if using more than 10k streams please reach out to Snowflake support.`).
 				Optional().
-				Advanced(),
-		).LintRule(`root = match {
+				Advanced().
+				Example(`channel-${HOST}`),
+			service.NewInterpolatedStringField(ssoFieldChannelName).
+				Description(`The channel name to use.
+Duplicate channel names will result in errors and prevent multiple instances of Redpanda Connect from writing at the same time.
+Note that batches are assumed to all contain messages for the same channel, so this interpolation is only executed on the first
+message in each batch. It's recommended to batch at the input level to ensure that batches contain messages for the same channel
+if using an input that is partitioned (such as an Apache Kafka topic).
+
+This option is mutually exclusive with `+"`"+ssoFieldChannelPrefix+"`"+`.
+
+NOTE: There is a limit of 10,000 streams per table - if using more than 10k streams please reach out to Snowflake support.`).
+				Optional().
+				Advanced().
+				Examples(`partition-${!@kafka_partition}`),
+			service.NewInterpolatedStringField(ssoFieldOffsetToken).
+				Description(`The offset token to use for exactly once delivery of data in the pipeline. When data is sent on a channel, each message in a batch's offset token
+is compared to the latest token for a channel. If the offset token is lexicographically less than the latest in the channel, it's assumed the message is a duplicate and
+is dropped. This means it is *very important* to have ordered delivery to the output, any out of order messages to the output will be seen as duplicates and dropped.
+Specifically this means that retried messages could be seen as duplicates if later messages have succeeded in the meantime, so in most circumstances a dead letter queue
+output should be employed for failed messages.
+
+NOTE: It's assumed that messages within a batch are in increasing order by offset token, additionally if you're using a numeric value as an offset token, make sure to pad
+      the value so that it's lexicographically ordered in its string representation, since offset tokens are compared in string form.
+
+For more information about offset tokens, see https://docs.snowflake.com/en/user-guide/data-load-snowpipe-streaming-overview#offset-tokens[^Snowflake Documentation]`).
+				Optional().
+				Advanced().
+				Examples(`offset-${!"%016X".format(@kafka_offset)}`, `postgres-${!@lsn}`),
+		).
+		LintRule(`root = match {
   this.exists("private_key") && this.exists("private_key_file") => [ "both `+"`private_key`"+` and `+"`private_key_file`"+` can't be set simultaneously" ],
 }`).
+		LintRule(`root = match {
+  this.exists("channel_prefix") && this.exists("channel_name") => [ "both `+"`channel_prefix`"+` and `+"`channel_name`"+` can't be set simultaneously" ],
+}`).
 		Example(
-			"Ingesting data from Redpanda",
-			`How to ingest data from Redpanda with consumer groups, decode the schema using the schema registry, then write the corresponding data into Snowflake.`,
+			"Exactly once CDC into Snowflake",
+			`How to send data from a PostgreSQL table into Snowflake exactly once using Postgres Logical Replication.
+
+NOTE: If attempting to do exactly-once it's important that rows are delivered in order to the output. Be sure to read the documentation for offset_token first.
+Removing the offset_token is a safer option that will instruct Redpanda Connect to use its default at-least-once delivery model instead.`,
 			`
 input:
-  kafka_franz:
-    seed_brokers: ["redpanda.example.com:9092"]
+  postgres_cdc:
+    dsn: postgres://foouser:foopass@localhost:5432/foodb
+    schema: "public"
+    tables: ["my_pg_table"]
+    # We want very large batches - each batch will be sent to Snowflake individually
+    # so to optimize query performance we want as big of files as we have memory for
+    batching:
+      count: 50000
+      period: 45s
+    # Prevent multiple batches from being in flight at once, so that we never send
+    # a batch while another batch is being retried, this is important to ensure that
+    # the Snowflake Snowpipe Streaming channel does not see older data - as it will
+    # assume that the older data is already committed.
+    checkpoint_limit: 1
+output:
+  snowflake_streaming:
+    # We use the log sequence number in the WAL from Postgres to ensure we
+    # only upload data exactly once, these are already lexicographically
+    # ordered.
+    offset_token: "${!@lsn}"
+    # Since we're sending a single ordered log, we can only send one thing
+    # at a time to ensure that we're properly incrementing our offset_token
+    # and only using a single channel at a time.
+    max_in_flight: 1
+    account: "MYSNOW-ACCOUNT"
+    user: MYUSER
+    role: ACCOUNTADMIN
+    database: "MYDATABASE"
+    schema: "PUBLIC"
+    table: "MY_PG_TABLE"
+    private_key_file: "my/private/key.p8"
+`).
+		Example(
+			"Ingesting data exactly once from Redpanda",
+			`How to ingest data from Redpanda with consumer groups, decode the schema using the schema registry, then write the corresponding data into Snowflake exactly once.
+
+NOTE: If attempting to do exactly-once its important that records are delivered in order to the output and correctly partitioned. Be sure to read the documentation for 
+channel_name and offset_token first. Removing the offset_token is a safer option that will instruct Redpanda Connect to use its default at-least-once delivery model instead.`,
+			`
+input:
+  redpanda_common:
     topics: ["my_topic_going_to_snow"]
     consumer_group: "redpanda_connect_to_snowflake"
-    tls: {enabled: true}
-    sasl:
-      - mechanism: SCRAM-SHA-256
-        username: MY_USER_NAME
-        password: "${TODO}"
+    # We want very large batches - each batch will be sent to Snowflake individually
+    # so to optimize query performance we want as big of files as we have memory for
+    fetch_max_bytes: 100MiB
+    fetch_min_bytes: 50MiB
+    partition_buffer_bytes: 100MiB
 pipeline:
   processors:
     - schema_registry_decode:
@@ -160,25 +238,34 @@ pipeline:
           username: MY_USER_NAME
           password: "${TODO}"
 output:
-  snowflake_streaming:
-    # By default there is only a single channel per output table allowed
-    # if we want to have multiple Redpanda Connect streams writing data
-    # then we need a unique channel prefix per stream. We'll use the host
-    # name to get unique prefixes in this example.
-    channel_prefix: "snowflake-channel-for-${HOST}"
-    account: "MYSNOW-ACCOUNT"
-    user: MYUSER
-    role: ACCOUNTADMIN
-    database: "MYDATABASE"
-    schema: "PUBLIC"
-    table: "MYTABLE"
-    private_key_file: "my/private/key.p8"
-    schema_evolution:
-      enabled: true
+  fallback:
+    - snowflake_streaming:
+        # To ensure that we write an ordered stream each partition in kafka gets its own
+        # channel.
+        channel_name: "partition-${!@kafka_partition}"
+        # Ensure that our offsets are lexicographically sorted in string form by padding with
+        # leading zeros
+        offset_token: offset-${!"%016X".format(@kafka_offset)}
+        account: "MYSNOW-ACCOUNT"
+        user: MYUSER
+        role: ACCOUNTADMIN
+        database: "MYDATABASE"
+        schema: "PUBLIC"
+        table: "MYTABLE"
+        private_key_file: "my/private/key.p8"
+        schema_evolution:
+          enabled: true
+    # In order to prevent delivery orders from messing with the order of delivered records
+    # it's important that failures are immediately sent to a dead letter queue and not retried
+    # to Snowflake. See the ordering documentation for the "redpanda" input for more details.
+    - retry:
+        output:
+          redpanda_common:
+            topic: "dead_letter_queue"
 `,
 		).
 		Example(
-			"HTTP Sidecar to push data to Snowflake",
+			"HTTP Server to push data to Snowflake",
 			`This example demonstrates how to create an HTTP server input that can recieve HTTP PUT requests
 with JSON payloads, that are buffered locally then written to Snowflake in batches.
 
@@ -206,6 +293,13 @@ output:
     schema: "PUBLIC"
     table: "MYTABLE"
     private_key_file: "my/private/key.p8"
+    # By default there is only a single channel per output table allowed
+    # if we want to have multiple Redpanda Connect streams writing data
+    # then we need a unique channel prefix per stream. We'll use the host
+    # name to get unique prefixes in this example.
+    channel_prefix: "snowflake-channel-for-${HOST}"
+    schema_evolution:
+      enabled: true
 `,
 		)
 }
@@ -292,7 +386,7 @@ func newSnowflakeStreamer(
 	if err != nil {
 		return nil, err
 	}
-	table, err := conf.FieldString(ssoFieldTable)
+	dynamicTable, err := conf.FieldInterpolatedString(ssoFieldTable)
 	if err != nil {
 		return nil, err
 	}
@@ -336,11 +430,26 @@ func newSnowflakeStreamer(
 		if err != nil {
 			return nil, err
 		}
-	} else {
-		// There is a limit of 10k channels, so we can't dynamically create them.
-		// The only other good default is to create one and only allow a single
-		// stream to write to a single table.
-		channelPrefix = fmt.Sprintf("Redpanda_Connect_%s.%s.%s", db, schema, table)
+	}
+
+	var channelName *service.InterpolatedString
+	if conf.Contains(ssoFieldChannelName) {
+		channelName, err = conf.FieldInterpolatedString(ssoFieldChannelName)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if (channelName != nil) && (len(channelPrefix) > 0) {
+		return nil, fmt.Errorf("only one of `%s` or `%s` can be specified", ssoFieldChannelName, ssoFieldChannelPrefix)
+	}
+
+	var offsetToken *service.InterpolatedString
+	if conf.Contains(ssoFieldOffsetToken) {
+		offsetToken, err = conf.FieldInterpolatedString(ssoFieldOffsetToken)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	maxInFlight, err := conf.FieldMaxInFlight()
@@ -379,7 +488,7 @@ func newSnowflakeStreamer(
 			return err
 		}
 	}
-	restClient, err := streaming.NewRestClient(account, user, mgr.EngineVersion(), channelPrefix, rsaKey, mgr.Logger())
+	restClient, err := streaming.NewRestClient(account, user, mgr.EngineVersion(), rsaKey, mgr.Logger())
 	if err != nil {
 		return nil, fmt.Errorf("unable to create rest API client: %w", err)
 	}
@@ -392,81 +501,130 @@ func newSnowflakeStreamer(
 			PrivateKey:     rsaKey,
 			Logger:         mgr.Logger(),
 			ConnectVersion: mgr.EngineVersion(),
-			Application:    channelPrefix,
 		})
 	if err != nil {
 		return nil, err
 	}
-	o := &snowflakeStreamerOutput{
-		channelPrefix:          channelPrefix,
-		client:                 client,
-		db:                     db,
-		schema:                 schema,
-		table:                  table,
-		role:                   role,
-		mapping:                mapping,
-		logger:                 mgr.Logger(),
-		buildTime:              mgr.Metrics().NewTimer("snowflake_build_output_latency_ns"),
-		uploadTime:             mgr.Metrics().NewTimer("snowflake_upload_latency_ns"),
-		convertTime:            mgr.Metrics().NewTimer("snowflake_convert_latency_ns"),
-		serializeTime:          mgr.Metrics().NewTimer("snowflake_serialize_latency_ns"),
-		compressedOutput:       mgr.Metrics().NewCounter("snowflake_compressed_output_size_bytes"),
-		initStatementsFn:       initStatementsFn,
-		buildOpts:              buildOpts,
-		schemaEvolutionMapping: schemaEvolutionMapping,
-		restClient:             restClient,
+
+	mgr.SetGeneric(SnowflakeClientResourceForTesting, restClient)
+	makeImpl := func(table string) (*snowpipeSchemaEvolver, service.BatchOutput) {
+		var schemaEvolver *snowpipeSchemaEvolver
+		if schemaEvolutionMapping != nil {
+			schemaEvolver = &snowpipeSchemaEvolver{
+				schemaEvolutionMapping: schemaEvolutionMapping,
+				restClient:             restClient,
+				logger:                 mgr.Logger(),
+				db:                     db,
+				schema:                 schema,
+				table:                  table,
+				role:                   role,
+			}
+		}
+		var impl service.BatchOutput
+		if channelName != nil {
+			indexed := &snowpipeIndexedOutput{
+				channelName:            channelName,
+				client:                 client,
+				db:                     db,
+				schema:                 schema,
+				table:                  table,
+				role:                   role,
+				logger:                 mgr.Logger(),
+				metrics:                newSnowpipeMetrics(mgr.Metrics()),
+				buildOpts:              buildOpts,
+				offsetToken:            offsetToken,
+				schemaMigrationEnabled: schemaEvolver != nil,
+			}
+			indexed.channelPool = pool.NewIndexed(func(ctx context.Context, name string) (*streaming.SnowflakeIngestionChannel, error) {
+				hash := sha256.Sum256([]byte(name))
+				id := binary.BigEndian.Uint16(hash[:])
+				return indexed.openChannel(ctx, name, int16(id))
+			})
+			impl = indexed
+		} else {
+			if channelPrefix == "" {
+				// There is a limit of 10k channels, so we can't dynamically create them.
+				// The only other good default is to create one and only allow a single
+				// stream to write to a single table.
+				channelPrefix = fmt.Sprintf("Redpanda_Connect_%s.%s.%s", db, schema, table)
+			}
+			pooled := &snowpipePooledOutput{
+				channelPrefix:          channelPrefix,
+				client:                 client,
+				db:                     db,
+				schema:                 schema,
+				table:                  table,
+				role:                   role,
+				logger:                 mgr.Logger(),
+				metrics:                newSnowpipeMetrics(mgr.Metrics()),
+				buildOpts:              buildOpts,
+				offsetToken:            offsetToken,
+				schemaMigrationEnabled: schemaEvolver != nil,
+			}
+			pooled.channelPool = pool.NewCapped(maxInFlight, func(ctx context.Context, id int) (*streaming.SnowflakeIngestionChannel, error) {
+				name := fmt.Sprintf("%s_%d", pooled.channelPrefix, id)
+				return pooled.openChannel(ctx, name, int16(id))
+			})
+			impl = pooled
+		}
+		return schemaEvolver, impl
 	}
-	o.channelPool = capped.NewPool(maxInFlight, o.openNewChannel)
-	return o, nil
+
+	if table, ok := dynamicTable.Static(); ok {
+		schemaEvolver, impl := makeImpl(table)
+		return &snowpipeStreamingOutput{
+			initStatementsFn: initStatementsFn,
+			client:           client,
+			restClient:       restClient,
+			mapping:          mapping,
+			logger:           mgr.Logger(),
+			schemaEvolver:    schemaEvolver,
+
+			impl: impl,
+		}, nil
+	} else {
+		return &dynamicSnowpipeStreamingOutput{
+			table: dynamicTable,
+			byTable: pool.NewIndexed(func(ctx context.Context, table string) (service.BatchOutput, error) {
+				schemaEvolver, impl := makeImpl(table)
+				o := &snowpipeStreamingOutput{
+					initStatementsFn: nil,
+					client:           nil,
+					restClient:       nil,
+					mapping:          mapping,
+					logger:           mgr.Logger(),
+					schemaEvolver:    schemaEvolver,
+
+					impl: impl,
+				}
+				if err := o.Connect(ctx); err != nil {
+					return nil, err
+				}
+				return o, nil
+			}),
+			initStatementsFn: initStatementsFn,
+			client:           client,
+			restClient:       restClient,
+		}, nil
+	}
 }
 
-type snowflakeStreamerOutput struct {
-	client                 *streaming.SnowflakeServiceClient
-	channelPool            capped.Pool[*streaming.SnowflakeIngestionChannel]
-	compressedOutput       *service.MetricCounter
-	uploadTime             *service.MetricTimer
-	buildTime              *service.MetricTimer
-	convertTime            *service.MetricTimer
-	serializeTime          *service.MetricTimer
-	buildOpts              streaming.BuildOptions
-	schemaEvolutionMapping *bloblang.Executor
+type snowflakeClientForTesting string
 
-	schemaMigrationMu                      sync.RWMutex
-	channelPrefix, db, schema, table, role string
-	mapping                                *bloblang.Executor
-	logger                                 *service.Logger
-	initStatementsFn                       func(context.Context, *streaming.SnowflakeRestClient) error
-	restClient                             *streaming.SnowflakeRestClient
+// SnowflakeClientResourceForTesting is a key that can be used to access the REST client for the snowflake output
+// which can remove boilerplate from tests to setup a new REST client.
+const SnowflakeClientResourceForTesting snowflakeClientForTesting = "SnowflakeClientResourceForTesting"
+
+type dynamicSnowpipeStreamingOutput struct {
+	table   *service.InterpolatedString
+	byTable pool.Indexed[service.BatchOutput]
+
+	initStatementsFn func(context.Context, *streaming.SnowflakeRestClient) error
+	client           *streaming.SnowflakeServiceClient
+	restClient       *streaming.SnowflakeRestClient
 }
 
-func (o *snowflakeStreamerOutput) openNewChannel(ctx context.Context) (*streaming.SnowflakeIngestionChannel, error) {
-	id := o.channelPool.Size()
-	name := fmt.Sprintf("%s_%d", o.channelPrefix, id)
-	return o.openChannel(ctx, name, int16(id))
-}
-
-func (o *snowflakeStreamerOutput) schemaEvolutionEnabled() bool {
-	return o.schemaEvolutionMapping != nil
-}
-
-func (o *snowflakeStreamerOutput) hasOpenedChannels() bool {
-	return o.channelPool.Size() > 0
-}
-
-func (o *snowflakeStreamerOutput) openChannel(ctx context.Context, name string, id int16) (*streaming.SnowflakeIngestionChannel, error) {
-	o.logger.Debugf("opening snowflake streaming channel: %s", name)
-	return o.client.OpenChannel(ctx, streaming.ChannelOptions{
-		ID:                      id,
-		Name:                    name,
-		DatabaseName:            o.db,
-		SchemaName:              o.schema,
-		TableName:               o.table,
-		BuildOptions:            o.buildOpts,
-		StrictSchemaEnforcement: o.schemaEvolutionEnabled(),
-	})
-}
-
-func (o *snowflakeStreamerOutput) Connect(ctx context.Context) error {
+func (o *dynamicSnowpipeStreamingOutput) Connect(ctx context.Context) error {
 	if o.initStatementsFn != nil {
 		if err := o.initStatementsFn(ctx, o.restClient); err != nil {
 			return fmt.Errorf("unable to run initialization statement: %w", err)
@@ -474,53 +632,79 @@ func (o *snowflakeStreamerOutput) Connect(ctx context.Context) error {
 		// We've already executed our init statement, we don't need to do that anymore
 		o.initStatementsFn = nil
 	}
-	// Precreate a single channel so we know stuff works, otherwise we'll create them on demand.
-	c, err := o.channelPool.Acquire(ctx)
-	if err == nil {
-		// We succeeded! Put the channel back and move on.
-		o.channelPool.Release(c)
-		return nil
-	}
-	// It's possible we couldn't open the channel because the table doesn't exist - let's check that.
-	autoCreate, autoCreateErr := o.WillAutoCreateTable(ctx)
-	// If we know we don't have an output table and schema evolution is enabled, then don't create
-	// any channels - we'll do it lazily after we can create the table (which we need data for).
-	if autoCreateErr == nil && autoCreate {
-		o.logger.Debug("determined table does not exist, waiting to auto-create the table until we have data")
-		return nil
-	}
-
-	return fmt.Errorf("unable to open snowflake streaming channel: %w", err)
+	return nil
 }
 
-func (o *snowflakeStreamerOutput) WillAutoCreateTable(ctx context.Context) (bool, error) {
-	if !o.schemaEvolutionEnabled() {
-		return false, nil
+func (o *dynamicSnowpipeStreamingOutput) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
+	executor := batch.InterpolationExecutor(o.table)
+	tableBatches := map[string]service.MessageBatch{}
+	for i, msg := range batch {
+		table, err := executor.TryString(i)
+		if err != nil {
+			return fmt.Errorf("unable to interpolate `%s`: %w", ssoFieldTable, err)
+		}
+		tableBatches[table] = append(tableBatches[table], msg)
 	}
-	resp, err := o.restClient.RunSQL(ctx, streaming.RunSQLRequest{
-		Statement: `SELECT NOT to_boolean(count(1)) FROM INFORMATION_SCHEMA.TABLES where table_schema = ? AND table_name = ?`,
-		// Currently we set of timeout of 30 seconds so that we don't have to handle async operations
-		// that need polling to wait until they finish (results are made async when execution is longer
-		// than 45 seconds).
-		Timeout:  30,
-		Database: o.db,
-		Schema:   "INFORMATION_SCHEMA",
-		Role:     o.role,
-		Bindings: map[string]streaming.BindingValue{
-			"1": {Type: "TEXT", Value: o.schema},
-			"2": {Type: "TEXT", Value: o.table},
-		},
-	})
-	if err != nil {
-		return false, err
+	for table, batch := range tableBatches {
+		output, err := o.byTable.Acquire(ctx, table)
+		if err != nil {
+			return err
+		}
+		// Immediately release, these are thread safe, so we can let other
+		// threads modify them while we have a reference.
+		o.byTable.Release(table, output)
+		if err := output.WriteBatch(ctx, batch); err != nil {
+			return err
+		}
 	}
-	if len(resp.Data) != 1 && len(resp.Data[0]) != 1 {
-		return false, errors.New("unknown error determining if the table exists")
-	}
-	return strconv.ParseBool(resp.Data[0][0])
+	return nil
 }
 
-func (o *snowflakeStreamerOutput) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
+func (o *dynamicSnowpipeStreamingOutput) Close(ctx context.Context) error {
+	for _, key := range o.byTable.Keys() {
+		out, err := o.byTable.Acquire(ctx, key)
+		if err != nil {
+			return err
+		}
+		o.byTable.Release(key, out)
+		if err := out.Close(ctx); err != nil {
+			return err
+		}
+	}
+	o.byTable.Reset()
+	o.client.Close()
+	o.restClient.Close()
+	return nil
+}
+
+type snowpipeStreamingOutput struct {
+	initStatementsFn func(context.Context, *streaming.SnowflakeRestClient) error
+	client           *streaming.SnowflakeServiceClient
+	restClient       *streaming.SnowflakeRestClient
+	mapping          *bloblang.Executor
+	logger           *service.Logger
+	schemaEvolver    *snowpipeSchemaEvolver
+
+	mu sync.RWMutex
+
+	impl service.BatchOutput
+}
+
+func (o *snowpipeStreamingOutput) Connect(ctx context.Context) error {
+	if o.initStatementsFn != nil {
+		if err := o.initStatementsFn(ctx, o.restClient); err != nil {
+			return fmt.Errorf("unable to run initialization statement: %w", err)
+		}
+		// We've already executed our init statement, we don't need to do that anymore
+		o.initStatementsFn = nil
+	}
+	return o.impl.Connect(ctx)
+}
+
+func (o *snowpipeStreamingOutput) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
+	if len(batch) == 0 {
+		return nil
+	}
 	if o.mapping != nil {
 		mapped := make(service.MessageBatch, len(batch))
 		exec := batch.BloblangExecutor(o.mapping)
@@ -533,49 +717,131 @@ func (o *snowflakeStreamerOutput) WriteBatch(ctx context.Context, batch service.
 		}
 		batch = mapped
 	}
-	if !o.hasOpenedChannels() {
-		if len(batch) == 0 {
-			return nil
-		}
-		if err := o.CreateOutputTable(ctx, batch); err != nil {
-			return err
-		}
-		// We're not connected so tell the framework to call connect to re-connect to open our channel
-		return service.ErrNotConnected
-	}
 	var err error
 	// We only migrate one column at a time, so tolerate up to 10 schema
 	// migrations for a single batch before giving up. This protects against
 	// any bugs over infinitely looping.
 	for i := 0; i < 10; i++ {
-		err = o.WriteBatchInternal(ctx, batch)
+		o.mu.RLock()
+		err = o.impl.WriteBatch(ctx, batch)
+		o.mu.RUnlock()
 		if err == nil {
 			return nil
 		}
-		migrationErr := schemaMigrationNeededError{}
-		if !errors.As(err, &migrationErr) {
-			break
-		}
-		if err := migrationErr.migrator(ctx); err != nil {
+		if o.schemaEvolver == nil {
 			return err
+		}
+		if streaming.IsTableNotExistsError(err) {
+			if err := o.createTable(ctx, batch); err != nil {
+				return err
+			}
+			continue // If creating the table succeeded, retry
+		}
+		needsMigrationErr := &schemaMigrationNeededError{}
+		if !errors.As(err, &needsMigrationErr) {
+			return err
+		}
+		o.mu.Lock()
+		migrateErr := o.runMigration(ctx, needsMigrationErr)
+		o.mu.Unlock()
+		if migrateErr != nil {
+			return migrateErr
 		}
 	}
 	return err
 }
 
-func (o *snowflakeStreamerOutput) WriteBatchInternal(ctx context.Context, batch service.MessageBatch) error {
-	o.schemaMigrationMu.RLock()
-	defer o.schemaMigrationMu.RUnlock()
+func (o *snowpipeStreamingOutput) createTable(ctx context.Context, batch service.MessageBatch) error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if err := o.schemaEvolver.CreateOutputTable(ctx, batch); err != nil {
+		return err
+	}
+	if err := o.impl.Connect(ctx); err != nil {
+		return err
+	}
+	return nil
+}
+
+// runMigration requires the migration lock being held.
+func (o *snowpipeStreamingOutput) runMigration(ctx context.Context, needsMigrationErr *schemaMigrationNeededError) error {
+	if err := needsMigrationErr.runMigration(ctx, o.schemaEvolver); err != nil {
+		return err
+	}
+	// After a migration we need to reopen all our channels
+	// so close and reopen our impl
+	if err := o.impl.Close(ctx); err != nil {
+		return err
+	}
+	if err := o.impl.Connect(ctx); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (o *snowpipeStreamingOutput) Close(ctx context.Context) error {
+	if err := o.impl.Close(ctx); err != nil {
+		return err
+	}
+	if o.client != nil {
+		o.client.Close()
+	}
+	if o.restClient != nil {
+		o.restClient.Close()
+	}
+	return nil
+}
+
+type snowpipePooledOutput struct {
+	client      *streaming.SnowflakeServiceClient
+	channelPool pool.Capped[*streaming.SnowflakeIngestionChannel]
+	metrics     *snowpipeMetrics
+	buildOpts   streaming.BuildOptions
+
+	channelPrefix, db, schema, table, role string
+	offsetToken                            *service.InterpolatedString
+	logger                                 *service.Logger
+	schemaMigrationEnabled                 bool
+}
+
+func (o *snowpipePooledOutput) openChannel(ctx context.Context, name string, id int16) (*streaming.SnowflakeIngestionChannel, error) {
+	o.logger.Debugf("opening snowflake streaming channel: %s", name)
+	return o.client.OpenChannel(ctx, streaming.ChannelOptions{
+		ID:                      id,
+		Name:                    name,
+		DatabaseName:            o.db,
+		SchemaName:              o.schema,
+		TableName:               o.table,
+		BuildOptions:            o.buildOpts,
+		StrictSchemaEnforcement: o.schemaMigrationEnabled,
+	})
+}
+
+func (o *snowpipePooledOutput) Connect(ctx context.Context) error {
+	return nil
+}
+
+func (o *snowpipePooledOutput) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
 	channel, err := o.channelPool.Acquire(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to open snowflake streaming channel: %w", err)
 	}
-	o.logger.Debugf("inserting rows using channel %s", channel.Name)
-	stats, err := channel.InsertRows(ctx, batch)
+	var offsets *streaming.OffsetTokenRange
+	if o.offsetToken != nil {
+		batch, offsets, err = preprocessForExactlyOnce(channel, o.offsetToken, batch)
+		if err != nil || len(batch) == 0 {
+			o.channelPool.Release(channel)
+			return err
+		}
+		o.logger.Debugf("inserting rows using channel %s at offsets: %+v", channel.Name, *offsets)
+	} else {
+		o.logger.Debugf("inserting rows using channel %s", channel.Name)
+	}
+	stats, err := channel.InsertRows(ctx, batch, offsets)
 	if err != nil {
 		// Only evolve the schema if requested.
-		if o.schemaEvolutionEnabled() {
-			schemaErr, ok := asSchemaMigrationError(o, err)
+		if o.schemaMigrationEnabled {
+			schemaErr, ok := asSchemaMigrationError(err)
 			if ok {
 				// put the channel back so that we can reopen it along with the rest of the channels to
 				// pick up the new schema.
@@ -594,11 +860,7 @@ func (o *snowflakeStreamerOutput) WriteBatchInternal(ctx context.Context, batch 
 		return wrapInsertError(err)
 	}
 	o.logger.Debugf("done inserting %d rows using channel %s, stats: %+v", len(batch), channel.Name, stats)
-	o.compressedOutput.Incr(int64(stats.CompressedOutputSize))
-	o.uploadTime.Timing(stats.UploadTime.Nanoseconds())
-	o.buildTime.Timing(stats.BuildTime.Nanoseconds())
-	o.convertTime.Timing(stats.ConvertTime.Nanoseconds())
-	o.serializeTime.Timing(stats.SerializeTime.Nanoseconds())
+	o.metrics.Report(stats)
 	polls, err := channel.WaitUntilCommitted(ctx)
 	if err == nil {
 		o.logger.Tracef("batch committed in snowflake after %d polls", polls)
@@ -607,222 +869,138 @@ func (o *snowflakeStreamerOutput) WriteBatchInternal(ctx context.Context, batch 
 	return err
 }
 
-func asSchemaMigrationError(o *snowflakeStreamerOutput, err error) (schemaMigrationNeededError, bool) {
-	nullColumnErr := streaming.NonNullColumnError{}
-	if errors.As(err, &nullColumnErr) {
-		// Return an error so that we release our read lock and can take the write lock
-		// to forcibly reopen all our channels to get a new schema.
-		return schemaMigrationNeededError{
-			migrator: func(ctx context.Context) error {
-				o.schemaMigrationMu.Lock()
-				defer o.schemaMigrationMu.Unlock()
-				if err := o.MigrateNotNullColumn(ctx, nullColumnErr); err != nil {
-					return err
-				}
-				return o.ReopenAllChannels(ctx)
-			},
-		}, true
-	}
-	missingColumnErr := streaming.MissingColumnError{}
-	if errors.As(err, &missingColumnErr) {
-		return schemaMigrationNeededError{
-			migrator: func(ctx context.Context) error {
-				o.schemaMigrationMu.Lock()
-				defer o.schemaMigrationMu.Unlock()
-				if err := o.MigrateMissingColumn(ctx, missingColumnErr); err != nil {
-					return err
-				}
-				return o.ReopenAllChannels(ctx)
-			},
-		}, true
-	}
-	batchErr := streaming.BatchSchemaMismatchError[streaming.MissingColumnError]{}
-	if errors.As(err, &batchErr) {
-		return schemaMigrationNeededError{
-			migrator: func(ctx context.Context) error {
-				o.schemaMigrationMu.Lock()
-				defer o.schemaMigrationMu.Unlock()
-				for _, missingCol := range batchErr.Errors {
-					// TODO(rockwood): Consider a batch SQL statement that adds N columns at a time
-					if err := o.MigrateMissingColumn(ctx, missingCol); err != nil {
-						return err
-					}
-				}
-				return o.ReopenAllChannels(ctx)
-			},
-		}, true
-	}
-	return schemaMigrationNeededError{}, false
+func (o *snowpipePooledOutput) Close(ctx context.Context) error {
+	o.channelPool.Reset()
+	return nil
 }
 
-type schemaMigrationNeededError struct {
-	migrator func(ctx context.Context) error
+type snowpipeIndexedOutput struct {
+	client      *streaming.SnowflakeServiceClient
+	channelPool pool.Indexed[*streaming.SnowflakeIngestionChannel]
+	metrics     *snowpipeMetrics
+	buildOpts   streaming.BuildOptions
+
+	db, schema, table, role  string
+	offsetToken, channelName *service.InterpolatedString
+	logger                   *service.Logger
+	schemaMigrationEnabled   bool
 }
 
-func (schemaMigrationNeededError) Error() string {
-	return "schema migration was required and the operation needs to be retried after the migration"
-}
-
-func (o *snowflakeStreamerOutput) ComputeMissingColumnType(col streaming.MissingColumnError) (string, error) {
-	msg := service.NewMessage(nil)
-	msg.SetStructuredMut(map[string]any{
-		"name":  col.RawName(),
-		"value": col.Value(),
+func (o *snowpipeIndexedOutput) openChannel(ctx context.Context, name string, id int16) (*streaming.SnowflakeIngestionChannel, error) {
+	o.logger.Debugf("opening snowflake streaming channel: %s", name)
+	return o.client.OpenChannel(ctx, streaming.ChannelOptions{
+		ID:                      id,
+		Name:                    name,
+		DatabaseName:            o.db,
+		SchemaName:              o.schema,
+		TableName:               o.table,
+		BuildOptions:            o.buildOpts,
+		StrictSchemaEnforcement: o.schemaMigrationEnabled,
 	})
-	out, err := msg.BloblangQuery(o.schemaEvolutionMapping)
-	if err != nil {
-		return "", fmt.Errorf("unable to compute new column type for %s: %w", col.ColumnName(), err)
-	}
-	v, err := out.AsBytes()
-	if err != nil {
-		return "", fmt.Errorf("unable to extract result from new column type mapping for %s: %w", col.ColumnName(), err)
-	}
-	columnType := string(v)
-	if err := validateColumnType(columnType); err != nil {
-		return "", err
-	}
-	return columnType, nil
 }
 
-func (o *snowflakeStreamerOutput) MigrateMissingColumn(ctx context.Context, col streaming.MissingColumnError) error {
-	columnType, err := o.ComputeMissingColumnType(col)
-	if err != nil {
-		return err
-	}
-	o.logger.Infof("identified new schema - attempting to alter table to add column: %s %s", col.ColumnName(), columnType)
-	err = o.RunSQLMigration(
-		ctx,
-		// This looks very scary and it *should*. This is prone to SQL injection attacks. The column name is
-		// quoted according to the rules in Snowflake's documentation. This is also why we need to
-		// validate the data type, so that you can't sneak an injection attack in there.
-		fmt.Sprintf(`ALTER TABLE IDENTIFIER(?)
-    ADD COLUMN IF NOT EXISTS %s %s
-      COMMENT 'column created by schema evolution from Redpanda Connect'`,
-			col.ColumnName(),
-			columnType,
-		),
-	)
-	if err != nil {
-		o.logger.Warnf("unable to add new column, this maybe due to a race with another request, error: %s", err)
-	}
+func (o *snowpipeIndexedOutput) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (o *snowflakeStreamerOutput) MigrateNotNullColumn(ctx context.Context, col streaming.NonNullColumnError) error {
-	o.logger.Infof("identified new schema - attempting to alter table to remove null constraint on column: %s", col.ColumnName())
-	err := o.RunSQLMigration(
-		ctx,
-		// This looks very scary and it *should*. This is prone to SQL injection attacks. The column name here
-		// comes directly from the Snowflake API so it better not have a SQL injection :)
-		fmt.Sprintf(`ALTER TABLE IDENTIFIER(?) ALTER
-      %s DROP NOT NULL,
-      %s COMMENT 'column altered to be nullable by schema evolution from Redpanda Connect'`,
-			col.ColumnName(),
-			col.ColumnName(),
-		),
-	)
+func (o *snowpipeIndexedOutput) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
+	channelName, err := batch.TryInterpolatedString(0, o.channelName)
 	if err != nil {
-		o.logger.Warnf("unable to mark column %s as null, this maybe due to a race with another request, error: %s", col.ColumnName(), err)
+		return fmt.Errorf("error executing %s: %w", ssoFieldChannelName, err)
 	}
-	return nil
-}
-
-func (o *snowflakeStreamerOutput) CreateOutputTable(ctx context.Context, batch service.MessageBatch) error {
-	o.schemaMigrationMu.Lock()
-	defer o.schemaMigrationMu.Unlock()
-	if len(batch) == 0 {
-		return errors.New("cannot create a table from an empty batch")
-	}
-	o.logger.Infof("identified write to non-existing table - attempting to create table: %s", o.table)
-	msg := batch[0] // we assume messages are uniform - otherwise normal schema evolution will be able to evolve the table.
-	v, err := msg.AsStructured()
+	channel, err := o.channelPool.Acquire(ctx, channelName)
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to open snowflake streaming channel: %w", err)
 	}
-	row, ok := v.(map[string]any)
-	if !ok {
-		return fmt.Errorf("unable to extract row from column, expected object but got: %T", v)
-	}
-	columns := []string{}
-	for k, v := range row {
-		col := streaming.NewMissingColumnError(k, v)
-		colType, err := o.ComputeMissingColumnType(col)
-		if err != nil {
+	var offsets *streaming.OffsetTokenRange
+	if o.offsetToken != nil {
+		batch, offsets, err = preprocessForExactlyOnce(channel, o.offsetToken, batch)
+		if err != nil || len(batch) == 0 {
+			o.channelPool.Release(channel.Name, channel)
 			return err
 		}
-		columns = append(columns, fmt.Sprintf("%s %s", col.ColumnName(), colType))
+		o.logger.Debugf("inserting rows using channel %s at offsets: %+v", channel.Name, *offsets)
+	} else {
+		o.logger.Debugf("inserting rows using channel %s", channel.Name)
 	}
-	return o.RunSQLMigration(
-		ctx,
-		// This looks very scary and it *should*. This is prone to SQL injection attacks. The column name is
-		// quoted according to the rules in Snowflake's documentation (via col.ColumnName()). This is also why we need to
-		// validate the data type, so that you can't sneak an injection attack in there.
-		fmt.Sprintf(
-			`CREATE TABLE IF NOT EXISTS IDENTIFIER(?) (%s) COMMENT = 'table created via schema evolution from Redpanda Connect'`,
-			strings.Join(columns, ", "),
-		),
-	)
-}
-
-func (o *snowflakeStreamerOutput) RunSQLMigration(ctx context.Context, statement string) error {
-	_, err := o.restClient.RunSQL(ctx, streaming.RunSQLRequest{
-		Statement: statement,
-		// Currently we set a of timeout of 30 seconds so that we don't have to handle async operations
-		// that need polling to wait until they finish (results are made async when execution is longer
-		// than 45 seconds).
-		Timeout:  30,
-		Database: o.db,
-		Schema:   o.schema,
-		Role:     o.role,
-		Bindings: map[string]streaming.BindingValue{
-			"1": {Type: "TEXT", Value: o.table},
-		},
-	})
-	return err
-}
-
-// ReopenAllChannels should be called while holding schemaMigrationMu so that
-// all channels are actually processed
-func (o *snowflakeStreamerOutput) ReopenAllChannels(ctx context.Context) error {
-	all := []*streaming.SnowflakeIngestionChannel{}
-	for {
-		channel, ok := o.channelPool.TryAcquireExisting()
-		if !ok {
-			break
+	stats, err := channel.InsertRows(ctx, batch, offsets)
+	if err != nil {
+		// Only evolve the schema if requested.
+		if o.schemaMigrationEnabled {
+			schemaErr, ok := asSchemaMigrationError(err)
+			if ok {
+				// put the channel back so that we can reopen it along with the rest of the channels to
+				// pick up the new schema.
+				o.channelPool.Release(channel.Name, channel)
+				return schemaErr
+			}
 		}
 		reopened, reopenErr := o.openChannel(ctx, channel.Name, channel.ID)
 		if reopenErr == nil {
-			channel = reopened
+			o.channelPool.Release(channel.Name, reopened)
 		} else {
-			o.logger.Warnf("unable to reopen channel %q schema migration: %v", channel.Name, reopenErr)
-			// Keep the existing channel so we don't reopen channels, but instead retry later.
+			o.logger.Warnf("unable to reopen channel %q after failure: %v", channel.Name, reopenErr)
+			// Keep around the same channel so retry opening later
+			o.channelPool.Release(channel.Name, channel)
 		}
-		all = append(all, channel)
+		return wrapInsertError(err)
 	}
-	for _, c := range all {
-		o.channelPool.Release(c)
+	o.logger.Debugf("done inserting %d rows using channel %s, stats: %+v", len(batch), channel.Name, stats)
+	o.metrics.Report(stats)
+	polls, err := channel.WaitUntilCommitted(ctx)
+	if err == nil {
+		o.logger.Tracef("batch committed in snowflake after %d polls", polls)
 	}
+	o.channelPool.Release(channel.Name, channel)
+	return err
+}
+
+func (o *snowpipeIndexedOutput) Close(ctx context.Context) error {
+	o.channelPool.Reset()
 	return nil
 }
 
-func (o *snowflakeStreamerOutput) Close(ctx context.Context) error {
-	o.restClient.Close()
-	return o.client.Close()
-}
-
-// This doesn't need to fully match, but be enough to prevent SQL injection as well as
-// catch common errors.
-var validColumnTypeRegex = regexp.MustCompile(`^\s*(?i:NUMBER|DECIMAL|NUMERIC|INT|INTEGER|BIGINT|SMALLINT|TINYINT|BYTEINT|FLOAT|FLOAT4|FLOAT8|DOUBLE|DOUBLE\s+PRECISION|REAL|VARCHAR|CHAR|CHARACTER|STRING|TEXT|BINARY|VARBINARY|BOOLEAN|DATE|DATETIME|TIME|TIMESTAMP|TIMESTAMP_LTZ|TIMESTAMP_NTZ|TIMESTAMP_TZ|VARIANT|OBJECT|ARRAY)\s*(?:\(\s*\d+\s*\)|\(\s*\d+\s*,\s*\d+\s*\))?\s*$`)
-
-func validateColumnType(v string) error {
-	if validColumnTypeRegex.MatchString(v) {
-		return nil
+func preprocessForExactlyOnce(
+	channel *streaming.SnowflakeIngestionChannel,
+	offsetTokenMapping *service.InterpolatedString,
+	batch service.MessageBatch,
+) (service.MessageBatch, *streaming.OffsetTokenRange, error) {
+	latest := channel.LatestOffsetToken()
+	exec := batch.InterpolationExecutor(offsetTokenMapping)
+	firstRawToken, err := exec.TryString(0)
+	if err != nil {
+		return nil, nil, err
 	}
-	return fmt.Errorf("invalid Snowflake column data type: %s", v)
+	lastRawToken, err := exec.TryString(len(batch) - 1)
+	if err != nil {
+		return nil, nil, err
+	}
+	// Common case, all data is new
+	if latest == nil || firstRawToken > string(*latest) {
+		return batch, &streaming.OffsetTokenRange{Start: streaming.OffsetToken(firstRawToken), End: streaming.OffsetToken(lastRawToken)}, nil
+	}
+	// We need to filter out data that is too old.
+	filteredBatch := make(service.MessageBatch, 0, len(batch))
+	var rawToken string
+	for i := range batch {
+		rawToken, err = exec.TryString(i)
+		if err != nil {
+			return nil, nil, err
+		}
+		if rawToken <= string(*latest) {
+			continue
+		}
+		filteredBatch = append(filteredBatch, batch[i])
+	}
+	if len(filteredBatch) == 0 {
+		return filteredBatch, nil, nil
+	}
+	// This is a lazy way to compute the bounds, but filtering should be a rare operation.
+	return preprocessForExactlyOnce(channel, offsetTokenMapping, filteredBatch)
 }
 
 func wrapInsertError(err error) error {
-	if errors.Is(err, streaming.InvalidTimestampFormatError{}) {
+	if errors.Is(err, &streaming.InvalidTimestampFormatError{}) {
 		return fmt.Errorf("%w; if a custom format is required use a `%s` and bloblang functions `ts_parse` or `ts_strftime` to convert a custom format into a timestamp", err, ssoFieldMapping)
 	}
 	return err
