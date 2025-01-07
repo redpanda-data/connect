@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -312,6 +313,15 @@ func (a *awsSQSReader) ackLoop(wg *sync.WaitGroup, inFlightTracker *sqsInFlightT
 		if len(handles) == 0 {
 			return
 		}
+		seen := make(map[string]bool, len(handles))
+		// deduplicate handles, unlikely that there are duplicates, so this is defensive.
+		handles = slices.DeleteFunc(handles, func(h *sqsMessageHandle) bool {
+			if seen[h.id] {
+				return true
+			}
+			seen[h.id] = true
+			return false
+		})
 		if erase {
 			if err := a.deleteMessages(closeNowCtx, handles...); err != nil {
 				a.log.Errorf("Failed to delete messages: %v", err)
@@ -572,7 +582,7 @@ func (err *batchUpdateVisibilityError) Error() string {
 		if i > 0 {
 			msg.WriteByte(',')
 		}
-		msg.WriteString(fmt.Sprintf("'%v'", *fail.Id))
+		msg.WriteString(fmt.Sprintf("%q", *fail.Id))
 	}
 	msg.WriteByte(']')
 	return msg.String()
