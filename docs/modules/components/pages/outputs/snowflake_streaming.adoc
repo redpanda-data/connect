@@ -164,7 +164,7 @@ Exactly once CDC into Snowflake::
 How to send data from a PostgreSQL table into Snowflake exactly once using Postgres Logical Replication.
 
 NOTE: If attempting to do exactly-once it's important that rows are delivered in order to the output. Be sure to read the documentation for offset_token first.
-Removing the offset_token is a safer option that will instruct Redpanda Connect to use it's default at-least-once delivery model instead.
+Removing the offset_token is a safer option that will instruct Redpanda Connect to use its default at-least-once delivery model instead.
 
 ```yaml
 input:
@@ -178,7 +178,7 @@ input:
       count: 50000
       period: 45s
     # Prevent multiple batches from being in flight at once, so that we never send
-    # batch while another batch is being retried, this is important to ensure that
+    # a batch while another batch is being retried, this is important to ensure that
     # the Snowflake Snowpipe Streaming channel does not see older data - as it will
     # assume that the older data is already committed.
     checkpoint_limit: 1
@@ -188,7 +188,7 @@ output:
     # only upload data exactly once, these are already lexicographically
     # ordered.
     offset_token: "${!@lsn}"
-    # Since we're sending a single ordered log, we can only send on thing
+    # Since we're sending a single ordered log, we can only send one thing
     # at a time to ensure that we're properly incrementing our offset_token
     # and only using a single channel at a time.
     max_in_flight: 1
@@ -208,8 +208,8 @@ Ingesting data exactly once from Redpanda::
 
 How to ingest data from Redpanda with consumer groups, decode the schema using the schema registry, then write the corresponding data into Snowflake exactly once.
 
-NOTE: If attempting to do exactly-once it's important that records are delivered in order to the output and correctly partitioned. Be sure to read the documentation for 
-channel_name and offset_token first. Removing the offset_token is a safer option that will instruct Redpanda Connect to use it's default at-least-once delivery model instead.
+NOTE: If attempting to do exactly-once its important that records are delivered in order to the output and correctly partitioned. Be sure to read the documentation for 
+channel_name and offset_token first. Removing the offset_token is a safer option that will instruct Redpanda Connect to use its default at-least-once delivery model instead.
 
 ```yaml
 input:
@@ -232,7 +232,7 @@ pipeline:
 output:
   fallback:
     - snowflake_streaming:
-        # To ensure that we write an ordered stream each partition in kafka gets it's own
+        # To ensure that we write an ordered stream each partition in kafka gets its own
         # channel.
         channel_name: "partition-${!@kafka_partition}"
         # Ensure that our offsets are lexicographically sorted in string form by padding with
@@ -611,7 +611,7 @@ The maximum number of messages to have in flight at a given time. Increase this 
 
 The prefix to use when creating a channel name.
 Duplicate channel names will result in errors and prevent multiple instances of Redpanda Connect from writing at the same time.
-By default if neither `channel_prefix`or `channel_name is specified then the output will create a channel name that is based on the table FQN so there will only be a single stream per table.
+By default if neither `channel_prefix` or `channel_name is specified then the output will create a channel name that is based on the table FQN so there will only be a single stream per table.
 
 At most `max_in_flight` channels will be opened.
 
@@ -661,7 +661,7 @@ Specifically this means that retried messages could be seen as duplicates if lat
 output should be employed for failed messages.
 
 NOTE: It's assumed that messages within a batch are in increasing order by offset token, additionally if you're using a numeric value as an offset token, make sure to pad
-      the value so that it's lexicographically ordered in it's string representation, since offset tokens are compared in string form.
+      the value so that it's lexicographically ordered in its string representation, since offset tokens are compared in string form.
 
 For more information about offset tokens, see https://docs.snowflake.com/en/user-guide/data-load-snowpipe-streaming-overview#offset-tokens[^Snowflake Documentation]
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].

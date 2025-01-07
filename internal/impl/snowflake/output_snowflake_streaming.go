@@ -160,7 +160,7 @@ Specifically this means that retried messages could be seen as duplicates if lat
 output should be employed for failed messages.
 
 NOTE: It's assumed that messages within a batch are in increasing order by offset token, additionally if you're using a numeric value as an offset token, make sure to pad
-      the value so that it's lexicographically ordered in it's string representation, since offset tokens are compared in string form.
+      the value so that it's lexicographically ordered in its string representation, since offset tokens are compared in string form.
 
 For more information about offset tokens, see https://docs.snowflake.com/en/user-guide/data-load-snowpipe-streaming-overview#offset-tokens[^Snowflake Documentation]`).
 				Optional().
@@ -178,7 +178,7 @@ For more information about offset tokens, see https://docs.snowflake.com/en/user
 			`How to send data from a PostgreSQL table into Snowflake exactly once using Postgres Logical Replication.
 
 NOTE: If attempting to do exactly-once it's important that rows are delivered in order to the output. Be sure to read the documentation for offset_token first.
-Removing the offset_token is a safer option that will instruct Redpanda Connect to use it's default at-least-once delivery model instead.`,
+Removing the offset_token is a safer option that will instruct Redpanda Connect to use its default at-least-once delivery model instead.`,
 			`
 input:
   postgres_cdc:
