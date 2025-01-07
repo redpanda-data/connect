@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- `aws_sqs` now has a `max_outstanding` field to prevent unbounded memory usage. (@rockwotj)
 - `avro` scanner now emits metadata for the Avro schema it used along with the schema fingerprint. (@rockwotj)
 - Field `content_type` added to the `amqp_1` output. (@timo102)
 - `kafka_franz`, `ockam_kafka`, `redpanda`, `redpanda_common`, `redpanda_migrator` now support `fetch_max_wait` configuration field.
@@ -18,6 +19,7 @@ All notable changes to this project will be documented in this file.
 
 - The `code` and `file` fields on the `javascript` processor docs no longer erroneously mention interpolation support. (@mihaitodor)
 - The `postgres_cdc` now correctly handles `null` values. (@rockwotj)
+- Fix an issue in `aws_sqs` with refreshing in-flight message leases which could prevent acks from processed. (@rockwotj)
 
 ## 4.44.0 - 2024-12-13
 
