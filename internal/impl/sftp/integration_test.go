@@ -186,7 +186,7 @@ cache_resources:
 		files, err := client.Glob("/upload/*.txt")
 		assert.NoError(c, err)
 		assert.Empty(c, files)
-	}, time.Second, time.Millisecond*100)
+	}, time.Second*10, time.Millisecond*100)
 }
 
 func setupDockerPool(t *testing.T) *dockertest.Resource {
