@@ -297,8 +297,15 @@ func (t *sqsInFlightTracker) AddNew(ctx context.Context, messages ...sqsMessage)
 		if m.handle == nil {
 			continue
 		}
-		e := t.fifo.PushBack(m.handle)
-		t.handles[m.handle.id] = e
+		// If this is a duplicate (a re-recieve of an inflight message due to timeout)
+		// we can just update the existing handle.
+		if e, ok := t.handles[m.handle.id]; ok {
+			e.Value = m.handle
+			t.fifo.MoveToBack(e)
+		} else {
+			e := t.fifo.PushBack(m.handle)
+			t.handles[m.handle.id] = e
+		}
 	}
 }
 
