@@ -159,9 +159,9 @@ For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ol
 						ocpToolParamFieldProps,
 						service.NewStringField(ocpToolParamPropFieldType).Description("The type of this parameter."),
 						service.NewStringField(ocpToolParamPropFieldDescription).Description("A description of this parameter."),
-						service.NewStringListField(ocpToolParamPropFieldEnum).Default([]string{}).Description("Specifies that the this parameter is an enum and only these specific values should be used."),
-					),
-				),
+						service.NewStringListField(ocpToolParamPropFieldEnum).Default([]string{}).Description("Specifies that this parameter is an enum and only these specific values should be used."),
+					).Description("The properties for the processor's input data"),
+				).Description("The parameters the LLM needs to provide to invoke this tool."),
 				service.NewProcessorListField(ocpToolFieldPipeline).Description("The pipeline to execute when the LLM uses this tool.").Optional(),
 			).Description("The tools to allow the LLM to invoke. This allows building subpipelines that the LLM can choose to invoke to execute agentic-like actions."),
 		).Fields(commonFields()...).
@@ -185,6 +185,39 @@ pipeline:
 output:
   stdout:
     codec: lines
+`).
+		Example(
+			"Use subpipelines as tool calls",
+			"This example allows llama3.2 to execute a subpipeline as a tool call to get more data.",
+			`
+input:
+  generate:
+    count: 1
+    mapping: |
+      root = "What is the weather like in Chicago?"
+pipeline:
+  processors:
+    - ollama_chat:
+        model: llama3.2
+        prompt: "${!content().string()}"
+        tools:
+          - name: GetWeather
+            description: "Retrieve the weather for a specific city"
+            parameters:
+              required: ["city"]
+              properties:
+                city:
+                  type: string
+                  description: the city to lookup the weather for
+            processors:
+              - http:
+                  verb: GET
+                  url: 'https://wttr.in/${!this.city}?T'
+                  headers:
+                    # Spoof curl user-ageent to get a plaintext text
+                    User-Agent: curl/8.11.1
+output:
+  stdout: {}
 `)
 }
 
