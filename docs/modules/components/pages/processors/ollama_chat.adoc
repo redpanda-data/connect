@@ -45,6 +45,7 @@ ollama_chat:
   max_tokens: 0 # No default (optional)
   temperature: 0 # No default (optional)
   save_prompt_metadata: false
+  tools: [] # No default (required)
   runner:
     context_size: 0 # No default (optional)
     batch_size: 0 # No default (optional)
@@ -76,6 +77,8 @@ ollama_chat:
   frequency_penalty: 0 # No default (optional)
   stop: [] # No default (optional)
   save_prompt_metadata: false
+  max_tool_calls: 3
+  tools: [] # No default (required)
   runner:
     context_size: 0 # No default (optional)
     batch_size: 0 # No default (optional)
@@ -124,6 +127,44 @@ pipeline:
 output:
   stdout:
     codec: lines
+```
+
+--
+Use subpipelines as tool calls::
++
+--
+
+This example allows llama3.2 to execute a subpipeline as a tool call to get more data.
+
+```yaml
+input:
+  generate:
+    count: 1
+    mapping: |
+      root = "What is the weather like in Chicago?"
+pipeline:
+  processors:
+    - ollama_chat:
+        model: llama3.2
+        prompt: "${!content().string()}"
+        tools:
+          - name: GetWeather
+            description: "Retrieve the weather for a specific city"
+            parameters:
+              required: ["city"]
+              properties:
+                city:
+                  type: string
+                  description: the city to lookup the weather for
+            processors:
+              - http:
+                  verb: GET
+                  url: 'https://wttr.in/${!this.city}?T'
+                  headers:
+                    # Spoof curl user-ageent to get a plaintext text
+                    User-Agent: curl/8.11.1
+output:
+  stdout: {}
 ```
 
 --
@@ -292,6 +333,97 @@ If enabled the prompt is saved as @prompt metadata on the output message. If sys
 *Type*: `bool`
 
 *Default*: `false`
+
+=== `max_tool_calls`
+
+The maximum number of sequential tool calls.
+
+
+*Type*: `int`
+
+*Default*: `3`
+
+=== `tools`
+
+The tools to allow the LLM to invoke. This allows building subpipelines that the LLM can choose to invoke to execute agentic-like actions.
+
+
+*Type*: `array`
+
+
+=== `tools[].name`
+
+The name of this tool.
+
+
+*Type*: `string`
+
+
+=== `tools[].description`
+
+A description of this tool, the LLM uses this to decide if the tool should be used.
+
+
+*Type*: `string`
+
+
+=== `tools[].parameters`
+
+The parameters the LLM needs to provide to invoke this tool.
+
+
+*Type*: `object`
+
+
+=== `tools[].parameters.required`
+
+The required parameters for this pipeline.
+
+
+*Type*: `array`
+
+*Default*: `[]`
+
+=== `tools[].parameters.properties`
+
+The properties for the processor's input data
+
+
+*Type*: `object`
+
+
+=== `tools[].parameters.properties.<name>.type`
+
+The type of this parameter.
+
+
+*Type*: `string`
+
+
+=== `tools[].parameters.properties.<name>.description`
+
+A description of this parameter.
+
+
+*Type*: `string`
+
+
+=== `tools[].parameters.properties.<name>.enum`
+
+Specifies that this parameter is an enum and only these specific values should be used.
+
+
+*Type*: `array`
+
+*Default*: `[]`
+
+=== `tools[].processors`
+
+The pipeline to execute when the LLM uses this tool.
+
+
+*Type*: `array`
+
 
 === `runner`
 
