@@ -130,6 +130,44 @@ output:
 ```
 
 --
+Use subpipelines as tool calls::
++
+--
+
+This example allows llama3.2 to execute a subpipeline as a tool call to get more data.
+
+```yaml
+input:
+  generate:
+    count: 1
+    mapping: |
+      root = "What is the weather like in Chicago?"
+pipeline:
+  processors:
+    - ollama_chat:
+        model: llama3.2
+        prompt: "${!content().string()}"
+        tools:
+          - name: GetWeather
+            description: "Retrieve the weather for a specific city"
+            parameters:
+              required: ["city"]
+              properties:
+                city:
+                  type: string
+                  description: the city to lookup the weather for
+            processors:
+              - http:
+                  verb: GET
+                  url: 'https://wttr.in/${!this.city}?T'
+                  headers:
+                    # Spoof curl user-ageent to get a plaintext text
+                    User-Agent: curl/8.11.1
+output:
+  stdout: {}
+```
+
+--
 ======
 
 == Fields
@@ -331,7 +369,7 @@ A description of this tool, the LLM uses this to decide if the tool should be us
 
 === `tools[].parameters`
 
-Sorry! This field is missing documentation.
+The parameters the LLM needs to provide to invoke this tool.
 
 
 *Type*: `object`
@@ -348,7 +386,7 @@ The required parameters for this pipeline.
 
 === `tools[].parameters.properties`
 
-Sorry! This field is missing documentation.
+The properties for the processor's input data
 
 
 *Type*: `object`
@@ -372,7 +410,7 @@ A description of this parameter.
 
 === `tools[].parameters.properties.<name>.enum`
 
-Specifies that the this parameter is an enum and only these specific values should be used.
+Specifies that this parameter is an enum and only these specific values should be used.
 
 
 *Type*: `array`
