@@ -19,9 +19,9 @@ import (
 	"errors"
 	"fmt"
 
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
@@ -81,12 +81,12 @@ func init() {
 type Processor struct {
 	log *service.Logger
 
-	client                       *mongo.Client
-	database                     *mongo.Database
-	collection                   *service.InterpolatedString
-	writeConcernCollectionOption *options.CollectionOptions
-	operation                    Operation
-	writeMaps                    writeMaps
+	client           *mongo.Client
+	database         *mongo.Database
+	collection       *service.InterpolatedString
+	writeConcernSpec *writeConcernSpec
+	operation        Operation
+	writeMaps        writeMaps
 
 	marshalMode JSONMarshalMode
 }
@@ -102,7 +102,7 @@ func ProcessorFromParsed(conf *service.ParsedConfig, res *service.Resources) (mp
 	if mp.collection, err = conf.FieldInterpolatedString(mpFieldCollection); err != nil {
 		return
 	}
-	if mp.writeConcernCollectionOption, err = writeConcernCollectionOptionFromParsed(conf); err != nil {
+	if mp.writeConcernSpec, err = writeConcernSpecFromParsed(conf); err != nil {
 		return
 	}
 	if mp.operation, err = operationFromParsed(conf); err != nil {
@@ -147,9 +147,9 @@ func (m *Processor) ProcessBatch(ctx context.Context, batch service.MessageBatch
 			return err
 		}
 
-		findOptions := &options.FindOneOptions{}
+		findOptions := options.FindOne()
 		if hintJSON != nil {
-			findOptions.Hint = hintJSON
+			findOptions.SetHint(hintJSON)
 		}
 
 		collectionStr, err := batch.TryInterpolatedString(i, m.collection)
@@ -188,10 +188,13 @@ func (m *Processor) ProcessBatch(ctx context.Context, batch service.MessageBatch
 				Hint:   hintJSON,
 			}
 		case OperationFindOne:
-			collection := m.database.Collection(collectionStr, m.writeConcernCollectionOption)
+			ctx, cancel := context.WithTimeout(context.Background(), m.writeConcernSpec.wTimeout)
+			defer cancel()
+
+			collection := m.database.Collection(collectionStr, m.writeConcernSpec.options)
 
 			var decoded any
-			if err = collection.FindOne(context.Background(), filterJSON, findOptions).Decode(&decoded); err != nil {
+			if err = collection.FindOne(ctx, filterJSON, findOptions).Decode(&decoded); err != nil {
 				if errors.Is(err, mongo.ErrNoDocuments) {
 					return err
 				}
@@ -219,19 +222,26 @@ func (m *Processor) ProcessBatch(ctx context.Context, batch service.MessageBatch
 
 	if len(writeModelsMap) > 0 {
 		for collectionStr, msAndMs := range writeModelsMap {
-			collection := m.database.Collection(collectionStr, m.writeConcernCollectionOption)
-
-			// We should have at least one write model in the slice
-			if _, err := collection.BulkWrite(ctx, msAndMs.ws); err != nil {
-				m.log.Errorf("Bulk write failed in mongodb processor: %v", err)
-				for _, msg := range msAndMs.msgs {
-					msg.SetError(err)
-				}
-			}
+			m.bulkWrite(ctx, collectionStr, &msAndMs)
 		}
 	}
 
 	return []service.MessageBatch{batch}, nil
+}
+
+func (m *Processor) bulkWrite(ctx context.Context, collectionStr string, msgsAndModels *msgsAndModels) {
+	ctx, cancel := context.WithTimeout(ctx, m.writeConcernSpec.wTimeout)
+	defer cancel()
+
+	collection := m.database.Collection(collectionStr, m.writeConcernSpec.options)
+
+	// We should have at least one write model in the slice
+	if _, err := collection.BulkWrite(ctx, msgsAndModels.ws); err != nil {
+		m.log.Errorf("Bulk write failed in mongodb processor: %v", err)
+		for _, msg := range msgsAndModels.msgs {
+			msg.SetError(err)
+		}
+	}
 }
 
 // Close the connection to mongodb.
