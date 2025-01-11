@@ -137,6 +137,11 @@ func ResourceWithPostgreSQLVersion(t *testing.T, pool *dockertest.Pool, version 
 			return err
 		}
 
+		_, err = db.Exec("CREATE TABLE IF NOT EXISTS large_values (id serial PRIMARY KEY, value TEXT);")
+		if err != nil {
+			return err
+		}
+
 		// flights_non_streamed is a control table with data that should not be streamed or queried by snapshot streaming
 		_, err = db.Exec("CREATE TABLE IF NOT EXISTS flights_non_streamed (id serial PRIMARY KEY, name VARCHAR(50), created_at TIMESTAMP);")
 
@@ -756,4 +761,107 @@ file:
 			require.NoError(t, streamOut.StopWithin(time.Second*10))
 		})
 	}
+}
+
+func TestIntegrationTOASTValues(t *testing.T) {
+	t.Parallel()
+	integration.CheckSkip(t)
+	tmpDir := t.TempDir()
+	pool, err := dockertest.NewPool("")
+	require.NoError(t, err)
+
+	var (
+		resource *dockertest.Resource
+		db       *sql.DB
+	)
+
+	resource, db, err = ResourceWithPostgreSQLVersion(t, pool, "16")
+	require.NoError(t, err)
+	require.NoError(t, resource.Expire(120))
+
+	_, err = db.Exec(`ALTER TABLE large_values REPLICA IDENTITY FULL;`)
+	require.NoError(t, err)
+
+	const stringSize = 400_000
+
+	hostAndPort := resource.GetHostPort("5432/tcp")
+	hostAndPortSplited := strings.Split(hostAndPort, ":")
+	password := "l]YLSc|4[i56%{gY"
+
+	require.NoError(t, err)
+
+	// Insert a large >1MiB value
+	_, err = db.Exec(`INSERT INTO large_values (id, value) VALUES ($1, $2);`, 1, strings.Repeat("foo", stringSize))
+	require.NoError(t, err)
+
+	databaseURL := fmt.Sprintf("user=user_name password=%s dbname=dbname sslmode=disable host=%s port=%s", password, hostAndPortSplited[0], hostAndPortSplited[1])
+	template := fmt.Sprintf(`
+pg_stream:
+    dsn: %s
+    slot_name: test_slot_native_decoder
+    stream_snapshot: true
+    snapshot_batch_size: 1
+    schema: public
+    tables:
+       - large_values
+`, databaseURL)
+
+	cacheConf := fmt.Sprintf(`
+label: pg_stream_cache
+file:
+    directory: %v
+`, tmpDir)
+
+	streamOutBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: TRACE`))
+	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
+	require.NoError(t, streamOutBuilder.AddInputYAML(template))
+
+	var outBatches []string
+	var outBatchMut sync.Mutex
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
+		msgBytes, err := mb[0].AsBytes()
+		require.NoError(t, err)
+		outBatchMut.Lock()
+		outBatches = append(outBatches, string(msgBytes))
+		outBatchMut.Unlock()
+		return nil
+	}))
+
+	streamOut, err := streamOutBuilder.Build()
+	require.NoError(t, err)
+
+	license.InjectTestService(streamOut.Resources())
+
+	go func() {
+		_ = streamOut.Run(context.Background())
+	}()
+
+	assert.Eventually(t, func() bool {
+		outBatchMut.Lock()
+		defer outBatchMut.Unlock()
+		return len(outBatches) == 1
+	}, time.Second*10, time.Millisecond*100)
+
+	_, err = db.Exec(`UPDATE large_values SET value=$1;`, strings.Repeat("bar", stringSize))
+	require.NoError(t, err)
+	_, err = db.Exec(`UPDATE large_values SET id=$1;`, 3)
+	require.NoError(t, err)
+	_, err = db.Exec(`DELETE FROM large_values`)
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO large_values (id, value) VALUES ($1, $2);`, 2, strings.Repeat("qux", stringSize))
+	require.NoError(t, err)
+
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		outBatchMut.Lock()
+		defer outBatchMut.Unlock()
+		assert.Len(c, outBatches, 5, "got: %#v", outBatches)
+	}, time.Second*10, time.Millisecond*100)
+	require.JSONEq(t, `{"id":1, "value": "`+strings.Repeat("foo", stringSize)+`"}`, outBatches[0], "GOT: %s", outBatches[0])
+	require.JSONEq(t, `{"id":1, "value": "`+strings.Repeat("bar", stringSize)+`"}`, outBatches[1], "GOT: %s", outBatches[1])
+	require.JSONEq(t, `{"id":3, "value": "`+strings.Repeat("bar", stringSize)+`"}`, outBatches[2], "GOT: %s", outBatches[2])
+	require.JSONEq(t, `{"id":3, "value": "`+strings.Repeat("bar", stringSize)+`"}`, outBatches[3], "GOT: %s", outBatches[3])
+	require.JSONEq(t, `{"id":2, "value": "`+strings.Repeat("qux", stringSize)+`"}`, outBatches[4], "GOT: %s", outBatches[4])
+
+	require.NoError(t, streamOut.StopWithin(time.Second*10))
 }

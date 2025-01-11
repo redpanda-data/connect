@@ -74,10 +74,8 @@ func decodePgOutput(WALData []byte, relations map[uint32]*RelationMessage, typeM
 		for idx, col := range logicalMsg.Tuple.Columns {
 			colName := rel.Columns[idx].Name
 			switch col.DataType {
-			case 'n': // null
+			case 'n', 'u': // null or unchanged toast
 				values[colName] = nil
-			case 'u': // unchanged toast
-				// This TOAST value was not changed. TOAST values are not stored in the tuple, and logical replication doesn't want to spend a disk read to fetch its value for you.
 			case 't': //text
 				val, err := decodeTextColumnData(typeMap, col.Data, rel.Columns[idx].DataType)
 				if err != nil {
@@ -104,13 +102,29 @@ func decodePgOutput(WALData []byte, relations map[uint32]*RelationMessage, typeM
 			case 'n': // null
 				values[colName] = nil
 			case 'u': // unchanged toast
-				// This TOAST value was not changed. TOAST values are not stored in the tuple, and logical replication doesn't want to spend a disk read to fetch its value for you.
+				// In the case of an update of an unchanged toast value and the replica is set to
+				// IDENTITY FULL, we need to look at the old tuple in order to get the data, it's
+				// just marked as unchanged in the new tuple.
+				if idx < len(logicalMsg.OldTuple.Columns) {
+					col = logicalMsg.OldTuple.Columns[idx]
+					switch col.DataType {
+					case 'n', 'u':
+						values[colName] = nil
+						continue
+					case 't':
+					default:
+						return nil, fmt.Errorf("unable to decode column data, unknown data type: %d", col.DataType)
+					}
+				}
+				fallthrough
 			case 't': //text
 				val, err := decodeTextColumnData(typeMap, col.Data, rel.Columns[idx].DataType)
 				if err != nil {
 					return nil, fmt.Errorf("unable to decode column data: %w", err)
 				}
 				values[colName] = val
+			default:
+				return nil, fmt.Errorf("unable to decode column data, unknown data type: %d", col.DataType)
 			}
 		}
 		message.Data = values
@@ -126,16 +140,15 @@ func decodePgOutput(WALData []byte, relations map[uint32]*RelationMessage, typeM
 		for idx, col := range logicalMsg.OldTuple.Columns {
 			colName := rel.Columns[idx].Name
 			switch col.DataType {
-			case 'n': // null
+			case 'n', 'u': // null or unchanged toast
 				values[colName] = nil
-			case 'u': // unchanged toast
-				// This TOAST value was not changed. TOAST values are not stored in the tuple, and logical replication doesn't want to spend a disk read to fetch its value for you.
 			case 't': //text
 				val, err := decodeTextColumnData(typeMap, col.Data, rel.Columns[idx].DataType)
 				if err != nil {
 					return nil, fmt.Errorf("unable to decode column data: %w", err)
 				}
 				values[colName] = val
+			default:
 			}
 		}
 		message.Data = values

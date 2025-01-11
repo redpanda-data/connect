@@ -36,9 +36,12 @@ type SnapshotCreationResponse struct {
 // Therefore Snapshotter opens another connection to the database and sets the transaction to the snapshot.
 // This allows you to read the data that was in the database at the time of the snapshot creation.
 type Snapshotter struct {
-	pgConnection             *sql.DB
-	snapshotCreateConnection *sql.DB
-	logger                   *service.Logger
+	pool   *sql.DB
+	logger *service.Logger
+	// Only needed for older PG versions, holds the snapshot open for the reader
+	snapshotTxn *sql.Tx
+	// The TXN for the snapshot phase
+	readerTxn *sql.Tx
 
 	snapshotName string
 
@@ -52,41 +55,35 @@ func NewSnapshotter(dbDSN string, logger *service.Logger, version int) (*Snapsho
 		return nil, err
 	}
 
-	snapshotCreateConnection, err := openPgConnectionFromConfig(dbDSN)
-	if err != nil {
-		return nil, err
-	}
-
 	return &Snapshotter{
-		pgConnection:             pgConn,
-		snapshotCreateConnection: snapshotCreateConnection,
-		logger:                   logger,
-		version:                  version,
+		pool:    pgConn,
+		logger:  logger,
+		version: version,
 	}, nil
 }
 
-func (s *Snapshotter) initSnapshotTransaction() (SnapshotCreationResponse, error) {
+func (s *Snapshotter) initSnapshotTransaction(ctx context.Context) (SnapshotCreationResponse, error) {
 	if s.version > 14 {
 		return SnapshotCreationResponse{}, errors.New("snapshot is exported by default for versions above PG14")
+	}
+	if s.snapshotTxn != nil {
+		return SnapshotCreationResponse{}, errors.New("snapshot already exists")
 	}
 
 	var snapshotName sql.NullString
 
-	snapshotRow, err := s.pgConnection.Query(`BEGIN; SELECT pg_export_snapshot();`)
+	tx, err := s.pool.BeginTx(context.Background(), &sql.TxOptions{ReadOnly: true, Isolation: sql.LevelRepeatableRead})
 	if err != nil {
-		return SnapshotCreationResponse{}, fmt.Errorf("cant get exported snapshot for initial streaming %w pg version: %d", err, s.version)
+		return SnapshotCreationResponse{}, fmt.Errorf("unable to begin a tx to export a snapshot: %w pg version: %d", err, s.version)
 	}
-
+	s.snapshotTxn = tx
+	snapshotRow := tx.QueryRowContext(ctx, `SELECT pg_export_snapshot();`)
 	if snapshotRow.Err() != nil {
-		return SnapshotCreationResponse{}, fmt.Errorf("can get avg row size due to query failure: %w", snapshotRow.Err())
+		return SnapshotCreationResponse{}, fmt.Errorf("unable to get snapshot name: %w", snapshotRow.Err())
 	}
 
-	if snapshotRow.Next() {
-		if err = snapshotRow.Scan(&snapshotName); err != nil {
-			return SnapshotCreationResponse{}, fmt.Errorf("cant scan snapshot name into string: %w", err)
-		}
-	} else {
-		return SnapshotCreationResponse{}, errors.New("cant get avg row size; 0 rows returned")
+	if err = snapshotRow.Scan(&snapshotName); err != nil {
+		return SnapshotCreationResponse{}, fmt.Errorf("cant scan snapshot name into string: %w", err)
 	}
 
 	return SnapshotCreationResponse{ExportedSnapshotName: snapshotName.String}, nil
@@ -96,51 +93,37 @@ func (s *Snapshotter) setTransactionSnapshotName(snapshotName string) {
 	s.snapshotName = snapshotName
 }
 
-func (s *Snapshotter) prepare() error {
+func (s *Snapshotter) prepare(ctx context.Context) error {
 	if s.snapshotName == "" {
 		return errors.New("snapshot name is not set")
 	}
-
-	if _, err := s.pgConnection.Exec("BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ;"); err != nil {
-		return err
+	if s.readerTxn != nil {
+		return errors.New("reader txn already open")
 	}
-
+	// Use a background context because we explicitly want the Tx to be long lived, we explicitly close it in the close method
+	tx, err := s.pool.BeginTx(context.Background(), &sql.TxOptions{ReadOnly: true, Isolation: sql.LevelRepeatableRead})
+	if err != nil {
+		return fmt.Errorf("unable to start reader txn: %w", err)
+	}
+	s.readerTxn = tx
 	sq, err := sanitize.SQLQuery("SET TRANSACTION SNAPSHOT $1;", s.snapshotName)
 	if err != nil {
 		return err
 	}
-
-	if _, err := s.pgConnection.Exec(sq); err != nil {
+	if _, err := tx.ExecContext(ctx, sq); err != nil {
 		return err
 	}
-
 	return nil
 }
 
-func (s *Snapshotter) findAvgRowSize(ctx context.Context, table TableFQN) (sql.NullInt64, error) {
-	var (
-		avgRowSize sql.NullInt64
-		rows       *sql.Rows
-		err        error
-	)
-
-	// table is validated to be correct pg identifier, so we can use it directly
-	if rows, err = s.pgConnection.QueryContext(ctx, fmt.Sprintf(`SELECT SUM(pg_column_size('%s.*')) / COUNT(*) FROM %s;`, table, table)); err != nil {
-		return avgRowSize, fmt.Errorf("can get avg row size due to query failure: %w", err)
+func (s *Snapshotter) findAvgRowSize(ctx context.Context, table TableFQN) (avgRowSize sql.NullInt64, err error) {
+	row := s.readerTxn.QueryRowContext(ctx, fmt.Sprintf(`SELECT SUM(pg_column_size('%s.*')) / COUNT(*) FROM %s;`, table, table))
+	if row.Err() != nil {
+		return avgRowSize, fmt.Errorf("cannot get avg row size due to query failure: %w", err)
 	}
-
-	if rows.Err() != nil {
-		return avgRowSize, fmt.Errorf("can get avg row size due to query failure: %w", rows.Err())
+	if err = row.Scan(&avgRowSize); err != nil {
+		return avgRowSize, fmt.Errorf("cannot get avg row size: %w", err)
 	}
-
-	if rows.Next() {
-		if err = rows.Scan(&avgRowSize); err != nil {
-			return avgRowSize, fmt.Errorf("can get avg row size: %w", err)
-		}
-	} else {
-		return avgRowSize, errors.New("can get avg row size; 0 rows returned")
-	}
-
 	return avgRowSize, nil
 }
 
@@ -280,7 +263,6 @@ func (s *Snapshotter) calculateBatchSize(availableMemory uint64, estimatedRowSiz
 }
 
 func (s *Snapshotter) querySnapshotData(ctx context.Context, table TableFQN, lastSeenPk map[string]any, pkColumns []string, limit int) (rows *sql.Rows, err error) {
-
 	s.logger.Debugf("Query snapshot table: %v, limit: %v, lastSeenPkVal: %v, pk: %v", table, limit, lastSeenPk, pkColumns)
 
 	if lastSeenPk == nil {
@@ -289,19 +271,16 @@ func (s *Snapshotter) querySnapshotData(ctx context.Context, table TableFQN, las
 		if err != nil {
 			return nil, err
 		}
-
-		return s.pgConnection.QueryContext(ctx, sq)
+		return s.readerTxn.QueryContext(ctx, sq)
 	}
 
 	var (
 		placeholders      []string
 		lastSeenPksValues []any
-		i                 = 1
 	)
 
-	for _, col := range pkColumns {
-		placeholders = append(placeholders, fmt.Sprintf("$%d", i))
-		i++
+	for i, col := range pkColumns {
+		placeholders = append(placeholders, fmt.Sprintf("$%d", i+1))
 		lastSeenPksValues = append(lastSeenPksValues, lastSeenPk[col])
 	}
 
@@ -314,27 +293,38 @@ func (s *Snapshotter) querySnapshotData(ctx context.Context, table TableFQN, las
 		return nil, err
 	}
 
-	return s.pgConnection.QueryContext(ctx, sq)
+	return s.readerTxn.QueryContext(ctx, sq)
 }
 
 func (s *Snapshotter) releaseSnapshot() error {
-	if s.version < 14 && s.snapshotCreateConnection != nil {
-		if _, err := s.snapshotCreateConnection.Exec("COMMIT;"); err != nil {
+	if s.version < 14 && s.snapshotTxn != nil {
+		if err := s.snapshotTxn.Commit(); err != nil {
 			return err
 		}
+		s.snapshotTxn = nil
 	}
-
-	_, err := s.pgConnection.Exec("COMMIT;")
-	return err
+	if err := s.readerTxn.Commit(); err != nil {
+		return err
+	}
+	s.readerTxn = nil
+	return nil
 }
 
 func (s *Snapshotter) closeConn() error {
-	if s.pgConnection != nil {
-		return s.pgConnection.Close()
+	if s.readerTxn != nil {
+		if err := s.readerTxn.Rollback(); err != nil {
+			return err
+		}
+		s.readerTxn = nil
 	}
-
-	if s.snapshotCreateConnection != nil {
-		return s.snapshotCreateConnection.Close()
+	if s.snapshotTxn != nil {
+		if err := s.snapshotTxn.Rollback(); err != nil {
+			return err
+		}
+		s.snapshotTxn = nil
+	}
+	if err := s.pool.Close(); err != nil {
+		return err
 	}
 
 	return nil

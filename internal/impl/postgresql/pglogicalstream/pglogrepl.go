@@ -271,7 +271,7 @@ func CreateReplicationSlot(
 	var snapshotResponse SnapshotCreationResponse
 	if options.SnapshotAction == "export" {
 		var err error
-		snapshotResponse, err = snapshotter.initSnapshotTransaction()
+		snapshotResponse, err = snapshotter.initSnapshotTransaction(ctx)
 		if err != nil {
 			return CreateReplicationSlotResult{}, err
 		}

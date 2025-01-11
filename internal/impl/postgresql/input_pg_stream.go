@@ -325,9 +325,11 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 	})
 	monitorLoop.Start()
 	defer monitorLoop.Stop()
-	ctx, _ := p.stopSig.SoftStopCtx(context.Background())
+	ctx, cancel := p.stopSig.SoftStopCtx(context.Background())
+	defer cancel()
 	defer func() {
-		ctx, _ := p.stopSig.HardStopCtx(context.Background())
+		ctx, cancel := p.stopSig.HardStopCtx(context.Background())
+		defer cancel()
 		if err := batcher.Close(ctx); err != nil {
 			p.logger.Errorf("unable to close batcher: %s", err)
 		}
