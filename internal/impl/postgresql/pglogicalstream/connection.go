@@ -46,15 +46,3 @@ func getPostgresVersion(dbDSN string) (int, error) {
 
 	return majorVersion, nil
 }
-
-// getPostgresConnectionPID returns the postgres connection pid or -1 if a failure
-//
-// Mainly used for debugging.
-func getPostgresConnectionPID(db *sql.DB) int {
-	var pid int
-	err := db.QueryRow("SELECT pg_backend_pid()").Scan(&pid)
-	if err != nil {
-		return -1
-	}
-	return pid
-}

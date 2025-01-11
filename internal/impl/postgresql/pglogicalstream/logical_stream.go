@@ -86,8 +86,6 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		return nil, err
 	}
 
-	println("main conn pid:", dbConn.PID())
-
 	schema, err := sanitize.NormalizePostgresIdentifier(config.DBSchema)
 	if err != nil {
 		return nil, fmt.Errorf("invalid schema name %q: %w", config.DBSchema, err)
@@ -252,7 +250,8 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 				stream.errors <- fmt.Errorf("failed to process snapshot: %w", err)
 				return
 			}
-			ctx, _ := stream.shutSig.SoftStopCtx(context.Background())
+			ctx, done := stream.shutSig.SoftStopCtx(context.Background())
+			defer done()
 			if err := stream.startLr(ctx, lsnrestart); err != nil {
 				stream.errors <- fmt.Errorf("failed to start logical replication: %w", err)
 				return
@@ -340,7 +339,8 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 	lastEmittedCommitLSN := currentLSN
 
 	commitLSN := func(force bool) error {
-		ctx, _ := s.shutSig.HardStopCtx(context.Background())
+		ctx, done := s.shutSig.HardStopCtx(context.Background())
+		defer done()
 		ackedLSN := s.getAckedLSN()
 		if ackedLSN == lastEmittedLSN {
 			ackedLSN = lastEmittedCommitLSN
@@ -360,7 +360,8 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 		}
 	}()
 
-	ctx, _ := s.shutSig.SoftStopCtx(context.Background())
+	ctx, done := s.shutSig.SoftStopCtx(context.Background())
+	defer done()
 	for !s.shutSig.IsSoftStopSignalled() {
 		if err := commitLSN(time.Now().After(s.nextStandbyMessageDeadline)); err != nil {
 			return err
@@ -468,7 +469,9 @@ func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, re
 }
 
 func (s *Stream) processSnapshot() error {
-	if err := s.snapshotter.prepare(); err != nil {
+	ctx, done := s.shutSig.SoftStopCtx(context.Background())
+	defer done()
+	if err := s.snapshotter.prepare(ctx); err != nil {
 		return fmt.Errorf("failed to prepare database snapshot - snapshot may be expired: %w", err)
 	}
 	defer func() {
@@ -494,8 +497,6 @@ func (s *Stream) processSnapshot() error {
 				avgRowSizeBytes sql.NullInt64
 				offset          = 0
 			)
-
-			ctx, _ := s.shutSig.SoftStopCtx(context.Background())
 
 			avgRowSizeBytes, err = s.snapshotter.findAvgRowSize(ctx, table)
 			if err != nil {
@@ -553,7 +554,7 @@ func (s *Stream) processSnapshot() error {
 				var rowsCount = 0
 				rowsStart := time.Now()
 				totalScanDuration := time.Duration(0)
-				totalWaitingFromBenthos := time.Duration(0)
+				sendDuration := time.Duration(0)
 
 				for snapshotRows.Next() {
 					rowsCount += 1
@@ -600,14 +601,17 @@ func (s *Stream) processSnapshot() error {
 					case <-s.shutSig.SoftStopChan():
 						return nil
 					}
-					totalWaitingFromBenthos += time.Since(waitingFromBenthos)
+					sendDuration += time.Since(waitingFromBenthos)
+				}
 
+				if snapshotRows.Err() != nil {
+					return fmt.Errorf("failed to close snapshot data iterator for table %v: %w", table, snapshotRows.Err())
 				}
 
 				batchEnd := time.Since(rowsStart)
 				s.logger.Debugf("Batch duration: %v %s \n", batchEnd, tableName)
 				s.logger.Debugf("Scan duration %v %s\n", totalScanDuration, tableName)
-				s.logger.Debugf("Waiting from benthos duration %v %s\n", totalWaitingFromBenthos, tableName)
+				s.logger.Debugf("Send duration %v %s\n", sendDuration, tableName)
 
 				offset += batchSize
 
@@ -676,7 +680,8 @@ func (s *Stream) getPrimaryKeyColumn(ctx context.Context, table TableFQN) (map[s
 func (s *Stream) Stop(ctx context.Context) error {
 	s.shutSig.TriggerSoftStop()
 	var wg errgroup.Group
-	stopNowCtx, _ := s.shutSig.HardStopCtx(ctx)
+	stopNowCtx, done := s.shutSig.HardStopCtx(ctx)
+	defer done()
 	wg.Go(func() error {
 		return s.pgConn.Close(stopNowCtx)
 	})
