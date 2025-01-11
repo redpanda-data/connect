@@ -53,6 +53,7 @@ func (s *Snapshot) prepareSnapshot(ctx context.Context) (*position, error) {
 
 	// Start a consistent snapshot transaction
 	s.tx, err = s.snapshotConn.BeginTx(ctx, &sql.TxOptions{
+		ReadOnly:  true,
 		Isolation: sql.LevelRepeatableRead,
 	})
 
@@ -68,6 +69,10 @@ func (s *Snapshot) prepareSnapshot(ctx context.Context) (*position, error) {
 		the data being read, maintaining referential integrity across tables while capturing
 		the initial state.
 	*/
+
+	// NOTE: this is a little sneaky because we're actually implicitly closing the transaction
+	// started with `BeginTx` above and replacing it with this one. We have to do this because
+	// the `database/sql` driver we're using does not support this WITH CONSISTENT SNAPSHOT.
 	if _, err := s.tx.ExecContext(ctx, "START TRANSACTION WITH CONSISTENT SNAPSHOT"); err != nil {
 		if rErr := s.tx.Rollback(); rErr != nil {
 			return nil, rErr
