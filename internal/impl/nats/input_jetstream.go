@@ -366,13 +366,8 @@ func (j *jetStreamReader) Connect(ctx context.Context) (err error) {
 				if natsErr.ErrorCode == nats.JSErrCodeStreamNotFound {
 					// create stream and subject
 					_, err = jCtx.AddStream(&nats.StreamConfig{
-						Name: j.stream,
-						Subjects: func() []string {
-							if j.subject == "" {
-								return nil
-							}
-							return []string{j.subject}
-						}(),
+						Name:     j.stream,
+						Subjects: []string{"*"},
 						Storage: func() nats.StorageType {
 							if j.storageType == "file" {
 								return nats.FileStorage
