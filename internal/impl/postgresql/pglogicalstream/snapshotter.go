@@ -56,7 +56,6 @@ func NewSnapshotter(dbDSN string, logger *service.Logger, version int) (*Snapsho
 	if err != nil {
 		return nil, err
 	}
-
 	return &Snapshotter{
 		pgConnection:             pgConn,
 		snapshotCreateConnection: snapshotCreateConnection,
@@ -76,6 +75,7 @@ func (s *Snapshotter) initSnapshotTransaction() (SnapshotCreationResponse, error
 	if err != nil {
 		return SnapshotCreationResponse{}, fmt.Errorf("cant get exported snapshot for initial streaming %w pg version: %d", err, s.version)
 	}
+	defer snapshotRow.Close()
 
 	if snapshotRow.Err() != nil {
 		return SnapshotCreationResponse{}, fmt.Errorf("can get avg row size due to query failure: %w", snapshotRow.Err())
@@ -330,11 +330,15 @@ func (s *Snapshotter) releaseSnapshot() error {
 
 func (s *Snapshotter) closeConn() error {
 	if s.pgConnection != nil {
-		return s.pgConnection.Close()
+		if err := s.pgConnection.Close(); err != nil {
+			return err
+		}
 	}
 
 	if s.snapshotCreateConnection != nil {
-		return s.snapshotCreateConnection.Close()
+		if err := s.snapshotCreateConnection.Close(); err != nil {
+			return err
+		}
 	}
 
 	return nil

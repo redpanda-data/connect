@@ -856,7 +856,7 @@ file:
 		outBatchMut.Lock()
 		defer outBatchMut.Unlock()
 		assert.Len(c, outBatches, 5, "got: %#v", outBatches)
-	}, time.Second*25, time.Millisecond*100)
+	}, time.Second*10, time.Millisecond*100)
 	require.JSONEq(t, `{"id":1, "value": "`+strings.Repeat("foo", stringSize)+`"}`, outBatches[0], "GOT: %s", outBatches[0])
 	require.JSONEq(t, `{"id":1, "value": "`+strings.Repeat("bar", stringSize)+`"}`, outBatches[1], "GOT: %s", outBatches[1])
 	require.JSONEq(t, `{"id":3, "value": "`+strings.Repeat("bar", stringSize)+`"}`, outBatches[2], "GOT: %s", outBatches[2])

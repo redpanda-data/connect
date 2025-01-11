@@ -86,6 +86,8 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		return nil, err
 	}
 
+	println("main conn pid:", dbConn.PID())
+
 	schema, err := sanitize.NormalizePostgresIdentifier(config.DBSchema)
 	if err != nil {
 		return nil, fmt.Errorf("invalid schema name %q: %w", config.DBSchema, err)
@@ -388,7 +390,6 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 			s.logger.Warn("received malformatted with no data")
 			continue
 		}
-
 		switch msg.Data[0] {
 		case PrimaryKeepaliveMessageByteID:
 			pkm, err := ParsePrimaryKeepaliveMessage(msg.Data[1:])
@@ -420,6 +421,8 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 				lastEmittedLSN = msgLSN
 				lastEmittedCommitLSN = msgLSN
 			}
+		default:
+			return fmt.Errorf("unknown message type: %c", msg.Data[0])
 		}
 	}
 	// clean shutdown, return nil
@@ -469,6 +472,7 @@ func (s *Stream) processSnapshot() error {
 		return fmt.Errorf("failed to prepare database snapshot - snapshot may be expired: %w", err)
 	}
 	defer func() {
+		s.logger.Debugf("Finished snapshot processing")
 		if err := s.snapshotter.releaseSnapshot(); err != nil {
 			s.logger.Warnf("Failed to release database snapshot: %v", err.Error())
 		}
