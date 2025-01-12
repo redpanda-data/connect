@@ -56,6 +56,10 @@ func (d *driver) Run(sql string) error {
 		return err
 	}
 
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
 	columnTypes, err := rows.ColumnTypes()
 	if err != nil {
 		return err

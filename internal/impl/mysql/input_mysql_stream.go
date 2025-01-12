@@ -313,11 +313,12 @@ func (i *mysqlStreamInput) readSnapshot(ctx context.Context, snapshot *Snapshot)
 			return err
 		}
 		i.logger.Tracef("primary keys for table %s: %v", table, tablePks)
-		var numRowsProcessed int
 		lastSeenPksValues := map[string]any{}
 		for _, pk := range tablePks {
 			lastSeenPksValues[pk] = nil
 		}
+
+		var numRowsProcessed int
 		for {
 			var batchRows *sql.Rows
 			if numRowsProcessed == 0 {
@@ -326,21 +327,19 @@ func (i *mysqlStreamInput) readSnapshot(ctx context.Context, snapshot *Snapshot)
 				batchRows, err = snapshot.querySnapshotTable(ctx, table, tablePks, &lastSeenPksValues, i.fieldSnapshotMaxBatchSize)
 			}
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to execute snapshot table query: %s", err)
 			}
 
 			types, err := batchRows.ColumnTypes()
 			if err != nil {
-				_ = batchRows.Close()
-				return err
+				return fmt.Errorf("failed to fetch column types: %s", err)
 			}
 
 			values, mappers := prepSnapshotScannerAndMappers(types)
 
 			columns, err := batchRows.Columns()
 			if err != nil {
-				_ = batchRows.Close()
-				return err
+				return fmt.Errorf("failed to fetch columns: %s", err)
 			}
 
 			var batchRowsCount int
@@ -349,7 +348,6 @@ func (i *mysqlStreamInput) readSnapshot(ctx context.Context, snapshot *Snapshot)
 				batchRowsCount++
 
 				if err := batchRows.Scan(values...); err != nil {
-					_ = batchRows.Close()
 					return err
 				}
 
@@ -376,6 +374,11 @@ func (i *mysqlStreamInput) readSnapshot(ctx context.Context, snapshot *Snapshot)
 					return ctx.Err()
 				}
 			}
+
+			if err := batchRows.Err(); err != nil {
+				return fmt.Errorf("failed to iterate snapshot table: %s", err)
+			}
+
 			// TODO(cdc): Save checkpoint
 			if batchRowsCount < i.fieldSnapshotMaxBatchSize {
 				break

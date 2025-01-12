@@ -144,6 +144,10 @@ ORDER BY ORDINAL_POSITION;
 		pks = append(pks, pk)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate table: %s", err)
+	}
+
 	if len(pks) == 0 {
 		return nil, fmt.Errorf("unable to find primary key for table %s - does the table exist and does it have a primary key set?", table)
 	}
