@@ -131,6 +131,7 @@ mqtt                      ,output    ,mqtt                      ,4.37.0  ,certif
 msgpack                   ,processor ,msgpack                   ,3.59.0  ,community  ,n          ,n     ,n
 multilevel                ,cache     ,Multilevel                ,0.0.0   ,certified  ,n          ,y     ,y
 mutation                  ,processor ,mutation                  ,4.5.0   ,certified  ,n          ,y     ,y
+mysql_cdc                 ,input     ,mysql_cdc                 ,4.45.0  ,enterprise ,n          ,y     ,y
 nanomsg                   ,input     ,nanomsg                   ,0.0.0   ,community  ,n          ,n     ,n
 nanomsg                   ,output    ,nanomsg                   ,0.0.0   ,community  ,n          ,n     ,n
 nats                      ,input     ,NATS                      ,0.0.0   ,certified  ,n          ,y     ,y
@@ -170,7 +171,7 @@ parquet                   ,processor ,parquet                   ,3.62.0  ,commun
 parquet_decode            ,processor ,parquet_decode            ,4.4.0   ,certified  ,n          ,y     ,y
 parquet_encode            ,processor ,parquet_encode            ,4.4.0   ,certified  ,n          ,y     ,y
 parse_log                 ,processor ,parse_log                 ,0.0.0   ,community  ,n          ,y     ,y
-pg_stream                 ,input     ,pg_stream                 ,0.0.0   ,enterprise ,y          ,y     ,y
+pg_stream                 ,input     ,pg_stream                 ,4.43.0  ,enterprise ,y          ,y     ,y
 pinecone                  ,output    ,pinecone                  ,4.31.0  ,certified  ,n          ,y     ,y
 postgres_cdc              ,input     ,postgres_cdc              ,4.43.0  ,enterprise ,n          ,y     ,y
 processors                ,processor ,processors                ,0.0.0   ,certified  ,n          ,y     ,y

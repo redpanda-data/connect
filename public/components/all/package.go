@@ -21,6 +21,7 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/cohere"
 	_ "github.com/redpanda-data/connect/v4/public/components/gcp/enterprise"
 	_ "github.com/redpanda-data/connect/v4/public/components/kafka/enterprise"
+	_ "github.com/redpanda-data/connect/v4/public/components/mysql"
 	_ "github.com/redpanda-data/connect/v4/public/components/ollama"
 	_ "github.com/redpanda-data/connect/v4/public/components/openai"
 	_ "github.com/redpanda-data/connect/v4/public/components/postgresql"
