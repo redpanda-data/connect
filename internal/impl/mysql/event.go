@@ -18,7 +18,7 @@ import (
 
 type position = mysql.Position
 
-// MessageOperation is a string type specifying message opration
+// MessageOperation is a string type specifying message operation
 type MessageOperation string
 
 const (

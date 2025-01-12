@@ -44,6 +44,15 @@ const (
 
 var mysqlStreamConfigSpec = service.NewConfigSpec().
 	Summary("Enables MySQL streaming for RedPanda Connect.").
+	Description(`
+== Metadata
+
+This input adds the following metadata fields to each message:
+
+- operation
+- table
+- binlog_position
+`).
 	Fields(
 		service.NewStringField(fieldMySQLDSN).
 			Description("The DSN of the MySQL database to connect to.").
@@ -52,7 +61,7 @@ var mysqlStreamConfigSpec = service.NewConfigSpec().
 			Description("A list of tables to stream from the database.").
 			Example([]string{"table1", "table2"}),
 		service.NewStringField(fieldCheckpointCache).
-			Description("A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current latest BinLog Position that has been successfully delivered, this allows Redpanda Connect to continue from that BinLog Position upon restart, rather than consume the entire state of the table.\""),
+			Description("A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current latest BinLog Position that has been successfully delivered, this allows Redpanda Connect to continue from that BinLog Position upon restart, rather than consume the entire state of the table."),
 		service.NewStringField(fieldCheckpointKey).
 			Description("The key to use to store the snapshot position in `"+fieldCheckpointCache+"`. An alternative key can be provided if multiple CDC inputs share the same cache.").
 			Default("mysql_binlog_position"),
@@ -105,7 +114,7 @@ type mysqlStreamInput struct {
 }
 
 func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s service.BatchInput, err error) {
-	streamInput := mysqlStreamInput{
+	i := mysqlStreamInput{
 		logger:           res.Logger(),
 		rawMessageEvents: make(chan MessageEvent),
 		msgChan:          make(chan asyncMessage),
@@ -114,42 +123,41 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 
 	var batching service.BatchPolicy
 
-	if streamInput.dsn, err = conf.FieldString(fieldMySQLDSN); err != nil {
+	if i.dsn, err = conf.FieldString(fieldMySQLDSN); err != nil {
 		return nil, err
 	}
 
-	streamInput.mysqlConfig, err = mysql.ParseDSN(streamInput.dsn)
+	i.mysqlConfig, err = mysql.ParseDSN(i.dsn)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing mysql DSN: %v", err)
 	}
 
-	if streamInput.tables, err = conf.FieldStringList(fieldMySQLTables); err != nil {
+	if i.tables, err = conf.FieldStringList(fieldMySQLTables); err != nil {
 		return nil, err
 	}
 
-	if streamInput.streamSnapshot, err = conf.FieldBool(fieldStreamSnapshot); err != nil {
+	if i.streamSnapshot, err = conf.FieldBool(fieldStreamSnapshot); err != nil {
 		return nil, err
 	}
 
-	if streamInput.fieldSnapshotMaxBatchSize, err = conf.FieldInt(fieldSnapshotMaxBatchSize); err != nil {
+	if i.fieldSnapshotMaxBatchSize, err = conf.FieldInt(fieldSnapshotMaxBatchSize); err != nil {
 		return nil, err
 	}
 
-	if streamInput.checkPointLimit, err = conf.FieldInt(fieldCheckpointLimit); err != nil {
+	if i.checkPointLimit, err = conf.FieldInt(fieldCheckpointLimit); err != nil {
 		return nil, err
 	}
 
-	if streamInput.binLogCache, err = conf.FieldString(fieldCheckpointCache); err != nil {
+	if i.binLogCache, err = conf.FieldString(fieldCheckpointCache); err != nil {
 		return nil, err
 	}
-	if !conf.Resources().HasCache(streamInput.binLogCache) {
-		return nil, fmt.Errorf("unknown cache resource: %s", streamInput.binLogCache)
+	if !conf.Resources().HasCache(i.binLogCache) {
+		return nil, fmt.Errorf("unknown cache resource: %s", i.binLogCache)
 	}
-	if streamInput.binLogCacheKey, err = conf.FieldString(fieldCheckpointKey); err != nil {
+	if i.binLogCacheKey, err = conf.FieldString(fieldCheckpointKey); err != nil {
 		return nil, err
 	}
 
-	i := &streamInput
 	i.cp = checkpoint.NewCapped[*position](int64(i.checkPointLimit))
 
 	i.tablesFilterMap = map[string]bool{}
@@ -173,7 +181,7 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 		batching.Count = 1
 	}
 
-	r, err := service.AutoRetryNacksBatchedToggled(conf, i)
+	r, err := service.AutoRetryNacksBatchedToggled(conf, &i)
 	if err != nil {
 		return nil, err
 	}
@@ -222,14 +230,14 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 
 	pos, err := i.getCachedBinlogPosition(ctx)
 	if err != nil {
-		return fmt.Errorf("unable to get cached binlog position: %w", err)
+		return fmt.Errorf("unable to get cached binlog position: %s", err)
 	}
 	// create snapshot instance if we were requested and haven't finished it before.
 	var snapshot *Snapshot
 	if i.streamSnapshot && pos == nil {
 		db, err := sql.Open("mysql", i.dsn)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to connect to MySQL server: %s", err)
 		}
 		snapshot = NewSnapshot(i.logger, db)
 	}
@@ -248,7 +256,7 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 		wg.Go(func() error { return i.readMessages(ctx) })
 		wg.Go(func() error { return i.startMySQLSync(ctx, pos, snapshot) })
 		if err := wg.Wait(); err != nil && !errors.Is(err, context.Canceled) {
-			i.logger.Errorf("error during MySQL CDC: %v", err)
+			i.logger.Errorf("error during MySQL CDC: %s", err)
 		} else {
 			i.logger.Info("successfully shutdown MySQL CDC stream")
 		}

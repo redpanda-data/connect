@@ -642,6 +642,6 @@ memory: {}
   "longtext_col": "long_text_value",
   "enum_col": "option2",
   "set_col": ["b", "c"],
-  "json_col": {"foo":-1,"bar":[3,2,1]} 
+  "json_col": {"foo":-1,"bar":[3,2,1]}
 }`, outBatches[1])
 }
