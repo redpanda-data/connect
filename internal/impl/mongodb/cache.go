@@ -19,9 +19,9 @@ import (
 	"fmt"
 	"time"
 
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -114,7 +114,7 @@ func (m *mongodbCache) Get(ctx context.Context, key string) ([]byte, error) {
 }
 
 func (m *mongodbCache) Set(ctx context.Context, key string, value []byte, _ *time.Duration) error {
-	opts := options.Update().SetUpsert(true)
+	opts := options.UpdateOne().SetUpsert(true)
 	filter := bson.M{m.keyField: key}
 	update := bson.M{"$set": bson.M{m.valueField: string(value)}}
 

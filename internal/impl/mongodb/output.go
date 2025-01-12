@@ -20,8 +20,7 @@ import (
 	"fmt"
 	"sync"
 
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
@@ -83,12 +82,12 @@ func init() {
 type outputWriter struct {
 	log *service.Logger
 
-	client                       *mongo.Client
-	database                     *mongo.Database
-	collection                   *service.InterpolatedString
-	writeConcernCollectionOption *options.CollectionOptions
-	operation                    Operation
-	writeMaps                    writeMaps
+	client           *mongo.Client
+	database         *mongo.Database
+	collection       *service.InterpolatedString
+	writeConcernSpec *writeConcernSpec
+	operation        Operation
+	writeMaps        writeMaps
 
 	mu sync.Mutex
 }
@@ -103,7 +102,7 @@ func newOutputWriter(conf *service.ParsedConfig, res *service.Resources) (db *ou
 	if db.collection, err = conf.FieldInterpolatedString(moFieldCollection); err != nil {
 		return
 	}
-	if db.writeConcernCollectionOption, err = writeConcernCollectionOptionFromParsed(conf); err != nil {
+	if db.writeConcernSpec, err = writeConcernSpecFromParsed(conf); err != nil {
 		return
 	}
 	if db.operation, err = operationFromParsed(conf); err != nil {
@@ -201,9 +200,7 @@ func (m *outputWriter) WriteBatch(ctx context.Context, batch service.MessageBatc
 	// Dispatch any documents which WalkWithBatchedErrors managed to process successfully
 	if len(writeModelsMap) > 0 {
 		for collectionStr, writeModels := range writeModelsMap {
-			// We should have at least one write model in the slice
-			collection := m.database.Collection(collectionStr, m.writeConcernCollectionOption)
-			if _, err := collection.BulkWrite(ctx, writeModels); err != nil {
+			if err := m.builkWrite(ctx, collectionStr, writeModels); err != nil {
 				return err
 			}
 		}
@@ -214,6 +211,16 @@ func (m *outputWriter) WriteBatch(ctx context.Context, batch service.MessageBatc
 		return batchErr
 	}
 	return nil
+}
+
+func (m *outputWriter) builkWrite(ctx context.Context, collectionStr string, writeModels []mongo.WriteModel) error {
+	ctx, cancel := context.WithTimeout(ctx, m.writeConcernSpec.wTimeout)
+	defer cancel()
+
+	// We should have at least one write model in the slice
+	collection := m.database.Collection(collectionStr, m.writeConcernSpec.options)
+	_, err := collection.BulkWrite(ctx, writeModels)
+	return err
 }
 
 func (m *outputWriter) Close(ctx context.Context) error {
