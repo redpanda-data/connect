@@ -135,6 +135,17 @@ func init() {
 
 			clientOpts = append(clientOpts, kgo.WithLogger(&kafka.KGoLogger{L: mgr.Logger()}))
 
+			matchesTopic := func(topic string) bool {
+				if len(topicPatterns) > 0 {
+					return slices.ContainsFunc(topicPatterns, func(tp *regexp.Regexp) bool {
+						return tp.MatchString(topic)
+					})
+				}
+				return slices.ContainsFunc(topics, func(t string) bool {
+					return t == topic
+				})
+			}
+
 			rdr, err := kafka.NewFranzReaderOrderedFromConfig(conf, mgr, func() ([]kgo.Opt, error) {
 				return clientOpts, nil
 			}, func(record *kgo.Record) (*service.Message, error) {
@@ -144,17 +155,6 @@ func init() {
 				key := kmsg.NewOffsetCommitKey()
 				if err := key.ReadFrom(record.Key); err != nil || (key.Version != 0 && key.Version != 1) {
 					return nil, fmt.Errorf("failed to decode record key: %s", err)
-				}
-
-				matchesTopic := func(topic string) bool {
-					if len(topicPatterns) > 0 {
-						return slices.ContainsFunc(topicPatterns, func(tp *regexp.Regexp) bool {
-							return tp.MatchString(topic)
-						})
-					}
-					return slices.ContainsFunc(topics, func(t string) bool {
-						return t == topic
-					})
 				}
 
 				isExpectedTopic := matchesTopic(key.Topic)
