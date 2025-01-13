@@ -204,7 +204,7 @@ func newOckamKafkaOutput(conf *service.ParsedConfig, log *service.Logger) (*ocka
 	)
 
 	var client *kgo.Client
-	kafkaWriter, err := kafka.NewFranzWriterFromConfig(conf.Namespace("kafka"), func(fn kafka.FranzSharedClientUseFn) error {
+	kafkaWriter, err := kafka.NewFranzWriterFromConfig(conf.Namespace("kafka"), func(_ context.Context, fn kafka.FranzSharedClientUseFn) error {
 		if client == nil {
 			var err error
 			if client, err = kgo.NewClient(clientOpts...); err != nil {
@@ -221,7 +221,7 @@ func newOckamKafkaOutput(conf *service.ParsedConfig, log *service.Logger) (*ocka
 		client.Close()
 		client = nil
 		return nil
-	}, nil, nil)
+	}, nil)
 	if err != nil {
 		return nil, err
 	}

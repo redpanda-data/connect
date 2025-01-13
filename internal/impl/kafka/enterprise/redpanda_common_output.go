@@ -79,9 +79,9 @@ func init() {
 			if batchPolicy, err = conf.FieldBatchPolicy(roFieldBatching); err != nil {
 				return
 			}
-			output, err = kafka.NewFranzWriterFromConfig(conf, func(fn kafka.FranzSharedClientUseFn) error {
+			output, err = kafka.NewFranzWriterFromConfig(conf, func(_ context.Context, fn kafka.FranzSharedClientUseFn) error {
 				return kafka.FranzSharedClientUse(sharedGlobalRedpandaClientKey, mgr, fn)
-			}, func(context.Context) error { return nil }, nil, nil)
+			}, func(context.Context) error { return nil }, nil)
 			return
 		})
 	if err != nil {

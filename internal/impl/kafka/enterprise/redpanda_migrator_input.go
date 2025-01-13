@@ -12,7 +12,6 @@ import (
 	"context"
 	"errors"
 	"slices"
-	"time"
 
 	"github.com/twmb/franz-go/pkg/kgo"
 
@@ -23,13 +22,12 @@ import (
 )
 
 const (
+	// Deprecated fields
+	rmiFieldMultiHeader               = "multi_header"
+	rmiFieldBatchSize                 = "batch_size"
 	rmiFieldOutputResource            = "output_resource"
 	rmiFieldReplicationFactorOverride = "replication_factor_override"
 	rmiFieldReplicationFactor         = "replication_factor"
-
-	// Deprecated
-	rmiFieldMultiHeader = "multi_header"
-	rmiFieldBatchSize   = "batch_size"
 
 	rmiResourceDefaultLabel = "redpanda_migrator_input"
 )
@@ -43,11 +41,9 @@ func redpandaMigratorInputConfig() *service.ConfigSpec {
 		Description(`
 Reads a batch of messages from a Kafka broker and waits for the output to acknowledge the writes before updating the Kafka consumer group offset.
 
-This input should be used in combination with a ` + "`redpanda_migrator`" + ` output which it can query for existing topics.
+This input should be used in combination with a ` + "`redpanda_migrator`" + ` output.
 
 When a consumer group is specified this input consumes one or more topics where partitions will automatically balance across any other connected clients with the same consumer group. When a consumer group is not specified topics can either be consumed in their entirety or with explicit partitions.
-
-It attempts to create all selected topics along with their associated ACLs in the broker that the ` + "`redpanda_migrator`" + ` output points to identified by the label specified in ` + "`output_resource`" + `.
 
 It provides the same delivery guarantees and ordering semantics as the ` + "`redpanda`" + ` input.
 
@@ -95,20 +91,23 @@ func redpandaMigratorInputConfigFields() []*service.ConfigField {
 		kafka.FranzReaderOrderedConfigFields(),
 		[]*service.ConfigField{
 			service.NewAutoRetryNacksToggleField(),
+
+			// Deprecated fields
 			service.NewStringField(rmiFieldOutputResource).
 				Description("The label of the redpanda_migrator output in which the currently selected topics need to be created before attempting to read messages.").
 				Default(rmoResourceDefaultLabel).
-				Advanced(),
+				Advanced().
+				Deprecated(),
 			service.NewBoolField(rmiFieldReplicationFactorOverride).
 				Description("Use the specified replication factor when creating topics.").
 				Default(true).
-				Advanced(),
+				Advanced().
+				Deprecated(),
 			service.NewIntField(rmiFieldReplicationFactor).
 				Description("Replication factor for created topics. This is only used when `replication_factor_override` is set to `true`.").
 				Default(3).
-				Advanced(),
-
-			// Deprecated
+				Advanced().
+				Deprecated(),
 			service.NewBoolField(rmiFieldMultiHeader).
 				Description("Decode headers into lists to allow handling of multiple values with the same key").
 				Default(false).
@@ -141,21 +140,6 @@ func init() {
 			}
 			clientOpts = append(clientOpts, tmpOpts...)
 
-			replicationFactorOverride, err := conf.FieldBool(rmiFieldReplicationFactorOverride)
-			if err != nil {
-				return nil, err
-			}
-
-			replicationFactor, err := conf.FieldInt(rmiFieldReplicationFactor)
-			if err != nil {
-				return nil, err
-			}
-
-			outputResource, err := conf.FieldString(rmiFieldOutputResource)
-			if err != nil {
-				return nil, err
-			}
-
 			clientLabel := mgr.Label()
 			if clientLabel == "" {
 				clientLabel = rmiResourceDefaultLabel
@@ -178,50 +162,6 @@ func init() {
 						Client: client,
 					}, res); err != nil {
 						res.Logger().With("error", err).Warn("Failed to store client connection for sharing")
-					}
-
-					topics := client.GetConsumeTopics()
-					if len(topics) > 0 {
-						mgr.Logger().Debugf("Consuming from topics: %s", topics)
-					} else {
-						mgr.Logger().Warn("No matching topics found")
-						return
-					}
-
-					// Make multiple attempts until the output connects in the background.
-					// TODO: It would be nicer to somehow get notified when the output is ready.
-				loop:
-					for {
-						if err = kafka.FranzSharedClientUse(outputResource, res, func(details *kafka.FranzSharedClientInfo) error {
-							for _, topic := range topics {
-								if err := createTopic(ctx, topic, replicationFactorOverride, replicationFactor, client, details.Client); err != nil && err != errTopicAlreadyExists {
-									// We could end up attempting to create a topic which doesn't have any messages in it, so if that
-									// fails, we can just log an error and carry on. If it does contain messages, the output will
-									// attempt to create it again anyway and will trigger and error if it can't.
-									// The output `topicCache` could be populated here to avoid the redundant call to create topics, but
-									// it's not worth the complexity.
-									mgr.Logger().Errorf("Failed to create topic %q and ACLs: %s", topic, err)
-								} else {
-									if err == errTopicAlreadyExists {
-										mgr.Logger().Debugf("Topic %q already exists", topic)
-									} else {
-										mgr.Logger().Infof("Created topic %q in output cluster", topic)
-									}
-									if err := createACLs(ctx, topic, client, details.Client); err != nil {
-										mgr.Logger().Errorf("Failed to create ACLs for topic %q: %s", topic, err)
-									}
-								}
-							}
-							return nil
-						}); err == nil {
-							break
-						}
-
-						select {
-						case <-time.After(100 * time.Millisecond):
-						case <-ctx.Done():
-							break loop
-						}
 					}
 				},
 				func(res *service.Resources) {

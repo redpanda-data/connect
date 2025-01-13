@@ -96,11 +96,12 @@ output:
 
 Writes a batch of messages to a Kafka broker and waits for acknowledgement before propagating it back to the input.
 
-This output should be used in combination with a `redpanda_migrator` input which it can query for topic and ACL configurations.
+This output should be used in combination with a `redpanda_migrator` input identified by the label specified in
+`input_resource` which it can query for topic and ACL configurations. Once connected, the output will attempt to
+create all topics which the input consumes from along with their ACLs.
 
-If the configured broker does not contain the current message topic, it attempts to create it along with the topic
-ACLs which are read automatically from the `redpanda_migrator` input identified by the label specified in
-`input_resource`.
+If the configured broker does not contain the current message topic, this output attempts to create it along with its
+ACLs.
 
 ACL migration adheres to the following principles:
 

@@ -72,8 +72,8 @@ type clientOptsFn func() ([]kgo.Opt, error)
 // recordToMessageFn is a function that converts a Kafka record into a Message.
 type recordToMessageFn func(record *kgo.Record) (*service.Message, error)
 
-// preflightHookFn is a function which is executed once before the first batch of messages is emitted.
-type preflightHookFn func(ctx context.Context, res *service.Resources, client *kgo.Client)
+// onConnectHookFn is a function which is executed when the Kafka client is connected.
+type onConnectHookFn func(ctx context.Context, res *service.Resources, client *kgo.Client)
 
 // closeHookFn is a function which is executed when the Kafka client gets closed.
 type closeHookFn func(res *service.Resources)
@@ -82,19 +82,18 @@ type closeHookFn func(res *service.Resources)
 type FranzReaderOrdered struct {
 	clientOptsFn clientOptsFn
 
-	partState             *partitionState
-	lagUpdater            *asyncroutine.Periodic
-	topicLagGauge         *service.MetricGauge
-	topicLagCache         sync.Map
-	preflightHookExecuted bool
-	client                *kgo.Client
+	partState     *partitionState
+	lagUpdater    *asyncroutine.Periodic
+	topicLagGauge *service.MetricGauge
+	topicLagCache sync.Map
+	client        *kgo.Client
 
 	consumerGroup         string
 	commitPeriod          time.Duration
 	topicLagRefreshPeriod time.Duration
 	cacheLimit            uint64
 	recordToMessageFn     recordToMessageFn
-	preflightHookFn       preflightHookFn
+	onConnectHookFn       onConnectHookFn
 	closeHookFn           closeHookFn
 	readBackOff           backoff.BackOff
 
@@ -107,10 +106,9 @@ type FranzReaderOrdered struct {
 // Optional parameters:
 // - `recordToMessageFn` is a function that converts a Kafka record into a Message. If set to `nil`,
 // `FranzRecordToMessageV1` is used instead.
-// - `preflightHookFn` is a function which is executed once before the first batch of messages is emitted. It can be
-// set to `nil`.
+// - `onConnectHookFn` is a function which is executed when the Kafka client is connected. It can be set to `nil`.
 // - `closeHookFn` is a function which is executed when the Kafka client gets closed. It can be set to `nil`.
-func NewFranzReaderOrderedFromConfig(conf *service.ParsedConfig, res *service.Resources, clientOptsFn clientOptsFn, recordToMessageFn recordToMessageFn, preflightHookFn preflightHookFn, closeHookFn closeHookFn) (*FranzReaderOrdered, error) {
+func NewFranzReaderOrderedFromConfig(conf *service.ParsedConfig, res *service.Resources, clientOptsFn clientOptsFn, recordToMessageFn recordToMessageFn, onConnectHookFn onConnectHookFn, closeHookFn closeHookFn) (*FranzReaderOrdered, error) {
 	readBackOff := backoff.NewExponentialBackOff()
 	readBackOff.InitialInterval = time.Millisecond
 	readBackOff.MaxInterval = time.Millisecond * 100
@@ -127,7 +125,7 @@ func NewFranzReaderOrderedFromConfig(conf *service.ParsedConfig, res *service.Re
 		clientOptsFn:      clientOptsFn,
 		topicLagGauge:     res.Metrics().NewGauge("redpanda_lag", "topic", "partition"),
 		recordToMessageFn: recordToMessageFn,
-		preflightHookFn:   preflightHookFn,
+		onConnectHookFn:   onConnectHookFn,
 		closeHookFn:       closeHookFn,
 	}
 
@@ -441,6 +439,17 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 		return fmt.Errorf("failed to connect to cluster: %s", err)
 	}
 
+	topics := f.client.GetConsumeTopics()
+	if len(topics) > 0 {
+		f.log.Debugf("Consuming from topics: %s", topics)
+	} else {
+		f.log.Warn("Topic filter did not match any existing topics")
+	}
+
+	if f.onConnectHookFn != nil {
+		f.onConnectHookFn(ctx, f.res, f.client)
+	}
+
 	if f.lagUpdater != nil {
 		f.lagUpdater.Stop()
 	}
@@ -579,11 +588,6 @@ func (f *FranzReaderOrdered) ReadBatch(ctx context.Context) (service.MessageBatc
 
 	for {
 		if mAck := f.partState.pop(); mAck != nil {
-			if f.preflightHookFn != nil && !f.preflightHookExecuted {
-				f.preflightHookFn(ctx, f.res, f.client)
-				f.preflightHookExecuted = true
-			}
-
 			f.readBackOff.Reset()
 			return mAck.batch, func(ctx context.Context, res error) error {
 				// Res will always be nil because we initialize with service.AutoRetryNacks

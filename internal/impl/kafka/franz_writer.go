@@ -254,7 +254,7 @@ func FranzWriterConfigLints() string {
 }
 
 // accessClientFn is a function which is executed to fetch the client.
-type accessClientFn func(FranzSharedClientUseFn) error
+type accessClientFn func(context.Context, FranzSharedClientUseFn) error
 
 // yieldClientFn is a function which is executed during close to yield the client.
 type yieldClientFn func(context.Context) error
@@ -271,24 +271,20 @@ type FranzWriter struct {
 	IsTimestampMs bool
 	MetaFilter    *service.MetadataFilter
 
-	accessClientFn  accessClientFn
-	yieldClientFn   yieldClientFn
-	onConnectHookFn func(client *kgo.Client)
-	onWriteHookFn   onWriteHookFn
+	accessClientFn accessClientFn
+	yieldClientFn  yieldClientFn
+	onWriteHookFn  onWriteHookFn
 }
 
 // NewFranzWriterFromConfig uses a parsed config to extract customisation for writing data to a Kafka broker. A closure
 // function must be provided that is responsible for granting access to a connected client.
 // Optional parameters:
-// - `onConnectHookFn` is a function that is executed when the Kafka client is successfully connected. It can be set to
-// `nil`.
 // - `onWriteHookFn` is a function which is executed before each batch of messages is written. It can be set to `nil`.
-func NewFranzWriterFromConfig(conf *service.ParsedConfig, accessClientFn accessClientFn, yieldClientFn yieldClientFn, onConnectHookFn func(client *kgo.Client), onWriteHookFn onWriteHookFn) (*FranzWriter, error) {
+func NewFranzWriterFromConfig(conf *service.ParsedConfig, accessClientFn accessClientFn, yieldClientFn yieldClientFn, onWriteHookFn onWriteHookFn) (*FranzWriter, error) {
 	w := FranzWriter{
-		accessClientFn:  accessClientFn,
-		yieldClientFn:   yieldClientFn,
-		onConnectHookFn: onConnectHookFn,
-		onWriteHookFn:   onWriteHookFn,
+		accessClientFn: accessClientFn,
+		yieldClientFn:  yieldClientFn,
+		onWriteHookFn:  onWriteHookFn,
 	}
 
 	var err error
@@ -410,23 +406,13 @@ func (w *FranzWriter) BatchToRecords(ctx context.Context, b service.MessageBatch
 
 // Connect to the target seed brokers.
 func (w *FranzWriter) Connect(ctx context.Context) error {
-	var client *kgo.Client
-	if err := w.accessClientFn(func(details *FranzSharedClientInfo) error {
+	return w.accessClientFn(ctx, func(details *FranzSharedClientInfo) error {
 		// Check connectivity to cluster
 		if err := details.Client.Ping(ctx); err != nil {
 			return fmt.Errorf("failed to connect to cluster: %s", err)
 		}
-		client = details.Client
 		return nil
-	}); err != nil {
-		return err
-	}
-
-	if w.onConnectHookFn != nil {
-		w.onConnectHookFn(client)
-	}
-
-	return nil
+	})
 }
 
 // WriteBatch attempts to write a batch of messages to the target topics.
@@ -434,7 +420,7 @@ func (w *FranzWriter) WriteBatch(ctx context.Context, b service.MessageBatch) er
 	if len(b) == 0 {
 		return nil
 	}
-	return w.accessClientFn(func(details *FranzSharedClientInfo) error {
+	return w.accessClientFn(ctx, func(details *FranzSharedClientInfo) error {
 		records, err := w.BatchToRecords(ctx, b)
 		if err != nil {
 			return err

@@ -83,7 +83,7 @@ func init() {
 			var client *kgo.Client
 			var clientMut sync.Mutex
 
-			output, err = NewFranzWriterFromConfig(conf, func(fn FranzSharedClientUseFn) error {
+			output, err = NewFranzWriterFromConfig(conf, func(_ context.Context, fn FranzSharedClientUseFn) error {
 				clientMut.Lock()
 				defer clientMut.Unlock()
 
@@ -107,7 +107,7 @@ func init() {
 				client.Close()
 				client = nil
 				return nil
-			}, nil, nil)
+			}, nil)
 			return
 		})
 	if err != nil {

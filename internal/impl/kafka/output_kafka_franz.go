@@ -97,7 +97,7 @@ func init() {
 
 			var client *kgo.Client
 
-			output, err = NewFranzWriterFromConfig(conf, func(fn FranzSharedClientUseFn) error {
+			output, err = NewFranzWriterFromConfig(conf, func(_ context.Context, fn FranzSharedClientUseFn) error {
 				if client == nil {
 					var err error
 					if client, err = kgo.NewClient(clientOpts...); err != nil {
@@ -115,7 +115,7 @@ func init() {
 				client.Close()
 				client = nil
 				return nil
-			}, nil, nil)
+			}, nil)
 			return
 		})
 	if err != nil {
