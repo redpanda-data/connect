@@ -40,6 +40,12 @@ All notable changes to this project will be documented in this file.
 - Metric `redpanda_lag` now emitted by the `redpanda` and `redpanda_common` inputs. (@mihaitodor)
 - Metadata `kafka_lag` now emitted by the `redpanda` and `redpanda_common` inputs. (@mihaitodor)
 - The `redpanda_migrator_bundle` input and output now set labels for their subcomponents. (@mihaitodor)
+- (Benthos) Field `label` added to the template tests definitions. (@mihaitodor)
+- (Benthos) Metadata field `label` can now be utilized within a template's `mapping` field to access the label that is associated with the template instantiation in a config. (@mihaitodor)
+- (Benthos) `bloblang` scalar type added to template fields. (@mihaitodor)
+- (Benthos) Go API: Method `SetOutputBrokerPattern` added to the `StreamBuilder` type. (@mihaitodor)
+- (Benthos) New `error_source_name`, `error_source_label` and `error_source_path` bloblang functions. (@mihaitodor)
+- (Benthos) Flag `--verbose` added to the `benthos lint` and `benthos template lint` commands. (@mihaitodor)
 
 ### Changed
 
@@ -51,6 +57,8 @@ All notable changes to this project will be documented in this file.
 - Fields `kafka_key` and `max_in_flight` for the `redpanda_migrator_offsets` output are now deprecated. (@mihaitodor)
 - Field `batching` for the `redpanda_migrator` output is now deprecated. (@mihaitodor)
 - The `redpanda_migrator` input no longer emits tombstone messages. (@mihaitodor)
+- (Benthos) The `branch` processor no longer emits an entry in the log at error level when the child processors throw errors. (@mihaitodor)
+- (Benthos) Streams and the StreamBuilder API now use `reject` by default when no output is specified in the config and `stdout` isn't registered (for example when the `io` components are not imported). (@mihaitodor)
 
 ## 4.44.0 - 2024-12-13
 
