@@ -133,8 +133,6 @@ func init() {
 			// Consume messages from the `__consumer_offsets` topic
 			clientOpts = append(clientOpts, kgo.ConsumeTopics("__consumer_offsets"))
 
-			clientOpts = append(clientOpts, kgo.WithLogger(&kafka.KGoLogger{L: mgr.Logger()}))
-
 			matchesTopic := func(topic string) bool {
 				if len(topicPatterns) > 0 {
 					return slices.ContainsFunc(topicPatterns, func(tp *regexp.Regexp) bool {
@@ -148,23 +146,26 @@ func init() {
 
 			rdr, err := kafka.NewFranzReaderOrderedFromConfig(conf, mgr, func() ([]kgo.Opt, error) {
 				return clientOpts, nil
-			}, func(record *kgo.Record) (*service.Message, error) {
+			}, func(record *kgo.Record) (*service.Message, bool) {
 				msg := kafka.FranzRecordToMessageV1(record)
 
 				// Check the version to ensure that we process only offset commit keys
 				key := kmsg.NewOffsetCommitKey()
 				if err := key.ReadFrom(record.Key); err != nil || (key.Version != 0 && key.Version != 1) {
-					return nil, fmt.Errorf("failed to decode record key: %s", err)
+					mgr.Logger().Debugf("Failed to decode record key: %s", err)
+					return nil, false
 				}
 
 				isExpectedTopic := matchesTopic(key.Topic)
 				if !isExpectedTopic {
-					return nil, fmt.Errorf("skipping updates for topic %q", key.Topic)
+					mgr.Logger().Tracef("Skipping updates for topic %q", key.Topic)
+					return nil, false
 				}
 
 				offsetCommitValue := kmsg.NewOffsetCommitValue()
 				if err = offsetCommitValue.ReadFrom(record.Value); err != nil {
-					return nil, fmt.Errorf("failed to decode offset commit value: %s", err)
+					mgr.Logger().Debugf("Failed to decode offset commit value: %s", err)
+					return nil, false
 				}
 
 				msg.MetaSetMut("kafka_offset_topic", key.Topic)
@@ -173,7 +174,7 @@ func init() {
 				msg.MetaSetMut("kafka_offset_commit_timestamp", offsetCommitValue.CommitTimestamp)
 				msg.MetaSetMut("kafka_offset_metadata", offsetCommitValue.Metadata)
 
-				return msg, nil
+				return msg, true
 			}, nil, nil)
 			if err != nil {
 				return nil, err

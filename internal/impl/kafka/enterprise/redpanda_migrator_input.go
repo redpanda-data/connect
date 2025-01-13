@@ -10,7 +10,6 @@ package enterprise
 
 import (
 	"context"
-	"errors"
 	"slices"
 
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -149,13 +148,14 @@ func init() {
 				func() ([]kgo.Opt, error) {
 					return clientOpts, nil
 				},
-				func(record *kgo.Record) (*service.Message, error) {
+				func(record *kgo.Record) (*service.Message, bool) {
 					if record.Value == nil {
 						// Skip tombstone messages.
-						return nil, errors.New("tombstone message")
+						mgr.Logger().Debug("Skipping tombstone message")
+						return nil, false
 					}
 
-					return kafka.FranzRecordToMessageV1(record), nil
+					return kafka.FranzRecordToMessageV1(record), true
 				},
 				func(ctx context.Context, res *service.Resources, client *kgo.Client) {
 					if err = kafka.FranzSharedClientSet(clientLabel, &kafka.FranzSharedClientInfo{

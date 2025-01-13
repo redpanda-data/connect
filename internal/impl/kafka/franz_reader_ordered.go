@@ -70,7 +70,7 @@ func FranzReaderOrderedConfigFields() []*service.ConfigField {
 type clientOptsFn func() ([]kgo.Opt, error)
 
 // recordToMessageFn is a function that converts a Kafka record into a Message.
-type recordToMessageFn func(record *kgo.Record) (*service.Message, error)
+type recordToMessageFn func(record *kgo.Record) (*service.Message, bool)
 
 // onConnectHookFn is a function which is executed when the Kafka client is connected.
 type onConnectHookFn func(ctx context.Context, res *service.Resources, client *kgo.Client)
@@ -115,7 +115,7 @@ func NewFranzReaderOrderedFromConfig(conf *service.ParsedConfig, res *service.Re
 	readBackOff.MaxElapsedTime = 0
 
 	if recordToMessageFn == nil {
-		recordToMessageFn = func(record *kgo.Record) (*service.Message, error) { return FranzRecordToMessageV1(record), nil }
+		recordToMessageFn = func(record *kgo.Record) (*service.Message, bool) { return FranzRecordToMessageV1(record), true }
 	}
 	f := FranzReaderOrdered{
 		readBackOff:       readBackOff,
@@ -157,9 +157,8 @@ func (f *FranzReaderOrdered) recordsToBatch(records []*kgo.Record) *batchWithRec
 	var length uint64
 	var batch service.MessageBatch
 	for _, r := range records {
-		msg, err := f.recordToMessageFn(r)
-		if err != nil {
-			f.log.Debugf("Failed to convert kafka record to message: %s", err)
+		msg, ok := f.recordToMessageFn(r)
+		if !ok {
 			continue
 		}
 		length += uint64(len(r.Value) + len(r.Key))
