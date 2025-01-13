@@ -9,6 +9,7 @@
 package enterprise
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"regexp"
@@ -133,56 +134,100 @@ func init() {
 			// Consume messages from the `__consumer_offsets` topic
 			clientOpts = append(clientOpts, kgo.ConsumeTopics("__consumer_offsets"))
 
-			matchesTopic := func(topic string) bool {
-				if len(topicPatterns) > 0 {
-					return slices.ContainsFunc(topicPatterns, func(tp *regexp.Regexp) bool {
-						return tp.MatchString(topic)
-					})
-				}
-				return slices.ContainsFunc(topics, func(t string) bool {
-					return t == topic
-				})
-			}
-
 			rdr, err := kafka.NewFranzReaderOrderedFromConfig(conf, mgr, func() ([]kgo.Opt, error) {
 				return clientOpts, nil
-			}, func(record *kgo.Record) (*service.Message, bool) {
-				msg := kafka.FranzRecordToMessageV1(record)
-
-				// Check the version to ensure that we process only offset commit keys
-				key := kmsg.NewOffsetCommitKey()
-				if err := key.ReadFrom(record.Key); err != nil || (key.Version != 0 && key.Version != 1) {
-					mgr.Logger().Debugf("Failed to decode record key: %s", err)
-					return nil, false
-				}
-
-				isExpectedTopic := matchesTopic(key.Topic)
-				if !isExpectedTopic {
-					mgr.Logger().Tracef("Skipping updates for topic %q", key.Topic)
-					return nil, false
-				}
-
-				offsetCommitValue := kmsg.NewOffsetCommitValue()
-				if err = offsetCommitValue.ReadFrom(record.Value); err != nil {
-					mgr.Logger().Debugf("Failed to decode offset commit value: %s", err)
-					return nil, false
-				}
-
-				msg.MetaSetMut("kafka_offset_topic", key.Topic)
-				msg.MetaSetMut("kafka_offset_group", key.Group)
-				msg.MetaSetMut("kafka_offset_partition", key.Partition)
-				msg.MetaSetMut("kafka_offset_commit_timestamp", offsetCommitValue.CommitTimestamp)
-				msg.MetaSetMut("kafka_offset_metadata", offsetCommitValue.Metadata)
-
-				return msg, true
-			}, nil, nil)
+			})
 			if err != nil {
 				return nil, err
 			}
 
-			return service.AutoRetryNacksBatchedToggled(conf, rdr)
+			return service.AutoRetryNacksBatchedToggled(conf, &redpandaMigratorOffsetsInput{
+				FranzReaderOrdered: rdr,
+				topicPatterns:      topicPatterns,
+				topics:             topics,
+				mgr:                mgr,
+			})
 		})
 	if err != nil {
 		panic(err)
+	}
+}
+
+//------------------------------------------------------------------------------
+
+type redpandaMigratorOffsetsInput struct {
+	*kafka.FranzReaderOrdered
+
+	topicPatterns []*regexp.Regexp
+	topics        []string
+
+	mgr *service.Resources
+}
+
+func (rmoi *redpandaMigratorOffsetsInput) matchesTopic(topic string) bool {
+	if len(rmoi.topicPatterns) > 0 {
+		return slices.ContainsFunc(rmoi.topicPatterns, func(tp *regexp.Regexp) bool {
+			return tp.MatchString(topic)
+		})
+	}
+	return slices.ContainsFunc(rmoi.topics, func(t string) bool {
+		return t == topic
+	})
+}
+
+func (rmoi *redpandaMigratorOffsetsInput) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
+	for {
+		batch, ack, err := rmoi.FranzReaderOrdered.ReadBatch(ctx)
+		if err != nil {
+			return batch, ack, err
+		}
+
+		batch = slices.DeleteFunc(batch, func(msg *service.Message) bool {
+			var recordKey []byte
+			if key, ok := msg.MetaGetMut("kafka_key"); !ok {
+				return true
+			} else {
+				recordKey = key.([]byte)
+			}
+
+			// Check the version to ensure that we process only offset commit keys
+			key := kmsg.NewOffsetCommitKey()
+			if err := key.ReadFrom(recordKey); err != nil || (key.Version != 0 && key.Version != 1) {
+				rmoi.mgr.Logger().Debugf("Failed to decode record key: %s", err)
+				return true
+			}
+
+			isExpectedTopic := rmoi.matchesTopic(key.Topic)
+			if !isExpectedTopic {
+				rmoi.mgr.Logger().Tracef("Skipping updates for topic %q", key.Topic)
+				return true
+			}
+
+			recordValue, err := msg.AsBytes()
+			if err != nil {
+				return true
+			}
+
+			offsetCommitValue := kmsg.NewOffsetCommitValue()
+			if err = offsetCommitValue.ReadFrom(recordValue); err != nil {
+				rmoi.mgr.Logger().Debugf("Failed to decode offset commit value: %s", err)
+				return true
+			}
+
+			msg.MetaSetMut("kafka_offset_topic", key.Topic)
+			msg.MetaSetMut("kafka_offset_group", key.Group)
+			msg.MetaSetMut("kafka_offset_partition", key.Partition)
+			msg.MetaSetMut("kafka_offset_commit_timestamp", offsetCommitValue.CommitTimestamp)
+			msg.MetaSetMut("kafka_offset_metadata", offsetCommitValue.Metadata)
+
+			return false
+		})
+
+		if len(batch) == 0 {
+			_ = ack(ctx, nil) // TODO: Log this error?
+			continue
+		}
+
+		return batch, ack, nil
 	}
 }

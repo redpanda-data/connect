@@ -124,7 +124,7 @@ func init() {
 
 			rdr, err := NewFranzReaderOrderedFromConfig(conf, mgr, func() ([]kgo.Opt, error) {
 				return clientOpts, nil
-			}, nil, nil, nil)
+			})
 			if err != nil {
 				return nil, err
 			}

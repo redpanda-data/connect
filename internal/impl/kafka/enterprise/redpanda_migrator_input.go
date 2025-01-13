@@ -147,31 +147,16 @@ func init() {
 			rdr, err := kafka.NewFranzReaderOrderedFromConfig(conf, mgr,
 				func() ([]kgo.Opt, error) {
 					return clientOpts, nil
-				},
-				func(record *kgo.Record) (*service.Message, bool) {
-					if record.Value == nil {
-						// Skip tombstone messages.
-						mgr.Logger().Debug("Skipping tombstone message")
-						return nil, false
-					}
-
-					return kafka.FranzRecordToMessageV1(record), true
-				},
-				func(ctx context.Context, res *service.Resources, client *kgo.Client) {
-					if err = kafka.FranzSharedClientSet(clientLabel, &kafka.FranzSharedClientInfo{
-						Client: client,
-					}, res); err != nil {
-						res.Logger().With("error", err).Warn("Failed to store client connection for sharing")
-					}
-				},
-				func(res *service.Resources) {
-					_, _ = kafka.FranzSharedClientPop(clientLabel, res)
 				})
 			if err != nil {
 				return nil, err
 			}
 
-			return service.AutoRetryNacksBatchedToggled(conf, rdr)
+			return service.AutoRetryNacksBatchedToggled(conf, &redpandaMigratorInput{
+				FranzReaderOrdered: rdr,
+				clientLabel:        clientLabel,
+				mgr:                mgr,
+			})
 		})
 	if err != nil {
 		panic(err)
@@ -179,3 +164,58 @@ func init() {
 }
 
 //------------------------------------------------------------------------------
+
+type redpandaMigratorInput struct {
+	*kafka.FranzReaderOrdered
+
+	clientLabel string
+
+	mgr *service.Resources
+}
+
+func (rmi *redpandaMigratorInput) Connect(ctx context.Context) error {
+	if err := rmi.FranzReaderOrdered.Connect(ctx); err != nil {
+		return err
+	}
+
+	if err := kafka.FranzSharedClientSet(rmi.clientLabel, &kafka.FranzSharedClientInfo{
+		Client: rmi.FranzReaderOrdered.Client,
+	}, rmi.mgr); err != nil {
+		rmi.mgr.Logger().Warnf("Failed to store client connection for sharing: %s", err)
+	}
+
+	return nil
+}
+
+func (rmi *redpandaMigratorInput) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
+	for {
+		batch, ack, err := rmi.FranzReaderOrdered.ReadBatch(ctx)
+		if err != nil {
+			return batch, ack, err
+		}
+
+		batch = slices.DeleteFunc(batch, func(msg *service.Message) bool {
+			b, err := msg.AsBytes()
+
+			if b == nil {
+				rmi.mgr.Logger().Debugf("Skipping tombstone message")
+				return true
+			}
+
+			return err != nil
+		})
+
+		if len(batch) == 0 {
+			_ = ack(ctx, nil) // TODO: Log this error?
+			continue
+		}
+
+		return batch, ack, nil
+	}
+}
+
+func (rmi *redpandaMigratorInput) Close(ctx context.Context) error {
+	_, _ = kafka.FranzSharedClientPop(rmi.clientLabel, rmi.mgr)
+
+	return rmi.FranzReaderOrdered.Close(ctx)
+}

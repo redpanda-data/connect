@@ -66,35 +66,20 @@ func FranzReaderOrderedConfigFields() []*service.ConfigField {
 
 //------------------------------------------------------------------------------
 
-// clientOptsFn is a function for setting Kafka client options.
-type clientOptsFn func() ([]kgo.Opt, error)
-
-// recordToMessageFn is a function that converts a Kafka record into a Message.
-type recordToMessageFn func(record *kgo.Record) (*service.Message, bool)
-
-// onConnectHookFn is a function which is executed when the Kafka client is connected.
-type onConnectHookFn func(ctx context.Context, res *service.Resources, client *kgo.Client)
-
-// closeHookFn is a function which is executed when the Kafka client gets closed.
-type closeHookFn func(res *service.Resources)
-
 // FranzReaderOrdered implements a kafka reader using the franz-go library.
 type FranzReaderOrdered struct {
-	clientOptsFn clientOptsFn
+	clientOpts func() ([]kgo.Opt, error)
 
 	partState     *partitionState
 	lagUpdater    *asyncroutine.Periodic
 	topicLagGauge *service.MetricGauge
 	topicLagCache sync.Map
-	client        *kgo.Client
+	Client        *kgo.Client
 
 	consumerGroup         string
 	commitPeriod          time.Duration
 	topicLagRefreshPeriod time.Duration
 	cacheLimit            uint64
-	recordToMessageFn     recordToMessageFn
-	onConnectHookFn       onConnectHookFn
-	closeHookFn           closeHookFn
 	readBackOff           backoff.BackOff
 
 	res     *service.Resources
@@ -103,30 +88,19 @@ type FranzReaderOrdered struct {
 }
 
 // NewFranzReaderOrderedFromConfig attempts to instantiate a new FranzReaderOrdered reader from a parsed config.
-// Optional parameters:
-// - `recordToMessageFn` is a function that converts a Kafka record into a Message. If set to `nil`,
-// `FranzRecordToMessageV1` is used instead.
-// - `onConnectHookFn` is a function which is executed when the Kafka client is connected. It can be set to `nil`.
-// - `closeHookFn` is a function which is executed when the Kafka client gets closed. It can be set to `nil`.
-func NewFranzReaderOrderedFromConfig(conf *service.ParsedConfig, res *service.Resources, clientOptsFn clientOptsFn, recordToMessageFn recordToMessageFn, onConnectHookFn onConnectHookFn, closeHookFn closeHookFn) (*FranzReaderOrdered, error) {
+func NewFranzReaderOrderedFromConfig(conf *service.ParsedConfig, res *service.Resources, optsFn func() ([]kgo.Opt, error)) (*FranzReaderOrdered, error) {
 	readBackOff := backoff.NewExponentialBackOff()
 	readBackOff.InitialInterval = time.Millisecond
 	readBackOff.MaxInterval = time.Millisecond * 100
 	readBackOff.MaxElapsedTime = 0
 
-	if recordToMessageFn == nil {
-		recordToMessageFn = func(record *kgo.Record) (*service.Message, bool) { return FranzRecordToMessageV1(record), true }
-	}
 	f := FranzReaderOrdered{
-		readBackOff:       readBackOff,
-		res:               res,
-		log:               res.Logger(),
-		shutSig:           shutdown.NewSignaller(),
-		clientOptsFn:      clientOptsFn,
-		topicLagGauge:     res.Metrics().NewGauge("redpanda_lag", "topic", "partition"),
-		recordToMessageFn: recordToMessageFn,
-		onConnectHookFn:   onConnectHookFn,
-		closeHookFn:       closeHookFn,
+		readBackOff:   readBackOff,
+		res:           res,
+		log:           res.Logger(),
+		shutSig:       shutdown.NewSignaller(),
+		clientOpts:    optsFn,
+		topicLagGauge: res.Metrics().NewGauge("redpanda_lag", "topic", "partition"),
 	}
 
 	f.consumerGroup, _ = conf.FieldString(kroFieldConsumerGroup)
@@ -157,18 +131,17 @@ func (f *FranzReaderOrdered) recordsToBatch(records []*kgo.Record) *batchWithRec
 	var length uint64
 	var batch service.MessageBatch
 	for _, r := range records {
-		msg, ok := f.recordToMessageFn(r)
-		if !ok {
-			continue
-		}
 		length += uint64(len(r.Value) + len(r.Key))
-		batch = append(batch, msg)
 
 		lag := int64(0)
 		if val, ok := f.topicLagCache.Load(fmt.Sprintf("%s_%d", r.Topic, r.Partition)); ok {
 			lag = val.(int64)
 		}
+
+		msg := FranzRecordToMessageV1(r)
 		msg.MetaSetMut("kafka_lag", lag)
+
+		batch = append(batch, msg)
 
 		// The record lives on for checkpointing, but we don't need the contents
 		// going forward so discard these. This looked fine to me but could
@@ -385,7 +358,7 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 		return service.ErrEndOfInput
 	}
 
-	clientOpts, err := f.clientOptsFn()
+	clientOpts, err := f.clientOpts()
 	if err != nil {
 		return err
 	}
@@ -393,10 +366,10 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 	commitFn := func(r *kgo.Record) {}
 	if f.consumerGroup != "" {
 		commitFn = func(r *kgo.Record) {
-			if f.client == nil {
+			if f.Client == nil {
 				return
 			}
-			f.client.MarkCommitRecords(r)
+			f.Client.MarkCommitRecords(r)
 		}
 	}
 
@@ -429,30 +402,26 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 		)
 	}
 
-	if f.client, err = kgo.NewClient(clientOpts...); err != nil {
+	if f.Client, err = kgo.NewClient(clientOpts...); err != nil {
 		return err
 	}
 
 	// Check connectivity to cluster
-	if err = f.client.Ping(ctx); err != nil {
+	if err = f.Client.Ping(ctx); err != nil {
 		return fmt.Errorf("failed to connect to cluster: %s", err)
 	}
 
-	topics := f.client.GetConsumeTopics()
+	topics := f.Client.GetConsumeTopics()
 	if len(topics) > 0 {
 		f.log.Debugf("Consuming from topics: %s", topics)
 	} else {
 		f.log.Warn("Topic filter did not match any existing topics")
 	}
 
-	if f.onConnectHookFn != nil {
-		f.onConnectHookFn(ctx, f.res, f.client)
-	}
-
 	if f.lagUpdater != nil {
 		f.lagUpdater.Stop()
 	}
-	adminClient := kadm.NewClient(f.client)
+	adminClient := kadm.NewClient(f.Client)
 	f.lagUpdater = asyncroutine.NewPeriodicWithContext(f.topicLagRefreshPeriod, func(ctx context.Context) {
 		ctx, done := context.WithTimeout(ctx, f.topicLagRefreshPeriod)
 		defer done()
@@ -480,10 +449,7 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 
 	go func() {
 		defer func() {
-			if f.closeHookFn != nil {
-				f.closeHookFn(f.res)
-			}
-			f.client.Close()
+			f.Client.Close()
 			if f.shutSig.IsSoftStopSignalled() {
 				f.shutSig.TriggerHasStopped()
 			}
@@ -500,7 +466,7 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 			// In this case we don't want to actually resume any of them yet so
 			// I add a forced timeout to deal with it.
 			stallCtx, pollDone := context.WithTimeout(closeCtx, time.Second)
-			fetches := f.client.PollFetches(stallCtx)
+			fetches := f.Client.PollFetches(stallCtx)
 			pollDone()
 
 			if errs := fetches.Errors(); len(errs) > 0 {
@@ -525,7 +491,7 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 				}
 
 				if nonTemporalErr {
-					f.client.Close()
+					f.Client.Close()
 					return
 				}
 			}
@@ -548,11 +514,11 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 					pauseTopicPartitions[p.Topic] = append(pauseTopicPartitions[p.Topic], p.Partition)
 				}
 			})
-			_ = f.client.PauseFetchPartitions(pauseTopicPartitions)
+			_ = f.Client.PauseFetchPartitions(pauseTopicPartitions)
 
 		noActivePartitions:
 			for {
-				pausedPartitionTopics := f.client.PauseFetchPartitions(nil)
+				pausedPartitionTopics := f.Client.PauseFetchPartitions(nil)
 
 				// Walk all the disabled topic partitions and check whether any
 				// of them can be resumed.
@@ -565,7 +531,7 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 					}
 				}
 				if len(resumeTopicPartitions) > 0 {
-					f.client.ResumeFetchPartitions(resumeTopicPartitions)
+					f.Client.ResumeFetchPartitions(resumeTopicPartitions)
 				}
 
 				if len(f.consumerGroup) == 0 || len(resumeTopicPartitions) > 0 || checkpoints.tallyActivePartitions(pausedPartitionTopics) > 0 {
