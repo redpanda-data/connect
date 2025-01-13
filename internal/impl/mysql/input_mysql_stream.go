@@ -379,7 +379,6 @@ func (i *mysqlStreamInput) readSnapshot(ctx context.Context, snapshot *Snapshot)
 				return fmt.Errorf("failed to iterate snapshot table: %s", err)
 			}
 
-			// TODO(cdc): Save checkpoint
 			if batchRowsCount < i.fieldSnapshotMaxBatchSize {
 				break
 			}
@@ -562,9 +561,6 @@ func (i *mysqlStreamInput) flushBatch(
 			}
 			offset := *maxOffset
 			// This has no offset - it's a snapshot message
-			// TODO(cdc): We should be storing the primary key for
-			// each table in the snapshot so we can properly resume the
-			// primary key scan.
 			if offset == nil {
 				return nil
 			}
