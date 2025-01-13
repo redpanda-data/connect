@@ -178,23 +178,24 @@ func (m *mongoInput) Connect(ctx context.Context) error {
 	}
 
 	collection := m.database.Collection(m.collection)
+	var opErr error
 	switch m.operation {
 	case "find":
 		findOptions, err := m.getFindOptions()
 		if err != nil {
 			return fmt.Errorf("error parsing 'find' options: %v", err)
 		}
-		m.cursor, err = collection.Find(ctx, m.query, findOptions)
+		m.cursor, opErr = collection.Find(ctx, m.query, findOptions)
 	case "aggregate":
 		aggregateOptions, err := m.getAggregateOptions()
 		if err != nil {
 			return fmt.Errorf("error parsing 'aggregate' options: %v", err)
 		}
-		m.cursor, err = collection.Aggregate(ctx, m.query, aggregateOptions)
+		m.cursor, opErr = collection.Aggregate(ctx, m.query, aggregateOptions)
 	default:
 		return fmt.Errorf("operation '%s' not supported. the supported values are 'find' and 'aggregate'", m.operation)
 	}
-	if err != nil {
+	if opErr != nil {
 		_ = m.client.Disconnect(ctx)
 		return err
 	}
