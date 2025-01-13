@@ -188,9 +188,6 @@ func (m *Processor) ProcessBatch(ctx context.Context, batch service.MessageBatch
 				Hint:   hintJSON,
 			}
 		case OperationFindOne:
-			ctx, cancel := context.WithTimeout(context.Background(), m.writeConcernSpec.wTimeout)
-			defer cancel()
-
 			collection := m.database.Collection(collectionStr, m.writeConcernSpec.options)
 
 			var decoded any
