@@ -223,7 +223,7 @@ query: SELECT * FROM footable WHERE user_id = $1;
 
 === `args_mapping`
 
-A xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of columns specified.
+An optional xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `query`.
 
 
 *Type*: `string`

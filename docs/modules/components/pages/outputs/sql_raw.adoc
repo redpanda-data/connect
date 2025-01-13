@@ -41,8 +41,9 @@ output:
   sql_raw:
     driver: "" # No default (required)
     dsn: clickhouse://username:password@host1:9000,host2:9000/database?dial_timeout=200ms&max_execution_time=60 # No default (required)
-    query: INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?); # No default (required)
+    query: INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?); # No default (optional)
     args_mapping: root = [ this.cat.meow, this.doc.woofs[0] ] # No default (optional)
+    queries: [] # No default (optional)
     max_in_flight: 64
     batching:
       count: 0
@@ -63,9 +64,10 @@ output:
   sql_raw:
     driver: "" # No default (required)
     dsn: clickhouse://username:password@host1:9000,host2:9000/database?dial_timeout=200ms&max_execution_time=60 # No default (required)
-    query: INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?); # No default (required)
+    query: INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?); # No default (optional)
     unsafe_dynamic_query: false
     args_mapping: root = [ this.cat.meow, this.doc.woofs[0] ] # No default (optional)
+    queries: [] # No default (optional)
     max_in_flight: 64
     init_files: [] # No default (optional)
     init_statement: | # No default (optional)
@@ -113,6 +115,35 @@ output:
         this.user.name,
         meta("kafka_topic"),
       ]
+```
+
+--
+Dynamically Creating Tables (PostgreSQL)::
++
+--
+
+Here we dynamically create output tables transactionally with inserting a record into the newly created table.
+
+```yaml
+output:
+  processors:
+    - mapping: |
+        root = this
+        # Prevent SQL injection when using unsafe_dynamic_query
+        meta table_name = "\"" + metadata("table_name").replace_all("\"", "\"\"") + "\""
+  sql_raw:
+    driver: postgres
+    dsn: postgres://localhost/postgres
+    unsafe_dynamic_query: true
+    queries:
+      - query: |
+          CREATE TABLE IF NOT EXISTS ${!metadata("table_name")} (id varchar primary key, document jsonb);
+      - query: |
+          INSERT INTO ${!metadata("table_name")} (id, document) VALUES ($1, $2)
+          ON CONFLICT (id) DO UPDATE SET document = EXCLUDED.document;
+        args_mapping: |
+          root = [ this.id, this.document.string() ]
+
 ```
 
 --
@@ -258,9 +289,53 @@ args_mapping: root = [ this.cat.meow, this.doc.woofs[0] ]
 args_mapping: root = [ meta("user.id") ]
 ```
 
+=== `queries`
+
+A list of statements to run in addition to `query`. When specifying multiple statements, they are all executed within a transaction.
+
+
+*Type*: `array`
+
+
+=== `queries[].query`
+
+The query to execute. The style of placeholder to use depends on the driver, some drivers require question marks (`?`) whereas others expect incrementing dollar signs (`$1`, `$2`, and so on) or colons (`:1`, `:2` and so on). The style to use is outlined in this table:
+
+| Driver | Placeholder Style |
+|---|---|
+| `clickhouse` | Dollar sign |
+| `mysql` | Question mark |
+| `postgres` | Dollar sign |
+| `mssql` | Question mark |
+| `sqlite` | Question mark |
+| `oracle` | Colon |
+| `snowflake` | Question mark |
+| `trino` | Question mark |
+| `gocosmos` | Colon |
+
+
+*Type*: `string`
+
+
+=== `queries[].args_mapping`
+
+An optional xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `query`.
+
+
+*Type*: `string`
+
+
+```yml
+# Examples
+
+args_mapping: root = [ this.cat.meow, this.doc.woofs[0] ]
+
+args_mapping: root = [ meta("user.id") ]
+```
+
 === `max_in_flight`
 
-The maximum number of inserts to run in parallel.
+The maximum number of statements to execute in parallel.
 
 
 *Type*: `int`
