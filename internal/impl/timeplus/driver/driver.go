@@ -51,9 +51,12 @@ func (d *driver) Run(sql string) error {
 	d.ctx, d.cancel = context.WithCancel(context.Background())
 	ckCtx := protonDriver.Context(d.ctx)
 
-	//nolint
 	rows, err := d.conn.QueryContext(ckCtx, sql)
 	if err != nil {
+		return err
+	}
+
+	if err := rows.Err(); err != nil {
 		return err
 	}
 

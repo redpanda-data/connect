@@ -65,6 +65,7 @@ require (
 	github.com/getsentry/sentry-go v0.28.1
 	github.com/go-faker/faker/v4 v4.4.2
 	github.com/go-jose/go-jose/v3 v3.0.3
+	github.com/go-mysql-org/go-mysql v1.10.0
 	github.com/go-resty/resty/v2 v2.15.3
 	github.com/go-sql-driver/mysql v1.8.1
 	github.com/gocql/gocql v1.6.0
@@ -161,8 +162,10 @@ require (
 	cloud.google.com/go/spanner v1.73.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/keyvault/azsecrets v0.12.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/keyvault/internal v0.7.1 // indirect
+	github.com/BurntSushi/toml v1.4.1-0.20240526193622-a339e1f7089c // indirect
 	github.com/GoogleCloudPlatform/grpc-gcp-go/grpcgcp v1.5.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.24.1 // indirect
+	github.com/Masterminds/semver v1.5.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.34.3 // indirect
 	github.com/census-instrumentation/opencensus-proto v0.4.1 // indirect
 	github.com/certifi/gocertifi v0.0.0-20210507211836-431795d63e8d // indirect
@@ -177,8 +180,14 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/onsi/gomega v1.34.2 // indirect
+	github.com/pingcap/errors v0.11.5-0.20240311024730-e056997136bb // indirect
+	github.com/pingcap/failpoint v0.0.0-20240528011301-b51a646c7c86 // indirect
+	github.com/pingcap/log v1.1.1-0.20230317032135-a0d097d16e22 // indirect
+	github.com/pingcap/tidb/pkg/parser v0.0.0-20241118164214-4f047be191be // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
 	github.com/samber/lo v1.47.0 // indirect
+	github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726 // indirect
+	github.com/siddontang/go-log v0.0.0-20180807004314-8d05993dda07 // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
