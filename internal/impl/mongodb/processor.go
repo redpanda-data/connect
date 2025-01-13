@@ -227,8 +227,11 @@ func (m *Processor) ProcessBatch(ctx context.Context, batch service.MessageBatch
 }
 
 func (m *Processor) bulkWrite(ctx context.Context, collectionStr string, msgsAndModels *msgsAndModels) {
-	ctx, cancel := context.WithTimeout(ctx, m.writeConcernSpec.wTimeout)
-	defer cancel()
+	if m.writeConcernSpec.wTimeout != 0 {
+		var cancel func()
+		ctx, cancel = context.WithTimeout(ctx, m.writeConcernSpec.wTimeout)
+		defer cancel()
+	}
 
 	collection := m.database.Collection(collectionStr, m.writeConcernSpec.options)
 

@@ -214,8 +214,11 @@ func (m *outputWriter) WriteBatch(ctx context.Context, batch service.MessageBatc
 }
 
 func (m *outputWriter) builkWrite(ctx context.Context, collectionStr string, writeModels []mongo.WriteModel) error {
-	ctx, cancel := context.WithTimeout(ctx, m.writeConcernSpec.wTimeout)
-	defer cancel()
+	if m.writeConcernSpec.wTimeout != 0 {
+		var cancel func()
+		ctx, cancel = context.WithTimeout(ctx, m.writeConcernSpec.wTimeout)
+		defer cancel()
+	}
 
 	// We should have at least one write model in the slice
 	collection := m.database.Collection(collectionStr, m.writeConcernSpec.options)
