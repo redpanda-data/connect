@@ -79,9 +79,15 @@ func init() {
 			if batchPolicy, err = conf.FieldBatchPolicy(roFieldBatching); err != nil {
 				return
 			}
-			output, err = kafka.NewFranzWriterFromConfig(conf, func(_ context.Context, fn kafka.FranzSharedClientUseFn) error {
-				return kafka.FranzSharedClientUse(sharedGlobalRedpandaClientKey, mgr, fn)
-			}, func(context.Context) error { return nil }, nil)
+			output, err = kafka.NewFranzWriterFromConfig(
+				conf,
+				kafka.NewFranzWriterHooks(
+					func(_ context.Context, fn kafka.FranzSharedClientUseFn) error {
+						return kafka.FranzSharedClientUse(sharedGlobalRedpandaClientKey, mgr, fn)
+					}).
+					WithYieldClientFn(
+						func(context.Context) error { return nil }),
+			)
 			return
 		})
 	if err != nil {

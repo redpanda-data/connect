@@ -253,14 +253,28 @@ func FranzWriterConfigLints() string {
 }`
 }
 
-// accessClientFn is a function which is executed to fetch the client.
-type accessClientFn func(context.Context, FranzSharedClientUseFn) error
+type franzWriterHooks struct {
+	accessClientFn func(context.Context, FranzSharedClientUseFn) error
+	yieldClientFn  func(context.Context) error
+	writeHookFn    func(ctx context.Context, client *kgo.Client, records []*kgo.Record) error
+}
 
-// yieldClientFn is a function which is executed during close to yield the client.
-type yieldClientFn func(context.Context) error
+// NewFranzWriterHooks creates a new franzWriterHooks instance with a hook function that's executed to fetch the client.
+func NewFranzWriterHooks(fn func(context.Context, FranzSharedClientUseFn) error) franzWriterHooks {
+	return franzWriterHooks{accessClientFn: fn}
+}
 
-// onWriteHookFn is a function which is executed before a message batch is written.
-type onWriteHookFn func(ctx context.Context, client *kgo.Client, records []*kgo.Record) error
+// WithYieldClientFn adds a hook function that's executed during close to yield the client.
+func (h franzWriterHooks) WithYieldClientFn(fn func(context.Context) error) franzWriterHooks {
+	h.yieldClientFn = fn
+	return h
+}
+
+// WithWriteHookFn adds a hook function that's executed before a message batch is written.
+func (h franzWriterHooks) WithWriteHookFn(fn func(ctx context.Context, client *kgo.Client, records []*kgo.Record) error) franzWriterHooks {
+	h.writeHookFn = fn
+	return h
+}
 
 // FranzWriter implements a Kafka writer using the franz-go library.
 type FranzWriter struct {
@@ -270,21 +284,14 @@ type FranzWriter struct {
 	Timestamp     *service.InterpolatedString
 	IsTimestampMs bool
 	MetaFilter    *service.MetadataFilter
-
-	accessClientFn accessClientFn
-	yieldClientFn  yieldClientFn
-	onWriteHookFn  onWriteHookFn
+	hooks         franzWriterHooks
 }
 
 // NewFranzWriterFromConfig uses a parsed config to extract customisation for writing data to a Kafka broker. A closure
 // function must be provided that is responsible for granting access to a connected client.
-// Optional parameters:
-// - `onWriteHookFn` is a function which is executed before each batch of messages is written. It can be set to `nil`.
-func NewFranzWriterFromConfig(conf *service.ParsedConfig, accessClientFn accessClientFn, yieldClientFn yieldClientFn, onWriteHookFn onWriteHookFn) (*FranzWriter, error) {
+func NewFranzWriterFromConfig(conf *service.ParsedConfig, hooks franzWriterHooks) (*FranzWriter, error) {
 	w := FranzWriter{
-		accessClientFn: accessClientFn,
-		yieldClientFn:  yieldClientFn,
-		onWriteHookFn:  onWriteHookFn,
+		hooks: hooks,
 	}
 
 	var err error
@@ -406,7 +413,7 @@ func (w *FranzWriter) BatchToRecords(ctx context.Context, b service.MessageBatch
 
 // Connect to the target seed brokers.
 func (w *FranzWriter) Connect(ctx context.Context) error {
-	return w.accessClientFn(ctx, func(details *FranzSharedClientInfo) error {
+	return w.hooks.accessClientFn(ctx, func(details *FranzSharedClientInfo) error {
 		// Check connectivity to cluster
 		if err := details.Client.Ping(ctx); err != nil {
 			return fmt.Errorf("failed to connect to cluster: %s", err)
@@ -420,14 +427,14 @@ func (w *FranzWriter) WriteBatch(ctx context.Context, b service.MessageBatch) er
 	if len(b) == 0 {
 		return nil
 	}
-	return w.accessClientFn(ctx, func(details *FranzSharedClientInfo) error {
+	return w.hooks.accessClientFn(ctx, func(details *FranzSharedClientInfo) error {
 		records, err := w.BatchToRecords(ctx, b)
 		if err != nil {
 			return err
 		}
 
-		if w.onWriteHookFn != nil {
-			if err := w.onWriteHookFn(ctx, details.Client, records); err != nil {
+		if w.hooks.writeHookFn != nil {
+			if err := w.hooks.writeHookFn(ctx, details.Client, records); err != nil {
 				return fmt.Errorf("on write hook failed: %s", err)
 			}
 		}
@@ -456,5 +463,9 @@ func (w *FranzWriter) WriteBatch(ctx context.Context, b service.MessageBatch) er
 
 // Close calls into the provided yield client func.
 func (w *FranzWriter) Close(ctx context.Context) error {
-	return w.yieldClientFn(ctx)
+	if w.hooks.yieldClientFn != nil {
+		return w.hooks.yieldClientFn(ctx)
+	}
+
+	return nil
 }

@@ -178,154 +178,156 @@ func init() {
 			var schemaIDCache sync.Map
 			var topicCache sync.Map
 			createdTopicsOnConnect := false
-			output, err = kafka.NewFranzWriterFromConfig(conf,
-				func(ctx context.Context, fn kafka.FranzSharedClientUseFn) error {
-					clientMut.Lock()
-					defer clientMut.Unlock()
+			output, err = kafka.NewFranzWriterFromConfig(
+				conf,
+				kafka.NewFranzWriterHooks(
+					func(ctx context.Context, fn kafka.FranzSharedClientUseFn) error {
+						clientMut.Lock()
+						defer clientMut.Unlock()
 
-					if client == nil {
-						var err error
-						if client, err = kgo.NewClient(clientOpts...); err != nil {
+						if client == nil {
+							var err error
+							if client, err = kgo.NewClient(clientOpts...); err != nil {
+								return err
+							}
+						}
+
+						if err := fn(&kafka.FranzSharedClientInfo{Client: client, ConnDetails: connDetails}); err != nil {
 							return err
 						}
-					}
 
-					if err := fn(&kafka.FranzSharedClientInfo{Client: client, ConnDetails: connDetails}); err != nil {
-						return err
-					}
-
-					if createdTopicsOnConnect {
-						return nil
-					}
-
-					// Make multiple attempts until the input connects in the background.
-					// TODO: It would be nicer to somehow get notified when the input is ready.
-				loop:
-					for {
-						if err = kafka.FranzSharedClientUse(inputResource, mgr, func(details *kafka.FranzSharedClientInfo) error {
-							inputClient := details.Client
-							outputClient := client
-							topics := inputClient.GetConsumeTopics()
-
-							for _, topic := range topics {
-								if err := createTopic(ctx, topic, replicationFactorOverride, replicationFactor, inputClient, outputClient); err != nil {
-									if err == errTopicAlreadyExists {
-										topicCache.Store(topic, struct{}{})
-										mgr.Logger().Debugf("Topic %q already exists", topic)
-									} else {
-										mgr.Logger().Errorf("Failed to create topic %q and ACLs: %s", topic, err)
-									}
-
-									// This may be a topic which doesn't have any messages in it, so if we can't create
-									// it here, we just log an error and carry on. If it does contain messages, we'll
-									// attempt to create it again anyway during WriteBatch and we'll raise another error
-									// there if we can't.
-									continue
-								}
-
-								mgr.Logger().Infof("Created topic %q", topic)
-
-								if err := createACLs(ctx, topic, inputClient, outputClient); err != nil {
-									mgr.Logger().Errorf("Failed to create ACLs for topic %q: %s", topic, err)
-								}
-
-								topicCache.Store(topic, struct{}{})
-							}
-
-							createdTopicsOnConnect = true
+						if createdTopicsOnConnect {
 							return nil
-						}); err == nil {
-							break
 						}
 
-						select {
-						case <-time.After(100 * time.Millisecond):
-						case <-ctx.Done():
-							break loop
-						}
-					}
+						// Make multiple attempts until the input connects in the background.
+						// TODO: It would be nicer to somehow get notified when the input is ready.
+					loop:
+						for {
+							if err = kafka.FranzSharedClientUse(inputResource, mgr, func(details *kafka.FranzSharedClientInfo) error {
+								inputClient := details.Client
+								outputClient := client
+								topics := inputClient.GetConsumeTopics()
 
-					return nil
-				},
-				func(context.Context) error {
-					clientMut.Lock()
-					defer clientMut.Unlock()
+								for _, topic := range topics {
+									if err := createTopic(ctx, topic, replicationFactorOverride, replicationFactor, inputClient, outputClient); err != nil {
+										if err == errTopicAlreadyExists {
+											topicCache.Store(topic, struct{}{})
+											mgr.Logger().Debugf("Topic %q already exists", topic)
+										} else {
+											mgr.Logger().Errorf("Failed to create topic %q and ACLs: %s", topic, err)
+										}
 
-					if client == nil {
-						return nil
-					}
-
-					client.Close()
-					client = nil
-					return nil
-				},
-				func(ctx context.Context, client *kgo.Client, records []*kgo.Record) error {
-					if translateSchemaIDs {
-						if res, ok := mgr.GetGeneric(schemaRegistryOutputResource); ok {
-							srOutput := res.(*schemaRegistryOutput)
-
-							var ch franz_sr.ConfluentHeader
-							for recordIdx, record := range records {
-								schemaID, _, err := ch.DecodeID(record.Value)
-								if err != nil {
-									mgr.Logger().Warnf("Failed to extract schema ID from message index %d on topic %q: %s", recordIdx, record.Topic, err)
-									continue
-								}
-
-								var destSchemaID int
-								if cachedID, ok := schemaIDCache.Load(schemaID); !ok {
-									destSchemaID, err = srOutput.GetDestinationSchemaID(ctx, schemaID)
-									if err != nil {
-										mgr.Logger().Warnf("Failed to fetch destination schema ID from message index %d on topic %q: %s", recordIdx, record.Topic, err)
+										// This may be a topic which doesn't have any messages in it, so if we can't create
+										// it here, we just log an error and carry on. If it does contain messages, we'll
+										// attempt to create it again anyway during WriteBatch and we'll raise another error
+										// there if we can't.
 										continue
 									}
-									schemaIDCache.Store(schemaID, destSchemaID)
-								} else {
-									destSchemaID = cachedID.(int)
+
+									mgr.Logger().Infof("Created topic %q", topic)
+
+									if err := createACLs(ctx, topic, inputClient, outputClient); err != nil {
+										mgr.Logger().Errorf("Failed to create ACLs for topic %q: %s", topic, err)
+									}
+
+									topicCache.Store(topic, struct{}{})
 								}
 
-								err = sr.UpdateID(record.Value, destSchemaID)
-								if err != nil {
-									mgr.Logger().Warnf("Failed to update schema ID in message index %d on topic %s: %q", recordIdx, record.Topic, err)
-									continue
-								}
+								createdTopicsOnConnect = true
+								return nil
+							}); err == nil {
+								break
 							}
-						} else {
-							mgr.Logger().Warnf("schema_registry output resource %q not found; skipping schema ID translation", schemaRegistryOutputResource)
+
+							select {
+							case <-time.After(100 * time.Millisecond):
+							case <-ctx.Done():
+								break loop
+							}
+						}
+
+						return nil
+					}).WithYieldClientFn(
+					func(context.Context) error {
+						clientMut.Lock()
+						defer clientMut.Unlock()
+
+						if client == nil {
 							return nil
 						}
 
-					}
+						client.Close()
+						client = nil
+						return nil
+					}).WithWriteHookFn(
+					func(ctx context.Context, client *kgo.Client, records []*kgo.Record) error {
+						if translateSchemaIDs {
+							if res, ok := mgr.GetGeneric(schemaRegistryOutputResource); ok {
+								srOutput := res.(*schemaRegistryOutput)
 
-					// Once we get here, the input should already be initialised and its pre-flight hook should have
-					// been called already. Thus, we don't need to loop until the input is ready.
-					if err := kafka.FranzSharedClientUse(inputResource, mgr, func(details *kafka.FranzSharedClientInfo) error {
-						for _, record := range records {
-							if _, ok := topicCache.Load(record.Topic); !ok {
-								if err := createTopic(ctx, record.Topic, replicationFactorOverride, replicationFactor, details.Client, client); err != nil {
-									if err == errTopicAlreadyExists {
-										mgr.Logger().Debugf("Topic %q already exists", record.Topic)
+								var ch franz_sr.ConfluentHeader
+								for recordIdx, record := range records {
+									schemaID, _, err := ch.DecodeID(record.Value)
+									if err != nil {
+										mgr.Logger().Warnf("Failed to extract schema ID from message index %d on topic %q: %s", recordIdx, record.Topic, err)
+										continue
+									}
+
+									var destSchemaID int
+									if cachedID, ok := schemaIDCache.Load(schemaID); !ok {
+										destSchemaID, err = srOutput.GetDestinationSchemaID(ctx, schemaID)
+										if err != nil {
+											mgr.Logger().Warnf("Failed to fetch destination schema ID from message index %d on topic %q: %s", recordIdx, record.Topic, err)
+											continue
+										}
+										schemaIDCache.Store(schemaID, destSchemaID)
 									} else {
-										return fmt.Errorf("failed to create topic %q and ACLs: %s", record.Topic, err)
+										destSchemaID = cachedID.(int)
+									}
+
+									err = sr.UpdateID(record.Value, destSchemaID)
+									if err != nil {
+										mgr.Logger().Warnf("Failed to update schema ID in message index %d on topic %s: %q", recordIdx, record.Topic, err)
+										continue
 									}
 								}
-
-								mgr.Logger().Infof("Created topic %q", record.Topic)
-
-								if err := createACLs(ctx, record.Topic, details.Client, client); err != nil {
-									mgr.Logger().Errorf("Failed to create ACLs for topic %q: %s", record.Topic, err)
-								}
-
-								topicCache.Store(record.Topic, struct{}{})
+							} else {
+								mgr.Logger().Warnf("schema_registry output resource %q not found; skipping schema ID translation", schemaRegistryOutputResource)
+								return nil
 							}
-						}
-						return nil
-					}); err != nil {
-						mgr.Logger().With("error", err, "resource", inputResource).Warn("Failed to access shared client for given resource identifier")
-					}
 
-					return nil
-				})
+						}
+
+						// Once we get here, the input should already be initialised and its pre-flight hook should have
+						// been called already. Thus, we don't need to loop until the input is ready.
+						if err := kafka.FranzSharedClientUse(inputResource, mgr, func(details *kafka.FranzSharedClientInfo) error {
+							for _, record := range records {
+								if _, ok := topicCache.Load(record.Topic); !ok {
+									if err := createTopic(ctx, record.Topic, replicationFactorOverride, replicationFactor, details.Client, client); err != nil {
+										if err == errTopicAlreadyExists {
+											mgr.Logger().Debugf("Topic %q already exists", record.Topic)
+										} else {
+											return fmt.Errorf("failed to create topic %q and ACLs: %s", record.Topic, err)
+										}
+									}
+
+									mgr.Logger().Infof("Created topic %q", record.Topic)
+
+									if err := createACLs(ctx, record.Topic, details.Client, client); err != nil {
+										mgr.Logger().Errorf("Failed to create ACLs for topic %q: %s", record.Topic, err)
+									}
+
+									topicCache.Store(record.Topic, struct{}{})
+								}
+							}
+							return nil
+						}); err != nil {
+							mgr.Logger().With("error", err, "resource", inputResource).Warn("Failed to access shared client for given resource identifier")
+						}
+
+						return nil
+					}))
 			return
 		})
 	if err != nil {
