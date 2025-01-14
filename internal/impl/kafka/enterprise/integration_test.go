@@ -739,7 +739,7 @@ output:
 	require.NoError(t, stream.StopWithin(3*time.Second))
 }
 
-func runMigratorBundle(t *testing.T, source, destination redpandaEndpoints, topic string) {
+func runMigratorBundle(t *testing.T, source, destination redpandaEndpoints, topic string, callback func(*service.Message)) {
 	streamBuilder := service.NewStreamBuilder()
 	require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
 input:
@@ -793,6 +793,14 @@ output:
 `, source.brokerAddr, topic, source.schemaRegistryURL, source.schemaRegistryURL, destination.brokerAddr, destination.schemaRegistryURL)))
 	require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
 
+	require.NoError(t, streamBuilder.AddConsumerFunc(func(_ context.Context, m *service.Message) error {
+		callback(m)
+		return nil
+	}))
+
+	// Ensure the callback function is called after the output wrote the message
+	streamBuilder.SetOutputBrokerPattern(service.OutputBrokerPatternFanOutSequential)
+
 	stream, err := streamBuilder.Build()
 	require.NoError(t, err)
 
@@ -842,23 +850,65 @@ func TestRedpandaMigratorIntegration(t *testing.T) {
 	t.Log("Finished producing first message in source")
 
 	// Run the Redpanda Migrator bundle
-	runMigratorBundle(t, source, destination, dummyTopic)
-	time.Sleep(2 * time.Second)
+	msgChan := make(chan *service.Message)
+	checkMigrated := func(label string, validate func(string, map[string]string)) {
+	loop:
+		for {
+			select {
+			case m := <-msgChan:
+				l, ok := m.MetaGet("input_label")
+				require.True(t, ok)
+				if l != label {
+					goto loop
+				}
+
+				b, err := m.AsBytes()
+				require.NoError(t, err)
+
+				meta := map[string]string{}
+				require.NoError(t, m.MetaWalk(func(k, v string) error {
+					meta[k] = v
+					return nil
+				}))
+
+				validate(string(b), meta)
+			case <-time.After(5 * time.Second):
+				t.Error("timed out waiting for migrator transfer")
+			}
+
+			break loop
+		}
+
+	}
+	runMigratorBundle(t, source, destination, dummyTopic, func(m *service.Message) {
+		msgChan <- m
+	})
+
+	checkMigrated("redpanda_migrator_input", func(msg string, _ map[string]string) {
+		assert.Equal(t, "\x00\x00\x00\x00\x01\x06foo", msg)
+	})
 	t.Log("Migrator started")
 
 	dummyCG := "foobar_cg"
 	// Read the message from source using a consumer group
 	readMessageWithCG(t, source, dummyTopic, dummyCG, dummyMessage)
-	time.Sleep(2 * time.Second)
+	checkMigrated("redpanda_migrator_offsets_input", func(_ string, meta map[string]string) {
+		assert.Equal(t, dummyTopic, meta["kafka_offset_topic"])
+	})
 	t.Logf("Finished reading first message from source with consumer group %q", dummyCG)
 
 	// Produce one more message in the source
-	dummyMessage = `{"test":"bar"}`
-	produceMessage(t, source, dummyTopic, dummyMessage)
-	time.Sleep(2 * time.Second)
+	secondDummyMessage := `{"test":"bar"}`
+	produceMessage(t, source, dummyTopic, secondDummyMessage)
+	checkMigrated("redpanda_migrator_input", func(msg string, _ map[string]string) {
+		assert.Equal(t, "\x00\x00\x00\x00\x01\x06bar", msg)
+	})
 	t.Log("Finished producing second message in source")
 
 	// Read the new message from the destination using a consumer group
-	readMessageWithCG(t, destination, dummyTopic, dummyCG, dummyMessage)
+	readMessageWithCG(t, destination, dummyTopic, dummyCG, secondDummyMessage)
+	checkMigrated("redpanda_migrator_offsets_input", func(_ string, meta map[string]string) {
+		assert.Equal(t, dummyTopic, meta["kafka_offset_topic"])
+	})
 	t.Logf("Finished reading second message from destination with consumer group %q", dummyCG)
 }
