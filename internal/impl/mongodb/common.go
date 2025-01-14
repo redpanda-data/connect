@@ -260,8 +260,8 @@ const (
 func writeConcernDocs() *service.ConfigField {
 	return service.NewObjectField(commonFieldWriteConcern,
 		service.NewStringField(commonFieldWriteConcernW).
-			Description("W requests acknowledgement that write operations propagate to the specified number of mongodb instances.").
-			Default(""),
+			Description(`W requests acknowledgement that write operations propagate to the specified number of mongodb instances. Can be the string "majority" to wait for a calculated majority of nodes to acknowledge the write operation, or an integer value specifying an minimum number of nodes to acknowledge the operation, or a string specifying the name of a custom write concern configured in the cluster.`).
+			Default("majority"),
 		service.NewBoolField(commonFieldWriteConcernJ).
 			Description("J requests acknowledgement from MongoDB that write operations are written to the journal.").
 			Default(false),

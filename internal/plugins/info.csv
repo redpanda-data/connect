@@ -122,10 +122,10 @@ memcached                 ,cache     ,Memcached                 ,0.0.0   ,commun
 memory                    ,buffer    ,Memory                    ,0.0.0   ,certified  ,n          ,y     ,y
 memory                    ,cache     ,Memory                    ,0.0.0   ,certified  ,n          ,y     ,y
 metric                    ,processor ,metric                    ,0.0.0   ,certified  ,n          ,y     ,y
-mongodb                   ,cache     ,MongoDB                   ,3.43.0  ,community  ,n          ,n     ,n
-mongodb                   ,input     ,MongoDB                   ,3.64.0  ,community  ,n          ,n     ,n
-mongodb                   ,output    ,MongoDB                   ,3.43.0  ,community  ,n          ,n     ,n
-mongodb                   ,processor ,MongoDB                   ,3.43.0  ,community  ,n          ,n     ,n
+mongodb                   ,cache     ,MongoDB                   ,3.43.0  ,certified  ,n          ,y     ,y
+mongodb                   ,input     ,MongoDB                   ,3.64.0  ,certified  ,n          ,y     ,y
+mongodb                   ,output    ,MongoDB                   ,3.43.0  ,certified  ,n          ,y     ,y
+mongodb                   ,processor ,MongoDB                   ,3.43.0  ,certified  ,n          ,y     ,y
 mqtt                      ,input     ,mqtt                      ,4.37.0  ,certified  ,n          ,y     ,y
 mqtt                      ,output    ,mqtt                      ,4.37.0  ,certified  ,n          ,y     ,y
 msgpack                   ,processor ,msgpack                   ,3.59.0  ,community  ,n          ,n     ,n
