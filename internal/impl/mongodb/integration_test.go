@@ -25,9 +25,9 @@ import (
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
@@ -64,15 +64,15 @@ func TestIntegrationMongoDB(t *testing.T) {
 
 	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
-		mongoClient, err = mongo.Connect(context.Background(), options.Client().
-			SetConnectTimeout(10*time.Second).
-			SetSocketTimeout(30*time.Second).
-			SetServerSelectionTimeout(30*time.Second).
+		mongoClient, err = mongo.Connect(options.Client().
+			SetConnectTimeout(10 * time.Second).
+			SetTimeout(30 * time.Second).
+			SetServerSelectionTimeout(30 * time.Second).
 			SetAuth(options.Credential{
 				Username: "mongoadmin",
 				Password: "secret",
 			}).
-			ApplyURI("mongodb://localhost:"+resource.GetPort("27017/tcp")))
+			ApplyURI("mongodb://localhost:" + resource.GetPort("27017/tcp")))
 		return err
 	}))
 
