@@ -297,7 +297,6 @@ func (s *sqlRawProcessor) ProcessBatch(ctx context.Context, batch service.Messag
 					resMsg, err = argsExec[j].Query(i)
 				}
 				if err != nil {
-					s.logger.Debugf("Arguments mapping failed: %v", err)
 					err = fmt.Errorf("arguments mapping failed: %v", err)
 					break
 				}
@@ -305,14 +304,12 @@ func (s *sqlRawProcessor) ProcessBatch(ctx context.Context, batch service.Messag
 				var iargs any
 				iargs, err = resMsg.AsStructured()
 				if err != nil {
-					s.logger.Debugf("Mapping returned non-structured result: %v", err)
 					err = fmt.Errorf("mapping returned non-structured result: %w", err)
 					break
 				}
 
 				var ok bool
 				if args, ok = iargs.([]any); !ok {
-					s.logger.Debugf("Mapping returned non-array result: %T", iargs)
 					err = fmt.Errorf("mapping returned non-array result: %T", iargs)
 					break
 				}
@@ -322,7 +319,6 @@ func (s *sqlRawProcessor) ProcessBatch(ctx context.Context, batch service.Messag
 			queryStr := query.static
 			if query.dynamic != nil {
 				if queryStr, err = dynQueries[j].TryString(i); err != nil {
-					s.logger.Errorf("Query interoplation error: %v", err)
 					err = fmt.Errorf("query interpolation error: %w", err)
 					break
 				}
@@ -335,7 +331,7 @@ func (s *sqlRawProcessor) ProcessBatch(ctx context.Context, batch service.Messag
 					_, err = tx.ExecContext(ctx, queryStr, args...)
 				}
 				if err != nil {
-					s.logger.Debugf("Failed to run query: %v", err)
+					err = fmt.Errorf("failed to run query: %w", err)
 					break
 				}
 			} else {
@@ -346,13 +342,13 @@ func (s *sqlRawProcessor) ProcessBatch(ctx context.Context, batch service.Messag
 					rows, err = tx.QueryContext(ctx, queryStr, args...)
 				}
 				if err != nil {
-					s.logger.Debugf("Failed to run query: %v", err)
+					err = fmt.Errorf("failed to run query: %w", err)
 					break
 				}
 
 				var jArray []any
 				if jArray, err = sqlRowsToArray(rows); err != nil {
-					s.logger.Debugf("Failed to convert rows: %v", err)
+					err = fmt.Errorf("failed to convert rows: %w", err)
 					break
 				}
 
@@ -361,6 +357,7 @@ func (s *sqlRawProcessor) ProcessBatch(ctx context.Context, batch service.Messag
 			}
 		}
 		if err != nil {
+			s.logger.Debugf("%v", err)
 			msg.SetError(err)
 		}
 		if tx != nil {

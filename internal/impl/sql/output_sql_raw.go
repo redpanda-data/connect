@@ -281,6 +281,7 @@ func (s *sqlRawOutput) WriteBatch(ctx context.Context, batch service.MessageBatc
 			}
 			defer func() {
 				if err != nil {
+					s.logger.Debugf("%v", err)
 					if rerr := tx.Rollback(); rerr != nil {
 						s.logger.Debugf("Failed to rollback transaction: %v", rerr)
 					}
@@ -298,20 +299,17 @@ func (s *sqlRawOutput) WriteBatch(ctx context.Context, batch service.MessageBatc
 				var resMsg *service.Message
 				resMsg, err = argsExec[j].Query(i)
 				if err != nil {
-					s.logger.Debugf("Arguments mapping failed: %v", err)
-					return err
+					return fmt.Errorf("arguments mapping failed: %w", err)
 				}
 
 				var iargs any
 				iargs, err = resMsg.AsStructured()
 				if err != nil {
-					s.logger.Debugf("Mapping returned non-structured result: %v", err)
 					return fmt.Errorf("mapping returned non-structured result: %w", err)
 				}
 
 				var ok bool
 				if args, ok = iargs.([]any); !ok {
-					s.logger.Debugf("Mapping returned non-array result: %T", iargs)
 					return fmt.Errorf("mapping returned non-array result: %T", iargs)
 				}
 				args = s.argsConverter(args)
@@ -320,7 +318,6 @@ func (s *sqlRawOutput) WriteBatch(ctx context.Context, batch service.MessageBatc
 			queryStr := query.static
 			if query.dynamic != nil {
 				if queryStr, err = dynQueries[j].TryString(i); err != nil {
-					s.logger.Errorf("Query interoplation error: %v", err)
 					return fmt.Errorf("query interpolation error: %w", err)
 				}
 			}
@@ -331,8 +328,7 @@ func (s *sqlRawOutput) WriteBatch(ctx context.Context, batch service.MessageBatc
 				_, err = tx.ExecContext(ctx, queryStr, args...)
 			}
 			if err != nil {
-				s.logger.Debugf("Failed to run query: %v", err)
-				return err
+				return fmt.Errorf("failed to run query: %w", err)
 			}
 		}
 		return nil
