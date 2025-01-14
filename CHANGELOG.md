@@ -34,6 +34,7 @@ All notable changes to this project will be documented in this file.
 - Fix an issue in `aws_sqs` with refreshing in-flight message leases which could prevent acks from processed. (@rockwotj)
 - Fix an issue with `postgres_cdc` with TOAST values not being propagated with `REPLICA IDENTITY FULL`. (@rockwotj)
 - Fix a initial snapshot streaming consistency issue with `postgres_cdc`. (@rockwotj)
+- Fix bug in `sftp` input where the last file was not deleted when `watcher` and `delete_on_finish` were enabled (@ooesili)
 
 ## 4.44.0 - 2024-12-13
 
