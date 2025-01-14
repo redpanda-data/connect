@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM golang:1.22 AS build
+FROM golang:1.23 AS build
 
 ENV CGO_ENABLED=0
 ENV GOOS=linux
