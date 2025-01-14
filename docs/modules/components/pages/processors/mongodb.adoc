@@ -45,7 +45,7 @@ mongodb:
   collection: "" # No default (required)
   operation: insert-one
   write_concern:
-    w: ""
+    w: majority
     j: false
     w_timeout: ""
   document_map: ""
@@ -71,7 +71,7 @@ mongodb:
   collection: "" # No default (required)
   operation: insert-one
   write_concern:
-    w: ""
+    w: majority
     j: false
     w_timeout: ""
   document_map: ""
@@ -176,12 +176,12 @@ The write concern settings for the mongo connection.
 
 === `write_concern.w`
 
-W requests acknowledgement that write operations propagate to the specified number of mongodb instances.
+W requests acknowledgement that write operations propagate to the specified number of mongodb instances. Can be the string "majority" to wait for a calculated majority of nodes to acknowledge the write operation, or an integer value specifying an minimum number of nodes to acknowledge the operation, or a string specifying the name of a custom write concern configured in the cluster.
 
 
 *Type*: `string`
 
-*Default*: `""`
+*Default*: `"majority"`
 
 === `write_concern.j`
 
