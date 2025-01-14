@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"slices"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/rs/xid"
@@ -33,7 +34,9 @@ const connectorListPath = "/etc/redpanda/connector_list.yaml"
 func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.ConfigSchema, opts ...service.CLIOptFunc) {
 	instanceID := xid.New().String()
 
-	rpLogger := enterprise.NewTopicLogger(instanceID)
+	rpMgr := enterprise.NewGlobalRedpandaManager(instanceID)
+
+	rpLogger := rpMgr.SlogHandler()
 	var fbLogger *service.Logger
 
 	cListApplied, err := ApplyConnectorsList(connectorListPath, schema)
@@ -82,7 +85,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 			if cListApplied {
 				fbLogger.Infof("Successfully applied connectors allow/deny list from '%v'", connectorListPath)
 			}
-			rpLogger.SetFallbackLogger(l)
+			rpMgr.SetFallbackLogger(l)
 		}),
 		service.CLIOptAddTeeLogger(slog.New(rpLogger)),
 		service.CLIOptOnConfigParse(func(pConf *service.ParsedConfig) error {
@@ -93,43 +96,64 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 			if !disableTelemetry {
 				telemetry.ActivateExporter(instanceID, version, fbLogger, schema, pConf)
 			}
-			return rpLogger.InitOutputFromParsed(pConf.Namespace("redpanda"))
+			return rpMgr.InitFromParsedConfig(pConf.Namespace("redpanda"))
 		}),
 		service.CLIOptOnStreamStart(func(s *service.RunningStreamSummary) error {
-			rpLogger.SetStreamSummary(s)
+			rpMgr.SetStreamSummary(s)
 			return nil
 		}),
 
-		// Secrets management
-		service.CLIOptCustomRunFlags([]cli.Flag{
-			&cli.StringSliceFlag{
-				Name:  "secrets",
-				Usage: "Attempt to load secrets from a provided URN. If more than one entry is specified they will be attempted in order until a value is found. Environment variable lookups are specified with the URN `env:`, which by default is the only entry. In order to disable all secret lookups specify a single entry of `none:`.",
-				Value: cli.NewStringSlice("env:"),
-			},
-			&cli.BoolFlag{
-				Name:  "disable-telemetry",
-				Usage: "Disable anonymous telemetry from being emitted by this Connect instance.",
-			},
-			&cli.StringFlag{
-				Name:  "redpanda-license",
-				Usage: "Provide an explicit Redpanda License, which enables enterprise functionality. By default licenses found at the path `/etc/redpanda/redpanda.license` are applied.",
-			},
-		}, func(c *cli.Context) error {
-			disableTelemetry = c.Bool("disable-telemetry")
-			license := c.String("redpanda-license")
-			if license != "" {
-				licenseConfig.License = license
-			}
+		// Secrets management and other custom CLI flags
+		service.CLIOptCustomRunFlags(
+			slices.Concat(
+				// Secrets management flags
+				[]cli.Flag{
+					&cli.StringSliceFlag{
+						Name:  "secrets",
+						Usage: "Attempt to load secrets from a provided URN. If more than one entry is specified they will be attempted in order until a value is found. Environment variable lookups are specified with the URN `env:`, which by default is the only entry. In order to disable all secret lookups specify a single entry of `none:`.",
+						Value: cli.NewStringSlice("env:"),
+					},
+					&cli.BoolFlag{
+						Name:  "disable-telemetry",
+						Usage: "Disable anonymous telemetry from being emitted by this Connect instance.",
+					},
+					&cli.StringFlag{
+						Name:  "redpanda-license",
+						Usage: "Provide an explicit Redpanda License, which enables enterprise functionality. By default licenses found at the path `/etc/redpanda/redpanda.license` are applied.",
+					},
+				},
 
-			if secretsURNs := c.StringSlice("secrets"); len(secretsURNs) > 0 {
-				var err error
-				if secretLookupFn, err = secrets.ParseLookupURNs(c.Context, slog.New(rpLogger), secretsURNs...); err != nil {
+				// Hidden redpanda flags
+				redpandaFlags(),
+			),
+
+			func(c *cli.Context) error {
+				disableTelemetry = c.Bool("disable-telemetry")
+				license := c.String("redpanda-license")
+				if license != "" {
+					licenseConfig.License = license
+				}
+
+				if secretsURNs := c.StringSlice("secrets"); len(secretsURNs) > 0 {
+					var err error
+					if secretLookupFn, err = secrets.ParseLookupURNs(c.Context, slog.New(rpLogger), secretsURNs...); err != nil {
+						return err
+					}
+				}
+
+				// Hidden redpanda flags
+				pipelineID, logsTopic, statusTopic, connDetails, err := parseRedpandaFlags(c)
+				if err != nil {
 					return err
 				}
-			}
-			return nil
-		}),
+
+				if pipelineID != "" && connDetails != nil {
+					if err = rpMgr.InitWithCustomDetails(pipelineID, logsTopic, statusTopic, connDetails); err != nil {
+						return err
+					}
+				}
+				return nil
+			}),
 		service.CLIOptSetEnvVarLookup(func(ctx context.Context, key string) (string, bool) {
 			return secretLookupFn(ctx, key)
 		}),
@@ -143,9 +167,9 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 			fmt.Fprintln(os.Stderr, err.Error())
 		}
 	}
-	rpLogger.TriggerEventStopped(err)
+	rpMgr.TriggerEventStopped(err)
 
-	_ = rpLogger.Close(context.Background())
+	_ = rpMgr.Close(context.Background())
 	if exitCode != 0 {
 		os.Exit(exitCode)
 	}
