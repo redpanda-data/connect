@@ -497,13 +497,6 @@ func (f *FranzReaderUnordered) Connect(ctx context.Context) error {
 		return fmt.Errorf("failed to connect to cluster: %s", err)
 	}
 
-	topics := cl.GetConsumeTopics()
-	if len(topics) > 0 {
-		f.log.Debugf("Consuming from topics: %s", topics)
-	} else {
-		f.log.Warn("Topic filter did not match any existing topics")
-	}
-
 	go func() {
 		defer func() {
 			cl.Close()

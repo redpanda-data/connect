@@ -411,13 +411,6 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 		return fmt.Errorf("failed to connect to cluster: %s", err)
 	}
 
-	topics := f.Client.GetConsumeTopics()
-	if len(topics) > 0 {
-		f.log.Debugf("Consuming from topics: %s", topics)
-	} else {
-		f.log.Warn("Topic filter did not match any existing topics")
-	}
-
 	if f.lagUpdater != nil {
 		f.lagUpdater.Stop()
 	}
