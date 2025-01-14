@@ -30,7 +30,6 @@ import (
 
 const (
 	mpFieldCollection      = "collection"
-	mpFieldWriteConcern    = "write_concern"
 	mpFieldJSONMarshalMode = "json_marshal_mode"
 )
 
