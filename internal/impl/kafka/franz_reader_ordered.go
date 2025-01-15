@@ -380,6 +380,11 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 		return err
 	}
 
+	noActivePartitionsBackOff := backoff.NewExponentialBackOff()
+	noActivePartitionsBackOff.InitialInterval = time.Microsecond * 50
+	noActivePartitionsBackOff.MaxInterval = time.Second
+	noActivePartitionsBackOff.MaxElapsedTime = 0
+
 	go func() {
 		defer func() {
 			cl.Close()
@@ -440,12 +445,12 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 					}
 				}
 			})
-			_ = cl.PauseFetchPartitions(pauseTopicPartitions)
+
+			pausedPartitionTopics := cl.PauseFetchPartitions(pauseTopicPartitions)
+			noActivePartitionsBackOff.Reset()
 
 		noActivePartitions:
 			for {
-				pausedPartitionTopics := cl.PauseFetchPartitions(nil)
-
 				// Walk all the disabled topic partitions and check whether any
 				// of them can be resumed.
 				resumeTopicPartitions := map[string][]int32{}
@@ -463,6 +468,19 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 				if len(f.consumerGroup) == 0 || len(resumeTopicPartitions) > 0 || checkpoints.tallyActivePartitions(pausedPartitionTopics) > 0 {
 					break noActivePartitions
 				}
+
+				select {
+				case <-time.After(noActivePartitionsBackOff.NextBackOff()):
+				case <-closeCtx.Done():
+					return
+				}
+
+				// Unfortunately we need to re-allocate this in order to
+				// correctly analyse paused topic partitions against our active
+				// counts. This is because it's possible that were lost our
+				// allocation to partitions of a topic, but gained others, since
+				// the last call.
+				pausedPartitionTopics = cl.PauseFetchPartitions(nil)
 			}
 		}
 	}()
