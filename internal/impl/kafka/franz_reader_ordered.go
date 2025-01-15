@@ -17,6 +17,8 @@ package kafka
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -24,17 +26,20 @@ import (
 	"github.com/Jeffail/checkpoint"
 	"github.com/Jeffail/shutdown"
 	"github.com/cenkalti/backoff/v4"
+	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
+	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 	"github.com/redpanda-data/connect/v4/internal/dispatch"
 )
 
 const (
-	kroFieldConsumerGroup   = "consumer_group"
-	kroFieldCommitPeriod    = "commit_period"
-	kroFieldPartitionBuffer = "partition_buffer_bytes"
+	kroFieldConsumerGroup         = "consumer_group"
+	kroFieldCommitPeriod          = "commit_period"
+	kroFieldPartitionBuffer       = "partition_buffer_bytes"
+	kroFieldTopicLagRefreshPeriod = "topic_lag_refresh_period"
 )
 
 // FranzReaderOrderedConfigFields returns config fields for customising the
@@ -52,6 +57,10 @@ func FranzReaderOrderedConfigFields() []*service.ConfigField {
 			Description("A buffer size (in bytes) for each consumed partition, allowing records to be queued internally before flushing. Increasing this may improve throughput at the cost of higher memory utilisation. Note that each buffer can grow slightly beyond this value.").
 			Default("1MB").
 			Advanced(),
+		service.NewDurationField(kroFieldTopicLagRefreshPeriod).
+			Description("The period of time between each topic lag refresh cycle.").
+			Default("5s").
+			Advanced(),
 	}
 }
 
@@ -61,21 +70,24 @@ func FranzReaderOrderedConfigFields() []*service.ConfigField {
 type FranzReaderOrdered struct {
 	clientOpts func() ([]kgo.Opt, error)
 
-	partState *partitionState
+	partState     *partitionState
+	lagUpdater    *asyncroutine.Periodic
+	topicLagGauge *service.MetricGauge
+	topicLagCache sync.Map
+	Client        *kgo.Client
 
-	consumerGroup string
-	commitPeriod  time.Duration
-	cacheLimit    uint64
-
-	readBackOff backoff.BackOff
+	consumerGroup         string
+	commitPeriod          time.Duration
+	topicLagRefreshPeriod time.Duration
+	cacheLimit            uint64
+	readBackOff           backoff.BackOff
 
 	res     *service.Resources
 	log     *service.Logger
 	shutSig *shutdown.Signaller
 }
 
-// NewFranzReaderOrderedFromConfig attempts to instantiate a new
-// FranzReaderOrdered reader from a parsed config.
+// NewFranzReaderOrderedFromConfig attempts to instantiate a new FranzReaderOrdered reader from a parsed config.
 func NewFranzReaderOrderedFromConfig(conf *service.ParsedConfig, res *service.Resources, optsFn func() ([]kgo.Opt, error)) (*FranzReaderOrdered, error) {
 	readBackOff := backoff.NewExponentialBackOff()
 	readBackOff.InitialInterval = time.Millisecond
@@ -83,11 +95,12 @@ func NewFranzReaderOrderedFromConfig(conf *service.ParsedConfig, res *service.Re
 	readBackOff.MaxElapsedTime = 0
 
 	f := FranzReaderOrdered{
-		readBackOff: readBackOff,
-		res:         res,
-		log:         res.Logger(),
-		shutSig:     shutdown.NewSignaller(),
-		clientOpts:  optsFn,
+		readBackOff:   readBackOff,
+		res:           res,
+		log:           res.Logger(),
+		shutSig:       shutdown.NewSignaller(),
+		clientOpts:    optsFn,
+		topicLagGauge: res.Metrics().NewGauge("redpanda_lag", "topic", "partition"),
 	}
 
 	f.consumerGroup, _ = conf.FieldString(kroFieldConsumerGroup)
@@ -98,6 +111,10 @@ func NewFranzReaderOrderedFromConfig(conf *service.ParsedConfig, res *service.Re
 	}
 
 	if f.commitPeriod, err = conf.FieldDuration(kroFieldCommitPeriod); err != nil {
+		return nil, err
+	}
+
+	if f.topicLagRefreshPeriod, err = conf.FieldDuration(kroFieldTopicLagRefreshPeriod); err != nil {
 		return nil, err
 	}
 
@@ -115,7 +132,17 @@ func (f *FranzReaderOrdered) recordsToBatch(records []*kgo.Record) *batchWithRec
 	var batch service.MessageBatch
 	for _, r := range records {
 		length += uint64(len(r.Value) + len(r.Key))
-		batch = append(batch, FranzRecordToMessageV1(r))
+
+		lag := int64(0)
+		if val, ok := f.topicLagCache.Load(fmt.Sprintf("%s_%d", r.Topic, r.Partition)); ok {
+			lag = val.(int64)
+		}
+
+		msg := FranzRecordToMessageV1(r)
+		msg.MetaSetMut("kafka_lag", lag)
+
+		batch = append(batch, msg)
+
 		// The record lives on for checkpointing, but we don't need the contents
 		// going forward so discard these. This looked fine to me but could
 		// potentially be a source of problems so treat this as sus.
@@ -336,14 +363,13 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 		return err
 	}
 
-	var cl *kgo.Client
 	commitFn := func(r *kgo.Record) {}
 	if f.consumerGroup != "" {
 		commitFn = func(r *kgo.Record) {
-			if cl == nil {
+			if f.Client == nil {
 				return
 			}
-			cl.MarkCommitRecords(r)
+			f.Client.MarkCommitRecords(r)
 		}
 	}
 
@@ -376,7 +402,7 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 		)
 	}
 
-	if cl, err = kgo.NewClient(clientOpts...); err != nil {
+	if f.Client, err = kgo.NewClient(clientOpts...); err != nil {
 		return err
 	}
 
@@ -384,10 +410,44 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 	noActivePartitionsBackOff.InitialInterval = time.Microsecond * 50
 	noActivePartitionsBackOff.MaxInterval = time.Second
 	noActivePartitionsBackOff.MaxElapsedTime = 0
+  
+	// Check connectivity to cluster
+	if err = f.Client.Ping(ctx); err != nil {
+		return fmt.Errorf("failed to connect to cluster: %s", err)
+	}
+
+	if f.lagUpdater != nil {
+		f.lagUpdater.Stop()
+	}
+	adminClient := kadm.NewClient(f.Client)
+	f.lagUpdater = asyncroutine.NewPeriodicWithContext(f.topicLagRefreshPeriod, func(ctx context.Context) {
+		ctx, done := context.WithTimeout(ctx, f.topicLagRefreshPeriod)
+		defer done()
+
+		lags, err := adminClient.Lag(ctx, f.consumerGroup)
+		if err != nil {
+			f.log.Debugf("Failed to fetch group lags: %s", err)
+		}
+
+		lags.Each(func(gl kadm.DescribedGroupLag) {
+			for _, gl := range gl.Lag {
+				for _, pl := range gl {
+					lag := pl.Lag
+					if lag < 0 {
+						lag = 0
+					}
+
+					f.topicLagGauge.Set(lag, pl.Topic, strconv.Itoa(int(pl.Partition)))
+					f.topicLagCache.Store(fmt.Sprintf("%s_%d", pl.Topic, pl.Partition), lag)
+				}
+			}
+		})
+	})
+	f.lagUpdater.Start()
 
 	go func() {
 		defer func() {
-			cl.Close()
+			f.Client.Close()
 			if f.shutSig.IsSoftStopSignalled() {
 				f.shutSig.TriggerHasStopped()
 			}
@@ -404,7 +464,7 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 			// In this case we don't want to actually resume any of them yet so
 			// I add a forced timeout to deal with it.
 			stallCtx, pollDone := context.WithTimeout(closeCtx, time.Second)
-			fetches := cl.PollFetches(stallCtx)
+			fetches := f.Client.PollFetches(stallCtx)
 			pollDone()
 
 			if errs := fetches.Errors(); len(errs) > 0 {
@@ -429,7 +489,7 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 				}
 
 				if nonTemporalErr {
-					cl.Close()
+					f.Client.Close()
 					return
 				}
 			}
@@ -439,14 +499,21 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 
 			pauseTopicPartitions := map[string][]int32{}
 			fetches.EachPartition(func(p kgo.FetchTopicPartition) {
-				if len(p.Records) > 0 {
-					if checkpoints.addRecords(p.Topic, p.Partition, f.recordsToBatch(p.Records), f.cacheLimit) {
-						pauseTopicPartitions[p.Topic] = append(pauseTopicPartitions[p.Topic], p.Partition)
-					}
+				if len(p.Records) == 0 {
+					return
+				}
+
+				batch := f.recordsToBatch(p.Records)
+				if len(batch.b) == 0 {
+					return
+				}
+
+				if checkpoints.addRecords(p.Topic, p.Partition, batch, f.cacheLimit) {
+					pauseTopicPartitions[p.Topic] = append(pauseTopicPartitions[p.Topic], p.Partition)
 				}
 			})
 
-			pausedPartitionTopics := cl.PauseFetchPartitions(pauseTopicPartitions)
+			pausedPartitionTopics := f.Client.PauseFetchPartitions(pauseTopicPartitions)
 			noActivePartitionsBackOff.Reset()
 
 		noActivePartitions:
@@ -462,7 +529,7 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 					}
 				}
 				if len(resumeTopicPartitions) > 0 {
-					cl.ResumeFetchPartitions(resumeTopicPartitions)
+					f.Client.ResumeFetchPartitions(resumeTopicPartitions)
 				}
 
 				if len(f.consumerGroup) == 0 || len(resumeTopicPartitions) > 0 || checkpoints.tallyActivePartitions(pausedPartitionTopics) > 0 {

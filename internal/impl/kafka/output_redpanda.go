@@ -83,31 +83,35 @@ func init() {
 			var client *kgo.Client
 			var clientMut sync.Mutex
 
-			output, err = NewFranzWriterFromConfig(conf, func(fn FranzSharedClientUseFn) error {
-				clientMut.Lock()
-				defer clientMut.Unlock()
+			output, err = NewFranzWriterFromConfig(
+				conf,
+				NewFranzWriterHooks(
+					func(_ context.Context, fn FranzSharedClientUseFn) error {
+						clientMut.Lock()
+						defer clientMut.Unlock()
 
-				if client == nil {
-					var err error
-					if client, err = kgo.NewClient(clientOpts...); err != nil {
-						return err
-					}
-				}
-				return fn(&FranzSharedClientInfo{
-					Client:      client,
-					ConnDetails: connDetails,
-				})
-			}, func(context.Context) error {
-				clientMut.Lock()
-				defer clientMut.Unlock()
+						if client == nil {
+							var err error
+							if client, err = kgo.NewClient(clientOpts...); err != nil {
+								return err
+							}
+						}
+						return fn(&FranzSharedClientInfo{
+							Client:      client,
+							ConnDetails: connDetails,
+						})
+					}).WithYieldClientFn(
+					func(context.Context) error {
+						clientMut.Lock()
+						defer clientMut.Unlock()
 
-				if client == nil {
-					return nil
-				}
-				client.Close()
-				client = nil
-				return nil
-			})
+						if client == nil {
+							return nil
+						}
+						client.Close()
+						client = nil
+						return nil
+					}))
 			return
 		})
 	if err != nil {

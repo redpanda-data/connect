@@ -1,5 +1,5 @@
-= redpanda_migrator
-:type: output
+= redpanda_migrator_offsets
+:type: input
 :status: beta
 :categories: ["Services"]
 
@@ -23,9 +23,9 @@
 component_type_dropdown::[]
 
 
-A Redpanda Migrator output using the https://github.com/twmb/franz-go[Franz Kafka client library^].
+Redpanda Migrator consumer group offsets input using the https://github.com/twmb/franz-go[Franz Kafka client library^].
 
-Introduced in version 4.37.0.
+Introduced in version 4.45.0.
 
 
 [tabs]
@@ -36,17 +36,14 @@ Common::
 
 ```yml
 # Common config fields, showing default values
-output:
+input:
   label: ""
-  redpanda_migrator:
+  redpanda_migrator_offsets:
     seed_brokers: [] # No default (required)
-    topic: "" # No default (required)
-    key: "" # No default (optional)
-    partition: ${! meta("partition") } # No default (optional)
-    metadata:
-      include_prefixes: []
-      include_patterns: []
-    max_in_flight: 256
+    topics: [] # No default (required)
+    regexp_topics: false
+    consumer_group: "" # No default (optional)
+    auto_replay_nacks: true
 ```
 
 --
@@ -56,9 +53,9 @@ Advanced::
 
 ```yml
 # All config fields, showing default values
-output:
+input:
   label: ""
-  redpanda_migrator:
+  redpanda_migrator_offsets:
     seed_brokers: [] # No default (required)
     client_id: benthos
     tls:
@@ -70,71 +67,40 @@ output:
       client_certs: []
     sasl: [] # No default (optional)
     metadata_max_age: 5m
-    topic: "" # No default (required)
-    key: "" # No default (optional)
-    partition: ${! meta("partition") } # No default (optional)
-    metadata:
-      include_prefixes: []
-      include_patterns: []
-    timestamp_ms: ${! timestamp_unix_milli() } # No default (optional)
-    max_in_flight: 256
-    input_resource: redpanda_migrator_input
-    replication_factor_override: true
-    replication_factor: 3
-    translate_schema_ids: true
-    schema_registry_output_resource: schema_registry_output
-    partitioner: "" # No default (optional)
-    idempotent_write: true
-    compression: "" # No default (optional)
-    timeout: 10s
-    max_message_bytes: 1MB
-    broker_write_max_bytes: 100MB
+    topics: [] # No default (required)
+    regexp_topics: false
+    rack_id: ""
+    consumer_group: "" # No default (optional)
+    commit_period: 5s
+    partition_buffer_bytes: 1MB
+    topic_lag_refresh_period: 5s
+    auto_replay_nacks: true
 ```
 
 --
 ======
 
-Writes a batch of messages to a Kafka broker and waits for acknowledgement before propagating it back to the input.
+TODO: Description
 
-This output should be used in combination with a `redpanda_migrator` input identified by the label specified in
-`input_resource` which it can query for topic and ACL configurations. Once connected, the output will attempt to
-create all topics which the input consumes from along with their ACLs.
+== Metadata
 
-If the configured broker does not contain the current message topic, this output attempts to create it along with its
-ACLs.
+This input adds the following metadata fields to each message:
 
-ACL migration adheres to the following principles:
-
-- `ALLOW WRITE` ACLs for topics are not migrated
-- `ALLOW ALL` ACLs for topics are downgraded to `ALLOW READ`
-- Only topic ACLs are migrated, group ACLs are not migrated
-
-
-== Examples
-
-[tabs]
-======
-Transfer data::
-+
---
-
-Writes messages to the configured broker and creates topics and topic ACLs if they don't exist. It also ensures that the message order is preserved.
-
-```yaml
-output:
-  redpanda_migrator:
-    seed_brokers: [ "127.0.0.1:9093" ]
-    topic: ${! metadata("kafka_topic").or(throw("missing kafka_topic metadata")) }
-    key: ${! metadata("kafka_key") }
-    partitioner: manual
-    partition: ${! metadata("kafka_partition").or(throw("missing kafka_partition metadata")) }
-    timestamp_ms: ${! metadata("kafka_timestamp_ms").or(timestamp_unix_milli()) }
-    input_resource: redpanda_migrator_input
-    max_in_flight: 1
+```text
+- kafka_key
+- kafka_topic
+- kafka_partition
+- kafka_offset
+- kafka_timestamp_unix
+- kafka_timestamp_ms
+- kafka_tombstone_message
+- kafka_offset_topic
+- kafka_offset_group
+- kafka_offset_partition
+- kafka_offset_commit_timestamp
+- kafka_offset_metadata
 ```
 
---
-======
 
 == Fields
 
@@ -524,248 +490,88 @@ The maximum age of metadata before it is refreshed.
 
 *Default*: `"5m"`
 
-=== `topic`
+=== `topics`
 
-A topic to write messages to.
-This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
-
-
-*Type*: `string`
-
-
-=== `key`
-
-An optional key to populate for each message.
-This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
-
-
-*Type*: `string`
-
-
-=== `partition`
-
-An optional explicit partition to set for each message. This field is only relevant when the `partitioner` is set to `manual`. The provided interpolation string must be a valid integer.
-This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
-
-
-*Type*: `string`
-
-
-```yml
-# Examples
-
-partition: ${! meta("partition") }
-```
-
-=== `metadata`
-
-Determine which (if any) metadata values should be added to messages as headers.
-
-
-*Type*: `object`
-
-
-=== `metadata.include_prefixes`
-
-Provide a list of explicit metadata key prefixes to match against.
+A list of topics to consume from. Multiple comma separated topics can be listed in a single element. When a `consumer_group` is specified partitions are automatically distributed across consumers of a topic, otherwise all partitions are consumed.
 
 
 *Type*: `array`
 
-*Default*: `[]`
 
 ```yml
 # Examples
 
-include_prefixes:
-  - foo_
-  - bar_
+topics:
+  - foo
+  - bar
 
-include_prefixes:
-  - kafka_
+topics:
+  - things.*
 
-include_prefixes:
-  - content-
+topics:
+  - foo,bar
 ```
 
-=== `metadata.include_patterns`
+=== `regexp_topics`
 
-Provide a list of explicit metadata key regular expression (re2) patterns to match against.
-
-
-*Type*: `array`
-
-*Default*: `[]`
-
-```yml
-# Examples
-
-include_patterns:
-  - .*
-
-include_patterns:
-  - _timestamp_unix$
-```
-
-=== `timestamp_ms`
-
-An optional timestamp to set for each message expressed in milliseconds. When left empty, the current timestamp is used.
-This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
-
-
-*Type*: `string`
-
-
-```yml
-# Examples
-
-timestamp_ms: ${! timestamp_unix_milli() }
-
-timestamp_ms: ${! metadata("kafka_timestamp_ms") }
-```
-
-=== `max_in_flight`
-
-The maximum number of batches to be sending in parallel at any given time.
-
-
-*Type*: `int`
-
-*Default*: `256`
-
-=== `input_resource`
-
-The label of the redpanda_migrator input from which to read the configurations for topics and ACLs which need to be created.
-
-
-*Type*: `string`
-
-*Default*: `"redpanda_migrator_input"`
-
-=== `replication_factor_override`
-
-Use the specified replication factor when creating topics.
+Whether listed topics should be interpreted as regular expression patterns for matching multiple topics.
 
 
 *Type*: `bool`
 
-*Default*: `true`
+*Default*: `false`
 
-=== `replication_factor`
+=== `rack_id`
 
-Replication factor for created topics. This is only used when `replication_factor_override` is set to `true`.
-
-
-*Type*: `int`
-
-*Default*: `3`
-
-=== `translate_schema_ids`
-
-Translate schema IDs.
-
-
-*Type*: `bool`
-
-*Default*: `true`
-
-=== `schema_registry_output_resource`
-
-The label of the schema_registry output to use for fetching schema IDs.
+A rack specifies where the client is physically located and changes fetch requests to consume from the closest replica as opposed to the leader replica.
 
 
 *Type*: `string`
 
-*Default*: `"schema_registry_output"`
+*Default*: `""`
 
-=== `partitioner`
+=== `consumer_group`
 
-Override the default murmur2 hashing partitioner.
+An optional consumer group to consume as. When specified the partitions of specified topics are automatically distributed across consumers sharing a consumer group, and partition offsets are automatically committed and resumed under this name. Consumer groups are not supported when specifying explicit partitions to consume from in the `topics` field.
 
 
 *Type*: `string`
 
 
-|===
-| Option | Summary
+=== `commit_period`
 
-| `least_backup`
-| Chooses the least backed up partition (the partition with the fewest amount of buffered records). Partitions are selected per batch.
-| `manual`
-| Manually select a partition for each message, requires the field `partition` to be specified.
-| `murmur2_hash`
-| Kafka's default hash algorithm that uses a 32-bit murmur2 hash of the key to compute which partition the record will be on.
-| `round_robin`
-| Round-robin's messages through all available partitions. This algorithm has lower throughput and causes higher CPU load on brokers, but can be useful if you want to ensure an even distribution of records to partitions.
-
-|===
-
-=== `idempotent_write`
-
-Enable the idempotent write producer option. This requires the `IDEMPOTENT_WRITE` permission on `CLUSTER` and can be disabled if this permission is not available.
-
-
-*Type*: `bool`
-
-*Default*: `true`
-
-=== `compression`
-
-Optionally set an explicit compression type. The default preference is to use snappy when the broker supports it, and fall back to none if not.
+The period of time between each commit of the current partition offsets. Offsets are always committed during shutdown.
 
 
 *Type*: `string`
 
+*Default*: `"5s"`
 
-Options:
-`lz4`
-, `snappy`
-, `gzip`
-, `none`
-, `zstd`
-.
+=== `partition_buffer_bytes`
 
-=== `timeout`
-
-The maximum period of time to wait for message sends before abandoning the request and retrying
-
-
-*Type*: `string`
-
-*Default*: `"10s"`
-
-=== `max_message_bytes`
-
-The maximum space in bytes than an individual message may take, messages larger than this value will be rejected. This field corresponds to Kafka's `max.message.bytes`.
+A buffer size (in bytes) for each consumed partition, allowing records to be queued internally before flushing. Increasing this may improve throughput at the cost of higher memory utilisation. Note that each buffer can grow slightly beyond this value.
 
 
 *Type*: `string`
 
 *Default*: `"1MB"`
 
-```yml
-# Examples
+=== `topic_lag_refresh_period`
 
-max_message_bytes: 100MB
-
-max_message_bytes: 50mib
-```
-
-=== `broker_write_max_bytes`
-
-The upper bound for the number of bytes written to a broker connection in a single write. This field corresponds to Kafka's `socket.request.max.bytes`.
+The period of time between each topic lag refresh cycle.
 
 
 *Type*: `string`
 
-*Default*: `"100MB"`
+*Default*: `"5s"`
 
-```yml
-# Examples
+=== `auto_replay_nacks`
 
-broker_write_max_bytes: 128MB
+Whether messages that are rejected (nacked) at the output level should be automatically replayed indefinitely, eventually resulting in back pressure if the cause of the rejections is persistent. If set to `false` these messages will instead be deleted. Disabling auto replays can greatly improve memory efficiency of high throughput streams as the original shape of the data can be discarded immediately upon consumption and mutation.
 
-broker_write_max_bytes: 50mib
-```
+
+*Type*: `bool`
+
+*Default*: `true`
 
 

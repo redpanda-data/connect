@@ -76,6 +76,7 @@ input:
     consumer_group: "" # No default (optional)
     commit_period: 5s
     partition_buffer_bytes: 1MB
+    topic_lag_refresh_period: 5s
     auto_replay_nacks: true
 ```
 
@@ -115,6 +116,10 @@ output:
 
 Records are processed and delivered from each partition in batches as received from brokers. These batch sizes are therefore dynamically sized in order to optimise throughput, but can be tuned with the config fields `fetch_max_partition_bytes` and `fetch_max_bytes`. Batches can be further broken down using the xref:components:processors/split.adoc[`split`] processor.
 
+== Metrics
+
+Emits a `redpanda_lag` metric with `topic` and `partition` labels for each consumed topic.
+
 == Metadata
 
 This input adds the following metadata fields to each message:
@@ -124,6 +129,7 @@ This input adds the following metadata fields to each message:
 - kafka_topic
 - kafka_partition
 - kafka_offset
+- kafka_lag
 - kafka_timestamp_ms
 - kafka_timestamp_unix
 - kafka_tombstone_message
@@ -644,6 +650,15 @@ A buffer size (in bytes) for each consumed partition, allowing records to be que
 *Type*: `string`
 
 *Default*: `"1MB"`
+
+=== `topic_lag_refresh_period`
+
+The period of time between each topic lag refresh cycle.
+
+
+*Type*: `string`
+
+*Default*: `"5s"`
 
 === `auto_replay_nacks`
 

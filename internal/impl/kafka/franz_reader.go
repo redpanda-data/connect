@@ -37,7 +37,8 @@ func bytesFromStrField(name string, pConf *service.ParsedConfig) (uint64, error)
 	return fieldAsBytes, nil
 }
 
-func bytesFromStrFieldAsInt32(name string, pConf *service.ParsedConfig) (int32, error) {
+// BytesFromStrFieldAsInt32 attempts to parse string field containing a human-readable byte size
+func BytesFromStrFieldAsInt32(name string, pConf *service.ParsedConfig) (int32, error) {
 	ui64, err := bytesFromStrField(name, pConf)
 	if err != nil {
 		return 0, err
@@ -168,13 +169,13 @@ func FranzConsumerDetailsFromConfig(conf *service.ParsedConfig) (*FranzConsumerD
 		return nil, err
 	}
 
-	if d.FetchMaxBytes, err = bytesFromStrFieldAsInt32(kfrFieldFetchMaxBytes, conf); err != nil {
+	if d.FetchMaxBytes, err = BytesFromStrFieldAsInt32(kfrFieldFetchMaxBytes, conf); err != nil {
 		return nil, err
 	}
-	if d.FetchMinBytes, err = bytesFromStrFieldAsInt32(kfrFieldFetchMinBytes, conf); err != nil {
+	if d.FetchMinBytes, err = BytesFromStrFieldAsInt32(kfrFieldFetchMinBytes, conf); err != nil {
 		return nil, err
 	}
-	if d.FetchMaxPartitionBytes, err = bytesFromStrFieldAsInt32(kfrFieldFetchMaxPartitionBytes, conf); err != nil {
+	if d.FetchMaxPartitionBytes, err = BytesFromStrFieldAsInt32(kfrFieldFetchMaxPartitionBytes, conf); err != nil {
 		return nil, err
 	}
 

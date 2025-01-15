@@ -223,6 +223,8 @@ The scalar type of the field.
 | standard float type
 | `bool`
 | a boolean true/false
+| `bloblang`
+| a bloblang mapping
 | `unknown`
 | allows for nesting arbitrary configuration inside of a field
 
@@ -308,6 +310,15 @@ A name to identify the test.
 
 *Type*: `string`
 
+
+=== `tests[].label`
+
+A label to assign to this template when running the test.
+
+
+*Type*: `string`
+
+*Default*: `""`
 
 === `tests[].config`
 

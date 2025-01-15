@@ -54,7 +54,7 @@ func NewPeriodicWithContext(duration time.Duration, work func(context.Context)) 
 
 // Start starts the `Periodic` work.
 //
-// It does not do work immedately, only after the time has passed.
+// It does not do work immediately, only after the time has passed.
 func (p *Periodic) Start() {
 	if p.cancel != nil {
 		return

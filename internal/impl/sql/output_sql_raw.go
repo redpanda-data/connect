@@ -17,17 +17,17 @@ package sql
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"sync"
 
 	"github.com/Jeffail/shutdown"
 
-	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func sqlRawOutputConfig() *service.ConfigSpec {
-	spec := service.NewConfigSpec().
+	return service.NewConfigSpec().
 		Stable().
 		Categories("Services").
 		Summary("Executes an arbitrary SQL query for each message.").
@@ -35,7 +35,7 @@ func sqlRawOutputConfig() *service.ConfigSpec {
 		Field(driverField).
 		Field(dsnField).
 		Field(rawQueryField().
-			Example("INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);")).
+			Example("INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);").Optional()).
 		Field(service.NewBoolField("unsafe_dynamic_query").
 			Description("Whether to enable xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions] in the query. Great care should be made to ensure your queries are defended against injection attacks.").
 			Advanced().
@@ -45,15 +45,18 @@ func sqlRawOutputConfig() *service.ConfigSpec {
 			Example("root = [ this.cat.meow, this.doc.woofs[0] ]").
 			Example(`root = [ meta("user.id") ]`).
 			Optional()).
+		Field(service.NewObjectListField(
+			"queries",
+			rawQueryField(),
+			rawQueryArgsMappingField(),
+		).
+			Description("A list of statements to run in addition to `query`. When specifying multiple statements, they are all executed within a transaction.").
+			Optional()).
 		Field(service.NewIntField("max_in_flight").
-			Description("The maximum number of inserts to run in parallel.").
-			Default(64))
-
-	for _, f := range connFields() {
-		spec = spec.Field(f)
-	}
-
-	spec = spec.Field(service.NewBatchPolicyField("batching")).
+			Description("The maximum number of statements to execute in parallel.").
+			Default(64)).
+		Fields(connFields()...).
+		Field(service.NewBatchPolicyField("batching")).
 		Version("3.65.0").
 		Example("Table Insert (MySQL)",
 			`
@@ -71,8 +74,35 @@ output:
         meta("kafka_topic"),
       ]
 `,
-		)
-	return spec
+		).
+		Example(
+			"Dynamically Creating Tables (PostgreSQL)",
+			`Here we dynamically create output tables transactionally with inserting a record into the newly created table.`,
+			`
+output:
+  processors:
+    - mapping: |
+        root = this
+        # Prevent SQL injection when using unsafe_dynamic_query
+        meta table_name = "\"" + metadata("table_name").replace_all("\"", "\"\"") + "\""
+  sql_raw:
+    driver: postgres
+    dsn: postgres://localhost/postgres
+    unsafe_dynamic_query: true
+    queries:
+      - query: |
+          CREATE TABLE IF NOT EXISTS ${!metadata("table_name")} (id varchar primary key, document jsonb);
+      - query: |
+          INSERT INTO ${!metadata("table_name")} (id, document) VALUES ($1, $2)
+          ON CONFLICT (id) DO UPDATE SET document = EXCLUDED.document;
+        args_mapping: |
+          root = [ this.id, this.document.string() ]
+
+`,
+		).
+		LintRule(`root = match {
+        !this.exists("queries") && !this.exists("query") => [ "either ` + "`query`" + ` or ` + "`queries`" + ` is required" ],
+    }`)
 }
 
 func init() {
@@ -101,10 +131,8 @@ type sqlRawOutput struct {
 	db     *sql.DB
 	dbMut  sync.RWMutex
 
-	queryStatic string
-	queryDyn    *service.InterpolatedString
+	queries []rawQueryStatement
 
-	argsMapping   *bloblang.Executor
 	argsConverter argsConverter
 
 	connSettings *connSettings
@@ -124,25 +152,48 @@ func newSQLRawOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resource
 		return nil, err
 	}
 
-	queryStatic, err := conf.FieldString("query")
+	unsafeDyn, err := conf.FieldBool("unsafe_dynamic_query")
 	if err != nil {
 		return nil, err
 	}
 
-	var queryDyn *service.InterpolatedString
-	if unsafeDyn, err := conf.FieldBool("unsafe_dynamic_query"); err != nil {
-		return nil, err
-	} else if unsafeDyn {
-		if queryDyn, err = conf.FieldInterpolatedString("query"); err != nil {
+	queriesConf := []*service.ParsedConfig{}
+	if conf.Contains("query") {
+		queriesConf = append(queriesConf, conf)
+	}
+	if conf.Contains("queries") {
+		qc, err := conf.FieldObjectList("queries")
+		if err != nil {
 			return nil, err
 		}
+		queriesConf = append(queriesConf, qc...)
 	}
 
-	var argsMapping *bloblang.Executor
-	if conf.Contains("args_mapping") {
-		if argsMapping, err = conf.FieldBloblang("args_mapping"); err != nil {
-			return nil, err
+	if len(queriesConf) == 0 {
+		return nil, errors.New("either field 'query' or field 'queries' is required")
+	}
+
+	var queries []rawQueryStatement
+	for _, qc := range queriesConf {
+		var statement rawQueryStatement
+		if unsafeDyn {
+			statement.dynamic, err = qc.FieldInterpolatedString("query")
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			statement.static, err = qc.FieldString("query")
+			if err != nil {
+				return nil, err
+			}
 		}
+
+		if qc.Contains("args_mapping") {
+			if statement.argsMapping, err = qc.FieldBloblang("args_mapping"); err != nil {
+				return nil, err
+			}
+		}
+		queries = append(queries, statement)
 	}
 
 	connSettings, err := connSettingsFromParsed(conf, mgr)
@@ -157,15 +208,13 @@ func newSQLRawOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resource
 		argsConverter = func(v []any) []any { return v }
 	}
 
-	return newSQLRawOutput(mgr.Logger(), driverStr, dsnStr, queryStatic, queryDyn, argsMapping, argsConverter, connSettings), nil
+	return newSQLRawOutput(mgr.Logger(), driverStr, dsnStr, queries, argsConverter, connSettings), nil
 }
 
 func newSQLRawOutput(
 	logger *service.Logger,
 	driverStr, dsnStr string,
-	queryStatic string,
-	queryDyn *service.InterpolatedString,
-	argsMapping *bloblang.Executor,
+	queries []rawQueryStatement,
 	argsConverter argsConverter,
 	connSettings *connSettings,
 ) *sqlRawOutput {
@@ -174,9 +223,7 @@ func newSQLRawOutput(
 		shutSig:       shutdown.NewSignaller(),
 		driver:        driverStr,
 		dsn:           dsnStr,
-		queryStatic:   queryStatic,
-		queryDyn:      queryDyn,
-		argsMapping:   argsMapping,
+		queries:       queries,
 		argsConverter: argsConverter,
 		connSettings:  connSettings,
 	}
@@ -213,43 +260,79 @@ func (s *sqlRawOutput) WriteBatch(ctx context.Context, batch service.MessageBatc
 	s.dbMut.RLock()
 	defer s.dbMut.RUnlock()
 
-	var argsExec *service.MessageBatchBloblangExecutor
-	if s.argsMapping != nil {
-		argsExec = batch.BloblangExecutor(s.argsMapping)
+	argsExec := make([]*service.MessageBatchBloblangExecutor, len(s.queries))
+	for i, q := range s.queries {
+		if q.argsMapping != nil {
+			argsExec[i] = batch.BloblangExecutor(q.argsMapping)
+		}
 	}
-
-	for i := range batch {
-		var args []any
-		if argsExec != nil {
-			resMsg, err := argsExec.Query(i)
+	dynQueries := make([]*service.MessageBatchInterpolationExecutor, len(s.queries))
+	for i, q := range s.queries {
+		if q.dynamic != nil {
+			dynQueries[i] = batch.InterpolationExecutor(q.dynamic)
+		}
+	}
+	return batch.WalkWithBatchedErrors(func(i int, msg *service.Message) (err error) {
+		var tx *sql.Tx
+		if len(s.queries) > 1 {
+			tx, err = s.db.BeginTx(ctx, nil)
 			if err != nil {
 				return err
 			}
+			defer func() {
+				if err != nil {
+					s.logger.Debugf("%v", err)
+					if rerr := tx.Rollback(); rerr != nil {
+						s.logger.Debugf("Failed to rollback transaction: %v", rerr)
+					}
+				} else {
+					// NB: this sets the return value to the error
+					if err = tx.Commit(); err != nil {
+						s.logger.Debugf("Failed to commit transaction: %v", err)
+					}
+				}
+			}()
+		}
+		for j, query := range s.queries {
+			var args []any
+			if argsExec[j] != nil {
+				var resMsg *service.Message
+				resMsg, err = argsExec[j].Query(i)
+				if err != nil {
+					return fmt.Errorf("arguments mapping failed: %w", err)
+				}
 
-			iargs, err := resMsg.AsStructured()
+				var iargs any
+				iargs, err = resMsg.AsStructured()
+				if err != nil {
+					return fmt.Errorf("mapping returned non-structured result: %w", err)
+				}
+
+				var ok bool
+				if args, ok = iargs.([]any); !ok {
+					return fmt.Errorf("mapping returned non-array result: %T", iargs)
+				}
+				args = s.argsConverter(args)
+			}
+
+			queryStr := query.static
+			if query.dynamic != nil {
+				if queryStr, err = dynQueries[j].TryString(i); err != nil {
+					return fmt.Errorf("query interpolation error: %w", err)
+				}
+			}
+
+			if tx == nil {
+				_, err = s.db.ExecContext(ctx, queryStr, args...)
+			} else {
+				_, err = tx.ExecContext(ctx, queryStr, args...)
+			}
 			if err != nil {
-				return err
-			}
-
-			var ok bool
-			if args, ok = iargs.([]any); !ok {
-				return fmt.Errorf("mapping returned non-array result: %T", iargs)
+				return fmt.Errorf("failed to run query: %w", err)
 			}
 		}
-
-		queryStr := s.queryStatic
-		if s.queryDyn != nil {
-			var err error
-			if queryStr, err = batch.TryInterpolatedString(i, s.queryDyn); err != nil {
-				return fmt.Errorf("query interpolation error: %w", err)
-			}
-		}
-
-		if _, err := s.db.ExecContext(ctx, queryStr, args...); err != nil {
-			return err
-		}
-	}
-	return nil
+		return nil
+	})
 }
 
 func (s *sqlRawOutput) Close(ctx context.Context) error {
