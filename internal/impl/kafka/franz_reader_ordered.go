@@ -410,7 +410,7 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 	noActivePartitionsBackOff.InitialInterval = time.Microsecond * 50
 	noActivePartitionsBackOff.MaxInterval = time.Second
 	noActivePartitionsBackOff.MaxElapsedTime = 0
-  
+
 	// Check connectivity to cluster
 	if err = f.Client.Ping(ctx); err != nil {
 		return fmt.Errorf("failed to connect to cluster: %s", err)
@@ -547,7 +547,7 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 				// counts. This is because it's possible that were lost our
 				// allocation to partitions of a topic, but gained others, since
 				// the last call.
-				pausedPartitionTopics = cl.PauseFetchPartitions(nil)
+				pausedPartitionTopics = f.Client.PauseFetchPartitions(nil)
 			}
 		}
 	}()
