@@ -60,6 +60,10 @@ output:
 
 Records are processed and delivered from each partition in batches as received from brokers. These batch sizes are therefore dynamically sized in order to optimise throughput, but can be tuned with the config fields ` + "`fetch_max_partition_bytes` and `fetch_max_bytes`" + `. Batches can be further broken down using the ` + "xref:components:processors/split.adoc[`split`] processor" + `.
 
+== Metrics
+
+Emits a ` + "`redpanda_lag`" + ` metric with ` + "`topic`" + ` and ` + "`partition`" + ` labels for each consumed topic.
+
 == Metadata
 
 This input adds the following metadata fields to each message:
@@ -69,6 +73,7 @@ This input adds the following metadata fields to each message:
 - kafka_topic
 - kafka_partition
 - kafka_offset
+- kafka_lag
 - kafka_timestamp_ms
 - kafka_timestamp_unix
 - kafka_tombstone_message

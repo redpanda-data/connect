@@ -33,6 +33,8 @@ fields:
 mapping: |
   #!blobl
 
+  let labelPrefix = @label.not_empty().or("redpanda_migrator_bundle")
+
   if ["topic", "key", "partition", "partitioner", "timestamp"].any(f -> this.redpanda_migrator.keys().contains(f)) {
     root = throw("The topic, key, partition, partitioner and timestamp fields of the redpanda_migrator output must be left empty")
   }
@@ -51,9 +53,16 @@ mapping: |
           "^(?:[^k].*|k[^a].*|ka[^f].*|kaf[^k].*|kafk[^a].*|kafka[^_].*)"
         ]
       },
-      "translate_schema_ids": this.redpanda_migrator.translate_schema_ids.or(true) && this.schema_registry.length() != 0
+      "translate_schema_ids": this.redpanda_migrator.translate_schema_ids.or(true) && this.schema_registry.length() != 0,
+      "input_resource": "%s_redpanda_migrator_input".format($labelPrefix)
     }
   )
+
+  if this.schema_registry.length() != 0 {
+    let redpandaMigrator = $redpandaMigrator.assign({
+      "schema_registry_output_resource": "%s_schema_registry_output".format($labelPrefix)
+    })
+  }
 
   let redpandaMigratorOffsets = this.redpanda_migrator.with("seed_brokers", "consumer_group", "client_id", "rack_id", "max_message_bytes", "broker_write_max_bytes", "tls", "sasl")
 
@@ -65,7 +74,8 @@ mapping: |
   let schemaRegistry = if this.schema_registry.length() > 0 {
     this.schema_registry.assign({
       "subject": "${! @schema_registry_subject }",
-      "max_in_flight": $srMaxInFlight
+      "max_in_flight": $srMaxInFlight,
+      "input_resource": "%s_schema_registry_input".format($labelPrefix)
     })
   }
 
@@ -75,10 +85,11 @@ mapping: |
     """
       switch:
         cases:
-          - check: metadata("input_label") == "redpanda_migrator"
+          - check: metadata("input_label") == "redpanda_migrator_input"
             output:
               fallback:
-                - redpanda_migrator: %s
+                - label: %s_redpanda_migrator_output
+                  redpanda_migrator: %s
                   processors:
                     - mapping: |
                         meta input_label = deleted()
@@ -88,20 +99,22 @@ mapping: |
                     - log:
                         message: |
                           Dropping message: ${! content() } / ${! metadata() }
-          - check: metadata("input_label") == "redpanda_migrator_offsets"
+          - check: metadata("input_label") == "redpanda_migrator_offsets_input"
             output:
               fallback:
-                - redpanda_migrator_offsets: %s
+                - label: %s_redpanda_migrator_offsets_output
+                  redpanda_migrator_offsets: %s
                 # TODO: Use a DLQ
                 - drop: {}
                   processors:
                     - log:
                         message: |
                           Dropping message: ${! content() } / ${! metadata() }
-          - check: metadata("input_label") == "schema_registry"
+          - check: metadata("input_label") == "schema_registry_input"
             output:
               fallback:
-                - schema_registry: %s
+                - label: %s_schema_registry_output
+                  schema_registry: %s
                 - switch:
                     cases:
                       - check: '@fallback_error == "request returned status: 422"'
@@ -114,15 +127,16 @@ mapping: |
                                   Subject '${! @schema_registry_subject }' version ${! @schema_registry_version } already has schema: ${! content() }
                       - output:
                           reject: ${! @fallback_error }
-    """.format($redpandaMigrator.string(), $redpandaMigratorOffsets.string(), $schemaRegistry.string()).parse_yaml()
+    """.format($labelPrefix, $redpandaMigrator.string(), $labelPrefix, $redpandaMigratorOffsets.string(), $labelPrefix, $schemaRegistry.string()).parse_yaml()
   } else {
     """
       switch:
         cases:
-          - check: metadata("input_label") == "redpanda_migrator"
+          - check: metadata("input_label") == "redpanda_migrator_input"
             output:
               fallback:
-                - redpanda_migrator: %s
+                - label: %s_redpanda_migrator_output
+                  redpanda_migrator: %s
                   processors:
                     - mapping: |
                         meta input_label = deleted()
@@ -132,17 +146,18 @@ mapping: |
                     - log:
                         message: |
                           Dropping message: ${! content() } / ${! metadata() }
-          - check: metadata("input_label") == "redpanda_migrator_offsets"
+          - check: metadata("input_label") == "redpanda_migrator_offsets_input"
             output:
               fallback:
-                - redpanda_migrator_offsets: %s
+                - label: %s_redpanda_migrator_offsets_output
+                  redpanda_migrator_offsets: %s
                 # TODO: Use a DLQ
                 - drop: {}
                   processors:
                     - log:
                         message: |
                           Dropping message: ${! content() } / ${! metadata() }
-    """.format($redpandaMigrator.string(), $redpandaMigratorOffsets.string()).parse_yaml()
+    """.format($labelPrefix, $redpandaMigrator.string(), $labelPrefix, $redpandaMigratorOffsets.string()).parse_yaml()
   }
 
 tests:
@@ -158,10 +173,11 @@ tests:
     expected:
       switch:
         cases:
-          - check: metadata("input_label") == "redpanda_migrator"
+          - check: metadata("input_label") == "redpanda_migrator_input"
             output:
               fallback:
-                - redpanda_migrator:
+                - label: redpanda_migrator_bundle_redpanda_migrator_output
+                  redpanda_migrator:
                     key: ${! metadata("kafka_key") }
                     max_in_flight: 1
                     partition: ${! metadata("kafka_partition").or(throw("missing kafka_partition metadata")) }
@@ -174,6 +190,8 @@ tests:
                       include_patterns:
                         -  ^(?:[^k].*|k[^a].*|ka[^f].*|kaf[^k].*|kafk[^a].*|kafka[^_].*)
                     translate_schema_ids: true
+                    input_resource: redpanda_migrator_bundle_redpanda_migrator_input
+                    schema_registry_output_resource: redpanda_migrator_bundle_schema_registry_output
                   processors:
                     - mapping: |
                         meta input_label = deleted()
@@ -182,10 +200,11 @@ tests:
                     - log:
                         message: |
                           Dropping message: ${! content() } / ${! metadata() }
-          - check: metadata("input_label") == "redpanda_migrator_offsets"
+          - check: metadata("input_label") == "redpanda_migrator_offsets_input"
             output:
               fallback:
-                - redpanda_migrator_offsets:
+                - label: redpanda_migrator_bundle_redpanda_migrator_offsets_output
+                  redpanda_migrator_offsets:
                     seed_brokers:
                       - 127.0.0.1:9092
                 - drop: {}
@@ -193,13 +212,15 @@ tests:
                     - log:
                         message: |
                           Dropping message: ${! content() } / ${! metadata() }
-          - check: metadata("input_label") == "schema_registry"
+          - check: metadata("input_label") == "schema_registry_input"
             output:
               fallback:
-                - schema_registry:
+                - label: redpanda_migrator_bundle_schema_registry_output
+                  schema_registry:
                     subject: ${! @schema_registry_subject }
                     url: http://localhost:8081
                     max_in_flight: 1
+                    input_resource: redpanda_migrator_bundle_schema_registry_input
                 - switch:
                     cases:
                       - check: '@fallback_error == "request returned status: 422"'
@@ -225,10 +246,11 @@ tests:
     expected:
       switch:
         cases:
-          - check: metadata("input_label") == "redpanda_migrator"
+          - check: metadata("input_label") == "redpanda_migrator_input"
             output:
               fallback:
-                - redpanda_migrator:
+                - label: redpanda_migrator_bundle_redpanda_migrator_output
+                  redpanda_migrator:
                     key: ${! metadata("kafka_key") }
                     max_in_flight: 1
                     partition: ${! metadata("kafka_partition").or(throw("missing kafka_partition metadata")) }
@@ -241,6 +263,8 @@ tests:
                       include_patterns:
                         -  ^(?:[^k].*|k[^a].*|ka[^f].*|kaf[^k].*|kafk[^a].*|kafka[^_].*)
                     translate_schema_ids: false
+                    input_resource: redpanda_migrator_bundle_redpanda_migrator_input
+                    schema_registry_output_resource: redpanda_migrator_bundle_schema_registry_output
                   processors:
                     - mapping: |
                         meta input_label = deleted()
@@ -249,10 +273,11 @@ tests:
                     - log:
                         message: |
                           Dropping message: ${! content() } / ${! metadata() }
-          - check: metadata("input_label") == "redpanda_migrator_offsets"
+          - check: metadata("input_label") == "redpanda_migrator_offsets_input"
             output:
               fallback:
-                - redpanda_migrator_offsets:
+                - label: redpanda_migrator_bundle_redpanda_migrator_offsets_output
+                  redpanda_migrator_offsets:
                     seed_brokers:
                       - 127.0.0.1:9092
                 - drop: {}
@@ -260,13 +285,15 @@ tests:
                     - log:
                         message: |
                           Dropping message: ${! content() } / ${! metadata() }
-          - check: metadata("input_label") == "schema_registry"
+          - check: metadata("input_label") == "schema_registry_input"
             output:
               fallback:
-                - schema_registry:
+                - label: redpanda_migrator_bundle_schema_registry_output
+                  schema_registry:
                     subject: ${! @schema_registry_subject }
                     url: http://localhost:8081
                     max_in_flight: 1
+                    input_resource: redpanda_migrator_bundle_schema_registry_input
                 - switch:
                     cases:
                       - check: '@fallback_error == "request returned status: 422"'
@@ -292,10 +319,11 @@ tests:
     expected:
       switch:
         cases:
-          - check: metadata("input_label") == "redpanda_migrator"
+          - check: metadata("input_label") == "redpanda_migrator_input"
             output:
               fallback:
-                - redpanda_migrator:
+                - label: redpanda_migrator_bundle_redpanda_migrator_output
+                  redpanda_migrator:
                     key: ${! metadata("kafka_key") }
                     max_in_flight: 1
                     partition: ${! metadata("kafka_partition").or(throw("missing kafka_partition metadata")) }
@@ -308,6 +336,8 @@ tests:
                       include_patterns:
                         -  ^(?:[^k].*|k[^a].*|ka[^f].*|kaf[^k].*|kafk[^a].*|kafka[^_].*)
                     translate_schema_ids: true
+                    input_resource: redpanda_migrator_bundle_redpanda_migrator_input
+                    schema_registry_output_resource: redpanda_migrator_bundle_schema_registry_output
                   processors:
                     - mapping: |
                         meta input_label = deleted()
@@ -316,10 +346,11 @@ tests:
                     - log:
                         message: |
                           Dropping message: ${! content() } / ${! metadata() }
-          - check: metadata("input_label") == "redpanda_migrator_offsets"
+          - check: metadata("input_label") == "redpanda_migrator_offsets_input"
             output:
               fallback:
-                - redpanda_migrator_offsets:
+                - label: redpanda_migrator_bundle_redpanda_migrator_offsets_output
+                  redpanda_migrator_offsets:
                     seed_brokers:
                       - 127.0.0.1:9092
                 - drop: {}
@@ -327,13 +358,15 @@ tests:
                     - log:
                         message: |
                           Dropping message: ${! content() } / ${! metadata() }
-          - check: metadata("input_label") == "schema_registry"
+          - check: metadata("input_label") == "schema_registry_input"
             output:
               fallback:
-                - schema_registry:
+                - label: redpanda_migrator_bundle_schema_registry_output
+                  schema_registry:
                     subject: ${! @schema_registry_subject }
                     url: http://localhost:8081
                     max_in_flight: 1
+                    input_resource: redpanda_migrator_bundle_schema_registry_input
                 - switch:
                     cases:
                       - check: '@fallback_error == "request returned status: 422"'
@@ -355,10 +388,11 @@ tests:
     expected:
       switch:
         cases:
-          - check: metadata("input_label") == "redpanda_migrator"
+          - check: metadata("input_label") == "redpanda_migrator_input"
             output:
               fallback:
-                - redpanda_migrator:
+                - label: redpanda_migrator_bundle_redpanda_migrator_output
+                  redpanda_migrator:
                     key: ${! metadata("kafka_key") }
                     max_in_flight: 1
                     partition: ${! metadata("kafka_partition").or(throw("missing kafka_partition metadata")) }
@@ -371,6 +405,7 @@ tests:
                       include_patterns:
                         -  ^(?:[^k].*|k[^a].*|ka[^f].*|kaf[^k].*|kafk[^a].*|kafka[^_].*)
                     translate_schema_ids: false
+                    input_resource: redpanda_migrator_bundle_redpanda_migrator_input
                   processors:
                     - mapping: |
                         meta input_label = deleted()
@@ -379,10 +414,11 @@ tests:
                     - log:
                         message: |
                           Dropping message: ${! content() } / ${! metadata() }
-          - check: metadata("input_label") == "redpanda_migrator_offsets"
+          - check: metadata("input_label") == "redpanda_migrator_offsets_input"
             output:
               fallback:
-                - redpanda_migrator_offsets:
+                - label: redpanda_migrator_bundle_redpanda_migrator_offsets_output
+                  redpanda_migrator_offsets:
                     seed_brokers:
                       - 127.0.0.1:9092
                 - drop: {}

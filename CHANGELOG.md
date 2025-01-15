@@ -15,27 +15,50 @@ All notable changes to this project will be documented in this file.
 
 ## 4.45.0 - TBD
 
-### Added
-
-- `aws_sqs` now has a `max_outstanding` field to prevent unbounded memory usage. (@rockwotj)
-- `avro` scanner now emits metadata for the Avro schema it used along with the schema fingerprint. (@rockwotj)
-- Field `content_type` added to the `amqp_1` output. (@timo102)
-- `kafka_franz`, `ockam_kafka`, `redpanda`, `redpanda_common`, `redpanda_migrator` now support `fetch_max_wait` configuration field.
-- `snowpipe_streaming` now supports interpolating table names. (@rockwotj)
-- `snowpipe_streaming` now supports interpolating channel names. (@rockwotj)
-- `snowpipe_streaming` now supports exactly once delivery using `offset_token`. (@rockwotj)
-- `ollama_chat` now supports tool calling. (@rockwotj)
-- New `ollama_moderation` which allows using LlamaGuard or ShieldGemma to check if LLM responses are safe. (@rockwotj)
-- Field `queries` added to `sql_raw` processor and output to support rummong multiple SQL statements transactionally. (@rockwotj)
-
 ### Fixed
 
 - The `code` and `file` fields on the `javascript` processor docs no longer erroneously mention interpolation support. (@mihaitodor)
 - The `postgres_cdc` now correctly handles `null` values. (@rockwotj)
+- The `redpanda_migrator` output no longer rejects messages if it can't perform schema ID translation. (@mihaitodor)
+- The `redpanda_migrator` input no longer converts the kafka key to string. (@mihaitodor)
+
+### Added
+
+- `aws_sqs` input now has a `max_outstanding` field to prevent unbounded memory usage. (@rockwotj)
+- `avro` scanner now emits metadata for the Avro schema it used along with the schema fingerprint. (@rockwotj)
+- Field `content_type` added to the `amqp_1` output. (@timo102)
+- Field `fetch_max_wait` added to the `kafka_franz`, `ockam_kafka`, `redpanda`, `redpanda_common` and `redpanda_migrator` inputs. (@birdayz)
+- `snowpipe_streaming` output now supports interpolating table names. (@rockwotj)
+- `snowpipe_streaming` output now supports interpolating channel names. (@rockwotj)
+- `snowpipe_streaming` output now supports exactly once delivery using `offset_token`. (@rockwotj)
+- `ollama_chat` processor now supports tool calling. (@rockwotj)
+- New `ollama_moderation` processor which allows using LlamaGuard or ShieldGemma to check if LLM responses are safe. (@rockwotj)
+- Field `queries` added to `sql_raw` processor and output to support rummong multiple SQL statements transactionally. (@rockwotj)
+- New `redpanda_migrator_offsets` input. (@mihaitodor)
+- Fields `offset_topic`, `offset_group`, `offset_partition`, `offset_commit_timestamp` and `offset_metadata` added to the `redpanda_migrator_offsets` output. (@mihaitodor)
+- Field `topic_lag_refresh_period` added to the `redpanda` and `redpanda_common` inputs. (@mihaitodor)
+- Metric `redpanda_lag` now emitted by the `redpanda` and `redpanda_common` inputs. (@mihaitodor)
+- Metadata `kafka_lag` now emitted by the `redpanda` and `redpanda_common` inputs. (@mihaitodor)
+- The `redpanda_migrator_bundle` input and output now set labels for their subcomponents. (@mihaitodor)
+- (Benthos) Field `label` added to the template tests definitions. (@mihaitodor)
+- (Benthos) Metadata field `label` can now be utilized within a template's `mapping` field to access the label that is associated with the template instantiation in a config. (@mihaitodor)
+- (Benthos) `bloblang` scalar type added to template fields. (@mihaitodor)
+- (Benthos) Go API: Method `SetOutputBrokerPattern` added to the `StreamBuilder` type. (@mihaitodor)
+- (Benthos) New `error_source_name`, `error_source_label` and `error_source_path` bloblang functions. (@mihaitodor)
+- (Benthos) Flag `--verbose` added to the `benthos lint` and `benthos template lint` commands. (@mihaitodor)
+
+### Changed
+
 - Fix an issue in `aws_sqs` with refreshing in-flight message leases which could prevent acks from processed. (@rockwotj)
 - Fix an issue with `postgres_cdc` with TOAST values not being propagated with `REPLICA IDENTITY FULL`. (@rockwotj)
 - Fix a initial snapshot streaming consistency issue with `postgres_cdc`. (@rockwotj)
-- Fix bug in `sftp` input where the last file was not deleted when `watcher` and `delete_on_finish` were enabled (@ooesili)
+- Fix bug in `sftp` input where the last file was not deleted when `watcher` and `delete_on_finish` were enabled. (@ooesili)
+- Fields `batch_size`, `multi_header`, `replication_factor`, `replication_factor_override` and `output_resource` for the `redpanda_migrator` input are now deprecated. (@mihaitodor)
+- Fields `kafka_key` and `max_in_flight` for the `redpanda_migrator_offsets` output are now deprecated. (@mihaitodor)
+- Field `batching` for the `redpanda_migrator` output is now deprecated. (@mihaitodor)
+- The `redpanda_migrator` input no longer emits tombstone messages. (@mihaitodor)
+- (Benthos) The `branch` processor no longer emits an entry in the log at error level when the child processors throw errors. (@mihaitodor)
+- (Benthos) Streams and the StreamBuilder API now use `reject` by default when no output is specified in the config and `stdout` isn't registered (for example when the `io` components are not imported). (@mihaitodor)
 
 ## 4.44.0 - 2024-12-13
 
@@ -72,7 +95,7 @@ All notable changes to this project will be documented in this file.
 
 - Add support for `spanner` driver to SQL plugins. (@yufeng-deng)
 - Add support for complex database types (JSONB, TEXT[], INET, TSVECTOR, TSRANGE, POINT, INTEGER[]) for `pg_stream` input. (@le-vlad)
-- Add support for Parquet files to `bigquery` output (@rockwotj)
+- Add support for Parquet files to `bigquery` output. (@rockwotj)
 - (Benthos) New `exists` operator added to the `cache` processor. (@mihaitodor)
 - New CLI flag `redpanda-license` added as an alternative way to specify a Redpanda license. (@Jeffail)
 

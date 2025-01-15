@@ -77,13 +77,9 @@ input:
     fetch_max_partition_bytes: 1MiB
     consumer_group: "" # No default (optional)
     commit_period: 5s
-    multi_header: false
-    batch_size: 1024
-    auto_replay_nacks: true
+    partition_buffer_bytes: 1MB
     topic_lag_refresh_period: 5s
-    output_resource: redpanda_migrator_output
-    replication_factor_override: true
-    replication_factor: 3
+    auto_replay_nacks: true
 ```
 
 --
@@ -91,11 +87,11 @@ input:
 
 Reads a batch of messages from a Kafka broker and waits for the output to acknowledge the writes before updating the Kafka consumer group offset.
 
-This input should be used in combination with a `redpanda_migrator` output which it can query for existing topics.
+This input should be used in combination with a `redpanda_migrator` output.
 
 When a consumer group is specified this input consumes one or more topics where partitions will automatically balance across any other connected clients with the same consumer group. When a consumer group is not specified topics can either be consumed in their entirety or with explicit partitions.
 
-It attempts to create all selected topics it along with their associated ACLs in the broker that the `redpanda_migrator` output points to identified by the label specified in `output_resource`.
+It provides the same delivery guarantees and ordering semantics as the `redpanda` input.
 
 == Metrics
 
@@ -623,32 +619,14 @@ The period of time between each commit of the current partition offsets. Offsets
 
 *Default*: `"5s"`
 
-=== `multi_header`
+=== `partition_buffer_bytes`
 
-Decode headers into lists to allow handling of multiple values with the same key
-
-
-*Type*: `bool`
-
-*Default*: `false`
-
-=== `batch_size`
-
-The maximum number of messages that should be accumulated into each batch.
+A buffer size (in bytes) for each consumed partition, allowing records to be queued internally before flushing. Increasing this may improve throughput at the cost of higher memory utilisation. Note that each buffer can grow slightly beyond this value.
 
 
-*Type*: `int`
+*Type*: `string`
 
-*Default*: `1024`
-
-=== `auto_replay_nacks`
-
-Whether messages that are rejected (nacked) at the output level should be automatically replayed indefinitely, eventually resulting in back pressure if the cause of the rejections is persistent. If set to `false` these messages will instead be deleted. Disabling auto replays can greatly improve memory efficiency of high throughput streams as the original shape of the data can be discarded immediately upon consumption and mutation.
-
-
-*Type*: `bool`
-
-*Default*: `true`
+*Default*: `"1MB"`
 
 === `topic_lag_refresh_period`
 
@@ -659,31 +637,13 @@ The period of time between each topic lag refresh cycle.
 
 *Default*: `"5s"`
 
-=== `output_resource`
+=== `auto_replay_nacks`
 
-The label of the redpanda_migrator output in which the currently selected topics need to be created before attempting to read messages.
-
-
-*Type*: `string`
-
-*Default*: `"redpanda_migrator_output"`
-
-=== `replication_factor_override`
-
-Use the specified replication factor when creating topics.
+Whether messages that are rejected (nacked) at the output level should be automatically replayed indefinitely, eventually resulting in back pressure if the cause of the rejections is persistent. If set to `false` these messages will instead be deleted. Disabling auto replays can greatly improve memory efficiency of high throughput streams as the original shape of the data can be discarded immediately upon consumption and mutation.
 
 
 *Type*: `bool`
 
 *Default*: `true`
-
-=== `replication_factor`
-
-Replication factor for created topics. This is only used when `replication_factor_override` is set to `true`.
-
-
-*Type*: `int`
-
-*Default*: `3`
 
 
