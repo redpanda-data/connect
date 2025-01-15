@@ -40,9 +40,10 @@ label: ""
 sql_raw:
   driver: "" # No default (required)
   dsn: clickhouse://username:password@host1:9000,host2:9000/database?dial_timeout=200ms&max_execution_time=60 # No default (required)
-  query: INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?); # No default (required)
+  query: INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?); # No default (optional)
   args_mapping: root = [ this.cat.meow, this.doc.woofs[0] ] # No default (optional)
-  exec_only: false
+  exec_only: false # No default (optional)
+  queries: [] # No default (optional)
 ```
 
 --
@@ -56,10 +57,11 @@ label: ""
 sql_raw:
   driver: "" # No default (required)
   dsn: clickhouse://username:password@host1:9000,host2:9000/database?dial_timeout=200ms&max_execution_time=60 # No default (required)
-  query: INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?); # No default (required)
+  query: INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?); # No default (optional)
   unsafe_dynamic_query: false
   args_mapping: root = [ this.cat.meow, this.doc.woofs[0] ] # No default (optional)
-  exec_only: false
+  exec_only: false # No default (optional)
+  queries: [] # No default (optional)
   init_files: [] # No default (optional)
   init_statement: | # No default (optional)
     CREATE TABLE IF NOT EXISTS some_table (
@@ -118,6 +120,34 @@ pipeline:
               query: "SELECT * FROM footable WHERE user_id = $1;"
               args_mapping: '[ this.user.id ]'
         result_map: 'root.foo_rows = this'
+```
+
+--
+Dynamically Creating Tables (PostgreSQL)::
++
+--
+
+Here we query a database for columns of footable that share a `user_id` with the message field `user.id`. A xref:components:processors/branch.adoc[`branch` processor] is used in order to insert the resulting array into the original message at the path `foo_rows`.
+
+```yaml
+pipeline:
+  processors:
+    - mapping: |
+        root = this
+        # Prevent SQL injection when using unsafe_dynamic_query
+        meta table_name = "\"" + metadata("table_name").replace_all("\"", "\"\"") + "\""
+    - sql_raw:
+        driver: postgres
+        dsn: postgres://localhost/postgres
+        unsafe_dynamic_query: true
+        queries:
+          - query: |
+              CREATE TABLE IF NOT EXISTS ${!metadata("table_name")} (id varchar primary key, document jsonb);
+          - query: |
+              INSERT INTO ${!metadata("table_name")} (id, document) VALUES ($1, $2)
+              ON CONFLICT (id) DO UPDATE SET document = EXCLUDED.document;
+            args_mapping: |
+              root = [ this.id, this.document.string() ]
 ```
 
 --
@@ -267,12 +297,63 @@ args_mapping: root = [ meta("user.id") ]
 
 === `exec_only`
 
-Whether the query result should be discarded. When set to `true` the message contents will remain unchanged, which is useful in cases where you are executing inserts, updates, etc.
+Whether the query result should be discarded. When set to `true` the message contents will remain unchanged, which is useful in cases where you are executing inserts, updates, etc. By default this is true for the last query, and previous queries don't change the results. If set to true for any query but the last one, the subsequent `args_mappings` input is overwritten.
 
 
 *Type*: `bool`
 
-*Default*: `false`
+
+=== `queries`
+
+A list of statements to run in addition to `query`. When specifying multiple statements, they are all executed within a transaction. The output of the processor is always the last query that runs, unless `exec_only` is used.
+
+
+*Type*: `array`
+
+
+=== `queries[].query`
+
+The query to execute. The style of placeholder to use depends on the driver, some drivers require question marks (`?`) whereas others expect incrementing dollar signs (`$1`, `$2`, and so on) or colons (`:1`, `:2` and so on). The style to use is outlined in this table:
+
+| Driver | Placeholder Style |
+|---|---|
+| `clickhouse` | Dollar sign |
+| `mysql` | Question mark |
+| `postgres` | Dollar sign |
+| `mssql` | Question mark |
+| `sqlite` | Question mark |
+| `oracle` | Colon |
+| `snowflake` | Question mark |
+| `trino` | Question mark |
+| `gocosmos` | Colon |
+
+
+*Type*: `string`
+
+
+=== `queries[].args_mapping`
+
+An optional xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `query`.
+
+
+*Type*: `string`
+
+
+```yml
+# Examples
+
+args_mapping: root = [ this.cat.meow, this.doc.woofs[0] ]
+
+args_mapping: root = [ meta("user.id") ]
+```
+
+=== `queries[].exec_only`
+
+Whether the query result should be discarded. When set to `true` the message contents will remain unchanged, which is useful in cases where you are executing inserts, updates, etc. By default this is true for the last query, and previous queries don't change the results. If set to true for any query but the last one, the subsequent `args_mappings` input is overwritten.
+
+
+*Type*: `bool`
+
 
 === `init_files`
 

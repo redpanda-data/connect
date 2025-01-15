@@ -27,7 +27,7 @@ import (
 )
 
 func sqlRawInputConfig() *service.ConfigSpec {
-	spec := service.NewConfigSpec().
+	return service.NewConfigSpec().
 		Beta().
 		Categories("Services").
 		Summary("Executes a select query and creates a message for each row received.").
@@ -36,17 +36,9 @@ func sqlRawInputConfig() *service.ConfigSpec {
 		Field(dsnField).
 		Field(rawQueryField().
 			Example("SELECT * FROM footable WHERE user_id = $1;")).
-		Field(service.NewBloblangField("args_mapping").
-			Description("A xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of columns specified.").
-			Example("root = [ this.cat.meow, this.doc.woofs[0] ]").
-			Example(`root = [ meta("user.id") ]`).
-			Optional()).
-		Field(service.NewAutoRetryNacksToggleField())
-	for _, f := range connFields() {
-		spec = spec.Field(f)
-	}
-
-	spec = spec.
+		Field(rawQueryArgsMappingField()).
+		Field(service.NewAutoRetryNacksToggleField()).
+		Fields(connFields()...).
 		Version("4.10.0").
 		Example("Consumes an SQL table using a query as an input.",
 			`
@@ -63,7 +55,6 @@ input:
       ]
 `,
 		)
-	return spec
 }
 
 func init() {

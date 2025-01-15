@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
@@ -136,6 +137,14 @@ CREATE TABLE IF NOT EXISTS some_table (
 	}
 }
 
+type rawQueryStatement struct {
+	static  string
+	dynamic *service.InterpolatedString
+
+	argsMapping *bloblang.Executor // optional
+	execOnly    bool
+}
+
 func rawQueryField() *service.ConfigField {
 	return service.NewStringField("query").
 		Description("The query to execute. The style of placeholder to use depends on the driver, some drivers require question marks (`?`) whereas others expect incrementing dollar signs (`$1`, `$2`, and so on) or colons (`:1`, `:2` and so on). The style to use is outlined in this table:" + `
@@ -152,6 +161,14 @@ func rawQueryField() *service.ConfigField {
 ` + "| `trino` | Question mark |" + `
 ` + "| `gocosmos` | Colon |" + `
 `)
+}
+
+func rawQueryArgsMappingField() *service.ConfigField {
+	return service.NewBloblangField("args_mapping").
+		Description("An optional xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `query`.").
+		Example("root = [ this.cat.meow, this.doc.woofs[0] ]").
+		Example(`root = [ meta("user.id") ]`).
+		Optional()
 }
 
 type connSettings struct {

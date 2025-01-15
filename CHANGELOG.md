@@ -26,6 +26,7 @@ All notable changes to this project will be documented in this file.
 - `snowpipe_streaming` now supports exactly once delivery using `offset_token`. (@rockwotj)
 - `ollama_chat` now supports tool calling. (@rockwotj)
 - New `ollama_moderation` which allows using LlamaGuard or ShieldGemma to check if LLM responses are safe. (@rockwotj)
+- Field `queries` added to `sql_raw` processor and output to support rummong multiple SQL statements transactionally. (@rockwotj)
 
 ### Fixed
 

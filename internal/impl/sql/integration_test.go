@@ -136,6 +136,69 @@ args_mapping: 'root = [ this.id ]'
 	}
 }
 
+func testRawTransactionalProcessors(name string, fn func(t *testing.T, insertProc, selectProc service.BatchProcessor)) testFn {
+	return func(t *testing.T, driver, dsn, table string) {
+		t.Run(name, func(t *testing.T) {
+			if driver == "trino" {
+				t.Skip("transactions not supported")
+			}
+			placeholderStr := "?"
+			valuesStr := `(?, ?, ?)`
+			if driver == "postgres" || driver == "clickhouse" {
+				valuesStr = `($1, $2, $3)`
+				placeholderStr = "$1"
+			} else if driver == "oracle" {
+				valuesStr = `(:1, :2, :3)`
+				placeholderStr = ":1"
+			}
+			updateStatement := fmt.Sprintf(`update %s set "bar" = "bar" + 1 WHERE "foo" = %s`, table, placeholderStr)
+			if driver == "clickhouse" {
+				updateStatement = fmt.Sprintf(`alter table %s update bar = bar + 1 where foo = %s`, table, placeholderStr)
+			}
+			insertConf := fmt.Sprintf(`
+driver: %s
+dsn: %s
+query: insert into %s ( "foo", "bar", "baz" ) values `+valuesStr+`
+args_mapping: 'root = [ this.foo, this.bar.floor(), this.baz ]'
+exec_only: true
+queries:
+  - query: %s
+    args_mapping: 'root = [ this.foo ]'
+    exec_only: true
+`, driver, dsn, table, updateStatement)
+
+			updateStatement = strings.ReplaceAll(updateStatement, "+", "-")
+			queryConf := fmt.Sprintf(`
+driver: %s
+dsn: %s
+queries:
+  - query: %s
+    args_mapping: 'root = [ this.id ]'
+  - query: select "foo", "bar", "baz" from %s where "foo" = `+placeholderStr+`
+    args_mapping: 'root = [ this.id ]'
+`, driver, dsn, updateStatement, table)
+
+			env := service.NewEnvironment()
+
+			insertConfig, err := isql.RawProcessorConfig().ParseYAML(insertConf, env)
+			require.NoError(t, err)
+
+			selectConfig, err := isql.RawProcessorConfig().ParseYAML(queryConf, env)
+			require.NoError(t, err)
+
+			insertProc, err := isql.NewSQLRawProcessorFromConfig(insertConfig, service.MockResources())
+			require.NoError(t, err)
+			t.Cleanup(func() { insertProc.Close(context.Background()) })
+
+			selectProc, err := isql.NewSQLRawProcessorFromConfig(selectConfig, service.MockResources())
+			require.NoError(t, err)
+			t.Cleanup(func() { selectProc.Close(context.Background()) })
+
+			fn(t, insertProc, selectProc)
+		})
+	}
+}
+
 func testRawDeprecatedProcessors(name string, fn func(t *testing.T, insertProc, selectProc service.BatchProcessor)) testFn {
 	return func(t *testing.T, driver, dsn, table string) {
 		t.Run(name, func(t *testing.T) {
@@ -283,7 +346,7 @@ var testBatchProcessorParallel = testProcessors("parallel", func(t *testing.T, i
 	wg.Wait()
 })
 
-var testRawProcessorsBasic = testRawProcessors("raw", func(t *testing.T, insertProc, selectProc service.BatchProcessor) {
+func rawProcessorTest(t *testing.T, insertProc, selectProc service.BatchProcessor) {
 	var insertBatch service.MessageBatch
 	for i := 0; i < 10; i++ {
 		insertBatch = append(insertBatch, service.NewMessage([]byte(fmt.Sprintf(`{
@@ -317,47 +380,15 @@ var testRawProcessorsBasic = testRawProcessors("raw", func(t *testing.T, insertP
 		actBytes, err := v.AsBytes()
 		require.NoError(t, err)
 
-		assert.Equal(t, exp, string(actBytes))
+		assert.JSONEq(t, exp, string(actBytes))
 	}
-})
+}
 
-var testDeprecatedProcessorsBasic = testRawDeprecatedProcessors("deprecated", func(t *testing.T, insertProc, selectProc service.BatchProcessor) {
-	var insertBatch service.MessageBatch
-	for i := 0; i < 10; i++ {
-		insertBatch = append(insertBatch, service.NewMessage([]byte(fmt.Sprintf(`{
-  "foo": "doc-%d",
-  "bar": %d,
-  "baz": "and this"
-}`, i, i))))
-	}
+var testRawProcessorsBasic = testRawProcessors("raw", rawProcessorTest)
 
-	resBatches, err := insertProc.ProcessBatch(context.Background(), insertBatch)
-	require.NoError(t, err)
-	require.Len(t, resBatches, 1)
-	require.Len(t, resBatches[0], len(insertBatch))
-	for _, v := range resBatches[0] {
-		require.NoError(t, v.GetError())
-	}
+var testRawProcessorsTransactional = testRawTransactionalProcessors("raw_txn", rawProcessorTest)
 
-	var queryBatch service.MessageBatch
-	for i := 0; i < 10; i++ {
-		queryBatch = append(queryBatch, service.NewMessage([]byte(fmt.Sprintf(`{"id":"doc-%d"}`, i))))
-	}
-
-	resBatches, err = selectProc.ProcessBatch(context.Background(), queryBatch)
-	require.NoError(t, err)
-	require.Len(t, resBatches, 1)
-	require.Len(t, resBatches[0], len(queryBatch))
-	for i, v := range resBatches[0] {
-		require.NoError(t, v.GetError())
-
-		exp := fmt.Sprintf(`[{"bar":%d,"baz":"and this","foo":"doc-%d"}]`, i, i)
-		actBytes, err := v.AsBytes()
-		require.NoError(t, err)
-
-		assert.Equal(t, exp, string(actBytes))
-	}
-})
+var testDeprecatedProcessorsBasic = testRawDeprecatedProcessors("deprecated", rawProcessorTest)
 
 func testBatchInputOutputBatch(t *testing.T, driver, dsn, table string) {
 	colList := `[ "foo", "bar", "baz" ]`
@@ -454,35 +485,64 @@ processors:
 
 func testBatchInputOutputRaw(t *testing.T, driver, dsn, table string) {
 	t.Run("raw_input_output", func(t *testing.T) {
+
+		placeholderStr := "?"
+		valuesStr := `(?, ?, ?)`
+		if driver == "postgres" || driver == "clickhouse" {
+			valuesStr = `($1, $2, $3)`
+			placeholderStr = "$1"
+		} else if driver == "oracle" {
+			valuesStr = `(:1, :2, :3)`
+			placeholderStr = ":1"
+		}
+
+		updateStr := "update"
+		setStr := "set"
+		if driver == "clickhouse" {
+			updateStr = "alter table"
+			setStr = "update"
+		}
+
 		confReplacer := strings.NewReplacer(
 			"$driver", driver,
 			"$dsn", dsn,
 			"$table", table,
+			"$update", updateStr,
+			"$set", setStr,
 		)
 
-		valuesStr := `(?, ?, ?)`
-		if driver == "postgres" || driver == "clickhouse" {
-			valuesStr = `($1, $2, $3)`
-		} else if driver == "oracle" {
-			valuesStr = `(:1, :2, :3)`
+		updateStatement := confReplacer.Replace(`
+    - query: $update $table $set "bar" = "bar" + 1 where "foo" = ` + placeholderStr + `
+      args_mapping: 'root = [ this.foo ]'
+`)
+
+		// Trino doesn't support transactions, we make the test pass by doing this in blobl
+		if driver == "trino" {
+			updateStatement = `
+processors:
+  - mapping: |
+      root = this
+      root.bar = this.bar + 1
+`
 		}
 
 		outputConf := confReplacer.Replace(`
 sql_raw:
   driver: $driver
   dsn: $dsn
-  query: insert into $table ("foo", "bar", "baz") values ` + valuesStr + `
-  args_mapping: 'root = [ this.foo, this.bar.floor(), this.baz ]'
-`)
+  queries:
+    - query: insert into $table ("foo", "bar", "baz") values `+valuesStr+`
+      args_mapping: 'root = [ this.foo, this.bar.floor(), this.baz ]'
+`) + updateStatement
 
 		inputConf := confReplacer.Replace(`
 sql_raw:
   driver: $driver
   dsn: $dsn
-  query: 'select * from $table ORDER BY "bar" ASC'
+  query: 'select "foo", "bar" - 1 as "bar", "baz" from $table ORDER BY "bar" ASC'
 processors:
   # For some reason MySQL driver doesn't resolve to integer by default.
-  - bloblang: |
+  - mapping: |
       root = this
       root.bar = this.bar.number()
 `)
@@ -551,6 +611,7 @@ func testSuite(t *testing.T, driver, dsn string, createTableFn func(string) (str
 		testBatchInputOutputBatch,
 		testBatchInputOutputRaw,
 		testRawProcessorsBasic,
+		testRawProcessorsTransactional,
 		testDeprecatedProcessorsBasic,
 	} {
 		tableName, err := gonanoid.Generate("abcdefghijklmnopqrstuvwxyz", 40)
@@ -1044,9 +1105,13 @@ func TestIntegrationOracle(t *testing.T) {
 	})
 
 	createTable := func(name string) (string, error) {
+		// We use a binary float column because the integer type in Oracle
+		// can be larger than 64 bits so it is returned by the driver as a string.
+		// Using a float type allows the type to be returned to be a number in blobl
+		// which means the type is the same as other databases and the test passes.
 		_, err := db.Exec(fmt.Sprintf(`create table %s (
   "foo" varchar(50) not null,
-  "bar" integer not null,
+  "bar" binary_float not null,
   "baz" varchar(50) not null,
   primary key ("foo")
 		)`, name))
