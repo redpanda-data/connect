@@ -82,9 +82,9 @@ output:
 --
 ======
 
-== Alternatives
+## Alternatives
 
-For basic inserts use the xref:components:outputs/sql.adoc[`sql_insert`] output. For more complex queries use the xref:components:outputs/sql_raw.adoc[`sql_raw`] output.
+For basic inserts use the [`sql_insert`](/docs/components/outputs/sql) output. For more complex queries use the [`sql_raw`](/docs/components/outputs/sql_raw) output.
 
 == Fields
 
@@ -145,7 +145,7 @@ query: INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?);
 
 === `args_mapping`
 
-An optional xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `query`.
+An optional [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `query`.
 
 
 *Type*: `string`

@@ -42,8 +42,9 @@ output:
     driver: "" # No default (required)
     dsn: clickhouse://username:password@host1:9000,host2:9000/database?dial_timeout=200ms&max_execution_time=60 # No default (required)
     query: INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?); # No default (optional)
+    columns: []
+    data_types: []
     args_mapping: root = [ this.cat.meow, this.doc.woofs[0] ] # No default (optional)
-    queries: [] # No default (optional)
     max_in_flight: 64
     batching:
       count: 0
@@ -66,8 +67,9 @@ output:
     dsn: clickhouse://username:password@host1:9000,host2:9000/database?dial_timeout=200ms&max_execution_time=60 # No default (required)
     query: INSERT INTO footable (foo, bar, baz) VALUES (?, ?, ?); # No default (optional)
     unsafe_dynamic_query: false
+    columns: []
+    data_types: []
     args_mapping: root = [ this.cat.meow, this.doc.woofs[0] ] # No default (optional)
-    queries: [] # No default (optional)
     max_in_flight: 64
     init_files: [] # No default (optional)
     init_statement: | # No default (optional)
@@ -273,53 +275,52 @@ Whether to enable xref:configuration:interpolation.adoc#bloblang-queries[interpo
 
 *Default*: `false`
 
-=== `args_mapping`
+=== `columns`
 
-An optional xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `query`.
-
-
-*Type*: `string`
-
-
-```yml
-# Examples
-
-args_mapping: root = [ this.cat.meow, this.doc.woofs[0] ]
-
-args_mapping: root = [ meta("user.id") ]
-```
-
-=== `queries`
-
-A list of statements to run in addition to `query`. When specifying multiple statements, they are all executed within a transaction.
+A list of columns to insert.
 
 
 *Type*: `array`
 
+*Default*: `[]`
 
-=== `queries[].query`
+```yml
+# Examples
 
-The query to execute. The style of placeholder to use depends on the driver, some drivers require question marks (`?`) whereas others expect incrementing dollar signs (`$1`, `$2`, and so on) or colons (`:1`, `:2` and so on). The style to use is outlined in this table:
+columns:
+  - foo
+  - bar
+  - baz
+```
 
-| Driver | Placeholder Style |
-|---|---|
-| `clickhouse` | Dollar sign |
-| `mysql` | Question mark |
-| `postgres` | Dollar sign |
-| `mssql` | Question mark |
-| `sqlite` | Question mark |
-| `oracle` | Colon |
-| `snowflake` | Question mark |
-| `trino` | Question mark |
-| `gocosmos` | Colon |
+=== `data_types`
+
+The columns data types.
 
 
-*Type*: `string`
+*Type*: `array`
 
+*Default*: `[]`
 
-=== `queries[].args_mapping`
+```yml
+# Examples
 
-An optional xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `query`.
+data_types:
+  - name: foo
+    type: VARCHAR
+  - datetime:
+      format: "2006-01-02 15:04:05.999"
+    name: bar
+    type: DATETIME
+  - date:
+      format: "2006-01-02"
+    name: baz
+    type: DATE
+```
+
+=== `args_mapping`
+
+An optional [Bloblang mapping](/docs/guides/bloblang/about) which should evaluate to an array of values matching in size to the number of placeholder arguments in the field `query`.
 
 
 *Type*: `string`
