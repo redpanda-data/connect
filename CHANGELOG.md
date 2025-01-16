@@ -13,7 +13,7 @@ All notable changes to this project will be documented in this file.
 
 -->
 
-## 4.45.0 - TBD
+## 4.45.0 - 2025-01-16
 
 ### Fixed
 
