@@ -790,9 +790,11 @@ func (a *awsS3Reader) getObjectTarget(ctx context.Context) (*s3PendingObject, er
 	if object.scanner, err = a.objectScannerCtor.Create(obj.Body, target.ackFn, details); err != nil {
 		// Warning: NEVER return io.EOF from a scanner constructor, as this will
 		// falsely indicate that we've reached the end of our list of object
-		// targets when running an SQS feed.
+		// targets when running an SQS feed. So instead map the error and object
+		// to nil so the reader retries, and we also ack the message because there
+		// was nothing to read.
 		if errors.Is(err, io.EOF) {
-			err = fmt.Errorf("encountered an empty file for key '%v'", target.key)
+			err = nil
 		}
 		_ = target.ackFn(ctx, err)
 		return nil, err
@@ -817,8 +819,12 @@ func (a *awsS3Reader) ReadBatch(ctx context.Context) (msg service.MessageBatch, 
 	}()
 
 	var object *s3PendingObject
-	if object, err = a.getObjectTarget(ctx); err != nil {
-		return
+
+	// getObjectTarget might return nil objects for empty files, so we can just skip and get the nex file in this case.
+	for object == nil {
+		if object, err = a.getObjectTarget(ctx); err != nil {
+			return
+		}
 	}
 
 	var resBatch service.MessageBatch
@@ -839,8 +845,11 @@ func (a *awsS3Reader) ReadBatch(ctx context.Context) (msg service.MessageBatch, 
 		if object.extracted == 0 {
 			a.log.Debugf("Extracted zero messages from key %v", object.target.key)
 		}
-		if object, err = a.getObjectTarget(ctx); err != nil {
-			return
+		object = nil
+		for object == nil {
+			if object, err = a.getObjectTarget(ctx); err != nil {
+				return
+			}
 		}
 	}
 
