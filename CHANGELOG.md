@@ -3,15 +3,15 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-<!--
-
 ## 4.46.0 - TBD
 
 ### Added
 
 - New `mysql_cdc` input supporting change data capture (CDC) from MySQL. (@rockwotj, @le-vlad)
 
--->
+### Fixed
+
+- Empty files read by input `aws_s3` no longer cause spurious errors. (@rockwotj)
 
 ## 4.45.0 - 2025-01-16
 
