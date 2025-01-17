@@ -27,6 +27,8 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 const (
@@ -117,6 +119,10 @@ type mysqlStreamInput struct {
 }
 
 func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s service.BatchInput, err error) {
+	if err := license.CheckRunningEnterprise(res); err != nil {
+		return nil, err
+	}
+
 	i := mysqlStreamInput{
 		logger:           res.Logger(),
 		rawMessageEvents: make(chan MessageEvent),

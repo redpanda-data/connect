@@ -26,6 +26,8 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 type testDB struct {
@@ -146,6 +148,7 @@ file:
 
 			streamOut, err := streamOutBuilder.Build()
 			require.NoError(t, err)
+			license.InjectTestService(streamOut.Resources())
 
 			go func() {
 				err = streamOut.Run(context.Background())
@@ -183,6 +186,7 @@ file:
 
 			streamOut, err = streamOutBuilder.Build()
 			require.NoError(t, err)
+			license.InjectTestService(streamOut.Resources())
 
 			time.Sleep(time.Second)
 			for i := 1001; i < 2001; i++ {
@@ -251,6 +255,7 @@ file:
 
 	streamOut, err := streamOutBuilder.Build()
 	require.NoError(t, err)
+	license.InjectTestService(streamOut.Resources())
 
 	go func() {
 		err = streamOut.Run(context.Background())
@@ -333,6 +338,7 @@ file:
 
 	streamOut, err := streamOutBuilder.Build()
 	require.NoError(t, err)
+	license.InjectTestService(streamOut.Resources())
 
 	go func() {
 		err = streamOut.Run(context.Background())
@@ -504,6 +510,7 @@ memory: {}
 
 	streamOut, err := streamOutBuilder.Build()
 	require.NoError(t, err)
+	license.InjectTestService(streamOut.Resources())
 
 	go func() {
 		err = streamOut.Run(context.Background())
