@@ -105,7 +105,7 @@ func decodePgOutput(WALData []byte, relations map[uint32]*RelationMessage, typeM
 				// In the case of an update of an unchanged toast value and the replica is set to
 				// IDENTITY FULL, we need to look at the old tuple in order to get the data, it's
 				// just marked as unchanged in the new tuple.
-				if idx < len(logicalMsg.OldTuple.Columns) {
+				if logicalMsg.OldTupleType == 'O' && logicalMsg.OldTuple != nil && idx < len(logicalMsg.OldTuple.Columns) {
 					col = logicalMsg.OldTuple.Columns[idx]
 					switch col.DataType {
 					case 'n', 'u':
