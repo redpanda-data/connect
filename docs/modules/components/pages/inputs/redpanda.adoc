@@ -68,6 +68,7 @@ input:
     topics: [] # No default (required)
     regexp_topics: false
     rack_id: ""
+    instance_id: ""
     start_from_oldest: true
     fetch_max_bytes: 50MiB
     fetch_max_wait: 5s
@@ -574,6 +575,15 @@ Whether listed topics should be interpreted as regular expression patterns for m
 === `rack_id`
 
 A rack specifies where the client is physically located and changes fetch requests to consume from the closest replica as opposed to the leader replica.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `instance_id`
+
+When using a consumer group, an instance ID specifies the groups static membership, which can prevent rebalances during reconnects. When using a instance ID the client does NOT leave the group when closing. To actually leave the group one must use an external admin command to leave the group on behalf of this instance ID. This ID must be unique per consumer within the group.
 
 
 *Type*: `string`

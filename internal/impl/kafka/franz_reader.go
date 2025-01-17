@@ -48,6 +48,7 @@ func BytesFromStrFieldAsInt32(name string, pConf *service.ParsedConfig) (int32, 
 
 const (
 	// Consumer fields
+	kfrFieldInstanceID             = "instance_id"
 	kfrFieldRackID                 = "rack_id"
 	kfrFieldTopics                 = "topics"
 	kfrFieldRegexpTopics           = "regexp_topics"
@@ -82,6 +83,10 @@ Finally, it's also possible to specify an explicit offset to consume from by add
 			Description("A rack specifies where the client is physically located and changes fetch requests to consume from the closest replica as opposed to the leader replica.").
 			Default("").
 			Advanced(),
+		service.NewStringField(kfrFieldInstanceID).
+			Description("When using a consumer group, an instance ID specifies the groups static membership, which can prevent rebalances during reconnects. When using a instance ID the client does NOT leave the group when closing. To actually leave the group one must use an external admin command to leave the group on behalf of this instance ID. This ID must be unique per consumer within the group.").
+			Default("").
+			Advanced(),
 		service.NewBoolField(kfrFieldStartFromOldest).
 			Description("Determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset. The setting is applied when creating a new consumer group or the saved offset no longer exists.").
 			Default(true).
@@ -109,6 +114,7 @@ Finally, it's also possible to specify an explicit offset to consume from by add
 // consumer.
 type FranzConsumerDetails struct {
 	RackID                 string
+	InstanceID             string
 	InitialOffset          kgo.Offset
 	Topics                 []string
 	TopicPartitions        map[string]map[int32]kgo.Offset
@@ -126,6 +132,9 @@ func FranzConsumerDetailsFromConfig(conf *service.ParsedConfig) (*FranzConsumerD
 
 	var err error
 	if d.RackID, err = conf.FieldString(kfrFieldRackID); err != nil {
+		return nil, err
+	}
+	if d.InstanceID, err = conf.FieldString(kfrFieldInstanceID); err != nil {
 		return nil, err
 	}
 
@@ -202,6 +211,10 @@ func (d *FranzConsumerDetails) FranzOpts() []kgo.Opt {
 
 	if d.RegexPattern {
 		opts = append(opts, kgo.ConsumeRegex())
+	}
+
+	if d.InstanceID != "" {
+		opts = append(opts, kgo.InstanceID(d.InstanceID))
 	}
 
 	return opts

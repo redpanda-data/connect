@@ -35,6 +35,7 @@ const (
 	iskFieldTLS                           = "tls"
 	iskFieldConsumerGroup                 = "consumer_group"
 	iskFieldClientID                      = "client_id"
+	iskFieldInstanceID                    = "instance_id"
 	iskFieldRackID                        = "rack_id"
 	iskFieldStartFromOldest               = "start_from_oldest"
 	iskFieldCheckpointLimit               = "checkpoint_limit"
@@ -122,6 +123,10 @@ Unfortunately this error message will appear for a wide range of connection prob
 			service.NewStringField(iskFieldClientID).
 				Description("An identifier for the client connection.").
 				Advanced().Default("benthos"),
+			service.NewStringField(iskFieldInstanceID).
+				Description("When using consumer groups, an identifier for this specific input so that it can be identified over restarts of this process. This should be unique per input.").
+				Advanced().
+				Optional(),
 			service.NewStringField(iskFieldRackID).
 				Description("A rack identifier for this client.").
 				Advanced().Default(""),
@@ -459,6 +464,11 @@ func (k *kafkaReader) saramaConfigFromParsed(conf *service.ParsedConfig) (*saram
 
 	if config.ClientID, err = conf.FieldString(iskFieldClientID); err != nil {
 		return nil, err
+	}
+	if conf.Contains(iskFieldInstanceID) {
+		if config.Consumer.Group.InstanceId, err = conf.FieldString(iskFieldInstanceID); err != nil {
+			return nil, err
+		}
 	}
 
 	if config.RackID, err = conf.FieldString(iskFieldRackID); err != nil {
