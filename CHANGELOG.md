@@ -9,9 +9,12 @@ All notable changes to this project will be documented in this file.
 
 - New `mysql_cdc` input supporting change data capture (CDC) from MySQL. (@rockwotj, @le-vlad)
 
+## 4.45.1 - 2025-01-17
+
 ### Fixed
 
 - Empty files read by input `aws_s3` no longer cause spurious errors. (@rockwotj)
+- Fixes a SIGSEGV in `postgres_cdc` when using TOAST values with tables that don't have FULL replica identity. (@rockwotj)
 
 ## 4.45.0 - 2025-01-16
 
