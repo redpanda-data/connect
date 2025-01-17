@@ -74,6 +74,7 @@ input:
       token_key: ""
     consumer_group: ""
     client_id: benthos
+    instance_id: "" # No default (optional)
     rack_id: ""
     start_from_oldest: true
     checkpoint_limit: 1024
@@ -479,6 +480,14 @@ An identifier for the client connection.
 *Type*: `string`
 
 *Default*: `"benthos"`
+
+=== `instance_id`
+
+When using consumer groups, an identifier for this specific input so that it can be identified over restarts of this process. This should be unique per input.
+
+
+*Type*: `string`
+
 
 === `rack_id`
 
