@@ -50,6 +50,7 @@ label: ""
 schema_registry_decode:
   avro_raw_json: false
   url: "" # No default (required)
+  emit_default_values: false
   oauth:
     enabled: false
     consumer_key: ""
@@ -119,6 +120,15 @@ The base URL of the schema registry service.
 
 *Type*: `string`
 
+
+=== `emit_default_values`
+
+Emit default values for non populated fileds in protobuf.
+
+
+*Type*: `bool`
+
+*Default*: `false`
 
 === `oauth`
 
