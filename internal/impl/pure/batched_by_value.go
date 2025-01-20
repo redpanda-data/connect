@@ -24,9 +24,8 @@ import (
 
 	"github.com/Jeffail/shutdown"
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"golang.org/x/sync/errgroup"
-
 	"github.com/redpanda-data/connect/v4/internal/dispatch"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -38,17 +37,31 @@ const (
 func init() {
 	spec := service.NewConfigSpec().
 		Description("Batch messages by a function interpolated string evaluated per message. This allows for creating batches and processing messages in order based on some value for each message.").
+		Categories("Utility").
 		Fields(
 			service.NewInputField(bbvFieldChild).Description("The child input"),
 			service.NewInterpolatedStringField(bbvFieldValue).
 				Description("The value to partition each message by").
 				Example("${!@kafka_topic}-${!@kafka_partition}"),
 			service.NewBatchPolicyField(bbvFieldPolicy),
+			service.NewAutoRetryNacksToggleField(),
 			// TODO(rockwood): Do we need some kind of additional limit here to prevent an OOM due to the number of messages built up
 			// or should can rely on child inputs for that backpressure?
-		).Example("Explicit batching for the Redpanda input", "This is an example of explicitly batching per topic-partition in the `redpanda` input, which does not provide explicit batching controls, but instead relies on the batch sizes returned by the broker.", `
-
-    `)
+		).Example(
+		"Explicit batching for the Redpanda input",
+		"This is an example of explicitly batching per topic-partition in the `redpanda` input, which normally does not provide explicit batching controls, but instead relies on the batch sizes returned by the broker.", `
+input:
+  batched_by_value:
+    value: "${!@kafka_topic}-${!@kafka_partition}"
+    policy:
+      count: 10000
+      period: 10s
+    child:
+      redpanda:
+        seed_brokers: [TODO]
+        topics: [foo_topic]
+        consumer_group: redpanda_connect_foo
+`)
 	err := service.RegisterBatchInput("batched_by_value", spec, func(conf *service.ParsedConfig, res *service.Resources) (service.BatchInput, error) {
 		child, err := conf.FieldInput(bbvFieldChild)
 		if err != nil {
@@ -62,23 +75,32 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return &batchedByValueInput{
-			res,
-			computeValue,
-			policy,
-			child,
-			nil,
-			make(map[string]*batchedPartition),
-			make(chan flushedBatch),
-			make(chan error, 1),
-		}, nil
+		input := newBatchedByValueInput(res, computeValue, policy, child)
+		return service.AutoRetryNacksBatchedToggled(conf, input)
 	})
 	if err != nil {
 		panic(err)
 	}
 }
 
+func newBatchedByValueInput(res *service.Resources, computeValue *service.InterpolatedString, policy service.BatchPolicy, child childInput) *batchedByValueInput {
+	return &batchedByValueInput{
+		res,
+		computeValue,
+		policy,
+		child,
+		nil,
+		make(map[string]*batchedPartition),
+		make(chan flushedBatch),
+		make(chan error, 1),
+	}
+}
+
 type (
+	childInput interface {
+		ReadBatch(context.Context) (service.MessageBatch, service.AckFunc, error)
+		service.Closer
+	}
 	// At a high level, this input works by reading from the child input in a single background
 	// goroutine, then dispatching batches from the child into a number of batchers (aka queues)
 	// flushing each batches as the policy dictates. Periodic flushes are achieved via a timeout
@@ -88,15 +110,20 @@ type (
 		resources    *service.Resources
 		computeValue *service.InterpolatedString
 		policy       service.BatchPolicy
-		child        *service.OwnedInput
+		child        childInput
 		shutSig      *shutdown.Signaller
 		partitions   map[string]*batchedPartition
 		readChan     chan flushedBatch
 		errChan      chan error
 	}
 	batchedPartition struct {
+		// For the current batch we're building
 		batcher *service.Batcher
 		acks    []service.AckFunc
+		// For the batch we need to send
+		pending []flushedBatch
+		// For the batches we've sent
+		inFlight atomic.Bool
 	}
 	flushedBatch struct {
 		batch service.MessageBatch
@@ -171,10 +198,11 @@ func (bbvi *batchedByValueInput) addBatch(ctx context.Context, partitionID strin
 	}
 	part.acks = append(part.acks, ackFn)
 	flush := false
+	hasInFlight := part.inFlight.Load()
 	for _, msg := range batch {
-		// When adding messages to a batch, if we're using an input that supports explicit dispatching
-		// then we'll trigger the signal to dispatch the next batch, which will ensure batching order.
-		dispatch.TriggerSignal(msg.Context())
+		if !hasInFlight {
+			dispatch.TriggerSignal(msg.Context())
+		}
 		if part.batcher.Add(msg) {
 			flush = true
 		}
@@ -185,19 +213,14 @@ func (bbvi *batchedByValueInput) addBatch(ctx context.Context, partitionID strin
 }
 
 func (bbvi *batchedByValueInput) flushBatch(ctx context.Context, id string) {
-	// In the case of highly dynamic partitions, delete entries when we flush
-	// if there is ever a report of having issues with opening/closing of batch
-	// processors, then we can maybe have some idle timeout instead, but this
-	// seems unlikely
 	part := bbvi.partitions[id]
-	delete(bbvi.partitions, id)
-	defer part.batcher.Close(ctx)
 	ackFn := func(ctx context.Context, err error) (rErr error) {
 		for _, ack := range part.acks {
 			if aErr := ack(ctx, err); err == nil {
 				rErr = aErr
 			}
 		}
+		part.inFlight.Store(false)
 		return
 	}
 	batch, err := part.batcher.Flush(ctx)
@@ -205,12 +228,15 @@ func (bbvi *batchedByValueInput) flushBatch(ctx context.Context, id string) {
 		_ = ackFn(ctx, err)
 		return
 	}
-	select {
-	case bbvi.readChan <- flushedBatch{batch, ackFn}:
-	case <-ctx.Done():
-		_ = ackFn(ctx, ctx.Err())
+	if len(part.pending) == 0 && !part.inFlight.Swap(true) {
+		select {
+		case bbvi.readChan <- flushedBatch{batch, ackFn}:
+		case <-ctx.Done():
+			_ = ackFn(ctx, ctx.Err())
+		}
 		return
 	}
+	part.pending = append(part.pending, flushedBatch{batch, ackFn})
 }
 
 func (bbvi *batchedByValueInput) loop(shutSig *shutdown.Signaller) error {
@@ -224,13 +250,24 @@ func (bbvi *batchedByValueInput) loop(shutSig *shutdown.Signaller) error {
 	return nil
 }
 
-func (bbvi *batchedByValueInput) computeFlushDeadline(ctx context.Context) time.Time {
-	// Compute the earliest time we need to flush a batch by. If there are no batches,
-	// then use a time that is effectively in the infinite future.
-	needFlushDeadline := time.Unix(math.MaxInt32, 1e9-1)
-	if needFlushDeadline.Before(time.Unix(0, 0)) {
-		panic("oops")
+var errFlushNeeded = errors.New("yo dawg you need to flush")
+
+func (bbvi *batchedByValueInput) doLoopIter(ctx context.Context) error {
+	// Flush any pending batches if we can
+	for _, part := range bbvi.partitions {
+		if len(part.pending) > 0 && !part.inFlight.Swap(true) {
+			sending := part.pending[0]
+			part.pending = part.pending[1:]
+			select {
+			case bbvi.readChan <- sending:
+			case <-ctx.Done():
+				_ = sending.ackFn(ctx, ctx.Err())
+			}
+		}
 	}
+	// Compute the earliest time we need to flush a batch by. If there are no periodic
+	// batches, then use a time that is effectively in the infinite future.
+	needFlushDeadline := time.Now().Add(math.MaxInt64)
 	for id, part := range bbvi.partitions {
 		d, ok := part.batcher.UntilNext()
 		if !ok {
@@ -247,14 +284,8 @@ func (bbvi *batchedByValueInput) computeFlushDeadline(ctx context.Context) time.
 			needFlushDeadline = deadline
 		}
 	}
-	return needFlushDeadline
-}
-
-var errFlushNeeded = errors.New("yo dawg you need to flush")
-
-func (bbvi *batchedByValueInput) doLoopIter(ctx context.Context) error {
 	// We'll abort the read to flush by returning a sentinal error
-	readCtx, cancel := context.WithDeadlineCause(ctx, bbvi.computeFlushDeadline(ctx), errFlushNeeded)
+	readCtx, cancel := context.WithDeadlineCause(ctx, needFlushDeadline, errFlushNeeded)
 	defer cancel()
 	batch, ack, err := bbvi.child.ReadBatch(readCtx)
 	if errors.Is(err, errFlushNeeded) {
@@ -323,6 +354,9 @@ func (bbvi *batchedByValueInput) Close(ctx context.Context) error {
 	wg.Go(func() error {
 		bbvi.shutSig.TriggerSoftStop()
 		<-bbvi.shutSig.HasStoppedChan()
+		for _, part := range bbvi.partitions {
+			_ = part.batcher.Close(ctx)
+		}
 		return nil
 	})
 	wg.Go(func() error {
