@@ -105,12 +105,15 @@ func NewSnowflakeServiceClient(ctx context.Context, opts ClientOptions) (*Snowfl
 
 		uploader: uploaderAtomic,
 		// Tokens expire every hour, so refresh a bit before that
-		uploadRefreshLoop: asyncroutine.NewPeriodicWithContext(time.Hour-(2*time.Minute), func(ctx context.Context) {
+		uploadRefreshLoop: asyncroutine.NewPeriodicWithContext(time.Hour-(5*time.Minute), func(ctx context.Context) {
+			client.logger.Info("refreshing snowflake storage credentials")
 			resp, err := client.configureClient(ctx, clientConfigureRequest{Role: opts.Role})
 			if err != nil {
+				client.logger.Warnf("refreshing snowflake storage credentials failure: %v", err)
 				uploaderAtomic.Store(stageUploaderResult{err: err})
 				return
 			}
+			client.logger.Debug("refreshing snowflake storage credentials success")
 			// TODO: Do the other checks here that the Java SDK does (deploymentID, etc)
 			uploader, err := newUploader(resp.StageLocation)
 			uploaderAtomic.Store(stageUploaderResult{uploader: uploader, err: err})
@@ -128,6 +131,7 @@ func NewSnowflakeServiceClient(ctx context.Context, opts ClientOptions) (*Snowfl
 
 // Close closes the client and future requests have undefined behavior.
 func (c *SnowflakeServiceClient) Close() {
+	c.options.Logger.Debug("closing snowflake streaming output")
 	c.uploadRefreshLoop.Stop()
 	c.client.Close()
 	c.flusher.Close()
