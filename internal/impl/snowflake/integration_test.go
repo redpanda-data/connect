@@ -55,6 +55,10 @@ func SetupSnowflakeStream(t *testing.T, outputConfiguration string) (service.Mes
 	stream, err := streamBuilder.Build()
 	require.NoError(t, err)
 	license.InjectTestService(stream.Resources())
+	t.Cleanup(func() {
+		err := stream.Stop(context.Background())
+		require.NoError(t, err)
+	})
 	return produce, stream
 }
 
