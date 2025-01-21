@@ -57,6 +57,9 @@ const (
 	kfrFieldFetchMinBytes          = "fetch_min_bytes"
 	kfrFieldFetchMaxPartitionBytes = "fetch_max_partition_bytes"
 	kfrFieldFetchMaxWait           = "fetch_max_wait"
+	kfrFieldSessionTimeout         = "session_timeout"
+	kfrFieldRebalanceTimeout       = "rebalance_timeout"
+	kfrFieldHeartbeatInterval      = "heartbeat_interval"
 )
 
 // FranzConsumerFields returns a slice of fields specifically for customising
@@ -87,6 +90,18 @@ Finally, it's also possible to specify an explicit offset to consume from by add
 			Description("When using a consumer group, an instance ID specifies the groups static membership, which can prevent rebalances during reconnects. When using a instance ID the client does NOT leave the group when closing. To actually leave the group one must use an external admin command to leave the group on behalf of this instance ID. This ID must be unique per consumer within the group.").
 			Default("").
 			Advanced(),
+		service.NewDurationField(kfrFieldRebalanceTimeout).
+			Description("When using a consumer group, `rebalance_timeout` sets how long group members are allowed to take when a rebalance has begun. This timeout is how long all members are allowed to complete work and commit offsets, minus the time it took to detect the rebalance (from a heartbeat).").
+			Default("45s").
+			Advanced(),
+		service.NewDurationField(kfrFieldSessionTimeout).
+			Description("When using a consumer group, `session_timeout` sets how long a member in hte group can go between heartbeats. If a member does not heartbeat in this timeout, the broker will remove the member from the group and initiate a rebalance.").
+			Default("1m").
+			Advanced(),
+		service.NewDurationField(kfrFieldHeartbeatInterval).
+			Description("When using a consumer group, `heartbeat_interval` sets how long a group member goes between heartbeats to Kafka. Kafka uses heartbeats to ensure that a group member's sesion stays active. This value should be no higher than 1/3rd of the `session_timeout`. This is equivalent to the Java heartbeat.interval.ms setting.").
+			Default("3s").
+			Advanced(),
 		service.NewBoolField(kfrFieldStartFromOldest).
 			Description("Determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset. The setting is applied when creating a new consumer group or the saved offset no longer exists.").
 			Default(true).
@@ -115,6 +130,9 @@ Finally, it's also possible to specify an explicit offset to consume from by add
 type FranzConsumerDetails struct {
 	RackID                 string
 	InstanceID             string
+	SessionTimeout         time.Duration
+	RebalanceTimeout       time.Duration
+	HeartbeatInterval      time.Duration
 	InitialOffset          kgo.Offset
 	Topics                 []string
 	TopicPartitions        map[string]map[int32]kgo.Offset
@@ -135,6 +153,15 @@ func FranzConsumerDetailsFromConfig(conf *service.ParsedConfig) (*FranzConsumerD
 		return nil, err
 	}
 	if d.InstanceID, err = conf.FieldString(kfrFieldInstanceID); err != nil {
+		return nil, err
+	}
+	if d.SessionTimeout, err = conf.FieldDuration(kfrFieldSessionTimeout); err != nil {
+		return nil, err
+	}
+	if d.RebalanceTimeout, err = conf.FieldDuration(kfrFieldRebalanceTimeout); err != nil {
+		return nil, err
+	}
+	if d.HeartbeatInterval, err = conf.FieldDuration(kfrFieldHeartbeatInterval); err != nil {
 		return nil, err
 	}
 
@@ -207,6 +234,9 @@ func (d *FranzConsumerDetails) FranzOpts() []kgo.Opt {
 		kgo.FetchMinBytes(d.FetchMinBytes),
 		kgo.FetchMaxPartitionBytes(d.FetchMaxPartitionBytes),
 		kgo.FetchMaxWait(d.FetchMaxWait),
+		kgo.SessionTimeout(d.SessionTimeout),
+		kgo.RebalanceTimeout(d.RebalanceTimeout),
+		kgo.HeartbeatInterval(d.HeartbeatInterval),
 	}
 
 	if d.RegexPattern {
