@@ -71,6 +71,9 @@ input:
     regexp_topics: false
     rack_id: ""
     instance_id: ""
+    rebalance_timeout: 45s
+    session_timeout: 1m
+    heartbeat_interval: 3s
     start_from_oldest: true
     fetch_max_bytes: 50MiB
     fetch_max_wait: 5s
@@ -563,6 +566,33 @@ When using a consumer group, an instance ID specifies the groups static membersh
 *Type*: `string`
 
 *Default*: `""`
+
+=== `rebalance_timeout`
+
+When using a consumer group, `rebalance_timeout` sets how long group members are allowed to take when a rebalance has begun. This timeout is how long all members are allowed to complete work and commit offsets, minus the time it took to detect the rebalance (from a heartbeat).
+
+
+*Type*: `string`
+
+*Default*: `"45s"`
+
+=== `session_timeout`
+
+When using a consumer group, `session_timeout` sets how long a member in hte group can go between heartbeats. If a member does not heartbeat in this timeout, the broker will remove the member from the group and initiate a rebalance.
+
+
+*Type*: `string`
+
+*Default*: `"1m"`
+
+=== `heartbeat_interval`
+
+When using a consumer group, `heartbeat_interval` sets how long a group member goes between heartbeats to Kafka. Kafka uses heartbeats to ensure that a group member's sesion stays active. This value should be no higher than 1/3rd of the `session_timeout`. This is equivalent to the Java heartbeat.interval.ms setting.
+
+
+*Type*: `string`
+
+*Default*: `"3s"`
 
 === `start_from_oldest`
 
