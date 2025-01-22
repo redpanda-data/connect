@@ -108,7 +108,7 @@ nfpms:
     bindir: /usr/bin
     contents:
       - src: /usr/bin/redpanda-connect
-        dst: /usr/bin/.rpk-ac.connect
+        dst: /usr/bin/.rpk.ac-connect
         type: symlink
     builds:
       - connect
