@@ -282,7 +282,7 @@ func deleteSubject(t *testing.T, url string, subject string, hardDelete bool) {
 		deleteMode = franz_sr.HardDelete
 	}
 
-	_, err = client.DeleteSubject(context.Background(), subject, franz_sr.DeleteHow(deleteMode))
+	_, err = client.DeleteSubject(context.Background(), subject, deleteMode)
 	require.NoError(t, err)
 }
 
