@@ -73,10 +73,6 @@ basic_auth:
 			require.NoError(t, err)
 
 			e, err := newSchemaRegistryDecoderFromConfig(conf, service.MockResources())
-			if e != nil {
-				assert.Equal(t, test.expectedBaseURL, e.client.SchemaRegistryBaseURL.String())
-			}
-
 			if err == nil {
 				_ = e.Close(context.Background())
 			}
