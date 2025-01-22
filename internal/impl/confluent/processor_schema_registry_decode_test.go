@@ -37,6 +37,7 @@ func TestSchemaRegistryDecoderConfigParse(t *testing.T) {
 		config          string
 		errContains     string
 		expectedBaseURL string
+		hambaEnabled    bool
 	}{
 		{
 			name: "bad url",
@@ -63,6 +64,27 @@ basic_auth:
 `,
 			expectedBaseURL: "http://example.com/v1",
 		},
+		{
+			name: "hamba enabled",
+			config: `
+url: http://example.com/v1
+avro: 
+  raw_unions: false
+  preserve_logical_types: true
+`,
+			expectedBaseURL: "http://example.com/v1",
+			hambaEnabled:    true,
+		},
+		{
+			name: "hamba enabled with removing unions",
+			config: `
+url: http://example.com/v1
+avro:
+  preserve_logical_types: true
+`,
+			expectedBaseURL: "http://example.com/v1",
+			hambaEnabled:    true,
+		},
 	}
 
 	spec := schemaRegistryDecoderConfig()
@@ -73,6 +95,10 @@ basic_auth:
 			require.NoError(t, err)
 
 			e, err := newSchemaRegistryDecoderFromConfig(conf, service.MockResources())
+			if e != nil {
+				assert.Equal(t, test.hambaEnabled, e.cfg.avro.useHamba)
+			}
+
 			if err == nil {
 				_ = e.Close(context.Background())
 			}
@@ -218,12 +244,11 @@ func mustJBytes(t testing.TB, obj any) []byte {
 }
 
 func TestSchemaRegistryDecodeAvro(t *testing.T) {
-	returnedSchema3 := false
+	returnedSchema3Count := 0
 	urlStr := runSchemaRegistryServer(t, func(path string) ([]byte, error) {
 		switch path {
 		case "/schemas/ids/3":
-			assert.False(t, returnedSchema3)
-			returnedSchema3 = true
+			returnedSchema3Count++
 			return mustJBytes(t, map[string]any{
 				"schema": testSchema,
 			}), nil
@@ -237,13 +262,11 @@ func TestSchemaRegistryDecodeAvro(t *testing.T) {
 		return nil, nil
 	})
 
-	decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, false, service.MockResources())
-	require.NoError(t, err)
-
 	tests := []struct {
 		name        string
 		input       string
 		output      string
+		hambaOutput string
 		errContains string
 	}{
 		{
@@ -262,9 +285,10 @@ func TestSchemaRegistryDecodeAvro(t *testing.T) {
 			output: `{"Name":"foo","MaybeHobby":null,"Address": null}`,
 		},
 		{
-			name:   "successful message with logical types",
-			input:  "\x00\x00\x00\x00\x04\x02\x90\xaf\xce!\x02\x80\x80揪\x97\t\x02\x80\x80\xde\xf2\xdf\xff\xdf\xdc\x01\x02\x02!",
-			output: `{"int_time_millis":{"int.time-millis":35245000},"long_time_micros":{"long.time-micros":20192000000000},"long_timestamp_micros":{"long.timestamp-micros":62135596800000000},"pos_0_33333333":{"bytes.decimal":"!"}}`,
+			name:        "successful message with logical types",
+			input:       "\x00\x00\x00\x00\x04\x02\x90\xaf\xce!\x02\x80\x80揪\x97\t\x02\x80\x80\xde\xf2\xdf\xff\xdf\xdc\x01\x02\x02!",
+			output:      `{"int_time_millis":{"int.time-millis":35245000},"long_time_micros":{"long.time-micros":20192000000000},"long_timestamp_micros":{"long.timestamp-micros":62135596800000000},"pos_0_33333333":{"bytes.decimal":"!"}}`,
+			hambaOutput: `{"int_time_millis":{"int.time-millis":"9h47m25s"},"long_time_micros":{"long.time-micros":"5608h53m20s"},"long_timestamp_micros":{"long.timestamp-micros":"3939-01-01T00:00:00Z"},"pos_0_33333333":{"bytes.decimal":"0.33"}}`,
 		},
 		{
 			name:        "non-empty magic byte",
@@ -283,9 +307,21 @@ func TestSchemaRegistryDecodeAvro(t *testing.T) {
 		},
 	}
 
+	cfg := decodingConfig{}
+	cfg.avro.rawUnions = false
+	goAvroDecoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, cfg, service.MockResources())
+	require.NoError(t, err)
+	cfg.avro.useHamba = true
+	hambaDecoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, cfg, service.MockResources())
+	require.NoError(t, err)
+
 	for _, test := range tests {
 		test := test
-		t.Run(test.name, func(t *testing.T) {
+		fn := func(t *testing.T, useHamba bool) {
+			decoder := goAvroDecoder
+			if useHamba {
+				decoder = hambaDecoder
+			}
 			outMsgs, err := decoder.Process(context.Background(), service.NewMessage([]byte(test.input)))
 			if test.errContains != "" {
 				require.Error(t, err)
@@ -298,16 +334,27 @@ func TestSchemaRegistryDecodeAvro(t *testing.T) {
 				require.NoError(t, err)
 
 				jdopts := jsondiff.DefaultJSONOptions()
-				diff, explanation := jsondiff.Compare(b, []byte(test.output), &jdopts)
+				output := test.output
+				if useHamba && test.hambaOutput != "" {
+					output = test.hambaOutput
+				}
+				diff, explanation := jsondiff.Compare(b, []byte(output), &jdopts)
+				assert.JSONEq(t, output, string(b))
 				assert.Equalf(t, jsondiff.FullMatch.String(), diff.String(), "%s: %s", test.name, explanation)
 			}
-		})
+		}
+		t.Run("hamba/"+test.name, func(t *testing.T) { fn(t, true) })
+		t.Run("goavro/"+test.name, func(t *testing.T) { fn(t, false) })
 	}
 
-	require.NoError(t, decoder.Close(context.Background()))
-	decoder.cacheMut.Lock()
-	assert.Empty(t, decoder.schemas)
-	decoder.cacheMut.Unlock()
+	for _, decoder := range []*schemaRegistryDecoder{goAvroDecoder, hambaDecoder} {
+		require.NoError(t, decoder.Close(context.Background()))
+		decoder.cacheMut.Lock()
+		assert.Empty(t, decoder.schemas)
+		decoder.cacheMut.Unlock()
+	}
+
+	assert.Equal(t, 2, returnedSchema3Count)
 }
 
 func TestSchemaRegistryDecodeAvroRawJson(t *testing.T) {
@@ -325,12 +372,11 @@ func TestSchemaRegistryDecodeAvroRawJson(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	returnedSchema3 := false
+	returnedSchema3Count := 0
 	urlStr := runSchemaRegistryServer(t, func(path string) ([]byte, error) {
 		switch path {
 		case "/schemas/ids/3":
-			assert.False(t, returnedSchema3)
-			returnedSchema3 = true
+			returnedSchema3Count++
 			return payload3, nil
 		case "/schemas/ids/4":
 			return payload4, nil
@@ -340,13 +386,11 @@ func TestSchemaRegistryDecodeAvroRawJson(t *testing.T) {
 		return nil, nil
 	})
 
-	decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, true, service.MockResources())
-	require.NoError(t, err)
-
 	tests := []struct {
 		name        string
 		input       string
 		output      string
+		hambaOutput string
 		errContains string
 	}{
 		{
@@ -365,9 +409,10 @@ func TestSchemaRegistryDecodeAvroRawJson(t *testing.T) {
 			output: `{"Name":"foo","MaybeHobby":null,"Address": null}`,
 		},
 		{
-			name:   "successful message with logical types",
-			input:  "\x00\x00\x00\x00\x04\x02\x90\xaf\xce!\x02\x80\x80揪\x97\t\x02\x80\x80\xde\xf2\xdf\xff\xdf\xdc\x01\x02\x02!",
-			output: `{"int_time_millis":35245000,"long_time_micros":20192000000000,"long_timestamp_micros":62135596800000000,"pos_0_33333333":"!"}`,
+			name:        "successful message with logical types",
+			input:       "\x00\x00\x00\x00\x04\x02\x90\xaf\xce!\x02\x80\x80揪\x97\t\x02\x80\x80\xde\xf2\xdf\xff\xdf\xdc\x01\x02\x02!",
+			output:      `{"int_time_millis":35245000,"long_time_micros":20192000000000,"long_timestamp_micros":62135596800000000,"pos_0_33333333":"!"}`,
+			hambaOutput: `{"int_time_millis":"9h47m25s","long_time_micros":"5608h53m20s","long_timestamp_micros":"3939-01-01T00:00:00Z","pos_0_33333333":"0.33"}`,
 		},
 		{
 			name:        "non-empty magic byte",
@@ -385,10 +430,21 @@ func TestSchemaRegistryDecodeAvroRawJson(t *testing.T) {
 			errContains: "schema 5 not found by registry: nope",
 		},
 	}
+	cfg := decodingConfig{}
+	cfg.avro.rawUnions = true
+	goAvroDecoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, cfg, service.MockResources())
+	require.NoError(t, err)
+	cfg.avro.useHamba = true
+	hambaDecoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, cfg, service.MockResources())
+	require.NoError(t, err)
 
 	for _, test := range tests {
 		test := test
-		t.Run(test.name, func(t *testing.T) {
+		fn := func(t *testing.T, useHamba bool) {
+			decoder := goAvroDecoder
+			if useHamba {
+				decoder = hambaDecoder
+			}
 			outMsgs, err := decoder.Process(context.Background(), service.NewMessage([]byte(test.input)))
 			if test.errContains != "" {
 				require.Error(t, err)
@@ -400,17 +456,29 @@ func TestSchemaRegistryDecodeAvroRawJson(t *testing.T) {
 				b, err := outMsgs[0].AsBytes()
 				require.NoError(t, err)
 
+				output := test.output
+				if useHamba && test.hambaOutput != "" {
+					output = test.hambaOutput
+				}
+				assert.JSONEq(t, output, string(b))
 				jdopts := jsondiff.DefaultJSONOptions()
-				diff, explanation := jsondiff.Compare(b, []byte(test.output), &jdopts)
+				diff, explanation := jsondiff.Compare(b, []byte(output), &jdopts)
 				assert.Equalf(t, jsondiff.FullMatch.String(), diff.String(), "%s: %s", test.name, explanation)
 			}
-		})
+
+		}
+		t.Run("hamba/"+test.name, func(t *testing.T) { fn(t, true) })
+		t.Run("goavro/"+test.name, func(t *testing.T) { fn(t, false) })
 	}
 
-	require.NoError(t, decoder.Close(context.Background()))
-	decoder.cacheMut.Lock()
-	assert.Empty(t, decoder.schemas)
-	decoder.cacheMut.Unlock()
+	for _, decoder := range []*schemaRegistryDecoder{goAvroDecoder, hambaDecoder} {
+		require.NoError(t, decoder.Close(context.Background()))
+		decoder.cacheMut.Lock()
+		assert.Empty(t, decoder.schemas)
+		decoder.cacheMut.Unlock()
+	}
+
+	assert.Equal(t, 2, returnedSchema3Count)
 }
 
 func TestSchemaRegistryDecodeClearExpired(t *testing.T) {
@@ -418,7 +486,7 @@ func TestSchemaRegistryDecodeClearExpired(t *testing.T) {
 		return nil, fmt.Errorf("nope")
 	})
 
-	decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, false, service.MockResources())
+	decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, decodingConfig{}, service.MockResources())
 	require.NoError(t, err)
 	require.NoError(t, decoder.Close(context.Background()))
 
@@ -465,7 +533,7 @@ func TestSchemaRegistryDecodeProtobuf(t *testing.T) {
 		return nil, nil
 	})
 
-	decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, false, service.MockResources())
+	decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, decodingConfig{}, service.MockResources())
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -528,7 +596,7 @@ func TestSchemaRegistryDecodeJson(t *testing.T) {
 		return nil, nil
 	})
 
-	decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, false, service.MockResources())
+	decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, decodingConfig{}, service.MockResources())
 	require.NoError(t, err)
 
 	tests := []struct {

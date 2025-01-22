@@ -36,6 +36,9 @@ Common::
 # Common config fields, showing default values
 label: ""
 schema_registry_decode:
+  avro:
+    raw_unions: false # No default (optional)
+    preserve_logical_types: false
   url: "" # No default (required)
 ```
 
@@ -48,7 +51,9 @@ Advanced::
 # All config fields, showing default values
 label: ""
 schema_registry_decode:
-  avro_raw_json: false
+  avro:
+    raw_unions: false # No default (optional)
+    preserve_logical_types: false
   url: "" # No default (required)
   oauth:
     enabled: false
@@ -103,9 +108,35 @@ This processor decodes protobuf messages to JSON documents, you can read more ab
 
 == Fields
 
-=== `avro_raw_json`
+=== `avro`
 
-Whether Avro messages should be decoded into normal JSON ("json that meets the expectations of regular internet json") rather than https://avro.apache.org/docs/current/specification/_print/#json-encoding[Avro JSON^]. If `true` the schema returned from the subject should be decoded as https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull[standard json^] instead of as https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodec[avro json^]. There is a https://github.com/linkedin/goavro/blob/5ec5a5ee7ec82e16e6e2b438d610e1cab2588393/union.go#L224-L249[comment in goavro^], the https://github.com/linkedin/goavro[underlining library used for avro serialization^], that explains in more detail the difference between the standard json and avro json.
+Sorry! This field is missing documentation.
+
+
+*Type*: `object`
+
+
+=== `avro.raw_unions`
+
+Wheather avro messages should be decoded into normal JSON ("json that meets the expectations of regular internet json") rather than https://avro.apache.org/docs/current/specification/_print/#json-encoding[JSON as specified in the Avro Spec^].
+
+For example, if there is a union schema `["null", "string", "Foo"]` where `Foo` is a record name, would with raw_unions as false (the default) you get:
+- `null` as `null`;
+- the string `"a"` as `\{"string": "a"}`; and
+- a `Foo` instance as `\{"Foo": {...}}`, where `{...}` indicates the JSON encoding of a `Foo` instance.
+
+When raw_unions is set to true then the above union schema is decoded as the following:
+- `null` as `null`;
+- the string `"a"` as `"a"`; and
+- a `Foo` instance as `{...}`, where `{...}` indicates the JSON encoding of a `Foo` instance.
+
+
+*Type*: `bool`
+
+
+=== `avro.preserve_logical_types`
+
+Wheather logical types should be preserved or transformed back into their primative type. For example, decimals are decoded as raw bytes and timestamps are decoded as plain integers.
 
 
 *Type*: `bool`

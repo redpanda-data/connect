@@ -74,6 +74,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/googleapis/go-sql-spanner v1.8.0
 	github.com/gosimple/slug v1.14.0
+	github.com/hamba/avro/v2 v2.22.2-0.20240625062549-66aad10411d9
 	github.com/influxdata/influxdb1-client v0.0.0-20220302092344-a9ab5670611c
 	github.com/jackc/pgx/v4 v4.18.3
 	github.com/jackc/pgx/v5 v5.6.0
@@ -173,7 +174,6 @@ require (
 	github.com/containerd/platforms v0.2.1 // indirect
 	github.com/envoyproxy/go-control-plane v0.13.0 // indirect
 	github.com/envoyproxy/protoc-gen-validate v1.1.0 // indirect
-	github.com/hamba/avro/v2 v2.22.2-0.20240625062549-66aad10411d9 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/jzelinskie/stringz v0.0.3 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
