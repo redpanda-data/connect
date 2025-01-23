@@ -105,6 +105,12 @@ However, it is possible to instead create documents in https://pkg.go.dev/github
 
 This processor decodes protobuf messages to JSON documents, you can read more about JSON mapping of protobuf messages here: https://developers.google.com/protocol-buffers/docs/proto3#json
 
+== Metadata
+
+This processor also adds the following metadata to each outgoing message:
+
+schema_id: the ID of the schema in the schema registry that was associated with the message.
+
 
 == Fields
 
