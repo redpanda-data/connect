@@ -53,8 +53,9 @@ type ClientOptions struct {
 }
 
 type stageUploaderResult struct {
-	uploader uploader
-	err      error
+	uploader  uploader
+	fetchTime time.Time
+	err       error
 }
 
 // SnowflakeServiceClient is a port from Java :)
@@ -88,14 +89,18 @@ func NewSnowflakeServiceClient(ctx context.Context, opts ClientOptions) (*Snowfl
 		return nil, err
 	}
 	if resp.StatusCode != responseSuccess {
+		if resp.Message == "" {
+			resp.Message = "(no message)"
+		}
 		return nil, fmt.Errorf("unable to initialize client - status: %d, message: %s", resp.StatusCode, resp.Message)
 	}
-	uploader, err := newUploader(resp.StageLocation)
+	u, err := newUploader(resp.StageLocation)
 	if err != nil {
 		return nil, fmt.Errorf("unable to initialize stage uploader: %w", err)
 	}
 	uploaderAtomic := typed.NewAtomicValue(stageUploaderResult{
-		uploader: uploader,
+		uploader:  u,
+		fetchTime: time.Now(),
 	})
 	ssc := &SnowflakeServiceClient{
 		client:       client,
@@ -107,16 +112,27 @@ func NewSnowflakeServiceClient(ctx context.Context, opts ClientOptions) (*Snowfl
 		// Tokens expire every hour, so refresh a bit before that
 		uploadRefreshLoop: asyncroutine.NewPeriodicWithContext(time.Hour-(5*time.Minute), func(ctx context.Context) {
 			client.logger.Info("refreshing snowflake storage credentials")
-			resp, err := client.configureClient(ctx, clientConfigureRequest{Role: opts.Role})
+			u, err := backoff.RetryWithData(func() (uploader, error) {
+				resp, err := client.configureClient(ctx, clientConfigureRequest{Role: opts.Role})
+				if err == nil && resp.StatusCode != responseSuccess {
+					msg := "(no message)"
+					if resp.Message != "" {
+						msg = resp.Message
+					}
+					err = fmt.Errorf("unable to reconfigure client - status: %d, message: %s", resp.StatusCode, msg)
+				}
+				if err != nil {
+					return nil, err
+				}
+				// TODO: Do the other checks here that the Java SDK does (deploymentID, etc)
+				return newUploader(resp.StageLocation)
+			}, backoff.WithMaxRetries(backoff.NewConstantBackOff(time.Second), 3))
 			if err != nil {
 				client.logger.Warnf("refreshing snowflake storage credentials failure: %v", err)
-				uploaderAtomic.Store(stageUploaderResult{err: err})
-				return
+			} else {
+				client.logger.Debug("refreshing snowflake storage credentials success")
 			}
-			client.logger.Debug("refreshing snowflake storage credentials success")
-			// TODO: Do the other checks here that the Java SDK does (deploymentID, etc)
-			uploader, err := newUploader(resp.StageLocation)
-			uploaderAtomic.Store(stageUploaderResult{uploader: uploader, err: err})
+			uploaderAtomic.Store(stageUploaderResult{uploader: u, fetchTime: time.Now(), err: err})
 		}),
 		requestIDCounter: &atomic.Int64{},
 	}
@@ -439,7 +455,7 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 	uploadStartTime := time.Now()
 	uploaderResult := c.uploader.Load()
 	if uploaderResult.err != nil {
-		return insertStats, fmt.Errorf("failed to acquire stage uploader: %w", uploaderResult.err)
+		return insertStats, fmt.Errorf("failed to acquire stage uploader (last fetch time=%v): %w", uploaderResult.fetchTime, uploaderResult.err)
 	}
 	uploader := uploaderResult.uploader
 	fullMD5Hash := md5.Sum(part.parquetFile)
@@ -450,7 +466,7 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 		})
 	}, backoff.WithMaxRetries(backoff.NewConstantBackOff(time.Second), 3))
 	if err != nil {
-		return insertStats, fmt.Errorf("unable to upload to storage: %w", err)
+		return insertStats, fmt.Errorf("unable to upload to storage (last fetch time=%v): %w", uploaderResult.fetchTime, err)
 	}
 
 	uploadFinishTime := time.Now()
