@@ -53,16 +53,6 @@ output:
       CREATE TABLE IF NOT EXISTS mytable (amount NUMBER);
     schema_evolution:
       enabled: false # No default (required)
-      new_column_type_mapping: |-
-        root = match this.value.type() {
-          this == "string" => "STRING"
-          this == "bytes" => "BINARY"
-          this == "number" => "DOUBLE"
-          this == "bool" => "BOOLEAN"
-          this == "timestamp" => "TIMESTAMP"
-          _ => "VARIANT"
-        }
-      processors: [] # No default (optional)
     batching:
       count: 0
       byte_size: 0
