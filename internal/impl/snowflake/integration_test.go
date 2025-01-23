@@ -14,6 +14,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 
@@ -84,6 +85,10 @@ func RunSQLQuery(t *testing.T, stream *service.Stream, sql string) [][]string {
 	require.True(t, ok)
 	client, ok := resource.(*streaming.SnowflakeRestClient)
 	require.True(t, ok)
+	sql = strings.NewReplacer(
+		"$DATABASE", EnvOrDefault("SNOWFLAKE_DB", "BABY_DATABASE"),
+		"$SCHEMA", "PUBLIC",
+	).Replace(sql)
 	resp, err := client.RunSQL(context.Background(), streaming.RunSQLRequest{
 		Statement: sql,
 		Database:  EnvOrDefault("SNOWFLAKE_DB", "BABY_DATABASE"),
@@ -269,5 +274,51 @@ snowflake_streaming:
 		{"baz", "2", "foo", "foo"},
 		{"qux", "3", "foo", "foo"},
 		{"zoom", "4", "foo", "foo"},
+	}, rows)
+}
+
+func TestIntegrationSchemaEvolutionPipeline(t *testing.T) {
+	integration.CheckSkip(t)
+	produce, stream := SetupSnowflakeStream(t, `
+label: snowpipe_streaming
+snowflake_streaming:
+  account: "${SNOWFLAKE_ACCOUNT:WQKFXQQ-WI77362}"
+  user: "${SNOWFLAKE_USER:ROCKWOODREDPANDA}"
+  role: ACCOUNTADMIN
+  database: "${SNOWFLAKE_DB:BABY_DATABASE}"
+  schema: PUBLIC
+  table: integration_test_pipeline
+  init_statement: |
+    DROP TABLE IF EXISTS integration_test_pipeline;
+  private_key_file: "${SNOWFLAKE_PRIVATE_KEY:./streaming/resources/rsa_key.p8}"
+  max_in_flight: 4
+  channel_name: "${!this.channel}"
+  schema_evolution:
+    enabled: true
+    processors:
+      - mapping: |
+          root = match {
+            this.name == "token" => "NUMBER"
+            _ => "variant"
+          }
+    new_column_type_mapping: |
+      root = content()
+`)
+	RunStreamInBackground(t, stream)
+	require.NoError(t, produce(context.Background(), Batch([]map[string]any{
+		{"foo": "bar", "token": 1, "channel": "foo"},
+		{"foo": "baz", "token": 2, "channel": "foo"},
+		{"foo": "qux", "token": 3, "channel": "foo"},
+		{"foo": "zoom", "token": 4, "channel": "foo"},
+	})))
+	rows := RunSQLQuery(
+		t,
+		stream,
+		`SELECT column_name, data_type, numeric_precision, numeric_scale FROM $DATABASE.information_schema.columns WHERE table_name = 'INTEGRATION_TEST_PIPELINE' AND table_schema = '$SCHEMA' ORDER BY column_name`,
+	)
+	require.Equal(t, [][]string{
+		{"CHANNEL", "VARIANT", "", ""},
+		{"FOO", "VARIANT", "", ""},
+		{"TOKEN", "NUMBER", "38", "0"},
 	}, rows)
 }
