@@ -67,18 +67,46 @@ func asSchemaMigrationError(err error) (*schemaMigrationNeededError, bool) {
 
 type snowpipeSchemaEvolver struct {
 	schemaEvolutionMapping *bloblang.Executor
+	pipeline               []*service.OwnedProcessor
 	logger                 *service.Logger
 	// The evolver does not close nor own this rest client.
 	restClient              *streaming.SnowflakeRestClient
 	db, schema, table, role string
 }
 
-func (o *snowpipeSchemaEvolver) ComputeMissingColumnType(col *streaming.MissingColumnError) (string, error) {
-	msg := service.NewMessage(nil)
+func (o *snowpipeSchemaEvolver) ComputeMissingColumnType(ctx context.Context, col *streaming.MissingColumnError) (string, error) {
+	msg := col.Message().Copy()
+	original, err := msg.AsStructuredMut()
+	if err != nil {
+		// This should never happen, we had to get the data as structured to be able to know it was a missing column type
+		return "", fmt.Errorf("unable to extract JSON data from message that caused schema evolution: %w", err)
+	}
+	msg.SetError(nil) // Clear error
 	msg.SetStructuredMut(map[string]any{
-		"name":  col.RawName(),
-		"value": col.Value(),
+		"name":    col.RawName(),
+		"value":   col.Value(),
+		"message": original,
+		"db":      o.db,
+		"schema":  o.schema,
+		"table":   o.table,
 	})
+	if len(o.pipeline) > 0 {
+		batches, err := service.ExecuteProcessors(ctx, o.pipeline, service.MessageBatch{msg})
+		if err != nil {
+			return "", fmt.Errorf("failure to execute %s.%s prior to schema evolution: %w", ssoFieldSchemaEvolution, ssoFieldSchemaEvolutionProcessors, err)
+		}
+		if len(batches) != 1 {
+			return "", fmt.Errorf("expected a single batch output from %s.%s, got: %d", ssoFieldSchemaEvolution, ssoFieldSchemaEvolutionProcessors, len(batches))
+		}
+		batch := batches[0]
+		if len(batch) != 1 {
+			return "", fmt.Errorf("expected a single message output from %s.%s, got: %d", ssoFieldSchemaEvolution, ssoFieldSchemaEvolutionProcessors, len(batch))
+		}
+		msg = batch[0]
+		if err := msg.GetError(); err != nil {
+			return "", fmt.Errorf("message failure executing %s.%s prior to schema evolution: %w", ssoFieldSchemaEvolution, ssoFieldSchemaEvolutionProcessors, err)
+		}
+	}
 	out, err := msg.BloblangQuery(o.schemaEvolutionMapping)
 	if err != nil {
 		return "", fmt.Errorf("unable to compute new column type for %s: %w", col.ColumnName(), err)
@@ -95,7 +123,7 @@ func (o *snowpipeSchemaEvolver) ComputeMissingColumnType(col *streaming.MissingC
 }
 
 func (o *snowpipeSchemaEvolver) MigrateMissingColumn(ctx context.Context, col *streaming.MissingColumnError) error {
-	columnType, err := o.ComputeMissingColumnType(col)
+	columnType, err := o.ComputeMissingColumnType(ctx, col)
 	if err != nil {
 		return err
 	}
@@ -154,7 +182,7 @@ func (o *snowpipeSchemaEvolver) CreateOutputTable(ctx context.Context, batch ser
 	columns := []string{}
 	for k, v := range row {
 		col := streaming.NewMissingColumnError(msg, k, v)
-		colType, err := o.ComputeMissingColumnType(col)
+		colType, err := o.ComputeMissingColumnType(ctx, col)
 		if err != nil {
 			return err
 		}
