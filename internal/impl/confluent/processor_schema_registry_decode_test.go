@@ -263,6 +263,7 @@ func TestSchemaRegistryDecodeAvro(t *testing.T) {
 	})
 
 	tests := []struct {
+		schemaID    int
 		name        string
 		input       string
 		output      string
@@ -270,21 +271,25 @@ func TestSchemaRegistryDecodeAvro(t *testing.T) {
 		errContains string
 	}{
 		{
-			name:   "successful message",
-			input:  "\x00\x00\x00\x00\x03\x06foo\x02\x02\x06foo\x06bar\x02\x0edancing",
-			output: `{"Address":{"my.namespace.com.address":{"City":{"string":"foo"},"State":"bar"}},"MaybeHobby":{"string":"dancing"},"Name":"foo"}`,
+			schemaID: 3,
+			name:     "successful message",
+			input:    "\x00\x00\x00\x00\x03\x06foo\x02\x02\x06foo\x06bar\x02\x0edancing",
+			output:   `{"Address":{"my.namespace.com.address":{"City":{"string":"foo"},"State":"bar"}},"MaybeHobby":{"string":"dancing"},"Name":"foo"}`,
 		},
 		{
-			name:   "successful message with null hobby",
-			input:  "\x00\x00\x00\x00\x03\x06foo\x02\x02\x06foo\x06bar\x00",
-			output: `{"Address":{"my.namespace.com.address":{"City":{"string":"foo"},"State":"bar"}},"MaybeHobby":null,"Name":"foo"}`,
+			schemaID: 3,
+			name:     "successful message with null hobby",
+			input:    "\x00\x00\x00\x00\x03\x06foo\x02\x02\x06foo\x06bar\x00",
+			output:   `{"Address":{"my.namespace.com.address":{"City":{"string":"foo"},"State":"bar"}},"MaybeHobby":null,"Name":"foo"}`,
 		},
 		{
-			name:   "successful message no address and null hobby",
-			input:  "\x00\x00\x00\x00\x03\x06foo\x00\x00",
-			output: `{"Name":"foo","MaybeHobby":null,"Address": null}`,
+			schemaID: 3,
+			name:     "successful message no address and null hobby",
+			input:    "\x00\x00\x00\x00\x03\x06foo\x00\x00",
+			output:   `{"Name":"foo","MaybeHobby":null,"Address": null}`,
 		},
 		{
+			schemaID:    4,
 			name:        "successful message with logical types",
 			input:       "\x00\x00\x00\x00\x04\x02\x90\xaf\xce!\x02\x80\x80揪\x97\t\x02\x80\x80\xde\xf2\xdf\xff\xdf\xdc\x01\x02\x02!",
 			output:      `{"int_time_millis":{"int.time-millis":35245000},"long_time_micros":{"long.time-micros":20192000000000},"long_timestamp_micros":{"long.timestamp-micros":62135596800000000},"pos_0_33333333":{"bytes.decimal":"!"}}`,
@@ -341,6 +346,10 @@ func TestSchemaRegistryDecodeAvro(t *testing.T) {
 				diff, explanation := jsondiff.Compare(b, []byte(output), &jdopts)
 				assert.JSONEq(t, output, string(b))
 				assert.Equalf(t, jsondiff.FullMatch.String(), diff.String(), "%s: %s", test.name, explanation)
+
+				v, ok := outMsgs[0].MetaGetMut("schema_id")
+				assert.True(t, ok)
+				assert.Equal(t, test.schemaID, v)
 			}
 		}
 		t.Run("hamba/"+test.name, func(t *testing.T) { fn(t, true) })
@@ -387,6 +396,7 @@ func TestSchemaRegistryDecodeAvroRawJson(t *testing.T) {
 	})
 
 	tests := []struct {
+		schemaID    int
 		name        string
 		input       string
 		output      string
@@ -394,21 +404,25 @@ func TestSchemaRegistryDecodeAvroRawJson(t *testing.T) {
 		errContains string
 	}{
 		{
-			name:   "successful message",
-			input:  "\x00\x00\x00\x00\x03\x06foo\x02\x02\x06foo\x06bar\x02\x0edancing",
-			output: `{"Address":{"City":"foo","State":"bar"},"Name":"foo","MaybeHobby":"dancing"}`,
+			schemaID: 3,
+			name:     "successful message",
+			input:    "\x00\x00\x00\x00\x03\x06foo\x02\x02\x06foo\x06bar\x02\x0edancing",
+			output:   `{"Address":{"City":"foo","State":"bar"},"Name":"foo","MaybeHobby":"dancing"}`,
 		},
 		{
-			name:   "successful message with null hobby",
-			input:  "\x00\x00\x00\x00\x03\x06foo\x02\x02\x06foo\x06bar\x00",
-			output: `{"Address":{"City":"foo","State":"bar"},"MaybeHobby":null,"Name":"foo"}`,
+			schemaID: 3,
+			name:     "successful message with null hobby",
+			input:    "\x00\x00\x00\x00\x03\x06foo\x02\x02\x06foo\x06bar\x00",
+			output:   `{"Address":{"City":"foo","State":"bar"},"MaybeHobby":null,"Name":"foo"}`,
 		},
 		{
-			name:   "successful message no address and null hobby",
-			input:  "\x00\x00\x00\x00\x03\x06foo\x00\x00",
-			output: `{"Name":"foo","MaybeHobby":null,"Address": null}`,
+			schemaID: 3,
+			name:     "successful message no address and null hobby",
+			input:    "\x00\x00\x00\x00\x03\x06foo\x00\x00",
+			output:   `{"Name":"foo","MaybeHobby":null,"Address": null}`,
 		},
 		{
+			schemaID:    4,
 			name:        "successful message with logical types",
 			input:       "\x00\x00\x00\x00\x04\x02\x90\xaf\xce!\x02\x80\x80揪\x97\t\x02\x80\x80\xde\xf2\xdf\xff\xdf\xdc\x01\x02\x02!",
 			output:      `{"int_time_millis":35245000,"long_time_micros":20192000000000,"long_timestamp_micros":62135596800000000,"pos_0_33333333":"!"}`,
@@ -464,8 +478,11 @@ func TestSchemaRegistryDecodeAvroRawJson(t *testing.T) {
 				jdopts := jsondiff.DefaultJSONOptions()
 				diff, explanation := jsondiff.Compare(b, []byte(output), &jdopts)
 				assert.Equalf(t, jsondiff.FullMatch.String(), diff.String(), "%s: %s", test.name, explanation)
-			}
 
+				v, ok := outMsgs[0].MetaGetMut("schema_id")
+				assert.True(t, ok)
+				assert.Equal(t, test.schemaID, v)
+			}
 		}
 		t.Run("hamba/"+test.name, func(t *testing.T) { fn(t, true) })
 		t.Run("goavro/"+test.name, func(t *testing.T) { fn(t, false) })
@@ -567,8 +584,11 @@ func TestSchemaRegistryDecodeProtobuf(t *testing.T) {
 
 				b, err := outMsgs[0].AsBytes()
 				require.NoError(t, err)
-
 				assert.JSONEq(t, test.output, string(b), "%s: %s", test.name)
+
+				v, ok := outMsgs[0].MetaGetMut("schema_id")
+				assert.True(t, ok)
+				assert.Equal(t, 1, v)
 			}
 		})
 	}
@@ -639,6 +659,9 @@ func TestSchemaRegistryDecodeJson(t *testing.T) {
 				jdopts := jsondiff.DefaultJSONOptions()
 				diff, explanation := jsondiff.Compare(b, []byte(test.output), &jdopts)
 				assert.Equalf(t, jsondiff.FullMatch.String(), diff.String(), "%s: %s", test.name, explanation)
+				v, ok := outMsgs[0].MetaGetMut("schema_id")
+				assert.True(t, ok)
+				assert.Equal(t, 3, v)
 			}
 		})
 	}
