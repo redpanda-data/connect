@@ -60,6 +60,12 @@ However, it is possible to instead create documents in https://pkg.go.dev/github
 == Protobuf format
 
 This processor decodes protobuf messages to JSON documents, you can read more about JSON mapping of protobuf messages here: https://developers.google.com/protocol-buffers/docs/proto3#json
+
+== Metadata
+
+This processor also adds the following metadata to each outgoing message:
+
+schema_id: the ID of the schema in the schema registry that was associated with the message.
 `).
 		Field(service.NewBoolField("avro_raw_json").
 			Description("Whether Avro messages should be decoded into normal JSON (\"json that meets the expectations of regular internet json\") rather than https://avro.apache.org/docs/current/specification/_print/#json-encoding[Avro JSON^]. If `true` the schema returned from the subject should be decoded as https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull[standard json^] instead of as https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodec[avro json^]. There is a https://github.com/linkedin/goavro/blob/5ec5a5ee7ec82e16e6e2b438d610e1cab2588393/union.go#L224-L249[comment in goavro^], the https://github.com/linkedin/goavro[underlining library used for avro serialization^], that explains in more detail the difference between the standard json and avro json.").
@@ -209,6 +215,7 @@ func (s *schemaRegistryDecoder) Process(ctx context.Context, msg *service.Messag
 	if err := decoder(msg); err != nil {
 		return nil, err
 	}
+	msg.MetaSetMut("schema_id", id)
 
 	return service.MessageBatch{msg}, nil
 }
