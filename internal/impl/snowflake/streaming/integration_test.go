@@ -606,7 +606,10 @@ func TestChannelOffsetToken(t *testing.T) {
 	}, &streaming.OffsetTokenRange{Start: "0", End: "2"})
 	require.NoError(t, err)
 	require.Equal(t, ptr(streaming.OffsetToken("2")), channelA.LatestOffsetToken())
+	_, err = channelA.WaitUntilCommitted(ctx)
+	require.NoError(t, err)
 	channelB, err := streamClient.OpenChannel(ctx, channelOpts)
+	require.NoError(t, err)
 	require.Equal(t, ptr(streaming.OffsetToken("2")), channelB.LatestOffsetToken())
 	require.EventuallyWithT(t, func(collect *assert.CollectT) {
 		// Always order by A so we get consistent ordering for our test
