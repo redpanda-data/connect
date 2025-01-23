@@ -52,8 +52,8 @@ This processor creates documents formatted as https://avro.apache.org/docs/curre
 For example, the union schema ` + "`[\"null\",\"string\",\"Foo\"]`, where `Foo`" + ` is a record name, would encode:
 
 - ` + "`null` as `null`" + `;
-- the string ` + "`\"a\"` as `\\{\"string\": \"a\"}`" + `; and
-- a ` + "`Foo` instance as `\\{\"Foo\": {...}}`, where `{...}` indicates the JSON encoding of a `Foo`" + ` instance.
+- the string ` + "`\"a\"` as `{\"string\": \"a\"}`" + `; and
+- a ` + "`Foo` instance as `{\"Foo\": {...}}`, where `{...}` indicates the JSON encoding of a `Foo`" + ` instance.
 
 However, it is possible to instead create documents in https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull[standard/raw JSON format^] by setting the field ` + "<<avro_raw_json, `avro_raw_json`>> to `true`" + `.
 
@@ -63,7 +63,25 @@ This processor decodes protobuf messages to JSON documents, you can read more ab
 `).
 		Field(service.NewBoolField("avro_raw_json").
 			Description("Whether Avro messages should be decoded into normal JSON (\"json that meets the expectations of regular internet json\") rather than https://avro.apache.org/docs/current/specification/_print/#json-encoding[Avro JSON^]. If `true` the schema returned from the subject should be decoded as https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull[standard json^] instead of as https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodec[avro json^]. There is a https://github.com/linkedin/goavro/blob/5ec5a5ee7ec82e16e6e2b438d610e1cab2588393/union.go#L224-L249[comment in goavro^], the https://github.com/linkedin/goavro[underlining library used for avro serialization^], that explains in more detail the difference between the standard json and avro json.").
-			Advanced().Default(false)).
+			Advanced().Default(false).Deprecated()).
+		Fields(
+			service.NewObjectField(
+				"avro",
+				service.NewBoolField("raw_unions").Description(`Whether avro messages should be decoded into normal JSON ("json that meets the expectations of regular internet json") rather than https://avro.apache.org/docs/current/specification/_print/#json-encoding[JSON as specified in the Avro Spec^].
+
+For example, if there is a union schema `+"`"+`["null", "string", "Foo"]`+"`"+` where `+"`Foo`"+` is a record name, with raw_unions as false (the default) you get:
+- `+"`null` as `null`"+`;
+- the string `+"`\"a\"` as `{\"string\": \"a\"}`"+`; and
+- a `+"`Foo` instance as `{\"Foo\": {...}}`, where `{...}` indicates the JSON encoding of a `Foo`"+` instance.
+
+When raw_unions is set to true then the above union schema is decoded as the following:
+- `+"`null` as `null`"+`;
+- the string `+"`\"a\"` as `\"a\"`"+`; and
+- a `+"`Foo` instance as `{...}`, where `{...}` indicates the JSON encoding of a `Foo`"+` instance.
+`).Optional(),
+				service.NewBoolField("preserve_logical_types").Description(`Whether logical types should be preserved or transformed back into their primitive type. By default, decimals are decoded as raw bytes and timestamps are decoded as plain integers. Setting this field to true keeps decimal types as numbers in bloblang and timestamps as time values.`).Default(false),
+			).Description("Configuration for how to decode schemas that are of type AVRO."),
+		).
 		Field(service.NewURLField("url").Description("The base URL of the schema registry service."))
 
 	for _, f := range service.NewHTTPRequestAuthSignerFields() {
@@ -86,9 +104,16 @@ func init() {
 
 //------------------------------------------------------------------------------
 
+type decodingConfig struct {
+	avro struct {
+		useHamba  bool
+		rawUnions bool
+	}
+}
+
 type schemaRegistryDecoder struct {
-	avroRawJSON bool
-	client      *sr.Client
+	cfg    decodingConfig
+	client *sr.Client
 
 	schemas    map[int]*cachedSchemaDecoder
 	cacheMut   sync.RWMutex
@@ -112,26 +137,38 @@ func newSchemaRegistryDecoderFromConfig(conf *service.ParsedConfig, mgr *service
 	if err != nil {
 		return nil, err
 	}
-	avroRawJSON, err := conf.FieldBool("avro_raw_json")
+	var cfg decodingConfig
+	cfg.avro.rawUnions, err = conf.FieldBool("avro_raw_json")
 	if err != nil {
 		return nil, err
 	}
-	return newSchemaRegistryDecoder(urlStr, authSigner, tlsConf, avroRawJSON, mgr)
+
+	cfg.avro.useHamba, err = conf.FieldBool("avro", "preserve_logical_types")
+	if err != nil {
+		return nil, err
+	}
+	if conf.Contains("avro", "raw_unions") {
+		cfg.avro.rawUnions, err = conf.FieldBool("avro", "raw_unions")
+		if err != nil {
+			return nil, err
+		}
+	}
+	return newSchemaRegistryDecoder(urlStr, authSigner, tlsConf, cfg, mgr)
 }
 
 func newSchemaRegistryDecoder(
 	urlStr string,
 	reqSigner func(f fs.FS, req *http.Request) error,
 	tlsConf *tls.Config,
-	avroRawJSON bool,
+	cfg decodingConfig,
 	mgr *service.Resources,
 ) (*schemaRegistryDecoder, error) {
 	s := &schemaRegistryDecoder{
-		avroRawJSON: avroRawJSON,
-		schemas:     map[int]*cachedSchemaDecoder{},
-		shutSig:     shutdown.NewSignaller(),
-		logger:      mgr.Logger(),
-		mgr:         mgr,
+		cfg:     cfg,
+		schemas: map[int]*cachedSchemaDecoder{},
+		shutSig: shutdown.NewSignaller(),
+		logger:  mgr.Logger(),
+		mgr:     mgr,
 	}
 	var err error
 	if s.client, err = sr.NewClient(urlStr, reqSigner, tlsConf, mgr); err != nil {
@@ -265,7 +302,11 @@ func (s *schemaRegistryDecoder) getDecoder(id int) (schemaDecoder, error) {
 	case franz_sr.TypeJSON:
 		decoder, err = s.getJSONDecoder(ctx, resPayload)
 	default:
-		decoder, err = s.getAvroDecoder(ctx, resPayload)
+		if s.cfg.avro.useHamba {
+			decoder, err = s.getHambaAvroDecoder(ctx, resPayload)
+		} else {
+			decoder, err = s.getGoAvroDecoder(ctx, resPayload)
+		}
 	}
 	if err != nil {
 		return nil, err

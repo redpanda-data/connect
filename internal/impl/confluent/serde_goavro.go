@@ -100,14 +100,14 @@ func (s *schemaRegistryEncoder) getAvroEncoder(ctx context.Context, schema franz
 	}, nil
 }
 
-func (s *schemaRegistryDecoder) getAvroDecoder(ctx context.Context, schema franz_sr.Schema) (schemaDecoder, error) {
+func (s *schemaRegistryDecoder) getGoAvroDecoder(ctx context.Context, schema franz_sr.Schema) (schemaDecoder, error) {
 	schemaSpec, err := resolveAvroReferences(ctx, s.client, schema)
 	if err != nil {
 		return nil, err
 	}
 
 	var codec *goavro.Codec
-	if s.avroRawJSON {
+	if s.cfg.avro.rawUnions {
 		codec, err = goavro.NewCodecForStandardJSONFull(schemaSpec)
 	} else {
 		codec, err = goavro.NewCodec(schemaSpec)
