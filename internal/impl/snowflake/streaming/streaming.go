@@ -31,7 +31,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
-	"github.com/redpanda-data/connect/v4/internal/typed"
 )
 
 const debug = false
@@ -52,12 +51,6 @@ type ClientOptions struct {
 	ConnectVersion string
 }
 
-type stageUploaderResult struct {
-	uploader  uploader
-	fetchTime time.Time
-	err       error
-}
-
 // SnowflakeServiceClient is a port from Java :)
 type SnowflakeServiceClient struct {
 	client           *SnowflakeRestClient
@@ -66,8 +59,7 @@ type SnowflakeServiceClient struct {
 	options          ClientOptions
 	requestIDCounter *atomic.Int64
 
-	uploader          *typed.AtomicValue[stageUploaderResult]
-	uploadRefreshLoop *asyncroutine.Periodic
+	uploaderManager *uploaderManager
 
 	flusher *asyncroutine.Batcher[blobMetadata, blobRegisterStatus]
 }
@@ -94,61 +86,32 @@ func NewSnowflakeServiceClient(ctx context.Context, opts ClientOptions) (*Snowfl
 		}
 		return nil, fmt.Errorf("unable to initialize client - status: %d, message: %s", resp.StatusCode, resp.Message)
 	}
-	u, err := newUploader(resp.StageLocation)
-	if err != nil {
-		return nil, fmt.Errorf("unable to initialize stage uploader: %w", err)
+	um := newUploaderManager(client, opts.Role)
+	if err := um.Start(ctx); err != nil {
+		return nil, err
 	}
-	uploaderAtomic := typed.NewAtomicValue(stageUploaderResult{
-		uploader:  u,
-		fetchTime: time.Now(),
-	})
 	ssc := &SnowflakeServiceClient{
 		client:       client,
 		clientPrefix: fmt.Sprintf("%s_%d", resp.Prefix, resp.DeploymentID),
 		deploymentID: resp.DeploymentID,
 		options:      opts,
 
-		uploader: uploaderAtomic,
-		// Tokens expire every hour, so refresh a bit before that
-		uploadRefreshLoop: asyncroutine.NewPeriodicWithContext(time.Hour-(5*time.Minute), func(ctx context.Context) {
-			client.logger.Info("refreshing snowflake storage credentials")
-			u, err := backoff.RetryWithData(func() (uploader, error) {
-				resp, err := client.configureClient(ctx, clientConfigureRequest{Role: opts.Role})
-				if err == nil && resp.StatusCode != responseSuccess {
-					msg := "(no message)"
-					if resp.Message != "" {
-						msg = resp.Message
-					}
-					err = fmt.Errorf("unable to reconfigure client - status: %d, message: %s", resp.StatusCode, msg)
-				}
-				if err != nil {
-					return nil, err
-				}
-				// TODO: Do the other checks here that the Java SDK does (deploymentID, etc)
-				return newUploader(resp.StageLocation)
-			}, backoff.WithMaxRetries(backoff.NewConstantBackOff(time.Second), 3))
-			if err != nil {
-				client.logger.Warnf("refreshing snowflake storage credentials failure: %v", err)
-			} else {
-				client.logger.Debug("refreshing snowflake storage credentials success")
-			}
-			uploaderAtomic.Store(stageUploaderResult{uploader: u, fetchTime: time.Now(), err: err})
-		}),
+		uploaderManager:  um,
 		requestIDCounter: &atomic.Int64{},
 	}
 	// Flush up to 100 blobs at once, that seems like a fairly high upper bound
 	ssc.flusher, err = asyncroutine.NewBatcher(100, ssc.registerBlobs)
 	if err != nil {
+		um.Stop() // Don't leak the goroutine on failure
 		return nil, err
 	}
-	ssc.uploadRefreshLoop.Start()
 	return ssc, nil
 }
 
 // Close closes the client and future requests have undefined behavior.
 func (c *SnowflakeServiceClient) Close() {
 	c.options.Logger.Debug("closing snowflake streaming output")
-	c.uploadRefreshLoop.Stop()
+	c.uploaderManager.Stop()
 	c.client.Close()
 	c.flusher.Close()
 }
@@ -233,13 +196,13 @@ func (c *SnowflakeServiceClient) OpenChannel(ctx context.Context, opts ChannelOp
 		return nil, err
 	}
 	ch := &SnowflakeIngestionChannel{
-		ChannelOptions: opts,
-		clientPrefix:   c.clientPrefix,
-		schema:         schema,
-		parquetWriter:  newParquetWriter(c.options.ConnectVersion, schema),
-		client:         c.client,
-		role:           c.options.Role,
-		uploader:       c.uploader,
+		ChannelOptions:  opts,
+		clientPrefix:    c.clientPrefix,
+		schema:          schema,
+		parquetWriter:   newParquetWriter(c.options.ConnectVersion, schema),
+		client:          c.client,
+		role:            c.options.Role,
+		uploaderManager: c.uploaderManager,
 		encryptionInfo: &encryptionInfo{
 			encryptionKeyID: resp.EncryptionKeyID,
 			encryptionKey:   resp.EncryptionKey,
@@ -315,7 +278,7 @@ type SnowflakeIngestionChannel struct {
 	parquetWriter   *parquetWriter
 	schema          *parquet.Schema
 	client          *SnowflakeRestClient
-	uploader        *typed.AtomicValue[stageUploaderResult]
+	uploaderManager *uploaderManager
 	flusher         *asyncroutine.Batcher[blobMetadata, blobRegisterStatus]
 	encryptionInfo  *encryptionInfo
 	clientSequencer int64
@@ -451,24 +414,39 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 	if err != nil {
 		return insertStats, fmt.Errorf("unable to encrypt output: %w", err)
 	}
+	fullMD5Hash := md5.Sum(part.parquetFile)
 
 	uploadStartTime := time.Now()
-	uploaderResult := c.uploader.Load()
-	if uploaderResult.err != nil {
-		return insertStats, fmt.Errorf("failed to acquire stage uploader (last fetch time=%v): %w", uploaderResult.fetchTime, uploaderResult.err)
-	}
-	uploader := uploaderResult.uploader
-	fullMD5Hash := md5.Sum(part.parquetFile)
-	err = backoff.Retry(func() error {
-		return uploader.upload(ctx, blobPath, part.parquetFile, fullMD5Hash[:], map[string]string{
+	for i := range 3 {
+		ur := c.uploaderManager.GetUploader()
+		if ur.err != nil {
+			return insertStats, fmt.Errorf("failed to acquire stage uploader (last fetch time=%v): %w", ur.timestamp, ur.err)
+		}
+		err = ur.uploader.upload(ctx, blobPath, part.parquetFile, fullMD5Hash[:], map[string]string{
 			"ingestclientname": partnerID,
 			"ingestclientkey":  c.clientPrefix,
 		})
-	}, backoff.WithMaxRetries(backoff.NewConstantBackOff(time.Second), 3))
-	if err != nil {
-		return insertStats, fmt.Errorf("unable to upload to storage (last fetch time=%v): %w", uploaderResult.fetchTime, err)
+		if err == nil {
+			break
+		}
+		err = fmt.Errorf("unable to upload to storage (last cred refresh time=%v): %w", ur.timestamp, err)
+		// Similar to the Java SDK, the first failure we retry immediately after attempting to refresh
+		// our uploader. It seems there are some cases where the 1 hour refresh interval is too slow
+		// and tokens are only valid for ~30min. This is a poor man's workaround for dynamic token
+		// refreshing.
+		if i == 0 {
+			c.uploaderManager.RefreshUploader(ctx)
+			continue
+		}
+		select {
+		case <-time.After(time.Second):
+		case <-ctx.Done():
+			return insertStats, ctx.Err()
+		}
 	}
-
+	if err != nil {
+		return insertStats, err
+	}
 	uploadFinishTime := time.Now()
 
 	resp, err := c.flusher.Submit(ctx, blobMetadata{
