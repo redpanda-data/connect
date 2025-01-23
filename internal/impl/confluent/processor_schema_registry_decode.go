@@ -52,8 +52,8 @@ This processor creates documents formatted as https://avro.apache.org/docs/curre
 For example, the union schema ` + "`[\"null\",\"string\",\"Foo\"]`, where `Foo`" + ` is a record name, would encode:
 
 - ` + "`null` as `null`" + `;
-- the string ` + "`\"a\"` as `\\{\"string\": \"a\"}`" + `; and
-- a ` + "`Foo` instance as `\\{\"Foo\": {...}}`, where `{...}` indicates the JSON encoding of a `Foo`" + ` instance.
+- the string ` + "`\"a\"` as `{\"string\": \"a\"}`" + `; and
+- a ` + "`Foo` instance as `{\"Foo\": {...}}`, where `{...}` indicates the JSON encoding of a `Foo`" + ` instance.
 
 However, it is possible to instead create documents in https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull[standard/raw JSON format^] by setting the field ` + "<<avro_raw_json, `avro_raw_json`>> to `true`" + `.
 
@@ -67,25 +67,22 @@ This processor decodes protobuf messages to JSON documents, you can read more ab
 		Fields(
 			service.NewObjectField(
 				"avro",
-				service.NewBoolField("raw_unions").Description(`Wheather avro messages should be decoded into normal JSON ("json that meets the expectations of regular internet json") rather than https://avro.apache.org/docs/current/specification/_print/#json-encoding[JSON as specified in the Avro Spec^].
+				service.NewBoolField("raw_unions").Description(`Whether avro messages should be decoded into normal JSON ("json that meets the expectations of regular internet json") rather than https://avro.apache.org/docs/current/specification/_print/#json-encoding[JSON as specified in the Avro Spec^].
 
-For example, if there is a union schema `+"`"+`["null", "string", "Foo"]`+"`"+` where `+"`Foo`"+` is a record name, would with raw_unions as false (the default) you get:
+For example, if there is a union schema `+"`"+`["null", "string", "Foo"]`+"`"+` where `+"`Foo`"+` is a record name, with raw_unions as false (the default) you get:
 - `+"`null` as `null`"+`;
-- the string `+"`\"a\"` as `\\{\"string\": \"a\"}`"+`; and
-- a `+"`Foo` instance as `\\{\"Foo\": {...}}`, where `{...}` indicates the JSON encoding of a `Foo`"+` instance.
+- the string `+"`\"a\"` as `{\"string\": \"a\"}`"+`; and
+- a `+"`Foo` instance as `{\"Foo\": {...}}`, where `{...}` indicates the JSON encoding of a `Foo`"+` instance.
 
 When raw_unions is set to true then the above union schema is decoded as the following:
 - `+"`null` as `null`"+`;
 - the string `+"`\"a\"` as `\"a\"`"+`; and
 - a `+"`Foo` instance as `{...}`, where `{...}` indicates the JSON encoding of a `Foo`"+` instance.
 `).Optional(),
-				service.NewBoolField("preserve_logical_types").Description(`Wheather logical types should be preserved or transformed back into their primative type. For example, decimals are decoded as raw bytes and timestamps are decoded as plain integers.`).Default(false),
-			),
+				service.NewBoolField("preserve_logical_types").Description(`Whether logical types should be preserved or transformed back into their primitive type. By default, decimals are decoded as raw bytes and timestamps are decoded as plain integers. Setting this field to true keeps decimal types as numbers in bloblang and timestamps as time values.`).Default(false),
+			).Description("Configuration for how to decode schemas that are of type AVRO."),
 		).
-		Field(service.NewURLField("url").Description("The base URL of the schema registry service.")).
-		LintRule(`root = match {
-      this.exists("avro.raw_unions") && this.exists("avro_raw_json") => ["fields avro.raw_unions and avro_raw_json cannot be set simultaneously"],
-    }`)
+		Field(service.NewURLField("url").Description("The base URL of the schema registry service."))
 
 	for _, f := range service.NewHTTPRequestAuthSignerFields() {
 		spec = spec.Field(f.Version("4.7.0"))
