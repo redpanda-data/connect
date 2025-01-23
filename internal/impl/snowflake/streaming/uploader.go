@@ -20,6 +20,8 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 
 	gcs "cloud.google.com/go/storage"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
@@ -28,8 +30,11 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/cenkalti/backoff/v4"
 	"golang.org/x/oauth2"
 	gcsopt "google.golang.org/api/option"
+
+	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 )
 
 type uploader interface {
@@ -186,4 +191,90 @@ func splitBucketAndPath(stageLocation string) (string, string, error) {
 		return "", "", fmt.Errorf("unexpected stage location: %s", stageLocation)
 	}
 	return bucketAndPath[0], bucketAndPath[1], nil
+}
+
+type (
+	uploaderLoadResult struct {
+		uploader uploader
+		// Time of when the uploader was created
+		timestamp time.Time
+		// If there was an error creating the uploader
+		err error
+	}
+
+	uploaderManager struct {
+		state    *uploaderLoadResult
+		client   *SnowflakeRestClient
+		role     string
+		stateMu  sync.RWMutex
+		uploadMu sync.Mutex
+		periodic asyncroutine.Periodic
+	}
+)
+
+func newUploaderManager(client *SnowflakeRestClient, role string) *uploaderManager {
+	m := &uploaderManager{state: nil, client: client, role: role}
+	// According to the Java SDK tokens are refreshed every hour on GCP
+	// and 2 hours on AWS. It seems in practice some customers only have
+	// tokens that live for 30 minutes, so we need to support ealier
+	// refreshes (those are opt in however).
+	const refreshTime = time.Hour - time.Minute*5
+	m.periodic = *asyncroutine.NewPeriodicWithContext(refreshTime, m.RefreshUploader)
+	return m
+}
+
+func (m *uploaderManager) Start(ctx context.Context) error {
+	m.RefreshUploader(ctx)
+	s := m.GetUploader()
+	if s.err != nil {
+		return s.err
+	}
+	m.periodic.Start()
+	return nil
+}
+
+func (m *uploaderManager) GetUploader() *uploaderLoadResult {
+	m.stateMu.RLock()
+	defer m.stateMu.RUnlock()
+	return m.state
+}
+
+func (m *uploaderManager) RefreshUploader(ctx context.Context) {
+	m.uploadMu.Lock()
+	defer m.uploadMu.Unlock()
+	r := m.GetUploader()
+	// Don't refresh sooner than every minute.
+	if r != nil && time.Now().Before(r.timestamp.Add(time.Minute)) {
+		return
+	}
+	u, err := backoff.RetryWithData(func() (uploader, error) {
+		resp, err := m.client.configureClient(ctx, clientConfigureRequest{Role: m.role})
+		if err == nil && resp.StatusCode != responseSuccess {
+			msg := "(no message)"
+			if resp.Message != "" {
+				msg = resp.Message
+			}
+			err = fmt.Errorf("unable to reconfigure client - status: %d, message: %s", resp.StatusCode, msg)
+		}
+		if err != nil {
+			return nil, err
+		}
+		// TODO: Do the other checks here that the Java SDK does (deploymentID, etc)
+		return newUploader(resp.StageLocation)
+	}, backoff.WithMaxRetries(backoff.NewConstantBackOff(time.Second), 3))
+	if r != nil {
+		// Only log when this is running as a background task (so it's a refresh not initial setup).
+		if err != nil {
+			m.client.logger.Warnf("refreshing snowflake storage credentials failure: %v", err)
+		} else {
+			m.client.logger.Debug("refreshing snowflake storage credentials success")
+		}
+	}
+	m.stateMu.Lock()
+	defer m.stateMu.Unlock()
+	m.state = &uploaderLoadResult{uploader: u, timestamp: time.Now(), err: err}
+}
+
+func (m *uploaderManager) Stop() {
+	m.periodic.Stop()
 }

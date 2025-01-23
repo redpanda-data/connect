@@ -16,6 +16,10 @@ All notable changes to this project will be documented in this file.
 
 - Field `avro_raw_json` was deprecated in favor of `avro.raw_unions` for processor `schema_registry_decode`. (@rockwotj)
 
+### Changed
+
+- The `snowpipe_streaming` output now has better error handling for authentication failures when uploading to cloud storage. (@rockwotj)
+
 ## 4.45.1 - 2025-01-17
 
 ### Fixed
