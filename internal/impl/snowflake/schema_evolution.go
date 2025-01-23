@@ -153,7 +153,7 @@ func (o *snowpipeSchemaEvolver) CreateOutputTable(ctx context.Context, batch ser
 	}
 	columns := []string{}
 	for k, v := range row {
-		col := streaming.NewMissingColumnError(k, v)
+		col := streaming.NewMissingColumnError(msg, k, v)
 		colType, err := o.ComputeMissingColumnType(col)
 		if err != nil {
 			return err
