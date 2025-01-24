@@ -14,12 +14,17 @@ All notable changes to this project will be documented in this file.
 - Processor `schema_registry_decode` now adds metadata `schema_id` for the schema's ID in the schema registry. (@rockwotj)
 - Field `schema_evolution.processors` added to `snowpipe_streaming` to support side effects or enrichment during schema evolution. (@rockwotj)
 
+### Fixed
+
+- Fix a snapshot stream consistency issue with `postgres_cdc` where data could be missed if writes where happening during the snapshot phase. (@rockwotj)
+
 ### Changed
 
 - Field `avro_raw_json` was deprecated in favor of `avro.raw_unions` for processor `schema_registry_decode`. (@rockwotj)
 - The `snowpipe_streaming` output now has better error handling for authentication failures when uploading to cloud storage. (@rockwotj)
 - Field `schema_evolution.new_column_type_mapping` for `snowpipe_streaming` is deprecated and can be replaced with `schema_evolution.processors`. (@rockwotj)
 - Increased the default values for `max_message_bytes` and `broker_write_max_bytes` by using IEC units instead of SI units. This better matches defaults in Redpanda and Kafka. (@rockwotj)
+- Dropped support for postgres 10 and 11 in `postgres_cdc`. (@rockwotj)
 
 ## 4.45.1 - 2025-01-17
 

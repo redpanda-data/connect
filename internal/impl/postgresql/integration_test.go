@@ -11,9 +11,11 @@ package pgstream
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -26,6 +28,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 	"github.com/redpanda-data/connect/v4/internal/license"
 
 	"github.com/ory/dockertest/v3"
@@ -142,6 +145,11 @@ func ResourceWithPostgreSQLVersion(t *testing.T, pool *dockertest.Pool, version 
 			return err
 		}
 
+		_, err = db.Exec("CREATE TABLE IF NOT EXISTS seq (id serial PRIMARY KEY);")
+		if err != nil {
+			return err
+		}
+
 		// flights_non_streamed is a control table with data that should not be streamed or queried by snapshot streaming
 		_, err = db.Exec("CREATE TABLE IF NOT EXISTS flights_non_streamed (id serial PRIMARY KEY, name VARCHAR(50), created_at TIMESTAMP);")
 
@@ -156,7 +164,6 @@ func ResourceWithPostgreSQLVersion(t *testing.T, pool *dockertest.Pool, version 
 func TestIntegrationPostgresNoTxnMarkers(t *testing.T) {
 	t.Parallel()
 	integration.CheckSkip(t)
-	tmpDir := t.TempDir()
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
 
@@ -193,15 +200,8 @@ pg_stream:
        - '"FlightsCompositePK"'
 `, databaseURL)
 
-	cacheConf := fmt.Sprintf(`
-label: pg_stream_cache
-file:
-    directory: %v
-`, tmpDir)
-
 	streamOutBuilder := service.NewStreamBuilder()
 	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: TRACE`))
-	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
 	require.NoError(t, streamOutBuilder.AddInputYAML(template))
 
 	var outBatches []string
@@ -251,7 +251,6 @@ file:
 
 	streamOutBuilder = service.NewStreamBuilder()
 	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: OFF`))
-	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
 	require.NoError(t, streamOutBuilder.AddInputYAML(template))
 
 	outBatches = []string{}
@@ -291,7 +290,6 @@ file:
 
 func TestIntegrationPgStreamingFromRemoteDB(t *testing.T) {
 	t.Skip("This test requires a remote database to run. Aimed to test remote databases")
-	tmpDir := t.TempDir()
 
 	// tables: users, products, orders, order_items
 
@@ -311,15 +309,8 @@ pg_stream:
        - order_items
 `
 
-	cacheConf := fmt.Sprintf(`
-label: pg_stream_cache
-file:
-    directory: %v
-`, tmpDir)
-
 	streamOutBuilder := service.NewStreamBuilder()
 	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: INFO`))
-	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
 	require.NoError(t, streamOutBuilder.AddInputYAML(template))
 
 	var outMessages int64
@@ -368,7 +359,6 @@ file:
 func TestIntegrationPostgresIncludeTxnMarkers(t *testing.T) {
 	t.Parallel()
 	integration.CheckSkip(t)
-	tmpDir := t.TempDir()
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
 
@@ -404,15 +394,8 @@ pg_stream:
        - flights
 `, databaseURL)
 
-	cacheConf := fmt.Sprintf(`
-label: pg_stream_cache
-file:
-    directory: %v
-`, tmpDir)
-
 	streamOutBuilder := service.NewStreamBuilder()
 	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: INFO`))
-	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
 	require.NoError(t, streamOutBuilder.AddInputYAML(template))
 
 	var outBatches []string
@@ -463,7 +446,6 @@ file:
 
 	streamOutBuilder = service.NewStreamBuilder()
 	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: OFF`))
-	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
 	require.NoError(t, streamOutBuilder.AddInputYAML(template))
 
 	outBatches = []string{}
@@ -503,7 +485,6 @@ file:
 
 func TestIntegrationPgCDCForPgOutputStreamComplexTypesPlugin(t *testing.T) {
 	integration.CheckSkip(t)
-	tmpDir := t.TempDir()
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
 
@@ -558,15 +539,8 @@ pg_stream:
        - complex_types_example
 `, databaseURL)
 
-	cacheConf := fmt.Sprintf(`
-label: pg_stream_cache
-file:
-    directory: %v
-`, tmpDir)
-
 	streamOutBuilder := service.NewStreamBuilder()
 	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: TRACE`))
-	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
 	require.NoError(t, streamOutBuilder.AddInputYAML(template))
 
 	var outBatches []string
@@ -622,11 +596,10 @@ file:
 func TestIntegrationMultiplePostgresVersions(t *testing.T) {
 	integration.CheckSkip(t)
 	// running tests in the look to test different PostgreSQL versions
-	for _, version := range []string{"17", "16", "15", "14", "13", "12", "11", "10"} {
+	for _, version := range []string{"17", "16", "15", "14", "13", "12"} {
 		v := version
 		t.Run(version, func(t *testing.T) {
 			t.Parallel()
-			tmpDir := t.TempDir()
 			pool, err := dockertest.NewPool("")
 			require.NoError(t, err)
 
@@ -665,15 +638,8 @@ pg_stream:
        - FLIGHTS
 `, databaseURL)
 
-			cacheConf := fmt.Sprintf(`
-label: pg_stream_cache
-file:
-    directory: %v
-`, tmpDir)
-
 			streamOutBuilder := service.NewStreamBuilder()
 			require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: INFO`))
-			require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
 			require.NoError(t, streamOutBuilder.AddInputYAML(template))
 
 			var outBatches []string
@@ -723,7 +689,6 @@ file:
 
 			streamOutBuilder = service.NewStreamBuilder()
 			require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: INFO`))
-			require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
 			require.NoError(t, streamOutBuilder.AddInputYAML(template))
 
 			outBatches = []string{}
@@ -766,7 +731,6 @@ file:
 func TestIntegrationTOASTValues(t *testing.T) {
 	t.Parallel()
 	integration.CheckSkip(t)
-	tmpDir := t.TempDir()
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
 
@@ -806,15 +770,8 @@ pg_stream:
        - large_values
 `, databaseURL)
 
-	cacheConf := fmt.Sprintf(`
-label: pg_stream_cache
-file:
-    directory: %v
-`, tmpDir)
-
 	streamOutBuilder := service.NewStreamBuilder()
 	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: TRACE`))
-	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
 	require.NoError(t, streamOutBuilder.AddInputYAML(template))
 
 	var outBatches []string
@@ -864,4 +821,106 @@ file:
 	require.JSONEq(t, `{"id":2, "value": "`+strings.Repeat("qux", stringSize)+`"}`, outBatches[4], "GOT: %s", outBatches[4])
 
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
+}
+
+func TestIntegrationSnapshotConsistency(t *testing.T) {
+	t.Parallel()
+	integration.CheckSkip(t)
+	pool, err := dockertest.NewPool("")
+	require.NoError(t, err)
+
+	var (
+		resource *dockertest.Resource
+		db       *sql.DB
+	)
+
+	resource, db, err = ResourceWithPostgreSQLVersion(t, pool, "16")
+	require.NoError(t, err)
+	require.NoError(t, resource.Expire(120))
+
+	hostAndPort := resource.GetHostPort("5432/tcp")
+	hostAndPortSplited := strings.Split(hostAndPort, ":")
+	password := "l]YLSc|4[i56%{gY"
+
+	require.NoError(t, err)
+
+	databaseURL := fmt.Sprintf("user=user_name password=%s dbname=dbname sslmode=disable host=%s port=%s", password, hostAndPortSplited[0], hostAndPortSplited[1])
+	template := fmt.Sprintf(`
+read_until:
+  # Stop when we're idle for 3 seconds, which means our writer stopped
+  idle_timeout: 3s
+  input:
+    pg_stream:
+        dsn: %s
+        slot_name: test_slot
+        stream_snapshot: true
+        snapshot_batch_size: 1
+        schema: public
+        tables:
+           - seq
+`, databaseURL)
+
+	streamOutBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: DEBUG`))
+	require.NoError(t, streamOutBuilder.AddInputYAML(template))
+
+	var sequenceNumbers []int64
+	var batchMu sync.Mutex
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, batch service.MessageBatch) error {
+		batchMu.Lock()
+		defer batchMu.Unlock()
+		for _, msg := range batch {
+			msg, err := msg.AsStructured()
+			if err != nil {
+				return err
+			}
+			seq, err := msg.(map[string]any)["id"].(json.Number).Int64()
+			if err != nil {
+				return err
+			}
+			sequenceNumbers = append(sequenceNumbers, seq)
+		}
+		return nil
+	}))
+
+	// Continuously write so there is a chance we skip data between snapshot and stream hand off.
+	var count atomic.Int64
+	writer := asyncroutine.NewPeriodic(time.Microsecond, func() {
+		_, err := db.Exec("INSERT INTO seq DEFAULT VALUES")
+		require.NoError(t, err)
+		count.Add(1)
+	})
+	writer.Start()
+	t.Cleanup(writer.Stop)
+
+	// Wait to write some values so there are some values in the snapshot
+	time.Sleep(10 * time.Millisecond)
+
+	// Now start our stream
+	streamOut, err := streamOutBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(streamOut.Resources())
+	streamStopped := make(chan any, 1)
+	go func() {
+		err = streamOut.Run(context.Background())
+		require.NoError(t, err)
+		streamStopped <- nil
+	}()
+	// Let the writer write a little more
+	time.Sleep(5 * time.Second)
+	writer.Stop()
+	// Okay now wait for the stream to finish (the stream auto closes after it gets nothing for 3 seconds)
+	select {
+	case <-streamStopped:
+	case <-time.After(30 * time.Second):
+		require.Fail(t, "stream did not complete in time")
+	}
+	require.NoError(t, streamOut.StopWithin(10*time.Second))
+	expected := []int64{}
+	for i := range count.Load() {
+		expected = append(expected, i+1)
+	}
+	batchMu.Lock()
+	require.Equal(t, expected, sequenceNumbers)
+	batchMu.Unlock()
 }

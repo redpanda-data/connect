@@ -36,67 +36,28 @@ type SnapshotCreationResponse struct {
 // Therefore Snapshotter opens another connection to the database and sets the transaction to the snapshot.
 // This allows you to read the data that was in the database at the time of the snapshot creation.
 type Snapshotter struct {
-	pool   *sql.DB
-	logger *service.Logger
-	// Only needed for older PG versions, holds the snapshot open for the reader
-	snapshotTxn *sql.Tx
+	pool         *sql.DB
+	logger       *service.Logger
+	snapshotName string
 	// The TXN for the snapshot phase
 	readerTxn *sql.Tx
-
-	snapshotName string
-
-	version int
 }
 
 // NewSnapshotter creates a new Snapshotter instance
-func NewSnapshotter(dbDSN string, logger *service.Logger, version int) (*Snapshotter, error) {
+func NewSnapshotter(dbDSN string, logger *service.Logger, snapshotName string) (*Snapshotter, error) {
 	pgConn, err := openPgConnectionFromConfig(dbDSN)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Snapshotter{
-		pool:    pgConn,
-		logger:  logger,
-		version: version,
+		pool:         pgConn,
+		logger:       logger,
+		snapshotName: snapshotName,
 	}, nil
 }
 
-func (s *Snapshotter) initSnapshotTransaction(ctx context.Context) (SnapshotCreationResponse, error) {
-	if s.version > 14 {
-		return SnapshotCreationResponse{}, errors.New("snapshot is exported by default for versions above PG14")
-	}
-	if s.snapshotTxn != nil {
-		return SnapshotCreationResponse{}, errors.New("snapshot already exists")
-	}
-
-	var snapshotName sql.NullString
-
-	tx, err := s.pool.BeginTx(context.Background(), &sql.TxOptions{ReadOnly: true, Isolation: sql.LevelRepeatableRead})
-	if err != nil {
-		return SnapshotCreationResponse{}, fmt.Errorf("unable to begin a tx to export a snapshot: %w pg version: %d", err, s.version)
-	}
-	s.snapshotTxn = tx
-	snapshotRow := tx.QueryRowContext(ctx, `SELECT pg_export_snapshot();`)
-	if snapshotRow.Err() != nil {
-		return SnapshotCreationResponse{}, fmt.Errorf("unable to get snapshot name: %w", snapshotRow.Err())
-	}
-
-	if err = snapshotRow.Scan(&snapshotName); err != nil {
-		return SnapshotCreationResponse{}, fmt.Errorf("cant scan snapshot name into string: %w", err)
-	}
-
-	return SnapshotCreationResponse{ExportedSnapshotName: snapshotName.String}, nil
-}
-
-func (s *Snapshotter) setTransactionSnapshotName(snapshotName string) {
-	s.snapshotName = snapshotName
-}
-
 func (s *Snapshotter) prepare(ctx context.Context) error {
-	if s.snapshotName == "" {
-		return errors.New("snapshot name is not set")
-	}
 	if s.readerTxn != nil {
 		return errors.New("reader txn already open")
 	}
@@ -106,25 +67,27 @@ func (s *Snapshotter) prepare(ctx context.Context) error {
 		return fmt.Errorf("unable to start reader txn: %w", err)
 	}
 	s.readerTxn = tx
-	sq, err := sanitize.SQLQuery("SET TRANSACTION SNAPSHOT $1;", s.snapshotName)
+	sq, err := sanitize.SQLQuery("SET TRANSACTION SNAPSHOT $1", s.snapshotName)
 	if err != nil {
 		return err
 	}
 	if _, err := tx.ExecContext(ctx, sq); err != nil {
-		return err
+		return fmt.Errorf("unable to set txn snapshot to %s: %w", s.snapshotName, err)
 	}
 	return nil
 }
 
-func (s *Snapshotter) findAvgRowSize(ctx context.Context, table TableFQN) (avgRowSize sql.NullInt64, err error) {
-	row := s.readerTxn.QueryRowContext(ctx, fmt.Sprintf(`SELECT SUM(pg_column_size('%s.*')) / COUNT(*) FROM %s;`, table, table))
+func (s *Snapshotter) tableStats(ctx context.Context, table TableFQN) (avgRowSize, numRows int, err error) {
+	row := s.readerTxn.QueryRowContext(ctx, fmt.Sprintf(`SELECT SUM(pg_column_size('%s.*')) / COUNT(*), COUNT(*) FROM %s;`, table, table))
 	if row.Err() != nil {
-		return avgRowSize, fmt.Errorf("cannot get avg row size due to query failure: %w", err)
+		return 0, 0, fmt.Errorf("cannot get avg row size due to query failure: %w", err)
 	}
-	if err = row.Scan(&avgRowSize); err != nil {
-		return avgRowSize, fmt.Errorf("cannot get avg row size: %w", err)
+	var size sql.NullInt64
+	var count sql.NullInt64
+	if err = row.Scan(&size, &count); err != nil {
+		return 0, 0, fmt.Errorf("cannot read table stats: %w", err)
 	}
-	return avgRowSize, nil
+	return int(size.Int64), int(count.Int64), nil
 }
 
 func (s *Snapshotter) prepareScannersAndGetters(columnTypes []*sql.ColumnType) ([]any, []func(any) (any, error)) {
@@ -297,12 +260,6 @@ func (s *Snapshotter) querySnapshotData(ctx context.Context, table TableFQN, las
 }
 
 func (s *Snapshotter) releaseSnapshot() error {
-	if s.version < 14 && s.snapshotTxn != nil {
-		if err := s.snapshotTxn.Commit(); err != nil {
-			return err
-		}
-		s.snapshotTxn = nil
-	}
 	if err := s.readerTxn.Commit(); err != nil {
 		return err
 	}
@@ -316,12 +273,6 @@ func (s *Snapshotter) closeConn() error {
 			return err
 		}
 		s.readerTxn = nil
-	}
-	if s.snapshotTxn != nil {
-		if err := s.snapshotTxn.Rollback(); err != nil {
-			return err
-		}
-		s.snapshotTxn = nil
 	}
 	if err := s.pool.Close(); err != nil {
 		return err
