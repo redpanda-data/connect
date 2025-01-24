@@ -10,10 +10,12 @@ package snowflake
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -75,6 +77,23 @@ type snowpipeSchemaEvolver struct {
 }
 
 func (o *snowpipeSchemaEvolver) ComputeMissingColumnType(ctx context.Context, col *streaming.MissingColumnError) (string, error) {
+	if len(o.pipeline) == 0 && o.schemaEvolutionMapping == nil {
+		// The default mapping if not specified by a user
+		switch col.Value().(type) {
+		case []byte:
+			return "BINARY", nil
+		case string:
+			return "STRING", nil
+		case bool:
+			return "BOOLEAN", nil
+		case time.Time:
+			return "TIMESTAMP", nil
+		case json.Number, int, int64, int32, int16, int8, uint, uint64, uint32, uint16, uint8, float32, float64:
+			return "DOUBLE", nil
+		default:
+			return "VARIANT", nil
+		}
+	}
 	msg := col.Message().Copy()
 	original, err := msg.AsStructuredMut()
 	if err != nil {
@@ -90,28 +109,28 @@ func (o *snowpipeSchemaEvolver) ComputeMissingColumnType(ctx context.Context, co
 		"schema":  o.schema,
 		"table":   o.table,
 	})
-	if len(o.pipeline) > 0 {
-		batches, err := service.ExecuteProcessors(ctx, o.pipeline, service.MessageBatch{msg})
-		if err != nil {
-			return "", fmt.Errorf("failure to execute %s.%s prior to schema evolution: %w", ssoFieldSchemaEvolution, ssoFieldSchemaEvolutionProcessors, err)
-		}
-		if len(batches) != 1 {
-			return "", fmt.Errorf("expected a single batch output from %s.%s, got: %d", ssoFieldSchemaEvolution, ssoFieldSchemaEvolutionProcessors, len(batches))
-		}
-		batch := batches[0]
-		if len(batch) != 1 {
-			return "", fmt.Errorf("expected a single message output from %s.%s, got: %d", ssoFieldSchemaEvolution, ssoFieldSchemaEvolutionProcessors, len(batch))
-		}
-		msg = batch[0]
-		if err := msg.GetError(); err != nil {
-			return "", fmt.Errorf("message failure executing %s.%s prior to schema evolution: %w", ssoFieldSchemaEvolution, ssoFieldSchemaEvolutionProcessors, err)
-		}
-	}
-	out, err := msg.BloblangQuery(o.schemaEvolutionMapping)
+	batches, err := service.ExecuteProcessors(ctx, o.pipeline, service.MessageBatch{msg})
 	if err != nil {
-		return "", fmt.Errorf("unable to compute new column type for %s: %w", col.ColumnName(), err)
+		return "", fmt.Errorf("failure to execute %s.%s prior to schema evolution: %w", ssoFieldSchemaEvolution, ssoFieldSchemaEvolutionProcessors, err)
 	}
-	v, err := out.AsBytes()
+	if len(batches) != 1 {
+		return "", fmt.Errorf("expected a single batch output from %s.%s, got: %d", ssoFieldSchemaEvolution, ssoFieldSchemaEvolutionProcessors, len(batches))
+	}
+	batch := batches[0]
+	if len(batch) != 1 {
+		return "", fmt.Errorf("expected a single message output from %s.%s, got: %d", ssoFieldSchemaEvolution, ssoFieldSchemaEvolutionProcessors, len(batch))
+	}
+	msg = batch[0]
+	if err := msg.GetError(); err != nil {
+		return "", fmt.Errorf("message failure executing %s.%s prior to schema evolution: %w", ssoFieldSchemaEvolution, ssoFieldSchemaEvolutionProcessors, err)
+	}
+	if o.schemaEvolutionMapping != nil {
+		msg, err = msg.BloblangQuery(o.schemaEvolutionMapping)
+		if err != nil {
+			return "", fmt.Errorf("unable to compute new column type for %s: %w", col.ColumnName(), err)
+		}
+	}
+	v, err := msg.AsBytes()
 	if err != nil {
 		return "", fmt.Errorf("unable to extract result from new column type mapping for %s: %w", col.ColumnName(), err)
 	}

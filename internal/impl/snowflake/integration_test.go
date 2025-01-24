@@ -301,8 +301,6 @@ snowflake_streaming:
             this.name == "token" => "NUMBER"
             _ => "variant"
           }
-    new_column_type_mapping: |
-      root = content()
 `)
 	RunStreamInBackground(t, stream)
 	require.NoError(t, produce(context.Background(), Batch([]map[string]any{

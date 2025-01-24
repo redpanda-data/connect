@@ -118,11 +118,13 @@ ALTER TABLE t1 ADD COLUMN a2 NUMBER;
 				service.NewBloblangField(ssoFieldSchemaEvolutionNewColumnTypeMapping).Description(`
 The mapping function from Redpanda Connect type to column type in Snowflake. Overriding this can allow for customization of the datatype if there is specific information that you know about the data types in use. This mapping should result in the `+"`root`"+` variable being assigned a string with the data type for the new column in Snowflake.
 
-        The input to this mapping is either the output of `+"`processors`"+` if specified, otherwise it is an object with the value and the name of the new column, the original message and table being written too. The metadata is unchanged from the original message that caused the schema to change. For example: `+"`"+`{"value": 42.3, "name":"new_data_field", "message": {"existing_data_field": 42, "new_data_field": "foo"}, "db": MY_DATABASE", "schema": "MY_SCHEMA", "table": "MY_TABLE"}`).Default(defaultSchemaEvolutionNewColumnMapping).Advanced(),
+        The input to this mapping is either the output of `+"`processors`"+` if specified, otherwise it is an object with the value and the name of the new column, the original message and table being written too. The metadata is unchanged from the original message that caused the schema to change. For example: `+"`"+`{"value": 42.3, "name":"new_data_field", "message": {"existing_data_field": 42, "new_data_field": "foo"}, "db": MY_DATABASE", "schema": "MY_SCHEMA", "table": "MY_TABLE"}`).Optional().Deprecated(),
 				service.NewProcessorListField(ssoFieldSchemaEvolutionProcessors).Description(`
-A series of processors to execute when new columns are added to the table. Specifying this can support running side effects when the schema evolves or enriching the message with additional message to guide the schema changes. For example, one could read the schema the message was produced with from the schema registry and use that to decide which type the new column in Snowflake should be.
+A series of processors to execute when new columns are added to the table. Specifying this can support running side effects when the schema evolves or enriching the message with additional data to guide the schema changes. For example, one could read the schema the message was produced with from the schema registry and use that to decide which type the new column in Snowflake should be.
 
-        The input to these processors is an object with the value and the name of the new column, the original message and table being written too. The metadata is unchanged from the original message that caused the schema to change. For example: `+"`"+`{"value": 42.3, "name":"new_data_field", "message": {"existing_data_field": 42, "new_data_field": "foo"}, "db": MY_DATABASE", "schema": "MY_SCHEMA", "table": "MY_TABLE"}`+"`").Optional().Advanced(),
+        The input to these processors is an object with the value and the name of the new column, the original message and table being written too. The metadata is unchanged from the original message that caused the schema to change. For example: `+"`"+`{"value": 42.3, "name":"new_data_field", "message": {"existing_data_field": 42, "new_data_field": "foo"}, "db": MY_DATABASE", "schema": "MY_SCHEMA", "table": "MY_TABLE"}`+"`. The output of these series of processors should be a single message, where the contents of the message is a string indicating the column data type to use (FLOAT, VARIANT, NUMBER(38, 0), etc. An ALTER TABLE statement will then be executed on the table in Snowflake to add the column with the corresponding data type.").Optional().Advanced().Example([]map[string]any{
+					{"mapping": defaultSchemaEvolutionNewColumnMapping},
+				}),
 			).Description(`Options to control schema evolution within the pipeline as new columns are added to the pipeline.`).Optional(),
 			service.NewIntField(ssoFieldBuildParallelism).Description("The maximum amount of parallelism to use when building the output for Snowflake. The metric to watch to see if you need to change this is `snowflake_build_output_latency_ns`.").Optional().Advanced().Deprecated(),
 			service.NewObjectField(ssoFieldBuildOpts,
@@ -402,22 +404,23 @@ func newSnowflakeStreamer(
 			return nil, err
 		}
 	}
-	var schemaEvolutionMapping *bloblang.Executor
+	var schemaEvolutionEnabled bool
 	var schemaEvolutionProcessors []*service.OwnedProcessor
+	var schemaEvolutionMapping *bloblang.Executor
 	if conf.Contains(ssoFieldSchemaEvolution, ssoFieldSchemaEvolutionEnabled) {
 		seConf := conf.Namespace(ssoFieldSchemaEvolution)
-		enabled, err := seConf.FieldBool(ssoFieldSchemaEvolutionEnabled)
+		schemaEvolutionEnabled, err = seConf.FieldBool(ssoFieldSchemaEvolutionEnabled)
 		if err != nil {
 			return nil, err
 		}
-		if enabled {
-			schemaEvolutionMapping, err = seConf.FieldBloblang(ssoFieldSchemaEvolutionNewColumnTypeMapping)
+		if seConf.Contains(ssoFieldSchemaEvolutionProcessors) {
+			schemaEvolutionProcessors, err = seConf.FieldProcessorList(ssoFieldSchemaEvolutionProcessors)
 			if err != nil {
 				return nil, err
 			}
 		}
-		if seConf.Contains(ssoFieldSchemaEvolutionProcessors) {
-			schemaEvolutionProcessors, err = seConf.FieldProcessorList(ssoFieldSchemaEvolutionProcessors)
+		if seConf.Contains(ssoFieldSchemaEvolutionNewColumnTypeMapping) {
+			schemaEvolutionMapping, err = seConf.FieldBloblang(ssoFieldSchemaEvolutionNewColumnTypeMapping)
 			if err != nil {
 				return nil, err
 			}
@@ -525,7 +528,7 @@ func newSnowflakeStreamer(
 	mgr.SetGeneric(SnowflakeClientResourceForTesting, restClient)
 	makeImpl := func(table string) (*snowpipeSchemaEvolver, service.BatchOutput) {
 		var schemaEvolver *snowpipeSchemaEvolver
-		if schemaEvolutionMapping != nil {
+		if schemaEvolutionEnabled {
 			schemaEvolver = &snowpipeSchemaEvolver{
 				schemaEvolutionMapping: schemaEvolutionMapping,
 				pipeline:               schemaEvolutionProcessors,
