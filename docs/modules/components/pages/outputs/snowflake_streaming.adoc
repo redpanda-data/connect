@@ -53,15 +53,6 @@ output:
       CREATE TABLE IF NOT EXISTS mytable (amount NUMBER);
     schema_evolution:
       enabled: false # No default (required)
-      new_column_type_mapping: |-
-        root = match this.value.type() {
-          this == "string" => "STRING"
-          this == "bytes" => "BINARY"
-          this == "number" => "DOUBLE"
-          this == "bool" => "BOOLEAN"
-          this == "timestamp" => "TIMESTAMP"
-          _ => "VARIANT"
-        }
     batching:
       count: 0
       byte_size: 0
@@ -94,15 +85,7 @@ output:
       CREATE TABLE IF NOT EXISTS mytable (amount NUMBER);
     schema_evolution:
       enabled: false # No default (required)
-      new_column_type_mapping: |-
-        root = match this.value.type() {
-          this == "string" => "STRING"
-          this == "bytes" => "BINARY"
-          this == "number" => "DOUBLE"
-          this == "bool" => "BOOLEAN"
-          this == "timestamp" => "TIMESTAMP"
-          _ => "VARIANT"
-        }
+      processors: [] # No default (optional)
     build_options:
       parallelism: 1
       chunk_size: 50000
@@ -459,16 +442,30 @@ Whether schema evolution is enabled.
 *Type*: `bool`
 
 
-=== `schema_evolution.new_column_type_mapping`
+=== `schema_evolution.processors`
 
-The mapping function from Redpanda Connect type to column type in Snowflake. Overriding this can allow for customization of the datatype if there is specific information that you know about the data types in use. This mapping should result in the `root` variable being assigned a string with the data type for the new column in Snowflake.
+A series of processors to execute when new columns are added to the table. Specifying this can support running side effects when the schema evolves or enriching the message with additional data to guide the schema changes. For example, one could read the schema the message was produced with from the schema registry and use that to decide which type the new column in Snowflake should be.
 
-The input to this mapping is an object with the value and the name of the new column, for example: `{"value": 42.3, "name":"new_data_field"}"
+        The input to these processors is an object with the value and the name of the new column, the original message and table being written too. The metadata is unchanged from the original message that caused the schema to change. For example: `{"value": 42.3, "name":"new_data_field", "message": {"existing_data_field": 42, "new_data_field": "foo"}, "db": MY_DATABASE", "schema": "MY_SCHEMA", "table": "MY_TABLE"}`. The output of these series of processors should be a single message, where the contents of the message is a string indicating the column data type to use (FLOAT, VARIANT, NUMBER(38, 0), etc. An ALTER TABLE statement will then be executed on the table in Snowflake to add the column with the corresponding data type.
 
 
-*Type*: `string`
+*Type*: `array`
 
-*Default*: `"root = match this.value.type() {\n  this == \"string\" =\u003e \"STRING\"\n  this == \"bytes\" =\u003e \"BINARY\"\n  this == \"number\" =\u003e \"DOUBLE\"\n  this == \"bool\" =\u003e \"BOOLEAN\"\n  this == \"timestamp\" =\u003e \"TIMESTAMP\"\n  _ =\u003e \"VARIANT\"\n}"`
+
+```yml
+# Examples
+
+processors:
+  - mapping: |-
+      root = match this.value.type() {
+        this == "string" => "STRING"
+        this == "bytes" => "BINARY"
+        this == "number" => "DOUBLE"
+        this == "bool" => "BOOLEAN"
+        this == "timestamp" => "TIMESTAMP"
+        _ => "VARIANT"
+      }
+```
 
 === `build_options`
 

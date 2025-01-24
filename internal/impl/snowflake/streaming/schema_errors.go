@@ -13,6 +13,8 @@ package streaming
 import (
 	"errors"
 	"fmt"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 // SchemaMismatchError occurs when the user provided data has data that
@@ -47,6 +49,7 @@ var _ SchemaMismatchError = &NonNullColumnError{}
 // NonNullColumnError occurs when a column with a NOT NULL constraint
 // gets a value with a `NULL` value.
 type NonNullColumnError struct {
+	message    *service.Message
 	columnName string
 }
 
@@ -61,6 +64,11 @@ func (e *NonNullColumnError) Value() any {
 	return nil
 }
 
+// Message returns the message that caused this error
+func (e *NonNullColumnError) Message() *service.Message {
+	return e.message
+}
+
 // Error implements the error interface
 func (e *NonNullColumnError) Error() string {
 	return fmt.Sprintf("column %q has a NOT NULL constraint and recieved a nil value", e.columnName)
@@ -72,13 +80,19 @@ var _ SchemaMismatchError = &MissingColumnError{}
 // MissingColumnError occurs when a column that is not in the table is
 // found on a record
 type MissingColumnError struct {
+	message    *service.Message
 	columnName string
 	val        any
 }
 
 // NewMissingColumnError creates a new MissingColumnError object
-func NewMissingColumnError(rawName string, val any) *MissingColumnError {
-	return &MissingColumnError{rawName, val}
+func NewMissingColumnError(message *service.Message, rawName string, val any) *MissingColumnError {
+	return &MissingColumnError{message, rawName, val}
+}
+
+// Message returns the message that caused this error
+func (e *MissingColumnError) Message() *service.Message {
+	return e.message
 }
 
 // ColumnName returns the column name of the data that was not in the table

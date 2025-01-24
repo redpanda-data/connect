@@ -12,14 +12,13 @@ All notable changes to this project will be documented in this file.
 - Fields `rebalance_timeout`, `session_timeout` and `heartbeat_interval` added to the `kafka_franz`, `redpanda`, `redpanda_common`, `redpanda_migrator` and `ockam_kafka` inputs. (@rockwotj)
 - Field `avro.preserve_logical_types` for processor `schema_registry_decode` was added to preserve logical types instead of decoding them as their primitive representation. (@rockwotj)
 - Processor `schema_registry_decode` now adds metadata `schema_id` for the schema's ID in the schema registry. (@rockwotj)
+- Field `schema_evolution.processors` added to `snowpipe_streaming` to support side effects or enrichment during schema evolution. (@rockwotj)
 
 ### Changed
 
 - Field `avro_raw_json` was deprecated in favor of `avro.raw_unions` for processor `schema_registry_decode`. (@rockwotj)
-
-### Changed
-
 - The `snowpipe_streaming` output now has better error handling for authentication failures when uploading to cloud storage. (@rockwotj)
+- Field `schema_evolution.new_column_type_mapping` for `snowpipe_streaming` is deprecated and can be replaced with `schema_evolution.processors`. (@rockwotj)
 
 ## 4.45.1 - 2025-01-17
 
