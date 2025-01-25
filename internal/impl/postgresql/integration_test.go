@@ -924,3 +924,119 @@ read_until:
 	require.Equal(t, expected, sequenceNumbers)
 	batchMu.Unlock()
 }
+
+func TestIntegrationPostgresMetadata(t *testing.T) {
+	t.Parallel()
+	integration.CheckSkip(t)
+	pool, err := dockertest.NewPool("")
+	require.NoError(t, err)
+
+	var (
+		resource *dockertest.Resource
+		db       *sql.DB
+	)
+
+	resource, db, err = ResourceWithPostgreSQLVersion(t, pool, "16")
+	require.NoError(t, err)
+	require.NoError(t, resource.Expire(120))
+
+	hostAndPort := resource.GetHostPort("5432/tcp")
+	hostAndPortSplited := strings.Split(hostAndPort, ":")
+	password := "l]YLSc|4[i56%{gY"
+
+	require.NoError(t, err)
+
+	_, err = db.Exec(`INSERT INTO "FlightsCompositePK" ("Seq", "Name", "CreatedAt") VALUES ($1, $2, $3);`, 1, "delta", "2006-01-02T15:04:05Z07:00")
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO flights (name, created_at) VALUES ($1, $2);`, "delta", "2006-01-02T15:04:05Z07:00")
+	require.NoError(t, err)
+
+	databaseURL := fmt.Sprintf("user=user_name password=%s dbname=dbname sslmode=disable host=%s port=%s", password, hostAndPortSplited[0], hostAndPortSplited[1])
+	template := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: test_slot_native_decoder
+    stream_snapshot: true
+    snapshot_batch_size: 5
+    schema: public
+    tables:
+      - '"FlightsCompositePK"'
+      - flights
+`, databaseURL)
+
+	streamOutBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: TRACE`))
+	require.NoError(t, streamOutBuilder.AddInputYAML(template))
+	require.NoError(t, streamOutBuilder.AddProcessorYAML(`mapping: 'root = @'`))
+
+	var outBatches []any
+	var outBatchMut sync.Mutex
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, batch service.MessageBatch) error {
+		outBatchMut.Lock()
+		defer outBatchMut.Unlock()
+		for _, msg := range batch {
+			data, err := msg.AsStructured()
+			require.NoError(t, err)
+			d := data.(map[string]any)
+			if _, ok := d["lsn"]; ok {
+				d["lsn"] = "XXX/XXX" // Consistent LSN for assertions below
+			}
+			outBatches = append(outBatches, data)
+		}
+		return nil
+	}))
+
+	streamOut, err := streamOutBuilder.Build()
+	require.NoError(t, err)
+
+	license.InjectTestService(streamOut.Resources())
+
+	go func() {
+		_ = streamOut.Run(context.Background())
+	}()
+
+	assert.Eventually(t, func() bool {
+		outBatchMut.Lock()
+		defer outBatchMut.Unlock()
+		return len(outBatches) == 2
+	}, time.Second*25, time.Millisecond*100)
+
+	_, err = db.Exec(`INSERT INTO "FlightsCompositePK" ("Seq", "Name", "CreatedAt") VALUES ($1, $2, $3);`, 2, "bravo", "2006-01-02T15:04:05Z07:00")
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO flights (name, created_at) VALUES ($1, $2);`, "bravo", "2006-01-02T15:04:05Z07:00")
+	require.NoError(t, err)
+
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		outBatchMut.Lock()
+		defer outBatchMut.Unlock()
+		assert.Len(c, outBatches, 4, "got: %#v", outBatches)
+	}, time.Second*25, time.Millisecond*100)
+
+	require.ElementsMatch(
+		t,
+		outBatches,
+		[]any{
+			map[string]any{
+				"operation": "read",
+				"table":     "FlightsCompositePK",
+			},
+			map[string]any{
+				"operation": "read",
+				"table":     "flights",
+			},
+			map[string]any{
+				"operation": "insert",
+				"table":     "flights",
+				"lsn":       "XXX/XXX",
+			},
+			map[string]any{
+				"operation": "insert",
+				"table":     "FlightsCompositePK",
+				"lsn":       "XXX/XXX",
+			},
+		},
+	)
+
+	require.NoError(t, streamOut.StopWithin(time.Second*10))
+
+}

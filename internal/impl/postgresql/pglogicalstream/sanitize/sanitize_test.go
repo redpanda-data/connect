@@ -256,23 +256,31 @@ func TestQuerySanitize(t *testing.T) {
 }
 
 func TestIdentifierValidation(t *testing.T) {
-	quoted := []string{
-		`"FooBar"`,
-		`"Foo""Bar"`,
-		`"Foo""""Bar"`,
+	tests := []struct {
+		quoted   string
+		unquoted string
+	}{
+		{quoted: `"FooBar"`, unquoted: "FooBar"},
+		{quoted: `"Foo""Bar"`, unquoted: `Foo"Bar`},
+		{quoted: `"Foo""""Bar"`, unquoted: `Foo""Bar`},
 	}
 
-	for _, i := range quoted {
-		i := i
-		t.Run(i, func(t *testing.T) {
-			_, err := sanitize.NormalizePostgresIdentifier(i)
+	for _, testcase := range tests {
+		testcase := testcase
+		t.Run(testcase.unquoted, func(t *testing.T) {
+			q, err := sanitize.NormalizePostgresIdentifier(testcase.quoted)
 			require.NoError(t, err)
+			require.Equal(t, testcase.quoted, q)
+			r, err := sanitize.UnquotePostgresIdentifier(q)
+			require.NoError(t, err)
+			require.Equal(t, testcase.unquoted, r)
 		})
 	}
 
 	unquoted := []string{
 		`_Foobar`,
 		strings.Repeat("a", 63),
+		strings.Repeat("A", 63),
 	}
 
 	for _, i := range unquoted {
@@ -281,6 +289,9 @@ func TestIdentifierValidation(t *testing.T) {
 			normalized, err := sanitize.NormalizePostgresIdentifier(i)
 			require.NoError(t, err)
 			require.Equal(t, strconv.Quote(strings.ToLower(i)), normalized)
+			unquoted, err := sanitize.UnquotePostgresIdentifier(normalized)
+			require.NoError(t, err)
+			require.Equal(t, strings.ToLower(i), unquoted)
 		})
 	}
 

@@ -503,6 +503,15 @@ func (s *Stream) processSnapshot(ctx context.Context, snapshotter *Snapshotter) 
 		wg.Go(func() (err error) {
 			s.logger.Debugf("Processing snapshot for table: %v", table)
 
+			unquotedTable, err := sanitize.UnquotePostgresIdentifier(table.Table)
+			if err != nil {
+				return fmt.Errorf("unexpected failure to unquote table name: %w", err)
+			}
+			unquotedSchema, err := sanitize.UnquotePostgresIdentifier(table.Schema)
+			if err != nil {
+				return fmt.Errorf("unexpected failure to unquote schema name: %w", err)
+			}
+
 			avgRowSizeBytes, numRows, err := snapshotter.tableStats(ctx, table)
 			if err != nil {
 				return fmt.Errorf("failed to calculate average row size for table %v: %w", table, err)
@@ -592,8 +601,8 @@ func (s *Stream) processSnapshot(ctx context.Context, snapshotter *Snapshotter) 
 					snapshotChangePacket := StreamMessage{
 						LSN:       nil,
 						Operation: ReadOpType,
-						Table:     table.Table,
-						Schema:    table.Schema,
+						Table:     unquotedTable,
+						Schema:    unquotedSchema,
 						Data:      data,
 					}
 

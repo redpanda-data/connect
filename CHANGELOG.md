@@ -16,7 +16,8 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- Fix a snapshot stream consistency issue with `postgres_cdc` where data could be missed if writes where happening during the snapshot phase. (@rockwotj)
+- Fix a snapshot stream consistency issue with `postgres_cdc` where data could be missed if writes were happening during the snapshot phase. (@rockwotj)
+- Fix an issue where `@table` metadata was quoted for the snapshot phase in `postgres_cdc`. (@rockwotj)
 
 ### Changed
 
