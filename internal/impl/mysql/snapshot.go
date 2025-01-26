@@ -62,26 +62,6 @@ func (s *Snapshot) prepareSnapshot(ctx context.Context) (*position, error) {
 	}
 
 	/*
-		START TRANSACTION WITH CONSISTENT SNAPSHOT ensures a consistent view of database state
-		when reading historical data during CDC initialization. Without it, concurrent writes
-		could create inconsistencies between binlog position and table snapshots, potentially
-		missing or duplicating events. The snapshot prevents other transactions from modifying
-		the data being read, maintaining referential integrity across tables while capturing
-		the initial state.
-	*/
-
-	// NOTE: this is a little sneaky because we're actually implicitly closing the transaction
-	// started with `BeginTx` above and replacing it with this one. We have to do this because
-	// the `database/sql` driver we're using does not support this WITH CONSISTENT SNAPSHOT.
-	if _, err := s.tx.ExecContext(ctx, "START TRANSACTION WITH CONSISTENT SNAPSHOT"); err != nil {
-		if rErr := s.tx.Rollback(); rErr != nil {
-			return nil, rErr
-		}
-
-		return nil, fmt.Errorf("failed to start consistent snapshot: %v", err)
-	}
-
-	/*
 		FLUSH TABLES WITH READ LOCK is executed after CONSISTENT SNAPSHOT to:
 		1. Force MySQL to flush all data from memory to disk
 		2. Prevent any writes to tables while we read the binlog position
@@ -94,6 +74,35 @@ func (s *Snapshot) prepareSnapshot(ctx context.Context) (*position, error) {
 			return nil, rErr
 		}
 		return nil, fmt.Errorf("failed to acquire global read lock: %v", err)
+	}
+
+	/*
+				START TRANSACTION WITH CONSISTENT SNAPSHOT ensures a consistent view of database state
+				when reading historical data during CDC initialization. Without it, concurrent writes
+				could create inconsistencies between binlog position and table snapshots, potentially
+				missing or duplicating events. The snapshot prevents other transactions from modifying
+				the data being read, maintaining referential integrity across tables while capturing
+				the initial state.
+
+		    It's important that we do this AFTER we acquire the READ LOCK and flushing the tables,
+		    otherwise other writes could sneak in between our transaction snapshot and acquiring the
+		    lock.
+	*/
+
+	// NOTE: this is a little sneaky because we're actually implicitly closing the transaction
+	// started with `BeginTx` above and replacing it with this one. We have to do this because
+	// the `database/sql` driver we're using does not support this WITH CONSISTENT SNAPSHOT.
+	if _, err := s.tx.ExecContext(ctx, "START TRANSACTION WITH CONSISTENT SNAPSHOT"); err != nil {
+		// Make sure to release the lock if we fail
+		if _, eErr := s.lockConn.ExecContext(ctx, "UNLOCK TABLES"); eErr != nil {
+			return nil, eErr
+		}
+
+		if rErr := s.tx.Rollback(); rErr != nil {
+			return nil, rErr
+		}
+
+		return nil, fmt.Errorf("failed to start consistent snapshot: %v", err)
 	}
 
 	// Get binary log position (while locked)
