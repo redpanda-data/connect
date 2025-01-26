@@ -226,14 +226,16 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 	// canalConfig.Logger
 
 	for _, table := range i.tables {
-		canalConfig.IncludeTableRegex = append(canalConfig.IncludeTableRegex, regexp.QuoteMeta(table))
+		canalConfig.IncludeTableRegex = append(
+			canalConfig.IncludeTableRegex,
+			"^"+regexp.QuoteMeta(i.mysqlConfig.DBName+"."+table)+"$",
+		)
 	}
 
 	c, err := canal.NewCanal(canalConfig)
 	if err != nil {
 		return err
 	}
-	c.AddDumpTables(i.mysqlConfig.DBName, i.tables...)
 
 	i.canal = c
 

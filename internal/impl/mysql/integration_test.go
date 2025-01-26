@@ -12,7 +12,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -20,6 +22,7 @@ import (
 	"github.com/ory/dockertest/v3/docker"
 
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	_ "github.com/redpanda-data/benthos/v4/public/components/io"
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -27,6 +30,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
@@ -651,4 +655,96 @@ memory: {}
   "set_col": ["b", "c"],
   "json_col": {"foo":-1,"bar":[3,2,1]}
 }`, outBatches[1])
+}
+
+func TestIntegrationMySQLSnapshotConsistency(t *testing.T) {
+	dsn, db := setupTestWithMySQLVersion(t, "8.0")
+	db.Exec(`
+    CREATE TABLE IF NOT EXISTS foo (
+        a INT AUTO_INCREMENT,
+        PRIMARY KEY (a)
+    )
+`)
+
+	template := strings.NewReplacer("$DSN", dsn).Replace(`
+read_until:
+  # Stop when we're idle for 3 seconds, which means our writer stopped
+  idle_timeout: 3s
+  input:
+    mysql_cdc:
+      dsn: $DSN
+      stream_snapshot: true
+      snapshot_max_batch_size: 500
+      checkpoint_cache: foocache
+      tables:
+        - foo
+`)
+
+	cacheConf := `
+label: foocache
+file:
+  directory: ` + t.TempDir()
+
+	streamOutBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: DEBUG`))
+	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
+	require.NoError(t, streamOutBuilder.AddInputYAML(template))
+
+	var ids []int64
+	var batchMu sync.Mutex
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, batch service.MessageBatch) error {
+		batchMu.Lock()
+		defer batchMu.Unlock()
+		for _, msg := range batch {
+			data, err := msg.AsStructured()
+			require.NoError(t, err)
+			v, err := bloblang.ValueAsInt64(data.(map[string]any)["a"])
+			require.NoError(t, err)
+			ids = append(ids, v)
+		}
+		return nil
+	}))
+
+	streamOut, err := streamOutBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(streamOut.Resources())
+
+	// Continuously write so there is a chance we skip data between snapshot and stream hand off.
+	var count atomic.Int64
+	writer := asyncroutine.NewPeriodic(time.Microsecond, func() {
+		db.Exec("INSERT INTO foo (a) VALUES (DEFAULT)")
+		count.Add(1)
+	})
+	writer.Start()
+	t.Cleanup(writer.Stop)
+
+	// Wait to write some values so there are some values in the snapshot
+	time.Sleep(time.Second)
+
+	streamStopped := make(chan any, 1)
+	go func() {
+		err = streamOut.Run(context.Background())
+		require.NoError(t, err)
+		streamStopped <- nil
+	}()
+
+	// Let the writer write a little more
+	time.Sleep(time.Second * 3)
+
+	writer.Stop()
+
+	// Okay now wait for the stream to finish (the stream auto closes after it gets nothing for 3 seconds)
+	select {
+	case <-streamStopped:
+	case <-time.After(30 * time.Second):
+		require.Fail(t, "stream did not complete in time")
+	}
+	require.NoError(t, streamOut.StopWithin(time.Second*10))
+	expected := []int64{}
+	for i := range count.Load() {
+		expected = append(expected, i+1)
+	}
+	batchMu.Lock()
+	require.Equal(t, expected, ids)
+	batchMu.Unlock()
 }
