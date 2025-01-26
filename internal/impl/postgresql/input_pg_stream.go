@@ -40,6 +40,7 @@ const (
 	fieldSlotName                  = "slot_name"
 	fieldBatching                  = "batching"
 	fieldMaxParallelSnapshotTables = "max_parallel_snapshot_tables"
+	fieldUnchangedToastValue       = "unchanged_toast_value"
 
 	shutdownTimeout = 5 * time.Second
 )
@@ -111,6 +112,11 @@ This input adds the following metadata fields to each message:
 		Field(service.NewIntField(fieldMaxParallelSnapshotTables).
 			Description("Int specifies a number of tables that will be processed in parallel during the snapshot processing stage").
 			Default(1)).
+		Field(service.NewAnyField(fieldUnchangedToastValue).
+			Description("The value to emit when there are unchanged TOAST values in the stream. This ocurrs for updates and deletes where REPLICA IDENTITY is not FULL.").
+			Default(nil).
+			Example("__redpanda_connect_unchanged_toast_value__").
+			Advanced()).
 		Field(service.NewAutoRetryNacksToggleField()).
 		Field(service.NewBatchPolicyField(fieldBatching))
 }
@@ -131,6 +137,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		maxParallelSnapshotTables int
 		pgStandbyTimeout          time.Duration
 		batching                  service.BatchPolicy
+		unchangedToastValue       any
 	)
 
 	if err := license.CheckRunningEnterprise(mgr); err != nil {
@@ -206,6 +213,10 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		return nil, err
 	}
 
+	if unchangedToastValue, err = conf.FieldAny(fieldUnchangedToastValue); err != nil {
+		return nil, err
+	}
+
 	pgConnConfig, err := pgconn.ParseConfigWithOptions(dsn, pgconn.ParseConfigOptions{
 		// Don't support dynamic reading of password
 		GetSSLPassword: func(context.Context) string { return "" },
@@ -237,6 +248,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 			WalMonitorInterval:         walMonitorInterval,
 			MaxParallelSnapshotTables:  maxParallelSnapshotTables,
 			Logger:                     mgr.Logger(),
+			UnchangedToastValue:        unchangedToastValue,
 		},
 		batching:        batching,
 		checkpointLimit: checkpointLimit,

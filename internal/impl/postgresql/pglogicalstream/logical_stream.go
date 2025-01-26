@@ -52,6 +52,7 @@ type Stream struct {
 	logger                     *service.Logger
 	monitor                    *Monitor
 	maxParallelSnapshotTables  int
+	unchangedToastValue        any
 }
 
 // NewPgStream creates a new instance of the Stream struct
@@ -109,6 +110,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		shutSig:                    shutdown.NewSignaller(),
 		includeTxnMarkers:          config.IncludeTxnMarkers,
 		standbyMessageTimeout:      config.PgStandbyTimeout,
+		unchangedToastValue:        config.UnchangedToastValue,
 	}
 
 	monitor, err := NewMonitor(ctx, config.DBRawDSN, stream.logger, tables, stream.slotName, config.WalMonitorInterval)
@@ -453,7 +455,9 @@ const (
 // Handle handles the pgoutput output
 func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, relations map[uint32]*RelationMessage, typeMap *pgtype.Map) (processChangeResult, error) {
 	// parse changes inside the transaction
-	message, err := decodePgOutput(xld.WALData, relations, typeMap)
+	fmt.Println("unchangedToastValue", s.unchangedToastValue)
+	fmt.Printf("unchangedToastValue: %T\n", s.unchangedToastValue)
+	message, err := decodePgOutput(xld.WALData, relations, typeMap, s.unchangedToastValue)
 	if err != nil {
 		return changeResultNoMessage, err
 	}

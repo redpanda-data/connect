@@ -45,7 +45,7 @@ func isCommitMessage(WALData []byte) (bool, *CommitMessage, error) {
 // as a side effect it updates the relations map with any new relation metadata
 // When the relation is changes in the database, the relation message is sent
 // before the change message.
-func decodePgOutput(WALData []byte, relations map[uint32]*RelationMessage, typeMap *pgtype.Map) (*StreamMessage, error) {
+func decodePgOutput(WALData []byte, relations map[uint32]*RelationMessage, typeMap *pgtype.Map, unchangedToastValue any) (*StreamMessage, error) {
 	logicalMsg, err := Parse(WALData)
 	message := &StreamMessage{}
 
@@ -74,8 +74,10 @@ func decodePgOutput(WALData []byte, relations map[uint32]*RelationMessage, typeM
 		for idx, col := range logicalMsg.Tuple.Columns {
 			colName := rel.Columns[idx].Name
 			switch col.DataType {
-			case 'n', 'u': // null or unchanged toast
+			case 'n': // null
 				values[colName] = nil
+			case 'u': // unchanged toast
+				values[colName] = unchangedToastValue
 			case 't': //text
 				val, err := decodeTextColumnData(typeMap, col.Data, rel.Columns[idx].DataType)
 				if err != nil {
@@ -102,21 +104,27 @@ func decodePgOutput(WALData []byte, relations map[uint32]*RelationMessage, typeM
 			case 'n': // null
 				values[colName] = nil
 			case 'u': // unchanged toast
+				values[colName] = unchangedToastValue
 				// In the case of an update of an unchanged toast value and the replica is set to
 				// IDENTITY FULL, we need to look at the old tuple in order to get the data, it's
 				// just marked as unchanged in the new tuple.
 				if logicalMsg.OldTupleType == 'O' && logicalMsg.OldTuple != nil && idx < len(logicalMsg.OldTuple.Columns) {
 					col = logicalMsg.OldTuple.Columns[idx]
 					switch col.DataType {
-					case 'n', 'u':
+					case 'n': // null
 						values[colName] = nil
-						continue
+					case 'u': // unchanged toast
+						values[colName] = unchangedToastValue
 					case 't':
+						val, err := decodeTextColumnData(typeMap, col.Data, rel.Columns[idx].DataType)
+						if err != nil {
+							return nil, fmt.Errorf("unable to decode column data: %w", err)
+						}
+						values[colName] = val
 					default:
 						return nil, fmt.Errorf("unable to decode column data, unknown data type: %d", col.DataType)
 					}
 				}
-				fallthrough
 			case 't': //text
 				val, err := decodeTextColumnData(typeMap, col.Data, rel.Columns[idx].DataType)
 				if err != nil {
@@ -140,8 +148,10 @@ func decodePgOutput(WALData []byte, relations map[uint32]*RelationMessage, typeM
 		for idx, col := range logicalMsg.OldTuple.Columns {
 			colName := rel.Columns[idx].Name
 			switch col.DataType {
-			case 'n', 'u': // null or unchanged toast
+			case 'n': // null
 				values[colName] = nil
+			case 'u': // unchanged toast
+				values[colName] = unchangedToastValue
 			case 't': //text
 				val, err := decodeTextColumnData(typeMap, col.Data, rel.Columns[idx].DataType)
 				if err != nil {

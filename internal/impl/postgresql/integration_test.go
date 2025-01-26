@@ -731,96 +731,118 @@ pg_stream:
 func TestIntegrationTOASTValues(t *testing.T) {
 	t.Parallel()
 	integration.CheckSkip(t)
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
 
-	var (
-		resource *dockertest.Resource
-		db       *sql.DB
-	)
+	for _, replicaIdentity := range []string{"FULL", "DEFAULT", "ALT_UNCHANGED_TOAST"} {
+		replicaIdentity := replicaIdentity
+		t.Run(replicaIdentity, func(t *testing.T) {
+			t.Parallel()
+			pool, err := dockertest.NewPool("")
+			require.NoError(t, err)
 
-	resource, db, err = ResourceWithPostgreSQLVersion(t, pool, "16")
-	require.NoError(t, err)
-	require.NoError(t, resource.Expire(120))
+			var (
+				resource *dockertest.Resource
+				db       *sql.DB
+			)
 
-	_, err = db.Exec(`ALTER TABLE large_values REPLICA IDENTITY FULL;`)
-	require.NoError(t, err)
+			resource, db, err = ResourceWithPostgreSQLVersion(t, pool, "16")
+			require.NoError(t, err)
+			require.NoError(t, resource.Expire(120))
 
-	const stringSize = 400_000
+			if replicaIdentity == "FULL" {
+				_, err = db.Exec(`ALTER TABLE large_values REPLICA IDENTITY FULL`)
+				require.NoError(t, err)
+			}
 
-	hostAndPort := resource.GetHostPort("5432/tcp")
-	hostAndPortSplited := strings.Split(hostAndPort, ":")
-	password := "l]YLSc|4[i56%{gY"
+			const stringSize = 400_000
 
-	require.NoError(t, err)
+			hostAndPort := resource.GetHostPort("5432/tcp")
+			hostAndPortSplited := strings.Split(hostAndPort, ":")
+			password := "l]YLSc|4[i56%{gY"
 
-	// Insert a large >1MiB value
-	_, err = db.Exec(`INSERT INTO large_values (id, value) VALUES ($1, $2);`, 1, strings.Repeat("foo", stringSize))
-	require.NoError(t, err)
+			require.NoError(t, err)
 
-	databaseURL := fmt.Sprintf("user=user_name password=%s dbname=dbname sslmode=disable host=%s port=%s", password, hostAndPortSplited[0], hostAndPortSplited[1])
-	template := fmt.Sprintf(`
+			// Insert a large >1MiB value
+			_, err = db.Exec(`INSERT INTO large_values (id, value) VALUES ($1, $2);`, 1, strings.Repeat("foo", stringSize))
+			require.NoError(t, err)
+
+			databaseURL := fmt.Sprintf("user=user_name password=%s dbname=dbname sslmode=disable host=%s port=%s", password, hostAndPortSplited[0], hostAndPortSplited[1])
+			template := strings.NewReplacer("$DSN", databaseURL).Replace(`
 pg_stream:
-    dsn: %s
+    dsn: $DSN
     slot_name: test_slot_native_decoder
     stream_snapshot: true
     snapshot_batch_size: 1
     schema: public
     tables:
        - large_values
-`, databaseURL)
+`)
+			if replicaIdentity == "ALT_UNCHANGED_TOAST" {
+				template += `
+    unchanged_toast_value: '__redpanda_connect_unchanged_toast_yum__'
+      `
+			}
 
-	streamOutBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: TRACE`))
-	require.NoError(t, streamOutBuilder.AddInputYAML(template))
+			streamOutBuilder := service.NewStreamBuilder()
+			require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: TRACE`))
+			require.NoError(t, streamOutBuilder.AddInputYAML(template))
 
-	var outBatches []string
-	var outBatchMut sync.Mutex
-	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
-		msgBytes, err := mb[0].AsBytes()
-		require.NoError(t, err)
-		outBatchMut.Lock()
-		outBatches = append(outBatches, string(msgBytes))
-		outBatchMut.Unlock()
-		return nil
-	}))
+			var outBatches []string
+			var outBatchMut sync.Mutex
+			require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
+				msgBytes, err := mb[0].AsBytes()
+				require.NoError(t, err)
+				outBatchMut.Lock()
+				outBatches = append(outBatches, string(msgBytes))
+				outBatchMut.Unlock()
+				return nil
+			}))
 
-	streamOut, err := streamOutBuilder.Build()
-	require.NoError(t, err)
+			streamOut, err := streamOutBuilder.Build()
+			require.NoError(t, err)
 
-	license.InjectTestService(streamOut.Resources())
+			license.InjectTestService(streamOut.Resources())
 
-	go func() {
-		_ = streamOut.Run(context.Background())
-	}()
+			go func() {
+				_ = streamOut.Run(context.Background())
+			}()
 
-	assert.Eventually(t, func() bool {
-		outBatchMut.Lock()
-		defer outBatchMut.Unlock()
-		return len(outBatches) == 1
-	}, time.Second*10, time.Millisecond*100)
+			assert.Eventually(t, func() bool {
+				outBatchMut.Lock()
+				defer outBatchMut.Unlock()
+				return len(outBatches) == 1
+			}, time.Second*10, time.Millisecond*100)
 
-	_, err = db.Exec(`UPDATE large_values SET value=$1;`, strings.Repeat("bar", stringSize))
-	require.NoError(t, err)
-	_, err = db.Exec(`UPDATE large_values SET id=$1;`, 3)
-	require.NoError(t, err)
-	_, err = db.Exec(`DELETE FROM large_values`)
-	require.NoError(t, err)
-	_, err = db.Exec(`INSERT INTO large_values (id, value) VALUES ($1, $2);`, 2, strings.Repeat("qux", stringSize))
-	require.NoError(t, err)
+			_, err = db.Exec(`UPDATE large_values SET value=$1;`, strings.Repeat("bar", stringSize))
+			require.NoError(t, err)
+			_, err = db.Exec(`UPDATE large_values SET id=$1;`, 3)
+			require.NoError(t, err)
+			_, err = db.Exec(`DELETE FROM large_values`)
+			require.NoError(t, err)
+			_, err = db.Exec(`INSERT INTO large_values (id, value) VALUES ($1, $2);`, 2, strings.Repeat("qux", stringSize))
+			require.NoError(t, err)
 
-	assert.EventuallyWithT(t, func(c *assert.CollectT) {
-		outBatchMut.Lock()
-		defer outBatchMut.Unlock()
-		assert.Len(c, outBatches, 5, "got: %#v", outBatches)
-	}, time.Second*10, time.Millisecond*100)
-	require.JSONEq(t, `{"id":1, "value": "`+strings.Repeat("foo", stringSize)+`"}`, outBatches[0], "GOT: %s", outBatches[0])
-	require.JSONEq(t, `{"id":1, "value": "`+strings.Repeat("bar", stringSize)+`"}`, outBatches[1], "GOT: %s", outBatches[1])
-	require.JSONEq(t, `{"id":3, "value": "`+strings.Repeat("bar", stringSize)+`"}`, outBatches[2], "GOT: %s", outBatches[2])
-	require.JSONEq(t, `{"id":3, "value": "`+strings.Repeat("bar", stringSize)+`"}`, outBatches[3], "GOT: %s", outBatches[3])
-	require.JSONEq(t, `{"id":2, "value": "`+strings.Repeat("qux", stringSize)+`"}`, outBatches[4], "GOT: %s", outBatches[4])
+			assert.EventuallyWithT(t, func(c *assert.CollectT) {
+				outBatchMut.Lock()
+				defer outBatchMut.Unlock()
+				assert.Len(c, outBatches, 5, "got: %#v", outBatches)
+			}, time.Second*10, time.Millisecond*100)
+			require.JSONEq(t, `{"id":1, "value": "`+strings.Repeat("foo", stringSize)+`"}`, outBatches[0], "GOT: %s", outBatches[0])
+			require.JSONEq(t, `{"id":1, "value": "`+strings.Repeat("bar", stringSize)+`"}`, outBatches[1], "GOT: %s", outBatches[1])
+			if replicaIdentity == "FULL" {
+				require.JSONEq(t, `{"id":3, "value": "`+strings.Repeat("bar", stringSize)+`"}`, outBatches[2], "GOT: %s", outBatches[2])
+				require.JSONEq(t, `{"id":3, "value": "`+strings.Repeat("bar", stringSize)+`"}`, outBatches[3], "GOT: %s", outBatches[3])
+			} else if replicaIdentity == "DEFAULT" {
+				require.JSONEq(t, `{"id":3, "value": null}`, outBatches[2], "GOT: %s", outBatches[2])
+				require.JSONEq(t, `{"id":3, "value": null}`, outBatches[3], "GOT: %s", outBatches[3])
+			} else {
+				require.JSONEq(t, `{"id":3, "value": "__redpanda_connect_unchanged_toast_yum__"}`, outBatches[2], "GOT: %s", outBatches[2])
+				require.JSONEq(t, `{"id":3, "value": null}`, outBatches[3], "GOT: %s", outBatches[3])
+			}
+			require.JSONEq(t, `{"id":2, "value": "`+strings.Repeat("qux", stringSize)+`"}`, outBatches[4], "GOT: %s", outBatches[4])
 
-	require.NoError(t, streamOut.StopWithin(time.Second*10))
+			require.NoError(t, streamOut.StopWithin(time.Second*10))
+		})
+	}
 }
 
 func TestIntegrationSnapshotConsistency(t *testing.T) {

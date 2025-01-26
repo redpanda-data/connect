@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - Field `avro.preserve_logical_types` for processor `schema_registry_decode` was added to preserve logical types instead of decoding them as their primitive representation. (@rockwotj)
 - Processor `schema_registry_decode` now adds metadata `schema_id` for the schema's ID in the schema registry. (@rockwotj)
 - Field `schema_evolution.processors` added to `snowpipe_streaming` to support side effects or enrichment during schema evolution. (@rockwotj)
+- Field `unchanged_toast_value` added to `postgres_cdc` to control the value substituted for unchanged toast values when a table does not have full replica identity. (@rockwotj)
 
 ### Fixed
 
