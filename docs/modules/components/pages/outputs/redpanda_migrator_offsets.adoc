@@ -74,8 +74,8 @@ output:
     offset_commit_timestamp: ${! @kafka_offset_commit_timestamp }
     offset_metadata: ${! @kafka_offset_metadata }
     timeout: 10s
-    max_message_bytes: 1MB
-    broker_write_max_bytes: 100MB
+    max_message_bytes: 1MiB
+    broker_write_max_bytes: 100MiB
     max_retries: 0
     backoff:
       initial_interval: 1s
@@ -542,7 +542,7 @@ The maximum space in bytes than an individual message may take, messages larger 
 
 *Type*: `string`
 
-*Default*: `"1MB"`
+*Default*: `"1MiB"`
 
 ```yml
 # Examples
@@ -559,7 +559,7 @@ The upper bound for the number of bytes written to a broker connection in a sing
 
 *Type*: `string`
 
-*Default*: `"100MB"`
+*Default*: `"100MiB"`
 
 ```yml
 # Examples
