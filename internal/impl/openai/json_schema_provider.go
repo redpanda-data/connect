@@ -76,7 +76,7 @@ func (p *dynamicSchemaProvider) GetJSONSchema(ctx context.Context) (*oai.ChatCom
 	name := fmt.Sprintf("%s%d", p.namePrefix, info.ID)
 	p.cached = &oai.ChatCompletionResponseFormatJSONSchema{
 		Name:   name,
-		Schema: schema,
+		Schema: &schema,
 		Strict: true,
 	}
 	p.nextRefreshTime = time.Now().Add(p.refreshInterval)
