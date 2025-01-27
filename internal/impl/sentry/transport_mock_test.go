@@ -40,3 +40,7 @@ func (t *mockTransport) Configure(options sentry.ClientOptions) {
 func (t *mockTransport) SendEvent(event *sentry.Event) {
 	t.Called(event)
 }
+
+func (t *mockTransport) Close() {
+	t.Called()
+}
