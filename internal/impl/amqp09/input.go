@@ -81,6 +81,13 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 			service.NewBoolField(queueDeclareAutoDeleteField).
 				Description("Whether the declared queue will auto-delete.").
 				Default(false),
+			service.NewStringMapField(queueDeclareArgumentsField).
+				Description("Optional arguments specific to the server's implementation of the queue that can be sent for queue types which require extra parameters.").
+				Advanced().
+				Optional().
+				Example(map[string]any{
+					"x-queue-type": "quorum",
+				}),
 		).
 			Description(`Allows you to passively declare the target queue. If the queue already exists then the declaration passively verifies that they match the target fields.`).
 			Advanced().
@@ -161,9 +168,10 @@ type amqp09Reader struct {
 
 	nackRejectPattens []*regexp.Regexp
 
-	queueDeclare    bool
-	queueDurable    bool
-	queueAutoDelete bool
+	queueDeclare     bool
+	queueDurable     bool
+	queueAutoDelete  bool
+	queueDeclareArgs amqp.Table
 
 	bindingDeclare []amqp09BindingDeclare
 
@@ -231,6 +239,18 @@ func amqp09ReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources) 
 		a.queueDeclare, _ = qdConf.FieldBool(queueDeclareEnabledField)
 		a.queueDurable, _ = qdConf.FieldBool(queueDeclareDurableField)
 		a.queueAutoDelete, _ = qdConf.FieldBool(queueDeclareAutoDeleteField)
+
+		a.queueDeclareArgs = amqp.Table{}
+
+		if qdConf.Contains(queueDeclareArgumentsField) {
+			args, err := qdConf.FieldStringMap(queueDeclareArgumentsField)
+			if err != nil {
+				return nil, err
+			}
+			for key, value := range args {
+				a.queueDeclareArgs[key] = value
+			}
+		}
 	}
 
 	if conf.Contains(bindingsDeclareField) {
@@ -279,12 +299,12 @@ func (a *amqp09Reader) Connect(ctx context.Context) (err error) {
 
 	if a.queueDeclare {
 		if _, err = amqpChan.QueueDeclare(
-			a.queue,           // name of the queue
-			a.queueDurable,    // durable
-			a.queueAutoDelete, // delete when unused
-			false,             // exclusive
-			false,             // noWait
-			nil,               // arguments
+			a.queue,            // name of the queue
+			a.queueDurable,     // durable
+			a.queueAutoDelete,  // delete when unused
+			false,              // exclusive
+			false,              // noWait
+			a.queueDeclareArgs, // arguments
 		); err != nil {
 			_ = amqpChan.Close()
 			_ = conn.Close()

@@ -59,6 +59,7 @@ input:
       enabled: false
       durable: true
       auto_delete: false
+      arguments: {} # No default (optional)
     bindings_declare: [] # No default (optional)
     consumer_tag: ""
     auto_ack: false
@@ -171,6 +172,21 @@ Whether the declared queue will auto-delete.
 *Type*: `bool`
 
 *Default*: `false`
+
+=== `queue_declare.arguments`
+
+Optional arguments specific to the server's implementation of the queue that can be sent for queue types which require extra parameters.
+
+
+*Type*: `object`
+
+
+```yml
+# Examples
+
+arguments:
+  x-queue-type: quorum
+```
 
 === `bindings_declare`
 
