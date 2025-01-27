@@ -91,8 +91,8 @@ output:
       idempotent_write: true
       compression: "" # No default (optional)
       timeout: 10s
-      max_message_bytes: 1MB
-      broker_write_max_bytes: 100MB
+      max_message_bytes: 1MiB
+      broker_write_max_bytes: 100MiB
       topic: "" # No default (required)
       key: "" # No default (optional)
       partition: ${! meta("partition") } # No default (optional)
@@ -479,7 +479,7 @@ The maximum space in bytes than an individual message may take, messages larger 
 
 *Type*: `string`
 
-*Default*: `"1MB"`
+*Default*: `"1MiB"`
 
 ```yml
 # Examples
@@ -496,7 +496,7 @@ The upper bound for the number of bytes written to a broker connection in a sing
 
 *Type*: `string`
 
-*Default*: `"100MB"`
+*Default*: `"100MiB"`
 
 ```yml
 # Examples

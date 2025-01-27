@@ -53,13 +53,13 @@ func FranzProducerLimitsFields() []*service.ConfigField {
 		service.NewStringField(kfwFieldMaxMessageBytes).
 			Description("The maximum space in bytes than an individual message may take, messages larger than this value will be rejected. This field corresponds to Kafka's `max.message.bytes`.").
 			Advanced().
-			Default("1MB").
+			Default("1MiB").
 			Example("100MB").
 			Example("50mib"),
 		service.NewStringField(kfwFieldBrokerWriteMaxBytes).
 			Description("The upper bound for the number of bytes written to a broker connection in a single write. This field corresponds to Kafka's `socket.request.max.bytes`.").
 			Advanced().
-			Default("100MB").
+			Default("100MiB").
 			Example("128MB").
 			Example("50mib"),
 	}
