@@ -113,7 +113,7 @@ This input adds the following metadata fields to each message:
 			Description("Int specifies a number of tables that will be processed in parallel during the snapshot processing stage").
 			Default(1)).
 		Field(service.NewAnyField(fieldUnchangedToastValue).
-			Description("The value to emit when there are unchanged TOAST values in the stream. This ocurrs for updates and deletes where REPLICA IDENTITY is not FULL.").
+			Description("The value to emit when there are unchanged TOAST values in the stream. This occurs for updates and deletes where REPLICA IDENTITY is not FULL.").
 			Default(nil).
 			Example("__redpanda_connect_unchanged_toast_value__").
 			Advanced()).

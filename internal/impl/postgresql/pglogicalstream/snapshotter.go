@@ -80,7 +80,7 @@ func (s *Snapshotter) prepare(ctx context.Context) error {
 func (s *Snapshotter) tableStats(ctx context.Context, table TableFQN) (avgRowSize, numRows int, err error) {
 	row := s.readerTxn.QueryRowContext(ctx, fmt.Sprintf(`SELECT SUM(pg_column_size('%s.*')) / COUNT(*), COUNT(*) FROM %s;`, table, table))
 	if row.Err() != nil {
-		return 0, 0, fmt.Errorf("cannot get avg row size due to query failure: %w", err)
+		return 0, 0, fmt.Errorf("cannot get table stats due to query failure: %w", err)
 	}
 	var size sql.NullInt64
 	var count sql.NullInt64

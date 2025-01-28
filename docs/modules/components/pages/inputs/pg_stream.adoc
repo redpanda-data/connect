@@ -288,7 +288,7 @@ Int specifies a number of tables that will be processed in parallel during the s
 
 === `unchanged_toast_value`
 
-The value to emit when there are unchanged TOAST values in the stream. This ocurrs for updates and deletes where REPLICA IDENTITY is not FULL.
+The value to emit when there are unchanged TOAST values in the stream. This occurs for updates and deletes where REPLICA IDENTITY is not FULL.
 
 
 *Type*: `unknown`
