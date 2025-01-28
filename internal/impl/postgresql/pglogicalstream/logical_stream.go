@@ -39,13 +39,11 @@ type Stream struct {
 	// The LSN acked by the stream, we may not have acked this to postgres yet (ack, ack, ack)
 	ackedLSN LSN
 
-	standbyMessageTimeout      time.Duration
-	nextStandbyMessageDeadline time.Time
-	messages                   chan StreamMessage
-	errors                     chan error
+	standbyMessageTimeout time.Duration
+	messages              chan StreamMessage
+	errors                chan error
 
 	includeTxnMarkers          bool
-	snapshotName               string
 	slotName                   string
 	tables                     []TableFQN
 	snapshotBatchSize          int
@@ -53,8 +51,8 @@ type Stream struct {
 	snapshotMemorySafetyFactor float64
 	logger                     *service.Logger
 	monitor                    *Monitor
-	snapshotter                *Snapshotter
 	maxParallelSnapshotTables  int
+	unchangedToastValue        any
 }
 
 // NewPgStream creates a new instance of the Stream struct
@@ -111,24 +109,26 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		logger:                     config.Logger,
 		shutSig:                    shutdown.NewSignaller(),
 		includeTxnMarkers:          config.IncludeTxnMarkers,
+		standbyMessageTimeout:      config.PgStandbyTimeout,
+		unchangedToastValue:        config.UnchangedToastValue,
 	}
+
+	monitor, err := NewMonitor(ctx, config.DBRawDSN, stream.logger, tables, stream.slotName, config.WalMonitorInterval)
+	if err != nil {
+		return nil, err
+	}
+	stream.monitor = monitor
+	cleanups = append(cleanups, func() {
+		if err := monitor.Stop(); err != nil {
+			config.Logger.Warnf("unable to properly cleanup monitor on stream creation failure: %s", err)
+		}
+	})
 
 	var version int
 	version, err = getPostgresVersion(config.DBRawDSN)
 	if err != nil {
 		return nil, err
 	}
-
-	snapshotter, err := NewSnapshotter(config.DBRawDSN, stream.logger, version)
-	if err != nil {
-		return nil, err
-	}
-	stream.snapshotter = snapshotter
-	cleanups = append(cleanups, func() {
-		if err := snapshotter.closeConn(); err != nil {
-			config.Logger.Warnf("unable to properly cleanup snapshotter connection on stream creation failure: %s", err)
-		}
-	})
 
 	pluginArguments := []string{
 		"proto_version '1'",
@@ -151,16 +151,6 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		// TODO: Drop publication if it was created (meaning it's not existing state we might want to keep).
 	})
 
-	sysident, err := IdentifySystem(ctx, stream.pgConn)
-	if err != nil {
-		return nil, err
-	}
-
-	var freshlyCreatedSlot = false
-	var confirmedLSNFromDB string
-	var outputPlugin string
-	// check is replication slot exist to get last restart SLN
-
 	s, err := sanitize.SQLQuery("SELECT confirmed_flush_lsn, plugin FROM pg_replication_slots WHERE slot_name = $1", config.ReplicationSlotName)
 	if err != nil {
 		return nil, err
@@ -169,98 +159,119 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(connExecResult) == 0 || len(connExecResult[0].Rows) == 0 {
-		// here we create a new replication slot because there is no slot found
-		var createSlotResult CreateReplicationSlotResult
-		createSlotResult, err = CreateReplicationSlot(
-			ctx,
-			stream.pgConn,
-			stream.slotName,
+
+	if len(connExecResult) > 0 && len(connExecResult[0].Rows) > 0 {
+		slotCheckRow := connExecResult[0].Rows[0]
+		confirmedLSNFromDB, err := ParseLSN(string(slotCheckRow[0]))
+		if err != nil {
+			return nil, fmt.Errorf("unable to decode LSN from postgres: %w", err)
+		}
+		outputPlugin := string(slotCheckRow[1])
+		// handling a case when replication slot already exists but with different output plugin created manually
+		if outputPlugin != decodingPlugin {
+			return nil, fmt.Errorf("replication slot %s already exists with different output plugin: %s", config.ReplicationSlotName, outputPlugin)
+		}
+		if confirmedLSNFromDB > 0 {
+			stream.ackedLSN = confirmedLSNFromDB - 1
+		}
+		stream.logger.Debugf("starting stream from LSN %s", confirmedLSNFromDB.String())
+		if err = stream.startLr(ctx, confirmedLSNFromDB); err != nil {
+			return nil, err
+		}
+		go func() {
+			defer stream.shutSig.TriggerHasStopped()
+			if err := stream.streamMessages(confirmedLSNFromDB); err != nil {
+				stream.errors <- fmt.Errorf("logical replication stream error: %w", err)
+			}
+		}()
+		cleanups = nil
+		return stream, nil
+	}
+
+	var snapshotter *Snapshotter
+	if config.StreamOldData {
+		// Create a temporary replication slot that just creates a snapshot and freezes the LSN for the snapshot.
+		// We make this temporary so that if the snapshotting phase fails, we restart the snapshotting phase
+		// instead of resuming from the start of the stream (with an incomplete snapshot).
+		_, snapshotName, err := CreateReplicationSlot(
+			ctx, stream.pgConn,
+			stream.slotName+"_tmp",
 			decodingPlugin,
 			CreateReplicationSlotOptions{
-				Temporary:      config.TemporaryReplicationSlot,
-				SnapshotAction: "export",
+				Temporary:      true,
+				SnapshotAction: "EXPORT_SNAPSHOT",
 			},
-			version,
-			stream.snapshotter,
 		)
+		if err != nil {
+			return nil, fmt.Errorf("unable to create temporary replication slot for snapshot: %w", err)
+		}
+		stream.logger.Tracef("exported snapshot named: %s", snapshotName)
+		snapshotter, err = NewSnapshotter(config.DBRawDSN, stream.logger, snapshotName)
 		if err != nil {
 			return nil, err
 		}
-		stream.snapshotName = createSlotResult.SnapshotName
-		freshlyCreatedSlot = true
-		cleanups = append(cleanups, func() {
-			err := DropReplicationSlot(ctx, stream.pgConn, stream.slotName, DropReplicationSlotOptions{Wait: true})
-			if err != nil {
-				config.Logger.Warnf("unable to properly cleanup replication slot on stream creation failure: %s", err)
-			}
-		})
-	} else {
-		slotCheckRow := connExecResult[0].Rows[0]
-		confirmedLSNFromDB = string(slotCheckRow[0])
-		outputPlugin = string(slotCheckRow[1])
 	}
 
-	// handling a case when replication slot already exists but with different output plugin created manually
-	if !freshlyCreatedSlot && outputPlugin != decodingPlugin {
-		return nil, fmt.Errorf("replication slot %s already exists with different output plugin: %s", config.ReplicationSlotName, outputPlugin)
-	}
-
-	var lsnrestart LSN
-	if freshlyCreatedSlot {
-		lsnrestart = sysident.XLogPos
-	} else {
-		lsnrestart, _ = ParseLSN(confirmedLSNFromDB)
-	}
-	if lsnrestart > 0 {
-		stream.ackedLSN = lsnrestart - 1
-	}
-
-	stream.standbyMessageTimeout = config.PgStandbyTimeout
-	stream.nextStandbyMessageDeadline = time.Now().Add(stream.standbyMessageTimeout)
-
-	monitor, err := NewMonitor(ctx, config.DBRawDSN, stream.logger, tables, stream.slotName, config.WalMonitorInterval)
-	if err != nil {
-		return nil, err
-	}
-	stream.monitor = monitor
-	cleanups = append(cleanups, func() {
-		if err := monitor.Stop(); err != nil {
-			config.Logger.Warnf("unable to properly cleanup monitor on stream creation failure: %s", err)
-		}
-	})
-
-	stream.logger.Debugf("starting stream from LSN %s with snapshot name %s", lsnrestart.String(), stream.snapshotName)
-	// TODO(le-vlad): if snapshot processing is restarted we will just skip right to streaming...
-	if !freshlyCreatedSlot || !config.StreamOldData {
-		if err = stream.startLr(ctx, lsnrestart); err != nil {
-			return nil, err
-		}
-
-		go func() {
-			defer stream.shutSig.TriggerHasStopped()
-			if err := stream.streamMessages(lsnrestart); err != nil {
-				stream.errors <- fmt.Errorf("logical replication stream error: %w", err)
-			}
-		}()
-	} else {
-		go func() {
-			defer stream.shutSig.TriggerHasStopped()
-			if err := stream.processSnapshot(); err != nil {
+	go func() {
+		defer stream.shutSig.TriggerHasStopped()
+		ctx, done := stream.shutSig.SoftStopCtx(context.Background())
+		defer done()
+		var startLSN LSN
+		if snapshotter != nil {
+			if err = stream.processSnapshot(ctx, snapshotter); err != nil {
 				stream.errors <- fmt.Errorf("failed to process snapshot: %w", err)
 				return
 			}
-			ctx, done := stream.shutSig.SoftStopCtx(context.Background())
-			defer done()
-			if err := stream.startLr(ctx, lsnrestart); err != nil {
-				stream.errors <- fmt.Errorf("failed to start logical replication: %w", err)
+			// TODO: Do we want to ensure all snapshot messages are ack'd before moving
+			// onto the replication stream?
+
+			// Now that the snapshot has been processed, we can copy the replication
+			// slot, represerving the LSN but making it not temporary.
+			// This action also expires the snapshot.
+			startLSN, err = CopyReplicationSlot(
+				ctx,
+				stream.pgConn,
+				stream.slotName+"_tmp",
+				stream.slotName,
+				config.TemporaryReplicationSlot,
+			)
+			if err == nil {
+				// Drop our temporary name, we don't need it anymore.
+				err = DropReplicationSlot(
+					ctx,
+					stream.pgConn,
+					stream.slotName+"_tmp",
+					DropReplicationSlotOptions{Wait: false},
+				)
+			}
+			if err != nil {
+				stream.errors <- fmt.Errorf("failed to create streaming replication slot: %w", err)
 				return
 			}
-			if err := stream.streamMessages(lsnrestart); err != nil {
-				stream.errors <- fmt.Errorf("logical replication stream error: %w", err)
+		} else {
+			startLSN, _, err = CreateReplicationSlot(
+				ctx,
+				stream.pgConn,
+				stream.slotName,
+				decodingPlugin,
+				CreateReplicationSlotOptions{
+					Temporary:      config.TemporaryReplicationSlot,
+					SnapshotAction: "NOEXPORT_SNAPSHOT",
+				},
+			)
+			if err != nil {
+				stream.errors <- fmt.Errorf("failed to create replication slot: %w", err)
+				return
 			}
-		}()
-	}
+		}
+		if err := stream.startLr(ctx, startLSN); err != nil {
+			stream.errors <- fmt.Errorf("failed to start logical replication: %w", err)
+			return
+		}
+		if err := stream.streamMessages(startLSN); err != nil {
+			stream.errors <- fmt.Errorf("logical replication stream error: %w", err)
+		}
+	}()
 
 	// Success! No need to cleanup
 	cleanups = nil
@@ -325,7 +336,6 @@ func (s *Stream) commitAckedLSN(ctx context.Context, lsn LSN) error {
 	if err != nil {
 		return fmt.Errorf("failed to send standby status message at LSN %s: %w", lsn, err)
 	}
-	s.nextStandbyMessageDeadline = time.Now().Add(s.standbyMessageTimeout)
 	return nil
 }
 
@@ -338,7 +348,7 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 	lastEmittedLSN := currentLSN
 	lastEmittedCommitLSN := currentLSN
 
-	commitLSN := func(force bool) error {
+	commitLSN := func(force bool) (committed bool, err error) {
 		ctx, done := s.shutSig.HardStopCtx(context.Background())
 		defer done()
 		ackedLSN := s.getAckedLSN()
@@ -347,26 +357,30 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 		}
 		if force || ackedLSN > currentLSN {
 			if err := s.commitAckedLSN(ctx, ackedLSN); err != nil {
-				return err
+				return false, err
 			}
 			// Update the currentLSN
 			currentLSN = ackedLSN
+			return true, nil
 		}
-		return nil
+		return false, nil
 	}
 	defer func() {
-		if err := commitLSN(false); err != nil {
+		if _, err := commitLSN(false); err != nil {
 			s.logger.Errorf("unable to acknowledge LSN on stream shutdown: %v", err)
 		}
 	}()
 
+	nextStandbyMessageDeadline := time.Now().Add(s.standbyMessageTimeout)
 	ctx, done := s.shutSig.SoftStopCtx(context.Background())
 	defer done()
 	for !s.shutSig.IsSoftStopSignalled() {
-		if err := commitLSN(time.Now().After(s.nextStandbyMessageDeadline)); err != nil {
+		if committed, err := commitLSN(time.Now().After(nextStandbyMessageDeadline)); err != nil {
 			return err
+		} else if committed {
+			nextStandbyMessageDeadline = time.Now().Add(s.standbyMessageTimeout)
 		}
-		recvCtx, cancel := context.WithDeadline(ctx, s.nextStandbyMessageDeadline)
+		recvCtx, cancel := context.WithDeadline(ctx, nextStandbyMessageDeadline)
 		rawMsg, err := s.pgConn.ReceiveMessage(recvCtx)
 		cancel() // don't leak goroutine
 		hitStandbyTimeout := errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil
@@ -398,7 +412,7 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 				return fmt.Errorf("failed to parse PrimaryKeepaliveMessage: %w", err)
 			}
 			if pkm.ReplyRequested {
-				s.nextStandbyMessageDeadline = time.Time{}
+				nextStandbyMessageDeadline = time.Time{}
 			}
 
 		// XLogDataByteID is the message type for the actual WAL data
@@ -441,7 +455,7 @@ const (
 // Handle handles the pgoutput output
 func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, relations map[uint32]*RelationMessage, typeMap *pgtype.Map) (processChangeResult, error) {
 	// parse changes inside the transaction
-	message, err := decodePgOutput(xld.WALData, relations, typeMap)
+	message, err := decodePgOutput(xld.WALData, relations, typeMap, s.unchangedToastValue)
 	if err != nil {
 		return changeResultNoMessage, err
 	}
@@ -468,18 +482,16 @@ func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, re
 	}
 }
 
-func (s *Stream) processSnapshot() error {
-	ctx, done := s.shutSig.SoftStopCtx(context.Background())
-	defer done()
-	if err := s.snapshotter.prepare(ctx); err != nil {
+func (s *Stream) processSnapshot(ctx context.Context, snapshotter *Snapshotter) error {
+	if err := snapshotter.prepare(ctx); err != nil {
 		return fmt.Errorf("failed to prepare database snapshot - snapshot may be expired: %w", err)
 	}
 	defer func() {
 		s.logger.Debugf("Finished snapshot processing")
-		if err := s.snapshotter.releaseSnapshot(); err != nil {
+		if err := snapshotter.releaseSnapshot(); err != nil {
 			s.logger.Warnf("Failed to release database snapshot: %v", err.Error())
 		}
-		if err := s.snapshotter.closeConn(); err != nil {
+		if err := snapshotter.closeConn(); err != nil {
 			s.logger.Warnf("Failed to close database connection: %v", err.Error())
 		}
 	}()
@@ -493,23 +505,27 @@ func (s *Stream) processSnapshot() error {
 		wg.Go(func() (err error) {
 			s.logger.Debugf("Processing snapshot for table: %v", table)
 
-			var (
-				avgRowSizeBytes sql.NullInt64
-				offset          = 0
-			)
+			unquotedTable, err := sanitize.UnquotePostgresIdentifier(table.Table)
+			if err != nil {
+				return fmt.Errorf("unexpected failure to unquote table name: %w", err)
+			}
+			unquotedSchema, err := sanitize.UnquotePostgresIdentifier(table.Schema)
+			if err != nil {
+				return fmt.Errorf("unexpected failure to unquote schema name: %w", err)
+			}
 
-			avgRowSizeBytes, err = s.snapshotter.findAvgRowSize(ctx, table)
+			avgRowSizeBytes, numRows, err := snapshotter.tableStats(ctx, table)
 			if err != nil {
 				return fmt.Errorf("failed to calculate average row size for table %v: %w", table, err)
 			}
 
 			availableMemory := getAvailableMemory()
-			batchSize := s.snapshotter.calculateBatchSize(availableMemory, uint64(avgRowSizeBytes.Int64))
+			batchSize := snapshotter.calculateBatchSize(availableMemory, uint64(avgRowSizeBytes))
 			if s.snapshotBatchSize > 0 {
 				batchSize = s.snapshotBatchSize
 			}
 
-			s.logger.Debugf("Querying snapshot batch_side: %v, available_memory: %v, avg_row_size: %v", batchSize, availableMemory, avgRowSizeBytes.Int64)
+			s.logger.Debugf("Querying snapshot batch_side: %v, available_memory: %v, avg_row_size: %v, num rows: %v", batchSize, availableMemory, avgRowSizeBytes, numRows)
 
 			lastPrimaryKey, primaryKeyColumns, err := s.getPrimaryKeyColumn(ctx, table)
 			if err != nil {
@@ -522,13 +538,14 @@ func (s *Stream) processSnapshot() error {
 
 			var lastPkVals = map[string]any{}
 
+			var offset int
 			for {
 				var snapshotRows *sql.Rows
 				queryStart := time.Now()
 				if offset == 0 {
-					snapshotRows, err = s.snapshotter.querySnapshotData(ctx, table, nil, primaryKeyColumns, batchSize)
+					snapshotRows, err = snapshotter.querySnapshotData(ctx, table, nil, primaryKeyColumns, batchSize)
 				} else {
-					snapshotRows, err = s.snapshotter.querySnapshotData(ctx, table, lastPkVals, primaryKeyColumns, batchSize)
+					snapshotRows, err = snapshotter.querySnapshotData(ctx, table, lastPkVals, primaryKeyColumns, batchSize)
 				}
 				if err != nil {
 					return fmt.Errorf("failed to query snapshot data for table %v: %w", table, err)
@@ -560,7 +577,7 @@ func (s *Stream) processSnapshot() error {
 					rowsCount += 1
 
 					scanStart := time.Now()
-					scanArgs, valueGetters := s.snapshotter.prepareScannersAndGetters(columnTypes)
+					scanArgs, valueGetters := snapshotter.prepareScannersAndGetters(columnTypes)
 					err := snapshotRows.Scan(scanArgs...)
 					scanEnd := time.Since(scanStart)
 					totalScanDuration += scanEnd
@@ -586,8 +603,8 @@ func (s *Stream) processSnapshot() error {
 					snapshotChangePacket := StreamMessage{
 						LSN:       nil,
 						Operation: ReadOpType,
-						Table:     table.Table,
-						Schema:    table.Schema,
+						Table:     unquotedTable,
+						Schema:    unquotedSchema,
 						Data:      data,
 					}
 

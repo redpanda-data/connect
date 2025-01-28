@@ -381,6 +381,30 @@ func QuotePostgresIdentifier(name string) string {
 	return quoted.String()
 }
 
+// UnquotePostgresIdentifier returns the valid unescaped identifier.
+func UnquotePostgresIdentifier(quoted string) (string, error) {
+	var output strings.Builder
+	if !strings.HasPrefix(quoted, `"`) || !strings.HasSuffix(quoted, `"`) || len(quoted) < 2 {
+		return "", errors.New("missing quotes for identifier")
+	}
+	unquoted := quoted[1 : len(quoted)-1]
+	output.Grow(len(unquoted))
+	for i := 0; i < len(unquoted); i++ {
+		_ = output.WriteByte(unquoted[i])
+		if unquoted[i] != '"' {
+			continue
+		}
+		if i+1 >= len(unquoted) {
+			return "", fmt.Errorf("invalid quoted identifier: %s", quoted)
+		}
+		if unquoted[i+1] != '"' {
+			return "", fmt.Errorf("invalid quoted identifier: %s", quoted)
+		}
+		i++ // Skip over the next character to handle triple quotes
+	}
+	return output.String(), nil
+}
+
 // NormalizePostgresIdentifier checks if a string is a valid PostgreSQL identifier
 // This follows PostgreSQL's standard naming rules
 func NormalizePostgresIdentifier(name string) (string, error) {

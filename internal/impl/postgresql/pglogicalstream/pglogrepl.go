@@ -21,6 +21,7 @@ import (
 	"context"
 	"database/sql/driver"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -42,23 +43,6 @@ const (
 	// StandbyStatusUpdateByteID is the byte ID for StandbyStatusUpdate messages.
 	StandbyStatusUpdateByteID = 'r'
 )
-
-// ReplicationMode is the mode of replication to use.
-type ReplicationMode int
-
-const (
-	// LogicalReplication is the only replication mode supported by this plugin
-	LogicalReplication ReplicationMode = iota
-)
-
-// String formats the mode into a postgres valid string
-func (mode ReplicationMode) String() string {
-	if mode == LogicalReplication {
-		return "LOGICAL"
-	} else {
-		return "PHYSICAL"
-	}
-}
 
 // LSN is a PostgreSQL Log Sequence Number. See https://www.postgresql.org/docs/current/datatype-pg-lsn.html.
 type LSN uint64
@@ -215,19 +199,10 @@ func ParseTimelineHistory(mrr *pgconn.MultiResultReader) (TimelineHistoryResult,
 	return thr, nil
 }
 
-// CreateReplicationSlotOptions are the options for the CREATE_REPLICATION_SLOT command. Including Mode, Temporary, and SnapshotAction.
+// CreateReplicationSlotOptions are the options for the CREATE_REPLICATION_SLOT command.
 type CreateReplicationSlotOptions struct {
 	Temporary      bool
 	SnapshotAction string
-	Mode           ReplicationMode
-}
-
-// CreateReplicationSlotResult is the parsed results the CREATE_REPLICATION_SLOT command.
-type CreateReplicationSlotResult struct {
-	SlotName        string
-	ConsistentPoint string
-	SnapshotName    string
-	OutputPlugin    string
 }
 
 // CreateReplicationSlot creates a logical replication slot.
@@ -237,92 +212,51 @@ func CreateReplicationSlot(
 	slotName string,
 	outputPlugin string,
 	options CreateReplicationSlotOptions,
-	version int,
-	snapshotter *Snapshotter,
-) (CreateReplicationSlotResult, error) {
+) (lsn LSN, snapshotName string, err error) {
 	var temporaryString string
 	if options.Temporary {
 		temporaryString = "TEMPORARY"
 	}
-	var snapshotString string
-	if options.SnapshotAction == "export" {
-		snapshotString = "(SNAPSHOT export)"
-	} else {
-		snapshotString = options.SnapshotAction
-	}
-
 	// NOTE: All strings passed into here have been validated and are not prone to SQL injection.
-	newPgCreateSlotCommand := fmt.Sprintf("CREATE_REPLICATION_SLOT %s %s %s %s %s", slotName, temporaryString, options.Mode, outputPlugin, snapshotString)
-	oldPgCreateSlotCommand := fmt.Sprintf("SELECT * FROM pg_create_logical_replication_slot('%s', '%s', %v);", slotName, outputPlugin, temporaryString == "TEMPORARY")
-
-	var snapshotName string
-	if version > 14 {
-		result, err := ParseCreateReplicationSlot(conn.Exec(ctx, newPgCreateSlotCommand), version, snapshotName)
-		if err != nil {
-			return CreateReplicationSlotResult{}, err
-		}
-		if snapshotter != nil {
-			snapshotter.setTransactionSnapshotName(result.SnapshotName)
-		}
-
-		return result, nil
-	}
-
-	var snapshotResponse SnapshotCreationResponse
-	if options.SnapshotAction == "export" {
-		var err error
-		snapshotResponse, err = snapshotter.initSnapshotTransaction(ctx)
-		if err != nil {
-			return CreateReplicationSlotResult{}, err
-		}
-		snapshotter.setTransactionSnapshotName(snapshotResponse.ExportedSnapshotName)
-	}
-
-	replicationSlotCreationResponse := conn.Exec(ctx, oldPgCreateSlotCommand)
-	_, err := replicationSlotCreationResponse.ReadAll()
+	cmd := fmt.Sprintf("CREATE_REPLICATION_SLOT %s %s LOGICAL %s %s", slotName, temporaryString, outputPlugin, options.SnapshotAction)
+	results, err := conn.Exec(ctx, cmd).ReadAll()
 	if err != nil {
-		return CreateReplicationSlotResult{}, err
+		return 0, "", err
 	}
-
-	return CreateReplicationSlotResult{
-		SnapshotName: snapshotResponse.ExportedSnapshotName,
-	}, nil
+	if len(results) != 1 || len(results[0].Rows) != 1 || len(results[0].Rows[0]) != 4 {
+		return 0, "", errors.New("unexpected result from CREATE_REPLICATION_SLOT")
+	}
+	lsn, err = ParseLSN(string(results[0].Rows[0][1]))
+	if err != nil {
+		return 0, "", fmt.Errorf("invalid lsn from CREATE_REPLICATION_SLOT: %w", err)
+	}
+	return lsn, string(results[0].Rows[0][2]), nil
 }
 
-// ParseCreateReplicationSlot parses the result of the CREATE_REPLICATION_SLOT command.
-func ParseCreateReplicationSlot(mrr *pgconn.MultiResultReader, version int, snapshotName string) (CreateReplicationSlotResult, error) {
-	var crsr CreateReplicationSlotResult
-	results, err := mrr.ReadAll()
+// CopyReplicationSlot copies a replication slot, requires PG >= 12.
+func CopyReplicationSlot(ctx context.Context, conn *pgconn.PgConn, oldSlot, newSlot string, temporary bool) (LSN, error) {
+	cmd := fmt.Sprintf("select pg_copy_logical_replication_slot('%s', '%s', %v)", oldSlot, newSlot, temporary)
+	results, err := conn.Exec(ctx, cmd).ReadAll()
 	if err != nil {
-		return crsr, err
+		return 0, err
 	}
-
-	if len(results) != 1 {
-		return crsr, fmt.Errorf("expected 1 result set, got %d", len(results))
+	if len(results) != 1 || len(results[0].Rows) != 1 || len(results[0].Rows[0]) != 1 {
+		return 0, errors.New("unexpected result from pg_copy_logical_replication_slot")
 	}
-
-	result := results[0]
-	if len(result.Rows) != 1 {
-		return crsr, fmt.Errorf("expected 1 result row, got %d", len(result.Rows))
+	result := string(results[0].Rows[0][0])
+	if !strings.HasPrefix(result, "(") || !strings.HasSuffix(result, ")") {
+		return 0, fmt.Errorf("unexpected result from pg_copy_logical_replication_slot: %q", result)
 	}
-
-	row := result.Rows[0]
-	if version > 14 {
-		if len(row) != 4 {
-			return crsr, fmt.Errorf("expected 4 result columns, got %d", len(row))
-		}
+	result = result[1 : len(result)-1]
+	result, ok := strings.CutPrefix(result, newSlot)
+	if !ok {
+		return 0, fmt.Errorf("unexpected slot name from pg_copy_logical_replication_slot: %q", result)
 	}
-
-	crsr.SlotName = string(row[0])
-	crsr.ConsistentPoint = string(row[1])
-
-	if version > 14 {
-		crsr.SnapshotName = string(row[2])
-	} else {
-		crsr.SnapshotName = snapshotName
+	result, ok = strings.CutPrefix(result, ",")
+	if !ok {
+		return 0, fmt.Errorf("unexpected delimiter from pg_copy_logical_replication_slot: %q", result)
 	}
-
-	return crsr, nil
+	return ParseLSN(result)
 }
 
 // DropReplicationSlotOptions are options for the DROP_REPLICATION_SLOT command.
@@ -484,26 +418,14 @@ func GetPublicationTables(ctx context.Context, conn *pgconn.PgConn, publicationN
 // The Mode field is required and must be either PhysicalReplication or LogicalReplication. ## PhysicalReplication is not supporter by this plugin, but still can be implemented
 // The PluginArgs field is optional and only used for LogicalReplication.
 type StartReplicationOptions struct {
-	Timeline   int32 // 0 means current server timeline
-	Mode       ReplicationMode
 	PluginArgs []string
 }
 
 // StartReplication begins the replication process by executing the START_REPLICATION command.
 func StartReplication(ctx context.Context, conn *pgconn.PgConn, slotName string, startLSN LSN, options StartReplicationOptions) error {
-	var timelineString string
-	if options.Timeline > 0 {
-		timelineString = fmt.Sprintf("TIMELINE %d", options.Timeline)
-		options.PluginArgs = append(options.PluginArgs, timelineString)
-	}
-
-	sql := fmt.Sprintf("START_REPLICATION SLOT %s %s %s ", slotName, options.Mode, startLSN)
-	if options.Mode == LogicalReplication {
-		if len(options.PluginArgs) > 0 {
-			sql += fmt.Sprintf("(%s)", strings.Join(options.PluginArgs, ", "))
-		}
-	} else {
-		sql += timelineString
+	sql := fmt.Sprintf("START_REPLICATION SLOT %s LOGICAL %s ", slotName, startLSN)
+	if len(options.PluginArgs) > 0 {
+		sql += fmt.Sprintf("(%s)", strings.Join(options.PluginArgs, ", "))
 	}
 
 	conn.Frontend().SendQuery(&pgproto3.Query{String: sql})

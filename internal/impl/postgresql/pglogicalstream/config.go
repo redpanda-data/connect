@@ -44,4 +44,6 @@ type Config struct {
 	PgStandbyTimeout          time.Duration
 	WalMonitorInterval        time.Duration
 	MaxParallelSnapshotTables int
+	// The value to use for unchanged toast columns
+	UnchangedToastValue any
 }

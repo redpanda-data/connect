@@ -184,11 +184,8 @@ func TestIntegrationCreateReplicationSlot(t *testing.T) {
 	conn, err := pgconn.Connect(ctx, dbURL)
 	require.NoError(t, err)
 	defer closeConn(t, conn)
-
-	result, err := CreateReplicationSlot(ctx, conn, slotName, outputPlugin, CreateReplicationSlotOptions{Temporary: false, SnapshotAction: "export"}, 16, nil)
+	_, _, err = CreateReplicationSlot(ctx, conn, slotName, outputPlugin, CreateReplicationSlotOptions{Temporary: false})
 	require.NoError(t, err)
-
-	assert.Equal(t, slotName, result.SlotName)
 }
 
 func TestIntegrationDropReplicationSlot(t *testing.T) {
@@ -206,13 +203,40 @@ func TestIntegrationDropReplicationSlot(t *testing.T) {
 	require.NoError(t, err)
 	defer closeConn(t, conn)
 
-	_, err = CreateReplicationSlot(ctx, conn, slotName, outputPlugin, CreateReplicationSlotOptions{Temporary: false}, 16, nil)
+	_, _, err = CreateReplicationSlot(ctx, conn, slotName, outputPlugin, CreateReplicationSlotOptions{Temporary: false})
 	require.NoError(t, err)
 
 	err = DropReplicationSlot(ctx, conn, slotName, DropReplicationSlotOptions{})
 	require.NoError(t, err)
 
-	_, err = CreateReplicationSlot(ctx, conn, slotName, outputPlugin, CreateReplicationSlotOptions{Temporary: false}, 16, nil)
+	_, _, err = CreateReplicationSlot(ctx, conn, slotName, outputPlugin, CreateReplicationSlotOptions{Temporary: false})
+	require.NoError(t, err)
+}
+
+func TestIntegrationCopyReplicationSlot(t *testing.T) {
+	integration.CheckSkip(t)
+
+	pool, resource, dbURL := createDockerInstance(t)
+	defer func() {
+		err := pool.Purge(resource)
+		require.NoError(t, err)
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+
+	conn, err := pgconn.Connect(ctx, dbURL)
+	require.NoError(t, err)
+	defer closeConn(t, conn)
+
+	lsn, _, err := CreateReplicationSlot(ctx, conn, slotName, outputPlugin, CreateReplicationSlotOptions{Temporary: true})
+	require.NoError(t, err)
+	t.Log("initial lsn", lsn)
+
+	lsn, err = CopyReplicationSlot(ctx, conn, slotName, "foo", false)
+	require.NoError(t, err)
+	t.Log("copied lsn", lsn)
+
+	err = DropReplicationSlot(ctx, conn, slotName, DropReplicationSlotOptions{})
 	require.NoError(t, err)
 }
 
@@ -363,7 +387,7 @@ func TestIntegrationStartReplication(t *testing.T) {
 	err = CreatePublication(context.Background(), conn, publicationName, []TableFQN{})
 	require.NoError(t, err)
 
-	_, err = CreateReplicationSlot(ctx, conn, slotName, outputPlugin, CreateReplicationSlotOptions{Temporary: false, SnapshotAction: "export"}, 16, nil)
+	_, _, err = CreateReplicationSlot(ctx, conn, slotName, outputPlugin, CreateReplicationSlotOptions{Temporary: false})
 	require.NoError(t, err)
 
 	err = StartReplication(ctx, conn, slotName, sysident.XLogPos, StartReplicationOptions{
@@ -372,7 +396,6 @@ func TestIntegrationStartReplication(t *testing.T) {
 			"publication_names 'test_publication'",
 			"messages 'true'",
 		},
-		Mode: LogicalReplication,
 	})
 	require.NoError(t, err)
 
@@ -446,40 +469,40 @@ drop table t;
 
 	xld = rxXLogData()
 	var streamMessage *StreamMessage
-	streamMessage, err = decodePgOutput(xld.WALData, relations, typeMap)
+	streamMessage, err = decodePgOutput(xld.WALData, relations, typeMap, nil)
 	require.NoError(t, err)
 	assert.Nil(t, streamMessage)
 
 	xld = rxXLogData()
-	streamMessage, err = decodePgOutput(xld.WALData, relations, typeMap)
+	streamMessage, err = decodePgOutput(xld.WALData, relations, typeMap, nil)
 	require.NoError(t, err)
 	jsonData, err := json.Marshal(&streamMessage)
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"operation":"insert","schema":"public","table":"t","lsn":null,"data":{"id":1, "name":"foo"}}`, string(jsonData))
 
 	xld = rxXLogData()
-	streamMessage, err = decodePgOutput(xld.WALData, relations, typeMap)
+	streamMessage, err = decodePgOutput(xld.WALData, relations, typeMap, nil)
 	require.NoError(t, err)
 	jsonData, err = json.Marshal(&streamMessage)
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"operation":"insert","schema":"public","table":"t","lsn":null,"data":{"id":2,"name":"bar"}}`, string(jsonData))
 
 	xld = rxXLogData()
-	streamMessage, err = decodePgOutput(xld.WALData, relations, typeMap)
+	streamMessage, err = decodePgOutput(xld.WALData, relations, typeMap, nil)
 	require.NoError(t, err)
 	jsonData, err = json.Marshal(&streamMessage)
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"operation":"insert","schema":"public","table":"t","lsn":null,"data":{"id":3,"name":"baz"}}`, string(jsonData))
 
 	xld = rxXLogData()
-	streamMessage, err = decodePgOutput(xld.WALData, relations, typeMap)
+	streamMessage, err = decodePgOutput(xld.WALData, relations, typeMap, nil)
 	require.NoError(t, err)
 	jsonData, err = json.Marshal(&streamMessage)
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"operation":"update","schema":"public","table":"t","lsn":null,"data":{"id":3,"name":"quz"}}`, string(jsonData))
 
 	xld = rxXLogData()
-	streamMessage, err = decodePgOutput(xld.WALData, relations, typeMap)
+	streamMessage, err = decodePgOutput(xld.WALData, relations, typeMap, nil)
 	require.NoError(t, err)
 	jsonData, err = json.Marshal(&streamMessage)
 	require.NoError(t, err)
