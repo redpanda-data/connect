@@ -8,8 +8,11 @@
 
 FROM golang:1.23 AS build
 
+ARG TARGETPLATFORM
+
 ENV CGO_ENABLED=0
 ENV GOOS=linux
+ENV GOARCH=${TARGETPLATFORM}
 RUN useradd -u 10001 connect
 
 WORKDIR /go/src/github.com/redpanda-data/connect/
