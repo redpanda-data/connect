@@ -423,7 +423,7 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 			return insertStats, fmt.Errorf("failed to acquire stage uploader (last fetch time=%v): %w", ur.timestamp, ur.err)
 		}
 		err = ur.uploader.upload(ctx, blobPath, part.parquetFile, fullMD5Hash[:], map[string]string{
-			"ingestclientname": partnerID,
+			"ingestclientname": partnerID + "_" + c.Name,
 			"ingestclientkey":  c.clientPrefix,
 		})
 		if err == nil {
