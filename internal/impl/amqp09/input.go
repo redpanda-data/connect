@@ -81,6 +81,64 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 			service.NewBoolField(queueDeclareAutoDeleteField).
 				Description("Whether the declared queue will auto-delete.").
 				Default(false),
+			service.NewStringMapField(queueDeclareArgumentsField).
+				Description(`
+Optional arguments specific to the server's implementation of the queue that can be sent for queue types which require extra parameters.
+
+== Arguments
+
+- x-queue-type
+
+Is used to declare quorum and stream queues. Accepted values are: 'classic' (default), 'quorum', 'stream', 'drop-head', 'reject-publish' and 'reject-publish-dlx'.
+
+- x-max-length
+
+Maximum number of messages, is a non-negative integer value.
+
+- x-max-length-bytes
+
+Maximum number of messages, is a non-negative integer value.
+
+- x-overflow
+
+Sets overflow behaviour. Possible values are: 'drop-head' (default), 'reject-publish', 'reject-publish-dlx'.
+
+- x-message-ttl
+
+TTL period in milliseconds. Must be a string representation of the number.
+
+- x-expires
+
+Expiration policy, describes the expiration period in milliseconds. Must be a positive integer.
+
+- x-max-age
+
+Controls the retention of a stream. Must be a strin, valid units: (Y, M, D, h, m, s) e.g. '7D' for a week.
+
+- x-stream-max-segment-size-bytes
+
+Controls the size of the segment files on disk (default 500000000). Must be a positive integer.
+
+- x-queue-version
+
+declares the Classic Queue version to use. Expects an integer, either 1 or 2.
+
+- x-consumer-timeout
+
+Integer specified in milliseconds.
+
+- x-single-active-consumer
+
+Enables Single Active Consumer, Expects a Boolean.
+
+See https://github.com/rabbitmq/amqp091-go/blob/b3d409fe92c34bea04d8123a136384c85e8dc431/types.go#L282-L362 for more information on available arguments.`).
+				Advanced().
+				Optional().
+				Example(map[string]any{
+					"x-queue-type":       "quorum",
+					"x-max-length":       1000,
+					"x-max-length-bytes": 4096,
+				}),
 		).
 			Description(`Allows you to passively declare the target queue. If the queue already exists then the declaration passively verifies that they match the target fields.`).
 			Advanced().
@@ -161,9 +219,10 @@ type amqp09Reader struct {
 
 	nackRejectPattens []*regexp.Regexp
 
-	queueDeclare    bool
-	queueDurable    bool
-	queueAutoDelete bool
+	queueDeclare     bool
+	queueDurable     bool
+	queueAutoDelete  bool
+	queueDeclareArgs amqp.Table
 
 	bindingDeclare []amqp09BindingDeclare
 
@@ -231,6 +290,18 @@ func amqp09ReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources) 
 		a.queueDeclare, _ = qdConf.FieldBool(queueDeclareEnabledField)
 		a.queueDurable, _ = qdConf.FieldBool(queueDeclareDurableField)
 		a.queueAutoDelete, _ = qdConf.FieldBool(queueDeclareAutoDeleteField)
+
+		a.queueDeclareArgs = amqp.Table{}
+
+		if qdConf.Contains(queueDeclareArgumentsField) {
+			args, err := qdConf.FieldStringMap(queueDeclareArgumentsField)
+			if err != nil {
+				return nil, err
+			}
+			for key, value := range args {
+				a.queueDeclareArgs[key] = value
+			}
+		}
 	}
 
 	if conf.Contains(bindingsDeclareField) {
@@ -279,12 +350,12 @@ func (a *amqp09Reader) Connect(ctx context.Context) (err error) {
 
 	if a.queueDeclare {
 		if _, err = amqpChan.QueueDeclare(
-			a.queue,           // name of the queue
-			a.queueDurable,    // durable
-			a.queueAutoDelete, // delete when unused
-			false,             // exclusive
-			false,             // noWait
-			nil,               // arguments
+			a.queue,            // name of the queue
+			a.queueDurable,     // durable
+			a.queueAutoDelete,  // delete when unused
+			false,              // exclusive
+			false,              // noWait
+			a.queueDeclareArgs, // arguments
 		); err != nil {
 			_ = amqpChan.Close()
 			_ = conn.Close()

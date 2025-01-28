@@ -61,6 +61,13 @@ The fields 'key', 'exchange' and 'type' can be dynamically set using xref:config
 				service.NewBoolField(exchangeDeclareDurableField).
 					Description("Whether the exchange should be durable.").
 					Default(true),
+				service.NewStringMapField(exchangeDeclareArgumentsField).
+					Description("Optional arguments specific to the server's implementation of the exchange that can be sent for exchange types which require extra parameters.").
+					Advanced().
+					Optional().
+					Example(map[string]any{
+						"alternate-exchange": "my-ae",
+					}),
 			).
 				Description(`Optionally declare the target exchange (passive).`).
 				Advanced().
@@ -176,6 +183,7 @@ type amqp09Writer struct {
 	exchangeDeclare        bool
 	exchangeDeclareType    string
 	exchangeDeclareDurable bool
+	exchangeDeclareArgs    amqp.Table
 
 	log *service.Logger
 
@@ -239,6 +247,16 @@ func amqp09WriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) 
 		}
 		if a.exchangeDeclareDurable, err = edConf.FieldBool(exchangeDeclareDurableField); err != nil {
 			return nil, err
+		}
+
+		if edConf.Contains(exchangeDeclareArgumentsField) {
+			args, err := edConf.FieldStringMap(exchangeDeclareArgumentsField)
+			if err != nil {
+				return nil, err
+			}
+			for key, value := range args {
+				a.exchangeDeclareArgs[key] = value
+			}
 		}
 	}
 
@@ -360,7 +378,7 @@ func (a *amqp09Writer) declareExchange(exchange string) error {
 		false,                    // delete when complete
 		false,                    // internal
 		false,                    // noWait
-		nil,                      // arguments
+		a.exchangeDeclareArgs,    // arguments
 	); err != nil {
 		return fmt.Errorf("amqp failed to declare exchange: %w", err)
 	}
