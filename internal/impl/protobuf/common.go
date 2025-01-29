@@ -17,6 +17,7 @@ package protobuf
 import (
 	"fmt"
 
+	//nolint:staticcheck // Ignore SA1019 "github.com/jhump/protoreflect/desc/protoparse" is deprecated warning
 	"github.com/jhump/protoreflect/desc/protoparse"
 	"google.golang.org/protobuf/reflect/protoregistry"
 	"google.golang.org/protobuf/types/dynamicpb"
