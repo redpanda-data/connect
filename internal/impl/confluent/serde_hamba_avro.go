@@ -67,9 +67,10 @@ func (s *schemaRegistryDecoder) getHambaAvroDecoder(ctx context.Context, schema 
 		if err != nil {
 			return fmt.Errorf("unable to extract bytes from message: %w", err)
 		}
-		var native any
-		if err := avro.Unmarshal(codec, b, &native); err != nil {
-			return fmt.Errorf("unable to unmarshal avro: %w", err)
+		r := avro.NewReader(nil, 0).Reset(b)
+		native := r.ReadNext(codec)
+		if r.Error != nil {
+			return fmt.Errorf("unable to unmarshal avro: %w", r.Error)
 		}
 		var w avroSchemaWalker
 		w.unnestUnions = s.cfg.avro.rawUnions
