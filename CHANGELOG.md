@@ -3,7 +3,13 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.46.0 - TBD
+## 4.47.0 - TBD
+
+### Added
+
+- Field `arguments` added to the `amqp_0_9` input and output. (@calini)
+
+## 4.46.0 - 2025-01-29
 
 ### Added
 
