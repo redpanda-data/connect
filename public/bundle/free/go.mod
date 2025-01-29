@@ -2,7 +2,7 @@ module github.com/redpanda-data/connect/public/bundle/free/v4
 
 go 1.23.4
 
-require github.com/redpanda-data/connect/v4 v4.45.1
+require github.com/redpanda-data/connect/v4 v4.46.0
 
 require (
 	cel.dev/expr v0.19.1 // indirect
@@ -306,7 +306,7 @@ require (
 	github.com/twmb/franz-go v1.18.0 // indirect
 	github.com/twmb/franz-go/pkg/kadm v1.13.0 // indirect
 	github.com/twmb/franz-go/pkg/kmsg v1.9.0 // indirect
-	github.com/twmb/franz-go/pkg/sr v1.2.0 // indirect
+	github.com/twmb/franz-go/pkg/sr v1.3.0 // indirect
 	github.com/urfave/cli/v2 v2.27.5 // indirect
 	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
