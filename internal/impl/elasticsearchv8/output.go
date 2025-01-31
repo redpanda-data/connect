@@ -213,7 +213,39 @@ output:
     index: foo
     id: ${! @id }
     action: update
+`).
+		Example("Indexing documents from Redpanda", "Here we read messages from a Redpanda cluster and write them to an Elasticsearch index using a field from the message as the ID for the Elasticsearch document.", `
+input:
+  redpanda:
+    seed_brokers: [localhost:19092]
+    topics: ["things"]
+    consumer_group: "rpcn3"
+  processors:
+    - mapping: |
+        meta id = this.id
+        root = this
+output:
+  elasticsearch_v8:
+    urls: ['http://localhost:9200']
+    index: "things"
+    action: "index"
+    id: ${! meta("id") }
+`).
+		Example("Indexing documents from S3", "Here we read messages from a AWS S3 bucket and write them to an Elasticsearch index using the S3 key as the ID for the Elasticsearch document.", `
+input:
+  aws_s3:
+    bucket: "my-cool-bucket"
+    prefix: "bug-facts/"
+    scanner:
+      to_the_end: {}
+output:
+  elasticsearch_v8:
+    urls: ['http://localhost:9200']
+    index: "cool-bug-facts"
+    action: "index"
+    id: ${! meta("s3_key") }
 `)
+
 }
 
 func init() {
