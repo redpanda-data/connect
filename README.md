@@ -192,9 +192,8 @@ them individually via `go test -run "^Test.*Integration.*$" ./internal/impl/<con
 [bloblang-about]: https://docs.redpanda.com/redpanda-connect/guides/bloblang/about
 [config-doc]: https://docs.redpanda.com/redpanda-connect/configuration/about
 [releases]: https://github.com/redpanda-data/connect/releases
-[plugin-repo]: https://github.com/benthosdev/benthos-plugin-example
+[plugin-repo]: https://github.com/redpanda-data/redpanda-connect-plugin-example
 [getting-started]: https://docs.redpanda.com/redpanda-connect/guides/getting_started
-[benthos-studio]: https://studio.benthos.dev
 
 [godoc-badge]: https://pkg.go.dev/badge/github.com/redpanda-data/benthos/v4/public
 [godoc-url-apache]: https://pkg.go.dev/github.com/redpanda-data/connect/public/bundle/free/v4
