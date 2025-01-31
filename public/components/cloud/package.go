@@ -22,6 +22,7 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/confluent"
 	_ "github.com/redpanda-data/connect/v4/public/components/crypto"
 	_ "github.com/redpanda-data/connect/v4/public/components/dgraph"
+	_ "github.com/redpanda-data/connect/v4/public/components/elasticsearchv8"
 	_ "github.com/redpanda-data/connect/v4/public/components/gcp"
 	_ "github.com/redpanda-data/connect/v4/public/components/gcp/enterprise"
 	_ "github.com/redpanda-data/connect/v4/public/components/io"
