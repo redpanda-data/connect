@@ -295,9 +295,8 @@ func (e *esOutput) WriteBatch(ctx context.Context, batch service.MessageBatch) e
 		return batchErr
 	}
 
-	// time.Duration is an int64 counting nanonseconds, result.Took is an int64
-	// counting milliseconds
-	tookDuration := time.Duration(result.Took * 1e6)
+	// result.Took is an int64 counting milliseconds
+	tookDuration := time.Duration(result.Took) * time.Millisecond
 
 	e.log.Debugf(
 		"Successfully dispatched [%s] documents in %s (%s docs/sec)",
