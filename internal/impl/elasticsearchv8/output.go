@@ -136,7 +136,7 @@ Both the `+"`id` and `index`"+` fields can be dynamically set using function int
 			service.NewInterpolatedStringField(esFieldIndex).
 				Description("The index to place messages."),
 			service.NewInterpolatedStringField(esFieldAction).
-				Description("The action to take on the document. This field must resolve to one of the following action types: `index`, `update` or `delete`."),
+				Description("The action to take on the document. This field must resolve to one of the following action types: `index`, `update` or `delete`. See the `Updating Documents` example for more on how the `update` action works."),
 			service.NewInterpolatedStringField(esFieldID).
 				Description("The ID for indexed messages. Interpolation should be used in order to create a unique ID for each message.").
 				Example(`${!counter()}-${!timestamp_unix()}`),
@@ -172,13 +172,44 @@ Both the `+"`id` and `index`"+` fields can be dynamically set using function int
 			service.NewBatchPolicyField(esFieldBatching),
 		).
 		Example("Updating Documents", "When updating documents, the request body should contain a combination of a `doc`, `upsert`, and/or `script` fields at the top level, this should be done via mapping processors. `doc` updates using a partial document, `script` performs an update using a scripting language such as the built in Painless language, and `upsert` updates an existing document or inserts a new one if it doesn’t exist. For more information on the structures and behaviors of these fields, please see the https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-update.html[Elasticsearch Update API^]", `
+# Partial document update
 output:
   processors:
     - mapping: |
         meta id = this.id
+        # Performs a partial update ont he document.
         root.doc = this
-  opensearch:
-    urls: [ TODO ]
+  elasticsearch_v8:
+    urls: [localhost:9200]
+    index: foo
+    id: ${! @id }
+    action: update
+
+# Scripted update
+output:
+  processors:
+    - mapping: |
+        meta id = this.id
+        # Increments the field "counter" by 1.
+        root.script.source = "ctx._source.counter += 1"
+  elasticsearch_v8:
+    urls: [localhost:9200]
+    index: foo
+    id: ${! @id }
+    action: update
+
+# Upsert
+output:
+  processors:
+    - mapping: |
+        meta id = this.id
+        # If the product with the ID exists, its price will be updated to 100.
+        # If the product does not exist, a new document with ID 1 and a price
+        # of 50 will be inserted.
+        root.doc.product_price = 50
+        root.upsert.product_price = 100
+  elasticsearch_v8:
+    urls: [localhost:9200]
     index: foo
     id: ${! @id }
     action: update
