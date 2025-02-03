@@ -49,11 +49,11 @@ const (
 type esConfig struct {
 	clientOpts elasticsearch.Config
 
-	actionStr       *service.InterpolatedString
-	idStr           *service.InterpolatedString
-	indexStr        *service.InterpolatedString
-	pipelineStr     *service.InterpolatedString
-	routingStr      *service.InterpolatedString
+	action          *service.InterpolatedString
+	id              *service.InterpolatedString
+	index           *service.InterpolatedString
+	pipeline        *service.InterpolatedString
+	routing         *service.InterpolatedString
 	retryOnConflict int
 }
 
@@ -100,19 +100,19 @@ func esConfigFromParsed(pConf *service.ParsedConfig) (*esConfig, error) {
 		}
 	}
 
-	if conf.actionStr, err = pConf.FieldInterpolatedString(esFieldAction); err != nil {
+	if conf.action, err = pConf.FieldInterpolatedString(esFieldAction); err != nil {
 		return nil, err
 	}
-	if conf.idStr, err = pConf.FieldInterpolatedString(esFieldID); err != nil {
+	if conf.id, err = pConf.FieldInterpolatedString(esFieldID); err != nil {
 		return nil, err
 	}
-	if conf.indexStr, err = pConf.FieldInterpolatedString(esFieldIndex); err != nil {
+	if conf.index, err = pConf.FieldInterpolatedString(esFieldIndex); err != nil {
 		return nil, err
 	}
-	if conf.pipelineStr, err = pConf.FieldInterpolatedString(esFieldPipeline); err != nil {
+	if conf.pipeline, err = pConf.FieldInterpolatedString(esFieldPipeline); err != nil {
 		return nil, err
 	}
-	if conf.routingStr, err = pConf.FieldInterpolatedString(esFieldRouting); err != nil {
+	if conf.routing, err = pConf.FieldInterpolatedString(esFieldRouting); err != nil {
 		return nil, err
 	}
 	if conf.retryOnConflict, err = pConf.FieldInt(esFieldRetryOnConflict); err != nil {
@@ -299,9 +299,10 @@ func (e *esOutput) Connect(ctx context.Context) error {
 
 func (e *esOutput) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
 	bulkWriter := e.client.Bulk()
+	batchInterpolator := e.newBatchInterpolator(batch)
 
 	for i := range batch {
-		if err := e.addOpToBatch(bulkWriter, batch, i); err != nil {
+		if err := e.addOpToBatch(bulkWriter, batch, batchInterpolator, i); err != nil {
 			return fmt.Errorf("adding operation to batch: %w", err)
 		}
 	}
@@ -340,30 +341,48 @@ func (e *esOutput) WriteBatch(ctx context.Context, batch service.MessageBatch) e
 	return nil
 }
 
-func (e *esOutput) addOpToBatch(bulkWriter *bulk.Bulk, batch service.MessageBatch, i int) error {
+func (e *esOutput) newBatchInterpolator(batch service.MessageBatch) *batchInterpolator {
+	return &batchInterpolator{
+		action:   batch.InterpolationExecutor(e.conf.action),
+		index:    batch.InterpolationExecutor(e.conf.index),
+		routing:  batch.InterpolationExecutor(e.conf.routing),
+		id:       batch.InterpolationExecutor(e.conf.id),
+		pipeline: batch.InterpolationExecutor(e.conf.pipeline),
+	}
+}
+
+type batchInterpolator struct {
+	action   *service.MessageBatchInterpolationExecutor
+	index    *service.MessageBatchInterpolationExecutor
+	routing  *service.MessageBatchInterpolationExecutor
+	id       *service.MessageBatchInterpolationExecutor
+	pipeline *service.MessageBatchInterpolationExecutor
+}
+
+func (e *esOutput) addOpToBatch(bulkWriter *bulk.Bulk, batch service.MessageBatch, batchInterpolator *batchInterpolator, i int) error {
 	msg := batch[i]
 	msgBytes, err := msg.AsBytes()
 	if err != nil {
 		return fmt.Errorf("reading raw message data: %w", err)
 	}
 
-	action, err := batch.TryInterpolatedString(i, e.conf.actionStr)
+	action, err := batchInterpolator.action.TryString(i)
 	if err != nil {
 		return fmt.Errorf("interpolating action: %w", err)
 	}
-	index, err := batch.TryInterpolatedString(i, e.conf.indexStr)
+	index, err := batchInterpolator.index.TryString(i)
 	if err != nil {
 		return fmt.Errorf("interpolating index: %w", err)
 	}
-	routing, err := batch.TryInterpolatedString(i, e.conf.routingStr)
+	routing, err := batchInterpolator.routing.TryString(i)
 	if err != nil {
 		return fmt.Errorf("interpolating routing: %w", err)
 	}
-	id, err := batch.TryInterpolatedString(i, e.conf.idStr)
+	id, err := batchInterpolator.id.TryString(i)
 	if err != nil {
 		return fmt.Errorf("interpolating id: %w", err)
 	}
-	pipeline, err := batch.TryInterpolatedString(i, e.conf.pipelineStr)
+	pipeline, err := batchInterpolator.pipeline.TryString(i)
 	if err != nil {
 		return fmt.Errorf("interpolating pipeline: %w", err)
 	}
