@@ -60,7 +60,7 @@ type esConfig struct {
 func esConfigFromParsed(pConf *service.ParsedConfig) (*esConfig, error) {
 	conf := &esConfig{}
 
-	if os.Getenv("ELASTICSEARCH_DEBUG") != "" {
+	if os.Getenv("REDPANDA_CONNECT_ELASTICSEARCH_DEBUG") != "" {
 		conf.clientOpts.Logger = &elastictransport.CurlLogger{
 			Output:             os.Stdout,
 			EnableRequestBody:  true,
