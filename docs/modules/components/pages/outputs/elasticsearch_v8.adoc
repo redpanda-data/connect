@@ -108,16 +108,94 @@ Updating Documents::
 When updating documents, the request body should contain a combination of a `doc`, `upsert`, and/or `script` fields at the top level, this should be done via mapping processors. `doc` updates using a partial document, `script` performs an update using a scripting language such as the built in Painless language, and `upsert` updates an existing document or inserts a new one if it doesn’t exist. For more information on the structures and behaviors of these fields, please see the https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-update.html[Elasticsearch Update API^]
 
 ```yaml
+# Partial document update
 output:
   processors:
     - mapping: |
         meta id = this.id
+        # Performs a partial update ont he document.
         root.doc = this
-  opensearch:
-    urls: [ TODO ]
+  elasticsearch_v8:
+    urls: [localhost:9200]
     index: foo
     id: ${! @id }
     action: update
+
+# Scripted update
+output:
+  processors:
+    - mapping: |
+        meta id = this.id
+        # Increments the field "counter" by 1.
+        root.script.source = "ctx._source.counter += 1"
+  elasticsearch_v8:
+    urls: [localhost:9200]
+    index: foo
+    id: ${! @id }
+    action: update
+
+# Upsert
+output:
+  processors:
+    - mapping: |
+        meta id = this.id
+        # If the product with the ID exists, its price will be updated to 100.
+        # If the product does not exist, a new document with ID 1 and a price
+        # of 50 will be inserted.
+        root.doc.product_price = 50
+        root.upsert.product_price = 100
+  elasticsearch_v8:
+    urls: [localhost:9200]
+    index: foo
+    id: ${! @id }
+    action: update
+```
+
+--
+Indexing documents from Redpanda::
++
+--
+
+Here we read messages from a Redpanda cluster and write them to an Elasticsearch index using a field from the message as the ID for the Elasticsearch document.
+
+```yaml
+input:
+  redpanda:
+    seed_brokers: [localhost:19092]
+    topics: ["things"]
+    consumer_group: "rpcn3"
+  processors:
+    - mapping: |
+        meta id = this.id
+        root = this
+output:
+  elasticsearch_v8:
+    urls: ['http://localhost:9200']
+    index: "things"
+    action: "index"
+    id: ${! meta("id") }
+```
+
+--
+Indexing documents from S3::
++
+--
+
+Here we read messages from a AWS S3 bucket and write them to an Elasticsearch index using the S3 key as the ID for the Elasticsearch document.
+
+```yaml
+input:
+  aws_s3:
+    bucket: "my-cool-bucket"
+    prefix: "bug-facts/"
+    scanner:
+      to_the_end: {}
+output:
+  elasticsearch_v8:
+    urls: ['http://localhost:9200']
+    index: "cool-bug-facts"
+    action: "index"
+    id: ${! meta("s3_key") }
 ```
 
 --
@@ -151,7 +229,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 === `action`
 
-The action to take on the document. This field must resolve to one of the following action types: `index`, `update` or `delete`.
+The action to take on the document. This field must resolve to one of the following action types: `index`, `update` or `delete`. See the `Updating Documents` example for more on how the `update` action works.
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
 
