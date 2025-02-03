@@ -16,5 +16,5 @@ package elasticsearch
 
 import (
 	// Bring in the internal plugin definitions.
-	_ "github.com/redpanda-data/connect/v4/internal/impl/elasticsearchv8"
+	_ "github.com/redpanda-data/connect/v4/internal/impl/elasticsearch/v8"
 )
