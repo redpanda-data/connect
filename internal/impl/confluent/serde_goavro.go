@@ -22,26 +22,47 @@ import (
 	"github.com/linkedin/goavro/v2"
 	franz_sr "github.com/twmb/franz-go/pkg/sr"
 
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
 )
 
-func resolveAvroReferences(ctx context.Context, client *sr.Client, schema franz_sr.Schema) (string, error) {
+func resolveGoAvroReferences(ctx context.Context, client *sr.Client, mapping *bloblang.Executor, schema franz_sr.Schema) (string, error) {
+	mapSchema := func(s franz_sr.Schema) (string, error) {
+		if mapping == nil {
+			return s.Schema, nil
+		}
+		msg := service.NewMessage([]byte(s.Schema))
+		msg, err := msg.BloblangQuery(mapping)
+		if err != nil {
+			return "", fmt.Errorf("unable to apply avro schema mapping: %w", err)
+		}
+		avroSchema, err := msg.AsBytes()
+		if err != nil {
+			return "", fmt.Errorf("unable to extract avro schema mapping result: %w", err)
+		}
+		return string(avroSchema), nil
+	}
 	if len(schema.References) == 0 {
-		return schema.Schema, nil
+		return mapSchema(schema)
 	}
 
 	refsMap := map[string]string{}
 	if err := client.WalkReferences(ctx, schema.References, func(ctx context.Context, name string, schema franz_sr.Schema) error {
-		refsMap[name] = schema.Schema
-		return nil
+		s, err := mapSchema(schema)
+		refsMap[name] = s
+		return err
 	}); err != nil {
 		return "", nil
 	}
 
+	root, err := mapSchema(schema)
+	if err != nil {
+		return "", err
+	}
 	schemaDry := []string{}
-	if err := json.Unmarshal([]byte(schema.Schema), &schemaDry); err != nil {
+	if err := json.Unmarshal([]byte(root), &schemaDry); err != nil {
 		return "", fmt.Errorf("failed to parse root schema as enum: %w", err)
 	}
 
@@ -63,7 +84,7 @@ func resolveAvroReferences(ctx context.Context, client *sr.Client, schema franz_
 }
 
 func (s *schemaRegistryEncoder) getAvroEncoder(ctx context.Context, schema franz_sr.Schema) (schemaEncoder, error) {
-	schemaSpec, err := resolveAvroReferences(ctx, s.client, schema)
+	schemaSpec, err := resolveGoAvroReferences(ctx, s.client, nil, schema)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +122,7 @@ func (s *schemaRegistryEncoder) getAvroEncoder(ctx context.Context, schema franz
 }
 
 func (s *schemaRegistryDecoder) getGoAvroDecoder(ctx context.Context, schema franz_sr.Schema) (schemaDecoder, error) {
-	schemaSpec, err := resolveAvroReferences(ctx, s.client, schema)
+	schemaSpec, err := resolveGoAvroReferences(ctx, s.client, s.cfg.avro.mapping, schema)
 	if err != nil {
 		return nil, err
 	}

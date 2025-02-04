@@ -27,6 +27,7 @@ import (
 	"github.com/Jeffail/shutdown"
 	franz_sr "github.com/twmb/franz-go/pkg/sr"
 
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
@@ -86,6 +87,25 @@ When raw_unions is set to true then the above union schema is decoded as the fol
 - a `+"`Foo` instance as `{...}`, where `{...}` indicates the JSON encoding of a `Foo`"+` instance.
 `).Optional(),
 				service.NewBoolField("preserve_logical_types").Description(`Whether logical types should be preserved or transformed back into their primitive type. By default, decimals are decoded as raw bytes and timestamps are decoded as plain integers. Setting this field to true keeps decimal types as numbers in bloblang and timestamps as time values.`).Default(false),
+				service.NewBloblangField("mapping").Description(`A custom mapping to apply to Avro schemas JSON representation. This is useful to transform custom types emitted by other tools into standard avro.`).
+					Optional().
+					Advanced().Example(`
+map debeziumTimestampToAvroTimestamp {
+  let mapped_fields = this.fields.or([]).map_each(item -> item.apply("debeziumTimestampToAvroTimestamp"))
+  root = if this.type == "record" {
+    this.assign({"fields": $mapped_fields})
+  } else if this.type.type() == "array" {
+    this.assign({"type": this.type.map_each(item -> item.apply("debeziumTimestampToAvroTimestamp"))})
+  } else if this.type.type() == "object" && this.type.type == "long" && this.type."connect.name" == "io.debezium.time.Timestamp" && !this.type.exists("logicalType") {
+    # Add a logical type so that it's decoded as a timestamp instead of a long.
+    this.merge({"type":{"logicalType": "timestamp-millis"}})
+  } else {
+    this
+  }
+}
+root = this.apply("debeziumTimestampToAvroTimestamp")
+
+        `),
 			).Description("Configuration for how to decode schemas that are of type AVRO."),
 		).
 		Field(service.NewURLField("url").Description("The base URL of the schema registry service."))
@@ -114,6 +134,7 @@ type decodingConfig struct {
 	avro struct {
 		useHamba  bool
 		rawUnions bool
+		mapping   *bloblang.Executor
 	}
 }
 
@@ -155,6 +176,12 @@ func newSchemaRegistryDecoderFromConfig(conf *service.ParsedConfig, mgr *service
 	}
 	if conf.Contains("avro", "raw_unions") {
 		cfg.avro.rawUnions, err = conf.FieldBool("avro", "raw_unions")
+		if err != nil {
+			return nil, err
+		}
+	}
+	if conf.Contains("avro", "mapping") {
+		cfg.avro.mapping, err = conf.FieldBloblang("avro", "mapping")
 		if err != nil {
 			return nil, err
 		}

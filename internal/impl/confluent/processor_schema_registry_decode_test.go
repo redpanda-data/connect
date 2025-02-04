@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
@@ -269,6 +270,7 @@ func TestSchemaRegistryDecodeAvro(t *testing.T) {
 		output      string
 		hambaOutput string
 		errContains string
+		mapping     string
 	}{
 		{
 			schemaID: 3,
@@ -364,6 +366,86 @@ func TestSchemaRegistryDecodeAvro(t *testing.T) {
 	}
 
 	assert.Equal(t, 2, returnedSchema3Count)
+}
+
+func TestSchemaRegistryDecodeAvroMapping(t *testing.T) {
+	const testAvroDebeziumSchema = `{
+  "type": "record",
+  "name": "Event",
+  "namespace": "com.example",
+  "fields": [
+    {
+      "name": "eventId",
+      "type": "string"
+    },
+    {
+      "name": "eventTime",
+      "type": {
+        "type": "long",
+        "connect.version": 1,
+        "connect.parameters": {
+          "__debezium.source.column.type": "DATETIME"
+        },
+        "connect.default": 0,
+        "connect.name": "io.debezium.time.Timestamp"
+      },
+      "default": 0
+    }
+  ]
+}`
+	urlStr := runSchemaRegistryServer(t, func(path string) ([]byte, error) {
+		switch path {
+		case "/schemas/ids/7":
+			return mustJBytes(t, map[string]any{
+				"schema": testAvroDebeziumSchema,
+			}), nil
+		}
+		return nil, nil
+	})
+	input := "\x00\x00\x00\x00\x07\n12345\x92\xca߄\x9ae"
+	// Without this mapping, the above schema returns plain numbers for hamba
+	mapping, err := bloblang.GlobalEnvironment().Clone().Parse(`map debeziumTimestampToAvroTimestamp {
+  let mapped_fields = this.fields.or([]).map_each(item -> item.apply("debeziumTimestampToAvroTimestamp"))
+  root = if this.type == "record" {
+    this.assign({"fields": $mapped_fields})
+  } else if this.type.type() == "array" {
+    this.assign({"type": this.type.map_each(item -> item.apply("debeziumTimestampToAvroTimestamp"))})
+  } else if this.type.type() == "object" && this.type.type == "long" && this.type."connect.name" == "io.debezium.time.Timestamp" && !this.type.exists("logicalType") {
+    this.merge({"type":{"logicalType": "timestamp-millis"}})
+  } else {
+    this
+  }
+}
+root = this.apply("debeziumTimestampToAvroTimestamp")
+`)
+	require.NoError(t, err)
+	cfg := decodingConfig{}
+	cfg.avro.mapping = mapping
+	goAvroDecoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, cfg, service.MockResources())
+	require.NoError(t, err)
+	cfg.avro.useHamba = true
+	hambaDecoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, cfg, service.MockResources())
+	require.NoError(t, err)
+
+	for _, decoder := range []*schemaRegistryDecoder{goAvroDecoder, hambaDecoder} {
+		outBatch, err := decoder.Process(context.Background(), service.NewMessage([]byte(input)))
+		require.NoError(t, err)
+		require.Len(t, outBatch, 1)
+		b, err := outBatch[0].AsBytes()
+		require.NoError(t, err)
+		if decoder == goAvroDecoder {
+			assert.JSONEq(t, `{"eventId":"12345", "eventTime":1.738661425801e+12}`, string(b))
+		} else {
+			assert.JSONEq(t, `{"eventId":"12345", "eventTime":"2025-02-04T09:30:25.801Z"}`, string(b))
+		}
+	}
+
+	for _, decoder := range []*schemaRegistryDecoder{goAvroDecoder, hambaDecoder} {
+		require.NoError(t, decoder.Close(context.Background()))
+		decoder.cacheMut.Lock()
+		assert.Empty(t, decoder.schemas)
+		decoder.cacheMut.Unlock()
+	}
 }
 
 func TestSchemaRegistryDecodeAvroRawJson(t *testing.T) {
