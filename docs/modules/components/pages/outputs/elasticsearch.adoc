@@ -67,6 +67,7 @@ output:
     id: ${!counter()}-${!timestamp_unix()}
     type: ""
     routing: ""
+    retry_on_conflict: 0
     sniff: true
     healthcheck: true
     timeout: 5s
@@ -223,6 +224,15 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 *Type*: `string`
 
 *Default*: `""`
+
+=== `retry_on_conflict`
+
+When using the update or upsert action, retry_on_conflict can be used to specify how many times an update should be retried in the case of a version conflict.
+
+
+*Type*: `int`
+
+*Default*: `0`
 
 === `sniff`
 
