@@ -54,7 +54,21 @@ schema_registry_decode:
   avro:
     raw_unions: false # No default (optional)
     preserve_logical_types: false
-    mapping: "\nmap debeziumTimestampToAvroTimestamp {\n  let mapped_fields = this.fields.or([]).map_each(item -> item.apply(\"debeziumTimestampToAvroTimestamp\"))\n  root = if this.type == \"record\" {\n    this.assign({\"fields\": $mapped_fields})\n  } else if this.type.type() == \"array\" {\n    this.assign({\"type\": this.type.map_each(item -> item.apply(\"debeziumTimestampToAvroTimestamp\"))})\n  } else if this.type.type() == \"object\" && this.type.type == \"long\" && this.type.\"connect.name\" == \"io.debezium.time.Timestamp\" && !this.type.exists(\"logicalType\") {\n    # Add a logical type so that it's decoded as a timestamp instead of a long.\n    this.merge({\"type\":{\"logicalType\": \"timestamp-millis\"}})\n  } else {\n    this\n  }\n}\nroot = this.apply(\"debeziumTimestampToAvroTimestamp\")\n\n        " # No default (optional)
+    mapping: | # No default (optional)
+      map isDebeziumTimestampType {
+        root = this.type == "long" && this."connect.name" == "io.debezium.time.Timestamp" && !this.exists("logicalType")
+      }
+      map debeziumTimestampToAvroTimestamp {
+        let mapped_fields = this.fields.or([]).map_each(item -> item.apply("debeziumTimestampToAvroTimestamp"))
+        root = match {
+          this.type == "record" => this.assign({"fields": $mapped_fields})
+          this.type.type() == "array" => this.assign({"type": this.type.map_each(item -> item.apply("debeziumTimestampToAvroTimestamp"))})
+          # Add a logical type so that it's decoded as a timestamp instead of a long.
+          this.type.type() == "object" && this.type.apply("isDebeziumTimestampType") => this.merge({"type":{"logicalType": "timestamp-millis"}})
+          _ => this
+        }
+      }
+      root = this.apply("debeziumTimestampToAvroTimestamp")
   url: "" # No default (required)
   oauth:
     enabled: false
@@ -161,7 +175,21 @@ A custom mapping to apply to Avro schemas JSON representation. This is useful to
 ```yml
 # Examples
 
-mapping: "\nmap debeziumTimestampToAvroTimestamp {\n  let mapped_fields = this.fields.or([]).map_each(item -> item.apply(\"debeziumTimestampToAvroTimestamp\"))\n  root = if this.type == \"record\" {\n    this.assign({\"fields\": $mapped_fields})\n  } else if this.type.type() == \"array\" {\n    this.assign({\"type\": this.type.map_each(item -> item.apply(\"debeziumTimestampToAvroTimestamp\"))})\n  } else if this.type.type() == \"object\" && this.type.type == \"long\" && this.type.\"connect.name\" == \"io.debezium.time.Timestamp\" && !this.type.exists(\"logicalType\") {\n    # Add a logical type so that it's decoded as a timestamp instead of a long.\n    this.merge({\"type\":{\"logicalType\": \"timestamp-millis\"}})\n  } else {\n    this\n  }\n}\nroot = this.apply(\"debeziumTimestampToAvroTimestamp\")\n\n        "
+mapping: |2
+  map isDebeziumTimestampType {
+    root = this.type == "long" && this."connect.name" == "io.debezium.time.Timestamp" && !this.exists("logicalType")
+  }
+  map debeziumTimestampToAvroTimestamp {
+    let mapped_fields = this.fields.or([]).map_each(item -> item.apply("debeziumTimestampToAvroTimestamp"))
+    root = match {
+      this.type == "record" => this.assign({"fields": $mapped_fields})
+      this.type.type() == "array" => this.assign({"type": this.type.map_each(item -> item.apply("debeziumTimestampToAvroTimestamp"))})
+      # Add a logical type so that it's decoded as a timestamp instead of a long.
+      this.type.type() == "object" && this.type.apply("isDebeziumTimestampType") => this.merge({"type":{"logicalType": "timestamp-millis"}})
+      _ => this
+    }
+  }
+  root = this.apply("debeziumTimestampToAvroTimestamp")
 ```
 
 === `url`

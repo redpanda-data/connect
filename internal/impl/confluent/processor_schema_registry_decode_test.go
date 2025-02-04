@@ -404,16 +404,18 @@ func TestSchemaRegistryDecodeAvroMapping(t *testing.T) {
 	})
 	input := "\x00\x00\x00\x00\x07\n12345\x92\xca߄\x9ae"
 	// Without this mapping, the above schema returns plain numbers for hamba
-	mapping, err := bloblang.GlobalEnvironment().Clone().Parse(`map debeziumTimestampToAvroTimestamp {
+	mapping, err := bloblang.GlobalEnvironment().Clone().Parse(`
+map isDebeziumTimestampType {
+  root = this.type == "long" && this."connect.name" == "io.debezium.time.Timestamp" && !this.exists("logicalType")
+}
+map debeziumTimestampToAvroTimestamp {
   let mapped_fields = this.fields.or([]).map_each(item -> item.apply("debeziumTimestampToAvroTimestamp"))
-  root = if this.type == "record" {
-    this.assign({"fields": $mapped_fields})
-  } else if this.type.type() == "array" {
-    this.assign({"type": this.type.map_each(item -> item.apply("debeziumTimestampToAvroTimestamp"))})
-  } else if this.type.type() == "object" && this.type.type == "long" && this.type."connect.name" == "io.debezium.time.Timestamp" && !this.type.exists("logicalType") {
-    this.merge({"type":{"logicalType": "timestamp-millis"}})
-  } else {
-    this
+  root = match {
+    this.type == "record" => this.assign({"fields": $mapped_fields})
+    this.type.type() == "array" => this.assign({"type": this.type.map_each(item -> item.apply("debeziumTimestampToAvroTimestamp"))})
+    # Add a logical type so that it's decoded as a timestamp instead of a long.
+    this.type.type() == "object" && this.type.apply("isDebeziumTimestampType") => this.merge({"type":{"logicalType": "timestamp-millis"}})
+    _ => this
   }
 }
 root = this.apply("debeziumTimestampToAvroTimestamp")

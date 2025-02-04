@@ -90,22 +90,21 @@ When raw_unions is set to true then the above union schema is decoded as the fol
 				service.NewBloblangField("mapping").Description(`A custom mapping to apply to Avro schemas JSON representation. This is useful to transform custom types emitted by other tools into standard avro.`).
 					Optional().
 					Advanced().Example(`
+map isDebeziumTimestampType {
+  root = this.type == "long" && this."connect.name" == "io.debezium.time.Timestamp" && !this.exists("logicalType")
+}
 map debeziumTimestampToAvroTimestamp {
   let mapped_fields = this.fields.or([]).map_each(item -> item.apply("debeziumTimestampToAvroTimestamp"))
-  root = if this.type == "record" {
-    this.assign({"fields": $mapped_fields})
-  } else if this.type.type() == "array" {
-    this.assign({"type": this.type.map_each(item -> item.apply("debeziumTimestampToAvroTimestamp"))})
-  } else if this.type.type() == "object" && this.type.type == "long" && this.type."connect.name" == "io.debezium.time.Timestamp" && !this.type.exists("logicalType") {
+  root = match {
+    this.type == "record" => this.assign({"fields": $mapped_fields})
+    this.type.type() == "array" => this.assign({"type": this.type.map_each(item -> item.apply("debeziumTimestampToAvroTimestamp"))})
     # Add a logical type so that it's decoded as a timestamp instead of a long.
-    this.merge({"type":{"logicalType": "timestamp-millis"}})
-  } else {
-    this
+    this.type.type() == "object" && this.type.apply("isDebeziumTimestampType") => this.merge({"type":{"logicalType": "timestamp-millis"}})
+    _ => this
   }
 }
 root = this.apply("debeziumTimestampToAvroTimestamp")
-
-        `),
+`),
 			).Description("Configuration for how to decode schemas that are of type AVRO."),
 		).
 		Field(service.NewURLField("url").Description("The base URL of the schema registry service."))
