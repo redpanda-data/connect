@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
-	"github.com/gofrs/uuid"
+	"github.com/gofrs/uuid/v5"
 	"go.uber.org/multierr"
 	"google.golang.org/api/option"
 

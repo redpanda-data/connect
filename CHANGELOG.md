@@ -9,6 +9,9 @@ All notable changes to this project will be documented in this file.
 
 - Field `arguments` added to the `amqp_0_9` input and output. (@calini)
 - Field `avro.mapping` added to the `schema_registry_decode` processor to support converting custom avro types to standard avro types for legacy tooling. (@rockwotj)
+- (Benthos) A `crash` processor for FATAL logging. (@rockwotj)
+- (Benthos) A `uuid_v7` bloblang function. (@rockwotj)
+- (Benthos) Field `disable_http2` added to the `http_client` input and output and to the `http` processor. (@mihaitodor)
 
 ## 4.46.0 - 2025-01-29
 

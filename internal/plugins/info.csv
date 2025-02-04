@@ -57,6 +57,7 @@ compress                  ,processor ,compress                  ,0.0.0   ,certif
 couchbase                 ,cache     ,Couchbase                 ,4.12.0  ,community  ,n          ,n     ,n
 couchbase                 ,output    ,Couchbase                 ,4.37.0  ,community  ,n          ,n     ,n
 couchbase                 ,processor ,Couchbase                 ,4.11.0  ,community  ,n          ,n     ,n
+crash                     ,processor ,crash                     ,4.47.0  ,certified  ,n          ,n     ,n
 csv                       ,input     ,csv                       ,0.0.0   ,certified  ,n          ,n     ,n
 csv                       ,scanner   ,csv                       ,0.0.0   ,certified  ,n          ,y     ,y
 cypher                    ,output    ,cypher                    ,4.37.0  ,community  ,n          ,n     ,n

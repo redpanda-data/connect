@@ -112,6 +112,7 @@ input:
     drop_on: []
     successful_on: []
     proxy_url: "" # No default (optional)
+    disable_http2: false
     payload: "" # No default (optional)
     drop_empty_bodies: true
     stream:
@@ -821,6 +822,16 @@ An optional HTTP proxy URL.
 
 *Type*: `string`
 
+
+=== `disable_http2`
+
+Whether or not to disable disable HTTP/2
+
+
+*Type*: `bool`
+
+*Default*: `false`
+Requires version 4.44.0 or newer
 
 === `payload`
 
