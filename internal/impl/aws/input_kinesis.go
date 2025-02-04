@@ -135,7 +135,7 @@ Use the `+"`batching`"+` fields to configure an optional xref:configuration:batc
 				Description("Set the provisioned write capacity when creating the table with a `billing_mode` of `PROVISIONED`.").
 				Default(0).
 				Advanced(),
-		).
+		).AppendToObjectField(config.SessionFields()...).
 			Description("Determines the table used for storing and accessing the latest consumed sequence for shards, and for coordinating balanced consumers of streams."),
 		service.NewIntField(kiFieldCheckpointLimit).
 			Description("The maximum gap between the in flight sequence versus the latest acknowledged sequence at a given time. Increasing this limit enables parallel processing and batching at the output level to work on individual shards. Any given sequence will not be committed unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
@@ -195,6 +195,7 @@ type kinesisReader struct {
 	clientID string
 
 	sess    aws.Config
+	ddbSess aws.Config
 	batcher service.BatchPolicy
 	log     *service.Logger
 	mgr     *service.Resources
@@ -235,7 +236,12 @@ func newKinesisReaderFromParsed(pConf *service.ParsedConfig, mgr *service.Resour
 	if err != nil {
 		return nil, err
 	}
-	return newKinesisReaderFromConfig(conf, batcher, sess, mgr)
+	ddbCredsConf := pConf.Namespace("dynamodb")
+	ddbSess, err := GetSession(context.TODO(), ddbCredsConf)
+	if err != nil {
+		return nil, err
+	}
+	return newKinesisReaderFromConfig(conf, batcher, sess, ddbSess, mgr)
 }
 
 func parseStreamID(id string) (remaining, shard string, err error) {
@@ -256,7 +262,7 @@ func parseStreamID(id string) (remaining, shard string, err error) {
 	return
 }
 
-func newKinesisReaderFromConfig(conf kiConfig, batcher service.BatchPolicy, sess aws.Config, mgr *service.Resources) (*kinesisReader, error) {
+func newKinesisReaderFromConfig(conf kiConfig, batcher service.BatchPolicy, sess, ddb aws.Config, mgr *service.Resources) (*kinesisReader, error) {
 	if batcher.IsNoop() {
 		batcher.Count = 1
 	}
@@ -264,6 +270,7 @@ func newKinesisReaderFromConfig(conf kiConfig, batcher service.BatchPolicy, sess
 	k := kinesisReader{
 		conf:       conf,
 		sess:       sess,
+		ddbSess:    ddb,
 		batcher:    batcher,
 		log:        mgr.Logger(),
 		mgr:        mgr,
@@ -858,7 +865,7 @@ func (k *kinesisReader) Connect(ctx context.Context) error {
 	}
 
 	svc := kinesis.NewFromConfig(k.sess)
-	checkpointer, err := newAWSKinesisCheckpointer(k.sess, k.clientID, k.conf.DynamoDB, k.leasePeriod, k.commitPeriod)
+	checkpointer, err := newAWSKinesisCheckpointer(k.ddbSess, k.clientID, k.conf.DynamoDB, k.leasePeriod, k.commitPeriod)
 	if err != nil {
 		return err
 	}
