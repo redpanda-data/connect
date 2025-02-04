@@ -56,7 +56,19 @@ func (s *schemaRegistryDecoder) getHambaAvroDecoder(ctx context.Context, schema 
 	cache := &avro.SchemaCache{}
 	var codec avro.Schema
 	for _, schema := range schemaSpecs {
-		codec, err = avro.ParseWithCache(schema.Schema, "", cache)
+		avroSchema := []byte(schema.Schema)
+		if s.cfg.avro.mapping != nil {
+			msg := service.NewMessage(avroSchema)
+			msg, err = msg.BloblangQuery(s.cfg.avro.mapping)
+			if err != nil {
+				return nil, fmt.Errorf("unable to apply avro schema mapping: %w", err)
+			}
+			avroSchema, err = msg.AsBytes()
+			if err != nil {
+				return nil, fmt.Errorf("unable to extract avro schema mapping result: %w", err)
+			}
+		}
+		codec, err = avro.ParseBytesWithCache(avroSchema, "", cache)
 		if err != nil {
 			return nil, fmt.Errorf("unable to parse schema %w", err)
 		}

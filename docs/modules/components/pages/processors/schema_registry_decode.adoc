@@ -54,6 +54,21 @@ schema_registry_decode:
   avro:
     raw_unions: false # No default (optional)
     preserve_logical_types: false
+    mapping: | # No default (optional)
+      map isDebeziumTimestampType {
+        root = this.type == "long" && this."connect.name" == "io.debezium.time.Timestamp" && !this.exists("logicalType")
+      }
+      map debeziumTimestampToAvroTimestamp {
+        let mapped_fields = this.fields.or([]).map_each(item -> item.apply("debeziumTimestampToAvroTimestamp"))
+        root = match {
+          this.type == "record" => this.assign({"fields": $mapped_fields})
+          this.type.type() == "array" => this.assign({"type": this.type.map_each(item -> item.apply("debeziumTimestampToAvroTimestamp"))})
+          # Add a logical type so that it's decoded as a timestamp instead of a long.
+          this.type.type() == "object" && this.type.apply("isDebeziumTimestampType") => this.merge({"type":{"logicalType": "timestamp-millis"}})
+          _ => this
+        }
+      }
+      root = this.apply("debeziumTimestampToAvroTimestamp")
   url: "" # No default (required)
   oauth:
     enabled: false
@@ -148,6 +163,34 @@ Whether logical types should be preserved or transformed back into their primiti
 *Type*: `bool`
 
 *Default*: `false`
+
+=== `avro.mapping`
+
+A custom mapping to apply to Avro schemas JSON representation. This is useful to transform custom types emitted by other tools into standard avro.
+
+
+*Type*: `string`
+
+
+```yml
+# Examples
+
+mapping: |2
+  map isDebeziumTimestampType {
+    root = this.type == "long" && this."connect.name" == "io.debezium.time.Timestamp" && !this.exists("logicalType")
+  }
+  map debeziumTimestampToAvroTimestamp {
+    let mapped_fields = this.fields.or([]).map_each(item -> item.apply("debeziumTimestampToAvroTimestamp"))
+    root = match {
+      this.type == "record" => this.assign({"fields": $mapped_fields})
+      this.type.type() == "array" => this.assign({"type": this.type.map_each(item -> item.apply("debeziumTimestampToAvroTimestamp"))})
+      # Add a logical type so that it's decoded as a timestamp instead of a long.
+      this.type.type() == "object" && this.type.apply("isDebeziumTimestampType") => this.merge({"type":{"logicalType": "timestamp-millis"}})
+      _ => this
+    }
+  }
+  root = this.apply("debeziumTimestampToAvroTimestamp")
+```
 
 === `url`
 
