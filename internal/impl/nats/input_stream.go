@@ -20,7 +20,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gofrs/uuid"
+	"github.com/gofrs/uuid/v5"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/stan.go"
 
