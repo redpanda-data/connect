@@ -342,6 +342,27 @@ Generates a new RFC-4122 UUID each time it is invoked and prints a string repres
 root.id = uuid_v4()
 ```
 
+=== `uuid_v7`
+
+Generates a new time ordered UUID each time it is invoked and prints a string representation.
+
+==== Parameters
+
+- *`time`* &lt;(optional) timestamp&gt; An optional timestamp to use for the time ordered portion of the UUID.  
+
+==== Examples
+
+
+```coffeescript
+root.id = uuid_v7()
+```
+
+It is also possible to specify the timestamp for the uuid_v7
+
+```coffeescript
+root.id = uuid_v7(now().ts_sub_iso8601("PT1M"))
+```
+
 == Message Info
 
 === `batch_index`

@@ -111,6 +111,7 @@ output:
     drop_on: []
     successful_on: []
     proxy_url: "" # No default (optional)
+    disable_http2: false
     batch_as_multipart: false
     propagate_response: false
     max_in_flight: 64
@@ -793,6 +794,16 @@ An optional HTTP proxy URL.
 
 *Type*: `string`
 
+
+=== `disable_http2`
+
+Whether or not to disable disable HTTP/2
+
+
+*Type*: `bool`
+
+*Default*: `false`
+Requires version 4.44.0 or newer
 
 === `batch_as_multipart`
 
