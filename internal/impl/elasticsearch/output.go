@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -77,7 +78,7 @@ type esoConfig struct {
 	scriptParamsBlobl *bloblang.Executor
 }
 
-func esoConfigFromParsed(pConf *service.ParsedConfig) (conf esoConfig, err error) {
+func esoConfigFromParsed(pConf *service.ParsedConfig, logger *service.Logger) (conf esoConfig, err error) {
 	var tmpURLs []string
 	if tmpURLs, err = pConf.FieldStringList(esoFieldURLs); err != nil {
 		return
@@ -133,22 +134,28 @@ func esoConfigFromParsed(pConf *service.ParsedConfig) (conf esoConfig, err error
 		return
 	}
 
+	httpClient := &http.Client{}
+
 	var tlsConf *tls.Config
 	var tlsEnabled bool
 	if tlsConf, tlsEnabled, err = pConf.FieldTLSToggled(esoFieldTLS); err != nil {
 		return
 	} else if tlsEnabled {
-		conf.clientOpts = append(conf.clientOpts, elastic.SetHttpClient(&http.Client{
-			Transport: &http.Transport{
-				TLSClientConfig: tlsConf,
-			},
-			Timeout: timeout,
-		}))
+		httpClient.Transport = &http.Transport{
+			TLSClientConfig: tlsConf,
+		}
+		httpClient.Timeout = timeout
 	} else {
-		conf.clientOpts = append(conf.clientOpts, elastic.SetHttpClient(&http.Client{
-			Timeout: timeout,
-		}))
+		httpClient.Timeout = timeout
 	}
+	if env := os.Getenv("BENTHOS_ELASTICSEARCH_LOG_REQUESTS"); env == "true" {
+		httpClient.Transport = &LoggerRoundTripper{
+			Transport: httpClient.Transport,
+			Logger:    logger,
+			Service:   "elasticsearch",
+		}
+	}
+	conf.clientOpts = append(conf.clientOpts, elastic.SetHttpClient(httpClient))
 
 	var awsOpts []elastic.ClientOptionFunc
 	if awsOpts, err = AWSOptFn(pConf.Namespace(esoFieldAWS)); err != nil {
@@ -359,12 +366,13 @@ type Output struct {
 
 // OutputFromParsed returns an elasticsearch output writer from a parsed config.
 func OutputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (*Output, error) {
-	conf, err := esoConfigFromParsed(pConf)
+	logger := mgr.Logger()
+	conf, err := esoConfigFromParsed(pConf, logger)
 	if err != nil {
 		return nil, err
 	}
 	return &Output{
-		log:  mgr.Logger(),
+		log:  logger,
 		conf: conf,
 	}, nil
 }
