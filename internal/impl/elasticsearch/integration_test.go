@@ -49,7 +49,7 @@ var elasticIndex = `{
 	}
 }`
 
-func TestIntegrationElasticsearchV8(t *testing.T) {
+func TestIntegrationElasticsearch(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 

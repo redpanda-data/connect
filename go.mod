@@ -61,6 +61,8 @@ require (
 	github.com/dop251/goja_nodejs v0.0.0-20240728170619-29b559befffc
 	github.com/dustin/go-humanize v1.0.1
 	github.com/eclipse/paho.mqtt.golang v1.5.0
+	github.com/elastic/elastic-transport-go/v8 v8.6.0
+	github.com/elastic/go-elasticsearch/v8 v8.17.0
 	github.com/generikvault/gvalstrings v0.0.0-20180926130504-471f38f0112a
 	github.com/getsentry/sentry-go v0.28.1
 	github.com/go-faker/faker/v4 v4.4.2

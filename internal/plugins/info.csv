@@ -71,6 +71,7 @@ drop_on                   ,output    ,drop_on                   ,0.0.0   ,certif
 dynamic                   ,input     ,dynamic                   ,0.0.0   ,community  ,n          ,n     ,n
 dynamic                   ,output    ,dynamic                   ,0.0.0   ,community  ,n          ,n     ,n
 elasticsearch             ,output    ,elasticsearch             ,0.0.0   ,community  ,n          ,n     ,n
+elasticsearch_v8          ,output    ,elasticsearch_v8          ,4.47.0  ,certified  ,n          ,y     ,y
 fallback                  ,output    ,fallback                  ,3.58.0  ,certified  ,n          ,y     ,y
 file                      ,cache     ,File                      ,0.0.0   ,certified  ,n          ,n     ,n
 file                      ,input     ,File                      ,0.0.0   ,certified  ,n          ,n     ,n

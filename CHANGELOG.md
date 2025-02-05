@@ -12,6 +12,8 @@ All notable changes to this project will be documented in this file.
 - (Benthos) A `crash` processor for FATAL logging. (@rockwotj)
 - (Benthos) A `uuid_v7` bloblang function. (@rockwotj)
 - (Benthos) Field `disable_http2` added to the `http_client` input and output and to the `http` processor. (@mihaitodor)
+- New `elasticsearch_v8` output which supersedes the existing `elasticsearch` output that uses a deprecated Elasticsearch library. (@ooesili)
+- Field `retry_on_conflict` added to `elasticsearch` output to retry operations in case there are document version conflicts.
 
 ## 4.46.0 - 2025-01-29
 
