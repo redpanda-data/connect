@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"slices"
 
+	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
 
@@ -56,6 +57,7 @@ This input adds the following metadata fields to each message:
 - kafka_offset_partition
 - kafka_offset_commit_timestamp
 - kafka_offset_metadata
+- kafka_is_end_offset
 ` + "```" + `
 `).
 		Fields(redpandaMigratorOffsetsInputConfigFields()...)
@@ -95,58 +97,51 @@ func init() {
 				return nil, err
 			}
 
-			var topics []string
-			if topicList, err := conf.FieldStringList(rmoiFieldTopics); err != nil {
-				return nil, err
-			} else {
-				topics, _, err = kafka.ParseTopics(topicList, -1, false)
-				if err != nil {
-					return nil, err
-				}
-				if len(topics) == 0 {
-					return nil, errors.New("at least one topic must be specified")
-				}
-			}
-
-			var topicPatterns []*regexp.Regexp
-			if regexpTopics, err := conf.FieldBool(rmoiFieldRegexpTopics); err != nil {
-				return nil, err
-			} else if regexpTopics {
-				topicPatterns = make([]*regexp.Regexp, 0, len(topics))
-				for _, topic := range topics {
-					tp, err := regexp.Compile(topic)
-					if err != nil {
-						return nil, fmt.Errorf("failed to compile topic regex %q: %s", topic, err)
-					}
-					topicPatterns = append(topicPatterns, tp)
-				}
-			}
-
 			var rackID string
 			if rackID, err = conf.FieldString(rmoiFieldRackID); err != nil {
 				return nil, err
 			}
 			clientOpts = append(clientOpts, kgo.Rack(rackID))
 
-			// Configure `start_from_oldest: true`
-			clientOpts = append(clientOpts, kgo.ConsumeResetOffset(kgo.NewOffset().AtStart()))
+			i := redpandaMigratorOffsetsInput{
+				mgr:        mgr,
+				clientOpts: clientOpts,
+			}
 
-			// Consume messages from the `__consumer_offsets` topic
-			clientOpts = append(clientOpts, kgo.ConsumeTopics("__consumer_offsets"))
+			if topicList, err := conf.FieldStringList(rmoiFieldTopics); err != nil {
+				return nil, err
+			} else {
+				i.topics, _, err = kafka.ParseTopics(topicList, -1, false)
+				if err != nil {
+					return nil, err
+				}
+				if len(i.topics) == 0 {
+					return nil, errors.New("at least one topic must be specified")
+				}
+			}
 
-			rdr, err := kafka.NewFranzReaderOrderedFromConfig(conf, mgr, func() ([]kgo.Opt, error) {
-				return clientOpts, nil
+			if regexpTopics, err := conf.FieldBool(rmoiFieldRegexpTopics); err != nil {
+				return nil, err
+			} else if regexpTopics {
+				i.topicPatterns = make([]*regexp.Regexp, 0, len(i.topics))
+				for _, topic := range i.topics {
+					tp, err := regexp.Compile(topic)
+					if err != nil {
+						return nil, fmt.Errorf("failed to compile topic regex %q: %s", topic, err)
+					}
+					i.topicPatterns = append(i.topicPatterns, tp)
+				}
+			}
+
+			i.FranzReaderOrdered, err = kafka.NewFranzReaderOrderedFromConfig(conf, mgr, func() ([]kgo.Opt, error) {
+				// Consume messages from the `__consumer_offsets` topic and configure `start_from_oldest: true`
+				return append(clientOpts, kgo.ConsumeTopics("__consumer_offsets"), kgo.ConsumeResetOffset(kgo.NewOffset().AtStart())), nil
 			})
 			if err != nil {
 				return nil, err
 			}
 
-			return service.AutoRetryNacksBatchedToggled(conf, &redpandaMigratorOffsetsInput{
-				FranzReaderOrdered: rdr,
-				topicPatterns:      topicPatterns,
-				topics:             topics,
-				mgr:                mgr,
-			})
+			return service.AutoRetryNacksBatchedToggled(conf, &i)
 		})
 	if err != nil {
 		panic(err)
@@ -160,6 +155,7 @@ type redpandaMigratorOffsetsInput struct {
 
 	topicPatterns []*regexp.Regexp
 	topics        []string
+	clientOpts    []kgo.Opt
 
 	mgr *service.Resources
 }
@@ -175,6 +171,100 @@ func (rmoi *redpandaMigratorOffsetsInput) matchesTopic(topic string) bool {
 	})
 }
 
+func (rmoi *redpandaMigratorOffsetsInput) getKeyAndOffset(msg *service.Message) (key kmsg.OffsetCommitKey, offset kmsg.OffsetCommitValue, ok bool) {
+	var recordKey []byte
+	if k, exists := msg.MetaGetMut("kafka_key"); !exists {
+		return
+	} else {
+		recordKey = k.([]byte)
+	}
+
+	// Check the version to ensure that we process only offset commit keys
+	key = kmsg.NewOffsetCommitKey()
+	if err := key.ReadFrom(recordKey); err != nil || (key.Version != 0 && key.Version != 1) {
+		rmoi.mgr.Logger().Debugf("Failed to decode record key: %s", err)
+		return
+	}
+
+	isExpectedTopic := rmoi.matchesTopic(key.Topic)
+	if !isExpectedTopic {
+		rmoi.mgr.Logger().Tracef("Skipping updates for topic %q", key.Topic)
+		return
+	}
+
+	recordValue, err := msg.AsBytes()
+	if err != nil {
+		rmoi.mgr.Logger().Debugf("Failed to fetch record value: %s", err)
+		return
+	}
+
+	offset = kmsg.NewOffsetCommitValue()
+	if err := offset.ReadFrom(recordValue); err != nil {
+		rmoi.mgr.Logger().Debugf("Failed to decode offset commit value: %s", err)
+		return
+	}
+
+	return key, offset, true
+}
+
+func (rmoi *redpandaMigratorOffsetsInput) getEndTimestamp(ctx context.Context, topic string, partition int32, offset int64) (int64, bool, error) {
+	client, err := kgo.NewClient(rmoi.clientOpts...)
+	if err != nil {
+		return 0, false, fmt.Errorf("failed to create Kafka client: %s", err)
+	}
+	defer client.Close()
+
+	// The default kadm client timeout is 15s. Do we need to make this configurable?
+	offsets, err := kadm.NewClient(client).ListEndOffsets(ctx, topic)
+	if err != nil {
+		return 0, false, fmt.Errorf("failed to read the end offset for topic %q and partition %q: %s", topic, partition, err)
+	}
+
+	endOffset, ok := offsets.Lookup(topic, partition)
+	if !ok {
+		return 0, false, fmt.Errorf("failed to find the end offset for topic %q and partition %q: %s", topic, partition, err)
+	}
+
+	// If the end offset on the topic matches the offset we received via `__consumer_offsets`, then we must read the
+	// last record from the topic because the end offset does not have a corresponding record yet.
+	var recordOffset kgo.Offset
+	if endOffset.Offset == offset {
+		// The default offset begins at the end.
+		recordOffset = kgo.NewOffset().Relative(-1)
+	} else if endOffset.Offset > offset {
+		recordOffset = kgo.NewOffset().At(offset)
+	} else {
+		return 0, false, fmt.Errorf(
+			"the newest committed offset %d for topic %q partition %q should never be smaller than the received offset %d",
+			endOffset.Offset, topic, partition, offset,
+		)
+	}
+
+	client.AddConsumePartitions(map[string]map[int32]kgo.Offset{
+		topic: {
+			partition: recordOffset,
+		},
+	})
+
+	fetches := client.PollFetches(ctx)
+	if fetches.IsClientClosed() {
+		return 0, false, fmt.Errorf("failed to read record with offset %d for topic %q partition %q: client closed", offset, topic, partition)
+	}
+
+	if err := fetches.Err(); err != nil {
+		return 0, false, fmt.Errorf("failed to read record with offset %d for topic %q partition %q: %s", offset, topic, partition, err)
+	}
+
+	it := fetches.RecordIter()
+	if it.Done() {
+		return 0, false, fmt.Errorf("couldn't find record with offset %d for topic %q partition %q: %s", offset, topic, partition, err)
+	}
+
+	rec := it.Next()
+
+	return rec.Timestamp.UnixMilli(), endOffset.Offset == offset, nil
+}
+
 func (rmoi *redpandaMigratorOffsetsInput) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
 	for {
 		batch, ack, err := rmoi.FranzReaderOrdered.ReadBatch(ctx)
@@ -182,46 +272,32 @@ func (rmoi *redpandaMigratorOffsetsInput) ReadBatch(ctx context.Context) (servic
 			return batch, ack, err
 		}
 
-		batch = slices.DeleteFunc(batch, func(msg *service.Message) bool {
-			var recordKey []byte
-			if key, ok := msg.MetaGetMut("kafka_key"); !ok {
-				return true
-			} else {
-				recordKey = key.([]byte)
+		// Skip records where `getKeyAndOffset()` returns false. This logic is similar to `slices.DeleteFunc()`, but we
+		// need to return errors if we can't connect to the Kafka cluster to read data.
+		i := 0
+		for _, msg := range batch {
+			key, offset, ok := rmoi.getKeyAndOffset(msg)
+			if !ok {
+				continue
 			}
+			batch[i] = msg
+			i++
 
-			// Check the version to ensure that we process only offset commit keys
-			key := kmsg.NewOffsetCommitKey()
-			if err := key.ReadFrom(recordKey); err != nil || (key.Version != 0 && key.Version != 1) {
-				rmoi.mgr.Logger().Debugf("Failed to decode record key: %s", err)
-				return true
-			}
-
-			isExpectedTopic := rmoi.matchesTopic(key.Topic)
-			if !isExpectedTopic {
-				rmoi.mgr.Logger().Tracef("Skipping updates for topic %q", key.Topic)
-				return true
-			}
-
-			recordValue, err := msg.AsBytes()
+			ts, isEndOffset, err := rmoi.getEndTimestamp(ctx, key.Topic, key.Partition, offset.Offset)
 			if err != nil {
-				return true
-			}
-
-			offsetCommitValue := kmsg.NewOffsetCommitValue()
-			if err = offsetCommitValue.ReadFrom(recordValue); err != nil {
-				rmoi.mgr.Logger().Debugf("Failed to decode offset commit value: %s", err)
-				return true
+				return nil, nil, err
 			}
 
 			msg.MetaSetMut("kafka_offset_topic", key.Topic)
 			msg.MetaSetMut("kafka_offset_group", key.Group)
 			msg.MetaSetMut("kafka_offset_partition", key.Partition)
-			msg.MetaSetMut("kafka_offset_commit_timestamp", offsetCommitValue.CommitTimestamp)
-			msg.MetaSetMut("kafka_offset_metadata", offsetCommitValue.Metadata)
+			msg.MetaSetMut("kafka_offset_commit_timestamp", ts)
+			msg.MetaSetMut("kafka_offset_metadata", offset.Metadata)
+			msg.MetaSetMut("kafka_is_end_offset", isEndOffset)
+		}
 
-			return false
-		})
+		// Delete the records that we skipped
+		batch = slices.Delete(batch, i, len(batch))
 
 		if len(batch) == 0 {
 			_ = ack(ctx, nil) // TODO: Log this error?

@@ -33,6 +33,7 @@ const (
 	rmooFieldOffsetPartition       = "offset_partition"
 	rmooFieldOffsetCommitTimestamp = "offset_commit_timestamp"
 	rmooFieldOffsetMetadata        = "offset_metadata"
+	rmooFieldIsEndOffset           = "is_end_offset"
 
 	// Deprecated fields
 	rmooFieldKafkaKey    = "kafka_key"
@@ -65,6 +66,8 @@ func redpandaMigratorOffsetsOutputConfigFields() []*service.ConfigField {
 				Description("Kafka offset commit timestamp.").Default("${! @kafka_offset_commit_timestamp }"),
 			service.NewInterpolatedStringField(rmooFieldOffsetMetadata).
 				Description("Kafka offset metadata value.").Default(`${! @kafka_offset_metadata }`),
+			service.NewInterpolatedStringField(rmooFieldIsEndOffset).
+				Description("Indicates if the update represents the end offset of the Kafka topic partition.").Default(`${! @kafka_is_end_offset }`),
 
 			// Deprecated fields
 			service.NewInterpolatedStringField(rmooFieldKafkaKey).
@@ -103,13 +106,13 @@ func init() {
 
 // redpandaMigratorOffsetsWriter implements a Redpanda Migrator offsets writer using the franz-go library.
 type redpandaMigratorOffsetsWriter struct {
-	clientDetails         *kafka.FranzConnectionDetails
 	clientOpts            []kgo.Opt
 	offsetTopic           *service.InterpolatedString
 	offsetGroup           *service.InterpolatedString
 	offsetPartition       *service.InterpolatedString
 	offsetCommitTimestamp *service.InterpolatedString
 	offsetMetadata        *service.InterpolatedString
+	isEndOffset           *service.InterpolatedString
 	backoffCtor           func() backoff.BackOff
 
 	connMut sync.Mutex
@@ -124,8 +127,8 @@ func newRedpandaMigratorOffsetsWriterFromConfig(conf *service.ParsedConfig, mgr 
 		mgr: mgr,
 	}
 
-	var err error
-	if w.clientDetails, err = kafka.FranzConnectionDetailsFromConfig(conf, mgr.Logger()); err != nil {
+	clientDetails, err := kafka.FranzConnectionDetailsFromConfig(conf, mgr.Logger())
+	if err != nil {
 		return nil, err
 	}
 
@@ -149,8 +152,25 @@ func newRedpandaMigratorOffsetsWriterFromConfig(conf *service.ParsedConfig, mgr 
 		return nil, err
 	}
 
-	if w.clientOpts, err = kafka.FranzProducerLimitsOptsFromConfig(conf); err != nil {
+	if w.isEndOffset, err = conf.FieldInterpolatedString(rmooFieldIsEndOffset); err != nil {
 		return nil, err
+	}
+
+	var clientOpts []kgo.Opt
+	if clientOpts, err = kafka.FranzProducerLimitsOptsFromConfig(conf); err != nil {
+		return nil, err
+	}
+
+	w.clientOpts = slices.Concat(
+		clientOpts,
+		[]kgo.Opt{
+			kgo.SeedBrokers(clientDetails.SeedBrokers...),
+			kgo.SASL(clientDetails.SASL...),
+			kgo.ClientID(clientDetails.ClientID),
+			kgo.WithLogger(&kafka.KGoLogger{L: w.mgr.Logger()}),
+		})
+	if clientDetails.TLSConf != nil {
+		w.clientOpts = append(w.clientOpts, kgo.DialTLSConfig(clientDetails.TLSConf))
 	}
 
 	if w.backoffCtor, err = retries.CommonRetryBackOffCtorFromParsed(conf); err != nil {
@@ -171,21 +191,9 @@ func (w *redpandaMigratorOffsetsWriter) Connect(ctx context.Context) error {
 		return nil
 	}
 
-	clientOpts := slices.Concat(
-		w.clientOpts,
-		[]kgo.Opt{
-			kgo.SeedBrokers(w.clientDetails.SeedBrokers...),
-			kgo.SASL(w.clientDetails.SASL...),
-			kgo.ClientID(w.clientDetails.ClientID),
-			kgo.WithLogger(&kafka.KGoLogger{L: w.mgr.Logger()}),
-		})
-	if w.clientDetails.TLSConf != nil {
-		clientOpts = append(clientOpts, kgo.DialTLSConfig(w.clientDetails.TLSConf))
-	}
-
 	var err error
 	var client *kgo.Client
-	if client, err = kgo.NewClient(clientOpts...); err != nil {
+	if client, err = kgo.NewClient(w.clientOpts...); err != nil {
 		return err
 	}
 
@@ -194,9 +202,41 @@ func (w *redpandaMigratorOffsetsWriter) Connect(ctx context.Context) error {
 		return fmt.Errorf("failed to connect to cluster: %s", err)
 	}
 
+	// The default kadm client timeout is 15s. Do we need to make this configurable?
 	w.client = kadm.NewClient(client)
 
 	return nil
+}
+
+// getLastRecordOffset returns the last record offset for the given topic and partition.
+func (w *redpandaMigratorOffsetsWriter) getLastRecordOffset(ctx context.Context, topic string, partition int32) (int64, error) {
+	client, err := kgo.NewClient(w.clientOpts...)
+	if err != nil {
+		return 0, fmt.Errorf("failed to create Kafka client: %s", err)
+	}
+	defer client.Close()
+
+	client.AddConsumePartitions(map[string]map[int32]kgo.Offset{
+		topic: {
+			partition: kgo.NewOffset().Relative(-1),
+		},
+	})
+
+	fetches := client.PollFetches(ctx)
+	if fetches.IsClientClosed() {
+		return 0, fmt.Errorf("failed to read last record for topic %q partition %q: client closed", topic, partition)
+	}
+
+	if err := fetches.Err(); err != nil {
+		return 0, fmt.Errorf("failed to read last record for topic %q partition %q: %s", topic, partition, err)
+	}
+
+	it := fetches.RecordIter()
+	if it.Done() {
+		return 0, fmt.Errorf("couldn't find the last record for topic %q partition %q: %s", topic, partition, err)
+	}
+
+	return it.Next().Offset, nil
 }
 
 // Write attempts to write a message to the output cluster.
@@ -247,6 +287,18 @@ func (w *redpandaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.
 		}
 	}
 
+	isEndOffset := false
+	if w.isEndOffset != nil {
+		data, err := w.isEndOffset.TryString(msg)
+		if err != nil {
+			return fmt.Errorf("failed to extract is_end_offset: %w", err)
+		}
+		isEndOffset, err = strconv.ParseBool(data)
+		if err != nil {
+			return fmt.Errorf("failed to parse is_end_offset: %w", err)
+		}
+	}
+
 	updateConsumerOffsets := func() error {
 		listedOffsets, err := w.client.ListOffsetsAfterMilli(ctx, offsetCommitTimestamp, topic)
 		if err != nil {
@@ -265,6 +317,36 @@ func (w *redpandaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.
 					delete(partitionOffsets, partition)
 				}
 				offset.Metadata = offsetMetadata
+
+				// As an optimisation to try and avoid unnecessary duplicates in the common case, we check if the
+				// received offset update was triggered when a consumer read the last record of the source topic. In
+				// this special case, we check if the matching offset in the destination topic (returned by
+				// `ListOffsetsAfterMilli`) also points to the end record. If it does, then we can fetch the current end
+				// offset of the destination topic and set the destination consumer offset to that value.
+				// Note: We have to be conservative here and assume there might be duplicates in the destination topic,
+				// so we can't just update the offset to the end offset without first checking if
+				// `ListOffsetsAfterMilli` actually returned the offset of the end record.
+				if isEndOffset {
+					lastOffset, err := w.getLastRecordOffset(ctx, topic, partition)
+					if err != nil {
+						return err
+					}
+
+					if offset.At == lastOffset {
+						offsets, err := w.client.ListEndOffsets(ctx, topic)
+						if err != nil {
+							return fmt.Errorf("failed to read the end offset for topic %q and partition %q: %s", topic, partition, err)
+						}
+
+						committedOffset, ok := offsets.Lookup(topic, partition)
+						if !ok {
+							return fmt.Errorf("failed to find the end offset for topic %q and partition %q: %s", topic, partition, err)
+						}
+
+						offset.At = committedOffset.Offset
+					}
+				}
+
 				partitionOffsets[partition] = offset
 			}
 			if len(partitionOffsets) == 0 {
@@ -286,7 +368,8 @@ func (w *redpandaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.
 
 	backOff := w.backoffCtor()
 	for {
-		// TODO: Use `dispatch.TriggerSignal()` to consume new messages while `updateConsumerOffsets()` is running.
+		// TODO: Maybe use `dispatch.TriggerSignal()` to consume new messages while `updateConsumerOffsets()` is running
+		// if this proves to be too slow.
 		err := updateConsumerOffsets()
 		if err == nil {
 			break

@@ -99,6 +99,7 @@ This input adds the following metadata fields to each message:
 - kafka_offset_partition
 - kafka_offset_commit_timestamp
 - kafka_offset_metadata
+- kafka_is_end_offset
 ```
 
 

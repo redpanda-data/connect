@@ -5,10 +5,17 @@ All notable changes to this project will be documented in this file.
 
 ## 4.48.0 - TBD
 
+### Fixed
+
+- Fixed a bug with the `redpanda_migrator_offsets` input and output where the consumer group update migration logic based on timestamp lookup should no longer skip ahead in the destination cluster. This should enforce at-least-once delivery guarantees. (@mihaitodor)
+- The `redpanda_migrator_bundle` output no longer drops messages if either the `redpanda_migrator` or the `redpanda_migrator_offsets` child output throws an error. Connect will keep retrying to write the messages and apply backpressure to the input. (@mihaitodor)
+
 ### Added
 
 - Added a lint rule to verify field `private_key` for the `snowflake_streaming` output is in PEM format. (@rockwotj)
 - New `mongodb_cdc` input for change data capture (CDC) over MongoDB collections. (@rockwotj)
+- Field `is_end_offset` added to the `redpanda_migrator_offsets` output. (@mihaitodor)
+- Metadata field `kafka_is_end_offset` added to the `redpanda_migrator_offsets` input. (@mihaitodor)
 
 ### Changed
 
