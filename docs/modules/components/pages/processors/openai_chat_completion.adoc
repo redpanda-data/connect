@@ -215,7 +215,6 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 === `image`
 
 An image to send along with the prompt. The mapping result must be a byte array.
-This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
 
 *Type*: `string`

@@ -88,7 +88,7 @@ To learn more about chat completion, see the https://platform.openai.com/docs/gu
 			service.NewInterpolatedStringField(ocpFieldSystemPrompt).
 				Description("The system prompt to submit along with the user prompt.").
 				Optional(),
-			service.NewInterpolatedStringField(ocpFieldImage).
+			service.NewBloblangField(ocpFieldImage).
 				Description("An image to send along with the prompt. The mapping result must be a byte array.").
 				Version("4.38.0").
 				Example(`root = this.image.decode("base64") # decode base64 encoded image`).
