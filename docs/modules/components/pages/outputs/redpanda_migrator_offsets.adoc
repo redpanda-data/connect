@@ -45,6 +45,7 @@ output:
     offset_partition: ${! @kafka_offset_partition }
     offset_commit_timestamp: ${! @kafka_offset_commit_timestamp }
     offset_metadata: ${! @kafka_offset_metadata }
+    is_end_offset: ${! @kafka_is_end_offset }
 ```
 
 --
@@ -73,6 +74,7 @@ output:
     offset_partition: ${! @kafka_offset_partition }
     offset_commit_timestamp: ${! @kafka_offset_commit_timestamp }
     offset_metadata: ${! @kafka_offset_metadata }
+    is_end_offset: ${! @kafka_is_end_offset }
     timeout: 10s
     max_message_bytes: 1MiB
     broker_write_max_bytes: 100MiB
@@ -525,6 +527,16 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 *Type*: `string`
 
 *Default*: `"${! @kafka_offset_metadata }"`
+
+=== `is_end_offset`
+
+Indicates if the update represents the end offset of the Kafka topic partition.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+
+*Type*: `string`
+
+*Default*: `"${! @kafka_is_end_offset }"`
 
 === `timeout`
 
