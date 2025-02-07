@@ -16,6 +16,7 @@ package telemetry
 
 import (
 	"fmt"
+	"runtime"
 	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -30,6 +31,21 @@ type componentInfo struct {
 	Name string `json:"name"`
 }
 
+// Information gathered about the host that we're running on
+type hostInfo struct {
+	// Number of logical CPUs usable
+	NumCPU int `json:"numCpu"`
+
+	// Limit of concurrent goroutines by the scheduler
+	GoMaxProcs int `json:"goMaxProcs"`
+
+	// Architecture we're running on
+	GoArch string `json:"goArch"`
+
+	// OS we're running on
+	GoOS string `json:"goOS"`
+}
+
 // Contains all of the information which is delivered during a telemetry
 // export, serialisable in JSON format.
 type payload struct {
@@ -41,12 +57,20 @@ type payload struct {
 
 	// A slice representing each component within a config.
 	Components []componentInfo `json:"components"`
+
+	// Information about the host and process
+	HostInfo hostInfo `json:"hostInfo"`
 }
 
 // All information sent during a telemetry export is extracted within this
 // function and stored within the payload.
 func extractPayload(identifier string, logger *service.Logger, schema *service.ConfigSchema, conf *service.ParsedConfig) (*payload, error) {
-	p := payload{ID: identifier, Uptime: 0}
+	p := payload{ID: identifier, Uptime: 0, HostInfo: hostInfo{
+		NumCPU:     runtime.NumCPU(),
+		GoMaxProcs: runtime.GOMAXPROCS(0), // using 0 means to just read the value
+		GoOS:       runtime.GOOS,
+		GoArch:     runtime.GOARCH,
+	}}
 
 	rootValue, err := conf.FieldAny()
 	if err != nil {
