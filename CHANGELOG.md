@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.47.1 - 2025-02-11
+
+### Fixed
+
+- Fix an issue with left over staging files being left around in the `snowflake_streaming` output. (@rockwotj)
+
 ## 4.47.0 - 2025-02-07
 
 ### Added
