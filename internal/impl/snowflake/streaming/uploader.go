@@ -173,6 +173,9 @@ func (u *gcsUploader) upload(ctx context.Context, path string, encrypted, md5Has
 	ow := object.NewWriter(ctx)
 	ow.Metadata = metadata
 	ow.MD5 = md5Hash
+	// Prevent resumable uploads and staging files in the bucket by removing the chunk size.
+	// https://cloud.google.com/storage/docs/uploading-objects-from-memory#storage-upload-object-from-memory-go
+	ow.ChunkSize = 0
 	for len(encrypted) > 0 {
 		n, err := ow.Write(encrypted)
 		if err != nil {
