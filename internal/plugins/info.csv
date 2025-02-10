@@ -128,6 +128,7 @@ mongodb                   ,cache     ,MongoDB                   ,3.43.0  ,certif
 mongodb                   ,input     ,MongoDB                   ,3.64.0  ,certified  ,n          ,y     ,y
 mongodb                   ,output    ,MongoDB                   ,3.43.0  ,certified  ,n          ,y     ,y
 mongodb                   ,processor ,MongoDB                   ,3.43.0  ,certified  ,n          ,y     ,y
+mongodb_cdc               ,input     ,MongoDB CDC               ,4.48.0  ,enterprise ,n          ,y     ,y
 mqtt                      ,input     ,mqtt                      ,4.37.0  ,certified  ,n          ,y     ,y
 mqtt                      ,output    ,mqtt                      ,4.37.0  ,certified  ,n          ,y     ,y
 msgpack                   ,processor ,msgpack                   ,3.59.0  ,community  ,n          ,n     ,n
