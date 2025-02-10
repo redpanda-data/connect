@@ -28,7 +28,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blockblob"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
-	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/cenkalti/backoff/v4"
 	"golang.org/x/oauth2"
@@ -70,9 +69,8 @@ func newUploader(fileLocationInfo fileLocationInfo) (uploader, error) {
 		if err != nil {
 			return nil, err
 		}
-		uploader := manager.NewUploader(client)
 		return &s3Uploader{
-			client:     uploader,
+			client:     client,
 			bucket:     bucket,
 			pathPrefix: pathPrefix,
 		}, nil
@@ -146,19 +144,20 @@ func (u *azureUploader) upload(ctx context.Context, path string, encrypted, md5H
 }
 
 type s3Uploader struct {
-	client             *manager.Uploader
+	client             *s3.Client
 	bucket, pathPrefix string
 }
 
 func (u *s3Uploader) upload(ctx context.Context, path string, encrypted, md5Hash []byte, metadata map[string]string) error {
 	input := &s3.PutObjectInput{
-		Bucket:     &u.bucket,
-		Key:        aws.String(filepath.Join(u.pathPrefix, path)),
-		Body:       bytes.NewReader(encrypted),
-		Metadata:   metadata,
-		ContentMD5: aws.String(base64.StdEncoding.EncodeToString(md5Hash)),
+		Bucket:        &u.bucket,
+		Key:           aws.String(filepath.Join(u.pathPrefix, path)),
+		ContentLength: aws.Int64(int64(len(encrypted))),
+		Body:          bytes.NewReader(encrypted),
+		Metadata:      metadata,
+		ContentMD5:    aws.String(base64.StdEncoding.EncodeToString(md5Hash)),
 	}
-	_, err := u.client.Upload(ctx, input)
+	_, err := u.client.PutObject(ctx, input)
 	return err
 }
 
