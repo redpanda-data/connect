@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.48.0 - TBD
+
+### Added
+
+- Added a lint rule to verify field `private_key` for the `snowflake_streaming` output is in PEM format. (@rockwotj)
+
 ## 4.47.1 - 2025-02-11
 
 ### Fixed
