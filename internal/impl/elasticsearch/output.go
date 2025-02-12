@@ -63,12 +63,13 @@ type esoConfig struct {
 	clientOpts  []elastic.ClientOptionFunc
 	backoffCtor func() backoff.BackOff
 
-	actionStr   *service.InterpolatedString
-	idStr       *service.InterpolatedString
-	indexStr    *service.InterpolatedString
-	pipelineStr *service.InterpolatedString
-	routingStr  *service.InterpolatedString
-	typeStr     *service.InterpolatedString
+	actionStr       *service.InterpolatedString
+	idStr           *service.InterpolatedString
+	indexStr        *service.InterpolatedString
+	pipelineStr     *service.InterpolatedString
+	routingStr      *service.InterpolatedString
+	typeStr         *service.InterpolatedString
+	retryOnConflict int
 }
 
 func esoConfigFromParsed(pConf *service.ParsedConfig) (conf esoConfig, err error) {
@@ -178,6 +179,9 @@ func esoConfigFromParsed(pConf *service.ParsedConfig) (conf esoConfig, err error
 		return
 	}
 	if conf.typeStr, err = pConf.FieldInterpolatedString(esoFieldType); err != nil {
+		return
+	}
+	if conf.retryOnConflict, err = pConf.FieldInt(esoFieldRetryOnConflict); err != nil {
 		return
 	}
 	return
@@ -398,7 +402,7 @@ func (e *Output) WriteBatch(ctx context.Context, msg service.MessageBatch) error
 			return fmt.Errorf("failed to marshal message into JSON document: %w", ierr)
 		}
 
-		pbi := &pendingBulkIndex{Doc: jObj}
+		pbi := &pendingBulkIndex{Doc: jObj, RetryOnConflict: e.conf.retryOnConflict}
 		if pbi.Action, ierr = msg.TryInterpolatedString(i, e.conf.actionStr); ierr != nil {
 			return fmt.Errorf("action interpolation error: %w", ierr)
 		}
