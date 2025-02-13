@@ -59,6 +59,7 @@ openai_transcription:
   file: "" # No default (required)
   language: en # No default (optional)
   prompt: "" # No default (optional)
+  response_format: json
 ```
 
 --
@@ -143,5 +144,15 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 *Type*: `string`
 
+
+=== `response_format`
+
+The format of the output, in one of these options: json, text, srt, verbose_json, or vtt.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+
+*Type*: `string`
+
+*Default*: `"json"`
 
 
