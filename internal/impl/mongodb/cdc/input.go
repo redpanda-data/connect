@@ -299,7 +299,7 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 	}
 	versionStr, ok := buildInfo["version"].(string)
 	if !ok {
-		return fmt.Errorf("unable to determine mongodb version")
+		return errors.New("unable to determine mongodb version")
 	}
 	version, err := semver.NewVersion(versionStr)
 	if err != nil {
@@ -358,8 +358,8 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 				} else {
 					// If there are no writes between snapshot and streaming, we want to skip the last
 					// document that will be read in the snapshot.
-					nextTs := nextTimestamp(ts)
-					opts = opts.SetStartAtOperationTime(&nextTs)
+					nextTS := nextTimestamp(ts)
+					opts = opts.SetStartAtOperationTime(&nextTS)
 				}
 			}()
 			go func() {
