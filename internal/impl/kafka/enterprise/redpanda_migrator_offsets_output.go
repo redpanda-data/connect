@@ -338,12 +338,12 @@ func (w *redpandaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.
 							return fmt.Errorf("failed to read the end offset for topic %q and partition %q: %s", topic, partition, err)
 						}
 
-						committedOffset, ok := offsets.Lookup(topic, partition)
+						endOffset, ok := offsets.Lookup(topic, partition)
 						if !ok {
 							return fmt.Errorf("failed to find the end offset for topic %q and partition %q: %s", topic, partition, err)
 						}
 
-						offset.At = committedOffset.Offset
+						offset.At = endOffset.Offset
 					}
 				}
 
