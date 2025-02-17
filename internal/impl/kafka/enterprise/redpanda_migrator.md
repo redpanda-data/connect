@@ -22,7 +22,7 @@ Source->>Source: O = Receive(__consumer_offsets)
 Source->>Source: X = ListEndOffsets(T, P)
 Source->>Source: X > O
 Source->>Source: TS = ReadTimestamp(T, P, O)
-Source->>Destination: TS
+Source->>Destination: (T, P, TS)
 Destination->>Destination: O' = ListOffsetsAfterMilli(T, P, TS)
 Destination->>Destination: CommitOffsets(T, P, O')
 ```
@@ -37,7 +37,7 @@ Source->>Source: O = Receive(__consumer_offsets)
 Source->>Source: X = ListEndOffsets(T, P)
 Source->>Source: X == O
 Source->>Source: TS = ReadTimestamp(T, P, -1)
-Source->>Destination: TS
+Source->>Destination: (T, P, TS)
 Destination->>Destination: O' = ListOffsetsAfterMilli(T, P, TS)
 Destination->>Destination: O'' = ReadOffset(T, P, -1)
 Destination->>Destination: If O'' == O' then O' = ListEndOffsets(T, P)
