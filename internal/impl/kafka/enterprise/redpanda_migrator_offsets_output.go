@@ -218,6 +218,7 @@ func (w *redpandaMigratorOffsetsWriter) getLastRecordOffset(ctx context.Context,
 
 	client.AddConsumePartitions(map[string]map[int32]kgo.Offset{
 		topic: {
+			// The default offset begins at the end.
 			partition: kgo.NewOffset().Relative(-1),
 		},
 	})
@@ -343,7 +344,16 @@ func (w *redpandaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.
 							return fmt.Errorf("failed to find the end offset for topic %q and partition %q: %s", topic, partition, err)
 						}
 
-						offset.At = endOffset.Offset
+						// Sanity check: Make sure the topic did not receive any new records since we first called
+						// `getLastRecordOffset()`. If it did, then updating the consumer offset to the end offset will
+						// skip records, so it's best to just let the consumer read extra duplicate records instead.
+						lastOffset, err = w.getLastRecordOffset(ctx, topic, partition)
+						if err != nil {
+							return err
+						}
+						if offset.At == lastOffset {
+							offset.At = endOffset.Offset
+						}
 					}
 				}
 
