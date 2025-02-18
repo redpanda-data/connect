@@ -467,7 +467,7 @@ func (m *mongoCDC) computeSplitPoints(ctx context.Context, coll *mongo.Collectio
 	for i := range splitKeys {
 		v, ok := splitKeys[i].(bson.D)
 		if !ok {
-			return nil, fmt.Errorf("unexpected splitVector result format: %s", result.String())
+			return nil, fmt.Errorf("unexpected splitVector range result format: %s", result.String())
 		}
 		id := bsonGetPath(v, "_id")
 		ranges = append(ranges, [2]any{prev, id})
@@ -505,7 +505,7 @@ func (m *mongoCDC) autoBuckets(ctx context.Context, coll *mongo.Collection) ([][
 		})
 	}
 	if cursor.Err() != nil {
-		return nil, fmt.Errorf("unable to compute buckets: %w", err)
+		return nil, fmt.Errorf("unable to read buckets results: %w", err)
 	}
 	if len(ranges) == 0 {
 		return [][2]any{{bson.MinKey{}, bson.MaxKey{}}}, nil
@@ -559,13 +559,10 @@ func (m *mongoCDC) readSnapshotRange(ctx context.Context, coll *mongo.Collection
 		if err := cursor.Decode(&doc); err != nil {
 			return fmt.Errorf("unable to decode document: %w", err)
 		}
-		b, err := bson.MarshalExtJSON(doc, m.marshalCanonical, false)
+		msg, err := m.newMongoDBCDCMessage(doc, "read", coll.Name())
 		if err != nil {
-			return fmt.Errorf("error marshalling bson to json: %w", err)
+			return fmt.Errorf("unable to create message from document: %w", err)
 		}
-		msg := service.NewMessage(b)
-		msg.MetaSetMut("operation", "read")
-		msg.MetaSetMut("collection", coll.Name())
 		mb = append(mb, msg)
 		if cursor.RemainingBatchLength() == 0 {
 			resolve, err := cp.Track(ctx, nil, int64(len(mb)))
@@ -608,7 +605,10 @@ func (m *mongoCDC) readFromStream(ctx context.Context, cp *checkpoint.Capped[bso
 		if err := stream.Decode(&data); err != nil {
 			return fmt.Errorf("unable to decode document: %w", err)
 		}
-		opType := data["operationType"]
+		opType, ok := data["operationType"].(string)
+		if !ok {
+			return fmt.Errorf("unable to extract operation type from change string, got: %s", data)
+		}
 		var doc any
 		switch opType {
 		case "insert", "replace", "update":
@@ -629,22 +629,18 @@ func (m *mongoCDC) readFromStream(ctx context.Context, cp *checkpoint.Capped[bso
 			// Otherwise skip the other kinds of events
 			continue
 		}
-		var b []byte
-		if doc != nil {
-			b, err = bson.MarshalExtJSON(doc, m.marshalCanonical, false)
-			if err != nil {
-				return fmt.Errorf("error marshalling bson to json: %w", err)
-			}
-		} else {
-			b = []byte("null")
-		}
 		ns, ok := data["ns"].(bson.D)
 		if !ok {
 			return fmt.Errorf("invalid ns data: %T", data["ns"])
 		}
-		msg := service.NewMessage(b)
-		msg.MetaSetMut("operation", opType)
-		msg.MetaSetMut("collection", bsonGetPath(ns, "coll"))
+		coll, ok := bsonGetPath(ns, "coll").(string)
+		if !ok {
+			return fmt.Errorf("unable to extract collection from change stream, got: %s", data)
+		}
+		msg, err := m.newMongoDBCDCMessage(doc, opType, coll)
+		if err != nil {
+			return fmt.Errorf("unable to create message from change stream event: %w", err)
+		}
 		mb = append(mb, msg)
 		if stream.RemainingBatchLength() == 0 {
 			resolve, err := cp.Track(ctx, stream.ResumeToken(), int64(len(mb)))
@@ -656,9 +652,7 @@ func (m *mongoCDC) readFromStream(ctx context.Context, cp *checkpoint.Capped[bso
 					return err
 				}
 				resumeToken := resolve()
-				if resumeToken == nil {
-					return nil
-				} else if *resumeToken == nil {
+				if resumeToken == nil || *resumeToken == nil {
 					return nil
 				}
 				m.resumeTokenMu.Lock()
@@ -677,6 +671,22 @@ func (m *mongoCDC) readFromStream(ctx context.Context, cp *checkpoint.Capped[bso
 		}
 	}
 	return stream.Err()
+}
+
+func (m *mongoCDC) newMongoDBCDCMessage(doc any, operationType, collectionName string) (msg *service.Message, err error) {
+	var b []byte
+	if doc != nil {
+		b, err = bson.MarshalExtJSON(doc, m.marshalCanonical, false)
+		if err != nil {
+			return nil, fmt.Errorf("error marshalling bson to json: %w", err)
+		}
+	} else {
+		b = []byte("null")
+	}
+	msg = service.NewMessage(b)
+	msg.MetaSetMut("operation", operationType)
+	msg.MetaSetMut("collection", collectionName)
+	return msg, nil
 }
 
 func (m *mongoCDC) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
