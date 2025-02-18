@@ -10,6 +10,10 @@ All notable changes to this project will be documented in this file.
 - Added a lint rule to verify field `private_key` for the `snowflake_streaming` output is in PEM format. (@rockwotj)
 - New `mongodb_cdc` input for change data capture (CDC) over MongoDB collections. (@rockwotj)
 
+### Fixed
+
+- Fix an issue in the `snowflake_streaming` output when the user manually evolves the schema in their pipeline that could lead to elevated error rates in the connector. (@rockwotj)
+
 ### Changed
 
 - Output `snowflake_streaming` has additional logging and debug information when errors arise. (@rockwotj)
