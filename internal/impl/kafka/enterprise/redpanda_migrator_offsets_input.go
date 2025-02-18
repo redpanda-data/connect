@@ -207,7 +207,7 @@ func (rmoi *redpandaMigratorOffsetsInput) getKeyAndOffset(msg *service.Message) 
 	return key, offset, true
 }
 
-func (rmoi *redpandaMigratorOffsetsInput) getEndTimestamp(ctx context.Context, topic string, partition int32, offset int64) (int64, bool, error) {
+func (rmoi *redpandaMigratorOffsetsInput) getEndTimestamp(ctx context.Context, topic string, partition int32, offset int64) (timestamp int64, isEndOffset bool, err error) {
 	client, err := kgo.NewClient(rmoi.clientOpts...)
 	if err != nil {
 		return 0, false, fmt.Errorf("failed to create Kafka client: %s", err)

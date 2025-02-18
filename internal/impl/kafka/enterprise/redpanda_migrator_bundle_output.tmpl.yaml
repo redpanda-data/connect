@@ -105,7 +105,10 @@ mapping: |
                     cases:
                       - check: '@fallback_error == "request returned status: 422"'
                         output:
-                          drop: {} # TODO: Use a DLQ?
+                          # We want to drop these messages, because they indicate that the provided schema already
+                          # exists in the destination.
+                          # TODO: Use a DLQ?
+                          drop: {}
                           processors:
                             - log:
                                 message: |
