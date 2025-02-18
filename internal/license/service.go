@@ -126,7 +126,7 @@ func InjectCustomLicenseBytes(res *service.Resources, conf Config, licenseBytes 
 		"license_org", license.Organization,
 		"license_type", typeDisplayName(license.Type),
 		"expires_at", time.Unix(license.Expiry, 0).Format(time.RFC3339),
-	).Debug("Successfully loaded Redpanda license")
+	).Info("Successfully loaded Redpanda license")
 
 	s.loadedLicense.Store(&license)
 	setSharedService(res, s)
@@ -154,7 +154,7 @@ func (s *Service) readAndValidateLicense() (RedpandaLicense, error) {
 		"license_org", license.Organization,
 		"license_type", typeDisplayName(license.Type),
 		"expires_at", time.Unix(license.Expiry, 0).Format(time.RFC3339),
-	).Debug("Successfully loaded Redpanda license")
+	).Info("Successfully loaded Redpanda license")
 
 	return license, nil
 }
