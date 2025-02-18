@@ -85,7 +85,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 		}),
 		service.CLIOptAddTeeLogger(slog.New(rpLogger)),
 		service.CLIOptOnConfigParse(func(pConf *service.ParsedConfig) error {
-			// Kick off license service.
+			// Kick off license service, it's important we do this before telemetry.
 			license.RegisterService(pConf.Resources(), licenseConfig)
 
 			// Kick off telemetry exporter.
