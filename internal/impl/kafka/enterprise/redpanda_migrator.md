@@ -14,32 +14,61 @@ This approach requires that all topics which need to be migrated contain records
 
 ## Sequence diagrams
 
-Migrate consumer group update for record `R` in topic `T` partition `P` located at an arbitrary offset `O` in the `[start, end)` interval in the Source cluster which translates to offset `O'` in the Destination cluster.
+### Consumer group offsets migration
+
+Consumer group offsets are migrated independently from records and schemas.
+
+1. Migrate a consumer group update for a record in topic `T` partition `P` located at an arbitrary offset `O` in the `[start, end)` interval in the Source cluster which translates to offset `O'` in the Destination cluster.
 
 ```mermaid
 sequenceDiagram
-Source->>Source: O = Receive(__consumer_offsets)
-Source->>Source: X = ListEndOffsets(T, P)
-Source->>Source: X > O
-Source->>Source: TS = ReadTimestamp(T, P, O)
-Source->>Destination: (T, P, TS)
-Destination->>Destination: O' = ListOffsetsAfterMilli(T, P, TS)
-Destination->>Destination: CommitOffsets(T, P, O')
+
+Source->>Offsets Input: O = Receive(__consumer_offsets)
+Source->>Offsets Input: X = ListEndOffsets(T, P)
+Source->>Offsets Input: Check X < O
+Source->>Offsets Input: TS = ReadTimestamp(T, P, O)
+Offsets Input->>Offsets Output: (T, P, TS)
+Offsets Output->>Destination: O' = ListOffsetsAfterMilli(T, P, TS)
+Offsets Output->>Destination: CommitOffsets(T, P, O')
 ```
 
-Migrate consumer group update for record `R` from the end of topic topic `T` partition `P` with offset `O` the Source cluster which translates to offset `O'` in the Destination cluster.
+2. Migrate a consumer group update for the record at the end of topic `T` partition `P` with offset `O` in the Source cluster which translates to offset `O'` in the Destination cluster.
 
 Note: `-1` is used to retrieve the last record offset from a topic.
 
 ```mermaid
 sequenceDiagram
-Source->>Source: O = Receive(__consumer_offsets)
-Source->>Source: X = ListEndOffsets(T, P)
-Source->>Source: X == O
-Source->>Source: TS = ReadTimestamp(T, P, -1)
-Source->>Destination: (T, P, TS)
-Destination->>Destination: O' = ListOffsetsAfterMilli(T, P, TS)
-Destination->>Destination: O'' = ReadOffset(T, P, -1)
-Destination->>Destination: If O'' == O' then O' = ListEndOffsets(T, P)
-Destination->>Destination: CommitOffsets(T, P, O')
+
+Source->>Offsets Input: O = Receive(__consumer_offsets)
+Source->>Offsets Input: X = ListEndOffsets(T, P)
+Source->>Offsets Input: Check X == O
+Source->>Offsets Input: TS = ReadTimestamp(T, P, -1)
+Offsets Input->>Offsets Output: (T, P, TS)
+Offsets Output->>Destination: O' = ListOffsetsAfterMilli(T, P, TS)
+Offsets Output->>Destination: O'' = ReadOffset(T, P, -1)
+Offsets Output->>Destination: If O'' == O' then O''' = ListEndOffsets(T, P)
+Offsets Output->>Destination: O'' = ReadOffset(T, P, -1)
+Offsets Output->>Destination: If O'' == O' then O' = O'''
+Offsets Output->>Destination: CommitOffsets(T, P, O')
+```
+
+### Record and schema migration
+
+```mermaid
+sequenceDiagram
+
+Source SR->>SR Input: Read all via REST API
+SR Input->>SR Output: Stream schemas
+SR Output->>Destination SR: POST via REST API
+Source->>Migrator Input: Record batch
+Migrator Input->>Migrator Output: Record batch
+Migrator Output->>Migrator Output: R = Foreach record
+Migrator Output->>Migrator Output: Lookup schema ID X in local cache
+Migrator Output->>SR Output: GetDestinationSchemaID(X)
+SR Output->>SR Output: Lookup X in local cache
+SR Output->>Source SR: S = GetSchemaByID(X)
+SR Output->>Destination SR: Y = getOrCreateSchemaID(S)
+SR Output->>Migrator Output: Y
+Migrator Output->>Migrator Output: UpdateID(R, Y)
+Migrator Output->>Destination: Record batch
 ```
