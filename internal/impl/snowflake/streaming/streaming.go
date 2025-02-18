@@ -502,8 +502,24 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 		msg := channel.Message
 		if msg == "" {
 			msg = "(no message)"
+			if channel.ClientSequencer != c.clientSequencer {
+				msg = fmt.Sprintf(
+					"(client sequencer has changed (%v vs %v) - has another process opened this channel?)",
+					channel.ClientSequencer,
+					c.clientSequencer,
+				)
+			}
 		}
-		return insertStats, fmt.Errorf("error response ingesting data (%d): %s", channel.StatusCode, msg)
+		err = fmt.Errorf(
+			"error response ingesting data to table `%s.%s.%s` on channel `%s` (statusCode=%d): %s",
+			c.DatabaseName,
+			c.SchemaName,
+			c.TableName,
+			c.Name,
+			channel.StatusCode,
+			msg,
+		)
+		return insertStats, err
 	}
 	c.rowSequencer++
 	c.clientSequencer = channel.ClientSequencer
@@ -562,7 +578,7 @@ func (c *SnowflakeIngestionChannel) WaitUntilCommitted(ctx context.Context) (int
 			backoff.WithInitialInterval(time.Millisecond),
 			backoff.WithMultiplier(10),
 			backoff.WithMaxInterval(time.Second),
-			backoff.WithMaxElapsedTime(10*time.Minute),
+			backoff.WithMaxElapsedTime(time.Minute),
 		),
 		ctx,
 	))

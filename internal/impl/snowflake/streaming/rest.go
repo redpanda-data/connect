@@ -36,10 +36,12 @@ import (
 )
 
 const (
-	responseSuccess         = 0
-	responseTableNotExist   = 4
-	responseErrQueueFull    = 7
-	responseErrRetryRequest = 10
+	responseSuccess                   = 0
+	responseTableNotExist             = 4
+	responseErrQueueFull              = 7
+	responseErrRetryRequest           = 10
+	responseErrInvalidClientSequencer = 20
+	responseErrReopenChannelNeeded    = 35 // this can happen if the schema changes for example
 
 	partnerID = "RedpandaConnect_SnowpipeStreamingSDK"
 )

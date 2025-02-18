@@ -825,7 +825,7 @@ type snowpipePooledOutput struct {
 }
 
 func (o *snowpipePooledOutput) openChannel(ctx context.Context, name string, id int16) (*streaming.SnowflakeIngestionChannel, error) {
-	o.logger.Debugf("opening snowflake streaming channel: %s", name)
+	o.logger.Debugf("opening snowflake streaming channel for table `%s.%s.%s`: %s", o.db, o.schema, o.table, name)
 	return o.client.OpenChannel(ctx, streaming.ChannelOptions{
 		ID:                      id,
 		Name:                    name,
@@ -907,7 +907,7 @@ type snowpipeIndexedOutput struct {
 }
 
 func (o *snowpipeIndexedOutput) openChannel(ctx context.Context, name string, id int16) (*streaming.SnowflakeIngestionChannel, error) {
-	o.logger.Debugf("opening snowflake streaming channel: %s", name)
+	o.logger.Debugf("opening snowflake streaming channel for table `%s.%s.%s`: %s", o.db, o.schema, o.table, name)
 	return o.client.OpenChannel(ctx, streaming.ChannelOptions{
 		ID:                      id,
 		Name:                    name,
