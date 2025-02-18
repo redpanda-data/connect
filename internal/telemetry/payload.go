@@ -20,6 +20,8 @@ import (
 	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 // Information gathered from each component present in the running config.
@@ -60,17 +62,32 @@ type payload struct {
 
 	// Information about the host and process
 	HostInfo hostInfo `json:"hostInfo"`
+
+	LicenseOrg string `json:"licenseOrg"`
+}
+
+func extractLicenseOrg(res *service.Resources) string {
+	l, err := license.LoadFromResources(res)
+	if err != nil {
+		return ""
+	}
+	return l.Organization
 }
 
 // All information sent during a telemetry export is extracted within this
 // function and stored within the payload.
 func extractPayload(identifier string, logger *service.Logger, schema *service.ConfigSchema, conf *service.ParsedConfig) (*payload, error) {
-	p := payload{ID: identifier, Uptime: 0, HostInfo: hostInfo{
-		NumCPU:     runtime.NumCPU(),
-		GoMaxProcs: runtime.GOMAXPROCS(0), // using 0 means to just read the value
-		GoOS:       runtime.GOOS,
-		GoArch:     runtime.GOARCH,
-	}}
+	p := payload{
+		ID:     identifier,
+		Uptime: 0,
+		HostInfo: hostInfo{
+			NumCPU:     runtime.NumCPU(),
+			GoMaxProcs: runtime.GOMAXPROCS(0), // using 0 means to just read the value
+			GoOS:       runtime.GOOS,
+			GoArch:     runtime.GOARCH,
+		},
+		LicenseOrg: extractLicenseOrg(conf.Resources()),
+	}
 
 	rootValue, err := conf.FieldAny()
 	if err != nil {
