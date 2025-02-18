@@ -860,14 +860,16 @@ func (o *snowpipePooledOutput) WriteBatch(ctx context.Context, batch service.Mes
 	stats, err := channel.InsertRows(ctx, batch, offsets)
 	if err != nil {
 		// Only evolve the schema if requested.
+		var schemaErr *schemaMigrationNeededError
 		if o.schemaMigrationEnabled {
-			schemaErr, ok := asSchemaMigrationError(err)
-			if ok {
-				// put the channel back so that we can reopen it along with the rest of the channels to
-				// pick up the new schema.
-				o.channelPool.Release(channel)
-				return schemaErr
+			var ok bool
+			schemaErr, ok = asSchemaMigrationError(err)
+			if !ok {
+				schemaErr = nil
 			}
+			// Always attempt to reopen the channel when there are schema errors as the user could
+			// have migrated the schema in their pipeline and invalidated the channel. Worst case
+			// we reopen the channel twice, which is fine as we assume schema changes are rare.
 		}
 		reopened, reopenErr := o.openChannel(ctx, channel.Name, channel.ID)
 		if reopenErr == nil {
@@ -876,6 +878,9 @@ func (o *snowpipePooledOutput) WriteBatch(ctx context.Context, batch service.Mes
 			o.logger.Warnf("unable to reopen channel %q after failure: %v", channel.Name, reopenErr)
 			// Keep around the same channel so retry opening later
 			o.channelPool.Release(channel)
+		}
+		if schemaErr != nil {
+			return schemaErr
 		}
 		return wrapInsertError(err)
 	}
@@ -946,14 +951,16 @@ func (o *snowpipeIndexedOutput) WriteBatch(ctx context.Context, batch service.Me
 	stats, err := channel.InsertRows(ctx, batch, offsets)
 	if err != nil {
 		// Only evolve the schema if requested.
+		var schemaErr *schemaMigrationNeededError
 		if o.schemaMigrationEnabled {
-			schemaErr, ok := asSchemaMigrationError(err)
-			if ok {
-				// put the channel back so that we can reopen it along with the rest of the channels to
-				// pick up the new schema.
-				o.channelPool.Release(channel.Name, channel)
-				return schemaErr
+			var ok bool
+			schemaErr, ok = asSchemaMigrationError(err)
+			if !ok {
+				schemaErr = nil
 			}
+			// Always attempt to reopen the channel when there are schema errors as the user could
+			// have migrated the schema in their pipeline and invalidated the channel. Worst case
+			// we reopen the channel twice, which is fine as we assume schema changes are rare.
 		}
 		reopened, reopenErr := o.openChannel(ctx, channel.Name, channel.ID)
 		if reopenErr == nil {
@@ -962,6 +969,9 @@ func (o *snowpipeIndexedOutput) WriteBatch(ctx context.Context, batch service.Me
 			o.logger.Warnf("unable to reopen channel %q after failure: %v", channel.Name, reopenErr)
 			// Keep around the same channel so retry opening later
 			o.channelPool.Release(channel.Name, channel)
+		}
+		if schemaErr != nil {
+			return schemaErr
 		}
 		return wrapInsertError(err)
 	}
