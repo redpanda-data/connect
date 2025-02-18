@@ -170,7 +170,7 @@ func (s *Service) readLicense() (licenseFileContents []byte, err error) {
 
 	// Followed by explicit license file path.
 	if s.conf.LicenseFilepath != "" {
-		s.logger.Debug("Loading Redpanda Enterprise license from explicit file path")
+		s.logger.Info("Loading Redpanda Enterprise license from explicit file path")
 
 		licenseFileContents, err = os.ReadFile(s.conf.LicenseFilepath)
 		if err != nil {
@@ -187,7 +187,7 @@ func (s *Service) readLicense() (licenseFileContents []byte, err error) {
 		return nil, nil
 	}
 
-	s.logger.Debug("Loaded Redpanda Enterprise license from default file path")
+	s.logger.Info("Loaded Redpanda Enterprise license from default file path")
 	return
 }
 
