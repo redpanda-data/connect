@@ -15,6 +15,7 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -238,6 +239,10 @@ func (s *Service) validateLicense(license []byte) (RedpandaLicense, error) {
 	if err := json.Unmarshal(licenseData, &rpLicense); err != nil {
 		return openSourceLicense, fmt.Errorf("failed to unmarshal license data: %w", err)
 	}
+
+	// 5. In addition to the contents we also save the checksum.
+	hash = sha256.Sum256(license)
+	rpLicense.Checksum = hex.EncodeToString(hash[:])
 
 	return rpLicense, nil
 }
