@@ -215,6 +215,14 @@ func (c *SnowflakeServiceClient) OpenChannel(ctx context.Context, opts ChannelOp
 		fileMetadata:     typeMetadata,
 		requestIDCounter: c.requestIDCounter,
 	}
+	c.options.Logger.Debugf(
+		"successfully opened channel %s for table `%s.%s.%s` with client sequencer %v",
+		opts.Name,
+		opts.DatabaseName,
+		opts.SchemaName,
+		opts.TableName,
+		resp.ClientSequencer,
+	)
 	return ch, nil
 }
 
