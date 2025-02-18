@@ -162,7 +162,7 @@ func (s *Service) readAndValidateLicense() (RedpandaLicense, error) {
 func (s *Service) readLicense() (licenseFileContents []byte, err error) {
 	// Explicit license takes priority.
 	if s.conf.License != "" {
-		s.logger.Debug("Loading explicitly defined Redpanda Enterprise license")
+		s.logger.Info("Loading explicitly defined Redpanda Enterprise license")
 
 		licenseFileContents = []byte(s.conf.License)
 		return
