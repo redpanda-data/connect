@@ -208,38 +208,6 @@ func (w *redpandaMigratorOffsetsWriter) Connect(ctx context.Context) error {
 	return nil
 }
 
-// getLastRecordOffset returns the last record offset for the given topic and partition.
-func (w *redpandaMigratorOffsetsWriter) getLastRecordOffset(ctx context.Context, topic string, partition int32) (int64, error) {
-	client, err := kgo.NewClient(w.clientOpts...)
-	if err != nil {
-		return 0, fmt.Errorf("failed to create Kafka client: %s", err)
-	}
-	defer client.Close()
-
-	client.AddConsumePartitions(map[string]map[int32]kgo.Offset{
-		topic: {
-			// The default offset begins at the end.
-			partition: kgo.NewOffset().Relative(-1),
-		},
-	})
-
-	fetches := client.PollFetches(ctx)
-	if fetches.IsClientClosed() {
-		return 0, fmt.Errorf("failed to read last record for topic %q partition %q: client closed", topic, partition)
-	}
-
-	if err := fetches.Err(); err != nil {
-		return 0, fmt.Errorf("failed to read last record for topic %q partition %q: %s", topic, partition, err)
-	}
-
-	it := fetches.RecordIter()
-	if it.Done() {
-		return 0, fmt.Errorf("couldn't find the last record for topic %q partition %q: %s", topic, partition, err)
-	}
-
-	return it.Next().Offset, nil
-}
-
 // Write attempts to write a message to the output cluster.
 func (w *redpandaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.Message) error {
 	w.connMut.Lock()
@@ -260,7 +228,7 @@ func (w *redpandaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.
 		return fmt.Errorf("failed to extract offset group: %s", err)
 	}
 
-	var offsetPartition int32
+	var partition int32
 	if p, err := w.offsetPartition.TryString(msg); err != nil {
 		return fmt.Errorf("failed to extract offset partition: %s", err)
 	} else {
@@ -268,7 +236,7 @@ func (w *redpandaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.
 		if err != nil {
 			return fmt.Errorf("failed to parse offset partition: %s", err)
 		}
-		offsetPartition = int32(i)
+		partition = int32(i)
 	}
 
 	var offsetCommitTimestamp int64
@@ -301,6 +269,8 @@ func (w *redpandaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.
 	}
 
 	updateConsumerOffsets := func() error {
+		// ListOffsetsAfterMilli returns the topic's end offset if the supplied timestamp is greater than the timestamps
+		// of all the records in the topic. It also sets the timestamp of the returned offset to -1 in this case.
 		listedOffsets, err := w.client.ListOffsetsAfterMilli(ctx, offsetCommitTimestamp, topic)
 		if err != nil {
 			return fmt.Errorf("failed to translate consumer offsets: %s", err)
@@ -310,59 +280,49 @@ func (w *redpandaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.
 			return fmt.Errorf("listed offsets error: %s", err)
 		}
 
-		offsets := listedOffsets.Offsets()
-		// Logic extracted from offsets.KeepFunc() and adjusted to set the metadata.
-		for topic, partitionOffsets := range offsets {
-			for partition, offset := range partitionOffsets {
-				if offset.Partition != offsetPartition {
-					delete(partitionOffsets, partition)
-				}
-				offset.Metadata = offsetMetadata
+		offset, ok := listedOffsets.Lookup(topic, partition)
+		if !ok {
+			// This should never happen, but we check just in case.
+			return fmt.Errorf("no offsets returned for topic %q", topic)
+		}
 
-				// As an optimisation to try and avoid unnecessary duplicates in the common case, we check if the
-				// received offset update was triggered when a consumer read the last record of the source topic. In
-				// this special case, we check if the matching offset in the destination topic (returned by
-				// `ListOffsetsAfterMilli`) also points to the end record. If it does, then we can fetch the current end
-				// offset of the destination topic and set the destination consumer offset to that value.
-				// Note: We have to be conservative here and assume there might be duplicates in the destination topic,
-				// so we can't just update the offset to the end offset without first checking if
-				// `ListOffsetsAfterMilli` actually returned the offset of the end record.
-				if isEndOffset {
-					lastOffset, err := w.getLastRecordOffset(ctx, topic, partition)
-					if err != nil {
-						return err
-					}
+		if !isEndOffset && offset.Timestamp == -1 {
+			// This can happen if we received an offset update, but the record which was read from the source cluster to
+			// trigger it has not been replicated to the destination cluster yet. In this case, we raise an error so the
+			// operation is retried.
+			return fmt.Errorf("no offsets returned for topic %q", topic)
+		}
 
-					if offset.At == lastOffset {
-						offsets, err := w.client.ListEndOffsets(ctx, topic)
-						if err != nil {
-							return fmt.Errorf("failed to read the end offset for topic %q and partition %q: %s", topic, partition, err)
-						}
-
-						endOffset, ok := offsets.Lookup(topic, partition)
-						if !ok {
-							return fmt.Errorf("failed to find the end offset for topic %q and partition %q: %s", topic, partition, err)
-						}
-
-						// Sanity check: Make sure the topic did not receive any new records since we first called
-						// `getLastRecordOffset()`. If it did, then updating the consumer offset to the end offset will
-						// skip records, so it's best to just let the consumer read extra duplicate records instead.
-						lastOffset, err = w.getLastRecordOffset(ctx, topic, partition)
-						if err != nil {
-							return err
-						}
-						if offset.At == lastOffset {
-							offset.At = endOffset.Offset
-						}
-					}
-				}
-
-				partitionOffsets[partition] = offset
+		// This is an optimisation to try and avoid unnecessary duplicates in the common case when the
+		// received offset update points to the end offset of the source topic. In
+		// this special case, we check if the matching offset in the destination topic (returned by
+		// `ListOffsetsAfterMilli`) also points to the end offset. If it does, then we can fetch the current end
+		// offset of the destination topic and set the destination consumer offset to that value.
+		// Note: Even for compacted topics, the last record of the topic cannot be compacted, so it's safe to assume its
+		// offset will be one less than the end offset.
+		if isEndOffset && offset.Timestamp != -1 {
+			endOffsets, err := w.client.ListEndOffsets(ctx, topic)
+			if err != nil {
+				return fmt.Errorf("failed to read the end offset for topic %q and partition %q: %s", topic, partition, err)
 			}
-			if len(partitionOffsets) == 0 {
-				delete(offsets, topic)
+
+			endOffset, ok := endOffsets.Lookup(topic, partition)
+			if !ok {
+				return fmt.Errorf("failed to find the end offset for topic %q and partition %q: %s", topic, partition, err)
+			}
+			if endOffset.Offset == offset.Offset+1 {
+				offset.Offset = endOffset.Offset
 			}
 		}
+
+		var offsets kadm.Offsets
+		offsets.Add(kadm.Offset{
+			Topic:       offset.Topic,
+			Partition:   offset.Partition,
+			At:          offset.Offset,
+			LeaderEpoch: offset.LeaderEpoch,
+			Metadata:    offsetMetadata,
+		})
 
 		offsetResponses, err := w.client.CommitOffsets(ctx, group, offsets)
 		if err != nil {
@@ -385,9 +345,11 @@ func (w *redpandaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.
 			break
 		}
 
+		w.mgr.Logger().Debug(err.Error())
+
 		wait := backOff.NextBackOff()
 		if wait == backoff.Stop {
-			return fmt.Errorf("failed to update consumer offsets for topic %q and partition %d: %s", topic, offsetPartition, err)
+			return fmt.Errorf("failed to update consumer offsets for topic %q and partition %d: %s", topic, partition, err)
 		}
 
 		time.Sleep(wait)

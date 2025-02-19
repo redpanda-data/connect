@@ -985,31 +985,27 @@ func TestRedpandaMigratorOffsetsIntegration(t *testing.T) {
 			dummyConsumerGroup := "test_cg"
 			messageCount := 5
 
-			// Produce messages in the source cluster
-			// The message timestamps are produced in ascending order, starting from 1 all the way to messageCount
+			// Produce messages in the source cluster.
+			// The message timestamps are produced in ascending order, starting from 1 all the way to messageCount.
 			produceMessages(t, source, dummyTopic, dummyMessage, 0, messageCount, false)
 
-			// Produce the exact same messages in the destination cluster
+			// Produce the exact same messages in the destination cluster.
 			produceMessages(t, destination, dummyTopic, dummyMessage, 0, messageCount, false)
 
-			// Read the messages from the source cluster using a consumer group
+			// Read the messages from the source cluster using a consumer group.
 			readMessagesWithCG(t, source, dummyTopic, dummyConsumerGroup, dummyMessage, 5, false)
 
-			if !test.cgAtEndOffset {
+			if test.extraCGUpdate || !test.cgAtEndOffset {
+				// Make sure both source and destination have extra messages after the current consumer group offset.
 				// The next messages need to have more recent timestamps than the existing messages, so we use
-				// `messageCount` as an offset for their timestamps
-				produceMessages(t, source, dummyTopic, dummyMessage, messageCount, messageCount, false)
-			}
-
-			if test.extraCGUpdate {
-				// Make sure both source and destination have extra messages after the current consumer group offset
+				// `messageCount` as an offset for their timestamps.
 				produceMessages(t, source, dummyTopic, dummyMessage, messageCount, messageCount, false)
 				produceMessages(t, destination, dummyTopic, dummyMessage, messageCount, messageCount, false)
 			}
 
 			t.Log("Finished setting up messages in the source and destination clusters")
 
-			// Migrate the consumer group offset
+			// Migrate the consumer group offsets.
 			streamBuilder := service.NewStreamBuilder()
 			require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
 input:
@@ -1030,7 +1026,7 @@ output:
 				return nil
 			}))
 
-			// Ensure the callback function is called after the output wrote the message
+			// Ensure the callback function is called after the output wrote the message.
 			streamBuilder.SetOutputBrokerPattern(service.OutputBrokerPatternFanOutSequential)
 
 			stream, err := streamBuilder.Build()
@@ -1038,7 +1034,7 @@ output:
 
 			license.InjectTestService(stream.Resources())
 
-			// Run stream in the background
+			// Run stream in the background.
 			migratorCloseChan := make(chan struct{})
 			go func() {
 				err = stream.Run(context.Background())
@@ -1058,7 +1054,7 @@ output:
 			migratorUpdateWG.Wait()
 
 			if test.extraCGUpdate {
-				// Trigger another consumer group update to get it to point to the end of the topic
+				// Trigger another consumer group update to get it to point to the end of the topic.
 				migratorUpdateWG.Add(1)
 				readMessagesWithCG(t, source, dummyTopic, dummyConsumerGroup, dummyMessage, messageCount, false)
 				migratorUpdateWG.Wait()
@@ -1066,7 +1062,9 @@ output:
 
 			client, err := kgo.NewClient(kgo.SeedBrokers([]string{destination.brokerAddr}...))
 			require.NoError(t, err)
-			defer client.Close()
+			t.Cleanup(func() {
+				client.Close()
+			})
 
 			adm := kadm.NewClient(client)
 			offsets, err := adm.FetchOffsets(context.Background(), dummyConsumerGroup)
