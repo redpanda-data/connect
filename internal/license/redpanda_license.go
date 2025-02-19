@@ -23,6 +23,9 @@ type RedpandaLicense struct {
 
 	// Unix epoch
 	Expiry int64 `json:"expiry"`
+
+	// SHA-256 hash of the raw bytes
+	Checksum string `json:"-"`
 }
 
 // AllowsEnterpriseFeatures returns true if license type allows enterprise features.

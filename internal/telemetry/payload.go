@@ -63,15 +63,15 @@ type payload struct {
 	// Information about the host and process
 	HostInfo hostInfo `json:"hostInfo"`
 
-	LicenseOrg string `json:"licenseOrg"`
+	LicenseHash string `json:"licenseHash"`
 }
 
-func extractLicenseOrg(res *service.Resources) string {
+func extractLicenseHash(res *service.Resources) string {
 	l, err := license.LoadFromResources(res)
 	if err != nil {
 		return ""
 	}
-	return l.Organization
+	return l.Checksum
 }
 
 // All information sent during a telemetry export is extracted within this
@@ -86,7 +86,7 @@ func extractPayload(identifier string, logger *service.Logger, schema *service.C
 			GoOS:       runtime.GOOS,
 			GoArch:     runtime.GOARCH,
 		},
-		LicenseOrg: extractLicenseOrg(conf.Resources()),
+		LicenseHash: extractLicenseHash(conf.Resources()),
 	}
 
 	rootValue, err := conf.FieldAny()
