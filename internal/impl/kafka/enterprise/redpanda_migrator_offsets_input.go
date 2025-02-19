@@ -57,7 +57,7 @@ This input adds the following metadata fields to each message:
 - kafka_offset_partition
 - kafka_offset_commit_timestamp
 - kafka_offset_metadata
-- kafka_is_end_offset
+- kafka_is_high_watermark
 ` + "```" + `
 `).
 		Fields(redpandaMigratorOffsetsInputConfigFields()...)
@@ -207,7 +207,7 @@ func (rmoi *redpandaMigratorOffsetsInput) getKeyAndOffset(msg *service.Message) 
 	return key, offset, true
 }
 
-func (rmoi *redpandaMigratorOffsetsInput) getEndTimestamp(ctx context.Context, topic string, partition int32, offset int64) (timestamp int64, isEndOffset bool, err error) {
+func (rmoi *redpandaMigratorOffsetsInput) getTimestampForCommittedOffset(ctx context.Context, topic string, partition int32, offset int64) (timestamp int64, isHighWatermark bool, err error) {
 	client, err := kgo.NewClient(rmoi.clientOpts...)
 	if err != nil {
 		return 0, false, fmt.Errorf("failed to create Kafka client: %s", err)
@@ -217,26 +217,26 @@ func (rmoi *redpandaMigratorOffsetsInput) getEndTimestamp(ctx context.Context, t
 	// The default kadm client timeout is 15s. Do we need to make this configurable?
 	offsets, err := kadm.NewClient(client).ListEndOffsets(ctx, topic)
 	if err != nil {
-		return 0, false, fmt.Errorf("failed to read the end offset for topic %q and partition %q: %s", topic, partition, err)
+		return 0, false, fmt.Errorf("failed to read the high watermark for topic %q and partition %q: %s", topic, partition, err)
 	}
 
-	endOffset, ok := offsets.Lookup(topic, partition)
+	highWatermark, ok := offsets.Lookup(topic, partition)
 	if !ok {
-		return 0, false, fmt.Errorf("failed to find the end offset for topic %q and partition %q: %s", topic, partition, err)
+		return 0, false, fmt.Errorf("failed to find the high watermark for topic %q and partition %q: %s", topic, partition, err)
 	}
 
-	// If the end offset on the topic matches the offset we received via `__consumer_offsets`, then we must read the
-	// last record from the topic because the end offset does not have a corresponding record yet.
+	// If the high watermark on the topic matches the offset we received via `__consumer_offsets`, then we must read the
+	// last record from the topic because the high watermark does not have a corresponding record yet.
 	var recordOffset kgo.Offset
-	if endOffset.Offset == offset {
+	if highWatermark.Offset == offset {
 		// The default offset begins at the end.
 		recordOffset = kgo.NewOffset().Relative(-1)
-	} else if endOffset.Offset > offset {
+	} else if highWatermark.Offset > offset {
 		recordOffset = kgo.NewOffset().At(offset)
 	} else {
 		return 0, false, fmt.Errorf(
 			"the newest committed offset %d for topic %q partition %q should never be smaller than the received offset %d",
-			endOffset.Offset, topic, partition, offset,
+			highWatermark.Offset, topic, partition, offset,
 		)
 	}
 
@@ -262,7 +262,7 @@ func (rmoi *redpandaMigratorOffsetsInput) getEndTimestamp(ctx context.Context, t
 
 	rec := it.Next()
 
-	return rec.Timestamp.UnixMilli(), endOffset.Offset == offset, nil
+	return rec.Timestamp.UnixMilli(), highWatermark.Offset == offset, nil
 }
 
 func (rmoi *redpandaMigratorOffsetsInput) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
@@ -283,7 +283,7 @@ func (rmoi *redpandaMigratorOffsetsInput) ReadBatch(ctx context.Context) (servic
 			batch[i] = msg
 			i++
 
-			ts, isEndOffset, err := rmoi.getEndTimestamp(ctx, key.Topic, key.Partition, offset.Offset)
+			ts, isHWMCommit, err := rmoi.getTimestampForCommittedOffset(ctx, key.Topic, key.Partition, offset.Offset)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -293,7 +293,7 @@ func (rmoi *redpandaMigratorOffsetsInput) ReadBatch(ctx context.Context) (servic
 			msg.MetaSetMut("kafka_offset_partition", key.Partition)
 			msg.MetaSetMut("kafka_offset_commit_timestamp", ts)
 			msg.MetaSetMut("kafka_offset_metadata", offset.Metadata)
-			msg.MetaSetMut("kafka_is_end_offset", isEndOffset)
+			msg.MetaSetMut("kafka_is_high_watermark", isHWMCommit)
 		}
 
 		// Delete the records that we skipped

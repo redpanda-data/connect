@@ -33,7 +33,7 @@ const (
 	rmooFieldOffsetPartition       = "offset_partition"
 	rmooFieldOffsetCommitTimestamp = "offset_commit_timestamp"
 	rmooFieldOffsetMetadata        = "offset_metadata"
-	rmooFieldIsEndOffset           = "is_end_offset"
+	rmooFieldIsHighWatermark       = "is_high_watermark"
 
 	// Deprecated fields
 	rmooFieldKafkaKey    = "kafka_key"
@@ -66,8 +66,8 @@ func redpandaMigratorOffsetsOutputConfigFields() []*service.ConfigField {
 				Description("Kafka offset commit timestamp.").Default("${! @kafka_offset_commit_timestamp }"),
 			service.NewInterpolatedStringField(rmooFieldOffsetMetadata).
 				Description("Kafka offset metadata value.").Default(`${! @kafka_offset_metadata }`),
-			service.NewInterpolatedStringField(rmooFieldIsEndOffset).
-				Description("Indicates if the update represents the end offset of the Kafka topic partition.").Default(`${! @kafka_is_end_offset }`),
+			service.NewInterpolatedStringField(rmooFieldIsHighWatermark).
+				Description("Indicates if the update represents the high watermark of the Kafka topic partition.").Default(`${! @kafka_is_high_watermark }`),
 
 			// Deprecated fields
 			service.NewInterpolatedStringField(rmooFieldKafkaKey).
@@ -112,7 +112,7 @@ type redpandaMigratorOffsetsWriter struct {
 	offsetPartition       *service.InterpolatedString
 	offsetCommitTimestamp *service.InterpolatedString
 	offsetMetadata        *service.InterpolatedString
-	isEndOffset           *service.InterpolatedString
+	isHighWatermark       *service.InterpolatedString
 	backoffCtor           func() backoff.BackOff
 
 	connMut sync.Mutex
@@ -152,7 +152,7 @@ func newRedpandaMigratorOffsetsWriterFromConfig(conf *service.ParsedConfig, mgr 
 		return nil, err
 	}
 
-	if w.isEndOffset, err = conf.FieldInterpolatedString(rmooFieldIsEndOffset); err != nil {
+	if w.isHighWatermark, err = conf.FieldInterpolatedString(rmooFieldIsHighWatermark); err != nil {
 		return nil, err
 	}
 
@@ -256,21 +256,21 @@ func (w *redpandaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.
 		}
 	}
 
-	isEndOffset := false
-	if w.isEndOffset != nil {
-		data, err := w.isEndOffset.TryString(msg)
+	isHighWatermark := false
+	if w.isHighWatermark != nil {
+		data, err := w.isHighWatermark.TryString(msg)
 		if err != nil {
 			return fmt.Errorf("failed to extract is_end_offset: %w", err)
 		}
-		isEndOffset, err = strconv.ParseBool(data)
+		isHighWatermark, err = strconv.ParseBool(data)
 		if err != nil {
 			return fmt.Errorf("failed to parse is_end_offset: %w", err)
 		}
 	}
 
 	updateConsumerOffsets := func() error {
-		// ListOffsetsAfterMilli returns the topic's end offset if the supplied timestamp is greater than the timestamps
-		// of all the records in the topic. It also sets the timestamp of the returned offset to -1 in this case.
+		// ListOffsetsAfterMilli returns the topic's high watermark if the supplied timestamp is greater than the
+		// timestamps of all the records in the topic. It also sets the timestamp of the returned offset to -1 in this case.
 		listedOffsets, err := w.client.ListOffsetsAfterMilli(ctx, offsetCommitTimestamp, topic)
 		if err != nil {
 			return fmt.Errorf("failed to translate consumer offsets: %s", err)
@@ -283,35 +283,35 @@ func (w *redpandaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.
 		offset, ok := listedOffsets.Lookup(topic, partition)
 		if !ok {
 			// This should never happen, but we check just in case.
-			return fmt.Errorf("no offsets returned for topic %q", topic)
+			return fmt.Errorf("committed offset not yet replicated to the destination %q topic: lookup failed", topic)
 		}
 
-		if !isEndOffset && offset.Timestamp == -1 {
+		if !isHighWatermark && offset.Timestamp == -1 {
 			// This can happen if we received an offset update, but the record which was read from the source cluster to
 			// trigger it has not been replicated to the destination cluster yet. In this case, we raise an error so the
 			// operation is retried.
-			return fmt.Errorf("no offsets returned for topic %q", topic)
+			return fmt.Errorf("committed offset not yet replicated to the destination %q topic", topic)
 		}
 
-		// This is an optimisation to try and avoid unnecessary duplicates in the common case when the
-		// received offset update points to the end offset of the source topic. In
-		// this special case, we check if the matching offset in the destination topic (returned by
-		// `ListOffsetsAfterMilli`) also points to the end offset. If it does, then we can fetch the current end
-		// offset of the destination topic and set the destination consumer offset to that value.
+		// This is an optimisation to try and avoid unnecessary duplicates in the common case when the received offset
+		// update points to the high watermark of the source topic. In this special case, we check if the matching
+		// offset in the destination topic (returned by `ListOffsetsAfterMilli`) also points to the high watermark
+		// (indicated by having timestamp == -1). If it does, then we fetch the current high watermark of the
+		// destination topic and set the destination consumer offset to that value.
 		// Note: Even for compacted topics, the last record of the topic cannot be compacted, so it's safe to assume its
-		// offset will be one less than the end offset.
-		if isEndOffset && offset.Timestamp != -1 {
-			endOffsets, err := w.client.ListEndOffsets(ctx, topic)
+		// offset will be one less than the high watermark.
+		if isHighWatermark && offset.Timestamp != -1 {
+			offsets, err := w.client.ListEndOffsets(ctx, topic)
 			if err != nil {
-				return fmt.Errorf("failed to read the end offset for topic %q and partition %q: %s", topic, partition, err)
+				return fmt.Errorf("failed to read the high watermark for topic %q and partition %q: %s", topic, partition, err)
 			}
 
-			endOffset, ok := endOffsets.Lookup(topic, partition)
+			highWatermark, ok := offsets.Lookup(topic, partition)
 			if !ok {
-				return fmt.Errorf("failed to find the end offset for topic %q and partition %q: %s", topic, partition, err)
+				return fmt.Errorf("failed to find the high watermark for topic %q and partition %q: %s", topic, partition, err)
 			}
-			if endOffset.Offset == offset.Offset+1 {
-				offset.Offset = endOffset.Offset
+			if highWatermark.Offset == offset.Offset+1 {
+				offset.Offset = highWatermark.Offset
 			}
 		}
 
