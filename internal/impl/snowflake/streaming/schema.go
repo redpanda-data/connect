@@ -94,7 +94,7 @@ func constructParquetSchema(columns []columnMetadata) (*parquet.Schema, []*dataT
 		id := int(column.Ordinal)
 		var n parquet.Node
 		var converter dataConverter
-		var bufferFactory typedBufferFactory = defaultTypedBufferFactory
+		bufferFactory := defaultTypedBufferFactory
 		logicalType := strings.ToLower(column.LogicalType)
 		switch logicalType {
 		case "fixed":
