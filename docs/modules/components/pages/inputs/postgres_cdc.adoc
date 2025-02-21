@@ -48,7 +48,7 @@ input:
     tables: [] # No default (required)
     checkpoint_limit: 1024
     temporary_slot: false
-    slot_name: ""
+    slot_name: my_test_slot # No default (required)
     pg_standby_timeout: 10s
     pg_wal_monitor_interval: 3s
     max_parallel_snapshot_tables: 1
@@ -79,11 +79,12 @@ input:
     tables: [] # No default (required)
     checkpoint_limit: 1024
     temporary_slot: false
-    slot_name: ""
+    slot_name: my_test_slot # No default (required)
     pg_standby_timeout: 10s
     pg_wal_monitor_interval: 3s
     max_parallel_snapshot_tables: 1
     unchanged_toast_value: null
+    heartbeat_interval: 1h
     auto_replay_nacks: true
     batching:
       count: 0
@@ -234,7 +235,6 @@ The name of the PostgreSQL logical replication slot to use. If not provided, a r
 
 *Type*: `string`
 
-*Default*: `""`
 
 ```yml
 # Examples
@@ -294,6 +294,23 @@ The value to emit when there are unchanged TOAST values in the stream. This occu
 # Examples
 
 unchanged_toast_value: __redpanda_connect_unchanged_toast_value__
+```
+
+=== `heartbeat_interval`
+
+The interval at which to write heartbeat messages. Heartbeat messages are needed in scenarios when the subscribed tables are low frequency, but there are other high frequency tables writing. Due to the checkpointing mechanism for replication slots, not having new messages to acknowledge will prevent postgres from reclaiming the write ahead log, which can exhaust the local disk. Having heartbeats allows Redpanda Connect to safely acknowledge data periodically and move forward the committed point in the log so it can be reclaimed. Setting the duration to 0s will disable heartbeats entirely. Heartbeats are created by periodically writing logical messages to the write ahead log using `pg_logical_emit_message`.
+
+
+*Type*: `string`
+
+*Default*: `"1h"`
+
+```yml
+# Examples
+
+heartbeat_interval: 0s
+
+heartbeat_interval: 24h
 ```
 
 === `auto_replay_nacks`

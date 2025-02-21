@@ -461,6 +461,14 @@ drop table t;
 		return xld
 	}
 
+	decodeWALData := func(data []byte, relations map[uint32]*RelationMessage, typeMap *pgtype.Map, unchangedToastValue any) (*StreamMessage, error) {
+		m, err := Parse(data)
+		if err != nil {
+			return nil, err
+		}
+		return toStreamMessage(m, relations, typeMap, unchangedToastValue)
+	}
+
 	rxKeepAlive()
 	xld := rxXLogData()
 	begin, _, err := isBeginMessage(xld.WALData)
@@ -469,40 +477,40 @@ drop table t;
 
 	xld = rxXLogData()
 	var streamMessage *StreamMessage
-	streamMessage, err = decodePgOutput(xld.WALData, relations, typeMap, nil)
+	streamMessage, err = decodeWALData(xld.WALData, relations, typeMap, nil)
 	require.NoError(t, err)
 	assert.Nil(t, streamMessage)
 
 	xld = rxXLogData()
-	streamMessage, err = decodePgOutput(xld.WALData, relations, typeMap, nil)
+	streamMessage, err = decodeWALData(xld.WALData, relations, typeMap, nil)
 	require.NoError(t, err)
 	jsonData, err := json.Marshal(&streamMessage)
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"operation":"insert","schema":"public","table":"t","lsn":null,"data":{"id":1, "name":"foo"}}`, string(jsonData))
 
 	xld = rxXLogData()
-	streamMessage, err = decodePgOutput(xld.WALData, relations, typeMap, nil)
+	streamMessage, err = decodeWALData(xld.WALData, relations, typeMap, nil)
 	require.NoError(t, err)
 	jsonData, err = json.Marshal(&streamMessage)
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"operation":"insert","schema":"public","table":"t","lsn":null,"data":{"id":2,"name":"bar"}}`, string(jsonData))
 
 	xld = rxXLogData()
-	streamMessage, err = decodePgOutput(xld.WALData, relations, typeMap, nil)
+	streamMessage, err = decodeWALData(xld.WALData, relations, typeMap, nil)
 	require.NoError(t, err)
 	jsonData, err = json.Marshal(&streamMessage)
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"operation":"insert","schema":"public","table":"t","lsn":null,"data":{"id":3,"name":"baz"}}`, string(jsonData))
 
 	xld = rxXLogData()
-	streamMessage, err = decodePgOutput(xld.WALData, relations, typeMap, nil)
+	streamMessage, err = decodeWALData(xld.WALData, relations, typeMap, nil)
 	require.NoError(t, err)
 	jsonData, err = json.Marshal(&streamMessage)
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"operation":"update","schema":"public","table":"t","lsn":null,"data":{"id":3,"name":"quz"}}`, string(jsonData))
 
 	xld = rxXLogData()
-	streamMessage, err = decodePgOutput(xld.WALData, relations, typeMap, nil)
+	streamMessage, err = decodeWALData(xld.WALData, relations, typeMap, nil)
 	require.NoError(t, err)
 	jsonData, err = json.Marshal(&streamMessage)
 	require.NoError(t, err)

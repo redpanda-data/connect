@@ -40,18 +40,13 @@ func isCommitMessage(WALData []byte) (bool, *CommitMessage, error) {
 	return ok, m, nil
 }
 
-// decodePgOutput decodes a logical replication message in pgoutput format.
+// toStreamMessage decodes a logical replication message in pgoutput format.
 // It uses the provided relations map to look up the relation metadata for the
 // as a side effect it updates the relations map with any new relation metadata
 // When the relation is changes in the database, the relation message is sent
 // before the change message.
-func decodePgOutput(WALData []byte, relations map[uint32]*RelationMessage, typeMap *pgtype.Map, unchangedToastValue any) (*StreamMessage, error) {
-	logicalMsg, err := Parse(WALData)
+func toStreamMessage(logicalMsg Message, relations map[uint32]*RelationMessage, typeMap *pgtype.Map, unchangedToastValue any) (*StreamMessage, error) {
 	message := &StreamMessage{}
-
-	if err != nil {
-		return nil, err
-	}
 	switch logicalMsg := logicalMsg.(type) {
 	case *RelationMessage:
 		relations[logicalMsg.RelationID] = logicalMsg

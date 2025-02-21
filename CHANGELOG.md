@@ -5,25 +5,25 @@ All notable changes to this project will be documented in this file.
 
 ## 4.48.0 - TBD
 
-### Fixed
-
-- Fixed a bug with the `redpanda_migrator_offsets` input and output where the consumer group update migration logic based on timestamp lookup should no longer skip ahead in the destination cluster. This should enforce at-least-once delivery guarantees. (@mihaitodor)
-- The `redpanda_migrator_bundle` output no longer drops messages if either the `redpanda_migrator` or the `redpanda_migrator_offsets` child output throws an error. Connect will keep retrying to write the messages and apply backpressure to the input. (@mihaitodor)
-
 ### Added
 
 - Added a lint rule to verify field `private_key` for the `snowflake_streaming` output is in PEM format. (@rockwotj)
 - New `mongodb_cdc` input for change data capture (CDC) over MongoDB collections. (@rockwotj)
 - Field `is_high_watermark` added to the `redpanda_migrator_offsets` output. (@mihaitodor)
 - Metadata field `kafka_is_high_watermark` added to the `redpanda_migrator_offsets` input. (@mihaitodor)
+- Input `postgres_cdc` now emits logical messages to the WAL every hour by default to allow WAL reclaiming for low frequency tables, this frequency is controlled by field `heartbeat_interval`. (@rockwotj)
 
 ### Fixed
 
 - Fix an issue in the `snowflake_streaming` output when the user manually evolves the schema in their pipeline that could lead to elevated error rates in the connector. (@rockwotj)
+- Fixed a bug with the `redpanda_migrator_offsets` input and output where the consumer group update migration logic based on timestamp lookup should no longer skip ahead in the destination cluster. This should enforce at-least-once delivery guarantees. (@mihaitodor)
+- The `redpanda_migrator_bundle` output no longer drops messages if either the `redpanda_migrator` or the `redpanda_migrator_offsets` child output throws an error. Connect will keep retrying to write the messages and apply backpressure to the input. (@mihaitodor)
+
 
 ### Changed
 
 - Output `snowflake_streaming` has additional logging and debug information when errors arise. (@rockwotj)
+- Input `postgres_cdc` now does not add a prefix to the replication slot name, if upgrading from a previous version, prefix your current replication slot with `rs_` to continue to use the same replication slot. (@rockwotj)
 
 ## 4.47.1 - 2025-02-11
 

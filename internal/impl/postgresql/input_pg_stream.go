@@ -11,13 +11,13 @@ package pgstream
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/Jeffail/checkpoint"
 	"github.com/Jeffail/shutdown"
 	"github.com/jackc/pgx/v5/pgconn"
-	gonanoid "github.com/matoous/go-nanoid/v2"
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
@@ -41,6 +41,7 @@ const (
 	fieldBatching                  = "batching"
 	fieldMaxParallelSnapshotTables = "max_parallel_snapshot_tables"
 	fieldUnchangedToastValue       = "unchanged_toast_value"
+	fieldHeartbeatInterval         = "heartbeat_interval"
 
 	shutdownTimeout = 5 * time.Second
 )
@@ -99,8 +100,7 @@ This input adds the following metadata fields to each message:
 			Default(false)).
 		Field(service.NewStringField(fieldSlotName).
 			Description("The name of the PostgreSQL logical replication slot to use. If not provided, a random name will be generated. You can create this slot manually before starting replication if desired.").
-			Example("my_test_slot").
-			Default("")).
+			Example("my_test_slot")).
 		Field(service.NewDurationField(fieldPgStandbyTimeout).
 			Description("Specify the standby timeout before refreshing an idle connection.").
 			Example("30s").
@@ -116,6 +116,12 @@ This input adds the following metadata fields to each message:
 			Description("The value to emit when there are unchanged TOAST values in the stream. This occurs for updates and deletes where REPLICA IDENTITY is not FULL.").
 			Default(nil).
 			Example("__redpanda_connect_unchanged_toast_value__").
+			Advanced()).
+		Field(service.NewDurationField(fieldHeartbeatInterval).
+			Description("The interval at which to write heartbeat messages. Heartbeat messages are needed in scenarios when the subscribed tables are low frequency, but there are other high frequency tables writing. Due to the checkpointing mechanism for replication slots, not having new messages to acknowledge will prevent postgres from reclaiming the write ahead log, which can exhaust the local disk. Having heartbeats allows Redpanda Connect to safely acknowledge data periodically and move forward the committed point in the log so it can be reclaimed. Setting the duration to 0s will disable heartbeats entirely. Heartbeats are created by periodically writing logical messages to the write ahead log using `pg_logical_emit_message`.").
+			Default("1h").
+			Example("0s").
+			Example("24h").
 			Advanced()).
 		Field(service.NewAutoRetryNacksToggleField()).
 		Field(service.NewBatchPolicyField(fieldBatching))
@@ -138,6 +144,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		pgStandbyTimeout          time.Duration
 		batching                  service.BatchPolicy
 		unchangedToastValue       any
+		heartbeatInterval         time.Duration
 	)
 
 	if err := license.CheckRunningEnterprise(mgr); err != nil {
@@ -151,12 +158,8 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	if dbSlotName, err = conf.FieldString(fieldSlotName); err != nil {
 		return nil, err
 	}
-	// Set the default to be a random string
 	if dbSlotName == "" {
-		dbSlotName, err = gonanoid.Generate("0123456789ABCDEFGHJKMNPQRSTVWXYZ", 32)
-		if err != nil {
-			return nil, err
-		}
+		return nil, errors.New("slot_name is required")
 	}
 
 	if err := validateSimpleString(dbSlotName); err != nil {
@@ -217,6 +220,10 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		return nil, err
 	}
 
+	if heartbeatInterval, err = conf.FieldDuration(fieldHeartbeatInterval); err != nil {
+		return nil, err
+	}
+
 	pgConnConfig, err := pgconn.ParseConfigWithOptions(dsn, pgconn.ParseConfigOptions{
 		// Don't support dynamic reading of password
 		GetSSLPassword: func(context.Context) string { return "" },
@@ -239,7 +246,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 			DBTables: tables,
 
 			IncludeTxnMarkers:          includeTxnMarkers,
-			ReplicationSlotName:        "rs_" + dbSlotName,
+			ReplicationSlotName:        dbSlotName,
 			BatchSize:                  snapshotBatchSize,
 			StreamOldData:              streamSnapshot,
 			TemporaryReplicationSlot:   temporarySlot,
@@ -249,6 +256,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 			MaxParallelSnapshotTables:  maxParallelSnapshotTables,
 			Logger:                     mgr.Logger(),
 			UnchangedToastValue:        unchangedToastValue,
+			HeartbeatInterval:          heartbeatInterval,
 		},
 		batching:        batching,
 		checkpointLimit: checkpointLimit,
