@@ -51,6 +51,7 @@ type Stream struct {
 	snapshotMemorySafetyFactor float64
 	logger                     *service.Logger
 	monitor                    *Monitor
+	heartbeat                  *heartbeat
 	maxParallelSnapshotTables  int
 	unchangedToastValue        any
 }
@@ -124,6 +125,25 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		}
 	})
 
+	if config.HeartbeatInterval > 0 {
+		stream.heartbeat, err = newHeartbeat(
+			config.DBRawDSN,
+			config.HeartbeatInterval,
+			config.Logger,
+			"redpanda_connect_"+stream.slotName,
+			`{"type":"heartbeat"}`,
+		)
+		if err != nil {
+			return nil, err
+		}
+		stream.heartbeat.Start()
+		cleanups = append(cleanups, func() {
+			if err := stream.heartbeat.Stop(); err != nil {
+				config.Logger.Warnf("unable to properly cleanup heartbeat on stream creation failure: %s", err)
+			}
+		})
+	}
+
 	var version int
 	version, err = getPostgresVersion(config.DBRawDSN)
 	if err != nil {
@@ -172,7 +192,9 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 			return nil, fmt.Errorf("replication slot %s already exists with different output plugin: %s", config.ReplicationSlotName, outputPlugin)
 		}
 		if confirmedLSNFromDB > 0 {
-			stream.ackedLSN = confirmedLSNFromDB - 1
+			stream.ackedLSNMu.Lock()
+			stream.ackedLSN = confirmedLSNFromDB
+			stream.ackedLSNMu.Unlock()
 		}
 		stream.logger.Debugf("starting stream from LSN %s", confirmedLSNFromDB.String())
 		if err = stream.startLr(ctx, confirmedLSNFromDB); err != nil {
@@ -264,6 +286,9 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 				return
 			}
 		}
+		stream.ackedLSNMu.Lock()
+		stream.ackedLSN = startLSN
+		stream.ackedLSNMu.Unlock()
 		if err := stream.startLr(ctx, startLSN); err != nil {
 			stream.errors <- fmt.Errorf("failed to start logical replication: %w", err)
 			return
@@ -454,12 +479,21 @@ const (
 
 // Handle handles the pgoutput output
 func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, relations map[uint32]*RelationMessage, typeMap *pgtype.Map) (processChangeResult, error) {
+	logicalMsg, err := Parse(xld.WALData)
+	if err != nil {
+		return changeResultNoMessage, err
+	}
 	// parse changes inside the transaction
-	message, err := decodePgOutput(xld.WALData, relations, typeMap, s.unchangedToastValue)
+	message, err := toStreamMessage(logicalMsg, relations, typeMap, s.unchangedToastValue)
 	if err != nil {
 		return changeResultNoMessage, err
 	}
 	if message == nil {
+		// In the case of heartbeats we can treat that the same as suppressed commit messages and advance the LSN that way.
+		// this is only needed for low frequency tables to continue to progress the LSN.
+		if logicalMsg, ok := logicalMsg.(*LogicalDecodingMessage); ok && logicalMsg.Prefix == "redpanda_connect_"+s.slotName {
+			return changeResultSuppressedCommitMessage, nil
+		}
 		return changeResultNoMessage, nil
 	}
 
@@ -704,6 +738,12 @@ func (s *Stream) Stop(ctx context.Context) error {
 	})
 	wg.Go(func() error {
 		return s.monitor.Stop()
+	})
+	wg.Go(func() error {
+		if s.heartbeat != nil {
+			return s.heartbeat.Stop()
+		}
+		return nil
 	})
 	select {
 	case <-ctx.Done():

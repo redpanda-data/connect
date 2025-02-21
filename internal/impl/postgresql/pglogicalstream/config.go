@@ -46,4 +46,6 @@ type Config struct {
 	MaxParallelSnapshotTables int
 	// The value to use for unchanged toast columns
 	UnchangedToastValue any
+	// The interval to send logical messages
+	HeartbeatInterval time.Duration
 }

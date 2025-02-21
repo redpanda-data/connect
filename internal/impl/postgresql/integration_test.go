@@ -1062,3 +1062,84 @@ postgres_cdc:
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
 
 }
+
+func TestIntegrationHeartbeat(t *testing.T) {
+	t.Parallel()
+	integration.CheckSkip(t)
+	pool, err := dockertest.NewPool("")
+	require.NoError(t, err)
+
+	var (
+		resource *dockertest.Resource
+		db       *sql.DB
+	)
+
+	resource, db, err = ResourceWithPostgreSQLVersion(t, pool, "16")
+	require.NoError(t, err)
+	require.NoError(t, resource.Expire(120))
+
+	hostAndPort := resource.GetHostPort("5432/tcp")
+	hostAndPortSplited := strings.Split(hostAndPort, ":")
+	password := "l]YLSc|4[i56%{gY"
+
+	require.NoError(t, err)
+
+	databaseURL := fmt.Sprintf("user=user_name password=%s dbname=dbname sslmode=disable host=%s port=%s", password, hostAndPortSplited[0], hostAndPortSplited[1])
+	template := fmt.Sprintf(`
+postgres_cdc:
+    dsn: %s
+    slot_name: test_slot_native_decoder
+    schema: public
+    heartbeat_interval: 1s
+    pg_standby_timeout: 1s
+    tables:
+      - flights
+`, databaseURL)
+
+	writer := asyncroutine.NewPeriodic(time.Millisecond, func() {
+		_, err := db.Exec("INSERT INTO seq DEFAULT VALUES")
+		require.NoError(t, err)
+	})
+	writer.Start()
+	t.Cleanup(writer.Stop)
+
+	streamOutBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: TRACE`))
+	require.NoError(t, streamOutBuilder.AddInputYAML(template))
+	recvCount := &atomic.Int64{}
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, batch service.MessageBatch) error {
+		recvCount.Add(1)
+		return nil
+	}))
+	streamOut, err := streamOutBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(streamOut.Resources())
+	go func() {
+		require.NoError(t, streamOut.Run(context.Background()))
+	}()
+	time.Sleep(time.Second)
+
+	getRestartLSN := func() string {
+		for range 10 {
+			rows, err := db.Query("SELECT restart_lsn FROM pg_replication_slots WHERE slot_name = 'test_slot_native_decoder'")
+			require.NoError(t, err)
+			for rows.Next() {
+				var lsn string
+				require.NoError(t, rows.Scan(&lsn))
+				return lsn
+			}
+			require.NoError(t, rows.Err())
+			time.Sleep(1 * time.Second)
+		}
+		require.FailNow(t, "unable to get replication slot position")
+		return ""
+	}
+
+	// Make sure the LSN advances even when no messages are being emitted
+	startLSN := getRestartLSN()
+	require.Eventually(t, func() bool {
+		return getRestartLSN() > startLSN
+	}, 5*time.Second, 500*time.Millisecond)
+	require.NoError(t, streamOut.StopWithin(time.Second*10))
+
+}

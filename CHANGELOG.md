@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - New `mongodb_cdc` input for change data capture (CDC) over MongoDB collections. (@rockwotj)
 - Field `is_high_watermark` added to the `redpanda_migrator_offsets` output. (@mihaitodor)
 - Metadata field `kafka_is_high_watermark` added to the `redpanda_migrator_offsets` input. (@mihaitodor)
+- Input `postgres_cdc` now emits logical messages to the WAL every hour by default to allow WAL reclaiming for low frequency tables, this frequency is controlled by field `heartbeat_interval`. (@rockwotj)
 
 ### Fixed
 

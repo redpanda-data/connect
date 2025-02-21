@@ -41,6 +41,7 @@ const (
 	fieldBatching                  = "batching"
 	fieldMaxParallelSnapshotTables = "max_parallel_snapshot_tables"
 	fieldUnchangedToastValue       = "unchanged_toast_value"
+	fieldHeartbeatInterval         = "heartbeat_interval"
 
 	shutdownTimeout = 5 * time.Second
 )
@@ -116,6 +117,12 @@ This input adds the following metadata fields to each message:
 			Default(nil).
 			Example("__redpanda_connect_unchanged_toast_value__").
 			Advanced()).
+		Field(service.NewDurationField(fieldHeartbeatInterval).
+			Description("The interval at which to write heartbeat messages. Heartbeat messages are needed in scenarios when the subscribed tables are low frequency, but there are other high frequency tables writing. Due to the checkpointing mechanism for replication slots, not having new messages to acknowledge will prevent postgres from reclaiming the write ahead log, which can exhaust the local disk. Having heartbeats allows Redpanda Connect to safely acknowledge data periodically and move forward the committed point in the log so it can be reclaimed. Setting the duration to 0s will disable heartbeats entirely. Heartbeats are created by periodically writing logical messages to the write ahead log using `pg_logical_emit_message`.").
+			Default("1h").
+			Example("0s").
+			Example("24h").
+			Advanced()).
 		Field(service.NewAutoRetryNacksToggleField()).
 		Field(service.NewBatchPolicyField(fieldBatching))
 }
@@ -137,6 +144,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		pgStandbyTimeout          time.Duration
 		batching                  service.BatchPolicy
 		unchangedToastValue       any
+		heartbeatInterval         time.Duration
 	)
 
 	if err := license.CheckRunningEnterprise(mgr); err != nil {
@@ -212,6 +220,10 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		return nil, err
 	}
 
+	if heartbeatInterval, err = conf.FieldDuration(fieldHeartbeatInterval); err != nil {
+		return nil, err
+	}
+
 	pgConnConfig, err := pgconn.ParseConfigWithOptions(dsn, pgconn.ParseConfigOptions{
 		// Don't support dynamic reading of password
 		GetSSLPassword: func(context.Context) string { return "" },
@@ -244,6 +256,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 			MaxParallelSnapshotTables:  maxParallelSnapshotTables,
 			Logger:                     mgr.Logger(),
 			UnchangedToastValue:        unchangedToastValue,
+			HeartbeatInterval:          heartbeatInterval,
 		},
 		batching:        batching,
 		checkpointLimit: checkpointLimit,
