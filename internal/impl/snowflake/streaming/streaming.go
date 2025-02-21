@@ -518,15 +518,16 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 				)
 			}
 		}
-		err = fmt.Errorf(
-			"error response ingesting data to table `%s.%s.%s` on channel `%s` (statusCode=%d): %s",
-			c.DatabaseName,
-			c.SchemaName,
-			c.TableName,
-			c.Name,
-			channel.StatusCode,
-			msg,
-		)
+		err = &IngestionFailedError{
+			DatabaseName:            c.DatabaseName,
+			SchemaName:              c.SchemaName,
+			TableName:               c.TableName,
+			ChannelName:             c.Name,
+			StatusCode:              channel.StatusCode,
+			Message:                 msg,
+			ExpectedClientSequencer: c.clientSequencer,
+			ActualClientSequencer:   channel.ClientSequencer,
+		}
 		return insertStats, err
 	}
 	c.rowSequencer++
@@ -541,9 +542,67 @@ func (c *SnowflakeIngestionChannel) InsertRows(ctx context.Context, batch servic
 	return insertStats, err
 }
 
+// IngestionFailedError is an error that occurs when registing a BDEC file with Snowflake.
+type IngestionFailedError struct {
+	DatabaseName, SchemaName, TableName string
+	ChannelName                         string
+	StatusCode                          int64
+	Message                             string
+	ExpectedClientSequencer             int64
+	ActualClientSequencer               int64
+}
+
+// LostOwnership returns true when another channel was opened and this one is invalidated now
+func (e *IngestionFailedError) LostOwnership() bool {
+	return e.ExpectedClientSequencer != e.ActualClientSequencer || e.StatusCode == responseErrInvalidClientSequencer
+}
+
+// CanRetry returns true when it's expected a retry can fix the issue
+func (e *IngestionFailedError) CanRetry() bool {
+	switch e.StatusCode {
+	case responseErrRetryRequest,
+		responseErrTransientError,
+		responseErrMissingColumnStats:
+		return true
+	default:
+		return false
+	}
+}
+
+func (e *IngestionFailedError) Error() string {
+	return fmt.Sprintf(
+		"error response ingesting data to table `%s.%s.%s` on channel `%s` (statusCode=%d): %s",
+		e.DatabaseName,
+		e.SchemaName,
+		e.TableName,
+		e.ChannelName,
+		e.StatusCode,
+		e.Message,
+	)
+}
+
+// NotCommittedError is when the table is not committed the data asynchronously to Snowflake.
+type NotCommittedError struct {
+	DatabaseName, SchemaName, TableName string
+	ChannelName                         string
+	ActualRowSequencer                  int64
+	ExpectedRowSequencer                int64
+}
+
+func (e *NotCommittedError) Error() string {
+	return fmt.Sprintf(
+		"row sequencer not yet committed to table `%s.%s.%s` for channel %s: %d < %d",
+		e.DatabaseName,
+		e.SchemaName,
+		e.TableName,
+		e.ChannelName,
+		e.ActualRowSequencer,
+		e.ExpectedRowSequencer)
+}
+
 // WaitUntilCommitted waits until all the data in the channel has been committed
 // along with how many polls it took to get that.
-func (c *SnowflakeIngestionChannel) WaitUntilCommitted(ctx context.Context) (int, error) {
+func (c *SnowflakeIngestionChannel) WaitUntilCommitted(ctx context.Context, timeout time.Duration) (int, error) {
 	var polls int
 	err := backoff.Retry(func() error {
 		polls++
@@ -577,7 +636,14 @@ func (c *SnowflakeIngestionChannel) WaitUntilCommitted(ctx context.Context) (int
 			return backoff.Permanent(errors.New("channel client seqno has advanced - another process has reopened this channel"))
 		}
 		if status.PersistedRowSequencer < c.rowSequencer {
-			return fmt.Errorf("row sequencer not yet committed: %d < %d", status.PersistedRowSequencer, c.rowSequencer)
+			return &NotCommittedError{
+				DatabaseName:         c.DatabaseName,
+				SchemaName:           c.SchemaName,
+				TableName:            c.TableName,
+				ChannelName:          c.Name,
+				ActualRowSequencer:   status.PersistedRowSequencer,
+				ExpectedRowSequencer: c.rowSequencer,
+			}
 		}
 		return nil
 	}, backoff.WithContext(
@@ -586,7 +652,7 @@ func (c *SnowflakeIngestionChannel) WaitUntilCommitted(ctx context.Context) (int
 			backoff.WithInitialInterval(time.Millisecond),
 			backoff.WithMultiplier(10),
 			backoff.WithMaxInterval(time.Second),
-			backoff.WithMaxElapsedTime(time.Minute),
+			backoff.WithMaxElapsedTime(timeout),
 		),
 		ctx,
 	))

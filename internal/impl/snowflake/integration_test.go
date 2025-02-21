@@ -12,19 +12,26 @@ package snowflake_test
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/pem"
 	"errors"
 	"os"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	"github.com/stretchr/testify/require"
 
+	_ "github.com/snowflakedb/gosnowflake"
+
+	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 	"github.com/redpanda-data/connect/v4/internal/impl/snowflake"
 	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming"
+	_ "github.com/redpanda-data/connect/v4/internal/impl/sql"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
@@ -34,6 +41,52 @@ func EnvOrDefault(name, fallback string) string {
 		value = fallback
 	}
 	return value
+}
+
+// Global config is helpful to make the tests a bit more readable.
+var config struct {
+	db             string
+	schema         string
+	account        string
+	role           string
+	user           string
+	privateKeyFile string
+	privateKey     string
+	dsn            string
+}
+
+func ReplaceConfig(s string) string {
+	return strings.NewReplacer(
+		"$USER", config.user,
+		"$ACCOUNT", config.account,
+		"$DB", config.db,
+		"$ROLE", config.role,
+		"$SCHEMA", config.schema,
+		"$PRIVATE_KEY_FILE", config.privateKeyFile,
+		"$PRIVATE_KEY", config.privateKey,
+		"$DSN", config.dsn,
+	).Replace(s)
+}
+
+func SetupConfig() {
+	config.account = EnvOrDefault("SNOWFLAKE_ACCOUNT", "WQKFXQQ-WI77362")
+	config.user = EnvOrDefault("SNOWFLAKE_USER", "ROCKWOODREDPANDA")
+	config.db = EnvOrDefault("SNOWFLAKE_DB", "BABY_DATABASE")
+	config.role = EnvOrDefault("SNOWFLAKE_ROLE", "ACCOUNTADMIN")
+	config.schema = EnvOrDefault("SNOWFLAKE_SCHEMA", "PUBLIC")
+	config.privateKeyFile = EnvOrDefault("SNOWFLAKE_PRIVATE_KEY", "./streaming/resources/rsa_key.p8")
+	bytes, err := os.ReadFile(config.privateKeyFile)
+	if err != nil {
+		panic(err)
+	}
+	privateKeyBlock, _ := pem.Decode(bytes)
+	if privateKeyBlock == nil {
+		panic("invalid private key file")
+	}
+	config.privateKey = base64.URLEncoding.EncodeToString(privateKeyBlock.Bytes)
+	config.dsn = ReplaceConfig(
+		"$USER@$ACCOUNT.snowflakecomputing.com/$DB/$SCHEMA?role=$ROLE&warehouse=compute_wh&authenticator=snowflake_jwt&privateKey=$PRIVATE_KEY",
+	)
 }
 
 func Batch(rows []map[string]any) service.MessageBatch {
@@ -46,13 +99,14 @@ func Batch(rows []map[string]any) service.MessageBatch {
 	return batch
 }
 
-func SetupSnowflakeStream(t *testing.T, outputConfiguration string) (service.MessageBatchHandlerFunc, *service.Stream) {
+func SetupSnowflakeStream(t *testing.T, outputConfiguration string) (func([]map[string]any) error, *service.Stream) {
+	SetupConfig()
 	t.Helper()
 	streamBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamBuilder.SetLoggerYAML(`level: DEBUG`))
+	require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
 	produce, err := streamBuilder.AddBatchProducerFunc()
 	require.NoError(t, err)
-	require.NoError(t, streamBuilder.AddOutputYAML(outputConfiguration))
+	require.NoError(t, streamBuilder.AddOutputYAML(ReplaceConfig(outputConfiguration)))
 	stream, err := streamBuilder.Build()
 	require.NoError(t, err)
 	license.InjectTestService(stream.Resources())
@@ -60,7 +114,9 @@ func SetupSnowflakeStream(t *testing.T, outputConfiguration string) (service.Mes
 		err := stream.Stop(context.Background())
 		require.NoError(t, err)
 	})
-	return produce, stream
+	return func(b []map[string]any) error {
+		return produce(context.Background(), Batch(b))
+	}, stream
 }
 
 func RunStreamInBackground(t *testing.T, stream *service.Stream) {
@@ -85,15 +141,11 @@ func RunSQLQuery(t *testing.T, stream *service.Stream, sql string) [][]string {
 	require.True(t, ok)
 	client, ok := resource.(*streaming.SnowflakeRestClient)
 	require.True(t, ok)
-	sql = strings.NewReplacer(
-		"$DATABASE", EnvOrDefault("SNOWFLAKE_DB", "BABY_DATABASE"),
-		"$SCHEMA", "PUBLIC",
-	).Replace(sql)
 	resp, err := client.RunSQL(context.Background(), streaming.RunSQLRequest{
-		Statement: sql,
-		Database:  EnvOrDefault("SNOWFLAKE_DB", "BABY_DATABASE"),
-		Schema:    "PUBLIC",
-		Role:      "ACCOUNTADMIN",
+		Statement: ReplaceConfig(sql),
+		Database:  config.db,
+		Schema:    config.schema,
+		Role:      config.role,
 		Timeout:   30,
 	})
 	require.NoError(t, err)
@@ -106,39 +158,39 @@ func TestIntegrationExactlyOnceDelivery(t *testing.T) {
 	produce, stream := SetupSnowflakeStream(t, `
 label: snowpipe_streaming
 snowflake_streaming:
-  account: "${SNOWFLAKE_ACCOUNT:WQKFXQQ-WI77362}"
-  user: "${SNOWFLAKE_USER:ROCKWOODREDPANDA}"
-  role: ACCOUNTADMIN
-  database: "${SNOWFLAKE_DB:BABY_DATABASE}"
-  schema: PUBLIC
+  account: "$ACCOUNT"
+  user: "$USER"
+  role: $ROLE
+  database: "$DB"
+  schema: $SCHEMA
+  private_key_file: "$PRIVATE_KEY_FILE"
   table: integration_test_exactly_once
   init_statement: |
     DROP TABLE IF EXISTS integration_test_exactly_once;
-  private_key_file: "${SNOWFLAKE_PRIVATE_KEY:./streaming/resources/rsa_key.p8}"
   max_in_flight: 1
   offset_token: "${!this.token}"
   schema_evolution:
     enabled: true
 `)
 	RunStreamInBackground(t, stream)
-	require.NoError(t, produce(context.Background(), Batch([]map[string]any{
+	require.NoError(t, produce([]map[string]any{
 		{"foo": "bar", "token": 1},
 		{"foo": "baz", "token": 2},
 		{"foo": "qux", "token": 3},
 		{"foo": "zoom", "token": 4},
-	})))
-	require.NoError(t, produce(context.Background(), Batch([]map[string]any{
+	}))
+	require.NoError(t, produce([]map[string]any{
 		{"foo": "qux", "token": 3},
 		{"foo": "zoom", "token": 4},
 		{"foo": "thud", "token": 5},
 		{"foo": "zing", "token": 6},
-	})))
-	require.NoError(t, produce(context.Background(), Batch([]map[string]any{
+	}))
+	require.NoError(t, produce([]map[string]any{
 		{"foo": "bar", "token": 1},
 		{"foo": "baz", "token": 2},
 		{"foo": "qux", "token": 3},
 		{"foo": "zoom", "token": 4},
-	})))
+	}))
 	rows := RunSQLQuery(
 		t,
 		stream,
@@ -159,15 +211,15 @@ func TestIntegrationNamedChannels(t *testing.T) {
 	produce, stream := SetupSnowflakeStream(t, `
 label: snowpipe_streaming
 snowflake_streaming:
-  account: "${SNOWFLAKE_ACCOUNT:WQKFXQQ-WI77362}"
-  user: "${SNOWFLAKE_USER:ROCKWOODREDPANDA}"
-  role: ACCOUNTADMIN
-  database: "${SNOWFLAKE_DB:BABY_DATABASE}"
-  schema: PUBLIC
+  account: "$ACCOUNT"
+  user: "$USER"
+  role: $ROLE
+  database: "$DB"
+  schema: $SCHEMA
+  private_key_file: "$PRIVATE_KEY_FILE"
   table: integration_test_named_channels
   init_statement: |
     DROP TABLE IF EXISTS integration_test_named_channels;
-  private_key_file: "${SNOWFLAKE_PRIVATE_KEY:./streaming/resources/rsa_key.p8}"
   max_in_flight: 1
   offset_token: "${!this.token}"
   channel_name: "${!this.channel}"
@@ -175,24 +227,24 @@ snowflake_streaming:
     enabled: true
 `)
 	RunStreamInBackground(t, stream)
-	require.NoError(t, produce(context.Background(), Batch([]map[string]any{
+	require.NoError(t, produce([]map[string]any{
 		{"foo": "bar", "token": 1, "channel": "foo"},
 		{"foo": "baz", "token": 2, "channel": "foo"},
 		{"foo": "qux", "token": 3, "channel": "foo"},
 		{"foo": "zoom", "token": 4, "channel": "foo"},
-	})))
-	require.NoError(t, produce(context.Background(), Batch([]map[string]any{
+	}))
+	require.NoError(t, produce([]map[string]any{
 		{"foo": "qux", "token": 3, "channel": "bar"},
 		{"foo": "zoom", "token": 4, "channel": "bar"},
 		{"foo": "thud", "token": 5, "channel": "bar"},
 		{"foo": "zing", "token": 6, "channel": "bar"},
-	})))
-	require.NoError(t, produce(context.Background(), Batch([]map[string]any{
+	}))
+	require.NoError(t, produce([]map[string]any{
 		{"foo": "thud", "token": 5, "channel": "bar"},
 		{"foo": "zing", "token": 6, "channel": "bar"},
 		{"foo": "bizz", "token": 7, "channel": "bar"},
 		{"foo": "bang", "token": 8, "channel": "bar"},
-	})))
+	}))
 	rows := RunSQLQuery(
 		t,
 		stream,
@@ -217,40 +269,40 @@ func TestIntegrationDynamicTables(t *testing.T) {
 	produce, stream := SetupSnowflakeStream(t, `
 label: snowpipe_streaming
 snowflake_streaming:
-  account: "${SNOWFLAKE_ACCOUNT:WQKFXQQ-WI77362}"
-  user: "${SNOWFLAKE_USER:ROCKWOODREDPANDA}"
-  role: ACCOUNTADMIN
-  database: "${SNOWFLAKE_DB:BABY_DATABASE}"
-  schema: PUBLIC
+  account: "$ACCOUNT"
+  user: "$USER"
+  role: $ROLE
+  database: "$DB"
+  schema: $SCHEMA
+  private_key_file: "$PRIVATE_KEY_FILE"
   table: integration_test_dynamic_table_${!this.channel}
   init_statement: |
     DROP TABLE IF EXISTS integration_test_dynamic_table_foo;
     DROP TABLE IF EXISTS integration_test_dynamic_table_bar;
-  private_key_file: "${SNOWFLAKE_PRIVATE_KEY:./streaming/resources/rsa_key.p8}"
   max_in_flight: 4
   channel_name: "${!this.channel}"
   schema_evolution:
     enabled: true
 `)
 	RunStreamInBackground(t, stream)
-	require.NoError(t, produce(context.Background(), Batch([]map[string]any{
+	require.NoError(t, produce([]map[string]any{
 		{"foo": "bar", "token": 1, "channel": "foo"},
 		{"foo": "baz", "token": 2, "channel": "foo"},
 		{"foo": "qux", "token": 3, "channel": "foo"},
 		{"foo": "zoom", "token": 4, "channel": "foo"},
-	})))
-	require.NoError(t, produce(context.Background(), Batch([]map[string]any{
+	}))
+	require.NoError(t, produce([]map[string]any{
 		{"foo": "qux", "token": 3, "channel": "bar"},
 		{"foo": "zoom", "token": 4, "channel": "bar"},
 		{"foo": "thud", "token": 5, "channel": "bar"},
 		{"foo": "zing", "token": 6, "channel": "bar"},
-	})))
-	require.NoError(t, produce(context.Background(), Batch([]map[string]any{
+	}))
+	require.NoError(t, produce([]map[string]any{
 		{"foo": "thud", "token": 5, "channel": "bar"},
 		{"foo": "zing", "token": 6, "channel": "bar"},
 		{"foo": "bizz", "token": 7, "channel": "bar"},
 		{"foo": "bang", "token": 8, "channel": "bar"},
-	})))
+	}))
 	rows := RunSQLQuery(
 		t,
 		stream,
@@ -282,15 +334,15 @@ func TestIntegrationSchemaEvolutionPipeline(t *testing.T) {
 	produce, stream := SetupSnowflakeStream(t, `
 label: snowpipe_streaming
 snowflake_streaming:
-  account: "${SNOWFLAKE_ACCOUNT:WQKFXQQ-WI77362}"
-  user: "${SNOWFLAKE_USER:ROCKWOODREDPANDA}"
-  role: ACCOUNTADMIN
-  database: "${SNOWFLAKE_DB:BABY_DATABASE}"
-  schema: PUBLIC
-  table: integration_test_pipeline
+  account: "$ACCOUNT"
+  user: "$USER"
+  role: $ROLE
+  database: "$DB"
+  schema: $SCHEMA
+  private_key_file: "$PRIVATE_KEY_FILE"
+  table: integration_test_auto_schema_evolution
   init_statement: |
-    DROP TABLE IF EXISTS integration_test_pipeline;
-  private_key_file: "${SNOWFLAKE_PRIVATE_KEY:./streaming/resources/rsa_key.p8}"
+    DROP TABLE IF EXISTS integration_test_auto_schema_evolution;
   max_in_flight: 4
   channel_name: "${!this.channel}"
   schema_evolution:
@@ -303,20 +355,80 @@ snowflake_streaming:
           }
 `)
 	RunStreamInBackground(t, stream)
-	require.NoError(t, produce(context.Background(), Batch([]map[string]any{
+	require.NoError(t, produce([]map[string]any{
 		{"foo": "bar", "token": 1, "channel": "foo"},
 		{"foo": "baz", "token": 2, "channel": "foo"},
 		{"foo": "qux", "token": 3, "channel": "foo"},
 		{"foo": "zoom", "token": 4, "channel": "foo"},
-	})))
+	}))
 	rows := RunSQLQuery(
 		t,
 		stream,
-		`SELECT column_name, data_type, numeric_precision, numeric_scale FROM $DATABASE.information_schema.columns WHERE table_name = 'INTEGRATION_TEST_PIPELINE' AND table_schema = '$SCHEMA' ORDER BY column_name`,
+		`SELECT column_name, data_type, numeric_precision, numeric_scale FROM $DB.information_schema.columns WHERE table_name = 'INTEGRATION_TEST_AUTO_SCHEMA_EVOLUTION' AND table_schema = '$SCHEMA' ORDER BY column_name`,
 	)
 	require.Equal(t, [][]string{
 		{"CHANNEL", "VARIANT", "", ""},
 		{"FOO", "VARIANT", "", ""},
 		{"TOKEN", "NUMBER", "38", "0"},
 	}, rows)
+}
+
+func TestIntegrationManualSchemaEvolution(t *testing.T) {
+	// This is sort of a stress test for race conditions when the schema changes seperately
+	integration.CheckSkip(t)
+	produce, stream := SetupSnowflakeStream(t, `
+label: snowpipe_streaming
+snowflake_streaming:
+  account: "$ACCOUNT"
+  user: "$USER"
+  role: $ROLE
+  database: "$DB"
+  schema: $SCHEMA
+  private_key_file: "$PRIVATE_KEY_FILE"
+  table: integration_test_manual_schema_evolution
+  init_statement: |
+    DROP TABLE IF EXISTS integration_test_manual_schema_evolution;
+    CREATE TABLE integration_test_manual_schema_evolution(a VARIANT);
+  max_in_flight: 10
+  schema_evolution:
+    enabled: true
+    processors:
+      - mapping: |
+          root = this
+          root.type = "variant"
+      - sql_raw:
+          driver: snowflake
+          dsn: '$DSN'
+          unsafe_dynamic_query: true
+          query: |
+            ALTER TABLE integration_test_manual_schema_evolution
+              ADD COLUMN IF NOT EXISTS ${!this.name} ${!this.type}
+      - mapping: |
+          root = "variant"
+`)
+	RunStreamInBackground(t, stream)
+	require.NoError(t, produce([]map[string]any{
+		{"a": 0},
+	}))
+	writers := []*asyncroutine.Periodic{}
+	for range 10 {
+		w := asyncroutine.NewPeriodic(10*time.Millisecond, func() {
+			require.NoError(t, produce([]map[string]any{
+				{"a": 0},
+			}))
+		})
+		writers = append(writers, w)
+		w.Start()
+		t.Cleanup(w.Stop)
+	}
+	for c := range 10 {
+		c := string([]byte{byte('b' + c)})
+		t.Logf("Adding column: %q", c)
+		require.NoError(t, produce([]map[string]any{
+			{c: 0},
+		}))
+	}
+	for _, w := range writers {
+		w.Stop()
+	}
 }

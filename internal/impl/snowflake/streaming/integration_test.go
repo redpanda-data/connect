@@ -606,7 +606,7 @@ func TestChannelOffsetToken(t *testing.T) {
 	}, &streaming.OffsetTokenRange{Start: "0", End: "2"})
 	require.NoError(t, err)
 	require.Equal(t, ptr(streaming.OffsetToken("2")), channelA.LatestOffsetToken())
-	_, err = channelA.WaitUntilCommitted(ctx)
+	_, err = channelA.WaitUntilCommitted(ctx, time.Minute)
 	require.NoError(t, err)
 	channelB, err := streamClient.OpenChannel(ctx, channelOpts)
 	require.NoError(t, err)

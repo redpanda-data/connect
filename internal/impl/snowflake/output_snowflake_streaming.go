@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -50,6 +51,7 @@ const (
 	ssoFieldSchemaEvolutionEnabled              = "enabled"
 	ssoFieldSchemaEvolutionNewColumnTypeMapping = "new_column_type_mapping"
 	ssoFieldSchemaEvolutionProcessors           = "processors"
+	ssoFieldCommitTimeout                       = "commit_timeout"
 
 	defaultSchemaEvolutionNewColumnMapping = `root = match this.value.type() {
   this == "string" => "STRING"
@@ -173,6 +175,12 @@ For more information about offset tokens, see https://docs.snowflake.com/en/user
 				Optional().
 				Advanced().
 				Examples(`offset-${!"%016X".format(@kafka_offset)}`, `postgres-${!@lsn}`),
+			service.NewDurationField(ssoFieldCommitTimeout).
+				Description(`The max duration to wait until the data has been asynchronously committed to Snowflake.`).
+				Default("60s").
+				Advanced().
+				Example("10s").
+				Example("10m"),
 		).
 		LintRule(`root = match {
   this.exists("private_key") && this.exists("private_key_file") => [ "both `+"`private_key`"+` and `+"`private_key_file`"+` can't be set simultaneously" ],
@@ -477,6 +485,11 @@ func newSnowflakeStreamer(
 		return nil, err
 	}
 
+	commitTimeout, err := conf.FieldDuration(ssoFieldCommitTimeout)
+	if err != nil {
+		return nil, err
+	}
+
 	// Normalize role, db and schema as they are case-sensitive in the API calls.
 	// Maybe we should use the golang SQL driver for SQL statements so we don't have
 	// to handle this, instead of the REST API directly.
@@ -555,6 +568,7 @@ func newSnowflakeStreamer(
 				buildOpts:              buildOpts,
 				offsetToken:            offsetToken,
 				schemaMigrationEnabled: schemaEvolver != nil,
+				commitTimeout:          commitTimeout,
 			}
 			indexed.channelPool = pool.NewIndexed(func(ctx context.Context, name string) (*streaming.SnowflakeIngestionChannel, error) {
 				hash := sha256.Sum256([]byte(name))
@@ -581,6 +595,7 @@ func newSnowflakeStreamer(
 				buildOpts:              buildOpts,
 				offsetToken:            offsetToken,
 				schemaMigrationEnabled: schemaEvolver != nil,
+				commitTimeout:          commitTimeout,
 			}
 			pooled.channelPool = pool.NewCapped(maxInFlight, func(ctx context.Context, id int) (*streaming.SnowflakeIngestionChannel, error) {
 				name := fmt.Sprintf("%s_%d", pooled.channelPrefix, id)
@@ -753,12 +768,29 @@ func (o *snowpipeStreamingOutput) WriteBatch(ctx context.Context, batch service.
 			return err
 		}
 		if streaming.IsTableNotExistsError(err) {
-			if err := o.createTable(ctx, batch); err != nil {
+			o.mu.Lock()
+			err := o.createTable(ctx, batch)
+			o.mu.Unlock()
+			if err != nil {
 				return err
 			}
 			continue // If creating the table succeeded, retry
 		}
-		needsMigrationErr := &schemaMigrationNeededError{}
+		// There are a class of errors that can happen under normal operation and we want to transparently
+		// retry them after reopening the channel. However we only do this kind of retry once.
+		if i == 0 {
+			var ingestionErr *streaming.IngestionFailedError
+			if errors.As(err, &ingestionErr) && ingestionErr.CanRetry() {
+				continue
+			}
+			if errors.Is(err, &streaming.NotCommittedError{}) && i == 0 {
+				// If we didn't successfully commit, then it's possible something
+				// like the schema evolved before the commit went through on the
+				// snowflake side
+				continue
+			}
+		}
+		var needsMigrationErr *schemaMigrationNeededError
 		if !errors.As(err, &needsMigrationErr) {
 			return err
 		}
@@ -773,8 +805,6 @@ func (o *snowpipeStreamingOutput) WriteBatch(ctx context.Context, batch service.
 }
 
 func (o *snowpipeStreamingOutput) createTable(ctx context.Context, batch service.MessageBatch) error {
-	o.mu.Lock()
-	defer o.mu.Unlock()
 	if err := o.schemaEvolver.CreateOutputTable(ctx, batch); err != nil {
 		return err
 	}
@@ -814,10 +844,11 @@ func (o *snowpipeStreamingOutput) Close(ctx context.Context) error {
 }
 
 type snowpipePooledOutput struct {
-	client      *streaming.SnowflakeServiceClient
-	channelPool pool.Capped[*streaming.SnowflakeIngestionChannel]
-	metrics     *snowpipeMetrics
-	buildOpts   streaming.BuildOptions
+	client        *streaming.SnowflakeServiceClient
+	channelPool   pool.Capped[*streaming.SnowflakeIngestionChannel]
+	metrics       *snowpipeMetrics
+	buildOpts     streaming.BuildOptions
+	commitTimeout time.Duration
 
 	channelPrefix, db, schema, table, role string
 	offsetToken                            *service.InterpolatedString
@@ -887,12 +918,21 @@ func (o *snowpipePooledOutput) WriteBatch(ctx context.Context, batch service.Mes
 	}
 	o.logger.Debugf("done inserting %d rows using channel %s, stats: %+v", len(batch), channel.Name, stats)
 	o.metrics.Report(stats)
-	polls, err := channel.WaitUntilCommitted(ctx)
-	if err == nil {
-		o.logger.Tracef("batch committed in snowflake after %d polls", polls)
+	polls, err := channel.WaitUntilCommitted(ctx, o.commitTimeout)
+	if err != nil {
+		reopened, reopenErr := o.openChannel(ctx, channel.Name, channel.ID)
+		if reopenErr == nil {
+			o.channelPool.Release(reopened)
+		} else {
+			o.logger.Warnf("unable to reopen channel %q after failure: %v", channel.Name, reopenErr)
+			// Keep around the same channel so retry opening later
+			o.channelPool.Release(channel)
+		}
+		return err
 	}
+	o.logger.Tracef("batch committed in snowflake after %d polls", polls)
 	o.channelPool.Release(channel)
-	return err
+	return nil
 }
 
 func (o *snowpipePooledOutput) Close(ctx context.Context) error {
@@ -901,10 +941,11 @@ func (o *snowpipePooledOutput) Close(ctx context.Context) error {
 }
 
 type snowpipeIndexedOutput struct {
-	client      *streaming.SnowflakeServiceClient
-	channelPool pool.Indexed[*streaming.SnowflakeIngestionChannel]
-	metrics     *snowpipeMetrics
-	buildOpts   streaming.BuildOptions
+	client        *streaming.SnowflakeServiceClient
+	channelPool   pool.Indexed[*streaming.SnowflakeIngestionChannel]
+	metrics       *snowpipeMetrics
+	buildOpts     streaming.BuildOptions
+	commitTimeout time.Duration
 
 	db, schema, table, role  string
 	offsetToken, channelName *service.InterpolatedString
@@ -978,12 +1019,21 @@ func (o *snowpipeIndexedOutput) WriteBatch(ctx context.Context, batch service.Me
 	}
 	o.logger.Debugf("done inserting %d rows using channel %s, stats: %+v", len(batch), channel.Name, stats)
 	o.metrics.Report(stats)
-	polls, err := channel.WaitUntilCommitted(ctx)
-	if err == nil {
-		o.logger.Tracef("batch committed in snowflake after %d polls", polls)
+	polls, err := channel.WaitUntilCommitted(ctx, o.commitTimeout)
+	if err != nil {
+		reopened, reopenErr := o.openChannel(ctx, channel.Name, channel.ID)
+		if reopenErr == nil {
+			o.channelPool.Release(channel.Name, reopened)
+		} else {
+			o.logger.Warnf("unable to reopen channel %q after failure: %v", channel.Name, reopenErr)
+			// Keep around the same channel so retry opening later
+			o.channelPool.Release(channel.Name, channel)
+		}
+		return err
 	}
+	o.logger.Tracef("batch committed in snowflake after %d polls", polls)
 	o.channelPool.Release(channel.Name, channel)
-	return err
+	return nil
 }
 
 func (o *snowpipeIndexedOutput) Close(ctx context.Context) error {
