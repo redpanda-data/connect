@@ -191,6 +191,7 @@ input:
   postgres_cdc:
     dsn: postgres://foouser:foopass@localhost:5432/foodb
     schema: "public"
+    slot_name: "my_repl_slot"
     tables: ["my_pg_table"]
     # We want very large batches - each batch will be sent to Snowflake individually
     # so to optimize query performance we want as big of files as we have memory for
