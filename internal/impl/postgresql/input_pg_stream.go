@@ -11,13 +11,13 @@ package pgstream
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/Jeffail/checkpoint"
 	"github.com/Jeffail/shutdown"
 	"github.com/jackc/pgx/v5/pgconn"
-	gonanoid "github.com/matoous/go-nanoid/v2"
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
@@ -99,8 +99,7 @@ This input adds the following metadata fields to each message:
 			Default(false)).
 		Field(service.NewStringField(fieldSlotName).
 			Description("The name of the PostgreSQL logical replication slot to use. If not provided, a random name will be generated. You can create this slot manually before starting replication if desired.").
-			Example("my_test_slot").
-			Default("")).
+			Example("my_test_slot")).
 		Field(service.NewDurationField(fieldPgStandbyTimeout).
 			Description("Specify the standby timeout before refreshing an idle connection.").
 			Example("30s").
@@ -151,12 +150,8 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	if dbSlotName, err = conf.FieldString(fieldSlotName); err != nil {
 		return nil, err
 	}
-	// Set the default to be a random string
 	if dbSlotName == "" {
-		dbSlotName, err = gonanoid.Generate("0123456789ABCDEFGHJKMNPQRSTVWXYZ", 32)
-		if err != nil {
-			return nil, err
-		}
+		return nil, errors.New("slot_name is required")
 	}
 
 	if err := validateSimpleString(dbSlotName); err != nil {
@@ -239,7 +234,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 			DBTables: tables,
 
 			IncludeTxnMarkers:          includeTxnMarkers,
-			ReplicationSlotName:        "rs_" + dbSlotName,
+			ReplicationSlotName:        dbSlotName,
 			BatchSize:                  snapshotBatchSize,
 			StreamOldData:              streamSnapshot,
 			TemporaryReplicationSlot:   temporarySlot,
