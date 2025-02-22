@@ -41,7 +41,8 @@ const (
 	responseErrQueueFull              = 7
 	responseErrRetryRequest           = 10
 	responseErrInvalidClientSequencer = 20
-	responseErrReopenChannelNeeded    = 35 // this can happen if the schema changes for example
+	responseErrTransientError         = 35 // Can be due to schema changes
+	responseErrMissingColumnStats     = 40 // Can be due to schema changes
 
 	partnerID = "RedpandaConnect_SnowpipeStreamingSDK"
 )

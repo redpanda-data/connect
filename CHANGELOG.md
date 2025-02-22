@@ -12,12 +12,14 @@ All notable changes to this project will be documented in this file.
 - Field `is_high_watermark` added to the `redpanda_migrator_offsets` output. (@mihaitodor)
 - Metadata field `kafka_is_high_watermark` added to the `redpanda_migrator_offsets` input. (@mihaitodor)
 - Input `postgres_cdc` now emits logical messages to the WAL every hour by default to allow WAL reclaiming for low frequency tables, this frequency is controlled by field `heartbeat_interval`. (@rockwotj)
+- Output `snowflake_streaming` now has a `commit_timeout` field to control how long to wait for a commit in Snowflake. (@rockwotj)
 
 ### Fixed
 
 - Fix an issue in the `snowflake_streaming` output when the user manually evolves the schema in their pipeline that could lead to elevated error rates in the connector. (@rockwotj)
 - Fixed a bug with the `redpanda_migrator_offsets` input and output where the consumer group update migration logic based on timestamp lookup should no longer skip ahead in the destination cluster. This should enforce at-least-once delivery guarantees. (@mihaitodor)
 - The `redpanda_migrator_bundle` output no longer drops messages if either the `redpanda_migrator` or the `redpanda_migrator_offsets` child output throws an error. Connect will keep retrying to write the messages and apply backpressure to the input. (@mihaitodor)
+- Transient errors in `snowflake_streaming` are now automatically retried in cases it's determined to be safe to do. (@rockwotj)
 
 
 ### Changed

@@ -99,6 +99,7 @@ output:
     channel_prefix: channel-${HOST} # No default (optional)
     channel_name: partition-${!@kafka_partition} # No default (optional)
     offset_token: offset-${!"%016X".format(@kafka_offset)} # No default (optional)
+    commit_timeout: 60s
 ```
 
 --
@@ -674,6 +675,23 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 offset_token: offset-${!"%016X".format(@kafka_offset)}
 
 offset_token: postgres-${!@lsn}
+```
+
+=== `commit_timeout`
+
+The max duration to wait until the data has been asynchronously committed to Snowflake.
+
+
+*Type*: `string`
+
+*Default*: `"60s"`
+
+```yml
+# Examples
+
+commit_timeout: 10s
+
+commit_timeout: 10m
 ```
 
 
