@@ -48,7 +48,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sqs v1.34.3
 	github.com/aws/aws-sdk-go-v2/service/sts v1.32.3
 	github.com/beanstalkd/go-beanstalk v0.2.0
-	github.com/benhoyt/goawk v1.27.0
+	github.com/benhoyt/goawk v1.29.1
 	github.com/bradfitz/gomemcache v0.0.0-20230124162541-5f7a7d875746
 	github.com/bwmarrin/discordgo v0.28.1
 	github.com/bwmarrin/snowflake v0.3.0
@@ -65,7 +65,7 @@ require (
 	github.com/elastic/elastic-transport-go/v8 v8.6.0
 	github.com/elastic/go-elasticsearch/v8 v8.17.0
 	github.com/generikvault/gvalstrings v0.0.0-20180926130504-471f38f0112a
-	github.com/getsentry/sentry-go v0.28.1
+	github.com/getsentry/sentry-go v0.31.1
 	github.com/go-faker/faker/v4 v4.4.2
 	github.com/go-jose/go-jose/v3 v3.0.3
 	github.com/go-mysql-org/go-mysql v1.10.0
@@ -81,7 +81,7 @@ require (
 	github.com/influxdata/influxdb1-client v0.0.0-20220302092344-a9ab5670611c
 	github.com/jackc/pgx/v4 v4.18.3
 	github.com/jackc/pgx/v5 v5.6.0
-	github.com/jhump/protoreflect v1.16.0
+	github.com/jhump/protoreflect v1.17.0
 	github.com/lib/pq v1.10.9
 	github.com/linkedin/goavro/v2 v2.13.1
 	github.com/matoous/go-nanoid/v2 v2.1.0
@@ -117,7 +117,7 @@ require (
 	github.com/redpanda-data/common-go/secrets v0.1.2
 	github.com/redpanda-data/connect/public/bundle/free/v4 v4.31.0
 	github.com/rs/xid v1.5.0
-	github.com/sashabaranov/go-openai v1.28.3
+	github.com/sashabaranov/go-openai v1.37.0
 	github.com/sijms/go-ora/v2 v2.8.19
 	github.com/smira/go-statsd v1.3.3
 	github.com/snowflakedb/gosnowflake v1.11.0
@@ -154,7 +154,7 @@ require (
 	golang.org/x/sync v0.11.0
 	golang.org/x/text v0.22.0
 	google.golang.org/api v0.205.0
-	google.golang.org/protobuf v1.36.0
+	google.golang.org/protobuf v1.36.5
 	modernc.org/sqlite v1.32.0
 )
 
@@ -255,7 +255,7 @@ require (
 	github.com/btnguyen2k/consu/olaf v0.1.3 // indirect
 	github.com/btnguyen2k/consu/reddo v0.1.8 // indirect
 	github.com/btnguyen2k/consu/semita v0.1.5 // indirect
-	github.com/bufbuild/protocompile v0.10.0 // indirect
+	github.com/bufbuild/protocompile v0.14.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cockroachdb/apd/v3 v3.2.1 // indirect
 	github.com/cohere-ai/cohere-go/v2 v2.11.0
