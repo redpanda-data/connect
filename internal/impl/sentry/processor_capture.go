@@ -264,6 +264,11 @@ func (proc *captureProcessor) Close(ctx context.Context) error {
 		return errors.New("failed to flush sentry events before timeout")
 	}
 
+	client := proc.hub.Client()
+	if client != nil {
+		client.Close()
+	}
+
 	return nil
 }
 
