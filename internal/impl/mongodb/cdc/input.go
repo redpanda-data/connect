@@ -47,7 +47,7 @@ const (
 	fieldCheckpointLimit     = "checkpoint_limit"
 	fieldReadBatchSize       = "read_batch_size"
 	fieldReadMaxWait         = "read_max_wait"
-	fieldUsePreAndPostImages = "use_pre_and_post_images"
+	fieldDocumentMode        = "document_mode"
 	fieldJSONMarshalMode     = "json_marshal_mode"
 
 	marshalModeCanonical string = "canonical"
@@ -59,7 +59,16 @@ func spec() *service.ConfigSpec {
 		Summary(`Streams changes from a MongoDB replica set.`).
 		Description(`Read from a MongoDB replica set using https://www.mongodb.com/docs/manual/changeStreams/[^Change Streams]. It's only possible to watch for changes when using a sharded MongoDB or a MongoDB cluster running as a replica set.
 
-By default MongoDB does not propagate changes in all cases. In order to capture all changes (including deletes) in a MongoDB cluster one needs to enable pre and post image saving and the collection needs to also enable saving these pre and post images. For more information see https://www.mongodb.com/docs/manual/changeStreams/#change-streams-with-document-pre--and-post-images[^MongoDB documentation].`).
+By default MongoDB does not propagate changes in all cases. In order to capture all changes (including deletes) in a MongoDB cluster one needs to enable pre and post image saving and the collection needs to also enable saving these pre and post images. For more information see https://www.mongodb.com/docs/manual/changeStreams/#change-streams-with-document-pre--and-post-images[^MongoDB documentation].
+
+== Metadata
+
+Each message omitted by this plugin has the following metadata:
+
+- operation: either "create", "replace", "delete" or "update" for changes streamed. Documents from the initial snapshot have the operation set to "read".
+- collection: the collection the document was written to.
+- operation_time: the oplog time for when this operation occurred.
+    `).
 		Fields(
 			service.NewStringField(fieldClientURL).
 				Description("The URL of the target MongoDB server.").
@@ -105,9 +114,12 @@ By default MongoDB does not propagate changes in all cases. In order to capture 
 				Description("If true, determine parallel snapshot chunks using `$bucketAuto` instead of the `splitVector` command. This allows parallel collection reading in environments where privledged access to the MongoDB cluster is not allowed such as MongoDB Atlas.").
 				Default(false).
 				Advanced(),
-			service.NewBoolField(fieldUsePreAndPostImages).
-				Description("If true, enables uses pre and post images stored in MongoDB to ensure that updates and deletes have the full document. Otherwise update operations fetch the full current document and deletes only contain the document key.").
-				Default(false).
+			service.NewStringAnnotatedEnumField(fieldDocumentMode, map[string]string{
+				"update_lookup":       "In this mode insert, replace and update operations have the full document emitted and deletes only have the _id field populated. Documents updates lookup the full document. This corresponds to the updateLookup option, see the https://www.mongodb.com/docs/manual/changeStreams/#std-label-change-streams-updateLookup[^MongoDB documentation] for more information.",
+				"pre_and_post_images": "Uses pre and post image collection to emit the full documents for update and delete operations. To use and configure this mode see the setup steps in the https://www.mongodb.com/docs/manual/changeStreams/#change-streams-with-document-pre--and-post-images[^MongoDB documentation].",
+			}).
+				Description("The mode in which to emit documents, specifically updates and deletes.").
+				Default("update_lookup").
 				Advanced(),
 			service.NewStringAnnotatedEnumField(fieldJSONMarshalMode, map[string]string{
 				marshalModeCanonical: "A string format that emphasizes type preservation at the expense of readability and interoperability. " +
@@ -180,8 +192,17 @@ func newMongoCDC(conf *service.ParsedConfig, res *service.Resources) (i service.
 	if cdc.streamMaxWait, err = conf.FieldDuration(fieldReadMaxWait); err != nil {
 		return
 	}
-	if cdc.usePreAndPostImages, err = conf.FieldBool(fieldUsePreAndPostImages); err != nil {
+	var documentMode string
+	if documentMode, err = conf.FieldString(fieldDocumentMode); err != nil {
 		return
+	}
+	switch documentMode {
+	case "update_lookup":
+		cdc.usePreAndPostImages = false
+	case "pre_and_post_images":
+		cdc.usePreAndPostImages = true
+	default:
+		return nil, fmt.Errorf("unknown document_mode value: %s", documentMode)
 	}
 	marshalMode, err := conf.FieldString(fieldJSONMarshalMode)
 	if err != nil {
@@ -377,7 +398,7 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 			g, gctx := errgroup.WithContext(ctx)
 			for _, name := range m.collections {
 				coll := m.db.Collection(name)
-				g.Go(func() error { return m.readSnapshot(gctx, coll, cp) })
+				g.Go(func() error { return m.readSnapshot(gctx, coll, ts, cp) })
 			}
 			if err := g.Wait(); err != nil {
 				select {
@@ -410,14 +431,14 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (m *mongoCDC) readSnapshot(ctx context.Context, coll *mongo.Collection, cp *checkpoint.Capped[bson.Raw]) (err error) {
+func (m *mongoCDC) readSnapshot(ctx context.Context, coll *mongo.Collection, snapshotTime bson.Timestamp, cp *checkpoint.Capped[bson.Raw]) (err error) {
 	if m.snapshotParallelism == 0 {
 		return nil
 	}
 	if m.snapshotParallelism > 1 {
-		return m.readParallelSnapshot(ctx, coll, cp)
+		return m.readParallelSnapshot(ctx, coll, snapshotTime, cp)
 	} else {
-		return m.readSnapshotRange(ctx, coll, cp, bson.MinKey{}, bson.MaxKey{})
+		return m.readSnapshotRange(ctx, coll, snapshotTime, cp, bson.MinKey{}, bson.MaxKey{})
 	}
 }
 
@@ -515,12 +536,12 @@ func (m *mongoCDC) autoBuckets(ctx context.Context, coll *mongo.Collection) ([][
 	return ranges, nil
 }
 
-func (m *mongoCDC) readParallelSnapshot(ctx context.Context, coll *mongo.Collection, cp *checkpoint.Capped[bson.Raw]) error {
+func (m *mongoCDC) readParallelSnapshot(ctx context.Context, coll *mongo.Collection, snapshotTime bson.Timestamp, cp *checkpoint.Capped[bson.Raw]) error {
 	begin := time.Now()
 	ranges, err := m.getParallelRanges(ctx, coll)
 	if err != nil {
 		m.logger.Warnf("unable to determine split points for queries over %s, falling back to sequential scan due to: %v", coll.Name(), err)
-		return m.readSnapshotRange(ctx, coll, cp, bson.MinKey{}, bson.MaxKey{})
+		return m.readSnapshotRange(ctx, coll, snapshotTime, cp, bson.MinKey{}, bson.MaxKey{})
 	}
 	m.logger.Debugf("determined collection split points in %v", time.Since(begin))
 	g, ctx := errgroup.WithContext(ctx)
@@ -528,13 +549,13 @@ func (m *mongoCDC) readParallelSnapshot(ctx context.Context, coll *mongo.Collect
 		minKey := r[0]
 		maxKey := r[1]
 		g.Go(func() error {
-			return m.readSnapshotRange(ctx, coll, cp, minKey, maxKey)
+			return m.readSnapshotRange(ctx, coll, snapshotTime, cp, minKey, maxKey)
 		})
 	}
 	return g.Wait()
 }
 
-func (m *mongoCDC) readSnapshotRange(ctx context.Context, coll *mongo.Collection, cp *checkpoint.Capped[bson.Raw], start, end any) error {
+func (m *mongoCDC) readSnapshotRange(ctx context.Context, coll *mongo.Collection, snapshotTime bson.Timestamp, cp *checkpoint.Capped[bson.Raw], start, end any) error {
 	if err := m.snapshotSemaphore.Acquire(ctx, 1); err != nil {
 		return err
 	}
@@ -559,7 +580,7 @@ func (m *mongoCDC) readSnapshotRange(ctx context.Context, coll *mongo.Collection
 		if err := cursor.Decode(&doc); err != nil {
 			return fmt.Errorf("unable to decode document: %w", err)
 		}
-		msg, err := m.newMongoDBCDCMessage(doc, "read", coll.Name())
+		msg, err := m.newMongoDBCDCMessage(doc, "read", coll.Name(), snapshotTime)
 		if err != nil {
 			return fmt.Errorf("unable to create message from document: %w", err)
 		}
@@ -637,7 +658,11 @@ func (m *mongoCDC) readFromStream(ctx context.Context, cp *checkpoint.Capped[bso
 		if !ok {
 			return fmt.Errorf("unable to extract collection from change stream, got: %s", data)
 		}
-		msg, err := m.newMongoDBCDCMessage(doc, opType, coll)
+		optime, ok := data["clusterTime"].(bson.Timestamp)
+		if !ok {
+			return fmt.Errorf("unable to extract optime from change stream, got: %T", data["clusterTime"])
+		}
+		msg, err := m.newMongoDBCDCMessage(doc, opType, coll, optime)
 		if err != nil {
 			return fmt.Errorf("unable to create message from change stream event: %w", err)
 		}
@@ -673,7 +698,7 @@ func (m *mongoCDC) readFromStream(ctx context.Context, cp *checkpoint.Capped[bso
 	return stream.Err()
 }
 
-func (m *mongoCDC) newMongoDBCDCMessage(doc any, operationType, collectionName string) (msg *service.Message, err error) {
+func (m *mongoCDC) newMongoDBCDCMessage(doc any, operationType, collectionName string, opTime bson.Timestamp) (msg *service.Message, err error) {
 	var b []byte
 	if doc != nil {
 		b, err = bson.MarshalExtJSON(doc, m.marshalCanonical, false)
@@ -686,6 +711,13 @@ func (m *mongoCDC) newMongoDBCDCMessage(doc any, operationType, collectionName s
 	msg = service.NewMessage(b)
 	msg.MetaSetMut("operation", operationType)
 	msg.MetaSetMut("collection", collectionName)
+	// BSON has a special timestamp type for internal MongoDB use and is not associated with the regular Date type.
+	// This internal timestamp type is a 64 bit value where:
+	// the most significant 32 bits are a time_t value (seconds since the Unix epoch)
+	// the least significant 32 bits are an incrementing ordinal for operations within a given second.
+	// This is the JSON format for a timestamp, but the normalize serialization stuff doesn't support writing
+	// one at the top level.
+	msg.MetaSetMut("operation_time", fmt.Sprintf(`{"$timestamp":{"t":%d,"i":%d}}`, opTime.T, opTime.I))
 	return msg, nil
 }
 
