@@ -292,21 +292,21 @@ file:
 }
 
 func TestIntegrationMongoCDC(t *testing.T) {
-	runTest := func(t *testing.T, preAndPostImages bool) {
-		r := strings.NewReplacer("$IMAGES", strconv.FormatBool(preAndPostImages))
+	runTest := func(t *testing.T, mode string) {
+		r := strings.NewReplacer("$MODE", mode)
 		stream, db, output := setup(t, r.Replace(`
 mongodb_cdc:
   url: '$URI'
   database: '$DATABASE'
   checkpoint_cache: '$CACHE'
-  use_pre_and_post_images: $IMAGES
+  document_mode: $MODE
   collections:
     - 'foo'
 `), enablePreAndPostDocuments())
 		db.CreateCollection(
 			t,
 			"foo",
-			options.CreateCollection().SetChangeStreamPreAndPostImages(bson.M{"enabled": preAndPostImages}),
+			options.CreateCollection().SetChangeStreamPreAndPostImages(bson.M{"enabled": mode == "pre_and_post_images"}),
 		)
 		wait := stream.RunAsync(t)
 		time.Sleep(2 * time.Second) // Wait for stream to start
@@ -324,14 +324,15 @@ mongodb_cdc:
 		time.Sleep(3 * time.Second)
 		stream.StopWithin(t, 10*time.Second)
 		wait()
-		if preAndPostImages {
+		switch mode {
+		case "pre_and_post_images":
 			require.JSONEq(t, `[
           {"_id": "1", "data": "hello cdc"},
           {"_id": "1", "data": "hello cdc!"},
           {"_id": "1", "data": "hello cdc!", "foo": "hello!"},
           {"_id": "1", "data": "hello cdc!", "foo": "hello!"}
       ]`, output.MessagesJSON(t))
-		} else {
+		case "update_lookup":
 			require.JSONEq(t, `[
           {"_id": "1", "data": "hello cdc"},
           {"_id": "1", "data": "hello cdc!"},
@@ -346,8 +347,8 @@ mongodb_cdc:
     {"operation": "delete", "collection": "foo", "operation_time": "$timestamp"}
 ]`, output.MetadataJSON(t))
 	}
-	t.Run("Normal", func(t *testing.T) { runTest(t, false) })
-	t.Run("PreAndPostImages", func(t *testing.T) { runTest(t, true) })
+	t.Run("Normal", func(t *testing.T) { runTest(t, "update_lookup") })
+	t.Run("PreAndPostImages", func(t *testing.T) { runTest(t, "pre_and_post_images") })
 }
 
 func TestIntegrationMongoCDCWithSnapshot(t *testing.T) {
