@@ -200,7 +200,13 @@ func (o *outputHelper) Metadata(t *testing.T) []map[string]any {
 		for _, m := range b {
 			meta := map[string]any{}
 			err := m.MetaWalkMut(func(k string, v any) error {
-				meta[k] = v
+				switch k {
+				case "operation_time":
+					// Make this deterministic
+					meta[k] = "$timestamp"
+				default:
+					meta[k] = v
+				}
 				return nil
 			})
 			require.NoError(t, err)
@@ -286,21 +292,21 @@ file:
 }
 
 func TestIntegrationMongoCDC(t *testing.T) {
-	runTest := func(t *testing.T, preAndPostImages bool) {
-		r := strings.NewReplacer("$IMAGES", strconv.FormatBool(preAndPostImages))
+	runTest := func(t *testing.T, mode string) {
+		r := strings.NewReplacer("$MODE", mode)
 		stream, db, output := setup(t, r.Replace(`
 mongodb_cdc:
   url: '$URI'
   database: '$DATABASE'
   checkpoint_cache: '$CACHE'
-  use_pre_and_post_images: $IMAGES
+  document_mode: $MODE
   collections:
     - 'foo'
 `), enablePreAndPostDocuments())
 		db.CreateCollection(
 			t,
 			"foo",
-			options.CreateCollection().SetChangeStreamPreAndPostImages(bson.M{"enabled": preAndPostImages}),
+			options.CreateCollection().SetChangeStreamPreAndPostImages(bson.M{"enabled": mode == "pre_and_post_images"}),
 		)
 		wait := stream.RunAsync(t)
 		time.Sleep(2 * time.Second) // Wait for stream to start
@@ -318,14 +324,15 @@ mongodb_cdc:
 		time.Sleep(3 * time.Second)
 		stream.StopWithin(t, 10*time.Second)
 		wait()
-		if preAndPostImages {
+		switch mode {
+		case "pre_and_post_images":
 			require.JSONEq(t, `[
           {"_id": "1", "data": "hello cdc"},
           {"_id": "1", "data": "hello cdc!"},
           {"_id": "1", "data": "hello cdc!", "foo": "hello!"},
           {"_id": "1", "data": "hello cdc!", "foo": "hello!"}
       ]`, output.MessagesJSON(t))
-		} else {
+		case "update_lookup":
 			require.JSONEq(t, `[
           {"_id": "1", "data": "hello cdc"},
           {"_id": "1", "data": "hello cdc!"},
@@ -334,14 +341,14 @@ mongodb_cdc:
       ]`, output.MessagesJSON(t))
 		}
 		require.JSONEq(t, `[
-    {"operation": "insert", "collection": "foo"},
-    {"operation": "replace", "collection": "foo"},
-    {"operation": "update", "collection": "foo"},
-    {"operation": "delete", "collection": "foo"}
+      {"operation": "insert", "collection": "foo", "operation_time": "$timestamp"},
+    {"operation": "replace", "collection": "foo", "operation_time": "$timestamp"},
+    {"operation": "update", "collection": "foo", "operation_time": "$timestamp"},
+    {"operation": "delete", "collection": "foo", "operation_time": "$timestamp"}
 ]`, output.MetadataJSON(t))
 	}
-	t.Run("Normal", func(t *testing.T) { runTest(t, false) })
-	t.Run("PreAndPostImages", func(t *testing.T) { runTest(t, true) })
+	t.Run("Normal", func(t *testing.T) { runTest(t, "update_lookup") })
+	t.Run("PreAndPostImages", func(t *testing.T) { runTest(t, "pre_and_post_images") })
 }
 
 func TestIntegrationMongoCDCWithSnapshot(t *testing.T) {
@@ -385,8 +392,9 @@ read_until:
 	}
 	// Sanity check to make sure we got past the snapshot phase
 	require.Contains(t, output.Metadata(t), map[string]any{
-		"operation":  "insert",
-		"collection": "foo",
+		"operation":      "insert",
+		"collection":     "foo",
+		"operation_time": "$timestamp",
 	})
 }
 
@@ -437,7 +445,7 @@ read_until:
 		}
 		require.Empty(t, expected)
 		for _, meta := range output.Metadata(t) {
-			require.Equal(t, map[string]any{"operation": "read", "collection": "foo"}, meta)
+			require.Equal(t, map[string]any{"operation": "read", "collection": "foo", "operation_time": "$timestamp"}, meta)
 		}
 	}
 	t.Run("AutoBuckets", func(t *testing.T) { runTest(t, true) })
@@ -547,7 +555,7 @@ mongodb_cdc:
 	stream.Stop(t)
 	wait()
 	require.JSONEq(t, `[{"_id":1,"data":"hello"}, {"_id":3,"data":"hello"}]`, output.MessagesJSON(t))
-	require.JSONEq(t, `[{"operation":"read","collection":"foo"}, {"operation":"insert","collection":"foo"}]`, output.MetadataJSON(t))
+	require.JSONEq(t, `[{"operation":"read","collection":"foo", "operation_time":"$timestamp"}, {"operation":"insert","collection":"foo", "operation_time":"$timestamp"}]`, output.MetadataJSON(t))
 }
 
 func TestIntegrationMongoCDCMultipleCollections(t *testing.T) {
@@ -588,9 +596,9 @@ mongodb_cdc:
 		map[string]any{"_id": json.Number("3"), "data": "!"},
 	}, msgs[0:3])
 	require.ElementsMatch(t, []map[string]any{
-		{"operation": "read", "collection": "foo"},
-		{"operation": "read", "collection": "bar"},
-		{"operation": "read", "collection": "qux"},
+		{"operation": "read", "collection": "foo", "operation_time": "$timestamp"},
+		{"operation": "read", "collection": "bar", "operation_time": "$timestamp"},
+		{"operation": "read", "collection": "qux", "operation_time": "$timestamp"},
 	}, metas[0:3])
 	// Changes must be in order
 	require.Equal(t, []any{
@@ -599,8 +607,8 @@ mongodb_cdc:
 		map[string]any{"_id": json.Number("6"), "data": "!"},
 	}, msgs[3:6])
 	require.Equal(t, []map[string]any{
-		{"operation": "insert", "collection": "foo"},
-		{"operation": "insert", "collection": "bar"},
-		{"operation": "insert", "collection": "qux"},
+		{"operation": "insert", "collection": "foo", "operation_time": "$timestamp"},
+		{"operation": "insert", "collection": "bar", "operation_time": "$timestamp"},
+		{"operation": "insert", "collection": "qux", "operation_time": "$timestamp"},
 	}, metas[3:6])
 }

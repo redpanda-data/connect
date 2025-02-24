@@ -76,7 +76,7 @@ input:
     stream_snapshot: false
     snapshot_parallelism: 1
     snapshot_auto_bucket_sharding: false
-    use_pre_and_post_images: false
+    document_mode: update_lookup
     json_marshal_mode: canonical
     app_name: benthos
     auto_replay_nacks: true
@@ -88,6 +88,15 @@ input:
 Read from a MongoDB replica set using https://www.mongodb.com/docs/manual/changeStreams/[^Change Streams]. It's only possible to watch for changes when using a sharded MongoDB or a MongoDB cluster running as a replica set.
 
 By default MongoDB does not propagate changes in all cases. In order to capture all changes (including deletes) in a MongoDB cluster one needs to enable pre and post image saving and the collection needs to also enable saving these pre and post images. For more information see https://www.mongodb.com/docs/manual/changeStreams/#change-streams-with-document-pre--and-post-images[^MongoDB documentation].
+
+== Metadata
+
+Each message omitted by this plugin has the following metadata:
+
+- operation: either "create", "replace", "delete" or "update" for changes streamed. Documents from the initial snapshot have the operation set to "read".
+- collection: the collection the document was written to.
+- operation_time: the oplog time for when this operation occurred.
+    
 
 == Fields
 
@@ -224,14 +233,24 @@ If true, determine parallel snapshot chunks using `$bucketAuto` instead of the `
 
 *Default*: `false`
 
-=== `use_pre_and_post_images`
+=== `document_mode`
 
-If true, enables uses pre and post images stored in MongoDB to ensure that updates and deletes have the full document. Otherwise update operations fetch the full current document and deletes only contain the document key.
+The mode in which to emit documents, specifically updates and deletes.
 
 
-*Type*: `bool`
+*Type*: `string`
 
-*Default*: `false`
+*Default*: `"update_lookup"`
+
+|===
+| Option | Summary
+
+| `pre_and_post_images`
+| Uses pre and post image collection to emit the full documents for update and delete operations. To use and configure this mode see the setup steps in the https://www.mongodb.com/docs/manual/changeStreams/#change-streams-with-document-pre--and-post-images[^MongoDB documentation].
+| `update_lookup`
+| In this mode insert, replace and update operations have the full document emitted and deletes only have the _id field populated. Documents updates lookup the full document. This corresponds to the updateLookup option, see the https://www.mongodb.com/docs/manual/changeStreams/#std-label-change-streams-updateLookup[^MongoDB documentation] for more information.
+
+|===
 
 === `json_marshal_mode`
 
