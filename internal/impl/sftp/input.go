@@ -317,9 +317,15 @@ func (s *sftpReader) Close(ctx context.Context) error {
 	defer s.stateLock.Unlock()
 
 	s.closeScanner(ctx)
+
+	if s.client == nil {
+		return nil
+	}
+
 	if err := s.client.Close(); err != nil {
 		s.log.With("error", err).Error("Failed to close client")
 	}
+
 	return nil
 }
 

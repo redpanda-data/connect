@@ -20,7 +20,7 @@ All notable changes to this project will be documented in this file.
 - Fixed a bug with the `redpanda_migrator_offsets` input and output where the consumer group update migration logic based on timestamp lookup should no longer skip ahead in the destination cluster. This should enforce at-least-once delivery guarantees. (@mihaitodor)
 - The `redpanda_migrator_bundle` output no longer drops messages if either the `redpanda_migrator` or the `redpanda_migrator_offsets` child output throws an error. Connect will keep retrying to write the messages and apply backpressure to the input. (@mihaitodor)
 - Transient errors in `snowflake_streaming` are now automatically retried in cases it's determined to be safe to do. (@rockwotj)
-
+- Fixed a panic in the `sftp` input when Connect shuts down. (@mihaitodor)
 
 ### Changed
 
