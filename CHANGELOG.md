@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Enterprise licenses can now be loaded directly from an environment variable `REDPANDA_LICENSE`. (@rockwotj)
 - Added a lint rule to verify field `private_key` for the `snowflake_streaming` output is in PEM format. (@rockwotj)
 - New `mongodb_cdc` input for change data capture (CDC) over MongoDB collections. (@rockwotj)
 - Field `is_high_watermark` added to the `redpanda_migrator_offsets` output. (@mihaitodor)
