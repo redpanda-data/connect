@@ -104,7 +104,6 @@ type mysqlStreamInput struct {
 
 	batching                  service.BatchPolicy
 	batchPolicy               *service.Batcher
-	tablesFilterMap           map[string]bool
 	checkPointLimit           int
 	fieldSnapshotMaxBatchSize int
 
@@ -169,12 +168,10 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 
 	i.cp = checkpoint.NewCapped[*position](int64(i.checkPointLimit))
 
-	i.tablesFilterMap = map[string]bool{}
 	for _, table := range i.tables {
 		if err = validateTableName(table); err != nil {
 			return nil, err
 		}
-		i.tablesFilterMap[table] = true
 	}
 
 	if batching, err = conf.FieldBatchPolicy(fieldBatching); err != nil {
@@ -667,9 +664,6 @@ func (i *mysqlStreamInput) OnRotate(eh *replication.EventHeader, re *replication
 }
 
 func (i *mysqlStreamInput) OnRow(e *canal.RowsEvent) error {
-	if _, ok := i.tablesFilterMap[e.Table.Name]; !ok {
-		return nil
-	}
 	switch e.Action {
 	case canal.InsertAction:
 		return i.onMessage(e, 0, 1)
