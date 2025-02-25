@@ -72,6 +72,7 @@ output:
   label: ""
   snowflake_streaming:
     account: ORG-ACCOUNT # No default (required)
+    url: https://org-account.privatelink.snowflakecomputing.com # No default (optional)
     user: "" # No default (required)
     role: ACCOUNTADMIN # No default (required)
     database: MY_DATABASE # No default (required)
@@ -300,6 +301,20 @@ The Snowflake https://docs.snowflake.com/en/user-guide/admin-account-identifier.
 # Examples
 
 account: ORG-ACCOUNT
+```
+
+=== `url`
+
+Override the default URL used to connect to Snowflake which is https://ORG-ACCOUNT.snowflakecomputing.com
+
+
+*Type*: `string`
+
+
+```yml
+# Examples
+
+url: https://org-account.privatelink.snowflakecomputing.com
 ```
 
 === `user`

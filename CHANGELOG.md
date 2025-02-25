@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - Metadata field `kafka_is_high_watermark` added to the `redpanda_migrator_offsets` input. (@mihaitodor)
 - Input `postgres_cdc` now emits logical messages to the WAL every hour by default to allow WAL reclaiming for low frequency tables, this frequency is controlled by field `heartbeat_interval`. (@rockwotj)
 - Output `snowflake_streaming` now has a `commit_timeout` field to control how long to wait for a commit in Snowflake. (@rockwotj)
+- Output `snowflake_streaming` now has a `url` field to override the hostname for connections to Snowflake, which is required for private link deployments. (@rockwotj)
 
 ### Fixed
 
