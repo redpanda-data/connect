@@ -83,7 +83,7 @@ func setupTestWithMySQLVersion(t *testing.T, version string) (string, *testDB) {
 
 	port := resource.GetPort("3306/tcp")
 	dsn := fmt.Sprintf(
-		"root:password@tcp(localhost:%s)/testdb?parseTime=true&timeout=30s&readTimeout=30s&writeTimeout=30s&multiStatements=true",
+		"root:password@tcp(localhost:%s)/testdb?timeout=30s&readTimeout=30s&writeTimeout=30s&multiStatements=true",
 		port,
 	)
 

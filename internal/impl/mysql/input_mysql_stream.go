@@ -154,6 +154,9 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 	if err != nil {
 		return nil, fmt.Errorf("error parsing mysql DSN: %v", err)
 	}
+	// We require this configuration option is enabled.
+	i.mysqlConfig.ParseTime = true
+	i.dsn = i.mysqlConfig.FormatDSN()
 
 	if i.tables, err = conf.FieldStringList(fieldMySQLTables); err != nil {
 		return nil, err
