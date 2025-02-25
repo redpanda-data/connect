@@ -39,6 +39,8 @@ const debug = false
 type ClientOptions struct {
 	// Account name
 	Account string
+	// Account url
+	URL string
 	// username
 	User string
 	// Snowflake Role (i.e. ACCOUNTADMIN)
@@ -66,13 +68,14 @@ type SnowflakeServiceClient struct {
 
 // NewSnowflakeServiceClient creates a new API client for the Snowpipe Streaming API
 func NewSnowflakeServiceClient(ctx context.Context, opts ClientOptions) (*SnowflakeServiceClient, error) {
-	client, err := NewRestClient(
-		opts.Account,
-		opts.User,
-		opts.ConnectVersion,
-		opts.PrivateKey,
-		opts.Logger,
-	)
+	client, err := NewRestClient(RestOptions{
+		Account:    opts.Account,
+		URL:        opts.URL,
+		User:       opts.User,
+		Version:    opts.ConnectVersion,
+		PrivateKey: opts.PrivateKey,
+		Logger:     opts.Logger,
+	})
 	if err != nil {
 		return nil, err
 	}

@@ -305,6 +305,7 @@ type (
 // SnowflakeRestClient allows you to make REST API calls against Snowflake APIs.
 type SnowflakeRestClient struct {
 	account    string
+	url        string
 	user       string
 	privateKey *rsa.PrivateKey
 	client     *http.Client
@@ -315,9 +316,19 @@ type SnowflakeRestClient struct {
 	cachedJWT       *typed.AtomicValue[string]
 }
 
+// RestOptions is the options to create a REST client.
+type RestOptions struct {
+	Account    string
+	User       string
+	URL        string
+	Version    string
+	PrivateKey *rsa.PrivateKey
+	Logger     *service.Logger
+}
+
 // NewRestClient creates a new REST client for the given parameters.
-func NewRestClient(account, user, version string, privateKey *rsa.PrivateKey, logger *service.Logger) (c *SnowflakeRestClient, err error) {
-	version = strings.TrimLeft(version, "v")
+func NewRestClient(opts RestOptions) (c *SnowflakeRestClient, err error) {
+	version := strings.TrimLeft(opts.Version, "v")
 	// Drop any -rc suffix, Snowflake doesn't like it
 	splits := strings.SplitN(version, "-", 2)
 	if len(splits) > 1 {
@@ -329,11 +340,12 @@ func NewRestClient(account, user, version string, privateKey *rsa.PrivateKey, lo
 		version = "99.0.0"
 	}
 	c = &SnowflakeRestClient{
-		account:    account,
-		user:       user,
+		account:    opts.Account,
+		url:        opts.URL,
+		user:       opts.User,
 		client:     http.DefaultClient,
-		privateKey: privateKey,
-		logger:     logger,
+		privateKey: opts.PrivateKey,
+		logger:     opts.Logger,
 		version:    version,
 		cachedJWT:  typed.NewAtomicValue(""),
 		authRefreshLoop: asyncroutine.NewPeriodic(
@@ -343,7 +355,7 @@ func NewRestClient(account, user, version string, privateKey *rsa.PrivateKey, lo
 				// We've already done this once, and there is no external component here
 				// so this should never fail, but log just in case...
 				if err != nil {
-					logger.Errorf("unable to mint JWT for snowflake output: %s", err)
+					c.logger.Errorf("unable to mint JWT for snowflake output: %s", err)
 					return
 				}
 				c.cachedJWT.Store(jwt)
@@ -386,42 +398,42 @@ func (c *SnowflakeRestClient) computeJWT() (string, error) {
 // we don't have to handle async requests.
 func (c *SnowflakeRestClient) RunSQL(ctx context.Context, req RunSQLRequest) (resp RunSQLResponse, err error) {
 	requestID := uuid.NewString()
-	err = c.doPost(ctx, fmt.Sprintf("https://%s.snowflakecomputing.com/api/v2/statements?requestId=%s", c.account, requestID), req, &resp)
+	err = c.doPost(ctx, fmt.Sprintf("%s/api/v2/statements?requestId=%s", c.url, requestID), req, &resp)
 	return
 }
 
 // configureClient configures a client for Snowpipe Streaming.
 func (c *SnowflakeRestClient) configureClient(ctx context.Context, req clientConfigureRequest) (resp clientConfigureResponse, err error) {
 	requestID := uuid.NewString()
-	err = c.doPost(ctx, fmt.Sprintf("https://%s.snowflakecomputing.com/v1/streaming/client/configure?requestId=%s", c.account, requestID), req, &resp)
+	err = c.doPost(ctx, fmt.Sprintf("%s/v1/streaming/client/configure?requestId=%s", c.url, requestID), req, &resp)
 	return
 }
 
 // channelStatus returns the status of a given channel
 func (c *SnowflakeRestClient) channelStatus(ctx context.Context, req batchChannelStatusRequest) (resp batchChannelStatusResponse, err error) {
 	requestID := uuid.NewString()
-	err = c.doPost(ctx, fmt.Sprintf("https://%s.snowflakecomputing.com/v1/streaming/channels/status?requestId=%s", c.account, requestID), req, &resp)
+	err = c.doPost(ctx, fmt.Sprintf("%s/v1/streaming/channels/status?requestId=%s", c.url, requestID), req, &resp)
 	return
 }
 
 // openChannel opens a channel for writing
 func (c *SnowflakeRestClient) openChannel(ctx context.Context, req openChannelRequest) (resp openChannelResponse, err error) {
 	requestID := uuid.NewString()
-	err = c.doPost(ctx, fmt.Sprintf("https://%s.snowflakecomputing.com/v1/streaming/channels/open?requestId=%s", c.account, requestID), req, &resp)
+	err = c.doPost(ctx, fmt.Sprintf("%s/v1/streaming/channels/open?requestId=%s", c.url, requestID), req, &resp)
 	return
 }
 
 // dropChannel drops a channel when it's no longer in use.
 func (c *SnowflakeRestClient) dropChannel(ctx context.Context, req dropChannelRequest) (resp dropChannelResponse, err error) {
 	requestID := uuid.NewString()
-	err = c.doPost(ctx, fmt.Sprintf("https://%s.snowflakecomputing.com/v1/streaming/channels/drop?requestId=%s", c.account, requestID), req, &resp)
+	err = c.doPost(ctx, fmt.Sprintf("%s/v1/streaming/channels/drop?requestId=%s", c.url, requestID), req, &resp)
 	return
 }
 
 // registerBlob registers a blob in object storage to be ingested into Snowflake.
 func (c *SnowflakeRestClient) registerBlob(ctx context.Context, req registerBlobRequest) (resp registerBlobResponse, err error) {
 	requestID := uuid.NewString()
-	err = c.doPost(ctx, fmt.Sprintf("https://%s.snowflakecomputing.com/v1/streaming/channels/write/blobs?requestId=%s", c.account, requestID), req, &resp)
+	err = c.doPost(ctx, fmt.Sprintf("%s/v1/streaming/channels/write/blobs?requestId=%s", c.url, requestID), req, &resp)
 	return
 }
 

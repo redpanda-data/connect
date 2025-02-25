@@ -66,18 +66,20 @@ func setup(t *testing.T) (*streaming.SnowflakeRestClient, *streaming.SnowflakeSe
 	require.NoError(t, err)
 	clientOptions := streaming.ClientOptions{
 		Account:        envOr("SNOWFLAKE_ACCOUNT", "WQKFXQQ-WI77362"),
+		URL:            fmt.Sprintf("https://%s.snowflakecomputing.com", envOr("SNOWFLAKE_ACCOUNT", "WQKFXQQ-WI77362")),
 		User:           envOr("SNOWFLAKE_USER", "ROCKWOODREDPANDA"),
 		Role:           "ACCOUNTADMIN",
 		PrivateKey:     parseResult.(*rsa.PrivateKey),
 		ConnectVersion: "",
 	}
-	restClient, err := streaming.NewRestClient(
-		clientOptions.Account,
-		clientOptions.User,
-		clientOptions.ConnectVersion,
-		clientOptions.PrivateKey,
-		clientOptions.Logger,
-	)
+	restClient, err := streaming.NewRestClient(streaming.RestOptions{
+		Account:    clientOptions.Account,
+		User:       clientOptions.User,
+		URL:        clientOptions.URL,
+		Version:    clientOptions.ConnectVersion,
+		PrivateKey: clientOptions.PrivateKey,
+		Logger:     clientOptions.Logger,
+	})
 	require.NoError(t, err)
 	t.Cleanup(restClient.Close)
 	streamClient, err := streaming.NewSnowflakeServiceClient(ctx, clientOptions)

@@ -15,6 +15,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	neturl "net/url"
 	"strings"
 	"sync"
 	"time"
@@ -29,6 +30,7 @@ import (
 
 const (
 	ssoFieldAccount                             = "account"
+	ssoFieldURL                                 = "url"
 	ssoFieldUser                                = "user"
 	ssoFieldRole                                = "role"
 	ssoFieldDB                                  = "database"
@@ -98,6 +100,8 @@ You can monitor the output batch size using the `+"`snowflake_compressed_output_
 			service.NewStringField(ssoFieldAccount).
 				Description(`The Snowflake https://docs.snowflake.com/en/user-guide/admin-account-identifier.html#using-an-account-locator-as-an-identifier[Account name^]. Which should be formatted as `+"`<orgname>-<account_name>`"+` where `+"`<orgname>`"+` is the name of your Snowflake organization and `+"`<account_name>`"+` is the unique name of your account within your organization.
 `).Example("ORG-ACCOUNT"),
+			service.NewStringField(ssoFieldURL).
+				Description("Override the default URL used to connect to Snowflake which is https://ORG-ACCOUNT.snowflakecomputing.com").Optional().Example("https://org-account.privatelink.snowflakecomputing.com").Advanced(),
 			service.NewStringField(ssoFieldUser).Description("The user to run the Snowpipe Stream as. See https://docs.snowflake.com/en/user-guide/admin-user-management[Snowflake Documentation^] on how to create a user."),
 			service.NewStringField(ssoFieldRole).Description("The role for the `user` field. The role must have the https://docs.snowflake.com/en/user-guide/data-load-snowpipe-streaming-overview#required-access-privileges[required privileges^] to call the Snowpipe Streaming APIs. See https://docs.snowflake.com/en/user-guide/admin-user-management#user-roles[Snowflake Documentation^] for more information about roles.").Example("ACCOUNTADMIN"),
 			service.NewStringField(ssoFieldDB).Description("The Snowflake database to ingest data into.").Example("MY_DATABASE"),
@@ -386,6 +390,19 @@ func newSnowflakeStreamer(
 	if err != nil {
 		return nil, err
 	}
+	var url string
+	if conf.Contains(ssoFieldURL) {
+		url, err = conf.FieldString(ssoFieldAccount)
+		if err != nil {
+			return nil, err
+		}
+		_, err := neturl.Parse(url)
+		if err != nil {
+			return nil, fmt.Errorf("invalid url: %w", err)
+		}
+	} else {
+		url = fmt.Sprintf("https://%s.snowflakecomputing.com", account)
+	}
 	user, err := conf.FieldString(ssoFieldUser)
 	if err != nil {
 		return nil, err
@@ -521,7 +538,14 @@ func newSnowflakeStreamer(
 			return err
 		}
 	}
-	restClient, err := streaming.NewRestClient(account, user, mgr.EngineVersion(), rsaKey, mgr.Logger())
+	restClient, err := streaming.NewRestClient(streaming.RestOptions{
+		Account:    account,
+		URL:        url,
+		User:       user,
+		Version:    mgr.EngineVersion(),
+		PrivateKey: rsaKey,
+		Logger:     mgr.Logger(),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("unable to create rest API client: %w", err)
 	}
@@ -529,6 +553,7 @@ func newSnowflakeStreamer(
 		context.Background(),
 		streaming.ClientOptions{
 			Account:        account,
+			URL:            url,
 			User:           user,
 			Role:           role,
 			PrivateKey:     rsaKey,
