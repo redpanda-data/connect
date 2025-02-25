@@ -22,6 +22,7 @@ import (
 	"github.com/Jeffail/checkpoint"
 	"github.com/Jeffail/shutdown"
 	"github.com/go-mysql-org/go-mysql/canal"
+	gomysql "github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/go-mysql-org/go-mysql/schema"
 	"github.com/go-sql-driver/mysql"
@@ -32,6 +33,7 @@ import (
 )
 
 const (
+	fieldMySQLFlavor          = "flavor"
 	fieldMySQLDSN             = "dsn"
 	fieldMySQLTables          = "tables"
 	fieldStreamSnapshot       = "stream_snapshot"
@@ -59,6 +61,12 @@ This input adds the following metadata fields to each message:
 - binlog_position
 `).
 	Fields(
+		service.NewStringAnnotatedEnumField(fieldMySQLFlavor, map[string]string{
+			gomysql.MySQLFlavor:   "MySQL flavored databases.",
+			gomysql.MariaDBFlavor: "MariaDB flavored databases.",
+		}).
+			Description("The type of MySQL database to connect to.").
+			Default(gomysql.MySQLFlavor),
 		service.NewStringField(fieldMySQLDSN).
 			Description("The DSN of the MySQL database to connect to.").
 			Example("user:password@tcp(localhost:3306)/database"),
@@ -90,7 +98,8 @@ type asyncMessage struct {
 type mysqlStreamInput struct {
 	canal.DummyEventHandler
 
-	mutex sync.Mutex
+	mutex  sync.Mutex
+	flavor string
 	// canal stands for mysql binlog listener connection
 	canal             *canal.Canal
 	mysqlConfig       *mysql.Config
@@ -135,6 +144,12 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 		return nil, err
 	}
 
+	if i.flavor, err = conf.FieldString(fieldMySQLFlavor); err != nil {
+		return nil, err
+	}
+	if err := gomysql.ValidateFlavor(i.flavor); err != nil {
+		return nil, err
+	}
 	i.mysqlConfig, err = mysql.ParseDSN(i.dsn)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing mysql DSN: %v", err)
@@ -206,6 +221,7 @@ func init() {
 
 func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 	canalConfig := canal.NewDefaultConfig()
+	canalConfig.Flavor = i.flavor
 	canalConfig.Addr = i.mysqlConfig.Addr
 	canalConfig.User = i.mysqlConfig.User
 	canalConfig.Password = i.mysqlConfig.Passwd
