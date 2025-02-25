@@ -12,6 +12,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kerr"
@@ -56,7 +57,40 @@ func createTopic(ctx context.Context, topic string, replicationFactorOverride bo
 		}
 	}
 
-	if _, err := outputAdminClient.CreateTopic(ctx, partitions, rp, nil, topic); err != nil {
+	topicConfigs, err := inputAdminClient.DescribeTopicConfigs(ctx, topic)
+	if err != nil {
+		return fmt.Errorf("failed to fetch configs for topic %q from source broker: %s", topic, err)
+	}
+
+	rc, err := topicConfigs.On(topic, nil)
+	if err != nil {
+		return fmt.Errorf("failed to fetch configs for topic %q from source broker: %s", topic, err)
+	}
+
+	destinationConfigs := make(map[string]*string)
+	for _, c := range rc.Configs {
+		// Source: https://docs.redpanda.com/current/reference/properties/topic-properties/
+		if c.Key == "cleanup.policy" ||
+			c.Key == "flush.bytes" ||
+			c.Key == "flush.ms" ||
+			c.Key == "initial.retention.local.target.ms" ||
+			c.Key == "retention.bytes" ||
+			c.Key == "retention.ms" ||
+			c.Key == "segment.ms" ||
+			c.Key == "segment.bytes" ||
+			c.Key == "compression.type" ||
+			c.Key == "message.timestamp.type" ||
+			c.Key == "max.message.bytes" ||
+			c.Key == "replication.factor" ||
+			c.Key == "write.caching" ||
+			c.Key == "redpanda.iceberg.mode" ||
+			strings.HasPrefix(c.Key, "redpanda.remote.") {
+
+			destinationConfigs[c.Key] = c.Value
+		}
+	}
+
+	if _, err := outputAdminClient.CreateTopic(ctx, partitions, rp, destinationConfigs, topic); err != nil {
 		if !errors.Is(err, kerr.TopicAlreadyExists) {
 			return fmt.Errorf("failed to create topic %q: %s", topic, err)
 		}
@@ -72,11 +106,11 @@ func createACLs(ctx context.Context, topic string, inputClient *kgo.Client, outp
 	// Only topic ACLs are migrated, group ACLs are not migrated.
 	// Users are not migrated because we can't read passwords.
 
-	aclBuilder := kadm.NewACLs().Topics(topic).
+	builder := kadm.NewACLs().Topics(topic).
 		ResourcePatternType(kadm.ACLPatternLiteral).Operations().Allow().Deny().AllowHosts().DenyHosts()
 	var inputACLResults kadm.DescribeACLsResults
 	var err error
-	if inputACLResults, err = inputAdminClient.DescribeACLs(ctx, aclBuilder); err != nil {
+	if inputACLResults, err = inputAdminClient.DescribeACLs(ctx, builder); err != nil {
 		return fmt.Errorf("failed to fetch ACLs for topic %q: %s", topic, err)
 	}
 

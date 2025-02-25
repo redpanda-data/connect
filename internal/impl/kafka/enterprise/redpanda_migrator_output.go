@@ -226,11 +226,9 @@ func init() {
 											// message from it.
 											mgr.Logger().Errorf("Failed to create topic %q and ACLs: %s", topic, err)
 										}
-
-										continue
+									} else {
+										mgr.Logger().Infof("Created topic %q", topic)
 									}
-
-									mgr.Logger().Infof("Created topic %q", topic)
 
 									if err := createACLs(ctx, topic, inputClient, outputClient); err != nil {
 										mgr.Logger().Errorf("Failed to create ACLs for topic %q: %s", topic, err)
@@ -294,9 +292,9 @@ func init() {
 										} else {
 											return fmt.Errorf("failed to create topic %q and ACLs: %s", record.Topic, err)
 										}
+									} else {
+										mgr.Logger().Infof("Created topic %q", record.Topic)
 									}
-
-									mgr.Logger().Infof("Created topic %q", record.Topic)
 
 									if err := createACLs(ctx, record.Topic, details.Client, client); err != nil {
 										mgr.Logger().Errorf("Failed to create ACLs for topic %q: %s", record.Topic, err)
