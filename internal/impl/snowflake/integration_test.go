@@ -15,6 +15,7 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -371,6 +372,66 @@ snowflake_streaming:
 		{"FOO", "VARIANT", "", ""},
 		{"TOKEN", "NUMBER", "38", "0"},
 	}, rows)
+}
+
+func TestIntegrationSchemaEvolutionNull(t *testing.T) {
+	integration.CheckSkip(t)
+	runTest := func(t *testing.T, ignoreNull bool) {
+		produce, stream := SetupSnowflakeStream(t, fmt.Sprintf(`
+label: snowpipe_streaming
+snowflake_streaming:
+  account: "$ACCOUNT"
+  user: "$USER"
+  role: $ROLE
+  database: "$DB"
+  schema: $SCHEMA
+  private_key_file: "$PRIVATE_KEY_FILE"
+  table: integration_test_auto_schema_evolution_with_null
+  init_statement: |
+    DROP TABLE IF EXISTS integration_test_auto_schema_evolution_with_null;
+  max_in_flight: 4
+  channel_name: "${!this.channel}"
+  schema_evolution:
+    enabled: true
+    ignore_nulls: %v
+    processors:
+      - mapping: |
+          root = match {
+            this.name == "null_a" || this.name == "null_b" => "NUMBER"
+            _ => "variant"
+          }
+`, ignoreNull))
+		RunStreamInBackground(t, stream)
+		// Initial schema creation test
+		require.NoError(t, produce([]map[string]any{
+			{"foo": "bar", "null_a": nil},
+		}))
+		// Incremental schema migration test
+		require.NoError(t, produce([]map[string]any{
+			{"foo": "bar", "null_b": nil},
+		}))
+		rows := RunSQLQuery(
+			t,
+			stream,
+			`SELECT column_name, data_type, numeric_precision, numeric_scale
+     FROM $DB.information_schema.columns 
+     WHERE table_name = 'INTEGRATION_TEST_AUTO_SCHEMA_EVOLUTION_WITH_NULL' AND table_schema = '$SCHEMA'
+     ORDER BY column_name`,
+		)
+		if ignoreNull {
+			require.Equal(t, [][]string{
+				{"FOO", "VARIANT", "", ""},
+			}, rows)
+		} else {
+			require.Equal(t, [][]string{
+				{"FOO", "VARIANT", "", ""},
+				{"NULL_A", "NUMBER", "38", "0"},
+				{"NULL_B", "NUMBER", "38", "0"},
+			}, rows)
+		}
+	}
+	t.Run("IgnoreNull", func(t *testing.T) { runTest(t, true) })
+	t.Run("IncludeNull", func(t *testing.T) { runTest(t, false) })
 }
 
 func TestIntegrationManualSchemaEvolution(t *testing.T) {

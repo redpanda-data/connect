@@ -22,10 +22,22 @@ import (
 	"github.com/segmentio/encoding/thrift"
 )
 
+// SchemaMode specifies how to handle schema mismatches when constructing parquet files
+type SchemaMode int
+
+const (
+	// SchemaModeIgnoreExtra is a mode where unknown properties in messages are ignored
+	SchemaModeIgnoreExtra SchemaMode = iota
+	// SchemaModeStrict is a mode where non-null unknown properties in message result in errors
+	SchemaModeStrict
+	// SchemaModeStrictWithNulls is a mode where all unknown properties result in errors
+	SchemaModeStrictWithNulls
+)
+
 // messageToRow converts a message into columnar form using the provided name to index mapping.
 // We have to materialize the column into a row so that we can know if a column is null - the
 // msg can be sparse, but the row must not be sparse.
-func messageToRow(msg *service.Message, out []any, nameToPosition map[string]int, allowExtraProperties bool) error {
+func messageToRow(msg *service.Message, out []any, nameToPosition map[string]int, mode SchemaMode) error {
 	v, err := msg.AsStructured()
 	if err != nil {
 		return fmt.Errorf("error extracting object from message: %w", err)
@@ -38,7 +50,9 @@ func messageToRow(msg *service.Message, out []any, nameToPosition map[string]int
 	for k, v := range row {
 		idx, ok := nameToPosition[normalizeColumnName(k)]
 		if !ok {
-			if !allowExtraProperties && v != nil {
+			if mode == SchemaModeStrict && v != nil {
+				missingColumns = append(missingColumns, NewMissingColumnError(msg, k, v))
+			} else if mode == SchemaModeStrictWithNulls {
 				missingColumns = append(missingColumns, NewMissingColumnError(msg, k, v))
 			}
 			continue
@@ -55,7 +69,7 @@ func constructRowGroup(
 	batch service.MessageBatch,
 	schema *parquet.Schema,
 	transformers []*dataTransformer,
-	allowExtraProperties bool,
+	mode SchemaMode,
 ) ([]parquet.Row, []*statsBuffer, error) {
 	// We write all of our data in a columnar fashion, but need to pivot that data so that we can feed it into
 	// out parquet library (which sadly will redo the pivot - maybe we need a lower level abstraction...).
@@ -83,7 +97,7 @@ func constructRowGroup(
 	// is needed
 	row := make([]any, rowWidth)
 	for _, msg := range batch {
-		err := messageToRow(msg, row, nameToPosition, allowExtraProperties)
+		err := messageToRow(msg, row, nameToPosition, mode)
 		if err != nil {
 			return nil, nil, err
 		}
