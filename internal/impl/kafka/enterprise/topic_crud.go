@@ -12,7 +12,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kerr"
@@ -83,8 +82,7 @@ func createTopic(ctx context.Context, topic string, replicationFactorOverride bo
 			c.Key == "max.message.bytes" ||
 			c.Key == "replication.factor" ||
 			c.Key == "write.caching" ||
-			c.Key == "redpanda.iceberg.mode" ||
-			strings.HasPrefix(c.Key, "redpanda.remote.") {
+			c.Key == "redpanda.iceberg.mode" {
 
 			destinationConfigs[c.Key] = c.Value
 		}
