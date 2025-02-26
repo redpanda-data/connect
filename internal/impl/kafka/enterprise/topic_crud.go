@@ -66,24 +66,27 @@ func createTopic(ctx context.Context, topic string, replicationFactorOverride bo
 		return fmt.Errorf("failed to fetch configs for topic %q from source broker: %s", topic, err)
 	}
 
+	// Source: https://docs.redpanda.com/current/reference/properties/topic-properties/
+	allowedConfigs := map[string]struct{}{
+		"cleanup.policy":                    {},
+		"flush.bytes":                       {},
+		"flush.ms":                          {},
+		"initial.retention.local.target.ms": {},
+		"retention.bytes":                   {},
+		"retention.ms":                      {},
+		"segment.ms":                        {},
+		"segment.bytes":                     {},
+		"compression.type":                  {},
+		"message.timestamp.type":            {},
+		"max.message.bytes":                 {},
+		"replication.factor":                {},
+		"write.caching":                     {},
+		"redpanda.iceberg.mode":             {},
+	}
+
 	destinationConfigs := make(map[string]*string)
 	for _, c := range rc.Configs {
-		// Source: https://docs.redpanda.com/current/reference/properties/topic-properties/
-		if c.Key == "cleanup.policy" ||
-			c.Key == "flush.bytes" ||
-			c.Key == "flush.ms" ||
-			c.Key == "initial.retention.local.target.ms" ||
-			c.Key == "retention.bytes" ||
-			c.Key == "retention.ms" ||
-			c.Key == "segment.ms" ||
-			c.Key == "segment.bytes" ||
-			c.Key == "compression.type" ||
-			c.Key == "message.timestamp.type" ||
-			c.Key == "max.message.bytes" ||
-			c.Key == "replication.factor" ||
-			c.Key == "write.caching" ||
-			c.Key == "redpanda.iceberg.mode" {
-
+		if _, ok := allowedConfigs[c.Key]; ok {
 			destinationConfigs[c.Key] = c.Value
 		}
 	}
