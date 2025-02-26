@@ -68,6 +68,7 @@ func asSchemaMigrationError(err error) (*schemaMigrationNeededError, bool) {
 }
 
 type snowpipeSchemaEvolver struct {
+	mode                   streaming.SchemaMode
 	schemaEvolutionMapping *bloblang.Executor
 	pipeline               []*service.OwnedProcessor
 	logger                 *service.Logger
@@ -200,6 +201,9 @@ func (o *snowpipeSchemaEvolver) CreateOutputTable(ctx context.Context, batch ser
 	}
 	columns := []string{}
 	for k, v := range row {
+		if o.mode == streaming.SchemaModeStrict && v == nil {
+			continue
+		}
 		col := streaming.NewMissingColumnError(msg, k, v)
 		colType, err := o.ComputeMissingColumnType(ctx, col)
 		if err != nil {

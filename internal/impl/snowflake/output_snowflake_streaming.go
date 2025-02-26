@@ -51,6 +51,7 @@ const (
 	ssoFieldBuildChunkSize                      = "chunk_size"
 	ssoFieldSchemaEvolution                     = "schema_evolution"
 	ssoFieldSchemaEvolutionEnabled              = "enabled"
+	ssoFieldSchemaEvolutionIgnoreNulls          = "ignore_nulls"
 	ssoFieldSchemaEvolutionNewColumnTypeMapping = "new_column_type_mapping"
 	ssoFieldSchemaEvolutionProcessors           = "processors"
 	ssoFieldCommitTimeout                       = "commit_timeout"
@@ -121,6 +122,7 @@ ALTER TABLE t1 ADD COLUMN a2 NUMBER;
 `),
 			service.NewObjectField(ssoFieldSchemaEvolution,
 				service.NewBoolField(ssoFieldSchemaEvolutionEnabled).Description("Whether schema evolution is enabled."),
+				service.NewBoolField(ssoFieldSchemaEvolutionIgnoreNulls).Description("If `true`, then new columns that are `null` are ignored and schema evolution is not triggered. If `false` then null columns trigger schema migrations in Snowflake. NOTE: unless you already know what type this column will be in advance, it's highly encouraged to ignore null values.").Default(true).Advanced(),
 				service.NewBloblangField(ssoFieldSchemaEvolutionNewColumnTypeMapping).Description(`
 The mapping function from Redpanda Connect type to column type in Snowflake. Overriding this can allow for customization of the datatype if there is specific information that you know about the data types in use. This mapping should result in the `+"`root`"+` variable being assigned a string with the data type for the new column in Snowflake.
 
@@ -430,14 +432,24 @@ func newSnowflakeStreamer(
 			return nil, err
 		}
 	}
-	var schemaEvolutionEnabled bool
+	schemaEvolutionMode := streaming.SchemaModeIgnoreExtra
 	var schemaEvolutionProcessors []*service.OwnedProcessor
 	var schemaEvolutionMapping *bloblang.Executor
 	if conf.Contains(ssoFieldSchemaEvolution, ssoFieldSchemaEvolutionEnabled) {
 		seConf := conf.Namespace(ssoFieldSchemaEvolution)
-		schemaEvolutionEnabled, err = seConf.FieldBool(ssoFieldSchemaEvolutionEnabled)
+		schemaEvolutionEnabled, err := seConf.FieldBool(ssoFieldSchemaEvolutionEnabled)
 		if err != nil {
 			return nil, err
+		}
+		ignoreNulls, err := seConf.FieldBool(ssoFieldSchemaEvolutionIgnoreNulls)
+		if err != nil {
+			return nil, err
+		}
+		if schemaEvolutionEnabled {
+			schemaEvolutionMode = streaming.SchemaModeStrict
+			if !ignoreNulls {
+				schemaEvolutionMode = streaming.SchemaModeStrictWithNulls
+			}
 		}
 		if seConf.Contains(ssoFieldSchemaEvolutionProcessors) {
 			schemaEvolutionProcessors, err = seConf.FieldProcessorList(ssoFieldSchemaEvolutionProcessors)
@@ -567,8 +579,9 @@ func newSnowflakeStreamer(
 	mgr.SetGeneric(SnowflakeClientResourceForTesting, restClient)
 	makeImpl := func(table string) (*snowpipeSchemaEvolver, service.BatchOutput) {
 		var schemaEvolver *snowpipeSchemaEvolver
-		if schemaEvolutionEnabled {
+		if schemaEvolutionMode != streaming.SchemaModeIgnoreExtra {
 			schemaEvolver = &snowpipeSchemaEvolver{
+				mode:                   schemaEvolutionMode,
 				schemaEvolutionMapping: schemaEvolutionMapping,
 				pipeline:               schemaEvolutionProcessors,
 				restClient:             restClient,
@@ -582,18 +595,18 @@ func newSnowflakeStreamer(
 		var impl service.BatchOutput
 		if channelName != nil {
 			indexed := &snowpipeIndexedOutput{
-				channelName:            channelName,
-				client:                 client,
-				db:                     db,
-				schema:                 schema,
-				table:                  table,
-				role:                   role,
-				logger:                 mgr.Logger(),
-				metrics:                newSnowpipeMetrics(mgr.Metrics()),
-				buildOpts:              buildOpts,
-				offsetToken:            offsetToken,
-				schemaMigrationEnabled: schemaEvolver != nil,
-				commitTimeout:          commitTimeout,
+				channelName:   channelName,
+				client:        client,
+				db:            db,
+				schema:        schema,
+				table:         table,
+				role:          role,
+				logger:        mgr.Logger(),
+				metrics:       newSnowpipeMetrics(mgr.Metrics()),
+				buildOpts:     buildOpts,
+				offsetToken:   offsetToken,
+				schemaMode:    schemaEvolutionMode,
+				commitTimeout: commitTimeout,
 			}
 			indexed.channelPool = pool.NewIndexed(func(ctx context.Context, name string) (*streaming.SnowflakeIngestionChannel, error) {
 				hash := sha256.Sum256([]byte(name))
@@ -609,18 +622,18 @@ func newSnowflakeStreamer(
 				channelPrefix = fmt.Sprintf("Redpanda_Connect_%s.%s.%s", db, schema, table)
 			}
 			pooled := &snowpipePooledOutput{
-				channelPrefix:          channelPrefix,
-				client:                 client,
-				db:                     db,
-				schema:                 schema,
-				table:                  table,
-				role:                   role,
-				logger:                 mgr.Logger(),
-				metrics:                newSnowpipeMetrics(mgr.Metrics()),
-				buildOpts:              buildOpts,
-				offsetToken:            offsetToken,
-				schemaMigrationEnabled: schemaEvolver != nil,
-				commitTimeout:          commitTimeout,
+				channelPrefix: channelPrefix,
+				client:        client,
+				db:            db,
+				schema:        schema,
+				table:         table,
+				role:          role,
+				logger:        mgr.Logger(),
+				metrics:       newSnowpipeMetrics(mgr.Metrics()),
+				buildOpts:     buildOpts,
+				offsetToken:   offsetToken,
+				schemaMode:    schemaEvolutionMode,
+				commitTimeout: commitTimeout,
 			}
 			pooled.channelPool = pool.NewCapped(maxInFlight, func(ctx context.Context, id int) (*streaming.SnowflakeIngestionChannel, error) {
 				name := fmt.Sprintf("%s_%d", pooled.channelPrefix, id)
@@ -878,19 +891,19 @@ type snowpipePooledOutput struct {
 	channelPrefix, db, schema, table, role string
 	offsetToken                            *service.InterpolatedString
 	logger                                 *service.Logger
-	schemaMigrationEnabled                 bool
+	schemaMode                             streaming.SchemaMode
 }
 
 func (o *snowpipePooledOutput) openChannel(ctx context.Context, name string, id int16) (*streaming.SnowflakeIngestionChannel, error) {
 	o.logger.Debugf("opening snowflake streaming channel for table `%s.%s.%s`: %s", o.db, o.schema, o.table, name)
 	return o.client.OpenChannel(ctx, streaming.ChannelOptions{
-		ID:                      id,
-		Name:                    name,
-		DatabaseName:            o.db,
-		SchemaName:              o.schema,
-		TableName:               o.table,
-		BuildOptions:            o.buildOpts,
-		StrictSchemaEnforcement: o.schemaMigrationEnabled,
+		ID:           id,
+		Name:         name,
+		DatabaseName: o.db,
+		SchemaName:   o.schema,
+		TableName:    o.table,
+		BuildOptions: o.buildOpts,
+		SchemaMode:   o.schemaMode,
 	})
 }
 
@@ -918,7 +931,7 @@ func (o *snowpipePooledOutput) WriteBatch(ctx context.Context, batch service.Mes
 	if err != nil {
 		// Only evolve the schema if requested.
 		var schemaErr *schemaMigrationNeededError
-		if o.schemaMigrationEnabled {
+		if o.schemaMode != streaming.SchemaModeIgnoreExtra {
 			var ok bool
 			schemaErr, ok = asSchemaMigrationError(err)
 			if !ok {
@@ -975,19 +988,19 @@ type snowpipeIndexedOutput struct {
 	db, schema, table, role  string
 	offsetToken, channelName *service.InterpolatedString
 	logger                   *service.Logger
-	schemaMigrationEnabled   bool
+	schemaMode               streaming.SchemaMode
 }
 
 func (o *snowpipeIndexedOutput) openChannel(ctx context.Context, name string, id int16) (*streaming.SnowflakeIngestionChannel, error) {
 	o.logger.Debugf("opening snowflake streaming channel for table `%s.%s.%s`: %s", o.db, o.schema, o.table, name)
 	return o.client.OpenChannel(ctx, streaming.ChannelOptions{
-		ID:                      id,
-		Name:                    name,
-		DatabaseName:            o.db,
-		SchemaName:              o.schema,
-		TableName:               o.table,
-		BuildOptions:            o.buildOpts,
-		StrictSchemaEnforcement: o.schemaMigrationEnabled,
+		ID:           id,
+		Name:         name,
+		DatabaseName: o.db,
+		SchemaName:   o.schema,
+		TableName:    o.table,
+		BuildOptions: o.buildOpts,
+		SchemaMode:   o.schemaMode,
 	})
 }
 
@@ -1019,7 +1032,7 @@ func (o *snowpipeIndexedOutput) WriteBatch(ctx context.Context, batch service.Me
 	if err != nil {
 		// Only evolve the schema if requested.
 		var schemaErr *schemaMigrationNeededError
-		if o.schemaMigrationEnabled {
+		if o.schemaMode != streaming.SchemaModeIgnoreExtra {
 			var ok bool
 			schemaErr, ok = asSchemaMigrationError(err)
 			if !ok {

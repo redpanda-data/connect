@@ -86,6 +86,7 @@ output:
       CREATE TABLE IF NOT EXISTS mytable (amount NUMBER);
     schema_evolution:
       enabled: false # No default (required)
+      ignore_nulls: true
       processors: [] # No default (optional)
     build_options:
       parallelism: 1
@@ -458,6 +459,15 @@ Whether schema evolution is enabled.
 
 *Type*: `bool`
 
+
+=== `schema_evolution.ignore_nulls`
+
+If `true`, then new columns that are `null` are ignored and schema evolution is not triggered. If `false` then null columns trigger schema migrations in Snowflake. NOTE: unless you already know what type this column will be in advance, it's highly encouraged to ignore null values.
+
+
+*Type*: `bool`
+
+*Default*: `true`
 
 === `schema_evolution.processors`
 

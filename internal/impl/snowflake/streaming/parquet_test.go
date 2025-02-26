@@ -61,7 +61,7 @@ func TestWriteParquet(t *testing.T) {
 		batch,
 		schema,
 		transformers,
-		false,
+		SchemaModeIgnoreExtra,
 	)
 	require.NoError(t, err)
 	w := newParquetWriter("latest", schema)
