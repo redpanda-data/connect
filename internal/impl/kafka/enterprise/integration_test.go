@@ -656,6 +656,66 @@ func startRedpanda(t *testing.T, pool *dockertest.Pool, exposeBroker bool, autoc
 	}, nil
 }
 
+func createTopicWithACLs(t *testing.T, brokerAddr, topic, retentionTime, principal string, operation kadm.ACLOperation) {
+	client, err := kgo.NewClient(kgo.SeedBrokers([]string{brokerAddr}...))
+	require.NoError(t, err)
+	defer client.Close()
+
+	adm := kadm.NewClient(client)
+
+	configs := map[string]*string{"retention.ms": &retentionTime}
+	_, err = adm.CreateTopic(context.Background(), 1, -1, configs, topic)
+	require.NoError(t, err)
+
+	updateTopicACL(t, adm, topic, principal, operation)
+}
+
+func updateTopicACL(t *testing.T, client *kadm.Client, topic, principal string, operation kadm.ACLOperation) {
+	builder := kadm.NewACLs().Allow(principal).AllowHosts("*").Topics(topic).ResourcePatternType(kadm.ACLPatternLiteral).Operations(operation)
+	res, err := client.CreateACLs(context.Background(), builder)
+	require.NoError(t, err)
+	require.Len(t, res, 1)
+	assert.NoError(t, res[0].Err)
+}
+
+func checkTopic(t *testing.T, brokerAddr, topic, retentionTime, principal string, operation kadm.ACLOperation) {
+	client, err := kgo.NewClient(kgo.SeedBrokers([]string{brokerAddr}...))
+	require.NoError(t, err)
+	defer client.Close()
+
+	adm := kadm.NewClient(client)
+
+	topicConfigs, err := adm.DescribeTopicConfigs(context.Background(), topic)
+	require.NoError(t, err)
+
+	rc, err := topicConfigs.On(topic, nil)
+	require.NoError(t, err)
+	assert.Condition(t, func() bool {
+		for _, c := range rc.Configs {
+			if c.Key == "retention.ms" && *c.Value == retentionTime {
+				return true
+			}
+		}
+		return false
+	})
+
+	builder := kadm.NewACLs().Topics(topic).
+		ResourcePatternType(kadm.ACLPatternLiteral).Operations(operation).Allow().Deny().AllowHosts().DenyHosts()
+
+	aclResults, err := adm.DescribeACLs(context.Background(), builder)
+	require.NoError(t, err)
+	require.Len(t, aclResults[0].Described, 1)
+	require.NoError(t, aclResults[0].Err)
+	require.Len(t, aclResults[0].Described, 1)
+
+	for _, acl := range aclResults[0].Described {
+		assert.Equal(t, principal, acl.Principal)
+		assert.Equal(t, "*", acl.Host)
+		assert.Equal(t, topic, acl.Name)
+		assert.Equal(t, operation.String(), acl.Operation.String())
+	}
+}
+
 // produceMessages produces `count` messages to the given `topic` with the given `message` content. The
 // `timestampOffset` indicates an offset which gets added to the `counter()` Bloblang function which is used to generate
 // the message timestamps sequentially, the first one being `1 + timestampOffset`.
@@ -776,8 +836,6 @@ input:
       topics: [ %s ]
       consumer_group: migrator_cg
       start_from_oldest: true
-      replication_factor_override: true
-      replication_factor: -1
     schema_registry:
       url: %s
   processors:
@@ -1083,4 +1141,105 @@ output:
 			assert.Equal(t, dummyTopic, currentCGOffset.Topic)
 		})
 	}
+}
+
+func TestRedpandaMigratorTopicConfigAndACLsIntegration(t *testing.T) {
+	t.Parallel()
+
+	pool, err := dockertest.NewPool("")
+	require.NoError(t, err)
+	pool.MaxWait = time.Minute
+
+	source, err := startRedpanda(t, pool, true, true)
+	require.NoError(t, err)
+	destination, err := startRedpanda(t, pool, true, true)
+	require.NoError(t, err)
+
+	dummyTopic := "test"
+
+	runMigrator := func() {
+		streamBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
+input:
+  redpanda_migrator:
+    seed_brokers: [ %s ]
+    topics: [ %s ]
+    consumer_group: migrator_cg
+
+output:
+  redpanda_migrator:
+    seed_brokers: [ %s ]
+    topic: ${! @kafka_topic }
+    key: ${! @kafka_key }
+    partition: ${! @kafka_partition }
+    partitioner: manual
+    timestamp_ms: ${! @kafka_timestamp_ms }
+    translate_schema_ids: false
+    replication_factor_override: true
+    replication_factor: -1
+`, source.brokerAddr, dummyTopic, destination.brokerAddr)))
+		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
+
+		migratorUpdateWG := sync.WaitGroup{}
+		migratorUpdateWG.Add(1)
+		require.NoError(t, streamBuilder.AddConsumerFunc(func(_ context.Context, m *service.Message) error {
+			defer migratorUpdateWG.Done()
+			return nil
+		}))
+
+		// Ensure the callback function is called after the output wrote the message.
+		streamBuilder.SetOutputBrokerPattern(service.OutputBrokerPatternFanOutSequential)
+
+		stream, err := streamBuilder.Build()
+		require.NoError(t, err)
+
+		license.InjectTestService(stream.Resources())
+
+		// Run stream in the background.
+		go func() {
+			err = stream.Run(context.Background())
+			require.NoError(t, err)
+
+			t.Log("redpanda_migrator_offsets pipeline shut down")
+		}()
+
+		migratorUpdateWG.Wait()
+
+		require.NoError(t, stream.StopWithin(3*time.Second))
+	}
+
+	// Create a topic with a custom retention time
+	dummyRetentionTime := strconv.Itoa(int((48 * time.Hour).Milliseconds()))
+	dummyPrincipal := "User:redpanda"
+	dummyACLOperation := kmsg.ACLOperationRead
+	createTopicWithACLs(t, source.brokerAddr, dummyTopic, dummyRetentionTime, dummyPrincipal, dummyACLOperation)
+
+	// Produce one message
+	dummyMessage := `{"test":"foo"}`
+	produceMessages(t, source, dummyTopic, dummyMessage, 0, 1, true)
+
+	// Run the Redpanda Migrator
+	runMigrator()
+
+	// Ensure that the topic and ACL were migrated correctly
+	checkTopic(t, destination.brokerAddr, dummyTopic, dummyRetentionTime, dummyPrincipal, dummyACLOperation)
+
+	client, err := kgo.NewClient(kgo.SeedBrokers([]string{source.brokerAddr}...))
+	require.NoError(t, err)
+	defer client.Close()
+
+	adm := kadm.NewClient(client)
+
+	// Update ACL in the source topic and ensure that it's reflected in the destination
+	dummyACLOperation = kmsg.ACLOperationDescribe
+	updateTopicACL(t, adm, dummyTopic, dummyPrincipal, dummyACLOperation)
+
+	// Produce one more message so the consumerFunc will get triggered to indicate that Migrator ran successfully
+	produceMessages(t, source, dummyTopic, dummyMessage, 0, 1, true)
+
+	// Run the Redpanda Migrator again
+	runMigrator()
+
+	// Ensure that the ACL was updated correctly
+	checkTopic(t, destination.brokerAddr, dummyTopic, dummyRetentionTime, dummyPrincipal, dummyACLOperation)
 }
