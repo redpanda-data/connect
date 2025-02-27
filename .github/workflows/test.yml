@@ -22,8 +22,7 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v5
       with:
-        go-version: 1.22.x
-        check-latest: true
+        go-version: oldstable
 
     - name: Install dependencies for x_benthos_extra
       run: |
@@ -57,13 +56,12 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v5
       with:
-        go-version: 1.21.x
-        check-latest: true
+        go-version: oldstable
 
     - name: Lint
       uses: golangci/golangci-lint-action@v6
       with:
-        version: v1.61.0
+        version: v1.64.5
         args: --timeout 30m cmd/... internal/... public/...
 
   test-push-to-cloudsmith:
