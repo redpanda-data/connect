@@ -245,6 +245,23 @@ The mode in which to emit documents, specifically updates and deletes.
 |===
 | Option | Summary
 
+| `partial_update`
+| In this mode update operations only have a description of the update operation, which follows the following schema:
+      {
+        "_id": <document_id>,
+        "operations": [
+          # type == set means that the value was updated like so:
+          # root.foo."bar.baz" = "world"
+          {"path": ["foo", "bar.baz"], "type": "set", "value":"world"},
+          # type == unset means that the value was deleted like so:
+          # root.qux = deleted()
+          {"path": ["qux"], "type": "unset", "value": null},
+          # type == truncatedArray means that the array at that path was truncated to value number of elements
+          # root.array = this.array.slice(2)
+          {"path": ["array"], "type": "truncatedArray", "value": 2}
+        ]
+      }
+      
 | `pre_and_post_images`
 | Uses pre and post image collection to emit the full documents for update and delete operations. To use and configure this mode see the setup steps in the https://www.mongodb.com/docs/manual/changeStreams/#change-streams-with-document-pre--and-post-images[^MongoDB documentation].
 | `update_lookup`
