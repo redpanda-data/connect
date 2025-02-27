@@ -39,6 +39,7 @@ Common::
 input:
   label: ""
   mysql_cdc:
+    flavor: mysql
     dsn: user:password@tcp(localhost:3306)/database # No default (required)
     tables: [] # No default (required)
     checkpoint_cache: "" # No default (required)
@@ -64,6 +65,7 @@ Advanced::
 input:
   label: ""
   mysql_cdc:
+    flavor: mysql
     dsn: user:password@tcp(localhost:3306)/database # No default (required)
     tables: [] # No default (required)
     checkpoint_cache: "" # No default (required)
@@ -93,6 +95,25 @@ This input adds the following metadata fields to each message:
 
 
 == Fields
+
+=== `flavor`
+
+The type of MySQL database to connect to.
+
+
+*Type*: `string`
+
+*Default*: `"mysql"`
+
+|===
+| Option | Summary
+
+| `mariadb`
+| MariaDB flavored databases.
+| `mysql`
+| MySQL flavored databases.
+
+|===
 
 === `dsn`
 
