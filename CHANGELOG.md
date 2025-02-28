@@ -24,12 +24,14 @@ All notable changes to this project will be documented in this file.
 - Transient errors in `snowflake_streaming` are now automatically retried in cases it's determined to be safe to do. (@rockwotj)
 - Fixed a panic in the `sftp` input when Connect shuts down. (@mihaitodor)
 - Fixed an issue where `mysql_cdc` would not work with timestamps without the `parseTime=true` DSN parameter. (@rockwotj)
+- Fixed an issue where timestamps at extreme year bounds (i.e. year 0 or year 9999) would be encoded incorrectly in `snowflake_streaming`. (@rockwotj)
 
 ### Changed
 
 - Output `snowflake_streaming` has additional logging and debug information when errors arise. (@rockwotj)
 - Input `postgres_cdc` now does not add a prefix to the replication slot name, if upgrading from a previous version, prefix your current replication slot with `rs_` to continue to use the same replication slot. (@rockwotj)
 -  The `redpanda_migrator` output now uses the source topic config when creating a topic in the destination cluster. It also attempts to transfer topic ACLs to the destination cluster even if the topics already exist. (@mihaitodor)
+- When `preserve_logical_types` is `true` in `schema_registry_decode`, convert time logical times into bloblang timestamps instead of duration strings. (@rockwotj)
 
 ## 4.47.1 - 2025-02-11
 
