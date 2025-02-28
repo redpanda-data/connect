@@ -148,6 +148,11 @@ func RunSQLQuery(t *testing.T, stream *service.Stream, sql string) [][]string {
 		Schema:    config.schema,
 		Role:      config.role,
 		Timeout:   30,
+		Parameters: map[string]string{
+			"TIMESTAMP_OUTPUT_FORMAT": "YYYY-MM-DD HH24:MI:SS.FF3 TZHTZM",
+			"TIME_OUTPUT_FORMAT":      "HH24:MI:SS",
+			"DATE_OUTPUT_FORMAT":      "YYYY-MM-DD",
+		},
 	})
 	require.NoError(t, err)
 	require.Equal(t, "00000", resp.SQLState)
@@ -492,4 +497,37 @@ snowflake_streaming:
 	for _, w := range writers {
 		w.Stop()
 	}
+}
+
+func TestIntegrationTemporal(t *testing.T) {
+	integration.CheckSkip(t)
+	produce, stream := SetupSnowflakeStream(t, `
+label: snowpipe_streaming
+snowflake_streaming:
+  account: "$ACCOUNT"
+  user: "$USER"
+  role: $ROLE
+  database: "$DB"
+  schema: $SCHEMA
+  private_key_file: "$PRIVATE_KEY_FILE"
+  table: integration_test_temporal
+  init_statement: |
+    DROP TABLE IF EXISTS integration_test_temporal;
+    CREATE TABLE integration_test_temporal(a TIME, b TIMESTAMP_NTZ, c DATE);
+  max_in_flight: 1
+`)
+	RunStreamInBackground(t, stream)
+	d := 11*time.Hour + 35*time.Minute + 58*time.Second
+	time := time.Date(0, 1, 1, 0, 0, 0, 0, time.UTC).Add(d)
+	require.NoError(t, produce([]map[string]any{
+		{"a": time, "b": time, "c": time},
+	}))
+	rows := RunSQLQuery(
+		t,
+		stream,
+		`SELECT a, b, c FROM integration_test_temporal`,
+	)
+	require.Equal(t, [][]string{
+		{"11:35:58", "0800-11-22 00:50:52.580", "0000-01-02"},
+	}, rows)
 }
