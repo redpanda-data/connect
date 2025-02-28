@@ -145,7 +145,7 @@ func fls128(n Num) int {
 	if n.hi != 0 {
 		return 127 - bits.LeadingZeros64(uint64(n.hi))
 	}
-	return 64 - bits.LeadingZeros64(n.lo)
+	return 63 - bits.LeadingZeros64(n.lo)
 }
 
 // Neg computes -v

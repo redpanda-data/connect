@@ -356,6 +356,13 @@ func (c timestampConverter) ValidateAndConvert(stats *statsBuffer, val any, buf 
 	if c.trimTZ {
 		t = t.UTC()
 	}
+	y := t.Year()
+	if y < 1 || y > 9999 {
+		return fmt.Errorf(
+			"timestamp out of representable inclusive range of years between 1 and 9999: %d",
+			y,
+		)
+	}
 	v := snowflakeTimestampInt(t, c.scale, c.includeTZ)
 	if !v.FitsInPrecision(c.precision) {
 		return fmt.Errorf(

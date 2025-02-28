@@ -166,7 +166,14 @@ func (w *avroSchemaWalker) walk(root any, schema avro.Schema) (any, error) {
 				return nil, fmt.Errorf("expected *avro.LogicalTypeSchema for DecimalLogicalType got: %T", l)
 			}
 			return json.Number(v.FloatString(ls.Scale())), nil
-		case avro.Duration, avro.TimeMicros, avro.TimeMillis:
+		case avro.TimeMicros, avro.TimeMillis:
+			v, ok := root.(time.Duration)
+			if !ok {
+				return nil, fmt.Errorf("expected time.Duration for %v got: %T", l.Type(), root)
+			}
+			// Convert time units to timestamps, as that is the most natural representation in blobl
+			return time.Time{}.Add(v), nil
+		case avro.Duration:
 			v, ok := root.(time.Duration)
 			if !ok {
 				return nil, fmt.Errorf("expected time.Duration for %v got: %T", l.Type(), root)
