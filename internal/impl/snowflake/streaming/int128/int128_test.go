@@ -217,6 +217,46 @@ func TestDiv(t *testing.T) {
 			FromInt64(-0x1b9f),
 			Num{0xb9157556d724, 0xb14f635714d7563e},
 		},
+		{
+			MustParse("253401775507123000000"),
+			FromInt64(1),
+			MustParse("253401775507123000000"),
+		},
+		{
+			MustParse("-253401775507123000000"),
+			FromInt64(1),
+			MustParse("-253401775507123000000"),
+		},
+		{
+			MustParse("253401775507123000000"),
+			FromInt64(-1),
+			MustParse("-253401775507123000000"),
+		},
+		{
+			MustParse("-253401775507123000000"),
+			FromInt64(-1),
+			MustParse("253401775507123000000"),
+		},
+		{
+			MustParse("253401775507123000000"),
+			FromInt64(2),
+			MustParse("126700887753561500000"),
+		},
+		{
+			MustParse("253401775507123000000"),
+			FromInt64(-2),
+			MustParse("-126700887753561500000"),
+		},
+		{
+			MustParse("-253401775507123000000"),
+			FromInt64(-2),
+			MustParse("126700887753561500000"),
+		},
+		{
+			MustParse("-253401775507123000000"),
+			FromInt64(2),
+			MustParse("-126700887753561500000"),
+		},
 	}
 	for _, c := range cases {
 		c := c
@@ -266,6 +306,12 @@ func TestCompare(t *testing.T) {
 		require.NotEqual(t, a, b)
 		require.Equal(t, a, a)
 		require.Equal(t, b, b)
+		require.Less(t, Compare(a, b), 0)
+		require.Greater(t, Compare(b, a), 0)
+		require.Equal(t, 0, Compare(a, a))
+		require.Equal(t, 0, Compare(b, b))
+		require.Equal(t, 0, CompareUnsigned(a, a))
+		require.Equal(t, 0, CompareUnsigned(b, b))
 	}
 	require.Equal(t, FromInt64(0), FromInt64(0))
 	require.NotEqual(t, FromInt64(1), FromInt64(0))

@@ -17,6 +17,8 @@
 
 package int128
 
+import "cmp"
+
 // Div computes a / b
 //
 // Division by zero panics
@@ -35,7 +37,7 @@ func Div(dividend, divisor Num) Num {
 	if divisor == dividend {
 		return FromInt64(1)
 	}
-	if uGt(divisor, dividend) {
+	if CompareUnsigned(divisor, dividend) > 0 {
 		return Num{}
 	}
 	denominator := divisor
@@ -46,9 +48,9 @@ func Div(dividend, divisor Num) Num {
 	// remainder will be left in dividend.
 	for i := 0; i <= shift; i++ {
 		quotient = Shl(quotient, 1)
-		if uGt(dividend, denominator) {
+		if CompareUnsigned(dividend, denominator) >= 0 {
 			dividend = Sub(dividend, denominator)
-			quotient = Or(quotient, FromInt64(1))
+			quotient.lo |= 1
 		}
 		denominator = uShr(denominator, 1)
 	}
@@ -58,6 +60,24 @@ func Div(dividend, divisor Num) Num {
 	return quotient
 }
 
+// Compare returns -1 if a < b, 0 if a == b, and 1 if a > b.
+func Compare(a, b Num) int {
+	r := cmp.Compare(a.hi, b.hi)
+	if r == 0 {
+		return cmp.Compare(a.lo, b.lo)
+	}
+	return r
+}
+
+// CompareUnsigned returns -1 if |a| < |b|, 0 if a == b, and 1 if |a| > |b|.
+func CompareUnsigned(a, b Num) int {
+	r := cmp.Compare(uint64(a.hi), uint64(b.hi))
+	if r == 0 {
+		return cmp.Compare(a.lo, b.lo)
+	}
+	return r
+}
+
 // uShr is unsigned shift right (no sign extending)
 func uShr(v Num, amt uint) Num {
 	n := amt - 64
@@ -65,14 +85,5 @@ func uShr(v Num, amt uint) Num {
 	return Num{
 		hi: int64(uint64(v.hi) >> amt),
 		lo: v.lo>>amt | uint64(v.hi)>>n | uint64(v.hi)<<m,
-	}
-}
-
-// uGt is unsigned greater than comparison
-func uGt(a, b Num) bool {
-	if a.hi == b.hi {
-		return a.lo >= b.lo
-	} else {
-		return uint64(a.hi) >= uint64(b.hi)
 	}
 }

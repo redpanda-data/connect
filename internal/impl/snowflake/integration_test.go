@@ -518,7 +518,7 @@ snowflake_streaming:
 `)
 	RunStreamInBackground(t, stream)
 	d := 11*time.Hour + 35*time.Minute + 58*time.Second
-	time := time.Date(0, 1, 1, 0, 0, 0, 0, time.UTC).Add(d)
+	time := time.Date(1, 1, 1, 0, 0, 0, 0, time.UTC).Add(d)
 	require.NoError(t, produce([]map[string]any{
 		{"a": time, "b": time, "c": time},
 	}))
@@ -528,6 +528,6 @@ snowflake_streaming:
 		`SELECT a, b, c FROM integration_test_temporal`,
 	)
 	require.Equal(t, [][]string{
-		{"11:35:58", "0800-11-22 00:50:52.580", "0000-01-02"},
+		{"11:35:58", "0001-01-01 11:35:58.000", "0001-01-02"},
 	}, rows)
 }

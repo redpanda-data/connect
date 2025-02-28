@@ -220,6 +220,16 @@ func TestSnowflakeTimestamp(t *testing.T) {
 			keepTZ:    true,
 			tz:        true,
 		},
+		{
+			timestamp: "0001-01-01 22:05:07.123",
+			value:     int128.MustParse("-62135517292877000000"),
+			scale:     9,
+		},
+		{
+			timestamp: "9999-12-25 22:05:07.123",
+			value:     int128.MustParse("253401775507123000000"),
+			scale:     9,
+		},
 	}
 	for _, c := range cases {
 		c := c
@@ -230,7 +240,8 @@ func TestSnowflakeTimestamp(t *testing.T) {
 			}
 			parsed, err := time.Parse(layout, c.timestamp)
 			require.NoError(t, err)
-			require.Equal(t, c.value, snowflakeTimestampInt(parsed, c.scale, c.tz))
+			got := snowflakeTimestampInt(parsed, c.scale, c.tz)
+			require.Equal(t, c.value, got, "want: %s, got: %s", c.value, got)
 		})
 	}
 }
