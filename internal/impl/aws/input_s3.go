@@ -28,8 +28,10 @@ import (
 	"github.com/Jeffail/gabs/v2"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	sqstypes "github.com/aws/aws-sdk-go-v2/service/sqs/types"
+	"github.com/aws/smithy-go"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/codec"
@@ -578,12 +580,18 @@ func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]*s3ObjectTarget,
 				deleteS3ObjectAckFn(
 					s.s3, object.bucket, object.key, s.conf.DeleteObjects,
 					func(ctx context.Context, err error) (aerr error) {
-						if err != nil {
+						keyNotFound := false
+						if apiErr := smithy.APIError(nil); errors.As(err, &apiErr) {
+							if _, ok := apiErr.(*s3types.NoSuchKey); ok {
+								keyNotFound = true
+							}
+						}
+						if err != nil && !keyNotFound {
 							nackOnce.Do(func() {
 								// Prevent future acks from triggering a delete.
 								atomic.StoreInt32(&pendingAcks, -1)
 
-								s.log.Debugf("Pushing SQS notification back into the queue due to error: %v\n", err)
+								s.log.Debugf("Pushing SQS notification for key %q back into the queue due to error: %s", object.key, err)
 
 								// It's possible that this is called for one message
 								// at the _exact_ same time as another is acked, but
@@ -595,6 +603,9 @@ func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]*s3ObjectTarget,
 						} else {
 							ackOnce.Do(func() {
 								if atomic.AddInt32(&pendingAcks, -1) == 0 {
+									if keyNotFound {
+										s.log.Warnf("Dropping SQS notification for missing key %q: %s", object.key, err)
+									}
 									aerr = s.ackSQSMessage(ctx, sqsMsg)
 								}
 							})
