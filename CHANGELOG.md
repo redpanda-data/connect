@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 - Input `postgres_cdc` now emits logical messages to the WAL every hour by default to allow WAL reclaiming for low frequency tables, this frequency is controlled by field `heartbeat_interval`. (@rockwotj)
 - Output `snowflake_streaming` now has a `commit_timeout` field to control how long to wait for a commit in Snowflake. (@rockwotj)
 - Output `snowflake_streaming` now has a `url` field to override the hostname for connections to Snowflake, which is required for private link deployments. (@rockwotj)
+- All `sql_*` components now support the `clickhouse` driver in cloud builds. (@mihaitodor)
 
 ### Fixed
 
@@ -25,7 +26,7 @@ All notable changes to this project will be documented in this file.
 - Fixed a panic in the `sftp` input when Connect shuts down. (@mihaitodor)
 - Fixed an issue where `mysql_cdc` would not work with timestamps without the `parseTime=true` DSN parameter. (@rockwotj)
 - Fixed an issue where timestamps at extreme year bounds (i.e. year 0 or year 9999) would be encoded incorrectly in `snowflake_streaming`. (@rockwotj)
-- The `aws_s3` input now drops SQS notifications and emits a warning log message for files which have been deleted before Coonect was able to read them. (@mihaitodor)
+- The `aws_s3` input now drops SQS notifications and emits a warning log message for files which have been deleted before Connect was able to read them. (@mihaitodor)
 
 ### Changed
 

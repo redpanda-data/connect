@@ -242,7 +242,7 @@ splunk_hec                ,output    ,Splunk                    ,4.30.0  ,enterp
 sql                       ,cache     ,SQL                       ,4.26.0  ,certified  ,n          ,n     ,n
 sql                       ,output    ,SQL                       ,3.65.0  ,community  ,y          ,n     ,n
 sql                       ,processor ,SQL                       ,3.65.0  ,community  ,y          ,n     ,n
-sql_driver_clickhouse     ,sql_driver,ClickHouse                ,0.0.0   ,community  ,n          ,n     ,n
+sql_driver_clickhouse     ,sql_driver,ClickHouse                ,0.0.0   ,community  ,n          ,y     ,y
 sql_driver_gocosmos       ,sql_driver,Azure Cosmos DB           ,0.0.0   ,community  ,n          ,n     ,n
 sql_driver_mssql          ,sql_driver,Microsoft SQL Server      ,0.0.0   ,community  ,n          ,n     ,n
 sql_driver_mysql          ,sql_driver,MYSQL                     ,0.0.0   ,certified  ,n          ,y     ,y

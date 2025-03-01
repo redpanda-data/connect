@@ -55,6 +55,7 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/timeplus"
 
 	// Import all (supported) sql drivers.
+	_ "github.com/ClickHouse/clickhouse-go/v2"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
 	_ "github.com/sijms/go-ora/v2"
