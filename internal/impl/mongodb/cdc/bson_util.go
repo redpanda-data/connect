@@ -14,19 +14,17 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
-func bsonGetPath(doc bson.D, path ...string) any {
+func bsonGetPath(doc bson.M, path ...string) any {
 	var current any
 	current = doc
 	for _, segment := range path {
-		d, ok := current.(bson.D)
+		d, ok := current.(bson.M)
 		if !ok {
 			return nil
 		}
-		for _, kv := range d {
-			if kv.Key == segment {
-				current = kv.Value
-				break
-			}
+		current, ok = d[segment]
+		if !ok {
+			return nil
 		}
 	}
 	return current

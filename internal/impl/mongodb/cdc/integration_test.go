@@ -116,6 +116,20 @@ func (d *databaseHelper) CreateCollection(t *testing.T, collection string, opts 
 	require.NoError(t, err)
 }
 
+func (d *databaseHelper) FindOne(t *testing.T, collection string, id any) (doc any) {
+	r := d.Collection(collection).FindOne(context.Background(), bson.M{"_id": id})
+	require.NoError(t, r.Err())
+	require.NoError(t, r.Decode(&doc))
+	return
+}
+
+func (d *databaseHelper) FindOneJSON(t *testing.T, collection string, id any) string {
+	doc := d.FindOne(t, collection, id)
+	j, err := bson.MarshalExtJSON(doc, false, true)
+	require.NoError(t, err)
+	return string(j)
+}
+
 func (d *databaseHelper) InsertOne(t *testing.T, collection string, doc any) {
 	_, err := d.Collection(collection).InsertOne(context.Background(), doc)
 	require.NoError(t, err)
@@ -611,4 +625,99 @@ mongodb_cdc:
 		{"operation": "insert", "collection": "bar", "operation_time": "$timestamp"},
 		{"operation": "insert", "collection": "qux", "operation_time": "$timestamp"},
 	}, metas[3:6])
+}
+
+func TestIntegrationMongoPartialUpdates(t *testing.T) {
+	stream, db, output := setup(t, `
+mongodb_cdc:
+  url: '$URI'
+  database: '$DATABASE'
+  stream_snapshot: true
+  checkpoint_cache: '$CACHE'
+  json_marshal_mode: relaxed
+  document_mode: partial_update
+  collections:
+    - 'foo'
+`)
+	db.CreateCollection(t, "foo")
+	db.InsertOne(t, "foo", bson.M{
+		"_id":         1,
+		"nested.data": "hello",
+		"remove_me":   true,
+		"arraything": bson.M{
+			"here it is": bson.A{1, 2, 3},
+			"a.nother":   bson.A{"a", "b", "c"},
+		},
+		"nested": bson.M{
+			"bar": bson.A{bson.M{"a": "a"}},
+		},
+	})
+	wait := stream.RunAsync(t)
+	time.Sleep(time.Second)
+	db.UpdateOne(t, "foo", 1, bson.A{
+		bson.M{
+			"$set": bson.M{
+				"arraything": bson.M{
+					"$setField": bson.M{
+						"field": "a.nother",
+						"input": "$arraything",
+						"value": "world",
+					},
+				},
+			},
+		},
+		bson.M{
+			"$unset": "remove_me",
+		},
+	})
+	db.UpdateOne(t, "foo", 1, bson.A{
+		bson.M{
+			"$set": bson.M{
+				"arraything.here it is": bson.M{
+					"$slice": bson.A{"$arraything.here it is", 2},
+				},
+			},
+		},
+	})
+	db.UpdateOne(t, "foo", 1, bson.M{"$set": bson.M{"nested.bar.0.a": "b"}})
+	time.Sleep(time.Second)
+	stream.Stop(t)
+	wait()
+	actual := output.MessagesJSON(t)
+	require.JSONEq(t, `[
+    {
+      "_id": 1,
+      "arraything": {"a.nother":["a","b","c"],"here it is":[1,2,3]},
+      "nested": {"bar":[{"a":"a"}]},
+      "nested.data": "hello",
+      "remove_me": true
+    },
+    {
+      "_id":1,
+      "operations": [
+        {"path": ["arraything", "a.nother"], "type": "set", "value":"world"},
+        {"path": ["remove_me"], "type": "unset", "value": null}
+      ]
+    },
+    {
+      "_id":1,
+      "operations": [
+        {"path": ["arraything", "here it is"], "type": "truncatedArray", "value": 2}
+      ]
+    },
+    {
+      "_id":1,
+      "operations": [
+        {"path": ["nested", "bar", "0", "a"], "type": "set", "value":"b"}
+      ]
+    }
+  ]`, actual, "got: %s", actual)
+	require.JSONEq(t, `
+    {
+      "_id": 1,
+      "arraything": {"a.nother":"world","here it is":[1,2]},
+      "nested": {"bar":[{"a":"b"}]},
+      "nested.data": "hello"
+    }
+  `, db.FindOneJSON(t, "foo", 1))
 }

@@ -138,7 +138,7 @@ require (
 	github.com/xitongsys/parquet-go v1.6.2
 	github.com/xitongsys/parquet-go-source v0.0.0-20211228015320-b4f792c43cd0
 	github.com/youmark/pkcs8 v0.0.0-20240726163527-a2c0da244d78
-	go.mongodb.org/mongo-driver/v2 v2.0.0
+	go.mongodb.org/mongo-driver/v2 v2.1.0
 	go.nanomsg.org/mangos/v3 v3.4.2
 	go.opentelemetry.io/otel v1.34.0
 	go.opentelemetry.io/otel/exporters/jaeger v1.17.0

@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -117,6 +118,22 @@ Each message omitted by this plugin has the following metadata:
 			service.NewStringAnnotatedEnumField(fieldDocumentMode, map[string]string{
 				"update_lookup":       "In this mode insert, replace and update operations have the full document emitted and deletes only have the _id field populated. Documents updates lookup the full document. This corresponds to the updateLookup option, see the https://www.mongodb.com/docs/manual/changeStreams/#std-label-change-streams-updateLookup[^MongoDB documentation] for more information.",
 				"pre_and_post_images": "Uses pre and post image collection to emit the full documents for update and delete operations. To use and configure this mode see the setup steps in the https://www.mongodb.com/docs/manual/changeStreams/#change-streams-with-document-pre--and-post-images[^MongoDB documentation].",
+				"partial_update": `In this mode update operations only have a description of the update operation, which follows the following schema:
+      {
+        "_id": <document_id>,
+        "operations": [
+          # type == set means that the value was updated like so:
+          # root.foo."bar.baz" = "world"
+          {"path": ["foo", "bar.baz"], "type": "set", "value":"world"},
+          # type == unset means that the value was deleted like so:
+          # root.qux = deleted()
+          {"path": ["qux"], "type": "unset", "value": null},
+          # type == truncatedArray means that the array at that path was truncated to value number of elements
+          # root.array = this.array.slice(2)
+          {"path": ["array"], "type": "truncatedArray", "value": 2}
+        ]
+      }
+      `,
 			}).
 				Description("The mode in which to emit documents, specifically updates and deletes.").
 				Default("update_lookup").
@@ -198,9 +215,11 @@ func newMongoCDC(conf *service.ParsedConfig, res *service.Resources) (i service.
 	}
 	switch documentMode {
 	case "update_lookup":
-		cdc.usePreAndPostImages = false
+		cdc.docMode = documentModeUpdateLookup
 	case "pre_and_post_images":
-		cdc.usePreAndPostImages = true
+		cdc.docMode = documentModePreAndPostImage
+	case "partial_update":
+		cdc.docMode = documentModePartialUpdate
 	default:
 		return nil, fmt.Errorf("unknown document_mode value: %s", documentMode)
 	}
@@ -253,7 +272,10 @@ func newMongoCDC(conf *service.ParsedConfig, res *service.Resources) (i service.
 		SetTimeout(30 * time.Second).
 		SetServerSelectionTimeout(30 * time.Second).
 		ApplyURI(url).
-		SetAppName(appName)
+		SetAppName(appName).
+		SetBSONOptions(&options.BSONOptions{
+			DefaultDocumentM: true,
+		})
 
 	if username != "" && password != "" {
 		creds := options.Credential{
@@ -276,6 +298,14 @@ type mongoBatch struct {
 	ackFn     service.AckFunc
 }
 
+type documentMode int
+
+const (
+	documentModePreAndPostImage documentMode = iota
+	documentModeUpdateLookup
+	documentModePartialUpdate
+)
+
 type mongoCDC struct {
 	client      *mongo.Client
 	db          *mongo.Database
@@ -286,10 +316,10 @@ type mongoCDC struct {
 	readChan  chan mongoBatch
 	errorChan chan error
 
-	readBatchSize       int
-	streamMaxWait       time.Duration
-	usePreAndPostImages bool
-	marshalCanonical    bool
+	readBatchSize    int
+	streamMaxWait    time.Duration
+	docMode          documentMode
+	marshalCanonical bool
 
 	snapshotParallelism    int // if > 0 then enabled
 	snapshotSemaphore      *semaphore.Weighted
@@ -349,7 +379,7 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 	if r.Err() != nil {
 		return fmt.Errorf("unable to determine replication info (is your mongodb instance running as a replication set?): %w", r.Err())
 	}
-	var helloReply bson.D
+	var helloReply bson.M
 	if err := r.Decode(&helloReply); err != nil {
 		return fmt.Errorf("unable to decode replication info: %w", err)
 	}
@@ -370,12 +400,17 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 		opts := options.ChangeStream().
 			SetBatchSize(int32(m.readBatchSize)).
 			SetMaxAwaitTime(m.streamMaxWait)
-		if !m.usePreAndPostImages {
-			opts = opts.SetFullDocument(options.UpdateLookup)
-		} else {
+		switch m.docMode {
+		case documentModePreAndPostImage:
 			opts = opts.SetFullDocument(options.Required)
 			if version.Major() >= 6 {
 				opts = opts.SetFullDocumentBeforeChange(options.Required)
+			}
+		case documentModeUpdateLookup:
+			opts = opts.SetFullDocument(options.UpdateLookup)
+		case documentModePartialUpdate:
+			if version.Compare(semver.MustParse("6.1.0")) >= 0 {
+				opts = opts.SetShowExpandedEvents(true)
 			}
 		}
 		var skipSnapshot bool
@@ -444,11 +479,11 @@ func (m *mongoCDC) readSnapshot(ctx context.Context, coll *mongo.Collection, sna
 
 func getCollectionSize(ctx context.Context, collection *mongo.Collection) (int64, error) {
 	cmd := bson.M{"collStats": collection.Name()}
-	var result bson.D
+	var result bson.M
 	if err := collection.Database().RunCommand(ctx, cmd).Decode(&result); err != nil {
 		return 0, fmt.Errorf("error estimating collection size: %w", err)
 	}
-	size, err := bloblang.ValueAsInt64(bsonGetPath(result, "size"))
+	size, err := bloblang.ValueAsInt64(result["size"])
 	if err != nil {
 		return 0, fmt.Errorf("unable to extract collection size: %w", err)
 	}
@@ -475,22 +510,22 @@ func (m *mongoCDC) computeSplitPoints(ctx context.Context, coll *mongo.Collectio
 		{Key: "max", Value: bson.D{{Key: "_id", Value: bson.MaxKey{}}}},
 		{Key: "maxChunkSizeBytes", Value: chunkSize},
 	}
-	var result bson.D
+	var result bson.M
 	if err := m.db.RunCommand(ctx, command).Decode(&result); err != nil {
 		return nil, err
 	}
-	splitKeys, ok := bsonGetPath(result, "splitKeys").(bson.A)
+	splitKeys, ok := result["splitKeys"].(bson.A)
 	if !ok {
 		return nil, fmt.Errorf("unexpected splitVector result format: %s", result.String())
 	}
 	var prev any = bson.MinKey{}
 	ranges := [][2]any{}
 	for i := range splitKeys {
-		v, ok := splitKeys[i].(bson.D)
+		v, ok := splitKeys[i].(bson.M)
 		if !ok {
 			return nil, fmt.Errorf("unexpected splitVector range result format: %s", result.String())
 		}
-		id := bsonGetPath(v, "_id")
+		id := v["_id"]
 		ranges = append(ranges, [2]any{prev, id})
 		prev = id
 	}
@@ -515,7 +550,7 @@ func (m *mongoCDC) autoBuckets(ctx context.Context, coll *mongo.Collection) ([][
 	}
 	ranges := [][2]any{}
 	for cursor.Next(ctx) {
-		var bucket bson.D
+		var bucket bson.M
 		if err := cursor.Decode(&bucket); err != nil {
 			return nil, fmt.Errorf("unable to extract bucket: %w", err)
 		}
@@ -632,7 +667,79 @@ func (m *mongoCDC) readFromStream(ctx context.Context, cp *checkpoint.Capped[bso
 		}
 		var doc any
 		switch opType {
-		case "insert", "replace", "update":
+		case "update":
+			if m.docMode == documentModePartialUpdate {
+				key, ok := data["documentKey"].(bson.M)
+				if !ok {
+					return fmt.Errorf("missing document key in update, got: %s", data)
+				}
+				desc, ok := data["updateDescription"].(bson.M)
+				if !ok {
+					return fmt.Errorf("missing description in update, got: %s", data)
+				}
+				paths, _ := desc["disambiguatedPaths"].(bson.M)
+				if paths == nil {
+					paths = bson.M{}
+				}
+				normalizePath := func(path string) any {
+					if unambiguous, ok := paths[path]; ok {
+						return unambiguous
+					} else {
+						return strings.Split(path, ".")
+					}
+				}
+				ops := bson.A{}
+				updates, ok := desc["updatedFields"].(bson.M)
+				if !ok {
+					return fmt.Errorf("unexpected updatedFields in update operation: %s", data)
+				}
+				for k, v := range updates {
+					ops = append(ops, bson.M{
+						"path":  normalizePath(k),
+						"type":  "set",
+						"value": v,
+					})
+				}
+				removals, ok := desc["removedFields"].(bson.A)
+				if !ok {
+					return fmt.Errorf("unexpected removedFields in update operation: %s", data)
+				}
+				for _, path := range removals {
+					path, ok := path.(string)
+					if !ok {
+						return fmt.Errorf("unexpected removedFields element in update operation: %s", data)
+					}
+					ops = append(ops, bson.M{
+						"path":  normalizePath(path),
+						"type":  "unset",
+						"value": nil,
+					})
+				}
+				truncs, ok := desc["truncatedArrays"].(bson.A)
+				if !ok {
+					return fmt.Errorf("unexpected truncatedArrays in update operation: %s", data)
+				}
+				for _, truncated := range truncs {
+					truncated, ok := truncated.(bson.M)
+					if !ok {
+						return fmt.Errorf("unexpected truncatedArrays element in update operation: %s", data)
+					}
+					path, ok := truncated["field"].(string)
+					if !ok {
+						return fmt.Errorf("unexpected truncatedArrays field in update operation: %s", data)
+					}
+					ops = append(ops, bson.M{
+						"path":  normalizePath(path),
+						"type":  "truncatedArray",
+						"value": truncated["newSize"],
+					})
+				}
+				key["operations"] = ops
+				doc = key
+				break
+			}
+			fallthrough
+		case "insert", "replace":
 			afterDoc, afterOk := data["fullDocument"]
 			if !afterOk {
 				return fmt.Errorf("%s event did not have fullDocument", opType)
@@ -650,11 +757,7 @@ func (m *mongoCDC) readFromStream(ctx context.Context, cp *checkpoint.Capped[bso
 			// Otherwise skip the other kinds of events
 			continue
 		}
-		ns, ok := data["ns"].(bson.D)
-		if !ok {
-			return fmt.Errorf("invalid ns data: %T", data["ns"])
-		}
-		coll, ok := bsonGetPath(ns, "coll").(string)
+		coll, ok := bsonGetPath(data, "ns", "coll").(string)
 		if !ok {
 			return fmt.Errorf("unable to extract collection from change stream, got: %s", data)
 		}
