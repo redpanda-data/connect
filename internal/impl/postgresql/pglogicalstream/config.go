@@ -32,8 +32,6 @@ type Config struct {
 	TemporaryReplicationSlot bool
 	// StreamOldData is whether to stream all existing data
 	StreamOldData bool
-	// SnapshotMemorySafetyFactor is the memory safety factor for streaming snapshot
-	SnapshotMemorySafetyFactor float64
 	// BatchSize is the batch size for streaming
 	BatchSize int
 	// If true, include BEGIN and COMMIT messages in the stream
@@ -41,9 +39,9 @@ type Config struct {
 
 	Logger *service.Logger
 
-	PgStandbyTimeout          time.Duration
-	WalMonitorInterval        time.Duration
-	MaxParallelSnapshotTables int
+	PgStandbyTimeout   time.Duration
+	WalMonitorInterval time.Duration
+	MaxSnapshotWorkers int
 	// The value to use for unchanged toast columns
 	UnchangedToastValue any
 	// The interval to send logical messages

@@ -38,6 +38,9 @@ type (
 		Release(T)
 		// Size returns the number of items the pool has *created* (which may be all in use).
 		Size() int
+		// Cap is the max number of items the pool will ever create.
+		Cap() int
+		// Reset deletes all items currently in the pool and resets the allocated count.
 		Reset()
 	}
 	cappedImpl[T any] struct {
@@ -106,6 +109,10 @@ func (p *cappedImpl[T]) Release(item T) {
 
 func (p *cappedImpl[T]) Size() int {
 	return int(p.allocated.Load())
+}
+
+func (p *cappedImpl[T]) Cap() int {
+	return cap(p.queued)
 }
 
 func (p *cappedImpl[T]) Reset() {
