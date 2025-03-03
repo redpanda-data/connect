@@ -177,9 +177,8 @@ sampled_pages AS (
         LEAST(100.0, GREATEST(0.0001, 100.0 * ($REQUESTED_SAMPLES) / GREATEST(page_count, 1)))
       FROM
         table_stats) )
-),
+)
 
-selected_rows AS (
   SELECT
     $PRIMARY_KEY_COLUMNS
   FROM
@@ -190,12 +189,6 @@ selected_rows AS (
     t.ctid = sp.ctid 
   ORDER BY
     $PRIMARY_KEY_COLUMNS
-)
-
-SELECT
-  *
-FROM
-  selected_rows
 `
 
 	pkColumns = slices.Clone(pkColumns)
