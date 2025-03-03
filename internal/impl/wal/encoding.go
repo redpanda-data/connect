@@ -77,16 +77,23 @@ func appendMessageV0(buffer []byte, msg *service.Message) ([]byte, error) {
 	return buffer, nil
 }
 
-func readBatch(b []byte) (service.MessageBatch, []byte, error) {
+func readBatch(b []byte) (service.MessageBatch, error) {
 	if len(b) < 4 {
-		return nil, nil, errFailedParse
+		return nil, errFailedParse
 	}
 	ver := binary.LittleEndian.Uint32(b)
 	// Only supported version thus far.
 	if ver != 0 {
-		return nil, nil, errFailedParse
+		return nil, errFailedParse
 	}
-	return readBatchV0(b)
+	mb, b, err := readBatchV0(b)
+	if err != nil {
+		return nil, err
+	}
+	if len(b) != 0 {
+		return nil, errors.New("extra left over bytes when reading batch")
+	}
+	return mb, nil
 }
 
 func readBatchV0(b []byte) (service.MessageBatch, []byte, error) {
