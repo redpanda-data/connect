@@ -565,16 +565,16 @@ func (s *Stream) processSnapshot(ctx context.Context, snapshotter *snapshotter) 
 			return fmt.Errorf("failed to create sample keyspace: %w", err)
 		}
 
-		var prev []any
-		ranges := [][2][]any{} // what a type
+		var prev primaryKey
+		ranges := [][2]primaryKey{}
 		// We have a sorted key space, sample every N keys to get a uniform distibution.
 		chunkSize := len(splits) / s.maxSnapshotWorkers
 		for i := chunkSize; i < len(splits); i += chunkSize {
 			pk := splits[i]
-			ranges = append(ranges, [2][]any{prev, pk})
+			ranges = append(ranges, [2]primaryKey{prev, pk})
 			prev = pk
 		}
-		ranges = append(ranges, [2][]any{prev, nil})
+		ranges = append(ranges, [2]primaryKey{prev, nil})
 
 		if len(ranges) > 1 {
 			s.logger.Debugf(
@@ -615,7 +615,7 @@ func (s *Stream) processSnapshot(ctx context.Context, snapshotter *snapshotter) 
 	return nil
 }
 
-func (s *Stream) scanTableRange(ctx context.Context, snapshotter *snapshotter, table TableFQN, minExclusive, maxInclusive []any, primaryKeyIndex []string) error {
+func (s *Stream) scanTableRange(ctx context.Context, snapshotter *snapshotter, table TableFQN, minExclusive, maxInclusive primaryKey, primaryKeyIndex []string) error {
 	txn, err := snapshotter.AcquireReaderTxn(ctx)
 	if err != nil {
 		return err
@@ -640,7 +640,7 @@ func (s *Stream) scanTableRange(ctx context.Context, snapshotter *snapshotter, t
 		}
 
 		if minExclusive == nil {
-			minExclusive = make([]any, len(primaryKeyIndex))
+			minExclusive = make(primaryKey, len(primaryKeyIndex))
 		}
 
 		queryDuration := time.Since(queryStart)

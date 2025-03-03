@@ -142,12 +142,14 @@ func (s *snapshotter) closeConn() error {
 	return nil
 }
 
+type primaryKey []any
+
 func (s *snapshotTxn) randomlySampleKeyspace(
 	ctx context.Context,
 	table TableFQN,
 	pkColumns []string,
 	numSamples int,
-) (splits [][]any, err error) {
+) (splits []primaryKey, err error) {
 	query := `
 WITH
 
@@ -227,7 +229,7 @@ FROM
 		if err != nil {
 			return nil, fmt.Errorf("unable to scan args for tablesample query: %w", err)
 		}
-		var data = make([]any, len(valueGetters))
+		var data = make(primaryKey, len(valueGetters))
 		for i, getter := range valueGetters {
 			var val any
 			if val, err = getter(scanArgs[i]); err != nil {
@@ -256,7 +258,7 @@ func (t *tuple) ToSql() (sql string, args []any, err error) {
 
 var _ squirrel.Sqlizer = &tuple{}
 
-func (s *snapshotTxn) querySnapshotData(ctx context.Context, table TableFQN, minExclusive []any, maxInclusive []any, pkColumns []string, limit int) (rows *sql.Rows, err error) {
+func (s *snapshotTxn) querySnapshotData(ctx context.Context, table TableFQN, minExclusive primaryKey, maxInclusive primaryKey, pkColumns []string, limit int) (rows *sql.Rows, err error) {
 	pred := squirrel.And{}
 	pkAsTuple := "(" + strings.Join(pkColumns, ", ") + ")"
 	if minExclusive != nil {
