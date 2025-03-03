@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -86,12 +87,13 @@ func readBatch(b []byte) (service.MessageBatch, error) {
 	if ver != 0 {
 		return nil, errFailedParse
 	}
+	b = b[4:]
 	mb, b, err := readBatchV0(b)
 	if err != nil {
 		return nil, err
 	}
 	if len(b) != 0 {
-		return nil, errors.New("extra left over bytes when reading batch")
+		return nil, fmt.Errorf("extra left over bytes when reading batch: %d", len(b))
 	}
 	return mb, nil
 }
@@ -101,6 +103,7 @@ func readBatchV0(b []byte) (service.MessageBatch, []byte, error) {
 		return nil, nil, errFailedParse
 	}
 	parts := binary.LittleEndian.Uint32(b)
+	b = b[4:]
 	batch := make(service.MessageBatch, parts)
 	var err error
 	for i := uint32(0); i < parts; i++ {
@@ -120,7 +123,7 @@ func readMessageV0(b []byte) (*service.Message, []byte, error) {
 	if len(b) < int(contentLen+4) {
 		return nil, nil, errFailedParse
 	}
-	metaBytes := b[4:contentLen]
+	metaBytes := b[4 : 4+contentLen]
 	b = b[contentLen+4:]
 	// Content bytes.
 	if len(b) < 4 {
@@ -130,7 +133,7 @@ func readMessageV0(b []byte) (*service.Message, []byte, error) {
 	if len(b) < int(contentLen+4) {
 		return nil, nil, errFailedParse
 	}
-	contentBytes := b[4:contentLen]
+	contentBytes := b[4 : 4+contentLen]
 	b = b[contentLen+4:]
 	msg := service.NewMessage(contentBytes)
 	// Decode metadata

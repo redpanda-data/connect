@@ -21,7 +21,7 @@
 // SOFTWARE.
 //
 // This singular file is a fork of https://github.com/aarthikrao/wal, which is simplified
-// modified specifically for this package.
+// and modified specifically for this package.
 
 package wal
 
@@ -38,7 +38,9 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
@@ -52,9 +54,10 @@ type file interface {
 type WALOptions struct {
 	// LogDir is where the wal logs will be stored
 	LogDir string
-
 	// Maximum size in bytes for each file
 	MaxLogSize int64
+	// Maximum age in time for each file
+	MaxLogAge time.Duration
 
 	Log *service.Logger
 }
@@ -62,9 +65,10 @@ type WALOptions struct {
 type SegmentID int
 
 const (
-	lengthBufferSize             = 4
-	checkSumBufferSize           = 4
-	InvalidSegmentID   SegmentID = -1
+	lengthBufferSize   = 4
+	checkSumBufferSize = 4
+	// InvalidSegmentID is an segment ID that will never be used
+	InvalidSegmentID SegmentID = -1
 )
 
 var (
@@ -77,11 +81,13 @@ var (
 //
 // This struct is not thread safe and requires external synchronization.
 type WriteAheadLog struct {
-	logFileName        string
-	maxLogSize         int64
-	currentSegment     file
-	currentSegmentSize int64
-	currentSegmentID   SegmentID
+	logFileName            string
+	maxSegmentSize         int64
+	maxSegmentAge          time.Duration
+	currentSegment         file
+	currentSegmentSize     int64
+	currentSegmentDeadline time.Time
+	currentSegmentID       SegmentID
 
 	closedSegmentCount int
 
@@ -93,12 +99,25 @@ type WriteAheadLog struct {
 
 // NewWriteAheadLog creates a new instance of the WriteAheadLog with the provided options.
 func NewWriteAheadLog(opts *WALOptions) (*WriteAheadLog, error) {
-	walLogFilePrefix := filepath.Join(opts.LogDir, "wal")
+	if opts.MaxLogAge < time.Millisecond {
+		return nil, fmt.Errorf(
+			"unable to create WAL log segments with shorter time period than 1 millisecond: %v",
+			opts.MaxLogAge,
+		)
+	}
+	if opts.MaxLogSize < humanize.KiByte {
+		return nil, fmt.Errorf(
+			"unable to create WAL log segments smaller than 1KiB: %s",
+			humanize.Bytes(uint64(opts.MaxLogSize)),
+		)
+	}
 
+	walLogFilePrefix := filepath.Join(opts.LogDir, "wal")
 	wal := &WriteAheadLog{
-		logFileName: walLogFilePrefix,
-		maxLogSize:  opts.MaxLogSize,
-		log:         opts.Log,
+		logFileName:    walLogFilePrefix,
+		maxSegmentSize: opts.MaxLogSize,
+		maxSegmentAge:  opts.MaxLogAge,
+		log:            opts.Log,
 	}
 	err := wal.openExistingOrCreateNew(opts.LogDir)
 	if err != nil {
@@ -122,7 +141,8 @@ func (wal *WriteAheadLog) openExistingOrCreateNew(dirPath string) error {
 
 	if len(logFiles) == 0 {
 		// Create the first log file
-		firstLogFileName := wal.logFileName + ".0"
+		now := time.Now()
+		firstLogFileName := fmt.Sprintf("%s.%d.%d", wal.logFileName, 0, now.UnixMilli())
 		file, err := os.OpenFile(firstLogFileName, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 		if err != nil {
 			return err
@@ -133,6 +153,7 @@ func (wal *WriteAheadLog) openExistingOrCreateNew(dirPath string) error {
 		wal.currentSegmentSize = 0
 		wal.closedSegmentCount = 0
 		wal.currentSegmentID = 0
+		wal.currentSegmentDeadline = now.Add(wal.maxSegmentAge)
 	} else {
 		// open the last file
 		fileName := logFiles[len(logFiles)-1]
@@ -149,8 +170,10 @@ func (wal *WriteAheadLog) openExistingOrCreateNew(dirPath string) error {
 		wal.bufWriter = bufio.NewWriter(file)
 		wal.currentSegmentSize = fi.Size()
 		wal.closedSegmentCount = len(logFiles) - 1
-		wal.currentSegmentID = wal.parseSegmentID(fileName)
-		wal.log.Tracef("opened wal latestSegment=%d, closedSegmentCount=%d",
+		wal.currentSegmentID, wal.currentSegmentDeadline, _ = wal.parseSegmentName(fileName)
+		wal.currentSegmentDeadline = wal.currentSegmentDeadline.Add(wal.maxSegmentAge)
+		wal.log.Tracef(
+			"opened wal latestSegment=%d, closedSegmentCount=%d",
 			fileName,
 			wal.closedSegmentCount,
 		)
@@ -162,7 +185,7 @@ func (wal *WriteAheadLog) openExistingOrCreateNew(dirPath string) error {
 func (wal *WriteAheadLog) Append(data []byte) (SegmentID, error) {
 	entrySize := lengthBufferSize + checkSumBufferSize + len(data)
 
-	if wal.currentSegmentSize+int64(entrySize) > wal.maxLogSize {
+	if wal.currentSegmentSize+int64(entrySize) > wal.maxSegmentSize || time.Now().After(wal.currentSegmentDeadline) {
 		// Flushing all the in-memory changes to disk, and rotating the log
 		if err := wal.Sync(); err != nil {
 			return 0, err
@@ -226,7 +249,8 @@ func (wal *WriteAheadLog) rotateLog() error {
 		return err
 	}
 
-	newFileName := fmt.Sprintf("%s.%d", wal.logFileName, wal.currentSegmentID+1)
+	now := time.Now()
+	newFileName := fmt.Sprintf("%s.%d.%d", wal.logFileName, wal.currentSegmentID+1, now.UnixMilli())
 	file, err := os.OpenFile(newFileName, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
 		return err
@@ -237,6 +261,7 @@ func (wal *WriteAheadLog) rotateLog() error {
 	wal.currentSegment = file
 	wal.bufWriter.Reset(file)
 	wal.currentSegmentSize = 0
+	wal.currentSegmentDeadline = now.Add(wal.maxSegmentAge)
 	return nil
 }
 
@@ -245,20 +270,33 @@ func (wal *WriteAheadLog) DeleteSegment(id SegmentID) error {
 	if id == wal.currentSegmentID {
 		return ErrCannotDeleteCurrentSegment
 	}
-	fileName := fmt.Sprintf("%s.%d", wal.logFileName, id)
-	err := os.Remove(fileName)
+	fileName, err := filepath.Glob(fmt.Sprintf("%s.%d.*", wal.logFileName, id))
+	if err == nil && len(fileName) == 1 {
+		err = os.Remove(fileName[0])
+	}
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
+	}
+	if err == nil && len(fileName) > 1 {
+		return fmt.Errorf("cannot delete multiple segments with the same ID: %s", strings.Join(fileName, ", "))
 	}
 	return err
 }
 
-func (wal *WriteAheadLog) parseSegmentID(filename string) SegmentID {
-	id, err := strconv.Atoi(strings.TrimPrefix(filename, wal.logFileName+"."))
-	if err != nil {
-		return InvalidSegmentID
+func (wal *WriteAheadLog) parseSegmentName(filename string) (id SegmentID, start time.Time, ok bool) {
+	splits := strings.SplitN(filepath.Base(filename), ".", 3)
+	if len(splits) != 3 {
+		return id, start, false
 	}
-	return SegmentID(id)
+	rawID, err := strconv.Atoi(splits[1])
+	if err != nil {
+		return id, start, false
+	}
+	unixMilli, err := strconv.Atoi(splits[2])
+	if err != nil {
+		return id, start, false
+	}
+	return SegmentID(rawID), time.UnixMilli(int64(unixMilli)), true
 }
 
 func (wal *WriteAheadLog) loadAllSegmentsFromDisk() ([]string, error) {
@@ -267,11 +305,13 @@ func (wal *WriteAheadLog) loadAllSegmentsFromDisk() ([]string, error) {
 		return nil, err
 	}
 	slices.SortFunc(logFiles, func(a, b string) int {
-		return cmp.Compare(wal.parseSegmentID(a), wal.parseSegmentID(b))
+		aID, _, _ := wal.parseSegmentName(a)
+		bID, _, _ := wal.parseSegmentName(b)
+		return cmp.Compare(aID, bID)
 	})
 	if len(logFiles) != 0 {
-		id := wal.parseSegmentID(logFiles[0])
-		if id <= InvalidSegmentID {
+		_, _, ok := wal.parseSegmentName(logFiles[0])
+		if !ok {
 			return nil, fmt.Errorf("invalid segment file name: %s", logFiles[0])
 		}
 	}
@@ -286,7 +326,7 @@ func (wal *WriteAheadLog) Replay(f func(SegmentID, []byte) error) error {
 	}
 	var bufReader bufio.Reader
 	for _, logFile := range logFiles {
-		segmentID := wal.parseSegmentID(logFile)
+		segmentID, _, _ := wal.parseSegmentName(logFile)
 		file, err := os.Open(logFile)
 		if err != nil {
 			return err
