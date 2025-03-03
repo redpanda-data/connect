@@ -27,21 +27,19 @@ package wal
 
 import (
 	"bufio"
+	"cmp"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"hash/crc32"
 	"io"
-	"math"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
-	"sync"
-	"time"
 
-	"go.uber.org/zap"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 type file interface {
@@ -50,6 +48,7 @@ type file interface {
 	Sync() error
 }
 
+// WALOptions are options for the WAL
 type WALOptions struct {
 	// LogDir is where the wal logs will be stored
 	LogDir string
@@ -57,244 +56,120 @@ type WALOptions struct {
 	// Maximum size in bytes for each file
 	MaxLogSize int64
 
-	// The entire wal is broken down into smaller segments.
-	// This will be helpful during log rotation and management
-	// maximum number of log segments
-	MaxSegments int
-
-	MaxWaitBeforeSync time.Duration
-	SyncMaxBytes      int64
-
-	Log *zap.Logger
+	Log *service.Logger
 }
 
+type SegmentID int
+
 const (
-	lengthBufferSize   = 4
-	checkSumBufferSize = 4
+	lengthBufferSize             = 4
+	checkSumBufferSize           = 4
+	InvalidSegmentID   SegmentID = -1
+)
+
+var (
+	ErrCannotDeleteCurrentSegment = errors.New("cannot delete current segment")
 )
 
 // A Write Ahead Log (WAL) is a data structure used to record changes to a database or
 // any persistent storage system in a sequential and durable manner. This allows for
 // crash recovery and data integrity.
+//
+// This struct is not thread safe and requires external synchronization.
 type WriteAheadLog struct {
-	logFileName  string
-	file         file
-	mu           sync.Mutex
-	maxLogSize   int64
-	logSize      int64
-	segmentCount int
+	logFileName        string
+	maxLogSize         int64
+	currentSegment     file
+	currentSegmentSize int64
+	currentSegmentID   SegmentID
 
-	maxSegments      int
-	currentSegmentID int
+	closedSegmentCount int
 
-	log *zap.Logger
+	log *service.Logger
 
-	curOffset int64
 	bufWriter *bufio.Writer
 	sizeBuf   [lengthBufferSize]byte
-
-	// syncTimer is used to wait for either the specified time interval
-	// or until a syncMaxBytes amount of data has been accumulated before Syncing to the disk
-	syncTimer         *time.Ticker
-	maxWaitBeforeSync time.Duration // TODO: Yet to implement
-	syncMaxBytes      int64
 }
 
 // NewWriteAheadLog creates a new instance of the WriteAheadLog with the provided options.
 func NewWriteAheadLog(opts *WALOptions) (*WriteAheadLog, error) {
-	walLogFilePrefix := opts.LogDir + "wal"
+	walLogFilePrefix := filepath.Join(opts.LogDir, "wal")
 
 	wal := &WriteAheadLog{
-		logFileName:       walLogFilePrefix,
-		maxLogSize:        opts.MaxLogSize,
-		maxSegments:       opts.MaxSegments,
-		log:               opts.Log,
-		syncMaxBytes:      opts.SyncMaxBytes,
-		syncTimer:         time.NewTicker(opts.MaxWaitBeforeSync),
-		maxWaitBeforeSync: opts.MaxWaitBeforeSync,
+		logFileName: walLogFilePrefix,
+		maxLogSize:  opts.MaxLogSize,
+		log:         opts.Log,
 	}
 	err := wal.openExistingOrCreateNew(opts.LogDir)
 	if err != nil {
 		return nil, err
 	}
 
-	go wal.keepSyncing()
-
 	return wal, nil
 }
 
-// isDirectoryEmpty returns true if the directory, false otherwise.
-func isDirectoryEmpty(dirPath string) (bool, error) {
-	// Open the directory
-	dir, err := os.Open(dirPath)
-	if err != nil {
-		return false, err
-	}
-	defer dir.Close()
-
-	// Read the directory contents
-	fileList, err := dir.ReadDir(1) // Read the first entry
-	if err != nil && err != io.EOF {
-		return false, err
-	}
-
-	// If the list of files is empty, the directory is empty
-	return len(fileList) == 0, nil
-}
-
-func ensureDir(dirName string) error {
-	err := os.Mkdir(dirName, 0777)
-	if err == nil {
-		return nil
-	}
-	if os.IsExist(err) {
-		// check that the existing path is a directory
-		info, err := os.Stat(dirName)
-		if err != nil {
-			return err
-		}
-		if !info.IsDir() {
-			return errors.New("path exists but is not a directory")
-		}
-		return nil
-	}
-	return err
-}
-
 func (wal *WriteAheadLog) openExistingOrCreateNew(dirPath string) error {
-	// Create the directory if it doesnt exist
-	err := ensureDir(dirPath)
+	err := os.MkdirAll(dirPath, 0777)
 	if err != nil {
 		return err
 	}
 
-	empty, err := isDirectoryEmpty(dirPath)
+	// Fetch all the file names in the path and sort them
+	logFiles, err := wal.loadAllSegmentsFromDisk()
 	if err != nil {
 		return err
 	}
 
-	if empty {
-
+	if len(logFiles) == 0 {
 		// Create the first log file
-		firstLogFileName := wal.logFileName + ".0.0" // prefix + . {segmentID} + . {starting_offset}
-		file, err := os.OpenFile(firstLogFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+		firstLogFileName := wal.logFileName + ".0"
+		file, err := os.OpenFile(firstLogFileName, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 		if err != nil {
 			return err
 		}
-
 		// Set default values since this is the first log we are opening
-		wal.file = file
+		wal.currentSegment = file
 		wal.bufWriter = bufio.NewWriter(file)
-		wal.logSize = 0 // since fi.Size() is 0 for newly created file
-		wal.segmentCount = 0
+		wal.currentSegmentSize = 0
+		wal.closedSegmentCount = 0
 		wal.currentSegmentID = 0
-		wal.curOffset = -1
-
 	} else {
-		// Fetch all the file names in the path and sort them
-		logFiles, err := filepath.Glob(wal.logFileName + "*")
-		if err != nil {
-			return err
-		}
-		sort.Strings(logFiles)
-
 		// open the last file
 		fileName := logFiles[len(logFiles)-1]
 		file, err := os.OpenFile(fileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 		if err != nil {
 			return err
 		}
-
 		fi, err := file.Stat()
 		if err != nil {
 			return err
 		}
-
-		// Find the current segment count and the latest offset from file name
-		s := strings.Split(fileName, ".")
-		lastSegment, err := strconv.Atoi(s[1])
-		if err != nil {
-			return err
-		}
-
-		latestOffset, err := strconv.Atoi(s[2])
-		if err != nil {
-			return err
-		}
-		offset := int64(latestOffset)
-
-		// Go to the end of file and calculate the offset
-		file.Seek(0, io.SeekStart)
-		bufReader := bufio.NewReader(file)
-		n, err := wal.seekOffset(math.MaxInt, offset, *bufReader)
-		if err != nil && err != io.EOF {
-			return err
-		}
-		offset += n
-
-		wal.file = file
-		file.Seek(0, io.SeekEnd)
+		wal.currentSegment = file
+		wal.currentSegment.Seek(0, io.SeekEnd)
 		wal.bufWriter = bufio.NewWriter(file)
-		wal.logSize = fi.Size()
-		wal.currentSegmentID = lastSegment
-		wal.curOffset = offset
-		wal.segmentCount = len(logFiles) - 1
-
-		wal.log.Info("appending wal",
-			zap.String("file", fileName),
-			zap.Int64("latestOffset", wal.curOffset),
-			zap.Int("latestSegment", lastSegment),
-			zap.Int("segmentCount", wal.segmentCount),
+		wal.currentSegmentSize = fi.Size()
+		wal.closedSegmentCount = len(logFiles) - 1
+		wal.currentSegmentID = wal.parseSegmentID(fileName)
+		wal.log.Tracef("opened wal latestSegment=%d, closedSegmentCount=%d",
+			fileName,
+			wal.closedSegmentCount,
 		)
-
 	}
-
 	return nil
 }
 
-// keepSyncing periodically triggers a synchronous write to the disk to ensure data durability.
-func (wal *WriteAheadLog) keepSyncing() {
-	for {
-		<-wal.syncTimer.C
-
-		wal.mu.Lock()
-		err := wal.Sync()
-		wal.mu.Unlock()
-
-		if err != nil {
-			wal.log.Error("Error while performing sync", zap.Error(err))
-		}
-	}
-}
-
-// resetTimer resets the synchronization timer.
-func (wal *WriteAheadLog) resetTimer() {
-	wal.syncTimer.Reset(wal.maxWaitBeforeSync)
-}
-
-// Write appends the provided data to the log, ensuring log rotation and syncing if necessary.
-func (wal *WriteAheadLog) Write(data []byte) (int64, error) {
-	wal.mu.Lock()
-	defer wal.mu.Unlock()
-
+// Append appends the provided data to the log, ensuring log rotation and syncing if necessary.
+func (wal *WriteAheadLog) Append(data []byte) (SegmentID, error) {
 	entrySize := lengthBufferSize + checkSumBufferSize + len(data)
 
-	if wal.logSize+int64(entrySize) > wal.maxLogSize {
+	if wal.currentSegmentSize+int64(entrySize) > wal.maxLogSize {
 		// Flushing all the in-memory changes to disk, and rotating the log
 		if err := wal.Sync(); err != nil {
 			return 0, err
 		}
-
 		if err := wal.rotateLog(); err != nil {
 			return 0, err
 		}
-
-		wal.resetTimer()
-	}
-
-	_, err := wal.file.Seek(0, io.SeekEnd)
-	if err != nil {
-		return 0, err
 	}
 
 	// Write the size prefix to the buffer
@@ -315,31 +190,24 @@ func (wal *WriteAheadLog) Write(data []byte) (int64, error) {
 		return 0, err
 	}
 
-	wal.logSize += int64(entrySize)
-	wal.curOffset++
-	return wal.curOffset, nil
+	wal.currentSegmentSize += int64(entrySize)
+	return wal.currentSegmentID, nil
 }
 
 // Close closes the underneath storage file, it flushes data remaining in the memory buffer
 // and file systems in-memory copy of recently written data to file to ensure persistent commit of the log
 func (wal *WriteAheadLog) Close() error {
-	wal.mu.Lock()
-	defer wal.mu.Unlock()
-
 	// Flush all data to disk
 	if err := wal.Sync(); err != nil {
 		return err
 	}
 
-	return wal.file.Close()
+	return wal.currentSegment.Close()
 }
 
 // GetOffset returns the current log offset.
-func (wal *WriteAheadLog) GetOffset() int64 {
-	wal.mu.Lock()
-	defer wal.mu.Unlock()
-
-	return wal.curOffset
+func (wal *WriteAheadLog) CurrentSegment() SegmentID {
+	return wal.currentSegmentID
 }
 
 // Sync writes all the data to the disk ensuring data durability.
@@ -349,122 +217,82 @@ func (wal *WriteAheadLog) Sync() error {
 	if err != nil {
 		return err
 	}
-	return wal.file.Sync()
+	return wal.currentSegment.Sync()
 }
 
 // rotateLog closes the current file, opens a new one.
-// It also cleans up the oldest log files if the number of log files are greater than maxSegments
 func (wal *WriteAheadLog) rotateLog() error {
-	if err := wal.file.Close(); err != nil {
+	if err := wal.currentSegment.Close(); err != nil {
 		return err
 	}
 
-	if wal.segmentCount >= wal.maxSegments {
-		if err := wal.deleteOldestSegment(); err != nil {
-			return err
-		}
-
+	newFileName := fmt.Sprintf("%s.%d", wal.logFileName, wal.currentSegmentID+1)
+	file, err := os.OpenFile(newFileName, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+	if err != nil {
+		return err
 	}
 	wal.currentSegmentID++
-	wal.segmentCount++
+	wal.closedSegmentCount++
 
-	newFileName := fmt.Sprintf("%s.%d.%d", wal.logFileName, wal.currentSegmentID, wal.curOffset)
-
-	file, err := os.OpenFile(newFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	if err != nil {
-		return err
-	}
-
-	wal.file = file
+	wal.currentSegment = file
 	wal.bufWriter.Reset(file)
-	wal.logSize = 0
+	wal.currentSegmentSize = 0
 	return nil
 }
 
-// deleteOldestSegment removes the oldest log file if the number of log files exceeds the limit.
-func (wal *WriteAheadLog) deleteOldestSegment() error {
-	oldestSegment := fmt.Sprintf("%s.%d.*", wal.logFileName, wal.currentSegmentID-wal.maxSegments)
+// DeleteSegment deletes an old closed segment.
+func (wal *WriteAheadLog) DeleteSegment(id SegmentID) error {
+	if id == wal.currentSegmentID {
+		return ErrCannotDeleteCurrentSegment
+	}
+	fileName := fmt.Sprintf("%s.%d", wal.logFileName, id)
+	err := os.Remove(fileName)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return err
+}
 
-	files, err := filepath.Glob(oldestSegment)
+func (wal *WriteAheadLog) parseSegmentID(filename string) SegmentID {
+	id, err := strconv.Atoi(strings.TrimPrefix(filename, wal.logFileName+"."))
 	if err != nil {
-		return err
+		return InvalidSegmentID
 	}
-
-	// We will have only one file to delete but still ...
-	for _, f := range files {
-		wal.log.Info("Removing wal file", zap.String("segment", f))
-		if err := os.Remove(f); err != nil {
-			return err
-		}
-
-		// Update the segment count
-		wal.segmentCount--
-	}
-
-	return nil
+	return SegmentID(id)
 }
 
-// findStartingLogFile searches for the starting log file during replay.
-func (wal *WriteAheadLog) findStartingLogFile(offset int64, files []string) (i int, previousOffset int64, err error) {
-	i = -1
-	for index, file := range files {
-		parts := strings.Split(file, ".")
-		startingOffsetStr := parts[len(parts)-1]
-		startingOffset, err := strconv.ParseInt(startingOffsetStr, 10, 64)
-		if err != nil {
-			return -1, -1, err
-		}
-		if previousOffset <= offset && offset <= startingOffset {
-			return index, previousOffset, nil
-		}
-		previousOffset = startingOffset
-	}
-	return -1, -1, errors.New("offset doesn't exsist")
-}
-
-// seekOffset seeks to a specific offset in the log during replay.
-func (wal *WriteAheadLog) seekOffset(offset int64, startingOffset int64, file bufio.Reader) (n int64, err error) {
-	var readBytes []byte
-	for startingOffset < offset {
-		readBytes, err = file.Peek(lengthBufferSize)
-		if err != nil {
-			break
-		}
-		dataSize := binary.LittleEndian.Uint32(readBytes)
-		_, err = file.Discard(lengthBufferSize + int(dataSize))
-		if err != nil {
-			break
-		}
-		startingOffset++ // Check logic
-		n++
-	}
-	return n, err
-}
-
-// Replay replays log entries starting from the specified offset, invoking the provided callback.
-func (wal *WriteAheadLog) Replay(offset int64, f func([]byte) error) error {
+func (wal *WriteAheadLog) loadAllSegmentsFromDisk() ([]string, error) {
 	logFiles, err := filepath.Glob(wal.logFileName + "*")
 	if err != nil {
-		return err
+		return nil, err
 	}
-	sort.Strings(logFiles)
-	index, startingOffset, err := wal.findStartingLogFile(offset, logFiles)
+	slices.SortFunc(logFiles, func(a, b string) int {
+		return cmp.Compare(wal.parseSegmentID(a), wal.parseSegmentID(b))
+	})
+	if len(logFiles) != 0 {
+		id := wal.parseSegmentID(logFiles[0])
+		if id <= InvalidSegmentID {
+			return nil, fmt.Errorf("invalid segment file name: %s", logFiles[0])
+		}
+	}
+	return logFiles, nil
+}
+
+// Replay replays log entries starting from the start of the log, invoking the provided callback.
+func (wal *WriteAheadLog) Replay(f func(SegmentID, []byte) error) error {
+	logFiles, err := wal.loadAllSegmentsFromDisk()
 	if err != nil {
 		return err
 	}
 	var bufReader bufio.Reader
-	for i, logFile := range logFiles[index:] {
+	for _, logFile := range logFiles {
+		segmentID := wal.parseSegmentID(logFile)
 		file, err := os.Open(logFile)
 		if err != nil {
 			return err
 		}
 		bufReader.Reset(file)
-		if i == 0 {
-			if _, err = wal.seekOffset(offset, startingOffset, bufReader); err != nil {
-				return err
-			}
-		}
-		err = wal.iterateFile(bufReader, f)
+		err = wal.iterateFile(bufReader, func(b []byte) error { return f(segmentID, b) })
 		if err != nil {
 			file.Close()
 			return err
@@ -480,7 +308,6 @@ func (wal *WriteAheadLog) iterateFile(bufReader bufio.Reader, callback func([]by
 	var readBytes []byte
 	var err error
 	for err == nil {
-
 		readBytes, err = bufReader.Peek(lengthBufferSize)
 		if err != nil {
 			break
