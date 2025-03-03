@@ -27,6 +27,7 @@ All notable changes to this project will be documented in this file.
 - Fixed an issue where `mysql_cdc` would not work with timestamps without the `parseTime=true` DSN parameter. (@rockwotj)
 - Fixed an issue where timestamps at extreme year bounds (i.e. year 0 or year 9999) would be encoded incorrectly in `snowflake_streaming`. (@rockwotj)
 - The `aws_s3` input now drops SQS notifications and emits a warning log message for files which have been deleted before Connect was able to read them. (@mihaitodor)
+- Fixed a bug in `snowflake_streaming` where string/bytes values that are the min or max value for a column in a batch and were over 32 characters could be corrupted if the write was retried. (@rockwotj)
 
 ### Changed
 
