@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"time"
 	"unicode/utf8"
+	"unsafe"
 
 	"github.com/Jeffail/gabs/v2"
 	"github.com/parquet-go/parquet-go"
@@ -251,9 +252,26 @@ func (c binaryConverter) ValidateAndConvert(stats *statsBuffer, val any, buf typ
 		buf.WriteNull()
 		return nil
 	}
-	v, err := bloblang.ValueAsBytes(val)
-	if err != nil {
-		return err
+	var v []byte
+	switch t := val.(type) {
+	case string:
+		if t != "" {
+			// We don't modify this byte slice at all, so this is safe to grab the bytes
+			// without making a copy.
+			// Also make sure this isn't an empty string because it's undefined what the
+			// value is.
+			v = unsafe.Slice(unsafe.StringData(t), len(t))
+		} else {
+			v = []byte{}
+		}
+	case []byte:
+		v = t
+	default:
+		b, err := bloblang.ValueAsBytes(val)
+		if err != nil {
+			return err
+		}
+		v = b
 	}
 	if len(v) > c.maxLength {
 		return fmt.Errorf("value too long, length: %d, max: %d", len(v), c.maxLength)
