@@ -19,6 +19,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -111,13 +112,12 @@ func generateBlobPath(clientPrefix string, threadID, counter int64) string {
 
 // truncateBytesAsHex truncates an array of bytes up to 32 bytes and optionally increment the last byte(s).
 // More the one byte can be incremented in case it overflows.
-//
-// NOTE: This can mutate `bytes`
 func truncateBytesAsHex(bytes []byte, truncateUp bool) string {
 	const maxLobLen int = 32
 	if len(bytes) <= maxLobLen {
 		return hex.EncodeToString(bytes)
 	}
+	bytes = slices.Clone(bytes)
 	if truncateUp {
 		var i int
 		for i = maxLobLen - 1; i >= 0; i-- {
