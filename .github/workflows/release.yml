@@ -42,8 +42,7 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v5
       with:
-        go-version: 1.22.x
-        check-latest: true
+        go-version: oldstable
 
     - name: Release Notes
       run: ./resources/scripts/release_notes.sh > ./release_notes.md
