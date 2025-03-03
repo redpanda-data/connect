@@ -3,7 +3,7 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.48.0 - TBD
+## 4.48.0 - 2025-03-03
 
 ### Added
 
