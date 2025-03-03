@@ -21,8 +21,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/go-jose/go-jose/v3"
-	josejwt "github.com/go-jose/go-jose/v3/jwt"
+	"github.com/go-jose/go-jose/v4"
+	josejwt "github.com/go-jose/go-jose/v4/jwt"
 	"github.com/go-resty/resty/v2"
 	"github.com/redpanda-data/benthos/v4/public/service"
 
@@ -156,7 +156,7 @@ type telemetryExporter struct {
 
 // Send telemetry payload to a hardcoded HTTP endpoint.
 func (t *telemetryExporter) export(p *payload) {
-	tokenStr, err := t.JWTBuilder.Claims(p).CompactSerialize()
+	tokenStr, err := t.JWTBuilder.Claims(p).Serialize()
 	if err != nil {
 		t.logger.With("error", err).Debug("Failed to get token string")
 		return
