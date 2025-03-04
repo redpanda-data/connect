@@ -955,7 +955,7 @@ func (o *snowpipePooledOutput) WriteBatch(ctx context.Context, batch service.Mes
 		return wrapInsertError(err)
 	}
 	o.logger.Debugf("done inserting %d rows using channel %s, stats: %+v", len(batch), channel.Name, stats)
-	o.metrics.Report(stats)
+	commitStart := time.Now()
 	polls, err := channel.WaitUntilCommitted(ctx, o.commitTimeout)
 	if err != nil {
 		reopened, reopenErr := o.openChannel(ctx, channel.Name, channel.ID)
@@ -968,7 +968,9 @@ func (o *snowpipePooledOutput) WriteBatch(ctx context.Context, batch service.Mes
 		}
 		return err
 	}
-	o.logger.Tracef("batch committed in snowflake after %d polls", polls)
+	commitDuration := time.Since(commitStart)
+	o.logger.Debugf("batch of %d rows committed using channel %s after %d polls in %s", len(batch), channel.Name, polls, commitDuration)
+	o.metrics.Report(stats, commitDuration)
 	o.channelPool.Release(channel)
 	return nil
 }
@@ -1056,7 +1058,7 @@ func (o *snowpipeIndexedOutput) WriteBatch(ctx context.Context, batch service.Me
 		return wrapInsertError(err)
 	}
 	o.logger.Debugf("done inserting %d rows using channel %s, stats: %+v", len(batch), channel.Name, stats)
-	o.metrics.Report(stats)
+	commitStart := time.Now()
 	polls, err := channel.WaitUntilCommitted(ctx, o.commitTimeout)
 	if err != nil {
 		reopened, reopenErr := o.openChannel(ctx, channel.Name, channel.ID)
@@ -1069,7 +1071,9 @@ func (o *snowpipeIndexedOutput) WriteBatch(ctx context.Context, batch service.Me
 		}
 		return err
 	}
-	o.logger.Tracef("batch committed in snowflake after %d polls", polls)
+	commitDuration := time.Since(commitStart)
+	o.logger.Debugf("batch of %d rows committed using channel %s after %d polls in %s", len(batch), channel.Name, polls, commitDuration)
+	o.metrics.Report(stats, commitDuration)
 	o.channelPool.Release(channel.Name, channel)
 	return nil
 }
