@@ -112,7 +112,7 @@ func TestIntegrationRedpanda(t *testing.T) {
 	kafkaPortStr := strconv.Itoa(kafkaPort)
 
 	options := &dockertest.RunOptions{
-		Repository:   "redpandadata/redpanda",
+		Repository:   "docker.redpanda.com/redpandadata/redpanda",
 		Tag:          "latest",
 		Hostname:     "redpanda",
 		ExposedPorts: []string{"9092/tcp"},
@@ -265,7 +265,7 @@ func TestIntegrationRedpandaSasl(t *testing.T) {
 	kafkaPortStr := strconv.Itoa(kafkaPort)
 
 	options := &dockertest.RunOptions{
-		Repository:   "redpandadata/redpanda",
+		Repository:   "docker.redpanda.com/redpandadata/redpanda",
 		Tag:          "latest",
 		Hostname:     "redpanda",
 		ExposedPorts: []string{"9092/tcp"},
@@ -373,7 +373,7 @@ func TestIntegrationRedpandaOutputFixedTimestamp(t *testing.T) {
 	kafkaPortStr := strconv.Itoa(kafkaPort)
 
 	options := &dockertest.RunOptions{
-		Repository:   "redpandadata/redpanda",
+		Repository:   "docker.redpanda.com/redpandadata/redpanda",
 		Tag:          "latest",
 		Hostname:     "redpanda",
 		ExposedPorts: []string{"9092/tcp"},
@@ -445,7 +445,7 @@ func BenchmarkIntegrationRedpanda(b *testing.B) {
 	kafkaPortStr := strconv.Itoa(kafkaPort)
 
 	options := &dockertest.RunOptions{
-		Repository:   "redpandadata/redpanda",
+		Repository:   "docker.redpanda.com/redpandadata/redpanda",
 		Tag:          "latest",
 		Hostname:     "redpanda",
 		ExposedPorts: []string{"9092/tcp"},
