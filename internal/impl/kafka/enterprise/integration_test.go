@@ -590,7 +590,7 @@ func startRedpanda(t *testing.T, pool *dockertest.Pool, exposeBroker bool, autoc
 	}
 
 	options := &dockertest.RunOptions{
-		Repository:   "redpandadata/redpanda",
+		Repository:   "docker.redpanda.com/redpandadata/redpanda",
 		Tag:          "latest",
 		Hostname:     "redpanda",
 		Cmd:          cmd,
@@ -1144,6 +1144,7 @@ output:
 }
 
 func TestRedpandaMigratorTopicConfigAndACLsIntegration(t *testing.T) {
+	integration.CheckSkip(t)
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
