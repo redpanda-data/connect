@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.49.0 - TBD
+
+### Added
+
+- Output `snowflake_streaming` has two new stats `snowflake_register_latency_ns` and `snowflake_commit_latency_ns`. (@rockwotj)
+
 ## 4.48.0 - 2025-03-03
 
 ### Added
