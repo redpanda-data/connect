@@ -968,7 +968,7 @@ func (o *snowpipePooledOutput) WriteBatch(ctx context.Context, batch service.Mes
 		}
 		return err
 	}
-	commitDuration := time.Now().Sub(commitStart)
+	commitDuration := time.Since(commitStart)
 	o.logger.Debugf("batch of %d rows committed using channel %s after %d polls in %s", len(batch), channel.Name, polls, commitDuration)
 	o.metrics.Report(stats, commitDuration)
 	o.channelPool.Release(channel)
@@ -1071,7 +1071,7 @@ func (o *snowpipeIndexedOutput) WriteBatch(ctx context.Context, batch service.Me
 		}
 		return err
 	}
-	commitDuration := time.Now().Sub(commitStart)
+	commitDuration := time.Since(commitStart)
 	o.logger.Debugf("batch of %d rows committed using channel %s after %d polls in %s", len(batch), channel.Name, polls, commitDuration)
 	o.metrics.Report(stats, commitDuration)
 	o.channelPool.Release(channel.Name, channel)
