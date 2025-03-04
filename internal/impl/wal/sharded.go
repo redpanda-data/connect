@@ -74,7 +74,7 @@ will be replayed upon startup.
 					Default("20MiB").Example("50MB").Example("1GB"),
 				service.NewDurationField("max_segment_age").
 					Description("The maximum age of a single segment of the WAL will be before being rotated.").
-					Default("1d").Example("1h").Example("7d"),
+					Default("24h").Example("1h").Example("72h"),
 				service.NewIntField("shards").
 					Description("The number of shards or seperate WAL files there are. When there is only a single shard messages are processed in order. Setting this to greater than 1 will support multiple log files, which can improve performance, but messages can be processed out of order.").
 					Default(1),
@@ -84,7 +84,7 @@ will be replayed upon startup.
 			if err != nil {
 				return nil, err
 			}
-			limit, err := conf.FieldInt("limit", "count")
+			limit, err := conf.FieldInt("limits", "count")
 			if err != nil {
 				return nil, err
 			}
