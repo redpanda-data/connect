@@ -38,7 +38,15 @@ jobs:
         sudo rm -rf /opt/ghc
         sudo rm -rf /usr/local/lib/android
         sudo rm -rf /usr/local/share/powershell
-        sudo rm -rf /usr/share/swift
+        sudo rm -rf "/opt/google/chrome"
+        sudo rm -rf "/opt/microsoft/msedge"
+        sudo rm -rf "/opt/microsoft/powershell"
+        sudo rm -rf "/opt/pipx"
+        sudo rm -rf "/usr/lib/mono"
+        sudo rm -rf "/usr/local/julia*""
+        sudo rm -rf "/usr/local/lib/node_modules"
+        sudo rm -rf "/usr/local/share/chromium"
+        sudo rm -rf "/usr/share/swift"
         sudo rm -rf "/usr/local/share/boost"
         sudo rm -rf "$AGENT_TOOLSDIRECTORY"
 
