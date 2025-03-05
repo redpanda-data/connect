@@ -41,9 +41,8 @@ type Stream struct {
 	ackedLSN LSN
 
 	standbyMessageTimeout time.Duration
-	// TODO: consider batching messages on this channel
-	messages chan StreamMessage
-	errors   chan error
+	messages              chan []StreamMessage
+	errors                chan error
 
 	includeTxnMarkers       bool
 	slotName                string
@@ -110,7 +109,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	}
 	stream := &Stream{
 		pgConn:                dbConn,
-		messages:              make(chan StreamMessage),
+		messages:              make(chan []StreamMessage),
 		errors:                make(chan error, 1),
 		slotName:              config.ReplicationSlotName,
 		snapshotBatchSize:     batchSize,
@@ -526,7 +525,7 @@ func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, re
 	lsn := msgLSN.String()
 	message.LSN = &lsn
 	select {
-	case s.messages <- *message:
+	case s.messages <- []StreamMessage{*message}:
 		return changeResultEmittedMessage, nil
 	case <-ctx.Done():
 		return changeResultNoMessage, ctx.Err()
@@ -547,7 +546,7 @@ func (s *Stream) processSnapshot(ctx context.Context, snapshotter *snapshotter) 
 
 	for _, table := range s.tables {
 		table := table
-		s.logger.Debugf("Planning snapshot scan for table: %v", table)
+		s.logger.Infof("Planning snapshot scan for table: %v", table)
 		planStartTime := time.Now()
 		primaryKeyColumns, err := s.getPrimaryKeyColumn(ctx, table)
 		if err != nil {
@@ -584,14 +583,14 @@ func (s *Stream) processSnapshot(ctx context.Context, snapshotter *snapshotter) 
 		ranges = append(ranges, [2]primaryKey{prev, nil})
 
 		if len(ranges) > 1 {
-			s.logger.Debugf(
+			s.logger.Infof(
 				"created plan in %v to split %s into %d chunks and process in parallel",
 				time.Since(planStartTime),
 				table,
 				len(ranges),
 			)
 		} else {
-			s.logger.Debugf(
+			s.logger.Infof(
 				"created plan in %v to scan %s sequentially",
 				time.Since(planStartTime),
 				table,
@@ -604,7 +603,9 @@ func (s *Stream) processSnapshot(ctx context.Context, snapshotter *snapshotter) 
 			snapshotTasks = append(snapshotTasks, func(ctx context.Context) error {
 				s.logger.Debugf("Scanning %s in range (%+v %+v]", table, start, end)
 				err := s.scanTableRange(ctx, snapshotter, table, start, end, primaryKeyColumns)
-				s.logger.Debugf("Finished scanning %s in range (%+v %+v]", table, start, end)
+				if err != nil {
+					s.logger.Debugf("Finished scanning %s in range (%+v %+v]", table, start, end)
+				}
 				return err
 			})
 		}
@@ -652,9 +653,6 @@ func (s *Stream) scanTableRange(ctx context.Context, snapshotter *snapshotter, t
 			minExclusive = make(primaryKey, len(primaryKeyIndex))
 		}
 
-		queryDuration := time.Since(queryStart)
-		s.logger.Tracef("Query duration: %v %s \n", queryDuration, table)
-
 		if snapshotRows.Err() != nil {
 			return fmt.Errorf("failed to get snapshot data for table %v: %w", table, snapshotRows.Err())
 		}
@@ -676,19 +674,14 @@ func (s *Stream) scanTableRange(ctx context.Context, snapshotter *snapshotter, t
 		}
 
 		var rowsCount = 0
+		batch := make([]StreamMessage, 0, s.snapshotBatchSize)
 		rowsStart := time.Now()
-		totalScanDuration := time.Duration(0)
-		sendDuration := time.Duration(0)
-
 		for snapshotRows.Next() {
 			rowsCount += 1
 
-			scanStart := time.Now()
 			if err := snapshotRows.Scan(scanArgs...); err != nil {
 				return fmt.Errorf("failed to scan row for table %v: %v", table, err.Error())
 			}
-			scanEnd := time.Since(scanStart)
-			totalScanDuration += scanEnd
 
 			data := make(map[string]any, len(valueGetters))
 			for i, getter := range valueGetters {
@@ -702,30 +695,27 @@ func (s *Stream) scanTableRange(ctx context.Context, snapshotter *snapshotter, t
 					minExclusive[j] = val
 				}
 			}
-			snapshotChangePacket := StreamMessage{
+			batch = append(batch, StreamMessage{
 				LSN:       nil,
 				Operation: ReadOpType,
 				Table:     unquotedTable,
 				Schema:    unquotedSchema,
 				Data:      data,
-			}
-			waitingFromBenthos := time.Now()
-			select {
-			case s.messages <- snapshotChangePacket:
-			case <-s.shutSig.SoftStopChan():
-				return nil
-			}
-			sendDuration += time.Since(waitingFromBenthos)
+			})
 		}
 		s.monitor.UpdateSnapshotProgressForTable(table, rowsCount)
 		if snapshotRows.Err() != nil {
 			return fmt.Errorf("failed to close snapshot data iterator for table %v: %w", table, snapshotRows.Err())
 		}
-
-		batchEnd := time.Since(rowsStart)
-		s.logger.Debugf("Batch duration: %v %s \n", batchEnd, table)
-		s.logger.Debugf("Scan duration %v %s\n", totalScanDuration, table)
-		s.logger.Debugf("Send duration %v %s\n", sendDuration, table)
+		sendStartTime := time.Now()
+		select {
+		case s.messages <- batch:
+		case <-s.shutSig.SoftStopChan():
+			return nil
+		}
+		s.logger.Tracef("Query duration: %v %s \n", rowsStart.Sub(queryStart), table)
+		s.logger.Tracef("Scan duration %v %s\n", sendStartTime.Sub(rowsStart), table)
+		s.logger.Tracef("Send duration %v %s\n", time.Since(sendStartTime), table)
 
 		if rowsCount < s.snapshotBatchSize {
 			break
@@ -735,7 +725,7 @@ func (s *Stream) scanTableRange(ctx context.Context, snapshotter *snapshotter, t
 }
 
 // Messages is a channel that can be used to consume messages from the plugin. It will contain LSN nil for snapshot messages
-func (s *Stream) Messages() chan StreamMessage {
+func (s *Stream) Messages() chan []StreamMessage {
 	return s.messages
 }
 

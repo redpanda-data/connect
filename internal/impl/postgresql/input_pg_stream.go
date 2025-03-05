@@ -372,22 +372,28 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				p.logger.Debugf("failed to flush batch: %s", err)
 				break
 			}
-		case message := <-pgStream.Messages():
+		case batch := <-pgStream.Messages():
 			var (
-				mb  []byte
-				err error
+				flush bool
+				mb    []byte
+				err   error
 			)
-			if mb, err = json.Marshal(message.Data); err != nil {
-				p.logger.Errorf("failure to marshal message: %s", err)
-				break
+			for _, msg := range batch {
+				if mb, err = json.Marshal(msg.Data); err != nil {
+					p.logger.Errorf("failure to marshal message: %s", err)
+					break
+				}
+				batchMsg := service.NewMessage(mb)
+				batchMsg.MetaSet("table", msg.Table)
+				batchMsg.MetaSet("operation", string(msg.Operation))
+				if msg.LSN != nil {
+					batchMsg.MetaSet("lsn", *msg.LSN)
+				}
+				if batcher.Add(batchMsg) {
+					flush = true
+				}
 			}
-			batchMsg := service.NewMessage(mb)
-			batchMsg.MetaSet("table", message.Table)
-			batchMsg.MetaSet("operation", string(message.Operation))
-			if message.LSN != nil {
-				batchMsg.MetaSet("lsn", *message.LSN)
-			}
-			if batcher.Add(batchMsg) {
+			if flush {
 				nextTimedBatchChan = nil
 				flushedBatch, err := batcher.Flush(ctx)
 				if err != nil {
