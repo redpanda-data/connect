@@ -10,9 +10,9 @@ package pglogicalstream
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -23,6 +23,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
 )
 
@@ -40,20 +41,19 @@ type Stream struct {
 	ackedLSN LSN
 
 	standbyMessageTimeout time.Duration
-	messages              chan StreamMessage
+	messages              chan []StreamMessage
 	errors                chan error
 
-	includeTxnMarkers          bool
-	slotName                   string
-	tables                     []TableFQN
-	snapshotBatchSize          int
-	decodingPluginArguments    []string
-	snapshotMemorySafetyFactor float64
-	logger                     *service.Logger
-	monitor                    *Monitor
-	heartbeat                  *heartbeat
-	maxParallelSnapshotTables  int
-	unchangedToastValue        any
+	includeTxnMarkers       bool
+	slotName                string
+	tables                  []TableFQN
+	snapshotBatchSize       int
+	decodingPluginArguments []string
+	logger                  *service.Logger
+	monitor                 *Monitor
+	heartbeat               *heartbeat
+	maxSnapshotWorkers      int
+	unchangedToastValue     any
 }
 
 // NewPgStream creates a new instance of the Stream struct
@@ -71,7 +71,12 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		}
 	}()
 
+	debugger := asyncroutine.NewPeriodic(5*time.Second, func() {
+		config.Logger.Debug("Waiting to ping database...")
+	})
+	debugger.Start()
 	dbConn, err := pgconn.ConnectConfig(ctx, config.DBConfig.Copy())
+	debugger.Stop()
 	if err != nil {
 		return nil, err
 	}
@@ -98,20 +103,23 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		}
 		tables = append(tables, TableFQN{Schema: schema, Table: normalized})
 	}
+	batchSize := 1000
+	if config.BatchSize > 0 {
+		batchSize = config.BatchSize
+	}
 	stream := &Stream{
-		pgConn:                     dbConn,
-		messages:                   make(chan StreamMessage),
-		errors:                     make(chan error, 1),
-		slotName:                   config.ReplicationSlotName,
-		snapshotMemorySafetyFactor: config.SnapshotMemorySafetyFactor,
-		snapshotBatchSize:          config.BatchSize,
-		tables:                     tables,
-		maxParallelSnapshotTables:  config.MaxParallelSnapshotTables,
-		logger:                     config.Logger,
-		shutSig:                    shutdown.NewSignaller(),
-		includeTxnMarkers:          config.IncludeTxnMarkers,
-		standbyMessageTimeout:      config.PgStandbyTimeout,
-		unchangedToastValue:        config.UnchangedToastValue,
+		pgConn:                dbConn,
+		messages:              make(chan []StreamMessage),
+		errors:                make(chan error, 1),
+		slotName:              config.ReplicationSlotName,
+		snapshotBatchSize:     batchSize,
+		tables:                tables,
+		maxSnapshotWorkers:    config.MaxSnapshotWorkers,
+		logger:                config.Logger,
+		shutSig:               shutdown.NewSignaller(),
+		includeTxnMarkers:     config.IncludeTxnMarkers,
+		standbyMessageTimeout: config.PgStandbyTimeout,
+		unchangedToastValue:   config.UnchangedToastValue,
 	}
 
 	monitor, err := NewMonitor(ctx, config.DBRawDSN, stream.logger, tables, stream.slotName, config.WalMonitorInterval)
@@ -196,6 +204,11 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 			stream.ackedLSN = confirmedLSNFromDB
 			stream.ackedLSNMu.Unlock()
 		}
+		if config.StreamOldData {
+			for _, table := range tables {
+				stream.monitor.MarkSnapshotComplete(table)
+			}
+		}
 		stream.logger.Debugf("starting stream from LSN %s", confirmedLSNFromDB.String())
 		if err = stream.startLr(ctx, confirmedLSNFromDB); err != nil {
 			return nil, err
@@ -210,7 +223,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		return stream, nil
 	}
 
-	var snapshotter *Snapshotter
+	var snapshotter *snapshotter
 	if config.StreamOldData {
 		// Create a temporary replication slot that just creates a snapshot and freezes the LSN for the snapshot.
 		// We make this temporary so that if the snapshotting phase fails, we restart the snapshotting phase
@@ -228,7 +241,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 			return nil, fmt.Errorf("unable to create temporary replication slot for snapshot: %w", err)
 		}
 		stream.logger.Tracef("exported snapshot named: %s", snapshotName)
-		snapshotter, err = NewSnapshotter(config.DBRawDSN, stream.logger, snapshotName)
+		snapshotter, err = newSnapshotter(config.DBRawDSN, stream.logger, snapshotName, 1)
 		if err != nil {
 			return nil, err
 		}
@@ -243,6 +256,9 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 			if err = stream.processSnapshot(ctx, snapshotter); err != nil {
 				stream.errors <- fmt.Errorf("failed to process snapshot: %w", err)
 				return
+			}
+			for _, table := range tables {
+				stream.monitor.MarkSnapshotComplete(table)
 			}
 			// TODO: Do we want to ensure all snapshot messages are ack'd before moving
 			// onto the replication stream?
@@ -472,9 +488,9 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 type processChangeResult int
 
 const (
-	changeResultNoMessage               = 0
-	changeResultSuppressedCommitMessage = 1
-	changeResultEmittedMessage          = 2
+	changeResultNoMessage               processChangeResult = 0
+	changeResultSuppressedCommitMessage processChangeResult = 1
+	changeResultEmittedMessage          processChangeResult = 2
 )
 
 // Handle handles the pgoutput output
@@ -509,175 +525,207 @@ func (s *Stream) processChange(ctx context.Context, msgLSN LSN, xld XLogData, re
 	lsn := msgLSN.String()
 	message.LSN = &lsn
 	select {
-	case s.messages <- *message:
+	case s.messages <- []StreamMessage{*message}:
 		return changeResultEmittedMessage, nil
 	case <-ctx.Done():
 		return changeResultNoMessage, ctx.Err()
 	}
 }
 
-func (s *Stream) processSnapshot(ctx context.Context, snapshotter *Snapshotter) error {
-	if err := snapshotter.prepare(ctx); err != nil {
-		return fmt.Errorf("failed to prepare database snapshot - snapshot may be expired: %w", err)
+func (s *Stream) processSnapshot(ctx context.Context, snapshotter *snapshotter) error {
+	if err := snapshotter.Prepare(ctx); err != nil {
+		return fmt.Errorf("unable to prepare snapshot: %w", err)
 	}
 	defer func() {
-		s.logger.Debugf("Finished snapshot processing")
-		if err := snapshotter.releaseSnapshot(); err != nil {
-			s.logger.Warnf("Failed to release database snapshot: %v", err.Error())
-		}
 		if err := snapshotter.closeConn(); err != nil {
 			s.logger.Warnf("Failed to close database connection: %v", err.Error())
 		}
 	}()
 
-	s.logger.Debugf("Starting snapshot processing")
-	var wg errgroup.Group
-	wg.SetLimit(s.maxParallelSnapshotTables)
+	snapshotTasks := []func(context.Context) error{}
 
 	for _, table := range s.tables {
-		tableName := table
-		wg.Go(func() (err error) {
-			s.logger.Debugf("Processing snapshot for table: %v", table)
+		table := table
+		s.logger.Infof("Planning snapshot scan for table: %v", table)
+		planStartTime := time.Now()
+		primaryKeyColumns, err := s.getPrimaryKeyColumn(ctx, table)
+		if err != nil {
+			return fmt.Errorf("failed to get primary key column for table %v: %w", table, err)
+		}
+		if len(primaryKeyColumns) == 0 {
+			return fmt.Errorf("failed to get primary key for table %s", table)
+		}
 
-			unquotedTable, err := sanitize.UnquotePostgresIdentifier(table.Table)
-			if err != nil {
-				return fmt.Errorf("unexpected failure to unquote table name: %w", err)
-			}
-			unquotedSchema, err := sanitize.UnquotePostgresIdentifier(table.Schema)
-			if err != nil {
-				return fmt.Errorf("unexpected failure to unquote schema name: %w", err)
-			}
+		txn, err := snapshotter.AcquireReaderTxn(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to create snapshot transaction for snapshot read: %w", err)
+		}
 
-			avgRowSizeBytes, numRows, err := snapshotter.tableStats(ctx, table)
-			if err != nil {
-				return fmt.Errorf("failed to calculate average row size for table %v: %w", table, err)
-			}
+		const overSampleFactor = 32
+		numSamples := min(s.maxSnapshotWorkers, 256) * overSampleFactor
+		splits, err := txn.randomlySampleKeyspace(ctx, table, primaryKeyColumns, numSamples)
 
-			availableMemory := getAvailableMemory()
-			batchSize := snapshotter.calculateBatchSize(availableMemory, uint64(avgRowSizeBytes))
-			if s.snapshotBatchSize > 0 {
-				batchSize = s.snapshotBatchSize
-			}
+		snapshotter.ReleaseReaderTxn(txn)
 
-			s.logger.Debugf("Querying snapshot batch_side: %v, available_memory: %v, avg_row_size: %v, num rows: %v", batchSize, availableMemory, avgRowSizeBytes, numRows)
+		if err != nil {
+			return fmt.Errorf("failed to create sample keyspace: %w", err)
+		}
 
-			lastPrimaryKey, primaryKeyColumns, err := s.getPrimaryKeyColumn(ctx, table)
-			if err != nil {
-				return fmt.Errorf("failed to get primary key column for table %v: %w", table, err)
-			}
+		var prev primaryKey
+		ranges := [][2]primaryKey{}
+		// We have a sorted key space, sample every N keys to get a uniform distibution.
+		chunkSize := len(splits) / s.maxSnapshotWorkers
+		for i := chunkSize; i < len(splits); i += chunkSize {
+			pk := splits[i]
+			ranges = append(ranges, [2]primaryKey{prev, pk})
+			prev = pk
+		}
+		ranges = append(ranges, [2]primaryKey{prev, nil})
 
-			if len(lastPrimaryKey) == 0 {
-				return fmt.Errorf("failed to get primary key column for table %s", table)
-			}
+		if len(ranges) > 1 {
+			s.logger.Infof(
+				"created plan in %v to split %s into %d chunks and process in parallel",
+				time.Since(planStartTime),
+				table,
+				len(ranges),
+			)
+		} else {
+			s.logger.Infof(
+				"created plan in %v to scan %s sequentially",
+				time.Since(planStartTime),
+				table,
+			)
+		}
 
-			var lastPkVals = map[string]any{}
-
-			var offset int
-			for {
-				var snapshotRows *sql.Rows
-				queryStart := time.Now()
-				if offset == 0 {
-					snapshotRows, err = snapshotter.querySnapshotData(ctx, table, nil, primaryKeyColumns, batchSize)
-				} else {
-					snapshotRows, err = snapshotter.querySnapshotData(ctx, table, lastPkVals, primaryKeyColumns, batchSize)
-				}
+		for _, r := range ranges {
+			start := r[0]
+			end := r[1]
+			snapshotTasks = append(snapshotTasks, func(ctx context.Context) error {
+				s.logger.Debugf("Scanning %s in range (%+v %+v]", table, start, end)
+				err := s.scanTableRange(ctx, snapshotter, table, start, end, primaryKeyColumns)
 				if err != nil {
-					return fmt.Errorf("failed to query snapshot data for table %v: %w", table, err)
+					s.logger.Debugf("Finished scanning %s in range (%+v %+v]", table, start, end)
 				}
-
-				queryDuration := time.Since(queryStart)
-				s.logger.Tracef("Query duration: %v %s \n", queryDuration, tableName)
-
-				if snapshotRows.Err() != nil {
-					return fmt.Errorf("failed to get snapshot data for table %v: %w", table, snapshotRows.Err())
-				}
-
-				columnTypes, err := snapshotRows.ColumnTypes()
-				if err != nil {
-					return fmt.Errorf("failed to get column types for table %v: %w", table, err)
-				}
-
-				columnNames, err := snapshotRows.Columns()
-				if err != nil {
-					return fmt.Errorf("failed to get column names for table %v: %w", table, err)
-				}
-
-				var rowsCount = 0
-				rowsStart := time.Now()
-				totalScanDuration := time.Duration(0)
-				sendDuration := time.Duration(0)
-
-				for snapshotRows.Next() {
-					rowsCount += 1
-
-					scanStart := time.Now()
-					scanArgs, valueGetters := snapshotter.prepareScannersAndGetters(columnTypes)
-					err := snapshotRows.Scan(scanArgs...)
-					scanEnd := time.Since(scanStart)
-					totalScanDuration += scanEnd
-
-					if err != nil {
-						return fmt.Errorf("failed to scan row for table %v: %v", table, err.Error())
-					}
-
-					var data = make(map[string]any)
-					for i, getter := range valueGetters {
-						col := columnNames[i]
-						var val any
-						if val, err = getter(scanArgs[i]); err != nil {
-							return fmt.Errorf("unable to decode column %s: %w", col, err)
-						}
-						data[col] = val
-						normalized := sanitize.QuotePostgresIdentifier(col)
-						if _, ok := lastPrimaryKey[normalized]; ok {
-							lastPkVals[normalized] = val
-						}
-					}
-
-					snapshotChangePacket := StreamMessage{
-						LSN:       nil,
-						Operation: ReadOpType,
-						Table:     unquotedTable,
-						Schema:    unquotedSchema,
-						Data:      data,
-					}
-
-					if rowsCount%100 == 0 {
-						s.monitor.UpdateSnapshotProgressForTable(table, rowsCount+offset)
-					}
-
-					waitingFromBenthos := time.Now()
-					select {
-					case s.messages <- snapshotChangePacket:
-					case <-s.shutSig.SoftStopChan():
-						return nil
-					}
-					sendDuration += time.Since(waitingFromBenthos)
-				}
-
-				if snapshotRows.Err() != nil {
-					return fmt.Errorf("failed to close snapshot data iterator for table %v: %w", table, snapshotRows.Err())
-				}
-
-				batchEnd := time.Since(rowsStart)
-				s.logger.Debugf("Batch duration: %v %s \n", batchEnd, tableName)
-				s.logger.Debugf("Scan duration %v %s\n", totalScanDuration, tableName)
-				s.logger.Debugf("Send duration %v %s\n", sendDuration, tableName)
-
-				offset += batchSize
-
-				if rowsCount < batchSize {
-					break
-				}
-			}
-			return nil
-		})
+				return err
+			})
+		}
 	}
-	return wg.Wait()
+	s.logger.Debugf("Starting snapshot processing")
+	// Run all the snapshot reads now
+	wg, ctx := errgroup.WithContext(ctx)
+	wg.SetLimit(s.maxSnapshotWorkers)
+	for _, task := range snapshotTasks {
+		task := task
+		wg.Go(func() error { return task(ctx) })
+	}
+	if err := wg.Wait(); err != nil {
+		return err
+	}
+	s.logger.Debugf("Finished snapshot processing")
+	return nil
+}
+
+func (s *Stream) scanTableRange(ctx context.Context, snapshotter *snapshotter, table TableFQN, minExclusive, maxInclusive primaryKey, primaryKeyIndex []string) error {
+	txn, err := snapshotter.AcquireReaderTxn(ctx)
+	if err != nil {
+		return err
+	}
+	defer snapshotter.ReleaseReaderTxn(txn)
+
+	unquotedTable, err := sanitize.UnquotePostgresIdentifier(table.Table)
+	if err != nil {
+		return fmt.Errorf("unexpected failure to unquote table name: %w", err)
+	}
+	unquotedSchema, err := sanitize.UnquotePostgresIdentifier(table.Schema)
+	if err != nil {
+		return fmt.Errorf("unexpected failure to unquote schema name: %w", err)
+	}
+
+	for {
+		queryStart := time.Now()
+		snapshotRows, err := txn.querySnapshotData(ctx, table, minExclusive, maxInclusive, primaryKeyIndex, s.snapshotBatchSize)
+
+		if err != nil {
+			return fmt.Errorf("failed to query snapshot data for table %v: %w", table, err)
+		}
+
+		if minExclusive == nil {
+			minExclusive = make(primaryKey, len(primaryKeyIndex))
+		}
+
+		if snapshotRows.Err() != nil {
+			return fmt.Errorf("failed to get snapshot data for table %v: %w", table, snapshotRows.Err())
+		}
+
+		columnTypes, err := snapshotRows.ColumnTypes()
+		if err != nil {
+			return fmt.Errorf("failed to get column types for table %v: %w", table, err)
+		}
+		scanArgs, valueGetters := prepareScannersAndGetters(columnTypes)
+
+		columnNames, err := snapshotRows.Columns()
+		if err != nil {
+			return fmt.Errorf("failed to get column names for table %v: %w", table, err)
+		}
+		pkPosition := make([]int, len(columnNames))
+		for i, col := range columnNames {
+			normalized := sanitize.QuotePostgresIdentifier(col)
+			pkPosition[i] = slices.Index(primaryKeyIndex, normalized)
+		}
+
+		var rowsCount = 0
+		batch := make([]StreamMessage, 0, s.snapshotBatchSize)
+		rowsStart := time.Now()
+		for snapshotRows.Next() {
+			rowsCount += 1
+
+			if err := snapshotRows.Scan(scanArgs...); err != nil {
+				return fmt.Errorf("failed to scan row for table %v: %v", table, err.Error())
+			}
+
+			data := make(map[string]any, len(valueGetters))
+			for i, getter := range valueGetters {
+				col := columnNames[i]
+				var val any
+				if val, err = getter(scanArgs[i]); err != nil {
+					return fmt.Errorf("unable to decode column %s: %w", col, err)
+				}
+				data[col] = val
+				if j := pkPosition[i]; j != -1 {
+					minExclusive[j] = val
+				}
+			}
+			batch = append(batch, StreamMessage{
+				LSN:       nil,
+				Operation: ReadOpType,
+				Table:     unquotedTable,
+				Schema:    unquotedSchema,
+				Data:      data,
+			})
+		}
+		s.monitor.UpdateSnapshotProgressForTable(table, rowsCount)
+		if snapshotRows.Err() != nil {
+			return fmt.Errorf("failed to close snapshot data iterator for table %v: %w", table, snapshotRows.Err())
+		}
+		sendStartTime := time.Now()
+		select {
+		case s.messages <- batch:
+		case <-s.shutSig.SoftStopChan():
+			return nil
+		}
+		s.logger.Tracef("Query duration: %v %s \n", rowsStart.Sub(queryStart), table)
+		s.logger.Tracef("Scan duration %v %s\n", sendStartTime.Sub(rowsStart), table)
+		s.logger.Tracef("Send duration %v %s\n", time.Since(sendStartTime), table)
+
+		if rowsCount < s.snapshotBatchSize {
+			break
+		}
+	}
+	return nil
 }
 
 // Messages is a channel that can be used to consume messages from the plugin. It will contain LSN nil for snapshot messages
-func (s *Stream) Messages() chan StreamMessage {
+func (s *Stream) Messages() chan []StreamMessage {
 	return s.messages
 }
 
@@ -686,7 +734,7 @@ func (s *Stream) Errors() chan error {
 	return s.errors
 }
 
-func (s *Stream) getPrimaryKeyColumn(ctx context.Context, table TableFQN) (map[string]any, []string, error) {
+func (s *Stream) getPrimaryKeyColumn(ctx context.Context, table TableFQN) ([]string, error) {
 	/// Query to get all primary key columns in their correct order
 	q, err := sanitize.SQLQuery(`
         SELECT a.attname
@@ -699,17 +747,17 @@ func (s *Stream) getPrimaryKeyColumn(ctx context.Context, table TableFQN) (map[s
     `, table.String())
 
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to sanitize query: %w", err)
+		return nil, fmt.Errorf("failed to sanitize query: %w", err)
 	}
 
 	reader := s.pgConn.Exec(ctx, q)
 	data, err := reader.ReadAll()
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to read query results: %w", err)
+		return nil, fmt.Errorf("failed to read query results: %w", err)
 	}
 
 	if len(data) == 0 || len(data[0].Rows) == 0 {
-		return nil, nil, fmt.Errorf("no primary key found for table %s", table)
+		return nil, fmt.Errorf("no primary key found for table %s", table)
 	}
 
 	// Extract all primary key column names
@@ -719,12 +767,7 @@ func (s *Stream) getPrimaryKeyColumn(ctx context.Context, table TableFQN) (map[s
 		pkColumns[i] = sanitize.QuotePostgresIdentifier(string(row[0]))
 	}
 
-	var pksMap = make(map[string]any)
-	for _, pk := range pkColumns {
-		pksMap[pk] = nil
-	}
-
-	return pksMap, pkColumns, nil
+	return pkColumns, nil
 }
 
 // Stop closes the stream (hopefully gracefully)

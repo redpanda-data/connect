@@ -395,7 +395,7 @@ pg_stream:
 `, databaseURL)
 
 	streamOutBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: INFO`))
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: TRACE`))
 	require.NoError(t, streamOutBuilder.AddInputYAML(template))
 
 	var outBatches []string

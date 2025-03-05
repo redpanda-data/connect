@@ -9,6 +9,11 @@ All notable changes to this project will be documented in this file.
 
 - Output `snowflake_streaming` has two new stats `snowflake_register_latency_ns` and `snowflake_commit_latency_ns`. (@rockwotj)
 
+### Changed
+
+- Field `snapshot_memory_safety_factor` is now removed for input `postgres_cdc`, the batch size must be explicitly defined, the batch size default is 1000. (@rockwotj)
+- Input `postgres_cdc` now supports intra-table snapshot read parallelism in addition to inter-table parallelism. (@rockwotj)
+
 ## 4.48.0 - 2025-03-03
 
 ### Added

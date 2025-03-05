@@ -47,8 +47,7 @@ input:
     dsn: postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable # No default (required)
     include_transaction_markers: false
     stream_snapshot: false
-    snapshot_memory_safety_factor: 1
-    snapshot_batch_size: 0
+    snapshot_batch_size: 1000
     schema: public # No default (required)
     tables: [] # No default (required)
     checkpoint_limit: 1024
@@ -78,8 +77,7 @@ input:
     dsn: postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable # No default (required)
     include_transaction_markers: false
     stream_snapshot: false
-    snapshot_memory_safety_factor: 1
-    snapshot_batch_size: 0
+    snapshot_batch_size: 1000
     schema: public # No default (required)
     tables: [] # No default (required)
     checkpoint_limit: 1024
@@ -153,29 +151,14 @@ When set to true, the plugin will first stream a snapshot of all existing data i
 stream_snapshot: true
 ```
 
-=== `snapshot_memory_safety_factor`
-
-Determines the fraction of available memory that can be used for streaming the snapshot. Values between 0 and 1 represent the percentage of memory to use. Lower values make initial streaming slower but help prevent out-of-memory errors.
-
-
-*Type*: `float`
-
-*Default*: `1`
-
-```yml
-# Examples
-
-snapshot_memory_safety_factor: 0.2
-```
-
 === `snapshot_batch_size`
 
-The number of rows to fetch in each batch when querying the snapshot. A value of 0 lets the plugin determine the batch size based on `snapshot_memory_safety_factor` property.
+The number of rows to fetch in each batch when querying the snapshot.
 
 
 *Type*: `int`
 
-*Default*: `0`
+*Default*: `1000`
 
 ```yml
 # Examples

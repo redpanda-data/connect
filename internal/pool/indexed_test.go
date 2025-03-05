@@ -23,7 +23,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/pool"
+	"github.com/redpanda-data/connect/v4/internal/pool"
 )
 
 type bar struct {

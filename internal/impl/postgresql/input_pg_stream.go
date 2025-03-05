@@ -80,11 +80,12 @@ This input adds the following metadata fields to each message:
 		Field(service.NewFloatField(fieldSnapshotMemSafetyFactor).
 			Description("Determines the fraction of available memory that can be used for streaming the snapshot. Values between 0 and 1 represent the percentage of memory to use. Lower values make initial streaming slower but help prevent out-of-memory errors.").
 			Example(0.2).
-			Default(1)).
+			Default(1).
+			Deprecated()).
 		Field(service.NewIntField(fieldSnapshotBatchSize).
-			Description("The number of rows to fetch in each batch when querying the snapshot. A value of 0 lets the plugin determine the batch size based on `snapshot_memory_safety_factor` property.").
+			Description("The number of rows to fetch in each batch when querying the snapshot.").
 			Example(10000).
-			Default(0)).
+			Default(1000)).
 		Field(service.NewStringField(fieldSchema).
 			Description("The PostgreSQL schema from which to replicate data.").
 			Examples("public", `"MyCaseSensitiveSchemaNeedingQuotes"`),
@@ -136,7 +137,6 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		tables                    []string
 		streamSnapshot            bool
 		includeTxnMarkers         bool
-		snapshotMemSafetyFactor   float64
 		snapshotBatchSize         int
 		checkpointLimit           int
 		walMonitorInterval        time.Duration
@@ -187,10 +187,6 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	}
 
 	if streamSnapshot, err = conf.FieldBool(fieldStreamSnapshot); err != nil {
-		return nil, err
-	}
-
-	if snapshotMemSafetyFactor, err = conf.FieldFloat(fieldSnapshotMemSafetyFactor); err != nil {
 		return nil, err
 	}
 
@@ -245,18 +241,17 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 			DBSchema: schema,
 			DBTables: tables,
 
-			IncludeTxnMarkers:          includeTxnMarkers,
-			ReplicationSlotName:        dbSlotName,
-			BatchSize:                  snapshotBatchSize,
-			StreamOldData:              streamSnapshot,
-			TemporaryReplicationSlot:   temporarySlot,
-			SnapshotMemorySafetyFactor: snapshotMemSafetyFactor,
-			PgStandbyTimeout:           pgStandbyTimeout,
-			WalMonitorInterval:         walMonitorInterval,
-			MaxParallelSnapshotTables:  maxParallelSnapshotTables,
-			Logger:                     mgr.Logger(),
-			UnchangedToastValue:        unchangedToastValue,
-			HeartbeatInterval:          heartbeatInterval,
+			IncludeTxnMarkers:        includeTxnMarkers,
+			ReplicationSlotName:      dbSlotName,
+			BatchSize:                snapshotBatchSize,
+			StreamOldData:            streamSnapshot,
+			TemporaryReplicationSlot: temporarySlot,
+			PgStandbyTimeout:         pgStandbyTimeout,
+			WalMonitorInterval:       walMonitorInterval,
+			MaxSnapshotWorkers:       maxParallelSnapshotTables,
+			Logger:                   mgr.Logger(),
+			UnchangedToastValue:      unchangedToastValue,
+			HeartbeatInterval:        heartbeatInterval,
 		},
 		batching:        batching,
 		checkpointLimit: checkpointLimit,
@@ -377,22 +372,28 @@ func (p *pgStreamInput) processStream(pgStream *pglogicalstream.Stream, batcher 
 				p.logger.Debugf("failed to flush batch: %s", err)
 				break
 			}
-		case message := <-pgStream.Messages():
+		case batch := <-pgStream.Messages():
 			var (
-				mb  []byte
-				err error
+				flush bool
+				mb    []byte
+				err   error
 			)
-			if mb, err = json.Marshal(message.Data); err != nil {
-				p.logger.Errorf("failure to marshal message: %s", err)
-				break
+			for _, msg := range batch {
+				if mb, err = json.Marshal(msg.Data); err != nil {
+					p.logger.Errorf("failure to marshal message: %s", err)
+					break
+				}
+				batchMsg := service.NewMessage(mb)
+				batchMsg.MetaSet("table", msg.Table)
+				batchMsg.MetaSet("operation", string(msg.Operation))
+				if msg.LSN != nil {
+					batchMsg.MetaSet("lsn", *msg.LSN)
+				}
+				if batcher.Add(batchMsg) {
+					flush = true
+				}
 			}
-			batchMsg := service.NewMessage(mb)
-			batchMsg.MetaSet("table", message.Table)
-			batchMsg.MetaSet("operation", string(message.Operation))
-			if message.LSN != nil {
-				batchMsg.MetaSet("lsn", *message.LSN)
-			}
-			if batcher.Add(batchMsg) {
+			if flush {
 				nextTimedBatchChan = nil
 				flushedBatch, err := batcher.Flush(ctx)
 				if err != nil {

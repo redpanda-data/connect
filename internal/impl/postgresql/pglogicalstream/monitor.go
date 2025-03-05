@@ -12,10 +12,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"maps"
-	"math"
 	"strings"
-	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -33,13 +31,12 @@ type Report struct {
 type Monitor struct {
 	// tableStat contains numbers of rows for each table determined at the moment of the snapshot creation
 	// this is used to calculate snapshot ingestion progress
-	tableStat map[TableFQN]int64
-	lock      sync.Mutex
-	// snapshotProgress is a map of table names to the percentage of rows ingested from the snapshot
-	snapshotProgress map[TableFQN]float64
+	tableStat map[TableFQN]float64
+	// snapshotProgress is a map of table names to the number of rows ingested from the snapshot
+	snapshotProgress map[TableFQN]*atomic.Int64
 	// replicationLagInBytes is the replication lag in bytes measured by
 	// finding the difference between the latest LSN and the last confirmed LSN for the replication slot
-	replicationLagInBytes int64
+	replicationLagInBytes atomic.Int64
 
 	dbConn   *sql.DB
 	slotName string
@@ -65,13 +62,18 @@ func NewMonitor(
 	}
 
 	m := &Monitor{
-		snapshotProgress:      map[TableFQN]float64{},
-		replicationLagInBytes: 0,
+		snapshotProgress:      make(map[TableFQN]*atomic.Int64, len(tables)),
+		tableStat:             make(map[TableFQN]float64, len(tables)),
+		replicationLagInBytes: atomic.Int64{},
 		dbConn:                dbConn,
 		slotName:              slotName,
 		logger:                logger,
 	}
 	m.loop = asyncroutine.NewPeriodicWithContext(interval, m.readReplicationLag)
+	for _, table := range tables {
+		m.snapshotProgress[table] = &atomic.Int64{}
+		m.tableStat[table] = 0
+	}
 	if err = m.readTablesStat(ctx, tables); err != nil {
 		return nil, err
 	}
@@ -80,35 +82,36 @@ func NewMonitor(
 }
 
 // UpdateSnapshotProgressForTable updates the snapshot ingestion progress for a given table
-func (m *Monitor) UpdateSnapshotProgressForTable(table TableFQN, position int) {
-	m.lock.Lock()
-	defer m.lock.Unlock()
-	m.snapshotProgress[table] = math.Round(float64(position) / float64(m.tableStat[table]) * 100)
+func (m *Monitor) UpdateSnapshotProgressForTable(table TableFQN, read int) {
+	m.snapshotProgress[table].Add(int64(read))
+}
+
+// MarkSnapshotComplete means that we finished snapshotting.
+func (m *Monitor) MarkSnapshotComplete(table TableFQN) {
+	m.snapshotProgress[table].Store(int64(m.tableStat[table]))
 }
 
 // we need to read the tables stat to calculate the snapshot ingestion progress
 func (m *Monitor) readTablesStat(ctx context.Context, tables []TableFQN) error {
-	results := make(map[TableFQN]int64)
-
 	for _, table := range tables {
-		var count int64
-		err := m.dbConn.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+table.String()).Scan(&count)
+		var count float64
+		err := m.dbConn.QueryRowContext(
+			ctx,
+			`SELECT reltuples FROM pg_class WHERE oid = $1::regclass`,
+			table.String(),
+		).Scan(&count)
 
 		if err != nil {
-			// If the error is because the table doesn't exist, we'll set the count to 0
-			// and continue. You might want to log this situation.
+			// Keep going if only the table does not exist
 			if strings.Contains(err.Error(), "does not exist") {
-				results[table] = 0
 				continue
 			}
 			// For any other error, we'll return it
 			return fmt.Errorf("error counting rows in table %s: %w", table, err)
 		}
 
-		results[table] = count
+		m.tableStat[table] = count
 	}
-
-	m.tableStat = results
 	return nil
 }
 
@@ -132,20 +135,24 @@ func (m *Monitor) readReplicationLag(ctx context.Context) {
 		}
 	}
 
-	m.lock.Lock()
-	m.replicationLagInBytes = lagbytes
-	m.lock.Unlock()
+	m.replicationLagInBytes.Store(lagbytes)
 }
 
 // Report returns a snapshot of the monitor's state
 func (m *Monitor) Report() *Report {
-	m.lock.Lock()
-	defer m.lock.Unlock()
 	// report the snapshot ingestion progress
 	// report the replication lag
+	progress := map[TableFQN]float64{}
+	for table, read := range m.snapshotProgress {
+		total := m.tableStat[table]
+		if total <= 0 {
+			continue
+		}
+		progress[table] = float64(read.Load()) / total
+	}
 	return &Report{
-		WalLagInBytes: m.replicationLagInBytes,
-		TableProgress: maps.Clone(m.snapshotProgress),
+		WalLagInBytes: m.replicationLagInBytes.Load(),
+		TableProgress: progress,
 	}
 }
 
