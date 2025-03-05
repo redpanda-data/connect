@@ -32,7 +32,7 @@ buffer:
     limits:
       count: 0
     max_segment_size: 20MiB
-    max_segment_age: 1d
+    max_segment_age: 24h
     shards: 1
 ```
 
@@ -99,14 +99,14 @@ The maximum age of a single segment of the WAL will be before being rotated.
 
 *Type*: `string`
 
-*Default*: `"1d"`
+*Default*: `"24h"`
 
 ```yml
 # Examples
 
 max_segment_age: 1h
 
-max_segment_age: 7d
+max_segment_age: 72h
 ```
 
 === `shards`
