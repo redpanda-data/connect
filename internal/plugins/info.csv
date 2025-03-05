@@ -97,7 +97,7 @@ hdfs                      ,output    ,hdfs                      ,0.0.0   ,commun
 http                      ,processor ,HTTP                      ,0.0.0   ,certified  ,n          ,y     ,y
 http_client               ,input     ,http_client               ,0.0.0   ,certified  ,n          ,y     ,y
 http_client               ,output    ,http_client               ,0.0.0   ,certified  ,n          ,y     ,y
-http_server               ,input     ,http_server               ,0.0.0   ,certified  ,n          ,n     ,n
+http_server               ,input     ,http_server               ,0.0.0   ,certified  ,n          ,y     ,y
 http_server               ,output    ,http_server               ,0.0.0   ,certified  ,n          ,n     ,n
 influxdb                  ,metric    ,influxdb                  ,3.36.0  ,community  ,n          ,n     ,n
 inproc                    ,input     ,inproc                    ,0.0.0   ,certified  ,n          ,y     ,y
