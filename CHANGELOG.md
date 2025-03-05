@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.51.0 - TBD
+
+### Added
+
+- Field `private_key` added to `ssh` input and output to let users directly specify their private key contents in their config instead of writing it to a file (@ooesili)
+
 ## 4.50.0 - 2025-03-18
 
 ### Added

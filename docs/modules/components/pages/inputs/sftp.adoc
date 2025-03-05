@@ -44,6 +44,7 @@ input:
       username: ""
       password: ""
       private_key_file: ""
+      private_key: ""
       private_key_pass: ""
     paths: [] # No default (required)
     auto_replay_nacks: true
@@ -71,6 +72,7 @@ input:
       username: ""
       password: ""
       private_key_file: ""
+      private_key: ""
       private_key_pass: ""
     paths: [] # No default (required)
     auto_replay_nacks: true
@@ -139,6 +141,20 @@ This field contains sensitive information that usually shouldn't be added to a c
 === `credentials.private_key_file`
 
 The private key for the username to connect to the SFTP server.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `credentials.private_key`
+
+The private key file for the username to connect to the SFTP server.
+[CAUTION]
+====
+This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
+====
+
 
 
 *Type*: `string`

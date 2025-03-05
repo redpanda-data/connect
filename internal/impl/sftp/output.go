@@ -115,7 +115,7 @@ func newWriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (s 
 	if s.path, err = conf.FieldInterpolatedString(soFieldPath); err != nil {
 		return
 	}
-	if s.creds, err = credentialsFromParsed(conf.Namespace(soFieldCredentials)); err != nil {
+	if s.creds, err = credentialsFromParsed(conf.Namespace(soFieldCredentials), mgr); err != nil {
 		return
 	}
 
