@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Output `snowflake_streaming` has two new stats `snowflake_register_latency_ns` and `snowflake_commit_latency_ns`. (@rockwotj)
+- Field `private_key` added to `ssh` input and output to let users directly specify their private key contents in their config instead of writing it to a file (@ooesili)
 
 ### Changed
 

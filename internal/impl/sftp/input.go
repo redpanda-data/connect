@@ -142,7 +142,7 @@ func newSFTPReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources)
 	if s.paths, err = conf.FieldStringList(siFieldPaths); err != nil {
 		return
 	}
-	if s.creds, err = credentialsFromParsed(conf.Namespace(siFieldCredentials)); err != nil {
+	if s.creds, err = credentialsFromParsed(conf.Namespace(siFieldCredentials), mgr); err != nil {
 		return
 	}
 	if s.scannerCtor, err = codec.DeprecatedCodecFromParsed(conf); err != nil {
