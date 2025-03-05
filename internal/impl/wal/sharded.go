@@ -46,7 +46,7 @@ type sharded struct {
 var _ service.BatchBuffer = &sharded{}
 
 func init() {
-	service.RegisterBatchBuffer(
+	err := service.RegisterBatchBuffer(
 		"wal",
 		service.NewConfigSpec().
 			Summary(`A write ahead log (WAL) buffer that keeps writes in memory but also persists batches to disk.`).
@@ -105,7 +105,7 @@ will be replayed upon startup.
 				return nil, err
 			}
 			if shardCount == 1 {
-				return newWALShard(limit, &WALOptions{
+				return newWALShard(limit, &Options{
 					LogDir:     filepath.Join(path, "shard_0"),
 					MaxLogSize: int64(maxSegmentSize),
 					MaxLogAge:  maxSegmentAge,
@@ -114,7 +114,7 @@ will be replayed upon startup.
 			}
 			var shards []service.BatchBuffer
 			for i := range shardCount {
-				s, err := newWALShard(limit, &WALOptions{
+				s, err := newWALShard(limit, &Options{
 					LogDir:     filepath.Join(path, fmt.Sprintf("shard_%d", i)),
 					MaxLogSize: int64(maxSegmentSize),
 					MaxLogAge:  maxSegmentAge,
@@ -127,6 +127,9 @@ will be replayed upon startup.
 			}
 			return newShardedBuffer(shards)
 		})
+	if err != nil {
+		panic(err)
+	}
 }
 
 func newShardedBuffer(shards []service.BatchBuffer) (*sharded, error) {

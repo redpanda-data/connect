@@ -27,6 +27,7 @@ func TestEncodingRoundtrip(t *testing.T) {
 		service.NewMessage([]byte(`hello test!`)),
 		service.NewMessage([]byte(`whoa cool`)),
 	}
+	expected[0].MetaSetMut("foo", []any{"bar", 3.14, true})
 	b, err := appendBatchV0(nil, expected)
 	require.NoError(t, err)
 	actual, err := readBatch(b)

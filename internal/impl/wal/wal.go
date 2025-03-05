@@ -50,8 +50,8 @@ type file interface {
 	Sync() error
 }
 
-// WALOptions are options for the WAL
-type WALOptions struct {
+// Options are options for the WAL
+type Options struct {
 	// LogDir is where the wal logs will be stored
 	LogDir string
 	// Maximum size in bytes for each file
@@ -62,6 +62,7 @@ type WALOptions struct {
 	Log *service.Logger
 }
 
+// SegmentID is an ID for an individual segment file
 type SegmentID int
 
 const (
@@ -72,10 +73,11 @@ const (
 )
 
 var (
+	// ErrCannotDeleteCurrentSegment is returned when the current segment is attempted to be deleted.
 	ErrCannotDeleteCurrentSegment = errors.New("cannot delete current segment")
 )
 
-// A Write Ahead Log (WAL) is a data structure used to record changes to a database or
+// WriteAheadLog (WAL) is a data structure used to record changes to a database or
 // any persistent storage system in a sequential and durable manner. This allows for
 // crash recovery and data integrity.
 //
@@ -98,7 +100,7 @@ type WriteAheadLog struct {
 }
 
 // NewWriteAheadLog creates a new instance of the WriteAheadLog with the provided options.
-func NewWriteAheadLog(opts *WALOptions) (*WriteAheadLog, error) {
+func NewWriteAheadLog(opts *Options) (*WriteAheadLog, error) {
 	if opts.MaxLogAge < time.Millisecond {
 		return nil, fmt.Errorf(
 			"unable to create WAL log segments with shorter time period than 1 millisecond: %v",
@@ -166,7 +168,10 @@ func (wal *WriteAheadLog) openExistingOrCreateNew(dirPath string) error {
 			return err
 		}
 		wal.currentSegment = file
-		wal.currentSegment.Seek(0, io.SeekEnd)
+		_, err = wal.currentSegment.Seek(0, io.SeekEnd)
+		if err != nil {
+			return err
+		}
 		wal.bufWriter = bufio.NewWriter(file)
 		wal.currentSegmentSize = fi.Size()
 		wal.closedSegmentCount = len(logFiles) - 1
@@ -228,7 +233,7 @@ func (wal *WriteAheadLog) Close() error {
 	return wal.currentSegment.Close()
 }
 
-// GetOffset returns the current log offset.
+// CurrentSegment returns the current log segment ID.
 func (wal *WriteAheadLog) CurrentSegment() SegmentID {
 	return wal.currentSegmentID
 }

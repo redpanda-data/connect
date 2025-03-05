@@ -69,7 +69,7 @@ const (
 
 var _ service.BatchBuffer = &shard{}
 
-func newWALShard(limit int, opts *WALOptions) (*shard, error) {
+func newWALShard(limit int, opts *Options) (*shard, error) {
 	wal, err := NewWriteAheadLog(opts)
 	if err != nil {
 		return nil, err
@@ -209,6 +209,11 @@ type (
 	persistedBatch struct {
 		id  SegmentID
 		err error
+	}
+	// The main loop recieves these from ack'd messages
+	ackedSegment struct {
+		id  SegmentID
+		err chan<- error
 	}
 	// The main loop recieves these from WALPersistLoop
 	deletedSegment struct {
@@ -373,18 +378,6 @@ mainLoop:
 
 	return nil
 }
-
-type (
-	walLoopMsg   interface{}
-	persistBatch struct {
-		batch service.MessageBatch
-	}
-	// The WAL loop recieves these from ack'ing messages
-	ackedSegment struct {
-		id  SegmentID
-		err chan<- error
-	}
-)
 
 func (s *shard) runWALLoop(ctx context.Context) error {
 	err := s.wal.Replay(func(id SegmentID, b []byte) error {

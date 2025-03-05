@@ -60,13 +60,13 @@ func makeAckFn(t *testing.T) service.AckFunc {
 
 func TestBufferSingle(t *testing.T) {
 	t.Parallel()
-	shard, err := newWALShard(0, &WALOptions{
+	shard, err := newWALShard(0, &Options{
 		LogDir:     t.TempDir(),
 		MaxLogSize: humanize.MiByte,
 		MaxLogAge:  time.Minute,
 	})
 	require.NoError(t, err)
-	ctx := t.Context()
+	ctx := context.Background()
 	err = shard.WriteBatch(ctx, makeBatch(0), makeAckFn(t))
 	require.NoError(t, err)
 	b, ackFn, err := shard.ReadBatch(ctx)
@@ -78,13 +78,13 @@ func TestBufferSingle(t *testing.T) {
 
 func TestBufferSequential(t *testing.T) {
 	t.Parallel()
-	shard, err := newWALShard(0, &WALOptions{
+	shard, err := newWALShard(0, &Options{
 		LogDir:     t.TempDir(),
 		MaxLogSize: humanize.MiByte,
 		MaxLogAge:  time.Minute,
 	})
 	require.NoError(t, err)
-	ctx := t.Context()
+	ctx := context.Background()
 	for i := range 10 {
 		b := makeBatch(i)
 		err = shard.WriteBatch(ctx, b, makeAckFn(t))
@@ -101,13 +101,13 @@ func TestBufferSequential(t *testing.T) {
 
 func TestBufferInterleaved(t *testing.T) {
 	t.Parallel()
-	shard, err := newWALShard(0, &WALOptions{
+	shard, err := newWALShard(0, &Options{
 		LogDir:     t.TempDir(),
 		MaxLogSize: humanize.MiByte,
 		MaxLogAge:  time.Minute,
 	})
 	require.NoError(t, err)
-	ctx := t.Context()
+	ctx := context.Background()
 	for i := range 10 {
 		b := makeBatch(i)
 		err = shard.WriteBatch(ctx, b, makeAckFn(t))
@@ -123,13 +123,13 @@ func TestBufferInterleaved(t *testing.T) {
 func TestBufferRandomized(t *testing.T) {
 	runTest := func(t *testing.T, ackHandler func(service.AckFunc)) {
 		t.Parallel()
-		shard, err := newWALShard(0, &WALOptions{
+		shard, err := newWALShard(0, &Options{
 			LogDir:     t.TempDir(),
 			MaxLogSize: humanize.MiByte,
 			MaxLogAge:  time.Minute,
 		})
 		require.NoError(t, err)
-		ctx := t.Context()
+		ctx := context.Background()
 		results := make(chan string, 10000)
 		for i := range 10 {
 			go func() {
@@ -165,7 +165,7 @@ func TestBufferRandomized(t *testing.T) {
 			if ackFn == nil {
 				return
 			}
-			require.NoError(t, ackFn(t.Context(), nil))
+			require.NoError(t, ackFn(context.Background(), nil))
 		})
 	})
 	t.Run("AckDelayed", func(t *testing.T) {
@@ -174,7 +174,7 @@ func TestBufferRandomized(t *testing.T) {
 				return
 			}
 			time.Sleep(time.Millisecond)
-			require.NoError(t, ackFn(t.Context(), nil))
+			require.NoError(t, ackFn(context.Background(), nil))
 		})
 	})
 	t.Run("AckAsync", func(t *testing.T) {
@@ -187,7 +187,7 @@ func TestBufferRandomized(t *testing.T) {
 				go func() {
 					defer wg.Done()
 					time.Sleep(time.Millisecond)
-					require.NoError(t, ackFn(t.Context(), nil))
+					require.NoError(t, ackFn(context.Background(), nil))
 				}()
 			}
 		})
@@ -202,13 +202,13 @@ func TestBufferRandomized(t *testing.T) {
 func TestFileCleanup(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	shard, err := newWALShard(0, &WALOptions{
+	shard, err := newWALShard(0, &Options{
 		LogDir:     dir,
 		MaxLogSize: humanize.MiByte,
 		MaxLogAge:  time.Minute,
 	})
 	require.NoError(t, err)
-	ctx := t.Context()
+	ctx := context.Background()
 	var ackFns []service.AckFunc
 	for range 1024 {
 		// Make big batches
@@ -236,13 +236,13 @@ func TestFileCleanup(t *testing.T) {
 func TestReplay(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	shard, err := newWALShard(0, &WALOptions{
+	shard, err := newWALShard(0, &Options{
 		LogDir:     dir,
 		MaxLogSize: humanize.MiByte,
 		MaxLogAge:  time.Minute,
 	})
 	require.NoError(t, err)
-	ctx := t.Context()
+	ctx := context.Background()
 	var wg sync.WaitGroup
 	for i := range 10 {
 		wg.Add(1)
@@ -256,7 +256,7 @@ func TestReplay(t *testing.T) {
 	}
 	wg.Wait()
 	require.NoError(t, shard.Close(ctx))
-	shard, err = newWALShard(0, &WALOptions{
+	shard, err = newWALShard(0, &Options{
 		LogDir:     dir,
 		MaxLogSize: humanize.MiByte,
 		MaxLogAge:  time.Minute,
@@ -274,13 +274,13 @@ func TestReplay(t *testing.T) {
 func TestEndOfInput(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	shard, err := newWALShard(0, &WALOptions{
+	shard, err := newWALShard(0, &Options{
 		LogDir:     dir,
 		MaxLogSize: humanize.MiByte,
 		MaxLogAge:  time.Minute,
 	})
 	require.NoError(t, err)
-	ctx := t.Context()
+	ctx := context.Background()
 	for i := range 10 {
 		b := makeBatch(i)
 		err = shard.WriteBatch(ctx, b, makeAckFn(t))
@@ -301,13 +301,13 @@ func TestEndOfInput(t *testing.T) {
 func TestEndOfInputWithReplay(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	shard, err := newWALShard(0, &WALOptions{
+	shard, err := newWALShard(0, &Options{
 		LogDir:     dir,
 		MaxLogSize: humanize.MiByte,
 		MaxLogAge:  time.Minute,
 	})
 	require.NoError(t, err)
-	ctx := t.Context()
+	ctx := context.Background()
 	var wg sync.WaitGroup
 	for i := range 10 {
 		wg.Add(1)
@@ -321,7 +321,7 @@ func TestEndOfInputWithReplay(t *testing.T) {
 	}
 	wg.Wait()
 	require.NoError(t, shard.Close(ctx))
-	shard, err = newWALShard(0, &WALOptions{
+	shard, err = newWALShard(0, &Options{
 		LogDir:     dir,
 		MaxLogSize: humanize.MiByte,
 		MaxLogAge:  time.Minute,
@@ -336,6 +336,9 @@ func TestEndOfInputWithReplay(t *testing.T) {
 	}
 	require.NoError(t, shard.Close(ctx))
 	require.NoError(t, fs.WalkDir(os.DirFS(dir), ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
 		if d.IsDir() {
 			return nil
 		}
