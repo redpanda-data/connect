@@ -23,6 +23,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
 )
 
@@ -71,7 +72,12 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		}
 	}()
 
+	debugger := asyncroutine.NewPeriodic(5*time.Second, func() {
+		config.Logger.Debug("Waiting to ping database...")
+	})
+	debugger.Start()
 	dbConn, err := pgconn.ConnectConfig(ctx, config.DBConfig.Copy())
+	debugger.Stop()
 	if err != nil {
 		return nil, err
 	}
@@ -542,6 +548,7 @@ func (s *Stream) processSnapshot(ctx context.Context, snapshotter *snapshotter) 
 	for _, table := range s.tables {
 		table := table
 		s.logger.Debugf("Planning snapshot scan for table: %v", table)
+		planStartTime := time.Now()
 		primaryKeyColumns, err := s.getPrimaryKeyColumn(ctx, table)
 		if err != nil {
 			return fmt.Errorf("failed to get primary key column for table %v: %w", table, err)
@@ -578,13 +585,15 @@ func (s *Stream) processSnapshot(ctx context.Context, snapshotter *snapshotter) 
 
 		if len(ranges) > 1 {
 			s.logger.Debugf(
-				"planning to split %s into %d chunks and processing in parallel",
+				"created plan in %v to split %s into %d chunks and process in parallel",
+				time.Since(planStartTime),
 				table,
 				len(ranges),
 			)
 		} else {
 			s.logger.Debugf(
-				"planning to scanning %s sequentially",
+				"created plan in %v to scan %s sequentially",
+				time.Since(planStartTime),
 				table,
 			)
 		}

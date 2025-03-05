@@ -150,10 +150,11 @@ func (s *snapshotTxn) randomlySampleKeyspace(
 	pkColumns []string,
 	numSamples int,
 ) (splits []primaryKey, err error) {
+	// ensure each CTE name is prefixed with `_rpcn__` so we don't clash with the user table name.
 	query := `
 WITH
 
-table_stats AS (
+_rpcn__table_stats AS (
   SELECT
     relpages AS page_count
   FROM
@@ -162,7 +163,7 @@ table_stats AS (
   oid = $1::regclass
 ),
 
-sampled_pages AS (
+_rpcn__sampled_pages AS (
   SELECT
     DISTINCT
   ON
@@ -176,17 +177,26 @@ sampled_pages AS (
       SELECT
         LEAST(100.0, GREATEST(0.0001, 100.0 * ($REQUESTED_SAMPLES) / GREATEST(page_count, 1)))
       FROM
-        table_stats) )
-)
-
+        _rpcn__table_stats) )
+),
+-- Force materialization of this CTE to prevent the query planner from merging this with
+-- the output. When merged, the planner will likely choose to scan the entire primary key
+-- index which is slow. However we really don't want that, we just want to sample, *then*
+-- lookup the primary key as a secondary step in the plan. It's really just the ORDER BY
+-- clause on the primary key that causes the planner to do that, so adding the optimization
+-- barrier in between prevents it.
+_rpcn__sampled_keys AS MATERIALIZED (
   SELECT
     $PRIMARY_KEY_COLUMNS
   FROM
     $TABLE t
   INNER JOIN
-    sampled_pages sp
+    _rpcn__sampled_pages sp
   ON
     t.ctid = sp.ctid 
+)
+  SELECT *
+  FROM _rpcn__sampled_keys t
   ORDER BY
     $PRIMARY_KEY_COLUMNS
 `

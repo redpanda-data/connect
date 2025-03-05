@@ -31,7 +31,7 @@ type Report struct {
 type Monitor struct {
 	// tableStat contains numbers of rows for each table determined at the moment of the snapshot creation
 	// this is used to calculate snapshot ingestion progress
-	tableStat map[TableFQN]int64
+	tableStat map[TableFQN]float64
 	// snapshotProgress is a map of table names to the percentage of rows ingested from the snapshot
 	snapshotProgress map[TableFQN]*atomic.Int64
 	// replicationLagInBytes is the replication lag in bytes measured by
@@ -63,7 +63,7 @@ func NewMonitor(
 
 	m := &Monitor{
 		snapshotProgress:      make(map[TableFQN]*atomic.Int64, len(tables)),
-		tableStat:             make(map[TableFQN]int64, len(tables)),
+		tableStat:             make(map[TableFQN]float64, len(tables)),
 		replicationLagInBytes: atomic.Int64{},
 		dbConn:                dbConn,
 		slotName:              slotName,
@@ -88,13 +88,13 @@ func (m *Monitor) UpdateSnapshotProgressForTable(table TableFQN, read int) {
 
 // MarkSnapshotComplete means that we finished snapshotting.
 func (m *Monitor) MarkSnapshotComplete(table TableFQN) {
-	m.snapshotProgress[table].Store(m.tableStat[table])
+	m.snapshotProgress[table].Store(int64(m.tableStat[table]))
 }
 
 // we need to read the tables stat to calculate the snapshot ingestion progress
 func (m *Monitor) readTablesStat(ctx context.Context, tables []TableFQN) error {
 	for _, table := range tables {
-		var count int64
+		var count float64
 		err := m.dbConn.QueryRowContext(
 			ctx,
 			`SELECT reltuples FROM pg_class WHERE oid = $1::regclass`,
@@ -148,7 +148,7 @@ func (m *Monitor) Report() *Report {
 		if total <= 0 {
 			continue
 		}
-		progress[table] = float64(read.Load()) / float64(total)
+		progress[table] = float64(read.Load()) / total
 	}
 	return &Report{
 		WalLagInBytes: m.replicationLagInBytes.Load(),
