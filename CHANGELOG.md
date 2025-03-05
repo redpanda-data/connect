@@ -9,6 +9,11 @@ All notable changes to this project will be documented in this file.
 
 - Output `snowflake_streaming` has two new stats `snowflake_register_latency_ns` and `snowflake_commit_latency_ns`. (@rockwotj)
 
+### Changed
+
+- Field `snapshot_memory_safety_factor` is now removed for input `postgres_cdc`, the batch size must be explicitly defined, the batch size default is 1000. (@rockwotj)
+- Input `postgres_cdc` now supports intra-table snapshot read parallelism in addition to inter-table parallelism. (@rockwotj)
+
 ## 4.48.0 - 2025-03-03
 
 ### Added
@@ -41,8 +46,6 @@ All notable changes to this project will be documented in this file.
 - Input `postgres_cdc` now does not add a prefix to the replication slot name, if upgrading from a previous version, prefix your current replication slot with `rs_` to continue to use the same replication slot. (@rockwotj)
 -  The `redpanda_migrator` output now uses the source topic config when creating a topic in the destination cluster. It also attempts to transfer topic ACLs to the destination cluster even if the topics already exist. (@mihaitodor)
 - When `preserve_logical_types` is `true` in `schema_registry_decode`, convert time logical times into bloblang timestamps instead of duration strings. (@rockwotj)
-- Field `snapshot_memory_safety_factor` is now removed for input `postgres_cdc`, the batch size must be explicitly defined, the batch size default is 1000. (@rockwotj)
-- Input `postgres_cdc` now supports intra-table snapshot read parallelism in addition to inter-table parallelism. (@rockwotj)
 
 ## 4.47.1 - 2025-02-11
 
