@@ -32,7 +32,7 @@ type Monitor struct {
 	// tableStat contains numbers of rows for each table determined at the moment of the snapshot creation
 	// this is used to calculate snapshot ingestion progress
 	tableStat map[TableFQN]float64
-	// snapshotProgress is a map of table names to the percentage of rows ingested from the snapshot
+	// snapshotProgress is a map of table names to the number of rows ingested from the snapshot
 	snapshotProgress map[TableFQN]*atomic.Int64
 	// replicationLagInBytes is the replication lag in bytes measured by
 	// finding the difference between the latest LSN and the last confirmed LSN for the replication slot
