@@ -18,6 +18,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/fs"
+	"os"
 	"slices"
 	"strconv"
 	"sync"
@@ -333,4 +335,17 @@ func TestEndOfInputWithReplay(t *testing.T) {
 		require.JSONEq(t, fmt.Sprintf("[%d]", i), batchAsJSON(t, b))
 	}
 	require.NoError(t, shard.Close(ctx))
+	require.NoError(t, fs.WalkDir(os.DirFS(dir), ".", func(path string, d fs.DirEntry, err error) error {
+		if d.IsDir() {
+			return nil
+		}
+		stat, err := d.Info()
+		if err != nil {
+			return err
+		}
+		if stat.Size() > 0 {
+			return fmt.Errorf("non empty file %s found after close", path)
+		}
+		return nil
+	}))
 }

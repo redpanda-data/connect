@@ -190,7 +190,7 @@ func (wal *WriteAheadLog) Append(data []byte) (SegmentID, error) {
 		if err := wal.Sync(); err != nil {
 			return 0, err
 		}
-		if err := wal.rotateLog(); err != nil {
+		if err := wal.RotateSegment(); err != nil {
 			return 0, err
 		}
 	}
@@ -243,8 +243,8 @@ func (wal *WriteAheadLog) Sync() error {
 	return wal.currentSegment.Sync()
 }
 
-// rotateLog closes the current file, opens a new one.
-func (wal *WriteAheadLog) rotateLog() error {
+// RotateSegment closes the current file, opens a new one.
+func (wal *WriteAheadLog) RotateSegment() error {
 	if err := wal.currentSegment.Close(); err != nil {
 		return err
 	}
@@ -369,7 +369,8 @@ func (wal *WriteAheadLog) iterateFile(bufReader bufio.Reader, callback func([]by
 			break
 		}
 
-		readBytes, err = bufReader.Peek(size)
+		readBytes := make([]byte, size)
+		_, err = io.ReadFull(&bufReader, readBytes)
 		if err != nil {
 			break
 		}
@@ -382,7 +383,6 @@ func (wal *WriteAheadLog) iterateFile(bufReader bufio.Reader, callback func([]by
 		if err = callback(readBytes); err != nil {
 			break
 		}
-		_, err = bufReader.Discard(size)
 	}
 	if err == io.EOF {
 		return nil

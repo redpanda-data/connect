@@ -16,6 +16,7 @@ package wal
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -188,7 +189,9 @@ func (s *shard) EndOfInput() {
 func (s *shard) Close(ctx context.Context) error {
 	select {
 	case s.mainChan <- &closeBuffer{}:
-		return s.loops.Wait()
+		loopErr := s.loops.Wait()
+		walErr := s.wal.Close()
+		return errors.Join(loopErr, walErr)
 	case <-ctx.Done():
 		s.log.Warn("unable to cleanly close WAL buffer")
 		return ctx.Err()
@@ -243,11 +246,15 @@ func (s *shard) runMainLoop(ctx context.Context) error {
 		}
 		return v.(*atomic.Int64).Load()
 	}
+	removeSegmentCount := func(id SegmentID) {
+		s.pendingBySegment.Delete(id)
+	}
 	pushToOutput := func(batch service.MessageBatch, id SegmentID) {
 		if currentSegment != id {
 			s.log.Tracef("WAL rotation: (previous_segment=%v, next_segment=%v)", currentSegment, id)
 			// The segment was all acked by the time we are sending this new batch
 			if getSegmentCount(currentSegment) == 0 && currentSegment != InvalidSegmentID {
+				removeSegmentCount(currentSegment)
 				pending.PushBack(&pendingWALOp{
 					persist: nil,
 					remove:  &ackedSegment{id: currentSegment, err: make(chan error, 1)},
@@ -255,7 +262,9 @@ func (s *shard) runMainLoop(ctx context.Context) error {
 			}
 		}
 		currentSegment = id
-		incrementSegmentCount(id)
+		if batch != nil {
+			incrementSegmentCount(id)
+		}
 		s.durableCond.L.Lock()
 		s.durable.PushBack(durableBatch{
 			batch: batch, segmentID: id,
@@ -280,9 +289,10 @@ func (s *shard) runMainLoop(ctx context.Context) error {
 				pushToOutput(nil, currentSegment)
 				pending.PopFront()
 				nextWALOp()
+			} else {
+				inflight = front
+				pending.PopFront()
 			}
-			inflight = front
-			pending.PopFront()
 		default:
 		}
 	}
@@ -299,6 +309,7 @@ mainLoop:
 				m.err <- nil
 				break recvSwitch
 			}
+			removeSegmentCount(currentSegment)
 			pending.PushBack(&pendingWALOp{persist: nil, remove: m})
 		case *deletedSegment:
 			if inflight == nil || inflight.remove == nil {
@@ -346,7 +357,17 @@ mainLoop:
 			_ = item.persist.ackFn(context.Background(), context.Canceled)
 		}
 		if item.remove != nil {
-			item.remove.err <- context.Canceled
+			item.remove.err <- s.wal.DeleteSegment(item.remove.id)
+		}
+	}
+
+	// Best effort clean up the current segment if everything is clean
+	if currentSegment != InvalidSegmentID && getSegmentCount(currentSegment) == 0 && inflight == nil {
+		if err := s.wal.RotateSegment(); err != nil {
+			return fmt.Errorf("unable to rotate last segment during shutdown, some messages will be replayed on startup: %v", err)
+		}
+		if err := s.wal.DeleteSegment(currentSegment); err != nil {
+			return fmt.Errorf("unable to delete last segment during shutdown, some messages will be replayed on startup: %v", err)
 		}
 	}
 
@@ -410,5 +431,5 @@ func (s *shard) runWALLoop(ctx context.Context) error {
 			}
 		}
 	}
-	return s.wal.Close()
+	return nil
 }
