@@ -178,10 +178,10 @@ func TestParquetDecodeProcessor(t *testing.T) {
 		for _, test := range tests {
 			_, err := pWtr.Write([]any{test.input})
 			require.NoError(t, err)
-			require.NoError(t, pWtr.Close())
 
 			expected = append(expected, test.input)
 		}
+		require.NoError(t, pWtr.Close())
 
 		reader := &parquetDecodeProcessor{}
 
