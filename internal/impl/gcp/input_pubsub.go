@@ -19,6 +19,7 @@ import (
 	"errors"
 	"strings"
 	"sync"
+	"time"
 
 	"cloud.google.com/go/pubsub"
 	"google.golang.org/api/option"
@@ -233,6 +234,14 @@ func (c *gcpPubSubReader) Connect(ignored context.Context) error {
 	sub.ReceiveSettings.MaxOutstandingMessages = c.conf.MaxOutstandingMessages
 	sub.ReceiveSettings.MaxOutstandingBytes = c.conf.MaxOutstandingBytes
 	sub.ReceiveSettings.Synchronous = c.conf.Sync
+
+	p, err := sub.IAM().TestPermissions(context.Background(), []string{"pubsub.subscriptions.consume"})
+	if err != nil {
+		return service.NewErrBackOff(err, 5*time.Second)
+	}
+	if len(p) == 0 {
+		return service.NewErrBackOff(errors.New("missing subscription permissions"), 5*time.Second)
+	}
 
 	subCtx, cancel := context.WithCancel(context.Background())
 	msgsChan := make(chan *pubsub.Message, 1)
