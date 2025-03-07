@@ -197,7 +197,7 @@ func (m *mongoInput) Connect(ctx context.Context) error {
 	}
 	if opErr != nil {
 		_ = m.client.Disconnect(ctx)
-		return err
+		return opErr
 	}
 	return nil
 }
