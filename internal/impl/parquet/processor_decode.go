@@ -131,9 +131,14 @@ func (s *parquetDecodeProcessor) Process(ctx context.Context, msg *service.Messa
 			break
 		}
 
-		for i := 0; i < n; i++ {
+		schema := pRdr.Schema()
+		for _, row := range rowBuf[:n] {
 			newMsg := msg.Copy()
-			newMsg.SetStructuredMut(rowBuf[i])
+			row, err = visitWithSchema(decodingCoersionVisitor{}, row, schema)
+			if err != nil {
+				return nil, fmt.Errorf("coercing logical types after decoding: %w", err)
+			}
+			newMsg.SetStructuredMut(row)
 			resBatch = append(resBatch, newMsg)
 		}
 	}
