@@ -3,9 +3,9 @@ http:
 
 input:
   generate:
-    interval: ""
+    interval: 3s
     count: 100_000_000
-    batch_size: 20
+    batch_size: 1
     mapping: |
       root.ID = counter()
       root.Name = [ "frosty", "spot", "oodles" ].index(random_int() % 3)
@@ -18,6 +18,8 @@ output:
 
 redpanda:
     seed_brokers: [ localhost:9092 ]
+    logs_topic: generate.logs
+    status_topic: generate.status
 
 metrics:
   prometheus:
