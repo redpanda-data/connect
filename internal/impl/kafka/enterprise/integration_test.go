@@ -37,6 +37,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
+	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka/enterprise"
 	"github.com/redpanda-data/connect/v4/internal/license"
 	"github.com/redpanda-data/connect/v4/internal/protoconnect"
@@ -116,6 +117,10 @@ func TestKafkaEnterpriseIntegration(t *testing.T) {
 		testStatusHappy(ctx, t, container.brokerAddr)
 	})
 
+	t.Run("test_logs_overrides", func(t *testing.T) {
+		testLogsOverrides(ctx, t, container.brokerAddr)
+	})
+
 	t.Run("test_logs_close_flush", func(t *testing.T) {
 		testLogsCloseFlush(ctx, t, container.brokerAddr)
 	})
@@ -127,7 +132,7 @@ func testLogsHappy(ctx context.Context, t testing.TB, brokerAddr string) {
 	require.NoError(t, createKafkaTopic(ctx, brokerAddr, logsTopic, 1))
 	require.NoError(t, createKafkaTopic(ctx, brokerAddr, statusTopic, 1))
 
-	conf, err := service.NewConfigSpec().Fields(enterprise.TopicLoggerFields()...).ParseYAML(fmt.Sprintf(`
+	conf, err := service.NewConfigSpec().Fields(enterprise.GlobalRedpandaFields()...).ParseYAML(fmt.Sprintf(`
 seed_brokers: [ %v ]
 pipeline_id: bar
 logs_topic: %v
@@ -139,12 +144,12 @@ max_message_bytes: 1MB
 
 	license.InjectTestService(conf.Resources())
 
-	logger := enterprise.NewTopicLogger("foo")
-	require.NoError(t, logger.InitOutputFromParsed(conf))
+	gmgr := enterprise.NewGlobalRedpandaManager("foo")
+	require.NoError(t, gmgr.InitFromParsedConfig(conf))
 
 	inputLogs := 10
 
-	tmpLogger := slog.New(logger)
+	tmpLogger := slog.New(gmgr.SlogHandler())
 	for i := 0; i < inputLogs; i++ {
 		tmpLogger.With("v", i).Info("This is a log message")
 	}
@@ -170,13 +175,113 @@ max_message_bytes: 1MB
 	}
 }
 
+func testLogsOverrides(ctx context.Context, t testing.TB, brokerAddr string) {
+	logsTopicConf, statusTopicConf := "__testlogsnope.logs", "_testlogsnope.status"
+	logsTopicOverride, statusTopicOverride := "__testlogsoverride.logs", "_testlogsoverride.status"
+	topicCustom := "__testlogsoverrides.custom"
+
+	require.NoError(t, createKafkaTopic(ctx, brokerAddr, logsTopicConf, 1))
+	require.NoError(t, createKafkaTopic(ctx, brokerAddr, statusTopicConf, 1))
+	require.NoError(t, createKafkaTopic(ctx, brokerAddr, logsTopicOverride, 1))
+	require.NoError(t, createKafkaTopic(ctx, brokerAddr, statusTopicOverride, 1))
+	require.NoError(t, createKafkaTopic(ctx, brokerAddr, topicCustom, 1))
+
+	conf, err := service.NewConfigSpec().Fields(enterprise.GlobalRedpandaFields()...).ParseYAML(fmt.Sprintf(`
+seed_brokers: [ %v ]
+pipeline_id: bar
+logs_topic: %v
+logs_level: info
+status_topic: %v
+max_message_bytes: 1MB
+`, brokerAddr, logsTopicConf, statusTopicConf), nil)
+	require.NoError(t, err)
+
+	license.InjectTestService(conf.Resources())
+
+	gmgr := enterprise.NewGlobalRedpandaManager("foo")
+	require.NoError(t, gmgr.InitWithCustomDetails("meowcustom", logsTopicOverride, statusTopicOverride, &kafka.FranzConnectionDetails{
+		SeedBrokers: []string{brokerAddr},
+		MetaMaxAge:  time.Minute * 5,
+		ClientID:    "foobar",
+	}))
+	require.NoError(t, gmgr.InitFromParsedConfig(conf))
+
+	inputLogs := 10
+
+	tmpLogger := slog.New(gmgr.SlogHandler())
+	for i := 0; i < inputLogs; i++ {
+		tmpLogger.With("v", i).Info("This is a log message")
+	}
+
+	outRecords := readNKafkaMessages(ctx, t, brokerAddr, logsTopicOverride, inputLogs)
+	assert.Len(t, outRecords, inputLogs)
+
+	for i, v := range outRecords {
+		j := struct {
+			PipelineID string `json:"pipeline_id"`
+			InstanceID string `json:"instance_id"`
+			Message    string `json:"message"`
+			Level      string `json:"level"`
+			V          string `json:"v"`
+		}{}
+		require.NoError(t, json.Unmarshal(v.Value, &j))
+		assert.Equal(t, "foo", j.InstanceID)
+		assert.Equal(t, "meowcustom", j.PipelineID)
+		assert.Equal(t, strconv.Itoa(i), j.V)
+		assert.Equal(t, "INFO", j.Level)
+		assert.Equal(t, "This is a log message", j.Message)
+		assert.Equal(t, "meowcustom", string(v.Key))
+	}
+
+	strmBuilder := service.NewStreamBuilder()
+
+	require.NoError(t, strmBuilder.AddOutputYAML(fmt.Sprintf(`
+redpanda_common:
+  topic: %v
+`, topicCustom)))
+
+	require.NoError(t, strmBuilder.AddProcessorYAML(`
+mapping: 'root = content().uppercase()'
+`))
+
+	prodFn, err := strmBuilder.AddProducerFunc()
+	require.NoError(t, err)
+
+	strm, err := strmBuilder.Build()
+	require.NoError(t, err)
+
+	// Ooooo, this is rather yucky.
+	sharedRef, err := kafka.FranzSharedClientPop(enterprise.SharedGlobalRedpandaClientKey, conf.Resources())
+	require.NoError(t, err)
+	require.NoError(t, kafka.FranzSharedClientSet(enterprise.SharedGlobalRedpandaClientKey, sharedRef, strm.Resources()))
+
+	license.InjectTestService(strm.Resources())
+
+	go func() {
+		assert.NoError(t, strm.Run(ctx))
+	}()
+
+	for i := 0; i < 10; i++ {
+		require.NoError(t, prodFn(ctx, service.NewMessage(fmt.Appendf(nil, "Meow%v", i))))
+	}
+
+	outRecords = readNKafkaMessages(ctx, t, brokerAddr, topicCustom, 10)
+	assert.Len(t, outRecords, inputLogs)
+
+	for i := 0; i < 10; i++ {
+		assert.Equal(t, fmt.Sprintf("MEOW%v", i), string(outRecords[i].Value))
+	}
+
+	require.NoError(t, strm.Stop(ctx))
+}
+
 func testLogsCloseFlush(ctx context.Context, t testing.TB, brokerAddr string) {
 	logsTopic, statusTopic := "__testlogscloseflush.logs", "_testlogscloseflush.status"
 
 	require.NoError(t, createKafkaTopic(ctx, brokerAddr, logsTopic, 1))
 	require.NoError(t, createKafkaTopic(ctx, brokerAddr, statusTopic, 1))
 
-	conf, err := service.NewConfigSpec().Fields(enterprise.TopicLoggerFields()...).ParseYAML(fmt.Sprintf(`
+	conf, err := service.NewConfigSpec().Fields(enterprise.GlobalRedpandaFields()...).ParseYAML(fmt.Sprintf(`
 seed_brokers: [ %v ]
 pipeline_id: bar
 logs_topic: %v
@@ -188,17 +293,17 @@ max_message_bytes: 1MB
 
 	license.InjectTestService(conf.Resources())
 
-	logger := enterprise.NewTopicLogger("foo")
-	require.NoError(t, logger.InitOutputFromParsed(conf))
+	gmgr := enterprise.NewGlobalRedpandaManager("foo")
+	require.NoError(t, gmgr.InitFromParsedConfig(conf))
 
 	inputLogs := 10
 
-	tmpLogger := slog.New(logger)
+	tmpLogger := slog.New(gmgr.SlogHandler())
 	for i := 0; i < inputLogs; i++ {
 		tmpLogger.With("v", i).Info("This is a log message")
 	}
 
-	require.NoError(t, logger.Close(ctx))
+	require.NoError(t, gmgr.Close(ctx))
 
 	outRecords := readNKafkaMessages(ctx, t, brokerAddr, logsTopic, inputLogs)
 	assert.Len(t, outRecords, inputLogs)
@@ -227,7 +332,7 @@ func testStatusHappy(ctx context.Context, t testing.TB, brokerAddr string) {
 	require.NoError(t, createKafkaTopic(ctx, brokerAddr, logsTopic, 1))
 	require.NoError(t, createKafkaTopic(ctx, brokerAddr, statusTopic, 1))
 
-	conf, err := service.NewConfigSpec().Fields(enterprise.TopicLoggerFields()...).ParseYAML(fmt.Sprintf(`
+	conf, err := service.NewConfigSpec().Fields(enterprise.GlobalRedpandaFields()...).ParseYAML(fmt.Sprintf(`
 seed_brokers: [ %v ]
 pipeline_id: buz
 logs_topic: %v
@@ -239,10 +344,10 @@ max_message_bytes: 1MB
 
 	license.InjectTestService(conf.Resources())
 
-	logger := enterprise.NewTopicLogger("baz")
-	require.NoError(t, logger.InitOutputFromParsed(conf))
+	gmgr := enterprise.NewGlobalRedpandaManager("baz")
+	require.NoError(t, gmgr.InitFromParsedConfig(conf))
 
-	logger.TriggerEventStopped(errors.New("uh oh"))
+	gmgr.TriggerEventStopped(errors.New("uh oh"))
 
 	outRecords := readNKafkaMessages(ctx, t, brokerAddr, statusTopic, 2)
 	assert.Len(t, outRecords, 2)

@@ -83,7 +83,7 @@ func init() {
 				conf,
 				kafka.NewFranzWriterHooks(
 					func(_ context.Context, fn kafka.FranzSharedClientUseFn) error {
-						return kafka.FranzSharedClientUse(sharedGlobalRedpandaClientKey, mgr, fn)
+						return kafka.FranzSharedClientUse(SharedGlobalRedpandaClientKey, mgr, fn)
 					}).
 					WithYieldClientFn(
 						func(context.Context) error { return nil }),

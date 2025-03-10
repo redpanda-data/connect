@@ -23,7 +23,7 @@ import (
 )
 
 func redpandaTopLevelConfigField() *service.ConfigField {
-	return service.NewObjectField("redpanda", enterprise.TopicLoggerFields()...)
+	return service.NewObjectField("redpanda", enterprise.GlobalRedpandaFields()...)
 }
 
 // Standard returns the config schema of a standard build of Redpanda Connect.
