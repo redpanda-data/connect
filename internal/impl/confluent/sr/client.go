@@ -159,6 +159,16 @@ func (c *Client) CreateSchema(ctx context.Context, subject string, schema sr.Sch
 	return ss.ID, nil
 }
 
+// CreateSchemaWithIDAndVersion creates a new schema for the given subject, ID and version.
+func (c *Client) CreateSchemaWithIDAndVersion(ctx context.Context, subject string, schema sr.Schema, id int, version int) (int, error) {
+	ss, err := c.Client.CreateSchemaWithIDAndVersion(ctx, subject, schema, id, version)
+	if err != nil {
+		return -1, fmt.Errorf("failed to create schema for subject %q with id %d and version %d: %s", subject, id, version, err)
+	}
+
+	return ss.ID, nil
+}
+
 type refWalkFn func(ctx context.Context, name string, info sr.Schema) error
 
 // WalkReferences goes through the provided schema info and for each reference

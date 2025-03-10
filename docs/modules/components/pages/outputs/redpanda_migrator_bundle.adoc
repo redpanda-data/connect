@@ -32,6 +32,7 @@ output:
   redpanda_migrator_bundle:
     redpanda_migrator: {} # No default (required)
     schema_registry: {} # No default (required)
+    translate_schema_ids: false
 ```
 
 All-in-one output which writes messages and schemas to a Kafka or Redpanda cluster. This output is meant to be used
@@ -55,5 +56,15 @@ The `schema_registry` output configuration. The `subject` field must be left emp
 
 *Type*: `object`
 
+
+=== `translate_schema_ids`
+
+Allow the target Schema Registry instance to allocate different schema IDs for migrated schemas. This is useful
+when it already contains some schemas which differ from the ones being migrated.
+
+
+*Type*: `bool`
+
+*Default*: `false`
 
 
