@@ -16,12 +16,12 @@ package parquet
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/gofrs/uuid/v5"
 	"github.com/parquet-go/parquet-go"
-	"github.com/parquet-go/parquet-go/format"
 )
 
 type schemaVisitor interface {
@@ -92,6 +92,8 @@ func (encodingCoersionVisitor) visitLeaf(value any, schemaNode parquet.Node) (an
 			} else {
 				panic("unreachable")
 			}
+		default:
+			return nil, errors.New("TIMESTAMP values must be RFC3339-formatted strings")
 		}
 	} else if logicalType.Json != nil {
 		switch value.(type) {
@@ -104,44 +106,70 @@ func (encodingCoersionVisitor) visitLeaf(value any, schemaNode parquet.Node) (an
 		default:
 			return value, nil
 		}
+	} else if logicalType.UUID != nil {
+		switch v := value.(type) {
+		case string:
+			id, err := uuid.FromString(v)
+			if err != nil {
+				return nil, fmt.Errorf("parsing string as UUID: %w", err)
+			}
+			return id.Bytes(), nil
+		default:
+			return value, nil
+		}
 	}
 
 	return value, nil
 }
 
-type decodingCoersionVisitor struct{}
+type decodingCoersionVisitor struct {
+	version int
+}
 
-func (decodingCoersionVisitor) visitLeaf(value any, schemaNode parquet.Node) (any, error) {
+func (d *decodingCoersionVisitor) visitLeaf(value any, schemaNode parquet.Node) (any, error) {
 	logicalType := schemaNode.Type().LogicalType()
 	if logicalType == nil {
 		return value, nil
 	}
-	if logicalType.Timestamp != nil {
-		tsNum, ok := value.(int64)
-		if !ok {
-			return nil, fmt.Errorf("decoding timestamp but physical type is not an integer: %T", value)
-		}
 
-		var schemaSpec *format.TimestampType = logicalType.Timestamp
-		if schemaSpec.Unit.Millis != nil {
-			return time.UnixMilli(tsNum), nil
-		} else if schemaSpec.Unit.Micros != nil {
-			return time.UnixMicro(tsNum), nil
-		} else if schemaSpec.Unit.Nanos != nil {
-			return time.Unix(tsNum/1e9, tsNum%1e9), nil
-		} else {
-			panic("unreachable")
+	if d.version >= 1 {
+		if logicalType.Timestamp != nil {
+			tsNum, ok := value.(int64)
+			if !ok {
+				return nil, fmt.Errorf("decoding timestamp but physical type is not an integer: %T", value)
+			}
+			// This is the best we can do to detect missing optionals.
+			if tsNum == 0 {
+				return nil, nil
+			}
+
+			schemaSpec := logicalType.Timestamp
+			var ts time.Time
+			if schemaSpec.Unit.Millis != nil {
+				ts = time.UnixMilli(tsNum)
+			} else if schemaSpec.Unit.Micros != nil {
+				ts = time.UnixMicro(tsNum)
+			} else if schemaSpec.Unit.Nanos != nil {
+				ts = time.Unix(tsNum/1e9, tsNum%1e9)
+			} else {
+				panic("unreachable")
+			}
+			if schemaSpec.IsAdjustedToUTC {
+				return ts.UTC(), nil
+			} else {
+				return ts.Local(), nil
+			}
+		} else if logicalType.UUID != nil {
+			uuidBytes, ok := value.([]byte)
+			if !ok {
+				return nil, fmt.Errorf("decoding UUID, physical type is not []byte: %T", value)
+			}
+			id, err := uuid.FromBytes(uuidBytes)
+			if err != nil {
+				return nil, fmt.Errorf("parsing value as UUID: %w", err)
+			}
+			return id.String(), nil
 		}
-	} else if logicalType.UUID != nil {
-		uuidBytes, ok := value.([]byte)
-		if !ok {
-			return nil, fmt.Errorf("decoding UUID by physical type is not a []byte: %T", value)
-		}
-		id, err := uuid.FromBytes(uuidBytes)
-		if err != nil {
-			return nil, fmt.Errorf("parsing value as UUID: %w", err)
-		}
-		return id.String(), nil
 	}
 
 	return value, nil

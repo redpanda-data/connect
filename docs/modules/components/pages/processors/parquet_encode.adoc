@@ -129,6 +129,11 @@ Options:
 , `DOUBLE`
 , `BYTE_ARRAY`
 , `UTF8`
+, `TIMESTAMP`
+, `BSON`
+, `ENUM`
+, `JSON`
+, `UUID`
 .
 
 === `schema[].repeated`
