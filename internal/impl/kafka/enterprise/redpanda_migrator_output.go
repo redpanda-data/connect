@@ -97,7 +97,7 @@ func redpandaMigratorOutputConfigFields() []*service.ConfigField {
 				Description("Replication factor for created topics. This is only used when `replication_factor_override` is set to `true`.").
 				Default(3).
 				Advanced(),
-			service.NewBoolField(rmoFieldTranslateSchemaIDs).Description("Translate schema IDs.").Default(true).Advanced(),
+			service.NewBoolField(rmoFieldTranslateSchemaIDs).Description("Translate schema IDs.").Default(false).Advanced(),
 			service.NewStringField(rmoFieldSchemaRegistryOutputResource).
 				Description("The label of the schema_registry output to use for fetching schema IDs.").
 				Default(sroResourceDefaultLabel).

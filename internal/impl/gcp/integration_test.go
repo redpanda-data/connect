@@ -16,7 +16,6 @@ package gcp_test
 
 import (
 	"context"
-	"os"
 	"testing"
 	"time"
 
@@ -46,7 +45,6 @@ func createGCPCloudStorageBucket(var1, id string) error {
 
 func TestIntegrationGCP(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
@@ -69,10 +67,7 @@ func TestIntegrationGCP(t *testing.T) {
 
 	_ = resource.Expire(900)
 
-	os.Setenv("STORAGE_EMULATOR_HOST", "localhost:"+resource.GetPort("4443/tcp")) //nolint: tenv // this test runs in parallel
-	t.Cleanup(func() {
-		defer os.Unsetenv("STORAGE_EMULATOR_HOST")
-	})
+	t.Setenv("STORAGE_EMULATOR_HOST", "localhost:"+resource.GetPort("4443/tcp")) //nolint: tenv // this test runs in parallel
 
 	// Wait for fake-gcs-server to properly start up
 	err = pool.Retry(func() error {

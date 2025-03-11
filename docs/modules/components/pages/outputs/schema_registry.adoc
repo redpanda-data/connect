@@ -57,6 +57,7 @@ output:
     url: "" # No default (required)
     subject: "" # No default (required)
     backfill_dependencies: true
+    translate_ids: false
     input_resource: schema_registry_input
     tls:
       enabled: false
@@ -151,6 +152,15 @@ Backfill schema references and previous versions.
 *Type*: `bool`
 
 *Default*: `true`
+
+=== `translate_ids`
+
+Translate schema IDs.
+
+
+*Type*: `bool`
+
+*Default*: `false`
 
 === `input_resource`
 

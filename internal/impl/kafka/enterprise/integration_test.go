@@ -592,8 +592,9 @@ output:
     - schema_registry:
         url: %s
         subject: ${! @schema_registry_subject }
-        # Preserve schema order.
+        # Preserve schema order
         max_in_flight: 1
+        translate_ids: true
     # Don't retry the same message multiple times so we do fail if schemas with references are sent in the wrong order
     - drop: {}
 `, source.schemaRegistryURL, destination.schemaRegistryURL)))
@@ -955,6 +956,7 @@ input:
                   kafka_offset_partition:        ${! @kafka_offset_partition }
                   kafka_offset_commit_timestamp: ${! @kafka_offset_commit_timestamp }
                   kafka_offset_metadata:         ${! @kafka_offset_metadata }
+                  kafka_is_high_watermark:       ${! @kafka_is_high_watermark }
                   kafka_offset:                  ${! @kafka_offset } # This is just the offset of the __consumer_offsets topic
         - check: '@input_label == "redpanda_migrator_input"'
           processors:

@@ -32,6 +32,7 @@ const (
 	sroFieldURL                  = "url"
 	sroFieldSubject              = "subject"
 	sroFieldBackfillDependencies = "backfill_dependencies"
+	sroFieldTranslateIDs         = "translate_ids"
 	sroFieldInputResource        = "input_resource"
 	sroFieldTLS                  = "tls"
 
@@ -74,6 +75,7 @@ func schemaRegistryOutputConfigFields() []*service.ConfigField {
 		service.NewStringField(sroFieldURL).Description("The base URL of the schema registry service."),
 		service.NewInterpolatedStringField(sroFieldSubject).Description("Subject."),
 		service.NewBoolField(sroFieldBackfillDependencies).Description("Backfill schema references and previous versions.").Default(true).Advanced(),
+		service.NewBoolField(sroFieldTranslateIDs).Description("Translate schema IDs.").Default(false).Advanced(),
 		service.NewStringField(sroFieldInputResource).
 			Description("The label of the schema_registry input from which to read source schemas.").
 			Default(sriResourceDefaultLabel).
@@ -107,6 +109,7 @@ func init() {
 type schemaRegistryOutput struct {
 	subject              *service.InterpolatedString
 	backfillDependencies bool
+	translateIDs         bool
 	inputResource        srResourceKey
 
 	client      *sr.Client
@@ -136,6 +139,10 @@ func outputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (o *s
 	}
 
 	if o.backfillDependencies, err = pConf.FieldBool(sroFieldBackfillDependencies); err != nil {
+		return
+	}
+
+	if o.translateIDs, err = pConf.FieldBool(sroFieldTranslateIDs); err != nil {
 		return
 	}
 
@@ -372,13 +379,19 @@ func (o *schemaRegistryOutput) createSchema(ctx context.Context, key schemaLinea
 		return destinationID.(int), nil
 	}
 
-	// TODO: Use `CreateSchemaWithID()` when `translate_ids: false` after https://github.com/twmb/franz-go/pull/849
-	// is merged.
-
-	// This should return the destination ID without an error if the schema already exists.
-	destinationID, err := o.client.CreateSchema(ctx, ss.Subject, ss.Schema)
-	if err != nil {
-		return -1, fmt.Errorf("failed to create schema for subject %q and version %d: %s", ss.Subject, ss.Version, err)
+	var destinationID int
+	var err error
+	if o.translateIDs {
+		// This should return the destination ID without an error if the schema already exists.
+		destinationID, err = o.client.CreateSchema(ctx, ss.Subject, ss.Schema)
+		if err != nil {
+			return -1, err
+		}
+	} else {
+		destinationID, err = o.client.CreateSchemaWithIDAndVersion(ctx, ss.Subject, ss.Schema, ss.ID, ss.Version)
+		if err != nil {
+			return -1, err
+		}
 	}
 
 	// Cache the schema along with the destination ID.

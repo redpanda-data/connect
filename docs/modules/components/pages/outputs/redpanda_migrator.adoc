@@ -81,7 +81,7 @@ output:
     input_resource: redpanda_migrator_input
     replication_factor_override: true
     replication_factor: 3
-    translate_schema_ids: true
+    translate_schema_ids: false
     schema_registry_output_resource: schema_registry_output
     partitioner: "" # No default (optional)
     idempotent_write: true
@@ -667,7 +667,7 @@ Translate schema IDs.
 
 *Type*: `bool`
 
-*Default*: `true`
+*Default*: `false`
 
 === `schema_registry_output_resource`
 
