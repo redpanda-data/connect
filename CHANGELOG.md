@@ -9,6 +9,10 @@ All notable changes to this project will be documented in this file.
 
 - Processor `openai_chat_completion` can now call tools that are defined as a series of additional processors. (@rockwotj)
 
+### Fixed
+
+- Output `snowflake_streaming` can now write float columns with `NaN`, `-inf` and `inf` values. (@rockwotj)
+
 ## 4.49.0 - 2025-03-06
 
 ### Added

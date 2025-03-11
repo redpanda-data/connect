@@ -11,6 +11,9 @@
 package streaming
 
 import (
+	"cmp"
+	"math"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -76,4 +79,84 @@ func TestMergeStr(t *testing.T) {
 		nullCount: 2,
 		hasData:   true,
 	}, s)
+}
+
+func TestRenderFloat(t *testing.T) {
+	require.Equal(t, `"NaN"`, string(asJSONNumber(math.NaN())))
+	require.Equal(t, `"Infinity"`, string(asJSONNumber(math.Inf(1))))
+	require.Equal(t, `"-Infinity"`, string(asJSONNumber(math.Inf(-1))))
+	require.Equal(
+		t,
+		"3.141592653589793",
+		string(asJSONNumber(3.141592653589793)),
+	)
+	require.Equal(
+		t,
+		"1.7976931348623157e+308",
+		string(asJSONNumber(math.MaxFloat64)),
+	)
+	require.Equal(
+		t,
+		"-1.7976931348623157e+308",
+		string(asJSONNumber(-math.MaxFloat64)),
+	)
+}
+
+func TestRealTotalOrder(t *testing.T) {
+	isSorted := slices.IsSortedFunc([]float64{
+		math.Inf(-1),
+		-math.MaxFloat64,
+		-math.MaxFloat32,
+		-1,
+		-math.SmallestNonzeroFloat32,
+		-math.SmallestNonzeroFloat64,
+		math.Copysign(0, -1),
+		0,
+		math.SmallestNonzeroFloat64,
+		math.SmallestNonzeroFloat32,
+		1,
+		math.MaxFloat32,
+		math.MaxFloat64,
+		math.Inf(1),
+		math.NaN(),
+	}, compareDouble)
+	require.True(t, isSorted)
+}
+
+func BenchmarkRealComparison(b *testing.B) {
+	values := []float64{
+		math.Inf(-1),
+		-math.MaxFloat64,
+		-math.MaxFloat32,
+		-1,
+		-math.SmallestNonzeroFloat32,
+		-math.SmallestNonzeroFloat64,
+		math.Copysign(0, -1),
+		0,
+		math.SmallestNonzeroFloat64,
+		math.SmallestNonzeroFloat32,
+		1,
+		math.MaxFloat32,
+		math.MaxFloat64,
+		math.Inf(1),
+		math.NaN(),
+	}
+	b.Run("JVMSemantics", func(b *testing.B) {
+		for range b.N {
+			for _, v1 := range values {
+				for _, v2 := range values {
+					_ = compareDouble(v1, v2)
+				}
+			}
+		}
+	})
+	b.Run("GoSemantics", func(b *testing.B) {
+		for range b.N {
+			for _, v1 := range values {
+				for _, v2 := range values {
+					_ = cmp.Compare(v1, v2)
+				}
+			}
+		}
+	})
 }

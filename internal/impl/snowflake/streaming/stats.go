@@ -12,6 +12,8 @@ package streaming
 
 import (
 	"bytes"
+	"encoding/json"
+	"math"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/snowflake/streaming/int128"
 )
@@ -42,8 +44,12 @@ func (s *statsBuffer) UpdateFloat64Stats(v float64) {
 		s.maxRealVal = v
 		s.hasData = true
 	} else {
-		s.minRealVal = min(s.minRealVal, v)
-		s.maxRealVal = max(s.maxRealVal, v)
+		if compareDouble(v, s.minRealVal) < 0 {
+			s.minRealVal = v
+		}
+		if compareDouble(v, s.maxRealVal) > 0 {
+			s.maxRealVal = v
+		}
 	}
 }
 
@@ -70,8 +76,14 @@ func mergeStats(a, b *statsBuffer) *statsBuffer {
 	case a.hasData && b.hasData:
 		c.minIntVal = int128.Min(a.minIntVal, b.minIntVal)
 		c.maxIntVal = int128.Max(a.maxIntVal, b.maxIntVal)
-		c.minRealVal = min(a.minRealVal, b.minRealVal)
-		c.maxRealVal = max(a.maxRealVal, b.maxRealVal)
+		c.minRealVal = a.minRealVal
+		if compareDouble(b.minRealVal, c.minRealVal) < 0 {
+			c.minRealVal = b.minRealVal
+		}
+		c.maxRealVal = a.maxRealVal
+		if compareDouble(b.maxRealVal, c.maxRealVal) > 0 {
+			c.maxRealVal = b.maxRealVal
+		}
 		c.maxStrLen = max(a.maxStrLen, b.maxStrLen)
 		c.minStrVal = a.minStrVal
 		if bytes.Compare(b.minStrVal, a.minStrVal) < 0 {
@@ -114,10 +126,53 @@ func computeColumnEpInfo(transformers []*dataTransformer, stats []*statsBuffer) 
 			MaxLength:      int64(stat.maxStrLen),
 			MinIntValue:    stat.minIntVal,
 			MaxIntValue:    stat.maxIntVal,
-			MinRealValue:   stat.minRealVal,
-			MaxRealValue:   stat.maxRealVal,
+			MinRealValue:   asJSONNumber(stat.minRealVal),
+			MaxRealValue:   asJSONNumber(stat.maxRealVal),
 			DistinctValues: -1,
 		}
 	}
 	return info
+}
+
+func asJSONNumber(f float64) json.RawMessage {
+	if math.IsNaN(f) {
+		return json.RawMessage(`"NaN"`)
+	}
+	if math.IsInf(f, -1) {
+		return json.RawMessage(`"-Infinity"`)
+	}
+	if math.IsInf(f, 1) {
+		return json.RawMessage(`"Infinity"`)
+	}
+	b, _ := json.Marshal(f) // this cannot fail, we handle the cases above
+	return json.RawMessage(b)
+}
+
+// with similar semantics to Java's Double.compare
+func compareDouble(a, b float64) int {
+	if a < b {
+		return -1
+	}
+	if a > b {
+		return 1
+	}
+	aBits := rawDoubleBits(a)
+	bBits := rawDoubleBits(b)
+	if aBits == bBits {
+		return 0
+	}
+	if aBits < bBits {
+		// (-0, 0) or (!NaN, NaN)
+		return -1
+	}
+	// (0, -0) or (NaN, !NaN)
+	return 1
+}
+
+// rawDoubleBits to Double.doubleToLongBits in Java.
+func rawDoubleBits(a float64) int64 {
+	if math.IsNaN(a) {
+		a = math.NaN() // Use a canonical NaN (yes there are many different kinds)
+	}
+	return int64(math.Float64bits(a))
 }

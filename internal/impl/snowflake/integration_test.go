@@ -16,6 +16,9 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"iter"
+	"math"
+	"math/bits"
 	"os"
 	"strings"
 	"sync"
@@ -26,6 +29,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 
 	_ "github.com/snowflakedb/gosnowflake"
 
@@ -530,4 +534,73 @@ snowflake_streaming:
 	require.Equal(t, [][]string{
 		{"11:35:58", "0001-01-01 11:35:58.000", "0001-01-02"},
 	}, rows)
+}
+
+func TestAllFloats(t *testing.T) {
+	integration.CheckSkipExact(t)
+	produce, stream := SetupSnowflakeStream(t, `
+label: snowpipe_streaming
+snowflake_streaming:
+  account: "$ACCOUNT"
+  user: "$USER"
+  role: $ROLE
+  database: "$DB"
+  schema: $SCHEMA
+  private_key_file: "$PRIVATE_KEY_FILE"
+  table: integration_test_floats
+  init_statement: |
+    DROP TABLE IF EXISTS integration_test_floats;
+    CREATE TABLE integration_test_floats(a FLOAT);
+  max_in_flight: 16
+`)
+	RunStreamInBackground(t, stream)
+	values := []float64{
+		math.MaxFloat32, math.MaxFloat64, math.SmallestNonzeroFloat32, math.SmallestNonzeroFloat64,
+		math.Pi, math.E, math.Sqrt2, math.Inf(1), math.Inf(-1), math.NaN(),
+		0.0, math.Copysign(0, -1), 1e308, 1e-308, 1e-324,
+		math.Ln2, math.Ln10, math.Log2E, math.Log10E, math.Phi,
+	}
+	var eg errgroup.Group
+	eg.SetLimit(16)
+	for set := range powerSet(values, 5) {
+		batch := []map[string]any{}
+		for _, f := range set {
+			batch = append(batch, map[string]any{"a": f})
+		}
+		eg.Go(func() error { return produce(batch) })
+	}
+	require.NoError(t, eg.Wait())
+	rows := RunSQLQuery(
+		t,
+		stream,
+		`SELECT min(a), max(a) FROM integration_test_floats`,
+	)
+	require.Equal(t, [][]string{
+		{"-inf", "NaN"},
+	}, rows)
+}
+
+func powerSet[T any](items []T, minCount int) iter.Seq[[]T] {
+	if len(items) >= 64 {
+		return nil
+	}
+	return func(yield func([]T) bool) {
+		for i := range uint64(1) << len(items) {
+			// Make sure there are a few different numbers
+			ones := bits.OnesCount64(i)
+			if ones < minCount {
+				continue
+			}
+			set := make([]T, 0, ones)
+			for j := range items {
+				mask := uint64(1) << j
+				if i&mask != 0 {
+					set = append(set, items[j])
+				}
+			}
+			if !yield(set) {
+				return
+			}
+		}
+	}
 }
