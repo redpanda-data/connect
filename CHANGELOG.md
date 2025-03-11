@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.49.0 - TBD
+
+### Added
+
+- Processor `openai_chat_completion` can now call tools that are defined as a series of additional processors. (@rockwotj)
+
 ## 4.49.0 - 2025-03-06
 
 ### Added
