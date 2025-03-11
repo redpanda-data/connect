@@ -138,10 +138,6 @@ func (d *decodingCoersionVisitor) visitLeaf(value any, schemaNode parquet.Node) 
 			if !ok {
 				return nil, fmt.Errorf("decoding timestamp but physical type is not an integer: %T", value)
 			}
-			// This is the best we can do to detect missing optionals.
-			if tsNum == 0 {
-				return nil, nil
-			}
 
 			schemaSpec := logicalType.Timestamp
 			var ts time.Time
