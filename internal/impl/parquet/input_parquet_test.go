@@ -36,11 +36,7 @@ type simpleData struct {
 }
 
 func TestParquetHappy(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "parquet_happy")
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		_ = os.RemoveAll(tmpDir)
-	})
+	tmpDir := t.TempDir()
 
 	for name, rows := range map[string][]simpleData{
 		"1_first": {

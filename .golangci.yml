@@ -86,7 +86,7 @@ linters:
     # - prealloc
     - perfsprint
     - testifylint
-    - tenv
+    - usetesting
     - predeclared
     - mirror
     - rowserrcheck

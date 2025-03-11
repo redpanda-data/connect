@@ -61,7 +61,7 @@ jobs:
     - name: Lint
       uses: golangci/golangci-lint-action@v6
       with:
-        version: v1.64.5
+        version: v1.64.6
         args: --timeout 30m cmd/... internal/... public/...
 
   test-push-to-cloudsmith:

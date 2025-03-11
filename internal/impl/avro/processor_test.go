@@ -119,7 +119,7 @@ func TestAvroSchemaPath(t *testing.T) {
 	]
 }`
 
-	tmpSchemaFile, err := os.CreateTemp("", "benthos_avro_test")
+	tmpSchemaFile, err := os.CreateTemp(t.TempDir(), "benthos_avro_test")
 	require.NoError(t, err)
 
 	defer os.Remove(tmpSchemaFile.Name())

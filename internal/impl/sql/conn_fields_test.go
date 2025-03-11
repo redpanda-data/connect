@@ -36,11 +36,7 @@ func TestConnSettingsInitStmt(t *testing.T) {
 	tCtx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
-	tmpDir, err := os.MkdirTemp("", t.Name())
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		os.RemoveAll(tmpDir)
-	})
+	tmpDir := t.TempDir()
 
 	outputConf := fmt.Sprintf(`
 sql_insert:
@@ -117,11 +113,7 @@ func TestConnSettingsInitFiles(t *testing.T) {
 	tCtx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
-	tmpDir, err := os.MkdirTemp("", t.Name())
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		os.RemoveAll(tmpDir)
-	})
+	tmpDir := t.TempDir()
 
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "foo.sql"), []byte(`
 CREATE TABLE IF NOT EXISTS things (

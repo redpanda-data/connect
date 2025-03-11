@@ -75,7 +75,7 @@ parquet:
 }
 
 func TestParquetProcessorConfigParse(t *testing.T) {
-	tmpSchemaFile, err := os.CreateTemp("", "benthos_parquet_test")
+	tmpSchemaFile, err := os.CreateTemp(t.TempDir(), "benthos_parquet_test")
 	require.NoError(t, err)
 
 	_, err = tmpSchemaFile.WriteString(`{
