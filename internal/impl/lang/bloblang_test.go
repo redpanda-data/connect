@@ -111,3 +111,27 @@ func TestULID_BadRandom(t *testing.T) {
 	require.ErrorContains(t, err, "invalid randomness source: not-very-random")
 	require.Nil(t, ex, "did not expect an executable mapping")
 }
+
+func TestUnicodeSegmentation_Grapheme(t *testing.T) {
+	e, err := bloblang.Parse(`root = "foo❤️‍🔥".unicode_segments("grapheme")`)
+	require.NoError(t, err)
+	res, err := e.Query(nil)
+	require.NoError(t, err)
+	assert.Equal(t, []any{"f", "o", "o", "❤️‍🔥"}, res)
+}
+
+func TestUnicodeSegmentation_Word(t *testing.T) {
+	e, err := bloblang.Parse(`root = "what's up?".unicode_segments("word")`)
+	require.NoError(t, err)
+	res, err := e.Query(nil)
+	require.NoError(t, err)
+	assert.Equal(t, []any{"what's", " ", "up", "?"}, res)
+}
+
+func TestUnicodeSegmentation_Sentence(t *testing.T) {
+	e, err := bloblang.Parse(`root = "This is sentence 1.0. This is 2.0!".unicode_segments("sentence")`)
+	require.NoError(t, err)
+	res, err := e.Query(nil)
+	require.NoError(t, err)
+	assert.Equal(t, []any{"This is sentence 1.0. ", "This is 2.0!"}, res)
+}
