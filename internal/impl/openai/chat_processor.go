@@ -52,7 +52,7 @@ const (
 	ocpFieldSchemaRegistryURL             = "url"
 	ocpFieldSchemaRegistryTLS             = "tls"
 	// Tool options
-	ocpFieldTool                     = "tools"
+	ocpFieldTools                    = "tools"
 	ocpToolFieldName                 = "name"
 	ocpToolFieldDesc                 = "description"
 	ocpToolFieldParams               = "parameters"
@@ -178,7 +178,7 @@ We generally recommend altering this or temperature but not both.`).
 				Advanced().
 				Description("Up to 4 sequences where the API will stop generating further tokens."),
 			service.NewObjectListField(
-				ocpFieldTool,
+				ocpFieldTools,
 				service.NewStringField(ocpToolFieldName).Description("The name of this tool."),
 				service.NewStringField(ocpToolFieldDesc).Description("A description of this tool, the LLM uses this to decide if the tool should be used."),
 				service.NewObjectField(
@@ -383,8 +383,8 @@ func makeChatProcessor(conf *service.ParsedConfig, mgr *service.Resources) (serv
 		return nil, fmt.Errorf("unknown %s: %q", ocpFieldResponseFormat, v)
 	}
 	var tools []pipelineTool
-	if conf.Contains(ocpFieldTool) {
-		toolSpecs, err := conf.FieldObjectList(ocpFieldTool)
+	if conf.Contains(ocpFieldTools) {
+		toolSpecs, err := conf.FieldObjectList(ocpFieldTools)
 		if err != nil {
 			return nil, err
 		}
