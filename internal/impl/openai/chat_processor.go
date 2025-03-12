@@ -51,7 +51,23 @@ const (
 	ocpFieldSchemaRegistryNamePrefix      = "name_prefix"
 	ocpFieldSchemaRegistryURL             = "url"
 	ocpFieldSchemaRegistryTLS             = "tls"
+	// Tool options
+	ocpFieldTools                    = "tools"
+	ocpToolFieldName                 = "name"
+	ocpToolFieldDesc                 = "description"
+	ocpToolFieldParams               = "parameters"
+	ocpToolParamFieldRequired        = "required"
+	ocpToolParamFieldProps           = "properties"
+	ocpToolParamPropFieldType        = "type"
+	ocpToolParamPropFieldDescription = "description"
+	ocpToolParamPropFieldEnum        = "enum"
+	ocpToolFieldPipeline             = "processors"
 )
+
+type pipelineTool struct {
+	tool       oai.Tool
+	processors []*service.OwnedProcessor
+}
 
 func init() {
 	err := service.RegisterProcessor(
@@ -161,6 +177,22 @@ We generally recommend altering this or temperature but not both.`).
 				Optional().
 				Advanced().
 				Description("Up to 4 sequences where the API will stop generating further tokens."),
+			service.NewObjectListField(
+				ocpFieldTools,
+				service.NewStringField(ocpToolFieldName).Description("The name of this tool."),
+				service.NewStringField(ocpToolFieldDesc).Description("A description of this tool, the LLM uses this to decide if the tool should be used."),
+				service.NewObjectField(
+					ocpToolFieldParams,
+					service.NewStringListField(ocpToolParamFieldRequired).Default([]string{}).Description("The required parameters for this pipeline."),
+					service.NewObjectMapField(
+						ocpToolParamFieldProps,
+						service.NewStringField(ocpToolParamPropFieldType).Description("The type of this parameter."),
+						service.NewStringField(ocpToolParamPropFieldDescription).Description("A description of this parameter."),
+						service.NewStringListField(ocpToolParamPropFieldEnum).Default([]string{}).Description("Specifies that this parameter is an enum and only these specific values should be used."),
+					).Description("The properties for the processor's input data"),
+				).Description("The parameters the LLM needs to provide to invoke this tool."),
+				service.NewProcessorListField(ocpToolFieldPipeline).Description("The pipeline to execute when the LLM uses this tool.").Optional(),
+			).Description("The tools to allow the LLM to invoke. This allows building subpipelines that the LLM can choose to invoke to execute agentic-like actions."),
 		).LintRule(`
       root = match {
         this.exists("`+ocpFieldJSONSchema+`") && this.exists("`+ocpFieldSchemaRegistry+`") => ["cannot set both `+"`"+ocpFieldJSONSchema+"`"+` and `+"`"+ocpFieldSchemaRegistry+"`"+`"]
@@ -188,6 +220,38 @@ pipeline:
 output:
   stdout:
     codec: lines
+`).Example(
+		"Use GPT-4o to call a tool",
+		"This example asks GPT-4o to respond with the weather by invoking an HTTP processor to get the forecast.",
+		`
+input:
+  generate:
+    count: 1
+    mapping: |
+      root = "What is the weather like in Chicago?"
+pipeline:
+  processors:
+    - openai_chat_completion:
+        model: gpt-4o
+        api_key: "${OPENAI_API_KEY}"
+        prompt: "${!content().string()}"
+        tools:
+          - name: GetWeather
+            description: "Retrieve the weather for a specific city"
+            parameters:
+              required: ["city"]
+              properties:
+                city:
+                  type: string
+                  description: the city to look up the weather for
+            processors:
+              - http:
+                  verb: GET
+                  url: 'https://wttr.in/${!this.city}?T'
+                  headers:
+                    User-Agent: curl/8.11.1 # Returns a text string from the weather website
+output:
+  stdout: {}
 `)
 }
 
@@ -318,6 +382,72 @@ func makeChatProcessor(conf *service.ParsedConfig, mgr *service.Resources) (serv
 	default:
 		return nil, fmt.Errorf("unknown %s: %q", ocpFieldResponseFormat, v)
 	}
+	var tools []pipelineTool
+	if conf.Contains(ocpFieldTools) {
+		toolSpecs, err := conf.FieldObjectList(ocpFieldTools)
+		if err != nil {
+			return nil, err
+		}
+		for _, toolConf := range toolSpecs {
+			t := oai.Tool{Type: oai.ToolTypeFunction, Function: &oai.FunctionDefinition{}}
+			t.Function.Name, err = toolConf.FieldString(ocpToolFieldName)
+			if err != nil {
+				return nil, err
+			}
+			t.Function.Description, err = toolConf.FieldString(ocpToolFieldDesc)
+			if err != nil {
+				return nil, err
+			}
+			type toolParam = struct {
+				Type        string   `json:"type"`
+				Description string   `json:"description"`
+				Enum        []string `json:"enum,omitempty"`
+			}
+			type toolParams = struct {
+				Type       string               `json:"type"`
+				Required   []string             `json:"required"`
+				Properties map[string]toolParam `json:"properties"`
+			}
+			parameters := toolParams{
+				Type:       "object",
+				Properties: map[string]toolParam{},
+			}
+			paramsConf := toolConf.Namespace(ocpToolFieldParams)
+			parameters.Required, err = paramsConf.FieldStringList(ocpToolParamFieldRequired)
+			if err != nil {
+				return nil, err
+			}
+			propsConf, err := paramsConf.FieldObjectMap(ocpToolParamFieldProps)
+			if err != nil {
+				return nil, err
+			}
+			for name, paramConf := range propsConf {
+				paramType, err := paramConf.FieldString(ocpToolParamPropFieldType)
+				if err != nil {
+					return nil, err
+				}
+				desc, err := paramConf.FieldString(ocpToolParamPropFieldDescription)
+				if err != nil {
+					return nil, err
+				}
+				enum, err := paramConf.FieldStringList(ocpToolParamPropFieldEnum)
+				if err != nil {
+					return nil, err
+				}
+				parameters.Properties[name] = toolParam{
+					Type:        paramType,
+					Description: desc,
+					Enum:        enum,
+				}
+			}
+			t.Function.Parameters = parameters
+			pipeline, err := toolConf.FieldProcessorList(ocpToolFieldPipeline)
+			if err != nil {
+				return nil, err
+			}
+			tools = append(tools, pipelineTool{t, pipeline})
+		}
+	}
 	return &chatProcessor{
 		b,
 		up,
@@ -333,6 +463,7 @@ func makeChatProcessor(conf *service.ParsedConfig, mgr *service.Resources) (serv
 		stop,
 		responseFormat,
 		schemaProvider,
+		tools,
 	}, nil
 }
 
@@ -406,6 +537,7 @@ type chatProcessor struct {
 	stop             []string
 	responseFormat   oai.ChatCompletionResponseFormatType
 	schemaProvider   jsonSchemaProvider
+	tools            []pipelineTool
 }
 
 func (p *chatProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
@@ -495,14 +627,80 @@ func (p *chatProcessor) Process(ctx context.Context, msg *service.Message) (serv
 			}},
 		})
 	}
-	resp, err := p.client.CreateChatCompletion(ctx, body)
-	if err != nil {
-		return nil, err
+	if len(p.tools) > 0 {
+		// TODO: Support parallel tool calls
+		body.ParallelToolCalls = false
+		for _, t := range p.tools {
+			body.Tools = append(body.Tools, t.tool)
+		}
 	}
-	if len(resp.Choices) != 1 {
-		return nil, fmt.Errorf("invalid number of choices in response: %d", len(resp.Choices))
+	const maxToolCalls = 10
+	for range maxToolCalls {
+		resp, err := p.client.CreateChatCompletion(ctx, body)
+		if err != nil {
+			return nil, err
+		}
+		if len(resp.Choices) != 1 {
+			return nil, fmt.Errorf("invalid number of choices in response: %d", len(resp.Choices))
+		}
+		respMessage := resp.Choices[0].Message
+		if len(respMessage.ToolCalls) == 0 {
+			msg = msg.Copy()
+			msg.SetBytes([]byte(respMessage.Content))
+			return service.MessageBatch{msg}, nil
+		} else if len(respMessage.ToolCalls) > 1 {
+			return nil, fmt.Errorf("parallel tool calling disabled, but got %d parallel tool calls", len(respMessage.ToolCalls))
+		}
+		invoked := respMessage.ToolCalls[0]
+		idx := slices.IndexFunc(p.tools, func(t pipelineTool) bool {
+			return t.tool.Function.Name == invoked.Function.Name
+		})
+		if idx == -1 {
+			return nil, fmt.Errorf("unknown tool call from model %s", invoked.Function.Name)
+		}
+		toolMsg := service.NewMessage([]byte(invoked.Function.Arguments))
+		toolBatches, err := service.ExecuteProcessors(ctx, p.tools[idx].processors, service.MessageBatch{toolMsg})
+		if err != nil {
+			return nil, fmt.Errorf("error calling tool %s: %w", invoked.Function.Name, err)
+		}
+		output, err := combineToSingleMessage(toolBatches)
+		if err != nil {
+			return nil, fmt.Errorf("error processing pipeline %s output: %w", invoked.Function.Name, err)
+		}
+		body.Messages = append(body.Messages, respMessage, oai.ChatCompletionMessage{
+			Role:       oai.ChatMessageRoleTool,
+			Content:    output,
+			Name:       invoked.Function.Name,
+			ToolCallID: invoked.ID,
+		})
 	}
-	msg = msg.Copy()
-	msg.SetBytes([]byte(resp.Choices[0].Message.Content))
-	return service.MessageBatch{msg}, nil
+	return nil, fmt.Errorf("model did not finish after %d function calls", maxToolCalls)
+}
+
+func combineToSingleMessage(batches []service.MessageBatch) (string, error) {
+	msgs := []any{}
+	for _, batch := range batches {
+		for _, msg := range batch {
+			if err := msg.GetError(); err != nil {
+				return "", fmt.Errorf("pipeline resulted in message with error: %w", err)
+			}
+			if msg.HasStructured() {
+				v, err := msg.AsStructured()
+				if err != nil {
+					return "", fmt.Errorf("unable to extract JSON result: %w", err)
+				}
+				msgs = append(msgs, v)
+			} else {
+				b, err := msg.AsBytes()
+				if err != nil {
+					return "", fmt.Errorf("unable to extract raw bytes result: %w", err)
+				}
+				msgs = append(msgs, string(b))
+			}
+		}
+	}
+	if len(msgs) == 1 {
+		return bloblang.ValueToString(msgs[0]), nil
+	}
+	return bloblang.ValueToString(msgs), nil
 }

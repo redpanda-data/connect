@@ -162,7 +162,7 @@ var ollamaProcess = singleton.New(singleton.Config[*exec.Cmd]{
 		}
 		cfg.logger.Tracef("starting ollama subprocess at %s", serverPath)
 		proc := exec.Command(serverPath, "serve")
-		proc.Env = append(os.Environ(), "OLLAMA_MODELS="+cfg.cacheDir)
+		proc.Env = append(os.Environ() /*"OLLAMA_MODELS="+cfg.cacheDir,*/, "OLLAMA_FLASH_ATTENTION=1")
 		proc.Stdout = &commandOutput{logger: cfg.logger}
 		proc.Stderr = &commandOutput{logger: cfg.logger}
 		if err = proc.Start(); err != nil {

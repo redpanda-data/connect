@@ -51,6 +51,7 @@ openai_chat_completion:
   json_schema:
     name: "" # No default (required)
     schema: "" # No default (required)
+  tools: [] # No default (required)
 ```
 
 --
@@ -108,6 +109,7 @@ openai_chat_completion:
   presence_penalty: 0 # No default (optional)
   seed: 0 # No default (optional)
   stop: [] # No default (optional)
+  tools: [] # No default (required)
 ```
 
 --
@@ -145,6 +147,44 @@ pipeline:
 output:
   stdout:
     codec: lines
+```
+
+--
+Use GPT-4o to call a tool::
++
+--
+
+This example asks GPT-4o to respond with the weather by invoking an HTTP processor to get the forecast.
+
+```yaml
+input:
+  generate:
+    count: 1
+    mapping: |
+      root = "What is the weather like in Chicago?"
+pipeline:
+  processors:
+    - openai_chat_completion:
+        model: gpt-4o
+        api_key: "${OPENAI_API_KEY}"
+        prompt: "${!content().string()}"
+        tools:
+          - name: GetWeather
+            description: "Retrieve the weather for a specific city"
+            parameters:
+              required: ["city"]
+              properties:
+                city:
+                  type: string
+                  description: the city to look up the weather for
+            processors:
+              - http:
+                  verb: GET
+                  url: 'https://wttr.in/${!this.city}?T'
+                  headers:
+                    User-Agent: curl/8.11.1 # Returns a text string from the weather website
+output:
+  stdout: {}
 ```
 
 --
@@ -686,6 +726,88 @@ If specified, our system will make a best effort to sample deterministically, su
 === `stop`
 
 Up to 4 sequences where the API will stop generating further tokens.
+
+
+*Type*: `array`
+
+
+=== `tools`
+
+The tools to allow the LLM to invoke. This allows building subpipelines that the LLM can choose to invoke to execute agentic-like actions.
+
+
+*Type*: `array`
+
+
+=== `tools[].name`
+
+The name of this tool.
+
+
+*Type*: `string`
+
+
+=== `tools[].description`
+
+A description of this tool, the LLM uses this to decide if the tool should be used.
+
+
+*Type*: `string`
+
+
+=== `tools[].parameters`
+
+The parameters the LLM needs to provide to invoke this tool.
+
+
+*Type*: `object`
+
+
+=== `tools[].parameters.required`
+
+The required parameters for this pipeline.
+
+
+*Type*: `array`
+
+*Default*: `[]`
+
+=== `tools[].parameters.properties`
+
+The properties for the processor's input data
+
+
+*Type*: `object`
+
+
+=== `tools[].parameters.properties.<name>.type`
+
+The type of this parameter.
+
+
+*Type*: `string`
+
+
+=== `tools[].parameters.properties.<name>.description`
+
+A description of this parameter.
+
+
+*Type*: `string`
+
+
+=== `tools[].parameters.properties.<name>.enum`
+
+Specifies that this parameter is an enum and only these specific values should be used.
+
+
+*Type*: `array`
+
+*Default*: `[]`
+
+=== `tools[].processors`
+
+The pipeline to execute when the LLM uses this tool.
 
 
 *Type*: `array`
