@@ -26,6 +26,7 @@ import (
 	"github.com/go-faker/faker/v4"
 	"github.com/gosimple/slug"
 	"github.com/oklog/ulid"
+	"github.com/rivo/uniseg"
 	frand "golang.org/x/exp/rand"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
@@ -62,6 +63,65 @@ func init() {
 			}
 			return bloblang.StringMethod(func(s string) (any, error) {
 				return slug.MakeLang(s, langOpt), nil
+			}), nil
+		},
+	); err != nil {
+		panic(err)
+	}
+
+	unicodeSegmentsSpec := bloblang.NewPluginSpec().
+		Beta().
+		Category("String Manipulation").
+		Description(`Splits text into segments from a given string based on the unicode text segmentation rules.`).
+		Example("Splits a string into different sentences",
+			`root.sentences = this.value.unicode_segments("sentence")`,
+			[2]string{
+				`{"value":"This is sentence 1.0. And this is sentence two."}`,
+				`{"sentences":["This is sentence 1.0. ","And this is sentence two."]}`,
+			}).
+		Example("Splits a string into different graphemes",
+			`root.graphemes = this.value.unicode_segments("grapheme")`,
+			[2]string{
+				`{"value":"🐕‍🦺 🫠"}`,
+				`{"graphemes":["🐕‍🦺"," ","🫠"]}`,
+			}).
+		Example("Splits text into words",
+			`root.words = this.value.unicode_segments("word")`,
+			[2]string{
+				`{"value":"Hello, world!"}`,
+				`{"words":["Hello",","," ","world","!"]}`,
+			}).Param(bloblang.NewStringParam("segmentation_type"))
+
+	if err := bloblang.RegisterMethodV2(
+		"unicode_segments", unicodeSegmentsSpec,
+		func(args *bloblang.ParsedParams) (bloblang.Method, error) {
+			segmentType, err := args.GetString("segmentation_type")
+			if err != nil {
+				return nil, err
+			}
+			return bloblang.StringMethod(func(s string) (any, error) {
+				var next func(str string, state int) (chunk, rest string, newState int)
+				switch segmentType {
+				case "word":
+					next = uniseg.FirstWordInString
+				case "sentence":
+					next = uniseg.FirstSentenceInString
+				case "grapheme":
+					next = func(str string, state int) (chunk, rest string, newState int) {
+						chunk, rest, _, newState = uniseg.FirstGraphemeClusterInString(str, state)
+						return
+					}
+				default:
+					return nil, fmt.Errorf("unknown segmentation type: %s", segmentType)
+				}
+				parts := []any{}
+				state := -1
+				var chunk string
+				for len(s) > 0 {
+					chunk, s, state = next(s, state)
+					parts = append(parts, chunk)
+				}
+				return parts, nil
 			}), nil
 		},
 	); err != nil {

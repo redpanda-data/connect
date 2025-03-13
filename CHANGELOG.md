@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Processor `openai_chat_completion` can now call tools that are defined as a series of additional processors. (@rockwotj)
+- New bloblang function `unicode_segments` to split text based on unicode graphemes, words or sentences. (@rockwotj)
 
 ### Fixed
 
