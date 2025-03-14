@@ -20,10 +20,16 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 
 	"github.com/parquet-go/parquet-go"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+)
+
+const (
+	pFieldByteArrayAsString  = "byte_array_as_string"
+	pFieldHandleLogicalTypes = "handle_logical_types"
 )
 
 func parquetDecodeProcessorConfig() *service.ConfigSpec {
@@ -31,9 +37,18 @@ func parquetDecodeProcessorConfig() *service.ConfigSpec {
 		// Stable(). TODO
 		Categories("Parsing").
 		Summary("Decodes https://parquet.apache.org/docs/[Parquet files^] into a batch of structured messages.").
-		Field(service.NewBoolField("byte_array_as_string").
+		Field(service.NewBoolField(pFieldByteArrayAsString).
 			Description("Whether to extract BYTE_ARRAY and FIXED_LEN_BYTE_ARRAY values as strings rather than byte slices in all cases. Values with a logical type of UTF8 will automatically be extracted as strings irrespective of this field. Enabling this field makes serializing the data as JSON more intuitive as `[]byte` values are serialized as base64 encoded strings by default.").
 			Default(false).Deprecated()).
+		Field(service.NewStringAnnotatedEnumField(pFieldHandleLogicalTypes, map[string]string{
+			"v0": "No special handling of logical types",
+			"v1": `
+- TIMESTAMP - decodes as an RFC3339 string describing the time. If ` + "`isAdjustedToUTC`" + ` is set to true the time zone will be set to UTC, if it is set to false the time zone will be set to local time.
+- UUID - decodes as a string, i.e. ` + "`00112233-4455-6677-8899-aabbccddeeff`" + `.`,
+		}).
+			Description("Whether to be smart about decoding logical types. In the Parquet format, logical types are stored as one of the standard physical types with some additional metadata describing the logical type. For example, UUIDs are stored in a FIXED_LEN_BYTE_ARRAY physical type, but there is metadata in the schema denoting that it is a UUID. By default, this logical type metadata will be ignored and values will be decoded directly from the physical type, which isn't always desirable. By enabling this option, logical types will be given special treatment and will decode into more useful values. The value for this field specifies a version, i.e. v0, v1... Any given version enables the logical type handling for that version and all versions below it, which allows the handling of new logical types to be introduced without breaking existing pipelines. We recommend enabling the newest version available of this feature when creating new pipelines.").
+			Example("v1").
+			Default("v0")). // TODO: V5 bump this to the latest version
 		Description(`
 This processor uses https://github.com/parquet-go/parquet-go[https://github.com/parquet-go/parquet-go^], which is itself experimental. Therefore changes could be made into how this processor functions outside of major version releases.`).
 		Version("4.4.0").
@@ -72,13 +87,27 @@ func init() {
 //------------------------------------------------------------------------------
 
 func newParquetDecodeProcessorFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*parquetDecodeProcessor, error) {
+	handleLogicalTypes, err := conf.FieldString(pFieldHandleLogicalTypes)
+	if err != nil {
+		return nil, err
+	}
+
+	logicalTypesVersion, err := strconv.Atoi(handleLogicalTypes[1:])
+	if err != nil {
+		return nil, fmt.Errorf("invalid field format: %s", handleLogicalTypes)
+	}
+
 	return &parquetDecodeProcessor{
 		logger: logger,
+		visitor: decodingCoersionVisitor{
+			version: logicalTypesVersion,
+		},
 	}, nil
 }
 
 type parquetDecodeProcessor struct {
-	logger *service.Logger
+	logger  *service.Logger
+	visitor decodingCoersionVisitor
 }
 
 func newReaderWithoutPanic(r io.ReaderAt) (pRdr *parquet.GenericReader[any], err error) {
@@ -131,9 +160,14 @@ func (s *parquetDecodeProcessor) Process(ctx context.Context, msg *service.Messa
 			break
 		}
 
-		for i := 0; i < n; i++ {
+		schema := pRdr.Schema()
+		for _, row := range rowBuf[:n] {
 			newMsg := msg.Copy()
-			newMsg.SetStructuredMut(rowBuf[i])
+			row, err = visitWithSchema(&s.visitor, row, schema)
+			if err != nil {
+				return nil, fmt.Errorf("coercing logical types after decoding: %w", err)
+			}
+			newMsg.SetStructuredMut(row)
 			resBatch = append(resBatch, newMsg)
 		}
 	}
