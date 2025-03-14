@@ -110,8 +110,8 @@ func hsiResponseConfigFromParsed(pConf *service.ParsedConfig) (conf hsiResponseC
 	return
 }
 
-// RPIngressInputSpec defines the config spec of an RPIngressInput.
-func RPIngressInputSpec() *service.ConfigSpec {
+// InputSpec defines the config spec of an RPIngressInput.
+func InputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Categories("Network").
@@ -189,9 +189,9 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 
 func init() {
 	err := service.RegisterBatchInput(
-		"rpingress", RPIngressInputSpec(),
+		"rpingress", InputSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
-			return RPIngressInputFromParsed(conf, mgr)
+			return InputFromParsed(conf, mgr)
 		})
 	if err != nil {
 		panic(err)
@@ -205,8 +205,8 @@ type batchAndAck struct {
 	aFn   service.AckFunc
 }
 
-// RPIngressInput implements service.BatchInput.
-type RPIngressInput struct {
+// Input implements service.BatchInput.
+type Input struct {
 	conf hsiConfig
 	log  *service.Logger
 	mgr  *service.Resources
@@ -219,14 +219,14 @@ type RPIngressInput struct {
 	shutSig *shutdown.Signaller
 }
 
-// RPIngressInputFromParsed returns an RPIngressInput from a parsed config.
-func RPIngressInputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (*RPIngressInput, error) {
+// InputFromParsed returns an RPIngressInput from a parsed config.
+func InputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (*Input, error) {
 	conf, err := hsiConfigFromParsed(pConf)
 	if err != nil {
 		return nil, err
 	}
 
-	h := RPIngressInput{
+	h := Input{
 		shutSig: shutdown.NewSignaller(),
 		conf:    conf,
 		log:     mgr.Logger(),
@@ -245,22 +245,28 @@ func RPIngressInputFromParsed(pConf *service.ParsedConfig, mgr *service.Resource
 
 //------------------------------------------------------------------------------
 
-func (ri *RPIngressInput) RegisterCustomMux(mux *mux.Router) error {
-	postHdlr := gzipHandler(ri.postHandler)
-	mux.Path(ri.conf.Path).Handler(postHdlr)
+func (ri *Input) createHandler() http.HandlerFunc {
+	return gzipHandler(ri.postHandler)
+}
+
+// RegisterCustomMux adds the server endpoint to a mux instead of running its
+// own server, this is for testing purposes only.
+func (ri *Input) RegisterCustomMux(mux *mux.Router) error {
+	mux.Path(ri.conf.Path).Handler(ri.createHandler())
 	return nil
 }
 
-func (ri *RPIngressInput) Connect(context.Context) error {
+// Connect attempts to run a server with the appropriate endpoints registered
+// for receiving data.
+func (ri *Input) Connect(context.Context) error {
 	if ri.server != nil {
 		return nil
 	}
 
 	ri.mux = mux.NewRouter()
-	ri.server = &http.Server{Addr: ri.conf.Address, Handler: ri.mux}
+	ri.mux.Path(ri.conf.Path).Handler(ri.createHandler())
 
-	postHdlr := gzipHandler(ri.postHandler)
-	ri.mux.Path(ri.conf.Path).Handler(postHdlr)
+	ri.server = &http.Server{Addr: ri.conf.Address, Handler: ri.mux}
 
 	go func() {
 		defer ri.shutSig.TriggerHasStopped()
@@ -282,7 +288,8 @@ func (ri *RPIngressInput) Connect(context.Context) error {
 	return nil
 }
 
-func (ri *RPIngressInput) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
+// ReadBatch attempts to read a batch of data received via the server endpoints.
+func (ri *Input) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
 	select {
 	case <-ctx.Done():
 	case baa := <-ri.batches:
@@ -291,7 +298,7 @@ func (ri *RPIngressInput) ReadBatch(ctx context.Context) (service.MessageBatch, 
 	return nil, nil, ctx.Err()
 }
 
-func (ri *RPIngressInput) extractBatchFromRequest(r *http.Request) (service.MessageBatch, error) {
+func (ri *Input) extractBatchFromRequest(r *http.Request) (service.MessageBatch, error) {
 	var batch service.MessageBatch
 
 	contentType := r.Header.Get("Content-Type")
@@ -375,7 +382,7 @@ func (ri *RPIngressInput) extractBatchFromRequest(r *http.Request) (service.Mess
 	return batch, nil
 }
 
-func (ri *RPIngressInput) postHandler(w http.ResponseWriter, r *http.Request) {
+func (ri *Input) postHandler(w http.ResponseWriter, r *http.Request) {
 	if ri.shutSig.IsSoftStopSignalled() {
 		http.Error(w, "Server closing", http.StatusServiceUnavailable)
 		return
@@ -557,7 +564,9 @@ func (ri *RPIngressInput) postHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (ri *RPIngressInput) Close(ctx context.Context) error {
+// Close attempts to stop any further ingestion of data and stops the HTTP
+// server.
+func (ri *Input) Close(ctx context.Context) error {
 	ri.shutSig.TriggerSoftStop()
 	defer ri.shutSig.TriggerHardStop()
 

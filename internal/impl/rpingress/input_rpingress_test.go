@@ -10,6 +10,7 @@ package rpingress_test
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"mime"
@@ -18,26 +19,31 @@ import (
 	"net/http/httptest"
 	"net/textproto"
 	"testing"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
 	"github.com/redpanda-data/connect/v4/internal/impl/rpingress"
 )
 
 func TestHTTPSinglePayloads(t *testing.T) {
 	t.Parallel()
 
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	mux := mux.NewRouter()
 
-	pConf, err := rpingress.RPIngressInputSpec().ParseYAML(`
+	pConf, err := rpingress.InputSpec().ParseYAML(`
 path: /testpost
 `, nil)
 	require.NoError(t, err)
 
-	h, err := rpingress.RPIngressInputFromParsed(pConf, service.MockResources())
+	h, err := rpingress.InputFromParsed(pConf, service.MockResources())
 	require.NoError(t, err)
 
 	require.NoError(t, h.RegisterCustomMux(mux))
@@ -48,7 +54,7 @@ path: /testpost
 	// Test both single and multipart messages.
 	for i := 0; i < 100; i++ {
 		go func() {
-			batch, aFn, err := h.ReadBatch(t.Context())
+			batch, aFn, err := h.ReadBatch(tCtx)
 			require.NoError(t, err)
 
 			for _, m := range batch {
@@ -59,7 +65,7 @@ path: /testpost
 			}
 
 			require.NoError(t, batch.AddSyncResponse())
-			require.NoError(t, aFn(t.Context(), nil))
+			require.NoError(t, aFn(tCtx, nil))
 		}()
 
 		// Send it as single message
@@ -81,14 +87,17 @@ path: /testpost
 func TestHTTPBatchPayloads(t *testing.T) {
 	t.Parallel()
 
+	tCtx, done := context.WithTimeout(context.Background(), time.Second*30)
+	defer done()
+
 	mux := mux.NewRouter()
 
-	pConf, err := rpingress.RPIngressInputSpec().ParseYAML(`
+	pConf, err := rpingress.InputSpec().ParseYAML(`
 path: /testpost
 `, nil)
 	require.NoError(t, err)
 
-	h, err := rpingress.RPIngressInputFromParsed(pConf, service.MockResources())
+	h, err := rpingress.InputFromParsed(pConf, service.MockResources())
 	require.NoError(t, err)
 
 	require.NoError(t, h.RegisterCustomMux(mux))
@@ -99,7 +108,7 @@ path: /testpost
 	// Test both single and multipart messages.
 	for i := 0; i < 100; i++ {
 		go func() {
-			batch, aFn, err := h.ReadBatch(t.Context())
+			batch, aFn, err := h.ReadBatch(tCtx)
 			require.NoError(t, err)
 
 			for _, m := range batch {
@@ -110,7 +119,7 @@ path: /testpost
 			}
 
 			require.NoError(t, batch.AddSyncResponse())
-			require.NoError(t, aFn(t.Context(), nil))
+			require.NoError(t, aFn(tCtx, nil))
 		}()
 
 		hdr, body, err := createMultipart([]string{
