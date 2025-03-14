@@ -13,6 +13,8 @@ jobs:
         go-version: [oldstable, stable]
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
     env:
       CGO_ENABLED: 0
     steps:
