@@ -164,6 +164,7 @@ Options:
 , `replace-one`
 , `update-one`
 , `find-one`
+, `aggregate`
 .
 
 === `write_concern`
