@@ -122,6 +122,7 @@ require (
 	github.com/rs/xid v1.5.0
 	github.com/sashabaranov/go-openai v1.37.0
 	github.com/sijms/go-ora/v2 v2.8.19
+	github.com/slack-go/slack v0.16.0
 	github.com/smira/go-statsd v1.3.3
 	github.com/snowflakedb/gosnowflake v1.11.0
 	github.com/sourcegraph/conc v0.3.0

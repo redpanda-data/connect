@@ -50,6 +50,7 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/questdb"
 	_ "github.com/redpanda-data/connect/v4/public/components/redis"
 	_ "github.com/redpanda-data/connect/v4/public/components/sftp"
+	_ "github.com/redpanda-data/connect/v4/public/components/slack"
 	_ "github.com/redpanda-data/connect/v4/public/components/snowflake"
 	_ "github.com/redpanda-data/connect/v4/public/components/spicedb"
 	_ "github.com/redpanda-data/connect/v4/public/components/splunk"
