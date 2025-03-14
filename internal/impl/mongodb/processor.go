@@ -205,6 +205,34 @@ func (m *Processor) ProcessBatch(ctx context.Context, batch service.MessageBatch
 
 			msg.SetBytes(data)
 			return nil
+
+		case OperationAggregate:
+			var collection *mongo.Collection
+			var cursor *mongo.Cursor
+			var err error
+			collection = m.database.Collection(collectionStr, m.writeConcernSpec.options)
+			if cursor, err = collection.Aggregate(ctx, docJSON); err != nil {
+				m.log.Errorf("Error getting mongo db cursor, pipeline = %v: %s", docJSON, err)
+				return err
+			}
+			defer cursor.Close(ctx)
+
+			var result any
+			for cursor.Next(ctx) {
+				if err = cursor.Decode(&result); err != nil {
+					m.log.Errorf("Error decoding mongo db result, pipeline = %v: %s", docJSON, err)
+					return err
+				}
+			}
+
+			var data []byte
+			data, err = bson.MarshalExtJSON(result, m.marshalMode == JSONMarshalModeCanonical, false)
+			if err != nil {
+				return err
+			}
+
+			msg.SetBytes(data)
+			return nil
 		}
 
 		if writeModel != nil {

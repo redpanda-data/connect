@@ -136,6 +136,8 @@ const (
 	OperationUpdateOne Operation = "update-one"
 	// OperationFindOne Find one operation.
 	OperationFindOne Operation = "find-one"
+	// OperationAggregate Execute Aggregation Pipeline operation.
+	OperationAggregate Operation = "aggregate"
 	// OperationInvalid Invalid operation.
 	OperationInvalid Operation = "invalid"
 )
@@ -144,7 +146,8 @@ func (op Operation) isDocumentAllowed() bool {
 	switch op {
 	case OperationInsertOne,
 		OperationReplaceOne,
-		OperationUpdateOne:
+		OperationUpdateOne,
+		OperationAggregate:
 		return true
 	default:
 		return false
@@ -202,6 +205,8 @@ func NewOperation(op string) Operation {
 		return OperationUpdateOne
 	case "find-one":
 		return OperationFindOne
+	case "aggregate":
+		return OperationAggregate
 	default:
 		return OperationInvalid
 	}
@@ -220,6 +225,7 @@ func processorOperationDocs(defaultOperation Operation) *service.ConfigField {
 		string(OperationReplaceOne),
 		string(OperationUpdateOne),
 		string(OperationFindOne),
+		string(OperationAggregate),
 	).Description("The mongodb operation to perform.").
 		Default(string(defaultOperation))
 }
@@ -242,7 +248,7 @@ func operationFromParsed(pConf *service.ParsedConfig) (operation Operation, err 
 	}
 
 	if operation = NewOperation(operationStr); operation == OperationInvalid {
-		err = fmt.Errorf("mongodb operation '%s' unknown: must be insert-one, delete-one, delete-many, replace-one or update-one", operationStr)
+		err = fmt.Errorf("mongodb operation '%s' unknown: must be insert-one, delete-one, delete-many, replace-one, update-one or aggregate", operationStr)
 	}
 	return
 }
