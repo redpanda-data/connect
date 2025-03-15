@@ -65,16 +65,16 @@ builds:
 
 archives:
   - id: connect
-    builds: [ connect ]
-    format: tar.gz
+    ids: [ connect ]
+    formats: tar.gz
     files:
       - README.md
       - CHANGELOG.md
       - licenses
 
   - id: connect-cloud
-    builds: [ connect-cloud ]
-    format: tar.gz
+    ids: [ connect-cloud ]
+    formats: tar.gz
     name_template: 'redpanda-connect-cloud_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ with .Arm }}v{{ . }}{{ end }}{{ with .Mips }}_{{ . }}{{ end }}{{ if not (eq .Amd64 "v1") }}{{ .Amd64 }}{{ end }}'
     files:
       - README.md
@@ -82,13 +82,13 @@ archives:
       - licenses
 
   - id: connect-lambda
-    builds: [ connect-lambda ]
-    format: zip
+    ids: [ connect-lambda ]
+    formats: zip
     name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
   - id: connect-lambda-al2
-    builds: [ connect-lambda-al2 ]
-    format: zip
+    ids: [ connect-lambda-al2 ]
+    formats: zip
     name_template: "redpanda-connect-lambda-al2_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
 dist: target/dist
@@ -110,7 +110,7 @@ nfpms:
       - src: /usr/bin/redpanda-connect
         dst: /usr/bin/.rpk.ac-connect
         type: symlink
-    builds:
+    ids:
       - connect
     vendor: Redpanda Data, Inc.
     license: "https://github.com/redpanda-data/connect/blob/main/licenses/README.md"
