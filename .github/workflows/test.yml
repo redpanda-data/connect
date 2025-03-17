@@ -19,6 +19,16 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Install Microsoft Go
+      run: |
+        GO_VERSION=$(sed -n 3p ./go.mod | awk '{ print $2; }')
+        curl -sSLf -o msgo.tgz https://aka.ms/golang/release/latest/go${GO_VERSION}-1.linux-amd64.tar.gz
+        [[ -d "$GITHUB_WORKSPACE/bin" ]] || install -d -m 0755 "$GITHUB_WORKSPACE/bin"
+        [[ -d "$GITHUB_WORKSPACE/microsoft" ]] || install -d -m 0755 "$GITHUB_WORKSPACE/microsoft"
+        tar -C "$GITHUB_WORKSPACE/microsoft" -xf msgo.tgz
+        [[ -x "$GITHUB_WORKSPACE/microsoft/go/bin/go" ]] && ln -s "$GITHUB_WORKSPACE/microsoft/go/bin/go" "$GITHUB_WORKSPACE/bin/microsoft-go"
+        echo "$GITHUB_WORKSPACE/bin" >> "$GITHUB_PATH"
+
     - name: Install Go
       uses: actions/setup-go@v5
       with:
