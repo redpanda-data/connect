@@ -106,7 +106,7 @@ func newParquetDecodeProcessorFromConfig(conf *service.ParsedConfig, logger *ser
 	case logicalTypesVersionV2:
 		proc.visitor.version = 2
 	default:
-		return nil, fmt.Errorf("invalid value for field %s: %d", pFieldHandleLogicalTypes, handleLogicalTypes)
+		return nil, fmt.Errorf("invalid value for field %s: %s", pFieldHandleLogicalTypes, handleLogicalTypes)
 	}
 
 	return proc, nil
