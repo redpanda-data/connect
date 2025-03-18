@@ -79,7 +79,7 @@ schema:
 
 	decodeConf, err := parquetDecodeProcessorConfig().ParseYAML(`
 byte_array_as_string: true
-handle_logical_types: 1
+handle_logical_types: v2
 `, nil)
 	require.NoError(t, err)
 
@@ -119,7 +119,7 @@ schema:
 
 	decodeConf, err := parquetDecodeProcessorConfig().ParseYAML(`
 byte_array_as_string: true
-handle_logical_types: 1
+handle_logical_types: v2
 `, nil)
 	require.NoError(t, err)
 
