@@ -68,9 +68,9 @@ func visitWithSchema(visitor schemaVisitor, value any, schemaNode parquet.Node) 
 	}
 }
 
-type encodingCoersionVisitor struct{}
+type encodingCoercionVisitor struct{}
 
-func (encodingCoersionVisitor) visitLeaf(value any, schemaNode parquet.Node) (any, error) {
+func (encodingCoercionVisitor) visitLeaf(value any, schemaNode parquet.Node) (any, error) {
 	logicalType := schemaNode.Type().LogicalType()
 	if logicalType == nil {
 		return value, nil
@@ -83,29 +83,25 @@ func (encodingCoersionVisitor) visitLeaf(value any, schemaNode parquet.Node) (an
 				return nil, fmt.Errorf("parsing string RFC3339 timestamp: %w", err)
 			}
 			unit := logicalType.Timestamp.Unit
-			if unit.Millis != nil {
+			switch {
+			case unit.Millis != nil:
 				return ts.UnixMilli(), nil
-			} else if unit.Micros != nil {
+			case unit.Micros != nil:
 				return ts.UnixMicro(), nil
-			} else if unit.Nanos != nil {
+			case unit.Nanos != nil:
 				return ts.UnixNano(), nil
-			} else {
-				panic("unreachable")
+			default:
+				return nil, errors.New("unreachable branch while processing parquet timestamp")
 			}
 		default:
 			return nil, errors.New("TIMESTAMP values must be RFC3339-formatted strings")
 		}
 	} else if logicalType.Json != nil {
-		switch value.(type) {
-		case map[string]any, []any:
-			jsonBytes, err := json.Marshal(value)
-			if err != nil {
-				return nil, fmt.Errorf("encoding value as JSON: %w", err)
-			}
-			return jsonBytes, nil
-		default:
-			return value, nil
+		jsonBytes, err := json.Marshal(value)
+		if err != nil {
+			return nil, fmt.Errorf("encoding value as JSON: %w", err)
 		}
+		return jsonBytes, nil
 	} else if logicalType.UUID != nil {
 		switch v := value.(type) {
 		case string:
@@ -122,11 +118,11 @@ func (encodingCoersionVisitor) visitLeaf(value any, schemaNode parquet.Node) (an
 	return value, nil
 }
 
-type decodingCoersionVisitor struct {
+type decodingCoercionVisitor struct {
 	version int
 }
 
-func (d *decodingCoersionVisitor) visitLeaf(value any, schemaNode parquet.Node) (any, error) {
+func (d *decodingCoercionVisitor) visitLeaf(value any, schemaNode parquet.Node) (any, error) {
 	logicalType := schemaNode.Type().LogicalType()
 	if logicalType == nil {
 		return value, nil
@@ -141,14 +137,15 @@ func (d *decodingCoersionVisitor) visitLeaf(value any, schemaNode parquet.Node) 
 
 			schemaSpec := logicalType.Timestamp
 			var ts time.Time
-			if schemaSpec.Unit.Millis != nil {
+			switch {
+			case schemaSpec.Unit.Millis != nil:
 				ts = time.UnixMilli(tsNum)
-			} else if schemaSpec.Unit.Micros != nil {
+			case schemaSpec.Unit.Micros != nil:
 				ts = time.UnixMicro(tsNum)
-			} else if schemaSpec.Unit.Nanos != nil {
+			case schemaSpec.Unit.Nanos != nil:
 				ts = time.Unix(tsNum/1e9, tsNum%1e9)
-			} else {
-				panic("unreachable")
+			default:
+				return nil, errors.New("unreachable branch while processing parquet timestamp")
 			}
 			if schemaSpec.IsAdjustedToUTC {
 				return ts.UTC(), nil

@@ -294,7 +294,7 @@ func (s *parquetEncodeProcessor) ProcessBatch(ctx context.Context, batch service
 			return nil, fmt.Errorf("unable to encode message type %T as parquet row", ms)
 		}
 
-		rows[i], err = visitWithSchema(encodingCoersionVisitor{}, rows[i], s.schema)
+		rows[i], err = visitWithSchema(encodingCoercionVisitor{}, rows[i], s.schema)
 		if err != nil {
 			return nil, fmt.Errorf("coercing logical types: %w", err)
 		}
