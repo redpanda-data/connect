@@ -28,6 +28,7 @@ import (
 const (
 	scFieldCredentialsUsername       = "username"
 	scFieldCredentialsPassword       = "password"
+	scFieldCredentialsPrivateKey     = "private_key"
 	scFieldCredentialsPrivateKeyFile = "private_key_file"
 	scFieldCredentialsPrivateKeyPass = "private_key_pass"
 )
@@ -37,31 +38,67 @@ func credentialsFields() []*service.ConfigField {
 		service.NewStringField(scFieldCredentialsUsername).Description("The username to connect to the SFTP server.").Default(""),
 		service.NewStringField(scFieldCredentialsPassword).Description("The password for the username to connect to the SFTP server.").Secret().Default(""),
 		service.NewStringField(scFieldCredentialsPrivateKeyFile).Description("The private key for the username to connect to the SFTP server.").Default(""),
+		service.NewStringField(scFieldCredentialsPrivateKey).Description("The private key file for the username to connect to the SFTP server.").
+			Default("").
+			Secret().
+			LintRule(
+				`root = match { this.exists("private_key") && this.exists("private_key_file") => [ "both ` + scFieldCredentialsPrivateKey + ` and ` + scFieldCredentialsPrivateKeyFile + ` can't be set simultaneously" ], }`,
+			),
 		service.NewStringField(scFieldCredentialsPrivateKeyPass).Description("Optional passphrase for private key.").Secret().Default(""),
 	}
 }
 
-func credentialsFromParsed(pConf *service.ParsedConfig) (creds credentials, err error) {
+func credentialsFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (creds credentials, err error) {
 	if creds.Username, err = pConf.FieldString(scFieldCredentialsUsername); err != nil {
 		return
 	}
 	if creds.Password, err = pConf.FieldString(scFieldCredentialsPassword); err != nil {
 		return
 	}
-	if creds.PrivateKeyFile, err = pConf.FieldString(scFieldCredentialsPrivateKeyFile); err != nil {
-		return
+
+	var privateKey []byte
+	privateKeyStr, err := pConf.FieldString(scFieldCredentialsPrivateKey)
+	if err != nil {
+		return credentials{}, err
 	}
-	if creds.PrivateKeyPass, err = pConf.FieldString(scFieldCredentialsPrivateKeyPass); err != nil {
-		return
+	privateKeyFile, err := pConf.FieldString(scFieldCredentialsPrivateKeyFile)
+	if err != nil {
+		return credentials{}, err
 	}
+
+	if privateKeyStr != "" {
+		privateKey = []byte(privateKeyStr)
+	} else if privateKeyFile != "" {
+		privateKey, err = service.ReadFile(mgr.FS(), privateKeyFile)
+		if err != nil {
+			return credentials{}, fmt.Errorf("reading private key file: %w", err)
+		}
+	}
+
+	if privateKey != nil {
+		privateKeyPass, err := pConf.FieldString(scFieldCredentialsPrivateKeyPass)
+		if err != nil {
+			return credentials{}, err
+		}
+
+		// check if passphrase is provided and parse private key
+		if privateKeyPass == "" {
+			creds.Signer, err = ssh.ParsePrivateKey(privateKey)
+		} else {
+			creds.Signer, err = ssh.ParsePrivateKeyWithPassphrase(privateKey, []byte(privateKeyPass))
+		}
+		if err != nil {
+			return credentials{}, fmt.Errorf("failed to parse private key: %v", err)
+		}
+	}
+
 	return
 }
 
 type credentials struct {
-	Username       string
-	Password       string
-	PrivateKeyFile string
-	PrivateKeyPass string
+	Username string
+	Password string
+	Signer   ssh.Signer
 }
 
 func (c credentials) GetClient(fs fs.FS, address string) (*sftp.Client, error) {
@@ -95,25 +132,8 @@ func (c credentials) GetClient(fs fs.FS, address string) (*sftp.Client, error) {
 	}
 
 	// set private key auth when provided
-	if c.PrivateKeyFile != "" {
-		// read private key file
-		var privateKey []byte
-		privateKey, err = service.ReadFile(fs, c.PrivateKeyFile)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read private key: %v", err)
-		}
-		// check if passphrase is provided and parse private key
-		var signer ssh.Signer
-		if c.PrivateKeyPass == "" {
-			signer, err = ssh.ParsePrivateKey(privateKey)
-		} else {
-			signer, err = ssh.ParsePrivateKeyWithPassphrase(privateKey, []byte(c.PrivateKeyPass))
-		}
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse private key: %v", err)
-		}
-		// append to config.Auth
-		config.Auth = append(config.Auth, ssh.PublicKeys(signer))
+	if c.Signer != nil {
+		config.Auth = append(config.Auth, ssh.PublicKeys(c.Signer))
 	}
 
 	conn, err := ssh.Dial("tcp", address, config)
