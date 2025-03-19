@@ -61,6 +61,11 @@ schema:
   - { name: e, type: INT64, optional: true }
   - { name: f, type: INT64 }
   - { name: g, type: UTF8 }
+  - { name: ts, type: TIMESTAMP, optional: true }
+  - { name: bson, type: BSON, optional: true }
+  - { name: enum, type: ENUM, optional: true }
+  - { name: uuid, type: UUID, optional: true }
+  - { name: json, type: JSON, optional: true }
   - name: nested_stuff
     optional: true
     fields:
@@ -74,6 +79,7 @@ schema:
 
 	decodeConf, err := parquetDecodeProcessorConfig().ParseYAML(`
 byte_array_as_string: true
+handle_logical_types: v2
 `, nil)
 	require.NoError(t, err)
 
@@ -95,6 +101,11 @@ schema:
   - { name: e, type: INT64, optional: true }
   - { name: f, type: INT64 }
   - { name: g, type: UTF8 }
+  - { name: ts, type: TIMESTAMP, optional: true }
+  - { name: bson, type: BSON, optional: true }
+  - { name: enum, type: ENUM, optional: true }
+  - { name: uuid, type: UUID, optional: true }
+  - { name: json, type: JSON, optional: true }
   - name: nested_stuff
     optional: true
     fields:
@@ -108,6 +119,7 @@ schema:
 
 	decodeConf, err := parquetDecodeProcessorConfig().ParseYAML(`
 byte_array_as_string: true
+handle_logical_types: v2
 `, nil)
 	require.NoError(t, err)
 
@@ -138,6 +150,11 @@ func testParquetEncodeDecodeRoundTrip(t *testing.T, encodeProc *parquetEncodePro
   "e": 6,
   "f": 7,
   "g": "logical string represent",
+  "ts": "1996-12-19T16:39:57Z",
+  "bson": "bson-data",
+  "enum": "enum",
+  "uuid": "4a701342-4e27-4d08-bef9-e2f74fb79418",
+  "json": {"foo":" bar"},
   "nested_stuff": {
     "a_stuff": "a value",
     "b_stuff": "b value"
@@ -153,6 +170,11 @@ func testParquetEncodeDecodeRoundTrip(t *testing.T, encodeProc *parquetEncodePro
   "e": 6,
   "f": 7,
   "g": "logical string represent",
+  "ts": "1996-12-19T16:39:57Z",
+  "bson": "bson-data",
+  "enum": "enum",
+  "uuid": "4a701342-4e27-4d08-bef9-e2f74fb79418",
+  "json": {"foo":" bar"},
   "nested_stuff": {
     "a_stuff": "a value",
     "b_stuff": "b value"
@@ -179,6 +201,11 @@ func testParquetEncodeDecodeRoundTrip(t *testing.T, encodeProc *parquetEncodePro
   "e": null,
   "f": 7,
   "g": "logical string represent",
+  "ts": null,
+  "bson": null,
+  "enum": null,
+  "uuid": null,
+  "json": null,
   "nested_stuff": null
 }`,
 		},
