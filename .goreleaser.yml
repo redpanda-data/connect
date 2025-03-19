@@ -34,6 +34,24 @@ builds:
       -X github.com/redpanda-data/connect/v4/internal/telemetry.ExportDelay={{ if index .Env "CONNECT_TELEMETRY_DELAY"  }}{{ .Env.CONNECT_TELEMETRY_DELAY }}{{ else }}{{ end }}
       -X github.com/redpanda-data/connect/v4/internal/telemetry.ExportPeriod={{ if index .Env "CONNECT_TELEMETRY_PERIOD"  }}{{ .Env.CONNECT_TELEMETRY_PERIOD }}{{ else }}{{ end }}
 
+  - id: connect-fips
+    main: cmd/redpanda-connect/main.go
+    binary: redpanda-connect-fips
+    goos: [ linux ]
+    goarch: [ amd64 ]
+    tool: 'microsoft-go'
+    env:
+      - GOEXPERIMENT=systemcrypto
+      - CGO_ENABLED=1
+    ldflags:
+      -s -w
+      -X main.Version={{.Version}}
+      -X main.DateBuilt={{.Date}}
+      -X main.BinaryName=redpanda-connect-fips
+      -X github.com/redpanda-data/connect/v4/internal/telemetry.ExportHost={{ if index .Env "CONNECT_TELEMETRY_HOST"  }}{{ .Env.CONNECT_TELEMETRY_HOST }}{{ else }}{{ end }}
+      -X github.com/redpanda-data/connect/v4/internal/telemetry.ExportDelay={{ if index .Env "CONNECT_TELEMETRY_DELAY"  }}{{ .Env.CONNECT_TELEMETRY_DELAY }}{{ else }}{{ end }}
+      -X github.com/redpanda-data/connect/v4/internal/telemetry.ExportPeriod={{ if index .Env "CONNECT_TELEMETRY_PERIOD"  }}{{ .Env.CONNECT_TELEMETRY_PERIOD }}{{ else }}{{ end }}
+
   - id: connect-cloud
     main: cmd/redpanda-connect-cloud/main.go
     binary: redpanda-connect
@@ -66,6 +84,14 @@ builds:
 archives:
   - id: connect
     ids: [ connect ]
+    formats: tar.gz
+    files:
+      - README.md
+      - CHANGELOG.md
+      - licenses
+
+  - id: connect-fips
+    ids: [ connect-fips ]
     formats: tar.gz
     files:
       - README.md
@@ -110,8 +136,12 @@ nfpms:
       - src: /usr/bin/redpanda-connect
         dst: /usr/bin/.rpk.ac-connect
         type: symlink
+      - src: /usr/bin/redpanda-connect-fips
+        dst: /usr/bin/.rpk.ac-connect-fips
+        type: symlink
     ids:
       - connect
+      - connect-fips
     vendor: Redpanda Data, Inc.
     license: "https://github.com/redpanda-data/connect/blob/main/licenses/README.md"
     homepage: redpanda.com

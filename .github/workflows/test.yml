@@ -22,7 +22,7 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v5
       with:
-        go-version: oldstable
+        go-version: stable
 
     - name: Install dependencies for x_benthos_extra
       run: |
