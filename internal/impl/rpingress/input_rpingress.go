@@ -318,7 +318,7 @@ func (ri *Input) extractBatchFromRequest(r *http.Request) (service.MessageBatch,
 
 	mediaType, params, err := mime.ParseMediaType(contentType)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse media type: %w", err)
 	}
 
 	if strings.HasPrefix(mediaType, "multipart/") {
@@ -329,18 +329,18 @@ func (ri *Input) extractBatchFromRequest(r *http.Request) (service.MessageBatch,
 				if errors.Is(err, io.EOF) {
 					break
 				}
-				return nil, err
+				return nil, fmt.Errorf("failed to obtain next multipart message part: %w", err)
 			}
 			var msgBytes []byte
 			if msgBytes, err = io.ReadAll(p); err != nil {
-				return nil, err
+				return nil, fmt.Errorf("failed to read multipart message part: %w", err)
 			}
 			batch = append(batch, service.NewMessage(msgBytes))
 		}
 	} else {
 		var msgBytes []byte
 		if msgBytes, err = io.ReadAll(r.Body); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to read body: %w", err)
 		}
 		batch = append(batch, service.NewMessage(msgBytes))
 	}
