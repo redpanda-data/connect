@@ -219,6 +219,7 @@ resource                  ,processor ,resource                  ,0.0.0   ,certif
 retry                     ,output    ,retry                     ,0.0.0   ,certified  ,n          ,y     ,y
 retry                     ,processor ,retry                     ,4.27.0  ,certified  ,n          ,y     ,y
 ristretto                 ,cache     ,Ristretto                 ,0.0.0   ,community  ,n          ,y     ,y
+rpingress                 ,input     ,rpingress                 ,4.51.0  ,enterprise ,n          ,y     ,y
 schema_registry           ,input     ,schema_registry           ,4.33.0  ,enterprise ,n          ,y     ,y
 schema_registry           ,output    ,schema_registry           ,4.33.0  ,enterprise ,n          ,y     ,y
 schema_registry_decode    ,processor ,schema_registry_decode    ,0.0.0   ,certified  ,n          ,y     ,y
