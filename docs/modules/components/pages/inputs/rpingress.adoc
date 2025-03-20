@@ -40,13 +40,9 @@ input:
     address: ""
     path: /deliver
     rate_limit: ""
-    oidc_auth:
-      enabled: false
-      provider_url: ""
-      jwt_signing_key: ""
-      client_id: ""
-      client_secret: ""
-      redirect_url: ""
+    rp_jwt_validator:
+      issuer_url: ""
+      audience: ""
 ```
 
 --
@@ -64,16 +60,13 @@ input:
     rate_limit: ""
     cert_file: ""
     key_file: ""
-    oidc_auth:
-      enabled: false
-      provider_url: ""
-      jwt_signing_key: ""
-      client_id: ""
-      client_secret: ""
-      redirect_url: ""
     cors:
       enabled: false
       allowed_origins: []
+    rp_jwt_validator:
+      enabled: false
+      issuer_url: ""
+      audience: ""
     sync_response:
       status: "200"
       headers:
@@ -165,78 +158,6 @@ Enable TLS by specifying a certificate and key file. Only valid with a custom `a
 
 *Default*: `""`
 
-=== `oidc_auth`
-
-Sorry! This field is missing documentation.
-
-
-*Type*: `object`
-
-
-=== `oidc_auth.enabled`
-
-Whether to enable OIDC authentication
-
-
-*Type*: `bool`
-
-*Default*: `false`
-
-=== `oidc_auth.provider_url`
-
-The URL of the authentication provider
-
-
-*Type*: `string`
-
-*Default*: `""`
-
-=== `oidc_auth.jwt_signing_key`
-
-A secret token to sign JWT with
-[CAUTION]
-====
-This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
-====
-
-
-
-*Type*: `string`
-
-*Default*: `""`
-
-=== `oidc_auth.client_id`
-
-An identifier for authentication clients
-
-
-*Type*: `string`
-
-*Default*: `""`
-
-=== `oidc_auth.client_secret`
-
-A secret key to encrypt session info
-[CAUTION]
-====
-This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
-====
-
-
-
-*Type*: `string`
-
-*Default*: `""`
-
-=== `oidc_auth.redirect_url`
-
-The URL to redirect authenticated requests to
-
-
-*Type*: `string`
-
-*Default*: `""`
-
 === `cors`
 
 Adds Cross-Origin Resource Sharing headers.
@@ -262,6 +183,46 @@ An explicit list of origins that are allowed for CORS requests.
 *Type*: `array`
 
 *Default*: `[]`
+
+=== `rp_jwt_validator`
+
+Sorry! This field is missing documentation.
+
+
+*Type*: `object`
+
+
+=== `rp_jwt_validator.enabled`
+
+Sorry! This field is missing documentation.
+
+
+*Type*: `bool`
+
+*Default*: `false`
+
+=== `rp_jwt_validator.issuer_url`
+
+Sorry! This field is missing documentation.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `rp_jwt_validator.audience`
+
+Sorry! This field is missing documentation.
+[CAUTION]
+====
+This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
+====
+
+
+
+*Type*: `string`
+
+*Default*: `""`
 
 === `sync_response`
 
