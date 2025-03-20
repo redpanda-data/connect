@@ -28,12 +28,14 @@ const (
 	rpjwtFieldEnabled   = "enabled"
 	rpjwtFieldIssuerURL = "issuer_url"
 	rpjwtFieldAudience  = "audience"
+	rpjwtFieldOrgID     = "organization_id"
 )
 
 type rpjwtConfig struct {
 	enabled   bool
 	issuerURL string
 	audience  string
+	orgID     string
 }
 
 func rpjwtConfigField() *service.ConfigField {
@@ -44,6 +46,9 @@ func rpjwtConfigField() *service.ConfigField {
 		service.NewStringField(rpjwtFieldIssuerURL).
 			Default(""),
 		service.NewStringField(rpjwtFieldAudience).
+			Default("").
+			Secret(),
+		service.NewStringField(rpjwtFieldOrgID).
 			Default("").
 			Secret(),
 	)
@@ -62,12 +67,17 @@ func rpjwtConfigFromParsed(pConf *service.ParsedConfig) (conf rpjwtConfig, err e
 	if conf.audience, err = pConf.FieldString(rpjwtFieldAudience); err != nil {
 		return
 	}
+
+	if conf.orgID, err = pConf.FieldString(rpjwtFieldOrgID); err != nil {
+		return
+	}
 	return
 }
 
 type rpJWTValidatorMiddleware struct {
 	logger       *service.Logger
 	jwtValidator *validator.Validator
+	orgID        string
 
 	validationCache *cache.Cache[string, *validator.ValidatedClaims]
 }
@@ -90,6 +100,11 @@ func newRPJWTValidatorMiddleware(ctx context.Context, log *service.Logger, conf 
 		issuerURL.String(),
 		[]string{conf.audience},
 		validator.WithAllowedClockSkew(time.Minute),
+		validator.WithCustomClaims(
+			func() validator.CustomClaims {
+				return &rpCustomClaims{}
+			},
+		),
 	)
 	if err != nil {
 		return nil, errors.New("failed to set up the jwt validator")
@@ -98,9 +113,21 @@ func newRPJWTValidatorMiddleware(ctx context.Context, log *service.Logger, conf 
 	return &rpJWTValidatorMiddleware{
 		logger:       log,
 		jwtValidator: jwtValidator,
+		orgID:        conf.orgID,
 
 		validationCache: cache.New[string, *validator.ValidatedClaims](cache.MaxAge(10*time.Second), cache.MaxErrorAge(time.Second)),
 	}, nil
+}
+
+type rpCustomClaims struct {
+	OrgID string `json:"https://cloud.redpanda.com/organization_id,omitempty"`
+}
+
+func (r *rpCustomClaims) Validate(_ context.Context) error {
+	if r.OrgID == "" {
+		return errors.New("there is no organization present in the token")
+	}
+	return nil
 }
 
 func (r *rpJWTValidatorMiddleware) wrap(next http.Handler) http.Handler {
@@ -115,9 +142,23 @@ func (r *rpJWTValidatorMiddleware) wrap(next http.Handler) http.Handler {
 			return
 		}
 
-		if _, err = r.ValidateToken(req.Context(), authToken); err != nil {
+		var claims *validator.ValidatedClaims
+		if claims, err = r.ValidateToken(req.Context(), authToken); err != nil {
 			r.logger.With("error", err).Error("Authentication token was not valid")
 			http.Error(w, "authentication token was invalid", http.StatusBadRequest)
+			return
+		}
+
+		customClaims, ok := claims.CustomClaims.(*rpCustomClaims)
+		if !ok {
+			r.logger.Error("Failed to extract custom claims")
+			http.Error(w, "authentication claims were not found", http.StatusBadRequest)
+			return
+		}
+
+		if customClaims.OrgID != r.orgID {
+			r.logger.With("org_id", customClaims.OrgID).Error("Organisation ID mismatch")
+			http.Error(w, "organisation mismatch", http.StatusUnauthorized)
 			return
 		}
 
