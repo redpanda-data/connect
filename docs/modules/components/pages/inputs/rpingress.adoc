@@ -37,7 +37,7 @@ Common::
 input:
   label: ""
   rpingress:
-    address: ""
+    address: "" # No default (required)
     path: /deliver
     rate_limit: ""
     rp_jwt_validator:
@@ -56,7 +56,7 @@ Advanced::
 input:
   label: ""
   rpingress:
-    address: ""
+    address: "" # No default (required)
     path: /deliver
     rate_limit: ""
     cert_file: ""
@@ -122,7 +122,6 @@ The address to host from.
 
 *Type*: `string`
 
-*Default*: `""`
 
 === `path`
 

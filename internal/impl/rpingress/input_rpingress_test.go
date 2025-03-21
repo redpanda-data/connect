@@ -39,6 +39,7 @@ func TestHTTPSinglePayloads(t *testing.T) {
 	mux := mux.NewRouter()
 
 	pConf, err := rpingress.InputSpec().ParseYAML(`
+address: 0.0.0.0:1234 # Unused
 path: /testpost
 `, nil)
 	require.NoError(t, err)
@@ -93,6 +94,7 @@ func TestHTTPBatchPayloads(t *testing.T) {
 	mux := mux.NewRouter()
 
 	pConf, err := rpingress.InputSpec().ParseYAML(`
+address: 0.0.0.0:1234 # Unused
 path: /testpost
 `, nil)
 	require.NoError(t, err)
