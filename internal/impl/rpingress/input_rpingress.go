@@ -145,8 +145,7 @@ If HTTPS is enabled, the following fields are added as well:
 You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].`).
 		Fields(
 			service.NewStringField(hsiFieldAddress).
-				Description("The address to host from.").
-				Default(""),
+				Description("The address to host from."),
 			service.NewStringField(hsiFieldPath).
 				Description("The endpoint path to listen for data delivery requests.").
 				Default("/deliver"),
