@@ -36,7 +36,16 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: oldstable
+          go-version: stable
+      - name: Install Microsoft Go
+        run: |
+          GO_VERSION=$(go mod edit -json | jq -r .Go)
+          curl -sSLf -o "$RUNNER_TEMP/msgo.tgz" https://aka.ms/golang/release/latest/go${GO_VERSION}-1.linux-amd64.tar.gz
+          [[ -d "$RUNNER_TEMP/bin" ]] || install -d -m 0755 "$RUNNER_TEMP/bin"
+          [[ -d "$RUNNER_TEMP/microsoft" ]] || install -d -m 0755 "$RUNNER_TEMP/microsoft"
+          tar -C "$RUNNER_TEMP/microsoft" -xf "$RUNNER_TEMP/msgo.tgz"
+          [[ -x "$RUNNER_TEMP/microsoft/go/bin/go" ]] && ln -s "$RUNNER_TEMP/microsoft/go/bin/go" "$RUNNER_TEMP/bin/microsoft-go"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - name: Write telemetry private key
         env:
           CONNECT_TELEMETRY_PRIV_KEY: ${{ secrets.TELEMETRY_PRIVATE_KEY }}
