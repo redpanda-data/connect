@@ -43,6 +43,7 @@ input:
     rp_jwt_validator:
       issuer_url: ""
       audience: ""
+      organization_id: ""
 ```
 
 --
@@ -67,6 +68,7 @@ input:
       enabled: false
       issuer_url: ""
       audience: ""
+      organization_id: ""
     sync_response:
       status: "200"
       headers:
@@ -211,6 +213,20 @@ Sorry! This field is missing documentation.
 *Default*: `""`
 
 === `rp_jwt_validator.audience`
+
+Sorry! This field is missing documentation.
+[CAUTION]
+====
+This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
+====
+
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `rp_jwt_validator.organization_id`
 
 Sorry! This field is missing documentation.
 [CAUTION]
