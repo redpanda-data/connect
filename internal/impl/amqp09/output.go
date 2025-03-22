@@ -425,6 +425,7 @@ func (a *amqp09Writer) Write(ctx context.Context, msg *service.Message) error {
 	if a.exchangeDeclareType == "topic" {
 		msgType = strings.ReplaceAll(msgType, "/", ".")
 	}
+
 	contentType, err := a.contentType.TryString(msg)
 	if err != nil {
 		return fmt.Errorf("content type interpolation error: %w", err)
