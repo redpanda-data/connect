@@ -93,6 +93,7 @@ archives:
   - id: connect-fips
     ids: [ connect-fips ]
     formats: tar.gz
+    name_template: 'redpanda-connect-fips_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ with .Arm }}v{{ . }}{{ end }}{{ with .Mips }}_{{ . }}{{ end }}{{ if not (eq .Amd64 "v1") }}{{ .Amd64 }}{{ end }}'
     files:
       - README.md
       - CHANGELOG.md
