@@ -548,6 +548,9 @@ snowflake_streaming:
   schema: $SCHEMA
   private_key_file: "$PRIVATE_KEY_FILE"
   table: integration_test_floats
+  build_options:
+    parallelism: 4
+    chunk_size: 2
   init_statement: |
     DROP TABLE IF EXISTS integration_test_floats;
     CREATE TABLE integration_test_floats(a FLOAT);
