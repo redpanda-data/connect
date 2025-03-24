@@ -21,6 +21,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"path"
+	"slices"
 	"sync/atomic"
 	"time"
 
@@ -202,7 +203,6 @@ func (c *SnowflakeServiceClient) OpenChannel(ctx context.Context, opts ChannelOp
 		ChannelOptions:  opts,
 		clientPrefix:    c.clientPrefix,
 		schema:          schema,
-		parquetWriter:   newParquetWriter(c.options.ConnectVersion, schema),
 		client:          c.client,
 		role:            c.options.Role,
 		uploaderManager: c.uploaderManager,
@@ -217,6 +217,7 @@ func (c *SnowflakeServiceClient) OpenChannel(ctx context.Context, opts ChannelOp
 		transformers:     transformers,
 		fileMetadata:     typeMetadata,
 		requestIDCounter: c.requestIDCounter,
+		connectVersion:   c.options.ConnectVersion,
 	}
 	c.options.Logger.Debugf(
 		"successfully opened channel %s for table `%s.%s.%s` with client sequencer %v",
@@ -286,7 +287,6 @@ type SnowflakeIngestionChannel struct {
 	ChannelOptions
 	role            string
 	clientPrefix    string
-	parquetWriter   *parquetWriter
 	schema          *parquet.Schema
 	client          *SnowflakeRestClient
 	uploaderManager *uploaderManager
@@ -300,6 +300,7 @@ type SnowflakeIngestionChannel struct {
 	// This is shared among the various open channels to get some uniqueness
 	// when naming bdec files
 	requestIDCounter *atomic.Int64
+	connectVersion   string
 }
 
 // InsertStats holds some basic statistics about the InsertRows operation
@@ -322,8 +323,6 @@ type bdecPart struct {
 }
 
 func (c *SnowflakeIngestionChannel) constructBdecPart(batch service.MessageBatch, metadata map[string]string) (bdecPart, error) {
-	wg := &errgroup.Group{}
-	wg.SetLimit(c.BuildOptions.Parallelism)
 	type rowGroup struct {
 		rows  []parquet.Row
 		stats []*statsBuffer
@@ -331,16 +330,20 @@ func (c *SnowflakeIngestionChannel) constructBdecPart(batch service.MessageBatch
 	rowGroups := []rowGroup{}
 	maxChunkSize := c.BuildOptions.ChunkSize
 	convertStart := time.Now()
-	for i := 0; i < len(batch); i += maxChunkSize {
-		end := min(maxChunkSize, len(batch[i:]))
+	work := []func() error{}
+	for chunk := range slices.Chunk(batch, maxChunkSize) {
 		j := len(rowGroups)
 		rowGroups = append(rowGroups, rowGroup{})
-		chunk := batch[i : i+end]
-		wg.Go(func() error {
+		work = append(work, func() error {
 			rows, stats, err := constructRowGroup(chunk, c.schema, c.transformers, c.SchemaMode)
 			rowGroups[j] = rowGroup{rows, stats}
 			return err
 		})
+	}
+	var wg errgroup.Group
+	wg.SetLimit(c.BuildOptions.Parallelism)
+	for _, w := range work {
+		wg.Go(w)
 	}
 	if err := wg.Wait(); err != nil {
 		return bdecPart{}, err
@@ -359,7 +362,8 @@ func (c *SnowflakeIngestionChannel) constructBdecPart(batch service.MessageBatch
 	}
 	// TODO(perf): It would be really nice to be able to compress in parallel,
 	// that actually ends up taking quite of bit of CPU.
-	buf, err := c.parquetWriter.WriteFile(allRows, metadata)
+	w := newParquetWriter(c.connectVersion, c.schema)
+	buf, err := w.WriteFile(allRows, metadata)
 	if err != nil {
 		return bdecPart{}, err
 	}
