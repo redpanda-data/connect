@@ -23,6 +23,8 @@ import (
 
 	"cloud.google.com/go/pubsub"
 	"google.golang.org/api/option"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -236,11 +238,14 @@ func (c *gcpPubSubReader) Connect(ignored context.Context) error {
 	sub.ReceiveSettings.Synchronous = c.conf.Sync
 
 	p, err := sub.IAM().TestPermissions(context.Background(), []string{"pubsub.subscriptions.consume"})
-	if err != nil {
-		return service.NewErrBackOff(err, 5*time.Second)
-	}
-	if len(p) == 0 {
-		return service.NewErrBackOff(errors.New("missing subscription permissions"), 5*time.Second)
+	// Ignore these checks when running against the emulator
+	if status.Code(err) != codes.Unimplemented {
+		if err != nil {
+			return service.NewErrBackOff(err, 5*time.Second)
+		}
+		if len(p) == 0 {
+			return service.NewErrBackOff(errors.New("missing subscription permissions"), 5*time.Second)
+		}
 	}
 
 	subCtx, cancel := context.WithCancel(context.Background())
