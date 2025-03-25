@@ -39,11 +39,11 @@ func SplitMessage(textSplitter TextSplitter, message *service.Message) (service.
 	if err != nil {
 		return nil, err
 	}
-	output := make(service.MessageBatch, 0)
-	for _, chunk := range chunks {
+	output := make(service.MessageBatch, len(chunks))
+	for i, chunk := range chunks {
 		cpy := message.Copy()
 		cpy.SetBytes([]byte(chunk))
-		output = append(output, cpy)
+		output[i] = cpy
 	}
 	return output, nil
 }
