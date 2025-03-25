@@ -6,7 +6,7 @@
 //
 // https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
-package rpingress
+package gateway
 
 import (
 	"context"
@@ -23,55 +23,11 @@ import (
 	"github.com/twmb/go-cache/cache"
 )
 
-const (
-	rpjwtFieldObject    = "rp_jwt_validator"
-	rpjwtFieldEnabled   = "enabled"
-	rpjwtFieldIssuerURL = "issuer_url"
-	rpjwtFieldAudience  = "audience"
-	rpjwtFieldOrgID     = "organization_id"
-)
-
 type rpjwtConfig struct {
 	enabled   bool
 	issuerURL string
 	audience  string
 	orgID     string
-}
-
-func rpjwtConfigField() *service.ConfigField {
-	return service.NewObjectField(rpjwtFieldObject,
-		service.NewBoolField(rpjwtFieldEnabled).
-			Advanced().
-			Default(false),
-		service.NewStringField(rpjwtFieldIssuerURL).
-			Default(""),
-		service.NewStringField(rpjwtFieldAudience).
-			Default("").
-			Secret(),
-		service.NewStringField(rpjwtFieldOrgID).
-			Default("").
-			Secret(),
-	)
-}
-
-func rpjwtConfigFromParsed(pConf *service.ParsedConfig) (conf rpjwtConfig, err error) {
-	pConf = pConf.Namespace(rpjwtFieldObject)
-	if conf.enabled, _ = pConf.FieldBool(rpjwtFieldEnabled); !conf.enabled {
-		return
-	}
-
-	if conf.issuerURL, err = pConf.FieldString(rpjwtFieldIssuerURL); err != nil {
-		return
-	}
-
-	if conf.audience, err = pConf.FieldString(rpjwtFieldAudience); err != nil {
-		return
-	}
-
-	if conf.orgID, err = pConf.FieldString(rpjwtFieldOrgID); err != nil {
-		return
-	}
-	return
 }
 
 type rpJWTValidatorMiddleware struct {

@@ -6,7 +6,7 @@
 //
 // https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
-package rpingress_test
+package gateway_test
 
 import (
 	"bytes"
@@ -27,24 +27,23 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
-	"github.com/redpanda-data/connect/v4/internal/impl/rpingress"
+	"github.com/redpanda-data/connect/v4/internal/impl/gateway"
 )
 
 func TestHTTPSinglePayloads(t *testing.T) {
-	t.Parallel()
+	t.Setenv("REDPANDA_CLOUD_GATEWAY_ADDRESS", "0.0.0.0:1234")
 
 	tCtx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
 	mux := mux.NewRouter()
 
-	pConf, err := rpingress.InputSpec().ParseYAML(`
-address: 0.0.0.0:1234 # Unused
+	pConf, err := gateway.InputSpec().ParseYAML(`
 path: /testpost
 `, nil)
 	require.NoError(t, err)
 
-	h, err := rpingress.InputFromParsed(pConf, service.MockResources())
+	h, err := gateway.InputFromParsed(pConf, service.MockResources())
 	require.NoError(t, err)
 
 	require.NoError(t, h.RegisterCustomMux(tCtx, mux))
@@ -86,20 +85,19 @@ path: /testpost
 }
 
 func TestHTTPBatchPayloads(t *testing.T) {
-	t.Parallel()
+	t.Setenv("REDPANDA_CLOUD_GATEWAY_ADDRESS", "0.0.0.0:1234")
 
 	tCtx, done := context.WithTimeout(context.Background(), time.Second*30)
 	defer done()
 
 	mux := mux.NewRouter()
 
-	pConf, err := rpingress.InputSpec().ParseYAML(`
-address: 0.0.0.0:1234 # Unused
+	pConf, err := gateway.InputSpec().ParseYAML(`
 path: /testpost
 `, nil)
 	require.NoError(t, err)
 
-	h, err := rpingress.InputFromParsed(pConf, service.MockResources())
+	h, err := gateway.InputFromParsed(pConf, service.MockResources())
 	require.NoError(t, err)
 
 	require.NoError(t, h.RegisterCustomMux(tCtx, mux))

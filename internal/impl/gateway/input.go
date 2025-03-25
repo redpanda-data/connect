@@ -6,7 +6,7 @@
 //
 // https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
-package rpingress
+package gateway
 
 import (
 	"bytes"
@@ -20,10 +20,12 @@ import (
 	"net"
 	"net/http"
 	"net/textproto"
+	"os"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/klauspost/compress/gzip"
 
@@ -33,14 +35,8 @@ import (
 )
 
 const (
-	hsiFieldAddress                 = "address"
 	hsiFieldPath                    = "path"
 	hsiFieldRateLimit               = "rate_limit"
-	hsiFieldCertFile                = "cert_file"
-	hsiFieldKeyFile                 = "key_file"
-	hsiFieldCORS                    = "cors"
-	hsiFieldCORSEnabled             = "enabled"
-	hsiFieldCORSAllowedOrigins      = "allowed_origins"
 	hsiFieldResponse                = "sync_response"
 	hsiFieldResponseStatus          = "status"
 	hsiFieldResponseHeaders         = "headers"
@@ -48,14 +44,30 @@ const (
 )
 
 type hsiConfig struct {
+	Path      string
+	RateLimit string
+	Response  hsiResponseConfig
+
+	// Set via environment variables
 	Address        string
-	Path           string
-	RateLimit      string
-	CertFile       string
-	KeyFile        string
-	CORS           corsConfig
 	RPJWTValidator rpjwtConfig
-	Response       hsiResponseConfig
+	CORS           corsConfig
+}
+
+type corsConfig struct {
+	enabled        bool
+	allowedOrigins []string
+}
+
+func (conf corsConfig) WrapHandler(handler http.Handler) http.Handler {
+	if !conf.enabled {
+		return handler
+	}
+	return handlers.CORS(
+		handlers.AllowedOrigins(conf.allowedOrigins),
+		handlers.AllowedHeaders([]string{"Content-Type", "Authorization"}),
+		handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"}),
+	)(handler)
 }
 
 type hsiResponseConfig struct {
@@ -65,31 +77,46 @@ type hsiResponseConfig struct {
 }
 
 func hsiConfigFromParsed(pConf *service.ParsedConfig) (conf hsiConfig, err error) {
-	if conf.Address, err = pConf.FieldString(hsiFieldAddress); err != nil {
-		return
-	}
 	if conf.Path, err = pConf.FieldString(hsiFieldPath); err != nil {
 		return
 	}
 	if conf.RateLimit, err = pConf.FieldString(hsiFieldRateLimit); err != nil {
 		return
 	}
-	if conf.CertFile, err = pConf.FieldString(hsiFieldCertFile); err != nil {
-		return
-	}
-	if conf.KeyFile, err = pConf.FieldString(hsiFieldKeyFile); err != nil {
-		return
-	}
-	if conf.CORS, err = corsConfigFromParsed(pConf); err != nil {
-		return
-	}
-	if conf.RPJWTValidator, err = rpjwtConfigFromParsed(pConf); err != nil {
-		return
-	}
 	if conf.Response, err = hsiResponseConfigFromParsed(pConf.Namespace(hsiFieldResponse)); err != nil {
 		return
 	}
 	return
+}
+
+const (
+	rpEnvAddress     = "REDPANDA_CLOUD_GATEWAY_ADDRESS"
+	rpEnvJWTIssuer   = "REDPANDA_CLOUD_GATEWAY_JWT_ISSUER_URL"
+	rpEnvJWTAudience = "REDPANDA_CLOUD_GATEWAY_JWT_AUDIENCE"
+	rpEnvJWTOrgID    = "REDPANDA_CLOUD_GATEWAY_JWT_ORGANIZATION_ID"
+	rpEnvCorsOrigins = "REDPANDA_CLOUD_GATEWAY_CORS_ORIGINS"
+)
+
+func (h *hsiConfig) applyEnvVarOverrides() error {
+	if h.Address = os.Getenv(rpEnvAddress); h.Address == "" {
+		return errors.New("an address must be specified via env var for this input to be functional")
+	}
+
+	if h.RPJWTValidator.issuerURL = os.Getenv(rpEnvJWTIssuer); h.RPJWTValidator.issuerURL != "" {
+		h.RPJWTValidator.enabled = true
+		h.RPJWTValidator.audience = os.Getenv(rpEnvJWTAudience)
+		h.RPJWTValidator.orgID = os.Getenv(rpEnvJWTOrgID)
+	}
+
+	if v := os.Getenv(rpEnvCorsOrigins); v != "" {
+		h.CORS.enabled = true
+		h.CORS.allowedOrigins = strings.Split(v, ",")
+		for i, o := range h.CORS.allowedOrigins {
+			h.CORS.allowedOrigins[i] = strings.TrimSpace(o)
+		}
+	}
+
+	return nil
 }
 
 func hsiResponseConfigFromParsed(pConf *service.ParsedConfig) (conf hsiResponseConfig, err error) {
@@ -110,7 +137,7 @@ func InputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
 		Categories("Network").
-		Summary(`Receive messages POSTed over HTTP(S). HTTP 2.0 is supported when using TLS, which is enabled when key and cert files are specified.`).
+		Summary(`Receive messages delivered over HTTP.`).
 		Description(`
 The field `+"`rate_limit`"+` allows you to specify an optional `+"xref:components:rate_limits/about.adoc[`rate_limit` resource]"+`, which will be applied to each HTTP request made and each websocket payload received.
 
@@ -135,33 +162,14 @@ This input adds the following metadata fields to each message:
 - All cookies
 `+"```"+`
 
-If HTTPS is enabled, the following fields are added as well:
-`+"```text"+`
-- http_server_tls_version
-- http_server_tls_subject
-- http_server_tls_cipher_suite
-`+"```"+`
-
 You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].`).
 		Fields(
-			service.NewStringField(hsiFieldAddress).
-				Description("The address to host from."),
 			service.NewStringField(hsiFieldPath).
 				Description("The endpoint path to listen for data delivery requests.").
-				Default("/deliver"),
+				Default("/"),
 			service.NewStringField(hsiFieldRateLimit).
 				Description("An optional xref:components:rate_limits/about.adoc[rate limit] to throttle requests by.").
 				Default(""),
-			service.NewStringField(hsiFieldCertFile).
-				Description("Enable TLS by specifying a certificate and key file. Only valid with a custom `address`.").
-				Advanced().
-				Default(""),
-			service.NewStringField(hsiFieldKeyFile).
-				Description("Enable TLS by specifying a certificate and key file. Only valid with a custom `address`.").
-				Advanced().
-				Default(""),
-			corsField(),
-			rpjwtConfigField(),
 			service.NewObjectField(hsiFieldResponse,
 				service.NewInterpolatedStringField(hsiFieldResponseStatus).
 					Description("Specify the status code to return with synchronous responses. This is a string value, which allows you to customize it based on resulting payloads and their metadata.").
@@ -182,7 +190,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 
 func init() {
 	err := service.RegisterBatchInput(
-		"rpingress", InputSpec(),
+		"gateway", InputSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
 			return InputFromParsed(conf, mgr)
 		})
@@ -218,6 +226,10 @@ type Input struct {
 func InputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (*Input, error) {
 	conf, err := hsiConfigFromParsed(pConf)
 	if err != nil {
+		return nil, err
+	}
+
+	if err := conf.applyEnvVarOverrides(); err != nil {
 		return nil, err
 	}
 
@@ -280,18 +292,9 @@ func (ri *Input) Connect(ctx context.Context) error {
 	go func() {
 		defer ri.shutSig.TriggerHasStopped()
 
-		if ri.conf.KeyFile != "" || ri.conf.CertFile != "" {
-			ri.log.With("address", ri.conf.Address+ri.conf.Path).Info("Receiving HTTPS messages")
-			if err := ri.server.ListenAndServeTLS(
-				ri.conf.CertFile, ri.conf.KeyFile,
-			); err != http.ErrServerClosed {
-				ri.log.With("error").Error("Server error")
-			}
-		} else {
-			ri.log.With("address", ri.conf.Address+ri.conf.Path).Info("Receiving HTTP messages")
-			if err := ri.server.ListenAndServe(); err != http.ErrServerClosed {
-				ri.log.With("error").Error("Server error")
-			}
+		ri.log.With("address", ri.conf.Address+ri.conf.Path).Info("Receiving HTTP messages")
+		if err := ri.server.ListenAndServe(); err != http.ErrServerClosed {
+			ri.log.With("error").Error("Server error")
 		}
 	}()
 	return nil

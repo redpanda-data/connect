@@ -77,6 +77,7 @@ file                      ,cache     ,File                      ,0.0.0   ,certif
 file                      ,input     ,File                      ,0.0.0   ,certified  ,n          ,n     ,n
 file                      ,output    ,File                      ,0.0.0   ,certified  ,n          ,n     ,n
 for_each                  ,processor ,for_each                  ,0.0.0   ,certified  ,n          ,y     ,y
+gateway                   ,input     ,gateway                   ,4.51.0  ,enterprise ,n          ,y     ,y
 gcp_bigquery              ,output    ,GCP BigQuery              ,3.55.0  ,certified  ,n          ,y     ,y
 gcp_bigquery_select       ,input     ,GCP BigQuery              ,3.63.0  ,certified  ,n          ,y     ,y
 gcp_bigquery_select       ,processor ,GCP BigQuery              ,3.64.0  ,certified  ,n          ,y     ,y
@@ -219,7 +220,6 @@ resource                  ,processor ,resource                  ,0.0.0   ,certif
 retry                     ,output    ,retry                     ,0.0.0   ,certified  ,n          ,y     ,y
 retry                     ,processor ,retry                     ,4.27.0  ,certified  ,n          ,y     ,y
 ristretto                 ,cache     ,Ristretto                 ,0.0.0   ,community  ,n          ,y     ,y
-rpingress                 ,input     ,rpingress                 ,4.51.0  ,enterprise ,n          ,y     ,y
 schema_registry           ,input     ,schema_registry           ,4.33.0  ,enterprise ,n          ,y     ,y
 schema_registry           ,output    ,schema_registry           ,4.33.0  ,enterprise ,n          ,y     ,y
 schema_registry_decode    ,processor ,schema_registry_decode    ,0.0.0   ,certified  ,n          ,y     ,y
