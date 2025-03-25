@@ -1,4 +1,4 @@
-= rpingress
+= gateway
 :type: input
 :status: stable
 :categories: ["Network"]
@@ -23,7 +23,7 @@
 component_type_dropdown::[]
 
 
-Receive messages POSTed over HTTP(S). HTTP 2.0 is supported when using TLS, which is enabled when key and cert files are specified.
+Receive messages delivered over HTTP.
 
 
 [tabs]
@@ -36,14 +36,9 @@ Common::
 # Common config fields, showing default values
 input:
   label: ""
-  rpingress:
-    address: "" # No default (required)
-    path: /deliver
+  gateway:
+    path: /
     rate_limit: ""
-    rp_jwt_validator:
-      issuer_url: ""
-      audience: ""
-      organization_id: ""
 ```
 
 --
@@ -55,20 +50,9 @@ Advanced::
 # All config fields, showing default values
 input:
   label: ""
-  rpingress:
-    address: "" # No default (required)
-    path: /deliver
+  gateway:
+    path: /
     rate_limit: ""
-    cert_file: ""
-    key_file: ""
-    cors:
-      enabled: false
-      allowed_origins: []
-    rp_jwt_validator:
-      enabled: false
-      issuer_url: ""
-      audience: ""
-      organization_id: ""
     sync_response:
       status: "200"
       headers:
@@ -104,24 +88,9 @@ This input adds the following metadata fields to each message:
 - All cookies
 ```
 
-If HTTPS is enabled, the following fields are added as well:
-```text
-- http_server_tls_version
-- http_server_tls_subject
-- http_server_tls_cipher_suite
-```
-
 You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
 
 == Fields
-
-=== `address`
-
-The address to host from.
-
-
-*Type*: `string`
-
 
 === `path`
 
@@ -130,109 +99,11 @@ The endpoint path to listen for data delivery requests.
 
 *Type*: `string`
 
-*Default*: `"/deliver"`
+*Default*: `"/"`
 
 === `rate_limit`
 
 An optional xref:components:rate_limits/about.adoc[rate limit] to throttle requests by.
-
-
-*Type*: `string`
-
-*Default*: `""`
-
-=== `cert_file`
-
-Enable TLS by specifying a certificate and key file. Only valid with a custom `address`.
-
-
-*Type*: `string`
-
-*Default*: `""`
-
-=== `key_file`
-
-Enable TLS by specifying a certificate and key file. Only valid with a custom `address`.
-
-
-*Type*: `string`
-
-*Default*: `""`
-
-=== `cors`
-
-Adds Cross-Origin Resource Sharing headers.
-
-
-*Type*: `object`
-
-
-=== `cors.enabled`
-
-Whether to allow CORS requests.
-
-
-*Type*: `bool`
-
-*Default*: `false`
-
-=== `cors.allowed_origins`
-
-An explicit list of origins that are allowed for CORS requests.
-
-
-*Type*: `array`
-
-*Default*: `[]`
-
-=== `rp_jwt_validator`
-
-Sorry! This field is missing documentation.
-
-
-*Type*: `object`
-
-
-=== `rp_jwt_validator.enabled`
-
-Sorry! This field is missing documentation.
-
-
-*Type*: `bool`
-
-*Default*: `false`
-
-=== `rp_jwt_validator.issuer_url`
-
-Sorry! This field is missing documentation.
-
-
-*Type*: `string`
-
-*Default*: `""`
-
-=== `rp_jwt_validator.audience`
-
-Sorry! This field is missing documentation.
-[CAUTION]
-====
-This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
-====
-
-
-
-*Type*: `string`
-
-*Default*: `""`
-
-=== `rp_jwt_validator.organization_id`
-
-Sorry! This field is missing documentation.
-[CAUTION]
-====
-This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
-====
-
 
 
 *Type*: `string`
