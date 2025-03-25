@@ -268,7 +268,7 @@ func (ri *Input) RegisterCustomMux(ctx context.Context, mux *mux.Router) error {
 		return err
 	}
 
-	mux.Path(ri.conf.Path).Handler(ri.createHandler())
+	mux.PathPrefix(ri.conf.Path).Handler(ri.createHandler())
 	return nil
 }
 
@@ -285,7 +285,7 @@ func (ri *Input) Connect(ctx context.Context) error {
 	}
 
 	ri.mux = mux.NewRouter()
-	ri.mux.Path(ri.conf.Path).Handler(ri.createHandler())
+	ri.mux.PathPrefix(ri.conf.Path).Handler(ri.createHandler())
 
 	ri.server = &http.Server{Addr: ri.conf.Address, Handler: ri.mux}
 
