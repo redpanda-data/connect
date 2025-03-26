@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 - Field `handle_logical_types` added to `parquet_decode` input to provide better handling of Parquet logical types (@ooesili)
 - New `gateway` input. (@Jeffail)
 
+### Fixed
+
+- The `azure_blob_storage` input now drops `targets_input` notifications and emits a warning log message for blobs which have been deleted before Connect was able to read them. (@mihaitodor)
+
 ## 4.50.0 - 2025-03-18
 
 ### Added

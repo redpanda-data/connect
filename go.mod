@@ -10,12 +10,12 @@ require (
 	cloud.google.com/go/pubsub v1.47.0
 	cloud.google.com/go/storage v1.51.0
 	cloud.google.com/go/vertexai v0.12.0
-	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.14.0
-	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.8.0
-	github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos v1.0.3
-	github.com/Azure/azure-sdk-for-go/sdk/data/aztables v1.2.0
-	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.4.1
-	github.com/Azure/azure-sdk-for-go/sdk/storage/azdatalake v1.2.1
+	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.17.1
+	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.8.2
+	github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos v1.3.0
+	github.com/Azure/azure-sdk-for-go/sdk/data/aztables v1.3.0
+	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.6.0
+	github.com/Azure/azure-sdk-for-go/sdk/storage/azdatalake v1.4.0
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azqueue v1.0.0
 	github.com/Azure/go-amqp v1.0.5
 	github.com/ClickHouse/clickhouse-go/v2 v2.27.1
@@ -216,7 +216,7 @@ require (
 	github.com/Azure/azure-sdk-for-go v68.0.0+incompatible // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.10.0 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20230124172434-306776ec8161 // indirect
-	github.com/AzureAD/microsoft-authentication-library-for-go v1.2.2 // indirect
+	github.com/AzureAD/microsoft-authentication-library-for-go v1.3.3 // indirect
 	github.com/ClickHouse/ch-go v0.61.5 // indirect
 	github.com/DataDog/zstd v1.5.2 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.51.0 // indirect
