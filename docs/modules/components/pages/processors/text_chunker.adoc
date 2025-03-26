@@ -47,9 +47,6 @@ text_chunker:
   length_measure: runes
   include_code_blocks: false
   keep_reference_links: false
-  keep_separator: false
-  keep_heading_hierarchy: false
-  join_table_rows: false
 ```
 
 --
@@ -75,11 +72,7 @@ text_chunker:
   disallowed_special:
     - all
   include_code_blocks: false
-  secondary_splitter: null # No default (optional)
   keep_reference_links: false
-  keep_separator: false
-  keep_heading_hierarchy: false
-  join_table_rows: false
 ```
 
 --
@@ -202,52 +195,9 @@ Whether to include code blocks in the output.
 
 *Default*: `false`
 
-=== `secondary_splitter`
-
-A secondary text splitter to apply to each chunk after the initial split.
-
-
-*Type*: `processor`
-
-
-```yml
-# Examples
-
-secondary_splitter:
-  text_chunker:
-    strategy: token
-```
-
 === `keep_reference_links`
 
 Whether to keep reference links in the output.
-
-
-*Type*: `bool`
-
-*Default*: `false`
-
-=== `keep_separator`
-
-Whether to keep the separator in the output. When set to true the seperators are included in the resulting split text.
-
-
-*Type*: `bool`
-
-*Default*: `false`
-
-=== `keep_heading_hierarchy`
-
-Whether to keep the hierarchy of markdown headers in each chunk. When true each chunk gets prepended with a list of all parent headings in the hierarchy up to this point.
-
-
-*Type*: `bool`
-
-*Default*: `false`
-
-=== `join_table_rows`
-
-Whether to join markdown table rows in the output.
 
 
 *Type*: `bool`

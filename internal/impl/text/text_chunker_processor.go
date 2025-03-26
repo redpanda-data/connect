@@ -48,7 +48,6 @@ const (
 	tcpFieldAllowedSpecial    = "allowed_special"
 	tcpFieldDisallowedSpecial = "disallowed_special"
 	tcpFieldIncludeCodeBlocks = "include_code_blocks"
-	tcpFieldSecondarySplitter = "secondary_splitter"
 	tcpFieldReferenceLinks    = "keep_reference_links"
 )
 
@@ -97,15 +96,6 @@ func newTextChunkerSpec() *service.ConfigSpec {
 			service.NewBoolField(tcpFieldIncludeCodeBlocks).
 				Default(textsplitter.DefaultOptions().CodeBlocks).
 				Description("Whether to include code blocks in the output."),
-			service.NewProcessorField(tcpFieldSecondarySplitter).
-				Optional().
-				Advanced().
-				Example(map[string]any{
-					"text_chunker": map[string]any{
-						tcpFieldStrategy: "token",
-					},
-				}).
-				Description("A secondary text splitter to apply to each chunk after the initial split."),
 			service.NewBoolField(tcpFieldReferenceLinks).
 				Default(textsplitter.DefaultOptions().ReferenceLinks).
 				Description("Whether to keep reference links in the output."),
@@ -140,15 +130,6 @@ func newTextChunker(conf *service.ParsedConfig, res *service.Resources) (service
 		return nil, err
 	}
 	opts = append(opts, textsplitter.WithReferenceLinks(referenceLinks))
-
-	if conf.Contains(tcpFieldSecondarySplitter) {
-		secondaryProcessor, err := conf.FieldProcessor(tcpFieldSecondarySplitter)
-		if err != nil {
-			return nil, err
-		}
-		processor.secondary = &processorSplitter{context: nil, processor: secondaryProcessor}
-		opts = append(opts, textsplitter.WithSecondSplitter(processor.secondary))
-	}
 
 	codeBlocks, err := conf.FieldBool(tcpFieldIncludeCodeBlocks)
 	if err != nil {
@@ -222,16 +203,11 @@ func newTextChunker(conf *service.ParsedConfig, res *service.Resources) (service
 }
 
 type textChunker struct {
-	splitter  textsplitter.TextSplitter
-	secondary *processorSplitter
+	splitter textsplitter.TextSplitter
 }
 
 // Process implements service.Processor.
 func (t *textChunker) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
-	if t.secondary != nil {
-		t.secondary.context = ctx
-		defer func() { t.secondary.context = nil }()
-	}
 	b, err := msg.AsBytes()
 	if err != nil {
 		return nil, err
@@ -251,33 +227,5 @@ func (t *textChunker) Process(ctx context.Context, msg *service.Message) (servic
 
 // Close implements service.Processor.
 func (t *textChunker) Close(ctx context.Context) error {
-	if t.secondary != nil {
-		if err := t.secondary.processor.Close(ctx); err != nil {
-			return err
-		}
-	}
 	return nil
-}
-
-type processorSplitter struct {
-	context   context.Context
-	processor *service.OwnedProcessor
-}
-
-// SplitText implements chunker.TextSplitter.
-func (p *processorSplitter) SplitText(text string) ([]string, error) {
-	batch, err := p.processor.Process(p.context, service.NewMessage([]byte(text)))
-	if err != nil {
-		return nil, err
-	}
-	var output []string
-	err = batch.WalkWithBatchedErrors(func(i int, m *service.Message) error {
-		b, err := m.AsBytes()
-		if err != nil {
-			return err
-		}
-		output = append(output, string(b))
-		return nil
-	})
-	return output, err
 }
