@@ -53,6 +53,8 @@ type input struct {
 	log *service.Logger
 	// filesChan is used to send file details from the scanner to the reader.
 	filesChan chan fileEvent
+	// errorChan is used to send errors form the scanner to the reader.
+	errorChan chan error
 	// shutSig signals when the input should stop processing.
 	shutSig *shutdown.Signaller
 	// repository is the Git repository instance.
@@ -73,6 +75,8 @@ type fileEvent struct {
 	path string
 	// isDeleted indicates whether the file was deleted.
 	isDeleted bool
+	// ackFn is the function to call when the file is acknowledged.
+	ackFn func()
 }
 
 // init registers the Git input plugin with the service registry.
@@ -85,7 +89,7 @@ func init() {
 				return nil, err
 			}
 
-			return newInput(conf, mgr)
+			return service.AutoRetryNacksToggled(parsedCfg, newInput(conf, mgr))
 		})
 	if err != nil {
 		panic(err)
@@ -93,30 +97,41 @@ func init() {
 }
 
 // newInput creates a new Git input instance from a parsed configuration.
-func newInput(cfg inputCfg, mgr *service.Resources) (*input, error) {
-	i := &input{
+func newInput(cfg inputCfg, mgr *service.Resources) *input {
+	return &input{
 		cfg:       cfg,
 		filesChan: make(chan fileEvent),
-		shutSig:   shutdown.NewSignaller(),
+		errorChan: make(chan error),
+		shutSig:   nil,
 		log:       mgr.Logger(),
 		mgr:       mgr,
 	}
-
-	return i, nil
 }
 
 // Connect implements service.Input. It initializes the Git repository by creating
 // a temporary directory, cloning the repository, and starting the polling routine.
 func (in *input) Connect(ctx context.Context) error {
+	// On reconnect wait for previous process to shutdown
+	if in.shutSig != nil {
+		select {
+		case <-in.shutSig.HasStoppedChan():
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	in.shutSig = shutdown.NewSignaller()
+	in.filesChan = make(chan fileEvent)
+	in.errorChan = make(chan error)
 	// Create a temporary directory for the repository
 	tmpDir, err := os.MkdirTemp("", "git-input-*")
 	if err != nil {
+		in.shutSig.TriggerHasStopped()
 		return fmt.Errorf("failed to create temp directory: %w", err)
 	}
 	in.tempDir = tmpDir
 
 	// If checkpoint cache is configured, try to get the last processed commit
-	var cachedCommitHash string
+	var cachedCommitHash plumbing.Hash
 	if in.cfg.checkpointCache != "" {
 		if err := in.mgr.AccessCache(ctx, in.cfg.checkpointCache, func(cache service.Cache) {
 			lastCommitBytes, cacheErr := cache.Get(ctx, in.cfg.checkpointKey)
@@ -124,24 +139,41 @@ func (in *input) Connect(ctx context.Context) error {
 				err = fmt.Errorf("failed to get last commit from cache: %w", cacheErr)
 				return
 			}
-			cachedCommitHash = string(lastCommitBytes)
+			cachedCommitHash = plumbing.NewHash(string(lastCommitBytes))
 		}); err != nil {
+			in.shutSig.TriggerHasStopped()
 			return err
 		}
 
-		if cachedCommitHash != "" {
+		if cachedCommitHash != plumbing.ZeroHash {
 			in.log.Infof("continuing from cached last commit: %q", cachedCommitHash)
+			in.lastCommitMu.Lock()
+			in.lastCommit = cachedCommitHash
+			in.lastCommitMu.Unlock()
 		}
 	}
 
 	// Clone the repository
 	if err := in.cloneRepo(ctx); err != nil {
 		_ = os.RemoveAll(tmpDir)
+		in.shutSig.TriggerHasStopped()
 		return fmt.Errorf("failed to clone repo: %w", err)
 	}
 
-	// Start polling for changes
-	go in.pollChanges(cachedCommitHash)
+	// Start polling for changes, cleanup when we're done
+	go func() {
+		ctx, cancel := in.shutSig.SoftStopCtx(context.Background())
+		defer cancel()
+		defer close(in.filesChan)
+		defer close(in.errorChan)
+		defer in.shutSig.TriggerHasStopped()
+		in.pollChanges(ctx, cachedCommitHash)
+		if in.tempDir != "" {
+			if err := os.RemoveAll(in.tempDir); err != nil {
+				in.log.Errorf("Failed to remove temp directory: %v", err)
+			}
+		}
+	}()
 
 	return nil
 }
@@ -152,13 +184,15 @@ func (in *input) Read(ctx context.Context) (*service.Message, service.AckFunc, e
 	for {
 		select {
 		case <-ctx.Done():
-			in.shutSig.TriggerHasStopped()
-			return nil, nil, service.ErrEndOfInput
-		case <-in.shutSig.HardStopChan():
-			return nil, nil, service.ErrEndOfInput
+			return nil, nil, ctx.Err()
+		case err, ok := <-in.errorChan:
+			if !ok {
+				return nil, nil, service.ErrNotConnected
+			}
+			return nil, nil, err
 		case event, ok := <-in.filesChan:
 			if !ok {
-				return nil, nil, service.ErrEndOfInput
+				return nil, nil, service.ErrNotConnected
 			}
 			if event.isDeleted {
 				// For deleted files, create a message with empty content and metadata
@@ -170,7 +204,7 @@ func (in *input) Read(ctx context.Context) (*service.Message, service.AckFunc, e
 				msg.MetaSet("git_file_path", relPath)
 				msg.MetaSet("git_commit", in.getLastCommit().String())
 				msg.MetaSetMut("git_deleted", true)
-				return msg, func(ctx context.Context, err error) error { return nil }, nil
+				return msg, func(ctx context.Context, _ error) error { event.ackFn(); return nil }, nil
 			}
 
 			msg, err := in.createMessage(event.path)
@@ -183,21 +217,17 @@ func (in *input) Read(ctx context.Context) (*service.Message, service.AckFunc, e
 				continue // Skip this file and read the next one
 			}
 
-			return msg, func(ctx context.Context, err error) error { return nil }, nil
+			return msg, func(ctx context.Context, _ error) error { event.ackFn(); return nil }, nil
 		}
 	}
 }
 
 // Close implements service.Input. It signals shutdown and cleans up the temporary repository directory.
 func (in *input) Close(ctx context.Context) error {
+	if in.shutSig == nil {
+		return nil
+	}
 	in.shutSig.TriggerHardStop()
-	go func() {
-		if in.tempDir != "" {
-			if err := os.RemoveAll(in.tempDir); err != nil {
-				in.log.Errorf("Failed to remove temp directory: %v", err)
-			}
-		}
-	}()
 	select {
 	case <-in.shutSig.HasStoppedChan():
 	case <-ctx.Done():
@@ -224,14 +254,13 @@ func (in *input) cloneRepo(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("git clone failed: %w", err)
 	}
-
 	ref, err := in.repository.Head()
 	if err != nil {
-		return fmt.Errorf("failed to get HEAD reference: %w", err)
+		return fmt.Errorf("unable to get reference: %w", err)
 	}
-
-	in.setLastCommit(ctx, ref.Hash())
-
+	in.lastCommitMu.Lock()
+	in.lastCommit = ref.Hash()
+	in.lastCommitMu.Unlock()
 	return nil
 }
 
@@ -258,28 +287,47 @@ func (in *input) getLastCommit() plumbing.Hash {
 
 // pollChanges runs in a separate goroutine and periodically checks for updates
 // in the Git repository according to the configured poll interval.
-func (in *input) pollChanges(cachedCommitHash string) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	go func() {
-		<-in.shutSig.SoftStopChan()
-		cancel()
-	}()
-
-	hasCheckpoint := cachedCommitHash != ""
+func (in *input) pollChanges(ctx context.Context, cachedCommit plumbing.Hash) {
+	hasCheckpoint := cachedCommit != plumbing.ZeroHash
+	var initialScanWg *sync.WaitGroup
 	if hasCheckpoint {
 		// Perform initial catch-up
-		cachedCommit := plumbing.NewHash(cachedCommitHash)
-		if err := in.processChangedFiles(ctx, cachedCommit, in.getLastCommit()); err != nil {
-			in.log.Errorf("failed to process changes since last commit: %v", err)
+		wg, err := in.processChangedFiles(ctx, cachedCommit, in.getLastCommit())
+		if err != nil {
+			select {
+			case in.errorChan <- fmt.Errorf("error on initial catch up: %w", err):
+			case <-ctx.Done():
+			}
+			return
 		}
+		initialScanWg = wg
 	} else {
 		// Otherwise, do a full initial scan of the repo
-		if err := in.walkRepositoryFiles(ctx); err != nil {
-			in.log.Errorf("initial file scan error: %v", err)
+		wg, err := in.walkRepositoryFiles(ctx)
+		if err != nil {
+			err = fmt.Errorf("initial file scan error: %w", err)
+			select {
+			case in.errorChan <- err:
+			case <-ctx.Done():
+			}
+			return
 		}
+		initialScanWg = wg
 	}
+
+	done := make(chan any)
+	go func() {
+		initialScanWg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-ctx.Done():
+		return
+	}
+
+	in.setLastCommit(ctx, in.getLastCommit())
 
 	ticker := time.NewTicker(in.cfg.pollInterval)
 	defer ticker.Stop()
@@ -287,11 +335,15 @@ func (in *input) pollChanges(cachedCommitHash string) {
 	for {
 		select {
 		case <-ctx.Done():
-			close(in.filesChan)
 			return
 		case <-ticker.C:
 			if err := in.fetchAndProcessNewCommits(ctx); err != nil {
-				in.log.Errorf("failed to check for updates: %v", err)
+				err = fmt.Errorf("failed to check for updates: %v", err)
+				select {
+				case in.errorChan <- err:
+				case <-ctx.Done():
+				}
+				return
 			}
 		}
 	}
@@ -335,12 +387,24 @@ func (in *input) fetchAndProcessNewCommits(ctx context.Context) error {
 	}
 
 	// If the commit hash has changed, process the changes
-	if err := in.processChangedFiles(ctx, oldCommit, newCommit); err != nil {
+	wg, err := in.processChangedFiles(ctx, oldCommit, newCommit)
+	if err != nil {
 		return fmt.Errorf("failed to process changed files: %w", err)
 	}
-	in.setLastCommit(ctx, newCommit)
 
-	return nil
+	done := make(chan any)
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		in.setLastCommit(ctx, newCommit)
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // updateCheckpointCache writes the new commit hash into the cache, if configured.
@@ -377,23 +441,25 @@ func (*input) pullGitChanges(ctx context.Context, wt *git.Worktree, auth transpo
 }
 
 // processChangedFiles identifies changes between two commits and processes them.
-func (in *input) processChangedFiles(ctx context.Context, oldCommit, newCommit plumbing.Hash) error {
+func (in *input) processChangedFiles(ctx context.Context, oldCommit, newCommit plumbing.Hash) (*sync.WaitGroup, error) {
 	// Get the old and new commit objects
 	oldCommitObj, err := in.repository.CommitObject(oldCommit)
 	if err != nil {
-		return fmt.Errorf("failed to get old commit object: %w", err)
+		return nil, fmt.Errorf("failed to get old commit object: %w", err)
 	}
 
 	newCommitObj, err := in.repository.CommitObject(newCommit)
 	if err != nil {
-		return fmt.Errorf("failed to get new commit object: %w", err)
+		return nil, fmt.Errorf("failed to get new commit object: %w", err)
 	}
 
 	// Compare the two commits
 	diff, err := oldCommitObj.Patch(newCommitObj)
 	if err != nil {
-		return fmt.Errorf("failed to generate diff: %w", err)
+		return nil, fmt.Errorf("failed to generate diff: %w", err)
 	}
+
+	wg := &sync.WaitGroup{}
 
 	// Process each changed file
 	for _, filePatch := range diff.FilePatches() {
@@ -407,10 +473,12 @@ func (in *input) processChangedFiles(ctx context.Context, oldCommit, newCommit p
 
 			// Check patterns
 			if in.matchesPatterns(relPath) {
+				wg.Add(1)
 				select {
-				case in.filesChan <- fileEvent{path: path, isDeleted: true}:
+				case in.filesChan <- fileEvent{path: path, isDeleted: true, ackFn: wg.Done}:
 				case <-ctx.Done():
-					return errors.New("shutdown signaled")
+					wg.Done()
+					return nil, ctx.Err()
 				}
 			}
 			continue
@@ -422,10 +490,12 @@ func (in *input) processChangedFiles(ctx context.Context, oldCommit, newCommit p
 
 			// Check patterns
 			if in.matchesPatterns(relPath) {
+				wg.Add(1)
 				select {
-				case in.filesChan <- fileEvent{path: path, isDeleted: false}:
+				case in.filesChan <- fileEvent{path: path, isDeleted: false, ackFn: wg.Done}:
 				case <-ctx.Done():
-					return errors.New("shutdown signaled")
+					wg.Done()
+					return nil, ctx.Err()
 				}
 			}
 		}
@@ -433,7 +503,7 @@ func (in *input) processChangedFiles(ctx context.Context, oldCommit, newCommit p
 
 	in.log.Debugf("processed changes, found %d file changes", len(diff.FilePatches()))
 
-	return nil
+	return wg, nil
 }
 
 // matchesPatterns checks if the relative path matches the include/exclude patterns.
@@ -461,10 +531,11 @@ func (in *input) matchesPatterns(relPath string) bool {
 
 // walkRepositoryFiles walks through the repository directory, applying include/exclude patterns,
 // and sends matching file paths to the files channel for processing.
-func (in *input) walkRepositoryFiles(ctx context.Context) error {
+func (in *input) walkRepositoryFiles(ctx context.Context) (*sync.WaitGroup, error) {
 	scanPath := in.tempDir
 
-	return filepath.WalkDir(scanPath, func(path string, d fs.DirEntry, err error) error {
+	wg := &sync.WaitGroup{}
+	err := filepath.WalkDir(scanPath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -477,15 +548,17 @@ func (in *input) walkRepositoryFiles(ctx context.Context) error {
 
 		// Check patterns
 		if in.matchesPatterns(relPath) {
+			wg.Add(1)
 			select {
-			case in.filesChan <- fileEvent{path: path, isDeleted: false}:
+			case in.filesChan <- fileEvent{path: path, isDeleted: false, ackFn: wg.Done}:
 			case <-ctx.Done():
-				return errors.New("shutdown signaled")
+				wg.Done()
+				return ctx.Err()
 			}
 		}
-
 		return nil
 	})
+	return wg, err
 }
 
 // detectMimeType determines the MIME type of a file by examining its contents or by looking

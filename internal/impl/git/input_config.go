@@ -134,6 +134,7 @@ You can access these metadata fields using function interpolation.`
 			).
 				Description("Authentication options for the Git repository").
 				Optional(),
+			service.NewAutoRetryNacksToggleField(),
 		)
 }
 
