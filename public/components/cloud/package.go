@@ -26,6 +26,7 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/gateway"
 	_ "github.com/redpanda-data/connect/v4/public/components/gcp"
 	_ "github.com/redpanda-data/connect/v4/public/components/gcp/enterprise"
+	_ "github.com/redpanda-data/connect/v4/public/components/git"
 	_ "github.com/redpanda-data/connect/v4/public/components/io"
 	_ "github.com/redpanda-data/connect/v4/public/components/kafka"
 	_ "github.com/redpanda-data/connect/v4/public/components/kafka/enterprise"
