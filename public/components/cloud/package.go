@@ -53,6 +53,7 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/spicedb"
 	_ "github.com/redpanda-data/connect/v4/public/components/splunk"
 	_ "github.com/redpanda-data/connect/v4/public/components/sql/base"
+	_ "github.com/redpanda-data/connect/v4/public/components/text"
 	_ "github.com/redpanda-data/connect/v4/public/components/timeplus"
 
 	// Import all (supported) sql drivers.

@@ -273,6 +273,7 @@ sync_response             ,output    ,sync_response             ,0.0.0   ,certif
 sync_response             ,processor ,sync_response             ,0.0.0   ,certified  ,n          ,y     ,y
 system_window             ,buffer    ,system_window             ,3.53.0  ,certified  ,n          ,y     ,y
 tar                       ,scanner   ,tar                       ,0.0.0   ,certified  ,n          ,y     ,y
+text_chunker              ,processor ,text_chunker              ,4.51.0  ,certified  ,n          ,y     ,y
 timeplus                  ,input     ,timeplus                  ,4.39.0  ,community  ,n          ,y     ,y
 timeplus                  ,output    ,timeplus                  ,4.38.0  ,community  ,n          ,y     ,y
 to_the_end                ,scanner   ,to_the_end                ,0.0.0   ,certified  ,n          ,y     ,y
