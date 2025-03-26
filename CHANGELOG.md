@@ -8,6 +8,8 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Field `private_key` added to `ssh` input and output to let users directly specify their private key contents in their config instead of writing it to a file (@ooesili)
+- Field `history` added to `ollama_chat` processor to allow for chat history. (@rockwotj)
+- Field `history` added to `openai_chat_completion` processor to allow for chat history. (@rockwotj)
 - Field `handle_logical_types` added to `parquet_decode` input to provide better handling of Parquet logical types (@ooesili)
 - New `gateway` input. (@Jeffail)
 - New `git` input. (@weeco, @rockwotj)
