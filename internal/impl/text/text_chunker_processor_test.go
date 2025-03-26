@@ -61,22 +61,16 @@ Some content below h1>h2>h4.
 		`## First header: h2
 Some content below the first h2.`,
 		`## Second header: h2`,
-		`## Second header: h2
-### Third header: h3
+		`### Third header: h3
 - This is a list item of bullet type.`,
-		`## Second header: h2
-### Third header: h3
+		`### Third header: h3
 - This is another list item.`,
-		`## Second header: h2
-### Third header: h3
+		`### Third header: h3
 *Everything* is going according to **plan**.`,
 		`# Fourth header: h1
 Some content below the first h1.`,
-		`# Fourth header: h1
-## Fifth header: h2`,
-		`# Fourth header: h1
-## Fifth header: h2
-#### Sixth header: h4
+		`## Fifth header: h2`,
+		`#### Sixth header: h4
 Some content below h1>h2>h4.`,
 	}
 	splits := splitTextUsingConfig(t,
@@ -86,7 +80,6 @@ text_chunker:
   strategy: markdown
   chunk_overlap: 64
   chunk_size: 32
-  keep_heading_hierarchy: true
 `)
 	require.Equal(t, expected, splits)
 }

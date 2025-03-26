@@ -22,8 +22,7 @@ import (
 	"github.com/pkoukk/tiktoken-go"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/rivo/uniseg"
-
-	"github.com/redpanda-data/connect/v4/internal/impl/text/chunker"
+	"github.com/tmc/langchaingo/textsplitter"
 )
 
 var _ service.Processor = (*textChunker)(nil)
@@ -40,20 +39,17 @@ func init() {
 }
 
 const (
-	tcpFieldStrategy             = "strategy"
-	tcpFieldChunkSize            = "chunk_size"
-	tcpFieldChunkOverlap         = "chunk_overlap"
-	tcpFieldSeparators           = "separators"
-	tcpFieldWithLenFunc          = "length_measure"
-	tcpFieldTokenEncoding        = "token_encoding"
-	tcpFieldAllowedSpecial       = "allowed_special"
-	tcpFieldDisallowedSpecial    = "disallowed_special"
-	tcpFieldIncludeCodeBlocks    = "include_code_blocks"
-	tcpFieldSecondarySplitter    = "secondary_splitter"
-	tcpFieldReferenceLinks       = "keep_reference_links"
-	tcpFieldKeepSeparator        = "keep_separator"
-	tcpFieldKeepHeadingHierarchy = "keep_heading_hierarchy"
-	tcpFieldJoinTableRows        = "join_table_rows"
+	tcpFieldStrategy          = "strategy"
+	tcpFieldChunkSize         = "chunk_size"
+	tcpFieldChunkOverlap      = "chunk_overlap"
+	tcpFieldSeparators        = "separators"
+	tcpFieldWithLenFunc       = "length_measure"
+	tcpFieldTokenEncoding     = "token_encoding"
+	tcpFieldAllowedSpecial    = "allowed_special"
+	tcpFieldDisallowedSpecial = "disallowed_special"
+	tcpFieldIncludeCodeBlocks = "include_code_blocks"
+	tcpFieldSecondarySplitter = "secondary_splitter"
+	tcpFieldReferenceLinks    = "keep_reference_links"
 )
 
 func newTextChunkerSpec() *service.ConfigSpec {
@@ -69,13 +65,13 @@ func newTextChunkerSpec() *service.ConfigSpec {
 			}),
 			service.NewIntField(tcpFieldChunkSize).
 				Description("The maximum size of each chunk.").
-				Default(chunker.DefaultOptions().ChunkSize),
+				Default(textsplitter.DefaultOptions().ChunkSize),
 			service.NewIntField(tcpFieldChunkOverlap).
 				Description("The number of characters to overlap between chunks.").
-				Default(chunker.DefaultOptions().ChunkOverlap),
+				Default(textsplitter.DefaultOptions().ChunkOverlap),
 			service.NewStringListField(tcpFieldSeparators).
 				Description("A list of strings that should be considered as separators between chunks.").
-				Default(chunker.DefaultOptions().Separators),
+				Default(textsplitter.DefaultOptions().Separators),
 			service.NewStringAnnotatedEnumField(tcpFieldWithLenFunc, map[string]string{
 				"utf8":      "Determine the length of text using the number of utf8 bytes.",
 				"runes":     "Use the number of codepoints to determine the length of a string.",
@@ -92,14 +88,14 @@ func newTextChunkerSpec() *service.ConfigSpec {
 				Example("r50k_base"),
 			service.NewStringListField(tcpFieldAllowedSpecial).
 				Advanced().
-				Default(chunker.DefaultOptions().AllowedSpecial).
+				Default(textsplitter.DefaultOptions().AllowedSpecial).
 				Description("A list of special tokens that are allowed in the output."),
 			service.NewStringListField(tcpFieldDisallowedSpecial).
 				Advanced().
-				Default(chunker.DefaultOptions().DisallowedSpecial).
+				Default(textsplitter.DefaultOptions().DisallowedSpecial).
 				Description("A list of special tokens that are disallowed in the output."),
 			service.NewBoolField(tcpFieldIncludeCodeBlocks).
-				Default(chunker.DefaultOptions().CodeBlocks).
+				Default(textsplitter.DefaultOptions().CodeBlocks).
 				Description("Whether to include code blocks in the output."),
 			service.NewProcessorField(tcpFieldSecondarySplitter).
 				Optional().
@@ -111,60 +107,39 @@ func newTextChunkerSpec() *service.ConfigSpec {
 				}).
 				Description("A secondary text splitter to apply to each chunk after the initial split."),
 			service.NewBoolField(tcpFieldReferenceLinks).
-				Default(chunker.DefaultOptions().ReferenceLinks).
+				Default(textsplitter.DefaultOptions().ReferenceLinks).
 				Description("Whether to keep reference links in the output."),
-			service.NewBoolField(tcpFieldKeepSeparator).Default(chunker.DefaultOptions().KeepSeparator).Description("Whether to keep the separator in the output. When set to true the seperators are included in the resulting split text."),
-			service.NewBoolField(tcpFieldKeepHeadingHierarchy).Default(chunker.DefaultOptions().KeepHeadingHierarchy).Description("Whether to keep the hierarchy of markdown headers in each chunk. When true each chunk gets prepended with a list of all parent headings in the hierarchy up to this point."),
-			service.NewBoolField(tcpFieldJoinTableRows).Default(chunker.DefaultOptions().JoinTableRows).Description("Whether to join markdown table rows in the output."),
 		)
 
 }
 
 func newTextChunker(conf *service.ParsedConfig, res *service.Resources) (service.Processor, error) {
 	processor := &textChunker{}
-	opts := []chunker.Option{}
+	opts := []textsplitter.Option{}
 
 	chunkSize, err := conf.FieldInt(tcpFieldChunkSize)
 	if err != nil {
 		return nil, err
 	}
-	opts = append(opts, chunker.WithChunkSize(chunkSize))
+	opts = append(opts, textsplitter.WithChunkSize(chunkSize))
 
 	chunkOverlap, err := conf.FieldInt(tcpFieldChunkOverlap)
 	if err != nil {
 		return nil, err
 	}
-	opts = append(opts, chunker.WithChunkOverlap(chunkOverlap))
+	opts = append(opts, textsplitter.WithChunkOverlap(chunkOverlap))
 
 	seps, err := conf.FieldStringList(tcpFieldSeparators)
 	if err != nil {
 		return nil, err
 	}
-	opts = append(opts, chunker.WithSeparators(seps))
+	opts = append(opts, textsplitter.WithSeparators(seps))
 
 	referenceLinks, err := conf.FieldBool(tcpFieldReferenceLinks)
 	if err != nil {
 		return nil, err
 	}
-	opts = append(opts, chunker.WithReferenceLinks(referenceLinks))
-
-	keepSeparator, err := conf.FieldBool(tcpFieldKeepSeparator)
-	if err != nil {
-		return nil, err
-	}
-	opts = append(opts, chunker.WithKeepSeparator(keepSeparator))
-
-	keepHeadingHierarchy, err := conf.FieldBool(tcpFieldKeepHeadingHierarchy)
-	if err != nil {
-		return nil, err
-	}
-	opts = append(opts, chunker.WithHeadingHierarchy(keepHeadingHierarchy))
-
-	joinTableRows, err := conf.FieldBool(tcpFieldJoinTableRows)
-	if err != nil {
-		return nil, err
-	}
-	opts = append(opts, chunker.WithJoinTableRows(joinTableRows))
+	opts = append(opts, textsplitter.WithReferenceLinks(referenceLinks))
 
 	if conf.Contains(tcpFieldSecondarySplitter) {
 		secondaryProcessor, err := conf.FieldProcessor(tcpFieldSecondarySplitter)
@@ -172,14 +147,14 @@ func newTextChunker(conf *service.ParsedConfig, res *service.Resources) (service
 			return nil, err
 		}
 		processor.secondary = &processorSplitter{context: nil, processor: secondaryProcessor}
-		opts = append(opts, chunker.WithSecondSplitter(processor.secondary))
+		opts = append(opts, textsplitter.WithSecondSplitter(processor.secondary))
 	}
 
 	codeBlocks, err := conf.FieldBool(tcpFieldIncludeCodeBlocks)
 	if err != nil {
 		return nil, err
 	}
-	opts = append(opts, chunker.WithCodeBlocks(codeBlocks))
+	opts = append(opts, textsplitter.WithCodeBlocks(codeBlocks))
 
 	var tokenizer *tiktoken.Tiktoken
 	if conf.Contains(tcpFieldTokenEncoding) {
@@ -191,20 +166,20 @@ func newTextChunker(conf *service.ParsedConfig, res *service.Resources) (service
 		if err != nil {
 			return nil, fmt.Errorf("failed to get tokenizer for encoding '%v': %w", encoding, err)
 		}
-		opts = append(opts, chunker.WithEncodingName(encoding))
+		opts = append(opts, textsplitter.WithEncodingName(encoding))
 	}
 
 	allowedSpecial, err := conf.FieldStringList(tcpFieldAllowedSpecial)
 	if err != nil {
 		return nil, err
 	}
-	opts = append(opts, chunker.WithAllowedSpecial(allowedSpecial))
+	opts = append(opts, textsplitter.WithAllowedSpecial(allowedSpecial))
 
 	disallowedSpecial, err := conf.FieldStringList(tcpFieldDisallowedSpecial)
 	if err != nil {
 		return nil, err
 	}
-	opts = append(opts, chunker.WithDisallowedSpecial(disallowedSpecial))
+	opts = append(opts, textsplitter.WithDisallowedSpecial(disallowedSpecial))
 
 	lenFuncStr, err := conf.FieldString(tcpFieldWithLenFunc)
 	if err != nil {
@@ -212,18 +187,18 @@ func newTextChunker(conf *service.ParsedConfig, res *service.Resources) (service
 	}
 	switch lenFuncStr {
 	case "utf8":
-		opts = append(opts, chunker.WithLenFunc(func(s string) int { return len(s) }))
+		opts = append(opts, textsplitter.WithLenFunc(func(s string) int { return len(s) }))
 	case "runes":
-		opts = append(opts, chunker.WithLenFunc(utf8.RuneCountInString))
+		opts = append(opts, textsplitter.WithLenFunc(utf8.RuneCountInString))
 	case "token":
 		if tokenizer == nil {
 			return nil, fmt.Errorf("token length measure requires %s", tcpFieldTokenEncoding)
 		}
-		opts = append(opts, chunker.WithLenFunc(func(s string) int {
+		opts = append(opts, textsplitter.WithLenFunc(func(s string) int {
 			return len(tokenizer.Encode(s, allowedSpecial, disallowedSpecial))
 		}))
 	case "graphemes":
-		opts = append(opts, chunker.WithLenFunc(func(s string) int { return uniseg.GraphemeClusterCount(s) }))
+		opts = append(opts, textsplitter.WithLenFunc(func(s string) int { return uniseg.GraphemeClusterCount(s) }))
 	default:
 		return nil, fmt.Errorf("unknown %s: %v", tcpFieldWithLenFunc, lenFuncStr)
 	}
@@ -234,12 +209,12 @@ func newTextChunker(conf *service.ParsedConfig, res *service.Resources) (service
 	}
 	switch strat {
 	case "recursive_character":
-		s := chunker.NewRecursiveCharacter(opts...)
+		s := textsplitter.NewRecursiveCharacter(opts...)
 		processor.splitter = s
 	case "markdown":
-		processor.splitter = chunker.NewMarkdownTextSplitter(opts...)
+		processor.splitter = textsplitter.NewMarkdownTextSplitter(opts...)
 	case "token":
-		processor.splitter = chunker.NewTokenSplitter(opts...)
+		processor.splitter = textsplitter.NewTokenSplitter(opts...)
 	default:
 		return nil, fmt.Errorf("unknown %s: %v", tcpFieldStrategy, strat)
 	}
@@ -247,7 +222,7 @@ func newTextChunker(conf *service.ParsedConfig, res *service.Resources) (service
 }
 
 type textChunker struct {
-	splitter  chunker.TextSplitter
+	splitter  textsplitter.TextSplitter
 	secondary *processorSplitter
 }
 
@@ -257,7 +232,21 @@ func (t *textChunker) Process(ctx context.Context, msg *service.Message) (servic
 		t.secondary.context = ctx
 		defer func() { t.secondary.context = nil }()
 	}
-	return chunker.SplitMessage(t.splitter, msg)
+	b, err := msg.AsBytes()
+	if err != nil {
+		return nil, err
+	}
+	texts, err := t.splitter.SplitText(string(b))
+	if err != nil {
+		return nil, err
+	}
+	batch := make(service.MessageBatch, len(texts))
+	for i, text := range texts {
+		cpy := msg.Copy()
+		cpy.SetBytes([]byte(text))
+		batch[i] = cpy
+	}
+	return batch, nil
 }
 
 // Close implements service.Processor.
