@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - Field `private_key` added to `ssh` input and output to let users directly specify their private key contents in their config instead of writing it to a file (@ooesili)
 - Field `handle_logical_types` added to `parquet_decode` input to provide better handling of Parquet logical types (@ooesili)
 - New `gateway` input. (@Jeffail)
+- New `text_chunker` processor for splitting text for creating document vector embeddings. (@rockwotj)
 
 ## 4.50.0 - 2025-03-18
 

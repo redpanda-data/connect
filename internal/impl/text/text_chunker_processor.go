@@ -21,8 +21,9 @@ import (
 
 	"github.com/pkoukk/tiktoken-go"
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"github.com/redpanda-data/connect/v4/internal/impl/text/chunker"
 	"github.com/rivo/uniseg"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/text/chunker"
 )
 
 var _ service.Processor = (*textChunker)(nil)

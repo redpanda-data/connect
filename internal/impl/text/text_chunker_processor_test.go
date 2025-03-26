@@ -16,6 +16,7 @@ package text
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 
@@ -98,7 +99,7 @@ func splitTextUsingConfig(t *testing.T, text, config string) []string {
 	var output service.MessageBatch
 	err = b.AddBatchConsumerFunc(func(ctx context.Context, batch service.MessageBatch) error {
 		mu.Lock()
-		mu.Unlock()
+		defer mu.Unlock()
 		output = append(output, batch...)
 		return nil
 	})
@@ -112,7 +113,11 @@ func splitTextUsingConfig(t *testing.T, text, config string) []string {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		s.Run(ctx)
+		err = s.Run(ctx)
+		if errors.Is(err, context.Canceled) {
+			err = nil
+		}
+		require.NoError(t, err)
 	}()
 	err = producer(ctx, service.MessageBatch{service.NewMessage([]byte(text))})
 	require.NoError(t, err)

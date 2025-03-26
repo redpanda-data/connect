@@ -19,6 +19,8 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
+//
+// Forked from https://github.com/tmc/langchaingo/blob/main/LICENSE
 
 package chunker
 
@@ -29,7 +31,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-// SplitText splits a text into smaller chunks.
+// SplitMessage splits a text into smaller chunks.
 func SplitMessage(textSplitter TextSplitter, message *service.Message) (service.MessageBatch, error) {
 	b, err := message.AsBytes()
 	if err != nil {
