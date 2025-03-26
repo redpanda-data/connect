@@ -50,6 +50,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.32.3
 	github.com/beanstalkd/go-beanstalk v0.2.0
 	github.com/benhoyt/goawk v1.29.1
+	github.com/bmatcuk/doublestar/v4 v4.8.1
 	github.com/bradfitz/gomemcache v0.0.0-20230124162541-5f7a7d875746
 	github.com/bwmarrin/discordgo v0.28.1
 	github.com/bwmarrin/snowflake v0.3.0
@@ -68,6 +69,7 @@ require (
 	github.com/generikvault/gvalstrings v0.0.0-20180926130504-471f38f0112a
 	github.com/getsentry/sentry-go v0.31.1
 	github.com/go-faker/faker/v4 v4.4.2
+	github.com/go-git/go-git/v5 v5.14.0
 	github.com/go-jose/go-jose/v4 v4.0.5
 	github.com/go-mysql-org/go-mysql v1.10.0
 	github.com/go-resty/resty/v2 v2.15.3
@@ -173,14 +175,22 @@ require (
 	github.com/GoogleCloudPlatform/grpc-gcp-go/grpcgcp v1.5.2 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.27.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.51.0 // indirect
+	github.com/ProtonMail/go-crypto v1.1.5 // indirect
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.34.3 // indirect
 	github.com/certifi/gocertifi v0.0.0-20210507211836-431795d63e8d // indirect
+	github.com/cloudflare/circl v1.6.0 // indirect
 	github.com/cncf/xds/go v0.0.0-20250121191232-2f005788dc42 // indirect
 	github.com/containerd/platforms v0.2.1 // indirect
+	github.com/cyphar/filepath-securejoin v0.4.1 // indirect
+	github.com/emirpasic/gods v1.18.1 // indirect
 	github.com/envoyproxy/go-control-plane/envoy v1.32.4 // indirect
 	github.com/envoyproxy/protoc-gen-validate v1.2.1 // indirect
+	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
+	github.com/go-git/go-billy/v5 v5.6.2 // indirect
+	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/jzelinskie/stringz v0.0.3 // indirect
+	github.com/kevinburke/ssh_config v1.2.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
@@ -188,13 +198,17 @@ require (
 	github.com/pingcap/failpoint v0.0.0-20240528011301-b51a646c7c86 // indirect
 	github.com/pingcap/log v1.1.1-0.20230317032135-a0d097d16e22 // indirect
 	github.com/pingcap/tidb/pkg/parser v0.0.0-20241118164214-4f047be191be // indirect
+	github.com/pjbgf/sha1cd v0.3.2 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
 	github.com/samber/lo v1.47.0 // indirect
+	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 // indirect
 	github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726 // indirect
 	github.com/siddontang/go-log v0.0.0-20180807004314-8d05993dda07 // indirect
+	github.com/skeema/knownhosts v1.3.1 // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
+	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	gitlab.com/golang-commonmark/html v0.0.0-20191124015941-a22733972181 // indirect
 	gitlab.com/golang-commonmark/linkify v0.0.0-20200225224916-64bca66f6ad3 // indirect
 	gitlab.com/golang-commonmark/mdurl v0.0.0-20191124015652-932350d1cb84 // indirect
@@ -204,6 +218,7 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.35.0 // indirect
 	gonum.org/v1/gonum v0.15.1 // indirect
 	gopkg.in/go-jose/go-jose.v2 v2.6.3 // indirect
+	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
 
 require (
@@ -304,7 +319,7 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang-sql/civil v0.0.0-20220223132316-b832511892a9 // indirect
 	github.com/golang-sql/sqlexp v0.1.0 // indirect
-	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
+	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/flatbuffers v24.3.25+incompatible // indirect
