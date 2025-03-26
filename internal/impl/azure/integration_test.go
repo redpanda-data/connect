@@ -271,7 +271,7 @@ input:
 		).Run(
 			t, template,
 			integration.StreamTestOptVarSet("VAR1", dummyQueue),
-			integration.StreamTestOptVarSet("VAR2", "UseDevelopmentStorage=true;"),
+			integration.StreamTestOptVarSet("VAR2", connString),
 		)
 	})
 }

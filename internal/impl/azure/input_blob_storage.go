@@ -27,6 +27,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/bloberror"
 	"github.com/Jeffail/gabs/v2"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -299,7 +300,15 @@ func (a *azureTargetStreamReader) Pop(ctx context.Context) (*azureObjectTarget, 
 			a.pending = append(a.pending, &azureObjectTarget{
 				key: name,
 				ackFn: func(ctx context.Context, err error) (aerr error) {
-					if err != nil {
+					keyNotFound := false
+					var rErr *azcore.ResponseError
+					if errors.As(err, &rErr) {
+						if rErr.ErrorCode == string(bloberror.BlobNotFound) {
+							a.log.Warnf("Skipping missing blob: %s", name)
+							keyNotFound = true
+						}
+					}
+					if err != nil && !keyNotFound {
 						nackOnce.Do(func() {
 							// Prevent future acks from triggering a delete.
 							atomic.StoreInt32(&pendingAcks, -1)
