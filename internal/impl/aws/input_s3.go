@@ -583,6 +583,7 @@ func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]*s3ObjectTarget,
 						keyNotFound := false
 						if apiErr := smithy.APIError(nil); errors.As(err, &apiErr) {
 							if _, ok := apiErr.(*s3types.NoSuchKey); ok {
+								s.log.Warnf("Dropping SQS notification for missing key %q: %s", object.key, err)
 								keyNotFound = true
 							}
 						}
@@ -603,9 +604,6 @@ func (s *sqsTargetReader) readSQSEvents(ctx context.Context) ([]*s3ObjectTarget,
 						} else {
 							ackOnce.Do(func() {
 								if atomic.AddInt32(&pendingAcks, -1) == 0 {
-									if keyNotFound {
-										s.log.Warnf("Dropping SQS notification for missing key %q: %s", object.key, err)
-									}
 									aerr = s.ackSQSMessage(ctx, sqsMsg)
 								}
 							})
