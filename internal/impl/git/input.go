@@ -540,6 +540,11 @@ func (in *input) walkRepositoryFiles(ctx context.Context) (*sync.WaitGroup, erro
 			return err
 		}
 
+		// We need to recurse into directories, but aren't interested in directories itself
+		if d.IsDir() {
+			return nil
+		}
+
 		// Get relative path for pattern matching
 		relPath, err := filepath.Rel(scanPath, path)
 		if err != nil {
