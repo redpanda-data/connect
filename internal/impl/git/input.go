@@ -664,21 +664,6 @@ func (in *input) setupAuth() (transport.AuthMethod, error) {
 
 	// Check if token auth is configured
 	if in.cfg.auth.token.value != "" {
-		// Check the repository URL to determine how to use the token
-		repoURL, err := url.Parse(in.cfg.repoURL)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse repository URL: %w", err)
-		}
-
-		// For GitHub, use the token as the password with an empty username
-		if strings.Contains(repoURL.Host, "github.com") {
-			return &githttp.BasicAuth{
-				Username: "", // Not needed for GitHub tokens
-				Password: in.cfg.auth.token.value,
-			}, nil
-		}
-
-		// For GitLab and others the username should not be blank or equal to "oauth2"
 		return &githttp.BasicAuth{
 			Username: "oauth2",
 			Password: in.cfg.auth.token.value,
