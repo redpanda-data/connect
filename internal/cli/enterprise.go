@@ -157,6 +157,8 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 		service.CLIOptSetEnvVarLookup(func(ctx context.Context, key string) (string, bool) {
 			return secretLookupFn(ctx, key)
 		}),
+
+		service.CLIOptAddCommand(mcpServerCli(slog.New(rpLogger))),
 	)
 
 	exitCode, err := service.RunCLIToCode(context.Background(), opts...)
