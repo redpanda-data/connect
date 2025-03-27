@@ -23,7 +23,6 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -244,7 +243,7 @@ func (in *input) cloneRepo(ctx context.Context) error {
 		return err
 	}
 
-	in.repository, err = git.PlainClone(in.tempDir, false, &git.CloneOptions{
+	in.repository, err = git.PlainCloneContext(ctx, in.tempDir, false, &git.CloneOptions{
 		URL:           in.cfg.repoURL,
 		Auth:          auth,
 		ReferenceName: plumbing.NewBranchReferenceName(in.cfg.branch),
@@ -425,11 +424,12 @@ func (in *input) updateCheckpointCache(ctx context.Context, newHash plumbing.Has
 
 // pullGitChanges attempts to pull the latest changes from the remote.
 // If there's no update, it returns nil.
-func (*input) pullGitChanges(ctx context.Context, wt *git.Worktree, auth transport.AuthMethod) error {
+func (in *input) pullGitChanges(ctx context.Context, wt *git.Worktree, auth transport.AuthMethod) error {
 	err := wt.PullContext(ctx, &git.PullOptions{
-		RemoteName: "origin",
-		Auth:       auth,
-		Force:      true,
+		RemoteName:    "origin",
+		ReferenceName: plumbing.NewBranchReferenceName(in.cfg.branch),
+		Auth:          auth,
+		Force:         true,
 	})
 	if errors.Is(err, git.NoErrAlreadyUpToDate) {
 		return nil
