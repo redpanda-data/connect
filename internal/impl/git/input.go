@@ -23,7 +23,6 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -244,7 +243,7 @@ func (in *input) cloneRepo(ctx context.Context) error {
 		return err
 	}
 
-	in.repository, err = git.PlainClone(in.tempDir, false, &git.CloneOptions{
+	in.repository, err = git.PlainCloneContext(ctx, in.tempDir, false, &git.CloneOptions{
 		URL:           in.cfg.repoURL,
 		Auth:          auth,
 		ReferenceName: plumbing.NewBranchReferenceName(in.cfg.branch),
@@ -425,11 +424,12 @@ func (in *input) updateCheckpointCache(ctx context.Context, newHash plumbing.Has
 
 // pullGitChanges attempts to pull the latest changes from the remote.
 // If there's no update, it returns nil.
-func (*input) pullGitChanges(ctx context.Context, wt *git.Worktree, auth transport.AuthMethod) error {
+func (in *input) pullGitChanges(ctx context.Context, wt *git.Worktree, auth transport.AuthMethod) error {
 	err := wt.PullContext(ctx, &git.PullOptions{
-		RemoteName: "origin",
-		Auth:       auth,
-		Force:      true,
+		RemoteName:    "origin",
+		ReferenceName: plumbing.NewBranchReferenceName(in.cfg.branch),
+		Auth:          auth,
+		Force:         true,
 	})
 	if errors.Is(err, git.NoErrAlreadyUpToDate) {
 		return nil
@@ -664,21 +664,6 @@ func (in *input) setupAuth() (transport.AuthMethod, error) {
 
 	// Check if token auth is configured
 	if in.cfg.auth.token.value != "" {
-		// Check the repository URL to determine how to use the token
-		repoURL, err := url.Parse(in.cfg.repoURL)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse repository URL: %w", err)
-		}
-
-		// For GitHub, use the token as the password with an empty username
-		if strings.Contains(repoURL.Host, "github.com") {
-			return &githttp.BasicAuth{
-				Username: "", // Not needed for GitHub tokens
-				Password: in.cfg.auth.token.value,
-			}, nil
-		}
-
-		// For GitLab and others the username should not be blank or equal to "oauth2"
 		return &githttp.BasicAuth{
 			Username: "oauth2",
 			Password: in.cfg.auth.token.value,
