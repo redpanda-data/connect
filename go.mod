@@ -4,6 +4,8 @@ go 1.23.4
 
 replace github.com/99designs/keyring => github.com/Jeffail/keyring v1.2.3
 
+replace github.com/redpanda-data/benthos/v4 => ../benthos/
+
 require (
 	cloud.google.com/go/aiplatform v1.74.0
 	cloud.google.com/go/bigquery v1.66.2
@@ -219,6 +221,7 @@ require (
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	go.opentelemetry.io/contrib/detectors/gcp v1.35.0 // indirect
 	go.opentelemetry.io/otel/sdk/metric v1.35.0 // indirect
+	go.starlark.net v0.0.0-20250318223901-d9371fef63fe // indirect
 	gonum.org/v1/gonum v0.15.1 // indirect
 	gopkg.in/go-jose/go-jose.v2 v2.6.3 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
