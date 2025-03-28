@@ -65,6 +65,9 @@ jobs:
         [[ -x "$RUNNER_TEMP/microsoft/go/bin/go" ]] && ln -s "$RUNNER_TEMP/microsoft/go/bin/go" "$RUNNER_TEMP/bin/microsoft-go"
         echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
 
+    - name: Install patchelf
+      run: sudo apt-get update && sudo apt-get install -y patchelf
+
     - name: Release Notes
       run: ./resources/scripts/release_notes.sh > ./release_notes.md
 

@@ -39,6 +39,9 @@ builds:
     binary: redpanda-connect-fips
     goos: [ linux ]
     goarch: [ amd64 ]
+    hooks:
+      post:
+        - cmd: ./resources/scripts/fips_patchelf.sh "{{ .Path }}"
     tool: 'microsoft-go'
     env:
       - GOEXPERIMENT=systemcrypto
@@ -90,15 +93,6 @@ archives:
       - CHANGELOG.md
       - licenses
 
-  - id: connect-fips
-    ids: [ connect-fips ]
-    formats: tar.gz
-    name_template: 'redpanda-connect-fips_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ with .Arm }}v{{ . }}{{ end }}{{ with .Mips }}_{{ . }}{{ end }}{{ if not (eq .Amd64 "v1") }}{{ .Amd64 }}{{ end }}'
-    files:
-      - README.md
-      - CHANGELOG.md
-      - licenses
-
   - id: connect-cloud
     ids: [ connect-cloud ]
     formats: tar.gz
@@ -137,11 +131,34 @@ nfpms:
       - src: /usr/bin/redpanda-connect
         dst: /usr/bin/.rpk.ac-connect
         type: symlink
-      - src: /usr/bin/redpanda-connect-fips
-        dst: /usr/bin/.rpk.ac-connect-fips
-        type: symlink
     ids:
       - connect
+    vendor: Redpanda Data, Inc.
+    license: "https://github.com/redpanda-data/connect/blob/main/licenses/README.md"
+    homepage: redpanda.com
+    maintainer: Redpanda Data <support@redpanda.com>
+    formats:
+      - deb
+      - rpm
+  - id: connect-fips-pkgs
+    description: Redpanda Connect FIPS is a high performance and resilient stream processor.
+    package_name: redpanda-connect-fips
+    file_name_template: "{{ .ConventionalFileName }}"
+    bindir: /opt/redpanda/libexec
+    contents:
+      - src: resources/scripts/fips_wrapper.sh
+        dst: /usr/bin/redpanda-connect-fips
+        file_info:
+          mode: 0755
+          owner: root
+          group: root
+      # installs an alias so users can type `rpk connect`
+      - src: /opt/redpanda/libexec/redpanda-connect-fips
+        dst: /usr/bin/.rpk.ac-connect
+        type: symlink
+    dependencies:
+      - redpanda-rpk-fips
+    ids:
       - connect-fips
     vendor: Redpanda Data, Inc.
     license: "https://github.com/redpanda-data/connect/blob/main/licenses/README.md"
@@ -150,11 +167,13 @@ nfpms:
     formats:
       - deb
       - rpm
+
 publishers:
   # Gets run once per artifact (deb or rpm)
   - name: Publish Linux packages to Cloudsmith
     ids:
       - connect-linux-pkgs
+      - connect-fips-pkgs
     cmd: ./resources/scripts/push_pkg_to_cloudsmith.sh {{ .ArtifactPath }} {{ .Version }}
     env:
       - CLOUDSMITH_API_KEY={{ .Env.CLOUDSMITH_API_KEY }}
