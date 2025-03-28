@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - New `git` input. (@weeco, @rockwotj)
 - New `text_chunker` processor for splitting text for creating document vector embeddings. (@rockwotj)
 - New `aggregate` operation added to the `mongodb` processor to provide support for aggregation pipelines. (@mihaitodor)
+- New `slack` input reading from slack using socketmode. (@rockwotj)
 
 ### Fixed
 
