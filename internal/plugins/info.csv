@@ -231,6 +231,7 @@ sequence                  ,input     ,sequence                  ,0.0.0   ,certif
 sftp                      ,input     ,sftp                      ,3.39.0  ,certified  ,n          ,y     ,y
 sftp                      ,output    ,sftp                      ,3.39.0  ,certified  ,n          ,y     ,y
 skip_bom                  ,scanner   ,skip_bom                  ,0.0.0   ,certified  ,n          ,y     ,y
+slack                     ,input     ,slack                     ,4.51.0  ,enterprise ,n          ,y     ,y
 sleep                     ,processor ,sleep                     ,0.0.0   ,certified  ,n          ,y     ,y
 snowflake_put             ,output    ,Snowflake                 ,4.0.0   ,enterprise ,n          ,y     ,y
 snowflake_streaming       ,output    ,Snowflake Streaming       ,4.39.0  ,enterprise ,n          ,y     ,y
