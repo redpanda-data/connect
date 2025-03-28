@@ -73,6 +73,7 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/text"
 	_ "github.com/redpanda-data/connect/v4/public/components/timeplus"
 	_ "github.com/redpanda-data/connect/v4/public/components/twitter"
+	_ "github.com/redpanda-data/connect/v4/public/components/wal"
 	_ "github.com/redpanda-data/connect/v4/public/components/wasm"
 	_ "github.com/redpanda-data/connect/v4/public/components/zeromq"
 )
