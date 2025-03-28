@@ -117,25 +117,27 @@ Use the `+"`batching`"+` fields to configure an optional xref:configuration:batc
 			Description("One or more Kinesis data streams to consume from. Streams can either be specified by their name or full ARN. Shards of a stream are automatically balanced across consumers by coordinating through the provided DynamoDB table. Multiple comma separated streams can be listed in a single element. Shards are automatically distributed across consumers of a stream by coordinating through the provided DynamoDB table. Alternatively, it's possible to specify an explicit shard to consume from with a colon after the stream name, e.g. `foo:0` would consume the shard `0` of the stream `foo`.").
 			Examples([]any{"foo", "arn:aws:kinesis:*:111122223333:stream/my-stream"}),
 		service.NewObjectField(kiFieldDynamoDB,
-			service.NewStringField(kiddbFieldTable).
+			append([]*service.ConfigField{service.NewStringField(kiddbFieldTable).
 				Description("The name of the table to access.").
 				Default(""),
-			service.NewBoolField(kiddbFieldCreate).
-				Description("Whether, if the table does not exist, it should be created.").
-				Default(false),
-			service.NewStringEnumField(kiddbFieldBillingMode, "PROVISIONED", "PAY_PER_REQUEST").
-				Description("When creating the table determines the billing mode.").
-				Default("PAY_PER_REQUEST").
-				Advanced(),
-			service.NewIntField(kiddbFieldReadCapacityUnits).
-				Description("Set the provisioned read capacity when creating the table with a `billing_mode` of `PROVISIONED`.").
-				Default(0).
-				Advanced(),
-			service.NewIntField(kiddbFieldWriteCapacityUnits).
-				Description("Set the provisioned write capacity when creating the table with a `billing_mode` of `PROVISIONED`.").
-				Default(0).
-				Advanced(),
-		).AppendToObjectField(config.SessionFields()...).
+				service.NewBoolField(kiddbFieldCreate).
+					Description("Whether, if the table does not exist, it should be created.").
+					Default(false),
+				service.NewStringEnumField(kiddbFieldBillingMode, "PROVISIONED", "PAY_PER_REQUEST").
+					Description("When creating the table determines the billing mode.").
+					Default("PAY_PER_REQUEST").
+					Advanced(),
+				service.NewIntField(kiddbFieldReadCapacityUnits).
+					Description("Set the provisioned read capacity when creating the table with a `billing_mode` of `PROVISIONED`.").
+					Default(0).
+					Advanced(),
+				service.NewIntField(kiddbFieldWriteCapacityUnits).
+					Description("Set the provisioned write capacity when creating the table with a `billing_mode` of `PROVISIONED`.").
+					Default(0).
+					Advanced()},
+				config.SessionFields()...,
+			)...,
+		).
 			Description("Determines the table used for storing and accessing the latest consumed sequence for shards, and for coordinating balanced consumers of streams."),
 		service.NewIntField(kiFieldCheckpointLimit).
 			Description("The maximum gap between the in flight sequence versus the latest acknowledged sequence at a given time. Increasing this limit enables parallel processing and batching at the output level to work on individual shards. Any given sequence will not be committed unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
@@ -236,11 +238,18 @@ func newKinesisReaderFromParsed(pConf *service.ParsedConfig, mgr *service.Resour
 	if err != nil {
 		return nil, err
 	}
+
+	var ddbSess aws.Config
 	ddbCredsConf := pConf.Namespace("dynamodb")
-	ddbSess, err := GetSession(context.TODO(), ddbCredsConf)
-	if err != nil {
-		return nil, err
+	if ddbCredsConf.Contains("region") || ddbCredsConf.Contains("endpoint") || ddbCredsConf.Contains("credentials") {
+		if ddbSess, err = GetSession(context.TODO(), ddbCredsConf); err != nil {
+			return nil, err
+		}
+	} else {
+		// Reuse the Kinesis config if the DynamoDB config is empty
+		ddbSess = sess
 	}
+
 	return newKinesisReaderFromConfig(conf, batcher, sess, ddbSess, mgr)
 }
 
@@ -262,7 +271,7 @@ func parseStreamID(id string) (remaining, shard string, err error) {
 	return
 }
 
-func newKinesisReaderFromConfig(conf kiConfig, batcher service.BatchPolicy, sess, ddb aws.Config, mgr *service.Resources) (*kinesisReader, error) {
+func newKinesisReaderFromConfig(conf kiConfig, batcher service.BatchPolicy, sess, ddbSess aws.Config, mgr *service.Resources) (*kinesisReader, error) {
 	if batcher.IsNoop() {
 		batcher.Count = 1
 	}
@@ -270,7 +279,7 @@ func newKinesisReaderFromConfig(conf kiConfig, batcher service.BatchPolicy, sess
 	k := kinesisReader{
 		conf:       conf,
 		sess:       sess,
-		ddbSess:    ddb,
+		ddbSess:    ddbSess,
 		batcher:    batcher,
 		log:        mgr.Logger(),
 		mgr:        mgr,

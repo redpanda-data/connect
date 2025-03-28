@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.53.0 - TBD
+
+### Added
+
+- Fields `region`, `endpoint` and `credentials` added to the `dynamodb` configuration section of the `aws_kinesis` input. (@jreyeshdez, @mihaitodor)
+
 ## 4.52.0 - 2025-04-03
 
 ### Added
