@@ -164,6 +164,7 @@ Options:
 , `replace-one`
 , `update-one`
 , `find-one`
+, `aggregate`
 .
 
 === `write_concern`
@@ -203,7 +204,7 @@ The write concern timeout.
 
 === `document_map`
 
-A bloblang map representing a document to store within MongoDB, expressed as https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/[extended JSON in canonical form^]. The document map is required for the operations insert-one, replace-one and update-one.
+A bloblang map representing a document to store within MongoDB, expressed as https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/[extended JSON in canonical form^]. The document map is required for the operations insert-one, replace-one, update-one and aggregate.
 
 
 *Type*: `string`

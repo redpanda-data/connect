@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - New `gateway` input. (@Jeffail)
 - New `git` input. (@weeco, @rockwotj)
 - New `text_chunker` processor for splitting text for creating document vector embeddings. (@rockwotj)
+- New `aggregate` operation added to the `mongodb` processor to provide support for aggregation pipelines. (@mihaitodor)
 
 ### Fixed
 

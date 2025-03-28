@@ -101,6 +101,9 @@ func TestProcessorIntegration(t *testing.T) {
 	t.Run("upsert", func(t *testing.T) {
 		testMongoDBProcessorUpsert(mongoClient, port, t)
 	})
+	t.Run("aggregate", func(t *testing.T) {
+		testMongoDBProcessorAggregate(mongoClient, port, t)
+	})
 }
 
 func testMProc(t testing.TB, port, collection, configYAML string) *mongodb.Processor {
@@ -483,4 +486,79 @@ json_marshal_mode: %v
 		diff, explanation := jsondiff.Compare(mBytes, []byte(tt.expected), &jdopts)
 		assert.Equalf(t, jsondiff.SupersetMatch.String(), diff.String(), "%s: %s", tt.name, explanation)
 	}
+}
+
+func testMongoDBProcessorAggregate(mongoClient *mongo.Client, port string, t *testing.T) {
+	tCtx := context.Background()
+
+	collection := mongoClient.Database("TestDB").Collection("TestCollection")
+	_, err := collection.InsertMany(context.Background(), []bson.M{
+		{"_id": 0, "name": "Pepperoni", "size": "small", "price": 19,
+			"quantity": 10, "date": time.Date(2021, 3, 13, 8, 14, 30, 0, time.UTC)},
+		{"_id": 1, "name": "Pepperoni", "size": "medium", "price": 20,
+			"quantity": 20, "date": time.Date(2021, 3, 13, 9, 13, 24, 0, time.UTC)},
+		{"_id": 2, "name": "Pepperoni", "size": "large", "price": 21,
+			"quantity": 30, "date": time.Date(2021, 3, 17, 9, 22, 12, 0, time.UTC)},
+		{"_id": 3, "name": "Cheese", "size": "small", "price": 12,
+			"quantity": 15, "date": time.Date(2021, 3, 13, 11, 21, 39, 736000000, time.UTC)},
+		{"_id": 4, "name": "Cheese", "size": "medium", "price": 13,
+			"quantity": 50, "date": time.Date(2022, 1, 12, 21, 23, 13, 331000000, time.UTC)},
+		{"_id": 5, "name": "Cheese", "size": "large", "price": 14,
+			"quantity": 10, "date": time.Date(2022, 1, 12, 5, 8, 13, 0, time.UTC)},
+		{"_id": 6, "name": "Vegan", "size": "small", "price": 17,
+			"quantity": 10, "date": time.Date(2021, 1, 13, 5, 8, 13, 0, time.UTC)},
+		{"_id": 7, "name": "Vegan", "size": "medium", "price": 18,
+			"quantity": 10, "date": time.Date(2021, 1, 13, 5, 10, 13, 0, time.UTC)},
+	})
+	assert.NoError(t, err)
+
+	tests := []struct {
+		name        string
+		marshalMode mongodb.JSONMarshalMode
+		expected    string
+	}{
+		{
+			name:        "canonical marshal mode",
+			marshalMode: mongodb.JSONMarshalModeCanonical,
+			expected:    `[{"_id":"Cheese","totalQuantity":{"$numberInt":"50"}},{"_id":"Pepperoni","totalQuantity":{"$numberInt":"20"}},{"_id":"Vegan","totalQuantity":{"$numberInt":"10"}}]`,
+		},
+		{
+			name:        "relaxed marshal mode",
+			marshalMode: mongodb.JSONMarshalModeRelaxed,
+			expected:    `[{"_id":"Cheese","totalQuantity":50},{"_id":"Pepperoni","totalQuantity":20},{"_id":"Vegan","totalQuantity":10}]`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			m := testMProc(t, port, "", fmt.Sprintf(`
+operation: aggregate
+json_marshal_mode: %s
+document_map: |
+  root = [
+    {
+      "$match": { "size": "medium" }
+    },
+    {
+      "$group": { "_id": "$name", "totalQuantity": { "$sum": "$quantity" } }
+    },
+    { "$sort" : { "_id": 1 } }
+  ]
+`, test.marshalMode))
+			resMsg, err := m.ProcessBatch(tCtx, service.MessageBatch{
+				service.NewMessage([]byte{}),
+			})
+			require.NoError(t, err)
+			require.Len(t, resMsg, 1)
+			require.NoError(t, resMsg[0][0].GetError())
+
+			mBytes, err := resMsg[0][0].AsBytes()
+			require.NoError(t, err)
+
+			jdopts := jsondiff.DefaultJSONOptions()
+			diff, explanation := jsondiff.Compare(mBytes, []byte(test.expected), &jdopts)
+			assert.Equalf(t, jsondiff.FullMatch.String(), diff.String(), "%s: %s", t.Name(), explanation)
+		})
+	}
+
 }

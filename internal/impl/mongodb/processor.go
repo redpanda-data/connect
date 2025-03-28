@@ -16,6 +16,7 @@ package mongodb
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -204,6 +205,39 @@ func (m *Processor) ProcessBatch(ctx context.Context, batch service.MessageBatch
 			}
 
 			msg.SetBytes(data)
+			return nil
+
+		case OperationAggregate:
+			var collection *mongo.Collection
+			var cursor *mongo.Cursor
+			var err error
+			collection = m.database.Collection(collectionStr, m.writeConcernSpec.options)
+			if cursor, err = collection.Aggregate(ctx, docJSON); err != nil {
+				return err
+			}
+			defer cursor.Close(ctx)
+
+			var results []bson.D
+			if err := cursor.All(ctx, &results); err != nil {
+				m.log.Errorf("Error decoding mongo db result, pipeline = %v: %s", filterJSON, err)
+				return err
+			}
+
+			var docs []json.RawMessage
+			for _, r := range results {
+				data, err := bson.MarshalExtJSON(r, m.marshalMode == JSONMarshalModeCanonical, false)
+				if err != nil {
+					return err
+				}
+				docs = append(docs, data)
+			}
+
+			m, err := json.Marshal(docs)
+			if err != nil {
+				return err
+			}
+
+			msg.SetBytes(m)
 			return nil
 		}
 
