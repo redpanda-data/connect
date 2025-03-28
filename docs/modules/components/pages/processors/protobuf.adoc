@@ -36,6 +36,7 @@ protobuf:
   discard_unknown: false
   use_proto_names: false
   import_paths: []
+  use_enum_numbers: false
 ```
 
 The main functionality of this processor is to map to and from JSON documents, you can read more about JSON mapping of protobuf messages here: https://developers.google.com/protocol-buffers/docs/proto3#json[https://developers.google.com/protocol-buffers/docs/proto3#json^]
@@ -202,5 +203,14 @@ A list of directories containing .proto files, including all definitions require
 *Type*: `array`
 
 *Default*: `[]`
+
+=== `use_enum_numbers`
+
+If `true`, the `to_json` operator deserializes enums as numerical values instead of string names.
+
+
+*Type*: `bool`
+
+*Default*: `false`
 
 

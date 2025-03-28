@@ -120,12 +120,13 @@ discard_unknown: %t
 
 func TestProtobufToJSON(t *testing.T) {
 	type testCase struct {
-		name          string
-		message       string
-		importPath    string
-		input         []byte
-		output        string
-		useProtoNames bool
+		name           string
+		message        string
+		importPath     string
+		input          []byte
+		output         string
+		useProtoNames  bool
+		useEnumNumbers bool
 	}
 
 	tests := []testCase{
@@ -150,9 +151,9 @@ func TestProtobufToJSON(t *testing.T) {
 			input: []byte{
 				0x0a, 0x05, 0x63, 0x61, 0x6c, 0x65, 0x62, 0x12, 0x05, 0x71, 0x75, 0x61, 0x79, 0x65, 0x32, 0x11,
 				0x63, 0x61, 0x6c, 0x65, 0x62, 0x40, 0x6d, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x2e, 0x63, 0x6f,
-				0x6d,
+				0x6d, 0x40, 0x01,
 			},
-			output: `{"firstName":"caleb","lastName":"quaye","email":"caleb@myspace.com"}`,
+			output: `{"firstName":"caleb","lastName":"quaye","email":"caleb@myspace.com","device":"DEVICE_IOS"}`,
 		},
 		{
 			name:          "protobuf to json with use_proto_names",
@@ -165,6 +166,18 @@ func TestProtobufToJSON(t *testing.T) {
 				0x6d,
 			},
 			output: `{"first_name":"caleb","last_name":"quaye","email":"caleb@myspace.com"}`,
+		},
+		{
+			name:           "protobuf to json with use_enum_numbers",
+			message:        "testing.Person",
+			importPath:     "../../../config/test/protobuf/schema",
+			useEnumNumbers: true,
+			input: []byte{
+				0x0a, 0x05, 0x63, 0x61, 0x6c, 0x65, 0x62, 0x12, 0x05, 0x71, 0x75, 0x61, 0x79, 0x65, 0x32, 0x11,
+				0x63, 0x61, 0x6c, 0x65, 0x62, 0x40, 0x6d, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x2e, 0x63, 0x6f,
+				0x6d, 0x40, 0x01,
+			},
+			output: `{"firstName":"caleb","lastName":"quaye","email":"caleb@myspace.com","device":1}`,
 		},
 		{
 			name:       "any: protobuf to json 1",
@@ -197,7 +210,8 @@ operator: to_json
 message: %v
 import_paths: [ %v ]
 use_proto_names: %t
-`, test.message, test.importPath, test.useProtoNames), nil)
+use_enum_numbers: %t
+`, test.message, test.importPath, test.useProtoNames, test.useEnumNumbers), nil)
 			require.NoError(t, err)
 
 			proc, err := newProtobuf(conf, service.MockResources())
