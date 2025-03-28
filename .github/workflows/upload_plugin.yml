@@ -46,6 +46,8 @@ jobs:
           tar -C "$RUNNER_TEMP/microsoft" -xf "$RUNNER_TEMP/msgo.tgz"
           [[ -x "$RUNNER_TEMP/microsoft/go/bin/go" ]] && ln -s "$RUNNER_TEMP/microsoft/go/bin/go" "$RUNNER_TEMP/bin/microsoft-go"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Install patchelf
+        run: sudo apt-get update && sudo apt-get install -y patchelf
       - name: Write telemetry private key
         env:
           CONNECT_TELEMETRY_PRIV_KEY: ${{ secrets.TELEMETRY_PRIVATE_KEY }}
