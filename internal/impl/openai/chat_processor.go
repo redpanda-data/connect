@@ -11,6 +11,7 @@ package openai
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"math"
 	"net/http"
@@ -29,6 +30,7 @@ import (
 const (
 	ocpFieldUserPrompt       = "prompt"
 	ocpFieldSystemPrompt     = "system_prompt"
+	ocpFieldHistory          = "history"
 	ocpFieldImage            = "image"
 	ocpFieldMaxTokens        = "max_tokens"
 	ocpFieldTemp             = "temperature"
@@ -103,6 +105,9 @@ To learn more about chat completion, see the https://platform.openai.com/docs/gu
 				Optional(),
 			service.NewInterpolatedStringField(ocpFieldSystemPrompt).
 				Description("The system prompt to submit along with the user prompt.").
+				Optional(),
+			service.NewBloblangField(ocpFieldHistory).
+				Description(`The history of the prior conversation. A bloblang query that should result in an array of objects of the form: [{"role": "user", "content": "<text>"}, {"role":"assistant", "content":"<text>"}]`).
 				Optional(),
 			service.NewBloblangField(ocpFieldImage).
 				Description("An image to send along with the prompt. The mapping result must be a byte array.").
@@ -220,10 +225,60 @@ pipeline:
 output:
   stdout:
     codec: lines
-`).Example(
-		"Use GPT-4o to call a tool",
-		"This example asks GPT-4o to respond with the weather by invoking an HTTP processor to get the forecast.",
-		`
+`).
+		Example(
+			"Provide historical chat history",
+			"This pipeline provides a historical chat history to GPT-4o using a cache.",
+			`
+input:
+  stdin:
+    scanner:
+      lines: {}
+pipeline:
+  processors:
+    - mapping: |
+        root.prompt = content().string()
+    - branch:
+        processors:
+          - cache:
+              resource: mem
+              operator: get
+              key: history
+          - catch:
+            - mapping: 'root = []'
+        result_map: 'root.history = this'
+    - branch:
+        processors:
+        - openai_chat_completion:
+            model: gpt-4o
+            api_key: TODO
+            prompt: "${!this.prompt}"
+            history: 'root = this.history'
+        result_map: 'root.response = content().string()'
+    - mutation: |
+        root.history = this.history.concat([
+          {"role": "user", "content": this.prompt},
+          {"role": "assistant", "content": this.response},
+        ])
+    - cache:
+        resource: mem
+        operator: set
+        key: history
+        value: '${!this.history}'
+    - mapping: |
+        root = this.response
+output:
+  stdout:
+    codec: lines
+
+cache_resources:
+  - label: mem 
+    memory: {}
+`).
+		Example(
+			"Use GPT-4o to call a tool",
+			"This example asks GPT-4o to respond with the weather by invoking an HTTP processor to get the forecast.",
+			`
 input:
   generate:
     count: 1
@@ -274,6 +329,13 @@ func makeChatProcessor(conf *service.ParsedConfig, mgr *service.Resources) (serv
 	var sp *service.InterpolatedString
 	if conf.Contains(ocpFieldSystemPrompt) {
 		sp, err = conf.FieldInterpolatedString(ocpFieldSystemPrompt)
+		if err != nil {
+			return nil, err
+		}
+	}
+	var h *bloblang.Executor
+	if conf.Contains(ocpFieldHistory) {
+		h, err = conf.FieldBloblang(ocpFieldHistory)
 		if err != nil {
 			return nil, err
 		}
@@ -452,6 +514,7 @@ func makeChatProcessor(conf *service.ParsedConfig, mgr *service.Resources) (serv
 		b,
 		up,
 		sp,
+		h,
 		i,
 		maxTokens,
 		temp,
@@ -526,6 +589,7 @@ type chatProcessor struct {
 
 	userPrompt       *service.InterpolatedString
 	systemPrompt     *service.InterpolatedString
+	history          *bloblang.Executor
 	image            *bloblang.Executor
 	maxTokens        *int
 	temperature      *float32
@@ -586,6 +650,21 @@ func (p *chatProcessor) Process(ctx context.Context, msg *service.Message) (serv
 			Role:    "system",
 			Content: s,
 		})
+	}
+	if p.history != nil {
+		msg, err := msg.BloblangQuery(p.history)
+		if err != nil {
+			return nil, fmt.Errorf("%s execution error: %w", ocpFieldHistory, err)
+		}
+		b, err := msg.AsBytes()
+		if err != nil {
+			return nil, fmt.Errorf("%s extraction error: %w", ocpFieldHistory, err)
+		}
+		var msgs []oai.ChatCompletionMessage
+		if err := json.Unmarshal(b, &msgs); err != nil {
+			return nil, fmt.Errorf("unable to unmarshal %s: %w", ocpFieldHistory, err)
+		}
+		body.Messages = append(body.Messages, msgs...)
 	}
 	chatMsg := oai.ChatCompletionMessage{
 		Role: "user",

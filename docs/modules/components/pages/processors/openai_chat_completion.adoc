@@ -43,6 +43,7 @@ openai_chat_completion:
   model: gpt-4o # No default (required)
   prompt: "" # No default (optional)
   system_prompt: "" # No default (optional)
+  history: "" # No default (optional)
   image: 'root = this.image.decode("base64") # decode base64 encoded image' # No default (optional)
   max_tokens: 0 # No default (optional)
   temperature: 0 # No default (optional)
@@ -68,6 +69,7 @@ openai_chat_completion:
   model: gpt-4o # No default (required)
   prompt: "" # No default (optional)
   system_prompt: "" # No default (optional)
+  history: "" # No default (optional)
   image: 'root = this.image.decode("base64") # decode base64 encoded image' # No default (optional)
   max_tokens: 0 # No default (optional)
   temperature: 0 # No default (optional)
@@ -147,6 +149,60 @@ pipeline:
 output:
   stdout:
     codec: lines
+```
+
+--
+Provide historical chat history::
++
+--
+
+This pipeline provides a historical chat history to GPT-4o using a cache.
+
+```yaml
+input:
+  stdin:
+    scanner:
+      lines: {}
+pipeline:
+  processors:
+    - mapping: |
+        root.prompt = content().string()
+    - branch:
+        processors:
+          - cache:
+              resource: mem
+              operator: get
+              key: history
+          - catch:
+            - mapping: 'root = []'
+        result_map: 'root.history = this'
+    - branch:
+        processors:
+        - openai_chat_completion:
+            model: gpt-4o
+            api_key: TODO
+            prompt: "${!this.prompt}"
+            history: 'root = this.history'
+        result_map: 'root.response = content().string()'
+    - mutation: |
+        root.history = this.history.concat([
+          {"role": "user", "content": this.prompt},
+          {"role": "assistant", "content": this.response},
+        ])
+    - cache:
+        resource: mem
+        operator: set
+        key: history
+        value: '${!this.history}'
+    - mapping: |
+        root = this.response
+output:
+  stdout:
+    codec: lines
+
+cache_resources:
+  - label: mem 
+    memory: {}
 ```
 
 --
@@ -247,6 +303,14 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 The system prompt to submit along with the user prompt.
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+
+*Type*: `string`
+
+
+=== `history`
+
+The history of the prior conversation. A bloblang query that should result in an array of objects of the form: [{"role": "user", "content": "<text>"}, {"role":"assistant", "content":"<text>"}]
 
 
 *Type*: `string`

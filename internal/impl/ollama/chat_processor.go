@@ -41,6 +41,7 @@ const (
 	ocpFieldFrequencyPenalty   = "frequency_penalty"
 	ocpFieldStop               = "stop"
 	ocpFieldEmitPromptMetadata = "save_prompt_metadata"
+	ocpFieldHistory            = "history"
 	ocpFieldMaxToolCalls       = "max_tool_calls"
 
 	// Tool options
@@ -143,6 +144,9 @@ For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ol
 			service.NewBoolField(ocpFieldEmitPromptMetadata).
 				Default(false).
 				Description(`If enabled the prompt is saved as @prompt metadata on the output message. If system_prompt is used it's also saved as @system_prompt`),
+			service.NewBloblangField(ocpFieldHistory).
+				Optional().
+				Description(`Historical messages to include in the chat request. The result of the bloblang query should be an array of objects of the form of [{"role": "", "content":""}].`),
 			service.NewIntField(ocpFieldMaxToolCalls).
 				Default(3).
 				Advanced().
@@ -240,6 +244,13 @@ func makeOllamaCompletionProcessor(conf *service.ParsedConfig, mgr *service.Reso
 			return nil, err
 		}
 		p.systemPrompt = pf
+	}
+	if conf.Contains(ocpFieldHistory) {
+		i, err := conf.FieldBloblang(ocpFieldHistory)
+		if err != nil {
+			return nil, err
+		}
+		p.history = i
 	}
 	if conf.Contains(ocpFieldImage) {
 		i, err := conf.FieldBloblang(ocpFieldImage)
@@ -344,6 +355,7 @@ type ollamaCompletionProcessor struct {
 	format       json.RawMessage
 	userPrompt   *service.InterpolatedString
 	systemPrompt *service.InterpolatedString
+	history      *bloblang.Executor
 	image        *bloblang.Executor
 	savePrompt   bool
 	maxToolCalls int
@@ -374,7 +386,21 @@ func (o *ollamaCompletionProcessor) Process(ctx context.Context, msg *service.Me
 			return nil, fmt.Errorf("unable to convert `%s` result to a byte array: %w", ocpFieldImage, err)
 		}
 	}
-	g, err := o.generateCompletion(ctx, sp, up, image)
+	var history []api.Message
+	if o.history != nil {
+		h, err := msg.BloblangQuery(o.history)
+		if err != nil {
+			return nil, fmt.Errorf("unable to execute bloblang for `%s`: %w", ocpFieldHistory, err)
+		}
+		b, err := h.AsBytes()
+		if err != nil {
+			return nil, fmt.Errorf("unable to convert `%s` result to bytes: %w", ocpFieldHistory, err)
+		}
+		if err := json.Unmarshal(b, &history); err != nil {
+			return nil, fmt.Errorf("unable to parse `%s`: %w", ocpFieldHistory, err)
+		}
+	}
+	g, err := o.generateCompletion(ctx, sp, up, image, history)
 	if err != nil {
 		return nil, err
 	}
@@ -403,10 +429,11 @@ func (o *ollamaCompletionProcessor) computePrompt(msg *service.Message) (string,
 	return string(b), nil
 }
 
-func (o *ollamaCompletionProcessor) generateCompletion(ctx context.Context, systemPrompt, userPrompt string, image []byte) (string, error) {
+func (o *ollamaCompletionProcessor) generateCompletion(ctx context.Context, systemPrompt, userPrompt string, image []byte, history []api.Message) (string, error) {
 	var req api.ChatRequest
 	req.Model = o.model
 	req.Options = o.opts
+	req.Messages = history
 	if o.format != nil {
 		req.Format = o.format
 	}
