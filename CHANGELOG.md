@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - Field `handle_logical_types` added to `parquet_decode` input to provide better handling of Parquet logical types (@ooesili)
 - New `gateway` input. (@Jeffail)
 - New `text_chunker` processor for splitting text for creating document vector embeddings. (@rockwotj)
+- New `aggregate` operation added to the `mongodb` processor to provide support for aggregation pipelines. (@mihaitodor)
 
 ### Fixed
 

@@ -490,21 +490,8 @@ json_marshal_mode: %v
 
 func testMongoDBProcessorAggregate(mongoClient *mongo.Client, port string, t *testing.T) {
 	tCtx := context.Background()
-	m := testMProc(t, port, "", `
-operation: aggregate
-document_map: |
-  root = [
-    {
-      "$match": { "size": "medium" }
-    },
-	{
-	  "$group": { "_id": "$name", "totalQuantity": { "$sum": "$quantity" } }
-	}
-  ]
-	`)
 
 	collection := mongoClient.Database("TestDB").Collection("TestCollection")
-
 	_, err := collection.InsertMany(context.Background(), []bson.M{
 		{"_id": 0, "name": "Pepperoni", "size": "small", "price": 19,
 			"quantity": 10, "date": time.Date(2021, 3, 13, 8, 14, 30, 0, time.UTC)},
@@ -524,17 +511,54 @@ document_map: |
 			"quantity": 10, "date": time.Date(2021, 1, 13, 5, 10, 13, 0, time.UTC)},
 	})
 	assert.NoError(t, err)
-	resMsg, err := m.ProcessBatch(tCtx, service.MessageBatch{
-		service.NewMessage([]byte{}),
-	})
-	require.NoError(t, err)
-	require.Len(t, resMsg, 1)
 
-	mBytes, err := resMsg[0][0].AsBytes()
-	require.NoError(t, err)
+	tests := []struct {
+		name        string
+		marshalMode mongodb.JSONMarshalMode
+		expected    string
+	}{
+		{
+			name:        "canonical marshal mode",
+			marshalMode: mongodb.JSONMarshalModeCanonical,
+			expected:    `[{"_id":"Cheese","totalQuantity":{"$numberInt":"50"}},{"_id":"Pepperoni","totalQuantity":{"$numberInt":"20"}},{"_id":"Vegan","totalQuantity":{"$numberInt":"10"}}]`,
+		},
+		{
+			name:        "relaxed marshal mode",
+			marshalMode: mongodb.JSONMarshalModeRelaxed,
+			expected:    `[{"_id":"Cheese","totalQuantity":50},{"_id":"Pepperoni","totalQuantity":20},{"_id":"Vegan","totalQuantity":10}]`,
+		},
+	}
 
-	var expected = `[{ "_id": { "$string": "Cheese" }, "totalQuantity": { "$int32": 50 } }, { "_id": { "$string": "Vegan" }, "totalQuantity": { "$int32": 10 } }, { "_id": { "$string": "Pepperoni" }, "totalQuantity": { "$int32": 20 } }]]`
-	jdopts := jsondiff.DefaultJSONOptions()
-	diff, explanation := jsondiff.Compare(mBytes, []byte(expected), &jdopts)
-	assert.Equalf(t, jsondiff.SupersetMatch.String(), diff.String(), "%s: %s", t.Name(), explanation)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			m := testMProc(t, port, "", fmt.Sprintf(`
+operation: aggregate
+json_marshal_mode: %s
+document_map: |
+  root = [
+    {
+      "$match": { "size": "medium" }
+    },
+    {
+      "$group": { "_id": "$name", "totalQuantity": { "$sum": "$quantity" } }
+    },
+    { "$sort" : { "_id": 1 } }
+  ]
+`, test.marshalMode))
+			resMsg, err := m.ProcessBatch(tCtx, service.MessageBatch{
+				service.NewMessage([]byte{}),
+			})
+			require.NoError(t, err)
+			require.Len(t, resMsg, 1)
+			require.NoError(t, resMsg[0][0].GetError())
+
+			mBytes, err := resMsg[0][0].AsBytes()
+			require.NoError(t, err)
+
+			jdopts := jsondiff.DefaultJSONOptions()
+			diff, explanation := jsondiff.Compare(mBytes, []byte(test.expected), &jdopts)
+			assert.Equalf(t, jsondiff.FullMatch.String(), diff.String(), "%s: %s", t.Name(), explanation)
+		})
+	}
+
 }

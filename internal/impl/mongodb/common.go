@@ -248,7 +248,7 @@ func operationFromParsed(pConf *service.ParsedConfig) (operation Operation, err 
 	}
 
 	if operation = NewOperation(operationStr); operation == OperationInvalid {
-		err = fmt.Errorf("mongodb operation '%s' unknown: must be insert-one, delete-one, delete-many, replace-one, update-one or aggregate", operationStr)
+		err = fmt.Errorf("mongodb operation %q unknown: must be insert-one, delete-one, delete-many, replace-one, update-one or aggregate", operationStr)
 	}
 	return
 }
@@ -331,7 +331,7 @@ func writeMapsFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewBloblangField(commonFieldDocumentMap).
 			Description("A bloblang map representing a document to store within MongoDB, expressed as https://www.mongodb.com/docs/manual/reference/mongodb-extended-json/[extended JSON in canonical form^]. The document map is required for the operations " +
-				"insert-one, replace-one and update-one.").
+				"insert-one, replace-one, update-one and aggregate.").
 			Examples(mapExamples()...).
 			Default(""),
 		service.NewBloblangField(commonFieldFilterMap).
