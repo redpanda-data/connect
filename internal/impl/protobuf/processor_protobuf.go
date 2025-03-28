@@ -37,6 +37,7 @@ const (
 	fieldImportPaths    = "import_paths"
 	fieldDiscardUnknown = "discard_unknown"
 	fieldUseProtoNames  = "use_proto_names"
+	fieldUseEnumNumbers = "use_enum_numbers"
 )
 
 func protobufProcessorSpec() *service.ConfigSpec {
@@ -73,6 +74,9 @@ Attempts to create a target protobuf message from a generic JSON structure.
 		service.NewStringListField(fieldImportPaths).
 			Description("A list of directories containing .proto files, including all definitions required for parsing the target message. If left empty the current directory is used. Each directory listed will be walked with all found .proto files imported.").
 			Default([]string{}),
+		service.NewBoolField(fieldUseEnumNumbers).
+			Description("If `true`, the `to_json` operator deserializes enums as numerical values instead of string names.").
+			Default(false),
 	).Example(
 		"JSON to Protobuf", `
 If we have the following protobuf definition within a directory called `+"`testing/schema`"+`:
@@ -166,7 +170,7 @@ func init() {
 
 type protobufOperator func(part *service.Message) error
 
-func newProtobufToJSONOperator(f fs.FS, msg string, importPaths []string, useProtoNames bool) (protobufOperator, error) {
+func newProtobufToJSONOperator(f fs.FS, msg string, importPaths []string, useProtoNames bool, useEnumNumbers bool) (protobufOperator, error) {
 	if msg == "" {
 		return nil, errors.New("message field must not be empty")
 	}
@@ -198,8 +202,9 @@ func newProtobufToJSONOperator(f fs.FS, msg string, importPaths []string, usePro
 		}
 
 		opts := protojson.MarshalOptions{
-			Resolver:      types,
-			UseProtoNames: useProtoNames,
+			Resolver:       types,
+			UseProtoNames:  useProtoNames,
+			UseEnumNumbers: useEnumNumbers,
 		}
 		data, err := opts.Marshal(dynMsg)
 		if err != nil {
@@ -256,10 +261,10 @@ func newProtobufFromJSONOperator(f fs.FS, msg string, importPaths []string, disc
 	}, nil
 }
 
-func strToProtobufOperator(f fs.FS, opStr, message string, importPaths []string, discardUnknown, useProtoNames bool) (protobufOperator, error) {
+func strToProtobufOperator(f fs.FS, opStr, message string, importPaths []string, discardUnknown, useProtoNames bool, useEnumNumbers bool) (protobufOperator, error) {
 	switch opStr {
 	case "to_json":
-		return newProtobufToJSONOperator(f, message, importPaths, useProtoNames)
+		return newProtobufToJSONOperator(f, message, importPaths, useProtoNames, useEnumNumbers)
 	case "from_json":
 		return newProtobufFromJSONOperator(f, message, importPaths, discardUnknown)
 	}
@@ -329,7 +334,12 @@ func newProtobuf(conf *service.ParsedConfig, mgr *service.Resources) (*protobufP
 		return nil, err
 	}
 
-	if p.operator, err = strToProtobufOperator(mgr.FS(), operatorStr, message, importPaths, discardUnknown, useProtoNames); err != nil {
+	var useEnumNumbers bool
+	if useEnumNumbers, err = conf.FieldBool(fieldUseEnumNumbers); err != nil {
+		return nil, err
+	}
+
+	if p.operator, err = strToProtobufOperator(mgr.FS(), operatorStr, message, importPaths, discardUnknown, useProtoNames, useEnumNumbers); err != nil {
 		return nil, err
 	}
 	return p, nil
