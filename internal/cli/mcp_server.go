@@ -36,7 +36,7 @@ Each resource will be exposed as a tool that AI can interact with:
   
   `[1:],
 		Action: func(c *cli.Context) error {
-			var repositoryDir string
+			repositoryDir := "."
 			if c.Args().Len() > 0 {
 				if c.Args().Len() > 1 {
 					return errors.New("a maximum of one repository directory must be specified with this command")
