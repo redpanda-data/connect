@@ -165,6 +165,7 @@ Options:
 `direct`
 , `fanout`
 , `topic`
+, `headers`
 , `x-custom`
 .
 
