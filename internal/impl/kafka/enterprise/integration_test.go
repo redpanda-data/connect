@@ -856,11 +856,8 @@ output:
 	stream, err := streamBuilder.Build()
 	require.NoError(t, err)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	go func() {
-		err = stream.Run(ctx)
+		err = stream.Run(context.Background())
 		require.NoError(t, err)
 	}()
 
@@ -953,6 +950,7 @@ input:
         - check: '@input_label == "redpanda_migrator_offsets_input"'
           processors:
             - log:
+                level: INFO
                 message: Migrating Kafka offset
                 fields:
                   kafka_offset_topic:            ${! @kafka_offset_topic }
@@ -970,7 +968,8 @@ input:
                       url: %s
                       avro_raw_json: true
                   - log:
-                      message: 'Migrating Kafka message: ${! content() }'
+                      level: INFO
+                      message: 'Migrating Kafka message: ${! content() } with key ${! @kafka_key } and timestamp ${! @kafka_timestamp_ms }'
         - check: '@input_label == "schema_registry_input"'
           processors:
             - branch:
@@ -1451,7 +1450,7 @@ func TestRedpandaMigratorConsumerGroupConsistencyIntegration(t *testing.T) {
 	runMigratorBundle(t, source, destination, dummyTopic, "", true, nil)
 	t.Log("Migrator started")
 
-	// Wait for a few records to be produced
+	// Wait for a few records to be produced...
 	time.Sleep(1 * time.Second)
 
 	// Fetch the first few record keys from the source to create the consumer group
@@ -1461,34 +1460,40 @@ func TestRedpandaMigratorConsumerGroupConsistencyIntegration(t *testing.T) {
 	require.Equal(t, 1, keys[0])
 
 	// Wait for the topic and consumer group to be replicated in the destination first
-	for {
+	require.Eventually(t, func() bool {
 		client, err := kgo.NewClient([]kgo.Opt{
 			kgo.SeedBrokers([]string{destination.brokerAddr}...),
 		}...)
 		require.NoError(t, err)
+		defer client.Close()
+
 		adm := kadm.NewClient(client)
 
 		topics, err := adm.ListTopics(context.Background(), []string{dummyTopic}...)
 		require.NoError(t, err)
 		if !topics.Has(dummyTopic) {
-			time.Sleep(1 * time.Second)
-			continue
+			return false
 		}
 
 		groups, err := adm.DescribeGroups(context.Background(), []string{dummyConsumerGroup}...)
 		require.NoError(t, err)
 		if groups.Error() != nil || !slices.Contains(groups.Names(), dummyConsumerGroup) {
 			t.Logf("Consumer group %q doesn't exist yet...", dummyConsumerGroup)
-			time.Sleep(1 * time.Second)
-			continue
+			return false
 		}
-		client.Close()
 
-		break
-	}
+		lag, err := adm.Lag(context.Background(), dummyConsumerGroup)
+		require.NoError(t, err)
+		require.NoError(t, lag.Error())
+		lag.Each(func(l kadm.DescribedGroupLag) {
+			t.Logf("Initial destination consumer group lag: %d", l.Lag.Total())
+		})
+
+		return true
+	}, 30*time.Second, 1*time.Second)
 
 	var prevSrcKeys []int
-	for {
+	require.Eventually(t, func() bool {
 		srcKeys := fetchRecordKeys(t, source.brokerAddr, dummyTopic, dummyConsumerGroup, 10)
 
 		// Allow some time for the consumer group update to be migrated before flipping the consumer to the destination.
@@ -1501,11 +1506,11 @@ func TestRedpandaMigratorConsumerGroupConsistencyIntegration(t *testing.T) {
 		if destKeys == nil {
 			// Stop the tests if the producer finished and the destination consumer group reached the high water mark
 			if srcKeys == nil {
-				break
+				return true
 			}
 
 			// Try again if the destination topic still needs to receive data
-			continue
+			return false
 		}
 
 		lastSrcKey := srcKeys[len(srcKeys)-1]
@@ -1525,5 +1530,7 @@ func TestRedpandaMigratorConsumerGroupConsistencyIntegration(t *testing.T) {
 		// Cache the previous source key so we can compare the current destination key with it after the producer
 		// finished, but Migrator still needs to copy some records over
 		prevSrcKeys = srcKeys
-	}
+
+		return false
+	}, 30*time.Second, 1*time.Nanosecond)
 }
