@@ -14,12 +14,17 @@ All notable changes to this project will be documented in this file.
 - New `gateway` input. (@Jeffail)
 - New `git` input. (@weeco, @rockwotj)
 - New `text_chunker` processor for splitting text for creating document vector embeddings. (@rockwotj)
-- New `aggregate` operation added to the `mongodb` processor to provide support for aggregation pipelines. (@mihaitodor)
+- New `aggregate` operation added to the `mongodb` processor to provide support for aggregation pipelines. (@brknstrngz, @mihaitodor)
 - New `slack` input reading from slack using socketmode. (@rockwotj)
+- Option `headers` added to field `type` on the `amqp_0_9` output. (@brknstrngz)
 
 ### Fixed
 
 - The `azure_blob_storage` input now drops `targets_input` notifications and emits a warning log message for blobs which have been deleted before Connect was able to read them. (@mihaitodor)
+
+### Changed
+
+- Field `type` on the `amqp_0_9` output now only enforces dots in routing keys and message types for `topic` exchanges. (@brknstrngz)
 
 ## 4.50.0 - 2025-03-18
 
