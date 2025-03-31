@@ -125,6 +125,7 @@ func toArgBuiltinMethod(name string, spec *fieldSpec) (*starlark.Builtin, error)
 	return starlark.NewBuiltin(name, fn), nil
 }
 
+// starlarkComponent is a component that was created from a Starlark script.
 type starlarkComponent struct {
 	Name             string
 	SerializedConfig json.RawMessage

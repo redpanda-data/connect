@@ -49,13 +49,14 @@ func Run(logger *slog.Logger, repositoryDir, baseURLStr string) error {
 			if err != nil {
 				return err
 			}
-			for k, v := range result.Processors {
+			for _, v := range result.Processors {
 				cfg := map[string]any{
-					"label": k,
+					"label": v.Label,
 					v.Name:  v.SerializedConfig,
 					"meta": map[string]any{
 						"mcp": map[string]any{
-							"enabled": true,
+							"enabled":     true,
+							"description": v.Description,
 						},
 					},
 				}

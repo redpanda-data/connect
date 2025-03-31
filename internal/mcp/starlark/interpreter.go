@@ -11,18 +11,28 @@
 package starlark
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"go.starlark.net/starlark"
 	"go.starlark.net/syntax"
 )
 
+// MCPProcessorTool represents a processor tool defined in a Starlark file.
+type MCPProcessorTool struct {
+	Label            string
+	Description      string
+	Name             string
+	SerializedConfig json.RawMessage
+}
+
 // EvalResult represents the evaluated contents of a starlark file.
 type EvalResult struct {
-	Processors map[string]starlarkComponent
+	Processors []MCPProcessorTool
 }
 
 // Eval attempts to parse a Starlark file.
@@ -44,16 +54,15 @@ func Eval(env *service.Environment, logger *service.Logger, path string, content
 			return nil, errors.New("load disallowed")
 		},
 	}
-	result := &EvalResult{
-		Processors: make(map[string]starlarkComponent),
-	}
+	result := &EvalResult{}
 	mcpToolFn := func(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 		if len(args) != 0 {
 			return nil, errors.New("unexpected positional arguments")
 		}
 		var (
-			label     string
-			processor *starlarkComponent
+			label       string
+			description string
+			processor   *starlarkComponent
 		)
 		err := starlark.UnpackArgs(
 			b.Name(),
@@ -61,6 +70,8 @@ func Eval(env *service.Environment, logger *service.Logger, path string, content
 			kwargs,
 			"label",
 			&label,
+			"description?",
+			&description,
 			"processor",
 			&processor,
 		)
@@ -75,10 +86,12 @@ func Eval(env *service.Environment, logger *service.Logger, path string, content
 			name = "try"
 		}
 		// TODO: Check for duplicate labels
-		result.Processors[label] = starlarkComponent{
+		result.Processors = append(result.Processors, MCPProcessorTool{
+			Label:            label,
+			Description:      description,
 			Name:             name,
-			SerializedConfig: processor.SerializedConfig,
-		}
+			SerializedConfig: slices.Clone(processor.SerializedConfig),
+		})
 		return starlark.None, nil
 	}
 	secretFn := func(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
