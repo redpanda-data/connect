@@ -57,8 +57,6 @@ var identifierReplacements = map[string]string{
 	"while": "loop",
 }
 
-type componentCallback func(name string, json []byte) error
-
 func toBuiltinMethod(name string, spec *fieldSpec) (*starlark.Builtin, error) {
 	switch spec.Kind {
 	case kindScalar:
@@ -99,7 +97,7 @@ func toKeywordBuiltinMethod(name string, spec *fieldSpec) (*starlark.Builtin, er
 func toArgsBuiltinMethod(name string, spec *fieldSpec) (*starlark.Builtin, error) {
 	fn := func(thread *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 		if len(kwargs) != 0 {
-			return nil, fmt.Errorf("unexpected keyword arguments for %s", name, spec)
+			return nil, fmt.Errorf("unexpected keyword arguments for %s", name)
 		}
 		b, err := serializeStarlarkToJSON(thread, args)
 		if err != nil {

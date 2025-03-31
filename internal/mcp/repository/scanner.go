@@ -37,13 +37,22 @@ func (s *Scanner) OnResourceFile(fn func(resourceType string, filePath string, c
 	s.onResource = fn
 }
 
-func (s *Scanner) scanResourceTypeFn(rtype string) fs.WalkDirFunc {
+func (s *Scanner) scanResourceTypeFn(rtype string, allowedExtensions ...string) fs.WalkDirFunc {
+	allowedExtensionsMap := map[string]struct{}{}
+	for _, n := range allowedExtensions {
+		allowedExtensionsMap[n] = struct{}{}
+	}
+
 	return func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 
 		if d != nil && d.IsDir() {
+			return nil
+		}
+
+		if _, exists := allowedExtensionsMap[filepath.Ext(path)]; !exists {
 			return nil
 		}
 
@@ -62,15 +71,20 @@ func (s *Scanner) Scan(root string) error {
 		// Scan each resource type for files
 		resourceDir := filepath.Join(root, "resources")
 
+		// Look for any starlark files in the main resources folder
+		if err := fs.WalkDir(s.fs, resourceDir, s.scanResourceTypeFn("starlark", ".star")); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+
 		// Caches
 		targetDir := filepath.Join(resourceDir, "caches")
-		if err := fs.WalkDir(s.fs, targetDir, s.scanResourceTypeFn("cache")); err != nil && !os.IsNotExist(err) {
+		if err := fs.WalkDir(s.fs, targetDir, s.scanResourceTypeFn("cache", ".yaml", ".yml")); err != nil && !os.IsNotExist(err) {
 			return err
 		}
 
 		// Processors
 		targetDir = filepath.Join(resourceDir, "processors")
-		if err := fs.WalkDir(s.fs, targetDir, s.scanResourceTypeFn("processor")); err != nil && !os.IsNotExist(err) {
+		if err := fs.WalkDir(s.fs, targetDir, s.scanResourceTypeFn("processor", ".yaml", ".yaml")); err != nil && !os.IsNotExist(err) {
 			return err
 		}
 	}

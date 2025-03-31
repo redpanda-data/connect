@@ -16,11 +16,11 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
-	"path/filepath"
 
 	"github.com/mark3labs/mcp-go/server"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
 	"github.com/redpanda-data/connect/v4/internal/mcp/repository"
 	"github.com/redpanda-data/connect/v4/internal/mcp/starlark"
 	"github.com/redpanda-data/connect/v4/internal/mcp/tools"
@@ -37,17 +37,15 @@ func Run(logger *slog.Logger, repositoryDir, baseURLStr string) error {
 		"1.0.0",
 	)
 
+	env := service.GlobalEnvironment()
+
 	resWrapper := tools.NewResourcesWrapper(logger, s)
 
 	repoScanner := repository.NewScanner(os.DirFS(repositoryDir))
 	repoScanner.OnResourceFile(func(resourceType string, filename string, contents []byte) error {
-		if filepath.Ext(filename) == ".star" {
-			result, err := starlark.Eval(
-				service.GlobalEnvironment(),
-				nil,
-				filename,
-				contents,
-			)
+		switch resourceType {
+		case "starlark":
+			result, err := starlark.Eval(env, nil, filename, contents)
 			if err != nil {
 				return err
 			}
@@ -69,9 +67,6 @@ func Run(logger *slog.Logger, repositoryDir, baseURLStr string) error {
 					return err
 				}
 			}
-			return nil
-		}
-		switch resourceType {
 		case "cache":
 			if err := resWrapper.AddCache(contents); err != nil {
 				return err

@@ -19,10 +19,12 @@ import (
 	"go.starlark.net/syntax"
 )
 
+// EvalResult represents the evaluated contents of a starlark file.
 type EvalResult struct {
 	Processors map[string]starlarkComponent
 }
 
+// Eval attempts to parse a Starlark file.
 func Eval(env *service.Environment, logger *service.Logger, path string, contents []byte) (*EvalResult, error) {
 	opts := &syntax.FileOptions{
 		Set:               true,
@@ -46,7 +48,7 @@ func Eval(env *service.Environment, logger *service.Logger, path string, content
 	}
 	fn := func(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 		if len(args) != 0 {
-			return nil, fmt.Errorf("unexpected positional arguments")
+			return nil, errors.New("unexpected positional arguments")
 		}
 		var (
 			label     string
@@ -65,7 +67,7 @@ func Eval(env *service.Environment, logger *service.Logger, path string, content
 			return nil, err
 		}
 		if processor == nil {
-			return nil, fmt.Errorf("processor is required")
+			return nil, errors.New("processor is required")
 		}
 		name := processor.Name
 		if name == "attempt" {
