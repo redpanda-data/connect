@@ -55,7 +55,7 @@ The fields 'key', 'exchange' and 'type' can be dynamically set using xref:config
 				service.NewBoolField(exchangeDeclareEnabledField).
 					Description("Whether to declare the exchange.").
 					Default(false),
-				service.NewStringEnumField(exchangeDeclareTypeField, "direct", "fanout", "topic", "x-custom").
+				service.NewStringEnumField(exchangeDeclareTypeField, "direct", "fanout", "topic", "headers", "x-custom").
 					Description("The type of the exchange.").
 					Default("direct"),
 				service.NewBoolField(exchangeDeclareDurableField).
@@ -414,13 +414,17 @@ func (a *amqp09Writer) Write(ctx context.Context, msg *service.Message) error {
 	if err != nil {
 		return fmt.Errorf("binding key interpolation error: %w", err)
 	}
-	bindingKey = strings.ReplaceAll(bindingKey, "/", ".")
+	if a.exchangeDeclareType == "topic" {
+		bindingKey = strings.ReplaceAll(bindingKey, "/", ".")
+	}
 
 	msgType, err := a.msgType.TryString(msg)
 	if err != nil {
 		return fmt.Errorf("msg type interpolation error: %w", err)
 	}
-	msgType = strings.ReplaceAll(msgType, "/", ".")
+	if a.exchangeDeclareType == "topic" {
+		msgType = strings.ReplaceAll(msgType, "/", ".")
+	}
 
 	contentType, err := a.contentType.TryString(msg)
 	if err != nil {
