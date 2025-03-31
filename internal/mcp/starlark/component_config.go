@@ -57,72 +57,72 @@ var identifierReplacements = map[string]string{
 	"while": "loop",
 }
 
-func toBuiltinMethod(name string, spec *fieldSpec) (*starlark.Builtin, error) {
+func toBuiltinMethod(methodName, componentName string, spec *fieldSpec) (*starlark.Builtin, error) {
 	switch spec.Kind {
 	case kindScalar:
 		if spec.Type == "object" {
-			return toKeywordBuiltinMethod(name, spec)
+			return toKeywordBuiltinMethod(methodName, componentName, spec)
 		}
-		return toArgBuiltinMethod(name, spec)
+		return toArgBuiltinMethod(methodName, componentName, spec)
 	case kindArray, kind2DArray:
-		return toArgsBuiltinMethod(name, spec)
+		return toArgsBuiltinMethod(methodName, componentName, spec)
 	case kindMap:
-		return toKeywordBuiltinMethod(name, spec)
+		return toKeywordBuiltinMethod(methodName, componentName, spec)
 	default:
 		return nil, fmt.Errorf("unsupported field kind: %v", spec.Kind)
 	}
 }
 
-func toKeywordBuiltinMethod(name string, spec *fieldSpec) (*starlark.Builtin, error) {
+func toKeywordBuiltinMethod(methodName, componentName string, spec *fieldSpec) (*starlark.Builtin, error) {
 	fn := func(thread *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 		if len(args) != 0 {
-			return nil, fmt.Errorf("unexpected positional arguments for %s", name)
+			return nil, fmt.Errorf("unexpected positional arguments for %s", methodName)
 		}
 		dict := starlark.NewDict(len(kwargs))
 		for _, kwarg := range kwargs {
 			key, value := kwarg.Index(0).(starlark.String), kwarg.Index(1)
 			if err := dict.SetKey(key, value); err != nil {
-				return nil, fmt.Errorf("unable to serialize configuration in component %s for key %v: %w", name, key, err)
+				return nil, fmt.Errorf("unable to serialize configuration in component %s for key %v: %w", methodName, key, err)
 			}
 		}
 		b, err := serializeStarlarkToJSON(thread, dict)
 		if err != nil {
-			return nil, fmt.Errorf("unable to serialize configuration for %s: %w", name, err)
+			return nil, fmt.Errorf("unable to serialize configuration for %s: %w", methodName, err)
 		}
-		return &starlarkComponent{name, b}, nil
+		return &starlarkComponent{componentName, b}, nil
 	}
-	return starlark.NewBuiltin(name, fn), nil
+	return starlark.NewBuiltin(methodName, fn), nil
 }
 
-func toArgsBuiltinMethod(name string, spec *fieldSpec) (*starlark.Builtin, error) {
+func toArgsBuiltinMethod(methodName, componentName string, spec *fieldSpec) (*starlark.Builtin, error) {
 	fn := func(thread *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 		if len(kwargs) != 0 {
-			return nil, fmt.Errorf("unexpected keyword arguments for %s", name)
+			return nil, fmt.Errorf("unexpected keyword arguments for %s", methodName)
 		}
 		b, err := serializeStarlarkToJSON(thread, args)
 		if err != nil {
-			return nil, fmt.Errorf("unable to serialize configuration for %s: %v", name, err)
+			return nil, fmt.Errorf("unable to serialize configuration for %s: %v", methodName, err)
 		}
-		return &starlarkComponent{name, b}, nil
+		return &starlarkComponent{componentName, b}, nil
 	}
-	return starlark.NewBuiltin(name, fn), nil
+	return starlark.NewBuiltin(methodName, fn), nil
 }
 
-func toArgBuiltinMethod(name string, spec *fieldSpec) (*starlark.Builtin, error) {
+func toArgBuiltinMethod(methodName, componentName string, spec *fieldSpec) (*starlark.Builtin, error) {
 	fn := func(thread *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 		if len(kwargs) != 0 {
-			return nil, fmt.Errorf("unexpected keyword arguments for %s: %+v", name, spec)
+			return nil, fmt.Errorf("unexpected keyword arguments for %s: %+v", methodName, spec)
 		}
 		if args.Len() != 1 {
-			return nil, fmt.Errorf("expected 1 argument, got %d for %s", args.Len(), name)
+			return nil, fmt.Errorf("expected 1 argument, got %d for %s", args.Len(), methodName)
 		}
 		b, err := serializeStarlarkToJSON(thread, args.Index(0))
 		if err != nil {
-			return nil, fmt.Errorf("unable to serialize configuration for %s: %v", name, err)
+			return nil, fmt.Errorf("unable to serialize configuration for %s: %v", methodName, err)
 		}
-		return &starlarkComponent{name, b}, nil
+		return &starlarkComponent{componentName, b}, nil
 	}
-	return starlark.NewBuiltin(name, fn), nil
+	return starlark.NewBuiltin(methodName, fn), nil
 }
 
 // starlarkComponent is a component that was created from a Starlark script.
@@ -164,7 +164,7 @@ func (s *starlarkComponent) Truth() starlark.Bool {
 
 // Type implements starlark.Value.
 func (s *starlarkComponent) Type() string {
-	return "benthos.component"
+	return "redpanda.connect.StarlarkComponent"
 }
 
 func serializeStarlarkToJSON(thread *starlark.Thread, value starlark.Value) ([]byte, error) {

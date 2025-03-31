@@ -81,15 +81,11 @@ func Eval(env *service.Environment, logger *service.Logger, path string, content
 		if processor == nil {
 			return nil, errors.New("processor is required")
 		}
-		name := processor.Name
-		if name == "attempt" {
-			name = "try"
-		}
 		// TODO: Check for duplicate labels
 		result.Processors = append(result.Processors, MCPProcessorTool{
 			Label:            label,
 			Description:      description,
-			Name:             name,
+			Name:             processor.Name,
 			SerializedConfig: slices.Clone(processor.SerializedConfig),
 		})
 		return starlark.None, nil
@@ -136,7 +132,7 @@ func Eval(env *service.Environment, logger *service.Logger, path string, content
 			walkErr = fmt.Errorf("error extracting field spec for %s: %v", name, err)
 			return
 		}
-		builtin, err := toBuiltinMethod(methodName, spec)
+		builtin, err := toBuiltinMethod(methodName, name, spec)
 		if err != nil {
 			walkErr = fmt.Errorf("error building constructor for %s: %v", name, err)
 			return
