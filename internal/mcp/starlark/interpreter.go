@@ -13,6 +13,7 @@ package starlark
 import (
 	"errors"
 	"fmt"
+	"os"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"go.starlark.net/starlark"
@@ -46,7 +47,7 @@ func Eval(env *service.Environment, logger *service.Logger, path string, content
 	result := &EvalResult{
 		Processors: make(map[string]starlarkComponent),
 	}
-	fn := func(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	mcpToolFn := func(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 		if len(args) != 0 {
 			return nil, errors.New("unexpected positional arguments")
 		}
@@ -80,8 +81,30 @@ func Eval(env *service.Environment, logger *service.Logger, path string, content
 		}
 		return starlark.None, nil
 	}
+	secretFn := func(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+		var (
+			name string
+		)
+		err := starlark.UnpackArgs(
+			b.Name(),
+			args,
+			kwargs,
+			"name",
+			&name,
+		)
+		if err != nil {
+			return nil, err
+		}
+		if name == "" {
+			return nil, errors.New("name is required")
+		}
+		// TODO: Use the correct secret lookup function
+		value := os.Getenv(name)
+		return starlark.String(value), nil
+	}
 	predeclared := starlark.StringDict{
-		"mcp_tool": starlark.NewBuiltin("mcp_tool", fn),
+		"mcp_tool": starlark.NewBuiltin("mcp_tool", mcpToolFn),
+		"secret":   starlark.NewBuiltin("secret", secretFn),
 	}
 	var walkErr error
 	env.WalkProcessors(func(name string, conf *service.ConfigView) {
