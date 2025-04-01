@@ -55,7 +55,7 @@ func outputSpec() *service.ConfigSpec {
 			service.NewBoolField(oFieldMarkdown).Description("Enable markdown formatting in the message.").Default(slack.DEFAULT_MESSAGE_MARKDOWN),
 			service.NewBoolField(oFieldUnfurlLinks).Description("Enable link unfurling in the message.").Default(slack.DEFAULT_MESSAGE_UNFURL_LINKS),
 			service.NewBoolField(oFieldUnfurlMedia).Description("Enable media unfurling in the message.").Default(slack.DEFAULT_MESSAGE_UNFURL_MEDIA),
-			service.NewBoolField(oFieldLinkNames).Description("Enable link names in the message.").Default(slack.DEFAULT_MESSAGE_LINK_NAMES),
+			service.NewBoolField(oFieldLinkNames).Description("Enable link names in the message.").Default(false),
 		)
 }
 
