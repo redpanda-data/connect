@@ -11,6 +11,7 @@
 package mcp
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -30,7 +31,7 @@ import (
 
 // Run an mcp server against a target directory, with an optional base URL for
 // an HTTP server.
-func Run(logger *slog.Logger, repositoryDir, baseURLStr string) error {
+func Run(logger *slog.Logger, envVarLookupFunc func(context.Context, string) (string, bool), repositoryDir, baseURLStr string) error {
 	// Create MCP server
 	s := server.NewMCPServer(
 		"Redpanda Runtime",
@@ -40,6 +41,7 @@ func Run(logger *slog.Logger, repositoryDir, baseURLStr string) error {
 	env := service.GlobalEnvironment()
 
 	resWrapper := tools.NewResourcesWrapper(logger, s)
+	resWrapper.SetEnvVarLookupFunc(envVarLookupFunc)
 
 	repoScanner := repository.NewScanner(os.DirFS(repositoryDir))
 	repoScanner.OnResourceFile(func(resourceType string, filename string, contents []byte) error {

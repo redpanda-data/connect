@@ -23,6 +23,7 @@ func mcpServerCli(logger *slog.Logger) *cli.Command {
 			Name:  "base-url",
 			Usage: "An optional base URL to bind the MCP server to instead of running in stdio mode.",
 		},
+		secretsFlag,
 	}
 
 	return &cli.Command{
@@ -44,7 +45,12 @@ Each resource will be exposed as a tool that AI can interact with:
 				repositoryDir = c.Args().First()
 			}
 
-			if err := mcp.Run(logger, repositoryDir, c.String("base-url")); err != nil {
+			secretLookupFn, err := parseSecretsFlag(logger, c)
+			if err != nil {
+				return err
+			}
+
+			if err := mcp.Run(logger, secretLookupFn, repositoryDir, c.String("base-url")); err != nil {
 				return err
 			}
 			return nil

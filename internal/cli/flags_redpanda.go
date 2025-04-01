@@ -13,6 +13,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 	"time"
@@ -21,6 +22,7 @@ import (
 	"github.com/urfave/cli/v2"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
+	"github.com/redpanda-data/connect/v4/internal/secrets"
 )
 
 const (
@@ -35,6 +37,30 @@ const (
 	rfSASLUsername      = "x-redpanda-sasl-username"
 	rfSASLPassword      = "x-redpanda-sasl-password"
 )
+
+var secretsFlag = &cli.StringSliceFlag{
+	Name:  "secrets",
+	Usage: "Attempt to load secrets from a provided URN. If more than one entry is specified they will be attempted in order until a value is found. Environment variable lookups are specified with the URN `env:`, which by default is the only entry. In order to disable all secret lookups specify a single entry of `none:`.",
+	Value: cli.NewStringSlice("env:"),
+}
+
+var licenseFlag = &cli.StringFlag{
+	Name:  "redpanda-license",
+	Usage: "Provide an explicit Redpanda License, which enables enterprise functionality. By default licenses found at the path `/etc/redpanda/redpanda.license` are applied.",
+}
+
+func parseLicenseFlag(c *cli.Context) string {
+	return c.String("redpanda-license")
+}
+
+func parseSecretsFlag(logger *slog.Logger, c *cli.Context) (func(context.Context, string) (string, bool), error) {
+	if secretsURNs := c.StringSlice("secrets"); len(secretsURNs) > 0 {
+		return secrets.ParseLookupURNs(c.Context, logger, secretsURNs...)
+	}
+	return func(ctx context.Context, key string) (string, bool) {
+		return "", false
+	}, nil
+}
 
 func redpandaFlags() []cli.Flag {
 	return []cli.Flag{

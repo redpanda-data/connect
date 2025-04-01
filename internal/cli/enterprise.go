@@ -21,7 +21,6 @@ import (
 
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka/enterprise"
 	"github.com/redpanda-data/connect/v4/internal/license"
-	"github.com/redpanda-data/connect/v4/internal/secrets"
 	"github.com/redpanda-data/connect/v4/internal/telemetry"
 )
 
@@ -108,18 +107,11 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 			slices.Concat(
 				// Secrets management flags
 				[]cli.Flag{
-					&cli.StringSliceFlag{
-						Name:  "secrets",
-						Usage: "Attempt to load secrets from a provided URN. If more than one entry is specified they will be attempted in order until a value is found. Environment variable lookups are specified with the URN `env:`, which by default is the only entry. In order to disable all secret lookups specify a single entry of `none:`.",
-						Value: cli.NewStringSlice("env:"),
-					},
+					secretsFlag,
+					licenseFlag,
 					&cli.BoolFlag{
 						Name:  "disable-telemetry",
 						Usage: "Disable anonymous telemetry from being emitted by this Connect instance.",
-					},
-					&cli.StringFlag{
-						Name:  "redpanda-license",
-						Usage: "Provide an explicit Redpanda License, which enables enterprise functionality. By default licenses found at the path `/etc/redpanda/redpanda.license` are applied.",
 					},
 				},
 
@@ -129,16 +121,12 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 
 			func(c *cli.Context) error {
 				disableTelemetry = c.Bool("disable-telemetry")
-				license := c.String("redpanda-license")
-				if license != "" {
+				if license := parseLicenseFlag(c); license != "" {
 					licenseConfig.License = license
 				}
 
-				if secretsURNs := c.StringSlice("secrets"); len(secretsURNs) > 0 {
-					var err error
-					if secretLookupFn, err = secrets.ParseLookupURNs(c.Context, slog.New(rpLogger), secretsURNs...); err != nil {
-						return err
-					}
+				if secretLookupFn, err = parseSecretsFlag(slog.New(rpLogger), c); err != nil {
+					return err
 				}
 
 				// Hidden redpanda flags

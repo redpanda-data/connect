@@ -13,6 +13,7 @@ package tools
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -42,6 +43,13 @@ func NewResourcesWrapper(logger *slog.Logger, svr *server.MCPServer) *ResourcesW
 	return w
 }
 
+// SetEnvVarLookupFunc changes the behaviour of the resources wrapper so that
+// the value of environment variable interpolations (of the form `${FOO}`) are
+// obtained via a provided function rather than the default of os.LookupEnv.
+func (w *ResourcesWrapper) SetEnvVarLookupFunc(fn func(context.Context, string) (string, bool)) {
+	w.builder.SetEnvVarLookupFunc(fn)
+}
+
 // Build the underlying ResourcesBuilder, which allows the resources to be
 // executed.
 func (w *ResourcesWrapper) Build() (err error) {
@@ -60,9 +68,37 @@ func (w *ResourcesWrapper) Close(ctx context.Context) error {
 	return closeFn(ctx)
 }
 
-type mcpConfig struct {
-	Enabled     bool   `yaml:"enabled"`
+type mcpProperty struct {
+	Name        string `yaml:"name"`
+	Type        string `yaml:"type"`
 	Description string `yaml:"description"`
+	Required    bool   `yaml:"required"`
+}
+
+func (p mcpProperty) toolOption() (mcp.ToolOption, error) {
+	var opts []mcp.PropertyOption
+	if p.Required {
+		opts = append(opts, mcp.Required())
+	}
+	if p.Description != "" {
+		opts = append(opts, mcp.Description(p.Description))
+	}
+
+	switch p.Type {
+	case "string":
+		return mcp.WithString(p.Name, opts...), nil
+	case "bool", "boolean":
+		return mcp.WithBoolean(p.Name, opts...), nil
+	case "number":
+		return mcp.WithNumber(p.Name, opts...), nil
+	}
+	return nil, fmt.Errorf("property type '%v' not supported", p.Type)
+}
+
+type mcpConfig struct {
+	Enabled     bool          `yaml:"enabled"`
+	Description string        `yaml:"description"`
+	Properties  []mcpProperty `yaml:"properties"`
 }
 
 type meta struct {
@@ -183,19 +219,39 @@ func (w *ResourcesWrapper) AddProcessor(fileBytes []byte) error {
 		return nil
 	}
 
-	w.svr.AddTool(mcp.NewTool(res.Label,
+	opts := []mcp.ToolOption{
 		mcp.WithDescription(res.Meta.MCP.Description),
 		mcp.WithString("value",
 			mcp.Description("The value to execute the tool upon."),
-			mcp.Required(),
+			// mcp.Required(), TODO: Maybe enforce this with no other params?
 		),
-	), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		value, exists := request.Params.Arguments["value"].(string)
-		if !exists {
-			return nil, errors.New("missing value [string] argument")
+	}
+
+	extraParams := map[string]bool{}
+	for _, p := range res.Meta.MCP.Properties {
+		o, err := p.toolOption()
+		if err != nil {
+			return fmt.Errorf("property '%v': %w", p.Name, err)
 		}
+		if _, exists := extraParams[p.Name]; exists {
+			return fmt.Errorf("duplicate property '%v' detected", p.Name)
+		}
+		extraParams[p.Name] = p.Required
+		opts = append(opts, o)
+	}
+
+	w.svr.AddTool(mcp.NewTool(res.Label, opts...), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		value, _ := request.Params.Arguments["value"].(string)
+		// TODO: Should we make this required?
 
 		inMsg := service.NewMessage([]byte(value))
+		for k, required := range extraParams {
+			if v, exists := request.Params.Arguments[k]; exists {
+				inMsg.MetaSetMut(k, v)
+			} else if required {
+				return nil, fmt.Errorf("required parameter '%v' was missing", k)
+			}
+		}
 
 		var resBatch service.MessageBatch
 		var procErr error
