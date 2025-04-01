@@ -43,7 +43,7 @@ func outputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Description(`Post a new message to a Slack channel using https://api.slack.com/methods/chat.postMessage[^chat.postMessage]`).
 		Fields(
-			service.NewStringField(iFieldBotToken).Description("The Slack Bot User OAuth token to use.").LintRule(`
+			service.NewStringField(oFieldBotToken).Description("The Slack Bot User OAuth token to use.").LintRule(`
         root = if !this.has_prefix("xoxb-") { [ "field must start with xoxb-" ] }
       `),
 			service.NewInterpolatedStringField(oFieldChannelID).Description("The channel ID to post messages to."),
@@ -56,7 +56,30 @@ func outputSpec() *service.ConfigSpec {
 			service.NewBoolField(oFieldUnfurlLinks).Description("Enable link unfurling in the message.").Default(slack.DEFAULT_MESSAGE_UNFURL_LINKS),
 			service.NewBoolField(oFieldUnfurlMedia).Description("Enable media unfurling in the message.").Default(slack.DEFAULT_MESSAGE_UNFURL_MEDIA),
 			service.NewBoolField(oFieldLinkNames).Description("Enable link names in the message.").Default(false),
-		)
+		).
+		Example("Echo Slackbot", "A slackbot that echo messages from other users", `
+input:
+  slack:
+    app_token: "${APP_TOKEN}"
+    bot_token: "${BOT_TOKEN}"
+pipeline:
+  processors:
+    - mutation: |
+        # ignore hidden or non message events
+        if this.event.type != "message" || (this.event.hidden | false) {
+          root = deleted()
+        }
+        # Don't respond to our own messages
+        if this.authorizations.any(auth -> auth.user_id == this.event.user) {
+          root = deleted()
+        }
+output:
+  slack_post:
+    bot_token: "${BOT_TOKEN}"
+    channel_id: "${!this.event.channel}"
+    thread_ts: "${!this.event.ts}"
+    text: "ECHO: ${!this.event.text}"
+    `)
 }
 
 func newOutput(conf *service.ParsedConfig, res *service.Resources) (service.Output, int, error) {
