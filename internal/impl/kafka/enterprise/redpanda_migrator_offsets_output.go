@@ -286,8 +286,6 @@ func (w *redpandaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.
 			return fmt.Errorf("failed to list offsets for topic %q and timestamp %d: %s", topic, offsetCommitTimestamp, err)
 		}
 
-		w.mgr.Logger().Tracef("Listed offsets for topic %q and timestamp %d: %+v", topic, offsetCommitTimestamp, listedOffsets)
-
 		if err := listedOffsets.Error(); err != nil {
 			return fmt.Errorf("failed to read offsets for topic %q and timestamp %d: %s", topic, offsetCommitTimestamp, err)
 		}
@@ -344,6 +342,8 @@ func (w *redpandaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.
 		if err := offsetResponses.Error(); err != nil {
 			return fmt.Errorf("committed consumer offsets returned an error for topic %q and partition %q (timestamp %d): %s", topic, partition, offsetCommitTimestamp, err)
 		}
+
+		w.mgr.Logger().Debugf("Wrote offset for topic %q and timestamp %d: %d", topic, offsetCommitTimestamp, offset.Offset)
 
 		return nil
 	}
