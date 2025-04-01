@@ -846,6 +846,7 @@ output:
     topic: %s
     key: ${! counter() }
     timestamp_ms: ${! counter() + %d}
+    max_in_flight: 1
 `, rpe.brokerAddr, topic, timestampOffset)
 	require.NoError(t, streamBuilder.SetYAML(config))
 	require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
@@ -981,9 +982,11 @@ output:
   redpanda_migrator_bundle:
     redpanda_migrator:
       seed_brokers: [ %s ]
-      topic_prefix: %s
+      topic_prefix: "%s"
       replication_factor_override: true
       replication_factor: -1
+      # TODO: Remove this compression setting once https://github.com/redpanda-data/redpanda/issues/25769 is fixed
+      compression: none
     schema_registry:
       url: %s
 `, source.brokerAddr, topic, source.schemaRegistryURL, source.schemaRegistryURL, destination.brokerAddr, topicPrefix, destination.schemaRegistryURL)))
@@ -1438,10 +1441,8 @@ func TestRedpandaMigratorConsumerGroupConsistencyIntegration(t *testing.T) {
 	dummyMessage := `{"test":"foo"}`
 	go func() {
 		t.Log("Producing messages...")
-		produceMessages(t, source, dummyTopic, dummyMessage, 0, 100, false, 50*time.Millisecond)
 
-		// Allow consumers a bit of time to read all the data
-		time.Sleep(100 * time.Millisecond)
+		produceMessages(t, source, dummyTopic, dummyMessage, 0, 100, true, 50*time.Millisecond)
 
 		t.Log("Finished producing messages")
 	}()
@@ -1455,9 +1456,11 @@ func TestRedpandaMigratorConsumerGroupConsistencyIntegration(t *testing.T) {
 
 	// Fetch the first few record keys from the source to create the consumer group
 	dummyConsumerGroup := "foobar_cg"
-	keys := fetchRecordKeys(t, source.brokerAddr, dummyTopic, dummyConsumerGroup, 5)
+	initialFetchCount := 5
+	keys := fetchRecordKeys(t, source.brokerAddr, dummyTopic, dummyConsumerGroup, initialFetchCount)
 	require.Len(t, keys, 5)
 	require.Equal(t, 1, keys[0])
+	require.Equal(t, 5, keys[4])
 
 	// Wait for the topic and consumer group to be replicated in the destination first
 	require.Eventually(t, func() bool {
@@ -1482,12 +1485,21 @@ func TestRedpandaMigratorConsumerGroupConsistencyIntegration(t *testing.T) {
 			return false
 		}
 
-		lag, err := adm.Lag(context.Background(), dummyConsumerGroup)
+		groupLag, err := adm.Lag(context.Background(), dummyConsumerGroup)
 		require.NoError(t, err)
-		require.NoError(t, lag.Error())
-		lag.Each(func(l kadm.DescribedGroupLag) {
-			t.Logf("Initial destination consumer group lag: %d", l.Lag.Total())
+		require.NoError(t, groupLag.Error())
+
+		var lag kadm.GroupMemberLag
+		var ok bool
+		groupLag.Each(func(l kadm.DescribedGroupLag) {
+			lag, ok = l.Lag.Lookup(dummyTopic, 0)
 		})
+		if !ok {
+			return false
+		}
+
+		// Ensure the migrated consumer group points to the offset of the last record from the initial fetch
+		require.Equal(t, int64(initialFetchCount), lag.Commit.At)
 
 		return true
 	}, 30*time.Second, 1*time.Second)
@@ -1513,16 +1525,12 @@ func TestRedpandaMigratorConsumerGroupConsistencyIntegration(t *testing.T) {
 			return false
 		}
 
-		lastSrcKey := srcKeys[len(srcKeys)-1]
-		firstDestKey := destKeys[0]
-
-		if lastSrcKey > 0 {
-			// TODO: Check for excessive duplicates
-			assert.LessOrEqual(t, firstDestKey, lastSrcKey+1)
-		} else {
+		if srcKeys == nil {
 			srcKeys = prevSrcKeys
-			assert.LessOrEqual(t, firstDestKey, prevSrcKeys[len(prevSrcKeys)-1]+1)
 		}
+
+		// Ensure the destination keys come after the source keys which means the consumer group update was migrated
+		assert.LessOrEqual(t, destKeys[0], srcKeys[len(srcKeys)-1]+1)
 
 		t.Logf("Source keys: %v", srcKeys)
 		t.Logf("Destination keys: %v", destKeys)
