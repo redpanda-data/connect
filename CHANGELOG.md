@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.52.0 - TBD
+
+### Added
+
+- New `slack_post` output for posting messages to slack channels. (@rockwotj)
+
 ## 4.51.0 - 2025-03-31
 
 ### Added
