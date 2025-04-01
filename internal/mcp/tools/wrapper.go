@@ -203,6 +203,86 @@ func (w *ResourcesWrapper) AddCache(fileBytes []byte) error {
 	return nil
 }
 
+// AddInput attempts to parse an input resource config and adds it as an MCP
+// tool if appropriate.
+func (w *ResourcesWrapper) AddInput(fileBytes []byte) error {
+	var res resFile
+	if err := yaml.Unmarshal(fileBytes, &res); err != nil {
+		return err
+	}
+
+	if err := w.builder.AddInputYAML(string(fileBytes)); err != nil {
+		return err
+	}
+
+	if !res.Meta.MCP.Enabled {
+		return nil
+	}
+
+	opts := []mcp.ToolOption{
+		mcp.WithDescription(res.Meta.MCP.Description),
+		mcp.WithNumber("count",
+			mcp.Description("The number of messages to read from this input before returning the results."),
+			mcp.DefaultNumber(1),
+		),
+	}
+
+	w.svr.AddTool(mcp.NewTool(res.Label, opts...), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		countFloat, _ := request.Params.Arguments["count"].(float64)
+
+		count := int(countFloat)
+		if count <= 0 {
+			count = 1
+		}
+
+		var resBatch service.MessageBatch
+		var iErr error
+		if err := w.resources.AccessInput(ctx, res.Label, func(i *service.ResourceInput) {
+			for len(resBatch) < count {
+				tmpBatch, ackFn, err := i.ReadBatch(ctx)
+				if err != nil {
+					iErr = err
+					return
+				}
+
+				// NOTE: We do a deep copy here because after acknowledgement
+				// we no longer own the message contents.
+				resBatch = append(resBatch, tmpBatch.DeepCopy()...)
+
+				// TODO: Is there a sensible way of hooking up acknowledgements?
+				if err := ackFn(ctx, nil); err != nil {
+					iErr = err
+					return
+				}
+			}
+		}); err != nil {
+			return nil, err
+		}
+		if iErr != nil {
+			return nil, iErr
+		}
+
+		var content []mcp.Content
+		for _, m := range resBatch {
+			mBytes, err := m.AsBytes()
+			if err != nil {
+				return nil, err
+			}
+
+			content = append(content, mcp.TextContent{
+				Type: "text",
+				Text: string(mBytes),
+			})
+		}
+
+		return &mcp.CallToolResult{
+			Content: content,
+		}, nil
+	})
+
+	return nil
+}
+
 // AddProcessor attempts to parse a processor resource config and adds it as an
 // MCP tool if appropriate.
 func (w *ResourcesWrapper) AddProcessor(fileBytes []byte) error {

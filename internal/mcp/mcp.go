@@ -70,6 +70,10 @@ func Run(logger *slog.Logger, envVarLookupFunc func(context.Context, string) (st
 					return err
 				}
 			}
+		case "input":
+			if err := resWrapper.AddInput(contents); err != nil {
+				return err
+			}
 		case "cache":
 			if err := resWrapper.AddCache(contents); err != nil {
 				return err

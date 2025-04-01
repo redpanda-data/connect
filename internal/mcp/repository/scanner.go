@@ -76,8 +76,14 @@ func (s *Scanner) Scan(root string) error {
 			return err
 		}
 
+		// Inputs
+		targetDir := filepath.Join(resourceDir, "inputs")
+		if err := fs.WalkDir(s.fs, targetDir, s.scanResourceTypeFn("input", ".yaml", ".yml")); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+
 		// Caches
-		targetDir := filepath.Join(resourceDir, "caches")
+		targetDir = filepath.Join(resourceDir, "caches")
 		if err := fs.WalkDir(s.fs, targetDir, s.scanResourceTypeFn("cache", ".yaml", ".yml")); err != nil && !os.IsNotExist(err) {
 			return err
 		}
