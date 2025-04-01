@@ -48,8 +48,8 @@ func inputSpec() *service.ConfigSpec {
 		Example("Echo Slackbot", "A slackbot that echo messages from other users", `
 input:
   slack:
-    app_token: "${APP_TOKEN}"
-    bot_token: "${BOT_TOKEN}"
+    app_token: "${APP_TOKEN:xapp-demo}"
+    bot_token: "${BOT_TOKEN:xoxb-demo}"
 pipeline:
   processors:
     - mutation: |
@@ -63,7 +63,7 @@ pipeline:
         }
 output:
   slack_post:
-    bot_token: "${BOT_TOKEN}"
+    bot_token: "${BOT_TOKEN:xoxb-demo}"
     channel_id: "${!this.event.channel}"
     thread_ts: "${!this.event.ts}"
     text: "ECHO: ${!this.event.text}"
