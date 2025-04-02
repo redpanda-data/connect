@@ -57,29 +57,7 @@ func outputSpec() *service.ConfigSpec {
 			service.NewBoolField(oFieldUnfurlMedia).Description("Enable media unfurling in the message.").Default(slack.DEFAULT_MESSAGE_UNFURL_MEDIA),
 			service.NewBoolField(oFieldLinkNames).Description("Enable link names in the message.").Default(false),
 		).
-		Example("Echo Slackbot", "A slackbot that echo messages from other users", `
-input:
-  slack:
-    app_token: "${APP_TOKEN:xapp-demo}"
-    bot_token: "${BOT_TOKEN:xoxb-demo}"
-pipeline:
-  processors:
-    - mutation: |
-        # ignore hidden or non message events
-        if this.event.type != "message" || (this.event.hidden | false) {
-          root = deleted()
-        }
-        # Don't respond to our own messages
-        if this.authorizations.any(auth -> auth.user_id == this.event.user) {
-          root = deleted()
-        }
-output:
-  slack_post:
-    bot_token: "${BOT_TOKEN:xoxb-demo}"
-    channel_id: "${!this.event.channel}"
-    thread_ts: "${!this.event.ts}"
-    text: "ECHO: ${!this.event.text}"
-    `)
+		Example(echobotExample())
 }
 
 func newOutput(conf *service.ParsedConfig, res *service.Resources) (service.Output, int, error) {
