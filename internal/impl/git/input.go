@@ -248,7 +248,6 @@ func (in *input) cloneRepo(ctx context.Context) error {
 		Auth:          auth,
 		ReferenceName: plumbing.NewBranchReferenceName(in.cfg.branch),
 		SingleBranch:  true,
-		Depth:         1,
 	})
 	if err != nil {
 		return fmt.Errorf("git clone failed: %w", err)
