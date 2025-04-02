@@ -26,6 +26,7 @@ import (
 // a ResourcesBuilder as well as, where appropriate, adding them to an MCP
 // server as tools.
 type ResourcesWrapper struct {
+	logger    *slog.Logger
 	svr       *server.MCPServer
 	builder   *service.ResourceBuilder
 	resources *service.Resources
@@ -35,6 +36,7 @@ type ResourcesWrapper struct {
 // NewResourcesWrapper creates a new resources wrapper.
 func NewResourcesWrapper(logger *slog.Logger, svr *server.MCPServer) *ResourcesWrapper {
 	w := &ResourcesWrapper{
+		logger:  logger,
 		svr:     svr,
 		builder: service.NewResourceBuilder(),
 	}
@@ -125,6 +127,8 @@ func (w *ResourcesWrapper) AddCache(fileBytes []byte) error {
 	if !res.Meta.MCP.Enabled {
 		return nil
 	}
+
+	w.logger.With("label", res.Label).Info("Registering cache tools")
 
 	w.svr.AddTool(mcp.NewTool("get-"+res.Label,
 		mcp.WithDescription("Obtain an item from "+res.Meta.MCP.Description),
@@ -219,6 +223,8 @@ func (w *ResourcesWrapper) AddInput(fileBytes []byte) error {
 		return nil
 	}
 
+	w.logger.With("label", res.Label).Info("Registering input tool")
+
 	opts := []mcp.ToolOption{
 		mcp.WithDescription(res.Meta.MCP.Description),
 		mcp.WithNumber("count",
@@ -298,6 +304,8 @@ func (w *ResourcesWrapper) AddProcessor(fileBytes []byte) error {
 	if !res.Meta.MCP.Enabled {
 		return nil
 	}
+
+	w.logger.With("label", res.Label).Info("Registering processor tool")
 
 	opts := []mcp.ToolOption{
 		mcp.WithDescription(res.Meta.MCP.Description),

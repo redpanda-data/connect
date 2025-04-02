@@ -135,6 +135,9 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 					return err
 				}
 
+				// We need a fallback logger since the normal run cli isnt executed
+				rpMgr.SetFallbackLogger(service.NewLoggerFromSlog(slog.Default()))
+
 				if pipelineID != "" && connDetails != nil {
 					if err = rpMgr.InitWithCustomDetails(pipelineID, logsTopic, statusTopic, connDetails); err != nil {
 						return err
@@ -146,7 +149,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 			return secretLookupFn(ctx, key)
 		}),
 
-		service.CLIOptAddCommand(mcpServerCli(slog.New(rpLogger))),
+		service.CLIOptAddCommand(mcpServerCli(rpMgr)),
 	)
 
 	exitCode, err := service.RunCLIToCode(context.Background(), opts...)

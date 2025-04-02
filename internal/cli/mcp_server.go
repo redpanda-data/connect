@@ -9,15 +9,20 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"log/slog"
+	"os"
 
 	"github.com/urfave/cli/v2"
 
+	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/kafka/enterprise"
 	"github.com/redpanda-data/connect/v4/internal/mcp"
 )
 
-func mcpServerCli(logger *slog.Logger) *cli.Command {
+func mcpServerCli(rpMgr *enterprise.GlobalRedpandaManager) *cli.Command {
 	flags := []cli.Flag{
 		&cli.StringFlag{
 			Name:  "base-url",
@@ -45,15 +50,68 @@ Each resource will be exposed as a tool that AI can interact with:
 				repositoryDir = c.Args().First()
 			}
 
+			fallbackLogger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+				Level: slog.LevelError,
+			}))
+
+			baseURL := c.String("base-url")
+			if baseURL != "" {
+				// It's safe to initialise a stdout logger
+				fallbackLogger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+					Level: slog.LevelInfo,
+				}))
+			}
+
+			rpMgr.SetFallbackLogger(service.NewLoggerFromSlog(fallbackLogger))
+			// TODO: rpMgr.Init...
+			logger := slog.New(newTeeLogger(fallbackLogger.Handler(), rpMgr.SlogHandler()))
+
 			secretLookupFn, err := parseSecretsFlag(logger, c)
 			if err != nil {
 				return err
 			}
 
-			if err := mcp.Run(logger, secretLookupFn, repositoryDir, c.String("base-url")); err != nil {
+			if err := mcp.Run(logger, secretLookupFn, repositoryDir, baseURL); err != nil {
 				return err
 			}
 			return nil
 		},
+	}
+}
+
+type teeLogger struct {
+	main      slog.Handler
+	secondary slog.Handler
+}
+
+func newTeeLogger(main, secondary slog.Handler) *teeLogger {
+	return &teeLogger{
+		main:      main,
+		secondary: secondary,
+	}
+}
+
+func (t *teeLogger) Enabled(ctx context.Context, level slog.Level) bool {
+	return t.main.Enabled(ctx, level)
+}
+
+func (t *teeLogger) Handle(ctx context.Context, record slog.Record) error {
+	if err := t.main.Handle(ctx, record); err != nil {
+		return err
+	}
+	return t.secondary.Handle(ctx, record)
+}
+
+func (t *teeLogger) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &teeLogger{
+		main:      t.main.WithAttrs(attrs),
+		secondary: t.secondary.WithAttrs(attrs),
+	}
+}
+
+func (t *teeLogger) WithGroup(name string) slog.Handler {
+	return &teeLogger{
+		main:      t.main.WithGroup(name),
+		secondary: t.secondary.WithGroup(name),
 	}
 }
