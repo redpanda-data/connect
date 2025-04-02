@@ -79,7 +79,7 @@ func (s *Scanner) Scan(root string) error {
 		resourceDir := filepath.Join(root, "resources")
 
 		// Look for any starlark files in the main resources folder
-		if err := fs.WalkDir(s.fs, resourceDir, s.scanResourceTypeFn("starlark", ".star")); err != nil && !os.IsNotExist(err) {
+		if err := fs.WalkDir(s.fs, resourceDir, s.scanResourceTypeFn("starlark", ".star", ".star.py")); err != nil && !os.IsNotExist(err) {
 			return err
 		}
 
