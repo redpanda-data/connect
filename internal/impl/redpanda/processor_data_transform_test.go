@@ -44,7 +44,7 @@ func getWASMArtifact(t testing.TB) []byte {
 	tmpDir := t.TempDir()
 	outPath := filepath.Join(tmpDir, "uppercase.wasm")
 
-	require.NoError(t, exec.Command("env", "GOOS=wasip1", "GOARCH=wasm", "go", "build", "-C", "./testdata/uppercase", "-o", outPath).Run())
+	require.NoError(t, exec.Command("env", "GOOS=wasip1", "GOARCH=wasm", "GOEXPERIMENT=", "go", "build", "-C", "./testdata/uppercase", "-o", outPath).Run())
 
 	outBytes, err := os.ReadFile(outPath)
 	require.NoError(t, err)
