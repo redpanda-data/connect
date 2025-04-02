@@ -22,6 +22,7 @@ type Scanner struct {
 	fs fs.FS
 
 	onResource func(resourceType string, filePath string, contents []byte) error
+	onMetrics  func(filePath string, contents []byte) error
 }
 
 // NewScanner creates a new scanner with defaults.
@@ -35,6 +36,12 @@ func NewScanner(fs fs.FS) *Scanner {
 // encountered by the scanner.
 func (s *Scanner) OnResourceFile(fn func(resourceType string, filePath string, contents []byte) error) {
 	s.onResource = fn
+}
+
+// OnMetricsFile registers a closure to be called for a metrics config file
+// encountered by the scanner.
+func (s *Scanner) OnMetricsFile(fn func(filePath string, contents []byte) error) {
+	s.onMetrics = fn
 }
 
 func (s *Scanner) scanResourceTypeFn(rtype string, allowedExtensions ...string) fs.WalkDirFunc {
@@ -98,6 +105,18 @@ func (s *Scanner) Scan(root string) error {
 		targetDir = filepath.Join(resourceDir, "outputs")
 		if err := fs.WalkDir(s.fs, targetDir, s.scanResourceTypeFn("output", ".yaml", ".yml")); err != nil && !os.IsNotExist(err) {
 			return err
+		}
+	}
+
+	if s.onMetrics != nil {
+		o11yDir := filepath.Join(root, "o11y")
+		for _, ext := range []string{".yaml", ".yml"} {
+			fileName := filepath.Join(o11yDir, "metrics"+ext)
+			if contents, err := fs.ReadFile(s.fs, fileName); err == nil {
+				if err := s.onMetrics(fileName, contents); err != nil {
+					return err
+				}
+			}
 		}
 	}
 

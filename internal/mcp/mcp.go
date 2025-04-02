@@ -15,9 +15,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"net/url"
 	"os"
 
+	"github.com/gorilla/mux"
 	"github.com/mark3labs/mcp-go/server"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -29,19 +31,34 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/all"
 )
 
+type gMux struct {
+	m *mux.Router
+}
+
+func (g *gMux) HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) {
+	g.m.Path(pattern).HandlerFunc(handler) // TODO: PathPrefix?
+}
+
 // Run an mcp server against a target directory, with an optional base URL for
 // an HTTP server.
-func Run(logger *slog.Logger, envVarLookupFunc func(context.Context, string) (string, bool), repositoryDir, baseURLStr string) error {
+func Run(
+	logger *slog.Logger,
+	envVarLookupFunc func(context.Context, string) (string, bool),
+	repositoryDir, baseURLStr string,
+) error {
 	// Create MCP server
 	s := server.NewMCPServer(
 		"Redpanda Runtime",
 		"1.0.0",
 	)
 
+	mux := mux.NewRouter()
+
 	env := service.GlobalEnvironment()
 
 	resWrapper := tools.NewResourcesWrapper(logger, s)
 	resWrapper.SetEnvVarLookupFunc(envVarLookupFunc)
+	resWrapper.SetHTTPMultiplexer(&gMux{m: mux})
 
 	repoScanner := repository.NewScanner(os.DirFS(repositoryDir))
 	repoScanner.OnResourceFile(func(resourceType string, filename string, contents []byte) error {
@@ -66,24 +83,24 @@ func Run(logger *slog.Logger, envVarLookupFunc func(context.Context, string) (st
 				if err != nil {
 					return err
 				}
-				if err := resWrapper.AddProcessor(b); err != nil {
+				if err := resWrapper.AddProcessorYAML(b); err != nil {
 					return err
 				}
 			}
 		case "input":
-			if err := resWrapper.AddInput(contents); err != nil {
+			if err := resWrapper.AddInputYAML(contents); err != nil {
 				return err
 			}
 		case "cache":
-			if err := resWrapper.AddCache(contents); err != nil {
+			if err := resWrapper.AddCacheYAML(contents); err != nil {
 				return err
 			}
 		case "processor":
-			if err := resWrapper.AddProcessor(contents); err != nil {
+			if err := resWrapper.AddProcessorYAML(contents); err != nil {
 				return err
 			}
 		case "output":
-			if err := resWrapper.AddOutput(contents); err != nil {
+			if err := resWrapper.AddOutputYAML(contents); err != nil {
 				return err
 			}
 		default:
@@ -91,6 +108,12 @@ func Run(logger *slog.Logger, envVarLookupFunc func(context.Context, string) (st
 		}
 		return nil
 	})
+
+	repoScanner.OnMetricsFile(func(fileName string, contents []byte) error {
+		// TODO: Detect starlark here?
+		return resWrapper.SetMetricsYAML(contents)
+	})
+
 	if err := repoScanner.Scan("."); err != nil {
 		return err
 	}
@@ -106,8 +129,15 @@ func Run(logger *slog.Logger, envVarLookupFunc func(context.Context, string) (st
 		}
 
 		sseServer := server.NewSSEServer(s, server.WithBaseURL(baseURLStr))
+		mux.PathPrefix("/").Handler(sseServer)
+
+		srv := &http.Server{
+			Handler: mux,
+			Addr:    ":" + baseURL.Port(),
+		}
+
 		logger.Info("SSE server listening")
-		if err := sseServer.Start(":" + baseURL.Port()); err != nil {
+		if err := srv.ListenAndServe(); err != nil {
 			return err
 		}
 	} else {

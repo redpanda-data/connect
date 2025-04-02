@@ -41,7 +41,6 @@ func NewResourcesWrapper(logger *slog.Logger, svr *server.MCPServer) *ResourcesW
 		builder: service.NewResourceBuilder(),
 	}
 	w.builder.SetLogger(logger)
-	// TODO: Add metrics
 	return w
 }
 
@@ -50,6 +49,12 @@ func NewResourcesWrapper(logger *slog.Logger, svr *server.MCPServer) *ResourcesW
 // obtained via a provided function rather than the default of os.LookupEnv.
 func (w *ResourcesWrapper) SetEnvVarLookupFunc(fn func(context.Context, string) (string, bool)) {
 	w.builder.SetEnvVarLookupFunc(fn)
+}
+
+// SetHTTPMultiplexer assigns a given HTTP multiplexer to be used by resources
+// and metrics solutions to expose themselves as HTTP endpoints.
+func (w *ResourcesWrapper) SetHTTPMultiplexer(mux service.HTTPMultiplexer) {
+	w.builder.SetHTTPMux(mux)
 }
 
 // Build the underlying ResourcesBuilder, which allows the resources to be
@@ -121,9 +126,15 @@ type resFile struct {
 	Meta  meta   `yaml:"meta"`
 }
 
-// AddCache attempts to parse a cache resource config and adds it as an MCP tool
-// if appropriate.
-func (w *ResourcesWrapper) AddCache(fileBytes []byte) error {
+// SetMetricsYAML attempts to parse a metrics config to be used by all
+// resources.
+func (w *ResourcesWrapper) SetMetricsYAML(fileBytes []byte) error {
+	return w.builder.SetMetricsYAML(string(fileBytes))
+}
+
+// AddCacheYAML attempts to parse a cache resource config and adds it as an MCP
+// tool if appropriate.
+func (w *ResourcesWrapper) AddCacheYAML(fileBytes []byte) error {
 	var res resFile
 	if err := yaml.Unmarshal(fileBytes, &res); err != nil {
 		return err
@@ -216,9 +227,9 @@ func (w *ResourcesWrapper) AddCache(fileBytes []byte) error {
 	return nil
 }
 
-// AddInput attempts to parse an input resource config and adds it as an MCP
+// AddInputYAML attempts to parse an input resource config and adds it as an MCP
 // tool if appropriate.
-func (w *ResourcesWrapper) AddInput(fileBytes []byte) error {
+func (w *ResourcesWrapper) AddInputYAML(fileBytes []byte) error {
 	var res resFile
 	if err := yaml.Unmarshal(fileBytes, &res); err != nil {
 		return err
@@ -298,9 +309,9 @@ func (w *ResourcesWrapper) AddInput(fileBytes []byte) error {
 	return nil
 }
 
-// AddProcessor attempts to parse a processor resource config and adds it as an
-// MCP tool if appropriate.
-func (w *ResourcesWrapper) AddProcessor(fileBytes []byte) error {
+// AddProcessorYAML attempts to parse a processor resource config and adds it as
+// an MCP tool if appropriate.
+func (w *ResourcesWrapper) AddProcessorYAML(fileBytes []byte) error {
 	var res resFile
 	if err := yaml.Unmarshal(fileBytes, &res); err != nil {
 		return err
@@ -386,9 +397,9 @@ func (w *ResourcesWrapper) AddProcessor(fileBytes []byte) error {
 	return nil
 }
 
-// AddOutput attempts to parse an output resource config and adds it as an MCP
-// tool if appropriate.
-func (w *ResourcesWrapper) AddOutput(fileBytes []byte) error {
+// AddOutputYAML attempts to parse an output resource config and adds it as an
+// MCP tool if appropriate.
+func (w *ResourcesWrapper) AddOutputYAML(fileBytes []byte) error {
 	var res resFile
 	if err := yaml.Unmarshal(fileBytes, &res); err != nil {
 		return err
