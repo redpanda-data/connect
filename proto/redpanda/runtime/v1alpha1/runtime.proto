@@ -1,0 +1,76 @@
+// Copyright 2025 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package redpanda.runtime.v1alpha1;
+
+option go_package = "internal/agent/runtimepb";
+
+import "google/protobuf/timestamp.proto";
+
+// `NullValue` is a representation of a null value.
+enum NullValue { NULL_VALUE = 0; }
+
+// `StructValue` represents a struct value which can be used to represent a
+// structured data value.
+message StructValue {
+  map<string, Value> fields = 1;
+}
+
+// `ListValue` represents a list value which can be used to represent a list of
+// values.
+message ListValue {
+  repeated Value values = 1;
+}
+
+// `Value` represents a dynamically typed value which can be used to represent
+// a value passed to an agent.
+message Value {
+  oneof kind {
+    NullValue null_value = 1;
+    string string_value = 2;
+    int64 integer_value = 3;
+    double double_value = 4;
+    bool bool_value = 5;
+    google.protobuf.Timestamp timestamp_value = 6;
+    bytes bytes_value = 7;
+    StructValue struct_value = 8;
+    ListValue list_value = 9;
+  }
+}
+
+// Message represents a piece of structured data that flows through the runtime.
+message Message {
+  oneof payload {
+    bytes serialized = 1;
+    Value structured = 2;
+  }
+  StructValue metadata = 3;
+}
+
+// InvokeAgentRequest is the request message for the `InvokeAgent` method.
+message InvokeAgentRequest {
+  Message message = 1;
+}
+
+// InvokeAgentResponse is the response message for the `InvokeAgent` method.
+message InvokeAgentResponse {
+  Message message = 1;
+}
+
+// `Runtime` is the service that provides the ability to invoke an agent.
+service Runtime {
+  rpc InvokeAgent(InvokeAgentRequest) returns (InvokeAgentResponse);
+}

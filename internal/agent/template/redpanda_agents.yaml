@@ -1,0 +1,12 @@
+agents:
+  # The key here determines where the agent entrypoint is found: "agents/weather.py"
+  weather:
+    # Define how your agent recieves input
+    input:
+      stdin: {}
+    # Define the tools your agent has access too
+    tools:
+      - check_weather
+    # Define where the agent's output goes
+    output:
+      stdout: {}

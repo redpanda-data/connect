@@ -11,10 +11,11 @@
 package starlark
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
+	"log/slog"
 	"slices"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -36,7 +37,14 @@ type EvalResult struct {
 }
 
 // Eval attempts to parse a Starlark file.
-func Eval(env *service.Environment, logger *service.Logger, path string, contents []byte) (*EvalResult, error) {
+func Eval(
+	ctx context.Context,
+	env *service.Environment,
+	logger *slog.Logger,
+	path string,
+	contents []byte,
+	envVarLookupFunc func(context.Context, string) (string, bool),
+) (*EvalResult, error) {
 	opts := &syntax.FileOptions{
 		Set:               true,
 		While:             true,
@@ -54,6 +62,12 @@ func Eval(env *service.Environment, logger *service.Logger, path string, content
 			return nil, errors.New("load disallowed")
 		},
 	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go func() {
+		<-ctx.Done()
+		thread.Cancel("context cancelled")
+	}()
 	result := &EvalResult{}
 	mcpToolFn := func(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 		if len(args) != 0 {
@@ -107,8 +121,10 @@ func Eval(env *service.Environment, logger *service.Logger, path string, content
 		if name == "" {
 			return nil, errors.New("name is required")
 		}
-		// TODO: Use the correct secret lookup function
-		value := os.Getenv(name)
+		value, ok := envVarLookupFunc(ctx, name)
+		if !ok {
+			return starlark.None, nil
+		}
 		return starlark.String(value), nil
 	}
 	predeclared := starlark.StringDict{
@@ -122,7 +138,7 @@ func Eval(env *service.Environment, logger *service.Logger, path string, content
 		if err != nil {
 			newName, ok := identifierReplacements[name]
 			if !ok {
-				logger.Warnf("Skipping processor %v due to invalid identifier: %v", name, err)
+				logger.Warn("Skipping processor %v due to invalid identifier: %v", name, err)
 				return
 			}
 			methodName = newName

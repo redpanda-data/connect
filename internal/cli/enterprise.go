@@ -148,7 +148,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 		service.CLIOptSetEnvVarLookup(func(ctx context.Context, key string) (string, bool) {
 			return secretLookupFn(ctx, key)
 		}),
-
+		service.CLIOptAddCommand(agentCli(rpMgr)),
 		service.CLIOptAddCommand(mcpServerCli(rpMgr)),
 	)
 

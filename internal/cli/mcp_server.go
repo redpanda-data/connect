@@ -25,8 +25,8 @@ import (
 func mcpServerCli(rpMgr *enterprise.GlobalRedpandaManager) *cli.Command {
 	flags := []cli.Flag{
 		&cli.StringFlag{
-			Name:  "base-url",
-			Usage: "An optional base URL to bind the MCP server to instead of running in stdio mode.",
+			Name:  "address",
+			Usage: "An optional address to bind the MCP server to instead of running in stdio mode.",
 		},
 		secretsFlag,
 	}
@@ -54,8 +54,8 @@ Each resource will be exposed as a tool that AI can interact with:
 				Level: slog.LevelError,
 			}))
 
-			baseURL := c.String("base-url")
-			if baseURL != "" {
+			addr := c.String("address")
+			if addr != "" {
 				// It's safe to initialise a stdout logger
 				fallbackLogger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 					Level: slog.LevelInfo,
@@ -71,7 +71,7 @@ Each resource will be exposed as a tool that AI can interact with:
 				return err
 			}
 
-			if err := mcp.Run(logger, secretLookupFn, repositoryDir, baseURL); err != nil {
+			if err := mcp.Run(logger, secretLookupFn, repositoryDir, addr); err != nil {
 				return err
 			}
 			return nil

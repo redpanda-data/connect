@@ -31,14 +31,16 @@ type ResourcesWrapper struct {
 	builder   *service.ResourceBuilder
 	resources *service.Resources
 	closeFn   func(context.Context) error
+	filter    func(label string) bool
 }
 
 // NewResourcesWrapper creates a new resources wrapper.
-func NewResourcesWrapper(logger *slog.Logger, svr *server.MCPServer) *ResourcesWrapper {
+func NewResourcesWrapper(logger *slog.Logger, svr *server.MCPServer, filter func(label string) bool) *ResourcesWrapper {
 	w := &ResourcesWrapper{
 		logger:  logger,
 		svr:     svr,
 		builder: service.NewResourceBuilder(),
+		filter:  filter,
 	}
 	w.builder.SetLogger(logger)
 	return w
@@ -140,6 +142,10 @@ func (w *ResourcesWrapper) AddCacheYAML(fileBytes []byte) error {
 		return err
 	}
 
+	if !w.filter(res.Label) {
+		return nil
+	}
+
 	if err := w.builder.AddCacheYAML(string(fileBytes)); err != nil {
 		return err
 	}
@@ -235,6 +241,10 @@ func (w *ResourcesWrapper) AddInputYAML(fileBytes []byte) error {
 		return err
 	}
 
+	if !w.filter(res.Label) {
+		return nil
+	}
+
 	if err := w.builder.AddInputYAML(string(fileBytes)); err != nil {
 		return err
 	}
@@ -316,7 +326,9 @@ func (w *ResourcesWrapper) AddProcessorYAML(fileBytes []byte) error {
 	if err := yaml.Unmarshal(fileBytes, &res); err != nil {
 		return err
 	}
-
+	if !w.filter(res.Label) {
+		return nil
+	}
 	if err := w.builder.AddProcessorYAML(string(fileBytes)); err != nil {
 		return err
 	}
@@ -403,6 +415,9 @@ func (w *ResourcesWrapper) AddOutputYAML(fileBytes []byte) error {
 	var res resFile
 	if err := yaml.Unmarshal(fileBytes, &res); err != nil {
 		return err
+	}
+	if !w.filter(res.Label) {
+		return nil
 	}
 
 	if err := w.builder.AddOutputYAML(string(fileBytes)); err != nil {

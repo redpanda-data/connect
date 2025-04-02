@@ -13,10 +13,11 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
-	"net/url"
 	"os"
 
 	"github.com/gorilla/mux"
@@ -41,11 +42,18 @@ func (g *gMux) HandleFunc(pattern string, handler func(http.ResponseWriter, *htt
 
 // Run an mcp server against a target directory, with an optional base URL for
 // an HTTP server.
-func Run(
+type MCPServer struct {
+	base *server.MCPServer
+	mux  *mux.Router
+}
+
+// Initialize initializes the MCP server.
+func NewMCPServer(
+	repositoryDir string,
 	logger *slog.Logger,
 	envVarLookupFunc func(context.Context, string) (string, bool),
-	repositoryDir, baseURLStr string,
-) error {
+	filter func(label string) bool,
+) (*MCPServer, error) {
 	// Create MCP server
 	s := server.NewMCPServer(
 		"Redpanda Runtime",
@@ -56,7 +64,7 @@ func Run(
 
 	env := service.GlobalEnvironment()
 
-	resWrapper := tools.NewResourcesWrapper(logger, s)
+	resWrapper := tools.NewResourcesWrapper(logger, s, filter)
 	resWrapper.SetEnvVarLookupFunc(envVarLookupFunc)
 	resWrapper.SetHTTPMultiplexer(&gMux{m: mux})
 
@@ -64,7 +72,7 @@ func Run(
 	repoScanner.OnResourceFile(func(resourceType string, filename string, contents []byte) error {
 		switch resourceType {
 		case "starlark":
-			result, err := starlark.Eval(env, nil, filename, contents)
+			result, err := starlark.Eval(context.Background(), env, logger, filename, contents, envVarLookupFunc)
 			if err != nil {
 				return err
 			}
@@ -115,36 +123,40 @@ func Run(
 	})
 
 	if err := repoScanner.Scan("."); err != nil {
-		return err
+		return nil, err
 	}
 
 	if err := resWrapper.Build(); err != nil {
+		return nil, err
+	}
+
+	return &MCPServer{s, mux}, nil
+}
+
+func (m *MCPServer) ServeStdio() error {
+	if err := server.ServeStdio(m.base); err != nil {
 		return err
 	}
-
-	if baseURLStr != "" {
-		baseURL, err := url.Parse(baseURLStr)
-		if err != nil {
-			return err
-		}
-
-		sseServer := server.NewSSEServer(s, server.WithBaseURL(baseURLStr))
-		mux.PathPrefix("/").Handler(sseServer)
-
-		srv := &http.Server{
-			Handler: mux,
-			Addr:    ":" + baseURL.Port(),
-		}
-
-		logger.Info("SSE server listening")
-		if err := srv.ListenAndServe(); err != nil {
-			return err
-		}
-	} else {
-		if err := server.ServeStdio(s); err != nil {
-			return err
-		}
-	}
-
 	return nil
+}
+
+func (m *MCPServer) ServeSSE(ctx context.Context, l net.Listener) error {
+	sseServer := server.NewSSEServer(m.base, server.WithBaseURL(
+		"http://"+l.Addr().String(),
+	))
+	m.mux.PathPrefix("/").Handler(sseServer)
+	srv := &http.Server{
+		Handler: m.mux,
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go func() {
+		<-ctx.Done()
+		_ = srv.Shutdown(context.Background())
+	}()
+	err := srv.Serve(l)
+	if errors.Is(err, http.ErrServerClosed) {
+		return nil
+	}
+	return err
 }
