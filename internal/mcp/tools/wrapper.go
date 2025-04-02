@@ -77,6 +77,15 @@ type mcpProperty struct {
 	Required    bool   `yaml:"required"`
 }
 
+func (p mcpProperty) rawOption() (any, error) {
+	return map[string]any{
+		"name":        p.Name,
+		"type":        p.Type,
+		"description": p.Description,
+		"required":    p.Required,
+	}, nil
+}
+
 func (p mcpProperty) toolOption() (mcp.ToolOption, error) {
 	var opts []mcp.PropertyOption
 	if p.Required {
@@ -371,6 +380,107 @@ func (w *ResourcesWrapper) AddProcessor(fileBytes []byte) error {
 
 		return &mcp.CallToolResult{
 			Content: content,
+		}, nil
+	})
+
+	return nil
+}
+
+// AddOutput attempts to parse an output resource config and adds it as an MCP
+// tool if appropriate.
+func (w *ResourcesWrapper) AddOutput(fileBytes []byte) error {
+	var res resFile
+	if err := yaml.Unmarshal(fileBytes, &res); err != nil {
+		return err
+	}
+
+	if err := w.builder.AddOutputYAML(string(fileBytes)); err != nil {
+		return err
+	}
+
+	if !res.Meta.MCP.Enabled {
+		return nil
+	}
+
+	w.logger.With("label", res.Label).Info("Registering output tool")
+
+	messageProperties := map[string]any{
+		"value": map[string]any{
+			"type":        "string",
+			"description": "The raw contents of the message",
+			"required":    true,
+		},
+	}
+
+	for _, p := range res.Meta.MCP.Properties {
+		o, err := p.rawOption()
+		if err != nil {
+			return fmt.Errorf("property '%v': %w", p.Name, err)
+		}
+		if _, exists := messageProperties[p.Name]; exists {
+			return fmt.Errorf("duplicate property '%v' detected", p.Name)
+		}
+		messageProperties[p.Name] = o
+	}
+
+	opts := []mcp.ToolOption{
+		mcp.WithDescription(res.Meta.MCP.Description),
+		mcp.WithArray("messages",
+			mcp.Required(),
+			mcp.Items(map[string]any{
+				"type":       "object",
+				"properties": messageProperties,
+			}),
+		),
+	}
+
+	w.svr.AddTool(mcp.NewTool(res.Label, opts...), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		messages, exists := request.Params.Arguments["messages"].([]any)
+		if !exists || len(messages) == 0 {
+			return nil, errors.New("at least one message is required")
+		}
+
+		var inBatch service.MessageBatch
+		for i, m := range messages {
+			mObj, ok := m.(map[string]any)
+			if !ok {
+				return nil, fmt.Errorf("message %v was not an object", i)
+			}
+
+			contents, exists := mObj["value"].(string)
+			if !exists {
+				return nil, fmt.Errorf("message %v is missing a value", i)
+			}
+
+			msg := service.NewMessage([]byte(contents))
+
+			for k, v := range mObj {
+				if k == "value" {
+					continue
+				}
+				msg.MetaSetMut(k, v)
+			}
+
+			inBatch = append(inBatch, msg)
+		}
+
+		var outErr error
+		if err := w.resources.AccessOutput(ctx, res.Label, func(o *service.ResourceOutput) {
+			outErr = o.WriteBatch(ctx, inBatch)
+		}); err != nil {
+			return nil, err
+		}
+		if outErr != nil {
+			return nil, outErr
+		}
+
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				mcp.TextContent{
+					Type: "text",
+					Text: "Messages delivered successfully",
+				},
+			},
 		}, nil
 	})
 

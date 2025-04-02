@@ -93,6 +93,12 @@ func (s *Scanner) Scan(root string) error {
 		if err := fs.WalkDir(s.fs, targetDir, s.scanResourceTypeFn("processor", ".yaml", ".yaml")); err != nil && !os.IsNotExist(err) {
 			return err
 		}
+
+		// Outputs
+		targetDir = filepath.Join(resourceDir, "outputs")
+		if err := fs.WalkDir(s.fs, targetDir, s.scanResourceTypeFn("output", ".yaml", ".yml")); err != nil && !os.IsNotExist(err) {
+			return err
+		}
 	}
 
 	return nil

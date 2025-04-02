@@ -82,6 +82,10 @@ func Run(logger *slog.Logger, envVarLookupFunc func(context.Context, string) (st
 			if err := resWrapper.AddProcessor(contents); err != nil {
 				return err
 			}
+		case "output":
+			if err := resWrapper.AddOutput(contents); err != nil {
+				return err
+			}
 		default:
 			return fmt.Errorf("resource type '%v' is not supported yet", resourceType)
 		}
