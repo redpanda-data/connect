@@ -41,7 +41,7 @@ MCP Demo:
 
 Agentic AI Demo:
 
-[![MCP Demo](https://img.youtube.com/vi/oi8qgtTqQRU/0.jpg)](https://www.youtube.com/watch?v=oi8qgtTqQRU)
+[![Agentic AI Demo](https://img.youtube.com/vi/oi8qgtTqQRU/0.jpg)](https://www.youtube.com/watch?v=oi8qgtTqQRU)
 
 ### Delivery Guarantees
 
