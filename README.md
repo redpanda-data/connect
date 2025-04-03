@@ -33,6 +33,16 @@ output:
     max_in_flight: 20
 ```
 
+### !NEW! Check Out the Latest AI Goodies
+
+MCP Demo:
+
+[![MCP Demo](https://img.youtube.com/vi/JhF8HMpVmus/0.jpg)](https://www.youtube.com/watch?v=JhF8HMpVmus)
+
+Agentic AI Demo:
+
+[![Agentic AI Demo](https://img.youtube.com/vi/oi8qgtTqQRU/0.jpg)](https://www.youtube.com/watch?v=oi8qgtTqQRU)
+
 ### Delivery Guarantees
 
 Delivery guarantees [can be a dodgy subject](https://youtu.be/QmpBOCvY8mY). Redpanda Connect processes and acknowledges messages using an in-process transaction model with no need for any disk persisted state, so when connecting to at-least-once sources and sinks it's able to guarantee at-least-once delivery even in the event of crashes, disk corruption, or other unexpected server faults.
