@@ -33,9 +33,15 @@ output:
     max_in_flight: 20
 ```
 
-### Check Out the New MCP Server
+### !NEW! Check Out the New MCP Server
+
+MCP Demo:
 
 [![MCP Demo](https://img.youtube.com/vi/JhF8HMpVmus/0.jpg)](https://www.youtube.com/watch?v=JhF8HMpVmus)
+
+Agentic AI Demo:
+
+[![MCP Demo](https://img.youtube.com/vi/oi8qgtTqQRU/0.jpg)](https://www.youtube.com/watch?v=oi8qgtTqQRU)
 
 ### Delivery Guarantees
 
