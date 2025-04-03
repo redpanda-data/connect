@@ -143,9 +143,7 @@ func (m *Server) ServeStdio() error {
 
 // ServeSSE attempts to run the MCP server in SSE mode.
 func (m *Server) ServeSSE(ctx context.Context, l net.Listener) error {
-	sseServer := server.NewSSEServer(m.base, server.WithBaseURL(
-		"http://"+l.Addr().String(),
-	))
+	sseServer := server.NewSSEServer(m.base)
 	m.mux.PathPrefix("/").Handler(sseServer)
 	srv := &http.Server{
 		Handler: m.mux,
