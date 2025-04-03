@@ -75,17 +75,20 @@ require (
 	github.com/go-resty/resty/v2 v2.15.3
 	github.com/go-sql-driver/mysql v1.8.1
 	github.com/gocql/gocql v1.6.0
-	github.com/gofrs/uuid/v5 v5.3.1
+	github.com/gofrs/uuid/v5 v5.3.2
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/googleapis/go-sql-spanner v1.8.0
 	github.com/gosimple/slug v1.14.0
 	github.com/hamba/avro/v2 v2.28.0
+	github.com/hashicorp/go-hclog v1.6.3
+	github.com/hashicorp/go-plugin v1.6.3
 	github.com/influxdata/influxdb1-client v0.0.0-20220302092344-a9ab5670611c
 	github.com/jackc/pgx/v4 v4.18.3
 	github.com/jackc/pgx/v5 v5.6.0
 	github.com/jhump/protoreflect v1.17.0
 	github.com/lib/pq v1.10.9
 	github.com/linkedin/goavro/v2 v2.13.1
+	github.com/mark3labs/mcp-go v0.17.0
 	github.com/matoous/go-nanoid/v2 v2.1.0
 	github.com/microcosm-cc/bluemonday v1.0.27
 	github.com/microsoft/gocosmos v1.1.1
@@ -116,7 +119,7 @@ require (
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475
 	github.com/redis/go-redis/v9 v9.7.0
-	github.com/redpanda-data/benthos/v4 v4.46.0
+	github.com/redpanda-data/benthos/v4 v4.47.0
 	github.com/redpanda-data/common-go/secrets v0.1.2
 	github.com/redpanda-data/connect/public/bundle/free/v4 v4.31.0
 	github.com/rs/xid v1.5.0
@@ -153,10 +156,11 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.28.0
 	go.opentelemetry.io/otel/sdk v1.35.0
 	go.opentelemetry.io/otel/trace v1.35.0
+	go.starlark.net v0.0.0-20250318223901-d9371fef63fe
 	go.uber.org/multierr v1.11.0
 	golang.org/x/crypto v0.36.0
 	golang.org/x/exp v0.0.0-20250106191152-7588d65b2ba8
-	golang.org/x/net v0.37.0
+	golang.org/x/net v0.38.0
 	golang.org/x/sync v0.12.0
 	golang.org/x/text v0.23.0
 	google.golang.org/api v0.227.0
@@ -188,6 +192,7 @@ require (
 	github.com/envoyproxy/protoc-gen-validate v1.2.1 // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
 	github.com/go-git/go-billy/v5 v5.6.2 // indirect
+	github.com/hashicorp/yamux v0.1.2 // indirect
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/jzelinskie/stringz v0.0.3 // indirect
@@ -195,6 +200,7 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/oklog/run v1.1.0 // indirect
 	github.com/pingcap/errors v0.11.5-0.20240311024730-e056997136bb // indirect
 	github.com/pingcap/failpoint v0.0.0-20240528011301-b51a646c7c86 // indirect
 	github.com/pingcap/log v1.1.1-0.20230317032135-a0d097d16e22 // indirect
@@ -210,6 +216,7 @@ require (
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
+	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	gitlab.com/golang-commonmark/html v0.0.0-20191124015941-a22733972181 // indirect
 	gitlab.com/golang-commonmark/linkify v0.0.0-20200225224916-64bca66f6ad3 // indirect
 	gitlab.com/golang-commonmark/mdurl v0.0.0-20191124015652-932350d1cb84 // indirect
@@ -375,7 +382,7 @@ require (
 	github.com/lufia/plan9stats v0.0.0-20240226150601-1dcf7310316a // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
-	github.com/mattn/go-colorable v0.1.13 // indirect
+	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
@@ -453,7 +460,7 @@ require (
 	google.golang.org/genproto v0.0.0-20250324211829-b45e905df463 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250324211829-b45e905df463 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250324211829-b45e905df463 // indirect
-	google.golang.org/grpc v1.71.0
+	google.golang.org/grpc v1.71.1
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/jcmturner/aescts.v1 v1.0.1 // indirect
 	gopkg.in/jcmturner/dnsutils.v1 v1.0.1 // indirect

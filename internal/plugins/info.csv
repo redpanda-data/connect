@@ -245,7 +245,7 @@ spicedb_watch             ,input     ,spicedb_watch             ,0.0.0   ,commun
 split                     ,processor ,split                     ,0.0.0   ,certified  ,n          ,y     ,y
 splunk                    ,input     ,Splunk                    ,4.30.0  ,enterprise ,n          ,y     ,y
 splunk_hec                ,output    ,Splunk                    ,4.30.0  ,enterprise ,n          ,y     ,y
-sql                       ,cache     ,SQL                       ,4.26.0  ,certified  ,n          ,n     ,n
+sql                       ,cache     ,SQL                       ,4.26.0  ,certified  ,n          ,y     ,y
 sql                       ,output    ,SQL                       ,3.65.0  ,community  ,y          ,n     ,n
 sql                       ,processor ,SQL                       ,3.65.0  ,community  ,y          ,n     ,n
 sql_driver_clickhouse     ,sql_driver,ClickHouse                ,0.0.0   ,community  ,n          ,y     ,y

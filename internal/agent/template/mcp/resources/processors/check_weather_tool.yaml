@@ -1,0 +1,12 @@
+label: 'check_weather'
+processors:
+  - http:
+      verb: GET
+      url: 'https://wttr.in/${!content().string()}?T'
+      headers:
+        User-Agent: curl/8.11.1 # Returns a text string from the weather website
+
+meta:
+  mcp:
+    enabled: true
+    description: 'A tool that can tell you what the weather is in a city passed as the value'
