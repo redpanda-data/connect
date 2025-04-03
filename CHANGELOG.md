@@ -8,6 +8,8 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - New `slack_post` output for posting messages to slack channels. (@rockwotj)
+- New `slack_users` input for reading all slack users. (@rockwotj)
+- New `slack_thread` processor for looking up a full slack thread. (@rockwotj)
 
 ## 4.51.0 - 2025-03-31
 
