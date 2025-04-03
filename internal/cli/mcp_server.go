@@ -29,6 +29,7 @@ func mcpServerCli(rpMgr *enterprise.GlobalRedpandaManager) *cli.Command {
 			Usage: "An optional address to bind the MCP server to instead of running in stdio mode.",
 		},
 		secretsFlag,
+		envFileFlag,
 	}
 
 	return &cli.Command{
@@ -36,12 +37,18 @@ func mcpServerCli(rpMgr *enterprise.GlobalRedpandaManager) *cli.Command {
 		Usage: "Execute an MCP server against a suite of Redpanda Connect resources.",
 		Flags: flags,
 		Description: `
+!!EXPERIMENTAL!!
+
 Each resource will be exposed as a tool that AI can interact with:
 
   {{.BinaryName}} mcp-server ./repo
   
   `[1:],
 		Action: func(c *cli.Context) error {
+			if err := applyEnvFileFlag(c); err != nil {
+				return err
+			}
+
 			repositoryDir := "."
 			if c.Args().Len() > 0 {
 				if c.Args().Len() > 1 {

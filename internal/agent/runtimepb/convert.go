@@ -110,7 +110,7 @@ func anyToProto(a any) (*Value, error) {
 	return nil, fmt.Errorf("unsupported type: %T", a)
 }
 
-// MessageToProto converts a service.Message from proto form.
+// ProtoToMessage converts a service.Message from proto form.
 func ProtoToMessage(msg *Message) (*service.Message, error) {
 	var out *service.Message
 	switch p := msg.Payload.(type) {

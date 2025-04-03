@@ -14,6 +14,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -55,7 +56,7 @@ func newAgentProcessor(conf *service.ParsedConfig, res *service.Resources) (serv
 		return nil, err
 	}
 	if len(cmd) == 0 {
-		return nil, fmt.Errorf("command must be specified")
+		return nil, errors.New("command must be specified")
 	}
 	mcpServerAddress, err := conf.FieldString(apFieldMCPServerAddr)
 	if err != nil {

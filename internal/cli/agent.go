@@ -31,12 +31,14 @@ func agentCli(rpMgr *enterprise.GlobalRedpandaManager) *cli.Command {
 		Name:  "agent",
 		Usage: "Redpanda Connect commands.",
 		Subcommands: []*cli.Command{
-			&cli.Command{
+			{
 				Name:  "init",
 				Usage: "Initialize a Redpanda Connect agent",
 				// TODO: This is a junk description. Make it better.
 				Flags: []cli.Flag{&cli.StringFlag{Name: "name"}},
 				Description: `
+!!EXPERIMENTAL!!
+
 Initialize a template for building a Redpanda Connect agent.
 
   {{.BinaryName}} agent init ./repo
@@ -63,7 +65,7 @@ Initialize a template for building a Redpanda Connect agent.
 					})
 				},
 			},
-			&cli.Command{
+			{
 				Name:  "run",
 				Usage: "Execute a Redpanda Connect agent as part of a pipeline that has access to tools via the MCP protocol",
 				Flags: flags,
@@ -83,14 +85,11 @@ Each resource in the mcp subdirectory will create tools that can be used, then t
 						repositoryDir = c.Args().First()
 					}
 
-					fallbackLogger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-						Level: slog.LevelError,
-					}))
-
 					// It's safe to initialise a stdout logger
-					fallbackLogger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+					fallbackLogger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 						Level: slog.LevelInfo,
 					}))
+
 					rpMgr.SetFallbackLogger(service.NewLoggerFromSlog(fallbackLogger))
 					// TODO: rpMgr.Init...
 					logger := slog.New(newTeeLogger(fallbackLogger.Handler(), rpMgr.SlogHandler()))

@@ -25,9 +25,10 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"github.com/redpanda-data/connect/v4/internal/mcp"
 	"golang.org/x/sync/errgroup"
 	"gopkg.in/yaml.v3"
+
+	"github.com/redpanda-data/connect/v4/internal/mcp"
 )
 
 type agentConfig struct {
@@ -55,6 +56,7 @@ func (g *gMux) HandleFunc(pattern string, handler func(http.ResponseWriter, *htt
 	g.m.Path(g.prefix + pattern).HandlerFunc(handler) // TODO: PathPrefix?
 }
 
+// RunAgent attempts to run an agent pipeline.
 func RunAgent(
 	logger *slog.Logger,
 	envVarLookupFunc func(context.Context, string) (string, bool),
@@ -83,7 +85,7 @@ func RunAgent(
 	ctx, cancel := context.WithCancelCause(context.Background())
 	eg, ctx := errgroup.WithContext(ctx)
 	buildStream := func(name string, agent agentConfig) (*service.Stream, error) {
-		server, err := mcp.NewMCPServer(
+		server, err := mcp.NewServer(
 			filepath.Join(repositoryDir, "mcp"),
 			logger,
 			envVarLookupFunc,

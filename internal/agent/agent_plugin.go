@@ -19,8 +19,9 @@ import (
 
 	"github.com/hashicorp/go-plugin"
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"github.com/redpanda-data/connect/v4/internal/agent/runtimepb"
 	"google.golang.org/grpc"
+
+	"github.com/redpanda-data/connect/v4/internal/agent/runtimepb"
 )
 
 // Handshake is a common handshake that is shared by plugin and host.

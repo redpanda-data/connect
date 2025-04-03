@@ -40,20 +40,20 @@ func (g *gMux) HandleFunc(pattern string, handler func(http.ResponseWriter, *htt
 	g.m.Path(pattern).HandlerFunc(handler) // TODO: PathPrefix?
 }
 
-// Run an mcp server against a target directory, with an optional base URL for
-// an HTTP server.
-type MCPServer struct {
+// Server runs an mcp server against a target directory, with an optiona base
+// URL for an HTTP server.
+type Server struct {
 	base *server.MCPServer
 	mux  *mux.Router
 }
 
-// Initialize initializes the MCP server.
-func NewMCPServer(
+// NewServer initializes the MCP server.
+func NewServer(
 	repositoryDir string,
 	logger *slog.Logger,
 	envVarLookupFunc func(context.Context, string) (string, bool),
 	filter func(label string) bool,
-) (*MCPServer, error) {
+) (*Server, error) {
 	// Create MCP server
 	s := server.NewMCPServer(
 		"Redpanda Runtime",
@@ -130,17 +130,19 @@ func NewMCPServer(
 		return nil, err
 	}
 
-	return &MCPServer{s, mux}, nil
+	return &Server{s, mux}, nil
 }
 
-func (m *MCPServer) ServeStdio() error {
+// ServeStdio attempts to run the MCP server in stdio mode.
+func (m *Server) ServeStdio() error {
 	if err := server.ServeStdio(m.base); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (m *MCPServer) ServeSSE(ctx context.Context, l net.Listener) error {
+// ServeSSE attempts to run the MCP server in SSE mode.
+func (m *Server) ServeSSE(ctx context.Context, l net.Listener) error {
 	sseServer := server.NewSSEServer(m.base, server.WithBaseURL(
 		"http://"+l.Addr().String(),
 	))

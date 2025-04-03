@@ -25,7 +25,7 @@ func Run(
 	envVarLookupFunc func(context.Context, string) (string, bool),
 	repositoryDir, addr string,
 ) error {
-	srv, err := NewMCPServer(repositoryDir, logger, envVarLookupFunc, func(string) bool { return true })
+	srv, err := NewServer(repositoryDir, logger, envVarLookupFunc, func(string) bool { return true })
 	if err != nil {
 		return err
 	}
