@@ -33,7 +33,7 @@ output:
     max_in_flight: 20
 ```
 
-### !NEW! Check Out the New MCP Server
+### !NEW! Check Out the Latest AI Goodies
 
 MCP Demo:
 
