@@ -9,4 +9,4 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-redpanda-agents = { git = "http://github.com/redpanda-data/agent.git", branch = "runtime" }
+redpanda-agents = { git = "http://github.com/redpanda-data/agent.git", branch = "main" }
