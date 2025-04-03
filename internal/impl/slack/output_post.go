@@ -43,7 +43,7 @@ func outputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Description(`Post a new message to a Slack channel using https://api.slack.com/methods/chat.postMessage[^chat.postMessage]`).
 		Fields(
-			service.NewStringField(iFieldBotToken).Description("The Slack Bot User OAuth token to use.").LintRule(`
+			service.NewStringField(oFieldBotToken).Description("The Slack Bot User OAuth token to use.").LintRule(`
         root = if !this.has_prefix("xoxb-") { [ "field must start with xoxb-" ] }
       `),
 			service.NewInterpolatedStringField(oFieldChannelID).Description("The channel ID to post messages to."),
@@ -55,8 +55,9 @@ func outputSpec() *service.ConfigSpec {
 			service.NewBoolField(oFieldMarkdown).Description("Enable markdown formatting in the message.").Default(slack.DEFAULT_MESSAGE_MARKDOWN),
 			service.NewBoolField(oFieldUnfurlLinks).Description("Enable link unfurling in the message.").Default(slack.DEFAULT_MESSAGE_UNFURL_LINKS),
 			service.NewBoolField(oFieldUnfurlMedia).Description("Enable media unfurling in the message.").Default(slack.DEFAULT_MESSAGE_UNFURL_MEDIA),
-			service.NewBoolField(oFieldLinkNames).Description("Enable link names in the message.").Default(slack.DEFAULT_MESSAGE_LINK_NAMES),
-		)
+			service.NewBoolField(oFieldLinkNames).Description("Enable link names in the message.").Default(false),
+		).
+		Example(echobotExample())
 }
 
 func newOutput(conf *service.ParsedConfig, res *service.Resources) (service.Output, int, error) {

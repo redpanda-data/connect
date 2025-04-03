@@ -44,7 +44,8 @@ func inputSpec() *service.ConfigSpec {
         root = if !this.has_prefix("xoxb-") { [ "field must start with xoxb-" ] }
       `),
 			service.NewAutoRetryNacksToggleField(),
-		)
+		).
+		Example(echobotExample())
 }
 
 func newInput(conf *service.ParsedConfig, res *service.Resources) (service.Input, error) {
