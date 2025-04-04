@@ -560,7 +560,7 @@ func (m *mongoCDC) autoBuckets(ctx context.Context, coll *mongo.Collection) ([][
 			bsonGetPath(bucket, "_id", "max"),
 		})
 	}
-	if cursor.Err() != nil {
+	if err := cursor.Err(); err != nil {
 		return nil, fmt.Errorf("unable to read buckets results: %w", err)
 	}
 	if len(ranges) == 0 {
