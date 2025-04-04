@@ -640,7 +640,7 @@ func (m *mongoCDC) readSnapshotRange(ctx context.Context, coll *mongo.Collection
 			mb = nil
 		}
 	}
-	if cursor.Err() != nil {
+	if err := cursor.Err(); err != nil {
 		return fmt.Errorf("failed to read snapshot: %w", err)
 	}
 	return nil
