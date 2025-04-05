@@ -60,6 +60,17 @@ const (
 	kfrFieldSessionTimeout         = "session_timeout"
 	kfrFieldRebalanceTimeout       = "rebalance_timeout"
 	kfrFieldHeartbeatInterval      = "heartbeat_interval"
+	kfrFieldTransactionIsolation   = "transaction_isolation_level"
+)
+
+// TransactionIsolationLevel is a type that represents the transaction isolation level when reading from kafka.
+type TransactionIsolationLevel string
+
+const (
+	// TransactionIsolationLevelReadUncommitted is a transaction isolation level that allows reading uncommitted records.
+	TransactionIsolationLevelReadUncommitted TransactionIsolationLevel = "read_uncommitted"
+	// TransactionIsolationLevelReadCommitted is a transaction isolation level that only allows reading committed records.
+	TransactionIsolationLevelReadCommitted TransactionIsolationLevel = "read_committed"
 )
 
 // FranzConsumerFields returns a slice of fields specifically for customising
@@ -122,6 +133,12 @@ Finally, it's also possible to specify an explicit offset to consume from by add
 			Description("Sets the maximum amount of bytes that will be consumed for a single partition in a fetch request. Note that if a single batch is larger than this number, that batch will still be returned so the client can make progress. This is the equivalent to the Java fetch.max.partition.bytes setting.").
 			Advanced().
 			Default("1MiB"),
+		service.NewStringAnnotatedEnumField(kfrFieldTransactionIsolation, map[string]string{
+			string(TransactionIsolationLevelReadUncommitted): "If set, then uncommitted records are processed.",
+			string(TransactionIsolationLevelReadCommitted):   "If set, only committed transactional records are processed.",
+		}).
+			Description("The transaction isolation level").
+			Default(string(TransactionIsolationLevelReadUncommitted)),
 	}
 }
 
@@ -130,6 +147,7 @@ Finally, it's also possible to specify an explicit offset to consume from by add
 type FranzConsumerDetails struct {
 	RackID                 string
 	InstanceID             string
+	IsolationLevel         kgo.IsolationLevel
 	SessionTimeout         time.Duration
 	RebalanceTimeout       time.Duration
 	HeartbeatInterval      time.Duration
@@ -163,6 +181,22 @@ func FranzConsumerDetailsFromConfig(conf *service.ParsedConfig) (*FranzConsumerD
 	}
 	if d.HeartbeatInterval, err = conf.FieldDuration(kfrFieldHeartbeatInterval); err != nil {
 		return nil, err
+	}
+	if d.InstanceID, err = conf.FieldString(kfrFieldInstanceID); err != nil {
+		return nil, err
+	}
+	isolationLevelStr, err := conf.FieldString(kfrFieldTransactionIsolation)
+	if err != nil {
+		return nil, err
+	}
+	isolationLevel := TransactionIsolationLevel(isolationLevelStr)
+	switch isolationLevel {
+	case TransactionIsolationLevelReadCommitted:
+		d.IsolationLevel = kgo.ReadCommitted()
+	case TransactionIsolationLevelReadUncommitted:
+		d.IsolationLevel = kgo.ReadUncommitted()
+	default:
+		return nil, fmt.Errorf("invalid transaction isolation level: %v", isolationLevelStr)
 	}
 
 	startFromOldest, err := conf.FieldBool(kfrFieldStartFromOldest)
@@ -237,6 +271,7 @@ func (d *FranzConsumerDetails) FranzOpts() []kgo.Opt {
 		kgo.SessionTimeout(d.SessionTimeout),
 		kgo.RebalanceTimeout(d.RebalanceTimeout),
 		kgo.HeartbeatInterval(d.HeartbeatInterval),
+		kgo.FetchIsolationLevel(d.IsolationLevel),
 	}
 
 	if d.RegexPattern {

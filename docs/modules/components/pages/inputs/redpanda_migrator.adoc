@@ -42,6 +42,7 @@ input:
     seed_brokers: [] # No default (required)
     topics: [] # No default (required)
     regexp_topics: false
+    transaction_isolation_level: read_uncommitted
     consumer_group: "" # No default (optional)
     auto_replay_nacks: true
 ```
@@ -79,6 +80,7 @@ input:
     fetch_max_wait: 5s
     fetch_min_bytes: 1B
     fetch_max_partition_bytes: 1MiB
+    transaction_isolation_level: read_uncommitted
     consumer_group: "" # No default (optional)
     commit_period: 5s
     partition_buffer_bytes: 1MB
@@ -641,6 +643,25 @@ Sets the maximum amount of bytes that will be consumed for a single partition in
 *Type*: `string`
 
 *Default*: `"1MiB"`
+
+=== `transaction_isolation_level`
+
+The transaction isolation level
+
+
+*Type*: `string`
+
+*Default*: `"read_uncommitted"`
+
+|===
+| Option | Summary
+
+| `read_committed`
+| If set, only committed transactional records are processed.
+| `read_uncommitted`
+| If set, then uncommitted records are processed.
+
+|===
 
 === `consumer_group`
 
