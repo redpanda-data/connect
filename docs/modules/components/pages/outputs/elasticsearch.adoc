@@ -97,16 +97,16 @@ output:
       processors: [] # No default (optional)
     aws:
       enabled: false
-      region: ""
-      endpoint: ""
+      region: "" # No default (optional)
+      endpoint: "" # No default (optional)
       credentials:
-        profile: ""
-        id: ""
-        secret: ""
-        token: ""
-        from_ec2_role: false
-        role: ""
-        role_external_id: ""
+        profile: "" # No default (optional)
+        id: "" # No default (optional)
+        secret: "" # No default (optional)
+        token: "" # No default (optional)
+        from_ec2_role: false # No default (optional)
+        role: "" # No default (optional)
+        role_external_id: "" # No default (optional)
     gzip_compression: false
 ```
 
@@ -653,7 +653,6 @@ The AWS region to target.
 
 *Type*: `string`
 
-*Default*: `""`
 
 === `aws.endpoint`
 
@@ -662,7 +661,6 @@ Allows you to specify a custom endpoint for the AWS API.
 
 *Type*: `string`
 
-*Default*: `""`
 
 === `aws.credentials`
 
@@ -679,7 +677,6 @@ A profile from `~/.aws/credentials` to use.
 
 *Type*: `string`
 
-*Default*: `""`
 
 === `aws.credentials.id`
 
@@ -688,7 +685,6 @@ The ID of credentials to use.
 
 *Type*: `string`
 
-*Default*: `""`
 
 === `aws.credentials.secret`
 
@@ -702,7 +698,6 @@ This field contains sensitive information that usually shouldn't be added to a c
 
 *Type*: `string`
 
-*Default*: `""`
 
 === `aws.credentials.token`
 
@@ -711,7 +706,6 @@ The token for the credentials being used, required when using short term credent
 
 *Type*: `string`
 
-*Default*: `""`
 
 === `aws.credentials.from_ec2_role`
 
@@ -720,7 +714,6 @@ Use the credentials of a host EC2 machine configured to assume https://docs.aws.
 
 *Type*: `bool`
 
-*Default*: `false`
 Requires version 4.2.0 or newer
 
 === `aws.credentials.role`
@@ -730,7 +723,6 @@ A role ARN to assume.
 
 *Type*: `string`
 
-*Default*: `""`
 
 === `aws.credentials.role_external_id`
 
@@ -739,7 +731,6 @@ An external ID to provide when assuming a role.
 
 *Type*: `string`
 
-*Default*: `""`
 
 === `gzip_compression`
 

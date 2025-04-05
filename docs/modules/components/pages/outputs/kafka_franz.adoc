@@ -396,7 +396,6 @@ The AWS region to target.
 
 *Type*: `string`
 
-*Default*: `""`
 
 === `sasl[].aws.endpoint`
 
@@ -405,7 +404,6 @@ Allows you to specify a custom endpoint for the AWS API.
 
 *Type*: `string`
 
-*Default*: `""`
 
 === `sasl[].aws.credentials`
 
@@ -422,7 +420,6 @@ A profile from `~/.aws/credentials` to use.
 
 *Type*: `string`
 
-*Default*: `""`
 
 === `sasl[].aws.credentials.id`
 
@@ -431,7 +428,6 @@ The ID of credentials to use.
 
 *Type*: `string`
 
-*Default*: `""`
 
 === `sasl[].aws.credentials.secret`
 
@@ -445,7 +441,6 @@ This field contains sensitive information that usually shouldn't be added to a c
 
 *Type*: `string`
 
-*Default*: `""`
 
 === `sasl[].aws.credentials.token`
 
@@ -454,7 +449,6 @@ The token for the credentials being used, required when using short term credent
 
 *Type*: `string`
 
-*Default*: `""`
 
 === `sasl[].aws.credentials.from_ec2_role`
 
@@ -463,7 +457,6 @@ Use the credentials of a host EC2 machine configured to assume https://docs.aws.
 
 *Type*: `bool`
 
-*Default*: `false`
 Requires version 4.2.0 or newer
 
 === `sasl[].aws.credentials.role`
@@ -473,7 +466,6 @@ A role ARN to assume.
 
 *Type*: `string`
 
-*Default*: `""`
 
 === `sasl[].aws.credentials.role_external_id`
 
@@ -482,7 +474,6 @@ An external ID to provide when assuming a role.
 
 *Type*: `string`
 
-*Default*: `""`
 
 === `metadata_max_age`
 
