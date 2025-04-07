@@ -1810,8 +1810,8 @@ github.com/redis/go-redis/v9 v9.7.0 h1:HhLSs+B6O021gwzl+locl0zEDnyNkxMtf/Z3NNBMa
 github.com/redis/go-redis/v9 v9.7.0/go.mod h1:f6zhXITC7JUJIlPEiBOTXxJgPLdZcA93GewI7inzyWw=
 github.com/redpanda-data/benthos/v4 v4.47.0 h1:kIFBr7zYmoOcVgsWPgLxAcgl6gG8a8Sb8SkQuthFa6U=
 github.com/redpanda-data/benthos/v4 v4.47.0/go.mod h1:zMLG/yCfRp4YM0mrrkIAxVGGVHBM2Vt1dWTgFakMTp8=
-github.com/redpanda-data/common-go/secrets v0.1.2 h1:UCDLN/yL8yjSIYhS5MB+2Am1Jy4XZMZPtuuCRL/82Rw=
-github.com/redpanda-data/common-go/secrets v0.1.2/go.mod h1:WjaDI39reE/GPRPHTsaYmiMjhHj+qsSJLe+kHsPKsXk=
+github.com/redpanda-data/common-go/secrets v0.1.3 h1:VRo+OFS4Zgb2UMvwcIuUujdMhAPNGoGESZgcF4gjgcY=
+github.com/redpanda-data/common-go/secrets v0.1.3/go.mod h1:WjUU/5saSXwItZx6veFOGbQZUgPQz4MQ65z22y0Ky84=
 github.com/redpanda-data/connect/public/bundle/free/v4 v4.31.0 h1:Qiz4Q8ZO17n8797hgDdJ2f1XN7wh6J2hIRgeeSw4F24=
 github.com/redpanda-data/connect/public/bundle/free/v4 v4.31.0/go.mod h1:ISgO+/kuuSW0Z7sJo1rWe/rYKIv1rDPHTQ/bSLQEog0=
 github.com/remyoudompheng/bigfft v0.0.0-20200410134404-eec4a21b6bb0/go.mod h1:qqbHyh8v60DhA7CoWK5oRCqLrMHRGoxYCSS9EjAz6Eo=
