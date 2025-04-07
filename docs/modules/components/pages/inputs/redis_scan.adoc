@@ -23,7 +23,7 @@
 component_type_dropdown::[]
 
 
-Scans the set of keys in the current selected database and gets their values, using the Scan and Get commands.
+Scans the set of keys in the current selected database and gets their values, using the Scan and respective, typed, Get commands.
 
 Introduced in version 4.27.0.
 
@@ -42,6 +42,7 @@ input:
     url: redis://:6379 # No default (required)
     auto_replay_nacks: true
     match: ""
+    type: string
 ```
 
 --
@@ -66,6 +67,7 @@ input:
       client_certs: []
     auto_replay_nacks: true
     match: ""
+    type: string
 ```
 
 --
@@ -76,11 +78,26 @@ Optionally, iterates only elements matching a blob-style pattern. For example:
 - `*foo*` iterates only keys which contain `foo` in it.
 - `foo*` iterates only keys starting with `foo`.
 
-This input generates a message for each key value pair in the following format:
+With no type specified (default) this input generates a message for each key value pair in the legacy format:
 
 ```json
 {"key":"foo","value":"bar"}
 ```
+For `type` set to `string` this input generates a string for each key value pair in the following format:
+
+```json
+"foovalue"
+```
+
+The key is stored in the metadata field `key`.
+
+For `type` set to `hash` this input generates a message for each key fields pair in the following format:
+
+```json
+{"field1":"Hello","field2":"Hi"}
+```
+
+The key is stored in the metadata field `key`.
 
 
 == Fields
@@ -334,5 +351,19 @@ match: foo
 
 match: '*4*'
 ```
+
+=== `type`
+
+The type of the Redis keys to scan.
+
+
+*Type*: `string`
+
+*Default*: `"string"`
+
+Options:
+`hash`
+, `string`
+.
 
 
