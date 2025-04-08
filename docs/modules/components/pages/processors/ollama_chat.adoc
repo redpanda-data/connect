@@ -46,7 +46,7 @@ ollama_chat:
   temperature: 0 # No default (optional)
   save_prompt_metadata: false
   history: "" # No default (optional)
-  tools: [] # No default (required)
+  tools: []
   runner:
     context_size: 0 # No default (optional)
     batch_size: 0 # No default (optional)
@@ -80,7 +80,7 @@ ollama_chat:
   save_prompt_metadata: false
   history: "" # No default (optional)
   max_tool_calls: 3
-  tools: [] # No default (required)
+  tools: []
   runner:
     context_size: 0 # No default (optional)
     batch_size: 0 # No default (optional)
@@ -360,6 +360,7 @@ The tools to allow the LLM to invoke. This allows building subpipelines that the
 
 *Type*: `array`
 
+*Default*: `[]`
 
 === `tools[].name`
 

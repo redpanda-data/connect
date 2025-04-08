@@ -826,6 +826,7 @@ The parameters the LLM needs to provide to invoke this tool.
 
 *Type*: `object`
 
+*Default*: `[]`
 
 === `tools[].parameters.required`
 

@@ -167,7 +167,8 @@ For more information, see the https://github.com/ollama/ollama/tree/main/docs[Ol
 					).Description("The properties for the processor's input data"),
 				).Description("The parameters the LLM needs to provide to invoke this tool."),
 				service.NewProcessorListField(ocpToolFieldPipeline).Description("The pipeline to execute when the LLM uses this tool.").Optional(),
-			).Description("The tools to allow the LLM to invoke. This allows building subpipelines that the LLM can choose to invoke to execute agentic-like actions."),
+			).Description("The tools to allow the LLM to invoke. This allows building subpipelines that the LLM can choose to invoke to execute agentic-like actions.").
+				Default([]any{}),
 		).Fields(commonFields()...).
 		Example(
 			"Use Llava to analyze an image",
