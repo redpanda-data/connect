@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Fields `region`, `endpoint` and `credentials` added to the `dynamodb` configuration section of the `aws_kinesis` input. (@jreyeshdez, @mihaitodor)
+- Field `isolation_level` added to `kafka`, `kafka_franz`, `ockam_kafka`, `redpanda`, `redpanda_common`, and `redpanda_migrator` inputs. (@rockwotj)
 
 ## 4.52.0 - 2025-04-03
 

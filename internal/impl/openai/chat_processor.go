@@ -195,7 +195,8 @@ We generally recommend altering this or temperature but not both.`).
 						service.NewStringField(ocpToolParamPropFieldDescription).Description("A description of this parameter."),
 						service.NewStringListField(ocpToolParamPropFieldEnum).Default([]string{}).Description("Specifies that this parameter is an enum and only these specific values should be used."),
 					).Description("The properties for the processor's input data"),
-				).Description("The parameters the LLM needs to provide to invoke this tool."),
+				).Description("The parameters the LLM needs to provide to invoke this tool.").
+					Default([]any{}),
 				service.NewProcessorListField(ocpToolFieldPipeline).Description("The pipeline to execute when the LLM uses this tool.").Optional(),
 			).Description("The tools to allow the LLM to invoke. This allows building subpipelines that the LLM can choose to invoke to execute agentic-like actions."),
 		).LintRule(`
