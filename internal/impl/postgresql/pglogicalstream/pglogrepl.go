@@ -518,7 +518,7 @@ func SendStandbyStatusUpdate(_ context.Context, conn *pgconn.PgConn, ssu Standby
 	if ssu.WALApplyPosition == 0 {
 		ssu.WALApplyPosition = ssu.WALWritePosition
 	}
-	if ssu.ClientTime.Equal((time.Time{})) {
+	if ssu.ClientTime.IsZero() {
 		ssu.ClientTime = time.Now()
 	}
 

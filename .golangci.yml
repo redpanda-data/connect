@@ -1,7 +1,6 @@
 version: "2"
 linters:
   default: none
-  # Default linters reported by `golangci-lint help linters` in v1.52.0
   enable:
     - errcheck
     - govet
