@@ -161,9 +161,10 @@ func newSQLSelectInputFromConfig(conf *service.ParsedConfig, mgr *service.Resour
 	}
 
 	s.builder = squirrel.Select(columns...).From(tableStr)
-	if s.driver == "postgres" || s.driver == "clickhouse" {
+	switch s.driver {
+	case "postgres", "clickhouse":
 		s.builder = s.builder.PlaceholderFormat(squirrel.Dollar)
-	} else if s.driver == "oracle" || s.driver == "gocosmos" {
+	case "oracle", "gocosmos":
 		s.builder = s.builder.PlaceholderFormat(squirrel.Colon)
 	}
 

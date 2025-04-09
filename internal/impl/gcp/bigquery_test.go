@@ -58,7 +58,7 @@ type mockBQClient struct {
 }
 
 func (client *mockBQClient) RunQuery(ctx context.Context, options *bqQueryBuilderOptions) (bigqueryIterator, error) {
-	args := client.Mock.Called(ctx, options)
+	args := client.Called(ctx, options)
 
 	var iter bigqueryIterator
 	if mi := args.Get(0); mi != nil {

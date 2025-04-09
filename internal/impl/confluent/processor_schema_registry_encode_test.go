@@ -715,10 +715,7 @@ func TestSchemaRegistryEncodeJSONConstantRefreshes(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for {
-				if time.Since(tStarted) > (time.Second * 300) {
-					break
-				}
+			for time.Since(tStarted) <= (time.Second * 300) {
 
 				outBatches, err := encoder.ProcessBatch(
 					context.Background(),

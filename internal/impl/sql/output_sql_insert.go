@@ -167,9 +167,10 @@ func newSQLInsertOutputFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 	}
 
 	s.builder = squirrel.Insert(tableStr).Columns(columns...)
-	if s.driver == "postgres" || s.driver == "clickhouse" {
+	switch s.driver {
+	case "postgres", "clickhouse":
 		s.builder = s.builder.PlaceholderFormat(squirrel.Dollar)
-	} else if s.driver == "oracle" || s.driver == "gocosmos" {
+	case "oracle", "gocosmos":
 		s.builder = s.builder.PlaceholderFormat(squirrel.Colon)
 	}
 

@@ -45,8 +45,8 @@ func mustHexDecode(s string) []byte {
 
 func TestTruncateBytesAsHex(t *testing.T) {
 	// Test empty input
-	require.Equal(t, "", truncateBytesAsHex([]byte{}, false))
-	require.Equal(t, "", truncateBytesAsHex([]byte{}, true))
+	require.Empty(t, truncateBytesAsHex([]byte{}, false))
+	require.Empty(t, truncateBytesAsHex([]byte{}, true))
 
 	// Test basic case
 	decoded := mustHexDecode("aa")
@@ -110,7 +110,7 @@ func TestCompat(t *testing.T) {
 }
 
 func TestColumnNormalization(t *testing.T) {
-	require.Equal(t, "", normalizeColumnName(""))
+	require.Empty(t, normalizeColumnName(""))
 	require.Equal(t, "FOO", normalizeColumnName("foo"))
 	require.Equal(t, `bar`, normalizeColumnName(`"bar"`))
 	require.Equal(t, "'BAR'", normalizeColumnName(`'bar'`))

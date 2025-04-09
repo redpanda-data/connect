@@ -828,13 +828,14 @@ pg_stream:
 			}, time.Second*10, time.Millisecond*100)
 			require.JSONEq(t, `{"id":1, "value": "`+strings.Repeat("foo", stringSize)+`"}`, outBatches[0], "GOT: %s", outBatches[0])
 			require.JSONEq(t, `{"id":1, "value": "`+strings.Repeat("bar", stringSize)+`"}`, outBatches[1], "GOT: %s", outBatches[1])
-			if replicaIdentity == "FULL" {
+			switch replicaIdentity {
+			case "FULL":
 				require.JSONEq(t, `{"id":3, "value": "`+strings.Repeat("bar", stringSize)+`"}`, outBatches[2], "GOT: %s", outBatches[2])
 				require.JSONEq(t, `{"id":3, "value": "`+strings.Repeat("bar", stringSize)+`"}`, outBatches[3], "GOT: %s", outBatches[3])
-			} else if replicaIdentity == "DEFAULT" {
+			case "DEFAULT":
 				require.JSONEq(t, `{"id":3, "value": null}`, outBatches[2], "GOT: %s", outBatches[2])
 				require.JSONEq(t, `{"id":3, "value": null}`, outBatches[3], "GOT: %s", outBatches[3])
-			} else {
+			default:
 				require.JSONEq(t, `{"id":3, "value": "__redpanda_connect_unchanged_toast_yum__"}`, outBatches[2], "GOT: %s", outBatches[2])
 				require.JSONEq(t, `{"id":3, "value": null}`, outBatches[3], "GOT: %s", outBatches[3])
 			}

@@ -785,7 +785,8 @@ func (a *awkProc) Process(ctx context.Context, msg *service.Message) (service.Me
 		Funcs:  customFuncs,
 	}
 
-	if a.codec == "json" {
+	switch a.codec {
+	case "json":
 		jsonPart, err := msg.AsStructured()
 		if err != nil {
 			a.log.Errorf("Failed to parse part into json: %v\n", err)
@@ -796,14 +797,14 @@ func (a *awkProc) Process(ctx context.Context, msg *service.Message) (service.Me
 			config.Vars = append(config.Vars, varInvalidRegexp.ReplaceAllString(k, "_"), v)
 		}
 		config.Stdin = bytes.NewReader([]byte(" "))
-	} else if a.codec == "text" {
+	case "text":
 		msgBytes, err := msg.AsBytes()
 		if err != nil {
 			a.log.Errorf("Failed to obtain message as text: %v\n", err)
 			return nil, err
 		}
 		config.Stdin = bytes.NewReader(msgBytes)
-	} else {
+	default:
 		config.Stdin = bytes.NewReader([]byte(" "))
 	}
 

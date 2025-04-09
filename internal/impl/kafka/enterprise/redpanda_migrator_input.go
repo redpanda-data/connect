@@ -179,7 +179,7 @@ func (rmi *redpandaMigratorInput) Connect(ctx context.Context) error {
 	}
 
 	if err := kafka.FranzSharedClientSet(rmi.clientLabel, &kafka.FranzSharedClientInfo{
-		Client: rmi.FranzReaderOrdered.Client,
+		Client: rmi.Client,
 	}, rmi.mgr); err != nil {
 		rmi.mgr.Logger().Warnf("Failed to store client connection for sharing: %s", err)
 	}

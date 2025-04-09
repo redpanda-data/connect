@@ -238,11 +238,12 @@ func newVertexAIProcessor(conf *service.ParsedConfig, mgr *service.Resources) (p
 	}
 	var format string
 	format, err = conf.FieldString(vaicpFieldResponseFormat)
-	if format == "json" {
+	switch format {
+	case "json":
 		proc.responseMIMEType = "application/json"
-	} else if format == "text" {
+	case "text":
 		proc.responseMIMEType = "text/plain"
-	} else {
+	default:
 		return nil, fmt.Errorf("invalid value %q for `%s`", format, vaicpFieldResponseFormat)
 	}
 	p = proc

@@ -67,7 +67,7 @@ func TestIntegrationRedis(t *testing.T) {
 
 	v, exists := secretsLookup(ctx, "foo")
 	assert.False(t, exists)
-	assert.Equal(t, "", v)
+	assert.Empty(t, v)
 
 	v, exists = secretsLookup(ctx, "bar")
 	assert.True(t, exists)

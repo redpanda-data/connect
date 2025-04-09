@@ -166,42 +166,42 @@ func extractOptions(conf *service.ParsedConfig) (map[string]any, error) {
 		if err != nil {
 			return nil, err
 		}
-		opts.Runner.NumCtx = v
+		opts.NumCtx = v
 	}
 	if conf.Contains(bopFieldRunner, bopFieldBatchSize) {
 		v, err := conf.FieldInt(bopFieldRunner, bopFieldBatchSize)
 		if err != nil {
 			return nil, err
 		}
-		opts.Runner.NumBatch = v
+		opts.NumBatch = v
 	}
 	if conf.Contains(bopFieldRunner, bopFieldGPULayers) {
 		v, err := conf.FieldInt(bopFieldRunner, bopFieldGPULayers)
 		if err != nil {
 			return nil, err
 		}
-		opts.Runner.NumGPU = v
+		opts.NumGPU = v
 	}
 	if conf.Contains(bopFieldRunner, bopFieldThreads) {
 		v, err := conf.FieldInt(bopFieldRunner, bopFieldThreads)
 		if err != nil {
 			return nil, err
 		}
-		opts.Runner.NumThread = v
+		opts.NumThread = v
 	}
 	if conf.Contains(bopFieldRunner, bopFieldUseMMap) {
 		v, err := conf.FieldBool(bopFieldRunner, bopFieldUseMMap)
 		if err != nil {
 			return nil, err
 		}
-		opts.Runner.UseMMap = &v
+		opts.UseMMap = &v
 	}
 	if conf.Contains(bopFieldRunner, bopFieldUseMLock) {
 		v, err := conf.FieldBool(bopFieldRunner, bopFieldUseMLock)
 		if err != nil {
 			return nil, err
 		}
-		opts.Runner.UseMLock = v
+		opts.UseMLock = v
 	}
 	// The API for some reason doesn't use the strongly typed option, but a generic map,
 	// so roundtrip it via JSON so we don't have to manually map the names to their JSON fields.
