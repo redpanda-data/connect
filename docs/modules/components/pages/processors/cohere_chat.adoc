@@ -47,6 +47,7 @@ cohere_chat:
   temperature: 0 # No default (optional)
   response_format: text
   json_schema: "" # No default (optional)
+  max_tool_calls: 10
   tools: []
 ```
 
@@ -99,6 +100,7 @@ cohere_chat:
   presence_penalty: 0 # No default (optional)
   seed: 0 # No default (optional)
   stop: [] # No default (optional)
+  max_tool_calls: 10
   tools: []
 ```
 
@@ -592,6 +594,15 @@ Up to 4 sequences where the API will stop generating further tokens.
 
 *Type*: `array`
 
+
+=== `max_tool_calls`
+
+Maximum number of tool calls the model can do.
+
+
+*Type*: `int`
+
+*Default*: `10`
 
 === `tools`
 

@@ -11,6 +11,7 @@ package cohere
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"slices"
@@ -489,10 +490,10 @@ func (p *chatProcessor) Process(ctx context.Context, msg *service.Message) (serv
 		}
 		for _, tool := range resp.Message.ToolCalls {
 			if tool.Id == nil {
-				return nil, fmt.Errorf("tool call has no ID")
+				return nil, errors.New("tool call has no ID")
 			}
 			if tool.Function == nil || tool.Function.Name == nil {
-				return nil, fmt.Errorf("tool call has no function name")
+				return nil, errors.New("tool call has no function name")
 			}
 			// Fix a bug in cohere API when the function arguments are null, it expects a valid JSON object in the response.
 			if tool.Function.Arguments == nil || *tool.Function.Arguments == "null" {
@@ -507,9 +508,6 @@ func (p *chatProcessor) Process(ctx context.Context, msg *service.Message) (serv
 			},
 		})
 		for _, tool := range resp.Message.ToolCalls {
-			if tool.Function == nil || tool.Function.Name == nil {
-				return nil, fmt.Errorf("tool call has no function name")
-			}
 			name := *tool.Function.Name
 			idx := slices.IndexFunc(p.tools, func(t pipelineTool) bool { return t.tool.Function.Name == name })
 			if idx < 0 {
