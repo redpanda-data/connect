@@ -47,6 +47,7 @@ cohere_chat:
   temperature: 0 # No default (optional)
   response_format: text
   json_schema: "" # No default (optional)
+  tools: []
 ```
 
 --
@@ -98,6 +99,7 @@ cohere_chat:
   presence_penalty: 0 # No default (optional)
   seed: 0 # No default (optional)
   stop: [] # No default (optional)
+  tools: []
 ```
 
 --
@@ -586,6 +588,89 @@ If specified, our system will make a best effort to sample deterministically, su
 === `stop`
 
 Up to 4 sequences where the API will stop generating further tokens.
+
+
+*Type*: `array`
+
+
+=== `tools`
+
+The tools to allow the LLM to invoke. This allows building subpipelines that the LLM can choose to invoke to execute agentic-like actions.
+
+
+*Type*: `array`
+
+*Default*: `[]`
+
+=== `tools[].name`
+
+The name of this tool.
+
+
+*Type*: `string`
+
+
+=== `tools[].description`
+
+A description of this tool, the LLM uses this to decide if the tool should be used.
+
+
+*Type*: `string`
+
+
+=== `tools[].parameters`
+
+The parameters the LLM needs to provide to invoke this tool.
+
+
+*Type*: `object`
+
+
+=== `tools[].parameters.required`
+
+The required parameters for this pipeline.
+
+
+*Type*: `array`
+
+*Default*: `[]`
+
+=== `tools[].parameters.properties`
+
+The properties for the processor's input data
+
+
+*Type*: `object`
+
+
+=== `tools[].parameters.properties.<name>.type`
+
+The type of this parameter.
+
+
+*Type*: `string`
+
+
+=== `tools[].parameters.properties.<name>.description`
+
+A description of this parameter.
+
+
+*Type*: `string`
+
+
+=== `tools[].parameters.properties.<name>.enum`
+
+Specifies that this parameter is an enum and only these specific values should be used.
+
+
+*Type*: `array`
+
+*Default*: `[]`
+
+=== `tools[].processors`
+
+The pipeline to execute when the LLM uses this tool.
 
 
 *Type*: `array`
