@@ -75,7 +75,7 @@ pipeline:
   - cohere_rerank:
       model: rerank-v3.5
       api_key: "${COHERE_API_KEY}"
-			query: "${!this.query}"
+      query: "${!this.query}"
       documents: "root = this.docs"
 output:
   stdout: {}```
