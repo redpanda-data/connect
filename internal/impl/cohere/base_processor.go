@@ -11,7 +11,8 @@ package cohere
 import (
 	"context"
 
-	cohere "github.com/cohere-ai/cohere-go/v2/client"
+	coopt "github.com/cohere-ai/cohere-go/v2/option"
+	coherev2 "github.com/cohere-ai/cohere-go/v2/v2"
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
@@ -36,7 +37,7 @@ func baseConfigFieldsWithModels(modelExamples ...any) []*service.ConfigField {
 }
 
 type baseProcessor struct {
-	client *cohere.Client
+	client *coherev2.Client
 	model  string
 }
 
@@ -53,9 +54,9 @@ func newBaseProcessor(conf *service.ParsedConfig) (*baseProcessor, error) {
 	if err != nil {
 		return nil, err
 	}
-	c := cohere.NewClient(
-		cohere.WithBaseURL(bu),
-		cohere.WithToken(k),
+	c := coherev2.NewClient(
+		coopt.WithBaseURL(bu),
+		coopt.WithToken(k),
 	)
 	m, err := conf.FieldString(cpFieldModel)
 	if err != nil {
