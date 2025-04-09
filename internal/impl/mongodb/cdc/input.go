@@ -30,6 +30,7 @@ import (
 	"golang.org/x/sync/semaphore"
 
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 const (
@@ -163,6 +164,9 @@ func init() {
 }
 
 func newMongoCDC(conf *service.ParsedConfig, res *service.Resources) (i service.BatchInput, err error) {
+	if err := license.CheckRunningEnterprise(res); err != nil {
+		return nil, err
+	}
 	cdc := &mongoCDC{
 		readChan:  make(chan mongoBatch),
 		errorChan: make(chan error, 1),
