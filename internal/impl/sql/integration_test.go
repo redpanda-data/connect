@@ -89,9 +89,10 @@ func testRawProcessors(name string, fn func(t *testing.T, insertProc, selectProc
 	return func(t *testing.T, driver, dsn, table string) {
 		t.Run(name, func(t *testing.T) {
 			valuesStr := `(?, ?, ?)`
-			if driver == "postgres" || driver == "clickhouse" {
+			switch driver {
+			case "postgres", "clickhouse":
 				valuesStr = `($1, $2, $3)`
-			} else if driver == "oracle" {
+			case "oracle":
 				valuesStr = `(:1, :2, :3)`
 			}
 			insertConf := fmt.Sprintf(`
@@ -103,9 +104,10 @@ exec_only: true
 `, driver, dsn, table)
 
 			placeholderStr := "?"
-			if driver == "postgres" || driver == "clickhouse" {
+			switch driver {
+			case "postgres", "clickhouse":
 				placeholderStr = "$1"
-			} else if driver == "oracle" {
+			case "oracle":
 				placeholderStr = ":1"
 			}
 			queryConf := fmt.Sprintf(`
@@ -144,10 +146,11 @@ func testRawTransactionalProcessors(name string, fn func(t *testing.T, insertPro
 			}
 			placeholderStr := "?"
 			valuesStr := `(?, ?, ?)`
-			if driver == "postgres" || driver == "clickhouse" {
+			switch driver {
+			case "postgres", "clickhouse":
 				valuesStr = `($1, $2, $3)`
 				placeholderStr = "$1"
-			} else if driver == "oracle" {
+			case "oracle":
 				valuesStr = `(:1, :2, :3)`
 				placeholderStr = ":1"
 			}
@@ -203,9 +206,10 @@ func testRawDeprecatedProcessors(name string, fn func(t *testing.T, insertProc, 
 	return func(t *testing.T, driver, dsn, table string) {
 		t.Run(name, func(t *testing.T) {
 			valuesStr := `(?, ?, ?)`
-			if driver == "postgres" || driver == "clickhouse" {
+			switch driver {
+			case "postgres", "clickhouse":
 				valuesStr = `($1, $2, $3)`
-			} else if driver == "oracle" {
+			case "oracle":
 				valuesStr = `(:1, :2, :3)`
 			}
 			insertConf := fmt.Sprintf(`
@@ -216,9 +220,10 @@ args_mapping: 'root = [ this.foo, this.bar.floor(), this.baz ]'
 `, driver, dsn, table)
 
 			placeholderStr := "?"
-			if driver == "postgres" || driver == "clickhouse" {
+			switch driver {
+			case "postgres", "clickhouse":
 				placeholderStr = "$1"
-			} else if driver == "oracle" {
+			case "oracle":
 				placeholderStr = ":1"
 			}
 			queryConf := fmt.Sprintf(`
@@ -488,10 +493,11 @@ func testBatchInputOutputRaw(t *testing.T, driver, dsn, table string) {
 
 		placeholderStr := "?"
 		valuesStr := `(?, ?, ?)`
-		if driver == "postgres" || driver == "clickhouse" {
+		switch driver {
+		case "postgres", "clickhouse":
 			valuesStr = `($1, $2, $3)`
 			placeholderStr = "$1"
-		} else if driver == "oracle" {
+		case "oracle":
 			valuesStr = `(:1, :2, :3)`
 			placeholderStr = ":1"
 		}

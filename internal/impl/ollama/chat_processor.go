@@ -264,11 +264,12 @@ func makeOllamaCompletionProcessor(conf *service.ParsedConfig, mgr *service.Reso
 	if err != nil {
 		return nil, err
 	}
-	if format == "json" {
+	switch format {
+	case "json":
 		p.format = json.RawMessage(`"json"`)
-	} else if format == "text" {
+	case "text":
 		p.format = nil
-	} else {
+	default:
 		return nil, fmt.Errorf("invalid %s: %q", ocpFieldResponseFormat, format)
 	}
 	p.savePrompt, err = conf.FieldBool(ocpFieldEmitPromptMetadata)

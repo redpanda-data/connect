@@ -59,9 +59,9 @@ jobs:
         go-version: oldstable
 
     - name: Lint
-      uses: golangci/golangci-lint-action@v6
+      uses: golangci/golangci-lint-action@v7
       with:
-        version: v1.64.6
+        version: v2.0.2
         args: --timeout 30m cmd/... internal/... public/...
 
   test-push-to-cloudsmith:

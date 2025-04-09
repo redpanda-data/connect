@@ -150,12 +150,13 @@ func newSQLCacheFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (
 	s.upsertBuilder = squirrel.Insert(tableStr).Columns(s.keyColumn, valueColumn)
 	s.deleteBuilder = squirrel.Delete(tableStr)
 
-	if s.driver == "postgres" || s.driver == "clickhouse" {
+	switch s.driver {
+	case "postgres", "clickhouse":
 		s.selectBuilder = s.selectBuilder.PlaceholderFormat(squirrel.Dollar)
 		s.insertBuilder = s.insertBuilder.PlaceholderFormat(squirrel.Dollar)
 		s.upsertBuilder = s.upsertBuilder.PlaceholderFormat(squirrel.Dollar)
 		s.deleteBuilder = s.deleteBuilder.PlaceholderFormat(squirrel.Dollar)
-	} else if s.driver == "oracle" || s.driver == "gocosmos" {
+	case "oracle", "gocosmos":
 		s.selectBuilder = s.selectBuilder.PlaceholderFormat(squirrel.Colon)
 		s.insertBuilder = s.insertBuilder.PlaceholderFormat(squirrel.Colon)
 		s.upsertBuilder = s.upsertBuilder.PlaceholderFormat(squirrel.Colon)

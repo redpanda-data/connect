@@ -66,9 +66,10 @@ func containsDoubleNewline(data []byte) (int, int) {
 	minPos := minPosInt(crcr, minPosInt(lflf, minPosInt(crlflf, minPosInt(lfcrlf, crlfcrlf))))
 	// Detemine the length of the sequence
 	nlen := 2
-	if minPos == crlfcrlf {
+	switch minPos {
+	case crlfcrlf:
 		nlen = 4
-	} else if minPos == crlflf || minPos == lfcrlf {
+	case crlflf, lfcrlf:
 		nlen = 3
 	}
 	return minPos, nlen

@@ -179,7 +179,7 @@ func (wi *watchInput) Connect(ctx context.Context) error {
 		defer wi.shutSig.TriggerHasStopped()
 		ctx, cancel := wi.shutSig.SoftStopCtx(ctx)
 		defer cancel()
-		stream, err := client.WatchServiceClient.Watch(ctx, &v1.WatchRequest{
+		stream, err := client.Watch(ctx, &v1.WatchRequest{
 			OptionalStartCursor: startCursor,
 		})
 		if err != nil {

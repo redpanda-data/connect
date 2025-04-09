@@ -43,9 +43,10 @@ type tpIngest struct {
 func NewClient(logger *service.Logger, target string, baseURL *url.URL, workspace, stream, apikey, username, password string) *Client {
 	ingestURL, _ := url.Parse(baseURL.String())
 
-	if target == TargetTimeplus {
+	switch target {
+	case TargetTimeplus:
 		ingestURL.Path = path.Join(ingestURL.Path, workspace, "api", timeplusAPIVersion, "streams", stream, "ingest")
-	} else if target == TargetTimeplusd {
+	case TargetTimeplusd:
 		ingestURL.Path = path.Join(ingestURL.Path, "timeplusd", timeplusdDAPIVersion, "ingest", "streams", stream)
 	}
 

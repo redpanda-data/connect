@@ -471,9 +471,10 @@ func (s *Stream) streamMessages(currentLSN LSN) error {
 			// See the explaination above about lastEmittedCommitLSN but if this is a commit message, we want to
 			// only remap the commit of the last message in a transaction, so only update the remapped value if
 			// it was a suppressed commit, otherwise we just provide a noop mapping of commit LSN
-			if result == changeResultSuppressedCommitMessage {
+			switch result {
+			case changeResultSuppressedCommitMessage:
 				lastEmittedCommitLSN = msgLSN
-			} else if result == changeResultEmittedMessage {
+			case changeResultEmittedMessage:
 				lastEmittedLSN = msgLSN
 				lastEmittedCommitLSN = msgLSN
 			}

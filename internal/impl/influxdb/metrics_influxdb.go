@@ -226,24 +226,25 @@ func clientConfFromParsed(conf *service.ParsedConfig) (c clientConf, err error) 
 }
 
 func (conf clientConf) build() (c client.Client, err error) {
-	if conf.u.Scheme == "https" {
+	switch conf.u.Scheme {
+	case "https":
 		c, err = client.NewHTTPClient(client.HTTPConfig{
 			Addr:      conf.u.String(),
 			TLSConfig: conf.tlsConf,
 			Username:  conf.username,
 			Password:  conf.password,
 		})
-	} else if conf.u.Scheme == "http" {
+	case "http":
 		c, err = client.NewHTTPClient(client.HTTPConfig{
 			Addr:     conf.u.String(),
 			Username: conf.username,
 			Password: conf.password,
 		})
-	} else if conf.u.Scheme == "udp" {
+	case "udp":
 		c, err = client.NewUDPClient(client.UDPConfig{
 			Addr: conf.u.Host,
 		})
-	} else {
+	default:
 		return nil, fmt.Errorf("protocol needs to be http, https or udp and is %s", conf.u.Scheme)
 	}
 	return c, err

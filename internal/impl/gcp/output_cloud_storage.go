@@ -294,12 +294,13 @@ func (g *gcpCloudStorageOutput) WriteBatch(ctx context.Context, batch service.Me
 		} else {
 			isMerge = true
 
-			if g.conf.CollisionMode == GCPCloudStorageErrorIfExistsCollisionMode {
+			switch g.conf.CollisionMode {
+			case GCPCloudStorageErrorIfExistsCollisionMode:
 				if err == nil {
 					err = fmt.Errorf("file at path already exists: %s", outputPath)
 				}
 				return err
-			} else if g.conf.CollisionMode == GCPCloudStorageIgnoreCollisionMode {
+			case GCPCloudStorageIgnoreCollisionMode:
 				return nil
 			}
 

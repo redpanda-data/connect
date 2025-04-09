@@ -61,7 +61,7 @@ path: /testpost
 				mBytes, err := m.AsBytes()
 				require.NoError(t, err)
 
-				m.SetBytes(bytes.Replace(mBytes, []byte("test"), []byte("response"), -1))
+				m.SetBytes(bytes.ReplaceAll(mBytes, []byte("test"), []byte("response")))
 			}
 
 			require.NoError(t, batch.AddSyncResponse())
@@ -115,7 +115,7 @@ path: /testpost
 				mBytes, err := m.AsBytes()
 				require.NoError(t, err)
 
-				m.SetBytes(bytes.Replace(mBytes, []byte("test"), []byte("response"), -1))
+				m.SetBytes(bytes.ReplaceAll(mBytes, []byte("test"), []byte("response")))
 			}
 
 			require.NoError(t, batch.AddSyncResponse())

@@ -1,79 +1,15 @@
-run:
-  timeout: 30s
-
-issues:
-  max-issues-per-linter: 0
-  max-same-issues: 0
-  # fix: true
-  include:
-    - EXC0012
-    - EXC0014
-  exclude-rules:
-    - path: _test.go
-      linters:
-        - bodyclose
-        - perfsprint
-linters-settings:
-  revive:
-    enable-all-rules: false
-    rules:
-      - name: superfluous-else
-      - name: exported
-  errcheck:
-    exclude-functions:
-      - (*github.com/redpanda-data/benthos/v4/internal/batch.Error).Failed
-      - (*github.com/redpanda-data/benthos/v4/public/service.BatchError).Failed
-  govet:
-    enable-all: true
-    disable:
-      - fieldalignment
-      - deepequalerrors
-      - shadow
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - experimental
-      - opinionated
-      - performance
-      - style
-    disabled-checks:
-      - hugeParam # Micro-optimisations
-      - rangeValCopy # Micro-optimisations
-      - ifElseChain # Mostly false positives
-      - ptrToRefParam # False positives?
-      - importShadow # Probably not worth the hassle...
-  # depguard:
-  #   rules:
-  #     main:
-  #       deny:
-  #         - pkg: "io/ioutil"
-  testifylint:
-    disable-all: true
-    enable:
-      - nil-compare
-      - compares
-      - error-is-as
-      - bool-compare
-      - empty
-      - len
-      - expected-actual
-      - error-nil
+version: "2"
 linters:
-  disable-all: true
+  default: none
+  # Default linters reported by `golangci-lint help linters` in v1.52.0
   enable:
-    # Default linters reported by `golangci-lint help linters` in v1.52.0
     - errcheck
-    - gosimple
     - govet
     - ineffassign
     - staticcheck
-    - typecheck
     - unused
     # Extra linters:
     - wastedassign
-    - stylecheck
-    - gofmt
-    - goimports
     # gocritic is very slow (golangci-lint v1.52.0)
     # - gocritic
     - revive
@@ -92,3 +28,71 @@ linters:
     - rowserrcheck
     - bodyclose
     - nolintlint
+  settings:
+    errcheck:
+      exclude-functions:
+        - (*github.com/redpanda-data/benthos/v4/internal/batch.Error).Failed
+        - (*github.com/redpanda-data/benthos/v4/public/service.BatchError).Failed
+    gocritic:
+      disabled-checks:
+        - hugeParam # Micro-optimisations
+        - rangeValCopy # Micro-optimisations
+        - ifElseChain # Mostly false positives
+        - ptrToRefParam # False positives?
+        - importShadow # Probably not worth the hassle...
+      enabled-tags:
+        - diagnostic
+        - experimental
+        - opinionated
+        - performance
+        - style
+    govet:
+      disable:
+        - fieldalignment
+        - deepequalerrors
+        - shadow
+      enable-all: true
+    revive:
+      enable-all-rules: false
+      rules:
+        - name: superfluous-else
+        - name: exported
+    testifylint:
+      disable-all: true
+      enable:
+        - nil-compare
+        - compares
+        - error-is-as
+        - bool-compare
+        - empty
+        - len
+        - expected-actual
+        - error-nil
+  exclusions:
+    generated: lax
+    presets:
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - bodyclose
+          - perfsprint
+        path: _test.go
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
