@@ -35,6 +35,7 @@ const (
 	ccpFieldPresencePenalty  = "presence_penalty"
 	ccpFieldFrequencyPenalty = "frequency_penalty"
 	ccpFieldResponseFormat   = "response_format"
+	ccpFieldMaxToolCalls     = "max_tool_calls"
 	// JSON schema fields
 	ccpFieldJSONSchema = "json_schema"
 	// Schema registry fields
@@ -44,16 +45,16 @@ const (
 	ccpFieldSchemaRegistryURL             = "url"
 	ccpFieldSchemaRegistryTLS             = "tls"
 	// Tool options
-	ocpFieldTools                    = "tools"
-	ocpToolFieldName                 = "name"
-	ocpToolFieldDesc                 = "description"
-	ocpToolFieldParams               = "parameters"
-	ocpToolParamFieldRequired        = "required"
-	ocpToolParamFieldProps           = "properties"
-	ocpToolParamPropFieldType        = "type"
-	ocpToolParamPropFieldDescription = "description"
-	ocpToolParamPropFieldEnum        = "enum"
-	ocpToolFieldPipeline             = "processors"
+	ccpFieldTools                    = "tools"
+	ccpToolFieldName                 = "name"
+	ccpToolFieldDesc                 = "description"
+	ccpToolFieldParams               = "parameters"
+	ccpToolParamFieldRequired        = "required"
+	ccpToolParamFieldProps           = "properties"
+	ccpToolParamPropFieldType        = "type"
+	ccpToolParamPropFieldDescription = "description"
+	ccpToolParamPropFieldEnum        = "enum"
+	ccpToolFieldPipeline             = "processors"
 )
 
 type pipelineTool struct {
@@ -154,21 +155,22 @@ We generally recommend altering this or temperature but not both.`).
 				Optional().
 				Advanced().
 				Description("Up to 4 sequences where the API will stop generating further tokens."),
+			service.NewIntField(ccpFieldMaxToolCalls).Description("Maximum number of tool calls the model can do.").Default(10),
 			service.NewObjectListField(
-				ocpFieldTools,
-				service.NewStringField(ocpToolFieldName).Description("The name of this tool."),
-				service.NewStringField(ocpToolFieldDesc).Description("A description of this tool, the LLM uses this to decide if the tool should be used."),
+				ccpFieldTools,
+				service.NewStringField(ccpToolFieldName).Description("The name of this tool."),
+				service.NewStringField(ccpToolFieldDesc).Description("A description of this tool, the LLM uses this to decide if the tool should be used."),
 				service.NewObjectField(
-					ocpToolFieldParams,
-					service.NewStringListField(ocpToolParamFieldRequired).Default([]string{}).Description("The required parameters for this pipeline."),
+					ccpToolFieldParams,
+					service.NewStringListField(ccpToolParamFieldRequired).Default([]string{}).Description("The required parameters for this pipeline."),
 					service.NewObjectMapField(
-						ocpToolParamFieldProps,
-						service.NewStringField(ocpToolParamPropFieldType).Description("The type of this parameter."),
-						service.NewStringField(ocpToolParamPropFieldDescription).Description("A description of this parameter."),
-						service.NewStringListField(ocpToolParamPropFieldEnum).Default([]string{}).Description("Specifies that this parameter is an enum and only these specific values should be used."),
+						ccpToolParamFieldProps,
+						service.NewStringField(ccpToolParamPropFieldType).Description("The type of this parameter."),
+						service.NewStringField(ccpToolParamPropFieldDescription).Description("A description of this parameter."),
+						service.NewStringListField(ccpToolParamPropFieldEnum).Default([]string{}).Description("Specifies that this parameter is an enum and only these specific values should be used."),
 					).Description("The properties for the processor's input data"),
 				).Description("The parameters the LLM needs to provide to invoke this tool."),
-				service.NewProcessorListField(ocpToolFieldPipeline).Description("The pipeline to execute when the LLM uses this tool.").Optional(),
+				service.NewProcessorListField(ccpToolFieldPipeline).Description("The pipeline to execute when the LLM uses this tool.").Optional(),
 			).Description("The tools to allow the LLM to invoke. This allows building subpipelines that the LLM can choose to invoke to execute agentic-like actions.").Default([]any{}),
 		).LintRule(`
       root = match {
@@ -290,30 +292,30 @@ func makeChatProcessor(conf *service.ParsedConfig, mgr *service.Resources) (serv
 		return nil, fmt.Errorf("unknown %s: %q", ccpFieldResponseFormat, v)
 	}
 	var tools []pipelineTool
-	confTools, err := conf.FieldObjectList(ocpFieldTools)
+	confTools, err := conf.FieldObjectList(ccpFieldTools)
 	if err != nil {
 		return nil, err
 	}
 	for _, toolConf := range confTools {
-		name, err := toolConf.FieldString(ocpToolFieldName)
+		name, err := toolConf.FieldString(ccpToolFieldName)
 		if err != nil {
 			return nil, err
 		}
-		desc, err := toolConf.FieldString(ocpToolFieldDesc)
+		desc, err := toolConf.FieldString(ccpToolFieldDesc)
 		if err != nil {
 			return nil, err
 		}
-		required, err := toolConf.FieldStringList(ocpToolFieldParams, ocpToolParamFieldRequired)
+		required, err := toolConf.FieldStringList(ccpToolFieldParams, ccpToolParamFieldRequired)
 		if err != nil {
 			return nil, err
 		}
-		paramsConf, err := toolConf.FieldObjectMap(ocpToolFieldParams, ocpToolParamFieldProps)
+		paramsConf, err := toolConf.FieldObjectMap(ccpToolFieldParams, ccpToolParamFieldProps)
 		if err != nil {
 			return nil, err
 		}
 		params := map[string]any{}
 		for paramName, paramConf := range paramsConf {
-			paramType, err := paramConf.FieldString(ocpToolParamPropFieldType)
+			paramType, err := paramConf.FieldString(ccpToolParamPropFieldType)
 			if err != nil {
 				return nil, err
 			}
@@ -321,14 +323,14 @@ func makeChatProcessor(conf *service.ParsedConfig, mgr *service.Resources) (serv
 				"type": paramType,
 			}
 
-			desc, err := paramConf.FieldString(ocpToolParamPropFieldDescription)
+			desc, err := paramConf.FieldString(ccpToolParamPropFieldDescription)
 			if err != nil {
 				return nil, err
 			}
 			if desc != "" {
 				param["description"] = desc
 			}
-			enum, err := paramConf.FieldStringList(ocpToolParamPropFieldEnum)
+			enum, err := paramConf.FieldStringList(ccpToolParamPropFieldEnum)
 			if err != nil {
 				return nil, err
 			}
@@ -349,7 +351,7 @@ func makeChatProcessor(conf *service.ParsedConfig, mgr *service.Resources) (serv
 				},
 			},
 		}
-		processors, err := toolConf.FieldProcessorList(ocpToolFieldPipeline)
+		processors, err := toolConf.FieldProcessorList(ccpToolFieldPipeline)
 		if err != nil {
 			return nil, err
 		}
@@ -358,7 +360,11 @@ func makeChatProcessor(conf *service.ParsedConfig, mgr *service.Resources) (serv
 			processors: processors,
 		})
 	}
-	return &chatProcessor{b, up, sp, maxTokens, temp, topP, frequencyPenalty, presencePenalty, seed, stop, responseFormat, schemaProvider, tools}, nil
+	maxToolCalls, err := conf.FieldInt(ccpFieldMaxToolCalls)
+	if err != nil {
+		return nil, err
+	}
+	return &chatProcessor{b, up, sp, maxTokens, temp, topP, frequencyPenalty, presencePenalty, seed, stop, responseFormat, schemaProvider, tools, maxToolCalls}, nil
 }
 
 func newFixedSchemaProvider(conf *service.ParsedConfig) (jsonSchemaProvider, error) {
@@ -415,6 +421,7 @@ type chatProcessor struct {
 	responseFormat   cohere.ResponseFormatV2
 	schemaProvider   jsonSchemaProvider
 	tools            []pipelineTool
+	maxToolCalls     int
 }
 
 func (p *chatProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
@@ -469,7 +476,10 @@ func (p *chatProcessor) Process(ctx context.Context, msg *service.Message) (serv
 	}
 	var err error
 	var resp *cohere.ChatResponse
-	for {
+	for i := 0; i <= p.maxToolCalls; i++ {
+		if i == p.maxToolCalls {
+			body.Tools = nil // Disallow tools
+		}
 		resp, err = p.client.Chat(ctx, &body)
 		if err != nil {
 			return nil, fmt.Errorf("error calling Cohere API: %w", err)

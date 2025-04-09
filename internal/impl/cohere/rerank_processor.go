@@ -140,7 +140,7 @@ func (p *rerankProcessor) Process(ctx context.Context, msg *service.Message) (se
 	}
 	docs, ok := v.([]any)
 	if !ok {
-		return nil, fmt.Errorf("failed to extract documents response as array: %w", err)
+		return nil, fmt.Errorf("failed to extract documents response as array: %T", v)
 	}
 	if len(docs) == 0 {
 		return nil, errors.New("no documents to rerank")
