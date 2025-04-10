@@ -127,9 +127,9 @@ type embeddingsProcessor struct {
 }
 
 func (p *embeddingsProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
-	var body cohere.EmbedRequest
-	body.Model = &p.model
-	body.InputType = &p.inputType
+	var body cohere.V2EmbedRequest
+	body.Model = p.model
+	body.InputType = p.inputType
 	if p.text != nil {
 		s, err := msg.BloblangQuery(p.text)
 		if err != nil {
@@ -151,13 +151,13 @@ func (p *embeddingsProcessor) Process(ctx context.Context, msg *service.Message)
 	if err != nil {
 		return nil, err
 	}
-	if resp.EmbeddingsFloats == nil {
+	if resp.Embeddings == nil {
 		return nil, errors.New("expected embeddings output")
 	}
-	if len(resp.EmbeddingsFloats.Embeddings) != 1 {
-		return nil, fmt.Errorf("expected a single embeddings response, got: %d", len(resp.EmbeddingsFloats.Embeddings))
+	if len(resp.Embeddings.Float) != 1 {
+		return nil, fmt.Errorf("expected a single embeddings response, got: %d", len(resp.Embeddings.Float))
 	}
-	embd := resp.EmbeddingsFloats.Embeddings[0]
+	embd := resp.Embeddings.Float[0]
 	data := make([]any, len(embd))
 	for i, f := range embd {
 		data[i] = f
