@@ -48,20 +48,7 @@ This input adds the following metadata fields to each message:
 ` + "```" + `
 `).
 		Fields(FranzKafkaInputConfigFields()...).
-		LintRule(`
-let has_topic_partitions = this.topics.any(t -> t.contains(":"))
-root = if $has_topic_partitions {
-  if this.consumer_group.or("") != "" {
-    "this input does not support both a consumer group and explicit topic partitions"
-  } else if this.regexp_topics {
-    "this input does not support both regular expression topics and explicit topic partitions"
-  }
-} else {
-  if this.consumer_group.or("") == "" {
-    "a consumer group is mandatory when not using explicit topic partitions"
-  }
-}
-`)
+		LintRule(FranzConsumerFieldLintRules)
 }
 
 // FranzKafkaInputConfigFields returns the full suite of config fields for a

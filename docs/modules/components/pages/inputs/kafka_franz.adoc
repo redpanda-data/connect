@@ -68,6 +68,8 @@ input:
       client_certs: []
     sasl: [] # No default (optional)
     metadata_max_age: 5m
+    request_timeout_overhead: 10s
+    conn_idle_timeout: 20s
     topics: [] # No default (required)
     regexp_topics: false
     rack_id: ""
@@ -75,7 +77,7 @@ input:
     rebalance_timeout: 45s
     session_timeout: 1m
     heartbeat_interval: 3s
-    start_from_oldest: true
+    start_offset: earliest
     fetch_max_bytes: 50MiB
     fetch_max_wait: 5s
     fetch_min_bytes: 1B
@@ -496,6 +498,24 @@ The maximum age of metadata before it is refreshed.
 
 *Default*: `"5m"`
 
+=== `request_timeout_overhead`
+
+The request time overhead. Uses the given time as overhead while deadlining requests. Roughly equivalent to request.timeout.ms, but grants additional time to requests that have timeout fields.
+
+
+*Type*: `string`
+
+*Default*: `"10s"`
+
+=== `conn_idle_timeout`
+
+The rough amount of time to allow connections to idle before they are closed.
+
+
+*Type*: `string`
+
+*Default*: `"20s"`
+
 === `topics`
 
 A list of topics to consume from. Multiple comma separated topics can be listed in a single element. When a `consumer_group` is specified partitions are automatically distributed across consumers of a topic, otherwise all partitions are consumed.
@@ -587,14 +607,26 @@ When using a consumer group, `heartbeat_interval` sets how long a group member g
 
 *Default*: `"3s"`
 
-=== `start_from_oldest`
+=== `start_offset`
 
-Determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset. The setting is applied when creating a new consumer group or the saved offset no longer exists.
+Sets the offset to start consuming from, or if OffsetOutOfRange is seen while fetching, to restart consuming from.
 
 
-*Type*: `bool`
+*Type*: `string`
 
-*Default*: `true`
+*Default*: `"earliest"`
+
+|===
+| Option | Summary
+
+| `committed`
+| Prevents consuming a partition in a group if the partition has no prior commits. Corresponds to Kafka's `auto.offset.reset=none` option
+| `earliest`
+| Start from the earliest offset. Corresponds to Kafka's `auto.offset.reset=earliest` option.
+| `latest`
+| Start from the latest offset. Corresponds to Kafka's `auto.offset.reset=latest` option.
+
+|===
 
 === `fetch_max_bytes`
 

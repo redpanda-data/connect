@@ -27,10 +27,12 @@ import (
 
 const (
 	// Connection fields
-	kfcFieldSeedBrokers    = "seed_brokers"
-	kfcFieldClientID       = "client_id"
-	kfcFieldTLS            = "tls"
-	kfcFieldMetadataMaxAge = "metadata_max_age"
+	kfcFieldSeedBrokers            = "seed_brokers"
+	kfcFieldClientID               = "client_id"
+	kfcFieldTLS                    = "tls"
+	kfcFieldMetadataMaxAge         = "metadata_max_age"
+	kfcFieldRequestTimeoutOverhead = "request_timeout_overhead"
+	kfcFieldConnIdleTimeout        = "conn_idle_timeout"
 )
 
 // FranzConnectionFields returns a slice of fields specifically for establishing
@@ -52,18 +54,28 @@ func FranzConnectionFields() []*service.ConfigField {
 			Description("The maximum age of metadata before it is refreshed.").
 			Default("5m").
 			Advanced(),
+		service.NewDurationField(kfcFieldRequestTimeoutOverhead).
+			Description("The request time overhead. Uses the given time as overhead while deadlining requests. Roughly equivalent to request.timeout.ms, but grants additional time to requests that have timeout fields.").
+			Default("10s").
+			Advanced(),
+		service.NewDurationField(kfcFieldConnIdleTimeout).
+			Description("The rough amount of time to allow connections to idle before they are closed.").
+			Default("20s").
+			Advanced(),
 	}
 }
 
 // FranzConnectionDetails describes information required to create a kafka
 // connection.
 type FranzConnectionDetails struct {
-	SeedBrokers []string
-	ClientID    string
-	TLSEnabled  bool
-	TLSConf     *tls.Config
-	SASL        []sasl.Mechanism
-	MetaMaxAge  time.Duration
+	SeedBrokers            []string
+	ClientID               string
+	TLSEnabled             bool
+	TLSConf                *tls.Config
+	SASL                   []sasl.Mechanism
+	MetaMaxAge             time.Duration
+	RequestTimeoutOverhead time.Duration
+	ConnIdleTimeout        time.Duration
 
 	Logger *service.Logger
 }
@@ -99,6 +111,14 @@ func FranzConnectionDetailsFromConfig(conf *service.ParsedConfig, log *service.L
 		return nil, err
 	}
 
+	if d.RequestTimeoutOverhead, err = conf.FieldDuration(kfcFieldRequestTimeoutOverhead); err != nil {
+		return nil, err
+	}
+
+	if d.ConnIdleTimeout, err = conf.FieldDuration(kfcFieldConnIdleTimeout); err != nil {
+		return nil, err
+	}
+
 	return &d, nil
 }
 
@@ -111,6 +131,8 @@ func (d *FranzConnectionDetails) FranzOpts() []kgo.Opt {
 		kgo.SASL(d.SASL...),
 		kgo.ClientID(d.ClientID),
 		kgo.MetadataMaxAge(d.MetaMaxAge),
+		kgo.RequestTimeoutOverhead(d.RequestTimeoutOverhead),
+		kgo.ConnIdleTimeout(d.ConnIdleTimeout),
 	}
 
 	if d.TLSEnabled {
