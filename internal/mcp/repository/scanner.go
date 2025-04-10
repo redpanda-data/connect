@@ -15,6 +15,7 @@
 package repository
 
 import (
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -69,10 +70,13 @@ func (s *Scanner) scanResourceTypeFn(rtype string, allowedExtensions ...string) 
 
 		contents, err := fs.ReadFile(s.fs, path)
 		if err != nil {
-			return err
+			return fmt.Errorf("%v: %w", path, err)
 		}
 
-		return s.onResource(rtype, path, contents)
+		if err := s.onResource(rtype, path, contents); err != nil {
+			return fmt.Errorf("%v: %w", path, err)
+		}
+		return nil
 	}
 }
 
