@@ -140,11 +140,11 @@ func (g *googleDriveDownloadProcessor) Process(ctx context.Context, msg *service
 	}
 	id, err := g.fileID.TryString(msg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to interpolate query: %v", err)
+		return nil, fmt.Errorf("failed to interpolate file_id: %v", err)
 	}
 	mimeType, err := g.mimeType.TryString(msg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to interpolate query: %v", err)
+		return nil, fmt.Errorf("failed to interpolate mime_type: %v", err)
 	}
 	exportMimeType, ok := g.exportMimeTypes[mimeType]
 	var b []byte
