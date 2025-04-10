@@ -9,6 +9,8 @@ All notable changes to this project will be documented in this file.
 
 - New `google_drive_search` processor. (@rockwotj)
 - New `google_drive_download` processor. (@rockwotj)
+- Field `use_enum_numbers` added to `protobuf` processor. (@benwebber)
+- Field `tools` added to `cohere_chat` processor. (@rockwotj)
 - Fields `region`, `endpoint` and `credentials` added to the `dynamodb` configuration section of the `aws_kinesis` input. (@jreyeshdez, @mihaitodor)
 - Field `isolation_level` added to `kafka`, `kafka_franz`, `ockam_kafka`, `redpanda`, `redpanda_common`, and `redpanda_migrator` inputs. (@rockwotj)
 
