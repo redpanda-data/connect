@@ -138,6 +138,12 @@ func (w *ResourcesWrapper) SetMetricsYAML(fileBytes []byte) error {
 	return w.builder.SetMetricsYAML(string(fileBytes))
 }
 
+// SetTracerYAML attempts to parse a tracer config to be used by all
+// resources.
+func (w *ResourcesWrapper) SetTracerYAML(fileBytes []byte) error {
+	return w.builder.SetTracerYAML(string(fileBytes))
+}
+
 // AddCacheYAML attempts to parse a cache resource config and adds it as an MCP
 // tool if appropriate.
 func (w *ResourcesWrapper) AddCacheYAML(fileBytes []byte) error {

@@ -126,6 +126,11 @@ func NewServer(
 		return resWrapper.SetMetricsYAML(contents)
 	})
 
+	repoScanner.OnTracerFile(func(fileName string, contents []byte) error {
+		// TODO: Detect starlark here?
+		return resWrapper.SetTracerYAML(contents)
+	})
+
 	if err := repoScanner.Scan("."); err != nil {
 		return nil, err
 	}
