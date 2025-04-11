@@ -28,6 +28,7 @@ type Scanner struct {
 
 	onResource func(resourceType string, filePath string, contents []byte) error
 	onMetrics  func(filePath string, contents []byte) error
+	onTracer   func(filePath string, contents []byte) error
 }
 
 // NewScanner creates a new scanner with defaults.
@@ -47,6 +48,12 @@ func (s *Scanner) OnResourceFile(fn func(resourceType string, filePath string, c
 // encountered by the scanner.
 func (s *Scanner) OnMetricsFile(fn func(filePath string, contents []byte) error) {
 	s.onMetrics = fn
+}
+
+// OnTracerFile registers a closure to be called for a tracer config file
+// encountered by the scanner.
+func (s *Scanner) OnTracerFile(fn func(filePath string, contents []byte) error) {
+	s.onTracer = fn
 }
 
 func (s *Scanner) scanResourceTypeFn(rtype string, allowedExtensions ...string) fs.WalkDirFunc {
@@ -80,6 +87,8 @@ func (s *Scanner) scanResourceTypeFn(rtype string, allowedExtensions ...string) 
 	}
 }
 
+var yamlExtensions = []string{".yml", ".yaml"}
+
 // Scan a target repository at the root provided.
 func (s *Scanner) Scan(root string) error {
 	if s.onResource != nil {
@@ -93,35 +102,47 @@ func (s *Scanner) Scan(root string) error {
 
 		// Inputs
 		targetDir := filepath.Join(resourceDir, "inputs")
-		if err := fs.WalkDir(s.fs, targetDir, s.scanResourceTypeFn("input", ".yaml", ".yml")); err != nil && !os.IsNotExist(err) {
+		if err := fs.WalkDir(s.fs, targetDir, s.scanResourceTypeFn("input", yamlExtensions...)); err != nil && !os.IsNotExist(err) {
 			return err
 		}
 
 		// Caches
 		targetDir = filepath.Join(resourceDir, "caches")
-		if err := fs.WalkDir(s.fs, targetDir, s.scanResourceTypeFn("cache", ".yaml", ".yml")); err != nil && !os.IsNotExist(err) {
+		if err := fs.WalkDir(s.fs, targetDir, s.scanResourceTypeFn("cache", yamlExtensions...)); err != nil && !os.IsNotExist(err) {
 			return err
 		}
 
 		// Processors
 		targetDir = filepath.Join(resourceDir, "processors")
-		if err := fs.WalkDir(s.fs, targetDir, s.scanResourceTypeFn("processor", ".yaml", ".yml")); err != nil && !os.IsNotExist(err) {
+		if err := fs.WalkDir(s.fs, targetDir, s.scanResourceTypeFn("processor", yamlExtensions...)); err != nil && !os.IsNotExist(err) {
 			return err
 		}
 
 		// Outputs
 		targetDir = filepath.Join(resourceDir, "outputs")
-		if err := fs.WalkDir(s.fs, targetDir, s.scanResourceTypeFn("output", ".yaml", ".yml")); err != nil && !os.IsNotExist(err) {
+		if err := fs.WalkDir(s.fs, targetDir, s.scanResourceTypeFn("output", yamlExtensions...)); err != nil && !os.IsNotExist(err) {
 			return err
 		}
 	}
 
 	if s.onMetrics != nil {
 		o11yDir := filepath.Join(root, "o11y")
-		for _, ext := range []string{".yaml", ".yml"} {
+		for _, ext := range yamlExtensions {
 			fileName := filepath.Join(o11yDir, "metrics"+ext)
 			if contents, err := fs.ReadFile(s.fs, fileName); err == nil {
 				if err := s.onMetrics(fileName, contents); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	if s.onTracer != nil {
+		o11yDir := filepath.Join(root, "o11y")
+		for _, ext := range yamlExtensions {
+			fileName := filepath.Join(o11yDir, "tracer"+ext)
+			if contents, err := fs.ReadFile(s.fs, fileName); err == nil {
+				if err := s.onTracer(fileName, contents); err != nil {
 					return err
 				}
 			}
