@@ -43,8 +43,7 @@ func driveDownloadProcessorConfig() *service.ConfigSpec {
 		Summary("Downloads files from Google Drive").
 		Description(`
 Can download a file from Google Drive based on a file ID.
-
-Authentication is expected to be configured through Google application credentials.`).
+`+baseAuthDescription).
 		Fields(commonFields()...).
 		Fields(
 			service.NewInterpolatedStringField(driveDownloadFieldFileID).

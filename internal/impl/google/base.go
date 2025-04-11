@@ -24,12 +24,26 @@ import (
 
 const (
 	baseFieldCredentialsJSON = "credentials_json"
+
+	baseAuthDescription = `== Authentication
+By default, this connector will use Google Application Default Credentials (ADC) to authenticate with Google APIs.
+
+To use this mechanism locally, the following gcloud commands can be used:
+
+	# Login for the application default credentials and add scopes for readonly drive access
+	gcloud auth application-default login --scopes='openid,https://www.googleapis.com/auth/userinfo.email,https://www.googleapis.com/auth/drive.readonly,https://www.googleapis.com/auth/cloud-platform'
+	# When logging in with a user account, you may need to set the quota project for the application default credentials
+	gcloud auth application-default set-quota-project <project-id>
+
+Otherwise if using a service account, you can create a JSON key for the service account and set it in the ` + "`" + baseFieldCredentialsJSON + "`" + ` field.
+In order for a service account to access files in Google Drive either files need to be explicitly shared with the service account email, otherwise https://support.google.com/a/answer/162106[^domain wide delegation] can be used to share all files within a Google Workspace.
+`
 )
 
 func commonFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewStringField(baseFieldCredentialsJSON).
-			Description("A service account credentials JSON file. If left unset than the application default credentials are used.").
+			Description("A service account credentials JSON file. If left unset then the application default credentials are used.").
 			Optional().
 			Secret(),
 	}

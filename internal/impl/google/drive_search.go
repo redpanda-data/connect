@@ -47,8 +47,7 @@ This processor searches for files in Google Drive using the provided query.
 
 Search results are emitted as message batch.
 
-Authentication is expected to be configured through Google application credentials.
-`).
+`+baseAuthDescription).
 		Fields(commonFields()...).
 		Fields(
 			service.NewInterpolatedStringField(driveSearchFieldQuery).
@@ -151,8 +150,9 @@ func (g *googleDriveSearchProcessor) Process(ctx context.Context, msg *service.M
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal file to JSON: %v", err)
 		}
-		msg := service.NewMessage(b)
-		batch = append(batch, msg)
+		cpy := msg.Copy()
+		cpy.SetBytes(b)
+		batch = append(batch, cpy)
 	}
 	return batch, nil
 }
