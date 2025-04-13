@@ -23,6 +23,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"go.opentelemetry.io/otel/trace"
 	"gopkg.in/yaml.v3"
 )
 
@@ -79,6 +80,15 @@ func (w *ResourcesWrapper) Close(ctx context.Context) error {
 	w.resources = nil
 	w.closeFn = nil
 	return closeFn(ctx)
+}
+
+func (w *ResourcesWrapper) initSpan(ctx context.Context, name string) (context.Context, trace.Span) {
+	return w.resources.OtelTracer().Tracer("rpcn-mcp").Start(ctx, name)
+}
+
+func (w *ResourcesWrapper) initMsgSpan(name string, msg *service.Message) (*service.Message, trace.Span) {
+	ctx, t := w.initSpan(msg.Context(), name)
+	return msg.WithContext(ctx), t
 }
 
 type mcpProperty struct {
@@ -173,6 +183,9 @@ func (w *ResourcesWrapper) AddCacheYAML(fileBytes []byte) error {
 			mcp.Required(),
 		),
 	), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		ctx, span := w.initSpan(ctx, res.Label)
+		defer span.End()
+
 		key, exists := request.Params.Arguments["key"].(string)
 		if !exists {
 			return nil, errors.New("missing key [string] argument")
@@ -210,6 +223,9 @@ func (w *ResourcesWrapper) AddCacheYAML(fileBytes []byte) error {
 			mcp.Required(),
 		),
 	), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		ctx, span := w.initSpan(ctx, res.Label)
+		defer span.End()
+
 		key, exists := request.Params.Arguments["key"].(string)
 		if !exists {
 			return nil, errors.New("missing key [string] argument")
@@ -374,7 +390,9 @@ func (w *ResourcesWrapper) AddProcessorYAML(fileBytes []byte) error {
 		value, _ := request.Params.Arguments["value"].(string)
 		// TODO: Should we make this required?
 
-		inMsg := service.NewMessage([]byte(value))
+		inMsg, span := w.initMsgSpan(res.Label, service.NewMessage([]byte(value)))
+		defer span.End()
+
 		for k, required := range extraParams {
 			if v, exists := request.Params.Arguments[k]; exists {
 				inMsg.MetaSetMut(k, v)
@@ -488,7 +506,8 @@ func (w *ResourcesWrapper) AddOutputYAML(fileBytes []byte) error {
 				return nil, fmt.Errorf("message %v is missing a value", i)
 			}
 
-			msg := service.NewMessage([]byte(contents))
+			msg, span := w.initMsgSpan(res.Label, service.NewMessage([]byte(contents)))
+			defer span.End()
 
 			for k, v := range mObj {
 				if k == "value" {
