@@ -14,6 +14,7 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/go-faker/faker/v4/pkg/slice"
 	"github.com/urfave/cli/v2"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -27,6 +28,10 @@ func mcpServerCli(rpMgr *enterprise.GlobalRedpandaManager) *cli.Command {
 		&cli.StringFlag{
 			Name:  "address",
 			Usage: "An optional address to bind the MCP server to instead of running in stdio mode.",
+		},
+		&cli.StringSliceFlag{
+			Name:  "tag",
+			Usage: "Optionally limit the resources that this command runs by providing one or more tags. Only resources containing all specified tags in the field `meta.tags` will be executed.",
 		},
 		secretsFlag,
 		envFileFlag,
@@ -78,7 +83,16 @@ Each resource will be exposed as a tool that AI can interact with:
 				return err
 			}
 
-			if err := mcp.Run(logger, secretLookupFn, repositoryDir, addr); err != nil {
+			tagFilters := c.StringSlice("tag")
+
+			if err := mcp.Run(logger, secretLookupFn, repositoryDir, addr, func(tags []string) bool {
+				for _, t := range tagFilters {
+					if !slice.Contains(tags, t) {
+						return false
+					}
+				}
+				return true
+			}); err != nil {
 				return err
 			}
 			return nil
