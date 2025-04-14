@@ -13,8 +13,8 @@ import (
 	"errors"
 	"log/slog"
 	"os"
+	"regexp"
 
-	"github.com/go-faker/faker/v4/pkg/slice"
 	"github.com/urfave/cli/v2"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -31,7 +31,7 @@ func mcpServerCli(rpMgr *enterprise.GlobalRedpandaManager) *cli.Command {
 		},
 		&cli.StringSliceFlag{
 			Name:  "tag",
-			Usage: "Optionally limit the resources that this command runs by providing one or more tags. Only resources containing all specified tags in the field `meta.tags` will be executed.",
+			Usage: "Optionally limit the resources that this command runs by providing one or more regular expressions. Resources that do not contain a match within the field `meta.tags` for each tag regular expression specified will be ignored.",
 		},
 		secretsFlag,
 		envFileFlag,
@@ -83,11 +83,25 @@ Each resource will be exposed as a tool that AI can interact with:
 				return err
 			}
 
-			tagFilters := c.StringSlice("tag")
+			tagFilterStrs := c.StringSlice("tag")
+			var tagFilterREs []*regexp.Regexp
+			for _, f := range tagFilterStrs {
+				r, err := regexp.Compile(f)
+				if err != nil {
+					return err
+				}
+				tagFilterREs = append(tagFilterREs, r)
+			}
 
 			if err := mcp.Run(logger, secretLookupFn, repositoryDir, addr, func(tags []string) bool {
-				for _, t := range tagFilters {
-					if !slice.Contains(tags, t) {
+				for _, f := range tagFilterREs {
+					var matched bool
+					for _, tag := range tags {
+						if matched = f.MatchString(tag); matched {
+							break
+						}
+					}
+					if !matched {
 						return false
 					}
 				}
