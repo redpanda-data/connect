@@ -23,6 +23,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"gopkg.in/yaml.v3"
 )
@@ -186,9 +187,13 @@ func (w *ResourcesWrapper) AddCacheYAML(fileBytes []byte) error {
 		ctx, span := w.initSpan(ctx, res.Label)
 		defer span.End()
 
+		span.SetAttributes(attribute.String("operation", "get"))
+
 		key, exists := request.Params.Arguments["key"].(string)
 		if !exists {
-			return nil, errors.New("missing key [string] argument")
+			err := errors.New("missing key [string] argument")
+			span.RecordError(err)
+			return nil, err
 		}
 
 		var value []byte
@@ -196,9 +201,11 @@ func (w *ResourcesWrapper) AddCacheYAML(fileBytes []byte) error {
 		if err := w.resources.AccessCache(ctx, res.Label, func(c service.Cache) {
 			value, getErr = c.Get(ctx, key)
 		}); err != nil {
+			span.RecordError(err)
 			return nil, err
 		}
 		if getErr != nil {
+			span.RecordError(getErr)
 			return nil, getErr
 		}
 
@@ -226,23 +233,31 @@ func (w *ResourcesWrapper) AddCacheYAML(fileBytes []byte) error {
 		ctx, span := w.initSpan(ctx, res.Label)
 		defer span.End()
 
+		span.SetAttributes(attribute.String("operation", "set"))
+
 		key, exists := request.Params.Arguments["key"].(string)
 		if !exists {
-			return nil, errors.New("missing key [string] argument")
+			err := errors.New("missing key [string] argument")
+			span.RecordError(err)
+			return nil, err
 		}
 
 		value, exists := request.Params.Arguments["value"].(string)
 		if !exists {
-			return nil, errors.New("missing value [string] argument")
+			err := errors.New("missing value [string] argument")
+			span.RecordError(err)
+			return nil, err
 		}
 
 		var setErr error
 		if err := w.resources.AccessCache(ctx, res.Label, func(c service.Cache) {
 			setErr = c.Set(ctx, key, []byte(value), nil)
 		}); err != nil {
+			span.RecordError(err)
 			return nil, err
 		}
 		if setErr != nil {
+			span.RecordError(setErr)
 			return nil, setErr
 		}
 
@@ -406,20 +421,24 @@ func (w *ResourcesWrapper) AddProcessorYAML(fileBytes []byte) error {
 		if err := w.resources.AccessProcessor(ctx, res.Label, func(p *service.ResourceProcessor) {
 			resBatch, procErr = p.Process(ctx, inMsg)
 		}); err != nil {
+			span.RecordError(err)
 			return nil, err
 		}
 		if procErr != nil {
+			span.RecordError(procErr)
 			return nil, procErr
 		}
 
 		var content []mcp.Content
 		for _, m := range resBatch {
 			if err := m.GetError(); err != nil {
+				span.RecordError(err)
 				return nil, err
 			}
 
 			mBytes, err := m.AsBytes()
 			if err != nil {
+				span.RecordError(err)
 				return nil, err
 			}
 
@@ -494,6 +513,8 @@ func (w *ResourcesWrapper) AddOutputYAML(fileBytes []byte) error {
 			return nil, errors.New("at least one message is required")
 		}
 
+		var spans []trace.Span
+
 		var inBatch service.MessageBatch
 		for i, m := range messages {
 			mObj, ok := m.(map[string]any)
@@ -509,6 +530,8 @@ func (w *ResourcesWrapper) AddOutputYAML(fileBytes []byte) error {
 			msg, span := w.initMsgSpan(res.Label, service.NewMessage([]byte(contents)))
 			defer span.End()
 
+			spans = append(spans, span)
+
 			for k, v := range mObj {
 				if k == "value" {
 					continue
@@ -523,9 +546,15 @@ func (w *ResourcesWrapper) AddOutputYAML(fileBytes []byte) error {
 		if err := w.resources.AccessOutput(ctx, res.Label, func(o *service.ResourceOutput) {
 			outErr = o.WriteBatch(ctx, inBatch)
 		}); err != nil {
+			for _, s := range spans {
+				s.RecordError(err)
+			}
 			return nil, err
 		}
 		if outErr != nil {
+			for _, s := range spans {
+				s.RecordError(outErr)
+			}
 			return nil, outErr
 		}
 
