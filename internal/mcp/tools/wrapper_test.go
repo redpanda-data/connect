@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-faker/faker/v4/pkg/slice"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/stretchr/testify/assert"
@@ -40,9 +41,7 @@ func (dh discardHandler) WithGroup(name string) slog.Handler        { return dh 
 func TestResourcesWrappersCacheHappy(t *testing.T) {
 	s := server.NewMCPServer("Testing", "1.0.0")
 
-	r := tools.NewResourcesWrapper(slog.New(discardHandler{}), s, func(string) bool {
-		return true
-	})
+	r := tools.NewResourcesWrapper(slog.New(discardHandler{}), s, nil, nil)
 
 	require.NoError(t, r.AddCacheYAML([]byte(`
 label: foocache
@@ -66,7 +65,8 @@ label: bazcache
 memory: {}
 `)))
 
-	require.NoError(t, r.Build())
+	res, err := r.Build()
+	require.NoError(t, err)
 
 	ctx, done := context.WithTimeout(context.Background(), time.Minute)
 	defer done()
@@ -86,6 +86,77 @@ memory: {}
 
 	assert.Equal(t, "set-foocache", tools[1].Name)
 	assert.Contains(t, tools[1].Description, "my foo cache")
+
+	assert.True(t, res.HasCache("bazcache"))
+
+	defer r.Close(ctx)
+}
+
+func TestResourcesWrappersTagFiltering(t *testing.T) {
+	s := server.NewMCPServer("Testing", "1.0.0")
+
+	r := tools.NewResourcesWrapper(slog.New(discardHandler{}), s, nil, func(tags []string) bool {
+		if slice.Contains(tags, "foo") || slice.Contains(tags, "bar") {
+			return true
+		}
+		return false
+	})
+
+	require.NoError(t, r.AddCacheYAML([]byte(`
+label: foocache
+memory: {}
+meta:
+  mcp:
+    enabled: true
+    description: my foo cache
+`)))
+
+	require.NoError(t, r.AddCacheYAML([]byte(`
+label: barcache
+memory: {}
+meta:
+  tags: [ bar ]
+  mcp:
+    enabled: true
+    description: my bar cache
+`)))
+
+	require.NoError(t, r.AddCacheYAML([]byte(`
+label: bazcache
+memory: {}
+`)))
+
+	require.NoError(t, r.AddCacheYAML([]byte(`
+label: buzcache
+memory: {}
+meta:
+  tags: [ nope, foo ]
+`)))
+
+	res, err := r.Build()
+	require.NoError(t, err)
+
+	ctx, done := context.WithTimeout(context.Background(), time.Minute)
+	defer done()
+
+	toolsList, ok := s.HandleMessage(ctx, []byte(`{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/list"
+}`)).(mcp.JSONRPCResponse)
+	require.True(t, ok)
+
+	tools := toolsList.Result.(mcp.ListToolsResult).Tools
+	assert.Len(t, tools, 2)
+
+	assert.Equal(t, "get-barcache", tools[0].Name)
+	assert.Contains(t, tools[0].Description, "my bar cache")
+
+	assert.Equal(t, "set-barcache", tools[1].Name)
+	assert.Contains(t, tools[1].Description, "my bar cache")
+
+	assert.False(t, res.HasCache("bazcache"))
+	assert.True(t, res.HasCache("buzcache"))
 
 	defer r.Close(ctx)
 }

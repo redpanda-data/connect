@@ -32,21 +32,33 @@ import (
 // a ResourcesBuilder as well as, where appropriate, adding them to an MCP
 // server as tools.
 type ResourcesWrapper struct {
-	logger    *slog.Logger
-	svr       *server.MCPServer
-	builder   *service.ResourceBuilder
-	resources *service.Resources
-	closeFn   func(context.Context) error
-	filter    func(label string) bool
+	logger      *slog.Logger
+	svr         *server.MCPServer
+	builder     *service.ResourceBuilder
+	resources   *service.Resources
+	closeFn     func(context.Context) error
+	labelFilter func(label string) bool
+	tagsFilter  func(tags []string) bool
 }
 
 // NewResourcesWrapper creates a new resources wrapper.
-func NewResourcesWrapper(logger *slog.Logger, svr *server.MCPServer, filter func(label string) bool) *ResourcesWrapper {
+func NewResourcesWrapper(logger *slog.Logger, svr *server.MCPServer, labelFilter func(label string) bool, tagsFilter func(tags []string) bool) *ResourcesWrapper {
+	if labelFilter == nil {
+		labelFilter = func(label string) bool {
+			return true
+		}
+	}
+	if tagsFilter == nil {
+		tagsFilter = func(tags []string) bool {
+			return true
+		}
+	}
 	w := &ResourcesWrapper{
-		logger:  logger,
-		svr:     svr,
-		builder: service.NewResourceBuilder(),
-		filter:  filter,
+		logger:      logger,
+		svr:         svr,
+		builder:     service.NewResourceBuilder(),
+		labelFilter: labelFilter,
+		tagsFilter:  tagsFilter,
 	}
 	w.builder.SetLogger(logger)
 	return w
@@ -67,8 +79,9 @@ func (w *ResourcesWrapper) SetHTTPMultiplexer(mux service.HTTPMultiplexer) {
 
 // Build the underlying ResourcesBuilder, which allows the resources to be
 // executed.
-func (w *ResourcesWrapper) Build() (err error) {
-	w.resources, w.closeFn, err = w.builder.Build()
+func (w *ResourcesWrapper) Build() (resources *service.Resources, err error) {
+	resources, w.closeFn, err = w.builder.Build()
+	w.resources = resources
 	return
 }
 
@@ -135,7 +148,8 @@ type mcpConfig struct {
 }
 
 type meta struct {
-	MCP mcpConfig `yaml:"mcp"`
+	Tags []string  `yaml:"tags"`
+	MCP  mcpConfig `yaml:"mcp"`
 }
 
 type resFile struct {
@@ -155,6 +169,17 @@ func (w *ResourcesWrapper) SetTracerYAML(fileBytes []byte) error {
 	return w.builder.SetTracerYAML(string(fileBytes))
 }
 
+func attrString(s trace.Span, key, value string) {
+	if len(value) < 128 {
+		s.SetAttributes(attribute.String(key, value))
+	} else {
+		s.SetAttributes(
+			attribute.String(key+"_prefix", value[:128]),
+			attribute.Int(key+"_length", len(value)),
+		)
+	}
+}
+
 // AddCacheYAML attempts to parse a cache resource config and adds it as an MCP
 // tool if appropriate.
 func (w *ResourcesWrapper) AddCacheYAML(fileBytes []byte) error {
@@ -163,7 +188,10 @@ func (w *ResourcesWrapper) AddCacheYAML(fileBytes []byte) error {
 		return err
 	}
 
-	if !w.filter(res.Label) {
+	if !w.labelFilter(res.Label) {
+		return nil
+	}
+	if !w.tagsFilter(res.Meta.Tags) {
 		return nil
 	}
 
@@ -196,6 +224,8 @@ func (w *ResourcesWrapper) AddCacheYAML(fileBytes []byte) error {
 			return nil, err
 		}
 
+		span.SetAttributes(attribute.String("key", key))
+
 		var value []byte
 		var getErr error
 		if err := w.resources.AccessCache(ctx, res.Label, func(c service.Cache) {
@@ -208,6 +238,8 @@ func (w *ResourcesWrapper) AddCacheYAML(fileBytes []byte) error {
 			span.RecordError(getErr)
 			return nil, getErr
 		}
+
+		attrString(span, "value", string(value))
 
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
@@ -242,12 +274,16 @@ func (w *ResourcesWrapper) AddCacheYAML(fileBytes []byte) error {
 			return nil, err
 		}
 
+		span.SetAttributes(attribute.String("key", key))
+
 		value, exists := request.Params.Arguments["value"].(string)
 		if !exists {
 			err := errors.New("missing value [string] argument")
 			span.RecordError(err)
 			return nil, err
 		}
+
+		attrString(span, "value", value)
 
 		var setErr error
 		if err := w.resources.AccessCache(ctx, res.Label, func(c service.Cache) {
@@ -282,7 +318,10 @@ func (w *ResourcesWrapper) AddInputYAML(fileBytes []byte) error {
 		return err
 	}
 
-	if !w.filter(res.Label) {
+	if !w.labelFilter(res.Label) {
+		return nil
+	}
+	if !w.tagsFilter(res.Meta.Tags) {
 		return nil
 	}
 
@@ -367,9 +406,13 @@ func (w *ResourcesWrapper) AddProcessorYAML(fileBytes []byte) error {
 	if err := yaml.Unmarshal(fileBytes, &res); err != nil {
 		return err
 	}
-	if !w.filter(res.Label) {
+	if !w.labelFilter(res.Label) {
 		return nil
 	}
+	if !w.tagsFilter(res.Meta.Tags) {
+		return nil
+	}
+
 	if err := w.builder.AddProcessorYAML(string(fileBytes)); err != nil {
 		return err
 	}
@@ -408,9 +451,12 @@ func (w *ResourcesWrapper) AddProcessorYAML(fileBytes []byte) error {
 		inMsg, span := w.initMsgSpan(res.Label, service.NewMessage([]byte(value)))
 		defer span.End()
 
+		attrString(span, "value", value)
+
 		for k, required := range extraParams {
 			if v, exists := request.Params.Arguments[k]; exists {
 				inMsg.MetaSetMut(k, v)
+				attrString(span, k, fmt.Sprintf("%v", v))
 			} else if required {
 				return nil, fmt.Errorf("required parameter '%v' was missing", k)
 			}
@@ -463,7 +509,10 @@ func (w *ResourcesWrapper) AddOutputYAML(fileBytes []byte) error {
 	if err := yaml.Unmarshal(fileBytes, &res); err != nil {
 		return err
 	}
-	if !w.filter(res.Label) {
+	if !w.labelFilter(res.Label) {
+		return nil
+	}
+	if !w.tagsFilter(res.Meta.Tags) {
 		return nil
 	}
 
@@ -530,15 +579,17 @@ func (w *ResourcesWrapper) AddOutputYAML(fileBytes []byte) error {
 			msg, span := w.initMsgSpan(res.Label, service.NewMessage([]byte(contents)))
 			defer span.End()
 
-			spans = append(spans, span)
+			attrString(span, "contents", contents)
 
 			for k, v := range mObj {
 				if k == "value" {
 					continue
 				}
 				msg.MetaSetMut(k, v)
+				attrString(span, k, fmt.Sprintf("%v", v))
 			}
 
+			spans = append(spans, span)
 			inBatch = append(inBatch, msg)
 		}
 

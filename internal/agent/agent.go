@@ -92,6 +92,7 @@ func RunAgent(
 			func(label string) bool {
 				return slices.Contains(agent.Tools, label)
 			},
+			nil,
 		)
 		if err != nil {
 			return nil, err
