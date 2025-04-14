@@ -35,46 +35,51 @@ import (
 func oltpSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Summary("Send tracing events to an https://opentelemetry.io/docs/collector/[Open Telemetry collector^].").
-		Field(service.NewObjectListField("http",
-			service.NewStringField("address").
-				Description("The endpoint of a collector to send tracing events to.").
-				Optional().
-				Example("localhost:4318"),
-			service.NewStringField("url").
-				Description("The URL of a collector to send tracing events to.").
-				Deprecated().
-				Default("localhost:4318"),
-			service.NewBoolField("secure").
-				Description("Connect to the collector over HTTPS").
-				Default(false),
-		).Description("A list of http collectors.")).
-		Field(service.NewObjectListField("grpc",
-			service.NewURLField("address").
-				Description("The endpoint of a collector to send tracing events to.").
-				Optional().
-				Example("localhost:4317"),
-			service.NewURLField("url").
-				Description("The URL of a collector to send tracing events to.").
-				Deprecated().
-				Default("localhost:4317"),
-			service.NewBoolField("secure").
-				Description("Connect to the collector with client transport security").
-				Default(false),
-		).Description("A list of grpc collectors.")).
-		Field(service.NewStringMapField("tags").
-			Description("A map of tags to add to all tracing spans.").
-			Default(map[string]any{}).
-			Advanced()).
-		Field(service.NewObjectField("sampling",
-			service.NewBoolField("enabled").
-				Description("Whether to enable sampling.").
-				Default(false),
-			service.NewFloatField("ratio").
-				Description("Sets the ratio of traces to sample.").
-				Examples(0.85, 0.5).
-				Optional()).
-			Description("Settings for trace sampling. Sampling is recommended for high-volume production workloads.").
-			Version("4.25.0"))
+		Fields(
+			service.NewStringField("service").
+				Default("benthos").
+				Description("The name of the service in traces."),
+			service.NewObjectListField("http",
+				service.NewStringField("address").
+					Description("The endpoint of a collector to send tracing events to.").
+					Optional().
+					Example("localhost:4318"),
+				service.NewStringField("url").
+					Description("The URL of a collector to send tracing events to.").
+					Deprecated().
+					Default("localhost:4318"),
+				service.NewBoolField("secure").
+					Description("Connect to the collector over HTTPS").
+					Default(false),
+			).Description("A list of http collectors."),
+			service.NewObjectListField("grpc",
+				service.NewURLField("address").
+					Description("The endpoint of a collector to send tracing events to.").
+					Optional().
+					Example("localhost:4317"),
+				service.NewURLField("url").
+					Description("The URL of a collector to send tracing events to.").
+					Deprecated().
+					Default("localhost:4317"),
+				service.NewBoolField("secure").
+					Description("Connect to the collector with client transport security").
+					Default(false),
+			).Description("A list of grpc collectors."),
+			service.NewStringMapField("tags").
+				Description("A map of tags to add to all tracing spans.").
+				Default(map[string]any{}).
+				Advanced(),
+			service.NewObjectField("sampling",
+				service.NewBoolField("enabled").
+					Description("Whether to enable sampling.").
+					Default(false),
+				service.NewFloatField("ratio").
+					Description("Sets the ratio of traces to sample.").
+					Examples(0.85, 0.5).
+					Optional()).
+				Description("Settings for trace sampling. Sampling is recommended for high-volume production workloads.").
+				Version("4.25.0"),
+		)
 }
 
 func init() {
@@ -103,6 +108,7 @@ type sampleConfig struct {
 }
 
 type otlp struct {
+	serviceName   string
 	engineVersion string
 	grpc          []collector
 	http          []collector
@@ -111,6 +117,11 @@ type otlp struct {
 }
 
 func oltpConfigFromParsed(conf *service.ParsedConfig) (*otlp, error) {
+	serviceName, err := conf.FieldString("service")
+	if err != nil {
+		return nil, err
+	}
+
 	http, err := collectors(conf, "http")
 	if err != nil {
 		return nil, err
@@ -132,11 +143,12 @@ func oltpConfigFromParsed(conf *service.ParsedConfig) (*otlp, error) {
 	}
 
 	return &otlp{
-		conf.EngineVersion(),
-		grpc,
-		http,
-		tags,
-		sampling,
+		serviceName:   serviceName,
+		engineVersion: conf.EngineVersion(),
+		grpc:          grpc,
+		http:          http,
+		tags:          tags,
+		sampling:      sampling,
 	}, nil
 }
 
@@ -213,7 +225,7 @@ func newOtlp(config *otlp) (trace.TracerProvider, error) {
 	}
 
 	if _, ok := config.tags[string(semconv.ServiceNameKey)]; !ok {
-		attrs = append(attrs, semconv.ServiceNameKey.String("benthos"))
+		attrs = append(attrs, semconv.ServiceNameKey.String(config.serviceName))
 
 		// Only set the default service version tag if the user doesn't provide
 		// a custom service name tag.
