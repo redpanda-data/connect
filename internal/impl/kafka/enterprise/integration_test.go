@@ -932,7 +932,7 @@ output:
 	require.NoError(t, stream.StopWithin(3*time.Second))
 }
 
-func runMigratorBundle(t *testing.T, source, destination redpandaEndpoints, topic string, callback func(*service.Message)) {
+func runMigratorBundle(t *testing.T, source, destination redpandaEndpoints, topic, topicPrefix string, callback func(*service.Message)) {
 	streamBuilder := service.NewStreamBuilder()
 	require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
 input:
@@ -978,11 +978,12 @@ output:
   redpanda_migrator_bundle:
     redpanda_migrator:
       seed_brokers: [ %s ]
+      topic_prefix: %s
       replication_factor_override: true
       replication_factor: -1
     schema_registry:
       url: %s
-`, source.brokerAddr, topic, source.schemaRegistryURL, source.schemaRegistryURL, destination.brokerAddr, destination.schemaRegistryURL)))
+`, source.brokerAddr, topic, source.schemaRegistryURL, source.schemaRegistryURL, destination.brokerAddr, topicPrefix, destination.schemaRegistryURL)))
 	require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
 
 	require.NoError(t, streamBuilder.AddConsumerFunc(func(_ context.Context, m *service.Message) error {
@@ -1072,7 +1073,9 @@ func TestRedpandaMigratorIntegration(t *testing.T) {
 		}
 
 	}
-	runMigratorBundle(t, source, destination, dummyTopic, func(m *service.Message) {
+
+	destTopicPrefix := "dest."
+	runMigratorBundle(t, source, destination, dummyTopic, destTopicPrefix, func(m *service.Message) {
 		msgChan <- m
 	})
 
@@ -1098,7 +1101,7 @@ func TestRedpandaMigratorIntegration(t *testing.T) {
 	t.Log("Finished producing second message in source")
 
 	// Read the new message from the destination using a consumer group
-	readMessagesWithCG(t, destination, dummyTopic, dummyCG, secondDummyMessage, 1, true)
+	readMessagesWithCG(t, destination, destTopicPrefix+dummyTopic, dummyCG, secondDummyMessage, 1, true)
 	checkMigrated("redpanda_migrator_offsets_input", func(_ string, meta map[string]string) {
 		assert.Equal(t, dummyTopic, meta["kafka_offset_topic"])
 	})

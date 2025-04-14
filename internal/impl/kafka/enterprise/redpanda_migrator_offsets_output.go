@@ -29,6 +29,7 @@ import (
 
 const (
 	rmooFieldOffsetTopic           = "offset_topic"
+	rmooFieldOffsetTopicPrefix     = "offset_topic_prefix"
 	rmooFieldOffsetGroup           = "offset_group"
 	rmooFieldOffsetPartition       = "offset_partition"
 	rmooFieldOffsetCommitTimestamp = "offset_commit_timestamp"
@@ -58,6 +59,8 @@ func redpandaMigratorOffsetsOutputConfigFields() []*service.ConfigField {
 		[]*service.ConfigField{
 			service.NewInterpolatedStringField(rmooFieldOffsetTopic).
 				Description("Kafka offset topic.").Default("${! @kafka_offset_topic }"),
+			service.NewInterpolatedStringField(rmooFieldOffsetTopicPrefix).
+				Description("Kafka offset topic prefix.").Default("").Advanced(),
 			service.NewInterpolatedStringField(rmooFieldOffsetGroup).
 				Description("Kafka offset group.").Default("${! @kafka_offset_group }"),
 			service.NewInterpolatedStringField(rmooFieldOffsetPartition).
@@ -108,6 +111,7 @@ func init() {
 type redpandaMigratorOffsetsWriter struct {
 	clientOpts            []kgo.Opt
 	offsetTopic           *service.InterpolatedString
+	offsetTopicPrefix     string
 	offsetGroup           *service.InterpolatedString
 	offsetPartition       *service.InterpolatedString
 	offsetCommitTimestamp *service.InterpolatedString
@@ -133,6 +137,10 @@ func newRedpandaMigratorOffsetsWriterFromConfig(conf *service.ParsedConfig, mgr 
 	}
 
 	if w.offsetTopic, err = conf.FieldInterpolatedString(rmooFieldOffsetTopic); err != nil {
+		return nil, err
+	}
+
+	if w.offsetTopicPrefix, err = conf.FieldString(rmooFieldOffsetTopicPrefix); err != nil {
 		return nil, err
 	}
 
@@ -222,6 +230,8 @@ func (w *redpandaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.
 	if topic, err = w.offsetTopic.TryString(msg); err != nil {
 		return fmt.Errorf("failed to extract offset topic: %s", err)
 	}
+
+	topic = w.offsetTopicPrefix + topic
 
 	var group string
 	if group, err = w.offsetGroup.TryString(msg); err != nil {

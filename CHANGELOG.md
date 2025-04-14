@@ -19,6 +19,8 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - Field `start_from_oldest` for the `kafka_franz`, `ockam_kafka`, `redpanda`, `redpanda_common`, and `redpanda_migrator` inputs is now deprecated in favour of `start_offset`. (@mihaitodor)
+- Field `topic_prefix` added to the `redpanda_migrator` output. (@mihaitodor)
+- Field `offset_topic_prefix` added to the `redpanda_migrator_offsets` output. (@mihaitodor)
 
 ## 4.52.0 - 2025-04-03
 
