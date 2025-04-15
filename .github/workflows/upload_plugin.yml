@@ -78,3 +78,16 @@ jobs:
           goarch: amd64,arm64
           repo_hostname: rpk-plugins.redpanda.com
           dry_run: ${{ env.DRY_RUN != 'false' }}
+      - name: Upload connect-fips plugin to S3
+        uses: ./.github/actions/upload_managed_plugin
+        with:
+          aws_region: "us-west-2"
+          aws_s3_bucket: "rpk-plugins-repo"
+          project_root_dir: ${{ github.workspace }}
+          artifacts_file: ${{ github.workspace }}/target/dist/artifacts.json
+          metadata_file: ${{ github.workspace }}/target/dist/metadata.json
+          plugin_name: "connect-fips"
+          goos: linux
+          goarch: amd64
+          repo_hostname: rpk-plugins.redpanda.com
+          dry_run: ${{ env.DRY_RUN != 'false' }}
