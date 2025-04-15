@@ -69,6 +69,8 @@ output:
       client_certs: []
     sasl: [] # No default (optional)
     metadata_max_age: 5m
+    request_timeout_overhead: 10s
+    conn_idle_timeout: 20s
     offset_topic: ${! @kafka_offset_topic }
     offset_group: ${! @kafka_offset_group }
     offset_partition: ${! @kafka_offset_partition }
@@ -468,6 +470,24 @@ The maximum age of metadata before it is refreshed.
 *Type*: `string`
 
 *Default*: `"5m"`
+
+=== `request_timeout_overhead`
+
+The request time overhead. Uses the given time as overhead while deadlining requests. Roughly equivalent to request.timeout.ms, but grants additional time to requests that have timeout fields.
+
+
+*Type*: `string`
+
+*Default*: `"10s"`
+
+=== `conn_idle_timeout`
+
+The rough amount of time to allow connections to idle before they are closed.
+
+
+*Type*: `string`
+
+*Default*: `"20s"`
 
 === `offset_topic`
 

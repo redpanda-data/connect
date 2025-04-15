@@ -12,8 +12,13 @@ All notable changes to this project will be documented in this file.
 - Field `use_enum_numbers` added to `protobuf` processor. (@benwebber)
 - Field `tools` added to `cohere_chat` processor. (@rockwotj)
 - Fields `region`, `endpoint` and `credentials` added to the `dynamodb` configuration section of the `aws_kinesis` input. (@jreyeshdez, @mihaitodor)
-- Field `isolation_level` added to `kafka`, `kafka_franz`, `ockam_kafka`, `redpanda`, `redpanda_common`, and `redpanda_migrator` inputs. (@rockwotj)
+- Field `transaction_isolation_level` added to `kafka_franz`, `ockam_kafka`, `redpanda`, `redpanda_common`, and `redpanda_migrator` inputs. (@rockwotj)
 - New `cohere_rerank` processor to rerank documents in RAG pipelines using Cohere. (@rockwotj)
+- Fields `request_timeout_overhead`, `conn_idle_timeout` and `start_offset` added to the `kafka_franz`, `ockam_kafka`, `redpanda`, `redpanda_common`, and `redpanda_migrator` inputs. (@mihaitodor)
+
+### Changed
+
+- Field `start_from_oldest` for the `kafka_franz`, `ockam_kafka`, `redpanda`, `redpanda_common`, and `redpanda_migrator` inputs is now deprecated in favour of `start_offset`. (@mihaitodor)
 
 ## 4.52.0 - 2025-04-03
 

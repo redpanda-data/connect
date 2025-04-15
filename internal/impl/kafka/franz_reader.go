@@ -15,6 +15,7 @@
 package kafka
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -53,6 +54,7 @@ const (
 	kfrFieldTopics                 = "topics"
 	kfrFieldRegexpTopics           = "regexp_topics"
 	kfrFieldStartFromOldest        = "start_from_oldest"
+	kfrFieldStartOffset            = "start_offset"
 	kfrFieldFetchMaxBytes          = "fetch_max_bytes"
 	kfrFieldFetchMinBytes          = "fetch_min_bytes"
 	kfrFieldFetchMaxPartitionBytes = "fetch_max_partition_bytes"
@@ -71,6 +73,45 @@ const (
 	TransactionIsolationLevelReadUncommitted TransactionIsolationLevel = "read_uncommitted"
 	// TransactionIsolationLevelReadCommitted is a transaction isolation level that only allows reading committed records.
 	TransactionIsolationLevelReadCommitted TransactionIsolationLevel = "read_committed"
+)
+
+// startOffsetType describes the offset to start consuming from, or if OffsetOutOfRange is seen while fetching,
+// to restart consuming from.
+type startOffsetType string
+
+const (
+	// startOffsetEarliest corresponds to auto.offset.reset "earliest"
+	startOffsetEarliest startOffsetType = "earliest"
+	// startOffsetLatest corresponds to auto.offset.reset "latest"
+	startOffsetLatest startOffsetType = "latest"
+	// startOffsetCommitted corresponds to auto.offset.reset "none"
+	startOffsetCommitted startOffsetType = "committed"
+)
+
+const (
+	// FranzConsumerFieldLintRules contains the lint rules for the consumer fields.
+	FranzConsumerFieldLintRules = `
+let has_topic_partitions = this.topics.any(t -> t.contains(":"))
+
+root = [
+  if $has_topic_partitions {
+    if this.consumer_group.or("") != "" {
+      "this input does not support both a consumer group and explicit topic partitions"
+    } else if this.regexp_topics {
+      "this input does not support both regular expression topics and explicit topic partitions"
+    }
+  } else {
+    if this.consumer_group.or("") == "" {
+      "a consumer group is mandatory when not using explicit topic partitions"
+    }
+  },
+  # We don't have any way to distinguish between start_from_oldest set explicitly to true and not set at all, so we
+  # assume users will be OK if start_offset overwrites it silently
+  if this.start_from_oldest == false && this.start_offset == "earliest" {
+    "start_from_oldest cannot be set to false when start_offset is set to earliest"
+  }
+]
+`
 )
 
 // FranzConsumerFields returns a slice of fields specifically for customising
@@ -116,6 +157,14 @@ Finally, it's also possible to specify an explicit offset to consume from by add
 		service.NewBoolField(kfrFieldStartFromOldest).
 			Description("Determines whether to consume from the oldest available offset, otherwise messages are consumed from the latest offset. The setting is applied when creating a new consumer group or the saved offset no longer exists.").
 			Default(true).
+			Advanced().
+			Deprecated(),
+		service.NewStringAnnotatedEnumField(kfrFieldStartOffset, map[string]string{
+			string(startOffsetEarliest):  "Start from the earliest offset. Corresponds to Kafka's `auto.offset.reset=earliest` option.",
+			string(startOffsetLatest):    "Start from the latest offset. Corresponds to Kafka's `auto.offset.reset=latest` option.",
+			string(startOffsetCommitted): "Prevents consuming a partition in a group if the partition has no prior commits. Corresponds to Kafka's `auto.offset.reset=none` option",
+		}).Description("Sets the offset to start consuming from, or if OffsetOutOfRange is seen while fetching, to restart consuming from.").
+			Default(string(startOffsetEarliest)).
 			Advanced(),
 		service.NewStringField(kfrFieldFetchMaxBytes).
 			Description("Sets the maximum amount of bytes a broker will try to send during a fetch. Note that brokers may not obey this limit if it has records larger than this limit. This is the equivalent to the Java fetch.max.bytes setting.").
@@ -151,7 +200,7 @@ type FranzConsumerDetails struct {
 	SessionTimeout         time.Duration
 	RebalanceTimeout       time.Duration
 	HeartbeatInterval      time.Duration
-	InitialOffset          kgo.Offset
+	StartOffset            kgo.Offset
 	Topics                 []string
 	TopicPartitions        map[string]map[int32]kgo.Offset
 	RegexPattern           bool
@@ -199,19 +248,29 @@ func FranzConsumerDetailsFromConfig(conf *service.ParsedConfig) (*FranzConsumerD
 		return nil, fmt.Errorf("invalid transaction isolation level: %v", isolationLevelStr)
 	}
 
+	startOffset, err := conf.FieldString(kfrFieldStartOffset)
+	if err != nil {
+		return nil, err
+	}
+
+	switch startOffsetType(startOffset) {
+	case startOffsetEarliest:
+		d.StartOffset = kgo.NewOffset().AtStart()
+	case startOffsetLatest:
+		d.StartOffset = kgo.NewOffset().AtEnd()
+	case startOffsetCommitted:
+		d.StartOffset = kgo.NewOffset().AtCommitted()
+	default:
+		return nil, fmt.Errorf("invalid start offset type: %s", startOffset)
+	}
+
 	startFromOldest, err := conf.FieldBool(kfrFieldStartFromOldest)
 	if err != nil {
 		return nil, err
 	}
-	var defaultOffset int64 = -1
-	if startFromOldest {
-		defaultOffset = -2
-	}
 
-	if startFromOldest {
-		d.InitialOffset = kgo.NewOffset().AtStart()
-	} else {
-		d.InitialOffset = kgo.NewOffset().AtEnd()
+	if !startFromOldest && d.StartOffset == kgo.NewOffset().AtStart() {
+		return nil, errors.New("start_from_oldest cannot be set to false when start_offset is set to earliest")
 	}
 
 	topicList, err := conf.FieldStringList(kfrFieldTopics)
@@ -220,7 +279,7 @@ func FranzConsumerDetailsFromConfig(conf *service.ParsedConfig) (*FranzConsumerD
 	}
 
 	var topicPartitionsInts map[string]map[int32]int64
-	if d.Topics, topicPartitionsInts, err = ParseTopics(topicList, defaultOffset, true); err != nil {
+	if d.Topics, topicPartitionsInts, err = ParseTopics(topicList, d.StartOffset.EpochOffset().Offset, true); err != nil {
 		return nil, err
 	}
 
@@ -263,7 +322,7 @@ func (d *FranzConsumerDetails) FranzOpts() []kgo.Opt {
 		kgo.Rack(d.RackID),
 		kgo.ConsumeTopics(d.Topics...),
 		kgo.ConsumePartitions(d.TopicPartitions),
-		kgo.ConsumeResetOffset(d.InitialOffset),
+		kgo.ConsumeResetOffset(d.StartOffset),
 		kgo.FetchMaxBytes(d.FetchMaxBytes),
 		kgo.FetchMinBytes(d.FetchMinBytes),
 		kgo.FetchMaxPartitionBytes(d.FetchMaxPartitionBytes),

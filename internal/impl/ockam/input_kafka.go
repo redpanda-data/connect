@@ -56,7 +56,7 @@ func ockamKafkaInputConfig() *service.ConfigSpec {
 			},
 			kafka.FranzConsumerFields(),
 			kafka.FranzReaderUnorderedConfigFields(),
-		)...)).
+		)...).LintRule(kafka.FranzConsumerFieldLintRules)).
 		Field(service.NewBoolField("disable_content_encryption").Default(false)).
 		Field(service.NewStringField("enrollment_ticket").Optional()).
 		Field(service.NewStringField("identity_name").Optional()).
