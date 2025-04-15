@@ -79,6 +79,7 @@ output:
       include_prefixes: []
       include_patterns: []
     timestamp_ms: ${! timestamp_unix_milli() } # No default (optional)
+    topic_prefix: ""
     max_in_flight: 256
     input_resource: redpanda_migrator_input
     replication_factor_override: true
@@ -634,6 +635,16 @@ timestamp_ms: ${! timestamp_unix_milli() }
 
 timestamp_ms: ${! metadata("kafka_timestamp_ms") }
 ```
+
+=== `topic_prefix`
+
+The topic prefix.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+
+*Type*: `string`
+
+*Default*: `""`
 
 === `max_in_flight`
 

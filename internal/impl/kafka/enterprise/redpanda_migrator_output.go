@@ -10,6 +10,7 @@ package enterprise
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"sync"
@@ -25,6 +26,8 @@ import (
 )
 
 const (
+	rmoFieldTopic                        = "topic"
+	rmoFieldTopicPrefix                  = "topic_prefix"
 	rmoFieldMaxInFlight                  = "max_in_flight"
 	rmoFieldBatching                     = "batching"
 	rmoFieldInputResource                = "input_resource"
@@ -82,6 +85,8 @@ func redpandaMigratorOutputConfigFields() []*service.ConfigField {
 		kafka.FranzConnectionFields(),
 		kafka.FranzWriterConfigFields(),
 		[]*service.ConfigField{
+			service.NewInterpolatedStringField(rmoFieldTopicPrefix).
+				Description("The topic prefix.").Default("").Advanced(),
 			service.NewIntField(rmoFieldMaxInFlight).
 				Description("The maximum number of batches to be sending in parallel at any given time.").
 				Default(256),
@@ -121,6 +126,17 @@ func init() {
 		) {
 			if err = license.CheckRunningEnterprise(mgr); err != nil {
 				return
+			}
+
+			topicPrefix, err := conf.FieldString(rmoFieldTopicPrefix)
+			if err != nil {
+				return
+			}
+			var destTopicResolver *service.InterpolatedString
+			if topicPrefix != "" {
+				if destTopicResolver, err = conf.FieldInterpolatedString(rmoFieldTopic); err != nil {
+					return
+				}
 			}
 
 			if maxInFlight, err = conf.FieldInt(rmoFieldMaxInFlight); err != nil {
@@ -215,7 +231,23 @@ func init() {
 								topics := inputClient.GetConsumeTopics()
 
 								for _, topic := range topics {
-									if err := createTopic(ctx, topic, replicationFactorOverride, replicationFactor, inputClient, outputClient); err != nil {
+									destTopic := topic
+									// Check if the user specified a topic alias and resolve it.
+									if topicPrefix != "" {
+										// Hack: The current message corresponds to a specific topic, but we want to
+										// create all topics, so we assume users will only use the `kafka_topic`
+										// metadata when specifying the `topic`.
+										tmpMsg := service.NewMessage(nil)
+										tmpMsg.MetaSetMut("kafka_topic", topic)
+										if destTopic, err = destTopicResolver.TryString(tmpMsg); err != nil {
+											return fmt.Errorf("failed to parse destination topic: %s", err)
+										} else if destTopic == "" {
+											return errors.New("failed to parse destination topic: empty string")
+										}
+
+										destTopic = topicPrefix + destTopic
+									}
+									if err := createTopic(ctx, topic, destTopic, replicationFactorOverride, replicationFactor, inputClient, outputClient); err != nil {
 										if err == errTopicAlreadyExists {
 											topicCache.Store(topic, struct{}{})
 											mgr.Logger().Debugf("Topic %q already exists", topic)
@@ -227,10 +259,10 @@ func init() {
 											mgr.Logger().Errorf("Failed to create topic %q and ACLs: %s", topic, err)
 										}
 									} else {
-										mgr.Logger().Infof("Created topic %q", topic)
+										mgr.Logger().Infof("Created topic %q", destTopic)
 									}
 
-									if err := createACLs(ctx, topic, inputClient, outputClient); err != nil {
+									if err := createACLs(ctx, topic, destTopic, inputClient, outputClient); err != nil {
 										mgr.Logger().Errorf("Failed to create ACLs for topic %q: %s", topic, err)
 									}
 
@@ -244,49 +276,55 @@ func init() {
 							}
 						})
 
+						var srOutput *schemaRegistryOutput
 						if translateSchemaIDs {
 							if res, ok := mgr.GetGeneric(schemaRegistryOutputResource); ok {
-								srOutput := res.(*schemaRegistryOutput)
-
-								var ch franz_sr.ConfluentHeader
-								for recordIdx, record := range records {
-									schemaID, _, err := ch.DecodeID(record.Value)
-									if err != nil {
-										mgr.Logger().Warnf("Failed to extract schema ID from message index %d on topic %q: %s", recordIdx, record.Topic, err)
-										continue
-									}
-
-									var destSchemaID int
-									if cachedID, ok := schemaIDCache.Load(schemaID); !ok {
-										destSchemaID, err = srOutput.GetDestinationSchemaID(ctx, schemaID)
-										if err != nil {
-											mgr.Logger().Warnf("Failed to fetch destination schema ID from message index %d on topic %q: %s", recordIdx, record.Topic, err)
-											continue
-										}
-										schemaIDCache.Store(schemaID, destSchemaID)
-									} else {
-										destSchemaID = cachedID.(int)
-									}
-
-									err = sr.UpdateID(record.Value, destSchemaID)
-									if err != nil {
-										mgr.Logger().Warnf("Failed to update schema ID in message index %d on topic %s: %q", recordIdx, record.Topic, err)
-										continue
-									}
-								}
+								srOutput = res.(*schemaRegistryOutput)
 							} else {
 								mgr.Logger().Warnf("schema_registry output resource %q not found; skipping schema ID translation", schemaRegistryOutputResource)
+							}
+						}
+						translateSchemaID := func(record *kgo.Record) error {
+							if srOutput == nil {
 								return nil
 							}
 
+							var ch franz_sr.ConfluentHeader
+							schemaID, _, err := ch.DecodeID(record.Value)
+							if err != nil {
+								return fmt.Errorf("failed to extract schema ID: %s", err)
+							}
+
+							var destSchemaID int
+							if cachedID, ok := schemaIDCache.Load(schemaID); !ok {
+								if destSchemaID, err = srOutput.GetDestinationSchemaID(ctx, schemaID); err != nil {
+									return fmt.Errorf("failed to fetch destination schema ID: %s", err)
+								}
+								schemaIDCache.Store(schemaID, destSchemaID)
+							} else {
+								destSchemaID = cachedID.(int)
+							}
+
+							if err = sr.UpdateID(record.Value, destSchemaID); err != nil {
+								return fmt.Errorf("failed to update schema ID: %s", err)
+							}
+
+							return nil
 						}
 
 						// The current record may be coming from a topic which was created later during runtime, so we
 						// need to try and create it if we haven't done so already.
 						if err := kafka.FranzSharedClientUse(inputResource, mgr, func(details *kafka.FranzSharedClientInfo) error {
-							for _, record := range records {
-								if _, ok := topicCache.Load(record.Topic); !ok {
-									if err := createTopic(ctx, record.Topic, replicationFactorOverride, replicationFactor, details.Client, client); err != nil {
+							for i, record := range records {
+								if err := translateSchemaID(record); err != nil {
+									mgr.Logger().Warnf("Failed to update schema ID in record index %d on topic %s: %q", i, record.Topic, err)
+								}
+
+								srcTopic := record.Topic
+								record.Topic = topicPrefix + record.Topic
+
+								if _, ok := topicCache.Load(srcTopic); !ok {
+									if err := createTopic(ctx, srcTopic, record.Topic, replicationFactorOverride, replicationFactor, details.Client, client); err != nil {
 										if err == errTopicAlreadyExists {
 											mgr.Logger().Debugf("Topic %q already exists", record.Topic)
 										} else {
@@ -296,11 +334,11 @@ func init() {
 										mgr.Logger().Infof("Created topic %q", record.Topic)
 									}
 
-									if err := createACLs(ctx, record.Topic, details.Client, client); err != nil {
+									if err := createACLs(ctx, srcTopic, record.Topic, details.Client, client); err != nil {
 										mgr.Logger().Errorf("Failed to create ACLs for topic %q: %s", record.Topic, err)
 									}
 
-									topicCache.Store(record.Topic, struct{}{})
+									topicCache.Store(srcTopic, struct{}{})
 								}
 							}
 							return nil

@@ -51,8 +51,8 @@ mapping: |
     root = throw("redpanda_migrator_bundle.translate_schema_ids must be used instead of schema_registry.translate_ids and redpanda_migrator.translate_schema_ids")
   }
 
-  if ["topic", "key", "partition", "partitioner", "timestamp"].any(f -> this.redpanda_migrator.keys().contains(f)) {
-    root = throw("The topic, key, partition, partitioner and timestamp fields of the redpanda_migrator output must be left empty")
+  if ["topic", "key", "partition", "partitioner", "timestamp", "timestamp_ms"].any(f -> this.redpanda_migrator.keys().contains(f)) {
+    root = throw("The topic, key, partition, partitioner, timestamp and timestamp_ms fields of the redpanda_migrator output must be left empty")
   }
 
   let redpandaMigrator = this.redpanda_migrator.assign(
@@ -62,7 +62,6 @@ mapping: |
       "partition": "${! metadata(\"kafka_partition\").or(throw(\"missing kafka_partition metadata\")) }",
       "partitioner": "manual",
       "timestamp_ms": "${! metadata(\"kafka_timestamp_ms\").or(timestamp_unix_milli()) }",
-      "max_in_flight": this.redpanda_migrator.max_in_flight.or(1),
       "metadata": {
         "include_patterns": [
           # Exclude metadata fields which start with `kafka_`
@@ -80,7 +79,11 @@ mapping: |
     })
   }
 
-  let redpandaMigratorOffsets = this.redpanda_migrator.with("seed_brokers", "consumer_group", "client_id", "rack_id", "max_message_bytes", "broker_write_max_bytes", "tls", "sasl")
+  let redpandaMigratorOffsets = this.redpanda_migrator.with("seed_brokers", "consumer_group", "client_id", "rack_id", "max_message_bytes", "broker_write_max_bytes", "tls", "sasl").assign(
+    {
+      "offset_topic_prefix": this.redpanda_migrator.topic_prefix.or(deleted()),
+    }
+  )
 
   if this.schema_registry.keys().contains("subject") {
     root = throw("The subject field of the schema_registry output must not be set")
@@ -156,6 +159,7 @@ tests:
     config:
       redpanda_migrator:
         seed_brokers: [ "127.0.0.1:9092" ]
+        topic_prefix: dest.
         max_in_flight: 1
       schema_registry:
         url: http://localhost:8081
@@ -176,6 +180,7 @@ tests:
                   - 127.0.0.1:9092
                 timestamp_ms: ${! metadata("kafka_timestamp_ms").or(timestamp_unix_milli()) }
                 topic: ${! metadata("kafka_topic").or(throw("missing kafka_topic metadata")) }
+                topic_prefix: "dest."
                 metadata:
                   include_patterns:
                     -  ^(?:[^k].*|k[^a].*|ka[^f].*|kaf[^k].*|kafk[^a].*|kafka[^_].*)
@@ -191,6 +196,7 @@ tests:
               redpanda_migrator_offsets:
                 seed_brokers:
                   - 127.0.0.1:9092
+                offset_topic_prefix: "dest."
           - check: metadata("input_label") == "schema_registry_input"
             output:
               fallback:

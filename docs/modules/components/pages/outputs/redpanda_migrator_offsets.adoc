@@ -72,6 +72,7 @@ output:
     request_timeout_overhead: 10s
     conn_idle_timeout: 20s
     offset_topic: ${! @kafka_offset_topic }
+    offset_topic_prefix: ""
     offset_group: ${! @kafka_offset_group }
     offset_partition: ${! @kafka_offset_partition }
     offset_commit_timestamp: ${! @kafka_offset_commit_timestamp }
@@ -498,6 +499,16 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 *Type*: `string`
 
 *Default*: `"${! @kafka_offset_topic }"`
+
+=== `offset_topic_prefix`
+
+Kafka offset topic prefix.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+
+*Type*: `string`
+
+*Default*: `""`
 
 === `offset_group`
 

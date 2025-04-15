@@ -23,23 +23,23 @@ var (
 	errTopicAlreadyExists = errors.New("topic already exists")
 )
 
-func createTopic(ctx context.Context, topic string, replicationFactorOverride bool, replicationFactor int, inputClient *kgo.Client, outputClient *kgo.Client) error {
+func createTopic(ctx context.Context, srcTopic, destTopic string, replicationFactorOverride bool, replicationFactor int, inputClient *kgo.Client, outputClient *kgo.Client) error {
 	outputAdminClient := kadm.NewClient(outputClient)
 
-	if topics, err := outputAdminClient.ListTopics(ctx, topic); err != nil {
-		return fmt.Errorf("failed to fetch topic %q from output broker: %s", topic, err)
+	if topics, err := outputAdminClient.ListTopics(ctx, srcTopic); err != nil {
+		return fmt.Errorf("failed to fetch topic %q from output broker: %s", srcTopic, err)
 	} else {
-		if topics.Has(topic) {
+		if topics.Has(srcTopic) {
 			return errTopicAlreadyExists
 		}
 	}
 
 	inputAdminClient := kadm.NewClient(inputClient)
 	var inputTopic kadm.TopicDetail
-	if topics, err := inputAdminClient.ListTopics(ctx, topic); err != nil {
-		return fmt.Errorf("failed to fetch topic %q from source broker: %s", topic, err)
+	if topics, err := inputAdminClient.ListTopics(ctx, srcTopic); err != nil {
+		return fmt.Errorf("failed to fetch topic %q from source broker: %s", srcTopic, err)
 	} else {
-		inputTopic = topics[topic]
+		inputTopic = topics[srcTopic]
 	}
 
 	partitions := int32(len(inputTopic.Partitions))
@@ -56,14 +56,14 @@ func createTopic(ctx context.Context, topic string, replicationFactorOverride bo
 		}
 	}
 
-	topicConfigs, err := inputAdminClient.DescribeTopicConfigs(ctx, topic)
+	topicConfigs, err := inputAdminClient.DescribeTopicConfigs(ctx, srcTopic)
 	if err != nil {
-		return fmt.Errorf("failed to fetch configs for topic %q from source broker: %s", topic, err)
+		return fmt.Errorf("failed to fetch configs for topic %q from source broker: %s", srcTopic, err)
 	}
 
-	rc, err := topicConfigs.On(topic, nil)
+	rc, err := topicConfigs.On(srcTopic, nil)
 	if err != nil {
-		return fmt.Errorf("failed to fetch configs for topic %q from source broker: %s", topic, err)
+		return fmt.Errorf("failed to fetch configs for topic %q from source broker: %s", srcTopic, err)
 	}
 
 	// Source: https://docs.redpanda.com/current/reference/properties/topic-properties/
@@ -91,32 +91,32 @@ func createTopic(ctx context.Context, topic string, replicationFactorOverride bo
 		}
 	}
 
-	if _, err := outputAdminClient.CreateTopic(ctx, partitions, rp, destinationConfigs, topic); err != nil {
+	if _, err := outputAdminClient.CreateTopic(ctx, partitions, rp, destinationConfigs, destTopic); err != nil {
 		if !errors.Is(err, kerr.TopicAlreadyExists) {
-			return fmt.Errorf("failed to create topic %q: %s", topic, err)
+			return fmt.Errorf("failed to create topic %q: %s", destTopic, err)
 		}
 	}
 
 	return nil
 }
 
-func createACLs(ctx context.Context, topic string, inputClient *kgo.Client, outputClient *kgo.Client) error {
+func createACLs(ctx context.Context, srcTopic, destTopic string, inputClient *kgo.Client, outputClient *kgo.Client) error {
 	inputAdminClient := kadm.NewClient(inputClient)
 	outputAdminClient := kadm.NewClient(outputClient)
 
 	// Only topic ACLs are migrated, group ACLs are not migrated.
 	// Users are not migrated because we can't read passwords.
 
-	builder := kadm.NewACLs().Topics(topic).
+	builder := kadm.NewACLs().Topics(srcTopic).
 		ResourcePatternType(kadm.ACLPatternLiteral).Operations().Allow().Deny().AllowHosts().DenyHosts()
 	var inputACLResults kadm.DescribeACLsResults
 	var err error
 	if inputACLResults, err = inputAdminClient.DescribeACLs(ctx, builder); err != nil {
-		return fmt.Errorf("failed to fetch ACLs for topic %q: %s", topic, err)
+		return fmt.Errorf("failed to fetch ACLs for topic %q: %s", srcTopic, err)
 	}
 
 	if len(inputACLResults) > 1 {
-		return fmt.Errorf("received unexpected number of ACL results for topic %q: %d", topic, len(inputACLResults))
+		return fmt.Errorf("received unexpected number of ACL results for topic %q: %d", srcTopic, len(inputACLResults))
 	}
 
 	for _, acl := range inputACLResults[0].Described {
@@ -134,14 +134,14 @@ func createACLs(ctx context.Context, topic string, inputClient *kgo.Client, outp
 		}
 		switch acl.Permission {
 		case kmsg.ACLPermissionTypeAllow:
-			builder = builder.Allow(acl.Principal).AllowHosts(acl.Host).Topics(acl.Name).ResourcePatternType(acl.Pattern).Operations(op)
+			builder = builder.Allow(acl.Principal).AllowHosts(acl.Host).Topics(destTopic).ResourcePatternType(acl.Pattern).Operations(op)
 		case kmsg.ACLPermissionTypeDeny:
-			builder = builder.Deny(acl.Principal).DenyHosts(acl.Host).Topics(acl.Name).ResourcePatternType(acl.Pattern).Operations(op)
+			builder = builder.Deny(acl.Principal).DenyHosts(acl.Host).Topics(destTopic).ResourcePatternType(acl.Pattern).Operations(op)
 		}
 
 		// Attempting to overwrite existing ACLs is idempotent and doesn't seem to raise an error.
 		if _, err := outputAdminClient.CreateACLs(ctx, builder); err != nil {
-			return fmt.Errorf("failed to create ACLs for topic %q: %s", topic, err)
+			return fmt.Errorf("failed to create ACLs for topic %q: %s", destTopic, err)
 		}
 	}
 
