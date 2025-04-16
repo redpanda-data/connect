@@ -19,6 +19,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/drive/v3"
+	"google.golang.org/api/drivelabels/v2"
 	"google.golang.org/api/option"
 )
 
@@ -49,14 +50,15 @@ func commonFields() []*service.ConfigField {
 	}
 }
 
-type baseProcessor struct {
+type baseProcessor[Service any] struct {
 	credentialsJSON string
 
-	mu           sync.RWMutex
-	driveService *drive.Service // guarded by mu
+	mu      sync.RWMutex
+	service *Service // guarded by mu
+	ctor    func(context.Context, ...option.ClientOption) (*Service, error)
 }
 
-func newBaseProcessor(conf *service.ParsedConfig) (*baseProcessor, error) {
+func newBaseLabelProcessor(conf *service.ParsedConfig) (*baseProcessor[drivelabels.Service], error) {
 	creds := ""
 	if conf.Contains(baseFieldCredentialsJSON) {
 		var err error
@@ -65,24 +67,51 @@ func newBaseProcessor(conf *service.ParsedConfig) (*baseProcessor, error) {
 			return nil, err
 		}
 	}
-	return &baseProcessor{credentialsJSON: creds}, nil
+	return &baseProcessor[drivelabels.Service]{credentialsJSON: creds, ctor: drivelabels.NewService}, nil
 }
 
-// initDriveService initializes the Google Drive API service using the provided credentials
-func (g *baseProcessor) getDriveService(ctx context.Context) (*drive.Service, error) {
+func newBaseDriveProcessor(conf *service.ParsedConfig) (*baseProcessor[drive.Service], error) {
+	creds := ""
+	if conf.Contains(baseFieldCredentialsJSON) {
+		var err error
+		creds, err = conf.FieldString(baseFieldCredentialsJSON)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &baseProcessor[drive.Service]{credentialsJSON: creds, ctor: drive.NewService}, nil
+}
+
+func (g *baseProcessor[Service]) getDriveService(ctx context.Context) (*Service, error) {
 	g.mu.RLock()
-	service := g.driveService
+	service := g.service
 	g.mu.RUnlock()
 	if service != nil {
 		return service, nil
 	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	if g.driveService != nil {
-		return g.driveService, nil
+	if g.service != nil {
+		return g.service, nil
 	}
-	options := []option.ClientOption{}
-	if g.credentialsJSON == "" {
+	options, err := googleClientOptions(ctx, g.credentialsJSON)
+	if err != nil {
+		return nil, err
+	}
+	service, err = g.ctor(ctx, options...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Drive service: %v", err)
+	}
+	g.service = service
+	return g.service, nil
+}
+
+func (g *baseProcessor[Service]) Close(ctx context.Context) error {
+	return nil
+}
+
+func googleClientOptions(ctx context.Context, credentialsJSON string) (options []option.ClientOption, err error) {
+	if credentialsJSON == "" {
 		creds, err := google.FindDefaultCredentials(ctx, drive.DriveReadonlyScope)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create default google client: %v", err)
@@ -98,23 +127,12 @@ func (g *baseProcessor) getDriveService(ctx context.Context) (*drive.Service, er
 			}
 		}
 	} else {
-		jwtConfig, err := google.JWTConfigFromJSON([]byte(g.credentialsJSON), drive.DriveReadonlyScope)
+		jwtConfig, err := google.JWTConfigFromJSON([]byte(credentialsJSON), drive.DriveReadonlyScope)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse credentials: %v", err)
 		}
 		client := jwtConfig.Client(ctx)
 		options = append(options, option.WithHTTPClient(client))
 	}
-	// Create Drive service
-	driveService, err := drive.NewService(ctx, options...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Drive service: %v", err)
-	}
-
-	g.driveService = driveService
-	return g.driveService, nil
-}
-
-func (g *baseProcessor) Close(ctx context.Context) error {
-	return nil
+	return
 }

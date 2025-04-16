@@ -93,7 +93,7 @@ gcp_vertex_ai_embeddings  ,processor ,gcp_vertex_ai_embeddings  ,4.37.0  ,enterp
 generate                  ,input     ,generate                  ,3.40.0  ,certified  ,n          ,y     ,y
 git                       ,input     ,git                       ,4.51.0  ,certified  ,n          ,y     ,y
 google_drive_download     ,processor ,google_drive_download     ,4.53.0  ,enterprise ,n          ,y     ,y
-google_drive_get_labels   ,processor ,google_drive_get_labels   ,4.53.0  ,enterprise ,n          ,y     ,y
+google_drive_list_labels  ,processor ,google_drive_list_labels  ,4.53.0  ,enterprise ,n          ,y     ,y
 google_drive_search       ,processor ,google_drive_search       ,4.53.0  ,enterprise ,n          ,y     ,y
 grok                      ,processor ,grok                      ,0.0.0   ,community  ,n          ,n     ,n
 group_by                  ,processor ,group_by                  ,0.0.0   ,certified  ,n          ,y     ,y

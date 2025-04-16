@@ -86,14 +86,14 @@ pipeline:
 }
 
 type googleDriveDownloadProcessor struct {
-	*baseProcessor
+	*baseProcessor[drive.Service]
 	fileID          *service.InterpolatedString
 	mimeType        *service.InterpolatedString
 	exportMimeTypes map[string]string
 }
 
 func newGoogleDriveDownloadProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-	base, err := newBaseProcessor(conf)
+	base, err := newBaseDriveProcessor(conf)
 	if err != nil {
 		return nil, err
 	}

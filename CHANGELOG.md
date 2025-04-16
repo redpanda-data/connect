@@ -9,7 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - New `google_drive_search` processor. (@rockwotj)
 - New `google_drive_download` processor. (@rockwotj)
-- New `google_drive_get_labels` processor. (@rockwotj)
+- New `google_drive_list_labels` processor. (@rockwotj)
 - Field `use_enum_numbers` added to `protobuf` processor. (@benwebber)
 - Field `tools` added to `cohere_chat` processor. (@rockwotj)
 - Fields `region`, `endpoint` and `credentials` added to the `dynamodb` configuration section of the `aws_kinesis` input. (@jreyeshdez, @mihaitodor)

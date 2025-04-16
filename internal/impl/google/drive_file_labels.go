@@ -16,16 +16,12 @@ import (
 	"fmt"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"google.golang.org/api/drive/v3"
-)
-
-const (
-	driveLabelsFieldFileID = "file_id"
+	"google.golang.org/api/drivelabels/v2"
 )
 
 func init() {
 	err := service.RegisterProcessor(
-		"google_drive_get_labels",
+		"google_drive_list_labels",
 		driveLabelsProcessorConfig(),
 		newGoogleDriveLabelsProcessor,
 	)
@@ -42,40 +38,29 @@ func driveLabelsProcessorConfig() *service.ConfigSpec {
 Can list labels for a file from Google Drive based on a file ID.
 `+baseAuthDescription).
 		Fields(commonFields()...).
-		Fields(
-			service.NewInterpolatedStringField(driveLabelsFieldFileID).
-				Description("The file ID of the file to get labels for."),
-		).
 		Example("List files from Google Drive with labels", "This example lists all files with a specific name from Google Drive and their labels.", `
 pipeline:
   processors:
-    - google_drive_search:
-        query: "name contains 'Foo'"
     - branch:
         result_map: 'root.labels = this'
         processors:
           - google_drive_get_labels:
-              file_id: "${!this.id}"
+    - google_drive_search:
+        query: "name contains 'Foo'"
 `)
 }
 
 type googleDriveLabelsProcessor struct {
-	*baseProcessor
-	fileID *service.InterpolatedString
+	*baseProcessor[drivelabels.Service]
 }
 
 func newGoogleDriveLabelsProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-	base, err := newBaseProcessor(conf)
-	if err != nil {
-		return nil, err
-	}
-	fileID, err := conf.FieldInterpolatedString(driveLabelsFieldFileID)
+	base, err := newBaseLabelProcessor(conf)
 	if err != nil {
 		return nil, err
 	}
 	return &googleDriveLabelsProcessor{
 		baseProcessor: base,
-		fileID:        fileID,
 	}, nil
 }
 
@@ -84,23 +69,23 @@ func (g *googleDriveLabelsProcessor) Process(ctx context.Context, msg *service.M
 	if err != nil {
 		return nil, err
 	}
-	id, err := g.fileID.TryString(msg)
-	if err != nil {
-		return nil, fmt.Errorf("unable to interpolate %s: %w", driveLabelsFieldFileID, err)
-	}
 	allLabels := []json.RawMessage{}
-	err = client.Files.ListLabels(id).Context(ctx).Pages(ctx, func(labels *drive.LabelList) error {
-		for _, label := range labels.Labels {
-			b, err := label.MarshalJSON()
-			if err != nil {
-				return fmt.Errorf("unable to marshal label: %w", err)
+	err = client.Labels.List().
+		Context(ctx).
+		PublishedOnly(true).
+		View("LABEL_VIEW_FULL").
+		Pages(ctx, func(labels *drivelabels.GoogleAppsDriveLabelsV2ListLabelsResponse) error {
+			for _, label := range labels.Labels {
+				b, err := label.MarshalJSON()
+				if err != nil {
+					return fmt.Errorf("unable to marshal label: %w", err)
+				}
+				allLabels = append(allLabels, b)
 			}
-			allLabels = append(allLabels, b)
-		}
-		return nil
-	})
+			return nil
+		})
 	if err != nil {
-		return nil, fmt.Errorf("unable to list labels for %s: %w", id, err)
+		return nil, fmt.Errorf("unable to list labels: %w", err)
 	}
 	labels, err := json.Marshal(allLabels)
 	if err != nil {
