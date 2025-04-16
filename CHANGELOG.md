@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 - Field `transaction_isolation_level` added to `kafka_franz`, `ockam_kafka`, `redpanda`, `redpanda_common`, and `redpanda_migrator` inputs. (@rockwotj)
 - New `cohere_rerank` processor to rerank documents in RAG pipelines using Cohere. (@rockwotj)
 - Fields `request_timeout_overhead`, `conn_idle_timeout` and `start_offset` added to the `kafka_franz`, `ockam_kafka`, `redpanda`, `redpanda_common`, and `redpanda_migrator` inputs. (@mihaitodor)
+- Fields `request_timeout_overhead` and `conn_idle_timeout` added to the `redpanda_migrator_offsets` input and the `kafka_franz`, `ockam_kafka`, `redpanda`, `redpanda_common`, `redpanda_migrator`, and `redpanda_migrator_offsets` outputs. (@mihaitodor)
 
 ### Changed
 
