@@ -28,6 +28,7 @@ require (
 	github.com/Masterminds/squirrel v1.5.4
 	github.com/PaesslerAG/gval v1.2.2
 	github.com/PaesslerAG/jsonpath v0.1.1
+	github.com/apache/arrow/go/parquet v0.0.0-20211112161151-bc219186db40
 	github.com/apache/pulsar-client-go v0.13.1
 	github.com/auth0/go-jwt-middleware/v2 v2.3.0
 	github.com/authzed/authzed-go v1.0.0
@@ -40,11 +41,11 @@ require (
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.17.10
 	github.com/aws/aws-sdk-go-v2/service/bedrockruntime v1.15.1
 	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.40.3
-	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.34.4
+	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.34.6
 	github.com/aws/aws-sdk-go-v2/service/firehose v1.32.0
 	github.com/aws/aws-sdk-go-v2/service/kinesis v1.29.3
 	github.com/aws/aws-sdk-go-v2/service/lambda v1.56.3
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.58.3
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.60.1
 	github.com/aws/aws-sdk-go-v2/service/sns v1.31.3
 	github.com/aws/aws-sdk-go-v2/service/sqs v1.34.3
 	github.com/aws/aws-sdk-go-v2/service/sts v1.32.3
@@ -55,6 +56,7 @@ require (
 	github.com/bwmarrin/discordgo v0.28.1
 	github.com/bwmarrin/snowflake v0.3.0
 	github.com/cenkalti/backoff/v4 v4.3.0
+	github.com/chelseajonesr/rfarrow v0.0.0-20241213002207-3b5e11b074f8
 	github.com/clbanning/mxj/v2 v2.7.0
 	github.com/colinmarc/hdfs v1.1.3
 	github.com/couchbase/gocb/v2 v2.9.1
@@ -122,6 +124,7 @@ require (
 	github.com/redpanda-data/benthos/v4 v4.47.0
 	github.com/redpanda-data/common-go/secrets v0.1.3
 	github.com/redpanda-data/connect/public/bundle/free/v4 v4.31.0
+	github.com/rivian/delta-go v0.0.0-20241231204135-64252305b570
 	github.com/rs/xid v1.5.0
 	github.com/sashabaranov/go-openai v1.37.0
 	github.com/sijms/go-ora/v2 v2.8.19
@@ -181,6 +184,7 @@ require (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.27.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.51.0 // indirect
 	github.com/ProtonMail/go-crypto v1.1.5 // indirect
+	github.com/apache/arrow/go/v14 v14.0.2 // indirect
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.34.3 // indirect
 	github.com/certifi/gocertifi v0.0.0-20210507211836-431795d63e8d // indirect
 	github.com/cloudflare/circl v1.6.0 // indirect
@@ -193,10 +197,14 @@ require (
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
 	github.com/go-git/go-billy/v5 v5.6.2 // indirect
 	github.com/hashicorp/yamux v0.1.2 // indirect
+	github.com/iancoleman/strcase v0.3.0 // indirect
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/jzelinskie/stringz v0.0.3 // indirect
 	github.com/kevinburke/ssh_config v1.2.0 // indirect
+	github.com/klauspost/asmfmt v1.3.2 // indirect
+	github.com/minio/asm2plan9s v0.0.0-20200509001527-cdd76441f9d8 // indirect
+	github.com/minio/c2goasm v0.0.0-20190812172519-36a3d3bbc4f3 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
@@ -267,13 +275,13 @@ require (
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.22 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.22 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.1 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/v4a v1.3.15 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/v4a v1.3.16 // indirect
 	github.com/aws/aws-sdk-go-v2/service/dynamodbstreams v1.22.3 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.12.0 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.3.17 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/endpoint-discovery v1.9.16 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.3.18 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/endpoint-discovery v1.9.17 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.12.3 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.17.15 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.17.16 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.24.3 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.28.3 // indirect
 	github.com/aws/smithy-go v1.22.0
