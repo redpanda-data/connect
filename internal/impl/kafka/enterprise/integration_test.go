@@ -1551,16 +1551,21 @@ func TestRedpandaRecordOrder(t *testing.T) {
 	require.NoError(t, err)
 	pool.MaxWait = time.Minute
 
-	source, err := startRedpanda(t, pool, true, true)
+	source, err := startRedpanda(t, pool, true, false)
 	require.NoError(t, err)
 
-	destination, err := startRedpanda(t, pool, true, true)
+	destination, err := startRedpanda(t, pool, true, false)
 	require.NoError(t, err)
 
 	t.Logf("Source broker: %s", source.brokerAddr)
 	t.Logf("Destination broker: %s", destination.brokerAddr)
 
+	// Create the topic
 	dummyTopic := "foobar"
+	dummyRetentionTime := strconv.Itoa(int((1 * time.Hour).Milliseconds()))
+	createTopicWithACLs(t, source.brokerAddr, dummyTopic, dummyRetentionTime, "User:redpanda", kmsg.ACLOperationAll)
+	createTopicWithACLs(t, destination.brokerAddr, dummyTopic, dummyRetentionTime, "User:redpanda", kmsg.ACLOperationAll)
+
 	dummyMessage := `{"test":"foo"}`
 	go func() {
 		t.Log("Producing messages...")
