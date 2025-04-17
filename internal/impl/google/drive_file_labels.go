@@ -35,19 +35,9 @@ func driveLabelsProcessorConfig() *service.ConfigSpec {
 		Categories("Unstructured").
 		Summary("Lists labels for a file in Google Drive").
 		Description(`
-Can list labels for a file from Google Drive based on a file ID.
-`+baseAuthDescription).
-		Fields(commonFields()...).
-		Example("List files from Google Drive with labels", "This example lists all files with a specific name from Google Drive and their labels.", `
-pipeline:
-  processors:
-    - branch:
-        result_map: 'root.labels = this'
-        processors:
-          - google_drive_get_labels:
-    - google_drive_search:
-        query: "name contains 'Foo'"
-`)
+Can list all labels from Google Drive.
+		` + authDescription("https://www.googleapis.com/auth/drive.labels.readonly")).
+		Fields(commonFields()...)
 }
 
 type googleDriveLabelsProcessor struct {

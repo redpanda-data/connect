@@ -32,14 +32,14 @@ google_drive_list_labels:
   credentials_json: "" # No default (optional)
 ```
 
-Can list labels for a file from Google Drive based on a file ID.
-== Authentication
+Can list all labels from Google Drive.
+		== Authentication
 By default, this connector will use Google Application Default Credentials (ADC) to authenticate with Google APIs.
 
 To use this mechanism locally, the following gcloud commands can be used:
 
 	# Login for the application default credentials and add scopes for readonly drive access
-	gcloud auth application-default login --scopes='openid,https://www.googleapis.com/auth/userinfo.email,https://www.googleapis.com/auth/drive.readonly,https://www.googleapis.com/auth/cloud-platform'
+	gcloud auth application-default login --scopes='openid,https://www.googleapis.com/auth/userinfo.email,https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/drive.labels.readonly'
 	# When logging in with a user account, you may need to set the quota project for the application default credentials
 	gcloud auth application-default set-quota-project <project-id>
 
@@ -61,29 +61,5 @@ This field contains sensitive information that usually shouldn't be added to a c
 
 *Type*: `string`
 
-
-== Examples
-
-[tabs]
-======
-List files from Google Drive with labels::
-+
---
-
-This example lists all files with a specific name from Google Drive and their labels.
-
-```yaml
-pipeline:
-  processors:
-    - branch:
-        result_map: 'root.labels = this'
-        processors:
-          - google_drive_get_labels:
-    - google_drive_search:
-        query: "name contains 'Foo'"
-```
-
---
-======
 
 

@@ -51,7 +51,7 @@ By default, this connector will use Google Application Default Credentials (ADC)
 To use this mechanism locally, the following gcloud commands can be used:
 
 	# Login for the application default credentials and add scopes for readonly drive access
-	gcloud auth application-default login --scopes='openid,https://www.googleapis.com/auth/userinfo.email,https://www.googleapis.com/auth/drive.readonly,https://www.googleapis.com/auth/cloud-platform'
+	gcloud auth application-default login --scopes='openid,https://www.googleapis.com/auth/userinfo.email,https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/drive.readonly'
 	# When logging in with a user account, you may need to set the quota project for the application default credentials
 	gcloud auth application-default set-quota-project <project-id>
 
