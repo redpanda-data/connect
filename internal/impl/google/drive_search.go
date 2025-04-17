@@ -19,6 +19,8 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/googleapi"
+
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 const (
@@ -91,6 +93,9 @@ type googleDriveSearchProcessor struct {
 
 // newGoogleDriveSearchProcessor creates a new instance of googleDriveSearchProcessor.
 func newGoogleDriveSearchProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+	if err := license.CheckRunningEnterprise(mgr); err != nil {
+		return nil, err
+	}
 	base, err := newBaseDriveProcessor(conf)
 	if err != nil {
 		return nil, err

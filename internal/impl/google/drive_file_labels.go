@@ -17,6 +17,8 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"google.golang.org/api/drivelabels/v2"
+
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 func init() {
@@ -45,6 +47,9 @@ type googleDriveLabelsProcessor struct {
 }
 
 func newGoogleDriveLabelsProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+	if err := license.CheckRunningEnterprise(mgr); err != nil {
+		return nil, err
+	}
 	base, err := newBaseLabelProcessor(conf)
 	if err != nil {
 		return nil, err
