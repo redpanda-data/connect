@@ -24,6 +24,7 @@ import (
 const (
 	driveSearchFieldQuery      = "query"
 	driveSearchFieldProjection = "projection"
+	driveSearchFieldLabels     = "include_label_ids"
 	driveSearchFieldMaxResults = "max_results"
 )
 
@@ -45,16 +46,19 @@ func driveSearchProcessorConfig() *service.ConfigSpec {
 		Description(`
 This processor searches for files in Google Drive using the provided query.
 
-Search results are emitted as message batch.
+Search results are emitted as message batch, where each message is a https://developers.google.com/workspace/drive/api/reference/rest/v3/files#File[^Google Drive File]
 
-`+baseAuthDescription).
+`+authDescription("https://www.googleapis.com/auth/drive.readonly")).
 		Fields(commonFields()...).
 		Fields(
 			service.NewInterpolatedStringField(driveSearchFieldQuery).
 				Description("The search query to use for finding files in Google Drive. Supports the same query format as the Google Drive UI."),
 			service.NewStringListField(driveSearchFieldProjection).
 				Description("The partial fields to include in the result.").
-				Default([]any{"id", "name", "mimeType", "parents", "size"}),
+				Default([]any{"id", "name", "mimeType", "size", "labelInfo"}),
+			service.NewInterpolatedStringField(driveSearchFieldLabels).
+				Description("A comma delimited list of label IDs to include in the result").
+				Default(""),
 			service.NewIntField(driveSearchFieldMaxResults).
 				Description("The maximum number of results to return.").
 				Default(64),
@@ -66,7 +70,6 @@ pipeline:
   processors:
     - google_drive_search:
         query: "${!content().string()}"
-        projection: ["id", "name", "mimeType", "parents", "size"]
     - mutation: 'meta path = this.name'
     - google_drive_download:
         file_id: "${!this.id}"
@@ -79,19 +82,24 @@ output:
 }
 
 type googleDriveSearchProcessor struct {
-	*baseProcessor
+	*baseProcessor[drive.Service]
 	query      *service.InterpolatedString
+	labels     *service.InterpolatedString
 	fields     []string
 	maxResults int
 }
 
 // newGoogleDriveSearchProcessor creates a new instance of googleDriveSearchProcessor.
 func newGoogleDriveSearchProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-	base, err := newBaseProcessor(conf)
+	base, err := newBaseDriveProcessor(conf)
 	if err != nil {
 		return nil, err
 	}
 	query, err := conf.FieldInterpolatedString(driveSearchFieldQuery)
+	if err != nil {
+		return nil, err
+	}
+	labels, err := conf.FieldInterpolatedString(driveSearchFieldLabels)
 	if err != nil {
 		return nil, err
 	}
@@ -109,6 +117,7 @@ func newGoogleDriveSearchProcessor(conf *service.ParsedConfig, mgr *service.Reso
 	return &googleDriveSearchProcessor{
 		baseProcessor: base,
 		query:         query,
+		labels:        labels,
 		fields:        fields,
 		maxResults:    maxResults,
 	}, nil
@@ -123,13 +132,20 @@ func (g *googleDriveSearchProcessor) Process(ctx context.Context, msg *service.M
 	}
 	q, err := g.query.TryString(msg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to interpolate query: %v", err)
+		return nil, fmt.Errorf("failed to interpolate %s: %v", driveSearchFieldQuery, err)
+	}
+	l, err := g.labels.TryString(msg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to interpolate %s: %v", driveSearchFieldLabels, err)
 	}
 	call := client.Files.List().
 		Context(ctx).
 		Q(q).
 		PageSize(min(int64(g.maxResults), 100)).
 		Fields("nextPageToken", googleapi.Field("files("+strings.Join(g.fields, ",")+")"))
+	if l != "" {
+		call = call.IncludeLabels(l)
+	}
 	var files []*drive.File
 	err = call.Pages(ctx, func(page *drive.FileList) error {
 		files = append(files, page.Files...)

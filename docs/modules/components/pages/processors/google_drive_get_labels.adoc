@@ -1,4 +1,4 @@
-= google_drive_search
+= google_drive_get_labels
 :type: processor
 :status: experimental
 :categories: ["Unstructured"]
@@ -23,71 +23,30 @@
 component_type_dropdown::[]
 
 
-Searches Google Drive for files matching the provided query.
+Lists labels for a file in Google Drive
 
 ```yml
 # Config fields, showing default values
 label: ""
-google_drive_search:
+google_drive_get_labels:
   credentials_json: "" # No default (optional)
-  query: "" # No default (required)
-  projection:
-    - id
-    - name
-    - mimeType
-    - size
-    - labelInfo
-  include_label_ids: ""
-  max_results: 64
+  file_id: "" # No default (required)
 ```
 
-This processor searches for files in Google Drive using the provided query.
-
-Search results are emitted as message batch, where each message is a https://developers.google.com/workspace/drive/api/reference/rest/v3/files#File[^Google Drive File]
-
+Can list labels for a file from Google Drive based on a file ID.
 == Authentication
 By default, this connector will use Google Application Default Credentials (ADC) to authenticate with Google APIs.
 
 To use this mechanism locally, the following gcloud commands can be used:
 
 	# Login for the application default credentials and add scopes for readonly drive access
-	gcloud auth application-default login --scopes='openid,https://www.googleapis.com/auth/userinfo.email,https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/drive.readonly'
+	gcloud auth application-default login --scopes='openid,https://www.googleapis.com/auth/userinfo.email,https://www.googleapis.com/auth/drive.readonly,https://www.googleapis.com/auth/cloud-platform'
 	# When logging in with a user account, you may need to set the quota project for the application default credentials
 	gcloud auth application-default set-quota-project <project-id>
 
 Otherwise if using a service account, you can create a JSON key for the service account and set it in the `credentials_json` field.
 In order for a service account to access files in Google Drive either files need to be explicitly shared with the service account email, otherwise https://support.google.com/a/answer/162106[^domain wide delegation] can be used to share all files within a Google Workspace.
 
-
-== Examples
-
-[tabs]
-======
-Search & download files from Google Drive::
-+
---
-
-This examples downloads all the files from Google Drive that are returned in the query
-
-```yaml
-input:
-  stdin: {}
-pipeline:
-  processors:
-    - google_drive_search:
-        query: "${!content().string()}"
-    - mutation: 'meta path = this.name'
-    - google_drive_download:
-        file_id: "${!this.id}"
-        mime_type: "${!this.mimeType}"
-output:
-  file:
-    path: "${!@path}"
-    codec: all-bytes
-```
-
---
-======
 
 == Fields
 
@@ -104,41 +63,38 @@ This field contains sensitive information that usually shouldn't be added to a c
 *Type*: `string`
 
 
-=== `query`
+=== `file_id`
 
-The search query to use for finding files in Google Drive. Supports the same query format as the Google Drive UI.
+The file ID of the file to get labels for.
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
 
 *Type*: `string`
 
 
-=== `projection`
+== Examples
 
-The partial fields to include in the result.
+[tabs]
+======
+List files from Google Drive with labels::
++
+--
 
+This example lists all files with a specific name from Google Drive and their labels.
 
-*Type*: `array`
+```yaml
+pipeline:
+  processors:
+    - google_drive_search:
+        query: "name contains 'Foo'"
+    - branch:
+        result_map: 'root.labels = this'
+        processors:
+          - google_drive_get_labels:
+              file_id: "${!this.id}"
+```
 
-*Default*: `["id","name","mimeType","size","labelInfo"]`
-
-=== `include_label_ids`
-
-A comma delimited list of label IDs to include in the result
-This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
-
-
-*Type*: `string`
-
-*Default*: `""`
-
-=== `max_results`
-
-The maximum number of results to return.
-
-
-*Type*: `int`
-
-*Default*: `64`
+--
+======
 
 
