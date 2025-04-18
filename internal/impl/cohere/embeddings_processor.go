@@ -145,6 +145,7 @@ func (p *embeddingsProcessor) Process(ctx context.Context, msg *service.Message)
 	body.Model = p.model
 	body.InputType = p.inputType
 	body.OutputDimension = p.dimensions
+	body.EmbeddingTypes = []cohere.EmbeddingType{cohere.EmbeddingTypeFloat}
 	if p.text != nil {
 		s, err := msg.BloblangQuery(p.text)
 		if err != nil {
