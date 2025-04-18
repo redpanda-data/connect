@@ -35,7 +35,8 @@ cohere_embeddings:
   api_key: "" # No default (required)
   model: embed-english-v3.0 # No default (required)
   text_mapping: "" # No default (optional)
-  dimensions: search_document
+  input_type: search_document
+  dimensions: 0 # No default (optional)
 ```
 
 This processor sends text strings to the Cohere API, which generates vector embeddings. By default, the processor submits the entire payload of each message as a string, unless you use the `text_mapping` configuration field to customize it.
@@ -125,7 +126,7 @@ The text you want to generate a vector embedding for. By default, the processor 
 *Type*: `string`
 
 
-=== `dimensions`
+=== `input_type`
 
 Specifies the type of input passed to the model.
 
@@ -147,5 +148,13 @@ Specifies the type of input passed to the model.
 | Used for embeddings of search queries run against a vector DB to find relevant documents.
 
 |===
+
+=== `dimensions`
+
+The number of dimensions of the output embedding. This is only available for embed-v4 and newer models. Possible values are 256, 512, 1024, and 1536.
+
+
+*Type*: `int`
+
 
 
