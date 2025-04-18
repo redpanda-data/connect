@@ -25,6 +25,12 @@ DOCS_FLAGS ?=
 APPS = redpanda-connect redpanda-connect-cloud redpanda-connect-community redpanda-connect-ai
 all: $(APPS)
 
+export GOBIN ?= $(CURDIR)/bin
+export PATH  := $(GOBIN):$(PATH)
+
+install-tools:
+	@go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.0.2
+
 install: $(APPS)
 	@install -d $(INSTALL_DIR)
 	@rm -f $(INSTALL_DIR)/redpanda-connect
