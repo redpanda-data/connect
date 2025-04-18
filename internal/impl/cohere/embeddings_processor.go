@@ -22,7 +22,8 @@ import (
 
 const (
 	oepFieldTextMapping = "text_mapping"
-	oepFieldInputType   = "dimensions"
+	oepFieldInputType   = "input_type"
+	oepFieldDimensions  = "dimensions"
 )
 
 func init() {
@@ -65,6 +66,9 @@ To learn more about vector embeddings, see the https://docs.cohere.com/docs/embe
 			}).
 				Description("Specifies the type of input passed to the model.").
 				Default("search_document"),
+			service.NewIntField(oepFieldDimensions).
+				Optional().
+				Description("The number of dimensions of the output embedding. This is only available for embed-v4 and newer models. Possible values are 256, 512, 1024, and 1536."),
 		).
 		Example(
 			"Store embedding vectors in Qdrant",
@@ -105,31 +109,42 @@ func makeEmbeddingsProcessor(conf *service.ParsedConfig, mgr *service.Resources)
 		}
 	}
 	var et cohere.EmbedInputType
-	if conf.Contains(oepFieldInputType) {
-		v, err := conf.FieldString(oepFieldInputType)
-		if err != nil {
-			return nil, err
-		}
-		t, err := cohere.NewEmbedInputTypeFromString(v)
-		if err != nil {
-			return nil, err
-		}
-		et = t
+	v, err := conf.FieldString(oepFieldInputType)
+	if err != nil {
+		return nil, err
 	}
-	return &embeddingsProcessor{b, t, et}, nil
+	typ, err := cohere.NewEmbedInputTypeFromString(v)
+	if err != nil {
+		return nil, err
+	}
+	et = typ
+	var dims *int
+	if conf.Contains(oepFieldDimensions) {
+		dimensions, err := conf.FieldInt(oepFieldDimensions)
+		if err != nil {
+			return nil, err
+		}
+		if dimensions != 256 && dimensions != 512 && dimensions != 1024 && dimensions != 1536 {
+			return nil, fmt.Errorf("invalid dimensions: %d", dimensions)
+		}
+		dims = &dimensions
+	}
+	return &embeddingsProcessor{b, t, et, dims}, nil
 }
 
 type embeddingsProcessor struct {
 	*baseProcessor
 
-	text      *bloblang.Executor
-	inputType cohere.EmbedInputType
+	text       *bloblang.Executor
+	inputType  cohere.EmbedInputType
+	dimensions *int
 }
 
 func (p *embeddingsProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
 	var body cohere.V2EmbedRequest
 	body.Model = p.model
 	body.InputType = p.inputType
+	body.OutputDimension = p.dimensions
 	if p.text != nil {
 		s, err := msg.BloblangQuery(p.text)
 		if err != nil {
