@@ -1,0 +1,40 @@
+input:
+  http_server:
+    path: /query
+    allowed_verbs:
+      - POST
+    sync_response:
+      status: "${!this.status.or(200)}"
+    timeout: 60s
+pipeline:
+  processors:
+    - try:
+      - json_schema:
+          schema: |
+            {
+              "$schema": "http://json-schema.org/draft-07/schema#",
+              "title": "HTTP Request schema",
+              "type": "object",
+              "properties": {
+                "query": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "query"
+              ]
+            }
+      - cohere_embed:
+          api_key: ${COHERE_API_KEY}
+          input_type: search_query
+          dimensions: 1536
+      - pgvector:
+          dsn: ${POSTGRES_DSN}
+          table: ${POSTGRES_TABLE}_cohere
+output:
+  processors:
+    - mutation: |
+        if errored() {
+          root = {"status": 500, "error": error()}
+        }
+  sync_response: {}
