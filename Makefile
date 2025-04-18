@@ -68,8 +68,7 @@ docker-ai:
 	@docker tag $(DOCKER_IMAGE):$(VER_CUT)-ai $(DOCKER_IMAGE):latest-ai
 
 fmt:
-	@go list -f {{.Dir}} ./... | xargs -I{} gofmt -w -s {}
-	@go list -f {{.Dir}} ./... | xargs -I{} goimports -w -local github.com/redpanda-data/connect/v4 {}
+	@golangci-lint fmt cmd/... internal/... public/...
 	@go mod tidy
 
 lint:
