@@ -58,10 +58,14 @@ jobs:
       with:
         go-version: oldstable
 
+    - name: Set version env variables
+      run: |
+        cat .versions >> $GITHUB_ENV
+
     - name: Lint
       uses: golangci/golangci-lint-action@v7
       with:
-        version: v2.0.2
+        version: "v${{env.GOLANGCI_LINT_VERSION}}"
         args: --timeout 30m cmd/... internal/... public/...
 
   test-push-to-cloudsmith:
