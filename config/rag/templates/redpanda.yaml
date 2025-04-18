@@ -1,0 +1,79 @@
+name: rag_topics
+type: input 
+fields:
+  - name: seed_brokers
+    type: string
+  - name: user
+    type: string
+    default: ""
+  - name: password
+    type: string
+    default: ""
+  - name: consumer_group
+    type: string
+  - name: batching
+    type: unknown 
+    default: {}
+mapping: |
+    root.kafka_franz = {
+      "seed_brokers": [this.seed_brokers],
+      "sasl": if this.user != "" { 
+          [{
+            "username": this.user,
+            "password": this.password,
+            "mechanism": "SCRAM-SHA-256",
+          }]
+        } else {
+          []
+        },
+      "tls": {"enabled": this.user != ""},
+      "topics": ["^rp\\.ai\\.rag\\..*$"],
+      "regexp_topics": true,
+      "consumer_group": this.consumer_group,
+      "batching": this.batching,
+    }
+
+tests:
+  - name: no auth test
+    config:
+      seed_brokers: "localhost:9092"
+      consumer_group: "foo_cg"
+      batching:
+        count: 100
+        period: 10s
+    expected:
+      kafka_franz:
+        seed_brokers: [localhost:9092]
+        sasl: []
+        tls:
+          enabled: false
+        topics: ['^rp\.ai\.rag\..*$']
+        consumer_group: foo_cg
+        regexp_topics: true
+        batching:
+          count: 100
+          period: 10s
+  - name: yes auth test
+    config:
+      seed_brokers: "localhost:9092"
+      consumer_group: "foo_cg"
+      batching:
+        count: 100
+        period: 10s
+      user: me
+      password: 12345
+    expected:
+      kafka_franz:
+        seed_brokers: [localhost:9092]
+        sasl:
+          - username: me
+            password: "12345"
+            mechanism: SCRAM-SHA-256
+        tls:
+          enabled: true
+        topics: ['^rp\.ai\.rag\..*$']
+        consumer_group: foo_cg
+        regexp_topics: true
+        batching:
+          count: 100
+          period: 10s

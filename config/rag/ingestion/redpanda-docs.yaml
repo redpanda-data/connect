@@ -1,0 +1,28 @@
+input:
+  git:
+    repository_url: https://github.com/redpanda-data/docs.git
+    branch: main
+    poll_interval: "10s"
+    include_patterns:
+      - 'modules/**/*.adoc'
+    exclude_patterns:
+      - 'modules/ROOT/**'
+    max_file_size: 1048576
+
+pipeline:
+  processors:
+    - mapping: |
+        meta = @.map_each_key(key -> key.trim_prefix("git_"))
+        root = if @is_binary {
+          deleted()
+        }
+output:
+  kafka_franz:
+    seed_brokers: ["${REDPANDA_BROKERS}"]
+    sasl: []
+    tls:
+      enabled: false
+    topic: "rp.ai.rag.rpdocs"
+    key: ${!meta("git_file_path")}
+    metadata:
+      include_patterns: [".*"]

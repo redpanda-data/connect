@@ -1,0 +1,26 @@
+name: ollama_embed
+type: processor
+
+fields:
+  - name: input_type
+    type: string
+  - name: dimensions
+    type: int
+
+mapping: |
+  root.ollama_embeddings = {
+    "model": "nomic-embed-text",
+    "text": "%s: ${!content().string()}".format(this.input_type),
+    "dimensions": this.dimensions,
+  }
+
+tests:
+  - name: ollama_embeddings test
+    config: 
+      input_type: "search_document"
+      dimensions: 768
+    expected:
+      ollama_embeddings:
+        model: nomic-embed-text
+        text: "search_document: ${!content().string()}"
+        dimensions: 768
