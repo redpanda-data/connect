@@ -1,4 +1,12 @@
 version: "2"
+
+run:
+  timeout: 5m
+  paths:
+    - cmd/...
+    - internal/...
+    - public/...
+
 linters:
   default: none
   enable:
