@@ -134,13 +134,7 @@ make
 
 ## Lint
 
-Redpanda Connect uses [golangci-lint][golangci-lint] for linting, which you can install with:
-
-```shell
-curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin
-```
-
-And then run it with `make lint`.
+Redpanda Connect uses [golangci-lint][golangci-lint] for linting, which you can install with `make install-tools` and then run it with `make lint`.
 
 ## Plugins
 
