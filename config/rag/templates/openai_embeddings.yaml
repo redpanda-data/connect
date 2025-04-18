@@ -1,0 +1,26 @@
+name: oai_embed
+type: processor
+
+fields:
+  - name: api_key
+    type: string
+  - name: dimensions
+    type: int
+
+mapping: |
+  root.openai_embeddings = {
+    "api_key": this.api_key,
+    "model": "text-embedding-3-small",
+    "dimensions": this.dimensions,
+  }
+
+tests:
+  - name: openai_embeddings test
+    config: 
+      api_key: "sk-foo"
+      dimensions: 768
+    expected:
+      openai_embeddings:
+        api_key: sk-foo
+        model: text-embedding-3-small
+        dimensions: 768

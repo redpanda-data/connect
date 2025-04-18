@@ -1,0 +1,31 @@
+name: cohere_embed
+type: processor
+
+fields:
+  - name: api_key
+    type: string
+  - name: input_type
+    type: string
+  - name: dimensions
+    type: int
+
+mapping: |
+  root.cohere_embeddings = {
+    "api_key": this.api_key,
+    "model": "embed-v4.0",
+    "input_type": this.input_type,
+    "dimensions": this.dimensions
+  }
+
+tests:
+  - name: cohere_embeddings test
+    config: 
+      api_key: "sk-foo"
+      input_type: "search_document"
+      dimensions: 1536
+    expected:
+      cohere_embeddings:
+        api_key: sk-foo
+        model: embed-v4.0
+        input_type: search_document
+        dimensions: 1536
