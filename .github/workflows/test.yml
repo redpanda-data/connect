@@ -58,11 +58,14 @@ jobs:
       with:
         go-version: oldstable
 
+    - name: Set version env variables
+      run: |
+        cat .versions >> $GITHUB_ENV
+
     - name: Lint
       uses: golangci/golangci-lint-action@v7
       with:
-        version: v2.0.2
-        args: --timeout 30m cmd/... internal/... public/...
+        version: "${{env.GOLANGCI_LINT_VERSION}}"
 
   test-push-to-cloudsmith:
     if: ${{ github.repository == 'redpanda-data/connect' || github.event_name != 'schedule' }}

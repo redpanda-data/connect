@@ -25,6 +25,14 @@ DOCS_FLAGS ?=
 APPS = redpanda-connect redpanda-connect-cloud redpanda-connect-community redpanda-connect-ai
 all: $(APPS)
 
+export GOBIN ?= $(CURDIR)/bin
+export PATH  := $(GOBIN):$(PATH)
+
+include .versions
+
+install-tools:
+	@go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v$(GOLANGCI_LINT_VERSION)
+
 install: $(APPS)
 	@install -d $(INSTALL_DIR)
 	@rm -f $(INSTALL_DIR)/redpanda-connect
@@ -60,13 +68,11 @@ docker-ai:
 	@docker tag $(DOCKER_IMAGE):$(VER_CUT)-ai $(DOCKER_IMAGE):latest-ai
 
 fmt:
-	@go list -f {{.Dir}} ./... | xargs -I{} gofmt -w -s {}
-	@go list -f {{.Dir}} ./... | xargs -I{} goimports -w -local github.com/redpanda-data/connect/v4 {}
+	@golangci-lint fmt
 	@go mod tidy
 
 lint:
-	@go vet $(GO_FLAGS) ./...
-	@golangci-lint run --timeout 5m cmd/... internal/... public/...
+	@golangci-lint run
 
 test: $(APPS)
 	@go test $(GO_FLAGS) -ldflags "$(LD_FLAGS)" -timeout 3m ./...
