@@ -161,6 +161,10 @@ cache_resources:
 		if !ok {
 			return errors.New("sftp_path metadata not found")
 		}
+		_, ok = msg.MetaGet("sftp_mod_time")
+		if !ok {
+			return errors.New("sftp_mod_time metadata not found")
+		}
 		receivedPaths = append(receivedPaths, path)
 		return nil
 	}))
