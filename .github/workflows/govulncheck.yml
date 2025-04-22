@@ -1,0 +1,19 @@
+---
+name: Vulnerability Check
+
+on:
+  schedule:
+    - cron: '0 1 * * *' # run at 1 AM UTC
+  workflow_dispatch:
+
+jobs:
+  vulnerability-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Go Vulnerability Check
+        uses: golang/govulncheck-action@v1
+        with:
+          go-version-input: stable
