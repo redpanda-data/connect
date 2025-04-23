@@ -28,9 +28,9 @@ func Run(
 	logger *slog.Logger,
 	envVarLookupFunc func(context.Context, string) (string, bool),
 	repositoryDir, addr string,
-	tagFilter func([]string) bool,
+	tagFilterFunc func([]string) bool,
 ) error {
-	srv, err := NewServer(repositoryDir, logger, envVarLookupFunc, nil, tagFilter)
+	srv, err := NewServer(repositoryDir, logger, envVarLookupFunc, nil, tagFilterFunc)
 	if err != nil {
 		return err
 	}

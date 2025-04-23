@@ -56,8 +56,8 @@ func NewServer(
 	repositoryDir string,
 	logger *slog.Logger,
 	envVarLookupFunc func(context.Context, string) (string, bool),
-	filter func(label string) bool,
-	tagFilter func(tags []string) bool,
+	filterFunc func(label string) bool,
+	tagFilterFunc func(tags []string) bool,
 ) (*Server, error) {
 	// Create MCP server
 	s := server.NewMCPServer(
@@ -69,7 +69,7 @@ func NewServer(
 
 	env := service.GlobalEnvironment()
 
-	resWrapper := tools.NewResourcesWrapper(logger, s, filter, tagFilter)
+	resWrapper := tools.NewResourcesWrapper(logger, s, filterFunc, tagFilterFunc)
 	resWrapper.SetEnvVarLookupFunc(envVarLookupFunc)
 	resWrapper.SetHTTPMultiplexer(&gMux{m: mux})
 

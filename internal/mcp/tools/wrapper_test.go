@@ -17,10 +17,10 @@ package tools_test
 import (
 	"context"
 	"log/slog"
+	"slices"
 	"testing"
 	"time"
 
-	"github.com/go-faker/faker/v4/pkg/slice"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/stretchr/testify/assert"
@@ -96,7 +96,7 @@ func TestResourcesWrappersTagFiltering(t *testing.T) {
 	s := server.NewMCPServer("Testing", "1.0.0")
 
 	r := tools.NewResourcesWrapper(slog.New(discardHandler{}), s, nil, func(tags []string) bool {
-		if slice.Contains(tags, "foo") || slice.Contains(tags, "bar") {
+		if slices.Contains(tags, "foo") || slices.Contains(tags, "bar") {
 			return true
 		}
 		return false
