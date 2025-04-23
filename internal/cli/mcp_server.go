@@ -13,6 +13,7 @@ import (
 	"errors"
 	"log/slog"
 	"os"
+	"regexp"
 
 	"github.com/urfave/cli/v2"
 
@@ -27,6 +28,10 @@ func mcpServerCli(rpMgr *enterprise.GlobalRedpandaManager) *cli.Command {
 		&cli.StringFlag{
 			Name:  "address",
 			Usage: "An optional address to bind the MCP server to instead of running in stdio mode.",
+		},
+		&cli.StringSliceFlag{
+			Name:  "tag",
+			Usage: "Optionally limit the resources that this command runs by providing one or more regular expressions. Resources that do not contain a match within the field `meta.tags` for each tag regular expression specified will be ignored.",
 		},
 		secretsFlag,
 		envFileFlag,
@@ -78,7 +83,30 @@ Each resource will be exposed as a tool that AI can interact with:
 				return err
 			}
 
-			if err := mcp.Run(logger, secretLookupFn, repositoryDir, addr); err != nil {
+			tagFilterStrs := c.StringSlice("tag")
+			var tagFilterREs []*regexp.Regexp
+			for _, f := range tagFilterStrs {
+				r, err := regexp.Compile(f)
+				if err != nil {
+					return err
+				}
+				tagFilterREs = append(tagFilterREs, r)
+			}
+
+			if err := mcp.Run(logger, secretLookupFn, repositoryDir, addr, func(tags []string) bool {
+				for _, f := range tagFilterREs {
+					var matched bool
+					for _, tag := range tags {
+						if matched = f.MatchString(tag); matched {
+							break
+						}
+					}
+					if !matched {
+						return false
+					}
+				}
+				return true
+			}); err != nil {
 				return err
 			}
 			return nil

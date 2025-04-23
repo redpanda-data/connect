@@ -51,7 +51,7 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v5
       with:
-        go-version: oldstable
+        go-version: stable
 
     - name: Set version env variables
       run: |
