@@ -35,6 +35,7 @@ Common::
 # Common config fields, showing default values
 tracer:
   open_telemetry_collector:
+    service: benthos
     http: [] # No default (required)
     grpc: [] # No default (required)
     sampling:
@@ -51,6 +52,7 @@ Advanced::
 # All config fields, showing default values
 tracer:
   open_telemetry_collector:
+    service: benthos
     http: [] # No default (required)
     grpc: [] # No default (required)
     tags: {}
@@ -63,6 +65,15 @@ tracer:
 ======
 
 == Fields
+
+=== `service`
+
+The name of the service in traces.
+
+
+*Type*: `string`
+
+*Default*: `"benthos"`
 
 === `http`
 
