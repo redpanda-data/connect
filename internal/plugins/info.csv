@@ -190,6 +190,7 @@ pulsar                    ,input     ,pulsar                    ,3.43.0  ,commun
 pulsar                    ,output    ,pulsar                    ,3.43.0  ,community  ,n          ,n     ,n
 pusher                    ,output    ,pusher                    ,4.3.0   ,community  ,n          ,n     ,n
 qdrant                    ,output    ,qdrant                    ,4.33.0  ,certified  ,n          ,y     ,y
+qdrant                    ,processor ,qdrant                    ,4.54.0  ,certified  ,n          ,y     ,y
 questdb                   ,output    ,questdb                   ,4.37.0  ,certified  ,n          ,y     ,y
 rate_limit                ,processor ,rate_limit                ,0.0.0   ,certified  ,n          ,y     ,y
 re_match                  ,scanner   ,re_match                  ,0.0.0   ,certified  ,n          ,y     ,y

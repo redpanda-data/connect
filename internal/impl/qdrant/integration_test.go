@@ -17,12 +17,16 @@ package qdrant
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/qdrant/go-client/qdrant"
+	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
+	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -44,13 +48,13 @@ output:
 `
 )
 
-func TestIntegrationQdrant(t *testing.T) {
+func TestIntegrationQdrant_Output(t *testing.T) {
 	integration.CheckSkip(t)
 
 	t.Parallel()
 
 	ctx := context.Background()
-	qdrantContainer, err := qc.Run(ctx, "qdrant/qdrant:v1.10.1")
+	qdrantContainer, err := qc.Run(ctx, "qdrant/qdrant:v1.14.0")
 	require.NoError(t, err, "failed to start container")
 
 	testCases := []struct {
@@ -147,6 +151,139 @@ func TestIntegrationQdrant(t *testing.T) {
 			)
 
 		})
+	}
+
+	require.NoError(t, qdrantContainer.Terminate(ctx), "failed to terminate container")
+}
+
+func TestIntegrationQdrant_Processor(t *testing.T) {
+	integration.CheckSkip(t)
+
+	t.Parallel()
+
+	ctx := context.Background()
+	qdrantContainer, err := qc.Run(ctx, "qdrant/qdrant:v1.14.0")
+	require.NoError(t, err, "failed to start container")
+
+	vectors := []any{
+		[]any{0.352, 0.532, 0.532},
+		map[string]any{"some_sparse": map[string]any{"indices": []any{23, 325, 532}, "values": []any{0.352, 0.532, 0.532}}},
+		map[string]any{"some_dense": []any{0.352, 0.532, 0.532}, "some_sparse": map[string]any{"indices": []any{23, 325, 532}, "values": []any{0.352, 0.532, 0.532}}},
+	}
+
+	payloads := []map[string]any{
+		{
+			"city":  "London",
+			"color": "red",
+		},
+		{
+			"city":  "London",
+			"color": "blue",
+		},
+		{
+			"city":  "New York",
+			"color": "blue",
+		},
+	}
+
+	addr, err := qdrantContainer.GRPCEndpoint(ctx)
+	require.NoError(t, err, "failed to get container grpc endpoint")
+
+	host, port, err := parseHostAndPort(addr)
+	require.NoError(t, err, "failed to parse host and port")
+
+	err = setupCollection(ctx, addr, collectionName)
+	require.NoError(t, err, "failed to setup collection")
+
+	client, err := qdrant.NewClient(&qdrant.Config{
+		Host: host,
+		Port: port,
+	})
+	require.NoError(t, err, "failed to create qdrant client")
+	var points []*qdrant.PointStruct
+	for i, vector := range vectors {
+		v, err := newVectors(vector)
+		require.NoError(t, err, "failed to create vector")
+		for j, payload := range payloads {
+			points = append(points, &qdrant.PointStruct{
+				Id:      qdrant.NewIDNum(uint64((i * len(payloads)) + j)),
+				Payload: qdrant.NewValueMap(payload),
+				Vectors: qdrant.NewVectorsMap(v),
+			})
+		}
+	}
+	wait := true
+	_, err = client.Upsert(ctx, &qdrant.UpsertPoints{
+		CollectionName: collectionName,
+		Points:         points,
+		Wait:           &wait,
+		Ordering:       &qdrant.WriteOrdering{Type: qdrant.WriteOrderingType_Strong},
+	})
+	require.NoError(t, err, "failed to upsert point")
+
+	builder := service.NewStreamBuilder()
+	err = builder.AddProcessorYAML(strings.NewReplacer(
+		"$PORT", strconv.Itoa(port),
+		"$COLLECTION_NAME", collectionName,
+	).Replace(`
+qdrant:
+  grpc_host: 'localhost:$PORT'
+  collection_name: $COLLECTION_NAME
+  vector_mapping: this.vector
+  filter: this.filter
+  payload_fields: ['city']
+  payload_filter: exclude
+  limit: 1`))
+	require.NoError(t, err, "failed to create processor")
+	produce, err := builder.AddProducerFunc()
+	require.NoError(t, err, "failed to create producer")
+	output := service.MessageBatch{}
+	var mu sync.Mutex
+	err = builder.AddConsumerFunc(func(ctx context.Context, m *service.Message) error {
+		mu.Lock()
+		defer mu.Unlock()
+		output = append(output, m)
+		return nil
+	})
+	require.NoError(t, err, "failed to create conusmer")
+	stream, err := builder.Build()
+	require.NoError(t, err, "failed to create stream")
+	streamCtx, cancel := context.WithCancel(ctx)
+	streamDone := make(chan any)
+	go func() {
+		err := stream.Run(streamCtx)
+		if errors.Is(err, streamCtx.Err()) {
+			err = nil
+		}
+		require.NoError(t, err)
+		close(streamDone)
+	}()
+	err = produce(ctx, service.NewMessage([]byte(`{
+		"vector": [0.352,0.532,0.532],
+		"filter": {"must": [{"field":{"key": "color", "match": {"text": "red"}}}]}
+	}`)))
+	require.NoError(t, err, "failed to produce message")
+	err = produce(ctx, service.NewMessage([]byte(`{
+		"vector": {"some_sparse": {"indices":[23,325,532],"values":[0.352,0.532,0.532]}},
+		"filter": {
+			"must": [{"has_id":{"has_id":[{"num": 8}]}}],
+			"must_not": [{"field":{"key": "city", "match": {"text": "London"}}}]
+		}
+	}`)))
+	require.NoError(t, err, "failed to produce message")
+	cancel()
+	<-streamDone
+
+	expected := []string{
+		`[{"id":{"num":"0"},"payload":{"color":{"stringValue":"red"}},"score":0.9999999}]`,
+		`[{"id":{"num":"8"},"payload":{"color":{"stringValue":"blue"}},"score":0.689952}]`,
+	}
+
+	for i, m := range output {
+		require.NoError(t, m.GetError(), "message had error")
+		b, err := m.AsBytes()
+		require.NoError(t, err, "failed to get message bytes")
+		require.Equal(t, expected[i], string(b))
 	}
 
 	require.NoError(t, qdrantContainer.Terminate(ctx), "failed to terminate container")

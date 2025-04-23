@@ -82,6 +82,30 @@ func (c *qdrantClient) Upsert(ctx context.Context, collectionName string, points
 	return err
 }
 
+func (c *qdrantClient) Query(
+	ctx context.Context,
+	collectionName string,
+	vectorName *string,
+	vector *qdrant.VectorInput,
+	payload *qdrant.WithPayloadSelector,
+	filter *qdrant.Filter,
+	limit uint64,
+) ([]*qdrant.ScoredPoint, error) {
+	request := &qdrant.QueryPoints{
+		CollectionName: collectionName,
+		Using:          vectorName,
+		Query: &qdrant.Query{
+			Variant: &qdrant.Query_Nearest{
+				Nearest: vector,
+			},
+		},
+		Filter:      filter,
+		WithPayload: payload,
+		Limit:       &limit,
+	}
+	return c.client.Query(ctx, request)
+}
+
 func (c *qdrantClient) Connect(ctx context.Context) error {
 	c.logger.Debug("Checking connection to Qdrant")
 	_, err := c.client.HealthCheck(ctx)

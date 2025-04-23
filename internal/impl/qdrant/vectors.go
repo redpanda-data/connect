@@ -22,7 +22,7 @@ import (
 )
 
 // newVectors converts the input into the appropriate *pb.Vectors format
-func newVectors(input any) (*qdrant.Vectors, error) {
+func newVectors(input any) (map[string]*qdrant.Vector, error) {
 	namedVectors := make(map[string]*qdrant.Vector)
 
 	switch vec := input.(type) {
@@ -78,7 +78,7 @@ func newVectors(input any) (*qdrant.Vectors, error) {
 		return nil, fmt.Errorf("unsupported vector input type: %T", input)
 	}
 
-	return qdrant.NewVectorsMap(namedVectors), nil
+	return namedVectors, nil
 }
 
 // Handle dense and multi-vectors
