@@ -62,6 +62,8 @@ jobs:
       with:
         version: "v${{env.GOLANGCI_LINT_VERSION}}"
         args: "--timeout=30m cmd/... internal/... public/..."
+        skip-cache: true
+        skip-save-cache: true
 
   test-push-to-cloudsmith:
     if: ${{ github.repository == 'redpanda-data/connect' || github.event_name != 'schedule' }}
