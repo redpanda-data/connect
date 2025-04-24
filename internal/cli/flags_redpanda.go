@@ -22,6 +22,7 @@ import (
 	"github.com/urfave/cli/v2"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
+	"github.com/redpanda-data/connect/v4/internal/license"
 	"github.com/redpanda-data/connect/v4/internal/secrets"
 )
 
@@ -49,8 +50,17 @@ var licenseFlag = &cli.StringFlag{
 	Usage: "Provide an explicit Redpanda License, which enables enterprise functionality. By default licenses found at the path `/etc/redpanda/redpanda.license` are applied.",
 }
 
-func parseLicenseFlag(c *cli.Context) string {
-	return c.String("redpanda-license")
+func defaultLicenseConfig() license.Config {
+	return license.Config{
+		License:         os.Getenv("REDPANDA_LICENSE"),
+		LicenseFilepath: os.Getenv("REDPANDA_LICENSE_FILEPATH"),
+	}
+}
+
+func applyLicenseFlag(c *cli.Context, conf *license.Config) {
+	if inline := c.String("redpanda-license"); inline != "" {
+		conf.License = inline
+	}
 }
 
 func parseSecretsFlag(logger *slog.Logger, c *cli.Context) (func(context.Context, string) (string, bool), error) {

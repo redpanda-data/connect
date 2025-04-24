@@ -49,10 +49,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 	}
 
 	var disableTelemetry bool
-	licenseConfig := license.Config{
-		License:         os.Getenv("REDPANDA_LICENSE"),
-		LicenseFilepath: os.Getenv("REDPANDA_LICENSE_FILEPATH"),
-	}
+	licenseConfig := defaultLicenseConfig()
 
 	opts = append(opts,
 		service.CLIOptSetVersion(version, dateBuilt),
@@ -121,9 +118,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 
 			func(c *cli.Context) error {
 				disableTelemetry = c.Bool("disable-telemetry")
-				if license := parseLicenseFlag(c); license != "" {
-					licenseConfig.License = license
-				}
+				applyLicenseFlag(c, &licenseConfig)
 
 				if secretLookupFn, err = parseSecretsFlag(slog.New(rpLogger), c); err != nil {
 					return err
