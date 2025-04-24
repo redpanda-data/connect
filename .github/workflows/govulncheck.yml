@@ -2,8 +2,9 @@
 name: Vulnerability Check
 
 on:
-  schedule:
-    - cron: '0 1 * * *' # run at 1 AM UTC
+# Disabled due to ollama issues that are not fixed yet.
+#  schedule:
+#    - cron: '0 1 * * *' # run at 1 AM UTC
   workflow_dispatch:
 
 jobs:
