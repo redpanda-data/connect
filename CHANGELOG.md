@@ -3,6 +3,17 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.54.0 - TBD
+
+### Added
+
+- (Benthos) Field `client_auth` added to the `socket_server` input. (@filippog)
+- (Benthos) New Bloblang string method `uuid_v5`. (@artemklevtsov)
+
+### Changed
+
+- (Benthos) The `http_client` input and output and the `http` processor now support extracting multi-value HTTP headers. (@mihaitodor)
+
 ## 4.53.0 - 2025-04-18
 
 ### Added
