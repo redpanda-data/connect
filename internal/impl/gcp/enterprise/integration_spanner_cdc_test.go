@@ -1,0 +1,311 @@
+// Copyright 2025 Redpanda Data, Inc.
+//
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
+
+package enterprise
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"flag"
+	"fmt"
+	"testing"
+	"time"
+
+	"cloud.google.com/go/spanner"
+	adminapi "cloud.google.com/go/spanner/admin/database/apiv1"
+	"cloud.google.com/go/spanner/admin/database/apiv1/databasepb"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+
+	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
+	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service/integration"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/gcp/enterprise/changestreams"
+	"github.com/redpanda-data/connect/v4/internal/license"
+)
+
+var (
+	spannerProjectID  = flag.String("spanner.project_id", "", "GCP project ID for Spanner tests")
+	spannerInstanceID = flag.String("spanner.instance_id", "", "Spanner instance ID for tests")
+	spannerDatabaseID = flag.String("spanner.database_id", "", "Spanner database ID for tests")
+)
+
+func spannerDatabasePath() string {
+	return fmt.Sprintf("projects/%s/instances/%s/databases/%s", *spannerProjectID, *spannerInstanceID, *spannerDatabaseID)
+}
+
+type spannerTestHelper struct {
+	client   *spanner.Client
+	tableID  string
+	streamID string
+}
+
+func newSpannerTestHelper(ctx context.Context) (spannerTestHelper, error) {
+	client, err := spanner.NewClient(ctx, spannerDatabasePath())
+	if err != nil {
+		return spannerTestHelper{}, err
+	}
+
+	ts := time.Now().UnixNano()
+	return spannerTestHelper{
+		client:   client,
+		tableID:  fmt.Sprintf("table_%d", ts),
+		streamID: fmt.Sprintf("stream_%d", ts),
+	}, nil
+}
+
+func (h spannerTestHelper) createTableAndStream(ctx context.Context) error {
+	adm, err := adminapi.NewDatabaseAdminClient(ctx)
+	if err != nil {
+		return err
+	}
+
+	op, err := adm.UpdateDatabaseDdl(ctx, &databasepb.UpdateDatabaseDdlRequest{
+		Database: spannerDatabasePath(),
+		Statements: []string{
+			fmt.Sprintf(`CREATE TABLE %s (id INT64 NOT NULL, active BOOL NOT NULL ) PRIMARY KEY (id)`, h.tableID),
+			fmt.Sprintf(`CREATE CHANGE STREAM %s FOR %s`, h.streamID, h.tableID),
+		},
+	})
+	if err != nil {
+		return err
+	}
+	return op.Wait(ctx)
+}
+
+func (h spannerTestHelper) dropTableAndStream(ctx context.Context) error {
+	adm, err := adminapi.NewDatabaseAdminClient(ctx)
+	if err != nil {
+		return err
+	}
+
+	op, err := adm.UpdateDatabaseDdl(ctx, &databasepb.UpdateDatabaseDdlRequest{
+		Database: spannerDatabasePath(),
+		Statements: []string{
+			fmt.Sprintf(`DROP CHANGE STREAM %s`, h.streamID),
+			fmt.Sprintf(`DROP TABLE %s`, h.tableID),
+		},
+	})
+	if err != nil {
+		return err
+	}
+	return op.Wait(ctx)
+}
+
+// Run tests with:
+// go test -v -run TestIntegrationSpannerCDCInput . -spanner.project_id=sandbox-rpcn -spanner.instance_id=rpcn-tests -spanner.database_id=changestreams
+func TestIntegrationSpannerCDCInput(t *testing.T) {
+	integration.CheckSkip(t)
+	if *spannerProjectID == "" || *spannerInstanceID == "" || *spannerDatabaseID == "" {
+		t.Skip("Skipping Spanner integration test as required flags are not set")
+	}
+
+	h, err := newSpannerTestHelper(t.Context())
+	if err != nil {
+		t.Fatalf("failed to create test helper: %v", err)
+	}
+
+	// Create table and stream
+	if err := h.createTableAndStream(t.Context()); err != nil {
+		t.Fatalf("failed to create table and stream: %v", err)
+	}
+	t.Logf("Created table %q and stream %q", h.tableID, h.streamID)
+
+	t.Cleanup(func() {
+		if err := h.dropTableAndStream(t.Context()); err != nil {
+			t.Error(err)
+		}
+		t.Logf("Dropped table %q and stream %q", h.tableID, h.streamID)
+	})
+
+	// Configure the Spanner input using StreamBuilder
+	inputConf := fmt.Sprintf(`
+gcp_spanner_cdc:
+  project_id: %s
+  instance_id: %s
+  database_id: %s
+  stream_id: %s
+  start_timestamp: %s
+  heartbeat_interval: "5s"
+`, *spannerProjectID, *spannerInstanceID, *spannerDatabaseID, h.streamID, time.Now().Format(time.RFC3339))
+
+	// Create the stream builder and add the input
+	sb := service.NewStreamBuilder()
+	if err := sb.AddInputYAML(inputConf); err != nil {
+		t.Fatalf("failed to add input YAML: %v", err)
+	}
+	if err := sb.SetLoggerYAML(`level: DEBUG`); err != nil {
+		t.Fatalf("failed to set logger level: %v", err)
+	}
+
+	const maxTestTime = 2 * time.Minute
+	ctx, cancel := context.WithTimeout(t.Context(), maxTestTime)
+	defer cancel()
+
+	messages := make(chan *service.Message)
+
+	// Add a consumer function to collect messages
+	if err := sb.AddConsumerFunc(func(ctx context.Context, msg *service.Message) error {
+		messages <- msg.Copy()
+		return nil
+	}); err != nil {
+		t.Fatalf("failed to add consumer function: %v", err)
+	}
+
+	// Build the stream
+	stream, err := sb.Build()
+	if err != nil {
+		t.Fatalf("failed to build stream: %v", err)
+	}
+	license.InjectTestService(stream.Resources())
+
+	t.Cleanup(func() {
+		if err := stream.StopWithin(time.Second); err != nil {
+			t.Log(err)
+		}
+	})
+
+	go func() {
+		if err := stream.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+			t.Errorf("stream error: %v", err)
+		}
+	}()
+
+	if _, err := h.client.ReadWriteTransaction(ctx, func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
+		if _, err := txn.Update(ctx, spanner.NewStatement(fmt.Sprintf("INSERT INTO %s (id, active) VALUES (1, true)", h.tableID))); err != nil {
+			return err
+		}
+		if _, err := txn.Update(ctx, spanner.NewStatement(fmt.Sprintf("DELETE FROM %s WHERE id = 1", h.tableID))); err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("failed to add test data: %v", err)
+	}
+
+	expected := []changestreams.DataChangeRecord{
+		{
+			RecordSequence:                       "00000000",
+			IsLastRecordInTransactionInPartition: false,
+			TableName:                            h.tableID,
+			ColumnTypes: []*changestreams.ColumnType{
+				{
+					Name: "id",
+					Type: spanner.NullJSON{
+						Value: map[string]interface{}{"code": "INT64"},
+						Valid: true,
+					},
+					IsPrimaryKey:    true,
+					OrdinalPosition: 1,
+				},
+				{
+					Name: "active",
+					Type: spanner.NullJSON{
+						Value: map[string]interface{}{"code": "BOOL"},
+						Valid: true,
+					},
+					IsPrimaryKey:    false,
+					OrdinalPosition: 2,
+				},
+			},
+			Mods: []*changestreams.Mod{
+				{
+					Keys: spanner.NullJSON{
+						Value: map[string]interface{}{"id": "1"},
+						Valid: true,
+					},
+					NewValues: spanner.NullJSON{
+						Value: map[string]interface{}{"active": true},
+						Valid: true,
+					},
+					OldValues: spanner.NullJSON{
+						Value: map[string]interface{}{},
+						Valid: true,
+					},
+				},
+			},
+			ModType:                         "INSERT",
+			ValueCaptureType:                "OLD_AND_NEW_VALUES",
+			NumberOfRecordsInTransaction:    2,
+			NumberOfPartitionsInTransaction: 1,
+			TransactionTag:                  "",
+			IsSystemTransaction:             false,
+		},
+		{
+			RecordSequence:                       "00000001",
+			IsLastRecordInTransactionInPartition: true,
+			TableName:                            h.tableID,
+			ColumnTypes: []*changestreams.ColumnType{
+				{
+					Name: "id",
+					Type: spanner.NullJSON{
+						Value: map[string]interface{}{"code": "INT64"},
+						Valid: true,
+					},
+					IsPrimaryKey:    true,
+					OrdinalPosition: 1,
+				},
+				{
+					Name: "active",
+					Type: spanner.NullJSON{
+						Value: map[string]interface{}{"code": "BOOL"},
+						Valid: true,
+					},
+					IsPrimaryKey:    false,
+					OrdinalPosition: 2,
+				},
+			},
+			Mods: []*changestreams.Mod{
+				{
+					Keys: spanner.NullJSON{
+						Value: map[string]interface{}{"id": "1"},
+						Valid: true,
+					},
+					NewValues: spanner.NullJSON{
+						Value: map[string]interface{}{},
+						Valid: true,
+					},
+					OldValues: spanner.NullJSON{
+						Value: map[string]interface{}{"active": true},
+						Valid: true,
+					},
+				},
+			},
+			ModType:                         "DELETE",
+			ValueCaptureType:                "OLD_AND_NEW_VALUES",
+			NumberOfRecordsInTransaction:    2,
+			NumberOfPartitionsInTransaction: 1,
+			TransactionTag:                  "",
+			IsSystemTransaction:             false,
+		},
+	}
+
+	var got []changestreams.DataChangeRecord
+	for msg := range messages {
+		b, err := msg.AsBytes()
+		if err != nil {
+			t.Fatalf("failed to get message bytes: %v", err)
+		}
+
+		var dcr changestreams.DataChangeRecord
+		if err := json.Unmarshal(b, &dcr); err != nil {
+			t.Fatalf("failed to unmarshal message: %v", err)
+		}
+		got = append(got, dcr)
+		if len(got) == len(expected) {
+			break
+		}
+	}
+
+	opt := cmpopts.IgnoreFields(changestreams.DataChangeRecord{}, "CommitTimestamp", "ServerTransactionID")
+	if diff := cmp.Diff(got, expected, opt); diff != "" {
+		t.Errorf("diff = %v", diff)
+	}
+}
