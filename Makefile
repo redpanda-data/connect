@@ -74,6 +74,10 @@ fmt:
 lint:
 	@golangci-lint run cmd/... internal/... public/...
 
+run: CONF ?= ./config/dev.yaml
+run:
+	go run ./cmd/redpanda-connect --config $(CONF)
+
 test: $(APPS)
 	@go test $(GO_FLAGS) -ldflags "$(LD_FLAGS)" -timeout 3m ./...
 	@$(PATHINSTBIN)/redpanda-connect template lint $(TEMPLATE_FILES)
