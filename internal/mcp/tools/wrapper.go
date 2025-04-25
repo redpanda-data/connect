@@ -488,6 +488,8 @@ func (w *ResourcesWrapper) AddProcessorYAML(fileBytes []byte) error {
 				return nil, err
 			}
 
+			attrString(span, "result", string(mBytes))
+
 			content = append(content, mcp.TextContent{
 				Type: "text",
 				Text: string(mBytes),

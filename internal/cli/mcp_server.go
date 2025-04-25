@@ -41,6 +41,9 @@ func mcpServerCli(rpMgr *enterprise.GlobalRedpandaManager) *cli.Command {
 		Name:  "mcp-server",
 		Usage: "Execute an MCP server against a suite of Redpanda Connect resources.",
 		Flags: flags,
+		Subcommands: []*cli.Command{
+			mcpServerInitCli(rpMgr),
+		},
 		Description: `
 !!EXPERIMENTAL!!
 
