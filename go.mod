@@ -10,6 +10,7 @@ require (
 	cloud.google.com/go/aiplatform v1.74.0
 	cloud.google.com/go/bigquery v1.66.2
 	cloud.google.com/go/pubsub v1.47.0
+	cloud.google.com/go/spanner v1.76.1
 	cloud.google.com/go/storage v1.51.0
 	cloud.google.com/go/vertexai v0.12.0
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.18.0
@@ -80,6 +81,7 @@ require (
 	github.com/gocql/gocql v1.6.0
 	github.com/gofrs/uuid/v5 v5.3.2
 	github.com/golang-jwt/jwt/v5 v5.2.2
+	github.com/google/go-cmp v0.7.0
 	github.com/googleapis/go-sql-spanner v1.8.0
 	github.com/gosimple/slug v1.14.0
 	github.com/hamba/avro/v2 v2.28.0
@@ -171,7 +173,6 @@ require (
 	cloud.google.com/go/longrunning v0.6.5 // indirect
 	cloud.google.com/go/monitoring v1.24.1 // indirect
 	cloud.google.com/go/secretmanager v1.14.5 // indirect
-	cloud.google.com/go/spanner v1.76.1 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/keyvault/azsecrets v0.12.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/keyvault/internal v0.7.1 // indirect
 	github.com/BurntSushi/toml v1.5.0 // indirect
