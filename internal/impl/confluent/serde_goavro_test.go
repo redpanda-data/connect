@@ -109,7 +109,7 @@ func TestAvroReferences(t *testing.T) {
 
 			cfg := decodingConfig{}
 			cfg.avro.rawUnions = true
-			decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, cfg, service.MockResources())
+			decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, cfg, 10*time.Minute, service.MockResources())
 			require.NoError(t, err)
 
 			t.Cleanup(func() {

@@ -39,6 +39,7 @@ schema_registry_decode:
   avro:
     raw_unions: false # No default (optional)
     preserve_logical_types: false
+  cache_duration: 10m
   url: "" # No default (required)
 ```
 
@@ -69,6 +70,7 @@ schema_registry_decode:
         }
       }
       root = this.apply("debeziumTimestampToAvroTimestamp")
+  cache_duration: 10m
   url: "" # No default (required)
   oauth:
     enabled: false
@@ -190,6 +192,23 @@ mapping: |2
     }
   }
   root = this.apply("debeziumTimestampToAvroTimestamp")
+```
+
+=== `cache_duration`
+
+The duration after which a schema is considered stale and will be removed from the cache.
+
+
+*Type*: `string`
+
+*Default*: `"10m"`
+
+```yml
+# Examples
+
+cache_duration: 1h
+
+cache_duration: 5m
 ```
 
 === `url`
