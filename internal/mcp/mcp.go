@@ -26,6 +26,8 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/mark3labs/mcp-go/server"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
@@ -153,7 +155,14 @@ func (m *Server) ServeStdio() error {
 
 // ServeSSE attempts to run the MCP server in SSE mode.
 func (m *Server) ServeSSE(ctx context.Context, l net.Listener) error {
-	sseServer := server.NewSSEServer(m.base)
+	sseServer := server.NewSSEServer(
+		m.base,
+		server.WithSSEContextFunc(func(ctx context.Context, r *http.Request) context.Context {
+			// Propagate context from the request to the handlers in the MCP server.
+			propagator := otel.GetTextMapPropagator()
+			return propagator.Extract(ctx, propagation.HeaderCarrier(r.Header))
+		}),
+	)
 	m.mux.PathPrefix("/").Handler(sseServer)
 	srv := &http.Server{
 		Handler: m.mux,
