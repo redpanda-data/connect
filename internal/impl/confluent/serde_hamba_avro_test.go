@@ -111,7 +111,7 @@ func TestHambaAvroReferences(t *testing.T) {
 			cfg := decodingConfig{}
 			cfg.avro.useHamba = true
 			cfg.avro.rawUnions = true
-			decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, cfg, 10*time.Minute, service.MockResources())
+			decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, cfg, schemaStaleAfter, service.MockResources())
 			require.NoError(t, err)
 
 			t.Cleanup(func() {
@@ -293,7 +293,7 @@ func TestHambaDecodeAvroUnions(t *testing.T) {
 			cfg := decodingConfig{}
 			cfg.avro.useHamba = true
 			cfg.avro.rawUnions = test.unnestUnions
-			decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, cfg, 10*time.Minute, service.MockResources())
+			decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, cfg, schemaStaleAfter, service.MockResources())
 			require.NoError(t, err)
 
 			t.Cleanup(func() {

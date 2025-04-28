@@ -96,7 +96,7 @@ message bar {
 			encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, true, time.Minute*10, time.Minute, service.MockResources())
 			require.NoError(t, err)
 
-			decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, decodingConfig{}, 10*time.Minute, service.MockResources())
+			decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, decodingConfig{}, schemaStaleAfter, service.MockResources())
 			require.NoError(t, err)
 
 			t.Cleanup(func() {
@@ -226,7 +226,7 @@ message bar {
 			encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, true, time.Minute*10, time.Minute, service.MockResources())
 			require.NoError(t, err)
 
-			decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, decodingConfig{}, 10*time.Minute, service.MockResources())
+			decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, decodingConfig{}, schemaStaleAfter, service.MockResources())
 			require.NoError(t, err)
 
 			t.Cleanup(func() {
@@ -295,7 +295,7 @@ func runEncoderAgainstInputsMultiple(t testing.TB, urlStr, subject string, input
 		n = b.N
 	}
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		inMsg := service.NewMessage(inputs[i%len(inputs)])
 		encodedMsgs, err := encoder.ProcessBatch(tCtx, service.MessageBatch{inMsg})
 		require.NoError(t, err)
