@@ -219,7 +219,7 @@ func (w *outputWriter) batchPointsByCollection(batch service.MessageBatch) (map[
 		if err != nil {
 			return nil, fmt.Errorf("%s extraction failed: %w", qoFieldPayloadMapping, err)
 		}
-		maybePayloadMap, ok := maybePayload.(map[string]interface{})
+		maybePayloadMap, ok := maybePayload.(map[string]any)
 		if !ok {
 			return nil, errors.New("unable to coerce payload output type")
 		}
@@ -231,7 +231,7 @@ func (w *outputWriter) batchPointsByCollection(batch service.MessageBatch) (map[
 
 		batches[collectionName] = append(batches[collectionName], &qdrant.PointStruct{
 			Id:      id,
-			Vectors: vec,
+			Vectors: qdrant.NewVectorsMap(vec),
 			Payload: payload,
 		})
 	}

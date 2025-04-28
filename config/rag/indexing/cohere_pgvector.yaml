@@ -1,0 +1,50 @@
+input:
+  rag_topics:
+    seed_brokers: "${REDPANDA_BROKERS}"
+    consumer_group: "${INDEXING_CONSUMER}.cohere"
+    user: "${REDPANDA_USER}"
+    password: "${REDPANDA_PASS}"
+    batching: 
+      count: 100
+      period: 10s
+pipeline:
+  threads: 8
+  processors:
+    - try:
+        - mutation: |
+            if !@mime_type.or("text/plain").contains("text") {
+              root = deleted()
+            }
+            if (@kafka_key.not_empty() | null) == null {
+              meta kafka_key = content().hash("sha256").encode("hex")
+            }
+        - text_chunker:
+            strategy: recursive_character
+        - group_by_value:
+            value: ${! @kafka_key }
+        - mapping: |
+            root.document = content().string()
+            root.chunk_id = batch_index()
+        - branch:
+            request_map: root = this.document
+            processors:
+              - cohere_embed:
+                  api_key: ${COHERE_API_KEY}
+                  input_type: search_document
+                  dimensions: 1536
+            result_map: root.embeddings = this
+        - archive:
+            format: json_array
+    - catch:
+        - log:
+            level: ERROR
+            message: "ERROR: ${!error()}"
+        - mapping: 'root = deleted()'
+output:
+  fallback:
+  - reject_errored:
+      pgvector:
+        dsn: "${POSTGRES_DSN}"
+        table: "${POSTGRES_TABLE}_cohere"
+        dimensions: 1536
+  - reject: "error ${!@fallback_error}, processing document: ${!content().string()}"

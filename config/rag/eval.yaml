@@ -1,0 +1,139 @@
+input:
+  generate:
+    count: 1
+    mapping: |
+      root = [
+        "I just deployed Redpanda on Kubernetes. What do I need to do to run it in production?",
+        "How do you join two arrays in bloblang?",
+        "What is the rpk command to describe the acls of a user?",
+        # Spoiler alert, it's that redis_hash output takes interpolated strings not blobl
+        """
+        What is wrong with this?
+
+        ```yaml
+        input: 
+          label: 'mqtt_topic'
+          mqtt:
+            urls: ['${MQTT_BROKER_HOST:${MQTT_BROKER_HOST}}']
+            topics: ['mytopics/+']
+            client_id: redpanda-connect-mqtt
+            qos: 0
+        pipeline:
+          processors: 
+            # If the topic is 'mytopics/connected', drop the message 
+            - mapping: |
+                root = if meta("mqtt_topic") == "mytopics/connected" { deleted() } else { this } 
+            # Extract fields from payload to match desired structure
+            - mapping: |
+                root = { 
+                  "A": this.a,
+                  "B": this.b.or(''),
+                  "C": this.c.or(''),
+                  "D": this.d.or(''),
+                }
+            # Set Redis key as 'foo_<A>'
+            - mapping: |
+                root = this
+                meta redis_key = "foo_" + this.A
+          output:
+            redis_hash:
+              url: redis://redis:6379
+              key: ${!meta("redis_key")} 
+              fields:
+                a: this.A
+                b: this.B
+                c: this.C
+                d: this.D
+          ```
+        """,
+        "What is the best thing about Redpanda?",
+        "Docker Compose for Redpanda",
+        "Give me an example of using the `http` processor within a `for_each` processor.",
+        "How do I enable Tiered Storage?",
+      ]
+pipeline:
+  processors:
+    - unarchive:
+        format: json_array
+    - mapping: 'root.query = this'
+    - workflow:
+        meta_path: workflow_result
+        branches:
+          cohere_pgvector:
+            processors:
+              - http:
+                  url: http://localhost:4195/cohere_pgvector/query
+            result_map: 'root.cohere_pgvector = this'
+          openai_pgvector:
+            processors:
+              - http:
+                  url: http://localhost:4195/openai_pgvector/query
+            result_map: 'root.openai_pgvector = this'
+          ollama_pgvector:
+            processors:
+              - http:
+                  url: http://localhost:4195/ollama_pgvector/query
+            result_map: 'root.ollama_pgvector = this'
+          score:
+            request_map: |
+              root.query = this.query
+              root.cohere_pgvector = this.cohere_pgvector
+              root.openai_pgvector = this.openai_pgvector
+              root.ollama_pgvector = this.ollama_pgvector
+            processors:
+              - mapping: |
+                  # This computes the combination of all retrival results
+                  let results = this.without("query").keys()
+                  root.processed = []
+                  root.unprocessed = range(0, $results.length()).fold([], i -> (
+                    i.tally.concat($results.slice(i.value+1).fold([], b -> (
+                      b.tally.append({
+                        "q": this.query,
+                        $results.index(i.value): this.get($results.index(i.value)), 
+                        b.value: this.get(b.value),
+                      })
+                    )))
+                  ))
+              # Loop over every combination of values and have gemini score them.
+              - while:
+                  check: 'this.unprocessed.length() > 0'
+                  processors:
+                  - branch:
+                      request_map: |
+                        root = this.unprocessed.0
+                      result_map: |
+                        root.processed = root.processed.append(this)
+                      processors:
+                      - gcp_vertex_ai_chat:
+                          project: ${GCP_PROJECT}
+                          model: gemini-2.5-pro-preview-03-25
+                          prompt: |
+                            Below is a YAML document with 3 keys, one is a query from a user,
+                            and two other keys contain documents that were retrived based on
+                            the user's query. Please rate which set of documents are better
+                            suited to give context to answer the user's question.
+
+                            ${!this.format_yaml()}
+
+                            Please respond in JSON with this format:
+                            {
+                              "winner": "<key in yaml doc that had better results>",
+                              "reasoning": "<the reason why it was better>"
+                            }
+                          response_format: json
+                  - mutation: 'root.unprocessed = this.unprocessed.slice(1)'
+            result_map: 'root.results = this.processed'
+    - mapping: |
+        root = this
+        # TODO: check the result
+        root.workflow_result = deleted()
+    - archive:
+        format: json_array
+    - mapping: |
+        root = this.format_yaml()
+output:
+  file:
+    path: results/${! now().ts_format("2006-01-02", "UTC") }.yaml
+
+http:
+  enabled: false

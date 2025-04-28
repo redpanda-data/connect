@@ -1,0 +1,81 @@
+name: pgvector
+type: output
+
+fields:
+  - name: table
+    type: string
+  - name: dsn
+    type: string
+  - name: max_in_flight
+    type: int
+    default: 8
+  - name: dimensions
+    type: int
+  - name: batching
+    type: unknown
+    default:
+      count: 100
+      period: 10s
+
+mapping: |
+  root.sql_raw = {
+    "driver": "postgres",
+    "dsn": this.dsn,
+    "init_statement": """
+      CREATE EXTENSION IF NOT EXISTS vector;
+      CREATE TABLE IF NOT EXISTS %s (
+        topic text,
+        key text,
+        chunk_id integer,
+        document text,
+        embeddings vector(%d),
+        PRIMARY KEY(topic, key, chunk_id)
+      );""".format(this.table, this.dimensions).trim("\n"),
+    "queries": [
+      { 
+        "query": "DELETE FROM %s WHERE (topic, key) = ($1, $2)".format(this.table),
+        "args_mapping": "root = [ @kafka_topic, @kafka_key ]",
+      },
+      {
+        "query": """
+          INSERT INTO %s (topic, key, chunk_id, document, embeddings) SELECT $1, $2, (chunk->>'chunk_id')::INT, chunk->>'document', (chunk->>'embeddings')::text::vector FROM jsonb_array_elements($3) AS chunk
+        """.format(this.table).trim(),
+        "args_mapping": "root = [@kafka_topic, @kafka_key, this.format_json(no_indent: true, escape_html: false)]",
+        },
+      ],
+    "max_in_flight": this.max_in_flight,
+    "batching": this.batching,
+  }
+
+tests:
+  - name: pgvector output test
+    config: 
+      dsn: "postgres://localhost"
+      table: "foo"
+      dimensions: 768
+    expected:
+      sql_raw: 
+        driver: "postgres"
+        dsn: "postgres://localhost"
+        init_statement: |-2
+              CREATE EXTENSION IF NOT EXISTS vector;
+              CREATE TABLE IF NOT EXISTS foo (
+                topic text,
+                key text,
+                chunk_id integer,
+                document text,
+                embeddings vector(768),
+                PRIMARY KEY(topic, key, chunk_id)
+              );
+        queries:
+          - args_mapping: "root = [ @kafka_topic, @kafka_key ]"
+            query: "DELETE FROM foo WHERE (topic, key) = ($1, $2)"
+          - args_mapping: 'root = [@kafka_topic, @kafka_key, this.format_json(no_indent: true, escape_html: false)]'
+            query: >-
+              INSERT INTO foo (topic, key, chunk_id, document, embeddings)
+              SELECT $1, $2, (chunk->>'chunk_id')::INT, chunk->>'document', (chunk->>'embeddings')::text::vector
+              FROM jsonb_array_elements($3) AS chunk
+        max_in_flight: 8
+        batching:
+            count: 100
+            period: 10s

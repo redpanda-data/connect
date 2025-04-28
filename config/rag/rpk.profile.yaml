@@ -1,0 +1,14 @@
+name: docker-compose
+description: ""
+prompt: ""
+from_cloud: false
+kafka_api:
+    brokers:
+        - localhost:19092
+admin_api:
+    addresses:
+        - localhost:19644
+schema_registry:
+    addresses:
+        - localhost:18081
+

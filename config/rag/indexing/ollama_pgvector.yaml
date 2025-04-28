@@ -1,0 +1,44 @@
+input:
+  rag_topics:
+    seed_brokers: "${REDPANDA_BROKERS}"
+    consumer_group: "${INDEXING_CONSUMER}.ollama"
+    user: "${REDPANDA_USER}"
+    password: "${REDPANDA_PASS}"
+    batching: 
+      count: 100
+      period: 10s
+pipeline:
+  threads: 8
+  processors:
+    - try:
+        - mutation: |
+            if !@mime_type.or("text/plain").contains("text") {
+              root = deleted()
+            }
+            if (@kafka_key.not_empty() | null) == null {
+              meta kafka_key = content().hash("sha256").encode("hex")
+            }
+        - text_chunker:
+            strategy: recursive_character
+        - group_by_value:
+            value: ${! @kafka_key }
+        - mapping: |
+            root.document = content().string()
+            root.chunk_id = batch_index()
+        - label: embeddings
+          branch:
+            request_map: root = this.document
+            processors:
+              - ollama_embed:
+                  input_type: search_document
+            result_map: root.embeddings = this
+        - archive:
+            format: json_array
+output:
+  fallback:
+  - reject_errored:
+      pgvector:
+        dsn: "${POSTGRES_DSN}"
+        table: "${POSTGRES_TABLE}_ollama"
+        dimensions: 768
+  - reject: "error ${!@fallback_error}, processing document: ${!content().string()}"

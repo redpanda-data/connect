@@ -1,0 +1,29 @@
+name: pgvector
+type: processor
+
+fields:
+  - name: table
+    type: string
+  - name: dsn
+    type: string
+  - name: limit
+    type: int
+    default: 3
+
+mapping: |
+  root.sql_raw = {
+    "driver": "postgres",
+    "dsn": this.dsn,
+    "query": """
+      SELECT (
+        SELECT STRING_AGG(t2.document, '' ORDER BY chunk_id ASC) 
+        FROM %s t2 
+        WHERE t1.key = t2.key AND t1.topic = t2.topic
+        GROUP BY key
+      ) AS document, key, topic
+      FROM %s t1
+      ORDER BY embeddings <-> $1
+      LIMIT %d
+    """.format(this.table, this.table, this.limit),
+    "args_mapping": "[ this.vector() ]",
+  }
