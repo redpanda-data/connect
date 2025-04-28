@@ -31,7 +31,6 @@ pipeline:
             processors:
               - ollama_embed:
                   input_type: search_document
-                  dimensions: 768
             result_map: root.embeddings = this
         - archive:
             format: json_array

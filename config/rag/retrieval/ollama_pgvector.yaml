@@ -26,7 +26,6 @@ pipeline:
             }
       - ollama_embed:
           input_type: search_query
-          dimensions: 768
       - pgvector:
           dsn: ${POSTGRES_DSN}
           table: ${POSTGRES_TABLE}_ollama
