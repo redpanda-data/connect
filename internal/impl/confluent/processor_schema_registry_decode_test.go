@@ -316,10 +316,10 @@ func TestSchemaRegistryDecodeAvro(t *testing.T) {
 
 	cfg := decodingConfig{}
 	cfg.avro.rawUnions = false
-	goAvroDecoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, cfg, service.MockResources())
+	goAvroDecoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, cfg, schemaStaleAfter, service.MockResources())
 	require.NoError(t, err)
 	cfg.avro.useHamba = true
-	hambaDecoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, cfg, service.MockResources())
+	hambaDecoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, cfg, schemaStaleAfter, service.MockResources())
 	require.NoError(t, err)
 
 	for _, test := range tests {
@@ -423,10 +423,10 @@ root = this.apply("debeziumTimestampToAvroTimestamp")
 	require.NoError(t, err)
 	cfg := decodingConfig{}
 	cfg.avro.mapping = mapping
-	goAvroDecoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, cfg, service.MockResources())
+	goAvroDecoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, cfg, schemaStaleAfter, service.MockResources())
 	require.NoError(t, err)
 	cfg.avro.useHamba = true
-	hambaDecoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, cfg, service.MockResources())
+	hambaDecoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, cfg, schemaStaleAfter, service.MockResources())
 	require.NoError(t, err)
 
 	for _, decoder := range []*schemaRegistryDecoder{goAvroDecoder, hambaDecoder} {
@@ -530,10 +530,10 @@ func TestSchemaRegistryDecodeAvroRawJson(t *testing.T) {
 	}
 	cfg := decodingConfig{}
 	cfg.avro.rawUnions = true
-	goAvroDecoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, cfg, service.MockResources())
+	goAvroDecoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, cfg, schemaStaleAfter, service.MockResources())
 	require.NoError(t, err)
 	cfg.avro.useHamba = true
-	hambaDecoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, cfg, service.MockResources())
+	hambaDecoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, cfg, schemaStaleAfter, service.MockResources())
 	require.NoError(t, err)
 
 	for _, test := range tests {
@@ -587,13 +587,13 @@ func TestSchemaRegistryDecodeClearExpired(t *testing.T) {
 		return nil, fmt.Errorf("nope")
 	})
 
-	decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, decodingConfig{}, service.MockResources())
+	decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, decodingConfig{}, schemaStaleAfter, service.MockResources())
 	require.NoError(t, err)
 	require.NoError(t, decoder.Close(context.Background()))
 
 	tStale := time.Now().Add(-time.Hour).Unix()
 	tNotStale := time.Now().Unix()
-	tNearlyStale := time.Now().Add(-(schemaStaleAfter / 2)).Unix()
+	tNearlyStale := time.Now().Add(schemaStaleAfter / 2).Unix()
 
 	decoder.cacheMut.Lock()
 	decoder.schemas = map[int]*cachedSchemaDecoder{
@@ -603,7 +603,7 @@ func TestSchemaRegistryDecodeClearExpired(t *testing.T) {
 	}
 	decoder.cacheMut.Unlock()
 
-	decoder.clearExpired()
+	decoder.clearExpired(schemaStaleAfter)
 
 	decoder.cacheMut.Lock()
 	assert.Equal(t, map[int]*cachedSchemaDecoder{
@@ -634,7 +634,7 @@ func TestSchemaRegistryDecodeProtobuf(t *testing.T) {
 		return nil, nil
 	})
 
-	decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, decodingConfig{}, service.MockResources())
+	decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, decodingConfig{}, schemaStaleAfter, service.MockResources())
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -700,7 +700,7 @@ func TestSchemaRegistryDecodeJson(t *testing.T) {
 		return nil, nil
 	})
 
-	decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, decodingConfig{}, service.MockResources())
+	decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, decodingConfig{}, schemaStaleAfter, service.MockResources())
 	require.NoError(t, err)
 
 	tests := []struct {
