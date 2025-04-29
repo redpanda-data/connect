@@ -33,7 +33,8 @@ func TestHambaAvroReferences(t *testing.T) {
 
 	rootSchema := `[
   "benthos.namespace.com.foo",
-  "benthos.namespace.com.bar"
+  "benthos.namespace.com.bar",
+  "benthos.namespace.com.baz"
 ]`
 
 	fooSchema := `{
@@ -54,6 +55,15 @@ func TestHambaAvroReferences(t *testing.T) {
 	]
 }`
 
+	bazSchema := `{
+	"namespace": "benthos.namespace.com",
+	"type": "record",
+	"name": "baz",
+	"fields": [
+		{ "name": "Miao", "type": "benthos.namespace.com.foo" }
+	]
+}`
+
 	urlStr := runSchemaRegistryServer(t, func(path string) ([]byte, error) {
 		switch path {
 		case "/subjects/root/versions/latest", "/schemas/ids/1":
@@ -65,6 +75,7 @@ func TestHambaAvroReferences(t *testing.T) {
 				"references": []any{
 					map[string]any{"name": "benthos.namespace.com.foo", "subject": "foo", "version": 10},
 					map[string]any{"name": "benthos.namespace.com.bar", "subject": "bar", "version": 20},
+					map[string]any{"name": "benthos.namespace.com.baz", "subject": "baz", "version": 30},
 				},
 			}), nil
 		case "/subjects/foo/versions/10", "/schemas/ids/2":
@@ -77,7 +88,17 @@ func TestHambaAvroReferences(t *testing.T) {
 				"id": 3, "version": 20, "schemaType": "AVRO",
 				"schema": barSchema,
 			}), nil
-		}
+		case "/subjects/baz/versions/30", "/schemas/ids/4":
+			return mustJBytes(t, map[string]any {
+				"id": 4, 
+				"version": 30,
+				"schema": bazSchema,
+				"schemaType": "AVRO",
+				"references": []any{
+					map[string]any{"name": "benthos.namespace.com.foo", "subject": "foo", "version": 10},
+				},
+			}), nil
+		}		
 		return nil, nil
 	})
 
@@ -99,6 +120,11 @@ func TestHambaAvroReferences(t *testing.T) {
 			name:   "a bar",
 			input:  `{"Moo":"mmuuuuuueew"}`,
 			output: `{"Moo":"mmuuuuuueew"}`,
+		},
+		{
+			name:   "a baz",
+			input:  `{"Miao":{"Woof":"tssssssuuuuuuu"}}`,
+			output: `{"Miao":{"Woof":"tssssssuuuuuuu"}}`,
 		},
 	}
 

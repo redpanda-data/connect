@@ -183,19 +183,22 @@ func (c *Client) WalkReferences(ctx context.Context, refs []sr.SchemaReference, 
 
 func (c *Client) walkReferencesTracked(ctx context.Context, seen map[string]int, refs []sr.SchemaReference, fn refWalkFn) error {
 	for _, ref := range refs {
+		info, err := c.GetSchemaBySubjectAndVersion(ctx, ref.Subject, &ref.Version, false)
+		if err != nil {
+			return err
+		}
+
+		if err := fn(ctx, ref.Name, info.Schema); err != nil {
+			return err
+		}
+
 		if i, exists := seen[ref.Name]; exists {
 			if i != ref.Version {
 				return fmt.Errorf("duplicate reference '%v' version mismatch of %v and %v, aborting in order to avoid invalid state", ref.Name, i, ref.Version)
 			}
 			continue
 		}
-		info, err := c.GetSchemaBySubjectAndVersion(ctx, ref.Subject, &ref.Version, false)
-		if err != nil {
-			return err
-		}
-		if err := fn(ctx, ref.Name, info.Schema); err != nil {
-			return err
-		}
+
 		seen[ref.Name] = ref.Version
 		if err := c.walkReferencesTracked(ctx, seen, info.References, fn); err != nil {
 			return err
