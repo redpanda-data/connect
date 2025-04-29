@@ -32,6 +32,7 @@ import (
 	"go.opentelemetry.io/otel/exporters/jaeger"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/tracing"
 )
 
 const (
@@ -183,6 +184,7 @@ func NewJaeger(config jaegerConfig) (trace.TracerProvider, error) {
 	}
 
 	return tracesdk.NewTracerProvider(
+		tracesdk.WithIDGenerator(tracing.NewIDGenerator()),
 		tracesdk.WithBatcher(exp, batchOpts...),
 		tracesdk.WithResource(resource.NewWithAttributes(semconv.SchemaURL, attrs...)),
 		tracesdk.WithSampler(sampler),

@@ -34,7 +34,7 @@ func MessageToProto(msg *service.Message) (*Message, error) {
 		if err != nil {
 			return nil, err
 		}
-		val, err := anyToProto(v)
+		val, err := AnyToProto(v)
 		if err != nil {
 			return nil, err
 		}
@@ -42,7 +42,7 @@ func MessageToProto(msg *service.Message) (*Message, error) {
 	}
 	out.Metadata = &StructValue{Fields: map[string]*Value{}}
 	err := msg.MetaWalkMut(func(k string, v any) error {
-		val, err := anyToProto(v)
+		val, err := AnyToProto(v)
 		out.Metadata.Fields[k] = val
 		return err
 	})
@@ -52,7 +52,8 @@ func MessageToProto(msg *service.Message) (*Message, error) {
 	return out, nil
 }
 
-func anyToProto(a any) (*Value, error) {
+// AnyToProto converts an arbitrary value into a proto Value.
+func AnyToProto(a any) (*Value, error) {
 	switch v := a.(type) {
 	case nil:
 		return &Value{Kind: &Value_NullValue{}}, nil
@@ -89,7 +90,7 @@ func anyToProto(a any) (*Value, error) {
 	case []any:
 		out := &ListValue{Values: make([]*Value, len(v))}
 		for i, item := range v {
-			v, err := anyToProto(item)
+			v, err := AnyToProto(item)
 			if err != nil {
 				return nil, err
 			}
@@ -99,7 +100,7 @@ func anyToProto(a any) (*Value, error) {
 	case map[string]any:
 		out := &StructValue{Fields: make(map[string]*Value, len(v))}
 		for k, item := range v {
-			v, err := anyToProto(item)
+			v, err := AnyToProto(item)
 			if err != nil {
 				return nil, err
 			}
@@ -118,14 +119,14 @@ func ProtoToMessage(msg *Message) (*service.Message, error) {
 		out = service.NewMessage(p.Serialized)
 	case *Message_Structured:
 		out = service.NewMessage(nil)
-		v, err := valueToAny(p.Structured)
+		v, err := ValueToAny(p.Structured)
 		if err != nil {
 			return nil, err
 		}
 		out.SetStructuredMut(v)
 	}
 	for k, v := range msg.Metadata.Fields {
-		val, err := valueToAny(v)
+		val, err := ValueToAny(v)
 		if err != nil {
 			return nil, err
 		}
@@ -134,7 +135,8 @@ func ProtoToMessage(msg *Message) (*service.Message, error) {
 	return out, nil
 }
 
-func valueToAny(val *Value) (any, error) {
+// ValueToAny converts a proto Value into an arbitrary value.
+func ValueToAny(val *Value) (any, error) {
 	switch v := val.Kind.(type) {
 	case *Value_NullValue:
 		return nil, nil
@@ -153,7 +155,7 @@ func valueToAny(val *Value) (any, error) {
 	case *Value_ListValue:
 		out := make([]any, len(v.ListValue.Values))
 		for i, item := range v.ListValue.Values {
-			val, err := valueToAny(item)
+			val, err := ValueToAny(item)
 			if err != nil {
 				return nil, err
 			}
@@ -163,7 +165,7 @@ func valueToAny(val *Value) (any, error) {
 	case *Value_StructValue:
 		out := make(map[string]any, len(v.StructValue.Fields))
 		for k, item := range v.StructValue.Fields {
-			val, err := valueToAny(item)
+			val, err := ValueToAny(item)
 			if err != nil {
 				return nil, err
 			}

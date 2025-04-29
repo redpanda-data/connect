@@ -26,6 +26,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/tracing"
 )
 
 const (
@@ -104,6 +105,7 @@ func cloudTraceFromParsed(conf *service.ParsedConfig) (trace.TracerProvider, err
 	}
 
 	return tracesdk.NewTracerProvider(
+		tracesdk.WithIDGenerator(tracing.NewIDGenerator()),
 		tracesdk.WithBatcher(exp, batchOpts...),
 		tracesdk.WithResource(resource.NewWithAttributes(semconv.SchemaURL, attrs...)),
 		tracesdk.WithSampler(sampler),

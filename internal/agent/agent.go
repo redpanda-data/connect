@@ -32,9 +32,12 @@ import (
 )
 
 type agentConfig struct {
-	Input  yaml.Node `yaml:"input"`
-	Tools  []string  `yaml:"tools"`
-	Output yaml.Node `yaml:"output"`
+	Input   yaml.Node `yaml:"input"`
+	Tools   []string  `yaml:"tools"`
+	Output  yaml.Node `yaml:"output"`
+	Tracer  yaml.Node `yaml:"tracer"`
+	Metrics yaml.Node `yaml:"metrics"`
+	Logger  yaml.Node `yaml:"logger"`
 }
 
 type httpConfig struct {
@@ -74,7 +77,7 @@ func RunAgent(
 	}
 	env := service.NewEnvironment()
 	err = env.RegisterProcessor(
-		"xxx_secret_agent_runtime_xxx",
+		"redpanda_agent_runtime",
 		newAgentProcessorConfigSpec(),
 		newAgentProcessor,
 	)
@@ -104,6 +107,7 @@ func RunAgent(
 		go func() {
 			err := server.ServeSSE(ctx, l)
 			cancel(err)
+			_ = l.Close()
 		}()
 		b := env.NewStreamBuilder()
 		b.SetHTTPMux(&gMux{m: mux, prefix: "/" + name})
@@ -111,16 +115,43 @@ func RunAgent(
 		b.SetEnvVarLookupFunc(func(key string) (string, bool) {
 			return envVarLookupFunc(context.Background(), key)
 		})
-		if !agent.Input.IsZero() {
-			input, _ := yaml.Marshal(agent.Input)
-			if err := b.AddInputYAML(string(input)); err != nil {
-				return nil, fmt.Errorf("failed to add agent input: %w", err)
-			}
+		configs := []struct {
+			name    string
+			node    yaml.Node
+			builder func(string) error
+		}{
+			{
+				name:    "input",
+				node:    agent.Input,
+				builder: b.AddInputYAML,
+			},
+			{
+				name:    "output",
+				node:    agent.Output,
+				builder: b.AddOutputYAML,
+			},
+			{
+				name:    "metrics",
+				node:    agent.Metrics,
+				builder: b.SetMetricsYAML,
+			},
+			{
+				name:    "logger",
+				node:    agent.Logger,
+				builder: b.SetLoggerYAML,
+			},
+			{
+				name:    "tracer",
+				node:    agent.Tracer,
+				builder: b.SetTracerYAML,
+			},
 		}
-		if !agent.Output.IsZero() {
-			output, _ := yaml.Marshal(agent.Output)
-			if err := b.AddOutputYAML(string(output)); err != nil {
-				return nil, fmt.Errorf("failed to add agent output: %w", err)
+		for _, config := range configs {
+			if !config.node.IsZero() {
+				str, _ := yaml.Marshal(config.node)
+				if err := config.builder(string(str)); err != nil {
+					return nil, fmt.Errorf("failed to add agent %s: %w", config.name, err)
+				}
 			}
 		}
 		err = b.AddProcessorYAML(strings.NewReplacer(
@@ -128,7 +159,7 @@ func RunAgent(
 			"$PORT", strconv.Itoa(l.Addr().(*net.TCPAddr).Port),
 			"$CWD", repositoryDir,
 		).Replace(`
-xxx_secret_agent_runtime_xxx:
+redpanda_agent_runtime:
   command: ["uv", "run", "agents/$NAME.py"]
   mcp_server: "http://127.0.0.1:$PORT/sse"
   cwd: "$CWD"
