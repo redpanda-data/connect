@@ -87,7 +87,7 @@ Each resource in the mcp subdirectory will create tools that can be used, then t
 
 					// It's safe to initialise a stdout logger
 					fallbackLogger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-						Level: slog.LevelInfo,
+						Level: slog.LevelDebug,
 					}))
 
 					rpMgr.SetFallbackLogger(service.NewLoggerFromSlog(fallbackLogger))

@@ -26,7 +26,6 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/mark3labs/mcp-go/server"
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -158,9 +157,10 @@ func (m *Server) ServeSSE(ctx context.Context, l net.Listener) error {
 	sseServer := server.NewSSEServer(
 		m.base,
 		server.WithSSEContextFunc(func(ctx context.Context, r *http.Request) context.Context {
-			// Propagate context from the request to the handlers in the MCP server.
-			propagator := otel.GetTextMapPropagator()
-			return propagator.Extract(ctx, propagation.HeaderCarrier(r.Header))
+			// Propagate tracing using the traceparent header from the request to the handlers in the MCP server.
+			w3cTraceContext := propagation.TraceContext{}
+			ctx = w3cTraceContext.Extract(ctx, propagation.HeaderCarrier(r.Header))
+			return ctx
 		}),
 	)
 	m.mux.PathPrefix("/").Handler(sseServer)

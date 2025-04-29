@@ -66,12 +66,12 @@ type rpcClient struct {
 	tracer trace.Tracer
 }
 
-func (m *rpcClient) InvokeAgent(ctx context.Context, msg *service.Message) (*service.Message, error) {
-	pb, err := runtimepb.MessageToProto(msg)
+func (m *rpcClient) InvokeAgent(ctx context.Context, inputMsg *service.Message) (*service.Message, error) {
+	pb, err := runtimepb.MessageToProto(inputMsg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert message for agent: %w", err)
 	}
-	span := trace.SpanFromContext(msg.Context())
+	span := trace.SpanFromContext(inputMsg.Context())
 	var traceContext *runtimepb.TraceContext
 	if c := span.SpanContext(); c.IsValid() {
 		traceContext = &runtimepb.TraceContext{
@@ -89,14 +89,16 @@ func (m *rpcClient) InvokeAgent(ctx context.Context, msg *service.Message) (*ser
 		// TODO: Support typed errors handled in the core engine
 		return nil, fmt.Errorf("failed to invoke agent: %w", err)
 	}
-	msg, err = runtimepb.ProtoToMessage(resp.GetMessage())
+	outputMsg, err := runtimepb.ProtoToMessage(resp.GetMessage())
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert message from agent: %w", err)
 	}
-	if err := m.applySubSpans(msg.Context(), resp.GetTrace().GetSpans()); err != nil {
+	// Copy the context too
+	outputMsg = outputMsg.WithContext(inputMsg.Context())
+	if err := m.applySubSpans(outputMsg.Context(), resp.GetTrace().GetSpans()); err != nil {
 		return nil, err
 	}
-	return msg, nil
+	return outputMsg, nil
 }
 
 func (m *rpcClient) applySubSpans(ctx context.Context, spans []*runtimepb.Span) error {

@@ -448,7 +448,7 @@ func (w *ResourcesWrapper) AddProcessorYAML(fileBytes []byte) error {
 		value, _ := request.Params.Arguments["value"].(string)
 		// TODO: Should we make this required?
 
-		inMsg, span := w.initMsgSpan(res.Label, service.NewMessage([]byte(value)))
+		inMsg, span := w.initMsgSpan(res.Label, service.NewMessage([]byte(value)).WithContext(ctx))
 		defer span.End()
 
 		attrString(span, "value", value)
@@ -576,7 +576,7 @@ func (w *ResourcesWrapper) AddOutputYAML(fileBytes []byte) error {
 				return nil, fmt.Errorf("message %v is missing a value", i)
 			}
 
-			msg, span := w.initMsgSpan(res.Label, service.NewMessage([]byte(contents)))
+			msg, span := w.initMsgSpan(res.Label, service.NewMessage([]byte(contents)).WithContext(ctx))
 			defer span.End()
 
 			attrString(span, "contents", contents)
