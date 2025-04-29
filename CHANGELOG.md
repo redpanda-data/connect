@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - (Benthos) Field `client_auth` added to the `socket_server` input. (@filippog)
 - (Benthos) New Bloblang string method `uuid_v5`. (@artemklevtsov)
 - New `qdrant` processor. (@rockwotj)
+- New `mcp-server init` subcommand. (@Jeffail)
 
 ### Fixed
 
