@@ -29,6 +29,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
+	"github.com/redpanda-data/connect/v4/internal/license"
 	"github.com/redpanda-data/connect/v4/internal/mcp/repository"
 	"github.com/redpanda-data/connect/v4/internal/mcp/starlark"
 	"github.com/redpanda-data/connect/v4/internal/mcp/tools"
@@ -58,6 +59,7 @@ func NewServer(
 	envVarLookupFunc func(context.Context, string) (string, bool),
 	filterFunc func(label string) bool,
 	tagFilterFunc func(tags []string) bool,
+	licenseConfig license.Config,
 ) (*Server, error) {
 	// Create MCP server
 	s := server.NewMCPServer(
@@ -136,9 +138,12 @@ func NewServer(
 		return nil, err
 	}
 
-	if _, err := resWrapper.Build(); err != nil {
+	resources, err := resWrapper.Build()
+	if err != nil {
 		return nil, err
 	}
+
+	license.RegisterService(resources, licenseConfig)
 
 	return &Server{s, mux}, nil
 }

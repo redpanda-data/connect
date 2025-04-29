@@ -25,6 +25,7 @@ import (
 func agentCli(rpMgr *enterprise.GlobalRedpandaManager) *cli.Command {
 	flags := []cli.Flag{
 		secretsFlag,
+		licenseFlag,
 	}
 
 	return &cli.Command{
@@ -71,6 +72,8 @@ Initialize a template for building a Redpanda Connect agent.
 				Flags: flags,
 				// TODO: This is a junk description. Make it better.
 				Description: `
+!!EXPERIMENTAL!!
+
 Each resource in the mcp subdirectory will create tools that can be used, then the redpanda_agents.yaml file along with python agent modules will be invoked:
 
   {{.BinaryName}} agent run ./repo
@@ -85,6 +88,9 @@ Each resource in the mcp subdirectory will create tools that can be used, then t
 						repositoryDir = c.Args().First()
 					}
 
+					licenseConfig := defaultLicenseConfig()
+					applyLicenseFlag(c, &licenseConfig)
+
 					// It's safe to initialise a stdout logger
 					fallbackLogger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 						Level: slog.LevelInfo,
@@ -98,7 +104,7 @@ Each resource in the mcp subdirectory will create tools that can be used, then t
 					if err != nil {
 						return err
 					}
-					if err := agent.RunAgent(logger, secretLookupFn, repositoryDir); err != nil {
+					if err := agent.RunAgent(logger, secretLookupFn, repositoryDir, licenseConfig); err != nil {
 						return err
 					}
 					return nil

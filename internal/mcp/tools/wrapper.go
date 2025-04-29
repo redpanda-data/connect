@@ -32,11 +32,12 @@ import (
 // a ResourcesBuilder as well as, where appropriate, adding them to an MCP
 // server as tools.
 type ResourcesWrapper struct {
-	logger      *slog.Logger
-	svr         *server.MCPServer
-	builder     *service.ResourceBuilder
-	resources   *service.Resources
-	closeFn     func(context.Context) error
+	logger    *slog.Logger
+	svr       *server.MCPServer
+	builder   *service.ResourceBuilder
+	resources *service.Resources
+	closeFn   func(context.Context) error
+	// TODO: Remove labels in favour of tags
 	labelFilter func(label string) bool
 	tagsFilter  func(tags []string) bool
 }

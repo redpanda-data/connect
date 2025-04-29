@@ -35,6 +35,7 @@ func mcpServerCli(rpMgr *enterprise.GlobalRedpandaManager) *cli.Command {
 		},
 		secretsFlag,
 		envFileFlag,
+		licenseFlag,
 	}
 
 	return &cli.Command{
@@ -56,6 +57,9 @@ Each resource will be exposed as a tool that AI can interact with:
 			if err := applyEnvFileFlag(c); err != nil {
 				return err
 			}
+
+			licenseConfig := defaultLicenseConfig()
+			applyLicenseFlag(c, &licenseConfig)
 
 			repositoryDir := "."
 			if c.Args().Len() > 0 {
@@ -109,7 +113,7 @@ Each resource will be exposed as a tool that AI can interact with:
 					}
 				}
 				return true
-			}); err != nil {
+			}, licenseConfig); err != nil {
 				return err
 			}
 			return nil

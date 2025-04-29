@@ -28,6 +28,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"gopkg.in/yaml.v3"
 
+	"github.com/redpanda-data/connect/v4/internal/license"
 	"github.com/redpanda-data/connect/v4/internal/mcp"
 )
 
@@ -61,6 +62,7 @@ func RunAgent(
 	logger *slog.Logger,
 	envVarLookupFunc func(context.Context, string) (string, bool),
 	repositoryDir string,
+	licenseConfig license.Config,
 ) error {
 	redpandaAgentsContents, err := os.ReadFile(filepath.Join(repositoryDir, "redpanda_agents.yaml"))
 	if err != nil {
@@ -93,6 +95,7 @@ func RunAgent(
 				return slices.Contains(agent.Tools, label)
 			},
 			nil,
+			licenseConfig,
 		)
 		if err != nil {
 			return nil, err
@@ -148,6 +151,10 @@ xxx_secret_agent_runtime_xxx:
 			eg.Go(func() error { return err })
 			break
 		}
+		license.RegisterService(
+			stream.Resources(),
+			licenseConfig,
+		)
 		eg.Go(func() error { return stream.Run(ctx) })
 	}
 	if config.HTTP.enabled {

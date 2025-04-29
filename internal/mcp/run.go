@@ -19,6 +19,7 @@ import (
 	"log/slog"
 	"net"
 
+	"github.com/redpanda-data/connect/v4/internal/license"
 	_ "github.com/redpanda-data/connect/v4/public/components/all"
 )
 
@@ -29,8 +30,9 @@ func Run(
 	envVarLookupFunc func(context.Context, string) (string, bool),
 	repositoryDir, addr string,
 	tagFilterFunc func([]string) bool,
+	license license.Config,
 ) error {
-	srv, err := NewServer(repositoryDir, logger, envVarLookupFunc, nil, tagFilterFunc)
+	srv, err := NewServer(repositoryDir, logger, envVarLookupFunc, nil, tagFilterFunc, license)
 	if err != nil {
 		return err
 	}
