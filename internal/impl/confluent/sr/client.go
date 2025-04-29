@@ -189,7 +189,7 @@ func (c *Client) walkReferencesTracked(ctx context.Context, seen map[string]int,
 			if i != ref.Version {
 				return fmt.Errorf("duplicate reference '%v' version mismatch of %v and %v, aborting in order to avoid invalid state", ref.Name, i, ref.Version)
 			}
-			stopWalking = exists
+			stopWalking = true
 		}
 
 		info, err := c.GetSchemaBySubjectAndVersion(ctx, ref.Subject, &ref.Version, false)
