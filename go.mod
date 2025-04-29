@@ -1,6 +1,8 @@
 module github.com/redpanda-data/connect/v4
 
-go 1.23.4
+go 1.24.1
+
+toolchain go1.24.2
 
 replace github.com/99designs/keyring => github.com/Jeffail/keyring v1.2.3
 
@@ -119,7 +121,7 @@ require (
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475
 	github.com/redis/go-redis/v9 v9.7.0
-	github.com/redpanda-data/benthos/v4 v4.48.0
+	github.com/redpanda-data/benthos/v4 v4.50.0
 	github.com/redpanda-data/common-go/secrets v0.1.3
 	github.com/redpanda-data/connect/public/bundle/free/v4 v4.31.0
 	github.com/rs/xid v1.5.0
@@ -160,7 +162,7 @@ require (
 	go.uber.org/multierr v1.11.0
 	golang.org/x/crypto v0.37.0
 	golang.org/x/exp v0.0.0-20250106191152-7588d65b2ba8
-	golang.org/x/net v0.38.0
+	golang.org/x/net v0.39.0
 	golang.org/x/sync v0.13.0
 	golang.org/x/text v0.24.0
 	google.golang.org/api v0.227.0
@@ -414,8 +416,8 @@ require (
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/quipo/dependencysolver v0.0.0-20170801134659-2b009cb4ddcc // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
-	github.com/rickb777/period v1.0.9 // indirect
-	github.com/rickb777/plural v1.4.2 // indirect
+	github.com/rickb777/period v1.0.11 // indirect
+	github.com/rickb777/plural v1.4.3 // indirect
 	github.com/rivo/uniseg v0.4.7
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
@@ -450,12 +452,12 @@ require (
 	go.opentelemetry.io/proto/otlp v1.3.1 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
-	golang.org/x/mod v0.23.0 // indirect
+	golang.org/x/mod v0.24.0 // indirect
 	golang.org/x/oauth2 v0.29.0
 	golang.org/x/sys v0.32.0 // indirect
 	golang.org/x/term v0.31.0 // indirect
 	golang.org/x/time v0.11.0 // indirect
-	golang.org/x/tools v0.30.0 // indirect
+	golang.org/x/tools v0.32.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
 	google.golang.org/genproto v0.0.0-20250324211829-b45e905df463 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250324211829-b45e905df463 // indirect

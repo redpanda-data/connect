@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - (Benthos) New Bloblang string method `uuid_v5`. (@artemklevtsov)
 - New `qdrant` processor. (@rockwotj)
 - New `mcp-server init` subcommand. (@Jeffail)
+- (Benthos) Config: Environment variable interpolation now supports `base64decode` as an optional transform function. (@mihaitodor)
 
 ### Fixed
 
@@ -20,6 +21,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - (Benthos) The `http_client` input and output and the `http` processor now support extracting multi-value HTTP headers. (@mihaitodor)
+- (Benthos) Resources are now initialized lazily upon first usage. This means that resources which establish connections will only do so if they are being actively utilized. One consequence of this behaviour is that beyond linting errors your resource configs will only report errors if and when they are used. (@Jeffail)
 
 ## 4.53.0 - 2025-04-18
 
