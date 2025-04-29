@@ -3,7 +3,7 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.54.0 - TBD
+## 4.54.0 - 2025-04-29
 
 ### Added
 
@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 - (Benthos) Field `client_auth` added to the `socket_server` input. (@filippog)
 - (Benthos) New Bloblang string method `uuid_v5`. (@artemklevtsov)
 - New `qdrant` processor. (@rockwotj)
+
+### Fixed
+
+- Specifying a `redpanda` logger via cli opts no longer yields invalid timeout settings. (@Jeffail)
 
 ### Changed
 
