@@ -25,45 +25,33 @@ package changestreams
 
 import (
 	"context"
-	"fmt"
 
 	"cloud.google.com/go/spanner"
+	"cloud.google.com/go/spanner/admin/database/apiv1/databasepb"
 )
 
-type dialect int
+type dialect = databasepb.DatabaseDialect
 
-const (
-	dialectUnknown dialect = iota
-	dialectGoogleSQL
-	dialectPostgreSQL
+var (
+	dialectGoogleSQL  = databasepb.DatabaseDialect_GOOGLE_STANDARD_SQL
+	dialectPostgreSQL = databasepb.DatabaseDialect_POSTGRESQL
 )
-
-func (d dialect) String() string {
-	switch d {
-	case dialectGoogleSQL:
-		return "GoogleSQL"
-	case dialectPostgreSQL:
-		return "PostgreSQL"
-	default:
-		return ""
-	}
-}
 
 func detectDialect(ctx context.Context, client *spanner.Client) (dialect, error) {
-	var value string
-	stmt := spanner.NewStatement("SELECT option_value FROM information_schema.database_options WHERE option_name = 'database_dialect'")
-	if err := client.Single().Query(ctx, stmt).Do(func(r *spanner.Row) error {
-		return r.ColumnByName("option_value", &value)
+	const stmt = `SELECT option_value FROM information_schema.database_options WHERE option_name = 'database_dialect'`
+	var v string
+	if err := client.Single().Query(ctx, spanner.NewStatement(stmt)).Do(func(r *spanner.Row) error {
+		return r.ColumnByName("option_value", &v)
 	}); err != nil {
-		return dialectUnknown, err
+		return databasepb.DatabaseDialect_DATABASE_DIALECT_UNSPECIFIED, err
 	}
 
-	switch value {
-	case "GOOGLE_STANDARD_SQL", "":
+	switch v {
+	case dialectGoogleSQL.String(), "":
 		return dialectGoogleSQL, nil
-	case "POSTGRESQL":
+	case dialectPostgreSQL.String():
 		return dialectPostgreSQL, nil
 	default:
-		return dialectUnknown, fmt.Errorf("invalid dialect: %q", value)
+		return databasepb.DatabaseDialect_DATABASE_DIALECT_UNSPECIFIED, nil
 	}
 }
