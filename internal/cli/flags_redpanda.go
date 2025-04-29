@@ -16,11 +16,11 @@ import (
 	"log/slog"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/twmb/franz-go/pkg/sasl/scram"
 	"github.com/urfave/cli/v2"
 
+	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
 	"github.com/redpanda-data/connect/v4/internal/secrets"
 )
@@ -118,23 +118,49 @@ func redpandaFlags() []cli.Flag {
 }
 
 func parseRedpandaFlags(c *cli.Context) (pipelineID, logsTopic, statusTopic string, connDetails *kafka.FranzConnectionDetails, err error) {
-	connDetails = &kafka.FranzConnectionDetails{
-		ClientID:   "rpcn",
-		MetaMaxAge: time.Minute * 5,
-	}
-
 	pipelineID = c.String(rfPipelineID)
 	logsTopic = c.String(rfLogsTopic)
 	statusTopic = c.String(rfStatusTopic)
 
-	connDetails.SeedBrokers = c.StringSlice(rfBrokers)
+	connDetails, err = rpConnDetails(
+		c.StringSlice(rfBrokers),
+		c.Bool(rfTLSEnabled),
+		c.String(rfTLSRootCasFile),
+		c.Bool(rfTLSSkipCertVerify),
+		c.String(rfSASLMechanism),
+		c.String(rfSASLUsername),
+		c.String(rfSASLPassword),
+	)
+	return
+}
 
-	if connDetails.TLSEnabled = c.Bool(rfTLSEnabled); connDetails.TLSEnabled {
+func rpConnDetails(
+	brokers []string,
+	tlsEnabled bool,
+	rootCasFile string,
+	tlsSkipVerify bool,
+	saslMech, saslUser, saslPass string,
+) (connDetails *kafka.FranzConnectionDetails, err error) {
+	var pConf *service.ParsedConfig
+	if pConf, err = service.NewConfigSpec().Fields(kafka.FranzConnectionFields()...).ParseYAML(`
+seed_brokers: [ ]
+client_id: rpcn
+`, nil); err != nil {
+		return
+	}
+
+	if connDetails, err = kafka.FranzConnectionDetailsFromConfig(pConf, nil); err != nil {
+		return
+	}
+
+	connDetails.SeedBrokers = brokers
+
+	if connDetails.TLSEnabled = tlsEnabled; connDetails.TLSEnabled {
 		connDetails.TLSConf = &tls.Config{
 			MinVersion: tls.VersionTLS12,
 		}
 
-		if rootCasFile := c.String(rfTLSRootCasFile); rootCasFile != "" {
+		if rootCasFile != "" {
 			var caCert []byte
 			if caCert, err = os.ReadFile(rootCasFile); err != nil {
 				return
@@ -144,30 +170,27 @@ func parseRedpandaFlags(c *cli.Context) (pipelineID, logsTopic, statusTopic stri
 			connDetails.TLSConf.RootCAs.AppendCertsFromPEM(caCert)
 		}
 
-		if c.Bool(rfTLSSkipCertVerify) {
-			connDetails.TLSConf.InsecureSkipVerify = true
-		}
+		connDetails.TLSConf.InsecureSkipVerify = tlsSkipVerify
 	}
 
-	if mech := c.String(rfSASLMechanism); mech != "" {
-		user, pass := c.String(rfSASLUsername), c.String(rfSASLPassword)
-		switch strings.ToLower(mech) {
+	if saslMech != "" {
+		switch strings.ToLower(saslMech) {
 		case "scram-sha-256":
 			connDetails.SASL = append(connDetails.SASL, scram.Sha256(func(c context.Context) (scram.Auth, error) {
 				return scram.Auth{
-					User: user,
-					Pass: pass,
+					User: saslUser,
+					Pass: saslPass,
 				}, nil
 			}))
 		case "scram-sha-512":
 			connDetails.SASL = append(connDetails.SASL, scram.Sha512(func(c context.Context) (scram.Auth, error) {
 				return scram.Auth{
-					User: user,
-					Pass: pass,
+					User: saslUser,
+					Pass: saslPass,
 				}, nil
 			}))
 		default:
-			err = fmt.Errorf("unsupported sasl mechanism: %v", mech)
+			err = fmt.Errorf("unsupported sasl mechanism: %v", saslMech)
 			return
 		}
 	}
