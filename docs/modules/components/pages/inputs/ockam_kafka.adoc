@@ -96,6 +96,7 @@ input:
         period: ""
         check: ""
         processors: [] # No default (optional)
+      topic_lag_refresh_period: 5s
     disable_content_encryption: false
     enrollment_ticket: "" # No default (optional)
     identity_name: "" # No default (optional)
@@ -605,6 +606,15 @@ processors:
   - archive:
       format: json_array
 ```
+
+=== `kafka.topic_lag_refresh_period`
+
+The period of time between each topic lag refresh cycle.
+
+
+*Type*: `string`
+
+*Default*: `"5s"`
 
 === `disable_content_encryption`
 
