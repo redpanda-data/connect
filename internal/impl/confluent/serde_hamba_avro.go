@@ -43,8 +43,6 @@ func resolveHambaAvroReferences(ctx context.Context, client *sr.Client, schema f
 	}
 
 	schemas = append(schemas, schema)
-	// We walk the above schemas in top down order, however when resolving references we need to add schemas to our codec
-	// in a bottom up manner.
 	return schemas, nil
 }
 
