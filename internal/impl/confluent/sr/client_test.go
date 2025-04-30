@@ -31,7 +31,7 @@ func mustJBytes(t testing.TB, obj any) []byte {
 }
 
 func TestWalkReferences(t *testing.T) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*10)
+	tCtx, done := context.WithTimeout(t.Context(), time.Second*10)
 	defer done()
 
 	rootSchema := `[
@@ -117,61 +117,61 @@ func TestWalkReferences(t *testing.T) {
 				"schema": barSchema,
 			}), nil
 		case "/subjects/baz/versions/1", "/schemas/ids/4":
-			return mustJBytes(t, map[string]any {
-				"id": 4, 
-				"version": 1,
-				"schema": bazSchema,
+			return mustJBytes(t, map[string]any{
+				"id":         4,
+				"version":    1,
+				"schema":     bazSchema,
 				"schemaType": "AVRO",
 				"references": []any{
 					map[string]any{"name": "benthos.namespace.com.foo", "subject": "foo", "version": 1},
 				},
 			}), nil
-		}		
+		}
 		return nil, nil
 	})
 
 	tests := []struct {
-		name				string 
-		schemaId    int
-		output     	[]string
+		name     string
+		schemaId int
+		output   []string
 	}{
 		{
-			name: "root",
+			name:     "root",
 			schemaId: 1,
 			output: []string{
 				"benthos.namespace.com.foo",
 				"benthos.namespace.com.bar",
-  			"benthos.namespace.com.baz",
+				"benthos.namespace.com.baz",
 			},
 		},
 		{
-			name: "foo",
+			name:     "foo",
 			schemaId: 2,
-			output: []string{},
+			output:   []string{},
 		},
 		{
-			name: "baz",
+			name:     "baz",
 			schemaId: 4,
 			output: []string{
 				"benthos.namespace.com.foo",
 			},
 		},
 		{
-			name: "root2",
+			name:     "root2",
 			schemaId: 5,
 			output: []string{
 				"benthos.namespace.com.foo",
 				"benthos.namespace.com.baz",
-  			"benthos.namespace.com.bar",
+				"benthos.namespace.com.bar",
 			},
 		},
 		{
-			name: "root3",
+			name:     "root3",
 			schemaId: 6,
 			output: []string{
 				"benthos.namespace.com.bar",
 				"benthos.namespace.com.foo",
-  			"benthos.namespace.com.baz",
+				"benthos.namespace.com.baz",
 			},
 		},
 	}
@@ -188,7 +188,7 @@ func TestWalkReferences(t *testing.T) {
 			walkErr := client.WalkReferences(tCtx, schema.References, func(ctx context.Context, name string, schema franz_sr.Schema) error {
 				schemas = append(schemas, name)
 				return nil
-			});
+			})
 			require.NoError(t, walkErr)
 			require.Len(t, schemas, len(test.output))
 			for i, name := range schemas {
@@ -197,7 +197,6 @@ func TestWalkReferences(t *testing.T) {
 		})
 	}
 }
-
 
 func runSchemaRegistryServer(t testing.TB, fn func(path string) ([]byte, error)) string {
 	t.Helper()
@@ -222,4 +221,3 @@ func runSchemaRegistryServer(t testing.TB, fn func(path string) ([]byte, error))
 
 	return ts.URL
 }
-
