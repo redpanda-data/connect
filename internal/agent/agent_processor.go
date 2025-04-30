@@ -44,7 +44,7 @@ func newAgentProcessorConfigSpec() *service.ConfigSpec {
 
 type agentProcessor struct {
 	client  *plugin.Client
-	runtime runtime
+	runtime *rpcClient
 	once    sync.Once
 }
 
@@ -66,6 +66,7 @@ func newAgentProcessor(conf *service.ParsedConfig, res *service.Resources) (serv
 	if err != nil {
 		return nil, err
 	}
+	// TODO: This sort of all seems like junk. We should write our own plugin mechanism.
 	c := exec.Command(cmd[0], cmd[1:]...)
 	c.Dir = cwd
 	c.Env = append(os.Environ(), "REDPANDA_CONNECT_AGENT_RUNTIME_MCP_SERVER="+mcpServerAddress)
@@ -87,7 +88,8 @@ func newAgentProcessor(conf *service.ParsedConfig, res *service.Resources) (serv
 		client.Kill()
 		return nil, err
 	}
-	rt := raw.(runtime)
+	rt := raw.(*rpcClient)
+	rt.tracer = res.OtelTracer().Tracer("rpcn-agent")
 	return &agentProcessor{
 		client:  client,
 		runtime: rt,

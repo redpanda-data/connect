@@ -30,6 +30,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/tracing"
 )
 
 func oltpSpec() *service.ConfigSpec {
@@ -234,7 +235,11 @@ func newOtlp(config *otlp) (trace.TracerProvider, error) {
 		}
 	}
 
-	opts = append(opts, tracesdk.WithResource(resource.NewWithAttributes(semconv.SchemaURL, attrs...)))
+	opts = append(
+		opts,
+		tracesdk.WithIDGenerator(tracing.NewIDGenerator()),
+		tracesdk.WithResource(resource.NewWithAttributes(semconv.SchemaURL, attrs...)),
+	)
 
 	return tracesdk.NewTracerProvider(opts...), nil
 }
