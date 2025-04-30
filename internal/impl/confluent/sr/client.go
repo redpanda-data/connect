@@ -171,9 +171,10 @@ func (c *Client) CreateSchemaWithIDAndVersion(ctx context.Context, subject strin
 
 type refWalkFn func(ctx context.Context, name string, info sr.Schema) error
 
-// WalkReferences goes through the provided schema info and for each reference
-// the provided closure is called recursively, which means each reference obtained
-// will also be walked.
+// WalkReferences goes through the provided schema info in a topological order
+// (i.e. before a schema is traversed all its references schemas are traversed first)
+// and for each reference the provided closure is called recursively, which means 
+// each reference obtained will also be walked.
 //
 // If a reference of a given subject but differing version is detected an error
 // is returned as this would put us in an invalid state.
@@ -183,13 +184,11 @@ func (c *Client) WalkReferences(ctx context.Context, refs []sr.SchemaReference, 
 
 func (c *Client) walkReferencesTracked(ctx context.Context, seen map[string]int, refs []sr.SchemaReference, fn refWalkFn) error {
 	for _, ref := range refs {
-		var stopWalking = false
-
 		if i, exists := seen[ref.Name]; exists {
 			if i != ref.Version {
 				return fmt.Errorf("duplicate reference '%v' version mismatch of %v and %v, aborting in order to avoid invalid state", ref.Name, i, ref.Version)
 			}
-			stopWalking = true
+			continue
 		}
 
 		info, err := c.GetSchemaBySubjectAndVersion(ctx, ref.Subject, &ref.Version, false)
@@ -197,16 +196,12 @@ func (c *Client) walkReferencesTracked(ctx context.Context, seen map[string]int,
 			return err
 		}
 
-		if err := fn(ctx, ref.Name, info.Schema); err != nil {
+		seen[ref.Name] = ref.Version
+		if err := c.walkReferencesTracked(ctx, seen, info.References, fn); err != nil {
 			return err
 		}
 
-		if stopWalking {
-			continue
-		}
-
-		seen[ref.Name] = ref.Version
-		if err := c.walkReferencesTracked(ctx, seen, info.References, fn); err != nil {
+		if err := fn(ctx, ref.Name, info.Schema); err != nil {
 			return err
 		}
 	}
