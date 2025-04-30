@@ -16,7 +16,7 @@ import tempfile
 import boto3
 import click
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from contextlib import contextmanager
 
 
@@ -25,6 +25,8 @@ class Metadata(BaseModel):
     tag: str
     version: str
 
+class ArtifactExtra(BaseModel):
+    id: str | None = Field(alias='ID')
 
 # Partial schema of goreleaser artifacts.json
 class Artifact(BaseModel):
@@ -33,6 +35,7 @@ class Artifact(BaseModel):
     type: str
     goos: str | None = None
     goarch: str | None = None
+    extra: ArtifactExtra | None = None
 
 
 @dataclasses.dataclass
@@ -399,6 +402,7 @@ def upload_archives(
         for a in artifacts
         if a.type == "Binary"
            and a.name == plugin_config.binary_name
+           and (a.extra.id if a.extra else None) == plugin_config.plugin_name
            and a.goos in goos_list
            and a.goarch in goarch_list
     ]
