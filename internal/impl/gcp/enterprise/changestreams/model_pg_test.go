@@ -55,7 +55,6 @@ func TestDecodePostgresRow(t *testing.T) {
   }
 }`,
 			want: &ChangeRecord{
-				DataChangeRecords: []*DataChangeRecord{},
 				ChildPartitionsRecords: []*ChildPartitionsRecord{
 					{
 						StartTimestamp: mustParseTime("2023-02-24T01:06:48.000000-08:00"),
@@ -68,7 +67,6 @@ func TestDecodePostgresRow(t *testing.T) {
 						},
 					},
 				},
-				HeartbeatRecords: []*HeartbeatRecord{},
 			},
 		},
 		{
@@ -170,8 +168,6 @@ func TestDecodePostgresRow(t *testing.T) {
 						},
 					},
 				},
-				ChildPartitionsRecords: []*ChildPartitionsRecord{},
-				HeartbeatRecords:       []*HeartbeatRecord{},
 			},
 		},
 		{
@@ -183,8 +179,6 @@ func TestDecodePostgresRow(t *testing.T) {
   }
 }`,
 			want: &ChangeRecord{
-				DataChangeRecords:      []*DataChangeRecord{},
-				ChildPartitionsRecords: []*ChildPartitionsRecord{},
 				HeartbeatRecords: []*HeartbeatRecord{
 					{
 						Timestamp: mustParseTime("2023-02-24T17:16:43.811345-08:00"),
