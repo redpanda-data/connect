@@ -88,16 +88,16 @@ func TestAvroReferences(t *testing.T) {
 				"schema": barSchema,
 			}), nil
 		case "/subjects/baz/versions/30", "/schemas/ids/4":
-			return mustJBytes(t, map[string]any {
-				"id": 4, 
-				"version": 30,
-				"schema": bazSchema,
+			return mustJBytes(t, map[string]any{
+				"id":         4,
+				"version":    30,
+				"schema":     bazSchema,
 				"schemaType": "AVRO",
 				"references": []any{
 					map[string]any{"name": "benthos.namespace.com.foo", "subject": "foo", "version": 10},
 				},
 			}), nil
-		}		
+		}
 		return nil, nil
 	})
 

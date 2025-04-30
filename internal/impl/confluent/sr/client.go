@@ -173,7 +173,7 @@ type refWalkFn func(ctx context.Context, name string, info sr.Schema) error
 
 // WalkReferences goes through the provided schema info in a topological order
 // (i.e. before a schema is traversed all its references schemas are traversed first)
-// and for each reference the provided closure is called recursively, which means 
+// and for each reference the provided closure is called recursively, which means
 // each reference obtained will also be walked.
 //
 // If a reference of a given subject but differing version is detected an error
