@@ -3,11 +3,15 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.55.0 - TBD
+## 4.54.1 - 2025-04-30
 
 ### Added
 
 - New consumer group lag metric and `topic_lag_refresh_period` field to `kafka_franz`, and `ockam_kafka`. (@rockwotj)
+
+### Fixed
+
+- Fixed an issue with our release process where `rpk connect` could accidentally use a cloud artifact. (@rockwotj)
 
 ## 4.54.0 - 2025-04-29
 
