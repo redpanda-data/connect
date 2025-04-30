@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -26,12 +25,10 @@ import (
 	"github.com/Jeffail/checkpoint"
 	"github.com/Jeffail/shutdown"
 	"github.com/cenkalti/backoff/v4"
-	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
-	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 	"github.com/redpanda-data/connect/v4/internal/dispatch"
 )
 
@@ -70,17 +67,14 @@ func FranzReaderOrderedConfigFields() []*service.ConfigField {
 type FranzReaderOrdered struct {
 	clientOpts func() ([]kgo.Opt, error)
 
-	partState     *partitionState
-	lagUpdater    *asyncroutine.Periodic
-	topicLagGauge *service.MetricGauge
-	topicLagCache sync.Map
-	Client        *kgo.Client
+	partState *partitionState
+	Client    *kgo.Client
 
 	consumerGroup         string
 	commitPeriod          time.Duration
-	topicLagRefreshPeriod time.Duration
 	cacheLimit            uint64
 	readBackOff           backoff.BackOff
+	topicLagRefreshPeriod time.Duration
 
 	res     *service.Resources
 	log     *service.Logger
@@ -95,12 +89,11 @@ func NewFranzReaderOrderedFromConfig(conf *service.ParsedConfig, res *service.Re
 	readBackOff.MaxElapsedTime = 0
 
 	f := FranzReaderOrdered{
-		readBackOff:   readBackOff,
-		res:           res,
-		log:           res.Logger(),
-		shutSig:       shutdown.NewSignaller(),
-		clientOpts:    optsFn,
-		topicLagGauge: res.Metrics().NewGauge("redpanda_lag", "topic", "partition"),
+		readBackOff: readBackOff,
+		res:         res,
+		log:         res.Logger(),
+		shutSig:     shutdown.NewSignaller(),
+		clientOpts:  optsFn,
 	}
 
 	f.consumerGroup, _ = conf.FieldString(kroFieldConsumerGroup)
@@ -127,19 +120,17 @@ type batchWithRecords struct {
 	size uint64
 }
 
-func (f *FranzReaderOrdered) recordsToBatch(records []*kgo.Record) *batchWithRecords {
+func (f *FranzReaderOrdered) recordsToBatch(records []*kgo.Record, consumerLag *ConsumerLag) *batchWithRecords {
 	var length uint64
 	var batch service.MessageBatch
 	for _, r := range records {
 		length += uint64(len(r.Value) + len(r.Key))
 
-		lag := int64(0)
-		if val, ok := f.topicLagCache.Load(fmt.Sprintf("%s_%d", r.Topic, r.Partition)); ok {
-			lag = val.(int64)
-		}
-
 		msg := FranzRecordToMessageV1(r)
-		msg.MetaSetMut("kafka_lag", lag)
+		if consumerLag != nil {
+			lag := consumerLag.Load(r.Topic, r.Partition)
+			msg.MetaSetMut("kafka_lag", lag)
+		}
 
 		batch = append(batch, msg)
 
@@ -416,36 +407,14 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 		return fmt.Errorf("failed to connect to cluster: %s", err)
 	}
 
-	if f.lagUpdater != nil {
-		f.lagUpdater.Stop()
-	}
-	adminClient := kadm.NewClient(f.Client)
-	f.lagUpdater = asyncroutine.NewPeriodicWithContext(f.topicLagRefreshPeriod, func(ctx context.Context) {
-		ctx, done := context.WithTimeout(ctx, f.topicLagRefreshPeriod)
-		defer done()
-
-		lags, err := adminClient.Lag(ctx, f.consumerGroup)
-		if err != nil {
-			f.log.Debugf("Failed to fetch group lags: %s", err)
-		}
-
-		lags.Each(func(gl kadm.DescribedGroupLag) {
-			for _, gl := range gl.Lag {
-				for _, pl := range gl {
-					lag := pl.Lag
-					if lag < 0 {
-						lag = 0
-					}
-
-					f.topicLagGauge.Set(lag, pl.Topic, strconv.Itoa(int(pl.Partition)))
-					f.topicLagCache.Store(fmt.Sprintf("%s_%d", pl.Topic, pl.Partition), lag)
-				}
-			}
-		})
-	})
-	f.lagUpdater.Start()
-
 	go func() {
+		var consumerLag *ConsumerLag
+		if f.consumerGroup != "" {
+			topicLagGauge := f.res.Metrics().NewGauge("redpanda_lag", "topic", "partition")
+			consumerLag = NewConsumerLag(f.Client, f.consumerGroup, f.res.Logger(), topicLagGauge, f.topicLagRefreshPeriod)
+			consumerLag.Start()
+			defer consumerLag.Stop()
+		}
 		defer func() {
 			f.Client.Close()
 			if f.shutSig.IsSoftStopSignalled() {
@@ -503,7 +472,7 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 					return
 				}
 
-				batch := f.recordsToBatch(p.Records)
+				batch := f.recordsToBatch(p.Records, consumerLag)
 				if len(batch.b) == 0 {
 					return
 				}

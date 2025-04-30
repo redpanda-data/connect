@@ -32,11 +32,12 @@ import (
 )
 
 const (
-	kruFieldConsumerGroup   = "consumer_group"
-	kruFieldCheckpointLimit = "checkpoint_limit"
-	kruFieldCommitPeriod    = "commit_period"
-	kruFieldMultiHeader     = "multi_header"
-	kruFieldBatching        = "batching"
+	kruFieldConsumerGroup         = "consumer_group"
+	kruFieldCheckpointLimit       = "checkpoint_limit"
+	kruFieldCommitPeriod          = "commit_period"
+	kruFieldMultiHeader           = "multi_header"
+	kruFieldBatching              = "batching"
+	kruFieldTopicLagRefreshPeriod = "topic_lag_refresh_period"
 )
 
 // FranzReaderUnorderedConfigFields returns config fields for customising the
@@ -64,6 +65,10 @@ func FranzReaderUnorderedConfigFields() []*service.ConfigField {
 		service.NewBatchPolicyField(kruFieldBatching).
 			Description("Allows you to configure a xref:configuration:batching.adoc[batching policy] that applies to individual topic partitions in order to batch messages together before flushing them for processing. Batching can be beneficial for performance as well as useful for windowed processing, and doing so this way preserves the ordering of topic partitions.").
 			Advanced(),
+		service.NewDurationField(kruFieldTopicLagRefreshPeriod).
+			Description("The period of time between each topic lag refresh cycle.").
+			Default("5s").
+			Advanced(),
 	}
 }
 
@@ -81,11 +86,12 @@ type batchWithAckFn struct {
 type FranzReaderUnordered struct {
 	clientOpts []kgo.Opt
 
-	consumerGroup   string
-	checkpointLimit int
-	commitPeriod    time.Duration
-	multiHeader     bool
-	batchPolicy     service.BatchPolicy
+	consumerGroup         string
+	checkpointLimit       int
+	commitPeriod          time.Duration
+	multiHeader           bool
+	batchPolicy           service.BatchPolicy
+	topicLagRefreshPeriod time.Duration
 
 	batchChan atomic.Value
 	res       *service.Resources
@@ -128,6 +134,10 @@ func NewFranzReaderUnorderedFromConfig(conf *service.ParsedConfig, res *service.
 	}
 
 	if f.multiHeader, err = conf.FieldBool(kruFieldMultiHeader); err != nil {
+		return nil, err
+	}
+
+	if f.topicLagRefreshPeriod, err = conf.FieldDuration(kruFieldTopicLagRefreshPeriod); err != nil {
 		return nil, err
 	}
 
@@ -498,6 +508,13 @@ func (f *FranzReaderUnordered) Connect(ctx context.Context) error {
 	}
 
 	go func() {
+		if f.consumerGroup != "" {
+			topicLagGauge := f.res.Metrics().NewGauge("kafka_lag", "topic", "partition")
+			consumerLag := NewConsumerLag(cl, f.consumerGroup, f.res.Logger(), topicLagGauge, f.topicLagRefreshPeriod)
+			consumerLag.Start()
+			defer consumerLag.Stop()
+		}
+
 		defer func() {
 			cl.Close()
 			checkpoints.close()
