@@ -42,13 +42,14 @@ func NewConsumerLag(
 	topicLagRefreshPeriod time.Duration,
 ) *ConsumerLag {
 	adminClient := kadm.NewClient(client)
-	topicLagCache := &sync.Map{}
+	topicLagCache := new(sync.Map)
 	lagUpdater := asyncroutine.NewPeriodicWithContext(topicLagRefreshPeriod, func(ctx context.Context) {
 		ctx, done := context.WithTimeout(ctx, topicLagRefreshPeriod)
 		defer done()
 		lags, err := adminClient.Lag(ctx, consumerGroup)
 		if err != nil {
 			logger.Debugf("Failed to fetch group lags: %s", err)
+			return
 		}
 		lags.Each(func(gl kadm.DescribedGroupLag) {
 			for _, gl := range gl.Lag {
