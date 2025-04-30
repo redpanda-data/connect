@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
-	"slices"
 	"strings"
 	"time"
 
@@ -35,16 +34,17 @@ func resolveHambaAvroReferences(ctx context.Context, client *sr.Client, schema f
 	if len(schema.References) == 0 {
 		return []franz_sr.Schema{schema}, nil
 	}
-	schemas := []franz_sr.Schema{schema}
+	schemas := []franz_sr.Schema{}
 	if err := client.WalkReferences(ctx, schema.References, func(ctx context.Context, name string, schema franz_sr.Schema) error {
 		schemas = append(schemas, schema)
 		return nil
 	}); err != nil {
 		return nil, fmt.Errorf("unable to walk schema references: %w", err)
 	}
+
+	schemas = append(schemas, schema)
 	// We walk the above schemas in top down order, however when resolving references we need to add schemas to our codec
 	// in a bottom up manner.
-	slices.Reverse(schemas)
 	return schemas, nil
 }
 
