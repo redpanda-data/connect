@@ -152,7 +152,7 @@ func (f *FranzReaderOrdered) recordsToBatch(records []*kgo.Record, consumerLag *
 
 type partitionCache struct {
 	mut             sync.Mutex
-	pendingDispatch map[int]struct{}
+	pendingDispatch map[int64]struct{}
 	cache           []*batchWithRecords
 	cacheSize       uint64
 	checkpointer    *checkpoint.Uncapped[*kgo.Record]
@@ -161,7 +161,7 @@ type partitionCache struct {
 
 func newPartitionCache(commitFn func(r *kgo.Record)) *partitionCache {
 	pt := &partitionCache{
-		pendingDispatch: map[int]struct{}{},
+		pendingDispatch: map[int64]struct{}{},
 		checkpointer:    checkpoint.NewUncapped[*kgo.Record](),
 		commitFn:        commitFn,
 	}
@@ -192,11 +192,11 @@ func (p *partitionCache) pop() *batchWithAckFn {
 		return nil
 	}
 
-	batchID := len(p.pendingDispatch)
-	p.pendingDispatch[batchID] = struct{}{}
-
 	nextBatch := p.cache[0]
 	p.cache = p.cache[1:]
+
+	batchID := nextBatch.r[0].Offset
+	p.pendingDispatch[batchID] = struct{}{}
 
 	dispatchCounter := int64(len(nextBatch.b))
 	for i := 0; i < len(nextBatch.b); i++ {
