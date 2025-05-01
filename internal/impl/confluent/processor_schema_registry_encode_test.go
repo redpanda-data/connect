@@ -320,7 +320,7 @@ func TestSchemaRegistryEncodeAvroLogicalTypes(t *testing.T) {
 		{
 			name:        "message doesnt match schema codec",
 			input:       `{"int_time_millis":35245000,"long_time_micros":20192000000000,"long_timestamp_micros":null,"pos_0_33333333":"!"}`,
-			errContains: "cannot decode textual union: expected:",
+			errContains: "cannot decode textual union:",
 		},
 		{
 			name:        "message doesnt match schema",

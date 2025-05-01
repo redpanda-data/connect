@@ -16,6 +16,7 @@ package confluent
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 
@@ -28,7 +29,7 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
 )
 
-func resolveGoAvroReferences(ctx context.Context, client *sr.Client, mapping *bloblang.Executor, schema franz_sr.Schema) (string, error) {
+func resolveGoAvroReferences(ctx context.Context, client *sr.Client, mapping *bloblang.Executor, schema franz_sr.Schema) ([]json.RawMessage, error) {
 	mapSchema := func(s franz_sr.Schema) (string, error) {
 		if mapping == nil {
 			return s.Schema, nil
@@ -44,49 +45,66 @@ func resolveGoAvroReferences(ctx context.Context, client *sr.Client, mapping *bl
 		}
 		return string(avroSchema), nil
 	}
-	if len(schema.References) == 0 {
-		return mapSchema(schema)
-	}
 
-	refsMap := map[string]string{}
+	schemas := []json.RawMessage{}
 	if err := client.WalkReferences(ctx, schema.References, func(ctx context.Context, name string, schema franz_sr.Schema) error {
 		s, err := mapSchema(schema)
-		refsMap[name] = s
+		schemas = append(schemas, []byte(s))
 		return err
 	}); err != nil {
-		return "", nil
+		return nil, nil
 	}
 
 	root, err := mapSchema(schema)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	schemaDry := []string{}
-	if err := json.Unmarshal([]byte(root), &schemaDry); err != nil {
-		return "", fmt.Errorf("failed to parse root schema as enum: %w", err)
-	}
-
-	schemaHydrated := make([]json.RawMessage, len(schemaDry))
-	for i, name := range schemaDry {
-		def, exists := refsMap[name]
-		if !exists {
-			return "", fmt.Errorf("referenced type '%v' was not found in references", name)
-		}
-		schemaHydrated[i] = []byte(def)
-	}
-
-	schemaHydratedBytes, err := json.Marshal(schemaHydrated)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal hydrated schema: %w", err)
-	}
-
-	return string(schemaHydratedBytes), nil
+	schemas = append(schemas, []byte(root))
+	return schemas, nil
 }
 
 func (s *schemaRegistryEncoder) getAvroEncoder(ctx context.Context, schema franz_sr.Schema) (schemaEncoder, error) {
-	schemaSpec, err := resolveGoAvroReferences(ctx, s.client, nil, schema)
+	schemas, err := resolveGoAvroReferences(ctx, s.client, nil, schema)
 	if err != nil {
 		return nil, err
+	}
+	var schemaJson json.RawMessage
+	numSchemas := len(schemas)
+	var numEncodedBytesToStrip int
+
+	var native interface{}
+	if err := json.Unmarshal(schemas[len(schemas)-1], &native); err != nil {
+		return nil, fmt.Errorf("failed to parse root schema as enum: %w", err)
+	}
+
+	if numSchemas == 1 {
+		schemaJson = schemas[0]
+	} else if numSchemas >= 2 {
+		switch v := native.(type) {
+		case []interface{}:
+			numEncodedBytesToStrip = 0
+		case map[string]interface{}:
+			numEncodedBytesToStrip = len(intToZigZagBytes(int64(numSchemas - 1)))
+		default:
+			return nil, fmt.Errorf("unexpected root schema type: %T", v)
+		}
+	} else {
+		return nil, fmt.Errorf("Expect at least one schema to decode, got: %d", numSchemas)
+	}
+
+	var schemaSpec string
+	if schemaJson != nil {
+		schemaJson, err := json.Marshal(schemaJson)
+		schemaSpec = string(schemaJson)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal hydrated schema: %w", err)
+		}
+	} else {
+		schemasJson, err := json.Marshal(schemas)
+		schemaSpec = string(schemasJson)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal hydrated schema: %w", err)
+		}
 	}
 
 	var codec *goavro.Codec
@@ -115,6 +133,7 @@ func (s *schemaRegistryEncoder) getAvroEncoder(ctx context.Context, schema franz
 		if err != nil {
 			return err
 		}
+		binary = binary[numEncodedBytesToStrip:]
 
 		m.SetBytes(binary)
 		return nil
@@ -122,9 +141,44 @@ func (s *schemaRegistryEncoder) getAvroEncoder(ctx context.Context, schema franz
 }
 
 func (s *schemaRegistryDecoder) getGoAvroDecoder(ctx context.Context, schema franz_sr.Schema) (schemaDecoder, error) {
-	schemaSpec, err := resolveGoAvroReferences(ctx, s.client, s.cfg.avro.mapping, schema)
-	if err != nil {
-		return nil, err
+	schemas, err := resolveGoAvroReferences(ctx, s.client, nil, schema)
+	var schemaJson json.RawMessage
+	numSchemas := len(schemas)
+	var unionTypeBytesToAdd []byte
+
+	var native interface{}
+	if err := json.Unmarshal(schemas[len(schemas)-1], &native); err != nil {
+		return nil, fmt.Errorf("failed to parse root schema as enum: %w", err)
+	}
+
+	if numSchemas == 1 {
+		schemaJson = schemas[0]
+	} else if numSchemas >= 2 {
+		switch v := native.(type) {
+		case []interface{}:
+			unionTypeBytesToAdd = nil
+		case map[string]interface{}:
+			unionTypeBytesToAdd = intToZigZagBytes(int64(numSchemas - 1))
+		default:
+			return nil, fmt.Errorf("unexpected root schema type: %T", v)
+		}
+	} else {
+		return nil, fmt.Errorf("Expect at least one schema to decode, got: %d", numSchemas)
+	}
+
+	var schemaSpec string
+	if schemaJson != nil {
+		schemaJson, err := json.Marshal(schemaJson)
+		schemaSpec = string(schemaJson)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal hydrated schema: %w", err)
+		}
+	} else {
+		schemasJson, err := json.Marshal(schemas)
+		schemaSpec = string(schemasJson)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal hydrated schema: %w", err)
+		}
 	}
 
 	var codec *goavro.Codec
@@ -139,6 +193,9 @@ func (s *schemaRegistryDecoder) getGoAvroDecoder(ctx context.Context, schema fra
 
 	decoder := func(m *service.Message) error {
 		b, err := m.AsBytes()
+		if unionTypeBytesToAdd != nil {
+			b = append(unionTypeBytesToAdd, b...)
+		}
 		if err != nil {
 			return err
 		}
@@ -152,10 +209,41 @@ func (s *schemaRegistryDecoder) getGoAvroDecoder(ctx context.Context, schema fra
 		if err != nil {
 			return err
 		}
+
+		if unionTypeBytesToAdd != nil {
+			var unionWrapper map[string]interface{}
+			err := json.Unmarshal(jb, &unionWrapper)
+			if err != nil {
+				return fmt.Errorf("unexpected error when unmarshalling: %w", err)
+			}
+
+			if !(len(unionWrapper) == 1) {
+				return fmt.Errorf("expected native to be a map[string]interface{} with length one, got %d", len(unionWrapper))
+			}
+			for _, value := range unionWrapper {
+				unwrapped, err := json.Marshal(value)
+				if err != nil {
+					return fmt.Errorf("unexpected error when marshalling the unwrapped native: %w", err)
+				}
+				jb = unwrapped
+			}
+		}
+
 		m.SetBytes(jb)
 
 		return nil
 	}
 
 	return decoder, nil
+}
+
+func zigZagEncode(n int64) uint64 {
+	return uint64((n << 1) ^ (n >> 63))
+}
+
+func intToZigZagBytes(n int64) []byte {
+	encoded := zigZagEncode(n)
+	buf := make([]byte, binary.MaxVarintLen64)
+	numBytes := binary.PutUvarint(buf, encoded)
+	return buf[:numBytes]
 }
