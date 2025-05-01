@@ -15,7 +15,6 @@
 package sql
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -40,5 +39,5 @@ args_mapping: 'root = [ this.id ]'
 
 	insertOutput, err := newSQLInsertOutputFromConfig(insertConfig, service.MockResources())
 	require.NoError(t, err)
-	require.NoError(t, insertOutput.Close(context.Background()))
+	require.NoError(t, insertOutput.Close(t.Context()))
 }

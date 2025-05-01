@@ -155,7 +155,7 @@ file:
 			license.InjectTestService(streamOut.Resources())
 
 			go func() {
-				err = streamOut.Run(context.Background())
+				err = streamOut.Run(t.Context())
 				require.NoError(t, err)
 			}()
 
@@ -198,7 +198,7 @@ file:
 			}
 
 			go func() {
-				err = streamOut.Run(context.Background())
+				err = streamOut.Run(t.Context())
 				require.NoError(t, err)
 			}()
 
@@ -262,7 +262,7 @@ file:
 	license.InjectTestService(streamOut.Resources())
 
 	go func() {
-		err = streamOut.Run(context.Background())
+		err = streamOut.Run(t.Context())
 		require.NoError(t, err)
 	}()
 
@@ -345,7 +345,7 @@ file:
 	license.InjectTestService(streamOut.Resources())
 
 	go func() {
-		err = streamOut.Run(context.Background())
+		err = streamOut.Run(t.Context())
 		require.NoError(t, err)
 	}()
 
@@ -517,7 +517,7 @@ memory: {}
 	license.InjectTestService(streamOut.Resources())
 
 	go func() {
-		err = streamOut.Run(context.Background())
+		err = streamOut.Run(t.Context())
 		require.NoError(t, err)
 	}()
 
@@ -723,7 +723,7 @@ file:
 
 	streamStopped := make(chan any, 1)
 	go func() {
-		err = streamOut.Run(context.Background())
+		err = streamOut.Run(t.Context())
 		require.NoError(t, err)
 		streamStopped <- nil
 	}()

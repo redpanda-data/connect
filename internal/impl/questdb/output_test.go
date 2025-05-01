@@ -178,7 +178,7 @@ designated_timestamp_unit: hello`,
 func TestOptionsOnWrite(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 
 	sentMsgs := make(chan string, 4) // Arbitrary buffer size, > max number of test messages

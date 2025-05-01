@@ -15,7 +15,6 @@
 package sql
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -41,5 +40,5 @@ args_mapping: 'root = [ this.id ]'
 
 	selectInput, err := newSQLSelectInputFromConfig(selectConfig, service.MockResources())
 	require.NoError(t, err)
-	require.NoError(t, selectInput.Close(context.Background()))
+	require.NoError(t, selectInput.Close(t.Context()))
 }

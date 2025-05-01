@@ -52,7 +52,7 @@ func TestIntegrationAzureServiceBus(t *testing.T) {
 }
 
 func testAMQP1Connected(url, sourceAddress string, t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	conf, err := amqp1InputSpec().ParseYAML(fmt.Sprintf(`
 url: %v
@@ -68,7 +68,7 @@ azure_renew_lock: true
 	require.NoError(t, err)
 
 	defer func() {
-		_ = m.Close(context.Background())
+		_ = m.Close(t.Context())
 	}()
 
 	client, err := amqp.Dial(ctx, url, nil)
@@ -157,7 +157,7 @@ azure_renew_lock: true
 }
 
 func testAMQP1Disconnected(url, sourceAddress string, t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	conf, err := amqp1InputSpec().ParseYAML(fmt.Sprintf(`
 url: %v
@@ -175,7 +175,7 @@ azure_renew_lock: true
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		_ = m.Close(context.Background())
+		_ = m.Close(t.Context())
 		wg.Done()
 	}()
 

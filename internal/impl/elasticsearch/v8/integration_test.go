@@ -14,7 +14,6 @@
 package elasticsearch
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -33,7 +32,7 @@ func TestIntegrationElasticsearch(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
 	pool.MaxWait = time.Second * 60

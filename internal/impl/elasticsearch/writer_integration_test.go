@@ -103,13 +103,13 @@ func TestIntegrationWriter(t *testing.T) {
 				CreateIndex("test_conn_index").
 				Timeout("20s").
 				Body(index).
-				Do(context.Background())
+				Do(t.Context())
 			if cerr == nil {
 				_, cerr = client.
 					CreateIndex("test_conn_index_2").
 					Timeout("20s").
 					Body(index).
-					Do(context.Background())
+					Do(t.Context())
 			}
 		}
 		return cerr
@@ -157,7 +157,7 @@ func TestIntegrationWriter(t *testing.T) {
 }
 
 func testElasticNoIndex(urls []string, client *elastic.Client, t *testing.T) {
-	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	ctx, done := context.WithTimeout(t.Context(), time.Second*30)
 	defer done()
 
 	m := outputFromConf(t, `
@@ -197,7 +197,7 @@ sniff: false
 }
 
 func testElasticParallelWrites(urls []string, client *elastic.Client, t *testing.T) {
-	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	ctx, done := context.WithTimeout(t.Context(), time.Second*30)
 	defer done()
 
 	m := outputFromConf(t, `
@@ -256,7 +256,7 @@ sniff: false
 }
 
 func testElasticErrorHandling(urls []string, client *elastic.Client, t *testing.T) {
-	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	ctx, done := context.WithTimeout(t.Context(), time.Second*30)
 	defer done()
 
 	m := outputFromConf(t, `
@@ -284,7 +284,7 @@ sniff: false
 }
 
 func testElasticConnect(urls []string, client *elastic.Client, t *testing.T) {
-	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	ctx, done := context.WithTimeout(t.Context(), time.Second*30)
 	defer done()
 
 	m := outputFromConf(t, `
@@ -331,7 +331,7 @@ sniff: false
 }
 
 func testElasticIndexInterpolation(urls []string, client *elastic.Client, t *testing.T) {
-	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	ctx, done := context.WithTimeout(t.Context(), time.Second*30)
 	defer done()
 
 	m := outputFromConf(t, `
@@ -377,7 +377,7 @@ sniff: false
 }
 
 func testElasticBatch(urls []string, client *elastic.Client, t *testing.T) {
-	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	ctx, done := context.WithTimeout(t.Context(), time.Second*30)
 	defer done()
 
 	m := outputFromConf(t, `
@@ -424,7 +424,7 @@ sniff: false
 }
 
 func testElasticBatchDelete(urls []string, client *elastic.Client, t *testing.T) {
-	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	ctx, done := context.WithTimeout(t.Context(), time.Second*30)
 	defer done()
 
 	m := outputFromConf(t, `
@@ -499,7 +499,7 @@ sniff: false
 }
 
 func testElasticBatchIDCollision(urls []string, client *elastic.Client, t *testing.T) {
-	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	ctx, done := context.WithTimeout(t.Context(), time.Second*30)
 	defer done()
 
 	m := outputFromConf(t, `

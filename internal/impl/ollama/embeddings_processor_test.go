@@ -9,7 +9,6 @@
 package ollama
 
 import (
-	"context"
 	"net/http"
 	"net/url"
 	"testing"
@@ -39,7 +38,7 @@ func createEmbeddingsProcessorForTest(t *testing.T, addr string) *ollamaEmbeddin
 func TestOllamaEmbeddingsIntegration(t *testing.T) {
 	integration.CheckSkip(t)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	ollamaContainer, err := ollama.Run(ctx, "ollama/ollama:0.2.5")
 	assert.NoError(t, err)
 	defer func() {
@@ -50,7 +49,7 @@ func TestOllamaEmbeddingsIntegration(t *testing.T) {
 	addr, err := ollamaContainer.ConnectionString(ctx)
 	assert.NoError(t, err)
 	proc := createEmbeddingsProcessorForTest(t, addr)
-	err = proc.pullModel(context.Background())
+	err = proc.pullModel(t.Context())
 	assert.NoError(t, err)
 	msg := service.NewMessage([]byte("Redpanda is the fastest and best streaming platform"))
 	batch, err := proc.Process(ctx, msg)

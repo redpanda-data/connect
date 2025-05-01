@@ -116,16 +116,16 @@ func SetupSnowflakeStream(t *testing.T, outputConfiguration string) (func([]map[
 	require.NoError(t, err)
 	license.InjectTestService(stream.Resources())
 	t.Cleanup(func() {
-		err := stream.Stop(context.Background())
+		err := stream.Stop(t.Context())
 		require.NoError(t, err)
 	})
 	return func(b []map[string]any) error {
-		return produce(context.Background(), Batch(b))
+		return produce(t.Context(), Batch(b))
 	}, stream
 }
 
 func RunStreamInBackground(t *testing.T, stream *service.Stream) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -146,7 +146,7 @@ func RunSQLQuery(t *testing.T, stream *service.Stream, sql string) [][]string {
 	require.True(t, ok)
 	client, ok := resource.(*streaming.SnowflakeRestClient)
 	require.True(t, ok)
-	resp, err := client.RunSQL(context.Background(), streaming.RunSQLRequest{
+	resp, err := client.RunSQL(t.Context(), streaming.RunSQLRequest{
 		Statement: ReplaceConfig(sql),
 		Database:  config.db,
 		Schema:    config.schema,

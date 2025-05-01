@@ -15,7 +15,6 @@
 package avro
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -88,7 +87,7 @@ schema: |
 			proc, err := newAvroFromConfig(conf, service.MockResources())
 			require.NoError(t, err)
 
-			msgs, err := proc.Process(context.Background(), service.NewMessage([]byte(test.input)))
+			msgs, err := proc.Process(t.Context(), service.NewMessage([]byte(test.input)))
 			require.NoError(t, err)
 			require.Len(t, msgs, 1)
 
@@ -172,7 +171,7 @@ schema_path: %v
 			proc, err := newAvroFromConfig(conf, service.MockResources())
 			require.NoError(t, err)
 
-			msgs, err := proc.Process(context.Background(), service.NewMessage([]byte(test.input)))
+			msgs, err := proc.Process(t.Context(), service.NewMessage([]byte(test.input)))
 			require.NoError(t, err)
 			require.Len(t, msgs, 1)
 

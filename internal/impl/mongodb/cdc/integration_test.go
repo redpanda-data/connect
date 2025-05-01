@@ -42,7 +42,7 @@ type streamHelper struct {
 
 func (s *streamHelper) Run(t *testing.T) {
 	stream := s.makeStream(t)
-	require.NoError(t, stream.Run(context.Background()))
+	require.NoError(t, stream.Run(t.Context()))
 }
 
 func (s *streamHelper) RunAsync(t *testing.T) func() {
@@ -51,7 +51,7 @@ func (s *streamHelper) RunAsync(t *testing.T) func() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		require.NoError(t, stream.Run(context.Background()))
+		require.NoError(t, stream.Run(t.Context()))
 	}()
 	return wg.Wait
 
@@ -59,12 +59,12 @@ func (s *streamHelper) RunAsync(t *testing.T) func() {
 
 func (s *streamHelper) RunWithErrors(t *testing.T) {
 	stream := s.makeStream(t)
-	require.Error(t, stream.Run(context.Background()))
+	require.Error(t, stream.Run(t.Context()))
 }
 
 func (s *streamHelper) Stop(t *testing.T) {
 	stream := s.getStream(t)
-	require.NoError(t, stream.Stop(context.Background()))
+	require.NoError(t, stream.Stop(t.Context()))
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	require.Same(t, s.current, stream)
@@ -112,12 +112,12 @@ type databaseHelper struct {
 }
 
 func (d *databaseHelper) CreateCollection(t *testing.T, collection string, opts ...options.Lister[options.CreateCollectionOptions]) {
-	err := d.Database.CreateCollection(context.Background(), collection, opts...)
+	err := d.Database.CreateCollection(t.Context(), collection, opts...)
 	require.NoError(t, err)
 }
 
 func (d *databaseHelper) FindOne(t *testing.T, collection string, id any) (doc any) {
-	r := d.Collection(collection).FindOne(context.Background(), bson.M{"_id": id})
+	r := d.Collection(collection).FindOne(t.Context(), bson.M{"_id": id})
 	require.NoError(t, r.Err())
 	require.NoError(t, r.Decode(&doc))
 	return
@@ -131,27 +131,27 @@ func (d *databaseHelper) FindOneJSON(t *testing.T, collection string, id any) st
 }
 
 func (d *databaseHelper) InsertOne(t *testing.T, collection string, doc any) {
-	_, err := d.Collection(collection).InsertOne(context.Background(), doc)
+	_, err := d.Collection(collection).InsertOne(t.Context(), doc)
 	require.NoError(t, err)
 }
 
 func (d *databaseHelper) InsertMany(t *testing.T, collection string, docs ...any) {
-	_, err := d.Collection(collection).InsertMany(context.Background(), docs)
+	_, err := d.Collection(collection).InsertMany(t.Context(), docs)
 	require.NoError(t, err)
 }
 
 func (d *databaseHelper) ReplaceOne(t *testing.T, collection string, id, doc any) {
-	_, err := d.Collection(collection).ReplaceOne(context.Background(), bson.M{"_id": id}, doc)
+	_, err := d.Collection(collection).ReplaceOne(t.Context(), bson.M{"_id": id}, doc)
 	require.NoError(t, err)
 }
 
 func (d *databaseHelper) UpdateOne(t *testing.T, collection string, id, doc any) {
-	_, err := d.Collection(collection).UpdateOne(context.Background(), bson.M{"_id": id}, doc)
+	_, err := d.Collection(collection).UpdateOne(t.Context(), bson.M{"_id": id}, doc)
 	require.NoError(t, err)
 }
 
 func (d *databaseHelper) DeleteByID(t *testing.T, collection string, id any) {
-	_, err := d.Collection(collection).DeleteOne(context.Background(), bson.M{"_id": id})
+	_, err := d.Collection(collection).DeleteOne(t.Context(), bson.M{"_id": id})
 	require.NoError(t, err)
 }
 
@@ -259,19 +259,19 @@ func setup(t *testing.T, template string, opts ...setupOption) (*streamHelper, *
 	integration.CheckSkip(t)
 	t.Helper()
 	container, err := mongocontainer.Run(
-		context.Background(),
+		t.Context(),
 		"mongo:7",
 		mongocontainer.WithUsername("mongoadmin"),
 		mongocontainer.WithPassword("secret"),
 		mongocontainer.WithReplicaSet("rs0"),
 	)
 	t.Cleanup(func() {
-		if err := container.Terminate(context.Background()); err != nil {
+		if err := container.Terminate(t.Context()); err != nil {
 			t.Fatal("unable to shutdown container", err)
 		}
 	})
 	require.NoError(t, err)
-	uri, err := container.ConnectionString(context.Background())
+	uri, err := container.ConnectionString(t.Context())
 	require.NoError(t, err)
 	// We need a directConnection because we don't have all the right networking setup
 	// for a proper replica set.
@@ -282,7 +282,7 @@ func setup(t *testing.T, template string, opts ...setupOption) (*streamHelper, *
 		SetServerSelectionTimeout(10 * time.Second).
 		ApplyURI(uri))
 	require.NoError(t, err)
-	require.NoError(t, mongoClient.Ping(context.Background(), nil))
+	require.NoError(t, mongoClient.Ping(t.Context(), nil))
 	for _, opt := range opts {
 		require.NoError(t, opt(mongoClient))
 	}

@@ -28,7 +28,7 @@ import (
 )
 
 func TestHambaAvroReferences(t *testing.T) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*10)
+	tCtx, done := context.WithTimeout(t.Context(), time.Second*10)
 	defer done()
 
 	rootSchema := `[
@@ -161,7 +161,7 @@ func TestHambaAvroReferences(t *testing.T) {
 }
 
 func TestHambaDecodeAvroUnions(t *testing.T) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*10)
+	tCtx, done := context.WithTimeout(t.Context(), time.Second*10)
 	defer done()
 
 	rootSchema := `{

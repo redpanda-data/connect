@@ -16,7 +16,6 @@ package aws
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"strconv"
 	"testing"
@@ -84,7 +83,7 @@ credentials:
 `, endpoint), nil)
 	require.NoError(t, err)
 
-	conf, err := config.LoadDefaultConfig(context.TODO(),
+	conf, err := config.LoadDefaultConfig(t.Context(),
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("xxxxx", "xxxxx", "xxxxx")),
 		config.WithRegion("us-east-1"),
 	)
@@ -94,7 +93,7 @@ credentials:
 	// bootstrap kinesis
 	client := kinesis.NewFromConfig(conf)
 	if err := pool.Retry(func() error {
-		_, err := client.CreateStream(context.TODO(), &kinesis.CreateStreamInput{
+		_, err := client.CreateStream(t.Context(), &kinesis.CreateStreamInput{
 			ShardCount: aws.Int32(1),
 			StreamName: aws.String("foo"),
 		})
@@ -122,11 +121,11 @@ func testKinesisConnect(t *testing.T, c koConfig, client *kinesis.Client) {
 		t.Fatal(err)
 	}
 
-	if err := r.Connect(context.Background()); err != nil {
+	if err := r.Connect(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	defer func() {
-		require.NoError(t, r.Close(context.Background()))
+		require.NoError(t, r.Close(t.Context()))
 	}()
 
 	records := [][]byte{
@@ -140,11 +139,11 @@ func testKinesisConnect(t *testing.T, c koConfig, client *kinesis.Client) {
 		msg = append(msg, service.NewMessage(record))
 	}
 
-	if err := r.WriteBatch(context.Background(), msg); err != nil {
+	if err := r.WriteBatch(t.Context(), msg); err != nil {
 		t.Fatal(err)
 	}
 
-	iterator, err := client.GetShardIterator(context.TODO(), &kinesis.GetShardIteratorInput{
+	iterator, err := client.GetShardIterator(t.Context(), &kinesis.GetShardIteratorInput{
 		ShardId:           aws.String("shardId-000000000000"),
 		ShardIteratorType: types.ShardIteratorTypeTrimHorizon,
 		StreamName:        aws.String(c.Stream),
@@ -153,7 +152,7 @@ func testKinesisConnect(t *testing.T, c koConfig, client *kinesis.Client) {
 		t.Fatal(err)
 	}
 
-	out, err := client.GetRecords(context.TODO(), &kinesis.GetRecordsInput{
+	out, err := client.GetRecords(t.Context(), &kinesis.GetRecordsInput{
 		Limit:         aws.Int32(10),
 		ShardIterator: iterator.ShardIterator,
 	})
@@ -178,7 +177,7 @@ func testKinesisConnectWithInvalidStream(t *testing.T, c koConfig, client *kines
 
 	retries := 3
 	for i := 0; i < retries; i++ {
-		err := r.Connect(context.Background())
+		err := r.Connect(t.Context())
 		assert.Error(t, err)
 	}
 }

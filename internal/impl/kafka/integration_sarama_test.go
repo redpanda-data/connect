@@ -75,7 +75,7 @@ func TestIntegrationSaramaCheckpointOneLockUp(t *testing.T) {
 
 	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
-		return createKafkaTopic(context.Background(), "localhost:"+kafkaPortStr, "wcotesttopic", 20)
+		return createKafkaTopic(t.Context(), "localhost:"+kafkaPortStr, "wcotesttopic", 20)
 	}))
 
 	// When the `-timeout` flag is not set explicitly, the default is 10 minutes: https://pkg.go.dev/cmd/go#hdr-Testing_flags
@@ -85,7 +85,7 @@ func TestIntegrationSaramaCheckpointOneLockUp(t *testing.T) {
 	} else {
 		dl = time.Now().Add(time.Minute)
 	}
-	testCtx, done := context.WithTimeout(context.Background(), time.Until(dl))
+	testCtx, done := context.WithTimeout(t.Context(), time.Until(dl))
 	defer done()
 
 	writeCtx, writeDone := context.WithCancel(testCtx)
@@ -239,7 +239,7 @@ func TestIntegrationSaramaRedpanda(t *testing.T) {
 	_ = resource.Expire(900)
 
 	require.NoError(t, pool.Retry(func() error {
-		return createKafkaTopic(context.Background(), "localhost:"+kafkaPortStr, "pls_ignore_just_testing_connection", 1)
+		return createKafkaTopic(t.Context(), "localhost:"+kafkaPortStr, "pls_ignore_just_testing_connection", 1)
 	}))
 
 	template := `
@@ -505,11 +505,11 @@ topic: pls_ignore_just_testing_connection
 		if serr != nil {
 			return serr
 		}
-		defer tmpOutput.Close(context.Background())
-		if serr := tmpOutput.Connect(context.Background()); serr != nil {
+		defer tmpOutput.Close(t.Context())
+		if serr := tmpOutput.Connect(t.Context()); serr != nil {
 			return serr
 		}
-		return tmpOutput.WriteBatch(context.Background(), service.MessageBatch{
+		return tmpOutput.WriteBatch(t.Context(), service.MessageBatch{
 			service.NewMessage([]byte("foo message")),
 		})
 	}))
@@ -703,7 +703,7 @@ func TestIntegrationSaramaOutputFixedTimestamp(t *testing.T) {
 
 	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
-		return createKafkaTopic(context.Background(), "localhost:"+kafkaPortStr, "testingconnection", 1)
+		return createKafkaTopic(t.Context(), "localhost:"+kafkaPortStr, "testingconnection", 1)
 	}))
 
 	template := `

@@ -15,7 +15,6 @@
 package prometheus
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -59,7 +58,7 @@ push_url: %v
 	assert.NotNil(t, p.pusher)
 
 	go func() {
-		err := p.Close(context.Background())
+		err := p.Close(t.Context())
 		assert.NoError(t, err)
 	}()
 
@@ -93,7 +92,7 @@ push_interval: %v
 	}
 
 	go func() {
-		assert.NoError(t, p.Close(context.Background()))
+		assert.NoError(t, p.Close(t.Context()))
 	}()
 
 	// Wait for another message for the PushGateway (might not be the one sent on close)
@@ -202,7 +201,7 @@ file_output_path: %v
 
 	assert.Nil(t, p.pusher)
 
-	err := p.Close(context.Background())
+	err := p.Close(t.Context())
 	assert.NoError(t, err)
 
 	assert.FileExists(t, fPath)

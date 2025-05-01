@@ -15,7 +15,6 @@
 package couchbase_test
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -113,9 +112,9 @@ func TestIntegrationCouchbaseOutput(t *testing.T) {
 	servicePort := requireCouchbase(t)
 
 	bucket := fmt.Sprintf("testing-output-%d", time.Now().Unix())
-	require.NoError(t, createBucket(context.Background(), t, servicePort, bucket))
+	require.NoError(t, createBucket(t.Context(), t, servicePort, bucket))
 	t.Cleanup(func() {
-		require.NoError(t, removeBucket(context.Background(), t, servicePort, bucket))
+		require.NoError(t, removeBucket(t.Context(), t, servicePort, bucket))
 	})
 
 	uid := faker.UUIDHyphenated()
@@ -151,7 +150,7 @@ func getOutput(tb testing.TB, config string) service.BatchOutput {
 	require.NoError(tb, err)
 	require.NotNil(tb, output)
 
-	require.NoError(tb, output.Connect(context.Background()))
+	require.NoError(tb, output.Connect(tb.Context()))
 
 	return output
 }
@@ -167,7 +166,7 @@ content: 'root = this'
 operation: 'insert'
 `, port, bucket, username, password)
 
-	err := getOutput(t, config).WriteBatch(context.Background(), service.MessageBatch{
+	err := getOutput(t, config).WriteBatch(t.Context(), service.MessageBatch{
 		service.NewMessage([]byte(payload)),
 	})
 
@@ -185,7 +184,7 @@ content: 'root = this'
 operation: 'upsert'
 `, port, bucket, username, password)
 
-	err := getOutput(t, config).WriteBatch(context.Background(), service.MessageBatch{
+	err := getOutput(t, config).WriteBatch(t.Context(), service.MessageBatch{
 		service.NewMessage([]byte(payload)),
 	})
 
@@ -203,7 +202,7 @@ content: 'root = this'
 operation: 'replace'
 `, port, bucket, username, password)
 
-	err := getOutput(t, config).WriteBatch(context.Background(), service.MessageBatch{
+	err := getOutput(t, config).WriteBatch(t.Context(), service.MessageBatch{
 		service.NewMessage([]byte(payload)),
 	})
 
@@ -220,7 +219,7 @@ id: '${! content() }'
 operation: 'remove'
 `, port, bucket, username, password)
 
-	err := getOutput(t, config).WriteBatch(context.Background(), service.MessageBatch{
+	err := getOutput(t, config).WriteBatch(t.Context(), service.MessageBatch{
 		service.NewMessage([]byte(uid)),
 	})
 

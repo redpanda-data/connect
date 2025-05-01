@@ -107,7 +107,7 @@ func TestKafkaEnterpriseIntegration(t *testing.T) {
 	container, err := startRedpanda(t, pool, true, true)
 	require.NoError(t, err)
 
-	ctx, done := context.WithTimeout(context.Background(), time.Minute*3)
+	ctx, done := context.WithTimeout(t.Context(), time.Minute*3)
 	defer done()
 
 	t.Run("test_logs_happy", func(t *testing.T) {
@@ -375,7 +375,7 @@ func createSchema(t *testing.T, url string, subject string, schema string, refer
 	client, err := franz_sr.NewClient(franz_sr.URLs(url))
 	require.NoError(t, err)
 
-	_, err = client.CreateSchema(context.Background(), subject, franz_sr.Schema{Schema: schema, References: references})
+	_, err = client.CreateSchema(t.Context(), subject, franz_sr.Schema{Schema: schema, References: references})
 	require.NoError(t, err)
 }
 
@@ -390,7 +390,7 @@ func deleteSubject(t *testing.T, url string, subject string, hardDelete bool) {
 		deleteMode = franz_sr.HardDelete
 	}
 
-	_, err = client.DeleteSubject(context.Background(), subject, deleteMode)
+	_, err = client.DeleteSubject(t.Context(), subject, deleteMode)
 	require.NoError(t, err)
 }
 
@@ -504,7 +504,7 @@ output:
 
 			license.InjectTestService(stream.Resources())
 
-			ctx, done := context.WithTimeout(context.Background(), 3*time.Second)
+			ctx, done := context.WithTimeout(t.Context(), 3*time.Second)
 			defer done()
 
 			err = stream.Run(ctx)
@@ -606,7 +606,7 @@ output:
 
 	license.InjectTestService(stream.Resources())
 
-	ctx, done := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, done := context.WithTimeout(t.Context(), 3*time.Second)
 	defer done()
 
 	err = stream.Run(ctx)
@@ -719,7 +719,7 @@ func startRedpanda(t *testing.T, pool *dockertest.Pool, exposeBroker bool, autoc
 	})
 
 	require.NoError(t, pool.Retry(func() error {
-		ctx, done := context.WithTimeout(context.Background(), 3*time.Second)
+		ctx, done := context.WithTimeout(t.Context(), 3*time.Second)
 		defer done()
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("http://localhost:%s/v1/cluster/health_overview", resource.GetPort("9644/tcp")), nil)
@@ -771,7 +771,7 @@ func createTopicWithACLs(t *testing.T, brokerAddr, topic, retentionTime, princip
 	adm := kadm.NewClient(client)
 
 	configs := map[string]*string{"retention.ms": &retentionTime}
-	_, err = adm.CreateTopic(context.Background(), 1, -1, configs, topic)
+	_, err = adm.CreateTopic(t.Context(), 1, -1, configs, topic)
 	require.NoError(t, err)
 
 	updateTopicACL(t, adm, topic, principal, operation)
@@ -779,7 +779,7 @@ func createTopicWithACLs(t *testing.T, brokerAddr, topic, retentionTime, princip
 
 func updateTopicACL(t *testing.T, client *kadm.Client, topic, principal string, operation kadm.ACLOperation) {
 	builder := kadm.NewACLs().Allow(principal).AllowHosts("*").Topics(topic).ResourcePatternType(kadm.ACLPatternLiteral).Operations(operation)
-	res, err := client.CreateACLs(context.Background(), builder)
+	res, err := client.CreateACLs(t.Context(), builder)
 	require.NoError(t, err)
 	require.Len(t, res, 1)
 	assert.NoError(t, res[0].Err)
@@ -792,7 +792,7 @@ func checkTopic(t *testing.T, brokerAddr, topic, retentionTime, principal string
 
 	adm := kadm.NewClient(client)
 
-	topicConfigs, err := adm.DescribeTopicConfigs(context.Background(), topic)
+	topicConfigs, err := adm.DescribeTopicConfigs(t.Context(), topic)
 	require.NoError(t, err)
 
 	rc, err := topicConfigs.On(topic, nil)
@@ -809,7 +809,7 @@ func checkTopic(t *testing.T, brokerAddr, topic, retentionTime, principal string
 	builder := kadm.NewACLs().Topics(topic).
 		ResourcePatternType(kadm.ACLPatternLiteral).Operations(operation).Allow().Deny().AllowHosts().DenyHosts()
 
-	aclResults, err := adm.DescribeACLs(context.Background(), builder)
+	aclResults, err := adm.DescribeACLs(t.Context(), builder)
 	require.NoError(t, err)
 	require.Len(t, aclResults[0].Described, 1)
 	require.NoError(t, aclResults[0].Err)
@@ -858,12 +858,12 @@ output:
 	require.NoError(t, err)
 
 	go func() {
-		err = stream.Run(context.Background())
+		err = stream.Run(t.Context())
 		require.NoError(t, err)
 	}()
 
 	for range count {
-		ctx, done := context.WithTimeout(context.Background(), 3*time.Second)
+		ctx, done := context.WithTimeout(t.Context(), 3*time.Second)
 		require.NoError(t, inFunc(ctx, service.NewMessage([]byte(message))))
 		done()
 
@@ -922,7 +922,7 @@ output:
 	stream, err := streamBuilder.Build()
 	require.NoError(t, err)
 
-	ctx, done := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, done := context.WithTimeout(t.Context(), 5*time.Second)
 	t.Cleanup(done)
 
 	go func() {
@@ -1012,7 +1012,7 @@ output:
 	// Run stream in the background and shut it down when the test is finished
 	closeChan := make(chan struct{})
 	go func() {
-		err = stream.Run(context.Background())
+		err = stream.Run(t.Context())
 		require.NoError(t, err)
 
 		t.Log("Migrator pipeline shut down")
@@ -1214,7 +1214,7 @@ output:
 			// Run stream in the background.
 			migratorCloseChan := make(chan struct{})
 			go func() {
-				err = stream.Run(context.Background())
+				err = stream.Run(t.Context())
 				require.NoError(t, err)
 
 				t.Log("redpanda_migrator_offsets pipeline shut down")
@@ -1244,13 +1244,13 @@ output:
 			})
 
 			adm := kadm.NewClient(client)
-			offsets, err := adm.FetchOffsets(context.Background(), dummyConsumerGroup)
+			offsets, err := adm.FetchOffsets(t.Context(), dummyConsumerGroup)
 			currentCGOffset, ok := offsets.Lookup(dummyTopic, 0)
 			require.True(t, ok)
 
 			endOffset := int64(messageCount)
 			if test.cgAtEndOffset {
-				offsets, err := adm.ListEndOffsets(context.Background(), dummyTopic)
+				offsets, err := adm.ListEndOffsets(t.Context(), dummyTopic)
 				require.NoError(t, err)
 				o, ok := offsets.Lookup(dummyTopic, 0)
 				require.True(t, ok)
@@ -1317,7 +1317,7 @@ output:
 
 		// Run stream in the background.
 		go func() {
-			err = stream.Run(context.Background())
+			err = stream.Run(t.Context())
 			require.NoError(t, err)
 
 			t.Log("redpanda_migrator_offsets pipeline shut down")
@@ -1376,12 +1376,12 @@ func fetchRecordKeys(t *testing.T, brokerAddress, topic, consumerGroup string, c
 
 	defer func() {
 		// We need to manually trigger a commit before closing the client because the default is to autocommit every 5s
-		err := client.CommitUncommittedOffsets(context.Background())
+		err := client.CommitUncommittedOffsets(t.Context())
 		require.NoError(t, err)
 		client.Close()
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 1*time.Second)
 	defer cancel()
 	fetches := client.PollRecords(ctx, count)
 	require.False(t, fetches.IsClientClosed())
@@ -1472,20 +1472,20 @@ func TestRedpandaMigratorConsumerGroupConsistencyIntegration(t *testing.T) {
 
 		adm := kadm.NewClient(client)
 
-		topics, err := adm.ListTopics(context.Background(), []string{dummyTopic}...)
+		topics, err := adm.ListTopics(t.Context(), []string{dummyTopic}...)
 		require.NoError(t, err)
 		if !topics.Has(dummyTopic) {
 			return false
 		}
 
-		groups, err := adm.DescribeGroups(context.Background(), []string{dummyConsumerGroup}...)
+		groups, err := adm.DescribeGroups(t.Context(), []string{dummyConsumerGroup}...)
 		require.NoError(t, err)
 		if groups.Error() != nil || !slices.Contains(groups.Names(), dummyConsumerGroup) {
 			t.Logf("Consumer group %q doesn't exist yet...", dummyConsumerGroup)
 			return false
 		}
 
-		groupLag, err := adm.Lag(context.Background(), dummyConsumerGroup)
+		groupLag, err := adm.Lag(t.Context(), dummyConsumerGroup)
 		require.NoError(t, err)
 		require.NoError(t, groupLag.Error())
 

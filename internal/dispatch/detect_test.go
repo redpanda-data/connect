@@ -24,12 +24,12 @@ import (
 func TestDispatchNA(t *testing.T) {
 	// Just ensures we don't panic
 
-	ctx := context.Background()
+	ctx := t.Context()
 	TriggerSignal(ctx)
 	TriggerSignal(ctx)
 	TriggerSignal(ctx)
 
-	ctx = context.TODO()
+	ctx = t.Context()
 	TriggerSignal(ctx)
 	TriggerSignal(ctx)
 	TriggerSignal(ctx)
@@ -46,7 +46,7 @@ func TestDispatchNA(t *testing.T) {
 func TestDispatchHappy(t *testing.T) {
 	seen := []string{}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	ctx = CtxOnTriggerSignal(ctx, func() {
 		seen = append(seen, "root")
 	})

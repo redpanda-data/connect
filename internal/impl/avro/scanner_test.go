@@ -79,20 +79,20 @@ test:
 			require.NoError(t, err)
 
 			for _, s := range test.output {
-				m, aFn, err := strm.NextBatch(context.Background())
+				m, aFn, err := strm.NextBatch(t.Context())
 				require.NoError(t, err)
 				require.Len(t, m, 1)
 				mBytes, err := m[0].AsBytes()
 				require.NoError(t, err)
 				assert.JSONEq(t, s, string(mBytes))
-				require.NoError(t, aFn(context.Background(), nil))
+				require.NoError(t, aFn(t.Context(), nil))
 				assert.False(t, acked)
 			}
 
-			_, _, err = strm.NextBatch(context.Background())
+			_, _, err = strm.NextBatch(t.Context())
 			require.Equal(t, io.EOF, err)
 
-			require.NoError(t, strm.Close(context.Background()))
+			require.NoError(t, strm.Close(t.Context()))
 			assert.True(t, acked)
 		})
 	}

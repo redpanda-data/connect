@@ -110,7 +110,7 @@ url: %s
 	reader, err := inputFromParsed(inputConf, mgr)
 	require.NoError(t, err)
 
-	ctx, done := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, done := context.WithTimeout(t.Context(), 1*time.Second)
 	t.Cleanup(done)
 	err = reader.Connect(ctx)
 	require.NoError(t, err)

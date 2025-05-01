@@ -27,7 +27,7 @@ import (
 )
 
 func TestCaptureProcessor(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 
 	spec := newCaptureProcessorConfig()
@@ -77,7 +77,7 @@ func TestCaptureProcessor(t *testing.T) {
 }
 
 func TestCaptureProcessor_Sync(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 
 	spec := newCaptureProcessorConfig()
@@ -124,7 +124,7 @@ func TestCaptureProcessor_Sync(t *testing.T) {
 }
 
 func TestCaptureProcessor_InvalidMessage(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 
 	spec := newCaptureProcessorConfig()
@@ -154,7 +154,7 @@ func TestCaptureProcessor_InvalidMessage(t *testing.T) {
 // TestCaptureProcessor_NoSampling checks that sentry capture is disabled if
 // sampling rate is 0.
 func TestCaptureProcessor_NoSampling(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 
 	spec := newCaptureProcessorConfig()
@@ -189,7 +189,7 @@ func TestCaptureProcessor_NoSampling(t *testing.T) {
 }
 
 func TestCaptureProcessor_FlushOnClose(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 
 	d, err := time.ParseDuration("3s")
@@ -219,7 +219,7 @@ func TestCaptureProcessor_FlushOnClose(t *testing.T) {
 }
 
 func TestCaptureProcessor_FlushFailed(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 
 	spec := newCaptureProcessorConfig()
@@ -248,7 +248,7 @@ func TestCaptureProcessor_FlushFailed(t *testing.T) {
 // TestCaptureProcessor_EmptyContext checks that deleting context in mapping
 // results in empty context on sentry event.
 func TestCaptureProcessor_EmptyContext(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 
 	spec := newCaptureProcessorConfig()
@@ -294,7 +294,7 @@ func TestCaptureProcessor_EmptyContext(t *testing.T) {
 // TestCaptureProcessor_NoContext checks that leaving context config unset
 // results in empty context on sentry event.
 func TestCaptureProcessor_NoContext(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 
 	spec := newCaptureProcessorConfig()
@@ -337,7 +337,7 @@ func TestCaptureProcessor_NoContext(t *testing.T) {
 }
 
 func TestCaptureProcessor_NilContextValue(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 
 	spec := newCaptureProcessorConfig()
@@ -382,7 +382,7 @@ func TestCaptureProcessor_NilContextValue(t *testing.T) {
 }
 
 func TestCaptureProcessor_InvalidContext(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 
 	spec := newCaptureProcessorConfig()
@@ -412,7 +412,7 @@ func TestCaptureProcessor_InvalidContext(t *testing.T) {
 }
 
 func TestCaptureProcessor_ContextNotStructured(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 
 	spec := newCaptureProcessorConfig()
@@ -442,7 +442,7 @@ func TestCaptureProcessor_ContextNotStructured(t *testing.T) {
 }
 
 func TestCaptureProcessor_ContextNotMap(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 
 	spec := newCaptureProcessorConfig()
@@ -472,7 +472,7 @@ func TestCaptureProcessor_ContextNotMap(t *testing.T) {
 }
 
 func TestCaptureProcessor_ContextValueNotMap(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 
 	spec := newCaptureProcessorConfig()
@@ -502,7 +502,7 @@ func TestCaptureProcessor_ContextValueNotMap(t *testing.T) {
 }
 
 func TestCaptureProcessor_InvalidTag(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 
 	spec := newCaptureProcessorConfig()

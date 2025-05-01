@@ -15,7 +15,6 @@
 package awk
 
 import (
-	"context"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -42,7 +41,7 @@ program: "{ print foo_bar }"
 `)
 	require.NoError(t, err)
 
-	_, err = a.Process(context.Background(), service.NewMessage([]byte("this is bad json")))
+	_, err = a.Process(t.Context(), service.NewMessage([]byte("this is bad json")))
 	require.Error(t, err)
 
 	_, err = testAwk(`
@@ -63,7 +62,7 @@ program: "{ exit 1; print foo }"
 `)
 	require.NoError(t, err)
 
-	_, err = a.Process(context.Background(), service.NewMessage([]byte("this will fail")))
+	_, err = a.Process(t.Context(), service.NewMessage([]byte("this will fail")))
 	require.Error(t, err)
 }
 
@@ -74,7 +73,7 @@ program: '{ print timestamp_unix("this isnt a date string") }'
 `)
 	require.NoError(t, err)
 
-	_, err = a.Process(context.Background(), service.NewMessage([]byte("this is a value")))
+	_, err = a.Process(t.Context(), service.NewMessage([]byte("this is a value")))
 	require.Error(t, err)
 }
 
@@ -568,7 +567,7 @@ program: %v
 			msg.MetaSetMut(k, v)
 		}
 
-		msgs, err := a.Process(context.Background(), msg)
+		msgs, err := a.Process(t.Context(), msg)
 		if err != nil {
 			if test.errContains != "" {
 				assert.ErrorContains(t, err, test.errContains, "Test '%s' failed", test.name)

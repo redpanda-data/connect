@@ -73,7 +73,7 @@ root."-".S = json("content")
 		service.NewMessage([]byte(`{"content":"bar stuff","id":"bar"}`)),
 	}
 
-	resBatch, err := db.ProcessBatch(context.Background(), reqBatch)
+	resBatch, err := db.ProcessBatch(t.Context(), reqBatch)
 	require.NoError(t, err)
 	assertBatchMatches(t, reqBatch, resBatch)
 
@@ -139,7 +139,7 @@ root."-".S = json("id")
 		service.NewMessage([]byte(`{"meow":{"S":"meow1"},"meow2":{"S":"meow2"}}`)),
 	}
 
-	resBatch, err := db.ProcessBatch(context.Background(), reqBatch)
+	resBatch, err := db.ProcessBatch(t.Context(), reqBatch)
 	require.NoError(t, err)
 	assertBatchMatches(t, expBatch, resBatch)
 
@@ -212,7 +212,7 @@ root."-".S = json("content")
 		service.NewMessage([]byte(`{"content":"baz stuff","id":"baz"}`)),
 	}
 
-	resBatch, err := db.ProcessBatch(context.Background(), reqBatch)
+	resBatch, err := db.ProcessBatch(t.Context(), reqBatch)
 	require.NoError(t, err)
 	assertBatchMatches(t, reqBatch, resBatch)
 

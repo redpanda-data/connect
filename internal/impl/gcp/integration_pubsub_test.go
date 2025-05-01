@@ -59,7 +59,7 @@ func TestIntegrationGCPPubSub(t *testing.T) {
 
 	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 		defer cancel()
 		client, err := pubsub.NewClient(ctx, dummyProject)
 		if err != nil {
@@ -203,7 +203,7 @@ input:
 				go func() {
 					defer wg.Done()
 
-					ctx, done := context.WithTimeout(context.Background(), 1*time.Second)
+					ctx, done := context.WithTimeout(t.Context(), 1*time.Second)
 					defer done()
 
 					msg := service.NewMessage([]byte("hello world!"))
@@ -221,7 +221,7 @@ input:
 					assert.NoError(t, stream.StopWithin(1*time.Second))
 				}()
 
-				require.NoError(t, stream.Run(context.Background()))
+				require.NoError(t, stream.Run(t.Context()))
 
 				wg.Wait()
 			})

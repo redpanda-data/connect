@@ -16,7 +16,6 @@ package parquet
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"testing"
 
@@ -157,7 +156,7 @@ func TestParquetDecodeProcessor(t *testing.T) {
 
 			reader := &parquetDecodeProcessor{}
 
-			readerResBatch, err := reader.Process(context.Background(), service.NewMessage(buf.Bytes()))
+			readerResBatch, err := reader.Process(t.Context(), service.NewMessage(buf.Bytes()))
 			require.NoError(t, err)
 
 			require.Len(t, readerResBatch, 1)
@@ -185,7 +184,7 @@ func TestParquetDecodeProcessor(t *testing.T) {
 
 		reader := &parquetDecodeProcessor{}
 
-		readerResBatch, err := reader.Process(context.Background(), service.NewMessage(buf.Bytes()))
+		readerResBatch, err := reader.Process(t.Context(), service.NewMessage(buf.Bytes()))
 		require.NoError(t, err)
 		require.Len(t, readerResBatch, len(expected))
 
@@ -227,7 +226,7 @@ func TestDecodeCompressionStringParsing(t *testing.T) {
 
 	reader := &parquetDecodeProcessor{}
 
-	readerResBatch, err := reader.Process(context.Background(), service.NewMessage(buf.Bytes()))
+	readerResBatch, err := reader.Process(t.Context(), service.NewMessage(buf.Bytes()))
 	require.NoError(t, err)
 
 	require.Len(t, readerResBatch, 1)
@@ -264,7 +263,7 @@ func TestDecodeCompression(t *testing.T) {
 
 	reader := &parquetDecodeProcessor{}
 
-	readerResBatch, err := reader.Process(context.Background(), service.NewMessage(bufCompressed.Bytes()))
+	readerResBatch, err := reader.Process(t.Context(), service.NewMessage(bufCompressed.Bytes()))
 	require.NoError(t, err)
 
 	require.Len(t, readerResBatch, 1)

@@ -76,7 +76,7 @@ func TestIntegrationAzure(t *testing.T) {
 			return err
 		}
 
-		ctx, done := context.WithTimeout(context.Background(), 1*time.Second)
+		ctx, done := context.WithTimeout(t.Context(), 1*time.Second)
 		defer done()
 
 		if _, err = client.NewListContainersPager(nil).NextPage(ctx); err != nil {
@@ -200,7 +200,7 @@ input:
 		client, err := azblob.NewClientFromConnectionString(connString, nil)
 		require.NoError(t, err)
 
-		ctx, done := context.WithTimeout(context.Background(), 1*time.Second)
+		ctx, done := context.WithTimeout(t.Context(), 1*time.Second)
 		defer done()
 
 		file := path.Join(dummyPrefix, dummyFile)
@@ -445,7 +445,7 @@ input:
 		dummyUUID, err := uuid.NewV4()
 		require.NoError(t, err)
 
-		ctx, done := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, done := context.WithTimeout(t.Context(), 30*time.Second)
 		t.Cleanup(done)
 
 		database := fmt.Sprintf("%s-%s", dummyDatabase, dummyUUID)

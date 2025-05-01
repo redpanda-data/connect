@@ -15,7 +15,6 @@
 package redpanda
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -80,12 +79,12 @@ func testDataTransformProcessorSerial(t *testing.T, wasm []byte) {
 	proc, err := newDataTransformProcessor(wasm, defaultConfig(), service.MockResources())
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		require.NoError(t, proc.Close(context.Background()))
+		require.NoError(t, proc.Close(t.Context()))
 	})
 
 	for i := 0; i < 1000; i++ {
 		inMsg := service.NewMessage([]byte(`hello world`))
-		outBatches, err := proc.ProcessBatch(context.Background(), service.MessageBatch{inMsg})
+		outBatches, err := proc.ProcessBatch(t.Context(), service.MessageBatch{inMsg})
 		require.NoError(t, err)
 
 		require.Len(t, outBatches, 1)
@@ -122,7 +121,7 @@ func testDataTransformProcessorKeys(t *testing.T, wasm []byte) {
 	require.NoError(t, err)
 	inMsg := service.NewMessage([]byte(`hello world`))
 	inMsg.MetaSetMut("example_input_key", "foobar")
-	outBatches, err := proc.ProcessBatch(context.Background(), service.MessageBatch{inMsg})
+	outBatches, err := proc.ProcessBatch(t.Context(), service.MessageBatch{inMsg})
 	require.NoError(t, err)
 	require.Len(t, outBatches, 1)
 	require.Len(t, outBatches[0], 1)
@@ -135,7 +134,7 @@ func testDataTransformProcessorParallel(t *testing.T, wasm []byte) {
 	proc, err := newDataTransformProcessor(wasm, defaultConfig(), service.MockResources())
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		require.NoError(t, proc.Close(context.Background()))
+		require.NoError(t, proc.Close(t.Context()))
 	})
 
 	tStarted := time.Now()
@@ -150,7 +149,7 @@ func testDataTransformProcessorParallel(t *testing.T, wasm []byte) {
 				iters++
 				exp := fmt.Sprintf("hello world %v:%v", id, iters)
 				inMsg := service.NewMessage([]byte(exp))
-				outBatches, err := proc.ProcessBatch(context.Background(), service.MessageBatch{inMsg})
+				outBatches, err := proc.ProcessBatch(t.Context(), service.MessageBatch{inMsg})
 				require.NoError(t, err)
 
 				require.Len(t, outBatches, 1)
@@ -170,7 +169,7 @@ func BenchmarkRedpandaDataTransforms(b *testing.B) {
 	proc, err := newDataTransformProcessor(wasm, defaultConfig(), service.MockResources())
 	require.NoError(b, err)
 	b.Cleanup(func() {
-		require.NoError(b, proc.Close(context.Background()))
+		require.NoError(b, proc.Close(b.Context()))
 	})
 
 	b.ResetTimer()
@@ -179,7 +178,7 @@ func BenchmarkRedpandaDataTransforms(b *testing.B) {
 	inMsg := service.NewMessage([]byte(`hello world`))
 
 	for i := 0; i < b.N; i++ {
-		outBatches, err := proc.ProcessBatch(context.Background(), service.MessageBatch{inMsg.Copy()})
+		outBatches, err := proc.ProcessBatch(b.Context(), service.MessageBatch{inMsg.Copy()})
 		require.NoError(b, err)
 
 		require.Len(b, outBatches, 1)

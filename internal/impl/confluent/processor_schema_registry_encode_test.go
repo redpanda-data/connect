@@ -15,7 +15,6 @@
 package confluent
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -107,7 +106,7 @@ subject: foo
 
 			e, err := newSchemaRegistryEncoderFromConfig(conf, service.MockResources())
 			if err == nil {
-				_ = e.Close(context.Background())
+				_ = e.Close(t.Context())
 			}
 			if test.errContains == "" {
 				require.NoError(t, err)
@@ -174,7 +173,7 @@ func TestSchemaRegistryEncodeAvro(t *testing.T) {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			outBatches, err := encoder.ProcessBatch(
-				context.Background(),
+				t.Context(),
 				service.MessageBatch{service.NewMessage([]byte(test.input))},
 			)
 			require.NoError(t, err)
@@ -195,7 +194,7 @@ func TestSchemaRegistryEncodeAvro(t *testing.T) {
 		})
 	}
 
-	require.NoError(t, encoder.Close(context.Background()))
+	require.NoError(t, encoder.Close(t.Context()))
 	encoder.cacheMut.Lock()
 	assert.Empty(t, encoder.schemas)
 	encoder.cacheMut.Unlock()
@@ -256,7 +255,7 @@ func TestSchemaRegistryEncodeAvroRawJSON(t *testing.T) {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			outBatches, err := encoder.ProcessBatch(
-				context.Background(),
+				t.Context(),
 				service.MessageBatch{service.NewMessage([]byte(test.input))},
 			)
 			require.NoError(t, err)
@@ -277,7 +276,7 @@ func TestSchemaRegistryEncodeAvroRawJSON(t *testing.T) {
 		})
 	}
 
-	require.NoError(t, encoder.Close(context.Background()))
+	require.NoError(t, encoder.Close(t.Context()))
 	encoder.cacheMut.Lock()
 	assert.Empty(t, encoder.schemas)
 	encoder.cacheMut.Unlock()
@@ -333,7 +332,7 @@ func TestSchemaRegistryEncodeAvroLogicalTypes(t *testing.T) {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			outBatches, err := encoder.ProcessBatch(
-				context.Background(),
+				t.Context(),
 				service.MessageBatch{service.NewMessage([]byte(test.input))},
 			)
 			require.NoError(t, err)
@@ -354,7 +353,7 @@ func TestSchemaRegistryEncodeAvroLogicalTypes(t *testing.T) {
 		})
 	}
 
-	require.NoError(t, encoder.Close(context.Background()))
+	require.NoError(t, encoder.Close(t.Context()))
 	encoder.cacheMut.Lock()
 	assert.Empty(t, encoder.schemas)
 	encoder.cacheMut.Unlock()
@@ -410,7 +409,7 @@ func TestSchemaRegistryEncodeAvroRawJSONLogicalTypes(t *testing.T) {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			outBatches, err := encoder.ProcessBatch(
-				context.Background(),
+				t.Context(),
 				service.MessageBatch{service.NewMessage([]byte(test.input))},
 			)
 			require.NoError(t, err)
@@ -431,7 +430,7 @@ func TestSchemaRegistryEncodeAvroRawJSONLogicalTypes(t *testing.T) {
 		})
 	}
 
-	require.NoError(t, encoder.Close(context.Background()))
+	require.NoError(t, encoder.Close(t.Context()))
 	encoder.cacheMut.Lock()
 	assert.Empty(t, encoder.schemas)
 	encoder.cacheMut.Unlock()
@@ -447,7 +446,7 @@ func TestSchemaRegistryEncodeClearExpired(t *testing.T) {
 
 	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, false, time.Minute*10, time.Minute, service.MockResources())
 	require.NoError(t, err)
-	require.NoError(t, encoder.Close(context.Background()))
+	require.NoError(t, encoder.Close(t.Context()))
 
 	tStale := time.Now().Add(-time.Hour).Unix()
 	tNotStale := time.Now().Unix()
@@ -508,7 +507,7 @@ func TestSchemaRegistryEncodeRefresh(t *testing.T) {
 
 	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, false, time.Minute*10, time.Minute, service.MockResources())
 	require.NoError(t, err)
-	require.NoError(t, encoder.Close(context.Background()))
+	require.NoError(t, encoder.Close(t.Context()))
 
 	tStale := time.Now().Add(-time.Hour).Unix()
 	tNotStale := time.Now().Unix()
@@ -643,7 +642,7 @@ func TestSchemaRegistryEncodeJSON(t *testing.T) {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			outBatches, err := encoder.ProcessBatch(
-				context.Background(),
+				t.Context(),
 				service.MessageBatch{service.NewMessage([]byte(test.input))},
 			)
 			require.NoError(t, err)
@@ -664,7 +663,7 @@ func TestSchemaRegistryEncodeJSON(t *testing.T) {
 		})
 	}
 
-	require.NoError(t, encoder.Close(context.Background()))
+	require.NoError(t, encoder.Close(t.Context()))
 	encoder.cacheMut.Lock()
 	assert.Empty(t, encoder.schemas)
 	encoder.cacheMut.Unlock()
@@ -718,7 +717,7 @@ func TestSchemaRegistryEncodeJSONConstantRefreshes(t *testing.T) {
 			for time.Since(tStarted) <= (time.Second * 300) {
 
 				outBatches, err := encoder.ProcessBatch(
-					context.Background(),
+					t.Context(),
 					service.MessageBatch{service.NewMessage([]byte(input))},
 				)
 				require.NoError(t, err)
@@ -738,7 +737,7 @@ func TestSchemaRegistryEncodeJSONConstantRefreshes(t *testing.T) {
 
 	wg.Wait()
 
-	require.NoError(t, encoder.Close(context.Background()))
+	require.NoError(t, encoder.Close(t.Context()))
 	encoder.cacheMut.Lock()
 	assert.Empty(t, encoder.schemas)
 	encoder.cacheMut.Unlock()

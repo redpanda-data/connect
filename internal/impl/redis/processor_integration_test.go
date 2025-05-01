@@ -15,7 +15,6 @@
 package redis
 
 import (
-	"context"
 	"fmt"
 	"net/url"
 	"sort"
@@ -56,7 +55,7 @@ func TestIntegrationRedisProcessor(t *testing.T) {
 		Network: uri.Scheme,
 	})
 
-	ctx := context.Background()
+	ctx := t.Context()
 	if err = pool.Retry(func() error {
 		return client.Ping(ctx).Err()
 	}); err != nil {
@@ -130,7 +129,7 @@ keys_mapping: 'root = [ "key" ]'
 		service.NewMessage([]byte(`ignore`)),
 	}
 
-	resMsgs, response := r.ProcessBatch(context.Background(), msg)
+	resMsgs, response := r.ProcessBatch(t.Context(), msg)
 	require.NoError(t, response)
 
 	require.Len(t, resMsgs, 1)
@@ -154,7 +153,7 @@ args_mapping: 'root = [ "foo*" ]'
 	r, err := newRedisProcFromConfig(conf, service.MockResources())
 	require.NoError(t, err)
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, key := range []string{
 		"bar1", "bar2", "fooa", "foob", "baz1", "fooc",
@@ -167,7 +166,7 @@ args_mapping: 'root = [ "foo*" ]'
 		service.NewMessage([]byte(`ignore me please`)),
 	}
 
-	resMsgs, response := r.ProcessBatch(context.Background(), msg)
+	resMsgs, response := r.ProcessBatch(t.Context(), msg)
 	require.NoError(t, response)
 
 	require.Len(t, resMsgs, 1)
@@ -218,7 +217,7 @@ args_mapping: 'root = [ meta("key"), content().string() ]'
 	msg[4].MetaSet("key", "foo2")
 	msg[5].MetaSet("key", "foo2")
 
-	resMsgs, response := r.ProcessBatch(context.Background(), msg)
+	resMsgs, response := r.ProcessBatch(t.Context(), msg)
 	require.NoError(t, response)
 
 	exp := []string{
@@ -240,7 +239,7 @@ args_mapping: 'root = [ meta("key"), content().string() ]'
 		assert.Equal(t, e, string(act))
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	res, err := client.SCard(ctx, "foo1").Result()
 	if err != nil {
 		t.Fatal(err)
@@ -275,7 +274,7 @@ args_mapping: 'root = [ content().string() ]'
 		service.NewMessage([]byte(`foo2`)),
 	}
 
-	resMsgs, response := r.ProcessBatch(context.Background(), msg)
+	resMsgs, response := r.ProcessBatch(t.Context(), msg)
 	require.NoError(t, response)
 
 	exp := []string{
@@ -314,7 +313,7 @@ args_mapping: 'root = [ "incrby", this.number() ]'
 		service.NewMessage([]byte(`0`)),
 	}
 
-	resMsgs, response := r.ProcessBatch(context.Background(), msg)
+	resMsgs, response := r.ProcessBatch(t.Context(), msg)
 	require.NoError(t, response)
 
 	exp := []string{
@@ -347,7 +346,7 @@ key: foo*
 	r, err := newRedisProcFromConfig(conf, service.MockResources())
 	require.NoError(t, err)
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, key := range []string{
 		"bar1", "bar2", "fooa", "foob", "baz1", "fooc",
@@ -360,7 +359,7 @@ key: foo*
 		service.NewMessage([]byte(`ignore me please`)),
 	}
 
-	resMsgs, response := r.ProcessBatch(context.Background(), msg)
+	resMsgs, response := r.ProcessBatch(t.Context(), msg)
 	require.NoError(t, response)
 
 	require.Len(t, resMsgs, 1)
@@ -410,7 +409,7 @@ key: "${! meta(\"key\") }"
 	msg[4].MetaSet("key", "foo2")
 	msg[5].MetaSet("key", "foo2")
 
-	resMsgs, response := r.ProcessBatch(context.Background(), msg)
+	resMsgs, response := r.ProcessBatch(t.Context(), msg)
 	require.NoError(t, response)
 
 	if len(resMsgs) != 1 {
@@ -431,7 +430,7 @@ key: "${! meta(\"key\") }"
 		assert.Equal(t, e, string(act))
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	res, err := client.SCard(ctx, "foo1").Result()
 	if err != nil {
@@ -467,7 +466,7 @@ key: "${! content() }"
 		service.NewMessage([]byte(`foo2`)),
 	}
 
-	resMsgs, response := r.ProcessBatch(context.Background(), msg)
+	resMsgs, response := r.ProcessBatch(t.Context(), msg)
 	require.NoError(t, response)
 
 	if len(resMsgs) != 1 {
@@ -505,7 +504,7 @@ key: incrby
 		service.NewMessage([]byte(`0`)),
 	}
 
-	resMsgs, response := r.ProcessBatch(context.Background(), msg)
+	resMsgs, response := r.ProcessBatch(t.Context(), msg)
 	require.NoError(t, response)
 
 	exp := []string{
@@ -538,7 +537,7 @@ args_mapping: 'root = [ json("key"), json("field"), json("value") ]'
 		service.NewMessage([]byte(`{"key": "object", "field": "type", "value": "car"}`)),
 	}
 
-	resMsgs, response := r.ProcessBatch(context.Background(), msg)
+	resMsgs, response := r.ProcessBatch(t.Context(), msg)
 	require.NoError(t, response)
 
 	exp := []string{
@@ -574,7 +573,7 @@ args_mapping: 'root = [ json("key"), json("field") ]'
 		service.NewMessage([]byte(`{"key": "object", "field": "type"}`)),
 	}
 
-	resMsgs, response := r.ProcessBatch(context.Background(), msg)
+	resMsgs, response := r.ProcessBatch(t.Context(), msg)
 	require.NoError(t, response)
 
 	exp := []string{
@@ -603,7 +602,7 @@ args_mapping: 'root = [ json("key")]'
 		service.NewMessage([]byte(`{"key": "object"}`)),
 	}
 
-	resMsgs, response := r.ProcessBatch(context.Background(), msg)
+	resMsgs, response := r.ProcessBatch(t.Context(), msg)
 	require.NoError(t, response)
 
 	exp := []string{

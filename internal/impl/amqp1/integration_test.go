@@ -48,7 +48,7 @@ func TestIntegrationAMQP1(t *testing.T) {
 		assert.NoError(t, pool.Purge(resource))
 	})
 
-	ctx, done := context.WithTimeout(context.Background(), time.Minute)
+	ctx, done := context.WithTimeout(t.Context(), time.Minute)
 	defer done()
 
 	_ = resource.Expire(900)

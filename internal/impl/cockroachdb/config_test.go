@@ -15,7 +15,6 @@
 package crdb
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -45,5 +44,5 @@ options:
 	require.NoError(t, err)
 
 	assert.Equal(t, "EXPERIMENTAL CHANGEFEED FOR strm_2 WITH UPDATED, CURSOR='1637953249519902405.0000000000'", selectInput.statement)
-	require.NoError(t, selectInput.Close(context.Background()))
+	require.NoError(t, selectInput.Close(t.Context()))
 }

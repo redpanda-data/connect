@@ -9,7 +9,6 @@
 package ollama
 
 import (
-	"context"
 	"net/http"
 	"net/url"
 	"testing"
@@ -43,7 +42,7 @@ func createModerationProcessorForTest(t *testing.T, model, addr, prompt, respons
 
 func TestOllamaModerationIntegration(t *testing.T) {
 	integration.CheckSkip(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	ollamaContainer, err := ollama.Run(
 		ctx,

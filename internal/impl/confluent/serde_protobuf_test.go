@@ -27,7 +27,7 @@ import (
 )
 
 func TestProtobufEncodeMultipleMessages(t *testing.T) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*10)
+	tCtx, done := context.WithTimeout(t.Context(), time.Second*10)
 	defer done()
 
 	thingsSchema := `
@@ -147,7 +147,7 @@ message bar {
 }
 
 func TestProtobufReferences(t *testing.T) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*10)
+	tCtx, done := context.WithTimeout(t.Context(), time.Second*10)
 	defer done()
 
 	thingsSchema := `
@@ -276,7 +276,7 @@ message bar {
 }
 
 func runEncoderAgainstInputsMultiple(t testing.TB, urlStr, subject string, inputs [][]byte) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*10)
+	tCtx, done := context.WithTimeout(t.Context(), time.Second*10)
 	defer done()
 
 	subj, err := service.NewInterpolatedString(subject)

@@ -93,7 +93,7 @@ const slotName = "pglogrepl_test"
 const outputPlugin = "pgoutput"
 
 func closeConn(t testing.TB, conn *pgconn.PgConn) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	require.NoError(t, conn.Close(ctx))
 }
@@ -152,7 +152,7 @@ func TestIntegrationIdentifySystem(t *testing.T) {
 		err := pool.Purge(resource)
 		require.NoError(t, err)
 	}()
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*100)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*100)
 	defer cancel()
 
 	conn, err := pgconn.Connect(ctx, dbURL)
@@ -178,7 +178,7 @@ func TestIntegrationCreateReplicationSlot(t *testing.T) {
 		err := pool.Purge(resource)
 		require.NoError(t, err)
 	}()
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*5)
 	defer cancel()
 
 	conn, err := pgconn.Connect(ctx, dbURL)
@@ -196,7 +196,7 @@ func TestIntegrationDropReplicationSlot(t *testing.T) {
 		err := pool.Purge(resource)
 		require.NoError(t, err)
 	}()
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*5)
 	defer cancel()
 
 	conn, err := pgconn.Connect(ctx, dbURL)
@@ -221,7 +221,7 @@ func TestIntegrationCopyReplicationSlot(t *testing.T) {
 		err := pool.Purge(resource)
 		require.NoError(t, err)
 	}()
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*5)
 	defer cancel()
 
 	conn, err := pgconn.Connect(ctx, dbURL)
@@ -249,7 +249,7 @@ func TestIntegrationCreatePublication(t *testing.T) {
 		require.NoError(t, err)
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*5)
 	defer cancel()
 
 	conn, err := pgconn.Connect(ctx, dbURL)
@@ -258,23 +258,23 @@ func TestIntegrationCreatePublication(t *testing.T) {
 
 	publicationName := "test_publication"
 	schema := `"public"`
-	err = CreatePublication(context.Background(), conn, publicationName, []TableFQN{})
+	err = CreatePublication(t.Context(), conn, publicationName, []TableFQN{})
 	require.NoError(t, err)
 
-	tables, forAllTables, err := GetPublicationTables(context.Background(), conn, publicationName)
+	tables, forAllTables, err := GetPublicationTables(t.Context(), conn, publicationName)
 	require.NoError(t, err)
 	assert.Empty(t, tables)
 	assert.True(t, forAllTables)
 
-	multiReader := conn.Exec(context.Background(), "CREATE TABLE test_table (id serial PRIMARY KEY, name text);")
+	multiReader := conn.Exec(t.Context(), "CREATE TABLE test_table (id serial PRIMARY KEY, name text);")
 	_, err = multiReader.ReadAll()
 	require.NoError(t, err)
 
 	publicationWithTables := "test_pub_with_tables"
-	err = CreatePublication(context.Background(), conn, publicationWithTables, []TableFQN{{schema, `"test_table"`}})
+	err = CreatePublication(t.Context(), conn, publicationWithTables, []TableFQN{{schema, `"test_table"`}})
 	require.NoError(t, err)
 
-	tables, forAllTables, err = GetPublicationTables(context.Background(), conn, publicationName)
+	tables, forAllTables, err = GetPublicationTables(t.Context(), conn, publicationName)
 	require.NoError(t, err)
 	assert.NotEmpty(t, tables)
 	assert.Len(t, tables, 1)
@@ -282,18 +282,18 @@ func TestIntegrationCreatePublication(t *testing.T) {
 	assert.False(t, forAllTables)
 
 	// Add more tables to publication
-	multiReader = conn.Exec(context.Background(), "CREATE TABLE test_table2 (id serial PRIMARY KEY, name text);")
+	multiReader = conn.Exec(t.Context(), "CREATE TABLE test_table2 (id serial PRIMARY KEY, name text);")
 	_, err = multiReader.ReadAll()
 	require.NoError(t, err)
 
 	// Pass more tables to the publication
-	err = CreatePublication(context.Background(), conn, publicationWithTables, []TableFQN{
+	err = CreatePublication(t.Context(), conn, publicationWithTables, []TableFQN{
 		{schema, "test_table2"},
 		{schema, "test_table"},
 	})
 	require.NoError(t, err)
 
-	tables, forAllTables, err = GetPublicationTables(context.Background(), conn, publicationWithTables)
+	tables, forAllTables, err = GetPublicationTables(t.Context(), conn, publicationWithTables)
 	require.NoError(t, err)
 	assert.NotEmpty(t, tables)
 	assert.Len(t, tables, 2)
@@ -302,12 +302,12 @@ func TestIntegrationCreatePublication(t *testing.T) {
 	assert.False(t, forAllTables)
 
 	// Remove one table from the publication
-	err = CreatePublication(context.Background(), conn, publicationWithTables, []TableFQN{
+	err = CreatePublication(t.Context(), conn, publicationWithTables, []TableFQN{
 		{schema, "test_table"},
 	})
 	require.NoError(t, err)
 
-	tables, forAllTables, err = GetPublicationTables(context.Background(), conn, publicationWithTables)
+	tables, forAllTables, err = GetPublicationTables(t.Context(), conn, publicationWithTables)
 	require.NoError(t, err)
 	assert.NotEmpty(t, tables)
 	assert.Len(t, tables, 1)
@@ -315,12 +315,12 @@ func TestIntegrationCreatePublication(t *testing.T) {
 	assert.False(t, forAllTables)
 
 	// Add one table and remove one at the same time
-	err = CreatePublication(context.Background(), conn, publicationWithTables, []TableFQN{
+	err = CreatePublication(t.Context(), conn, publicationWithTables, []TableFQN{
 		{schema, "test_table2"},
 	})
 	require.NoError(t, err)
 
-	tables, forAllTables, err = GetPublicationTables(context.Background(), conn, publicationWithTables)
+	tables, forAllTables, err = GetPublicationTables(t.Context(), conn, publicationWithTables)
 	require.NoError(t, err)
 	assert.NotEmpty(t, tables)
 	assert.Contains(t, tables, TableFQN{schema, `"test_table2"`})
@@ -328,35 +328,35 @@ func TestIntegrationCreatePublication(t *testing.T) {
 
 	// Create a schema with a quoted identifier
 	caseSensitiveSchema := `"FooBar"`
-	multiReader = conn.Exec(context.Background(), fmt.Sprintf("CREATE SCHEMA %s;", caseSensitiveSchema))
+	multiReader = conn.Exec(t.Context(), fmt.Sprintf("CREATE SCHEMA %s;", caseSensitiveSchema))
 	_, err = multiReader.ReadAll()
 	require.NoError(t, err)
 
 	caseSensitiveTable := `"Foo"`
-	multiReader = conn.Exec(context.Background(), fmt.Sprintf("CREATE TABLE %s.%s (id serial PRIMARY KEY, name text);", caseSensitiveSchema, caseSensitiveTable))
+	multiReader = conn.Exec(t.Context(), fmt.Sprintf("CREATE TABLE %s.%s (id serial PRIMARY KEY, name text);", caseSensitiveSchema, caseSensitiveTable))
 	_, err = multiReader.ReadAll()
 	require.NoError(t, err)
 
 	caseSensitiveTable2 := `"Bar"`
-	multiReader = conn.Exec(context.Background(), fmt.Sprintf("CREATE TABLE %s.%s (id serial PRIMARY KEY, name text);", caseSensitiveSchema, caseSensitiveTable2))
+	multiReader = conn.Exec(t.Context(), fmt.Sprintf("CREATE TABLE %s.%s (id serial PRIMARY KEY, name text);", caseSensitiveSchema, caseSensitiveTable2))
 	_, err = multiReader.ReadAll()
 	require.NoError(t, err)
 
 	// Pass tables to the schema with quoted identifiers
 	publicationQuotedIdentifiers := "quoted_identifiers"
-	err = CreatePublication(context.Background(), conn, publicationQuotedIdentifiers, []TableFQN{
+	err = CreatePublication(t.Context(), conn, publicationQuotedIdentifiers, []TableFQN{
 		{caseSensitiveSchema, caseSensitiveTable},
 		{caseSensitiveSchema, caseSensitiveTable2},
 	})
 	require.NoError(t, err)
 
 	// Remove one table with a quoted identifier from the publication
-	err = CreatePublication(context.Background(), conn, publicationQuotedIdentifiers, []TableFQN{
+	err = CreatePublication(t.Context(), conn, publicationQuotedIdentifiers, []TableFQN{
 		{caseSensitiveSchema, caseSensitiveTable},
 	})
 	require.NoError(t, err)
 
-	tables, forAllTables, err = GetPublicationTables(context.Background(), conn, publicationQuotedIdentifiers)
+	tables, forAllTables, err = GetPublicationTables(t.Context(), conn, publicationQuotedIdentifiers)
 	require.NoError(t, err)
 	assert.Len(t, tables, 1)
 	assert.Contains(t, tables, TableFQN{`"FooBar"`, `"Foo"`})
@@ -372,7 +372,7 @@ func TestIntegrationStartReplication(t *testing.T) {
 		require.NoError(t, err)
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*5)
 	defer cancel()
 
 	conn, err := pgconn.Connect(ctx, dbURL)
@@ -384,7 +384,7 @@ func TestIntegrationStartReplication(t *testing.T) {
 
 	// create publication
 	publicationName := "test_publication"
-	err = CreatePublication(context.Background(), conn, publicationName, []TableFQN{})
+	err = CreatePublication(t.Context(), conn, publicationName, []TableFQN{})
 	require.NoError(t, err)
 
 	_, _, err = CreateReplicationSlot(ctx, conn, slotName, outputPlugin, CreateReplicationSlotOptions{Temporary: false})
@@ -400,7 +400,7 @@ func TestIntegrationStartReplication(t *testing.T) {
 	require.NoError(t, err)
 
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		ctx, cancel := context.WithTimeout(t.Context(), time.Second*5)
 		defer cancel()
 
 		config, err := pgconn.ParseConfig(dbURL)
@@ -531,7 +531,7 @@ func TestIntegrationSendStandbyStatusUpdate(t *testing.T) {
 		require.NoError(t, err)
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*5)
 	defer cancel()
 
 	conn, err := pgconn.Connect(ctx, dbURL)

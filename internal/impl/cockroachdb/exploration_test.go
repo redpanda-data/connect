@@ -61,16 +61,16 @@ func TestIntegrationExploration(t *testing.T) {
 
 	require.NoError(t, pool.Retry(func() error {
 		if pgpool == nil {
-			if pgpool, err = pgxpool.Connect(context.Background(), dsn); err != nil {
+			if pgpool, err = pgxpool.Connect(t.Context(), dsn); err != nil {
 				return err
 			}
 		}
 		// Enable changefeeds
-		if _, err = pgpool.Exec(context.Background(), "SET CLUSTER SETTING kv.rangefeed.enabled = true;"); err != nil {
+		if _, err = pgpool.Exec(t.Context(), "SET CLUSTER SETTING kv.rangefeed.enabled = true;"); err != nil {
 			return err
 		}
 		// Create table
-		_, err = pgpool.Exec(context.Background(), "CREATE TABLE foo (a INT PRIMARY KEY);")
+		_, err = pgpool.Exec(t.Context(), "CREATE TABLE foo (a INT PRIMARY KEY);")
 		return err
 	}))
 	t.Cleanup(func() {
@@ -84,12 +84,12 @@ func TestIntegrationExploration(t *testing.T) {
 	i := 0
 	for ; i < 100; i++ {
 		// Insert some rows
-		if _, err = pgpool.Exec(context.Background(), fmt.Sprintf("INSERT INTO foo VALUES (%v);", i)); err != nil {
+		if _, err = pgpool.Exec(t.Context(), fmt.Sprintf("INSERT INTO foo VALUES (%v);", i)); err != nil {
 			return
 		}
 	}
 
-	rowsCtx, done := context.WithCancel(context.Background())
+	rowsCtx, done := context.WithCancel(t.Context())
 
 	rows, err := cfdb.QueryContext(rowsCtx, "EXPERIMENTAL CHANGEFEED FOR foo WITH UPDATED")
 	require.NoError(t, err)
@@ -117,7 +117,7 @@ func TestIntegrationExploration(t *testing.T) {
 
 	// Insert some more rows
 	for ; i < 150; i++ {
-		if _, err = pgpool.Exec(context.Background(), fmt.Sprintf("INSERT INTO foo VALUES (%v);", i)); err != nil {
+		if _, err = pgpool.Exec(t.Context(), fmt.Sprintf("INSERT INTO foo VALUES (%v);", i)); err != nil {
 			t.Error(err)
 		}
 	}
@@ -126,7 +126,7 @@ func TestIntegrationExploration(t *testing.T) {
 	cfdb, err = sql.Open("postgres", dsn)
 	require.NoError(t, err)
 
-	rowsCtx, done = context.WithCancel(context.Background())
+	rowsCtx, done = context.WithCancel(t.Context())
 
 	rows, err = cfdb.QueryContext(rowsCtx, "EXPERIMENTAL CHANGEFEED FOR foo WITH UPDATED, CURSOR=\""+latestCursor+"\"")
 	require.NoError(t, err)

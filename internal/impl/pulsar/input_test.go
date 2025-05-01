@@ -15,7 +15,6 @@
 package pulsar
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -68,7 +67,7 @@ subscription_name: "sub"
 				require.EqualError(t, err, test.errStr)
 			} else {
 				require.NoError(t, err, "new reader from parsed")
-				require.NoError(t, reader.Close(context.Background()))
+				require.NoError(t, reader.Close(t.Context()))
 			}
 		})
 	}

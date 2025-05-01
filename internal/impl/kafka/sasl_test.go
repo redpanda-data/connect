@@ -15,7 +15,6 @@
 package kafka_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/IBM/sarama"
@@ -98,8 +97,8 @@ sasl:
 	require.NoError(t, err)
 
 	mockResources := service.MockResources(service.MockResourcesOptAddCache("token_provider"))
-	require.NoError(t, mockResources.AccessCache(context.Background(), "token_provider", func(c service.Cache) {
-		require.NoError(t, c.Add(context.Background(), "jwt", []byte("foo"), nil))
+	require.NoError(t, mockResources.AccessCache(t.Context(), "token_provider", func(c service.Cache) {
+		require.NoError(t, c.Add(t.Context(), "jwt", []byte("foo"), nil))
 	}))
 
 	conf := &sarama.Config{}

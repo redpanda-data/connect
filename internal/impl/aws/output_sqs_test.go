@@ -140,9 +140,9 @@ type inMsg struct {
 type inEntries []inMsg
 
 func TestSQSRetries(t *testing.T) {
-	tCtx := context.Background()
+	tCtx := t.Context()
 
-	conf, err := config.LoadDefaultConfig(context.Background(),
+	conf, err := config.LoadDefaultConfig(t.Context(),
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("xxxxx", "xxxxx", "xxxxx")),
 	)
 	require.NoError(t, err)
@@ -213,9 +213,9 @@ func TestSQSRetries(t *testing.T) {
 }
 
 func TestSQSSendLimit(t *testing.T) {
-	tCtx := context.Background()
+	tCtx := t.Context()
 
-	conf, err := config.LoadDefaultConfig(context.Background(),
+	conf, err := config.LoadDefaultConfig(t.Context(),
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("xxxxx", "xxxxx", "xxxxx")),
 	)
 	require.NoError(t, err)
@@ -288,9 +288,9 @@ func TestSQSSendLimit(t *testing.T) {
 }
 
 func TestSQSMultipleQueues(t *testing.T) {
-	tCtx := context.Background()
+	tCtx := t.Context()
 
-	conf, err := config.LoadDefaultConfig(context.Background(),
+	conf, err := config.LoadDefaultConfig(t.Context(),
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("xxxxx", "xxxxx", "xxxxx")),
 	)
 	require.NoError(t, err)

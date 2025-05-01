@@ -100,12 +100,12 @@ func TestIntegrationOpensearch(t *testing.T) {
 		}
 	}
 }`
-			_, cerr = client.Do(context.Background(), osapi.IndicesCreateReq{
+			_, cerr = client.Do(t.Context(), osapi.IndicesCreateReq{
 				Index: "test_conn_index",
 				Body:  strings.NewReader(index),
 			}, nil)
 			if cerr == nil {
-				_, cerr = client.Do(context.Background(), osapi.IndicesCreateReq{
+				_, cerr = client.Do(t.Context(), osapi.IndicesCreateReq{
 					Index: "test_conn_index_2",
 					Body:  strings.NewReader(index),
 				}, nil)
@@ -156,7 +156,7 @@ func TestIntegrationOpensearch(t *testing.T) {
 }
 
 func testOpenSearchNoIndex(urls []string, client *os.Client, t *testing.T) {
-	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	ctx, done := context.WithTimeout(t.Context(), time.Second*30)
 	defer done()
 
 	m := outputFromConf(t, `
@@ -202,7 +202,7 @@ func resEqualsJSON(t testing.TB, res *os.Response, exp string) {
 }
 
 func testOpenSearchParallelWrites(urls []string, client *os.Client, t *testing.T) {
-	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	ctx, done := context.WithTimeout(t.Context(), time.Second*30)
 	defer done()
 
 	m := outputFromConf(t, `
@@ -253,7 +253,7 @@ action: index
 }
 
 func testOpenSearchErrorHandling(urls []string, t *testing.T) {
-	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	ctx, done := context.WithTimeout(t.Context(), time.Second*30)
 	defer done()
 
 	m := outputFromConf(t, `
@@ -279,7 +279,7 @@ action: index
 }
 
 func testOpenSearchConnect(urls []string, client *os.Client, t *testing.T) {
-	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	ctx, done := context.WithTimeout(t.Context(), time.Second*30)
 	defer done()
 
 	m := outputFromConf(t, `
@@ -320,7 +320,7 @@ action: index
 }
 
 func testOpenSearchIndexInterpolation(urls []string, client *os.Client, t *testing.T) {
-	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	ctx, done := context.WithTimeout(t.Context(), time.Second*30)
 	defer done()
 
 	m := outputFromConf(t, `
@@ -360,7 +360,7 @@ action: index
 }
 
 func testOpenSearchBatch(urls []string, client *os.Client, t *testing.T) {
-	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	ctx, done := context.WithTimeout(t.Context(), time.Second*30)
 	defer done()
 
 	m := outputFromConf(t, `
@@ -401,7 +401,7 @@ action: index
 }
 
 func testOpenSearchBatchDelete(urls []string, client *os.Client, t *testing.T) {
-	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	ctx, done := context.WithTimeout(t.Context(), time.Second*30)
 	defer done()
 
 	m := outputFromConf(t, `
@@ -469,7 +469,7 @@ action: ${! @elastic_action }
 }
 
 func testOpenSearchBatchIDCollision(urls []string, client *os.Client, t *testing.T) {
-	ctx, done := context.WithTimeout(context.Background(), time.Second*30)
+	ctx, done := context.WithTimeout(t.Context(), time.Second*30)
 	defer done()
 
 	m := outputFromConf(t, `

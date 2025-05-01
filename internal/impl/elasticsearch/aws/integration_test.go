@@ -108,7 +108,7 @@ aws:
 				CreateIndex("test_conn_index").
 				Timeout("20s").
 				Body(elasticIndex).
-				Do(context.Background())
+				Do(t.Context())
 		}
 		return cerr
 	}); err != nil {

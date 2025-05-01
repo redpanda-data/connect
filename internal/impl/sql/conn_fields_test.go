@@ -33,7 +33,7 @@ import (
 )
 
 func TestConnSettingsInitStmt(t *testing.T) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*30)
+	tCtx, done := context.WithTimeout(t.Context(), time.Second*30)
 	defer done()
 
 	tmpDir := t.TempDir()
@@ -110,7 +110,7 @@ sql_select:
 }
 
 func TestConnSettingsInitFiles(t *testing.T) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*30)
+	tCtx, done := context.WithTimeout(t.Context(), time.Second*30)
 	defer done()
 
 	tmpDir := t.TempDir()

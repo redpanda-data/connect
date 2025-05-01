@@ -15,7 +15,6 @@
 package spicedb
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -31,7 +30,7 @@ import (
 func TestIntegrationSpiceDB(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
-	ctx := context.Background()
+	ctx := t.Context()
 	pool, err := dockertest.NewPool("")
 	if err != nil {
 		t.Skipf("Could not connect to docker: %s", err)

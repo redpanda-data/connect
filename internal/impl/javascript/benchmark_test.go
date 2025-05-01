@@ -39,7 +39,7 @@ code: |
 	proc, err := newJavascriptProcessorFromConfig(conf, service.MockResources())
 	require.NoError(b, err)
 
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*30)
+	tCtx, done := context.WithTimeout(b.Context(), time.Second*30)
 	defer done()
 
 	tmpMsg := service.NewMessage(nil)

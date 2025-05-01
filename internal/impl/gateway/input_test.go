@@ -33,7 +33,7 @@ import (
 func TestHTTPSinglePayloads(t *testing.T) {
 	t.Setenv("REDPANDA_CLOUD_GATEWAY_ADDRESS", "0.0.0.0:1234")
 
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*30)
+	tCtx, done := context.WithTimeout(t.Context(), time.Second*30)
 	defer done()
 
 	mux := mux.NewRouter()
@@ -87,7 +87,7 @@ path: /testpost
 func TestHTTPBatchPayloads(t *testing.T) {
 	t.Setenv("REDPANDA_CLOUD_GATEWAY_ADDRESS", "0.0.0.0:1234")
 
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*30)
+	tCtx, done := context.WithTimeout(t.Context(), time.Second*30)
 	defer done()
 
 	mux := mux.NewRouter()

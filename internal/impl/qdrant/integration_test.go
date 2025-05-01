@@ -53,7 +53,7 @@ func TestIntegrationQdrant_Output(t *testing.T) {
 
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	qdrantContainer, err := qc.Run(ctx, "qdrant/qdrant:v1.14.0")
 	require.NoError(t, err, "failed to start container")
 
@@ -161,7 +161,7 @@ func TestIntegrationQdrant_Processor(t *testing.T) {
 
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	qdrantContainer, err := qc.Run(ctx, "qdrant/qdrant:v1.14.0")
 	require.NoError(t, err, "failed to start container")
 

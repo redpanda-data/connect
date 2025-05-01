@@ -101,7 +101,7 @@ func splitTextUsingConfig(t *testing.T, text, config string) []string {
 	require.NoError(t, err)
 	s, err := b.Build()
 	require.NoError(t, err)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	done := make(chan struct{})
 	go func() {

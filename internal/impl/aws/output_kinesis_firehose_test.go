@@ -43,7 +43,7 @@ func (m *mockKinesisFirehose) PutRecordBatch(ctx context.Context, input *firehos
 func testKFO(t *testing.T, m *mockKinesisFirehose) *kinesisFirehoseWriter {
 	t.Helper()
 
-	conf, err := config.LoadDefaultConfig(context.TODO(),
+	conf, err := config.LoadDefaultConfig(t.Context(),
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("xxxxx", "xxxxx", "xxxxx")),
 		config.WithRegion("us-east-1"),
 	)
@@ -74,7 +74,7 @@ func TestKinesisFirehoseWriteSinglePartMessage(t *testing.T) {
 	msg := service.MessageBatch{
 		service.NewMessage([]byte(`{"foo":"bar","id":123}`)),
 	}
-	require.NoError(t, k.WriteBatch(context.Background(), msg))
+	require.NoError(t, k.WriteBatch(t.Context(), msg))
 }
 
 func TestKinesisFirehoseWriteMultiPartMessage(t *testing.T) {
@@ -99,7 +99,7 @@ func TestKinesisFirehoseWriteMultiPartMessage(t *testing.T) {
 	for _, p := range parts {
 		msg = append(msg, service.NewMessage(p.data))
 	}
-	require.NoError(t, k.WriteBatch(context.Background(), msg))
+	require.NoError(t, k.WriteBatch(t.Context(), msg))
 }
 
 func TestKinesisFirehoseWriteChunk(t *testing.T) {
@@ -121,7 +121,7 @@ func TestKinesisFirehoseWriteChunk(t *testing.T) {
 		msg = append(msg, part)
 	}
 
-	if err := k.WriteBatch(context.Background(), msg); err != nil {
+	if err := k.WriteBatch(t.Context(), msg); err != nil {
 		t.Error(err)
 	}
 	if exp, act := n/kinesisMaxRecordsCount+1, len(batchLengths); act != exp {
@@ -178,7 +178,7 @@ func TestKinesisFirehoseWriteChunkWithThrottling(t *testing.T) {
 		500, 500, 500, 300,
 	}
 
-	if err := k.WriteBatch(context.Background(), msg); err != nil {
+	if err := k.WriteBatch(t.Context(), msg); err != nil {
 		t.Error(err)
 	}
 	if exp, act := len(expectedLengths), len(batchLengths); act != exp {
@@ -211,7 +211,7 @@ func TestKinesisFirehoseWriteError(t *testing.T) {
 		service.NewMessage([]byte(`{"foo":"bar"}`)),
 	}
 
-	if exp, err := "blah", k.WriteBatch(context.Background(), msg); err.Error() != exp {
+	if exp, err := "blah", k.WriteBatch(t.Context(), msg); err.Error() != exp {
 		t.Errorf("Expected err to equal %s, got %v", exp, err)
 	}
 	if exp, act := 3, calls; act != exp {
@@ -251,7 +251,7 @@ func TestKinesisFirehoseWriteMessageThrottling(t *testing.T) {
 		service.NewMessage([]byte(`{"foo":"qux","id":789}`)),
 	}
 
-	if err := k.WriteBatch(context.Background(), msg); err != nil {
+	if err := k.WriteBatch(t.Context(), msg); err != nil {
 		t.Error(err)
 	}
 	if exp, act := len(msg), len(calls); act != exp {
@@ -289,7 +289,7 @@ func TestKinesisFirehoseWriteBackoffMaxRetriesExceeded(t *testing.T) {
 		service.NewMessage([]byte(`{"foo":"bar","id":123}`)),
 	}
 
-	if err := k.WriteBatch(context.Background(), msg); err == nil {
+	if err := k.WriteBatch(t.Context(), msg); err == nil {
 		t.Error(errors.New("expected kinesis.Write to error"))
 	}
 	if exp := 3; calls != exp {

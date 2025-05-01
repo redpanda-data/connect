@@ -57,7 +57,7 @@ func TestIntegrationRedis(t *testing.T) {
 
 	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
-		return client.Ping(context.Background()).Err()
+		return client.Ping(t.Context()).Err()
 	}))
 
 	// STREAMS
@@ -298,7 +298,7 @@ func BenchmarkIntegrationRedis(b *testing.B) {
 
 	_ = resource.Expire(900)
 	require.NoError(b, pool.Retry(func() error {
-		return client.Ping(context.Background()).Err()
+		return client.Ping(b.Context()).Err()
 	}))
 
 	// STREAMS

@@ -15,7 +15,6 @@
 package dgraph
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -29,7 +28,7 @@ func TestRistrettoCache(t *testing.T) {
 	c, err := newRistrettoCache(0, false, nil)
 	require.NoError(t, err)
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	_, err = c.Get(ctx, "foo")
 	assert.Equal(t, service.ErrKeyNotFound, err)
@@ -53,7 +52,7 @@ func TestRistrettoCacheWithTTL(t *testing.T) {
 	c, err := newRistrettoCache(0, false, nil)
 	require.NoError(t, err)
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	require.NoError(t, c.Set(ctx, "foo", []byte("1"), nil))
 

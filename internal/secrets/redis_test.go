@@ -54,10 +54,10 @@ func TestIntegrationRedis(t *testing.T) {
 
 	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
-		return client.Ping(context.Background()).Err()
+		return client.Ping(t.Context()).Err()
 	}))
 
-	ctx, done := context.WithTimeout(context.Background(), time.Minute)
+	ctx, done := context.WithTimeout(t.Context(), time.Minute)
 	defer done()
 
 	require.NoError(t, client.Set(ctx, "bar", "meow", time.Minute).Err())
