@@ -15,7 +15,6 @@
 package xml
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -113,7 +112,7 @@ func TestXMLCases(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(tt *testing.T) {
-			msgsOut, err := proc.Process(context.Background(), service.NewMessage([]byte(test.input)))
+			msgsOut, err := proc.Process(t.Context(), service.NewMessage([]byte(test.input)))
 			require.NoError(t, err)
 			require.Len(t, msgsOut, 1)
 
@@ -138,7 +137,7 @@ cast: true
 
 	testString := `<root><title>This is a title</title><number id="99">123</number><bool>True</bool></root>`
 
-	msgsOut, err := proc.Process(context.Background(), service.NewMessage([]byte(testString)))
+	msgsOut, err := proc.Process(t.Context(), service.NewMessage([]byte(testString)))
 	require.NoError(t, err)
 
 	require.Len(t, msgsOut, 1)

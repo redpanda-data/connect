@@ -68,7 +68,7 @@ memory: {}
 	res, err := r.Build()
 	require.NoError(t, err)
 
-	ctx, done := context.WithTimeout(context.Background(), time.Minute)
+	ctx, done := context.WithTimeout(t.Context(), time.Minute)
 	defer done()
 
 	toolsList, ok := s.HandleMessage(ctx, []byte(`{
@@ -136,7 +136,7 @@ meta:
 	res, err := r.Build()
 	require.NoError(t, err)
 
-	ctx, done := context.WithTimeout(context.Background(), time.Minute)
+	ctx, done := context.WithTimeout(t.Context(), time.Minute)
 	defer done()
 
 	toolsList, ok := s.HandleMessage(ctx, []byte(`{

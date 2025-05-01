@@ -15,7 +15,6 @@
 package mongodb_test
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -72,8 +71,8 @@ func TestProcessorIntegration(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if err := mongoClient.Database("TestDB").CreateCollection(context.Background(), "TestCollection"); err != nil {
-			_ = mongoClient.Disconnect(context.Background())
+		if err := mongoClient.Database("TestDB").CreateCollection(t.Context(), "TestCollection"); err != nil {
+			_ = mongoClient.Disconnect(t.Context())
 			return err
 		}
 		return nil
@@ -139,7 +138,7 @@ func assertMessagesEqual(t testing.TB, batch service.MessageBatch, to []string) 
 }
 
 func testMongoDBProcessorInsert(mongoClient *mongo.Client, port string, t *testing.T) {
-	tCtx := context.Background()
+	tCtx := t.Context()
 	m := testMProc(t, port, "", `
 write_concern:
   w: "1"
@@ -182,7 +181,7 @@ document_map: |
 }
 
 func testMongoDBProcessorDeleteOne(mongoClient *mongo.Client, port string, t *testing.T) {
-	tCtx := context.Background()
+	tCtx := t.Context()
 	m := testMProc(t, port, "", `
 write_concern:
   w: "1"
@@ -208,14 +207,14 @@ filter_map: |
 	})
 
 	// Validate the record has been deleted from the db
-	result := collection.FindOne(context.Background(), bson.M{"a": "foo_delete", "b": "bar_delete"})
+	result := collection.FindOne(t.Context(), bson.M{"a": "foo_delete", "b": "bar_delete"})
 	b, err := result.Raw()
 	assert.Nil(t, b)
 	assert.Error(t, err, "mongo: no documents in result")
 }
 
 func testMongoDBProcessorDeleteMany(mongoClient *mongo.Client, port string, t *testing.T) {
-	tCtx := context.Background()
+	tCtx := t.Context()
 	m := testMProc(t, port, "", `
 write_concern:
   w: "1"
@@ -229,9 +228,9 @@ filter_map: |
 
 	collection := mongoClient.Database("TestDB").Collection("TestCollection")
 
-	_, err := collection.InsertOne(context.Background(), bson.M{"a": "foo_delete_many", "b": "bar_delete_many", "c": "c1"})
+	_, err := collection.InsertOne(t.Context(), bson.M{"a": "foo_delete_many", "b": "bar_delete_many", "c": "c1"})
 	assert.NoError(t, err)
-	_, err = collection.InsertOne(context.Background(), bson.M{"a": "foo_delete_many", "b": "bar_delete_many", "c": "c2"})
+	_, err = collection.InsertOne(t.Context(), bson.M{"a": "foo_delete_many", "b": "bar_delete_many", "c": "c2"})
 	assert.NoError(t, err)
 
 	resMsgs, err := m.ProcessBatch(tCtx, service.MessageBatch{
@@ -246,14 +245,14 @@ filter_map: |
 	})
 
 	// Validate the record has been deleted from the db
-	result := collection.FindOne(context.Background(), bson.M{"a": "foo_delete_many", "b": "bar_delete_many"})
+	result := collection.FindOne(t.Context(), bson.M{"a": "foo_delete_many", "b": "bar_delete_many"})
 	b, err := result.Raw()
 	assert.Nil(t, b)
 	assert.Error(t, err, "mongo: no documents in result")
 }
 
 func testMongoDBProcessorReplaceOne(mongoClient *mongo.Client, port string, t *testing.T) {
-	tCtx := context.Background()
+	tCtx := t.Context()
 	m := testMProc(t, port, "", `
 write_concern:
   w: "1"
@@ -269,7 +268,7 @@ filter_map: |
 
 	collection := mongoClient.Database("TestDB").Collection("TestCollection")
 
-	_, err := collection.InsertOne(context.Background(), bson.M{"a": "foo_replace", "b": "bar_old", "c": "c1"})
+	_, err := collection.InsertOne(t.Context(), bson.M{"a": "foo_replace", "b": "bar_old", "c": "c1"})
 	assert.NoError(t, err)
 
 	resMsgs, err := m.ProcessBatch(tCtx, service.MessageBatch{
@@ -282,7 +281,7 @@ filter_map: |
 	})
 
 	// Validate the record has been updated in the db
-	result := collection.FindOne(context.Background(), bson.M{"a": "foo_replace", "b": "bar_new"})
+	result := collection.FindOne(t.Context(), bson.M{"a": "foo_replace", "b": "bar_new"})
 	b, err := result.Raw()
 	assert.NoError(t, err)
 	aVal := b.Lookup("a")
@@ -294,7 +293,7 @@ filter_map: |
 }
 
 func testMongoDBProcessorUpdateOne(mongoClient *mongo.Client, port string, t *testing.T) {
-	tCtx := context.Background()
+	tCtx := t.Context()
 	m := testMProc(t, port, "", `
 write_concern:
   w: "1"
@@ -309,7 +308,7 @@ filter_map: |
 
 	collection := mongoClient.Database("TestDB").Collection("TestCollection")
 
-	_, err := collection.InsertOne(context.Background(), bson.M{"a": "foo_update", "b": "bar_update_old", "c": "c1"})
+	_, err := collection.InsertOne(t.Context(), bson.M{"a": "foo_update", "b": "bar_update_old", "c": "c1"})
 	assert.NoError(t, err)
 
 	resMsgs, err := m.ProcessBatch(tCtx, service.MessageBatch{
@@ -322,7 +321,7 @@ filter_map: |
 	})
 
 	// Validate the record has been updated in the db
-	result := collection.FindOne(context.Background(), bson.M{"a": "foo_update", "b": "bar_update_new"})
+	result := collection.FindOne(t.Context(), bson.M{"a": "foo_update", "b": "bar_update_new"})
 	b, err := result.Raw()
 	assert.NoError(t, err)
 	aVal := b.Lookup("a")
@@ -334,7 +333,7 @@ filter_map: |
 }
 
 func testMongoDBProcessorUpsert(mongoClient *mongo.Client, port string, t *testing.T) {
-	tCtx := context.Background()
+	tCtx := t.Context()
 	m := testMProc(t, port, "", `
 write_concern:
   w: "1"
@@ -416,10 +415,10 @@ upsert: true
 }
 
 func testMongoDBProcessorFindOne(mongoClient *mongo.Client, port string, t *testing.T) {
-	tCtx := context.Background()
+	tCtx := t.Context()
 	collection := mongoClient.Database("TestDB").Collection("TestCollection")
 
-	_, err := collection.InsertOne(context.Background(), bson.M{"a": "foo", "b": "bar", "c": "baz", "answer_to_everything": 42})
+	_, err := collection.InsertOne(t.Context(), bson.M{"a": "foo", "b": "bar", "c": "baz", "answer_to_everything": 42})
 	assert.NoError(t, err)
 
 	for _, tt := range []struct {
@@ -489,10 +488,10 @@ json_marshal_mode: %v
 }
 
 func testMongoDBProcessorAggregate(mongoClient *mongo.Client, port string, t *testing.T) {
-	tCtx := context.Background()
+	tCtx := t.Context()
 
 	collection := mongoClient.Database("TestDB").Collection("TestCollection")
-	_, err := collection.InsertMany(context.Background(), []bson.M{
+	_, err := collection.InsertMany(t.Context(), []bson.M{
 		{"_id": 0, "name": "Pepperoni", "size": "small", "price": 19,
 			"quantity": 10, "date": time.Date(2021, 3, 13, 8, 14, 30, 0, time.UTC)},
 		{"_id": 1, "name": "Pepperoni", "size": "medium", "price": 20,

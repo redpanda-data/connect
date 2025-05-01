@@ -15,7 +15,6 @@
 package gcp
 
 import (
-	"context"
 	"errors"
 	"testing"
 
@@ -27,7 +26,7 @@ import (
 )
 
 func TestPubSubOutput(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	conf, err := newPubSubOutputConfig().ParseYAML(`
     project: sample-project
@@ -89,7 +88,7 @@ func TestPubSubOutput(t *testing.T) {
 }
 
 func TestPubSubOutput_MessageAttr(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	conf, err := newPubSubOutputConfig().ParseYAML(`
     project: sample-project
@@ -151,7 +150,7 @@ func TestPubSubOutput_MessageAttr(t *testing.T) {
 }
 
 func TestPubSubOutput_MissingTopic(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	conf, err := newPubSubOutputConfig().ParseYAML(`
     project: sample-project
@@ -221,7 +220,7 @@ func TestPubSubOutput_MissingTopic(t *testing.T) {
 }
 
 func TestPubSubOutput_PublishErrors(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	conf, err := newPubSubOutputConfig().ParseYAML(`
     project: sample-project

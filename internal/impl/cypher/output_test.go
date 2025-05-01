@@ -15,7 +15,6 @@
 package cypher
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -84,10 +83,10 @@ args_mapping: |
   root.pop = this.population
     `, uri)
 	require.NoError(t, pool.Retry(func() error {
-		return out.Connect(context.Background())
+		return out.Connect(t.Context())
 	}))
 	t.Cleanup(func() {
-		if err = out.Close(context.Background()); err != nil {
+		if err = out.Close(t.Context()); err != nil {
 			t.Logf("Failed to cleanup output: %v", err)
 		}
 	})
@@ -97,9 +96,9 @@ args_mapping: |
 		`{"state":"OR","city":"Portland", "population":635000}`,
 		`{"state":"WI","city":"Madison", "population":272000}`,
 	)
-	require.NoError(t, out.WriteBatch(context.Background(), batch))
+	require.NoError(t, out.WriteBatch(t.Context(), batch))
 	result, err := neo4j.ExecuteQuery(
-		context.Background(),
+		t.Context(),
 		out.driver,
 		`
     MATCH (c:City)-[:IN]->(:State{name:"OR"})

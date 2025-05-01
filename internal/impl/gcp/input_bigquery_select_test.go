@@ -15,7 +15,6 @@
 package gcp
 
 import (
-	"context"
 	"errors"
 	"testing"
 
@@ -69,19 +68,19 @@ func TestGCPBigQuerySelectInput(t *testing.T) {
 
 	mockClient.On("RunQuery", mock.Anything, mock.Anything).Return(iter, nil)
 
-	err = inp.Connect(context.Background())
+	err = inp.Connect(t.Context())
 	require.NoError(t, err)
 
 	i := 0
 	for {
-		msg, ack, err := inp.Read(context.Background())
+		msg, ack, err := inp.Read(t.Context())
 		if i >= len(iter.rows) {
 			require.ErrorIs(t, err, service.ErrEndOfInput)
 			break
 		}
 
 		require.NoError(t, err)
-		require.NoError(t, ack(context.Background(), nil))
+		require.NoError(t, ack(t.Context(), nil))
 
 		bs, err := msg.AsBytes()
 		require.NoError(t, err)
@@ -103,7 +102,7 @@ func TestGCPBigQuerySelectInput_NotConnected(t *testing.T) {
 	inp, err := newBigQuerySelectInput(parsed, nil)
 	require.NoError(t, err)
 
-	msg, ack, err := inp.Read(context.Background())
+	msg, ack, err := inp.Read(t.Context())
 	require.ErrorIs(t, err, service.ErrNotConnected)
 	require.Nil(t, msg)
 	require.Nil(t, ack)
@@ -129,10 +128,10 @@ func TestGCPBigQuerySelectInput_IteratorError(t *testing.T) {
 
 	mockClient.On("RunQuery", mock.Anything, mock.Anything).Return(iter, nil)
 
-	err = inp.Connect(context.Background())
+	err = inp.Connect(t.Context())
 	require.NoError(t, err)
 
-	msg, ack, err := inp.Read(context.Background())
+	msg, ack, err := inp.Read(t.Context())
 	require.ErrorIs(t, err, testErr)
 	require.Nil(t, msg)
 	require.Nil(t, ack)
@@ -151,10 +150,10 @@ func TestGCPBigQuerySelectInput_Connect(t *testing.T) {
 	mockClient.On("RunQuery", mock.Anything, mock.Anything).Return(&mockBQIterator{}, nil)
 	inp.client = mockClient
 
-	err = inp.Connect(context.Background())
+	err = inp.Connect(t.Context())
 	require.NoError(t, err)
 
-	err = inp.Close(context.Background())
+	err = inp.Close(t.Context())
 	require.NoError(t, err)
 
 	mockClient.AssertExpectations(t)
@@ -174,7 +173,7 @@ func TestGCPBigQuerySelectInput_ConnectError(t *testing.T) {
 	mockClient.On("RunQuery", mock.Anything, mock.Anything).Return(nil, testErr)
 	inp.client = mockClient
 
-	err = inp.Connect(context.Background())
+	err = inp.Connect(t.Context())
 	require.ErrorIs(t, err, testErr)
 
 	mockClient.AssertExpectations(t)

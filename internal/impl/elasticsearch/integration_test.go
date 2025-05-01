@@ -84,7 +84,7 @@ func TestIntegrationElasticsearch(t *testing.T) {
 				CreateIndex("test_conn_index").
 				Timeout("20s").
 				Body(elasticIndex).
-				Do(context.Background())
+				Do(t.Context())
 		}
 		return cerr
 	}); err != nil {
@@ -165,7 +165,7 @@ func TestIntegrationElasticsearchV7(t *testing.T) {
 				CreateIndex("test_conn_index").
 				Timeout("20s").
 				Body(elasticIndex).
-				Do(context.Background())
+				Do(t.Context())
 			if err != nil && strings.Contains(err.Error(), "already exists") {
 				err = nil
 			}
@@ -248,7 +248,7 @@ func BenchmarkIntegrationElasticsearch(b *testing.B) {
 				CreateIndex("test_conn_index").
 				Timeout("20s").
 				Body(elasticIndex).
-				Do(context.Background())
+				Do(b.Context())
 		}
 		return cerr
 	}); err != nil {

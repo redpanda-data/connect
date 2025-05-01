@@ -45,7 +45,7 @@ code: |
 	proc, err := newJavascriptProcessorFromConfig(conf, service.MockResources())
 	require.NoError(t, err)
 
-	bCtx, done := context.WithTimeout(context.Background(), time.Second*30)
+	bCtx, done := context.WithTimeout(t.Context(), time.Second*30)
 	defer done()
 
 	resBatches, err := proc.ProcessBatch(bCtx, service.MessageBatch{
@@ -76,7 +76,7 @@ code: 'benthos.v0_msg_set_string(benthos.v0_msg_as_string() + "hello world");'
 	proc, err := newJavascriptProcessorFromConfig(conf, service.MockResources())
 	require.NoError(t, err)
 
-	bCtx, done := context.WithTimeout(context.Background(), time.Second*30)
+	bCtx, done := context.WithTimeout(t.Context(), time.Second*30)
 	defer done()
 
 	resBatches, err := proc.ProcessBatch(bCtx, service.MessageBatch{
@@ -113,7 +113,7 @@ code: |
 	proc, err := newJavascriptProcessorFromConfig(conf, service.MockResources())
 	require.NoError(t, err)
 
-	bCtx, done := context.WithTimeout(context.Background(), time.Second*30)
+	bCtx, done := context.WithTimeout(t.Context(), time.Second*30)
 	defer done()
 
 	resBatches, err := proc.ProcessBatch(bCtx, service.MessageBatch{
@@ -163,7 +163,7 @@ code: |
 	proc, err := newJavascriptProcessorFromConfig(conf, service.MockResources())
 	require.NoError(t, err)
 
-	bCtx, done := context.WithTimeout(context.Background(), time.Second*30)
+	bCtx, done := context.WithTimeout(t.Context(), time.Second*30)
 	defer done()
 
 	resBatches, err := proc.ProcessBatch(bCtx, service.MessageBatch{
@@ -197,7 +197,7 @@ code: |
 	proc, err := newJavascriptProcessorFromConfig(conf, service.MockResources())
 	require.NoError(t, err)
 
-	bCtx, done := context.WithTimeout(context.Background(), time.Second*30)
+	bCtx, done := context.WithTimeout(t.Context(), time.Second*30)
 	defer done()
 
 	resBatches, err := proc.ProcessBatch(bCtx, service.MessageBatch{
@@ -240,7 +240,7 @@ code: |
 	proc, err := newJavascriptProcessorFromConfig(conf, service.MockResources())
 	require.NoError(t, err)
 
-	bCtx, done := context.WithTimeout(context.Background(), time.Second*30)
+	bCtx, done := context.WithTimeout(t.Context(), time.Second*30)
 	defer done()
 
 	resBatches, err := proc.ProcessBatch(bCtx, service.MessageBatch{
@@ -285,7 +285,7 @@ file: %v
 	proc, err := newJavascriptProcessorFromConfig(conf, service.MockResources())
 	require.NoError(t, err)
 
-	bCtx, done := context.WithTimeout(context.Background(), time.Second*30)
+	bCtx, done := context.WithTimeout(t.Context(), time.Second*30)
 	defer done()
 
 	resBatches, err := proc.ProcessBatch(bCtx, service.MessageBatch{
@@ -332,7 +332,7 @@ global_folders: [ "%s" ]
 	proc, err := newJavascriptProcessorFromConfig(conf, service.MockResources())
 	require.NoError(t, err)
 
-	bCtx, done := context.WithTimeout(context.Background(), time.Second*30)
+	bCtx, done := context.WithTimeout(t.Context(), time.Second*30)
 	defer done()
 
 	resBatches, err := proc.ProcessBatch(bCtx, service.MessageBatch{
@@ -372,7 +372,7 @@ code: |
 	proc, err := newJavascriptProcessorFromConfig(conf, service.MockResources())
 	require.NoError(t, err)
 
-	bCtx, done := context.WithTimeout(context.Background(), time.Second*30)
+	bCtx, done := context.WithTimeout(t.Context(), time.Second*30)
 	defer done()
 
 	resBatches, err := proc.ProcessBatch(bCtx, service.MessageBatch{

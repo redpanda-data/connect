@@ -74,7 +74,7 @@ batch_count: 2
 	in, err := newParquetInputFromConfig(conf, service.MockResources())
 	require.NoError(t, err)
 
-	tCtx, done := context.WithTimeout(context.Background(), time.Minute)
+	tCtx, done := context.WithTimeout(t.Context(), time.Minute)
 	defer done()
 
 	b, _, err := in.ReadBatch(tCtx)

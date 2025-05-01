@@ -15,7 +15,6 @@
 package confluent
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -31,7 +30,7 @@ import (
 )
 
 func TestSchemaRegistryClient_GetSchemaBySubjectAndVersion(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	fooFirst, err := json.Marshal(struct {
 		Schema string `json:"schema"`
 		ID     int    `json:"id"`

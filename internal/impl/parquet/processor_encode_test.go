@@ -16,7 +16,6 @@ package parquet
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -42,7 +41,7 @@ schema:
 	encodeProc, err := newParquetEncodeProcessorFromConfig(encodeConf, nil)
 	require.NoError(t, err)
 
-	tctx := context.Background()
+	tctx := t.Context()
 	_, err = encodeProc.ProcessBatch(tctx, service.MessageBatch{
 		service.NewMessage([]byte(`{"id":12,"name":"foo"}`)),
 	})
@@ -130,7 +129,7 @@ handle_logical_types: v2
 }
 
 func testParquetEncodeDecodeRoundTrip(t *testing.T, encodeProc *parquetEncodeProcessor, decodeProc *parquetDecodeProcessor) {
-	tctx := context.Background()
+	tctx := t.Context()
 
 	for _, test := range []struct {
 		name      string
@@ -247,7 +246,7 @@ func testParquetEncodeDecodeRoundTrip(t *testing.T, encodeProc *parquetEncodePro
 }
 
 func TestParquetEncodeEmptyBatch(t *testing.T) {
-	tctx := context.Background()
+	tctx := t.Context()
 
 	encodeConf, err := parquetEncodeProcessorConfig().ParseYAML(`
 default_encoding: PLAIN
@@ -337,7 +336,7 @@ func TestParquetEncodeProcessor(t *testing.T) {
 			reader, err := newParquetEncodeProcessor(nil, testPMSchema(), &parquet.Uncompressed)
 			require.NoError(t, err)
 
-			readerResBatches, err := reader.ProcessBatch(context.Background(), service.MessageBatch{
+			readerResBatches, err := reader.ProcessBatch(t.Context(), service.MessageBatch{
 				service.NewMessage(expectedDataBytes),
 			})
 			require.NoError(t, err)
@@ -384,7 +383,7 @@ func TestParquetEncodeProcessor(t *testing.T) {
 		reader, err := newParquetEncodeProcessor(nil, testPMSchema(), &parquet.Uncompressed)
 		require.NoError(t, err)
 
-		readerResBatches, err := reader.ProcessBatch(context.Background(), inBatch)
+		readerResBatches, err := reader.ProcessBatch(t.Context(), inBatch)
 		require.NoError(t, err)
 
 		require.Len(t, readerResBatches, 1)
@@ -468,7 +467,7 @@ schema:
 		t.Run(fmt.Sprintf("iteration %d", i), func(t *testing.T) {
 			defer wg.Done()
 
-			encodedBatches, err := encodeProc.ProcessBatch(context.Background(), inBatch)
+			encodedBatches, err := encodeProc.ProcessBatch(t.Context(), inBatch)
 			require.NoError(t, err)
 			require.Len(t, encodedBatches, 1)
 			require.Len(t, encodedBatches[0], 1)

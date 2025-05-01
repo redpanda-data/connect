@@ -78,7 +78,7 @@ string_columns:
 		},
 	}
 
-	require.NoError(t, db.WriteBatch(context.Background(), service.MessageBatch{
+	require.NoError(t, db.WriteBatch(t.Context(), service.MessageBatch{
 		service.NewMessage([]byte(`{"id":"foo","content":"foo stuff"}`)),
 		service.NewMessage([]byte(`{"id":"bar","content":"bar stuff"}`)),
 	}))
@@ -151,7 +151,7 @@ backoff:
 		},
 	}
 
-	require.NoError(t, db.WriteBatch(context.Background(), service.MessageBatch{
+	require.NoError(t, db.WriteBatch(t.Context(), service.MessageBatch{
 		service.NewMessage([]byte(`{"id":"foo","content":"foo stuff"}`)),
 		service.NewMessage([]byte(`{"id":"bar","content":"bar stuff"}`)),
 		service.NewMessage([]byte(`{"id":"baz","content":"baz stuff"}`)),
@@ -260,7 +260,7 @@ string_columns:
 		},
 	}
 
-	require.NoError(t, db.WriteBatch(context.Background(), service.MessageBatch{
+	require.NoError(t, db.WriteBatch(t.Context(), service.MessageBatch{
 		service.NewMessage([]byte(`{"id":"foo","content":"foo stuff"}`)),
 		service.NewMessage([]byte(`{"id":"bar","content":"bar stuff"}`)),
 		service.NewMessage([]byte(`{"id":"baz","content":"baz stuff"}`)),
@@ -357,7 +357,7 @@ string_columns:
 
 	expErr := service.NewBatchError(msg, errors.New("woop"))
 	expErr.Failed(1, barErr)
-	require.Equal(t, expErr, db.WriteBatch(context.Background(), msg))
+	require.Equal(t, expErr, db.WriteBatch(t.Context(), msg))
 
 	batchExpected := []types.WriteRequest{
 		{
@@ -466,7 +466,7 @@ string_columns:
 		service.NewMessage([]byte(`{"id":"baz","content":"baz stuff"}`)),
 	}
 
-	require.Equal(t, errors.New("failed to set 1 items"), db.WriteBatch(context.Background(), msg))
+	require.Equal(t, errors.New("failed to set 1 items"), db.WriteBatch(t.Context(), msg))
 
 	expected := [][]types.WriteRequest{
 		{

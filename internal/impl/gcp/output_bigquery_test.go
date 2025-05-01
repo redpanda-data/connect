@@ -221,8 +221,8 @@ csv:
 	require.NoError(t, err)
 
 	output.clientURL = gcpBQClientURL(server.URL)
-	err = output.Connect(context.Background())
-	defer output.Close(context.Background())
+	err = output.Connect(t.Context())
+	defer output.Close(t.Context())
 	require.NoError(t, err)
 
 	data := []byte("1,2,3")
@@ -271,8 +271,8 @@ table: table_meow
 
 	output.clientURL = gcpBQClientURL(server.URL)
 
-	err = output.Connect(context.Background())
-	defer output.Close(context.Background())
+	err = output.Connect(t.Context())
+	defer output.Close(t.Context())
 
 	require.EqualError(t, err, "dataset does not exist: dataset_meow")
 }
@@ -297,11 +297,11 @@ table: table_meow
 
 	output.clientURL = gcpBQClientURL(server.URL)
 
-	ctx, done := context.WithTimeout(context.Background(), time.Millisecond*200)
+	ctx, done := context.WithTimeout(t.Context(), time.Millisecond*200)
 	defer done()
 
 	err = output.Connect(ctx)
-	defer output.Close(context.Background())
+	defer output.Close(t.Context())
 
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "googleapi: got HTTP response code 500 with body: {}")
@@ -334,11 +334,11 @@ create_disposition: CREATE_NEVER
 
 	output.clientURL = gcpBQClientURL(server.URL)
 
-	ctx, done := context.WithTimeout(context.Background(), time.Millisecond*200)
+	ctx, done := context.WithTimeout(t.Context(), time.Millisecond*200)
 	defer done()
 
 	err = output.Connect(ctx)
-	defer output.Close(context.Background())
+	defer output.Close(t.Context())
 
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "table does not exist: table_meow")
@@ -371,11 +371,11 @@ create_disposition: CREATE_NEVER
 
 	output.clientURL = gcpBQClientURL(server.URL)
 
-	ctx, done := context.WithTimeout(context.Background(), time.Millisecond*200)
+	ctx, done := context.WithTimeout(t.Context(), time.Millisecond*200)
 	defer done()
 
 	err = output.Connect(ctx)
-	defer output.Close(context.Background())
+	defer output.Close(t.Context())
 
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "googleapi: got HTTP response code 500 with body: {}")
@@ -400,8 +400,8 @@ table: table_meow
 
 	output.clientURL = gcpBQClientURL(server.URL)
 
-	err = output.Connect(context.Background())
-	defer output.Close(context.Background())
+	err = output.Connect(t.Context())
+	defer output.Close(t.Context())
 
 	require.NoError(t, err)
 }
@@ -432,8 +432,8 @@ table: table_meow
 
 	output.clientURL = gcpBQClientURL(server.URL)
 
-	err = output.Connect(context.Background())
-	defer output.Close(context.Background())
+	err = output.Connect(t.Context())
+	defer output.Close(t.Context())
 
 	require.NoError(t, err)
 }
@@ -487,12 +487,12 @@ table: table_meow
 
 	output.clientURL = gcpBQClientURL(server.URL)
 
-	err = output.Connect(context.Background())
-	defer output.Close(context.Background())
+	err = output.Connect(t.Context())
+	defer output.Close(t.Context())
 
 	require.NoError(t, err)
 
-	err = output.WriteBatch(context.Background(), service.MessageBatch{
+	err = output.WriteBatch(t.Context(), service.MessageBatch{
 		service.NewMessage([]byte(`{"what1":"meow1","what2":1,"what3":true}`)),
 		service.NewMessage([]byte(`{"what1":"meow2","what2":2,"what3":false}`)),
 	})
@@ -531,12 +531,12 @@ table: table_meow
 
 	output.clientURL = gcpBQClientURL(server.URL)
 
-	err = output.Connect(context.Background())
-	defer output.Close(context.Background())
+	err = output.Connect(t.Context())
+	defer output.Close(t.Context())
 
 	require.NoError(t, err)
 
-	err = output.WriteBatch(context.Background(), service.MessageBatch{
+	err = output.WriteBatch(t.Context(), service.MessageBatch{
 		service.NewMessage([]byte(`{"what1":"meow1","what2":1,"what3":true}`)),
 		service.NewMessage([]byte(`{"what1":"meow2","what2":2,"what3":false}`)),
 	})

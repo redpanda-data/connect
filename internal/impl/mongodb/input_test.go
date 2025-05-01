@@ -15,7 +15,6 @@
 package mongodb
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -53,7 +52,7 @@ query: |
 
 	mongoInput, err := newMongoInput(mongoConfig, resources.Logger())
 	require.NoError(t, err)
-	require.NoError(t, mongoInput.Close(context.Background()))
+	require.NoError(t, mongoInput.Close(t.Context()))
 }
 
 func TestInputIntegration(t *testing.T) {
@@ -96,8 +95,8 @@ func TestInputIntegration(t *testing.T) {
 			ApplyURI("mongodb://localhost:" + resource.GetPort("27017/tcp"))); err != nil {
 			return err
 		}
-		if err := mongoClient.Database(dbName).CreateCollection(context.Background(), collName); err != nil {
-			_ = mongoClient.Disconnect(context.Background())
+		if err := mongoClient.Database(dbName).CreateCollection(t.Context(), collName); err != nil {
+			_ = mongoClient.Disconnect(t.Context())
 			return err
 		}
 		return nil
@@ -135,7 +134,7 @@ func TestInputIntegration(t *testing.T) {
 		},
 	}
 
-	_, err = coll.InsertMany(context.Background(), sampleData)
+	_, err = coll.InsertMany(t.Context(), sampleData)
 	require.NoError(t, err)
 
 	type testCase struct {
@@ -147,7 +146,7 @@ func TestInputIntegration(t *testing.T) {
 	cases := map[string]testCase{
 		"find": {
 			query: func(coll *mongo.Collection) (*mongo.Cursor, error) {
-				return coll.Find(context.Background(), bson.M{
+				return coll.Find(t.Context(), bson.M{
 					"age": bson.M{
 						"$gte": 18,
 					},
@@ -173,7 +172,7 @@ limit: 3
 		},
 		"aggregate": {
 			query: func(coll *mongo.Collection) (*mongo.Cursor, error) {
-				return coll.Aggregate(context.Background(), []any{
+				return coll.Aggregate(t.Context(), []any{
 					bson.M{
 						"$match": bson.M{
 							"age": bson.M{
@@ -240,7 +239,7 @@ func testInput(
 ) {
 	t.Helper()
 
-	controlCtx := context.Background()
+	controlCtx := t.Context()
 	controlConn, err := mongo.Connect(options.Client().ApplyURI("mongodb://mongoadmin:secret@localhost:" + port))
 	require.NoError(t, err)
 	controlColl := controlConn.Database("TestDB").Collection("TestCollection")
@@ -268,7 +267,7 @@ func testInput(
 	mongoInput, err := newMongoInput(mongoConfig, resources.Logger())
 	require.NoError(t, err)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	err = mongoInput.Connect(ctx)
 	require.NoError(t, err)
 
@@ -295,5 +294,5 @@ func testInput(
 	assert.Equal(t, service.ErrEndOfInput, err)
 	require.Nil(t, ack)
 
-	require.NoError(t, mongoInput.Close(context.Background()))
+	require.NoError(t, mongoInput.Close(t.Context()))
 }

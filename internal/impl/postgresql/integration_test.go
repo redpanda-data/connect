@@ -221,7 +221,7 @@ pg_stream:
 	license.InjectTestService(streamOut.Resources())
 
 	go func() {
-		_ = streamOut.Run(context.Background())
+		_ = streamOut.Run(t.Context())
 	}()
 
 	assert.Eventually(t, func() bool {
@@ -269,7 +269,7 @@ pg_stream:
 	license.InjectTestService(streamOut.Resources())
 
 	go func() {
-		assert.NoError(t, streamOut.Run(context.Background()))
+		assert.NoError(t, streamOut.Run(t.Context()))
 	}()
 
 	time.Sleep(time.Second * 5)
@@ -331,7 +331,7 @@ pg_stream:
 	license.InjectTestService(streamOut.Resources())
 
 	go func() {
-		_ = streamOut.Run(context.Background())
+		_ = streamOut.Run(t.Context())
 	}()
 
 	assert.Eventually(t, func() bool {
@@ -415,7 +415,7 @@ pg_stream:
 	license.InjectTestService(streamOut.Resources())
 
 	go func() {
-		err = streamOut.Run(context.Background())
+		err = streamOut.Run(t.Context())
 		require.NoError(t, err)
 	}()
 
@@ -464,7 +464,7 @@ pg_stream:
 	license.InjectTestService(streamOut.Resources())
 
 	go func() {
-		assert.NoError(t, streamOut.Run(context.Background()))
+		assert.NoError(t, streamOut.Run(t.Context()))
 	}()
 
 	time.Sleep(time.Second * 5)
@@ -560,7 +560,7 @@ pg_stream:
 	license.InjectTestService(streamOut.Resources())
 
 	go func() {
-		err = streamOut.Run(context.Background())
+		err = streamOut.Run(t.Context())
 		require.NoError(t, err)
 	}()
 
@@ -659,7 +659,7 @@ pg_stream:
 			license.InjectTestService(streamOut.Resources())
 
 			go func() {
-				_ = streamOut.Run(context.Background())
+				_ = streamOut.Run(t.Context())
 			}()
 
 			assert.Eventually(t, func() bool {
@@ -707,7 +707,7 @@ pg_stream:
 			license.InjectTestService(streamOut.Resources())
 
 			go func() {
-				assert.NoError(t, streamOut.Run(context.Background()))
+				assert.NoError(t, streamOut.Run(t.Context()))
 			}()
 
 			time.Sleep(time.Second * 5)
@@ -803,7 +803,7 @@ pg_stream:
 			license.InjectTestService(streamOut.Resources())
 
 			go func() {
-				_ = streamOut.Run(context.Background())
+				_ = streamOut.Run(t.Context())
 			}()
 
 			assert.Eventually(t, func() bool {
@@ -925,7 +925,7 @@ read_until:
 	license.InjectTestService(streamOut.Resources())
 	streamStopped := make(chan any, 1)
 	go func() {
-		err = streamOut.Run(context.Background())
+		err = streamOut.Run(t.Context())
 		require.NoError(t, err)
 		streamStopped <- nil
 	}()
@@ -1015,7 +1015,7 @@ postgres_cdc:
 	license.InjectTestService(streamOut.Resources())
 
 	go func() {
-		_ = streamOut.Run(context.Background())
+		_ = streamOut.Run(t.Context())
 	}()
 
 	assert.Eventually(t, func() bool {
@@ -1116,7 +1116,7 @@ postgres_cdc:
 	require.NoError(t, err)
 	license.InjectTestService(streamOut.Resources())
 	go func() {
-		require.NoError(t, streamOut.Run(context.Background()))
+		require.NoError(t, streamOut.Run(t.Context()))
 	}()
 	time.Sleep(time.Second)
 

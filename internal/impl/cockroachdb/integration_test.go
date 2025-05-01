@@ -60,16 +60,16 @@ func TestIntegrationCRDB(t *testing.T) {
 
 	require.NoError(t, pool.Retry(func() error {
 		if pgpool == nil {
-			if pgpool, err = pgxpool.Connect(context.Background(), fmt.Sprintf("postgresql://root@localhost:%v/defaultdb?sslmode=disable", port)); err != nil {
+			if pgpool, err = pgxpool.Connect(t.Context(), fmt.Sprintf("postgresql://root@localhost:%v/defaultdb?sslmode=disable", port)); err != nil {
 				return err
 			}
 		}
 		// Enable changefeeds
-		if _, err = pgpool.Exec(context.Background(), "SET CLUSTER SETTING kv.rangefeed.enabled = true;"); err != nil {
+		if _, err = pgpool.Exec(t.Context(), "SET CLUSTER SETTING kv.rangefeed.enabled = true;"); err != nil {
 			return err
 		}
 		// Create table
-		_, err = pgpool.Exec(context.Background(), "CREATE TABLE foo (a INT PRIMARY KEY);")
+		_, err = pgpool.Exec(t.Context(), "CREATE TABLE foo (a INT PRIMARY KEY);")
 		return err
 	}))
 	t.Cleanup(func() {
@@ -79,7 +79,7 @@ func TestIntegrationCRDB(t *testing.T) {
 	// Create a backlog of rows
 	for i := 0; i < 100; i++ {
 		// Insert some rows
-		if _, err = pgpool.Exec(context.Background(), fmt.Sprintf("INSERT INTO foo VALUES (%v);", i)); err != nil {
+		if _, err = pgpool.Exec(t.Context(), fmt.Sprintf("INSERT INTO foo VALUES (%v);", i)); err != nil {
 			return
 		}
 	}
@@ -118,12 +118,12 @@ file:
 	require.NoError(t, err)
 
 	go func() {
-		_ = streamOut.Run(context.Background())
+		_ = streamOut.Run(t.Context())
 	}()
 
 	for i := 0; i < 900; i++ {
 		// Insert some more rows in
-		if _, err = pgpool.Exec(context.Background(), fmt.Sprintf("INSERT INTO foo VALUES (%v);", 100+i)); err != nil {
+		if _, err = pgpool.Exec(t.Context(), fmt.Sprintf("INSERT INTO foo VALUES (%v);", 100+i)); err != nil {
 			t.Error(err)
 		}
 	}
@@ -158,13 +158,13 @@ file:
 	require.NoError(t, err)
 
 	go func() {
-		assert.NoError(t, streamOut.Run(context.Background()))
+		assert.NoError(t, streamOut.Run(t.Context()))
 	}()
 
 	time.Sleep(time.Second)
 	for i := 0; i < 50; i++ {
 		// Insert some more rows
-		if _, err = pgpool.Exec(context.Background(), fmt.Sprintf("INSERT INTO foo VALUES (%v);", 1000+i)); err != nil {
+		if _, err = pgpool.Exec(t.Context(), fmt.Sprintf("INSERT INTO foo VALUES (%v);", 1000+i)); err != nil {
 			t.Error(err)
 		}
 	}

@@ -74,11 +74,11 @@ args_mapping: 'root = [ this.id ]'
 
 			insertProc, err := isql.NewSQLInsertProcessorFromConfig(insertConfig, service.MockResources())
 			require.NoError(t, err)
-			t.Cleanup(func() { insertProc.Close(context.Background()) })
+			t.Cleanup(func() { insertProc.Close(t.Context()) })
 
 			selectProc, err := isql.NewSQLSelectProcessorFromConfig(selectConfig, service.MockResources())
 			require.NoError(t, err)
-			t.Cleanup(func() { selectProc.Close(context.Background()) })
+			t.Cleanup(func() { selectProc.Close(t.Context()) })
 
 			fn(t, insertProc, selectProc)
 		})
@@ -127,11 +127,11 @@ args_mapping: 'root = [ this.id ]'
 
 			insertProc, err := isql.NewSQLRawProcessorFromConfig(insertConfig, service.MockResources())
 			require.NoError(t, err)
-			t.Cleanup(func() { insertProc.Close(context.Background()) })
+			t.Cleanup(func() { insertProc.Close(t.Context()) })
 
 			selectProc, err := isql.NewSQLRawProcessorFromConfig(selectConfig, service.MockResources())
 			require.NoError(t, err)
-			t.Cleanup(func() { selectProc.Close(context.Background()) })
+			t.Cleanup(func() { selectProc.Close(t.Context()) })
 
 			fn(t, insertProc, selectProc)
 		})
@@ -191,11 +191,11 @@ queries:
 
 			insertProc, err := isql.NewSQLRawProcessorFromConfig(insertConfig, service.MockResources())
 			require.NoError(t, err)
-			t.Cleanup(func() { insertProc.Close(context.Background()) })
+			t.Cleanup(func() { insertProc.Close(t.Context()) })
 
 			selectProc, err := isql.NewSQLRawProcessorFromConfig(selectConfig, service.MockResources())
 			require.NoError(t, err)
-			t.Cleanup(func() { selectProc.Close(context.Background()) })
+			t.Cleanup(func() { selectProc.Close(t.Context()) })
 
 			fn(t, insertProc, selectProc)
 		})
@@ -244,11 +244,11 @@ result_codec: json_array
 
 			insertProc, err := isql.NewSQLDeprecatedProcessorFromConfig(insertConfig, service.MockResources())
 			require.NoError(t, err)
-			t.Cleanup(func() { insertProc.Close(context.Background()) })
+			t.Cleanup(func() { insertProc.Close(t.Context()) })
 
 			selectProc, err := isql.NewSQLDeprecatedProcessorFromConfig(selectConfig, service.MockResources())
 			require.NoError(t, err)
-			t.Cleanup(func() { selectProc.Close(context.Background()) })
+			t.Cleanup(func() { selectProc.Close(t.Context()) })
 
 			fn(t, insertProc, selectProc)
 		})
@@ -265,7 +265,7 @@ var testBatchProcessorBasic = testProcessors("basic", func(t *testing.T, insertP
 }`, i, i))))
 	}
 
-	resBatches, err := insertProc.ProcessBatch(context.Background(), insertBatch)
+	resBatches, err := insertProc.ProcessBatch(t.Context(), insertBatch)
 	require.NoError(t, err)
 	require.Len(t, resBatches, 1)
 	require.Len(t, resBatches[0], len(insertBatch))
@@ -278,7 +278,7 @@ var testBatchProcessorBasic = testProcessors("basic", func(t *testing.T, insertP
 		queryBatch = append(queryBatch, service.NewMessage([]byte(fmt.Sprintf(`{"id":"doc-%d"}`, i))))
 	}
 
-	resBatches, err = selectProc.ProcessBatch(context.Background(), queryBatch)
+	resBatches, err = selectProc.ProcessBatch(t.Context(), queryBatch)
 	require.NoError(t, err)
 	require.Len(t, resBatches, 1)
 	require.Len(t, resBatches[0], len(queryBatch))
@@ -314,7 +314,7 @@ var testBatchProcessorParallel = testProcessors("parallel", func(t *testing.T, i
 			defer wg.Done()
 			<-startChan
 			for _, msg := range insertBatch {
-				_, err := insertProc.ProcessBatch(context.Background(), service.MessageBatch{msg})
+				_, err := insertProc.ProcessBatch(t.Context(), service.MessageBatch{msg})
 				require.NoError(t, err)
 			}
 		}()
@@ -338,7 +338,7 @@ var testBatchProcessorParallel = testProcessors("parallel", func(t *testing.T, i
 			defer wg.Done()
 			<-startChan
 			for _, msg := range queryBatch {
-				resBatches, err := selectProc.ProcessBatch(context.Background(), service.MessageBatch{msg})
+				resBatches, err := selectProc.ProcessBatch(t.Context(), service.MessageBatch{msg})
 				require.NoError(t, err)
 				require.Len(t, resBatches, 1)
 				require.Len(t, resBatches[0], 1)
@@ -361,7 +361,7 @@ func rawProcessorTest(t *testing.T, insertProc, selectProc service.BatchProcesso
 }`, i, i))))
 	}
 
-	resBatches, err := insertProc.ProcessBatch(context.Background(), insertBatch)
+	resBatches, err := insertProc.ProcessBatch(t.Context(), insertBatch)
 	require.NoError(t, err)
 	require.Len(t, resBatches, 1)
 	require.Len(t, resBatches[0], len(insertBatch))
@@ -374,7 +374,7 @@ func rawProcessorTest(t *testing.T, insertProc, selectProc service.BatchProcesso
 		queryBatch = append(queryBatch, service.NewMessage([]byte(fmt.Sprintf(`{"id":"doc-%d"}`, i))))
 	}
 
-	resBatches, err = selectProc.ProcessBatch(context.Background(), queryBatch)
+	resBatches, err = selectProc.ProcessBatch(t.Context(), queryBatch)
 	require.NoError(t, err)
 	require.Len(t, resBatches, 1)
 	require.Len(t, resBatches[0], len(queryBatch))
@@ -442,7 +442,7 @@ processors:
 		require.NoError(t, err)
 
 		go func() {
-			assert.NoError(t, streamIn.Run(context.Background()))
+			assert.NoError(t, streamIn.Run(t.Context()))
 		}()
 
 		streamOutBuilder := service.NewStreamBuilder()
@@ -468,10 +468,10 @@ processors:
 	"baz": "and this"
 }`, i, i))))
 		}
-		require.NoError(t, inFn(context.Background(), insertBatch))
+		require.NoError(t, inFn(t.Context(), insertBatch))
 		require.NoError(t, streamIn.StopWithin(15*time.Second))
 
-		require.NoError(t, streamOut.Run(context.Background()))
+		require.NoError(t, streamOut.Run(t.Context()))
 
 		assert.Equal(t, []string{
 			"{\"bar\":0,\"baz\":\"and this\",\"foo\":\"doc-0\"}",
@@ -564,7 +564,7 @@ processors:
 		require.NoError(t, err)
 
 		go func() {
-			assert.NoError(t, streamIn.Run(context.Background()))
+			assert.NoError(t, streamIn.Run(t.Context()))
 		}()
 
 		streamOutBuilder := service.NewStreamBuilder()
@@ -590,10 +590,10 @@ processors:
 	"baz": "and this"
 }`, i, i))))
 		}
-		require.NoError(t, inFn(context.Background(), insertBatch))
+		require.NoError(t, inFn(t.Context(), insertBatch))
 		require.NoError(t, streamIn.StopWithin(15*time.Second))
 
-		require.NoError(t, streamOut.Run(context.Background()))
+		require.NoError(t, streamOut.Run(t.Context()))
 
 		assert.Equal(t, []string{
 			"{\"bar\":0,\"baz\":\"and this\",\"foo\":\"doc-0\"}",
@@ -870,14 +870,14 @@ args_mapping: 'root = [ this.foo, this.embedding.vector() ]'
 	require.NoError(t, err)
 	insertProc, err := isql.NewSQLInsertProcessorFromConfig(insertConfig, service.MockResources())
 	require.NoError(t, err)
-	t.Cleanup(func() { insertProc.Close(context.Background()) })
+	t.Cleanup(func() { insertProc.Close(t.Context()) })
 
 	insertBatch := service.MessageBatch{
 		service.NewMessage([]byte(`{"foo": "blob","embedding": [4,5,6]}`)),
 		service.NewMessage([]byte(`{"foo": "fish","embedding": [1,2,3]}`)),
 	}
 
-	resBatches, err := insertProc.ProcessBatch(context.Background(), insertBatch)
+	resBatches, err := insertProc.ProcessBatch(t.Context(), insertBatch)
 	require.NoError(t, err)
 	require.Len(t, resBatches, 1)
 	require.Len(t, resBatches[0], len(insertBatch))
@@ -898,10 +898,10 @@ suffix: ORDER BY embedding <-> '[3,1,2]' LIMIT 1
 
 	selectProc, err := isql.NewSQLSelectProcessorFromConfig(selectConfig, service.MockResources())
 	require.NoError(t, err)
-	t.Cleanup(func() { selectProc.Close(context.Background()) })
+	t.Cleanup(func() { selectProc.Close(t.Context()) })
 
 	queryBatch := service.MessageBatch{service.NewMessage([]byte(`{}`))}
-	resBatches, err = selectProc.ProcessBatch(context.Background(), queryBatch)
+	resBatches, err = selectProc.ProcessBatch(t.Context(), queryBatch)
 	require.NoError(t, err)
 	require.Len(t, resBatches, 1)
 	require.Len(t, resBatches[0], 1)
@@ -1312,11 +1312,11 @@ args_mapping: 'root = [ this.foo ]'
 
 	insertProc, err := isql.NewSQLInsertProcessorFromConfig(insertConfig, service.MockResources())
 	require.NoError(t, err)
-	t.Cleanup(func() { insertProc.Close(context.Background()) })
+	t.Cleanup(func() { insertProc.Close(t.Context()) })
 
 	selectProc, err := isql.NewSQLSelectProcessorFromConfig(selectConfig, service.MockResources())
 	require.NoError(t, err)
-	t.Cleanup(func() { selectProc.Close(context.Background()) })
+	t.Cleanup(func() { selectProc.Close(t.Context()) })
 
 	insertBatch := service.MessageBatch{service.NewMessage([]byte(`{
   "foo": "blobfish",
@@ -1324,7 +1324,7 @@ args_mapping: 'root = [ this.foo ]'
   "baz": 41
 }`))}
 
-	resBatches, err := insertProc.ProcessBatch(context.Background(), insertBatch)
+	resBatches, err := insertProc.ProcessBatch(t.Context(), insertBatch)
 	require.NoError(t, err)
 	require.Len(t, resBatches, 1)
 	require.Len(t, resBatches[0], len(insertBatch))
@@ -1334,7 +1334,7 @@ args_mapping: 'root = [ this.foo ]'
 
 	queryBatch := service.MessageBatch{service.NewMessage([]byte(`{"foo":"blobfish"}`))}
 
-	resBatches, err = selectProc.ProcessBatch(context.Background(), queryBatch)
+	resBatches, err = selectProc.ProcessBatch(t.Context(), queryBatch)
 	require.NoError(t, err)
 	require.Len(t, resBatches, 1)
 	require.Len(t, resBatches[0], 1)

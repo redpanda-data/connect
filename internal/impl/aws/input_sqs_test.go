@@ -119,7 +119,7 @@ func (m *mockSqsInput) DeleteMessageBatch(ctx context.Context, input *sqs.Delete
 }
 
 func TestSQSInput(t *testing.T) {
-	tCtx := context.Background()
+	tCtx := t.Context()
 	defer tCtx.Done()
 
 	messages := []types.Message{
@@ -141,7 +141,7 @@ func TestSQSInput(t *testing.T) {
 	}
 	expectedMessages := len(messages)
 
-	conf, err := config.LoadDefaultConfig(context.Background(),
+	conf, err := config.LoadDefaultConfig(t.Context(),
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("xxxxx", "xxxxx", "xxxxx")),
 	)
 	require.NoError(t, err)
@@ -219,7 +219,7 @@ func TestSQSInput(t *testing.T) {
 }
 
 func TestSQSInputBatchAck(t *testing.T) {
-	tCtx := context.Background()
+	tCtx := t.Context()
 	defer tCtx.Done()
 
 	messages := []types.Message{}
@@ -232,7 +232,7 @@ func TestSQSInputBatchAck(t *testing.T) {
 	}
 	expectedMessages := len(messages)
 
-	conf, err := config.LoadDefaultConfig(context.Background(),
+	conf, err := config.LoadDefaultConfig(t.Context(),
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("xxxxx", "xxxxx", "xxxxx")),
 	)
 	require.NoError(t, err)

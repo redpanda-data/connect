@@ -15,7 +15,6 @@
 package redis
 
 import (
-	"context"
 	"fmt"
 	"net/url"
 	"sync"
@@ -54,7 +53,7 @@ func TestIntegrationRedisRateLimit(t *testing.T) {
 		Network: uri.Scheme,
 	})
 
-	ctx := context.Background()
+	ctx := t.Context()
 	if err = pool.Retry(func() error {
 		return client.Ping(ctx).Err()
 	}); err != nil {
@@ -89,7 +88,7 @@ url: `+url, nil)
 	rl, err := newRedisRatelimitFromConfig(conf)
 	require.NoError(t, err)
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for i := 0; i < 10; i++ {
 		period, err := rl.Access(ctx)
@@ -117,7 +116,7 @@ url: `+url, nil)
 	rl, err := newRedisRatelimitFromConfig(conf)
 	require.NoError(t, err)
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	wg := sync.WaitGroup{}
 	wg.Add(10)

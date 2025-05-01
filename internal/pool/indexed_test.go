@@ -39,7 +39,7 @@ func TestIndexedAcquire(t *testing.T) {
 		mu.Unlock()
 		return bar{name}, nil
 	})
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	for i := 1; i <= 5; i++ {
 		b, err := p.Acquire(ctx, strconv.Itoa(i))
 		require.NoError(t, err)
@@ -67,7 +67,7 @@ func TestIndexedCtorCancellation(t *testing.T) {
 		<-ctx.Done()
 		return nil, ctx.Err()
 	})
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	go func() {
 		time.Sleep(100 * time.Millisecond)
 		cancel()

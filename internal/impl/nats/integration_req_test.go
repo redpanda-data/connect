@@ -15,7 +15,6 @@
 package nats
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -84,7 +83,7 @@ func TestIntegrationNatsReq(t *testing.T) {
 			require.NoError(t, err)
 
 			m := service.NewMessage([]byte("hello"))
-			return p.Process(context.Background(), m)
+			return p.Process(t.Context(), m)
 		}
 
 		t.Run("normal request", func(t *testing.T) {

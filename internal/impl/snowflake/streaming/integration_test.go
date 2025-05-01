@@ -9,7 +9,6 @@
 package streaming_test
 
 import (
-	"context"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/json"
@@ -54,7 +53,7 @@ func envOr(name, dflt string) string {
 
 func setup(t *testing.T) (*streaming.SnowflakeRestClient, *streaming.SnowflakeServiceClient) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 	privateKeyFile, err := os.ReadFile("./resources/rsa_key.p8")
 	if errors.Is(err, os.ErrNotExist) {
 		t.Skip("no RSA private key, skipping snowflake test")
@@ -89,7 +88,7 @@ func setup(t *testing.T) (*streaming.SnowflakeRestClient, *streaming.SnowflakeSe
 }
 
 func TestAllSnowflakeDatatypes(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	restClient, streamClient := setup(t)
 	channelOpts := streaming.ChannelOptions{
 		Name:         t.Name(),
@@ -274,7 +273,7 @@ func TestAllSnowflakeDatatypes(t *testing.T) {
 }
 
 func TestIntegerCompat(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	restClient, streamClient := setup(t)
 	channelOpts := streaming.ChannelOptions{
 		Name:         t.Name(),
@@ -349,7 +348,7 @@ func TestIntegerCompat(t *testing.T) {
 }
 
 func TestTimestampCompat(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	restClient, streamClient := setup(t)
 	channelOpts := streaming.ChannelOptions{
 		Name:         t.Name(),
@@ -498,7 +497,7 @@ func TestTimestampCompat(t *testing.T) {
 }
 
 func TestChannelReopenFails(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	restClient, streamClient := setup(t)
 	channelOpts := streaming.ChannelOptions{
 		Name:         t.Name(),
@@ -563,7 +562,7 @@ func TestChannelReopenFails(t *testing.T) {
 }
 
 func TestChannelOffsetToken(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	restClient, streamClient := setup(t)
 	channelOpts := streaming.ChannelOptions{
 		Name:         t.Name(),

@@ -15,7 +15,6 @@
 package confluent
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -101,7 +100,7 @@ avro:
 			}
 
 			if err == nil {
-				_ = e.Close(context.Background())
+				_ = e.Close(t.Context())
 			}
 			if test.errContains == "" {
 				require.NoError(t, err)
@@ -329,7 +328,7 @@ func TestSchemaRegistryDecodeAvro(t *testing.T) {
 			if useHamba {
 				decoder = hambaDecoder
 			}
-			outMsgs, err := decoder.Process(context.Background(), service.NewMessage([]byte(test.input)))
+			outMsgs, err := decoder.Process(t.Context(), service.NewMessage([]byte(test.input)))
 			if test.errContains != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), test.errContains)
@@ -359,7 +358,7 @@ func TestSchemaRegistryDecodeAvro(t *testing.T) {
 	}
 
 	for _, decoder := range []*schemaRegistryDecoder{goAvroDecoder, hambaDecoder} {
-		require.NoError(t, decoder.Close(context.Background()))
+		require.NoError(t, decoder.Close(t.Context()))
 		decoder.cacheMut.Lock()
 		assert.Empty(t, decoder.schemas)
 		decoder.cacheMut.Unlock()
@@ -430,7 +429,7 @@ root = this.apply("debeziumTimestampToAvroTimestamp")
 	require.NoError(t, err)
 
 	for _, decoder := range []*schemaRegistryDecoder{goAvroDecoder, hambaDecoder} {
-		outBatch, err := decoder.Process(context.Background(), service.NewMessage([]byte(input)))
+		outBatch, err := decoder.Process(t.Context(), service.NewMessage([]byte(input)))
 		require.NoError(t, err)
 		require.Len(t, outBatch, 1)
 		b, err := outBatch[0].AsBytes()
@@ -443,7 +442,7 @@ root = this.apply("debeziumTimestampToAvroTimestamp")
 	}
 
 	for _, decoder := range []*schemaRegistryDecoder{goAvroDecoder, hambaDecoder} {
-		require.NoError(t, decoder.Close(context.Background()))
+		require.NoError(t, decoder.Close(t.Context()))
 		decoder.cacheMut.Lock()
 		assert.Empty(t, decoder.schemas)
 		decoder.cacheMut.Unlock()
@@ -543,7 +542,7 @@ func TestSchemaRegistryDecodeAvroRawJson(t *testing.T) {
 			if useHamba {
 				decoder = hambaDecoder
 			}
-			outMsgs, err := decoder.Process(context.Background(), service.NewMessage([]byte(test.input)))
+			outMsgs, err := decoder.Process(t.Context(), service.NewMessage([]byte(test.input)))
 			if test.errContains != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), test.errContains)
@@ -573,7 +572,7 @@ func TestSchemaRegistryDecodeAvroRawJson(t *testing.T) {
 	}
 
 	for _, decoder := range []*schemaRegistryDecoder{goAvroDecoder, hambaDecoder} {
-		require.NoError(t, decoder.Close(context.Background()))
+		require.NoError(t, decoder.Close(t.Context()))
 		decoder.cacheMut.Lock()
 		assert.Empty(t, decoder.schemas)
 		decoder.cacheMut.Unlock()
@@ -589,7 +588,7 @@ func TestSchemaRegistryDecodeClearExpired(t *testing.T) {
 
 	decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, decodingConfig{}, schemaStaleAfter, service.MockResources())
 	require.NoError(t, err)
-	require.NoError(t, decoder.Close(context.Background()))
+	require.NoError(t, decoder.Close(t.Context()))
 
 	tStale := time.Now().Add(-time.Hour).Unix()
 	tNotStale := time.Now().Unix()
@@ -658,7 +657,7 @@ func TestSchemaRegistryDecodeProtobuf(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			outMsgs, err := decoder.Process(context.Background(), service.NewMessage([]byte(test.input)))
+			outMsgs, err := decoder.Process(t.Context(), service.NewMessage([]byte(test.input)))
 			if test.errContains != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), test.errContains)
@@ -677,7 +676,7 @@ func TestSchemaRegistryDecodeProtobuf(t *testing.T) {
 		})
 	}
 
-	require.NoError(t, decoder.Close(context.Background()))
+	require.NoError(t, decoder.Close(t.Context()))
 	decoder.cacheMut.Lock()
 	assert.Empty(t, decoder.schemas)
 	decoder.cacheMut.Unlock()
@@ -729,7 +728,7 @@ func TestSchemaRegistryDecodeJson(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			outMsgs, err := decoder.Process(context.Background(), service.NewMessage([]byte(test.input)))
+			outMsgs, err := decoder.Process(t.Context(), service.NewMessage([]byte(test.input)))
 			if test.errContains != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), test.errContains)
@@ -750,7 +749,7 @@ func TestSchemaRegistryDecodeJson(t *testing.T) {
 		})
 	}
 
-	require.NoError(t, decoder.Close(context.Background()))
+	require.NoError(t, decoder.Close(t.Context()))
 	decoder.cacheMut.Lock()
 	assert.Empty(t, decoder.schemas)
 	decoder.cacheMut.Unlock()

@@ -85,7 +85,7 @@ func memBufFromConf(t testing.TB, conf string) *sql.SQLiteBuffer {
 func TestBufferSQLiteBasic(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	block := memBufFromConf(t, fmt.Sprintf(`
 path: "%v"
 `, filepath.Join(tmpDir, "foo.db")))
@@ -113,7 +113,7 @@ path: "%v"
 func TestBufferSQLiteBatchPreservation(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	block := memBufFromConf(t, fmt.Sprintf(`
 path: "%v"
 `, filepath.Join(tmpDir, "foo.db")))
@@ -143,7 +143,7 @@ path: "%v"
 func TestBufferSQLiteBatchSplit(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	block := memBufFromConf(t, fmt.Sprintf(`
 path: "%v"
 post_processors:
@@ -175,7 +175,7 @@ post_processors:
 func TestBufferSQLiteProcessors(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	block := memBufFromConf(t, fmt.Sprintf(`
 path: "%v"
 pre_processors:
@@ -209,7 +209,7 @@ post_processors:
 func TestBufferSQLiteOwnership(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	block := memBufFromConf(t, fmt.Sprintf(`
 path: "%v"
 `, filepath.Join(tmpDir, "foo.db")))
@@ -254,7 +254,7 @@ path: "%v"
 func TestBufferSQLiteLoopingRandom(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	block := memBufFromConf(t, fmt.Sprintf(`
 path: "%v"
 `, filepath.Join(tmpDir, "foo.db")))
@@ -284,7 +284,7 @@ path: "%v"
 func TestBufferSQLiteLockStep(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	block := memBufFromConf(t, fmt.Sprintf(`
 path: "%v"
 `, filepath.Join(tmpDir, "foo.db")))
@@ -322,7 +322,7 @@ path: "%v"
 func TestBufferSQLiteAck(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	block := memBufFromConf(t, fmt.Sprintf(`
 path: "%v"
 `, filepath.Join(tmpDir, "foo.db")))
@@ -371,7 +371,7 @@ path: "%v"
 func TestBufferSQLiteCloseWithPending(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	block := memBufFromConf(t, fmt.Sprintf(`
 path: "%v"
 `, filepath.Join(tmpDir, "foo.db")))
@@ -412,7 +412,7 @@ path: "%v"
 func TestBufferSQLiteCloseAfterNack(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	conf := fmt.Sprintf(`
 path: "%v"
 `, filepath.Join(tmpDir, "foo.db"))
@@ -464,7 +464,7 @@ path: "%v"
 func BenchmarkBufferSQLiteWrites(b *testing.B) {
 	tmpDir := b.TempDir()
 
-	ctx := context.Background()
+	ctx := b.Context()
 	block := memBufFromConf(b, fmt.Sprintf(`
 path: "%v"
 `, filepath.Join(tmpDir, "foo.db")))
@@ -485,7 +485,7 @@ path: "%v"
 func BenchmarkBufferSQLiteReads(b *testing.B) {
 	tmpDir := b.TempDir()
 
-	ctx := context.Background()
+	ctx := b.Context()
 	block := memBufFromConf(b, fmt.Sprintf(`
 path: "%v"
 `, filepath.Join(tmpDir, "foo.db")))
@@ -518,7 +518,7 @@ path: "%v"
 func BenchmarkBufferSQLiteLockStep(b *testing.B) {
 	tmpDir := b.TempDir()
 
-	ctx := context.Background()
+	ctx := b.Context()
 	block := memBufFromConf(b, fmt.Sprintf(`
 path: "%v"
 `, filepath.Join(tmpDir, "foo.db")))
@@ -557,7 +557,7 @@ path: "%v"
 func BenchmarkBufferSQLiteLockStepLarge(b *testing.B) {
 	tmpDir := b.TempDir()
 
-	ctx := context.Background()
+	ctx := b.Context()
 	block := memBufFromConf(b, fmt.Sprintf(`
 path: "%v"
 `, filepath.Join(tmpDir, "foo.db")))
@@ -609,7 +609,7 @@ func BenchmarkBufferSQLiteBatch100(b *testing.B) {
 func benchmarkBufferSQLiteProcsBatchedN(b *testing.B, n int) {
 	tmpDir := b.TempDir()
 
-	ctx := context.Background()
+	ctx := b.Context()
 	block := memBufFromConf(b, fmt.Sprintf(`
 path: "%v"
 pre_processors:

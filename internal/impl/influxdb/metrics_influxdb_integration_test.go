@@ -15,7 +15,6 @@
 package influxdb
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"runtime"
@@ -108,7 +107,7 @@ tags:
 
 func testInfluxConnect(t *testing.T, i *influxDBMetrics, c client.Client) {
 	i.NewGaugeCtor("testing")().Set(31337)
-	i.Close(context.Background())
+	i.Close(t.Context())
 
 	resp, err := c.Query(client.Query{Command: `SELECT "hostname"::tag, "value"::field FROM "testing"`, Database: "db0"})
 	if err != nil {

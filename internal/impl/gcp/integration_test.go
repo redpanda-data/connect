@@ -71,7 +71,7 @@ func TestIntegrationGCP(t *testing.T) {
 
 	// Wait for fake-gcs-server to properly start up
 	err = pool.Retry(func() error {
-		ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancelFunc := context.WithTimeout(t.Context(), 5*time.Second)
 		defer cancelFunc()
 
 		client, eerr := storage.NewClient(ctx)

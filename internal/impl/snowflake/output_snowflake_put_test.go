@@ -346,7 +346,7 @@ snowpipe: '` + tc.snowpipe + `'
 
 			s.nowFn = func() time.Time { return time.Time{} }
 
-			err = s.WriteBatch(context.Background(), service.MessageBatch{
+			err = s.WriteBatch(t.Context(), service.MessageBatch{
 				service.NewMessage([]byte(`{"id":"foo","content":"foo stuff"}`)),
 				service.NewMessage([]byte(`{"id":"bar","content":"bar stuff"}`)),
 			})

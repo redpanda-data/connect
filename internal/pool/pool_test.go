@@ -62,7 +62,7 @@ func TestAcquire(t *testing.T) {
 		numCreated++
 		return foo{}, nil
 	})
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	for i := 1; i <= 5; i++ {
 		_, err := p.Acquire(ctx)
 		require.NoError(t, err)
@@ -85,7 +85,7 @@ func TestAcquire(t *testing.T) {
 	valResult := typed.NewAtomicValue[*foo](nil)
 	expected := foo{99}
 	go func() {
-		val, _ := p.Acquire(context.Background())
+		val, _ := p.Acquire(t.Context())
 		valResult.Store(&val)
 	}()
 	p.Release(expected)
@@ -99,7 +99,7 @@ func TestCtorCancellation(t *testing.T) {
 		<-ctx.Done()
 		return nil, ctx.Err()
 	})
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	go func() {
 		time.Sleep(100 * time.Millisecond)
 		cancel()
@@ -120,7 +120,7 @@ func TestRandomized(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < 100; j++ {
-				f, err := p.Acquire(context.Background())
+				f, err := p.Acquire(t.Context())
 				require.NoError(t, err)
 				time.Sleep(time.Millisecond)
 				p.Release(f)

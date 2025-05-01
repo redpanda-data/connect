@@ -15,7 +15,6 @@
 package jaeger
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -108,10 +107,10 @@ func TestNewJaeger(t *testing.T) {
 		require.NoError(t, err, test.Name)
 
 		// Add a span and flush it
-		_, span := jaegerProvider.Tracer("testProvider").Start(context.Background(), "testSpan")
+		_, span := jaegerProvider.Tracer("testProvider").Start(t.Context(), "testSpan")
 		span.AddEvent("testEvent")
 		span.End()
-		jaegerProvider.(*tracesdk.TracerProvider).ForceFlush(context.Background())
+		jaegerProvider.(*tracesdk.TracerProvider).ForceFlush(t.Context())
 
 		snapshots := exporter.GetSpans().Snapshots()
 		require.Len(t, snapshots, 1, test.Name)

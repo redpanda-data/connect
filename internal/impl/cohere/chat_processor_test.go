@@ -83,7 +83,7 @@ cohere_chat:
 	stream, err := builder.Build()
 	license.InjectTestService(stream.Resources())
 	require.NoError(t, err)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	done := make(chan struct{})
 	go func() {
@@ -94,7 +94,7 @@ cohere_chat:
 		}
 		require.NoError(t, err)
 	}()
-	err = handler(context.Background(), service.NewMessage([]byte(`"hello"`)))
+	err = handler(t.Context(), service.NewMessage([]byte(`"hello"`)))
 	require.NoError(t, err)
 	cancel()
 	<-done

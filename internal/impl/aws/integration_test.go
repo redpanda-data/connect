@@ -15,7 +15,6 @@
 package aws
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 	"testing"
@@ -67,7 +66,7 @@ func getLocalStack(t testing.TB) (port string) {
 				t.Logf("localstack probe error: %v", err)
 			}
 		}()
-		return createBucket(context.Background(), port, "test-bucket")
+		return createBucket(t.Context(), port, "test-bucket")
 	}))
 	return
 }

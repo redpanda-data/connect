@@ -10,7 +10,6 @@ package ollama
 
 import (
 	"bytes"
-	"context"
 	"net/http"
 	"net/url"
 	"testing"
@@ -41,7 +40,7 @@ func createCompletionProcessorForTest(t *testing.T, addr string) *ollamaCompleti
 func TestOllamaCompletionIntegration(t *testing.T) {
 	integration.CheckSkip(t)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	ollamaContainer, err := ollama.Run(ctx, "ollama/ollama:0.5.1")
 	assert.NoError(t, err)
 	defer func() {
@@ -52,7 +51,7 @@ func TestOllamaCompletionIntegration(t *testing.T) {
 	addr, err := ollamaContainer.ConnectionString(ctx)
 	assert.NoError(t, err)
 	proc := createCompletionProcessorForTest(t, addr)
-	err = proc.pullModel(context.Background())
+	err = proc.pullModel(t.Context())
 	assert.NoError(t, err)
 	msg := service.NewMessage([]byte("In one word what color is snow?"))
 	batch, err := proc.Process(ctx, msg)

@@ -15,7 +15,6 @@
 package redis
 
 import (
-	"context"
 	"fmt"
 	"runtime"
 	"strings"
@@ -58,7 +57,7 @@ func TestIntegrationRedisCache(t *testing.T) {
 			return cErr
 		}
 
-		cErr = r.Set(context.Background(), "benthos_test_redis_connect", []byte("foo bar"), nil)
+		cErr = r.Set(t.Context(), "benthos_test_redis_connect", []byte("foo bar"), nil)
 		return cErr
 	}))
 
@@ -150,7 +149,7 @@ kind: cluster
 			return cErr
 		}
 
-		cErr = r.Set(context.Background(), "benthos_test_redis_connect", []byte("foo bar"), nil)
+		cErr = r.Set(t.Context(), "benthos_test_redis_connect", []byte("foo bar"), nil)
 		return cErr
 	}))
 
@@ -262,7 +261,7 @@ master: mymaster
 			return cErr
 		}
 
-		cErr = r.Set(context.Background(), "benthos_test_redis_connect", []byte("foo bar"), nil)
+		cErr = r.Set(t.Context(), "benthos_test_redis_connect", []byte("foo bar"), nil)
 		return cErr
 	}))
 

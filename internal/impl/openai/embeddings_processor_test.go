@@ -55,7 +55,7 @@ func TestEmbedding(t *testing.T) {
 		text: text,
 	}
 	input := service.NewMessage([]byte(faker.Paragraph(options.WithGenerateUniqueValues(true))))
-	output, err := p.Process(context.Background(), input)
+	output, err := p.Process(t.Context(), input)
 	assert.NoError(t, err)
 	assert.Len(t, output, 1)
 	msg := output[0]
@@ -73,6 +73,6 @@ func TestEmbeddingInterpolationError(t *testing.T) {
 		text: text,
 	}
 	input := service.NewMessage([]byte(faker.Paragraph(options.WithGenerateUniqueValues(true))))
-	_, err = p.Process(context.Background(), input)
+	_, err = p.Process(t.Context(), input)
 	assert.Error(t, err)
 }

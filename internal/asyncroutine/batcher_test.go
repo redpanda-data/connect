@@ -36,7 +36,7 @@ func TestBatcherCancellation(t *testing.T) {
 	require.NoError(t, err)
 
 	// test request cancellation
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	var done atomic.Bool
 	go func() {
 		_, err := b.Submit(ctx, req{1})
@@ -51,7 +51,7 @@ func TestBatcherCancellation(t *testing.T) {
 	// test batcher cancellation
 	done.Store(false)
 	go func() {
-		_, err := b.Submit(context.Background(), req{1})
+		_, err := b.Submit(t.Context(), req{1})
 		require.ErrorIs(t, err, context.Canceled)
 		done.Store(true)
 	}()
@@ -79,7 +79,7 @@ func TestBatching(t *testing.T) {
 	for i := range 100 {
 		go func(i int) {
 			submitted.Done()
-			resp, err := b.Submit(context.Background(), req{i})
+			resp, err := b.Submit(t.Context(), req{i})
 			require.NoError(t, err)
 			require.Equal(t, i, resp.i)
 			done.Done()

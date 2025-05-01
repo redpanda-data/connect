@@ -15,7 +15,6 @@
 package gcp
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"testing"
@@ -83,7 +82,7 @@ func TestGCPBigQuerySelectProcessor(t *testing.T) {
 		service.NewMessage([]byte(`{"term": "test2"}`)),
 	}
 
-	batches, err := proc.ProcessBatch(context.Background(), inbatch)
+	batches, err := proc.ProcessBatch(t.Context(), inbatch)
 	require.NoError(t, err)
 	require.Len(t, batches, 1)
 
@@ -138,7 +137,7 @@ func TestGCPBigQuerySelectProcessor_IteratorError(t *testing.T) {
 		service.NewMessage(inmsg),
 	}
 
-	batches, err := proc.ProcessBatch(context.Background(), inbatch)
+	batches, err := proc.ProcessBatch(t.Context(), inbatch)
 	require.NoError(t, err)
 	require.Len(t, batches, 1)
 

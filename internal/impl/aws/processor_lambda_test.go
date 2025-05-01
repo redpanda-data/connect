@@ -46,7 +46,7 @@ func TestLambdaErrors(t *testing.T) {
 	p, err := newLambdaProc(mock, false, "foofn", 3, "", time.Second, service.MockResources())
 	require.NoError(t, err)
 
-	bCtx := context.Background()
+	bCtx := t.Context()
 	inBatch := service.MessageBatch{
 		service.NewMessage([]byte("foo")),
 		service.NewMessage([]byte("bar")),
@@ -90,7 +90,7 @@ func TestLambdaMutations(t *testing.T) {
 	p, err := newLambdaProc(mock, false, "foofn", 3, "", time.Second, service.MockResources())
 	require.NoError(t, err)
 
-	bCtx := context.Background()
+	bCtx := t.Context()
 	inBatch := service.MessageBatch{
 		service.NewMessage([]byte("foo")),
 		service.NewMessage([]byte("bar")),

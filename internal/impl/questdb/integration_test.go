@@ -33,7 +33,7 @@ import (
 )
 
 func TestIntegrationQuestDB(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	integration.CheckSkip(t)
 	t.Parallel()

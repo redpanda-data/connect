@@ -15,7 +15,6 @@
 package parquet
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -201,12 +200,12 @@ func TestParquetJSONSchemaRoundTrip(t *testing.T) {
 				inputBatch = append(inputBatch, service.NewMessage([]byte(d)))
 			}
 
-			writerResBatches, err := writer.ProcessBatch(context.Background(), inputBatch)
+			writerResBatches, err := writer.ProcessBatch(t.Context(), inputBatch)
 			require.NoError(t, err)
 			require.Len(t, writerResBatches, 1)
 			require.Len(t, writerResBatches[0], 1)
 
-			readerResBatches, err := reader.ProcessBatch(context.Background(), writerResBatches[0])
+			readerResBatches, err := reader.ProcessBatch(t.Context(), writerResBatches[0])
 			require.NoError(t, err)
 			require.Len(t, writerResBatches, 1)
 
@@ -280,12 +279,12 @@ func TestParquetJSONSchemaRoundTripInferSchema(t *testing.T) {
 				inputBatch = append(inputBatch, service.NewMessage([]byte(d)))
 			}
 
-			writerResBatches, err := writer.ProcessBatch(context.Background(), inputBatch)
+			writerResBatches, err := writer.ProcessBatch(t.Context(), inputBatch)
 			require.NoError(t, err)
 			require.Len(t, writerResBatches, 1)
 			require.Len(t, writerResBatches[0], 1)
 
-			readerResBatches, err := reader.ProcessBatch(context.Background(), writerResBatches[0])
+			readerResBatches, err := reader.ProcessBatch(t.Context(), writerResBatches[0])
 			require.NoError(t, err)
 			require.Len(t, writerResBatches, 1)
 

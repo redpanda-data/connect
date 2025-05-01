@@ -167,7 +167,7 @@ cache_resources:
 	stream, err := builder.Build()
 	require.NoError(t, err)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	runErr := make(chan error)
 	go func() { runErr <- stream.Run(ctx) }()
 	defer func() {

@@ -27,7 +27,7 @@ import (
 )
 
 func TestAvroReferences(t *testing.T) {
-	tCtx, done := context.WithTimeout(context.Background(), time.Second*10)
+	tCtx, done := context.WithTimeout(t.Context(), time.Second*10)
 	defer done()
 
 	rootSchema := `[

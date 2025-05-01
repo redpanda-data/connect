@@ -112,7 +112,7 @@ func TestIntegrationDynamoDBCache(t *testing.T) {
 
 	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
-		return createTable(context.Background(), t, resource.GetPort("8000/tcp"), "poketable")
+		return createTable(t.Context(), t, resource.GetPort("8000/tcp"), "poketable")
 	}))
 
 	template := `

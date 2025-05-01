@@ -106,7 +106,7 @@ func checkInput(i cloudwatch.PutMetricDataInput) map[string]checkedDatum {
 func TestCloudWatchBasic(t *testing.T) {
 	mockSvc := &mockCloudWatchClient{}
 	cw := cwmMock(mockSvc)
-	cw.ctx, cw.cancel = context.WithCancel(context.Background())
+	cw.ctx, cw.cancel = context.WithCancel(t.Context())
 
 	ctrFoo := cw.NewCounterCtor("counter.foo")()
 	ctrFoo.Incr(7)
@@ -220,7 +220,7 @@ func TestCloudWatchBasic(t *testing.T) {
 func TestCloudWatchMoreThan20Items(t *testing.T) {
 	mockSvc := &mockCloudWatchClient{}
 	cw := cwmMock(mockSvc)
-	cw.ctx, cw.cancel = context.WithCancel(context.Background())
+	cw.ctx, cw.cancel = context.WithCancel(t.Context())
 
 	exp := map[string]checkedDatum{}
 	for i := 0; i < 30; i++ {
@@ -252,7 +252,7 @@ func TestCloudWatchMoreThan20Items(t *testing.T) {
 func TestCloudWatchMoreThan150Values(t *testing.T) {
 	mockSvc := &mockCloudWatchClient{}
 	cw := cwmMock(mockSvc)
-	cw.ctx, cw.cancel = context.WithCancel(context.Background())
+	cw.ctx, cw.cancel = context.WithCancel(t.Context())
 
 	exp := checkedDatum{
 		unit:   "None",
@@ -287,7 +287,7 @@ func TestCloudWatchMoreThan150Values(t *testing.T) {
 func TestCloudWatchMoreThan150RandomReduce(t *testing.T) {
 	mockSvc := &mockCloudWatchClient{}
 	cw := cwmMock(mockSvc)
-	cw.ctx, cw.cancel = context.WithCancel(context.Background())
+	cw.ctx, cw.cancel = context.WithCancel(t.Context())
 
 	gge := cw.NewGaugeCtor("foo")()
 	for i := int64(0); i < 300; i++ {
@@ -307,7 +307,7 @@ func TestCloudWatchMoreThan150RandomReduce(t *testing.T) {
 func TestCloudWatchMoreThan150LiveReduce(t *testing.T) {
 	mockSvc := &mockCloudWatchClient{}
 	cw := cwmMock(mockSvc)
-	cw.ctx, cw.cancel = context.WithCancel(context.Background())
+	cw.ctx, cw.cancel = context.WithCancel(t.Context())
 
 	gge := cw.NewGaugeCtor("foo")()
 	for i := int64(0); i < 5000; i++ {
@@ -327,7 +327,7 @@ func TestCloudWatchMoreThan150LiveReduce(t *testing.T) {
 func TestCloudWatchTags(t *testing.T) {
 	mockSvc := &mockCloudWatchClient{}
 	cw := cwmMock(mockSvc)
-	cw.ctx, cw.cancel = context.WithCancel(context.Background())
+	cw.ctx, cw.cancel = context.WithCancel(t.Context())
 
 	ctr := cw.NewCounterCtor("counter.bar", "foo")
 	gge := cw.NewGaugeCtor("gauge.bar", "bar")
@@ -375,7 +375,7 @@ func TestCloudWatchTags(t *testing.T) {
 func TestCloudWatchTagsMoreThan20(t *testing.T) {
 	mockSvc := &mockCloudWatchClient{}
 	cw := cwmMock(mockSvc)
-	cw.ctx, cw.cancel = context.WithCancel(context.Background())
+	cw.ctx, cw.cancel = context.WithCancel(t.Context())
 
 	expTagMap := map[string]string{}
 	tagNames := []string{}

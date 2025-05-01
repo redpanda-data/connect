@@ -37,7 +37,7 @@ logger:
 `)
 	require.NoError(t, err)
 
-	ctx, done := context.WithTimeout(context.Background(), time.Second*5)
+	ctx, done := context.WithTimeout(t.Context(), time.Second*5)
 	defer done()
 
 	res, err := h.Handle(ctx, "hello world")

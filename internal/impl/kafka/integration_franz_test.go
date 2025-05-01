@@ -71,7 +71,7 @@ func TestIntegrationFranz(t *testing.T) {
 
 	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
-		return createKafkaTopic(context.Background(), "localhost:"+kafkaPortStr, "testingconnection", 1)
+		return createKafkaTopic(t.Context(), "localhost:"+kafkaPortStr, "testingconnection", 1)
 	}))
 
 	template := `
@@ -192,7 +192,7 @@ input:
 			t, manualPartitionTemplate,
 			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
 				vars.General["VAR4"] = "group" + vars.ID
-				require.NoError(t, createKafkaTopic(context.Background(), "localhost:"+kafkaPortStr, vars.ID, 1))
+				require.NoError(t, createKafkaTopic(t.Context(), "localhost:"+kafkaPortStr, vars.ID, 1))
 			}),
 			integration.StreamTestOptPort(kafkaPortStr),
 			integration.StreamTestOptVarSet("VAR1", ""),
@@ -351,7 +351,7 @@ func TestIntegrationFranzOutputFixedTimestamp(t *testing.T) {
 
 	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
-		return createKafkaTopic(context.Background(), "localhost:"+kafkaPortStr, "testingconnection", 1)
+		return createKafkaTopic(t.Context(), "localhost:"+kafkaPortStr, "testingconnection", 1)
 	}))
 
 	template := `
@@ -423,7 +423,7 @@ func BenchmarkIntegrationFranz(b *testing.B) {
 
 	_ = resource.Expire(900)
 	require.NoError(b, pool.Retry(func() error {
-		return createKafkaTopic(context.Background(), "localhost:"+kafkaPortStr, "testingconnection", 1)
+		return createKafkaTopic(b.Context(), "localhost:"+kafkaPortStr, "testingconnection", 1)
 	}))
 
 	// Unordered (old) client

@@ -186,7 +186,7 @@ func TestUpdate(t *testing.T) {
 	m1 := newMessage("foo", "bar")
 	m2 := newMessage("foo", "qux")
 	m3 := newMessage("fuzz", "bar")
-	err := w.WriteBatch(context.Background(), service.MessageBatch{m1.AsMessage(), m2.AsMessage(), m3.AsMessage()})
+	err := w.WriteBatch(t.Context(), service.MessageBatch{m1.AsMessage(), m2.AsMessage(), m3.AsMessage()})
 	require.NoError(t, err)
 	require.Equal(t, m1.AsVector(), c.Get(w.host, m1.namespace, m1.id))
 	require.Nil(t, c.Get(w.host, m3.namespace, m2.id))
@@ -199,7 +199,7 @@ func TestUpsert(t *testing.T) {
 	m1 := newMessage("foo", "bar")
 	m2 := newMessage("foo", "qux")
 	m3 := newMessage("fuzz", "bar")
-	err := w.WriteBatch(context.Background(), service.MessageBatch{m1.AsMessage(), m2.AsMessage(), m3.AsMessage()})
+	err := w.WriteBatch(t.Context(), service.MessageBatch{m1.AsMessage(), m2.AsMessage(), m3.AsMessage()})
 	require.NoError(t, err)
 	for _, m := range []mockMessage{m1, m2, m3} {
 		require.Equal(t, m.AsVector(), c.Get(w.host, m.namespace, m.id))
@@ -213,7 +213,7 @@ func TestDelete(t *testing.T) {
 	m1 := newMessage("foo", "bar")
 	m2 := newMessage("foo", "qux")
 	m3 := newMessage("fuzz", "bar")
-	err := w.WriteBatch(context.Background(), service.MessageBatch{m1.AsMessage(), m2.AsMessage(), m3.AsMessage()})
+	err := w.WriteBatch(t.Context(), service.MessageBatch{m1.AsMessage(), m2.AsMessage(), m3.AsMessage()})
 	require.NoError(t, err)
 	for _, m := range []mockMessage{m1, m2, m3} {
 		require.Nil(t, c.Get(w.host, m.namespace, m.id))
@@ -227,7 +227,7 @@ func TestMapping(t *testing.T) {
 	w.vectorMapping, err = bloblang.GlobalEnvironment().Parse("this.map_each(v -> v * 2)")
 	require.NoError(t, err)
 	m := newMessage("foo", "bar")
-	err = w.WriteBatch(context.Background(), service.MessageBatch{m.AsMessage()})
+	err = w.WriteBatch(t.Context(), service.MessageBatch{m.AsMessage()})
 	require.NoError(t, err)
 	for i, v := range m.vector {
 		m.vector[i] = v * 2

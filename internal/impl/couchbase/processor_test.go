@@ -15,7 +15,6 @@
 package couchbase_test
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -123,9 +122,9 @@ func TestIntegrationCouchbaseProcessor(t *testing.T) {
 	servicePort := requireCouchbase(t)
 
 	bucket := fmt.Sprintf("testing-processor-%d", time.Now().Unix())
-	require.NoError(t, createBucket(context.Background(), t, servicePort, bucket))
+	require.NoError(t, createBucket(t.Context(), t, servicePort, bucket))
 	t.Cleanup(func() {
-		require.NoError(t, removeBucket(context.Background(), t, servicePort, bucket))
+		require.NoError(t, removeBucket(t.Context(), t, servicePort, bucket))
 	})
 
 	uid := faker.UUIDHyphenated()
@@ -187,7 +186,7 @@ content: 'root = this'
 operation: 'insert'
 `, port, bucket, username, password)
 
-	msgOut, err := getProc(t, config).ProcessBatch(context.Background(), service.MessageBatch{
+	msgOut, err := getProc(t, config).ProcessBatch(t.Context(), service.MessageBatch{
 		service.NewMessage([]byte(payload)),
 	})
 
@@ -213,7 +212,7 @@ content: 'root = this'
 operation: 'upsert'
 `, port, bucket, username, password)
 
-	msgOut, err := getProc(t, config).ProcessBatch(context.Background(), service.MessageBatch{
+	msgOut, err := getProc(t, config).ProcessBatch(t.Context(), service.MessageBatch{
 		service.NewMessage([]byte(payload)),
 	})
 
@@ -239,7 +238,7 @@ content: 'root = this'
 operation: 'replace'
 `, port, bucket, username, password)
 
-	msgOut, err := getProc(t, config).ProcessBatch(context.Background(), service.MessageBatch{
+	msgOut, err := getProc(t, config).ProcessBatch(t.Context(), service.MessageBatch{
 		service.NewMessage([]byte(payload)),
 	})
 
@@ -264,7 +263,7 @@ id: '${! content() }'
 operation: 'get'
 `, port, bucket, username, password)
 
-	msgOut, err := getProc(t, config).ProcessBatch(context.Background(), service.MessageBatch{
+	msgOut, err := getProc(t, config).ProcessBatch(t.Context(), service.MessageBatch{
 		service.NewMessage([]byte(uid)),
 	})
 
@@ -289,7 +288,7 @@ id: '${! content() }'
 operation: 'remove'
 `, port, bucket, username, password)
 
-	msgOut, err := getProc(t, config).ProcessBatch(context.Background(), service.MessageBatch{
+	msgOut, err := getProc(t, config).ProcessBatch(t.Context(), service.MessageBatch{
 		service.NewMessage([]byte(uid)),
 	})
 
@@ -314,7 +313,7 @@ id: '${! content() }'
 operation: 'get'
 `, port, bucket, username, password)
 
-	msgOut, err := getProc(t, config).ProcessBatch(context.Background(), service.MessageBatch{
+	msgOut, err := getProc(t, config).ProcessBatch(t.Context(), service.MessageBatch{
 		service.NewMessage([]byte(uid)),
 	})
 

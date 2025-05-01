@@ -15,7 +15,6 @@
 package msgpack
 
 import (
-	"context"
 	b64 "encoding/base64"
 	"testing"
 
@@ -64,7 +63,7 @@ func TestMsgPackToJson(t *testing.T) {
 
 			input := service.NewMessage(inputBytes)
 
-			msgs, err := proc.Process(context.Background(), input)
+			msgs, err := proc.Process(t.Context(), input)
 			require.NoError(t, err)
 			require.Len(t, msgs, 1)
 
@@ -125,7 +124,7 @@ func TestMsgPackFromJson(t *testing.T) {
 
 			input := service.NewMessage([]byte(test.input))
 
-			msgs, err := proc.Process(context.Background(), input)
+			msgs, err := proc.Process(t.Context(), input)
 			require.NoError(t, err)
 			require.Len(t, msgs, 1)
 

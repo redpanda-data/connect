@@ -1,7 +1,6 @@
 package timeplus
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -55,7 +54,7 @@ stream: mystream
 		out, _, _, err := newTimeplusOutput(conf, service.MockResources())
 		require.NoError(t, err)
 
-		err = out.Connect(context.Background())
+		err = out.Connect(t.Context())
 		require.NoError(t, err)
 
 		content1 := map[string]any{
@@ -80,12 +79,12 @@ stream: mystream
 			msg1,
 			msg2,
 		}
-		err = out.WriteBatch(context.Background(), batch)
+		err = out.WriteBatch(t.Context(), batch)
 		require.NoError(t, err)
 
 		<-ch
 
-		err = out.Close(context.Background())
+		err = out.Close(t.Context())
 		require.NoError(t, err)
 	})
 
@@ -119,7 +118,7 @@ apikey: 7v3fHptcgZBBkFyi4qpG1-scsUnrLbLLgA2PFXTy0H-bcqVBF5iPdU3KG1_k
 		out, _, _, err := newTimeplusOutput(conf, service.MockResources())
 		require.NoError(t, err)
 
-		err = out.Connect(context.Background())
+		err = out.Connect(t.Context())
 		require.NoError(t, err)
 
 		content1 := map[string]any{
@@ -146,12 +145,12 @@ apikey: 7v3fHptcgZBBkFyi4qpG1-scsUnrLbLLgA2PFXTy0H-bcqVBF5iPdU3KG1_k
 			msg1,
 			msg2,
 		}
-		err = out.WriteBatch(context.Background(), batch)
+		err = out.WriteBatch(t.Context(), batch)
 		require.NoError(t, err)
 
 		<-ch
 
-		err = out.Close(context.Background())
+		err = out.Close(t.Context())
 		require.NoError(t, err)
 	})
 
@@ -191,7 +190,7 @@ password: hello
 		out, _, _, err := newTimeplusOutput(conf, service.MockResources())
 		require.NoError(t, err)
 
-		err = out.Connect(context.Background())
+		err = out.Connect(t.Context())
 		require.NoError(t, err)
 
 		content1 := map[string]any{
@@ -212,10 +211,10 @@ password: hello
 			msg1,
 			msg2,
 		}
-		err = out.WriteBatch(context.Background(), batch)
+		err = out.WriteBatch(t.Context(), batch)
 		require.NoError(t, err)
 
-		err = out.Close(context.Background())
+		err = out.Close(t.Context())
 		require.NoError(t, err)
 	})
 
