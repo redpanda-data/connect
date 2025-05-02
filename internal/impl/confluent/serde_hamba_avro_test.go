@@ -122,10 +122,28 @@ func TestHambaAvroReferences(t *testing.T) {
 			subject: "root",
 		},
 		{
-			name:    "a baz",
+			name:    "a baz (root subject)",
 			input:   `{"Miao":{"Woof":"tssssssuuuuuuu"}}`,
 			output:  `{"Miao":{"Woof":"tssssssuuuuuuu"}}`,
 			subject: "root",
+		},
+		{
+			name:    "a foo (foo subject)",
+			input:   `{"Woof":"hhnnnnnnroooo"}`,
+			output:  `{"Woof":"hhnnnnnnroooo"}`,
+			subject: "foo",
+		},
+		{
+			name:    "a bar (bar subject)",
+			input:   `{"Moo":"mmuuuuuueew"}`,
+			output:  `{"Moo":"mmuuuuuueew"}`,
+			subject: "bar",
+		},
+		{
+			name:    "a baz (baz subject)",
+			input:   `{"Miao":{"Woof":"tssssssuuuuuuu"}}`,
+			output:  `{"Miao":{"Woof":"tssssssuuuuuuu"}}`,
+			subject: "baz",
 		},
 	}
 
