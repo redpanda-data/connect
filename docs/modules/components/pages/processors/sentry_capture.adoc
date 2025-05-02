@@ -33,6 +33,7 @@ sentry_capture:
   dsn: ""
   message: webhook event received # No default (required)
   context: 'root = {"order": {"product_id": "P93174", "quantity": 5}}' # No default (optional)
+  extras: root.foo = "bar" # No default (optional)
   tags: {} # No default (optional)
   environment: ""
   release: ""
@@ -84,6 +85,22 @@ A mapping that must evaluate to an object-of-objects or `deleted()`. If this map
 context: 'root = {"order": {"product_id": "P93174", "quantity": 5}}'
 
 context: root = deleted()
+```
+
+=== `extras`
+
+A mapping that must evaluate to an object. If this mapping produces a value, then it is set on a sentry event as extras.
+
+
+*Type*: `string`
+
+
+```yml
+# Examples
+
+extras: root.foo = "bar"
+
+extras: root = this.without("password")
 ```
 
 === `tags`

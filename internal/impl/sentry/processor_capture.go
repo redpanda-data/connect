@@ -51,6 +51,12 @@ func newCaptureProcessorConfig() *service.ConfigSpec {
 				Example(`root = {"order": {"product_id": "P93174", "quantity": 5}}`).
 				Example(`root = deleted()`),
 
+			service.NewBloblangField("extras").
+				Description("A mapping that must evaluate to an object. If this mapping produces a value, then it is set on a sentry event as extras.").
+				Optional().
+				Example(`root.foo = "bar"`).
+				Example(`root = this.without("password")`),
+
 			service.NewInterpolatedStringMapField("tags").
 				Optional().
 				Description("Sets key/value string tags on an event. Unlike context, these are indexed and searchable on Sentry but have length limitations."),
@@ -88,6 +94,7 @@ type captureProcessor struct {
 	hub      *sentry.Hub
 	messageQ *service.InterpolatedString
 	contextQ *bloblang.Executor
+	extrasQ  *bloblang.Executor
 	tagsQ    map[string]*service.InterpolatedString
 
 	samplingRate float64
@@ -150,6 +157,15 @@ func newCaptureProcessor(conf *service.ParsedConfig, mgr *service.Resources, opt
 		tagsQ = tq
 	}
 
+	var extrasQ *bloblang.Executor
+	if conf.Contains("extras") {
+		ex, err := conf.FieldBloblang("extras")
+		if err != nil {
+			return nil, err
+		}
+		extrasQ = ex
+	}
+
 	flushTimeout, err := conf.FieldDuration("flush_timeout")
 	if err != nil {
 		return nil, err
@@ -209,6 +225,7 @@ func newCaptureProcessor(conf *service.ParsedConfig, mgr *service.Resources, opt
 		messageQ: messageQ,
 		contextQ: contextQ,
 		tagsQ:    tagsQ,
+		extrasQ:  extrasQ,
 
 		samplingRate: samplingRate,
 		flushTimeout: flushTimeout,
@@ -249,9 +266,15 @@ func (proc *captureProcessor) Process(ctx context.Context, msg *service.Message)
 		tags[key] = tag
 	}
 
+	extras, _, err := queryMapStringInterface(msg, proc.extrasQ, "extras")
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate sentry message: %w", err)
+	}
+
 	hub.WithScope(func(scope *sentry.Scope) {
 		scope.SetContexts(sentryCtx)
 		scope.SetTags(tags)
+		scope.SetExtras(extras)
 
 		hub.CaptureMessage(message)
 	})
@@ -259,42 +282,26 @@ func (proc *captureProcessor) Process(ctx context.Context, msg *service.Message)
 	return out, nil
 }
 
-func (proc *captureProcessor) Close(ctx context.Context) error {
+func (proc *captureProcessor) Close(ctx context.Context) (err error) {
 	if flushed := proc.hub.Flush(proc.flushTimeout); !flushed {
-		return errors.New("failed to flush sentry events before timeout")
+		err = errors.New("failed to flush sentry events before timeout")
 	}
 
-	client := proc.hub.Client()
-	if client != nil {
+	if client := proc.hub.Client(); client != nil {
 		client.Close()
 	}
 
-	return nil
+	return err
 }
 
 func (proc *captureProcessor) queryContext(msg *service.Message) (map[string]sentry.Context, error) {
 	out := make(map[string]sentry.Context)
-	if proc.contextQ == nil {
-		return out, nil
-	}
 
-	result, err := msg.BloblangQuery(proc.contextQ)
+	c, ok, err := queryMapStringInterface(msg, proc.contextQ, "context")
 	if err != nil {
-		return nil, fmt.Errorf("failed to query for context: %w", err)
-	}
-
-	if result == nil {
+		return nil, err
+	} else if !ok {
 		return out, nil
-	}
-
-	raw, err := result.AsStructured()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get structured data for context: %w", err)
-	}
-
-	c, ok := raw.(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("expected object from context mapping but got: %T", raw)
 	}
 
 	for key, value := range c {
@@ -320,6 +327,37 @@ func (proc *captureProcessor) queryContext(msg *service.Message) (map[string]sen
 	}
 
 	return out, nil
+}
+
+func queryMapStringInterface(
+	msg *service.Message,
+	blobl *bloblang.Executor,
+	name string,
+) (map[string]any, bool, error) {
+	if blobl == nil {
+		return nil, false, nil
+	}
+
+	result, err := msg.BloblangQuery(blobl)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to query for %s: %w", name, err)
+	}
+
+	if result == nil {
+		return nil, false, nil
+	}
+
+	raw, err := result.AsStructured()
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to get structured data for %s: %w", name, err)
+	}
+
+	c, ok := raw.(map[string]any)
+	if !ok {
+		return nil, false, fmt.Errorf("expected object from %s mapping but got: %T", name, raw)
+	}
+
+	return c, true, nil
 }
 
 func mapLevel(raw string) (sentry.Level, error) {

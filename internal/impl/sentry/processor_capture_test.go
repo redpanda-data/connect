@@ -41,18 +41,20 @@ func TestCaptureProcessor(t *testing.T) {
   tags:
     pipeline: test-pipeline
     app: "test ${! this.appversion }"
+  extras: |
+    root.foo = "bar"
+    root.version =  "v" + this.appversion
   `, service.GlobalEnvironment())
 	require.NoError(t, err, "failed to parse test config")
 
 	var rawEvent any
-	transport := &mockTransport{}
+	transport := NewTransport(t)
 	transport.On("SendEvent", argEvent).Return().Run(func(args mock.Arguments) {
 		rawEvent = args.Get(0)
 	})
 	transport.On("Configure", mock.Anything).Return()
 	transport.On("Flush", mock.Anything).Return(true)
 	transport.On("Close", mock.Anything).Return()
-	t.Cleanup(func() { transport.AssertExpectations(t) })
 
 	proc, err := newCaptureProcessor(conf, service.MockResources(), withTransport(transport))
 	require.NoError(t, err, "failed to create processor")
@@ -74,6 +76,7 @@ func TestCaptureProcessor(t *testing.T) {
 	require.Equal(t, "benthos-sentry", event.Release, "event has wrong release")
 	require.Equal(t, map[string]any{"country": "us"}, event.Contexts["profile"])
 	require.Equal(t, map[string]string{"app": "test 0.1.0", "pipeline": "test-pipeline", "benthos": "mock"}, event.Tags)
+	require.Equal(t, map[string]any{"foo": "bar", "version": "v0.1.0"}, event.Extra)
 }
 
 func TestCaptureProcessor_Sync(t *testing.T) {
@@ -89,18 +92,18 @@ func TestCaptureProcessor_Sync(t *testing.T) {
   message: "hello ${! this.name }"
   context: |
     root = {"profile": {"country": this.country}}
+  extras:  this.without("country")
   `, service.GlobalEnvironment())
 	require.NoError(t, err, "failed to parse test config")
 
 	var rawEvent any
-	transport := &mockTransport{}
+	transport := NewTransport(t)
 	transport.On("SendEvent", argEvent).Return().Run(func(args mock.Arguments) {
 		rawEvent = args.Get(0)
 	})
 	transport.On("Configure", mock.Anything).Return()
 	transport.On("Flush", mock.Anything).Return(true)
 	transport.On("Close", mock.Anything).Return()
-	t.Cleanup(func() { transport.AssertExpectations(t) })
 
 	proc, err := newCaptureProcessor(conf, service.MockResources(), withTransport(transport))
 	require.NoError(t, err, "failed to create processor")
@@ -121,6 +124,7 @@ func TestCaptureProcessor_Sync(t *testing.T) {
 	require.Equal(t, "testing", event.Environment, "event has wrong environment")
 	require.Equal(t, "benthos-sentry", event.Release, "event has wrong release")
 	require.Equal(t, sentry.LevelDebug, event.Level, "event has wrong level")
+	require.Equal(t, map[string]any{"name": "jane"}, event.Extra)
 }
 
 func TestCaptureProcessor_InvalidMessage(t *testing.T) {
@@ -133,11 +137,10 @@ func TestCaptureProcessor_InvalidMessage(t *testing.T) {
   `, service.GlobalEnvironment())
 	require.NoError(t, err, "failed to parse test config")
 
-	transport := &mockTransport{}
+	transport := NewTransport(t)
 	transport.On("Configure", mock.Anything).Return()
 	transport.On("Flush", mock.Anything).Return(true)
 	transport.On("Close", mock.Anything).Return()
-	t.Cleanup(func() { transport.AssertExpectations(t) })
 
 	proc, err := newCaptureProcessor(conf, service.MockResources(), withTransport(transport))
 	require.NoError(t, err, "failed to create processor")
@@ -169,11 +172,10 @@ func TestCaptureProcessor_NoSampling(t *testing.T) {
   `, service.GlobalEnvironment())
 	require.NoError(t, err, "failed to parse test config")
 
-	transport := &mockTransport{}
+	transport := NewTransport(t)
 	transport.On("Configure", mock.Anything).Return()
 	transport.On("Flush", mock.Anything).Return(true)
 	transport.On("Close", mock.Anything).Return()
-	t.Cleanup(func() { transport.AssertExpectations(t) })
 
 	proc, err := newCaptureProcessor(conf, service.MockResources(), withTransport(transport))
 	require.NoError(t, err, "failed to create processor")
@@ -207,11 +209,10 @@ func TestCaptureProcessor_FlushOnClose(t *testing.T) {
   `, service.GlobalEnvironment())
 	require.NoError(t, err, "failed to parse test config")
 
-	transport := &mockTransport{}
+	transport := NewTransport(t)
 	transport.On("Configure", mock.Anything).Return()
 	transport.On("Flush", d).Return(true)
 	transport.On("Close", mock.Anything).Return()
-	t.Cleanup(func() { transport.AssertExpectations(t) })
 
 	proc, err := newCaptureProcessor(conf, service.MockResources(), withTransport(transport))
 	require.NoError(t, err, "failed to create processor")
@@ -233,10 +234,10 @@ func TestCaptureProcessor_FlushFailed(t *testing.T) {
   `, service.GlobalEnvironment())
 	require.NoError(t, err, "failed to parse test config")
 
-	transport := &mockTransport{}
+	transport := NewTransport(t)
 	transport.On("Configure", mock.Anything).Return()
 	transport.On("Flush", mock.Anything).Return(false)
-	t.Cleanup(func() { transport.AssertExpectations(t) })
+	transport.On("Close").Return()
 
 	proc, err := newCaptureProcessor(conf, service.MockResources(), withTransport(transport))
 	require.NoError(t, err, "failed to create processor")
@@ -259,14 +260,13 @@ func TestCaptureProcessor_EmptyContext(t *testing.T) {
 	require.NoError(t, err, "failed to parse test config")
 
 	var rawEvent any
-	transport := &mockTransport{}
+	transport := NewTransport(t)
 	transport.On("SendEvent", argEvent).Return().Run(func(args mock.Arguments) {
 		rawEvent = args.Get(0)
 	})
 	transport.On("Configure", mock.Anything).Return()
 	transport.On("Flush", mock.Anything).Return(true)
 	transport.On("Close", mock.Anything).Return()
-	t.Cleanup(func() { transport.AssertExpectations(t) })
 
 	proc, err := newCaptureProcessor(conf, service.MockResources(), withTransport(transport))
 	require.NoError(t, err, "failed to create processor")
@@ -304,14 +304,13 @@ func TestCaptureProcessor_NoContext(t *testing.T) {
 	require.NoError(t, err, "failed to parse test config")
 
 	var rawEvent any
-	transport := &mockTransport{}
+	transport := NewTransport(t)
 	transport.On("SendEvent", argEvent).Return().Run(func(args mock.Arguments) {
 		rawEvent = args.Get(0)
 	})
 	transport.On("Configure", mock.Anything).Return()
 	transport.On("Flush", mock.Anything).Return(true)
 	transport.On("Close", mock.Anything).Return()
-	t.Cleanup(func() { transport.AssertExpectations(t) })
 
 	proc, err := newCaptureProcessor(conf, service.MockResources(), withTransport(transport))
 	require.NoError(t, err, "failed to create processor")
@@ -349,14 +348,13 @@ func TestCaptureProcessor_NilContextValue(t *testing.T) {
 	require.NoError(t, err, "failed to parse test config")
 
 	var rawEvent any
-	transport := &mockTransport{}
+	transport := NewTransport(t)
 	transport.On("SendEvent", argEvent).Return().Run(func(args mock.Arguments) {
 		rawEvent = args.Get(0)
 	})
 	transport.On("Configure", mock.Anything).Return()
 	transport.On("Flush", mock.Anything).Return(true)
 	transport.On("Close", mock.Anything).Return()
-	t.Cleanup(func() { transport.AssertExpectations(t) })
 
 	proc, err := newCaptureProcessor(conf, service.MockResources(), withTransport(transport))
 	require.NoError(t, err, "failed to create processor")
@@ -393,11 +391,10 @@ func TestCaptureProcessor_InvalidContext(t *testing.T) {
   `, service.GlobalEnvironment())
 	require.NoError(t, err, "failed to parse test config")
 
-	transport := &mockTransport{}
+	transport := NewTransport(t)
 	transport.On("Configure", mock.Anything).Return()
 	transport.On("Flush", mock.Anything).Return(true)
 	transport.On("Close", mock.Anything).Return()
-	t.Cleanup(func() { transport.AssertExpectations(t) })
 
 	proc, err := newCaptureProcessor(conf, service.MockResources(), withTransport(transport))
 	require.NoError(t, err, "failed to create processor")
@@ -423,11 +420,10 @@ func TestCaptureProcessor_ContextNotStructured(t *testing.T) {
   `, service.GlobalEnvironment())
 	require.NoError(t, err, "failed to parse test config")
 
-	transport := &mockTransport{}
+	transport := NewTransport(t)
 	transport.On("Configure", mock.Anything).Return()
 	transport.On("Flush", mock.Anything).Return(true)
 	transport.On("Close", mock.Anything).Return()
-	t.Cleanup(func() { transport.AssertExpectations(t) })
 
 	proc, err := newCaptureProcessor(conf, service.MockResources(), withTransport(transport))
 	require.NoError(t, err, "failed to create processor")
@@ -453,11 +449,10 @@ func TestCaptureProcessor_ContextNotMap(t *testing.T) {
   `, service.GlobalEnvironment())
 	require.NoError(t, err, "failed to parse test config")
 
-	transport := &mockTransport{}
+	transport := NewTransport(t)
 	transport.On("Configure", mock.Anything).Return()
 	transport.On("Flush", mock.Anything).Return(true)
 	transport.On("Close", mock.Anything).Return()
-	t.Cleanup(func() { transport.AssertExpectations(t) })
 
 	proc, err := newCaptureProcessor(conf, service.MockResources(), withTransport(transport))
 	require.NoError(t, err, "failed to create processor")
@@ -483,11 +478,10 @@ func TestCaptureProcessor_ContextValueNotMap(t *testing.T) {
   `, service.GlobalEnvironment())
 	require.NoError(t, err, "failed to parse test config")
 
-	transport := &mockTransport{}
+	transport := NewTransport(t)
 	transport.On("Configure", mock.Anything).Return()
 	transport.On("Flush", mock.Anything).Return(true)
 	transport.On("Close", mock.Anything).Return()
-	t.Cleanup(func() { transport.AssertExpectations(t) })
 
 	proc, err := newCaptureProcessor(conf, service.MockResources(), withTransport(transport))
 	require.NoError(t, err, "failed to create processor")
@@ -513,11 +507,10 @@ func TestCaptureProcessor_InvalidTag(t *testing.T) {
   `, service.GlobalEnvironment())
 	require.NoError(t, err, "failed to parse test config")
 
-	transport := &mockTransport{}
+	transport := NewTransport(t)
 	transport.On("Configure", mock.Anything).Return()
 	transport.On("Flush", mock.Anything).Return(true)
 	transport.On("Close", mock.Anything).Return()
-	t.Cleanup(func() { transport.AssertExpectations(t) })
 
 	proc, err := newCaptureProcessor(conf, service.MockResources(), withTransport(transport))
 	require.NoError(t, err, "failed to create processor")

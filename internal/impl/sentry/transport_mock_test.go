@@ -27,6 +27,18 @@ type mockTransport struct {
 	mock.Mock
 }
 
+func NewTransport(t interface {
+	mock.TestingT
+	Cleanup(func())
+}) *mockTransport {
+	mock := &mockTransport{}
+	mock.Test(t)
+
+	t.Cleanup(func() { mock.AssertExpectations(t) })
+
+	return mock
+}
+
 func (t *mockTransport) Flush(timeout time.Duration) bool {
 	args := t.Called(timeout)
 
