@@ -37,6 +37,7 @@ const (
 	kroFieldCommitPeriod          = "commit_period"
 	kroFieldPartitionBuffer       = "partition_buffer_bytes"
 	kroFieldTopicLagRefreshPeriod = "topic_lag_refresh_period"
+	kroFieldBatchMaxSize          = "max_yield_batch_size"
 )
 
 // FranzReaderOrderedConfigFields returns config fields for customising the
@@ -58,6 +59,10 @@ func FranzReaderOrderedConfigFields() []*service.ConfigField {
 			Description("The period of time between each topic lag refresh cycle.").
 			Default("5s").
 			Advanced(),
+		service.NewStringField(kroFieldBatchMaxSize).
+			Description("The maximum size (in bytes) for each batch yielded by this input. When routed to a redpanda output without modification this would roughly translate to the batch.bytes config field of a traditional producer.").
+			Default("32KB").
+			Advanced(),
 	}
 }
 
@@ -75,6 +80,7 @@ type FranzReaderOrdered struct {
 	cacheLimit            uint64
 	readBackOff           backoff.BackOff
 	topicLagRefreshPeriod time.Duration
+	batchMaxSize          uint64
 
 	res     *service.Resources
 	log     *service.Logger
@@ -111,28 +117,42 @@ func NewFranzReaderOrderedFromConfig(conf *service.ParsedConfig, res *service.Re
 		return nil, err
 	}
 
+	if f.batchMaxSize, err = bytesFromStrField(kroFieldBatchMaxSize, conf); err != nil {
+		return nil, err
+	}
+
 	return &f, nil
 }
 
-type batchWithRecords struct {
-	b    service.MessageBatch
-	r    []*kgo.Record
+type messageWithRecord struct {
+	m    *service.Message
+	r    *kgo.Record
 	size uint64
 }
 
-func (f *FranzReaderOrdered) recordsToBatch(records []*kgo.Record, consumerLag *ConsumerLag) *batchWithRecords {
-	var length uint64
-	var batch service.MessageBatch
-	for _, r := range records {
-		length += uint64(len(r.Value) + len(r.Key))
+type batchWithRecords struct {
+	b    []*messageWithRecord
+	size uint64
+}
 
+func (f *FranzReaderOrdered) recordsToBatch(records []*kgo.Record, consumerLag *ConsumerLag) (batch batchWithRecords) {
+	batch.b = make([]*messageWithRecord, len(records))
+
+	for i, r := range records {
 		msg := FranzRecordToMessageV1(r)
 		if consumerLag != nil {
 			lag := consumerLag.Load(r.Topic, r.Partition)
 			msg.MetaSetMut("kafka_lag", lag)
 		}
 
-		batch = append(batch, msg)
+		rmsg := &messageWithRecord{
+			m:    msg,
+			r:    r,
+			size: uint64(len(r.Value) + len(r.Key)),
+		}
+
+		batch.b[i] = rmsg
+		batch.size += rmsg.size
 
 		// The record lives on for checkpointing, but we don't need the contents
 		// going forward so discard these. This looked fine to me but could
@@ -140,12 +160,7 @@ func (f *FranzReaderOrdered) recordsToBatch(records []*kgo.Record, consumerLag *
 		r.Key = nil
 		r.Value = nil
 	}
-
-	return &batchWithRecords{
-		b:    batch,
-		r:    records,
-		size: length,
-	}
+	return
 }
 
 //------------------------------------------------------------------------------
@@ -168,14 +183,59 @@ func newPartitionCache(commitFn func(r *kgo.Record)) *partitionCache {
 	return pt
 }
 
-func (p *partitionCache) push(bufferSize uint64, batch *batchWithRecords) (pauseFetch bool) {
+func (p *partitionCache) push(bufferSize, maxBatchSize uint64, batch *batchWithRecords) (pauseFetch bool) {
 	p.mut.Lock()
 	defer p.mut.Unlock()
 
+	// Calculate new size of the cache
 	p.cacheSize += batch.size
-	p.cache = append(p.cache, batch)
+	pauseFetch = p.cacheSize >= bufferSize
 
-	return p.cacheSize >= bufferSize
+	if len(p.cache) > 0 {
+		// If we have existing batch in the cache and it has spare capacity then
+		// collapse as many of our new batch into it as possible.
+		indexEnd := len(p.cache) - 1
+
+		for len(batch.b) > 0 && p.cache[indexEnd].size < maxBatchSize {
+			nextMsgSize := batch.b[0].size
+
+			if p.cache[indexEnd].size+nextMsgSize > maxBatchSize {
+				break
+			}
+
+			p.cache[indexEnd].b = append(p.cache[indexEnd].b, batch.b[0])
+			p.cache[indexEnd].size += nextMsgSize
+
+			batch.b = batch.b[1:]
+			batch.size -= nextMsgSize
+		}
+	}
+
+	for len(batch.b) > 0 {
+		if batch.size <= maxBatchSize {
+			p.cache = append(p.cache, batch)
+			return
+		}
+
+		tmpBatch := &batchWithRecords{}
+		for len(batch.b) > 0 {
+			nextMsgSize := batch.b[0].size
+
+			if len(tmpBatch.b) > 0 && tmpBatch.size+nextMsgSize > maxBatchSize {
+				break
+			}
+
+			tmpBatch.b = append(tmpBatch.b, batch.b[0])
+			tmpBatch.size += nextMsgSize
+
+			batch.b = batch.b[1:]
+			batch.size -= nextMsgSize
+		}
+
+		p.cache = append(p.cache, tmpBatch)
+	}
+
+	return
 }
 
 func (p *partitionCache) pop() *batchWithAckFn {
@@ -195,13 +255,16 @@ func (p *partitionCache) pop() *batchWithAckFn {
 	nextBatch := p.cache[0]
 	p.cache = p.cache[1:]
 
-	batchID := nextBatch.r[0].Offset
+	batchID := nextBatch.b[0].r.Offset
 	p.pendingDispatch[batchID] = struct{}{}
 
 	dispatchCounter := int64(len(nextBatch.b))
+
+	outBatch := make(service.MessageBatch, len(nextBatch.b))
+
 	for i := 0; i < len(nextBatch.b); i++ {
 		var incOnce sync.Once
-		nextBatch.b[i] = nextBatch.b[i].WithContext(dispatch.CtxOnTriggerSignal(nextBatch.b[i].Context(), func() {
+		outBatch[i] = nextBatch.b[i].m.WithContext(dispatch.CtxOnTriggerSignal(nextBatch.b[i].m.Context(), func() {
 			incOnce.Do(func() {
 				if atomic.AddInt64(&dispatchCounter, -1) <= 0 {
 					p.mut.Lock()
@@ -212,7 +275,7 @@ func (p *partitionCache) pop() *batchWithAckFn {
 		}))
 	}
 
-	releaseFn := p.checkpointer.Track(nextBatch.r[len(nextBatch.r)-1], int64(len(nextBatch.r)))
+	releaseFn := p.checkpointer.Track(nextBatch.b[len(nextBatch.b)-1].r, int64(len(nextBatch.b)))
 	onAck := func() {
 		p.mut.Lock()
 		releaseRecord := releaseFn()
@@ -227,7 +290,7 @@ func (p *partitionCache) pop() *batchWithAckFn {
 
 	return &batchWithAckFn{
 		onAck: onAck,
-		batch: nextBatch.b,
+		batch: outBatch,
 	}
 }
 
@@ -268,7 +331,7 @@ func (c *partitionState) pop() *batchWithAckFn {
 	return nil
 }
 
-func (c *partitionState) addRecords(topic string, partition int32, batch *batchWithRecords, bufferSize uint64) (pauseFetch bool) {
+func (c *partitionState) addRecords(topic string, partition int32, batch *batchWithRecords, bufferSize, maxBatchSize uint64) (pauseFetch bool) {
 	c.mut.Lock()
 	defer c.mut.Unlock()
 
@@ -285,7 +348,7 @@ func (c *partitionState) addRecords(topic string, partition int32, batch *batchW
 	}
 
 	if batch != nil {
-		return partCache.push(bufferSize, batch)
+		return partCache.push(bufferSize, maxBatchSize, batch)
 	}
 	return partCache.pauseFetch(bufferSize)
 }
@@ -382,7 +445,7 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 				for topic, parts := range m {
 					for _, part := range parts {
 						// Adds the partition to our checkpointer
-						checkpoints.addRecords(topic, part, nil, f.cacheLimit)
+						checkpoints.addRecords(topic, part, nil, f.cacheLimit, f.batchMaxSize)
 					}
 				}
 			}),
@@ -477,7 +540,7 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 					return
 				}
 
-				if checkpoints.addRecords(p.Topic, p.Partition, batch, f.cacheLimit) {
+				if checkpoints.addRecords(p.Topic, p.Partition, &batch, f.cacheLimit, f.batchMaxSize) {
 					pauseTopicPartitions[p.Topic] = append(pauseTopicPartitions[p.Topic], p.Partition)
 				}
 			})
