@@ -71,6 +71,7 @@ input:
     commit_period: 5s
     partition_buffer_bytes: 1MB
     topic_lag_refresh_period: 5s
+    max_yield_batch_size: 32KB
     auto_replay_nacks: true
 ```
 
@@ -332,6 +333,15 @@ The period of time between each topic lag refresh cycle.
 *Type*: `string`
 
 *Default*: `"5s"`
+
+=== `max_yield_batch_size`
+
+The maximum size (in bytes) for each batch yielded by this input. When routed to a redpanda output without modification this would roughly translate to the batch.bytes config field of a traditional producer.
+
+
+*Type*: `string`
+
+*Default*: `"32KB"`
 
 === `auto_replay_nacks`
 
