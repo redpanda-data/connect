@@ -89,7 +89,7 @@ func (s *schemaRegistryEncoder) getAvroEncoder(ctx context.Context, schema franz
 			return nil, fmt.Errorf("unexpected root schema type: %T", v)
 		}
 	} else {
-		return nil, fmt.Errorf("Expect at least one schema to decode, got: %d", numSchemas)
+		return nil, fmt.Errorf("expect at least one schema to decode, got: %d", numSchemas)
 	}
 
 	var schemaSpec string
@@ -142,6 +142,10 @@ func (s *schemaRegistryEncoder) getAvroEncoder(ctx context.Context, schema franz
 
 func (s *schemaRegistryDecoder) getGoAvroDecoder(ctx context.Context, schema franz_sr.Schema) (schemaDecoder, error) {
 	schemas, err := resolveGoAvroReferences(ctx, s.client, nil, schema)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve avro references: %w", err)
+	}
+
 	var schemaJson json.RawMessage
 	numSchemas := len(schemas)
 	var unionTypeBytesToAdd []byte
@@ -163,7 +167,7 @@ func (s *schemaRegistryDecoder) getGoAvroDecoder(ctx context.Context, schema fra
 			return nil, fmt.Errorf("unexpected root schema type: %T", v)
 		}
 	} else {
-		return nil, fmt.Errorf("Expect at least one schema to decode, got: %d", numSchemas)
+		return nil, fmt.Errorf("expect at least one schema to decode, got: %d", numSchemas)
 	}
 
 	var schemaSpec string
@@ -217,7 +221,7 @@ func (s *schemaRegistryDecoder) getGoAvroDecoder(ctx context.Context, schema fra
 				return fmt.Errorf("unexpected error when unmarshalling: %w", err)
 			}
 
-			if !(len(unionWrapper) == 1) {
+			if len(unionWrapper) != 1 {
 				return fmt.Errorf("expected native to be a map[string]interface{} with length one, got %d", len(unionWrapper))
 			}
 			for _, value := range unionWrapper {
