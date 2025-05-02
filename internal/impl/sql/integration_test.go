@@ -18,6 +18,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -630,8 +631,7 @@ func testSuite(t *testing.T, driver, dsn string, createTableFn func(string) (str
 	}
 }
 
-func TestIntegrationClickhouse(t *testing.T) {
-	integration.CheckSkip(t)
+func runClickhouseTest(t *testing.T, dsnScheme string) {
 	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
@@ -640,8 +640,20 @@ func TestIntegrationClickhouse(t *testing.T) {
 	}
 	pool.MaxWait = 3 * time.Minute
 
+	pwd, err := os.Getwd()
+	require.NoError(t, err)
 	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository:   "clickhouse/clickhouse-server",
+		Repository: "clickhouse/clickhouse-server",
+		Env: []string{
+			"CLICKHOUSE_SKIP_USER_SETUP=1",
+		},
+		Mounts: []string{
+			// Hack: We need to set `max_os_cpu_wait_time_ratio_to_throw` to a value that is lower than
+			// `min_os_cpu_wait_time_ratio_to_throw`. Otherwise, the server will terminate the connection early with
+			// error "code: 745, message: CPU is overloaded".
+			// For extra details, see the code here: https://github.com/ClickHouse/ClickHouse/pull/78778.
+			pwd + "/resources/clickhouse/clickhouse.xml:/etc/clickhouse-server/users.d/clickhouse.xml",
+		},
 		ExposedPorts: []string{"9000/tcp"},
 	})
 	require.NoError(t, err)
@@ -665,7 +677,7 @@ func TestIntegrationClickhouse(t *testing.T) {
 		return name, err
 	}
 
-	dsn := fmt.Sprintf("clickhouse://localhost:%s/", resource.GetPort("9000/tcp"))
+	dsn := fmt.Sprintf("%s://localhost:%s/", dsnScheme, resource.GetPort("9000/tcp"))
 	require.NoError(t, pool.Retry(func() error {
 		db, err = sql.Open("clickhouse", dsn)
 		if err != nil {
@@ -685,59 +697,29 @@ func TestIntegrationClickhouse(t *testing.T) {
 	testSuite(t, "clickhouse", dsn, createTable)
 }
 
-func TestIntegrationOldClickhouse(t *testing.T) {
+func TestIntegrationClickhouse(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	pool, err := dockertest.NewPool("")
-	if err != nil {
-		t.Skipf("Could not connect to docker: %s", err)
-	}
-	pool.MaxWait = 3 * time.Minute
-
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository:   "clickhouse/clickhouse-server",
-		ExposedPorts: []string{"9000/tcp"},
-	})
-	require.NoError(t, err)
-
-	var db *sql.DB
-	t.Cleanup(func() {
-		if err = pool.Purge(resource); err != nil {
-			t.Logf("Failed to clean up docker resource: %s", err)
-		}
-		if db != nil {
-			db.Close()
-		}
-	})
-
-	createTable := func(name string) (string, error) {
-		_, err := db.Exec(fmt.Sprintf(`create table %s (
-  "foo" String,
-  "bar" Int64,
-  "baz" String
-		) engine=Memory;`, name))
-		return name, err
+	tests := []struct {
+		name      string
+		dsnScheme string
+	}{
+		{
+			name:      "new DSN scheme",
+			dsnScheme: "clickhouse",
+		},
+		{
+			name:      "old DSN scheme",
+			dsnScheme: "tcp",
+		},
 	}
 
-	dsn := fmt.Sprintf("tcp://localhost:%s/", resource.GetPort("9000/tcp"))
-	require.NoError(t, pool.Retry(func() error {
-		db, err = sql.Open("clickhouse", dsn)
-		if err != nil {
-			return err
-		}
-		if err = db.Ping(); err != nil {
-			db.Close()
-			db = nil
-			return err
-		}
-		if _, err := createTable("footable"); err != nil {
-			return err
-		}
-		return nil
-	}))
-
-	testSuite(t, "clickhouse", dsn, createTable)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			runClickhouseTest(t, test.dsnScheme)
+		})
+	}
 }
 
 func TestIntegrationPostgres(t *testing.T) {
