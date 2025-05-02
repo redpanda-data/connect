@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## 4.55.0 - TBD
 
+### Added
+
+- Field `max_yield_batch_size` added to all `redpanda` flavored inputs. (@Jeffail)
+
 ### Fixed
 
 - Fixed an issue with the experimental `redpanda` input where batch ordering could be mixed between two subsequent batches. (@mihaitodor, @rockwotj)
