@@ -32,6 +32,7 @@ include .versions
 
 install-tools:
 	@go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v$(GOLANGCI_LINT_VERSION)
+	@go install golang.org/x/tools/cmd/goimports@latest
 
 install: $(APPS)
 	@install -d $(INSTALL_DIR)
