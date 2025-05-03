@@ -42,7 +42,7 @@ func (c *mockClient) Index(host string) (indexClient, error) {
 	return &mockIndexClient{index: i, openConnections: &c.openConnections}, nil
 }
 
-func (c *mockClient) Write(host string, ns string, value *pinecone.Vector) {
+func (c *mockClient) Write(host, ns string, value *pinecone.Vector) {
 	idx, _ := c.Index(host)
 	idx.SetNamespace(ns)
 	_ = idx.UpsertVectors(context.Background(), []*pinecone.Vector{value})
@@ -146,7 +146,7 @@ func (m *mockMessage) AsMessage() *service.Message {
 	return msg
 }
 
-func newMessage(ns string, id string) mockMessage {
+func newMessage(ns, id string) mockMessage {
 	vec := make([]float32, 384)
 	for i := range vec {
 		vec[i] = rand.Float32()

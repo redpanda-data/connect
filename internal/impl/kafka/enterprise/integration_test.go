@@ -369,7 +369,7 @@ max_message_bytes: 1MB
 	assert.Equal(t, "buz", string(outRecords[1].Key))
 }
 
-func createSchema(t *testing.T, url string, subject string, schema string, references []franz_sr.SchemaReference) {
+func createSchema(t *testing.T, url, subject, schema string, references []franz_sr.SchemaReference) {
 	t.Helper()
 
 	client, err := franz_sr.NewClient(franz_sr.URLs(url))
@@ -379,7 +379,7 @@ func createSchema(t *testing.T, url string, subject string, schema string, refer
 	require.NoError(t, err)
 }
 
-func deleteSubject(t *testing.T, url string, subject string, hardDelete bool) {
+func deleteSubject(t *testing.T, url, subject string, hardDelete bool) {
 	t.Helper()
 
 	client, err := franz_sr.NewClient(franz_sr.URLs(url))
@@ -661,7 +661,7 @@ type redpandaEndpoints struct {
 }
 
 // TODO: Generalise this helper for the other Kafka tests here which use Redpanda.
-func startRedpanda(t *testing.T, pool *dockertest.Pool, exposeBroker bool, autocreateTopics bool) (redpandaEndpoints, error) {
+func startRedpanda(t *testing.T, pool *dockertest.Pool, exposeBroker, autocreateTopics bool) (redpandaEndpoints, error) {
 	t.Helper()
 
 	cmd := []string{

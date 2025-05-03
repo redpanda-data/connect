@@ -262,7 +262,7 @@ func (t *tuple) ToSql() (sql string, args []any, err error) {
 
 var _ squirrel.Sqlizer = &tuple{}
 
-func (s *snapshotTxn) querySnapshotData(ctx context.Context, table TableFQN, minExclusive primaryKey, maxInclusive primaryKey, pkColumns []string, limit int) (rows *sql.Rows, err error) {
+func (s *snapshotTxn) querySnapshotData(ctx context.Context, table TableFQN, minExclusive, maxInclusive primaryKey, pkColumns []string, limit int) (rows *sql.Rows, err error) {
 	pred := squirrel.And{}
 	pkAsTuple := "(" + strings.Join(pkColumns, ", ") + ")"
 	if minExclusive != nil {

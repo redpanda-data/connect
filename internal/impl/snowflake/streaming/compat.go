@@ -66,7 +66,7 @@ func deriveKey(encryptionKey, diversifier string) ([]byte, error) {
 }
 
 // See Encyptor.encrypt in the Java SDK
-func encrypt(buf []byte, encryptionKey string, diversifier string, iv int64) ([]byte, error) {
+func encrypt(buf []byte, encryptionKey, diversifier string, iv int64) ([]byte, error) {
 	// Derive the key from the diversifier and the original encryptionKey from server
 	key, err := deriveKey(encryptionKey, diversifier)
 	if err != nil {

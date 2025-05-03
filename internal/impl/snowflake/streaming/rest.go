@@ -445,7 +445,7 @@ func debugf(l *service.Logger, msg string, args ...any) {
 	l.Tracef(msg, args...)
 }
 
-func (c *SnowflakeRestClient) doPost(ctx context.Context, url string, req any, resp any) error {
+func (c *SnowflakeRestClient) doPost(ctx context.Context, url string, req, resp any) error {
 	marshaller := json.Marshal
 	if debug {
 		marshaller = func(v any) ([]byte, error) {

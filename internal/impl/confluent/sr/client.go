@@ -160,7 +160,7 @@ func (c *Client) CreateSchema(ctx context.Context, subject string, schema sr.Sch
 }
 
 // CreateSchemaWithIDAndVersion creates a new schema for the given subject, ID and version.
-func (c *Client) CreateSchemaWithIDAndVersion(ctx context.Context, subject string, schema sr.Schema, id int, version int) (int, error) {
+func (c *Client) CreateSchemaWithIDAndVersion(ctx context.Context, subject string, schema sr.Schema, id, version int) (int, error) {
 	ss, err := c.Client.CreateSchemaWithIDAndVersion(ctx, subject, schema, id, version)
 	if err != nil {
 		return -1, fmt.Errorf("failed to create schema for subject %q with id %d and version %d: %s", subject, id, version, err)

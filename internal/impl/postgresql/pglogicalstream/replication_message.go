@@ -119,7 +119,7 @@ func (m *baseMessage) decodeTupleDataError(name, field string, e error) error {
 	return fmt.Errorf("%s.%s decode tuple error: %s", name, field, e.Error())
 }
 
-func (m *baseMessage) invalidTupleTypeError(name, field string, e string, a byte) error {
+func (m *baseMessage) invalidTupleTypeError(name, field, e string, a byte) error {
 	return fmt.Errorf("%s.%s invalid tuple type value, expect %s, actual %c", name, field, e, a)
 }
 
