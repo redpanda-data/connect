@@ -120,7 +120,7 @@ require (
 	github.com/r3labs/diff/v3 v3.0.1
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475
-	github.com/redis/go-redis/v9 v9.7.0
+	github.com/redis/go-redis/v9 v9.7.3
 	github.com/redpanda-data/benthos/v4 v4.50.0
 	github.com/redpanda-data/common-go/secrets v0.1.3
 	github.com/redpanda-data/connect/public/bundle/free/v4 v4.31.0
