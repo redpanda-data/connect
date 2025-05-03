@@ -92,6 +92,11 @@ formatters:
   enable:
     - gofmt
     - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/redpanda-data/connect
+        - github.com/redpanda-data/benthos
   exclusions:
     generated: lax
     paths:
