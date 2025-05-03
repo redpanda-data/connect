@@ -24,8 +24,9 @@ import (
 	"github.com/Jeffail/shutdown"
 	v1 "github.com/authzed/authzed-go/proto/authzed/api/v1"
 	"github.com/dustin/go-humanize"
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"google.golang.org/protobuf/encoding/protojson"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 var _ service.Input = &watchInput{}

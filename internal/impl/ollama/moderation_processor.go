@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/ollama/ollama/api"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 

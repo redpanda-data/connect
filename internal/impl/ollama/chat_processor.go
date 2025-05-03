@@ -18,6 +18,7 @@ import (
 
 	"github.com/Jeffail/gabs/v2"
 	"github.com/ollama/ollama/api"
+
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
 

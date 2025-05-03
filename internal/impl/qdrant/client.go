@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/qdrant/go-client/qdrant"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 

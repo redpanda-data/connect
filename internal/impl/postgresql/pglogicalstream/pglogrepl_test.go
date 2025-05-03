@@ -24,10 +24,11 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/ory/dockertest/v3"
 	"github.com/ory/dockertest/v3/docker"
-	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+
+	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
 
 func TestLSNSuite(t *testing.T) {

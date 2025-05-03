@@ -23,6 +23,7 @@ import (
 	"time"
 
 	qdb "github.com/questdb/go-questdb-client/v3"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 

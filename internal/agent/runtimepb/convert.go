@@ -15,9 +15,10 @@ import (
 	"fmt"
 	"time"
 
+	"google.golang.org/protobuf/types/known/timestamppb"
+
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // MessageToProto converts a service.Message into proto form.

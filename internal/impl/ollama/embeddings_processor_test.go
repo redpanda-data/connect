@@ -14,11 +14,12 @@ import (
 	"testing"
 
 	"github.com/ollama/ollama/api"
-	"github.com/redpanda-data/benthos/v4/public/service"
-	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go/modules/ollama"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
 
 func createEmbeddingsProcessorForTest(t *testing.T, addr string) *ollamaEmbeddingProcessor {

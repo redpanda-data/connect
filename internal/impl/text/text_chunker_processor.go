@@ -20,9 +20,10 @@ import (
 	"unicode/utf8"
 
 	"github.com/pkoukk/tiktoken-go"
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/rivo/uniseg"
 	"github.com/tmc/langchaingo/textsplitter"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 var _ service.Processor = (*textChunker)(nil)

@@ -25,12 +25,13 @@ import (
 	"testing"
 
 	"github.com/qdrant/go-client/qdrant"
-	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
-	"github.com/redpanda-data/benthos/v4/public/service"
-	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	qc "github.com/testcontainers/testcontainers-go/modules/qdrant"
+
+	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
+	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
 
 const (

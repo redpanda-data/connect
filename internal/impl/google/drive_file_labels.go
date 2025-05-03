@@ -15,8 +15,9 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"google.golang.org/api/drivelabels/v2"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/license"
 )

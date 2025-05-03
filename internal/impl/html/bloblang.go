@@ -18,6 +18,7 @@ import (
 	"fmt"
 
 	"github.com/microcosm-cc/bluemonday"
+
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 )
 

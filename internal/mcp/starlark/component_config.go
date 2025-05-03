@@ -19,9 +19,10 @@ import (
 	"fmt"
 	"hash/fnv"
 
-	"github.com/redpanda-data/benthos/v4/public/service"
 	starlarkjson "go.starlark.net/lib/json"
 	"go.starlark.net/starlark"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (

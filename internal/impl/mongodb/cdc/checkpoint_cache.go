@@ -11,8 +11,9 @@ package cdc
 import (
 	"context"
 
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"go.mongodb.org/mongo-driver/v2/bson"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 type checkpointCache struct {

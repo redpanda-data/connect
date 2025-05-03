@@ -21,9 +21,10 @@ import (
 	"testing"
 
 	"github.com/pinecone-io/go-pinecone/pinecone"
+	"github.com/stretchr/testify/require"
+
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"github.com/stretchr/testify/require"
 )
 
 type mockClient struct {

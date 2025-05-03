@@ -16,9 +16,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/googleapi"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
