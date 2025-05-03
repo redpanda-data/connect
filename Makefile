@@ -67,7 +67,10 @@ docker-ai:
 	@docker build -f ./resources/docker/Dockerfile.ai . -t $(DOCKER_IMAGE):$(VER_CUT)-ai
 	@docker tag $(DOCKER_IMAGE):$(VER_CUT)-ai $(DOCKER_IMAGE):latest-ai
 
-fmt:
+goimports:
+	@goimports -e -l -w -local github.com/redpanda-data/connect,github.com/redpanda-data/benthos cmd internal public
+
+fmt: goimports
 	@golangci-lint fmt cmd/... internal/... public/...
 	@go mod tidy
 
