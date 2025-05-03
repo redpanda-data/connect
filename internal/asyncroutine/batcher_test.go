@@ -24,8 +24,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type req struct{ i int }
-type resp struct{ i int }
+type (
+	req  struct{ i int }
+	resp struct{ i int }
+)
 
 func TestBatcherCancellation(t *testing.T) {
 	b, err := NewBatcher(3, func(ctx context.Context, reqs []req) (resps []resp, err error) {

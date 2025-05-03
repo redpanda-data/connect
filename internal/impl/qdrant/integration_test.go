@@ -111,7 +111,6 @@ func TestIntegrationQdrant_Output(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-
 			host, port, err := parseHostAndPort(addr)
 			require.NoError(t, err, "failed to parse host and port")
 			queryPoint := func(ctx context.Context, testID, messageID string) (string, []string, error) {
@@ -150,7 +149,6 @@ func TestIntegrationQdrant_Output(t *testing.T) {
 				integration.StreamTestOptVarSet("VECTOR", tc.vector),
 				integration.StreamTestOptVarSet("PAYLOAD", string(payloadBytes)),
 			)
-
 		})
 	}
 
@@ -291,7 +289,6 @@ qdrant:
 }
 
 func setupCollection(ctx context.Context, addr, collectionName string) error {
-
 	host, port, err := parseHostAndPort(addr)
 	if err != nil {
 		return err

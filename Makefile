@@ -32,7 +32,6 @@ include .versions
 
 install-tools:
 	@go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v$(GOLANGCI_LINT_VERSION)
-	@go install golang.org/x/tools/cmd/goimports@latest
 
 install: $(APPS)
 	@install -d $(INSTALL_DIR)
@@ -68,10 +67,7 @@ docker-ai:
 	@docker build -f ./resources/docker/Dockerfile.ai . -t $(DOCKER_IMAGE):$(VER_CUT)-ai
 	@docker tag $(DOCKER_IMAGE):$(VER_CUT)-ai $(DOCKER_IMAGE):latest-ai
 
-goimports:
-	@goimports -e -l -w -local github.com/redpanda-data/connect,github.com/redpanda-data/benthos cmd internal public
-
-fmt: goimports
+fmt:
 	@golangci-lint fmt cmd/... internal/... public/...
 	@go mod tidy
 

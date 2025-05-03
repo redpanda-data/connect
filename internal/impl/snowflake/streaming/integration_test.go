@@ -394,13 +394,13 @@ func TestTimestampCompat(t *testing.T) {
 	require.NoError(t, err)
 	for _, col := range columnNames {
 		timestamps1[col] = time.Date(
-			2024, 1, 01,
-			12, 30, 05,
+			2024, 1, 0o1,
+			12, 30, 0o5,
 			int(time.Nanosecond+time.Microsecond+time.Millisecond),
 			time.UTC,
 		)
 		timestamps2[col] = time.Date(
-			2024, 1, 01,
+			2024, 1, 0o1,
 			20, 45, 55,
 			int(time.Nanosecond+time.Microsecond+time.Millisecond),
 			easternTz,

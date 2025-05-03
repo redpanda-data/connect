@@ -53,5 +53,4 @@ func (c *checkpointCache) Load(ctx context.Context) (resumeToken bson.Raw, err e
 		err = bson.UnmarshalExtJSON(cVal, true, &resumeToken)
 	}
 	return
-
 }

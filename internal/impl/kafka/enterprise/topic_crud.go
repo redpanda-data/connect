@@ -19,9 +19,7 @@ import (
 	"github.com/twmb/franz-go/pkg/kmsg"
 )
 
-var (
-	errTopicAlreadyExists = errors.New("topic already exists")
-)
+var errTopicAlreadyExists = errors.New("topic already exists")
 
 func createTopic(ctx context.Context, srcTopic, destTopic string, replicationFactorOverride bool, replicationFactor int, inputClient *kgo.Client, outputClient *kgo.Client) error {
 	outputAdminClient := kadm.NewClient(outputClient)

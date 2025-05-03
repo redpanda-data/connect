@@ -56,7 +56,7 @@ func unpackEmbeddedFS(efs embed.FS, embedPath, destPath string, vars map[string]
 		if err != nil {
 			return err
 		}
-		f, err := os.OpenFile(outputPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+		f, err := os.OpenFile(outputPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 		if err != nil {
 			return err
 		}

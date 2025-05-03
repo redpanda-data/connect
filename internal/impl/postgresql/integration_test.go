@@ -1062,7 +1062,6 @@ postgres_cdc:
 	)
 
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
-
 }
 
 func TestIntegrationHeartbeat(t *testing.T) {
@@ -1143,5 +1142,4 @@ postgres_cdc:
 		return getRestartLSN() > startLSN
 	}, 5*time.Second, 500*time.Millisecond)
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
-
 }

@@ -136,8 +136,10 @@ type starlarkComponent struct {
 	SerializedConfig json.RawMessage
 }
 
-var _ starlark.Value = (*starlarkComponent)(nil)
-var _ json.Marshaler = (*starlarkComponent)(nil)
+var (
+	_ starlark.Value = (*starlarkComponent)(nil)
+	_ json.Marshaler = (*starlarkComponent)(nil)
+)
 
 // MarshalJSON implements json.Marshaler.
 func (s *starlarkComponent) MarshalJSON() ([]byte, error) {

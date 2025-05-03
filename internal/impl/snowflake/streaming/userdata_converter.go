@@ -62,22 +62,28 @@ func (b *typedBufferImpl) WriteValue(v parquet.Value) {
 	b.matrix[(b.currentRow*b.rowWidth)+b.columnIndex] = v
 	b.currentRow++
 }
+
 func (b *typedBufferImpl) WriteNull() {
 	b.WriteValue(parquet.NullValue())
 }
+
 func (b *typedBufferImpl) WriteInt128(v int128.Num) {
 	b.scratch = v.AppendBigEndian(b.scratch)
 	b.WriteValue(parquet.FixedLenByteArrayValue(b.scratch[len(b.scratch)-16:]).Level(0, 1, b.columnIndex))
 }
+
 func (b *typedBufferImpl) WriteBool(v bool) {
 	b.WriteValue(parquet.BooleanValue(v).Level(0, 1, b.columnIndex))
 }
+
 func (b *typedBufferImpl) WriteFloat64(v float64) {
 	b.WriteValue(parquet.DoubleValue(v).Level(0, 1, b.columnIndex))
 }
+
 func (b *typedBufferImpl) WriteBytes(v []byte) {
 	b.WriteValue(parquet.ByteArrayValue(v).Level(0, 1, b.columnIndex))
 }
+
 func (b *typedBufferImpl) Prepare(matrix []parquet.Value, columnIndex, rowWidth int) {
 	b.currentRow = 0
 	b.matrix = matrix

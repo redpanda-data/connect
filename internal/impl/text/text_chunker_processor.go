@@ -101,7 +101,6 @@ func newTextChunkerSpec() *service.ConfigSpec {
 				Default(textsplitter.DefaultOptions().ReferenceLinks).
 				Description("Whether to keep reference links in the output."),
 		)
-
 }
 
 func newTextChunker(conf *service.ParsedConfig, res *service.Resources) (service.Processor, error) {

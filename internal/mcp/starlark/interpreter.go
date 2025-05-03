@@ -110,9 +110,7 @@ func Eval(
 		return starlark.None, nil
 	}
 	secretFn := func(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-		var (
-			name string
-		)
+		var name string
 		err := starlark.UnpackArgs(
 			b.Name(),
 			args,

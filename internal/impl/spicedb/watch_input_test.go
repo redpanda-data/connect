@@ -135,7 +135,7 @@ definition document {
 		require.NoError(t, err)
 		bytes, err := msg.AsBytes()
 		require.NoError(t, err)
-		var resp = v1.WatchResponse{}
+		resp := v1.WatchResponse{}
 		require.NoError(t, protojson.Unmarshal(bytes, &resp))
 		require.Len(t, resp.Updates, 1)
 		require.Equal(t, "alice", resp.Updates[0].Relationship.Subject.Object.ObjectId)

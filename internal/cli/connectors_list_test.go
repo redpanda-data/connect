@@ -82,7 +82,7 @@ deny: []
 		t.Run(testCase.name, func(t *testing.T) {
 			tmpDir := t.TempDir()
 			inputPath := path.Join(tmpDir, "components_list.yaml")
-			require.NoError(t, os.WriteFile(inputPath, []byte(testCase.input), 0666))
+			require.NoError(t, os.WriteFile(inputPath, []byte(testCase.input), 0o666))
 
 			sch := testSchema(t)
 			actMod, err := cli.ApplyConnectorsList(inputPath, sch)

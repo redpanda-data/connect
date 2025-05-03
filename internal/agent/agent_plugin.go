@@ -46,8 +46,10 @@ type runtimePlugin struct {
 	plugin.NetRPCUnsupportedPlugin
 }
 
-var _ plugin.GRPCPlugin = (*runtimePlugin)(nil)
-var _ plugin.Plugin = (*runtimePlugin)(nil)
+var (
+	_ plugin.GRPCPlugin = (*runtimePlugin)(nil)
+	_ plugin.Plugin     = (*runtimePlugin)(nil)
+)
 
 // GRPCClient implements plugin.GRPCPlugin.
 func (p *runtimePlugin) GRPCClient(ctx context.Context, broker *plugin.GRPCBroker, c *grpc.ClientConn) (any, error) {

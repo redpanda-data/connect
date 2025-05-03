@@ -55,7 +55,6 @@ func (s *streamHelper) RunAsync(t *testing.T) func() {
 		require.NoError(t, stream.Run(t.Context()))
 	}()
 	return wg.Wait
-
 }
 
 func (s *streamHelper) RunWithErrors(t *testing.T) {

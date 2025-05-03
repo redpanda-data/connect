@@ -646,7 +646,6 @@ func (s *Stream) scanTableRange(ctx context.Context, snapshotter *snapshotter, t
 	for {
 		queryStart := time.Now()
 		snapshotRows, err := txn.querySnapshotData(ctx, table, minExclusive, maxInclusive, primaryKeyIndex, s.snapshotBatchSize)
-
 		if err != nil {
 			return fmt.Errorf("failed to query snapshot data for table %v: %w", table, err)
 		}
@@ -675,7 +674,7 @@ func (s *Stream) scanTableRange(ctx context.Context, snapshotter *snapshotter, t
 			pkPosition[i] = slices.Index(primaryKeyIndex, normalized)
 		}
 
-		var rowsCount = 0
+		rowsCount := 0
 		batch := make([]StreamMessage, 0, s.snapshotBatchSize)
 		rowsStart := time.Now()
 		for snapshotRows.Next() {
@@ -747,7 +746,6 @@ func (s *Stream) getPrimaryKeyColumn(ctx context.Context, table TableFQN) ([]str
         AND    i.indisprimary
         ORDER BY array_position(i.indkey, a.attnum);
     `, table.String())
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to sanitize query: %w", err)
 	}

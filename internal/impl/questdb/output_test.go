@@ -128,7 +128,6 @@ symbols:
 	assert.Equal(t, map[string]bool{"fieldA": true, "fieldB": true}, w.timestampStringFields)
 	assert.Equal(t, time.RFC3339, w.timestampStringFormat)
 	assert.Equal(t, map[string]bool{"mySymbolA": true, "mySymbolB": true}, w.symbols)
-
 }
 
 func TestValidationErrorsFromConf(t *testing.T) {
@@ -171,7 +170,6 @@ designated_timestamp_unit: hello`,
 
 			_, _, _, err = fromConf(cfg, service.MockResources())
 			assert.ErrorContains(t, err, tc.expectedErrContains)
-
 		})
 	}
 }

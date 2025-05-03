@@ -64,7 +64,7 @@ func (c *sseClient) Run(sql string) error {
 		"sql": sql,
 	}
 
-	var body = new(bytes.Buffer)
+	body := new(bytes.Buffer)
 	if err := json.NewEncoder(body).Encode(payload); err != nil {
 		return err
 	}

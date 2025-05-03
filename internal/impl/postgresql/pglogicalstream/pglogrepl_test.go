@@ -90,8 +90,10 @@ func (s *lsnSuite) TestValueInterface() {
 	s.Equal("00000016/B374D848", lsnStr)
 }
 
-const slotName = "pglogrepl_test"
-const outputPlugin = "pgoutput"
+const (
+	slotName     = "pglogrepl_test"
+	outputPlugin = "pgoutput"
+)
 
 func closeConn(t testing.TB, conn *pgconn.PgConn) {
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)

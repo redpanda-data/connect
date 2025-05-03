@@ -17,9 +17,7 @@ import (
 	"time"
 )
 
-var (
-	errMsgNotSupported = errors.New("replication message not supported")
-)
+var errMsgNotSupported = errors.New("replication message not supported")
 
 // MessageType indicates the type of logical replication message.
 type MessageType uint8
@@ -169,7 +167,7 @@ func (m *baseMessage) decodeInt32(src []byte) (int32, int) {
 // BeginMessage is a begin message.
 type BeginMessage struct {
 	baseMessage
-	//FinalLSN is the final LSN of the transaction.
+	// FinalLSN is the final LSN of the transaction.
 	FinalLSN LSN
 	// CommitTime is the commit timestamp of the transaction.
 	CommitTime time.Time

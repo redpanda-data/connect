@@ -246,7 +246,6 @@ output:
     action: "index"
     id: ${! meta("s3_key") }
 `)
-
 }
 
 func init() {

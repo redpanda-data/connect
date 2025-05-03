@@ -56,7 +56,6 @@ func (s *Snapshot) prepareSnapshot(ctx context.Context) (*position, error) {
 		ReadOnly:  true,
 		Isolation: sql.LevelRepeatableRead,
 	})
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to start transaction: %v", err)
 	}

@@ -111,7 +111,7 @@ func setupTestWithMySQLVersion(t *testing.T, version string) (string, *testDB) {
 
 func TestIntegrationMySQLCDC(t *testing.T) {
 	integration.CheckSkip(t)
-	var mysqlTestVersions = []string{"8.0", "9.0", "9.1"}
+	mysqlTestVersions := []string{"8.0", "9.0", "9.1"}
 	for _, version := range mysqlTestVersions {
 		t.Run(version, func(t *testing.T) {
 			dsn, db := setupTestWithMySQLVersion(t, version)

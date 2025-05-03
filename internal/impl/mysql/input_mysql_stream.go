@@ -502,6 +502,7 @@ func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mapper
 	}
 	return
 }
+
 func (i *mysqlStreamInput) readMessages(ctx context.Context) error {
 	var nextTimedBatchChan <-chan time.Time
 	for {

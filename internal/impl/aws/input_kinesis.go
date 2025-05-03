@@ -117,9 +117,10 @@ Use the `+"`batching`"+` fields to configure an optional xref:configuration:batc
 			Description("One or more Kinesis data streams to consume from. Streams can either be specified by their name or full ARN. Shards of a stream are automatically balanced across consumers by coordinating through the provided DynamoDB table. Multiple comma separated streams can be listed in a single element. Shards are automatically distributed across consumers of a stream by coordinating through the provided DynamoDB table. Alternatively, it's possible to specify an explicit shard to consume from with a colon after the stream name, e.g. `foo:0` would consume the shard `0` of the stream `foo`.").
 			Examples([]any{"foo", "arn:aws:kinesis:*:111122223333:stream/my-stream"}),
 		service.NewObjectField(kiFieldDynamoDB,
-			append([]*service.ConfigField{service.NewStringField(kiddbFieldTable).
-				Description("The name of the table to access.").
-				Default(""),
+			append([]*service.ConfigField{
+				service.NewStringField(kiddbFieldTable).
+					Description("The name of the table to access.").
+					Default(""),
 				service.NewBoolField(kiddbFieldCreate).
 					Description("Whether, if the table does not exist, it should be created.").
 					Default(false),
@@ -134,7 +135,8 @@ Use the `+"`batching`"+` fields to configure an optional xref:configuration:batc
 				service.NewIntField(kiddbFieldWriteCapacityUnits).
 					Description("Set the provisioned write capacity when creating the table with a `billing_mode` of `PROVISIONED`.").
 					Default(0).
-					Advanced()},
+					Advanced(),
+			},
 				config.SessionFields()...,
 			)...,
 		).

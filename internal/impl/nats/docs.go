@@ -41,9 +41,11 @@ NATS component, so that monitoring tools between NATS and Redpanda Connect can s
 func inputTracingDocs() *service.ConfigField {
 	return service.NewExtractTracingSpanMappingField().Version(tracingVersion)
 }
+
 func outputTracingDocs() *service.ConfigField {
 	return service.NewInjectTracingSpanMappingField().Version(tracingVersion)
 }
+
 func kvDocs(extraFields ...*service.ConfigField) []*service.ConfigField {
 	// TODO: Use `slices.Concat()` after switching to Go 1.22
 	fields := append(
