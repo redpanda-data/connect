@@ -98,8 +98,7 @@ formatters:
       extra-rules: true
     goimports:
       local-prefixes:
-        - github.com/redpanda-data/connect
-        - github.com/redpanda-data/benthos
+        - github.com/redpanda-data
   exclusions:
     generated: lax
     paths:
