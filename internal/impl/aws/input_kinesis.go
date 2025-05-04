@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -51,6 +52,27 @@ const (
 	kiFieldRebalancePeriod = "rebalance_period"
 	kiFieldStartFromOldest = "start_from_oldest"
 	kiFieldBatching        = "batching"
+)
+
+// These control shard balancing behavior
+const (
+	// prevents trying to claim the same shard too frequently
+	minReclaimInterval = 30 * time.Second
+
+	// limits how many claim operations can happen in one cycle
+	maxClaimOpsPerIteration = 10
+
+	// ensures that each balancing cycle takes at least this long
+	minIterationTime = 500 * time.Millisecond
+
+	// adds a small pause between claim operations to prevent CPU spikes
+	interClaimDelay = 100 * time.Millisecond
+
+	// adds a small pause between API calls to prevent hammering DynamoDB
+	interApiDelay = 50 * time.Millisecond
+
+	// errorDelay adds a pause after encountering errors
+	errorDelay = time.Second
 )
 
 type kiConfig struct {
@@ -670,112 +692,240 @@ func (k *kinesisReader) runBalancedShards() {
 		})
 	}()
 
+	// Add jitter to prevent thundering herd problem
+	jitter := time.Duration(rand.Intn(500)) * time.Millisecond
+	select {
+	case <-time.After(jitter):
+	case <-k.ctx.Done():
+		return
+	}
+
+	// Track when we last attempted to claim each shard
+	lastShardAttempt := make(map[string]map[string]time.Time)
+
 	for {
+		loopStart := time.Now()
+		claimOps := 0
+
 		for _, info := range k.streams {
+			if _, exists := lastShardAttempt[info.id]; !exists {
+				lastShardAttempt[info.id] = make(map[string]time.Time)
+			}
+
+			if claimOps >= maxClaimOpsPerIteration {
+				k.log.Debugf("Reached claim operation limit (%d) for this iteration, continuing in next cycle", maxClaimOpsPerIteration)
+				break
+			}
+
 			shardsRes, err := k.svc.ListShards(k.ctx, &kinesis.ListShardsInput{
 				StreamARN: &info.arn,
 			})
 
-			var clientClaims map[string][]awsKinesisClientClaim
-			if err == nil {
-				clientClaims, err = k.checkpointer.AllClaims(k.ctx, info.id)
-			}
 			if err != nil {
 				if k.ctx.Err() != nil {
 					return
 				}
-				k.log.Errorf("Failed to obtain stream '%v' shards or claims: %v", info.id, err)
+				k.log.Errorf("Failed to obtain stream '%v' shards: %v", info.id, err)
+				time.Sleep(errorDelay)
+				continue
+			}
+
+			select {
+			case <-time.After(interApiDelay):
+			case <-k.ctx.Done():
+				return
+			}
+
+			clientClaims, err := k.checkpointer.AllClaims(k.ctx, info.id)
+			if err != nil {
+				if k.ctx.Err() != nil {
+					return
+				}
+				k.log.Errorf("Failed to obtain claims for stream '%v': %v", info.id, err)
+				time.Sleep(errorDelay)
 				continue
 			}
 
 			totalShards := len(shardsRes.Shards)
-			unclaimedShards := make(map[string]string, totalShards)
+			prioritizedShards := make(map[string]string, totalShards)
+
+			// First process unclaimed or expired shards
 			for _, s := range shardsRes.Shards {
-				if !isShardFinished(s) {
-					unclaimedShards[*s.ShardId] = ""
+				if s.ShardId != nil && !isShardFinished(s) {
+					prioritizedShards[*s.ShardId] = ""
 				}
 			}
+
 			for clientID, claims := range clientClaims {
 				for _, claim := range claims {
 					if time.Since(claim.LeaseTimeout) > k.leasePeriod*2 {
-						unclaimedShards[claim.ShardID] = clientID
+						// Expired lease
+						prioritizedShards[claim.ShardID] = clientID
 					} else {
-						delete(unclaimedShards, claim.ShardID)
+						// Valid lease, don't try to claim
+						delete(prioritizedShards, claim.ShardID)
 					}
 				}
 			}
 
-			// Have a go at grabbing any unclaimed shards
-			if len(unclaimedShards) > 0 {
-				for shardID, clientID := range unclaimedShards {
+			// Calculate fair distribution target
+			selfClaimCount := len(clientClaims[k.clientID])
+			targetShardCount := 0
+
+			if totalClients := len(clientClaims); totalClients > 0 {
+				targetShardCount = totalShards / (totalClients + 1)
+			}
+
+			// Process unclaimed/expired shards first
+			if len(prioritizedShards) > 0 {
+				shardIDs := make([]string, 0, len(prioritizedShards))
+				for shardID := range prioritizedShards {
+					shardIDs = append(shardIDs, shardID)
+				}
+				sort.Strings(shardIDs)
+
+				for _, shardID := range shardIDs {
+					if claimOps >= maxClaimOpsPerIteration {
+						break
+					}
+
+					if lastAttempt, found := lastShardAttempt[info.id][shardID]; found {
+						if time.Since(lastAttempt) < minReclaimInterval {
+							continue
+						}
+					}
+
+					lastShardAttempt[info.id][shardID] = time.Now()
+
+					clientID := prioritizedShards[shardID]
 					sequence, err := k.checkpointer.Claim(k.ctx, info.id, shardID, clientID)
+					claimOps++
+
 					if err != nil {
 						if k.ctx.Err() != nil {
 							return
 						}
 						if !errors.Is(err, ErrLeaseNotAcquired) {
-							k.log.Errorf("Failed to claim unclaimed shard '%v': %v", shardID, err)
+							k.log.Errorf("Failed to claim shard '%v': %v", shardID, err)
 						}
 						continue
 					}
+
 					wg.Add(1)
 					if err = k.runConsumer(&wg, *info, shardID, sequence); err != nil {
-						k.log.Errorf("Failed to start consumer: %v\n", err)
+						k.log.Errorf("Failed to start consumer: %v", err)
+					} else {
+						selfClaimCount++
+					}
+
+					select {
+					case <-time.After(interClaimDelay):
+					case <-k.ctx.Done():
+						return
 					}
 				}
-
-				// If there are unclaimed shards then let's not resort to
-				// thievery just yet.
-				continue
 			}
 
-			// There were no unclaimed shards, let's look for a shard to steal.
-			selfClaims := len(clientClaims[k.clientID])
-			for clientID, claims := range clientClaims {
-				if clientID == k.clientID {
-					// Don't steal from ourself, we're not at that point yet.
-					continue
-				}
+			// If we have fewer shards than our target, attempt to steal some
+			if selfClaimCount < targetShardCount {
+				clientsByShardCount := make(map[int][]string)
+				maxShardCount := 0
 
-				// This is an extremely naive "algorithm", we simply randomly
-				// iterate all other clients with shards and if any have two
-				// more shards than we do then it's fair game. Using two here
-				// so that we don't play hot potatoes with an odd shard.
-				if len(claims) > (selfClaims + 1) {
-					randomShard := claims[(rand.Int() % len(claims))].ShardID
-					k.log.Debugf(
-						"Attempting to steal stream '%v' shard '%v' from client '%v' as client '%v'",
-						info.id, randomShard, clientID, k.clientID,
-					)
-
-					sequence, err := k.checkpointer.Claim(k.ctx, info.id, randomShard, clientID)
-					if err != nil {
-						if k.ctx.Err() != nil {
-							return
-						}
-						if !errors.Is(err, ErrLeaseNotAcquired) {
-							k.log.Errorf("Failed to steal shard '%v': %v", randomShard, err)
-						}
-						k.log.Debugf(
-							"Aborting theft of stream '%v' shard '%v' from client '%v' as client '%v'",
-							info.id, randomShard, clientID, k.clientID,
-						)
+				for clientID, claims := range clientClaims {
+					if clientID == k.clientID {
 						continue
 					}
 
-					k.log.Debugf(
-						"Successfully stole stream '%v' shard '%v' from client '%v' as client '%v'",
-						info.id, randomShard, clientID, k.clientID,
-					)
-					wg.Add(1)
-					if err = k.runConsumer(&wg, *info, randomShard, sequence); err != nil {
-						k.log.Errorf("Failed to start consumer: %v\n", err)
-					} else {
-						// If we successfully stole the shard then that's enough
-						// for now.
+					count := len(claims)
+					if count > maxShardCount {
+						maxShardCount = count
+					}
+
+					clientsByShardCount[count] = append(clientsByShardCount[count], clientID)
+				}
+
+				// Only steal from clients with at least 2 more shards than us
+				stealThreshold := selfClaimCount + 2
+				stealSuccessful := false
+
+				// Start with clients that have the most shards
+				for shardCount := maxShardCount; shardCount >= stealThreshold; shardCount-- {
+					clients := clientsByShardCount[shardCount]
+					rand.Shuffle(len(clients), func(i, j int) {
+						clients[i], clients[j] = clients[j], clients[i]
+					})
+
+					for _, clientID := range clients {
+						claims := clientClaims[clientID]
+
+						randomIndex := rand.Intn(len(claims))
+						shardID := claims[randomIndex].ShardID
+
+						if lastAttempt, found := lastShardAttempt[info.id][shardID]; found {
+							if time.Since(lastAttempt) < minReclaimInterval {
+								continue
+							}
+						}
+
+						lastShardAttempt[info.id][shardID] = time.Now()
+
+						k.log.Debugf(
+							"Attempting to steal stream '%v' shard '%v' from client '%v' as client '%v'",
+							info.id, shardID, clientID, k.clientID,
+						)
+
+						sequence, err := k.checkpointer.Claim(k.ctx, info.id, shardID, clientID)
+						claimOps++
+
+						if err != nil {
+							if k.ctx.Err() != nil {
+								return
+							}
+							if !errors.Is(err, ErrLeaseNotAcquired) {
+								k.log.Errorf("Failed to steal shard '%v': %v", shardID, err)
+							}
+							k.log.Debugf(
+								"Aborting theft of stream '%v' shard '%v' from client '%v' as client '%v'",
+								info.id, shardID, clientID, k.clientID,
+							)
+							continue
+						}
+
+						k.log.Debugf(
+							"Successfully stole stream '%v' shard '%v' from client '%v' as client '%v'",
+							info.id, shardID, clientID, k.clientID,
+						)
+
+						wg.Add(1)
+						if err = k.runConsumer(&wg, *info, shardID, sequence); err != nil {
+							k.log.Errorf("Failed to start consumer: %v", err)
+						} else {
+							stealSuccessful = true
+							break
+						}
+
+						select {
+						case <-time.After(interClaimDelay):
+						case <-k.ctx.Done():
+							return
+						}
+					}
+
+					if stealSuccessful {
 						break
 					}
 				}
+			}
+		}
+
+		// Ensure minimum iteration time to prevent CPU spikes
+		iterationDuration := time.Since(loopStart)
+		if iterationDuration < minIterationTime {
+			sleepTime := minIterationTime - iterationDuration
+			select {
+			case <-time.After(sleepTime):
+			case <-k.ctx.Done():
+				return
 			}
 		}
 
