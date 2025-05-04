@@ -16,6 +16,7 @@ package couchbase_test
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -27,6 +28,8 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/couchbase"
+
+	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 )
 
 func TestProcessorConfigLinting(t *testing.T) {
@@ -195,6 +198,11 @@ operation: 'insert'
 	assert.Len(t, msgOut, 1)
 	assert.Len(t, msgOut[0], 1)
 
+	// check CAS
+	cas, ok := msgOut[0][0].MetaGetMut(couchbase.MetaCASKey)
+	assert.True(t, ok)
+	assert.NotEmpty(t, cas)
+
 	// message content should stay the same.
 	dataOut, err := msgOut[0][0].AsBytes()
 	assert.NoError(t, err)
@@ -220,6 +228,11 @@ operation: 'upsert'
 	assert.NoError(t, err)
 	assert.Len(t, msgOut, 1)
 	assert.Len(t, msgOut[0], 1)
+
+	// check CAS
+	cas, ok := msgOut[0][0].MetaGetMut(couchbase.MetaCASKey)
+	assert.True(t, ok)
+	assert.NotEmpty(t, cas)
 
 	// message content should stay the same.
 	dataOut, err := msgOut[0][0].AsBytes()
@@ -247,6 +260,11 @@ operation: 'replace'
 	assert.Len(t, msgOut, 1)
 	assert.Len(t, msgOut[0], 1)
 
+	// check CAS
+	cas, ok := msgOut[0][0].MetaGetMut(couchbase.MetaCASKey)
+	assert.True(t, ok)
+	assert.NotEmpty(t, cas)
+
 	// message content should stay the same.
 	dataOut, err := msgOut[0][0].AsBytes()
 	assert.NoError(t, err)
@@ -272,6 +290,11 @@ operation: 'get'
 	assert.Len(t, msgOut, 1)
 	assert.Len(t, msgOut[0], 1)
 
+	// check CAS
+	cas, ok := msgOut[0][0].MetaGetMut(couchbase.MetaCASKey)
+	assert.True(t, ok)
+	assert.NotEmpty(t, cas)
+
 	// message should contain expected payload.
 	dataOut, err := msgOut[0][0].AsBytes()
 	assert.NoError(t, err)
@@ -296,6 +319,11 @@ operation: 'remove'
 	assert.NoError(t, err)
 	assert.Len(t, msgOut, 1)
 	assert.Len(t, msgOut[0], 1)
+
+	// check CAS
+	cas, ok := msgOut[0][0].MetaGetMut(couchbase.MetaCASKey)
+	assert.True(t, ok)
+	assert.NotEmpty(t, cas)
 
 	// message content should stay the same.
 	dataOut, err := msgOut[0][0].AsBytes()
@@ -323,10 +351,217 @@ operation: 'get'
 	assert.Len(t, msgOut[0], 1)
 
 	// message should contain an error.
-	assert.Error(t, msgOut[0][0].GetError(), "TODO")
+	assert.Error(t, msgOut[0][0].GetError())
 
 	// message content should stay the same.
 	dataOut, err := msgOut[0][0].AsBytes()
 	assert.NoError(t, err)
 	assert.Equal(t, uid, string(dataOut))
+}
+
+func TestIntegrationCouchbaseStream(t *testing.T) {
+	ctx := context.Background()
+
+	integration.CheckSkip(t)
+
+	servicePort := requireCouchbase(t)
+	bucket := fmt.Sprintf("testing-stream-%d", time.Now().Unix())
+	require.NoError(t, createBucket(context.Background(), t, servicePort, bucket))
+	t.Cleanup(func() {
+		require.NoError(t, removeBucket(context.Background(), t, servicePort, bucket))
+	})
+
+	for _, clearCAS := range []bool{true, false} {
+		t.Run(fmt.Sprintf("%t", clearCAS), func(t *testing.T) {
+			streamOutBuilder := service.NewStreamBuilder()
+			require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: OFF`))
+
+			inFn, err := streamOutBuilder.AddBatchProducerFunc()
+			require.NoError(t, err)
+
+			var outBatches []service.MessageBatch
+			var outBatchMut sync.Mutex
+			require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
+				outBatchMut.Lock()
+				outBatches = append(outBatches, mb)
+				outBatchMut.Unlock()
+				return nil
+			}))
+
+			// insert
+			require.NoError(t, streamOutBuilder.AddProcessorYAML(fmt.Sprintf(`
+couchbase:
+  url: 'couchbase://localhost:%s'
+  bucket: %s
+  username: %s
+  password: %s
+  id: '${! json("key") }'
+  content: 'root = this'
+  operation: 'insert'
+`, servicePort, bucket, username, password)))
+
+			if clearCAS { // ignore cas check
+				require.NoError(t, streamOutBuilder.AddProcessorYAML(`
+mapping: |
+  meta couchbase_cas = deleted()
+`))
+			}
+
+			// replace
+			require.NoError(t, streamOutBuilder.AddProcessorYAML(fmt.Sprintf(`
+couchbase:
+  url: 'couchbase://localhost:%s'
+  bucket: %s
+  username: %s
+  password: %s
+  id: '${! json("key") }'
+  content: 'root = this'
+  operation: 'replace'
+`, servicePort, bucket, username, password)))
+
+			if clearCAS { // ignore cas check
+				require.NoError(t, streamOutBuilder.AddProcessorYAML(`
+mapping: |
+  meta couchbase_cas = deleted()
+`))
+			}
+			// remove
+			require.NoError(t, streamOutBuilder.AddProcessorYAML(fmt.Sprintf(`
+couchbase:
+  url: 'couchbase://localhost:%s'
+  bucket: %s
+  username: %s
+  password: %s
+  id: '${! json("key") }'
+  operation: 'remove'
+`, servicePort, bucket, username, password)))
+
+			streamOut, err := streamOutBuilder.Build()
+			require.NoError(t, err)
+			go func() {
+				err = streamOut.Run(context.Background())
+				require.NoError(t, err)
+			}()
+
+			require.NoError(t, inFn(ctx, service.MessageBatch{
+				service.NewMessage([]byte(`{"key":"hello","value":"word"}`)),
+			}))
+			require.NoError(t, streamOut.StopWithin(time.Second*15))
+
+			assert.Eventually(t, func() bool {
+				outBatchMut.Lock()
+				defer outBatchMut.Unlock()
+				return len(outBatches) == 1
+			}, time.Second*5, time.Millisecond*100)
+
+			// batch processing should be fine and contain one message.
+			assert.NoError(t, err)
+			assert.Len(t, outBatches, 1)
+			assert.Len(t, outBatches[0], 1)
+
+			// message should contain an error.
+			assert.NoError(t, outBatches[0][0].GetError())
+		})
+	}
+}
+
+func TestIntegrationCouchbaseStreamError(t *testing.T) {
+	ctx := context.Background()
+
+	integration.CheckSkip(t)
+
+	servicePort := requireCouchbase(t)
+	bucket := fmt.Sprintf("testing-stream-error-%d", time.Now().Unix())
+	require.NoError(t, createBucket(context.Background(), t, servicePort, bucket))
+	t.Cleanup(func() {
+		require.NoError(t, removeBucket(context.Background(), t, servicePort, bucket))
+	})
+
+	streamOutBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: OFF`))
+
+	inFn, err := streamOutBuilder.AddBatchProducerFunc()
+	require.NoError(t, err)
+
+	var outBatches []service.MessageBatch
+	var outBatchMut sync.Mutex
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
+		outBatchMut.Lock()
+		outBatches = append(outBatches, mb)
+		outBatchMut.Unlock()
+		return nil
+	}))
+
+	// insert
+	require.NoError(t, streamOutBuilder.AddProcessorYAML(fmt.Sprintf(`
+couchbase:
+  url: 'couchbase://localhost:%s'
+  bucket: %s
+  username: %s
+  password: %s
+  id: '${! json("key") }'
+  content: |
+    root = this
+    root.at = timestamp_unix_micro()
+  operation: 'insert'
+`, servicePort, bucket, username, password)))
+
+	// upsert adn remove in parallel
+	require.NoError(t, streamOutBuilder.AddProcessorYAML(fmt.Sprintf(`
+workflow:
+  meta_path: ""
+  branches:
+    write:
+      processors:
+        - couchbase:
+            url: 'couchbase://localhost:%[1]s'
+            bucket: %[2]s
+            username: %[3]s
+            password: %[4]s
+            id: '${! json("key") }'
+            content: |
+              root = this
+              root.at = timestamp_unix_micro()
+            operation: 'replace'
+    remove:
+      processors:
+        - sleep:
+            duration: "1s"
+        - couchbase:
+            url: 'couchbase://localhost:%[1]s'
+            bucket: %[2]s
+            username: %[3]s
+            password: %[4]s
+            id: '${! json("key") }'
+            content: |
+              root = this
+              root.at = timestamp_unix_micro()
+            operation: 'replace'
+`, servicePort, bucket, username, password)))
+
+	streamOut, err := streamOutBuilder.Build()
+	require.NoError(t, err)
+	go func() {
+		err = streamOut.Run(context.Background())
+		require.NoError(t, err)
+	}()
+
+	require.NoError(t, inFn(ctx, service.MessageBatch{
+		service.NewMessage([]byte(`{"key":"hello","value":"word"}`)),
+	}))
+	require.NoError(t, streamOut.StopWithin(time.Second*15))
+
+	assert.Eventually(t, func() bool {
+		outBatchMut.Lock()
+		defer outBatchMut.Unlock()
+		return len(outBatches) == 1
+	}, time.Second*5, time.Millisecond*100)
+
+	// batch contain one message.
+	assert.NoError(t, err)
+	assert.Len(t, outBatches, 1)
+	assert.Len(t, outBatches[0], 1)
+
+	// message should contain an error.
+	assert.Error(t, outBatches[0][0].GetError())
 }
