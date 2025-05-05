@@ -37,7 +37,7 @@ func TestDecodePostgresRow(t *testing.T) {
 	tests := []struct {
 		desc             string
 		changeRecordJSON string
-		want             *ChangeRecord
+		want             ChangeRecord
 	}{
 		{
 			desc: "child partitions record",
@@ -54,7 +54,7 @@ func TestDecodePostgresRow(t *testing.T) {
     ]
   }
 }`,
-			want: &ChangeRecord{
+			want: ChangeRecord{
 				ChildPartitionsRecords: []*ChildPartitionsRecord{
 					{
 						StartTimestamp: mustParseTime("2023-02-24T01:06:48.000000-08:00"),
@@ -116,7 +116,7 @@ func TestDecodePostgresRow(t *testing.T) {
     "value_capture_type": "OLD_AND_NEW_VALUES"
   }
 }`,
-			want: &ChangeRecord{
+			want: ChangeRecord{
 				DataChangeRecords: []*DataChangeRecord{
 					{
 						CommitTimestamp:                      mustParseTime("2023-02-24T17:17:00.678847-08:00"),
@@ -178,7 +178,7 @@ func TestDecodePostgresRow(t *testing.T) {
     "timestamp": "2023-02-24T17:16:43.811345-08:00"
   }
 }`,
-			want: &ChangeRecord{
+			want: ChangeRecord{
 				HeartbeatRecords: []*HeartbeatRecord{
 					{
 						Timestamp: mustParseTime("2023-02-24T17:16:43.811345-08:00"),
