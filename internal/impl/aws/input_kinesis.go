@@ -69,10 +69,10 @@ const (
 	interClaimDelay = 100 * time.Millisecond
 
 	// adds a small pause between API calls to prevent hammering DynamoDB
-	interApiDelay = 50 * time.Millisecond
+	interApiDelay = 100 * time.Millisecond
 
 	// adds a pause after encountering errors
-	errorDelay = time.Second
+	errorDelay = 500 * time.Millisecond
 
 	// metrics
 	metricShardsPerClient = "kinesis_client_shards"
@@ -249,7 +249,7 @@ type kinesisReader struct {
 	closedChan chan struct{}
 
 	clientShardsMetric *service.MetricGauge
-	shardsStolen       *service.MetricCounter
+	shardsStolenMetric *service.MetricCounter
 }
 
 var errCannotMixBalancedShards = errors.New("it is not currently possible to include balanced and explicit shard streams in the same kinesis input")
@@ -325,8 +325,8 @@ func newKinesisReaderFromConfig(conf kiConfig, batcher service.BatchPolicy, sess
 	k.boffPool = sync.Pool{
 		New: func() any {
 			boff := backoff.NewExponentialBackOff()
-			boff.InitialInterval = time.Millisecond * 300
-			boff.MaxInterval = time.Second * 5
+			boff.InitialInterval = 300 * time.Millisecond
+			boff.MaxInterval = 5 * time.Second
 			boff.MaxElapsedTime = 0
 			return boff
 		},
@@ -381,7 +381,7 @@ func newKinesisReaderFromConfig(conf kiConfig, batcher service.BatchPolicy, sess
 
 	// Initialize metrics
 	k.clientShardsMetric = mgr.Metrics().NewGauge(metricShardsPerClient)
-	k.shardsStolen = mgr.Metrics().NewCounter(metricShardsStolen)
+	k.shardsStolenMetric = mgr.Metrics().NewCounter(metricShardsStolen)
 
 	return &k, nil
 }
@@ -737,7 +737,7 @@ func (k *kinesisReader) runBalancedShards() {
 				if k.ctx.Err() != nil {
 					return
 				}
-				k.log.Errorf("Failed to obtain stream '%v' shards: %v", info.id, err)
+				k.log.Errorf("Failed to list shards: %v", err)
 				time.Sleep(errorDelay)
 				continue
 			}
@@ -929,7 +929,7 @@ func (k *kinesisReader) runBalancedShards() {
 					}
 
 					if stealSuccessful {
-						k.shardsStolen.Incr(1)
+						k.shardsStolenMetric.Incr(1)
 						break
 					}
 				}
