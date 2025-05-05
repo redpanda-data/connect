@@ -25,13 +25,11 @@ package changestreams
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	"cloud.google.com/go/spanner"
-	"golang.org/x/sync/errgroup"
 	"google.golang.org/api/option"
 )
 
@@ -49,65 +47,82 @@ const (
 	partitionStateFinished
 )
 
+type tokenTimestamp struct {
+	token          string
+	startTimestamp time.Time
+}
+
 // Reader is the change stream reader.
 type Reader struct {
 	client            *spanner.Client
+	handler           Handler
 	streamID          string
 	startTimestamp    time.Time
 	endTimestamp      time.Time
 	heartbeatInterval time.Duration
 	dialect           dialect
-	states            map[string]partitionState
-	group             *errgroup.Group
-	mu                sync.Mutex
+
+	ch       chan tokenTimestamp
+	states   map[string]partitionState
+	statesMu sync.Mutex
 }
 
 // Config is the configuration for the reader.
 type Config struct {
-	// If StartTimestamp is a zero value of time.Time, reader reads from the current timestamp.
-	StartTimestamp time.Time
-	// If EndTimestamp is a zero value of time.Time, reader reads until it is cancelled.
-	EndTimestamp         time.Time
-	HeartbeatInterval    time.Duration
+	ProjectID         string
+	InstanceID        string
+	DatabaseID        string
+	StreamID          string
+	StartTimestamp    time.Time // If StartTimestamp is a zero value of time.Time, reader reads from the current timestamp.
+	EndTimestamp      time.Time // If EndTimestamp is a zero value of time.Time, reader reads until it is cancelled.
+	HeartbeatInterval time.Duration
+
 	SpannerClientConfig  spanner.ClientConfig
 	SpannerClientOptions []option.ClientOption
 }
 
-// NewReader creates a new reader.
-func NewReader(ctx context.Context, projectID, instanceID, databaseID, streamID string) (*Reader, error) {
-	return NewReaderWithConfig(ctx, projectID, instanceID, databaseID, streamID, Config{
-		SpannerClientConfig: spanner.ClientConfig{
-			SessionPoolConfig: spanner.DefaultSessionPoolConfig,
-		},
-	})
+// Handler is responsible for handling the read results.
+type Handler interface {
+	OnReadResult(result *ReadResult) error
+	OnReadError(err error)
 }
 
 // NewReaderWithConfig creates a new reader with a given configuration.
-func NewReaderWithConfig(ctx context.Context, projectID, instanceID, databaseID, streamID string, config Config) (*Reader, error) {
-	dbPath := fmt.Sprintf("projects/%s/instances/%s/databases/%s", projectID, instanceID, databaseID)
-	client, err := spanner.NewClientWithConfig(ctx, dbPath, config.SpannerClientConfig, config.SpannerClientOptions...)
+func NewReaderWithConfig(ctx context.Context, conf Config, h Handler) (*Reader, error) {
+	dbPath := fmt.Sprintf("projects/%s/instances/%s/databases/%s", conf.ProjectID, conf.InstanceID, conf.DatabaseID)
+	client, err := spanner.NewClientWithConfig(ctx, dbPath, conf.SpannerClientConfig, conf.SpannerClientOptions...)
 	if err != nil {
 		return nil, err
 	}
 
 	dialect, err := detectDialect(ctx, client)
 	if err != nil {
+		client.Close()
 		return nil, fmt.Errorf("failed to detect dialect: %w", err)
 	}
 
-	heartbeatInterval := config.HeartbeatInterval
+	heartbeatInterval := conf.HeartbeatInterval
 	if heartbeatInterval == 0 {
 		heartbeatInterval = 10 * time.Second
 	}
 
+	ch := make(chan tokenTimestamp, 1)
+	ch <- tokenTimestamp{
+		token:          "",
+		startTimestamp: conf.StartTimestamp,
+	}
+
 	return &Reader{
 		client:            client,
-		streamID:          streamID,
-		startTimestamp:    config.StartTimestamp,
-		endTimestamp:      config.EndTimestamp,
+		handler:           h,
+		streamID:          conf.StreamID,
+		startTimestamp:    conf.StartTimestamp,
+		endTimestamp:      conf.EndTimestamp,
 		heartbeatInterval: heartbeatInterval,
-		dialect:           dialect,
-		states:            make(map[string]partitionState),
+
+		dialect: dialect,
+		ch:      ch,
+		states:  make(map[string]partitionState),
 	}, nil
 }
 
@@ -116,59 +131,34 @@ func (r *Reader) Close() {
 	r.client.Close()
 }
 
-// Read starts reading the change stream.
+// Start starts the reader.
 //
-// If function f returns an error, Read finishes the process and returns the error.
-// Once this method is called, reader must not be reused in any other places (i.e. not reentrant).
-func (r *Reader) Read(ctx context.Context, f func(result *ReadResult) error) error {
-	r.mu.Lock()
-	if r.group != nil {
-		r.mu.Unlock()
-		return errors.New("reader has already been read")
-	}
-	group, ctx := errgroup.WithContext(ctx)
-	r.group = group
-	r.mu.Unlock()
-
-	r.group.Go(func() error {
-		start := r.startTimestamp
-		if start.IsZero() {
-			start = time.Now()
+// It reads from the change stream and calls the handler for each read result.
+// It stops when the context is cancelled.
+func (r *Reader) Start(ctx context.Context) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case token := <-r.ch:
+			go func() {
+				if err := r.read(ctx, token.token, token.startTimestamp); err != nil {
+					r.handler.OnReadError(err)
+				}
+			}()
 		}
-		return r.startRead(ctx, "", start, f)
-	})
-
-	return group.Wait()
+	}
 }
 
-func (r *Reader) startRead(ctx context.Context, partitionToken string, startTimestamp time.Time, f func(result *ReadResult) error) error {
+func (r *Reader) read(ctx context.Context, partitionToken string, startTimestamp time.Time) error {
 	if !r.markStateReading(partitionToken) {
 		return nil
 	}
 
 	var stmt spanner.Statement
-	switch r.dialect {
-	case dialectGoogleSQL:
+	if r.isPostgres() {
 		stmt = spanner.Statement{
-			SQL: fmt.Sprintf("SELECT ChangeRecord FROM READ_%s(@start_timestamp, @end_timestamp, @partition_token, @heartbeat_millis_second)", r.streamID),
-			Params: map[string]interface{}{
-				"start_timestamp":         startTimestamp,
-				"end_timestamp":           r.endTimestamp,
-				"partition_token":         partitionToken,
-				"heartbeat_millis_second": r.heartbeatInterval / time.Millisecond,
-			},
-		}
-		if r.endTimestamp.IsZero() {
-			// Must be converted to NULL.
-			stmt.Params["end_timestamp"] = nil
-		}
-		if partitionToken == "" {
-			// Must be converted to NULL.
-			stmt.Params["partition_token"] = nil
-		}
-	case dialectPostgreSQL:
-		stmt = spanner.Statement{
-			SQL: fmt.Sprintf("SELECT * FROM spanner.read_json_%s($1, $2, $3, $4, null)", r.streamID),
+			SQL: fmt.Sprintf(`SELECT * FROM spanner.read_json_%s($1, $2, $3, $4, null)`, r.streamID),
 			Params: map[string]interface{}{
 				"p1": startTimestamp,
 				"p2": r.endTimestamp,
@@ -184,60 +174,51 @@ func (r *Reader) startRead(ctx context.Context, partitionToken string, startTime
 			// Must be converted to NULL.
 			stmt.Params["p3"] = nil
 		}
-	default:
-		return fmt.Errorf("unexpected dialect: %s", r.dialect)
+	} else {
+		stmt = spanner.Statement{
+			SQL: fmt.Sprintf(`SELECT ChangeRecord FROM READ_%s(@start_timestamp, @end_timestamp, @partition_token, @heartbeat_millis_second)`, r.streamID),
+			Params: map[string]interface{}{
+				"start_timestamp":         startTimestamp,
+				"end_timestamp":           r.endTimestamp,
+				"partition_token":         partitionToken,
+				"heartbeat_millis_second": r.heartbeatInterval / time.Millisecond,
+			},
+		}
+		if r.endTimestamp.IsZero() {
+			// Must be converted to NULL.
+			stmt.Params["end_timestamp"] = nil
+		}
+		if partitionToken == "" {
+			// Must be converted to NULL.
+			stmt.Params["partition_token"] = nil
+		}
 	}
 
-	var childPartitionRecords []*ChildPartitionsRecord
 	if err := r.client.Single().Query(ctx, stmt).Do(func(row *spanner.Row) error {
-		readResult := ReadResult{PartitionToken: partitionToken}
-		switch r.dialect {
-		case dialectGoogleSQL:
-			if err := row.ToStructLenient(&readResult); err != nil {
-				return err
-			}
-		case dialectPostgreSQL:
+		rr := ReadResult{PartitionToken: partitionToken}
+		if r.isPostgres() {
 			changeRecord, err := decodePostgresRow(row)
 			if err != nil {
 				return err
 			}
-			readResult.ChangeRecords = []*ChangeRecord{changeRecord}
-		default:
-			return fmt.Errorf("unexpected dialect: %s", r.dialect)
-		}
-
-		for _, changeRecord := range readResult.ChangeRecords {
-			if len(changeRecord.ChildPartitionsRecords) > 0 {
-				childPartitionRecords = append(childPartitionRecords, changeRecord.ChildPartitionsRecords...)
+			rr.ChangeRecords = []*ChangeRecord{&changeRecord}
+		} else {
+			if err := row.ToStruct(&rr); err != nil {
+				return err
 			}
 		}
-
-		return f(&readResult)
+		return r.onReadResult(ctx, &rr)
 	}); err != nil {
 		return err
 	}
 
 	r.markStateFinished(partitionToken)
-
-	for _, childPartitionsRecord := range childPartitionRecords {
-		// childStartTimestamp is always later than r.startTimestamp.
-		childStartTimestamp := childPartitionsRecord.StartTimestamp
-		for _, childPartition := range childPartitionsRecord.ChildPartitions {
-			if r.canReadChild(childPartition) {
-				partition := childPartition
-				r.group.Go(func() error {
-					return r.startRead(ctx, partition.Token, childStartTimestamp, f)
-				})
-			}
-		}
-	}
-
 	return nil
 }
 
 func (r *Reader) markStateReading(partitionToken string) bool {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.statesMu.Lock()
+	defer r.statesMu.Unlock()
 
 	if _, ok := r.states[partitionToken]; ok {
 		// Already started by another parent.
@@ -248,15 +229,39 @@ func (r *Reader) markStateReading(partitionToken string) bool {
 }
 
 func (r *Reader) markStateFinished(partitionToken string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.statesMu.Lock()
+	defer r.statesMu.Unlock()
 
 	r.states[partitionToken] = partitionStateFinished
 }
 
+func (r *Reader) onReadResult(ctx context.Context, rr *ReadResult) error {
+	err := r.handler.OnReadResult(rr)
+
+	for _, cr := range rr.ChangeRecords {
+		for _, cpr := range cr.ChildPartitionsRecords {
+			for _, cp := range cpr.ChildPartitions {
+				if r.canReadChild(cp) {
+					select {
+					case <-ctx.Done():
+						return ctx.Err()
+					case r.ch <- tokenTimestamp{
+						token:          cp.Token,
+						startTimestamp: cpr.StartTimestamp,
+					}:
+						// ok
+					}
+				}
+			}
+		}
+	}
+
+	return err
+}
+
 func (r *Reader) canReadChild(partition *ChildPartition) bool {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.statesMu.Lock()
+	defer r.statesMu.Unlock()
 
 	for _, parent := range partition.ParentPartitionTokens {
 		if r.states[parent] != partitionStateFinished {
@@ -264,4 +269,8 @@ func (r *Reader) canReadChild(partition *ChildPartition) bool {
 		}
 	}
 	return true
+}
+
+func (r *Reader) isPostgres() bool {
+	return r.dialect == dialectPostgreSQL
 }

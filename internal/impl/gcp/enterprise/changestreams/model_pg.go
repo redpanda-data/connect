@@ -15,15 +15,17 @@ import (
 	"cloud.google.com/go/spanner"
 )
 
-func decodePostgresRow(row *spanner.Row) (*ChangeRecord, error) {
+var emptyChangeRecord = ChangeRecord{}
+
+func decodePostgresRow(row *spanner.Row) (ChangeRecord, error) {
 	var col spanner.NullJSON
 	if err := row.Column(0, &col); err != nil {
-		return nil, fmt.Errorf("extract column from row: %w", err)
+		return emptyChangeRecord, fmt.Errorf("extract column from row: %w", err)
 	}
 
 	b, err := col.MarshalJSON()
 	if err != nil {
-		return nil, fmt.Errorf("marshal JSON column: %w", err)
+		return emptyChangeRecord, fmt.Errorf("marshal JSON column: %w", err)
 	}
 
 	var pgcr struct {
@@ -32,7 +34,7 @@ func decodePostgresRow(row *spanner.Row) (*ChangeRecord, error) {
 		ChildPartitionsRecord *ChildPartitionsRecord `json:"child_partitions_record"`
 	}
 	if err := json.Unmarshal(b, &pgcr); err != nil {
-		return nil, fmt.Errorf("unmarshal JSON data: %w", err)
+		return emptyChangeRecord, fmt.Errorf("unmarshal JSON data: %w", err)
 	}
 
 	var cr ChangeRecord
@@ -45,5 +47,5 @@ func decodePostgresRow(row *spanner.Row) (*ChangeRecord, error) {
 	if pgcr.ChildPartitionsRecord != nil {
 		cr.ChildPartitionsRecords = []*ChildPartitionsRecord{pgcr.ChildPartitionsRecord}
 	}
-	return &cr, nil
+	return cr, nil
 }
