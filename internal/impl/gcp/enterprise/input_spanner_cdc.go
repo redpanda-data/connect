@@ -11,6 +11,7 @@ package enterprise
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync/atomic"
 	"time"
@@ -33,13 +34,7 @@ const (
 )
 
 type spannerCDCInputConfig struct {
-	ProjectID         string
-	InstanceID        string
-	DatabaseID        string
-	StreamID          string
-	StartTimestamp    time.Time
-	EndTimestamp      time.Time
-	HeartbeatInterval time.Duration
+	changestreams.Config
 }
 
 func parseRFC3339Nano(pConf *service.ParsedConfig, key string) (time.Time, error) {
@@ -163,19 +158,18 @@ func newSpannerCDCReaderFromParsed(pConf *service.ParsedConfig, mgr *service.Res
 	if err != nil {
 		return nil, err
 	}
-	return newSpannerCDCReader(conf, mgr)
+
+	return newSpannerCDCReader(conf, mgr), nil
 }
 
-func newSpannerCDCReader(conf spannerCDCInputConfig, mgr *service.Resources) (*spannerCDCReader, error) {
-	r := &spannerCDCReader{
+func newSpannerCDCReader(conf spannerCDCInputConfig, mgr *service.Resources) *spannerCDCReader {
+	return &spannerCDCReader{
 		conf: conf,
 		log:  mgr.Logger(),
 	}
-
-	return r, nil
 }
 
-func (r *spannerCDCReader) onReadResult(res *changestreams.ReadResult) error {
+func (r *spannerCDCReader) OnReadResult(res *changestreams.ReadResult) error {
 	for _, cr := range res.ChangeRecords {
 		for _, dcr := range cr.DataChangeRecords {
 			b, err := json.Marshal(dcr)
@@ -197,23 +191,19 @@ func (r *spannerCDCReader) onReadResult(res *changestreams.ReadResult) error {
 	return nil
 }
 
+func (r *spannerCDCReader) OnReadError(err error) {
+	if errors.Is(err, context.Canceled) {
+		return
+	}
+	r.log.Errorf("Error reading from Spanner change stream: %v", err)
+}
+
 func (r *spannerCDCReader) Connect(ctx context.Context) error {
 	r.log.Infof("Connecting to Spanner CDC stream: %s (project: %s, instance: %s, database: %s)",
 		r.conf.StreamID, r.conf.ProjectID, r.conf.InstanceID, r.conf.DatabaseID)
 
 	var err error
-	r.reader, err = changestreams.NewReaderWithConfig(
-		ctx,
-		r.conf.ProjectID,
-		r.conf.InstanceID,
-		r.conf.DatabaseID,
-		r.conf.StreamID,
-		changestreams.Config{
-			StartTimestamp:    r.conf.StartTimestamp,
-			EndTimestamp:      r.conf.EndTimestamp,
-			HeartbeatInterval: r.conf.HeartbeatInterval,
-		},
-	)
+	r.reader, err = changestreams.NewReaderWithConfig(ctx, r.conf.Config, r)
 	if err != nil {
 		return fmt.Errorf("failed to create Spanner change stream reader: %w", err)
 	}
@@ -224,7 +214,7 @@ func (r *spannerCDCReader) Connect(ctx context.Context) error {
 	bg, r.cancel = context.WithCancel(ctx)
 	go func() {
 		r.connected.Store(true)
-		if err := r.reader.Read(bg, r.onReadResult); err != nil {
+		if err := r.reader.Start(bg); err != nil {
 			r.log.Errorf("Error reading from Spanner change stream: %v", err)
 		} else {
 			r.log.Debug("Spanner change stream reader finished")
