@@ -14,6 +14,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -56,9 +57,56 @@ func newSpannerTestHelper(ctx context.Context) (spannerTestHelper, error) {
 	ts := time.Now().UnixNano()
 	return spannerTestHelper{
 		client:   client,
-		tableID:  fmt.Sprintf("table_%d", ts),
-		streamID: fmt.Sprintf("stream_%d", ts),
+		tableID:  fmt.Sprintf("rpcn_test_table_%d", ts),
+		streamID: fmt.Sprintf("rpcn_test_stream_%d", ts),
 	}, nil
+}
+
+// cleanupOrphanedTestStreams finds all change streams with the pattern
+// "rpcn_test_stream_%d" and deletes both the streams and their associated tables.
+func (h spannerTestHelper) cleanupOrphanedTestStreams(ctx context.Context) error {
+	stmt := spanner.Statement{
+		SQL: `SELECT change_stream_name FROM information_schema.change_streams WHERE change_stream_name LIKE 'rpcn_test_stream_%'`,
+	}
+	iter := h.client.Single().Query(ctx, stmt)
+	defer iter.Stop()
+
+	// Collect all stream names
+	streamNames := make([]string, 0)
+	if err := iter.Do(func(row *spanner.Row) error {
+		var sn string
+		if err := row.Columns(&sn); err != nil {
+			return err
+		}
+		streamNames = append(streamNames, sn)
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	if len(streamNames) == 0 {
+		return nil
+	}
+
+	dropSQLs := make([]string, 0, len(streamNames)*2)
+	for _, sn := range streamNames {
+		dropSQLs = append(dropSQLs,
+			fmt.Sprintf(`DROP CHANGE STREAM %s`, sn),
+			fmt.Sprintf(`DROP TABLE %s`, strings.Replace(sn, "stream", "table", 1)))
+	}
+	adm, err := adminapi.NewDatabaseAdminClient(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create admin client: %w", err)
+	}
+
+	op, err := adm.UpdateDatabaseDdl(ctx, &databasepb.UpdateDatabaseDdlRequest{
+		Database:   spannerDatabasePath(),
+		Statements: dropSQLs,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to execute drop statements: %w", err)
+	}
+	return op.Wait(ctx)
 }
 
 func (h spannerTestHelper) createTableAndStream(ctx context.Context) error {
@@ -103,6 +151,7 @@ func (h spannerTestHelper) dropTableAndStream(ctx context.Context) error {
 // go test -v -run TestIntegrationSpannerCDCInput . -spanner.project_id=sandbox-rpcn -spanner.instance_id=rpcn-tests -spanner.database_id=changestreams
 func TestIntegrationSpannerCDCInput(t *testing.T) {
 	integration.CheckSkip(t)
+
 	if *spannerProjectID == "" || *spannerInstanceID == "" || *spannerDatabaseID == "" {
 		t.Skip("Skipping Spanner integration test as required flags are not set")
 	}
@@ -111,15 +160,16 @@ func TestIntegrationSpannerCDCInput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create test helper: %v", err)
 	}
-
-	// Create table and stream
+	if err := h.cleanupOrphanedTestStreams(t.Context()); err != nil {
+		t.Fatalf("failed to cleanup orphaned test streams: %v", err)
+	}
 	if err := h.createTableAndStream(t.Context()); err != nil {
 		t.Fatalf("failed to create table and stream: %v", err)
 	}
 	t.Logf("Created table %q and stream %q", h.tableID, h.streamID)
 
 	t.Cleanup(func() {
-		if err := h.dropTableAndStream(t.Context()); err != nil {
+		if err := h.dropTableAndStream(context.Background()); err != nil { //nolint:usetesting // the cleanup needs to run with fresh context
 			t.Error(err)
 		}
 		t.Logf("Dropped table %q and stream %q", h.tableID, h.streamID)
