@@ -11,7 +11,6 @@ import (
 	"time"
 
 	franz_sr "github.com/twmb/franz-go/pkg/sr"
-	//"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
