@@ -33,7 +33,8 @@ func TestHambaAvroReferences(t *testing.T) {
 
 	rootSchema := `[
   "benthos.namespace.com.foo",
-  "benthos.namespace.com.bar"
+  "benthos.namespace.com.bar",
+  "benthos.namespace.com.baz"
 ]`
 
 	fooSchema := `{
@@ -54,6 +55,15 @@ func TestHambaAvroReferences(t *testing.T) {
 	]
 }`
 
+	bazSchema := `{
+	"namespace": "benthos.namespace.com",
+	"type": "record",
+	"name": "baz",
+	"fields": [
+		{ "name": "Miao", "type": "benthos.namespace.com.foo" }
+	]
+}`
+
 	urlStr := runSchemaRegistryServer(t, func(path string) ([]byte, error) {
 		switch path {
 		case "/subjects/root/versions/latest", "/schemas/ids/1":
@@ -65,46 +75,66 @@ func TestHambaAvroReferences(t *testing.T) {
 				"references": []any{
 					map[string]any{"name": "benthos.namespace.com.foo", "subject": "foo", "version": 10},
 					map[string]any{"name": "benthos.namespace.com.bar", "subject": "bar", "version": 20},
+					map[string]any{"name": "benthos.namespace.com.baz", "subject": "baz", "version": 30},
 				},
 			}), nil
-		case "/subjects/foo/versions/10", "/schemas/ids/2":
+		case "/subjects/foo/versions/latest", "/subjects/foo/versions/10", "/schemas/ids/2":
 			return mustJBytes(t, map[string]any{
 				"id": 2, "version": 10, "schemaType": "AVRO",
 				"schema": fooSchema,
 			}), nil
-		case "/subjects/bar/versions/20", "/schemas/ids/3":
+		case "/subjects/bar/versions/latest", "/subjects/bar/versions/20", "/schemas/ids/3":
 			return mustJBytes(t, map[string]any{
 				"id": 3, "version": 20, "schemaType": "AVRO",
 				"schema": barSchema,
+			}), nil
+		case "/subjects/baz/versions/latest", "/subjects/baz/versions/30", "/schemas/ids/4":
+			return mustJBytes(t, map[string]any{
+				"id":         4,
+				"version":    30,
+				"schema":     bazSchema,
+				"schemaType": "AVRO",
+				"references": []any{
+					map[string]any{"name": "benthos.namespace.com.foo", "subject": "foo", "version": 10},
+				},
 			}), nil
 		}
 		return nil, nil
 	})
 
-	subj, err := service.NewInterpolatedString("root")
-	require.NoError(t, err)
-
 	tests := []struct {
 		name        string
+		subject     string
 		input       string
 		output      string
 		errContains []string
 	}{
 		{
-			name:   "a foo",
-			input:  `{"Woof":"hhnnnnnnroooo"}`,
-			output: `{"Woof":"hhnnnnnnroooo"}`,
+			name:    "a foo",
+			input:   `{"Woof":"hhnnnnnnroooo"}`,
+			output:  `{"Woof":"hhnnnnnnroooo"}`,
+			subject: "root",
 		},
 		{
-			name:   "a bar",
-			input:  `{"Moo":"mmuuuuuueew"}`,
-			output: `{"Moo":"mmuuuuuueew"}`,
+			name:    "a bar",
+			input:   `{"Moo":"mmuuuuuueew"}`,
+			output:  `{"Moo":"mmuuuuuueew"}`,
+			subject: "root",
+		},
+		{
+			name:    "a baz",
+			input:   `{"Miao":{"Woof":"tssssssuuuuuuu"}}`,
+			output:  `{"Miao":{"Woof":"tssssssuuuuuuu"}}`,
+			subject: "root",
 		},
 	}
 
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
+			subj, err := service.NewInterpolatedString(test.subject)
+			require.NoError(t, err)
+
 			encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, true, time.Minute*10, time.Minute, service.MockResources())
 			require.NoError(t, err)
 

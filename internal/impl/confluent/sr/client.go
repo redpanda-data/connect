@@ -171,9 +171,10 @@ func (c *Client) CreateSchemaWithIDAndVersion(ctx context.Context, subject strin
 
 type refWalkFn func(ctx context.Context, name string, info sr.Schema) error
 
-// WalkReferences goes through the provided schema info and for each reference
-// the provided closure is called recursively, which means each reference obtained
-// will also be walked.
+// WalkReferences goes through the provided schema info in a topological order
+// (i.e. before a schema is traversed all its references schemas are traversed first)
+// and for each reference the provided closure is called recursively, which means
+// each reference obtained will also be walked.
 //
 // If a reference of a given subject but differing version is detected an error
 // is returned as this would put us in an invalid state.
@@ -189,15 +190,18 @@ func (c *Client) walkReferencesTracked(ctx context.Context, seen map[string]int,
 			}
 			continue
 		}
+
 		info, err := c.GetSchemaBySubjectAndVersion(ctx, ref.Subject, &ref.Version, false)
 		if err != nil {
 			return err
 		}
-		if err := fn(ctx, ref.Name, info.Schema); err != nil {
-			return err
-		}
+
 		seen[ref.Name] = ref.Version
 		if err := c.walkReferencesTracked(ctx, seen, info.References, fn); err != nil {
+			return err
+		}
+
+		if err := fn(ctx, ref.Name, info.Schema); err != nil {
 			return err
 		}
 	}
