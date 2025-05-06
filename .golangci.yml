@@ -82,6 +82,9 @@ linters:
           - perfsprint
         path: _test.go
       - linters:
+          - perfsprint
+        path: internal/impl/gcp/enterprise/changestreams/metadata
+      - linters:
           - revive
         text: "exported method .*.Close should have comment or be unexported"
     paths:
