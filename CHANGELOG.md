@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Fixed an issue with the experimental `redpanda` input where batch ordering could be mixed between two subsequent batches. (@mihaitodor, @rockwotj)
+- Fixed an issue in `schema_registry_decode` where Avro schema references were not properly resolved. (@geniegeist)
 
 ## 4.54.1 - 2025-04-30
 
