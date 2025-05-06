@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	franz_sr "github.com/twmb/franz-go/pkg/sr"
 	"github.com/stretchr/testify/require"
+	franz_sr "github.com/twmb/franz-go/pkg/sr"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
