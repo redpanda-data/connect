@@ -203,7 +203,7 @@ gcp_spanner_cdc:
 
 	// Add a consumer function to collect messages
 	if err := sb.AddConsumerFunc(func(ctx context.Context, msg *service.Message) error {
-		messages <- msg.Copy()
+		messages <- msg
 		return nil
 	}); err != nil {
 		t.Fatalf("failed to add consumer function: %v", err)

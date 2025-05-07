@@ -252,6 +252,11 @@ func NewStore(conf StoreConfig, client *spanner.Client) *Store {
 	}
 }
 
+// Config returns the store configuration.
+func (s *Store) Config() StoreConfig {
+	return s.conf
+}
+
 // GetPartition fetches the partition metadata row data for the given partition token.
 func (s *Store) GetPartition(ctx context.Context, partitionToken string) (PartitionMetadata, error) {
 	var stmt spanner.Statement
