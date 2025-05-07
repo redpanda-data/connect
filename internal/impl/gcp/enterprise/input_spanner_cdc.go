@@ -11,7 +11,6 @@ package enterprise
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"sync/atomic"
 	"time"
@@ -155,10 +154,10 @@ type spannerCDCReader struct {
 	conf spannerCDCInputConfig
 	log  *service.Logger
 
-	reader    *changestreams.Reader
-	cancel    context.CancelFunc
-	resCh     chan *service.Message
-	connected atomic.Bool
+	subscriber *changestreams.Subscriber
+	cancel     context.CancelFunc
+	resCh      chan *service.Message
+	connected  atomic.Bool
 }
 
 var _ service.Input = (*spannerCDCReader)(nil)
@@ -183,33 +182,21 @@ func newSpannerCDCReader(conf spannerCDCInputConfig, mgr *service.Resources) *sp
 	}
 }
 
-func (r *spannerCDCReader) OnReadResult(res *changestreams.ReadResult) error {
-	for _, cr := range res.ChangeRecords {
-		for _, dcr := range cr.DataChangeRecords {
-			b, err := json.Marshal(dcr)
-			if err != nil {
-				return fmt.Errorf("failed to marshal read result as JSON: %w", err)
-			}
-
-			msg := service.NewMessage(b)
-			msg.MetaSetMut("spanner_partition_token", res.PartitionToken)
-			msg.MetaSetMut("spanner_project_id", r.conf.ProjectID)
-			msg.MetaSetMut("spanner_instance_id", r.conf.InstanceID)
-			msg.MetaSetMut("spanner_database_id", r.conf.DatabaseID)
-			msg.MetaSetMut("spanner_stream_id", r.conf.StreamID)
-
-			r.resCh <- msg
-		}
+func (r *spannerCDCReader) onDataChangeRecord(ctx context.Context, dcr *changestreams.DataChangeRecord) error {
+	b, err := json.Marshal(dcr)
+	if err != nil {
+		return fmt.Errorf("failed to marshal read result as JSON: %w", err)
 	}
+
+	msg := service.NewMessage(b)
+	msg.MetaSetMut("spanner_project_id", r.conf.ProjectID)
+	msg.MetaSetMut("spanner_instance_id", r.conf.InstanceID)
+	msg.MetaSetMut("spanner_database_id", r.conf.DatabaseID)
+	msg.MetaSetMut("spanner_stream_id", r.conf.StreamID)
+
+	r.resCh <- msg
 
 	return nil
-}
-
-func (r *spannerCDCReader) OnReadError(err error) {
-	if errors.Is(err, context.Canceled) {
-		return
-	}
-	r.log.Errorf("Error reading from Spanner change stream: %v", err)
 }
 
 func (r *spannerCDCReader) Connect(ctx context.Context) error {
@@ -217,9 +204,13 @@ func (r *spannerCDCReader) Connect(ctx context.Context) error {
 		r.conf.StreamID, r.conf.ProjectID, r.conf.InstanceID, r.conf.DatabaseID)
 
 	var err error
-	r.reader, err = changestreams.NewReaderWithConfig(ctx, r.conf.Config, r)
+	r.subscriber, err = changestreams.NewSubscriber(ctx, r.conf.Config, r.onDataChangeRecord, r.log)
 	if err != nil {
-		return fmt.Errorf("failed to create Spanner change stream reader: %w", err)
+		return fmt.Errorf("create Spanner change stream reader: %w", err)
+	}
+
+	if err := r.subscriber.Setup(ctx); err != nil {
+		return fmt.Errorf("setup Spanner change stream reader: %w", err)
 	}
 
 	r.resCh = make(chan *service.Message)
@@ -228,11 +219,7 @@ func (r *spannerCDCReader) Connect(ctx context.Context) error {
 	bg, r.cancel = context.WithCancel(ctx)
 	go func() {
 		r.connected.Store(true)
-		if err := r.reader.Start(bg); err != nil {
-			r.log.Errorf("Error reading from Spanner change stream: %v", err)
-		} else {
-			r.log.Debug("Spanner change stream reader finished")
-		}
+		r.subscriber.Start(bg)
 		r.connected.Store(false)
 	}()
 
@@ -258,6 +245,6 @@ func (r *spannerCDCReader) Read(ctx context.Context) (*service.Message, service.
 
 func (r *spannerCDCReader) Close(ctx context.Context) error {
 	r.cancel()
-	r.reader.Close()
+	r.subscriber.Close()
 	return nil
 }

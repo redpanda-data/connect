@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"cloud.google.com/go/spanner"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/gcp/enterprise/changestreams/metadata"
 )
 
 // ChangeRecord is the single unit of the records from the change stream.
@@ -189,7 +191,27 @@ func (cp *ChildPartition) String() string {
 		cp.Token, cp.ParentPartitionTokens)
 }
 
-// TODO(mmt): add splits to metrics
+// toPartitionMetadata converts a ChildPartition to a PartitionMetadata.
+// The startTimestamp is taken from the ChildPartitionsRecord.StartTimestamp,
+// and represents the earliest timestamp that the child partitions contain
+// change records for. The endTimestamp and heartbeatMillis are inherited
+// from the parent partition.
+func (cp *ChildPartition) toPartitionMetadata(
+	startTimestamp,
+	endTimestamp time.Time,
+	heartbeatMillis int64,
+) metadata.PartitionMetadata {
+	return metadata.PartitionMetadata{
+		PartitionToken:  cp.Token,
+		ParentTokens:    cp.ParentPartitionTokens,
+		StartTimestamp:  startTimestamp,
+		EndTimestamp:    endTimestamp,
+		HeartbeatMillis: heartbeatMillis,
+		State:           metadata.StateCreated,
+		Watermark:       startTimestamp,
+	}
+}
+
 func (cp *ChildPartition) isSplit() bool {
 	return len(cp.ParentPartitionTokens) == 1
 }
