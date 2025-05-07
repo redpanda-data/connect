@@ -185,7 +185,7 @@ pinecone                  ,output    ,pinecone                  ,4.31.0  ,certif
 postgres_cdc              ,input     ,postgres_cdc              ,4.43.0  ,enterprise ,n          ,y     ,y
 processors                ,processor ,processors                ,0.0.0   ,certified  ,n          ,y     ,y
 prometheus                ,metric    ,prometheus                ,0.0.0   ,certified  ,n          ,y     ,y
-protobuf                  ,processor ,Protobuf                  ,0.0.0   ,certified  ,n          ,y     ,y
+protobuf                  ,processor ,Protobuf                  ,0.0.0   ,certified  ,n          ,n     ,n
 pulsar                    ,input     ,pulsar                    ,3.43.0  ,community  ,n          ,n     ,n
 pulsar                    ,output    ,pulsar                    ,3.43.0  ,community  ,n          ,n     ,n
 pusher                    ,output    ,pusher                    ,4.3.0   ,community  ,n          ,n     ,n
