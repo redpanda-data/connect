@@ -8,7 +8,7 @@
  * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
  */
 
-//go:generate protoc -I=../../proto/redpanda/runtime/v1alpha1 --go_out=../.. --go-grpc_out=../.. runtime.proto
+//go:generate protoc -I=../../proto/redpanda/runtime/v1alpha1 --go_out=../.. --go-grpc_out=../.. agent.proto
 
 package agent
 

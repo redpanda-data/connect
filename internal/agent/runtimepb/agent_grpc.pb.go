@@ -16,7 +16,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.5.1
 // - protoc             v5.29.3
-// source: runtime.proto
+// source: agent.proto
 
 package runtimepb
 
@@ -33,107 +33,107 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Runtime_InvokeAgent_FullMethodName = "/redpanda.runtime.v1alpha1.Runtime/InvokeAgent"
+	AgentRuntime_InvokeAgent_FullMethodName = "/redpanda.runtime.v1alpha1.AgentRuntime/InvokeAgent"
 )
 
-// RuntimeClient is the client API for Runtime service.
+// AgentRuntimeClient is the client API for AgentRuntime service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
-// `Runtime` is the service that provides the ability to invoke an agent.
-type RuntimeClient interface {
+// `AgentRuntime` is the service that provides the ability to invoke an agent.
+type AgentRuntimeClient interface {
 	InvokeAgent(ctx context.Context, in *InvokeAgentRequest, opts ...grpc.CallOption) (*InvokeAgentResponse, error)
 }
 
-type runtimeClient struct {
+type agentRuntimeClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewRuntimeClient(cc grpc.ClientConnInterface) RuntimeClient {
-	return &runtimeClient{cc}
+func NewAgentRuntimeClient(cc grpc.ClientConnInterface) AgentRuntimeClient {
+	return &agentRuntimeClient{cc}
 }
 
-func (c *runtimeClient) InvokeAgent(ctx context.Context, in *InvokeAgentRequest, opts ...grpc.CallOption) (*InvokeAgentResponse, error) {
+func (c *agentRuntimeClient) InvokeAgent(ctx context.Context, in *InvokeAgentRequest, opts ...grpc.CallOption) (*InvokeAgentResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(InvokeAgentResponse)
-	err := c.cc.Invoke(ctx, Runtime_InvokeAgent_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, AgentRuntime_InvokeAgent_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// RuntimeServer is the server API for Runtime service.
-// All implementations must embed UnimplementedRuntimeServer
+// AgentRuntimeServer is the server API for AgentRuntime service.
+// All implementations must embed UnimplementedAgentRuntimeServer
 // for forward compatibility.
 //
-// `Runtime` is the service that provides the ability to invoke an agent.
-type RuntimeServer interface {
+// `AgentRuntime` is the service that provides the ability to invoke an agent.
+type AgentRuntimeServer interface {
 	InvokeAgent(context.Context, *InvokeAgentRequest) (*InvokeAgentResponse, error)
-	mustEmbedUnimplementedRuntimeServer()
+	mustEmbedUnimplementedAgentRuntimeServer()
 }
 
-// UnimplementedRuntimeServer must be embedded to have
+// UnimplementedAgentRuntimeServer must be embedded to have
 // forward compatible implementations.
 //
 // NOTE: this should be embedded by value instead of pointer to avoid a nil
 // pointer dereference when methods are called.
-type UnimplementedRuntimeServer struct{}
+type UnimplementedAgentRuntimeServer struct{}
 
-func (UnimplementedRuntimeServer) InvokeAgent(context.Context, *InvokeAgentRequest) (*InvokeAgentResponse, error) {
+func (UnimplementedAgentRuntimeServer) InvokeAgent(context.Context, *InvokeAgentRequest) (*InvokeAgentResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method InvokeAgent not implemented")
 }
-func (UnimplementedRuntimeServer) mustEmbedUnimplementedRuntimeServer() {}
-func (UnimplementedRuntimeServer) testEmbeddedByValue()                 {}
+func (UnimplementedAgentRuntimeServer) mustEmbedUnimplementedAgentRuntimeServer() {}
+func (UnimplementedAgentRuntimeServer) testEmbeddedByValue()                      {}
 
-// UnsafeRuntimeServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to RuntimeServer will
+// UnsafeAgentRuntimeServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to AgentRuntimeServer will
 // result in compilation errors.
-type UnsafeRuntimeServer interface {
-	mustEmbedUnimplementedRuntimeServer()
+type UnsafeAgentRuntimeServer interface {
+	mustEmbedUnimplementedAgentRuntimeServer()
 }
 
-func RegisterRuntimeServer(s grpc.ServiceRegistrar, srv RuntimeServer) {
-	// If the following call pancis, it indicates UnimplementedRuntimeServer was
+func RegisterAgentRuntimeServer(s grpc.ServiceRegistrar, srv AgentRuntimeServer) {
+	// If the following call pancis, it indicates UnimplementedAgentRuntimeServer was
 	// embedded by pointer and is nil.  This will cause panics if an
 	// unimplemented method is ever invoked, so we test this at initialization
 	// time to prevent it from happening at runtime later due to I/O.
 	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
 		t.testEmbeddedByValue()
 	}
-	s.RegisterService(&Runtime_ServiceDesc, srv)
+	s.RegisterService(&AgentRuntime_ServiceDesc, srv)
 }
 
-func _Runtime_InvokeAgent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _AgentRuntime_InvokeAgent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(InvokeAgentRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RuntimeServer).InvokeAgent(ctx, in)
+		return srv.(AgentRuntimeServer).InvokeAgent(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Runtime_InvokeAgent_FullMethodName,
+		FullMethod: AgentRuntime_InvokeAgent_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RuntimeServer).InvokeAgent(ctx, req.(*InvokeAgentRequest))
+		return srv.(AgentRuntimeServer).InvokeAgent(ctx, req.(*InvokeAgentRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-// Runtime_ServiceDesc is the grpc.ServiceDesc for Runtime service.
+// AgentRuntime_ServiceDesc is the grpc.ServiceDesc for AgentRuntime service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var Runtime_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "redpanda.runtime.v1alpha1.Runtime",
-	HandlerType: (*RuntimeServer)(nil),
+var AgentRuntime_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "redpanda.runtime.v1alpha1.AgentRuntime",
+	HandlerType: (*AgentRuntimeServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
 			MethodName: "InvokeAgent",
-			Handler:    _Runtime_InvokeAgent_Handler,
+			Handler:    _AgentRuntime_InvokeAgent_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "runtime.proto",
+	Metadata: "agent.proto",
 }
