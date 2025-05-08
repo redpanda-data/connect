@@ -798,11 +798,11 @@ func (k *kinesisReader) runBalancedShards() {
 							k.log.Errorf("Failed to claim shard '%v': %v", shardID, err)
 						}
 						continue
-					} else {
-						k.log.Debugf("Successfully claimed shard '%v'", shardID)
-						selfClaimCount++
-						claimOps++
 					}
+
+					k.log.Debugf("Successfully claimed shard '%v'", shardID)
+					selfClaimCount++
+					claimOps++
 
 					wg.Add(1)
 					if err = k.runConsumer(&wg, *info, shardID, sequence); err != nil {
@@ -841,15 +841,15 @@ func (k *kinesisReader) runBalancedShards() {
 								info.id, randomShard, clientID, k.clientID,
 							)
 							continue
-						} else {
-							k.log.Debugf(
-								"Successfully stole stream '%v' shard '%v' from client '%v' as client '%v'",
-								info.id, randomShard, clientID, k.clientID,
-							)
-							k.shardsStolenMetric.Incr(1)
-							selfClaimCount++
-							claimOps++
 						}
+
+						k.log.Debugf(
+							"Successfully stole stream '%v' shard '%v' from client '%v' as client '%v'",
+							info.id, randomShard, clientID, k.clientID,
+						)
+						k.shardsStolenMetric.Incr(1)
+						selfClaimCount++
+						claimOps++
 
 						wg.Add(1)
 						if err = k.runConsumer(&wg, *info, randomShard, sequence); err != nil {
