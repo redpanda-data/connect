@@ -16,49 +16,10 @@ syntax = "proto3";
 
 package redpanda.runtime.v1alpha1;
 
-option go_package = "internal/agent/runtimepb";
+option go_package = "github.com/redpanda-data/connect/v4/internal/agent/runtimepb";
 
 import "google/protobuf/timestamp.proto";
-
-// `NullValue` is a representation of a null value.
-enum NullValue { NULL_VALUE = 0; }
-
-// `StructValue` represents a struct value which can be used to represent a
-// structured data value.
-message StructValue {
-  map<string, Value> fields = 1;
-}
-
-// `ListValue` represents a list value which can be used to represent a list of
-// values.
-message ListValue {
-  repeated Value values = 1;
-}
-
-// `Value` represents a dynamically typed value which can be used to represent
-// a value passed to an agent.
-message Value {
-  oneof kind {
-    NullValue null_value = 1;
-    string string_value = 2;
-    int64 integer_value = 3;
-    double double_value = 4;
-    bool bool_value = 5;
-    google.protobuf.Timestamp timestamp_value = 6;
-    bytes bytes_value = 7;
-    StructValue struct_value = 8;
-    ListValue list_value = 9;
-  }
-}
-
-// Message represents a piece of structured data that flows through the runtime.
-message Message {
-  oneof payload {
-    bytes serialized = 1;
-    Value structured = 2;
-  }
-  StructValue metadata = 3;
-}
+import "redpanda/runtime/v1alpha1/message.proto";
 
 message TraceContext {
   string trace_id = 1;
