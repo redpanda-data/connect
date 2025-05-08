@@ -85,6 +85,7 @@ input:
     auto_replay_nacks: true
     commit_period: 5s
     rebalance_period: 30s
+    rebalance_ops: 10
     lease_period: 30s
     start_from_oldest: true
     region: "" # No default (optional)
@@ -322,6 +323,15 @@ The period of time between each attempt to rebalance shards across clients.
 *Type*: `string`
 
 *Default*: `"30s"`
+
+=== `rebalance_ops`
+
+The number of shard claim operations can happen in one rebalance cycle
+
+
+*Type*: `int`
+
+*Default*: `10`
 
 === `lease_period`
 
