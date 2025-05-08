@@ -93,7 +93,7 @@ message InvokeAgentResponse {
   Trace trace = 2;
 }
 
-// `Runtime` is the service that provides the ability to invoke an agent.
-service Runtime {
+// `AgentRuntime` is the service that provides the ability to invoke an agent.
+service AgentRuntime {
   rpc InvokeAgent(InvokeAgentRequest) returns (InvokeAgentResponse);
 }

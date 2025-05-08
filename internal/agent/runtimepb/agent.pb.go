@@ -16,7 +16,7 @@
 // versions:
 // 	protoc-gen-go v1.36.6
 // 	protoc        v5.29.3
-// source: runtime.proto
+// source: agent.proto
 
 package runtimepb
 
@@ -64,11 +64,11 @@ func (x NullValue) String() string {
 }
 
 func (NullValue) Descriptor() protoreflect.EnumDescriptor {
-	return file_runtime_proto_enumTypes[0].Descriptor()
+	return file_agent_proto_enumTypes[0].Descriptor()
 }
 
 func (NullValue) Type() protoreflect.EnumType {
-	return &file_runtime_proto_enumTypes[0]
+	return &file_agent_proto_enumTypes[0]
 }
 
 func (x NullValue) Number() protoreflect.EnumNumber {
@@ -77,7 +77,7 @@ func (x NullValue) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use NullValue.Descriptor instead.
 func (NullValue) EnumDescriptor() ([]byte, []int) {
-	return file_runtime_proto_rawDescGZIP(), []int{0}
+	return file_agent_proto_rawDescGZIP(), []int{0}
 }
 
 // `StructValue` represents a struct value which can be used to represent a
@@ -91,7 +91,7 @@ type StructValue struct {
 
 func (x *StructValue) Reset() {
 	*x = StructValue{}
-	mi := &file_runtime_proto_msgTypes[0]
+	mi := &file_agent_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -103,7 +103,7 @@ func (x *StructValue) String() string {
 func (*StructValue) ProtoMessage() {}
 
 func (x *StructValue) ProtoReflect() protoreflect.Message {
-	mi := &file_runtime_proto_msgTypes[0]
+	mi := &file_agent_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -116,7 +116,7 @@ func (x *StructValue) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StructValue.ProtoReflect.Descriptor instead.
 func (*StructValue) Descriptor() ([]byte, []int) {
-	return file_runtime_proto_rawDescGZIP(), []int{0}
+	return file_agent_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *StructValue) GetFields() map[string]*Value {
@@ -137,7 +137,7 @@ type ListValue struct {
 
 func (x *ListValue) Reset() {
 	*x = ListValue{}
-	mi := &file_runtime_proto_msgTypes[1]
+	mi := &file_agent_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -149,7 +149,7 @@ func (x *ListValue) String() string {
 func (*ListValue) ProtoMessage() {}
 
 func (x *ListValue) ProtoReflect() protoreflect.Message {
-	mi := &file_runtime_proto_msgTypes[1]
+	mi := &file_agent_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -162,7 +162,7 @@ func (x *ListValue) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListValue.ProtoReflect.Descriptor instead.
 func (*ListValue) Descriptor() ([]byte, []int) {
-	return file_runtime_proto_rawDescGZIP(), []int{1}
+	return file_agent_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *ListValue) GetValues() []*Value {
@@ -194,7 +194,7 @@ type Value struct {
 
 func (x *Value) Reset() {
 	*x = Value{}
-	mi := &file_runtime_proto_msgTypes[2]
+	mi := &file_agent_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -206,7 +206,7 @@ func (x *Value) String() string {
 func (*Value) ProtoMessage() {}
 
 func (x *Value) ProtoReflect() protoreflect.Message {
-	mi := &file_runtime_proto_msgTypes[2]
+	mi := &file_agent_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -219,7 +219,7 @@ func (x *Value) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Value.ProtoReflect.Descriptor instead.
 func (*Value) Descriptor() ([]byte, []int) {
-	return file_runtime_proto_rawDescGZIP(), []int{2}
+	return file_agent_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *Value) GetKind() isValue_Kind {
@@ -383,7 +383,7 @@ type Message struct {
 
 func (x *Message) Reset() {
 	*x = Message{}
-	mi := &file_runtime_proto_msgTypes[3]
+	mi := &file_agent_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -395,7 +395,7 @@ func (x *Message) String() string {
 func (*Message) ProtoMessage() {}
 
 func (x *Message) ProtoReflect() protoreflect.Message {
-	mi := &file_runtime_proto_msgTypes[3]
+	mi := &file_agent_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -408,7 +408,7 @@ func (x *Message) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Message.ProtoReflect.Descriptor instead.
 func (*Message) Descriptor() ([]byte, []int) {
-	return file_runtime_proto_rawDescGZIP(), []int{3}
+	return file_agent_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *Message) GetPayload() isMessage_Payload {
@@ -470,7 +470,7 @@ type TraceContext struct {
 
 func (x *TraceContext) Reset() {
 	*x = TraceContext{}
-	mi := &file_runtime_proto_msgTypes[4]
+	mi := &file_agent_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -482,7 +482,7 @@ func (x *TraceContext) String() string {
 func (*TraceContext) ProtoMessage() {}
 
 func (x *TraceContext) ProtoReflect() protoreflect.Message {
-	mi := &file_runtime_proto_msgTypes[4]
+	mi := &file_agent_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -495,7 +495,7 @@ func (x *TraceContext) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TraceContext.ProtoReflect.Descriptor instead.
 func (*TraceContext) Descriptor() ([]byte, []int) {
-	return file_runtime_proto_rawDescGZIP(), []int{4}
+	return file_agent_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *TraceContext) GetTraceId() string {
@@ -528,7 +528,7 @@ type Trace struct {
 
 func (x *Trace) Reset() {
 	*x = Trace{}
-	mi := &file_runtime_proto_msgTypes[5]
+	mi := &file_agent_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -540,7 +540,7 @@ func (x *Trace) String() string {
 func (*Trace) ProtoMessage() {}
 
 func (x *Trace) ProtoReflect() protoreflect.Message {
-	mi := &file_runtime_proto_msgTypes[5]
+	mi := &file_agent_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -553,7 +553,7 @@ func (x *Trace) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Trace.ProtoReflect.Descriptor instead.
 func (*Trace) Descriptor() ([]byte, []int) {
-	return file_runtime_proto_rawDescGZIP(), []int{5}
+	return file_agent_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *Trace) GetSpans() []*Span {
@@ -577,7 +577,7 @@ type Span struct {
 
 func (x *Span) Reset() {
 	*x = Span{}
-	mi := &file_runtime_proto_msgTypes[6]
+	mi := &file_agent_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -589,7 +589,7 @@ func (x *Span) String() string {
 func (*Span) ProtoMessage() {}
 
 func (x *Span) ProtoReflect() protoreflect.Message {
-	mi := &file_runtime_proto_msgTypes[6]
+	mi := &file_agent_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -602,7 +602,7 @@ func (x *Span) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Span.ProtoReflect.Descriptor instead.
 func (*Span) Descriptor() ([]byte, []int) {
-	return file_runtime_proto_rawDescGZIP(), []int{6}
+	return file_agent_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *Span) GetSpanId() string {
@@ -658,7 +658,7 @@ type InvokeAgentRequest struct {
 
 func (x *InvokeAgentRequest) Reset() {
 	*x = InvokeAgentRequest{}
-	mi := &file_runtime_proto_msgTypes[7]
+	mi := &file_agent_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -670,7 +670,7 @@ func (x *InvokeAgentRequest) String() string {
 func (*InvokeAgentRequest) ProtoMessage() {}
 
 func (x *InvokeAgentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_runtime_proto_msgTypes[7]
+	mi := &file_agent_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -683,7 +683,7 @@ func (x *InvokeAgentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InvokeAgentRequest.ProtoReflect.Descriptor instead.
 func (*InvokeAgentRequest) Descriptor() ([]byte, []int) {
-	return file_runtime_proto_rawDescGZIP(), []int{7}
+	return file_agent_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *InvokeAgentRequest) GetMessage() *Message {
@@ -711,7 +711,7 @@ type InvokeAgentResponse struct {
 
 func (x *InvokeAgentResponse) Reset() {
 	*x = InvokeAgentResponse{}
-	mi := &file_runtime_proto_msgTypes[8]
+	mi := &file_agent_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -723,7 +723,7 @@ func (x *InvokeAgentResponse) String() string {
 func (*InvokeAgentResponse) ProtoMessage() {}
 
 func (x *InvokeAgentResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_runtime_proto_msgTypes[8]
+	mi := &file_agent_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -736,7 +736,7 @@ func (x *InvokeAgentResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InvokeAgentResponse.ProtoReflect.Descriptor instead.
 func (*InvokeAgentResponse) Descriptor() ([]byte, []int) {
-	return file_runtime_proto_rawDescGZIP(), []int{8}
+	return file_agent_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *InvokeAgentResponse) GetMessage() *Message {
@@ -753,11 +753,11 @@ func (x *InvokeAgentResponse) GetTrace() *Trace {
 	return nil
 }
 
-var File_runtime_proto protoreflect.FileDescriptor
+var File_agent_proto protoreflect.FileDescriptor
 
-const file_runtime_proto_rawDesc = "" +
+const file_agent_proto_rawDesc = "" +
 	"\n" +
-	"\rruntime.proto\x12\x19redpanda.runtime.v1alpha1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xb6\x01\n" +
+	"\vagent.proto\x12\x19redpanda.runtime.v1alpha1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xb6\x01\n" +
 	"\vStructValue\x12J\n" +
 	"\x06fields\x18\x01 \x03(\v22.redpanda.runtime.v1alpha1.StructValue.FieldsEntryR\x06fields\x1a[\n" +
 	"\vFieldsEntry\x12\x10\n" +
@@ -818,25 +818,25 @@ const file_runtime_proto_rawDesc = "" +
 	"\x05trace\x18\x02 \x01(\v2 .redpanda.runtime.v1alpha1.TraceR\x05trace*\x1b\n" +
 	"\tNullValue\x12\x0e\n" +
 	"\n" +
-	"NULL_VALUE\x10\x002w\n" +
-	"\aRuntime\x12l\n" +
+	"NULL_VALUE\x10\x002|\n" +
+	"\fAgentRuntime\x12l\n" +
 	"\vInvokeAgent\x12-.redpanda.runtime.v1alpha1.InvokeAgentRequest\x1a..redpanda.runtime.v1alpha1.InvokeAgentResponseB\x1aZ\x18internal/agent/runtimepbb\x06proto3"
 
 var (
-	file_runtime_proto_rawDescOnce sync.Once
-	file_runtime_proto_rawDescData []byte
+	file_agent_proto_rawDescOnce sync.Once
+	file_agent_proto_rawDescData []byte
 )
 
-func file_runtime_proto_rawDescGZIP() []byte {
-	file_runtime_proto_rawDescOnce.Do(func() {
-		file_runtime_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_runtime_proto_rawDesc), len(file_runtime_proto_rawDesc)))
+func file_agent_proto_rawDescGZIP() []byte {
+	file_agent_proto_rawDescOnce.Do(func() {
+		file_agent_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_agent_proto_rawDesc), len(file_agent_proto_rawDesc)))
 	})
-	return file_runtime_proto_rawDescData
+	return file_agent_proto_rawDescData
 }
 
-var file_runtime_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_runtime_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
-var file_runtime_proto_goTypes = []any{
+var file_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_agent_proto_goTypes = []any{
 	(NullValue)(0),                // 0: redpanda.runtime.v1alpha1.NullValue
 	(*StructValue)(nil),           // 1: redpanda.runtime.v1alpha1.StructValue
 	(*ListValue)(nil),             // 2: redpanda.runtime.v1alpha1.ListValue
@@ -851,7 +851,7 @@ var file_runtime_proto_goTypes = []any{
 	nil,                           // 11: redpanda.runtime.v1alpha1.Span.AttributesEntry
 	(*timestamppb.Timestamp)(nil), // 12: google.protobuf.Timestamp
 }
-var file_runtime_proto_depIdxs = []int32{
+var file_agent_proto_depIdxs = []int32{
 	10, // 0: redpanda.runtime.v1alpha1.StructValue.fields:type_name -> redpanda.runtime.v1alpha1.StructValue.FieldsEntry
 	3,  // 1: redpanda.runtime.v1alpha1.ListValue.values:type_name -> redpanda.runtime.v1alpha1.Value
 	0,  // 2: redpanda.runtime.v1alpha1.Value.null_value:type_name -> redpanda.runtime.v1alpha1.NullValue
@@ -871,8 +871,8 @@ var file_runtime_proto_depIdxs = []int32{
 	6,  // 16: redpanda.runtime.v1alpha1.InvokeAgentResponse.trace:type_name -> redpanda.runtime.v1alpha1.Trace
 	3,  // 17: redpanda.runtime.v1alpha1.StructValue.FieldsEntry.value:type_name -> redpanda.runtime.v1alpha1.Value
 	3,  // 18: redpanda.runtime.v1alpha1.Span.AttributesEntry.value:type_name -> redpanda.runtime.v1alpha1.Value
-	8,  // 19: redpanda.runtime.v1alpha1.Runtime.InvokeAgent:input_type -> redpanda.runtime.v1alpha1.InvokeAgentRequest
-	9,  // 20: redpanda.runtime.v1alpha1.Runtime.InvokeAgent:output_type -> redpanda.runtime.v1alpha1.InvokeAgentResponse
+	8,  // 19: redpanda.runtime.v1alpha1.AgentRuntime.InvokeAgent:input_type -> redpanda.runtime.v1alpha1.InvokeAgentRequest
+	9,  // 20: redpanda.runtime.v1alpha1.AgentRuntime.InvokeAgent:output_type -> redpanda.runtime.v1alpha1.InvokeAgentResponse
 	20, // [20:21] is the sub-list for method output_type
 	19, // [19:20] is the sub-list for method input_type
 	19, // [19:19] is the sub-list for extension type_name
@@ -880,12 +880,12 @@ var file_runtime_proto_depIdxs = []int32{
 	0,  // [0:19] is the sub-list for field type_name
 }
 
-func init() { file_runtime_proto_init() }
-func file_runtime_proto_init() {
-	if File_runtime_proto != nil {
+func init() { file_agent_proto_init() }
+func file_agent_proto_init() {
+	if File_agent_proto != nil {
 		return
 	}
-	file_runtime_proto_msgTypes[2].OneofWrappers = []any{
+	file_agent_proto_msgTypes[2].OneofWrappers = []any{
 		(*Value_NullValue)(nil),
 		(*Value_StringValue)(nil),
 		(*Value_IntegerValue)(nil),
@@ -896,7 +896,7 @@ func file_runtime_proto_init() {
 		(*Value_StructValue)(nil),
 		(*Value_ListValue)(nil),
 	}
-	file_runtime_proto_msgTypes[3].OneofWrappers = []any{
+	file_agent_proto_msgTypes[3].OneofWrappers = []any{
 		(*Message_Serialized)(nil),
 		(*Message_Structured)(nil),
 	}
@@ -904,18 +904,18 @@ func file_runtime_proto_init() {
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_runtime_proto_rawDesc), len(file_runtime_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_agent_proto_rawDesc), len(file_agent_proto_rawDesc)),
 			NumEnums:      1,
 			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_runtime_proto_goTypes,
-		DependencyIndexes: file_runtime_proto_depIdxs,
-		EnumInfos:         file_runtime_proto_enumTypes,
-		MessageInfos:      file_runtime_proto_msgTypes,
+		GoTypes:           file_agent_proto_goTypes,
+		DependencyIndexes: file_agent_proto_depIdxs,
+		EnumInfos:         file_agent_proto_enumTypes,
+		MessageInfos:      file_agent_proto_msgTypes,
 	}.Build()
-	File_runtime_proto = out.File
-	file_runtime_proto_goTypes = nil
-	file_runtime_proto_depIdxs = nil
+	File_agent_proto = out.File
+	file_agent_proto_goTypes = nil
+	file_agent_proto_depIdxs = nil
 }
