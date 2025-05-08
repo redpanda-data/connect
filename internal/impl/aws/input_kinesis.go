@@ -57,9 +57,6 @@ const (
 
 // These control shard balancing behavior
 const (
-	// prevents trying to claim the same shard too frequently
-	minReclaimInterval = 10 * time.Second
-
 	// ensures that each balancing cycle takes at least this long
 	minIterationTime = 1 * time.Second
 
