@@ -1,0 +1,86 @@
+// Copyright 2025 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package redpanda.runtime.v1alpha1;
+
+option go_package = "github.com/redpanda-data/connect/v4/internal/dynamic/plugin/runtimepb";
+
+import "redpanda/runtime/v1alpha1/message.proto";
+
+// BatchProcessor is a Benthos processor implementation that works against batches
+// of messages, which allows windowed processing.
+//
+// Message batches must be created by upstream components (inputs, buffers, etc)
+// otherwise this processor will simply receive batches containing single messages.
+service BatchProcessorService {
+  // Init is the first method called for a batch processor and it passes the user's
+  // configuration to the input.
+  //
+  // The schema for the processor configuration is specified in the `plugin.yaml` file
+  // provided to Redpanda Connect.
+  rpc Init(BatchProcessorInitRequest) returns (BatchProcessorInitResponse) {}
+  // Process a batch of messages into one or more resulting batches, or return
+  // an error if the entire batch could not be processed. If zero messages are
+  // returned and the error is nil then all messages are filtered.
+  //
+  // The provided MessageBatch should NOT be modified, in order to return a
+  // mutated batch a copy of the slice should be created instead.
+  //
+  // When an error is returned all of the input messages will continue down
+  // the pipeline but will be marked with the error with *message.SetError,
+  // and metrics and logs will be emitted.
+  //
+  // In order to add errors to individual messages of the batch for downstream
+  // handling use message.SetError(err) and return it in the resulting batch
+  // with a nil error.
+  //
+  // The Message types returned MUST be derived from the provided messages,
+  // and CANNOT be custom instantiations of Message. In order to copy the
+  // provided messages use the Copy method.
+  rpc ProcessBatch(BatchProcessorProcessBatchRequest) returns (BatchProcessorProcessBatchResponse) {}
+  // Close the component, blocks until either the underlying resources are
+  // cleaned up or the context is cancelled. Returns an error if the context
+  // is cancelled.
+  rpc Close(BatchProcessorCloseRequest) returns (BatchProcessorCloseResponse) {}
+}
+
+message BatchProcessorInitRequest {
+  Value config = 1;
+}
+message BatchProcessorInitResponse {
+  // If present, then the input configuration is invalid and an error should be surfaced
+  // at pipeline construction time.
+  Error error = 1;
+}
+
+message BatchProcessorProcessBatchRequest {
+  // The input batch to the processor.
+  MessageBatch batch = 1;
+}
+message BatchProcessorProcessBatchResponse {
+  // The resulting batch of messages. Returning multiple batches allows
+  // for splitting a single batch into multiple batches.
+  repeated MessageBatch batches = 1;
+  // If present, then the processing failed.
+  Error error = 2;
+}
+
+message BatchProcessorCloseRequest {}
+message BatchProcessorCloseResponse {
+  // If present, then the close attempt failed.
+  Error error = 1;
+}
+

@@ -23,6 +23,7 @@ package runtimepb
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	durationpb "google.golang.org/protobuf/types/known/durationpb"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
@@ -173,7 +174,7 @@ func (x *ListValue) GetValues() []*Value {
 }
 
 // `Value` represents a dynamically typed value which can be used to represent
-// a value passed to an agent.
+// a value within a Redpanda Connect pipeline.
 type Value struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Kind:
@@ -368,10 +369,19 @@ func (*Value_StructValue) isValue_Kind() {}
 
 func (*Value_ListValue) isValue_Kind() {}
 
-// An error bit attached to a message.
+// An error in the context of a data pipeline.
 type Error struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Error         string                 `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The error message.
+	Message string `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`
+	// Additional error details for specific Redpanda Connect behavior.
+	//
+	// Types that are valid to be assigned to Detail:
+	//
+	//	*Error_Backoff
+	//	*Error_NotConnected_
+	//	*Error_EndOfInput_
+	Detail        isError_Detail `protobuf_oneof:"detail"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -406,14 +416,73 @@ func (*Error) Descriptor() ([]byte, []int) {
 	return file_redpanda_runtime_v1alpha1_message_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *Error) GetError() string {
+func (x *Error) GetMessage() string {
 	if x != nil {
-		return x.Error
+		return x.Message
 	}
 	return ""
 }
 
-// Message represents a piece of structured data that flows through the runtime.
+func (x *Error) GetDetail() isError_Detail {
+	if x != nil {
+		return x.Detail
+	}
+	return nil
+}
+
+func (x *Error) GetBackoff() *durationpb.Duration {
+	if x != nil {
+		if x, ok := x.Detail.(*Error_Backoff); ok {
+			return x.Backoff
+		}
+	}
+	return nil
+}
+
+func (x *Error) GetNotConnected() *Error_NotConnected {
+	if x != nil {
+		if x, ok := x.Detail.(*Error_NotConnected_); ok {
+			return x.NotConnected
+		}
+	}
+	return nil
+}
+
+func (x *Error) GetEndOfInput() *Error_EndOfInput {
+	if x != nil {
+		if x, ok := x.Detail.(*Error_EndOfInput_); ok {
+			return x.EndOfInput
+		}
+	}
+	return nil
+}
+
+type isError_Detail interface {
+	isError_Detail()
+}
+
+type Error_Backoff struct {
+	// BackOff is an error that plugins can optionally wrap another error with which instructs upstream components to wait for a specified period of time before retrying the errored call.
+	//
+	// Only suppported by Connect methods in the Input and Output services.
+	Backoff *durationpb.Duration `protobuf:"bytes,2,opt,name=backoff,proto3,oneof"`
+}
+
+type Error_NotConnected_ struct {
+	NotConnected *Error_NotConnected `protobuf:"bytes,3,opt,name=not_connected,json=notConnected,proto3,oneof"`
+}
+
+type Error_EndOfInput_ struct {
+	EndOfInput *Error_EndOfInput `protobuf:"bytes,4,opt,name=end_of_input,json=endOfInput,proto3,oneof"`
+}
+
+func (*Error_Backoff) isError_Detail() {}
+
+func (*Error_NotConnected_) isError_Detail() {}
+
+func (*Error_EndOfInput_) isError_Detail() {}
+
+// Message represents a piece of data or an event that flows through the runtime.
 type Message struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Payload:
@@ -512,11 +581,135 @@ func (*Message_Bytes) isMessage_Payload() {}
 
 func (*Message_Structured) isMessage_Payload() {}
 
+type MessageBatch struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Messages      []*Message             `protobuf:"bytes,1,rep,name=messages,proto3" json:"messages,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MessageBatch) Reset() {
+	*x = MessageBatch{}
+	mi := &file_redpanda_runtime_v1alpha1_message_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageBatch) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageBatch) ProtoMessage() {}
+
+func (x *MessageBatch) ProtoReflect() protoreflect.Message {
+	mi := &file_redpanda_runtime_v1alpha1_message_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageBatch.ProtoReflect.Descriptor instead.
+func (*MessageBatch) Descriptor() ([]byte, []int) {
+	return file_redpanda_runtime_v1alpha1_message_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *MessageBatch) GetMessages() []*Message {
+	if x != nil {
+		return x.Messages
+	}
+	return nil
+}
+
+// NotConnected is returned by inputs and outputs when their Read or
+// Write methods are called and the connection that they maintain is lost.
+// This error prompts the upstream component to call Connect until the
+// connection is re-established.
+type Error_NotConnected struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Error_NotConnected) Reset() {
+	*x = Error_NotConnected{}
+	mi := &file_redpanda_runtime_v1alpha1_message_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Error_NotConnected) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Error_NotConnected) ProtoMessage() {}
+
+func (x *Error_NotConnected) ProtoReflect() protoreflect.Message {
+	mi := &file_redpanda_runtime_v1alpha1_message_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Error_NotConnected.ProtoReflect.Descriptor instead.
+func (*Error_NotConnected) Descriptor() ([]byte, []int) {
+	return file_redpanda_runtime_v1alpha1_message_proto_rawDescGZIP(), []int{3, 0}
+}
+
+// EndOfInput is returned by inputs that have exhausted their source of
+// data to the point where subsequent Read calls will be ineffective. This
+// error prompts the upstream component to gracefully terminate the
+// pipeline.
+type Error_EndOfInput struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Error_EndOfInput) Reset() {
+	*x = Error_EndOfInput{}
+	mi := &file_redpanda_runtime_v1alpha1_message_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Error_EndOfInput) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Error_EndOfInput) ProtoMessage() {}
+
+func (x *Error_EndOfInput) ProtoReflect() protoreflect.Message {
+	mi := &file_redpanda_runtime_v1alpha1_message_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Error_EndOfInput.ProtoReflect.Descriptor instead.
+func (*Error_EndOfInput) Descriptor() ([]byte, []int) {
+	return file_redpanda_runtime_v1alpha1_message_proto_rawDescGZIP(), []int{3, 1}
+}
+
 var File_redpanda_runtime_v1alpha1_message_proto protoreflect.FileDescriptor
 
 const file_redpanda_runtime_v1alpha1_message_proto_rawDesc = "" +
 	"\n" +
-	"'redpanda/runtime/v1alpha1/message.proto\x12\x19redpanda.runtime.v1alpha1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xb6\x01\n" +
+	"'redpanda/runtime/v1alpha1/message.proto\x12\x19redpanda.runtime.v1alpha1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1egoogle/protobuf/duration.proto\"\xb6\x01\n" +
 	"\vStructValue\x12J\n" +
 	"\x06fields\x18\x01 \x03(\v22.redpanda.runtime.v1alpha1.StructValue.FieldsEntryR\x06fields\x1a[\n" +
 	"\vFieldsEntry\x12\x10\n" +
@@ -538,9 +731,17 @@ const file_redpanda_runtime_v1alpha1_message_proto_rawDesc = "" +
 	"\fstruct_value\x18\b \x01(\v2&.redpanda.runtime.v1alpha1.StructValueH\x00R\vstructValue\x12E\n" +
 	"\n" +
 	"list_value\x18\t \x01(\v2$.redpanda.runtime.v1alpha1.ListValueH\x00R\tlistValueB\x06\n" +
-	"\x04kind\"\x1d\n" +
-	"\x05Error\x12\x14\n" +
-	"\x05error\x18\x01 \x01(\tR\x05error\"\xec\x01\n" +
+	"\x04kind\"\xa7\x02\n" +
+	"\x05Error\x12\x18\n" +
+	"\amessage\x18\x01 \x01(\tR\amessage\x125\n" +
+	"\abackoff\x18\x02 \x01(\v2\x19.google.protobuf.DurationH\x00R\abackoff\x12T\n" +
+	"\rnot_connected\x18\x03 \x01(\v2-.redpanda.runtime.v1alpha1.Error.NotConnectedH\x00R\fnotConnected\x12O\n" +
+	"\fend_of_input\x18\x04 \x01(\v2+.redpanda.runtime.v1alpha1.Error.EndOfInputH\x00R\n" +
+	"endOfInput\x1a\x0e\n" +
+	"\fNotConnected\x1a\f\n" +
+	"\n" +
+	"EndOfInputB\b\n" +
+	"\x06detail\"\xec\x01\n" +
 	"\aMessage\x12\x16\n" +
 	"\x05bytes\x18\x01 \x01(\fH\x00R\x05bytes\x12B\n" +
 	"\n" +
@@ -548,7 +749,9 @@ const file_redpanda_runtime_v1alpha1_message_proto_rawDesc = "" +
 	"structured\x12B\n" +
 	"\bmetadata\x18\x03 \x01(\v2&.redpanda.runtime.v1alpha1.StructValueR\bmetadata\x126\n" +
 	"\x05error\x18\x04 \x01(\v2 .redpanda.runtime.v1alpha1.ErrorR\x05errorB\t\n" +
-	"\apayload*\x1b\n" +
+	"\apayload\"N\n" +
+	"\fMessageBatch\x12>\n" +
+	"\bmessages\x18\x01 \x03(\v2\".redpanda.runtime.v1alpha1.MessageR\bmessages*\x1b\n" +
 	"\tNullValue\x12\x0e\n" +
 	"\n" +
 	"NULL_VALUE\x10\x00BGZEgithub.com/redpanda-data/connect/v4/internal/dynamic/plugin/runtimepbb\x06proto3"
@@ -566,7 +769,7 @@ func file_redpanda_runtime_v1alpha1_message_proto_rawDescGZIP() []byte {
 }
 
 var file_redpanda_runtime_v1alpha1_message_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_redpanda_runtime_v1alpha1_message_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_redpanda_runtime_v1alpha1_message_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_redpanda_runtime_v1alpha1_message_proto_goTypes = []any{
 	(NullValue)(0),                // 0: redpanda.runtime.v1alpha1.NullValue
 	(*StructValue)(nil),           // 1: redpanda.runtime.v1alpha1.StructValue
@@ -574,25 +777,33 @@ var file_redpanda_runtime_v1alpha1_message_proto_goTypes = []any{
 	(*Value)(nil),                 // 3: redpanda.runtime.v1alpha1.Value
 	(*Error)(nil),                 // 4: redpanda.runtime.v1alpha1.Error
 	(*Message)(nil),               // 5: redpanda.runtime.v1alpha1.Message
-	nil,                           // 6: redpanda.runtime.v1alpha1.StructValue.FieldsEntry
-	(*timestamppb.Timestamp)(nil), // 7: google.protobuf.Timestamp
+	(*MessageBatch)(nil),          // 6: redpanda.runtime.v1alpha1.MessageBatch
+	nil,                           // 7: redpanda.runtime.v1alpha1.StructValue.FieldsEntry
+	(*Error_NotConnected)(nil),    // 8: redpanda.runtime.v1alpha1.Error.NotConnected
+	(*Error_EndOfInput)(nil),      // 9: redpanda.runtime.v1alpha1.Error.EndOfInput
+	(*timestamppb.Timestamp)(nil), // 10: google.protobuf.Timestamp
+	(*durationpb.Duration)(nil),   // 11: google.protobuf.Duration
 }
 var file_redpanda_runtime_v1alpha1_message_proto_depIdxs = []int32{
-	6,  // 0: redpanda.runtime.v1alpha1.StructValue.fields:type_name -> redpanda.runtime.v1alpha1.StructValue.FieldsEntry
+	7,  // 0: redpanda.runtime.v1alpha1.StructValue.fields:type_name -> redpanda.runtime.v1alpha1.StructValue.FieldsEntry
 	3,  // 1: redpanda.runtime.v1alpha1.ListValue.values:type_name -> redpanda.runtime.v1alpha1.Value
 	0,  // 2: redpanda.runtime.v1alpha1.Value.null_value:type_name -> redpanda.runtime.v1alpha1.NullValue
-	7,  // 3: redpanda.runtime.v1alpha1.Value.timestamp_value:type_name -> google.protobuf.Timestamp
+	10, // 3: redpanda.runtime.v1alpha1.Value.timestamp_value:type_name -> google.protobuf.Timestamp
 	1,  // 4: redpanda.runtime.v1alpha1.Value.struct_value:type_name -> redpanda.runtime.v1alpha1.StructValue
 	2,  // 5: redpanda.runtime.v1alpha1.Value.list_value:type_name -> redpanda.runtime.v1alpha1.ListValue
-	3,  // 6: redpanda.runtime.v1alpha1.Message.structured:type_name -> redpanda.runtime.v1alpha1.Value
-	1,  // 7: redpanda.runtime.v1alpha1.Message.metadata:type_name -> redpanda.runtime.v1alpha1.StructValue
-	4,  // 8: redpanda.runtime.v1alpha1.Message.error:type_name -> redpanda.runtime.v1alpha1.Error
-	3,  // 9: redpanda.runtime.v1alpha1.StructValue.FieldsEntry.value:type_name -> redpanda.runtime.v1alpha1.Value
-	10, // [10:10] is the sub-list for method output_type
-	10, // [10:10] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	11, // 6: redpanda.runtime.v1alpha1.Error.backoff:type_name -> google.protobuf.Duration
+	8,  // 7: redpanda.runtime.v1alpha1.Error.not_connected:type_name -> redpanda.runtime.v1alpha1.Error.NotConnected
+	9,  // 8: redpanda.runtime.v1alpha1.Error.end_of_input:type_name -> redpanda.runtime.v1alpha1.Error.EndOfInput
+	3,  // 9: redpanda.runtime.v1alpha1.Message.structured:type_name -> redpanda.runtime.v1alpha1.Value
+	1,  // 10: redpanda.runtime.v1alpha1.Message.metadata:type_name -> redpanda.runtime.v1alpha1.StructValue
+	4,  // 11: redpanda.runtime.v1alpha1.Message.error:type_name -> redpanda.runtime.v1alpha1.Error
+	5,  // 12: redpanda.runtime.v1alpha1.MessageBatch.messages:type_name -> redpanda.runtime.v1alpha1.Message
+	3,  // 13: redpanda.runtime.v1alpha1.StructValue.FieldsEntry.value:type_name -> redpanda.runtime.v1alpha1.Value
+	14, // [14:14] is the sub-list for method output_type
+	14, // [14:14] is the sub-list for method input_type
+	14, // [14:14] is the sub-list for extension type_name
+	14, // [14:14] is the sub-list for extension extendee
+	0,  // [0:14] is the sub-list for field type_name
 }
 
 func init() { file_redpanda_runtime_v1alpha1_message_proto_init() }
@@ -611,6 +822,11 @@ func file_redpanda_runtime_v1alpha1_message_proto_init() {
 		(*Value_StructValue)(nil),
 		(*Value_ListValue)(nil),
 	}
+	file_redpanda_runtime_v1alpha1_message_proto_msgTypes[3].OneofWrappers = []any{
+		(*Error_Backoff)(nil),
+		(*Error_NotConnected_)(nil),
+		(*Error_EndOfInput_)(nil),
+	}
 	file_redpanda_runtime_v1alpha1_message_proto_msgTypes[4].OneofWrappers = []any{
 		(*Message_Bytes)(nil),
 		(*Message_Structured)(nil),
@@ -621,7 +837,7 @@ func file_redpanda_runtime_v1alpha1_message_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_redpanda_runtime_v1alpha1_message_proto_rawDesc), len(file_redpanda_runtime_v1alpha1_message_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   6,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

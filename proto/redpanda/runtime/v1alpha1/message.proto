@@ -19,6 +19,7 @@ package redpanda.runtime.v1alpha1;
 option go_package = "github.com/redpanda-data/connect/v4/internal/dynamic/plugin/runtimepb";
 
 import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
 
 // `NullValue` is a representation of a null value.
 enum NullValue { NULL_VALUE = 0; }
@@ -36,7 +37,7 @@ message ListValue {
 }
 
 // `Value` represents a dynamically typed value which can be used to represent
-// a value passed to an agent.
+// a value within a Redpanda Connect pipeline.
 message Value {
   oneof kind {
     NullValue null_value = 1;
@@ -51,12 +52,32 @@ message Value {
   }
 }
 
-// An error bit attached to a message.
+// An error in the context of a data pipeline.
 message Error {
-  string error = 1;
+  // The error message.
+  string message = 1;
+  // NotConnected is returned by inputs and outputs when their Read or
+  // Write methods are called and the connection that they maintain is lost.
+  // This error prompts the upstream component to call Connect until the
+  // connection is re-established.
+  message NotConnected {}
+  // EndOfInput is returned by inputs that have exhausted their source of
+	// data to the point where subsequent Read calls will be ineffective. This
+	// error prompts the upstream component to gracefully terminate the
+	// pipeline.
+  message EndOfInput {}
+  // Additional error details for specific Redpanda Connect behavior.
+  oneof detail {
+    // BackOff is an error that plugins can optionally wrap another error with which instructs upstream components to wait for a specified period of time before retrying the errored call.
+    //
+    // Only suppported by Connect methods in the Input and Output services.
+    google.protobuf.Duration backoff = 2;
+    NotConnected not_connected = 3;
+    EndOfInput end_of_input = 4;
+  }
 }
 
-// Message represents a piece of structured data that flows through the runtime.
+// Message represents a piece of data or an event that flows through the runtime.
 message Message {
   oneof payload {
     bytes bytes = 1;
@@ -64,4 +85,8 @@ message Message {
   }
   StructValue metadata = 3;
   Error error = 4;
+}
+
+message MessageBatch {
+  repeated Message messages = 1;
 }

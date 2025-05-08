@@ -10,4 +10,4 @@
 
 package plugin
 
-//go:generate protoc -I=../../../proto --go_opt=module=github.com/redpanda-data/connect/v4 --go-grpc_opt=module=github.com/redpanda-data/connect/v4 --go_out=../../.. --go-grpc_out=../../.. redpanda/runtime/v1alpha1/message.proto
+//go:generate protoc -I=../../../proto --go_opt=module=github.com/redpanda-data/connect/v4 --go-grpc_opt=module=github.com/redpanda-data/connect/v4 --go_out=../../.. --go-grpc_out=../../.. redpanda/runtime/v1alpha1/message.proto redpanda/runtime/v1alpha1/input.proto redpanda/runtime/v1alpha1/output.proto redpanda/runtime/v1alpha1/processor.proto
