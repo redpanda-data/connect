@@ -8,7 +8,7 @@
  * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
  */
 
-//go:generate protoc -I=../../proto/redpanda/runtime/v1alpha1 --go_out=../.. --go-grpc_out=../.. agent.proto
+//go:generate protoc -I=../../proto --go-grpc_opt=module=github.com/redpanda-data/connect/v4 --go_opt=module=github.com/redpanda-data/connect/v4 --go_out=../.. --go-grpc_out=../.. redpanda/runtime/v1alpha1/agent.proto
 
 package agent
 
@@ -51,7 +51,7 @@ var _ plugin.Plugin = (*runtimePlugin)(nil)
 // GRPCClient implements plugin.GRPCPlugin.
 func (p *runtimePlugin) GRPCClient(ctx context.Context, broker *plugin.GRPCBroker, c *grpc.ClientConn) (any, error) {
 	return &rpcClient{
-		client: runtimepb.NewRuntimeClient(c),
+		client: runtimepb.NewAgentRuntimeClient(c),
 		tracer: nil,
 	}, nil
 }
@@ -62,7 +62,7 @@ func (p *runtimePlugin) GRPCServer(broker *plugin.GRPCBroker, s *grpc.Server) er
 }
 
 type rpcClient struct {
-	client runtimepb.RuntimeClient
+	client runtimepb.AgentRuntimeClient
 	tracer trace.Tracer
 }
 

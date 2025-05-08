@@ -16,7 +16,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.5.1
 // - protoc             v5.29.3
-// source: agent.proto
+// source: redpanda/runtime/v1alpha1/agent.proto
 
 package runtimepb
 
@@ -135,5 +135,5 @@ var AgentRuntime_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "agent.proto",
+	Metadata: "redpanda/runtime/v1alpha1/agent.proto",
 }
