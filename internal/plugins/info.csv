@@ -207,6 +207,7 @@ redis_scan                ,input     ,Redis                     ,4.27.0  ,certif
 redis_script              ,processor ,Redis Script              ,4.11.0  ,certified  ,n          ,y     ,y
 redis_streams             ,input     ,Redis Streams             ,0.0.0   ,certified  ,n          ,y     ,y
 redis_streams             ,output    ,Redis Streams             ,0.0.0   ,certified  ,n          ,y     ,y
+redpanda                  ,cache     ,redpanda                  ,4.55.0  ,certified  ,n          ,y     ,y
 redpanda                  ,input     ,redpanda                  ,4.39.0  ,certified  ,n          ,y     ,y
 redpanda                  ,output    ,redpanda                  ,4.39.0  ,certified  ,n          ,y     ,y
 redpanda_common           ,input     ,redpanda_common           ,4.39.0  ,enterprise ,n          ,y     ,y
