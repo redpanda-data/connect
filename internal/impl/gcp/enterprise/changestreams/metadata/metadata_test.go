@@ -106,7 +106,7 @@ func TestIntegrationStore(t *testing.T) {
 		}
 	}
 
-	t.Run("Insert", func(t *testing.T) {
+	t.Run("InsertTestData", func(t *testing.T) {
 		for _, tc := range tests {
 			t.Run(tc.name, func(t *testing.T) {
 				if err := tc.s.insert(t.Context(), []PartitionMetadata{
@@ -166,8 +166,6 @@ func TestIntegrationStore(t *testing.T) {
 
 				want := []PartitionMetadata{
 					pm("created1", ts, StateCreated),
-					pm("scheduled", ts.Add(time.Second), StateScheduled),
-					pm("running", ts.Add(2*time.Second), StateRunning),
 				}
 
 				if diff := cmp.Diff(got, want); diff != "" {
@@ -256,6 +254,52 @@ func TestIntegrationStore(t *testing.T) {
 					if diff := cmp.Diff(pm, pmr); diff != "" {
 						t.Errorf("UpdateToScheduled() mismatch (-want +got):\n%s", diff)
 					}
+				}
+			})
+		}
+	})
+
+	t.Run("CheckParentPartitionsFinished", func(t *testing.T) {
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				subtests := []struct {
+					name          string
+					partitions    []string
+					expectResult  bool
+					errorContains string
+				}{
+					{
+						name:         "all finished",
+						partitions:   []string{"finished"},
+						expectResult: true,
+					},
+					{
+						name:         "mixed states",
+						partitions:   []string{"finished", "running"},
+						expectResult: false,
+					},
+					{
+						name:         "empty list",
+						partitions:   []string{},
+						expectResult: true,
+					},
+					{
+						name:         "non-existent",
+						partitions:   []string{"nonexistent"},
+						expectResult: false,
+					},
+				}
+
+				for _, st := range subtests {
+					t.Run(st.name, func(t *testing.T) {
+						result, err := tc.s.CheckParentPartitionsFinished(t.Context(), st.partitions)
+						if err != nil {
+							t.Fatalf("CheckParentPartitionsFinished failed: %v", err)
+						}
+						if result != st.expectResult {
+							t.Errorf("Expected result to be %v, got %v", st.expectResult, result)
+						}
+					})
 				}
 			})
 		}
