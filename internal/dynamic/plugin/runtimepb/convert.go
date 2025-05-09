@@ -29,7 +29,7 @@ func MessageToProto(msg *service.Message) (*Message, error) {
 		if err != nil {
 			return nil, err
 		}
-		out.Payload = &Message_Serialized{b}
+		out.Payload = &Message_Bytes{b}
 	} else {
 		v, err := msg.AsStructured()
 		if err != nil {
@@ -116,8 +116,8 @@ func AnyToProto(a any) (*Value, error) {
 func ProtoToMessage(msg *Message) (*service.Message, error) {
 	var out *service.Message
 	switch p := msg.Payload.(type) {
-	case *Message_Serialized:
-		out = service.NewMessage(p.Serialized)
+	case *Message_Bytes:
+		out = service.NewMessage(p.Bytes)
 	case *Message_Structured:
 		out = service.NewMessage(nil)
 		v, err := ValueToAny(p.Structured)
