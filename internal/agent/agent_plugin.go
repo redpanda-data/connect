@@ -8,7 +8,7 @@
  * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
  */
 
-//go:generate protoc -I=../../proto/redpanda/runtime/v1alpha1 --go_out=../.. --go-grpc_out=../.. runtime.proto
+//go:generate protoc -I=../../proto --go-grpc_opt=module=github.com/redpanda-data/connect/v4 --go_opt=module=github.com/redpanda-data/connect/v4 --go_out=../.. --go-grpc_out=../.. redpanda/runtime/v1alpha1/agent.proto
 
 package agent
 
@@ -24,7 +24,8 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 
-	"github.com/redpanda-data/connect/v4/internal/agent/runtimepb"
+	agentruntimepb "github.com/redpanda-data/connect/v4/internal/agent/runtimepb"
+	"github.com/redpanda-data/connect/v4/internal/dynamic/plugin/runtimepb"
 	"github.com/redpanda-data/connect/v4/internal/tracing"
 )
 
@@ -51,7 +52,7 @@ var _ plugin.Plugin = (*runtimePlugin)(nil)
 // GRPCClient implements plugin.GRPCPlugin.
 func (p *runtimePlugin) GRPCClient(ctx context.Context, broker *plugin.GRPCBroker, c *grpc.ClientConn) (any, error) {
 	return &rpcClient{
-		client: runtimepb.NewRuntimeClient(c),
+		client: agentruntimepb.NewAgentRuntimeClient(c),
 		tracer: nil,
 	}, nil
 }
@@ -62,7 +63,7 @@ func (p *runtimePlugin) GRPCServer(broker *plugin.GRPCBroker, s *grpc.Server) er
 }
 
 type rpcClient struct {
-	client runtimepb.RuntimeClient
+	client agentruntimepb.AgentRuntimeClient
 	tracer trace.Tracer
 }
 
@@ -72,16 +73,16 @@ func (m *rpcClient) InvokeAgent(ctx context.Context, inputMsg *service.Message) 
 		return nil, fmt.Errorf("failed to convert message for agent: %w", err)
 	}
 	span := trace.SpanFromContext(inputMsg.Context())
-	var traceContext *runtimepb.TraceContext
+	var traceContext *agentruntimepb.TraceContext
 	if c := span.SpanContext(); c.IsValid() {
-		traceContext = &runtimepb.TraceContext{
+		traceContext = &agentruntimepb.TraceContext{
 			TraceId:    c.TraceID().String(),
 			SpanId:     c.SpanID().String(),
 			TraceFlags: c.TraceFlags().String(),
 		}
 	}
 
-	resp, err := m.client.InvokeAgent(ctx, &runtimepb.InvokeAgentRequest{
+	resp, err := m.client.InvokeAgent(ctx, &agentruntimepb.InvokeAgentRequest{
 		Message:      pb,
 		TraceContext: traceContext,
 	})
@@ -101,7 +102,7 @@ func (m *rpcClient) InvokeAgent(ctx context.Context, inputMsg *service.Message) 
 	return outputMsg, nil
 }
 
-func (m *rpcClient) applySubSpans(ctx context.Context, spans []*runtimepb.Span) error {
+func (m *rpcClient) applySubSpans(ctx context.Context, spans []*agentruntimepb.Span) error {
 	for _, protoSpan := range spans {
 		var attrs []attribute.KeyValue
 		for k, v := range protoSpan.GetAttributes() {
