@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 
 - Field `extras` added to the `sentry_capture` processor. (@peczenyj)
 - Field `steal_grace_period` added to the `aws_kinesis` input. (@Jeffail)
+- New `redpanda` cache that stores key/value pairs in a compacted topic. (@rockwotj)
 
 ### Fixed
 
