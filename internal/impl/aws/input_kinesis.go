@@ -52,6 +52,10 @@ const (
 	kiFieldRebalancePeriod  = "rebalance_period"
 	kiFieldStartFromOldest  = "start_from_oldest"
 	kiFieldBatching         = "batching"
+
+	// Kinesis metrics
+	metricShardsPerClient = "kinesis_client_shards"
+	metricShardsStolen    = "kinesis_shards_stolen_total"
 )
 
 type kiConfig struct {
@@ -230,6 +234,9 @@ type kinesisReader struct {
 
 	closeOnce  sync.Once
 	closedChan chan struct{}
+
+	clientShardsMetric *service.MetricGauge
+	shardsStolenMetric *service.MetricCounter
 }
 
 var errCannotMixBalancedShards = errors.New("it is not currently possible to include balanced and explicit shard streams in the same kinesis input")
@@ -361,6 +368,11 @@ func newKinesisReaderFromConfig(conf kiConfig, batcher service.BatchPolicy, sess
 	if k.rebalancePeriod, err = time.ParseDuration(k.conf.RebalancePeriod); err != nil {
 		return nil, fmt.Errorf("failed to parse rebalance period string: %v", err)
 	}
+
+	// Initialize metrics
+	k.clientShardsMetric = mgr.Metrics().NewGauge(metricShardsPerClient)
+	k.shardsStolenMetric = mgr.Metrics().NewCounter(metricShardsStolen)
+
 	return &k, nil
 }
 
@@ -700,6 +712,12 @@ func (k *kinesisReader) runBalancedShards() {
 				continue
 			}
 
+			if claims, exists := clientClaims[k.clientID]; exists {
+				k.clientShardsMetric.Set(int64(len(claims)))
+			} else {
+				k.clientShardsMetric.Set(0)
+			}
+
 			totalShards := len(shardsRes.Shards)
 			unclaimedShards := make(map[string]string, totalShards)
 			for _, s := range shardsRes.Shards {
@@ -779,6 +797,8 @@ func (k *kinesisReader) runBalancedShards() {
 						"Successfully stole stream '%v' shard '%v' from client '%v' as client '%v'",
 						info.id, randomShard, clientID, k.clientID,
 					)
+					k.shardsStolenMetric.Incr(1)
+
 					wg.Add(1)
 					if err = k.runConsumer(&wg, *info, randomShard, sequence); err != nil {
 						k.log.Errorf("Failed to start consumer: %v\n", err)
