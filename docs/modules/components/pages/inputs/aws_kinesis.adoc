@@ -46,6 +46,7 @@ input:
     checkpoint_limit: 1024
     auto_replay_nacks: true
     commit_period: 5s
+    steal_grace_period: 2s
     start_from_oldest: true
     batching:
       count: 0
@@ -84,6 +85,7 @@ input:
     checkpoint_limit: 1024
     auto_replay_nacks: true
     commit_period: 5s
+    steal_grace_period: 2s
     rebalance_period: 30s
     lease_period: 30s
     start_from_oldest: true
@@ -313,6 +315,15 @@ The period of time between each update to the checkpoint table.
 *Type*: `string`
 
 *Default*: `"5s"`
+
+=== `steal_grace_period`
+
+Determines how long beyond the next commit period a client will wait when stealing a shard for the current owner to store a checkpoint. A longer value increases the time taken to balance shards but reduces the likelihood of processing duplicate messages.
+
+
+*Type*: `string`
+
+*Default*: `"2s"`
 
 === `rebalance_period`
 
