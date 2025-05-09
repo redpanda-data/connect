@@ -470,6 +470,7 @@ type testTypedBuffer struct {
 func (b *testTypedBuffer) WriteNull() {
 	b.output = nil
 }
+
 func (b *testTypedBuffer) WriteInt128(v int128.Num) {
 	switch {
 	case int128.Less(v, int128.MinInt64):
@@ -484,12 +485,15 @@ func (b *testTypedBuffer) WriteInt128(v int128.Num) {
 func (b *testTypedBuffer) WriteBool(v bool) {
 	b.output = v
 }
+
 func (b *testTypedBuffer) WriteFloat64(v float64) {
 	b.output = v
 }
+
 func (b *testTypedBuffer) WriteBytes(v []byte) {
 	b.output = v
 }
+
 func (b *testTypedBuffer) Prepare([]parquet.Value, int, int) {
 	b.output = nil
 }

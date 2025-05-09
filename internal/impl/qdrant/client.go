@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/qdrant/go-client/qdrant"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
@@ -109,7 +110,6 @@ func (c *qdrantClient) Query(
 func (c *qdrantClient) Connect(ctx context.Context) error {
 	c.logger.Debug("Checking connection to Qdrant")
 	_, err := c.client.HealthCheck(ctx)
-
 	if err != nil {
 		return fmt.Errorf("failed to connect to Qdrant: %w", err)
 	}

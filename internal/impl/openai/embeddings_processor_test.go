@@ -14,11 +14,12 @@ import (
 
 	"github.com/go-faker/faker/v4"
 	"github.com/go-faker/faker/v4/pkg/options"
-	"github.com/redpanda-data/benthos/v4/public/bloblang"
-	"github.com/redpanda-data/benthos/v4/public/service"
 	oai "github.com/sashabaranov/go-openai"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 type mockEmbeddingsClient struct {

@@ -14,6 +14,7 @@ import (
 	"fmt"
 
 	cohere "github.com/cohere-ai/cohere-go/v2"
+
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
 

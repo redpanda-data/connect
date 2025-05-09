@@ -16,8 +16,9 @@ import (
 	"io"
 	"slices"
 
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"google.golang.org/api/drive/v3"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/license"
 )

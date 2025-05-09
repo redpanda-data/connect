@@ -10,8 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/redpanda-data/benthos/v4/public/service"
 	protonDriver "github.com/timeplus-io/proton-go-driver/v2"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 type driver struct {

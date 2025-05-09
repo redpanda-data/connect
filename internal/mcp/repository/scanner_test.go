@@ -63,7 +63,7 @@ func TestScannerHappy(t *testing.T) {
 	}
 	act := map[string]string{}
 
-	s.OnResourceFile(func(resourceType string, filePath string, contents []byte) error {
+	s.OnResourceFile(func(resourceType, filePath string, contents []byte) error {
 		act[filePath+"/"+resourceType] = string(contents)
 		return nil
 	})
@@ -112,7 +112,7 @@ func TestScannerRoot(t *testing.T) {
 	}
 	act := map[string]string{}
 
-	s.OnResourceFile(func(resourceType string, filePath string, contents []byte) error {
+	s.OnResourceFile(func(resourceType, filePath string, contents []byte) error {
 		act[filePath+"/"+resourceType] = string(contents)
 		return nil
 	})

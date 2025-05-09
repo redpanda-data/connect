@@ -24,6 +24,7 @@ import (
 	"github.com/go-jose/go-jose/v4"
 	josejwt "github.com/go-jose/go-jose/v4/jwt"
 	"github.com/go-resty/resty/v2"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	_ "embed"

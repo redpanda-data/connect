@@ -77,7 +77,7 @@ func NewServer(
 	resWrapper.SetHTTPMultiplexer(&gMux{m: mux})
 
 	repoScanner := repository.NewScanner(os.DirFS(repositoryDir))
-	repoScanner.OnResourceFile(func(resourceType string, filename string, contents []byte) error {
+	repoScanner.OnResourceFile(func(resourceType, filename string, contents []byte) error {
 		switch resourceType {
 		case "starlark":
 			result, err := starlark.Eval(context.Background(), env, logger, filename, contents, envVarLookupFunc)

@@ -21,6 +21,7 @@ import (
 
 	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 	neo4jconfig "github.com/neo4j/neo4j-go-driver/v5/neo4j/config"
+
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
 )

@@ -19,8 +19,9 @@ import (
 
 	"github.com/auth0/go-jwt-middleware/v2/jwks"
 	"github.com/auth0/go-jwt-middleware/v2/validator"
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/twmb/go-cache/cache"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 type rpjwtConfig struct {

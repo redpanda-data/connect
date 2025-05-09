@@ -73,7 +73,7 @@ func toStreamMessage(logicalMsg Message, relations map[uint32]*RelationMessage, 
 				values[colName] = nil
 			case 'u': // unchanged toast
 				values[colName] = unchangedToastValue
-			case 't': //text
+			case 't': // text
 				val, err := decodeTextColumnData(typeMap, col.Data, rel.Columns[idx].DataType)
 				if err != nil {
 					return nil, fmt.Errorf("unable to decode column data: %w", err)
@@ -120,7 +120,7 @@ func toStreamMessage(logicalMsg Message, relations map[uint32]*RelationMessage, 
 						return nil, fmt.Errorf("unable to decode column data, unknown data type: %d", col.DataType)
 					}
 				}
-			case 't': //text
+			case 't': // text
 				val, err := decodeTextColumnData(typeMap, col.Data, rel.Columns[idx].DataType)
 				if err != nil {
 					return nil, fmt.Errorf("unable to decode column data: %w", err)
@@ -147,7 +147,7 @@ func toStreamMessage(logicalMsg Message, relations map[uint32]*RelationMessage, 
 				values[colName] = nil
 			case 'u': // unchanged toast
 				values[colName] = unchangedToastValue
-			case 't': //text
+			case 't': // text
 				val, err := decodeTextColumnData(typeMap, col.Data, rel.Columns[idx].DataType)
 				if err != nil {
 					return nil, fmt.Errorf("unable to decode column data: %w", err)

@@ -15,9 +15,10 @@ import (
 	"os"
 	"slices"
 
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/rs/xid"
 	"github.com/urfave/cli/v2"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka/enterprise"
 	"github.com/redpanda-data/connect/v4/internal/license"

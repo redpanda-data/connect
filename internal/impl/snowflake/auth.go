@@ -20,9 +20,10 @@ import (
 	"fmt"
 	"io/fs"
 
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/youmark/pkcs8"
 	"golang.org/x/crypto/ssh"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func wipeSlice(b []byte) {

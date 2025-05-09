@@ -127,9 +127,7 @@ func FromFloat64(v float64, prec, scale int32) (Num, error) {
 	return fromPositiveFloat64(v, prec, scale)
 }
 
-var (
-	pt5 = big.NewFloat(0.5)
-)
+var pt5 = big.NewFloat(0.5)
 
 // FromString converts a string into an Int128 as long as it fits within the given precision and scale.
 func FromString(v string, prec, scale int32) (n Num, err error) {
@@ -304,15 +302,13 @@ func Rescale(n Num, precision, scale int32) (out Num, err error) {
 	return
 }
 
-var (
-	float64PowersOfTen = [...]float64{
-		1e-38, 1e-37, 1e-36, 1e-35, 1e-34, 1e-33, 1e-32, 1e-31, 1e-30, 1e-29,
-		1e-28, 1e-27, 1e-26, 1e-25, 1e-24, 1e-23, 1e-22, 1e-21, 1e-20, 1e-19,
-		1e-18, 1e-17, 1e-16, 1e-15, 1e-14, 1e-13, 1e-12, 1e-11, 1e-10, 1e-9,
-		1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1e0, 1e1,
-		1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11,
-		1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19, 1e20, 1e21,
-		1e22, 1e23, 1e24, 1e25, 1e26, 1e27, 1e28, 1e29, 1e30, 1e31,
-		1e32, 1e33, 1e34, 1e35, 1e36, 1e37, 1e38,
-	}
-)
+var float64PowersOfTen = [...]float64{
+	1e-38, 1e-37, 1e-36, 1e-35, 1e-34, 1e-33, 1e-32, 1e-31, 1e-30, 1e-29,
+	1e-28, 1e-27, 1e-26, 1e-25, 1e-24, 1e-23, 1e-22, 1e-21, 1e-20, 1e-19,
+	1e-18, 1e-17, 1e-16, 1e-15, 1e-14, 1e-13, 1e-12, 1e-11, 1e-10, 1e-9,
+	1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1e0, 1e1,
+	1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11,
+	1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19, 1e20, 1e21,
+	1e22, 1e23, 1e24, 1e25, 1e26, 1e27, 1e28, 1e29, 1e30, 1e31,
+	1e32, 1e33, 1e34, 1e35, 1e36, 1e37, 1e38,
+}

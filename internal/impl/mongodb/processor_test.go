@@ -492,22 +492,38 @@ func testMongoDBProcessorAggregate(mongoClient *mongo.Client, port string, t *te
 
 	collection := mongoClient.Database("TestDB").Collection("TestCollection")
 	_, err := collection.InsertMany(t.Context(), []bson.M{
-		{"_id": 0, "name": "Pepperoni", "size": "small", "price": 19,
-			"quantity": 10, "date": time.Date(2021, 3, 13, 8, 14, 30, 0, time.UTC)},
-		{"_id": 1, "name": "Pepperoni", "size": "medium", "price": 20,
-			"quantity": 20, "date": time.Date(2021, 3, 13, 9, 13, 24, 0, time.UTC)},
-		{"_id": 2, "name": "Pepperoni", "size": "large", "price": 21,
-			"quantity": 30, "date": time.Date(2021, 3, 17, 9, 22, 12, 0, time.UTC)},
-		{"_id": 3, "name": "Cheese", "size": "small", "price": 12,
-			"quantity": 15, "date": time.Date(2021, 3, 13, 11, 21, 39, 736000000, time.UTC)},
-		{"_id": 4, "name": "Cheese", "size": "medium", "price": 13,
-			"quantity": 50, "date": time.Date(2022, 1, 12, 21, 23, 13, 331000000, time.UTC)},
-		{"_id": 5, "name": "Cheese", "size": "large", "price": 14,
-			"quantity": 10, "date": time.Date(2022, 1, 12, 5, 8, 13, 0, time.UTC)},
-		{"_id": 6, "name": "Vegan", "size": "small", "price": 17,
-			"quantity": 10, "date": time.Date(2021, 1, 13, 5, 8, 13, 0, time.UTC)},
-		{"_id": 7, "name": "Vegan", "size": "medium", "price": 18,
-			"quantity": 10, "date": time.Date(2021, 1, 13, 5, 10, 13, 0, time.UTC)},
+		{
+			"_id": 0, "name": "Pepperoni", "size": "small", "price": 19,
+			"quantity": 10, "date": time.Date(2021, 3, 13, 8, 14, 30, 0, time.UTC),
+		},
+		{
+			"_id": 1, "name": "Pepperoni", "size": "medium", "price": 20,
+			"quantity": 20, "date": time.Date(2021, 3, 13, 9, 13, 24, 0, time.UTC),
+		},
+		{
+			"_id": 2, "name": "Pepperoni", "size": "large", "price": 21,
+			"quantity": 30, "date": time.Date(2021, 3, 17, 9, 22, 12, 0, time.UTC),
+		},
+		{
+			"_id": 3, "name": "Cheese", "size": "small", "price": 12,
+			"quantity": 15, "date": time.Date(2021, 3, 13, 11, 21, 39, 736000000, time.UTC),
+		},
+		{
+			"_id": 4, "name": "Cheese", "size": "medium", "price": 13,
+			"quantity": 50, "date": time.Date(2022, 1, 12, 21, 23, 13, 331000000, time.UTC),
+		},
+		{
+			"_id": 5, "name": "Cheese", "size": "large", "price": 14,
+			"quantity": 10, "date": time.Date(2022, 1, 12, 5, 8, 13, 0, time.UTC),
+		},
+		{
+			"_id": 6, "name": "Vegan", "size": "small", "price": 17,
+			"quantity": 10, "date": time.Date(2021, 1, 13, 5, 8, 13, 0, time.UTC),
+		},
+		{
+			"_id": 7, "name": "Vegan", "size": "medium", "price": 18,
+			"quantity": 10, "date": time.Date(2021, 1, 13, 5, 10, 13, 0, time.UTC),
+		},
 	})
 	assert.NoError(t, err)
 
@@ -559,5 +575,4 @@ document_map: |
 			assert.Equalf(t, jsondiff.FullMatch.String(), diff.String(), "%s: %s", t.Name(), explanation)
 		})
 	}
-
 }

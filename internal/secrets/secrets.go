@@ -106,7 +106,7 @@ func parseSecretsLookupURN(ctx context.Context, logger *slog.Logger, urn string)
 	}
 }
 
-func lookupFn(providerFn secrets.SecretProviderFn, secretsManager secrets.SecretAPI, prefix string, trimPrefix string) (LookupFn, error) {
+func lookupFn(providerFn secrets.SecretProviderFn, secretsManager secrets.SecretAPI, prefix, trimPrefix string) (LookupFn, error) {
 	provider, err := providerFn(secretsManager, prefix, trimPrefix)
 	if err != nil {
 		return nil, err

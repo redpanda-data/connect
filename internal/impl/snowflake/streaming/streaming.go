@@ -28,8 +28,9 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/parquet-go/parquet-go"
 	"github.com/parquet-go/parquet-go/format"
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 )

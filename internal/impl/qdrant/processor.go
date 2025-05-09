@@ -21,9 +21,10 @@ import (
 	"slices"
 
 	"github.com/qdrant/go-client/qdrant"
+	"google.golang.org/protobuf/encoding/protojson"
+
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"google.golang.org/protobuf/encoding/protojson"
 )
 
 const (

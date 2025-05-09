@@ -125,7 +125,6 @@ func TestXMLCases(t *testing.T) {
 }
 
 func TestXMLWithCast(t *testing.T) {
-
 	pConf, err := xmlProcSpec().ParseYAML(`
 operator: to_json
 cast: true

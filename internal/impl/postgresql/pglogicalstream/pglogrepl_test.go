@@ -24,10 +24,11 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/ory/dockertest/v3"
 	"github.com/ory/dockertest/v3/docker"
-	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+
+	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
 
 func TestLSNSuite(t *testing.T) {
@@ -89,8 +90,10 @@ func (s *lsnSuite) TestValueInterface() {
 	s.Equal("00000016/B374D848", lsnStr)
 }
 
-const slotName = "pglogrepl_test"
-const outputPlugin = "pgoutput"
+const (
+	slotName     = "pglogrepl_test"
+	outputPlugin = "pgoutput"
+)
 
 func closeConn(t testing.TB, conn *pgconn.PgConn) {
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)

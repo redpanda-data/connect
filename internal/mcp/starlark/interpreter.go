@@ -22,9 +22,10 @@ import (
 	"log/slog"
 	"slices"
 
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"go.starlark.net/starlark"
 	"go.starlark.net/syntax"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 // MCPProcessorTool represents a processor tool defined in a Starlark file.
@@ -109,9 +110,7 @@ func Eval(
 		return starlark.None, nil
 	}
 	secretFn := func(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-		var (
-			name string
-		)
+		var name string
 		err := starlark.UnpackArgs(
 			b.Name(),
 			args,

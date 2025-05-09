@@ -182,7 +182,7 @@ func Shl(v Num, amt uint) Num {
 }
 
 // Or returns a | i
-func Or(a Num, b Num) Num {
+func Or(a, b Num) Num {
 	return Num{
 		hi: a.hi | b.hi,
 		lo: a.lo | b.lo,

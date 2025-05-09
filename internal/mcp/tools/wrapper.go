@@ -22,10 +22,11 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"gopkg.in/yaml.v3"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 // ResourcesWrapper attempts to parse resource files, adds those resources to

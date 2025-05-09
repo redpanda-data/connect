@@ -26,8 +26,9 @@ import (
 	"github.com/go-mysql-org/go-mysql/replication"
 	"github.com/go-mysql-org/go-mysql/schema"
 	"github.com/go-sql-driver/mysql"
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
@@ -501,6 +502,7 @@ func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mapper
 	}
 	return
 }
+
 func (i *mysqlStreamInput) readMessages(ctx context.Context) error {
 	var nextTimedBatchChan <-chan time.Time
 	for {

@@ -20,9 +20,7 @@ import (
 	"cloud.google.com/go/pubsub"
 )
 
-var (
-	_ pubsubClient = (*airGappedPubsubClient)(nil)
-)
+var _ pubsubClient = (*airGappedPubsubClient)(nil)
 
 type pubsubClient interface {
 	Topic(id string, settings *pubsub.PublishSettings) pubsubTopic

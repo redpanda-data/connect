@@ -17,8 +17,9 @@ package kafka
 import (
 	"slices"
 
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/twmb/franz-go/pkg/kgo"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func redpandaInputConfig() *service.ConfigSpec {

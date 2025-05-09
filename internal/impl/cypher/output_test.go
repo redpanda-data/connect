@@ -21,9 +21,10 @@ import (
 
 	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 	"github.com/ory/dockertest/v3"
+	"github.com/stretchr/testify/require"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
-	"github.com/stretchr/testify/require"
 )
 
 func outputFromConf(t *testing.T, confStr string, args ...any) *output {

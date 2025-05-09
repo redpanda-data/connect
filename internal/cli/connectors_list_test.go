@@ -13,9 +13,10 @@ import (
 	"path"
 	"testing"
 
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/cli"
 )
@@ -81,7 +82,7 @@ deny: []
 		t.Run(testCase.name, func(t *testing.T) {
 			tmpDir := t.TempDir()
 			inputPath := path.Join(tmpDir, "components_list.yaml")
-			require.NoError(t, os.WriteFile(inputPath, []byte(testCase.input), 0666))
+			require.NoError(t, os.WriteFile(inputPath, []byte(testCase.input), 0o666))
 
 			sch := testSchema(t)
 			actMod, err := cli.ApplyConnectorsList(inputPath, sch)

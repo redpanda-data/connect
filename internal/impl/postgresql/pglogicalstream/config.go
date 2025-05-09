@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 

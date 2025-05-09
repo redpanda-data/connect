@@ -43,8 +43,10 @@ func (e *BatchSchemaMismatchError[T]) Error() string {
 	return errors.Join(errs...).Error()
 }
 
-var _ error = &NonNullColumnError{}
-var _ SchemaMismatchError = &NonNullColumnError{}
+var (
+	_ error               = &NonNullColumnError{}
+	_ SchemaMismatchError = &NonNullColumnError{}
+)
 
 // NonNullColumnError occurs when a column with a NOT NULL constraint
 // gets a value with a `NULL` value.
@@ -74,8 +76,10 @@ func (e *NonNullColumnError) Error() string {
 	return fmt.Sprintf("column %q has a NOT NULL constraint and recieved a nil value", e.columnName)
 }
 
-var _ error = &MissingColumnError{}
-var _ SchemaMismatchError = &MissingColumnError{}
+var (
+	_ error               = &MissingColumnError{}
+	_ SchemaMismatchError = &MissingColumnError{}
+)
 
 // MissingColumnError occurs when a column that is not in the table is
 // found on a record

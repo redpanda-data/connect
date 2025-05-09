@@ -24,18 +24,18 @@ type loggerAdapter struct {
 	logger *service.Logger
 }
 
-func (l *loggerAdapter) Error(name string, id string, err error) {
+func (l *loggerAdapter) Error(name, id string, err error) {
 	l.logger.Errorf("[%s %s] %w", name, id, err)
 }
 
-func (l *loggerAdapter) Warnf(name string, id string, msg string, args ...any) {
+func (l *loggerAdapter) Warnf(name, id, msg string, args ...any) {
 	l.logger.Warnf("[%s %s] %s", name, id, fmt.Sprintf(msg, args...))
 }
 
-func (l *loggerAdapter) Infof(name string, id string, msg string, args ...any) {
+func (l *loggerAdapter) Infof(name, id, msg string, args ...any) {
 	l.logger.Infof("[%s %s] %s", name, id, fmt.Sprintf(msg, args...))
 }
 
-func (l *loggerAdapter) Debugf(name string, id string, msg string, args ...any) {
+func (l *loggerAdapter) Debugf(name, id, msg string, args ...any) {
 	l.logger.Debugf("[%s %s] %s", name, id, fmt.Sprintf(msg, args...))
 }

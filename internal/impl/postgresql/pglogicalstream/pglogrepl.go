@@ -333,8 +333,8 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, publicationName
 		return nil
 	}
 
-	var tablesToRemoveFromPublication = []TableFQN{}
-	var tablesToAddToPublication = []TableFQN{}
+	tablesToRemoveFromPublication := []TableFQN{}
+	tablesToAddToPublication := []TableFQN{}
 	for _, table := range tables {
 		if !slices.Contains(pubTables, table) {
 			tablesToAddToPublication = append(tablesToAddToPublication, table)

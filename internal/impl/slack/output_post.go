@@ -15,9 +15,10 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/slack-go/slack"
+
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"github.com/slack-go/slack"
 )
 
 func init() {

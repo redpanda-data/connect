@@ -91,7 +91,14 @@ issues:
 formatters:
   enable:
     - gofmt
+    - gofumpt
     - goimports
+  settings:
+    gofumpt:
+      extra-rules: true
+    goimports:
+      local-prefixes:
+        - github.com/redpanda-data
   exclusions:
     generated: lax
     paths:

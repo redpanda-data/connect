@@ -16,6 +16,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
 	bedrocktypes "github.com/aws/aws-sdk-go-v2/service/bedrockruntime/types"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/aws"

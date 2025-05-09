@@ -43,7 +43,6 @@ func outputConfig() *service.ConfigSpec {
 		LintRule(`root = if ((this.operation == "insert" || this.operation == "replace" || this.operation == "upsert") && !this.exists("content")) { [ "content must be set for insert, replace and upsert operations." ] }`).
 		Field(service.NewOutputMaxInFlightField()).
 		Field(service.NewBatchPolicyField("batching"))
-
 }
 
 func init() {

@@ -170,7 +170,7 @@ func init() {
 
 type protobufOperator func(part *service.Message) error
 
-func newProtobufToJSONOperator(f fs.FS, msg string, importPaths []string, useProtoNames bool, useEnumNumbers bool) (protobufOperator, error) {
+func newProtobufToJSONOperator(f fs.FS, msg string, importPaths []string, useProtoNames, useEnumNumbers bool) (protobufOperator, error) {
 	if msg == "" {
 		return nil, errors.New("message field must not be empty")
 	}
@@ -261,7 +261,7 @@ func newProtobufFromJSONOperator(f fs.FS, msg string, importPaths []string, disc
 	}, nil
 }
 
-func strToProtobufOperator(f fs.FS, opStr, message string, importPaths []string, discardUnknown, useProtoNames bool, useEnumNumbers bool) (protobufOperator, error) {
+func strToProtobufOperator(f fs.FS, opStr, message string, importPaths []string, discardUnknown, useProtoNames, useEnumNumbers bool) (protobufOperator, error) {
 	switch opStr {
 	case "to_json":
 		return newProtobufToJSONOperator(f, message, importPaths, useProtoNames, useEnumNumbers)

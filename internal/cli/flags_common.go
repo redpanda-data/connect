@@ -12,8 +12,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/urfave/cli/v2"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (

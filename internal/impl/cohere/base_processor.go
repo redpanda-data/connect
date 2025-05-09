@@ -13,6 +13,7 @@ import (
 
 	coopt "github.com/cohere-ai/cohere-go/v2/option"
 	coherev2 "github.com/cohere-ai/cohere-go/v2/v2"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 

@@ -25,11 +25,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
+
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
-	"github.com/stretchr/testify/require"
-	"golang.org/x/sync/errgroup"
 
 	_ "github.com/snowflakedb/gosnowflake"
 

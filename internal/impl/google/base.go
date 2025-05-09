@@ -17,11 +17,12 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/drivelabels/v2"
 	"google.golang.org/api/option"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (

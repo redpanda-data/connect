@@ -16,8 +16,9 @@ import (
 	"time"
 
 	"github.com/Jeffail/shutdown"
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"google.golang.org/protobuf/encoding/protojson"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/protoconnect"
 )

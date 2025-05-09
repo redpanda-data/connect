@@ -676,7 +676,6 @@ type relationMessageSuite struct {
 }
 
 func (s *relationMessageSuite) Test() {
-
 	msg, expected := s.createRelationTestData()
 
 	m, err := Parse(msg)
@@ -715,7 +714,6 @@ type insertMessageSuite struct {
 }
 
 func (s *insertMessageSuite) Test() {
-
 	msg, expected := s.createInsertTestData()
 
 	m, err := Parse(msg)

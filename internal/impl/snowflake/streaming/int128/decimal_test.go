@@ -453,7 +453,7 @@ func BenchmarkParsing(b *testing.B) {
 	}
 }
 
-func computeDecimalParameters(str string) (digitCount int32, leadingDigits int32) {
+func computeDecimalParameters(str string) (digitCount, leadingDigits int32) {
 	foundFraction := false
 	for _, r := range str {
 		if r == '.' {

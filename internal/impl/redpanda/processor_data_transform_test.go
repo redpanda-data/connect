@@ -115,7 +115,7 @@ func testDataTransformProcessorKeys(t *testing.T, wasm []byte) {
 	var err error
 	cfg.inputKey, err = service.NewInterpolatedString(`${! metadata("example_input_key") }`)
 	require.NoError(t, err)
-	var outputKeyField = "example_output_key"
+	outputKeyField := "example_output_key"
 	cfg.outputKeyField = &outputKeyField
 	proc, err := newDataTransformProcessor(wasm, cfg, service.MockResources())
 	require.NoError(t, err)

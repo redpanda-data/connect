@@ -100,7 +100,6 @@ func (m *Monitor) readTablesStat(ctx context.Context, tables []TableFQN) error {
 			`SELECT reltuples FROM pg_class WHERE oid = $1::regclass`,
 			table.String(),
 		).Scan(&count)
-
 		if err != nil {
 			// Keep going if only the table does not exist
 			if strings.Contains(err.Error(), "does not exist") {

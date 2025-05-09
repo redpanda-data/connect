@@ -491,7 +491,6 @@ processors:
 
 func testBatchInputOutputRaw(t *testing.T, driver, dsn, table string) {
 	t.Run("raw_input_output", func(t *testing.T) {
-
 		placeholderStr := "?"
 		valuesStr := `(?, ?, ?)`
 		switch driver {

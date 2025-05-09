@@ -13,9 +13,10 @@ import (
 	"fmt"
 	"io"
 
+	oai "github.com/sashabaranov/go-openai"
+
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
-	oai "github.com/sashabaranov/go-openai"
 
 	"github.com/redpanda-data/connect/v4/internal/license"
 )

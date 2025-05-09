@@ -13,8 +13,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"gopkg.in/yaml.v3"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 type connectorsList struct {

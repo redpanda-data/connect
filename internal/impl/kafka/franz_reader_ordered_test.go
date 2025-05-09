@@ -19,11 +19,12 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/redpanda-data/benthos/v4/public/service"
-	"github.com/redpanda-data/connect/v4/internal/dispatch"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/twmb/franz-go/pkg/kgo"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/dispatch"
 )
 
 func TestPartitionCacheOrdering(t *testing.T) {

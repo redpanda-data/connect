@@ -19,9 +19,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func TestMatchesPatterns(t *testing.T) {
