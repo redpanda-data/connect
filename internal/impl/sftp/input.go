@@ -383,13 +383,13 @@ func (w *watcherPathProvider) Next(ctx context.Context) (string, bool, error) {
 		}
 
 		if waitFor := time.Until(w.nextPoll); w.nextPoll.IsZero() || waitFor > 0 {
-			w.nextPoll = time.Now().Add(w.pollInterval)
 			select {
 			case <-time.After(waitFor):
 			case <-ctx.Done():
 				return "", false, ctx.Err()
 			}
 		}
+		w.nextPoll = time.Now().Add(w.pollInterval)
 
 		if err := w.findNewPaths(ctx); err != nil {
 			return "", false, fmt.Errorf("expanding new paths: %w", err)
