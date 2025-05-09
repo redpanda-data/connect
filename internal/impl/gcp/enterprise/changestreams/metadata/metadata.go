@@ -34,6 +34,23 @@ const (
 
 // PartitionMetadata contains information about a change stream partition.
 //
+// To support reading change stream records in near  real-time as database
+// writes scale, the Spanner API is designed for a change stream to be queried
+// concurrently using change stream partitions. Change stream partitions
+// map to change stream data splits that contain the change stream records.
+// A change stream's partitions change dynamically over time and are correlated
+// to how Spanner dynamically splits and merges the database data.
+//
+// A change stream partition contains records for an immutable key range for
+// a specific time range. Any change stream partition can split into one or more
+// change stream partitions, or be merged with other change stream partitions.
+// When these split or merge events happen, child partitions are created to
+// capture the changes for their respective immutable key ranges for the next
+// time range. In addition to data change records, a change stream query returns
+// child partition records to notify readers of new change stream partitions
+// that need to be queried, as well as heartbeat records to indicate forward
+// progress when no writes have occurred recently.
+//
 // The StartTimestamp is taken from ChildPartitionsRecord.StartTimestamp,
 // and represents the earliest DataChangeRecord.CommitTimestamp in this
 // partition or in the sibling partitions.
@@ -308,24 +325,27 @@ func (s *Store) GetUnfinishedMinWatermark(ctx context.Context) (time.Time, error
 	return watermark, nil
 }
 
-// GetPartitionsCreatedAfter fetches all partitions created after the specified timestamp.
-// Results are ordered by creation time and start timestamp in ascending order.
+// GetPartitionsCreatedAfter fetches all partitions created after the
+// specified timestamp that are in the CREATED state. Results are ordered by
+// creation time and start timestamp in ascending order.
 func (s *Store) GetPartitionsCreatedAfter(ctx context.Context, timestamp time.Time) ([]PartitionMetadata, error) {
 	var stmt spanner.Statement
 	if s.conf.isPostgres() {
 		stmt = spanner.Statement{
-			SQL: fmt.Sprintf(`SELECT * FROM "%s" WHERE "%s" > $1 ORDER BY "%s" ASC, "%s" ASC`,
-				s.conf.TableName, columnCreatedAt, columnCreatedAt, columnStartTimestamp),
+			SQL: fmt.Sprintf(`SELECT * FROM "%s" WHERE "%s" > $1 AND "%s" = $2 ORDER BY "%s" ASC, "%s" ASC`,
+				s.conf.TableName, columnCreatedAt, columnState, columnCreatedAt, columnStartTimestamp),
 			Params: map[string]any{
 				"p1": timestamp,
+				"p2": StateCreated,
 			},
 		}
 	} else {
 		stmt = spanner.Statement{
-			SQL: fmt.Sprintf(`SELECT * FROM %s WHERE %s > @timestamp ORDER BY %s ASC, %s ASC`,
-				s.conf.TableName, columnCreatedAt, columnCreatedAt, columnStartTimestamp),
+			SQL: fmt.Sprintf(`SELECT * FROM %s WHERE %s > @timestamp AND %s = @state ORDER BY %s ASC, %s ASC`,
+				s.conf.TableName, columnCreatedAt, columnState, columnCreatedAt, columnStartTimestamp),
 			Params: map[string]any{
 				"timestamp": timestamp,
+				"state":     StateCreated,
 			},
 		}
 	}
@@ -451,6 +471,30 @@ func (s *Store) updatePartitionStatus(
 	}, spanner.TransactionOptions{TransactionTag: "UpdateTo" + strings.ToTitle(string(toState))})
 
 	return resp.CommitTs.UTC(), err
+}
+
+// CheckParentPartitionsFinished checks if all parent tokens in the given list
+// are in FINISHED state.
+func (s *Store) CheckParentPartitionsFinished(ctx context.Context, partitionTokens []string) (bool, error) {
+	if len(partitionTokens) == 0 {
+		return true, nil
+	}
+
+	var ok bool
+
+	if _, err := s.client.ReadWriteTransactionWithOptions(ctx, func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
+		matchingTokens, err := s.getPartitionsMatchingStateInTransaction(ctx, txn, partitionTokens, StateFinished)
+		if err != nil {
+			return fmt.Errorf("get partitions matching state: %w", err)
+		}
+		ok = len(partitionTokens) == len(matchingTokens)
+
+		return nil
+	}, spanner.TransactionOptions{TransactionTag: "CheckParentPartitionsFinished"}); err != nil {
+		return false, err
+	}
+
+	return ok, nil
 }
 
 func (s *Store) getPartitionsMatchingStateInTransaction(

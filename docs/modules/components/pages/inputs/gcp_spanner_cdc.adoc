@@ -39,6 +39,7 @@ input:
     start_timestamp: ""
     end_timestamp: ""
     heartbeat_interval: 10s
+    metadata_table: ""
     auto_replay_nacks: true
 ```
 
@@ -116,6 +117,15 @@ Duration string for heartbeat interval (e.g., '10s')
 *Type*: `string`
 
 *Default*: `"10s"`
+
+=== `metadata_table`
+
+The table to store metadata in (default: cdc_metadata_<stream_id>)
+
+
+*Type*: `string`
+
+*Default*: `""`
 
 === `auto_replay_nacks`
 
