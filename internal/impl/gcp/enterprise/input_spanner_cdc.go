@@ -31,6 +31,12 @@ const (
 	siFieldStartTimestamp    = "start_timestamp"
 	siFieldEndTimestamp      = "end_timestamp"
 	siFieldHeartbeatInterval = "heartbeat_interval"
+	siFieldMetadataTable     = "metadata_table"
+)
+
+// Default values
+const (
+	defaultMetadataTableFormat = "cdc_metadata_%s"
 )
 
 type spannerCDCInputConfig struct {
@@ -91,6 +97,13 @@ func spannerCDCInputConfigFromParsed(pConf *service.ParsedConfig) (conf spannerC
 	if conf.HeartbeatInterval, err = parseDuration(pConf, siFieldHeartbeatInterval); err != nil {
 		return
 	}
+	if conf.MetadataTable, err = pConf.FieldString(siFieldMetadataTable); err != nil {
+		return
+	}
+	if conf.MetadataTable == "" {
+		conf.MetadataTable = fmt.Sprintf(defaultMetadataTableFormat, conf.StreamID)
+	}
+
 	return
 }
 
@@ -121,6 +134,7 @@ https://cloud.google.com/spanner/docs/change-streams
 		Field(service.NewStringField(siFieldStartTimestamp).Optional().Description("RFC3339 formatted timestamp to start reading from (default: current time)").Default("")).
 		Field(service.NewStringField(siFieldEndTimestamp).Optional().Description("RFC3339 formatted timestamp to stop reading at (default: no end time)").Default("")).
 		Field(service.NewStringField(siFieldHeartbeatInterval).Optional().Description("Duration string for heartbeat interval (e.g., '10s')").Default("10s")).
+		Field(service.NewStringField(siFieldMetadataTable).Optional().Description("The table to store metadata in (default: cdc_metadata_<stream_id>)").Default("")).
 		Field(service.NewAutoRetryNacksToggleField())
 }
 
