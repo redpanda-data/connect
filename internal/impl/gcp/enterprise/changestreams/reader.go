@@ -76,6 +76,7 @@ type Config struct {
 	StartTimestamp    time.Time // If StartTimestamp is a zero value of time.Time, reader reads from the current timestamp.
 	EndTimestamp      time.Time // If EndTimestamp is a zero value of time.Time, reader reads until it is cancelled.
 	HeartbeatInterval time.Duration
+	MetadataTable     string
 
 	SpannerClientConfig  spanner.ClientConfig
 	SpannerClientOptions []option.ClientOption
