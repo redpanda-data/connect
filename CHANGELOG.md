@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Field `extras` added to the `sentry_capture` processor. (@peczenyj)
+- Field `steal_grace_period` added to the `aws_kinesis` input. (@Jeffail)
 
 ### Fixed
 

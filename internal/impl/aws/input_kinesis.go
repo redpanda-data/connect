@@ -43,24 +43,26 @@ const (
 	kiddbFieldBillingMode        = "billing_mode"
 
 	// Kinesis Input Fields
-	kiFieldDynamoDB        = "dynamodb"
-	kiFieldStreams         = "streams"
-	kiFieldCheckpointLimit = "checkpoint_limit"
-	kiFieldCommitPeriod    = "commit_period"
-	kiFieldLeasePeriod     = "lease_period"
-	kiFieldRebalancePeriod = "rebalance_period"
-	kiFieldStartFromOldest = "start_from_oldest"
-	kiFieldBatching        = "batching"
+	kiFieldDynamoDB         = "dynamodb"
+	kiFieldStreams          = "streams"
+	kiFieldCheckpointLimit  = "checkpoint_limit"
+	kiFieldCommitPeriod     = "commit_period"
+	kiFieldStealGracePeriod = "steal_grace_period"
+	kiFieldLeasePeriod      = "lease_period"
+	kiFieldRebalancePeriod  = "rebalance_period"
+	kiFieldStartFromOldest  = "start_from_oldest"
+	kiFieldBatching         = "batching"
 )
 
 type kiConfig struct {
-	Streams         []string
-	DynamoDB        kiddbConfig
-	CheckpointLimit int
-	CommitPeriod    string
-	LeasePeriod     string
-	RebalancePeriod string
-	StartFromOldest bool
+	Streams          []string
+	DynamoDB         kiddbConfig
+	CheckpointLimit  int
+	CommitPeriod     string
+	StealGracePeriod string
+	LeasePeriod      string
+	RebalancePeriod  string
+	StartFromOldest  bool
 }
 
 func kinesisInputConfigFromParsed(pConf *service.ParsedConfig) (conf kiConfig, err error) {
@@ -76,6 +78,9 @@ func kinesisInputConfigFromParsed(pConf *service.ParsedConfig) (conf kiConfig, e
 		return
 	}
 	if conf.CommitPeriod, err = pConf.FieldString(kiFieldCommitPeriod); err != nil {
+		return
+	}
+	if conf.StealGracePeriod, err = pConf.FieldString(kiFieldStealGracePeriod); err != nil {
 		return
 	}
 	if conf.LeasePeriod, err = pConf.FieldString(kiFieldLeasePeriod); err != nil {
@@ -146,6 +151,9 @@ Use the `+"`batching`"+` fields to configure an optional xref:configuration:batc
 		service.NewDurationField(kiFieldCommitPeriod).
 			Description("The period of time between each update to the checkpoint table.").
 			Default("5s"),
+		service.NewDurationField(kiFieldStealGracePeriod).
+			Description("Determines how long beyond the next commit period a client will wait when stealing a shard for the current owner to store a checkpoint. A longer value increases the time taken to balance shards but reduces the likelihood of processing duplicate messages.").
+			Default("2s"),
 		service.NewDurationField(kiFieldRebalancePeriod).
 			Description("The period of time between each attempt to rebalance shards across clients.").
 			Default("30s").
@@ -209,9 +217,10 @@ type kinesisReader struct {
 
 	streams []*streamInfo
 
-	commitPeriod    time.Duration
-	leasePeriod     time.Duration
-	rebalancePeriod time.Duration
+	commitPeriod     time.Duration
+	stealGracePeriod time.Duration
+	leasePeriod      time.Duration
+	rebalancePeriod  time.Duration
 
 	cMut    sync.Mutex
 	msgChan chan asyncMessage
@@ -342,6 +351,9 @@ func newKinesisReaderFromConfig(conf kiConfig, batcher service.BatchPolicy, sess
 
 	if k.commitPeriod, err = time.ParseDuration(k.conf.CommitPeriod); err != nil {
 		return nil, fmt.Errorf("failed to parse commit period string: %v", err)
+	}
+	if k.stealGracePeriod, err = time.ParseDuration(k.conf.StealGracePeriod); err != nil {
+		return nil, fmt.Errorf("failed to parse steal grace period string: %v", err)
 	}
 	if k.leasePeriod, err = time.ParseDuration(k.conf.LeasePeriod); err != nil {
 		return nil, fmt.Errorf("failed to parse lease period string: %v", err)
@@ -874,7 +886,7 @@ func (k *kinesisReader) Connect(ctx context.Context) error {
 	}
 
 	svc := kinesis.NewFromConfig(k.sess)
-	checkpointer, err := newAWSKinesisCheckpointer(k.ddbSess, k.clientID, k.conf.DynamoDB, k.leasePeriod, k.commitPeriod)
+	checkpointer, err := newAWSKinesisCheckpointer(ctx, k.ddbSess, k.clientID, k.conf.DynamoDB, k.leasePeriod, k.commitPeriod, k.stealGracePeriod)
 	if err != nil {
 		return err
 	}

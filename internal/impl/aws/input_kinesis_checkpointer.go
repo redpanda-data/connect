@@ -66,30 +66,33 @@ func kinesisInputDynamoDBConfigFromParsed(pConf *service.ParsedConfig) (conf kid
 type awsKinesisCheckpointer struct {
 	conf kiddbConfig
 
-	clientID      string
-	leaseDuration time.Duration
-	commitPeriod  time.Duration
-	svc           *dynamodb.Client
+	clientID         string
+	leaseDuration    time.Duration
+	commitPeriod     time.Duration
+	stealGracePeriod time.Duration
+
+	svc *dynamodb.Client
 }
 
 // newAWSKinesisCheckpointer creates a new DynamoDB checkpointer from an AWS
 // session and a configuration struct.
 func newAWSKinesisCheckpointer(
+	ctx context.Context,
 	aConf aws.Config,
 	clientID string,
 	conf kiddbConfig,
-	leaseDuration time.Duration,
-	commitPeriod time.Duration,
+	leaseDuration, commitPeriod, stealGracePeriod time.Duration,
 ) (*awsKinesisCheckpointer, error) {
 	c := &awsKinesisCheckpointer{
-		conf:          conf,
-		leaseDuration: leaseDuration,
-		commitPeriod:  commitPeriod,
-		svc:           dynamodb.NewFromConfig(aConf),
-		clientID:      clientID,
+		conf:             conf,
+		leaseDuration:    leaseDuration,
+		commitPeriod:     commitPeriod,
+		stealGracePeriod: stealGracePeriod,
+		svc:              dynamodb.NewFromConfig(aConf),
+		clientID:         clientID,
 	}
 
-	if err := c.ensureTableExists(context.TODO()); err != nil {
+	if err := c.ensureTableExists(ctx); err != nil {
 		return nil, err
 	}
 	return c, nil
@@ -315,14 +318,18 @@ func (k *awsKinesisCheckpointer) Claim(ctx context.Context, streamID, shardID, f
 	//
 	// This allows the victim client to update the checkpoint with the final
 	// sequence as it yields the shard.
-	if fromClientID != "" && time.Since(currentLease) < k.leaseDuration {
-		// Wait for the estimated next checkpoint time plus a grace period of
-		// one second.
-		waitFor := k.leaseDuration - time.Since(currentLease) + time.Second
-		select {
-		case <-time.After(waitFor):
-		case <-ctx.Done():
-			return "", ctx.Err()
+	if fromClientID != "" {
+		// Wait for the estimated next checkpoint time plus a grace period.
+		lastCheckpoint := currentLease.Add(-k.leaseDuration)
+		nextExpectedCheckpoint := lastCheckpoint.Add(k.commitPeriod)
+		waitUntil := nextExpectedCheckpoint.Add(k.stealGracePeriod)
+
+		if waitFor := time.Until(waitUntil); waitFor > 0 {
+			select {
+			case <-time.After(waitFor):
+			case <-ctx.Done():
+				return "", ctx.Err()
+			}
 		}
 
 		cp, err := k.getCheckpoint(ctx, streamID, shardID)
