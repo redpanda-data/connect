@@ -15,6 +15,10 @@ All notable changes to this project will be documented in this file.
 - Fixed an issue with the experimental `redpanda` input where batch ordering could be mixed between two subsequent batches. (@mihaitodor, @rockwotj)
 - Fixed an issue in `schema_registry_decode` where Avro schema references were not properly resolved. (@geniegeist)
 
+### Changed
+
+- The way in which custom parameters for the experimental `mcp-server` subcommand are defined have changed. When defined they will now yield a JSON message to tool processors and outputs instead of complementary metadata keys, and there is no longer an implicit `value` field under these cirumstances.
+
 ## 4.54.1 - 2025-04-30
 
 ### Added

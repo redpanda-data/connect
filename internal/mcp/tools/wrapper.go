@@ -424,49 +424,70 @@ func (w *ResourcesWrapper) AddProcessorYAML(fileBytes []byte) error {
 
 	w.logger.With("label", res.Label).Info("Registering processor tool")
 
-	opts := []mcp.ToolOption{
-		mcp.WithDescription(res.Meta.MCP.Description),
-		mcp.WithString("value",
-			mcp.Description("The value to execute the tool upon."),
-			// mcp.Required(), TODO: Maybe enforce this with no other params?
-		),
-	}
+	opts := []mcp.ToolOption{mcp.WithDescription(res.Meta.MCP.Description)}
 
-	extraParams := map[string]bool{}
+	params := map[string]bool{}
 	for _, p := range res.Meta.MCP.Properties {
 		o, err := p.toolOption()
 		if err != nil {
 			return fmt.Errorf("property '%v': %w", p.Name, err)
 		}
-		if _, exists := extraParams[p.Name]; exists {
+		if _, exists := params[p.Name]; exists {
 			return fmt.Errorf("duplicate property '%v' detected", p.Name)
 		}
-		extraParams[p.Name] = p.Required
+		params[p.Name] = p.Required
 		opts = append(opts, o)
 	}
 
-	w.svr.AddTool(mcp.NewTool(res.Label, opts...), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		value, _ := request.Params.Arguments["value"].(string)
-		// TODO: Should we make this required?
+	if len(params) == 0 {
+		// If no explicit parameters are specified, just add a generic value string
+		opts = append(
+			opts,
+			mcp.WithString("value",
+				mcp.Description("The value to execute the tool upon."),
+				// mcp.Required(), TODO: Maybe enforce this with no other params?
+			),
+		)
+	}
 
-		inMsg, span := w.initMsgSpan(res.Label, service.NewMessage([]byte(value)).WithContext(ctx))
+	w.svr.AddTool(mcp.NewTool(res.Label, opts...), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		msg := service.NewMessage(nil)
+		msg, span := w.initMsgSpan(res.Label, msg.WithContext(ctx))
 		defer span.End()
 
-		attrString(span, "value", value)
-
-		for k, required := range extraParams {
+		for k, required := range params {
 			if v, exists := request.Params.Arguments[k]; exists {
-				inMsg.MetaSetMut(k, v)
+				msg.MetaSetMut(k, v)
 				attrString(span, k, fmt.Sprintf("%v", v))
 			} else if required {
 				return nil, fmt.Errorf("required parameter '%v' was missing", k)
 			}
 		}
 
+		if len(params) == 0 {
+			value, _ := request.Params.Arguments["value"].(string)
+			attrString(span, "value", value)
+			msg.SetBytes([]byte(value))
+		} else {
+			for k, v := range request.Params.Arguments {
+				switch t := v.(type) {
+				case string:
+					attrString(span, k, t)
+				case []byte:
+					attrString(span, k, string(t))
+				case bool:
+					span.SetAttributes(attribute.Bool(k, t))
+				case float64:
+					span.SetAttributes(attribute.Float64(k, t))
+				}
+			}
+			msg.SetStructured(request.Params.Arguments)
+		}
+
 		var resBatch service.MessageBatch
 		var procErr error
 		if err := w.resources.AccessProcessor(ctx, res.Label, func(p *service.ResourceProcessor) {
-			resBatch, procErr = p.Process(ctx, inMsg)
+			resBatch, procErr = p.Process(ctx, msg)
 		}); err != nil {
 			span.RecordError(err)
 			return nil, err
@@ -529,13 +550,7 @@ func (w *ResourcesWrapper) AddOutputYAML(fileBytes []byte) error {
 
 	w.logger.With("label", res.Label).Info("Registering output tool")
 
-	messageProperties := map[string]any{
-		"value": map[string]any{
-			"type":        "string",
-			"description": "The raw contents of the message",
-			"required":    true,
-		},
-	}
+	messageProperties := map[string]any{}
 
 	for _, p := range res.Meta.MCP.Properties {
 		o, err := p.rawOption()
@@ -546,6 +561,14 @@ func (w *ResourcesWrapper) AddOutputYAML(fileBytes []byte) error {
 			return fmt.Errorf("duplicate property '%v' detected", p.Name)
 		}
 		messageProperties[p.Name] = o
+	}
+
+	if len(res.Meta.MCP.Properties) == 0 {
+		messageProperties["value"] = map[string]any{
+			"type":        "string",
+			"description": "The raw contents of the message",
+			"required":    true,
+		}
 	}
 
 	opts := []mcp.ToolOption{
@@ -574,24 +597,30 @@ func (w *ResourcesWrapper) AddOutputYAML(fileBytes []byte) error {
 				return nil, fmt.Errorf("message %v was not an object", i)
 			}
 
-			contents, exists := mObj["value"].(string)
-			if !exists {
-				return nil, fmt.Errorf("message %v is missing a value", i)
-			}
-
-			msg, span := w.initMsgSpan(res.Label, service.NewMessage([]byte(contents)).WithContext(ctx))
+			msg, span := w.initMsgSpan(res.Label, service.NewMessage(nil).WithContext(ctx))
 			defer span.End()
-
-			attrString(span, "contents", contents)
-
-			for k, v := range mObj {
-				if k == "value" {
-					continue
+			if len(res.Meta.MCP.Properties) == 0 {
+				contents, exists := mObj["value"].(string)
+				if !exists {
+					return nil, fmt.Errorf("message %v is missing a value", i)
 				}
-				msg.MetaSetMut(k, v)
-				attrString(span, k, fmt.Sprintf("%v", v))
+				attrString(span, "contents", contents)
+				msg.SetBytes([]byte(contents))
+			} else {
+				for k, v := range mObj {
+					switch t := v.(type) {
+					case string:
+						attrString(span, k, t)
+					case []byte:
+						attrString(span, k, string(t))
+					case bool:
+						span.SetAttributes(attribute.Bool(k, t))
+					case float64:
+						span.SetAttributes(attribute.Float64(k, t))
+					}
+				}
+				msg.SetStructured(mObj)
 			}
-
 			spans = append(spans, span)
 			inBatch = append(inBatch, msg)
 		}
