@@ -1,12 +1,18 @@
 // Copyright 2024 Redpanda Data, Inc.
 //
-// Licensed as a Redpanda Enterprise file under the Redpanda Community
-// License (the "License"); you may not use this file except in compliance with
-// the License. You may obtain a copy of the License at
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-package enterprise
+package kafka
 
 import (
 	"context"
@@ -21,8 +27,6 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
-	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
-	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 const (
@@ -65,7 +69,7 @@ ACL migration adheres to the following principles:
 - Only topic ACLs are migrated, group ACLs are not migrated
 `).
 		Fields(redpandaMigratorOutputConfigFields()...).
-		LintRule(kafka.FranzWriterConfigLints()).
+		LintRule(FranzWriterConfigLints()).
 		Example("Transfer data", "Writes messages to the configured broker and creates topics and topic ACLs if they don't exist. It also ensures that the message order is preserved.", `
 output:
   redpanda_migrator:
@@ -82,8 +86,8 @@ output:
 
 func redpandaMigratorOutputConfigFields() []*service.ConfigField {
 	return slices.Concat(
-		kafka.FranzConnectionFields(),
-		kafka.FranzWriterConfigFields(),
+		FranzConnectionFields(),
+		FranzWriterConfigFields(),
 		[]*service.ConfigField{
 			service.NewInterpolatedStringField(rmoFieldTopicPrefix).
 				Description("The topic prefix.").Default("").Advanced(),
@@ -112,7 +116,7 @@ func redpandaMigratorOutputConfigFields() []*service.ConfigField {
 			service.NewStringField(rmoFieldRackID).Deprecated(),
 			service.NewBatchPolicyField(rmoFieldBatching).Deprecated(),
 		},
-		kafka.FranzProducerFields(),
+		FranzProducerFields(),
 	)
 }
 
@@ -124,10 +128,6 @@ func init() {
 			maxInFlight int,
 			err error,
 		) {
-			if err = license.CheckRunningEnterprise(mgr); err != nil {
-				return
-			}
-
 			topicPrefix, err := conf.FieldString(rmoFieldTopicPrefix)
 			if err != nil {
 				return
@@ -174,13 +174,13 @@ func init() {
 
 			var tmpOpts, clientOpts []kgo.Opt
 
-			var connDetails *kafka.FranzConnectionDetails
-			if connDetails, err = kafka.FranzConnectionDetailsFromConfig(conf, mgr.Logger()); err != nil {
+			var connDetails *FranzConnectionDetails
+			if connDetails, err = FranzConnectionDetailsFromConfig(conf, mgr.Logger()); err != nil {
 				return
 			}
 			clientOpts = append(clientOpts, connDetails.FranzOpts()...)
 
-			if tmpOpts, err = kafka.FranzProducerOptsFromConfig(conf); err != nil {
+			if tmpOpts, err = FranzProducerOptsFromConfig(conf); err != nil {
 				return
 			}
 			clientOpts = append(clientOpts, tmpOpts...)
@@ -193,10 +193,10 @@ func init() {
 			var schemaIDCache sync.Map
 			var topicCache sync.Map
 			var runOnce sync.Once
-			output, err = kafka.NewFranzWriterFromConfig(
+			output, err = NewFranzWriterFromConfig(
 				conf,
-				kafka.NewFranzWriterHooks(
-					func(ctx context.Context, fn kafka.FranzSharedClientUseFn) error {
+				NewFranzWriterHooks(
+					func(ctx context.Context, fn FranzSharedClientUseFn) error {
 						clientMut.Lock()
 						defer clientMut.Unlock()
 
@@ -207,7 +207,7 @@ func init() {
 							}
 						}
 
-						return fn(&kafka.FranzSharedClientInfo{Client: client, ConnDetails: connDetails})
+						return fn(&FranzSharedClientInfo{Client: client, ConnDetails: connDetails})
 					}).WithYieldClientFn(
 					func(context.Context) error {
 						clientMut.Lock()
@@ -225,7 +225,7 @@ func init() {
 						// Try to create all topics which the input `redpanda_migrator` resource is configured to read
 						// from when we receive the first message.
 						runOnce.Do(func() {
-							err := kafka.FranzSharedClientUse(inputResource, mgr, func(details *kafka.FranzSharedClientInfo) error {
+							err := FranzSharedClientUse(inputResource, mgr, func(details *FranzSharedClientInfo) error {
 								inputClient := details.Client
 								outputClient := client
 								topics := inputClient.GetConsumeTopics()
@@ -314,7 +314,7 @@ func init() {
 
 						// The current record may be coming from a topic which was created later during runtime, so we
 						// need to try and create it if we haven't done so already.
-						if err := kafka.FranzSharedClientUse(inputResource, mgr, func(details *kafka.FranzSharedClientInfo) error {
+						if err := FranzSharedClientUse(inputResource, mgr, func(details *FranzSharedClientInfo) error {
 							for i, record := range records {
 								if err := translateSchemaID(record); err != nil {
 									mgr.Logger().Warnf("Failed to update schema ID in record index %d on topic %s: %q", i, record.Topic, err)

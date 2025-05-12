@@ -1,12 +1,18 @@
 // Copyright 2024 Redpanda Data, Inc.
 //
-// Licensed as a Redpanda Enterprise file under the Redpanda Community
-// License (the "License"); you may not use this file except in compliance with
-// the License. You may obtain a copy of the License at
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-package enterprise
+package kafka
 
 import (
 	"context"
@@ -22,8 +28,6 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
-	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
-	"github.com/redpanda-data/connect/v4/internal/license"
 	"github.com/redpanda-data/connect/v4/internal/retries"
 )
 
@@ -55,7 +59,7 @@ func redpandaMigratorOffsetsOutputConfig() *service.ConfigSpec {
 // franz-go client library.
 func redpandaMigratorOffsetsOutputConfigFields() []*service.ConfigField {
 	return slices.Concat(
-		kafka.FranzConnectionFields(),
+		FranzConnectionFields(),
 		[]*service.ConfigField{
 			service.NewInterpolatedStringField(rmooFieldOffsetTopic).
 				Description("Kafka offset topic.").Default("${! @kafka_offset_topic }"),
@@ -79,7 +83,7 @@ func redpandaMigratorOffsetsOutputConfigFields() []*service.ConfigField {
 				Description("The maximum number of batches to be sending in parallel at any given time.").
 				Default(1).Deprecated(),
 		},
-		kafka.FranzProducerLimitsFields(),
+		FranzProducerLimitsFields(),
 		retries.CommonRetryBackOffFields(0, "1s", "5s", "30s"),
 	)
 }
@@ -91,10 +95,6 @@ func init() {
 			maxInFlight int,
 			err error,
 		) {
-			if err = license.CheckRunningEnterprise(mgr); err != nil {
-				return
-			}
-
 			maxInFlight = 1
 
 			output, err = newRedpandaMigratorOffsetsWriterFromConfig(conf, mgr)
@@ -131,7 +131,7 @@ func newRedpandaMigratorOffsetsWriterFromConfig(conf *service.ParsedConfig, mgr 
 		mgr: mgr,
 	}
 
-	clientDetails, err := kafka.FranzConnectionDetailsFromConfig(conf, mgr.Logger())
+	clientDetails, err := FranzConnectionDetailsFromConfig(conf, mgr.Logger())
 	if err != nil {
 		return nil, err
 	}
@@ -165,7 +165,7 @@ func newRedpandaMigratorOffsetsWriterFromConfig(conf *service.ParsedConfig, mgr 
 	}
 
 	var clientOpts []kgo.Opt
-	if clientOpts, err = kafka.FranzProducerLimitsOptsFromConfig(conf); err != nil {
+	if clientOpts, err = FranzProducerLimitsOptsFromConfig(conf); err != nil {
 		return nil, err
 	}
 
@@ -175,7 +175,7 @@ func newRedpandaMigratorOffsetsWriterFromConfig(conf *service.ParsedConfig, mgr 
 			kgo.SeedBrokers(clientDetails.SeedBrokers...),
 			kgo.SASL(clientDetails.SASL...),
 			kgo.ClientID(clientDetails.ClientID),
-			kgo.WithLogger(&kafka.KGoLogger{L: w.mgr.Logger()}),
+			kgo.WithLogger(&KGoLogger{L: w.mgr.Logger()}),
 		})
 	if clientDetails.TLSConf != nil {
 		w.clientOpts = append(w.clientOpts, kgo.DialTLSConfig(clientDetails.TLSConf))
