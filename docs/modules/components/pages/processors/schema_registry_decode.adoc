@@ -39,6 +39,7 @@ schema_registry_decode:
   avro:
     raw_unions: false # No default (optional)
     preserve_logical_types: false
+    translate_kafka_connect_types: false
   cache_duration: 10m
   url: "" # No default (required)
 ```
@@ -55,6 +56,7 @@ schema_registry_decode:
   avro:
     raw_unions: false # No default (optional)
     preserve_logical_types: false
+    translate_kafka_connect_types: false
     mapping: | # No default (optional)
       map isDebeziumTimestampType {
         root = this.type == "long" && this."connect.name" == "io.debezium.time.Timestamp" && !this.exists("logicalType")
@@ -160,6 +162,63 @@ When raw_unions is set to true then the above union schema is decoded as the fol
 === `avro.preserve_logical_types`
 
 Whether logical types should be preserved or transformed back into their primitive type. By default, decimals are decoded as raw bytes and timestamps are decoded as plain integers. Setting this field to true keeps decimal types as numbers in bloblang and timestamps as time values.
+
+
+*Type*: `bool`
+
+*Default*: `false`
+
+=== `avro.translate_kafka_connect_types`
+
+Only valid if preserve_logical_types is true. This decodes various Kafka Connect types into their bloblang equivalents when not representable by standard logical types according to the Avro standard.
+
+Types that are currently translated:
+
+.Debezium Custom Temporal Types
+|===
+|Type Name |Bloblang Type |Description
+
+|io.debezium.time.Date
+|timestamp
+|Date without time (days since epoch)
+
+|io.debezium.time.Timestamp
+|timestamp
+|Timestamp without timezone (milliseconds since epoch)
+
+|io.debezium.time.MicroTimestamp
+|timestamp
+|Timestamp with microsecond precision
+
+|io.debezium.time.NanoTimestamp
+|timestamp
+|Timestamp with nanosecond precision
+
+|io.debezium.time.ZonedTime
+|timestamp
+|Time with timezone (ISO-8601 format)
+
+|io.debezium.time.ZonedTimestamp
+|timestamp
+|Timestamp with timezone (ISO-8601 format)
+
+|io.debezium.time.Year
+|timestamp at January 1st at 00:00:00
+|Year value
+
+|io.debezium.time.Time
+|timestamp at the unix epoch
+|Time without date (milliseconds past midnight)
+
+|io.debezium.time.MicroTime
+|timestamp at the unix epoch
+|Time with microsecond precision
+
+|io.debezium.time.NanoTime
+|timestamp at the unix epoch
+|Time with nanosecond precision
+
+|===
 
 
 *Type*: `bool`
