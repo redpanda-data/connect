@@ -54,7 +54,9 @@ message Value {
 
 // An error in the context of a data pipeline.
 message Error {
-  // The error message.
+  // The error message. If non empty, then the error to be "valid" and
+  // if empty the error is ignored as if a success (due to proto3 empty
+  // semantics).
   string message = 1;
   // NotConnected is returned by inputs and outputs when their Read or
   // Write methods are called and the connection that they maintain is lost.
@@ -67,6 +69,7 @@ message Error {
 	// pipeline.
   message EndOfInput {}
   // Additional error details for specific Redpanda Connect behavior.
+  // If one of these fields is set, then message must be non-empty.
   oneof detail {
     // BackOff is an error that plugins can optionally wrap another error with which instructs upstream components to wait for a specified period of time before retrying the errored call.
     //
