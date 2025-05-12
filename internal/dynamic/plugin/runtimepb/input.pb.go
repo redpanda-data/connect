@@ -374,7 +374,9 @@ func (x *BatchInputAckRequest) GetError() *Error {
 }
 
 type BatchInputAckResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// If present, then this ack/nack request failed.
+	Error         *Error `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -407,6 +409,13 @@ func (x *BatchInputAckResponse) ProtoReflect() protoreflect.Message {
 // Deprecated: Use BatchInputAckResponse.ProtoReflect.Descriptor instead.
 func (*BatchInputAckResponse) Descriptor() ([]byte, []int) {
 	return file_redpanda_runtime_v1alpha1_input_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *BatchInputAckResponse) GetError() *Error {
+	if x != nil {
+		return x.Error
+	}
+	return nil
 }
 
 type BatchInputCloseRequest struct {
@@ -510,8 +519,9 @@ const file_redpanda_runtime_v1alpha1_input_proto_rawDesc = "" +
 	"\x05error\x18\x03 \x01(\v2 .redpanda.runtime.v1alpha1.ErrorR\x05error\"i\n" +
 	"\x14BatchInputAckRequest\x12\x19\n" +
 	"\bbatch_id\x18\x01 \x01(\x04R\abatchId\x126\n" +
-	"\x05error\x18\x02 \x01(\v2 .redpanda.runtime.v1alpha1.ErrorR\x05error\"\x17\n" +
-	"\x15BatchInputAckResponse\"\x18\n" +
+	"\x05error\x18\x02 \x01(\v2 .redpanda.runtime.v1alpha1.ErrorR\x05error\"O\n" +
+	"\x15BatchInputAckResponse\x126\n" +
+	"\x05error\x18\x02 \x01(\v2 .redpanda.runtime.v1alpha1.ErrorR\x05error\"\x18\n" +
 	"\x16BatchInputCloseRequest\"Q\n" +
 	"\x17BatchInputCloseResponse\x126\n" +
 	"\x05error\x18\x01 \x01(\v2 .redpanda.runtime.v1alpha1.ErrorR\x05error2\xc2\x04\n" +
@@ -557,22 +567,23 @@ var file_redpanda_runtime_v1alpha1_input_proto_depIdxs = []int32{
 	12, // 3: redpanda.runtime.v1alpha1.BatchInputReadResponse.batch:type_name -> redpanda.runtime.v1alpha1.MessageBatch
 	11, // 4: redpanda.runtime.v1alpha1.BatchInputReadResponse.error:type_name -> redpanda.runtime.v1alpha1.Error
 	11, // 5: redpanda.runtime.v1alpha1.BatchInputAckRequest.error:type_name -> redpanda.runtime.v1alpha1.Error
-	11, // 6: redpanda.runtime.v1alpha1.BatchInputCloseResponse.error:type_name -> redpanda.runtime.v1alpha1.Error
-	0,  // 7: redpanda.runtime.v1alpha1.BatchInputService.Init:input_type -> redpanda.runtime.v1alpha1.BatchInputInitRequest
-	2,  // 8: redpanda.runtime.v1alpha1.BatchInputService.Connect:input_type -> redpanda.runtime.v1alpha1.BatchInputConnectRequest
-	4,  // 9: redpanda.runtime.v1alpha1.BatchInputService.ReadBatch:input_type -> redpanda.runtime.v1alpha1.BatchInputReadRequest
-	6,  // 10: redpanda.runtime.v1alpha1.BatchInputService.Ack:input_type -> redpanda.runtime.v1alpha1.BatchInputAckRequest
-	8,  // 11: redpanda.runtime.v1alpha1.BatchInputService.Close:input_type -> redpanda.runtime.v1alpha1.BatchInputCloseRequest
-	1,  // 12: redpanda.runtime.v1alpha1.BatchInputService.Init:output_type -> redpanda.runtime.v1alpha1.BatchInputInitResponse
-	3,  // 13: redpanda.runtime.v1alpha1.BatchInputService.Connect:output_type -> redpanda.runtime.v1alpha1.BatchInputConnectResponse
-	5,  // 14: redpanda.runtime.v1alpha1.BatchInputService.ReadBatch:output_type -> redpanda.runtime.v1alpha1.BatchInputReadResponse
-	7,  // 15: redpanda.runtime.v1alpha1.BatchInputService.Ack:output_type -> redpanda.runtime.v1alpha1.BatchInputAckResponse
-	9,  // 16: redpanda.runtime.v1alpha1.BatchInputService.Close:output_type -> redpanda.runtime.v1alpha1.BatchInputCloseResponse
-	12, // [12:17] is the sub-list for method output_type
-	7,  // [7:12] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	11, // 6: redpanda.runtime.v1alpha1.BatchInputAckResponse.error:type_name -> redpanda.runtime.v1alpha1.Error
+	11, // 7: redpanda.runtime.v1alpha1.BatchInputCloseResponse.error:type_name -> redpanda.runtime.v1alpha1.Error
+	0,  // 8: redpanda.runtime.v1alpha1.BatchInputService.Init:input_type -> redpanda.runtime.v1alpha1.BatchInputInitRequest
+	2,  // 9: redpanda.runtime.v1alpha1.BatchInputService.Connect:input_type -> redpanda.runtime.v1alpha1.BatchInputConnectRequest
+	4,  // 10: redpanda.runtime.v1alpha1.BatchInputService.ReadBatch:input_type -> redpanda.runtime.v1alpha1.BatchInputReadRequest
+	6,  // 11: redpanda.runtime.v1alpha1.BatchInputService.Ack:input_type -> redpanda.runtime.v1alpha1.BatchInputAckRequest
+	8,  // 12: redpanda.runtime.v1alpha1.BatchInputService.Close:input_type -> redpanda.runtime.v1alpha1.BatchInputCloseRequest
+	1,  // 13: redpanda.runtime.v1alpha1.BatchInputService.Init:output_type -> redpanda.runtime.v1alpha1.BatchInputInitResponse
+	3,  // 14: redpanda.runtime.v1alpha1.BatchInputService.Connect:output_type -> redpanda.runtime.v1alpha1.BatchInputConnectResponse
+	5,  // 15: redpanda.runtime.v1alpha1.BatchInputService.ReadBatch:output_type -> redpanda.runtime.v1alpha1.BatchInputReadResponse
+	7,  // 16: redpanda.runtime.v1alpha1.BatchInputService.Ack:output_type -> redpanda.runtime.v1alpha1.BatchInputAckResponse
+	9,  // 17: redpanda.runtime.v1alpha1.BatchInputService.Close:output_type -> redpanda.runtime.v1alpha1.BatchInputCloseResponse
+	13, // [13:18] is the sub-list for method output_type
+	8,  // [8:13] is the sub-list for method input_type
+	8,  // [8:8] is the sub-list for extension type_name
+	8,  // [8:8] is the sub-list for extension extendee
+	0,  // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_redpanda_runtime_v1alpha1_input_proto_init() }

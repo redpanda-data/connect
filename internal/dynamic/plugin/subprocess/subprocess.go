@@ -94,11 +94,9 @@ func (s *subprocess) Start() error {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(ctx, s.cmdArgs[0], s.cmdArgs[1:]...)
-	if s.env != nil {
-		cmd.Env = os.Environ() // Inherit current environment
-		for k, v := range s.env {
-			cmd.Env = append(s.cmd.Env, fmt.Sprintf("%s=%s", k, v))
-		}
+	cmd.Env = []string{}
+	for k, v := range s.env {
+		cmd.Env = append(s.cmd.Env, fmt.Sprintf("%s=%s", k, v))
 	}
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {

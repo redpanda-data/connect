@@ -372,9 +372,12 @@ func (*Value_ListValue) isValue_Kind() {}
 // An error in the context of a data pipeline.
 type Error struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// The error message.
+	// The error message. If non empty, then the error to be "valid" and
+	// if empty the error is ignored as if a success (due to proto3 empty
+	// semantics).
 	Message string `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`
 	// Additional error details for specific Redpanda Connect behavior.
+	// If one of these fields is set, then message must be non-empty.
 	//
 	// Types that are valid to be assigned to Detail:
 	//

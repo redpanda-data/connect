@@ -21,6 +21,19 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
+// MessageBatchToProto converts a service.MessageBatch into proto form.
+func MessageBatchToProto(batch service.MessageBatch) (*MessageBatch, error) {
+	out := new(MessageBatch)
+	for _, msg := range batch {
+		proto, err := MessageToProto(msg)
+		if err != nil {
+			return nil, err
+		}
+		out.Messages = append(out.Messages, proto)
+	}
+	return out, nil
+}
+
 // MessageToProto converts a service.Message into proto form.
 func MessageToProto(msg *service.Message) (*Message, error) {
 	out := &Message{}
@@ -110,6 +123,19 @@ func AnyToProto(a any) (*Value, error) {
 		return &Value{Kind: &Value_StructValue{out}}, nil
 	}
 	return nil, fmt.Errorf("unsupported type: %T", a)
+}
+
+// ProtoToMessageBatch converts a service.MessageBatch from proto form.
+func ProtoToMessageBatch(proto *MessageBatch) (service.MessageBatch, error) {
+	var batch service.MessageBatch
+	for _, msgProto := range proto.GetMessages() {
+		msg, err := ProtoToMessage(msgProto)
+		if err != nil {
+			return nil, err
+		}
+		batch = append(batch, msg)
+	}
+	return batch, nil
 }
 
 // ProtoToMessage converts a service.Message from proto form.

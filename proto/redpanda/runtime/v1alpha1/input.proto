@@ -115,7 +115,10 @@ message BatchInputAckRequest {
   // If auto_replay_nacks is enabled in the InitResponse, then this should never be present.
   Error error = 2;
 }
-message BatchInputAckResponse {}
+message BatchInputAckResponse {
+  // If present, then this ack/nack request failed.
+  Error error = 2;
+}
 
 message BatchInputCloseRequest {}
 message BatchInputCloseResponse {
