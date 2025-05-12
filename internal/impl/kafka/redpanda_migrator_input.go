@@ -1,12 +1,18 @@
 // Copyright 2024 Redpanda Data, Inc.
 //
-// Licensed as a Redpanda Enterprise file under the Redpanda Community
-// License (the "License"); you may not use this file except in compliance with
-// the License. You may obtain a copy of the License at
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-package enterprise
+package kafka
 
 import (
 	"context"
@@ -15,9 +21,6 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
-
-	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
-	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 const (
@@ -67,14 +70,14 @@ This input adds the following metadata fields to each message:
 ` + "```" + `
 `).
 		Fields(redpandaMigratorInputConfigFields()...).
-		LintRule(kafka.FranzConsumerFieldLintRules)
+		LintRule(FranzConsumerFieldLintRules)
 }
 
 func redpandaMigratorInputConfigFields() []*service.ConfigField {
 	return slices.Concat(
-		kafka.FranzConnectionFields(),
-		kafka.FranzConsumerFields(),
-		kafka.FranzReaderOrderedConfigFields(),
+		FranzConnectionFields(),
+		FranzConsumerFields(),
+		FranzReaderOrderedConfigFields(),
 		[]*service.ConfigField{
 			service.NewAutoRetryNacksToggleField(),
 
@@ -111,17 +114,13 @@ func redpandaMigratorInputConfigFields() []*service.ConfigField {
 func init() {
 	err := service.RegisterBatchInput("redpanda_migrator", redpandaMigratorInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
-			if err := license.CheckRunningEnterprise(mgr); err != nil {
-				return nil, err
-			}
-
-			tmpOpts, err := kafka.FranzConnectionOptsFromConfig(conf, mgr.Logger())
+			tmpOpts, err := FranzConnectionOptsFromConfig(conf, mgr.Logger())
 			if err != nil {
 				return nil, err
 			}
 			clientOpts := append([]kgo.Opt{}, tmpOpts...)
 
-			if tmpOpts, err = kafka.FranzConsumerOptsFromConfig(conf); err != nil {
+			if tmpOpts, err = FranzConsumerOptsFromConfig(conf); err != nil {
 				return nil, err
 			}
 			clientOpts = append(clientOpts, tmpOpts...)
@@ -131,7 +130,7 @@ func init() {
 				clientLabel = rmiResourceDefaultLabel
 			}
 
-			rdr, err := kafka.NewFranzReaderOrderedFromConfig(conf, mgr,
+			rdr, err := NewFranzReaderOrderedFromConfig(conf, mgr,
 				func() ([]kgo.Opt, error) {
 					return clientOpts, nil
 				})
@@ -153,7 +152,7 @@ func init() {
 //------------------------------------------------------------------------------
 
 type redpandaMigratorInput struct {
-	*kafka.FranzReaderOrdered
+	*FranzReaderOrdered
 
 	clientLabel string
 
@@ -165,7 +164,7 @@ func (rmi *redpandaMigratorInput) Connect(ctx context.Context) error {
 		return err
 	}
 
-	if err := kafka.FranzSharedClientSet(rmi.clientLabel, &kafka.FranzSharedClientInfo{
+	if err := FranzSharedClientSet(rmi.clientLabel, &FranzSharedClientInfo{
 		Client: rmi.Client,
 	}, rmi.mgr); err != nil {
 		rmi.mgr.Logger().Warnf("Failed to store client connection for sharing: %s", err)
@@ -202,7 +201,7 @@ func (rmi *redpandaMigratorInput) ReadBatch(ctx context.Context) (service.Messag
 }
 
 func (rmi *redpandaMigratorInput) Close(ctx context.Context) error {
-	_, _ = kafka.FranzSharedClientPop(rmi.clientLabel, rmi.mgr)
+	_, _ = FranzSharedClientPop(rmi.clientLabel, rmi.mgr)
 
 	return rmi.FranzReaderOrdered.Close(ctx)
 }

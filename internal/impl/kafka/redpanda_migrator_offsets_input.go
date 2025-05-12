@@ -1,12 +1,18 @@
 // Copyright 2024 Redpanda Data, Inc.
 //
-// Licensed as a Redpanda Enterprise file under the Redpanda Community
-// License (the "License"); you may not use this file except in compliance with
-// the License. You may obtain a copy of the License at
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-package enterprise
+package kafka
 
 import (
 	"context"
@@ -20,8 +26,6 @@ import (
 	"github.com/twmb/franz-go/pkg/kmsg"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
-
-	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
 )
 
 const (
@@ -65,7 +69,7 @@ This input adds the following metadata fields to each message:
 
 func redpandaMigratorOffsetsInputConfigFields() []*service.ConfigField {
 	return slices.Concat(
-		kafka.FranzConnectionFields(),
+		FranzConnectionFields(),
 		[]*service.ConfigField{
 			service.NewStringListField(rmoiFieldTopics).
 				Description(`
@@ -82,7 +86,7 @@ A list of topics to consume from. Multiple comma separated topics can be listed 
 				Default("").
 				Advanced(),
 		},
-		kafka.FranzReaderOrderedConfigFields(),
+		FranzReaderOrderedConfigFields(),
 		[]*service.ConfigField{
 			service.NewAutoRetryNacksToggleField(),
 		},
@@ -92,7 +96,7 @@ A list of topics to consume from. Multiple comma separated topics can be listed 
 func init() {
 	err := service.RegisterBatchInput("redpanda_migrator_offsets", redpandaMigratorOffsetsInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
-			clientOpts, err := kafka.FranzConnectionOptsFromConfig(conf, mgr.Logger())
+			clientOpts, err := FranzConnectionOptsFromConfig(conf, mgr.Logger())
 			if err != nil {
 				return nil, err
 			}
@@ -111,7 +115,7 @@ func init() {
 			if topicList, err := conf.FieldStringList(rmoiFieldTopics); err != nil {
 				return nil, err
 			} else {
-				i.topics, _, err = kafka.ParseTopics(topicList, -1, false)
+				i.topics, _, err = ParseTopics(topicList, -1, false)
 				if err != nil {
 					return nil, err
 				}
@@ -133,7 +137,7 @@ func init() {
 				}
 			}
 
-			i.FranzReaderOrdered, err = kafka.NewFranzReaderOrderedFromConfig(conf, mgr, func() ([]kgo.Opt, error) {
+			i.FranzReaderOrdered, err = NewFranzReaderOrderedFromConfig(conf, mgr, func() ([]kgo.Opt, error) {
 				// Consume messages from the `__consumer_offsets` topic and configure `start_from_oldest: true`
 				return append(clientOpts, kgo.ConsumeTopics("__consumer_offsets"), kgo.ConsumeResetOffset(kgo.NewOffset().AtStart())), nil
 			})
@@ -151,7 +155,7 @@ func init() {
 //------------------------------------------------------------------------------
 
 type redpandaMigratorOffsetsInput struct {
-	*kafka.FranzReaderOrdered
+	*FranzReaderOrdered
 
 	topicPatterns []*regexp.Regexp
 	topics        []string
