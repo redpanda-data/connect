@@ -469,6 +469,18 @@ func (w *ResourcesWrapper) AddProcessorYAML(fileBytes []byte) error {
 			attrString(span, "value", value)
 			msg.SetBytes([]byte(value))
 		} else {
+			for k, v := range request.Params.Arguments {
+				switch t := v.(type) {
+				case string:
+					attrString(span, k, t)
+				case []byte:
+					attrString(span, k, string(t))
+				case bool:
+					span.SetAttributes(attribute.Bool(k, t))
+				case float64:
+					span.SetAttributes(attribute.Float64(k, t))
+				}
+			}
 			msg.SetStructured(request.Params.Arguments)
 		}
 
@@ -595,6 +607,18 @@ func (w *ResourcesWrapper) AddOutputYAML(fileBytes []byte) error {
 				attrString(span, "contents", contents)
 				msg.SetBytes([]byte(contents))
 			} else {
+				for k, v := range mObj {
+					switch t := v.(type) {
+					case string:
+						attrString(span, k, t)
+					case []byte:
+						attrString(span, k, string(t))
+					case bool:
+						span.SetAttributes(attribute.Bool(k, t))
+					case float64:
+						span.SetAttributes(attribute.Float64(k, t))
+					}
+				}
 				msg.SetStructured(mObj)
 			}
 			spans = append(spans, span)
