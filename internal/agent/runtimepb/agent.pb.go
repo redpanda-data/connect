@@ -21,7 +21,7 @@
 package runtimepb
 
 import (
-	runtimepb "github.com/redpanda-data/connect/v4/internal/dynamic/plugin/runtimepb"
+	runtimepb "github.com/redpanda-data/connect/v4/internal/rpcplugin/runtimepb"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"

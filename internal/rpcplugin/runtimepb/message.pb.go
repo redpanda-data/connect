@@ -757,7 +757,7 @@ const file_redpanda_runtime_v1alpha1_message_proto_rawDesc = "" +
 	"\bmessages\x18\x01 \x03(\v2\".redpanda.runtime.v1alpha1.MessageR\bmessages*\x1b\n" +
 	"\tNullValue\x12\x0e\n" +
 	"\n" +
-	"NULL_VALUE\x10\x00BGZEgithub.com/redpanda-data/connect/v4/internal/dynamic/plugin/runtimepbb\x06proto3"
+	"NULL_VALUE\x10\x00BBZ@github.com/redpanda-data/connect/v4/internal/rpcplugin/runtimepbb\x06proto3"
 
 var (
 	file_redpanda_runtime_v1alpha1_message_proto_rawDescOnce sync.Once
