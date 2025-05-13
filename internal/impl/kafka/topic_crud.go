@@ -19,33 +19,38 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kerr"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
 )
 
-var (
-	errTopicAlreadyExists = errors.New("topic already exists")
-)
+type createTopicConfig struct {
+	srcTopic                  string
+	destTopic                 string
+	replicationFactorOverride bool
+	replicationFactor         int
+	isServerlessBroker        bool
+}
 
-func createTopic(ctx context.Context, srcTopic, destTopic string, replicationFactorOverride bool, replicationFactor int, inputClient *kgo.Client, outputClient *kgo.Client) error {
+func createTopic(ctx context.Context, logger *service.Logger, inputClient *kgo.Client, outputClient *kgo.Client, cfg createTopicConfig) error {
 	outputAdminClient := kadm.NewClient(outputClient)
 
-	if topics, err := outputAdminClient.ListTopics(ctx, srcTopic); err != nil {
-		return fmt.Errorf("failed to fetch topic %q from output broker: %s", srcTopic, err)
+	if topics, err := outputAdminClient.ListTopics(ctx, cfg.srcTopic); err != nil {
+		return fmt.Errorf("failed to fetch topic %q from output broker: %s", cfg.srcTopic, err)
 	} else {
-		if topics.Has(srcTopic) {
-			return errTopicAlreadyExists
+		if topics.Has(cfg.srcTopic) {
+			return kerr.TopicAlreadyExists
 		}
 	}
 
 	inputAdminClient := kadm.NewClient(inputClient)
 	var inputTopic kadm.TopicDetail
-	if topics, err := inputAdminClient.ListTopics(ctx, srcTopic); err != nil {
-		return fmt.Errorf("failed to fetch topic %q from source broker: %s", srcTopic, err)
+	if topics, err := inputAdminClient.ListTopics(ctx, cfg.srcTopic); err != nil {
+		return fmt.Errorf("failed to fetch topic %q from source broker: %s", cfg.srcTopic, err)
 	} else {
-		inputTopic = topics[srcTopic]
+		inputTopic = topics[cfg.srcTopic]
 	}
 
 	partitions := int32(len(inputTopic.Partitions))
@@ -53,8 +58,8 @@ func createTopic(ctx context.Context, srcTopic, destTopic string, replicationFac
 		partitions = -1
 	}
 	var rp int16
-	if replicationFactorOverride {
-		rp = int16(replicationFactor)
+	if cfg.replicationFactorOverride {
+		rp = int16(cfg.replicationFactor)
 	} else {
 		rp = int16(inputTopic.Partitions.NumReplicas())
 		if rp == 0 {
@@ -62,14 +67,14 @@ func createTopic(ctx context.Context, srcTopic, destTopic string, replicationFac
 		}
 	}
 
-	topicConfigs, err := inputAdminClient.DescribeTopicConfigs(ctx, srcTopic)
+	topicConfigs, err := inputAdminClient.DescribeTopicConfigs(ctx, cfg.srcTopic)
 	if err != nil {
-		return fmt.Errorf("failed to fetch configs for topic %q from source broker: %s", srcTopic, err)
+		return fmt.Errorf("failed to fetch configs for topic %q from source broker: %s", cfg.srcTopic, err)
 	}
 
-	rc, err := topicConfigs.On(srcTopic, nil)
+	rc, err := topicConfigs.On(cfg.srcTopic, nil)
 	if err != nil {
-		return fmt.Errorf("failed to fetch configs for topic %q from source broker: %s", srcTopic, err)
+		return fmt.Errorf("failed to fetch configs for topic %q from source broker: %s", cfg.srcTopic, err)
 	}
 
 	// Source: https://docs.redpanda.com/current/reference/properties/topic-properties/
@@ -89,6 +94,14 @@ func createTopic(ctx context.Context, srcTopic, destTopic string, replicationFac
 		"write.caching":                     {},
 		"redpanda.iceberg.mode":             {},
 	}
+	if cfg.isServerlessBroker {
+		allowedConfigs = map[string]struct{}{
+			"cleanup.policy":    {},
+			"retention.ms":      {},
+			"max.message.bytes": {},
+			"write.caching":     {},
+		}
+	}
 
 	destinationConfigs := make(map[string]*string)
 	for _, c := range rc.Configs {
@@ -97,9 +110,17 @@ func createTopic(ctx context.Context, srcTopic, destTopic string, replicationFac
 		}
 	}
 
-	if _, err := outputAdminClient.CreateTopic(ctx, partitions, rp, destinationConfigs, destTopic); err != nil {
+	if _, err := outputAdminClient.CreateTopic(ctx, partitions, rp, destinationConfigs, cfg.destTopic); err != nil {
+		if errors.Is(err, kerr.InvalidConfig) && !cfg.isServerlessBroker {
+			logger.Warnf("Invalid config detected while creating topic %q. Retrying with serverless config.", cfg.destTopic)
+			cfg.isServerlessBroker = true
+			return createTopic(ctx, logger, inputClient, outputClient, cfg)
+		}
+
 		if !errors.Is(err, kerr.TopicAlreadyExists) {
-			return fmt.Errorf("failed to create topic %q: %s", destTopic, err)
+			return fmt.Errorf("failed to create topic %q: %s", cfg.destTopic, err)
+		} else {
+			return err
 		}
 	}
 
