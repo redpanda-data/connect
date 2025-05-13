@@ -350,3 +350,184 @@ func TestHambaDecodeAvroUnions(t *testing.T) {
 		})
 	}
 }
+
+func TestHambaDecodeKafkaConnectTypes(t *testing.T) {
+	tCtx, done := context.WithTimeout(t.Context(), time.Second*10)
+	defer done()
+
+	rootSchema := `{
+    "type": "record",
+    "name": "Value",
+    "namespace": "com.redpanda.testing",
+    "fields": [
+        {
+            "name": "id",
+            "type": "int"
+        },
+        {
+            "name": "inserted_d",
+            "type": {
+                "type": "int",
+                "connect.version": 1,
+                "connect.name": "io.debezium.time.Date"
+            }
+        },
+        {
+            "name": "inserted_dt",
+            "type": [
+                "null",
+                {
+                    "type": "long",
+                    "connect.version": 1,
+                    "connect.name": "io.debezium.time.Timestamp"
+                }
+            ],
+            "default": null
+        },
+        {
+            "name": "inserted_dt2",
+            "type": [
+                "null",
+                {
+                    "type": "long",
+                    "connect.version": 1,
+                    "connect.name": "io.debezium.time.NanoTimestamp"
+                }
+            ],
+            "default": null
+        },
+        {
+            "name": "decvalue",
+            "type": [
+                "null",
+                {
+                    "type": "bytes",
+                    "scale": 2,
+                    "precision": 12,
+                    "connect.version": 1,
+                    "connect.parameters": {
+                        "scale": "2",
+                        "connect.decimal.precision": "12"
+                    },
+                    "connect.name": "org.apache.kafka.connect.data.Decimal",
+                    "logicalType": "decimal"
+                }
+            ],
+            "default": null
+        },
+        {
+            "name": "__op",
+            "type": [
+                "null",
+                "string"
+            ],
+            "default": null
+        },
+        {
+            "name": "__source_change_lsn",
+            "type": [
+                "null",
+                "string"
+            ],
+            "default": null
+        },
+        {
+            "name": "__source_commit_lsn",
+            "type": [
+                "null",
+                "string"
+            ],
+            "default": null
+        },
+        {
+            "name": "__source_ts_ms",
+            "type": [
+                "null",
+                "long"
+            ],
+            "default": null
+        }
+    ],
+		"connect.name": "com.redpanda.testing.Value"
+}`
+
+	urlStr := runSchemaRegistryServer(t, func(path string) ([]byte, error) {
+		switch path {
+		case "/subjects/root/versions/latest", "/schemas/ids/1":
+			return mustJBytes(t, map[string]any{
+				"id":         1,
+				"version":    10,
+				"schema":     rootSchema,
+				"schemaType": "AVRO",
+			}), nil
+		}
+		return nil, nil
+	})
+
+	subject, err := service.NewInterpolatedString("root")
+	require.NoError(t, err)
+
+	tests := []struct {
+		name   string
+		input  string
+		output string
+	}{
+		{
+			name: "all kafka connect types",
+			input: `{
+  "id": 1001,
+	"inserted_d": 14558,
+	"inserted_dt": 1257894000000,
+	"inserted_dt2": 1257894000000000000,
+	"decvalue": null,
+	"__op": null,
+	"__source_commit_lsn": null,
+	"__source_change_lsn": null,
+	"__source_ts_ms": null
+}`,
+			output: `{
+  "id": 1001,
+	"inserted_d": "2009-11-10T00:00:00Z",
+	"inserted_dt": "2009-11-10T23:00:00Z",
+	"inserted_dt2": "2009-11-10T23:00:00Z",
+	"decvalue": null,
+	"__op": null,
+	"__source_commit_lsn": null,
+	"__source_change_lsn": null,
+	"__source_ts_ms": null
+}`,
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subject, true, schemaStaleAfter, time.Minute, service.MockResources())
+			require.NoError(t, err)
+			cfg := decodingConfig{}
+			cfg.avro.useHamba = true
+			cfg.avro.rawUnions = true
+			cfg.avro.translateKafkaConnectTypes = true
+			decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, cfg, schemaStaleAfter, service.MockResources())
+			require.NoError(t, err)
+
+			t.Cleanup(func() {
+				_ = encoder.Close(tCtx)
+				_ = decoder.Close(tCtx)
+			})
+			batches, err := encoder.ProcessBatch(tCtx, service.MessageBatch{service.NewMessage([]byte(test.input))})
+			require.NoError(t, err)
+			require.Len(t, batches, 1)
+			require.Len(t, batches[0], 1)
+			require.NoError(t, batches[0][0].GetError())
+
+			msgs, err := decoder.Process(tCtx, batches[0][0])
+			require.NoError(t, err)
+			require.Len(t, msgs, 1)
+			require.NoError(t, msgs[0].GetError())
+			b, err := msgs[0].AsBytes()
+			require.NoError(t, err)
+			require.JSONEq(t, test.output, string(b))
+		})
+	}
+}

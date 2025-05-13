@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - Field `steal_grace_period` added to the `aws_kinesis` input. (@Jeffail)
 - New `redpanda` cache that stores key/value pairs in a compacted topic. (@rockwotj)
 - Field `max_yield_batch_bytes` added to all `redpanda` flavored inputs. (@Jeffail)
+- New `translate_kafka_connect_types` to `schema_registry_decode` to decode non-standard types emitted by debezium. (@rockwotj)
 
 ### Fixed
 

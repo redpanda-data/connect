@@ -111,10 +111,6 @@ Types that are currently translated:
 |timestamp
 |Timestamp with nanosecond precision
 
-|io.debezium.time.ZonedTime
-|timestamp
-|Time with timezone (ISO-8601 format)
-
 |io.debezium.time.ZonedTimestamp
 |timestamp
 |Timestamp with timezone (ISO-8601 format)

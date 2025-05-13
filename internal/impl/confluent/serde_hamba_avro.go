@@ -240,7 +240,7 @@ func (w *avroSchemaWalker) translateKafkaConnectValue(value any, schema avro.Pro
 		if err != nil {
 			return nil, fmt.Errorf("expected number for io.debezium.time.Date got: %T", value)
 		}
-		return time.Date(int(v), time.January, 0, 0, 0, 0, 0, nil), nil
+		return time.UnixMilli(0).AddDate(0, 0, int(v)), nil
 	case "io.debezium.time.Year":
 		v, err := bloblang.ValueAsInt64(value)
 		if err != nil {
