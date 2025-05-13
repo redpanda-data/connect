@@ -87,6 +87,9 @@ func RegisterInputPlugin(env *service.Environment, spec InputConfig) error {
 		cleanup = append(cleanup, conn.Close)
 		spec.Env["REDPANDA_CONNECT_PLUGIN_ADDRESS"] = socketPath
 		proc, err := subprocess.New(spec.Cmd, spec.Env, subprocess.WithLogger(res.Logger()))
+		if err != nil {
+			return nil, fmt.Errorf("invalid subprocess: %w", err)
+		}
 		if err := proc.Start(); err != nil {
 			return nil, fmt.Errorf("unable to start subprocess: %w", err)
 		}
@@ -121,6 +124,9 @@ func startInputPlugin(
 	cfgValue any,
 ) (autoRetryNacks bool, err error) {
 	if err := proc.Start(); err != nil {
+		if errors.Is(err, subprocess.ErrProcessAlreadyStarted) {
+			return false, nil
+		}
 		return false, fmt.Errorf("unable to restart plugin: %w", err)
 	}
 	value, err := runtimepb.AnyToProto(cfgValue)

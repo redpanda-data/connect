@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -28,7 +27,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-// InputConfig is the configuration for a plugin input.
+// ProcessorConfig is the configuration for a plugin processor.
 type ProcessorConfig struct {
 	// The name of the plugin
 	Name string
@@ -46,7 +45,6 @@ type processor struct {
 	cfgValue any
 	proc     subprocess.SubProcess
 	client   runtimepb.BatchProcessorServiceClient
-	mu       sync.Mutex
 }
 
 var _ service.BatchProcessor = (*processor)(nil)
@@ -89,6 +87,10 @@ func RegisterProcessorPlugin(env *service.Environment, spec ProcessorConfig) err
 		cleanup = append(cleanup, conn.Close)
 		spec.Env["REDPANDA_CONNECT_PLUGIN_ADDRESS"] = socketPath
 		proc, err := subprocess.New(spec.Cmd, spec.Env, subprocess.WithLogger(res.Logger()))
+		if err != nil {
+			err = fmt.Errorf("invalid subprocess: %w", err)
+			return nil, err
+		}
 		if err := proc.Start(); err != nil {
 			return nil, fmt.Errorf("unable to start subprocess: %w", err)
 		}
@@ -120,6 +122,9 @@ func startProcessorPlugin(
 	cfgValue any,
 ) (err error) {
 	if err := proc.Start(); err != nil {
+		if errors.Is(err, subprocess.ErrProcessAlreadyStarted) {
+			return nil
+		}
 		return fmt.Errorf("unable to restart plugin: %w", err)
 	}
 	value, err := runtimepb.AnyToProto(cfgValue)
@@ -160,14 +165,11 @@ func (p *processor) ProcessBatch(ctx context.Context, batch service.MessageBatch
 				return nil, fmt.Errorf("unable to read from plugin: %w", err)
 			}
 			// Otherwise we assume the process might have crashed, so attempt to restart it
-			p.mu.Lock()
-			if !p.proc.IsRunning() {
-				err = startProcessorPlugin(ctx, p.proc, p.client, p.cfgValue)
-			}
-			p.mu.Unlock()
+			err = startProcessorPlugin(ctx, p.proc, p.client, p.cfgValue)
 			if err != nil {
 				return nil, fmt.Errorf("unable to restart plugin: %w", err)
 			}
+			continue
 		}
 		break
 	}

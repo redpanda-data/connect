@@ -37,6 +37,7 @@ func (f FieldType) Validate() error {
 	return fmt.Errorf("invalid field kind: %q", f)
 }
 
+// Field types.
 const (
 	FieldTypeString  FieldType = "string"
 	FieldTypeInt     FieldType = "int"
@@ -57,6 +58,7 @@ func (f FieldKind) Validate() error {
 	return fmt.Errorf("invalid field kind: %q", f)
 }
 
+// Field kinds.
 const (
 	FieldKindScalar FieldKind = "scalar"
 	FieldKindMap    FieldKind = "map"
@@ -164,22 +166,23 @@ func (c *FieldConfig) Validate() error {
 	return nil
 }
 
-// PluginType describes the type of plugin.
-type PluginType string
+// ComponentType describes the type of plugin.
+type ComponentType string
 
 // Validate checks that the plugin type is valid.
-func (p PluginType) Validate() error {
+func (p ComponentType) Validate() error {
 	switch p {
-	case PluginTypeInput, PluginTypeProcessor, PluginTypeOutput:
+	case ComponentTypeInput, ComponentTypeProcessor, ComponentTypeOutput:
 		return nil
 	}
 	return fmt.Errorf("invalid plugin type: %q", p)
 }
 
+// Component types.
 const (
-	PluginTypeInput     PluginType = "input"
-	PluginTypeProcessor PluginType = "processor"
-	PluginTypeOutput    PluginType = "output"
+	ComponentTypeInput     ComponentType = "input"
+	ComponentTypeProcessor ComponentType = "processor"
+	ComponentTypeOutput    ComponentType = "output"
 )
 
 // Config describes a dynamic plugin over gRPC.
@@ -189,7 +192,7 @@ type Config struct {
 	Description string `yaml:"description"`
 	// The command to run for the plugin.
 	Cmd    []string      `yaml:"command"`
-	Type   PluginType    `yaml:"type"`
+	Type   ComponentType `yaml:"type"`
 	Fields []FieldConfig `yaml:"fields"`
 }
 
@@ -230,6 +233,10 @@ func (c *Config) toSpec() (*service.ConfigSpec, error) {
 	return spec, nil
 }
 
+// DiscoverAndRegisterPlugins discovers and registers plugins from the given paths.
+//
+// Paths can be either absolute paths or globs. The function will read the manifest files
+// and then register the plugins with the given environment.
 func DiscoverAndRegisterPlugins(fs fs.FS, env *service.Environment, paths []string) error {
 	paths, err := service.Globs(fs, paths...)
 	if err != nil {
@@ -252,21 +259,21 @@ func DiscoverAndRegisterPlugins(fs fs.FS, env *service.Environment, paths []stri
 			return err
 		}
 		switch cfg.Type {
-		case PluginTypeInput:
+		case ComponentTypeInput:
 			err = RegisterInputPlugin(env, InputConfig{
 				Name: cfg.Name,
 				Cmd:  cfg.Cmd,
 				Env:  environMap(),
 				Spec: spec,
 			})
-		case PluginTypeOutput:
+		case ComponentTypeOutput:
 			err = RegisterOutputPlugin(env, OutputConfig{
 				Name: cfg.Name,
 				Cmd:  cfg.Cmd,
 				Env:  environMap(),
 				Spec: spec,
 			})
-		case PluginTypeProcessor:
+		case ComponentTypeProcessor:
 			err = RegisterProcessorPlugin(env, ProcessorConfig{
 				Name: cfg.Name,
 				Cmd:  cfg.Cmd,
