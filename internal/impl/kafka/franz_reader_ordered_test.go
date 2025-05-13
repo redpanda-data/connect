@@ -36,18 +36,18 @@ func TestPartitionCacheOrdering(t *testing.T) {
 
 	go func() {
 		for bid := 0; bid < batches; bid++ {
-			var bs service.MessageBatch
-			var rs []*kgo.Record
+			var bwr batchWithRecords
+
 			for i := 0; i < batchSize; i++ {
 				mid := int64((bid * batchSize) + i)
-				bs = append(bs, service.NewMessage(strconv.AppendInt(nil, mid, 10)))
-				rs = append(rs, &kgo.Record{Offset: mid})
+				bwr.b = append(bwr.b, &messageWithRecord{
+					m:    service.NewMessage(strconv.AppendInt(nil, mid, 10)),
+					r:    &kgo.Record{Offset: mid},
+					size: 1,
+				})
+				bwr.size++
 			}
-			require.False(t, pCache.push(uint64(batches*10), &batchWithRecords{
-				b:    bs,
-				r:    rs,
-				size: 1,
-			}))
+			require.False(t, pCache.push(uint64(batches*10), uint64(batchSize), &bwr))
 		}
 	}()
 
@@ -120,4 +120,90 @@ func TestPartitionCacheOrdering(t *testing.T) {
 			return
 		}
 	}
+}
+
+func TestPartitionCacheBatching(t *testing.T) {
+	pCache := newPartitionCache(func(r *kgo.Record) {})
+	bufSize, batchSize := uint64(1_000_000), uint64(10)
+
+	var i int64
+	testBatchIn := func(msgs ...string) *batchWithRecords {
+		b := &batchWithRecords{}
+		for _, m := range msgs {
+			b.b = append(b.b, &messageWithRecord{
+				m:    service.NewMessage([]byte(m)),
+				r:    &kgo.Record{Offset: i},
+				size: uint64(len(m)),
+			})
+			b.size += uint64(len(m))
+			i++
+		}
+		return b
+	}
+
+	popOutStrs := func(pCache *partitionCache) (outStrs []string) {
+		tmp := pCache.pop()
+		if tmp == nil {
+			return
+		}
+
+		tmp.onAck()
+		for _, m := range tmp.batch {
+			outBytes, err := m.AsBytes()
+			require.NoError(t, err)
+
+			outStrs = append(outStrs, string(outBytes))
+		}
+		return
+	}
+
+	// Ensure big batches are broken down
+	assert.False(t, pCache.push(bufSize, batchSize, testBatchIn(
+		"aaaa",
+		"bbbb",
+		"cccc",
+		"dd",
+		"ee",
+		"ffff",
+	)))
+
+	assert.Equal(t, []string{"aaaa", "bbbb"}, popOutStrs(pCache))
+
+	assert.Equal(t, []string{"cccc", "dd", "ee"}, popOutStrs(pCache))
+
+	assert.Equal(t, []string{"ffff"}, popOutStrs(pCache))
+
+	assert.Equal(t, []string(nil), popOutStrs(pCache))
+
+	// Ensure small batches get messages appended to them
+	assert.False(t, pCache.push(bufSize, batchSize, testBatchIn(
+		"aaaa",
+		"bbbb",
+	)))
+
+	assert.False(t, pCache.push(bufSize, batchSize, testBatchIn(
+		"cc",
+		"dddd",
+		"eeee",
+		"ffff",
+	)))
+
+	assert.False(t, pCache.push(bufSize, batchSize, testBatchIn(
+		"gg",
+		"hh",
+	)))
+
+	assert.False(t, pCache.push(bufSize, batchSize, testBatchIn(
+		"iiiiiiii",
+	)))
+
+	assert.Equal(t, []string{"aaaa", "bbbb", "cc"}, popOutStrs(pCache))
+
+	assert.Equal(t, []string{"dddd", "eeee"}, popOutStrs(pCache))
+
+	assert.Equal(t, []string{"ffff", "gg", "hh"}, popOutStrs(pCache))
+
+	assert.Equal(t, []string{"iiiiiiii"}, popOutStrs(pCache))
+
+	assert.Equal(t, []string(nil), popOutStrs(pCache))
 }
