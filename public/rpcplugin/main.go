@@ -26,6 +26,7 @@ package rpcplugin
 
 import (
 	"context"
+	"encoding/json"
 	"net"
 	"os"
 	"os/signal"
@@ -34,7 +35,6 @@ import (
 	"sync/atomic"
 	"syscall"
 
-	"github.com/Jeffail/gabs/v2"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/rpcplugin/runtimepb"
 	"github.com/siddontang/go/log"
@@ -42,12 +42,12 @@ import (
 )
 
 // ProcessorConstructor is the factory function to create a new batch processor.
-type ProcessorConstructor func(config *gabs.Container) (processor service.BatchProcessor, err error)
+type ProcessorConstructor[T any] func(config T) (processor service.BatchProcessor, err error)
 
 type processor struct {
 	runtimepb.UnimplementedBatchProcessorServiceServer
 
-	ctor      ProcessorConstructor
+	ctor      ProcessorConstructor[any]
 	component service.BatchProcessor
 }
 
@@ -60,7 +60,7 @@ func (p *processor) Init(ctx context.Context, req *runtimepb.BatchProcessorInitR
 	if err != nil {
 		return &runtimepb.BatchProcessorInitResponse{Error: runtimepb.ErrorToProto(err)}, nil
 	}
-	component, err := p.ctor(gabs.Wrap(config))
+	component, err := p.ctor(config)
 	if err != nil {
 		return &runtimepb.BatchProcessorInitResponse{Error: runtimepb.ErrorToProto(err)}, nil
 	}
@@ -102,19 +102,31 @@ func (p *processor) Close(ctx context.Context, req *runtimepb.BatchProcessorClos
 }
 
 // ProcessorMain should be called in your main function to initial the RPC plugin service and process messages.
-func ProcessorMain(ctor ProcessorConstructor) {
+// The configuration object given to the constructor is strongly typed, and deserialized using encoding/json rules.
+func ProcessorMain[T any](ctor ProcessorConstructor[T]) {
+	GenericProcessorMain(func(config any) (service.BatchProcessor, error) {
+		typed, err := typedFromAny[T](config)
+		if err != nil {
+			return nil, err
+		}
+		return ctor(typed)
+	})
+}
+
+// GenericProcessorMain is the same as ProcessorMain except that it does not give a strongly typed configuration object
+func GenericProcessorMain(ctor ProcessorConstructor[any]) {
 	runMain(func(s *grpc.Server) {
 		runtimepb.RegisterBatchProcessorServiceServer(s, &processor{ctor: ctor})
 	})
 }
 
 // OutputConstructor is the factory function to create a new batch output.
-type OutputConstructor func(config *gabs.Container) (output service.BatchOutput, maxInFlight int, batchPolicy service.BatchPolicy, err error)
+type OutputConstructor[T any] func(config T) (output service.BatchOutput, maxInFlight int, batchPolicy service.BatchPolicy, err error)
 
 type output struct {
 	runtimepb.UnimplementedBatchOutputServiceServer
 
-	ctor      OutputConstructor
+	ctor      OutputConstructor[any]
 	component service.BatchOutput
 }
 
@@ -127,7 +139,7 @@ func (o *output) Init(ctx context.Context, req *runtimepb.BatchOutputInitRequest
 	if err != nil {
 		return &runtimepb.BatchOutputInitResponse{Error: runtimepb.ErrorToProto(err)}, nil
 	}
-	component, maxInFlight, batchPolicy, err := o.ctor(gabs.Wrap(config))
+	component, maxInFlight, batchPolicy, err := o.ctor(config)
 	if err != nil {
 		return &runtimepb.BatchOutputInitResponse{Error: runtimepb.ErrorToProto(err)}, nil
 	}
@@ -176,19 +188,31 @@ func (o *output) Close(ctx context.Context, req *runtimepb.BatchOutputCloseReque
 }
 
 // OutputMain should be called in your main function to initial the RPC plugin service and process messages.
-func OutputMain(ctor OutputConstructor) {
+// The configuration object given to the constructor is strongly typed, and deserialized using encoding/json rules.
+func OutputMain[T any](ctor OutputConstructor[T]) {
+	GenericOutputMain(func(config any) (service.BatchOutput, int, service.BatchPolicy, error) {
+		typed, err := typedFromAny[T](config)
+		if err != nil {
+			return nil, 0, service.BatchPolicy{}, err
+		}
+		return ctor(typed)
+	})
+}
+
+// GenericOutputMain is the same as OutputMain except that it does not give a strongly typed configuration object
+func GenericOutputMain(ctor OutputConstructor[any]) {
 	runMain(func(s *grpc.Server) {
 		runtimepb.RegisterBatchOutputServiceServer(s, &output{ctor: ctor})
 	})
 }
 
 // InputConstructor is the factory function to create a new batch input.
-type InputConstructor func(config *gabs.Container) (output service.BatchInput, autoRetryNacks bool, err error)
+type InputConstructor[T any] func(config T) (output service.BatchInput, autoRetryNacks bool, err error)
 
 type input struct {
 	runtimepb.UnimplementedBatchInputServiceServer
 
-	ctor             InputConstructor
+	ctor             InputConstructor[any]
 	component        service.BatchInput
 	acks             sync.Map
 	batchIDGenerator atomic.Uint64
@@ -203,7 +227,7 @@ func (i *input) Init(ctx context.Context, req *runtimepb.BatchInputInitRequest) 
 	if err != nil {
 		return &runtimepb.BatchInputInitResponse{Error: runtimepb.ErrorToProto(err)}, nil
 	}
-	component, autoRetryNacks, err := i.ctor(gabs.Wrap(config))
+	component, autoRetryNacks, err := i.ctor(config)
 	if err != nil {
 		return &runtimepb.BatchInputInitResponse{Error: runtimepb.ErrorToProto(err)}, nil
 	}
@@ -260,10 +284,33 @@ func (i *input) ReadBatch(ctx context.Context, req *runtimepb.BatchInputReadRequ
 }
 
 // InputMain should be called in your main function to initial the RPC plugin service and process messages.
-func InputMain(ctor InputConstructor) {
+// The configuration object given to the constructor is strongly typed, and deserialized using encoding/json rules.
+func InputMain[T any](ctor InputConstructor[T]) {
+	GenericInputMain(func(config any) (service.BatchInput, bool, error) {
+		typed, err := typedFromAny[T](config)
+		if err != nil {
+			return nil, false, err
+		}
+		return ctor(typed)
+	})
+}
+
+// GenericInputMain is the same as InputMain except that it does not give a strongly typed configuration object
+func GenericInputMain(ctor InputConstructor[any]) {
 	runMain(func(s *grpc.Server) {
 		runtimepb.RegisterBatchInputServiceServer(s, &input{ctor: ctor})
 	})
+}
+
+func typedFromAny[T any](v any) (result T, err error) {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return result, err
+	}
+	if err := json.Unmarshal(b, &result); err != nil {
+		return result, err
+	}
+	return result, nil
 }
 
 func runMain(register func(*grpc.Server)) {
