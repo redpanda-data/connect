@@ -37,7 +37,7 @@ const (
 	kroFieldCommitPeriod          = "commit_period"
 	kroFieldPartitionBuffer       = "partition_buffer_bytes"
 	kroFieldTopicLagRefreshPeriod = "topic_lag_refresh_period"
-	kroFieldBatchMaxSize          = "max_yield_batch_size"
+	kroFieldBatchMaxSize          = "max_yield_batch_bytes"
 )
 
 // FranzReaderOrderedConfigFields returns config fields for customising the
