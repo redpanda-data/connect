@@ -27,7 +27,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-// InputConfig is the configuration for a plugin input.
+// OutputConfig is the configuration for a plugin output.
 type OutputConfig struct {
 	// The name of the plugin
 	Name string
@@ -87,6 +87,10 @@ func RegisterOutputPlugin(env *service.Environment, spec OutputConfig) error {
 		cleanup = append(cleanup, conn.Close)
 		spec.Env["REDPANDA_CONNECT_PLUGIN_ADDRESS"] = socketPath
 		proc, err := subprocess.New(spec.Cmd, spec.Env, subprocess.WithLogger(res.Logger()))
+		if err != nil {
+			err = fmt.Errorf("invalid subprocess: %w", err)
+			return nil, service.BatchPolicy{}, 0, err
+		}
 		if err := proc.Start(); err != nil {
 			err = fmt.Errorf("unable to start subprocess: %w", err)
 			return nil, service.BatchPolicy{}, 0, err
@@ -120,6 +124,9 @@ func startOutputPlugin(
 	cfgValue any,
 ) (maxInFlight int, batchPolicy service.BatchPolicy, err error) {
 	if err := proc.Start(); err != nil {
+		if errors.Is(err, subprocess.ErrProcessAlreadyStarted) {
+			return 0, service.BatchPolicy{}, nil
+		}
 		return 0, service.BatchPolicy{}, fmt.Errorf("unable to restart plugin: %w", err)
 	}
 	value, err := runtimepb.AnyToProto(cfgValue)

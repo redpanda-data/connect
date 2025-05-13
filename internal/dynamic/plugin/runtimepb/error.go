@@ -21,6 +21,7 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 )
 
+// ProtoToError converts a protobuf error to a Go error.
 func ProtoToError(err *Error) error {
 	if err == nil {
 		return nil
@@ -40,6 +41,7 @@ func ProtoToError(err *Error) error {
 	return errors.New(msg)
 }
 
+// ErrorToProto converts a Go error to a protobuf error.
 func ErrorToProto(err error) *Error {
 	if err == nil {
 		return nil
