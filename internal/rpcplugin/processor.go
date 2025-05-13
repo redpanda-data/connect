@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package plugin
+package rpcplugin
 
 import (
 	"context"
@@ -21,8 +21,8 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"github.com/redpanda-data/connect/v4/internal/dynamic/plugin/runtimepb"
-	"github.com/redpanda-data/connect/v4/internal/dynamic/plugin/subprocess"
+	"github.com/redpanda-data/connect/v4/internal/rpcplugin/runtimepb"
+	"github.com/redpanda-data/connect/v4/internal/rpcplugin/subprocess"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )

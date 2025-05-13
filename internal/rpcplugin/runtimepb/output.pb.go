@@ -500,7 +500,7 @@ const file_redpanda_runtime_v1alpha1_output_proto_rawDesc = "" +
 	"\x04Init\x121.redpanda.runtime.v1alpha1.BatchOutputInitRequest\x1a2.redpanda.runtime.v1alpha1.BatchOutputInitResponse\"\x00\x12x\n" +
 	"\aConnect\x124.redpanda.runtime.v1alpha1.BatchOutputConnectRequest\x1a5.redpanda.runtime.v1alpha1.BatchOutputConnectResponse\"\x00\x12o\n" +
 	"\x04Send\x121.redpanda.runtime.v1alpha1.BatchOutputSendRequest\x1a2.redpanda.runtime.v1alpha1.BatchOutputSendResponse\"\x00\x12r\n" +
-	"\x05Close\x122.redpanda.runtime.v1alpha1.BatchOutputCloseRequest\x1a3.redpanda.runtime.v1alpha1.BatchOutputCloseResponse\"\x00BGZEgithub.com/redpanda-data/connect/v4/internal/dynamic/plugin/runtimepbb\x06proto3"
+	"\x05Close\x122.redpanda.runtime.v1alpha1.BatchOutputCloseRequest\x1a3.redpanda.runtime.v1alpha1.BatchOutputCloseResponse\"\x00BBZ@github.com/redpanda-data/connect/v4/internal/rpcplugin/runtimepbb\x06proto3"
 
 var (
 	file_redpanda_runtime_v1alpha1_output_proto_rawDescOnce sync.Once

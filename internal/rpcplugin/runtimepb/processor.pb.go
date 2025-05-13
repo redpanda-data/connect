@@ -326,7 +326,7 @@ const file_redpanda_runtime_v1alpha1_processor_proto_rawDesc = "" +
 	"\x15BatchProcessorService\x12u\n" +
 	"\x04Init\x124.redpanda.runtime.v1alpha1.BatchProcessorInitRequest\x1a5.redpanda.runtime.v1alpha1.BatchProcessorInitResponse\"\x00\x12\x8d\x01\n" +
 	"\fProcessBatch\x12<.redpanda.runtime.v1alpha1.BatchProcessorProcessBatchRequest\x1a=.redpanda.runtime.v1alpha1.BatchProcessorProcessBatchResponse\"\x00\x12x\n" +
-	"\x05Close\x125.redpanda.runtime.v1alpha1.BatchProcessorCloseRequest\x1a6.redpanda.runtime.v1alpha1.BatchProcessorCloseResponse\"\x00BGZEgithub.com/redpanda-data/connect/v4/internal/dynamic/plugin/runtimepbb\x06proto3"
+	"\x05Close\x125.redpanda.runtime.v1alpha1.BatchProcessorCloseRequest\x1a6.redpanda.runtime.v1alpha1.BatchProcessorCloseResponse\"\x00BBZ@github.com/redpanda-data/connect/v4/internal/rpcplugin/runtimepbb\x06proto3"
 
 var (
 	file_redpanda_runtime_v1alpha1_processor_proto_rawDescOnce sync.Once

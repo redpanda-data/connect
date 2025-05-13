@@ -19,9 +19,9 @@ import (
 	"github.com/rs/xid"
 	"github.com/urfave/cli/v2"
 
-	"github.com/redpanda-data/connect/v4/internal/dynamic/plugin"
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka/enterprise"
 	"github.com/redpanda-data/connect/v4/internal/license"
+	"github.com/redpanda-data/connect/v4/internal/rpcplugin"
 	"github.com/redpanda-data/connect/v4/internal/telemetry"
 )
 
@@ -130,7 +130,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 				}
 
 				rpcPlugins := c.StringSlice("rpc-plugins")
-				err := plugin.DiscoverAndRegisterPlugins(service.OSFS(), service.GlobalEnvironment(), rpcPlugins)
+				err := rpcplugin.DiscoverAndRegisterPlugins(service.OSFS(), service.GlobalEnvironment(), rpcPlugins)
 				if err != nil {
 					return err
 				}

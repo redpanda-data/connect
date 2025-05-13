@@ -25,7 +25,7 @@ import (
 	"google.golang.org/grpc"
 
 	agentruntimepb "github.com/redpanda-data/connect/v4/internal/agent/runtimepb"
-	"github.com/redpanda-data/connect/v4/internal/dynamic/plugin/runtimepb"
+	"github.com/redpanda-data/connect/v4/internal/rpcplugin/runtimepb"
 	"github.com/redpanda-data/connect/v4/internal/tracing"
 )
 
