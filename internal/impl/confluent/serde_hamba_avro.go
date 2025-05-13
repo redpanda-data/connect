@@ -17,6 +17,7 @@ package confluent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"strings"
@@ -25,6 +26,7 @@ import (
 	franz_sr "github.com/twmb/franz-go/pkg/sr"
 
 	"github.com/hamba/avro/v2"
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
@@ -84,6 +86,7 @@ func (s *schemaRegistryDecoder) getHambaAvroDecoder(ctx context.Context, schema 
 		}
 		var w avroSchemaWalker
 		w.unnestUnions = s.cfg.avro.rawUnions
+		w.translateKafkaConnectTypes = s.cfg.avro.translateKafkaConnectTypes
 		if native, err = w.walk(native, codec); err != nil {
 			return fmt.Errorf("unable to transform avro data into expected format: %w", err)
 		}
@@ -95,10 +98,21 @@ func (s *schemaRegistryDecoder) getHambaAvroDecoder(ctx context.Context, schema 
 }
 
 type avroSchemaWalker struct {
-	unnestUnions bool
+	unnestUnions               bool
+	translateKafkaConnectTypes bool
 }
 
+var errUnknownKafkaConnectType = errors.New("unknown kafka connect type")
+
 func (w *avroSchemaWalker) walk(root any, schema avro.Schema) (any, error) {
+	if w.translateKafkaConnectTypes {
+		if s, ok := schema.(avro.PropertySchema); ok {
+			v, err := w.translateKafkaConnectValue(root, s)
+			if !errors.Is(err, errUnknownKafkaConnectType) {
+				return v, err
+			}
+		}
+	}
 	switch s := schema.(type) {
 	case *avro.RecordSchema:
 		v, ok := root.(map[string]any)
@@ -216,4 +230,48 @@ func (w *avroSchemaWalker) walkSlice(slice []any, schema *avro.ArraySchema) ([]a
 		}
 	}
 	return slice, nil
+}
+
+func (w *avroSchemaWalker) translateKafkaConnectValue(value any, schema avro.PropertySchema) (any, error) {
+	name := schema.Prop("connect.name")
+	switch name {
+	case "io.debezium.time.Date":
+		v, err := bloblang.ValueAsInt64(value)
+		if err != nil {
+			return nil, fmt.Errorf("expected number for io.debezium.time.Date got: %T", value)
+		}
+		return time.UnixMilli(0).AddDate(0, 0, int(v)), nil
+	case "io.debezium.time.Year":
+		v, err := bloblang.ValueAsInt64(value)
+		if err != nil {
+			return nil, fmt.Errorf("expected number for io.debezium.time.Date got: %T", value)
+		}
+		return time.UnixMilli(0).AddDate(int(v), 0, 0), nil
+	case "io.debezium.time.Timestamp", "io.debezium.time.Time":
+		v, err := bloblang.ValueAsInt64(value)
+		if err != nil {
+			return nil, fmt.Errorf("expected number for %s got: %T", name, value)
+		}
+		return time.UnixMilli(v), nil
+	case "io.debezium.time.MicroTimestamp", "io.debezium.time.MicroTime":
+		v, err := bloblang.ValueAsInt64(value)
+		if err != nil {
+			return nil, fmt.Errorf("expected number for %s got: %T", name, value)
+		}
+		return time.UnixMilli(0).Add(time.Duration(v) * time.Microsecond), nil
+	case "io.debezium.time.NanoTimestamp", "io.debezium.time.NanoTime":
+		v, err := bloblang.ValueAsInt64(value)
+		if err != nil {
+			return nil, fmt.Errorf("expected number for %s got: %T", name, value)
+		}
+		return time.UnixMilli(0).Add(time.Duration(v) * time.Nanosecond), nil
+	case "io.debezium.time.ZonedTimestamp":
+		v := bloblang.ValueToString(value)
+		t, err := time.Parse(time.RFC3339Nano, v)
+		if err != nil {
+			return nil, fmt.Errorf("expected valid ISO formatted timestamp for io.debezium.time.ZonedTimestamp got: %q", v)
+		}
+		return t, nil
+	}
+	return nil, errUnknownKafkaConnectType
 }

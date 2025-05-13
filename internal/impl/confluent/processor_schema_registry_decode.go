@@ -87,6 +87,53 @@ When raw_unions is set to true then the above union schema is decoded as the fol
 - a `+"`Foo` instance as `{...}`, where `{...}` indicates the JSON encoding of a `Foo`"+` instance.
 `).Optional(),
 				service.NewBoolField("preserve_logical_types").Description(`Whether logical types should be preserved or transformed back into their primitive type. By default, decimals are decoded as raw bytes and timestamps are decoded as plain integers. Setting this field to true keeps decimal types as numbers in bloblang and timestamps as time values.`).Default(false),
+				service.NewBoolField("translate_kafka_connect_types").Description(`Only valid if preserve_logical_types is true. This decodes various Kafka Connect types into their bloblang equivalents when not representable by standard logical types according to the Avro standard.
+
+Types that are currently translated:
+
+.Debezium Custom Temporal Types
+|===
+|Type Name |Bloblang Type |Description
+
+|io.debezium.time.Date
+|timestamp
+|Date without time (days since epoch)
+
+|io.debezium.time.Timestamp
+|timestamp
+|Timestamp without timezone (milliseconds since epoch)
+
+|io.debezium.time.MicroTimestamp
+|timestamp
+|Timestamp with microsecond precision
+
+|io.debezium.time.NanoTimestamp
+|timestamp
+|Timestamp with nanosecond precision
+
+|io.debezium.time.ZonedTimestamp
+|timestamp
+|Timestamp with timezone (ISO-8601 format)
+
+|io.debezium.time.Year
+|timestamp at January 1st at 00:00:00
+|Year value
+
+|io.debezium.time.Time
+|timestamp at the unix epoch
+|Time without date (milliseconds past midnight)
+
+|io.debezium.time.MicroTime
+|timestamp at the unix epoch
+|Time with microsecond precision
+
+|io.debezium.time.NanoTime
+|timestamp at the unix epoch
+|Time with nanosecond precision
+
+|===
+
+`).Default(false),
 				service.NewBloblangField("mapping").Description(`A custom mapping to apply to Avro schemas JSON representation. This is useful to transform custom types emitted by other tools into standard avro.`).
 					Optional().
 					Advanced().Example(`
@@ -134,9 +181,10 @@ func init() {
 
 type decodingConfig struct {
 	avro struct {
-		useHamba  bool
-		rawUnions bool
-		mapping   *bloblang.Executor
+		useHamba                   bool
+		rawUnions                  bool
+		translateKafkaConnectTypes bool
+		mapping                    *bloblang.Executor
 	}
 }
 
@@ -173,6 +221,10 @@ func newSchemaRegistryDecoderFromConfig(conf *service.ParsedConfig, mgr *service
 	}
 
 	cfg.avro.useHamba, err = conf.FieldBool("avro", "preserve_logical_types")
+	if err != nil {
+		return nil, err
+	}
+	cfg.avro.translateKafkaConnectTypes, err = conf.FieldBool("avro", "translate_kafka_connect_types")
 	if err != nil {
 		return nil, err
 	}
