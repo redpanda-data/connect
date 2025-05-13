@@ -94,7 +94,7 @@ func (p *processor) ProcessBatch(ctx context.Context, req *runtimepb.BatchProces
 
 // Close implements runtimepb.BatchProcessorServiceServer.
 func (p *processor) Close(ctx context.Context, req *runtimepb.BatchProcessorCloseRequest) (*runtimepb.BatchProcessorCloseResponse, error) {
-	if p.component != nil {
+	if p.component == nil {
 		return &runtimepb.BatchProcessorCloseResponse{Error: nil}, nil
 	}
 	err := p.component.Close(ctx)

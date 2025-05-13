@@ -90,14 +90,8 @@ func RegisterInputPlugin(env *service.Environment, spec InputConfig) error {
 		if err != nil {
 			return nil, fmt.Errorf("invalid subprocess: %w", err)
 		}
-		if err := proc.Start(); err != nil {
-			return nil, fmt.Errorf("unable to start subprocess: %w", err)
-		}
 		ctx, cancel := context.WithTimeout(context.Background(), maxStartupTime)
 		defer cancel()
-		cleanup = append(cleanup, func() error {
-			return proc.Close(ctx)
-		})
 		client := runtimepb.NewBatchInputServiceClient(conn)
 		autoRetryNacks, err := startInputPlugin(ctx, proc, client, cfgValue)
 		if err != nil {
@@ -131,6 +125,7 @@ func startInputPlugin(
 	}
 	value, err := runtimepb.AnyToProto(cfgValue)
 	if err != nil {
+		_ = proc.Close(ctx)
 		return false, fmt.Errorf("unable to convert config to proto: %w", err)
 	}
 	autoRetryNacks, err = backoff.RetryWithData(func() (bool, error) {
@@ -149,6 +144,7 @@ func startInputPlugin(
 		return resp.AutoReplayNacks, nil
 	}, backoff.NewExponentialBackOff(backoff.WithMaxElapsedTime(maxStartupTime)))
 	if err != nil {
+		_ = proc.Close(ctx)
 		return false, fmt.Errorf("unable to initialize plugin: %w", err)
 	}
 	return autoRetryNacks, nil
