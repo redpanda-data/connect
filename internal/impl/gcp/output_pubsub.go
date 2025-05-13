@@ -263,6 +263,21 @@ func (out *pubsubOutput) WriteBatch(ctx context.Context, batch service.MessageBa
 		p.Go(func(ctx context.Context) (*serverResult, error) {
 			_, err := res.Get(ctx)
 			if err != nil {
+				errMeta := out.metaFilter.Walk(msg, func(key, value string) error {
+					// Checking attributes explicitly for UTF-8 validity makes the user experience way better. We can point out
+					// which key is non-compatible.
+					// The UTF-8 requirement comes from internal Protocol Buffer/GRPC conversions happening in the PubSub client.
+					if !utf8.ValidString(key) {
+						return fmt.Errorf("metadata field %s contains non-UTF-8 characters", key)
+					}
+					if !utf8.ValidString(value) {
+						return fmt.Errorf("metadata field %s contains non-UTF-8 data: %s", key, value)
+					}
+					return nil
+				})
+				if errMeta != nil {
+					err = fmt.Errorf("%w: %w", err, errMeta)
+				}
 				return &serverResult{batchIndex: i, err: err}, nil
 			}
 			return nil, nil
@@ -325,16 +340,6 @@ func (out *pubsubOutput) writeMessage(ctx context.Context, cachedTopics map[stri
 
 	attr := make(map[string]string)
 	if err := out.metaFilter.Walk(msg, func(key, value string) error {
-		// Checking attributes explicitly for UTF-8 validity makes the user experience way better. We can point out
-		// which key is non-compatible.
-		// The UTF-8 requirement comes from internal Protocol Buffer/GRPC conversions happening in the PubSub client.
-		if !utf8.ValidString(key) {
-			return fmt.Errorf("metadata field %s contains non-UTF-8 characters", key)
-		}
-		if !utf8.ValidString(value) {
-			return fmt.Errorf("metadata field %s contains non-UTF-8 data: %s", key, value)
-		}
-
 		attr[key] = value
 		return nil
 	}); err != nil {
