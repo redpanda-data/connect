@@ -91,15 +91,8 @@ func RegisterOutputPlugin(env *service.Environment, spec OutputConfig) error {
 			err = fmt.Errorf("invalid subprocess: %w", err)
 			return nil, service.BatchPolicy{}, 0, err
 		}
-		if err := proc.Start(); err != nil {
-			err = fmt.Errorf("unable to start subprocess: %w", err)
-			return nil, service.BatchPolicy{}, 0, err
-		}
 		ctx, cancel := context.WithTimeout(context.Background(), maxStartupTime)
 		defer cancel()
-		cleanup = append(cleanup, func() error {
-			return proc.Close(ctx)
-		})
 		client := runtimepb.NewBatchOutputServiceClient(conn)
 		maxInFlight, batchPolicy, err := startOutputPlugin(ctx, proc, client, cfgValue)
 		if err != nil {
@@ -131,6 +124,7 @@ func startOutputPlugin(
 	}
 	value, err := runtimepb.AnyToProto(cfgValue)
 	if err != nil {
+		_ = proc.Close(ctx)
 		return 0, service.BatchPolicy{}, fmt.Errorf("unable to convert config to proto: %w", err)
 	}
 	resp, err := backoff.RetryWithData(func() (*runtimepb.BatchOutputInitResponse, error) {
@@ -149,6 +143,7 @@ func startOutputPlugin(
 		return resp, nil
 	}, backoff.NewExponentialBackOff(backoff.WithMaxElapsedTime(maxStartupTime)))
 	if err != nil {
+		_ = proc.Close(ctx)
 		return 0, service.BatchPolicy{}, fmt.Errorf("unable to initialize plugin: %w", err)
 	}
 	batchPolicy.ByteSize = int(resp.GetBatchPolicy().GetByteSize())

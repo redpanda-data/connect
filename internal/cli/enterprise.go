@@ -131,7 +131,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 				}
 
 				rpcPlugins := c.StringSlice("rpc-plugins")
-				err := rpcplugin.DiscoverAndRegisterPlugins(service.OSFS(), service.GlobalEnvironment(), rpcPlugins)
+				err := rpcplugin.DiscoverAndRegisterPlugins(service.OSFS(), schema.Environment(), rpcPlugins)
 				if err != nil {
 					return err
 				}

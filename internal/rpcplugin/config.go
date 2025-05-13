@@ -81,7 +81,7 @@ func (c FieldConfig) toSpec() (*service.ConfigField, error) {
 		fieldType = *c.Type
 	}
 	fieldKind := FieldKindScalar
-	if c.Type != nil {
+	if c.Kind != nil {
 		fieldKind = *c.Kind
 	}
 	var f *service.ConfigField
@@ -171,6 +171,9 @@ type ComponentType string
 
 // Validate checks that the plugin type is valid.
 func (p ComponentType) Validate() error {
+	if p == "" {
+		return errors.New("plugin type is required")
+	}
 	switch p {
 	case ComponentTypeInput, ComponentTypeProcessor, ComponentTypeOutput:
 		return nil

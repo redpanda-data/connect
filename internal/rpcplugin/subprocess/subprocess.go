@@ -110,7 +110,7 @@ func (s *subprocess) Start() error {
 	cmd := exec.CommandContext(ctx, s.cmdArgs[0], s.cmdArgs[1:]...)
 	cmd.Env = []string{}
 	for k, v := range s.env {
-		cmd.Env = append(s.cmd.Env, fmt.Sprintf("%s=%s", k, v))
+		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
 	}
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {

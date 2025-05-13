@@ -91,14 +91,8 @@ func RegisterProcessorPlugin(env *service.Environment, spec ProcessorConfig) err
 			err = fmt.Errorf("invalid subprocess: %w", err)
 			return nil, err
 		}
-		if err := proc.Start(); err != nil {
-			return nil, fmt.Errorf("unable to start subprocess: %w", err)
-		}
 		ctx, cancel := context.WithTimeout(context.Background(), maxStartupTime)
 		defer cancel()
-		cleanup = append(cleanup, func() error {
-			return proc.Close(ctx)
-		})
 		client := runtimepb.NewBatchProcessorServiceClient(conn)
 		err = startProcessorPlugin(ctx, proc, client, cfgValue)
 		if err != nil {
@@ -129,6 +123,7 @@ func startProcessorPlugin(
 	}
 	value, err := runtimepb.AnyToProto(cfgValue)
 	if err != nil {
+		_ = proc.Close(ctx)
 		return fmt.Errorf("unable to convert config to proto: %w", err)
 	}
 	err = backoff.Retry(func() error {
@@ -144,6 +139,7 @@ func startProcessorPlugin(
 		return runtimepb.ProtoToError(resp.Error)
 	}, backoff.NewExponentialBackOff(backoff.WithMaxElapsedTime(maxStartupTime)))
 	if err != nil {
+		_ = proc.Close(ctx)
 		return fmt.Errorf("unable to initialize plugin: %w", err)
 	}
 	return nil
