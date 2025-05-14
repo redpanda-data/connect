@@ -53,6 +53,7 @@ func sftpInputSpec() *service.ConfigSpec {
 This input adds the following metadata fields to each message:
 
 - sftp_path
+- sftp_mod_time
 
 You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].`).
 		Fields(
@@ -122,12 +123,17 @@ type sftpReader struct {
 	watcherMinAge       time.Duration
 
 	// State
-	stateLock   sync.Mutex
-	scanner     codec.DeprecatedFallbackStream
-	currentPath string
+	stateLock       sync.Mutex
+	scanner         codec.DeprecatedFallbackStream
+	currentFileInfo currentFileInfo
 
 	client       *clientPool
 	pathProvider pathProvider
+}
+
+type currentFileInfo struct {
+	path    string
+	modTime time.Time
 }
 
 func newSFTPReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (s *sftpReader, err error) {
@@ -224,7 +230,7 @@ func (s *sftpReader) tryReadBatch(ctx context.Context) (service.MessageBatch, se
 
 		_ = s.scanner.Close(ctx)
 		s.scanner = nil
-		s.currentPath = ""
+		s.currentFileInfo.path = ""
 		if errors.Is(err, io.EOF) {
 			err = service.ErrNotConnected
 		}
@@ -232,7 +238,8 @@ func (s *sftpReader) tryReadBatch(ctx context.Context) (service.MessageBatch, se
 	}
 
 	for _, part := range parts {
-		part.MetaSetMut("sftp_path", s.currentPath)
+		part.MetaSetMut("sftp_path", s.currentFileInfo.path)
+		part.MetaSetMut("sftp_mod_time", s.currentFileInfo.modTime)
 	}
 
 	return parts, codecAckFn, nil
@@ -257,6 +264,11 @@ func (s *sftpReader) initScanner(ctx context.Context) (codec.DeprecatedFallbackS
 		}
 		if !ok {
 			return nil, service.ErrEndOfInput
+		}
+
+		fileInfo, err := s.client.Stat(path)
+		if err != nil {
+			return nil, fmt.Errorf("stat path: %w", err)
 		}
 
 		file, err = s.client.Open(path)
@@ -284,7 +296,10 @@ func (s *sftpReader) initScanner(ctx context.Context) (codec.DeprecatedFallbackS
 
 		s.stateLock.Lock()
 		s.scanner = scanner
-		s.currentPath = path
+		s.currentFileInfo = currentFileInfo{
+			path:    path,
+			modTime: fileInfo.ModTime(),
+		}
 		s.stateLock.Unlock()
 		return scanner, nil
 	}
@@ -335,7 +350,7 @@ func (s *sftpReader) closeScanner(ctx context.Context) {
 			s.log.With("error", err).Error("Failed to close scanner")
 		}
 		s.scanner = nil
-		s.currentPath = ""
+		s.currentFileInfo.path = ""
 	}
 }
 
