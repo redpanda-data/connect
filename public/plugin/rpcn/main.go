@@ -14,7 +14,7 @@
 
 // Package rpcplugin contains a library supporting writing plugins that are run dynamically over gRPC
 // instead of having to compile in support for a new component.
-package rpcplugin
+package rpcn
 
 // !!! NOTE !!!
 // If you're looking at the source of this package to reimplment it for your language than please open
@@ -27,6 +27,7 @@ package rpcplugin
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net"
 	"os"
 	"os/signal"
@@ -325,6 +326,7 @@ func runMain(register func(*grpc.Server)) {
 	if !ok {
 		log.Fatal("REDPANDA_CONNECT_PLUGIN_ADDRESS not set")
 	}
+	fmt.Println("Successfully loaded Redpanda Connect RPC plugin")
 	s := grpc.NewServer()
 	register(s)
 	var l net.Listener
