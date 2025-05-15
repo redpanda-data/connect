@@ -30,49 +30,44 @@ import (
 // ErrProcessAlreadyStarted is returned when trying to start a subprocess that is already running.
 var ErrProcessAlreadyStarted = errors.New("subprocess already started")
 
-// SubProcess defines the interface for managing a subprocess.
-type SubProcess interface {
-	// Start launches the subprocess and begins monitoring. It returns an error
-	// if the process fails to start initially.
-	Start() error
-	// IsRunning checks if the subprocess is currently running.
-	// Close MUST be called even if IsRunning returns false.
-	IsRunning() bool
-	// Close attempts to gracefully shut down the subprocess. It waits for the process
-	// to exit and cleans up resources.
-	Close(ctx context.Context) error
-}
-
 // Option is a function that can configure a SubProcess.
-type Option func(*subprocess)
+type Option func(*Subprocess)
+
+// WithCwd allows you to configure the working directory for the subprocess.
+func WithCwd(dir string) Option {
+	return func(s *Subprocess) {
+		s.cwd = dir
+	}
+}
 
 // WithLogger allows providing a custom logger for internal library messages.
 func WithLogger(logger *service.Logger) Option {
-	return func(s *subprocess) {
+	return func(s *Subprocess) {
 		s.logger = logger
 	}
 }
 
 // WithStdoutHook allows providing a custom logger for stdout messages.
 func WithStdoutHook(hook func(line string)) Option {
-	return func(s *subprocess) {
-		s.stdoutHook = hook
+	return func(s *Subprocess) {
+		s.stderrHook = hook
 	}
 }
 
 // WithStderrHook allows providing a custom logger for stderr messages.
 func WithStderrHook(hook func(line string)) Option {
-	return func(s *subprocess) {
+	return func(s *Subprocess) {
 		s.stdoutHook = hook
 	}
 }
 
-type subprocess struct {
+type Subprocess struct {
 	cmdArgs    []string
 	env        map[string]string
 	stdoutHook func(line string)
 	stderrHook func(line string)
 	logger     *service.Logger
+	cwd        string
 
 	cmd    *exec.Cmd
 	mu     sync.Mutex
@@ -85,11 +80,11 @@ func New(
 	cmd []string,
 	env map[string]string,
 	options ...Option,
-) (SubProcess, error) {
+) (*Subprocess, error) {
 	if len(cmd) == 0 {
 		return nil, errors.New("command cannot be empty")
 	}
-	s := &subprocess{
+	s := &Subprocess{
 		cmdArgs: cmd,
 		env:     env,
 		logger:  nil,
@@ -100,7 +95,7 @@ func New(
 	return s, nil
 }
 
-func (s *subprocess) Start() error {
+func (s *Subprocess) Start() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.cmd != nil {
@@ -108,6 +103,7 @@ func (s *subprocess) Start() error {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(ctx, s.cmdArgs[0], s.cmdArgs[1:]...)
+	cmd.Dir = s.cwd
 	cmd.Env = []string{}
 	for k, v := range s.env {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
@@ -143,7 +139,7 @@ func (s *subprocess) Start() error {
 	return nil
 }
 
-func (s *subprocess) readOutput(pipe io.Reader, isStderr bool) {
+func (s *Subprocess) readOutput(pipe io.Reader, isStderr bool) {
 	defer s.wg.Done()
 	src := map[bool]string{false: "stdout", true: "stderr"}[isStderr]
 	log := s.logger.With("source", src)
@@ -151,8 +147,7 @@ func (s *subprocess) readOutput(pipe io.Reader, isStderr bool) {
 	hook := func(line string) {}
 	if !isStderr && s.stdoutHook != nil {
 		hook = s.stdoutHook
-	}
-	if isStderr && s.stderrHook != nil {
+	} else if isStderr && s.stderrHook != nil {
 		hook = s.stderrHook
 	}
 	for scanner.Scan() {
@@ -165,7 +160,7 @@ func (s *subprocess) readOutput(pipe io.Reader, isStderr bool) {
 	}
 }
 
-func (s *subprocess) IsRunning() bool {
+func (s *Subprocess) IsRunning() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.cmd == nil {
@@ -177,7 +172,7 @@ func (s *subprocess) IsRunning() bool {
 	return true
 }
 
-func (s *subprocess) Close(ctx context.Context) error {
+func (s *Subprocess) Close(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -189,29 +184,29 @@ func (s *subprocess) Close(ctx context.Context) error {
 	s.logger.Debugf("Attempting to gracefully shut down subprocess with PID %d...", s.cmd.Process.Pid)
 	if s.cmd.Process != nil {
 		if err := s.cmd.Process.Signal(os.Interrupt); err != nil {
-			s.logger.Tracef("Failed to send interrupt signal to subprocess PID %d: %v. Attempting to kill.", s.cmd.Process.Pid, err)
+			s.logger.Warnf("Failed to send interrupt signal to subprocess PID %d: %v. Attempting to kill.", s.cmd.Process.Pid, err)
 			if err := s.cmd.Process.Kill(); err != nil {
-				s.logger.Warnf("Failed to kill subprocess PID %d: %v", s.cmd.Process.Pid, err)
+				s.logger.Errorf("Failed to kill subprocess PID %d: %v", s.cmd.Process.Pid, err)
 			}
 		}
 	}
 	// Use the provided context for waiting for the process to exit
-	waitChan := make(chan struct{})
+	done := make(chan struct{})
 	go func() {
 		s.wg.Wait() // Wait for all goroutines (output readers and waitProcess) to finish
-		close(waitChan)
+		close(done)
 	}()
 
 	select {
-	case <-waitChan:
+	case <-done:
 		s.logger.Tracef("Subprocess goroutines finished.")
 	case <-ctx.Done():
 		s.logger.Tracef("Context cancelled while waiting for subprocess PID %d to exit.", s.cmd.Process.Pid)
 		// The subprocess might still be running if it didn't respond to signals and the context timed out.
 		if s.cmd.Process != nil && s.cmd.ProcessState == nil || (s.cmd.ProcessState != nil && !s.cmd.ProcessState.Exited()) {
-			s.logger.Tracef("Subprocess PID %d did not exit within context deadline, attempting forceful kill.", s.cmd.Process.Pid)
+			s.logger.Warnf("Subprocess PID %d did not exit within context deadline, attempting forceful kill.", s.cmd.Process.Pid)
 			if err := s.cmd.Process.Kill(); err != nil {
-				s.logger.Warnf("Failed to forcefully kill subprocess PID %d: %v", s.cmd.Process.Pid, err)
+				s.logger.Errorf("Failed to forcefully kill subprocess PID %d: %v", s.cmd.Process.Pid, err)
 			}
 		}
 		return ctx.Err()

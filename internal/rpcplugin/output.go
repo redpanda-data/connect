@@ -37,13 +37,15 @@ type OutputConfig struct {
 	//
 	// This does NOT inherit from the current process
 	Env map[string]string
+	// Directory for the process
+	Cwd string
 	// The configuration spec for the plugin
 	Spec *service.ConfigSpec
 }
 
 type output struct {
 	cfgValue any
-	proc     subprocess.SubProcess
+	proc     *subprocess.Subprocess
 	client   runtimepb.BatchOutputServiceClient
 }
 
@@ -86,7 +88,12 @@ func RegisterOutputPlugin(env *service.Environment, spec OutputConfig) error {
 		}
 		cleanup = append(cleanup, conn.Close)
 		spec.Env["REDPANDA_CONNECT_PLUGIN_ADDRESS"] = socketPath
-		proc, err := subprocess.New(spec.Cmd, spec.Env, subprocess.WithLogger(res.Logger()))
+		proc, err := subprocess.New(
+			spec.Cmd,
+			spec.Env,
+			subprocess.WithLogger(res.Logger()),
+			subprocess.WithCwd(spec.Cwd),
+		)
 		if err != nil {
 			err = fmt.Errorf("invalid subprocess: %w", err)
 			return nil, service.BatchPolicy{}, 0, err
@@ -112,7 +119,7 @@ func RegisterOutputPlugin(env *service.Environment, spec OutputConfig) error {
 
 func startOutputPlugin(
 	ctx context.Context,
-	proc subprocess.SubProcess,
+	proc *subprocess.Subprocess,
 	client runtimepb.BatchOutputServiceClient,
 	cfgValue any,
 ) (maxInFlight int, batchPolicy service.BatchPolicy, err error) {
@@ -127,6 +134,7 @@ func startOutputPlugin(
 		_ = proc.Close(ctx)
 		return 0, service.BatchPolicy{}, fmt.Errorf("unable to convert config to proto: %w", err)
 	}
+	// Retry to wait for the process to start
 	resp, err := backoff.RetryWithData(func() (*runtimepb.BatchOutputInitResponse, error) {
 		resp, err := client.Init(ctx, &runtimepb.BatchOutputInitRequest{
 			Config: value,
@@ -157,6 +165,7 @@ func startOutputPlugin(
 // Connect implements service.BatchOutput.
 func (o *output) Connect(ctx context.Context) (err error) {
 	var resp *runtimepb.BatchOutputConnectResponse
+	// If the plugin crashes attempt to restart the process up to retryCount times.
 	for range retryCount {
 		resp, err = o.client.Connect(ctx, &runtimepb.BatchOutputConnectRequest{})
 		if err != nil {
@@ -207,5 +216,8 @@ func (o *output) Close(ctx context.Context) error {
 	if err := runtimepb.ProtoToError(resp.Error); err != nil {
 		return fmt.Errorf("plugin close error: %w", err)
 	}
-	return o.proc.Close(ctx)
+	if err := o.proc.Close(ctx); err != nil {
+		return fmt.Errorf("unable to close plugin process: %w", err)
+	}
+	return nil
 }

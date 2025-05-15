@@ -195,6 +195,7 @@ type Config struct {
 	Description string `yaml:"description"`
 	// The command to run for the plugin.
 	Cmd    []string      `yaml:"command"`
+	Cwd    string        `yaml:"cwd"`
 	Type   ComponentType `yaml:"type"`
 	Fields []FieldConfig `yaml:"fields"`
 }
@@ -257,41 +258,47 @@ func DiscoverAndRegisterPlugins(fs fs.FS, env *service.Environment, paths []stri
 		if err := cfg.Validate(); err != nil {
 			return fmt.Errorf("failed to validate plugin config file %s: %w", path, err)
 		}
-		spec, err := cfg.toSpec()
-		if err != nil {
-			return err
-		}
-		switch cfg.Type {
-		case ComponentTypeInput:
-			err = RegisterInputPlugin(env, InputConfig{
-				Name: cfg.Name,
-				Cmd:  cfg.Cmd,
-				Env:  environMap(),
-				Spec: spec,
-			})
-		case ComponentTypeOutput:
-			err = RegisterOutputPlugin(env, OutputConfig{
-				Name: cfg.Name,
-				Cmd:  cfg.Cmd,
-				Env:  environMap(),
-				Spec: spec,
-			})
-		case ComponentTypeProcessor:
-			err = RegisterProcessorPlugin(env, ProcessorConfig{
-				Name: cfg.Name,
-				Cmd:  cfg.Cmd,
-				Env:  environMap(),
-				Spec: spec,
-			})
-		default:
-			// Validated above
-			panic("unreachable")
-		}
-		if err != nil {
-			return err
+		if err := registerPlugin(env, &cfg); err != nil {
+			return fmt.Errorf("failed to register plugin %s: %w", cfg.Name, err)
 		}
 	}
 	return nil
+}
+
+func registerPlugin(env *service.Environment, cfg *Config) error {
+	spec, err := cfg.toSpec()
+	if err != nil {
+		return err
+	}
+	switch cfg.Type {
+	case ComponentTypeInput:
+		return RegisterInputPlugin(env, InputConfig{
+			Name: cfg.Name,
+			Cmd:  cfg.Cmd,
+			Env:  environMap(),
+			Spec: spec,
+			Cwd:  cfg.Cwd,
+		})
+	case ComponentTypeOutput:
+		return RegisterOutputPlugin(env, OutputConfig{
+			Name: cfg.Name,
+			Cmd:  cfg.Cmd,
+			Env:  environMap(),
+			Spec: spec,
+			Cwd:  cfg.Cwd,
+		})
+	case ComponentTypeProcessor:
+		return RegisterProcessorPlugin(env, ProcessorConfig{
+			Name: cfg.Name,
+			Cmd:  cfg.Cmd,
+			Env:  environMap(),
+			Spec: spec,
+			Cwd:  cfg.Cwd,
+		})
+	default:
+		// Validated above
+		panic("unreachable")
+	}
 }
 
 func environMap() map[string]string {
