@@ -51,7 +51,7 @@ func redpandaMigratorOffsetsOutputConfig() *service.ConfigSpec {
 		Categories("Services").
 		Version("4.37.0").
 		Summary("Redpanda Migrator consumer group offsets output using the https://github.com/twmb/franz-go[Franz Kafka client library^].").
-		Description("This output can be used in combination with the `kafka_franz` input that is configured to read the `__consumer_offsets` topic.").
+		Description("This output should be used in combination with the `redpanda_migrator_offsets` input").
 		Fields(redpandaMigratorOffsetsOutputConfigFields()...)
 }
 

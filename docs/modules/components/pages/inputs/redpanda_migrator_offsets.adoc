@@ -83,7 +83,11 @@ input:
 --
 ======
 
-TODO: Description
+This input reads consumer group updates from the `__consumer_offsets` topic and should be used in combination with the `redpanda_migrator_offsets` output.
+
+== Metrics
+
+Emits a `redpanda_lag` metric with `topic` and `partition` labels for each consumed topic.
 
 == Metadata
 
