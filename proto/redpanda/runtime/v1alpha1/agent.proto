@@ -27,9 +27,7 @@ message TraceContext {
   string trace_flags = 4;
 }
 
-message Trace {
-  repeated Span spans = 1;
-}
+message Trace { repeated Span spans = 1; }
 
 message Span {
   string span_id = 1;

@@ -20,17 +20,18 @@ option go_package = "github.com/redpanda-data/connect/v4/internal/rpcplugin/runt
 
 import "redpanda/runtime/v1alpha1/message.proto";
 
-// BatchProcessor is a Benthos processor implementation that works against batches
-// of messages, which allows windowed processing.
+// BatchProcessor is a Benthos processor implementation that works against
+// batches of messages, which allows windowed processing.
 //
 // Message batches must be created by upstream components (inputs, buffers, etc)
-// otherwise this processor will simply receive batches containing single messages.
+// otherwise this processor will simply receive batches containing single
+// messages.
 service BatchProcessorService {
-  // Init is the first method called for a batch processor and it passes the user's
-  // configuration to the input.
+  // Init is the first method called for a batch processor and it passes the
+  // user's configuration to the input.
   //
-  // The schema for the processor configuration is specified in the `plugin.yaml` file
-  // provided to Redpanda Connect.
+  // The schema for the processor configuration is specified in the
+  // `plugin.yaml` file provided to Redpanda Connect.
   rpc Init(BatchProcessorInitRequest) returns (BatchProcessorInitResponse) {}
   // Process a batch of messages into one or more resulting batches, or return
   // an error if the entire batch could not be processed. If zero messages are
@@ -50,19 +51,18 @@ service BatchProcessorService {
   // The Message types returned MUST be derived from the provided messages,
   // and CANNOT be custom instantiations of Message. In order to copy the
   // provided messages use the Copy method.
-  rpc ProcessBatch(BatchProcessorProcessBatchRequest) returns (BatchProcessorProcessBatchResponse) {}
+  rpc ProcessBatch(BatchProcessorProcessBatchRequest)
+      returns (BatchProcessorProcessBatchResponse) {}
   // Close the component, blocks until either the underlying resources are
   // cleaned up or the context is cancelled. Returns an error if the context
   // is cancelled.
   rpc Close(BatchProcessorCloseRequest) returns (BatchProcessorCloseResponse) {}
 }
 
-message BatchProcessorInitRequest {
-  Value config = 1;
-}
+message BatchProcessorInitRequest { Value config = 1; }
 message BatchProcessorInitResponse {
-  // If present, then the input configuration is invalid and an error should be surfaced
-  // at pipeline construction time.
+  // If present, then the input configuration is invalid and an error should be
+  // surfaced at pipeline construction time.
   Error error = 1;
 }
 
@@ -83,4 +83,3 @@ message BatchProcessorCloseResponse {
   // If present, then the close attempt failed.
   Error error = 1;
 }
-

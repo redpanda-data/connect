@@ -22,19 +22,17 @@ import "google/protobuf/timestamp.proto";
 import "google/protobuf/duration.proto";
 
 // `NullValue` is a representation of a null value.
-enum NullValue { NULL_VALUE = 0; }
+enum NullValue {
+  NULL_VALUE = 0;
+}
 
 // `StructValue` represents a struct value which can be used to represent a
 // structured data value.
-message StructValue {
-  map<string, Value> fields = 1;
-}
+message StructValue { map<string, Value> fields = 1; }
 
 // `ListValue` represents a list value which can be used to represent a list of
 // values.
-message ListValue {
-  repeated Value values = 1;
-}
+message ListValue { repeated Value values = 1; }
 
 // `Value` represents a dynamically typed value which can be used to represent
 // a value within a Redpanda Connect pipeline.
@@ -64,14 +62,16 @@ message Error {
   // connection is re-established.
   message NotConnected {}
   // EndOfInput is returned by inputs that have exhausted their source of
-	// data to the point where subsequent Read calls will be ineffective. This
-	// error prompts the upstream component to gracefully terminate the
-	// pipeline.
+  // data to the point where subsequent Read calls will be ineffective. This
+  // error prompts the upstream component to gracefully terminate the
+  // pipeline.
   message EndOfInput {}
   // Additional error details for specific Redpanda Connect behavior.
   // If one of these fields is set, then message must be non-empty.
   oneof detail {
-    // BackOff is an error that plugins can optionally wrap another error with which instructs upstream components to wait for a specified period of time before retrying the errored call.
+    // BackOff is an error that plugins can optionally wrap another error with
+    // which instructs upstream components to wait for a specified period of
+    // time before retrying the errored call.
     //
     // Only suppported by Connect methods in the Input and Output services.
     google.protobuf.Duration backoff = 2;
@@ -80,7 +80,8 @@ message Error {
   }
 }
 
-// Message represents a piece of data or an event that flows through the runtime.
+// Message represents a piece of data or an event that flows through the
+// runtime.
 message Message {
   oneof payload {
     bytes bytes = 1;
@@ -90,6 +91,4 @@ message Message {
   Error error = 4;
 }
 
-message MessageBatch {
-  repeated Message messages = 1;
-}
+message MessageBatch { repeated Message messages = 1; }
