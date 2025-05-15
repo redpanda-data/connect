@@ -50,17 +50,18 @@ func WithLogger(logger *service.Logger) Option {
 // WithStdoutHook allows providing a custom logger for stdout messages.
 func WithStdoutHook(hook func(line string)) Option {
 	return func(s *Subprocess) {
-		s.stderrHook = hook
+		s.stdoutHook = hook
 	}
 }
 
 // WithStderrHook allows providing a custom logger for stderr messages.
 func WithStderrHook(hook func(line string)) Option {
 	return func(s *Subprocess) {
-		s.stdoutHook = hook
+		s.stderrHook = hook
 	}
 }
 
+// Subprocess represents a subprocess that can be started, monitored, and closed.
 type Subprocess struct {
 	cmdArgs    []string
 	env        map[string]string
@@ -95,6 +96,7 @@ func New(
 	return s, nil
 }
 
+// Start starts the subprocess with the provided command and environment variables.
 func (s *Subprocess) Start() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -160,6 +162,7 @@ func (s *Subprocess) readOutput(pipe io.Reader, isStderr bool) {
 	}
 }
 
+// IsRunning checks if the subprocess is currently running.
 func (s *Subprocess) IsRunning() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -172,6 +175,7 @@ func (s *Subprocess) IsRunning() bool {
 	return true
 }
 
+// Close attempts to gracefully shut down the subprocess.
 func (s *Subprocess) Close(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

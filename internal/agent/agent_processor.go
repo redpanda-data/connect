@@ -14,16 +14,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
-	"log"
 	"os"
-	"os/exec"
-	"sync"
-
-	"github.com/hashicorp/go-hclog"
-	"github.com/hashicorp/go-plugin"
+	"strings"
+	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	agentruntimepb "github.com/redpanda-data/connect/v4/internal/agent/runtimepb"
+	"github.com/redpanda-data/connect/v4/internal/rpcplugin/subprocess"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 const (
@@ -42,9 +41,8 @@ func newAgentProcessorConfigSpec() *service.ConfigSpec {
 }
 
 type agentProcessor struct {
-	client  *plugin.Client
-	runtime *rpcClient
-	once    sync.Once
+	client *rpcClient
+	proc   *subprocess.Subprocess
 }
 
 var _ service.Processor = (*agentProcessor)(nil)
@@ -65,178 +63,94 @@ func newAgentProcessor(conf *service.ParsedConfig, res *service.Resources) (serv
 	if err != nil {
 		return nil, err
 	}
-	// TODO: This sort of all seems like junk. We should write our own plugin mechanism.
-	c := exec.Command(cmd[0], cmd[1:]...)
-	c.Dir = cwd
-	c.Env = append(os.Environ(), "REDPANDA_CONNECT_AGENT_RUNTIME_MCP_SERVER="+mcpServerAddress)
-	client := plugin.NewClient(&plugin.ClientConfig{
-		HandshakeConfig:  handshake,
-		Plugins:          pluginMap,
-		Cmd:              c,
-		AllowedProtocols: []plugin.Protocol{plugin.ProtocolGRPC},
-		SkipHostEnv:      true, // We do this ourselves
-		Logger:           &hclogger{res.Logger()},
-	})
-	rpc, err := client.Client()
+
+	// TODO: Remove this junk compatibility with the hashicorp plugin stuff, and instead
+	// just use a unix socket.
+	protocol := make(chan string, 1)
+	proc, err := subprocess.New(
+		cmd,
+		environMap(mcpServerAddress),
+		subprocess.WithLogger(res.Logger()),
+		subprocess.WithCwd(cwd),
+		subprocess.WithStdoutHook(func() func(string) {
+			done := false
+			return func(line string) {
+				if done {
+					return
+				}
+				done = true
+				protocol <- line
+			}
+		}()),
+	)
 	if err != nil {
-		client.Kill()
-		return nil, err
+		return nil, fmt.Errorf("failed to create plugin process: %w", err)
 	}
-	raw, err := rpc.Dispense("runtime")
-	if err != nil {
-		client.Kill()
-		return nil, err
+	if err := proc.Start(); err != nil {
+		return nil, fmt.Errorf("failed to start plugin process: %w", err)
 	}
-	rt := raw.(*rpcClient)
-	rt.tracer = res.OtelTracer().Tracer("rpcn-agent")
-	return &agentProcessor{
-		client:  client,
-		runtime: rt,
-	}, nil
+	select {
+	case line := <-protocol:
+		parts := strings.Split(strings.TrimSpace(line), "|")
+		if len(parts) != 5 {
+			res.Logger().Debugf("missing protocol line: %q", line)
+			_ = proc.Close(context.Background())
+			return nil, fmt.Errorf("invalid protocol line: %q, if you're seeing this it's likely you're not calling `redpanda.runtime.serve` in your script. Do not log or print anything before this runs. If you need to make sure it goes to stderr instead of stdout", line)
+		}
+		if parts[0] != "1" || parts[1] != "1" || parts[2] != "tcp" || parts[4] != "grpc" {
+			res.Logger().Debugf("invalid protocol line: %q", line)
+			_ = proc.Close(context.Background())
+			return nil, fmt.Errorf("invalid protocol line: %q, if you're seeing this it's likely you're not calling `redpanda.runtime.serve` in your script. Do not log or print anything before this runs. If you need to make sure it goes to stderr instead of stdout", line)
+		}
+		addr := parts[3]
+		runtimeConn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			res.Logger().Debugf("failed to create connection: %v", err)
+			_ = proc.Close(context.Background())
+			return nil, fmt.Errorf("failed to connect to plugin process: %w", err)
+		}
+		res.Logger().Debugf("started agent listening on %s", addr)
+		client := &rpcClient{
+			client: agentruntimepb.NewAgentRuntimeClient(runtimeConn),
+			tracer: res.OtelTracer().Tracer("rpcn-agent"),
+		}
+		return &agentProcessor{
+			client: client,
+			proc:   proc,
+		}, nil
+	case <-time.After(10 * time.Second):
+		res.Logger().Debugf("failed to start agent after 10 seconds")
+		_ = proc.Close(context.Background())
+		if !proc.IsRunning() {
+			return nil, errors.New("failed to start plugin process, process exited, make sure you're calling `redpanda.runtime.serve`")
+		}
+		return nil, errors.New("failed to start plugin process, timeout waiting for protocol line")
+	}
+}
+
+func environMap(mcpServerAddress string) map[string]string {
+	m := make(map[string]string)
+	for _, val := range os.Environ() {
+		kv := strings.SplitN(val, "=", 2)
+		m[kv[0]] = kv[1]
+	}
+	m["REDPANDA_CONNECT_AGENT_RUNTIME_MCP_SERVER"] = mcpServerAddress
+	return m
 }
 
 // Process implements service.Processor.
 func (a *agentProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
-	msg, err := a.runtime.InvokeAgent(ctx, msg)
+	msg, err := a.client.InvokeAgent(ctx, msg)
 	if err != nil {
 		return nil, err
 	}
 	return service.MessageBatch{msg}, nil
 }
 
-// Close implements service.Processor.
-func (a *agentProcessor) Close(ctx context.Context) error {
-	a.once.Do(a.client.Kill)
+// Close implements service.BatchProcessor.
+func (p *agentProcessor) Close(ctx context.Context) error {
+	if err := p.proc.Close(ctx); err != nil {
+		return fmt.Errorf("unable to close plugin process: %w", err)
+	}
 	return nil
-}
-
-type hclogger struct {
-	logger *service.Logger
-}
-
-// Debug implements hclog.Logger.
-func (h *hclogger) Debug(msg string, args ...any) {
-	for i := 0; i < len(args); i = i + 2 {
-		msg = fmt.Sprintf("%s %s=%v", msg, args[i], args[i+1])
-	}
-	h.logger.Debug(msg)
-}
-
-// Error implements hclog.Logger.
-func (h *hclogger) Error(msg string, args ...any) {
-	for i := 0; i < len(args); i = i + 2 {
-		msg = fmt.Sprintf("%s %s=%v", msg, args[i], args[i+1])
-	}
-	h.logger.Error(msg)
-}
-
-// GetLevel implements hclog.Logger.
-func (h *hclogger) GetLevel() hclog.Level {
-	return hclog.Info
-}
-
-// ImpliedArgs implements hclog.Logger.
-func (h *hclogger) ImpliedArgs() []any {
-	return nil
-}
-
-// Info implements hclog.Logger.
-func (h *hclogger) Info(msg string, args ...any) {
-	for i := 0; i < len(args); i = i + 2 {
-		msg = fmt.Sprintf("%s %s=%v", msg, args[i], args[i+1])
-	}
-	h.logger.Info(msg)
-}
-
-// IsDebug implements hclog.Logger.
-func (h *hclogger) IsDebug() bool {
-	return false
-}
-
-// IsError implements hclog.Logger.
-func (h *hclogger) IsError() bool {
-	return true
-}
-
-// IsInfo implements hclog.Logger.
-func (h *hclogger) IsInfo() bool {
-	return true
-}
-
-// IsTrace implements hclog.Logger.
-func (h *hclogger) IsTrace() bool {
-	return false
-}
-
-// IsWarn implements hclog.Logger.
-func (h *hclogger) IsWarn() bool {
-	return true
-}
-
-// Log implements hclog.Logger.
-func (h *hclogger) Log(level hclog.Level, msg string, args ...interface{}) {
-	switch level {
-	case hclog.Debug:
-		h.Debug(msg, args...)
-	case hclog.Error:
-		h.Error(msg, args...)
-	case hclog.Info:
-		h.Info(msg, args...)
-	case hclog.Trace:
-		h.Trace(msg, args...)
-	case hclog.Warn:
-		h.Warn(msg, args...)
-	case hclog.NoLevel:
-	case hclog.Off:
-	}
-}
-
-// Name implements hclog.Logger.
-func (h *hclogger) Name() string {
-	return "redpanda-connect-plugin"
-}
-
-// Named implements hclog.Logger.
-func (h *hclogger) Named(name string) hclog.Logger {
-	return h
-}
-
-// ResetNamed implements hclog.Logger.
-func (h *hclogger) ResetNamed(name string) hclog.Logger {
-	return h
-}
-
-// SetLevel implements hclog.Logger.
-func (h *hclogger) SetLevel(level hclog.Level) {
-}
-
-// StandardLogger implements hclog.Logger.
-func (h *hclogger) StandardLogger(opts *hclog.StandardLoggerOptions) *log.Logger {
-	return log.New(io.Discard, "", 0)
-}
-
-// StandardWriter implements hclog.Logger.
-func (h *hclogger) StandardWriter(opts *hclog.StandardLoggerOptions) io.Writer {
-	return io.Discard
-}
-
-// Trace implements hclog.Logger.
-func (h *hclogger) Trace(msg string, args ...any) {
-	for i := 0; i < len(args); i = i + 2 {
-		msg = fmt.Sprintf("%s %s=%v", msg, args[i], args[i+1])
-	}
-	h.logger.Trace(msg)
-}
-
-// Warn implements hclog.Logger.
-func (h *hclogger) Warn(msg string, args ...any) {
-	for i := 0; i < len(args); i = i + 2 {
-		msg = fmt.Sprintf("%s %s=%v", msg, args[i], args[i+1])
-	}
-	h.logger.Warn(msg)
-}
-
-// With implements hclog.Logger.
-func (h *hclogger) With(args ...any) hclog.Logger {
-	return h
 }

@@ -14,56 +14,17 @@ package agent
 
 import (
 	"context"
-	"errors"
 	"fmt"
-
-	"github.com/hashicorp/go-plugin"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
-	"google.golang.org/grpc"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	agentruntimepb "github.com/redpanda-data/connect/v4/internal/agent/runtimepb"
 	"github.com/redpanda-data/connect/v4/internal/rpcplugin/runtimepb"
 	"github.com/redpanda-data/connect/v4/internal/tracing"
 )
-
-// Handshake is a common handshake that is shared by plugin and host.
-var handshake = plugin.HandshakeConfig{
-	// This isn't required when using VersionedPlugins
-	ProtocolVersion:  1,
-	MagicCookieKey:   "REDPANDA_CONNECT_DYNAMIC_PLUGIN",
-	MagicCookieValue: ":blobswag:",
-}
-
-// PluginMap is the map of plugins we can dispense.
-var pluginMap = map[string]plugin.Plugin{
-	"runtime": &runtimePlugin{},
-}
-
-type runtimePlugin struct {
-	plugin.NetRPCUnsupportedPlugin
-}
-
-var (
-	_ plugin.GRPCPlugin = (*runtimePlugin)(nil)
-	_ plugin.Plugin     = (*runtimePlugin)(nil)
-)
-
-// GRPCClient implements plugin.GRPCPlugin.
-func (p *runtimePlugin) GRPCClient(ctx context.Context, broker *plugin.GRPCBroker, c *grpc.ClientConn) (any, error) {
-	return &rpcClient{
-		client: agentruntimepb.NewAgentRuntimeClient(c),
-		tracer: nil,
-	}, nil
-}
-
-// GRPCServer implements plugin.GRPCPlugin.
-func (p *runtimePlugin) GRPCServer(broker *plugin.GRPCBroker, s *grpc.Server) error {
-	return errors.ErrUnsupported
-}
 
 type rpcClient struct {
 	client agentruntimepb.AgentRuntimeClient
