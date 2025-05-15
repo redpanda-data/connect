@@ -37,13 +37,15 @@ type InputConfig struct {
 	//
 	// This does NOT inherit from the current process
 	Env map[string]string
+	// Directory for the process
+	Cwd string
 	// The configuration spec for the plugin
 	Spec *service.ConfigSpec
 }
 
 type input struct {
 	cfgValue any
-	proc     subprocess.SubProcess
+	proc     *subprocess.Subprocess
 	client   runtimepb.BatchInputServiceClient
 }
 
@@ -86,7 +88,12 @@ func RegisterInputPlugin(env *service.Environment, spec InputConfig) error {
 		}
 		cleanup = append(cleanup, conn.Close)
 		spec.Env["REDPANDA_CONNECT_PLUGIN_ADDRESS"] = socketPath
-		proc, err := subprocess.New(spec.Cmd, spec.Env, subprocess.WithLogger(res.Logger()))
+		proc, err := subprocess.New(
+			spec.Cmd,
+			spec.Env,
+			subprocess.WithLogger(res.Logger()),
+			subprocess.WithCwd(spec.Cwd),
+		)
 		if err != nil {
 			return nil, fmt.Errorf("invalid subprocess: %w", err)
 		}
@@ -113,7 +120,7 @@ func RegisterInputPlugin(env *service.Environment, spec InputConfig) error {
 
 func startInputPlugin(
 	ctx context.Context,
-	proc subprocess.SubProcess,
+	proc *subprocess.Subprocess,
 	client runtimepb.BatchInputServiceClient,
 	cfgValue any,
 ) (autoRetryNacks bool, err error) {
@@ -128,6 +135,7 @@ func startInputPlugin(
 		_ = proc.Close(ctx)
 		return false, fmt.Errorf("unable to convert config to proto: %w", err)
 	}
+	// Retry to wait for the process to start
 	autoRetryNacks, err = backoff.RetryWithData(func() (bool, error) {
 		resp, err := client.Init(ctx, &runtimepb.BatchInputInitRequest{
 			Config: value,
@@ -153,6 +161,7 @@ func startInputPlugin(
 // Connect implements service.BatchInput.
 func (i *input) Connect(ctx context.Context) (err error) {
 	var resp *runtimepb.BatchInputConnectResponse
+	// If the plugin crashes attempt to restart the process up to retryCount times.
 	for range retryCount {
 		resp, err = i.client.Connect(ctx, &runtimepb.BatchInputConnectRequest{})
 		if err != nil {
@@ -199,7 +208,7 @@ func (i *input) ReadBatch(ctx context.Context) (service.MessageBatch, service.Ac
 			Error:   runtimepb.ErrorToProto(err),
 		})
 		if err != nil {
-			return fmt.Errorf("unable to ack batch: %w", err)
+			return fmt.Errorf("unable to ack batch with ID %d: %w", id, err)
 		}
 		return runtimepb.ProtoToError(resp.Error)
 	}, nil
@@ -214,5 +223,8 @@ func (i *input) Close(ctx context.Context) error {
 	if err := runtimepb.ProtoToError(resp.Error); err != nil {
 		return fmt.Errorf("plugin close error: %w", err)
 	}
-	return i.proc.Close(ctx)
+	if err := i.proc.Close(ctx); err != nil {
+		return fmt.Errorf("unable to close plugin process: %w", err)
+	}
+	return nil
 }

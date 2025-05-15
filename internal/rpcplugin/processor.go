@@ -37,13 +37,15 @@ type ProcessorConfig struct {
 	//
 	// This does NOT inherit from the current process
 	Env map[string]string
+	// Directory for the process
+	Cwd string
 	// The configuration spec for the plugin
 	Spec *service.ConfigSpec
 }
 
 type processor struct {
 	cfgValue any
-	proc     subprocess.SubProcess
+	proc     *subprocess.Subprocess
 	client   runtimepb.BatchProcessorServiceClient
 }
 
@@ -86,7 +88,12 @@ func RegisterProcessorPlugin(env *service.Environment, spec ProcessorConfig) err
 		}
 		cleanup = append(cleanup, conn.Close)
 		spec.Env["REDPANDA_CONNECT_PLUGIN_ADDRESS"] = socketPath
-		proc, err := subprocess.New(spec.Cmd, spec.Env, subprocess.WithLogger(res.Logger()))
+		proc, err := subprocess.New(
+			spec.Cmd,
+			spec.Env,
+			subprocess.WithLogger(res.Logger()),
+			subprocess.WithCwd(spec.Cwd),
+		)
 		if err != nil {
 			err = fmt.Errorf("invalid subprocess: %w", err)
 			return nil, err
@@ -111,7 +118,7 @@ func RegisterProcessorPlugin(env *service.Environment, spec ProcessorConfig) err
 
 func startProcessorPlugin(
 	ctx context.Context,
-	proc subprocess.SubProcess,
+	proc *subprocess.Subprocess,
 	client runtimepb.BatchProcessorServiceClient,
 	cfgValue any,
 ) (err error) {
@@ -126,6 +133,7 @@ func startProcessorPlugin(
 		_ = proc.Close(ctx)
 		return fmt.Errorf("unable to convert config to proto: %w", err)
 	}
+	// Retry to wait for the process to start
 	err = backoff.Retry(func() error {
 		resp, err := client.Init(ctx, &runtimepb.BatchProcessorInitRequest{
 			Config: value,
@@ -152,6 +160,7 @@ func (p *processor) ProcessBatch(ctx context.Context, batch service.MessageBatch
 		return nil, fmt.Errorf("unable to convert batch to proto: %w", err)
 	}
 	var resp *runtimepb.BatchProcessorProcessBatchResponse
+	// If the plugin crashes attempt to restart the process up to retryCount times.
 	for range retryCount {
 		resp, err = p.client.ProcessBatch(ctx, &runtimepb.BatchProcessorProcessBatchRequest{
 			Batch: proto,
@@ -192,5 +201,8 @@ func (p *processor) Close(ctx context.Context) error {
 	if err := runtimepb.ProtoToError(resp.Error); err != nil {
 		return fmt.Errorf("plugin close error: %w", err)
 	}
-	return p.proc.Close(ctx)
+	if err := p.proc.Close(ctx); err != nil {
+		return fmt.Errorf("unable to close plugin process: %w", err)
+	}
+	return nil
 }
