@@ -23,7 +23,7 @@ import "redpanda/runtime/v1alpha1/message.proto";
 // BatchOutput is an interface implemented by Benthos outputs that require
 // Benthos to batch messages before dispatch in order to improve throughput.
 // Each call to WriteBatch should block until either all messages in the batch
-// have been successfully or unsuccessfully sent, or the context is cancelled.
+// have been successfully or unsuccessfully sent, or the RPC deadline is reached.
 //
 // Multiple write calls can be performed in parallel, and the constructor of an
 // output must provide a MaxInFlight parameter indicating the maximum number of
@@ -49,8 +49,7 @@ service BatchOutputService {
   // again until Connect has returned a nil error.
   rpc Send(BatchOutputSendRequest) returns (BatchOutputSendResponse) {}
   // Close the component, blocks until either the underlying resources are
-  // cleaned up or the context is cancelled. Returns an error if the context
-  // is cancelled.
+  // cleaned up or the RPC deadline is reached.
   rpc Close(BatchOutputCloseRequest) returns (BatchOutputCloseResponse) {}
 }
 
