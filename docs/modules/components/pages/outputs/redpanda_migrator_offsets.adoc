@@ -91,7 +91,7 @@ output:
 --
 ======
 
-This output can be used in combination with the `kafka_franz` input that is configured to read the `__consumer_offsets` topic.
+This output should be used in combination with the `redpanda_migrator_offsets` input
 
 == Fields
 

@@ -51,7 +51,7 @@ It provides the same delivery guarantees and ordering semantics as the ` + "`red
 
 == Metrics
 
-Emits a ` + "`input_redpanda_migrator_lag`" + ` metric with ` + "`topic`" + ` and ` + "`partition`" + ` labels for each consumed topic.
+Emits a ` + "`redpanda_lag`" + ` metric with ` + "`topic`" + ` and ` + "`partition`" + ` labels for each consumed topic.
 
 == Metadata
 
