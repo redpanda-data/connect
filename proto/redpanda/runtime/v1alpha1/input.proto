@@ -25,7 +25,7 @@ import "redpanda/runtime/v1alpha1/message.proto";
 // a logical group rather than as individual messages.
 //
 // Calls to ReadBatch should block until either a message batch is ready to
-// process, the connection is lost, or the provided context is cancelled.
+// process, the connection is lost, or the RPC deadline is reached.
 service BatchInputService {
   // Init is the first method called for a batch input and it passes the user's
   // configuration to the input.
@@ -36,10 +36,6 @@ service BatchInputService {
   // Establish a connection to the upstream service. Connect will always be
   // called first when a reader is instantiated, and will be continuously
   // called with back off until a nil error is returned.
-  //
-  // The provided context remains open only for the duration of the connecting
-  // phase, and should not be used to establish the lifetime of the connection
-  // itself.
   //
   // Once Connect returns a nil error the Read method will be called until
   // either ErrNotConnected is returned, or the reader is closed.
@@ -70,8 +66,7 @@ service BatchInputService {
   // to get automatic retries, and noop this function.
   rpc Ack(BatchInputAckRequest) returns (BatchInputAckResponse);
   // Close the component, blocks until either the underlying resources are
-  // cleaned up or the context is cancelled. Returns an error if the context
-  // is cancelled.
+  // cleaned up or the RPC deadline is reached.
   rpc Close(BatchInputCloseRequest) returns (BatchInputCloseResponse);
 }
 

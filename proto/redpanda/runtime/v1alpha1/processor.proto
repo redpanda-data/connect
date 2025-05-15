@@ -54,8 +54,7 @@ service BatchProcessorService {
   rpc ProcessBatch(BatchProcessorProcessBatchRequest)
       returns (BatchProcessorProcessBatchResponse) {}
   // Close the component, blocks until either the underlying resources are
-  // cleaned up or the context is cancelled. Returns an error if the context
-  // is cancelled.
+  // cleaned up or the RPC deadline is reached.
   rpc Close(BatchProcessorCloseRequest) returns (BatchProcessorCloseResponse) {}
 }
 
