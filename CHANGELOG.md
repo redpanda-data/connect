@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - New `redpanda` cache that stores key/value pairs in a compacted topic. (@rockwotj)
 - Field `max_yield_batch_bytes` added to all `redpanda` flavored inputs. (@Jeffail)
 - New `translate_kafka_connect_types` to `schema_registry_decode` to decode non-standard types emitted by debezium. (@rockwotj)
+- (Benthos) CLI flag `--api-path-prefix` added to the `studio pull` and `studio sync-schema` subcommands. (@mihaitodor)
 
 ### Fixed
 
