@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 - The `mcp-server` subcommand now supports the new streamable HTTP spec when the `address` flag is specified. (@Jeffail)
 - Field `poll_interval` added to the `redpanda_migrator_offsets` input. (@mihaitodor)
 - Field `consumer_group_offsets_poll_interval` added to the `redpanda_migrator_bundle` input. (@mihaitodor)
+- Field `input_bundle_label` added to the `redpanda_migrator_bundle` output. (@mihaitodor)
 
 ### Fixed
 
