@@ -79,12 +79,10 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 }
 
 func init() {
-	err := service.RegisterInput("nsq", inputConfigSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
+	service.MustRegisterInput("nsq", inputConfigSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 		return newNSQReaderFromParsed(conf, mgr)
 	})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 type nsqReader struct {

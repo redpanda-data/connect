@@ -61,7 +61,7 @@ func s3CacheConfig() *service.ConfigSpec {
 }
 
 func init() {
-	err := service.RegisterCache(
+	service.MustRegisterCache(
 		"aws_s3", s3CacheConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
 			s, err := newS3CacheFromConfig(conf)
@@ -70,9 +70,7 @@ func init() {
 			}
 			return s, nil
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 func newS3CacheFromConfig(conf *service.ParsedConfig) (*s3Cache, error) {

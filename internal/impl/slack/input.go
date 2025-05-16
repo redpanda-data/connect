@@ -23,10 +23,7 @@ import (
 )
 
 func init() {
-	err := service.RegisterInput("slack", inputSpec(), newInput)
-	if err != nil {
-		panic(err)
-	}
+	service.MustRegisterInput("slack", inputSpec(), newInput)
 }
 
 const (

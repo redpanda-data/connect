@@ -207,7 +207,7 @@ output:
 }
 
 func init() {
-	err := service.RegisterBatchOutput("opensearch", OutputSpec(),
+	service.MustRegisterBatchOutput("opensearch", OutputSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPolicy service.BatchPolicy, maxInFlight int, err error) {
 			if maxInFlight, err = conf.FieldMaxInFlight(); err != nil {
 				return
@@ -218,9 +218,7 @@ func init() {
 			out, err = OutputFromParsed(conf, mgr)
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 // Output implements service.BatchOutput for elasticsearch.

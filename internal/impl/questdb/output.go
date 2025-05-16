@@ -510,11 +510,9 @@ func (q *questdbWriter) Close(ctx context.Context) error {
 }
 
 func init() {
-	if err := service.RegisterBatchOutput(
+	service.MustRegisterBatchOutput(
 		"questdb",
 		questdbOutputConfig(),
 		fromConf,
-	); err != nil {
-		panic(err)
-	}
+	)
 }

@@ -29,14 +29,12 @@ import (
 var _ service.Processor = (*textChunker)(nil)
 
 func init() {
-	err := service.RegisterProcessor(
+	service.MustRegisterProcessor(
 		"text_chunker",
 		newTextChunkerSpec(),
 		newTextChunker,
 	)
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 const (

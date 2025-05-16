@@ -291,15 +291,10 @@ func validateSimpleString(s string) error {
 }
 
 func init() {
-	err := service.RegisterBatchInput("postgres_cdc", newPostgresCDCConfig(), newPgStreamInput)
-	if err != nil {
-		panic(err)
-	}
+	service.MustRegisterBatchInput("postgres_cdc", newPostgresCDCConfig(), newPgStreamInput)
 	// Legacy naming
-	err = service.RegisterBatchInput("pg_stream", newPostgresCDCConfig().Deprecated(), newPgStreamInput)
-	if err != nil {
-		panic(err)
-	}
+	service.MustRegisterBatchInput("pg_stream", newPostgresCDCConfig().Deprecated(), newPgStreamInput)
+
 }
 
 type pgStreamInput struct {

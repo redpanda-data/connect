@@ -143,7 +143,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 }
 
 func init() {
-	err := service.RegisterInput("gcp_pubsub", pbiSpec(),
+	service.MustRegisterInput("gcp_pubsub", pbiSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 			pConf, err := pbiConfigFromParsed(conf)
 			if err != nil {
@@ -151,9 +151,7 @@ func init() {
 			}
 			return newGCPPubSubReader(pConf, mgr)
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 func createSubscription(conf pbiConfig, client *pubsub.Client, log *service.Logger) {

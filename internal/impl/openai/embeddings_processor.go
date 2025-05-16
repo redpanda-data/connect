@@ -26,14 +26,12 @@ const (
 )
 
 func init() {
-	err := service.RegisterProcessor(
+	service.MustRegisterProcessor(
 		"openai_embeddings",
 		embeddingProcessorConfig(),
 		makeEmbeddingsProcessor,
 	)
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 func embeddingProcessorConfig() *service.ConfigSpec {

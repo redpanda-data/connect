@@ -101,7 +101,7 @@ xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
 }
 
 func init() {
-	err := service.RegisterInput(
+	service.MustRegisterInput(
 		"nats_jetstream", natsJetStreamInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 			input, err := newJetStreamReaderFromConfig(conf, mgr)
@@ -110,9 +110,7 @@ func init() {
 			}
 			return conf.WrapInputExtractTracingSpanMapping("nats_jetstream", input)
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 //------------------------------------------------------------------------------

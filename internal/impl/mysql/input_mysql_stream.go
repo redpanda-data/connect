@@ -215,10 +215,7 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 }
 
 func init() {
-	err := service.RegisterBatchInput("mysql_cdc", mysqlStreamConfigSpec, newMySQLStreamInput)
-	if err != nil {
-		panic(err)
-	}
+	service.MustRegisterBatchInput("mysql_cdc", mysqlStreamConfigSpec, newMySQLStreamInput)
 }
 
 // ---- Redpanda Connect specific methods----

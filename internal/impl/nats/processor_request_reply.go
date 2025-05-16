@@ -77,10 +77,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 }
 
 func init() {
-	err := service.RegisterProcessor("nats_request_reply", natsRequestReplyConfig(), newRequestReplyProcessor)
-	if err != nil {
-		panic(err)
-	}
+	service.MustRegisterProcessor("nats_request_reply", natsRequestReplyConfig(), newRequestReplyProcessor)
 }
 
 type requestReplyProcessor struct {

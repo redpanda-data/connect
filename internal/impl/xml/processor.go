@@ -103,14 +103,12 @@ With cast set to true, the resulting JSON structure would look like this:
 }
 
 func init() {
-	err := service.RegisterProcessor(
+	service.MustRegisterProcessor(
 		"xml", xmlProcSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
 			return xmlProcFromParsed(conf, mgr)
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 type xmlProc struct {

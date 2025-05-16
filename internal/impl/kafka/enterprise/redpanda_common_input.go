@@ -90,7 +90,7 @@ This input adds the following metadata fields to each message:
 }
 
 func init() {
-	err := service.RegisterBatchInput("redpanda_common", redpandaCommonInputConfig(),
+	service.MustRegisterBatchInput("redpanda_common", redpandaCommonInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
 			if err := license.CheckRunningEnterprise(mgr); err != nil {
 				return nil, err
@@ -123,7 +123,5 @@ func init() {
 
 			return service.AutoRetryNacksBatchedToggled(conf, rdr)
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }

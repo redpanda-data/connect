@@ -84,7 +84,7 @@ func oltpSpec() *service.ConfigSpec {
 }
 
 func init() {
-	err := service.RegisterOtelTracerProvider(
+	service.MustRegisterOtelTracerProvider(
 		"open_telemetry_collector", oltpSpec(),
 		func(conf *service.ParsedConfig) (trace.TracerProvider, error) {
 			c, err := oltpConfigFromParsed(conf)
@@ -93,9 +93,7 @@ func init() {
 			}
 			return newOtlp(c)
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 type collector struct {

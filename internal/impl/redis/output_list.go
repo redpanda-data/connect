@@ -58,7 +58,7 @@ func redisListOutputConfig() *service.ConfigSpec {
 }
 
 func init() {
-	err := service.RegisterBatchOutput(
+	service.MustRegisterBatchOutput(
 		"redis_list", redisListOutputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPol service.BatchPolicy, mif int, err error) {
 			if batchPol, err = conf.FieldBatchPolicy(loFieldBatching); err != nil {
@@ -70,9 +70,7 @@ func init() {
 			out, err = newRedisListWriter(conf, mgr)
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 type redisListWriter struct {

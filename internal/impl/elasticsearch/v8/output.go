@@ -249,7 +249,7 @@ output:
 }
 
 func init() {
-	err := service.RegisterBatchOutput("elasticsearch_v8", elasticsearchConfigSpec(),
+	service.MustRegisterBatchOutput("elasticsearch_v8", elasticsearchConfigSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPolicy service.BatchPolicy, maxInFlight int, err error) {
 			if maxInFlight, err = conf.FieldMaxInFlight(); err != nil {
 				return
@@ -260,9 +260,7 @@ func init() {
 			out, err = outputFromParsed(conf, mgr)
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 func outputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (*esOutput, error) {

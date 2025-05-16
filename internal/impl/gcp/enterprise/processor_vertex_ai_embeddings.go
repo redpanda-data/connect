@@ -38,14 +38,12 @@ const (
 )
 
 func init() {
-	err := service.RegisterProcessor(
+	service.MustRegisterProcessor(
 		"gcp_vertex_ai_embeddings",
 		newVertexAIEmbeddingsProcessorConfig(),
 		newVertexAIEmbeddingsProcessor,
 	)
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 func newVertexAIEmbeddingsProcessorConfig() *service.ConfigSpec {

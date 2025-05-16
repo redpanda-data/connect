@@ -93,7 +93,7 @@ func schemaRegistryOutputConfigFields() []*service.ConfigField {
 }
 
 func init() {
-	err := service.RegisterOutput("schema_registry", schemaRegistryOutputSpec(),
+	service.MustRegisterOutput("schema_registry", schemaRegistryOutputSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.Output, maxInFlight int, err error) {
 			if maxInFlight, err = conf.FieldMaxInFlight(); err != nil {
 				return
@@ -102,9 +102,7 @@ func init() {
 			out, err = outputFromParsed(conf, mgr)
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 type schemaRegistryOutput struct {

@@ -184,7 +184,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 }
 
 func init() {
-	err := service.RegisterBatchOutput("kafka", OSKConfigSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (o service.BatchOutput, batchPol service.BatchPolicy, mIF int, err error) {
+	service.MustRegisterBatchOutput("kafka", OSKConfigSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (o service.BatchOutput, batchPol service.BatchPolicy, mIF int, err error) {
 		if o, err = NewKafkaWriterFromParsed(conf, mgr); err != nil {
 			return
 		}
@@ -200,9 +200,7 @@ func init() {
 		o, err = conf.WrapBatchOutputExtractTracingSpanMapping("kafka", o)
 		return
 	})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 type kafkaWriter struct {

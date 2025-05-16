@@ -55,14 +55,12 @@ func ProcessorConfig() *service.ConfigSpec {
 }
 
 func init() {
-	err := service.RegisterBatchProcessor("couchbase", ProcessorConfig(),
+	service.MustRegisterBatchProcessor("couchbase", ProcessorConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 			return NewProcessor(conf, mgr)
 		},
 	)
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 //------------------------------------------------------------------------------

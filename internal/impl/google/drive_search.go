@@ -32,14 +32,12 @@ const (
 )
 
 func init() {
-	err := service.RegisterProcessor(
+	service.MustRegisterProcessor(
 		"google_drive_search",
 		driveSearchProcessorConfig(),
 		newGoogleDriveSearchProcessor,
 	)
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 func driveSearchProcessorConfig() *service.ConfigSpec {

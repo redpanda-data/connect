@@ -52,7 +52,7 @@ func pusherOutputConfig() *service.ConfigSpec {
 }
 
 func init() {
-	err := service.RegisterBatchOutput("pusher", pusherOutputConfig(),
+	service.MustRegisterBatchOutput("pusher", pusherOutputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (
 			output service.BatchOutput,
 			batchPolicy service.BatchPolicy,
@@ -68,9 +68,7 @@ func init() {
 			output, err = newPusherWriterFromConfig(conf, mgr.Logger())
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 type pusherWriter struct {

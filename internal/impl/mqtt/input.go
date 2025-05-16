@@ -64,16 +64,14 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 }
 
 func init() {
-	err := service.RegisterInput("mqtt", inputConfigSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
+	service.MustRegisterInput("mqtt", inputConfigSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 		rdr, err := newMQTTReaderFromParsed(conf, mgr)
 		if err != nil {
 			return nil, err
 		}
 		return service.AutoRetryNacksToggled(conf, rdr)
 	})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 type mqttReader struct {

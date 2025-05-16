@@ -327,7 +327,7 @@ output:
 }
 
 func init() {
-	err := service.RegisterBatchOutput(
+	service.MustRegisterBatchOutput(
 		"snowflake_streaming",
 		snowflakeStreamingOutputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (
@@ -349,9 +349,7 @@ func init() {
 			output, err = newSnowflakeStreamer(conf, mgr)
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 func newSnowflakeStreamer(

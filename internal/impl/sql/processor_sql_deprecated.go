@@ -52,14 +52,12 @@ For basic inserts or select queries use either the ` + "xref:components:processo
 }
 
 func init() {
-	err := service.RegisterBatchProcessor(
+	service.MustRegisterBatchProcessor(
 		"sql", DeprecatedProcessorConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 			return NewSQLDeprecatedProcessorFromConfig(conf, mgr)
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 // NewSQLDeprecatedProcessorFromConfig returns an internal sql processor.

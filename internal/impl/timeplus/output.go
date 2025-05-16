@@ -78,9 +78,6 @@ output:
 		Field(service.NewOutputMaxInFlightField()).
 		Field(service.NewBatchPolicyField("batching"))
 
-	if err := service.RegisterBatchOutput("timeplus", outputConfigSpec, newTimeplusOutput); err != nil {
-		panic(err)
-	}
 }
 
 type timeplus struct {

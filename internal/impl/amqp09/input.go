@@ -185,12 +185,10 @@ See https://github.com/rabbitmq/amqp091-go/blob/b3d409fe92c34bea04d8123a136384c8
 }
 
 func init() {
-	err := service.RegisterInput("amqp_0_9", amqp09InputSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
+	service.MustRegisterInput("amqp_0_9", amqp09InputSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 		return amqp09ReaderFromParsed(conf, mgr)
 	})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 type amqp09BindingDeclare struct {

@@ -378,13 +378,11 @@ func mapLevel(raw string) (sentry.Level, error) {
 }
 
 func init() {
-	if err := service.RegisterProcessor(
+	service.MustRegisterProcessor(
 		"sentry_capture",
 		newCaptureProcessorConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
 			return newCaptureProcessor(conf, mgr)
 		},
-	); err != nil {
-		panic(err)
-	}
+	)
 }

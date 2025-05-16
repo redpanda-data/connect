@@ -91,7 +91,7 @@ The NATS Streaming Server is being deprecated. Critical bug fixes and security f
 }
 
 func init() {
-	err := service.RegisterOutput(
+	service.MustRegisterOutput(
 		"nats_stream", soSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Output, int, error) {
 			pConf, err := soConfigFromParsed(conf, mgr)
@@ -109,9 +109,7 @@ func init() {
 			spanOutput, err := conf.WrapOutputExtractTracingSpanMapping("nats_stream", w)
 			return spanOutput, maxInFlight, err
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 type natsStreamWriter struct {
