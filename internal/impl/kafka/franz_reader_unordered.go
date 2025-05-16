@@ -573,7 +573,10 @@ func (f *FranzReaderUnordered) Connect(ctx context.Context) error {
 						return
 					}
 				}
+			} else {
+				connErrBackOff.Reset()
 			}
+
 			if closeCtx.Err() != nil {
 				return
 			}
