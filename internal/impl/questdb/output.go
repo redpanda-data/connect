@@ -23,6 +23,7 @@ import (
 	"time"
 
 	qdb "github.com/questdb/go-questdb-client/v3"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
@@ -117,7 +118,6 @@ type questdbWriter struct {
 }
 
 func fromConf(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPol service.BatchPolicy, mif int, err error) {
-
 	if batchPol, err = conf.FieldBatchPolicy("batching"); err != nil {
 		return
 	}

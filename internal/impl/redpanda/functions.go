@@ -37,6 +37,7 @@ var _ = registerModuleRunnerFunction("check_abi_version_1", func(r *dataTransfor
 		// Placeholder for ABI compatibility check
 	}
 })
+
 var _ = registerModuleRunnerFunction("check_abi_version_2", func(r *dataTransformEngine) any {
 	return func(ctx context.Context, m api.Module) {
 		// Placeholder for ABI compatibility check
@@ -56,7 +57,8 @@ var _ = registerModuleRunnerFunction("read_batch_header", func(r *dataTransformE
 		maxTimestamp,
 		producerId,
 		producerEpoch,
-		baseSequence uint32) int32 {
+		baseSequence uint32,
+	) int32 {
 		// Notify the host we're done processing a batch.
 		r.hostChan <- nil
 		// Wait for new batch to be submitted for processing.

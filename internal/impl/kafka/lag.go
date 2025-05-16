@@ -21,10 +21,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/redpanda-data/benthos/v4/public/service"
-	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 )
 
 // ConsumerLag is a struct that manages the consumer lag for Kafka topics.

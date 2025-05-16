@@ -188,7 +188,7 @@ func downloadAndInstall() error {
 		return fmt.Errorf("failed to copy downloaded contents to file %s: %v", binary, err)
 	}
 
-	err = os.Chmod(binary, 0700)
+	err = os.Chmod(binary, 0o700)
 	if err != nil {
 		return fmt.Errorf("failed to change permissions of the file %s: %v", binary, err)
 	}
@@ -235,7 +235,7 @@ func downloadAndInstallWithInstallScript() error {
 	if err != nil {
 		return fmt.Errorf("failed to copy install script to a temporary file: %v", err)
 	}
-	err = os.Chmod(tmpFile.Name(), 0700)
+	err = os.Chmod(tmpFile.Name(), 0o700)
 	if err != nil {
 		return fmt.Errorf("failed to change permissions on the install script to 0700: %v", err)
 	}
@@ -313,7 +313,6 @@ func ockamHome() string {
 	err = os.MkdirAll(filepath.Join(homeDir, ".ockam"), os.ModePerm)
 	if os.IsPermission(err) {
 		return fallBackHomeDir
-
 	}
 
 	return filepath.Join(homeDir, ".ockam")

@@ -219,6 +219,7 @@ func setupDockerPool(t *testing.T) *dockertest.Resource {
 
 	return resource
 }
+
 func getClient(resource *dockertest.Resource) (*sftp.Client, error) {
 	creds := credentials{
 		Username: sftpUsername,

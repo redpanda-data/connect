@@ -24,6 +24,7 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-plugin"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 

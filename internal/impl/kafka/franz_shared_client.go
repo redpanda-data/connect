@@ -18,8 +18,9 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/twmb/franz-go/pkg/kgo"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 var (

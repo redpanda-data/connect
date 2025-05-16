@@ -13,9 +13,10 @@ import (
 	"context"
 	"fmt"
 
+	oai "github.com/sashabaranov/go-openai"
+
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
-	oai "github.com/sashabaranov/go-openai"
 )
 
 const (
