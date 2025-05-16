@@ -55,7 +55,7 @@ func natsJetStreamOutputConfig() *service.ConfigSpec {
 }
 
 func init() {
-	err := service.RegisterOutput(
+	service.MustRegisterOutput(
 		"nats_jetstream", natsJetStreamOutputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Output, int, error) {
 			maxInFlight, err := conf.FieldInt("max_in_flight")
@@ -69,9 +69,7 @@ func init() {
 			spanOutput, err := conf.WrapOutputExtractTracingSpanMapping("nats_jetstream", w)
 			return spanOutput, maxInFlight, err
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 //------------------------------------------------------------------------------

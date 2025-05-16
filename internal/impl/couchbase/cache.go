@@ -39,14 +39,12 @@ func CacheConfig() *service.ConfigSpec {
 }
 
 func init() {
-	err := service.RegisterCache("couchbase", CacheConfig(),
+	service.MustRegisterCache("couchbase", CacheConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
 			return NewCache(conf, mgr)
 		},
 	)
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 //------------------------------------------------------------------------------

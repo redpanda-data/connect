@@ -67,7 +67,7 @@ There is a specific docker tag postfix ` + "`-cgo`" + ` for C builds containing 
 }
 
 func init() {
-	_ = service.RegisterBatchInput("zmq4", zmqInputConfig(), func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
+	service.MustRegisterBatchInput("zmq4", zmqInputConfig(), func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
 		r, err := zmqInputFromConfig(conf, mgr)
 		if err != nil {
 			return nil, err

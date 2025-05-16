@@ -46,7 +46,7 @@ func outputConfig() *service.ConfigSpec {
 }
 
 func init() {
-	err := service.RegisterBatchOutput(
+	service.MustRegisterBatchOutput(
 		"couchbase",
 		outputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPol service.BatchPolicy, mif int, err error) {
@@ -60,9 +60,7 @@ func init() {
 			return
 		},
 	)
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 // Output is a sink for Couchbase

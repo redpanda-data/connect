@@ -89,7 +89,7 @@ input:
 }
 
 func init() {
-	err := service.RegisterInput(
+	service.MustRegisterInput(
 		"sql_select", sqlSelectInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 			i, err := newSQLSelectInputFromConfig(conf, mgr)
@@ -98,9 +98,7 @@ func init() {
 			}
 			return service.AutoRetryNacksToggled(conf, i)
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 //------------------------------------------------------------------------------

@@ -112,7 +112,7 @@ If the `+"`storage_connection_string`"+` does not contain the `+"`AccountName`"+
 }
 
 func init() {
-	err := service.RegisterOutput("azure_blob_storage", bsoSpec(),
+	service.MustRegisterOutput("azure_blob_storage", bsoSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.Output, mif int, err error) {
 			var pConf bsoConfig
 			if pConf, err = bsoConfigFromParsed(conf); err != nil {
@@ -126,9 +126,7 @@ func init() {
 			}
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 type azureBlobStorageWriter struct {

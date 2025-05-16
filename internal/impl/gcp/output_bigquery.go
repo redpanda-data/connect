@@ -253,7 +253,7 @@ For parquet, the data can be encoded using the ` + "`parquet_encode`" + ` proces
 }
 
 func init() {
-	err := service.RegisterBatchOutput(
+	service.MustRegisterBatchOutput(
 		"gcp_bigquery", gcpBigQueryConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (output service.BatchOutput, batchPol service.BatchPolicy, maxInFlight int, err error) {
 			if batchPol, err = conf.FieldBatchPolicy("batching"); err != nil {
@@ -269,9 +269,7 @@ func init() {
 			output, err = newGCPBigQueryOutput(gconf, mgr.Logger())
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 type gcpBigQueryOutput struct {

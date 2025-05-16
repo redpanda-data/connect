@@ -94,14 +94,11 @@ root.must_not = [
 }
 
 func init() {
-	err := service.RegisterProcessor(
+	service.MustRegisterProcessor(
 		"qdrant",
 		processorSpec(),
 		newProcessor,
 	)
-	if err != nil {
-		panic(err)
-	}
 }
 
 func newProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {

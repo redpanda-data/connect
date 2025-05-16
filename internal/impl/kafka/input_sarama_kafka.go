@@ -168,7 +168,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 }
 
 func init() {
-	err := service.RegisterBatchInput("kafka", iskConfigSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
+	service.MustRegisterBatchInput("kafka", iskConfigSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
 		i, err := newKafkaReaderFromParsed(conf, mgr)
 		if err != nil {
 			return nil, err
@@ -181,9 +181,7 @@ func init() {
 
 		return conf.WrapBatchInputExtractTracingSpanMapping("kafka", r)
 	})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 //------------------------------------------------------------------------------

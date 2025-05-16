@@ -160,7 +160,7 @@ func newCRDBChangefeedInputFromConfig(conf *service.ParsedConfig, res *service.R
 }
 
 func init() {
-	err := service.RegisterInput(
+	service.MustRegisterInput(
 		"cockroachdb_changefeed", crdbChangefeedInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 			i, err := newCRDBChangefeedInputFromConfig(conf, mgr)
@@ -169,9 +169,7 @@ func init() {
 			}
 			return service.AutoRetryNacksToggled(conf, i)
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 func (c *crdbChangefeedInput) Connect(ctx context.Context) (err error) {

@@ -124,7 +124,7 @@ func redpandaMigratorOutputConfigFields() []*service.ConfigField {
 }
 
 func init() {
-	err := service.RegisterBatchOutput("redpanda_migrator", redpandaMigratorOutputConfig(),
+	service.MustRegisterBatchOutput("redpanda_migrator", redpandaMigratorOutputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (
 			output service.BatchOutput,
 			batchPolicy service.BatchPolicy,
@@ -364,7 +364,5 @@ func init() {
 					}))
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }

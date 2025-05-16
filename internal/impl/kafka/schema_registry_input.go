@@ -90,7 +90,7 @@ func schemaRegistryInputConfigFields() []*service.ConfigField {
 }
 
 func init() {
-	err := service.RegisterInput("schema_registry", schemaRegistryInputSpec(),
+	service.MustRegisterInput("schema_registry", schemaRegistryInputSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 			i, err := inputFromParsed(conf, mgr)
 			if err != nil {
@@ -98,9 +98,7 @@ func init() {
 			}
 			return service.AutoRetryNacksToggled(conf, i)
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 type schemaRegistryInput struct {

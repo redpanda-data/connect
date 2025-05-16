@@ -89,7 +89,7 @@ metrics:
 }
 
 func init() {
-	err := service.RegisterMetricsExporter("aws_cloudwatch", cwMetricsSpec(),
+	service.MustRegisterMetricsExporter("aws_cloudwatch", cwMetricsSpec(),
 		func(conf *service.ParsedConfig, log *service.Logger) (service.MetricsExporter, error) {
 			cwConf, err := cwmConfigFromParsed(conf)
 			if err != nil {
@@ -101,9 +101,7 @@ func init() {
 			}
 			return newCloudWatch(cwConf, sess, log)
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 //------------------------------------------------------------------------------

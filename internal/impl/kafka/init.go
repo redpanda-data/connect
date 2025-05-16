@@ -31,11 +31,6 @@ var redpandaMigratorInputTemplate []byte
 var redpandaMigratorOutputTemplate []byte
 
 func init() {
-	if err := service.RegisterTemplateYAML(string(redpandaMigratorInputTemplate)); err != nil {
-		panic(err)
-	}
-
-	if err := service.RegisterTemplateYAML(string(redpandaMigratorOutputTemplate)); err != nil {
-		panic(err)
-	}
+	service.MustRegisterTemplateYAML(string(redpandaMigratorInputTemplate))
+	service.MustRegisterTemplateYAML(string(redpandaMigratorOutputTemplate))
 }

@@ -58,7 +58,7 @@ input:
 }
 
 func init() {
-	err := service.RegisterInput(
+	service.MustRegisterInput(
 		"sql_raw", sqlRawInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 			i, err := newSQLRawInputFromConfig(conf, mgr)
@@ -67,9 +67,7 @@ func init() {
 			}
 			return service.AutoRetryNacksToggled(conf, i)
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 //------------------------------------------------------------------------------

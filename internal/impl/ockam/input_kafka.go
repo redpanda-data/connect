@@ -29,7 +29,7 @@ import (
 
 // this function is, almost, an exact copy of the init() function in ../kafka/input_kafka_franz.go
 func init() {
-	err := service.RegisterBatchInput("ockam_kafka", ockamKafkaInputConfig(),
+	service.MustRegisterBatchInput("ockam_kafka", ockamKafkaInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
 			i, err := newOckamKafkaInput(conf, mgr)
 			if err != nil {
@@ -37,9 +37,7 @@ func init() {
 			}
 			return service.AutoRetryNacksBatchedToggled(conf.Namespace("kafka"), i)
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 func ockamKafkaInputConfig() *service.ConfigSpec {

@@ -77,7 +77,7 @@ func outputSpec() *service.ConfigSpec {
 }
 
 func init() {
-	err := service.RegisterBatchOutput(
+	service.MustRegisterBatchOutput(
 		"qdrant",
 		outputSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPol service.BatchPolicy, mif int, err error) {
@@ -92,9 +92,7 @@ func init() {
 			}
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 type outputWriter struct {

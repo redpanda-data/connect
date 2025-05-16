@@ -58,10 +58,7 @@ specified encoding.`).
 }
 
 func init() {
-	err := service.RegisterProcessor("avro", avroConfigSpec(), newAvroFromConfig)
-	if err != nil {
-		panic(err)
-	}
+	service.MustRegisterProcessor("avro", avroConfigSpec(), newAvroFromConfig)
 }
 
 //------------------------------------------------------------------------------

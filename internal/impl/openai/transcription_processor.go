@@ -28,14 +28,12 @@ const (
 )
 
 func init() {
-	err := service.RegisterProcessor(
+	service.MustRegisterProcessor(
 		"openai_transcription",
 		transcriptionProcessorConfig(),
 		makeTranscriptionProcessor,
 	)
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 func transcriptionProcessorConfig() *service.ConfigSpec {

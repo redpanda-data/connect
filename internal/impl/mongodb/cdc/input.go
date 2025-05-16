@@ -158,10 +158,7 @@ Each message omitted by this plugin has the following metadata:
 }
 
 func init() {
-	err := service.RegisterBatchInput("mongodb_cdc", spec(), newMongoCDC)
-	if err != nil {
-		panic(err)
-	}
+	service.MustRegisterBatchInput("mongodb_cdc", spec(), newMongoCDC)
 }
 
 func newMongoCDC(conf *service.ParsedConfig, res *service.Resources) (i service.BatchInput, err error) {
