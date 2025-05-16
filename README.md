@@ -132,9 +132,15 @@ cd connect
 make
 ```
 
-## Lint
+## Formatting and Linting
 
-Redpanda Connect uses [golangci-lint][golangci-lint] for linting, which you can install with `make install-tools` and then run it with `make lint`.
+Redpanda Connect uses [golangci-lint][golangci-lint] for formatting and linting.
+You can install it with `make install-tools` and then run:
+
+- `make fmt` to format the codebase,
+- `make lint` to lint the codebase.
+
+Configure your editor to use `gofumpt` as a formatter, see the instructions for different editors [here](https://github.com/mvdan/gofumpt#installation). 
 
 ## Plugins
 
