@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.55.1 - 2025-05-16
+
+### Fixed
+
+- Fixed an issue where the `kafka_franz`, `redpanda` and `redpanda_common` inputs could stall for an unreasonable length of time after losing connection to a broker. (@Jeffail)
+
 ## 4.55.0 - 2025-05-15
 
 ### Added
