@@ -1,5 +1,6 @@
 http:
-  enabled: false
+  address: 0.0.0.0:4196
+  enabled: true
 
 input:
   redpanda_common:
@@ -22,12 +23,9 @@ output:
         - mapping: |
             root = "Uh oh: %v failed to deliver due to: %v".format(content().string(), @fallback_error)
 
-redpanda_common:
+redpanda:
   seed_brokers: [ localhost:9092 ]
 
 metrics:
-  prometheus:
-    push_interval: 1s
-    push_job_name: benthos_push
-    push_url: "http://localhost:9091"
+  prometheus: {}
 

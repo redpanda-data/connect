@@ -14,6 +14,8 @@ services:
     volumes:
       - ./prometheus/:/etc/prometheus/
       - prometheus_data:/prometheus
+    extra_hosts:
+      - host.docker.internal:host-gateway
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
@@ -21,30 +23,6 @@ services:
       - '--web.console.templates=/usr/share/prometheus/consoles'
     ports:
       - 9090:9090
-
-  traefik:
-    image: "traefik"
-    command:
-      - "--api.insecure=true"
-      - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false"
-      - "--entrypoints.web.address=:80"
-    ports:
-      - "80:80"
-      - "8080:8080"
-    volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock:ro"
-
-  pushgateway:
-    image: prom/pushgateway
-    ports:
-      - 9091:9091
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.whoami.rule=Host(`push.localhost`)"
-      - "traefik.http.routers.whoami.entrypoints=web"
-      - "traefik.http.routers.whoami.middlewares=secured"
-      - "traefik.http.middlewares.secured.basicauth.users=foo:$$2y$$05$$zwyVyaTBE.hdSl8Xs./bJuv3nrlIgiFCsHNDvnWy4C3GRnR4L5cl6"
 
   grafana:
     image: grafana/grafana
