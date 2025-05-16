@@ -54,7 +54,7 @@ func redpandaOutputConfigFields() []*service.ConfigField {
 }
 
 func init() {
-	err := service.RegisterBatchOutput("redpanda", redpandaOutputConfig(),
+	service.MustRegisterBatchOutput("redpanda", redpandaOutputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (
 			output service.BatchOutput,
 			batchPolicy service.BatchPolicy,
@@ -114,7 +114,5 @@ func init() {
 					}))
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }

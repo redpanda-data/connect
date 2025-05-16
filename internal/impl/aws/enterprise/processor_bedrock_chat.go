@@ -34,10 +34,7 @@ const (
 )
 
 func init() {
-	err := service.RegisterProcessor("aws_bedrock_chat", newBedrockChatConfigSpec(), newBedrockChatProcessor)
-	if err != nil {
-		panic(err)
-	}
+	service.MustRegisterProcessor("aws_bedrock_chat", newBedrockChatConfigSpec(), newBedrockChatProcessor)
 }
 
 func newBedrockChatConfigSpec() *service.ConfigSpec {

@@ -75,7 +75,7 @@ func outputSpec() *service.ConfigSpec {
 }
 
 func init() {
-	err := service.RegisterBatchOutput(
+	service.MustRegisterBatchOutput(
 		"pinecone",
 		outputSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPol service.BatchPolicy, mif int, err error) {
@@ -90,9 +90,7 @@ func init() {
 			}
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 type operation string

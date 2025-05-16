@@ -382,10 +382,7 @@ pipeline:
 func init() {
 	varInvalidRegexp = regexp.MustCompile(`[^a-zA-Z0-9_]`)
 
-	err := service.RegisterProcessor("awk", awkSpec(), newAWKProcFromConfig)
-	if err != nil {
-		panic(err)
-	}
+	service.MustRegisterProcessor("awk", awkSpec(), newAWKProcFromConfig)
 }
 
 //------------------------------------------------------------------------------

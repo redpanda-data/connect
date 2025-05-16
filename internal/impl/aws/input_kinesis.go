@@ -176,7 +176,7 @@ Use the `+"`batching`"+` fields to configure an optional xref:configuration:batc
 }
 
 func init() {
-	err := service.RegisterBatchInput("aws_kinesis", kinesisInputSpec(),
+	service.MustRegisterBatchInput("aws_kinesis", kinesisInputSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
 			r, err := newKinesisReaderFromParsed(conf, mgr)
 			if err != nil {
@@ -184,9 +184,7 @@ func init() {
 			}
 			return service.AutoRetryNacksBatchedToggled(conf, r)
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 //------------------------------------------------------------------------------

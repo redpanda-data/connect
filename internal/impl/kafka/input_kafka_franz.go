@@ -65,7 +65,7 @@ func FranzKafkaInputConfigFields() []*service.ConfigField {
 }
 
 func init() {
-	err := service.RegisterBatchInput("kafka_franz", franzKafkaInputConfig(),
+	service.MustRegisterBatchInput("kafka_franz", franzKafkaInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
 			tmpOpts, err := FranzConnectionOptsFromConfig(conf, mgr.Logger())
 			if err != nil {
@@ -85,7 +85,5 @@ func init() {
 
 			return service.AutoRetryNacksBatchedToggled(conf, rdr)
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }

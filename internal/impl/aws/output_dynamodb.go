@@ -164,7 +164,7 @@ This output benefits from sending messages as a batch for improved performance. 
 }
 
 func init() {
-	err := service.RegisterBatchOutput("aws_dynamodb", ddboOutputSpec(),
+	service.MustRegisterBatchOutput("aws_dynamodb", ddboOutputSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPolicy service.BatchPolicy, maxInFlight int, err error) {
 			if maxInFlight, err = conf.FieldMaxInFlight(); err != nil {
 				return
@@ -179,9 +179,7 @@ func init() {
 			out, err = newDynamoDBWriter(wConf, mgr)
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 type dynamoDBAPI interface {

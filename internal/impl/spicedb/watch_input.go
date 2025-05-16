@@ -31,12 +31,10 @@ import (
 var _ service.Input = &watchInput{}
 
 func init() {
-	err := service.RegisterInput("spicedb_watch", watchInputSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
+	service.MustRegisterInput("spicedb_watch", watchInputSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 		return newWatchInput(conf, mgr)
 	})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 func watchInputSpec() *service.ConfigSpec {

@@ -58,14 +58,12 @@ const (
 )
 
 func init() {
-	err := service.RegisterProcessor(
+	service.MustRegisterProcessor(
 		"ollama_chat",
 		ollamaChatProcessorConfig(),
 		makeOllamaCompletionProcessor,
 	)
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 func ollamaChatProcessorConfig() *service.ConfigSpec {

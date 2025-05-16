@@ -80,7 +80,7 @@ type fileEvent struct {
 
 // init registers the Git input plugin with the service registry.
 func init() {
-	err := service.RegisterInput(
+	service.MustRegisterInput(
 		"git", gitInputConfig(),
 		func(parsedCfg *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 			conf, err := inputCfgFromParsed(parsedCfg)
@@ -90,9 +90,7 @@ func init() {
 
 			return service.AutoRetryNacksToggled(parsedCfg, newInput(conf, mgr))
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 // newInput creates a new Git input instance from a parsed configuration.

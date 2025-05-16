@@ -29,14 +29,12 @@ const (
 )
 
 func init() {
-	err := service.RegisterProcessor(
+	service.MustRegisterProcessor(
 		"google_drive_download",
 		driveDownloadProcessorConfig(),
 		newGoogleDriveDownloadProcessor,
 	)
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 func driveDownloadProcessorConfig() *service.ConfigSpec {

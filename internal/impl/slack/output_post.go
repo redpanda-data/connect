@@ -21,10 +21,7 @@ import (
 )
 
 func init() {
-	err := service.RegisterOutput("slack_post", outputSpec(), newOutput)
-	if err != nil {
-		panic(err)
-	}
+	service.MustRegisterOutput("slack_post", outputSpec(), newOutput)
 }
 
 const (

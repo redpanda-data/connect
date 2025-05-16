@@ -20,10 +20,7 @@ import (
 )
 
 func init() {
-	err := service.RegisterProcessor("slack_thread", threadProcessorSpec(), newThreadProcessor)
-	if err != nil {
-		panic(err)
-	}
+	service.MustRegisterProcessor("slack_thread", threadProcessorSpec(), newThreadProcessor)
 }
 
 const (

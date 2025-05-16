@@ -83,7 +83,7 @@ Where latter stages will overwrite matching field names of a former stage.`+serv
 }
 
 func init() {
-	err := service.RegisterOutput(
+	service.MustRegisterOutput(
 		"redis_hash", redisHashOutputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.Output, maxInFlight int, err error) {
 			if maxInFlight, err = conf.FieldMaxInFlight(); err != nil {
@@ -92,9 +92,7 @@ func init() {
 			out, err = newRedisHashWriter(conf, mgr)
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 type redisHashWriter struct {

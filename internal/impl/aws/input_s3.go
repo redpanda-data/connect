@@ -228,7 +228,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 }
 
 func init() {
-	err := service.RegisterBatchInput("aws_s3", s3InputSpec(),
+	service.MustRegisterBatchInput("aws_s3", s3InputSpec(),
 		func(pConf *service.ParsedConfig, res *service.Resources) (service.BatchInput, error) {
 			conf, err := s3iConfigFromParsed(pConf)
 			if err != nil {
@@ -253,9 +253,7 @@ func init() {
 			}
 			return rdr, nil
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 //------------------------------------------------------------------------------

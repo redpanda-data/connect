@@ -64,11 +64,9 @@ input:
 		Field(service.NewStringField("apikey").Secret().Optional().Description("The API key. Required when reads from Timeplus Enterprise Cloud")).
 		Field(service.NewStringField("username").Optional().Description("The username. Required when reads from Timeplus Enterprise (self-hosted) or Timeplusd")).
 		Field(service.NewStringField("password").Secret().Optional().Description("The password. Required when reads from Timeplus Enterprise (self-hosted) or Timeplusd"))
-	err := service.RegisterInput(
+	service.MustRegisterInput(
 		"timeplus", inputConfigSpec, newTimeplusInput)
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 func newTimeplusInput(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {

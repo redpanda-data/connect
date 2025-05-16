@@ -112,7 +112,7 @@ By default Redpanda Connect will use a shared credentials file when connecting t
 }
 
 func init() {
-	err := service.RegisterBatchInput("gcp_cloud_storage", csiSpec(),
+	service.MustRegisterBatchInput("gcp_cloud_storage", csiSpec(),
 		func(pConf *service.ParsedConfig, res *service.Resources) (service.BatchInput, error) {
 			conf, err := csiConfigFromParsed(pConf)
 			if err != nil {
@@ -125,9 +125,7 @@ func init() {
 			}
 			return service.AutoRetryNacksBatched(rdr), nil
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 const (

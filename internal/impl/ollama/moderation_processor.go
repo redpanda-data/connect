@@ -23,14 +23,12 @@ const (
 )
 
 func init() {
-	err := service.RegisterProcessor(
+	service.MustRegisterProcessor(
 		"ollama_moderation",
 		ollamaModerationProcessorConfig(),
 		makeOllamaModerationProcessor,
 	)
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 func ollamaModerationProcessorConfig() *service.ConfigSpec {

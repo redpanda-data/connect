@@ -47,14 +47,12 @@ func redisRatelimitConfig() *service.ConfigSpec {
 }
 
 func init() {
-	err := service.RegisterRateLimit(
+	service.MustRegisterRateLimit(
 		"redis", redisRatelimitConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.RateLimit, error) {
 			return newRedisRatelimitFromConfig(conf)
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 //------------------------------------------------------------------------------

@@ -49,14 +49,11 @@ func ristrettoCacheConfig() *service.ConfigSpec {
 }
 
 func init() {
-	err := service.RegisterCache(
+	service.MustRegisterCache(
 		"ristretto", ristrettoCacheConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
 			return newRistrettoCacheFromConfig(conf)
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 func newRistrettoCacheFromConfig(conf *service.ParsedConfig) (*ristrettoCache, error) {

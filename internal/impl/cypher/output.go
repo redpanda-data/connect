@@ -149,7 +149,7 @@ output:
 }
 
 func init() {
-	err := service.RegisterBatchOutput(
+	service.MustRegisterBatchOutput(
 		"cypher", outputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPolicy service.BatchPolicy, maxInFlight int, err error) {
 			if batchPolicy, err = conf.FieldBatchPolicy(coFieldBatching); err != nil {
@@ -161,9 +161,7 @@ func init() {
 			out, err = newCypherOutput(conf, mgr)
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 func newCypherOutput(conf *service.ParsedConfig, mgr *service.Resources) (*output, error) {

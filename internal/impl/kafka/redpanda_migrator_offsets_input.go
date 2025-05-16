@@ -98,7 +98,7 @@ A list of topics to consume from. Multiple comma separated topics can be listed 
 }
 
 func init() {
-	err := service.RegisterBatchInput("redpanda_migrator_offsets", redpandaMigratorOffsetsInputConfig(),
+	service.MustRegisterBatchInput("redpanda_migrator_offsets", redpandaMigratorOffsetsInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
 			clientOpts, err := FranzConnectionOptsFromConfig(conf, mgr.Logger())
 			if err != nil {
@@ -151,9 +151,7 @@ func init() {
 
 			return service.AutoRetryNacksBatchedToggled(conf, &i)
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 //------------------------------------------------------------------------------

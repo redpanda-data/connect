@@ -66,16 +66,14 @@ The `+"`topic`"+` field can be dynamically set using function interpolations des
 }
 
 func init() {
-	err := service.RegisterOutput("mqtt", outputConfigSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (out service.Output, maxInFlight int, err error) {
+	service.MustRegisterOutput("mqtt", outputConfigSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (out service.Output, maxInFlight int, err error) {
 		if maxInFlight, err = conf.FieldMaxInFlight(); err != nil {
 			return
 		}
 		out, err = newMQTTWriterFromParsed(conf, mgr)
 		return
 	})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 type mqttWriter struct {

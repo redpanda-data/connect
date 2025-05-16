@@ -28,14 +28,12 @@ const (
 )
 
 func init() {
-	err := service.RegisterProcessor(
+	service.MustRegisterProcessor(
 		"cohere_rerank",
 		rerankProcessorConfig(),
 		makeRerankProcessor,
 	)
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 func rerankProcessorConfig() *service.ConfigSpec {

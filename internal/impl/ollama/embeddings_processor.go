@@ -24,14 +24,12 @@ const (
 )
 
 func init() {
-	err := service.RegisterProcessor(
+	service.MustRegisterProcessor(
 		"ollama_embeddings",
 		ollamaEmbeddingProcessorConfig(),
 		makeOllamaEmbeddingProcessor,
 	)
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 func ollamaEmbeddingProcessorConfig() *service.ConfigSpec {

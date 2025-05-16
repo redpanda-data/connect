@@ -21,9 +21,10 @@ import (
 	"slices"
 
 	"github.com/qdrant/go-client/qdrant"
+	"google.golang.org/protobuf/encoding/protojson"
+
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"google.golang.org/protobuf/encoding/protojson"
 )
 
 const (
@@ -93,14 +94,11 @@ root.must_not = [
 }
 
 func init() {
-	err := service.RegisterProcessor(
+	service.MustRegisterProcessor(
 		"qdrant",
 		processorSpec(),
 		newProcessor,
 	)
-	if err != nil {
-		panic(err)
-	}
 }
 
 func newProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {

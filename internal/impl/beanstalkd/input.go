@@ -36,14 +36,12 @@ func beanstalkdInputConfig() *service.ConfigSpec {
 }
 
 func init() {
-	err := service.RegisterInput(
+	service.MustRegisterInput(
 		"beanstalkd", beanstalkdInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 			return newBeanstalkdReaderFromConfig(conf, mgr.Logger())
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 type beanstalkdReader struct {

@@ -62,7 +62,7 @@ const (
 )
 
 func init() {
-	err := service.RegisterBatchOutput("redpanda_common", redpandaCommonOutputConfig(),
+	service.MustRegisterBatchOutput("redpanda_common", redpandaCommonOutputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (
 			output service.BatchOutput,
 			batchPolicy service.BatchPolicy,
@@ -90,7 +90,5 @@ func init() {
 			)
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }

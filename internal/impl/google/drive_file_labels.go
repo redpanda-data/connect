@@ -22,14 +22,12 @@ import (
 )
 
 func init() {
-	err := service.RegisterProcessor(
+	service.MustRegisterProcessor(
 		"google_drive_list_labels",
 		driveLabelsProcessorConfig(),
 		newGoogleDriveLabelsProcessor,
 	)
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 func driveLabelsProcessorConfig() *service.ConfigSpec {

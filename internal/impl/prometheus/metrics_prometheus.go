@@ -130,14 +130,12 @@ If the Push Gateway requires HTTP Basic Authentication it can be configured with
 }
 
 func init() {
-	err := service.RegisterMetricsExporter(
+	service.MustRegisterMetricsExporter(
 		"prometheus", configSpec(),
 		func(conf *service.ParsedConfig, log *service.Logger) (service.MetricsExporter, error) {
 			return fromParsed(conf, log)
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 //------------------------------------------------------------------------------

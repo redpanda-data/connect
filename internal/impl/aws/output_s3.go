@@ -301,7 +301,7 @@ output:
 }
 
 func init() {
-	err := service.RegisterBatchOutput("aws_s3", s3oOutputSpec(),
+	service.MustRegisterBatchOutput("aws_s3", s3oOutputSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPolicy service.BatchPolicy, maxInFlight int, err error) {
 			if maxInFlight, err = conf.FieldMaxInFlight(); err != nil {
 				return
@@ -316,9 +316,7 @@ func init() {
 			out, err = newAmazonS3Writer(wConf, mgr)
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 type amazonS3Writer struct {

@@ -391,7 +391,7 @@ type serverResult struct {
 }
 
 func init() {
-	if err := service.RegisterBatchOutput("gcp_pubsub", newPubSubOutputConfig(), func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPolicy service.BatchPolicy, maxInFlight int, err error) {
+	service.MustRegisterBatchOutput("gcp_pubsub", newPubSubOutputConfig(), func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPolicy service.BatchPolicy, maxInFlight int, err error) {
 		maxInFlight, err = conf.FieldInt("max_in_flight")
 		if err != nil {
 			return
@@ -405,7 +405,5 @@ func init() {
 		out, err = newPubSubOutput(conf)
 
 		return
-	}); err != nil {
-		panic(err)
-	}
+	})
 }

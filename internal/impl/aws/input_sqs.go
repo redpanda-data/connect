@@ -138,7 +138,7 @@ xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].`
 }
 
 func init() {
-	err := service.RegisterInput("aws_sqs", sqsInputSpec(),
+	service.MustRegisterInput("aws_sqs", sqsInputSpec(),
 		func(pConf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 			sess, err := GetSession(context.TODO(), pConf)
 			if err != nil {
@@ -152,9 +152,7 @@ func init() {
 
 			return newAWSSQSReader(conf, sess, mgr.Logger())
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 //------------------------------------------------------------------------------

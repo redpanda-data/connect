@@ -274,14 +274,12 @@ func consumeIterator(iter bigqueryIterator) ([]map[string]bigquery.Value, error)
 }
 
 func init() {
-	err := service.RegisterBatchProcessor(
+	service.MustRegisterBatchProcessor(
 		"gcp_bigquery_select", newBigQuerySelectProcessorConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 			return newBigQuerySelectProcessor(conf, &bigQueryProcessorOptions{
 				logger: mgr.Logger(),
 			})
 		})
-	if err != nil {
-		panic(err)
-	}
+
 }

@@ -24,14 +24,12 @@ const (
 )
 
 func init() {
-	err := service.RegisterProcessor(
+	service.MustRegisterProcessor(
 		"openai_translation",
 		translationProcessorConfig(),
 		makeTranslationProcessor,
 	)
-	if err != nil {
-		panic(err)
-	}
+
 }
 
 func translationProcessorConfig() *service.ConfigSpec {
