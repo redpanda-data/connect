@@ -26,9 +26,10 @@ import (
 
 	"github.com/ory/dockertest/v3"
 	"github.com/ory/dockertest/v3/docker"
-	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
 
 // RedpandaEndpoints contains the endpoints for the Redpanda container.
@@ -38,7 +39,7 @@ type RedpandaEndpoints struct {
 }
 
 // StartRedpanda starts a Redpanda container.
-func StartRedpanda(t *testing.T, pool *dockertest.Pool, exposeBroker bool, autocreateTopics bool) (RedpandaEndpoints, error) {
+func StartRedpanda(t *testing.T, pool *dockertest.Pool, exposeBroker, autocreateTopics bool) (RedpandaEndpoints, error) {
 	t.Helper()
 
 	cmd := []string{

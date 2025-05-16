@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/bmatcuk/doublestar/v4"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 

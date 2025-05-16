@@ -26,6 +26,7 @@ import (
 	franz_sr "github.com/twmb/franz-go/pkg/sr"
 
 	"github.com/hamba/avro/v2"
+
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
 

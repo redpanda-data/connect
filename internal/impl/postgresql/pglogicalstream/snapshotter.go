@@ -22,6 +22,7 @@ import (
 	"github.com/jackc/pgtype"
 
 	_ "github.com/lib/pq"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/postgresql/pglogicalstream/sanitize"
@@ -232,7 +233,7 @@ _rpcn__sampled_keys AS MATERIALIZED (
 		if err != nil {
 			return nil, fmt.Errorf("unable to scan args for tablesample query: %w", err)
 		}
-		var data = make(primaryKey, len(valueGetters))
+		data := make(primaryKey, len(valueGetters))
 		for i, getter := range valueGetters {
 			var val any
 			if val, err = getter(scanArgs[i]); err != nil {
@@ -261,7 +262,7 @@ func (t *tuple) ToSql() (sql string, args []any, err error) {
 
 var _ squirrel.Sqlizer = &tuple{}
 
-func (s *snapshotTxn) querySnapshotData(ctx context.Context, table TableFQN, minExclusive primaryKey, maxInclusive primaryKey, pkColumns []string, limit int) (rows *sql.Rows, err error) {
+func (s *snapshotTxn) querySnapshotData(ctx context.Context, table TableFQN, minExclusive, maxInclusive primaryKey, pkColumns []string, limit int) (rows *sql.Rows, err error) {
 	pred := squirrel.And{}
 	pkAsTuple := "(" + strings.Join(pkColumns, ", ") + ")"
 	if minExclusive != nil {
@@ -278,7 +279,6 @@ func (s *snapshotTxn) querySnapshotData(ctx context.Context, table TableFQN, min
 		Limit(uint64(limit)).
 		PlaceholderFormat(squirrel.Dollar).
 		ToSql()
-
 	if err != nil {
 		return nil, fmt.Errorf("unable to generate SQL query for table scan: %w", err)
 	}
@@ -286,7 +286,6 @@ func (s *snapshotTxn) querySnapshotData(ctx context.Context, table TableFQN, min
 	s.logger.Tracef("running snapshot query: %s", q)
 
 	rows, err = s.tx.QueryContext(ctx, q, args...)
-
 	if err != nil {
 		return nil, err
 	}

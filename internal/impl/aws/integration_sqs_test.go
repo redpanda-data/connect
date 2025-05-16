@@ -106,5 +106,4 @@ input:
 			integration.StreamTestOptPort(lsPort),
 		)
 	})
-
 }

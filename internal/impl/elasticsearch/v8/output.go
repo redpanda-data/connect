@@ -27,6 +27,7 @@ import (
 	"github.com/elastic/go-elasticsearch/v8"
 	"github.com/elastic/go-elasticsearch/v8/typedapi/core/bulk"
 	"github.com/elastic/go-elasticsearch/v8/typedapi/types"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
@@ -245,7 +246,6 @@ output:
     action: "index"
     id: ${! meta("s3_key") }
 `)
-
 }
 
 func init() {

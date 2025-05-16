@@ -21,10 +21,11 @@ import (
 
 	v1 "github.com/authzed/authzed-go/proto/authzed/api/v1"
 	"github.com/ory/dockertest/v3"
-	"github.com/redpanda-data/benthos/v4/public/service"
-	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
 
 func TestIntegrationSpiceDB(t *testing.T) {
@@ -134,7 +135,7 @@ definition document {
 		require.NoError(t, err)
 		bytes, err := msg.AsBytes()
 		require.NoError(t, err)
-		var resp = v1.WatchResponse{}
+		resp := v1.WatchResponse{}
 		require.NoError(t, protojson.Unmarshal(bytes, &resp))
 		require.Len(t, resp.Updates, 1)
 		require.Equal(t, "alice", resp.Updates[0].Relationship.Subject.Object.ObjectId)

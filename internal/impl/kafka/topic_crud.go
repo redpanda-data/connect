@@ -19,11 +19,12 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kerr"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 type createTopicConfig struct {
@@ -34,7 +35,7 @@ type createTopicConfig struct {
 	isServerlessBroker        bool
 }
 
-func createTopic(ctx context.Context, logger *service.Logger, inputClient *kgo.Client, outputClient *kgo.Client, cfg createTopicConfig) error {
+func createTopic(ctx context.Context, logger *service.Logger, inputClient, outputClient *kgo.Client, cfg createTopicConfig) error {
 	outputAdminClient := kadm.NewClient(outputClient)
 
 	if topics, err := outputAdminClient.ListTopics(ctx, cfg.srcTopic); err != nil {
@@ -127,7 +128,7 @@ func createTopic(ctx context.Context, logger *service.Logger, inputClient *kgo.C
 	return nil
 }
 
-func createACLs(ctx context.Context, srcTopic, destTopic string, inputClient *kgo.Client, outputClient *kgo.Client) error {
+func createACLs(ctx context.Context, srcTopic, destTopic string, inputClient, outputClient *kgo.Client) error {
 	inputAdminClient := kadm.NewClient(inputClient)
 	outputAdminClient := kadm.NewClient(outputClient)
 

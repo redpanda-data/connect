@@ -30,7 +30,8 @@ type mockTransport struct {
 func NewTransport(t interface {
 	mock.TestingT
 	Cleanup(func())
-}) *mockTransport {
+},
+) *mockTransport {
 	mock := &mockTransport{}
 	mock.Test(t)
 

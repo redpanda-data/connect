@@ -17,9 +17,7 @@ import (
 	"time"
 )
 
-var (
-	errMsgNotSupported = errors.New("replication message not supported")
-)
+var errMsgNotSupported = errors.New("replication message not supported")
 
 // MessageType indicates the type of logical replication message.
 type MessageType uint8
@@ -121,7 +119,7 @@ func (m *baseMessage) decodeTupleDataError(name, field string, e error) error {
 	return fmt.Errorf("%s.%s decode tuple error: %s", name, field, e.Error())
 }
 
-func (m *baseMessage) invalidTupleTypeError(name, field string, e string, a byte) error {
+func (m *baseMessage) invalidTupleTypeError(name, field, e string, a byte) error {
 	return fmt.Errorf("%s.%s invalid tuple type value, expect %s, actual %c", name, field, e, a)
 }
 
@@ -169,7 +167,7 @@ func (m *baseMessage) decodeInt32(src []byte) (int32, int) {
 // BeginMessage is a begin message.
 type BeginMessage struct {
 	baseMessage
-	//FinalLSN is the final LSN of the transaction.
+	// FinalLSN is the final LSN of the transaction.
 	FinalLSN LSN
 	// CommitTime is the commit timestamp of the transaction.
 	CommitTime time.Time

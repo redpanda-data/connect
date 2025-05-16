@@ -18,8 +18,9 @@ import (
 
 	"github.com/parquet-go/parquet-go"
 	"github.com/parquet-go/parquet-go/format"
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/segmentio/encoding/thrift"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 // SchemaMode specifies how to handle schema mismatches when constructing parquet files

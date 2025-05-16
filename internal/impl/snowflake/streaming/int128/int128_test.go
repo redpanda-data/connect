@@ -56,7 +56,7 @@ func TestSub(t *testing.T) {
 	)
 }
 
-func SlowMul(a Num, b Num) Num {
+func SlowMul(a, b Num) Num {
 	delta := FromInt64(-1)
 	deltaFn := Add
 	if Less(b, FromInt64(0)) {

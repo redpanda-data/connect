@@ -15,6 +15,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	amzn "github.com/aws/aws-sdk-go-v2/aws"

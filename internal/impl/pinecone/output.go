@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	"github.com/pinecone-io/go-pinecone/pinecone"
+
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
 )

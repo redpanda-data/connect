@@ -16,9 +16,10 @@ import (
 	"unicode/utf8"
 
 	"cloud.google.com/go/vertexai/genai"
+	"google.golang.org/api/option"
+
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"google.golang.org/api/option"
 
 	"github.com/redpanda-data/connect/v4/internal/license"
 )

@@ -554,7 +554,6 @@ args_mapping: 'root = [ json("key"), json("field"), json("value") ]'
 		require.NoError(t, err)
 		assert.Equal(t, e, string(act))
 	}
-
 }
 
 func testRedisHGet(t *testing.T, client *redis.Client, url string) {
