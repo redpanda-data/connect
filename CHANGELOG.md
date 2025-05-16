@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.55.1 - TBD
+
+### Fixed
+
+- Fixed an issue where the `kafka_franz`, `redpanda`, `redpanda_common`, `redpanda_migrator`, `redpanda_migrator_offsets` and `ockam_kafka` inputs could stall for an unreasonable length of time after losing connection to a broker. (@Jeffail)
+
 ## 4.55.0 - 2025-05-15
 
 ### Added

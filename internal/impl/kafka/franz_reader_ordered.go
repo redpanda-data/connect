@@ -465,6 +465,11 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 	noActivePartitionsBackOff.MaxInterval = time.Second
 	noActivePartitionsBackOff.MaxElapsedTime = 0
 
+	connErrBackOff := backoff.NewExponentialBackOff()
+	connErrBackOff.InitialInterval = time.Millisecond * 100
+	connErrBackOff.MaxInterval = time.Second
+	connErrBackOff.MaxElapsedTime = 0
+
 	// Check connectivity to cluster
 	if err = f.Client.Ping(ctx); err != nil {
 		return fmt.Errorf("failed to connect to cluster: %s", err)
@@ -520,11 +525,17 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 					}
 				}
 
-				if nonTemporalErr {
-					f.Client.Close()
-					return
+				if nonTemporalErr && fetches.Empty() {
+					select {
+					case <-time.After(connErrBackOff.NextBackOff()):
+					case <-closeCtx.Done():
+						return
+					}
 				}
+			} else {
+				connErrBackOff.Reset()
 			}
+
 			if closeCtx.Err() != nil {
 				return
 			}

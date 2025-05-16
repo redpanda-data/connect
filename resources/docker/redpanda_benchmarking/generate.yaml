@@ -1,9 +1,10 @@
 http:
-  enabled: false
+  address: 0.0.0.0:4197
+  enabled: true
 
 input:
   generate:
-    interval: 3s
+    interval: 1s
     count: 100_000_000
     batch_size: 1
     mapping: |
@@ -22,8 +23,5 @@ redpanda:
     status_topic: generate.status
 
 metrics:
-  prometheus:
-    push_interval: 1s
-    push_job_name: benthos_push
-    push_url: "http://localhost:9091"
+  prometheus: {}
 
