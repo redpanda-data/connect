@@ -85,6 +85,7 @@ output:
     replication_factor_override: true
     replication_factor: 3
     translate_schema_ids: false
+    is_serverless: false
     schema_registry_output_resource: schema_registry_output
     partitioner: "" # No default (optional)
     idempotent_write: true
@@ -685,6 +686,15 @@ Replication factor for created topics. This is only used when `replication_facto
 === `translate_schema_ids`
 
 Translate schema IDs.
+
+
+*Type*: `bool`
+
+*Default*: `false`
+
+=== `is_serverless`
+
+Set this to `true` when using Serverless clusters in Redpanda Cloud.
 
 
 *Type*: `bool`

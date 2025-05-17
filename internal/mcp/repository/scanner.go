@@ -26,7 +26,7 @@ import (
 type Scanner struct {
 	fs fs.FS
 
-	onResource func(resourceType string, filePath string, contents []byte) error
+	onResource func(resourceType, filePath string, contents []byte) error
 	onMetrics  func(filePath string, contents []byte) error
 	onTracer   func(filePath string, contents []byte) error
 }
@@ -40,7 +40,7 @@ func NewScanner(fs fs.FS) *Scanner {
 
 // OnResourceFile registers a closure to be called for each resource file
 // encountered by the scanner.
-func (s *Scanner) OnResourceFile(fn func(resourceType string, filePath string, contents []byte) error) {
+func (s *Scanner) OnResourceFile(fn func(resourceType, filePath string, contents []byte) error) {
 	s.onResource = fn
 }
 

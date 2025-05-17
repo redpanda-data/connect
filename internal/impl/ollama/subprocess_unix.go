@@ -84,10 +84,10 @@ func (c *runOllamaConfig) downloadOllama(ctx context.Context, path string) error
 	}
 
 	if !strings.HasSuffix(url, ".tgz") {
-		if err := c.fs.MkdirAll(filepath.Join(path, "bin"), 0777); err != nil {
+		if err := c.fs.MkdirAll(filepath.Join(path, "bin"), 0o777); err != nil {
 			return err
 		}
-		ollama, err := c.fs.OpenFile(filepath.Join(path, "bin/ollama"), os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0755)
+		ollama, err := c.fs.OpenFile(filepath.Join(path, "bin/ollama"), os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0o755)
 		if err != nil {
 			return fmt.Errorf("unable to create file for ollama binary download: %w", err)
 		}
@@ -116,10 +116,10 @@ func (c *runOllamaConfig) downloadOllama(ctx context.Context, path string) error
 		}
 		fullpath := filepath.Join(path, header.Name)
 		c.logger.Tracef("extracting file to %s", fullpath)
-		if err := c.fs.MkdirAll(filepath.Dir(fullpath), 0777); err != nil {
+		if err := c.fs.MkdirAll(filepath.Dir(fullpath), 0o777); err != nil {
 			return err
 		}
-		file, err := c.fs.OpenFile(fullpath, os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0755)
+		file, err := c.fs.OpenFile(fullpath, os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0o755)
 		if err != nil {
 			return fmt.Errorf("unable to create file for ollama binary download: %w", err)
 		}
@@ -144,7 +144,7 @@ var ollamaProcess = singleton.New(singleton.Config[*exec.Cmd]{
 		serverPath, err := cfg.lookPath("ollama")
 		if errors.Is(err, exec.ErrNotFound) {
 			serverPath = path.Join(cfg.cacheDir, "bin/ollama")
-			if err := os.MkdirAll(cfg.cacheDir, 0777); err != nil {
+			if err := os.MkdirAll(cfg.cacheDir, 0o777); err != nil {
 				return nil, err
 			}
 			if _, err = os.Stat(serverPath); errors.Is(err, os.ErrNotExist) {
@@ -196,4 +196,5 @@ var ollamaProcess = singleton.New(singleton.Config[*exec.Cmd]{
 			return nil
 		})
 		return wg.Wait()
-	}})
+	},
+})

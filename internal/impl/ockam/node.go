@@ -30,7 +30,7 @@ type node struct {
 	config     string
 }
 
-func newNode(identityName string, address string, ticket string, relay string) (*node, error) {
+func newNode(identityName, address, ticket, relay string) (*node, error) {
 	name := "redpanda-connect-" + generateName()
 
 	identity, identifier, err := getIdentity(identityName)
@@ -77,7 +77,7 @@ func (n *node) delete() error {
 }
 
 // TODO: improve this function's interface
-func (n *node) createKafkaInlet(name string, from string, to string, avoidPublishing bool, routeToConsumer string, allowOutlet string, allowProducer string, allowConsumer string, disableContentEncryption bool, encryptedFields []string) error {
+func (n *node) createKafkaInlet(name, from, to string, avoidPublishing bool, routeToConsumer, allowOutlet, allowProducer, allowConsumer string, disableContentEncryption bool, encryptedFields []string) error {
 	args := []string{"kafka-inlet", "create", "--addr", name, "--at", n.name, "--from", from, "--to", to}
 	if routeToConsumer != "" {
 		args = append(args, "--consumer", routeToConsumer)
@@ -104,7 +104,7 @@ func (n *node) createKafkaInlet(name string, from string, to string, avoidPublis
 	return err
 }
 
-func (n *node) createKafkaOutlet(name string, bootstrapServer string, tls bool, allowInlet string) error {
+func (n *node) createKafkaOutlet(name, bootstrapServer string, tls bool, allowInlet string) error {
 	args := []string{"kafka-outlet", "create", "--addr", name, "--at", n.name, "--bootstrap-server", bootstrapServer}
 
 	if tls {
@@ -131,7 +131,7 @@ func generateName() string {
 	return fmt.Sprintf("%08x", randomNumber)
 }
 
-func appendAllowArgs(args []string, flag string, value string, identifier string) []string {
+func appendAllowArgs(args []string, flag, value, identifier string) []string {
 	if value != "" {
 		if value == "self" {
 			args = append(args, flag, "(= subject.identifier \""+identifier+"\")")

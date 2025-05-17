@@ -90,8 +90,14 @@ issues:
   max-same-issues: 0
 formatters:
   enable:
-    - gofmt
     - goimports
+    - gofumpt
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/redpanda-data/
+    gofumpt:
+      extra-rules: true
   exclusions:
     generated: lax
     paths:

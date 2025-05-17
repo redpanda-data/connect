@@ -41,7 +41,7 @@ type (
 // NewBatcher creates a background goroutine that collects batches of requests and calls `fn`
 // with them. `fn` should take a number of requests and return a number of responses, where the
 // index of each request should line up the resulting response slice if error is `nil`.
-func NewBatcher[Request any, Response any](
+func NewBatcher[Request, Response any](
 	maxBatchSize int,
 	fn func(context.Context, []Request) ([]Response, error),
 ) (*Batcher[Request, Response], error) {

@@ -3,7 +3,17 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.55.0 - TBD
+## 4.55.1 - TBD
+
+### Added
+
+- New `is_serverless` field added to the `redpanda_migrator` output. (@mihaitodor)
+
+### Fixed
+
+- Fixed an issue where the `kafka_franz`, `redpanda`, `redpanda_common`, `redpanda_migrator`, `redpanda_migrator_offsets` and `ockam_kafka` inputs could stall for an unreasonable length of time after losing connection to a broker. (@Jeffail)
+
+## 4.55.0 - 2025-05-15
 
 ### Added
 
@@ -12,6 +22,7 @@ All notable changes to this project will be documented in this file.
 - New `redpanda` cache that stores key/value pairs in a compacted topic. (@rockwotj)
 - Field `max_yield_batch_bytes` added to all `redpanda` flavored inputs. (@Jeffail)
 - New `translate_kafka_connect_types` to `schema_registry_decode` to decode non-standard types emitted by debezium. (@rockwotj)
+- (Benthos) CLI flag `--api-path-prefix` added to the `studio pull` and `studio sync-schema` subcommands. (@mihaitodor)
 
 ### Fixed
 
@@ -20,7 +31,8 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- The way in which custom parameters for the experimental `mcp-server` subcommand are defined have changed. When defined they will now yield a JSON message to tool processors and outputs instead of complementary metadata keys, and there is no longer an implicit `value` field under these cirumstances.
+- The way in which custom parameters for the experimental `mcp-server` subcommand are defined have changed. When defined they will now yield a JSON message to tool processors and outputs instead of complementary metadata keys, and there is no longer an implicit `value` field under these cirumstances. (@rockwotj)
+- The old deprecated `elasticsearch` output has been removed. This is not a change we would traditionally make without waiting for a major version increment. However, a dependency of the library used in this component is compromised and is now a significant security concern, which warrants the immediate removal. (@Jeffail)
 
 ## 4.54.1 - 2025-04-30
 

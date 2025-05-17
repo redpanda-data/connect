@@ -28,6 +28,7 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
@@ -444,7 +445,7 @@ func debugf(l *service.Logger, msg string, args ...any) {
 	l.Tracef(msg, args...)
 }
 
-func (c *SnowflakeRestClient) doPost(ctx context.Context, url string, req any, resp any) error {
+func (c *SnowflakeRestClient) doPost(ctx context.Context, url string, req, resp any) error {
 	marshaller := json.Marshal
 	if debug {
 		marshaller = func(v any) ([]byte, error) {

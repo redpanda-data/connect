@@ -16,9 +16,10 @@ import (
 	"fmt"
 
 	"github.com/Jeffail/shutdown"
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/socketmode"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func init() {

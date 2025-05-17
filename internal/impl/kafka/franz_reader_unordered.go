@@ -22,6 +22,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/twmb/franz-go/pkg/kgo"
 
 	"github.com/Jeffail/checkpoint"
@@ -507,6 +508,11 @@ func (f *FranzReaderUnordered) Connect(ctx context.Context) error {
 		return fmt.Errorf("failed to connect to cluster: %s", err)
 	}
 
+	connErrBackOff := backoff.NewExponentialBackOff()
+	connErrBackOff.InitialInterval = time.Millisecond * 100
+	connErrBackOff.MaxInterval = time.Second
+	connErrBackOff.MaxElapsedTime = 0
+
 	go func() {
 		if f.consumerGroup != "" {
 			topicLagGauge := f.res.Metrics().NewGauge("kafka_lag", "topic", "partition")
@@ -560,11 +566,17 @@ func (f *FranzReaderUnordered) Connect(ctx context.Context) error {
 					}
 				}
 
-				if nonTemporalErr {
-					cl.Close()
-					return
+				if nonTemporalErr && fetches.Empty() {
+					select {
+					case <-time.After(connErrBackOff.NextBackOff()):
+					case <-closeCtx.Done():
+						return
+					}
 				}
+			} else {
+				connErrBackOff.Reset()
 			}
+
 			if closeCtx.Err() != nil {
 				return
 			}

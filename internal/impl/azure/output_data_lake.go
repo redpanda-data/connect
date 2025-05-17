@@ -19,6 +19,7 @@ import (
 	"fmt"
 
 	dlservice "github.com/Azure/azure-sdk-for-go/sdk/storage/azdatalake/service"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 

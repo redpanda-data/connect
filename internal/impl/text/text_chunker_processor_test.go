@@ -20,9 +20,10 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"github.com/stretchr/testify/require"
 )
 
 func TestChunksRecursiveChars(t *testing.T) {

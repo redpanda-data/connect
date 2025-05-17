@@ -19,9 +19,10 @@ import (
 	"fmt"
 	"hash/fnv"
 
-	"github.com/redpanda-data/benthos/v4/public/service"
 	starlarkjson "go.starlark.net/lib/json"
 	"go.starlark.net/starlark"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
@@ -135,8 +136,10 @@ type starlarkComponent struct {
 	SerializedConfig json.RawMessage
 }
 
-var _ starlark.Value = (*starlarkComponent)(nil)
-var _ json.Marshaler = (*starlarkComponent)(nil)
+var (
+	_ starlark.Value = (*starlarkComponent)(nil)
+	_ json.Marshaler = (*starlarkComponent)(nil)
+)
 
 // MarshalJSON implements json.Marshaler.
 func (s *starlarkComponent) MarshalJSON() ([]byte, error) {

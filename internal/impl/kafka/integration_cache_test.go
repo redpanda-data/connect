@@ -22,10 +22,11 @@ import (
 	"time"
 
 	"github.com/gofrs/uuid/v5"
+	"github.com/twmb/franz-go/pkg/kgo"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
-	"github.com/twmb/franz-go/pkg/kgo"
 
 	"github.com/ory/dockertest/v3"
 	"github.com/ory/dockertest/v3/docker"

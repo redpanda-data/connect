@@ -21,6 +21,7 @@ import (
 	"slices"
 	"sync"
 
+	"github.com/twmb/franz-go/pkg/kerr"
 	"github.com/twmb/franz-go/pkg/kgo"
 	franz_sr "github.com/twmb/franz-go/pkg/sr"
 
@@ -38,6 +39,7 @@ const (
 	rmoFieldRepFactorOverride            = "replication_factor_override"
 	rmoFieldRepFactor                    = "replication_factor"
 	rmoFieldTranslateSchemaIDs           = "translate_schema_ids"
+	rmoFieldIsServerless                 = "is_serverless"
 	rmoFieldSchemaRegistryOutputResource = "schema_registry_output_resource"
 
 	// Deprecated
@@ -107,6 +109,7 @@ func redpandaMigratorOutputConfigFields() []*service.ConfigField {
 				Default(3).
 				Advanced(),
 			service.NewBoolField(rmoFieldTranslateSchemaIDs).Description("Translate schema IDs.").Default(false).Advanced(),
+			service.NewBoolField(rmoFieldIsServerless).Description("Set this to `true` when using Serverless clusters in Redpanda Cloud.").Default(false).Advanced(),
 			service.NewStringField(rmoFieldSchemaRegistryOutputResource).
 				Description("The label of the schema_registry output to use for fetching schema IDs.").
 				Default(sroResourceDefaultLabel).
@@ -148,18 +151,22 @@ func init() {
 				return
 			}
 
-			var replicationFactorOverride bool
-			if replicationFactorOverride, err = conf.FieldBool(rmoFieldRepFactorOverride); err != nil {
+			createTopicCfg := createTopicConfig{}
+
+			if createTopicCfg.replicationFactorOverride, err = conf.FieldBool(rmoFieldRepFactorOverride); err != nil {
 				return
 			}
 
-			var replicationFactor int
-			if replicationFactor, err = conf.FieldInt(rmoFieldRepFactor); err != nil {
+			if createTopicCfg.replicationFactor, err = conf.FieldInt(rmoFieldRepFactor); err != nil {
 				return
 			}
 
 			var translateSchemaIDs bool
 			if translateSchemaIDs, err = conf.FieldBool(rmoFieldTranslateSchemaIDs); err != nil {
+				return
+			}
+
+			if createTopicCfg.isServerlessBroker, err = conf.FieldBool(rmoFieldIsServerless); err != nil {
 				return
 			}
 
@@ -247,8 +254,12 @@ func init() {
 
 										destTopic = topicPrefix + destTopic
 									}
-									if err := createTopic(ctx, topic, destTopic, replicationFactorOverride, replicationFactor, inputClient, outputClient); err != nil {
-										if err == errTopicAlreadyExists {
+
+									cfg := createTopicCfg
+									cfg.srcTopic = topic
+									cfg.destTopic = destTopic
+									if err := createTopic(ctx, mgr.Logger(), inputClient, outputClient, cfg); err != nil {
+										if errors.Is(err, kerr.TopicAlreadyExists) {
 											topicCache.Store(topic, struct{}{})
 											mgr.Logger().Debugf("Topic %q already exists", topic)
 										} else {
@@ -260,13 +271,13 @@ func init() {
 										}
 									} else {
 										mgr.Logger().Infof("Created topic %q", destTopic)
-									}
 
-									if err := createACLs(ctx, topic, destTopic, inputClient, outputClient); err != nil {
-										mgr.Logger().Errorf("Failed to create ACLs for topic %q: %s", topic, err)
-									}
+										if err := createACLs(ctx, topic, destTopic, inputClient, outputClient); err != nil {
+											mgr.Logger().Errorf("Failed to create ACLs for topic %q: %s", topic, err)
+										}
 
-									topicCache.Store(topic, struct{}{})
+										topicCache.Store(topic, struct{}{})
+									}
 								}
 
 								return nil
@@ -324,8 +335,11 @@ func init() {
 								record.Topic = topicPrefix + record.Topic
 
 								if _, ok := topicCache.Load(srcTopic); !ok {
-									if err := createTopic(ctx, srcTopic, record.Topic, replicationFactorOverride, replicationFactor, details.Client, client); err != nil {
-										if err == errTopicAlreadyExists {
+									cfg := createTopicCfg
+									cfg.srcTopic = srcTopic
+									cfg.destTopic = record.Topic
+									if err := createTopic(ctx, mgr.Logger(), details.Client, client, cfg); err != nil {
+										if errors.Is(err, kerr.TopicAlreadyExists) {
 											mgr.Logger().Debugf("Topic %q already exists", record.Topic)
 										} else {
 											return fmt.Errorf("failed to create topic %q and ACLs: %s", record.Topic, err)

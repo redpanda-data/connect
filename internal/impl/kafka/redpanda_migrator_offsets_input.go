@@ -42,7 +42,11 @@ func redpandaMigratorOffsetsInputConfig() *service.ConfigSpec {
 		Version("4.45.0").
 		Summary(`Redpanda Migrator consumer group offsets input using the https://github.com/twmb/franz-go[Franz Kafka client library^].`).
 		Description(`
-TODO: Description
+This input reads consumer group updates from the ` + "`__consumer_offsets`" + ` topic and should be used in combination with the ` + "`redpanda_migrator_offsets`" + ` output.
+
+== Metrics
+
+Emits a ` + "`redpanda_lag`" + ` metric with ` + "`topic`" + ` and ` + "`partition`" + ` labels for each consumed topic.
 
 == Metadata
 

@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/gofrs/uuid/v5"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka/redpandatest"
@@ -46,7 +47,7 @@ import (
 	franz_sr "github.com/twmb/franz-go/pkg/sr"
 )
 
-func createSchema(t *testing.T, url string, subject string, schema string, references []franz_sr.SchemaReference) {
+func createSchema(t *testing.T, url, subject, schema string, references []franz_sr.SchemaReference) {
 	t.Helper()
 
 	client, err := franz_sr.NewClient(franz_sr.URLs(url))
@@ -56,7 +57,7 @@ func createSchema(t *testing.T, url string, subject string, schema string, refer
 	require.NoError(t, err)
 }
 
-func deleteSubject(t *testing.T, url string, subject string, hardDelete bool) {
+func deleteSubject(t *testing.T, url, subject string, hardDelete bool) {
 	t.Helper()
 
 	client, err := franz_sr.NewClient(franz_sr.URLs(url))

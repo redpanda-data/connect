@@ -1,9 +1,10 @@
 http:
-  enabled: false
+  address: 0.0.0.0:4195
+  enabled: true
 
 input:
   redpanda_common:
-    consumer_group: cg_d
+    consumer_group: cg_b
     topics: [ '.*' ]
     regexp_topics: true
     auto_replay_nacks: false
@@ -19,8 +20,5 @@ redpanda:
   seed_brokers: [ localhost:9092 ]
 
 metrics:
-  prometheus:
-    push_interval: 1s
-    push_job_name: benthos_push
-    push_url: "http://localhost:9091"
+  prometheus: {}
 

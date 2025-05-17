@@ -19,9 +19,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (

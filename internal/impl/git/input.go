@@ -37,6 +37,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
 
 	"github.com/Jeffail/shutdown"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 

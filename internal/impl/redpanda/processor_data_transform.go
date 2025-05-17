@@ -368,7 +368,7 @@ func (r *dataTransformEngine) newTransformMessage(message *service.Message) (tms
 	} else {
 		tmsg.timestamp = time.Now().UnixMilli()
 	}
-	err = r.cfg.inputMetadata.Walk(message, func(key string, value string) error {
+	err = r.cfg.inputMetadata.Walk(message, func(key, value string) error {
 		tmsg.headers = append(tmsg.headers, transformHeader{key, []byte(value)})
 		return nil
 	})

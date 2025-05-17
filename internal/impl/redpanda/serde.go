@@ -164,7 +164,7 @@ func writeNum(n int, out []byte) int {
 	return binary.PutVarint(out, int64(n))
 }
 
-func writeSized(b []byte, out []byte) int {
+func writeSized(b, out []byte) int {
 	if len(out) < binary.MaxVarintLen64 {
 		return -1
 	}
