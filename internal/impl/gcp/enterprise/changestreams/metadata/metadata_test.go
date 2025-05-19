@@ -175,6 +175,28 @@ func TestIntegrationStore(t *testing.T) {
 		}
 	})
 
+	t.Run("GetInterruptedPartitions", func(t *testing.T) {
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				got, err := tc.s.GetInterruptedPartitions(t.Context())
+				if err != nil {
+					t.Fatalf("GetInterruptedPartitions failed: %v", err)
+				}
+
+				// Should return partitions in SCHEDULED or RUNNING state
+				// ordered by creation time and start timestamp ascending
+				want := []PartitionMetadata{
+					pm("scheduled", ts.Add(time.Second), StateScheduled),
+					pm("running", ts.Add(2*time.Second), StateRunning),
+				}
+
+				if diff := cmp.Diff(got, want); diff != "" {
+					t.Errorf("GetInterruptedPartitions() mismatch (-want +got):\n%s", diff)
+				}
+			})
+		}
+	})
+
 	t.Run("Create", func(t *testing.T) {
 		for _, tc := range tests {
 			t.Run(tc.name, func(t *testing.T) {

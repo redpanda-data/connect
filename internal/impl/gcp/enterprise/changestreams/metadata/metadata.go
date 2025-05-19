@@ -373,6 +373,60 @@ func (s *Store) GetPartitionsCreatedAfter(ctx context.Context, timestamp time.Ti
 	return pms, nil
 }
 
+// GetInterruptedPartitions fetches all partitions that are in SCHEDULED or
+// RUNNING state. These partitions are considered "interrupted" as they were
+// being processed but didn't reach the FINISHED state. Results are ordered
+// by creation time and start timestamp in ascending order.
+func (s *Store) GetInterruptedPartitions(ctx context.Context) ([]PartitionMetadata, error) {
+	var (
+		sql    string
+		params map[string]any
+	)
+
+	states := []State{StateScheduled, StateRunning}
+
+	if s.conf.isPostgres() {
+		sql = fmt.Sprintf(`SELECT * FROM "%s" WHERE "%s" = ANY($1) ORDER BY "%s" ASC, "%s" ASC`,
+			s.conf.TableName,
+			columnState,
+			columnCreatedAt,
+			columnStartTimestamp)
+		params = map[string]any{
+			"p1": states,
+		}
+	} else {
+		sql = fmt.Sprintf("SELECT * FROM %s WHERE %s IN UNNEST(@states) ORDER BY %s ASC, %s ASC",
+			s.conf.TableName,
+			columnState,
+			columnCreatedAt,
+			columnStartTimestamp)
+		params = map[string]any{
+			"states": states,
+		}
+	}
+
+	stmt := spanner.Statement{
+		SQL:    sql,
+		Params: params,
+	}
+
+	iter := s.client.Single().QueryWithOptions(ctx, stmt, queryTag("GetInterruptedPartitions"))
+
+	var pms []PartitionMetadata
+	if err := iter.Do(func(r *spanner.Row) error {
+		var pm PartitionMetadata
+		if err := r.ToStruct(&pm); err != nil {
+			return err
+		}
+		pms = append(pms, pm)
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("get interrupted partitions: %w", err)
+	}
+
+	return pms, nil
+}
+
 // Create creates a new partition metadata row in state CREATED.
 func (s *Store) Create(ctx context.Context, pms []PartitionMetadata) error {
 	ms := make([]*spanner.Mutation, len(pms))
