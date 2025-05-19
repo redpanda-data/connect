@@ -219,7 +219,9 @@ func (r *spannerCDCReader) Connect(ctx context.Context) error {
 	bg, r.cancel = context.WithCancel(ctx)
 	go func() {
 		r.connected.Store(true)
-		r.subscriber.Start(bg)
+		if err := r.subscriber.Start(bg); err != nil {
+			r.log.Errorf("Spanner change stream reader error: %v", err)
+		}
 		r.connected.Store(false)
 	}()
 
