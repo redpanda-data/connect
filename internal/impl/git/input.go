@@ -91,7 +91,6 @@ func init() {
 
 			return service.AutoRetryNacksToggled(parsedCfg, newInput(conf, mgr))
 		})
-
 }
 
 // newInput creates a new Git input instance from a parsed configuration.

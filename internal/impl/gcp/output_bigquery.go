@@ -269,7 +269,6 @@ func init() {
 			output, err = newGCPBigQueryOutput(gconf, mgr.Logger())
 			return
 		})
-
 }
 
 type gcpBigQueryOutput struct {

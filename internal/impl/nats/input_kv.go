@@ -86,7 +86,6 @@ func init() {
 			return service.AutoRetryNacksToggled(conf, reader)
 		},
 	)
-
 }
 
 type kvReader struct {

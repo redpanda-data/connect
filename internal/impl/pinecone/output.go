@@ -91,7 +91,6 @@ func init() {
 			}
 			return
 		})
-
 }
 
 type operation string

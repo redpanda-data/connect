@@ -123,7 +123,6 @@ func init() {
 			out, err = newSNSWriter(wConf, mgr)
 			return
 		})
-
 }
 
 type snsWriter struct {

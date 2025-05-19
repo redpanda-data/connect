@@ -98,7 +98,6 @@ func init() {
 			}
 			return service.AutoRetryNacksToggled(conf, i)
 		})
-
 }
 
 type schemaRegistryInput struct {

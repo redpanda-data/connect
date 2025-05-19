@@ -43,7 +43,6 @@ func init() {
 		newVertexAIEmbeddingsProcessorConfig(),
 		newVertexAIEmbeddingsProcessor,
 	)
-
 }
 
 func newVertexAIEmbeddingsProcessorConfig() *service.ConfigSpec {

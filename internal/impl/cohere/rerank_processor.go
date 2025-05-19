@@ -34,7 +34,6 @@ func init() {
 		rerankProcessorConfig(),
 		makeRerankProcessor,
 	)
-
 }
 
 func rerankProcessorConfig() *service.ConfigSpec {

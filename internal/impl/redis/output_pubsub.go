@@ -58,7 +58,6 @@ func init() {
 			out, err = newRedisPubSubWriter(conf, mgr)
 			return
 		})
-
 }
 
 type redisPubSubWriter struct {

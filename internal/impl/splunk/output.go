@@ -111,7 +111,6 @@ func init() {
 			out, err = outputFromParsed(conf, mgr.Logger())
 			return
 		})
-
 }
 
 type output struct {

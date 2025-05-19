@@ -75,7 +75,6 @@ func init() {
 			}
 			return
 		})
-
 }
 
 type hdfsReader struct {

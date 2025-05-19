@@ -35,7 +35,6 @@ func init() {
 		imageProcessorConfig(),
 		makeImageProcessor,
 	)
-
 }
 
 func imageProcessorConfig() *service.ConfigSpec {

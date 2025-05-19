@@ -74,7 +74,6 @@ func init() {
 		}
 		return service.AutoRetryNacksToggled(conf, rdr)
 	})
-
 }
 
 type nanomsgReader struct {

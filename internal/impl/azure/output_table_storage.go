@@ -173,7 +173,6 @@ func init() {
 			}
 			return
 		})
-
 }
 
 type azureTableStorageWriter struct {

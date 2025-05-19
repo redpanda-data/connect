@@ -84,7 +84,6 @@ func init() {
 			}
 			return
 		})
-
 }
 
 type hdfsWriter struct {

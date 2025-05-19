@@ -44,7 +44,6 @@ func init() {
 			return newKVCache(conf, mgr)
 		},
 	)
-
 }
 
 type kvCache struct {

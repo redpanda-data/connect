@@ -181,7 +181,6 @@ func init() {
 
 		return conf.WrapBatchInputExtractTracingSpanMapping("kafka", r)
 	})
-
 }
 
 //------------------------------------------------------------------------------

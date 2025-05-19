@@ -63,7 +63,6 @@ func init() {
 			w, err := newKVOutput(conf, mgr)
 			return w, maxInFlight, err
 		})
-
 }
 
 //------------------------------------------------------------------------------

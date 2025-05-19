@@ -72,7 +72,6 @@ func init() {
 			out, err = newWriterFromParsed(conf, mgr)
 			return
 		})
-
 }
 
 //------------------------------------------------------------------------------

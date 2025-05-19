@@ -85,7 +85,6 @@ func init() {
 			}
 			return
 		})
-
 }
 
 func dloConfigFromParsed(pConf *service.ParsedConfig) (*dloConfig, error) {

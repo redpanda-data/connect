@@ -75,7 +75,6 @@ func init() {
 
 			return service.InputWithMaxInFlight(mInF, i), nil
 		})
-
 }
 
 func newRedisListInputFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {

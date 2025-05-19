@@ -41,7 +41,6 @@ func init() {
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 			return newBeanstalkdReaderFromConfig(conf, mgr.Logger())
 		})
-
 }
 
 type beanstalkdReader struct {

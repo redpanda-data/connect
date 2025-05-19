@@ -408,7 +408,6 @@ func init() {
 			output, err = newSnowflakeWriterFromConfig(conf, mgr)
 			return
 		})
-
 }
 
 //------------------------------------------------------------------------------

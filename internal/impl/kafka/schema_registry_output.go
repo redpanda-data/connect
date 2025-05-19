@@ -102,7 +102,6 @@ func init() {
 			out, err = outputFromParsed(conf, mgr)
 			return
 		})
-
 }
 
 type schemaRegistryOutput struct {

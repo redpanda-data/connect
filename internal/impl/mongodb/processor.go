@@ -70,7 +70,6 @@ func init() {
 			proc, err = ProcessorFromParsed(conf, mgr)
 			return
 		})
-
 }
 
 //------------------------------------------------------------------------------

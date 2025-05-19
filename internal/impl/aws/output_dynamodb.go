@@ -179,7 +179,6 @@ func init() {
 			out, err = newDynamoDBWriter(wConf, mgr)
 			return
 		})
-
 }
 
 type dynamoDBAPI interface {

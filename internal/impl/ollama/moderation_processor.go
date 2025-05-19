@@ -29,7 +29,6 @@ func init() {
 		ollamaModerationProcessorConfig(),
 		makeOllamaModerationProcessor,
 	)
-
 }
 
 func ollamaModerationProcessorConfig() *service.ConfigSpec {

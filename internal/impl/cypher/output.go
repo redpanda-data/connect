@@ -162,7 +162,6 @@ func init() {
 			out, err = newCypherOutput(conf, mgr)
 			return
 		})
-
 }
 
 func newCypherOutput(conf *service.ParsedConfig, mgr *service.Resources) (*output, error) {

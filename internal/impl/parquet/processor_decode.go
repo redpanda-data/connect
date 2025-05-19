@@ -78,7 +78,6 @@ func init() {
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
 			return newParquetDecodeProcessorFromConfig(conf, mgr.Logger())
 		})
-
 }
 
 //------------------------------------------------------------------------------

@@ -48,7 +48,6 @@ func init() {
 		newVertexAIProcessorConfig(),
 		newVertexAIProcessor,
 	)
-
 }
 
 func newVertexAIProcessorConfig() *service.ConfigSpec {

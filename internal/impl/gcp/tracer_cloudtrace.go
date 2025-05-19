@@ -62,7 +62,6 @@ func init() {
 	service.MustRegisterOtelTracerProvider("gcp_cloudtrace", cloudTraceSpec(), func(conf *service.ParsedConfig) (trace.TracerProvider, error) {
 		return cloudTraceFromParsed(conf)
 	})
-
 }
 
 func cloudTraceFromParsed(conf *service.ParsedConfig) (trace.TracerProvider, error) {

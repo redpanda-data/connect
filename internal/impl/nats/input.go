@@ -85,7 +85,6 @@ func init() {
 			return conf.WrapInputExtractTracingSpanMapping("nats", r)
 		},
 	)
-
 }
 
 type natsReader struct {

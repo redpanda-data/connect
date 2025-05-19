@@ -104,7 +104,6 @@ func init() {
 
 			return w, mIF, nil
 		})
-
 }
 
 type amqp1Writer struct {

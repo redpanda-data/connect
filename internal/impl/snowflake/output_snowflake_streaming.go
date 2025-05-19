@@ -349,7 +349,6 @@ func init() {
 			output, err = newSnowflakeStreamer(conf, mgr)
 			return
 		})
-
 }
 
 func newSnowflakeStreamer(

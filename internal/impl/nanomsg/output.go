@@ -73,7 +73,6 @@ func init() {
 		}
 		return wtr, mIF, nil
 	})
-
 }
 
 type nanomsgWriter struct {

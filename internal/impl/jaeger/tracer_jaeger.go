@@ -115,7 +115,6 @@ func init() {
 		jConf.FlushInterval, _ = conf.FieldString(jtFieldFlushInterval)
 		return NewJaeger(jConf)
 	})
-
 }
 
 //------------------------------------------------------------------------------

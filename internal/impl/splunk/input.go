@@ -66,7 +66,6 @@ func init() {
 			}
 			return service.AutoRetryNacksToggled(conf, i)
 		})
-
 }
 
 type input struct {

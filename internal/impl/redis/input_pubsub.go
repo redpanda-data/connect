@@ -62,7 +62,6 @@ func init() {
 			}
 			return service.AutoRetryNacksToggled(conf, r)
 		})
-
 }
 
 type redisPubSubReader struct {

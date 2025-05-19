@@ -163,7 +163,6 @@ func init() {
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
 			return newProtobuf(conf, mgr)
 		})
-
 }
 
 type protobufOperator func(part *service.Message) error

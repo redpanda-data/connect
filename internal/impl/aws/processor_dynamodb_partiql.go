@@ -88,7 +88,6 @@ pipeline:
 			}
 			return newDynamoDBPartiQL(mgr.Logger(), client, query, dynQuery, args), nil
 		})
-
 }
 
 type dynamoDBPartiQL struct {

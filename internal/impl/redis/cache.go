@@ -60,7 +60,6 @@ func init() {
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
 			return newRedisCacheFromConfig(conf)
 		})
-
 }
 
 func newRedisCacheFromConfig(conf *service.ParsedConfig) (*redisCache, error) {

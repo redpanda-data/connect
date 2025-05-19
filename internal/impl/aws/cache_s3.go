@@ -70,7 +70,6 @@ func init() {
 			}
 			return s, nil
 		})
-
 }
 
 func newS3CacheFromConfig(conf *service.ParsedConfig) (*s3Cache, error) {

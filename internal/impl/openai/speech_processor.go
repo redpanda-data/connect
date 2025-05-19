@@ -33,7 +33,6 @@ func init() {
 		speechProcessorConfig(),
 		makeSpeechProcessor,
 	)
-
 }
 
 func speechProcessorConfig() *service.ConfigSpec {

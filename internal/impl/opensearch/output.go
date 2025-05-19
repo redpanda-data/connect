@@ -218,7 +218,6 @@ func init() {
 			out, err = OutputFromParsed(conf, mgr)
 			return
 		})
-
 }
 
 // Output implements service.BatchOutput for elasticsearch.

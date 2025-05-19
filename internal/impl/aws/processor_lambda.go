@@ -144,7 +144,6 @@ pipeline:
 
 			return newLambdaProc(lambda.NewFromConfig(aconf), parallel, function, numRetries, rateLimit, timeout, mgr)
 		})
-
 }
 
 //------------------------------------------------------------------------------

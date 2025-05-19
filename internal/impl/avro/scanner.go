@@ -64,7 +64,6 @@ func init() {
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchScannerCreator, error) {
 			return avroScannerFromParsed(conf)
 		})
-
 }
 
 func avroScannerFromParsed(conf *service.ParsedConfig) (l *avroScannerCreator, err error) {

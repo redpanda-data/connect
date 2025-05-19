@@ -71,7 +71,6 @@ func init() {
 			out, err = newRedisStreamsWriter(conf, mgr)
 			return
 		})
-
 }
 
 type redisStreamsWriter struct {

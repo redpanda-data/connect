@@ -110,7 +110,6 @@ func init() {
 			}
 			return conf.WrapInputExtractTracingSpanMapping("nats_jetstream", input)
 		})
-
 }
 
 //------------------------------------------------------------------------------

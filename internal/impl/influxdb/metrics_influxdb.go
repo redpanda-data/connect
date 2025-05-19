@@ -120,7 +120,6 @@ func init() {
 		func(conf *service.ParsedConfig, log *service.Logger) (service.MetricsExporter, error) {
 			return fromParsed(conf, log)
 		})
-
 }
 
 type influxDBMetrics struct {

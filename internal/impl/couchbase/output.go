@@ -60,7 +60,6 @@ func init() {
 			return
 		},
 	)
-
 }
 
 // Output is a sink for Couchbase

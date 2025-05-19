@@ -52,7 +52,6 @@ func init() {
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.RateLimit, error) {
 			return newRedisRatelimitFromConfig(conf)
 		})
-
 }
 
 //------------------------------------------------------------------------------

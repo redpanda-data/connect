@@ -155,7 +155,6 @@ func init() {
 			out, err = newSQSWriter(wConf, mgr)
 			return
 		})
-
 }
 
 type sqsWriter struct {

@@ -47,7 +47,6 @@ func init() {
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
 			return newGcpCloudStorageCacheFromConfig(conf)
 		})
-
 }
 
 func newGcpCloudStorageCacheFromConfig(parsedConf *service.ParsedConfig) (*gcpCloudStorageCache, error) {

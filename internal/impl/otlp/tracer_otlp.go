@@ -93,7 +93,6 @@ func init() {
 			}
 			return newOtlp(c)
 		})
-
 }
 
 type collector struct {

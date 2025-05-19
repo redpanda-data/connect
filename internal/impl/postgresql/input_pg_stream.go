@@ -294,7 +294,6 @@ func init() {
 	service.MustRegisterBatchInput("postgres_cdc", newPostgresCDCConfig(), newPgStreamInput)
 	// Legacy naming
 	service.MustRegisterBatchInput("pg_stream", newPostgresCDCConfig().Deprecated(), newPgStreamInput)
-
 }
 
 type pgStreamInput struct {

@@ -169,7 +169,6 @@ func init() {
 			}
 			return service.AutoRetryNacksToggled(conf, i)
 		})
-
 }
 
 func (c *crdbChangefeedInput) Connect(ctx context.Context) (err error) {

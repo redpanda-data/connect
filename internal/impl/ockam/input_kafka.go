@@ -37,7 +37,6 @@ func init() {
 			}
 			return service.AutoRetryNacksBatchedToggled(conf.Namespace("kafka"), i)
 		})
-
 }
 
 func ockamKafkaInputConfig() *service.ConfigSpec {

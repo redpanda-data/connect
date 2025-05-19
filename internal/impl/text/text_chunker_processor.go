@@ -34,7 +34,6 @@ func init() {
 		newTextChunkerSpec(),
 		newTextChunker,
 	)
-
 }
 
 const (

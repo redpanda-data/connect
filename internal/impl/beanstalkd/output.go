@@ -48,7 +48,6 @@ func init() {
 			w, err := newBeanstalkdWriterFromConfig(conf, mgr.Logger())
 			return w, maxInFlight, err
 		})
-
 }
 
 type beanstalkdWriter struct {

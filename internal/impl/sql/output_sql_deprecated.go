@@ -57,7 +57,6 @@ func init() {
 			out, err = newSQLDeprecatedOutputFromConfig(conf, mgr)
 			return
 		})
-
 }
 
 //------------------------------------------------------------------------------

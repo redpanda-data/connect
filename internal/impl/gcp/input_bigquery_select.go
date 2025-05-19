@@ -276,5 +276,4 @@ func init() {
 			}
 			return service.AutoRetryNacksToggled(conf, i)
 		})
-
 }

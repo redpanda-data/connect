@@ -118,7 +118,6 @@ func init() {
 			out, err = newSQLRawOutputFromConfig(conf, mgr)
 			return
 		})
-
 }
 
 //------------------------------------------------------------------------------
