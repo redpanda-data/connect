@@ -60,9 +60,13 @@ type Subscriber struct {
 	client  *spanner.Client
 	store   *metadata.Store
 	querier querier
+	resumed map[string]struct{}
 	wg      sync.WaitGroup
 	cb      func(context.Context, *DataChangeRecord) error
 	log     *service.Logger
+
+	testingAdminClient  *adminapi.DatabaseAdminClient
+	testingPostFinished func(partitionToken string, err error)
 }
 
 // NewSubscriber creates Spanner client and initializes the Subscriber.
@@ -135,15 +139,21 @@ func (s *Subscriber) Setup(ctx context.Context) error {
 func (s *Subscriber) createPartitionMetadataTableIfNotExist(ctx context.Context) error {
 	s.log.Debugf("Creating partition metadata table %s if not exist", s.store.Config().TableName)
 
-	adm, err := adminapi.NewDatabaseAdminClient(ctx, s.conf.SpannerClientOptions...)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err := adm.Close(); err != nil {
-			s.log.Warnf("Failed to close database admin client: %v", err)
+	var adm *adminapi.DatabaseAdminClient
+	if s.testingAdminClient != nil {
+		adm = s.testingAdminClient
+	} else {
+		var err error
+		adm, err = adminapi.NewDatabaseAdminClient(ctx, s.conf.SpannerClientOptions...)
+		if err != nil {
+			return err
 		}
-	}()
+		defer func() {
+			if err := adm.Close(); err != nil {
+				s.log.Warnf("Failed to close database admin client: %v", err)
+			}
+		}()
+	}
 	return metadata.CreatePartitionMetadataTableWithDatabaseAdminClient(ctx, s.store.Config(), adm)
 }
 
@@ -191,10 +201,14 @@ func (s *Subscriber) handleRootPartitions(ctx context.Context, cr ChangeRecord) 
 
 // Start starts reading the change stream and processing partitions. It can be
 // stopped by canceling the context. If EndTimestamp is set, the subscriber will
-// stop when it reaches the end timestamp.
+// stop when it reaches the end timestamp. Setup can resume the subscriber
+// from the last record processed.
+//
+// Error can be returned only if rescheduling interrupted partitions fails or
+// if the context is canceled.
 //
 // Setup must be called before Start.
-func (s *Subscriber) Start(ctx context.Context) {
+func (s *Subscriber) Start(ctx context.Context) error {
 	s.log.Info("Starting subscriber")
 
 	defer func() {
@@ -203,6 +217,20 @@ func (s *Subscriber) Start(ctx context.Context) {
 		s.log.Info("Subscriber stopped")
 	}()
 
+	if pms, err := s.store.GetInterruptedPartitions(ctx); err != nil {
+		return fmt.Errorf("get interrupted partitions: %w", err)
+	} else if len(pms) > 0 {
+		s.resumed = make(map[string]struct{}, len(pms))
+		for _, pm := range pms {
+			s.resumed[pm.PartitionToken] = struct{}{}
+		}
+
+		s.log.Debugf("Detected %d interrupted partitions", len(pms))
+		if err := s.schedule(ctx, pms); err != nil {
+			return fmt.Errorf("schedule interrupted partitions: %w", err)
+		}
+	}
+
 	const resumeDuration = 100 * time.Millisecond
 	t := time.NewTimer(0)
 	defer t.Stop()
@@ -210,15 +238,15 @@ func (s *Subscriber) Start(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return ctx.Err()
 		case <-t.C:
 			if err := s.detectNewPartitions(ctx); err != nil {
 				if isCancelled(err) {
-					return
+					return ctx.Err()
 				}
 				if errors.Is(err, errEndOfStream) {
 					s.log.Infof("No new partitions detected, exiting")
-					return
+					return nil
 				}
 				s.log.Errorf("Error while processing partitions: %v", err)
 			}
@@ -273,7 +301,11 @@ func (s *Subscriber) schedule(ctx context.Context, pms []metadata.PartitionMetad
 
 				s.waitForParentPartitionsToFinish(ctx, pm)
 
-				if err := s.queryChangeStream(ctx, pm.PartitionToken); err != nil {
+				err := s.queryChangeStream(ctx, pm.PartitionToken)
+				if s.testingPostFinished != nil {
+					s.testingPostFinished(pm.PartitionToken, err)
+				}
+				if err != nil {
 					if isCancelled(err) {
 						s.log.Debugf("%s: context canceled", pm.PartitionToken)
 						return
@@ -360,8 +392,10 @@ func (s *Subscriber) queryChangeStream(ctx context.Context, partitionToken strin
 	if pm.State != metadata.StateRunning {
 		return fmt.Errorf("partition is not running: %s", pm.State)
 	}
-	if pm.RunningAt == nil || !ts.Equal(*pm.RunningAt) {
-		return fmt.Errorf("partition is already running: %s", pm.RunningAt)
+	if _, resumed := s.resumed[partitionToken]; !resumed {
+		if pm.RunningAt == nil || !ts.Equal(*pm.RunningAt) {
+			return fmt.Errorf("partition is already running: %s", pm.RunningAt)
+		}
 	}
 
 	h := s.partitionMetadataHandler(pm)
