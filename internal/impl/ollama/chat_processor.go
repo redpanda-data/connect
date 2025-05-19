@@ -64,7 +64,6 @@ func init() {
 		ollamaChatProcessorConfig(),
 		makeOllamaCompletionProcessor,
 	)
-
 }
 
 func ollamaChatProcessorConfig() *service.ConfigSpec {

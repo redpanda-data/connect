@@ -92,7 +92,6 @@ func init() {
 			}
 			return
 		})
-
 }
 
 type outputWriter struct {

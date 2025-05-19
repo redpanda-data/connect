@@ -45,7 +45,6 @@ func init() {
 			output, err = newOckamKafkaOutput(conf, mgr.Logger())
 			return
 		})
-
 }
 
 func ockamKafkaOutputConfig() *service.ConfigSpec {

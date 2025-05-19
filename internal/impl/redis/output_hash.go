@@ -92,7 +92,6 @@ func init() {
 			out, err = newRedisHashWriter(conf, mgr)
 			return
 		})
-
 }
 
 type redisHashWriter struct {

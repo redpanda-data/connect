@@ -92,7 +92,6 @@ func init() {
 	service.MustRegisterCache("sql", sqlCacheConfig(), func(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
 		return newSQLCacheFromConfig(conf, mgr)
 	})
-
 }
 
 //------------------------------------------------------------------------------

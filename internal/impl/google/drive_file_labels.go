@@ -28,7 +28,6 @@ func init() {
 		driveLabelsProcessorConfig(),
 		newGoogleDriveLabelsProcessor,
 	)
-
 }
 
 func driveLabelsProcessorConfig() *service.ConfigSpec {

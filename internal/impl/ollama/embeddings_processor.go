@@ -30,7 +30,6 @@ func init() {
 		ollamaEmbeddingProcessorConfig(),
 		makeOllamaEmbeddingProcessor,
 	)
-
 }
 
 func ollamaEmbeddingProcessorConfig() *service.ConfigSpec {

@@ -93,7 +93,6 @@ func init() {
 			}
 			return
 		})
-
 }
 
 type azureQueueStorageWriter struct {

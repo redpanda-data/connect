@@ -85,7 +85,6 @@ func init() {
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
 			return newMongoInput(conf, mgr.Logger())
 		})
-
 }
 
 func newMongoInput(conf *service.ParsedConfig, logger *service.Logger) (service.BatchInput, error) {

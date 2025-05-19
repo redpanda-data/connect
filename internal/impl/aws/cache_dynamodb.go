@@ -88,7 +88,6 @@ func init() {
 			}
 			return d, nil
 		})
-
 }
 
 func newDynamodbCacheFromConfig(conf *service.ParsedConfig) (*dynamodbCache, error) {

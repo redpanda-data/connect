@@ -66,7 +66,6 @@ input:
 		Field(service.NewStringField("password").Secret().Optional().Description("The password. Required when reads from Timeplus Enterprise (self-hosted) or Timeplusd"))
 	service.MustRegisterInput(
 		"timeplus", inputConfigSpec, newTimeplusInput)
-
 }
 
 func newTimeplusInput(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {

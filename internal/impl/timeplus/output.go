@@ -77,7 +77,6 @@ output:
 		Field(service.NewStringField("password").Secret().Optional().Description("The password. Required if you are sending message to Timeplus Enterprise (self-hosted) or timeplusd")).
 		Field(service.NewOutputMaxInFlightField()).
 		Field(service.NewBatchPolicyField("batching"))
-
 }
 
 type timeplus struct {

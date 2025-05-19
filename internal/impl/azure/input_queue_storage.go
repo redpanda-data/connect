@@ -107,7 +107,6 @@ func init() {
 			}
 			return newAzureQueueStorage(pConf, mgr)
 		})
-
 }
 
 type azureQueueStorage struct {

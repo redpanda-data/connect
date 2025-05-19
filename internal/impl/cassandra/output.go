@@ -115,7 +115,6 @@ func init() {
 			out, err = newCassandraWriter(conf, mgr)
 			return
 		})
-
 }
 
 type cassandraWriter struct {

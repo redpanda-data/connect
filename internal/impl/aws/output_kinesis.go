@@ -115,7 +115,6 @@ func init() {
 			out, err = newKinesisWriter(wConf, mgr)
 			return
 		})
-
 }
 
 const (

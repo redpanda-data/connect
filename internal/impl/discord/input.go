@@ -75,7 +75,6 @@ func init() {
 			return service.AutoRetryNacksToggled(conf, reader)
 		},
 	)
-
 }
 
 type reader struct {

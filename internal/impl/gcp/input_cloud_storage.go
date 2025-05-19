@@ -125,7 +125,6 @@ func init() {
 			}
 			return service.AutoRetryNacksBatched(rdr), nil
 		})
-
 }
 
 const (

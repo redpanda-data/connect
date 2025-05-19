@@ -37,7 +37,6 @@ func init() {
 		driveSearchProcessorConfig(),
 		newGoogleDriveSearchProcessor,
 	)
-
 }
 
 func driveSearchProcessorConfig() *service.ConfigSpec {

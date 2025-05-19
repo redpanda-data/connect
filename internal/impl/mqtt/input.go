@@ -71,7 +71,6 @@ func init() {
 		}
 		return service.AutoRetryNacksToggled(conf, rdr)
 	})
-
 }
 
 type mqttReader struct {

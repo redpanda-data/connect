@@ -70,7 +70,6 @@ func init() {
 			return spanOutput, maxInFlight, err
 		},
 	)
-
 }
 
 type natsWriter struct {

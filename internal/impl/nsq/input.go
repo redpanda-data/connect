@@ -82,7 +82,6 @@ func init() {
 	service.MustRegisterInput("nsq", inputConfigSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 		return newNSQReaderFromParsed(conf, mgr)
 	})
-
 }
 
 type nsqReader struct {

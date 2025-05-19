@@ -281,5 +281,4 @@ func init() {
 				logger: mgr.Logger(),
 			})
 		})
-
 }

@@ -92,7 +92,6 @@ func init() {
 			}
 			return service.AutoRetryNacksBatchedToggled(conf, r)
 		})
-
 }
 
 type pendingRedisStreamMsg struct {

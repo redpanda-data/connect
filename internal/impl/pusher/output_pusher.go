@@ -68,7 +68,6 @@ func init() {
 			output, err = newPusherWriterFromConfig(conf, mgr.Logger())
 			return
 		})
-
 }
 
 type pusherWriter struct {

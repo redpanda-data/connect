@@ -316,7 +316,6 @@ func init() {
 			out, err = newAmazonS3Writer(wConf, mgr)
 			return
 		})
-
 }
 
 type amazonS3Writer struct {

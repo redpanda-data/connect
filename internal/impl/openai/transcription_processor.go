@@ -33,7 +33,6 @@ func init() {
 		transcriptionProcessorConfig(),
 		makeTranscriptionProcessor,
 	)
-
 }
 
 func transcriptionProcessorConfig() *service.ConfigSpec {

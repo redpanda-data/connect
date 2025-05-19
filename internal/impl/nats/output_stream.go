@@ -109,7 +109,6 @@ func init() {
 			spanOutput, err := conf.WrapOutputExtractTracingSpanMapping("nats_stream", w)
 			return spanOutput, maxInFlight, err
 		})
-
 }
 
 type natsStreamWriter struct {

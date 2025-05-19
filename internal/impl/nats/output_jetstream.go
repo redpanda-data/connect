@@ -69,7 +69,6 @@ func init() {
 			spanOutput, err := conf.WrapOutputExtractTracingSpanMapping("nats_jetstream", w)
 			return spanOutput, maxInFlight, err
 		})
-
 }
 
 //------------------------------------------------------------------------------

@@ -55,7 +55,6 @@ func init() {
 			return w, 1, err
 		},
 	)
-
 }
 
 type writer struct {

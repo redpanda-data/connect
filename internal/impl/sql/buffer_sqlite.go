@@ -83,7 +83,6 @@ func init() {
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchBuffer, error) {
 			return NewSQLiteBufferFromConfig(conf, mgr)
 		})
-
 }
 
 var maxRequeue = math.MaxInt

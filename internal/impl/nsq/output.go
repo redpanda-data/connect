@@ -65,7 +65,6 @@ func init() {
 		}
 		return wtr, mIF, nil
 	})
-
 }
 
 type nsqWriter struct {

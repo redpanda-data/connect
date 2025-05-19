@@ -134,7 +134,6 @@ func init() {
 			return newKVProcessor(conf, mgr)
 		},
 	)
-
 }
 
 type kvProcessor struct {

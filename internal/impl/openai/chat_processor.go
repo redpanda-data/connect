@@ -78,7 +78,6 @@ func init() {
 		chatProcessorConfig(),
 		makeChatProcessor,
 	)
-
 }
 
 func chatProcessorConfig() *service.ConfigSpec {

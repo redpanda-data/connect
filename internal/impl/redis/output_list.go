@@ -70,7 +70,6 @@ func init() {
 			out, err = newRedisListWriter(conf, mgr)
 			return
 		})
-
 }
 
 type redisListWriter struct {

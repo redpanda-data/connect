@@ -35,7 +35,6 @@ func init() {
 		driveDownloadProcessorConfig(),
 		newGoogleDriveDownloadProcessor,
 	)
-
 }
 
 func driveDownloadProcessorConfig() *service.ConfigSpec {

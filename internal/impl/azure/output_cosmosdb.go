@@ -100,7 +100,6 @@ func init() {
 			output, err = newCosmosDBWriterFromParsed(conf, mgr.Logger())
 			return
 		})
-
 }
 
 //------------------------------------------------------------------------------

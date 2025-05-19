@@ -73,7 +73,6 @@ func init() {
 		out, err = newMQTTWriterFromParsed(conf, mgr)
 		return
 	})
-
 }
 
 type mqttWriter struct {

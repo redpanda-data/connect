@@ -99,7 +99,6 @@ func init() {
 			out, err = newKinesisFirehoseWriter(wConf, mgr.Logger())
 			return
 		})
-
 }
 
 type firehoseAPI interface {

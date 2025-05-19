@@ -208,7 +208,6 @@ func init() {
 			out, err = newGCPCloudStorageOutput(pConf, mgr)
 			return
 		})
-
 }
 
 // gcpCloudStorageOutput is a benthos writer.Type implementation that writes

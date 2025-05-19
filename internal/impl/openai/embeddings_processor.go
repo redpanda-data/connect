@@ -31,7 +31,6 @@ func init() {
 		embeddingProcessorConfig(),
 		makeEmbeddingsProcessor,
 	)
-
 }
 
 func embeddingProcessorConfig() *service.ConfigSpec {

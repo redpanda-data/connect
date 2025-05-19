@@ -39,7 +39,6 @@ func init() {
 			}
 			return w, n, err
 		})
-
 }
 
 func outputConfigSpec() *service.ConfigSpec {

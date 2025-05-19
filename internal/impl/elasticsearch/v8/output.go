@@ -260,7 +260,6 @@ func init() {
 			out, err = outputFromParsed(conf, mgr)
 			return
 		})
-
 }
 
 func outputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (*esOutput, error) {

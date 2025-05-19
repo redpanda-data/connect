@@ -126,7 +126,6 @@ func init() {
 			}
 			return
 		})
-
 }
 
 type azureBlobStorageWriter struct {

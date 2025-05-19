@@ -68,7 +68,6 @@ func init() {
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 			return newCassandraInput(conf)
 		})
-
 }
 
 func newCassandraInput(conf *service.ParsedConfig) (service.Input, error) {

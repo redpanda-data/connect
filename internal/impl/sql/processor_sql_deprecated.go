@@ -57,7 +57,6 @@ func init() {
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 			return NewSQLDeprecatedProcessorFromConfig(conf, mgr)
 		})
-
 }
 
 // NewSQLDeprecatedProcessorFromConfig returns an internal sql processor.

@@ -194,7 +194,6 @@ func init() {
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
 			return InputFromParsed(conf, mgr)
 		})
-
 }
 
 //------------------------------------------------------------------------------

@@ -30,7 +30,6 @@ func init() {
 		translationProcessorConfig(),
 		makeTranslationProcessor,
 	)
-
 }
 
 func translationProcessorConfig() *service.ConfigSpec {

@@ -188,7 +188,6 @@ func init() {
 	service.MustRegisterInput("amqp_0_9", amqp09InputSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 		return amqp09ReaderFromParsed(conf, mgr)
 	})
-
 }
 
 type amqp09BindingDeclare struct {

@@ -151,7 +151,6 @@ func init() {
 			}
 			return newGCPPubSubReader(pConf, mgr)
 		})
-
 }
 
 func createSubscription(conf pbiConfig, client *pubsub.Client, log *service.Logger) {

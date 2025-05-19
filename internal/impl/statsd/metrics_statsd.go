@@ -51,7 +51,6 @@ func init() {
 	service.MustRegisterMetricsExporter("statsd", statsdSpec(), func(conf *service.ParsedConfig, log *service.Logger) (service.MetricsExporter, error) {
 		return newStatsdFromParsed(conf, log)
 	})
-
 }
 
 //------------------------------------------------------------------------------

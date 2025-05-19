@@ -100,7 +100,6 @@ func init() {
 			output, err = newRedpandaMigratorOffsetsWriterFromConfig(conf, mgr)
 			return
 		})
-
 }
 
 //------------------------------------------------------------------------------

@@ -200,7 +200,6 @@ func init() {
 		o, err = conf.WrapBatchOutputExtractTracingSpanMapping("kafka", o)
 		return
 	})
-
 }
 
 type kafkaWriter struct {

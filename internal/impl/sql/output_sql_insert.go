@@ -104,7 +104,6 @@ func init() {
 			out, err = newSQLInsertOutputFromConfig(conf, mgr)
 			return
 		})
-
 }
 
 //------------------------------------------------------------------------------
