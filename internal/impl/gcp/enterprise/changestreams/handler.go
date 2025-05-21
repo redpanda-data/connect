@@ -11,6 +11,7 @@ package changestreams
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
@@ -19,71 +20,63 @@ import (
 
 type handler struct {
 	pm    metadata.PartitionMetadata
-	cb    func(context.Context, *DataChangeRecord) error
+	tr    timeRange
+	cb    CallbackFunc
 	store *metadata.Store
 	log   *service.Logger
 }
 
+func (s *Subscriber) partitionMetadataHandler(pm metadata.PartitionMetadata) *handler {
+	return &handler{
+		pm: pm,
+		cb: s.cb,
+		tr: timeRange{
+			cur: pm.StartTimestamp,
+			end: pm.EndTimestamp,
+		},
+		store: s.store,
+		log:   s.log,
+	}
+}
+
 func (h *handler) handleChangeRecord(ctx context.Context, cr ChangeRecord) error {
-	tr := timeRange{
-		cur: h.pm.StartTimestamp,
-		end: h.pm.EndTimestamp,
-	}
-
-	if err := h.handleDataChangeRecords(ctx, cr, &tr); err != nil {
+	if err := h.handleDataChangeRecords(ctx, cr); err != nil {
 		return err
 	}
-	lastUpdatedWatermark := tr.now()
-
 	for _, hr := range cr.HeartbeatRecords {
-		tr.tryClaim(hr.Timestamp)
+		h.tr.tryClaim(hr.Timestamp)
 	}
-	if err := h.handleChildPartitionsRecords(ctx, cr, &tr); err != nil {
+	if err := h.handleChildPartitionsRecords(ctx, cr); err != nil {
 		return err
-	}
-
-	if tr.now().Compare(lastUpdatedWatermark) != 0 {
-		if err := h.store.UpdateWatermark(ctx, h.pm.PartitionToken, tr.now()); err != nil {
-			return fmt.Errorf("update watermark: %w", err)
-		}
 	}
 
 	return nil
 }
 
-func (h *handler) handleDataChangeRecords(
-	ctx context.Context,
-	cr ChangeRecord,
-	tr *timeRange,
-) error {
+func (h *handler) handleDataChangeRecords(ctx context.Context, cr ChangeRecord) error {
 	for _, dcr := range cr.DataChangeRecords {
-		if !tr.tryClaim(dcr.CommitTimestamp) {
+		if !h.tr.tryClaim(dcr.CommitTimestamp) {
 			h.log.Errorf("%s: failed to claim data change record timestamp: %v, current: %v",
-				h.pm.PartitionToken, dcr.CommitTimestamp, tr.now())
+				h.pm.PartitionToken, dcr.CommitTimestamp, h.tr.now())
 			continue
 		}
 
 		h.log.Debugf("%s: data change record: table: %s, modification type: %s, commit timestamp: %v",
 			h.pm.PartitionToken, dcr.TableName, dcr.ModType, dcr.CommitTimestamp)
-		if err := h.cb(ctx, dcr); err != nil {
+
+		if err := h.cb(ctx, h.pm.PartitionToken, dcr); err != nil {
 			return fmt.Errorf("data change record handler failed: %w", err)
 		}
-		if err := h.store.UpdateWatermark(ctx, h.pm.PartitionToken, tr.now()); err != nil {
-			return fmt.Errorf("update watermark: %w", err)
-		}
+		// Updating watermark is delegated to Callback.
 	}
 	return nil
 }
 
-func (h *handler) handleChildPartitionsRecords(
-	ctx context.Context,
-	cr ChangeRecord,
-	tr *timeRange,
-) error {
+func (h *handler) handleChildPartitionsRecords(ctx context.Context, cr ChangeRecord) error {
 	for _, cpr := range cr.ChildPartitionsRecords {
-		if !tr.tryClaim(cpr.StartTimestamp) {
+		if !h.tr.tryClaim(cpr.StartTimestamp) {
 			h.log.Errorf("%s: failed to claim child partition record timestamp: %v, current: %v",
-				h.pm.PartitionToken, cpr.StartTimestamp, tr.now())
+				h.pm.PartitionToken, cpr.StartTimestamp, h.tr.now())
 			continue
 		}
 
@@ -102,4 +95,8 @@ func (h *handler) handleChildPartitionsRecords(
 		}
 	}
 	return nil
+}
+
+func (h *handler) watermark() time.Time {
+	return h.tr.now()
 }
