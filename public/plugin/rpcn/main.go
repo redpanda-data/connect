@@ -28,6 +28,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"os/signal"
@@ -38,7 +39,6 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/rpcplugin/runtimepb"
-	"github.com/siddontang/go/log"
 	"google.golang.org/grpc"
 )
 
@@ -349,7 +349,7 @@ func runMain(register func(*grpc.Server)) {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		<-sigChan
-		log.Debug("Shutting down server...")
+		log.Println("Shutting down server...")
 		s.GracefulStop()
 		close(shutdown)
 	}()
