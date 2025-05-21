@@ -69,6 +69,7 @@ output:
     password: "" # No default (optional)
     bucket: "" # No default (required)
     collection: _default
+    scope: _default
     transcoder: legacy
     timeout: 15s
     id: ${! json("id") } # No default (required)
@@ -143,6 +144,15 @@ Couchbase bucket.
 === `collection`
 
 Bucket collection.
+
+
+*Type*: `string`
+
+*Default*: `"_default"`
+
+=== `scope`
+
+Bucket scope.
 
 
 *Type*: `string`
