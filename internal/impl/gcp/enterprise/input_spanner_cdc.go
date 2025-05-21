@@ -182,8 +182,8 @@ func newSpannerCDCReader(conf spannerCDCInputConfig, mgr *service.Resources) *sp
 	}
 }
 
-func (r *spannerCDCReader) onDataChangeRecord(ctx context.Context, dcr *changestreams.DataChangeRecord) error {
-	b, err := json.Marshal(dcr)
+func (r *spannerCDCReader) onDataChangeRecord(_ context.Context, dcre changestreams.DataChangeRecordExt) error {
+	b, err := json.Marshal(dcre.DataChangeRecord)
 	if err != nil {
 		return fmt.Errorf("failed to marshal read result as JSON: %w", err)
 	}

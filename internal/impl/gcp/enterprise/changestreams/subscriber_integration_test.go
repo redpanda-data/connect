@@ -38,7 +38,7 @@ var (
 func testSubscriber(
 	t *testing.T,
 	e changestreamstest.EmulatorHelper,
-	cb func(ctx context.Context, dcr *DataChangeRecord) error,
+	cb CallbackFunc,
 ) (*Subscriber, *metadata.Store, *mockQuerier) {
 	t.Helper()
 
@@ -60,7 +60,7 @@ func testSubscriber(
 	}
 
 	if cb == nil {
-		cb = func(ctx context.Context, dcr *DataChangeRecord) error { return nil }
+		cb = func(_ context.Context, _ string, _ *DataChangeRecord) error { return nil }
 	}
 
 	log := service.NewLoggerFromSlog(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug})))
@@ -140,8 +140,10 @@ func TestIntegrationSubscriberResume(t *testing.T) {
 	defer e.Close()
 
 	dch := make(chan *DataChangeRecord)
-	s, ms, mq := testSubscriber(t, e, func(ctx context.Context, dcr *DataChangeRecord) error {
-		dch <- dcr
+	s, ms, mq := testSubscriber(t, e, func(ctx context.Context, partitionToken string, dcr *DataChangeRecord) error {
+		if dcr != nil {
+			dch <- dcr
+		}
 		return nil
 	})
 	defer s.Close()
@@ -228,6 +230,115 @@ func TestIntegrationSubscriberResume(t *testing.T) {
 	} else if pm.State != metadata.StateFinished {
 		t.Fatalf("partition is not finished: %s", pm.State)
 	}
+}
+
+func TestIntegrationSubscriberCallbackUpdatePartitionWatermark(t *testing.T) {
+	integration.CheckSkip(t)
+
+	e := changestreamstest.MakeEmulatorHelper(t)
+	defer e.Close()
+
+	partitionToken := "test-partition"
+	cnt := 0
+	var s *Subscriber
+	s, ms, mq := testSubscriber(t, e, func(ctx context.Context, partitionToken string, dcr *DataChangeRecord) error {
+		cnt += 1
+		switch cnt {
+		case 1:
+			// When message is added to batch
+		case 2:
+			// Then watermark is not updated
+			pm, err := s.store.GetPartition(t.Context(), partitionToken)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if pm.State != metadata.StateRunning {
+				t.Errorf("partition is not running: %s", pm.State)
+			}
+			if pm.Watermark != testStartTimestamp {
+				t.Errorf("watermark updated to %v after ErrAddedToBatch returned", pm.Watermark)
+			}
+
+			// When UpdatePartitionWatermark is called
+			if err := s.UpdatePartitionWatermark(ctx, partitionToken, dcr); err != nil {
+				t.Fatal(err)
+			}
+		case 3:
+			if dcr != nil {
+				t.Fatal("expected nil dcr")
+			}
+
+			// Then watermark is updated
+			pm, err := s.store.GetPartition(t.Context(), partitionToken)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if pm.State != metadata.StateRunning {
+				t.Errorf("partition is not running: %s", pm.State)
+			}
+			if pm.Watermark != testStartTimestamp.Add(2*time.Second) {
+				t.Errorf("watermark updated to %v after UpdatePartitionWatermark returned", pm.Watermark)
+			}
+		default:
+			t.Fatal("unexpected call")
+		}
+
+		return nil
+	})
+	defer s.Close()
+
+	fch := make(chan string)
+	s.testingPostFinished = func(partitionToken string, err error) {
+		if err == nil {
+			fch <- partitionToken
+		}
+	}
+
+	// Call setup to create the metadata table
+	mq.ExpectQueryWithRecords(rootPartitionMetadata.PartitionToken, ChangeRecord{})
+	if err := s.Setup(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	mq.AssertExpectations(t)
+
+	// Given partition with data change records
+	pm := metadata.PartitionMetadata{
+		PartitionToken: partitionToken,
+		ParentTokens:   []string{},
+		StartTimestamp: testStartTimestamp,
+		Watermark:      testStartTimestamp,
+	}
+	if err := ms.Create(t.Context(), []metadata.PartitionMetadata{pm}); err != nil {
+		t.Fatal(err)
+	}
+	mq.ExpectQueryWithRecords(partitionToken, ChangeRecord{
+		DataChangeRecords: []*DataChangeRecord{
+			{
+				RecordSequence:  "1",
+				CommitTimestamp: testStartTimestamp.Add(time.Second),
+				TableName:       "test-table",
+				ModType:         "INSERT",
+			},
+			{
+				RecordSequence:  "2",
+				CommitTimestamp: testStartTimestamp.Add(2 * time.Second),
+				TableName:       "test-table",
+				ModType:         "UPDATE",
+			},
+		},
+	})
+
+	// When Start is called
+	go func() {
+		if err := s.Start(t.Context()); err != nil {
+			t.Log(err)
+		}
+	}()
+
+	// And partition is processed
+	<-fch
+
+	mq.AssertExpectations(t)
 }
 
 func collectN[T any](t *testing.T, n int, ch <-chan T) []T {
