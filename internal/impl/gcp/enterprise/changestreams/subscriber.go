@@ -62,7 +62,7 @@ type Subscriber struct {
 	querier querier
 	resumed map[string]struct{}
 	wg      sync.WaitGroup
-	cb      func(context.Context, *DataChangeRecord) error
+	cb      CallbackFunc
 	log     *service.Logger
 
 	testingAdminClient  *adminapi.DatabaseAdminClient
@@ -73,7 +73,7 @@ type Subscriber struct {
 func NewSubscriber(
 	ctx context.Context,
 	conf Config,
-	cb func(context.Context, *DataChangeRecord) error,
+	cb CallbackFunc,
 	log *service.Logger,
 ) (*Subscriber, error) {
 	if cb == nil {
@@ -404,23 +404,20 @@ func (s *Subscriber) queryChangeStream(ctx context.Context, partitionToken strin
 	if err := s.querier.query(ctx, pm, h.handleChangeRecord); err != nil {
 		return fmt.Errorf("process partition change stream: %w", err)
 	}
+	if err := s.cb(ctx, partitionToken, nil); err != nil {
+		return fmt.Errorf("end of partition: %w", err)
+	}
 	s.log.Debugf("%s: done querying partition change stream", partitionToken)
 
 	s.log.Debugf("%s: updating partition to finished", partitionToken)
+	if err := s.store.UpdateWatermark(ctx, partitionToken, h.watermark()); err != nil {
+		return fmt.Errorf("update watermark: %w", err)
+	}
 	if _, err := s.store.UpdateToFinished(ctx, partitionToken); err != nil {
 		return fmt.Errorf("update partition to finished: %w", err)
 	}
 
 	return nil
-}
-
-func (s *Subscriber) partitionMetadataHandler(pm metadata.PartitionMetadata) *handler {
-	return &handler{
-		store: s.store,
-		log:   s.log,
-		pm:    pm,
-		cb:    s.cb,
-	}
 }
 
 func (s *Subscriber) Close() {
