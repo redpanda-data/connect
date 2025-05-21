@@ -1,0 +1,60 @@
+[project]
+name = "redpanda-connect"
+version = "0.1.0"
+description = "A library for writing Redpanda Connect plugins in Python"
+readme = "README.md"
+authors = [
+    { name = "Tyler Rockwood", email = "rockwood@redpanda.com" }
+]
+requires-python = ">=3.12"
+dependencies = []
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+
+[dependency-groups]
+dev = [
+    "mypy",
+    "ruff",
+    "pyright",
+    "grpcio-tools>=1.71.0",
+    "mypy-protobuf>=3.6.0",
+    "types-protobuf>=5.29.1.20250403",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+exclude = ["v1alpha1"]
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "UP", # pyupgrade
+]
+isort = { combine-as-imports = true }
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"examples/**/*.py" = ["E501"]
+
+[tool.pyright]
+exclude = [
+  "src/redpanda/runtime/v1alpha1/**",
+  "**/__pycache__",
+  "**/.*",
+]
+reportUnusedCallResult = false
+reportExplicitAny = false
+reportAny = false
+reportUnknownParameterType = false

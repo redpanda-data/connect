@@ -1,0 +1,52 @@
+version: '3'
+
+tasks:
+  sync:
+    desc: "Sync all extras and packages for the dev group"
+    cmds:
+      - uv sync --all-extras --all-packages --group dev
+
+  format:
+    aliases: [fmt]
+    desc: "Run ruff format and check with fix"
+    cmds:
+      - uv run ruff format
+      - uv run ruff check --fix
+
+  lint:
+    desc: "Run ruff check"
+    cmds:
+      - uv run ruff check
+
+  pyright:
+    desc: "Run pyright"
+    cmds:
+      - uv run pyright
+
+  tests:
+    aliases: [test]
+    desc: "Run pytest"
+    cmds:
+      - uv run pytest
+
+  old-version-tests:
+    desc: "Run tests with Python 3.9"
+    env:
+      UV_PROJECT_ENVIRONMENT: ".venv_39"
+    cmds:
+      - uv run --python 3.9 -m pytest
+      - uv run --python 3.9 -m pyright .
+
+  protogen:
+    desc: "Generate protobuf"
+    vars:
+      OUT_DIR: src
+    cmds:
+      - >
+        uv run -m grpc_tools.protoc \
+          --python_out={{.OUT_DIR}} \
+          --mypy_out={{.OUT_DIR}} \
+          --grpc_python_out={{.OUT_DIR}} \
+          --mypy_grpc_out={{.OUT_DIR}} \
+          -I ../../../proto \
+          ../../../proto/redpanda/runtime/v1alpha1/*.proto
