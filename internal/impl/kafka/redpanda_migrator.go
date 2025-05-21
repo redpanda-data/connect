@@ -24,10 +24,10 @@ import (
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 )
 
-//go:embed redpanda_migrator_bundle_input.tmpl.yaml
+//go:embed input_redpanda_migrator_bundle.tmpl.yaml
 var redpandaMigratorInputTemplate []byte
 
-//go:embed redpanda_migrator_bundle_output.tmpl.yaml
+//go:embed output_redpanda_migrator_bundle.tmpl.yaml
 var redpandaMigratorOutputTemplate []byte
 
 func init() {

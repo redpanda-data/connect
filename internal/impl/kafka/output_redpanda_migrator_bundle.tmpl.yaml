@@ -44,10 +44,18 @@ fields:
       Allow the target Schema Registry instance to allocate different schema IDs for migrated schemas. This is useful
       when it already contains some schemas which differ from the ones being migrated.
 
+  - name: input_bundle_label
+    type: string
+    kind: scalar
+    default: ""
+    description: |
+      Specify the redpanda_migrator_bundle input label if one is assigned to it.
+
 mapping: |
   #!blobl
 
   let labelPrefix = @label.not_empty().or("redpanda_migrator_bundle")
+  let inputBundleLabel = this.input_bundle_label.not_empty().or("redpanda_migrator_bundle")
 
   if this.translate_schema_ids == true && this.schema_registry.length() == 0 {
     root = throw("Schema ID translation requires schema_registry to be configured")
@@ -75,7 +83,7 @@ mapping: |
         ]
       },
       "translate_schema_ids": this.translate_schema_ids.or(false),
-      "input_resource": "%s_redpanda_migrator_input".format($labelPrefix)
+      "input_resource": "%s_redpanda_migrator_input".format($inputBundleLabel)
     }
   )
 
@@ -100,7 +108,7 @@ mapping: |
     this.schema_registry.assign({
       "subject": "${! @schema_registry_subject }",
       "max_in_flight": $srMaxInFlight,
-      "input_resource": "%s_schema_registry_input".format($labelPrefix),
+      "input_resource": "%s_schema_registry_input".format($inputBundleLabel),
       "translate_ids": this.translate_schema_ids.or(false)
     })
   }
@@ -213,6 +221,71 @@ tests:
                     max_in_flight: 1
                     translate_ids: false
                     input_resource: redpanda_migrator_bundle_schema_registry_input
+                - switch:
+                    cases:
+                      - check: '@fallback_error == "request returned status: 422"'
+                        output:
+                          drop: {}
+                          processors:
+                            - log:
+                                message: |
+                                  Subject '${! @schema_registry_subject }' version ${! @schema_registry_version } already has schema: ${! content() }
+                      - output:
+                          reject: ${! @fallback_error }
+
+  - name: Migrate messages, offsets and schemas when setting a label on the bundle input
+    config:
+      redpanda_migrator:
+        seed_brokers: [ "127.0.0.1:9092" ]
+        topic_prefix: dest.
+        max_in_flight: 1
+      schema_registry:
+        url: http://localhost:8081
+        max_in_flight: 1
+      input_bundle_label: source
+
+    expected:
+      switch:
+        cases:
+          - check: metadata("input_label") == "redpanda_migrator_input"
+            output:
+              label: redpanda_migrator_bundle_redpanda_migrator_output
+              redpanda_migrator:
+                key: ${! metadata("kafka_key") }
+                max_in_flight: 1
+                partition: ${! metadata("kafka_partition").or(throw("missing kafka_partition metadata")) }
+                partitioner: manual
+                seed_brokers:
+                  - 127.0.0.1:9092
+                timestamp_ms: ${! metadata("kafka_timestamp_ms").or(timestamp_unix_milli()) }
+                topic: ${! metadata("kafka_topic").or(throw("missing kafka_topic metadata")) }
+                topic_prefix: "dest."
+                metadata:
+                  include_patterns:
+                    -  ^(?:[^k].*|k[^a].*|ka[^f].*|kaf[^k].*|kafk[^a].*|kafka[^_].*)
+                translate_schema_ids: false
+                input_resource: source_redpanda_migrator_input
+                schema_registry_output_resource: redpanda_migrator_bundle_schema_registry_output
+              processors:
+                - mapping: |
+                    meta input_label = deleted()
+          - check: metadata("input_label") == "redpanda_migrator_offsets_input"
+            output:
+              label: redpanda_migrator_bundle_redpanda_migrator_offsets_output
+              redpanda_migrator_offsets:
+                seed_brokers:
+                  - 127.0.0.1:9092
+                offset_topic_prefix: "dest."
+          - check: metadata("input_label") == "schema_registry_input"
+            output:
+              fallback:
+                - label: redpanda_migrator_bundle_schema_registry_output
+                  schema_registry:
+                    subject: ${! @schema_registry_subject }
+                    url: http://localhost:8081
+                    max_in_flight: 1
+                    translate_ids: false
+                    input_resource: source_schema_registry_input
                 - switch:
                     cases:
                       - check: '@fallback_error == "request returned status: 422"'

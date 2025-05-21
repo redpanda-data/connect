@@ -46,7 +46,7 @@ mapping: |
 
   let labelPrefix = @label.not_empty().or("redpanda_migrator_bundle")
 
-  let redpandaMigrator = this.redpanda_migrator.assign({"output_resource": "%s_redpanda_migrator_output".format($labelPrefix)})
+  let redpandaMigrator = this.redpanda_migrator
 
   let redpandaMigratorOffsets = this.redpanda_migrator.with("seed_brokers", "topics", "regexp_topics", "consumer_group", "topic_lag_refresh_period", "client_id", "rack_id", "tls", "sasl")
 
@@ -155,7 +155,6 @@ tests:
               seed_brokers: [ "127.0.0.1:9092" ]
               topics: [ "foobar" ]
               consumer_group: "migrator"
-              output_resource: redpanda_migrator_bundle_redpanda_migrator_output
             processors:
               - mapping: meta input_label = "redpanda_migrator_input"
           - label: redpanda_migrator_bundle_redpanda_migrator_offsets_input
@@ -199,7 +198,6 @@ tests:
                     seed_brokers: [ "127.0.0.1:9092" ]
                     topics: [ "foobar" ]
                     consumer_group: "migrator"
-                    output_resource: redpanda_migrator_bundle_redpanda_migrator_output
                   processors:
                     - mapping: meta input_label = "redpanda_migrator_input"
                 - label: redpanda_migrator_bundle_redpanda_migrator_offsets_input
@@ -225,7 +223,6 @@ tests:
               seed_brokers: [ "127.0.0.1:9092" ]
               topics: [ "foobar" ]
               consumer_group: "migrator"
-              output_resource: redpanda_migrator_bundle_redpanda_migrator_output
             processors:
               - mapping: meta input_label = "redpanda_migrator_input"
           - label: redpanda_migrator_bundle_redpanda_migrator_offsets_input

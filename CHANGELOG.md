@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.56.0 - TBD
+
+### Added
+
+- Field `input_bundle_label` added to the `redpanda_migrator_bundle` output. (@mihaitodor)
+
 ## 4.55.1 - 2025-05-19
 
 ### Added
