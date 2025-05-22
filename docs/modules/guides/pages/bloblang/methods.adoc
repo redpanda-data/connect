@@ -2998,6 +2998,7 @@ Serializes a target value into an XML byte array.
 
 *`indent`* &lt;string, default `"    "`&gt; Indentation string. Each element in an XML object or array will begin on a new, indented line followed by one or more copies of indent according to the indentation nesting.  
 *`no_indent`* &lt;bool, default `false`&gt; Disable indentation.  
+*`root_tag`* &lt;(optional) string&gt; Root tag. Set this if you wish to override the root tag of the document.  
 
 ==== Examples
 
@@ -3013,6 +3014,21 @@ root = this.format_xml()
 #              <baz>foo bar baz</baz>
 #          </bar>
 #      </foo>
+
+# In:  {"-foo":"bar","fizz":"buzz"}
+# Out: <doc foo="bar">
+#          <fizz>buzz</fizz>
+#      </doc>
+
+# In:  {"foo":[{"bar":"baz"},{"fizz":"buzz"}]}
+# Out: <doc>
+#          <foo>
+#              <bar>baz</bar>
+#          </foo>
+#          <foo>
+#              <fizz>buzz</fizz>
+#          </foo>
+#      </doc>
 ```
 
 Pass a string to the `indent` parameter in order to customise the indentation.
@@ -3044,6 +3060,36 @@ root = this.format_xml(no_indent: true)
 
 # In:  {"foo":{"bar":{"baz":"foo bar baz"}}}
 # Out: <foo><bar><baz>foo bar baz</baz></bar></foo>
+```
+
+Set a custom root tag.
+
+```coffeescript
+root = this.format_xml(root_tag: "blobfish")
+
+# In:  {"foo":{"bar":{"baz":"foo bar baz"}}}
+# Out: <blobfish>
+#          <foo>
+#              <bar>
+#                  <baz>foo bar baz</baz>
+#              </bar>
+#          </foo>
+#      </blobfish>
+
+# In:  {"-foo":"bar","fizz":"buzz"}
+# Out: <blobfish foo="bar">
+#          <fizz>buzz</fizz>
+#      </blobfish>
+
+# In:  {"foo":[{"bar":"baz"},{"fizz":"buzz"}]}
+# Out: <blobfish>
+#          <foo>
+#              <bar>baz</bar>
+#          </foo>
+#          <foo>
+#              <fizz>buzz</fizz>
+#          </foo>
+#      </blobfish>
 ```
 
 === `format_yaml`

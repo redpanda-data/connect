@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.56.0 - TBD
+
+### Added
+
+- Parameter `root_tag` added to the `format_xml()` Bloblang method. (@mihaitodor)
+
 ## 4.55.1 - 2025-05-19
 
 ### Added
