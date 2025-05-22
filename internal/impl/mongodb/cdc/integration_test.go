@@ -266,7 +266,7 @@ func setup(t *testing.T, template string, opts ...setupOption) (*streamHelper, *
 		mongocontainer.WithReplicaSet("rs0"),
 	)
 	t.Cleanup(func() {
-		if err := container.Terminate(t.Context()); err != nil {
+		if err := container.Terminate(context.Background()); err != nil {
 			t.Fatal("unable to shutdown container", err)
 		}
 	})
@@ -720,4 +720,30 @@ mongodb_cdc:
       "nested.data": "hello"
     }
   `, db.FindOneJSON(t, "foo", 1))
+}
+
+func TestIntegrationMongoResumeAfterSnapshotWithoutChanges(t *testing.T) {
+	stream, db, output := setup(t, `
+mongodb_cdc:
+  url: '$URI'
+  database: '$DATABASE'
+  stream_snapshot: true
+  checkpoint_cache: '$CACHE'
+  json_marshal_mode: relaxed
+  collections:
+    - 'foo'
+`)
+	db.CreateCollection(t, "foo")
+	db.InsertOne(t, "foo", bson.M{"_id": 1, "data": "hello"})
+	db.InsertOne(t, "foo", bson.M{"_id": 2, "data": "hello"})
+	wait := stream.RunAsync(t)
+	time.Sleep(10 * time.Second)
+	stream.Stop(t)
+	wait()
+	require.JSONEq(t, `[{"_id":1,"data":"hello"}, {"_id":2,"data":"hello"}]`, output.MessagesJSON(t))
+	wait = stream.RunAsync(t)
+	time.Sleep(5 * time.Second)
+	stream.Stop(t)
+	wait()
+	require.JSONEq(t, `[{"_id":1,"data":"hello"}, {"_id":2,"data":"hello"}]`, output.MessagesJSON(t))
 }

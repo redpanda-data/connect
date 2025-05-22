@@ -9,6 +9,7 @@
 package cdc
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -252,16 +253,23 @@ func newMongoCDC(conf *service.ParsedConfig, res *service.Resources) (i service.
 	if checkpointInterval.Seconds() > 0 {
 		cdc.checkpointFlusher = asyncroutine.NewPeriodicWithContext(
 			checkpointInterval,
-			func(ctx context.Context) {
-				cdc.resumeTokenMu.Lock()
-				defer cdc.resumeTokenMu.Unlock()
-				if cdc.resumeToken == nil {
-					return
+			func() func(context.Context) {
+				// Don't resave the resume token if it hasn't changed.
+				var lastResumeToken bson.Raw
+				return func(ctx context.Context) {
+					cdc.resumeTokenMu.Lock()
+					defer cdc.resumeTokenMu.Unlock()
+					if cdc.resumeToken == nil || bytes.Equal(lastResumeToken, cdc.resumeToken) {
+						return
+					}
+					state := checkpointState{ResumeToken: cdc.resumeToken}
+					if err := cdc.checkpoint.Store(ctx, state); err != nil {
+						res.Logger().Warnf("unable to store checkpoints in cache: %v", err)
+					} else {
+						lastResumeToken = cdc.resumeToken
+					}
 				}
-				if err := cdc.checkpoint.Store(ctx, cdc.resumeToken); err != nil {
-					res.Logger().Warnf("unable to store checkpoints in cache: %v", err)
-				}
-			},
+			}(),
 		)
 	}
 
@@ -372,22 +380,29 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 	if version.Major() < 4 {
 		return fmt.Errorf("`mongodc_cdc` requires MongoDB version 4 or higher - current version: %v", version.String())
 	}
-	m.resumeToken, err = m.checkpoint.Load(ctx)
+	state, err := m.checkpoint.Load(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to load checkpoints from cache: %w", err)
 	}
 	// Set the stream start when starting fresh to be the current oplog end time.
-	r = m.db.RunCommand(ctx, bson.M{"hello": 1})
-	if r.Err() != nil {
-		return fmt.Errorf("unable to determine replication info (is your mongodb instance running as a replication set?): %w", r.Err())
-	}
-	var helloReply bson.M
-	if err := r.Decode(&helloReply); err != nil {
-		return fmt.Errorf("unable to decode replication info: %w", err)
-	}
-	ts, ok := bsonGetPath(helloReply, "lastWrite", "majorityOpTime", "ts").(bson.Timestamp)
-	if !ok {
-		return fmt.Errorf("unable to get oplog last commit timestamp, got %s", helloReply.String())
+	var oplogEnd *bson.Timestamp
+	if state != nil {
+		m.resumeToken = state.ResumeToken
+		oplogEnd = state.OplogPosition
+	} else {
+		r = m.db.RunCommand(ctx, bson.M{"hello": 1})
+		if r.Err() != nil {
+			return fmt.Errorf("unable to determine replication info (is your mongodb instance running as a replication set?): %w", r.Err())
+		}
+		var helloReply bson.M
+		if err := r.Decode(&helloReply); err != nil {
+			return fmt.Errorf("unable to decode replication info: %w", err)
+		}
+		ts, ok := bsonGetPath(helloReply, "lastWrite", "majorityOpTime", "ts").(bson.Timestamp)
+		if !ok {
+			return fmt.Errorf("unable to get oplog last commit timestamp, got %s", helloReply.String())
+		}
+		oplogEnd = &ts
 	}
 	shutsig := shutdown.NewSignaller()
 	m.shutsig = shutsig
@@ -415,27 +430,26 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 				opts = opts.SetShowExpandedEvents(true)
 			}
 		}
-		var skipSnapshot bool
 		func() {
 			m.resumeTokenMu.Lock()
 			defer m.resumeTokenMu.Unlock()
 			if m.resumeToken != nil {
 				// TODO: Handle the resume token becoming invalid due to collection rename/drop
 				opts = opts.SetResumeAfter(m.resumeToken)
-				skipSnapshot = true
 			} else {
 				// If there are no writes between snapshot and streaming, we want to skip the last
 				// document that will be read in the snapshot.
-				nextTS := nextTimestamp(ts)
+				nextTS := nextTimestamp(*oplogEnd)
 				opts = opts.SetStartAtOperationTime(&nextTS)
 			}
 		}()
 		cp := checkpoint.NewCapped[bson.Raw](int64(m.checkpointLimit))
-		if !skipSnapshot {
+		if state == nil {
+			var snapshotAckWg sync.WaitGroup
 			g, gctx := errgroup.WithContext(ctx)
 			for _, name := range m.collections {
 				coll := m.db.Collection(name)
-				g.Go(func() error { return m.readSnapshot(gctx, coll, ts, cp) })
+				g.Go(func() error { return m.readSnapshot(gctx, coll, *oplogEnd, cp, &snapshotAckWg) })
 			}
 			if err := g.Wait(); err != nil {
 				select {
@@ -443,6 +457,19 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 				default:
 				}
 				return
+			}
+			done := make(chan struct{})
+			go func() {
+				snapshotAckWg.Wait()
+				close(done)
+			}()
+			select {
+			case <-done:
+			case <-ctx.Done():
+			}
+			state := checkpointState{OplogPosition: oplogEnd}
+			if err := m.checkpoint.Store(ctx, state); err != nil {
+				m.logger.Warnf("unable to store checkpoint after finishing checkpoint for `mongodb_cdc`: %v", err)
 			}
 		}
 		if err := m.readFromStream(ctx, cp, opts); err != nil {
@@ -460,7 +487,8 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 			if m.resumeToken == nil {
 				return
 			}
-			if err := m.checkpoint.Store(ctx, m.resumeToken); err != nil {
+			state := checkpointState{ResumeToken: m.resumeToken}
+			if err := m.checkpoint.Store(ctx, state); err != nil {
 				m.logger.Warnf("unable to store checkpoint before stopping `mongodb_cdc`: %v", err)
 			}
 		}()
@@ -468,14 +496,19 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (m *mongoCDC) readSnapshot(ctx context.Context, coll *mongo.Collection, snapshotTime bson.Timestamp, cp *checkpoint.Capped[bson.Raw]) (err error) {
+func (m *mongoCDC) readSnapshot(
+	ctx context.Context,
+	coll *mongo.Collection,
+	snapshotTime bson.Timestamp,
+	cp *checkpoint.Capped[bson.Raw],
+	ackWg *sync.WaitGroup) (err error) {
 	if m.snapshotParallelism == 0 {
 		return nil
 	}
 	if m.snapshotParallelism > 1 {
-		return m.readParallelSnapshot(ctx, coll, snapshotTime, cp)
+		return m.readParallelSnapshot(ctx, coll, snapshotTime, cp, ackWg)
 	} else {
-		return m.readSnapshotRange(ctx, coll, snapshotTime, cp, bson.MinKey{}, bson.MaxKey{})
+		return m.readSnapshotRange(ctx, coll, snapshotTime, cp, ackWg, bson.MinKey{}, bson.MaxKey{})
 	}
 }
 
@@ -573,12 +606,18 @@ func (m *mongoCDC) autoBuckets(ctx context.Context, coll *mongo.Collection) ([][
 	return ranges, nil
 }
 
-func (m *mongoCDC) readParallelSnapshot(ctx context.Context, coll *mongo.Collection, snapshotTime bson.Timestamp, cp *checkpoint.Capped[bson.Raw]) error {
+func (m *mongoCDC) readParallelSnapshot(
+	ctx context.Context,
+	coll *mongo.Collection,
+	snapshotTime bson.Timestamp,
+	cp *checkpoint.Capped[bson.Raw],
+	ackWg *sync.WaitGroup,
+) error {
 	begin := time.Now()
 	ranges, err := m.getParallelRanges(ctx, coll)
 	if err != nil {
 		m.logger.Warnf("unable to determine split points for queries over %s, falling back to sequential scan due to: %v", coll.Name(), err)
-		return m.readSnapshotRange(ctx, coll, snapshotTime, cp, bson.MinKey{}, bson.MaxKey{})
+		return m.readSnapshotRange(ctx, coll, snapshotTime, cp, ackWg, bson.MinKey{}, bson.MaxKey{})
 	}
 	m.logger.Debugf("determined collection split points in %v", time.Since(begin))
 	g, ctx := errgroup.WithContext(ctx)
@@ -586,13 +625,20 @@ func (m *mongoCDC) readParallelSnapshot(ctx context.Context, coll *mongo.Collect
 		minKey := r[0]
 		maxKey := r[1]
 		g.Go(func() error {
-			return m.readSnapshotRange(ctx, coll, snapshotTime, cp, minKey, maxKey)
+			return m.readSnapshotRange(ctx, coll, snapshotTime, cp, ackWg, minKey, maxKey)
 		})
 	}
 	return g.Wait()
 }
 
-func (m *mongoCDC) readSnapshotRange(ctx context.Context, coll *mongo.Collection, snapshotTime bson.Timestamp, cp *checkpoint.Capped[bson.Raw], start, end any) error {
+func (m *mongoCDC) readSnapshotRange(
+	ctx context.Context,
+	coll *mongo.Collection,
+	snapshotTime bson.Timestamp,
+	cp *checkpoint.Capped[bson.Raw],
+	ackWg *sync.WaitGroup,
+	start, end any,
+) error {
 	if err := m.snapshotSemaphore.Acquire(ctx, 1); err != nil {
 		return err
 	}
@@ -627,8 +673,12 @@ func (m *mongoCDC) readSnapshotRange(ctx context.Context, coll *mongo.Collection
 			if err != nil {
 				return fmt.Errorf("unable to create batch: %w", err)
 			}
+			ackWg.Add(1)
+			// Ack functions can be called multiple times in certain cases
+			done := sync.OnceFunc(ackWg.Done)
 			b := mongoBatch{mb, func(context.Context, error) error {
 				resumeToken := resolve()
+				done()
 				if resumeToken != nil && *resumeToken != nil {
 					return fmt.Errorf("unexpected resume token for snapshot batch: %s", resumeToken.String())
 				}
@@ -789,7 +839,8 @@ func (m *mongoCDC) readFromStream(ctx context.Context, cp *checkpoint.Capped[bso
 				defer m.resumeTokenMu.Unlock()
 				m.resumeToken = stream.ResumeToken()
 				if m.checkpointFlusher == nil {
-					return m.checkpoint.Store(ctx, m.resumeToken)
+					state := checkpointState{ResumeToken: m.resumeToken}
+					return m.checkpoint.Store(ctx, state)
 				}
 				return nil
 			}
