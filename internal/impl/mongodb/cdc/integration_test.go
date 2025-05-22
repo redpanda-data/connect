@@ -748,7 +748,7 @@ mongodb_cdc:
 	db.InsertOne(t, "foo", bson.M{"_id": 1, "data": "hello"})
 	db.InsertOne(t, "foo", bson.M{"_id": 2, "data": "hello"})
 	wait := stream.RunAsync(t)
-	time.Sleep(10 * time.Second)
+	time.Sleep(5 * time.Second)
 	stream.Stop(t)
 	wait()
 	require.JSONEq(t, `[{"_id":1,"data":"hello"}, {"_id":2,"data":"hello"}]`, output.MessagesJSON(t))
@@ -757,4 +757,28 @@ mongodb_cdc:
 	stream.Stop(t)
 	wait()
 	require.JSONEq(t, `[{"_id":1,"data":"hello"}, {"_id":2,"data":"hello"}]`, output.MessagesJSON(t))
+}
+
+func TestIntegrationMongoIssue3425(t *testing.T) {
+	stream, db, output := setup(t, `
+mongodb_cdc:
+  url: '$URI'
+  database: '$DATABASE'
+  stream_snapshot: true
+  checkpoint_cache: '$CACHE'
+  json_marshal_mode: relaxed
+  collections:
+    - 'foo'
+`)
+	db.CreateCollection(t, "foo")
+	db.InsertOne(t, "foo", bson.M{"_id": 1, "data": "hello"})
+	db.InsertOne(t, "foo", bson.M{"_id": 2, "data": "hello"})
+	wait := stream.RunAsync(t)
+	time.Sleep(35 * time.Second) // there is a default connection timeout of 30 seconds in the driver
+	require.JSONEq(t, `[{"_id":1,"data":"hello"}, {"_id":2,"data":"hello"}]`, output.MessagesJSON(t))
+	db.InsertOne(t, "foo", bson.M{"_id": 3, "data": "hello"})
+	time.Sleep(5 * time.Second)
+	stream.Stop(t)
+	wait()
+	require.JSONEq(t, `[{"_id":1,"data":"hello"}, {"_id":2,"data":"hello"}, {"_id":3,"data":"hello"}]`, output.MessagesJSON(t))
 }
