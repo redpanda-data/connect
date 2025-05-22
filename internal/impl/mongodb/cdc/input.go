@@ -25,7 +25,6 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
-	"go.mongodb.org/mongo-driver/v2/x/mongo/driver/topology"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 
@@ -473,28 +472,11 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 				m.logger.Warnf("unable to store checkpoint after finishing checkpoint for `mongodb_cdc`: %v", err)
 			}
 		}
-		for {
-			err := m.readFromStream(ctx, cp, opts)
-			// errors.Is does not work because this type is not comparable.
-			// This fixes issue #3425 by transparently retrying when this
-			// happens, it's fine to restart the stream when there is an 
-			// error like this from testing.
-			if _, ok := err.(topology.WaitQueueTimeoutError); ok {
-				m.resumeTokenMu.Lock()
-				token := m.resumeToken
-				m.resumeTokenMu.Unlock()
-				if token != nil {
-					opts = opts.SetResumeAfter(token).SetStartAtOperationTime(nil)
-				}
-				continue
+		if err := m.readFromStream(ctx, cp, opts); err != nil {
+			select {
+			case m.errorChan <- fmt.Errorf("error watching MongoDB change stream: %w", err):
+			default:
 			}
-			if err != nil {
-				select {
-				case m.errorChan <- fmt.Errorf("error watching MongoDB change stream: %w", err):
-				default:
-				}
-			}
-			break
 		}
 		func() {
 			// Save the resume token before the background fiber finishes.
@@ -726,7 +708,20 @@ func (m *mongoCDC) readFromStream(ctx context.Context, cp *checkpoint.Capped[bso
 	}
 	stream.SetBatchSize(int32(m.readBatchSize))
 	var mb service.MessageBatch
-	for stream.Next(ctx) {
+	// You'd think that this would be the same as just calling stream.Next(ctx), but surprise! It's not
+	// They do something funky where they apply another timeout they probably shouldn't be applying,
+	// so work around that by doing the polling loop for the next record ourselves.
+	next := func() bool {
+		for {
+			if stream.TryNext(ctx) {
+				return true
+			}
+			if stream.Err() != nil || stream.ID() == 0 {
+				return false
+			}
+		}
+	}
+	for next() {
 		var data bson.M
 		if err := stream.Decode(&data); err != nil {
 			return fmt.Errorf("unable to decode document: %w", err)
