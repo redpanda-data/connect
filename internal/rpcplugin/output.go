@@ -174,7 +174,7 @@ func (o *output) Connect(ctx context.Context) (err error) {
 				return err
 			}
 			if err := o.proc.Close(ctx); err != nil {
-				return fmt.Errorf("unable to retart plugin process: %w", err)
+				return fmt.Errorf("unable to restart plugin process: %w", err)
 			}
 			if _, _, err := startOutputPlugin(ctx, o.proc, o.client, o.cfgValue); err != nil {
 				return fmt.Errorf("unable to restart plugin: %w", err)

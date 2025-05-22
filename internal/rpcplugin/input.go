@@ -170,7 +170,7 @@ func (i *input) Connect(ctx context.Context) (err error) {
 				return err
 			}
 			if err := i.proc.Close(ctx); err != nil {
-				return fmt.Errorf("unable to retart plugin process: %w", err)
+				return fmt.Errorf("unable to restart plugin process: %w", err)
 			}
 			if _, err := startInputPlugin(ctx, i.proc, i.client, i.cfgValue); err != nil {
 				return fmt.Errorf("unable to restart plugin: %w", err)

@@ -71,7 +71,7 @@ service BatchInputService {
 }
 
 message BatchInputInitRequest {
-  // The parsed configuration from the user based on the register schema in
+  // The parsed configuration from the user based on the registered schema in
   // `plugin.yaml`.
   Value config = 1;
 }

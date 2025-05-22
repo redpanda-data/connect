@@ -52,7 +52,7 @@ message Value {
 
 // An error in the context of a data pipeline.
 message Error {
-  // The error message. If non empty, then the error to be "valid" and
+  // The error message. If non empty, then the error is valid and
   // if empty the error is ignored as if a success (due to proto3 empty
   // semantics).
   string message = 1;
@@ -73,7 +73,7 @@ message Error {
     // which instructs upstream components to wait for a specified period of
     // time before retrying the errored call.
     //
-    // Only suppported by Connect methods in the Input and Output services.
+    // Only supported by Connect methods in the Input and Output services.
     google.protobuf.Duration backoff = 2;
     NotConnected not_connected = 3;
     EndOfInput end_of_input = 4;

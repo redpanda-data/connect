@@ -123,7 +123,6 @@ require (
 	github.com/redpanda-data/connect/public/bundle/free/v4 v4.31.0
 	github.com/rs/xid v1.5.0
 	github.com/sashabaranov/go-openai v1.37.0
-	github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726
 	github.com/sijms/go-ora/v2 v2.8.19
 	github.com/slack-go/slack v0.16.0
 	github.com/smira/go-statsd v1.3.3
@@ -209,6 +208,7 @@ require (
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
 	github.com/samber/lo v1.47.0 // indirect
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 // indirect
+	github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726 // indirect
 	github.com/siddontang/go-log v0.0.0-20180807004314-8d05993dda07 // indirect
 	github.com/skeema/knownhosts v1.3.1 // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect
