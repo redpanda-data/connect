@@ -719,6 +719,20 @@ func (m *mongoCDC) readFromStream(ctx context.Context, cp *checkpoint.Capped[bso
 			if stream.Err() != nil || stream.ID() == 0 {
 				return false
 			}
+			// TODO: If there is nothing pending, we can checkpoint the latest resume token
+			// And get rid of the rest of the changes in this PR...
+			if false /* cp.Pending() == 0 */ {
+				m.resumeTokenMu.Lock()
+				m.resumeToken = stream.ResumeToken()
+				if m.checkpointFlusher == nil {
+					state := checkpointState{ResumeToken: m.resumeToken}
+					err := m.checkpoint.Store(ctx, state)
+					if err != nil {
+						m.logger.Warnf("unable to store checkpoint in cache: %v", err)
+					}
+				}
+				m.resumeTokenMu.Unlock()
+			}
 		}
 	}
 	for next() {
