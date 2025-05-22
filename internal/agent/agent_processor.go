@@ -18,11 +18,12 @@ import (
 	"strings"
 	"time"
 
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 	agentruntimepb "github.com/redpanda-data/connect/v4/internal/agent/runtimepb"
 	"github.com/redpanda-data/connect/v4/internal/rpcplugin/subprocess"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 const (

@@ -20,11 +20,12 @@ import (
 	"fmt"
 
 	"github.com/cenkalti/backoff/v4"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/rpcplugin/runtimepb"
 	"github.com/redpanda-data/connect/v4/internal/rpcplugin/subprocess"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 // OutputConfig is the configuration for a plugin output.

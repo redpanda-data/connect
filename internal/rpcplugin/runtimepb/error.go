@@ -17,8 +17,9 @@ package runtimepb
 import (
 	"errors"
 
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"google.golang.org/protobuf/types/known/durationpb"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 // ProtoToError converts a protobuf error to a Go error.

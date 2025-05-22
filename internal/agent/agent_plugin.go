@@ -16,10 +16,11 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/redpanda-data/benthos/v4/public/bloblang"
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
+	"github.com/redpanda-data/benthos/v4/public/service"
 
 	agentruntimepb "github.com/redpanda-data/connect/v4/internal/agent/runtimepb"
 	"github.com/redpanda-data/connect/v4/internal/rpcplugin/runtimepb"

@@ -37,9 +37,10 @@ import (
 	"sync/atomic"
 	"syscall"
 
+	"google.golang.org/grpc"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/rpcplugin/runtimepb"
-	"google.golang.org/grpc"
 )
 
 // ProcessorConstructor is the factory function to create a new batch processor.

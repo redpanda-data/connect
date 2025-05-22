@@ -25,7 +25,7 @@ import (
 
 // Helper function to create a simple test command that prints output and exits
 // This version is for Unix-like systems.
-func createEchoCommand(message string, stream string, exitCode int) []string {
+func createEchoCommand(message, stream string, exitCode int) []string {
 	// Use /bin/sh -c to execute the command string
 	if stream == "stderr" {
 		return []string{"/bin/sh", "-c", fmt.Sprintf("echo %q >&2; exit %d", message, exitCode)}

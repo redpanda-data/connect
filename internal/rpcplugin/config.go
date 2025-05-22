@@ -21,8 +21,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"gopkg.in/yaml.v3"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 // FieldType describes the type of field.

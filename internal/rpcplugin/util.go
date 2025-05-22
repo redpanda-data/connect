@@ -21,8 +21,10 @@ import (
 	"time"
 )
 
-const retryCount = 3
-const maxStartupTime = 30 * time.Second
+const (
+	retryCount     = 3
+	maxStartupTime = 30 * time.Second
+)
 
 func newUnixSocketAddr() (string, error) {
 	dir, err := os.MkdirTemp(os.TempDir(), "rpcn_plugin_*")
