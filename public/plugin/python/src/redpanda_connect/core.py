@@ -62,7 +62,7 @@ or it might be None indicating that the message was successfully sent to the out
 """
 
 
-class Input:
+class Input(Protocol):
     """
     An input is a source component that can generate batches of messages, which are
     then passed to the processor and output components.
@@ -72,7 +72,7 @@ class Input:
         """
         Connect to the input source. This is called before any messages are read>
         """
-        raise NotImplementedError("connect not implemented")
+        ...
 
     async def read_batch(self) -> tuple[MessageBatch, AckFn]:
         """
@@ -83,13 +83,13 @@ class Input:
         Any checkpointing should not be done until the ack function is called, in order to
         preserve at least once semantics.
         """
-        raise NotImplementedError("read_batch not implemented")
+        ...
 
     async def close(self) -> None:
         """
         Close the input source and frees up any resources.
         """
-        raise NotImplementedError("close not implemented")
+        ...
 
 
 AutoRetryNacks: TypeAlias = bool
@@ -178,21 +178,20 @@ def input(func: Callable[[Value], AsyncIterator[Message]]) -> InputConstructor:
     return batch_input(wrapped)
 
 
-class Processor:
+class Processor(Protocol):
     async def process(self, batch: MessageBatch) -> list[MessageBatch]:
         """
         Process a batch of messages into one or more resulting batches, or return
         an error if the entire batch could not be processed. If zero messages are
         returned and the error is nil then all messages are filtered.
         """
-        _ = batch
-        raise NotImplementedError("process not implemented")
+        ...
 
     async def close(self) -> None:
         """
         Close the processor and frees up any resources.
         """
-        raise NotImplementedError("close not implemented")
+        ...
 
 
 ProcessorConstructor: TypeAlias = Callable[[Value], Processor]
@@ -233,7 +232,7 @@ def processor(func: Callable[[Message], Message]) -> ProcessorConstructor:
     return batch_processor(wrapped)
 
 
-class Output:
+class Output(Protocol):
     """
     An output is a sink component that can receive batches of messages and send them somewhere.
     """
@@ -242,20 +241,19 @@ class Output:
         """
         Connect to the output sink. This is called before any messages are written.
         """
-        raise NotImplementedError("connect not implemented")
+        ...
 
     async def write_batch(self, batch: MessageBatch) -> None:
         """
         Write a batch of messages to the output sink.
         """
-        _ = batch
-        raise NotImplementedError("read_batch not implemented")
+        ...
 
     async def close(self) -> None:
         """
         Close the output sink and frees up any resources.
         """
-        raise NotImplementedError("close not implemented")
+        ...
 
 
 @dataclass
