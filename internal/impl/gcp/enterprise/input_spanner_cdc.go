@@ -10,12 +10,13 @@ package enterprise
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/ack"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/gcp/enterprise/changestreams"
 	"github.com/redpanda-data/connect/v4/internal/license"
@@ -31,6 +32,7 @@ const (
 	siFieldEndTimestamp      = "end_timestamp"
 	siFieldHeartbeatInterval = "heartbeat_interval"
 	siFieldMetadataTable     = "metadata_table"
+	siFieldBatchPolicy       = "batching"
 )
 
 // Default values
@@ -134,33 +136,41 @@ https://cloud.google.com/spanner/docs/change-streams
 		Field(service.NewStringField(siFieldEndTimestamp).Optional().Description("RFC3339 formatted timestamp to stop reading at (default: no end time)").Default("")).
 		Field(service.NewStringField(siFieldHeartbeatInterval).Optional().Description("Duration string for heartbeat interval (e.g., '10s')").Default("10s")).
 		Field(service.NewStringField(siFieldMetadataTable).Optional().Description("The table to store metadata in (default: cdc_metadata_<stream_id>)").Default("")).
+		Field(service.NewBatchPolicyField(siFieldBatchPolicy)).
 		Field(service.NewAutoRetryNacksToggleField())
 }
 
 func init() {
-	service.MustRegisterInput("gcp_spanner_cdc", spannerCDCInputSpec(),
-		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
+	service.MustRegisterBatchInput("gcp_spanner_cdc", spannerCDCInputSpec(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
 			r, err := newSpannerCDCReaderFromParsed(conf, mgr)
 			if err != nil {
 				return nil, err
 			}
-			return service.AutoRetryNacksToggled(conf, r)
+			return service.AutoRetryNacksBatchedToggled(conf, r)
 		})
 }
 
 //------------------------------------------------------------------------------
 
+type asyncMessage struct {
+	msg   service.MessageBatch
+	ackFn service.AckFunc
+}
+
 type spannerCDCReader struct {
 	conf spannerCDCInputConfig
 	log  *service.Logger
 
+	batching   service.BatchPolicy
+	batcher    *spannerPartitionBatcherFactory
+	resCh      chan asyncMessage
 	subscriber *changestreams.Subscriber
 	cancel     context.CancelFunc
-	resCh      chan *service.Message
 	connected  atomic.Bool
 }
 
-var _ service.Input = (*spannerCDCReader)(nil)
+var _ service.BatchInput = (*spannerCDCReader)(nil)
 
 func newSpannerCDCReaderFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (*spannerCDCReader, error) {
 	if err := license.CheckRunningEnterprise(mgr); err != nil {
@@ -172,39 +182,99 @@ func newSpannerCDCReaderFromParsed(pConf *service.ParsedConfig, mgr *service.Res
 		return nil, err
 	}
 
-	return newSpannerCDCReader(conf, mgr), nil
-}
-
-func newSpannerCDCReader(conf spannerCDCInputConfig, mgr *service.Resources) *spannerCDCReader {
-	return &spannerCDCReader{
-		conf: conf,
-		log:  mgr.Logger(),
-	}
-}
-
-func (r *spannerCDCReader) onDataChangeRecord(_ context.Context, dcre changestreams.DataChangeRecordExt) error {
-	b, err := json.Marshal(dcre.DataChangeRecord)
+	batching, err := pConf.FieldBatchPolicy("batching")
 	if err != nil {
-		return fmt.Errorf("failed to marshal read result as JSON: %w", err)
+		return nil, err
+	} else if batching.IsNoop() {
+		batching.Count = 1
 	}
 
-	msg := service.NewMessage(b)
-	msg.MetaSetMut("spanner_project_id", r.conf.ProjectID)
-	msg.MetaSetMut("spanner_instance_id", r.conf.InstanceID)
-	msg.MetaSetMut("spanner_database_id", r.conf.DatabaseID)
-	msg.MetaSetMut("spanner_stream_id", r.conf.StreamID)
+	return newSpannerCDCReader(conf, batching, mgr), nil
+}
 
-	r.resCh <- msg
+func newSpannerCDCReader(conf spannerCDCInputConfig, batching service.BatchPolicy, mgr *service.Resources) *spannerCDCReader {
+	return &spannerCDCReader{
+		conf:     conf,
+		log:      mgr.Logger(),
+		batching: batching,
+		batcher:  newSpannerPartitionBatcherFactory(batching, mgr),
+		resCh:    make(chan asyncMessage),
+	}
+}
 
-	return nil
+func (r *spannerCDCReader) waitForAck(
+	ctx context.Context,
+	partitionToken string,
+	dcr *changestreams.DataChangeRecord,
+	msg service.MessageBatch,
+) error {
+	if len(msg) == 0 {
+		return nil
+	}
+	ackOnce := ack.NewOnce(func(ctx context.Context) error {
+		return r.subscriber.UpdatePartitionWatermark(ctx, partitionToken, dcr)
+	})
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case r.resCh <- asyncMessage{msg: msg, ackFn: ackOnce.Ack}:
+		// ok
+	}
+	return ackOnce.Wait(ctx)
+}
+
+var forcePeriodicFlush = &changestreams.DataChangeRecord{
+	ModType: "FORCE_PERIODIC_FLUSH", // This is fake mod type to indicate periodic flush
+}
+
+func (r *spannerCDCReader) onDataChangeRecord(ctx context.Context, partitionToken string, dcr *changestreams.DataChangeRecord) error {
+	batcher, _, err := r.batcher.forPartition(partitionToken)
+	if err != nil {
+		return err
+	}
+
+	if dcr == nil {
+		msg, last, err := batcher.Flush(ctx)
+		if err != nil {
+			return err
+		}
+		if err := batcher.Close(ctx); err != nil {
+			return err
+		}
+		return r.waitForAck(ctx, partitionToken, last, msg)
+	}
+
+	if dcr == forcePeriodicFlush {
+		msg, last, err := batcher.Flush(ctx)
+		if err != nil {
+			return err
+		}
+		return r.waitForAck(ctx, partitionToken, last, msg)
+	}
+
+	msg, err := batcher.MaybeFlushWith(ctx, dcr)
+	if err != nil {
+		return err
+	}
+	return r.waitForAck(ctx, partitionToken, dcr, msg)
 }
 
 func (r *spannerCDCReader) Connect(ctx context.Context) error {
 	r.log.Infof("Connecting to Spanner CDC stream: %s (project: %s, instance: %s, database: %s)",
 		r.conf.StreamID, r.conf.ProjectID, r.conf.InstanceID, r.conf.DatabaseID)
 
+	var cb changestreams.CallbackFunc = r.onDataChangeRecord
+	if r.batching.Period != "" {
+		r.log.Infof("Periodic flushing enabled: %s", r.batching.Period)
+		p := periodicallyFlushingSpannerCDCReader{
+			spannerCDCReader: r,
+			reqCh:            make(map[string]chan callbackRequest),
+		}
+		cb = p.onDataChangeRecord
+	}
+
 	var err error
-	r.subscriber, err = changestreams.NewSubscriber(ctx, r.conf.Config, r.onDataChangeRecord, r.log)
+	r.subscriber, err = changestreams.NewSubscriber(ctx, r.conf.Config, cb, r.log)
 	if err != nil {
 		return fmt.Errorf("create Spanner change stream reader: %w", err)
 	}
@@ -212,8 +282,6 @@ func (r *spannerCDCReader) Connect(ctx context.Context) error {
 	if err := r.subscriber.Setup(ctx); err != nil {
 		return fmt.Errorf("setup Spanner change stream reader: %w", err)
 	}
-
-	r.resCh = make(chan *service.Message)
 
 	var bg context.Context
 	bg, r.cancel = context.WithCancel(ctx)
@@ -228,18 +296,14 @@ func (r *spannerCDCReader) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (r *spannerCDCReader) ack(ctx context.Context, err error) error {
-	return nil
-}
-
-func (r *spannerCDCReader) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
+func (r *spannerCDCReader) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
 	if !r.connected.Load() {
 		return nil, nil, service.ErrNotConnected
 	}
 
 	select {
-	case res := <-r.resCh:
-		return res, r.ack, nil
+	case am := <-r.resCh:
+		return am.msg, am.ackFn, nil
 	case <-ctx.Done():
 		return nil, nil, ctx.Err()
 	}
@@ -249,4 +313,89 @@ func (r *spannerCDCReader) Close(ctx context.Context) error {
 	r.cancel()
 	r.subscriber.Close()
 	return nil
+}
+
+type callbackRequest struct {
+	partitionToken string
+	dcr            *changestreams.DataChangeRecord
+	errCh          chan error
+}
+
+// periodicallyFlushingSpannerCDCReader synchronizes callback invocations with
+// periodic flushes to ensure ordering of messages. The flush period is
+// governed by the spannerPartitionBatcher.period timer.
+//
+// When spannerPartitionBatcher.Close is called the timer is stopped and the
+// go routine is terminated.
+//
+// All calls to spannerCDCReader.onDataChangeRecord use the same context as the
+// first call to periodicallyFlushingSpannerCDCReader.onDataChangeRecord for
+// a given partition.
+type periodicallyFlushingSpannerCDCReader struct {
+	*spannerCDCReader
+	mu    sync.RWMutex
+	reqCh map[string]chan callbackRequest
+}
+
+func (r *periodicallyFlushingSpannerCDCReader) onDataChangeRecord(ctx context.Context, partitionToken string, dcr *changestreams.DataChangeRecord) error {
+	batcher, cached, err := r.batcher.forPartition(partitionToken)
+	if err != nil {
+		return err
+	}
+
+	if !cached {
+		ch := make(chan callbackRequest)
+		r.mu.Lock()
+		r.reqCh[partitionToken] = ch
+		r.mu.Unlock()
+
+		go func() {
+			r.log.Debugf("%s: starting periodic flusher", partitionToken)
+			defer func() {
+				r.mu.Lock()
+				delete(r.reqCh, partitionToken)
+				r.mu.Unlock()
+				r.log.Debugf("%s: periodic flusher stopped", partitionToken)
+			}()
+
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case _, ok := <-batcher.period.C:
+					if !ok {
+						return
+					}
+					err := r.spannerCDCReader.onDataChangeRecord(ctx, partitionToken, forcePeriodicFlush)
+					if err != nil {
+						r.log.Warnf("%s: periodic flush error: %v", partitionToken, err)
+					}
+				case cr := <-ch:
+					cr.errCh <- r.spannerCDCReader.onDataChangeRecord(ctx, partitionToken, cr.dcr)
+				}
+			}
+		}()
+	}
+
+	r.mu.RLock()
+	ch := r.reqCh[partitionToken]
+	r.mu.RUnlock()
+
+	errCh := make(chan error)
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case ch <- callbackRequest{
+		partitionToken: partitionToken,
+		dcr:            dcr,
+		errCh:          errCh,
+	}:
+		// ok
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case err := <-errCh:
+		return err
+	}
 }
