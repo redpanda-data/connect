@@ -9,6 +9,10 @@ All notable changes to this project will be documented in this file.
 
 - Parameter `root_tag` added to the `format_xml()` Bloblang method. (@mihaitodor)
 
+### Fixed
+
+- Fixed an issue where the `aws_kinesis` input would cause high CPU utilization in cases where a shard has a trickle of data and a batching period is specified.
+
 ## 4.55.1 - 2025-05-19
 
 ### Added
