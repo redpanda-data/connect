@@ -17,6 +17,7 @@ import logging
 import os
 import signal
 import sys
+from datetime import timedelta
 from typing import Callable, final, override
 
 import grpc  # pyright: ignore[reportMissingTypeStubs]
@@ -43,8 +44,7 @@ from .core import (
 )
 from .errors import BaseError
 
-logger = logging.getLogger(__name__)
-
+_logger = logging.getLogger(__name__)
 
 def _id_generator():
     id = 1
@@ -261,10 +261,11 @@ class _OutputService(output_pb2_grpc.BatchOutputServiceServicer):
             resp.batch_policy.byte_size = batch_policy.byte_size
             resp.batch_policy.count = batch_policy.count
             period = batch_policy.period
-            # The string format is parsed by time.ParseDuration in golang.
-            resp.batch_policy.period = (
-                f"{period.days * 24}h{period.seconds}s{period.microseconds}us"
-            )
+            if period != timedelta():
+                # The string format is parsed by time.ParseDuration in golang.
+                resp.batch_policy.period = (
+                    f"{period.days * 24}h{period.seconds}s{period.microseconds}us"
+                )
             resp.batch_policy.check = batch_policy.check
         except BaseError as e:
             resp.error.CopyFrom(error_to_proto(e))
@@ -336,11 +337,11 @@ class _OutputService(output_pb2_grpc.BatchOutputServiceServicer):
 async def _serve_component(register: Callable[[grpc.aio.Server], None]):
     version = os.environ.get("REDPANDA_CONNECT_PLUGIN_VERSION", "1")
     if version != "1":
-        logger.fatal(f"Unsupported plugin version: {version}")
+        _logger.fatal(f"Unsupported plugin version: {version}")
         sys.exit(1)
     addr = os.environ.get("REDPANDA_CONNECT_PLUGIN_ADDRESS", None)
     if not addr:
-        logger.fatal("REDPANDA_CONNECT_PLUGIN_ADDRESS not set")
+        _logger.fatal("REDPANDA_CONNECT_PLUGIN_ADDRESS not set")
         sys.exit(1)
     print("Successfully loaded Redpanda Connect RPC plugin")
     server = grpc.aio.server()
@@ -349,7 +350,7 @@ async def _serve_component(register: Callable[[grpc.aio.Server], None]):
     await server.start()
 
     async def stop(sig: int):
-        logger.info("stopping server")
+        _logger.info("stopping server")
         await server.stop(grace=None)
         loop.remove_signal_handler(sig)
 
@@ -363,7 +364,10 @@ async def _serve_component(register: Callable[[grpc.aio.Server], None]):
 
 
 async def input_main(ctor: InputConstructor):
-    """ """
+    """
+    input_main is the entry point for the input plugin. It should be called in __main__
+    and will block until plugin shutdown.
+    """
     logging.basicConfig(encoding="utf-8", level=logging.DEBUG)
 
     def register(server: grpc.aio.Server):
@@ -374,7 +378,10 @@ async def input_main(ctor: InputConstructor):
 
 
 async def processor_main(ctor: ProcessorConstructor):
-    """ """
+    """ 
+    processor_main is the entry point for the processor plugin. It should be called in __main__
+    and will block until plugin shutdown.
+    """
     logging.basicConfig(encoding="utf-8", level=logging.DEBUG)
 
     def register(server: grpc.aio.Server):
@@ -385,7 +392,10 @@ async def processor_main(ctor: ProcessorConstructor):
 
 
 async def output_main(ctor: OutputConstructor):
-    """ """
+    """
+    output_main is the entry point for the output plugin. It should be called in __main__
+    and will block until plugin shutdown.
+    """
     logging.basicConfig(encoding="utf-8", level=logging.DEBUG)
 
     def register(server: grpc.aio.Server):

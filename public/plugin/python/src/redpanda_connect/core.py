@@ -1,7 +1,22 @@
+# Copyright 2025 Redpanda Data, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import asyncio
 from collections.abc import AsyncIterator, Awaitable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Callable, TypeAlias, override
+from typing import Callable, Protocol, TypeAlias, override
 
 from .errors import BaseError, EndOfInputError, NotConnectedError
 
@@ -188,7 +203,9 @@ then returns a properly configured processor component.
 
 
 def batch_processor(func: Callable[[MessageBatch], list[MessageBatch]]) -> ProcessorConstructor:
-    """ """
+    """
+    A decorator that wraps a function that processes a single message and returns it to continue down the pipeline.
+    """
 
     def ctor(_: Value) -> Processor:
         class FuncProcessor(Processor):
@@ -206,7 +223,9 @@ def batch_processor(func: Callable[[MessageBatch], list[MessageBatch]]) -> Proce
 
 
 def processor(func: Callable[[Message], Message]) -> ProcessorConstructor:
-    """ """
+    """ 
+    A decorator that wraps a function that processes a single message and returns it to continue down the pipeline.
+    """
 
     def wrapped(batch: MessageBatch) -> list[MessageBatch]:
         return [[func(msg) for msg in batch]]
@@ -265,25 +284,68 @@ class BatchPolicy:
 
 OutputConstructor: TypeAlias = Callable[[Value], tuple[Output, int, BatchPolicy]]
 """
-
+A constructor for an output. It should take the configuration and return a tuple of the output,
+the maximum number of messages that can be in flight at once, and the batching policy to use.
 """
 
 
-def batch_output(
-    max_in_flight: int, batch_policy: BatchPolicy | None = None
-) -> Callable[[Callable[[MessageBatch], None]], OutputConstructor]:
-    """ """
+class BatchingOutputFunc(Protocol):
+    """
+    A function that takes a batch of messages and returns a list of batches.
+    """
 
-    def wrapped(func: Callable[[MessageBatch], None]) -> OutputConstructor:
-        def ctor(_: Value) -> tuple[Output, int, BatchPolicy]:
+    async def __call__(self, config: Value, batches: AsyncIterator[MessageBatch]) -> None:
+        """
+        Called once when the output is connected, it should read from batches in a loop.
+        """
+        ...
+
+
+
+
+def batch_output(
+    max_in_flight: int = 1, batch_policy: BatchPolicy | None = None
+) -> Callable[[BatchingOutputFunc], OutputConstructor]:
+    """ 
+    A decorator that wraps an output function that takes the configuration and stream of batches.
+    """
+
+    def wrapped(func: BatchingOutputFunc) -> OutputConstructor:
+        def ctor(config: Value) -> tuple[Output, int, BatchPolicy]:
+            queue = asyncio.Queue[tuple[MessageBatch, asyncio.Future[None]]](maxsize=max_in_flight)
+
+            async def consumer() -> AsyncIterator[MessageBatch]:
+                while True:
+                    batch, fut = await queue.get()
+                    yield batch
+                    fut.set_result(None)
+            async def noop() -> None:
+                return
             class FuncOutput(Output):
+                task: asyncio.Task[None] = asyncio.create_task(noop())
+
+                @override
+                async def connect(self) -> None:
+                    self.task.cancel()
+                    await self.task
+                    self.task = asyncio.create_task(func(config, consumer()))
+
                 @override
                 async def write_batch(self, batch: MessageBatch) -> None:
-                    return func(batch)
+                    fut = asyncio.Future[None]()
+                    await queue.put((batch, fut))
+                    done, _ = await asyncio.wait(
+                        (fut, self.task), return_when=asyncio.FIRST_COMPLETED
+                    )
+                    for f in done:
+                        err = f.exception()
+                        if err is not None:
+                            raise err
 
                 @override
                 async def close(self) -> None:
-                    pass
+                    self.task.cancel()
+                    await self.task
 
             return FuncOutput(), max_in_flight, batch_policy or BatchPolicy()
 
@@ -292,14 +354,32 @@ def batch_output(
     return wrapped
 
 
-def output(max_in_flight: int) -> Callable[[Callable[[Message], None]], OutputConstructor]:
-    """ """
+class OutputFunc(Protocol):
+    """
+    An output function that recieves the configuration and a stream of messages that can be sent.
+    """
+    async def __call__(self, config: Value, messages: AsyncIterator[Message]) -> None: ...
+    """
+    Called once when the output is connected, it should read from messages in a loop.
+    """
+
+def output(max_in_flight: int = 1) -> Callable[[OutputFunc], OutputConstructor]:
+    """
+    A decorator that wraps an output function that takes the configuration and stream of messages.
+
+    Args:
+        max_in_flight: The maximum number of messages that can be in flight at once.
+    """
     batching_output = batch_output(max_in_flight)
 
-    def wrapped(func: Callable[[Message], None]) -> OutputConstructor:
-        def inner_wrapped(batch: MessageBatch) -> None:
-            for msg in batch:
-                func(msg)
+    def wrapped(func: OutputFunc) -> OutputConstructor:
+        async def inner_wrapped(config: Value, batches: AsyncIterator[MessageBatch]) -> None:
+            async def split_batches() -> AsyncIterator[Message]:
+                async for batch in batches:
+                    for msg in batch:
+                        yield msg
+
+            await func(config, split_batches())
 
         return batching_output(inner_wrapped)
 

@@ -2,6 +2,9 @@
 #   json_gen:
 #     count: 3
 
-pipeline:
-  processors:
-    - fizzbuzz: {}
+# pipeline:
+#   processors:
+#     - fizzbuzz: {}
+
+output:
+  py_log: {}
