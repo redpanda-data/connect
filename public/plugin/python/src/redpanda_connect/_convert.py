@@ -68,8 +68,8 @@ def message_to_proto(message: Message) -> message_pb2.Message:
     proto = message_pb2.Message()
     if isinstance(message.payload, bytes):
         proto.bytes = message.payload
-    elif isinstance(message.payload, bytes):
-        proto.bytes = message.payload
+    elif isinstance(message.payload, str):
+        proto.bytes = message.payload.encode()
     else:
         proto.structured.CopyFrom(value_to_proto(message.payload))
     for k, v in message.metadata.items():

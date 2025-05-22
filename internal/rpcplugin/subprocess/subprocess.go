@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"os/exec"
 	"sync"
 
@@ -134,7 +133,11 @@ func (s *Subprocess) Start() error {
 	go func() {
 		defer s.wg.Done()
 		err := cmd.Wait()
-		s.logger.Debugf("Subprocess with PID %d exited with error: %v", cmd.Process.Pid, err)
+		if err != nil {
+			s.logger.Debugf("Subprocess with PID %d exited with error: %v", cmd.Process.Pid, err)
+		} else {
+			s.logger.Debugf("Subprocess with PID %d exited with no error", cmd.Process.Pid)
+		}
 	}()
 	s.cmd = cmd
 	s.cancel = cancel
@@ -146,6 +149,7 @@ func (s *Subprocess) readOutput(pipe io.Reader, isStderr bool) {
 	src := map[bool]string{false: "stdout", true: "stderr"}[isStderr]
 	log := s.logger.With("source", src)
 	scanner := bufio.NewScanner(pipe)
+	scanner.Buffer([]byte{}, 512*1024)
 	hook := func(line string) {}
 	if !isStderr && s.stdoutHook != nil {
 		hook = s.stdoutHook
@@ -187,7 +191,7 @@ func (s *Subprocess) Close(ctx context.Context) error {
 
 	s.logger.Debugf("Attempting to gracefully shut down subprocess with PID %d...", s.cmd.Process.Pid)
 	if s.cmd.Process != nil {
-		if err := s.cmd.Process.Signal(os.Interrupt); err != nil {
+		if err := s.cmd.Process.Signal(stopSignal); err != nil {
 			s.logger.Warnf("Failed to send interrupt signal to subprocess PID %d: %v. Attempting to kill.", s.cmd.Process.Pid, err)
 			if err := s.cmd.Process.Kill(); err != nil {
 				s.logger.Errorf("Failed to kill subprocess PID %d: %v", s.cmd.Process.Pid, err)

@@ -6,6 +6,7 @@ from ._grpc import input_main, output_main, processor_main
 from .core import (
     Message,
     MessageBatch,
+    Value,
     batch_input,
     batch_processor,
     input,
@@ -27,6 +28,7 @@ __all__ = [
     "MessageBatch",
     "batch_input",
     "batch_processor",
+    "Value",
     "input",
     "processor",
     "output",

@@ -1,0 +1,7 @@
+# input:
+#   json_gen:
+#     count: 3
+
+pipeline:
+  processors:
+    - fizzbuzz: {}

@@ -13,13 +13,20 @@
 # limitations under the License.
 
 import asyncio
-from redpanda_connect import (Message, processor, processor_main)
+
+from redpanda_connect import Message, processor, processor_main
+
 
 @processor
 def fizzbuzz_processor(msg: Message) -> Message:
-    v = msg.payload
-    if not isinstance(v, int):
-        raise ValueError("Payload must be an integer")
+    if isinstance(msg.payload, int):
+        v = msg.payload
+    elif isinstance(msg.payload, str):
+        v = int(msg.payload)
+    elif isinstance(msg.payload, bytes):
+        v = int(msg.payload.decode())
+    else:
+        raise TypeError(f"Unsupported type for payload: {type(msg.payload)}")
     if v % 3 == 0 and v % 5 == 0:
         msg.payload = "fizzbuzz"
     elif v % 3 == 0:

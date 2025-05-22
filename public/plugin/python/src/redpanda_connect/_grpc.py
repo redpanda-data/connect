@@ -43,6 +43,8 @@ from .core import (
 )
 from .errors import BaseError
 
+logger = logging.getLogger(__name__)
+
 
 def _id_generator():
     id = 1
@@ -334,11 +336,11 @@ class _OutputService(output_pb2_grpc.BatchOutputServiceServicer):
 async def _serve_component(register: Callable[[grpc.aio.Server], None]):
     version = os.environ.get("REDPANDA_CONNECT_PLUGIN_VERSION", "1")
     if version != "1":
-        logging.fatal(f"Unsupported plugin version: {version}")
+        logger.fatal(f"Unsupported plugin version: {version}")
         sys.exit(1)
     addr = os.environ.get("REDPANDA_CONNECT_PLUGIN_ADDRESS", None)
     if not addr:
-        logging.fatal("REDPANDA_CONNECT_PLUGIN_ADDRESS not set")
+        logger.fatal("REDPANDA_CONNECT_PLUGIN_ADDRESS not set")
         sys.exit(1)
     print("Successfully loaded Redpanda Connect RPC plugin")
     server = grpc.aio.server()
@@ -347,13 +349,14 @@ async def _serve_component(register: Callable[[grpc.aio.Server], None]):
     await server.start()
 
     async def stop(sig: int):
+        logger.info("stopping server")
         await server.stop(grace=None)
         loop.remove_signal_handler(sig)
 
     try:
         loop = asyncio.get_event_loop()
         for sig in (signal.SIGINT, signal.SIGTERM):
-            loop.add_signal_handler(sig, lambda sig: asyncio.ensure_future(stop(sig)), sig)
+            loop.add_signal_handler(sig, lambda sig: asyncio.create_task(stop(sig)), sig)
         await server.wait_for_termination()
     finally:
         await server.stop(grace=None)
@@ -361,6 +364,7 @@ async def _serve_component(register: Callable[[grpc.aio.Server], None]):
 
 async def input_main(ctor: InputConstructor):
     """ """
+    logging.basicConfig(encoding="utf-8", level=logging.DEBUG)
 
     def register(server: grpc.aio.Server):
         input_service = _InputService(ctor)
@@ -371,6 +375,7 @@ async def input_main(ctor: InputConstructor):
 
 async def processor_main(ctor: ProcessorConstructor):
     """ """
+    logging.basicConfig(encoding="utf-8", level=logging.DEBUG)
 
     def register(server: grpc.aio.Server):
         processor_service = _ProcessorService(ctor)
@@ -381,6 +386,7 @@ async def processor_main(ctor: ProcessorConstructor):
 
 async def output_main(ctor: OutputConstructor):
     """ """
+    logging.basicConfig(encoding="utf-8", level=logging.DEBUG)
 
     def register(server: grpc.aio.Server):
         output_service = _OutputService(ctor)

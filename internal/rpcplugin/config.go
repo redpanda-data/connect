@@ -234,6 +234,9 @@ func (c *Config) toSpec() (*service.ConfigSpec, error) {
 		}
 		spec = spec.Field(fieldSpec)
 	}
+	if len(c.Fields) == 0 {
+		spec = spec.Field(service.NewObjectField(""))
+	}
 	return spec, nil
 }
 

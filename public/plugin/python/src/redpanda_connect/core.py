@@ -21,7 +21,7 @@ class Message:
     """
     The payload of the message. This can be a bytes object or a Value object.
     """
-    metadata: dict[str, Value] = field(default_factory = lambda: ({}))
+    metadata: dict[str, Value] = field(default_factory=lambda: ({}))
     """
     Metadata is a dictionary of key-value pairs that can be used to store
     additional information outside of the payload.
@@ -92,7 +92,7 @@ nack'd messages or not.
 """
 
 
-def batch_input(func: Callable[[], AsyncIterator[MessageBatch]]) -> InputConstructor:
+def batch_input(func: Callable[[Value], AsyncIterator[MessageBatch]]) -> InputConstructor:
     """
     A decorator that wraps a generator of message batches.
 
@@ -103,18 +103,18 @@ def batch_input(func: Callable[[], AsyncIterator[MessageBatch]]) -> InputConstru
     Example:
 
         @batch_input
-        async def my_input():
+        async def my_input(_config: Value):
             for _ in range(10):
                 yield [Message(b"hello"), Message(b"world")]
     """
 
-    def ctor(_: Value) -> tuple[Input, AutoRetryNacks]:
+    def ctor(config: Value) -> tuple[Input, AutoRetryNacks]:
         class FuncInput(Input):
             iter: AsyncIterator[MessageBatch] | None = None
 
             @override
             async def connect(self) -> None:
-                self.iter = func()
+                self.iter = func(config)
 
             @override
             async def read_batch(self) -> tuple[MessageBatch, AckFn]:
@@ -139,7 +139,7 @@ def batch_input(func: Callable[[], AsyncIterator[MessageBatch]]) -> InputConstru
     return ctor
 
 
-def input(func: Callable[[], AsyncIterator[Message]]) -> InputConstructor:
+def input(func: Callable[[Value], AsyncIterator[Message]]) -> InputConstructor:
     """
     A decorator that wraps a generator of messages.
 
@@ -155,8 +155,8 @@ def input(func: Callable[[], AsyncIterator[Message]]) -> InputConstructor:
                 yield Message(b"hello")
     """
 
-    async def wrapped() -> AsyncIterator[MessageBatch]:
-        iter = func()
+    async def wrapped(config: Value) -> AsyncIterator[MessageBatch]:
+        iter = func(config)
         async for msg in iter:
             yield [msg]
 

@@ -156,7 +156,7 @@ func ProtoToMessage(msg *Message) (*service.Message, error) {
 		}
 		out.SetStructuredMut(v)
 	}
-	for k, v := range msg.Metadata.Fields {
+	for k, v := range msg.GetMetadata().GetFields() {
 		val, err := ValueToAny(v)
 		if err != nil {
 			return nil, err
