@@ -10,6 +10,29 @@ package changestreams
 
 import "time"
 
+var now = time.Now
+
+// timeCache is a cache for a single time value.
+type timeCache struct {
+	v time.Time     // cached value
+	t time.Time     // when the value was cached
+	d time.Duration // cache duration
+
+	now func() time.Time
+}
+
+func (c *timeCache) get() time.Time {
+	if c.v.IsZero() || c.now().Sub(c.t) > c.d {
+		return time.Time{}
+	}
+	return c.v
+}
+
+func (c *timeCache) set(v time.Time) {
+	c.v = v
+	c.t = c.now()
+}
+
 // timeRange makes sure that we process records in monotonically increasing
 // time order, and do not process records over a certain time range if the end
 // time is set.
