@@ -273,6 +273,7 @@ func setup(t *testing.T, template string, opts ...setupOption) (*streamHelper, *
 		mongocontainer.WithReplicaSet("rs0"),
 	)
 	t.Cleanup(func() {
+		//nolint:usetesting // t.Context() is already cancelled when cleanup runs
 		if err := container.Terminate(context.Background()); err != nil {
 			t.Fatal("unable to shutdown container", err)
 		}
