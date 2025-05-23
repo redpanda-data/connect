@@ -9,6 +9,7 @@
 package cdc
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -252,16 +253,22 @@ func newMongoCDC(conf *service.ParsedConfig, res *service.Resources) (i service.
 	if checkpointInterval.Seconds() > 0 {
 		cdc.checkpointFlusher = asyncroutine.NewPeriodicWithContext(
 			checkpointInterval,
-			func(ctx context.Context) {
-				cdc.resumeTokenMu.Lock()
-				defer cdc.resumeTokenMu.Unlock()
-				if cdc.resumeToken == nil {
-					return
+			func() func(context.Context) {
+				// Don't resave the resume token if it hasn't changed.
+				var lastResumeToken bson.Raw
+				return func(ctx context.Context) {
+					cdc.resumeTokenMu.Lock()
+					defer cdc.resumeTokenMu.Unlock()
+					if cdc.resumeToken == nil || bytes.Equal(lastResumeToken, cdc.resumeToken) {
+						return
+					}
+					if err := cdc.checkpoint.Store(ctx, cdc.resumeToken); err != nil {
+						res.Logger().Warnf("unable to store checkpoints in cache: %v", err)
+					} else {
+						lastResumeToken = cdc.resumeToken
+					}
 				}
-				if err := cdc.checkpoint.Store(ctx, cdc.resumeToken); err != nil {
-					res.Logger().Warnf("unable to store checkpoints in cache: %v", err)
-				}
-			},
+			}(),
 		)
 	}
 
@@ -415,14 +422,12 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 				opts = opts.SetShowExpandedEvents(true)
 			}
 		}
-		var skipSnapshot bool
 		func() {
 			m.resumeTokenMu.Lock()
 			defer m.resumeTokenMu.Unlock()
 			if m.resumeToken != nil {
 				// TODO: Handle the resume token becoming invalid due to collection rename/drop
 				opts = opts.SetResumeAfter(m.resumeToken)
-				skipSnapshot = true
 			} else {
 				// If there are no writes between snapshot and streaming, we want to skip the last
 				// document that will be read in the snapshot.
@@ -431,7 +436,7 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 			}
 		}()
 		cp := checkpoint.NewCapped[bson.Raw](int64(m.checkpointLimit))
-		if !skipSnapshot {
+		if m.resumeToken == nil {
 			g, gctx := errgroup.WithContext(ctx)
 			for _, name := range m.collections {
 				coll := m.db.Collection(name)
@@ -468,7 +473,12 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (m *mongoCDC) readSnapshot(ctx context.Context, coll *mongo.Collection, snapshotTime bson.Timestamp, cp *checkpoint.Capped[bson.Raw]) (err error) {
+func (m *mongoCDC) readSnapshot(
+	ctx context.Context,
+	coll *mongo.Collection,
+	snapshotTime bson.Timestamp,
+	cp *checkpoint.Capped[bson.Raw],
+) (err error) {
 	if m.snapshotParallelism == 0 {
 		return nil
 	}
@@ -573,7 +583,12 @@ func (m *mongoCDC) autoBuckets(ctx context.Context, coll *mongo.Collection) ([][
 	return ranges, nil
 }
 
-func (m *mongoCDC) readParallelSnapshot(ctx context.Context, coll *mongo.Collection, snapshotTime bson.Timestamp, cp *checkpoint.Capped[bson.Raw]) error {
+func (m *mongoCDC) readParallelSnapshot(
+	ctx context.Context,
+	coll *mongo.Collection,
+	snapshotTime bson.Timestamp,
+	cp *checkpoint.Capped[bson.Raw],
+) error {
 	begin := time.Now()
 	ranges, err := m.getParallelRanges(ctx, coll)
 	if err != nil {
@@ -592,7 +607,13 @@ func (m *mongoCDC) readParallelSnapshot(ctx context.Context, coll *mongo.Collect
 	return g.Wait()
 }
 
-func (m *mongoCDC) readSnapshotRange(ctx context.Context, coll *mongo.Collection, snapshotTime bson.Timestamp, cp *checkpoint.Capped[bson.Raw], start, end any) error {
+func (m *mongoCDC) readSnapshotRange(
+	ctx context.Context,
+	coll *mongo.Collection,
+	snapshotTime bson.Timestamp,
+	cp *checkpoint.Capped[bson.Raw],
+	start, end any,
+) error {
 	if err := m.snapshotSemaphore.Acquire(ctx, 1); err != nil {
 		return err
 	}
@@ -658,7 +679,35 @@ func (m *mongoCDC) readFromStream(ctx context.Context, cp *checkpoint.Capped[bso
 	}
 	stream.SetBatchSize(int32(m.readBatchSize))
 	var mb service.MessageBatch
-	for stream.Next(ctx) {
+	// You'd think that this would be the same as just calling stream.Next(ctx), but surprise! It's not
+	// They do something funky where they apply another timeout they probably shouldn't be applying,
+	// so work around that by doing the polling loop for the next record ourselves.
+	next := func() bool {
+		for {
+			if stream.TryNext(ctx) {
+				return true
+			}
+			if stream.Err() != nil || stream.ID() == 0 {
+				return false
+			}
+			// If we have no pending batches, then we can accept this resume token as the new checkpoint, this
+			// is important to advance our oplog position while the collections we're streaming don't have changes.
+			// If there are batches in flight, then we just drop the resume token - we can pick up it back up
+			// next time after we poll for changes.
+			if cp.Pending() == 0 {
+				m.resumeTokenMu.Lock()
+				m.resumeToken = stream.ResumeToken()
+				if m.checkpointFlusher == nil {
+					err := m.checkpoint.Store(ctx, m.resumeToken)
+					if err != nil {
+						m.logger.Warnf("unable to store checkpoint in cache: %v", err)
+					}
+				}
+				m.resumeTokenMu.Unlock()
+			}
+		}
+	}
+	for next() {
 		var data bson.M
 		if err := stream.Decode(&data); err != nil {
 			return fmt.Errorf("unable to decode document: %w", err)

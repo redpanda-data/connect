@@ -37,10 +37,10 @@ func (c *checkpointCache) Store(ctx context.Context, resumeToken bson.Raw) error
 	return err
 }
 
-func (c *checkpointCache) Load(ctx context.Context) (resumeToken bson.Raw, err error) {
+func (c *checkpointCache) Load(ctx context.Context) (bson.Raw, error) {
 	var cVal []byte
 	var cErr error
-	err = c.resources.AccessCache(ctx, c.cacheName, func(cache service.Cache) {
+	err := c.resources.AccessCache(ctx, c.cacheName, func(cache service.Cache) {
 		cVal, cErr = cache.Get(ctx, c.cacheKey)
 	})
 	if err == nil {
@@ -49,8 +49,12 @@ func (c *checkpointCache) Load(ctx context.Context) (resumeToken bson.Raw, err e
 	if err == service.ErrKeyNotFound {
 		return nil, nil
 	}
-	if err == nil {
-		err = bson.UnmarshalExtJSON(cVal, true, &resumeToken)
+	if err != nil {
+		return nil, err
 	}
-	return
+	var resumeToken bson.Raw
+	if err = bson.UnmarshalExtJSON(cVal, true, &resumeToken); err != nil {
+		return nil, err
+	}
+	return resumeToken, nil
 }
