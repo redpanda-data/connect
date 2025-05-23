@@ -628,11 +628,13 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, info streamInfo, shardID
 				nextFlushChan = k.msgChan
 			} else {
 				nextFlushChan = nil
-			}
 
-			if nextTimedBatchChan == nil {
-				if tNext, exists := recordBatcher.UntilNext(); exists {
-					nextTimedBatchChan = time.After(tNext)
+				// Only allow a timed batch flush if we do not have a pending
+				// message.
+				if nextTimedBatchChan == nil {
+					if tNext, exists := recordBatcher.UntilNext(); exists {
+						nextTimedBatchChan = time.After(tNext)
+					}
 				}
 			}
 
@@ -657,6 +659,11 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, info streamInfo, shardID
 				}
 			case <-nextTimedBatchChan:
 				nextTimedBatchChan = nil
+				if pendingMsg.msg == nil {
+					if pendingMsg, err = recordBatcher.FlushMessage(k.ctx); err != nil {
+						k.log.Errorf("Failed to dispatch message due to checkpoint error: %v\n", err)
+					}
+				}
 			case nextFlushChan <- pendingMsg:
 				pendingMsg = asyncMessage{}
 			case <-nextPullChan:
