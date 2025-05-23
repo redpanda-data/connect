@@ -10,11 +10,13 @@ package enterprise
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/Jeffail/shutdown"
+	"google.golang.org/api/option"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/ack"
@@ -25,6 +27,7 @@ import (
 
 // Spanner Input Fields
 const (
+	siFieldCredentialsJSON      = "credentials_json"
 	siFieldProjectID            = "project_id"
 	siFieldInstanceID           = "instance_id"
 	siFieldDatabaseID           = "database_id"
@@ -80,6 +83,19 @@ func parseDuration(pConf *service.ParsedConfig, key string) (time.Duration, erro
 }
 
 func spannerCDCInputConfigFromParsed(pConf *service.ParsedConfig) (conf spannerCDCInputConfig, err error) {
+	credentialsJSON, err := pConf.FieldString(siFieldCredentialsJSON)
+	if err != nil {
+		return
+	}
+	if credentialsJSON != "" {
+		credBytes, err := base64.StdEncoding.DecodeString(credentialsJSON)
+		if err != nil {
+			return conf, fmt.Errorf("decode base64 credentials: %w", err)
+		}
+		conf.SpannerClientOptions = append(conf.SpannerClientOptions,
+			option.WithCredentialsJSON(credBytes))
+	}
+
 	if conf.ProjectID, err = pConf.FieldString(siFieldProjectID); err != nil {
 		return
 	}
@@ -134,6 +150,7 @@ Change streams provide a way to track mutations to your Spanner database tables.
 more information about Spanner change streams, refer to the Google Cloud documentation:
 https://cloud.google.com/spanner/docs/change-streams
 `).
+		Field(service.NewStringField(siFieldCredentialsJSON).Optional().Description("Base64 encoded GCP service account JSON credentials file for authentication. If not provided, Application Default Credentials (ADC) will be used.").Default("")).
 		Field(service.NewStringField(siFieldProjectID).Description("GCP project ID containing the Spanner instance")).
 		Field(service.NewStringField(siFieldInstanceID).Description("Spanner instance ID")).
 		Field(service.NewStringField(siFieldDatabaseID).Description("Spanner database ID")).
