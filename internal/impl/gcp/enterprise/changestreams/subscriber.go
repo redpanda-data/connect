@@ -37,6 +37,7 @@ type Config struct {
 	HeartbeatInterval    time.Duration
 	MetadataTable        string
 	MinWatermarkCacheTTL time.Duration
+	AllowedModTypes      []string
 
 	SpannerClientConfig       spanner.ClientConfig
 	SpannerClientOptions      []option.ClientOption
@@ -108,6 +109,10 @@ func NewSubscriber(
 		DatabaseID: conf.DatabaseID,
 		Dialect:    dialect,
 		TableNames: tableNames,
+	}
+
+	if len(conf.AllowedModTypes) != 0 {
+		cb = filteredCallback(cb, modTypeFilter(conf.AllowedModTypes))
 	}
 
 	return &Subscriber{
