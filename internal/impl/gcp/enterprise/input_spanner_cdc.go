@@ -12,8 +12,9 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"time"
+
+	"github.com/Jeffail/shutdown"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/ack"
@@ -38,6 +39,7 @@ const (
 // Default values
 const (
 	defaultMetadataTableFormat = "cdc_metadata_%s"
+	shutdownTimeout            = 5 * time.Second
 )
 
 type spannerCDCInputConfig struct {
@@ -166,8 +168,7 @@ type spannerCDCReader struct {
 	batcher    *spannerPartitionBatcherFactory
 	resCh      chan asyncMessage
 	subscriber *changestreams.Subscriber
-	cancel     context.CancelFunc
-	connected  atomic.Bool
+	stopSig    *shutdown.Signaller
 }
 
 var _ service.BatchInput = (*spannerCDCReader)(nil)
@@ -199,6 +200,7 @@ func newSpannerCDCReader(conf spannerCDCInputConfig, batching service.BatchPolic
 		batching: batching,
 		batcher:  newSpannerPartitionBatcherFactory(batching, mgr),
 		resCh:    make(chan asyncMessage),
+		stopSig:  shutdown.NewSignaller(),
 	}
 }
 
@@ -283,35 +285,47 @@ func (r *spannerCDCReader) Connect(ctx context.Context) error {
 		return fmt.Errorf("setup Spanner change stream reader: %w", err)
 	}
 
-	var bg context.Context
-	bg, r.cancel = context.WithCancel(ctx)
+	// Reset our stop signal
+	r.stopSig = shutdown.NewSignaller()
+	ctx, cancel := r.stopSig.SoftStopCtx(context.Background())
+
 	go func() {
-		r.connected.Store(true)
-		if err := r.subscriber.Start(bg); err != nil {
+		defer cancel()
+		if err := r.subscriber.Start(ctx); err != nil {
 			r.log.Errorf("Spanner change stream reader error: %v", err)
 		}
-		r.connected.Store(false)
+		r.subscriber.Close()
+		r.stopSig.TriggerHasStopped()
 	}()
 
 	return nil
 }
 
 func (r *spannerCDCReader) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
-	if !r.connected.Load() {
-		return nil, nil, service.ErrNotConnected
-	}
-
 	select {
-	case am := <-r.resCh:
-		return am.msg, am.ackFn, nil
 	case <-ctx.Done():
 		return nil, nil, ctx.Err()
+	case <-r.stopSig.HasStoppedChan():
+		return nil, nil, service.ErrNotConnected
+	case am := <-r.resCh:
+		return am.msg, am.ackFn, nil
 	}
 }
 
 func (r *spannerCDCReader) Close(ctx context.Context) error {
-	r.cancel()
-	r.subscriber.Close()
+	r.stopSig.TriggerSoftStop()
+	select {
+	case <-ctx.Done():
+	case <-time.After(shutdownTimeout):
+	case <-r.stopSig.HasStoppedChan():
+	}
+	r.stopSig.TriggerHardStop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(shutdownTimeout):
+	case <-r.stopSig.HasStoppedChan():
+	}
 	return nil
 }
 
@@ -349,6 +363,7 @@ func (r *periodicallyFlushingSpannerCDCReader) onDataChangeRecord(ctx context.Co
 		r.reqCh[partitionToken] = ch
 		r.mu.Unlock()
 
+		softStopCh := r.stopSig.SoftStopChan()
 		go func() {
 			r.log.Debugf("%s: starting periodic flusher", partitionToken)
 			defer func() {
@@ -362,10 +377,13 @@ func (r *periodicallyFlushingSpannerCDCReader) onDataChangeRecord(ctx context.Co
 				select {
 				case <-ctx.Done():
 					return
+				case <-softStopCh:
+					return
 				case _, ok := <-batcher.period.C:
 					if !ok {
 						return
 					}
+
 					err := r.spannerCDCReader.onDataChangeRecord(ctx, partitionToken, forcePeriodicFlush)
 					if err != nil {
 						r.log.Warnf("%s: periodic flush error: %v", partitionToken, err)
