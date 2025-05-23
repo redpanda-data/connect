@@ -47,6 +47,7 @@ input:
     end_timestamp: ""
     heartbeat_interval: 10s
     metadata_table: ""
+    min_watermark_cache_ttl: 5s
     batching:
       count: 0
       byte_size: 0
@@ -73,6 +74,7 @@ input:
     end_timestamp: ""
     heartbeat_interval: 10s
     metadata_table: ""
+    min_watermark_cache_ttl: 5s
     batching:
       count: 0
       byte_size: 0
@@ -168,6 +170,15 @@ The table to store metadata in (default: cdc_metadata_<stream_id>)
 *Type*: `string`
 
 *Default*: `""`
+
+=== `min_watermark_cache_ttl`
+
+Duration string for frequency of querying Spanner for minimum watermark.
+
+
+*Type*: `string`
+
+*Default*: `"5s"`
 
 === `batching`
 

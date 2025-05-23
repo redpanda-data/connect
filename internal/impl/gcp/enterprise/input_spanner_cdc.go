@@ -25,15 +25,16 @@ import (
 
 // Spanner Input Fields
 const (
-	siFieldProjectID         = "project_id"
-	siFieldInstanceID        = "instance_id"
-	siFieldDatabaseID        = "database_id"
-	siFieldStreamID          = "stream_id"
-	siFieldStartTimestamp    = "start_timestamp"
-	siFieldEndTimestamp      = "end_timestamp"
-	siFieldHeartbeatInterval = "heartbeat_interval"
-	siFieldMetadataTable     = "metadata_table"
-	siFieldBatchPolicy       = "batching"
+	siFieldProjectID            = "project_id"
+	siFieldInstanceID           = "instance_id"
+	siFieldDatabaseID           = "database_id"
+	siFieldStreamID             = "stream_id"
+	siFieldStartTimestamp       = "start_timestamp"
+	siFieldEndTimestamp         = "end_timestamp"
+	siFieldHeartbeatInterval    = "heartbeat_interval"
+	siFieldMetadataTable        = "metadata_table"
+	siFieldMinWatermarkCacheTTL = "min_watermark_cache_ttl"
+	siFieldBatchPolicy          = "batching"
 )
 
 // Default values
@@ -106,6 +107,9 @@ func spannerCDCInputConfigFromParsed(pConf *service.ParsedConfig) (conf spannerC
 	if conf.MetadataTable == "" {
 		conf.MetadataTable = fmt.Sprintf(defaultMetadataTableFormat, conf.StreamID)
 	}
+	if conf.MinWatermarkCacheTTL, err = parseDuration(pConf, siFieldMinWatermarkCacheTTL); err != nil {
+		return
+	}
 
 	return
 }
@@ -138,6 +142,7 @@ https://cloud.google.com/spanner/docs/change-streams
 		Field(service.NewStringField(siFieldEndTimestamp).Optional().Description("RFC3339 formatted timestamp to stop reading at (default: no end time)").Default("")).
 		Field(service.NewStringField(siFieldHeartbeatInterval).Optional().Description("Duration string for heartbeat interval (e.g., '10s')").Default("10s")).
 		Field(service.NewStringField(siFieldMetadataTable).Optional().Description("The table to store metadata in (default: cdc_metadata_<stream_id>)").Default("")).
+		Field(service.NewStringField(siFieldMinWatermarkCacheTTL).Optional().Description("Duration string for frequency of querying Spanner for minimum watermark.").Default("5s")).
 		Field(service.NewBatchPolicyField(siFieldBatchPolicy)).
 		Field(service.NewAutoRetryNacksToggleField())
 }
