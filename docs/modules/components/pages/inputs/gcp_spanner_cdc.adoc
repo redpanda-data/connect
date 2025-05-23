@@ -49,6 +49,7 @@ input:
     heartbeat_interval: 10s
     metadata_table: ""
     min_watermark_cache_ttl: 5s
+    allowed_mod_types: [] # No default (optional)
     batching:
       count: 0
       byte_size: 0
@@ -77,6 +78,7 @@ input:
     heartbeat_interval: 10s
     metadata_table: ""
     min_watermark_cache_ttl: 5s
+    allowed_mod_types: [] # No default (optional)
     batching:
       count: 0
       byte_size: 0
@@ -190,6 +192,14 @@ Duration string for frequency of querying Spanner for minimum watermark.
 *Type*: `string`
 
 *Default*: `"5s"`
+
+=== `allowed_mod_types`
+
+List of modification types to process (e.g., 'INSERT', 'UPDATE', 'DELETE'). If not specified, all modification types are processed.
+
+
+*Type*: `array`
+
 
 === `batching`
 
