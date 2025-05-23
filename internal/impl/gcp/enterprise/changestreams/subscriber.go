@@ -28,14 +28,15 @@ import (
 
 // Config is the configuration for a Subscriber.
 type Config struct {
-	ProjectID         string
-	InstanceID        string
-	DatabaseID        string
-	StreamID          string
-	StartTimestamp    time.Time
-	EndTimestamp      time.Time
-	HeartbeatInterval time.Duration
-	MetadataTable     string
+	ProjectID            string
+	InstanceID           string
+	DatabaseID           string
+	StreamID             string
+	StartTimestamp       time.Time
+	EndTimestamp         time.Time
+	HeartbeatInterval    time.Duration
+	MetadataTable        string
+	MinWatermarkCacheTTL time.Duration
 
 	SpannerClientConfig       spanner.ClientConfig
 	SpannerClientOptions      []option.ClientOption
@@ -56,14 +57,15 @@ type Config struct {
 // It creates the metadata table if it does not exist. If MetadataTable is
 // not set, it uses a random table name, this should be used in tests only.
 type Subscriber struct {
-	conf    Config
-	client  *spanner.Client
-	store   *metadata.Store
-	querier querier
-	resumed map[string]struct{}
-	wg      sync.WaitGroup
-	cb      CallbackFunc
-	log     *service.Logger
+	conf         Config
+	client       *spanner.Client
+	store        *metadata.Store
+	minWatermark timeCache
+	querier      querier
+	resumed      map[string]struct{}
+	wg           sync.WaitGroup
+	cb           CallbackFunc
+	log          *service.Logger
 
 	testingAdminClient  *adminapi.DatabaseAdminClient
 	testingPostFinished func(partitionToken string, err error)
@@ -112,6 +114,10 @@ func NewSubscriber(
 		conf:   conf,
 		client: client,
 		store:  metadata.NewStore(sConf, client),
+		minWatermark: timeCache{
+			d:   conf.MinWatermarkCacheTTL,
+			now: now,
+		},
 		querier: clientQuerier{
 			client:     client,
 			dialect:    dialect,
@@ -258,14 +264,19 @@ func (s *Subscriber) Start(ctx context.Context) error {
 var errEndOfStream = errors.New("no new partitions")
 
 func (s *Subscriber) detectNewPartitions(ctx context.Context) error {
-	minWatermark, err := s.store.GetUnfinishedMinWatermark(ctx)
-	if err != nil {
-		return fmt.Errorf("get unfinished min watermark: %w", err)
+	minWatermark := s.minWatermark.get()
+	if minWatermark.IsZero() {
+		var err error
+		minWatermark, err = s.store.GetUnfinishedMinWatermark(ctx)
+		if err != nil {
+			return fmt.Errorf("get unfinished min watermark: %w", err)
+		}
+		s.log.Debugf("Detected unfinished min watermark: %v", minWatermark)
 	}
 	if minWatermark.IsZero() {
 		return nil
 	}
-	s.log.Tracef("Detected unfinished min watermark: %v", minWatermark)
+	s.minWatermark.set(minWatermark)
 
 	if !s.conf.EndTimestamp.IsZero() && minWatermark.After(s.conf.EndTimestamp) {
 		s.log.Debugf("Min watermark is after end timestamp: %v", s.conf.EndTimestamp)
