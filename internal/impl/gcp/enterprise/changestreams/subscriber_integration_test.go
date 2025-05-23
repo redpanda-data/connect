@@ -39,6 +39,7 @@ func testSubscriber(
 	t *testing.T,
 	e changestreamstest.EmulatorHelper,
 	cb CallbackFunc,
+	opts ...func(*Config),
 ) (*Subscriber, *metadata.Store, *mockQuerier) {
 	t.Helper()
 
@@ -57,6 +58,9 @@ func testSubscriber(
 		SpannerClientOptions: []option.ClientOption{
 			option.WithGRPCConn(e.Conn()),
 		},
+	}
+	for _, o := range opts {
+		o(&conf)
 	}
 
 	if cb == nil {
@@ -337,6 +341,90 @@ func TestIntegrationSubscriberCallbackUpdatePartitionWatermark(t *testing.T) {
 
 	// And partition is processed
 	<-fch
+
+	mq.AssertExpectations(t)
+}
+
+func TestIntegrationSubscriberAllowedModTypes(t *testing.T) {
+	integration.CheckSkip(t)
+
+	e := changestreamstest.MakeEmulatorHelper(t)
+	defer e.Close()
+
+	partitionToken := "test-partition"
+	dch := make(chan *DataChangeRecord, 10) // Make sure we don't block
+	cb := func(_ context.Context, _ string, dcr *DataChangeRecord) error {
+		if dcr != nil {
+			dch <- dcr
+		}
+		return nil
+	}
+
+	// Given subscriber with allowed mod types
+	s, ms, mq := testSubscriber(t, e, cb, func(conf *Config) {
+		conf.AllowedModTypes = []string{"INSERT"} // Only allow INSERT operations
+	})
+	defer s.Close()
+
+	fch := make(chan string)
+	s.testingPostFinished = func(partitionToken string, err error) {
+		if err == nil {
+			fch <- partitionToken
+		}
+	}
+
+	// Call setup to create the metadata table
+	mq.ExpectQueryWithRecords(rootPartitionMetadata.PartitionToken, ChangeRecord{})
+	if err := s.Setup(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	mq.AssertExpectations(t)
+
+	// Given partition with INSERT and UPDATE data change records
+	pm := metadata.PartitionMetadata{
+		PartitionToken: partitionToken,
+		ParentTokens:   []string{},
+		StartTimestamp: testStartTimestamp,
+		Watermark:      testStartTimestamp,
+	}
+	if err := ms.Create(t.Context(), []metadata.PartitionMetadata{pm}); err != nil {
+		t.Fatal(err)
+	}
+	mq.ExpectQueryWithRecords(partitionToken, ChangeRecord{
+		DataChangeRecords: []*DataChangeRecord{
+			{
+				RecordSequence:  "1",
+				CommitTimestamp: testStartTimestamp.Add(time.Second),
+				TableName:       "test-table",
+				ModType:         "INSERT", // This should be processed
+			},
+			{
+				RecordSequence:  "2",
+				CommitTimestamp: testStartTimestamp.Add(2 * time.Second),
+				TableName:       "test-table",
+				ModType:         "UPDATE", // This should be filtered out
+			},
+		},
+	})
+
+	// When Start is called
+	go func() {
+		if err := s.Start(t.Context()); err != nil {
+			t.Log(err)
+		}
+	}()
+
+	// And partition is processed
+	<-fch
+
+	// Then only INSERT data change record is processed
+	if len(dch) != 1 {
+		t.Fatalf("expected 1 data change record, got %d", len(dch))
+	}
+	dcrs := collectN(t, 1, dch)
+	if dcrs[0].ModType != "INSERT" {
+		t.Errorf("expected mod type to be INSERT, got %s", dcrs[1].ModType)
+	}
 
 	mq.AssertExpectations(t)
 }
