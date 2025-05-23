@@ -13,6 +13,43 @@ import (
 	"time"
 )
 
+func TestTimeCache(t *testing.T) {
+	t0 := time.Unix(0, 1000)
+
+	var nowTime time.Time
+	c := &timeCache{
+		d: 2 * time.Second,
+		now: func() time.Time {
+			nowTime = nowTime.Add(time.Second)
+			return nowTime
+		},
+	}
+
+	// Empty cache
+	if v := c.get(); !v.IsZero() {
+		t.Errorf("expected zero time, got %v", v)
+	}
+
+	// Set and get
+	t.Log(nowTime)
+	c.set(t0)
+	if v := c.get(); !v.Equal(t0) {
+		t.Errorf("expected %v, got %v", t0, v)
+	}
+
+	// Get cached
+	t.Log(nowTime)
+	if v := c.get(); !v.Equal(t0) {
+		t.Errorf("expected %v, got %v", t0, v)
+	}
+
+	// Cache expired
+	t.Log(nowTime)
+	if v := c.get(); !v.IsZero() {
+		t.Errorf("expected zero time, got %v", v)
+	}
+}
+
 func TestTimeRange(t *testing.T) {
 	r := timeRange{
 		cur: time.Unix(0, 10_000),
