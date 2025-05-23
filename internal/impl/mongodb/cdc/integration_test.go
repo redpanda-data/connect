@@ -12,6 +12,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -277,16 +278,23 @@ func setup(t *testing.T, template string, opts ...setupOption) (*streamHelper, *
 		}
 	})
 	require.NoError(t, err)
-	uri, err := container.ConnectionString(t.Context())
+	connStr, err := container.ConnectionString(t.Context())
 	require.NoError(t, err)
-	// We need a directConnection because we don't have all the right networking setup
-	// for a proper replica set.
-	uri = uri + "/?directConnection=true"
+	url, err := url.Parse(connStr)
+	require.NoError(t, err)
+	// Force a directConnection because we don't have the proper networking setup for a
+	// proper replica set cluster.
+	query := url.Query()
+	query.Add("directConnection", "true")
+	url.RawQuery = query.Encode()
+	uri := url.String()
+	t.Log(uri)
 	mongoClient, err := mongo.Connect(options.Client().
 		SetConnectTimeout(5 * time.Second).
 		SetTimeout(10 * time.Second).
 		SetServerSelectionTimeout(10 * time.Second).
-		ApplyURI(uri))
+		ApplyURI(uri).
+		SetDirect(true))
 	require.NoError(t, err)
 	require.NoError(t, mongoClient.Ping(t.Context(), nil))
 	for _, opt := range opts {

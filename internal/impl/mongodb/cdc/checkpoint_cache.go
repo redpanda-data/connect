@@ -22,17 +22,8 @@ type checkpointCache struct {
 	cacheKey  string
 }
 
-type checkpointState struct {
-	ResumeToken bson.Raw `bson:"rpcn_resume_token,omitempty" json:"rpcn_resume_token,omitempty"`
-	// stored after the first oplog write
-	OplogPosition *bson.Timestamp `bson:"rpcn_oplog_start,omitempty" json:"rpcn_oplog_start,omitempty"`
-}
-
-func (c *checkpointCache) Store(ctx context.Context, state checkpointState) error {
-	if state.ResumeToken == nil && state.OplogPosition.IsZero() {
-		return nil
-	}
-	b, err := bson.MarshalExtJSON(&state, true, false)
+func (c *checkpointCache) Store(ctx context.Context, resumeToken bson.Raw) error {
+	b, err := bson.MarshalExtJSON(resumeToken, true, false)
 	if err != nil {
 		return err
 	}
@@ -46,7 +37,7 @@ func (c *checkpointCache) Store(ctx context.Context, state checkpointState) erro
 	return err
 }
 
-func (c *checkpointCache) Load(ctx context.Context) (*checkpointState, error) {
+func (c *checkpointCache) Load(ctx context.Context) (bson.Raw, error) {
 	var cVal []byte
 	var cErr error
 	err := c.resources.AccessCache(ctx, c.cacheName, func(cache service.Cache) {
@@ -61,23 +52,9 @@ func (c *checkpointCache) Load(ctx context.Context) (*checkpointState, error) {
 	if err != nil {
 		return nil, err
 	}
-	var test bson.M
-	if err = bson.UnmarshalExtJSON(cVal, true, &test); err != nil {
+	var resumeToken bson.Raw
+	if err = bson.UnmarshalExtJSON(cVal, true, &resumeToken); err != nil {
 		return nil, err
 	}
-	_, ok1 := test["rpcn_oplog_start"]
-	_, ok2 := test["rpcn_resume_token"]
-	if !ok1 && !ok2 {
-		// this means it is the legacy (raw) resume token format
-		var resumeToken bson.Raw
-		if err = bson.UnmarshalExtJSON(cVal, true, &resumeToken); err != nil {
-			return nil, err
-		}
-		return &checkpointState{ResumeToken: resumeToken}, nil
-	}
-	var state checkpointState
-	if err = bson.UnmarshalExtJSON(cVal, true, &state); err != nil {
-		return nil, err
-	}
-	return &state, nil
+	return resumeToken, nil
 }
