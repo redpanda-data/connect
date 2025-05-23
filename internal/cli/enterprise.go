@@ -22,6 +22,7 @@ import (
 
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka/enterprise"
 	"github.com/redpanda-data/connect/v4/internal/license"
+	"github.com/redpanda-data/connect/v4/internal/rpcplugin"
 	"github.com/redpanda-data/connect/v4/internal/telemetry"
 )
 
@@ -111,6 +112,10 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 						Name:  "disable-telemetry",
 						Usage: "Disable anonymous telemetry from being emitted by this Connect instance.",
 					},
+					&cli.StringSliceFlag{
+						Name:  "rpc-plugins",
+						Usage: "Plugins to load over the RPC interface. This flag should point to manifest files containing the plugin definitions. Globs are also supported.",
+					},
 				},
 
 				// Hidden redpanda flags
@@ -122,6 +127,12 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 				applyLicenseFlag(c, &licenseConfig)
 
 				if secretLookupFn, err = parseSecretsFlag(slog.New(rpLogger), c); err != nil {
+					return err
+				}
+
+				rpcPlugins := c.StringSlice("rpc-plugins")
+				err := rpcplugin.DiscoverAndRegisterPlugins(service.OSFS(), schema.Environment(), rpcPlugins)
+				if err != nil {
 					return err
 				}
 
