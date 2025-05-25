@@ -300,16 +300,19 @@ func (e *Output) WriteBatch(ctx context.Context, msg service.MessageBatch) error
 		requests[i] = pbi
 	}
 
+	var bErr *service.BatchError
+
 	start := time.Now()
 	b, _ := opensearchutil.NewBulkIndexer(opensearchutil.BulkIndexerConfig{
 		Client: e.client,
+		OnError: func(ctx context.Context, err error) {
+			bErr = service.NewBatchError(msg, err)
+		},
 	})
 
 	var bErrMut sync.Mutex
-	var bErr *service.BatchError
 
 	for i, v := range requests {
-		i := i
 		bulkReq, err := e.buildBulkableRequest(v, func(err error) {
 			bErrMut.Lock()
 			defer bErrMut.Unlock()
