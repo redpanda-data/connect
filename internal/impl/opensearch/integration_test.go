@@ -69,7 +69,7 @@ func TestIntegrationOpensearch(t *testing.T) {
 	}
 
 	urls := []string{fmt.Sprintf("http://127.0.0.1:%v", resource.GetPort("9200/tcp"))}
-	unreachableUrls := []string{fmt.Sprintf("http://127.0.0.1:9100")}
+	unreachableUrls := []string{"http://127.0.0.1:9100"}
 
 	var client *os.Client
 
