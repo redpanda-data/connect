@@ -69,6 +69,7 @@ func TestIntegrationOpensearch(t *testing.T) {
 	}
 
 	urls := []string{fmt.Sprintf("http://127.0.0.1:%v", resource.GetPort("9200/tcp"))}
+	unreachableUrls := []string{fmt.Sprintf("http://127.0.0.1:9100")}
 
 	var client *os.Client
 
@@ -136,6 +137,10 @@ func TestIntegrationOpensearch(t *testing.T) {
 
 	t.Run("TestOpenSearchConnect", func(te *testing.T) {
 		testOpenSearchConnect(urls, client, te)
+	})
+
+	t.Run("TestOpenSearchWriteBatchUnreachable", func(te *testing.T) {
+		testOpenSearchWriteBatchUnreachable(unreachableUrls, client, te)
 	})
 
 	t.Run("TestOpenSearchIndexInterpolation", func(te *testing.T) {
@@ -317,6 +322,28 @@ action: index
 
 		resEqualsJSON(t, get, string(testMsgs[i]))
 	}
+}
+
+func testOpenSearchWriteBatchUnreachable(urls []string, client *os.Client, t *testing.T) {
+	ctx, done := context.WithTimeout(t.Context(), time.Second*30)
+	defer done()
+
+	m := outputFromConf(t, `
+index: test_conn_index
+id: 'foo-${!counter()}'
+urls: %v
+action: index
+`, urls)
+
+	require.NoError(t, m.Connect(ctx))
+	defer func() {
+		require.NoError(t, m.Close(ctx))
+	}()
+
+	batch := service.MessageBatch{service.NewMessage([]byte(`{"message": "foo"}`))}
+
+	err := m.WriteBatch(ctx, batch)
+	require.ErrorContains(t, err, "connect: connection refused")
 }
 
 func testOpenSearchIndexInterpolation(urls []string, client *os.Client, t *testing.T) {
