@@ -16,7 +16,8 @@ import (
 
 	"cloud.google.com/go/spanner"
 	"cloud.google.com/go/spanner/admin/database/apiv1/databasepb"
-	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
@@ -65,9 +66,8 @@ func TestIntegrationStore(t *testing.T) {
 	t.Run("CreatePartitionMetadataTableWithDatabaseAdminClient", func(t *testing.T) {
 		for _, tc := range tests {
 			t.Run(tc.name, func(t *testing.T) {
-				if err := CreatePartitionMetadataTableWithDatabaseAdminClient(t.Context(), tc.s.conf, e.DatabaseAdminClient); err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t,
+					CreatePartitionMetadataTableWithDatabaseAdminClient(t.Context(), tc.s.conf, e.DatabaseAdminClient))
 			})
 		}
 	})
@@ -75,21 +75,16 @@ func TestIntegrationStore(t *testing.T) {
 	t.Run("GetUnfinishedMinWatermarkEmpty", func(t *testing.T) {
 		for _, tc := range tests {
 			t.Run(tc.name, func(t *testing.T) {
-				if err := CreatePartitionMetadataTableWithDatabaseAdminClient(t.Context(), tc.s.conf, e.DatabaseAdminClient); err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t,
+					CreatePartitionMetadataTableWithDatabaseAdminClient(t.Context(), tc.s.conf, e.DatabaseAdminClient))
 
 				// Test with empty table
 				got, err := tc.s.GetUnfinishedMinWatermark(t.Context())
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
 
 				// Should return zero time when no data exists
 				want := time.Time{}
-				if !got.Equal(want) {
-					t.Errorf("GetUnfinishedMinWatermark on empty data = %v, want = %v", got, want)
-				}
+				assert.Equal(t, want, got)
 			})
 		}
 	})
@@ -109,15 +104,13 @@ func TestIntegrationStore(t *testing.T) {
 	t.Run("InsertTestData", func(t *testing.T) {
 		for _, tc := range tests {
 			t.Run(tc.name, func(t *testing.T) {
-				if err := tc.s.insert(t.Context(), []PartitionMetadata{
+				require.NoError(t, tc.s.insert(t.Context(), []PartitionMetadata{
 					pm("created1", ts, StateCreated),
 					pm("created2", ts.Add(-2*time.Second), StateCreated),
 					pm("scheduled", ts.Add(time.Second), StateScheduled),
 					pm("running", ts.Add(2*time.Second), StateRunning),
 					pm("finished", ts.Add(-time.Second), StateFinished),
-				}); err != nil {
-					t.Fatal(err)
-				}
+				}))
 			})
 		}
 	})
@@ -126,13 +119,9 @@ func TestIntegrationStore(t *testing.T) {
 		for _, tc := range tests {
 			t.Run(tc.name, func(t *testing.T) {
 				got, err := tc.s.GetPartition(t.Context(), "created1")
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
 				want := pm("created1", ts, StateCreated)
-				if diff := cmp.Diff(got, want); diff != "" {
-					t.Errorf("GetPartition() mismatch (-want +got):\n%s", diff)
-				}
+				assert.Equal(t, want, got)
 			})
 		}
 	})
@@ -141,15 +130,10 @@ func TestIntegrationStore(t *testing.T) {
 		for _, tc := range tests {
 			t.Run(tc.name, func(t *testing.T) {
 				got, err := tc.s.GetUnfinishedMinWatermark(t.Context())
-				if err != nil {
-					t.Error(err)
-					return
-				}
+				require.NoError(t, err)
 
 				want := ts.Add(-2 * time.Second)
-				if got != want {
-					t.Errorf("GetUnfinishedMinWatermark = %v, want = %v", got, want)
-				}
+				assert.Equal(t, want, got)
 			})
 		}
 	})
@@ -160,17 +144,13 @@ func TestIntegrationStore(t *testing.T) {
 		for _, tc := range tests {
 			t.Run(tc.name, func(t *testing.T) {
 				got, err := tc.s.GetPartitionsCreatedAfter(t.Context(), cutoff)
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
 
 				want := []PartitionMetadata{
 					pm("created1", ts, StateCreated),
 				}
 
-				if diff := cmp.Diff(got, want); diff != "" {
-					t.Errorf("GetPartitionsCreatedAfter() mismatch (-want +got):\n%s", diff)
-				}
+				assert.Equal(t, want, got)
 			})
 		}
 	})
@@ -179,9 +159,7 @@ func TestIntegrationStore(t *testing.T) {
 		for _, tc := range tests {
 			t.Run(tc.name, func(t *testing.T) {
 				got, err := tc.s.GetInterruptedPartitions(t.Context())
-				if err != nil {
-					t.Fatalf("GetInterruptedPartitions failed: %v", err)
-				}
+				require.NoError(t, err)
 
 				// Should return partitions in SCHEDULED or RUNNING state
 				// ordered by creation time and start timestamp ascending
@@ -190,9 +168,7 @@ func TestIntegrationStore(t *testing.T) {
 					pm("running", ts.Add(2*time.Second), StateRunning),
 				}
 
-				if diff := cmp.Diff(got, want); diff != "" {
-					t.Errorf("GetInterruptedPartitions() mismatch (-want +got):\n%s", diff)
-				}
+				assert.Equal(t, want, got)
 			})
 		}
 	})
@@ -200,17 +176,16 @@ func TestIntegrationStore(t *testing.T) {
 	t.Run("Create", func(t *testing.T) {
 		for _, tc := range tests {
 			t.Run(tc.name, func(t *testing.T) {
-				if err := tc.s.Create(t.Context(), []PartitionMetadata{
+				err := tc.s.Create(t.Context(), []PartitionMetadata{
 					pm("created3", ts, StateCreated),
-				}); err != nil {
-					t.Fatal(err)
-				}
-				if err := tc.s.Create(t.Context(), []PartitionMetadata{
+				})
+				require.NoError(t, err)
+
+				err = tc.s.Create(t.Context(), []PartitionMetadata{
 					pm("created3", ts.Add(time.Second), StateCreated),
 					pm("created4", ts.Add(time.Second), StateCreated),
-				}); spanner.ErrCode(err) != codes.AlreadyExists {
-					t.Fatal(err)
-				}
+				})
+				assert.Equal(t, codes.AlreadyExists, spanner.ErrCode(err))
 			})
 		}
 	})
@@ -221,9 +196,7 @@ func TestIntegrationStore(t *testing.T) {
 				partitionForToken := func(token string) PartitionMetadata {
 					t.Helper()
 					pm, err := tc.s.GetPartition(t.Context(), token)
-					if err != nil {
-						t.Fatal(err)
-					}
+					require.NoError(t, err)
 					return pm
 				}
 
@@ -232,50 +205,30 @@ func TestIntegrationStore(t *testing.T) {
 				pmr := partitionForToken("running")
 
 				commitTs, err := tc.s.UpdateToScheduled(t.Context(), []string{"created1", "scheduled", "running"})
-				if err != nil {
-					t.Fatal(err)
-				}
-				if commitTs.IsZero() {
-					t.Error("Expected non-zero commit timestamp")
-				}
+				require.NoError(t, err)
+				assert.False(t, commitTs.IsZero())
 
 				// created1
 				{
 					pm, err := tc.s.GetPartition(t.Context(), "created1")
-					if err != nil {
-						t.Fatalf("Failed to get partition created1: %v", err)
-					}
-					if pm.State != StateScheduled {
-						t.Errorf("Expected partition created1 to be in SCHEDULED state, got %s", pm.State)
-					}
-					if pm.ScheduledAt == nil {
-						t.Errorf("Expected partition created1 to have ScheduledAt timestamp")
-					}
-					if !commitTs.Equal(*pm.ScheduledAt) {
-						t.Errorf("Expected commitTs (%v) to match ScheduledAt (%v)", commitTs, *pm.ScheduledAt)
-					}
+					require.NoError(t, err)
+					assert.Equal(t, StateScheduled, pm.State)
+					assert.NotNil(t, pm.ScheduledAt)
+					assert.Equal(t, commitTs, *pm.ScheduledAt)
 				}
 
 				// scheduled
 				{
 					pm, err := tc.s.GetPartition(t.Context(), "scheduled")
-					if err != nil {
-						t.Fatalf("Failed to get partition scheduled: %v", err)
-					}
-					if diff := cmp.Diff(pm, pms); diff != "" {
-						t.Errorf("UpdateToScheduled() mismatch (-want +got):\n%s", diff)
-					}
+					require.NoError(t, err)
+					assert.Equal(t, pms, pm)
 				}
 
 				// running
 				{
 					pm, err := tc.s.GetPartition(t.Context(), "running")
-					if err != nil {
-						t.Fatalf("Failed to get partition running: %v", err)
-					}
-					if diff := cmp.Diff(pm, pmr); diff != "" {
-						t.Errorf("UpdateToScheduled() mismatch (-want +got):\n%s", diff)
-					}
+					require.NoError(t, err)
+					assert.Equal(t, pmr, pm)
 				}
 			})
 		}
@@ -315,12 +268,8 @@ func TestIntegrationStore(t *testing.T) {
 				for _, st := range subtests {
 					t.Run(st.name, func(t *testing.T) {
 						result, err := tc.s.CheckParentPartitionsFinished(t.Context(), st.partitions)
-						if err != nil {
-							t.Fatalf("CheckParentPartitionsFinished failed: %v", err)
-						}
-						if result != st.expectResult {
-							t.Errorf("Expected result to be %v, got %v", st.expectResult, result)
-						}
+						require.NoError(t, err)
+						assert.Equal(t, st.expectResult, result)
 					})
 				}
 			})
@@ -331,18 +280,13 @@ func TestIntegrationStore(t *testing.T) {
 		for _, tc := range tests {
 			t.Run(tc.name, func(t *testing.T) {
 				want := ts.Add(5 * time.Minute)
-				if err := tc.s.UpdateWatermark(t.Context(), "created1", want); err != nil {
-					t.Fatalf("Failed to update watermark: %v", err)
-				}
+				err := tc.s.UpdateWatermark(t.Context(), "created1", want)
+				require.NoError(t, err)
 
 				got, err := tc.s.GetPartition(t.Context(), "created1")
-				if err != nil {
-					t.Fatalf("Failed to get partition after update: %v", err)
-				}
+				require.NoError(t, err)
 
-				if !got.Watermark.Equal(want) {
-					t.Errorf("Expected watermark to be %v, got %v", want, got.Watermark)
-				}
+				assert.Equal(t, want, got.Watermark)
 			})
 		}
 	})
@@ -350,9 +294,7 @@ func TestIntegrationStore(t *testing.T) {
 	t.Run("DeletePartitionMetadataTableWithDatabaseAdminClient", func(t *testing.T) {
 		for _, tc := range tests {
 			t.Run(tc.name, func(t *testing.T) {
-				if err := CreatePartitionMetadataTableWithDatabaseAdminClient(t.Context(), tc.s.conf, e.DatabaseAdminClient); err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, CreatePartitionMetadataTableWithDatabaseAdminClient(t.Context(), tc.s.conf, e.DatabaseAdminClient))
 			})
 		}
 	})
@@ -377,9 +319,9 @@ func TestIntegrationRealStore(t *testing.T) {
 	defer r.Close()
 	s := realTestSore(r)
 
-	if err := CreatePartitionMetadataTableWithDatabaseAdminClient(t.Context(), s.conf, r.DatabaseAdminClient()); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t,
+		CreatePartitionMetadataTableWithDatabaseAdminClient(t.Context(), s.conf, r.DatabaseAdminClient()))
+
 	defer func() {
 		if err := DeletePartitionMetadataTableWithDatabaseAdminClient(
 			context.Background(), s.conf, r.DatabaseAdminClient()); err != nil { //nolint:usetesting // use context.Background
@@ -388,12 +330,10 @@ func TestIntegrationRealStore(t *testing.T) {
 	}()
 
 	t.Run("UpdateToScheduledInParallel", func(t *testing.T) {
-		if err := s.Create(t.Context(), []PartitionMetadata{{
+		require.NoError(t, s.Create(t.Context(), []PartitionMetadata{{
 			PartitionToken: "created",
 			ParentTokens:   []string{},
-		}}); err != nil {
-			t.Fatal(err)
-		}
+		}}))
 
 		// Run 10 workers in parallel, all trying to update the same partition
 		const numWorkers = 10
@@ -418,15 +358,9 @@ func TestIntegrationRealStore(t *testing.T) {
 
 		// Verify that the partition is now in SCHEDULED state
 		pm, err := s.GetPartition(t.Context(), "created")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if pm.State != StateScheduled {
-			t.Errorf("Expected partition to be in SCHEDULED state, got %s", pm.State)
-		}
-		if pm.ScheduledAt == nil {
-			t.Error("Expected ScheduledAt to be set")
-		}
+		require.NoError(t, err)
+		assert.Equal(t, StateScheduled, pm.State)
+		assert.NotNil(t, pm.ScheduledAt)
 
 		// Verify only one commit timestamp was set
 		var matchCount int
@@ -435,8 +369,6 @@ func TestIntegrationRealStore(t *testing.T) {
 				matchCount++
 			}
 		}
-		if matchCount != 1 {
-			t.Errorf("Expected only one commit timestamp to be set, got %d", matchCount)
-		}
+		assert.Equal(t, 1, matchCount)
 	})
 }
