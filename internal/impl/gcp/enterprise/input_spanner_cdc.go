@@ -67,22 +67,6 @@ func parseRFC3339Nano(pConf *service.ParsedConfig, key string) (time.Time, error
 	return t, nil
 }
 
-func parseDuration(pConf *service.ParsedConfig, key string) (time.Duration, error) {
-	s, err := pConf.FieldString(key)
-	if err != nil {
-		return 0, err
-	}
-	if s == "" {
-		return 0, nil
-	}
-
-	d, err := time.ParseDuration(s)
-	if err != nil {
-		return 0, fmt.Errorf("failed to parse %v as duration: %w", key, err)
-	}
-	return d, nil
-}
-
 func spannerCDCInputConfigFromParsed(pConf *service.ParsedConfig) (conf spannerCDCInputConfig, err error) {
 	credentialsJSON, err := pConf.FieldString(siFieldCredentialsJSON)
 	if err != nil {
@@ -115,7 +99,7 @@ func spannerCDCInputConfigFromParsed(pConf *service.ParsedConfig) (conf spannerC
 	if conf.EndTimestamp, err = parseRFC3339Nano(pConf, siFieldEndTimestamp); err != nil {
 		return
 	}
-	if conf.HeartbeatInterval, err = parseDuration(pConf, siFieldHeartbeatInterval); err != nil {
+	if conf.HeartbeatInterval, err = pConf.FieldDuration(siFieldHeartbeatInterval); err != nil {
 		return
 	}
 	if conf.MetadataTable, err = pConf.FieldString(siFieldMetadataTable); err != nil {
@@ -129,7 +113,7 @@ func spannerCDCInputConfigFromParsed(pConf *service.ParsedConfig) (conf spannerC
 			return
 		}
 	}
-	if conf.MinWatermarkCacheTTL, err = parseDuration(pConf, siFieldMinWatermarkCacheTTL); err != nil {
+	if conf.MinWatermarkCacheTTL, err = pConf.FieldDuration(siFieldMinWatermarkCacheTTL); err != nil {
 		return
 	}
 
@@ -160,13 +144,13 @@ https://cloud.google.com/spanner/docs/change-streams
 		Field(service.NewStringField(siFieldProjectID).Description("GCP project ID containing the Spanner instance")).
 		Field(service.NewStringField(siFieldInstanceID).Description("Spanner instance ID")).
 		Field(service.NewStringField(siFieldDatabaseID).Description("Spanner database ID")).
-		Field(service.NewStringField(siFieldStreamID).Description("The name of the change stream to track")).
-		Field(service.NewStringField(siFieldStartTimestamp).Optional().Description("RFC3339 formatted timestamp to start reading from (default: current time)").Default("")).
-		Field(service.NewStringField(siFieldEndTimestamp).Optional().Description("RFC3339 formatted timestamp to stop reading at (default: no end time)").Default("")).
-		Field(service.NewStringField(siFieldHeartbeatInterval).Optional().Description("Duration string for heartbeat interval (e.g., '10s')").Default("10s")).
-		Field(service.NewStringField(siFieldMetadataTable).Optional().Description("The table to store metadata in (default: cdc_metadata_<stream_id>)").Default("")).
-		Field(service.NewStringField(siFieldMinWatermarkCacheTTL).Optional().Description("Duration string for frequency of querying Spanner for minimum watermark.").Default("5s")).
-		Field(service.NewStringListField(siFieldAllowedModTypes).Optional().Description("List of modification types to process (e.g., 'INSERT', 'UPDATE', 'DELETE'). If not specified, all modification types are processed.")).
+		Field(service.NewStringField(siFieldStreamID).Description("The name of the change stream to track, the stream must exist in the database. To create a change stream, see https://cloud.google.com/spanner/docs/change-streams/manage.")).
+		Field(service.NewStringField(siFieldStartTimestamp).Optional().Description("RFC3339 formatted inclusive timestamp to start reading from the change stream (default: current time)").Example("2022-01-01T00:00:00Z").Default("")).
+		Field(service.NewStringField(siFieldEndTimestamp).Optional().Description("RFC3339 formatted exclusive timestamp to stop reading at (default: no end time)").Example("2022-01-01T00:00:00Z").Default("")).
+		Field(service.NewStringField(siFieldHeartbeatInterval).Advanced().Description("Duration string for heartbeat interval").Default("10s")).
+		Field(service.NewStringField(siFieldMetadataTable).Advanced().Optional().Description("The table to store metadata in (default: cdc_metadata_<stream_id>)").Default("")).
+		Field(service.NewStringField(siFieldMinWatermarkCacheTTL).Advanced().Description("Duration string for frequency of querying Spanner for minimum watermark.").Default("5s")).
+		Field(service.NewStringListField(siFieldAllowedModTypes).Advanced().Optional().Description("List of modification types to process. If not specified, all modification types are processed. Allowed values: INSERT, UPDATE, DELETE").Example([]string{"INSERT", "UPDATE", "DELETE"})).
 		Field(service.NewBatchPolicyField(siFieldBatchPolicy)).
 		Field(service.NewAutoRetryNacksToggleField())
 }

@@ -46,10 +46,6 @@ input:
     stream_id: "" # No default (required)
     start_timestamp: ""
     end_timestamp: ""
-    heartbeat_interval: 10s
-    metadata_table: ""
-    min_watermark_cache_ttl: 5s
-    allowed_mod_types: [] # No default (optional)
     batching:
       count: 0
       byte_size: 0
@@ -142,7 +138,7 @@ Spanner database ID
 
 === `stream_id`
 
-The name of the change stream to track
+The name of the change stream to track, the stream must exist in the database. To create a change stream, see https://cloud.google.com/spanner/docs/change-streams/manage.
 
 
 *Type*: `string`
@@ -150,25 +146,37 @@ The name of the change stream to track
 
 === `start_timestamp`
 
-RFC3339 formatted timestamp to start reading from (default: current time)
+RFC3339 formatted inclusive timestamp to start reading from the change stream (default: current time)
 
 
 *Type*: `string`
 
 *Default*: `""`
+
+```yml
+# Examples
+
+start_timestamp: "2022-01-01T00:00:00Z"
+```
 
 === `end_timestamp`
 
-RFC3339 formatted timestamp to stop reading at (default: no end time)
+RFC3339 formatted exclusive timestamp to stop reading at (default: no end time)
 
 
 *Type*: `string`
 
 *Default*: `""`
 
+```yml
+# Examples
+
+end_timestamp: "2022-01-01T00:00:00Z"
+```
+
 === `heartbeat_interval`
 
-Duration string for heartbeat interval (e.g., '10s')
+Duration string for heartbeat interval
 
 
 *Type*: `string`
@@ -195,11 +203,20 @@ Duration string for frequency of querying Spanner for minimum watermark.
 
 === `allowed_mod_types`
 
-List of modification types to process (e.g., 'INSERT', 'UPDATE', 'DELETE'). If not specified, all modification types are processed.
+List of modification types to process. If not specified, all modification types are processed. Allowed values: INSERT, UPDATE, DELETE
 
 
 *Type*: `array`
 
+
+```yml
+# Examples
+
+allowed_mod_types:
+  - INSERT
+  - UPDATE
+  - DELETE
+```
 
 === `batching`
 
