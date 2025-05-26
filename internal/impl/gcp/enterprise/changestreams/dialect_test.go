@@ -14,6 +14,9 @@ import (
 
 	adminpb "cloud.google.com/go/spanner/admin/database/apiv1/databasepb"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/gcp/enterprise/changestreams/changestreamstest"
@@ -48,12 +51,8 @@ func TestIntegrationDetectDialect(t *testing.T) {
 				opts = append(opts, tc.fn)
 			}
 			dd, err := detectDialect(t.Context(), e.CreateTestDatabase(dbName, opts...))
-			if err != nil {
-				t.Fatalf("failed to detect dialect: %v", err)
-			}
-			if dd != tc.dialect {
-				t.Fatalf("expected dialect %s, got %s", tc.dialect, dd)
-			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.dialect, dd)
 		})
 	}
 }

@@ -17,6 +17,9 @@ import (
 
 	"google.golang.org/api/option"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
@@ -70,9 +73,8 @@ func testSubscriber(
 	log := service.NewLoggerFromSlog(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug})))
 
 	s, err := NewSubscriber(t.Context(), conf, cb, log)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+
 	mq := new(mockQuerier)
 	s.querier = mq
 	s.testingAdminClient = e.DatabaseAdminClient
@@ -107,34 +109,24 @@ func TestIntegrationSubscriberSetup(t *testing.T) {
 	defer mq.AssertExpectations(t)
 
 	// When Setup is called
-	if err := s.Setup(t.Context()); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, s.Setup(t.Context()))
+
 	// Then the root partition is created
 	cpm0, err := s.store.GetPartition(t.Context(), childPartitionToken)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cpm0.State != metadata.StateCreated {
-		t.Fatalf("child partition is not running: %s", cpm0.State)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, metadata.StateCreated, cpm0.State)
 
 	// Given the root partition is scheduled
-	if ms.UpdateToScheduled(t.Context(), []string{childPartitionToken}); err != nil { //nolint:errcheck
-		t.Fatal(err)
-	}
+	_, err = ms.UpdateToScheduled(t.Context(), []string{childPartitionToken})
+	require.NoError(t, err)
+
 	// When Setup is called again
-	if err := s.Setup(t.Context()); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, s.Setup(t.Context()))
+
 	// Then the root partition is not changed
 	cpm1, err := s.store.GetPartition(t.Context(), childPartitionToken)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cpm1.State != metadata.StateScheduled {
-		t.Fatalf("child partition is not scheduled: %s", cpm1.State)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, metadata.StateScheduled, cpm1.State)
 }
 
 func TestIntegrationSubscriberResume(t *testing.T) {
@@ -161,12 +153,10 @@ func TestIntegrationSubscriberResume(t *testing.T) {
 
 	// Call setup to create the metadata table
 	mq.ExpectQueryWithRecords(rootPartitionMetadata.PartitionToken, ChangeRecord{})
-	if err := s.Setup(t.Context()); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, s.Setup(t.Context()))
 	mq.AssertExpectations(t)
 
-	pm := func(token string) metadata.PartitionMetadata {
+	testPartitionMetadata := func(token string) metadata.PartitionMetadata {
 		return metadata.PartitionMetadata{
 			PartitionToken: token,
 			ParentTokens:   []string{},
@@ -176,23 +166,18 @@ func TestIntegrationSubscriberResume(t *testing.T) {
 	}
 
 	// Create partition in SCHEDULED state
-	if err := ms.Create(t.Context(), []metadata.PartitionMetadata{pm("scheduled")}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := ms.UpdateToScheduled(t.Context(), []string{"scheduled"}); err != nil {
-		t.Fatal(err)
-	}
+	err := ms.Create(t.Context(), []metadata.PartitionMetadata{testPartitionMetadata("scheduled")})
+	require.NoError(t, err)
+	_, err = ms.UpdateToScheduled(t.Context(), []string{"scheduled"})
+	require.NoError(t, err)
 
 	// Create partition in RUNNING state
-	if err := ms.Create(t.Context(), []metadata.PartitionMetadata{pm("running")}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := ms.UpdateToScheduled(t.Context(), []string{"running"}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := ms.UpdateToRunning(t.Context(), "running"); err != nil {
-		t.Fatal(err)
-	}
+	err = ms.Create(t.Context(), []metadata.PartitionMetadata{testPartitionMetadata("running")})
+	require.NoError(t, err)
+	_, err = ms.UpdateToScheduled(t.Context(), []string{"running"})
+	require.NoError(t, err)
+	_, err = ms.UpdateToRunning(t.Context(), "running")
+	require.NoError(t, err)
 
 	mq.ExpectQueryWithRecords("scheduled", ChangeRecord{
 		DataChangeRecords: []*DataChangeRecord{
@@ -224,16 +209,13 @@ func TestIntegrationSubscriberResume(t *testing.T) {
 
 	// And partitions are moved to FINISHED state
 	collectN(t, 2, fch)
-	if pm, err := ms.GetPartition(t.Context(), "scheduled"); err != nil {
-		t.Fatal(err)
-	} else if pm.State != metadata.StateFinished {
-		t.Fatalf("partition is not finished: %s", pm.State)
-	}
-	if pm, err := ms.GetPartition(t.Context(), "running"); err != nil {
-		t.Fatal(err)
-	} else if pm.State != metadata.StateFinished {
-		t.Fatalf("partition is not finished: %s", pm.State)
-	}
+	pm, err := ms.GetPartition(t.Context(), "scheduled")
+	require.NoError(t, err)
+	assert.Equal(t, metadata.StateFinished, pm.State)
+
+	pm, err = ms.GetPartition(t.Context(), "running")
+	require.NoError(t, err)
+	assert.Equal(t, metadata.StateFinished, pm.State)
 }
 
 func TestIntegrationSubscriberCallbackUpdatePartitionWatermark(t *testing.T) {
@@ -253,36 +235,20 @@ func TestIntegrationSubscriberCallbackUpdatePartitionWatermark(t *testing.T) {
 		case 2:
 			// Then watermark is not updated
 			pm, err := s.store.GetPartition(t.Context(), partitionToken)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if pm.State != metadata.StateRunning {
-				t.Errorf("partition is not running: %s", pm.State)
-			}
-			if pm.Watermark != testStartTimestamp {
-				t.Errorf("watermark updated to %v after ErrAddedToBatch returned", pm.Watermark)
-			}
+			require.NoError(t, err)
+			assert.Equal(t, metadata.StateRunning, pm.State)
+			assert.Equal(t, testStartTimestamp, pm.Watermark)
 
 			// When UpdatePartitionWatermark is called
-			if err := s.UpdatePartitionWatermark(ctx, partitionToken, dcr); err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, s.UpdatePartitionWatermark(ctx, partitionToken, dcr))
 		case 3:
-			if dcr != nil {
-				t.Fatal("expected nil dcr")
-			}
+			assert.Nil(t, dcr)
 
 			// Then watermark is updated
 			pm, err := s.store.GetPartition(t.Context(), partitionToken)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if pm.State != metadata.StateRunning {
-				t.Errorf("partition is not running: %s", pm.State)
-			}
-			if pm.Watermark != testStartTimestamp.Add(2*time.Second) {
-				t.Errorf("watermark updated to %v after UpdatePartitionWatermark returned", pm.Watermark)
-			}
+			require.NoError(t, err)
+			assert.Equal(t, metadata.StateRunning, pm.State)
+			assert.Equal(t, testStartTimestamp.Add(2*time.Second), pm.Watermark)
 		default:
 			t.Fatal("unexpected call")
 		}
@@ -300,9 +266,7 @@ func TestIntegrationSubscriberCallbackUpdatePartitionWatermark(t *testing.T) {
 
 	// Call setup to create the metadata table
 	mq.ExpectQueryWithRecords(rootPartitionMetadata.PartitionToken, ChangeRecord{})
-	if err := s.Setup(t.Context()); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, s.Setup(t.Context()))
 	mq.AssertExpectations(t)
 
 	// Given partition with data change records
@@ -312,9 +276,8 @@ func TestIntegrationSubscriberCallbackUpdatePartitionWatermark(t *testing.T) {
 		StartTimestamp: testStartTimestamp,
 		Watermark:      testStartTimestamp,
 	}
-	if err := ms.Create(t.Context(), []metadata.PartitionMetadata{pm}); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, ms.Create(t.Context(), []metadata.PartitionMetadata{pm}))
+
 	mq.ExpectQueryWithRecords(partitionToken, ChangeRecord{
 		DataChangeRecords: []*DataChangeRecord{
 			{
@@ -375,9 +338,7 @@ func TestIntegrationSubscriberAllowedModTypes(t *testing.T) {
 
 	// Call setup to create the metadata table
 	mq.ExpectQueryWithRecords(rootPartitionMetadata.PartitionToken, ChangeRecord{})
-	if err := s.Setup(t.Context()); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, s.Setup(t.Context()))
 	mq.AssertExpectations(t)
 
 	// Given partition with INSERT and UPDATE data change records
@@ -387,9 +348,8 @@ func TestIntegrationSubscriberAllowedModTypes(t *testing.T) {
 		StartTimestamp: testStartTimestamp,
 		Watermark:      testStartTimestamp,
 	}
-	if err := ms.Create(t.Context(), []metadata.PartitionMetadata{pm}); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, ms.Create(t.Context(), []metadata.PartitionMetadata{pm}))
+
 	mq.ExpectQueryWithRecords(partitionToken, ChangeRecord{
 		DataChangeRecords: []*DataChangeRecord{
 			{
@@ -418,13 +378,9 @@ func TestIntegrationSubscriberAllowedModTypes(t *testing.T) {
 	<-fch
 
 	// Then only INSERT data change record is processed
-	if len(dch) != 1 {
-		t.Fatalf("expected 1 data change record, got %d", len(dch))
-	}
+	assert.Len(t, dch, 1)
 	dcrs := collectN(t, 1, dch)
-	if dcrs[0].ModType != "INSERT" {
-		t.Errorf("expected mod type to be INSERT, got %s", dcrs[1].ModType)
-	}
+	assert.Equal(t, "INSERT", dcrs[0].ModType)
 
 	mq.AssertExpectations(t)
 }
