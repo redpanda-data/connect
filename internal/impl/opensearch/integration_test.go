@@ -69,7 +69,7 @@ func TestIntegrationOpensearch(t *testing.T) {
 	}
 
 	urls := []string{fmt.Sprintf("http://127.0.0.1:%v", resource.GetPort("9200/tcp"))}
-	unreachableUrls := []string{"http://127.0.0.1:9100"}
+	unreachableUrls := []string{"http://127.0.0.1:49151"}
 
 	var client *os.Client
 
@@ -140,7 +140,7 @@ func TestIntegrationOpensearch(t *testing.T) {
 	})
 
 	t.Run("TestOpenSearchWriteBatchUnreachable", func(te *testing.T) {
-		testOpenSearchWriteBatchUnreachable(unreachableUrls, client, te)
+		testOpenSearchWriteBatchUnreachable(unreachableUrls, te)
 	})
 
 	t.Run("TestOpenSearchIndexInterpolation", func(te *testing.T) {
@@ -324,7 +324,7 @@ action: index
 	}
 }
 
-func testOpenSearchWriteBatchUnreachable(urls []string, client *os.Client, t *testing.T) {
+func testOpenSearchWriteBatchUnreachable(urls []string, t *testing.T) {
 	ctx, done := context.WithTimeout(t.Context(), time.Second*30)
 	defer done()
 
