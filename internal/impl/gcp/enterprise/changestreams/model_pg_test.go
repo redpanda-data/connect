@@ -30,7 +30,8 @@ import (
 	"time"
 
 	"cloud.google.com/go/spanner"
-	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestDecodePostgresRow(t *testing.T) {
@@ -190,24 +191,17 @@ func TestDecodePostgresRow(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
 			var jsonVal interface{}
-			if err := json.Unmarshal([]byte(test.changeRecordJSON), &jsonVal); err != nil {
-				t.Fatalf("unexpected json.Unmarshal error: %v", err)
-			}
+			require.NoError(t, json.Unmarshal([]byte(test.changeRecordJSON), &jsonVal))
+
 			row, err := spanner.NewRow([]string{"read_json_playersstream"}, []interface{}{spanner.NullJSON{
 				Valid: true,
 				Value: jsonVal,
 			}})
-			if err != nil {
-				t.Fatalf("unexpected spanner.NewRow error: %v", err)
-			}
+			require.NoError(t, err)
 
 			got, err := decodePostgresRow(row)
-			if err != nil {
-				t.Errorf("decodePostgresRow error: %v", err)
-			}
-			if diff := cmp.Diff(got, test.want); diff != "" {
-				t.Errorf("diff = %v", diff)
-			}
+			require.NoError(t, err)
+			assert.Equal(t, test.want, got)
 		})
 	}
 }
@@ -215,7 +209,7 @@ func TestDecodePostgresRow(t *testing.T) {
 func mustParseTime(value string) time.Time {
 	t, err := time.Parse(time.RFC3339Nano, value)
 	if err != nil {
-		panic(fmt.Sprintf("failed to parse time: %v", err))
+		panic(fmt.Sprintf("invalid time %q: %v", value, err))
 	}
 	return t
 }

@@ -23,6 +23,7 @@ import (
 	"cloud.google.com/go/spanner/admin/database/apiv1/databasepb"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/stretchr/testify/require"
 
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -188,12 +189,8 @@ gcp_spanner_cdc:
 
 	// Create the stream builder and add the input
 	sb := service.NewStreamBuilder()
-	if err := sb.AddInputYAML(inputConf); err != nil {
-		t.Fatalf("failed to add input YAML: %v", err)
-	}
-	if err := sb.SetLoggerYAML(`level: DEBUG`); err != nil {
-		t.Fatalf("failed to set logger level: %v", err)
-	}
+	require.NoError(t, sb.AddInputYAML(inputConf))
+	require.NoError(t, sb.SetLoggerYAML(`level: DEBUG`))
 
 	const maxTestTime = 2 * time.Minute
 	ctx, cancel := context.WithTimeout(t.Context(), maxTestTime)
@@ -202,18 +199,15 @@ gcp_spanner_cdc:
 	messages := make(chan *service.Message)
 
 	// Add a consumer function to collect messages
-	if err := sb.AddConsumerFunc(func(ctx context.Context, msg *service.Message) error {
+	err := sb.AddConsumerFunc(func(ctx context.Context, msg *service.Message) error {
 		messages <- msg
 		return nil
-	}); err != nil {
-		t.Fatalf("failed to add consumer function: %v", err)
-	}
+	})
+	require.NoError(t, err)
 
 	// Build the stream
 	stream, err := sb.Build()
-	if err != nil {
-		t.Fatalf("failed to build stream: %v", err)
-	}
+	require.NoError(t, err, "failed to build stream")
 	license.InjectTestService(stream.Resources())
 
 	t.Cleanup(func() {
@@ -228,17 +222,16 @@ gcp_spanner_cdc:
 		}
 	}()
 
-	if _, err := h.client.ReadWriteTransaction(ctx, func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
-		if _, err := txn.Update(ctx, spanner.NewStatement(fmt.Sprintf("INSERT INTO %s (id, active) VALUES (1, true)", h.tableID))); err != nil {
+	_, err = h.client.ReadWriteTransaction(ctx, func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
+		if _, err := txn.Update(ctx, spanner.NewStatement(fmt.Sprintf("INSERT INTO %s (id, active) VALUES (1, true)", h.Table()))); err != nil {
 			return err
 		}
 		if _, err := txn.Update(ctx, spanner.NewStatement(fmt.Sprintf("DELETE FROM %s WHERE id = 1", h.tableID))); err != nil {
 			return err
 		}
 		return nil
-	}); err != nil {
-		t.Fatalf("failed to add test data: %v", err)
-	}
+	})
+	require.NoError(t, err)
 
 	expected := []changestreams.DataChangeRecord{
 		{
@@ -340,14 +333,11 @@ gcp_spanner_cdc:
 	var got []changestreams.DataChangeRecord
 	for msg := range messages {
 		b, err := msg.AsBytes()
-		if err != nil {
-			t.Fatalf("failed to get message bytes: %v", err)
-		}
+		require.NoError(t, err)
 
 		var dcr changestreams.DataChangeRecord
-		if err := json.Unmarshal(b, &dcr); err != nil {
-			t.Fatalf("failed to unmarshal message: %v", err)
-		}
+		require.NoError(t, json.Unmarshal(b, &dcr))
+
 		got = append(got, dcr)
 		if len(got) == len(expected) {
 			break

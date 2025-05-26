@@ -11,6 +11,8 @@ package changestreams
 import (
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestTimeCache(t *testing.T) {
@@ -26,28 +28,20 @@ func TestTimeCache(t *testing.T) {
 	}
 
 	// Empty cache
-	if v := c.get(); !v.IsZero() {
-		t.Errorf("expected zero time, got %v", v)
-	}
+	assert.True(t, c.get().IsZero(), "expected zero time")
 
 	// Set and get
 	t.Log(nowTime)
 	c.set(t0)
-	if v := c.get(); !v.Equal(t0) {
-		t.Errorf("expected %v, got %v", t0, v)
-	}
+	assert.Equal(t, t0, c.get(), "time mismatch after set")
 
 	// Get cached
 	t.Log(nowTime)
-	if v := c.get(); !v.Equal(t0) {
-		t.Errorf("expected %v, got %v", t0, v)
-	}
+	assert.Equal(t, t0, c.get(), "time mismatch from cache")
 
 	// Cache expired
 	t.Log(nowTime)
-	if v := c.get(); !v.IsZero() {
-		t.Errorf("expected zero time, got %v", v)
-	}
+	assert.True(t, c.get().IsZero(), "expected zero time after expiration")
 }
 
 func TestTimeRange(t *testing.T) {
@@ -69,8 +63,7 @@ func TestTimeRange(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		if r.tryClaim(test.time) != test.expected {
-			t.Errorf("Expected tryClaim(%v) to be %v", test.time, test.expected)
-		}
+		assert.Equal(t, test.expected, r.tryClaim(test.time),
+			"tryClaim(%v) returned unexpected result", test.time)
 	}
 }

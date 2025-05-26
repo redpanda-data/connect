@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/gcp/enterprise/changestreams/metadata"
 )
@@ -26,15 +26,11 @@ func TestGroupPartitionsByCreatedAt(t *testing.T) {
 	}
 
 	got := groupPartitionsByCreatedAt(pms)
-
 	want := [][]metadata.PartitionMetadata{
 		{{PartitionToken: "a", CreatedAt: time.Unix(0, 10_000)}, {PartitionToken: "b", CreatedAt: time.Unix(0, 10_000)}},
 		{{PartitionToken: "c", CreatedAt: time.Unix(0, 20_000)}, {PartitionToken: "d", CreatedAt: time.Unix(0, 20_000)}},
 	}
-
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("groupPartitionsByCreatedAt() mismatch (-want +got):\n%s", diff)
-	}
+	assert.Equal(t, want, got)
 }
 
 func TestTokensOf(t *testing.T) {
@@ -47,7 +43,5 @@ func TestTokensOf(t *testing.T) {
 
 	got := tokensOf(pms)
 	want := []string{"a", "b", "c", "d"}
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Errorf("tokensOf() mismatch (-want +got):\n%s", diff)
-	}
+	assert.Equal(t, want, got)
 }
