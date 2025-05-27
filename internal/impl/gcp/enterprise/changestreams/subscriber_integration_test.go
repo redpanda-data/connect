@@ -164,6 +164,107 @@ func TestIntegrationSubscriberSetup(t *testing.T) {
 	assert.Equal(t, metadata.StateScheduled, cpm1.State)
 }
 
+func TestIntegrationSubscriberStartContextCanceled(t *testing.T) {
+	integration.CheckSkip(t)
+
+	e := changestreamstest.MakeEmulatorHelper(t)
+	defer e.Close()
+
+	s, ms, mq, _ := testSubscriberSetup(t, e, nil)
+	defer s.Close()
+
+	// Given a single partition
+	require.NoError(t, ms.Create(t.Context(), []metadata.PartitionMetadata{
+		testPartitionMetadata(testPartitionToken),
+	}))
+
+	// When the partition waits for context cancellation
+	mq.ExpectQuery(testPartitionToken).Run(func(args mock.Arguments) {
+		ctx := args.Get(0).(context.Context)
+		select {
+		case <-ctx.Done():
+		case <-time.After(time.Second):
+			t.Fatalf("timed out waiting for partition1 to be aborted")
+		}
+	}).Return(context.Canceled)
+
+	// And context is cancelled
+	ctx, cancel := context.WithCancel(t.Context())
+	time.AfterFunc(100*time.Millisecond, cancel)
+
+	// Then Start returns context.Canceled
+	require.ErrorIs(t, s.Start(ctx), context.Canceled)
+
+	mq.AssertExpectations(t)
+}
+
+func TestIntegrationSubscriberStartReturnsErrorOnPartitionError(t *testing.T) {
+	integration.CheckSkip(t)
+
+	e := changestreamstest.MakeEmulatorHelper(t)
+	defer e.Close()
+
+	s, ms, mq, _ := testSubscriberSetup(t, e, nil)
+	defer s.Close()
+
+	// Given two sibling partitions
+	require.NoError(t, ms.Create(t.Context(), []metadata.PartitionMetadata{
+		testPartitionMetadata("partition1"),
+		testPartitionMetadata("partition2"),
+	}))
+
+	// When partition2 returns an error
+	testErr := errors.New("test error from partition2")
+	mq.ExpectQuery("partition2").Return(testErr)
+
+	// Then partition1 is aborted
+	mq.ExpectQuery("partition1").Run(func(args mock.Arguments) {
+		ctx := args.Get(0).(context.Context)
+		select {
+		case <-ctx.Done():
+		case <-time.After(time.Second):
+			t.Fatalf("timed out waiting for partition1 to be aborted")
+		}
+	}).Return(context.Canceled)
+
+	require.ErrorIs(t, s.Start(t.Context()), testErr)
+	mq.AssertExpectations(t)
+}
+
+func TestIntegrationSubscriberStartReturnsErrorOnCallbackError(t *testing.T) {
+	integration.CheckSkip(t)
+
+	e := changestreamstest.MakeEmulatorHelper(t)
+	defer e.Close()
+
+	// When callback returns an error
+	testErr := errors.New("test error from callback")
+	s, ms, mq, _ := testSubscriberSetup(t, e, func(ctx context.Context, partitionToken string, dcr *DataChangeRecord) error {
+		return testErr
+	})
+	defer s.Close()
+
+	// Given partition with data
+	require.NoError(t, ms.Create(t.Context(), []metadata.PartitionMetadata{
+		testPartitionMetadata(testPartitionToken),
+	}))
+	mq.ExpectQueryWithRecords(testPartitionToken, ChangeRecord{
+		DataChangeRecords: []*DataChangeRecord{
+			{
+				RecordSequence:  "1",
+				CommitTimestamp: testStartTimestamp,
+				TableName:       "test-table",
+				ModType:         "INSERT",
+			},
+		},
+	})
+	mq.expectCallbackError = true
+
+	// Then Start returns the error
+	require.ErrorIs(t, s.Start(t.Context()), testErr)
+	mq.AssertExpectations(t)
+}
+
 func TestIntegrationSubscriberResume(t *testing.T) {
 	integration.CheckSkip(t)
 
@@ -198,6 +299,8 @@ func TestIntegrationSubscriberResume(t *testing.T) {
 			{
 				RecordSequence:  "1",
 				CommitTimestamp: testStartTimestamp,
+				TableName:       "test-table",
+				ModType:         "INSERT",
 			},
 		},
 	})
@@ -206,6 +309,8 @@ func TestIntegrationSubscriberResume(t *testing.T) {
 			{
 				RecordSequence:  "2",
 				CommitTimestamp: testStartTimestamp,
+				TableName:       "test-table",
+				ModType:         "UPDATE",
 			},
 		},
 	})

@@ -19,6 +19,7 @@ import (
 
 type mockQuerier struct {
 	mock.Mock
+	expectCallbackError bool
 }
 
 func (m *mockQuerier) query(ctx context.Context, pm metadata.PartitionMetadata, cb func(ctx context.Context, cr ChangeRecord) error) error {
@@ -39,6 +40,9 @@ func (m *mockQuerier) ExpectQueryWithRecords(partitionToken string, records ...C
 		for _, record := range records {
 			if err := cb(ctx, record); err != nil {
 				// We can't return an error from a Run function.
+				if m.expectCallbackError {
+					return
+				}
 				panic(fmt.Sprintf("error in callback: %v", err))
 			}
 		}
