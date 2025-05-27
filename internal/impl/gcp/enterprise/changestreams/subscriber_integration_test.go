@@ -10,11 +10,13 @@ package changestreams
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/mock"
 	"google.golang.org/api/option"
 
 	"github.com/stretchr/testify/assert"
@@ -36,7 +38,17 @@ var (
 		HeartbeatMillis: 1000,
 		Watermark:       testStartTimestamp,
 	}
+	testPartitionToken = "partition0"
 )
+
+func testPartitionMetadata(token string) metadata.PartitionMetadata {
+	return metadata.PartitionMetadata{
+		PartitionToken: token,
+		ParentTokens:   []string{},
+		StartTimestamp: testStartTimestamp,
+		Watermark:      testStartTimestamp,
+	}
+}
 
 func testSubscriber(
 	t *testing.T,
@@ -80,6 +92,29 @@ func testSubscriber(
 	s.testingAdminClient = e.DatabaseAdminClient
 
 	return s, s.store, mq
+}
+
+func testSubscriberSetup(
+	t *testing.T,
+	e changestreamstest.EmulatorHelper,
+	cb CallbackFunc,
+	opts ...func(*Config),
+) (*Subscriber, *metadata.Store, *mockQuerier, chan string) {
+	s, ms, mq := testSubscriber(t, e, cb, opts...)
+
+	done := make(chan string)
+	s.testingPostFinished = func(partitionToken string, err error) {
+		if err == nil {
+			done <- partitionToken
+		}
+	}
+
+	// Call setup to create the metadata table
+	mq.ExpectQueryWithRecords(rootPartitionMetadata.PartitionToken, ChangeRecord{})
+	require.NoError(t, s.Setup(t.Context()))
+	mq.AssertExpectations(t)
+
+	return s, ms, mq, done
 }
 
 func TestIntegrationSubscriberSetup(t *testing.T) {
@@ -136,34 +171,13 @@ func TestIntegrationSubscriberResume(t *testing.T) {
 	defer e.Close()
 
 	dch := make(chan *DataChangeRecord)
-	s, ms, mq := testSubscriber(t, e, func(ctx context.Context, partitionToken string, dcr *DataChangeRecord) error {
+	s, ms, mq, done := testSubscriberSetup(t, e, func(ctx context.Context, partitionToken string, dcr *DataChangeRecord) error {
 		if dcr != nil {
 			dch <- dcr
 		}
 		return nil
 	})
 	defer s.Close()
-
-	fch := make(chan string)
-	s.testingPostFinished = func(partitionToken string, err error) {
-		if err == nil {
-			fch <- partitionToken
-		}
-	}
-
-	// Call setup to create the metadata table
-	mq.ExpectQueryWithRecords(rootPartitionMetadata.PartitionToken, ChangeRecord{})
-	require.NoError(t, s.Setup(t.Context()))
-	mq.AssertExpectations(t)
-
-	testPartitionMetadata := func(token string) metadata.PartitionMetadata {
-		return metadata.PartitionMetadata{
-			PartitionToken: token,
-			ParentTokens:   []string{},
-			StartTimestamp: testStartTimestamp,
-			Watermark:      testStartTimestamp,
-		}
-	}
 
 	// Create partition in SCHEDULED state
 	err := ms.Create(t.Context(), []metadata.PartitionMetadata{testPartitionMetadata("scheduled")})
@@ -207,8 +221,10 @@ func TestIntegrationSubscriberResume(t *testing.T) {
 	collectN(t, 2, dch)
 	mq.AssertExpectations(t)
 
-	// And partitions are moved to FINISHED state
-	collectN(t, 2, fch)
+	// When partitions are finished
+	collectN(t, 2, done)
+
+	// Then partitions are moved to FINISHED state
 	pm, err := ms.GetPartition(t.Context(), "scheduled")
 	require.NoError(t, err)
 	assert.Equal(t, metadata.StateFinished, pm.State)
@@ -224,10 +240,11 @@ func TestIntegrationSubscriberCallbackUpdatePartitionWatermark(t *testing.T) {
 	e := changestreamstest.MakeEmulatorHelper(t)
 	defer e.Close()
 
-	partitionToken := "test-partition"
-	cnt := 0
-	var s *Subscriber
-	s, ms, mq := testSubscriber(t, e, func(ctx context.Context, partitionToken string, dcr *DataChangeRecord) error {
+	var (
+		cnt = 0
+		s   *Subscriber
+	)
+	s, ms, mq, done := testSubscriberSetup(t, e, func(ctx context.Context, partitionToken string, dcr *DataChangeRecord) error {
 		cnt += 1
 		switch cnt {
 		case 1:
@@ -257,28 +274,16 @@ func TestIntegrationSubscriberCallbackUpdatePartitionWatermark(t *testing.T) {
 	})
 	defer s.Close()
 
-	fch := make(chan string)
-	s.testingPostFinished = func(partitionToken string, err error) {
-		if err == nil {
-			fch <- partitionToken
-		}
-	}
-
-	// Call setup to create the metadata table
-	mq.ExpectQueryWithRecords(rootPartitionMetadata.PartitionToken, ChangeRecord{})
-	require.NoError(t, s.Setup(t.Context()))
-	mq.AssertExpectations(t)
-
 	// Given partition with data change records
 	pm := metadata.PartitionMetadata{
-		PartitionToken: partitionToken,
+		PartitionToken: testPartitionToken,
 		ParentTokens:   []string{},
 		StartTimestamp: testStartTimestamp,
 		Watermark:      testStartTimestamp,
 	}
 	require.NoError(t, ms.Create(t.Context(), []metadata.PartitionMetadata{pm}))
 
-	mq.ExpectQueryWithRecords(partitionToken, ChangeRecord{
+	mq.ExpectQueryWithRecords(testPartitionToken, ChangeRecord{
 		DataChangeRecords: []*DataChangeRecord{
 			{
 				RecordSequence:  "1",
@@ -303,7 +308,7 @@ func TestIntegrationSubscriberCallbackUpdatePartitionWatermark(t *testing.T) {
 	}()
 
 	// And partition is processed
-	<-fch
+	collectN(t, 1, done)
 
 	mq.AssertExpectations(t)
 }
@@ -314,27 +319,17 @@ func TestIntegrationSubscriberAllowedModTypes(t *testing.T) {
 	e := changestreamstest.MakeEmulatorHelper(t)
 	defer e.Close()
 
-	partitionToken := "test-partition"
+	// Given subscriber with allowed mod types
 	dch := make(chan *DataChangeRecord, 10) // Make sure we don't block
-	cb := func(_ context.Context, _ string, dcr *DataChangeRecord) error {
+	s, ms, mq, done := testSubscriberSetup(t, e, func(_ context.Context, _ string, dcr *DataChangeRecord) error {
 		if dcr != nil {
 			dch <- dcr
 		}
 		return nil
-	}
-
-	// Given subscriber with allowed mod types
-	s, ms, mq := testSubscriber(t, e, cb, func(conf *Config) {
+	}, func(conf *Config) {
 		conf.AllowedModTypes = []string{"INSERT"} // Only allow INSERT operations
 	})
 	defer s.Close()
-
-	fch := make(chan string)
-	s.testingPostFinished = func(partitionToken string, err error) {
-		if err == nil {
-			fch <- partitionToken
-		}
-	}
 
 	// Call setup to create the metadata table
 	mq.ExpectQueryWithRecords(rootPartitionMetadata.PartitionToken, ChangeRecord{})
@@ -343,14 +338,14 @@ func TestIntegrationSubscriberAllowedModTypes(t *testing.T) {
 
 	// Given partition with INSERT and UPDATE data change records
 	pm := metadata.PartitionMetadata{
-		PartitionToken: partitionToken,
+		PartitionToken: testPartitionToken,
 		ParentTokens:   []string{},
 		StartTimestamp: testStartTimestamp,
 		Watermark:      testStartTimestamp,
 	}
 	require.NoError(t, ms.Create(t.Context(), []metadata.PartitionMetadata{pm}))
 
-	mq.ExpectQueryWithRecords(partitionToken, ChangeRecord{
+	mq.ExpectQueryWithRecords(testPartitionToken, ChangeRecord{
 		DataChangeRecords: []*DataChangeRecord{
 			{
 				RecordSequence:  "1",
@@ -375,7 +370,7 @@ func TestIntegrationSubscriberAllowedModTypes(t *testing.T) {
 	}()
 
 	// And partition is processed
-	<-fch
+	collectN(t, 1, done)
 
 	// Then only INSERT data change record is processed
 	assert.Len(t, dch, 1)
