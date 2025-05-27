@@ -12,12 +12,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"cloud.google.com/go/spanner"
 	adminapi "cloud.google.com/go/spanner/admin/database/apiv1"
 	"cloud.google.com/go/spanner/apiv1/spannerpb"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/api/option"
 	"google.golang.org/grpc/codes"
 
@@ -64,7 +64,7 @@ type Subscriber struct {
 	minWatermark timeCache
 	querier      querier
 	resumed      map[string]struct{}
-	wg           sync.WaitGroup
+	eg           *errgroup.Group
 	cb           CallbackFunc
 	log          *service.Logger
 
@@ -221,12 +221,11 @@ func (s *Subscriber) handleRootPartitions(ctx context.Context, cr ChangeRecord) 
 // Setup must be called before Start.
 func (s *Subscriber) Start(ctx context.Context) error {
 	s.log.Info("Starting subscriber")
-
 	defer func() {
-		s.log.Info("Waiting for all partitions to finish")
-		s.wg.Wait()
 		s.log.Info("Subscriber stopped")
 	}()
+
+	s.eg, ctx = errgroup.WithContext(ctx)
 
 	if pms, err := s.store.GetInterruptedPartitions(ctx); err != nil {
 		return fmt.Errorf("get interrupted partitions: %w", err)
@@ -242,6 +241,17 @@ func (s *Subscriber) Start(ctx context.Context) error {
 		}
 	}
 
+	s.eg.Go(func() error {
+		defer func() {
+			s.log.Info("Waiting for all partitions to finish")
+		}()
+		return s.detectNewPartitionsLoop(ctx)
+	})
+
+	return s.eg.Wait()
+}
+
+func (s *Subscriber) detectNewPartitionsLoop(ctx context.Context) error {
 	const resumeDuration = 100 * time.Millisecond
 	t := time.NewTimer(0)
 	defer t.Stop()
@@ -259,7 +269,7 @@ func (s *Subscriber) Start(ctx context.Context) error {
 					s.log.Infof("No new partitions detected, exiting")
 					return nil
 				}
-				s.log.Errorf("Error while processing partitions: %v", err)
+				return fmt.Errorf("detect new partitions: %w", err)
 			}
 			t.Reset(resumeDuration)
 		}
@@ -311,10 +321,7 @@ func (s *Subscriber) schedule(ctx context.Context, pms []metadata.PartitionMetad
 		}
 
 		for _, pm := range g {
-			s.wg.Add(1)
-			go func() {
-				defer s.wg.Done()
-
+			s.eg.Go(func() error {
 				s.waitForParentPartitionsToFinish(ctx, pm)
 
 				err := s.queryChangeStream(ctx, pm.PartitionToken)
@@ -323,14 +330,16 @@ func (s *Subscriber) schedule(ctx context.Context, pms []metadata.PartitionMetad
 				}
 				if err != nil {
 					if isCancelled(err) {
-						s.log.Debugf("%s: context canceled", pm.PartitionToken)
-						return
+						return ctx.Err()
 					}
-					s.log.Errorf("Error while processing partition %s: %v", pm.PartitionToken, err)
+					return fmt.Errorf("%s: query change stream: %w", pm.PartitionToken, err)
 				}
-			}()
+
+				return nil
+			})
 		}
 	}
+
 	return nil
 }
 
