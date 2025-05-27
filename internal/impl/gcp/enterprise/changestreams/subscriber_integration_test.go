@@ -485,6 +485,137 @@ func TestIntegrationSubscriberAllowedModTypes(t *testing.T) {
 	mq.AssertExpectations(t)
 }
 
+func TestIntegrationSubscriberChildTokenProcessingOrder(t *testing.T) {
+	integration.CheckSkip(t)
+
+	e := changestreamstest.MakeEmulatorHelper(t)
+	defer e.Close()
+
+	// Given child partition tokens where 0->1,2,3 and 2,3->4
+	const (
+		childToken1 = "child_token_1"
+		childToken2 = "child_token_2"
+		childToken3 = "child_token_3"
+		childToken4 = "child_token_4"
+	)
+
+	// And child token 3 blocks
+	childToken3Done := make(chan struct{})
+	s, ms, mq, done := testSubscriberSetup(t, e, func(ctx context.Context, partitionToken string, dcr *DataChangeRecord) error {
+		if partitionToken == childToken3 {
+			select {
+			case <-childToken3Done:
+			case <-time.After(time.Second):
+				t.Errorf("timeout waiting for child token 3 to be processed")
+			}
+		}
+		return nil
+	})
+	defer s.Close()
+
+	ts := time.Date(2022, 5, 1, 9, 0, 0, 0, time.UTC)
+	heartbeatMillis := int64(10000)
+
+	require.NoError(t, ms.Create(t.Context(), []metadata.PartitionMetadata{{
+		PartitionToken:  testPartitionToken,
+		ParentTokens:    []string{},
+		StartTimestamp:  ts,
+		EndTimestamp:    time.Time{}, // No end timestamp
+		HeartbeatMillis: heartbeatMillis,
+		State:           metadata.StateCreated,
+		Watermark:       ts,
+	}}))
+	mq.ExpectQueryWithRecords(testPartitionToken, ChangeRecord{
+		ChildPartitionsRecords: []*ChildPartitionsRecord{
+			{
+				StartTimestamp: ts,
+				RecordSequence: "1000012389",
+				ChildPartitions: []*ChildPartition{
+					{
+						Token:                 childToken1,
+						ParentPartitionTokens: []string{},
+					},
+					{
+						Token:                 childToken2,
+						ParentPartitionTokens: []string{},
+					},
+				},
+			},
+			{
+				StartTimestamp: ts,
+				RecordSequence: "1000012390",
+				ChildPartitions: []*ChildPartition{
+					{
+						Token:                 childToken3,
+						ParentPartitionTokens: []string{},
+					},
+				},
+			},
+		},
+	})
+
+	ts4 := time.Date(2022, 5, 1, 9, 30, 15, 0, time.UTC)
+	mq.ExpectQueryWithRecords(childToken1, ChangeRecord{}).Run(func(args mock.Arguments) {
+		// Verify query parameters
+		pm := args.Get(1).(metadata.PartitionMetadata)
+		assert.Equal(t, ts, pm.StartTimestamp)
+		assert.True(t, pm.EndTimestamp.IsZero())
+		assert.Equal(t, heartbeatMillis, pm.HeartbeatMillis)
+	})
+	mq.ExpectQueryWithRecords(childToken2, ChangeRecord{
+		ChildPartitionsRecords: []*ChildPartitionsRecord{
+			{
+				StartTimestamp: ts4,
+				RecordSequence: "1000012389",
+				ChildPartitions: []*ChildPartition{
+					{
+						Token:                 childToken4,
+						ParentPartitionTokens: []string{childToken2, childToken3},
+					},
+				},
+			},
+		},
+	})
+	mq.ExpectQueryWithRecords(childToken3, ChangeRecord{
+		ChildPartitionsRecords: []*ChildPartitionsRecord{
+			{
+				StartTimestamp: ts4,
+				RecordSequence: "1000012389",
+				ChildPartitions: []*ChildPartition{
+					{
+						Token:                 childToken4,
+						ParentPartitionTokens: []string{childToken2, childToken3},
+					},
+				},
+			},
+		},
+	})
+
+	// When Start is called
+	go func() {
+		if err := s.Start(t.Context()); err != nil {
+			t.Log(err)
+		}
+	}()
+
+	// Then child partitions are processed
+	collectN(t, 3, done) // 0, 1, 2
+
+	// When detect new partitions runs
+	time.Sleep(500 * time.Millisecond)
+
+	// Then child token 4 is NOT processed
+	mq.AssertExpectations(t)
+
+	// When child token 3 is finished
+	mq.ExpectQueryWithRecords(childToken4, ChangeRecord{})
+	close(childToken3Done)
+
+	// Then child token 4 is processed
+	collectN(t, 2, done)
+	mq.AssertExpectations(t)
+}
+
 func collectN[T any](t *testing.T, n int, ch <-chan T) []T {
 	t.Helper()
 

@@ -13,6 +13,9 @@ import (
 	"fmt"
 	"time"
 
+	"cloud.google.com/go/spanner"
+	"google.golang.org/grpc/codes"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/gcp/enterprise/changestreams/metadata"
@@ -91,7 +94,9 @@ func (h *handler) handleChildPartitionsRecords(ctx context.Context, cr ChangeRec
 				cp.toPartitionMetadata(cpr.StartTimestamp, h.pm.EndTimestamp, h.pm.HeartbeatMillis))
 		}
 		if err := h.store.Create(ctx, childPartitions); err != nil {
-			return fmt.Errorf("create partitions: %w", err)
+			if spanner.ErrCode(err) != codes.AlreadyExists {
+				return fmt.Errorf("create partitions: %w", err)
+			}
 		}
 	}
 	return nil
