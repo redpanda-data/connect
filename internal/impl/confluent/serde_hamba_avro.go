@@ -241,34 +241,34 @@ func (w *avroSchemaWalker) translateKafkaConnectValue(value any, schema avro.Pro
 		if err != nil {
 			return nil, fmt.Errorf("expected number for io.debezium.time.Date got: %T", value)
 		}
-		return time.UnixMilli(0).AddDate(0, 0, int(v)), nil
+		return time.UnixMilli(0).UTC().AddDate(0, 0, int(v)), nil
 	case "io.debezium.time.Year":
 		v, err := bloblang.ValueAsInt64(value)
 		if err != nil {
 			return nil, fmt.Errorf("expected number for io.debezium.time.Date got: %T", value)
 		}
-		return time.UnixMilli(0).AddDate(int(v), 0, 0), nil
+		return time.UnixMilli(0).UTC().AddDate(int(v), 0, 0), nil
 	case "io.debezium.time.Timestamp", "io.debezium.time.Time":
 		v, err := bloblang.ValueAsInt64(value)
 		if err != nil {
 			return nil, fmt.Errorf("expected number for %s got: %T", name, value)
 		}
-		return time.UnixMilli(v), nil
+		return time.UnixMilli(v).UTC(), nil
 	case "io.debezium.time.MicroTimestamp", "io.debezium.time.MicroTime":
 		v, err := bloblang.ValueAsInt64(value)
 		if err != nil {
 			return nil, fmt.Errorf("expected number for %s got: %T", name, value)
 		}
-		return time.UnixMilli(0).Add(time.Duration(v) * time.Microsecond), nil
+		return time.UnixMilli(0).UTC().Add(time.Duration(v) * time.Microsecond), nil
 	case "io.debezium.time.NanoTimestamp", "io.debezium.time.NanoTime":
 		v, err := bloblang.ValueAsInt64(value)
 		if err != nil {
 			return nil, fmt.Errorf("expected number for %s got: %T", name, value)
 		}
-		return time.UnixMilli(0).Add(time.Duration(v) * time.Nanosecond), nil
+		return time.UnixMilli(0).UTC().Add(time.Duration(v) * time.Nanosecond), nil
 	case "io.debezium.time.ZonedTimestamp":
 		v := bloblang.ValueToString(value)
-		t, err := time.Parse(time.RFC3339Nano, v)
+		t, err := time.ParseInLocation(time.RFC3339Nano, v, time.UTC)
 		if err != nil {
 			return nil, fmt.Errorf("expected valid ISO formatted timestamp for io.debezium.time.ZonedTimestamp got: %q", v)
 		}
