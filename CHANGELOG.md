@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Fixed an issue where the `aws_kinesis` input would cause high CPU utilization in cases where a shard has a trickle of data and a batching period is specified.
+- Fixed an issue where the `mongodb_cdc` inputs could have spurious errors when collections had no writes for > 30 seconds. (@rockwotj)
 
 ## 4.55.1 - 2025-05-19
 
