@@ -12,6 +12,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -57,9 +58,15 @@ func (s *streamHelper) RunAsync(t *testing.T) func() {
 	return wg.Wait
 }
 
-func (s *streamHelper) RunWithErrors(t *testing.T) {
+func (s *streamHelper) RunAsyncWithErrors(t *testing.T) func() {
 	stream := s.makeStream(t)
-	require.Error(t, stream.Run(t.Context()))
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		require.Error(t, stream.Run(t.Context()))
+	}()
+	return wg.Wait
 }
 
 func (s *streamHelper) Stop(t *testing.T) {
@@ -266,21 +273,29 @@ func setup(t *testing.T, template string, opts ...setupOption) (*streamHelper, *
 		mongocontainer.WithReplicaSet("rs0"),
 	)
 	t.Cleanup(func() {
-		if err := container.Terminate(t.Context()); err != nil {
+		//nolint:usetesting // t.Context() is already cancelled when cleanup runs
+		if err := container.Terminate(context.Background()); err != nil {
 			t.Fatal("unable to shutdown container", err)
 		}
 	})
 	require.NoError(t, err)
-	uri, err := container.ConnectionString(t.Context())
+	connStr, err := container.ConnectionString(t.Context())
 	require.NoError(t, err)
-	// We need a directConnection because we don't have all the right networking setup
-	// for a proper replica set.
-	uri = uri + "/?directConnection=true"
+	url, err := url.Parse(connStr)
+	require.NoError(t, err)
+	// Force a directConnection because we don't have the proper networking setup for a
+	// proper replica set cluster.
+	query := url.Query()
+	query.Add("directConnection", "true")
+	url.RawQuery = query.Encode()
+	uri := url.String()
+	t.Log(uri)
 	mongoClient, err := mongo.Connect(options.Client().
 		SetConnectTimeout(5 * time.Second).
 		SetTimeout(10 * time.Second).
 		SetServerSelectionTimeout(10 * time.Second).
-		ApplyURI(uri))
+		ApplyURI(uri).
+		SetDirect(true))
 	require.NoError(t, err)
 	require.NoError(t, mongoClient.Ping(t.Context(), nil))
 	for _, opt := range opts {
@@ -510,10 +525,15 @@ mongodb_cdc:
 	db.CreateCollection(t, "foo")
 	db.InsertOne(t, "foo", bson.M{"_id": 1, "data": "hello"})
 	output.NackAll()
-	wait := stream.RunAsync(t)
+	// For some reason the stream's Run doesn't exit until the context is cancelled.
+	// I'm not sure why that doesn't work, but for this test we can just cancel and
+	// let the cancelation happen after the test is done.
+	//
+	// Ideally wait would return immediately after StopNow is called...
+	wait := stream.RunAsyncWithErrors(t)
+	t.Cleanup(wait)
 	time.Sleep(time.Second)
 	stream.StopNow(t)
-	wait()
 	require.Empty(t, output.Messages(t))
 
 	output.AckAll()
@@ -720,4 +740,54 @@ mongodb_cdc:
       "nested.data": "hello"
     }
   `, db.FindOneJSON(t, "foo", 1))
+}
+
+func TestIntegrationMongoResumeAfterSnapshotWithoutChanges(t *testing.T) {
+	stream, db, output := setup(t, `
+mongodb_cdc:
+  url: '$URI'
+  database: '$DATABASE'
+  stream_snapshot: true
+  checkpoint_cache: '$CACHE'
+  json_marshal_mode: relaxed
+  collections:
+    - 'foo'
+`)
+	db.CreateCollection(t, "foo")
+	db.InsertOne(t, "foo", bson.M{"_id": 1, "data": "hello"})
+	db.InsertOne(t, "foo", bson.M{"_id": 2, "data": "hello"})
+	wait := stream.RunAsync(t)
+	time.Sleep(5 * time.Second)
+	stream.Stop(t)
+	wait()
+	require.JSONEq(t, `[{"_id":1,"data":"hello"}, {"_id":2,"data":"hello"}]`, output.MessagesJSON(t))
+	wait = stream.RunAsync(t)
+	time.Sleep(5 * time.Second)
+	stream.Stop(t)
+	wait()
+	require.JSONEq(t, `[{"_id":1,"data":"hello"}, {"_id":2,"data":"hello"}]`, output.MessagesJSON(t))
+}
+
+func TestIntegrationMongoIssue3425(t *testing.T) {
+	stream, db, output := setup(t, `
+mongodb_cdc:
+  url: '$URI'
+  database: '$DATABASE'
+  stream_snapshot: true
+  checkpoint_cache: '$CACHE'
+  json_marshal_mode: relaxed
+  collections:
+    - 'foo'
+`)
+	db.CreateCollection(t, "foo")
+	db.InsertOne(t, "foo", bson.M{"_id": 1, "data": "hello"})
+	db.InsertOne(t, "foo", bson.M{"_id": 2, "data": "hello"})
+	wait := stream.RunAsync(t)
+	time.Sleep(35 * time.Second) // there is a default connection timeout of 30 seconds in the driver
+	require.JSONEq(t, `[{"_id":1,"data":"hello"}, {"_id":2,"data":"hello"}]`, output.MessagesJSON(t))
+	db.InsertOne(t, "foo", bson.M{"_id": 3, "data": "hello"})
+	time.Sleep(5 * time.Second)
+	stream.Stop(t)
+	wait()
+	require.JSONEq(t, `[{"_id":1,"data":"hello"}, {"_id":2,"data":"hello"}, {"_id":3,"data":"hello"}]`, output.MessagesJSON(t))
 }

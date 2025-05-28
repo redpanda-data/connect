@@ -45,7 +45,7 @@ For basic inserts use the ` + "xref:components:outputs/sql.adoc[`sql_insert`]" +
 }
 
 func init() {
-	err := service.RegisterBatchOutput(
+	service.MustRegisterBatchOutput(
 		"sql", sqlDeprecatedOutputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPolicy service.BatchPolicy, maxInFlight int, err error) {
 			if batchPolicy, err = conf.FieldBatchPolicy("batching"); err != nil {
@@ -57,9 +57,6 @@ func init() {
 			out, err = newSQLDeprecatedOutputFromConfig(conf, mgr)
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 //------------------------------------------------------------------------------

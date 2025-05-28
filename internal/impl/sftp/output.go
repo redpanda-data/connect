@@ -63,7 +63,7 @@ func sftpOutputSpec() *service.ConfigSpec {
 }
 
 func init() {
-	err := service.RegisterOutput(
+	service.MustRegisterOutput(
 		"sftp", sftpOutputSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.Output, maxInFlight int, err error) {
 			if maxInFlight, err = conf.FieldMaxInFlight(); err != nil {
@@ -72,9 +72,6 @@ func init() {
 			out, err = newWriterFromParsed(conf, mgr)
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 //------------------------------------------------------------------------------

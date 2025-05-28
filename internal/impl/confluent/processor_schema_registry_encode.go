@@ -97,14 +97,11 @@ We will be considering alternative approaches in future so please https://redpan
 }
 
 func init() {
-	err := service.RegisterBatchProcessor(
+	service.MustRegisterBatchProcessor(
 		"schema_registry_encode", schemaRegistryEncoderConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 			return newSchemaRegistryEncoderFromConfig(conf, mgr)
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 //------------------------------------------------------------------------------

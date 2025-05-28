@@ -46,7 +46,7 @@ This output will interpolate functions within the channel field, you can find a 
 }
 
 func init() {
-	err := service.RegisterBatchOutput(
+	service.MustRegisterBatchOutput(
 		"redis_pubsub", redisPubSubOutputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPol service.BatchPolicy, mif int, err error) {
 			if batchPol, err = conf.FieldBatchPolicy(psoFieldBatching); err != nil {
@@ -58,9 +58,6 @@ func init() {
 			out, err = newRedisPubSubWriter(conf, mgr)
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 type redisPubSubWriter struct {

@@ -78,14 +78,11 @@ buffer:
 }
 
 func init() {
-	err := service.RegisterBatchBuffer(
+	service.MustRegisterBatchBuffer(
 		"sqlite", SQLiteBufferConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchBuffer, error) {
 			return NewSQLiteBufferFromConfig(conf, mgr)
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 var maxRequeue = math.MaxInt

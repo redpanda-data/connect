@@ -73,14 +73,11 @@ type pipelineTool struct {
 }
 
 func init() {
-	err := service.RegisterProcessor(
+	service.MustRegisterProcessor(
 		"openai_chat_completion",
 		chatProcessorConfig(),
 		makeChatProcessor,
 	)
-	if err != nil {
-		panic(err)
-	}
 }
 
 func chatProcessorConfig() *service.ConfigSpec {

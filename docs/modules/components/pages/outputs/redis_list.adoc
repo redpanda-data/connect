@@ -323,7 +323,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 key: some_list
 
-key: ${! @.kafka_key )}
+key: ${! @.kafka_key }
 
 key: ${! this.doc.id }
 

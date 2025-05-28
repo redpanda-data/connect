@@ -167,14 +167,11 @@ root = this.apply("debeziumTimestampToAvroTimestamp")
 }
 
 func init() {
-	err := service.RegisterProcessor(
+	service.MustRegisterProcessor(
 		"schema_registry_decode", schemaRegistryDecoderConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
 			return newSchemaRegistryDecoderFromConfig(conf, mgr)
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 //------------------------------------------------------------------------------

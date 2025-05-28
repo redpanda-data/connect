@@ -78,7 +78,8 @@ Attempts to parse a string as an XML document and returns a structured result, w
 Serializes a target value into an XML byte array.
 `).
 			Example("Serializes a target value into a pretty-printed XML byte array (with 4 space indentation by default).",
-				`root = this.format_xml()`, [2]string{
+				`root = this.format_xml()`,
+				[2]string{
 					`{"foo":{"bar":{"baz":"foo bar baz"}}}`,
 					`<foo>
     <bar>
@@ -86,9 +87,27 @@ Serializes a target value into an XML byte array.
     </bar>
 </foo>`,
 				},
+				[2]string{
+					`{"-foo":"bar","fizz":"buzz"}`,
+					`<doc foo="bar">
+    <fizz>buzz</fizz>
+</doc>`,
+				},
+				[2]string{
+					`{"foo":[{"bar":"baz"},{"fizz":"buzz"}]}`,
+					`<doc>
+    <foo>
+        <bar>baz</bar>
+    </foo>
+    <foo>
+        <fizz>buzz</fizz>
+    </foo>
+</doc>`,
+				},
 			).
 			Example("Pass a string to the `indent` parameter in order to customise the indentation.",
-				`root = this.format_xml("  ")`, [2]string{
+				`root = this.format_xml("  ")`,
+				[2]string{
 					`{"foo":{"bar":{"baz":"foo bar baz"}}}`,
 					`<foo>
   <bar>
@@ -98,15 +117,47 @@ Serializes a target value into an XML byte array.
 				},
 			).
 			Example("Use the `.string()` method in order to coerce the result into a string.",
-				`root.doc = this.format_xml("").string()`, [2]string{
+				`root.doc = this.format_xml("").string()`,
+				[2]string{
 					`{"foo":{"bar":{"baz":"foo bar baz"}}}`,
 					`{"doc":"<foo>\n<bar>\n<baz>foo bar baz</baz>\n</bar>\n</foo>"}`,
 				},
 			).
 			Example("Set the `no_indent` parameter to true to disable indentation.",
-				`root = this.format_xml(no_indent: true)`, [2]string{
+				`root = this.format_xml(no_indent: true)`,
+				[2]string{
 					`{"foo":{"bar":{"baz":"foo bar baz"}}}`,
 					`<foo><bar><baz>foo bar baz</baz></bar></foo>`,
+				},
+			).
+			Example("Set a custom root tag.",
+				`root = this.format_xml(root_tag: "blobfish")`,
+				[2]string{
+					`{"foo":{"bar":{"baz":"foo bar baz"}}}`,
+					`<blobfish>
+    <foo>
+        <bar>
+            <baz>foo bar baz</baz>
+        </bar>
+    </foo>
+</blobfish>`,
+				},
+				[2]string{
+					`{"-foo":"bar","fizz":"buzz"}`,
+					`<blobfish foo="bar">
+    <fizz>buzz</fizz>
+</blobfish>`,
+				},
+				[2]string{
+					`{"foo":[{"bar":"baz"},{"fizz":"buzz"}]}`,
+					`<blobfish>
+    <foo>
+        <bar>baz</bar>
+    </foo>
+    <foo>
+        <fizz>buzz</fizz>
+    </foo>
+</blobfish>`,
 				},
 			).
 			Param(bloblang.NewStringParam("indent").Description(
@@ -114,7 +165,10 @@ Serializes a target value into an XML byte array.
 				Default(strings.Repeat(" ", 4))).
 			Param(bloblang.NewBoolParam("no_indent").Description(
 				"Disable indentation.").
-				Default(false)),
+				Default(false)).
+			Param(bloblang.NewStringParam("root_tag").Description(
+				"Root tag. Set this if you wish to override the root tag of the document.").
+				Optional()),
 		func(args *bloblang.ParsedParams) (bloblang.Method, error) {
 			return bloblang.ObjectMethod(func(obj map[string]any) (any, error) {
 				indent := ""
@@ -127,10 +181,16 @@ Serializes a target value into an XML byte array.
 				if err != nil {
 					return nil, err
 				}
-				if *noIndentOpt {
+				if noIndentOpt != nil && *noIndentOpt {
 					return mxj.Map(obj).Xml()
 				}
-				return mxj.Map(obj).XmlIndent("", indent)
+				var rootTag []string
+				if rt, err := args.GetOptionalString("root_tag"); err != nil {
+					return nil, err
+				} else if rt != nil {
+					rootTag = append(rootTag, *rt)
+				}
+				return mxj.Map(obj).XmlIndent("", indent, rootTag...)
 			}), nil
 		}); err != nil {
 		panic(err)

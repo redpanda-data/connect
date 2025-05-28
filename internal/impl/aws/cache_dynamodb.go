@@ -76,7 +76,7 @@ Strong read consistency can be enabled using the ` + "`consistent_read`" + ` con
 }
 
 func init() {
-	err := service.RegisterCache(
+	service.MustRegisterCache(
 		"aws_dynamodb", dynCacheConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
 			d, err := newDynamodbCacheFromConfig(conf)
@@ -88,9 +88,6 @@ func init() {
 			}
 			return d, nil
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 func newDynamodbCacheFromConfig(conf *service.ParsedConfig) (*dynamodbCache, error) {

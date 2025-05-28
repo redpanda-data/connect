@@ -65,14 +65,11 @@ type pipelineTool struct {
 }
 
 func init() {
-	err := service.RegisterProcessor(
+	service.MustRegisterProcessor(
 		"cohere_chat",
 		chatProcessorConfig(),
 		makeChatProcessor,
 	)
-	if err != nil {
-		panic(err)
-	}
 }
 
 func chatProcessorConfig() *service.ConfigSpec {

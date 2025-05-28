@@ -109,7 +109,7 @@ pipeline:
 		Default(3).
 		Advanced())
 
-	err := service.RegisterBatchProcessor(
+	service.MustRegisterBatchProcessor(
 		"aws_lambda", conf,
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 			aconf, err := GetSession(context.TODO(), conf)
@@ -144,9 +144,6 @@ pipeline:
 
 			return newLambdaProc(lambda.NewFromConfig(aconf), parallel, function, numRetries, rateLimit, timeout, mgr)
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 //------------------------------------------------------------------------------

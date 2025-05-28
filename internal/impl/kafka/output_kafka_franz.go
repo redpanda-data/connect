@@ -66,7 +66,7 @@ func FranzKafkaOutputConfigFields() []*service.ConfigField {
 }
 
 func init() {
-	err := service.RegisterBatchOutput("kafka_franz", franzKafkaOutputConfig(),
+	service.MustRegisterBatchOutput("kafka_franz", franzKafkaOutputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (
 			output service.BatchOutput,
 			batchPolicy service.BatchPolicy,
@@ -122,7 +122,4 @@ func init() {
 					}))
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
 }

@@ -128,15 +128,12 @@ This processor adds the following metadata fields to each message, depending on 
 }
 
 func init() {
-	err := service.RegisterProcessor(
+	service.MustRegisterProcessor(
 		"nats_kv", natsKVProcessorConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
 			return newKVProcessor(conf, mgr)
 		},
 	)
-	if err != nil {
-		panic(err)
-	}
 }
 
 type kvProcessor struct {

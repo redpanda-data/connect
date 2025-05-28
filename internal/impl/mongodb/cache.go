@@ -44,14 +44,11 @@ func mongodbCacheConfig() *service.ConfigSpec {
 }
 
 func init() {
-	err := service.RegisterCache(
+	service.MustRegisterCache(
 		"mongodb", mongodbCacheConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
 			return newMongodbCacheFromConfig(conf)
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 func newMongodbCacheFromConfig(parsedConf *service.ParsedConfig) (*mongodbCache, error) {

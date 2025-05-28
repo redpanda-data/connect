@@ -59,7 +59,7 @@ pipeline:
 		conf = conf.Field(f)
 	}
 
-	err := service.RegisterBatchProcessor(
+	service.MustRegisterBatchProcessor(
 		"aws_dynamodb_partiql", conf,
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 			sess, err := GetSession(context.TODO(), conf)
@@ -88,9 +88,6 @@ pipeline:
 			}
 			return newDynamoDBPartiQL(mgr.Logger(), client, query, dynQuery, args), nil
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 type dynamoDBPartiQL struct {

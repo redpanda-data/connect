@@ -156,7 +156,7 @@ properties:
 }
 
 func init() {
-	err := service.RegisterBatchOutput("azure_table_storage", tsoSpec(),
+	service.MustRegisterBatchOutput("azure_table_storage", tsoSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batcher service.BatchPolicy, mif int, err error) {
 			var pConf tsoConfig
 			if pConf, err = tsoConfigFromParsed(conf); err != nil {
@@ -173,9 +173,6 @@ func init() {
 			}
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 type azureTableStorageWriter struct {

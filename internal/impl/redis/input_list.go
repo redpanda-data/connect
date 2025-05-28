@@ -56,7 +56,7 @@ func redisListInputConfig() *service.ConfigSpec {
 }
 
 func init() {
-	err := service.RegisterInput(
+	service.MustRegisterInput(
 		"redis_list", redisListInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 			mInF, err := conf.FieldInt("max_in_flight")
@@ -75,9 +75,6 @@ func init() {
 
 			return service.InputWithMaxInFlight(mInF, i), nil
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 func newRedisListInputFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {

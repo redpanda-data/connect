@@ -58,7 +58,7 @@ func outputSpec() *service.ConfigSpec {
 }
 
 func init() {
-	err := service.RegisterBatchOutput(
+	service.MustRegisterBatchOutput(
 		"mongodb", outputSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPol service.BatchPolicy, mif int, err error) {
 			if batchPol, err = conf.FieldBatchPolicy(moFieldBatching); err != nil {
@@ -72,9 +72,6 @@ func init() {
 			}
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 // ------------------------------------------------------------------------------

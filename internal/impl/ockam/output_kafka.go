@@ -29,7 +29,7 @@ import (
 
 // this function is, almost, an exact copy of the init() function in ../kafka/output_kafka_franz.go
 func init() {
-	err := service.RegisterBatchOutput("ockam_kafka", ockamKafkaOutputConfig(),
+	service.MustRegisterBatchOutput("ockam_kafka", ockamKafkaOutputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (
 			output service.BatchOutput,
 			batchPolicy service.BatchPolicy,
@@ -45,9 +45,6 @@ func init() {
 			output, err = newOckamKafkaOutput(conf, mgr.Logger())
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 func ockamKafkaOutputConfig() *service.ConfigSpec {

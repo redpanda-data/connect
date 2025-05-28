@@ -67,16 +67,13 @@ func inputConfigSpec() *service.ConfigSpec {
 }
 
 func init() {
-	err := service.RegisterInput("nanomsg", inputConfigSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
+	service.MustRegisterInput("nanomsg", inputConfigSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 		rdr, err := newNanomsgReaderFromParsed(conf, mgr)
 		if err != nil {
 			return nil, err
 		}
 		return service.AutoRetryNacksToggled(conf, rdr)
 	})
-	if err != nil {
-		panic(err)
-	}
 }
 
 type nanomsgReader struct {

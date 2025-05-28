@@ -53,7 +53,7 @@ Use `+"`\\`"+` to escape special characters if you want to match them verbatim.`
 }
 
 func init() {
-	err := service.RegisterInput(
+	service.MustRegisterInput(
 		"redis_pubsub", redisPubSubInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 			r, err := newRedisPubSubReader(conf, mgr)
@@ -62,9 +62,6 @@ func init() {
 			}
 			return service.AutoRetryNacksToggled(conf, r)
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 type redisPubSubReader struct {

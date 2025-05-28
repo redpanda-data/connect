@@ -51,14 +51,11 @@ func memcachedConfig() *service.ConfigSpec {
 }
 
 func init() {
-	err := service.RegisterCache(
+	service.MustRegisterCache(
 		"memcached", memcachedConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
 			return newMemcachedFromConfig(conf)
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 func newMemcachedFromConfig(conf *service.ParsedConfig) (*memcachedCache, error) {

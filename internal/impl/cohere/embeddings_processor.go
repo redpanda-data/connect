@@ -28,14 +28,11 @@ const (
 )
 
 func init() {
-	err := service.RegisterProcessor(
+	service.MustRegisterProcessor(
 		"cohere_embeddings",
 		embeddingProcessorConfig(),
 		makeEmbeddingsProcessor,
 	)
-	if err != nil {
-		panic(err)
-	}
 }
 
 func embeddingProcessorConfig() *service.ConfigSpec {

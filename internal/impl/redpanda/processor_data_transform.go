@@ -84,14 +84,11 @@ You can find out about how transforms work here: https://docs.redpanda.com/curre
 }
 
 func init() {
-	err := service.RegisterBatchProcessor(
+	service.MustRegisterBatchProcessor(
 		"redpanda_data_transform", dataTransformProcessorConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 			return newDataTransformProcessorFromConfig(conf, mgr)
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 //------------------------------------------------------------------------------

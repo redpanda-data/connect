@@ -45,7 +45,15 @@ func NewClient(
 		return nil, fmt.Errorf("failed to parse url: %w", err)
 	}
 
-	clientSR, err := sr.NewClient(sr.URLs(urlStr), sr.PreReq(func(req *http.Request) error { return reqSigner(mgr.FS(), req) }))
+	opts := []sr.ClientOpt{sr.URLs(urlStr)}
+	if tlsConf != nil {
+		opts = append(opts, sr.DialTLSConfig(tlsConf))
+	}
+	if reqSigner != nil {
+		opts = append(opts, sr.PreReq(func(req *http.Request) error { return reqSigner(mgr.FS(), req) }))
+	}
+
+	clientSR, err := sr.NewClient(opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to init client: %w", err)
 	}

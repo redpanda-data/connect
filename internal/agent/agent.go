@@ -181,6 +181,7 @@ redpanda_agent_runtime:
 		stream, err := buildStream(name, agent)
 		if err != nil {
 			eg.Go(func() error { return err })
+			cancel(err)
 			break
 		}
 		license.RegisterService(

@@ -84,7 +84,7 @@ func outputSpec() *service.ConfigSpec {
 }
 
 func init() {
-	err := service.RegisterBatchOutput("splunk_hec", outputSpec(),
+	service.MustRegisterBatchOutput("splunk_hec", outputSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPolicy service.BatchPolicy, maxInFlight int, err error) {
 			if err = license.CheckRunningEnterprise(mgr); err != nil {
 				return
@@ -111,9 +111,6 @@ func init() {
 			out, err = outputFromParsed(conf, mgr.Logger())
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 type output struct {

@@ -89,7 +89,7 @@ func redpandaMigratorOffsetsOutputConfigFields() []*service.ConfigField {
 }
 
 func init() {
-	err := service.RegisterOutput("redpanda_migrator_offsets", redpandaMigratorOffsetsOutputConfig(),
+	service.MustRegisterOutput("redpanda_migrator_offsets", redpandaMigratorOffsetsOutputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (
 			output service.Output,
 			maxInFlight int,
@@ -100,9 +100,6 @@ func init() {
 			output, err = newRedpandaMigratorOffsetsWriterFromConfig(conf, mgr)
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 //------------------------------------------------------------------------------

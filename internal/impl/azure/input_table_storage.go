@@ -98,7 +98,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 }
 
 func init() {
-	err := service.RegisterBatchInput("azure_table_storage", tsiSpec(),
+	service.MustRegisterBatchInput("azure_table_storage", tsiSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
 			pConf, err := tsiConfigFromParsed(conf)
 			if err != nil {
@@ -106,9 +106,6 @@ func init() {
 			}
 			return newAzureTableStorage(pConf, mgr)
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 //------------------------------------------------------------------------------

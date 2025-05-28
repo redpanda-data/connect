@@ -141,7 +141,7 @@ The fields 'key', 'exchange' and 'type' can be dynamically set using xref:config
 }
 
 func init() {
-	err := service.RegisterOutput("amqp_0_9", amqp09OutputSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (service.Output, int, error) {
+	service.MustRegisterOutput("amqp_0_9", amqp09OutputSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (service.Output, int, error) {
 		maxInFlight, err := conf.FieldMaxInFlight()
 		if err != nil {
 			return nil, 0, err
@@ -149,9 +149,6 @@ func init() {
 		w, err := amqp09WriterFromParsed(conf, mgr)
 		return w, maxInFlight, err
 	})
-	if err != nil {
-		panic(err)
-	}
 }
 
 type amqp09Writer struct {

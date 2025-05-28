@@ -388,7 +388,7 @@ output:
 }
 
 func init() {
-	err := service.RegisterBatchOutput("snowflake_put", snowflakePutOutputConfig(),
+	service.MustRegisterBatchOutput("snowflake_put", snowflakePutOutputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (
 			output service.BatchOutput,
 			batchPolicy service.BatchPolicy,
@@ -408,9 +408,6 @@ func init() {
 			output, err = newSnowflakeWriterFromConfig(conf, mgr)
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 //------------------------------------------------------------------------------

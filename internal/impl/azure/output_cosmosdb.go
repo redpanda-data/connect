@@ -84,7 +84,7 @@ output:
 }
 
 func init() {
-	err := service.RegisterBatchOutput("azure_cosmosdb", cosmosDBOutputConfig(),
+	service.MustRegisterBatchOutput("azure_cosmosdb", cosmosDBOutputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (
 			output service.BatchOutput,
 			batchPolicy service.BatchPolicy,
@@ -100,9 +100,6 @@ func init() {
 			output, err = newCosmosDBWriterFromParsed(conf, mgr.Logger())
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 //------------------------------------------------------------------------------

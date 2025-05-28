@@ -55,14 +55,11 @@ func redisCacheConfig() *service.ConfigSpec {
 }
 
 func init() {
-	err := service.RegisterCache(
+	service.MustRegisterCache(
 		"redis", redisCacheConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
 			return newRedisCacheFromConfig(conf)
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 func newRedisCacheFromConfig(conf *service.ParsedConfig) (*redisCache, error) {

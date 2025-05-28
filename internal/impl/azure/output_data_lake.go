@@ -71,7 +71,7 @@ type dloConfig struct {
 }
 
 func init() {
-	err := service.RegisterOutput("azure_data_lake_gen2", dataLakeSpec(),
+	service.MustRegisterOutput("azure_data_lake_gen2", dataLakeSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.Output, mif int, err error) {
 			var pConf *dloConfig
 			if pConf, err = dloConfigFromParsed(conf); err != nil {
@@ -85,9 +85,6 @@ func init() {
 			}
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 func dloConfigFromParsed(pConf *service.ParsedConfig) (*dloConfig, error) {

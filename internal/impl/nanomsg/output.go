@@ -62,7 +62,7 @@ func outputConfigSpec() *service.ConfigSpec {
 }
 
 func init() {
-	err := service.RegisterOutput("nanomsg", outputConfigSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (service.Output, int, error) {
+	service.MustRegisterOutput("nanomsg", outputConfigSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (service.Output, int, error) {
 		wtr, err := newNanomsgWriterFromParsed(conf, mgr)
 		if err != nil {
 			return nil, 0, err
@@ -73,9 +73,6 @@ func init() {
 		}
 		return wtr, mIF, nil
 	})
-	if err != nil {
-		panic(err)
-	}
 }
 
 type nanomsgWriter struct {

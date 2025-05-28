@@ -25,7 +25,7 @@ import (
 )
 
 func init() {
-	err := service.RegisterOutput(
+	service.MustRegisterOutput(
 		"pulsar",
 		outputConfigSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Output, int, error) {
@@ -39,9 +39,6 @@ func init() {
 			}
 			return w, n, err
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 func outputConfigSpec() *service.ConfigSpec {

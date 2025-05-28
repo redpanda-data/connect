@@ -112,7 +112,7 @@ func redpandaMigratorInputConfigFields() []*service.ConfigField {
 }
 
 func init() {
-	err := service.RegisterBatchInput("redpanda_migrator", redpandaMigratorInputConfig(),
+	service.MustRegisterBatchInput("redpanda_migrator", redpandaMigratorInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
 			tmpOpts, err := FranzConnectionOptsFromConfig(conf, mgr.Logger())
 			if err != nil {
@@ -144,9 +144,6 @@ func init() {
 				mgr:                mgr,
 			})
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 //------------------------------------------------------------------------------

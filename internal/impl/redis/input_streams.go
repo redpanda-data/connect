@@ -83,7 +83,7 @@ func redisStreamsInputConfig() *service.ConfigSpec {
 }
 
 func init() {
-	err := service.RegisterBatchInput(
+	service.MustRegisterBatchInput(
 		"redis_streams", redisStreamsInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
 			r, err := newRedisStreamsReader(conf, mgr)
@@ -92,9 +92,6 @@ func init() {
 			}
 			return service.AutoRetryNacksBatchedToggled(conf, r)
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 type pendingRedisStreamMsg struct {

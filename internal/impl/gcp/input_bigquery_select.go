@@ -267,7 +267,7 @@ func (inp *bigQuerySelectInput) Close(ctx context.Context) error {
 }
 
 func init() {
-	err := service.RegisterInput(
+	service.MustRegisterInput(
 		"gcp_bigquery_select", newBigQuerySelectInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 			i, err := newBigQuerySelectInput(conf, mgr.Logger())
@@ -276,7 +276,4 @@ func init() {
 			}
 			return service.AutoRetryNacksToggled(conf, i)
 		})
-	if err != nil {
-		panic(err)
-	}
 }

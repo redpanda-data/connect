@@ -99,7 +99,7 @@ Only one authentication method is required, `+"`storage_connection_string`"+` or
 }
 
 func init() {
-	err := service.RegisterBatchInput("azure_queue_storage", qsiSpec(),
+	service.MustRegisterBatchInput("azure_queue_storage", qsiSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
 			pConf, err := qsiConfigFromParsed(conf)
 			if err != nil {
@@ -107,9 +107,6 @@ func init() {
 			}
 			return newAzureQueueStorage(pConf, mgr)
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 type azureQueueStorage struct {

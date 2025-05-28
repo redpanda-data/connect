@@ -42,14 +42,11 @@ func gcpCloudStorageCacheConfig() *service.ConfigSpec {
 }
 
 func init() {
-	err := service.RegisterCache(
+	service.MustRegisterCache(
 		"gcp_cloud_storage", gcpCloudStorageCacheConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
 			return newGcpCloudStorageCacheFromConfig(conf)
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 func newGcpCloudStorageCacheFromConfig(parsedConf *service.ParsedConfig) (*gcpCloudStorageCache, error) {

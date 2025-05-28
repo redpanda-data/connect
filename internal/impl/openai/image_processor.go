@@ -30,14 +30,11 @@ const (
 )
 
 func init() {
-	err := service.RegisterProcessor(
+	service.MustRegisterProcessor(
 		"openai_image_generation",
 		imageProcessorConfig(),
 		makeImageProcessor,
 	)
-	if err != nil {
-		panic(err)
-	}
 }
 
 func imageProcessorConfig() *service.ConfigSpec {

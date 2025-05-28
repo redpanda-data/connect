@@ -64,15 +64,12 @@ func ProcessorSpec() *service.ConfigSpec {
 }
 
 func init() {
-	err := service.RegisterBatchProcessor(
+	service.MustRegisterBatchProcessor(
 		"mongodb", ProcessorSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (proc service.BatchProcessor, err error) {
 			proc, err = ProcessorFromParsed(conf, mgr)
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 //------------------------------------------------------------------------------

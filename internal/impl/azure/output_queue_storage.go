@@ -76,7 +76,7 @@ In order to set the `+"`queue_name`"+` you can use function interpolations descr
 }
 
 func init() {
-	err := service.RegisterBatchOutput("azure_queue_storage", qsoSpec(),
+	service.MustRegisterBatchOutput("azure_queue_storage", qsoSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batcher service.BatchPolicy, mif int, err error) {
 			var pConf qsoConfig
 			if pConf, err = qsoConfigFromParsed(conf); err != nil {
@@ -93,9 +93,6 @@ func init() {
 			}
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 type azureQueueStorageWriter struct {

@@ -54,7 +54,7 @@ func outputConfigSpec() *service.ConfigSpec {
 }
 
 func init() {
-	err := service.RegisterOutput("nsq", outputConfigSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (service.Output, int, error) {
+	service.MustRegisterOutput("nsq", outputConfigSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (service.Output, int, error) {
 		wtr, err := newNSQWriterFromParsed(conf, mgr)
 		if err != nil {
 			return nil, 0, err
@@ -65,9 +65,6 @@ func init() {
 		}
 		return wtr, mIF, nil
 	})
-	if err != nil {
-		panic(err)
-	}
 }
 
 type nsqWriter struct {

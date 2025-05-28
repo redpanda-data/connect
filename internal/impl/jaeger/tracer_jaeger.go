@@ -93,7 +93,7 @@ func jaegerConfigSpec() *service.ConfigSpec {
 var exporterInitFn = func(epOpt jaeger.EndpointOption) (tracesdk.SpanExporter, error) { return jaeger.New(epOpt) }
 
 func init() {
-	err := service.RegisterOtelTracerProvider("jaeger", jaegerConfigSpec(), func(conf *service.ParsedConfig) (p trace.TracerProvider, err error) {
+	service.MustRegisterOtelTracerProvider("jaeger", jaegerConfigSpec(), func(conf *service.ParsedConfig) (p trace.TracerProvider, err error) {
 		jConf := jaegerConfig{
 			engineVersion: conf.EngineVersion(),
 		}
@@ -115,9 +115,6 @@ func init() {
 		jConf.FlushInterval, _ = conf.FieldString(jtFieldFlushInterval)
 		return NewJaeger(jConf)
 	})
-	if err != nil {
-		panic(err)
-	}
 }
 
 //------------------------------------------------------------------------------

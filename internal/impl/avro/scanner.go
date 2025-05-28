@@ -60,13 +60,10 @@ This scanner also emits the canonical Avro schema as ` + "`@avro_schema`" + ` me
 }
 
 func init() {
-	err := service.RegisterBatchScannerCreator("avro", avroScannerSpec(),
+	service.MustRegisterBatchScannerCreator("avro", avroScannerSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchScannerCreator, error) {
 			return avroScannerFromParsed(conf)
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 func avroScannerFromParsed(conf *service.ParsedConfig) (l *avroScannerCreator, err error) {

@@ -38,7 +38,7 @@ output:
   label: ""
   redis_hash:
     url: redis://:6379 # No default (required)
-    key: ${! @.kafka_key )} # No default (required)
+    key: ${! @.kafka_key } # No default (required)
     walk_metadata: false
     walk_json_object: false
     fields: {}
@@ -65,7 +65,7 @@ output:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
-    key: ${! @.kafka_key )} # No default (required)
+    key: ${! @.kafka_key } # No default (required)
     walk_metadata: false
     walk_json_object: false
     fields: {}
@@ -338,7 +338,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 ```yml
 # Examples
 
-key: ${! @.kafka_key )}
+key: ${! @.kafka_key }
 
 key: ${! this.doc.id }
 

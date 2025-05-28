@@ -38,7 +38,7 @@ func beanstalkdOutputConfig() *service.ConfigSpec {
 }
 
 func init() {
-	err := service.RegisterOutput(
+	service.MustRegisterOutput(
 		"beanstalkd", beanstalkdOutputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Output, int, error) {
 			maxInFlight, err := conf.FieldInt("max_in_flight")
@@ -48,9 +48,6 @@ func init() {
 			w, err := newBeanstalkdWriterFromConfig(conf, mgr.Logger())
 			return w, maxInFlight, err
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 type beanstalkdWriter struct {

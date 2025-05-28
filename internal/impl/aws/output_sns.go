@@ -111,7 +111,7 @@ By default Redpanda Connect will use a shared credentials file when connecting t
 }
 
 func init() {
-	err := service.RegisterOutput("aws_sns", snsoOutputSpec(),
+	service.MustRegisterOutput("aws_sns", snsoOutputSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.Output, maxInFlight int, err error) {
 			if maxInFlight, err = conf.FieldMaxInFlight(); err != nil {
 				return
@@ -123,9 +123,6 @@ func init() {
 			out, err = newSNSWriter(wConf, mgr)
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 type snsWriter struct {

@@ -57,7 +57,7 @@ func outputSpec() *service.ConfigSpec {
 }
 
 func init() {
-	err := service.RegisterBatchOutput(
+	service.MustRegisterBatchOutput(
 		"hdfs", outputSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, pol service.BatchPolicy, mif int, err error) {
 			w := &hdfsWriter{
@@ -84,9 +84,6 @@ func init() {
 			}
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 type hdfsWriter struct {

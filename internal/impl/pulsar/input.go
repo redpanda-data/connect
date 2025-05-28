@@ -33,15 +33,12 @@ const (
 )
 
 func init() {
-	err := service.RegisterInput(
+	service.MustRegisterInput(
 		"pulsar",
 		inputConfigSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 			return newPulsarReaderFromParsed(conf, mgr.Logger())
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 func inputConfigSpec() *service.ConfigSpec {

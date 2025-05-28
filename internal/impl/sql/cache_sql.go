@@ -89,12 +89,9 @@ The ` + "`add`" + ` operation is performed with a traditional ` + "`insert`" + `
 }
 
 func init() {
-	err := service.RegisterCache("sql", sqlCacheConfig(), func(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
+	service.MustRegisterCache("sql", sqlCacheConfig(), func(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
 		return newSQLCacheFromConfig(conf, mgr)
 	})
-	if err != nil {
-		panic(err)
-	}
 }
 
 //------------------------------------------------------------------------------

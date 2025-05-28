@@ -168,7 +168,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 }
 
 func init() {
-	err := service.RegisterBatchInput("azure_blob_storage", bsiSpec(),
+	service.MustRegisterBatchInput("azure_blob_storage", bsiSpec(),
 		func(pConf *service.ParsedConfig, res *service.Resources) (service.BatchInput, error) {
 			conf, err := bsiConfigFromParsed(pConf)
 			if err != nil {
@@ -185,9 +185,6 @@ func init() {
 			}
 			return rdr, nil
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 //------------------------------------------------------------------------------

@@ -207,7 +207,7 @@ output:
 }
 
 func init() {
-	err := service.RegisterBatchOutput("opensearch", OutputSpec(),
+	service.MustRegisterBatchOutput("opensearch", OutputSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPolicy service.BatchPolicy, maxInFlight int, err error) {
 			if maxInFlight, err = conf.FieldMaxInFlight(); err != nil {
 				return
@@ -218,9 +218,6 @@ func init() {
 			out, err = OutputFromParsed(conf, mgr)
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 // Output implements service.BatchOutput for elasticsearch.
@@ -303,16 +300,20 @@ func (e *Output) WriteBatch(ctx context.Context, msg service.MessageBatch) error
 		requests[i] = pbi
 	}
 
+	var bBulkErr *service.BatchError
+
 	start := time.Now()
 	b, _ := opensearchutil.NewBulkIndexer(opensearchutil.BulkIndexerConfig{
 		Client: e.client,
+		OnError: func(ctx context.Context, err error) {
+			bBulkErr = service.NewBatchError(msg, err)
+		},
 	})
 
-	var bErrMut sync.Mutex
 	var bErr *service.BatchError
+	var bErrMut sync.Mutex
 
 	for i, v := range requests {
-		i := i
 		bulkReq, err := e.buildBulkableRequest(v, func(err error) {
 			bErrMut.Lock()
 			defer bErrMut.Unlock()
@@ -332,6 +333,10 @@ func (e *Output) WriteBatch(ctx context.Context, msg service.MessageBatch) error
 
 	if err := b.Close(ctx); err != nil {
 		return err
+	}
+
+	if bBulkErr != nil {
+		return bBulkErr
 	}
 
 	if bErr != nil {

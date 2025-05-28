@@ -65,7 +65,7 @@ func inputConfig() *service.ConfigSpec {
 }
 
 func init() {
-	err := service.RegisterInput(
+	service.MustRegisterInput(
 		"discord", inputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 			reader, err := newReader(conf, mgr)
@@ -75,9 +75,6 @@ func init() {
 			return service.AutoRetryNacksToggled(conf, reader)
 		},
 	)
-	if err != nil {
-		panic(err)
-	}
 }
 
 type reader struct {

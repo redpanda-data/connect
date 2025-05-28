@@ -80,14 +80,11 @@ func mongoConfigSpec() *service.ConfigSpec {
 }
 
 func init() {
-	err := service.RegisterBatchInput(
+	service.MustRegisterBatchInput(
 		"mongodb", mongoConfigSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
 			return newMongoInput(conf, mgr.Logger())
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 func newMongoInput(conf *service.ParsedConfig, logger *service.Logger) (service.BatchInput, error) {

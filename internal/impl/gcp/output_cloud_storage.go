@@ -191,7 +191,7 @@ output:
 }
 
 func init() {
-	err := service.RegisterBatchOutput("gcp_cloud_storage", csoSpec(),
+	service.MustRegisterBatchOutput("gcp_cloud_storage", csoSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPolicy service.BatchPolicy, maxInFlight int, err error) {
 			if maxInFlight, err = conf.FieldMaxInFlight(); err != nil {
 				return
@@ -208,9 +208,6 @@ func init() {
 			out, err = newGCPCloudStorageOutput(pConf, mgr)
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 // gcpCloudStorageOutput is a benthos writer.Type implementation that writes

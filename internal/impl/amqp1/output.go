@@ -90,7 +90,7 @@ root = if this.url.or("") == "" && this.urls.or([]).length() == 0 {
 }
 
 func init() {
-	err := service.RegisterOutput("amqp_1", amqp1OutputSpec(),
+	service.MustRegisterOutput("amqp_1", amqp1OutputSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Output, int, error) {
 			w, err := amqp1WriterFromParsed(conf, mgr)
 			if err != nil {
@@ -104,9 +104,6 @@ func init() {
 
 			return w, mIF, nil
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 type amqp1Writer struct {

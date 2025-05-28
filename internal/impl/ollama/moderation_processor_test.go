@@ -16,7 +16,6 @@ import (
 	"github.com/ollama/ollama/api"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/ollama"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -48,7 +47,6 @@ func TestOllamaModerationIntegration(t *testing.T) {
 	ollamaContainer, err := ollama.Run(
 		ctx,
 		"ollama/ollama:0.4.2",
-		testcontainers.WithLogger(testcontainers.TestLogger(t)),
 	)
 	require.NoError(t, err)
 	t.Cleanup(func() {

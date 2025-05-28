@@ -140,7 +140,7 @@ By default Redpanda Connect will use a shared credentials file when connecting t
 }
 
 func init() {
-	err := service.RegisterBatchOutput("aws_sqs", sqsoOutputSpec(),
+	service.MustRegisterBatchOutput("aws_sqs", sqsoOutputSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPolicy service.BatchPolicy, maxInFlight int, err error) {
 			if maxInFlight, err = conf.FieldMaxInFlight(); err != nil {
 				return
@@ -155,9 +155,6 @@ func init() {
 			out, err = newSQSWriter(wConf, mgr)
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 type sqsWriter struct {

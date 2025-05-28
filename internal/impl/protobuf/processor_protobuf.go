@@ -159,13 +159,10 @@ pipeline:
 }
 
 func init() {
-	err := service.RegisterProcessor("protobuf", protobufProcessorSpec(),
+	service.MustRegisterProcessor("protobuf", protobufProcessorSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
 			return newProtobuf(conf, mgr)
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 type protobufOperator func(part *service.Message) error

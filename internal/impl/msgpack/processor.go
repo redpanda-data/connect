@@ -36,14 +36,11 @@ func processorConfig() *service.ConfigSpec {
 }
 
 func init() {
-	err := service.RegisterProcessor(
+	service.MustRegisterProcessor(
 		"msgpack", processorConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
 			return newProcessorFromConfig(conf)
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 type msgPackOperator func(m *service.Message) (*service.Message, error)

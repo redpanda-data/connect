@@ -48,16 +48,13 @@ If the format of a message is a JSON object matching the https://discord.com/dev
 }
 
 func init() {
-	err := service.RegisterOutput(
+	service.MustRegisterOutput(
 		"discord", outputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Output, int, error) {
 			w, err := newWriter(conf, mgr)
 			return w, 1, err
 		},
 	)
-	if err != nil {
-		panic(err)
-	}
 }
 
 type writer struct {

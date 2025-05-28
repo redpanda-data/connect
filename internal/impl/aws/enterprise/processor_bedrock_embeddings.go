@@ -31,10 +31,7 @@ const (
 )
 
 func init() {
-	err := service.RegisterProcessor("aws_bedrock_embeddings", newBedrockEmbeddingsConfigSpec(), newBedrockEmbeddingsProcessor)
-	if err != nil {
-		panic(err)
-	}
+	service.MustRegisterProcessor("aws_bedrock_embeddings", newBedrockEmbeddingsConfigSpec(), newBedrockEmbeddingsProcessor)
 }
 
 func newBedrockEmbeddingsConfigSpec() *service.ConfigSpec {

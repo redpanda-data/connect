@@ -103,7 +103,7 @@ output:
 }
 
 func init() {
-	err := service.RegisterBatchOutput(
+	service.MustRegisterBatchOutput(
 		"cassandra", outputSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPolicy service.BatchPolicy, maxInFlight int, err error) {
 			if maxInFlight, err = conf.FieldMaxInFlight(); err != nil {
@@ -115,9 +115,6 @@ func init() {
 			out, err = newCassandraWriter(conf, mgr)
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 type cassandraWriter struct {

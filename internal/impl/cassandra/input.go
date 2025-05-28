@@ -63,14 +63,11 @@ input:
 }
 
 func init() {
-	err := service.RegisterInput(
+	service.MustRegisterInput(
 		"cassandra", inputConfigSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 			return newCassandraInput(conf)
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 func newCassandraInput(conf *service.ParsedConfig) (service.Input, error) {

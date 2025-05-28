@@ -78,16 +78,13 @@ input:
 }
 
 func init() {
-	err := service.RegisterBatchInput("azure_cosmosdb", cosmosDBInputSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
+	service.MustRegisterBatchInput("azure_cosmosdb", cosmosDBInputSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
 		r, err := newCosmosDBReaderFromParsed(conf, mgr)
 		if err != nil {
 			return nil, err
 		}
 		return service.AutoRetryNacksBatchedToggled(conf, r)
 	})
-	if err != nil {
-		panic(err)
-	}
 }
 
 //------------------------------------------------------------------------------

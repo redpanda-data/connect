@@ -68,7 +68,7 @@ Where latter stages will overwrite matching field names of a former stage.`+serv
 		Fields(
 			service.NewInterpolatedStringField(hoFieldKey).
 				Description("The key for each message, function interpolations should be used to create a unique key per message.").
-				Examples("${! @.kafka_key )}", "${! this.doc.id }", "${! counter() }"),
+				Examples("${! @.kafka_key }", "${! this.doc.id }", "${! counter() }"),
 			service.NewBoolField(hoFieldWalkMetadata).
 				Description("Whether all metadata fields of messages should be walked and added to the list of hash fields to set.").
 				Default(false),
@@ -83,7 +83,7 @@ Where latter stages will overwrite matching field names of a former stage.`+serv
 }
 
 func init() {
-	err := service.RegisterOutput(
+	service.MustRegisterOutput(
 		"redis_hash", redisHashOutputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.Output, maxInFlight int, err error) {
 			if maxInFlight, err = conf.FieldMaxInFlight(); err != nil {
@@ -92,9 +92,6 @@ func init() {
 			out, err = newRedisHashWriter(conf, mgr)
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 type redisHashWriter struct {

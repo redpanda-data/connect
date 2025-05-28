@@ -73,14 +73,11 @@ output:
 }
 
 func init() {
-	err := service.RegisterProcessor(
+	service.MustRegisterProcessor(
 		"parquet_decode", parquetDecodeProcessorConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
 			return newParquetDecodeProcessorFromConfig(conf, mgr.Logger())
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 //------------------------------------------------------------------------------

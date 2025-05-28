@@ -76,7 +76,7 @@ This input adds the following metadata fields to each message:
 }
 
 func init() {
-	err := service.RegisterInput(
+	service.MustRegisterInput(
 		"nats_kv", natsKVInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 			reader, err := newKVReader(conf, mgr)
@@ -86,9 +86,6 @@ func init() {
 			return service.AutoRetryNacksToggled(conf, reader)
 		},
 	)
-	if err != nil {
-		panic(err)
-	}
 }
 
 type kvReader struct {

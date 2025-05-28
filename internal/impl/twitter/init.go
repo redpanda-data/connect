@@ -28,7 +28,5 @@ import (
 var searchInputTemplate []byte
 
 func init() {
-	if err := service.RegisterTemplateYAML(string(searchInputTemplate)); err != nil {
-		panic(err)
-	}
+	service.MustRegisterTemplateYAML(string(searchInputTemplate))
 }

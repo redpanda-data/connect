@@ -46,7 +46,7 @@ func redisListOutputConfig() *service.ConfigSpec {
 		Fields(
 			service.NewInterpolatedStringField(loFieldKey).
 				Description("The key for each message, function interpolations can be optionally used to create a unique key per message.").
-				Examples("some_list", "${! @.kafka_key )}", "${! this.doc.id }", "${! counter() }"),
+				Examples("some_list", "${! @.kafka_key }", "${! this.doc.id }", "${! counter() }"),
 			service.NewOutputMaxInFlightField(),
 			service.NewBatchPolicyField(loFieldBatching),
 			service.NewStringEnumField("command", string(rPush), string(lPush)).
@@ -58,7 +58,7 @@ func redisListOutputConfig() *service.ConfigSpec {
 }
 
 func init() {
-	err := service.RegisterBatchOutput(
+	service.MustRegisterBatchOutput(
 		"redis_list", redisListOutputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPol service.BatchPolicy, mif int, err error) {
 			if batchPol, err = conf.FieldBatchPolicy(loFieldBatching); err != nil {
@@ -70,9 +70,6 @@ func init() {
 			out, err = newRedisListWriter(conf, mgr)
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 type redisListWriter struct {

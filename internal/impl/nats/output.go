@@ -55,7 +55,7 @@ func natsOutputConfig() *service.ConfigSpec {
 }
 
 func init() {
-	err := service.RegisterOutput(
+	service.MustRegisterOutput(
 		"nats", natsOutputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Output, int, error) {
 			maxInFlight, err := conf.FieldInt("max_in_flight")
@@ -70,9 +70,6 @@ func init() {
 			return spanOutput, maxInFlight, err
 		},
 	)
-	if err != nil {
-		panic(err)
-	}
 }
 
 type natsWriter struct {

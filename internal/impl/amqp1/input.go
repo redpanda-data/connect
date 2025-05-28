@@ -84,13 +84,10 @@ root = if this.url.or("") == "" && this.urls.or([]).length() == 0 {
 }
 
 func init() {
-	err := service.RegisterBatchInput("amqp_1", amqp1InputSpec(),
+	service.MustRegisterBatchInput("amqp_1", amqp1InputSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
 			return amqp1ReaderFromParsed(conf, mgr)
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 //------------------------------------------------------------------------------

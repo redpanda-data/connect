@@ -54,7 +54,7 @@ func inputSpec() *service.ConfigSpec {
 }
 
 func init() {
-	err := service.RegisterInput("splunk", inputSpec(),
+	service.MustRegisterInput("splunk", inputSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 			if err := license.CheckRunningEnterprise(mgr); err != nil {
 				return nil, err
@@ -66,9 +66,6 @@ func init() {
 			}
 			return service.AutoRetryNacksToggled(conf, i)
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 type input struct {

@@ -43,14 +43,11 @@ const (
 )
 
 func init() {
-	err := service.RegisterProcessor(
+	service.MustRegisterProcessor(
 		"gcp_vertex_ai_chat",
 		newVertexAIProcessorConfig(),
 		newVertexAIProcessor,
 	)
-	if err != nil {
-		panic(err)
-	}
 }
 
 func newVertexAIProcessorConfig() *service.ConfigSpec {

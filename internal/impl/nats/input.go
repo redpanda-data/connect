@@ -70,7 +70,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 }
 
 func init() {
-	err := service.RegisterInput(
+	service.MustRegisterInput(
 		"nats", natsInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 			input, err := newNATSReader(conf, mgr)
@@ -85,9 +85,6 @@ func init() {
 			return conf.WrapInputExtractTracingSpanMapping("nats", r)
 		},
 	)
-	if err != nil {
-		panic(err)
-	}
 }
 
 type natsReader struct {

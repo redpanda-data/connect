@@ -59,7 +59,7 @@ Redis stream entries are key/value pairs, as such it is necessary to specify the
 }
 
 func init() {
-	err := service.RegisterBatchOutput(
+	service.MustRegisterBatchOutput(
 		"redis_streams", redisStreamsOutputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPol service.BatchPolicy, mif int, err error) {
 			if batchPol, err = conf.FieldBatchPolicy(soFieldBatching); err != nil {
@@ -71,9 +71,6 @@ func init() {
 			out, err = newRedisStreamsWriter(conf, mgr)
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 type redisStreamsWriter struct {

@@ -57,7 +57,7 @@ xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].`
 }
 
 func init() {
-	err := service.RegisterInput(
+	service.MustRegisterInput(
 		"hdfs", inputSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.Input, err error) {
 			rdr := &hdfsReader{
@@ -75,9 +75,6 @@ func init() {
 			}
 			return
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 type hdfsReader struct {

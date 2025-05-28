@@ -53,7 +53,7 @@ When a value extracted as a byte slice exists within a document which is later J
 }
 
 func init() {
-	err := service.RegisterBatchInput(
+	service.MustRegisterBatchInput(
 		"parquet", parquetInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
 			in, err := newParquetInputFromConfig(conf, mgr)
@@ -62,9 +62,6 @@ func init() {
 			}
 			return service.AutoRetryNacksBatchedToggled(conf, in)
 		})
-	if err != nil {
-		panic(err)
-	}
 }
 
 //------------------------------------------------------------------------------
