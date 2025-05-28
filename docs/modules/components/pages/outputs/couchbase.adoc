@@ -68,7 +68,8 @@ output:
     username: "" # No default (optional)
     password: "" # No default (optional)
     bucket: "" # No default (required)
-    collection: _default
+    collection: "" # No default (optional)
+    scope: "" # No default (optional)
     transcoder: legacy
     timeout: 15s
     id: ${! json("id") } # No default (required)
@@ -147,7 +148,14 @@ Bucket collection.
 
 *Type*: `string`
 
-*Default*: `"_default"`
+
+=== `scope`
+
+Bucket scope.
+
+
+*Type*: `string`
+
 
 === `transcoder`
 

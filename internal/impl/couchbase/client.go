@@ -34,6 +34,7 @@ type couchbaseConfig struct {
 	opts       gocb.ClusterOptions
 	bucket     string
 	collection string
+	scope      string
 }
 
 type couchbaseClient struct {
@@ -121,7 +122,15 @@ func getClientConfig(conf *service.ParsedConfig) (*couchbaseConfig, error) {
 			return nil, err
 		}
 	}
-	return &couchbaseConfig{url, opts, bucket, collection}, nil
+	var scope string
+	if conf.Contains("scope") {
+		scope, err = conf.FieldString("scope")
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &couchbaseConfig{url, opts, bucket, collection, scope}, nil
 }
 
 func makeClient(cfg *couchbaseConfig) (*couchbaseClient, error) {
@@ -142,7 +151,12 @@ func makeClient(cfg *couchbaseConfig) (*couchbaseClient, error) {
 
 	// retrieve collection
 	if cfg.collection != "" {
-		proc.collection = cluster.Bucket(cfg.bucket).Collection(cfg.collection)
+		bucket := cluster.Bucket(cfg.bucket)
+		scope := bucket.DefaultScope()
+		if cfg.scope != "" {
+			scope = bucket.Scope(cfg.scope)
+		}
+		proc.collection = scope.Collection(cfg.collection)
 	} else {
 		proc.collection = cluster.Bucket(cfg.bucket).DefaultCollection()
 	}
