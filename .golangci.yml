@@ -92,6 +92,9 @@ linters:
         path: _test.go
       - linters:
           - perfsprint
+        path: internal/impl/gcp/enterprise/changestreams/changestreamstest
+      - linters:
+          - perfsprint
         path: internal/impl/gcp/enterprise/changestreams/metadata
       - linters:
           - revive
