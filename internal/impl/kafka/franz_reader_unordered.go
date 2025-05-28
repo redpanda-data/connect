@@ -150,8 +150,12 @@ type msgWithRecord struct {
 	r   *kgo.Record
 }
 
-func (f *FranzReaderUnordered) recordToMessage(record *kgo.Record) *msgWithRecord {
+func (f *FranzReaderUnordered) recordToMessage(record *kgo.Record, consumerLag *ConsumerLag) *msgWithRecord {
 	msg := FranzRecordToMessageV0(record, f.multiHeader)
+	if consumerLag != nil {
+		lag := consumerLag.Load(record.Topic, record.Partition)
+		msg.MetaSetMut("kafka_lag", lag)
+	}
 
 	// The record lives on for checkpointing, but we don't need the contents
 	// going forward so discard these. This looked fine to me but could
@@ -514,9 +518,10 @@ func (f *FranzReaderUnordered) Connect(ctx context.Context) error {
 	connErrBackOff.MaxElapsedTime = 0
 
 	go func() {
+		var consumerLag *ConsumerLag
 		if f.consumerGroup != "" {
 			topicLagGauge := f.res.Metrics().NewGauge("kafka_lag", "topic", "partition")
-			consumerLag := NewConsumerLag(cl, f.consumerGroup, f.res.Logger(), topicLagGauge, f.topicLagRefreshPeriod)
+			consumerLag = NewConsumerLag(cl, f.consumerGroup, f.res.Logger(), topicLagGauge, f.topicLagRefreshPeriod)
 			consumerLag.Start()
 			defer consumerLag.Stop()
 		}
@@ -585,7 +590,7 @@ func (f *FranzReaderUnordered) Connect(ctx context.Context) error {
 			iter := fetches.RecordIter()
 			for !iter.Done() {
 				record := iter.Next()
-				if checkpoints.addRecord(closeCtx, f.recordToMessage(record), f.checkpointLimit) {
+				if checkpoints.addRecord(closeCtx, f.recordToMessage(record, consumerLag), f.checkpointLimit) {
 					pauseTopicPartitions[record.Topic] = append(pauseTopicPartitions[record.Topic], record.Partition)
 				}
 			}

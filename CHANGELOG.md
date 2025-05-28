@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Parameter `root_tag` added to the `format_xml()` Bloblang method. (@mihaitodor)
+- Metadata `kafka_lag` now emitted by the `kafka_franz` and `ockam_kafka` inputs. (@mihaitodor)
 
 ### Fixed
 
