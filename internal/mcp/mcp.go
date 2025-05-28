@@ -77,6 +77,11 @@ func NewServer(
 	resWrapper.SetHTTPMultiplexer(&gMux{m: mux})
 
 	repoScanner := repository.NewScanner(os.DirFS(repositoryDir))
+
+	repoScanner.OnTemplateFile(func(filePath string, contents []byte) error {
+		return env.RegisterTemplateYAML(string(contents))
+	})
+
 	repoScanner.OnResourceFile(func(resourceType, filename string, contents []byte) error {
 		switch resourceType {
 		case "starlark":

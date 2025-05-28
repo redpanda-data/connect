@@ -27,6 +27,12 @@ import (
 
 func TestScannerHappy(t *testing.T) {
 	s := repository.NewScanner(fstest.MapFS{
+		filepath.Clean("templates/woof.yaml"): &fstest.MapFile{
+			Data: []byte(`woof template`),
+		},
+		filepath.Clean("templates/notthis.txt"): &fstest.MapFile{
+			Data: []byte(`IGNORE ME`),
+		},
 		filepath.Clean("resources/caches/foo.yaml"): &fstest.MapFile{
 			Data: []byte(`foo cache conf`),
 		},
@@ -54,6 +60,7 @@ func TestScannerHappy(t *testing.T) {
 	})
 
 	exp := map[string]string{
+		"templates/woof.yaml/template":                  "woof template",
 		"resources/caches/foo.yaml/cache":               "foo cache conf",
 		"resources/processors/deeper/bar.yml/processor": "bar proc conf",
 		"resources/inputs/baz.yml/input":                "baz input conf",
@@ -63,6 +70,10 @@ func TestScannerHappy(t *testing.T) {
 	}
 	act := map[string]string{}
 
+	s.OnTemplateFile(func(filePath string, contents []byte) error {
+		act[filePath+"/template"] = string(contents)
+		return nil
+	})
 	s.OnResourceFile(func(resourceType, filePath string, contents []byte) error {
 		act[filePath+"/"+resourceType] = string(contents)
 		return nil
