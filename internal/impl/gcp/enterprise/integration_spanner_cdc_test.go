@@ -233,11 +233,9 @@ gcp_spanner_cdc:
 	})
 	require.NoError(t, err)
 
-	expected := []changestreams.DataChangeRecord{
+	expected := []spannerMod{
 		{
-			RecordSequence:                       "00000000",
-			IsLastRecordInTransactionInPartition: false,
-			TableName:                            h.tableID,
+			TableName: h.tableID,
 			ColumnTypes: []*changestreams.ColumnType{
 				{
 					Name: "id",
@@ -258,33 +256,24 @@ gcp_spanner_cdc:
 					OrdinalPosition: 2,
 				},
 			},
-			Mods: []*changestreams.Mod{
-				{
-					Keys: spanner.NullJSON{
-						Value: map[string]interface{}{"id": "1"},
-						Valid: true,
-					},
-					NewValues: spanner.NullJSON{
-						Value: map[string]interface{}{"active": true},
-						Valid: true,
-					},
-					OldValues: spanner.NullJSON{
-						Value: map[string]interface{}{},
-						Valid: true,
-					},
+			Mod: &changestreams.Mod{
+				Keys: spanner.NullJSON{
+					Value: map[string]interface{}{"id": "1"},
+					Valid: true,
+				},
+				NewValues: spanner.NullJSON{
+					Value: map[string]interface{}{"active": true},
+					Valid: true,
+				},
+				OldValues: spanner.NullJSON{
+					Value: map[string]interface{}{},
+					Valid: true,
 				},
 			},
-			ModType:                         "INSERT",
-			ValueCaptureType:                "OLD_AND_NEW_VALUES",
-			NumberOfRecordsInTransaction:    2,
-			NumberOfPartitionsInTransaction: 1,
-			TransactionTag:                  "",
-			IsSystemTransaction:             false,
+			ModType: "INSERT",
 		},
 		{
-			RecordSequence:                       "00000001",
-			IsLastRecordInTransactionInPartition: true,
-			TableName:                            h.tableID,
+			TableName: h.tableID,
 			ColumnTypes: []*changestreams.ColumnType{
 				{
 					Name: "id",
@@ -305,40 +294,32 @@ gcp_spanner_cdc:
 					OrdinalPosition: 2,
 				},
 			},
-			Mods: []*changestreams.Mod{
-				{
-					Keys: spanner.NullJSON{
-						Value: map[string]interface{}{"id": "1"},
-						Valid: true,
-					},
-					NewValues: spanner.NullJSON{
-						Value: map[string]interface{}{},
-						Valid: true,
-					},
-					OldValues: spanner.NullJSON{
-						Value: map[string]interface{}{"active": true},
-						Valid: true,
-					},
+			Mod: &changestreams.Mod{
+				Keys: spanner.NullJSON{
+					Value: map[string]interface{}{"id": "1"},
+					Valid: true,
+				},
+				NewValues: spanner.NullJSON{
+					Value: map[string]interface{}{},
+					Valid: true,
+				},
+				OldValues: spanner.NullJSON{
+					Value: map[string]interface{}{"active": true},
+					Valid: true,
 				},
 			},
-			ModType:                         "DELETE",
-			ValueCaptureType:                "OLD_AND_NEW_VALUES",
-			NumberOfRecordsInTransaction:    2,
-			NumberOfPartitionsInTransaction: 1,
-			TransactionTag:                  "",
-			IsSystemTransaction:             false,
+			ModType: "DELETE",
 		},
 	}
 
-	var got []changestreams.DataChangeRecord
+	var got []spannerMod
 	for msg := range messages {
 		b, err := msg.AsBytes()
 		require.NoError(t, err)
 
-		var dcr changestreams.DataChangeRecord
-		require.NoError(t, json.Unmarshal(b, &dcr))
-
-		got = append(got, dcr)
+		var mod spannerMod
+		require.NoError(t, json.Unmarshal(b, &mod))
+		got = append(got, mod)
 		if len(got) == len(expected) {
 			break
 		}
