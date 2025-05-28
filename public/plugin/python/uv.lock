@@ -150,6 +150,9 @@ wheels = [
 name = "redpanda-connect"
 version = "0.1.0"
 source = { editable = "." }
+dependencies = [
+    { name = "grpcio" },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -162,6 +165,7 @@ dev = [
 ]
 
 [package.metadata]
+requires-dist = [{ name = "grpcio", specifier = ">=1.71.0" }]
 
 [package.metadata.requires-dev]
 dev = [
