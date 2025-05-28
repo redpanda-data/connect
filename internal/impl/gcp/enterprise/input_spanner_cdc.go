@@ -217,25 +217,29 @@ func newSpannerCDCReader(conf spannerCDCInputConfig, batching service.BatchPolic
 	}
 }
 
-func (r *spannerCDCReader) waitForAck(
+func (r *spannerCDCReader) emit(
 	ctx context.Context,
 	partitionToken string,
 	dcr *changestreams.DataChangeRecord,
 	msg service.MessageBatch,
-) error {
+) (*ack.Once, error) {
 	if len(msg) == 0 {
-		return nil
+		return nil, nil
 	}
 	ackOnce := ack.NewOnce(func(ctx context.Context) error {
-		return r.subscriber.UpdatePartitionWatermark(ctx, partitionToken, dcr)
+		// If we processed the message and failed to update the watermark, we
+		// would try to update it on the next message, no need to return an error here.
+		if err := r.subscriber.UpdatePartitionWatermark(ctx, partitionToken, dcr); err != nil {
+			r.log.Errorf("%s: failed to update watermark: %v", partitionToken, err)
+		}
+		return nil
 	})
 	select {
 	case <-ctx.Done():
-		return ctx.Err()
+		return nil, ctx.Err()
 	case r.resCh <- asyncMessage{msg: msg, ackFn: ackOnce.Ack}:
-		// ok
+		return ackOnce, nil
 	}
-	return ackOnce.Wait(ctx)
 }
 
 var forcePeriodicFlush = &changestreams.DataChangeRecord{
@@ -248,15 +252,31 @@ func (r *spannerCDCReader) onDataChangeRecord(ctx context.Context, partitionToke
 		return err
 	}
 
+	if err := batcher.AckError(); err != nil {
+		return fmt.Errorf("ack error: %v", err)
+	}
+
+	// On partition end, flush the remaining messages and wait for all messages
+	// to be acked before returning and marking the partition as finished.
 	if dcr == nil {
 		msg, last, err := batcher.Flush(ctx)
 		if err != nil {
 			return err
 		}
+		ack, err := r.emit(ctx, partitionToken, last, msg)
+		if err != nil {
+			return err
+		}
+		batcher.AddAck(ack)
+
+		if err := batcher.WaitAcks(ctx); err != nil {
+			return fmt.Errorf("ack error: %v", err)
+		}
 		if err := batcher.Close(ctx); err != nil {
 			return err
 		}
-		return r.waitForAck(ctx, partitionToken, last, msg)
+
+		return nil
 	}
 
 	if dcr == forcePeriodicFlush {
@@ -264,14 +284,26 @@ func (r *spannerCDCReader) onDataChangeRecord(ctx context.Context, partitionToke
 		if err != nil {
 			return err
 		}
-		return r.waitForAck(ctx, partitionToken, last, msg)
+		ack, err := r.emit(ctx, partitionToken, last, msg)
+		if err != nil {
+			return err
+		}
+		batcher.AddAck(ack)
+
+		return nil
 	}
 
 	msg, err := batcher.MaybeFlushWith(ctx, dcr)
 	if err != nil {
 		return err
 	}
-	return r.waitForAck(ctx, partitionToken, dcr, msg)
+	ack, err := r.emit(ctx, partitionToken, dcr, msg)
+	if err != nil {
+		return err
+	}
+	batcher.AddAck(ack)
+
+	return nil
 }
 
 func (r *spannerCDCReader) Connect(ctx context.Context) error {
