@@ -192,8 +192,8 @@ func TestIntegrationSubscriberStartContextCanceled(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	time.AfterFunc(100*time.Millisecond, cancel)
 
-	// Then Start returns context.Canceled
-	require.ErrorIs(t, s.Start(ctx), context.Canceled)
+	// Then Run returns context.Canceled
+	require.ErrorIs(t, s.Run(ctx), context.Canceled)
 
 	mq.AssertExpectations(t)
 }
@@ -227,7 +227,7 @@ func TestIntegrationSubscriberStartReturnsErrorOnPartitionError(t *testing.T) {
 		}
 	}).Return(context.Canceled)
 
-	require.ErrorIs(t, s.Start(t.Context()), testErr)
+	require.ErrorIs(t, s.Run(t.Context()), testErr)
 	mq.AssertExpectations(t)
 }
 
@@ -260,8 +260,8 @@ func TestIntegrationSubscriberStartReturnsErrorOnCallbackError(t *testing.T) {
 	})
 	mq.expectCallbackError = true
 
-	// Then Start returns the error
-	require.ErrorIs(t, s.Start(t.Context()), testErr)
+	// Then Run returns the error
+	require.ErrorIs(t, s.Run(t.Context()), testErr)
 	mq.AssertExpectations(t)
 }
 
@@ -315,9 +315,9 @@ func TestIntegrationSubscriberResume(t *testing.T) {
 		},
 	})
 
-	// When Start is called
+	// When Run is called
 	go func() {
-		if err := s.Start(t.Context()); err != nil {
+		if err := s.Run(t.Context()); err != nil {
 			t.Log(err)
 		}
 	}()
@@ -405,9 +405,9 @@ func TestIntegrationSubscriberCallbackUpdatePartitionWatermark(t *testing.T) {
 		},
 	})
 
-	// When Start is called
+	// When Run is called
 	go func() {
-		if err := s.Start(t.Context()); err != nil {
+		if err := s.Run(t.Context()); err != nil {
 			t.Log(err)
 		}
 	}()
@@ -467,9 +467,9 @@ func TestIntegrationSubscriberAllowedModTypes(t *testing.T) {
 		},
 	})
 
-	// When Start is called
+	// When Run is called
 	go func() {
-		if err := s.Start(t.Context()); err != nil {
+		if err := s.Run(t.Context()); err != nil {
 			t.Log(err)
 		}
 	}()
@@ -591,9 +591,9 @@ func TestIntegrationSubscriberChildTokenProcessingOrder(t *testing.T) {
 		},
 	})
 
-	// When Start is called
+	// When Run is called
 	go func() {
-		if err := s.Start(t.Context()); err != nil {
+		if err := s.Run(t.Context()); err != nil {
 			t.Log(err)
 		}
 	}()
