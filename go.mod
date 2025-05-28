@@ -81,7 +81,6 @@ require (
 	github.com/gocql/gocql v1.6.0
 	github.com/gofrs/uuid/v5 v5.3.2
 	github.com/golang-jwt/jwt/v5 v5.2.2
-	github.com/google/go-cmp v0.7.0
 	github.com/googleapis/go-sql-spanner v1.8.0
 	github.com/gosimple/slug v1.14.0
 	github.com/hamba/avro/v2 v2.28.0
