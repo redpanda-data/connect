@@ -26,8 +26,8 @@ func NewConfigSpec() *service.ConfigSpec {
 		Field(service.NewStringField("username").Description("Username to connect to the cluster.").Optional()).
 		Field(service.NewStringField("password").Description("Password to connect to the cluster.").Secret().Optional()).
 		Field(service.NewStringField("bucket").Description("Couchbase bucket.")).
-		Field(service.NewStringField("collection").Description("Bucket collection.").Default("_default").Advanced().Optional()).
-		Field(service.NewStringField("scope").Description("Bucket scope.").Default("_default").Advanced().Optional()).
+		Field(service.NewStringField("collection").Description("Bucket collection.").Advanced().Optional()).
+		Field(service.NewStringField("scope").Description("Bucket scope.").Advanced().Optional()).
 		Field(service.NewStringAnnotatedEnumField("transcoder", map[string]string{
 			string(TranscoderRaw):       `RawBinaryTranscoder implements passthrough behavior of raw binary data. This transcoder does not apply any serialization. This will apply the following behavior to the value: binary ([]byte) -> binary bytes, binary expectedFlags. default -> error.`,
 			string(TranscoderRawJSON):   `RawJSONTranscoder implements passthrough behavior of JSON data. This transcoder does not apply any serialization. It will forward data across the network without incurring unnecessary parsing costs. This will apply the following behavior to the value: binary ([]byte) -> JSON bytes, JSON expectedFlags. string -> JSON bytes, JSON expectedFlags. default -> error.`,
