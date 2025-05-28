@@ -11,11 +11,13 @@ package enterprise
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/ack"
 	"github.com/redpanda-data/connect/v4/internal/impl/gcp/enterprise/changestreams"
 )
 
@@ -23,6 +25,7 @@ type spannerPartitionBatcher struct {
 	batcher *service.Batcher
 	last    *changestreams.DataChangeRecord
 	period  *time.Timer
+	acks    []*ack.Once
 	rm      func()
 }
 
@@ -58,6 +61,32 @@ func (s *spannerPartitionBatcher) flush(ctx context.Context) (service.MessageBat
 		s.period.Reset(d)
 	}
 	return msg, err
+}
+
+func (s *spannerPartitionBatcher) AddAck(ack *ack.Once) {
+	if ack == nil {
+		return
+	}
+	s.acks = append(s.acks, ack)
+}
+
+func (s *spannerPartitionBatcher) WaitAcks(ctx context.Context) error {
+	var merr []error
+	for _, ack := range s.acks {
+		if err := ack.Wait(ctx); err != nil {
+			merr = append(merr, err)
+		}
+	}
+	return errors.Join(merr...)
+}
+
+func (s *spannerPartitionBatcher) AckError() error {
+	for _, ack := range s.acks {
+		if _, err := ack.TryWait(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *spannerPartitionBatcher) Close(ctx context.Context) error {
