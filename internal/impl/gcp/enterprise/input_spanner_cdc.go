@@ -304,7 +304,7 @@ func (r *spannerCDCReader) Connect(ctx context.Context) error {
 
 	go func() {
 		defer cancel()
-		if err := r.subscriber.Start(ctx); err != nil {
+		if err := r.subscriber.Run(ctx); err != nil {
 			r.log.Errorf("Spanner change stream reader error: %v", err)
 		}
 		r.subscriber.Close()

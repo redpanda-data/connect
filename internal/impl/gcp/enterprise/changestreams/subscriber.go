@@ -210,7 +210,7 @@ func (s *Subscriber) handleRootPartitions(ctx context.Context, cr ChangeRecord) 
 	return nil
 }
 
-// Start starts reading the change stream and processing partitions. It can be
+// Run starts reading the change stream and processing partitions. It can be
 // stopped by canceling the context. If EndTimestamp is set, the subscriber will
 // stop when it reaches the end timestamp. Setup can resume the subscriber
 // from the last record processed.
@@ -218,8 +218,8 @@ func (s *Subscriber) handleRootPartitions(ctx context.Context, cr ChangeRecord) 
 // Error can be returned only if rescheduling interrupted partitions fails or
 // if the context is canceled.
 //
-// Setup must be called before Start.
-func (s *Subscriber) Start(ctx context.Context) error {
+// Setup must be called before Run.
+func (s *Subscriber) Run(ctx context.Context) error {
 	s.log.Info("Starting subscriber")
 	defer func() {
 		s.log.Info("Subscriber stopped")
