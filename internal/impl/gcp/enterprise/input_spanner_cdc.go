@@ -220,8 +220,8 @@ func newSpannerCDCReader(conf spannerCDCInputConfig, batching service.BatchPolic
 func (r *spannerCDCReader) emit(
 	ctx context.Context,
 	partitionToken string,
-	dcr *changestreams.DataChangeRecord,
 	msg service.MessageBatch,
+	commitTimestamp time.Time,
 ) (*ack.Once, error) {
 	if len(msg) == 0 {
 		return nil, nil
@@ -229,7 +229,7 @@ func (r *spannerCDCReader) emit(
 	ackOnce := ack.NewOnce(func(ctx context.Context) error {
 		// If we processed the message and failed to update the watermark, we
 		// would try to update it on the next message, no need to return an error here.
-		if err := r.subscriber.UpdatePartitionWatermark(ctx, partitionToken, dcr); err != nil {
+		if err := r.subscriber.UpdatePartitionWatermark(ctx, partitionToken, commitTimestamp); err != nil {
 			r.log.Errorf("%s: failed to update watermark: %v", partitionToken, err)
 		}
 		return nil
@@ -259,11 +259,11 @@ func (r *spannerCDCReader) onDataChangeRecord(ctx context.Context, partitionToke
 	// On partition end, flush the remaining messages and wait for all messages
 	// to be acked before returning and marking the partition as finished.
 	if dcr == nil {
-		msg, last, err := batcher.Flush(ctx)
+		msg, ts, err := batcher.Flush(ctx)
 		if err != nil {
 			return err
 		}
-		ack, err := r.emit(ctx, partitionToken, last, msg)
+		ack, err := r.emit(ctx, partitionToken, msg, ts)
 		if err != nil {
 			return err
 		}
@@ -280,11 +280,11 @@ func (r *spannerCDCReader) onDataChangeRecord(ctx context.Context, partitionToke
 	}
 
 	if dcr == forcePeriodicFlush {
-		msg, last, err := batcher.Flush(ctx)
+		msg, ts, err := batcher.Flush(ctx)
 		if err != nil {
 			return err
 		}
-		ack, err := r.emit(ctx, partitionToken, last, msg)
+		ack, err := r.emit(ctx, partitionToken, msg, ts)
 		if err != nil {
 			return err
 		}
@@ -293,15 +293,17 @@ func (r *spannerCDCReader) onDataChangeRecord(ctx context.Context, partitionToke
 		return nil
 	}
 
-	msg, err := batcher.MaybeFlushWith(ctx, dcr)
-	if err != nil {
+	iter := batcher.MaybeFlushWith(dcr)
+	for mb, ts := range iter.Iter(ctx) {
+		ack, err := r.emit(ctx, partitionToken, mb, ts)
+		if err != nil {
+			return err
+		}
+		batcher.AddAck(ack)
+	}
+	if err := iter.Err(); err != nil {
 		return err
 	}
-	ack, err := r.emit(ctx, partitionToken, dcr, msg)
-	if err != nil {
-		return err
-	}
-	batcher.AddAck(ack)
 
 	return nil
 }
