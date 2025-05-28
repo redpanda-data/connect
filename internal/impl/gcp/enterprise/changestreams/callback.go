@@ -10,6 +10,7 @@ package changestreams
 
 import (
 	"context"
+	"time"
 )
 
 // CallbackFunc is a function that is called for each change record.
@@ -24,7 +25,18 @@ import (
 type CallbackFunc func(ctx context.Context, partitionToken string, dcr *DataChangeRecord) error
 
 // UpdatePartitionWatermark updates the watermark for a partition. It's intended
-// for use by Callback function to update progress.
-func (s *Subscriber) UpdatePartitionWatermark(ctx context.Context, partitionToken string, dcr *DataChangeRecord) error {
-	return s.store.UpdateWatermark(ctx, partitionToken, dcr.CommitTimestamp)
+// for use by Callback function to update progress. If commitTimestamp is zero
+// value, the watermark is not updated.
+func (s *Subscriber) UpdatePartitionWatermark(
+	ctx context.Context,
+	partitionToken string,
+	commitTimestamp time.Time,
+) error {
+	if commitTimestamp.IsZero() {
+		return nil
+	}
+
+	s.log.Debugf("%s: updating watermark to %s", partitionToken, commitTimestamp)
+
+	return s.store.UpdateWatermark(ctx, partitionToken, commitTimestamp)
 }

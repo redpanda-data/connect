@@ -362,7 +362,7 @@ func TestIntegrationSubscriberCallbackUpdatePartitionWatermark(t *testing.T) {
 			assert.Equal(t, testStartTimestamp, pm.Watermark)
 
 			// When UpdatePartitionWatermark is called
-			require.NoError(t, s.UpdatePartitionWatermark(ctx, partitionToken, dcr))
+			require.NoError(t, s.UpdatePartitionWatermark(ctx, partitionToken, dcr.CommitTimestamp))
 		case 3:
 			assert.Nil(t, dcr)
 

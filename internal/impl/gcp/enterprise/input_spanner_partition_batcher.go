@@ -12,7 +12,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
+	"iter"
+	"strconv"
 	"sync"
 	"time"
 
@@ -20,6 +21,100 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/ack"
 	"github.com/redpanda-data/connect/v4/internal/impl/gcp/enterprise/changestreams"
 )
+
+// spannerPartitionBatchIter goes over changestreams.DataChangeRecord.Mods,
+// for every mod it creates a message and adds it to the batch, if the batch is
+// full, it yields the batch and creates a new one.
+//
+// Iff batch is returned with nonzero time, when acked the partition watermark
+// should be updated to this time.
+type spannerPartitionBatchIter struct {
+	*spannerPartitionBatcher
+	dcr *changestreams.DataChangeRecord
+	err error
+}
+
+type spannerMod struct {
+	TableName   string
+	ColumnTypes []*changestreams.ColumnType
+	Mod         *changestreams.Mod
+	ModType     string
+}
+
+func (s *spannerPartitionBatchIter) Iter(ctx context.Context) iter.Seq2[service.MessageBatch, time.Time] {
+	return func(yield func(service.MessageBatch, time.Time) bool) {
+		if s.err != nil {
+			return
+		}
+
+		lastFlushed := false
+		defer func() {
+			if lastFlushed {
+				s.last = nil
+			} else {
+				s.last = s.dcr
+			}
+		}()
+
+		first := true
+		for i, m := range s.dcr.Mods {
+			modData := spannerMod{
+				TableName:   s.dcr.TableName,
+				ColumnTypes: s.dcr.ColumnTypes,
+				Mod:         m,
+				ModType:     s.dcr.ModType,
+			}
+
+			b, err := json.Marshal(modData)
+			if err != nil {
+				s.err = err
+				return
+			}
+
+			msg := service.NewMessage(b)
+			msg.MetaSet("commit_timestamp", s.dcr.CommitTimestamp.Format(time.RFC3339Nano))
+			msg.MetaSet("record_sequence", s.dcr.RecordSequence)
+			msg.MetaSet("server_transaction_id", s.dcr.ServerTransactionID)
+			msg.MetaSet("is_last_record_in_transaction_in_partition", strconv.FormatBool(s.dcr.IsLastRecordInTransactionInPartition))
+			msg.MetaSet("value_capture_type", s.dcr.ValueCaptureType)
+			msg.MetaSet("number_of_records_in_transaction", strconv.FormatInt(s.dcr.NumberOfRecordsInTransaction, 10))
+			msg.MetaSet("number_of_partitions_in_transaction", strconv.FormatInt(s.dcr.NumberOfPartitionsInTransaction, 10))
+			msg.MetaSet("transaction_tag", s.dcr.TransactionTag)
+			msg.MetaSet("is_system_transaction", strconv.FormatBool(s.dcr.IsSystemTransaction))
+
+			if !s.batcher.Add(msg) {
+				continue
+			}
+
+			mb, err := s.flush(ctx)
+			if err != nil {
+				s.err = err
+				return
+			}
+
+			// Return the watermark to be updated after processing the batch.
+			// Not every batch should update the watermark, we update watermark
+			// only after processing the whole DataChangeRecord.
+			var watermark time.Time
+			if first && s.last != nil {
+				watermark = s.last.CommitTimestamp
+				first = false
+			}
+			if i == len(s.dcr.Mods)-1 {
+				watermark = s.dcr.CommitTimestamp
+				lastFlushed = true
+			}
+			if !yield(mb, watermark) {
+				return
+			}
+		}
+	}
+}
+
+// Err returns any error that occurred during iteration.
+func (s *spannerPartitionBatchIter) Err() error {
+	return s.err
+}
 
 type spannerPartitionBatcher struct {
 	batcher *service.Batcher
@@ -29,34 +124,24 @@ type spannerPartitionBatcher struct {
 	rm      func()
 }
 
-func (s *spannerPartitionBatcher) MaybeFlushWith(ctx context.Context, dcr *changestreams.DataChangeRecord) (service.MessageBatch, error) {
-	b, err := json.Marshal(dcr)
-	if err != nil {
-		return nil, fmt.Errorf("marshal data change record as JSON: %w", err)
-	}
-
-	s.last = dcr
-
-	if !s.batcher.Add(service.NewMessage(b)) {
-		return nil, nil
-	}
-
-	return s.flush(ctx)
+func (s *spannerPartitionBatcher) MaybeFlushWith(dcr *changestreams.DataChangeRecord) *spannerPartitionBatchIter {
+	return &spannerPartitionBatchIter{spannerPartitionBatcher: s, dcr: dcr}
 }
 
-func (s *spannerPartitionBatcher) Flush(ctx context.Context) (service.MessageBatch, *changestreams.DataChangeRecord, error) {
+func (s *spannerPartitionBatcher) Flush(ctx context.Context) (service.MessageBatch, time.Time, error) {
 	if s.last == nil {
-		return nil, nil, nil
+		return nil, time.Time{}, nil
 	}
+	defer func() {
+		s.last = nil
+	}()
 
-	last := s.last
 	msg, err := s.flush(ctx)
-	return msg, last, err
+	return msg, s.last.CommitTimestamp, err
 }
 
 func (s *spannerPartitionBatcher) flush(ctx context.Context) (service.MessageBatch, error) {
 	msg, err := s.batcher.Flush(ctx)
-	s.last = nil
 	if d, ok := s.batcher.UntilNext(); ok {
 		s.period.Reset(d)
 	}
