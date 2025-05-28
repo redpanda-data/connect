@@ -1,0 +1,5 @@
+name: fizzbuzz
+summary: Your favorite interview question - as a plugin!
+command: ["uv", "run", "examples/fizzbuzz_processor.py"]
+type: processor
+fields: []

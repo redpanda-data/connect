@@ -1,0 +1,123 @@
+// Copyright 2025 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package redpanda.runtime.v1alpha1;
+
+option go_package = "github.com/redpanda-data/connect/v4/internal/rpcplugin/runtimepb";
+
+import "redpanda/runtime/v1alpha1/message.proto";
+
+// BatchInput is an interface implemented by Benthos inputs that produce
+// messages in batches, where there is a desire to process and send the batch as
+// a logical group rather than as individual messages.
+//
+// Calls to ReadBatch should block until either a message batch is ready to
+// process, the connection is lost, or the RPC deadline is reached.
+service BatchInputService {
+  // Init is the first method called for a batch input and it passes the user's
+  // configuration to the input.
+  //
+  // The schema for the input configuration is specified in the `plugin.yaml`
+  // file provided to Redpanda Connect.
+  rpc Init(BatchInputInitRequest) returns (BatchInputInitResponse);
+  // Establish a connection to the upstream service. Connect will always be
+  // called first when a reader is instantiated, and will be continuously
+  // called with back off until a nil error is returned.
+  //
+  // Once Connect returns a nil error the Read method will be called until
+  // either ErrNotConnected is returned, or the reader is closed.
+  rpc Connect(BatchInputConnectRequest) returns (BatchInputConnectResponse);
+  // Read a message batch from a source, along with a function to be called
+  // once the entire batch can be either acked (successfully sent or
+  // intentionally filtered) or nacked (failed to be processed or dispatched
+  // to the output).
+  //
+  // The Ack will be called for every message batch at least once, but
+  // there are no guarantees as to when this will occur. If your input
+  // implementation doesn't have a specific mechanism for dealing with a nack
+  // then you can instruct the Connect framework to auto_replay_nacks in the
+  // InitResponse to get automatic retries.
+  //
+  // If this method returns Error.NotConnected then ReadBatch will not be called
+  // again until Connect has returned a nil error. If Error.EndOfInput is
+  // returned then Read will no longer be called and the pipeline will
+  // gracefully terminate.
+  rpc ReadBatch(BatchInputReadRequest) returns (BatchInputReadResponse);
+  // Acknowledge a message batch. This function ensures that the source of the
+  // message receives either an acknowledgement (error is missing) or an error
+  // that can either be propagated upstream as a nack, or trigger a reattempt at
+  // delivering the same message.
+  //
+  // If your input implementation doesn't have a specific mechanism for dealing
+  // with a nack then you can wrap your input implementation with AutoRetryNacks
+  // to get automatic retries, and noop this function.
+  rpc Ack(BatchInputAckRequest) returns (BatchInputAckResponse);
+  // Close the component, blocks until either the underlying resources are
+  // cleaned up or the RPC deadline is reached.
+  rpc Close(BatchInputCloseRequest) returns (BatchInputCloseResponse);
+}
+
+message BatchInputInitRequest {
+  // The parsed configuration from the user based on the registered schema in
+  // `plugin.yaml`.
+  Value config = 1;
+}
+message BatchInputInitResponse {
+  // If present, then the input configuration is invalid and an error should be
+  // surfaced at pipeline construction time.
+  Error error = 1;
+  // If true, then any nacks are automatically retried. This is useful for
+  // inputs that don't have a mechanism for dealing with nacks, and want to
+  // just automatically retry them until they succeed.
+  bool auto_replay_nacks = 2;
+}
+
+message BatchInputConnectRequest {}
+message BatchInputConnectResponse {
+  // If present, then the connect attempt failed.
+  Error error = 1;
+}
+
+message BatchInputReadRequest {}
+message BatchInputReadResponse {
+  // The ID of the batch, which is used in the ack request to identify the batch
+  // used. These IDs are opaque to the connect framework but IDs should be
+  // unique per process.
+  uint64 batch_id = 1;
+  // The batch of messages to be processed.
+  MessageBatch batch = 2;
+  // If present, then there was an error reading messages.
+  Error error = 3;
+}
+
+message BatchInputAckRequest {
+  // The ID of the batch.
+  uint64 batch_id = 1;
+  // If present, then this is a nack request.
+  // If auto_replay_nacks is enabled in the InitResponse, then this should never
+  // be present.
+  Error error = 2;
+}
+message BatchInputAckResponse {
+  // If present, then this ack/nack request failed.
+  Error error = 2;
+}
+
+message BatchInputCloseRequest {}
+message BatchInputCloseResponse {
+  // If present, then the close attempt failed.
+  Error error = 1;
+}

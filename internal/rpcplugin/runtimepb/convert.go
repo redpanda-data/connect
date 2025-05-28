@@ -1,12 +1,16 @@
-/*
- * Copyright 2025 Redpanda Data, Inc.
- *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
- * License (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
- */
+// Copyright 2025 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 package runtimepb
 
@@ -21,6 +25,19 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
+// MessageBatchToProto converts a service.MessageBatch into proto form.
+func MessageBatchToProto(batch service.MessageBatch) (*MessageBatch, error) {
+	out := new(MessageBatch)
+	for _, msg := range batch {
+		proto, err := MessageToProto(msg)
+		if err != nil {
+			return nil, err
+		}
+		out.Messages = append(out.Messages, proto)
+	}
+	return out, nil
+}
+
 // MessageToProto converts a service.Message into proto form.
 func MessageToProto(msg *service.Message) (*Message, error) {
 	out := &Message{}
@@ -29,7 +46,7 @@ func MessageToProto(msg *service.Message) (*Message, error) {
 		if err != nil {
 			return nil, err
 		}
-		out.Payload = &Message_Serialized{b}
+		out.Payload = &Message_Bytes{b}
 	} else {
 		v, err := msg.AsStructured()
 		if err != nil {
@@ -112,12 +129,25 @@ func AnyToProto(a any) (*Value, error) {
 	return nil, fmt.Errorf("unsupported type: %T", a)
 }
 
+// ProtoToMessageBatch converts a service.MessageBatch from proto form.
+func ProtoToMessageBatch(proto *MessageBatch) (service.MessageBatch, error) {
+	var batch service.MessageBatch
+	for _, msgProto := range proto.GetMessages() {
+		msg, err := ProtoToMessage(msgProto)
+		if err != nil {
+			return nil, err
+		}
+		batch = append(batch, msg)
+	}
+	return batch, nil
+}
+
 // ProtoToMessage converts a service.Message from proto form.
 func ProtoToMessage(msg *Message) (*service.Message, error) {
 	var out *service.Message
 	switch p := msg.Payload.(type) {
-	case *Message_Serialized:
-		out = service.NewMessage(p.Serialized)
+	case *Message_Bytes:
+		out = service.NewMessage(p.Bytes)
 	case *Message_Structured:
 		out = service.NewMessage(nil)
 		v, err := ValueToAny(p.Structured)
@@ -126,7 +156,7 @@ func ProtoToMessage(msg *Message) (*service.Message, error) {
 		}
 		out.SetStructuredMut(v)
 	}
-	for k, v := range msg.Metadata.Fields {
+	for k, v := range msg.GetMetadata().GetFields() {
 		val, err := ValueToAny(v)
 		if err != nil {
 			return nil, err

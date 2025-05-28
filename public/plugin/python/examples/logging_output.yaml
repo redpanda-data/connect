@@ -1,0 +1,9 @@
+name: py_log
+summary: Just log it
+command: ["uv", "run", "examples/logging_output.py"]
+type: output
+fields:
+  - name: repeat
+    type: int
+    description: the number of times to repeat the log
+    default: 1

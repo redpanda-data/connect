@@ -8,64 +8,27 @@
  * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
  */
 
-//go:generate protoc -I=../../proto/redpanda/runtime/v1alpha1 --go_out=../.. --go-grpc_out=../.. runtime.proto
+//go:generate protoc -I=../../proto --go-grpc_opt=module=github.com/redpanda-data/connect/v4 --go_opt=module=github.com/redpanda-data/connect/v4 --go_out=../.. --go-grpc_out=../.. redpanda/runtime/v1alpha1/agent.proto
 
 package agent
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
-	"github.com/hashicorp/go-plugin"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
-	"google.golang.org/grpc"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
 
-	"github.com/redpanda-data/connect/v4/internal/agent/runtimepb"
+	agentruntimepb "github.com/redpanda-data/connect/v4/internal/agent/runtimepb"
+	"github.com/redpanda-data/connect/v4/internal/rpcplugin/runtimepb"
 	"github.com/redpanda-data/connect/v4/internal/tracing"
 )
 
-// Handshake is a common handshake that is shared by plugin and host.
-var handshake = plugin.HandshakeConfig{
-	// This isn't required when using VersionedPlugins
-	ProtocolVersion:  1,
-	MagicCookieKey:   "REDPANDA_CONNECT_DYNAMIC_PLUGIN",
-	MagicCookieValue: ":blobswag:",
-}
-
-// PluginMap is the map of plugins we can dispense.
-var pluginMap = map[string]plugin.Plugin{
-	"runtime": &runtimePlugin{},
-}
-
-type runtimePlugin struct {
-	plugin.NetRPCUnsupportedPlugin
-}
-
-var (
-	_ plugin.GRPCPlugin = (*runtimePlugin)(nil)
-	_ plugin.Plugin     = (*runtimePlugin)(nil)
-)
-
-// GRPCClient implements plugin.GRPCPlugin.
-func (p *runtimePlugin) GRPCClient(ctx context.Context, broker *plugin.GRPCBroker, c *grpc.ClientConn) (any, error) {
-	return &rpcClient{
-		client: runtimepb.NewRuntimeClient(c),
-		tracer: nil,
-	}, nil
-}
-
-// GRPCServer implements plugin.GRPCPlugin.
-func (p *runtimePlugin) GRPCServer(broker *plugin.GRPCBroker, s *grpc.Server) error {
-	return errors.ErrUnsupported
-}
-
 type rpcClient struct {
-	client runtimepb.RuntimeClient
+	client agentruntimepb.AgentRuntimeClient
 	tracer trace.Tracer
 }
 
@@ -75,16 +38,16 @@ func (m *rpcClient) InvokeAgent(ctx context.Context, inputMsg *service.Message) 
 		return nil, fmt.Errorf("failed to convert message for agent: %w", err)
 	}
 	span := trace.SpanFromContext(inputMsg.Context())
-	var traceContext *runtimepb.TraceContext
+	var traceContext *agentruntimepb.TraceContext
 	if c := span.SpanContext(); c.IsValid() {
-		traceContext = &runtimepb.TraceContext{
+		traceContext = &agentruntimepb.TraceContext{
 			TraceId:    c.TraceID().String(),
 			SpanId:     c.SpanID().String(),
 			TraceFlags: c.TraceFlags().String(),
 		}
 	}
 
-	resp, err := m.client.InvokeAgent(ctx, &runtimepb.InvokeAgentRequest{
+	resp, err := m.client.InvokeAgent(ctx, &agentruntimepb.InvokeAgentRequest{
 		Message:      pb,
 		TraceContext: traceContext,
 	})
@@ -104,7 +67,7 @@ func (m *rpcClient) InvokeAgent(ctx context.Context, inputMsg *service.Message) 
 	return outputMsg, nil
 }
 
-func (m *rpcClient) applySubSpans(ctx context.Context, spans []*runtimepb.Span) error {
+func (m *rpcClient) applySubSpans(ctx context.Context, spans []*agentruntimepb.Span) error {
 	for _, protoSpan := range spans {
 		var attrs []attribute.KeyValue
 		for k, v := range protoSpan.GetAttributes() {
