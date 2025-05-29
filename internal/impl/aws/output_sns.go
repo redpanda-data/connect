@@ -26,7 +26,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sns"
 	"github.com/aws/aws-sdk-go-v2/service/sns/types"
 
-	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/aws/config"
@@ -139,7 +138,7 @@ func newSNSWriter(conf snsoConfig, mgr *service.Resources) (*snsWriter, error) {
 	return s, nil
 }
 
-func (a *snsWriter) Connect(ctx context.Context) error {
+func (a *snsWriter) Connect(context.Context) error {
 	if a.sns != nil {
 		return nil
 	}
@@ -155,14 +154,14 @@ type snsAttributes struct {
 
 var snsAttributeKeyInvalidCharRegexp = regexp.MustCompile(`(^\.)|(\.\.)|(^aws\.)|(^amazon\.)|(\.$)|([^a-z0-9_\-.]+)`)
 
-func isValidSNSAttribute(k, v string) bool {
+func isValidSNSAttribute(k string) bool {
 	return len(snsAttributeKeyInvalidCharRegexp.FindStringIndex(strings.ToLower(k))) == 0
 }
 
 func (a *snsWriter) getSNSAttributes(msg *service.Message) (snsAttributes, error) {
 	keys := []string{}
-	_ = a.conf.Metadata.WalkMut(msg, func(k string, v any) error {
-		if isValidSNSAttribute(k, bloblang.ValueToString(v)) {
+	_ = a.conf.Metadata.WalkMut(msg, func(k string, _ any) error {
+		if isValidSNSAttribute(k) {
 			keys = append(keys, k)
 		} else {
 			a.log.Debugf("Rejecting metadata key '%v' due to invalid characters\n", k)
@@ -234,6 +233,6 @@ func (a *snsWriter) Write(wctx context.Context, msg *service.Message) error {
 	return err
 }
 
-func (a *snsWriter) Close(context.Context) error {
+func (*snsWriter) Close(context.Context) error {
 	return nil
 }

@@ -277,7 +277,7 @@ func newSchemaRegistryDecoder(
 	return s, nil
 }
 
-func (s *schemaRegistryDecoder) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+func (s *schemaRegistryDecoder) Process(_ context.Context, msg *service.Message) (service.MessageBatch, error) {
 	b, err := msg.AsBytes()
 	if err != nil {
 		return nil, errors.New("unable to reference message as bytes")

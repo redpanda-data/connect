@@ -203,7 +203,7 @@ func (r *requestReplyProcessor) Process(ctx context.Context, msg *service.Messag
 	return service.MessageBatch{m}, nil
 }
 
-func (r *requestReplyProcessor) Close(ctx context.Context) error {
+func (r *requestReplyProcessor) Close(context.Context) error {
 	r.connMut.Lock()
 	defer r.connMut.Unlock()
 

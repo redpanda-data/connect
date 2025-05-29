@@ -17,32 +17,32 @@ import (
 
 type stubClient struct{}
 
-func (*stubClient) CreateEmbeddings(ctx context.Context, body oai.EmbeddingRequestConverter) (r oai.EmbeddingResponse, err error) {
+func (*stubClient) CreateEmbeddings(_ context.Context, _ oai.EmbeddingRequestConverter) (r oai.EmbeddingResponse, err error) {
 	err = errors.New("unimplemented")
 	return
 }
 
-func (*stubClient) CreateChatCompletion(ctx context.Context, body oai.ChatCompletionRequest) (r oai.ChatCompletionResponse, err error) {
+func (*stubClient) CreateChatCompletion(_ context.Context, _ oai.ChatCompletionRequest) (r oai.ChatCompletionResponse, err error) {
 	err = errors.New("unimplemented")
 	return
 }
 
-func (*stubClient) CreateSpeech(ctx context.Context, body oai.CreateSpeechRequest) (r oai.RawResponse, err error) {
+func (*stubClient) CreateSpeech(_ context.Context, _ oai.CreateSpeechRequest) (r oai.RawResponse, err error) {
 	err = errors.New("unimplemented")
 	return
 }
 
-func (*stubClient) CreateTranscription(ctx context.Context, body oai.AudioRequest) (r oai.AudioResponse, err error) {
+func (*stubClient) CreateTranscription(_ context.Context, _ oai.AudioRequest) (r oai.AudioResponse, err error) {
 	err = errors.New("unimplemented")
 	return
 }
 
-func (*stubClient) CreateTranslation(ctx context.Context, body oai.AudioRequest) (r oai.AudioResponse, err error) {
+func (*stubClient) CreateTranslation(_ context.Context, _ oai.AudioRequest) (r oai.AudioResponse, err error) {
 	err = errors.New("unimplemented")
 	return
 }
 
-func (*stubClient) CreateImage(ctx context.Context, body oai.ImageRequest) (r oai.ImageResponse, err error) {
+func (*stubClient) CreateImage(_ context.Context, _ oai.ImageRequest) (r oai.ImageResponse, err error) {
 	err = errors.New("unimplemented")
 	return
 }

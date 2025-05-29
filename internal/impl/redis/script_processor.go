@@ -198,7 +198,7 @@ func (r *redisScriptProc) ProcessBatch(ctx context.Context, inBatch service.Mess
 	return []service.MessageBatch{newMsg}, nil
 }
 
-func (r *redisScriptProc) Close(ctx context.Context) error {
+func (r *redisScriptProc) Close(context.Context) error {
 	return r.client.Close()
 }
 

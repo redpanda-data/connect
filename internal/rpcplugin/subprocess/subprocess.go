@@ -150,7 +150,7 @@ func (s *Subprocess) readOutput(pipe io.Reader, isStderr bool) {
 	log := s.logger.With("source", src)
 	scanner := bufio.NewScanner(pipe)
 	scanner.Buffer([]byte{}, 512*1024)
-	hook := func(line string) {}
+	hook := func(string) {}
 	if !isStderr && s.stdoutHook != nil {
 		hook = s.stdoutHook
 	} else if isStderr && s.stderrHook != nil {

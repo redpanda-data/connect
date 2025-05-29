@@ -15,11 +15,9 @@ import (
 	"path/filepath"
 
 	"github.com/urfave/cli/v2"
-
-	"github.com/redpanda-data/connect/v4/internal/impl/kafka/enterprise"
 )
 
-func mcpServerInitCli(rpMgr *enterprise.GlobalRedpandaManager) *cli.Command {
+func mcpServerInitCli() *cli.Command {
 	flags := []cli.Flag{}
 
 	return &cli.Command{
@@ -79,7 +77,7 @@ meta:
 `,
 	"resources/processors/example-processor.yaml": `label: example-processor
 try:
-  - mapping: 'root = content().uppercase()' 
+  - mapping: 'root = content().uppercase()'
 meta:
   tags: [ example ]
   mcp:

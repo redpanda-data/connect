@@ -188,7 +188,7 @@ func (s *sqlRawInput) Connect(ctx context.Context) (err error) {
 	return nil
 }
 
-func (s *sqlRawInput) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
+func (s *sqlRawInput) Read(context.Context) (*service.Message, service.AckFunc, error) {
 	s.dbMut.Lock()
 	defer s.dbMut.Unlock()
 
@@ -219,7 +219,7 @@ func (s *sqlRawInput) Read(ctx context.Context) (*service.Message, service.AckFu
 
 	msg := service.NewMessage(nil)
 	msg.SetStructured(obj)
-	return msg, func(ctx context.Context, err error) error {
+	return msg, func(context.Context, error) error {
 		// Nacks are handled by AutoRetryNacks because we don't have an explicit
 		// ack mechanism right now.
 		return nil

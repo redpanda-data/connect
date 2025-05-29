@@ -192,7 +192,7 @@ func TestGCPBigQueryOutputConvertToIsoError(t *testing.T) {
 
 func TestGCPBigQueryOutputCreateTableLoaderOk(t *testing.T) {
 	server := httptest.NewServer(
-		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			_, _ = w.Write([]byte(`{"id" : "dataset_meow"}`))
 		}),
 	)
@@ -253,7 +253,7 @@ csv:
 
 func TestGCPBigQueryOutputDatasetDoNotExists(t *testing.T) {
 	server := httptest.NewServer(
-		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = w.Write([]byte("{}"))
 		}),
@@ -279,7 +279,7 @@ table: table_meow
 
 func TestGCPBigQueryOutputDatasetDoNotExistsUnknownError(t *testing.T) {
 	server := httptest.NewServer(
-		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, _ = w.Write([]byte("{}"))
 		}),
@@ -383,7 +383,7 @@ create_disposition: CREATE_NEVER
 
 func TestGCPBigQueryOutputConnectOk(t *testing.T) {
 	server := httptest.NewServer(
-		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			_, _ = w.Write([]byte(`{"id" : "dataset_meow"}`))
 		}),
 	)

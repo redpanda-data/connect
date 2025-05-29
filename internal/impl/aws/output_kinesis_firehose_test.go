@@ -36,7 +36,7 @@ type mockKinesisFirehose struct {
 	fn func(input *firehose.PutRecordBatchInput) (*firehose.PutRecordBatchOutput, error)
 }
 
-func (m *mockKinesisFirehose) PutRecordBatch(ctx context.Context, input *firehose.PutRecordBatchInput, optFns ...func(*firehose.Options)) (*firehose.PutRecordBatchOutput, error) {
+func (m *mockKinesisFirehose) PutRecordBatch(_ context.Context, input *firehose.PutRecordBatchInput, _ ...func(*firehose.Options)) (*firehose.PutRecordBatchOutput, error) {
 	return m.fn(input)
 }
 
@@ -197,7 +197,7 @@ func TestKinesisFirehoseWriteError(t *testing.T) {
 
 	k := testKFO(t,
 		&mockKinesisFirehose{
-			fn: func(input *firehose.PutRecordBatchInput) (*firehose.PutRecordBatchOutput, error) {
+			fn: func(*firehose.PutRecordBatchInput) (*firehose.PutRecordBatchOutput, error) {
 				calls++
 				return nil, errors.New("blah")
 			},
@@ -270,7 +270,7 @@ func TestKinesisFirehoseWriteBackoffMaxRetriesExceeded(t *testing.T) {
 
 	k := testKFO(t,
 		&mockKinesisFirehose{
-			fn: func(input *firehose.PutRecordBatchInput) (*firehose.PutRecordBatchOutput, error) {
+			fn: func(*firehose.PutRecordBatchInput) (*firehose.PutRecordBatchOutput, error) {
 				calls++
 				var output firehose.PutRecordBatchOutput
 				output.FailedPutCount = aws.Int32(1)

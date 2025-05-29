@@ -435,7 +435,7 @@ func (k *kinesisReader) getIter(info streamInfo, shardID, sequence string) (stri
 // replacing the current iterator with this return param should always be safe.
 //
 // Do NOT modify this method without preserving this behaviour.
-func (k *kinesisReader) getRecords(info streamInfo, shardID, shardIter string) ([]types.Record, string, error) {
+func (k *kinesisReader) getRecords(info streamInfo, shardIter string) ([]types.Record, string, error) {
 	res, err := k.svc.GetRecords(k.ctx, &kinesis.GetRecordsInput{
 		StreamARN:     &info.arn,
 		Limit:         &awsKinesisDefaultLimit,
@@ -560,7 +560,7 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, info streamInfo, shardID
 		for {
 			var err error
 			if state == awsKinesisConsumerConsuming && len(pending) == 0 && nextPullChan == unblockedChan {
-				if pending, iter, err = k.getRecords(info, shardID, iter); err != nil {
+				if pending, iter, err = k.getRecords(info, iter); err != nil {
 					if !awsErrIsTimeout(err) {
 						nextPullChan = time.After(boff.NextBackOff())
 

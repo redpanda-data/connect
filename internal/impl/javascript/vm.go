@@ -134,7 +134,7 @@ func (r *vmRunner) reset() {
 	r.targetIndex = 0
 }
 
-func (r *vmRunner) Run(ctx context.Context, batch service.MessageBatch) (service.MessageBatch, error) {
+func (r *vmRunner) Run(_ context.Context, batch service.MessageBatch) (service.MessageBatch, error) {
 	defer r.reset()
 
 	var newBatch service.MessageBatch
@@ -156,6 +156,6 @@ func (r *vmRunner) Run(ctx context.Context, batch service.MessageBatch) (service
 	return newBatch, nil
 }
 
-func (r *vmRunner) Close(ctx context.Context) error {
+func (*vmRunner) Close(context.Context) error {
 	return nil
 }

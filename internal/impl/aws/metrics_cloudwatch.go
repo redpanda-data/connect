@@ -322,7 +322,7 @@ func newCloudWatch(config cwmConfig, sess aws.Config, log *service.Logger) (serv
 
 func (c *cwMetrics) NewCounterCtor(name string, labelKeys ...string) service.MetricsExporterCounterCtor {
 	if len(labelKeys) == 0 {
-		return func(labelValues ...string) service.MetricsExporterCounter {
+		return func(...string) service.MetricsExporterCounter {
 			return &cloudWatchStat{
 				root: c,
 				id:   name,
@@ -345,7 +345,7 @@ func (c *cwMetrics) NewCounterCtor(name string, labelKeys ...string) service.Met
 
 func (c *cwMetrics) NewTimerCtor(name string, labelKeys ...string) service.MetricsExporterTimerCtor {
 	if len(labelKeys) == 0 {
-		return func(labelValues ...string) service.MetricsExporterTimer {
+		return func(...string) service.MetricsExporterTimer {
 			return &cloudWatchStat{
 				root: c,
 				id:   name,
@@ -368,7 +368,7 @@ func (c *cwMetrics) NewTimerCtor(name string, labelKeys ...string) service.Metri
 
 func (c *cwMetrics) NewGaugeCtor(name string, labelKeys ...string) service.MetricsExporterGaugeCtor {
 	if len(labelKeys) == 0 {
-		return func(labelValues ...string) service.MetricsExporterGauge {
+		return func(...string) service.MetricsExporterGauge {
 			return &cloudWatchStat{
 				root: c,
 				id:   name,
@@ -521,11 +521,11 @@ func (c *cwMetrics) flush() error {
 
 //------------------------------------------------------------------------------
 
-func (c *cwMetrics) HandlerFunc() http.HandlerFunc {
+func (*cwMetrics) HandlerFunc() http.HandlerFunc {
 	return nil
 }
 
-func (c *cwMetrics) Close(ctx context.Context) error {
+func (c *cwMetrics) Close(context.Context) error {
 	c.cancel()
 	c.flush()
 	return nil

@@ -48,7 +48,7 @@ func (l *topicLogger) InitWithOutput(pipelineID, topic string, logsLevel slog.Le
 }
 
 // Enabled returns true if the logger is enabled and false otherwise.
-func (l *topicLogger) Enabled(ctx context.Context, atLevel slog.Level) bool {
+func (l *topicLogger) Enabled(_ context.Context, atLevel slog.Level) bool {
 	lvl := l.level.Load()
 	if lvl == nil {
 		return true
@@ -56,7 +56,7 @@ func (l *topicLogger) Enabled(ctx context.Context, atLevel slog.Level) bool {
 	return atLevel >= *lvl
 }
 
-func (l *topicLogger) Handle(ctx context.Context, r slog.Record) error {
+func (l *topicLogger) Handle(_ context.Context, r slog.Record) error {
 	topic, level, pipelineID := l.topic.Load(), l.level.Load(), l.pipelineID.Load()
 	if topic == nil || level == nil || pipelineID == nil {
 		return nil
@@ -92,7 +92,7 @@ func (l *topicLogger) Handle(ctx context.Context, r slog.Record) error {
 	}
 
 	l.pendingWrites.Add(1)
-	if err := tmpO.WriteBatchNonBlocking(service.MessageBatch{msg}, func(ctx context.Context, err error) error {
+	if err := tmpO.WriteBatchNonBlocking(service.MessageBatch{msg}, func(context.Context, error) error {
 		l.pendingWrites.Add(-1)
 		return nil
 	}); err != nil {
@@ -110,7 +110,7 @@ func (l *topicLogger) WithAttrs(attrs []slog.Attr) slog.Handler {
 	return &newL
 }
 
-func (l *topicLogger) WithGroup(name string) slog.Handler {
+func (l *topicLogger) WithGroup(string) slog.Handler {
 	return l // TODO
 }
 

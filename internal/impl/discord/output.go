@@ -85,7 +85,7 @@ func newWriter(conf *service.ParsedConfig, mgr *service.Resources) (*writer, err
 	return w, nil
 }
 
-func (w *writer) Connect(ctx context.Context) error {
+func (w *writer) Connect(context.Context) error {
 	w.connMut.Lock()
 	defer w.connMut.Unlock()
 	if w.sess != nil {
@@ -118,11 +118,11 @@ func (w *writer) Write(ctx context.Context, msg *service.Message) error {
 		return err
 	}
 
-	_, err = sess.ChannelMessageSend(w.channelID, string(rawContent))
+	_, err = sess.ChannelMessageSend(w.channelID, string(rawContent), []discordgo.RequestOption{discordgo.WithContext(ctx)}...)
 	return err
 }
 
-func (w *writer) Close(ctx context.Context) error {
+func (w *writer) Close(context.Context) error {
 	w.connMut.Lock()
 	if w.done != nil {
 		w.done()

@@ -31,19 +31,19 @@ type defaultLogger struct {
 	backend *service.Logger
 }
 
-func (l defaultLogger) SubLogger(fields plog.Fields) plog.Logger {
+func (l defaultLogger) SubLogger(plog.Fields) plog.Logger {
 	return l
 }
 
-func (l defaultLogger) WithFields(fields plog.Fields) plog.Entry {
+func (l defaultLogger) WithFields(plog.Fields) plog.Entry {
 	return l
 }
 
-func (l defaultLogger) WithField(name string, value any) plog.Entry {
+func (l defaultLogger) WithField(string, any) plog.Entry {
 	return l
 }
 
-func (l defaultLogger) WithError(err error) plog.Entry {
+func (l defaultLogger) WithError(error) plog.Entry {
 	return l
 }
 
@@ -86,28 +86,28 @@ func NoopLogger() plog.Logger {
 
 type noopLogger struct{}
 
-func (n noopLogger) SubLogger(fields plog.Fields) plog.Logger {
+func (n noopLogger) SubLogger(plog.Fields) plog.Logger {
 	return n
 }
 
-func (n noopLogger) WithFields(fields plog.Fields) plog.Entry {
+func (n noopLogger) WithFields(plog.Fields) plog.Entry {
 	return n
 }
 
-func (n noopLogger) WithField(name string, value any) plog.Entry {
+func (n noopLogger) WithField(string, any) plog.Entry {
 	return n
 }
 
-func (n noopLogger) WithError(err error) plog.Entry {
+func (n noopLogger) WithError(error) plog.Entry {
 	return n
 }
 
-func (n noopLogger) Debug(args ...any) {}
-func (n noopLogger) Info(args ...any)  {}
-func (n noopLogger) Warn(args ...any)  {}
-func (n noopLogger) Error(args ...any) {}
+func (noopLogger) Debug(...any) {}
+func (noopLogger) Info(...any)  {}
+func (noopLogger) Warn(...any)  {}
+func (noopLogger) Error(...any) {}
 
-func (n noopLogger) Debugf(format string, args ...any) {}
-func (n noopLogger) Infof(format string, args ...any)  {}
-func (n noopLogger) Warnf(format string, args ...any)  {}
-func (n noopLogger) Errorf(format string, args ...any) {}
+func (noopLogger) Debugf(string, ...any) {}
+func (noopLogger) Infof(string, ...any)  {}
+func (noopLogger) Warnf(string, ...any)  {}
+func (noopLogger) Errorf(string, ...any) {}

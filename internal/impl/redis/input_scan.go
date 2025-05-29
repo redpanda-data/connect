@@ -117,13 +117,13 @@ func (r *redisScanReader) Read(ctx context.Context) (*service.Message, service.A
 			"key":   key,
 			"value": res.Val(),
 		})
-		return msg, func(ctx context.Context, err error) error {
+		return msg, func(_ context.Context, err error) error {
 			return err
 		}, nil
 	}
 	return nil, nil, service.ErrEndOfInput
 }
 
-func (r *redisScanReader) Close(ctx context.Context) (err error) {
+func (r *redisScanReader) Close(context.Context) (err error) {
 	return r.client.Close()
 }

@@ -57,8 +57,17 @@ linters:
     revive:
       enable-all-rules: false
       rules:
-        - name: superfluous-else
+        # - name: defer
+        # - name: early-return
         - name: exported
+        - name: superfluous-else
+        - name: time-equal
+        - name: unnecessary-stmt
+        # - name: unchecked-type-assertion
+        - name: unused-parameter
+        - name: unused-receiver
+        - name: useless-break
+        - name: waitgroup-by-value
     testifylint:
       disable-all: true
       enable:

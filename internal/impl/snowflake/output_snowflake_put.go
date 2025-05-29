@@ -654,7 +654,7 @@ func newSnowflakeWriterFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 
 //------------------------------------------------------------------------------
 
-func (s *snowflakeWriter) Connect(ctx context.Context) error {
+func (s *snowflakeWriter) Connect(context.Context) error {
 	var err error
 	s.db, err = sql.Open("snowflake", s.dsn)
 	if err != nil {
@@ -846,7 +846,7 @@ func (s *snowflakeWriter) WriteBatch(ctx context.Context, batch service.MessageB
 	return nil
 }
 
-func (s *snowflakeWriter) Close(ctx context.Context) error {
+func (s *snowflakeWriter) Close(context.Context) error {
 	s.connMut.Lock()
 	defer s.connMut.Unlock()
 

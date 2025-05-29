@@ -332,7 +332,7 @@ func newAmazonS3Writer(conf s3oConfig, mgr *service.Resources) (*amazonS3Writer,
 	return a, nil
 }
 
-func (a *amazonS3Writer) Connect(ctx context.Context) error {
+func (a *amazonS3Writer) Connect(context.Context) error {
 	if a.uploader != nil {
 		return nil
 	}
@@ -474,6 +474,6 @@ func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg service.MessageBat
 	})
 }
 
-func (a *amazonS3Writer) Close(context.Context) error {
+func (*amazonS3Writer) Close(context.Context) error {
 	return nil
 }

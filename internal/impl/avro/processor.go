@@ -240,7 +240,7 @@ func newAvroFromConfig(conf *service.ParsedConfig, mgr *service.Resources) (serv
 
 //------------------------------------------------------------------------------
 
-func (p *avro) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+func (p *avro) Process(_ context.Context, msg *service.Message) (service.MessageBatch, error) {
 	err := p.operator(msg)
 	if err != nil {
 		p.log.Debugf("Operator failed: %v\n", err)
@@ -249,6 +249,6 @@ func (p *avro) Process(ctx context.Context, msg *service.Message) (service.Messa
 	return service.MessageBatch{msg}, nil
 }
 
-func (p *avro) Close(context.Context) error {
+func (*avro) Close(context.Context) error {
 	return nil
 }

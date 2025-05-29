@@ -49,7 +49,7 @@ func redisRatelimitConfig() *service.ConfigSpec {
 func init() {
 	service.MustRegisterRateLimit(
 		"redis", redisRatelimitConfig(),
-		func(conf *service.ParsedConfig, mgr *service.Resources) (service.RateLimit, error) {
+		func(conf *service.ParsedConfig, _ *service.Resources) (service.RateLimit, error) {
 			return newRedisRatelimitFromConfig(conf)
 		})
 }
@@ -128,6 +128,6 @@ func (r *redisRatelimit) Access(ctx context.Context) (time.Duration, error) {
 	return time.Duration((result.Val().(int64)) * int64(time.Millisecond)), nil
 }
 
-func (r *redisRatelimit) Close(ctx context.Context) error {
+func (*redisRatelimit) Close(context.Context) error {
 	return nil
 }

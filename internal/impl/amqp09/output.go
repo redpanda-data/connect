@@ -297,7 +297,7 @@ func amqp09WriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) 
 	return &a, nil
 }
 
-func (a *amqp09Writer) Connect(ctx context.Context) error {
+func (a *amqp09Writer) Connect(context.Context) error {
 	a.connLock.Lock()
 	defer a.connLock.Unlock()
 

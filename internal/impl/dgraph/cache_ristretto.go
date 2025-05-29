@@ -51,7 +51,7 @@ func ristrettoCacheConfig() *service.ConfigSpec {
 func init() {
 	service.MustRegisterCache(
 		"ristretto", ristrettoCacheConfig(),
-		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
+		func(conf *service.ParsedConfig, _ *service.Resources) (service.Cache, error) {
 			return newRistrettoCacheFromConfig(conf)
 		})
 }
@@ -141,7 +141,7 @@ func (r *ristrettoCache) Get(ctx context.Context, key string) ([]byte, error) {
 	}
 }
 
-func (r *ristrettoCache) Set(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
+func (r *ristrettoCache) Set(_ context.Context, key string, value []byte, ttl *time.Duration) error {
 	var t time.Duration
 	if ttl != nil {
 		t = *ttl
@@ -158,12 +158,12 @@ func (r *ristrettoCache) Add(ctx context.Context, key string, value []byte, ttl 
 	return r.Set(ctx, key, value, ttl)
 }
 
-func (r *ristrettoCache) Delete(ctx context.Context, key string) error {
+func (r *ristrettoCache) Delete(_ context.Context, key string) error {
 	r.cache.Del(key)
 	return nil
 }
 
-func (r *ristrettoCache) Close(ctx context.Context) error {
+func (r *ristrettoCache) Close(_ context.Context) error {
 	r.closeOnce.Do(func() {
 		r.cache.Close()
 	})

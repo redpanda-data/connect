@@ -106,7 +106,7 @@ cache_resources:
 	suite.Run(
 		t, template,
 		integration.CacheTestOptVarSet("VAR1", dsn),
-		integration.CacheTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.CacheTestConfigVars) {
+		integration.CacheTestOptPreTest(func(t testing.TB, _ context.Context, vars *integration.CacheTestConfigVars) {
 			tableName := strings.ReplaceAll(vars.ID, "-", "_")
 			tableName = "table_" + tableName
 			vars.General["VAR2"] = tableName

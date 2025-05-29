@@ -30,7 +30,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	"github.com/cenkalti/backoff/v4"
 
-	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/aws/config"
@@ -176,7 +175,7 @@ func newSQSWriter(conf sqsoConfig, mgr *service.Resources) (*sqsWriter, error) {
 	return s, nil
 }
 
-func (a *sqsWriter) Connect(ctx context.Context) error {
+func (a *sqsWriter) Connect(context.Context) error {
 	if a.sqs != nil {
 		return nil
 	}
@@ -195,15 +194,15 @@ type sqsAttributes struct {
 
 var sqsAttributeKeyInvalidCharRegexp = regexp.MustCompile(`(^\.)|(\.\.)|(^aws\.)|(^amazon\.)|(\.$)|([^a-z0-9_\-.]+)`)
 
-func isValidSQSAttribute(k, v string) bool {
+func isValidSQSAttribute(k string) bool {
 	return len(sqsAttributeKeyInvalidCharRegexp.FindStringIndex(strings.ToLower(k))) == 0
 }
 
 func (a *sqsWriter) getSQSAttributes(batch service.MessageBatch, i int) (sqsAttributes, error) {
 	msg := batch[i]
 	keys := []string{}
-	_ = a.conf.Metadata.WalkMut(msg, func(k string, v any) error {
-		if isValidSQSAttribute(k, bloblang.ValueToString(v)) {
+	_ = a.conf.Metadata.WalkMut(msg, func(k string, _ any) error {
+		if isValidSQSAttribute(k) {
 			keys = append(keys, k)
 		} else {
 			a.log.Debugf("Rejecting metadata key '%v' due to invalid characters\n", k)

@@ -89,7 +89,7 @@ sql_select:
 	require.NoError(t, streamOutBuilder.AddInputYAML(inputConf))
 
 	var msgs []string
-	require.NoError(t, streamOutBuilder.AddConsumerFunc(func(ctx context.Context, m *service.Message) error {
+	require.NoError(t, streamOutBuilder.AddConsumerFunc(func(_ context.Context, m *service.Message) error {
 		bMsg, err := m.AsBytes()
 		require.NoError(t, err)
 		msgs = append(msgs, string(bMsg))
@@ -172,7 +172,7 @@ sql_select:
 	require.NoError(t, streamOutBuilder.AddInputYAML(inputConf))
 
 	var msgs []string
-	require.NoError(t, streamOutBuilder.AddConsumerFunc(func(ctx context.Context, m *service.Message) error {
+	require.NoError(t, streamOutBuilder.AddConsumerFunc(func(_ context.Context, m *service.Message) error {
 		bMsg, err := m.AsBytes()
 		require.NoError(t, err)
 		msgs = append(msgs, string(bMsg))

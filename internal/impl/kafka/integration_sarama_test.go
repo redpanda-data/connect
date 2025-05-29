@@ -125,7 +125,7 @@ kafka:
 	outBuilder := service.NewStreamBuilder()
 	require.NoError(t, outBuilder.AddInputYAML(outBuilderConf))
 	require.NoError(t, outBuilder.AddProcessorYAML(`mapping: 'root = content().uppercase()'`))
-	require.NoError(t, outBuilder.AddConsumerFunc(func(ctx context.Context, m *service.Message) error {
+	require.NoError(t, outBuilder.AddConsumerFunc(func(context.Context, *service.Message) error {
 		messageCountMut.Lock()
 		outMessagesOne++
 		messageCountMut.Unlock()
@@ -139,7 +139,7 @@ kafka:
 
 	outBuilder = service.NewStreamBuilder()
 	require.NoError(t, outBuilder.AddInputYAML(outBuilderConf))
-	require.NoError(t, outBuilder.AddConsumerFunc(func(ctx context.Context, m *service.Message) error {
+	require.NoError(t, outBuilder.AddConsumerFunc(func(context.Context, *service.Message) error {
 		messageCountMut.Lock()
 		outMessagesTwo++
 		messageCountMut.Unlock()

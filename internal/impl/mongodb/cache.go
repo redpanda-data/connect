@@ -46,7 +46,7 @@ func mongodbCacheConfig() *service.ConfigSpec {
 func init() {
 	service.MustRegisterCache(
 		"mongodb", mongodbCacheConfig(),
-		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
+		func(conf *service.ParsedConfig, _ *service.Resources) (service.Cache, error) {
 			return newMongodbCacheFromConfig(conf)
 		})
 }

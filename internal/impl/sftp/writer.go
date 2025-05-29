@@ -26,7 +26,7 @@ type codecSuffixFn func(data []byte) ([]byte, bool)
 func codecGetWriter(codec string) (sFn codecSuffixFn, appendMode bool, err error) {
 	switch codec {
 	case "all-bytes":
-		return func(data []byte) ([]byte, bool) { return nil, false }, false, nil
+		return func([]byte) ([]byte, bool) { return nil, false }, false, nil
 	case "append":
 		return customDelimSuffixFn(""), true, nil
 	case "lines":

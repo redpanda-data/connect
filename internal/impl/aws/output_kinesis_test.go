@@ -33,7 +33,7 @@ type mockKinesis struct {
 	fn func(input *kinesis.PutRecordsInput) (*kinesis.PutRecordsOutput, error)
 }
 
-func (m *mockKinesis) PutRecords(ctx context.Context, input *kinesis.PutRecordsInput, optFns ...func(*kinesis.Options)) (*kinesis.PutRecordsOutput, error) {
+func (m *mockKinesis) PutRecords(_ context.Context, input *kinesis.PutRecordsInput, _ ...func(*kinesis.Options)) (*kinesis.PutRecordsOutput, error) {
 	return m.fn(input)
 }
 
@@ -216,7 +216,7 @@ partition_key: ${! json("id") }
 max_retries: 2
 `)
 	k.kinesis = &mockKinesis{
-		fn: func(input *kinesis.PutRecordsInput) (*kinesis.PutRecordsOutput, error) {
+		fn: func(*kinesis.PutRecordsInput) (*kinesis.PutRecordsOutput, error) {
 			calls++
 			return nil, errors.New("blah")
 		},
@@ -291,7 +291,7 @@ partition_key: ${! json("id") }
 max_retries: 2
 `)
 	k.kinesis = &mockKinesis{
-		fn: func(input *kinesis.PutRecordsInput) (*kinesis.PutRecordsOutput, error) {
+		fn: func(*kinesis.PutRecordsInput) (*kinesis.PutRecordsOutput, error) {
 			calls++
 			var output kinesis.PutRecordsOutput
 			output.FailedRecordCount = aws.Int32(1)

@@ -165,7 +165,7 @@ func (j *jetStreamOutput) disconnect() {
 
 //------------------------------------------------------------------------------
 
-func (j *jetStreamOutput) Write(ctx context.Context, msg *service.Message) error {
+func (j *jetStreamOutput) Write(_ context.Context, msg *service.Message) error {
 	j.connMut.Lock()
 	jCtx := j.jCtx
 	j.connMut.Unlock()

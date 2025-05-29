@@ -112,7 +112,7 @@ input:
 			integration.StreamTestStreamIsolated(10),
 		).Run(
 			t, template,
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+			integration.StreamTestOptPreTest(func(t testing.TB, _ context.Context, vars *integration.StreamTestConfigVars) {
 				require.NoError(t, createGCPCloudStorageBucket(vars.General["VAR1"], vars.ID))
 			}),
 			integration.StreamTestOptVarSet("VAR1", dummyBucketPrefix),
@@ -141,7 +141,7 @@ input:
 			integration.StreamTestStreamIsolated(10),
 		).Run(
 			t, template,
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+			integration.StreamTestOptPreTest(func(t testing.TB, _ context.Context, vars *integration.StreamTestConfigVars) {
 				require.NoError(t, createGCPCloudStorageBucket(vars.General["VAR1"], vars.ID))
 			}),
 			integration.StreamTestOptVarSet("VAR1", dummyBucketPrefix),
@@ -168,7 +168,7 @@ input:
 			integration.StreamTestStreamIsolated(10),
 		).Run(
 			t, template,
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+			integration.StreamTestOptPreTest(func(t testing.TB, _ context.Context, vars *integration.StreamTestConfigVars) {
 				require.NoError(t, createGCPCloudStorageBucket(vars.General["VAR1"], vars.ID))
 			}),
 			integration.StreamTestOptVarSet("VAR1", dummyBucketPrefix),

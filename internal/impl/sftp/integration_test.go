@@ -239,22 +239,22 @@ func writeSFTPFile(t *testing.T, client *sftp.Client, path, data string) {
 
 type osPT struct{}
 
-func (o *osPT) Open(name string) (fs.File, error) {
+func (*osPT) Open(name string) (fs.File, error) {
 	return os.Open(name)
 }
 
-func (o *osPT) OpenFile(name string, flag int, perm fs.FileMode) (fs.File, error) {
+func (*osPT) OpenFile(name string, flag int, perm fs.FileMode) (fs.File, error) {
 	return os.OpenFile(name, flag, perm)
 }
 
-func (o *osPT) Stat(name string) (fs.FileInfo, error) {
+func (*osPT) Stat(name string) (fs.FileInfo, error) {
 	return os.Stat(name)
 }
 
-func (o *osPT) Remove(name string) error {
+func (*osPT) Remove(name string) error {
 	return os.Remove(name)
 }
 
-func (o *osPT) MkdirAll(path string, perm fs.FileMode) error {
+func (*osPT) MkdirAll(path string, perm fs.FileMode) error {
 	return os.MkdirAll(path, perm)
 }

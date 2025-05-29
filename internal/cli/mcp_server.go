@@ -43,7 +43,7 @@ func mcpServerCli(rpMgr *enterprise.GlobalRedpandaManager) *cli.Command {
 		Usage: "Execute an MCP server against a suite of Redpanda Connect resources.",
 		Flags: flags,
 		Subcommands: []*cli.Command{
-			mcpServerInitCli(rpMgr),
+			mcpServerInitCli(),
 		},
 		Description: `
 !!EXPERIMENTAL!!
@@ -51,7 +51,7 @@ func mcpServerCli(rpMgr *enterprise.GlobalRedpandaManager) *cli.Command {
 Each resource will be exposed as a tool that AI can interact with:
 
   {{.BinaryName}} mcp-server ./repo
-  
+
   `[1:],
 		Action: func(c *cli.Context) error {
 			if err := applyEnvFileFlag(c); err != nil {

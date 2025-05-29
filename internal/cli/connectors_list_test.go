@@ -96,7 +96,7 @@ deny: []
 			assert.Equal(t, testCase.expectedMod, actMod)
 
 			var actInputs []string
-			sch.Environment().WalkInputs(func(n string, c *service.ConfigView) {
+			sch.Environment().WalkInputs(func(n string, _ *service.ConfigView) {
 				actInputs = append(actInputs, n)
 			})
 			assert.Equal(t, testCase.expectedInputs, actInputs)

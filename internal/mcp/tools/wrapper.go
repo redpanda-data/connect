@@ -46,12 +46,12 @@ type ResourcesWrapper struct {
 // NewResourcesWrapper creates a new resources wrapper.
 func NewResourcesWrapper(logger *slog.Logger, svr *server.MCPServer, labelFilter func(label string) bool, tagsFilter func(tags []string) bool) *ResourcesWrapper {
 	if labelFilter == nil {
-		labelFilter = func(label string) bool {
+		labelFilter = func(string) bool {
 			return true
 		}
 	}
 	if tagsFilter == nil {
-		tagsFilter = func(tags []string) bool {
+		tagsFilter = func([]string) bool {
 			return true
 		}
 	}

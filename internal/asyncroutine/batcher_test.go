@@ -30,7 +30,7 @@ type (
 )
 
 func TestBatcherCancellation(t *testing.T) {
-	b, err := NewBatcher(3, func(ctx context.Context, reqs []req) (resps []resp, err error) {
+	b, err := NewBatcher(3, func(ctx context.Context, _ []req) (resps []resp, err error) {
 		<-ctx.Done()
 		err = ctx.Err()
 		return

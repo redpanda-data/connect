@@ -178,7 +178,7 @@ func newBigQuerySelectInput(inConf *service.ParsedConfig, logger *service.Logger
 	}, nil
 }
 
-func (inp *bigQuerySelectInput) Connect(ctx context.Context) error {
+func (inp *bigQuerySelectInput) Connect(context.Context) error {
 	jobctx, _ := inp.shutdownSig.SoftStopCtx(context.Background())
 
 	if inp.client == nil {
@@ -228,7 +228,7 @@ func (inp *bigQuerySelectInput) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (inp *bigQuerySelectInput) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
+func (inp *bigQuerySelectInput) Read(context.Context) (*service.Message, service.AckFunc, error) {
 	if inp.iterator == nil {
 		return nil, nil, fmt.Errorf("query result iterator is not set: %w", service.ErrNotConnected)
 	}
@@ -249,14 +249,14 @@ func (inp *bigQuerySelectInput) Read(ctx context.Context) (*service.Message, ser
 
 	msg := service.NewMessage(bs)
 
-	return msg, func(ctx context.Context, err error) error {
+	return msg, func(context.Context, error) error {
 		// Nacks are handled by AutoRetryNacks because we don't have an explicit
 		// ack mechanism right now.
 		return nil
 	}, nil
 }
 
-func (inp *bigQuerySelectInput) Close(ctx context.Context) error {
+func (inp *bigQuerySelectInput) Close(context.Context) error {
 	inp.shutdownSig.TriggerHardStop()
 
 	if inp.client != nil {

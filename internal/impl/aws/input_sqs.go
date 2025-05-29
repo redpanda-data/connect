@@ -191,7 +191,7 @@ func newAWSSQSReader(conf sqsiConfig, aconf aws.Config, log *service.Logger) (*a
 
 // Connect attempts to establish a connection to the target SQS
 // queue.
-func (a *awsSQSReader) Connect(ctx context.Context) error {
+func (a *awsSQSReader) Connect(context.Context) error {
 	if a.sqs == nil {
 		a.sqs = sqs.NewFromConfig(a.aconf)
 	}

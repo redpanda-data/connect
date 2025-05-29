@@ -324,7 +324,7 @@ func amqp09ReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources) 
 //------------------------------------------------------------------------------
 
 // Connect establishes a connection to an AMQP09 server.
-func (a *amqp09Reader) Connect(ctx context.Context) (err error) {
+func (a *amqp09Reader) Connect(context.Context) (err error) {
 	a.m.Lock()
 	defer a.m.Unlock()
 
@@ -530,7 +530,7 @@ func (a *amqp09Reader) Read(ctx context.Context) (*service.Message, service.AckF
 			_ = a.disconnect()
 			return nil, nil, service.ErrNotConnected
 		}
-		return dataToMsg(data), func(actx context.Context, res error) error {
+		return dataToMsg(data), func(_ context.Context, res error) error {
 			if a.autoAck {
 				return nil
 			}
@@ -550,7 +550,7 @@ func (a *amqp09Reader) Read(ctx context.Context) (*service.Message, service.AckF
 	}
 }
 
-func (a *amqp09Reader) Close(ctx context.Context) error {
+func (a *amqp09Reader) Close(context.Context) error {
 	return a.disconnect()
 }
 

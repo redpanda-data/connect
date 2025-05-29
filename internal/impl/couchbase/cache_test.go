@@ -54,15 +54,15 @@ cache_resources:
 		integration.CacheTestOptVarSet("USER", username),
 		integration.CacheTestOptVarSet("PASS", password),
 		integration.CacheTestOptPreTest(func(tb testing.TB, ctx context.Context, vars *integration.CacheTestConfigVars) {
-			require.NoError(tb, createBucket(ctx, tb, servicePort, vars.ID))
+			require.NoError(tb, createBucket(ctx, servicePort, vars.ID))
 			tb.Cleanup(func() {
-				require.NoError(tb, removeBucket(ctx, tb, servicePort, vars.ID))
+				require.NoError(tb, removeBucket(ctx, servicePort, vars.ID))
 			})
 		}),
 	)
 }
 
-func removeBucket(ctx context.Context, tb testing.TB, port, bucket string) error {
+func removeBucket(ctx context.Context, port, bucket string) error {
 	cluster, err := gocb.Connect(fmt.Sprintf("couchbase://localhost:%v", port), gocb.ClusterOptions{
 		Authenticator: gocb.PasswordAuthenticator{
 			Username: username,
@@ -78,7 +78,7 @@ func removeBucket(ctx context.Context, tb testing.TB, port, bucket string) error
 	})
 }
 
-func createBucket(ctx context.Context, tb testing.TB, port, bucket string) error {
+func createBucket(ctx context.Context, port, bucket string) error {
 	cluster, err := gocb.Connect(fmt.Sprintf("couchbase://localhost:%v", port), gocb.ClusterOptions{
 		Authenticator: gocb.PasswordAuthenticator{
 			Username: username,
@@ -95,7 +95,9 @@ func createBucket(ctx context.Context, tb testing.TB, port, bucket string) error
 			RAMQuotaMB: 100, // smallest value and allow max 10 running bucket with cluster-ramsize 1024 from setup script
 			BucketType: gocb.CouchbaseBucketType,
 		},
-	}, nil)
+	}, &gocb.CreateBucketOptions{
+		Context: ctx,
+	})
 	if err != nil {
 		return err
 	}

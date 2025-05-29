@@ -244,7 +244,7 @@ func (n *natsReader) Read(ctx context.Context) (*service.Message, service.AckFun
 	}, nil
 }
 
-func (n *natsReader) Close(ctx context.Context) (err error) {
+func (n *natsReader) Close(context.Context) (err error) {
 	go func() {
 		n.disconnect()
 	}()

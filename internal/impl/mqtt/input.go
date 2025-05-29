@@ -114,7 +114,7 @@ func newMQTTReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources)
 	return m, nil
 }
 
-func (m *mqttReader) Connect(ctx context.Context) error {
+func (m *mqttReader) Connect(context.Context) error {
 	m.cMut.Lock()
 	defer m.cMut.Unlock()
 
@@ -149,7 +149,7 @@ func (m *mqttReader) Connect(ctx context.Context) error {
 				topics[topic] = m.qos
 			}
 
-			tok := c.SubscribeMultiple(topics, func(c mqtt.Client, msg mqtt.Message) {
+			tok := c.SubscribeMultiple(topics, func(_ mqtt.Client, msg mqtt.Message) {
 				msgMut.Lock()
 				if msgChan != nil {
 					select {
@@ -223,7 +223,7 @@ func (m *mqttReader) Read(ctx context.Context) (*service.Message, service.AckFun
 		message.MetaSetMut("mqtt_topic", msg.Topic())
 		message.MetaSetMut("mqtt_message_id", int(msg.MessageID()))
 
-		return message, func(ctx context.Context, res error) error {
+		return message, func(_ context.Context, res error) error {
 			if res == nil {
 				msg.Ack()
 			}
@@ -236,7 +236,7 @@ func (m *mqttReader) Read(ctx context.Context) (*service.Message, service.AckFun
 	}
 }
 
-func (m *mqttReader) Close(ctx context.Context) (err error) {
+func (m *mqttReader) Close(context.Context) (err error) {
 	m.cMut.Lock()
 	defer m.cMut.Unlock()
 

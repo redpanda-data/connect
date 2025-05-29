@@ -195,7 +195,7 @@ func newSchemaRegistryEncoder(
 	return s, nil
 }
 
-func (s *schemaRegistryEncoder) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+func (s *schemaRegistryEncoder) ProcessBatch(_ context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
 	batch = batch.Copy()
 	for i, msg := range batch {
 		subject, err := batch.TryInterpolatedString(i, s.subject)

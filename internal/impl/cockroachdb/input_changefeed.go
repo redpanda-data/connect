@@ -274,7 +274,7 @@ func (c *crdbChangefeedInput) Read(ctx context.Context) (*service.Message, servi
 	}
 
 	msg := service.NewMessage(jsonBytes)
-	return msg, func(ctx context.Context, err error) (cErr error) {
+	return msg, func(ctx context.Context, _ error) (cErr error) {
 		if cursorReleaseFn == nil {
 			return nil
 		}

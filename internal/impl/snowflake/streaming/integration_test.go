@@ -238,7 +238,7 @@ func TestAllSnowflakeDatatypes(t *testing.T) {
 		resp, err := restClient.RunSQL(ctx, streaming.RunSQLRequest{
 			Database: channelOpts.DatabaseName,
 			Schema:   channelOpts.SchemaName,
-			Statement: fmt.Sprintf(`SELECT 
+			Statement: fmt.Sprintf(`SELECT
           MAX(A), MAX(B), MAX(C),
                           MAX(F),
           MAX(G), MAX(H), MAX(I),
@@ -479,7 +479,7 @@ func TestTimestampCompat(t *testing.T) {
 		},
 		make([]string, 30),
 	}
-	require.EventuallyWithT(t, func(collect *assert.CollectT) {
+	require.EventuallyWithT(t, func(*assert.CollectT) {
 		resp, err := restClient.RunSQL(ctx, streaming.RunSQLRequest{
 			Database:  channelOpts.DatabaseName,
 			Schema:    channelOpts.SchemaName,

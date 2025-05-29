@@ -498,7 +498,7 @@ func (k *kafkaWriter) saramaConfigFromParsed(conf *service.ParsedConfig) (*saram
 }
 
 // Connect attempts to establish a connection to a Kafka broker.
-func (k *kafkaWriter) Connect(ctx context.Context) error {
+func (k *kafkaWriter) Connect(context.Context) error {
 	k.connMut.Lock()
 	defer k.connMut.Unlock()
 
@@ -709,7 +709,7 @@ func (mur *murmur2) Reset() {
 }
 
 // Size returns the number of bytes Sum will return.
-func (mur *murmur2) Size() int {
+func (*murmur2) Size() int {
 	return 4
 }
 
@@ -717,7 +717,7 @@ func (mur *murmur2) Size() int {
 // The Write method must be able to accept any amount
 // of data, but it may operate more efficiently if all writes
 // are a multiple of the block size.
-func (mur *murmur2) BlockSize() int {
+func (*murmur2) BlockSize() int {
 	return 4
 }
 

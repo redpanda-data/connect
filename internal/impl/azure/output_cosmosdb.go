@@ -134,7 +134,7 @@ func newCosmosDBWriterFromParsed(conf *service.ParsedConfig, logger *service.Log
 
 //------------------------------------------------------------------------------
 
-func (c *cosmosDBWriter) Connect(ctx context.Context) error { return nil }
+func (*cosmosDBWriter) Connect(context.Context) error { return nil }
 
 func (c *cosmosDBWriter) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
 	resp, err := cosmosdb.ExecMessageBatch(ctx, batch, c.containerClient, c.CRUDConfig, false)
@@ -155,4 +155,4 @@ func (c *cosmosDBWriter) WriteBatch(ctx context.Context, batch service.MessageBa
 	return nil
 }
 
-func (c *cosmosDBWriter) Close(ctx context.Context) error { return nil }
+func (*cosmosDBWriter) Close(context.Context) error { return nil }

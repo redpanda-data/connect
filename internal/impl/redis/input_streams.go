@@ -415,7 +415,7 @@ func (r *redisStreamsReader) ReadBatch(ctx context.Context) (service.MessageBatc
 			return nil, nil, err
 		}
 	}
-	return msg.payload, func(rctx context.Context, res error) error {
+	return msg.payload, func(_ context.Context, res error) error {
 		if res != nil {
 			r.pendingMsgsMut.Lock()
 			r.pendingMsgs = append(r.pendingMsgs, msg)

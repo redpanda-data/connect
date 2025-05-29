@@ -53,7 +53,7 @@ func qsoConfigFromParsed(pConf *service.ParsedConfig) (conf qsoConfig, err error
 }
 
 func qsoSpec() *service.ConfigSpec {
-	return azureComponentSpec(false).
+	return azureComponentSpec().
 		Beta().
 		Version("3.36.0").
 		Summary(`Sends messages to an Azure Storage Queue.`).
@@ -108,7 +108,7 @@ func newAzureQueueStorageWriter(conf qsoConfig, log *service.Logger) (*azureQueu
 	return s, nil
 }
 
-func (a *azureQueueStorageWriter) Connect(ctx context.Context) error {
+func (*azureQueueStorageWriter) Connect(context.Context) error {
 	return nil
 }
 
@@ -170,6 +170,6 @@ func (a *azureQueueStorageWriter) WriteBatch(ctx context.Context, batch service.
 	})
 }
 
-func (a *azureQueueStorageWriter) Close(context.Context) error {
+func (*azureQueueStorageWriter) Close(context.Context) error {
 	return nil
 }

@@ -74,7 +74,7 @@ type Processor struct {
 }
 
 // NewProcessor returns a Couchbase processor.
-func NewProcessor(conf *service.ParsedConfig, mgr *service.Resources) (*Processor, error) {
+func NewProcessor(conf *service.ParsedConfig, _ *service.Resources) (*Processor, error) {
 	cl, err := getClient(conf)
 	if err != nil {
 		return nil, err
@@ -126,7 +126,7 @@ func NewProcessor(conf *service.ParsedConfig, mgr *service.Resources) (*Processo
 
 // ProcessBatch applies the processor to a message batch, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (p *Processor) ProcessBatch(ctx context.Context, inBatch service.MessageBatch) ([]service.MessageBatch, error) {
+func (p *Processor) ProcessBatch(_ context.Context, inBatch service.MessageBatch) ([]service.MessageBatch, error) {
 	newMsg := inBatch.Copy()
 	ops := make([]gocb.BulkOp, len(inBatch))
 

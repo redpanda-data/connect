@@ -293,6 +293,6 @@ func (a *kinesisWriter) WriteBatch(ctx context.Context, batch service.MessageBat
 	return nil
 }
 
-func (a *kinesisWriter) Close(context.Context) error {
+func (*kinesisWriter) Close(context.Context) error {
 	return nil
 }

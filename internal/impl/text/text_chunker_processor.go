@@ -100,7 +100,7 @@ func newTextChunkerSpec() *service.ConfigSpec {
 		)
 }
 
-func newTextChunker(conf *service.ParsedConfig, res *service.Resources) (service.Processor, error) {
+func newTextChunker(conf *service.ParsedConfig, _ *service.Resources) (service.Processor, error) {
 	processor := &textChunker{}
 	opts := []textsplitter.Option{}
 
@@ -204,7 +204,7 @@ type textChunker struct {
 }
 
 // Process implements service.Processor.
-func (t *textChunker) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+func (t *textChunker) Process(_ context.Context, msg *service.Message) (service.MessageBatch, error) {
 	b, err := msg.AsBytes()
 	if err != nil {
 		return nil, err
@@ -223,6 +223,6 @@ func (t *textChunker) Process(ctx context.Context, msg *service.Message) (servic
 }
 
 // Close implements service.Processor.
-func (t *textChunker) Close(ctx context.Context) error {
+func (*textChunker) Close(context.Context) error {
 	return nil
 }

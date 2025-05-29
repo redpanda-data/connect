@@ -80,7 +80,7 @@ func tsoConfigFromParsed(pConf *service.ParsedConfig) (conf tsoConfig, err error
 }
 
 func tsoSpec() *service.ConfigSpec {
-	return azureComponentSpec(false).
+	return azureComponentSpec().
 		Beta().
 		Version("3.36.0").
 		Summary(`Stores messages in an Azure Table Storage table.`).
@@ -188,7 +188,7 @@ func newAzureTableStorageWriter(conf tsoConfig, mgr *service.Resources) (*azureT
 	return a, nil
 }
 
-func (a *azureTableStorageWriter) Connect(ctx context.Context) error {
+func (*azureTableStorageWriter) Connect(context.Context) error {
 	return nil
 }
 
@@ -309,7 +309,7 @@ func reachedBatchLimit(i int) bool {
 	return (i+1)%batchSizeLimit == 0
 }
 
-func (a *azureTableStorageWriter) addToBatch(batch []aztables.TransactionAction, transactionType string, entity *aztables.EDMEntity) ([]aztables.TransactionAction, error) {
+func (*azureTableStorageWriter) addToBatch(batch []aztables.TransactionAction, transactionType string, entity *aztables.EDMEntity) ([]aztables.TransactionAction, error) {
 	appendFunc := func(b []aztables.TransactionAction, t aztables.TransactionType, e *aztables.EDMEntity) ([]aztables.TransactionAction, error) {
 		m, err := json.Marshal(e)
 		if err != nil {
@@ -339,6 +339,6 @@ func (a *azureTableStorageWriter) addToBatch(batch []aztables.TransactionAction,
 	}
 }
 
-func (a *azureTableStorageWriter) Close(context.Context) error {
+func (*azureTableStorageWriter) Close(context.Context) error {
 	return nil
 }

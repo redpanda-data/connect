@@ -183,7 +183,7 @@ func (i *input) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (i *input) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
+func (i *input) Read(context.Context) (*service.Message, service.AckFunc, error) {
 	i.clientMut.Lock()
 	defer i.clientMut.Unlock()
 
@@ -206,7 +206,7 @@ func (i *input) Read(ctx context.Context) (*service.Message, service.AckFunc, er
 		return nil, nil, fmt.Errorf("failed to read data: %s", err)
 	}
 
-	return service.NewMessage(line), func(ctx context.Context, err error) error {
+	return service.NewMessage(line), func(context.Context, error) error {
 		// Nacks are handled by AutoRetryNacks because we don't have an explicit
 		// ack mechanism right now.
 		return nil

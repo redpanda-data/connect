@@ -34,7 +34,7 @@ func registerModuleRunnerFunction(name string, ctor func(r *moduleRunner) interf
 }
 
 var _ = registerModuleRunnerFunction("v0_msg_set_bytes", func(r *moduleRunner) interface{} {
-	return func(ctx context.Context, m api.Module, contentPtr, contentSize uint32) {
+	return func(ctx context.Context, _ api.Module, contentPtr, contentSize uint32) {
 		if r.targetMessage == nil {
 			r.funcErr(errors.New("attempted to set bytes of deleted message"))
 			return
@@ -50,7 +50,7 @@ var _ = registerModuleRunnerFunction("v0_msg_set_bytes", func(r *moduleRunner) i
 })
 
 var _ = registerModuleRunnerFunction("v0_msg_as_bytes", func(r *moduleRunner) interface{} {
-	return func(ctx context.Context, m api.Module) (ptrSize uint64) {
+	return func(ctx context.Context, _ api.Module) (ptrSize uint64) {
 		if r.targetMessage == nil {
 			r.funcErr(errors.New("attempted to read bytes of deleted message"))
 			return
@@ -72,7 +72,7 @@ var _ = registerModuleRunnerFunction("v0_msg_as_bytes", func(r *moduleRunner) in
 })
 
 var _ = registerModuleRunnerFunction("v0_msg_set_meta", func(r *moduleRunner) interface{} {
-	return func(ctx context.Context, m api.Module, keyPtr, keySize, contentPtr, contentSize uint32) {
+	return func(ctx context.Context, _ api.Module, keyPtr, keySize, contentPtr, contentSize uint32) {
 		if r.targetMessage == nil {
 			r.funcErr(errors.New("attempted to set metadata of deleted message"))
 			return
@@ -95,7 +95,7 @@ var _ = registerModuleRunnerFunction("v0_msg_set_meta", func(r *moduleRunner) in
 })
 
 var _ = registerModuleRunnerFunction("v0_msg_get_meta", func(r *moduleRunner) interface{} {
-	return func(ctx context.Context, m api.Module, keyPtr, keySize uint32) (ptrSize uint64) {
+	return func(ctx context.Context, _ api.Module, keyPtr, keySize uint32) (ptrSize uint64) {
 		if r.targetMessage == nil {
 			r.funcErr(errors.New("attempted to read meta of deleted message"))
 			return

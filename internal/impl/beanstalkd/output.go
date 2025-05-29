@@ -72,7 +72,7 @@ func newBeanstalkdWriterFromConfig(conf *service.ParsedConfig, log *service.Logg
 	return &bs, nil
 }
 
-func (bs *beanstalkdWriter) Connect(ctx context.Context) error {
+func (bs *beanstalkdWriter) Connect(context.Context) error {
 	bs.connMut.Lock()
 	defer bs.connMut.Unlock()
 
@@ -85,7 +85,7 @@ func (bs *beanstalkdWriter) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (bs *beanstalkdWriter) Write(ctx context.Context, msg *service.Message) error {
+func (bs *beanstalkdWriter) Write(_ context.Context, msg *service.Message) error {
 	bs.connMut.Lock()
 	conn := bs.connection
 	bs.connMut.Unlock()

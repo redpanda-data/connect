@@ -71,7 +71,7 @@ func TestIntegrationRedisProcessor(t *testing.T) {
 	defer client.Close()
 
 	t.Run("testRedisScript", func(t *testing.T) {
-		testRedisScript(t, client, urlStr)
+		testRedisScript(t, urlStr)
 	})
 	t.Run("testRedisKeys", func(t *testing.T) {
 		testRedisKeys(t, client, urlStr)
@@ -80,10 +80,10 @@ func TestIntegrationRedisProcessor(t *testing.T) {
 		testRedisSAdd(t, client, urlStr)
 	})
 	t.Run("testRedisSCard", func(t *testing.T) {
-		testRedisSCard(t, client, urlStr)
+		testRedisSCard(t, urlStr)
 	})
 	t.Run("testRedisIncrby", func(t *testing.T) {
-		testRedisIncrby(t, client, urlStr)
+		testRedisIncrby(t, urlStr)
 	})
 
 	require.NoError(t, client.FlushAll(ctx).Err())
@@ -95,25 +95,25 @@ func TestIntegrationRedisProcessor(t *testing.T) {
 		testRedisDeprecatedSAdd(t, client, urlStr)
 	})
 	t.Run("testRedisDeprecatedSCard", func(t *testing.T) {
-		testRedisDeprecatedSCard(t, client, urlStr)
+		testRedisDeprecatedSCard(t, urlStr)
 	})
 	t.Run("testRedisDeprecatedIncrby", func(t *testing.T) {
-		testRedisDeprecatedIncrby(t, client, urlStr)
+		testRedisDeprecatedIncrby(t, urlStr)
 	})
 
 	require.NoError(t, client.FlushAll(ctx).Err())
 	t.Run("testRedisHSet", func(t *testing.T) {
-		testRedisHSet(t, client, urlStr)
+		testRedisHSet(t, urlStr)
 	})
 	t.Run("testRedisHGet", func(t *testing.T) {
-		testRedisHGet(t, client, urlStr)
+		testRedisHGet(t, urlStr)
 	})
 	t.Run("testRedisHGetAll", func(t *testing.T) {
-		testRedisHGetAll(t, client, urlStr)
+		testRedisHGetAll(t, urlStr)
 	})
 }
 
-func testRedisScript(t *testing.T, client *redis.Client, url string) {
+func testRedisScript(t *testing.T, url string) {
 	conf, err := redisScriptProcConfig().ParseYAML(fmt.Sprintf(`
 url: %v
 script: "return KEYS[1] .. ': ' .. ARGV[1]"
@@ -256,7 +256,7 @@ args_mapping: 'root = [ meta("key"), content().string() ]'
 	}
 }
 
-func testRedisSCard(t *testing.T, client *redis.Client, url string) {
+func testRedisSCard(t *testing.T, url string) {
 	// WARNING: Relies on testRedisSAdd succeeding.
 	conf, err := redisProcConfig().ParseYAML(fmt.Sprintf(`
 url: %v
@@ -294,7 +294,7 @@ args_mapping: 'root = [ content().string() ]'
 	}
 }
 
-func testRedisIncrby(t *testing.T, client *redis.Client, url string) {
+func testRedisIncrby(t *testing.T, url string) {
 	conf, err := redisProcConfig().ParseYAML(fmt.Sprintf(`
 url: %v
 command: incrby
@@ -448,7 +448,7 @@ key: "${! meta(\"key\") }"
 	}
 }
 
-func testRedisDeprecatedSCard(t *testing.T, client *redis.Client, url string) {
+func testRedisDeprecatedSCard(t *testing.T, url string) {
 	// WARNING: Relies on testRedisSAdd succeeding.
 	conf, err := redisProcConfig().ParseYAML(fmt.Sprintf(`
 url: %v
@@ -485,7 +485,7 @@ key: "${! content() }"
 	}
 }
 
-func testRedisDeprecatedIncrby(t *testing.T, client *redis.Client, url string) {
+func testRedisDeprecatedIncrby(t *testing.T, url string) {
 	conf, err := redisProcConfig().ParseYAML(fmt.Sprintf(`
 url: %v
 operator: incrby
@@ -521,7 +521,7 @@ key: incrby
 	}
 }
 
-func testRedisHSet(t *testing.T, client *redis.Client, url string) {
+func testRedisHSet(t *testing.T, url string) {
 	conf, err := redisProcConfig().ParseYAML(fmt.Sprintf(`
 url: %v
 command: hset
@@ -556,7 +556,7 @@ args_mapping: 'root = [ json("key"), json("field"), json("value") ]'
 	}
 }
 
-func testRedisHGet(t *testing.T, client *redis.Client, url string) {
+func testRedisHGet(t *testing.T, url string) {
 	conf, err := redisProcConfig().ParseYAML(fmt.Sprintf(`
 url: %v
 command: hget
@@ -586,7 +586,7 @@ args_mapping: 'root = [ json("key"), json("field") ]'
 	}
 }
 
-func testRedisHGetAll(t *testing.T, client *redis.Client, url string) {
+func testRedisHGetAll(t *testing.T, url string) {
 	conf, err := redisProcConfig().ParseYAML(fmt.Sprintf(`
 url: %v
 command: hgetall

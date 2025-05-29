@@ -96,7 +96,7 @@ path: "%v"
 	for i := 0; i < n; i++ {
 		if err := block.WriteBatch(ctx, service.MessageBatch{
 			service.NewMessage([]byte(fmt.Sprintf("test%v", i))),
-		}, func(ctx context.Context, err error) error { return nil }); err != nil {
+		}, func(context.Context, error) error { return nil }); err != nil {
 			t.Error(err)
 		}
 	}
@@ -126,7 +126,7 @@ path: "%v"
 	msgB.MetaSet("c", "third")
 	msgC := service.NewMessage([]byte("hello world c"))
 
-	if err := block.WriteBatch(ctx, service.MessageBatch{msgA, msgB, msgC}, func(ctx context.Context, err error) error { return nil }); err != nil {
+	if err := block.WriteBatch(ctx, service.MessageBatch{msgA, msgB, msgC}, func(context.Context, error) error { return nil }); err != nil {
 		t.Error(err)
 	}
 
@@ -158,7 +158,7 @@ post_processors:
 	msgB.MetaSet("c", "third")
 	msgC := service.NewMessage([]byte("hello world c"))
 
-	if err := block.WriteBatch(ctx, service.MessageBatch{msgA, msgB, msgC}, func(ctx context.Context, err error) error { return nil }); err != nil {
+	if err := block.WriteBatch(ctx, service.MessageBatch{msgA, msgB, msgC}, func(context.Context, error) error { return nil }); err != nil {
 		t.Error(err)
 	}
 
@@ -192,7 +192,7 @@ post_processors:
 		for j := 0; j < m; j++ {
 			inBatch = append(inBatch, service.NewMessage(fmt.Appendf(nil, `{"id":"test%v","n":%v}`, i, j)))
 		}
-		if err := block.WriteBatch(ctx, inBatch, func(ctx context.Context, err error) error { return nil }); err != nil {
+		if err := block.WriteBatch(ctx, inBatch, func(context.Context, error) error { return nil }); err != nil {
 			t.Error(err)
 		}
 	}
@@ -220,7 +220,7 @@ path: "%v"
 		"hello": "world",
 	})
 
-	require.NoError(t, block.WriteBatch(ctx, service.MessageBatch{inMsg}, func(ctx context.Context, _ error) error {
+	require.NoError(t, block.WriteBatch(ctx, service.MessageBatch{inMsg}, func(context.Context, error) error {
 		inStruct, err := inMsg.AsStructuredMut()
 		require.NoError(t, err)
 		_, err = gabs.Wrap(inStruct).Set("quack", "moo")
@@ -266,7 +266,7 @@ path: "%v"
 		for i := 0; i < n; i++ {
 			if err := block.WriteBatch(ctx, service.MessageBatch{
 				service.NewMessage([]byte(fmt.Sprintf("test%v", i))),
-			}, func(ctx context.Context, err error) error { return nil }); err != nil {
+			}, func(context.Context, error) error { return nil }); err != nil {
 				t.Error(err)
 			}
 		}
@@ -310,7 +310,7 @@ path: "%v"
 		for i := 0; i < n; i++ {
 			if err := block.WriteBatch(ctx, service.MessageBatch{
 				service.NewMessage([]byte(fmt.Sprintf("test%v", i))),
-			}, func(ctx context.Context, err error) error { return nil }); err != nil {
+			}, func(context.Context, error) error { return nil }); err != nil {
 				t.Error(err)
 			}
 		}
@@ -330,13 +330,13 @@ path: "%v"
 
 	if err := block.WriteBatch(ctx, service.MessageBatch{
 		service.NewMessage([]byte("1")),
-	}, func(ctx context.Context, err error) error { return nil }); err != nil {
+	}, func(context.Context, error) error { return nil }); err != nil {
 		t.Error(err)
 	}
 
 	if err := block.WriteBatch(ctx, service.MessageBatch{
 		service.NewMessage([]byte("2")),
-	}, func(ctx context.Context, err error) error { return nil }); err != nil {
+	}, func(context.Context, error) error { return nil }); err != nil {
 		t.Error(err)
 	}
 
@@ -380,7 +380,7 @@ path: "%v"
 	for i := 0; i < 10; i++ {
 		if err := block.WriteBatch(ctx, service.MessageBatch{
 			service.NewMessage([]byte("hello world")),
-		}, func(ctx context.Context, err error) error { return nil }); err != nil {
+		}, func(context.Context, error) error { return nil }); err != nil {
 			t.Error(err)
 		}
 	}
@@ -426,7 +426,7 @@ path: "%v"
 	} {
 		require.NoError(t, block.WriteBatch(ctx, service.MessageBatch{
 			service.NewMessage([]byte(testMsg)),
-		}, func(ctx context.Context, err error) error { return nil }))
+		}, func(context.Context, error) error { return nil }))
 	}
 
 	m, ackFuncA, err := block.ReadBatch(ctx)
@@ -476,7 +476,7 @@ path: "%v"
 	for i := 0; i < b.N; i++ {
 		if err := block.WriteBatch(ctx, service.MessageBatch{
 			service.NewMessage([]byte(fmt.Sprintf("test%v", i))),
-		}, func(ctx context.Context, err error) error { return nil }); err != nil {
+		}, func(context.Context, error) error { return nil }); err != nil {
 			b.Error(err)
 		}
 	}
@@ -494,7 +494,7 @@ path: "%v"
 	for i := 0; i < b.N; i++ {
 		if err := block.WriteBatch(ctx, service.MessageBatch{
 			service.NewMessage([]byte(fmt.Sprintf("test%v", i))),
-		}, func(ctx context.Context, err error) error { return nil }); err != nil {
+		}, func(context.Context, error) error { return nil }); err != nil {
 			b.Error(err)
 		}
 	}
@@ -545,7 +545,7 @@ path: "%v"
 		for i := 0; i < b.N; i++ {
 			if err := block.WriteBatch(ctx, service.MessageBatch{
 				service.NewMessage([]byte(fmt.Sprintf("test%v", i))),
-			}, func(ctx context.Context, err error) error { return nil }); err != nil {
+			}, func(context.Context, error) error { return nil }); err != nil {
 				b.Error(err)
 			}
 		}
@@ -585,7 +585,7 @@ path: "%v"
 		for i := 0; i < b.N; i++ {
 			if err := block.WriteBatch(ctx, service.MessageBatch{
 				service.NewMessage(testMsg),
-			}, func(ctx context.Context, err error) error { return nil }); err != nil {
+			}, func(context.Context, error) error { return nil }); err != nil {
 				b.Error(err)
 			}
 		}
@@ -641,7 +641,7 @@ post_processors:
 			for bi := range batch {
 				batch[bi] = service.NewMessage(fmt.Appendf(nil, `{"n":"%v","b":"%v"}`, i, bi))
 			}
-			if err := block.WriteBatch(ctx, batch, func(ctx context.Context, err error) error { return nil }); err != nil {
+			if err := block.WriteBatch(ctx, batch, func(context.Context, error) error { return nil }); err != nil {
 				b.Error(err)
 			}
 		}

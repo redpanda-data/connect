@@ -239,7 +239,7 @@ output:
 			"Ingesting data exactly once from Redpanda",
 			`How to ingest data from Redpanda with consumer groups, decode the schema using the schema registry, then write the corresponding data into Snowflake exactly once.
 
-NOTE: If attempting to do exactly-once its important that records are delivered in order to the output and correctly partitioned. Be sure to read the documentation for 
+NOTE: If attempting to do exactly-once its important that records are delivered in order to the output and correctly partitioned. Be sure to read the documentation for
 channel_name and offset_token first. Removing the offset_token is a safer option that will instruct Redpanda Connect to use its default at-least-once delivery model instead.`,
 			`
 input:
@@ -904,7 +904,7 @@ func (o *snowpipePooledOutput) openChannel(ctx context.Context, name string, id 
 	})
 }
 
-func (o *snowpipePooledOutput) Connect(ctx context.Context) error {
+func (*snowpipePooledOutput) Connect(context.Context) error {
 	return nil
 }
 
@@ -972,7 +972,7 @@ func (o *snowpipePooledOutput) WriteBatch(ctx context.Context, batch service.Mes
 	return nil
 }
 
-func (o *snowpipePooledOutput) Close(ctx context.Context) error {
+func (o *snowpipePooledOutput) Close(context.Context) error {
 	o.channelPool.Reset()
 	return nil
 }
@@ -1003,7 +1003,7 @@ func (o *snowpipeIndexedOutput) openChannel(ctx context.Context, name string, id
 	})
 }
 
-func (o *snowpipeIndexedOutput) Connect(ctx context.Context) error {
+func (*snowpipeIndexedOutput) Connect(context.Context) error {
 	return nil
 }
 
@@ -1075,7 +1075,7 @@ func (o *snowpipeIndexedOutput) WriteBatch(ctx context.Context, batch service.Me
 	return nil
 }
 
-func (o *snowpipeIndexedOutput) Close(ctx context.Context) error {
+func (o *snowpipeIndexedOutput) Close(context.Context) error {
 	o.channelPool.Reset()
 	return nil
 }

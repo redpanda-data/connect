@@ -122,7 +122,7 @@ func newMQTTWriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources)
 	return m, nil
 }
 
-func (m *mqttWriter) Connect(ctx context.Context) error {
+func (m *mqttWriter) Connect(context.Context) error {
 	m.connMut.Lock()
 	defer m.connMut.Unlock()
 
@@ -149,7 +149,7 @@ func (m *mqttWriter) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (m *mqttWriter) Write(ctx context.Context, msg *service.Message) error {
+func (m *mqttWriter) Write(_ context.Context, msg *service.Message) error {
 	m.connMut.RLock()
 	client := m.client
 	m.connMut.RUnlock()

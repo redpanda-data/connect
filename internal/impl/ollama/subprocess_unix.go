@@ -170,7 +170,7 @@ var ollamaProcess = singleton.New(singleton.Config[*exec.Cmd]{
 		}
 		return proc, nil
 	},
-	Destructor: func(ctx context.Context, cmd *exec.Cmd) error {
+	Destructor: func(_ context.Context, cmd *exec.Cmd) error {
 		if cmd.Process == nil {
 			return nil
 		}

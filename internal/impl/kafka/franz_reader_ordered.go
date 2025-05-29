@@ -135,7 +135,7 @@ type batchWithRecords struct {
 	size uint64
 }
 
-func (f *FranzReaderOrdered) recordsToBatch(records []*kgo.Record, consumerLag *ConsumerLag) (batch batchWithRecords) {
+func recordsToBatch(records []*kgo.Record, consumerLag *ConsumerLag) (batch batchWithRecords) {
 	batch.b = make([]*messageWithRecord, len(records))
 
 	for i, r := range records {
@@ -417,7 +417,7 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 		return err
 	}
 
-	commitFn := func(r *kgo.Record) {}
+	commitFn := func(*kgo.Record) {}
 	if f.consumerGroup != "" {
 		commitFn = func(r *kgo.Record) {
 			if f.Client == nil {
@@ -546,7 +546,7 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 					return
 				}
 
-				batch := f.recordsToBatch(p.Records, consumerLag)
+				batch := recordsToBatch(p.Records, consumerLag)
 				if len(batch.b) == 0 {
 					return
 				}
@@ -608,7 +608,7 @@ func (f *FranzReaderOrdered) ReadBatch(ctx context.Context) (service.MessageBatc
 	for {
 		if mAck := f.partState.pop(); mAck != nil {
 			f.readBackOff.Reset()
-			return mAck.batch, func(ctx context.Context, res error) error {
+			return mAck.batch, func(context.Context, error) error {
 				// Res will always be nil because we initialize with service.AutoRetryNacks
 				mAck.onAck()
 				return nil

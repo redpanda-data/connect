@@ -295,14 +295,14 @@ func (i *schemaRegistryInput) Read(ctx context.Context) (*service.Message, servi
 	msg.MetaSetMut("schema_registry_subject", si.Subject)
 	msg.MetaSetMut("schema_registry_version", si.Version)
 
-	return msg, func(ctx context.Context, err error) error {
+	return msg, func(context.Context, error) error {
 		// Nacks are handled by AutoRetryNacks because we don't have an explicit
 		// ack mechanism right now.
 		return nil
 	}, nil
 }
 
-func (i *schemaRegistryInput) Close(ctx context.Context) error {
+func (i *schemaRegistryInput) Close(context.Context) error {
 	i.connMut.Lock()
 	defer i.connMut.Unlock()
 

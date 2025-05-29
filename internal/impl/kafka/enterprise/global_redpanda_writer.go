@@ -331,7 +331,7 @@ func newTopicLoggerWriterFromConfig(conf *service.ParsedConfig, log *service.Log
 
 //------------------------------------------------------------------------------
 
-func (f *franzTopicLoggerWriter) Connect(ctx context.Context) error {
+func (f *franzTopicLoggerWriter) Connect(context.Context) error {
 	if f.client != nil {
 		return nil
 	}
@@ -396,7 +396,7 @@ func (f *franzTopicLoggerWriter) disconnect() {
 	f.client = nil
 }
 
-func (f *franzTopicLoggerWriter) Close(ctx context.Context) error {
+func (f *franzTopicLoggerWriter) Close(context.Context) error {
 	f.disconnect()
 	return nil
 }

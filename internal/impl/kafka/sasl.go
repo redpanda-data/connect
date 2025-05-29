@@ -31,7 +31,7 @@ import (
 	"github.com/twmb/franz-go/pkg/sasl/scram"
 )
 
-func notImportedAWSFn(c *service.ParsedConfig) (sasl.Mechanism, error) {
+func notImportedAWSFn(*service.ParsedConfig) (sasl.Mechanism, error) {
 	return nil, errors.New("unable to configure AWS SASL as this binary does not import components/aws")
 }
 
@@ -137,7 +137,7 @@ func plainSaslFromConfig(c *service.ParsedConfig) (sasl.Mechanism, error) {
 	if err != nil {
 		return nil, err
 	}
-	return plain.Plain(func(c context.Context) (plain.Auth, error) {
+	return plain.Plain(func(context.Context) (plain.Auth, error) {
 		return plain.Auth{
 			User: username,
 			Pass: password,
@@ -156,7 +156,7 @@ func oauthSaslFromConfig(c *service.ParsedConfig) (sasl.Mechanism, error) {
 			return nil, err
 		}
 	}
-	return oauth.Oauth(func(c context.Context) (oauth.Auth, error) {
+	return oauth.Oauth(func(context.Context) (oauth.Auth, error) {
 		return oauth.Auth{
 			Token:      token,
 			Extensions: extensions,
@@ -173,7 +173,7 @@ func scram256SaslFromConfig(c *service.ParsedConfig) (sasl.Mechanism, error) {
 	if err != nil {
 		return nil, err
 	}
-	return scram.Sha256(func(c context.Context) (scram.Auth, error) {
+	return scram.Sha256(func(context.Context) (scram.Auth, error) {
 		return scram.Auth{
 			User: username,
 			Pass: password,
@@ -190,7 +190,7 @@ func scram512SaslFromConfig(c *service.ParsedConfig) (sasl.Mechanism, error) {
 	if err != nil {
 		return nil, err
 	}
-	return scram.Sha512(func(c context.Context) (scram.Auth, error) {
+	return scram.Sha512(func(context.Context) (scram.Auth, error) {
 		return scram.Auth{
 			User: username,
 			Pass: password,

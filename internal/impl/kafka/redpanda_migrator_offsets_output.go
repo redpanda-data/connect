@@ -368,7 +368,7 @@ func (w *redpandaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.
 }
 
 // Close underlying connections.
-func (w *redpandaMigratorOffsetsWriter) Close(ctx context.Context) error {
+func (w *redpandaMigratorOffsetsWriter) Close(context.Context) error {
 	w.connMut.Lock()
 	defer w.connMut.Unlock()
 

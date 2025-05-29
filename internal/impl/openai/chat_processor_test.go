@@ -24,7 +24,7 @@ type mockChatClient struct {
 	stubClient
 }
 
-func (m *mockChatClient) CreateChatCompletion(ctx context.Context, body oai.ChatCompletionRequest) (resp oai.ChatCompletionResponse, err error) {
+func (*mockChatClient) CreateChatCompletion(_ context.Context, body oai.ChatCompletionRequest) (resp oai.ChatCompletionResponse, err error) {
 	resp.ID = faker.UUIDHyphenated()
 	resp.Model = body.Model
 	resp.Choices = []oai.ChatCompletionChoice{

@@ -234,6 +234,6 @@ func (p *vertexAIEmbeddingsProcessor) computeText(msg *service.Message) (string,
 	return string(b), nil
 }
 
-func (p *vertexAIEmbeddingsProcessor) Close(ctx context.Context) error {
+func (p *vertexAIEmbeddingsProcessor) Close(context.Context) error {
 	return p.client.Close()
 }

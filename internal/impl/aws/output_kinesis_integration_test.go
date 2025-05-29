@@ -111,7 +111,7 @@ credentials:
 
 	t.Run("testKinesisConnectWithInvalidStream", func(t *testing.T) {
 		koConf.Stream = "invalid-foo"
-		testKinesisConnectWithInvalidStream(t, koConf, client)
+		testKinesisConnectWithInvalidStream(t, koConf)
 	})
 }
 
@@ -169,7 +169,7 @@ func testKinesisConnect(t *testing.T, c koConfig, client *kinesis.Client) {
 	}
 }
 
-func testKinesisConnectWithInvalidStream(t *testing.T, c koConfig, client *kinesis.Client) {
+func testKinesisConnectWithInvalidStream(t *testing.T, c koConfig) {
 	r, err := newKinesisWriter(c, service.MockResources())
 	if err != nil {
 		t.Fatal(err)

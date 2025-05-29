@@ -165,7 +165,7 @@ func newCassandraWriter(conf *service.ParsedConfig, mgr *service.Resources) (c *
 	return
 }
 
-func (c *cassandraWriter) Connect(ctx context.Context) error {
+func (c *cassandraWriter) Connect(context.Context) error {
 	c.connLock.Lock()
 	defer c.connLock.Unlock()
 	if c.session != nil {
@@ -187,7 +187,7 @@ func (c *cassandraWriter) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (c *cassandraWriter) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
+func (c *cassandraWriter) WriteBatch(_ context.Context, batch service.MessageBatch) error {
 	c.connLock.RLock()
 	session := c.session
 	c.connLock.RUnlock()
@@ -233,7 +233,7 @@ func (c *cassandraWriter) writeBatch(session *gocql.Session, b service.MessageBa
 	return session.ExecuteBatch(batch)
 }
 
-func (c *cassandraWriter) mapArgs(index int, exec *service.MessageBatchBloblangExecutor) ([]any, error) {
+func (*cassandraWriter) mapArgs(index int, exec *service.MessageBatchBloblangExecutor) ([]any, error) {
 	if exec == nil {
 		return nil, nil
 	}
@@ -295,7 +295,7 @@ func getExponentialTime(minDur, maxDur time.Duration, attempts int) time.Duratio
 	return time.Duration(napDuration)
 }
 
-func (d *decorator) GetRetryType(err error) gocql.RetryType {
+func (*decorator) GetRetryType(err error) gocql.RetryType {
 	switch t := err.(type) {
 	// not enough replica alive to perform query with required consistency
 	case *gocql.RequestErrUnavailable:

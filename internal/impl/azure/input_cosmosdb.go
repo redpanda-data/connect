@@ -163,7 +163,7 @@ func newCosmosDBReaderFromParsed(conf *service.ParsedConfig, _ *service.Resource
 	}, nil
 }
 
-func (c *cosmosDBReader) Connect(ctx context.Context) error { return nil }
+func (*cosmosDBReader) Connect(context.Context) error { return nil }
 
 func (c *cosmosDBReader) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
 	if !c.pager.More() {
@@ -184,7 +184,7 @@ func (c *cosmosDBReader) ReadBatch(ctx context.Context) (service.MessageBatch, s
 		resBatch = append(resBatch, m)
 	}
 
-	return resBatch, func(ctx context.Context, err error) error { return nil }, nil
+	return resBatch, func(context.Context, error) error { return nil }, nil
 }
 
-func (c *cosmosDBReader) Close(ctx context.Context) error { return nil }
+func (*cosmosDBReader) Close(context.Context) error { return nil }

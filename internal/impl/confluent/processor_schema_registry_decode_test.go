@@ -68,7 +68,7 @@ basic_auth:
 			name: "hamba enabled",
 			config: `
 url: http://example.com/v1
-avro: 
+avro:
   raw_unions: false
   preserve_logical_types: true
 `,
@@ -393,8 +393,7 @@ func TestSchemaRegistryDecodeAvroMapping(t *testing.T) {
   ]
 }`
 	urlStr := runSchemaRegistryServer(t, func(path string) ([]byte, error) {
-		switch path {
-		case "/schemas/ids/7":
+		if path == "/schemas/ids/7" {
 			return mustJBytes(t, map[string]any{
 				"schema": testAvroDebeziumSchema,
 			}), nil
@@ -582,7 +581,7 @@ func TestSchemaRegistryDecodeAvroRawJson(t *testing.T) {
 }
 
 func TestSchemaRegistryDecodeClearExpired(t *testing.T) {
-	urlStr := runSchemaRegistryServer(t, func(path string) ([]byte, error) {
+	urlStr := runSchemaRegistryServer(t, func(string) ([]byte, error) {
 		return nil, fmt.Errorf("nope")
 	})
 
@@ -624,8 +623,7 @@ func TestSchemaRegistryDecodeProtobuf(t *testing.T) {
 
 	returnedSchema1 := false
 	urlStr := runSchemaRegistryServer(t, func(path string) ([]byte, error) {
-		switch path {
-		case "/schemas/ids/1":
+		if path == "/schemas/ids/1" {
 			assert.False(t, returnedSchema1)
 			returnedSchema1 = true
 			return payload1, nil

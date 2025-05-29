@@ -67,7 +67,7 @@ func parseSecretsFlag(logger *slog.Logger, c *cli.Context) (func(context.Context
 	if secretsURNs := c.StringSlice("secrets"); len(secretsURNs) > 0 {
 		return secrets.ParseLookupURNs(c.Context, logger, secretsURNs...)
 	}
-	return func(ctx context.Context, key string) (string, bool) {
+	return func(context.Context, string) (string, bool) {
 		return "", false
 	}, nil
 }
@@ -186,14 +186,14 @@ client_id: rpcn
 	if saslMech != "" {
 		switch strings.ToLower(saslMech) {
 		case "scram-sha-256":
-			connDetails.SASL = append(connDetails.SASL, scram.Sha256(func(c context.Context) (scram.Auth, error) {
+			connDetails.SASL = append(connDetails.SASL, scram.Sha256(func(_ context.Context) (scram.Auth, error) {
 				return scram.Auth{
 					User: saslUser,
 					Pass: saslPass,
 				}, nil
 			}))
 		case "scram-sha-512":
-			connDetails.SASL = append(connDetails.SASL, scram.Sha512(func(c context.Context) (scram.Auth, error) {
+			connDetails.SASL = append(connDetails.SASL, scram.Sha512(func(_ context.Context) (scram.Auth, error) {
 				return scram.Auth{
 					User: saslUser,
 					Pass: saslPass,

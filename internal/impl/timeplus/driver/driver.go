@@ -73,7 +73,7 @@ func (d *driver) Run(sql string) error {
 }
 
 // Read reads one row.
-func (d *driver) Read(ctx context.Context) (map[string]any, error) {
+func (d *driver) Read(context.Context) (map[string]any, error) {
 	for { // retry loop
 		if d.rows.Next() {
 			count := len(d.columnTypes)

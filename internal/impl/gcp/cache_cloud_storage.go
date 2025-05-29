@@ -44,7 +44,7 @@ func gcpCloudStorageCacheConfig() *service.ConfigSpec {
 func init() {
 	service.MustRegisterCache(
 		"gcp_cloud_storage", gcpCloudStorageCacheConfig(),
-		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
+		func(conf *service.ParsedConfig, _ *service.Resources) (service.Cache, error) {
 			return newGcpCloudStorageCacheFromConfig(conf)
 		})
 }
@@ -155,6 +155,6 @@ func (c *gcpCloudStorageCache) Delete(ctx context.Context, key string) error {
 	return c.bucketHandle.Object(key).Delete(ctx)
 }
 
-func (c *gcpCloudStorageCache) Close(ctx context.Context) error {
+func (*gcpCloudStorageCache) Close(context.Context) error {
 	return nil
 }

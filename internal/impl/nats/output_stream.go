@@ -168,7 +168,7 @@ func (n *natsStreamWriter) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (n *natsStreamWriter) Write(ctx context.Context, msg *service.Message) error {
+func (n *natsStreamWriter) Write(_ context.Context, msg *service.Message) error {
 	n.connMut.RLock()
 	conn := n.stanConn
 	n.connMut.RUnlock()

@@ -57,7 +57,7 @@ func redisCacheConfig() *service.ConfigSpec {
 func init() {
 	service.MustRegisterCache(
 		"redis", redisCacheConfig(),
-		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
+		func(conf *service.ParsedConfig, _ *service.Resources) (service.Cache, error) {
 			return newRedisCacheFromConfig(conf)
 		})
 }
@@ -259,6 +259,6 @@ func (r *redisCache) Delete(ctx context.Context, key string) error {
 	}
 }
 
-func (r *redisCache) Close(ctx context.Context) error {
+func (r *redisCache) Close(context.Context) error {
 	return r.client.Close()
 }

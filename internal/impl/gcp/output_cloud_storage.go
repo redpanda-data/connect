@@ -232,7 +232,7 @@ func newGCPCloudStorageOutput(conf csoConfig, res *service.Resources) (*gcpCloud
 
 // Connect attempts to establish a connection to the target Google
 // Cloud Storage bucket.
-func (g *gcpCloudStorageOutput) Connect(ctx context.Context) error {
+func (g *gcpCloudStorageOutput) Connect(context.Context) error {
 	g.connMut.Lock()
 	defer g.connMut.Unlock()
 
@@ -269,7 +269,7 @@ func (g *gcpCloudStorageOutput) WriteBatch(ctx context.Context, batch service.Me
 	ctx, cancel := context.WithTimeout(ctx, g.conf.Timeout)
 	defer cancel()
 
-	return batch.WalkWithBatchedErrors(func(i int, msg *service.Message) error {
+	return batch.WalkWithBatchedErrors(func(_ int, msg *service.Message) error {
 		metadata := map[string]string{}
 		_ = msg.MetaWalk(func(k, v string) error {
 			metadata[k] = v
@@ -351,7 +351,7 @@ func (g *gcpCloudStorageOutput) WriteBatch(ctx context.Context, batch service.Me
 		if isMerge {
 			dst := client.Bucket(g.conf.Bucket).Object(outputPath)
 
-			if aerr := g.appendToFile(ctx, src, dst); aerr != nil {
+			if aerr := appendToFile(ctx, src, dst); aerr != nil {
 				return aerr
 			}
 		}
@@ -372,7 +372,7 @@ func (g *gcpCloudStorageOutput) Close(context.Context) error {
 	return err
 }
 
-func (g *gcpCloudStorageOutput) appendToFile(ctx context.Context, src, dst *storage.ObjectHandle) error {
+func appendToFile(ctx context.Context, src, dst *storage.ObjectHandle) error {
 	_, err := dst.ComposerFrom(dst, src).Run(ctx)
 
 	return err

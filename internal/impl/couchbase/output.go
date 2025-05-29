@@ -72,7 +72,7 @@ type Output struct {
 }
 
 // NewOutput returns a new couchbase output based on the provided config
-func NewOutput(conf *service.ParsedConfig, mgr *service.Resources) (*Output, error) {
+func NewOutput(conf *service.ParsedConfig, _ *service.Resources) (*Output, error) {
 	cl, err := getClientConfig(conf)
 	if err != nil {
 		return nil, err
@@ -121,7 +121,7 @@ func NewOutput(conf *service.ParsedConfig, mgr *service.Resources) (*Output, err
 }
 
 // Connect connects to the couchbase cluster
-func (o *Output) Connect(ctx context.Context) error {
+func (o *Output) Connect(context.Context) error {
 	client, err := makeClient(o.cfg)
 	if err != nil {
 		return err
@@ -131,7 +131,7 @@ func (o *Output) Connect(ctx context.Context) error {
 }
 
 // WriteBatch writes out to the couchbase cluster
-func (o *Output) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
+func (o *Output) WriteBatch(_ context.Context, batch service.MessageBatch) error {
 	ops := make([]gocb.BulkOp, len(batch))
 
 	var contentExec *service.MessageBatchBloblangExecutor

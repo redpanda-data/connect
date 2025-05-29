@@ -51,7 +51,7 @@ const (
 	ESOFieldAWSEnabled = "enabled"
 )
 
-func notImportedAWSOptFn(conf *service.ParsedConfig, osconf *opensearchapi.Config) error {
+func notImportedAWSOptFn(conf *service.ParsedConfig, _ *opensearchapi.Config) error {
 	if enabled, _ := conf.FieldBool(ESOFieldAWSEnabled); !enabled {
 		return nil
 	}
@@ -243,7 +243,7 @@ func OutputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (*Out
 //------------------------------------------------------------------------------
 
 // Connect attempts to connect to the server.
-func (e *Output) Connect(ctx context.Context) error {
+func (e *Output) Connect(context.Context) error {
 	if e.client != nil {
 		return nil
 	}
@@ -305,7 +305,7 @@ func (e *Output) WriteBatch(ctx context.Context, msg service.MessageBatch) error
 	start := time.Now()
 	b, _ := opensearchutil.NewBulkIndexer(opensearchutil.BulkIndexerConfig{
 		Client: e.client,
-		OnError: func(ctx context.Context, err error) {
+		OnError: func(_ context.Context, err error) {
 			bBulkErr = service.NewBatchError(msg, err)
 		},
 	})
@@ -314,7 +314,7 @@ func (e *Output) WriteBatch(ctx context.Context, msg service.MessageBatch) error
 	var bErrMut sync.Mutex
 
 	for i, v := range requests {
-		bulkReq, err := e.buildBulkableRequest(v, func(err error) {
+		bulkReq, err := buildBulkableRequest(v, func(err error) {
 			bErrMut.Lock()
 			defer bErrMut.Unlock()
 
@@ -356,12 +356,12 @@ func (e *Output) WriteBatch(ctx context.Context, msg service.MessageBatch) error
 }
 
 // Close closes the output.
-func (e *Output) Close(context.Context) error {
+func (*Output) Close(context.Context) error {
 	return nil
 }
 
 // Build a bulkable request for a given pending bulk index item.
-func (e *Output) buildBulkableRequest(p *pendingBulkIndex, onError func(err error)) (r *opensearchutil.BulkIndexerItem, err error) {
+func buildBulkableRequest(p *pendingBulkIndex, onError func(err error)) (r *opensearchutil.BulkIndexerItem, err error) {
 	switch p.Action {
 	case "update":
 		r = &opensearchutil.BulkIndexerItem{
@@ -401,8 +401,8 @@ func (e *Output) buildBulkableRequest(p *pendingBulkIndex, onError func(err erro
 	}
 
 	r.OnFailure = func(
-		ctx context.Context,
-		bii opensearchutil.BulkIndexerItem,
+		_ context.Context,
+		_ opensearchutil.BulkIndexerItem,
 		biri opensearchapi.BulkRespItem,
 		err error,
 	) {

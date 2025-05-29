@@ -61,7 +61,7 @@ func qsiConfigFromParsed(pConf *service.ParsedConfig) (conf qsiConfig, err error
 }
 
 func qsiSpec() *service.ConfigSpec {
-	return azureComponentSpec(false).
+	return azureComponentSpec().
 		Beta().
 		Version("3.42.0").
 		Summary(`Dequeue objects from an Azure Storage Queue.`).
@@ -122,7 +122,7 @@ func newAzureQueueStorage(conf qsiConfig, mgr *service.Resources) (*azureQueueSt
 	return a, nil
 }
 
-func (a *azureQueueStorage) Connect(ctx context.Context) error {
+func (*azureQueueStorage) Connect(context.Context) error {
 	return nil
 }
 
@@ -181,7 +181,7 @@ func (a *azureQueueStorage) ReadBatch(ctx context.Context) (batch service.Messag
 		batch = append(batch, part)
 		dqm[i] = queueMsg
 	}
-	return batch, func(ctx context.Context, res error) error {
+	return batch, func(ctx context.Context, _ error) error {
 		for _, queueMsg := range dqm {
 			_, err = queueClient.DeleteMessage(ctx, *queueMsg.MessageID, *queueMsg.PopReceipt, nil)
 			if err != nil {
@@ -192,6 +192,6 @@ func (a *azureQueueStorage) ReadBatch(ctx context.Context) (batch service.Messag
 	}, nil
 }
 
-func (a *azureQueueStorage) Close(ctx context.Context) error {
+func (*azureQueueStorage) Close(context.Context) error {
 	return nil
 }

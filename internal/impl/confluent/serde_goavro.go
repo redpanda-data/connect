@@ -49,7 +49,7 @@ func resolveGoAvroReferences(ctx context.Context, client *sr.Client, mapping *bl
 	}
 
 	refsMap := map[string]string{}
-	if err := client.WalkReferences(ctx, schema.References, func(ctx context.Context, name string, schema franz_sr.Schema) error {
+	if err := client.WalkReferences(ctx, schema.References, func(_ context.Context, name string, schema franz_sr.Schema) error {
 		s, err := mapSchema(schema)
 		refsMap[name] = s
 		return err

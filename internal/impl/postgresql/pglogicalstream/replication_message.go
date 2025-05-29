@@ -103,23 +103,23 @@ func (m *baseMessage) SetType(t MessageType) {
 
 // Decode parse src into message struct. The src must contain the complete message starts after
 // the first message type byte.
-func (m *baseMessage) Decode(_ []byte) error {
+func (*baseMessage) Decode([]byte) error {
 	return errors.New("message decode not implemented")
 }
 
-func (m *baseMessage) lengthError(name string, expectedLen, actualLen int) error {
+func (*baseMessage) lengthError(name string, expectedLen, actualLen int) error {
 	return fmt.Errorf("%s must have %d bytes, got %d bytes", name, expectedLen, actualLen)
 }
 
-func (m *baseMessage) decodeStringError(name, field string) error {
+func (*baseMessage) decodeStringError(name, field string) error {
 	return fmt.Errorf("%s.%s decode string error", name, field)
 }
 
-func (m *baseMessage) decodeTupleDataError(name, field string, e error) error {
+func (*baseMessage) decodeTupleDataError(name, field string, e error) error {
 	return fmt.Errorf("%s.%s decode tuple error: %s", name, field, e.Error())
 }
 
-func (m *baseMessage) invalidTupleTypeError(name, field, e string, a byte) error {
+func (*baseMessage) invalidTupleTypeError(name, field, e string, a byte) error {
 	return fmt.Errorf("%s.%s invalid tuple type value, expect %s, actual %c", name, field, e, a)
 }
 
@@ -133,7 +133,7 @@ func (m *baseMessage) invalidTupleTypeError(name, field, e string, a byte) error
 //	Eg. String, String("user").
 //
 // If there is no null byte in src, return -1.
-func (m *baseMessage) decodeString(src []byte) (string, int) {
+func (*baseMessage) decodeString(src []byte) (string, int) {
 	end := bytes.IndexByte(src, byte(0))
 	if end == -1 {
 		return "", -1
@@ -143,19 +143,19 @@ func (m *baseMessage) decodeString(src []byte) (string, int) {
 	return string(src[:end]), end + 1
 }
 
-func (m *baseMessage) decodeLSN(src []byte) (LSN, int) {
+func (*baseMessage) decodeLSN(src []byte) (LSN, int) {
 	return LSN(binary.BigEndian.Uint64(src)), 8
 }
 
-func (m *baseMessage) decodeTime(src []byte) (time.Time, int) {
+func (*baseMessage) decodeTime(src []byte) (time.Time, int) {
 	return pgTimeToTime(int64(binary.BigEndian.Uint64(src))), 8
 }
 
-func (m *baseMessage) decodeUint16(src []byte) (uint16, int) {
+func (*baseMessage) decodeUint16(src []byte) (uint16, int) {
 	return binary.BigEndian.Uint16(src), 2
 }
 
-func (m *baseMessage) decodeUint32(src []byte) (uint32, int) {
+func (*baseMessage) decodeUint32(src []byte) (uint32, int) {
 	return binary.BigEndian.Uint32(src), 4
 }
 

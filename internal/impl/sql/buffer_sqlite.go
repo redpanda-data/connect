@@ -88,7 +88,7 @@ func init() {
 var maxRequeue = math.MaxInt
 
 // NewSQLiteBufferFromConfig creates a new SQLite buffer from a parsed config.
-func NewSQLiteBufferFromConfig(conf *service.ParsedConfig, res *service.Resources) (*SQLiteBuffer, error) {
+func NewSQLiteBufferFromConfig(conf *service.ParsedConfig, _ *service.Resources) (*SQLiteBuffer, error) {
 	path, err := conf.FieldString("path")
 	if err != nil {
 		return nil, err
@@ -352,7 +352,7 @@ func (m *SQLiteBuffer) EndOfInput() {
 }
 
 // Close the underlying DB connection.
-func (m *SQLiteBuffer) Close(ctx context.Context) error {
+func (m *SQLiteBuffer) Close(context.Context) error {
 	m.cond.L.Lock()
 	m.closed = true
 	err := m.db.Close()

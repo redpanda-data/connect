@@ -75,7 +75,7 @@ func (o *overridableIDGenerator) NewIDs(ctx context.Context) (trace.TraceID, tra
 }
 
 // NewSpanID implements trace.IDGenerator.
-func (o *overridableIDGenerator) NewSpanID(ctx context.Context, traceID trace.TraceID) trace.SpanID {
+func (o *overridableIDGenerator) NewSpanID(ctx context.Context, _ trace.TraceID) trace.SpanID {
 	if id, ok := ctx.Value(customSpanIDKey).(trace.SpanID); ok {
 		return id
 	}

@@ -232,7 +232,7 @@ func newCaptureProcessor(conf *service.ParsedConfig, mgr *service.Resources, opt
 	}, nil
 }
 
-func (proc *captureProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+func (proc *captureProcessor) Process(_ context.Context, msg *service.Message) (service.MessageBatch, error) {
 	out := service.MessageBatch{msg}
 
 	// For historical reasons, a sampling rate of 0 or 1 on the sentry client
@@ -282,7 +282,7 @@ func (proc *captureProcessor) Process(ctx context.Context, msg *service.Message)
 	return out, nil
 }
 
-func (proc *captureProcessor) Close(ctx context.Context) (err error) {
+func (proc *captureProcessor) Close(context.Context) (err error) {
 	if flushed := proc.hub.Flush(proc.flushTimeout); !flushed {
 		err = errors.New("failed to flush sentry events before timeout")
 	}

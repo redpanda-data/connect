@@ -197,12 +197,12 @@ func (s *sqlCache) Get(ctx context.Context, key string) (value []byte, err error
 	return
 }
 
-func (s *sqlCache) Set(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
+func (s *sqlCache) Set(ctx context.Context, key string, value []byte, _ *time.Duration) error {
 	_, err := s.upsertBuilder.Values(key, value).RunWith(s.db).ExecContext(ctx)
 	return err
 }
 
-func (s *sqlCache) Add(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
+func (s *sqlCache) Add(ctx context.Context, key string, value []byte, _ *time.Duration) error {
 	_, err := s.insertBuilder.Values(key, value).RunWith(s.db).ExecContext(ctx)
 	if err != nil {
 		// This is difficult, ideally we need to translate any error that

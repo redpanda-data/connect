@@ -46,7 +46,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 		os.Exit(1)
 	}
 
-	secretLookupFn := func(ctx context.Context, key string) (string, bool) {
+	secretLookupFn := func(context.Context, string) (string, bool) {
 		return "", false
 	}
 

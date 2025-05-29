@@ -65,7 +65,7 @@ input:
 func init() {
 	service.MustRegisterInput(
 		"cassandra", inputConfigSpec(),
-		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
+		func(conf *service.ParsedConfig, _ *service.Resources) (service.Input, error) {
 			return newCassandraInput(conf)
 		})
 }
@@ -95,7 +95,7 @@ type cassandraInput struct {
 	iter    *gocql.Iter
 }
 
-func (c *cassandraInput) Connect(ctx context.Context) error {
+func (c *cassandraInput) Connect(context.Context) error {
 	if c.session != nil {
 		return nil
 	}
@@ -115,7 +115,7 @@ func (c *cassandraInput) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (c *cassandraInput) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
+func (c *cassandraInput) Read(context.Context) (*service.Message, service.AckFunc, error) {
 	mp := make(map[string]interface{})
 	if !c.iter.MapScan(mp) {
 		return nil, nil, service.ErrEndOfInput
@@ -123,12 +123,12 @@ func (c *cassandraInput) Read(ctx context.Context) (*service.Message, service.Ac
 
 	msg := service.NewMessage(nil)
 	msg.SetStructuredMut(mp)
-	return msg, func(ctx context.Context, err error) error {
+	return msg, func(context.Context, error) error {
 		return nil
 	}, nil
 }
 
-func (c *cassandraInput) Close(ctx context.Context) error {
+func (c *cassandraInput) Close(context.Context) error {
 	if c.session != nil {
 		c.session.Close()
 		c.session = nil

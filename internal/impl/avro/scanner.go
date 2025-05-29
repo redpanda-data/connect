@@ -61,7 +61,7 @@ This scanner also emits the canonical Avro schema as ` + "`@avro_schema`" + ` me
 
 func init() {
 	service.MustRegisterBatchScannerCreator("avro", avroScannerSpec(),
-		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchScannerCreator, error) {
+		func(conf *service.ParsedConfig, _ *service.Resources) (service.BatchScannerCreator, error) {
 			return avroScannerFromParsed(conf)
 		})
 }
@@ -78,7 +78,7 @@ type avroScannerCreator struct {
 	rawJSON bool
 }
 
-func (c *avroScannerCreator) Create(rdr io.ReadCloser, aFn service.AckFunc, details *service.ScannerSourceDetails) (service.BatchScanner, error) {
+func (c *avroScannerCreator) Create(rdr io.ReadCloser, aFn service.AckFunc, _ *service.ScannerSourceDetails) (service.BatchScanner, error) {
 	br := bufio.NewReader(rdr)
 	ocf, err := goavro.NewOCFReader(br)
 	if err != nil {
@@ -100,7 +100,7 @@ func (c *avroScannerCreator) Create(rdr io.ReadCloser, aFn service.AckFunc, deta
 	}, aFn), nil
 }
 
-func (c *avroScannerCreator) Close(context.Context) error {
+func (*avroScannerCreator) Close(context.Context) error {
 	return nil
 }
 
@@ -110,7 +110,7 @@ type avroScanner struct {
 	avroCodec *goavro.Codec
 }
 
-func (c *avroScanner) NextBatch(ctx context.Context) (service.MessageBatch, error) {
+func (c *avroScanner) NextBatch(context.Context) (service.MessageBatch, error) {
 	if c.r == nil {
 		return nil, io.EOF
 	}
@@ -138,7 +138,7 @@ func (c *avroScanner) NextBatch(ctx context.Context) (service.MessageBatch, erro
 	return service.MessageBatch{msg}, nil
 }
 
-func (c *avroScanner) Close(ctx context.Context) error {
+func (c *avroScanner) Close(context.Context) error {
 	if c.r == nil {
 		return nil
 	}

@@ -111,7 +111,7 @@ func TestXMLCases(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, test := range tests {
-		t.Run(test.name, func(tt *testing.T) {
+		t.Run(test.name, func(t *testing.T) {
 			msgsOut, err := proc.Process(t.Context(), service.NewMessage([]byte(test.input)))
 			require.NoError(t, err)
 			require.Len(t, msgsOut, 1)

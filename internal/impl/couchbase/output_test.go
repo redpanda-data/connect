@@ -112,9 +112,9 @@ func TestIntegrationCouchbaseOutput(t *testing.T) {
 	servicePort := requireCouchbase(t)
 
 	bucket := fmt.Sprintf("testing-output-%d", time.Now().Unix())
-	require.NoError(t, createBucket(t.Context(), t, servicePort, bucket))
+	require.NoError(t, createBucket(t.Context(), servicePort, bucket))
 	t.Cleanup(func() {
-		require.NoError(t, removeBucket(t.Context(), t, servicePort, bucket))
+		require.NoError(t, removeBucket(t.Context(), servicePort, bucket))
 	})
 
 	uid := faker.UUIDHyphenated()

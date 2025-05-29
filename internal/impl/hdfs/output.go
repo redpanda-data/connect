@@ -96,7 +96,7 @@ type hdfsWriter struct {
 	log    *service.Logger
 }
 
-func (h *hdfsWriter) Connect(ctx context.Context) error {
+func (h *hdfsWriter) Connect(context.Context) error {
 	if h.client != nil {
 		return nil
 	}
@@ -113,7 +113,7 @@ func (h *hdfsWriter) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (h *hdfsWriter) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
+func (h *hdfsWriter) WriteBatch(_ context.Context, batch service.MessageBatch) error {
 	if h.client == nil {
 		return service.ErrNotConnected
 	}
@@ -151,6 +151,6 @@ func (h *hdfsWriter) WriteBatch(ctx context.Context, batch service.MessageBatch)
 	})
 }
 
-func (h *hdfsWriter) Close(context.Context) error {
+func (*hdfsWriter) Close(context.Context) error {
 	return nil
 }

@@ -97,7 +97,7 @@ func newNSQWriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) 
 	return
 }
 
-func (n *nsqWriter) Connect(ctx context.Context) error {
+func (n *nsqWriter) Connect(context.Context) error {
 	n.connMut.Lock()
 	defer n.connMut.Unlock()
 
@@ -122,7 +122,7 @@ func (n *nsqWriter) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (n *nsqWriter) Write(ctx context.Context, msg *service.Message) error {
+func (n *nsqWriter) Write(_ context.Context, msg *service.Message) error {
 	n.connMut.RLock()
 	prod := n.producer
 	n.connMut.RUnlock()

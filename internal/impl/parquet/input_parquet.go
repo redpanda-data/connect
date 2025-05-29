@@ -120,7 +120,7 @@ type parquetReader struct {
 	openFile *openParquetFile
 }
 
-func (r *parquetReader) Connect(ctx context.Context) error {
+func (*parquetReader) Connect(context.Context) error {
 	return nil
 }
 
@@ -185,7 +185,7 @@ func (r *parquetReader) closeOpenFile() error {
 	return err
 }
 
-func (r *parquetReader) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
+func (r *parquetReader) ReadBatch(context.Context) (service.MessageBatch, service.AckFunc, error) {
 	r.mut.Lock()
 	defer r.mut.Unlock()
 
@@ -232,10 +232,10 @@ func (r *parquetReader) ReadBatch(ctx context.Context) (service.MessageBatch, se
 		resBatch[i] = newMsg
 	}
 
-	return resBatch, func(ctx context.Context, err error) error { return nil }, nil
+	return resBatch, func(context.Context, error) error { return nil }, nil
 }
 
-func (r *parquetReader) Close(ctx context.Context) error {
+func (r *parquetReader) Close(context.Context) error {
 	r.mut.Lock()
 	defer r.mut.Unlock()
 	return r.closeOpenFile()

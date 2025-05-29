@@ -96,7 +96,7 @@ func (s *statusEmitter) sendStatusEvent(e *protoconnect.StatusEvent) {
 	msg.MetaSetMut(topicMetaKey, s.topic)
 	msg.MetaSetMut(keyMetaKey, s.pipelineID)
 
-	_ = s.o.WriteBatchNonBlocking(service.MessageBatch{msg}, func(ctx context.Context, err error) error {
+	_ = s.o.WriteBatchNonBlocking(service.MessageBatch{msg}, func(context.Context, error) error {
 		return nil // TODO: Log nacks
 	}) // TODO: Log errors (occasionally)
 }

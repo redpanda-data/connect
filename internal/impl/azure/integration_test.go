@@ -320,7 +320,7 @@ func TestIntegrationCosmosDB(t *testing.T) {
 		p := httputil.NewSingleHostReverseProxy(url)
 		p.Transport = customTransport
 		// Don't log proxy errors, but return an error downstream
-		p.ErrorHandler = func(rw http.ResponseWriter, r *http.Request, err error) {
+		p.ErrorHandler = func(rw http.ResponseWriter, _ *http.Request, _ error) {
 			rw.WriteHeader(http.StatusBadGateway)
 		}
 

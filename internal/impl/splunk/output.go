@@ -183,7 +183,7 @@ func outputFromParsed(pConf *service.ParsedConfig, log *service.Logger) (o *outp
 
 //------------------------------------------------------------------------------
 
-func (o *output) Connect(_ context.Context) error { return nil }
+func (*output) Connect(context.Context) error { return nil }
 
 func (o *output) WriteBatch(ctx context.Context, b service.MessageBatch) (err error) {
 	header := make(http.Header)
@@ -270,4 +270,4 @@ func (o *output) WriteBatch(ctx context.Context, b service.MessageBatch) (err er
 	return
 }
 
-func (o *output) Close(_ context.Context) error { return nil }
+func (*output) Close(context.Context) error { return nil }

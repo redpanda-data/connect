@@ -68,7 +68,7 @@ func (client *mockBQClient) RunQuery(ctx context.Context, options *bqQueryBuilde
 	return iter, args.Error(1)
 }
 
-func (client *mockBQClient) Close() error {
+func (*mockBQClient) Close() error {
 	return nil
 }
 

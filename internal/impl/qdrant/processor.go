@@ -276,6 +276,6 @@ func (p *processor) Process(ctx context.Context, msg *service.Message) (service.
 }
 
 // Close implements service.Processor.
-func (p *processor) Close(ctx context.Context) error {
+func (p *processor) Close(context.Context) error {
 	return p.client.Close()
 }

@@ -38,7 +38,7 @@ func resolveHambaAvroReferences(ctx context.Context, client *sr.Client, schema f
 		return []franz_sr.Schema{schema}, nil
 	}
 	schemas := []franz_sr.Schema{}
-	if err := client.WalkReferences(ctx, schema.References, func(ctx context.Context, name string, schema franz_sr.Schema) error {
+	if err := client.WalkReferences(ctx, schema.References, func(_ context.Context, _ string, schema franz_sr.Schema) error {
 		schemas = append(schemas, schema)
 		return nil
 	}); err != nil {
@@ -233,7 +233,7 @@ func (w *avroSchemaWalker) walkSlice(slice []any, schema *avro.ArraySchema) ([]a
 	return slice, nil
 }
 
-func (w *avroSchemaWalker) translateKafkaConnectValue(value any, schema avro.PropertySchema) (any, error) {
+func (*avroSchemaWalker) translateKafkaConnectValue(value any, schema avro.PropertySchema) (any, error) {
 	name := schema.Prop("connect.name")
 	switch name {
 	case "io.debezium.time.Date":

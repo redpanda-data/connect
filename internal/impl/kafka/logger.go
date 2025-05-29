@@ -27,7 +27,7 @@ type KGoLogger struct {
 }
 
 // Level returns the logger level.
-func (k *KGoLogger) Level() kgo.LogLevel {
+func (*KGoLogger) Level() kgo.LogLevel {
 	return kgo.LogLevelDebug
 }
 

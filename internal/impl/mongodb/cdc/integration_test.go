@@ -180,7 +180,7 @@ func (o *outputHelper) AckAll() {
 	o.nack = false
 }
 
-func (o *outputHelper) AddBatch(ctx context.Context, batch service.MessageBatch) error {
+func (o *outputHelper) AddBatch(_ context.Context, batch service.MessageBatch) error {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	if o.nack {

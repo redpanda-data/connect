@@ -33,10 +33,10 @@ import (
 
 type discardHandler struct{}
 
-func (dh discardHandler) Enabled(context.Context, slog.Level) bool  { return false }
-func (dh discardHandler) Handle(context.Context, slog.Record) error { return nil }
-func (dh discardHandler) WithAttrs(attrs []slog.Attr) slog.Handler  { return dh }
-func (dh discardHandler) WithGroup(name string) slog.Handler        { return dh }
+func (discardHandler) Enabled(context.Context, slog.Level) bool  { return false }
+func (discardHandler) Handle(context.Context, slog.Record) error { return nil }
+func (dh discardHandler) WithAttrs([]slog.Attr) slog.Handler     { return dh }
+func (dh discardHandler) WithGroup(string) slog.Handler          { return dh }
 
 func TestResourcesWrappersCacheHappy(t *testing.T) {
 	s := server.NewMCPServer("Testing", "1.0.0")

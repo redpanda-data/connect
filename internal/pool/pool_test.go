@@ -57,7 +57,7 @@ func TestReuse(t *testing.T) {
 
 func TestAcquire(t *testing.T) {
 	numCreated := 0
-	p := pool.NewCapped(5, func(ctx context.Context, id int) (foo, error) {
+	p := pool.NewCapped(5, func(_ context.Context, id int) (foo, error) {
 		require.Equal(t, id, numCreated)
 		numCreated++
 		return foo{}, nil
@@ -95,7 +95,7 @@ func TestAcquire(t *testing.T) {
 }
 
 func TestCtorCancellation(t *testing.T) {
-	p := pool.NewCapped(5, func(ctx context.Context, id int) (any, error) {
+	p := pool.NewCapped(5, func(ctx context.Context, _ int) (any, error) {
 		<-ctx.Done()
 		return nil, ctx.Err()
 	})
@@ -110,7 +110,7 @@ func TestCtorCancellation(t *testing.T) {
 
 func TestRandomized(t *testing.T) {
 	var created atomic.Int64
-	p := pool.NewCapped(5, func(ctx context.Context, id int) (*foo, error) {
+	p := pool.NewCapped(5, func(_ context.Context, id int) (*foo, error) {
 		created.Add(1)
 		return &foo{id}, nil
 	})

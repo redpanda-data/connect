@@ -489,7 +489,7 @@ func (g *gcpBigQueryOutput) createTableLoader(data *[]byte) *bigquery.Loader {
 	return loader
 }
 
-func (g *gcpBigQueryOutput) Close(ctx context.Context) error {
+func (g *gcpBigQueryOutput) Close(context.Context) error {
 	g.connMut.Lock()
 	if g.client != nil {
 		g.client.Close()

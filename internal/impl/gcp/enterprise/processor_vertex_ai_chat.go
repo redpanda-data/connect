@@ -351,6 +351,6 @@ func (p *vertexAIChatProcessor) computePrompt(msg *service.Message) (string, err
 	return string(b), nil
 }
 
-func (p *vertexAIChatProcessor) Close(ctx context.Context) error {
+func (p *vertexAIChatProcessor) Close(context.Context) error {
 	return p.client.Close()
 }

@@ -249,7 +249,7 @@ func (proc *bigQuerySelectProcessor) ProcessBatch(ctx context.Context, batch ser
 	return []service.MessageBatch{outBatch}, nil
 }
 
-func (proc *bigQuerySelectProcessor) Close(ctx context.Context) error {
+func (proc *bigQuerySelectProcessor) Close(context.Context) error {
 	proc.closeF()
 	return nil
 }

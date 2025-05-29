@@ -125,12 +125,12 @@ func NewServer(
 		return nil
 	})
 
-	repoScanner.OnMetricsFile(func(fileName string, contents []byte) error {
+	repoScanner.OnMetricsFile(func(_ string, contents []byte) error {
 		// TODO: Detect starlark here?
 		return resWrapper.SetMetricsYAML(contents)
 	})
 
-	repoScanner.OnTracerFile(func(fileName string, contents []byte) error {
+	repoScanner.OnTracerFile(func(_ string, contents []byte) error {
 		// TODO: Detect starlark here?
 		return resWrapper.SetTracerYAML(contents)
 	})

@@ -238,7 +238,7 @@ func (r *kvReader) Read(ctx context.Context) (*service.Message, service.AckFunc,
 			metaKVOperation, entry.Operation().String(),
 		).Debugf("Received kv bucket update")
 
-		return newMessageFromKVEntry(entry), func(ctx context.Context, res error) error {
+		return newMessageFromKVEntry(entry), func(context.Context, error) error {
 			return nil
 		}, nil
 	}

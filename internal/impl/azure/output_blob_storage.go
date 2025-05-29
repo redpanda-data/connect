@@ -69,7 +69,7 @@ func bsoConfigFromParsed(pConf *service.ParsedConfig) (conf bsoConfig, err error
 }
 
 func bsoSpec() *service.ConfigSpec {
-	return azureComponentSpec(true).
+	return azureComponentSpec().
 		Beta().
 		Version("3.36.0").
 		Summary(`Sends message parts as objects to an Azure Blob Storage Account container. Each object is uploaded with the filename specified with the `+"`container`"+` field.`).
@@ -141,7 +141,7 @@ func newAzureBlobStorageWriter(conf bsoConfig, log *service.Logger) (*azureBlobS
 	return a, nil
 }
 
-func (a *azureBlobStorageWriter) Connect(ctx context.Context) error {
+func (*azureBlobStorageWriter) Connect(context.Context) error {
 	return nil
 }
 
@@ -234,7 +234,7 @@ func (a *azureBlobStorageWriter) Write(ctx context.Context, msg *service.Message
 	return nil
 }
 
-func (a *azureBlobStorageWriter) Close(context.Context) error {
+func (*azureBlobStorageWriter) Close(context.Context) error {
 	return nil
 }
 

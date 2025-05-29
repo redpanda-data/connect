@@ -28,39 +28,39 @@ func TestImportsMatch(t *testing.T) {
 
 	seen := map[string]struct{}{}
 
-	env.WalkBuffers(func(name string, config *service.ConfigView) {
+	env.WalkBuffers(func(name string, _ *service.ConfigView) {
 		seen[name] = struct{}{}
 	})
 
-	env.WalkCaches(func(name string, config *service.ConfigView) {
+	env.WalkCaches(func(name string, _ *service.ConfigView) {
 		seen[name] = struct{}{}
 	})
 
-	env.WalkInputs(func(name string, config *service.ConfigView) {
+	env.WalkInputs(func(name string, _ *service.ConfigView) {
 		seen[name] = struct{}{}
 	})
 
-	env.WalkMetrics(func(name string, config *service.ConfigView) {
+	env.WalkMetrics(func(name string, _ *service.ConfigView) {
 		seen[name] = struct{}{}
 	})
 
-	env.WalkOutputs(func(name string, config *service.ConfigView) {
+	env.WalkOutputs(func(name string, _ *service.ConfigView) {
 		seen[name] = struct{}{}
 	})
 
-	env.WalkProcessors(func(name string, config *service.ConfigView) {
+	env.WalkProcessors(func(name string, _ *service.ConfigView) {
 		seen[name] = struct{}{}
 	})
 
-	env.WalkRateLimits(func(name string, config *service.ConfigView) {
+	env.WalkRateLimits(func(name string, _ *service.ConfigView) {
 		seen[name] = struct{}{}
 	})
 
-	env.WalkScanners(func(name string, config *service.ConfigView) {
+	env.WalkScanners(func(name string, _ *service.ConfigView) {
 		seen[name] = struct{}{}
 	})
 
-	env.WalkTracers(func(name string, config *service.ConfigView) {
+	env.WalkTracers(func(name string, _ *service.ConfigView) {
 		seen[name] = struct{}{}
 	})
 

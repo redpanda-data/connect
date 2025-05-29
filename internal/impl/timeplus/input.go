@@ -132,7 +132,7 @@ type timeplusInput struct {
 	sql    string
 }
 
-func (p *timeplusInput) Connect(ctx context.Context) error {
+func (p *timeplusInput) Connect(context.Context) error {
 	logger := p.log.With("sql", p.sql)
 
 	// We don't pass the `ctx` to `Run` method intentionally because
@@ -166,7 +166,7 @@ func (p *timeplusInput) Read(ctx context.Context) (*service.Message, service.Ack
 	msg := service.NewMessage(nil)
 	msg.SetStructured(event)
 
-	ack := func(ctx context.Context, err error) error {
+	ack := func(context.Context, error) error {
 		// Nacks are retried automatically when we use service.AutoRetryNacks
 		return nil
 	}

@@ -236,6 +236,6 @@ func (w *outputWriter) batchPointsByCollection(batch service.MessageBatch) (map[
 	return batches, nil
 }
 
-func (w *outputWriter) Close(ctx context.Context) error {
+func (w *outputWriter) Close(context.Context) error {
 	return w.client.Close()
 }

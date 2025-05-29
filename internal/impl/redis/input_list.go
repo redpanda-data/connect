@@ -147,6 +147,6 @@ func (r *redisListReader) Read(ctx context.Context) (*service.Message, service.A
 		nil
 }
 
-func (r *redisListReader) Close(ctx context.Context) (err error) {
+func (r *redisListReader) Close(context.Context) (err error) {
 	return r.client.Close()
 }
