@@ -81,6 +81,9 @@ linters:
           - bodyclose
           - perfsprint
         path: _test.go
+      - linters:
+          - revive
+        text: "exported method .*\\.(Close|Connect|Read|ReadBatch|Write|WriteBatch|Process|ProcessBatch|NextBatch|Create|EndOfInput) should have comment or be unexported"
     paths:
       - third_party$
       - builtin$
