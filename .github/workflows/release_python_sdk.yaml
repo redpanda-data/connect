@@ -1,0 +1,33 @@
+name: Build and Publish Python Plugin Package
+
+on:
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+
+    # See: https://docs.pypi.org/trusted-publishers/using-a-publisher/
+    environment: pypi
+    permissions:
+      id-token: write
+
+    defaults:
+      run:
+        working-directory: public/plugin/python
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Build the package with uv
+        run: uv build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: public/plugin/python/dist
+

@@ -7,7 +7,9 @@ authors = [
     { name = "Tyler Rockwood", email = "rockwood@redpanda.com" }
 ]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "grpcio>=1.71.0",
+]
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 
