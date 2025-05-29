@@ -101,7 +101,7 @@ type credentials struct {
 	Signer   ssh.Signer
 }
 
-func (c credentials) GetClient(fs fs.FS, address string) (*sftp.Client, error) {
+func (c credentials) GetClient(_ fs.FS, address string) (*sftp.Client, error) {
 	host, port, err := net.SplitHostPort(address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse address: %v", err)
@@ -170,7 +170,7 @@ type IsRevokedCallback func(cert *ssh.Certificate) bool
 
 // HostAuthCallback is called when setting up the connection to the SFTP server.
 func HostAuthCallback() HostAuthorityCallback {
-	return func(p ssh.PublicKey, addr string) bool {
+	return func(ssh.PublicKey, string) bool {
 		return true
 	}
 }
@@ -187,7 +187,7 @@ func CertCallback(s *Server) IsRevokedCallback {
 
 // HostCallback is called when setting up the connection to the SFTP server.
 func HostCallback(s *Server) ssh.HostKeyCallback {
-	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+	return func(hostname string, _ net.Addr, key ssh.PublicKey) error {
 		s.Hostname = hostname
 		s.PublicKey = key
 		return nil

@@ -221,6 +221,6 @@ func (b *bedrockChatProcessor) computePrompt(msg *service.Message) (string, erro
 	return string(buf), nil
 }
 
-func (b *bedrockChatProcessor) Close(ctx context.Context) error {
+func (*bedrockChatProcessor) Close(context.Context) error {
 	return nil
 }

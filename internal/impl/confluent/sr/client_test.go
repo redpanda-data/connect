@@ -184,7 +184,7 @@ func TestWalkReferences(t *testing.T) {
 			require.NoError(t, err)
 
 			schemas := []string{}
-			walkErr := client.WalkReferences(tCtx, schema.References, func(ctx context.Context, name string, schema franz_sr.Schema) error {
+			walkErr := client.WalkReferences(tCtx, schema.References, func(_ context.Context, name string, _ franz_sr.Schema) error {
 				schemas = append(schemas, name)
 				return nil
 			})

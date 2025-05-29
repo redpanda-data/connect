@@ -184,7 +184,7 @@ func newOutputWriter(conf *service.ParsedConfig, mgr *service.Resources) (*outpu
 	return &w, nil
 }
 
-func (w *outputWriter) Connect(ctx context.Context) error {
+func (w *outputWriter) Connect(context.Context) error {
 	w.logger.Tracef("Connecting to %s", w.host)
 	c, err := w.client.Index(w.host)
 	if err != nil {
@@ -370,7 +370,7 @@ func (w *outputWriter) DeleteBatch(ctx context.Context, ic indexClient, batch se
 	return nil
 }
 
-func (w *outputWriter) Close(ctx context.Context) error {
+func (w *outputWriter) Close(context.Context) error {
 	for {
 		item := w.pool.Get()
 		if item == nil {

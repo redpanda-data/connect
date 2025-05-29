@@ -245,6 +245,6 @@ func (a *kinesisFirehoseWriter) WriteBatch(ctx context.Context, batch service.Me
 	return err
 }
 
-func (a *kinesisFirehoseWriter) Close(context.Context) error {
+func (*kinesisFirehoseWriter) Close(context.Context) error {
 	return nil
 }

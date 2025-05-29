@@ -414,6 +414,6 @@ func (r *redisProc) ProcessBatch(ctx context.Context, inBatch service.MessageBat
 	return []service.MessageBatch{newMsg}, nil
 }
 
-func (r *redisProc) Close(ctx context.Context) error {
+func (r *redisProc) Close(context.Context) error {
 	return r.client.Close()
 }

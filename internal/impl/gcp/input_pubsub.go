@@ -222,7 +222,8 @@ func newGCPPubSubReader(conf pbiConfig, res *service.Resources) (*gcpPubSubReade
 	}, nil
 }
 
-func (c *gcpPubSubReader) Connect(ignored context.Context) error {
+// TODO: Why are we not using the top level context here?
+func (c *gcpPubSubReader) Connect(context.Context) error {
 	c.subMut.Lock()
 	defer c.subMut.Unlock()
 	if c.subscription != nil {
@@ -304,7 +305,7 @@ func (c *gcpPubSubReader) Read(ctx context.Context) (*service.Message, service.A
 		part.MetaSetMut("gcp_pubsub_delivery_attempt", *gmsg.DeliveryAttempt)
 	}
 
-	return part, func(ctx context.Context, res error) error {
+	return part, func(_ context.Context, res error) error {
 		if res != nil {
 			gmsg.Nack()
 		} else {
@@ -314,7 +315,7 @@ func (c *gcpPubSubReader) Read(ctx context.Context) (*service.Message, service.A
 	}, nil
 }
 
-func (c *gcpPubSubReader) Close(ctx context.Context) error {
+func (c *gcpPubSubReader) Close(context.Context) error {
 	c.subMut.Lock()
 	defer c.subMut.Unlock()
 

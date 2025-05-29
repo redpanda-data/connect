@@ -307,7 +307,7 @@ func (ri *Input) ReadBatch(ctx context.Context) (service.MessageBatch, service.A
 	return nil, nil, ctx.Err()
 }
 
-func (ri *Input) extractBatchFromRequest(r *http.Request) (service.MessageBatch, error) {
+func extractBatchFromRequest(r *http.Request) (service.MessageBatch, error) {
 	var batch service.MessageBatch
 
 	contentType := r.Header.Get("Content-Type")
@@ -421,7 +421,7 @@ func (ri *Input) deliverHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	batch, err := ri.extractBatchFromRequest(r)
+	batch, err := extractBatchFromRequest(r)
 	if err != nil {
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		ri.log.With("error", err).Warn("Request read failed")

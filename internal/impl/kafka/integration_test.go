@@ -104,7 +104,7 @@ func createKafkaTopicSasl(address, id string, partitions int32) error {
 	cl, err := kgo.NewClient(
 		kgo.SeedBrokers(address),
 		kgo.SASL(
-			scram.Sha256(func(c context.Context) (scram.Auth, error) {
+			scram.Sha256(func(context.Context) (scram.Auth, error) {
 				return scram.Auth{User: "admin", Pass: "foobar"}, nil
 			}),
 		),
@@ -279,7 +279,7 @@ input:
 	t.Run("manual_partitioner", func(t *testing.T) {
 		suite.Run(
 			t, manualPartitionTemplate,
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+			integration.StreamTestOptPreTest(func(t testing.TB, _ context.Context, vars *integration.StreamTestConfigVars) {
 				vars.General["VAR4"] = "group" + vars.ID
 				require.NoError(t, createKafkaTopic(t.Context(), "localhost:"+kafkaPortStr, vars.ID, 1))
 			}),
@@ -388,7 +388,7 @@ input:
 
 	suite.Run(
 		t, template,
-		integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+		integration.StreamTestOptPreTest(func(t testing.TB, _ context.Context, vars *integration.StreamTestConfigVars) {
 			vars.General["VAR4"] = "group" + vars.ID
 			require.NoError(t, createKafkaTopicSasl("localhost:"+kafkaPortStr, vars.ID, 4))
 		}),
@@ -950,7 +950,7 @@ output:
 
 	recvMsgWG := sync.WaitGroup{}
 	recvMsgWG.Add(count)
-	err := streamBuilder.AddConsumerFunc(func(ctx context.Context, m *service.Message) error {
+	err := streamBuilder.AddConsumerFunc(func(_ context.Context, m *service.Message) error {
 		defer recvMsgWG.Done()
 		b, err := m.AsBytes()
 		require.NoError(t, err)
@@ -1239,7 +1239,7 @@ output:
 
 			migratorUpdateWG := sync.WaitGroup{}
 			migratorUpdateWG.Add(1)
-			require.NoError(t, streamBuilder.AddConsumerFunc(func(_ context.Context, m *service.Message) error {
+			require.NoError(t, streamBuilder.AddConsumerFunc(func(context.Context, *service.Message) error {
 				defer migratorUpdateWG.Done()
 				return nil
 			}))
@@ -1339,7 +1339,7 @@ output:
 
 		migratorUpdateWG := sync.WaitGroup{}
 		migratorUpdateWG.Add(1)
-		require.NoError(t, streamBuilder.AddConsumerFunc(func(_ context.Context, m *service.Message) error {
+		require.NoError(t, streamBuilder.AddConsumerFunc(func(context.Context, *service.Message) error {
 			defer migratorUpdateWG.Done()
 			return nil
 		}))

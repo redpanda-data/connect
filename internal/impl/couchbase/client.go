@@ -164,6 +164,6 @@ func makeClient(cfg *couchbaseConfig) (*couchbaseClient, error) {
 	return proc, nil
 }
 
-func (p *couchbaseClient) Close(ctx context.Context) error {
+func (p *couchbaseClient) Close(context.Context) error {
 	return p.cluster.Close(&gocb.ClusterCloseOptions{})
 }

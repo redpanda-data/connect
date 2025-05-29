@@ -167,6 +167,6 @@ func (b *bedrockEmbeddingsProcessor) computeText(msg *service.Message) (string, 
 	return string(buf), nil
 }
 
-func (b *bedrockEmbeddingsProcessor) Close(ctx context.Context) error {
+func (*bedrockEmbeddingsProcessor) Close(context.Context) error {
 	return nil
 }

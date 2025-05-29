@@ -397,7 +397,7 @@ func convertMessage(m *nats.Msg) (*service.Message, service.AckFunc, error) {
 		}
 	}
 
-	return msg, func(ctx context.Context, res error) error {
+	return msg, func(_ context.Context, res error) error {
 		if res == nil {
 			return m.Ack()
 		}

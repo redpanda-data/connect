@@ -79,7 +79,7 @@ func (c *mockIndexClient) GetNamespace() map[string]*pinecone.Vector {
 	return idx
 }
 
-func (c *mockIndexClient) UpdateVector(ctx context.Context, req *pinecone.UpdateVectorRequest) error {
+func (c *mockIndexClient) UpdateVector(_ context.Context, req *pinecone.UpdateVectorRequest) error {
 	vectors := c.GetNamespace()
 	entry, ok := vectors[req.Id]
 	if !ok {
@@ -92,7 +92,7 @@ func (c *mockIndexClient) UpdateVector(ctx context.Context, req *pinecone.Update
 	return nil
 }
 
-func (c *mockIndexClient) UpsertVectors(ctx context.Context, batch []*pinecone.Vector) error {
+func (c *mockIndexClient) UpsertVectors(_ context.Context, batch []*pinecone.Vector) error {
 	vectors := c.GetNamespace()
 	for _, req := range batch {
 		entry, ok := vectors[req.Id]
@@ -108,7 +108,7 @@ func (c *mockIndexClient) UpsertVectors(ctx context.Context, batch []*pinecone.V
 	return nil
 }
 
-func (c *mockIndexClient) DeleteVectorsByID(ctx context.Context, ids []string) error {
+func (c *mockIndexClient) DeleteVectorsByID(_ context.Context, ids []string) error {
 	vectors := c.GetNamespace()
 	for _, id := range ids {
 		delete(vectors, id)

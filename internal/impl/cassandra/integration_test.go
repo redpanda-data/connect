@@ -78,7 +78,7 @@ output:
     query: 'INSERT INTO testspace.table$ID JSON ?'
     args_mapping: 'root = [ this ]'
 `
-		queryGetFn := func(ctx context.Context, testID, messageID string) (string, []string, error) {
+		queryGetFn := func(_ context.Context, testID, messageID string) (string, []string, error) {
 			var resID int
 			var resContent string
 			if err := session.Query(
@@ -97,7 +97,7 @@ output:
 			integration.StreamTestOptPort(resource.GetPort("9042/tcp")),
 			integration.StreamTestOptSleepAfterInput(time.Second*10),
 			integration.StreamTestOptSleepAfterOutput(time.Second*10),
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+			integration.StreamTestOptPreTest(func(t testing.TB, _ context.Context, vars *integration.StreamTestConfigVars) {
 				vars.ID = strings.ReplaceAll(vars.ID, "-", "")
 				require.NoError(t, session.Query(
 					fmt.Sprintf(
@@ -119,7 +119,7 @@ output:
     args_mapping: |
       root = [ this.id, this.content, now(), [ "first meow", "second meow" ] ]
 `
-		queryGetFn := func(ctx context.Context, testID, messageID string) (string, []string, error) {
+		queryGetFn := func(_ context.Context, testID, messageID string) (string, []string, error) {
 			var resID int
 			var resContent string
 			var createdAt time.Time
@@ -144,7 +144,7 @@ output:
 			integration.StreamTestOptPort(resource.GetPort("9042/tcp")),
 			integration.StreamTestOptSleepAfterInput(time.Second*10),
 			integration.StreamTestOptSleepAfterOutput(time.Second*10),
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+			integration.StreamTestOptPreTest(func(t testing.TB, _ context.Context, vars *integration.StreamTestConfigVars) {
 				vars.ID = strings.ReplaceAll(vars.ID, "-", "")
 				require.NoError(t, session.Query(
 					fmt.Sprintf(

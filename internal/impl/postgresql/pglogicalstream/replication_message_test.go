@@ -40,25 +40,25 @@ func (s *messageSuite) True(value bool) {
 	s.R().True(value)
 }
 
-func (s *messageSuite) newLSN() LSN {
+func (*messageSuite) newLSN() LSN {
 	return LSN(rand.Int63())
 }
 
-func (s *messageSuite) newXid() uint32 {
+func (*messageSuite) newXid() uint32 {
 	return uint32(rand.Int31())
 }
 
-func (s *messageSuite) newTime() (time.Time, uint64) {
+func (*messageSuite) newTime() (time.Time, uint64) {
 	// Postgres time format only support millisecond accuracy.
 	now := time.Now().Truncate(time.Millisecond)
 	return now, uint64(timeToPgTime(now))
 }
 
-func (s *messageSuite) newRelationID() uint32 {
+func (*messageSuite) newRelationID() uint32 {
 	return uint32(rand.Int31())
 }
 
-func (s *messageSuite) putString(dst []byte, value string) int {
+func (*messageSuite) putString(dst []byte, value string) int {
 	copy(dst, value)
 	dst[len(value)] = byte(0)
 	return len(value) + 1

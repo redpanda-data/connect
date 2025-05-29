@@ -450,6 +450,6 @@ unprocessedLoop:
 	return err
 }
 
-func (d *dynamoDBWriter) Close(context.Context) error {
+func (*dynamoDBWriter) Close(context.Context) error {
 	return nil
 }

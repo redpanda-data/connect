@@ -24,10 +24,10 @@ func (l *logWrapper) Errorf(format string, v ...interface{}) {
 	l.l.With("component", "resty").Debugf(format, v...)
 }
 
-func (l *logWrapper) Warnf(format string, v ...interface{}) {
+func (*logWrapper) Warnf(string, ...interface{}) {
 	// Ignore
 }
 
-func (l *logWrapper) Debugf(format string, v ...interface{}) {
+func (*logWrapper) Debugf(string, ...interface{}) {
 	// Ignore
 }

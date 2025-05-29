@@ -42,7 +42,7 @@ func threadProcessorSpec() *service.ConfigSpec {
 		)
 }
 
-func newThreadProcessor(conf *service.ParsedConfig, res *service.Resources) (service.Processor, error) {
+func newThreadProcessor(conf *service.ParsedConfig, _ *service.Resources) (service.Processor, error) {
 	botToken, err := conf.FieldString(pFieldBotToken)
 	if err != nil {
 		return nil, err
@@ -107,6 +107,6 @@ func (t *threadProcessor) Process(ctx context.Context, m *service.Message) (serv
 }
 
 // Close implements service.Processor.
-func (t *threadProcessor) Close(ctx context.Context) error {
+func (*threadProcessor) Close(context.Context) error {
 	return nil
 }

@@ -372,7 +372,7 @@ func (p *metrics) HandlerFunc() http.HandlerFunc {
 func (p *metrics) NewCounterCtor(path string, labelNames ...string) service.MetricsExporterCounterCtor {
 	if !model.IsValidMetricName(model.LabelValue(path)) {
 		p.log.Errorf("Ignoring metric '%v' due to invalid name", path)
-		return func(labelValues ...string) service.MetricsExporterCounter {
+		return func(...string) service.MetricsExporterCounter {
 			return noopStat{}
 		}
 	}
@@ -398,7 +398,7 @@ func (p *metrics) NewCounterCtor(path string, labelNames ...string) service.Metr
 
 	if pv.count != len(labelNames) {
 		p.log.Errorf("Metrics label mismatch %v versus %v %v for name '%v', skipping metric", pv.count, len(labelNames), labelNames, path)
-		return func(labelValues ...string) service.MetricsExporterCounter {
+		return func(...string) service.MetricsExporterCounter {
 			return noopStat{}
 		}
 	}
@@ -410,7 +410,7 @@ func (p *metrics) NewCounterCtor(path string, labelNames ...string) service.Metr
 func (p *metrics) NewTimerCtor(path string, labelNames ...string) service.MetricsExporterTimerCtor {
 	if !model.IsValidMetricName(model.LabelValue(path)) {
 		p.log.Errorf("Ignoring metric '%v' due to invalid name", path)
-		return func(labelValues ...string) service.MetricsExporterTimer {
+		return func(...string) service.MetricsExporterTimer {
 			return noopStat{}
 		}
 	}
@@ -441,7 +441,7 @@ func (p *metrics) NewTimerCtor(path string, labelNames ...string) service.Metric
 
 	if pv.count != len(labelNames) {
 		p.log.Errorf("Metrics label mismatch %v versus %v %v for name '%v', skipping metric", pv.count, len(labelNames), labelNames, path)
-		return func(labelValues ...string) service.MetricsExporterTimer {
+		return func(...string) service.MetricsExporterTimer {
 			return noopStat{}
 		}
 	}
@@ -473,7 +473,7 @@ func (p *metrics) getTimerHistVec(path string, labelNames ...string) service.Met
 
 	if pv.count != len(labelNames) {
 		p.log.Errorf("Metrics label mismatch %v versus %v %v for name '%v', skipping metric", pv.count, len(labelNames), labelNames, path)
-		return func(labelValues ...string) service.MetricsExporterTimer {
+		return func(...string) service.MetricsExporterTimer {
 			return noopStat{}
 		}
 	}
@@ -485,7 +485,7 @@ func (p *metrics) getTimerHistVec(path string, labelNames ...string) service.Met
 func (p *metrics) NewGaugeCtor(path string, labelNames ...string) service.MetricsExporterGaugeCtor {
 	if !model.IsValidMetricName(model.LabelValue(path)) {
 		p.log.Errorf("Ignoring metric '%v' due to invalid name", path)
-		return func(labelValues ...string) service.MetricsExporterGauge {
+		return func(...string) service.MetricsExporterGauge {
 			return &noopStat{}
 		}
 	}
@@ -511,7 +511,7 @@ func (p *metrics) NewGaugeCtor(path string, labelNames ...string) service.Metric
 
 	if pv.count != len(labelNames) {
 		p.log.Errorf("Metrics label mismatch %v versus %v %v for name '%v', skipping metric", pv.count, len(labelNames), labelNames, path)
-		return func(labelValues ...string) service.MetricsExporterGauge {
+		return func(...string) service.MetricsExporterGauge {
 			return noopStat{}
 		}
 	}
@@ -541,10 +541,10 @@ func (p *metrics) Close(context.Context) error {
 
 type noopStat struct{}
 
-func (n noopStat) Incr(count int64)          {}
-func (n noopStat) Decr(count int64)          {}
-func (n noopStat) Timing(delta int64)        {}
-func (n noopStat) Set(value int64)           {}
-func (n noopStat) SetFloat64(value float64)  {}
-func (n noopStat) IncrFloat64(count float64) {}
-func (n noopStat) DecrFloat64(count float64) {}
+func (noopStat) Incr(int64)          {}
+func (noopStat) Decr(int64)          {}
+func (noopStat) Timing(int64)        {}
+func (noopStat) Set(int64)           {}
+func (noopStat) SetFloat64(float64)  {}
+func (noopStat) IncrFloat64(float64) {}
+func (noopStat) DecrFloat64(float64) {}

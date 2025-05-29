@@ -117,7 +117,7 @@ func newPulsarWriterFromParsed(conf *service.ParsedConfig, log *service.Logger) 
 
 //------------------------------------------------------------------------------
 
-func (p *pulsarWriter) Connect(ctx context.Context) error {
+func (p *pulsarWriter) Connect(context.Context) error {
 	p.m.Lock()
 	defer p.m.Unlock()
 
@@ -161,7 +161,7 @@ func (p *pulsarWriter) Connect(ctx context.Context) error {
 }
 
 // disconnect safely closes a connection to an Pulsar server.
-func (p *pulsarWriter) disconnect(ctx context.Context) error {
+func (p *pulsarWriter) disconnect() error {
 	p.m.Lock()
 	defer p.m.Unlock()
 
@@ -218,10 +218,10 @@ func (p *pulsarWriter) Write(ctx context.Context, msg *service.Message) error {
 		m.OrderingKey = string(orderingKey)
 	}
 
-	_, err = r.Send(context.Background(), m)
+	_, err = r.Send(ctx, m)
 	return err
 }
 
-func (p *pulsarWriter) Close(ctx context.Context) error {
-	return p.disconnect(ctx)
+func (p *pulsarWriter) Close(context.Context) error {
+	return p.disconnect()
 }

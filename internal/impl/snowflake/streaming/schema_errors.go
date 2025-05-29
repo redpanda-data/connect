@@ -62,7 +62,7 @@ func (e *NonNullColumnError) ColumnName() string {
 }
 
 // Value returns nil
-func (e *NonNullColumnError) Value() any {
+func (*NonNullColumnError) Value() any {
 	return nil
 }
 

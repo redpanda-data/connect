@@ -41,7 +41,7 @@ func cwmMock(svc cloudWatchAPI) *cwMetrics {
 	}
 }
 
-func (m *mockCloudWatchClient) PutMetricData(ctx context.Context, params *cloudwatch.PutMetricDataInput, optFns ...func(*cloudwatch.Options)) (*cloudwatch.PutMetricDataOutput, error) {
+func (m *mockCloudWatchClient) PutMetricData(_ context.Context, params *cloudwatch.PutMetricDataInput, _ ...func(*cloudwatch.Options)) (*cloudwatch.PutMetricDataOutput, error) {
 	m.inputs = append(m.inputs, *params)
 	if len(m.errs) > 0 {
 		err := m.errs[0]

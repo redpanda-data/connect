@@ -110,7 +110,7 @@ func (g *baseProcessor[Service]) getDriveService(ctx context.Context) (*Service,
 	return g.service, nil
 }
 
-func (g *baseProcessor[Service]) Close(ctx context.Context) error {
+func (*baseProcessor[Service]) Close(context.Context) error {
 	return nil
 }
 

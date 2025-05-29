@@ -203,7 +203,7 @@ func parseSubscriptionInitialPosition(subInitial string) (pulsar.SubscriptionIni
 
 //------------------------------------------------------------------------------
 
-func (p *pulsarReader) Connect(ctx context.Context) error {
+func (p *pulsarReader) Connect(context.Context) error {
 	p.m.Lock()
 	defer p.m.Unlock()
 
@@ -264,7 +264,7 @@ func (p *pulsarReader) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (p *pulsarReader) disconnect(ctx context.Context) error {
+func (p *pulsarReader) disconnect(context.Context) error {
 	p.m.Lock()
 	defer p.m.Unlock()
 
@@ -325,7 +325,7 @@ func (p *pulsarReader) Read(ctx context.Context) (*service.Message, service.AckF
 		msg.MetaSet(k, v)
 	}
 
-	return msg, func(ctx context.Context, res error) error {
+	return msg, func(_ context.Context, res error) error {
 		var r pulsar.Consumer
 		p.m.RLock()
 		if p.consumer != nil {

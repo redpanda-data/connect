@@ -34,7 +34,7 @@ func (k *kafkaReader) Setup(sesh sarama.ConsumerGroupSession) error {
 
 // Cleanup is run at the end of a session, once all ConsumeClaim goroutines have
 // exited but before the offsets are committed for the very last time.
-func (k *kafkaReader) Cleanup(sesh sarama.ConsumerGroupSession) error {
+func (k *kafkaReader) Cleanup(sarama.ConsumerGroupSession) error {
 	k.cMut.Lock()
 	k.session = nil
 	k.cMut.Unlock()

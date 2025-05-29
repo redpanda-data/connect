@@ -122,16 +122,16 @@ func TestIntegrationCouchbaseProcessor(t *testing.T) {
 	servicePort := requireCouchbase(t)
 
 	bucket := fmt.Sprintf("testing-processor-%d", time.Now().Unix())
-	require.NoError(t, createBucket(t.Context(), t, servicePort, bucket))
+	require.NoError(t, createBucket(t.Context(), servicePort, bucket))
 	t.Cleanup(func() {
-		require.NoError(t, removeBucket(t.Context(), t, servicePort, bucket))
+		require.NoError(t, removeBucket(t.Context(), servicePort, bucket))
 	})
 
 	uid := faker.UUIDHyphenated()
 	payload := fmt.Sprintf(`{"id": %q, "data": %q}`, uid, faker.Sentence())
 
 	t.Run("Insert", func(t *testing.T) {
-		testCouchbaseProcessorInsert(uid, payload, bucket, servicePort, t)
+		testCouchbaseProcessorInsert(payload, bucket, servicePort, t)
 	})
 	t.Run("Get", func(t *testing.T) {
 		testCouchbaseProcessorGet(uid, payload, bucket, servicePort, t)
@@ -145,7 +145,7 @@ func TestIntegrationCouchbaseProcessor(t *testing.T) {
 
 	payload = fmt.Sprintf(`{"id": %q, "data": %q}`, uid, faker.Sentence())
 	t.Run("Upsert", func(t *testing.T) {
-		testCouchbaseProcessorUpsert(uid, payload, bucket, servicePort, t)
+		testCouchbaseProcessorUpsert(payload, bucket, servicePort, t)
 	})
 	t.Run("Get", func(t *testing.T) {
 		testCouchbaseProcessorGet(uid, payload, bucket, servicePort, t)
@@ -153,7 +153,7 @@ func TestIntegrationCouchbaseProcessor(t *testing.T) {
 
 	payload = fmt.Sprintf(`{"id": %q, "data": %q}`, uid, faker.Sentence())
 	t.Run("Replace", func(t *testing.T) {
-		testCouchbaseProcessorReplace(uid, payload, bucket, servicePort, t)
+		testCouchbaseProcessorReplace(payload, bucket, servicePort, t)
 	})
 	t.Run("Get", func(t *testing.T) {
 		testCouchbaseProcessorGet(uid, payload, bucket, servicePort, t)
@@ -175,7 +175,7 @@ func getProc(tb testing.TB, config string) *couchbase.Processor {
 	return proc
 }
 
-func testCouchbaseProcessorInsert(uid, payload, bucket, port string, t *testing.T) {
+func testCouchbaseProcessorInsert(payload, bucket, port string, t *testing.T) {
 	config := fmt.Sprintf(`
 url: 'couchbase://localhost:%s'
 bucket: %s
@@ -201,7 +201,7 @@ operation: 'insert'
 	assert.JSONEq(t, payload, string(dataOut))
 }
 
-func testCouchbaseProcessorUpsert(uid, payload, bucket, port string, t *testing.T) {
+func testCouchbaseProcessorUpsert(payload, bucket, port string, t *testing.T) {
 	config := fmt.Sprintf(`
 url: 'couchbase://localhost:%s'
 bucket: %s
@@ -227,7 +227,7 @@ operation: 'upsert'
 	assert.JSONEq(t, payload, string(dataOut))
 }
 
-func testCouchbaseProcessorReplace(uid, payload, bucket, port string, t *testing.T) {
+func testCouchbaseProcessorReplace(payload, bucket, port string, t *testing.T) {
 	config := fmt.Sprintf(`
 url: 'couchbase://localhost:%s'
 bucket: %s

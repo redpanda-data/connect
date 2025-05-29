@@ -159,4 +159,4 @@ func (c *cosmosDBProcessor) ProcessBatch(ctx context.Context, batch service.Mess
 	return []service.MessageBatch{batch}, nil
 }
 
-func (c *cosmosDBProcessor) Close(ctx context.Context) error { return nil }
+func (*cosmosDBProcessor) Close(context.Context) error { return nil }

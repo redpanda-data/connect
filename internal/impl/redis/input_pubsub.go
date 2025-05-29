@@ -130,7 +130,7 @@ func (r *redisPubSubReader) Read(ctx context.Context) (*service.Message, service
 			_ = r.disconnect()
 			return nil, nil, service.ErrEndOfInput
 		}
-		return service.NewMessage([]byte(rMsg.Payload)), func(ctx context.Context, err error) error {
+		return service.NewMessage([]byte(rMsg.Payload)), func(context.Context, error) error {
 			return nil
 		}, nil
 	case <-ctx.Done():
@@ -154,7 +154,7 @@ func (r *redisPubSubReader) disconnect() error {
 	return err
 }
 
-func (r *redisPubSubReader) Close(ctx context.Context) (err error) {
+func (r *redisPubSubReader) Close(context.Context) (err error) {
 	err = r.disconnect()
 	return
 }

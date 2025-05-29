@@ -437,7 +437,7 @@ func TestSchemaRegistryEncodeAvroRawJSONLogicalTypes(t *testing.T) {
 }
 
 func TestSchemaRegistryEncodeClearExpired(t *testing.T) {
-	urlStr := runSchemaRegistryServer(t, func(path string) ([]byte, error) {
+	urlStr := runSchemaRegistryServer(t, func(string) ([]byte, error) {
 		return nil, fmt.Errorf("nope")
 	})
 

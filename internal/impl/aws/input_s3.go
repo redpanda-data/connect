@@ -316,7 +316,6 @@ type staticTargetReader struct {
 func newStaticTargetReader(
 	ctx context.Context,
 	conf s3iConfig,
-	log *service.Logger,
 	s3Client *s3.Client,
 ) (*staticTargetReader, error) {
 	maxKeys := int32(100)
@@ -377,7 +376,7 @@ func (s *staticTargetReader) Pop(ctx context.Context) (*s3ObjectTarget, error) {
 	return obj, nil
 }
 
-func (s staticTargetReader) Close(context.Context) error {
+func (staticTargetReader) Close(context.Context) error {
 	return nil
 }
 
@@ -704,7 +703,7 @@ func (a *awsS3Reader) getTargetReader(ctx context.Context) (s3ObjectTargetReader
 	if a.sqs != nil {
 		return newSQSTargetReader(a.conf, a.log, a.s3, a.sqs), nil
 	}
-	return newStaticTargetReader(ctx, a.conf, a.log, a.s3)
+	return newStaticTargetReader(ctx, a.conf, a.s3)
 }
 
 // Connect attempts to establish a connection to the target S3 bucket

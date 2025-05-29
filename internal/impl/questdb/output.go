@@ -300,7 +300,7 @@ func fromConf(conf *service.ParsedConfig, mgr *service.Resources) (out service.B
 	return
 }
 
-func (q *questdbWriter) Connect(ctx context.Context) error {
+func (*questdbWriter) Connect(context.Context) error {
 	// No connections are required to initialize a LineSenderPool,
 	// so nothing to do here. Each LineSender has its own http client
 	// that will use the network only when flushing messages to the server.

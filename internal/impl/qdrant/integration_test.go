@@ -113,7 +113,7 @@ func TestIntegrationQdrant_Output(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			host, port, err := parseHostAndPort(addr)
 			require.NoError(t, err, "failed to parse host and port")
-			queryPoint := func(ctx context.Context, testID, messageID string) (string, []string, error) {
+			queryPoint := func(ctx context.Context, _, messageID string) (string, []string, error) {
 				client, err := qdrant.NewClient(&qdrant.Config{
 					Host: host,
 					Port: port,
@@ -238,7 +238,7 @@ qdrant:
 	require.NoError(t, err, "failed to create producer")
 	output := service.MessageBatch{}
 	var mu sync.Mutex
-	err = builder.AddConsumerFunc(func(ctx context.Context, m *service.Message) error {
+	err = builder.AddConsumerFunc(func(_ context.Context, m *service.Message) error {
 		mu.Lock()
 		defer mu.Unlock()
 		output = append(output, m)

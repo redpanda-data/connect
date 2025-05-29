@@ -207,7 +207,7 @@ pg_stream:
 
 	var outBatches []string
 	var outBatchMut sync.Mutex
-	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 		msgBytes, err := mb[0].AsBytes()
 		require.NoError(t, err)
 		outBatchMut.Lock()
@@ -255,7 +255,7 @@ pg_stream:
 	require.NoError(t, streamOutBuilder.AddInputYAML(template))
 
 	outBatches = []string{}
-	require.NoError(t, streamOutBuilder.AddConsumerFunc(func(c context.Context, m *service.Message) error {
+	require.NoError(t, streamOutBuilder.AddConsumerFunc(func(_ context.Context, m *service.Message) error {
 		msgBytes, err := m.AsBytes()
 		require.NoError(t, err)
 		outBatchMut.Lock()
@@ -317,7 +317,7 @@ pg_stream:
 	var outMessages int64
 	var outMessagesMut sync.Mutex
 
-	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 		_, err := mb[0].AsBytes()
 		require.NoError(t, err)
 		outMessagesMut.Lock()
@@ -401,7 +401,7 @@ pg_stream:
 
 	var outBatches []string
 	var outBatchMut sync.Mutex
-	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 		msgBytes, err := mb[0].AsBytes()
 		require.NoError(t, err)
 		outBatchMut.Lock()
@@ -450,7 +450,7 @@ pg_stream:
 	require.NoError(t, streamOutBuilder.AddInputYAML(template))
 
 	outBatches = []string{}
-	require.NoError(t, streamOutBuilder.AddConsumerFunc(func(c context.Context, m *service.Message) error {
+	require.NoError(t, streamOutBuilder.AddConsumerFunc(func(_ context.Context, m *service.Message) error {
 		msgBytes, err := m.AsBytes()
 		require.NoError(t, err)
 		outBatchMut.Lock()
@@ -546,7 +546,7 @@ pg_stream:
 
 	var outBatches []string
 	var outBatchMut sync.Mutex
-	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 		msgBytes, err := mb[0].AsBytes()
 		require.NoError(t, err)
 		outBatchMut.Lock()
@@ -645,7 +645,7 @@ pg_stream:
 
 			var outBatches []string
 			var outBatchMut sync.Mutex
-			require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
+			require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 				msgBytes, err := mb[0].AsBytes()
 				require.NoError(t, err)
 				outBatchMut.Lock()
@@ -693,7 +693,7 @@ pg_stream:
 			require.NoError(t, streamOutBuilder.AddInputYAML(template))
 
 			outBatches = []string{}
-			require.NoError(t, streamOutBuilder.AddConsumerFunc(func(c context.Context, m *service.Message) error {
+			require.NoError(t, streamOutBuilder.AddConsumerFunc(func(_ context.Context, m *service.Message) error {
 				msgBytes, err := m.AsBytes()
 				require.NoError(t, err)
 				outBatchMut.Lock()
@@ -789,7 +789,7 @@ pg_stream:
 
 			var outBatches []string
 			var outBatchMut sync.Mutex
-			require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
+			require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 				msgBytes, err := mb[0].AsBytes()
 				require.NoError(t, err)
 				outBatchMut.Lock()
@@ -890,7 +890,7 @@ read_until:
 
 	var sequenceNumbers []int64
 	var batchMu sync.Mutex
-	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, batch service.MessageBatch) error {
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
 		batchMu.Lock()
 		defer batchMu.Unlock()
 		for _, msg := range batch {
@@ -995,7 +995,7 @@ postgres_cdc:
 
 	var outBatches []any
 	var outBatchMut sync.Mutex
-	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, batch service.MessageBatch) error {
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
 		outBatchMut.Lock()
 		defer outBatchMut.Unlock()
 		for _, msg := range batch {
@@ -1108,7 +1108,7 @@ postgres_cdc:
 	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: TRACE`))
 	require.NoError(t, streamOutBuilder.AddInputYAML(template))
 	recvCount := &atomic.Int64{}
-	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, batch service.MessageBatch) error {
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(context.Context, service.MessageBatch) error {
 		recvCount.Add(1)
 		return nil
 	}))

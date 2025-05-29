@@ -119,7 +119,7 @@ func newPusherWriterFromConfig(conf *service.ParsedConfig, log *service.Logger) 
 	return &p, nil
 }
 
-func (p *pusherWriter) Connect(ctx context.Context) error {
+func (p *pusherWriter) Connect(context.Context) error {
 	// create pusher client
 	p.client = pusher.Client{
 		AppID:   p.appID,
@@ -131,7 +131,7 @@ func (p *pusherWriter) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (p *pusherWriter) WriteBatch(ctx context.Context, b service.MessageBatch) (err error) {
+func (p *pusherWriter) WriteBatch(_ context.Context, b service.MessageBatch) (err error) {
 	events := make([]pusher.Event, 0, len(b))
 
 	// iterate over batch and set pusher events in array
@@ -158,7 +158,7 @@ func (p *pusherWriter) WriteBatch(ctx context.Context, b service.MessageBatch) (
 	return err
 }
 
-func (p *pusherWriter) Close(ctx context.Context) error {
+func (p *pusherWriter) Close(context.Context) error {
 	// p.client.HTTPClient might be nil if this output was never used. See: https://github.com/pusher/pusher-http-go/blob/v4.0.1/client.go#L115
 	if p.client.HTTPClient != nil {
 		p.client.HTTPClient.CloseIdleConnections()

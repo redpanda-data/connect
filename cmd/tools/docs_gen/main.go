@@ -165,7 +165,7 @@ type functionsContext struct {
 
 func doBloblangFunctions(dir string) {
 	var specs []bloblang.TemplateFunctionData
-	bloblang.GlobalEnvironment().WalkFunctions(func(name string, spec *bloblang.FunctionView) {
+	bloblang.GlobalEnvironment().WalkFunctions(func(_ string, spec *bloblang.FunctionView) {
 		tmpl := spec.TemplateData()
 		prefixExamples(tmpl.Examples)
 		specs = append(specs, tmpl)
@@ -243,7 +243,7 @@ func methodForCat(s bloblang.TemplateMethodData, cat string) (bloblang.TemplateM
 
 func doBloblangMethods(dir string) {
 	var specs []bloblang.TemplateMethodData
-	bloblang.GlobalEnvironment().WalkMethods(func(name string, spec *bloblang.MethodView) {
+	bloblang.GlobalEnvironment().WalkMethods(func(_ string, spec *bloblang.MethodView) {
 		tmpl := spec.TemplateData()
 		prefixExamples(tmpl.Examples)
 		for _, cat := range tmpl.Categories {

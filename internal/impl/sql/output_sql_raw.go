@@ -269,7 +269,7 @@ func (s *sqlRawOutput) WriteBatch(ctx context.Context, batch service.MessageBatc
 			dynQueries[i] = batch.InterpolationExecutor(q.dynamic)
 		}
 	}
-	return batch.WalkWithBatchedErrors(func(i int, msg *service.Message) (err error) {
+	return batch.WalkWithBatchedErrors(func(i int, _ *service.Message) (err error) {
 		var tx *sql.Tx
 		if len(s.queries) > 1 {
 			tx, err = s.db.BeginTx(ctx, nil)

@@ -89,7 +89,7 @@ type hdfsReader struct {
 	log *service.Logger
 }
 
-func (h *hdfsReader) Connect(ctx context.Context) error {
+func (h *hdfsReader) Connect(context.Context) error {
 	if h.client != nil {
 		return nil
 	}
@@ -116,7 +116,7 @@ func (h *hdfsReader) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (h *hdfsReader) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
+func (h *hdfsReader) Read(context.Context) (*service.Message, service.AckFunc, error) {
 	if len(h.targets) == 0 {
 		return nil, nil, service.ErrEndOfInput
 	}
@@ -133,11 +133,11 @@ func (h *hdfsReader) Read(ctx context.Context) (*service.Message, service.AckFun
 	msg := service.NewMessage(msgBytes)
 	msg.MetaSetMut("hdfs_name", fileName)
 	msg.MetaSetMut("hdfs_path", filePath)
-	return msg, func(ctx context.Context, err error) error {
+	return msg, func(context.Context, error) error {
 		return nil
 	}, nil
 }
 
-func (h *hdfsReader) Close(ctx context.Context) error {
+func (*hdfsReader) Close(context.Context) error {
 	return nil
 }

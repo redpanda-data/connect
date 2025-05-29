@@ -29,7 +29,7 @@ stream: mystream
 
 	t.Run("Successful send data to local Timeplus Enterprise", func(t *testing.T) {
 		ch := make(chan bool)
-		svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		svr := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, req *http.Request) {
 			require.Equal(t, http.MethodPost, req.Method)
 			require.Equal(t, "/default/api/v1beta2/streams/mystream/ingest", req.RequestURI)
 
@@ -90,7 +90,7 @@ stream: mystream
 
 	t.Run("Successful send data to remote Timeplus Enterprise", func(t *testing.T) {
 		ch := make(chan bool)
-		svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		svr := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, req *http.Request) {
 			require.Equal(t, http.MethodPost, req.Method)
 			require.Equal(t, "/nextgen/api/v1beta2/streams/test_rp/ingest", req.RequestURI)
 
@@ -159,7 +159,7 @@ func TestOutputTimeplusd(t *testing.T) {
 
 	t.Run("Successful ingest data", func(t *testing.T) {
 		ch := make(chan bool)
-		svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		svr := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, req *http.Request) {
 			require.Equal(t, http.MethodPost, req.Method)
 			require.Equal(t, "/timeplusd/v1/ingest/streams/mystream", req.RequestURI)
 

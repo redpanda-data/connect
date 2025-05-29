@@ -190,7 +190,7 @@ func (s *parquetProcessor) ProcessBatch(ctx context.Context, batch service.Messa
 	return s.operator(ctx, batch)
 }
 
-func (s *parquetProcessor) processBatchReader(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+func (s *parquetProcessor) processBatchReader(_ context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
 	if len(batch) == 0 {
 		return nil, nil
 	}
@@ -233,7 +233,7 @@ func (s *parquetProcessor) processBatchReader(ctx context.Context, batch service
 	return outBatches, nil
 }
 
-func (s *parquetProcessor) processBatchWriter(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+func (s *parquetProcessor) processBatchWriter(_ context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
 	if len(batch) == 0 {
 		return nil, nil
 	}
@@ -265,6 +265,6 @@ func (s *parquetProcessor) processBatchWriter(ctx context.Context, batch service
 	return []service.MessageBatch{{outMsg}}, nil
 }
 
-func (s *parquetProcessor) Close(ctx context.Context) error {
+func (*parquetProcessor) Close(context.Context) error {
 	return nil
 }

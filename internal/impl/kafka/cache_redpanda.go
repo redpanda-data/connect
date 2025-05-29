@@ -94,12 +94,12 @@ type redpandaCache struct {
 var _ service.Cache = (*redpandaCache)(nil)
 
 // Add implements service.Cache.
-func (r *redpandaCache) Add(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
+func (r *redpandaCache) Add(ctx context.Context, key string, value []byte, _ *time.Duration) error {
 	return r.producer.ProduceSync(ctx, kgo.KeySliceRecord([]byte(key), value)).FirstErr()
 }
 
 // Set implements service.Cache.
-func (r *redpandaCache) Set(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
+func (r *redpandaCache) Set(ctx context.Context, key string, value []byte, _ *time.Duration) error {
 	return r.producer.ProduceSync(ctx, kgo.KeySliceRecord([]byte(key), value)).FirstErr()
 }
 
@@ -154,7 +154,7 @@ func (r *redpandaCache) Get(ctx context.Context, key string) ([]byte, error) {
 }
 
 // Close implements service.Cache.
-func (r *redpandaCache) Close(ctx context.Context) error {
+func (r *redpandaCache) Close(context.Context) error {
 	r.producer.Close()
 	return nil
 }

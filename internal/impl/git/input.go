@@ -201,7 +201,7 @@ func (in *input) Read(ctx context.Context) (*service.Message, service.AckFunc, e
 				msg.MetaSet("git_file_path", relPath)
 				msg.MetaSet("git_commit", in.getLastCommit().String())
 				msg.MetaSetMut("git_deleted", true)
-				return msg, func(ctx context.Context, _ error) error { event.ackFn(); return nil }, nil
+				return msg, func(context.Context, error) error { event.ackFn(); return nil }, nil
 			}
 
 			msg, err := in.createMessage(event.path)
@@ -214,7 +214,7 @@ func (in *input) Read(ctx context.Context) (*service.Message, service.AckFunc, e
 				continue // Skip this file and read the next one
 			}
 
-			return msg, func(ctx context.Context, _ error) error { event.ackFn(); return nil }, nil
+			return msg, func(context.Context, error) error { event.ackFn(); return nil }, nil
 		}
 	}
 }

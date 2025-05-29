@@ -397,7 +397,7 @@ func (i *influxDBMetrics) NewGaugeCtor(path string, n ...string) service.Metrics
 	}
 }
 
-func (i *influxDBMetrics) HandlerFunc() http.HandlerFunc {
+func (*influxDBMetrics) HandlerFunc() http.HandlerFunc {
 	return nil
 }
 

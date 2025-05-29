@@ -124,7 +124,7 @@ func getOutputSocketFromType(t string) (mangos.Socket, error) {
 	return nil, errors.New("invalid Scalability Protocols socket type")
 }
 
-func (s *nanomsgWriter) Connect(ctx context.Context) error {
+func (s *nanomsgWriter) Connect(context.Context) error {
 	s.sockMut.Lock()
 	defer s.sockMut.Unlock()
 
@@ -166,7 +166,7 @@ func (s *nanomsgWriter) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (s *nanomsgWriter) Write(ctx context.Context, msg *service.Message) error {
+func (s *nanomsgWriter) Write(_ context.Context, msg *service.Message) error {
 	s.sockMut.RLock()
 	socket := s.socket
 	s.sockMut.RUnlock()

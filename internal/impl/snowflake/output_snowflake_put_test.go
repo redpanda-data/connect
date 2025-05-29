@@ -35,14 +35,14 @@ type MockDB struct {
 	QueriesCount int
 }
 
-func (db *MockDB) ExecContext(ctx context.Context, query string, _ ...any) (sql.Result, error) {
+func (db *MockDB) ExecContext(_ context.Context, query string, _ ...any) (sql.Result, error) {
 	db.Queries = append(db.Queries, query)
 	db.QueriesCount++
 
 	return nil, nil
 }
 
-func (db *MockDB) Close() error { return nil }
+func (*MockDB) Close() error { return nil }
 
 func (db *MockDB) hasQuery(query string) bool {
 	for _, q := range db.Queries {
@@ -330,7 +330,7 @@ snowpipe: '` + tc.snowpipe + `'
 
 			s.uuidGenerator = MockUUIDGenerator{}
 
-			snowpipeTestServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			snowpipeTestServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(test.snowflakeHTTPResponseCode)
 				_, _ = w.Write([]byte(`{"ResponseCode": "` + test.snowflakeResponseCode + `"}`))
 			}))

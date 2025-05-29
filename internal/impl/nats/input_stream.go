@@ -337,7 +337,7 @@ func (n *natsStreamReader) Read(ctx context.Context) (*service.Message, service.
 	part.MetaSetMut("nats_stream_subject", msg.Subject)
 	part.MetaSetMut("nats_stream_sequence", strconv.FormatUint(msg.Sequence, 10))
 
-	return part, func(rctx context.Context, res error) error {
+	return part, func(_ context.Context, res error) error {
 		if res == nil {
 			return msg.Ack()
 		}
@@ -345,7 +345,7 @@ func (n *natsStreamReader) Read(ctx context.Context) (*service.Message, service.
 	}, nil
 }
 
-func (n *natsStreamReader) Close(ctx context.Context) (err error) {
+func (n *natsStreamReader) Close(context.Context) (err error) {
 	go func() {
 		n.disconnect()
 	}()

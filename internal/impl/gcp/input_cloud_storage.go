@@ -186,7 +186,6 @@ type gcpCloudStorageTargetReader struct {
 func newGCPCloudStorageTargetReader(
 	ctx context.Context,
 	conf csiConfig,
-	log *service.Logger,
 	bucket *storage.BucketHandle,
 ) (*gcpCloudStorageTargetReader, error) {
 	staticKeys := gcpCloudStorageTargetReader{
@@ -214,7 +213,7 @@ func newGCPCloudStorageTargetReader(
 	return &staticKeys, nil
 }
 
-func (r *gcpCloudStorageTargetReader) Pop(ctx context.Context) (*gcpCloudStorageObjectTarget, error) {
+func (r *gcpCloudStorageTargetReader) Pop(context.Context) (*gcpCloudStorageObjectTarget, error) {
 	if len(r.pending) == 0 && r.startAfter != nil {
 		r.pending = nil
 
@@ -238,7 +237,7 @@ func (r *gcpCloudStorageTargetReader) Pop(ctx context.Context) (*gcpCloudStorage
 	return obj, nil
 }
 
-func (r gcpCloudStorageTargetReader) Close(context.Context) error {
+func (gcpCloudStorageTargetReader) Close(context.Context) error {
 	return nil
 }
 
@@ -286,7 +285,7 @@ func (g *gcpCloudStorageInput) Connect(ctx context.Context) error {
 		return err
 	}
 
-	g.keyReader, err = newGCPCloudStorageTargetReader(ctx, g.conf, g.log, g.client.Bucket(g.conf.Bucket))
+	g.keyReader, err = newGCPCloudStorageTargetReader(ctx, g.conf, g.client.Bucket(g.conf.Bucket))
 	return err
 }
 

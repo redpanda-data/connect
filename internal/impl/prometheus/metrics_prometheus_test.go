@@ -47,7 +47,7 @@ func TestPrometheusNoPushGateway(t *testing.T) {
 
 func TestPrometheusWithPushGateway(t *testing.T) {
 	pusherChan := make(chan struct{})
-	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		pusherChan <- struct{}{}
 	}))
 	defer server.Close()
@@ -72,7 +72,7 @@ push_url: %v
 
 func TestPrometheusWithPushGatewayAndPushInterval(t *testing.T) {
 	pusherChan := make(chan struct{})
-	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		pusherChan <- struct{}{}
 	}))
 	defer server.Close()

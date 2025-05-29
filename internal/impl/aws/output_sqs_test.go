@@ -118,7 +118,7 @@ func TestSQSHeaderCheck(t *testing.T) {
 	}
 
 	for i, test := range tests {
-		if act, exp := isValidSQSAttribute(test.k, test.v), test.expected; act != exp {
+		if act, exp := isValidSQSAttribute(test.k), test.expected; act != exp {
 			t.Errorf("Unexpected result for test '%v': %v != %v", i, act, exp)
 		}
 	}
@@ -129,7 +129,7 @@ type mockSqs struct {
 	fn func(*sqs.SendMessageBatchInput) (*sqs.SendMessageBatchOutput, error)
 }
 
-func (m *mockSqs) SendMessageBatch(ctx context.Context, input *sqs.SendMessageBatchInput, opts ...func(*sqs.Options)) (*sqs.SendMessageBatchOutput, error) {
+func (m *mockSqs) SendMessageBatch(_ context.Context, input *sqs.SendMessageBatchInput, _ ...func(*sqs.Options)) (*sqs.SendMessageBatchOutput, error) {
 	return m.fn(input)
 }
 

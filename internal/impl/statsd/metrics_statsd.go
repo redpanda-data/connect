@@ -188,7 +188,7 @@ func (h *statsdMetrics) NewGaugeCtor(path string, n ...string) service.MetricsEx
 	}
 }
 
-func (h *statsdMetrics) HandlerFunc() http.HandlerFunc {
+func (*statsdMetrics) HandlerFunc() http.HandlerFunc {
 	return nil
 }
 

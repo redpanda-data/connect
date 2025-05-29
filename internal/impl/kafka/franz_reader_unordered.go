@@ -469,7 +469,7 @@ func (f *FranzReaderUnordered) Connect(ctx context.Context) error {
 	batchChan := make(chan batchWithAckFn)
 
 	var cl *kgo.Client
-	commitFn := func(r *kgo.Record) {}
+	commitFn := func(*kgo.Record) {}
 	if f.consumerGroup != "" {
 		commitFn = func(r *kgo.Record) {
 			if cl == nil {
@@ -633,7 +633,7 @@ func (f *FranzReaderUnordered) ReadBatch(ctx context.Context) (service.MessageBa
 		return nil, nil, ctx.Err()
 	}
 
-	return mAck.batch, func(ctx context.Context, res error) error {
+	return mAck.batch, func(context.Context, error) error {
 		// Res will always be nil because we initialize with service.AutoRetryNacks
 		mAck.onAck()
 		return nil

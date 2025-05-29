@@ -62,7 +62,7 @@ func newSnapshotter(
 	return s, nil
 }
 
-func (s *snapshotter) openTxn(ctx context.Context, id int) (*sql.Tx, error) {
+func (s *snapshotter) openTxn(ctx context.Context, _ int) (*sql.Tx, error) {
 	// Use a background context because we explicitly want the Tx to be long lived, we explicitly close it in the close method
 	tx, err := s.connPool.BeginTx(context.Background(), &sql.TxOptions{ReadOnly: true, Isolation: sql.LevelRepeatableRead})
 	if err != nil {
@@ -194,7 +194,7 @@ _rpcn__sampled_keys AS MATERIALIZED (
   INNER JOIN
     _rpcn__sampled_pages sp
   ON
-    t.ctid = sp.ctid 
+    t.ctid = sp.ctid
 )
   SELECT *
   FROM _rpcn__sampled_keys t

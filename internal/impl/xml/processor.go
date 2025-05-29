@@ -136,7 +136,7 @@ func xmlProcFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (*xm
 	return j, nil
 }
 
-func (p *xmlProc) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+func (p *xmlProc) Process(_ context.Context, msg *service.Message) (service.MessageBatch, error) {
 	mBytes, err := msg.AsBytes()
 	if err != nil {
 		return nil, err
@@ -151,6 +151,6 @@ func (p *xmlProc) Process(ctx context.Context, msg *service.Message) (service.Me
 	return service.MessageBatch{msg}, nil
 }
 
-func (p *xmlProc) Close(ctx context.Context) error {
+func (*xmlProc) Close(context.Context) error {
 	return nil
 }

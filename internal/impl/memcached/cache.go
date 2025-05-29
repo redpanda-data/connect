@@ -53,7 +53,7 @@ func memcachedConfig() *service.ConfigSpec {
 func init() {
 	service.MustRegisterCache(
 		"memcached", memcachedConfig(),
-		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
+		func(conf *service.ParsedConfig, _ *service.Resources) (service.Cache, error) {
 			return newMemcachedFromConfig(conf)
 		})
 }
@@ -244,6 +244,6 @@ func (m *memcachedCache) Delete(ctx context.Context, key string) error {
 	}
 }
 
-func (m *memcachedCache) Close(ctx context.Context) error {
+func (*memcachedCache) Close(context.Context) error {
 	return nil
 }

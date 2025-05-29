@@ -63,7 +63,7 @@ func s3CacheConfig() *service.ConfigSpec {
 func init() {
 	service.MustRegisterCache(
 		"aws_s3", s3CacheConfig(),
-		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Cache, error) {
+		func(conf *service.ParsedConfig, _ *service.Resources) (service.Cache, error) {
 			s, err := newS3CacheFromConfig(conf)
 			if err != nil {
 				return nil, err
@@ -236,6 +236,6 @@ func (s *s3Cache) Delete(ctx context.Context, key string) (err error) {
 	}
 }
 
-func (s *s3Cache) Close(context.Context) error {
+func (*s3Cache) Close(context.Context) error {
 	return nil
 }

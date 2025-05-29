@@ -34,7 +34,7 @@ func mockEmbeddings(text string) []float32 {
 	return embd
 }
 
-func (m *mockEmbeddingsClient) CreateEmbeddings(ctx context.Context, genericBody oai.EmbeddingRequestConverter) (resp oai.EmbeddingResponse, err error) {
+func (*mockEmbeddingsClient) CreateEmbeddings(_ context.Context, genericBody oai.EmbeddingRequestConverter) (resp oai.EmbeddingResponse, err error) {
 	body := genericBody.(oai.EmbeddingRequestStrings)
 	for i, text := range body.Input {
 		resp.Data = append(resp.Data, oai.Embedding{

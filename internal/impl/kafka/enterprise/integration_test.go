@@ -77,7 +77,7 @@ func readNKafkaMessages(ctx context.Context, t testing.TB, address, topic string
 	for len(res) < nMessages {
 		fetches := cl.PollRecords(ctx, nMessages-len(res))
 		require.NoError(t, ctx.Err(), len(res))
-		fetches.EachError(func(s string, i int32, err error) {
+		fetches.EachError(func(_ string, _ int32, err error) {
 			t.Error(err)
 		})
 		fetches.EachRecord(func(r *kgo.Record) {

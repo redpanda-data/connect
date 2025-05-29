@@ -124,7 +124,7 @@ func TestPartitionCacheOrdering(t *testing.T) {
 }
 
 func TestPartitionCacheBatching(t *testing.T) {
-	pCache := newPartitionCache(func(r *kgo.Record) {})
+	pCache := newPartitionCache(func(*kgo.Record) {})
 	bufSize, batchSize := uint64(1_000_000), uint64(10)
 
 	var i int64

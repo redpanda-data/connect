@@ -92,7 +92,7 @@ output:
       w: 1
       w_timeout: 1s
 `
-	queryGetFn := func(ctx context.Context, testID, messageID string) (string, []string, error) {
+	queryGetFn := func(_ context.Context, testID, messageID string) (string, []string, error) {
 		db := mongoClient.Database("TestDB")
 		collection := db.Collection(generateCollectionName(testID))
 		idInt, err := strconv.Atoi(messageID)

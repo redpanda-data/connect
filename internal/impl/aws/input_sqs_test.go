@@ -89,7 +89,7 @@ func (m *mockSqsInput) ReceiveMessage(context.Context, *sqs.ReceiveMessageInput,
 	return &sqs.ReceiveMessageOutput{Messages: messages}, nil
 }
 
-func (m *mockSqsInput) ChangeMessageVisibilityBatch(ctx context.Context, input *sqs.ChangeMessageVisibilityBatchInput, opts ...func(*sqs.Options)) (*sqs.ChangeMessageVisibilityBatchOutput, error) {
+func (m *mockSqsInput) ChangeMessageVisibilityBatch(_ context.Context, input *sqs.ChangeMessageVisibilityBatchInput, _ ...func(*sqs.Options)) (*sqs.ChangeMessageVisibilityBatchOutput, error) {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 
@@ -104,7 +104,7 @@ func (m *mockSqsInput) ChangeMessageVisibilityBatch(ctx context.Context, input *
 	return &sqs.ChangeMessageVisibilityBatchOutput{}, nil
 }
 
-func (m *mockSqsInput) DeleteMessageBatch(ctx context.Context, input *sqs.DeleteMessageBatchInput, opts ...func(*sqs.Options)) (*sqs.DeleteMessageBatchOutput, error) {
+func (m *mockSqsInput) DeleteMessageBatch(_ context.Context, input *sqs.DeleteMessageBatchInput, _ ...func(*sqs.Options)) (*sqs.DeleteMessageBatchOutput, error) {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 

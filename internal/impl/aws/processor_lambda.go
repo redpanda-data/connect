@@ -183,7 +183,7 @@ func newLambdaProc(
 
 //------------------------------------------------------------------------------
 
-func (l *lambdaProc) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+func (l *lambdaProc) ProcessBatch(_ context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
 	if !l.parallel || len(batch) == 1 {
 		for _, p := range batch {
 			if err := l.client.InvokeV2(p); err != nil {
@@ -212,7 +212,7 @@ func (l *lambdaProc) ProcessBatch(ctx context.Context, batch service.MessageBatc
 	return []service.MessageBatch{batch}, nil
 }
 
-func (l *lambdaProc) Close(context.Context) error {
+func (*lambdaProc) Close(context.Context) error {
 	return nil
 }
 

@@ -56,7 +56,7 @@ type Cache struct {
 }
 
 // NewCache returns a Couchbase cache.
-func NewCache(conf *service.ParsedConfig, mgr *service.Resources) (*Cache, error) {
+func NewCache(conf *service.ParsedConfig, _ *service.Resources) (*Cache, error) {
 	cl, err := getClient(conf)
 	if err != nil {
 		return nil, err

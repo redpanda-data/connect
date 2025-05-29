@@ -38,7 +38,7 @@ func processorConfig() *service.ConfigSpec {
 func init() {
 	service.MustRegisterProcessor(
 		"msgpack", processorConfig(),
-		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+		func(conf *service.ParsedConfig, _ *service.Resources) (service.Processor, error) {
 			return newProcessorFromConfig(conf)
 		})
 }
@@ -105,7 +105,7 @@ func newProcessor(operatorStr string) (*processor, error) {
 	}, nil
 }
 
-func (p *processor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+func (p *processor) Process(_ context.Context, msg *service.Message) (service.MessageBatch, error) {
 	resMsg, err := p.operator(msg)
 	if err != nil {
 		return nil, err
@@ -113,6 +113,6 @@ func (p *processor) Process(ctx context.Context, msg *service.Message) (service.
 	return service.MessageBatch{resMsg}, nil
 }
 
-func (p *processor) Close(ctx context.Context) error {
+func (*processor) Close(context.Context) error {
 	return nil
 }

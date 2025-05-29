@@ -517,58 +517,58 @@ var awkFunctionsMap = map[string]any{
 		t := time.Unix(s, ns).In(time.UTC)
 		return t.Format(format)
 	},
-	"metadata_get": func(key string) string {
+	"metadata_get": func(string) string {
 		// Do nothing, this is a placeholder for compilation.
 		return ""
 	},
-	"metadata_set": func(key, value string) {
+	"metadata_set": func(string, string) {
 		// Do nothing, this is a placeholder for compilation.
 	},
-	"json_get": func(path string) (string, error) {
+	"json_get": func(string) (string, error) {
 		// Do nothing, this is a placeholder for compilation.
 		return "", errors.New("not implemented")
 	},
-	"json_set": func(path, value string) (int, error) {
+	"json_set": func(string, string) (int, error) {
 		// Do nothing, this is a placeholder for compilation.
 		return 0, errors.New("not implemented")
 	},
-	"json_set_int": func(path string, value int) (int, error) {
+	"json_set_int": func(string, string) (int, error) {
 		// Do nothing, this is a placeholder for compilation.
 		return 0, errors.New("not implemented")
 	},
-	"json_set_float": func(path string, value float64) (int, error) {
+	"json_set_float": func(string, float64) (int, error) {
 		// Do nothing, this is a placeholder for compilation.
 		return 0, errors.New("not implemented")
 	},
-	"json_set_bool": func(path string, value bool) (int, error) {
+	"json_set_bool": func(string, bool) (int, error) {
 		// Do nothing, this is a placeholder for compilation.
 		return 0, errors.New("not implemented")
 	},
-	"json_append": func(path, value string) (int, error) {
+	"json_append": func(string, string) (int, error) {
 		// Do nothing, this is a placeholder for compilation.
 		return 0, errors.New("not implemented")
 	},
-	"json_append_int": func(path string, value int) (int, error) {
+	"json_append_int": func(string, int) (int, error) {
 		// Do nothing, this is a placeholder for compilation.
 		return 0, errors.New("not implemented")
 	},
-	"json_append_float": func(path string, value float64) (int, error) {
+	"json_append_float": func(string, float64) (int, error) {
 		// Do nothing, this is a placeholder for compilation.
 		return 0, errors.New("not implemented")
 	},
-	"json_append_bool": func(path string, value bool) (int, error) {
+	"json_append_bool": func(string, bool) (int, error) {
 		// Do nothing, this is a placeholder for compilation.
 		return 0, errors.New("not implemented")
 	},
-	"json_delete": func(path string) (int, error) {
+	"json_delete": func(string) (int, error) {
 		// Do nothing, this is a placeholder for compilation.
 		return 0, errors.New("not implemented")
 	},
-	"json_length": func(path string) (int, error) {
+	"json_length": func(string) (int, error) {
 		// Do nothing, this is a placeholder for compilation.
 		return 0, errors.New("not implemented")
 	},
-	"json_type": func(path string) (string, error) {
+	"json_type": func(string) (string, error) {
 		// Do nothing, this is a placeholder for compilation.
 		return "", errors.New("not implemented")
 	},
@@ -590,7 +590,7 @@ var awkFunctionsMap = map[string]any{
 		}
 		return string(bytes)
 	},
-	"print_log": func(value, level string) {
+	"print_log": func(string, string) {
 		// Do nothing, this is a placeholder for compilation.
 	},
 	"base64_encode": func(data string) string {
@@ -635,7 +635,7 @@ func flattenForAWK(path string, data any) map[string]string {
 
 // ProcessMessage applies the processor to a message, either creating >0
 // resulting messages or a response to be sent back to the message source.
-func (a *awkProc) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+func (a *awkProc) Process(_ context.Context, msg *service.Message) (service.MessageBatch, error) {
 	var mutableJSONPart any
 
 	customFuncs := make(map[string]any, len(a.functions))
@@ -846,6 +846,6 @@ func (a *awkProc) Process(ctx context.Context, msg *service.Message) (service.Me
 	return service.MessageBatch{msg}, nil
 }
 
-func (a *awkProc) Close(context.Context) error {
+func (*awkProc) Close(context.Context) error {
 	return nil
 }

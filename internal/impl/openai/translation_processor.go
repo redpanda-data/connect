@@ -57,7 +57,7 @@ To learn more about translation, see the https://platform.openai.com/docs/guides
 		)
 }
 
-func makeTranslationProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+func makeTranslationProcessor(conf *service.ParsedConfig, _ *service.Resources) (service.Processor, error) {
 	b, err := newBaseProcessor(conf)
 	if err != nil {
 		return nil, err

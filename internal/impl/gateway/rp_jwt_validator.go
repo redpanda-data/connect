@@ -39,7 +39,7 @@ type rpJWTValidatorMiddleware struct {
 	validationCache *cache.Cache[string, *validator.ValidatedClaims]
 }
 
-func newRPJWTValidatorMiddleware(ctx context.Context, log *service.Logger, conf rpjwtConfig) (*rpJWTValidatorMiddleware, error) {
+func newRPJWTValidatorMiddleware(_ context.Context, log *service.Logger, conf rpjwtConfig) (*rpJWTValidatorMiddleware, error) {
 	if !conf.enabled {
 		return nil, nil
 	}

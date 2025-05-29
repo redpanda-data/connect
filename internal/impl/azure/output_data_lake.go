@@ -24,7 +24,7 @@ import (
 )
 
 func dataLakeSpec() *service.ConfigSpec {
-	return azureComponentSpec(true).
+	return azureComponentSpec().
 		Beta().
 		Version("4.38.0").
 		Summary(`Sends message parts as files to an Azure Data Lake Gen2 filesystem. Each file is uploaded with the filename specified with the `+"`"+dloFieldPath+"`"+` field.`).
@@ -122,7 +122,7 @@ type azureDataLakeWriter struct {
 	log  *service.Logger
 }
 
-func (a *azureDataLakeWriter) Connect(ctx context.Context) error {
+func (*azureDataLakeWriter) Connect(context.Context) error {
 	return nil
 }
 
@@ -152,6 +152,6 @@ func (a *azureDataLakeWriter) Write(ctx context.Context, msg *service.Message) e
 	return nil
 }
 
-func (a *azureDataLakeWriter) Close(ctx context.Context) error {
+func (*azureDataLakeWriter) Close(context.Context) error {
 	return nil
 }

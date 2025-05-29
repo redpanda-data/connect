@@ -32,14 +32,14 @@ func registerModuleRunnerFunction(name string, ctor func(r *dataTransformEngine)
 	return struct{}{}
 }
 
-var _ = registerModuleRunnerFunction("check_abi_version_1", func(r *dataTransformEngine) any {
-	return func(ctx context.Context, m api.Module) {
+var _ = registerModuleRunnerFunction("check_abi_version_1", func(*dataTransformEngine) any {
+	return func(_ context.Context, _ api.Module) {
 		// Placeholder for ABI compatibility check
 	}
 })
 
-var _ = registerModuleRunnerFunction("check_abi_version_2", func(r *dataTransformEngine) any {
-	return func(ctx context.Context, m api.Module) {
+var _ = registerModuleRunnerFunction("check_abi_version_2", func(*dataTransformEngine) any {
+	return func(_ context.Context, _ api.Module) {
 		// Placeholder for ABI compatibility check
 	}
 })
@@ -48,16 +48,16 @@ var _ = registerModuleRunnerFunction("read_batch_header", func(r *dataTransformE
 	return func(
 		ctx context.Context,
 		m api.Module,
-		baseOffset,
+		_,
 		recordCount,
-		partitionLeaderEpoch,
-		attributes,
-		lastOffsetDelta,
-		baseTimestamp,
-		maxTimestamp,
-		producerId,
-		producerEpoch,
-		baseSequence uint32,
+		_,
+		_,
+		_,
+		_,
+		_,
+		_,
+		_,
+		_ uint32,
 	) int32 {
 		// Notify the host we're done processing a batch.
 		r.hostChan <- nil
@@ -84,7 +84,7 @@ var _ = registerModuleRunnerFunction("read_batch_header", func(r *dataTransformE
 })
 
 var _ = registerModuleRunnerFunction("read_next_record", func(r *dataTransformEngine) any {
-	return func(ctx context.Context, m api.Module, attributes, timestamp, offset, dataPtr, dataLen uint32) int32 {
+	return func(_ context.Context, m api.Module, attributes, timestamp, _, dataPtr, dataLen uint32) int32 {
 		if r.targetIndex >= len(r.inputBatch) {
 			return noActiveTransform
 		}
@@ -113,7 +113,7 @@ var _ = registerModuleRunnerFunction("read_next_record", func(r *dataTransformEn
 })
 
 var _ = registerModuleRunnerFunction("write_record", func(r *dataTransformEngine) any {
-	return func(ctx context.Context, m api.Module, dataPtr, dataLen uint32) int32 {
+	return func(_ context.Context, m api.Module, dataPtr, dataLen uint32) int32 {
 		buf, ok := m.Memory().Read(dataPtr, dataLen)
 		if !ok {
 			return invalidBuffer
@@ -132,8 +132,8 @@ var _ = registerModuleRunnerFunction("write_record", func(r *dataTransformEngine
 	}
 })
 
-var _ = registerModuleRunnerFunction("write_record_with_options", func(r *dataTransformEngine) any {
-	return func(ctx context.Context, m api.Module, dataPtr, dataLen, optsPtr, optsLen uint32) int32 {
+var _ = registerModuleRunnerFunction("write_record_with_options", func(*dataTransformEngine) any {
+	return func(_ context.Context, m api.Module, dataPtr, dataLen, _, _ uint32) int32 {
 		dataBuf, ok := m.Memory().Read(dataPtr, dataLen)
 		if !ok {
 			return invalidBuffer

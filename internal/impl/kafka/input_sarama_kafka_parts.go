@@ -123,7 +123,7 @@ partMsgLoop:
 	}
 }
 
-func (k *kafkaReader) offsetVersion() int16 {
+func offsetVersion() int16 {
 	// - 0 (kafka 0.8.1 and later)
 	// - 1 (kafka 0.8.2 and later)
 	// - 2 (kafka 0.9.0 and later)
@@ -135,8 +135,8 @@ func (k *kafkaReader) offsetVersion() int16 {
 	return v
 }
 
-func (k *kafkaReader) offsetPartitionPutRequest(consumerGroup string) *sarama.OffsetCommitRequest {
-	v := k.offsetVersion()
+func offsetPartitionPutRequest(consumerGroup string) *sarama.OffsetCommitRequest {
+	v := offsetVersion()
 	req := &sarama.OffsetCommitRequest{
 		ConsumerGroup:           consumerGroup,
 		Version:                 v,
@@ -178,7 +178,7 @@ func (k *kafkaReader) connectExplicitTopics(ctx context.Context, config *sarama.
 	}
 
 	offsetGetReq := sarama.OffsetFetchRequest{
-		Version:       k.offsetVersion(),
+		Version:       offsetVersion(),
 		ConsumerGroup: k.consumerGroup,
 	}
 	for topic, parts := range k.topicPartitions {
@@ -200,7 +200,7 @@ func (k *kafkaReader) connectExplicitTopics(ctx context.Context, config *sarama.
 		offsetRes = &sarama.OffsetFetchResponse{}
 	}
 
-	offsetPutReq := k.offsetPartitionPutRequest(k.consumerGroup)
+	offsetPutReq := offsetPartitionPutRequest(k.consumerGroup)
 	offsetTracker := &closureOffsetTracker{
 		// Note: We don't need to wrap this call in a mutex lock because the
 		// checkpointer that uses it already does this, but it's not
@@ -272,7 +272,7 @@ func (k *kafkaReader) connectExplicitTopics(ctx context.Context, config *sarama.
 			}
 			k.cMut.Lock()
 			putReq := offsetPutReq
-			offsetPutReq = k.offsetPartitionPutRequest(k.consumerGroup)
+			offsetPutReq = offsetPartitionPutRequest(k.consumerGroup)
 			k.cMut.Unlock()
 			if coordinator != nil {
 				if _, err := coordinator.CommitOffset(putReq); err != nil {

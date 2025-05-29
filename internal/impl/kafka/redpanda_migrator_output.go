@@ -203,7 +203,7 @@ func init() {
 			output, err = NewFranzWriterFromConfig(
 				conf,
 				NewFranzWriterHooks(
-					func(ctx context.Context, fn FranzSharedClientUseFn) error {
+					func(_ context.Context, fn FranzSharedClientUseFn) error {
 						clientMut.Lock()
 						defer clientMut.Unlock()
 

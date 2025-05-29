@@ -223,7 +223,7 @@ func newProtobufFromJSONOperator(f fs.FS, msg string, importPaths []string, disc
 		return nil, err
 	}
 
-	types.RangeMessages(func(mt protoreflect.MessageType) bool {
+	types.RangeMessages(func(protoreflect.MessageType) bool {
 		return true
 	})
 
@@ -342,7 +342,7 @@ func newProtobuf(conf *service.ParsedConfig, mgr *service.Resources) (*protobufP
 	return p, nil
 }
 
-func (p *protobufProc) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+func (p *protobufProc) Process(_ context.Context, msg *service.Message) (service.MessageBatch, error) {
 	if err := p.operator(msg); err != nil {
 		p.log.Debugf("Operator failed: %v", err)
 		return nil, err
@@ -350,6 +350,6 @@ func (p *protobufProc) Process(ctx context.Context, msg *service.Message) (servi
 	return service.MessageBatch{msg}, nil
 }
 
-func (p *protobufProc) Close(context.Context) error {
+func (*protobufProc) Close(context.Context) error {
 	return nil
 }

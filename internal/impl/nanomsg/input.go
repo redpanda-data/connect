@@ -136,7 +136,7 @@ func getInputSocketFromType(t string) (mangos.Socket, error) {
 	return nil, errors.New("invalid Scalability Protocols socket type")
 }
 
-func (s *nanomsgReader) Connect(ctx context.Context) (err error) {
+func (s *nanomsgReader) Connect(context.Context) (err error) {
 	s.cMut.Lock()
 	defer s.cMut.Unlock()
 
@@ -196,7 +196,7 @@ func (s *nanomsgReader) Connect(ctx context.Context) (err error) {
 	return nil
 }
 
-func (s *nanomsgReader) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
+func (s *nanomsgReader) Read(context.Context) (*service.Message, service.AckFunc, error) {
 	s.cMut.Lock()
 	socket := s.socket
 	s.cMut.Unlock()
@@ -211,12 +211,12 @@ func (s *nanomsgReader) Read(ctx context.Context) (*service.Message, service.Ack
 		}
 		return nil, nil, err
 	}
-	return service.NewMessage(data), func(ctx context.Context, err error) error {
+	return service.NewMessage(data), func(context.Context, error) error {
 		return nil
 	}, nil
 }
 
-func (s *nanomsgReader) Close(ctx context.Context) (err error) {
+func (s *nanomsgReader) Close(context.Context) (err error) {
 	s.cMut.Lock()
 	defer s.cMut.Unlock()
 

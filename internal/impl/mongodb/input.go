@@ -225,7 +225,7 @@ func (m *mongoInput) ReadBatch(ctx context.Context) (service.MessageBatch, servi
 		m.count++
 
 		if m.batchSize == 0 || m.cursor.RemainingBatchLength() == 0 {
-			return batch, func(ctx context.Context, err error) error {
+			return batch, func(context.Context, error) error {
 				return nil
 			}, nil
 		}

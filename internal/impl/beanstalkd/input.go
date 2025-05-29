@@ -65,7 +65,7 @@ func newBeanstalkdReaderFromConfig(conf *service.ParsedConfig, log *service.Logg
 	return &bs, nil
 }
 
-func (bs *beanstalkdReader) Connect(ctx context.Context) error {
+func (bs *beanstalkdReader) Connect(context.Context) error {
 	bs.connMut.Lock()
 	defer bs.connMut.Unlock()
 
@@ -91,7 +91,7 @@ func (bs *beanstalkdReader) disconnect() error {
 	return nil
 }
 
-func (bs *beanstalkdReader) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
+func (bs *beanstalkdReader) Read(context.Context) (*service.Message, service.AckFunc, error) {
 	if bs.connection == nil {
 		return nil, nil, service.ErrNotConnected
 	}
@@ -105,7 +105,7 @@ func (bs *beanstalkdReader) Read(ctx context.Context) (*service.Message, service
 	}
 
 	msg := service.NewMessage(body)
-	return msg, func(ctx context.Context, res error) error {
+	return msg, func(_ context.Context, res error) error {
 		if res == nil {
 			return bs.connection.Delete(id)
 		}
@@ -113,7 +113,7 @@ func (bs *beanstalkdReader) Read(ctx context.Context) (*service.Message, service
 	}, nil
 }
 
-func (bs *beanstalkdReader) Close(ctx context.Context) (err error) {
+func (bs *beanstalkdReader) Close(context.Context) (err error) {
 	err = bs.disconnect()
 	return
 }

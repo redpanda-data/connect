@@ -37,7 +37,7 @@ func resolveJSONSchema(ctx context.Context, client *sr.Client, schema franz_sr.S
 		return sl.Compile(gojsonschema.NewStringLoader(schema.Schema))
 	}
 
-	if err := client.WalkReferences(ctx, schema.References, func(ctx context.Context, name string, schema franz_sr.Schema) error {
+	if err := client.WalkReferences(ctx, schema.References, func(_ context.Context, _ string, schema franz_sr.Schema) error {
 		return sl.AddSchemas(gojsonschema.NewStringLoader(schema.Schema))
 	}); err != nil {
 		return nil, err

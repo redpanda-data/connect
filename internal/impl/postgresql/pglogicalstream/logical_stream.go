@@ -345,7 +345,7 @@ func (s *Stream) startLr(ctx context.Context, lsnStart LSN) error {
 
 // AckLSN acknowledges the LSN up to which the stream has processed the messages.
 // This makes Postgres to remove the WAL files that are no longer needed.
-func (s *Stream) AckLSN(ctx context.Context, lsn string) error {
+func (s *Stream) AckLSN(_ context.Context, lsn string) error {
 	parsed, err := ParseLSN(lsn)
 	if err != nil {
 		return fmt.Errorf("unable to parse LSN: %w", err)

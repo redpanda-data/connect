@@ -210,7 +210,7 @@ cache_resources:
 		suite.Run(
 			t, template,
 			integration.CacheTestOptPort(kafkaPortStr),
-			integration.CacheTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.CacheTestConfigVars) {
+			integration.CacheTestOptPreTest(func(t testing.TB, _ context.Context, vars *integration.CacheTestConfigVars) {
 				err := createKafkaTopic(t.Context(), "localhost:"+kafkaPortStr, vars.ID, 1)
 				require.NoError(t, err)
 			}),

@@ -59,7 +59,7 @@ func TestAvroBasic(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		t.Run(test.name, func(tt *testing.T) {
+		t.Run(test.name, func(t *testing.T) {
 			conf, err := avroConfigSpec().ParseYAML(fmt.Sprintf(`
 operator: %v
 encoding: %v
@@ -160,7 +160,7 @@ func TestAvroSchemaPath(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		t.Run(test.name, func(tt *testing.T) {
+		t.Run(test.name, func(t *testing.T) {
 			conf, err := avroConfigSpec().ParseYAML(fmt.Sprintf(`
 operator: %v
 encoding: %v

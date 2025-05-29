@@ -193,7 +193,7 @@ func (r *reader) Connect(ctx context.Context) error {
 		// registered, so on the first message we trigger _another_ backfill
 		// just in case.
 		triggeredMiniBackfill := false
-		defer sess.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) {
+		defer sess.AddHandler(func(_ *discordgo.Session, m *discordgo.MessageCreate) {
 			if m.ChannelID != r.channelID {
 				return
 			}
@@ -243,7 +243,7 @@ func (r *reader) Read(ctx context.Context) (*service.Message, service.AckFunc, e
 	}
 
 	msg := service.NewMessage(jBytes)
-	return msg, func(ctx context.Context, err error) error {
+	return msg, func(ctx context.Context, _ error) error {
 		highestID := release()
 		if highestID == nil {
 			return nil

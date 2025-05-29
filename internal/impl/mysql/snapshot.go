@@ -169,7 +169,7 @@ func (s *Snapshot) querySnapshotTable(ctx context.Context, table string, pk []st
 	}
 
 	if lastSeenPkVal == nil {
-		snapshotQueryParts = append(snapshotQueryParts, s.buildOrderByClause(pk))
+		snapshotQueryParts = append(snapshotQueryParts, buildOrderByClause(pk))
 
 		snapshotQueryParts = append(snapshotQueryParts, "LIMIT ?")
 		q := strings.Join(snapshotQueryParts, " ")
@@ -185,14 +185,14 @@ func (s *Snapshot) querySnapshotTable(ctx context.Context, table string, pk []st
 	}
 
 	snapshotQueryParts = append(snapshotQueryParts, fmt.Sprintf("WHERE (%s) > (%s)", strings.Join(pk, ", "), strings.Join(placeholders, ", ")))
-	snapshotQueryParts = append(snapshotQueryParts, s.buildOrderByClause(pk))
+	snapshotQueryParts = append(snapshotQueryParts, buildOrderByClause(pk))
 	snapshotQueryParts = append(snapshotQueryParts, fmt.Sprintf("LIMIT %d", limit))
 	q := strings.Join(snapshotQueryParts, " ")
 	s.logger.Infof("Querying snapshot: %s", q)
 	return s.tx.QueryContext(ctx, q, lastSeenPkVals...)
 }
 
-func (s *Snapshot) buildOrderByClause(pk []string) string {
+func buildOrderByClause(pk []string) string {
 	if len(pk) == 1 {
 		return "ORDER BY " + pk[0]
 	}

@@ -33,7 +33,7 @@ type bar struct {
 func TestIndexedAcquire(t *testing.T) {
 	var mu sync.Mutex
 	created := map[string]bool{}
-	p := pool.NewIndexed(func(ctx context.Context, name string) (bar, error) {
+	p := pool.NewIndexed(func(_ context.Context, name string) (bar, error) {
 		mu.Lock()
 		created[name] = true
 		mu.Unlock()
@@ -63,7 +63,7 @@ func TestIndexedAcquire(t *testing.T) {
 }
 
 func TestIndexedCtorCancellation(t *testing.T) {
-	p := pool.NewIndexed(func(ctx context.Context, name string) (any, error) {
+	p := pool.NewIndexed(func(ctx context.Context, _ string) (any, error) {
 		<-ctx.Done()
 		return nil, ctx.Err()
 	})

@@ -136,7 +136,7 @@ func readWithoutPanic(pRdr *parquet.GenericReader[any], rows []any) (n int, err 
 	return
 }
 
-func (s *parquetDecodeProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
+func (s *parquetDecodeProcessor) Process(_ context.Context, msg *service.Message) (service.MessageBatch, error) {
 	mBytes, err := msg.AsBytes()
 	if err != nil {
 		return nil, err
@@ -179,6 +179,6 @@ func (s *parquetDecodeProcessor) Process(ctx context.Context, msg *service.Messa
 	return resBatch, nil
 }
 
-func (s *parquetDecodeProcessor) Close(ctx context.Context) error {
+func (*parquetDecodeProcessor) Close(context.Context) error {
 	return nil
 }

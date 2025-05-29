@@ -66,19 +66,19 @@ func toBuiltinMethod(methodName, componentName string, spec *fieldSpec) (*starla
 	switch spec.Kind {
 	case kindScalar:
 		if spec.Type == "object" {
-			return toKeywordBuiltinMethod(methodName, componentName, spec)
+			return toKeywordBuiltinMethod(methodName, componentName)
 		}
 		return toArgBuiltinMethod(methodName, componentName, spec)
 	case kindArray, kind2DArray:
-		return toArgsBuiltinMethod(methodName, componentName, spec)
+		return toArgsBuiltinMethod(methodName, componentName)
 	case kindMap:
-		return toKeywordBuiltinMethod(methodName, componentName, spec)
+		return toKeywordBuiltinMethod(methodName, componentName)
 	default:
 		return nil, fmt.Errorf("unsupported field kind: %v", spec.Kind)
 	}
 }
 
-func toKeywordBuiltinMethod(methodName, componentName string, spec *fieldSpec) (*starlark.Builtin, error) {
+func toKeywordBuiltinMethod(methodName, componentName string) (*starlark.Builtin, error) {
 	fn := func(thread *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 		if len(args) != 0 {
 			return nil, fmt.Errorf("unexpected positional arguments for %s", methodName)
@@ -99,7 +99,7 @@ func toKeywordBuiltinMethod(methodName, componentName string, spec *fieldSpec) (
 	return starlark.NewBuiltin(methodName, fn), nil
 }
 
-func toArgsBuiltinMethod(methodName, componentName string, spec *fieldSpec) (*starlark.Builtin, error) {
+func toArgsBuiltinMethod(methodName, componentName string) (*starlark.Builtin, error) {
 	fn := func(thread *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 		if len(kwargs) != 0 {
 			return nil, fmt.Errorf("unexpected keyword arguments for %s", methodName)
@@ -147,7 +147,7 @@ func (s *starlarkComponent) MarshalJSON() ([]byte, error) {
 }
 
 // Freeze implements starlark.Value.
-func (s *starlarkComponent) Freeze() {
+func (*starlarkComponent) Freeze() {
 	// Noop, we're immutable.
 }
 
@@ -165,12 +165,12 @@ func (s *starlarkComponent) String() string {
 }
 
 // Truth implements starlark.Value.
-func (s *starlarkComponent) Truth() starlark.Bool {
+func (*starlarkComponent) Truth() starlark.Bool {
 	return starlark.True
 }
 
 // Type implements starlark.Value.
-func (s *starlarkComponent) Type() string {
+func (*starlarkComponent) Type() string {
 	return "redpanda.connect.StarlarkComponent"
 }
 

@@ -71,7 +71,7 @@ type input struct {
 	client  *socketmode.Client
 }
 
-func (i *input) Connect(ctx context.Context) error {
+func (i *input) Connect(context.Context) error {
 	api := slack.New(i.botToken, slack.OptionAppLevelToken(i.appToken))
 	client := socketmode.New(api)
 	shutSig := shutdown.NewSignaller()
@@ -114,11 +114,10 @@ func (i *input) Read(ctx context.Context) (*service.Message, service.AckFunc, er
 				socketmode.EventTypeInteractive,
 				socketmode.EventTypeSlashCommand:
 				// These are the messages we want and need to ack
-				break
 			}
 			msg := service.NewMessage(evt.Request.Payload)
 			msg.MetaSetMut("type", string(evt.Type))
-			return msg, func(ctx context.Context, err error) error {
+			return msg, func(ctx context.Context, _ error) error {
 				if i.client == nil {
 					return nil
 				}

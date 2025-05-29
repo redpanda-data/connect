@@ -80,7 +80,7 @@ input:
 	)
 	suite.Run(
 		t, template,
-		integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+		integration.StreamTestOptPreTest(func(t testing.TB, _ context.Context, vars *integration.StreamTestConfigVars) {
 			js, err := natsConn.JetStream()
 			require.NoError(t, err)
 
@@ -151,7 +151,7 @@ input:
 	)
 	suite.Run(
 		t, template,
-		integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+		integration.StreamTestOptPreTest(func(t testing.TB, _ context.Context, vars *integration.StreamTestConfigVars) {
 			js, err := natsConn.JetStream()
 			require.NoError(t, err)
 

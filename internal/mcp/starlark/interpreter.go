@@ -63,7 +63,7 @@ func Eval(
 		Print: func(_ *starlark.Thread, msg string) {
 			logger.Debug(msg)
 		},
-		Load: func(_ *starlark.Thread, module string) (starlark.StringDict, error) {
+		Load: func(*starlark.Thread, string) (starlark.StringDict, error) {
 			return nil, errors.New("load disallowed")
 		},
 	}
@@ -74,7 +74,7 @@ func Eval(
 		thread.Cancel("context cancelled")
 	}()
 	result := &EvalResult{}
-	mcpToolFn := func(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	mcpToolFn := func(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 		if len(args) != 0 {
 			return nil, errors.New("unexpected positional arguments")
 		}
@@ -109,7 +109,7 @@ func Eval(
 		})
 		return starlark.None, nil
 	}
-	secretFn := func(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	secretFn := func(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 		var name string
 		err := starlark.UnpackArgs(
 			b.Name(),

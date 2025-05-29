@@ -58,7 +58,7 @@ func outputSpec() *service.ConfigSpec {
 		Example(echobotExample())
 }
 
-func newOutput(conf *service.ParsedConfig, res *service.Resources) (service.Output, int, error) {
+func newOutput(conf *service.ParsedConfig, _ *service.Resources) (service.Output, int, error) {
 	botToken, err := conf.FieldString(oFieldBotToken)
 	if err != nil {
 		return nil, 0, err
@@ -189,6 +189,6 @@ func (o *postOutput) Write(ctx context.Context, msg *service.Message) error {
 }
 
 // Close implements service.Output.
-func (o *postOutput) Close(ctx context.Context) error {
+func (*postOutput) Close(context.Context) error {
 	return nil
 }

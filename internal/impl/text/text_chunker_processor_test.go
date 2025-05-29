@@ -91,7 +91,7 @@ func splitTextUsingConfig(t *testing.T, text, config string) []string {
 	require.NoError(t, err)
 	var mu sync.Mutex
 	var output service.MessageBatch
-	err = b.AddBatchConsumerFunc(func(ctx context.Context, batch service.MessageBatch) error {
+	err = b.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
 		mu.Lock()
 		defer mu.Unlock()
 		output = append(output, batch...)

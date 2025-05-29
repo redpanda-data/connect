@@ -41,7 +41,7 @@ This vector can be inserted into various SQL databases if they have support for 
 
 	if err := bloblang.RegisterMethodV2(
 		"vector", vectorSpec,
-		func(args *bloblang.ParsedParams) (bloblang.Method, error) {
+		func(*bloblang.ParsedParams) (bloblang.Method, error) {
 			return bloblang.ArrayMethod(func(a []any) (any, error) {
 				vec := make([]float32, len(a))
 				for i, e := range a {

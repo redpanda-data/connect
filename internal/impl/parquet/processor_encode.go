@@ -270,7 +270,7 @@ func closeWithoutPanic(pWtr *parquet.GenericWriter[any]) (err error) {
 	return
 }
 
-func (s *parquetEncodeProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+func (s *parquetEncodeProcessor) ProcessBatch(_ context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
 	if len(batch) == 0 {
 		return nil, nil
 	}
@@ -309,6 +309,6 @@ func (s *parquetEncodeProcessor) ProcessBatch(ctx context.Context, batch service
 	return []service.MessageBatch{{outMsg}}, nil
 }
 
-func (s *parquetEncodeProcessor) Close(ctx context.Context) error {
+func (*parquetEncodeProcessor) Close(context.Context) error {
 	return nil
 }

@@ -54,7 +54,7 @@ type processor struct {
 }
 
 // Init implements runtimepb.BatchProcessorServiceServer.
-func (p *processor) Init(ctx context.Context, req *runtimepb.BatchProcessorInitRequest) (*runtimepb.BatchProcessorInitResponse, error) {
+func (p *processor) Init(_ context.Context, req *runtimepb.BatchProcessorInitRequest) (*runtimepb.BatchProcessorInitResponse, error) {
 	if p.component != nil {
 		return &runtimepb.BatchProcessorInitResponse{Error: nil}, nil
 	}
@@ -95,7 +95,7 @@ func (p *processor) ProcessBatch(ctx context.Context, req *runtimepb.BatchProces
 }
 
 // Close implements runtimepb.BatchProcessorServiceServer.
-func (p *processor) Close(ctx context.Context, req *runtimepb.BatchProcessorCloseRequest) (*runtimepb.BatchProcessorCloseResponse, error) {
+func (p *processor) Close(ctx context.Context, _ *runtimepb.BatchProcessorCloseRequest) (*runtimepb.BatchProcessorCloseResponse, error) {
 	if p.component == nil {
 		return &runtimepb.BatchProcessorCloseResponse{Error: nil}, nil
 	}
@@ -133,7 +133,7 @@ type output struct {
 }
 
 // Init implements runtimepb.BatchOutputServiceServer.
-func (o *output) Init(ctx context.Context, req *runtimepb.BatchOutputInitRequest) (*runtimepb.BatchOutputInitResponse, error) {
+func (o *output) Init(_ context.Context, req *runtimepb.BatchOutputInitRequest) (*runtimepb.BatchOutputInitResponse, error) {
 	if o.component != nil {
 		return &runtimepb.BatchOutputInitResponse{Error: nil}, nil
 	}
@@ -159,7 +159,7 @@ func (o *output) Init(ctx context.Context, req *runtimepb.BatchOutputInitRequest
 }
 
 // Connect implements runtimepb.BatchOutputServiceServer.
-func (o *output) Connect(ctx context.Context, req *runtimepb.BatchOutputConnectRequest) (*runtimepb.BatchOutputConnectResponse, error) {
+func (o *output) Connect(ctx context.Context, _ *runtimepb.BatchOutputConnectRequest) (*runtimepb.BatchOutputConnectResponse, error) {
 	if o.component == nil {
 		return &runtimepb.BatchOutputConnectResponse{Error: runtimepb.ErrorToProto(service.ErrNotConnected)}, nil
 	}
@@ -181,7 +181,7 @@ func (o *output) Send(ctx context.Context, req *runtimepb.BatchOutputSendRequest
 }
 
 // Close implements runtimepb.BatchOutputServiceServer.
-func (o *output) Close(ctx context.Context, req *runtimepb.BatchOutputCloseRequest) (*runtimepb.BatchOutputCloseResponse, error) {
+func (o *output) Close(ctx context.Context, _ *runtimepb.BatchOutputCloseRequest) (*runtimepb.BatchOutputCloseResponse, error) {
 	if o.component == nil {
 		return &runtimepb.BatchOutputCloseResponse{Error: nil}, nil
 	}
@@ -221,7 +221,7 @@ type input struct {
 }
 
 // Init implements runtimepb.BatchInputServiceServer.
-func (i *input) Init(ctx context.Context, req *runtimepb.BatchInputInitRequest) (*runtimepb.BatchInputInitResponse, error) {
+func (i *input) Init(_ context.Context, req *runtimepb.BatchInputInitRequest) (*runtimepb.BatchInputInitResponse, error) {
 	if i.component != nil {
 		return &runtimepb.BatchInputInitResponse{Error: nil}, nil
 	}
@@ -241,7 +241,7 @@ func (i *input) Init(ctx context.Context, req *runtimepb.BatchInputInitRequest) 
 }
 
 // Connect implements runtimepb.BatchInputServiceServer.
-func (i *input) Connect(ctx context.Context, req *runtimepb.BatchInputConnectRequest) (*runtimepb.BatchInputConnectResponse, error) {
+func (i *input) Connect(ctx context.Context, _ *runtimepb.BatchInputConnectRequest) (*runtimepb.BatchInputConnectResponse, error) {
 	if i.component == nil {
 		return &runtimepb.BatchInputConnectResponse{Error: runtimepb.ErrorToProto(service.ErrNotConnected)}, nil
 	}
@@ -250,7 +250,7 @@ func (i *input) Connect(ctx context.Context, req *runtimepb.BatchInputConnectReq
 }
 
 // Close implements runtimepb.BatchInputServiceServer.
-func (i *input) Close(ctx context.Context, req *runtimepb.BatchInputCloseRequest) (*runtimepb.BatchInputCloseResponse, error) {
+func (i *input) Close(ctx context.Context, _ *runtimepb.BatchInputCloseRequest) (*runtimepb.BatchInputCloseResponse, error) {
 	if i.component == nil {
 		return &runtimepb.BatchInputCloseResponse{Error: nil}, nil
 	}
@@ -259,7 +259,7 @@ func (i *input) Close(ctx context.Context, req *runtimepb.BatchInputCloseRequest
 }
 
 // Ack implements runtimepb.BatchInputServiceServer.
-func (i *input) Ack(ctx context.Context, req *runtimepb.BatchInputAckRequest) (*runtimepb.BatchInputAckResponse, error) {
+func (i *input) Ack(ctx context.Context, _ *runtimepb.BatchInputAckRequest) (*runtimepb.BatchInputAckResponse, error) {
 	if i.component == nil {
 		return &runtimepb.BatchInputAckResponse{Error: runtimepb.ErrorToProto(service.ErrNotConnected)}, nil
 	}
@@ -268,7 +268,7 @@ func (i *input) Ack(ctx context.Context, req *runtimepb.BatchInputAckRequest) (*
 }
 
 // ReadBatch implements runtimepb.BatchInputServiceServer.
-func (i *input) ReadBatch(ctx context.Context, req *runtimepb.BatchInputReadRequest) (*runtimepb.BatchInputReadResponse, error) {
+func (i *input) ReadBatch(ctx context.Context, _ *runtimepb.BatchInputReadRequest) (*runtimepb.BatchInputReadResponse, error) {
 	if i.component == nil {
 		return &runtimepb.BatchInputReadResponse{Error: runtimepb.ErrorToProto(service.ErrNotConnected)}, nil
 	}

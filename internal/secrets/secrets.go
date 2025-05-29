@@ -70,13 +70,13 @@ func parseSecretsLookupURN(ctx context.Context, logger *slog.Logger, urn string)
 
 	switch u.Scheme {
 	case "test":
-		return func(ctx context.Context, key string) (string, bool) {
+		return func(_ context.Context, key string) (string, bool) {
 			return key + " " + u.Host, true
 		}, nil
 	case "redis":
 		return newRedisSecretsLookup(ctx, logger, u)
 	case "env":
-		return func(ctx context.Context, key string) (string, bool) {
+		return func(_ context.Context, key string) (string, bool) {
 			return os.LookupEnv(key)
 		}, nil
 	case "aws":
@@ -98,7 +98,7 @@ func parseSecretsLookupURN(ctx context.Context, logger *slog.Logger, urn string)
 		}
 		return lookupFn(secrets.NewSecretProvider, secretsManager, path, u.Query().Get(trimPrefixParam))
 	case "none":
-		return func(ctx context.Context, key string) (string, bool) {
+		return func(context.Context, string) (string, bool) {
 			return "", false
 		}, nil
 	default:

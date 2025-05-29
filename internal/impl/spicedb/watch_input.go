@@ -236,7 +236,7 @@ func (wi *watchInput) Read(ctx context.Context) (*service.Message, service.AckFu
 		return nil, nil, fmt.Errorf("unable to marshal watch response: %w", err)
 	}
 	msg := service.NewMessage(msgBytes)
-	return msg, func(ctx context.Context, err error) error {
+	return msg, func(ctx context.Context, _ error) error {
 		var setErr error
 		if err := wi.mgr.AccessCache(ctx, wi.cache, func(c service.Cache) {
 			setErr = c.Set(ctx, wi.cacheKey, []byte(watchMsg.msg.ChangesThrough.Token), nil)

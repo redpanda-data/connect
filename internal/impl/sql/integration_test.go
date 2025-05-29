@@ -451,7 +451,7 @@ processors:
 		require.NoError(t, streamOutBuilder.AddInputYAML(inputConf))
 
 		var outBatches []string
-		require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
+		require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 			msgBytes, err := mb[0].AsBytes()
 			require.NoError(t, err)
 			outBatches = append(outBatches, string(msgBytes))
@@ -572,7 +572,7 @@ processors:
 		require.NoError(t, streamOutBuilder.AddInputYAML(inputConf))
 
 		var outBatches []string
-		require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
+		require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 			msgBytes, err := mb[0].AsBytes()
 			require.NoError(t, err)
 			outBatches = append(outBatches, string(msgBytes))

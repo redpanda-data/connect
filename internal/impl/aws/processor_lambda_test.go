@@ -31,7 +31,7 @@ type mockLambda struct {
 	fn func(*lambda.InvokeInput) (*lambda.InvokeOutput, error)
 }
 
-func (m *mockLambda) Invoke(ctx context.Context, in *lambda.InvokeInput, opts ...func(*lambda.Options)) (*lambda.InvokeOutput, error) {
+func (m *mockLambda) Invoke(_ context.Context, in *lambda.InvokeInput, _ ...func(*lambda.Options)) (*lambda.InvokeOutput, error) {
 	return m.fn(in)
 }
 

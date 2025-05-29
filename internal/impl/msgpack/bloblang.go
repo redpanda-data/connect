@@ -42,7 +42,7 @@ func init() {
 
 	if err := bloblang.RegisterMethodV2(
 		"parse_msgpack", msgpackParseSpec,
-		func(args *bloblang.ParsedParams) (bloblang.Method, error) {
+		func(*bloblang.ParsedParams) (bloblang.Method, error) {
 			return func(v any) (any, error) {
 				b, err := bloblang.ValueAsBytes(v)
 				if err != nil {
@@ -77,7 +77,7 @@ func init() {
 
 	if err := bloblang.RegisterMethodV2(
 		"format_msgpack", msgpackFormatSpec,
-		func(args *bloblang.ParsedParams) (bloblang.Method, error) {
+		func(*bloblang.ParsedParams) (bloblang.Method, error) {
 			return func(v any) (any, error) {
 				return msgpack.Marshal(v)
 			}, nil

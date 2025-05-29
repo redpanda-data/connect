@@ -132,7 +132,7 @@ func (n *natsWriter) Connect(ctx context.Context) error {
 }
 
 // Write attempts to write a message.
-func (n *natsWriter) Write(context context.Context, msg *service.Message) error {
+func (n *natsWriter) Write(_ context.Context, msg *service.Message) error {
 	n.connMut.RLock()
 	conn := n.natsConn
 	n.connMut.RUnlock()

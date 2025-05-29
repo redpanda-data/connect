@@ -170,7 +170,7 @@ func newSFTPReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources)
 	return
 }
 
-func (s *sftpReader) Connect(ctx context.Context) error {
+func (s *sftpReader) Connect(context.Context) error {
 	s.stateLock.Lock()
 	defer s.stateLock.Unlock()
 
@@ -354,7 +354,7 @@ func (s *staticPathProvider) Next(context.Context) (string, bool, error) {
 	return path, true, nil
 }
 
-func (s *staticPathProvider) Ack(context.Context, string, error) error {
+func (*staticPathProvider) Ack(context.Context, string, error) error {
 	return nil
 }
 

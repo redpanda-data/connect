@@ -44,7 +44,7 @@ func init() {
 			}
 			return nil
 		},
-		func(dec *msgpack.Decoder, value reflect.Value) error {
+		func(*msgpack.Decoder, reflect.Value) error {
 			return nil
 		},
 	)

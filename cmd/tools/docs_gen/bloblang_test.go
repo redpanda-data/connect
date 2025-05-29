@@ -112,7 +112,7 @@ func TestMethodExamples(t *testing.T) {
 	t.Setenv(key, tmpJSONFile.Name())
 
 	env := bloblang.GlobalEnvironment()
-	env.WalkMethods(func(name string, view *bloblang.MethodView) {
+	env.WalkMethods(func(_ string, view *bloblang.MethodView) {
 		spec := view.TemplateData()
 		t.Run(spec.Name, func(t *testing.T) {
 			t.Parallel()

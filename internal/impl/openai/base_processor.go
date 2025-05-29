@@ -41,7 +41,7 @@ type baseProcessor struct {
 	model  string
 }
 
-func (b *baseProcessor) Close(ctx context.Context) error {
+func (*baseProcessor) Close(context.Context) error {
 	return nil
 }
 

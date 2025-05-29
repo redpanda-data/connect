@@ -436,7 +436,7 @@ func (p *pgStreamInput) flushBatch(
 		return fmt.Errorf("unable to checkpoint: %w", err)
 	}
 
-	ackFn := func(ctx context.Context, res error) error {
+	ackFn := func(ctx context.Context, _ error) error {
 		maxOffset := resolveFn()
 		if maxOffset == nil {
 			return nil

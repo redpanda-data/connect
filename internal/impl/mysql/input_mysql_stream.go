@@ -574,7 +574,7 @@ func (i *mysqlStreamInput) flushBatch(
 	}
 	msg := asyncMessage{
 		msg: batch,
-		ackFn: func(ctx context.Context, res error) error {
+		ackFn: func(ctx context.Context, _ error) error {
 			i.mutex.Lock()
 			defer i.mutex.Unlock()
 			maxOffset := resolveFn()
@@ -676,7 +676,7 @@ func (i *mysqlStreamInput) setCachedBinlogPosition(ctx context.Context, binLogPo
 
 // --- MySQL Canal handler methods ----
 
-func (i *mysqlStreamInput) OnRotate(eh *replication.EventHeader, re *replication.RotateEvent) error {
+func (i *mysqlStreamInput) OnRotate(_ *replication.EventHeader, re *replication.RotateEvent) error {
 	i.currentBinlogName = string(re.NextLogName)
 	return nil
 }

@@ -34,11 +34,11 @@ type mockDynamoDB struct {
 	batchFn func(*dynamodb.BatchWriteItemInput) (*dynamodb.BatchWriteItemOutput, error)
 }
 
-func (m *mockDynamoDB) PutItem(ctx context.Context, params *dynamodb.PutItemInput, optFns ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error) {
+func (m *mockDynamoDB) PutItem(_ context.Context, params *dynamodb.PutItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error) {
 	return m.fn(params)
 }
 
-func (m *mockDynamoDB) BatchWriteItem(ctx context.Context, params *dynamodb.BatchWriteItemInput, optFns ...func(*dynamodb.Options)) (*dynamodb.BatchWriteItemOutput, error) {
+func (m *mockDynamoDB) BatchWriteItem(_ context.Context, params *dynamodb.BatchWriteItemInput, _ ...func(*dynamodb.Options)) (*dynamodb.BatchWriteItemOutput, error) {
 	return m.batchFn(params)
 }
 
@@ -68,7 +68,7 @@ string_columns:
 	var request map[string][]types.WriteRequest
 
 	db.client = &mockDynamoDB{
-		fn: func(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
+		fn: func(*dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
 			t.Error("not expected")
 			return nil, errors.New("not implemented")
 		},
@@ -226,7 +226,7 @@ string_columns:
 	var requests [][]types.WriteRequest
 
 	db.client = &mockDynamoDB{
-		fn: func(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
+		fn: func(*dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
 			t.Error("not expected")
 			return nil, errors.New("not implemented")
 		},
@@ -428,7 +428,7 @@ string_columns:
 	var requests [][]types.WriteRequest
 
 	db.client = &mockDynamoDB{
-		fn: func(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
+		fn: func(*dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
 			t.Error("not expected")
 			return nil, errors.New("not implemented")
 		},

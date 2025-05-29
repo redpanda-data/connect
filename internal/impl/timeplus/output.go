@@ -85,7 +85,7 @@ type timeplus struct {
 }
 
 // Close implements service.Output
-func (t *timeplus) Close(context.Context) error {
+func (*timeplus) Close(context.Context) error {
 	return nil
 }
 

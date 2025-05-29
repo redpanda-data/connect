@@ -39,7 +39,7 @@ const (
 	bscFieldStorageConnectionString = "storage_connection_string"
 )
 
-func azureComponentSpec(forBlobStorage bool) *service.ConfigSpec {
+func azureComponentSpec() *service.ConfigSpec {
 	spec := service.NewConfigSpec().
 		Categories("Services", "Azure").
 		Fields(

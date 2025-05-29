@@ -85,7 +85,7 @@ func bsiConfigFromParsed(pConf *service.ParsedConfig) (conf bsiConfig, err error
 }
 
 func bsiSpec() *service.ConfigSpec {
-	return azureComponentSpec(true).
+	return azureComponentSpec().
 		Beta().
 		Version("3.36.0").
 		Summary(`Downloads objects within an Azure Blob Storage container, optionally filtered by a prefix.`).
@@ -400,7 +400,7 @@ func (s *azureTargetBatchReader) Pop(ctx context.Context) (*azureObjectTarget, e
 	return obj, nil
 }
 
-func (s azureTargetBatchReader) Close(context.Context) error {
+func (azureTargetBatchReader) Close(context.Context) error {
 	return nil
 }
 

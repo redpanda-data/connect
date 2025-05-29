@@ -190,7 +190,7 @@ input:
 	t.Run("manual_partitioner", func(t *testing.T) {
 		suite.Run(
 			t, manualPartitionTemplate,
-			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+			integration.StreamTestOptPreTest(func(t testing.TB, _ context.Context, vars *integration.StreamTestConfigVars) {
 				vars.General["VAR4"] = "group" + vars.ID
 				require.NoError(t, createKafkaTopic(t.Context(), "localhost:"+kafkaPortStr, vars.ID, 1))
 			}),
@@ -302,7 +302,7 @@ input:
 
 	suite.Run(
 		t, template,
-		integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
+		integration.StreamTestOptPreTest(func(t testing.TB, _ context.Context, vars *integration.StreamTestConfigVars) {
 			vars.General["VAR4"] = "group" + vars.ID
 			require.NoError(t, createKafkaTopicSasl("localhost:"+kafkaPortStr, vars.ID, 4))
 		}),

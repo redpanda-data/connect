@@ -280,7 +280,7 @@ type esOutput struct {
 	client *elasticsearch.TypedClient
 }
 
-func (e *esOutput) Connect(ctx context.Context) error {
+func (e *esOutput) Connect(context.Context) error {
 	if e.client != nil {
 		return nil
 	}
@@ -444,7 +444,7 @@ func optionalStr(s string) *string {
 	return &s
 }
 
-func (e *esOutput) Close(context.Context) error {
+func (*esOutput) Close(context.Context) error {
 	// The client does not need to be closed, as it interacts with Elasticsearch
 	// over short lived HTTP connections.
 	return nil

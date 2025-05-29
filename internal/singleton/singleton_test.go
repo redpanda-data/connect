@@ -28,14 +28,14 @@ type Foo struct{}
 func TestSingleGoroutine(t *testing.T) {
 	open := false
 	s := New(Config[*Foo]{
-		Constructor: func(ctx context.Context) (*Foo, error) {
+		Constructor: func(context.Context) (*Foo, error) {
 			if open {
 				t.Error("constructor called multiple times")
 			}
 			open = true
 			return &Foo{}, nil
 		},
-		Destructor: func(ctx context.Context, foo *Foo) error {
+		Destructor: func(context.Context, *Foo) error {
 			if !open {
 				t.Error("destructor called multiple times")
 			}
@@ -64,13 +64,13 @@ func TestSingleGoroutine(t *testing.T) {
 func TestMultipleGoroutines(t *testing.T) {
 	open := atomic.Bool{}
 	s := New(Config[*Foo]{
-		Constructor: func(ctx context.Context) (*Foo, error) {
+		Constructor: func(context.Context) (*Foo, error) {
 			if open.Swap(true) {
 				t.Error("constructor called multiple times")
 			}
 			return &Foo{}, nil
 		},
-		Destructor: func(ctx context.Context, foo *Foo) error {
+		Destructor: func(context.Context, *Foo) error {
 			if !open.Swap(false) {
 				t.Error("destructor called multiple times")
 			}
@@ -81,7 +81,7 @@ func TestMultipleGoroutines(t *testing.T) {
 	var wg sync.WaitGroup
 	for i := 0; i < 3; i++ {
 		wg.Add(1)
-		go func(i int) {
+		go func() {
 			defer wg.Done()
 			f1, ticket1, err := s.Acquire(t.Context())
 			require.NoError(t, err)
@@ -97,7 +97,7 @@ func TestMultipleGoroutines(t *testing.T) {
 			require.NoError(t, s.Close(t.Context(), ticket2))
 			// Nothing to assert, could race with other goroutines
 			require.NoError(t, s.Close(t.Context(), ticket2))
-		}(i)
+		}()
 	}
 	wg.Wait()
 	require.False(t, open.Load())

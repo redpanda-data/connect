@@ -181,7 +181,7 @@ func (d *dynamoDBPartiQL) ProcessBatch(ctx context.Context, batch service.Messag
 	return []service.MessageBatch{batch}, nil
 }
 
-func (d *dynamoDBPartiQL) Close(ctx context.Context) error {
+func (*dynamoDBPartiQL) Close(context.Context) error {
 	return nil
 }
 

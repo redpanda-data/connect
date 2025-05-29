@@ -37,7 +37,7 @@ func (s *schemaRegistryDecoder) getProtobufDecoder(ctx context.Context, schema s
 	regMap := map[string]string{
 		".": schema.Schema,
 	}
-	if err := s.client.WalkReferences(ctx, schema.References, func(ctx context.Context, name string, si sr.Schema) error {
+	if err := s.client.WalkReferences(ctx, schema.References, func(_ context.Context, name string, si sr.Schema) error {
 		regMap[name] = si.Schema
 		return nil
 	}); err != nil {
@@ -101,7 +101,7 @@ func (s *schemaRegistryEncoder) getProtobufEncoder(ctx context.Context, schema s
 	regMap := map[string]string{
 		".": schema.Schema,
 	}
-	if err := s.client.WalkReferences(ctx, schema.References, func(ctx context.Context, name string, si sr.Schema) error {
+	if err := s.client.WalkReferences(ctx, schema.References, func(_ context.Context, name string, si sr.Schema) error {
 		regMap[name] = si.Schema
 		return nil
 	}); err != nil {
@@ -291,8 +291,7 @@ func readMessageIndexes(payload []byte) (int, []int, error) {
 
 func toMessageIndexBytes(descriptor protoreflect.Descriptor) []byte {
 	if descriptor.Index() == 0 {
-		switch descriptor.Parent().(type) {
-		case protoreflect.FileDescriptor:
+		if _, ok := descriptor.Parent().(protoreflect.FileDescriptor); ok {
 			// This is an optimization for the first message in the schema
 			return []byte{0}
 		}

@@ -72,7 +72,7 @@ test:
 
 			buf := bytes.NewReader(b)
 			var acked bool
-			strm, err := rdr.Create(io.NopCloser(buf), func(ctx context.Context, err error) error {
+			strm, err := rdr.Create(io.NopCloser(buf), func(context.Context, error) error {
 				acked = true
 				return nil
 			}, service.NewScannerSourceDetails())

@@ -191,7 +191,7 @@ func TestPubSubOutput_MissingTopic(t *testing.T) {
 	err = out.WriteBatch(ctx, batch)
 	require.ErrorAsf(t, err, &bErr, "expected a batch error but got: %T: %v", bErr, bErr)
 	require.ErrorContains(t, bErr, `topic 'test_foo' does not exist`)
-	bErr.WalkMessagesIndexedBy(index, func(i int, m *service.Message, err error) bool {
+	bErr.WalkMessagesIndexedBy(index, func(_ int, _ *service.Message, err error) bool {
 		if err != nil {
 			errs = append(errs, err)
 		}
@@ -209,7 +209,7 @@ func TestPubSubOutput_MissingTopic(t *testing.T) {
 	err = out.WriteBatch(ctx, batch)
 	require.ErrorAsf(t, err, &bErr, "expected a batch error but got: %T: %v", bErr, bErr)
 	require.ErrorContains(t, bErr, "failed to validate topic 'test_bar': simulated error")
-	bErr.WalkMessagesIndexedBy(index, func(i int, m *service.Message, err error) bool {
+	bErr.WalkMessagesIndexedBy(index, func(_ int, _ *service.Message, err error) bool {
 		if err != nil {
 			errs = append(errs, err)
 		}
@@ -288,7 +288,7 @@ func TestPubSubOutput_PublishErrors(t *testing.T) {
 	require.Equal(t, 2, batchErr.IndexedErrors(), "did not receive expected number of batch errors")
 
 	var errs []string
-	batchErr.WalkMessagesIndexedBy(index, func(i int, m *service.Message, err error) bool {
+	batchErr.WalkMessagesIndexedBy(index, func(_ int, _ *service.Message, err error) bool {
 		if err != nil {
 			errs = append(errs, err.Error())
 		}

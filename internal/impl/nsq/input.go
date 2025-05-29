@@ -168,7 +168,7 @@ func (n *nsqReader) HandleMessage(message *nsq.Message) error {
 	return nil
 }
 
-func (n *nsqReader) Connect(ctx context.Context) (err error) {
+func (n *nsqReader) Connect(context.Context) (err error) {
 	n.cMut.Lock()
 	defer n.cMut.Unlock()
 
@@ -248,7 +248,7 @@ func (n *nsqReader) Read(ctx context.Context) (*service.Message, service.AckFunc
 	part.MetaSetMut("nsq_timestamp", strconv.FormatInt(msg.Timestamp, 10))
 	part.MetaSetMut("nsq_nsqd_address", msg.NSQDAddress)
 
-	return part, func(rctx context.Context, res error) error {
+	return part, func(_ context.Context, res error) error {
 		if res != nil {
 			msg.Requeue(-1)
 		}
@@ -257,7 +257,7 @@ func (n *nsqReader) Read(ctx context.Context) (*service.Message, service.AckFunc
 	}, nil
 }
 
-func (n *nsqReader) Close(ctx context.Context) (err error) {
+func (n *nsqReader) Close(context.Context) (err error) {
 	n.interruptOnce.Do(func() {
 		close(n.interruptChan)
 	})

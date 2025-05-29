@@ -142,7 +142,7 @@ file:
 
 			var outBatches []string
 			var outBatchMut sync.Mutex
-			require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
+			require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 				msgBytes, err := mb[0].AsBytes()
 				require.NoError(t, err)
 				outBatchMut.Lock()
@@ -180,7 +180,7 @@ file:
 			require.NoError(t, streamOutBuilder.AddInputYAML(template))
 
 			outBatches = nil
-			require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
+			require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 				msgBytes, err := mb[0].AsBytes()
 				require.NoError(t, err)
 				outBatchMut.Lock()
@@ -249,7 +249,7 @@ file:
 
 	var outBatches []string
 	var outBatchMut sync.Mutex
-	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 		msgBytes, err := mb[0].AsBytes()
 		require.NoError(t, err)
 		outBatchMut.Lock()
@@ -332,7 +332,7 @@ file:
 
 	var outBatches []string
 	var outBatchMut sync.Mutex
-	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 		msgBytes, err := mb[0].AsBytes()
 		require.NoError(t, err)
 		outBatchMut.Lock()
@@ -504,7 +504,7 @@ memory: {}
 
 	var outBatches []string
 	var outBatchMut sync.Mutex
-	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 		msgBytes, err := mb[0].AsBytes()
 		require.NoError(t, err)
 		outBatchMut.Lock()
@@ -693,7 +693,7 @@ file:
 
 	var ids []int64
 	var batchMu sync.Mutex
-	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, batch service.MessageBatch) error {
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, batch service.MessageBatch) error {
 		batchMu.Lock()
 		defer batchMu.Unlock()
 		for _, msg := range batch {

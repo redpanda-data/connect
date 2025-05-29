@@ -64,7 +64,7 @@ func tsiConfigFromParsed(pConf *service.ParsedConfig) (conf tsiConfig, err error
 }
 
 func tsiSpec() *service.ConfigSpec {
-	return azureComponentSpec(false).
+	return azureComponentSpec().
 		Beta().
 		Version("4.10.0").
 		Summary(`Queries an Azure Storage Account Table, optionally with multiple filters.`).
@@ -129,7 +129,7 @@ func newAzureTableStorage(conf tsiConfig, mgr *service.Resources) (*azureTableSt
 }
 
 // Connect attempts to establish a connection to the target Azure Storage Table.
-func (a *azureTableStorage) Connect(ctx context.Context) error {
+func (a *azureTableStorage) Connect(context.Context) error {
 	options := &aztables.ListEntitiesOptions{
 		Filter: stringOrNil(a.conf.Filter),
 		Select: stringOrNil(a.conf.Select),
@@ -174,7 +174,7 @@ func (a *azureTableStorage) ReadBatch(ctx context.Context) (batch service.Messag
 			m.MetaSetMut("row_num", atomic.AddInt64(&a.row, 1))
 			batch = append(batch, m)
 		}
-		return batch, func(_ context.Context, res error) error {
+		return batch, func(context.Context, error) error {
 			return nil
 		}, err
 	}
@@ -182,6 +182,6 @@ func (a *azureTableStorage) ReadBatch(ctx context.Context) (batch service.Messag
 }
 
 // Close is called when the pipeline ends
-func (a *azureTableStorage) Close(ctx context.Context) (err error) {
+func (*azureTableStorage) Close(context.Context) (err error) {
 	return
 }

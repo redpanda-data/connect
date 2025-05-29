@@ -119,7 +119,7 @@ func newWriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (s 
 	return s, nil
 }
 
-func (s *sftpWriter) Connect(ctx context.Context) (err error) {
+func (s *sftpWriter) Connect(context.Context) (err error) {
 	s.handleMut.Lock()
 	defer s.handleMut.Unlock()
 
@@ -150,7 +150,7 @@ func (s *sftpWriter) writeTo(wtr io.Writer, p *service.Message) error {
 	return nil
 }
 
-func (s *sftpWriter) Write(ctx context.Context, msg *service.Message) error {
+func (s *sftpWriter) Write(_ context.Context, msg *service.Message) error {
 	s.handleMut.Lock()
 	defer s.handleMut.Unlock()
 
@@ -213,7 +213,7 @@ func (s *sftpWriter) Write(ctx context.Context, msg *service.Message) error {
 	return nil
 }
 
-func (s *sftpWriter) Close(ctx context.Context) error {
+func (s *sftpWriter) Close(context.Context) error {
 	s.handleMut.Lock()
 	defer s.handleMut.Unlock()
 

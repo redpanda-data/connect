@@ -341,7 +341,7 @@ func NewFranzWriterFromConfig(conf *service.ParsedConfig, hooks franzWriterHooks
 
 // BatchToRecords converts a batch of messages into a slice of records ready to
 // send via the franz-go library.
-func (w *FranzWriter) BatchToRecords(ctx context.Context, b service.MessageBatch) ([]*kgo.Record, error) {
+func (w *FranzWriter) BatchToRecords(_ context.Context, b service.MessageBatch) ([]*kgo.Record, error) {
 	topicExecutor := b.InterpolationExecutor(w.Topic)
 	var keyExecutor *service.MessageBatchInterpolationExecutor
 	if w.Key != nil {

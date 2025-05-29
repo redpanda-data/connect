@@ -102,7 +102,7 @@ func (a *awsKinesisRecordBatcher) FlushMessage(ctx context.Context) (asyncMessag
 	a.ackedWG.Add(1)
 	aMsg := asyncMessage{
 		msg: a.flushedMessage,
-		ackFn: func(ctx context.Context, res error) error {
+		ackFn: func(context.Context, error) error {
 			topSequence := resolveFn()
 			if topSequence != nil {
 				a.ackedMut.Lock()
