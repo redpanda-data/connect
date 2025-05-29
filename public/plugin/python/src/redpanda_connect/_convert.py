@@ -18,8 +18,7 @@ Convert between protobuf and Python types for Redpanda Connect.
 
 from google.protobuf import duration_pb2, timestamp_pb2
 
-from redpanda.runtime.v1alpha1 import message_pb2
-
+from ._proto.redpanda.runtime.v1alpha1 import message_pb2
 from .core import Message, Value
 from .errors import BackoffError, BaseError, EndOfInputError, NotConnectedError
 

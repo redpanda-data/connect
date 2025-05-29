@@ -203,7 +203,8 @@ then returns a properly configured processor component.
 
 def batch_processor(func: Callable[[MessageBatch], list[MessageBatch]]) -> ProcessorConstructor:
     """
-    A decorator that wraps a function that processes a single message and returns it to continue down the pipeline.
+    A decorator that wraps a function that processes a single message and returns it to continue
+    down the pipeline.
     """
 
     def ctor(_: Value) -> Processor:
@@ -222,8 +223,9 @@ def batch_processor(func: Callable[[MessageBatch], list[MessageBatch]]) -> Proce
 
 
 def processor(func: Callable[[Message], Message]) -> ProcessorConstructor:
-    """ 
-    A decorator that wraps a function that processes a single message and returns it to continue down the pipeline.
+    """
+    A decorator that wraps a function that processes a single message and returns it to continue
+    down the pipeline.
     """
 
     def wrapped(batch: MessageBatch) -> list[MessageBatch]:
@@ -299,12 +301,10 @@ class BatchingOutputFunc(Protocol):
         ...
 
 
-
-
 def batch_output(
     max_in_flight: int = 1, batch_policy: BatchPolicy | None = None
 ) -> Callable[[BatchingOutputFunc], OutputConstructor]:
-    """ 
+    """
     A decorator that wraps an output function that takes the configuration and stream of batches.
     """
 
@@ -317,8 +317,10 @@ def batch_output(
                     batch, fut = await queue.get()
                     yield batch
                     fut.set_result(None)
+
             async def noop() -> None:
                 return
+
             class FuncOutput(Output):
                 task: asyncio.Task[None] = asyncio.create_task(noop())
 
@@ -356,10 +358,13 @@ class OutputFunc(Protocol):
     """
     An output function that recieves the configuration and a stream of messages that can be sent.
     """
+
     async def __call__(self, config: Value, messages: AsyncIterator[Message]) -> None: ...
+
     """
     Called once when the output is connected, it should read from messages in a loop.
     """
+
 
 def output(max_in_flight: int = 1) -> Callable[[OutputFunc], OutputConstructor]:
     """

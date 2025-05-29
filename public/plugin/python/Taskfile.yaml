@@ -40,8 +40,9 @@ tasks:
   protogen:
     desc: "Generate protobuf"
     vars:
-      OUT_DIR: src
+      OUT_DIR: src/redpanda_connect/_proto
     cmds:
+      - mkdir -p {{.OUT_DIR}}
       - >
         uv run -m grpc_tools.protoc \
           --python_out={{.OUT_DIR}} \
@@ -50,3 +51,11 @@ tasks:
           --mypy_grpc_out={{.OUT_DIR}} \
           -I ../../../proto \
           ../../../proto/redpanda/runtime/v1alpha1/*.proto
+      - >
+        uv run protol \
+          --dont-create-package \
+          --in-place \
+          --python-out={{.OUT_DIR}} \
+          protoc --proto-path ../../../proto \
+          ../../../proto/redpanda/runtime/v1alpha1/*.proto
+

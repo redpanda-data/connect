@@ -23,7 +23,8 @@ from typing import Callable, final, override
 import grpc  # pyright: ignore[reportMissingTypeStubs]
 import grpc.aio  # pyright: ignore[reportMissingTypeStubs]
 
-from redpanda.runtime.v1alpha1 import (
+from ._convert import batch_to_proto, error_to_proto, proto_to_batch, proto_to_error, proto_to_value
+from ._proto.redpanda.runtime.v1alpha1 import (
     input_pb2,
     input_pb2_grpc,
     output_pb2,
@@ -31,8 +32,6 @@ from redpanda.runtime.v1alpha1 import (
     processor_pb2,
     processor_pb2_grpc,
 )
-
-from ._convert import batch_to_proto, error_to_proto, proto_to_batch, proto_to_error, proto_to_value
 from .core import (
     AckFn,
     Input,
@@ -45,6 +44,7 @@ from .core import (
 from .errors import BaseError
 
 _logger = logging.getLogger(__name__)
+
 
 def _id_generator():
     id = 1
@@ -378,7 +378,7 @@ async def input_main(ctor: InputConstructor):
 
 
 async def processor_main(ctor: ProcessorConstructor):
-    """ 
+    """
     processor_main is the entry point for the processor plugin. It should be called in __main__
     and will block until plugin shutdown.
     """

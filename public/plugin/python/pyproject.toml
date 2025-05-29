@@ -1,6 +1,6 @@
 [project]
 name = "redpanda-connect"
-version = "0.1.0"
+version = "0.1.2"
 description = "A library for writing Redpanda Connect plugins in Python"
 readme = "README.md"
 authors = [
@@ -9,6 +9,7 @@ authors = [
 requires-python = ">=3.12"
 dependencies = [
     "grpcio>=1.71.0",
+    "protobuf>=5.29.5",
 ]
 license = "Apache-2.0"
 license-files = ["LICENSE"]
@@ -21,6 +22,7 @@ dev = [
     "grpcio-tools>=1.71.0",
     "mypy-protobuf>=3.6.0",
     "types-protobuf>=5.29.1.20250403",
+    "protoletariat>=3.3.10",
 ]
 
 [build-system]
@@ -52,7 +54,7 @@ convention = "google"
 
 [tool.pyright]
 exclude = [
-  "src/redpanda/runtime/v1alpha1/**",
+  "src/redpanda_connect/_proto/**",
   "**/__pycache__",
   "**/.*",
 ]
