@@ -239,7 +239,7 @@ func TestIntegrationSubscriberStartReturnsErrorOnCallbackError(t *testing.T) {
 
 	// When callback returns an error
 	testErr := errors.New("test error from callback")
-	s, ms, mq, _ := testSubscriberSetup(t, e, func(ctx context.Context, partitionToken string, dcr *DataChangeRecord) error {
+	s, ms, mq, _ := testSubscriberSetup(t, e, func(_ context.Context, _ string, _ *DataChangeRecord) error {
 		return testErr
 	})
 	defer s.Close()
@@ -272,7 +272,7 @@ func TestIntegrationSubscriberResume(t *testing.T) {
 	defer e.Close()
 
 	dch := make(chan *DataChangeRecord)
-	s, ms, mq, done := testSubscriberSetup(t, e, func(ctx context.Context, partitionToken string, dcr *DataChangeRecord) error {
+	s, ms, mq, done := testSubscriberSetup(t, e, func(_ context.Context, _ string, dcr *DataChangeRecord) error {
 		if dcr != nil {
 			dch <- dcr
 		}
@@ -349,7 +349,7 @@ func TestIntegrationSubscriberCallbackUpdatePartitionWatermark(t *testing.T) {
 		cnt = 0
 		s   *Subscriber
 	)
-	s, ms, mq, done := testSubscriberSetup(t, e, func(ctx context.Context, partitionToken string, dcr *DataChangeRecord) error {
+	s, ms, mq, done := testSubscriberSetup(t, e, func(_ context.Context, partitionToken string, dcr *DataChangeRecord) error {
 		cnt += 1
 		switch cnt {
 		case 1:
@@ -362,7 +362,7 @@ func TestIntegrationSubscriberCallbackUpdatePartitionWatermark(t *testing.T) {
 			assert.Equal(t, testStartTimestamp, pm.Watermark)
 
 			// When UpdatePartitionWatermark is called
-			require.NoError(t, s.UpdatePartitionWatermark(ctx, partitionToken, dcr.CommitTimestamp))
+			require.NoError(t, s.UpdatePartitionWatermark(t.Context(), partitionToken, dcr.CommitTimestamp))
 		case 3:
 			assert.Nil(t, dcr)
 
@@ -501,7 +501,7 @@ func TestIntegrationSubscriberChildTokenProcessingOrder(t *testing.T) {
 
 	// And child token 3 blocks
 	childToken3Done := make(chan struct{})
-	s, ms, mq, done := testSubscriberSetup(t, e, func(ctx context.Context, partitionToken string, dcr *DataChangeRecord) error {
+	s, ms, mq, done := testSubscriberSetup(t, e, func(_ context.Context, partitionToken string, _ *DataChangeRecord) error {
 		if partitionToken == childToken3 {
 			select {
 			case <-childToken3Done:

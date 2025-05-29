@@ -51,7 +51,7 @@ gcp_spanner_cdc:
 	sb := service.NewStreamBuilder()
 	require.NoError(t, sb.AddInputYAML(inputConf))
 	require.NoError(t, sb.SetLoggerYAML(`level: DEBUG`))
-	require.NoError(t, sb.AddConsumerFunc(func(ctx context.Context, msg *service.Message) error {
+	require.NoError(t, sb.AddConsumerFunc(func(_ context.Context, msg *service.Message) error {
 		select {
 		case <-t.Context().Done():
 			return t.Context().Err()
