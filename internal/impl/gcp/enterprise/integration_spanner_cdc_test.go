@@ -95,26 +95,6 @@ func TestIntegrationSpannerCDCInput(t *testing.T) {
 		// Given table
 		h.CreateTableAndStream(`CREATE TABLE %s (id INT64 NOT NULL, active BOOL NOT NULL ) PRIMARY KEY (id)`)
 		ch := runSpannerCDCInputStream(t, h)
-		ct := []*changestreams.ColumnType{
-			{
-				Name: "id",
-				Type: spanner.NullJSON{
-					Value: map[string]interface{}{"code": "INT64"},
-					Valid: true,
-				},
-				IsPrimaryKey:    true,
-				OrdinalPosition: 1,
-			},
-			{
-				Name: "active",
-				Type: spanner.NullJSON{
-					Value: map[string]interface{}{"code": "BOOL"},
-					Valid: true,
-				},
-				IsPrimaryKey:    false,
-				OrdinalPosition: 2,
-			},
-		}
 
 		// When data is inserted and deleted in a transaction
 		_, err := h.Client().ReadWriteTransaction(t.Context(), func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
@@ -131,8 +111,8 @@ func TestIntegrationSpannerCDCInput(t *testing.T) {
 		// Then we get the changes
 		want := []spannerMod{
 			{
-				TableName:   h.Table(),
-				ColumnTypes: ct,
+				TableName: h.Table(),
+				ModType:   "INSERT",
 				Mod: &changestreams.Mod{
 					Keys: spanner.NullJSON{
 						Value: map[string]any{"id": "1"},
@@ -147,30 +127,10 @@ func TestIntegrationSpannerCDCInput(t *testing.T) {
 						Valid: true,
 					},
 				},
-				ModType: "INSERT",
 			},
 			{
 				TableName: h.Table(),
-				ColumnTypes: []*changestreams.ColumnType{
-					{
-						Name: "id",
-						Type: spanner.NullJSON{
-							Value: map[string]interface{}{"code": "INT64"},
-							Valid: true,
-						},
-						IsPrimaryKey:    true,
-						OrdinalPosition: 1,
-					},
-					{
-						Name: "active",
-						Type: spanner.NullJSON{
-							Value: map[string]interface{}{"code": "BOOL"},
-							Valid: true,
-						},
-						IsPrimaryKey:    false,
-						OrdinalPosition: 2,
-					},
-				},
+				ModType:   "DELETE",
 				Mod: &changestreams.Mod{
 					Keys: spanner.NullJSON{
 						Value: map[string]interface{}{"id": "1"},
@@ -185,7 +145,6 @@ func TestIntegrationSpannerCDCInput(t *testing.T) {
 						Valid: true,
 					},
 				},
-				ModType: "DELETE",
 			},
 		}
 		assert.Equal(t, want, collectN(t, 2, ch))

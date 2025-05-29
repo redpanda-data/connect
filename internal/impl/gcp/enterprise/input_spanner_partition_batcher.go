@@ -35,10 +35,9 @@ type spannerPartitionBatchIter struct {
 }
 
 type spannerMod struct {
-	TableName   string
-	ColumnTypes []*changestreams.ColumnType
-	Mod         *changestreams.Mod
-	ModType     string
+	TableName string
+	ModType   string
+	*changestreams.Mod
 }
 
 func (s *spannerPartitionBatchIter) Iter(ctx context.Context) iter.Seq2[service.MessageBatch, time.Time] {
@@ -59,10 +58,9 @@ func (s *spannerPartitionBatchIter) Iter(ctx context.Context) iter.Seq2[service.
 		first := true
 		for i, m := range s.dcr.Mods {
 			modData := spannerMod{
-				TableName:   s.dcr.TableName,
-				ColumnTypes: s.dcr.ColumnTypes,
-				Mod:         m,
-				ModType:     s.dcr.ModType,
+				TableName: s.dcr.TableName,
+				ModType:   s.dcr.ModType,
+				Mod:       m,
 			}
 
 			b, err := json.Marshal(modData)
