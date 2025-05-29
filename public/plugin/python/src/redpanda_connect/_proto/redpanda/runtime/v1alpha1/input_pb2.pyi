@@ -15,115 +15,102 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
-
 import builtins
 import google.protobuf.descriptor
 import google.protobuf.message
-import redpanda.runtime.v1alpha1.message_pb2
+from .... import redpanda
 import typing
-
 DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
 
 @typing.final
 class BatchInputInitRequest(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
     CONFIG_FIELD_NUMBER: builtins.int
+
     @property
     def config(self) -> redpanda.runtime.v1alpha1.message_pb2.Value:
-        """The parsed configuration from the user based on the register schema in
+        """The parsed configuration from the user based on the registered schema in
         `plugin.yaml`.
         """
 
-    def __init__(
-        self,
-        *,
-        config: redpanda.runtime.v1alpha1.message_pb2.Value | None = ...,
-    ) -> None: ...
-    def HasField(self, field_name: typing.Literal["config", b"config"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["config", b"config"]) -> None: ...
+    def __init__(self, *, config: redpanda.runtime.v1alpha1.message_pb2.Value | None=...) -> None:
+        ...
 
+    def HasField(self, field_name: typing.Literal['config', b'config']) -> builtins.bool:
+        ...
+
+    def ClearField(self, field_name: typing.Literal['config', b'config']) -> None:
+        ...
 global___BatchInputInitRequest = BatchInputInitRequest
 
 @typing.final
 class BatchInputInitResponse(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
     ERROR_FIELD_NUMBER: builtins.int
     AUTO_REPLAY_NACKS_FIELD_NUMBER: builtins.int
     auto_replay_nacks: builtins.bool
-    """If true, then any nacks are automatically retried. This is useful for
-    inputs that don't have a mechanism for dealing with nacks, and want to
-    just automatically retry them until they succeed.
-    """
+    "If true, then any nacks are automatically retried. This is useful for\n    inputs that don't have a mechanism for dealing with nacks, and want to\n    just automatically retry them until they succeed.\n    "
+
     @property
     def error(self) -> redpanda.runtime.v1alpha1.message_pb2.Error:
         """If present, then the input configuration is invalid and an error should be
         surfaced at pipeline construction time.
         """
 
-    def __init__(
-        self,
-        *,
-        error: redpanda.runtime.v1alpha1.message_pb2.Error | None = ...,
-        auto_replay_nacks: builtins.bool = ...,
-    ) -> None: ...
-    def HasField(self, field_name: typing.Literal["error", b"error"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["auto_replay_nacks", b"auto_replay_nacks", "error", b"error"]) -> None: ...
+    def __init__(self, *, error: redpanda.runtime.v1alpha1.message_pb2.Error | None=..., auto_replay_nacks: builtins.bool=...) -> None:
+        ...
 
+    def HasField(self, field_name: typing.Literal['error', b'error']) -> builtins.bool:
+        ...
+
+    def ClearField(self, field_name: typing.Literal['auto_replay_nacks', b'auto_replay_nacks', 'error', b'error']) -> None:
+        ...
 global___BatchInputInitResponse = BatchInputInitResponse
 
 @typing.final
 class BatchInputConnectRequest(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
-    def __init__(
-        self,
-    ) -> None: ...
-
+    def __init__(self) -> None:
+        ...
 global___BatchInputConnectRequest = BatchInputConnectRequest
 
 @typing.final
 class BatchInputConnectResponse(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
     ERROR_FIELD_NUMBER: builtins.int
+
     @property
     def error(self) -> redpanda.runtime.v1alpha1.message_pb2.Error:
         """If present, then the connect attempt failed."""
 
-    def __init__(
-        self,
-        *,
-        error: redpanda.runtime.v1alpha1.message_pb2.Error | None = ...,
-    ) -> None: ...
-    def HasField(self, field_name: typing.Literal["error", b"error"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["error", b"error"]) -> None: ...
+    def __init__(self, *, error: redpanda.runtime.v1alpha1.message_pb2.Error | None=...) -> None:
+        ...
 
+    def HasField(self, field_name: typing.Literal['error', b'error']) -> builtins.bool:
+        ...
+
+    def ClearField(self, field_name: typing.Literal['error', b'error']) -> None:
+        ...
 global___BatchInputConnectResponse = BatchInputConnectResponse
 
 @typing.final
 class BatchInputReadRequest(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
-    def __init__(
-        self,
-    ) -> None: ...
-
+    def __init__(self) -> None:
+        ...
 global___BatchInputReadRequest = BatchInputReadRequest
 
 @typing.final
 class BatchInputReadResponse(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
     BATCH_ID_FIELD_NUMBER: builtins.int
     BATCH_FIELD_NUMBER: builtins.int
     ERROR_FIELD_NUMBER: builtins.int
     batch_id: builtins.int
-    """The ID of the batch, which is used in the ack request to identify the batch
-    used. These IDs are opaque to the connect framework but IDs should be
-    unique per process.
-    """
+    'The ID of the batch, which is used in the ack request to identify the batch\n    used. These IDs are opaque to the connect framework but IDs should be\n    unique per process.\n    '
+
     @property
     def batch(self) -> redpanda.runtime.v1alpha1.message_pb2.MessageBatch:
         """The batch of messages to be processed."""
@@ -132,26 +119,24 @@ class BatchInputReadResponse(google.protobuf.message.Message):
     def error(self) -> redpanda.runtime.v1alpha1.message_pb2.Error:
         """If present, then there was an error reading messages."""
 
-    def __init__(
-        self,
-        *,
-        batch_id: builtins.int = ...,
-        batch: redpanda.runtime.v1alpha1.message_pb2.MessageBatch | None = ...,
-        error: redpanda.runtime.v1alpha1.message_pb2.Error | None = ...,
-    ) -> None: ...
-    def HasField(self, field_name: typing.Literal["batch", b"batch", "error", b"error"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["batch", b"batch", "batch_id", b"batch_id", "error", b"error"]) -> None: ...
+    def __init__(self, *, batch_id: builtins.int=..., batch: redpanda.runtime.v1alpha1.message_pb2.MessageBatch | None=..., error: redpanda.runtime.v1alpha1.message_pb2.Error | None=...) -> None:
+        ...
 
+    def HasField(self, field_name: typing.Literal['batch', b'batch', 'error', b'error']) -> builtins.bool:
+        ...
+
+    def ClearField(self, field_name: typing.Literal['batch', b'batch', 'batch_id', b'batch_id', 'error', b'error']) -> None:
+        ...
 global___BatchInputReadResponse = BatchInputReadResponse
 
 @typing.final
 class BatchInputAckRequest(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
     BATCH_ID_FIELD_NUMBER: builtins.int
     ERROR_FIELD_NUMBER: builtins.int
     batch_id: builtins.int
-    """The ID of the batch."""
+    'The ID of the batch.'
+
     @property
     def error(self) -> redpanda.runtime.v1alpha1.message_pb2.Error:
         """If present, then this is a nack request.
@@ -159,61 +144,58 @@ class BatchInputAckRequest(google.protobuf.message.Message):
         be present.
         """
 
-    def __init__(
-        self,
-        *,
-        batch_id: builtins.int = ...,
-        error: redpanda.runtime.v1alpha1.message_pb2.Error | None = ...,
-    ) -> None: ...
-    def HasField(self, field_name: typing.Literal["error", b"error"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["batch_id", b"batch_id", "error", b"error"]) -> None: ...
+    def __init__(self, *, batch_id: builtins.int=..., error: redpanda.runtime.v1alpha1.message_pb2.Error | None=...) -> None:
+        ...
 
+    def HasField(self, field_name: typing.Literal['error', b'error']) -> builtins.bool:
+        ...
+
+    def ClearField(self, field_name: typing.Literal['batch_id', b'batch_id', 'error', b'error']) -> None:
+        ...
 global___BatchInputAckRequest = BatchInputAckRequest
 
 @typing.final
 class BatchInputAckResponse(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
     ERROR_FIELD_NUMBER: builtins.int
+
     @property
     def error(self) -> redpanda.runtime.v1alpha1.message_pb2.Error:
         """If present, then this ack/nack request failed."""
 
-    def __init__(
-        self,
-        *,
-        error: redpanda.runtime.v1alpha1.message_pb2.Error | None = ...,
-    ) -> None: ...
-    def HasField(self, field_name: typing.Literal["error", b"error"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["error", b"error"]) -> None: ...
+    def __init__(self, *, error: redpanda.runtime.v1alpha1.message_pb2.Error | None=...) -> None:
+        ...
 
+    def HasField(self, field_name: typing.Literal['error', b'error']) -> builtins.bool:
+        ...
+
+    def ClearField(self, field_name: typing.Literal['error', b'error']) -> None:
+        ...
 global___BatchInputAckResponse = BatchInputAckResponse
 
 @typing.final
 class BatchInputCloseRequest(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
-    def __init__(
-        self,
-    ) -> None: ...
-
+    def __init__(self) -> None:
+        ...
 global___BatchInputCloseRequest = BatchInputCloseRequest
 
 @typing.final
 class BatchInputCloseResponse(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
     ERROR_FIELD_NUMBER: builtins.int
+
     @property
     def error(self) -> redpanda.runtime.v1alpha1.message_pb2.Error:
         """If present, then the close attempt failed."""
 
-    def __init__(
-        self,
-        *,
-        error: redpanda.runtime.v1alpha1.message_pb2.Error | None = ...,
-    ) -> None: ...
-    def HasField(self, field_name: typing.Literal["error", b"error"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["error", b"error"]) -> None: ...
+    def __init__(self, *, error: redpanda.runtime.v1alpha1.message_pb2.Error | None=...) -> None:
+        ...
 
+    def HasField(self, field_name: typing.Literal['error', b'error']) -> builtins.bool:
+        ...
+
+    def ClearField(self, field_name: typing.Literal['error', b'error']) -> None:
+        ...
 global___BatchInputCloseResponse = BatchInputCloseResponse

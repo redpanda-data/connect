@@ -15,13 +15,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
-
 import builtins
 import google.protobuf.descriptor
 import google.protobuf.message
-import redpanda.runtime.v1alpha1.message_pb2
+from .... import redpanda
 import typing
-
 DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
 
 @typing.final
@@ -31,9 +29,7 @@ class BatchPolicy(google.protobuf.message.Message):
 
     This is returned by Init RPC of batch outputs.
     """
-
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
     BYTE_SIZE_FIELD_NUMBER: builtins.int
     COUNT_FIELD_NUMBER: builtins.int
     CHECK_FIELD_NUMBER: builtins.int
@@ -42,50 +38,44 @@ class BatchPolicy(google.protobuf.message.Message):
     count: builtins.int
     check: builtins.str
     period: builtins.str
-    def __init__(
-        self,
-        *,
-        byte_size: builtins.int = ...,
-        count: builtins.int = ...,
-        check: builtins.str = ...,
-        period: builtins.str = ...,
-    ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["byte_size", b"byte_size", "check", b"check", "count", b"count", "period", b"period"]) -> None: ...
 
+    def __init__(self, *, byte_size: builtins.int=..., count: builtins.int=..., check: builtins.str=..., period: builtins.str=...) -> None:
+        ...
+
+    def ClearField(self, field_name: typing.Literal['byte_size', b'byte_size', 'check', b'check', 'count', b'count', 'period', b'period']) -> None:
+        ...
 global___BatchPolicy = BatchPolicy
 
 @typing.final
 class BatchOutputInitRequest(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
     CONFIG_FIELD_NUMBER: builtins.int
+
     @property
     def config(self) -> redpanda.runtime.v1alpha1.message_pb2.Value:
         """The parsed configuration from the user based on the register schema in
         `plugin.yaml`.
         """
 
-    def __init__(
-        self,
-        *,
-        config: redpanda.runtime.v1alpha1.message_pb2.Value | None = ...,
-    ) -> None: ...
-    def HasField(self, field_name: typing.Literal["config", b"config"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["config", b"config"]) -> None: ...
+    def __init__(self, *, config: redpanda.runtime.v1alpha1.message_pb2.Value | None=...) -> None:
+        ...
 
+    def HasField(self, field_name: typing.Literal['config', b'config']) -> builtins.bool:
+        ...
+
+    def ClearField(self, field_name: typing.Literal['config', b'config']) -> None:
+        ...
 global___BatchOutputInitRequest = BatchOutputInitRequest
 
 @typing.final
 class BatchOutputInitResponse(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
     ERROR_FIELD_NUMBER: builtins.int
     MAX_IN_FLIGHT_FIELD_NUMBER: builtins.int
     BATCH_POLICY_FIELD_NUMBER: builtins.int
     max_in_flight: builtins.int
-    """The maximum number of write calls can be performed in parallel. Must be >
-    0.
-    """
+    'The maximum number of write calls can be performed in parallel. Must be >\n    0.\n    '
+
     @property
     def error(self) -> redpanda.runtime.v1alpha1.message_pb2.Error:
         """If present, then the input configuration is invalid and an error should be
@@ -99,110 +89,104 @@ class BatchOutputInitResponse(google.protobuf.message.Message):
         that already exist in the pipeline.
         """
 
-    def __init__(
-        self,
-        *,
-        error: redpanda.runtime.v1alpha1.message_pb2.Error | None = ...,
-        max_in_flight: builtins.int = ...,
-        batch_policy: global___BatchPolicy | None = ...,
-    ) -> None: ...
-    def HasField(self, field_name: typing.Literal["batch_policy", b"batch_policy", "error", b"error"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["batch_policy", b"batch_policy", "error", b"error", "max_in_flight", b"max_in_flight"]) -> None: ...
+    def __init__(self, *, error: redpanda.runtime.v1alpha1.message_pb2.Error | None=..., max_in_flight: builtins.int=..., batch_policy: global___BatchPolicy | None=...) -> None:
+        ...
 
+    def HasField(self, field_name: typing.Literal['batch_policy', b'batch_policy', 'error', b'error']) -> builtins.bool:
+        ...
+
+    def ClearField(self, field_name: typing.Literal['batch_policy', b'batch_policy', 'error', b'error', 'max_in_flight', b'max_in_flight']) -> None:
+        ...
 global___BatchOutputInitResponse = BatchOutputInitResponse
 
 @typing.final
 class BatchOutputConnectRequest(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
-    def __init__(
-        self,
-    ) -> None: ...
-
+    def __init__(self) -> None:
+        ...
 global___BatchOutputConnectRequest = BatchOutputConnectRequest
 
 @typing.final
 class BatchOutputConnectResponse(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
     ERROR_FIELD_NUMBER: builtins.int
+
     @property
     def error(self) -> redpanda.runtime.v1alpha1.message_pb2.Error:
         """If present, then the connect attempt failed."""
 
-    def __init__(
-        self,
-        *,
-        error: redpanda.runtime.v1alpha1.message_pb2.Error | None = ...,
-    ) -> None: ...
-    def HasField(self, field_name: typing.Literal["error", b"error"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["error", b"error"]) -> None: ...
+    def __init__(self, *, error: redpanda.runtime.v1alpha1.message_pb2.Error | None=...) -> None:
+        ...
 
+    def HasField(self, field_name: typing.Literal['error', b'error']) -> builtins.bool:
+        ...
+
+    def ClearField(self, field_name: typing.Literal['error', b'error']) -> None:
+        ...
 global___BatchOutputConnectResponse = BatchOutputConnectResponse
 
 @typing.final
 class BatchOutputSendRequest(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
     BATCH_FIELD_NUMBER: builtins.int
+
     @property
     def batch(self) -> redpanda.runtime.v1alpha1.message_pb2.MessageBatch:
         """The batch of messages to send to the output"""
 
-    def __init__(
-        self,
-        *,
-        batch: redpanda.runtime.v1alpha1.message_pb2.MessageBatch | None = ...,
-    ) -> None: ...
-    def HasField(self, field_name: typing.Literal["batch", b"batch"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["batch", b"batch"]) -> None: ...
+    def __init__(self, *, batch: redpanda.runtime.v1alpha1.message_pb2.MessageBatch | None=...) -> None:
+        ...
 
+    def HasField(self, field_name: typing.Literal['batch', b'batch']) -> builtins.bool:
+        ...
+
+    def ClearField(self, field_name: typing.Literal['batch', b'batch']) -> None:
+        ...
 global___BatchOutputSendRequest = BatchOutputSendRequest
 
 @typing.final
 class BatchOutputSendResponse(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
     ERROR_FIELD_NUMBER: builtins.int
+
     @property
     def error(self) -> redpanda.runtime.v1alpha1.message_pb2.Error:
         """If present, then the send attempt failed."""
 
-    def __init__(
-        self,
-        *,
-        error: redpanda.runtime.v1alpha1.message_pb2.Error | None = ...,
-    ) -> None: ...
-    def HasField(self, field_name: typing.Literal["error", b"error"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["error", b"error"]) -> None: ...
+    def __init__(self, *, error: redpanda.runtime.v1alpha1.message_pb2.Error | None=...) -> None:
+        ...
 
+    def HasField(self, field_name: typing.Literal['error', b'error']) -> builtins.bool:
+        ...
+
+    def ClearField(self, field_name: typing.Literal['error', b'error']) -> None:
+        ...
 global___BatchOutputSendResponse = BatchOutputSendResponse
 
 @typing.final
 class BatchOutputCloseRequest(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
-    def __init__(
-        self,
-    ) -> None: ...
-
+    def __init__(self) -> None:
+        ...
 global___BatchOutputCloseRequest = BatchOutputCloseRequest
 
 @typing.final
 class BatchOutputCloseResponse(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
     ERROR_FIELD_NUMBER: builtins.int
+
     @property
     def error(self) -> redpanda.runtime.v1alpha1.message_pb2.Error:
         """If present, then the close attempt failed."""
 
-    def __init__(
-        self,
-        *,
-        error: redpanda.runtime.v1alpha1.message_pb2.Error | None = ...,
-    ) -> None: ...
-    def HasField(self, field_name: typing.Literal["error", b"error"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["error", b"error"]) -> None: ...
+    def __init__(self, *, error: redpanda.runtime.v1alpha1.message_pb2.Error | None=...) -> None:
+        ...
 
+    def HasField(self, field_name: typing.Literal['error', b'error']) -> builtins.bool:
+        ...
+
+    def ClearField(self, field_name: typing.Literal['error', b'error']) -> None:
+        ...
 global___BatchOutputCloseResponse = BatchOutputCloseResponse
