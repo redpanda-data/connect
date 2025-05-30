@@ -2,12 +2,12 @@ package main
 
 import (
 	"context"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/public/plugin/go/rpcn"
 )
 
-type config struct {
-}
+type config struct{}
 
 func main() {
 	rpcn.InputMain(func(cfg config) (input service.BatchInput, autoRetryNacks bool, err error) {
@@ -45,11 +45,11 @@ func (m *myInput) ReadBatch(context.Context) (service.MessageBatch, service.AckF
 }
 
 // Close implements service.BatchInput.
-func (m *myInput) Close(context.Context) error {
+func (*myInput) Close(context.Context) error {
 	return nil
 }
 
 // This is a no-op ack function, we can ignore the error because we have autoRetryNacks set to true.
-func noopAck(ctx context.Context, err error) error {
+func noopAck(context.Context, error) error {
 	return nil
 }

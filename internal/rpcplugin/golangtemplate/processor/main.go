@@ -2,12 +2,12 @@ package main
 
 import (
 	"context"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/public/plugin/go/rpcn"
 )
 
-type config struct {
-}
+type config struct{}
 
 func main() {
 	rpcn.ProcessorMain(func(cfg config) (service.BatchProcessor, error) {
@@ -22,11 +22,11 @@ type myProcessor struct {
 var _ service.BatchProcessor = (*myProcessor)(nil)
 
 // ProcessBatch implements service.BatchProcessor.
-func (m *myProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+func (*myProcessor) ProcessBatch(_ context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
 	return []service.MessageBatch{batch}, nil
 }
 
 // Close implements service.BatchProcessor.
-func (m *myProcessor) Close(ctx context.Context) error {
+func (*myProcessor) Close(context.Context) error {
 	return nil
 }

@@ -27,10 +27,13 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/template"
 )
 
+// PluginLanguage represents the programming language of the plugin.
 type PluginLanguage string
 
 const (
-	PluginLanguageGo     PluginLanguage = "golang"
+	// PluginLanguageGo is the language for Go plugins.
+	PluginLanguageGo PluginLanguage = "golang"
+	// PluginLanguagePython is the language for Python plugins.
 	PluginLanguagePython PluginLanguage = "python"
 )
 
@@ -54,6 +57,7 @@ var pythonOutputEmbeddedTemplate embed.FS
 //go:embed pythontemplate/processor
 var pythonProcessorEmbeddedTemplate embed.FS
 
+// InitializeProject initializes a new plugin project in the specified directory.
 func InitializeProject(lang PluginLanguage, compType ComponentType, directory string) error {
 	abs, err := filepath.Abs(directory)
 	if err != nil {

@@ -13,8 +13,9 @@ package cli
 import (
 	"errors"
 
-	"github.com/redpanda-data/connect/v4/internal/rpcplugin"
 	"github.com/urfave/cli/v2"
+
+	"github.com/redpanda-data/connect/v4/internal/rpcplugin"
 )
 
 func pluginInit() *cli.Command {
