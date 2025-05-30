@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 - Field `poll_interval` added to the `redpanda_migrator_offsets` input. (@mihaitodor)
 - Field `consumer_group_offsets_poll_interval` added to the `redpanda_migrator_bundle` input. (@mihaitodor)
 - Field `input_bundle_label` added to the `redpanda_migrator_bundle` output. (@mihaitodor)
+- New `gcp_spanner_cdc` input. (@mmatczuk)
 
 ### Fixed
 
