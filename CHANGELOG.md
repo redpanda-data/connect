@@ -10,12 +10,15 @@ All notable changes to this project will be documented in this file.
 - Field `scope` added to the `couchbase` client. (@peczenyj)
 - Parameter `root_tag` added to the `format_xml()` Bloblang method. (@mihaitodor)
 - Metadata `kafka_lag` now emitted by the `kafka_franz` and `ockam_kafka` inputs. (@mihaitodor)
+- New `mcp-server lint` subcommand for linting config directories. (@Jeffail)
+- (Benthos) CLI flag `--env-file` added to the `blobl` command. (@mihaitodor)
 
 ### Fixed
 
 - Fixed an issue where the `aws_kinesis` input would cause high CPU utilization in cases where a shard has a trickle of data and a batching period is specified.
 - Fixed an issue where the `mongodb_cdc` inputs could have spurious errors when collections had no writes for > 30 seconds. (@rockwotj)
 - Fixed a regression bug when configuring TLS for the Schema Registry client used by the `schema_registry` input and output and the `schema_registry_decode` and `schema_registry_encode` processors. This was introduced via [#3135](https://github.com/redpanda-data/connect/pull/3135) in [v4.46.0](https://github.com/redpanda-data/connect/releases/tag/v4.46.0).(@mihaitodor)
+- (Benthos) Fixed a regression bug where the `echo` and `lint` commands no longer loaded environment variables. (@mihaitodor)
 
 ## 4.55.1 - 2025-05-19
 
