@@ -15,8 +15,8 @@ import (
 	"net/http"
 	"unicode/utf8"
 
-	"cloud.google.com/go/vertexai/genai"
 	"google.golang.org/api/option"
+	"google.golang.org/genai"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -67,7 +67,6 @@ For more information, see the https://cloud.google.com/vertex-ai/docs[Vertex AI 
 				Optional(),
 			service.NewStringField(vaicpFieldLocation).
 				Description("The location of the model if using a fined tune model. For base models this can be omitted").
-				Optional().
 				Examples("us-central1"),
 			service.NewStringField(vaicpFieldModel).
 				Description("The name of the LLM to use. For a full list of models, see the https://console.cloud.google.com/vertex-ai/model-garden[Vertex AI Model Garden].").
@@ -99,7 +98,7 @@ For more information, see the https://cloud.google.com/vertex-ai/docs[Vertex AI 
 				Description("If specified, nucleus sampling will be used.").
 				Optional().
 				LintRule(`root = if this < 0 || this > 1 { ["field must be between 0.0-1.0"] }`),
-			service.NewIntField(vaicpFieldTopK).
+			service.NewFloatField(vaicpFieldTopK).
 				Advanced().
 				Description("If specified top-k sampling will be used.").
 				Optional().
@@ -133,12 +132,9 @@ func newVertexAIProcessor(conf *service.ParsedConfig, mgr *service.Resources) (p
 	if err != nil {
 		return
 	}
-	var location string
-	if conf.Contains(vaicpFieldLocation) {
-		location, err = conf.FieldString(vaicpFieldLocation)
-		if err != nil {
-			return
-		}
+	location, err := conf.FieldString(vaicpFieldLocation)
+	if err != nil {
+		return
 	}
 	opts := []option.ClientOption{}
 	if conf.Contains(vaicpFieldCredentialsJSON) {
@@ -149,15 +145,14 @@ func newVertexAIProcessor(conf *service.ParsedConfig, mgr *service.Resources) (p
 		}
 		opts = append(opts, option.WithCredentialsJSON([]byte(jsonObject)))
 	}
-	proc.client, err = genai.NewClient(ctx, project, location, opts...)
+	proc.client, err = genai.NewClient(ctx, &genai.ClientConfig{
+		Project:  project,
+		Location: location,
+		Backend:  genai.BackendVertexAI,
+	})
 	if err != nil {
 		return
 	}
-	defer func() {
-		if err != nil {
-			_ = proc.client.Close()
-		}
-	}()
 	proc.model, err = conf.FieldString(vaicpFieldModel)
 	if err != nil {
 		return
@@ -197,12 +192,12 @@ func newVertexAIProcessor(conf *service.ParsedConfig, mgr *service.Resources) (p
 		proc.topP = genai.Ptr(float32(topP))
 	}
 	if conf.Contains(vaicpFieldTopK) {
-		var topK int
-		topK, err = conf.FieldInt(vaicpFieldTopK)
+		var topK float64
+		topK, err = conf.FieldFloat(vaicpFieldTopK)
 		if err != nil {
 			return
 		}
-		proc.topK = genai.Ptr(int32(topK))
+		proc.topK = genai.Ptr(float32(topK))
 	}
 	if conf.Contains(vaicpFieldMaxTokens) {
 		var maxTokens int
@@ -210,7 +205,7 @@ func newVertexAIProcessor(conf *service.ParsedConfig, mgr *service.Resources) (p
 		if err != nil {
 			return
 		}
-		proc.maxTokens = genai.Ptr(int32(maxTokens))
+		proc.maxTokens = int32(maxTokens)
 	}
 	if conf.Contains(vaicpFieldStop) {
 		proc.stopSequences, err = conf.FieldStringList(vaicpFieldStop)
@@ -257,8 +252,8 @@ type vertexAIChatProcessor struct {
 	attachment       *bloblang.Executor
 	temp             *float32
 	topP             *float32
-	topK             *int32
-	maxTokens        *int32
+	topK             *float32
+	maxTokens        int32
 	stopSequences    []string
 	presencePenalty  *float32
 	frequencyPenalty *float32
@@ -266,31 +261,34 @@ type vertexAIChatProcessor struct {
 }
 
 func (p *vertexAIChatProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
-	m := p.client.GenerativeModel(p.model)
-	m.Temperature = p.temp
-	m.TopP = p.topP
-	m.TopK = p.topK
-	m.MaxOutputTokens = p.maxTokens
-	m.StopSequences = p.stopSequences
-	m.PresencePenalty = p.presencePenalty
-	m.FrequencyPenalty = p.frequencyPenalty
-	m.ResponseMIMEType = p.responseMIMEType
+	cfg := &genai.GenerateContentConfig{}
+	cfg.Temperature = p.temp
+	cfg.TopP = p.topP
+	cfg.TopK = p.topK
+	cfg.MaxOutputTokens = p.maxTokens
+	cfg.StopSequences = p.stopSequences
+	cfg.PresencePenalty = p.presencePenalty
+	cfg.FrequencyPenalty = p.frequencyPenalty
+	cfg.ResponseMIMEType = p.responseMIMEType
 	if p.systemPrompt != nil {
 		p, err := p.systemPrompt.TryString(msg)
 		if err != nil {
 			return nil, fmt.Errorf("unable to evaluate `%s`: %w", vaicpFieldSystemPrompt, err)
 		}
-		m.SystemInstruction = &genai.Content{
+		cfg.SystemInstruction = &genai.Content{
 			Role:  "system",
-			Parts: []genai.Part{genai.Text(p)},
+			Parts: []*genai.Part{{Text: p}},
 		}
 	}
-	chat := m.StartChat()
+	chat, err := p.client.Chats.Create(ctx, p.model, cfg, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create chat: %w", err)
+	}
 	prompt, err := p.computePrompt(msg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compute prompt: %w", err)
 	}
-	parts := []genai.Part{genai.Text(prompt)}
+	parts := []genai.Part{{Text: prompt}}
 	if p.attachment != nil {
 		v, err := msg.BloblangQuery(p.attachment)
 		if err != nil {
@@ -304,7 +302,7 @@ func (p *vertexAIChatProcessor) Process(ctx context.Context, msg *service.Messag
 		if contentType == "application/octet-stream" {
 			return nil, fmt.Errorf("unable to detect content-type of `%s`", vaicpFieldAttachment)
 		}
-		parts = append(parts, genai.Blob{MIMEType: contentType, Data: i})
+		parts = append(parts, genai.Part{InlineData: &genai.Blob{MIMEType: contentType, Data: i}})
 	}
 	resp, err := chat.SendMessage(ctx, parts...)
 	if err != nil {
@@ -316,21 +314,25 @@ func (p *vertexAIChatProcessor) Process(ctx context.Context, msg *service.Messag
 		}
 		return nil, errors.New("no candidate responses returned")
 	}
-	parts = resp.Candidates[0].Content.Parts
-	if len(parts) != 1 {
+	respParts := resp.Candidates[0].Content.Parts
+	if len(respParts) != 1 {
 		if resp.PromptFeedback != nil && resp.PromptFeedback.BlockReasonMessage != "" {
 			return nil, fmt.Errorf("response blocked due to: %s", resp.PromptFeedback.BlockReasonMessage)
 		}
 		return nil, errors.New("no candidate response parts returned")
 	}
 	out := msg.Copy()
-	switch p := parts[0].(type) {
-	case genai.Text:
-		out.SetStructured(string(p))
-	case genai.Blob:
-		out.SetBytes(p.Data)
-	case genai.FileData:
-		out.SetStructured(p.FileURI)
+	part := respParts[0]
+	switch {
+	case part.InlineData != nil:
+		out.SetBytes(part.InlineData.Data)
+		out.MetaSetMut("content_type", part.InlineData.MIMEType)
+	case part.FileData != nil:
+		out.SetStructured(part.FileData.FileURI)
+		out.MetaSetMut("content_type", part.InlineData.MIMEType)
+	case part.Text != "":
+		out.SetBytes([]byte(part.Text))
+		out.MetaSetMut("content_type", "text/plain")
 	default:
 		return nil, fmt.Errorf("unknown response content: %T", parts[0])
 	}
@@ -352,5 +354,5 @@ func (p *vertexAIChatProcessor) computePrompt(msg *service.Message) (string, err
 }
 
 func (p *vertexAIChatProcessor) Close(context.Context) error {
-	return p.client.Close()
+	return nil
 }
