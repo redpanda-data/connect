@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - Metadata `kafka_lag` now emitted by the `kafka_franz` and `ockam_kafka` inputs. (@mihaitodor)
 - New `mcp-server lint` subcommand for linting config directories. (@Jeffail)
 - (Benthos) CLI flag `--env-file` added to the `blobl` command. (@mihaitodor)
+- New `gcp_spanner_cdc` input. (@mmatczuk)
 
 ### Fixed
 
