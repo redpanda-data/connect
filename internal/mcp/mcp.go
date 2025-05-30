@@ -30,6 +30,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
+	"github.com/redpanda-data/connect/v4/internal/gateway"
 	"github.com/redpanda-data/connect/v4/internal/license"
 	"github.com/redpanda-data/connect/v4/internal/mcp/repository"
 	"github.com/redpanda-data/connect/v4/internal/mcp/starlark"
@@ -49,8 +50,9 @@ func (g *gMux) HandleFunc(pattern string, handler func(http.ResponseWriter, *htt
 // Server runs an mcp server against a target directory, with an optiona base
 // URL for an HTTP server.
 type Server struct {
-	base *server.MCPServer
-	mux  *mux.Router
+	base  *server.MCPServer
+	mux   *mux.Router
+	rpJWT *gateway.RPJWTMiddleware
 }
 
 // NewServer initializes the MCP server.
@@ -151,7 +153,12 @@ func NewServer(
 
 	license.RegisterService(resources, licenseConfig)
 
-	return &Server{s, mux}, nil
+	rpJWT, err := gateway.NewRPJWTMiddleware(service.NewLoggerFromSlog(logger))
+	if err != nil {
+		return nil, err
+	}
+
+	return &Server{s, mux, rpJWT}, nil
 }
 
 // ServeStdio attempts to run the MCP server in stdio mode.
@@ -175,7 +182,7 @@ func (m *Server) ServeSSE(ctx context.Context, l net.Listener) error {
 	)
 	m.mux.PathPrefix("/").Handler(sseServer)
 	srv := &http.Server{
-		Handler: m.mux,
+		Handler: m.rpJWT.Wrap(m.mux),
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
