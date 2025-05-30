@@ -1,0 +1,17 @@
+name: PROJECT_NAME_HERE
+summary: Add your summary here
+command: ["uv", "run", "main.py"]
+type: processor
+fields: []
+# Example of how to add configuration fields:
+# fields:
+#   - name: foo
+#     description: "The foo field"
+#     type: string # options: string, int, float, bool, unknown
+#     kind: scalar # or list or map
+#     default: "fizzbuzz"
+#   - name: bar
+#     description: "The bar field"
+#     type: int
+#     kind: list
+#     # omitting default means that it's a required field

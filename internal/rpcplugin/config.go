@@ -179,7 +179,7 @@ func (p ComponentType) Validate() error {
 	case ComponentTypeInput, ComponentTypeProcessor, ComponentTypeOutput:
 		return nil
 	}
-	return fmt.Errorf("invalid plugin type: %q", p)
+	return fmt.Errorf("unexpected plugin type, valid options %v, got: %q", allComponentTypes, p)
 }
 
 // Component types.
@@ -188,6 +188,8 @@ const (
 	ComponentTypeProcessor ComponentType = "processor"
 	ComponentTypeOutput    ComponentType = "output"
 )
+
+var allComponentTypes = []ComponentType{ComponentTypeInput, ComponentTypeProcessor, ComponentTypeOutput}
 
 // Config describes a dynamic plugin over gRPC.
 type Config struct {
