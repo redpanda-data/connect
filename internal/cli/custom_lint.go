@@ -127,7 +127,7 @@ func directoryMode(c *cli.Context, repositoryDir string) error {
 
 	repoScanner := repository.NewScanner(os.DirFS(repositoryDir))
 
-	repoScanner.OnTemplateFile(func(filePath string, contents []byte) error {
+	repoScanner.OnTemplateFile(func(_ string, contents []byte) error {
 		return env.RegisterTemplateYAML(string(contents))
 	})
 
