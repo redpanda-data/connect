@@ -17,6 +17,7 @@ import (
 	"cloud.google.com/go/spanner/apiv1/spannerpb"
 	"google.golang.org/api/iterator"
 
+	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/gcp/enterprise/changestreams/metadata"
 )
 
@@ -33,6 +34,7 @@ type clientQuerier struct {
 	dialect    dialect
 	streamName string
 	priority   spannerpb.RequestOptions_Priority
+	log        *service.Logger
 }
 
 // query executes a change stream query for the specified stream and partition.
@@ -78,6 +80,7 @@ func (q clientQuerier) query(
 			stmt.Params["partition_token"] = nil
 		}
 	}
+	q.log.Tracef("Executing query: %s with params: %v", stmt.SQL, stmt.Params)
 
 	iter := q.client.Single().QueryWithOptions(ctx, stmt, spanner.QueryOptions{Priority: q.priority})
 	defer iter.Stop()

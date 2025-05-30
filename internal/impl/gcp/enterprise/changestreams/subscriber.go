@@ -128,6 +128,7 @@ func NewSubscriber(
 			dialect:    dialect,
 			streamName: conf.StreamID,
 			priority:   conf.ChangeStreamQueryPriority,
+			log:        log,
 		},
 		cb:  cb,
 		log: log,
@@ -220,7 +221,10 @@ func (s *Subscriber) handleRootPartitions(ctx context.Context, cr ChangeRecord) 
 //
 // Setup must be called before Run.
 func (s *Subscriber) Run(ctx context.Context) error {
-	s.log.Info("Starting subscriber")
+	s.log.Infof("Starting subscriber stream_id=%s start_timestamp=%v end_timestamp=%v",
+		s.conf.StreamID,
+		s.conf.StartTimestamp,
+		s.conf.EndTimestamp)
 	defer func() {
 		s.log.Info("Subscriber stopped")
 	}()
