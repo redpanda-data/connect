@@ -25,7 +25,7 @@ component_type_dropdown::[]
 
 Creates an input that consumes from a spanner change stream.
 
-Introduced in version TODO.
+Introduced in version 4.56.0.
 
 
 [tabs]
