@@ -159,6 +159,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 		// Custom subcommands
 		service.CLIOptAddCommand(agentCli(rpMgr)),
 		service.CLIOptAddCommand(mcpServerCli(rpMgr)),
+		service.CLIOptAddCommand(pluginInit()),
 	)
 
 	exitCode, err := service.RunCLIToCode(context.Background(), opts...)

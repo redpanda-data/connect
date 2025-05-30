@@ -209,7 +209,7 @@ func GenericOutputMain(ctor OutputConstructor[any]) {
 }
 
 // InputConstructor is the factory function to create a new batch input.
-type InputConstructor[T any] func(config T) (output service.BatchInput, autoRetryNacks bool, err error)
+type InputConstructor[T any] func(config T) (input service.BatchInput, autoRetryNacks bool, err error)
 
 type input struct {
 	runtimepb.UnimplementedBatchInputServiceServer
