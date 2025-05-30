@@ -10,6 +10,7 @@ package enterprise
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -30,6 +31,7 @@ const (
 	vaicpFieldModel            = "model"
 	vaicpFieldLocation         = "location"
 	vaicpFieldPrompt           = "prompt"
+	vaicpFieldHistory          = "history"
 	vaicpFieldSystemPrompt     = "system_prompt"
 	vaicpFieldAttachment       = "attachment"
 	vaicpFieldTemp             = "temperature"
@@ -77,6 +79,9 @@ For more information, see the https://cloud.google.com/vertex-ai/docs[Vertex AI 
 			service.NewInterpolatedStringField(vaicpFieldSystemPrompt).
 				Description("The system prompt to submit to the Vertex AI LLM.").
 				Advanced().
+				Optional(),
+			service.NewBloblangField(vaicpFieldHistory).
+				Description(`Historical messages to include in the chat request. The result of the bloblang query should be an array of objects of the form of [{"role": "", "content":""}], where role is "user" or "model".`).
 				Optional(),
 			service.NewBloblangField(vaicpFieldAttachment).
 				Description("Additional data like an image to send with the prompt to the model. The result of the mapping must be a byte array, and the content type is automatically detected.").
@@ -175,6 +180,12 @@ func newVertexAIProcessor(conf *service.ParsedConfig, mgr *service.Resources) (p
 			return
 		}
 	}
+	if conf.Contains(vaicpFieldHistory) {
+		proc.history, err = conf.FieldBloblang(vaicpFieldHistory)
+		if err != nil {
+			return
+		}
+	}
 	if conf.Contains(vaicpFieldTemp) {
 		var temp float64
 		temp, err = conf.FieldFloat(vaicpFieldTemp)
@@ -250,6 +261,7 @@ type vertexAIChatProcessor struct {
 	userPrompt       *service.InterpolatedString
 	systemPrompt     *service.InterpolatedString
 	attachment       *bloblang.Executor
+	history          *bloblang.Executor
 	temp             *float32
 	topP             *float32
 	topK             *float32
@@ -276,11 +288,32 @@ func (p *vertexAIChatProcessor) Process(ctx context.Context, msg *service.Messag
 			return nil, fmt.Errorf("unable to evaluate `%s`: %w", vaicpFieldSystemPrompt, err)
 		}
 		cfg.SystemInstruction = &genai.Content{
-			Role:  "system",
+			Role:  genai.RoleUser,
 			Parts: []*genai.Part{{Text: p}},
 		}
 	}
-	chat, err := p.client.Chats.Create(ctx, p.model, cfg, nil)
+	var history []*genai.Content
+	if p.history != nil {
+		h, err := msg.BloblangQuery(p.history)
+		if err != nil {
+			return nil, fmt.Errorf("unable to evaluate `%s`: %w", vaicpFieldHistory, err)
+		}
+		b, err := h.AsBytes()
+		if err != nil {
+			return nil, fmt.Errorf("unable to extract `%s` output: %w", vaicpFieldHistory, err)
+		}
+		var bloblOutput []struct {
+			Role    genai.Role `json:"role"`
+			Content string     `json:"content"`
+		}
+		if err := json.Unmarshal(b, &bloblOutput); err != nil {
+			return nil, fmt.Errorf("unable to unmarshal `%s` output: %w", vaicpFieldHistory, err)
+		}
+		for _, h := range bloblOutput {
+			history = append(history, genai.NewContentFromText(h.Content, h.Role))
+		}
+	}
+	chat, err := p.client.Chats.Create(ctx, p.model, cfg, history)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create chat: %w", err)
 	}
