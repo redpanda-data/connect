@@ -33,6 +33,7 @@ input:
     network: "" # No default (required)
     address: /tmp/benthos.sock # No default (required)
     auto_replay_nacks: true
+    open_message_mapping: root = "username,password" # No default (optional)
     scanner:
       lines: {}
 ```
@@ -76,6 +77,20 @@ Whether messages that are rejected (nacked) at the output level should be automa
 *Type*: `bool`
 
 *Default*: `true`
+
+=== `open_message_mapping`
+
+An optional xref:guides:bloblang/about.adoc[Bloblang mapping] which should evaluate to a string which will be sent upstream before the downstream data flow starts.
+
+
+*Type*: `string`
+
+
+```yml
+# Examples
+
+open_message_mapping: root = "username,password"
+```
 
 === `scanner`
 

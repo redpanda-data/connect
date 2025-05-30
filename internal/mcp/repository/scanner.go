@@ -26,6 +26,7 @@ import (
 type Scanner struct {
 	fs fs.FS
 
+	onTemplate func(filePath string, contents []byte) error
 	onResource func(resourceType, filePath string, contents []byte) error
 	onMetrics  func(filePath string, contents []byte) error
 	onTracer   func(filePath string, contents []byte) error
@@ -36,6 +37,12 @@ func NewScanner(fs fs.FS) *Scanner {
 	return &Scanner{
 		fs: fs,
 	}
+}
+
+// OnTemplateFile registers a closure to be called for each template file
+// encountered by the scanner.
+func (s *Scanner) OnTemplateFile(fn func(filePath string, contents []byte) error) {
+	s.onTemplate = fn
 }
 
 // OnResourceFile registers a closure to be called for each resource file
@@ -56,7 +63,7 @@ func (s *Scanner) OnTracerFile(fn func(filePath string, contents []byte) error) 
 	s.onTracer = fn
 }
 
-func (s *Scanner) scanResourceTypeFn(rtype string, allowedExtensions ...string) fs.WalkDirFunc {
+func (s *Scanner) scanFnForExtensions(fn func(path string, contents []byte) error, allowedExtensions ...string) fs.WalkDirFunc {
 	allowedExtensionsMap := map[string]struct{}{}
 	for _, n := range allowedExtensions {
 		allowedExtensionsMap[n] = struct{}{}
@@ -80,7 +87,7 @@ func (s *Scanner) scanResourceTypeFn(rtype string, allowedExtensions ...string) 
 			return fmt.Errorf("%v: %w", path, err)
 		}
 
-		if err := s.onResource(rtype, path, contents); err != nil {
+		if err := fn(path, contents); err != nil {
 			return fmt.Errorf("%v: %w", path, err)
 		}
 		return nil
@@ -91,36 +98,57 @@ var yamlExtensions = []string{".yml", ".yaml"}
 
 // Scan a target repository at the root provided.
 func (s *Scanner) Scan(root string) error {
+	if s.onTemplate != nil {
+		templatesDir := filepath.Join(root, "templates")
+
+		// All templates are defined in yaml files
+		if err := fs.WalkDir(s.fs, templatesDir, s.scanFnForExtensions(func(path string, contents []byte) error {
+			return s.onTemplate(path, contents)
+		}, yamlExtensions...)); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+
 	if s.onResource != nil {
 		// Scan each resource type for files
 		resourceDir := filepath.Join(root, "resources")
 
 		// Look for any starlark files in the main resources folder
-		if err := fs.WalkDir(s.fs, resourceDir, s.scanResourceTypeFn("starlark", ".star", ".star.py")); err != nil && !os.IsNotExist(err) {
+		if err := fs.WalkDir(s.fs, resourceDir, s.scanFnForExtensions(func(path string, contents []byte) error {
+			return s.onResource("starlark", path, contents)
+		}, "starlark", ".star", ".star.py")); err != nil && !os.IsNotExist(err) {
 			return err
 		}
 
 		// Inputs
 		targetDir := filepath.Join(resourceDir, "inputs")
-		if err := fs.WalkDir(s.fs, targetDir, s.scanResourceTypeFn("input", yamlExtensions...)); err != nil && !os.IsNotExist(err) {
+		if err := fs.WalkDir(s.fs, targetDir, s.scanFnForExtensions(func(path string, contents []byte) error {
+			return s.onResource("input", path, contents)
+		}, yamlExtensions...)); err != nil && !os.IsNotExist(err) {
 			return err
 		}
 
 		// Caches
 		targetDir = filepath.Join(resourceDir, "caches")
-		if err := fs.WalkDir(s.fs, targetDir, s.scanResourceTypeFn("cache", yamlExtensions...)); err != nil && !os.IsNotExist(err) {
+		if err := fs.WalkDir(s.fs, targetDir, s.scanFnForExtensions(func(path string, contents []byte) error {
+			return s.onResource("cache", path, contents)
+		}, yamlExtensions...)); err != nil && !os.IsNotExist(err) {
 			return err
 		}
 
 		// Processors
 		targetDir = filepath.Join(resourceDir, "processors")
-		if err := fs.WalkDir(s.fs, targetDir, s.scanResourceTypeFn("processor", yamlExtensions...)); err != nil && !os.IsNotExist(err) {
+		if err := fs.WalkDir(s.fs, targetDir, s.scanFnForExtensions(func(path string, contents []byte) error {
+			return s.onResource("processor", path, contents)
+		}, yamlExtensions...)); err != nil && !os.IsNotExist(err) {
 			return err
 		}
 
 		// Outputs
 		targetDir = filepath.Join(resourceDir, "outputs")
-		if err := fs.WalkDir(s.fs, targetDir, s.scanResourceTypeFn("output", yamlExtensions...)); err != nil && !os.IsNotExist(err) {
+		if err := fs.WalkDir(s.fs, targetDir, s.scanFnForExtensions(func(path string, contents []byte) error {
+			return s.onResource("output", path, contents)
+		}, yamlExtensions...)); err != nil && !os.IsNotExist(err) {
 			return err
 		}
 	}

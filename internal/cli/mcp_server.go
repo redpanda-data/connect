@@ -44,6 +44,7 @@ func mcpServerCli(rpMgr *enterprise.GlobalRedpandaManager) *cli.Command {
 		Flags: flags,
 		Subcommands: []*cli.Command{
 			mcpServerInitCli(),
+			customLintCli(),
 		},
 		Description: `
 !!EXPERIMENTAL!!

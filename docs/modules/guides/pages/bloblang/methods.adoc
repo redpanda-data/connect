@@ -920,6 +920,78 @@ root.outs = this.ins.map_each(ele -> ele.abs())
 # Out: {"outs":[9,18,1.23,4.56]}
 ```
 
+=== `bitwise_and`
+
+Returns the number bitwise AND-ed with the specified value.
+
+==== Parameters
+
+*`value`* &lt;integer&gt; The value to AND with  
+
+==== Examples
+
+
+```coffeescript
+root.new_value = this.value.bitwise_and(6)
+
+# In:  {"value":12}
+# Out: {"new_value":4}
+
+# In:  {"value":0}
+# Out: {"new_value":0}
+
+# In:  {"value":-4}
+# Out: {"new_value":4}
+```
+
+=== `bitwise_or`
+
+Returns the number bitwise OR-ed with the specified value.
+
+==== Parameters
+
+*`value`* &lt;integer&gt; The value to OR with  
+
+==== Examples
+
+
+```coffeescript
+root.new_value = this.value.bitwise_or(6)
+
+# In:  {"value":12}
+# Out: {"new_value":14}
+
+# In:  {"value":0}
+# Out: {"new_value":6}
+
+# In:  {"value":-2}
+# Out: {"new_value":-2}
+```
+
+=== `bitwise_xor`
+
+Returns the number bitwise eXclusive-OR-ed with the specified value.
+
+==== Parameters
+
+*`value`* &lt;integer&gt; The value to XOR with  
+
+==== Examples
+
+
+```coffeescript
+root.new_value = this.value.bitwise_xor(6)
+
+# In:  {"value":12}
+# Out: {"new_value":10}
+
+# In:  {"value":0}
+# Out: {"new_value":6}
+
+# In:  {"value":-2}
+# Out: {"new_value":-8}
+```
+
 === `ceil`
 
 Returns the least integer value greater than or equal to a number. If the resulting value fits within a 64-bit integer then that is returned, otherwise a new floating point number is returned.
