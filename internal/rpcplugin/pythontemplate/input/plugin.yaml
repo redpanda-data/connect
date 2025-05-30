@@ -3,7 +3,7 @@ summary: Add your summary here
 command: ["uv", "run", "main.py"]
 type: input
 fields: []
-# Example of add configuration fields:
+# Example of how to add configuration fields:
 # fields:
 #   - name: foo
 #     description: "The foo field"
