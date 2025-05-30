@@ -13,6 +13,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -23,13 +25,18 @@ import (
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
-
 	"github.com/redpanda-data/connect/v4/internal/impl/gcp/enterprise/changestreams"
 	"github.com/redpanda-data/connect/v4/internal/impl/gcp/enterprise/changestreams/changestreamstest"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
-func runSpannerCDCInputStream(t *testing.T, h changestreamstest.RealHelper) <-chan *service.Message {
+func runSpannerCDCInputStream(
+	t *testing.T,
+	h changestreamstest.RealHelper,
+	startTimestamp time.Time,
+	endTimestamp time.Time,
+	msgs chan<- *service.Message,
+) {
 	inputConf := fmt.Sprintf(`
 gcp_spanner_cdc:
   project_id: %s
@@ -37,25 +44,30 @@ gcp_spanner_cdc:
   database_id: %s
   stream_id: %s
   start_timestamp: %s
+  end_timestamp: %s
   heartbeat_interval: "5s"
 `,
 		h.ProjectID(),
 		h.InstanceID(),
 		h.DatabaseID(),
 		h.Stream(),
-		time.Now().Format(time.RFC3339),
+		startTimestamp.Format(time.RFC3339),
+		endTimestamp.Add(time.Second).Format(time.RFC3339), // end timestamp is exclusive
 	)
-
-	ch := make(chan *service.Message, 10)
 
 	sb := service.NewStreamBuilder()
 	require.NoError(t, sb.AddInputYAML(inputConf))
 	require.NoError(t, sb.SetLoggerYAML(`level: DEBUG`))
+
+	var count int
 	require.NoError(t, sb.AddConsumerFunc(func(_ context.Context, msg *service.Message) error {
+		count += 1
+		t.Logf("Got message: %d", count)
+
 		select {
 		case <-t.Context().Done():
 			return t.Context().Err()
-		case ch <- msg:
+		case msgs <- msg:
 			return nil
 		}
 	},
@@ -75,83 +87,376 @@ gcp_spanner_cdc:
 		if err := s.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
 			t.Errorf("stream error: %v", err)
 		}
-		close(ch)
+		close(msgs)
 	}()
-
-	return ch
 }
 
-// Run tests with:
-// go test -v -run TestIntegrationSpannerCDCInput . -spanner.project_id=sandbox-rpcn -spanner.instance_id=rpcn-tests -spanner.database_id=changestreams
-func TestIntegrationSpannerCDCInput(t *testing.T) {
+type SingersTableHelper struct {
+	changestreamstest.RealHelper
+	t *testing.T
+}
+
+func (h SingersTableHelper) CreateTableAndStream() {
+	h.RealHelper.CreateTableAndStream(`CREATE TABLE %s (
+			SingerId INT64 NOT NULL,
+			FirstName STRING(MAX),
+			LastName STRING(MAX)
+		) PRIMARY KEY (SingerId)`)
+}
+
+func (h SingersTableHelper) InsertRows(n int) (time.Time, time.Time) {
+	firstCommitTimestamp := h.insertRow(1)
+	for i := 2; i < n; i++ {
+		h.insertRow(i)
+	}
+	lastCommitTimestamp := h.insertRow(n)
+	return firstCommitTimestamp, lastCommitTimestamp
+}
+
+func (h SingersTableHelper) UpdateRows(n int) (time.Time, time.Time) {
+	firstCommitTimestamp := h.updateRow(1)
+	for i := 2; i < n; i++ {
+		h.updateRow(i)
+	}
+	lastCommitTimestamp := h.updateRow(n)
+	return firstCommitTimestamp, lastCommitTimestamp
+}
+
+func (h SingersTableHelper) DeleteRows(n int) (time.Time, time.Time) {
+	firstCommitTimestamp := h.deleteRow(1)
+	for i := 2; i < n; i++ {
+		h.deleteRow(i)
+	}
+	lastCommitTimestamp := h.deleteRow(n)
+	return firstCommitTimestamp, lastCommitTimestamp
+}
+
+func (h SingersTableHelper) insertRow(singerID int) time.Time {
+	ts, err := h.Client().Apply(h.t.Context(),
+		[]*spanner.Mutation{h.insertMut(singerID)},
+		spanner.TransactionTag("app=rpcn;action=insert"))
+	require.NoError(h.t, err)
+
+	return ts
+}
+
+func (h SingersTableHelper) insertMut(singerID int) *spanner.Mutation {
+	return spanner.InsertMap(h.Table(), map[string]any{
+		"SingerId":  singerID,
+		"FirstName": fmt.Sprintf("First Name %d", singerID),
+		"LastName":  fmt.Sprintf("Last Name %d", singerID),
+	})
+}
+
+func (h SingersTableHelper) updateRow(singerID int) time.Time {
+	ts, err := h.Client().Apply(h.t.Context(),
+		[]*spanner.Mutation{h.updateMut(singerID)},
+		spanner.TransactionTag("app=rpcn;action=update"))
+	require.NoError(h.t, err)
+
+	return ts
+}
+
+func (h SingersTableHelper) updateMut(singerID int) *spanner.Mutation {
+	mut := spanner.UpdateMap(h.Table(), map[string]any{
+		"SingerId":  singerID,
+		"FirstName": fmt.Sprintf("Updated First Name %d", singerID),
+		"LastName":  fmt.Sprintf("Updated Last Name %d", singerID),
+	})
+	return mut
+}
+
+func (h SingersTableHelper) deleteRow(singerID int) time.Time {
+	ts, err := h.Client().Apply(h.t.Context(),
+		[]*spanner.Mutation{h.deleteMut(singerID)},
+		spanner.TransactionTag("app=rpcn;action=delete"))
+	require.NoError(h.t, err)
+
+	return ts
+}
+
+func (h SingersTableHelper) deleteMut(singerID int) *spanner.Mutation {
+	return spanner.Delete(h.Table(), spanner.Key{singerID})
+}
+
+func TestIntegrationRealSpannerCDCInput(t *testing.T) {
 	integration.CheckSkip(t)
 	changestreamstest.CheckSkipReal(t)
 
 	require.NoError(t, changestreamstest.MaybeDropOrphanedStreams(t.Context()))
 
-	t.Run("smoke", func(t *testing.T) {
-		h := changestreamstest.MakeRealHelper(t)
+	// How many rows to insert/update/delete
+	const numRows = 5
 
-		// Given table
-		h.CreateTableAndStream(`CREATE TABLE %s (id INT64 NOT NULL, active BOOL NOT NULL ) PRIMARY KEY (id)`)
-		ch := runSpannerCDCInputStream(t, h)
+	h := SingersTableHelper{changestreamstest.MakeRealHelper(t), t}
+	h.CreateTableAndStream()
 
-		// When data is inserted and deleted in a transaction
-		_, err := h.Client().ReadWriteTransaction(t.Context(), func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
-			if _, err := txn.Update(ctx, spanner.NewStatement(fmt.Sprintf("INSERT INTO %s (id, active) VALUES (1, true)", h.Table()))); err != nil {
-				return err
-			}
-			if _, err := txn.Update(ctx, spanner.NewStatement(fmt.Sprintf("DELETE FROM %s WHERE id = 1", h.Table()))); err != nil {
-				return err
-			}
-			return nil
-		})
-		require.NoError(t, err)
+	// When rows are inserted, updated and deleted
+	startTimestamp, _ := h.InsertRows(numRows)
+	h.UpdateRows(numRows)
+	_, endTimestamp := h.DeleteRows(numRows)
 
-		// Then we get the changes
-		want := []spannerMod{
-			{
-				TableName: h.Table(),
-				ModType:   "INSERT",
-				Mod: &changestreams.Mod{
-					Keys: spanner.NullJSON{
-						Value: map[string]any{"id": "1"},
-						Valid: true,
-					},
-					NewValues: spanner.NullJSON{
-						Value: map[string]any{"active": true},
-						Valid: true,
-					},
-					OldValues: spanner.NullJSON{
-						Value: map[string]any{},
-						Valid: true,
-					},
+	// And the stream is started
+	ch := make(chan *service.Message, 3*numRows)
+	runSpannerCDCInputStream(t, h.RealHelper, startTimestamp, endTimestamp, ch)
+
+	// Then all the changes are received
+	var inserts, updates, deletes []spannerMod
+	for _, v := range collectN(t, numRows*3, ch) {
+		mod, msg := v.Mod, v.Msg
+
+		switch mod.ModType {
+		case "INSERT":
+			transactionTag, _ := msg.MetaGet("transaction_tag")
+			require.Equal(t, "app=rpcn;action=insert", transactionTag)
+			inserts = append(inserts, mod)
+		case "UPDATE":
+			transactionTag, _ := msg.MetaGet("transaction_tag")
+			require.Equal(t, "app=rpcn;action=update", transactionTag)
+			updates = append(updates, mod)
+		case "DELETE":
+			transactionTag, _ := msg.MetaGet("transaction_tag")
+			require.Equal(t, "app=rpcn;action=delete", transactionTag)
+			deletes = append(deletes, mod)
+		}
+	}
+
+	wantInserts := make([]spannerMod, numRows)
+	for i := range wantInserts {
+		singerID := i + 1
+		wantInserts[i] = spannerMod{
+			TableName: h.Table(),
+			ModType:   "INSERT",
+			Mod: &changestreams.Mod{
+				Keys: spanner.NullJSON{
+					Value: map[string]any{"SingerId": fmt.Sprintf("%d", singerID)},
+					Valid: true,
 				},
-			},
-			{
-				TableName: h.Table(),
-				ModType:   "DELETE",
-				Mod: &changestreams.Mod{
-					Keys: spanner.NullJSON{
-						Value: map[string]interface{}{"id": "1"},
-						Valid: true,
+				NewValues: spanner.NullJSON{
+					Value: map[string]any{
+						"FirstName": fmt.Sprintf("First Name %d", singerID),
+						"LastName":  fmt.Sprintf("Last Name %d", singerID),
 					},
-					NewValues: spanner.NullJSON{
-						Value: map[string]interface{}{},
-						Valid: true,
-					},
-					OldValues: spanner.NullJSON{
-						Value: map[string]interface{}{"active": true},
-						Valid: true,
-					},
+					Valid: true,
+				},
+				OldValues: spanner.NullJSON{
+					Value: map[string]any{},
+					Valid: true,
 				},
 			},
 		}
-		assert.Equal(t, want, collectN(t, 2, ch))
-	})
+	}
+	assert.Equal(t, wantInserts, inserts)
+
+	wantUpdates := make([]spannerMod, numRows)
+	for i := range wantUpdates {
+		singerID := i + 1
+		wantUpdates[i] = spannerMod{
+			TableName: h.Table(),
+			ModType:   "UPDATE",
+			Mod: &changestreams.Mod{
+				Keys: spanner.NullJSON{
+					Value: map[string]any{"SingerId": fmt.Sprintf("%d", singerID)},
+					Valid: true,
+				},
+				NewValues: spanner.NullJSON{
+					Value: map[string]any{
+						"FirstName": fmt.Sprintf("Updated First Name %d", singerID),
+						"LastName":  fmt.Sprintf("Updated Last Name %d", singerID),
+					},
+					Valid: true,
+				},
+				OldValues: spanner.NullJSON{
+					Value: map[string]any{
+						"FirstName": fmt.Sprintf("First Name %d", singerID),
+						"LastName":  fmt.Sprintf("Last Name %d", singerID),
+					},
+					Valid: true,
+				},
+			},
+		}
+	}
+	assert.Equal(t, wantUpdates, updates)
+
+	wantDeletes := make([]spannerMod, numRows)
+	for i := range wantDeletes {
+		singerID := i + 1
+		wantDeletes[i] = spannerMod{
+			TableName: h.Table(),
+			ModType:   "DELETE",
+			Mod: &changestreams.Mod{
+				Keys: spanner.NullJSON{
+					Value: map[string]any{"SingerId": fmt.Sprintf("%d", singerID)},
+					Valid: true,
+				},
+				NewValues: spanner.NullJSON{
+					Value: map[string]any{},
+					Valid: true,
+				},
+				OldValues: spanner.NullJSON{
+					Value: map[string]any{
+						"FirstName": fmt.Sprintf("Updated First Name %d", singerID),
+						"LastName":  fmt.Sprintf("Updated Last Name %d", singerID),
+					},
+					Valid: true,
+				},
+			},
+		}
+	}
+	assert.Equal(t, wantDeletes, deletes)
 }
 
-func collectN(t *testing.T, n int, ch <-chan *service.Message) (mods []spannerMod) {
+func TestIntegrationRealSpannerCDCInputMessagesOrderedByTimestampAndTransactionId(t *testing.T) {
+	integration.CheckSkip(t)
+	changestreamstest.CheckSkipReal(t)
+
+	require.NoError(t, changestreamstest.MaybeDropOrphanedStreams(t.Context()))
+
+	h := SingersTableHelper{changestreamstest.MakeRealHelper(t), t}
+	h.CreateTableAndStream()
+
+	writeTransactionsToDatabase := func() time.Time {
+		// 1. Insert Singer 1 and Singer 2
+		ts, err := h.Client().Apply(h.t.Context(), []*spanner.Mutation{
+			h.insertMut(1),
+			h.insertMut(2),
+		})
+		require.NoError(t, err)
+		t.Logf("First transaction committed with timestamp: %v", ts)
+
+		// 2. Delete Singer 1 and Insert Singer 3
+		ts, err = h.Client().Apply(h.t.Context(), []*spanner.Mutation{
+			h.deleteMut(1),
+			h.insertMut(3),
+		})
+		require.NoError(t, err)
+		t.Logf("Second transaction committed with timestamp: %v", ts)
+
+		// 3. Delete Singer 2 and Singer 3
+		ts, err = h.Client().Apply(h.t.Context(), []*spanner.Mutation{
+			h.deleteMut(2),
+			h.deleteMut(3),
+		})
+		require.NoError(t, err)
+		t.Logf("Third transaction committed with timestamp: %v", ts)
+
+		// 4. Delete Singer 0 if it exists
+		ts, err = h.Client().Apply(h.t.Context(), []*spanner.Mutation{
+			h.deleteMut(0),
+		})
+		require.NoError(t, err)
+		t.Logf("Fourth transaction committed with timestamp: %v", ts)
+
+		return ts
+	}
+
+	// Given 3 batches of transactions with 2 second gaps
+	const expectedMessages = 1 + 7 + 2*6
+	startTimestamp := h.insertRow(0)
+	writeTransactionsToDatabase()
+	time.Sleep(2 * time.Second)
+	writeTransactionsToDatabase()
+	time.Sleep(2 * time.Second)
+	endTimestamp := writeTransactionsToDatabase()
+
+	// When we read from the stream
+	ch := make(chan *service.Message, expectedMessages)
+	runSpannerCDCInputStream(t, h.RealHelper, startTimestamp, endTimestamp, ch)
+	messages := collectN(t, expectedMessages, ch)
+
+	// Then there are 3 batches...
+
+	// Sort messages by commit timestamp and transaction ID
+	commitTimestampAt := func(idx int) time.Time {
+		s, ok := messages[idx].Msg.MetaGet("commit_timestamp")
+		require.True(t, ok)
+		v, err := time.Parse(time.RFC3339Nano, s)
+		require.NoError(t, err)
+		return v
+	}
+	transactionIdAt := func(idx int) string {
+		s, ok := messages[idx].Msg.MetaGet("server_transaction_id")
+		require.True(t, ok)
+		return s
+	}
+	sort.SliceStable(messages, func(i, j int) bool { // MUST be stable
+		if cmp := commitTimestampAt(i).Compare(commitTimestampAt(j)); cmp == 0 {
+			return transactionIdAt(i) < transactionIdAt(j)
+		} else {
+			return cmp < 0
+		}
+	})
+
+	// Group by batches with 1.5 second gap threshold
+	groupMessagesByBatch := func() [][]spannerMod {
+		var (
+			batches [][]spannerMod
+			cur     []spannerMod
+			lastTs  time.Time
+		)
+
+		for i, msg := range messages {
+			ts := commitTimestampAt(i)
+
+			if len(cur) == 0 || ts.Sub(lastTs) < 1500*time.Millisecond {
+				cur = append(cur, msg.Mod)
+			} else {
+				batches = append(batches, cur)
+				cur = []spannerMod{msg.Mod}
+			}
+			lastTs = ts
+		}
+		if len(cur) != 0 {
+			batches = append(batches, cur)
+		}
+
+		return batches
+	}
+	batches := groupMessagesByBatch()
+	require.Len(t, batches, 3)
+
+	// And operation order is preserved...
+
+	var sb strings.Builder
+	for i, batch := range batches {
+		sb.WriteString(fmt.Sprintf("Batch %d:\n", i))
+		for _, m := range batch {
+			fmt.Fprintf(&sb, "  %s: %s\n", m.ModType, m.Keys.Value)
+		}
+	}
+	want := `Batch 0:
+  INSERT: map[SingerId:0]
+  INSERT: map[SingerId:1]
+  INSERT: map[SingerId:2]
+  DELETE: map[SingerId:1]
+  INSERT: map[SingerId:3]
+  DELETE: map[SingerId:2]
+  DELETE: map[SingerId:3]
+  DELETE: map[SingerId:0]
+Batch 1:
+  INSERT: map[SingerId:1]
+  INSERT: map[SingerId:2]
+  DELETE: map[SingerId:1]
+  INSERT: map[SingerId:3]
+  DELETE: map[SingerId:2]
+  DELETE: map[SingerId:3]
+Batch 2:
+  INSERT: map[SingerId:1]
+  INSERT: map[SingerId:2]
+  DELETE: map[SingerId:1]
+  INSERT: map[SingerId:3]
+  DELETE: map[SingerId:2]
+  DELETE: map[SingerId:3]
+`
+	assert.Equal(t, want, sb.String())
+}
+
+type spannerModMessage struct {
+	Mod spannerMod
+	Msg *service.Message
+}
+
+func collectN(t *testing.T, n int, ch <-chan *service.Message) (mods []spannerModMessage) {
 	for range n {
 		select {
 		case msg := <-ch:
@@ -159,7 +464,10 @@ func collectN(t *testing.T, n int, ch <-chan *service.Message) (mods []spannerMo
 			require.NoError(t, err)
 			var sm spannerMod
 			require.NoError(t, json.Unmarshal(b, &sm))
-			mods = append(mods, sm)
+			mods = append(mods, spannerModMessage{
+				Mod: sm,
+				Msg: msg,
+			})
 		case <-time.After(time.Minute):
 			t.Fatalf("timeout waiting for message, got %d messages wanted %d", len(mods), n)
 		}
