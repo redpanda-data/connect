@@ -25,27 +25,29 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/gcp/enterprise/changestreams/changestreamstest"
 )
 
-func testStores(e changestreamstest.EmulatorHelper) (*Store, *Store) {
+func testStores(t *testing.T, e changestreamstest.EmulatorHelper) (*Store, *Store) {
 	const (
 		googleSQLDatabaseName = "google_sql_db"
 		postgresDatabaseName  = "postgres_db"
 	)
 
-	g := NewStore(StoreConfig{
+	g, err := NewStore(StoreConfig{
 		ProjectID:  changestreamstest.EmulatorProjectID,
 		InstanceID: changestreamstest.EmulatorInstanceID,
 		DatabaseID: googleSQLDatabaseName,
 		TableNames: RandomTableNames(googleSQLDatabaseName),
 		Dialect:    databasepb.DatabaseDialect_GOOGLE_STANDARD_SQL,
 	}, e.CreateTestDatabase(googleSQLDatabaseName))
+	require.NoError(t, err)
 
-	p := NewStore(StoreConfig{
+	p, err := NewStore(StoreConfig{
 		ProjectID:  changestreamstest.EmulatorProjectID,
 		InstanceID: changestreamstest.EmulatorInstanceID,
 		DatabaseID: postgresDatabaseName,
 		TableNames: RandomTableNames(postgresDatabaseName),
 		Dialect:    databasepb.DatabaseDialect_POSTGRESQL,
 	}, e.CreateTestDatabaseWithDialect(postgresDatabaseName, databasepb.DatabaseDialect_POSTGRESQL))
+	require.NoError(t, err)
 
 	return g, p
 }
@@ -54,7 +56,7 @@ func TestIntegrationStore(t *testing.T) {
 	integration.CheckSkip(t)
 
 	e := changestreamstest.MakeEmulatorHelper(t)
-	g, p := testStores(e)
+	g, p := testStores(t, e)
 	tests := []struct {
 		name string
 		s    *Store
@@ -300,14 +302,16 @@ func TestIntegrationStore(t *testing.T) {
 	})
 }
 
-func realTestSore(r changestreamstest.RealHelper) *Store {
-	return NewStore(StoreConfig{
+func realTestSore(t *testing.T, r changestreamstest.RealHelper) *Store {
+	s, err := NewStore(StoreConfig{
 		ProjectID:  r.ProjectID(),
 		InstanceID: r.InstanceID(),
 		DatabaseID: r.DatabaseID(),
 		TableNames: RandomTableNames(r.DatabaseID()),
 		Dialect:    databasepb.DatabaseDialect_GOOGLE_STANDARD_SQL,
 	}, r.Client())
+	require.NoError(t, err)
+	return s
 }
 
 func TestIntegrationRealStore(t *testing.T) {
@@ -317,7 +321,7 @@ func TestIntegrationRealStore(t *testing.T) {
 
 	r := changestreamstest.MakeRealHelper(t)
 	defer r.Close()
-	s := realTestSore(r)
+	s := realTestSore(t, r)
 
 	require.NoError(t,
 		CreatePartitionMetadataTableWithDatabaseAdminClient(t.Context(), s.conf, r.DatabaseAdminClient()))

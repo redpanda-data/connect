@@ -18,6 +18,7 @@ import (
 	"cloud.google.com/go/spanner"
 	adminapi "cloud.google.com/go/spanner/admin/database/apiv1"
 	"cloud.google.com/go/spanner/admin/database/apiv1/databasepb"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"google.golang.org/api/iterator"
 )
 
@@ -241,15 +242,25 @@ func DeletePartitionMetadataTableWithDatabaseAdminClient(
 type Store struct {
 	conf   StoreConfig
 	client *spanner.Client
+
+	finishedTokensCache *lru.Cache[string, struct{}]
 }
+
+const defaultFinishedTokensCacheSize = 10_000
 
 // NewStore returns a Store instance with the given configuration and Spanner
 // client. The client must be connected to the same database as the configuration.
-func NewStore(conf StoreConfig, client *spanner.Client) *Store {
-	return &Store{
-		conf:   conf,
-		client: client,
+func NewStore(conf StoreConfig, client *spanner.Client) (*Store, error) {
+	cache, err := lru.New[string, struct{}](defaultFinishedTokensCacheSize)
+	if err != nil {
+		return nil, fmt.Errorf("create LRU cache: %w", err)
 	}
+
+	return &Store{
+		conf:                conf,
+		client:              client,
+		finishedTokensCache: cache,
+	}, nil
 }
 
 // Config returns the store configuration.
@@ -490,7 +501,11 @@ func (s *Store) UpdateToRunning(ctx context.Context, partitionToken string) (tim
 // partitions that are currently in RUNNING state. Returns the commit
 // timestamp of the transaction.
 func (s *Store) UpdateToFinished(ctx context.Context, partitionToken string) (time.Time, error) {
-	return s.updatePartitionStatus(ctx, []string{partitionToken}, StateRunning, StateFinished, columnFinishedAt)
+	ts, err := s.updatePartitionStatus(ctx, []string{partitionToken}, StateRunning, StateFinished, columnFinishedAt)
+	if err == nil {
+		s.finishedTokensCache.Add(partitionToken, struct{}{})
+	}
+	return ts, err
 }
 
 // updatePartitionStatus updates partition rows from fromState to toState and
@@ -539,15 +554,29 @@ func (s *Store) CheckPartitionsFinished(ctx context.Context, partitionTokens []s
 		return true, nil
 	}
 
+	uncachedTokens := make([]string, 0, len(partitionTokens))
+	for _, token := range partitionTokens {
+		if _, ok := s.finishedTokensCache.Get(token); !ok {
+			uncachedTokens = append(uncachedTokens, token)
+		}
+	}
+	if len(uncachedTokens) == 0 {
+		return true, nil
+	}
+
 	var ok bool
 
 	if _, err := s.client.ReadWriteTransactionWithOptions(ctx, func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
-		matchingTokens, err := s.getPartitionsMatchingStateInTransaction(ctx, txn, partitionTokens, StateFinished)
+		matchingTokens, err := s.getPartitionsMatchingStateInTransaction(ctx, txn, uncachedTokens, StateFinished)
 		if err != nil {
 			return fmt.Errorf("get partitions matching state: %w", err)
 		}
-		ok = len(partitionTokens) == len(matchingTokens)
 
+		for _, token := range matchingTokens {
+			s.finishedTokensCache.Add(token, struct{}{})
+		}
+
+		ok = len(uncachedTokens) == len(matchingTokens)
 		return nil
 	}, spanner.TransactionOptions{TransactionTag: "CheckPartitionsFinished"}); err != nil {
 		return false, err
