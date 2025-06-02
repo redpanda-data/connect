@@ -42,7 +42,6 @@ input:
     seed_brokers: [] # No default (required)
     topics: [] # No default (required)
     regexp_topics: false
-    consumer_group: "" # No default (optional)
     auto_replay_nacks: true
 ```
 
@@ -72,35 +71,20 @@ input:
     topics: [] # No default (required)
     regexp_topics: false
     rack_id: ""
-    consumer_group: "" # No default (optional)
-    commit_period: 5s
-    partition_buffer_bytes: 1MB
-    topic_lag_refresh_period: 5s
-    max_yield_batch_bytes: 32KB
+    poll_interval: 15s
     auto_replay_nacks: true
 ```
 
 --
 ======
 
-This input reads consumer group updates from the `__consumer_offsets` topic and should be used in combination with the `redpanda_migrator_offsets` output.
-
-== Metrics
-
-Emits a `redpanda_lag` metric with `topic` and `partition` labels for each consumed topic.
+This input reads consumer group updates via the `OffsetFetch` API and should be used in combination with the `redpanda_migrator_offsets` output.
 
 == Metadata
 
 This input adds the following metadata fields to each message:
 
 ```text
-- kafka_key
-- kafka_topic
-- kafka_partition
-- kafka_offset
-- kafka_timestamp_unix
-- kafka_timestamp_ms
-- kafka_tombstone_message
 - kafka_offset_topic
 - kafka_offset_group
 - kafka_offset_partition
@@ -547,49 +531,14 @@ A rack specifies where the client is physically located and changes fetch reques
 
 *Default*: `""`
 
-=== `consumer_group`
+=== `poll_interval`
 
-An optional consumer group to consume as. When specified the partitions of specified topics are automatically distributed across consumers sharing a consumer group, and partition offsets are automatically committed and resumed under this name. Consumer groups are not supported when specifying explicit partitions to consume from in the `topics` field.
-
-
-*Type*: `string`
-
-
-=== `commit_period`
-
-The period of time between each commit of the current partition offsets. Offsets are always committed during shutdown.
+Duration between OffsetFetch polling attempts.
 
 
 *Type*: `string`
 
-*Default*: `"5s"`
-
-=== `partition_buffer_bytes`
-
-A buffer size (in bytes) for each consumed partition, allowing records to be queued internally before flushing. Increasing this may improve throughput at the cost of higher memory utilisation. Note that each buffer can grow slightly beyond this value.
-
-
-*Type*: `string`
-
-*Default*: `"1MB"`
-
-=== `topic_lag_refresh_period`
-
-The period of time between each topic lag refresh cycle.
-
-
-*Type*: `string`
-
-*Default*: `"5s"`
-
-=== `max_yield_batch_bytes`
-
-The maximum size (in bytes) for each batch yielded by this input. When routed to a redpanda output without modification this would roughly translate to the batch.bytes config field of a traditional producer.
-
-
-*Type*: `string`
-
-*Default*: `"32KB"`
+*Default*: `"15s"`
 
 === `auto_replay_nacks`
 

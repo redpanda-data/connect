@@ -37,7 +37,7 @@ const (
 	kroFieldCommitPeriod          = "commit_period"
 	kroFieldPartitionBuffer       = "partition_buffer_bytes"
 	kroFieldTopicLagRefreshPeriod = "topic_lag_refresh_period"
-	kroFieldBatchMaxSize          = "max_yield_batch_bytes"
+	kroFieldMaxYieldBatchBytes    = "max_yield_batch_bytes"
 )
 
 // FranzReaderOrderedConfigFields returns config fields for customising the
@@ -59,7 +59,7 @@ func FranzReaderOrderedConfigFields() []*service.ConfigField {
 			Description("The period of time between each topic lag refresh cycle.").
 			Default("5s").
 			Advanced(),
-		service.NewStringField(kroFieldBatchMaxSize).
+		service.NewStringField(kroFieldMaxYieldBatchBytes).
 			Description("The maximum size (in bytes) for each batch yielded by this input. When routed to a redpanda output without modification this would roughly translate to the batch.bytes config field of a traditional producer.").
 			Default("32KB").
 			Advanced(),
@@ -117,7 +117,7 @@ func NewFranzReaderOrderedFromConfig(conf *service.ParsedConfig, res *service.Re
 		return nil, err
 	}
 
-	if f.batchMaxSize, err = bytesFromStrField(kroFieldBatchMaxSize, conf); err != nil {
+	if f.batchMaxSize, err = bytesFromStrField(kroFieldMaxYieldBatchBytes, conf); err != nil {
 		return nil, err
 	}
 

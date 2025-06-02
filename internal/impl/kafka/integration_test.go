@@ -1002,7 +1002,6 @@ input:
                   kafka_offset_commit_timestamp: ${! @kafka_offset_commit_timestamp }
                   kafka_offset_metadata:         ${! @kafka_offset_metadata }
                   kafka_is_high_watermark:       ${! @kafka_is_high_watermark }
-                  kafka_offset:                  ${! @kafka_offset } # This is just the offset of the __consumer_offsets topic
         - check: '@input_label == "redpanda_migrator_input"'
           processors:
             - branch:
