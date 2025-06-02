@@ -136,7 +136,7 @@ func createKafkaTopicSasl(address, id string, partitions int32) error {
 	return nil
 }
 
-func TestIntegrationRedpanda(t *testing.T) {
+func TestRedpandaIntegration(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
@@ -289,7 +289,7 @@ input:
 	})
 }
 
-func TestRedpandaRecordOrder(t *testing.T) {
+func TestRedpandaRecordOrderIntegration(t *testing.T) {
 	// This test checks for out-of-order records being transferred between two Redpanda containers using the `redpanda`
 	// input and output with default settings. It used to fail occasionally before this fix was put in place:
 	// https://github.com/redpanda-data/connect/pull/3386.
@@ -414,7 +414,7 @@ output:
 	}, 30*time.Second, 1*time.Nanosecond)
 }
 
-func TestIntegrationRedpandaSasl(t *testing.T) {
+func TestRedpandaSaslIntegration(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
@@ -522,7 +522,7 @@ input:
 	)
 }
 
-func TestIntegrationRedpandaOutputFixedTimestamp(t *testing.T) {
+func TestRedpandaOutputFixedTimestampIntegration(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
@@ -595,7 +595,7 @@ input:
 	)
 }
 
-func BenchmarkIntegrationRedpanda(b *testing.B) {
+func BenchmarkRedpandaIntegration(b *testing.B) {
 	integration.CheckSkip(b)
 
 	pool, err := dockertest.NewPool("")
