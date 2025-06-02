@@ -18,7 +18,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"google.golang.org/api/option"
+	"cloud.google.com/go/auth"
+	"cloud.google.com/go/auth/credentials"
 	"google.golang.org/genai"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
@@ -212,19 +213,26 @@ func newVertexAIProcessor(conf *service.ParsedConfig, mgr *service.Resources) (p
 	if err != nil {
 		return
 	}
-	opts := []option.ClientOption{}
+	var creds *auth.Credentials
 	if conf.Contains(vaicpFieldCredentialsJSON) {
 		var jsonObject string
 		jsonObject, err = conf.FieldString(vaicpFieldCredentialsJSON)
 		if err != nil {
 			return
 		}
-		opts = append(opts, option.WithCredentialsJSON([]byte(jsonObject)))
+		creds, err = credentials.DetectDefault(&credentials.DetectOptions{
+			Scopes:          []string{"https://www.googleapis.com/auth/cloud-vertex-ai.firstparty.predict"},
+			CredentialsJSON: []byte(jsonObject),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to load json credentials: %w", err)
+		}
 	}
 	proc.client, err = genai.NewClient(ctx, &genai.ClientConfig{
-		Project:  project,
-		Location: location,
-		Backend:  genai.BackendVertexAI,
+		Project:     project,
+		Location:    location,
+		Backend:     genai.BackendVertexAI,
+		Credentials: creds,
 	})
 	if err != nil {
 		return
@@ -313,6 +321,9 @@ func newVertexAIProcessor(conf *service.ParsedConfig, mgr *service.Resources) (p
 	}
 	var format string
 	format, err = conf.FieldString(vaicpFieldResponseFormat)
+	if err != nil {
+		return nil, err
+	}
 	switch format {
 	case "json":
 		proc.responseMIMEType = "application/json"
@@ -612,6 +623,6 @@ func (p *vertexAIChatProcessor) computePrompt(msg *service.Message) (string, err
 	return string(b), nil
 }
 
-func (p *vertexAIChatProcessor) Close(context.Context) error {
+func (*vertexAIChatProcessor) Close(context.Context) error {
 	return nil
 }
