@@ -4,3 +4,4 @@ LICENSE
 README.md
 target/bin
 target/dist
+public/plugin/python/.venv
