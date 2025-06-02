@@ -234,7 +234,7 @@ func TestIntegrationStore(t *testing.T) {
 		}
 	})
 
-	t.Run("CheckParentPartitionsFinished", func(t *testing.T) {
+	t.Run("CheckPartitionsFinished", func(t *testing.T) {
 		for _, tc := range tests {
 			t.Run(tc.name, func(t *testing.T) {
 				subtests := []struct {
@@ -267,7 +267,7 @@ func TestIntegrationStore(t *testing.T) {
 
 				for _, st := range subtests {
 					t.Run(st.name, func(t *testing.T) {
-						result, err := tc.s.CheckParentPartitionsFinished(t.Context(), st.partitions)
+						result, err := tc.s.CheckPartitionsFinished(t.Context(), st.partitions)
 						require.NoError(t, err)
 						assert.Equal(t, st.expectResult, result)
 					})

@@ -532,9 +532,9 @@ func (s *Store) updatePartitionStatus(
 	return resp.CommitTs.UTC(), err
 }
 
-// CheckParentPartitionsFinished checks if all parent tokens in the given list
+// CheckPartitionsFinished checks if all parent tokens in the given list
 // are in FINISHED state.
-func (s *Store) CheckParentPartitionsFinished(ctx context.Context, partitionTokens []string) (bool, error) {
+func (s *Store) CheckPartitionsFinished(ctx context.Context, partitionTokens []string) (bool, error) {
 	if len(partitionTokens) == 0 {
 		return true, nil
 	}
@@ -549,7 +549,7 @@ func (s *Store) CheckParentPartitionsFinished(ctx context.Context, partitionToke
 		ok = len(partitionTokens) == len(matchingTokens)
 
 		return nil
-	}, spanner.TransactionOptions{TransactionTag: "CheckParentPartitionsFinished"}); err != nil {
+	}, spanner.TransactionOptions{TransactionTag: "CheckPartitionsFinished"}); err != nil {
 		return false, err
 	}
 

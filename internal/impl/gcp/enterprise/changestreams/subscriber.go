@@ -388,7 +388,7 @@ func groupPartitionsByCreatedAt(partitions []metadata.PartitionMetadata) [][]met
 // have been processed.
 func (s *Subscriber) waitForParentPartitionsToFinish(ctx context.Context, pm metadata.PartitionMetadata) {
 	for {
-		ok, err := s.store.CheckParentPartitionsFinished(ctx, pm.ParentTokens)
+		ok, err := s.store.CheckPartitionsFinished(ctx, pm.ParentTokens)
 		if err != nil {
 			s.log.Errorf("%s: error while checking parent partitions: %v",
 				pm.PartitionToken, err)
