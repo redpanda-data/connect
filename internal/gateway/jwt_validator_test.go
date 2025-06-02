@@ -20,7 +20,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/gateway"
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 func TestJWTConfigErrors(t *testing.T) {
@@ -71,7 +73,10 @@ func TestJWTConfigErrors(t *testing.T) {
 				t.Setenv(k, v)
 			}
 
-			_, err := gateway.NewRPJWTMiddleware(nil)
+			mgr := service.MockResources()
+			license.InjectTestService(mgr)
+
+			_, err := gateway.NewRPJWTMiddleware(mgr)
 			if test.errContains == "" {
 				require.NoError(t, err)
 			} else {
@@ -80,4 +85,42 @@ func TestJWTConfigErrors(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestJWTLicenseCheckNotApplicable(t *testing.T) {
+	mgr := service.MockResources()
+
+	_, err := gateway.NewRPJWTMiddleware(mgr)
+	require.NoError(t, err)
+}
+
+func TestJWTLicenseCheckValid(t *testing.T) {
+	for k, v := range map[string]string{
+		"REDPANDA_CLOUD_GATEWAY_JWT_ISSUER_URL":      "http://localhost:1234",
+		"REDPANDA_CLOUD_GATEWAY_JWT_AUDIENCE":        "foo",
+		"REDPANDA_CLOUD_GATEWAY_JWT_ORGANIZATION_ID": "bar",
+	} {
+		t.Setenv(k, v)
+	}
+
+	mgr := service.MockResources()
+	license.InjectTestService(mgr)
+
+	_, err := gateway.NewRPJWTMiddleware(mgr)
+	require.NoError(t, err)
+}
+
+func TestJWTLicenseCheckInvalid(t *testing.T) {
+	for k, v := range map[string]string{
+		"REDPANDA_CLOUD_GATEWAY_JWT_ISSUER_URL":      "http://localhost:1234",
+		"REDPANDA_CLOUD_GATEWAY_JWT_AUDIENCE":        "foo",
+		"REDPANDA_CLOUD_GATEWAY_JWT_ORGANIZATION_ID": "bar",
+	} {
+		t.Setenv(k, v)
+	}
+
+	mgr := service.MockResources()
+
+	_, err := gateway.NewRPJWTMiddleware(mgr)
+	require.Error(t, err)
 }

@@ -23,6 +23,7 @@ import (
 	"github.com/twmb/go-cache/cache"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 const (
@@ -42,10 +43,14 @@ type RPJWTMiddleware struct {
 }
 
 // NewRPJWTMiddleware creates a new RP JWT middleware.
-func NewRPJWTMiddleware(log *service.Logger) (*RPJWTMiddleware, error) {
+func NewRPJWTMiddleware(mgr *service.Resources) (*RPJWTMiddleware, error) {
 	issuerURLStr := os.Getenv(rpEnvJWTIssuer)
 	if issuerURLStr == "" {
 		return nil, nil
+	}
+
+	if err := license.CheckRunningEnterprise(mgr); err != nil {
+		return nil, fmt.Errorf("gateway jwt auth requires a valid license: %w", err)
 	}
 
 	audience := os.Getenv(rpEnvJWTAudience)
@@ -82,7 +87,7 @@ func NewRPJWTMiddleware(log *service.Logger) (*RPJWTMiddleware, error) {
 	}
 
 	return &RPJWTMiddleware{
-		logger:       log,
+		logger:       mgr.Logger(),
 		jwtValidator: jwtValidator,
 		orgID:        orgID,
 

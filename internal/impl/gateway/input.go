@@ -228,7 +228,7 @@ func InputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (*Inpu
 		mgr:     mgr,
 		batches: make(chan batchAndAck),
 	}
-	if h.rpJWTValidator, err = gateway.NewRPJWTMiddleware(mgr.Logger()); err != nil {
+	if h.rpJWTValidator, err = gateway.NewRPJWTMiddleware(mgr); err != nil {
 		return nil, err
 	}
 

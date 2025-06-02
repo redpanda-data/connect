@@ -153,7 +153,7 @@ func NewServer(
 
 	license.RegisterService(resources, licenseConfig)
 
-	rpJWT, err := gateway.NewRPJWTMiddleware(service.NewLoggerFromSlog(logger))
+	rpJWT, err := gateway.NewRPJWTMiddleware(resources)
 	if err != nil {
 		return nil, err
 	}
