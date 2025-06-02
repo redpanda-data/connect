@@ -115,10 +115,16 @@ func NewSubscriber(
 		cb = filteredCallback(cb, modTypeFilter(conf.AllowedModTypes))
 	}
 
+	store, err := metadata.NewStore(sConf, client)
+	if err != nil {
+		client.Close()
+		return nil, fmt.Errorf("create metadata store: %w", err)
+	}
+
 	return &Subscriber{
 		conf:   conf,
 		client: client,
-		store:  metadata.NewStore(sConf, client),
+		store:  store,
 		minWatermark: timeCache{
 			d:   conf.MinWatermarkCacheTTL,
 			now: now,
