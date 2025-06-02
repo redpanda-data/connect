@@ -46,7 +46,7 @@ func TestOllamaModerationIntegration(t *testing.T) {
 
 	ollamaContainer, err := ollama.Run(
 		ctx,
-		"ollama/ollama:0.4.2",
+		"ollama/ollama:0.9.0",
 	)
 	require.NoError(t, err)
 	t.Cleanup(func() {

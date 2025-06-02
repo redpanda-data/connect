@@ -304,9 +304,10 @@ func makeOllamaCompletionProcessor(conf *service.ParsedConfig, mgr *service.Reso
 				return nil, err
 			}
 			type toolParam = struct {
-				Type        string   `json:"type"`
-				Description string   `json:"description"`
-				Enum        []string `json:"enum,omitempty"`
+				Type        api.PropertyType `json:"type"`
+				Items       any              `json:"items,omitempty"`
+				Description string           `json:"description"`
+				Enum        []any            `json:"enum,omitempty"`
 			}
 			t.Function.Parameters.Properties = map[string]toolParam{}
 			for name, paramConf := range propsConf {
@@ -318,12 +319,16 @@ func makeOllamaCompletionProcessor(conf *service.ParsedConfig, mgr *service.Reso
 				if err != nil {
 					return nil, err
 				}
-				enum, err := paramConf.FieldStringList(ocpToolParamPropFieldEnum)
+				enumStr, err := paramConf.FieldStringList(ocpToolParamPropFieldEnum)
 				if err != nil {
 					return nil, err
 				}
+				var enum []any
+				for _, e := range enumStr {
+					enum = append(enum, e)
+				}
 				t.Function.Parameters.Properties[name] = toolParam{
-					Type:        paramType,
+					Type:        api.PropertyType{paramType},
 					Description: desc,
 					Enum:        enum,
 				}
