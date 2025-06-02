@@ -597,12 +597,12 @@ func (p *vertexAIChatProcessor) Process(ctx context.Context, msg *service.Messag
 			out.MetaSetMut("content_type", part.InlineData.MIMEType)
 		case part.FileData != nil:
 			out.SetStructured(part.FileData.FileURI)
-			out.MetaSetMut("content_type", part.InlineData.MIMEType)
+			out.MetaSetMut("content_type", part.FileData.MIMEType)
 		case part.Text != "":
 			out.SetBytes([]byte(part.Text))
 			out.MetaSetMut("content_type", "text/plain")
 		default:
-			return nil, fmt.Errorf("unknown response content: %T", reqParts[0])
+			return nil, fmt.Errorf("unknown response content: %T", respParts[0])
 		}
 		return service.MessageBatch{out}, nil
 	}
