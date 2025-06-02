@@ -84,7 +84,7 @@ func testSubscriber(
 
 	log := service.NewLoggerFromSlog(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug})))
 
-	s, err := NewSubscriber(t.Context(), conf, cb, log)
+	s, err := NewSubscriber(t.Context(), conf, cb, log, NewMetrics(nil, conf.StreamID))
 	require.NoError(t, err)
 
 	mq := new(mockQuerier)

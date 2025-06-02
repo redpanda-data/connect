@@ -13,6 +13,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -22,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	_ "github.com/redpanda-data/benthos/v4/public/components/io"
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
@@ -36,7 +40,14 @@ func runSpannerCDCInputStream(
 	startTimestamp time.Time,
 	endTimestamp time.Time,
 	msgs chan<- *service.Message,
-) {
+) (addr string) {
+	port, err := integration.GetFreePort()
+	require.NoError(t, err)
+	httpConf := fmt.Sprintf(`
+http:
+  enabled: true
+  address: localhost:%d`, port)
+
 	inputConf := fmt.Sprintf(`
 gcp_spanner_cdc:
   project_id: %s
@@ -56,8 +67,10 @@ gcp_spanner_cdc:
 	)
 
 	sb := service.NewStreamBuilder()
+	require.NoError(t, sb.SetYAML(httpConf))
 	require.NoError(t, sb.AddInputYAML(inputConf))
 	require.NoError(t, sb.SetLoggerYAML(`level: DEBUG`))
+	require.NoError(t, sb.SetMetricsYAML(`json_api: {}`))
 
 	var count int
 	require.NoError(t, sb.AddConsumerFunc(func(_ context.Context, msg *service.Message) error {
@@ -89,6 +102,8 @@ gcp_spanner_cdc:
 		}
 		close(msgs)
 	}()
+
+	return fmt.Sprintf("localhost:%d", port)
 }
 
 type SingersTableHelper struct {
@@ -198,7 +213,7 @@ func TestIntegrationRealSpannerCDCInput(t *testing.T) {
 
 	// And the stream is started
 	ch := make(chan *service.Message, 3*numRows)
-	runSpannerCDCInputStream(t, h.RealHelper, startTimestamp, endTimestamp, ch)
+	addr := runSpannerCDCInputStream(t, h.RealHelper, startTimestamp, endTimestamp, ch)
 
 	// Then all the changes are received
 	var inserts, updates, deletes []spannerMod
@@ -304,6 +319,35 @@ func TestIntegrationRealSpannerCDCInput(t *testing.T) {
 		}
 	}
 	assert.Equal(t, wantDeletes, deletes)
+
+	// And metrics are set...
+	resp, err := http.Get("http://" + addr + "/metrics")
+	require.NoError(t, err)
+	b, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	t.Logf("Metrics:\n%s", string(b))
+
+	ms := parseMetricsSnapshot(t, b)
+	require.NotZero(t, ms.PartitionCreatedToScheduled)
+	require.NotZero(t, ms.PartitionScheduledToRunning)
+	require.NotZero(t, ms.DataChangeRecordCommittedToEmitted)
+	ms.PartitionCreatedToScheduled = timeDist{}
+	ms.PartitionScheduledToRunning = timeDist{}
+	ms.DataChangeRecordCommittedToEmitted = timeDist{}
+
+	// This can be a bit flaky depending on if Spanner decides to split the
+	// partition. Adding PartitionRecordSplitCount covers both cases.
+	want := metricsSnapshot{
+		PartitionRecordCreatedCount:  2 + ms.PartitionRecordSplitCount,
+		PartitionRecordRunningCount:  2 + ms.PartitionRecordSplitCount,
+		PartitionRecordFinishedCount: 1 + ms.PartitionRecordSplitCount,
+		PartitionRecordSplitCount:    ms.PartitionRecordSplitCount,
+		PartitionRecordMergeCount:    0,
+		QueryCount:                   2 + ms.PartitionRecordSplitCount,
+		DataChangeRecordCount:        3 * numRows,
+		HeartbeatRecordCount:         1 + ms.PartitionRecordSplitCount,
+	}
+	assert.Equal(t, want, ms)
 }
 
 func TestIntegrationRealSpannerCDCInputMessagesOrderedByTimestampAndTransactionId(t *testing.T) {
@@ -473,4 +517,57 @@ func collectN(t *testing.T, n int, ch <-chan *service.Message) (mods []spannerMo
 		}
 	}
 	return
+}
+
+type timeDist struct {
+	P50 float64 `json:"p50"`
+	P90 float64 `json:"p90"`
+	P99 float64 `json:"p99"`
+}
+
+type metricsSnapshot struct {
+	PartitionRecordCreatedCount        int64    `json:"partition_record_created_count"`
+	PartitionRecordRunningCount        int64    `json:"partition_record_running_count"`
+	PartitionRecordFinishedCount       int64    `json:"partition_record_finished_count"`
+	PartitionRecordSplitCount          int64    `json:"partition_record_split_count"`
+	PartitionRecordMergeCount          int64    `json:"partition_record_merge_count"`
+	PartitionCreatedToScheduled        timeDist `json:"partition_created_to_scheduled_ns"`
+	PartitionScheduledToRunning        timeDist `json:"partition_scheduled_to_running_ns"`
+	QueryCount                         int64    `json:"query_count"`
+	DataChangeRecordCount              int64    `json:"data_change_record_count"`
+	DataChangeRecordCommittedToEmitted timeDist `json:"data_change_record_committed_to_emitted_ns"`
+	HeartbeatRecordCount               int64    `json:"heartbeat_record_count"`
+}
+
+func parseMetricsSnapshot(t *testing.T, data []byte) metricsSnapshot {
+	// First preprocess the JSON to clean up the metric names
+	data, err := extractSpannerCDCMetricsJSON(data)
+	require.NoError(t, err)
+
+	// Unmarshal the cleaned JSON into the metricsSnapshot struct
+	var ms metricsSnapshot
+	require.NoError(t, json.Unmarshal(data, &ms))
+	return ms
+}
+
+// extractSpannerCDCMetricsJSON transforms the raw metrics JSON into a format
+// that can be directly unmarshaled into a metricsSnapshot struct.
+func extractSpannerCDCMetricsJSON(data []byte) ([]byte, error) {
+	// Parse the raw JSON into a map
+	var rawData map[string]json.RawMessage
+	if err := json.Unmarshal(data, &rawData); err != nil {
+		return nil, err
+	}
+
+	metricNameRegex := regexp.MustCompile(`spanner_cdc_([^{]+)(?:\{.*\})?`)
+
+	res := make(map[string]json.RawMessage)
+	for k, v := range rawData {
+		m := metricNameRegex.FindStringSubmatch(k)
+		if len(m) < 2 {
+			continue
+		}
+		res[m[1]] = v
+	}
+	return json.Marshal(res)
 }

@@ -67,6 +67,7 @@ type Subscriber struct {
 	eg           *errgroup.Group
 	cb           CallbackFunc
 	log          *service.Logger
+	metrics      *Metrics
 
 	testingAdminClient  *adminapi.DatabaseAdminClient
 	testingPostFinished func(partitionToken string, err error)
@@ -78,6 +79,7 @@ func NewSubscriber(
 	conf Config,
 	cb CallbackFunc,
 	log *service.Logger,
+	metrics *Metrics,
 ) (*Subscriber, error) {
 	if cb == nil {
 		return nil, errors.New("no callback provided")
@@ -136,8 +138,9 @@ func NewSubscriber(
 			priority:   conf.ChangeStreamQueryPriority,
 			log:        log,
 		},
-		cb:  cb,
-		log: log,
+		cb:      cb,
+		log:     log,
+		metrics: metrics,
 	}, nil
 }
 
@@ -210,6 +213,7 @@ func (s *Subscriber) handleRootPartitions(ctx context.Context, cr ChangeRecord) 
 				}
 			} else {
 				s.log.Infof("Detected root partition %s", rpm.PartitionToken)
+				s.metrics.IncPartitionRecordCreatedCount(1)
 			}
 		}
 	}
@@ -427,15 +431,20 @@ func (s *Subscriber) queryChangeStream(ctx context.Context, partitionToken strin
 	if pm.State != metadata.StateRunning {
 		return fmt.Errorf("partition is not running: %s", pm.State)
 	}
+	s.metrics.IncPartitionRecordRunningCount()
+
 	if _, resumed := s.resumed[partitionToken]; !resumed {
 		if pm.RunningAt == nil || !ts.Equal(*pm.RunningAt) {
 			return fmt.Errorf("partition is already running: %s", pm.RunningAt)
 		}
+		s.metrics.UpdatePartitionCreatedToScheduled(pm.ScheduledAt.Sub(pm.CreatedAt))
+		s.metrics.UpdatePartitionScheduledToRunning(pm.RunningAt.Sub(*pm.ScheduledAt))
 	}
 
 	h := s.partitionMetadataHandler(pm)
 
 	s.log.Debugf("%s: querying partition change stream", partitionToken)
+	s.metrics.IncQueryCount()
 	if err := s.querier.query(ctx, pm, h.handleChangeRecord); err != nil {
 		return fmt.Errorf("process partition change stream: %w", err)
 	}
@@ -451,6 +460,8 @@ func (s *Subscriber) queryChangeStream(ctx context.Context, partitionToken strin
 	if _, err := s.store.UpdateToFinished(ctx, partitionToken); err != nil {
 		return fmt.Errorf("update partition to finished: %w", err)
 	}
+
+	s.metrics.IncPartitionRecordFinishedCount()
 
 	return nil
 }

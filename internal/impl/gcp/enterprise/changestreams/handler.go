@@ -22,11 +22,12 @@ import (
 )
 
 type handler struct {
-	pm    metadata.PartitionMetadata
-	tr    timeRange
-	cb    CallbackFunc
-	store *metadata.Store
-	log   *service.Logger
+	pm      metadata.PartitionMetadata
+	tr      timeRange
+	cb      CallbackFunc
+	store   *metadata.Store
+	log     *service.Logger
+	metrics *Metrics
 }
 
 func (s *Subscriber) partitionMetadataHandler(pm metadata.PartitionMetadata) *handler {
@@ -37,8 +38,9 @@ func (s *Subscriber) partitionMetadataHandler(pm metadata.PartitionMetadata) *ha
 			cur: pm.StartTimestamp,
 			end: pm.EndTimestamp,
 		},
-		store: s.store,
-		log:   s.log,
+		store:   s.store,
+		log:     s.log,
+		metrics: s.metrics,
 	}
 }
 
@@ -47,6 +49,7 @@ func (h *handler) handleChangeRecord(ctx context.Context, cr ChangeRecord) error
 		return err
 	}
 	for _, hr := range cr.HeartbeatRecords {
+		h.metrics.IncHeartbeatRecordCount()
 		h.tr.tryClaim(hr.Timestamp)
 	}
 	if err := h.handleChildPartitionsRecords(ctx, cr); err != nil {
@@ -58,6 +61,7 @@ func (h *handler) handleChangeRecord(ctx context.Context, cr ChangeRecord) error
 
 func (h *handler) handleDataChangeRecords(ctx context.Context, cr ChangeRecord) error {
 	for _, dcr := range cr.DataChangeRecords {
+		h.metrics.IncDataChangeRecordCount()
 		if !h.tr.tryClaim(dcr.CommitTimestamp) {
 			h.log.Errorf("%s: failed to claim data change record timestamp: %v, current: %v",
 				h.pm.PartitionToken, dcr.CommitTimestamp, h.tr.now())
@@ -70,6 +74,8 @@ func (h *handler) handleDataChangeRecords(ctx context.Context, cr ChangeRecord) 
 		if err := h.cb(ctx, h.pm.PartitionToken, dcr); err != nil {
 			return fmt.Errorf("data change record handler failed: %w", err)
 		}
+		h.metrics.UpdateDataChangeRecordCommittedToEmitted(time.Since(dcr.CommitTimestamp))
+
 		// Updating watermark is delegated to Callback.
 	}
 	return nil
@@ -85,17 +91,24 @@ func (h *handler) handleChildPartitionsRecords(ctx context.Context, cr ChangeRec
 
 		var childPartitions []metadata.PartitionMetadata
 		for _, cp := range cpr.ChildPartitions {
-			if cp.isSplit() {
-				h.log.Infof("Detected partition split for partition %s", cp.ParentPartitionTokens[0])
-			}
 			h.log.Debugf("%s: child partition: token: %s, parent partition tokens: %+v",
 				h.pm.PartitionToken, cp.Token, cp.ParentPartitionTokens)
 			childPartitions = append(childPartitions,
 				cp.toPartitionMetadata(cpr.StartTimestamp, h.pm.EndTimestamp, h.pm.HeartbeatMillis))
 		}
+
 		if err := h.store.Create(ctx, childPartitions); err != nil {
 			if spanner.ErrCode(err) != codes.AlreadyExists {
 				return fmt.Errorf("create partitions: %w", err)
+			}
+		}
+		h.metrics.IncPartitionRecordCreatedCount(len(childPartitions))
+
+		for _, cp := range cpr.ChildPartitions {
+			if cp.isSplit() {
+				h.metrics.IncPartitionRecordSplitCount()
+			} else {
+				h.metrics.IncPartitionRecordMergeCount()
 			}
 		}
 	}
