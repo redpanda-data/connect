@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -22,16 +23,18 @@ import (
 	"github.com/twmb/go-cache/cache"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
-type rpjwtConfig struct {
-	enabled   bool
-	issuerURL string
-	audience  string
-	orgID     string
-}
+const (
+	rpEnvJWTIssuer   = "REDPANDA_CLOUD_GATEWAY_JWT_ISSUER_URL"
+	rpEnvJWTAudience = "REDPANDA_CLOUD_GATEWAY_JWT_AUDIENCE"
+	rpEnvJWTOrgID    = "REDPANDA_CLOUD_GATEWAY_JWT_ORGANIZATION_ID"
+)
 
-type rpJWTValidatorMiddleware struct {
+// RPJWTMiddleware implements a custom JWT validation for the RP platform that
+// ensures a given request matches a specified organisation and audience.
+type RPJWTMiddleware struct {
 	logger       *service.Logger
 	jwtValidator *validator.Validator
 	orgID        string
@@ -39,14 +42,30 @@ type rpJWTValidatorMiddleware struct {
 	validationCache *cache.Cache[string, *validator.ValidatedClaims]
 }
 
-func newRPJWTValidatorMiddleware(_ context.Context, log *service.Logger, conf rpjwtConfig) (*rpJWTValidatorMiddleware, error) {
-	if !conf.enabled {
+// NewRPJWTMiddleware creates a new RP JWT middleware.
+func NewRPJWTMiddleware(mgr *service.Resources) (*RPJWTMiddleware, error) {
+	issuerURLStr := os.Getenv(rpEnvJWTIssuer)
+	if issuerURLStr == "" {
 		return nil, nil
 	}
 
-	issuerURL, err := url.Parse(conf.issuerURL)
+	if err := license.CheckRunningEnterprise(mgr); err != nil {
+		return nil, fmt.Errorf("gateway jwt auth requires a valid license: %w", err)
+	}
+
+	audience := os.Getenv(rpEnvJWTAudience)
+	if audience == "" {
+		return nil, fmt.Errorf("gateway JWT authentication requires an audience set via %v", rpEnvJWTAudience)
+	}
+
+	orgID := os.Getenv(rpEnvJWTOrgID)
+	if orgID == "" {
+		return nil, fmt.Errorf("gateway JWT authentication requires an organisation ID set via %v", rpEnvJWTOrgID)
+	}
+
+	issuerURL, err := url.Parse(issuerURLStr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse issuer URL: %w", err)
+		return nil, fmt.Errorf("failed to parse gateway JWT issuer URL: %w", err)
 	}
 
 	provider := jwks.NewCachingProvider(issuerURL, time.Minute)
@@ -55,7 +74,7 @@ func newRPJWTValidatorMiddleware(_ context.Context, log *service.Logger, conf rp
 		provider.KeyFunc,
 		validator.RS256,
 		issuerURL.String(),
-		[]string{conf.audience},
+		[]string{audience},
 		validator.WithAllowedClockSkew(time.Minute),
 		validator.WithCustomClaims(
 			func() validator.CustomClaims {
@@ -67,10 +86,10 @@ func newRPJWTValidatorMiddleware(_ context.Context, log *service.Logger, conf rp
 		return nil, errors.New("failed to set up the jwt validator")
 	}
 
-	return &rpJWTValidatorMiddleware{
-		logger:       log,
+	return &RPJWTMiddleware{
+		logger:       mgr.Logger(),
 		jwtValidator: jwtValidator,
-		orgID:        conf.orgID,
+		orgID:        orgID,
 
 		validationCache: cache.New[string, *validator.ValidatedClaims](cache.MaxAge(10*time.Second), cache.MaxErrorAge(time.Second)),
 	}, nil
@@ -87,7 +106,9 @@ func (r *rpCustomClaims) Validate(_ context.Context) error {
 	return nil
 }
 
-func (r *rpJWTValidatorMiddleware) wrap(next http.Handler) http.Handler {
+// Wrap a handler with JWT validation. Any request that fails validation will
+// be rejected and next will not be called.
+func (r *RPJWTMiddleware) Wrap(next http.Handler) http.Handler {
 	if r == nil {
 		return next
 	}
@@ -100,7 +121,7 @@ func (r *rpJWTValidatorMiddleware) wrap(next http.Handler) http.Handler {
 		}
 
 		var claims *validator.ValidatedClaims
-		if claims, err = r.ValidateToken(req.Context(), authToken); err != nil {
+		if claims, err = r.validateToken(req.Context(), authToken); err != nil {
 			r.logger.With("error", err).Error("Authentication token was not valid")
 			http.Error(w, "authentication token was invalid", http.StatusBadRequest)
 			return
@@ -137,7 +158,7 @@ func extractAuthenticationToken(r *http.Request) (string, error) {
 	return authHeaderParts[1], nil
 }
 
-func (r *rpJWTValidatorMiddleware) ValidateToken(ctx context.Context, tokenString string) (*validator.ValidatedClaims, error) {
+func (r *RPJWTMiddleware) validateToken(ctx context.Context, tokenString string) (*validator.ValidatedClaims, error) {
 	parsedToken, err, _ := r.validationCache.Get(tokenString, func() (*validator.ValidatedClaims, error) {
 		parsedToken, err := r.jwtValidator.ValidateToken(ctx, tokenString)
 		if err != nil {

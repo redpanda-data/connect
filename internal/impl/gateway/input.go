@@ -32,6 +32,7 @@ import (
 	"github.com/Jeffail/shutdown"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/gateway"
 )
 
 const (
@@ -49,9 +50,8 @@ type hsiConfig struct {
 	Response  hsiResponseConfig
 
 	// Set via environment variables
-	Address        string
-	RPJWTValidator rpjwtConfig
-	CORS           corsConfig
+	Address string
+	CORS    corsConfig
 }
 
 type corsConfig struct {
@@ -91,21 +91,12 @@ func hsiConfigFromParsed(pConf *service.ParsedConfig) (conf hsiConfig, err error
 
 const (
 	rpEnvAddress     = "REDPANDA_CLOUD_GATEWAY_ADDRESS"
-	rpEnvJWTIssuer   = "REDPANDA_CLOUD_GATEWAY_JWT_ISSUER_URL"
-	rpEnvJWTAudience = "REDPANDA_CLOUD_GATEWAY_JWT_AUDIENCE"
-	rpEnvJWTOrgID    = "REDPANDA_CLOUD_GATEWAY_JWT_ORGANIZATION_ID"
 	rpEnvCorsOrigins = "REDPANDA_CLOUD_GATEWAY_CORS_ORIGINS"
 )
 
 func (h *hsiConfig) applyEnvVarOverrides() error {
 	if h.Address = os.Getenv(rpEnvAddress); h.Address == "" {
 		return errors.New("an address must be specified via env var for this input to be functional")
-	}
-
-	if h.RPJWTValidator.issuerURL = os.Getenv(rpEnvJWTIssuer); h.RPJWTValidator.issuerURL != "" {
-		h.RPJWTValidator.enabled = true
-		h.RPJWTValidator.audience = os.Getenv(rpEnvJWTAudience)
-		h.RPJWTValidator.orgID = os.Getenv(rpEnvJWTOrgID)
 	}
 
 	if v := os.Getenv(rpEnvCorsOrigins); v != "" {
@@ -212,7 +203,7 @@ type Input struct {
 	mux    *mux.Router
 	server *http.Server
 
-	rpJWTValidator *rpJWTValidatorMiddleware
+	rpJWTValidator *gateway.RPJWTMiddleware
 
 	batches chan batchAndAck
 
@@ -237,6 +228,9 @@ func InputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (*Inpu
 		mgr:     mgr,
 		batches: make(chan batchAndAck),
 	}
+	if h.rpJWTValidator, err = gateway.NewRPJWTMiddleware(mgr); err != nil {
+		return nil, err
+	}
 
 	if h.conf.RateLimit != "" {
 		if !h.mgr.HasRateLimit(h.conf.RateLimit) {
@@ -252,33 +246,23 @@ func InputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (*Inpu
 func (ri *Input) createHandler() (h http.Handler) {
 	h = http.HandlerFunc(ri.deliverHandler)
 	h = gzipHandler(h)
-	h = ri.rpJWTValidator.wrap(h)
+	h = ri.rpJWTValidator.Wrap(h)
 	h = ri.conf.CORS.WrapHandler(h)
 	return
 }
 
 // RegisterCustomMux adds the server endpoint to a mux instead of running its
 // own server, this is for testing purposes only.
-func (ri *Input) RegisterCustomMux(ctx context.Context, mux *mux.Router) error {
-	var err error
-	if ri.rpJWTValidator, err = newRPJWTValidatorMiddleware(ctx, ri.log, ri.conf.RPJWTValidator); err != nil {
-		return err
-	}
-
+func (ri *Input) RegisterCustomMux(mux *mux.Router) error {
 	mux.PathPrefix(ri.conf.Path).Handler(ri.createHandler())
 	return nil
 }
 
 // Connect attempts to run a server with the appropriate endpoints registered
 // for receiving data.
-func (ri *Input) Connect(ctx context.Context) error {
+func (ri *Input) Connect(_ context.Context) error {
 	if ri.server != nil {
 		return nil
-	}
-
-	var err error
-	if ri.rpJWTValidator, err = newRPJWTValidatorMiddleware(ctx, ri.log, ri.conf.RPJWTValidator); err != nil {
-		return err
 	}
 
 	ri.mux = mux.NewRouter()

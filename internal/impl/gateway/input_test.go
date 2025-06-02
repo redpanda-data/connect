@@ -46,7 +46,7 @@ path: /testpost
 	h, err := gateway.InputFromParsed(pConf, service.MockResources())
 	require.NoError(t, err)
 
-	require.NoError(t, h.RegisterCustomMux(tCtx, mux))
+	require.NoError(t, h.RegisterCustomMux(mux))
 
 	server := httptest.NewServer(mux)
 	defer server.Close()
@@ -100,7 +100,7 @@ path: /testpost
 	h, err := gateway.InputFromParsed(pConf, service.MockResources())
 	require.NoError(t, err)
 
-	require.NoError(t, h.RegisterCustomMux(tCtx, mux))
+	require.NoError(t, h.RegisterCustomMux(mux))
 
 	server := httptest.NewServer(mux)
 	defer server.Close()
