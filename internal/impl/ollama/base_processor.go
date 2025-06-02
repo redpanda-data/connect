@@ -44,7 +44,6 @@ const (
 	bopFieldThreads     = "threads"
 	bopFieldLowVRAM     = "low_vram"
 	bopFieldUseMMap     = "use_mmap"
-	bopFieldUseMLock    = "use_mlock"
 )
 
 func commonFields() []*service.ConfigField {
@@ -69,10 +68,6 @@ func commonFields() []*service.ConfigField {
 				Optional().
 				Advanced().
 				Description("Map the model into memory. This is only support on unix systems and allows loading only the necessary parts of the model as needed."),
-			service.NewBoolField(bopFieldUseMLock).
-				Optional().
-				Advanced().
-				Description("Lock the model in memory, preventing it from being swapped out when memory-mapped. This option can improve performance but reduces some of the advantages of memory-mapping because it uses more RAM to run and can slow down load times as the model loads into RAM."),
 		).Optional().Description(`Options for the model runner that are used when the model is first loaded into memory.`),
 		service.NewStringField(bopFieldServerAddress).
 			Description("The address of the Ollama server to use. Leave the field blank and the processor starts and runs a local Ollama server or specify the address of your own local or remote server.").
@@ -196,13 +191,6 @@ func extractOptions(conf *service.ParsedConfig) (map[string]any, error) {
 			return nil, err
 		}
 		opts.UseMMap = &v
-	}
-	if conf.Contains(bopFieldRunner, bopFieldUseMLock) {
-		v, err := conf.FieldBool(bopFieldRunner, bopFieldUseMLock)
-		if err != nil {
-			return nil, err
-		}
-		opts.UseMLock = v
 	}
 	// The API for some reason doesn't use the strongly typed option, but a generic map,
 	// so roundtrip it via JSON so we don't have to manually map the names to their JSON fields.
