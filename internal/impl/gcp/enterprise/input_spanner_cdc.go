@@ -174,8 +174,9 @@ type asyncMessage struct {
 }
 
 type spannerCDCReader struct {
-	conf spannerCDCInputConfig
-	log  *service.Logger
+	conf    spannerCDCInputConfig
+	log     *service.Logger
+	metrics *changestreams.Metrics
 
 	batching   service.BatchPolicy
 	batcher    *spannerPartitionBatcherFactory
@@ -210,6 +211,7 @@ func newSpannerCDCReader(conf spannerCDCInputConfig, batching service.BatchPolic
 	return &spannerCDCReader{
 		conf:     conf,
 		log:      mgr.Logger(),
+		metrics:  changestreams.NewMetrics(mgr.Metrics(), conf.StreamID),
 		batching: batching,
 		batcher:  newSpannerPartitionBatcherFactory(batching, mgr),
 		resCh:    make(chan asyncMessage),
@@ -323,7 +325,7 @@ func (r *spannerCDCReader) Connect(ctx context.Context) error {
 	}
 
 	var err error
-	r.subscriber, err = changestreams.NewSubscriber(ctx, r.conf.Config, cb, r.log)
+	r.subscriber, err = changestreams.NewSubscriber(ctx, r.conf.Config, cb, r.log, r.metrics)
 	if err != nil {
 		return fmt.Errorf("create Spanner change stream reader: %w", err)
 	}
