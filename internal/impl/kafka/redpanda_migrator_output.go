@@ -260,7 +260,6 @@ func init() {
 									cfg.destTopic = destTopic
 									if err := createTopic(ctx, mgr.Logger(), inputClient, outputClient, cfg); err != nil {
 										if errors.Is(err, kerr.TopicAlreadyExists) {
-											topicCache.Store(topic, struct{}{})
 											mgr.Logger().Debugf("Topic %q already exists", topic)
 										} else {
 											// This may be a topic which doesn't have any messages in it, so if we
@@ -268,16 +267,17 @@ func init() {
 											// messages, we'll attempt to create it again anyway when receiving a
 											// message from it.
 											mgr.Logger().Errorf("Failed to create topic %q and ACLs: %s", topic, err)
+											continue
 										}
 									} else {
 										mgr.Logger().Infof("Created topic %q", destTopic)
-
-										if err := createACLs(ctx, topic, destTopic, inputClient, outputClient); err != nil {
-											mgr.Logger().Errorf("Failed to create ACLs for topic %q: %s", topic, err)
-										}
-
-										topicCache.Store(topic, struct{}{})
 									}
+
+									if err := createACLs(ctx, topic, destTopic, inputClient, outputClient); err != nil {
+										mgr.Logger().Errorf("Failed to create ACLs for topic %q: %s", topic, err)
+									}
+
+									topicCache.Store(topic, struct{}{})
 								}
 
 								return nil

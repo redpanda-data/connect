@@ -978,7 +978,7 @@ func checkTopic(t *testing.T, brokerAddr, topic, retentionTime, principal string
 
 	aclResults, err := adm.DescribeACLs(t.Context(), builder)
 	require.NoError(t, err)
-	require.Len(t, aclResults[0].Described, 1)
+	require.Len(t, aclResults, 1)
 	require.NoError(t, aclResults[0].Err)
 	require.Len(t, aclResults[0].Described, 1)
 
@@ -1434,8 +1434,12 @@ func TestRedpandaMigratorTopicConfigAndACLsIntegration(t *testing.T) {
 
 	source, err := redpandatest.StartRedpanda(t, pool, true, true)
 	require.NoError(t, err)
+
 	destination, err := redpandatest.StartRedpanda(t, pool, true, true)
 	require.NoError(t, err)
+
+	t.Logf("Source broker: %s", source.BrokerAddr)
+	t.Logf("Destination broker: %s", destination.BrokerAddr)
 
 	dummyTopic := "test"
 
