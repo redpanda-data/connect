@@ -289,6 +289,131 @@ input:
 	})
 }
 
+func TestRedpandaRecordOrder(t *testing.T) {
+	// This test checks for out-of-order records being transferred between two Redpanda containers using the `redpanda`
+	// input and output with default settings. It used to fail occasionally before this fix was put in place:
+	// https://github.com/redpanda-data/connect/pull/3386.
+	//
+	// Normally, you'll want to let it run multiple times in a loop over night:
+	// ```shell
+	// $ nohup go test -timeout 0 -v -count 10000 -run ^TestRedpandaRecordOrder$ ./internal/impl/kafka/enterprise > test.log 2>&1 &`
+	// ```
+	integration.CheckSkip(t)
+
+	pool, err := dockertest.NewPool("")
+	require.NoError(t, err)
+	pool.MaxWait = time.Minute
+
+	source, err := redpandatest.StartRedpanda(t, pool, true, false)
+	require.NoError(t, err)
+
+	destination, err := redpandatest.StartRedpanda(t, pool, true, false)
+	require.NoError(t, err)
+
+	t.Logf("Source broker: %s", source.BrokerAddr)
+	t.Logf("Destination broker: %s", destination.BrokerAddr)
+
+	// Create the topic
+	dummyTopic := "foobar"
+	dummyRetentionTime := strconv.Itoa(int((1 * time.Hour).Milliseconds()))
+	createTopicWithACLs(t, source.BrokerAddr, dummyTopic, dummyRetentionTime, "User:redpanda", kmsg.ACLOperationAll)
+	createTopicWithACLs(t, destination.BrokerAddr, dummyTopic, dummyRetentionTime, "User:redpanda", kmsg.ACLOperationAll)
+
+	dummyMessage := `{"test":"foo"}`
+	go func() {
+		t.Log("Producing messages...")
+
+		produceMessages(t, source, dummyTopic, dummyMessage, 0, 50, false, 50*time.Millisecond)
+
+		t.Log("Finished producing messages")
+	}()
+
+	runRedpandaPipeline := func(t *testing.T, source, destination redpandatest.RedpandaEndpoints, topic string, suppressLogs bool) {
+		streamBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
+input:
+  redpanda:
+    seed_brokers: [ %s ]
+    topics: [ %s ]
+    consumer_group: migrator_cg
+    start_from_oldest: true
+
+output:
+  redpanda:
+    seed_brokers: [ %s ]
+    topic: ${! @kafka_topic }
+    key: ${! @kafka_key }
+    timestamp_ms: ${! @kafka_timestamp_ms }
+    compression: none
+`, source.BrokerAddr, topic, destination.BrokerAddr)))
+		if suppressLogs {
+			require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
+		}
+
+		stream, err := streamBuilder.Build()
+		require.NoError(t, err)
+
+		// Run stream in the background and shut it down when the test is finished
+		closeChan := make(chan struct{})
+		go func() {
+			//nolint:usetesting // context.Background() could be replaced by t.Context()
+			err = stream.Run(context.Background())
+			require.NoError(t, err)
+
+			t.Log("Migrator pipeline shut down")
+
+			close(closeChan)
+		}()
+		t.Cleanup(func() {
+			require.NoError(t, stream.StopWithin(1*time.Second))
+
+			<-closeChan
+		})
+	}
+
+	// Run the Redpanda pipeline
+	runRedpandaPipeline(t, source, destination, dummyTopic, true)
+	t.Log("Pipeline started")
+
+	// Wait for a few records to be produced...
+	time.Sleep(1 * time.Second)
+
+	dummyConsumerGroup := "foobar_cg"
+	var prevSrcKeys []int
+	require.Eventually(t, func() bool {
+		srcKeys := fetchRecordKeys(t, source.BrokerAddr, dummyTopic, dummyConsumerGroup, 10)
+
+		time.Sleep(1 * time.Second)
+
+		destKeys := fetchRecordKeys(t, destination.BrokerAddr, dummyTopic, dummyConsumerGroup, 10)
+		if destKeys == nil {
+			// Stop the tests if the producer finished and the destination consumer group reached the high water mark
+			if srcKeys == nil {
+				return true
+			}
+
+			// Try again if the destination topic still needs to receive data
+			return false
+		}
+
+		if srcKeys == nil {
+			srcKeys = prevSrcKeys
+		}
+
+		assert.True(t, slices.IsSorted(srcKeys))
+		assert.True(t, slices.IsSorted(destKeys))
+
+		t.Logf("Source keys: %v", srcKeys)
+		t.Logf("Destination keys: %v", destKeys)
+
+		// Cache the previous source key so we can compare the current destination key with it after the producer
+		// finished, but Migrator still needs to copy some records over
+		prevSrcKeys = srcKeys
+
+		return false
+	}, 30*time.Second, 1*time.Nanosecond)
+}
+
 func TestIntegrationRedpandaSasl(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
@@ -988,6 +1113,7 @@ input:
       start_from_oldest: true
     schema_registry:
       url: %s
+    consumer_group_offsets_poll_interval: 2s
   processors:
     - switch:
         - check: '@input_label == "redpanda_migrator_offsets_input"'
@@ -1565,131 +1691,6 @@ func TestRedpandaMigratorConsumerGroupConsistencyIntegration(t *testing.T) {
 
 		// Ensure the destination keys come after the source keys which means the consumer group update was migrated
 		assert.LessOrEqual(t, destKeys[0], srcKeys[len(srcKeys)-1]+1)
-
-		t.Logf("Source keys: %v", srcKeys)
-		t.Logf("Destination keys: %v", destKeys)
-
-		// Cache the previous source key so we can compare the current destination key with it after the producer
-		// finished, but Migrator still needs to copy some records over
-		prevSrcKeys = srcKeys
-
-		return false
-	}, 30*time.Second, 1*time.Nanosecond)
-}
-
-func TestRedpandaRecordOrder(t *testing.T) {
-	// This test checks for out-of-order records being transferred between two Redpanda containers using the `redpanda`
-	// input and output with default settings. It used to fail occasionally before this fix was put in place:
-	// https://github.com/redpanda-data/connect/pull/3386.
-	//
-	// Normally, you'll want to let it run multiple times in a loop over night:
-	// ```shell
-	// $ nohup go test -timeout 0 -v -count 10000 -run ^TestRedpandaRecordOrder$ ./internal/impl/kafka/enterprise > test.log 2>&1 &`
-	// ```
-	integration.CheckSkip(t)
-
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
-	pool.MaxWait = time.Minute
-
-	source, err := redpandatest.StartRedpanda(t, pool, true, false)
-	require.NoError(t, err)
-
-	destination, err := redpandatest.StartRedpanda(t, pool, true, false)
-	require.NoError(t, err)
-
-	t.Logf("Source broker: %s", source.BrokerAddr)
-	t.Logf("Destination broker: %s", destination.BrokerAddr)
-
-	// Create the topic
-	dummyTopic := "foobar"
-	dummyRetentionTime := strconv.Itoa(int((1 * time.Hour).Milliseconds()))
-	createTopicWithACLs(t, source.BrokerAddr, dummyTopic, dummyRetentionTime, "User:redpanda", kmsg.ACLOperationAll)
-	createTopicWithACLs(t, destination.BrokerAddr, dummyTopic, dummyRetentionTime, "User:redpanda", kmsg.ACLOperationAll)
-
-	dummyMessage := `{"test":"foo"}`
-	go func() {
-		t.Log("Producing messages...")
-
-		produceMessages(t, source, dummyTopic, dummyMessage, 0, 50, false, 50*time.Millisecond)
-
-		t.Log("Finished producing messages")
-	}()
-
-	runRedpandaPipeline := func(t *testing.T, source, destination redpandatest.RedpandaEndpoints, topic string, suppressLogs bool) {
-		streamBuilder := service.NewStreamBuilder()
-		require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
-input:
-  redpanda:
-    seed_brokers: [ %s ]
-    topics: [ %s ]
-    consumer_group: migrator_cg
-    start_from_oldest: true
-
-output:
-  redpanda:
-    seed_brokers: [ %s ]
-    topic: ${! @kafka_topic }
-    key: ${! @kafka_key }
-    timestamp_ms: ${! @kafka_timestamp_ms }
-    compression: none
-`, source.BrokerAddr, topic, destination.BrokerAddr)))
-		if suppressLogs {
-			require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
-		}
-
-		stream, err := streamBuilder.Build()
-		require.NoError(t, err)
-
-		// Run stream in the background and shut it down when the test is finished
-		closeChan := make(chan struct{})
-		go func() {
-			//nolint:usetesting // context.Background() could be replaced by t.Context()
-			err = stream.Run(context.Background())
-			require.NoError(t, err)
-
-			t.Log("Migrator pipeline shut down")
-
-			close(closeChan)
-		}()
-		t.Cleanup(func() {
-			require.NoError(t, stream.StopWithin(1*time.Second))
-
-			<-closeChan
-		})
-	}
-
-	// Run the Redpanda pipeline
-	runRedpandaPipeline(t, source, destination, dummyTopic, true)
-	t.Log("Pipeline started")
-
-	// Wait for a few records to be produced...
-	time.Sleep(1 * time.Second)
-
-	dummyConsumerGroup := "foobar_cg"
-	var prevSrcKeys []int
-	require.Eventually(t, func() bool {
-		srcKeys := fetchRecordKeys(t, source.BrokerAddr, dummyTopic, dummyConsumerGroup, 10)
-
-		time.Sleep(1 * time.Second)
-
-		destKeys := fetchRecordKeys(t, destination.BrokerAddr, dummyTopic, dummyConsumerGroup, 10)
-		if destKeys == nil {
-			// Stop the tests if the producer finished and the destination consumer group reached the high water mark
-			if srcKeys == nil {
-				return true
-			}
-
-			// Try again if the destination topic still needs to receive data
-			return false
-		}
-
-		if srcKeys == nil {
-			srcKeys = prevSrcKeys
-		}
-
-		assert.True(t, slices.IsSorted(srcKeys))
-		assert.True(t, slices.IsSorted(destKeys))
 
 		t.Logf("Source keys: %v", srcKeys)
 		t.Logf("Destination keys: %v", destKeys)
