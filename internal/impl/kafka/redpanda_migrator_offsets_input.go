@@ -20,12 +20,13 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
+	"time"
 
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
-	"github.com/twmb/franz-go/pkg/kmsg"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/asyncroutine"
 )
 
 const (
@@ -33,6 +34,15 @@ const (
 	rmoiFieldTopics       = "topics"
 	rmoiFieldRegexpTopics = "regexp_topics"
 	rmoiFieldRackID       = "rack_id"
+	rmoiFieldPollInterval = "poll_interval"
+
+	// Deprecated
+	// `consumer_group`, `commit_period`, `partition_buffer_bytes`, `topic_lag_refresh_period`, and `max_yield_batch_bytes`
+	rmoFieldConsumerGroup         = "consumer_group"
+	rmoFieldCommitPeriod          = "commit_period"
+	rmoFieldPartitionBufferBytes  = "partition_buffer_bytes"
+	rmoFieldTopicLagRefreshPeriod = "topic_lag_refresh_period"
+	rmoFieldMaxYieldBatchBytes    = "max_yield_batch_bytes"
 )
 
 func redpandaMigratorOffsetsInputConfig() *service.ConfigSpec {
@@ -42,24 +52,13 @@ func redpandaMigratorOffsetsInputConfig() *service.ConfigSpec {
 		Version("4.45.0").
 		Summary(`Redpanda Migrator consumer group offsets input using the https://github.com/twmb/franz-go[Franz Kafka client library^].`).
 		Description(`
-This input reads consumer group updates from the ` + "`__consumer_offsets`" + ` topic and should be used in combination with the ` + "`redpanda_migrator_offsets`" + ` output.
-
-== Metrics
-
-Emits a ` + "`redpanda_lag`" + ` metric with ` + "`topic`" + ` and ` + "`partition`" + ` labels for each consumed topic.
+This input reads consumer group updates via the ` + "`OffsetFetch`" + ` API and should be used in combination with the ` + "`redpanda_migrator_offsets`" + ` output.
 
 == Metadata
 
 This input adds the following metadata fields to each message:
 
 ` + "```text" + `
-- kafka_key
-- kafka_topic
-- kafka_partition
-- kafka_offset
-- kafka_timestamp_unix
-- kafka_timestamp_ms
-- kafka_tombstone_message
 - kafka_offset_topic
 - kafka_offset_group
 - kafka_offset_partition
@@ -89,17 +88,25 @@ A list of topics to consume from. Multiple comma separated topics can be listed 
 				Description("A rack specifies where the client is physically located and changes fetch requests to consume from the closest replica as opposed to the leader replica.").
 				Default("").
 				Advanced(),
-		},
-		FranzReaderOrderedConfigFields(),
-		[]*service.ConfigField{
+			service.NewDurationField(rmoiFieldPollInterval).
+				Description("Duration between OffsetFetch polling attempts.").
+				Default("15s").
+				Advanced(),
 			service.NewAutoRetryNacksToggleField(),
+
+			// Deprecated
+			service.NewStringField(rmoFieldConsumerGroup).Deprecated(),
+			service.NewDurationField(rmoFieldCommitPeriod).Deprecated(),
+			service.NewStringField(rmoFieldPartitionBufferBytes).Deprecated(),
+			service.NewDurationField(rmoFieldTopicLagRefreshPeriod).Deprecated(),
+			service.NewStringField(rmoFieldMaxYieldBatchBytes).Deprecated(),
 		},
 	)
 }
 
 func init() {
-	service.MustRegisterBatchInput("redpanda_migrator_offsets", redpandaMigratorOffsetsInputConfig(),
-		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
+	service.MustRegisterInput("redpanda_migrator_offsets", redpandaMigratorOffsetsInputConfig(),
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 			clientOpts, err := FranzConnectionOptsFromConfig(conf, mgr.Logger())
 			if err != nil {
 				return nil, err
@@ -112,8 +119,9 @@ func init() {
 			clientOpts = append(clientOpts, kgo.Rack(rackID))
 
 			i := redpandaMigratorOffsetsInput{
-				mgr:        mgr,
 				clientOpts: clientOpts,
+				msgChan:    make(chan *service.Message),
+				log:        mgr.Logger(),
 			}
 
 			if topicList, err := conf.FieldStringList(rmoiFieldTopics); err != nil {
@@ -141,28 +149,27 @@ func init() {
 				}
 			}
 
-			i.FranzReaderOrdered, err = NewFranzReaderOrderedFromConfig(conf, mgr, func() ([]kgo.Opt, error) {
-				// Consume messages from the `__consumer_offsets` topic and configure `start_from_oldest: true`
-				return append(clientOpts, kgo.ConsumeTopics("__consumer_offsets"), kgo.ConsumeResetOffset(kgo.NewOffset().AtStart())), nil
-			})
-			if err != nil {
+			if i.pollInterval, err = conf.FieldDuration("poll_interval"); err != nil {
 				return nil, err
 			}
 
-			return service.AutoRetryNacksBatchedToggled(conf, &i)
+			return service.AutoRetryNacksToggled(conf, &i)
 		})
 }
 
 //------------------------------------------------------------------------------
 
 type redpandaMigratorOffsetsInput struct {
-	*FranzReaderOrdered
-
 	topicPatterns []*regexp.Regexp
 	topics        []string
+	pollInterval  time.Duration
 	clientOpts    []kgo.Opt
 
-	mgr *service.Resources
+	client  *kgo.Client
+	poller  *asyncroutine.Periodic
+	msgChan chan *service.Message
+
+	log *service.Logger
 }
 
 func (rmoi *redpandaMigratorOffsetsInput) matchesTopic(topic string) bool {
@@ -174,42 +181,6 @@ func (rmoi *redpandaMigratorOffsetsInput) matchesTopic(topic string) bool {
 	return slices.ContainsFunc(rmoi.topics, func(t string) bool {
 		return t == topic
 	})
-}
-
-func (rmoi *redpandaMigratorOffsetsInput) getKeyAndOffset(msg *service.Message) (key kmsg.OffsetCommitKey, offset kmsg.OffsetCommitValue, ok bool) {
-	var recordKey []byte
-	if k, exists := msg.MetaGetMut("kafka_key"); !exists {
-		return
-	} else {
-		recordKey = k.([]byte)
-	}
-
-	// Check the version to ensure that we process only offset commit keys
-	key = kmsg.NewOffsetCommitKey()
-	if err := key.ReadFrom(recordKey); err != nil || (key.Version != 0 && key.Version != 1) {
-		rmoi.mgr.Logger().Debugf("Failed to decode record key: %s", err)
-		return
-	}
-
-	isExpectedTopic := rmoi.matchesTopic(key.Topic)
-	if !isExpectedTopic {
-		rmoi.mgr.Logger().Tracef("Skipping updates for topic %q", key.Topic)
-		return
-	}
-
-	recordValue, err := msg.AsBytes()
-	if err != nil {
-		rmoi.mgr.Logger().Debugf("Failed to fetch record value: %s", err)
-		return
-	}
-
-	offset = kmsg.NewOffsetCommitValue()
-	if err := offset.ReadFrom(recordValue); err != nil {
-		rmoi.mgr.Logger().Debugf("Failed to decode offset commit value: %s", err)
-		return
-	}
-
-	return key, offset, true
 }
 
 func (rmoi *redpandaMigratorOffsetsInput) getTimestampForCommittedOffset(ctx context.Context, topic string, partition int32, offset int64) (timestamp int64, isHighWatermark bool, err error) {
@@ -270,45 +241,114 @@ func (rmoi *redpandaMigratorOffsetsInput) getTimestampForCommittedOffset(ctx con
 	return rec.Timestamp.UnixMilli(), highWatermark.Offset == offset, nil
 }
 
-func (rmoi *redpandaMigratorOffsetsInput) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
-	for {
-		batch, ack, err := rmoi.FranzReaderOrdered.ReadBatch(ctx)
-		if err != nil {
-			return batch, ack, err
-		}
-
-		// Skip records where `getKeyAndOffset()` returns false. This logic is similar to `slices.DeleteFunc()`, but we
-		// need to return errors if we can't connect to the Kafka cluster to read data.
-		i := 0
-		for _, msg := range batch {
-			key, offset, ok := rmoi.getKeyAndOffset(msg)
-			if !ok {
-				continue
-			}
-			batch[i] = msg
-			i++
-
-			ts, isHWMCommit, err := rmoi.getTimestampForCommittedOffset(ctx, key.Topic, key.Partition, offset.Offset)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			msg.MetaSetMut("kafka_offset_topic", key.Topic)
-			msg.MetaSetMut("kafka_offset_group", key.Group)
-			msg.MetaSetMut("kafka_offset_partition", key.Partition)
-			msg.MetaSetMut("kafka_offset_commit_timestamp", ts)
-			msg.MetaSetMut("kafka_offset_metadata", offset.Metadata)
-			msg.MetaSetMut("kafka_is_high_watermark", isHWMCommit)
-		}
-
-		// Delete the records that we skipped
-		batch = slices.Delete(batch, i, len(batch))
-
-		if len(batch) == 0 {
-			_ = ack(ctx, nil) // TODO: Log this error?
-			continue
-		}
-
-		return batch, ack, nil
+func (rmoi *redpandaMigratorOffsetsInput) Connect(ctx context.Context) error {
+	if rmoi.poller != nil {
+		return nil
 	}
+
+	var err error
+	rmoi.client, err = kgo.NewClient(rmoi.clientOpts...)
+	if err != nil {
+		return fmt.Errorf("failed to connect: %s", err)
+	}
+
+	if err := rmoi.client.Ping(ctx); err != nil {
+		return fmt.Errorf("failed to ping broker: %s", err)
+	}
+
+	type cacheKey struct {
+		group     string
+		topic     string
+		partition int32
+	}
+	offsetCache := make(map[cacheKey]int64)
+	adm := kadm.NewClient(rmoi.client)
+	rmoi.poller = asyncroutine.NewPeriodicWithContext(rmoi.pollInterval, func(ctx context.Context) {
+		describedGroups, err := adm.DescribeGroups(ctx)
+		if err != nil {
+			rmoi.log.Errorf("failed to list groups: %s", err)
+			return
+		}
+
+		var groups []string
+		for _, group := range describedGroups {
+			if group.Err == nil {
+				groups = append(groups, group.Group)
+			}
+		}
+
+		resp := adm.FetchManyOffsets(ctx, groups...)
+		if err := resp.Error(); err != nil {
+			rmoi.log.Errorf("failed to fetch group offsets: %s", err)
+			return
+		}
+
+		for group, offsetResp := range resp {
+			offsetResp.Fetched.Each(func(offset kadm.OffsetResponse) {
+				if !rmoi.matchesTopic(offset.Topic) {
+					// Skip if the topic does not match
+					return
+				}
+
+				key := cacheKey{
+					group:     group,
+					topic:     offset.Topic,
+					partition: offset.Partition,
+				}
+				if val, ok := offsetCache[key]; ok && val == offset.At {
+					// Skip if the offset hasn't changed
+					return
+				}
+
+				ts, isHWMCommit, err := rmoi.getTimestampForCommittedOffset(ctx, offset.Topic, offset.Partition, offset.At)
+				if err != nil {
+					rmoi.log.Errorf("failed to get timestamp for committed offset for group %q: %s", group, err)
+					return
+				}
+
+				offsetCache[key] = offset.At
+
+				msg := service.NewMessage(nil)
+				msg.MetaSetMut("kafka_offset_topic", offset.Topic)
+				msg.MetaSetMut("kafka_offset_group", group)
+				msg.MetaSetMut("kafka_offset_partition", offset.Partition)
+				msg.MetaSetMut("kafka_offset_commit_timestamp", ts)
+				msg.MetaSetMut("kafka_offset_metadata", offset.Metadata)
+				msg.MetaSetMut("kafka_is_high_watermark", isHWMCommit)
+
+				select {
+				case rmoi.msgChan <- msg:
+				case <-ctx.Done():
+					return
+				}
+			})
+		}
+	})
+
+	rmoi.poller.Start()
+
+	return nil
+}
+
+func (rmoi *redpandaMigratorOffsetsInput) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
+	if rmoi.poller == nil {
+		return nil, nil, service.ErrNotConnected
+	}
+
+	select {
+	case <-ctx.Done():
+		return nil, nil, ctx.Err()
+	case msg := <-rmoi.msgChan:
+		return msg, func(context.Context, error) error { return nil }, nil
+	}
+}
+
+func (rmoi *redpandaMigratorOffsetsInput) Close(context.Context) error {
+	if rmoi.poller != nil {
+		rmoi.poller.Stop()
+		rmoi.client.Close()
+		rmoi.poller = nil
+	}
+
+	return nil
 }
