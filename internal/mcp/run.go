@@ -44,5 +44,5 @@ func Run(
 		return err
 	}
 	defer l.Close()
-	return srv.ServeSSE(context.Background(), l)
+	return srv.ServeHTTP(context.Background(), l)
 }

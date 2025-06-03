@@ -169,8 +169,7 @@ func (m *Server) ServeStdio() error {
 	return nil
 }
 
-// ServeSSE attempts to run the MCP server in SSE mode.
-func (m *Server) ServeSSE(ctx context.Context, l net.Listener) error {
+func (m *Server) addSSEEndpoints() {
 	sseServer := server.NewSSEServer(
 		m.base,
 		server.WithSSEContextFunc(func(ctx context.Context, r *http.Request) context.Context {
@@ -180,7 +179,30 @@ func (m *Server) ServeSSE(ctx context.Context, l net.Listener) error {
 			return ctx
 		}),
 	)
-	m.mux.PathPrefix("/").Handler(sseServer)
+
+	m.mux.PathPrefix("/sse").Handler(sseServer)
+	m.mux.PathPrefix("/message").Handler(sseServer)
+}
+
+func (m *Server) addStreamableEndpoints() {
+	streamableServer := server.NewStreamableHTTPServer(
+		m.base,
+		server.WithHTTPContextFunc(func(ctx context.Context, r *http.Request) context.Context {
+			// Propagate tracing using the traceparent header from the request to the handlers in the MCP server.
+			w3cTraceContext := propagation.TraceContext{}
+			ctx = w3cTraceContext.Extract(ctx, propagation.HeaderCarrier(r.Header))
+			return ctx
+		}),
+	)
+
+	m.mux.PathPrefix("/mcp").Handler(streamableServer)
+}
+
+// ServeHTTP attempts to run the MCP server over HTTP.
+func (m *Server) ServeHTTP(ctx context.Context, l net.Listener) error {
+	m.addSSEEndpoints()
+	m.addStreamableEndpoints()
+
 	srv := &http.Server{
 		Handler: m.rpJWT.Wrap(m.mux),
 	}

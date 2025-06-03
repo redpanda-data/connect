@@ -109,7 +109,7 @@ func RunAgent(
 			return nil, err
 		}
 		go func() {
-			err := server.ServeSSE(ctx, l)
+			err := server.ServeHTTP(ctx, l)
 			cancel(err)
 			_ = l.Close()
 		}()
