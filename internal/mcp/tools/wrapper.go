@@ -219,7 +219,14 @@ func (w *ResourcesWrapper) AddCacheYAML(fileBytes []byte) error {
 
 		span.SetAttributes(attribute.String("operation", "get"))
 
-		key, exists := request.Params.Arguments["key"].(string)
+		argsObj, ok := request.Params.Arguments.(map[string]any)
+		if !ok {
+			err := fmt.Errorf("expected object arguments, got %T", request.Params.Arguments)
+			span.RecordError(err)
+			return nil, err
+		}
+
+		key, exists := argsObj["key"].(string)
 		if !exists {
 			err := errors.New("missing key [string] argument")
 			span.RecordError(err)
@@ -269,7 +276,14 @@ func (w *ResourcesWrapper) AddCacheYAML(fileBytes []byte) error {
 
 		span.SetAttributes(attribute.String("operation", "set"))
 
-		key, exists := request.Params.Arguments["key"].(string)
+		argsObj, ok := request.Params.Arguments.(map[string]any)
+		if !ok {
+			err := fmt.Errorf("expected object arguments, got %T", request.Params.Arguments)
+			span.RecordError(err)
+			return nil, err
+		}
+
+		key, exists := argsObj["key"].(string)
 		if !exists {
 			err := errors.New("missing key [string] argument")
 			span.RecordError(err)
@@ -278,7 +292,7 @@ func (w *ResourcesWrapper) AddCacheYAML(fileBytes []byte) error {
 
 		span.SetAttributes(attribute.String("key", key))
 
-		value, exists := request.Params.Arguments["value"].(string)
+		value, exists := argsObj["value"].(string)
 		if !exists {
 			err := errors.New("missing value [string] argument")
 			span.RecordError(err)
@@ -346,7 +360,13 @@ func (w *ResourcesWrapper) AddInputYAML(fileBytes []byte) error {
 	}
 
 	w.svr.AddTool(mcp.NewTool(res.Label, opts...), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		countFloat, _ := request.Params.Arguments["count"].(float64)
+		argsObj, ok := request.Params.Arguments.(map[string]any)
+		if !ok {
+			err := fmt.Errorf("expected object arguments, got %T", request.Params.Arguments)
+			return nil, err
+		}
+
+		countFloat, _ := argsObj["count"].(float64)
 
 		count := int(countFloat)
 		if count <= 0 {
@@ -456,8 +476,14 @@ func (w *ResourcesWrapper) AddProcessorYAML(fileBytes []byte) error {
 		msg, span := w.initMsgSpan(res.Label, msg.WithContext(ctx))
 		defer span.End()
 
+		argsObj, ok := request.Params.Arguments.(map[string]any)
+		if !ok {
+			err := fmt.Errorf("expected object arguments, got %T", request.Params.Arguments)
+			return nil, err
+		}
+
 		for k, required := range params {
-			if v, exists := request.Params.Arguments[k]; exists {
+			if v, exists := argsObj[k]; exists {
 				msg.MetaSetMut(k, v)
 				attrString(span, k, fmt.Sprintf("%v", v))
 			} else if required {
@@ -466,11 +492,11 @@ func (w *ResourcesWrapper) AddProcessorYAML(fileBytes []byte) error {
 		}
 
 		if len(params) == 0 {
-			value, _ := request.Params.Arguments["value"].(string)
+			value, _ := argsObj["value"].(string)
 			attrString(span, "value", value)
 			msg.SetBytes([]byte(value))
 		} else {
-			for k, v := range request.Params.Arguments {
+			for k, v := range argsObj {
 				switch t := v.(type) {
 				case string:
 					attrString(span, k, t)
@@ -584,7 +610,13 @@ func (w *ResourcesWrapper) AddOutputYAML(fileBytes []byte) error {
 	}
 
 	w.svr.AddTool(mcp.NewTool(res.Label, opts...), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		messages, exists := request.Params.Arguments["messages"].([]any)
+		argsObj, ok := request.Params.Arguments.(map[string]any)
+		if !ok {
+			err := fmt.Errorf("expected object arguments, got %T", request.Params.Arguments)
+			return nil, err
+		}
+
+		messages, exists := argsObj["messages"].([]any)
 		if !exists || len(messages) == 0 {
 			return nil, errors.New("at least one message is required")
 		}
