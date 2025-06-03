@@ -34,12 +34,6 @@ type spannerPartitionBatchIter struct {
 	err error
 }
 
-type spannerMod struct {
-	TableName string
-	ModType   string
-	*changestreams.Mod
-}
-
 func (s *spannerPartitionBatchIter) Iter(ctx context.Context) iter.Seq2[service.MessageBatch, time.Time] {
 	return func(yield func(service.MessageBatch, time.Time) bool) {
 		if s.err != nil {
@@ -57,19 +51,15 @@ func (s *spannerPartitionBatchIter) Iter(ctx context.Context) iter.Seq2[service.
 
 		first := true
 		for i, m := range s.dcr.Mods {
-			modData := spannerMod{
-				TableName: s.dcr.TableName,
-				ModType:   s.dcr.ModType,
-				Mod:       m,
-			}
-
-			b, err := json.Marshal(modData)
+			b, err := json.Marshal(m)
 			if err != nil {
 				s.err = err
 				return
 			}
 
 			msg := service.NewMessage(b)
+			msg.MetaSet("table_name", s.dcr.TableName)
+			msg.MetaSet("mod_type", s.dcr.ModType)
 			msg.MetaSet("commit_timestamp", s.dcr.CommitTimestamp.Format(time.RFC3339Nano))
 			msg.MetaSet("record_sequence", s.dcr.RecordSequence)
 			msg.MetaSet("server_transaction_id", s.dcr.ServerTransactionID)
