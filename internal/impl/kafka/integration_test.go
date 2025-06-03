@@ -1424,6 +1424,108 @@ output:
 	}
 }
 
+func TestRedpandaMigratorOffsetsNonMonotonicallyIncreasingTimestampsIntegration(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Parallel()
+
+	pool, err := dockertest.NewPool("")
+	require.NoError(t, err)
+	pool.MaxWait = time.Minute
+
+	source, err := redpandatest.StartRedpanda(t, pool, true, true)
+	require.NoError(t, err)
+	destination, err := redpandatest.StartRedpanda(t, pool, true, true)
+	require.NoError(t, err)
+
+	t.Logf("Source broker: %s", source.BrokerAddr)
+	t.Logf("Destination broker: %s", destination.BrokerAddr)
+
+	dummyTopic := "test"
+	dummyMessage := `{"test":"foo"}`
+	dummyConsumerGroup := "test_cg"
+	messageCount := 5
+
+	// Produce a batch of messages in the source cluster.
+	produceMessages(t, source, dummyTopic, dummyMessage, 0, messageCount, false, 0)
+
+	// Produce 3 batches of messages in the destination cluster with out of order and overlapping timestamps.
+	// offsets: 0, 1, 2, 3, 4, 5
+	// timestamps: 3, 4, 5, 6, 7
+	produceMessages(t, destination, dummyTopic, dummyMessage, 2, messageCount, false, 0)
+	// offsets: 6, 7, 8, 9, 10
+	// timestamps: 4, 5, 6, 7, 8
+	produceMessages(t, destination, dummyTopic, dummyMessage, 3, messageCount, false, 0)
+	// offsets: 11, 12, 13, 14, 15
+	// timestamps: 1, 2, 3, 4, 5
+	produceMessages(t, destination, dummyTopic, dummyMessage, 0, messageCount, false, 0)
+
+	// Read messageCount messages from the source cluster using a consumer group. The consumer group will point to the
+	// last message in the batch, which has timestamp 5.
+	readMessagesWithCG(t, source, dummyTopic, dummyConsumerGroup, dummyMessage, messageCount, false)
+
+	t.Log("Finished setting up messages in the source and destination clusters")
+
+	// Migrate the consumer group offsets.
+	streamBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
+input:
+  redpanda_migrator_offsets:
+    seed_brokers: [ %s ]
+    topics: [ %s ]
+    poll_interval: 2s
+
+output:
+  redpanda_migrator_offsets:
+    seed_brokers: [ %s ]
+`, source.BrokerAddr, dummyTopic, destination.BrokerAddr)))
+	require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
+
+	migratorUpdateWG := sync.WaitGroup{}
+	migratorUpdateWG.Add(1)
+	require.NoError(t, streamBuilder.AddConsumerFunc(func(context.Context, *service.Message) error {
+		defer migratorUpdateWG.Done()
+		return nil
+	}))
+
+	// Ensure the callback function is called after the output wrote the message.
+	streamBuilder.SetOutputBrokerPattern(service.OutputBrokerPatternFanOutSequential)
+
+	stream, err := streamBuilder.Build()
+	require.NoError(t, err)
+
+	// Run stream in the background.
+	migratorCloseChan := make(chan struct{})
+	go func() {
+		err = stream.Run(t.Context())
+		require.NoError(t, err)
+
+		t.Log("redpanda_migrator_offsets pipeline shut down")
+
+		close(migratorCloseChan)
+	}()
+
+	defer func() {
+		require.NoError(t, stream.StopWithin(3*time.Second))
+
+		<-migratorCloseChan
+	}()
+
+	migratorUpdateWG.Wait()
+
+	client, err := kgo.NewClient(kgo.SeedBrokers([]string{destination.BrokerAddr}...))
+	require.NoError(t, err)
+	defer client.Close()
+
+	adm := kadm.NewClient(client)
+	offsets, err := adm.FetchOffsets(t.Context(), dummyConsumerGroup)
+	currentCGOffset, ok := offsets.Lookup(dummyTopic, 0)
+	require.True(t, ok)
+
+	// Even though we have 3 batches of messages in the destination cluster, the consumer group should point to the
+	// offset of the first message which has timestamp 5.
+	assert.Equal(t, int64(2), currentCGOffset.At)
+}
+
 func TestRedpandaMigratorTopicConfigAndACLsIntegration(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
