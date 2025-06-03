@@ -28,7 +28,7 @@ participant Offsets Input
 participant Offsets Output
 participant Destination
 
-Source->>Offsets Input: O = Receive(__consumer_offsets)
+Source->>Offsets Input: O = OffsetFetch()
 Source->>Offsets Input: X = ListEndOffsets(T, P)
 Source->>Offsets Input: Check X < O
 Source->>Offsets Input: TS = ReadTimestamp(T, P, O)
@@ -49,7 +49,7 @@ participant Offsets Input
 participant Offsets Output
 participant Destination
 
-Source->>Offsets Input: O = Receive(__consumer_offsets)
+Source->>Offsets Input: O = OffsetFetch()
 Source->>Offsets Input: X = ListEndOffsets(T, P)
 Source->>Offsets Input: Check X == O
 Source->>Offsets Input: TS = ReadTimestamp(T, P, -1)
