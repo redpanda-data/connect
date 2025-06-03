@@ -20,14 +20,12 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"time"
 
 	"github.com/bwmarrin/snowflake"
 	"github.com/go-faker/faker/v4"
 	"github.com/gosimple/slug"
-	"github.com/oklog/ulid"
+	"github.com/oklog/ulid/v2"
 	"github.com/rivo/uniseg"
-	frand "golang.org/x/exp/rand"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 )
@@ -345,10 +343,7 @@ func registerULID() error {
 		)
 
 	secureRandom := rand.Reader
-	fastRandom := frand.New(new(frand.LockedSource))
-	// The cast to uint64 is done on the assumption that we will not get a
-	// negative value for time.
-	fastRandom.Seed(uint64(time.Now().UnixNano()))
+	fastRandom := ulid.DefaultEntropy()
 
 	return bloblang.RegisterFunctionV2("ulid", spec, func(args *bloblang.ParsedParams) (bloblang.Function, error) {
 		encoding, err := args.GetString("encoding")
@@ -377,24 +372,24 @@ func registerULID() error {
 		}
 
 		return func() (any, error) {
-			ms := ulid.Timestamp(time.Now())
+			ms := ulid.Now()
 
 			id, err := ulid.New(ms, rdr)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("failed to generate ulid: %s", err)
 			}
 
 			switch encoding {
 			case "crockford":
 				bs, err := id.MarshalText()
 				if err != nil {
-					return nil, err
+					return nil, fmt.Errorf("failed to marshal text: %s", err)
 				}
 				return string(bs), nil
 			case "hex":
 				bs, err := id.MarshalBinary()
 				if err != nil {
-					return nil, err
+					return nil, fmt.Errorf("failed to marshal binary: %s", err)
 				}
 				return hex.EncodeToString(bs), nil
 			default:
