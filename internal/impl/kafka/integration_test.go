@@ -138,7 +138,6 @@ func createKafkaTopicSasl(address, id string, partitions int32) error {
 
 func TestRedpandaIntegration(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
@@ -216,7 +215,6 @@ input:
 	)
 
 	t.Run("only one partition", func(t *testing.T) {
-		t.Parallel()
 		suite.Run(
 			t, template,
 			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
@@ -229,7 +227,6 @@ input:
 	})
 
 	t.Run("explicit partitions", func(t *testing.T) {
-		t.Parallel()
 		suite.Run(
 			t, template,
 			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
@@ -243,7 +240,6 @@ input:
 		)
 
 		t.Run("range of partitions", func(t *testing.T) {
-			t.Parallel()
 			suite.Run(
 				t, template,
 				integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
@@ -416,7 +412,6 @@ output:
 
 func TestRedpandaSaslIntegration(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
@@ -524,7 +519,6 @@ input:
 
 func TestRedpandaOutputFixedTimestampIntegration(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
@@ -675,7 +669,6 @@ input:
 
 func TestSchemaRegistryIntegration(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
@@ -831,7 +824,6 @@ output:
 
 func TestSchemaRegistryIDTranslationIntegration(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
@@ -1194,7 +1186,6 @@ output:
 
 func TestRedpandaMigratorIntegration(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
@@ -1285,7 +1276,6 @@ func TestRedpandaMigratorIntegration(t *testing.T) {
 
 func TestRedpandaMigratorOffsetsIntegration(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	tests := []struct {
 		name          string
@@ -1309,8 +1299,6 @@ func TestRedpandaMigratorOffsetsIntegration(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-
 			pool, err := dockertest.NewPool("")
 			require.NoError(t, err)
 			pool.MaxWait = time.Minute
@@ -1426,7 +1414,6 @@ output:
 
 func TestRedpandaMigratorOffsetsNonMonotonicallyIncreasingTimestampsIntegration(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
@@ -1528,7 +1515,6 @@ output:
 
 func TestRedpandaMigratorTopicConfigAndACLsIntegration(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
@@ -1681,7 +1667,6 @@ func fetchRecordKeys(t *testing.T, brokerAddress, topic, consumerGroup string, c
 // messages (even if it receives duplicates).
 func TestRedpandaMigratorConsumerGroupConsistencyIntegration(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
