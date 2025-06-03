@@ -216,105 +216,92 @@ func TestIntegrationRealSpannerCDCInput(t *testing.T) {
 	addr := runSpannerCDCInputStream(t, h.RealHelper, startTimestamp, endTimestamp, ch)
 
 	// Then all the changes are received
-	var inserts, updates, deletes []spannerMod
-	for _, v := range collectN(t, numRows*3, ch) {
-		mod, msg := v.Mod, v.Msg
-
-		switch mod.ModType {
+	var inserts, updates, deletes []changestreams.Mod
+	for _, msg := range collectN(t, numRows*3, ch) {
+		assert.Equal(t, h.Table(), msg.TableName)
+		switch msg.ModType {
 		case "INSERT":
 			transactionTag, _ := msg.MetaGet("transaction_tag")
 			require.Equal(t, "app=rpcn;action=insert", transactionTag)
-			inserts = append(inserts, mod)
+			inserts = append(inserts, msg.Mod)
 		case "UPDATE":
 			transactionTag, _ := msg.MetaGet("transaction_tag")
 			require.Equal(t, "app=rpcn;action=update", transactionTag)
-			updates = append(updates, mod)
+			updates = append(updates, msg.Mod)
 		case "DELETE":
 			transactionTag, _ := msg.MetaGet("transaction_tag")
 			require.Equal(t, "app=rpcn;action=delete", transactionTag)
-			deletes = append(deletes, mod)
+			deletes = append(deletes, msg.Mod)
 		}
 	}
 
-	wantInserts := make([]spannerMod, numRows)
+	wantInserts := make([]changestreams.Mod, numRows)
 	for i := range wantInserts {
 		singerID := i + 1
-		wantInserts[i] = spannerMod{
-			TableName: h.Table(),
-			ModType:   "INSERT",
-			Mod: &changestreams.Mod{
-				Keys: spanner.NullJSON{
-					Value: map[string]any{"SingerId": fmt.Sprintf("%d", singerID)},
-					Valid: true,
+		wantInserts[i] = changestreams.Mod{
+			Keys: spanner.NullJSON{
+				Value: map[string]any{"SingerId": fmt.Sprintf("%d", singerID)},
+				Valid: true,
+			},
+			NewValues: spanner.NullJSON{
+				Value: map[string]any{
+					"FirstName": fmt.Sprintf("First Name %d", singerID),
+					"LastName":  fmt.Sprintf("Last Name %d", singerID),
 				},
-				NewValues: spanner.NullJSON{
-					Value: map[string]any{
-						"FirstName": fmt.Sprintf("First Name %d", singerID),
-						"LastName":  fmt.Sprintf("Last Name %d", singerID),
-					},
-					Valid: true,
-				},
-				OldValues: spanner.NullJSON{
-					Value: map[string]any{},
-					Valid: true,
-				},
+				Valid: true,
+			},
+			OldValues: spanner.NullJSON{
+				Value: map[string]any{},
+				Valid: true,
 			},
 		}
 	}
 	assert.Equal(t, wantInserts, inserts)
 
-	wantUpdates := make([]spannerMod, numRows)
+	wantUpdates := make([]changestreams.Mod, numRows)
 	for i := range wantUpdates {
 		singerID := i + 1
-		wantUpdates[i] = spannerMod{
-			TableName: h.Table(),
-			ModType:   "UPDATE",
-			Mod: &changestreams.Mod{
-				Keys: spanner.NullJSON{
-					Value: map[string]any{"SingerId": fmt.Sprintf("%d", singerID)},
-					Valid: true,
+		wantUpdates[i] = changestreams.Mod{
+			Keys: spanner.NullJSON{
+				Value: map[string]any{"SingerId": fmt.Sprintf("%d", singerID)},
+				Valid: true,
+			},
+			NewValues: spanner.NullJSON{
+				Value: map[string]any{
+					"FirstName": fmt.Sprintf("Updated First Name %d", singerID),
+					"LastName":  fmt.Sprintf("Updated Last Name %d", singerID),
 				},
-				NewValues: spanner.NullJSON{
-					Value: map[string]any{
-						"FirstName": fmt.Sprintf("Updated First Name %d", singerID),
-						"LastName":  fmt.Sprintf("Updated Last Name %d", singerID),
-					},
-					Valid: true,
+				Valid: true,
+			},
+			OldValues: spanner.NullJSON{
+				Value: map[string]any{
+					"FirstName": fmt.Sprintf("First Name %d", singerID),
+					"LastName":  fmt.Sprintf("Last Name %d", singerID),
 				},
-				OldValues: spanner.NullJSON{
-					Value: map[string]any{
-						"FirstName": fmt.Sprintf("First Name %d", singerID),
-						"LastName":  fmt.Sprintf("Last Name %d", singerID),
-					},
-					Valid: true,
-				},
+				Valid: true,
 			},
 		}
 	}
 	assert.Equal(t, wantUpdates, updates)
 
-	wantDeletes := make([]spannerMod, numRows)
+	wantDeletes := make([]changestreams.Mod, numRows)
 	for i := range wantDeletes {
 		singerID := i + 1
-		wantDeletes[i] = spannerMod{
-			TableName: h.Table(),
-			ModType:   "DELETE",
-			Mod: &changestreams.Mod{
-				Keys: spanner.NullJSON{
-					Value: map[string]any{"SingerId": fmt.Sprintf("%d", singerID)},
-					Valid: true,
+		wantDeletes[i] = changestreams.Mod{
+			Keys: spanner.NullJSON{
+				Value: map[string]any{"SingerId": fmt.Sprintf("%d", singerID)},
+				Valid: true,
+			},
+			NewValues: spanner.NullJSON{
+				Value: map[string]any{},
+				Valid: true,
+			},
+			OldValues: spanner.NullJSON{
+				Value: map[string]any{
+					"FirstName": fmt.Sprintf("Updated First Name %d", singerID),
+					"LastName":  fmt.Sprintf("Updated Last Name %d", singerID),
 				},
-				NewValues: spanner.NullJSON{
-					Value: map[string]any{},
-					Valid: true,
-				},
-				OldValues: spanner.NullJSON{
-					Value: map[string]any{
-						"FirstName": fmt.Sprintf("Updated First Name %d", singerID),
-						"LastName":  fmt.Sprintf("Updated Last Name %d", singerID),
-					},
-					Valid: true,
-				},
+				Valid: true,
 			},
 		}
 	}
@@ -412,14 +399,14 @@ func TestIntegrationRealSpannerCDCInputMessagesOrderedByTimestampAndTransactionI
 
 	// Sort messages by commit timestamp and transaction ID
 	commitTimestampAt := func(idx int) time.Time {
-		s, ok := messages[idx].Msg.MetaGet("commit_timestamp")
+		s, ok := messages[idx].MetaGet("commit_timestamp")
 		require.True(t, ok)
 		v, err := time.Parse(time.RFC3339Nano, s)
 		require.NoError(t, err)
 		return v
 	}
 	transactionIdAt := func(idx int) string {
-		s, ok := messages[idx].Msg.MetaGet("server_transaction_id")
+		s, ok := messages[idx].MetaGet("server_transaction_id")
 		require.True(t, ok)
 		return s
 	}
@@ -432,10 +419,10 @@ func TestIntegrationRealSpannerCDCInputMessagesOrderedByTimestampAndTransactionI
 	})
 
 	// Group by batches with 1.5 second gap threshold
-	groupMessagesByBatch := func() [][]spannerMod {
+	groupMessagesByBatch := func() [][]spannerModMessage {
 		var (
-			batches [][]spannerMod
-			cur     []spannerMod
+			batches [][]spannerModMessage
+			cur     []spannerModMessage
 			lastTs  time.Time
 		)
 
@@ -443,10 +430,10 @@ func TestIntegrationRealSpannerCDCInputMessagesOrderedByTimestampAndTransactionI
 			ts := commitTimestampAt(i)
 
 			if len(cur) == 0 || ts.Sub(lastTs) < 1500*time.Millisecond {
-				cur = append(cur, msg.Mod)
+				cur = append(cur, msg)
 			} else {
 				batches = append(batches, cur)
-				cur = []spannerMod{msg.Mod}
+				cur = []spannerModMessage{msg}
 			}
 			lastTs = ts
 		}
@@ -465,7 +452,7 @@ func TestIntegrationRealSpannerCDCInputMessagesOrderedByTimestampAndTransactionI
 	for i, batch := range batches {
 		sb.WriteString(fmt.Sprintf("Batch %d:\n", i))
 		for _, m := range batch {
-			fmt.Fprintf(&sb, "  %s: %s\n", m.ModType, m.Keys.Value)
+			fmt.Fprintf(&sb, "  %s: %s\n", m.ModType, m.Mod.Keys.Value)
 		}
 	}
 	want := `Batch 0:
@@ -496,8 +483,10 @@ Batch 2:
 }
 
 type spannerModMessage struct {
-	Mod spannerMod
-	Msg *service.Message
+	*service.Message
+	TableName string
+	ModType   string
+	Mod       changestreams.Mod
 }
 
 func collectN(t *testing.T, n int, ch <-chan *service.Message) (mods []spannerModMessage) {
@@ -506,12 +495,19 @@ func collectN(t *testing.T, n int, ch <-chan *service.Message) (mods []spannerMo
 		case msg := <-ch:
 			b, err := msg.AsBytes()
 			require.NoError(t, err)
-			var sm spannerMod
-			require.NoError(t, json.Unmarshal(b, &sm))
-			mods = append(mods, spannerModMessage{
-				Mod: sm,
-				Msg: msg,
-			})
+
+			v := spannerModMessage{
+				Message: msg,
+			}
+
+			var ok bool
+			v.TableName, ok = msg.MetaGet("table_name")
+			require.True(t, ok)
+			v.ModType, ok = msg.MetaGet("mod_type")
+			require.True(t, ok)
+
+			require.NoError(t, json.Unmarshal(b, &v.Mod))
+			mods = append(mods, v)
 		case <-time.After(time.Minute):
 			t.Fatalf("timeout waiting for message, got %d messages wanted %d", len(mods), n)
 		}
