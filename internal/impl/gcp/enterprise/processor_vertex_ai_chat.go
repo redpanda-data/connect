@@ -10,13 +10,17 @@ package enterprise
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
+	"strings"
 	"unicode/utf8"
 
-	"cloud.google.com/go/vertexai/genai"
-	"google.golang.org/api/option"
+	"cloud.google.com/go/auth"
+	"cloud.google.com/go/auth/credentials"
+	"google.golang.org/genai"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -30,6 +34,7 @@ const (
 	vaicpFieldModel            = "model"
 	vaicpFieldLocation         = "location"
 	vaicpFieldPrompt           = "prompt"
+	vaicpFieldHistory          = "history"
 	vaicpFieldSystemPrompt     = "system_prompt"
 	vaicpFieldAttachment       = "attachment"
 	vaicpFieldTemp             = "temperature"
@@ -40,6 +45,18 @@ const (
 	vaicpFieldPresencePenalty  = "presence_penalty"
 	vaicpFieldFrequencyPenalty = "frequency_penalty"
 	vaicpFieldResponseFormat   = "response_format"
+	vaicpFieldMaxToolCalls     = "max_tool_calls"
+	// Tool options
+	vaicpFieldTool                     = "tools"
+	vaicpToolFieldName                 = "name"
+	vaicpToolFieldDesc                 = "description"
+	vaicpToolFieldParams               = "parameters"
+	vaicpToolParamFieldRequired        = "required"
+	vaicpToolParamFieldProps           = "properties"
+	vaicpToolParamPropFieldType        = "type"
+	vaicpToolParamPropFieldDescription = "description"
+	vaicpToolParamPropFieldEnum        = "enum"
+	vaicpToolFieldPipeline             = "processors"
 )
 
 func init() {
@@ -67,7 +84,6 @@ For more information, see the https://cloud.google.com/vertex-ai/docs[Vertex AI 
 				Optional(),
 			service.NewStringField(vaicpFieldLocation).
 				Description("The location of the model if using a fined tune model. For base models this can be omitted").
-				Optional().
 				Examples("us-central1"),
 			service.NewStringField(vaicpFieldModel).
 				Description("The name of the LLM to use. For a full list of models, see the https://console.cloud.google.com/vertex-ai/model-garden[Vertex AI Model Garden].").
@@ -78,6 +94,9 @@ For more information, see the https://cloud.google.com/vertex-ai/docs[Vertex AI 
 			service.NewInterpolatedStringField(vaicpFieldSystemPrompt).
 				Description("The system prompt to submit to the Vertex AI LLM.").
 				Advanced().
+				Optional(),
+			service.NewBloblangField(vaicpFieldHistory).
+				Description(`Historical messages to include in the chat request. The result of the bloblang query should be an array of objects of the form of [{"role": "", "content":""}], where role is "user" or "model".`).
 				Optional(),
 			service.NewBloblangField(vaicpFieldAttachment).
 				Description("Additional data like an image to send with the prompt to the model. The result of the mapping must be a byte array, and the content type is automatically detected.").
@@ -99,7 +118,7 @@ For more information, see the https://cloud.google.com/vertex-ai/docs[Vertex AI 
 				Description("If specified, nucleus sampling will be used.").
 				Optional().
 				LintRule(`root = if this < 0 || this > 1 { ["field must be between 0.0-1.0"] }`),
-			service.NewIntField(vaicpFieldTopK).
+			service.NewFloatField(vaicpFieldTopK).
 				Advanced().
 				Description("If specified top-k sampling will be used.").
 				Optional().
@@ -118,7 +137,64 @@ For more information, see the https://cloud.google.com/vertex-ai/docs[Vertex AI 
 				Description("Positive values penalize new tokens based on their existing frequency in the text so far, decreasing the model's likelihood to repeat the same line verbatim.").
 				Optional().
 				LintRule(`root = if this < -2 || this > 2 { ["field must be greater than -2.0 and less than 2.0"] }`),
-		)
+			service.NewIntField(vaicpFieldMaxToolCalls).
+				Default(10).
+				Advanced().
+				Description(`The maximum number of sequential tool calls.`).
+				LintRule(`root = if this <= 0 { ["field must be greater than zero"] }`),
+			service.NewObjectListField(
+				vaicpFieldTool,
+				service.NewStringField(vaicpToolFieldName).Description("The name of this tool."),
+				service.NewStringField(vaicpToolFieldDesc).Description("A description of this tool, the LLM uses this to decide if the tool should be used."),
+				service.NewObjectField(
+					vaicpToolFieldParams,
+					service.NewStringListField(vaicpToolParamFieldRequired).Default([]string{}).Description("The required parameters for this pipeline."),
+					service.NewObjectMapField(
+						vaicpToolParamFieldProps,
+						service.NewStringField(vaicpToolParamPropFieldType).Description("The type of this parameter."),
+						service.NewStringField(vaicpToolParamPropFieldDescription).Description("A description of this parameter."),
+						service.NewStringListField(vaicpToolParamPropFieldEnum).Default([]string{}).Description("Specifies that this parameter is an enum and only these specific values should be used."),
+					).Description("The properties for the processor's input data"),
+				).Description("The parameters the LLM needs to provide to invoke this tool."),
+				service.NewProcessorListField(vaicpToolFieldPipeline).Description("The pipeline to execute when the LLM uses this tool.").Optional(),
+			).Description("The tools to allow the LLM to invoke. This allows building subpipelines that the LLM can choose to invoke to execute agentic-like actions.").
+				Default([]any{}),
+		).
+		Example(
+			"Use processors as tool calls",
+			"This example allows gemini to execute a subpipeline as a tool call to get more data.",
+			`
+input:
+  generate:
+    count: 1
+    mapping: |
+      root = "What is the weather like in Chicago?"
+pipeline:
+  processors:
+    - gcp_vertex_ai_chat:
+        model: gemini-2.5-flash-preview-05-20
+        project: my-project
+        location: us-central1
+        prompt: "${!content().string()}"
+        tools:
+          - name: GetWeather
+            description: "Retrieve the weather for a specific city"
+            parameters:
+              required: ["city"]
+              properties:
+                city:
+                  type: string
+                  description: the city to lookup the weather for
+            processors:
+              - http:
+                  verb: GET
+                  url: 'https://wttr.in/${!this.city}?T'
+                  headers:
+                    # Spoof curl user-agent to get a plaintext text
+                    User-Agent: curl/8.11.1
+output:
+  stdout: {}
+`)
 }
 
 func newVertexAIProcessor(conf *service.ParsedConfig, mgr *service.Resources) (p service.Processor, err error) {
@@ -133,31 +209,34 @@ func newVertexAIProcessor(conf *service.ParsedConfig, mgr *service.Resources) (p
 	if err != nil {
 		return
 	}
-	var location string
-	if conf.Contains(vaicpFieldLocation) {
-		location, err = conf.FieldString(vaicpFieldLocation)
-		if err != nil {
-			return
-		}
+	location, err := conf.FieldString(vaicpFieldLocation)
+	if err != nil {
+		return
 	}
-	opts := []option.ClientOption{}
+	var creds *auth.Credentials
 	if conf.Contains(vaicpFieldCredentialsJSON) {
 		var jsonObject string
 		jsonObject, err = conf.FieldString(vaicpFieldCredentialsJSON)
 		if err != nil {
 			return
 		}
-		opts = append(opts, option.WithCredentialsJSON([]byte(jsonObject)))
+		creds, err = credentials.DetectDefault(&credentials.DetectOptions{
+			Scopes:          []string{"https://www.googleapis.com/auth/cloud-vertex-ai.firstparty.predict"},
+			CredentialsJSON: []byte(jsonObject),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to load json credentials: %w", err)
+		}
 	}
-	proc.client, err = genai.NewClient(ctx, project, location, opts...)
+	proc.client, err = genai.NewClient(ctx, &genai.ClientConfig{
+		Project:     project,
+		Location:    location,
+		Backend:     genai.BackendVertexAI,
+		Credentials: creds,
+	})
 	if err != nil {
 		return
 	}
-	defer func() {
-		if err != nil {
-			_ = proc.client.Close()
-		}
-	}()
 	proc.model, err = conf.FieldString(vaicpFieldModel)
 	if err != nil {
 		return
@@ -180,6 +259,12 @@ func newVertexAIProcessor(conf *service.ParsedConfig, mgr *service.Resources) (p
 			return
 		}
 	}
+	if conf.Contains(vaicpFieldHistory) {
+		proc.history, err = conf.FieldBloblang(vaicpFieldHistory)
+		if err != nil {
+			return
+		}
+	}
 	if conf.Contains(vaicpFieldTemp) {
 		var temp float64
 		temp, err = conf.FieldFloat(vaicpFieldTemp)
@@ -197,12 +282,12 @@ func newVertexAIProcessor(conf *service.ParsedConfig, mgr *service.Resources) (p
 		proc.topP = genai.Ptr(float32(topP))
 	}
 	if conf.Contains(vaicpFieldTopK) {
-		var topK int
-		topK, err = conf.FieldInt(vaicpFieldTopK)
+		var topK float64
+		topK, err = conf.FieldFloat(vaicpFieldTopK)
 		if err != nil {
 			return
 		}
-		proc.topK = genai.Ptr(int32(topK))
+		proc.topK = genai.Ptr(float32(topK))
 	}
 	if conf.Contains(vaicpFieldMaxTokens) {
 		var maxTokens int
@@ -210,7 +295,7 @@ func newVertexAIProcessor(conf *service.ParsedConfig, mgr *service.Resources) (p
 		if err != nil {
 			return
 		}
-		proc.maxTokens = genai.Ptr(int32(maxTokens))
+		proc.maxTokens = int32(maxTokens)
 	}
 	if conf.Contains(vaicpFieldStop) {
 		proc.stopSequences, err = conf.FieldStringList(vaicpFieldStop)
@@ -236,6 +321,9 @@ func newVertexAIProcessor(conf *service.ParsedConfig, mgr *service.Resources) (p
 	}
 	var format string
 	format, err = conf.FieldString(vaicpFieldResponseFormat)
+	if err != nil {
+		return nil, err
+	}
 	switch format {
 	case "json":
 		proc.responseMIMEType = "application/json"
@@ -244,8 +332,93 @@ func newVertexAIProcessor(conf *service.ParsedConfig, mgr *service.Resources) (p
 	default:
 		return nil, fmt.Errorf("invalid value %q for `%s`", format, vaicpFieldResponseFormat)
 	}
+	proc.maxToolCalls, err = conf.FieldInt(vaicpFieldMaxToolCalls)
+	if err != nil {
+		return nil, err
+	}
+	toolsConf, err := conf.FieldObjectList(vaicpFieldTool)
+	if err != nil {
+		return nil, err
+	}
+	for _, toolConf := range toolsConf {
+		name, err := toolConf.FieldString(vaicpToolFieldName)
+		if err != nil {
+			return nil, err
+		}
+		desc, err := toolConf.FieldString(vaicpToolFieldDesc)
+		if err != nil {
+			return nil, err
+		}
+		paramsConf := toolConf.Namespace(vaicpToolFieldParams)
+		required, err := paramsConf.FieldStringList(vaicpToolParamFieldRequired)
+		if err != nil {
+			return nil, err
+		}
+		propsConf, err := paramsConf.FieldObjectMap(vaicpToolParamFieldProps)
+		if err != nil {
+			return nil, err
+		}
+		props := map[string]*genai.Schema{}
+		for propName, propConf := range propsConf {
+			typeStr, err := propConf.FieldString(vaicpToolParamPropFieldType)
+			if err != nil {
+				return nil, err
+			}
+			typeStr = strings.ToUpper(typeStr)
+			validTypes := []genai.Type{
+				genai.TypeArray,
+				genai.TypeBoolean,
+				genai.TypeInteger,
+				genai.TypeNULL,
+				genai.TypeNumber,
+				genai.TypeObject,
+				genai.TypeString,
+			}
+			if !slices.Contains(validTypes, genai.Type(typeStr)) {
+				return nil, fmt.Errorf("invalid type %q for property %q in tool %q, valid types: %v", typeStr, propName, name, validTypes)
+			}
+			fieldDesc, err := propConf.FieldString(vaicpToolParamPropFieldDescription)
+			if err != nil {
+				return nil, err
+			}
+			enum, err := propConf.FieldStringList(vaicpToolParamPropFieldEnum)
+			if err != nil {
+				return nil, err
+			}
+			props[propName] = &genai.Schema{
+				Type:        genai.Type(typeStr),
+				Description: fieldDesc,
+				Enum:        enum,
+			}
+		}
+		pipeline, err := toolConf.FieldProcessorList(vaicpToolFieldPipeline)
+		if err != nil {
+			return nil, err
+		}
+		proc.tools = append(proc.tools, tool{
+			def: &genai.Tool{
+				FunctionDeclarations: []*genai.FunctionDeclaration{
+					{
+						Name:        name,
+						Description: desc,
+						Parameters: &genai.Schema{
+							Type:       genai.TypeObject,
+							Required:   required,
+							Properties: props,
+						},
+					},
+				},
+			},
+			pipeline: pipeline,
+		})
+	}
 	p = proc
 	return
+}
+
+type tool struct {
+	def      *genai.Tool
+	pipeline []*service.OwnedProcessor
 }
 
 type vertexAIChatProcessor struct {
@@ -255,42 +428,72 @@ type vertexAIChatProcessor struct {
 	userPrompt       *service.InterpolatedString
 	systemPrompt     *service.InterpolatedString
 	attachment       *bloblang.Executor
+	history          *bloblang.Executor
 	temp             *float32
 	topP             *float32
-	topK             *int32
-	maxTokens        *int32
+	topK             *float32
+	maxTokens        int32
 	stopSequences    []string
 	presencePenalty  *float32
 	frequencyPenalty *float32
 	responseMIMEType string
+	maxToolCalls     int
+	tools            []tool
 }
 
 func (p *vertexAIChatProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
-	m := p.client.GenerativeModel(p.model)
-	m.Temperature = p.temp
-	m.TopP = p.topP
-	m.TopK = p.topK
-	m.MaxOutputTokens = p.maxTokens
-	m.StopSequences = p.stopSequences
-	m.PresencePenalty = p.presencePenalty
-	m.FrequencyPenalty = p.frequencyPenalty
-	m.ResponseMIMEType = p.responseMIMEType
+	cfg := &genai.GenerateContentConfig{}
+	for _, tool := range p.tools {
+		cfg.Tools = append(cfg.Tools, tool.def)
+	}
+	cfg.Temperature = p.temp
+	cfg.TopP = p.topP
+	cfg.TopK = p.topK
+	cfg.MaxOutputTokens = p.maxTokens
+	cfg.StopSequences = p.stopSequences
+	cfg.PresencePenalty = p.presencePenalty
+	cfg.FrequencyPenalty = p.frequencyPenalty
+	cfg.ResponseMIMEType = p.responseMIMEType
 	if p.systemPrompt != nil {
 		p, err := p.systemPrompt.TryString(msg)
 		if err != nil {
 			return nil, fmt.Errorf("unable to evaluate `%s`: %w", vaicpFieldSystemPrompt, err)
 		}
-		m.SystemInstruction = &genai.Content{
-			Role:  "system",
-			Parts: []genai.Part{genai.Text(p)},
+		cfg.SystemInstruction = &genai.Content{
+			Role:  genai.RoleUser,
+			Parts: []*genai.Part{{Text: p}},
 		}
 	}
-	chat := m.StartChat()
+	var history []*genai.Content
+	if p.history != nil {
+		h, err := msg.BloblangQuery(p.history)
+		if err != nil {
+			return nil, fmt.Errorf("unable to evaluate `%s`: %w", vaicpFieldHistory, err)
+		}
+		b, err := h.AsBytes()
+		if err != nil {
+			return nil, fmt.Errorf("unable to extract `%s` output: %w", vaicpFieldHistory, err)
+		}
+		var bloblOutput []struct {
+			Role    genai.Role `json:"role"`
+			Content string     `json:"content"`
+		}
+		if err := json.Unmarshal(b, &bloblOutput); err != nil {
+			return nil, fmt.Errorf("unable to unmarshal `%s` output: %w", vaicpFieldHistory, err)
+		}
+		for _, h := range bloblOutput {
+			history = append(history, genai.NewContentFromText(h.Content, h.Role))
+		}
+	}
+	chat, err := p.client.Chats.Create(ctx, p.model, cfg, history)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create chat: %w", err)
+	}
 	prompt, err := p.computePrompt(msg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compute prompt: %w", err)
 	}
-	parts := []genai.Part{genai.Text(prompt)}
+	reqParts := []genai.Part{{Text: prompt}}
 	if p.attachment != nil {
 		v, err := msg.BloblangQuery(p.attachment)
 		if err != nil {
@@ -304,37 +507,106 @@ func (p *vertexAIChatProcessor) Process(ctx context.Context, msg *service.Messag
 		if contentType == "application/octet-stream" {
 			return nil, fmt.Errorf("unable to detect content-type of `%s`", vaicpFieldAttachment)
 		}
-		parts = append(parts, genai.Blob{MIMEType: contentType, Data: i})
+		reqParts = append(reqParts, genai.Part{InlineData: &genai.Blob{MIMEType: contentType, Data: i}})
 	}
-	resp, err := chat.SendMessage(ctx, parts...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate response: %w", err)
-	}
-	if len(resp.Candidates) != 1 {
-		if resp.PromptFeedback != nil && resp.PromptFeedback.BlockReasonMessage != "" {
-			return nil, fmt.Errorf("response blocked due to: %s", resp.PromptFeedback.BlockReasonMessage)
+	for range p.maxToolCalls {
+		resp, err := chat.SendMessage(ctx, reqParts...)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate response: %w", err)
 		}
-		return nil, errors.New("no candidate responses returned")
-	}
-	parts = resp.Candidates[0].Content.Parts
-	if len(parts) != 1 {
-		if resp.PromptFeedback != nil && resp.PromptFeedback.BlockReasonMessage != "" {
-			return nil, fmt.Errorf("response blocked due to: %s", resp.PromptFeedback.BlockReasonMessage)
+		if len(resp.Candidates) != 1 {
+			if resp.PromptFeedback != nil && resp.PromptFeedback.BlockReasonMessage != "" {
+				return nil, fmt.Errorf("response blocked due to: %s", resp.PromptFeedback.BlockReasonMessage)
+			}
+			return nil, errors.New("no candidate responses returned")
 		}
-		return nil, errors.New("no candidate response parts returned")
+		respParts := resp.Candidates[0].Content.Parts
+		reqParts = nil
+		for _, part := range respParts {
+			if part.FunctionCall == nil {
+				continue
+			}
+			var funcResp genai.Part
+			idx := slices.IndexFunc(p.tools, func(t tool) bool {
+				return t.def.FunctionDeclarations[0].Name == part.FunctionCall.Name
+			})
+			if idx < 0 {
+				return nil, fmt.Errorf("no function for tool call %q", part.FunctionCall.Name)
+			}
+			tool := p.tools[idx]
+			funcParams := msg.Copy()
+			funcParams.SetStructured(part.FunctionCall.Args)
+			batches, err := service.ExecuteProcessors(ctx, tool.pipeline, service.MessageBatch{funcParams})
+			funcResp.FunctionResponse = &genai.FunctionResponse{
+				ID:       part.FunctionCall.ID,
+				Name:     part.FunctionCall.Name,
+				Response: map[string]any{},
+			}
+			if err != nil {
+				funcResp.FunctionResponse.Response["error"] = err.Error()
+				reqParts = append(reqParts, funcResp)
+				continue
+			}
+			var outputs []any
+			var errs []error
+			for _, m := range slices.Concat(batches...) {
+				if err := m.GetError(); err != nil {
+					errs = append(errs, err)
+				} else if m.HasStructured() {
+					v, err := m.AsStructured()
+					if err != nil {
+						errs = append(errs, err)
+					} else {
+						outputs = append(outputs, v)
+					}
+				} else {
+					v, err := m.AsBytes()
+					if err != nil {
+						errs = append(errs, err)
+					} else if utf8.Valid(v) {
+						outputs = append(outputs, string(v))
+					} else {
+						outputs = append(outputs, v)
+					}
+				}
+			}
+			if len(errs) > 0 {
+				funcResp.FunctionResponse.Response["error"] = errors.Join(errs...).Error()
+			}
+			if len(outputs) > 1 {
+				funcResp.FunctionResponse.Response["output"] = outputs
+			} else if len(outputs) == 1 {
+				funcResp.FunctionResponse.Response["output"] = outputs[0]
+			}
+			reqParts = append(reqParts, funcResp)
+		}
+		if len(reqParts) > 0 {
+			continue
+		}
+		if len(respParts) != 1 {
+			if resp.PromptFeedback != nil && resp.PromptFeedback.BlockReasonMessage != "" {
+				return nil, fmt.Errorf("response blocked due to: %s", resp.PromptFeedback.BlockReasonMessage)
+			}
+			return nil, errors.New("no candidate response parts returned")
+		}
+		out := msg.Copy()
+		part := respParts[0]
+		switch {
+		case part.InlineData != nil:
+			out.SetBytes(part.InlineData.Data)
+			out.MetaSetMut("content_type", part.InlineData.MIMEType)
+		case part.FileData != nil:
+			out.SetStructured(part.FileData.FileURI)
+			out.MetaSetMut("content_type", part.FileData.MIMEType)
+		case part.Text != "":
+			out.SetBytes([]byte(part.Text))
+			out.MetaSetMut("content_type", "text/plain")
+		default:
+			return nil, fmt.Errorf("unknown response content: %T", respParts[0])
+		}
+		return service.MessageBatch{out}, nil
 	}
-	out := msg.Copy()
-	switch p := parts[0].(type) {
-	case genai.Text:
-		out.SetStructured(string(p))
-	case genai.Blob:
-		out.SetBytes(p.Data)
-	case genai.FileData:
-		out.SetStructured(p.FileURI)
-	default:
-		return nil, fmt.Errorf("unknown response content: %T", parts[0])
-	}
-	return service.MessageBatch{out}, nil
+	return nil, fmt.Errorf("exceeded maximum number of tool calls (%d)", p.maxToolCalls)
 }
 
 func (p *vertexAIChatProcessor) computePrompt(msg *service.Message) (string, error) {
@@ -351,6 +623,6 @@ func (p *vertexAIChatProcessor) computePrompt(msg *service.Message) (string, err
 	return string(b), nil
 }
 
-func (p *vertexAIChatProcessor) Close(context.Context) error {
-	return p.client.Close()
+func (*vertexAIChatProcessor) Close(context.Context) error {
+	return nil
 }
