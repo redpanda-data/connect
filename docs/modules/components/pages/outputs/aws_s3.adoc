@@ -82,6 +82,7 @@ output:
     force_path_style_urls: false
     max_in_flight: 64
     timeout: 5s
+    object_canned_acl: private
     batching:
       count: 0
       byte_size: 0
@@ -382,6 +383,25 @@ The maximum period to wait on an upload before abandoning it and reattempting.
 *Type*: `string`
 
 *Default*: `"5s"`
+
+=== `object_canned_acl`
+
+The object canned ACL value.
+
+
+*Type*: `string`
+
+*Default*: `"private"`
+
+Options:
+`private`
+, `public-read`
+, `public-read-write`
+, `authenticated-read`
+, `aws-exec-read`
+, `bucket-owner-read`
+, `bucket-owner-full-control`
+.
 
 === `batching`
 
