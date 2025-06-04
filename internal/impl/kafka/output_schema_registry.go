@@ -26,6 +26,8 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"cuelang.org/go/pkg/strings"
+	"github.com/google/go-cmp/cmp"
 	franz_sr "github.com/twmb/franz-go/pkg/sr"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -388,7 +390,26 @@ func (o *schemaRegistryOutput) createSchema(ctx context.Context, key schemaLinea
 	} else {
 		destinationID, err = o.client.CreateSchemaWithIDAndVersion(ctx, ss.Subject, ss.Schema, ss.ID, ss.Version)
 		if err != nil {
-			return -1, err
+			// Temporary hack until https://github.com/redpanda-data/redpanda/issues/26331 is resolved.
+			// If the schema already exists and is identical to the one we're trying to create, Redpanda should not
+			// return an error, but right now it does.
+			if strings.HasSuffix(err.Error(), fmt.Sprintf("Overwrite new schema with id %d is not permitted.", ss.ID)) {
+				existingSchema, errGet := o.client.GetSchemaBySubjectAndVersion(ctx, ss.Subject, &ss.Version, true)
+				if errGet != nil {
+					return -1, errGet
+				}
+
+				if !cmp.Equal(ss, existingSchema) {
+					// If the schemas differ, then we encountered a genuine conflict.
+					return -1, err
+				}
+
+				destinationID = existingSchema.ID
+
+			} else {
+				// Fail if we get any other errors.
+				return -1, err
+			}
 		}
 	}
 
