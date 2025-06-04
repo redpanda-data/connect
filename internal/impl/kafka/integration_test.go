@@ -674,35 +674,32 @@ func TestSchemaRegistryIntegration(t *testing.T) {
 	require.NoError(t, err)
 	pool.MaxWait = time.Minute
 
+	dummySchema := `{"name":"foo", "type": "string"}`
+	dummySchemaWithReference := `{"name":"bar", "type": "record", "fields":[{"name":"data", "type": "foo"}]}`
 	tests := []struct {
 		name                       string
-		schema                     string
 		includeSoftDeletedSubjects bool
 		extraSubject               string
 		subjectFilter              string
-		schemaWithReference        string
+		schemaWithReference        bool
 	}{
 		{
-			name:   "roundtrip",
-			schema: `{"name":"foo", "type": "string"}`,
+			name: "roundtrip",
 		},
 		{
 			name:                       "roundtrip with deleted subject",
-			schema:                     `{"name":"foo", "type": "string"}`,
 			includeSoftDeletedSubjects: true,
 		},
 		{
 			name:          "roundtrip with subject filter",
-			schema:        `{"name":"foo", "type": "string"}`,
 			extraSubject:  "foobar",
 			subjectFilter: `^\w+-\w+-\w+-\w+-\w+$`,
 		},
 		{
-			name:   "roundtrip with schema references",
-			schema: `{"name":"foo", "type": "string"}`,
+			name: "roundtrip with schema references",
 			// A UUID which always gets picked first when querying the `/subjects` endpoint.
 			extraSubject:        "ffffffff-ffff-ffff-ffff-ffffffffffff",
-			schemaWithReference: `{"name":"bar", "type": "record", "fields":[{"name":"data", "type": "foo"}]}`,
+			schemaWithReference: true,
 		},
 	}
 
@@ -737,18 +734,18 @@ func TestSchemaRegistryIntegration(t *testing.T) {
 				deleteSubject(t, destination.SchemaRegistryURL, subject, true)
 			}()
 
-			createSchema(t, source.SchemaRegistryURL, subject, test.schema, nil)
+			createSchema(t, source.SchemaRegistryURL, subject, dummySchema, nil)
 
 			if test.subjectFilter != "" {
-				createSchema(t, source.SchemaRegistryURL, test.extraSubject, test.schema, nil)
+				createSchema(t, source.SchemaRegistryURL, test.extraSubject, dummySchema, nil)
 			}
 
 			if test.includeSoftDeletedSubjects {
 				deleteSubject(t, source.SchemaRegistryURL, subject, false)
 			}
 
-			if test.schemaWithReference != "" {
-				createSchema(t, source.SchemaRegistryURL, test.extraSubject, test.schemaWithReference, []franz_sr.SchemaReference{{Name: "foo", Subject: subject, Version: 1}})
+			if test.schemaWithReference {
+				createSchema(t, source.SchemaRegistryURL, test.extraSubject, dummySchemaWithReference, []franz_sr.SchemaReference{{Name: "foo", Subject: subject, Version: 1}})
 			}
 
 			streamBuilder := service.NewStreamBuilder()
@@ -768,7 +765,7 @@ output:
         max_in_flight: 1
     # Don't retry the same message multiple times so we do fail if schemas with references are sent in the wrong order
     - drop: {}
-`, source.SchemaRegistryURL, test.includeSoftDeletedSubjects, test.subjectFilter, test.schemaWithReference != "", destination.SchemaRegistryURL)))
+`, source.SchemaRegistryURL, test.includeSoftDeletedSubjects, test.subjectFilter, test.schemaWithReference, destination.SchemaRegistryURL)))
 			require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
 
 			stream, err := streamBuilder.Build()
@@ -779,6 +776,10 @@ output:
 
 			err = stream.Run(ctx)
 			require.NoError(t, err)
+
+			defer func() {
+				require.NoError(t, stream.StopWithin(1*time.Second))
+			}()
 
 			resp, err := http.DefaultClient.Get(fmt.Sprintf("%s/subjects", destination.SchemaRegistryURL))
 			require.NoError(t, err)
@@ -802,9 +803,9 @@ output:
 			require.NoError(t, json.Unmarshal(body, &sd))
 			assert.Equal(t, subject, sd.Subject)
 			assert.Equal(t, 1, sd.Version)
-			assert.JSONEq(t, test.schema, sd.Schema.Schema)
+			assert.JSONEq(t, dummySchema, sd.Schema.Schema)
 
-			if test.schemaWithReference != "" {
+			if test.schemaWithReference {
 				resp, err = http.DefaultClient.Get(fmt.Sprintf("%s/subjects/%s/versions/1", destination.SchemaRegistryURL, test.extraSubject))
 				require.NoError(t, err)
 				body, err = io.ReadAll(resp.Body)
@@ -816,10 +817,68 @@ output:
 				require.NoError(t, json.Unmarshal(body, &sd))
 				assert.Equal(t, test.extraSubject, sd.Subject)
 				assert.Equal(t, 1, sd.Version)
-				assert.JSONEq(t, test.schemaWithReference, sd.Schema.Schema)
+				assert.JSONEq(t, dummySchemaWithReference, sd.Schema.Schema)
 			}
 		})
 	}
+}
+
+func TestSchemaRegistryDuplicateSchemaIntegration(t *testing.T) {
+	integration.CheckSkip(t)
+
+	pool, err := dockertest.NewPool("")
+	require.NoError(t, err)
+	pool.MaxWait = time.Minute
+
+	source, err := redpandatest.StartRedpanda(t, pool, false, true)
+	require.NoError(t, err)
+	destination, err := redpandatest.StartRedpanda(t, pool, false, true)
+	require.NoError(t, err)
+
+	dummySubject := "foobar"
+	dummySchema := `{"name":"foo", "type": "string"}`
+	createSchema(t, source.SchemaRegistryURL, dummySubject, dummySchema, nil)
+
+	streamBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
+input:
+  schema_registry:
+    url: %s
+output:
+  schema_registry:
+    url: %s
+    subject: ${! @schema_registry_subject }
+    translate_ids: false
+`, source.SchemaRegistryURL, destination.SchemaRegistryURL)))
+	require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
+
+	runStream := func() {
+		stream, err := streamBuilder.Build()
+		require.NoError(t, err)
+
+		ctx, done := context.WithTimeout(t.Context(), 2*time.Second)
+		defer done()
+		err = stream.Run(ctx)
+		require.NoError(t, err)
+	}
+
+	runStream()
+	// The second run should perform an idempotent write for the same schema and not fail.
+	runStream()
+
+	dummyVersion := 1
+	resp, err := http.DefaultClient.Get(fmt.Sprintf("%s/subjects/%s/versions/%d", destination.SchemaRegistryURL, dummySubject, dummyVersion))
+	require.NoError(t, err)
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var sd franz_sr.SubjectSchema
+	require.NoError(t, json.Unmarshal(body, &sd))
+	assert.Equal(t, dummySubject, sd.Subject)
+	assert.Equal(t, 1, sd.Version)
+	assert.JSONEq(t, dummySchema, sd.Schema.Schema)
 }
 
 func TestSchemaRegistryIDTranslationIntegration(t *testing.T) {
