@@ -31,6 +31,7 @@ func TestInputJetStreamConfigParse(t *testing.T) {
 		inputConfig := `
 urls: [ url1, url2 ]
 subject: testsubject
+max_reconnects: -1
 auth:
   nkey_file: test auth n key file
   user_credentials_file: test auth user creds file
@@ -46,6 +47,7 @@ auth:
 
 		assert.Equal(t, "url1,url2", e.connDetails.urls)
 		assert.Equal(t, "testsubject", e.subject)
+		assert.Equal(t, -1, *e.connDetails.maxReconnects)
 		assert.Equal(t, "test auth n key file", e.connDetails.authConf.NKeyFile)
 		assert.Equal(t, "test auth user creds file", e.connDetails.authConf.UserCredentialsFile)
 		assert.Equal(t, "test auth inline user JWT", e.connDetails.authConf.UserJWT)

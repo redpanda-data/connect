@@ -33,6 +33,10 @@ func connectionHeadFields() []*service.ConfigField {
 			Description("A list of URLs to connect to. If an item of the list contains commas it will be expanded into multiple URLs.").
 			Example([]string{"nats://127.0.0.1:4222"}).
 			Example([]string{"nats://username:password@127.0.0.1:4222"}),
+		service.NewIntField("max_reconnects").
+			Description("The maximum number of times to attempt to reconnect to the server. If negative, it will never stop trying to reconnect.").
+			Optional().
+			Advanced(),
 	}
 }
 
@@ -44,12 +48,13 @@ func connectionTailFields() []*service.ConfigField {
 }
 
 type connectionDetails struct {
-	label    string
-	logger   *service.Logger
-	tlsConf  *tls.Config
-	authConf authConfig
-	fs       *service.FS
-	urls     string
+	label         string
+	logger        *service.Logger
+	tlsConf       *tls.Config
+	authConf      authConfig
+	fs            *service.FS
+	urls          string
+	maxReconnects *int
 }
 
 func connectionDetailsFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (c connectionDetails, err error) {
@@ -62,6 +67,14 @@ func connectionDetailsFromParsed(conf *service.ParsedConfig, mgr *service.Resour
 		return
 	}
 	c.urls = strings.Join(urlList, ",")
+
+	if conf.Contains("max_reconnects") {
+		if maxReconnects, err := conf.FieldInt("max_reconnects"); err != nil {
+			return c, err
+		} else {
+			c.maxReconnects = &maxReconnects
+		}
+	}
 
 	var tlsEnabled bool
 	if c.tlsConf, tlsEnabled, err = conf.FieldTLSToggled("tls"); err != nil {
@@ -85,6 +98,9 @@ func (c *connectionDetails) get(_ context.Context, extraOpts ...nats.Option) (*n
 	opts = append(opts, nats.Name(c.label))
 	opts = append(opts, errorHandlerOption(c.logger))
 	opts = append(opts, authConfToOptions(c.authConf, c.fs)...)
+	if c.maxReconnects != nil {
+		opts = append(opts, nats.MaxReconnects(*c.maxReconnects))
+	}
 	opts = append(opts, extraOpts...)
 	return nats.Connect(c.urls, opts...)
 }
