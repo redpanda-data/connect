@@ -13,7 +13,6 @@ import (
 	"encoding/json"
 	"errors"
 	"iter"
-	"strconv"
 	"sync"
 	"time"
 
@@ -60,15 +59,15 @@ func (s *spannerPartitionBatchIter) Iter(ctx context.Context) iter.Seq2[service.
 			msg := service.NewMessage(b)
 			msg.MetaSet("table_name", s.dcr.TableName)
 			msg.MetaSet("mod_type", s.dcr.ModType)
-			msg.MetaSet("commit_timestamp", s.dcr.CommitTimestamp.Format(time.RFC3339Nano))
+			msg.MetaSetMut("commit_timestamp", s.dcr.CommitTimestamp)
 			msg.MetaSet("record_sequence", s.dcr.RecordSequence)
 			msg.MetaSet("server_transaction_id", s.dcr.ServerTransactionID)
-			msg.MetaSet("is_last_record_in_transaction_in_partition", strconv.FormatBool(s.dcr.IsLastRecordInTransactionInPartition))
+			msg.MetaSetMut("is_last_record_in_transaction_in_partition", s.dcr.IsLastRecordInTransactionInPartition)
 			msg.MetaSet("value_capture_type", s.dcr.ValueCaptureType)
-			msg.MetaSet("number_of_records_in_transaction", strconv.FormatInt(s.dcr.NumberOfRecordsInTransaction, 10))
-			msg.MetaSet("number_of_partitions_in_transaction", strconv.FormatInt(s.dcr.NumberOfPartitionsInTransaction, 10))
+			msg.MetaSetMut("number_of_records_in_transaction", s.dcr.NumberOfRecordsInTransaction)
+			msg.MetaSetMut("number_of_partitions_in_transaction", s.dcr.NumberOfPartitionsInTransaction)
 			msg.MetaSet("transaction_tag", s.dcr.TransactionTag)
-			msg.MetaSet("is_system_transaction", strconv.FormatBool(s.dcr.IsSystemTransaction))
+			msg.MetaSetMut("is_system_transaction", s.dcr.IsSystemTransaction)
 
 			if !s.batcher.Add(msg) {
 				continue
