@@ -3,7 +3,7 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.56.0 - TBD
+## 4.56.0 - 2025-06-05
 
 ### Added
 
@@ -18,6 +18,7 @@ All notable changes to this project will be documented in this file.
 - Field `input_bundle_label` added to the `redpanda_migrator_bundle` output. (@mihaitodor)
 - New `gcp_spanner_cdc` input. (@mmatczuk)
 - Field `object_canned_acl` added to the `aws_s3` output. (@mihaitodor)
+- Fields `history`, `max_tool_calls` and `tools` added to the `gcp_vertex_ai_chat` processor. (@rockwotj)
 
 ### Fixed
 
