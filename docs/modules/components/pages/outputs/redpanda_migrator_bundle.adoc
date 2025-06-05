@@ -33,6 +33,7 @@ output:
     redpanda_migrator: {} # No default (required)
     schema_registry: {} # No default (required)
     translate_schema_ids: false
+    input_bundle_label: ""
 ```
 
 All-in-one output which writes messages and schemas to a Kafka or Redpanda cluster. This output is meant to be used
@@ -66,5 +67,14 @@ when it already contains some schemas which differ from the ones being migrated.
 *Type*: `bool`
 
 *Default*: `false`
+
+=== `input_bundle_label`
+
+Specify the redpanda_migrator_bundle input label if one is assigned to it.
+
+
+*Type*: `string`
+
+*Default*: `""`
 
 

@@ -33,6 +33,7 @@ input:
     redpanda_migrator: {} # No default (required)
     schema_registry: {} # No default (required)
     migrate_schemas_before_data: true
+    consumer_group_offsets_poll_interval: 15s
 ```
 
 All-in-one input which reads messages and schemas from a Kafka or Redpanda cluster. This input is meant to be used
@@ -65,5 +66,14 @@ Migrate all schemas first before starting to migrate data.
 *Type*: `bool`
 
 *Default*: `true`
+
+=== `consumer_group_offsets_poll_interval`
+
+Duration between OffsetFetch polling attempts in redpanda_migrator_offsets input.
+
+
+*Type*: `string`
+
+*Default*: `"15s"`
 
 

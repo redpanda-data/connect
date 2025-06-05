@@ -41,14 +41,34 @@ fields:
     description: |
       Migrate all schemas first before starting to migrate data.
 
+  - name: consumer_group_offsets_poll_interval
+    type: string
+    kind: scalar
+    default: 15s
+    description: |
+      Duration between OffsetFetch polling attempts in redpanda_migrator_offsets input.
+
 mapping: |
   #!blobl
 
   let labelPrefix = @label.not_empty().or("redpanda_migrator_bundle")
 
-  let redpandaMigrator = this.redpanda_migrator.assign({"output_resource": "%s_redpanda_migrator_output".format($labelPrefix)})
-
-  let redpandaMigratorOffsets = this.redpanda_migrator.with("seed_brokers", "topics", "regexp_topics", "consumer_group", "topic_lag_refresh_period", "client_id", "rack_id", "tls", "sasl")
+  let redpandaMigratorOffsets = this.redpanda_migrator.with(
+    "seed_brokers",
+    "topics",
+    "regexp_topics",
+    "consumer_group",
+    "topic_lag_refresh_period",
+    "client_id",
+    "rack_id",
+    "tls",
+    "sasl").assign(
+      if this.exists("consumer_group_offsets_poll_interval") {
+        {"poll_interval": this.consumer_group_offsets_poll_interval}
+      } else {
+        {}
+      }
+    )
 
   root = if this.redpanda_migrator.length() == 0 {
     throw("the redpanda_migrator input must be configured")
@@ -79,7 +99,7 @@ mapping: |
                   redpanda_migrator_offsets: %s
                   processors:
                     - mapping: meta input_label = "redpanda_migrator_offsets_input"
-    """.format($labelPrefix, this.schema_registry.string(), $labelPrefix, $redpandaMigrator.string(), $labelPrefix, $redpandaMigratorOffsets.string()).parse_yaml()
+    """.format($labelPrefix, this.schema_registry.string(), $labelPrefix, this.redpanda_migrator.string(), $labelPrefix, $redpandaMigratorOffsets.string()).parse_yaml()
   } else if this.schema_registry.length() > 0 {
     """
       broker:
@@ -105,7 +125,7 @@ mapping: |
             redpanda_migrator_offsets: %s
             processors:
               - mapping: meta input_label = "redpanda_migrator_offsets_input"
-    """.format($labelPrefix, this.schema_registry.string(), $labelPrefix, $redpandaMigrator.string(), $labelPrefix, $redpandaMigratorOffsets.string()).parse_yaml()
+    """.format($labelPrefix, this.schema_registry.string(), $labelPrefix, this.redpanda_migrator.string(), $labelPrefix, $redpandaMigratorOffsets.string()).parse_yaml()
   } else {
     """
       broker:
@@ -118,7 +138,7 @@ mapping: |
             redpanda_migrator_offsets: %s
             processors:
               - mapping: meta input_label = "redpanda_migrator_offsets_input"
-    """.format($labelPrefix, $redpandaMigrator.string(), $labelPrefix, $redpandaMigratorOffsets.string()).parse_yaml()
+    """.format($labelPrefix, this.redpanda_migrator.string(), $labelPrefix, $redpandaMigratorOffsets.string()).parse_yaml()
   }
 
 tests:
@@ -155,7 +175,6 @@ tests:
               seed_brokers: [ "127.0.0.1:9092" ]
               topics: [ "foobar" ]
               consumer_group: "migrator"
-              output_resource: redpanda_migrator_bundle_redpanda_migrator_output
             processors:
               - mapping: meta input_label = "redpanda_migrator_input"
           - label: redpanda_migrator_bundle_redpanda_migrator_offsets_input
@@ -163,6 +182,7 @@ tests:
               seed_brokers: [ "127.0.0.1:9092" ]
               topics: [ "foobar" ]
               consumer_group: "migrator"
+              poll_interval: "15s"
             processors:
               - mapping: meta input_label = "redpanda_migrator_offsets_input"
 
@@ -199,7 +219,6 @@ tests:
                     seed_brokers: [ "127.0.0.1:9092" ]
                     topics: [ "foobar" ]
                     consumer_group: "migrator"
-                    output_resource: redpanda_migrator_bundle_redpanda_migrator_output
                   processors:
                     - mapping: meta input_label = "redpanda_migrator_input"
                 - label: redpanda_migrator_bundle_redpanda_migrator_offsets_input
@@ -207,6 +226,7 @@ tests:
                     seed_brokers: [ "127.0.0.1:9092" ]
                     topics: [ "foobar" ]
                     consumer_group: "migrator"
+                    poll_interval: "15s"
                   processors:
                     - mapping: meta input_label = "redpanda_migrator_offsets_input"
 
@@ -225,7 +245,6 @@ tests:
               seed_brokers: [ "127.0.0.1:9092" ]
               topics: [ "foobar" ]
               consumer_group: "migrator"
-              output_resource: redpanda_migrator_bundle_redpanda_migrator_output
             processors:
               - mapping: meta input_label = "redpanda_migrator_input"
           - label: redpanda_migrator_bundle_redpanda_migrator_offsets_input
@@ -233,5 +252,6 @@ tests:
               seed_brokers: [ "127.0.0.1:9092" ]
               topics: [ "foobar" ]
               consumer_group: "migrator"
+              poll_interval: "15s"
             processors:
               - mapping: meta input_label = "redpanda_migrator_offsets_input"

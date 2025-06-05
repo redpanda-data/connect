@@ -136,9 +136,8 @@ func createKafkaTopicSasl(address, id string, partitions int32) error {
 	return nil
 }
 
-func TestIntegrationRedpanda(t *testing.T) {
+func TestRedpandaIntegration(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
@@ -216,7 +215,6 @@ input:
 	)
 
 	t.Run("only one partition", func(t *testing.T) {
-		t.Parallel()
 		suite.Run(
 			t, template,
 			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
@@ -229,7 +227,6 @@ input:
 	})
 
 	t.Run("explicit partitions", func(t *testing.T) {
-		t.Parallel()
 		suite.Run(
 			t, template,
 			integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
@@ -243,7 +240,6 @@ input:
 		)
 
 		t.Run("range of partitions", func(t *testing.T) {
-			t.Parallel()
 			suite.Run(
 				t, template,
 				integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
@@ -289,9 +285,133 @@ input:
 	})
 }
 
-func TestIntegrationRedpandaSasl(t *testing.T) {
+func TestRedpandaRecordOrderIntegration(t *testing.T) {
+	// This test checks for out-of-order records being transferred between two Redpanda containers using the `redpanda`
+	// input and output with default settings. It used to fail occasionally before this fix was put in place:
+	// https://github.com/redpanda-data/connect/pull/3386.
+	//
+	// Normally, you'll want to let it run multiple times in a loop over night:
+	// ```shell
+	// $ nohup go test -timeout 0 -v -count 10000 -run ^TestRedpandaRecordOrder$ ./internal/impl/kafka/enterprise > test.log 2>&1 &`
+	// ```
 	integration.CheckSkip(t)
-	t.Parallel()
+
+	pool, err := dockertest.NewPool("")
+	require.NoError(t, err)
+	pool.MaxWait = time.Minute
+
+	source, err := redpandatest.StartRedpanda(t, pool, true, false)
+	require.NoError(t, err)
+
+	destination, err := redpandatest.StartRedpanda(t, pool, true, false)
+	require.NoError(t, err)
+
+	t.Logf("Source broker: %s", source.BrokerAddr)
+	t.Logf("Destination broker: %s", destination.BrokerAddr)
+
+	// Create the topic
+	dummyTopic := "foobar"
+	dummyRetentionTime := strconv.Itoa(int((1 * time.Hour).Milliseconds()))
+	createTopicWithACLs(t, source.BrokerAddr, dummyTopic, dummyRetentionTime, "User:redpanda", kmsg.ACLOperationAll)
+	createTopicWithACLs(t, destination.BrokerAddr, dummyTopic, dummyRetentionTime, "User:redpanda", kmsg.ACLOperationAll)
+
+	dummyMessage := `{"test":"foo"}`
+	go func() {
+		t.Log("Producing messages...")
+
+		produceMessages(t, source, dummyTopic, dummyMessage, 0, 50, false, 50*time.Millisecond)
+
+		t.Log("Finished producing messages")
+	}()
+
+	runRedpandaPipeline := func(t *testing.T, source, destination redpandatest.RedpandaEndpoints, topic string, suppressLogs bool) {
+		streamBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
+input:
+  redpanda:
+    seed_brokers: [ %s ]
+    topics: [ %s ]
+    consumer_group: migrator_cg
+    start_from_oldest: true
+
+output:
+  redpanda:
+    seed_brokers: [ %s ]
+    topic: ${! @kafka_topic }
+    key: ${! @kafka_key }
+    timestamp_ms: ${! @kafka_timestamp_ms }
+    compression: none
+`, source.BrokerAddr, topic, destination.BrokerAddr)))
+		if suppressLogs {
+			require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
+		}
+
+		stream, err := streamBuilder.Build()
+		require.NoError(t, err)
+
+		// Run stream in the background and shut it down when the test is finished
+		closeChan := make(chan struct{})
+		go func() {
+			//nolint:usetesting // context.Background() could be replaced by t.Context()
+			err = stream.Run(context.Background())
+			require.NoError(t, err)
+
+			t.Log("Migrator pipeline shut down")
+
+			close(closeChan)
+		}()
+		t.Cleanup(func() {
+			require.NoError(t, stream.StopWithin(1*time.Second))
+
+			<-closeChan
+		})
+	}
+
+	// Run the Redpanda pipeline
+	runRedpandaPipeline(t, source, destination, dummyTopic, true)
+	t.Log("Pipeline started")
+
+	// Wait for a few records to be produced...
+	time.Sleep(1 * time.Second)
+
+	dummyConsumerGroup := "foobar_cg"
+	var prevSrcKeys []int
+	require.Eventually(t, func() bool {
+		srcKeys := fetchRecordKeys(t, source.BrokerAddr, dummyTopic, dummyConsumerGroup, 10)
+
+		time.Sleep(1 * time.Second)
+
+		destKeys := fetchRecordKeys(t, destination.BrokerAddr, dummyTopic, dummyConsumerGroup, 10)
+		if destKeys == nil {
+			// Stop the tests if the producer finished and the destination consumer group reached the high water mark
+			if srcKeys == nil {
+				return true
+			}
+
+			// Try again if the destination topic still needs to receive data
+			return false
+		}
+
+		if srcKeys == nil {
+			srcKeys = prevSrcKeys
+		}
+
+		assert.True(t, slices.IsSorted(srcKeys))
+		assert.True(t, slices.IsSorted(destKeys))
+
+		t.Logf("Source keys: %v", srcKeys)
+		t.Logf("Destination keys: %v", destKeys)
+
+		// Cache the previous source key so we can compare the current destination key with it after the producer
+		// finished, but Migrator still needs to copy some records over
+		prevSrcKeys = srcKeys
+
+		return false
+	}, 30*time.Second, 1*time.Nanosecond)
+}
+
+func TestRedpandaSaslIntegration(t *testing.T) {
+	integration.CheckSkip(t)
 
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
@@ -397,9 +517,8 @@ input:
 	)
 }
 
-func TestIntegrationRedpandaOutputFixedTimestamp(t *testing.T) {
+func TestRedpandaOutputFixedTimestampIntegration(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
@@ -470,7 +589,7 @@ input:
 	)
 }
 
-func BenchmarkIntegrationRedpanda(b *testing.B) {
+func BenchmarkRedpandaIntegration(b *testing.B) {
 	integration.CheckSkip(b)
 
 	pool, err := dockertest.NewPool("")
@@ -550,41 +669,37 @@ input:
 
 func TestSchemaRegistryIntegration(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
 	pool.MaxWait = time.Minute
 
+	dummySchema := `{"name":"foo", "type": "string"}`
+	dummySchemaWithReference := `{"name":"bar", "type": "record", "fields":[{"name":"data", "type": "foo"}]}`
 	tests := []struct {
 		name                       string
-		schema                     string
 		includeSoftDeletedSubjects bool
 		extraSubject               string
 		subjectFilter              string
-		schemaWithReference        string
+		schemaWithReference        bool
 	}{
 		{
-			name:   "roundtrip",
-			schema: `{"name":"foo", "type": "string"}`,
+			name: "roundtrip",
 		},
 		{
 			name:                       "roundtrip with deleted subject",
-			schema:                     `{"name":"foo", "type": "string"}`,
 			includeSoftDeletedSubjects: true,
 		},
 		{
 			name:          "roundtrip with subject filter",
-			schema:        `{"name":"foo", "type": "string"}`,
 			extraSubject:  "foobar",
 			subjectFilter: `^\w+-\w+-\w+-\w+-\w+$`,
 		},
 		{
-			name:   "roundtrip with schema references",
-			schema: `{"name":"foo", "type": "string"}`,
+			name: "roundtrip with schema references",
 			// A UUID which always gets picked first when querying the `/subjects` endpoint.
 			extraSubject:        "ffffffff-ffff-ffff-ffff-ffffffffffff",
-			schemaWithReference: `{"name":"bar", "type": "record", "fields":[{"name":"data", "type": "foo"}]}`,
+			schemaWithReference: true,
 		},
 	}
 
@@ -619,18 +734,18 @@ func TestSchemaRegistryIntegration(t *testing.T) {
 				deleteSubject(t, destination.SchemaRegistryURL, subject, true)
 			}()
 
-			createSchema(t, source.SchemaRegistryURL, subject, test.schema, nil)
+			createSchema(t, source.SchemaRegistryURL, subject, dummySchema, nil)
 
 			if test.subjectFilter != "" {
-				createSchema(t, source.SchemaRegistryURL, test.extraSubject, test.schema, nil)
+				createSchema(t, source.SchemaRegistryURL, test.extraSubject, dummySchema, nil)
 			}
 
 			if test.includeSoftDeletedSubjects {
 				deleteSubject(t, source.SchemaRegistryURL, subject, false)
 			}
 
-			if test.schemaWithReference != "" {
-				createSchema(t, source.SchemaRegistryURL, test.extraSubject, test.schemaWithReference, []franz_sr.SchemaReference{{Name: "foo", Subject: subject, Version: 1}})
+			if test.schemaWithReference {
+				createSchema(t, source.SchemaRegistryURL, test.extraSubject, dummySchemaWithReference, []franz_sr.SchemaReference{{Name: "foo", Subject: subject, Version: 1}})
 			}
 
 			streamBuilder := service.NewStreamBuilder()
@@ -650,7 +765,7 @@ output:
         max_in_flight: 1
     # Don't retry the same message multiple times so we do fail if schemas with references are sent in the wrong order
     - drop: {}
-`, source.SchemaRegistryURL, test.includeSoftDeletedSubjects, test.subjectFilter, test.schemaWithReference != "", destination.SchemaRegistryURL)))
+`, source.SchemaRegistryURL, test.includeSoftDeletedSubjects, test.subjectFilter, test.schemaWithReference, destination.SchemaRegistryURL)))
 			require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
 
 			stream, err := streamBuilder.Build()
@@ -661,6 +776,10 @@ output:
 
 			err = stream.Run(ctx)
 			require.NoError(t, err)
+
+			defer func() {
+				require.NoError(t, stream.StopWithin(1*time.Second))
+			}()
 
 			resp, err := http.DefaultClient.Get(fmt.Sprintf("%s/subjects", destination.SchemaRegistryURL))
 			require.NoError(t, err)
@@ -684,9 +803,9 @@ output:
 			require.NoError(t, json.Unmarshal(body, &sd))
 			assert.Equal(t, subject, sd.Subject)
 			assert.Equal(t, 1, sd.Version)
-			assert.JSONEq(t, test.schema, sd.Schema.Schema)
+			assert.JSONEq(t, dummySchema, sd.Schema.Schema)
 
-			if test.schemaWithReference != "" {
+			if test.schemaWithReference {
 				resp, err = http.DefaultClient.Get(fmt.Sprintf("%s/subjects/%s/versions/1", destination.SchemaRegistryURL, test.extraSubject))
 				require.NoError(t, err)
 				body, err = io.ReadAll(resp.Body)
@@ -698,15 +817,72 @@ output:
 				require.NoError(t, json.Unmarshal(body, &sd))
 				assert.Equal(t, test.extraSubject, sd.Subject)
 				assert.Equal(t, 1, sd.Version)
-				assert.JSONEq(t, test.schemaWithReference, sd.Schema.Schema)
+				assert.JSONEq(t, dummySchemaWithReference, sd.Schema.Schema)
 			}
 		})
 	}
 }
 
+func TestSchemaRegistryDuplicateSchemaIntegration(t *testing.T) {
+	integration.CheckSkip(t)
+
+	pool, err := dockertest.NewPool("")
+	require.NoError(t, err)
+	pool.MaxWait = time.Minute
+
+	source, err := redpandatest.StartRedpanda(t, pool, false, true)
+	require.NoError(t, err)
+	destination, err := redpandatest.StartRedpanda(t, pool, false, true)
+	require.NoError(t, err)
+
+	dummySubject := "foobar"
+	dummySchema := `{"name":"foo", "type": "string"}`
+	createSchema(t, source.SchemaRegistryURL, dummySubject, dummySchema, nil)
+
+	streamBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
+input:
+  schema_registry:
+    url: %s
+output:
+  schema_registry:
+    url: %s
+    subject: ${! @schema_registry_subject }
+    translate_ids: false
+`, source.SchemaRegistryURL, destination.SchemaRegistryURL)))
+	require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
+
+	runStream := func() {
+		stream, err := streamBuilder.Build()
+		require.NoError(t, err)
+
+		ctx, done := context.WithTimeout(t.Context(), 2*time.Second)
+		defer done()
+		err = stream.Run(ctx)
+		require.NoError(t, err)
+	}
+
+	runStream()
+	// The second run should perform an idempotent write for the same schema and not fail.
+	runStream()
+
+	dummyVersion := 1
+	resp, err := http.DefaultClient.Get(fmt.Sprintf("%s/subjects/%s/versions/%d", destination.SchemaRegistryURL, dummySubject, dummyVersion))
+	require.NoError(t, err)
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var sd franz_sr.SubjectSchema
+	require.NoError(t, json.Unmarshal(body, &sd))
+	assert.Equal(t, dummySubject, sd.Subject)
+	assert.Equal(t, 1, sd.Version)
+	assert.JSONEq(t, dummySchema, sd.Schema.Schema)
+}
+
 func TestSchemaRegistryIDTranslationIntegration(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
@@ -853,7 +1029,7 @@ func checkTopic(t *testing.T, brokerAddr, topic, retentionTime, principal string
 
 	aclResults, err := adm.DescribeACLs(t.Context(), builder)
 	require.NoError(t, err)
-	require.Len(t, aclResults[0].Described, 1)
+	require.Len(t, aclResults, 1)
 	require.NoError(t, aclResults[0].Err)
 	require.Len(t, aclResults[0].Described, 1)
 
@@ -988,6 +1164,7 @@ input:
       start_from_oldest: true
     schema_registry:
       url: %s
+    consumer_group_offsets_poll_interval: 2s
   processors:
     - switch:
         - check: '@input_label == "redpanda_migrator_offsets_input"'
@@ -1002,7 +1179,6 @@ input:
                   kafka_offset_commit_timestamp: ${! @kafka_offset_commit_timestamp }
                   kafka_offset_metadata:         ${! @kafka_offset_metadata }
                   kafka_is_high_watermark:       ${! @kafka_is_high_watermark }
-                  kafka_offset:                  ${! @kafka_offset } # This is just the offset of the __consumer_offsets topic
         - check: '@input_label == "redpanda_migrator_input"'
           processors:
             - branch:
@@ -1069,7 +1245,6 @@ output:
 
 func TestRedpandaMigratorIntegration(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
@@ -1160,7 +1335,6 @@ func TestRedpandaMigratorIntegration(t *testing.T) {
 
 func TestRedpandaMigratorOffsetsIntegration(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	tests := []struct {
 		name          string
@@ -1184,8 +1358,6 @@ func TestRedpandaMigratorOffsetsIntegration(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-
 			pool, err := dockertest.NewPool("")
 			require.NoError(t, err)
 			pool.MaxWait = time.Minute
@@ -1299,9 +1471,8 @@ output:
 	}
 }
 
-func TestRedpandaMigratorTopicConfigAndACLsIntegration(t *testing.T) {
+func TestRedpandaMigratorOffsetsNonMonotonicallyIncreasingTimestampsIntegration(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
@@ -1311,6 +1482,111 @@ func TestRedpandaMigratorTopicConfigAndACLsIntegration(t *testing.T) {
 	require.NoError(t, err)
 	destination, err := redpandatest.StartRedpanda(t, pool, true, true)
 	require.NoError(t, err)
+
+	t.Logf("Source broker: %s", source.BrokerAddr)
+	t.Logf("Destination broker: %s", destination.BrokerAddr)
+
+	dummyTopic := "test"
+	dummyMessage := `{"test":"foo"}`
+	dummyConsumerGroup := "test_cg"
+	messageCount := 5
+
+	// Produce a batch of messages in the source cluster.
+	produceMessages(t, source, dummyTopic, dummyMessage, 0, messageCount, false, 0)
+
+	// Produce 3 batches of messages in the destination cluster with out of order and overlapping timestamps.
+	// offsets: 0, 1, 2, 3, 4, 5
+	// timestamps: 3, 4, 5, 6, 7
+	produceMessages(t, destination, dummyTopic, dummyMessage, 2, messageCount, false, 0)
+	// offsets: 6, 7, 8, 9, 10
+	// timestamps: 4, 5, 6, 7, 8
+	produceMessages(t, destination, dummyTopic, dummyMessage, 3, messageCount, false, 0)
+	// offsets: 11, 12, 13, 14, 15
+	// timestamps: 1, 2, 3, 4, 5
+	produceMessages(t, destination, dummyTopic, dummyMessage, 0, messageCount, false, 0)
+
+	// Read messageCount messages from the source cluster using a consumer group. The consumer group will point to the
+	// last message in the batch, which has timestamp 5.
+	readMessagesWithCG(t, source, dummyTopic, dummyConsumerGroup, dummyMessage, messageCount, false)
+
+	t.Log("Finished setting up messages in the source and destination clusters")
+
+	// Migrate the consumer group offsets.
+	streamBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
+input:
+  redpanda_migrator_offsets:
+    seed_brokers: [ %s ]
+    topics: [ %s ]
+    poll_interval: 2s
+
+output:
+  redpanda_migrator_offsets:
+    seed_brokers: [ %s ]
+`, source.BrokerAddr, dummyTopic, destination.BrokerAddr)))
+	require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
+
+	migratorUpdateWG := sync.WaitGroup{}
+	migratorUpdateWG.Add(1)
+	require.NoError(t, streamBuilder.AddConsumerFunc(func(context.Context, *service.Message) error {
+		defer migratorUpdateWG.Done()
+		return nil
+	}))
+
+	// Ensure the callback function is called after the output wrote the message.
+	streamBuilder.SetOutputBrokerPattern(service.OutputBrokerPatternFanOutSequential)
+
+	stream, err := streamBuilder.Build()
+	require.NoError(t, err)
+
+	// Run stream in the background.
+	migratorCloseChan := make(chan struct{})
+	go func() {
+		err = stream.Run(t.Context())
+		require.NoError(t, err)
+
+		t.Log("redpanda_migrator_offsets pipeline shut down")
+
+		close(migratorCloseChan)
+	}()
+
+	defer func() {
+		require.NoError(t, stream.StopWithin(3*time.Second))
+
+		<-migratorCloseChan
+	}()
+
+	migratorUpdateWG.Wait()
+
+	client, err := kgo.NewClient(kgo.SeedBrokers([]string{destination.BrokerAddr}...))
+	require.NoError(t, err)
+	defer client.Close()
+
+	adm := kadm.NewClient(client)
+	offsets, err := adm.FetchOffsets(t.Context(), dummyConsumerGroup)
+	currentCGOffset, ok := offsets.Lookup(dummyTopic, 0)
+	require.True(t, ok)
+
+	// Even though we have 3 batches of messages in the destination cluster, the consumer group should point to the
+	// offset of the first message which has timestamp 5.
+	assert.Equal(t, int64(2), currentCGOffset.At)
+}
+
+func TestRedpandaMigratorTopicConfigAndACLsIntegration(t *testing.T) {
+	integration.CheckSkip(t)
+
+	pool, err := dockertest.NewPool("")
+	require.NoError(t, err)
+	pool.MaxWait = time.Minute
+
+	source, err := redpandatest.StartRedpanda(t, pool, true, true)
+	require.NoError(t, err)
+
+	destination, err := redpandatest.StartRedpanda(t, pool, true, true)
+	require.NoError(t, err)
+
+	t.Logf("Source broker: %s", source.BrokerAddr)
+	t.Logf("Destination broker: %s", destination.BrokerAddr)
 
 	dummyTopic := "test"
 
@@ -1450,7 +1726,6 @@ func fetchRecordKeys(t *testing.T, brokerAddress, topic, consumerGroup string, c
 // messages (even if it receives duplicates).
 func TestRedpandaMigratorConsumerGroupConsistencyIntegration(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
@@ -1566,131 +1841,6 @@ func TestRedpandaMigratorConsumerGroupConsistencyIntegration(t *testing.T) {
 
 		// Ensure the destination keys come after the source keys which means the consumer group update was migrated
 		assert.LessOrEqual(t, destKeys[0], srcKeys[len(srcKeys)-1]+1)
-
-		t.Logf("Source keys: %v", srcKeys)
-		t.Logf("Destination keys: %v", destKeys)
-
-		// Cache the previous source key so we can compare the current destination key with it after the producer
-		// finished, but Migrator still needs to copy some records over
-		prevSrcKeys = srcKeys
-
-		return false
-	}, 30*time.Second, 1*time.Nanosecond)
-}
-
-func TestRedpandaRecordOrder(t *testing.T) {
-	// This test checks for out-of-order records being transferred between two Redpanda containers using the `redpanda`
-	// input and output with default settings. It used to fail occasionally before this fix was put in place:
-	// https://github.com/redpanda-data/connect/pull/3386.
-	//
-	// Normally, you'll want to let it run multiple times in a loop over night:
-	// ```shell
-	// $ nohup go test -timeout 0 -v -count 10000 -run ^TestRedpandaRecordOrder$ ./internal/impl/kafka/enterprise > test.log 2>&1 &`
-	// ```
-	integration.CheckSkip(t)
-
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
-	pool.MaxWait = time.Minute
-
-	source, err := redpandatest.StartRedpanda(t, pool, true, false)
-	require.NoError(t, err)
-
-	destination, err := redpandatest.StartRedpanda(t, pool, true, false)
-	require.NoError(t, err)
-
-	t.Logf("Source broker: %s", source.BrokerAddr)
-	t.Logf("Destination broker: %s", destination.BrokerAddr)
-
-	// Create the topic
-	dummyTopic := "foobar"
-	dummyRetentionTime := strconv.Itoa(int((1 * time.Hour).Milliseconds()))
-	createTopicWithACLs(t, source.BrokerAddr, dummyTopic, dummyRetentionTime, "User:redpanda", kmsg.ACLOperationAll)
-	createTopicWithACLs(t, destination.BrokerAddr, dummyTopic, dummyRetentionTime, "User:redpanda", kmsg.ACLOperationAll)
-
-	dummyMessage := `{"test":"foo"}`
-	go func() {
-		t.Log("Producing messages...")
-
-		produceMessages(t, source, dummyTopic, dummyMessage, 0, 50, false, 50*time.Millisecond)
-
-		t.Log("Finished producing messages")
-	}()
-
-	runRedpandaPipeline := func(t *testing.T, source, destination redpandatest.RedpandaEndpoints, topic string, suppressLogs bool) {
-		streamBuilder := service.NewStreamBuilder()
-		require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
-input:
-  redpanda:
-    seed_brokers: [ %s ]
-    topics: [ %s ]
-    consumer_group: migrator_cg
-    start_from_oldest: true
-
-output:
-  redpanda:
-    seed_brokers: [ %s ]
-    topic: ${! @kafka_topic }
-    key: ${! @kafka_key }
-    timestamp_ms: ${! @kafka_timestamp_ms }
-    compression: none
-`, source.BrokerAddr, topic, destination.BrokerAddr)))
-		if suppressLogs {
-			require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
-		}
-
-		stream, err := streamBuilder.Build()
-		require.NoError(t, err)
-
-		// Run stream in the background and shut it down when the test is finished
-		closeChan := make(chan struct{})
-		go func() {
-			//nolint:usetesting // context.Background() could be replaced by t.Context()
-			err = stream.Run(context.Background())
-			require.NoError(t, err)
-
-			t.Log("Migrator pipeline shut down")
-
-			close(closeChan)
-		}()
-		t.Cleanup(func() {
-			require.NoError(t, stream.StopWithin(1*time.Second))
-
-			<-closeChan
-		})
-	}
-
-	// Run the Redpanda pipeline
-	runRedpandaPipeline(t, source, destination, dummyTopic, true)
-	t.Log("Pipeline started")
-
-	// Wait for a few records to be produced...
-	time.Sleep(1 * time.Second)
-
-	dummyConsumerGroup := "foobar_cg"
-	var prevSrcKeys []int
-	require.Eventually(t, func() bool {
-		srcKeys := fetchRecordKeys(t, source.BrokerAddr, dummyTopic, dummyConsumerGroup, 10)
-
-		time.Sleep(1 * time.Second)
-
-		destKeys := fetchRecordKeys(t, destination.BrokerAddr, dummyTopic, dummyConsumerGroup, 10)
-		if destKeys == nil {
-			// Stop the tests if the producer finished and the destination consumer group reached the high water mark
-			if srcKeys == nil {
-				return true
-			}
-
-			// Try again if the destination topic still needs to receive data
-			return false
-		}
-
-		if srcKeys == nil {
-			srcKeys = prevSrcKeys
-		}
-
-		assert.True(t, slices.IsSorted(srcKeys))
-		assert.True(t, slices.IsSorted(destKeys))
 
 		t.Logf("Source keys: %v", srcKeys)
 		t.Logf("Destination keys: %v", destKeys)

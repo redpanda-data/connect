@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -53,6 +54,7 @@ const (
 	s3oFieldTimeout                 = "timeout"
 	s3oFieldKMSKeyID                = "kms_key_id"
 	s3oFieldServerSideEncryption    = "server_side_encryption"
+	s3oFieldObjectCannedACL         = "object_canned_acl"
 	s3oFieldBatching                = "batching"
 )
 
@@ -80,6 +82,7 @@ type s3oConfig struct {
 	KMSKeyID                string
 	ServerSideEncryption    string
 	UsePathStyle            bool
+	ObjectCannedACL         types.ObjectCannedACL
 
 	aconf aws.Config
 }
@@ -149,6 +152,19 @@ func s3oConfigFromParsed(pConf *service.ParsedConfig) (conf s3oConfig, err error
 	if conf.ServerSideEncryption, err = pConf.FieldString(s3oFieldServerSideEncryption); err != nil {
 		return
 	}
+
+	var objectCannedACL string
+	if objectCannedACL, err = pConf.FieldString(s3oFieldObjectCannedACL); err != nil {
+		return
+	}
+
+	if slices.Contains(types.ObjectCannedACL("").Values(), types.ObjectCannedACL(objectCannedACL)) {
+		conf.ObjectCannedACL = types.ObjectCannedACL(objectCannedACL)
+	} else {
+		err = fmt.Errorf("invalid object canned ACL value: %v", objectCannedACL)
+		return
+	}
+
 	if conf.aconf, err = GetSession(context.TODO(), pConf); err != nil {
 		return
 	}
@@ -295,6 +311,17 @@ output:
 				Description("The maximum period to wait on an upload before abandoning it and reattempting.").
 				Advanced().
 				Default("5s"),
+			service.NewStringEnumField(s3oFieldObjectCannedACL,
+				slices.Collect(func(yield func(string) bool) {
+					for _, v := range types.ObjectCannedACL("").Values() {
+						if !yield(string(v)) {
+							return
+						}
+					}
+				})...).
+				Description("The object canned ACL value.").
+				Default(string(types.ObjectCannedACLPrivate)).
+				Advanced(),
 			service.NewBatchPolicyField(s3oFieldBatching),
 		).
 		Fields(config.SessionFields()...)
@@ -436,6 +463,7 @@ func (a *amazonS3Writer) WriteBatch(wctx context.Context, msg service.MessageBat
 			WebsiteRedirectLocation: websiteRedirectLocation,
 			StorageClass:            types.StorageClass(storageClass),
 			Metadata:                metadata,
+			ACL:                     a.conf.ObjectCannedACL,
 		}
 
 		// Prepare tags, escaping keys and values to ensure they're valid query string parameters.

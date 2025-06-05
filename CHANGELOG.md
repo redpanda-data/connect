@@ -14,6 +14,11 @@ All notable changes to this project will be documented in this file.
 - (Benthos) CLI flag `--env-file` added to the `blobl` command. (@mihaitodor)
 - The `mcp-server` subcommand now supports the new streamable HTTP spec when the `address` flag is specified. (@Jeffail)
 - Field `max_reconnects` added to the `nats`, `nats_jestream`, `nats_kv`, `nats_stream` and `nats_request_reply` components. (@chelmi)
+- Field `poll_interval` added to the `redpanda_migrator_offsets` input. (@mihaitodor)
+- Field `consumer_group_offsets_poll_interval` added to the `redpanda_migrator_bundle` input. (@mihaitodor)
+- Field `input_bundle_label` added to the `redpanda_migrator_bundle` output. (@mihaitodor)
+- New `gcp_spanner_cdc` input. (@mmatczuk)
+- Field `object_canned_acl` added to the `aws_s3` output. (@mihaitodor)
 
 ### Fixed
 
@@ -21,6 +26,11 @@ All notable changes to this project will be documented in this file.
 - Fixed an issue where the `mongodb_cdc` inputs could have spurious errors when collections had no writes for > 30 seconds. (@rockwotj)
 - Fixed a regression bug when configuring TLS for the Schema Registry client used by the `schema_registry` input and output and the `schema_registry_decode` and `schema_registry_encode` processors. This was introduced via [#3135](https://github.com/redpanda-data/connect/pull/3135) in [v4.46.0](https://github.com/redpanda-data/connect/releases/tag/v4.46.0).(@mihaitodor)
 - (Benthos) Fixed a regression bug where the `echo` and `lint` commands no longer loaded environment variables. (@mihaitodor)
+
+### Changed
+
+- The `redpanda_migrator_offsets` input now polls the `OffsetFetch` API instead of reading from the `__consumer_offsets` topic. (@mihaitodor)
+- Fields `consumer_group`, `commit_period`, `partition_buffer_bytes`, `topic_lag_refresh_period`, and `max_yield_batch_bytes` for the `redpanda_migrator_offsets` input are now deprecated. (@mihaitodor)
 
 ## 4.55.1 - 2025-05-19
 

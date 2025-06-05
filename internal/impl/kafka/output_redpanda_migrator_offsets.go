@@ -310,12 +310,12 @@ func (w *redpandaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.
 		if isHighWatermark && offset.Timestamp != -1 {
 			offsets, err := w.client.ListEndOffsets(ctx, topic)
 			if err != nil {
-				return fmt.Errorf("failed to list the high watermark for topic %q and partition %q (timestamp %d): %s", topic, partition, offsetCommitTimestamp, err)
+				return fmt.Errorf("failed to list the high watermark for topic %q and partition %d (timestamp %d): %s", topic, partition, offsetCommitTimestamp, err)
 			}
 
 			highWatermark, ok := offsets.Lookup(topic, partition)
 			if !ok {
-				return fmt.Errorf("failed to read the high watermark for topic %q and partition %q (timestamp %d): %s", topic, partition, offsetCommitTimestamp, err)
+				return fmt.Errorf("failed to read the high watermark for topic %q and partition %d (timestamp %d): %s", topic, partition, offsetCommitTimestamp, err)
 			}
 			if highWatermark.Offset == offset.Offset+1 {
 				offset.Offset = highWatermark.Offset
@@ -333,14 +333,14 @@ func (w *redpandaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.
 
 		offsetResponses, err := w.client.CommitOffsets(ctx, group, offsets)
 		if err != nil {
-			return fmt.Errorf("failed to commit consumer offsets for topic %q and partition %q (timestamp %d): %s", topic, partition, offsetCommitTimestamp, err)
+			return fmt.Errorf("failed to commit consumer offsets for topic %q and partition %d (timestamp %d): %s", topic, partition, offsetCommitTimestamp, err)
 		}
 
 		if err := offsetResponses.Error(); err != nil {
-			return fmt.Errorf("committed consumer offsets returned an error for topic %q and partition %q (timestamp %d): %s", topic, partition, offsetCommitTimestamp, err)
+			return fmt.Errorf("committed consumer offsets returned an error for topic %q and partition %d (timestamp %d): %s", topic, partition, offsetCommitTimestamp, err)
 		}
 
-		w.mgr.Logger().Debugf("Wrote offset for topic %q and timestamp %d: %d", topic, offsetCommitTimestamp, offset.Offset)
+		w.mgr.Logger().Debugf("Wrote offset for topic %q and partition %d and timestamp %d: %d", topic, partition, offsetCommitTimestamp, offset.Offset)
 
 		return nil
 	}
