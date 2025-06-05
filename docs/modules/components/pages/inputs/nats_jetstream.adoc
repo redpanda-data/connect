@@ -59,6 +59,7 @@ input:
   label: ""
   nats_jetstream:
     urls: [] # No default (required)
+    max_reconnects: 0 # No default (optional)
     queue: "" # No default (optional)
     subject: foo.bar.baz # No default (optional)
     durable: "" # No default (optional)
@@ -166,6 +167,14 @@ urls:
 urls:
   - nats://username:password@127.0.0.1:4222
 ```
+
+=== `max_reconnects`
+
+The maximum number of times to attempt to reconnect to the server. If negative, it will never stop trying to reconnect.
+
+
+*Type*: `int`
+
 
 === `queue`
 
