@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - New `mcp-server lint` subcommand for linting config directories. (@Jeffail)
 - (Benthos) CLI flag `--env-file` added to the `blobl` command. (@mihaitodor)
 - The `mcp-server` subcommand now supports the new streamable HTTP spec when the `address` flag is specified. (@Jeffail)
+- Field `max_reconnects` added to the `nats`, `nats_jestream`, `nats_kv`, `nats_stream` and `nats_request_reply` components. (@chelmi)
 - Field `poll_interval` added to the `redpanda_migrator_offsets` input. (@mihaitodor)
 - Field `consumer_group_offsets_poll_interval` added to the `redpanda_migrator_bundle` input. (@mihaitodor)
 - Field `input_bundle_label` added to the `redpanda_migrator_bundle` output. (@mihaitodor)

@@ -57,6 +57,7 @@ input:
   label: ""
   nats_stream:
     urls: [] # No default (required)
+    max_reconnects: 0 # No default (optional)
     cluster_id: "" # No default (required)
     client_id: ""
     queue: ""
@@ -155,6 +156,14 @@ urls:
 urls:
   - nats://username:password@127.0.0.1:4222
 ```
+
+=== `max_reconnects`
+
+The maximum number of times to attempt to reconnect to the server. If negative, it will never stop trying to reconnect.
+
+
+*Type*: `int`
+
 
 === `cluster_id`
 

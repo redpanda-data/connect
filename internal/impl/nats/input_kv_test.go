@@ -35,6 +35,7 @@ key: testkey
 ignore_deletes: true
 include_history: true
 meta_only: true
+max_reconnects: -1
 auth:
   nkey_file: test auth n key file
   user_credentials_file: test auth user creds file
@@ -54,6 +55,7 @@ auth:
 		assert.True(t, e.ignoreDeletes)
 		assert.True(t, e.includeHistory)
 		assert.True(t, e.metaOnly)
+		assert.Equal(t, -1, *e.connDetails.maxReconnects)
 		assert.Equal(t, "test auth n key file", e.connDetails.authConf.NKeyFile)
 		assert.Equal(t, "test auth user creds file", e.connDetails.authConf.UserCredentialsFile)
 		assert.Equal(t, "test auth inline user JWT", e.connDetails.authConf.UserJWT)

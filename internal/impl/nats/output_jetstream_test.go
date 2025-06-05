@@ -31,6 +31,7 @@ func TestOutputJetStreamConfigParse(t *testing.T) {
 		outputConfig := `
 urls: [ url1, url2 ]
 subject: testsubject
+max_reconnects: -1
 headers:
   Content-Type: application/json
   Timestamp: ${!meta("Timestamp")}
@@ -54,6 +55,8 @@ auth:
 		subject, err := e.subjectStr.TryString(msg)
 		require.NoError(t, err)
 		assert.Equal(t, "testsubject", subject)
+
+		assert.Equal(t, -1, *e.connDetails.maxReconnects)
 
 		contentType, err := e.headers["Content-Type"].TryString(msg)
 		require.NoError(t, err)
