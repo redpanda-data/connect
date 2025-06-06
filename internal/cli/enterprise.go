@@ -50,8 +50,11 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 		return "", false
 	}
 
-	var disableTelemetry bool
-	licenseConfig := defaultLicenseConfig()
+	var (
+		licenseConfig    = defaultLicenseConfig()
+		chrootPath       string
+		disableTelemetry bool
+	)
 
 	opts = append(opts,
 		service.CLIOptSetVersion(version, dateBuilt),
@@ -87,9 +90,15 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 		}),
 		service.CLIOptAddTeeLogger(slog.New(rpLogger)),
 		service.CLIOptOnConfigParse(func(pConf *service.ParsedConfig) error {
+			if chrootPath != "" {
+				fbLogger.Infof("Chrooting to '%v'", chrootPath)
+				if err := chroot(chrootPath); err != nil {
+					return fmt.Errorf("chroot: %w", err)
+				}
+			}
+
 			// Kick off license service, it's important we do this before telemetry.
 			license.RegisterService(pConf.Resources(), licenseConfig)
-
 			// Kick off telemetry exporter.
 			if !disableTelemetry {
 				telemetry.ActivateExporter(instanceID, version, fbLogger, schema, pConf)
@@ -108,6 +117,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 				[]cli.Flag{
 					secretsFlag,
 					licenseFlag,
+					chrootFlag,
 					&cli.BoolFlag{
 						Name:  "disable-telemetry",
 						Usage: "Disable anonymous telemetry from being emitted by this Connect instance.",
@@ -123,8 +133,10 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 			),
 
 			func(c *cli.Context) error {
-				disableTelemetry = c.Bool("disable-telemetry")
 				applyLicenseFlag(c, &licenseConfig)
+				disableTelemetry = c.Bool("disable-telemetry")
+				chrootPath = c.String("chroot")
+				fmt.Println("XXX", c.String(chrootFlag.Name), disableTelemetry)
 
 				if secretLookupFn, err = parseSecretsFlag(slog.New(rpLogger), c); err != nil {
 					return err

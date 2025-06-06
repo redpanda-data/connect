@@ -72,6 +72,11 @@ func applyLicenseFlag(c *cli.Context, conf *license.Config) {
 	}
 }
 
+var chrootFlag = &cli.StringFlag{
+	Name:  "chroot",
+	Usage: "Chroot into the provided directory, after parsing configuration.",
+}
+
 func redpandaFlags() []cli.Flag {
 	return []cli.Flag{
 		&cli.StringFlag{
