@@ -45,6 +45,15 @@ var secretsFlag = &cli.StringSliceFlag{
 	Value: cli.NewStringSlice("env:"),
 }
 
+func parseSecretsFlag(logger *slog.Logger, c *cli.Context) (func(context.Context, string) (string, bool), error) {
+	if secretsURNs := c.StringSlice("secrets"); len(secretsURNs) > 0 {
+		return secrets.ParseLookupURNs(c.Context, logger, secretsURNs...)
+	}
+	return func(_ context.Context, _ string) (string, bool) {
+		return "", false
+	}, nil
+}
+
 var licenseFlag = &cli.StringFlag{
 	Name:  "redpanda-license",
 	Usage: "Provide an explicit Redpanda License, which enables enterprise functionality. By default licenses found at the path `/etc/redpanda/redpanda.license` are applied.",
@@ -61,15 +70,6 @@ func applyLicenseFlag(c *cli.Context, conf *license.Config) {
 	if inline := c.String("redpanda-license"); inline != "" {
 		conf.License = inline
 	}
-}
-
-func parseSecretsFlag(logger *slog.Logger, c *cli.Context) (func(context.Context, string) (string, bool), error) {
-	if secretsURNs := c.StringSlice("secrets"); len(secretsURNs) > 0 {
-		return secrets.ParseLookupURNs(c.Context, logger, secretsURNs...)
-	}
-	return func(context.Context, string) (string, bool) {
-		return "", false
-	}, nil
 }
 
 func redpandaFlags() []cli.Flag {
