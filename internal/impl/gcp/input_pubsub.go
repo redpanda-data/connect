@@ -103,6 +103,8 @@ This input adds the following metadata fields to each message:
 
 - gcp_pubsub_publish_time_unix - The time at which the message was published to the topic.
 - gcp_pubsub_delivery_attempt - When dead lettering is enabled, this is set to the number of times PubSub has attempted to deliver a message.
+- gcp_pubsub_message_id - The unique identifier of the message.
+- gcp_pubsub_ordering_key - The ordering key of the message.
 - All message attributes
 
 You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
@@ -276,6 +278,13 @@ func (c *gcpPubSubReader) Connect(context.Context) error {
 	return nil
 }
 
+const (
+	metaPublishTimeUnix string = "gcp_pubsub_publish_time_unix"
+	metaMessageID       string = "gcp_pubsub_message_id"
+	metaDeliveryAttempt string = "gcp_pubsub_delivery_attempt"
+	metaOrderingKey     string = "gcp_pubsub_ordering_key"
+)
+
 func (c *gcpPubSubReader) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
 	c.subMut.Lock()
 	msgsChan := c.msgsChan
@@ -299,10 +308,15 @@ func (c *gcpPubSubReader) Read(ctx context.Context) (*service.Message, service.A
 	for k, v := range gmsg.Attributes {
 		part.MetaSetMut(k, v)
 	}
-	part.MetaSetMut("gcp_pubsub_publish_time_unix", gmsg.PublishTime.Unix())
+	part.MetaSetMut(metaPublishTimeUnix, gmsg.PublishTime.Unix())
+	part.MetaSetMut(metaMessageID, gmsg.ID)
 
 	if gmsg.DeliveryAttempt != nil {
-		part.MetaSetMut("gcp_pubsub_delivery_attempt", *gmsg.DeliveryAttempt)
+		part.MetaSetMut(metaDeliveryAttempt, *gmsg.DeliveryAttempt)
+	}
+
+	if gmsg.OrderingKey != "" {
+		part.MetaSetMut(metaOrderingKey, gmsg.OrderingKey)
 	}
 
 	return part, func(_ context.Context, res error) error {
