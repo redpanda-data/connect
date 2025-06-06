@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## TBD
+
+### Added
+
+- New global CLI flag `--chroot`. (@mmatczuk) 
+
 ## 4.56.0 - 2025-06-05
 
 ### Added
