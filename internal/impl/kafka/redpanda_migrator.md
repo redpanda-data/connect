@@ -8,7 +8,7 @@ Given this delivery guarantee model, record offsets in the destination cluster w
 
 While more sophisticated approaches have been implemented (see [here](https://web.archive.org/web/20250112205959/https://blog.cloudera.com/a-look-inside-kafka-mirrormaker-2/) and [here](https://current.confluent.io/2024-sessions/mirrormaker-2s-offset-translation-isnt-exactly-once-and-thats-okay)), they are difficult to reason about and troubleshoot.
 
-In Redpanda Migrator, we chose a simple record timestamp-based approach, where, each time we get an update on the `__consumer_offsets` topic in the source cluster, we first try to determine the timestamp of the consumed record which triggered this update and then use this timestamp to do another lookup in the destination cluster to determine the offset of the corresponding migrated record.
+In Redpanda Migrator, we chose a simple record timestamp-based approach. First we poll the consumer groups in the source cluster periodically via `OffsetFetch()` to determine the latest offsets for every consumer group that's associated with the topics we wish to migrate. Then we read the records from the source cluster which correspond to each of these offsets to determine the associated timestamps. Afterwards, we use these timestamps to do another lookup in the destination cluster to determine the offsets of the corresponding records. Finally, we use these offsets to update the consumer groups in the destination cluster.
 
 This approach requires that all topics which need to be migrated contain records which have monotonically-increasing timestamps, including duplicates.
 
@@ -28,7 +28,7 @@ participant Offsets Input
 participant Offsets Output
 participant Destination
 
-Source->>Offsets Input: O = OffsetFetch()
+Offsets Input->>Source: O = OffsetFetch()
 Source->>Offsets Input: X = ListEndOffsets(T, P)
 Source->>Offsets Input: Check X < O
 Source->>Offsets Input: TS = ReadTimestamp(T, P, O)
@@ -49,7 +49,7 @@ participant Offsets Input
 participant Offsets Output
 participant Destination
 
-Source->>Offsets Input: O = OffsetFetch()
+Offsets Input->>Source: O = OffsetFetch()
 Source->>Offsets Input: X = ListEndOffsets(T, P)
 Source->>Offsets Input: Check X == O
 Source->>Offsets Input: TS = ReadTimestamp(T, P, -1)
