@@ -19,7 +19,7 @@ func TestGCPPubSubReaderRead(t *testing.T) {
 			log:      service.MockResources().Logger(),
 		}
 
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		cancel() // Cancel immediately
 
 		_, _, err := reader.Read(ctx)
@@ -32,7 +32,7 @@ func TestGCPPubSubReaderRead(t *testing.T) {
 			log:      service.MockResources().Logger(),
 		}
 
-		_, _, err := reader.Read(context.Background())
+		_, _, err := reader.Read(t.Context())
 		assert.Equal(t, service.ErrNotConnected, err)
 	})
 
@@ -45,7 +45,7 @@ func TestGCPPubSubReaderRead(t *testing.T) {
 			log:      service.MockResources().Logger(),
 		}
 
-		_, _, err := reader.Read(context.Background())
+		_, _, err := reader.Read(t.Context())
 		assert.Equal(t, service.ErrNotConnected, err)
 	})
 
@@ -72,7 +72,7 @@ func TestGCPPubSubReaderRead(t *testing.T) {
 			log:      service.MockResources().Logger(),
 		}
 
-		msg, ackFn, err := reader.Read(context.Background())
+		msg, ackFn, err := reader.Read(t.Context())
 		require.NoError(t, err)
 		require.NotNil(t, msg)
 		require.NotNil(t, ackFn)
