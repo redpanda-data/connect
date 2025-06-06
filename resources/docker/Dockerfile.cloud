@@ -12,6 +12,8 @@ ENV CGO_ENABLED=0
 ENV GOOS=linux
 RUN useradd -u 10001 connect
 
+RUN apt-get update && apt-get install -y libcap2-bin
+
 WORKDIR /go/src/github.com/redpanda-data/connect/
 # Update dependencies: On unchanged dependencies, cached layer will be reused
 COPY go.* /go/src/github.com/redpanda-data/connect/
@@ -22,6 +24,7 @@ COPY . /go/src/github.com/redpanda-data/connect/
 # Tag timetzdata required for busybox base image:
 # https://github.com/benthosdev/benthos/issues/897
 RUN make TAGS="timetzdata" redpanda-connect-cloud
+RUN setcap 'cap_sys_chroot=+ep' target/bin/redpanda-connect-cloud
 
 # Pack
 FROM busybox AS package
