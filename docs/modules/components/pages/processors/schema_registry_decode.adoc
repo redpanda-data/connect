@@ -40,6 +40,11 @@ schema_registry_decode:
     raw_unions: false # No default (optional)
     preserve_logical_types: false
     translate_kafka_connect_types: false
+  protobuf:
+    use_proto_names: false
+    use_enum_numbers: false
+    emit_unpopulated: false
+    emit_default_values: false
   cache_duration: 10m
   url: "" # No default (required)
 ```
@@ -72,6 +77,11 @@ schema_registry_decode:
         }
       }
       root = this.apply("debeziumTimestampToAvroTimestamp")
+  protobuf:
+    use_proto_names: false
+    use_enum_numbers: false
+    emit_unpopulated: false
+    emit_default_values: false
   cache_duration: 10m
   url: "" # No default (required)
   oauth:
@@ -248,6 +258,50 @@ mapping: |2
   }
   root = this.apply("debeziumTimestampToAvroTimestamp")
 ```
+
+=== `protobuf`
+
+Configuration for how to decode schemas that are of type PROTOBUF.
+
+
+*Type*: `object`
+
+
+=== `protobuf.use_proto_names`
+
+Use proto field name instead of lowerCamelCase name.
+
+
+*Type*: `bool`
+
+*Default*: `false`
+
+=== `protobuf.use_enum_numbers`
+
+Emits enum values as numbers.
+
+
+*Type*: `bool`
+
+*Default*: `false`
+
+=== `protobuf.emit_unpopulated`
+
+Whether to emit unpopulated fields. It does not emit unpopulated oneof fields or unpopulated extension fields.
+
+
+*Type*: `bool`
+
+*Default*: `false`
+
+=== `protobuf.emit_default_values`
+
+Whether to emit default-valued primitive fields, empty lists, and empty maps. emit_unpopulated takes precedence over emit_default_values
+
+
+*Type*: `bool`
+
+*Default*: `false`
 
 === `cache_duration`
 
