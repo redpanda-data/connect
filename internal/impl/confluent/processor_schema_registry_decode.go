@@ -262,29 +262,21 @@ func newSchemaRegistryDecoderFromConfig(conf *service.ParsedConfig, mgr *service
 			return nil, err
 		}
 	}
-	if conf.Contains("protobuf", "use_proto_names") {
-		cfg.protobuf.useProtoNames, err = conf.FieldBool("protobuf", "use_proto_names")
-		if err != nil {
-			return nil, err
-		}
+	cfg.protobuf.useProtoNames, err = conf.FieldBool("protobuf", "use_proto_names")
+	if err != nil {
+		return nil, err
 	}
-	if conf.Contains("protobuf", "use_enum_numbers") {
-		cfg.protobuf.useEnumNumbers, err = conf.FieldBool("protobuf", "use_enum_numbers")
-		if err != nil {
-			return nil, err
-		}
+	cfg.protobuf.useEnumNumbers, err = conf.FieldBool("protobuf", "use_enum_numbers")
+	if err != nil {
+		return nil, err
 	}
-	if conf.Contains("protobuf", "emit_unpopulated") {
-		cfg.protobuf.emitUnpopulated, err = conf.FieldBool("protobuf", "emit_unpopulated")
-		if err != nil {
-			return nil, err
-		}
+	cfg.protobuf.emitUnpopulated, err = conf.FieldBool("protobuf", "emit_unpopulated")
+	if err != nil {
+		return nil, err
 	}
-	if conf.Contains("protobuf", "emit_default_values") {
-		cfg.protobuf.emitDefaultValues, err = conf.FieldBool("protobuf", "emit_default_values")
-		if err != nil {
-			return nil, err
-		}
+	cfg.protobuf.emitDefaultValues, err = conf.FieldBool("protobuf", "emit_default_values")
+	if err != nil {
+		return nil, err
 	}
 	cacheDuration, err := conf.FieldDuration("cache_duration")
 	if err != nil {
