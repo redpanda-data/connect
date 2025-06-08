@@ -33,7 +33,14 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/protobuf"
 )
 
-func (s *schemaRegistryDecoder) getProtobufDecoder(ctx context.Context, schema sr.Schema) (schemaDecoder, error) {
+func (s *schemaRegistryDecoder) getProtobufDecoder(
+	ctx context.Context,
+	useProtoNames bool,
+	useEnumNumbers bool,
+	emitUnpopulated bool,
+	emitDefaultValues bool,
+	schema sr.Schema,
+) (schemaDecoder, error) {
 	regMap := map[string]string{
 		".": schema.Schema,
 	}
@@ -87,7 +94,13 @@ func (s *schemaRegistryDecoder) getProtobufDecoder(ctx context.Context, schema s
 			return fmt.Errorf("failed to unmarshal protobuf message: %w", err)
 		}
 
-		data, err := protojson.MarshalOptions{Resolver: types}.Marshal(dynMsg)
+		data, err := protojson.MarshalOptions{
+			Resolver:          types,
+			UseProtoNames:     useProtoNames,
+			UseEnumNumbers:    useEnumNumbers,
+			EmitUnpopulated:   emitUnpopulated,
+			EmitDefaultValues: emitDefaultValues,
+		}.Marshal(dynMsg)
 		if err != nil {
 			return fmt.Errorf("failed to marshal JSON protobuf message: %w", err)
 		}

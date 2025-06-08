@@ -153,6 +153,25 @@ map debeziumTimestampToAvroTimestamp {
 root = this.apply("debeziumTimestampToAvroTimestamp")
 `),
 			).Description("Configuration for how to decode schemas that are of type AVRO."),
+		).
+		Fields(
+			service.NewObjectField(
+				"protobuf",
+				service.NewBoolField("use_proto_names").
+					Description("Use proto field name instead of lowerCamelCase name.").
+					Default(false),
+				service.NewBoolField("use_enum_numbers").
+					Description("Emits enum values as numbers.").
+					Default(false),
+				service.NewBoolField("emit_unpopulated").
+					Description("Whether to emit unpopulated fields. It does not emit unpopulated oneof fields or unpopulated extension fields.").
+					Default(false),
+				service.NewBoolField("emit_default_values").
+					Description("Whether to emit default-valued primitive fields, empty lists, and empty maps. emit_unpopulated takes precedence over emit_default_values ").
+					Default(false),
+			).Description("Configuration for how to decode schemas that are of type PROTOBUF."),
+		).
+		Field(
 			service.NewDurationField("cache_duration").
 				Description("The duration after which a schema is considered stale and will be removed from the cache.").
 				Default("10m").Example("1h").Example("5m"),
@@ -182,6 +201,12 @@ type decodingConfig struct {
 		rawUnions                  bool
 		translateKafkaConnectTypes bool
 		mapping                    *bloblang.Executor
+	}
+	protobuf struct {
+		useProtoNames     bool
+		useEnumNumbers    bool
+		emitUnpopulated   bool
+		emitDefaultValues bool
 	}
 }
 
@@ -233,6 +258,30 @@ func newSchemaRegistryDecoderFromConfig(conf *service.ParsedConfig, mgr *service
 	}
 	if conf.Contains("avro", "mapping") {
 		cfg.avro.mapping, err = conf.FieldBloblang("avro", "mapping")
+		if err != nil {
+			return nil, err
+		}
+	}
+	if conf.Contains("protobuf", "use_proto_names") {
+		cfg.protobuf.useProtoNames, err = conf.FieldBool("protobuf", "use_proto_names")
+		if err != nil {
+			return nil, err
+		}
+	}
+	if conf.Contains("protobuf", "use_enum_numbers") {
+		cfg.protobuf.useEnumNumbers, err = conf.FieldBool("protobuf", "use_enum_numbers")
+		if err != nil {
+			return nil, err
+		}
+	}
+	if conf.Contains("protobuf", "emit_unpopulated") {
+		cfg.protobuf.emitUnpopulated, err = conf.FieldBool("protobuf", "emit_unpopulated")
+		if err != nil {
+			return nil, err
+		}
+	}
+	if conf.Contains("protobuf", "emit_default_values") {
+		cfg.protobuf.emitDefaultValues, err = conf.FieldBool("protobuf", "emit_default_values")
 		if err != nil {
 			return nil, err
 		}
@@ -388,7 +437,12 @@ func (s *schemaRegistryDecoder) getDecoder(id int) (schemaDecoder, error) {
 	var decoder schemaDecoder
 	switch resPayload.Type {
 	case franz_sr.TypeProtobuf:
-		decoder, err = s.getProtobufDecoder(ctx, resPayload)
+		decoder, err = s.getProtobufDecoder(ctx,
+			s.cfg.protobuf.useProtoNames,
+			s.cfg.protobuf.useEnumNumbers,
+			s.cfg.protobuf.emitUnpopulated,
+			s.cfg.protobuf.emitDefaultValues,
+			resPayload)
 	case franz_sr.TypeJSON:
 		decoder, err = s.getJSONDecoder(ctx, resPayload)
 	default:
