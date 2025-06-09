@@ -20,6 +20,7 @@ All notable changes to this project will be documented in this file.
 - New `gcp_spanner_cdc` input. (@mmatczuk)
 - Field `object_canned_acl` added to the `aws_s3` output. (@mihaitodor)
 - Fields `history`, `max_tool_calls` and `tools` added to the `gcp_vertex_ai_chat` processor. (@rockwotj)
+- New plugin mechanism added over gRPC for dynamically loaded plugins. (@rockwotj)
 
 ### Fixed
 
