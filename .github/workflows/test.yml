@@ -32,6 +32,9 @@ jobs:
     - name: Deps
       run: make deps && git diff-index --quiet HEAD || { >&2 echo "Stale go.{mod,sum} detected. This can be fixed with 'make deps'."; exit 1; }
 
+    - name: Format
+      run: CGO_ENABLED=1 make fmt TAGS=x_benthos_extra && test -z "$(git ls-files --others --modified --exclude-standard)" || { >&2 echo "Misformatted code detected. This can be fixed with 'make fmt'."; exit 1; }
+
     - name: Docs
       run: CGO_ENABLED=1 make docs TAGS=x_benthos_extra && test -z "$(git ls-files --others --modified --exclude-standard)" || { >&2 echo "Stale docs detected. This can be fixed with 'make docs'."; exit 1; }
 
