@@ -90,7 +90,7 @@ require (
 	github.com/jackc/pgx/v5 v5.6.0
 	github.com/jhump/protoreflect v1.17.0
 	github.com/lib/pq v1.10.9
-	github.com/linkedin/goavro/v2 v2.13.1
+	github.com/linkedin/goavro/v2 v2.14.0
 	github.com/mark3labs/mcp-go v0.31.0
 	github.com/matoous/go-nanoid/v2 v2.1.0
 	github.com/microcosm-cc/bluemonday v1.0.27
@@ -120,7 +120,7 @@ require (
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475
 	github.com/redis/go-redis/v9 v9.7.3
-	github.com/redpanda-data/benthos/v4 v4.52.0
+	github.com/redpanda-data/benthos/v4 v4.53.0
 	github.com/redpanda-data/common-go/secrets v0.1.3
 	github.com/redpanda-data/connect/public/bundle/free/v4 v4.31.0
 	github.com/rs/xid v1.5.0
@@ -159,10 +159,10 @@ require (
 	go.opentelemetry.io/otel/trace v1.36.0
 	go.starlark.net v0.0.0-20250318223901-d9371fef63fe
 	go.uber.org/multierr v1.11.0
-	golang.org/x/crypto v0.38.0
+	golang.org/x/crypto v0.39.0
 	golang.org/x/net v0.40.0
-	golang.org/x/sync v0.14.0
-	golang.org/x/text v0.25.0
+	golang.org/x/sync v0.15.0
+	golang.org/x/text v0.26.0
 	google.golang.org/api v0.233.0
 	google.golang.org/protobuf v1.36.6
 	modernc.org/sqlite v1.32.0
@@ -420,7 +420,7 @@ require (
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/quipo/dependencysolver v0.0.0-20170801134659-2b009cb4ddcc // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
-	github.com/rickb777/period v1.0.14 // indirect
+	github.com/rickb777/period v1.0.15 // indirect
 	github.com/rickb777/plural v1.4.4 // indirect
 	github.com/rivo/uniseg v0.4.7
 	github.com/robfig/cron/v3 v3.0.1 // indirect
@@ -454,7 +454,7 @@ require (
 	go.opentelemetry.io/proto/otlp v1.3.1 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
-	golang.org/x/mod v0.24.0 // indirect
+	golang.org/x/mod v0.25.0 // indirect
 	golang.org/x/oauth2 v0.30.0
 	golang.org/x/sys v0.33.0 // indirect
 	golang.org/x/term v0.32.0 // indirect
