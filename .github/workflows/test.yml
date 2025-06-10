@@ -62,7 +62,6 @@ jobs:
       with:
         version: "v${{env.GOLANGCI_LINT_VERSION}}"
         args: "--timeout=30m cmd/... internal/... public/..."
-        only-new-issues: true
         skip-cache: true
         skip-save-cache: true
 
