@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.58.0 - TBD
+
+### Added
+
+- New output `slack_reaction`. (@rockwotj) 
+
 ## 4.57.0 - 2025-06-10
 
 ### Added
