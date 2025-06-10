@@ -137,9 +137,9 @@ Both the `+"`id` and `index`"+` fields can be dynamically set using function int
 			service.NewInterpolatedStringField(esFieldIndex).
 				Description("The index to place messages."),
 			service.NewInterpolatedStringField(esFieldAction).
-				Description("The action to take on the document. This field must resolve to one of the following action types: `index`, `update` or `delete`. See the `Updating Documents` example for more on how the `update` action works."),
+				Description("The action to take on the document. This field must resolve to one of the following action types: `create`, `index`, `update` or `delete`. See the `Updating Documents` example for more on how the `update` action works."),
 			service.NewInterpolatedStringField(esFieldID).
-				Description("The ID for indexed messages. Interpolation should be used in order to create a unique ID for each message.").
+				Description("The ID for indexed messages. Interpolation should be used in order to create a unique ID for each message. Pass an empty string to let Elasticsearch set document ID's.").
 				Example(`${!counter()}-${!timestamp_unix()}`),
 			service.NewInterpolatedStringField(esFieldPipeline).
 				Description("An optional pipeline id to preprocess incoming documents.").
@@ -385,6 +385,16 @@ func (e *esOutput) addOpToBatch(bulkWriter *bulk.Bulk, batch service.MessageBatc
 	}
 
 	switch action {
+	case "create":
+		op := types.CreateOperation{
+			Index_:   &index,
+			Id_:      optionalStr(id),
+			Pipeline: optionalStr(pipeline),
+			Routing:  optionalStr(routing),
+		}
+		if err := bulkWriter.CreateOp(op, msgBytes); err != nil {
+			return err
+		}
 	case "index":
 		op := types.IndexOperation{
 			Index_:   &index,
