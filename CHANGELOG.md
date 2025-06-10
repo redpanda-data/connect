@@ -13,7 +13,8 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- New global CLI flag `--chroot`. (@mmatczuk) 
+- New global CLI flag `--chroot`. (@mmatczuk)
+- Fields `protobuf.use_proto_names`, `protobuf.use_enum_numbers`, `protobuf.emit_unpopulated` and `protobuf.emit_default_values` added to the `schema_registry_decode` processor. (@ZijunHui)
 - (Benthos) The `benchmark` processor metrics. (@mmatczuk)
 - (Benthos) New `string_enum` and `string_annotated_enum` template field types. (@mihaitodor)
 
