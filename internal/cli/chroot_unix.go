@@ -6,6 +6,8 @@
 //
 // https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
+//go:build unix
+
 package cli
 
 import (
