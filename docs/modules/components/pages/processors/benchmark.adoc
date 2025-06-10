@@ -35,6 +35,12 @@ benchmark:
 
 Logs messages per second and bytes per second of messages that are processed at a regular interval. A summary of the amount of messages processed over the entire lifetime of the processor will also be printed when the processor shuts down.
 
+The following metrics are exposed:
+- benchmark_messages_per_second (gauge): The current throughput in messages per second
+- benchmark_messages_total (counter): The total number of messages processed
+- benchmark_bytes_per_second (gauge): The current throughput in bytes per second
+- benchmark_bytes_total (counter): The total number of bytes processed
+
 == Fields
 
 === `interval`

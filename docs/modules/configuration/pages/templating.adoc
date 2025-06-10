@@ -217,14 +217,18 @@ The scalar type of the field.
 
 | `string`
 | standard string type
+| `string_enum`
+| string type which can have one of a discrete list of values
+| `string_annotated_enum`
+| string type which can have one of a discrete list of values, where each value must be accompanied by a description that annotates its behaviour in the documentation
 | `int`
 | standard integer type
 | `float`
 | standard float type
 | `bool`
-| a boolean true/false
+| standard boolean type
 | `bloblang`
-| a bloblang mapping
+| bloblang mapping
 | `unknown`
 | allows for nesting arbitrary configuration inside of a field
 
@@ -261,6 +265,14 @@ Whether this field is considered advanced.
 *Type*: `bool`
 
 *Default*: `false`
+
+=== `fields[].options`
+
+List of options for `string_enum` fields or map of annotated options for `string_annotated_enum` fields
+
+
+*Type*: `unknown`
+
 
 === `mapping`
 
