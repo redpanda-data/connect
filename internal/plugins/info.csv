@@ -239,6 +239,7 @@ sftp                      ,output    ,sftp                      ,3.39.0  ,certif
 skip_bom                  ,scanner   ,skip_bom                  ,0.0.0   ,certified  ,n          ,y     ,y
 slack                     ,input     ,Slack                     ,4.51.0  ,enterprise ,n          ,y     ,y
 slack_post                ,output    ,Slack Post                ,4.52.0  ,enterprise ,n          ,y     ,y
+slack_reaction            ,output    ,Slack Reaction            ,4.58.0  ,enterprise ,n          ,y     ,y
 slack_thread              ,processor ,Slack Thread              ,4.52.0  ,enterprise ,n          ,y     ,y
 slack_users               ,input     ,Slack Users               ,4.52.0  ,enterprise ,n          ,y     ,y
 sleep                     ,processor ,sleep                     ,0.0.0   ,certified  ,n          ,y     ,y
