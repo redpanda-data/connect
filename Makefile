@@ -38,6 +38,10 @@ install: $(APPS)
 	@rm -f $(INSTALL_DIR)/redpanda-connect
 	@cp $(PATHINSTBIN)/* $(INSTALL_DIR)/
 
+bump-benthos:
+	@go get -u github.com/redpanda-data/benthos/v4@latest
+	@go mod tidy
+
 deps:
 	@go mod tidy
 
