@@ -47,16 +47,16 @@ Avro, Protobuf and Json schemas are supported, all are capable of expanding from
 
 This processor creates documents formatted as https://avro.apache.org/docs/current/specification/_print/#json-encoding[Avro JSON^] when decoding with Avro schemas. In this format the value of a union is encoded in JSON as follows:
 
-- if its type is `+"`null`, then it is encoded as a JSON `null`"+`;
+- if its type is ` + "`null`, then it is encoded as a JSON `null`" + `;
 - otherwise it is encoded as a JSON object with one name/value pair whose name is the type's name and whose value is the recursively encoded value. For Avro's named types (record, fixed or enum) the user-specified name is used, for other types the type name is used.
 
-For example, the union schema `+"`[\"null\",\"string\",\"Foo\"]`, where `Foo`"+` is a record name, would encode:
+For example, the union schema ` + "`[\"null\",\"string\",\"Foo\"]`, where `Foo`" + ` is a record name, would encode:
 
-- `+"`null` as `null`"+`;
-- the string `+"`\"a\"` as `{\"string\": \"a\"}`"+`; and
-- a `+"`Foo` instance as `{\"Foo\": {...}}`, where `{...}` indicates the JSON encoding of a `Foo`"+` instance.
+- ` + "`null` as `null`" + `;
+- the string ` + "`\"a\"` as `{\"string\": \"a\"}`" + `; and
+- a ` + "`Foo` instance as `{\"Foo\": {...}}`, where `{...}` indicates the JSON encoding of a `Foo`" + ` instance.
 
-However, it is possible to instead create documents in https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull[standard/raw JSON format^] by setting the field `+"<<avro_raw_json, `avro_raw_json`>> to `true`"+`.
+However, it is possible to instead create documents in https://pkg.go.dev/github.com/linkedin/goavro/v2#NewCodecForStandardJSONFull[standard/raw JSON format^] by setting the field ` + "<<avro_raw_json, `avro_raw_json`>> to `true`" + `.
 
 == Protobuf format
 
