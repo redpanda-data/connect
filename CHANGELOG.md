@@ -3,11 +3,13 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## TBD
+## 4.57.0 - 2025-06-10
 
 ### Added
 
 - New global CLI flag `--chroot`. (@mmatczuk) 
+- (Benthos) The `benchmark` processor metrics. (@mmatczuk)
+- (Benthos) New `string_enum` and `string_annotated_enum` template field types. (@mihaitodor)
 
 ## 4.56.0 - 2025-06-05
 
