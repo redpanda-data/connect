@@ -1,0 +1,28 @@
+http:
+  enabled: true
+  address: 0.0.0.0:4195
+  debug_endpoints: true
+
+input:
+  gcp_spanner_cdc:
+    project_id: {{.ProjectID}}
+    instance_id: {{.InstanceID}}
+    database_id: {{.DatabaseID}}
+    stream_id: {{.StreamID}}
+    start_timestamp: {{.StartTimestamp}}
+    end_timestamp: {{.EndTimestamp}}
+    heartbeat_interval: "5s"
+    batching:
+      count: 1000
+
+pipeline:
+  processors:
+    - benchmark:
+        interval: 5s
+        count_bytes: true
+
+output:
+  drop: {}
+
+metrics:
+  prometheus: {}
