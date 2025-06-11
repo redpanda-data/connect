@@ -7,7 +7,8 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- New output `slack_reaction`. (@rockwotj) 
+- New output `slack_reaction`. (@rockwotj)
+- Field `allow_auto_topic_creation` added to the `kafka_franz`, `ockam_kafka`, `redpanda`, `redpanda_migrator`, and `ockam_kafka` outputs and to the top level `redpanda` Connect configuration. (@peczenyj)
 
 ## 4.57.0 - 2025-06-10
 

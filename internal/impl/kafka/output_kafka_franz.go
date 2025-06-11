@@ -93,8 +93,6 @@ func init() {
 			}
 			clientOpts = append(clientOpts, tmpOpts...)
 
-			clientOpts = append(clientOpts, kgo.AllowAutoTopicCreation()) // TODO: Configure this?
-
 			var client *kgo.Client
 
 			output, err = NewFranzWriterFromConfig(

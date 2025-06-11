@@ -81,6 +81,7 @@ output:
     partitioner: "" # No default (optional)
     idempotent_write: true
     compression: "" # No default (optional)
+    allow_auto_topic_creation: true
     timeout: 10s
     max_message_bytes: 1MiB
     broker_write_max_bytes: 100MiB
@@ -644,6 +645,15 @@ Options:
 , `none`
 , `zstd`
 .
+
+=== `allow_auto_topic_creation`
+
+Enables topics to be auto created if they do not exist when fetching their metadata.
+
+
+*Type*: `bool`
+
+*Default*: `true`
 
 === `timeout`
 

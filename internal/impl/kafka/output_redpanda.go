@@ -78,8 +78,6 @@ func init() {
 			}
 			clientOpts = append(clientOpts, tmpOpts...)
 
-			clientOpts = append(clientOpts, kgo.AllowAutoTopicCreation()) // TODO: Configure this?
-
 			var client *kgo.Client
 			var clientMut sync.Mutex
 

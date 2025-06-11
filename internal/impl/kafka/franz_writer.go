@@ -34,12 +34,13 @@ import (
 
 const (
 	// Producer fields
-	kfwFieldPartitioner         = "partitioner"
-	kfwFieldIdempotentWrite     = "idempotent_write"
-	kfwFieldCompression         = "compression"
-	kfwFieldTimeout             = "timeout"
-	kfwFieldMaxMessageBytes     = "max_message_bytes"
-	kfwFieldBrokerWriteMaxBytes = "broker_write_max_bytes"
+	kfwFieldPartitioner            = "partitioner"
+	kfwFieldIdempotentWrite        = "idempotent_write"
+	kfwFieldCompression            = "compression"
+	kfwFieldAllowAutoTopicCreation = "allow_auto_topic_creation"
+	kfwFieldTimeout                = "timeout"
+	kfwFieldMaxMessageBytes        = "max_message_bytes"
+	kfwFieldBrokerWriteMaxBytes    = "broker_write_max_bytes"
 )
 
 // FranzProducerLimitsFields returns a slice of fields specifically for
@@ -85,6 +86,10 @@ func FranzProducerFields() []*service.ConfigField {
 			service.NewStringEnumField(kfwFieldCompression, "lz4", "snappy", "gzip", "none", "zstd").
 				Description("Optionally set an explicit compression type. The default preference is to use snappy when the broker supports it, and fall back to none if not.").
 				Optional().
+				Advanced(),
+			service.NewBoolField(kfwFieldAllowAutoTopicCreation).
+				Description("Enables topics to be auto created if they do not exist when fetching their metadata.").
+				Default(true).
 				Advanced(),
 		},
 		FranzProducerLimitsFields(),
@@ -197,6 +202,15 @@ func FranzProducerOptsFromConfig(conf *service.ParsedConfig) ([]kgo.Opt, error) 
 	}
 	if !idempotentWrite {
 		opts = append(opts, kgo.DisableIdempotentWrite())
+	}
+
+	allowAutoTopicCreation, err := conf.FieldBool(kfwFieldAllowAutoTopicCreation)
+	if err != nil {
+		return nil, err
+	}
+
+	if allowAutoTopicCreation {
+		opts = append(opts, kgo.AllowAutoTopicCreation())
 	}
 
 	return opts, nil
