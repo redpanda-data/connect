@@ -137,7 +137,7 @@ Both the `+"`id` and `index`"+` fields can be dynamically set using function int
 			service.NewInterpolatedStringField(esFieldIndex).
 				Description("The index to place messages."),
 			service.NewInterpolatedStringField(esFieldAction).
-				Description("The action to take on the document. This field must resolve to one of the following action types: `index`, `update` or `delete`. See the `Updating Documents` example for more on how the `update` action works."),
+				Description("The action to take on the document. This field must resolve to one of the following action types: `index`, `update`, `delete`, `create` or `upsert`. See the `Updating Documents` example for more on how the `update` action works and the `Create Documents` and `Upserting Documents` examples for how to use the `create` and `upsert` actions respectively."),
 			service.NewInterpolatedStringField(esFieldID).
 				Description("The ID for indexed messages. Interpolation should be used in order to create a unique ID for each message.").
 				Example(`${!counter()}-${!timestamp_unix()}`),
@@ -245,6 +245,26 @@ output:
     index: "cool-bug-facts"
     action: "index"
     id: ${! meta("s3_key") }
+`).
+		Example("Create Documents", "When using the `create` action, a new document will be created if the document ID does not already exist. If the document ID already exists, the operation will fail.", `
+output:
+  elasticsearch_v8:
+    urls: [localhost:9200]
+    index: foo
+    id: ${! json("id") }
+    action: create
+`).
+		Example("Upserting Documents", "When using the `upsert` action, if the document ID already exists, it will be updated. If the document ID does not exist, a new document will be inserted. The request body should contain the document to be indexed.", `
+output:
+  processors:
+    - mapping: |
+        meta id = this.id
+        root = this.doc
+  elasticsearch_v8:
+    urls: [localhost:9200]
+    index: foo
+    id: ${! @id }
+    action: upsert
 `)
 }
 
@@ -385,7 +405,7 @@ func (e *esOutput) addOpToBatch(bulkWriter *bulk.Bulk, batch service.MessageBatc
 	}
 
 	switch action {
-	case "index":
+	case "index", "upsert":
 		op := types.IndexOperation{
 			Index_:   &index,
 			Id_:      optionalStr(id),
@@ -393,6 +413,16 @@ func (e *esOutput) addOpToBatch(bulkWriter *bulk.Bulk, batch service.MessageBatc
 			Routing:  optionalStr(routing),
 		}
 		if err := bulkWriter.IndexOp(op, msgBytes); err != nil {
+			return err
+		}
+	case "create":
+		op := types.CreateOperation{
+			Index_:   &index,
+			Id_:      optionalStr(id),
+			Pipeline: optionalStr(pipeline),
+			Routing:  optionalStr(routing),
+		}
+		if err := bulkWriter.CreateOp(op, msgBytes); err != nil {
 			return err
 		}
 	case "update":
