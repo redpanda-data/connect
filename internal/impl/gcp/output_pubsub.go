@@ -369,13 +369,13 @@ func (out *pubsubOutput) getTopic(ctx context.Context, name string) (pubsubTopic
 	}
 
 	t := out.client.Topic(name, out.publishSettings)
-	exists, err := t.Exists(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to validate topic '%v': %v", name, err)
-	}
-	if !exists {
-		return nil, fmt.Errorf("topic '%v' does not exist", name)
-	}
+	// exists, err := t.Exists(ctx)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("failed to validate topic '%v': %v", name, err)
+	// }
+	// if !exists {
+	// 	return nil, fmt.Errorf("topic '%v' does not exist", name)
+	// }
 
 	if out.orderingKeyQ != nil {
 		t.EnableOrdering()
