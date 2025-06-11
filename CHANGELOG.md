@@ -8,6 +8,8 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - New output `slack_reaction`. (@rockwotj) 
+- Field `validate_topic` added to `gcp_pubsub`. (@rockwotj) 
+- Output `elasticsearch_v8` now has support for `create` and `upsert` actions. (@rockwotj)
 
 ## 4.57.0 - 2025-06-10
 
@@ -22,7 +24,6 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- Output `elasticsearch_v8` now has support for `create` and `upsert` actions. (@rockwotj)
 - Field `scope` added to the `couchbase` client. (@peczenyj)
 - Parameter `root_tag` added to the `format_xml()` Bloblang method. (@mihaitodor)
 - Metadata `kafka_lag` now emitted by the `kafka_franz` and `ockam_kafka` inputs. (@mihaitodor)

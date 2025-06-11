@@ -74,6 +74,7 @@ output:
     delay_threshold: 10ms
     byte_threshold: 1000000
     publish_timeout: 1m0s
+    validate_topic: true
     metadata:
       exclude_prefixes: []
     flow_control:
@@ -227,6 +228,15 @@ publish_timeout: 5m
 
 publish_timeout: 60m
 ```
+
+=== `validate_topic`
+
+Whether to validate the existence of the topic before publishing. If set to false and the topic does not exist, messages will be lost.
+
+
+*Type*: `bool`
+
+*Default*: `true`
 
 === `metadata`
 
