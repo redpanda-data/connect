@@ -90,6 +90,10 @@ pipeline:
 				Example("60m").
 				Description("The maximum length of time to wait before abandoning a publish attempt for a message.").
 				Advanced(),
+			service.NewBoolField("validate_topic").
+				Description("Whether to validate the existence of the topic before publishing. If set to false and the topic does not exist, messages will be lost.").
+				Default(true).
+				Advanced(),
 			service.NewMetadataExcludeFilterField("metadata").
 				Optional().
 				Description("Specify criteria for which metadata values are sent as attributes, all are sent by default."),
@@ -124,6 +128,7 @@ type pubsubOutput struct {
 	topicQ          *service.InterpolatedString
 	metaFilter      *service.MetadataExcludeFilter
 	orderingKeyQ    *service.InterpolatedString
+	validateTopic   bool
 }
 
 func newPubSubOutput(conf *service.ParsedConfig) (*pubsubOutput, error) {
@@ -161,6 +166,11 @@ func newPubSubOutput(conf *service.ParsedConfig) (*pubsubOutput, error) {
 		return nil, err
 	}
 	if settings.Timeout, err = conf.FieldDuration("publish_timeout"); err != nil {
+		return nil, err
+	}
+
+	validateTopic, err := conf.FieldBool("validate_topic")
+	if err != nil {
 		return nil, err
 	}
 
@@ -219,6 +229,7 @@ func newPubSubOutput(conf *service.ParsedConfig) (*pubsubOutput, error) {
 		topicQ:          topicQ,
 		metaFilter:      metaFilter,
 		orderingKeyQ:    orderingKeyQ,
+		validateTopic:   validateTopic,
 	}, nil
 }
 
@@ -369,12 +380,15 @@ func (out *pubsubOutput) getTopic(ctx context.Context, name string) (pubsubTopic
 	}
 
 	t := out.client.Topic(name, out.publishSettings)
-	exists, err := t.Exists(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to validate topic '%v': %v", name, err)
-	}
-	if !exists {
-		return nil, fmt.Errorf("topic '%v' does not exist", name)
+
+	if out.validateTopic {
+		exists, err := t.Exists(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to validate topic '%v': %v", name, err)
+		}
+		if !exists {
+			return nil, fmt.Errorf("topic '%v' does not exist", name)
+		}
 	}
 
 	if out.orderingKeyQ != nil {
