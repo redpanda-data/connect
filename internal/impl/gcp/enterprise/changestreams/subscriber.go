@@ -158,7 +158,7 @@ func (s *Subscriber) Setup(ctx context.Context) error {
 }
 
 func (s *Subscriber) createPartitionMetadataTableIfNotExist(ctx context.Context) error {
-	s.log.Debugf("Creating partition metadata table %s if not exist", s.store.Config().TableName)
+	s.log.Infof("Creating partition metadata table %s if not exist", s.store.Config().TableName)
 
 	var adm *adminapi.DatabaseAdminClient
 	if s.testingAdminClient != nil {
@@ -290,7 +290,10 @@ func (s *Subscriber) detectNewPartitionsLoop(ctx context.Context) error {
 	}
 }
 
-var errEndOfStream = errors.New("no new partitions")
+var (
+	spannerZeroTime = time.Date(1, 1, 1, 0, 0, 0, 0, time.UTC)
+	errEndOfStream  = errors.New("no new partitions")
+)
 
 func (s *Subscriber) detectNewPartitions(ctx context.Context) error {
 	minWatermark := s.minWatermark.get()
@@ -302,9 +305,10 @@ func (s *Subscriber) detectNewPartitions(ctx context.Context) error {
 		}
 		s.log.Debugf("Detected unfinished min watermark: %v", minWatermark)
 	}
-	if minWatermark.IsZero() {
-		return nil
+	if minWatermark.Equal(spannerZeroTime) {
+		return errEndOfStream
 	}
+
 	s.minWatermark.set(minWatermark)
 
 	if !s.conf.EndTimestamp.IsZero() && minWatermark.After(s.conf.EndTimestamp) {
