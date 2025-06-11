@@ -36,7 +36,7 @@ func (s *Subscriber) UpdatePartitionWatermark(
 		return nil
 	}
 
-	s.log.Debugf("%s: updating watermark to %s", partitionToken, commitTimestamp)
+	s.log.Tracef("%s: updating watermark to %s", partitionToken, commitTimestamp)
 
 	return s.store.UpdateWatermark(ctx, partitionToken, commitTimestamp)
 }

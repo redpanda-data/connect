@@ -68,7 +68,7 @@ func (h *handler) handleDataChangeRecords(ctx context.Context, cr ChangeRecord) 
 			continue
 		}
 
-		h.log.Debugf("%s: data change record: table: %s, modification type: %s, commit timestamp: %v",
+		h.log.Tracef("%s: data change record: table: %s, modification type: %s, commit timestamp: %v",
 			h.pm.PartitionToken, dcr.TableName, dcr.ModType, dcr.CommitTimestamp)
 
 		if err := h.cb(ctx, h.pm.PartitionToken, dcr); err != nil {
