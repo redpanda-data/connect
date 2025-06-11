@@ -199,6 +199,42 @@ output:
 ```
 
 --
+Create Documents::
++
+--
+
+When using the `create` action, a new document will be created if the document ID does not already exist. If the document ID already exists, the operation will fail.
+
+```yaml
+output:
+  elasticsearch_v8:
+    urls: [localhost:9200]
+    index: foo
+    id: ${! json("id") }
+    action: create
+```
+
+--
+Upserting Documents::
++
+--
+
+When using the `upsert` action, if the document ID already exists, it will be updated. If the document ID does not exist, a new document will be inserted. The request body should contain the document to be indexed.
+
+```yaml
+output:
+  processors:
+    - mapping: |
+        meta id = this.id
+        root = this.doc
+  elasticsearch_v8:
+    urls: [localhost:9200]
+    index: foo
+    id: ${! @id }
+    action: upsert
+```
+
+--
 ======
 
 == Fields
@@ -229,7 +265,7 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 === `action`
 
-The action to take on the document. This field must resolve to one of the following action types: `index`, `update` or `delete`. See the `Updating Documents` example for more on how the `update` action works.
+The action to take on the document. This field must resolve to one of the following action types: `index`, `update`, `delete`, `create` or `upsert`. See the `Updating Documents` example for more on how the `update` action works and the `Create Documents` and `Upserting Documents` examples for how to use the `create` and `upsert` actions respectively.
 This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
 

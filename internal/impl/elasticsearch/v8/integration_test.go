@@ -78,10 +78,10 @@ elasticsearch_v8:
 	go func() {
 		require.NoError(t, stream.Run(ctx))
 	}()
-	t.Cleanup(func() {
+	defer func() {
 		err := stream.StopWithin(time.Second * 3)
 		require.NoError(t, err)
-	})
+	}()
 
 	t.Run("index", func(t *testing.T) {
 		msgBytes := []byte(`{"message":"blobfish are cool","likes":1}`)
@@ -128,5 +128,58 @@ elasticsearch_v8:
 		resp, err := client.Get("things", "1").Do(ctx)
 		require.NoError(t, err)
 		require.False(t, resp.Found)
+	})
+
+	t.Run("create", func(t *testing.T) {
+		// Create a new document
+		createMsgBytes := []byte(`{"message":"mantis shrimp are epic","likes":10}`)
+		createMsg := service.NewMessage(createMsgBytes)
+		createMsg.MetaSet("action", "create")
+		createMsg.MetaSet("id", "2")
+		err = inFunc(ctx, createMsg)
+		require.NoError(t, err)
+
+		resp, err := client.Get("things", "2").Do(ctx)
+		require.NoError(t, err)
+		require.True(t, resp.Found)
+		require.Equal(t, string(createMsgBytes), string(resp.Source_))
+
+		// Attempt to create the same document again (should fail)
+		err = inFunc(ctx, createMsg)
+		require.Error(t, err) // Expecting an error here
+
+		// Verify the document was not overwritten
+		resp, err = client.Get("things", "2").Do(ctx)
+		require.NoError(t, err)
+		require.True(t, resp.Found)
+		require.Equal(t, string(createMsgBytes), string(resp.Source_))
+	})
+
+	t.Run("upsert", func(t *testing.T) {
+		// Upsert a new document
+		upsertNewMsgBytes := []byte(`{"message":"dragonflies are ancient","likes":5}`)
+		upsertNewMsg := service.NewMessage(upsertNewMsgBytes)
+		upsertNewMsg.MetaSet("action", "upsert")
+		upsertNewMsg.MetaSet("id", "3")
+		err = inFunc(ctx, upsertNewMsg)
+		require.NoError(t, err)
+
+		resp, err := client.Get("things", "3").Do(ctx)
+		require.NoError(t, err)
+		require.True(t, resp.Found)
+		require.Equal(t, string(upsertNewMsgBytes), string(resp.Source_))
+
+		// Upsert an existing document (update)
+		upsertUpdateMsgBytes := []byte(`{"message":"dragonflies are truly ancient","likes":6}`)
+		upsertUpdateMsg := service.NewMessage(upsertUpdateMsgBytes)
+		upsertUpdateMsg.MetaSet("action", "upsert")
+		upsertUpdateMsg.MetaSet("id", "3")
+		err = inFunc(ctx, upsertUpdateMsg)
+		require.NoError(t, err)
+
+		resp, err = client.Get("things", "3").Do(ctx)
+		require.NoError(t, err)
+		require.True(t, resp.Found)
+		require.Equal(t, string(upsertUpdateMsgBytes), string(resp.Source_))
 	})
 }
