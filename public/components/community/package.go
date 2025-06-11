@@ -66,6 +66,7 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/redpanda"
 	_ "github.com/redpanda-data/connect/v4/public/components/sentry"
 	_ "github.com/redpanda-data/connect/v4/public/components/sftp"
+	_ "github.com/redpanda-data/connect/v4/public/components/sideeffect"
 	_ "github.com/redpanda-data/connect/v4/public/components/spicedb"
 	_ "github.com/redpanda-data/connect/v4/public/components/sql"
 	_ "github.com/redpanda-data/connect/v4/public/components/statsd"
