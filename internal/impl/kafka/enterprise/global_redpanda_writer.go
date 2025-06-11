@@ -324,8 +324,6 @@ func newTopicLoggerWriterFromConfig(conf *service.ParsedConfig, log *service.Log
 	}
 	f.clientOpts = append(f.clientOpts, tmpOpts...)
 
-	f.clientOpts = append(f.clientOpts, kgo.AllowAutoTopicCreation()) // TODO: Configure this?
-
 	return &f, nil
 }
 
