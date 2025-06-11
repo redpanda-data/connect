@@ -1,0 +1,17 @@
+version: '3'
+
+vars:
+  BENCHMARK_CONFIG_FILE: config.yml
+
+tasks:
+  gen-config:
+    desc: Generate config file for benchmark
+    cmds:
+      - go test -v -run TestBenchmarkInsert . {{.SPANNER_ARGS}} -output-config-file {{.BENCHMARK_CONFIG_FILE}}
+    status:
+      - test -f {{.BENCHMARK_CONFIG_FILE}}
+
+  clean:
+    desc: Remove config file
+    cmds:
+      - rm -f {{.BENCHMARK_CONFIG_FILE}}

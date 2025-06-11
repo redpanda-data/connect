@@ -6,7 +6,12 @@ vars:
   SPANNER_ARGS: -spanner.project_id=sandbox-rpcn-457914 -spanner.instance_id=rpcn-tests-spanner -spanner.database_id=rpcn-tests
 
 includes:
-  terraform: ./terraform/terraform.yml
+  benchmark:
+    taskfile: ./benchmark/benchmark.yml
+    dir: benchmark
+  terraform:
+    taskfile: ./terraform/terraform.yml
+    dir: terraform
 
 tasks:
   test:
