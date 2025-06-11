@@ -466,7 +466,7 @@ Options:
 
 === `kafka.allow_auto_topic_creation`
 
-enables topics to be auto created if they do not exist when fetching their metadata.
+Enables topics to be auto created if they do not exist when fetching their metadata.
 
 
 *Type*: `bool`

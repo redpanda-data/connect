@@ -88,7 +88,7 @@ func FranzProducerFields() []*service.ConfigField {
 				Optional().
 				Advanced(),
 			service.NewBoolField(kfwFieldAllowAutoTopicCreation).
-				Description("enables topics to be auto created if they do not exist when fetching their metadata.").
+				Description("Enables topics to be auto created if they do not exist when fetching their metadata.").
 				Default(true).
 				Advanced(),
 		},
