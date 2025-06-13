@@ -90,15 +90,16 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 		}),
 		service.CLIOptAddTeeLogger(slog.New(rpLogger)),
 		service.CLIOptOnConfigParse(func(pConf *service.ParsedConfig) error {
+			// Kick off license service, it's important we do this before chroot and telemetry
+			license.RegisterService(pConf.Resources(), licenseConfig)
+
+			// Chroot if needed
 			if chrootPath != "" {
 				fbLogger.Infof("Chrooting to '%v'", chrootPath)
 				if err := chroot(chrootPath); err != nil {
 					return fmt.Errorf("chroot: %w", err)
 				}
 			}
-
-			// Kick off license service, it's important we do this before telemetry.
-			license.RegisterService(pConf.Resources(), licenseConfig)
 
 			// Kick off telemetry exporter.
 			if !disableTelemetry {
