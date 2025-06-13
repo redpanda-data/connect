@@ -3,12 +3,16 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.58.0 - TBD
+## 4.58.0
 
 ### Added
 
 - New output `slack_reaction`. (@rockwotj)
 - Field `allow_auto_topic_creation` added to the `kafka_franz`, `redpanda`, `redpanda_migrator`, and `ockam_kafka` outputs and to the top level `redpanda` Connect configuration. (@peczenyj)
+
+### Fixed
+
+- Fixed an issue with `chroot` where license was not properly read, and networking was not properly configured. (@mmatczuk)
 
 ## 4.57.0 - 2025-06-10
 
