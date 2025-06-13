@@ -11,16 +11,25 @@
 package cli
 
 import (
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
 	"syscall"
 )
 
-// chroot changes the root directory to the provided path and then changes
-// the current directory to "/".
+// chroot creates read-only empty directory containing only required /etc files,
+// and chroots into it. The directory must not exist before calling this
+// function.
 //
 // NOTE: This function will only work if the binary is running with
 // sufficient privileges to call syscall.Chroot. If the binary does not
 // have the necessary privileges, this function will return an error.
 func chroot(path string) error {
+	if err := setupChrootDir(path); err != nil {
+		return fmt.Errorf("setup chroot: %w", err)
+	}
+
 	if err := syscall.Chroot(path); err != nil {
 		return err
 	}
@@ -29,4 +38,71 @@ func chroot(path string) error {
 	}
 
 	return nil
+}
+
+// configFiles defines the essential configuration files needed in chroot
+var configFiles = []string{
+	"/etc/nsswitch.conf",
+	"/etc/hosts",
+	"/etc/resolv.conf",
+}
+
+func setupChrootDir(chrootDir string) error {
+	// Make sure chroot directory does not exist
+	if _, err := os.Stat(chrootDir); err == nil {
+		return fmt.Errorf("chroot directory %s must not exist", chrootDir)
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("check directory: %w", err)
+	}
+
+	// Create the directory and /etc directory inside it, and copy files
+	if err := os.MkdirAll(filepath.Join(chrootDir, "etc"), 0o755); err != nil {
+		return fmt.Errorf("create etc directory: %w", err)
+	}
+	for _, filePath := range configFiles {
+		if err := copyFile(filePath, filepath.Join(chrootDir, filePath)); err != nil {
+			return fmt.Errorf("copy %s: %w", filePath, err)
+		}
+	}
+
+	// Recursively make chroot directory read-only
+	if err := makeReadOnly(chrootDir); err != nil {
+		return fmt.Errorf("make directory read-only: %w", err)
+	}
+
+	return nil
+}
+
+func copyFile(src, dst string) error {
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer srcFile.Close()
+
+	stat, err := srcFile.Stat()
+	if err != nil {
+		return err
+	}
+
+	dstFile, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, stat.Mode())
+	if err != nil {
+		return err
+	}
+	defer dstFile.Close()
+
+	if _, err := io.Copy(dstFile, srcFile); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func makeReadOnly(root string) error {
+	return filepath.Walk(root, func(filePath string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		return os.Chmod(filePath, info.Mode() & ^os.FileMode(0o222))
+	})
 }
