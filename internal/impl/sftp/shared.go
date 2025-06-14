@@ -16,10 +16,8 @@ package sftp
 
 import (
 	"fmt"
-	"io/fs"
 	"net"
 
-	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -101,7 +99,12 @@ type credentials struct {
 	Signer   ssh.Signer
 }
 
-func (c credentials) GetClient(_ fs.FS, address string) (*sftp.Client, error) {
+// GetConnection establishes a connection to a server using the provided
+// credentials.
+//
+// These connections can be used for multiple SFTP clients, and need closing
+// separately after the SFTP clients they enable have been closed.
+func (c credentials) GetConnection(address string) (*ssh.Client, error) {
 	host, port, err := net.SplitHostPort(address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse address: %v", err)
@@ -140,14 +143,7 @@ func (c credentials) GetClient(_ fs.FS, address string) (*sftp.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	client, err := sftp.NewClient(conn)
-	if err != nil {
-		conn.Close()
-		return nil, err
-	}
-
-	return client, nil
+	return conn, nil
 }
 
 // Server contains connection data for connecting to an SFTP server.
