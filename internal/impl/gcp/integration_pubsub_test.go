@@ -159,25 +159,25 @@ input:
 				name:        "invalid key",
 				key:         "\xc0\x80",
 				value:       "bar",
-				expectedErr: "failed to build message attributes: metadata field \xc0\x80 contains non-UTF-8 characters",
+				expectedErr: "rpc error: code = Internal desc = grpc: error while marshaling: string field contains invalid UTF-8: metadata field \xc0\x80 contains non-UTF-8 characters",
 			},
 			{
 				name:        "invalid control",
 				key:         "foo",
 				value:       "\xc0\x80",
-				expectedErr: "failed to build message attributes: metadata field foo contains non-UTF-8 data: \xc0\x80",
+				expectedErr: "rpc error: code = Internal desc = grpc: error while marshaling: string field contains invalid UTF-8: metadata field foo contains non-UTF-8 data: \xc0\x80",
 			},
 			{
 				name:        "invalid high",
 				key:         "foo",
 				value:       "\xed\xa0\x80",
-				expectedErr: "failed to build message attributes: metadata field foo contains non-UTF-8 data: \xed\xa0\x80",
+				expectedErr: "rpc error: code = Internal desc = grpc: error while marshaling: string field contains invalid UTF-8: metadata field foo contains non-UTF-8 data: \xed\xa0\x80",
 			},
 			{
 				name:        "invalid low",
 				key:         "foo",
 				value:       "\xed\xbf\xbf",
-				expectedErr: "failed to build message attributes: metadata field foo contains non-UTF-8 data: \xed\xbf\xbf",
+				expectedErr: "rpc error: code = Internal desc = grpc: error while marshaling: string field contains invalid UTF-8: metadata field foo contains non-UTF-8 data: \xed\xbf\xbf",
 			},
 		}
 
