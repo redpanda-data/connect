@@ -20,25 +20,57 @@ import (
 	"sync"
 
 	"github.com/pkg/sftp"
+	"golang.org/x/crypto/ssh"
 )
 
-func newClientPool(newClient func() (*sftp.Client, error)) (*clientPool, error) {
-	client, err := newClient()
-	if err != nil {
+func newClientPool(
+	newSshConn func() (*ssh.Client, error),
+	newClient func(*ssh.Client) (*sftp.Client, error),
+) (*clientPool, error) {
+
+	cp := clientPool{
+		newSshConn: newSshConn,
+		newClient:  newClient,
+		sshConn:    nil,
+		client:     nil,
+	}
+	// we instantiate our pool without a live connection/client, so that we
+	// have an early test of our preparation/repair function:
+	if err := cp.prepareClient(); err != nil {
 		return nil, err
 	}
-	return &clientPool{
-		newClient: newClient,
-		client:    client,
-	}, nil
+	return &cp, nil
 }
 
 type clientPool struct {
-	newClient func() (*sftp.Client, error)
+	newSshConn func() (*ssh.Client, error)
+	newClient  func(*ssh.Client) (*sftp.Client, error)
 
-	lock   sync.Mutex
-	client *sftp.Client
-	closed bool
+	lock    sync.Mutex
+	sshConn *ssh.Client
+	client  *sftp.Client
+	closed  bool
+}
+
+// prepareClient creates a new SSH connection and SFTP client if either/both
+// are missing.
+func (c *clientPool) prepareClient() error {
+	var err error
+
+	if c.client != nil {
+		return nil
+	}
+
+	// only create a new SSH connection if we don't have one already:
+	if c.sshConn == nil {
+		c.sshConn, err = c.newSshConn()
+		if err != nil {
+			return err
+		}
+	}
+
+	c.client, err = c.newClient(c.sshConn)
+	return err
 }
 
 func (c *clientPool) Open(path string) (*sftp.File, error) {
@@ -65,21 +97,20 @@ func (c *clientPool) Remove(path string) error {
 	})
 }
 
-func (c *clientPool) Close() error {
+func (c *clientPool) Close() (err error) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	if c.closed {
-		return nil
+	if c.client != nil {
+		err = c.client.Close()
+		c.client = nil
+	}
+	if c.sshConn != nil {
+		err = errors.Join(err, c.sshConn.Close())
+		c.sshConn = nil
 	}
 	c.closed = true
-
-	if c.client != nil {
-		err := c.client.Close()
-		c.client = nil
-		return err
-	}
-	return nil
+	return
 }
 
 func clientPoolDo(c *clientPool, fn func(*sftp.Client) error) error {
@@ -90,37 +121,32 @@ func clientPoolDo(c *clientPool, fn func(*sftp.Client) error) error {
 	return err
 }
 
+// clientPoolDoReturning executes a function with our pool SFTP client and
+// returns the resulting value/error.
+//
+// In the case the clientPool is used from an AckFn after the input is
+// closed, we create temporary connection/client to fulfil the operation,
+// then immediately close them again afterwards.
 func clientPoolDoReturning[T any](c *clientPool, fn func(*sftp.Client) (T, error)) (T, error) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	var zero T
+	var (
+		zero         T
+		err          error
+		afterClosure = c.closed // so we can clean up after ourselves
+	)
 
-	// In the case that the clientPool is used from an AckFn after the input is
-	// closed, we create temporary client to fulfil the operation, then
-	// immediately close it.
-	if c.closed {
-		client, err := c.newClient()
-		if err != nil {
-			return zero, err
-		}
-		result, err := fn(client)
-		_ = client.Close()
-		return result, err
-	}
-
-	if c.client == nil {
-		client, err := c.newClient()
-		if err != nil {
-			return zero, err
-		}
-		c.client = client
+	if err = c.prepareClient(); err != nil {
+		return zero, err
 	}
 
 	result, err := fn(c.client)
-	if errors.Is(err, sftp.ErrSSHFxConnectionLost) {
+	if afterClosure || errors.Is(err, sftp.ErrSSHFxConnectionLost) {
 		_ = c.client.Close()
 		c.client = nil
+		_ = c.sshConn.Close()
+		c.sshConn = nil
 	}
 	return result, err
 }

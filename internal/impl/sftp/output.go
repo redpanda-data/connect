@@ -24,6 +24,7 @@ import (
 	"sync"
 
 	"github.com/pkg/sftp"
+	"golang.org/x/crypto/ssh"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -87,6 +88,7 @@ type sftpWriter struct {
 	appendMode bool
 
 	handleMut  sync.Mutex
+	sshConn    *ssh.Client
 	client     *sftp.Client
 	handlePath string
 	handle     io.WriteCloser
@@ -127,7 +129,11 @@ func (s *sftpWriter) Connect(context.Context) (err error) {
 		return
 	}
 
-	s.client, err = s.creds.GetClient(s.mgr.FS(), s.address)
+	s.sshConn, err = s.creds.GetConnection(s.address)
+	if err != nil {
+		return
+	}
+	s.client, err = GetClient(s.mgr.FS(), s.sshConn)
 	return
 }
 
@@ -228,6 +234,12 @@ func (s *sftpWriter) Close(context.Context) error {
 			s.log.With("error", err).Error("Failed to close client")
 		}
 		s.client = nil
+	}
+	if s.sshConn != nil {
+		if err := s.sshConn.Close(); err != nil {
+			s.log.With("error", err).Error("Failed to close SSH connection")
+		}
+		s.sshConn = nil
 	}
 	return nil
 }

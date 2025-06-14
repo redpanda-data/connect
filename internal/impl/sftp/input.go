@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/pkg/sftp"
+	"golang.org/x/crypto/ssh"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/codec"
@@ -174,9 +175,10 @@ func (s *sftpReader) Connect(context.Context) error {
 	s.stateLock.Lock()
 	defer s.stateLock.Unlock()
 
-	client, err := newClientPool(func() (*sftp.Client, error) {
-		return s.creds.GetClient(s.mgr.FS(), s.address)
-	})
+	client, err := newClientPool(
+		func() (*ssh.Client, error) { return s.creds.GetConnection(s.address) },
+		func(conn *ssh.Client) (*sftp.Client, error) { return GetClient(s.mgr.FS(), conn) },
+	)
 	if err != nil {
 		if errors.Is(err, sftp.ErrSSHFxConnectionLost) {
 			err = service.ErrNotConnected

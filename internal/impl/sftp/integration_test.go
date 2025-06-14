@@ -225,7 +225,11 @@ func getClient(resource *dockertest.Resource) (*sftp.Client, error) {
 		Username: sftpUsername,
 		Password: sftpPassword,
 	}
-	return creds.GetClient(&osPT{}, "localhost:"+resource.GetPort("22/tcp"))
+	sshConn, err := creds.GetConnection("localhost:" + resource.GetPort("22/tcp"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create SSH connection: %w", err)
+	}
+	return GetClient(&osPT{}, sshConn)
 }
 
 func writeSFTPFile(t *testing.T, client *sftp.Client, path, data string) {
