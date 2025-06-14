@@ -27,7 +27,6 @@ func newClientPool(
 	newSshConn func() (*ssh.Client, error),
 	newClient func(*ssh.Client) (*sftp.Client, error),
 ) (*clientPool, error) {
-
 	cp := clientPool{
 		newSshConn: newSshConn,
 		newClient:  newClient,

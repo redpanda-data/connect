@@ -177,7 +177,7 @@ func (s *sftpReader) Connect(context.Context) error {
 
 	client, err := newClientPool(
 		func() (*ssh.Client, error) { return s.creds.GetConnection(s.address) },
-		func(conn *ssh.Client) (*sftp.Client, error) { return GetClient(s.mgr.FS(), conn) },
+		func(conn *ssh.Client) (*sftp.Client, error) { return sftp.NewClient(conn) },
 	)
 	if err != nil {
 		if errors.Is(err, sftp.ErrSSHFxConnectionLost) {

@@ -18,8 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/fs"
-	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -229,7 +227,7 @@ func getClient(resource *dockertest.Resource) (*sftp.Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create SSH connection: %w", err)
 	}
-	return GetClient(&osPT{}, sshConn)
+	return sftp.NewClient(sshConn)
 }
 
 func writeSFTPFile(t *testing.T, client *sftp.Client, path, data string) {
@@ -239,26 +237,4 @@ func writeSFTPFile(t *testing.T, client *sftp.Client, path, data string) {
 	defer file.Close()
 	_, err = fmt.Fprint(file, data, "writing file contents")
 	require.NoError(t, err)
-}
-
-type osPT struct{}
-
-func (*osPT) Open(name string) (fs.File, error) {
-	return os.Open(name)
-}
-
-func (*osPT) OpenFile(name string, flag int, perm fs.FileMode) (fs.File, error) {
-	return os.OpenFile(name, flag, perm)
-}
-
-func (*osPT) Stat(name string) (fs.FileInfo, error) {
-	return os.Stat(name)
-}
-
-func (*osPT) Remove(name string) error {
-	return os.Remove(name)
-}
-
-func (*osPT) MkdirAll(path string, perm fs.FileMode) error {
-	return os.MkdirAll(path, perm)
 }

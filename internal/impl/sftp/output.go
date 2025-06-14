@@ -133,7 +133,7 @@ func (s *sftpWriter) Connect(context.Context) (err error) {
 	if err != nil {
 		return
 	}
-	s.client, err = GetClient(s.mgr.FS(), s.sshConn)
+	s.client, err = sftp.NewClient(s.sshConn)
 	return
 }
 

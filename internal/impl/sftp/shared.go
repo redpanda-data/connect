@@ -16,10 +16,8 @@ package sftp
 
 import (
 	"fmt"
-	"io/fs"
 	"net"
 
-	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -146,14 +144,6 @@ func (c credentials) GetConnection(address string) (*ssh.Client, error) {
 		return nil, err
 	}
 	return conn, nil
-}
-
-// GetClient creates a new SFTP client on an established SSH connection.
-//
-// All SFTP clients should be closed before closing the underlying SSH
-// connection.
-func GetClient(_ fs.FS, conn *ssh.Client) (*sftp.Client, error) {
-	return sftp.NewClient(conn)
 }
 
 // Server contains connection data for connecting to an SFTP server.
