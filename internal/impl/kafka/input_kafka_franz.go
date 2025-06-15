@@ -17,8 +17,6 @@ package kafka
 import (
 	"slices"
 
-	"github.com/twmb/franz-go/pkg/kgo"
-
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
