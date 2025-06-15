@@ -28,6 +28,7 @@ import (
 	"github.com/rivo/uniseg"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
+	"slices"
 )
 
 func init() {
@@ -400,10 +401,5 @@ func registerULID() error {
 }
 
 func hasMember(arr []string, member string) bool {
-	for _, v := range arr {
-		if v == member {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(arr, member)
 }

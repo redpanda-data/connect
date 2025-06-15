@@ -161,7 +161,7 @@ file:
 			}()
 
 			time.Sleep(time.Second * 5)
-			for i := 0; i < 1000; i++ {
+			for i := range 1000 {
 				// Insert 10000 rows
 				db.Exec("INSERT INTO foo VALUES (?)", i)
 			}
@@ -223,7 +223,7 @@ func TestIntegrationMySQLSnapshotAndCDC(t *testing.T) {
     )
 `)
 	// Insert 1000 rows for initial snapshot streaming
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		db.Exec("INSERT INTO foo VALUES (?)", i)
 	}
 
@@ -305,7 +305,7 @@ func TestIntegrationMySQLCDCWithCompositePrimaryKeys(t *testing.T) {
 `)
 
 	// Insert 1000 rows for initial snapshot streaming
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		db.Exec("INSERT INTO `Foo` VALUES (?, ?)", i, i)
 		db.Exec("INSERT INTO foo_non_streamed VALUES (?, ?)", i, i)
 	}

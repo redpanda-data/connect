@@ -41,7 +41,7 @@ func TestWazeroWASIGoProcessor(t *testing.T) {
 		require.NoError(t, proc.Close(t.Context()))
 	})
 
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		inMsg := service.NewMessage([]byte(`hello world`))
 		outBatches, err := proc.ProcessBatch(t.Context(), service.MessageBatch{inMsg})
 		require.NoError(t, err)
@@ -70,7 +70,7 @@ func TestWazeroWASIGoProcessorParallel(t *testing.T) {
 
 	tStarted := time.Now()
 	var wg sync.WaitGroup
-	for j := 0; j < 10; j++ {
+	for j := range 10 {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
@@ -108,7 +108,7 @@ func TestWazeroWASIRustProcessor(t *testing.T) {
 		require.NoError(t, proc.Close(t.Context()))
 	})
 
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		inMsg := service.NewMessage([]byte(`hello world`))
 		outBatches, err := proc.ProcessBatch(t.Context(), service.MessageBatch{inMsg})
 		require.NoError(t, err)
@@ -135,12 +135,11 @@ func BenchmarkWazeroWASIGoCalls(b *testing.B) {
 		require.NoError(b, proc.Close(b.Context()))
 	})
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
 	inMsg := service.NewMessage([]byte(`hello world`))
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		outBatches, err := proc.ProcessBatch(b.Context(), service.MessageBatch{inMsg.Copy()})
 		require.NoError(b, err)
 
@@ -165,12 +164,11 @@ func BenchmarkWazeroWASIRustCalls(b *testing.B) {
 		require.NoError(b, proc.Close(b.Context()))
 	})
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
 	inMsg := service.NewMessage([]byte(`hello world`))
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		outBatches, err := proc.ProcessBatch(b.Context(), service.MessageBatch{inMsg.Copy()})
 		require.NoError(b, err)
 

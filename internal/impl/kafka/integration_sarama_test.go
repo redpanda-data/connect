@@ -154,7 +154,7 @@ kafka:
 	n := 1000
 	go func() {
 		for {
-			for i := 0; i < n; i++ {
+			for i := range n {
 				err := inFunc(writeCtx, service.NewMessage(fmt.Appendf(nil, "hello world %v", i)))
 				if writeCtx.Err() != nil {
 					return

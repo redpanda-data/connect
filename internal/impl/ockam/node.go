@@ -38,7 +38,7 @@ func newNode(identityName, address, ticket, relay string) (*node, error) {
 		return nil, err
 	}
 
-	configuration := map[string]interface{}{
+	configuration := map[string]any{
 		"name":                 name,
 		"identity":             identity,
 		"tcp-listener-address": address,
@@ -145,13 +145,13 @@ func appendAllowArgs(args []string, flag, value, identifier string) []string {
 	return args
 }
 
-func listIdentities() ([]map[string]interface{}, error) {
+func listIdentities() ([]map[string]any, error) {
 	stdout, _, err := runCommand(true, "identity", "list", "--output", "json")
 	if err != nil {
 		return nil, err
 	}
 
-	var identities []map[string]interface{}
+	var identities []map[string]any
 	err = json.Unmarshal([]byte(stdout), &identities)
 	if err != nil {
 		return nil, err

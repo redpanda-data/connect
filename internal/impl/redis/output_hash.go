@@ -23,6 +23,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"maps"
 )
 
 const (
@@ -163,9 +164,7 @@ func walkForHashFields(msg *service.Message, fields map[string]any) error {
 	if !ok {
 		return fmt.Errorf("expected JSON object, found '%T'", jVal)
 	}
-	for k, v := range jObj {
-		fields[k] = v
-	}
+	maps.Copy(fields, jObj)
 	return nil
 }
 

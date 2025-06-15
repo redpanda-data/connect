@@ -142,7 +142,7 @@ func BenchmarkRealComparison(b *testing.B) {
 		math.NaN(),
 	}
 	b.Run("JVMSemantics", func(b *testing.B) {
-		for range b.N {
+		for b.Loop() {
 			for _, v1 := range values {
 				for _, v2 := range values {
 					_ = compareDouble(v1, v2)
@@ -151,7 +151,7 @@ func BenchmarkRealComparison(b *testing.B) {
 		}
 	})
 	b.Run("GoSemantics", func(b *testing.B) {
-		for range b.N {
+		for b.Loop() {
 			for _, v1 := range values {
 				for _, v2 := range values {
 					_ = cmp.Compare(v1, v2)

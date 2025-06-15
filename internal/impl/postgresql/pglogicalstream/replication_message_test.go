@@ -28,7 +28,7 @@ func (s *messageSuite) R() *require.Assertions {
 	return s.Require()
 }
 
-func (s *messageSuite) Equal(e, a interface{}, args ...interface{}) {
+func (s *messageSuite) Equal(e, a any, args ...any) {
 	s.R().Equal(e, a, args...)
 }
 
@@ -108,7 +108,7 @@ func (s *messageSuite) putMessageTestData(msg []byte) *LogicalDecodingMessage {
 	bigEndian.PutUint32(msg[off:], uint32(len(content)))
 	off += 4
 
-	for i := 0; i < len(content); i++ {
+	for i := range len(content) {
 		msg[off] = content[i]
 		off++
 	}

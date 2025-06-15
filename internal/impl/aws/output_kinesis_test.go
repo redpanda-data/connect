@@ -130,7 +130,7 @@ partition_key: ${! json("id") }
 	}
 
 	var msg service.MessageBatch
-	for i := 0; i < n; i++ {
+	for range n {
 		part := service.NewMessage([]byte(`{"foo":"bar","id":123}`))
 		msg = append(msg, part)
 	}
@@ -170,7 +170,7 @@ partition_key: ${! json("id") }
 			output := kinesis.PutRecordsOutput{
 				Records: make([]types.PutRecordsResultEntry, count),
 			}
-			for i := 0; i < count; i++ {
+			for i := range count {
 				var entry types.PutRecordsResultEntry
 				if i >= 300 {
 					failed++
@@ -184,7 +184,7 @@ partition_key: ${! json("id") }
 	}
 
 	var msg service.MessageBatch
-	for i := 0; i < n; i++ {
+	for range n {
 		part := service.NewMessage([]byte(`{"foo":"bar","id":123}`))
 		msg = append(msg, part)
 	}
@@ -249,7 +249,7 @@ partition_key: ${! json("id") }
 			calls = append(calls, records)
 			var failed int32
 			var output kinesis.PutRecordsOutput
-			for i := 0; i < len(input.Records); i++ {
+			for i := range input.Records {
 				entry := types.PutRecordsResultEntry{}
 				if i > 0 {
 					failed++

@@ -42,7 +42,7 @@ func registerCompareBCryptMethod() error {
 			return nil, err
 		}
 
-		return bloblang.StringMethod(func(source string) (interface{}, error) {
+		return bloblang.StringMethod(func(source string) (any, error) {
 			input := []byte(source)
 			expected := []byte(hashedSecret)
 

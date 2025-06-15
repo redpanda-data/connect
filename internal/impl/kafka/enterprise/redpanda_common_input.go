@@ -105,7 +105,7 @@ func init() {
 				// Make multiple attempts here just to allow the redpanda logger
 				// to initialise in the background. Otherwise we get an annoying
 				// log.
-				for i := 0; i < 20; i++ {
+				for range 20 {
 					if err = kafka.FranzSharedClientUse(SharedGlobalRedpandaClientKey, mgr, func(details *kafka.FranzSharedClientInfo) error {
 						clientOpts = append(clientOpts, details.ConnDetails.FranzOpts()...)
 						return nil

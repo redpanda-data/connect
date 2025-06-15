@@ -63,7 +63,7 @@ func (lsn *LSN) decodeText(src string) error {
 }
 
 // Scan implements the Scanner interface.
-func (lsn *LSN) Scan(src interface{}) error {
+func (lsn *LSN) Scan(src any) error {
 	if lsn == nil {
 		return nil
 	}

@@ -135,7 +135,7 @@ func TestDecodePostgresRow(t *testing.T) {
 							{
 								Name: "playerid",
 								Type: spanner.NullJSON{
-									Value: map[string]interface{}{"code": "INT64"},
+									Value: map[string]any{"code": "INT64"},
 									Valid: true,
 								},
 								IsPrimaryKey:    true,
@@ -144,7 +144,7 @@ func TestDecodePostgresRow(t *testing.T) {
 							{
 								Name: "playername",
 								Type: spanner.NullJSON{
-									Value: map[string]interface{}{"code": "STRING"},
+									Value: map[string]any{"code": "STRING"},
 									Valid: true,
 								},
 								IsPrimaryKey:    false,
@@ -154,15 +154,15 @@ func TestDecodePostgresRow(t *testing.T) {
 						Mods: []*Mod{
 							{
 								Keys: spanner.NullJSON{
-									Value: map[string]interface{}{"playerid": "3"},
+									Value: map[string]any{"playerid": "3"},
 									Valid: true,
 								},
 								NewValues: spanner.NullJSON{
-									Value: map[string]interface{}{"playername": "b"},
+									Value: map[string]any{"playername": "b"},
 									Valid: true,
 								},
 								OldValues: spanner.NullJSON{
-									Value: map[string]interface{}{},
+									Value: map[string]any{},
 									Valid: true,
 								},
 							},
@@ -190,10 +190,10 @@ func TestDecodePostgresRow(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			var jsonVal interface{}
+			var jsonVal any
 			require.NoError(t, json.Unmarshal([]byte(test.changeRecordJSON), &jsonVal))
 
-			row, err := spanner.NewRow([]string{"read_json_playersstream"}, []interface{}{spanner.NullJSON{
+			row, err := spanner.NewRow([]string{"read_json_playersstream"}, []any{spanner.NullJSON{
 				Valid: true,
 				Value: jsonVal,
 			}})

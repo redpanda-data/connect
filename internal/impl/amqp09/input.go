@@ -240,7 +240,7 @@ func amqp09ReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources) 
 		return nil, errors.New("must specify at least one URL")
 	}
 	for _, u := range urlStrs {
-		for _, splitURL := range strings.Split(u, ",") {
+		for splitURL := range strings.SplitSeq(u, ",") {
 			if trimmed := strings.TrimSpace(splitURL); trimmed != "" {
 				a.urls = append(a.urls, trimmed)
 			}
@@ -461,7 +461,7 @@ func amqpSetMetadata(p *service.Message, k string, v any) {
 			amqpSetMetadata(p, metaKey+"_"+key, value)
 		}
 		return
-	case []interface{}:
+	case []any:
 		for key, value := range v {
 			amqpSetMetadata(p, fmt.Sprintf("%s_%d", metaKey, key), value)
 		}

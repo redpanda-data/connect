@@ -93,15 +93,15 @@ path: "%v"
 
 	n := 100
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		if err := block.WriteBatch(ctx, service.MessageBatch{
-			service.NewMessage([]byte(fmt.Sprintf("test%v", i))),
+			service.NewMessage(fmt.Appendf(nil, "test%v", i)),
 		}, func(context.Context, error) error { return nil }); err != nil {
 			t.Error(err)
 		}
 	}
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		m, ackFunc, err := block.ReadBatch(ctx)
 		require.NoError(t, err)
 		require.Len(t, m, 1, i)
@@ -187,9 +187,9 @@ post_processors:
 
 	n, m := 100, 10
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		var inBatch service.MessageBatch
-		for j := 0; j < m; j++ {
+		for j := range m {
 			inBatch = append(inBatch, service.NewMessage(fmt.Appendf(nil, `{"id":"test%v","n":%v}`, i, j)))
 		}
 		if err := block.WriteBatch(ctx, inBatch, func(context.Context, error) error { return nil }); err != nil {
@@ -197,7 +197,7 @@ post_processors:
 		}
 	}
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		outBatch, ackFunc, err := block.ReadBatch(ctx)
 		require.NoError(t, err)
 		require.Len(t, outBatch, m, i)
@@ -262,16 +262,16 @@ path: "%v"
 
 	n, iter := 10, 5
 
-	for j := 0; j < iter; j++ {
-		for i := 0; i < n; i++ {
+	for range iter {
+		for i := range n {
 			if err := block.WriteBatch(ctx, service.MessageBatch{
-				service.NewMessage([]byte(fmt.Sprintf("test%v", i))),
+				service.NewMessage(fmt.Appendf(nil, "test%v", i)),
 			}, func(context.Context, error) error { return nil }); err != nil {
 				t.Error(err)
 			}
 		}
 
-		for i := 0; i < n; i++ {
+		for i := range n {
 			m, ackFunc, err := block.ReadBatch(ctx)
 			require.NoError(t, err)
 			require.Len(t, m, 1)
@@ -297,7 +297,7 @@ path: "%v"
 
 	go func() {
 		defer wg.Done()
-		for i := 0; i < n; i++ {
+		for i := range n {
 			m, ackFunc, err := block.ReadBatch(ctx)
 			require.NoError(t, err)
 			require.Len(t, m, 1)
@@ -307,9 +307,9 @@ path: "%v"
 	}()
 
 	go func() {
-		for i := 0; i < n; i++ {
+		for i := range n {
 			if err := block.WriteBatch(ctx, service.MessageBatch{
-				service.NewMessage([]byte(fmt.Sprintf("test%v", i))),
+				service.NewMessage(fmt.Appendf(nil, "test%v", i)),
 			}, func(context.Context, error) error { return nil }); err != nil {
 				t.Error(err)
 			}
@@ -377,7 +377,7 @@ path: "%v"
 `, filepath.Join(tmpDir, "foo.db")))
 	defer block.Close(ctx)
 
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		if err := block.WriteBatch(ctx, service.MessageBatch{
 			service.NewMessage([]byte("hello world")),
 		}, func(context.Context, error) error { return nil }); err != nil {
@@ -394,7 +394,7 @@ path: "%v"
 	}()
 
 	<-time.After(time.Millisecond * 100)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		m, ackFunc, err := block.ReadBatch(ctx)
 		require.NoError(t, err)
 		require.Len(t, m, 1)
@@ -470,12 +470,11 @@ path: "%v"
 `, filepath.Join(tmpDir, "foo.db")))
 	defer block.Close(ctx)
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		if err := block.WriteBatch(ctx, service.MessageBatch{
-			service.NewMessage([]byte(fmt.Sprintf("test%v", i))),
+			service.NewMessage(fmt.Appendf(nil, "test%v", i)),
 		}, func(context.Context, error) error { return nil }); err != nil {
 			b.Error(err)
 		}
@@ -491,9 +490,9 @@ path: "%v"
 `, filepath.Join(tmpDir, "foo.db")))
 	defer block.Close(ctx)
 
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		if err := block.WriteBatch(ctx, service.MessageBatch{
-			service.NewMessage([]byte(fmt.Sprintf("test%v", i))),
+			service.NewMessage(fmt.Appendf(nil, "test%v", i)),
 		}, func(context.Context, error) error { return nil }); err != nil {
 			b.Error(err)
 		}
@@ -532,7 +531,7 @@ path: "%v"
 
 	go func() {
 		defer wg.Done()
-		for i := 0; i < b.N; i++ {
+		for i := 0; b.Loop(); i++ {
 			m, ackFunc, err := block.ReadBatch(ctx)
 			require.NoError(b, err)
 			require.Len(b, m, 1)
@@ -542,9 +541,9 @@ path: "%v"
 	}()
 
 	go func() {
-		for i := 0; i < b.N; i++ {
+		for i := 0; b.Loop(); i++ {
 			if err := block.WriteBatch(ctx, service.MessageBatch{
-				service.NewMessage([]byte(fmt.Sprintf("test%v", i))),
+				service.NewMessage(fmt.Appendf(nil, "test%v", i)),
 			}, func(context.Context, error) error { return nil }); err != nil {
 				b.Error(err)
 			}
@@ -573,7 +572,7 @@ path: "%v"
 
 	go func() {
 		defer wg.Done()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			m, ackFunc, err := block.ReadBatch(ctx)
 			require.NoError(b, err)
 			require.Len(b, m, 1)
@@ -582,7 +581,7 @@ path: "%v"
 	}()
 
 	go func() {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			if err := block.WriteBatch(ctx, service.MessageBatch{
 				service.NewMessage(testMsg),
 			}, func(context.Context, error) error { return nil }); err != nil {
@@ -627,7 +626,7 @@ post_processors:
 
 	go func() {
 		defer wg.Done()
-		for i := 0; i < b.N/n; i++ {
+		for range b.N / n {
 			m, ackFunc, err := block.ReadBatch(ctx)
 			require.NoError(b, err)
 			require.Len(b, m, n)
@@ -636,7 +635,7 @@ post_processors:
 	}()
 
 	go func() {
-		for i := 0; i < b.N/n; i++ {
+		for i := range b.N / n {
 			batch := make(service.MessageBatch, n)
 			for bi := range batch {
 				batch[bi] = service.NewMessage(fmt.Appendf(nil, `{"n":"%v","b":"%v"}`, i, bi))

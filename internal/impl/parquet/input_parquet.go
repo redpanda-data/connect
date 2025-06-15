@@ -226,7 +226,7 @@ func (r *parquetReader) ReadBatch(context.Context) (service.MessageBatch, servic
 	}
 
 	resBatch := make(service.MessageBatch, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		newMsg := service.NewMessage(nil)
 		newMsg.SetStructuredMut(rowBuf[i])
 		resBatch[i] = newMsg
