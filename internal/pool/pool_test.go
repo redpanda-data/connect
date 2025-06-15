@@ -115,11 +115,11 @@ func TestRandomized(t *testing.T) {
 		return &foo{id}, nil
 	})
 	var wg sync.WaitGroup
-	for i := 0; i < 25; i++ {
+	for range 25 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for j := 0; j < 100; j++ {
+			for range 100 {
 				f, err := p.Acquire(t.Context())
 				require.NoError(t, err)
 				time.Sleep(time.Millisecond)

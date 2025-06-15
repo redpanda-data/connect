@@ -19,6 +19,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 
 	"github.com/bwmarrin/snowflake"
@@ -400,10 +401,5 @@ func registerULID() error {
 }
 
 func hasMember(arr []string, member string) bool {
-	for _, v := range arr {
-		if v == member {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(arr, member)
 }

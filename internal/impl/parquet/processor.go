@@ -214,7 +214,7 @@ func (s *parquetProcessor) processBatchReader(_ context.Context, batch service.M
 		}
 
 		var outBatch service.MessageBatch
-		for j := 0; j < int(pr.GetNumRows()); j++ {
+		for j := range int(pr.GetNumRows()) {
 			res, err := pr.ReadByNumber(j)
 			if err != nil {
 				return nil, fmt.Errorf("failed to read parquet row: %w", err)

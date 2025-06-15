@@ -62,7 +62,7 @@ func TestOllamaEmbeddingsIntegration(t *testing.T) {
 	assert.NoError(t, msg.GetError())
 	require.IsType(t, []any{}, embd)
 	require.Len(t, embd, 384)
-	for i := 0; i < 384; i++ {
+	for i := range 384 {
 		require.IsType(t, float64(0), embd.([]any)[i])
 	}
 }

@@ -18,6 +18,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
 	"time"
@@ -285,13 +286,9 @@ func (i *influxDBMetrics) publishRegistry() error {
 		name, normalTags := decodeInfluxDBName(k)
 		tags := make(map[string]string, len(i.tags)+len(normalTags))
 		// apply normal tags
-		for k, v := range normalTags {
-			tags[k] = v
-		}
+		maps.Copy(tags, normalTags)
 		// override with any global
-		for k, v := range i.tags {
-			tags[k] = v
-		}
+		maps.Copy(tags, i.tags)
 		p, err := client.NewPoint(name, tags, v, now)
 		if err != nil {
 			i.log.Debugf("problem formatting metrics on %s: %s", name, err)

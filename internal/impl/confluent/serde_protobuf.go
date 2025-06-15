@@ -195,7 +195,7 @@ type cachedMessageTypes struct {
 }
 
 func messageDescriptorsToMap(msgs protoreflect.MessageDescriptors, m map[string]protoreflect.MessageDescriptor) {
-	for i := 0; i < msgs.Len(); i++ {
+	for i := range msgs.Len() {
 		msg := msgs.Get(i)
 		indexBytes := toMessageIndexBytes(msg)
 		m[string(indexBytes)] = msg
@@ -291,7 +291,7 @@ func readMessageIndexes(payload []byte) (int, []int, error) {
 		return bytesRead, []int{0}, nil
 	}
 	msgIndexes := make([]int, arrayLen)
-	for i := 0; i < int(arrayLen); i++ {
+	for i := range int(arrayLen) {
 		idx, read := binary.Varint(payload[bytesRead:])
 		if read <= 0 {
 			return bytesRead, nil, errors.New("unable to read message indexes")

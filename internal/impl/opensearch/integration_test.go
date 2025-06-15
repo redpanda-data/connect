@@ -185,7 +185,7 @@ action: index
 		service.NewMessage([]byte(`{"message":"hello world","user":"3"}`)),
 	}))
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		id := fmt.Sprintf("foo-%v", i+1)
 		get, err := client.Do(ctx, osapi.DocumentGetReq{
 			Index:      "does_not_exist",
@@ -230,7 +230,7 @@ action: index
 
 	docs := map[string]string{}
 
-	for i := 0; i < N; i++ {
+	for i := range N {
 		str := fmt.Sprintf(`{"key":"doc-%v","message":"foobar"}`, i)
 		docs[fmt.Sprintf("doc-%v", i)] = str
 		go func(content string) {
@@ -302,16 +302,16 @@ action: index
 	N := 10
 
 	var testMsgs [][]byte
-	for i := 0; i < N; i++ {
-		testData := []byte(fmt.Sprintf(`{"message":"hello world","user":"%v"}`, i))
+	for i := range N {
+		testData := fmt.Appendf(nil, `{"message":"hello world","user":"%v"}`, i)
 		testMsgs = append(testMsgs, testData)
 	}
-	for i := 0; i < N; i++ {
+	for i := range N {
 		require.NoError(t, m.WriteBatch(ctx, service.MessageBatch{
 			service.NewMessage(testMsgs[i]),
 		}))
 	}
-	for i := 0; i < N; i++ {
+	for i := range N {
 		id := fmt.Sprintf("foo-%v", i+1)
 		get, err := client.Do(ctx, osapi.DocumentGetReq{
 			Index:      "test_conn_index",
@@ -365,15 +365,15 @@ action: index
 	N := 10
 
 	testMsgs := [][]byte{}
-	for i := 0; i < N; i++ {
-		testMsgs = append(testMsgs, []byte(fmt.Sprintf(`{"message":"hello world","user":"%v"}`, i)))
+	for i := range N {
+		testMsgs = append(testMsgs, fmt.Appendf(nil, `{"message":"hello world","user":"%v"}`, i))
 	}
-	for i := 0; i < N; i++ {
+	for i := range N {
 		msg := service.NewMessage(testMsgs[i])
 		msg.MetaSetMut("index", "test_conn_index")
 		require.NoError(t, m.WriteBatch(ctx, service.MessageBatch{msg}))
 	}
-	for i := 0; i < N; i++ {
+	for i := range N {
 		id := fmt.Sprintf("bar-%v", i+1)
 		get, err := client.Do(ctx, osapi.DocumentGetReq{
 			Index:      "test_conn_index",
@@ -406,15 +406,15 @@ action: index
 
 	var testMsg [][]byte
 	var testBatch service.MessageBatch
-	for i := 0; i < N; i++ {
-		testMsg = append(testMsg, []byte(fmt.Sprintf(`{"message":"hello world","user":"%v"}`, i)))
+	for i := range N {
+		testMsg = append(testMsg, fmt.Appendf(nil, `{"message":"hello world","user":"%v"}`, i))
 		testBatch = append(testBatch, service.NewMessage(testMsg[i]))
 		testBatch[i].MetaSetMut("index", "test_conn_index")
 	}
 
 	require.NoError(t, m.WriteBatch(ctx, testBatch))
 
-	for i := 0; i < N; i++ {
+	for i := range N {
 		id := fmt.Sprintf("baz-%v", i+1)
 		get, err := client.Do(ctx, osapi.DocumentGetReq{
 			Index:      "test_conn_index",
@@ -447,9 +447,9 @@ action: ${! @elastic_action }
 
 	var testMsg [][]byte
 	var testBatch service.MessageBatch
-	for i := 0; i < N; i++ {
+	for i := range N {
 		id := fmt.Sprintf("buz-%v", i+1)
-		testMsg = append(testMsg, []byte(fmt.Sprintf(`{"message":"hello world","user":"%v"}`, i)))
+		testMsg = append(testMsg, fmt.Appendf(nil, `{"message":"hello world","user":"%v"}`, i))
 		testBatch = append(testBatch, service.NewMessage(testMsg[i]))
 		testBatch[i].MetaSetMut("elastic_action", "index")
 		testBatch[i].MetaSetMut("elastic_id", id)
@@ -457,7 +457,7 @@ action: ${! @elastic_action }
 
 	require.NoError(t, m.WriteBatch(ctx, testBatch))
 
-	for i := 0; i < N; i++ {
+	for i := range N {
 		id := fmt.Sprintf("buz-%v", i+1)
 		get, err := client.Do(ctx, osapi.DocumentGetReq{
 			Index:      "test_conn_index",
@@ -476,7 +476,7 @@ action: ${! @elastic_action }
 
 	require.NoError(t, m.WriteBatch(ctx, testBatch))
 
-	for i := 0; i < N; i++ {
+	for i := range N {
 		id := fmt.Sprintf("buz-%v", i+1)
 		get, err := client.Do(ctx, osapi.DocumentGetReq{
 			Index:      "test_conn_index",
@@ -525,7 +525,7 @@ action: index
 
 	require.NoError(t, m.WriteBatch(ctx, testBatch))
 
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		index, _ := testBatch[i].MetaGet("index")
 		get, err := client.Do(ctx, osapi.DocumentGetReq{
 			Index:      index,

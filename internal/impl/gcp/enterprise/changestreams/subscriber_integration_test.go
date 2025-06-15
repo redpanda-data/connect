@@ -620,7 +620,7 @@ func collectN[T any](t *testing.T, n int, ch <-chan T) []T {
 	t.Helper()
 
 	var items []T
-	for i := 0; i < n; i++ {
+	for range n {
 		select {
 		case item := <-ch:
 			items = append(items, item)
