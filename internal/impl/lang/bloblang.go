@@ -19,6 +19,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 
 	"github.com/bwmarrin/snowflake"
@@ -28,7 +29,6 @@ import (
 	"github.com/rivo/uniseg"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
-	"slices"
 )
 
 func init() {

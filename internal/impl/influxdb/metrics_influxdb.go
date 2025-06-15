@@ -18,6 +18,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
 	"time"
@@ -26,7 +27,6 @@ import (
 	"github.com/rcrowley/go-metrics"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"maps"
 )
 
 const (

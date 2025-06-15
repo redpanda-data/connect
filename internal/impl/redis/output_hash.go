@@ -18,12 +18,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"sync"
 
 	"github.com/redis/go-redis/v9"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"maps"
 )
 
 const (

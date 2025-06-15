@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"regexp"
 	"time"
 
@@ -30,7 +31,6 @@ import (
 	"github.com/benhoyt/goawk/parser"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"maps"
 )
 
 var varInvalidRegexp *regexp.Regexp

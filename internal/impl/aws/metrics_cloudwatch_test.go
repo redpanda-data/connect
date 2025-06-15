@@ -17,13 +17,13 @@ package aws
 import (
 	"context"
 	"fmt"
+	"maps"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
 	"github.com/stretchr/testify/assert"
-	"maps"
 )
 
 type mockCloudWatchClient struct {
