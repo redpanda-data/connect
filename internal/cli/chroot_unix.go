@@ -40,13 +40,6 @@ func chroot(path string) error {
 	return nil
 }
 
-// configFiles defines the essential configuration files needed in chroot
-var configFiles = []string{
-	"/etc/nsswitch.conf",
-	"/etc/hosts",
-	"/etc/resolv.conf",
-}
-
 func setupChrootDir(chrootDir string) error {
 	// Make sure chroot directory does not exist
 	if _, err := os.Stat(chrootDir); err == nil {
@@ -55,9 +48,37 @@ func setupChrootDir(chrootDir string) error {
 		return fmt.Errorf("check directory: %w", err)
 	}
 
-	// Create the directory and /etc directory inside it, and copy files
-	if err := os.MkdirAll(filepath.Join(chrootDir, "etc"), 0o755); err != nil {
-		return fmt.Errorf("create etc directory: %w", err)
+	// Create UNIX directory structure, and copy required /etc files
+	dirs := []string{
+		"/bin/",
+		"/dev/",
+		"/etc/",
+		"/etc/ssl/certs/",
+		"/home/",
+		"/lib/",
+		"/proc/",
+		"/root/",
+		"/sys/",
+		"/tmp/",
+		"/usr/",
+		"/usr/bin/",
+		"/usr/sbin/",
+		"/var/",
+		"/var/spool/",
+	}
+	configFiles := []string{
+		"/etc/group",
+		"/etc/hostname",
+		"/etc/hosts",
+		"/etc/nsswitch.conf",
+		"/etc/passwd",
+		"/etc/resolv.conf",
+		"/etc/ssl/certs/ca-certificates.crt",
+	}
+	for _, dir := range dirs {
+		if err := os.MkdirAll(filepath.Join(chrootDir, dir), 0o755); err != nil {
+			return fmt.Errorf("create %s directory: %w", dir, err)
+		}
 	}
 	for _, filePath := range configFiles {
 		if err := copyFile(filePath, filepath.Join(chrootDir, filePath)); err != nil {
