@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.58.1 - 2025-06-16
+
+### Fixed
+
+- Fixed an issue with `chroot` where TLS root certificates files were not properly loaded. (@mmatczuk)
+
 ## 4.58.0 - 2025-06-13
 
 ### Added
