@@ -3,12 +3,13 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.58.0
+## 4.58.0 - 2025-06-13
 
 ### Added
 
 - New output `slack_reaction`. (@rockwotj)
 - Field `allow_auto_topic_creation` added to the `kafka_franz`, `redpanda`, `redpanda_migrator`, and `ockam_kafka` outputs and to the top level `redpanda` Connect configuration. (@peczenyj)
+- Output `elasticsearch_v8` now has support for `create` and `upsert` actions. (@rockwotj)
 
 ### Fixed
 
@@ -27,12 +28,13 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- Output `elasticsearch_v8` now has support for `create` and `upsert` actions. (@rockwotj)
 - Field `scope` added to the `couchbase` client. (@peczenyj)
 - Parameter `root_tag` added to the `format_xml()` Bloblang method. (@mihaitodor)
 - Metadata `kafka_lag` now emitted by the `kafka_franz` and `ockam_kafka` inputs. (@mihaitodor)
 - New `mcp-server lint` subcommand for linting config directories. (@Jeffail)
 - (Benthos) CLI flag `--env-file` added to the `blobl` command. (@mihaitodor)
+- (Benthos) New `bitwise_and`, `bitwise_or`, and `bitwise_xor` bloblang methods. (@eadwright)
+- (Benthos) Field `open_message_mapping` added to the `socket` input. (@eadwright)
 - The `mcp-server` subcommand now supports the new streamable HTTP spec when the `address` flag is specified. (@Jeffail)
 - Field `max_reconnects` added to the `nats`, `nats_jestream`, `nats_kv`, `nats_stream` and `nats_request_reply` components. (@chelmi)
 - Field `poll_interval` added to the `redpanda_migrator_offsets` input. (@mihaitodor)
