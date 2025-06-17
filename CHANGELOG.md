@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.58.2 - 2025-06-17
+
+### Fixed
+
+- Fixed an issue with `chroot` where not all configuration files were copied, and limited the flag visibility to Linux only. (@mmatczuk)
+
 ## 4.58.1 - 2025-06-16
 
 ### Fixed
