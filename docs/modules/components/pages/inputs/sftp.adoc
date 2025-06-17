@@ -43,8 +43,10 @@ input:
     credentials:
       username: ""
       password: ""
-      private_key_file: ""
-      private_key: ""
+      host_public_key_file: "" # No default (optional)
+      host_public_key: "" # No default (optional)
+      private_key_file: "" # No default (optional)
+      private_key: "" # No default (optional)
       private_key_pass: ""
     paths: [] # No default (required)
     auto_replay_nacks: true
@@ -68,12 +70,16 @@ input:
   label: ""
   sftp:
     address: "" # No default (required)
+    connection_timeout: 30s
     credentials:
       username: ""
       password: ""
-      private_key_file: ""
-      private_key: ""
+      host_public_key_file: "" # No default (optional)
+      host_public_key: "" # No default (optional)
+      private_key_file: "" # No default (optional)
+      private_key: "" # No default (optional)
       private_key_pass: ""
+    max_sftp_sessions: 10
     paths: [] # No default (required)
     auto_replay_nacks: true
     scanner:
@@ -94,6 +100,7 @@ input:
 This input adds the following metadata fields to each message:
 
 - sftp_path
+- sftp_mod_time
 
 You can access these metadata fields using xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
 
@@ -106,6 +113,15 @@ The address of the server to connect to.
 
 *Type*: `string`
 
+
+=== `connection_timeout`
+
+The connection timeout to use when connecting to the target server.
+
+
+*Type*: `string`
+
+*Default*: `"30s"`
 
 === `credentials`
 
@@ -138,18 +154,33 @@ This field contains sensitive information that usually shouldn't be added to a c
 
 *Default*: `""`
 
-=== `credentials.private_key_file`
+=== `credentials.host_public_key_file`
 
-The private key for the username to connect to the SFTP server.
+The public key of the SFTP server.
 
 
 *Type*: `string`
 
-*Default*: `""`
+
+=== `credentials.host_public_key`
+
+The public key file of the SFTP server.
+
+
+*Type*: `string`
+
+
+=== `credentials.private_key_file`
+
+The private key file for the username to connect to the SFTP server.
+
+
+*Type*: `string`
+
 
 === `credentials.private_key`
 
-The private key file for the username to connect to the SFTP server.
+The private key for the username to connect to the SFTP server.
 [CAUTION]
 ====
 This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
@@ -159,7 +190,6 @@ This field contains sensitive information that usually shouldn't be added to a c
 
 *Type*: `string`
 
-*Default*: `""`
 
 === `credentials.private_key_pass`
 
@@ -174,6 +204,15 @@ This field contains sensitive information that usually shouldn't be added to a c
 *Type*: `string`
 
 *Default*: `""`
+
+=== `max_sftp_sessions`
+
+The maximum number of SFTP sessions.
+
+
+*Type*: `int`
+
+*Default*: `10`
 
 === `paths`
 
