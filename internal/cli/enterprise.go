@@ -56,6 +56,14 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 		disableTelemetry bool
 	)
 
+	flags := []cli.Flag{
+		secretsFlag,
+		licenseFlag,
+	}
+	if shouldAddChrootFlag() {
+		flags = append(flags, chrootFlag)
+	}
+
 	opts = append(opts,
 		service.CLIOptSetVersion(version, dateBuilt),
 		service.CLIOptSetBinaryName(binaryName),
@@ -115,11 +123,8 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 		// Secrets management and other custom CLI flags
 		service.CLIOptCustomRunFlags(
 			slices.Concat(
-				// Secrets management flags
+				flags,
 				[]cli.Flag{
-					secretsFlag,
-					licenseFlag,
-					chrootFlag,
 					&cli.BoolFlag{
 						Name:  "disable-telemetry",
 						Usage: "Disable anonymous telemetry from being emitted by this Connect instance.",
@@ -129,8 +134,6 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 						Usage: "Plugins to load over the RPC interface. This flag should point to manifest files containing the plugin definitions. Globs are also supported.",
 					},
 				},
-
-				// Hidden redpanda flags
 				redpandaFlags(),
 			),
 
