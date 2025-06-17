@@ -6,15 +6,17 @@
 //
 // https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
-//go:build unix
+//go:build linux
 
 package cli
 
 import (
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 )
 
@@ -49,11 +51,10 @@ func setupChrootDir(chrootDir string) error {
 	}
 
 	// Create UNIX directory structure, and copy required /etc files
-	dirs := []string{
+	directories := []string{
 		"/bin/",
 		"/dev/",
 		"/etc/",
-		"/etc/ssl/certs/",
 		"/home/",
 		"/lib/",
 		"/proc/",
@@ -73,9 +74,8 @@ func setupChrootDir(chrootDir string) error {
 		"/etc/nsswitch.conf",
 		"/etc/passwd",
 		"/etc/resolv.conf",
-		"/etc/ssl/certs/ca-certificates.crt",
 	}
-	for _, dir := range dirs {
+	for _, dir := range directories {
 		if err := os.MkdirAll(filepath.Join(chrootDir, dir), 0o755); err != nil {
 			return fmt.Errorf("create %s directory: %w", dir, err)
 		}
@@ -83,6 +83,35 @@ func setupChrootDir(chrootDir string) error {
 	for _, filePath := range configFiles {
 		if err := copyFile(filePath, filepath.Join(chrootDir, filePath)); err != nil {
 			return fmt.Errorf("copy %s: %w", filePath, err)
+		}
+	}
+
+	// Copy present TLS/SSL certificates - based on root_linux.go [1].
+	//
+	// I also tired forcing loading of system CA certificates instead of copying
+	// them, but it does not work in all cases.
+	//
+	// [1] https://github.com/golang/go/blob/master/src/crypto/x509/root_linux.go.
+	certFiles := []string{
+		"/etc/ssl/certs/ca-certificates.crt",                // Debian/Ubuntu/Gentoo etc.
+		"/etc/pki/tls/certs/ca-bundle.crt",                  // Fedora/RHEL 6
+		"/etc/ssl/ca-bundle.pem",                            // OpenSUSE
+		"/etc/pki/tls/cacert.pem",                           // OpenELEC
+		"/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem", // CentOS/RHEL 7
+		"/etc/ssl/cert.pem",                                 // Alpine Linux
+	}
+	certDirectories := []string{
+		"/etc/ssl/certs",     // SLES10/SLES11, https://golang.org/issue/12139
+		"/etc/pki/tls/certs", // Fedora/RHEL
+	}
+	for _, filePath := range certFiles {
+		if err := maybeCopyFile(filePath, filepath.Join(chrootDir, filePath)); err != nil {
+			return fmt.Errorf("copy %s: %w", filePath, err)
+		}
+	}
+	for _, dirPath := range certDirectories {
+		if err := maybeCopyDir(dirPath, filepath.Join(chrootDir, dirPath)); err != nil {
+			return fmt.Errorf("copy directory %s: %w", dirPath, err)
 		}
 	}
 
@@ -94,6 +123,14 @@ func setupChrootDir(chrootDir string) error {
 	return nil
 }
 
+func maybeCopyFile(src, dst string) error {
+	err := copyFile(src, dst)
+	if err != nil && os.IsNotExist(err) {
+		return nil
+	}
+	return err
+}
+
 func copyFile(src, dst string) error {
 	srcFile, err := os.Open(src)
 	if err != nil {
@@ -101,12 +138,16 @@ func copyFile(src, dst string) error {
 	}
 	defer srcFile.Close()
 
-	stat, err := srcFile.Stat()
+	srcInfo, err := srcFile.Stat()
 	if err != nil {
 		return err
 	}
 
-	dstFile, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, stat.Mode())
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return fmt.Errorf("create parent directory: %w", err)
+	}
+
+	dstFile, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, srcInfo.Mode())
 	if err != nil {
 		return err
 	}
@@ -117,6 +158,61 @@ func copyFile(src, dst string) error {
 	}
 
 	return nil
+}
+
+func maybeCopyDir(src, dst string) error {
+	entries, err := readUniqueDirectoryEntries(src)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil // Ignore if directory doesn't exist
+		}
+		return err
+	}
+
+	if err := os.MkdirAll(dst, 0o0755); err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue // Skip subdirectories
+		}
+
+		srcPath := filepath.Join(src, entry.Name())
+		dstPath := filepath.Join(dst, entry.Name())
+
+		if err := copyFile(srcPath, dstPath); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// readUniqueDirectoryEntries is like os.ReadDir but omits
+// symlinks that point within the directory.
+func readUniqueDirectoryEntries(dir string) ([]fs.DirEntry, error) {
+	files, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	uniq := files[:0]
+	for _, f := range files {
+		if !isSameDirSymlink(f, dir) {
+			uniq = append(uniq, f)
+		}
+	}
+	return uniq, nil
+}
+
+// isSameDirSymlink reports whether fi in dir is a symlink with a
+// target not containing a slash.
+func isSameDirSymlink(f fs.DirEntry, dir string) bool {
+	if f.Type()&fs.ModeSymlink == 0 {
+		return false
+	}
+	target, err := os.Readlink(filepath.Join(dir, f.Name()))
+	return err == nil && !strings.Contains(target, "/")
 }
 
 func makeReadOnly(root string) error {
