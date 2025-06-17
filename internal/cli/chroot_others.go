@@ -10,6 +10,6 @@
 
 package cli
 
-func chroot(path string) error {
+func chroot(_ string) error {
 	return nil
 }
