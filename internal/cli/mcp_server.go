@@ -36,7 +36,9 @@ func mcpServerCli(rpMgr *enterprise.GlobalRedpandaManager) *cli.Command {
 		secretsFlag,
 		envFileFlag,
 		licenseFlag,
-		chrootFlag,
+	}
+	if shouldAddChrootFlag() {
+		flags = append(flags, chrootFlag)
 	}
 
 	return &cli.Command{
