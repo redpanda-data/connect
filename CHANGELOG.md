@@ -7,7 +7,13 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- Field `validate_topic` added to `gcp_pubsub`. (@rockwotj) 
+- Field `validate_topic` added to `gcp_pubsub`. (@rockwotj)
+- Fields `connection_timeout`, `max_sftp_sessions`, `host_public_key` and `host_public_key_file` added to the `sftp` input and output. (@mihaitodor)
+- Metadata `sftp_mod_time` now emitted by the `sftp` input. (@mihaitodor, @anthonyvitale)
+
+### Fixed
+
+- The `sftp` input no longer creates new SSH connections for each file it reads. (@mihaitodor, @TColl)
 
 ## 4.58.2 - 2025-06-17
 
