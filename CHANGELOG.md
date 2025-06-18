@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.59.0 - TBD
+
+### Added
+
+- Field `validate_topic` added to `gcp_pubsub`. (@rockwotj) 
+
 ## 4.58.2 - 2025-06-17
 
 ### Fixed
