@@ -6,10 +6,10 @@
 //
 // https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
-//go:build !unix
+//go:build !linux
 
 package cli
 
-func chroot(path string) error {
+func chroot(_ string) error {
 	return nil
 }

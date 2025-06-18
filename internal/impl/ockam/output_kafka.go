@@ -197,9 +197,7 @@ func newOckamKafkaOutput(conf *service.ParsedConfig, log *service.Logger) (*ocka
 		return nil, err
 	}
 	clientOpts = append(clientOpts,
-		kgo.SeedBrokers(kafkaInletAddress),
-		kgo.AllowAutoTopicCreation(),
-	)
+		kgo.SeedBrokers(kafkaInletAddress))
 
 	var client *kgo.Client
 	kafkaWriter, err := kafka.NewFranzWriterFromConfig(

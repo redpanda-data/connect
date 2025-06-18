@@ -3,13 +3,35 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.58.0 - TBD
+## 4.59.0 - TBD
 
 ### Added
 
-- New output `slack_reaction`. (@rockwotj) 
 - Field `validate_topic` added to `gcp_pubsub`. (@rockwotj) 
+
+## 4.58.2 - 2025-06-17
+
+### Fixed
+
+- Fixed an issue with `chroot` where not all configuration files were copied, and limited the flag visibility to Linux only. (@mmatczuk)
+
+## 4.58.1 - 2025-06-16
+
+### Fixed
+
+- Fixed an issue with `chroot` where TLS root certificates files were not properly loaded. (@mmatczuk)
+
+## 4.58.0 - 2025-06-13
+
+### Added
+
+- New output `slack_reaction`. (@rockwotj)
+- Field `allow_auto_topic_creation` added to the `kafka_franz`, `redpanda`, `redpanda_migrator`, and `ockam_kafka` outputs and to the top level `redpanda` Connect configuration. (@peczenyj)
 - Output `elasticsearch_v8` now has support for `create` and `upsert` actions. (@rockwotj)
+
+### Fixed
+
+- Fixed an issue with `chroot` where license was not properly read, and networking was not properly configured. (@mmatczuk)
 
 ## 4.57.0 - 2025-06-10
 
@@ -29,6 +51,8 @@ All notable changes to this project will be documented in this file.
 - Metadata `kafka_lag` now emitted by the `kafka_franz` and `ockam_kafka` inputs. (@mihaitodor)
 - New `mcp-server lint` subcommand for linting config directories. (@Jeffail)
 - (Benthos) CLI flag `--env-file` added to the `blobl` command. (@mihaitodor)
+- (Benthos) New `bitwise_and`, `bitwise_or`, and `bitwise_xor` bloblang methods. (@eadwright)
+- (Benthos) Field `open_message_mapping` added to the `socket` input. (@eadwright)
 - The `mcp-server` subcommand now supports the new streamable HTTP spec when the `address` flag is specified. (@Jeffail)
 - Field `max_reconnects` added to the `nats`, `nats_jestream`, `nats_kv`, `nats_stream` and `nats_request_reply` components. (@chelmi)
 - Field `poll_interval` added to the `redpanda_migrator_offsets` input. (@mihaitodor)
