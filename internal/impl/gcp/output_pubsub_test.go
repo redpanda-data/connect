@@ -16,6 +16,7 @@ package gcp
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	"cloud.google.com/go/pubsub"
@@ -295,4 +296,152 @@ func TestPubSubOutput_PublishErrors(t *testing.T) {
 		return true
 	})
 	require.ElementsMatch(t, []string{"simulated foo error", "simulated bar error"}, errs)
+}
+
+func TestPubSubOutput_ValidateTopic(t *testing.T) {
+	ctx := t.Context()
+
+	tests := []struct {
+		name            string
+		validateTopic   bool
+		topicExists     bool
+		expectError     bool
+		expectPublish   bool
+		expectedError   string
+		multipleBatches bool // Test if getTopic caches correctly
+	}{
+		{
+			name:          "validate_topic=true, topic exists",
+			validateTopic: true,
+			topicExists:   true,
+			expectError:   false,
+			expectPublish: true,
+		},
+		{
+			name:          "validate_topic=true, topic does not exist",
+			validateTopic: true,
+			topicExists:   false,
+			expectError:   true,
+			expectPublish: false,
+			expectedError: "topic 'test_topic' does not exist",
+		},
+		{
+			name:          "validate_topic=false, topic exists",
+			validateTopic: false,
+			topicExists:   true, // Should still publish if topic happens to exist
+			expectError:   false,
+			expectPublish: true,
+		},
+		{
+			name:          "validate_topic=false, topic does not exist",
+			validateTopic: false,
+			topicExists:   false, // Exists() should not be called
+			expectError:   false, // No error, but messages might be lost
+			expectPublish: true,  // Publish will be attempted
+		},
+		{
+			name:            "validate_topic=true, topic exists, multiple batches",
+			validateTopic:   true,
+			topicExists:     true,
+			expectError:     false,
+			expectPublish:   true,
+			multipleBatches: true,
+		},
+		{
+			name:            "validate_topic=false, topic does not exist, multiple batches",
+			validateTopic:   false,
+			topicExists:     false,
+			expectError:     false,
+			expectPublish:   true,
+			multipleBatches: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			configYAML := `
+project: sample-project
+topic: test_topic
+validate_topic: %v
+`
+			conf, err := newPubSubOutputConfig().ParseYAML(
+				fmt.Sprintf(configYAML, tt.validateTopic),
+				nil,
+			)
+			require.NoError(t, err, "bad output config")
+
+			client := &mockPubSubClient{}
+			topic := &mockTopic{}
+
+			if tt.validateTopic {
+				topic.On("Exists").Return(tt.topicExists, nil).Once()
+			}
+
+			if tt.expectPublish {
+				if tt.topicExists || !tt.validateTopic { // Publish is called if topic exists OR validation is off
+					msgRes := &mockPublishResult{}
+					msgRes.On("Get").Return("id", nil) // Don't care about return val for this test
+					// Expect Publish to be called once per batch
+					timesToCallPublish := 1
+					if tt.multipleBatches {
+						timesToCallPublish = 2
+					}
+					topic.On("Publish", mock.Anything, mock.Anything).Return(msgRes).Times(timesToCallPublish)
+					topic.On("Stop").Return()
+				}
+			}
+
+			client.On("Topic", "test_topic").Return(topic).Once()
+			// If multiple batches and topic is cached, Topic() is called only once.
+			client.On("Close").Return(nil).Once()
+
+			out, err := newPubSubOutput(conf)
+			require.NoError(t, err, "failed to create output")
+			out.client = client
+			defer func() {
+				err = out.Close(ctx)
+				require.NoError(t, err, "closing output failed")
+				// Stop is only called if a topic was successfully obtained and used
+				// For multiple batches, Stop is still only called once at Close
+				if tt.expectPublish && ((tt.validateTopic && tt.topicExists) || !tt.validateTopic) {
+					topic.AssertCalled(t, "Stop")
+				}
+				mock.AssertExpectationsForObjects(t, client, topic)
+			}()
+
+			err = out.Connect(ctx)
+			require.NoError(t, err, "connect failed")
+
+			msgBatch := service.MessageBatch{service.NewMessage([]byte("test message"))}
+
+			err = out.WriteBatch(ctx, msgBatch)
+			if tt.expectError {
+				require.Error(t, err, "expected an error during WriteBatch")
+				if tt.expectedError != "" {
+					require.ErrorContains(t, err, tt.expectedError)
+				}
+			} else {
+				require.NoError(t, err, "did not expect an error during WriteBatch")
+			}
+
+			if tt.multipleBatches {
+				// Second batch to test caching of topic
+				err = out.WriteBatch(ctx, msgBatch)
+				if tt.expectError {
+					// If an error was expected, it should happen on the first batch
+					// and the topic wouldn't be cached for a second attempt in error cases.
+					// However, our test setup for error cases (topic not existing with validate_topic=true)
+					// means getTopic itself errors, so subsequent calls to WriteBatch would re-trigger that.
+					require.Error(t, err, "expected an error during second WriteBatch")
+					if tt.expectedError != "" {
+						require.ErrorContains(t, err, tt.expectedError)
+					}
+				} else {
+					require.NoError(t, err, "did not expect an error during second WriteBatch")
+				}
+			}
+
+			// Assertions for mock calls are handled in Cleanup
+		})
+	}
 }

@@ -45,11 +45,7 @@ This processor sends document strings to the Cohere API, which reranks them base
 
 To learn more about reranking, see the https://docs.cohere.com/docs/rerank-2[Cohere API documentation^].
 
-The output of this processor is an array of strings that are ordered by their relevance.
-
-== Metadata
-
-relevance_scores: an array of scores for each document, indicating how relevant it is to the query. The scores are in the same order as the documents in the input. The higher the score, the more relevant the document is to the query.
+The output of this processor is an array of objects, each containing a "document" field with the original document content and a "relevance_score" field indicating how relevant it is to the query. The objects are ordered by their relevance score (highest first).
 
 		`).
 		Version("4.37.0").
@@ -158,17 +154,17 @@ func (p *rerankProcessor) Process(ctx context.Context, msg *service.Message) (se
 	if err != nil {
 		return nil, fmt.Errorf("failed to rerank documents: %w", err)
 	}
-	rankedDocs := []any{}
-	scores := []any{}
+	rerankedResults := []any{}
 	for _, result := range resp.Results {
 		if result.Index < 0 || result.Index >= len(docs) {
 			return nil, fmt.Errorf("invalid API response: out of range index %d for documents array of length %d", result.Index, len(docs))
 		}
-		rankedDocs = append(rankedDocs, docs[result.Index])
-		scores = append(scores, result.RelevanceScore)
+		rerankedResults = append(rerankedResults, map[string]any{
+			"document":        docs[result.Index],
+			"relevance_score": result.RelevanceScore,
+		})
 	}
 	msg = msg.Copy()
-	msg.SetStructured(rankedDocs)
-	msg.MetaSetMut("relevance_scores", scores)
+	msg.SetStructured(rerankedResults)
 	return service.MessageBatch{msg}, nil
 }

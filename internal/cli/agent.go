@@ -26,7 +26,9 @@ func agentCli(rpMgr *enterprise.GlobalRedpandaManager) *cli.Command {
 	flags := []cli.Flag{
 		secretsFlag,
 		licenseFlag,
-		chrootFlag,
+	}
+	if shouldAddChrootFlag() {
+		flags = append(flags, chrootFlag)
 	}
 
 	return &cli.Command{
