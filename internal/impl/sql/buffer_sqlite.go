@@ -404,7 +404,7 @@ func execRetries(ctx context.Context, r retryable) (res sql.Result, err error) {
 	}
 }
 
-func queryRowRetries(ctx context.Context, r retryable, v ...interface{}) (err error) {
+func queryRowRetries(ctx context.Context, r retryable, v ...any) (err error) {
 	boff := getBackoff()
 	for {
 		if err = r.QueryRowContext(ctx).Scan(v...); err == nil || !retryableErr(err) {

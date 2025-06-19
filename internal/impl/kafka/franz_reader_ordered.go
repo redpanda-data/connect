@@ -262,7 +262,7 @@ func (p *partitionCache) pop() *batchWithAckFn {
 
 	outBatch := make(service.MessageBatch, len(nextBatch.b))
 
-	for i := 0; i < len(nextBatch.b); i++ {
+	for i := range nextBatch.b {
 		var incOnce sync.Once
 		outBatch[i] = nextBatch.b[i].m.WithContext(dispatch.CtxOnTriggerSignal(nextBatch.b[i].m.Context(), func() {
 			incOnce.Do(func() {

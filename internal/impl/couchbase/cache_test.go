@@ -102,7 +102,7 @@ func createBucket(ctx context.Context, port, bucket string) error {
 		return err
 	}
 
-	for i := 0; i < 5; i++ { // try five time
+	for range 5 { // try five time
 		time.Sleep(time.Second)
 		err = cluster.Bucket(bucket).WaitUntilReady(time.Second*10, nil)
 		if err == nil {

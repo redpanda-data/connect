@@ -118,7 +118,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			clientOpts := append([]kgo.Opt{}, tmpOpts...)
+			clientOpts := slices.Clone(tmpOpts)
 
 			if tmpOpts, err = FranzConsumerOptsFromConfig(conf); err != nil {
 				return nil, err

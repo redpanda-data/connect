@@ -438,7 +438,7 @@ func TestFitsInPrec(t *testing.T) {
 }
 
 func TestToBytes(t *testing.T) {
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		input := make([]byte, 16)
 		_, err := rand.Read(input)
 		require.NoError(t, err)

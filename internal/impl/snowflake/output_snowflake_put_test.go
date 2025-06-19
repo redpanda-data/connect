@@ -15,6 +15,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -45,13 +46,7 @@ func (db *MockDB) ExecContext(_ context.Context, query string, _ ...any) (sql.Re
 func (*MockDB) Close() error { return nil }
 
 func (db *MockDB) hasQuery(query string) bool {
-	for _, q := range db.Queries {
-		if q == query {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(db.Queries, query)
 }
 
 type MockUUIDGenerator struct{}
@@ -93,23 +88,11 @@ func (c *MockHTTPClient) Do(req *http.Request) (*http.Response, error) {
 }
 
 func (c *MockHTTPClient) hasQuery(query string) bool {
-	for _, q := range c.Queries {
-		if q == query {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(c.Queries, query)
 }
 
 func (c *MockHTTPClient) hasPayload(payload string) bool {
-	for _, p := range c.Payloads {
-		if p == payload {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(c.Payloads, payload)
 }
 
 func TestSnowflakeOutput(t *testing.T) {

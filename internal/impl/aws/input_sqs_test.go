@@ -59,11 +59,7 @@ func (m *mockSqsInput) TimeoutLoop(ctx context.Context) {
 
 			for mesID, timeout := range m.mesTimeouts {
 				timeout = timeout - 1
-				if timeout > 0 {
-					m.mesTimeouts[mesID] = timeout
-				} else {
-					m.mesTimeouts[mesID] = 0
-				}
+				m.mesTimeouts[mesID] = max(timeout, 0)
 			}
 
 			m.mtx.Unlock()
@@ -223,7 +219,7 @@ func TestSQSInputBatchAck(t *testing.T) {
 	defer tCtx.Done()
 
 	messages := []types.Message{}
-	for i := 0; i < 101; i++ {
+	for i := range 101 {
 		messages = append(messages, types.Message{
 			Body:          aws.String(fmt.Sprintf("message-%v", i)),
 			MessageId:     aws.String(fmt.Sprintf("id-%v", i)),

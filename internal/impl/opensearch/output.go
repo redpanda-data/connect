@@ -92,7 +92,7 @@ func esoConfigFromParsed(pConf *service.ParsedConfig) (conf esoConfig, err error
 		return
 	}
 	for _, u := range tmpURLs {
-		for _, splitURL := range strings.Split(u, ",") {
+		for splitURL := range strings.SplitSeq(u, ",") {
 			if splitURL != "" {
 				conf.clientOpts.Client.Addresses = append(conf.clientOpts.Client.Addresses, splitURL)
 			}
@@ -274,7 +274,7 @@ func (e *Output) WriteBatch(ctx context.Context, msg service.MessageBatch) error
 
 	requests := make([]*pendingBulkIndex, len(msg))
 
-	for i := 0; i < len(msg); i++ {
+	for i := range msg {
 		rawBytes, ierr := msg[i].AsBytes()
 		if ierr != nil {
 			e.log.Errorf("Failed to obtain message raw data: %v\n", ierr)

@@ -26,7 +26,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-type jsFunction func(call goja.FunctionCall, rt *goja.Runtime, l *service.Logger) (interface{}, error)
+type jsFunction func(call goja.FunctionCall, rt *goja.Runtime, l *service.Logger) (any, error)
 
 type jsFunctionParam struct {
 	name    string
@@ -112,7 +112,7 @@ let result = benthos.v0_fetch("http://example.com", {}, "GET", "")
 benthos.v0_msg_set_structured(result);
 `).
 	FnCtor(func(*vmRunner) jsFunction {
-		return func(call goja.FunctionCall, _ *goja.Runtime, _ *service.Logger) (interface{}, error) {
+		return func(call goja.FunctionCall, _ *goja.Runtime, _ *service.Logger) (any, error) {
 			var (
 				url         string
 				httpHeaders map[string]any
@@ -162,7 +162,7 @@ var _ = registerVMRunnerFunction("v0_msg_set_string", `Set the contents of the p
 	Param("value", "string", "The value to set it to.").
 	Example(`benthos.v0_msg_set_string("hello world");`).
 	FnCtor(func(r *vmRunner) jsFunction {
-		return func(call goja.FunctionCall, _ *goja.Runtime, _ *service.Logger) (interface{}, error) {
+		return func(call goja.FunctionCall, _ *goja.Runtime, _ *service.Logger) (any, error) {
 			var value string
 			if err := parseArgs(call, &value); err != nil {
 				return nil, err
@@ -176,7 +176,7 @@ var _ = registerVMRunnerFunction("v0_msg_set_string", `Set the contents of the p
 var _ = registerVMRunnerFunction("v0_msg_as_string", `Obtain the raw contents of the processed message as a string.`).
 	Example(`let contents = benthos.v0_msg_as_string();`).
 	FnCtor(func(r *vmRunner) jsFunction {
-		return func(goja.FunctionCall, *goja.Runtime, *service.Logger) (interface{}, error) {
+		return func(goja.FunctionCall, *goja.Runtime, *service.Logger) (any, error) {
 			b, err := r.targetMessage.AsBytes()
 			if err != nil {
 				return nil, err
@@ -195,7 +195,7 @@ benthos.v0_msg_set_structured({
 });
 `).
 	FnCtor(func(r *vmRunner) jsFunction {
-		return func(call goja.FunctionCall, _ *goja.Runtime, _ *service.Logger) (interface{}, error) {
+		return func(call goja.FunctionCall, _ *goja.Runtime, _ *service.Logger) (any, error) {
 			var value any
 			if err := parseArgs(call, &value); err != nil {
 				return nil, err
@@ -209,7 +209,7 @@ benthos.v0_msg_set_structured({
 var _ = registerVMRunnerFunction("v0_msg_as_structured", `Obtain the root of the processed message as a structured value. If the message is not valid JSON or has not already been expanded into a structured form this function will throw an error.`).
 	Example(`let foo = benthos.v0_msg_as_structured().foo;`).
 	FnCtor(func(r *vmRunner) jsFunction {
-		return func(goja.FunctionCall, *goja.Runtime, *service.Logger) (interface{}, error) {
+		return func(goja.FunctionCall, *goja.Runtime, *service.Logger) (any, error) {
 			return r.targetMessage.AsStructured()
 		}
 	})
@@ -218,7 +218,7 @@ var _ = registerVMRunnerFunction("v0_msg_exists_meta", `Check that a metadata ke
 	Param("name", "string", "The metadata key to search for.").
 	Example(`if (benthos.v0_msg_exists_meta("kafka_key")) {}`).
 	FnCtor(func(r *vmRunner) jsFunction {
-		return func(call goja.FunctionCall, _ *goja.Runtime, _ *service.Logger) (interface{}, error) {
+		return func(call goja.FunctionCall, _ *goja.Runtime, _ *service.Logger) (any, error) {
 			var name string
 			if err := parseArgs(call, &name); err != nil {
 				return nil, err
@@ -236,7 +236,7 @@ var _ = registerVMRunnerFunction("v0_msg_get_meta", `Get the value of a metadata
 	Param("name", "string", "The metadata key to search for.").
 	Example(`let key = benthos.v0_msg_get_meta("kafka_key");`).
 	FnCtor(func(r *vmRunner) jsFunction {
-		return func(call goja.FunctionCall, _ *goja.Runtime, _ *service.Logger) (interface{}, error) {
+		return func(call goja.FunctionCall, _ *goja.Runtime, _ *service.Logger) (any, error) {
 			var name string
 			if err := parseArgs(call, &name); err != nil {
 				return nil, err
@@ -255,7 +255,7 @@ var _ = registerVMRunnerFunction("v0_msg_set_meta", `Set a metadata key on the p
 	Param("value", "anything", "The value to set it to.").
 	Example(`benthos.v0_msg_set_meta("thing", "hello world");`).
 	FnCtor(func(r *vmRunner) jsFunction {
-		return func(call goja.FunctionCall, _ *goja.Runtime, _ *service.Logger) (interface{}, error) {
+		return func(call goja.FunctionCall, _ *goja.Runtime, _ *service.Logger) (any, error) {
 			var (
 				name  string
 				value any

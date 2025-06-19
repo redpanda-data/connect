@@ -792,7 +792,7 @@ func (o *snowpipeStreamingOutput) WriteBatch(ctx context.Context, batch service.
 	// We only migrate one column at a time, so tolerate up to 10 schema
 	// migrations for a single batch before giving up. This protects against
 	// any bugs over infinitely looping.
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		o.mu.RLock()
 		err = o.impl.WriteBatch(ctx, batch)
 		o.mu.RUnlock()

@@ -132,7 +132,7 @@ func BenchmarkColumnNormalization(b *testing.B) {
 	makeBench := func(name string) func(b *testing.B) {
 		return func(b *testing.B) {
 			var normalized string
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				normalized = normalizeColumnName(name)
 			}
 			b.SetBytes(int64(len(normalized)))

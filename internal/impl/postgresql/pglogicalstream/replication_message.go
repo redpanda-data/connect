@@ -304,7 +304,7 @@ func (m *RelationMessage) Decode(src []byte) error {
 	m.ColumnNum, used = m.decodeUint16(src[low:])
 	low += used
 
-	for i := 0; i < int(m.ColumnNum); i++ {
+	for i := range int(m.ColumnNum) {
 		column := new(RelationMessageColumn)
 		column.Flags = src[low]
 		low++
@@ -410,7 +410,7 @@ func (m *TupleData) Decode(src []byte) (int, error) {
 	m.ColumnNum, used = m.decodeUint16(src)
 	low += used
 
-	for i := 0; i < int(m.ColumnNum); i++ {
+	for range int(m.ColumnNum) {
 		column := new(TupleDataColumn)
 		column.DataType = src[low]
 		low += 1
@@ -421,7 +421,7 @@ func (m *TupleData) Decode(src []byte) (int, error) {
 			low += used
 
 			column.Data = make([]byte, int(column.Length))
-			for j := 0; j < int(column.Length); j++ {
+			for j := range int(column.Length) {
 				column.Data[j] = src[low+j]
 			}
 			low += int(column.Length)
@@ -629,7 +629,7 @@ func (m *TruncateMessage) Decode(src []byte) (err error) {
 	low++
 
 	m.RelationIDs = make([]uint32, m.RelationNum)
-	for i := 0; i < int(m.RelationNum); i++ {
+	for i := range int(m.RelationNum) {
 		m.RelationIDs[i], used = m.decodeUint32(src[low:])
 		low += used
 	}

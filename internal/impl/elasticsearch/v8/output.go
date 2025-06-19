@@ -74,7 +74,7 @@ func esConfigFromParsed(pConf *service.ParsedConfig) (*esConfig, error) {
 		return nil, err
 	}
 	for _, u := range urlStrs {
-		for _, urlStr := range strings.Split(u, ",") {
+		for urlStr := range strings.SplitSeq(u, ",") {
 			if urlStr != "" {
 				conf.clientOpts.Addresses = append(conf.clientOpts.Addresses, urlStr)
 			}

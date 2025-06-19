@@ -104,7 +104,7 @@ func TestIntegrationRedisClusterCache(t *testing.T) {
 
 	exposedPorts := make([]string, 12)
 	portBindings := make(map[docker.Port][]docker.PortBinding, 12)
-	for i := 0; i < 6; i++ {
+	for i := range 6 {
 		p1 := fmt.Sprintf("%d/tcp", 7000+i)
 		p2 := fmt.Sprintf("%d/tcp", 17000+i)
 		exposedPorts[i] = p1
@@ -130,7 +130,7 @@ func TestIntegrationRedisClusterCache(t *testing.T) {
 	})
 
 	clusterURL := ""
-	for i := 0; i < 6; i++ {
+	for i := range 6 {
 		clusterURL += fmt.Sprintf("redis://%s:%s/0,", hostIP, fmt.Sprintf("%d", 7000+i))
 	}
 	clusterURL = strings.TrimSuffix(clusterURL, ",")
