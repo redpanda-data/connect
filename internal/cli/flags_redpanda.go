@@ -81,6 +81,13 @@ var chrootFlag = &cli.StringFlag{
 		"This flag is only supported on Linux.",
 }
 
+var chrootPassthroughFlag = &cli.StringSliceFlag{
+	Name: "chroot-passthrough",
+	Usage: "Specify additional files to be copied into the chroot directory. " +
+		"This flag can be used multiple times. " +
+		"It is only supported when --chroot is used.",
+}
+
 func shouldAddChrootFlag() bool {
 	return runtime.GOOS == "linux"
 }

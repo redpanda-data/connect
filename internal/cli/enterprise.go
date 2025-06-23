@@ -51,9 +51,10 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 	}
 
 	var (
-		licenseConfig    = defaultLicenseConfig()
-		chrootPath       string
-		disableTelemetry bool
+		licenseConfig     = defaultLicenseConfig()
+		chrootPath        string
+		chrootPassthrough []string
+		disableTelemetry  bool
 	)
 
 	flags := []cli.Flag{
@@ -61,7 +62,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 		licenseFlag,
 	}
 	if shouldAddChrootFlag() {
-		flags = append(flags, chrootFlag)
+		flags = append(flags, chrootFlag, chrootPassthroughFlag)
 	}
 
 	opts = append(opts,
@@ -104,7 +105,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 			// Chroot if needed
 			if chrootPath != "" {
 				fbLogger.Infof("Chrooting to '%v'", chrootPath)
-				if err := chroot(chrootPath); err != nil {
+				if err := chroot(chrootPath, chrootPassthrough); err != nil {
 					return fmt.Errorf("chroot: %w", err)
 				}
 			}
@@ -140,6 +141,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 			func(c *cli.Context) error {
 				applyLicenseFlag(c, &licenseConfig)
 				chrootPath = c.String("chroot")
+				chrootPassthrough = c.StringSlice("chroot-passthrough")
 				disableTelemetry = c.Bool("disable-telemetry")
 
 				if secretLookupFn, err = parseSecretsFlag(slog.New(rpLogger), c); err != nil {

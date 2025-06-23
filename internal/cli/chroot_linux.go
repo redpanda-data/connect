@@ -27,8 +27,8 @@ import (
 // NOTE: This function will only work if the binary is running with
 // sufficient privileges to call syscall.Chroot. If the binary does not
 // have the necessary privileges, this function will return an error.
-func chroot(path string) error {
-	if err := setupChrootDir(path); err != nil {
+func chroot(path string, passthroughFiles []string) error {
+	if err := setupChrootDir(path, passthroughFiles); err != nil {
 		return fmt.Errorf("setup chroot: %w", err)
 	}
 
@@ -42,7 +42,7 @@ func chroot(path string) error {
 	return nil
 }
 
-func setupChrootDir(chrootDir string) error {
+func setupChrootDir(chrootDir string, passthroughFiles []string) error {
 	// Make sure chroot directory does not exist
 	if _, err := os.Stat(chrootDir); err == nil {
 		return fmt.Errorf("chroot directory %s must not exist", chrootDir)
@@ -83,6 +83,13 @@ func setupChrootDir(chrootDir string) error {
 	for _, filePath := range configFiles {
 		if err := copyFile(filePath, filepath.Join(chrootDir, filePath)); err != nil {
 			return fmt.Errorf("copy %s: %w", filePath, err)
+		}
+	}
+
+	// Copy any user-specified passthrough files
+	for _, filePath := range passthroughFiles {
+		if err := copyFile(filePath, filepath.Join(chrootDir, filePath)); err != nil {
+			return fmt.Errorf("copy passthrough file %s: %w", filePath, err)
 		}
 	}
 
