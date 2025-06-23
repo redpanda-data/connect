@@ -7,7 +7,8 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- Field `validate_topic` added to `gcp_pubsub`. (@rockwotj) 
+- Field `validate_topic` added to `gcp_pubsub`. (@rockwotj)
+- New global CLI flag `--chroot-passthrough` to specify additional files to be copied into the chroot directory. (@mmatczuk)
 
 ## 4.58.2 - 2025-06-17
 
