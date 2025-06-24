@@ -27,22 +27,59 @@ Writes files to an SFTP server.
 
 Introduced in version 3.39.0.
 
+
+[tabs]
+======
+Common::
++
+--
+
 ```yml
-# Config fields, showing default values
+# Common config fields, showing default values
 output:
   label: ""
   sftp:
     address: "" # No default (required)
-    path: "" # No default (required)
-    codec: all-bytes
     credentials:
       username: ""
       password: ""
-      private_key_file: ""
-      private_key: ""
+      host_public_key_file: "" # No default (optional)
+      host_public_key: "" # No default (optional)
+      private_key_file: "" # No default (optional)
+      private_key: "" # No default (optional)
       private_key_pass: ""
+    path: "" # No default (required)
+    codec: all-bytes
     max_in_flight: 64
 ```
+
+--
+Advanced::
++
+--
+
+```yml
+# All config fields, showing default values
+output:
+  label: ""
+  sftp:
+    address: "" # No default (required)
+    connection_timeout: 30s
+    credentials:
+      username: ""
+      password: ""
+      host_public_key_file: "" # No default (optional)
+      host_public_key: "" # No default (optional)
+      private_key_file: "" # No default (optional)
+      private_key: "" # No default (optional)
+      private_key_pass: ""
+    path: "" # No default (required)
+    codec: all-bytes
+    max_in_flight: 64
+```
+
+--
+======
 
 In order to have a different path for each object you should use function interpolations described xref:configuration:interpolation.adoc#bloblang-queries[here].
 
@@ -59,6 +96,97 @@ The address of the server to connect to.
 
 *Type*: `string`
 
+
+=== `connection_timeout`
+
+The connection timeout to use when connecting to the target server.
+
+
+*Type*: `string`
+
+*Default*: `"30s"`
+
+=== `credentials`
+
+The credentials to use to log into the target server.
+
+
+*Type*: `object`
+
+
+=== `credentials.username`
+
+The username to connect to the SFTP server.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `credentials.password`
+
+The password for the username to connect to the SFTP server.
+[CAUTION]
+====
+This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
+====
+
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `credentials.host_public_key_file`
+
+The public key of the SFTP server.
+
+
+*Type*: `string`
+
+
+=== `credentials.host_public_key`
+
+The public key file of the SFTP server.
+
+
+*Type*: `string`
+
+
+=== `credentials.private_key_file`
+
+The private key file for the username to connect to the SFTP server.
+
+
+*Type*: `string`
+
+
+=== `credentials.private_key`
+
+The private key for the username to connect to the SFTP server.
+[CAUTION]
+====
+This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
+====
+
+
+
+*Type*: `string`
+
+
+=== `credentials.private_key_pass`
+
+Optional passphrase for private key.
+[CAUTION]
+====
+This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
+====
+
+
+
+*Type*: `string`
+
+*Default*: `""`
 
 === `path`
 
@@ -101,74 +229,6 @@ codec: "delim:\t"
 
 codec: delim:foobar
 ```
-
-=== `credentials`
-
-The credentials to use to log into the target server.
-
-
-*Type*: `object`
-
-
-=== `credentials.username`
-
-The username to connect to the SFTP server.
-
-
-*Type*: `string`
-
-*Default*: `""`
-
-=== `credentials.password`
-
-The password for the username to connect to the SFTP server.
-[CAUTION]
-====
-This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
-====
-
-
-
-*Type*: `string`
-
-*Default*: `""`
-
-=== `credentials.private_key_file`
-
-The private key for the username to connect to the SFTP server.
-
-
-*Type*: `string`
-
-*Default*: `""`
-
-=== `credentials.private_key`
-
-The private key file for the username to connect to the SFTP server.
-[CAUTION]
-====
-This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
-====
-
-
-
-*Type*: `string`
-
-*Default*: `""`
-
-=== `credentials.private_key_pass`
-
-Optional passphrase for private key.
-[CAUTION]
-====
-This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
-====
-
-
-
-*Type*: `string`
-
-*Default*: `""`
 
 === `max_in_flight`
 

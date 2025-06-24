@@ -15,11 +15,14 @@
 package sftp
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
-	"os"
+	"io"
+	"net"
+	"net/http"
 	"strings"
 	"sync"
 	"testing"
@@ -29,6 +32,7 @@ import (
 	"github.com/pkg/sftp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/ssh"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
@@ -38,40 +42,43 @@ import (
 )
 
 var (
-	sftpUsername = "foo"
-	sftpPassword = "pass"
+	sftpUsername = "admin"
+	sftpPassword = "password"
 )
 
 func TestIntegrationSFTP(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	resource := setupDockerPool(t)
+	emulator := runEmulator(t)
 
 	t.Run("sftp", func(t *testing.T) {
 		template := `
 output:
   sftp:
-    address: localhost:$PORT
+    address: $VAR1
     path: /upload/test-$ID/${!uuid_v4()}.txt
     credentials:
-      username: foo
-      password: pass
-    codec: $VAR1
+      username: $VAR2
+      password: $VAR3
+      host_public_key: $VAR4
+    codec: all-bytes
     max_in_flight: 1
 
 input:
   sftp:
-    address: localhost:$PORT
+    address: $VAR1
     paths:
       - /upload/test-$ID/*.txt
     credentials:
-      username: foo
-      password: pass
-    codec: $VAR1
+      username: $VAR2
+      password: $VAR3
+      host_public_key: $VAR4
+    scanner:
+      to_the_end: {}
     delete_on_finish: false
     watcher:
-      enabled: $VAR2
+      enabled: $VAR5
       minimum_age: 100ms
       poll_interval: 100ms
       cache: files_memory
@@ -87,9 +94,12 @@ cache_resources:
 		)
 		suite.Run(
 			t, template,
-			integration.StreamTestOptPort(resource.GetPort("22/tcp")),
-			integration.StreamTestOptVarSet("VAR1", "all-bytes"),
-			integration.StreamTestOptVarSet("VAR2", "false"),
+			integration.StreamTestOptPort(emulator.address),
+			integration.StreamTestOptVarSet("VAR1", emulator.address),
+			integration.StreamTestOptVarSet("VAR2", sftpUsername),
+			integration.StreamTestOptVarSet("VAR3", sftpPassword),
+			integration.StreamTestOptVarSet("VAR4", emulator.hostKey),
+			integration.StreamTestOptVarSet("VAR5", "false"),
 		)
 
 		t.Run("watcher", func(t *testing.T) {
@@ -101,9 +111,12 @@ cache_resources:
 			)
 			watcherSuite.Run(
 				t, template,
-				integration.StreamTestOptPort(resource.GetPort("22/tcp")),
-				integration.StreamTestOptVarSet("VAR1", "all-bytes"),
-				integration.StreamTestOptVarSet("VAR2", "true"),
+				integration.StreamTestOptPort(emulator.address),
+				integration.StreamTestOptVarSet("VAR1", emulator.address),
+				integration.StreamTestOptVarSet("VAR2", sftpUsername),
+				integration.StreamTestOptVarSet("VAR3", sftpPassword),
+				integration.StreamTestOptVarSet("VAR4", emulator.hostKey),
+				integration.StreamTestOptVarSet("VAR5", "true"),
 			)
 		})
 	})
@@ -113,14 +126,14 @@ func TestIntegrationSFTPDeleteOnFinish(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	resource := setupDockerPool(t)
+	emulator := runEmulator(t)
 
-	client, err := getClient(resource)
+	err := emulator.client.MkdirAll("/upload")
 	require.NoError(t, err)
 
-	writeSFTPFile(t, client, "/upload/1.txt", "data-1")
-	writeSFTPFile(t, client, "/upload/2.txt", "data-2")
-	writeSFTPFile(t, client, "/upload/3.txt", "data-3")
+	writeSFTPFile(t, emulator.client, "/upload/1.txt", "data-1")
+	writeSFTPFile(t, emulator.client, "/upload/2.txt", "data-2")
+	writeSFTPFile(t, emulator.client, "/upload/3.txt", "data-3")
 
 	config := `
 output:
@@ -128,12 +141,15 @@ output:
 
 input:
   sftp:
-    address: localhost:$PORT
+    address: $VAR1
     paths:
       - /upload/*.txt
     credentials:
-      username: foo
-      password: pass
+      username: $VAR2
+      password: $VAR3
+      host_public_key: $VAR4
+    scanner:
+      to_the_end: {}
     delete_on_finish: true
     watcher:
       enabled: true
@@ -146,7 +162,10 @@ cache_resources:
       default_ttl: 900s
 `
 	config = strings.NewReplacer(
-		"$PORT", resource.GetPort("22/tcp"),
+		"$VAR1", emulator.address,
+		"$VAR2", sftpUsername,
+		"$VAR3", sftpPassword,
+		"$VAR4", emulator.hostKey,
 	).Replace(config)
 
 	var receivedPathsMut sync.Mutex
@@ -183,25 +202,36 @@ cache_resources:
 		defer receivedPathsMut.Unlock()
 		assert.Len(c, receivedPaths, 3)
 
-		files, err := client.Glob("/upload/*.txt")
+		files, err := emulator.client.Glob("/upload/*.txt")
 		assert.NoError(c, err)
 		assert.Empty(c, files)
 	}, time.Second*10, time.Millisecond*100)
 }
 
-func setupDockerPool(t *testing.T) *dockertest.Resource {
-	t.Helper()
+type emulator struct {
+	client  *sftp.Client
+	address string
+	hostKey string
+}
 
+func runEmulator(t *testing.T) emulator {
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
-
 	pool.MaxWait = time.Second * 30
+
+	adminUsername := "admin"
+	adminPassword := "password"
 	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository: "atmoz/sftp",
-		Tag:        "alpine",
-		Cmd: []string{
-			// https://github.com/atmoz/sftp/issues/401
-			"/bin/sh", "-c", "ulimit -n 65535 && exec /entrypoint " + sftpUsername + ":" + sftpPassword + ":1001:100:upload",
+		Repository: "drakkan/sftpgo",
+		Tag:        "edge-alpine-slim",
+		Env: []string{
+			"SFTPGO_DATA_PROVIDER__CREATE_DEFAULT_ADMIN=true",
+			"SFTPGO_DEFAULT_ADMIN_USERNAME=" + adminUsername,
+			"SFTPGO_DEFAULT_ADMIN_PASSWORD=" + adminPassword,
+		},
+		ExposedPorts: []string{
+			"2022/tcp",
+			"8080/tcp",
 		},
 	})
 	require.NoError(t, err)
@@ -211,21 +241,97 @@ func setupDockerPool(t *testing.T) *dockertest.Resource {
 
 	_ = resource.Expire(900)
 
-	// wait for server to be ready to accept connections
 	require.NoError(t, pool.Retry(func() error {
-		_, err := getClient(resource)
-		return err
+		resp, err := http.Get("http://" + resource.GetHostPort("8080/tcp") + "/healthz")
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("failed to query healthz, got status: %d", resp.StatusCode)
+		}
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+		if !bytes.Equal(body, []byte("ok")) {
+			return errors.New("failed healthz check, expected 'ok' response, got %s" + string(body))
+		}
+
+		return nil
 	}))
 
-	return resource
-}
-
-func getClient(resource *dockertest.Resource) (*sftp.Client, error) {
-	creds := credentials{
-		Username: sftpUsername,
-		Password: sftpPassword,
+	// Get an access token for the admin user
+	req, err := http.NewRequest(http.MethodGet, "http://"+resource.GetHostPort("8080/tcp")+"/api/v2/token", nil)
+	require.NoError(t, err)
+	req.SetBasicAuth(adminUsername, adminPassword)
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	var tokenResponse struct {
+		AccessToken string `json:"access_token"`
 	}
-	return creds.GetClient(&osPT{}, "localhost:"+resource.GetPort("22/tcp"))
+	require.NoError(t, json.Unmarshal(body, &tokenResponse))
+	require.NotEmpty(t, tokenResponse.AccessToken)
+
+	// Create a user for SFTP access
+	req, err = http.NewRequest(
+		http.MethodPost,
+		"http://"+resource.GetHostPort("8080/tcp")+"/api/v2/users",
+		strings.NewReader(
+			fmt.Sprintf(
+				`{"id": 1, "status": 1, "username": "%s", "password": "%s", "permissions": {"/": ["*"]}}`,
+				sftpUsername, sftpPassword,
+			),
+		),
+	)
+	require.NoError(t, err)
+	req.Header.Set("Authorization", "Bearer "+tokenResponse.AccessToken)
+	resp, err = http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+
+	address := resource.GetHostPort("2022/tcp")
+	var hostPubKey string
+	var sshClient *ssh.Client
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		var pubKey ssh.PublicKey
+		cb := func(_ string, _ net.Addr, key ssh.PublicKey) error {
+			pubKey = key
+			return nil
+		}
+
+		var err error
+		sshClient, err = ssh.Dial("tcp", address, &ssh.ClientConfig{
+			User:            sftpUsername,
+			Auth:            []ssh.AuthMethod{ssh.Password(sftpPassword)},
+			HostKeyCallback: cb,
+			Timeout:         2 * time.Second,
+		})
+		require.NoError(c, err)
+		require.NotEmpty(c, pubKey)
+
+		hostPubKey = string(ssh.MarshalAuthorizedKey(pubKey))
+	}, time.Second*6, time.Millisecond*100)
+
+	client, err := sftp.NewClient(sshClient)
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		require.NoError(t, client.Close())
+		require.NoError(t, sshClient.Close())
+	})
+
+	return emulator{
+		client:  client,
+		address: address,
+		hostKey: hostPubKey,
+	}
 }
 
 func writeSFTPFile(t *testing.T, client *sftp.Client, path, data string) {
@@ -235,26 +341,4 @@ func writeSFTPFile(t *testing.T, client *sftp.Client, path, data string) {
 	defer file.Close()
 	_, err = fmt.Fprint(file, data, "writing file contents")
 	require.NoError(t, err)
-}
-
-type osPT struct{}
-
-func (*osPT) Open(name string) (fs.File, error) {
-	return os.Open(name)
-}
-
-func (*osPT) OpenFile(name string, flag int, perm fs.FileMode) (fs.File, error) {
-	return os.OpenFile(name, flag, perm)
-}
-
-func (*osPT) Stat(name string) (fs.FileInfo, error) {
-	return os.Stat(name)
-}
-
-func (*osPT) Remove(name string) error {
-	return os.Remove(name)
-}
-
-func (*osPT) MkdirAll(path string, perm fs.FileMode) error {
-	return os.MkdirAll(path, perm)
 }

@@ -24,14 +24,14 @@ import (
 	"sync"
 
 	"github.com/pkg/sftp"
+	"golang.org/x/crypto/ssh"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 const (
-	soFieldAddress     = "address"
-	soFieldCredentials = "credentials"
-	soFieldPath        = "path"
+	soFieldPath  = "path"
+	soFieldCodec = "codec"
 )
 
 func sftpOutputSpec() *service.ConfigSpec {
@@ -41,12 +41,11 @@ func sftpOutputSpec() *service.ConfigSpec {
 		Version("3.39.0").
 		Summary(`Writes files to an SFTP server.`).
 		Description(`In order to have a different path for each object you should use function interpolations described xref:configuration:interpolation.adoc#bloblang-queries[here].`+service.OutputPerformanceDocs(true, false)).
+		Fields(connectionFields()...).
 		Fields(
-			service.NewStringField(soFieldAddress).
-				Description("The address of the server to connect to."),
 			service.NewInterpolatedStringField(soFieldPath).
 				Description("The file to save the messages to on the server."),
-			service.NewStringAnnotatedEnumField("codec", map[string]string{
+			service.NewStringAnnotatedEnumField(soFieldCodec, map[string]string{
 				"all-bytes": "Only applicable to file based outputs. Writes each message to a file in full, if the file already exists the old content is deleted.",
 				"append":    "Append each message to the output stream without any delimiter or special encoding.",
 				"lines":     "Append each message to the output stream followed by a line break.",
@@ -56,8 +55,6 @@ func sftpOutputSpec() *service.ConfigSpec {
 				LintRule("").
 				Examples("lines", "delim:\t", "delim:foobar").
 				Default("all-bytes"),
-			service.NewObjectField(soFieldCredentials, credentialsFields()...).
-				Description("The credentials to use to log into the target server."),
 			service.NewOutputMaxInFlightField(),
 		)
 }
@@ -78,16 +75,16 @@ func init() {
 
 type sftpWriter struct {
 	log *service.Logger
-	mgr *service.Resources
 
 	address    string
-	creds      credentials
+	sshConfig  *ssh.ClientConfig
 	path       *service.InterpolatedString
 	suffixFn   codecSuffixFn
 	appendMode bool
 
 	handleMut  sync.Mutex
-	client     *sftp.Client
+	sshClient  *ssh.Client
+	sftpClient *sftp.Client
 	handlePath string
 	handle     io.WriteCloser
 }
@@ -95,40 +92,49 @@ type sftpWriter struct {
 func newWriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (s *sftpWriter, err error) {
 	s = &sftpWriter{
 		log: mgr.Logger(),
-		mgr: mgr,
 	}
 
 	var codecStr string
-	if codecStr, err = conf.FieldString("codec"); err != nil {
+	if codecStr, err = conf.FieldString(soFieldCodec); err != nil {
 		return
 	}
 	if s.suffixFn, s.appendMode, err = codecGetWriter(codecStr); err != nil {
 		return nil, err
 	}
 
-	if s.address, err = conf.FieldString(soFieldAddress); err != nil {
+	if s.address, err = conf.FieldString(sFieldAddress); err != nil {
 		return
+	}
+	if s.sshConfig, err = sshAuthConfigFromParsed(conf.Namespace(sFieldCredentials), mgr); err != nil {
+		return
+	}
+	if conf.Contains(sFieldConnectionTimeout) {
+		if s.sshConfig.Timeout, err = conf.FieldDuration(sFieldConnectionTimeout); err != nil {
+			return
+		}
 	}
 	if s.path, err = conf.FieldInterpolatedString(soFieldPath); err != nil {
-		return
-	}
-	if s.creds, err = credentialsFromParsed(conf.Namespace(soFieldCredentials), mgr); err != nil {
 		return
 	}
 
 	return s, nil
 }
 
-func (s *sftpWriter) Connect(context.Context) (err error) {
+func (s *sftpWriter) Connect(context.Context) error {
 	s.handleMut.Lock()
 	defer s.handleMut.Unlock()
 
-	if s.client != nil {
-		return
+	if s.sshClient != nil {
+		return nil
 	}
 
-	s.client, err = s.creds.GetClient(s.mgr.FS(), s.address)
-	return
+	var err error
+	s.sshClient, err = ssh.Dial("tcp", s.address, s.sshConfig)
+	if err != nil {
+		return fmt.Errorf("failed to connect to SFTP server: %s", err)
+	}
+
+	return nil
 }
 
 func (s *sftpWriter) writeTo(wtr io.Writer, p *service.Message) error {
@@ -150,11 +156,21 @@ func (s *sftpWriter) writeTo(wtr io.Writer, p *service.Message) error {
 	return nil
 }
 
-func (s *sftpWriter) Write(_ context.Context, msg *service.Message) error {
+// Write stores the file handle and SFTP session in the writer, and writes the message to the file. This approach allows
+// us to reuse the same session across multiple writes, which is particularly useful when the codec requires appending
+// to files. The current implementation does not support parallel writes.
+func (s *sftpWriter) Write(_ context.Context, msg *service.Message) (wErr error) {
 	s.handleMut.Lock()
 	defer s.handleMut.Unlock()
 
-	if s.client == nil {
+	defer func() {
+		if wErr != nil && errors.Is(wErr, sftp.ErrSSHFxConnectionLost) {
+			s.sshClient = nil
+			wErr = service.ErrNotConnected
+		}
+	}()
+
+	if s.sshClient == nil {
 		return service.ErrNotConnected
 	}
 
@@ -163,14 +179,19 @@ func (s *sftpWriter) Write(_ context.Context, msg *service.Message) error {
 		return fmt.Errorf("path interpolation error: %w", err)
 	}
 
-	if s.handle != nil && path == s.handlePath {
-		// TODO: Detect underlying connection failure here and drop client.
-		return s.writeTo(s.handle, msg)
-	}
 	if s.handle != nil {
+		if path == s.handlePath {
+			return s.writeTo(s.handle, msg)
+		}
+
+		// If the path changes, we reset the handle and open the new file.
 		if err := s.handle.Close(); err != nil {
 			s.log.With("error", err).Error("Failed to close written file")
 		}
+		if err := s.sftpClient.Close(); err != nil {
+			s.log.With("error", err).Error("Failed to close SFTP client")
+		}
+
 		s.handle = nil
 		s.handlePath = ""
 	}
@@ -182,34 +203,45 @@ func (s *sftpWriter) Write(_ context.Context, msg *service.Message) error {
 		flag |= os.O_TRUNC
 	}
 
-	if err := s.client.MkdirAll(filepath.Dir(path)); err != nil {
-		if errors.Is(err, sftp.ErrSshFxConnectionLost) {
-			return service.ErrNotConnected
-		}
-		return err
-	}
-
-	handle, err := s.client.OpenFile(path, flag)
+	s.sftpClient, err = sftp.NewClient(s.sshClient)
 	if err != nil {
-		if errors.Is(err, sftp.ErrSshFxConnectionLost) {
-			return service.ErrNotConnected
-		}
-		return err
+		return fmt.Errorf("failed to create SFTP client: %w", err)
 	}
 
-	if err := s.writeTo(handle, msg); err != nil {
-		_ = handle.Close()
-		return err
+	if err := s.sftpClient.MkdirAll(filepath.Dir(path)); err != nil {
+		return fmt.Errorf("failed to create remote directory: %w", err)
 	}
+
+	handle, err := s.sftpClient.OpenFile(path, flag)
+	if err != nil {
+		return fmt.Errorf("failed to open remote file: %w", err)
+	}
+	s.handle = handle
+	s.handlePath = path
 
 	if s.appendMode {
-		s.handle = handle
-		s.handlePath = path
-	} else {
-		if err := handle.Close(); err != nil {
-			s.log.With("error", err).Error("Failed to close written file")
+		// Need to seek to the end when appending to an existing file.
+		// Details here: https://github.com/pkg/sftp/issues/295
+		fi, err := s.sftpClient.Lstat(path)
+		if err != nil {
+			return fmt.Errorf("failed to stat remote file: %w", err)
+		}
+		_, err = handle.Seek(fi.Size(), 0)
+		if err != nil {
+			return fmt.Errorf("failed to seek remote file: %w", err)
 		}
 	}
+
+	if err := s.writeTo(s.handle, msg); err != nil {
+		if err := s.handle.Close(); err != nil {
+			s.log.With("error", err).Error("Failed to close written file")
+		}
+		if err := s.sftpClient.Close(); err != nil {
+			s.log.With("error", err).Error("Failed to close SFTP client")
+		}
+		return fmt.Errorf("failed to write message to SFTP server: %w", err)
+	}
+
 	return nil
 }
 
@@ -217,17 +249,27 @@ func (s *sftpWriter) Close(context.Context) error {
 	s.handleMut.Lock()
 	defer s.handleMut.Unlock()
 
+	if s.sshClient == nil {
+		return nil
+	}
+
 	if s.handle != nil {
 		if err := s.handle.Close(); err != nil {
 			s.log.With("error", err).Error("Failed to close written file")
 		}
 		s.handle = nil
 	}
-	if s.client != nil {
-		if err := s.client.Close(); err != nil {
-			s.log.With("error", err).Error("Failed to close client")
+
+	if s.sftpClient != nil {
+		if err := s.sftpClient.Close(); err != nil {
+			s.log.With("error", err).Error("Failed to close SFTP client")
 		}
-		s.client = nil
 	}
+
+	if err := s.sshClient.Close(); err != nil {
+		return fmt.Errorf("failed to close SSH client: %w", err)
+	}
+	s.sshClient = nil
+
 	return nil
 }
