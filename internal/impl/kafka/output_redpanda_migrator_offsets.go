@@ -367,8 +367,6 @@ func (w *redpandaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.
 
 	backOff := w.backoffCtor()
 	for {
-		// TODO: Maybe use `dispatch.TriggerSignal()` to consume new messages while `updateConsumerOffsets()` is running
-		// if this proves to be too slow.
 		err := updateConsumerOffsets()
 		if err == nil {
 			break
