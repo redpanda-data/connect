@@ -55,14 +55,17 @@ mapping: |
 
   let redpandaMigratorOffsets = this.redpanda_migrator.with(
     "seed_brokers",
+    "client_id",
+    "tls",
+    "sasl",
+    "metadata_max_age",
+    "request_timeout_overhead",
+    "conn_idle_timeout",
     "topics",
     "regexp_topics",
-    "consumer_group",
     "topic_lag_refresh_period",
-    "client_id",
     "rack_id",
-    "tls",
-    "sasl").assign(
+    "auto_replay_nacks").assign(
       if this.exists("consumer_group_offsets_poll_interval") {
         {"poll_interval": this.consumer_group_offsets_poll_interval}
       } else {
@@ -181,7 +184,6 @@ tests:
             redpanda_migrator_offsets:
               seed_brokers: [ "127.0.0.1:9092" ]
               topics: [ "foobar" ]
-              consumer_group: "migrator"
               poll_interval: "15s"
             processors:
               - mapping: meta input_label = "redpanda_migrator_offsets_input"
@@ -225,7 +227,6 @@ tests:
                   redpanda_migrator_offsets:
                     seed_brokers: [ "127.0.0.1:9092" ]
                     topics: [ "foobar" ]
-                    consumer_group: "migrator"
                     poll_interval: "15s"
                   processors:
                     - mapping: meta input_label = "redpanda_migrator_offsets_input"
@@ -251,7 +252,6 @@ tests:
             redpanda_migrator_offsets:
               seed_brokers: [ "127.0.0.1:9092" ]
               topics: [ "foobar" ]
-              consumer_group: "migrator"
               poll_interval: "15s"
             processors:
               - mapping: meta input_label = "redpanda_migrator_offsets_input"

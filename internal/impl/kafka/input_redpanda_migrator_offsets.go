@@ -149,7 +149,7 @@ func init() {
 				}
 			}
 
-			if i.pollInterval, err = conf.FieldDuration("poll_interval"); err != nil {
+			if i.pollInterval, err = conf.FieldDuration(rmoiFieldPollInterval); err != nil {
 				return nil, err
 			}
 
@@ -193,12 +193,12 @@ func (rmoi *redpandaMigratorOffsetsInput) getTimestampForCommittedOffset(ctx con
 	// The default kadm client timeout is 15s. Do we need to make this configurable?
 	offsets, err := kadm.NewClient(client).ListEndOffsets(ctx, topic)
 	if err != nil {
-		return 0, false, fmt.Errorf("failed to read the high watermark for topic %q and partition %q: %s", topic, partition, err)
+		return 0, false, fmt.Errorf("failed to read the high watermark for topic %q and partition %d: %s", topic, partition, err)
 	}
 
 	highWatermark, ok := offsets.Lookup(topic, partition)
 	if !ok {
-		return 0, false, fmt.Errorf("failed to find the high watermark for topic %q and partition %q: %s", topic, partition, err)
+		return 0, false, fmt.Errorf("failed to find the high watermark for topic %q and partition %d: %s", topic, partition, err)
 	}
 
 	// If the high watermark on the topic matches the offset we received via `__consumer_offsets`, then we must read the
@@ -211,7 +211,7 @@ func (rmoi *redpandaMigratorOffsetsInput) getTimestampForCommittedOffset(ctx con
 		recordOffset = kgo.NewOffset().At(offset)
 	} else {
 		return 0, false, fmt.Errorf(
-			"the newest committed offset %d for topic %q partition %q should never be smaller than the received offset %d",
+			"the newest committed offset %d for topic %q partition %d should never be smaller than the received offset %d",
 			highWatermark.Offset, topic, partition, offset,
 		)
 	}
@@ -224,16 +224,16 @@ func (rmoi *redpandaMigratorOffsetsInput) getTimestampForCommittedOffset(ctx con
 
 	fetches := client.PollFetches(ctx)
 	if fetches.IsClientClosed() {
-		return 0, false, fmt.Errorf("failed to read record with offset %d for topic %q partition %q: client closed", offset, topic, partition)
+		return 0, false, fmt.Errorf("failed to read record with offset %d for topic %q partition %d: client closed", offset, topic, partition)
 	}
 
 	if err := fetches.Err(); err != nil {
-		return 0, false, fmt.Errorf("failed to read record with offset %d for topic %q partition %q: %s", offset, topic, partition, err)
+		return 0, false, fmt.Errorf("failed to read record with offset %d for topic %q partition %d: %s", offset, topic, partition, err)
 	}
 
 	it := fetches.RecordIter()
 	if it.Done() {
-		return 0, false, fmt.Errorf("couldn't find record with offset %d for topic %q partition %q: %s", offset, topic, partition, err)
+		return 0, false, fmt.Errorf("couldn't find record with offset %d for topic %q partition %d: %s", offset, topic, partition, err)
 	}
 
 	rec := it.Next()
@@ -302,7 +302,7 @@ func (rmoi *redpandaMigratorOffsetsInput) Connect(ctx context.Context) error {
 
 				ts, isHWMCommit, err := rmoi.getTimestampForCommittedOffset(ctx, offset.Topic, offset.Partition, offset.At)
 				if err != nil {
-					rmoi.log.Errorf("failed to get timestamp for committed offset for group %q: %s", group, err)
+					rmoi.log.Errorf("failed to get timestamp for committed offset: %s", err)
 					return
 				}
 

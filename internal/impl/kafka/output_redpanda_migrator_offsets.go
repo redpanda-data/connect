@@ -287,13 +287,13 @@ func (w *redpandaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.
 			return fmt.Errorf("failed to read offsets for topic %q and timestamp %d: %s", topic, offsetCommitTimestamp, err)
 		}
 
-		offset, ok := listedOffsets.Lookup(topic, partition)
+		destOffset, ok := listedOffsets.Lookup(topic, partition)
 		if !ok {
 			// This should never happen, but we check just in case.
 			return fmt.Errorf("record for timestamp %d not yet replicated to the destination topic %q partition %d: lookup failed", offsetCommitTimestamp, topic, partition)
 		}
 
-		if !isHighWatermark && offset.Timestamp == -1 {
+		if !isHighWatermark && destOffset.Timestamp == -1 {
 			// This can happen if we received an offset update, but the record which was read from the source cluster to
 			// trigger it has not been replicated to the destination cluster yet. In this case, we raise an error so the
 			// operation is retried.
@@ -307,7 +307,7 @@ func (w *redpandaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.
 		// destination topic and set the destination consumer offset to that value.
 		// Note: Even for compacted topics, the last record of the topic cannot be compacted, so it's safe to assume its
 		// offset will be one less than the high watermark.
-		if isHighWatermark && offset.Timestamp != -1 {
+		if isHighWatermark && destOffset.Timestamp != -1 {
 			offsets, err := w.client.ListEndOffsets(ctx, topic)
 			if err != nil {
 				return fmt.Errorf("failed to list the high watermark for topic %q and partition %d (timestamp %d): %s", topic, partition, offsetCommitTimestamp, err)
@@ -317,17 +317,37 @@ func (w *redpandaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.
 			if !ok {
 				return fmt.Errorf("failed to read the high watermark for topic %q and partition %d (timestamp %d): %s", topic, partition, offsetCommitTimestamp, err)
 			}
-			if highWatermark.Offset == offset.Offset+1 {
-				offset.Offset = highWatermark.Offset
+			if highWatermark.Offset == destOffset.Offset+1 {
+				destOffset.Offset = highWatermark.Offset
 			}
+		}
+
+		// If the destination consumer group already exists and if it has an offset that's ahead of the one we're trying
+		// to write, then we skip the update so we don't rewind the consumer group. We also skip updates if the existing
+		// offset is equal to the one we're trying to write.
+		currentGroupOffsets, err := w.client.FetchOffsets(ctx, group)
+		if err != nil {
+			return fmt.Errorf("failed to fetch the destination consumer group %q offsets: %s", group, err)
+		}
+
+		if err := currentGroupOffsets.Error(); err != nil {
+			return fmt.Errorf("destination consumer group offsets %q could not be read: %s", group, err)
+		}
+
+		if o, ok := currentGroupOffsets.Lookup(topic, partition); ok && o.At >= destOffset.Offset {
+			if o.At > destOffset.Offset {
+				// Log a warning when detecting rewinds.
+				w.mgr.Logger().Warnf("Skipping consumer offset update for topic %q and partition %d (timestamp %d) because the destination consumer group %q already has an offset of %d which is ahead of the one we're trying to write: %d", topic, partition, offsetCommitTimestamp, group, o.At, destOffset.Offset)
+			}
+			return nil
 		}
 
 		var offsets kadm.Offsets
 		offsets.Add(kadm.Offset{
-			Topic:       offset.Topic,
-			Partition:   offset.Partition,
-			At:          offset.Offset,
-			LeaderEpoch: offset.LeaderEpoch,
+			Topic:       destOffset.Topic,
+			Partition:   destOffset.Partition,
+			At:          destOffset.Offset,
+			LeaderEpoch: destOffset.LeaderEpoch,
 			Metadata:    offsetMetadata,
 		})
 
@@ -340,15 +360,13 @@ func (w *redpandaMigratorOffsetsWriter) Write(ctx context.Context, msg *service.
 			return fmt.Errorf("committed consumer offsets returned an error for topic %q and partition %d (timestamp %d): %s", topic, partition, offsetCommitTimestamp, err)
 		}
 
-		w.mgr.Logger().Debugf("Wrote offset for topic %q and partition %d and timestamp %d: %d", topic, partition, offsetCommitTimestamp, offset.Offset)
+		w.mgr.Logger().Debugf("Wrote offset for topic %q and partition %d and timestamp %d: %d", topic, partition, offsetCommitTimestamp, destOffset.Offset)
 
 		return nil
 	}
 
 	backOff := w.backoffCtor()
 	for {
-		// TODO: Maybe use `dispatch.TriggerSignal()` to consume new messages while `updateConsumerOffsets()` is running
-		// if this proves to be too slow.
 		err := updateConsumerOffsets()
 		if err == nil {
 			break
