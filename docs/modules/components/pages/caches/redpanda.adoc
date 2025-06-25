@@ -63,6 +63,7 @@ redpanda:
   request_timeout_overhead: 10s
   conn_idle_timeout: 20s
   topic: "" # No default (required)
+  allow_auto_topic_creation: true
 ```
 
 --
@@ -482,5 +483,14 @@ The topic to store data in.
 
 *Type*: `string`
 
+
+=== `allow_auto_topic_creation`
+
+Enables topics to be auto created if they do not exist when fetching their metadata.
+
+
+*Type*: `bool`
+
+*Default*: `true`
 
 

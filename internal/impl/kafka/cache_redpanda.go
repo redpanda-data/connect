@@ -26,7 +26,8 @@ import (
 )
 
 const (
-	rcFieldTopic = "topic"
+	rcFieldTopic                  = "topic"
+	rcFieldAllowAutoTopicCreation = "allow_auto_topic_creation"
 )
 
 func redpandaCacheConfig() *service.ConfigSpec {
@@ -47,6 +48,10 @@ This cache does not support any special TTL mechanism, any TTL should be handled
 		Fields(FranzConnectionFields()...).
 		Fields(
 			service.NewStringField(rcFieldTopic).Description("The topic to store data in."),
+			service.NewBoolField(rcFieldAllowAutoTopicCreation).
+				Description("Enables topics to be auto created if they do not exist when fetching their metadata.").
+				Default(true).
+				Advanced(),
 		)
 }
 
@@ -62,6 +67,13 @@ func init() {
 			topic, err := conf.FieldString(rcFieldTopic)
 			if err != nil {
 				return nil, err
+			}
+			allowAutoTopicCreation, err := conf.FieldBool(rcFieldAllowAutoTopicCreation)
+			if err != nil {
+				return nil, err
+			}
+			if allowAutoTopicCreation {
+				opts = append(opts, kgo.AllowAutoTopicCreation())
 			}
 			return NewRedpandaCache(opts, topic)
 		})
