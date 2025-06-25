@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"slices"
 	"strconv"
@@ -1383,7 +1384,7 @@ func TestRedpandaMigratorOffsetsIntegration(t *testing.T) {
 			produceMessages(t, destination, dummyTopic, dummyMessage, 0, messageCount, false, 0)
 
 			// Read the messages from the source cluster using a consumer group.
-			readMessagesWithCG(t, source, dummyTopic, dummyConsumerGroup, dummyMessage, 5, false)
+			readMessagesWithCG(t, source, dummyTopic, dummyConsumerGroup, dummyMessage, messageCount, false)
 
 			if test.extraCGUpdate || !test.cgAtEndOffset {
 				// Make sure both source and destination have extra messages after the current consumer group offset.
@@ -1402,6 +1403,7 @@ input:
   redpanda_migrator_offsets:
     seed_brokers: [ %s ]
     topics: [ %s ]
+    poll_interval: 2s
 
 output:
   redpanda_migrator_offsets:
@@ -1454,6 +1456,7 @@ output:
 
 			adm := kadm.NewClient(client)
 			offsets, err := adm.FetchOffsets(t.Context(), dummyConsumerGroup)
+			require.NoError(t, err)
 			currentCGOffset, ok := offsets.Lookup(dummyTopic, 0)
 			require.True(t, ok)
 
@@ -1469,6 +1472,125 @@ output:
 			assert.Equal(t, dummyTopic, currentCGOffset.Topic)
 		})
 	}
+}
+
+func TestRedpandaMigratorOffsetsSkipRewindsIntegration(t *testing.T) {
+	integration.CheckSkip(t)
+
+	pool, err := dockertest.NewPool("")
+	require.NoError(t, err)
+	pool.MaxWait = time.Minute
+
+	source, err := redpandatest.StartRedpanda(t, pool, true, true)
+	require.NoError(t, err)
+	destination, err := redpandatest.StartRedpanda(t, pool, true, true)
+	require.NoError(t, err)
+
+	t.Logf("Source broker: %s", source.BrokerAddr)
+	t.Logf("Destination broker: %s", destination.BrokerAddr)
+
+	dummyTopic := "test"
+	dummyMessage := `{"test":"foo"}`
+	dummyConsumerGroup := "test_cg"
+	messageCount := 5
+
+	// Produce messages in the source cluster.
+	// The message timestamps are produced in ascending order, starting from 1 all the way to messageCount.
+	produceMessages(t, source, dummyTopic, dummyMessage, 0, messageCount, false, 0)
+
+	// Produce the exact same messages in the destination cluster.
+	produceMessages(t, destination, dummyTopic, dummyMessage, 0, messageCount, false, 0)
+
+	// Read the messages from the source cluster using a consumer group.
+	readMessagesWithCG(t, source, dummyTopic, dummyConsumerGroup, dummyMessage, messageCount, false)
+
+	t.Log("Finished setting up messages in the source and destination clusters")
+
+	runMigrator := func() string {
+		streamBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
+input:
+  redpanda_migrator_offsets:
+    seed_brokers: [ %s ]
+    topics: [ %s ]
+    poll_interval: 2s
+
+output:
+  redpanda_migrator_offsets:
+    seed_brokers: [ %s ]
+`, source.BrokerAddr, dummyTopic, destination.BrokerAddr)))
+		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
+
+		migratorUpdateWG := sync.WaitGroup{}
+		migratorUpdateWG.Add(1)
+		require.NoError(t, streamBuilder.AddConsumerFunc(func(context.Context, *service.Message) error {
+			defer migratorUpdateWG.Done()
+			return nil
+		}))
+
+		// Ensure the callback function is called after the output wrote the message.
+		streamBuilder.SetOutputBrokerPattern(service.OutputBrokerPatternFanOutSequential)
+
+		var migratorLogs bytes.Buffer
+		streamBuilder.SetLogger(slog.New(slog.NewTextHandler(&migratorLogs, &slog.HandlerOptions{})))
+
+		stream, err := streamBuilder.Build()
+		require.NoError(t, err)
+
+		// Run stream in the background.
+		migratorCloseChan := make(chan struct{})
+		go func() {
+			err = stream.Run(t.Context())
+			require.NoError(t, err)
+
+			t.Log("redpanda_migrator_offsets pipeline shut down")
+
+			close(migratorCloseChan)
+		}()
+
+		migratorUpdateWG.Wait()
+
+		// Shutdown the Migrator stream.
+		require.NoError(t, stream.StopWithin(3*time.Second))
+		<-migratorCloseChan
+
+		t.Log("Finished running Migrator stream")
+
+		return migratorLogs.String()
+	}
+
+	expectedWarning := `Skipping consumer offset update for topic \"test\" and partition 0 (timestamp 5) because the destination consumer group \"test_cg\" already has an offset of 10 which is ahead of the one we're trying to write: 4`
+
+	// Run the Migrator stream to migrate the consumer group offsets.
+	logs := runMigrator()
+	assert.NotContains(t, logs, expectedWarning)
+
+	// Produce some more messages in the destination cluster.
+	produceMessages(t, destination, dummyTopic, dummyMessage, messageCount, messageCount, false, 0)
+
+	// Read the new messages from the destination cluster using a consumer group.
+	readMessagesWithCG(t, destination, dummyTopic, dummyConsumerGroup, dummyMessage, messageCount, false)
+
+	t.Log("Finished writing extra messages and updating the consumer group in the destination cluster")
+
+	// Run the Migrator stream again so it attempts to overwrite the consumer group offset.
+	logs = runMigrator()
+	t.Log(logs)
+	assert.Contains(t, logs, expectedWarning)
+
+	client, err := kgo.NewClient(kgo.SeedBrokers([]string{destination.BrokerAddr}...))
+	require.NoError(t, err)
+	defer client.Close()
+
+	adm := kadm.NewClient(client)
+	offsets, err := adm.FetchOffsets(t.Context(), dummyConsumerGroup)
+	require.NoError(t, err)
+	currentCGOffset, ok := offsets.Lookup(dummyTopic, 0)
+	require.True(t, ok)
+
+	endOffset := int64(messageCount * 2)
+	assert.Equal(t, endOffset, currentCGOffset.At)
+	assert.Equal(t, dummyTopic, currentCGOffset.Topic)
 }
 
 func TestRedpandaMigratorOffsetsNonMonotonicallyIncreasingTimestampsIntegration(t *testing.T) {

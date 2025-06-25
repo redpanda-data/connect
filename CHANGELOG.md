@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - The `sftp` input no longer creates new SSH connections for each file it reads. (@mihaitodor, @TColl)
+- Fixed a bug with the `redpanda_migrator_offsets` output where it was attempting to rewind consumer groups if it got restarted after consumers were migrated to the destination cluster. (@mihaitodor)
 
 ## 4.58.2 - 2025-06-17
 
