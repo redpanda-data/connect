@@ -11,6 +11,7 @@ package mysql
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -235,22 +236,29 @@ func (s *Snapshot) releaseSnapshot(_ context.Context) error {
 }
 
 func (s *Snapshot) close() error {
+	var errs []error
+
 	if s.tx != nil {
 		if err := s.tx.Rollback(); err != nil {
-			return fmt.Errorf("unable to rollback transaction: %w", err)
+			errs = append(errs, fmt.Errorf("rollback transaction: %w", err))
 		}
 		s.tx = nil
 	}
+
 	for _, conn := range []*sql.Conn{s.lockConn, s.snapshotConn} {
 		if conn == nil {
 			continue
 		}
 		if err := conn.Close(); err != nil {
-			return fmt.Errorf("unable to close connection: %w", err)
+			errs = append(errs, fmt.Errorf("close connection: %w", err))
 		}
 	}
-	if err := s.db.Close(); err != nil {
-		return fmt.Errorf("unable to close db: %w", err)
+
+	if s.db != nil {
+		if err := s.db.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("close db: %w", err))
+		}
 	}
-	return nil
+
+	return errors.Join(errs...)
 }
