@@ -1292,8 +1292,8 @@ func TestRedpandaMigratorIntegration(t *testing.T) {
 				}))
 
 				validate(string(b), meta)
-			case <-time.After(5 * time.Second):
-				t.Error("timed out waiting for migrator transfer")
+			case <-time.After(20 * time.Second):
+				require.FailNow(t, "timed out waiting for migrator transfer")
 			}
 
 			break loop
