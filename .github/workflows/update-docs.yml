@@ -1,0 +1,48 @@
+name: update-docs
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  update-blobl-playground-modules:
+    name: Update Bloblang playground modules
+    runs-on: ubuntu-latest
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ vars.RP_AWS_CRED_REGION }}
+          role-to-assume: arn:aws:iam::${{ secrets.RP_AWS_CRED_ACCOUNT_ID }}:role/${{ vars.RP_AWS_CRED_BASE_ROLE_NAME }}${{ github.event.repository.name }}
+      - uses: aws-actions/aws-secretsmanager-get-secrets@v2
+        with:
+          secret-ids: |
+            ,sdlc/prod/github/actions_bot_token
+          parse-json-secrets: true
+      - uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ env.ACTIONS_BOT_TOKEN }}
+          repository: redpanda-data/docs-ui
+          event-type: update-go-mod
+
+  update-rpcn-connector-docs:
+    name: Generate RPCN connector docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ vars.RP_AWS_CRED_REGION }}
+          role-to-assume: arn:aws:iam::${{ secrets.RP_AWS_CRED_ACCOUNT_ID }}:role/${{ vars.RP_AWS_CRED_BASE_ROLE_NAME }}${{ github.event.repository.name }}
+      - uses: aws-actions/aws-secretsmanager-get-secrets@v2
+        with:
+          secret-ids: |
+            ,sdlc/prod/github/actions_bot_token
+          parse-json-secrets: true
+      - uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ env.ACTIONS_BOT_TOKEN }}
+          repository: redpanda-data/rp-connect-docs
+          event-type: generate-rpcn-docs
