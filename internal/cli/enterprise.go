@@ -182,6 +182,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 
 	exitCode, err := service.RunCLIToCode(context.Background(), opts...)
 	if err != nil {
+		slog.New(rpMgr.SlogHandler()).With("status", exitCode, "error", err).Error("Pipeline exited with non-zero status")
 		if fbLogger != nil {
 			fbLogger.Error(err.Error())
 		} else {
