@@ -9,6 +9,10 @@ All notable changes to this project will be documented in this file.
 
 - Added `host_selection_policy` for `cassandra` input and output. (@jonny7)
 
+### Fixed
+
+- Fixed an issue where NATS JetStream input fails to handle a closed NATS connection. (@josephwoodward)
+
 ## 4.60.2 - 2025-07-14
 
 ### Added
