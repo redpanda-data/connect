@@ -18,8 +18,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"regexp"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/twmb/franz-go/pkg/kadm"
@@ -165,9 +167,10 @@ type redpandaMigratorOffsetsInput struct {
 	pollInterval  time.Duration
 	clientOpts    []kgo.Opt
 
-	client  *kgo.Client
-	poller  *asyncroutine.Periodic
-	msgChan chan *service.Message
+	client    *kgo.Client
+	admClient *kadm.Client
+	poller    *asyncroutine.Periodic
+	msgChan   chan *service.Message
 
 	log *service.Logger
 }
@@ -183,62 +186,154 @@ func (rmoi *redpandaMigratorOffsetsInput) matchesTopic(topic string) bool {
 	})
 }
 
-func (rmoi *redpandaMigratorOffsetsInput) getTimestampForCommittedOffset(ctx context.Context, topic string, partition int32, offset int64) (timestamp int64, isHighWatermark bool, err error) {
-	client, err := kgo.NewClient(rmoi.clientOpts...)
+type timestampRequests map[string]map[int32]int64
+
+type timestampResult struct {
+	timestamp       int64
+	isHighWatermark bool
+}
+
+type timestampResults map[string]map[int32]timestampResult
+
+func (rmoi *redpandaMigratorOffsetsInput) getTimestampsForCommittedOffsets(ctx context.Context, tsRequests timestampRequests) (timestampResults, error) {
+	topics := slices.Collect(maps.Keys(tsRequests))
+	rmoi.log.Debugf("Fetching timestamps for topics: %v", topics)
+
+	defer rmoi.client.PurgeTopicsFromClient(topics...)
+
+	endOffsets, err := rmoi.admClient.ListEndOffsets(ctx, topics...)
 	if err != nil {
-		return 0, false, fmt.Errorf("failed to create Kafka client: %s", err)
-	}
-	defer client.Close()
-
-	// The default kadm client timeout is 15s. Do we need to make this configurable?
-	offsets, err := kadm.NewClient(client).ListEndOffsets(ctx, topic)
-	if err != nil {
-		return 0, false, fmt.Errorf("failed to read the high watermark for topic %q and partition %d: %s", topic, partition, err)
+		return nil, fmt.Errorf("failed to read high watermarks: %s", err)
 	}
 
-	highWatermark, ok := offsets.Lookup(topic, partition)
-	if !ok {
-		return 0, false, fmt.Errorf("failed to find the high watermark for topic %q and partition %d: %s", topic, partition, err)
+	// Clone the tsRequests map so we can remove entries from it as we make progress.
+	pendingTsRequests := make(timestampRequests, len(tsRequests))
+	for t, po := range tsRequests {
+		for p, o := range po {
+			if _, ok := pendingTsRequests[t]; !ok {
+				pendingTsRequests[t] = make(map[int32]int64, len(po))
+			}
+			pendingTsRequests[t][p] = o
+		}
 	}
 
-	// If the high watermark on the topic matches the offset we received via `__consumer_offsets`, then we must read the
-	// last record from the topic because the high watermark does not have a corresponding record yet.
-	var recordOffset kgo.Offset
-	if highWatermark.Offset == offset {
-		// The default offset begins at the end.
-		recordOffset = kgo.NewOffset().Relative(-1)
-	} else if highWatermark.Offset > offset {
-		recordOffset = kgo.NewOffset().At(offset)
-	} else {
-		return 0, false, fmt.Errorf(
-			"the newest committed offset %d for topic %q partition %d should never be smaller than the received offset %d",
-			highWatermark.Offset, topic, partition, offset,
-		)
-	}
+	var pendingTsRequestsLock sync.Mutex
+	pollFetchesCtx, cancelPollFetches := context.WithCancel(ctx)
 
-	client.AddConsumePartitions(map[string]map[int32]kgo.Offset{
-		topic: {
-			partition: recordOffset,
-		},
+	// The partitionsPoller runs periodically to determine which records have not been fetched yet. If all of them have
+	// been fetched, then it will cancel the pollFetchesCtx to stop the fetch loop.
+	// TODO: Consider making the duration configurable.
+	partitionsPoller := asyncroutine.NewPeriodic(5*time.Second, func() {
+		consumePartitions := make(map[string]map[int32]kgo.Offset)
+		pendingTsRequestsLock.Lock()
+		for t, po := range pendingTsRequests {
+			for p, o := range po {
+				highWatermark, ok := endOffsets.Lookup(t, p)
+				if !ok {
+					rmoi.log.Errorf("Failed to find the high watermark for topic %q and partition %d", t, p)
+					continue
+				}
+
+				// If the high watermark on the topic matches the consumer group offset, then we must read the last record from
+				// the topic because the high watermark does not have a corresponding record yet.
+				var recordOffset kgo.Offset
+				if highWatermark.Offset == o {
+					// The default offset begins at the end.
+					recordOffset = kgo.NewOffset().Relative(-1)
+				} else if highWatermark.Offset > o {
+					recordOffset = kgo.NewOffset().At(o)
+				} else {
+					rmoi.log.Errorf("The high watermark %d for topic %q partition %d should not be smaller than the received offset %d",
+						highWatermark.Offset, t, p, o,
+					)
+					continue
+				}
+
+				if _, ok := consumePartitions[t]; !ok {
+					consumePartitions[t] = make(map[int32]kgo.Offset)
+				}
+				consumePartitions[t][p] = recordOffset
+			}
+		}
+		pendingTsRequestsLock.Unlock()
+
+		if len(consumePartitions) == 0 {
+			cancelPollFetches()
+		}
+
+		rmoi.client.AddConsumePartitions(consumePartitions)
 	})
+	partitionsPoller.Start()
+	defer partitionsPoller.Stop()
 
-	fetches := client.PollFetches(ctx)
-	if fetches.IsClientClosed() {
-		return 0, false, fmt.Errorf("failed to read record with offset %d for topic %q partition %d: client closed", offset, topic, partition)
+	tsResults := make(timestampResults)
+	pausedPartitions := make(map[string][]int32, len(tsRequests))
+	for {
+		// PollFetches may not return all the records we need in one go, so we loop and remove entries from
+		// pendingTsRequests until all the tsRequests have been found or the top level ctx is canceled.
+		// On the happy path, pollFetchesCtx will be canceled by partitionsPoller when all the requested timestamps have
+		// been found.
+		fetches := rmoi.client.PollFetches(pollFetchesCtx)
+		if fetches.IsClientClosed() {
+			return nil, errors.New("failed to read topic records: client closed")
+		}
+
+		if err := fetches.Err(); err != nil {
+			if errors.Is(err, context.Canceled) {
+				// Resume any paused partitions before exiting the fetch loop and returning the results to the caller.
+				rmoi.client.ResumeFetchPartitions(pausedPartitions)
+				break
+			}
+			return nil, fmt.Errorf("failed to read topic records: %s", err)
+		}
+
+		pendingTsRequestsLock.Lock()
+		fetches.EachTopic(func(t kgo.FetchTopic) {
+			t.EachPartition(func(p kgo.FetchPartition) {
+				p.EachRecord(func(rec *kgo.Record) {
+					if _, ok := pendingTsRequests[rec.Topic]; !ok {
+						return
+					}
+					if _, ok := pendingTsRequests[rec.Topic][rec.Partition]; !ok {
+						return
+					}
+
+					if _, ok := tsResults[rec.Topic]; !ok {
+						tsResults[rec.Topic] = make(map[int32]timestampResult)
+					}
+					// Only store the timestamp of the first record we encounter for each topic/partition pair.
+					if _, ok := tsResults[rec.Topic][rec.Partition]; !ok {
+						highWatermark, ok := endOffsets.Lookup(rec.Topic, rec.Partition)
+						if !ok {
+							rmoi.log.Errorf("could not find high watermark for topic %q and partition %d", rec.Topic, rec.Partition)
+						}
+
+						tsResults[rec.Topic][rec.Partition] = timestampResult{
+							timestamp:       rec.Timestamp.UnixMilli(),
+							isHighWatermark: highWatermark.Offset == pendingTsRequests[rec.Topic][rec.Partition],
+						}
+					}
+
+					// Remove this topic/partition pair from the next fetch cycles.
+					delete(pendingTsRequests[rec.Topic], rec.Partition)
+					if len(pendingTsRequests[rec.Topic]) == 0 {
+						delete(pendingTsRequests, rec.Topic)
+					}
+				})
+			})
+		})
+		pendingTsRequestsLock.Unlock()
+
+		// Gradually pause fetch partitions as we get more results from PollFetches.
+		for t, p := range tsResults {
+			newP := slices.Concat(pausedPartitions[t], slices.Collect(maps.Keys(p)))
+			slices.Sort(newP)
+			pausedPartitions[t] = slices.Compact(newP)
+		}
+		rmoi.client.PauseFetchPartitions(pausedPartitions)
 	}
 
-	if err := fetches.Err(); err != nil {
-		return 0, false, fmt.Errorf("failed to read record with offset %d for topic %q partition %d: %s", offset, topic, partition, err)
-	}
-
-	it := fetches.RecordIter()
-	if it.Done() {
-		return 0, false, fmt.Errorf("couldn't find record with offset %d for topic %q partition %d: %s", offset, topic, partition, err)
-	}
-
-	rec := it.Next()
-
-	return rec.Timestamp.UnixMilli(), highWatermark.Offset == offset, nil
+	return tsResults, nil
 }
 
 func (rmoi *redpandaMigratorOffsetsInput) Connect(ctx context.Context) error {
@@ -256,6 +351,9 @@ func (rmoi *redpandaMigratorOffsetsInput) Connect(ctx context.Context) error {
 		return fmt.Errorf("failed to ping broker: %s", err)
 	}
 
+	// The default kadm client timeout is 15s. Do we need to make this configurable?
+	rmoi.admClient = kadm.NewClient(rmoi.client)
+
 	type cacheKey struct {
 		group     string
 		topic     string
@@ -270,12 +368,8 @@ func (rmoi *redpandaMigratorOffsetsInput) Connect(ctx context.Context) error {
 			return
 		}
 
-		var groups []string
-		for _, group := range describedGroups {
-			if group.Err == nil {
-				groups = append(groups, group.Group)
-			}
-		}
+		groups := describedGroups.Names()
+		rmoi.log.Debugf("Discovered groups: %s", groups)
 
 		resp := adm.FetchManyOffsets(ctx, groups...)
 		if err := resp.Error(); err != nil {
@@ -283,10 +377,13 @@ func (rmoi *redpandaMigratorOffsetsInput) Connect(ctx context.Context) error {
 			return
 		}
 
+		pendingCacheKeys := make(map[string]map[int32]cacheKey)
+		groupOffsetMetadata := make(map[string]string)
+		tsRequests := make(timestampRequests)
 		for group, offsetResp := range resp {
 			offsetResp.Fetched.Each(func(offset kadm.OffsetResponse) {
 				if !rmoi.matchesTopic(offset.Topic) {
-					// Skip if the topic does not match
+					// Skip if the topic does not match the specified input filters.
 					return
 				}
 
@@ -296,32 +393,53 @@ func (rmoi *redpandaMigratorOffsetsInput) Connect(ctx context.Context) error {
 					partition: offset.Partition,
 				}
 				if val, ok := offsetCache[key]; ok && val == offset.At {
-					// Skip if the offset hasn't changed
+					// Skip if the offset hasn't changed.
 					return
 				}
 
-				ts, isHWMCommit, err := rmoi.getTimestampForCommittedOffset(ctx, offset.Topic, offset.Partition, offset.At)
-				if err != nil {
-					rmoi.log.Errorf("failed to get timestamp for committed offset: %s", err)
-					return
+				if _, ok := pendingCacheKeys[offset.Topic]; !ok {
+					pendingCacheKeys[offset.Topic] = make(map[int32]cacheKey)
 				}
+				pendingCacheKeys[offset.Topic][offset.Partition] = key
 
-				offsetCache[key] = offset.At
+				groupOffsetMetadata[group] = offset.Metadata
+
+				if _, ok := tsRequests[offset.Topic]; !ok {
+					tsRequests[offset.Topic] = make(map[int32]int64)
+				}
+				tsRequests[offset.Topic][offset.Partition] = offset.At
+			})
+		}
+
+		if len(tsRequests) == 0 {
+			return
+		}
+
+		tsResults, err := rmoi.getTimestampsForCommittedOffsets(ctx, tsRequests)
+		if err != nil {
+			rmoi.log.Errorf("failed to get timestamps for committed offsets: %s", err)
+			return
+		}
+
+		for topic, partitionTsResult := range tsResults {
+			for partition, tsResult := range partitionTsResult {
+				cacheKey := pendingCacheKeys[topic][partition]
+				offsetCache[cacheKey] = tsRequests[topic][partition]
 
 				msg := service.NewMessage(nil)
-				msg.MetaSetMut("kafka_offset_topic", offset.Topic)
-				msg.MetaSetMut("kafka_offset_group", group)
-				msg.MetaSetMut("kafka_offset_partition", offset.Partition)
-				msg.MetaSetMut("kafka_offset_commit_timestamp", ts)
-				msg.MetaSetMut("kafka_offset_metadata", offset.Metadata)
-				msg.MetaSetMut("kafka_is_high_watermark", isHWMCommit)
+				msg.MetaSetMut("kafka_offset_topic", topic)
+				msg.MetaSetMut("kafka_offset_group", cacheKey.group)
+				msg.MetaSetMut("kafka_offset_partition", partition)
+				msg.MetaSetMut("kafka_offset_commit_timestamp", tsResult.timestamp)
+				msg.MetaSetMut("kafka_offset_metadata", groupOffsetMetadata[cacheKey.group])
+				msg.MetaSetMut("kafka_is_high_watermark", tsResult.isHighWatermark)
 
 				select {
 				case rmoi.msgChan <- msg:
 				case <-ctx.Done():
 					return
 				}
-			})
+			}
 		}
 	})
 
