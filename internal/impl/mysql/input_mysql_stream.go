@@ -295,7 +295,7 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 func (i *mysqlStreamInput) startMySQLSync(ctx context.Context, pos *position, snapshot *Snapshot) error {
 	// If we are given a snapshot, then we need to read it.
 	if snapshot != nil {
-		startPos, err := snapshot.prepareSnapshot(ctx)
+		startPos, err := snapshot.prepareSnapshot(ctx, i.tables)
 		if err != nil {
 			_ = snapshot.close()
 			return fmt.Errorf("unable to prepare snapshot: %w", err)
