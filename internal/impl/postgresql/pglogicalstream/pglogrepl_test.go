@@ -43,7 +43,7 @@ func (s *lsnSuite) R() *require.Assertions {
 	return s.Require()
 }
 
-func (s *lsnSuite) Equal(e, a interface{}, args ...interface{}) {
+func (s *lsnSuite) Equal(e, a any, args ...any) {
 	s.R().Equal(e, a, args...)
 }
 

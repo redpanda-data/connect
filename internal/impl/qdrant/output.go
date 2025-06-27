@@ -177,7 +177,7 @@ func (w *outputWriter) batchPointsByCollection(batch service.MessageBatch) (map[
 	vectorExec := batch.BloblangExecutor(w.vectorMapping)
 	payloadExec := batch.BloblangExecutor(w.payloadMapping)
 	batches := make(map[string][]*qdrant.PointStruct)
-	for i := 0; i < len(batch); i++ {
+	for i := range batch {
 		collectionName, err := cnExec.TryString(i)
 		if err != nil {
 			return nil, fmt.Errorf("%s interpolation error: %w", qoFieldCollectionName, err)

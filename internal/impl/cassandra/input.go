@@ -116,7 +116,7 @@ func (c *cassandraInput) Connect(context.Context) error {
 }
 
 func (c *cassandraInput) Read(context.Context) (*service.Message, service.AckFunc, error) {
-	mp := make(map[string]interface{})
+	mp := make(map[string]any)
 	if !c.iter.MapScan(mp) {
 		return nil, nil, service.ErrEndOfInput
 	}

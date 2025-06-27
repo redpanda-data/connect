@@ -236,7 +236,7 @@ func newKafkaReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources
 		return nil, err
 	}
 	for _, addr := range cAddresses {
-		for _, splitAddr := range strings.Split(addr, ",") {
+		for splitAddr := range strings.SplitSeq(addr, ",") {
 			if trimmed := strings.TrimSpace(splitAddr); trimmed != "" {
 				k.addresses = append(k.addresses, trimmed)
 			}
@@ -410,10 +410,7 @@ func dataToPart(highestOffset int64, data *sarama.ConsumerMessage, multiHeader b
 		}
 	}
 
-	lag := highestOffset - data.Offset - 1
-	if lag < 0 {
-		lag = 0
-	}
+	lag := max(highestOffset-data.Offset-1, 0)
 
 	part.MetaSetMut("kafka_key", string(data.Key))
 	part.MetaSetMut("kafka_partition", int(data.Partition))

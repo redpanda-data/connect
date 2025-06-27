@@ -176,7 +176,7 @@ func testKinesisConnectWithInvalidStream(t *testing.T, c koConfig) {
 	}
 
 	retries := 3
-	for i := 0; i < retries; i++ {
+	for range retries {
 		err := r.Connect(t.Context())
 		assert.Error(t, err)
 	}

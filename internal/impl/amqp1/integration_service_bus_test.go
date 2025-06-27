@@ -87,7 +87,7 @@ azure_renew_lock: true
 
 	tests := []struct {
 		data            string
-		value           interface{}
+		value           any
 		expectedContent string
 	}{
 		{"hello world: 0", nil, "hello world: 0"},
@@ -101,7 +101,7 @@ azure_renew_lock: true
 	for _, test := range tests {
 		wg.Add(1)
 
-		go func(data string, value interface{}) {
+		go func(data string, value any) {
 			defer wg.Done()
 
 			contentType := "plain/text"

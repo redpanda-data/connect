@@ -274,7 +274,7 @@ func (w *outputWriter) computeBatchedVectors(batch service.MessageBatch) (map[st
 		metaExec = batch.BloblangExecutor(w.metadataMapping)
 	}
 	batches := map[string][]*pinecone.Vector{}
-	for i := 0; i < len(batch); i++ {
+	for i := range batch {
 		ns, err := nsExec.TryString(i)
 		if err != nil {
 			return nil, fmt.Errorf("%s interpolation error: %w", poFieldNamespace, err)
@@ -348,7 +348,7 @@ func (w *outputWriter) DeleteBatch(ctx context.Context, ic indexClient, batch se
 	nsExec := batch.InterpolationExecutor(w.namespace)
 	idExec := batch.InterpolationExecutor(w.id)
 	batches := map[string][]string{}
-	for i := 0; i < len(batch); i++ {
+	for i := range batch {
 		ns, err := nsExec.TryString(i)
 		if err != nil {
 			return fmt.Errorf("%s interpolation error: %w", poFieldNamespace, err)

@@ -134,7 +134,7 @@ func amqp1WriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (
 	}
 
 	for _, u := range urlStrs {
-		for _, splitURL := range strings.Split(u, ",") {
+		for splitURL := range strings.SplitSeq(u, ",") {
 			if trimmed := strings.TrimSpace(splitURL); trimmed != "" {
 				a.urls = append(a.urls, trimmed)
 			}
@@ -292,7 +292,7 @@ func (a *amqp1Writer) Write(ctx context.Context, msg *service.Message) error {
 		}
 
 		if mapVal != nil {
-			applicationProperties, ok := mapVal.(map[string]interface{})
+			applicationProperties, ok := mapVal.(map[string]any)
 			if !ok {
 				return fmt.Errorf("application_properties_map resulted in a non-object mapping: %T", mapVal)
 			}

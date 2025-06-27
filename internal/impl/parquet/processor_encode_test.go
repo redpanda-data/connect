@@ -462,7 +462,7 @@ schema:
 	}
 
 	wg := sync.WaitGroup{}
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		wg.Add(1)
 		t.Run(fmt.Sprintf("iteration %d", i), func(t *testing.T) {
 			defer wg.Done()

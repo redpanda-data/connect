@@ -137,7 +137,7 @@ func (r *redisPubSubWriter) WriteBatch(ctx context.Context, batch service.Messag
 
 	pipe := client.Pipeline()
 
-	for i := 0; i < len(batch); i++ {
+	for i := range batch {
 		channel, err := batch.TryInterpolatedString(i, r.channel)
 		if err != nil {
 			return fmt.Errorf("channel interpolation error: %w", err)

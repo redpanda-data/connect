@@ -48,10 +48,9 @@ code: |
 		"b": 7,
 	})
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		resBatches, err := proc.ProcessBatch(tCtx, service.MessageBatch{tmpMsg.Copy()})
 		require.NoError(b, err)
 		require.Len(b, resBatches, 1)
