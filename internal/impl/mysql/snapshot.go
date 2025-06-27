@@ -38,9 +38,13 @@ func NewSnapshot(logger *service.Logger, db *sql.DB) *Snapshot {
 	}
 }
 
-func (s *Snapshot) prepareSnapshot(ctx context.Context) (*position, error) {
+func (s *Snapshot) prepareSnapshot(ctx context.Context, tables []string) (*position, error) {
+	if len(tables) == 0 {
+		return nil, errors.New("no tables provided")
+	}
+
 	var err error
-	// Create a separate connection for FTWRL
+	// Create a separate connection for table locks
 	s.lockConn, err = s.db.Conn(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create lock connection: %v", err)
@@ -68,32 +72,36 @@ func (s *Snapshot) prepareSnapshot(ctx context.Context) (*position, error) {
 
 		This lock MUST be released quickly to avoid blocking other connections. Only use it
 		to capture the binlog coordinates, then release immediately with UNLOCK TABLES.
+
+		See https://dev.mysql.com/doc/refman/8.4/en/flush.html#flush-tables
 	*/
-	if _, err := s.lockConn.ExecContext(ctx, "FLUSH TABLES WITH READ LOCK"); err != nil {
+	lockQuery := buildFlushAndLockTablesQuery(tables)
+	s.logger.Infof("Acquiring table-level read locks with: %s", lockQuery)
+	if _, err := s.lockConn.ExecContext(ctx, lockQuery); err != nil {
 		if rErr := s.tx.Rollback(); rErr != nil {
 			return nil, rErr
 		}
-		return nil, fmt.Errorf("failed to acquire global read lock: %v", err)
+		return nil, fmt.Errorf("failed to acquire table-level read locks: %v", err)
 	}
 
 	/*
-				START TRANSACTION WITH CONSISTENT SNAPSHOT ensures a consistent view of database state
-				when reading historical data during CDC initialization. Without it, concurrent writes
-				could create inconsistencies between binlog position and table snapshots, potentially
-				missing or duplicating events. The snapshot prevents other transactions from modifying
-				the data being read, maintaining referential integrity across tables while capturing
-				the initial state.
+		START TRANSACTION WITH CONSISTENT SNAPSHOT ensures a consistent view of database state
+		when reading historical data during CDC initialization. Without it, concurrent writes
+		could create inconsistencies between binlog position and table snapshots, potentially
+		missing or duplicating events. The snapshot prevents other transactions from modifying
+		the data being read, maintaining referential integrity across tables while capturing
+		the initial state.
 
-		    It's important that we do this AFTER we acquire the READ LOCK and flushing the tables,
-		    otherwise other writes could sneak in between our transaction snapshot and acquiring the
-		    lock.
+		It's important that we do this AFTER we acquire the READ LOCK and flushing the tables,
+		otherwise other writes could sneak in between our transaction snapshot and acquiring the
+		lock.
 	*/
 
 	// NOTE: this is a little sneaky because we're actually implicitly closing the transaction
 	// started with `BeginTx` above and replacing it with this one. We have to do this because
 	// the `database/sql` driver we're using does not support this WITH CONSISTENT SNAPSHOT.
 	if _, err := s.tx.ExecContext(ctx, "START TRANSACTION WITH CONSISTENT SNAPSHOT"); err != nil {
-		// Make sure to release the lock if we fail
+		// Make sure to release the locks if we fail
 		if _, eErr := s.lockConn.ExecContext(ctx, "UNLOCK TABLES"); eErr != nil {
 			return nil, eErr
 		}
@@ -105,10 +113,10 @@ func (s *Snapshot) prepareSnapshot(ctx context.Context) (*position, error) {
 		return nil, fmt.Errorf("failed to start consistent snapshot: %v", err)
 	}
 
-	// Get binary log position (while locked)
+	// Get binary log position (while tables are locked)
 	pos, err := s.getCurrentBinlogPosition(ctx)
 	if err != nil {
-		// Make sure to release the lock if we fail
+		// Make sure to release the locks if we fail
 		if _, eErr := s.lockConn.ExecContext(ctx, "UNLOCK TABLES"); eErr != nil {
 			return nil, eErr
 		}
@@ -119,15 +127,28 @@ func (s *Snapshot) prepareSnapshot(ctx context.Context) (*position, error) {
 		return nil, fmt.Errorf("failed to get binlog position: %v", err)
 	}
 
-	// Release the global read lock immediately after getting the binlog position
+	// Release the table locks immediately after getting the binlog position
 	if _, err := s.lockConn.ExecContext(ctx, "UNLOCK TABLES"); err != nil {
 		if rErr := s.tx.Rollback(); rErr != nil {
 			return nil, rErr
 		}
-		return nil, fmt.Errorf("failed to release global read lock: %v", err)
+		return nil, fmt.Errorf("failed to release table locks: %v", err)
 	}
 
 	return &pos, nil
+}
+
+func buildFlushAndLockTablesQuery(tables []string) string {
+	var sb strings.Builder
+	sb.WriteString("FLUSH TABLES ")
+	for i, table := range tables {
+		if i > 0 {
+			sb.WriteString(", ")
+		}
+		fmt.Fprintf(&sb, "`%s`", table)
+	}
+	sb.WriteString(" WITH READ LOCK")
+	return sb.String()
 }
 
 func (s *Snapshot) getTablePrimaryKeys(ctx context.Context, table string) ([]string, error) {
