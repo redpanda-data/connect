@@ -145,13 +145,15 @@ func buildFlushAndLockTablesQuery(tables []string) string {
 }
 
 func (s *Snapshot) getTablePrimaryKeys(ctx context.Context, table string) ([]string, error) {
-	// Get primary key columns for the table
-	rows, err := s.tx.QueryContext(ctx, fmt.Sprintf(`
+	pkSql := `
 SELECT COLUMN_NAME
-FROM information_schema.KEY_COLUMN_USAGE
-WHERE TABLE_NAME = '%s' AND CONSTRAINT_NAME = 'PRIMARY'
-ORDER BY ORDINAL_POSITION;
-  `, table))
+FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+WHERE TABLE_NAME = '%s' AND CONSTRAINT_NAME = 'PRIMARY' AND TABLE_SCHEMA = DATABASE()
+ORDER BY ORDINAL_POSITION
+`
+
+	// Get primary key columns for the table
+	rows, err := s.tx.QueryContext(ctx, fmt.Sprintf(pkSql, table))
 	if err != nil {
 		return nil, fmt.Errorf("get primary key: %v", err)
 	}
