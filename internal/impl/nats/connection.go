@@ -40,6 +40,7 @@ func connectionHeadFields() []*service.ConfigField {
 		service.NewBoolField("tls_handshake_first").
 			Description("Perform a TLS handshake before sending the INFO protocol message.").
 			Optional().
+			Default(false).
 			Advanced(),
 	}
 }
