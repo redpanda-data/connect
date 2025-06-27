@@ -20,9 +20,11 @@ import (
 	"syscall"
 )
 
-// chroot creates read-only empty directory containing only required /etc files,
-// and chroots into it. The directory must not exist before calling this
-// function.
+// chroot creates a new directory under the provided path. The directory
+// is populated with a top level UNIX directory structure. Essential /etc
+// files are copied to the chroot directory. Additional files can be provided
+// via the passthroughFiles argument. The chroot directory is made read-only
+// except the /tmp directory.
 //
 // NOTE: This function will only work if the binary is running with
 // sufficient privileges to call syscall.Chroot. If the binary does not
@@ -125,6 +127,11 @@ func setupChrootDir(chrootDir string, passthroughFiles []string) error {
 	// Recursively make chroot directory read-only
 	if err := makeReadOnly(chrootDir); err != nil {
 		return fmt.Errorf("make directory read-only: %w", err)
+	}
+
+	// Make /tmp writable
+	if err := os.Chmod(filepath.Join(chrootDir, "/tmp"), 0o777); err != nil {
+		return fmt.Errorf("make /tmp writable: %w", err)
 	}
 
 	return nil
