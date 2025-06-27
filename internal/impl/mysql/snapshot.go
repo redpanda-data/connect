@@ -78,10 +78,15 @@ func (s *Snapshot) prepareSnapshot(ctx context.Context, tables []string) (*posit
 	lockQuery := buildFlushAndLockTablesQuery(tables)
 	s.logger.Infof("Acquiring table-level read locks with: %s", lockQuery)
 	if _, err := s.lockConn.ExecContext(ctx, lockQuery); err != nil {
-		if rErr := s.tx.Rollback(); rErr != nil {
-			return nil, rErr
+		return nil, errors.Join(
+			fmt.Errorf("failed to acquire table-level read locks: %w", err),
+			s.tx.Rollback())
+	}
+	unlockTables := func() error {
+		if _, err := s.lockConn.ExecContext(ctx, "UNLOCK TABLES"); err != nil {
+			return fmt.Errorf("failed to release table-level read locks: %w", err)
 		}
-		return nil, fmt.Errorf("failed to acquire table-level read locks: %v", err)
+		return nil
 	}
 
 	/*
@@ -101,38 +106,26 @@ func (s *Snapshot) prepareSnapshot(ctx context.Context, tables []string) (*posit
 	// started with `BeginTx` above and replacing it with this one. We have to do this because
 	// the `database/sql` driver we're using does not support this WITH CONSISTENT SNAPSHOT.
 	if _, err := s.tx.ExecContext(ctx, "START TRANSACTION WITH CONSISTENT SNAPSHOT"); err != nil {
-		// Make sure to release the locks if we fail
-		if _, eErr := s.lockConn.ExecContext(ctx, "UNLOCK TABLES"); eErr != nil {
-			return nil, eErr
-		}
-
-		if rErr := s.tx.Rollback(); rErr != nil {
-			return nil, rErr
-		}
-
-		return nil, fmt.Errorf("failed to start consistent snapshot: %v", err)
+		return nil, errors.Join(
+			fmt.Errorf("failed to start consistent snapshot: %w", err),
+			unlockTables(),
+			s.tx.Rollback())
 	}
 
 	// Get binary log position (while tables are locked)
 	pos, err := s.getCurrentBinlogPosition(ctx)
 	if err != nil {
-		// Make sure to release the locks if we fail
-		if _, eErr := s.lockConn.ExecContext(ctx, "UNLOCK TABLES"); eErr != nil {
-			return nil, eErr
-		}
-
-		if rErr := s.tx.Rollback(); rErr != nil {
-			return nil, rErr
-		}
-		return nil, fmt.Errorf("failed to get binlog position: %v", err)
+		return nil, errors.Join(
+			fmt.Errorf("failed to get binlog position: %w", err),
+			unlockTables(),
+			s.tx.Rollback())
 	}
 
 	// Release the table locks immediately after getting the binlog position
 	if _, err := s.lockConn.ExecContext(ctx, "UNLOCK TABLES"); err != nil {
-		if rErr := s.tx.Rollback(); rErr != nil {
-			return nil, rErr
-		}
-		return nil, fmt.Errorf("failed to release table locks: %v", err)
+		return nil, errors.Join(
+			fmt.Errorf("failed to release table-level read locks: %w", err),
+			s.tx.Rollback())
 	}
 
 	return &pos, nil
