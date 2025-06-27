@@ -18,6 +18,7 @@ All notable changes to this project will be documented in this file.
 - The `sftp` input no longer creates new SSH connections for each file it reads. (@mihaitodor, @TColl)
 - Fixed a bug with the `redpanda_migrator_offsets` output where it was attempting to rewind consumer groups if it got restarted after consumers were migrated to the destination cluster. (@mihaitodor)
 - Fixed an issue where error logs would not be dispatched to topics when the CLI exited with a non-zero status code. (@Jeffail)
+- Fixed `mysql_cdc` issue with snapshotting AWS RDS. (@mmatczuk)
 
 ## 4.58.2 - 2025-06-17
 
