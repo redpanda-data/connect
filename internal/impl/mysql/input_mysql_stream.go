@@ -73,7 +73,8 @@ This input adds the following metadata fields to each message:
 			Example("user:password@tcp(localhost:3306)/database"),
 		service.NewStringListField(fieldMySQLTables).
 			Description("A list of tables to stream from the database.").
-			Example([]string{"table1", "table2"}),
+			Example([]string{"table1", "table2"}).
+			LintRule("root = if this.length() == 0 { [ \"field 'tables' must contain at least one table\" ] }"),
 		service.NewStringField(fieldCheckpointCache).
 			Description("A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current latest BinLog Position that has been successfully delivered, this allows Redpanda Connect to continue from that BinLog Position upon restart, rather than consume the entire state of the table."),
 		service.NewStringField(fieldCheckpointKey).
