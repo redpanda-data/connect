@@ -47,13 +47,13 @@ func (s *Snapshot) prepareSnapshot(ctx context.Context, tables []string) (*posit
 	// Create a separate connection for table locks
 	s.lockConn, err = s.db.Conn(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create lock connection: %v", err)
+		return nil, fmt.Errorf("create lock connection: %v", err)
 	}
 
 	// Create another connection for the snapshot
 	s.snapshotConn, err = s.db.Conn(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create snapshot connection: %v", err)
+		return nil, fmt.Errorf("create snapshot connection: %v", err)
 	}
 
 	// Start a consistent snapshot transaction
@@ -62,7 +62,7 @@ func (s *Snapshot) prepareSnapshot(ctx context.Context, tables []string) (*posit
 		Isolation: sql.LevelRepeatableRead,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to start transaction: %v", err)
+		return nil, fmt.Errorf("start transaction: %v", err)
 	}
 
 	/*
@@ -79,12 +79,12 @@ func (s *Snapshot) prepareSnapshot(ctx context.Context, tables []string) (*posit
 	s.logger.Infof("Acquiring table-level read locks with: %s", lockQuery)
 	if _, err := s.lockConn.ExecContext(ctx, lockQuery); err != nil {
 		return nil, errors.Join(
-			fmt.Errorf("failed to acquire table-level read locks: %w", err),
+			fmt.Errorf("acquire table-level read locks: %w", err),
 			s.tx.Rollback())
 	}
 	unlockTables := func() error {
 		if _, err := s.lockConn.ExecContext(ctx, "UNLOCK TABLES"); err != nil {
-			return fmt.Errorf("failed to release table-level read locks: %w", err)
+			return fmt.Errorf("release table-level read locks: %w", err)
 		}
 		return nil
 	}
@@ -107,7 +107,7 @@ func (s *Snapshot) prepareSnapshot(ctx context.Context, tables []string) (*posit
 	// the `database/sql` driver we're using does not support this WITH CONSISTENT SNAPSHOT.
 	if _, err := s.tx.ExecContext(ctx, "START TRANSACTION WITH CONSISTENT SNAPSHOT"); err != nil {
 		return nil, errors.Join(
-			fmt.Errorf("failed to start consistent snapshot: %w", err),
+			fmt.Errorf("start consistent snapshot: %w", err),
 			unlockTables(),
 			s.tx.Rollback())
 	}
@@ -116,7 +116,7 @@ func (s *Snapshot) prepareSnapshot(ctx context.Context, tables []string) (*posit
 	pos, err := s.getCurrentBinlogPosition(ctx)
 	if err != nil {
 		return nil, errors.Join(
-			fmt.Errorf("failed to get binlog position: %w", err),
+			fmt.Errorf("get binlog position: %w", err),
 			unlockTables(),
 			s.tx.Rollback())
 	}
@@ -124,7 +124,7 @@ func (s *Snapshot) prepareSnapshot(ctx context.Context, tables []string) (*posit
 	// Release the table locks immediately after getting the binlog position
 	if _, err := s.lockConn.ExecContext(ctx, "UNLOCK TABLES"); err != nil {
 		return nil, errors.Join(
-			fmt.Errorf("failed to release table-level read locks: %w", err),
+			fmt.Errorf("release table-level read locks: %w", err),
 			s.tx.Rollback())
 	}
 
@@ -153,7 +153,7 @@ WHERE TABLE_NAME = '%s' AND CONSTRAINT_NAME = 'PRIMARY'
 ORDER BY ORDINAL_POSITION;
   `, table))
 	if err != nil {
-		return nil, fmt.Errorf("failed to get primary key: %v", err)
+		return nil, fmt.Errorf("get primary key: %v", err)
 	}
 
 	defer rows.Close()
@@ -168,7 +168,7 @@ ORDER BY ORDINAL_POSITION;
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("failed to iterate table: %s", err)
+		return nil, fmt.Errorf("iterate table: %s", err)
 	}
 
 	if len(pks) == 0 {
@@ -240,7 +240,7 @@ func (s *Snapshot) getCurrentBinlogPosition(ctx context.Context) (position, erro
 func (s *Snapshot) releaseSnapshot(_ context.Context) error {
 	if s.tx != nil {
 		if err := s.tx.Commit(); err != nil {
-			return fmt.Errorf("failed to commit transaction: %v", err)
+			return fmt.Errorf("commit transaction: %v", err)
 		}
 	}
 
