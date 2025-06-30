@@ -63,7 +63,6 @@ input:
     ignore_deletes: false
     include_history: false
     meta_only: false
-    tls_handshake_first: false
     tls:
       enabled: false
       skip_cert_verify: false
@@ -228,15 +227,6 @@ Include all the history per key, not just the last one.
 === `meta_only`
 
 Retrieve only the metadata of the entry
-
-
-*Type*: `bool`
-
-*Default*: `false`
-
-=== `tls_handshake_first`
-
-Determines to perform the TLS handshake before sending the CONNECT protocol message.
 
 
 *Type*: `bool`
