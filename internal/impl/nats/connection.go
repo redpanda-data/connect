@@ -37,17 +37,17 @@ func connectionHeadFields() []*service.ConfigField {
 			Description("The maximum number of times to attempt to reconnect to the server. If negative, it will never stop trying to reconnect.").
 			Optional().
 			Advanced(),
-		service.NewBoolField("tls_handshake_first").
-			Description("Perform a TLS handshake before sending the INFO protocol message.").
-			Optional().
-			Default(false).
-			Advanced(),
 	}
 }
 
 func connectionTailFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewTLSToggledField("tls"),
+		service.NewBoolField("tls_handshake_first").
+			Description("Perform a TLS handshake before sending the INFO protocol message.").
+			Optional().
+			Default(false).
+			Advanced(),
 		authFieldSpec(),
 	}
 }
