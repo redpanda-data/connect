@@ -243,23 +243,30 @@ type Store struct {
 	conf   StoreConfig
 	client *spanner.Client
 
-	finishedTokensCache *lru.Cache[string, struct{}]
+	// Caches
+	finishedTokensCache  *lru.Cache[string, struct{}]
+	watermarkUpdateCache *lru.Cache[string, time.Time]
 }
 
-const defaultFinishedTokensCacheSize = 10_000
+const defaultPartitionCacheSize = 10_000
 
 // NewStore returns a Store instance with the given configuration and Spanner
 // client. The client must be connected to the same database as the configuration.
 func NewStore(conf StoreConfig, client *spanner.Client) (*Store, error) {
-	cache, err := lru.New[string, struct{}](defaultFinishedTokensCacheSize)
+	finishedCache, err := lru.New[string, struct{}](defaultPartitionCacheSize)
 	if err != nil {
 		return nil, fmt.Errorf("create LRU cache: %w", err)
 	}
+	watermarkCache, err := lru.New[string, time.Time](defaultPartitionCacheSize)
+	if err != nil {
+		return nil, fmt.Errorf("create watermark cache: %w", err)
+	}
 
 	return &Store{
-		conf:                conf,
-		client:              client,
-		finishedTokensCache: cache,
+		conf:                 conf,
+		client:               client,
+		finishedTokensCache:  finishedCache,
+		watermarkUpdateCache: watermarkCache,
 	}, nil
 }
 
@@ -647,6 +654,25 @@ func (s *Store) getPartitionsMatchingStateInTransaction(
 	}
 
 	return matchingTokens, nil
+}
+
+// MaybeUpdateWatermark updates the partition watermark only if it hasn't been
+// updated in the last second for the given partition token. Returns true if the watermark was updated.
+func (s *Store) MaybeUpdateWatermark(ctx context.Context, partitionToken string, watermark time.Time) (bool, error) {
+	now := time.Now()
+
+	if lastUpdate, ok := s.watermarkUpdateCache.Get(partitionToken); ok {
+		if now.Sub(lastUpdate) < time.Second {
+			return false, nil
+		}
+	}
+
+	if err := s.UpdateWatermark(ctx, partitionToken, watermark); err != nil {
+		return false, err
+	}
+
+	s.watermarkUpdateCache.Add(partitionToken, now)
+	return true, nil
 }
 
 // UpdateWatermark updates the partition watermark to the given timestamp.

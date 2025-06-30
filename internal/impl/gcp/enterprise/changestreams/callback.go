@@ -36,7 +36,9 @@ func (s *Subscriber) UpdatePartitionWatermark(
 		return nil
 	}
 
-	s.log.Tracef("%s: updating watermark to %s", partitionToken, commitTimestamp)
-
-	return s.store.UpdateWatermark(ctx, partitionToken, commitTimestamp)
+	ok, err := s.store.MaybeUpdateWatermark(ctx, partitionToken, commitTimestamp)
+	if ok {
+		s.log.Tracef("%s: updating watermark to %s", partitionToken, commitTimestamp)
+	}
+	return err
 }
