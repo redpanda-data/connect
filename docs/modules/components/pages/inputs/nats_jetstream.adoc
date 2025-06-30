@@ -277,6 +277,15 @@ The maximum number of outstanding acks to be allowed before consuming is halted.
 
 *Default*: `1024`
 
+=== `tls_handshake_first`
+
+Determines to perform the TLS handshake before sending the CONNECT protocol message.
+
+
+*Type*: `bool`
+
+*Default*: `false`
+
 === `tls`
 
 Custom TLS settings can be used to override system defaults.
