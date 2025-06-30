@@ -278,6 +278,27 @@ func TestIntegrationStore(t *testing.T) {
 		}
 	})
 
+	t.Run("MaybeUpdateWatermark", func(t *testing.T) {
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				want := ts.Add(5 * time.Minute)
+				ok, err := tc.s.MaybeUpdateWatermark(t.Context(), "created1", want)
+				require.NoError(t, err)
+				require.True(t, ok)
+				for i := 0; i < 10; i++ {
+					ok, err := tc.s.MaybeUpdateWatermark(t.Context(), "created1", want)
+					require.NoError(t, err)
+					require.False(t, ok)
+				}
+
+				got, err := tc.s.GetPartition(t.Context(), "created1")
+				require.NoError(t, err)
+
+				assert.Equal(t, want, got.Watermark)
+			})
+		}
+	})
+
 	t.Run("UpdateWatermark", func(t *testing.T) {
 		for _, tc := range tests {
 			t.Run(tc.name, func(t *testing.T) {
