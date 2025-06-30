@@ -67,6 +67,7 @@ input:
     start_from_oldest: true
     max_inflight: 1024
     ack_wait: 30s
+    tls_handshake_first: false
     tls:
       enabled: false
       skip_cert_verify: false
@@ -244,6 +245,15 @@ An optional duration to specify at which a message that is yet to be acked will 
 *Type*: `string`
 
 *Default*: `"30s"`
+
+=== `tls_handshake_first`
+
+Determines to perform the TLS handshake before sending the CONNECT protocol message.
+
+
+*Type*: `bool`
+
+*Default*: `false`
 
 === `tls`
 

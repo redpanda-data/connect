@@ -68,6 +68,7 @@ input:
     deliver: all
     ack_wait: 30s
     max_ack_pending: 1024
+    tls_handshake_first: false
     tls:
       enabled: false
       skip_cert_verify: false

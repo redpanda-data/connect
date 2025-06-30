@@ -66,6 +66,7 @@ output:
       include_prefixes: []
       include_patterns: []
     max_in_flight: 1024
+    tls_handshake_first: false
     tls:
       enabled: false
       skip_cert_verify: false
@@ -249,6 +250,15 @@ The maximum number of messages to have in flight at a given time. Increase this 
 *Type*: `int`
 
 *Default*: `1024`
+
+=== `tls_handshake_first`
+
+Determines to perform the TLS handshake before sending the CONNECT protocol message.
+
+
+*Type*: `bool`
+
+*Default*: `false`
 
 === `tls`
 
