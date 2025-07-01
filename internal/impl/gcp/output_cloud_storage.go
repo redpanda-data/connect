@@ -61,8 +61,8 @@ type csoConfig struct {
 	Path            *service.InterpolatedString
 	ContentType     *service.InterpolatedString
 	ContentEncoding *service.InterpolatedString
+	CollisionMode   *service.InterpolatedString
 	ChunkSize       int
-	CollisionMode   string
 	Timeout         time.Duration
 	CredentialsJSON string
 }
@@ -83,7 +83,7 @@ func csoConfigFromParsed(pConf *service.ParsedConfig) (conf csoConfig, err error
 	if conf.ChunkSize, err = pConf.FieldInt(csoFieldChunkSize); err != nil {
 		return
 	}
-	if conf.CollisionMode, err = pConf.FieldString(csoFieldCollisionMode); err != nil {
+	if conf.CollisionMode, err = pConf.FieldInterpolatedString(csoFieldCollisionMode); err != nil {
 		return
 	}
 	if conf.Timeout, err = pConf.FieldDuration(csoFieldTimeout); err != nil {
@@ -162,13 +162,8 @@ output:
 				Description("An optional content encoding to set for each object.").
 				Default("").
 				Advanced(),
-			service.NewStringAnnotatedEnumField(csoFieldCollisionMode, map[string]string{
-				"overwrite":       "Replace the existing file with the new one.",
-				"append":          "Append the message bytes to the original file.",
-				"error-if-exists": "Return an error, this is the equivalent of a nack.",
-				"ignore":          "Do not modify the original file, the new data will be dropped.",
-			}).
-				Description(`Determines how file path collisions should be dealt with.`).
+			service.NewInterpolatedStringEnumField(csoFieldCollisionMode, "overwrite", "append", "error-if-exists", "ignore").
+				Description(`Determines how file path collisions should be dealt with. Options are "overwrite", which replaces the existing file with the new one, "append", which appends the message bytes to the original file, "error-if-exists", which returns an error and rejects the message if the file exists, and "ignore", does not modify the original file and drops the message.`).
 				Version("3.53.0").
 				Default(GCPCloudStorageOverwriteCollisionMode),
 			service.NewIntField(csoFieldChunkSize).
@@ -280,18 +275,24 @@ func (g *gcpCloudStorageOutput) WriteBatch(ctx context.Context, batch service.Me
 		if err != nil {
 			return fmt.Errorf("path interpolation error: %w", err)
 		}
-		if g.conf.CollisionMode != GCPCloudStorageOverwriteCollisionMode {
+
+		collisionMode, err := g.conf.CollisionMode.TryString(msg)
+		if err != nil {
+			return fmt.Errorf("collision mode interpolation error: %w", err)
+		}
+
+		if collisionMode != GCPCloudStorageOverwriteCollisionMode {
 			_, err = client.Bucket(g.conf.Bucket).Object(outputPath).Attrs(ctx)
 		}
 
 		isMerge := false
 		var tempPath string
-		if errors.Is(err, storage.ErrObjectNotExist) || g.conf.CollisionMode == GCPCloudStorageOverwriteCollisionMode {
+		if errors.Is(err, storage.ErrObjectNotExist) || collisionMode == GCPCloudStorageOverwriteCollisionMode {
 			tempPath = outputPath
 		} else {
 			isMerge = true
 
-			switch g.conf.CollisionMode {
+			switch collisionMode {
 			case GCPCloudStorageErrorIfExistsCollisionMode:
 				if err == nil {
 					err = fmt.Errorf("file at path already exists: %s", outputPath)

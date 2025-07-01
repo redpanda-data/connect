@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.60.0 - TBD
+
+### Added
+
+- The `gcp_cloud_storage` output field `collision_mode` now supports interpolation functions. (@Jeffail)
+
 ## 4.59.0 - 2025-06-27
 
 ### Added
