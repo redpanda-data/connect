@@ -186,7 +186,8 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 
 === `collision_mode`
 
-Determines how file path collisions should be dealt with.
+Determines how file path collisions should be dealt with. Options are "overwrite", which replaces the existing file with the new one, "append", which appends the message bytes to the original file, "error-if-exists", which returns an error and rejects the message if the file exists, and "ignore", does not modify the original file and drops the message.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
 
 *Type*: `string`
@@ -194,19 +195,12 @@ Determines how file path collisions should be dealt with.
 *Default*: `"overwrite"`
 Requires version 3.53.0 or newer
 
-|===
-| Option | Summary
-
-| `append`
-| Append the message bytes to the original file.
-| `error-if-exists`
-| Return an error, this is the equivalent of a nack.
-| `ignore`
-| Do not modify the original file, the new data will be dropped.
-| `overwrite`
-| Replace the existing file with the new one.
-
-|===
+Options:
+`overwrite`
+, `append`
+, `error-if-exists`
+, `ignore`
+.
 
 === `chunk_size`
 
