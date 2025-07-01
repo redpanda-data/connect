@@ -45,7 +45,7 @@ This processor sends document strings to the Cohere API, which reranks them base
 
 To learn more about reranking, see the https://docs.cohere.com/docs/rerank-2[Cohere API documentation^].
 
-The output of this processor is an array of objects, each containing a "document" field with the original document content and a "relevance_score" field indicating how relevant it is to the query. The objects are ordered by their relevance score (highest first).
+The output of this processor is an array of objects, each containing a "document" field with the original document content, a "relevance_score" field indicating how relevant it is to the query, and an index field that refers to the document's position within the input documents array. The objects are ordered by their relevance score (highest first).
 
 		`).
 		Version("4.37.0").
@@ -162,6 +162,7 @@ func (p *rerankProcessor) Process(ctx context.Context, msg *service.Message) (se
 		rerankedResults = append(rerankedResults, map[string]any{
 			"document":        docs[result.Index],
 			"relevance_score": result.RelevanceScore,
+			"index":           result.Index, // Index within original documents list.
 		})
 	}
 	msg = msg.Copy()

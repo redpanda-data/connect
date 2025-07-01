@@ -240,6 +240,9 @@ documents: "root = this.docs"
 				score, hasScore := resultItem["relevance_score"]
 				assert.True(t, hasScore, "Result item %d should have 'relevance_score' field", i)
 
+				index, hasIndex := resultItem["index"]
+				assert.True(t, hasIndex, "Result item %d should have 'index' field", i)
+
 				// Verify the document matches the expected index from mock response
 				mockResult := mockResults[i].(map[string]any)
 				expectedIndex := mockResult["index"].(int)
@@ -248,6 +251,7 @@ documents: "root = this.docs"
 
 				assert.Equal(t, expectedDocument, document, "Document at position %d should match expected document from index %d", i, expectedIndex)
 				assert.Equal(t, expectedScore, score, "Score at position %d should match expected score", i)
+				assert.Equal(t, expectedIndex, index, "Index at position %d should match expected index from mock response", i)
 			}
 
 			require.NoError(t, msgs[0].GetError())
@@ -321,10 +325,22 @@ top_n: 3
 		score, hasScore := resultItem["relevance_score"]
 		assert.True(t, hasScore, "Result item %d should have 'relevance_score' field", i)
 
+		index, hasIndex := resultItem["index"]
+		assert.True(t, hasIndex, "Result item %d should have 'index' field", i)
+
 		scoreFloat, ok := score.(float64)
 		require.True(t, ok, "Score should be a float64")
 
-		t.Logf("Result %d: score=%.6f, doc=%s", i, scoreFloat, document.(string)[:50]+"...")
+		indexInt, ok := index.(int)
+		require.True(t, ok, "Index should be an int")
+		assert.GreaterOrEqual(t, indexInt, 0, "Index should be non-negative")
+		assert.Less(t, indexInt, len(testDocuments), "Index should be within bounds of test documents")
+
+		// Verify the document at this index matches what we expect
+		expectedDoc := testDocuments[indexInt]
+		assert.Equal(t, expectedDoc, document, "Document should match the document at the specified index")
+
+		t.Logf("Result %d: score=%.6f, index=%d, doc=%s", i, scoreFloat, indexInt, document.(string)[:50]+"...")
 	}
 
 	// The first result should be about Washington D.C. (index 3)
