@@ -1,0 +1,16 @@
+version: '3'
+
+vars:
+  GIT_ROOT:
+    sh: git rev-parse --show-toplevel
+  SPANNER_ARGS: -spanner.project_id=sandbox-rpcn-457914 -spanner.instance_id=rpcn-tests-spanner -spanner.database_id=rpcn-tests
+
+includes:
+  terraform: ./terraform/terraform.yml
+
+tasks:
+  test:
+    desc: Run Spanner integration tests
+    dir: '{{.GIT_ROOT}}'
+    cmds:
+      - go test -v -run TestIntegrationReal ./internal/impl/gcp/enterprise/... {{.SPANNER_ARGS}}
