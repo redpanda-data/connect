@@ -31,4 +31,6 @@ resource "google_spanner_database" "database" {
   name     = var.database_name
 
   deletion_protection = false
+  version_retention_period = "1h"  # Disable backups by setting retention to minimum
+  enable_drop_protection = false
 }
