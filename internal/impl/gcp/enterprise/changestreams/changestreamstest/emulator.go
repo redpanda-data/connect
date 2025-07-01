@@ -23,7 +23,6 @@ import (
 	"github.com/ory/dockertest/v3/docker"
 	"google.golang.org/api/option"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
@@ -68,9 +67,6 @@ func startSpannerEmulator(t *testing.T) (addr string) {
 		}
 		defer conn.Close()
 
-		if s := conn.GetState(); s != connectivity.Ready {
-			return fmt.Errorf("not ready: %v", s)
-		}
 		return nil
 	}); err != nil {
 		closeFn()
