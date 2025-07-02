@@ -20,6 +20,7 @@ All notable changes to this project will be documented in this file.
 - Fixed an issue where error logs would not be dispatched to topics when the CLI exited with a non-zero status code. (@Jeffail)
 - Fixed `mysql_cdc` issue with snapshotting AWS RDS. (@mmatczuk)
 - The `chroot` flag makes the internal /tmp directory writable. (@mmatczuk)
+- The `spanner_cdc` input updates partition watermark no more than once per second. (@mmatczuk)
 
 ## 4.58.2 - 2025-06-17
 
