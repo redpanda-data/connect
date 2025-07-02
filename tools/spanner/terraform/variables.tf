@@ -7,7 +7,7 @@ variable "project_id" {
 variable "region" {
   description = "The GCP region for the Spanner instance"
   type        = string
-  default     = "europe-central2"
+  default     = "europe-west3"
 }
 
 variable "instance_name" {
@@ -19,7 +19,7 @@ variable "instance_name" {
 variable "instance_config" {
   description = "The configuration for the Spanner instance"
   type        = string
-  default     = "regional-europe-central2"
+  default     = "regional-europe-west3"
 }
 
 variable "instance_display_name" {

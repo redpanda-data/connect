@@ -98,7 +98,7 @@ func createInstance(ctx context.Context, conn *grpc.ClientConn) (string, error) 
 		Parent:     "projects/" + EmulatorProjectID,
 		InstanceId: EmulatorInstanceID,
 		Instance: &instancepb.Instance{
-			Config:          "projects/" + EmulatorProjectID + "/instanceConfigs/regional-europe-central2",
+			Config:          "projects/" + EmulatorProjectID + "/instanceConfigs/regional-europe-west3",
 			DisplayName:     EmulatorInstanceID,
 			ProcessingUnits: 100,
 		},
