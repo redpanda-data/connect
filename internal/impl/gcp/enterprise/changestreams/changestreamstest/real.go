@@ -136,6 +136,15 @@ func MakeRealHelper(t *testing.T) RealHelper {
 	}
 }
 
+// MakeRealHelperWithTableName creates a RealHelper with custom table and stream
+// names for the real spanner test environment.
+func MakeRealHelperWithTableName(t *testing.T, tableName, streamName string) RealHelper {
+	h := MakeRealHelper(t)
+	h.table = tableName
+	h.stream = streamName
+	return h
+}
+
 // ProjectID returns the project ID for the real Spanner instance.
 func (RealHelper) ProjectID() string {
 	return *realSpannerProjectID
