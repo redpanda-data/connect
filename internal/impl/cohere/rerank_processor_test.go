@@ -350,3 +350,168 @@ top_n: 3
 
 	require.NoError(t, msgs[0].GetError())
 }
+
+func TestCohereRerankProcessorDynamicTopN(t *testing.T) {
+	type testCase struct {
+		name               string
+		query              string
+		documents          []string
+		topNExpression     string
+		topNMeta           string
+		mockResponse       map[string]any
+		expectedResults    int
+		expectedFirstDoc   string
+		expectedFirstScore float64
+		expectError        bool
+		expectedErr        string
+	}
+
+	tests := []testCase{
+		{
+			name:            "dynamic top_n from metadata",
+			query:           "What is machine learning?",
+			documents:       []string{"Machine learning is a subset of AI", "Cooking recipes", "Weather forecast", "Deep learning"},
+			topNExpression:  `${! meta("top_n") }`,
+			topNMeta:        "2",
+			expectedResults: 2,
+			mockResponse: map[string]any{
+				"results": []any{
+					map[string]any{"index": 0, "relevance_score": 0.95},
+					map[string]any{"index": 3, "relevance_score": 0.85},
+				},
+			},
+			expectedFirstDoc:   "Machine learning is a subset of AI",
+			expectedFirstScore: 0.95,
+		},
+		{
+			name:            "dynamic top_n with bloblang conversion",
+			query:           "What is AI?",
+			documents:       []string{"AI overview", "Cooking", "Sports", "Technology"},
+			topNExpression:  `${! meta("top_n").number() }`,
+			topNMeta:        "3",
+			expectedResults: 3,
+			mockResponse: map[string]any{
+				"results": []any{
+					map[string]any{"index": 0, "relevance_score": 0.95},
+					map[string]any{"index": 3, "relevance_score": 0.75},
+					map[string]any{"index": 1, "relevance_score": 0.15},
+				},
+			},
+			expectedFirstDoc:   "AI overview",
+			expectedFirstScore: 0.95,
+		},
+		{
+			name:            "dynamic top_n with fallback",
+			query:           "test",
+			documents:       []string{"doc1", "doc2", "doc3"},
+			topNExpression:  `${! meta("top_n").number().or(2) }`,
+			topNMeta:        "", // empty meta to test fallback
+			expectedResults: 2,
+			mockResponse: map[string]any{
+				"results": []any{
+					map[string]any{"index": 0, "relevance_score": 0.8},
+					map[string]any{"index": 2, "relevance_score": 0.6},
+				},
+			},
+			expectedFirstDoc:   "doc1",
+			expectedFirstScore: 0.8,
+		},
+		{
+			name:           "dynamic top_n invalid number",
+			query:          "test",
+			documents:      []string{"doc1", "doc2"},
+			topNExpression: `${! meta("top_n") }`,
+			topNMeta:       "invalid",
+			expectError:    true,
+			expectedErr:    "top_n must be a valid integer",
+		},
+	}
+
+	for i, test := range tests {
+		t.Run(test.name+"/"+strconv.Itoa(i), func(t *testing.T) {
+			var server *httptest.Server
+
+			// Only create mock server if we have a mock response
+			if test.mockResponse != nil {
+				server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					require.Equal(t, "POST", r.Method)
+					require.Equal(t, "/v2/rerank", r.URL.Path)
+
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusOK)
+
+					responseBytes, err := json.Marshal(test.mockResponse)
+					require.NoError(t, err)
+					_, err = w.Write(responseBytes)
+					require.NoError(t, err)
+				}))
+				defer server.Close()
+			}
+
+			// Create input message
+			inputData := map[string]any{
+				"query": test.query,
+				"docs":  test.documents,
+			}
+			inputBytes, err := json.Marshal(inputData)
+			require.NoError(t, err)
+
+			// Create processor config
+			baseURL := "https://api.cohere.com"
+			if server != nil {
+				baseURL = server.URL
+			}
+
+			conf, err := rerankProcessorConfig().ParseYAML(fmt.Sprintf(`
+base_url: %s
+api_key: test-key
+model: rerank-v3.5
+query: "${!this.query}"
+documents: "root = this.docs"
+top_n: %s
+`, baseURL, test.topNExpression), nil)
+			require.NoError(t, err)
+
+			// Create processor with license service
+			resources := service.MockResources()
+			license.InjectTestService(resources)
+			proc, err := makeRerankProcessor(conf, resources)
+			require.NoError(t, err)
+
+			// Create message with metadata
+			msg := service.NewMessage(inputBytes)
+			if test.topNMeta != "" {
+				msg.MetaSetMut("top_n", test.topNMeta)
+			}
+
+			// Process message
+			msgs, err := proc.Process(t.Context(), msg)
+
+			if test.expectError {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), test.expectedErr)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Len(t, msgs, 1)
+
+			// Get result
+			result, err := msgs[0].AsStructured()
+			require.NoError(t, err)
+
+			resultArray, ok := result.([]any)
+			require.True(t, ok, "Expected result to be an array")
+			require.Len(t, resultArray, test.expectedResults)
+
+			// Check first result
+			firstResult, ok := resultArray[0].(map[string]any)
+			require.True(t, ok, "Expected first result to be a map")
+
+			assert.Equal(t, test.expectedFirstDoc, firstResult["document"])
+			assert.Equal(t, test.expectedFirstScore, firstResult["relevance_score"])
+
+			require.NoError(t, msgs[0].GetError())
+		})
+	}
+}
