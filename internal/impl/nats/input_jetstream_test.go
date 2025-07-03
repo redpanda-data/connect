@@ -53,7 +53,7 @@ tls_handshake_first: true
 		assert.Equal(t, "test auth user creds file", e.connDetails.authConf.UserCredentialsFile)
 		assert.Equal(t, "test auth inline user JWT", e.connDetails.authConf.UserJWT)
 		assert.Equal(t, "test auth inline user NKey Seed", e.connDetails.authConf.UserNkeySeed)
-		assert.True(t, *e.connDetails.tlsHandshakeFirst)
+		assert.True(t, e.connDetails.tlsHandshakeFirst)
 	})
 
 	t.Run("Missing user_nkey_seed", func(t *testing.T) {
@@ -188,6 +188,6 @@ auth:
 		e, err := newJetStreamReaderFromConfig(conf, service.MockResources())
 		require.NoError(t, err)
 
-		assert.False(t, *e.connDetails.tlsHandshakeFirst)
+		assert.False(t, e.connDetails.tlsHandshakeFirst)
 	})
 }
