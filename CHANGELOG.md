@@ -9,6 +9,10 @@ All notable changes to this project will be documented in this file.
 
 - The `gcp_cloud_storage` output field `collision_mode` now supports interpolation functions. (@Jeffail)
 
+### Fixed
+
+- The `redpanda_migrator_offsets` input now fetches record timestamps in parallel and discards consumer groups which point to truncated records. (@mihaitodor)
+
 ## 4.59.0 - 2025-06-27
 
 ### Added

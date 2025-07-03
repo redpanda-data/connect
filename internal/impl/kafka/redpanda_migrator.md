@@ -29,9 +29,9 @@ participant Offsets Output
 participant Destination
 
 Offsets Input->>Source: O = OffsetFetch()
-Source->>Offsets Input: X = ListEndOffsets(T, P)
-Source->>Offsets Input: Check X < O
-Source->>Offsets Input: TS = ReadTimestamp(T, P, O)
+Offsets Input->>Source: X = ListEndOffsets(T, P)
+Offsets Input->>Offsets Input: Check X < O
+Offsets Input->>Source: TS = ReadTimestamp(T, P, O)
 Offsets Input->>Offsets Output: (T, P, TS)
 Offsets Output->>Destination: O' = ListOffsetsAfterMilli(T, P, TS)
 Offsets Output->>Destination: CommitOffsets(T, P, O')
@@ -50,9 +50,9 @@ participant Offsets Output
 participant Destination
 
 Offsets Input->>Source: O = OffsetFetch()
-Source->>Offsets Input: X = ListEndOffsets(T, P)
-Source->>Offsets Input: Check X == O
-Source->>Offsets Input: TS = ReadTimestamp(T, P, -1)
+Offsets Input->>Source: X = ListEndOffsets(T, P)
+Offsets Input->>Offsets Input: Check X == O
+Offsets Input->>Source: TS = ReadTimestamp(T, P, -1)
 Offsets Input->>Offsets Output: (T, P, TS)
 Offsets Output->>Destination: O', TS' = ListOffsetsAfterMilli(T, P, TS)
 Offsets Output->>Destination: If TS' != -1 then O'' = ListEndOffsets(T, P)
