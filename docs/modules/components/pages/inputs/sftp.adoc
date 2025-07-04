@@ -133,7 +133,7 @@ The credentials to use to log into the target server.
 
 === `credentials.username`
 
-The username to connect to the SFTP server.
+The username to authenticate with the SFTP server.
 
 
 *Type*: `string`
@@ -142,7 +142,7 @@ The username to connect to the SFTP server.
 
 === `credentials.password`
 
-The password for the username to connect to the SFTP server.
+The password for the specified username to connect to the SFTP server.
 [CAUTION]
 ====
 This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
@@ -156,7 +156,7 @@ This field contains sensitive information that usually shouldn't be added to a c
 
 === `credentials.host_public_key_file`
 
-The public key of the SFTP server.
+The path to the SFTP server's public key file, used for host key verification.
 
 
 *Type*: `string`
@@ -164,7 +164,7 @@ The public key of the SFTP server.
 
 === `credentials.host_public_key`
 
-The public key file of the SFTP server.
+The raw contents of the SFTP server's public key, used for host key verification.
 
 
 *Type*: `string`
@@ -172,7 +172,7 @@ The public key file of the SFTP server.
 
 === `credentials.private_key_file`
 
-The private key file for the username to connect to the SFTP server.
+The path to the private key file, used for authenticating the username.
 
 
 *Type*: `string`
@@ -180,7 +180,7 @@ The private key file for the username to connect to the SFTP server.
 
 === `credentials.private_key`
 
-The private key for the username to connect to the SFTP server.
+The raw contents of the private key, used for authenticating the username.
 [CAUTION]
 ====
 This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
@@ -193,7 +193,7 @@ This field contains sensitive information that usually shouldn't be added to a c
 
 === `credentials.private_key_pass`
 
-Optional passphrase for private key.
+Optional passphrase for decrypting the private key, if it's encrypted.
 [CAUTION]
 ====
 This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
