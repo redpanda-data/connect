@@ -36,7 +36,7 @@ cohere_rerank:
   model: rerank-v3.5 # No default (required)
   query: "" # No default (required)
   documents: "" # No default (required)
-  top_n: 0
+  top_n: "0"
   max_tokens_per_doc: 4096
 ```
 
@@ -137,11 +137,12 @@ A list of texts that will be compared to the query. For optimal performance Cohe
 === `top_n`
 
 The number of documents to return, if 0 all documents are returned.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
 
-*Type*: `int`
+*Type*: `string`
 
-*Default*: `0`
+*Default*: `"0"`
 
 === `max_tokens_per_doc`
 

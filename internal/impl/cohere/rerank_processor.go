@@ -12,6 +12,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 
 	cohere "github.com/cohere-ai/cohere-go/v2"
 
@@ -57,7 +58,7 @@ The output of this processor is an array of objects, each containing a "document
 		Fields(
 			service.NewInterpolatedStringField(crpFieldQuery).Description("The search query"),
 			service.NewBloblangField(crpFieldDocuments).Description("A list of texts that will be compared to the query. For optimal performance Cohere recommends against sending more than 1000 documents in a single request. NOTE: structured data should be formatted as YAML for best performance."),
-			service.NewIntField(crpFieldTopN).Default(0).Description("The number of documents to return, if 0 all documents are returned."),
+			service.NewInterpolatedStringField(crpFieldTopN).Default("0").Description("The number of documents to return, if 0 all documents are returned."),
 			service.NewIntField(crpFieldMaxTokens).Default(4096).Description("Long documents will be automatically truncated to the specified number of tokens."),
 		).
 		Example(
@@ -99,7 +100,7 @@ func makeRerankProcessor(conf *service.ParsedConfig, mgr *service.Resources) (se
 	if err != nil {
 		return nil, err
 	}
-	t, err := conf.FieldInt(crpFieldTopN)
+	t, err := conf.FieldInterpolatedString(crpFieldTopN)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +116,7 @@ type rerankProcessor struct {
 
 	query     *service.InterpolatedString
 	documents *bloblang.Executor
-	topN      int
+	topN      *service.InterpolatedString
 	maxTokens int
 }
 
@@ -144,8 +145,16 @@ func (p *rerankProcessor) Process(ctx context.Context, msg *service.Message) (se
 		Query:           q,
 		MaxTokensPerDoc: &p.maxTokens,
 	}
-	if p.topN > 0 {
-		req.TopN = &p.topN
+	topNStr, err := p.topN.TryString(msg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to interpolate top_n: %w", err)
+	}
+	topNVal, err := strconv.Atoi(topNStr)
+	if err != nil {
+		return nil, fmt.Errorf("top_n must be a valid integer: %w", err)
+	}
+	if topNVal > 0 {
+		req.TopN = &topNVal
 	}
 	for _, d := range docs {
 		req.Documents = append(req.Documents, bloblang.ValueToString(d))
