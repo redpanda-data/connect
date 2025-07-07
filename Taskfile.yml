@@ -1,0 +1,77 @@
+version: '3'
+
+dotenv:
+  - .env
+  - .env.local
+  - .versions
+
+vars:
+  TARGET_DIR: target
+  TOOLS_BIN_DIR: bin
+  VERSION:
+    sh: git describe --tags 2>/dev/null | sed 's/^v//' || echo "0.0.0"
+
+includes:
+  build: ./taskfiles/build.yml
+  docker: ./taskfiles/docker.yml
+  test: ./taskfiles/test.yml
+  tools: ./taskfiles/tools.yml
+
+tasks:
+  bump-benthos:
+    desc: Update Benthos to latest version
+    cmds:
+      - go get -u github.com/redpanda-data/benthos/v4@latest
+      - go mod tidy
+
+  deps:
+    desc: Tidy Go modules
+    cmds:
+      - go mod tidy
+
+  fmt:
+    desc: Format code and tidy modules
+    deps:
+      - tools:install-golangci-lint
+    cmds:
+      - '{{.TOOLS_BIN_DIR}}/golangci-lint fmt cmd/... internal/... public/...'
+      - go mod tidy
+
+  lint:
+    desc: Run linter on code
+    deps:
+      - tools:install-golangci-lint
+    cmds:
+      - '{{.TOOLS_BIN_DIR}}/golangci-lint run cmd/... internal/... public/...'
+
+  vuln:
+    desc: Run vulnerability scanner
+    deps:
+      - tools:install-govulncheck
+    cmds:
+      - '{{.TOOLS_BIN_DIR}}/govulncheck ./...'
+
+  test:
+    desc: Run unit and template tests
+    deps:
+      - test:unit
+      - test:template
+
+  run:
+    desc: Run redpanda-connect with the specified config
+    vars:
+      CONF: '{{default "./config/dev.yaml" .CONF}}'
+    cmds:
+      - go run ./cmd/redpanda-connect --config {{.CONF}}
+
+  docs:
+    desc: Generate docs
+    deps:
+      - build:redpanda-connect
+    vars:
+      WEBSITE_DIR: ./docs/modules
+    cmds:
+      - go run -tags "{{.TAGS}}" ./cmd/tools/docs_gen
+      - go run -tags "{{.TAGS}}" ./cmd/tools/plugins_csv_fmt
+      - '{{.TARGET_DIR}}/redpanda-connect lint --deprecated "./config/examples/*.yaml" "{{.WEBSITE_DIR}}/**/*.md"'
+      - '{{.TARGET_DIR}}/redpanda-connect template lint "./config/template_examples/*.yaml"'

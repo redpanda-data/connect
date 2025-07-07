@@ -1,0 +1,42 @@
+version: '3'
+
+tasks:
+  unit:
+    desc: Run unit tests
+    aliases:
+      - ut
+    cmds:
+      - go test {{.GO_FLAGS}} -ldflags "{{.LD_FLAGS}}" -timeout 3m ./...
+
+  unit-race:
+    desc: Run unit tests with race detection
+    aliases:
+      - ut-race
+    cmds:
+      - go test {{.GO_FLAGS}} -ldflags "{{.LD_FLAGS}}" -timeout 3m -race ./...
+
+  integration:
+    desc: Run integration tests
+    aliases:
+      - it
+    prompt:
+      -|
+      WARNING! Running the integration tests in their entirety consumes a huge amount of computing resources and is likely to time out on most machines.
+      It's recommended that you instead run the integration suite for connectors you are working selectively with `go test -run 'TestIntegration/kafka' ./...` and so on.
+    cmds:
+      - go test {{.GO_FLAGS}} -ldflags "{{.LD_FLAGS}}" -run "^Test.*Integration.*$$" -timeout 5m ./...
+
+  template:
+    desc: Run template tests
+    aliases:
+      - tmpl
+    deps:
+      - :build:redpanda-connect
+    vars:
+      TEMPLATE_FILES:
+        sh: find internal/impl -type f -name "template_*.yaml"
+    cmds:
+      - go test {{.GO_FLAGS}} -ldflags "{{.LD_FLAGS}}" -timeout 3m ./...
+      - '{{.TARGET_DIR}}/redpanda-connect template lint {{.TEMPLATE_FILES}}'
+      - '{{.TARGET_DIR}}/redpanda-connect test ./config/test/...'
+      - '{{.TARGET_DIR}}/redpanda-connect template lint ./config/rag/templates/...'
