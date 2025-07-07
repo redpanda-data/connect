@@ -50,13 +50,13 @@ func connectionFields() []*service.ConfigField {
 			Advanced(),
 		service.NewObjectField(sFieldCredentials,
 			[]*service.ConfigField{
-				service.NewStringField(sFieldCredentialsUsername).Description("The username to connect to the SFTP server.").Default(""),
-				service.NewStringField(sFieldCredentialsPassword).Description("The password for the username to connect to the SFTP server.").Secret().Default(""),
-				service.NewStringField(sFieldCredentialsHostPublicKeyFile).Description("The public key of the SFTP server.").Optional(),
-				service.NewStringField(sFieldCredentialsHostPublicKey).Description("The public key file of the SFTP server.").Optional(),
-				service.NewStringField(sFieldCredentialsPrivateKeyFile).Description("The private key file for the username to connect to the SFTP server.").Optional(),
-				service.NewStringField(sFieldCredentialsPrivateKey).Description("The private key for the username to connect to the SFTP server.").Optional().Secret(),
-				service.NewStringField(sFieldCredentialsPrivateKeyPass).Description("Optional passphrase for private key.").Secret().Default(""),
+				service.NewStringField(sFieldCredentialsUsername).Description("The username to authenticate with the SFTP server.").Default(""),
+				service.NewStringField(sFieldCredentialsPassword).Description("The password for the specified username to connect to the SFTP server.").Secret().Default(""),
+				service.NewStringField(sFieldCredentialsHostPublicKeyFile).Description("The path to the SFTP server's public key file, used for host key verification.").Optional(),
+				service.NewStringField(sFieldCredentialsHostPublicKey).Description("The raw contents of the SFTP server's public key, used for host key verification.").Optional(),
+				service.NewStringField(sFieldCredentialsPrivateKeyFile).Description("The path to the private key file, used for authenticating the username.").Optional(),
+				service.NewStringField(sFieldCredentialsPrivateKey).Description("The raw contents of the private key, used for authenticating the username.").Optional().Secret(),
+				service.NewStringField(sFieldCredentialsPrivateKeyPass).Description("Optional passphrase for decrypting the private key, if it's encrypted.").Secret().Default(""),
 			}...,
 		).Description("The credentials to use to log into the target server.").
 			LintRule(`
