@@ -72,6 +72,7 @@ nats_request_reply:
     root_cas: ""
     root_cas_file: ""
     client_certs: []
+  tls_handshake_first: false
   auth:
     nkey_file: ./seed.nk # No default (optional)
     nkey: '!!!SECRET_SCRUBBED!!!' # No default (optional)
@@ -436,6 +437,15 @@ password: foo
 
 password: ${KEY_PASSWORD}
 ```
+
+=== `tls_handshake_first`
+
+Perform a TLS handshake before sending the INFO protocol message.
+
+
+*Type*: `bool`
+
+*Default*: `false`
 
 === `auth`
 

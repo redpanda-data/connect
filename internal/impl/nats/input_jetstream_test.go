@@ -37,6 +37,7 @@ auth:
   user_credentials_file: test auth user creds file
   user_jwt: test auth inline user JWT
   user_nkey_seed: test auth inline user NKey Seed
+tls_handshake_first: true
 `
 
 		conf, err := spec.ParseYAML(inputConfig, env)
@@ -52,6 +53,7 @@ auth:
 		assert.Equal(t, "test auth user creds file", e.connDetails.authConf.UserCredentialsFile)
 		assert.Equal(t, "test auth inline user JWT", e.connDetails.authConf.UserJWT)
 		assert.Equal(t, "test auth inline user NKey Seed", e.connDetails.authConf.UserNkeySeed)
+		assert.True(t, e.connDetails.tlsHandshakeFirst)
 	})
 
 	t.Run("Missing user_nkey_seed", func(t *testing.T) {
@@ -166,5 +168,26 @@ bind: false
 
 		_, err = newJetStreamReaderFromConfig(conf, service.MockResources())
 		require.Error(t, err)
+	})
+
+	t.Run("TLS handshake first empty", func(t *testing.T) {
+		inputConfig := `
+urls: [ url1, url2 ]
+subject: testsubject
+max_reconnects: -1
+auth:
+  nkey_file: test auth n key file
+  user_credentials_file: test auth user creds file
+  user_jwt: test auth inline user JWT
+  user_nkey_seed: test auth inline user NKey Seed
+`
+
+		conf, err := spec.ParseYAML(inputConfig, env)
+		require.NoError(t, err)
+
+		e, err := newJetStreamReaderFromConfig(conf, service.MockResources())
+		require.NoError(t, err)
+
+		assert.False(t, e.connDetails.tlsHandshakeFirst)
 	})
 }

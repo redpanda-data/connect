@@ -43,18 +43,23 @@ func connectionHeadFields() []*service.ConfigField {
 func connectionTailFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewTLSToggledField("tls"),
+		service.NewBoolField("tls_handshake_first").
+			Description("Perform a TLS handshake before sending the INFO protocol message.").
+			Default(false).
+			Advanced(),
 		authFieldSpec(),
 	}
 }
 
 type connectionDetails struct {
-	label         string
-	logger        *service.Logger
-	tlsConf       *tls.Config
-	authConf      authConfig
-	fs            *service.FS
-	urls          string
-	maxReconnects *int
+	label             string
+	logger            *service.Logger
+	tlsConf           *tls.Config
+	authConf          authConfig
+	fs                *service.FS
+	urls              string
+	maxReconnects     *int
+	tlsHandshakeFirst bool
 }
 
 func connectionDetailsFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (c connectionDetails, err error) {
@@ -76,6 +81,10 @@ func connectionDetailsFromParsed(conf *service.ParsedConfig, mgr *service.Resour
 		}
 	}
 
+	if c.tlsHandshakeFirst, err = conf.FieldBool("tls_handshake_first"); err != nil {
+		return c, err
+	}
+
 	var tlsEnabled bool
 	if c.tlsConf, tlsEnabled, err = conf.FieldTLSToggled("tls"); err != nil {
 		return
@@ -94,6 +103,9 @@ func (c *connectionDetails) get(_ context.Context, extraOpts ...nats.Option) (*n
 	var opts []nats.Option
 	if c.tlsConf != nil {
 		opts = append(opts, nats.Secure(c.tlsConf))
+	}
+	if c.tlsHandshakeFirst {
+		opts = append(opts, nats.TLSHandshakeFirst())
 	}
 	opts = append(opts, nats.Name(c.label))
 	opts = append(opts, errorHandlerOption(c.logger))
