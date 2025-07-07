@@ -129,16 +129,15 @@ Build with Go (any [currently supported version](https://go.dev/dl/)):
 ```shell
 git clone git@github.com:redpanda-data/connect
 cd connect
-make
+task build:all
 ```
 
 ## Formatting and Linting
 
 Redpanda Connect uses [golangci-lint][golangci-lint] for formatting and linting.
-You can install it with `make install-tools` and then run:
 
-- `make fmt` to format the codebase,
-- `make lint` to lint the codebase.
+- `task fmt` to format the codebase,
+- `task lint` to lint the codebase.
 
 Configure your editor to use `gofumpt` as a formatter, see the instructions for different editors [here](https://github.com/mvdan/gofumpt#installation). 
 
@@ -154,8 +153,8 @@ By default Redpanda Connect does not build with components that require linking 
 # With go
 go install -tags "x_benthos_extra" github.com/redpanda-data/connect/v4/cmd/redpanda-connect@latest
 
-# Using make
-make TAGS=x_benthos_extra
+# Using task
+TAGS=x_benthos_extra task build:all
 ```
 
 Note that this tag may change or be broken out into granular tags for individual components outside of major version releases. If you attempt a build and these dependencies are not present you'll see error messages such as `ld: library not found for -lzmq`.
@@ -165,7 +164,7 @@ Note that this tag may change or be broken out into granular tags for individual
 There's a multi-stage `Dockerfile` for creating a Redpanda Connect docker image which results in a minimal image from scratch. You can build it with:
 
 ```shell
-make docker
+task docker:all
 ```
 
 Then use the image:
@@ -182,11 +181,11 @@ docker run --rm \
 
 Contributions are welcome! To prevent CI errors, please always make sure a pull request has been:
 
-- Unit tested with `make test`
-- Linted with `make lint`
-- Formatted with `make fmt`
+- Unit tested with `task test`
+- Linted with `task lint`
+- Formatted with `task fmt`
 
-Note: most integration tests need to spin up Docker containers, so they are skipped by `make test`. You can trigger
+Note: most integration tests need to spin up Docker containers, so they are skipped by `task test`. You can trigger
 them individually via `go test -run "^Test.*Integration.*$" ./internal/impl/<connector directory>/...`.
 
 [inputs]: https://docs.redpanda.com/redpanda-connect/components/inputs/about

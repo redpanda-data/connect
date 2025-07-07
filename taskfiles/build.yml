@@ -1,0 +1,80 @@
+version: '3'
+
+vars:
+  LD_FLAGS: '{{default "-w -s" .LD_FLAGS}}'
+  GO_BUILD_CMD: go build {{.GO_FLAGS}} -tags "{{.TAGS}}" -ldflags "{{.LD_FLAGS}} -X main.Version=v{{.VERSION}} -X main.DateBuilt={{now | date "2006-01-02T15:04:05Z"}}"
+
+tasks:
+  all:
+    desc: Build all apps
+    deps:
+      - redpanda-connect
+      - redpanda-connect-cloud
+      - redpanda-connect-community
+      - redpanda-connect-ai
+
+  redpanda-connect:
+    desc: Build redpanda-connect
+    method: timestamp
+    sources:
+      - internal/**
+      - public/**
+      - go.mod
+      - go.sum
+    generates:
+      - '{{.TARGET_DIR}}/redpanda-connect'
+    cmds:
+      - task: :target-dir
+      - '{{.GO_BUILD_CMD}} -o {{.TARGET_DIR}}/redpanda-connect ./cmd/redpanda-connect'
+
+  redpanda-connect-cloud:
+    desc: Build redpanda-connect-cloud
+    method: timestamp
+    sources:
+      - internal/**
+      - public/**
+      - go.mod
+      - go.sum
+    generates:
+      - '{{.TARGET_DIR}}/redpanda-connect-cloud'
+    cmds:
+      - task: :target-dir
+      - '{{.GO_BUILD_CMD}} -o {{.TARGET_DIR}}/redpanda-connect-cloud ./cmd/redpanda-connect-cloud'
+
+  redpanda-connect-community:
+    desc: Build redpanda-connect-community
+    method: timestamp
+    sources:
+      - internal/**
+      - public/**
+      - go.mod
+      - go.sum
+    generates:
+      - '{{.TARGET_DIR}}/redpanda-connect-community'
+    cmds:
+      - task: :target-dir
+      - '{{.GO_BUILD_CMD}} -o {{.TARGET_DIR}}/redpanda-connect-community ./cmd/redpanda-connect-community'
+
+  redpanda-connect-ai:
+    desc: Build redpanda-connect-ai
+    method: timestamp
+    sources:
+      - internal/**
+      - public/**
+      - go.mod
+      - go.sum
+    generates:
+      - '{{.TARGET_DIR}}/redpanda-connect-ai'
+    cmds:
+      - task: :target-dir
+      - '{{.GO_BUILD_CMD}} -o {{.TARGET_DIR}}/redpanda-connect-ai ./cmd/redpanda-connect-ai'
+
+  :target-dir:
+    internal: true
+    cmds:
+      - mkdir -p '{{.TARGET_DIR}}'
+
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - rm -rf {{.TARGET_DIR}}
