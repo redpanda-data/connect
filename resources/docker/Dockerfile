@@ -19,6 +19,7 @@ ENV GOOS=linux
 RUN useradd -u 10001 connect
 
 RUN apt-get update && apt-get install -y libcap2-bin
+RUN go install github.com/go-task/task/v3/cmd/task@latest
 
 WORKDIR /go/src/github.com/redpanda-data/connect/
 # Update dependencies: On unchanged dependencies, cached layer will be reused
@@ -29,8 +30,8 @@ RUN go mod download
 COPY . /go/src/github.com/redpanda-data/connect/
 # Tag timetzdata required for busybox base image:
 # https://github.com/benthosdev/benthos/issues/897
-RUN make TAGS="timetzdata" redpanda-connect
-RUN setcap 'cap_sys_chroot=+ep' target/bin/redpanda-connect
+RUN TAGS="timetzdata" task build:redpanda-connect
+RUN setcap 'cap_sys_chroot=+ep' target/redpanda-connect
 
 # Pack
 FROM busybox AS package
@@ -42,7 +43,7 @@ WORKDIR /
 
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /etc/passwd /etc/passwd
-COPY --from=build /go/src/github.com/redpanda-data/connect/target/bin/redpanda-connect .
+COPY --from=build /go/src/github.com/redpanda-data/connect/target/redpanda-connect .
 COPY ./config/docker.yaml /connect.yaml
 
 USER connect
