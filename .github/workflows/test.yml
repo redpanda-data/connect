@@ -21,6 +21,7 @@ jobs:
 
     - name: Install Go
       uses: actions/setup-go@v5
+      id: setup-go
       with:
         go-version: stable
 
@@ -29,14 +30,17 @@ jobs:
         sudo apt update -y
         sudo apt install -y --no-install-recommends libzmq3-dev
 
+    - name: Setup Task
+      uses: arduino/setup-task@v2
+
     - name: Deps
-      run: make deps && git diff-index --quiet HEAD || { >&2 echo "Stale go.{mod,sum} detected. This can be fixed with 'make deps'."; exit 1; }
+      run: task deps && git diff-index --quiet HEAD || { >&2 echo "Stale go.{mod,sum} detected. This can be fixed with 'task deps'."; exit 1; }
 
     - name: Docs
-      run: CGO_ENABLED=1 make docs TAGS=x_benthos_extra && test -z "$(git ls-files --others --modified --exclude-standard)" || { >&2 echo "Stale docs detected. This can be fixed with 'make docs'."; exit 1; }
+      run: CGO_ENABLED=1 TAGS=x_benthos_extra task docs && test -z "$(git ls-files --others --modified --exclude-standard)" || { >&2 echo "Stale docs detected. This can be fixed with 'task docs'."; exit 1; }
 
     - name: Test
-      run: make test
+      run: task test
 
   golangci-lint:
     if: ${{ github.repository == 'redpanda-data/connect' || github.event_name != 'schedule' }}
