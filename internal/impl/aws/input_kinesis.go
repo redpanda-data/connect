@@ -51,6 +51,7 @@ const (
 	kiFieldRebalancePeriod  = "rebalance_period"
 	kiFieldStartFromOldest  = "start_from_oldest"
 	kiFieldBatching         = "batching"
+	kiFieldRecordPullDelay  = "record_pull_delay"
 
 	// Kinesis metrics
 	metricShardsPerClient = "kinesis_client_shards"
@@ -66,6 +67,7 @@ type kiConfig struct {
 	LeasePeriod      string
 	RebalancePeriod  string
 	StartFromOldest  bool
+	RecordPullDelay  string
 }
 
 func kinesisInputConfigFromParsed(pConf *service.ParsedConfig) (conf kiConfig, err error) {
@@ -93,6 +95,9 @@ func kinesisInputConfigFromParsed(pConf *service.ParsedConfig) (conf kiConfig, e
 		return
 	}
 	if conf.StartFromOldest, err = pConf.FieldBool(kiFieldStartFromOldest); err != nil {
+		return
+	}
+	if conf.RecordPullDelay, err = pConf.FieldString(kiFieldRecordPullDelay); err != nil {
 		return
 	}
 	return
@@ -170,6 +175,10 @@ Use the `+"`batching`"+` fields to configure an optional xref:configuration:batc
 		service.NewBoolField(kiFieldStartFromOldest).
 			Description("Whether to consume from the oldest message when a sequence does not yet exist for the stream.").
 			Default(true),
+		service.NewDurationField(kiFieldRecordPullDelay).
+			Description("The minimum delay between GetRecords API calls for each shard. This can be used to prevent hitting AWS API rate limits (5 GetRecords calls per second per shard across all consumers). Set to 0s to disable the delay.").
+			Default("0s").
+			Advanced(),
 	).
 		Fields(config.SessionFields()...).
 		Field(service.NewBatchPolicyField(kiFieldBatching))
@@ -223,6 +232,7 @@ type kinesisReader struct {
 	stealGracePeriod time.Duration
 	leasePeriod      time.Duration
 	rebalancePeriod  time.Duration
+	recordPullDelay  time.Duration
 
 	cMut    sync.Mutex
 	msgChan chan asyncMessage
@@ -365,6 +375,9 @@ func newKinesisReaderFromConfig(conf kiConfig, batcher service.BatchPolicy, sess
 	}
 	if k.rebalancePeriod, err = time.ParseDuration(k.conf.RebalancePeriod); err != nil {
 		return nil, fmt.Errorf("failed to parse rebalance period string: %v", err)
+	}
+	if k.recordPullDelay, err = time.ParseDuration(k.conf.RecordPullDelay); err != nil {
+		return nil, fmt.Errorf("failed to parse record pull delay string: %v", err)
 	}
 
 	// Initialize metrics
@@ -562,7 +575,13 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, info streamInfo, shardID
 			if state == awsKinesisConsumerConsuming && len(pending) == 0 && nextPullChan == unblockedChan {
 				if pending, iter, err = k.getRecords(info, iter); err != nil {
 					if !awsErrIsTimeout(err) {
-						nextPullChan = time.After(boff.NextBackOff())
+						// Apply the configured record pull delay, or the backoff delay, whichever is longer
+						backoffDelay := boff.NextBackOff()
+						if k.recordPullDelay > backoffDelay {
+							nextPullChan = time.After(k.recordPullDelay)
+						} else {
+							nextPullChan = time.After(backoffDelay)
+						}
 
 						var aerr *types.ExpiredIteratorException
 						if errors.As(err, &aerr) {
@@ -578,10 +597,21 @@ func (k *kinesisReader) runConsumer(wg *sync.WaitGroup, info streamInfo, shardID
 						}
 					}
 				} else if len(pending) == 0 {
-					nextPullChan = time.After(boff.NextBackOff())
+					// Apply the configured record pull delay, or the backoff delay, whichever is longer
+					backoffDelay := boff.NextBackOff()
+					if k.recordPullDelay > backoffDelay {
+						nextPullChan = time.After(k.recordPullDelay)
+					} else {
+						nextPullChan = time.After(backoffDelay)
+					}
 				} else {
 					boff.Reset()
-					nextPullChan = blockedChan
+					// Apply the configured record pull delay if set, otherwise block immediately
+					if k.recordPullDelay > 0 {
+						nextPullChan = time.After(k.recordPullDelay)
+					} else {
+						nextPullChan = blockedChan
+					}
 				}
 				// The getRecords method ensures that it returns the input
 				// iterator whenever it errors out. Therefore, regardless of the

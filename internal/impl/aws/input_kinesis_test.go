@@ -16,9 +16,13 @@ package aws
 
 import (
 	"testing"
+	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func TestStreamIDParser(t *testing.T) {
@@ -74,6 +78,99 @@ func TestStreamIDParser(t *testing.T) {
 				require.NoError(t, err)
 				assert.Equal(t, test.remaining, rem)
 				assert.Equal(t, test.shard, shard)
+			}
+		})
+	}
+}
+
+func TestKinesisInputConfig(t *testing.T) {
+	tests := []struct {
+		name          string
+		config        string
+		expectedDelay time.Duration
+		expectError   bool
+		errorContains string
+	}{
+		{
+			name: "default record_pull_delay",
+			config: `
+streams: ["test-stream"]
+dynamodb:
+  table: "test-table"
+`,
+			expectedDelay: 0,
+			expectError:   false,
+		},
+		{
+			name: "explicit record_pull_delay",
+			config: `
+streams: ["test-stream"]
+dynamodb:
+  table: "test-table"
+record_pull_delay: "250ms"
+`,
+			expectedDelay: 250 * time.Millisecond,
+			expectError:   false,
+		},
+		{
+			name: "zero record_pull_delay",
+			config: `
+streams: ["test-stream"]
+dynamodb:
+  table: "test-table"
+record_pull_delay: "0s"
+`,
+			expectedDelay: 0,
+			expectError:   false,
+		},
+		{
+			name: "one second record_pull_delay",
+			config: `
+streams: ["test-stream"]
+dynamodb:
+  table: "test-table"
+record_pull_delay: "1s"
+`,
+			expectedDelay: time.Second,
+			expectError:   false,
+		},
+		{
+			name: "invalid record_pull_delay",
+			config: `
+streams: ["test-stream"]
+dynamodb:
+  table: "test-table"
+record_pull_delay: "invalid"
+`,
+			expectError:   true,
+			errorContains: "failed to parse record pull delay",
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			pConf, err := kinesisInputSpec().ParseYAML(test.config, nil)
+			require.NoError(t, err)
+
+			conf, err := kinesisInputConfigFromParsed(pConf)
+			require.NoError(t, err)
+
+			// Create a mock batch policy and sessions for testing
+			batcher := service.BatchPolicy{}
+			sess := aws.Config{Region: "us-east-1"}
+			ddbSess := aws.Config{Region: "us-east-1"}
+
+			reader, err := newKinesisReaderFromConfig(conf, batcher, sess, ddbSess, service.MockResources())
+
+			if test.expectError {
+				require.Error(t, err)
+				if test.errorContains != "" {
+					assert.Contains(t, err.Error(), test.errorContains)
+				}
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, test.expectedDelay, reader.recordPullDelay)
 			}
 		})
 	}
