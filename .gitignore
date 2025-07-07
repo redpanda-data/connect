@@ -8,6 +8,7 @@ site
 TODO.md
 release_notes.md
 .idea
+.task
 .vscode
 .op
 __pycache__
