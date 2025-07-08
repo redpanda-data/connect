@@ -86,7 +86,7 @@ func NewRedpandaCache(opts []kgo.Opt, topic string) (service.Cache, error) {
 		kgo.DefaultProduceTopic(topic),
 		kgo.RecordPartitioner(kgo.StickyKeyPartitioner(nil)),
 	)
-	producer, err := kgo.NewClient(opts...)
+	producer, err := NewFranzClient(opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +122,7 @@ func (r *redpandaCache) Delete(ctx context.Context, key string) error {
 
 // Get implements service.Cache.
 func (r *redpandaCache) Get(ctx context.Context, key string) ([]byte, error) {
-	client, err := kgo.NewClient(r.opts...)
+	client, err := NewFranzClient(r.opts...)
 	if err != nil {
 		return nil, err
 	}

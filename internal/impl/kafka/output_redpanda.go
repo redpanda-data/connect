@@ -90,7 +90,7 @@ func init() {
 
 						if client == nil {
 							var err error
-							if client, err = kgo.NewClient(clientOpts...); err != nil {
+							if client, err = NewFranzClient(clientOpts...); err != nil {
 								return err
 							}
 						}

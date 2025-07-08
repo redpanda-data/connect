@@ -456,7 +456,7 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 		)
 	}
 
-	if f.Client, err = kgo.NewClient(clientOpts...); err != nil {
+	if f.Client, err = NewFranzClient(clientOpts...); err != nil {
 		return err
 	}
 

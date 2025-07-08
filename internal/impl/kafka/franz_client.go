@@ -15,10 +15,15 @@
 package kafka
 
 import (
+	"context"
 	"crypto/tls"
+	"errors"
+	"net"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/twmb/franz-go/pkg/kerr"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/sasl"
 
@@ -150,4 +155,93 @@ func FranzConnectionOptsFromConfig(conf *service.ParsedConfig, log *service.Logg
 		return nil, err
 	}
 	return d.FranzOpts(), nil
+}
+
+type kgoConnectionChecker struct {
+	brokerConnected  bool
+	unrecoverableErr error
+	mut              sync.Mutex
+}
+
+func (k *kgoConnectionChecker) OnBrokerConnect(_ kgo.BrokerMetadata, _ time.Duration, _ net.Conn, err error) {
+	k.mut.Lock()
+	defer k.mut.Unlock()
+
+	if err == nil {
+		k.brokerConnected = true
+		return
+	}
+
+	var ke *kerr.Error
+	if !errors.As(err, &ke) {
+		return
+	}
+
+	if !ke.Retriable {
+		k.unrecoverableErr = err
+	}
+}
+
+// PingAndWait waits until either a successful connection has been established
+// or an unrecoverable error has been encountered.
+func (k *kgoConnectionChecker) PingAndWait(ctx context.Context, client *kgo.Client) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	var pingErr error
+	go func() {
+		err := client.Ping(ctx)
+		k.mut.Lock()
+		pingErr = err
+		k.mut.Unlock()
+	}()
+
+	for {
+		k.mut.Lock()
+		connected := k.brokerConnected
+		unrecovErr := k.unrecoverableErr
+		pingErrTmp := pingErr
+		k.mut.Unlock()
+
+		if pingErrTmp != nil {
+			return pingErrTmp
+		}
+		if connected {
+			return nil
+		}
+		if unrecovErr != nil {
+			return unrecovErr
+		}
+
+		select {
+		case <-time.After(time.Millisecond * 10):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
+// NewFranzClient attempts to establish a new kafka client, and ensures that
+// config errors such as invalid SASL credentials result in the client being
+// closed and an error being returned instead of an endless retry loop.
+func NewFranzClient(opts ...kgo.Opt) (*kgo.Client, error) {
+	var connChecker kgoConnectionChecker
+
+	tmpOpts := append([]kgo.Opt{}, opts...)
+	tmpOpts = append(tmpOpts, kgo.WithHooks(&connChecker))
+
+	client, err := kgo.NewClient(tmpOpts...)
+	if err != nil {
+		return nil, err
+	}
+
+	ctx, done := context.WithTimeout(context.Background(), time.Minute)
+	defer done()
+
+	if err := connChecker.PingAndWait(ctx, client); err != nil {
+		client.Close()
+		return nil, service.NewErrBackOff(err, time.Minute)
+	}
+
+	return client, nil
 }

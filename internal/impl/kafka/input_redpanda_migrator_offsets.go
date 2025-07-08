@@ -184,7 +184,7 @@ func (rmoi *redpandaMigratorOffsetsInput) matchesTopic(topic string) bool {
 }
 
 func (rmoi *redpandaMigratorOffsetsInput) getTimestampForCommittedOffset(ctx context.Context, topic string, partition int32, offset int64) (timestamp int64, isHighWatermark bool, err error) {
-	client, err := kgo.NewClient(rmoi.clientOpts...)
+	client, err := NewFranzClient(rmoi.clientOpts...)
 	if err != nil {
 		return 0, false, fmt.Errorf("failed to create Kafka client: %s", err)
 	}
@@ -247,7 +247,7 @@ func (rmoi *redpandaMigratorOffsetsInput) Connect(ctx context.Context) error {
 	}
 
 	var err error
-	rmoi.client, err = kgo.NewClient(rmoi.clientOpts...)
+	rmoi.client, err = NewFranzClient(rmoi.clientOpts...)
 	if err != nil {
 		return fmt.Errorf("failed to connect: %s", err)
 	}

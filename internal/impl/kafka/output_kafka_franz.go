@@ -101,7 +101,7 @@ func init() {
 					func(_ context.Context, fn FranzSharedClientUseFn) error {
 						if client == nil {
 							var err error
-							if client, err = kgo.NewClient(clientOpts...); err != nil {
+							if client, err = NewFranzClient(clientOpts...); err != nil {
 								return err
 							}
 						}

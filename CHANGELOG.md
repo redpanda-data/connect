@@ -9,6 +9,10 @@ All notable changes to this project will be documented in this file.
 
 - The `gcp_cloud_storage` output field `collision_mode` now supports interpolation functions. (@Jeffail)
 
+### Fixed
+
+- All kafka components now detect unrecoverable connection issues and back off more aggressively. (@Jeffail)
+
 ## 4.59.0 - 2025-06-27
 
 ### Added

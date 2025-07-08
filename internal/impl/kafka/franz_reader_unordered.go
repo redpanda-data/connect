@@ -503,7 +503,7 @@ func (f *FranzReaderUnordered) Connect(ctx context.Context) error {
 	}
 
 	var err error
-	if cl, err = kgo.NewClient(clientOpts...); err != nil {
+	if cl, err = NewFranzClient(clientOpts...); err != nil {
 		return err
 	}
 

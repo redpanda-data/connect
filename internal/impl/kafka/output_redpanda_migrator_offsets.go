@@ -198,7 +198,7 @@ func (w *redpandaMigratorOffsetsWriter) Connect(ctx context.Context) error {
 
 	var err error
 	var client *kgo.Client
-	if client, err = kgo.NewClient(w.clientOpts...); err != nil {
+	if client, err = NewFranzClient(w.clientOpts...); err != nil {
 		return err
 	}
 

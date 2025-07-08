@@ -334,7 +334,7 @@ func (f *franzTopicLoggerWriter) Connect(context.Context) error {
 		return nil
 	}
 
-	cl, err := kgo.NewClient(f.clientOpts...)
+	cl, err := kafka.NewFranzClient(f.clientOpts...)
 	if err != nil {
 		return err
 	}
