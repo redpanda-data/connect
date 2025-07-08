@@ -1,5 +1,13 @@
 .PHONY: all deps docker clean test test-race test-integration fmt lint install
 
+define DEPRECATION_WARNING
+$(warning DEPRECATED: This Makefile is deprecated. Please use https://taskfile.dev instead.)
+
+endef
+
+# Display deprecation warning for all targets
+$(eval $(DEPRECATION_WARNING))
+
 TAGS ?=
 
 INSTALL_DIR        ?= $(GOPATH)/bin
