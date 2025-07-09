@@ -17,7 +17,6 @@ package kafka
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -503,13 +502,8 @@ func (f *FranzReaderUnordered) Connect(ctx context.Context) error {
 	}
 
 	var err error
-	if cl, err = kgo.NewClient(clientOpts...); err != nil {
+	if cl, err = NewFranzClient(ctx, clientOpts...); err != nil {
 		return err
-	}
-
-	// Check connectivity to cluster
-	if err = cl.Ping(ctx); err != nil {
-		return fmt.Errorf("failed to connect to cluster: %s", err)
 	}
 
 	connErrBackOff := backoff.NewExponentialBackOff()

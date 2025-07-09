@@ -15,6 +15,7 @@
 package kafka
 
 import (
+	"context"
 	"crypto/tls"
 	"strings"
 	"time"
@@ -150,4 +151,24 @@ func FranzConnectionOptsFromConfig(conf *service.ParsedConfig, log *service.Logg
 		return nil, err
 	}
 	return d.FranzOpts(), nil
+}
+
+// NewFranzClient attempts to establish a new kafka client, and ensures that
+// config errors such as invalid SASL credentials result in the client being
+// closed and an error being returned instead of an endless retry loop.
+func NewFranzClient(ctx context.Context, opts ...kgo.Opt) (*kgo.Client, error) {
+	client, err := kgo.NewClient(opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := client.Ping(ctx); err != nil {
+		client.Close()
+		if !kgo.IsRetryableBrokerErr(err) {
+			return nil, service.NewErrBackOff(err, time.Minute)
+		}
+		return nil, err
+	}
+
+	return client, nil
 }

@@ -329,12 +329,12 @@ func newTopicLoggerWriterFromConfig(conf *service.ParsedConfig, log *service.Log
 
 //------------------------------------------------------------------------------
 
-func (f *franzTopicLoggerWriter) Connect(context.Context) error {
+func (f *franzTopicLoggerWriter) Connect(ctx context.Context) error {
 	if f.client != nil {
 		return nil
 	}
 
-	cl, err := kgo.NewClient(f.clientOpts...)
+	cl, err := kafka.NewFranzClient(ctx, f.clientOpts...)
 	if err != nil {
 		return err
 	}
