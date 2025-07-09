@@ -427,11 +427,9 @@ func (w *FranzWriter) BatchToRecords(_ context.Context, b service.MessageBatch) 
 
 // Connect to the target seed brokers.
 func (w *FranzWriter) Connect(ctx context.Context) error {
-	return w.hooks.accessClientFn(ctx, func(details *FranzSharedClientInfo) error {
-		// Check connectivity to cluster
-		if err := details.Client.Ping(ctx); err != nil {
-			return fmt.Errorf("failed to connect to cluster: %s", err)
-		}
+	return w.hooks.accessClientFn(ctx, func(_ *FranzSharedClientInfo) error {
+		// Simply accessing the client is enough to establish that it is
+		// successfully connected.
 		return nil
 	})
 }

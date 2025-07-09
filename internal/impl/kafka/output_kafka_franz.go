@@ -98,10 +98,10 @@ func init() {
 			output, err = NewFranzWriterFromConfig(
 				conf,
 				NewFranzWriterHooks(
-					func(_ context.Context, fn FranzSharedClientUseFn) error {
+					func(ctx context.Context, fn FranzSharedClientUseFn) error {
 						if client == nil {
 							var err error
-							if client, err = NewFranzClient(clientOpts...); err != nil {
+							if client, err = NewFranzClient(ctx, clientOpts...); err != nil {
 								return err
 							}
 						}

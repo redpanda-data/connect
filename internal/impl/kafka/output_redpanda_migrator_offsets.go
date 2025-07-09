@@ -198,13 +198,8 @@ func (w *redpandaMigratorOffsetsWriter) Connect(ctx context.Context) error {
 
 	var err error
 	var client *kgo.Client
-	if client, err = NewFranzClient(w.clientOpts...); err != nil {
+	if client, err = NewFranzClient(ctx, w.clientOpts...); err != nil {
 		return err
-	}
-
-	// Check connectivity to cluster
-	if err := client.Ping(ctx); err != nil {
-		return fmt.Errorf("failed to connect to cluster: %s", err)
 	}
 
 	// The default kadm client timeout is 15s. Do we need to make this configurable?
