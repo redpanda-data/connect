@@ -89,6 +89,7 @@ input:
     rebalance_period: 30s
     lease_period: 30s
     start_from_oldest: true
+    record_pull_delay: 0s
     region: "" # No default (optional)
     endpoint: "" # No default (optional)
     credentials:
@@ -351,6 +352,15 @@ Whether to consume from the oldest message when a sequence does not yet exist fo
 *Type*: `bool`
 
 *Default*: `true`
+
+=== `record_pull_delay`
+
+The minimum delay between GetRecords API calls for each shard. This can be used to prevent hitting AWS API rate limits (5 GetRecords calls per second per shard across all consumers). Set to 0s to disable the delay.
+
+
+*Type*: `string`
+
+*Default*: `"0s"`
 
 === `region`
 
