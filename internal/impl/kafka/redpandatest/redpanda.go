@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"testing"
 	"time"
 
@@ -55,23 +56,29 @@ func StartRedpanda(t *testing.T, pool *dockertest.Pool, exposeBroker, autocreate
 		cmd = append(cmd, "--set redpanda.auto_create_topics_enabled=false")
 	}
 
+	// Port bindings takes precedence over exposed ports. When port bindings are
+	// specified, the exposed ports are ignored. The Admin API is required for
+	// health checks.
+	portBindings := map[docker.Port][]docker.PortBinding{
+		docker.Port("9644/tcp"): {{HostPort: "0"}},
+		docker.Port("8081/tcp"): {{HostPort: "0"}},
+	}
+
 	// Expose Schema Registry and Admin API by default. The Admin API is required for health checks.
-	exposedPorts := []string{"8081/tcp", "9644/tcp"}
-	var portBindings map[docker.Port][]docker.PortBinding
-	var kafkaPort string
+	kafkaPort := "9092/tcp"
 	if exposeBroker {
-		brokerPort, err := integration.GetFreePort()
+		freePort, err := integration.GetFreePort()
 		if err != nil {
-			return RedpandaEndpoints{}, fmt.Errorf("failed to start container: %s", err)
+			return RedpandaEndpoints{}, fmt.Errorf("get free port: %s", err)
 		}
+		kafkaPort = fmt.Sprintf("%d/tcp", freePort)
 
 		// Note: Schema Registry uses `--advertise-kafka-addr` to talk to the broker, so we need to use the same port for `--kafka-addr`.
 		// TODO: Ensure we don't stomp over some ports which are already in use inside the container.
-		cmd = append(cmd, fmt.Sprintf("--kafka-addr 0.0.0.0:%d", brokerPort), fmt.Sprintf("--advertise-kafka-addr localhost:%d", brokerPort))
-
-		kafkaPort = fmt.Sprintf("%d/tcp", brokerPort)
-		exposedPorts = append(exposedPorts, kafkaPort)
-		portBindings = map[docker.Port][]docker.PortBinding{docker.Port(kafkaPort): {{HostPort: kafkaPort}}}
+		cmd = append(cmd, fmt.Sprintf("--kafka-addr 0.0.0.0:%d", freePort), fmt.Sprintf("--advertise-kafka-addr localhost:%d", freePort))
+		portBindings[docker.Port(kafkaPort)] = []docker.PortBinding{{HostPort: strconv.Itoa(freePort)}}
+	} else {
+		portBindings[docker.Port(kafkaPort)] = []docker.PortBinding{{HostPort: "0"}}
 	}
 
 	options := &dockertest.RunOptions{
@@ -79,7 +86,6 @@ func StartRedpanda(t *testing.T, pool *dockertest.Pool, exposeBroker, autocreate
 		Tag:          "latest",
 		Hostname:     "redpanda",
 		Cmd:          cmd,
-		ExposedPorts: exposedPorts,
 		PortBindings: portBindings,
 	}
 
@@ -100,7 +106,8 @@ func StartRedpanda(t *testing.T, pool *dockertest.Pool, exposeBroker, autocreate
 		ctx, done := context.WithTimeout(t.Context(), 3*time.Second)
 		defer done()
 
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("http://localhost:%s/v1/cluster/health_overview", resource.GetPort("9644/tcp")), nil)
+		healthURL := fmt.Sprintf("http://localhost:%s/v1/cluster/health_overview", resource.GetPort("9644/tcp"))
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, healthURL, nil)
 		if err != nil {
 			return fmt.Errorf("failed to create request: %s", err)
 		}
