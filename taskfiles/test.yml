@@ -5,15 +5,17 @@ tasks:
     desc: Run unit tests
     aliases:
       - ut
+    vars:
+      TIMEOUT: '{{if .CI}}5m{{else}}1m{{end}}'
     cmds:
-      - go test {{.GO_FLAGS}} -ldflags "{{.LD_FLAGS}}" -timeout 3m ./...
+      - go test {{.GO_FLAGS}} -ldflags "{{.LD_FLAGS}}" -timeout {{.TIMEOUT}} -shuffle=on ./...
 
   unit-race:
     desc: Run unit tests with race detection
     aliases:
       - ut-race
     cmds:
-      - go test {{.GO_FLAGS}} -ldflags "{{.LD_FLAGS}}" -timeout 3m -race ./...
+      - go test {{.GO_FLAGS}} -ldflags "{{.LD_FLAGS}}" -timeout 3m -shuffle=on -race ./...
 
   integration:
     desc: Run integration tests for each package with integration tests
@@ -56,8 +58,9 @@ tasks:
     vars:
       TEMPLATE_FILES:
         sh: find internal/impl -type f -name "template_*.yaml"
+      TIMEOUT: '{{if .CI}}5m{{else}}1m{{end}}'
     cmds:
-      - go test {{.GO_FLAGS}} -ldflags "{{.LD_FLAGS}}" -timeout 3m ./...
+      - go test {{.GO_FLAGS}} -ldflags "{{.LD_FLAGS}}" -timeout {{.TIMEOUT}} ./...
       - '{{.TARGET_DIR}}/redpanda-connect template lint {{.TEMPLATE_FILES}}'
       - '{{.TARGET_DIR}}/redpanda-connect test ./config/test/...'
       - '{{.TARGET_DIR}}/redpanda-connect template lint ./config/rag/templates/...'
