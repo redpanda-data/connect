@@ -14,6 +14,10 @@ All notable changes to this project will be documented in this file.
 - All kafka components now detect unrecoverable connection issues and back off more aggressively. (@Jeffail)
 - The `redpanda_migrator_offsets` input now fetches record timestamps in parallel and discards consumer groups which point to truncated records. (@mihaitodor)
 
+### Changed
+
+- The `redpanda_migrator` input no longer skips tombstone records. (@mihaitodor)
+
 ## 4.59.0 - 2025-06-27
 
 ### Added

@@ -170,33 +170,6 @@ func (rmi *redpandaMigratorInput) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (rmi *redpandaMigratorInput) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
-	for {
-		batch, ack, err := rmi.FranzReaderOrdered.ReadBatch(ctx)
-		if err != nil {
-			return batch, ack, err
-		}
-
-		batch = slices.DeleteFunc(batch, func(msg *service.Message) bool {
-			b, err := msg.AsBytes()
-
-			if b == nil {
-				rmi.mgr.Logger().Debugf("Skipping tombstone message")
-				return true
-			}
-
-			return err != nil
-		})
-
-		if len(batch) == 0 {
-			_ = ack(ctx, nil) // TODO: Log this error?
-			continue
-		}
-
-		return batch, ack, nil
-	}
-}
-
 func (rmi *redpandaMigratorInput) Close(ctx context.Context) error {
 	_, _ = FranzSharedClientPop(rmi.clientLabel, rmi.mgr)
 
