@@ -1,0 +1,29 @@
+name: Integration Tests
+
+on:
+  schedule:
+    # Run every day at 2AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    # Allow manual triggering
+
+jobs:
+  integration-test:
+    if: ${{ github.repository == 'redpanda-data/connect' }}
+    runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: 0
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: Setup Task
+        uses: arduino/setup-task@v2
+
+      - name: Run Integration Tests
+        run: task test:integration
