@@ -298,6 +298,11 @@ func init() {
 								return nil
 							}
 
+							if record.Value == nil {
+								// Do not attept to translate schema IDs for tombstone records.
+								return nil
+							}
+
 							var ch franz_sr.ConfluentHeader
 							schemaID, _, err := ch.DecodeID(record.Value)
 							if err != nil {
