@@ -221,8 +221,9 @@ func newVertexAIProcessor(conf *service.ParsedConfig, mgr *service.Resources) (p
 			return
 		}
 		creds, err = credentials.DetectDefault(&credentials.DetectOptions{
-			Scopes:          []string{"https://www.googleapis.com/auth/cloud-vertex-ai.firstparty.predict"},
-			CredentialsJSON: []byte(jsonObject),
+			Scopes:           []string{"https://www.googleapis.com/auth/cloud-vertex-ai.firstparty.predict"},
+			CredentialsJSON:  []byte(jsonObject),
+			UseSelfSignedJWT: true,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to load json credentials: %w", err)

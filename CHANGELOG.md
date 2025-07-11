@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.60.1 - 2025-07-11
+
+### Fixed
+
+- Fixed using a `credentials_json` with `gcp_vertex_ai_chat`
+
 ## 4.60.0 - 2025-07-10
 
 ### Added
