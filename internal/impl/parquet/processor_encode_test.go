@@ -333,7 +333,7 @@ func TestParquetEncodeProcessor(t *testing.T) {
 			expectedDataBytes, err := json.Marshal(test.input)
 			require.NoError(t, err)
 
-			reader, err := newParquetEncodeProcessor(nil, testPMSchema(), &parquet.Uncompressed)
+			reader, err := newParquetEncodeProcessor(nil, testPMSchema(), "", &parquet.Uncompressed)
 			require.NoError(t, err)
 
 			readerResBatches, err := reader.ProcessBatch(t.Context(), service.MessageBatch{
@@ -380,7 +380,7 @@ func TestParquetEncodeProcessor(t *testing.T) {
 			inBatch = append(inBatch, service.NewMessage(dataBytes))
 		}
 
-		reader, err := newParquetEncodeProcessor(nil, testPMSchema(), &parquet.Uncompressed)
+		reader, err := newParquetEncodeProcessor(nil, testPMSchema(), "", &parquet.Uncompressed)
 		require.NoError(t, err)
 
 		readerResBatches, err := reader.ProcessBatch(t.Context(), inBatch)
