@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"testing"
 	"time"
 
@@ -71,7 +72,9 @@ func StartRedpanda(t *testing.T, pool *dockertest.Pool, exposeBroker, autocreate
 
 		kafkaPort = fmt.Sprintf("%d/tcp", brokerPort)
 		exposedPorts = append(exposedPorts, kafkaPort)
-		portBindings = map[docker.Port][]docker.PortBinding{docker.Port(kafkaPort): {{HostPort: kafkaPort}}}
+		portBindings = map[docker.Port][]docker.PortBinding{
+			docker.Port(kafkaPort): {{HostPort: strconv.Itoa(brokerPort)}},
+		}
 	}
 
 	options := &dockertest.RunOptions{
