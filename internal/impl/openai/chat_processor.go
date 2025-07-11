@@ -736,7 +736,8 @@ func (p *chatProcessor) Process(ctx context.Context, msg *service.Message) (serv
 		if idx == -1 {
 			return nil, fmt.Errorf("unknown tool call from model %s", invoked.Function.Name)
 		}
-		toolMsg := service.NewMessage([]byte(invoked.Function.Arguments))
+		toolMsg := msg.Copy()
+		toolMsg.SetBytes([]byte(invoked.Function.Arguments))
 		toolBatches, err := service.ExecuteProcessors(ctx, p.tools[idx].processors, service.MessageBatch{toolMsg})
 		if err != nil {
 			return nil, fmt.Errorf("error calling tool %s: %w", invoked.Function.Name, err)
