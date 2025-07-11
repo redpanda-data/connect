@@ -1,0 +1,66 @@
+version: '3'
+
+tasks:
+  unit:
+    desc: Run unit tests
+    aliases:
+      - ut
+    vars:
+      TIMEOUT: '{{if .CI}}5m{{else}}1m{{end}}'
+    cmds:
+      - go test {{.GO_FLAGS}} -ldflags "{{.LD_FLAGS}}" -timeout {{.TIMEOUT}} -shuffle=on ./...
+
+  unit-race:
+    desc: Run unit tests with race detection
+    aliases:
+      - ut-race
+    cmds:
+      - go test {{.GO_FLAGS}} -ldflags "{{.LD_FLAGS}}" -timeout 3m -shuffle=on -race ./...
+
+  integration:
+    desc: Run integration tests for each package with integration tests
+    aliases:
+      - it
+    cmds:
+      - |
+        set -e -o pipefail -u
+        failed=()
+        
+        for pkg in $(find . -name "*integration*_test.go" | xargs dirname | sort -R | uniq)
+        do
+          task test:integration-package PKG="$pkg" || failed+=("$pkg")
+        done
+        
+        if [ ${#failed[@]} -ne 0 ]
+        then
+          echo "FAILED PACKAGES:"
+          printf "  - %s\n" "${failed[@]}"
+          exit 1
+        fi
+    silent: true
+
+  integration-package:
+    desc: Run integration tests for package PKG
+    requires:
+      vars:
+        - PKG
+    vars:
+      TIMEOUT: '{{if .CI}}15m{{else}}5m{{end}}'
+    cmds:
+      - go test {{.GO_FLAGS}} -ldflags "{{.LD_FLAGS}}" -run "^Test.*Integration" -timeout {{.TIMEOUT}} {{.PKG}}
+
+  template:
+    desc: Run template tests
+    aliases:
+      - tmpl
+    deps:
+      - :build:redpanda-connect
+    vars:
+      TEMPLATE_FILES:
+        sh: find internal/impl -type f -name "template_*.yaml"
+      TIMEOUT: '{{if .CI}}5m{{else}}1m{{end}}'
+    cmds:
+      - go test {{.GO_FLAGS}} -ldflags "{{.LD_FLAGS}}" -timeout {{.TIMEOUT}} ./...
+      - '{{.TARGET_DIR}}/redpanda-connect template lint {{.TEMPLATE_FILES}}'
+      - '{{.TARGET_DIR}}/redpanda-connect test ./config/test/...'
+      - '{{.TARGET_DIR}}/redpanda-connect template lint ./config/rag/templates/...'

@@ -1,0 +1,26 @@
+version: '3'
+
+tasks:
+  install-all:
+    deps:
+      - install-golangci-lint
+      - install-govulncheck
+
+  install-golangci-lint:
+    desc: Install golangci-lint
+    required:
+      vars:
+        - GOLANGCI_LINT_VERSION
+    run: once
+    silent: true
+    sources:
+      - .versions
+    cmds:
+      - GOBIN={{.GOBIN}} go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v{{.GOLANGCI_LINT_VERSION}}
+
+  install-govulncheck:
+    desc: Install govulncheck
+    run: always
+    silent: true
+    cmds:
+      - GOBIN={{.GOBIN}} go install golang.org/x/vuln/cmd/govulncheck@latest

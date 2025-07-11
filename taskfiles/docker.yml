@@ -1,0 +1,51 @@
+version: '3'
+
+vars:
+  DOCKER_IMAGE: '{{default "docker.redpanda.com/redpandadata/connect" .DOCKER_IMAGE}}'
+
+tasks:
+  all:
+    desc: Build all Docker images
+    deps:
+      - main
+      - cloud
+      - ai
+
+  redpanda-connect:
+    desc: Build main Docker image
+    requires:
+      vars:
+        - VERSION
+    vars:
+      DOCKERFILE: ./resources/docker/Dockerfile
+    cmds:
+      - docker build -f {{.DOCKERFILE}} . -t {{.DOCKER_IMAGE}}:{{.VERSION}}{{.TAG_SUFFIX}}
+      - docker tag {{.DOCKER_IMAGE}}:{{.VERSION}}{{.TAG_SUFFIX}} {{.DOCKER_IMAGE}}:latest{{.TAG_SUFFIX}}
+
+  redpanda-connect-cloud:
+    desc: Build cloud Docker image
+    aliases:
+      - cloud
+    requires:
+      vars:
+        - VERSION
+    vars:
+      DOCKERFILE: ./resources/docker/Dockerfile.cloud
+      TAG_SUFFIX: '-cloud'
+    cmds:
+      - docker build -f {{.DOCKERFILE}} . -t {{.DOCKER_IMAGE}}:{{.VERSION}}{{.TAG_SUFFIX}}
+      - docker tag {{.DOCKER_IMAGE}}:{{.VERSION}}{{.TAG_SUFFIX}} {{.DOCKER_IMAGE}}:latest{{.TAG_SUFFIX}}
+
+  redpanda-connect-ai:
+    desc: Build AI Docker image
+    aliases:
+      - ai
+    requires:
+      vars:
+        - VERSION
+    vars:
+      DOCKERFILE: ./resources/docker/Dockerfile.ai
+      TAG_SUFFIX: '-ai'
+    cmds:
+      - docker build -f {{.DOCKERFILE}} . -t {{.DOCKER_IMAGE}}:{{.VERSION}}{{.TAG_SUFFIX}}
+      - docker tag {{.DOCKER_IMAGE}}:{{.VERSION}}{{.TAG_SUFFIX}} {{.DOCKER_IMAGE}}:latest{{.TAG_SUFFIX}}
