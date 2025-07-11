@@ -270,7 +270,6 @@ func FranzWriterConfigLints() string {
 type franzWriterHooks struct {
 	accessClientFn func(context.Context, FranzSharedClientUseFn) error
 	yieldClientFn  func(context.Context) error
-	writeHookFn    func(ctx context.Context, client *kgo.Client, records []*kgo.Record) error
 }
 
 // NewFranzWriterHooks creates a new franzWriterHooks instance with a hook function that's executed to fetch the client.
@@ -284,12 +283,6 @@ func (h franzWriterHooks) WithYieldClientFn(fn func(context.Context) error) fran
 	return h
 }
 
-// WithWriteHookFn adds a hook function that's executed before a message batch is written.
-func (h franzWriterHooks) WithWriteHookFn(fn func(ctx context.Context, client *kgo.Client, records []*kgo.Record) error) franzWriterHooks {
-	h.writeHookFn = fn
-	return h
-}
-
 // FranzWriter implements a Kafka writer using the franz-go library.
 type FranzWriter struct {
 	Topic         *service.InterpolatedString
@@ -299,6 +292,8 @@ type FranzWriter struct {
 	IsTimestampMs bool
 	MetaFilter    *service.MetadataFilter
 	hooks         franzWriterHooks
+	// OnWrite is executed for each record before it is written to the broker.
+	OnWrite func(ctx context.Context, client *kgo.Client, records []*kgo.Record) error
 }
 
 // NewFranzWriterFromConfig uses a parsed config to extract customisation for writing data to a Kafka broker. A closure
@@ -445,8 +440,8 @@ func (w *FranzWriter) WriteBatch(ctx context.Context, b service.MessageBatch) er
 			return err
 		}
 
-		if w.hooks.writeHookFn != nil {
-			if err := w.hooks.writeHookFn(ctx, details.Client, records); err != nil {
+		if w.OnWrite != nil {
+			if err := w.OnWrite(ctx, details.Client, records); err != nil {
 				return fmt.Errorf("on write hook failed: %s", err)
 			}
 		}
