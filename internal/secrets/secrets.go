@@ -86,7 +86,8 @@ func parseSecretsLookupURN(ctx context.Context, logger *slog.Logger, urn string)
 		}
 		return lookupFn(secrets.NewSecretProvider, secretsManager, path, u.Query().Get(trimPrefixParam))
 	case "gcp":
-		secretsManager, err := secrets.NewGCPSecretsManager(ctx, logger, u.Host)
+		audience := u.Query().Get("audience")
+		secretsManager, err := secrets.NewGCPSecretsManager(ctx, logger, u.Host, audience)
 		if err != nil {
 			return nil, err
 		}
