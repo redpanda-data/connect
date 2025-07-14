@@ -75,16 +75,25 @@ func (s *schemaRegistryDecoder) getHambaAvroDecoder(ctx context.Context, schema 
 		}
 	}
 
+	var commonSchemaAny any
+	if s.cfg.avro.storeSchemaMeta != "" {
+		if commonSchemaAny, err = tryExtractCommonSchema([]byte(schema.Schema)); err != nil {
+			s.logger.With("error", err).Error("Failed to extract common schema for meta storage")
+		}
+	}
+
 	decoder := func(m *service.Message) error {
 		b, err := m.AsBytes()
 		if err != nil {
 			return fmt.Errorf("unable to extract bytes from message: %w", err)
 		}
+
 		r := avro.NewReader(nil, 0).Reset(b)
 		native := r.ReadNext(codec)
 		if r.Error != nil {
 			return fmt.Errorf("unable to unmarshal avro: %w", r.Error)
 		}
+
 		var w avroSchemaWalker
 		w.unnestUnions = s.cfg.avro.rawUnions
 		w.translateKafkaConnectTypes = s.cfg.avro.translateKafkaConnectTypes
@@ -92,6 +101,10 @@ func (s *schemaRegistryDecoder) getHambaAvroDecoder(ctx context.Context, schema 
 			return fmt.Errorf("unable to transform avro data into expected format: %w", err)
 		}
 		m.SetStructuredMut(native)
+
+		if commonSchemaAny != nil {
+			m.MetaSetMut(s.cfg.avro.storeSchemaMeta, commonSchemaAny)
+		}
 		return nil
 	}
 

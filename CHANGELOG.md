@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.62.0 - TBD
+
+### Added
+
+- Field `store_schema_metadata` added to the `schema_registry_decode` processor. (@Jeffail)
+
 ## 4.61.0 - 2025-07-18
 
 ### Added
