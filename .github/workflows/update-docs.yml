@@ -1,8 +1,9 @@
-name: update-docs
+name: Update Docs
 
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - 'v*'
 
 permissions:
   id-token: write
