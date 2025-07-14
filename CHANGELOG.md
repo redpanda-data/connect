@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Field `store_schema_metadata` added to the `schema_registry_decode` processor. (@Jeffail)
+- Field `schema_metadata` added to the `parquet_encode` processor. (@Jeffail)
 
 ## 4.61.0 - 2025-07-18
 
