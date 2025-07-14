@@ -3,6 +3,13 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.60.2 - 2025-07-14
+
+### Added
+
+- Added support for consumer audience for serverless (@chappie)
+- Added Taskfile support for the project (@mmatczuk)
+
 ## 4.60.1 - 2025-07-11
 
 ### Fixed
