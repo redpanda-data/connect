@@ -2,7 +2,8 @@ version: '3'
 
 vars:
   LD_FLAGS: '{{default "-w -s" .LD_FLAGS}}'
-  GO_BUILD_CMD: go build {{.GO_FLAGS}} -tags "{{.TAGS}}" -ldflags "{{.LD_FLAGS}} -X main.Version=v{{.VERSION}} -X main.DateBuilt={{now | date "2006-01-02T15:04:05Z"}}"
+  DATE_BUILT: '{{now | date "2006-01-02T15:04:05Z"}}'
+  GO_BUILD_CMD: go build {{.GO_FLAGS}} -tags "{{.TAGS}}" -ldflags "{{.LD_FLAGS}} -X main.Version=v{{.VERSION}} -X main.DateBuilt={{.DATE_BUILT}}"
 
 tasks:
   all:
