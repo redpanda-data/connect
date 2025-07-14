@@ -130,7 +130,7 @@ ii.   **License to Enterprise Edition.**
         conditioned upon Your payment of the fees specified on
         [pricing](https://redpanda.com/contact), or as otherwise agreed to by Redpanda Data which You agree to pay to Redpanda Data in accordance
         with the payment terms set out on that page or as otherwise agreed to by Redpanda Data. Any professional
-        services or support for Support may also be subject to Your
+        services or support for Software may also be subject to Your
         payment of fees, which will be specified by Redpanda Data when you
         sign up to receive such professional services or support.
         Redpanda Data reserves the right to change the fees at any time
@@ -226,7 +226,7 @@ ii.   **License to Enterprise Edition.**
 
 7.  **<span class="smallcaps">Submission of Contributions.</span>**
     Unless You explicitly state otherwise, any Contribution
-    intentionally submitted for inclusion in by You to
+    intentionally submitted for inclusion in the Software by You to
     Redpanda Data shall be under the terms and conditions of
     [https://cla-assistant.io/redpanda-data/redpanda] (which is based off of the
     Apache License) or such other terms referenced in the relevant repository, without any additional terms or conditions,
