@@ -19,7 +19,6 @@ jobs:
 
     - name: Install Go
       uses: actions/setup-go@v5
-      id: setup-go
       with:
         go-version: stable
 
@@ -28,17 +27,8 @@ jobs:
         sudo apt update -y
         sudo apt install -y --no-install-recommends libzmq3-dev
 
-    - name: Cache Task binary
-      id: cache-task
-      uses: actions/cache@v4
-      with:
-        path: ~/go/bin/task
-        key: ${{ runner.os }}-go-task-binary-${{ steps.setup-go.outputs.go-version }}
-
     - name: Install Task
-      if: steps.cache-task.outputs.cache-hit != 'true'
-      run: |
-        go install github.com/go-task/task/v3/cmd/task@latest
+      uses: ./.github/actions/setup-task
 
     - name: Deps
       run: task deps && git diff-index --quiet HEAD || { >&2 echo "Stale go.{mod,sum} detected. This can be fixed with 'task deps'."; exit 1; }
