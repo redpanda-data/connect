@@ -19,11 +19,21 @@ jobs:
 
       - name: Install Go
         uses: actions/setup-go@v5
+        id: setup-go
         with:
           go-version: stable
 
-      - name: Setup Task
-        uses: arduino/setup-task@v2
+      - name: Cache Task binary
+        id: cache-task
+        uses: actions/cache@v4
+        with:
+          path: ~/go/bin/task
+          key: ${{ runner.os }}-go-task-binary-${{ steps.setup-go.outputs.go-version }}
+
+      - name: Install Task
+        if: steps.cache-task.outputs.cache-hit != 'true'
+        run: |
+          go install github.com/go-task/task/v3/cmd/task@latest
 
       - name: Run Integration Tests
         run: task test:integration
