@@ -16,7 +16,6 @@ package cassandra
 
 import (
 	"crypto/tls"
-	"fmt"
 	"strings"
 	"time"
 
@@ -39,8 +38,6 @@ const (
 	cFieldBackoffMaxInterval           = "max_interval"
 	cFieldTimeout                      = "timeout"
 	cFieldHostSelectionPolicy          = "host_selection_policy"
-	cFieldHostSelectionPolicyPrimary   = "primary"
-	cFieldHostSelectionPolicyFallback  = "fallback"
 	cFieldHostSelectionPolicyLocalDC   = "local_dc"
 	cFieldHostSelectionPolicyLocalRack = "local_rack"
 )
@@ -91,12 +88,6 @@ func clientFields() []*service.ConfigField {
 			Description("The client connection timeout.").
 			Default("600ms"),
 		service.NewObjectField(cFieldHostSelectionPolicy,
-			service.NewStringEnumField(cFieldHostSelectionPolicyPrimary, "round_robin", "token_aware").
-				Description("host selection policy to use, defaults to round_robin").
-				Default("round_robin"),
-			service.NewStringEnumField(cFieldHostSelectionPolicyFallback, "round_robin", "dc_aware", "rack_aware").
-				Description("Optional fallback host selection policy to use. When using the token_aware host_selection_policy, you need to provide a fallback host selection policy.").
-				Optional(),
 			service.NewStringField(cFieldHostSelectionPolicyLocalDC).
 				Description("The local DC to use, this is only applicable for the DC Aware & Rack Aware policies").
 				Optional(),
@@ -104,7 +95,7 @@ func clientFields() []*service.ConfigField {
 				Description("The local Rack to use, this is only applicable for the Rack Aware Policy").
 				Optional(),
 		).
-			Description("Optional host selection policy configurations").
+			Description("Optional host selection policy configurations. Defaults to TokenAwareHostPolicy with fallback of RoundRobinHostPolicy").
 			Advanced(),
 	}
 }
@@ -142,7 +133,7 @@ func (c *clientConf) Create() (*gocql.ClusterConfig, error) {
 		}
 	}
 
-	conn.PoolConfig.HostSelectionPolicy = c.hostSelectionPolicy
+	conn.PoolConfig.HostSelectionPolicy = gocql.TokenAwareHostPolicy(c.hostSelectionPolicy, gocql.ShuffleReplicas(), gocql.NonLocalReplicasFallback())
 
 	conn.RetryPolicy = &decorator{
 		NumRetries: c.maxRetries,
@@ -192,62 +183,19 @@ func clientConfFromParsed(conf *service.ParsedConfig) (c clientConf, err error) 
 
 	{
 		hostSelection := conf.Namespace(cFieldHostSelectionPolicy)
-		primary, _ := hostSelection.FieldString(cFieldHostSelectionPolicyPrimary)
-		fallback, _ := hostSelection.FieldString(cFieldHostSelectionPolicyFallback)
 		localDC, _ := hostSelection.FieldString(cFieldHostSelectionPolicyLocalDC)
 		localRack, _ := hostSelection.FieldString(cFieldHostSelectionPolicyLocalRack)
-		if c.hostSelectionPolicy, err = newHostSelectionPolicy(primaryHostSelection(primary), fallbackHostSelection(fallback), localDC, localRack); err != nil {
-			return
-		}
+		c.hostSelectionPolicy = newHostSelectionPolicy(localDC, localRack)
 	}
 	return
 }
 
-type primaryHostSelection string
-
-const (
-	roundRobinPrimaryHostSelection primaryHostSelection = "round_robin"
-	tokenAwarePrimaryHostSelection primaryHostSelection = "token_aware"
-)
-
-type fallbackHostSelection string
-
-const (
-	roundRobin fallbackHostSelection = "round_robin"
-	rackAware  fallbackHostSelection = "rack_aware"
-	dcAware    fallbackHostSelection = "dc_aware"
-)
-
-func newHostSelectionPolicy(policy primaryHostSelection, fallback fallbackHostSelection, localDC, localRack string) (gocql.HostSelectionPolicy, error) {
-	switch policy {
-	case roundRobinPrimaryHostSelection:
-		return gocql.RoundRobinHostPolicy(), nil
-	case tokenAwarePrimaryHostSelection:
-		selectionPolicy, err := fallbackPolicy(fallback, localDC, localRack)
-		if err != nil {
-			return nil, fmt.Errorf("unable to create token-aware policy with fallback: %w", err)
-		}
-		return gocql.TokenAwareHostPolicy(selectionPolicy), nil
-	default:
-		return nil, fmt.Errorf("unsupported host selection policy: %s", policy)
+func newHostSelectionPolicy(localDC, localRack string) gocql.HostSelectionPolicy {
+	if localDC != "" && localRack != "" {
+		return gocql.RackAwareRoundRobinPolicy(localDC, localRack)
 	}
-}
-
-func fallbackPolicy(policy fallbackHostSelection, localDC, localRack string) (gocql.HostSelectionPolicy, error) {
-	switch policy {
-	case rackAware:
-		if localDC != "" && localRack != "" {
-			return gocql.RackAwareRoundRobinPolicy(localDC, localRack), nil
-		}
-		return nil, fmt.Errorf("rack-aware drivers require both a local DC and a local Rack")
-	case dcAware:
-		if localDC != "" {
-			return gocql.DCAwareRoundRobinPolicy(localDC), nil
-		}
-		return nil, fmt.Errorf("dc-aware drivers require a local DC")
-	case roundRobin:
-		return gocql.RoundRobinHostPolicy(), nil
-	default:
-		return nil, fmt.Errorf("unknown fallback host selection policy")
+	if localDC != "" {
+		return gocql.DCAwareRoundRobinPolicy(localDC)
 	}
+	return gocql.RoundRobinHostPolicy()
 }

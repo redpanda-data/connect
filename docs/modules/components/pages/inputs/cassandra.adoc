@@ -72,8 +72,6 @@ input:
       max_interval: 5s
     timeout: 600ms
     host_selection_policy:
-      primary: round_robin
-      fallback: "" # No default (optional)
       local_dc: "" # No default (optional)
       local_rack: "" # No default (optional)
     query: "" # No default (required)
@@ -397,39 +395,11 @@ The client connection timeout.
 
 === `host_selection_policy`
 
-Optional host selection policy configurations
+Optional host selection policy configurations. Defaults to TokenAwareHostPolicy with fallback of RoundRobinHostPolicy
 
 
 *Type*: `object`
 
-
-=== `host_selection_policy.primary`
-
-host selection policy to use, defaults to round_robin
-
-
-*Type*: `string`
-
-*Default*: `"round_robin"`
-
-Options:
-`round_robin`
-, `token_aware`
-.
-
-=== `host_selection_policy.fallback`
-
-Optional fallback host selection policy to use. When using the token_aware host_selection_policy, you need to provide a fallback host selection policy.
-
-
-*Type*: `string`
-
-
-Options:
-`round_robin`
-, `dc_aware`
-, `rack_aware`
-.
 
 === `host_selection_policy.local_dc`
 
