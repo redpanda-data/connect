@@ -158,6 +158,74 @@ output:
 	})
 }
 
+// migratorPipeline is a helper type that encapsulates a
+// redpanda_migrator_offsets pipeline and provides methods for interacting with
+// it during tests.
+type migratorPipeline struct {
+	stream     *service.Stream
+	logBuffer  *bytes.Buffer
+	consumerWg *sync.WaitGroup
+	done       chan struct{}
+}
+
+// Cleanup properly shuts down the pipeline and waits for it to complete.
+func (m *migratorPipeline) Cleanup(t *testing.T) {
+	require.NoError(t, m.stream.StopWithin(3*time.Second))
+	<-m.done
+	t.Log("Migrator pipeline cleaned up")
+}
+
+func runOffsetsMigratorPipeline(t *testing.T, src, dst redpandatest.RedpandaEndpoints, topic string) *migratorPipeline {
+	yamlStr := fmt.Sprintf(`
+input:
+  redpanda_migrator_offsets:
+    seed_brokers: [ %s ]
+    topics: [ %s ]
+    poll_interval: 2s
+
+output:
+  redpanda_migrator_offsets:
+    seed_brokers: [ %s ]
+`, src.BrokerAddr, topic, dst.BrokerAddr)
+
+	sb := service.NewStreamBuilder()
+	require.NoError(t, sb.SetYAML(yamlStr))
+	require.NoError(t, sb.SetLoggerYAML(`level: INFO`))
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	require.NoError(t, sb.AddConsumerFunc(func(context.Context, *service.Message) error {
+		defer wg.Done()
+		return nil
+	}))
+	// Wait for the consumer to be called.
+	defer wg.Wait()
+
+	// Ensure the callback function is called after the output wrote the message.
+	sb.SetOutputBrokerPattern(service.OutputBrokerPatternFanOutSequential)
+
+	var logBuffer bytes.Buffer
+	sb.SetLogger(slog.New(slog.NewTextHandler(&logBuffer, &slog.HandlerOptions{})))
+
+	stream, err := sb.Build()
+	require.NoError(t, err)
+
+	// Run stream in the background.
+	done := make(chan struct{})
+	go func() {
+		require.NoError(t, stream.Run(t.Context()))
+		t.Log("redpanda_migrator_offsets pipeline shut down")
+		close(done)
+	}()
+
+	return &migratorPipeline{
+		stream:     stream,
+		logBuffer:  &logBuffer,
+		consumerWg: &wg,
+		done:       done,
+	}
+}
+
 func TestRedpandaMigratorIntegration(t *testing.T) {
 	integration.CheckSkip(t)
 
@@ -289,57 +357,13 @@ func TestRedpandaMigratorOffsetsIntegration(t *testing.T) {
 			t.Log("Finished setting up messages in the source and destination clusters")
 
 			// Migrate the consumer group offsets.
-			streamBuilder := service.NewStreamBuilder()
-			require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
-input:
-  redpanda_migrator_offsets:
-    seed_brokers: [ %s ]
-    topics: [ %s ]
-    poll_interval: 2s
-
-output:
-  redpanda_migrator_offsets:
-    seed_brokers: [ %s ]
-`, src.BrokerAddr, dummyTopic, dst.BrokerAddr)))
-			require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
-
-			migratorUpdateWG := sync.WaitGroup{}
-			migratorUpdateWG.Add(1)
-			require.NoError(t, streamBuilder.AddConsumerFunc(func(context.Context, *service.Message) error {
-				defer migratorUpdateWG.Done()
-				return nil
-			}))
-
-			// Ensure the callback function is called after the output wrote the message.
-			streamBuilder.SetOutputBrokerPattern(service.OutputBrokerPatternFanOutSequential)
-
-			stream, err := streamBuilder.Build()
-			require.NoError(t, err)
-
-			// Run stream in the background.
-			migratorCloseChan := make(chan struct{})
-			go func() {
-				err = stream.Run(t.Context())
-				require.NoError(t, err)
-
-				t.Log("redpanda_migrator_offsets pipeline shut down")
-
-				close(migratorCloseChan)
-			}()
-
-			defer func() {
-				require.NoError(t, stream.StopWithin(3*time.Second))
-
-				<-migratorCloseChan
-			}()
-
-			migratorUpdateWG.Wait()
+			pipeline := runOffsetsMigratorPipeline(t, src, dst, dummyTopic)
+			defer pipeline.Cleanup(t)
 
 			if test.extraCGUpdate {
-				// Trigger another consumer group update to get it to point to the end of the topic.
-				migratorUpdateWG.Add(1)
+				pipeline.consumerWg.Add(1)
 				readMessagesWithCG(t, src, dummyTopic, dummyConsumerGroup, dummyMessage, messageCount, false)
-				migratorUpdateWG.Wait()
+				pipeline.consumerWg.Wait()
 			}
 
 			client, err := kgo.NewClient(kgo.SeedBrokers([]string{dst.BrokerAddr}...))
@@ -388,56 +412,10 @@ func TestRedpandaMigratorOffsetsSkipRewindsIntegration(t *testing.T) {
 	t.Log("Finished setting up messages in the source and destination clusters")
 
 	runMigrator := func() string {
-		streamBuilder := service.NewStreamBuilder()
-		require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
-input:
-  redpanda_migrator_offsets:
-    seed_brokers: [ %s ]
-    topics: [ %s ]
-    poll_interval: 2s
-
-output:
-  redpanda_migrator_offsets:
-    seed_brokers: [ %s ]
-`, src.BrokerAddr, dummyTopic, dst.BrokerAddr)))
-		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
-
-		migratorUpdateWG := sync.WaitGroup{}
-		migratorUpdateWG.Add(1)
-		require.NoError(t, streamBuilder.AddConsumerFunc(func(context.Context, *service.Message) error {
-			defer migratorUpdateWG.Done()
-			return nil
-		}))
-
-		// Ensure the callback function is called after the output wrote the message.
-		streamBuilder.SetOutputBrokerPattern(service.OutputBrokerPatternFanOutSequential)
-
-		var migratorLogs bytes.Buffer
-		streamBuilder.SetLogger(slog.New(slog.NewTextHandler(&migratorLogs, &slog.HandlerOptions{})))
-
-		stream, err := streamBuilder.Build()
-		require.NoError(t, err)
-
-		// Run stream in the background.
-		migratorCloseChan := make(chan struct{})
-		go func() {
-			err = stream.Run(t.Context())
-			require.NoError(t, err)
-
-			t.Log("redpanda_migrator_offsets pipeline shut down")
-
-			close(migratorCloseChan)
-		}()
-
-		migratorUpdateWG.Wait()
-
-		// Shutdown the Migrator stream.
-		require.NoError(t, stream.StopWithin(3*time.Second))
-		<-migratorCloseChan
-
+		pipeline := runOffsetsMigratorPipeline(t, src, dst, dummyTopic)
+		pipeline.Cleanup(t)
 		t.Log("Finished running Migrator stream")
-
-		return migratorLogs.String()
+		return pipeline.logBuffer.String()
 	}
 
 	expectedWarning := `Skipping consumer offset update for topic \"test\" and partition 0 (timestamp 5) because the destination consumer group \"test_cg\" already has an offset of 10 which is ahead of the one we're trying to write: 4`
@@ -504,51 +482,8 @@ func TestRedpandaMigratorOffsetsNonMonotonicallyIncreasingTimestampsIntegration(
 	t.Log("Finished setting up messages in the source and destination clusters")
 
 	// Migrate the consumer group offsets.
-	streamBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
-input:
-  redpanda_migrator_offsets:
-    seed_brokers: [ %s ]
-    topics: [ %s ]
-    poll_interval: 2s
-
-output:
-  redpanda_migrator_offsets:
-    seed_brokers: [ %s ]
-`, src.BrokerAddr, dummyTopic, dst.BrokerAddr)))
-	require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
-
-	migratorUpdateWG := sync.WaitGroup{}
-	migratorUpdateWG.Add(1)
-	require.NoError(t, streamBuilder.AddConsumerFunc(func(context.Context, *service.Message) error {
-		defer migratorUpdateWG.Done()
-		return nil
-	}))
-
-	// Ensure the callback function is called after the output wrote the message.
-	streamBuilder.SetOutputBrokerPattern(service.OutputBrokerPatternFanOutSequential)
-
-	stream, err := streamBuilder.Build()
-	require.NoError(t, err)
-
-	// Run stream in the background.
-	migratorCloseChan := make(chan struct{})
-	go func() {
-		err = stream.Run(t.Context())
-		require.NoError(t, err)
-
-		t.Log("redpanda_migrator_offsets pipeline shut down")
-
-		close(migratorCloseChan)
-	}()
-
-	defer func() {
-		require.NoError(t, stream.StopWithin(3*time.Second))
-
-		<-migratorCloseChan
-	}()
-
-	migratorUpdateWG.Wait()
+	pipeline := runOffsetsMigratorPipeline(t, src, dst, dummyTopic)
+	defer pipeline.Cleanup(t)
 
 	client, err := kgo.NewClient(kgo.SeedBrokers([]string{dst.BrokerAddr}...))
 	require.NoError(t, err)
@@ -556,6 +491,7 @@ output:
 
 	adm := kadm.NewClient(client)
 	offsets, err := adm.FetchOffsets(t.Context(), dummyConsumerGroup)
+	require.NoError(t, err)
 	currentCGOffset, ok := offsets.Lookup(dummyTopic, 0)
 	require.True(t, ok)
 
