@@ -17,6 +17,7 @@ package kafka_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"slices"
@@ -694,8 +695,8 @@ output:
 	checkTopic(t, dst.BrokerAddr, dummyTopic, dummyRetentionTime, dummyPrincipal, dummyACLOperation)
 }
 
-// fetchRecordKeys calls franz-go directly because we don't have any means to read a range of records using the
-// kafka_franz input
+// fetchRecordKeys calls franz-go directly because we don't have any means to
+// read a range of records using the kafka_franz input.
 func fetchRecordKeys(t *testing.T, brokerAddress, topic, consumerGroup string, count int) []int {
 	client, err := kgo.NewClient([]kgo.Opt{
 		kgo.SeedBrokers([]string{brokerAddress}...),
@@ -706,8 +707,7 @@ func fetchRecordKeys(t *testing.T, brokerAddress, topic, consumerGroup string, c
 
 	defer func() {
 		// We need to manually trigger a commit before closing the client because the default is to autocommit every 5s
-		err := client.CommitUncommittedOffsets(t.Context())
-		require.NoError(t, err)
+		require.NoError(t, client.CommitUncommittedOffsets(t.Context()))
 		client.Close()
 	}()
 
@@ -715,20 +715,16 @@ func fetchRecordKeys(t *testing.T, brokerAddress, topic, consumerGroup string, c
 	defer cancel()
 	fetches := client.PollRecords(ctx, count)
 	require.False(t, fetches.IsClientClosed())
+
 	err = fetches.Err()
-	if err != nil {
-		// If the context was cancelled, the producer finished so we won't get any more messages
-		if err != context.DeadlineExceeded {
-			require.NoError(t, err)
-		}
+	// If the context was cancelled, the producer finished so we won't get
+	// any more messages.
+	if errors.Is(err, context.DeadlineExceeded) {
 		return nil
 	}
+	require.NoError(t, err)
 
 	it := fetches.RecordIter()
-
-	if it.Done() {
-		return nil
-	}
 
 	var keys []int
 	for !it.Done() {
