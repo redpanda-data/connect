@@ -9,7 +9,6 @@ import (
 )
 
 func TestNewHostSelectionPolicy(t *testing.T) {
-	// testCases defines the test scenarios for newHostSelectionPolicy.
 	testCases := []struct {
 		name                string
 		policy              primaryHostSelection
