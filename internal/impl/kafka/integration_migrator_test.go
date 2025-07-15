@@ -544,9 +544,7 @@ output:
 
 		// Run stream in the background.
 		go func() {
-			err = stream.Run(t.Context())
-			require.NoError(t, err)
-
+			require.NoError(t, stream.Run(t.Context()))
 			t.Log("redpanda_migrator_offsets pipeline shut down")
 		}()
 
