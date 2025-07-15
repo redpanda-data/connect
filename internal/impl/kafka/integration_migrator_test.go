@@ -250,7 +250,7 @@ func TestRedpandaMigratorIntegration(t *testing.T) {
 				l, ok := m.MetaGet("input_label")
 				require.True(t, ok)
 				if l != label {
-					goto loop
+					continue loop
 				}
 
 				b, err := m.AsBytes()
