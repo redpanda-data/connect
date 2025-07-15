@@ -39,6 +39,22 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka/redpandatest"
 )
 
+func runRedpandaPairForMigrator(t *testing.T) (src, dst redpandatest.RedpandaEndpoints) {
+	pool, err := dockertest.NewPool("")
+	require.NoError(t, err)
+	pool.MaxWait = time.Minute
+
+	src, err = redpandatest.StartRedpanda(t, pool, true, true)
+	require.NoError(t, err)
+
+	dst, err = redpandatest.StartRedpanda(t, pool, true, true)
+	require.NoError(t, err)
+
+	t.Logf("Source broker: %s", src.BrokerAddr)
+	t.Logf("Destination broker: %s", dst.BrokerAddr)
+	return src, dst
+}
+
 func runMigratorBundle(t *testing.T, src, dst redpandatest.RedpandaEndpoints, topic, topicPrefix string, suppressLogs bool, callback func(*service.Message)) {
 	const migratorBundleTmpl = `
 input:
@@ -145,18 +161,7 @@ output:
 func TestRedpandaMigratorIntegration(t *testing.T) {
 	integration.CheckSkip(t)
 
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
-	pool.MaxWait = time.Minute
-
-	src, err := redpandatest.StartRedpanda(t, pool, true, true)
-	require.NoError(t, err)
-	dst, err := redpandatest.StartRedpanda(t, pool, true, false)
-	require.NoError(t, err)
-
-	t.Logf("Source broker: %s", src.BrokerAddr)
-	t.Logf("Destination broker: %s", dst.BrokerAddr)
-
+	src, dst := runRedpandaPairForMigrator(t)
 	dummyTopic := "test"
 
 	// Create a schema associated with the test topic
@@ -257,18 +262,7 @@ func TestRedpandaMigratorOffsetsIntegration(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			pool, err := dockertest.NewPool("")
-			require.NoError(t, err)
-			pool.MaxWait = time.Minute
-
-			src, err := redpandatest.StartRedpanda(t, pool, true, true)
-			require.NoError(t, err)
-			dst, err := redpandatest.StartRedpanda(t, pool, true, true)
-			require.NoError(t, err)
-
-			t.Logf("Source broker: %s", src.BrokerAddr)
-			t.Logf("Destination broker: %s", dst.BrokerAddr)
-
+			src, dst := runRedpandaPairForMigrator(t)
 			dummyTopic := "test"
 			dummyMessage := `{"test":"foo"}`
 			dummyConsumerGroup := "test_cg"
@@ -375,18 +369,7 @@ output:
 func TestRedpandaMigratorOffsetsSkipRewindsIntegration(t *testing.T) {
 	integration.CheckSkip(t)
 
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
-	pool.MaxWait = time.Minute
-
-	src, err := redpandatest.StartRedpanda(t, pool, true, true)
-	require.NoError(t, err)
-	dst, err := redpandatest.StartRedpanda(t, pool, true, true)
-	require.NoError(t, err)
-
-	t.Logf("Source broker: %s", src.BrokerAddr)
-	t.Logf("Destination broker: %s", dst.BrokerAddr)
-
+	src, dst := runRedpandaPairForMigrator(t)
 	dummyTopic := "test"
 	dummyMessage := `{"test":"foo"}`
 	dummyConsumerGroup := "test_cg"
@@ -494,18 +477,7 @@ output:
 func TestRedpandaMigratorOffsetsNonMonotonicallyIncreasingTimestampsIntegration(t *testing.T) {
 	integration.CheckSkip(t)
 
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
-	pool.MaxWait = time.Minute
-
-	src, err := redpandatest.StartRedpanda(t, pool, true, true)
-	require.NoError(t, err)
-	dst, err := redpandatest.StartRedpanda(t, pool, true, true)
-	require.NoError(t, err)
-
-	t.Logf("Source broker: %s", src.BrokerAddr)
-	t.Logf("Destination broker: %s", dst.BrokerAddr)
-
+	src, dst := runRedpandaPairForMigrator(t)
 	dummyTopic := "test"
 	dummyMessage := `{"test":"foo"}`
 	dummyConsumerGroup := "test_cg"
@@ -595,19 +567,7 @@ output:
 func TestRedpandaMigratorTopicConfigAndACLsIntegration(t *testing.T) {
 	integration.CheckSkip(t)
 
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
-	pool.MaxWait = time.Minute
-
-	src, err := redpandatest.StartRedpanda(t, pool, true, true)
-	require.NoError(t, err)
-
-	dst, err := redpandatest.StartRedpanda(t, pool, true, true)
-	require.NoError(t, err)
-
-	t.Logf("Source broker: %s", src.BrokerAddr)
-	t.Logf("Destination broker: %s", dst.BrokerAddr)
-
+	src, dst := runRedpandaPairForMigrator(t)
 	dummyTopic := "test"
 
 	runMigrator := func() {
@@ -742,22 +702,11 @@ func fetchRecordKeys(t *testing.T, brokerAddress, topic, consumerGroup string, c
 func TestRedpandaMigratorConsumerGroupConsistencyIntegration(t *testing.T) {
 	integration.CheckSkip(t)
 
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
-	pool.MaxWait = time.Minute
-
-	src, err := redpandatest.StartRedpanda(t, pool, true, false)
-	require.NoError(t, err)
-
-	dst, err := redpandatest.StartRedpanda(t, pool, true, false)
-	require.NoError(t, err)
-
-	t.Logf("Source broker: %s", src.BrokerAddr)
-	t.Logf("Destination broker: %s", dst.BrokerAddr)
-
-	// Create the topic
+	src, dst := runRedpandaPairForMigrator(t)
 	dummyTopic := "foobar"
 	dummyRetentionTime := strconv.Itoa(int((1 * time.Hour).Milliseconds()))
+
+	// Create the topic
 	createTopicWithACLs(t, src.BrokerAddr, dummyTopic, dummyRetentionTime, "User:redpanda", kmsg.ACLOperationAll)
 
 	// Create a schema associated with the test topic
