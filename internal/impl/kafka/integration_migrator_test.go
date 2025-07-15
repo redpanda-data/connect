@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"sync"
 	"testing"
+	"text/template"
 	"time"
 
 	"github.com/ory/dockertest/v3"
@@ -38,17 +39,16 @@ import (
 )
 
 func runMigratorBundle(t *testing.T, source, destination redpandatest.RedpandaEndpoints, topic, topicPrefix string, suppressLogs bool, callback func(*service.Message)) {
-	streamBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
+	const migratorBundleTmpl = `
 input:
   redpanda_migrator_bundle:
     redpanda_migrator:
-      seed_brokers: [ %s ]
-      topics: [ %s ]
+      seed_brokers: [ {{.Source.BrokerAddr}} ]
+      topics: [ {{.Topic}} ]
       consumer_group: migrator_cg
       start_from_oldest: true
     schema_registry:
-      url: %s
+      url: {{.Source.SchemaRegistryURL}}
     consumer_group_offsets_poll_interval: 2s
   processors:
     - switch:
@@ -69,7 +69,7 @@ input:
             - branch:
                 processors:
                   - schema_registry_decode:
-                      url: %s
+                      url: {{.Source.SchemaRegistryURL}}
                       avro_raw_json: true
                   - log:
                       level: INFO
@@ -84,15 +84,33 @@ input:
 output:
   redpanda_migrator_bundle:
     redpanda_migrator:
-      seed_brokers: [ %s ]
-      topic_prefix: "%s"
+      seed_brokers: [ {{.Destination.BrokerAddr}} ]
+      topic_prefix: "{{.TopicPrefix}}"
       replication_factor_override: true
       replication_factor: -1
       # TODO: Remove this compression setting once https://github.com/redpanda-data/redpanda/issues/25769 is fixed
       compression: none
     schema_registry:
-      url: %s
-`, source.BrokerAddr, topic, source.SchemaRegistryURL, source.SchemaRegistryURL, destination.BrokerAddr, topicPrefix, destination.SchemaRegistryURL)))
+      url: {{.Destination.SchemaRegistryURL}}
+`
+	tmpl, err := template.New("migrator-bundle").Parse(migratorBundleTmpl)
+	require.NoError(t, err)
+	data := struct {
+		Source      redpandatest.RedpandaEndpoints
+		Destination redpandatest.RedpandaEndpoints
+		Topic       string
+		TopicPrefix string
+	}{
+		Source:      source,
+		Destination: destination,
+		Topic:       topic,
+		TopicPrefix: topicPrefix,
+	}
+	var yamlBuf bytes.Buffer
+	require.NoError(t, tmpl.Execute(&yamlBuf, data))
+
+	streamBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamBuilder.SetYAML(yamlBuf.String()))
 	if suppressLogs {
 		require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
 	}
