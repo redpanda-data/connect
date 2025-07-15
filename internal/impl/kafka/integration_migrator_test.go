@@ -38,17 +38,17 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka/redpandatest"
 )
 
-func runMigratorBundle(t *testing.T, source, destination redpandatest.RedpandaEndpoints, topic, topicPrefix string, suppressLogs bool, callback func(*service.Message)) {
+func runMigratorBundle(t *testing.T, src, dst redpandatest.RedpandaEndpoints, topic, topicPrefix string, suppressLogs bool, callback func(*service.Message)) {
 	const migratorBundleTmpl = `
 input:
   redpanda_migrator_bundle:
     redpanda_migrator:
-      seed_brokers: [ {{.Source.BrokerAddr}} ]
+      seed_brokers: [ {{.Src.BrokerAddr}} ]
       topics: [ {{.Topic}} ]
       consumer_group: migrator_cg
       start_from_oldest: true
     schema_registry:
-      url: {{.Source.SchemaRegistryURL}}
+      url: {{.Src.SchemaRegistryURL}}
     consumer_group_offsets_poll_interval: 2s
   processors:
     - switch:
@@ -69,7 +69,7 @@ input:
             - branch:
                 processors:
                   - schema_registry_decode:
-                      url: {{.Source.SchemaRegistryURL}}
+                      url: {{.Src.SchemaRegistryURL}}
                       avro_raw_json: true
                   - log:
                       level: INFO
@@ -84,65 +84,60 @@ input:
 output:
   redpanda_migrator_bundle:
     redpanda_migrator:
-      seed_brokers: [ {{.Destination.BrokerAddr}} ]
+      seed_brokers: [ {{.Dst.BrokerAddr}} ]
       topic_prefix: "{{.TopicPrefix}}"
       replication_factor_override: true
       replication_factor: -1
       # TODO: Remove this compression setting once https://github.com/redpanda-data/redpanda/issues/25769 is fixed
       compression: none
     schema_registry:
-      url: {{.Destination.SchemaRegistryURL}}
+      url: {{.Dst.SchemaRegistryURL}}
 `
 	tmpl, err := template.New("migrator-bundle").Parse(migratorBundleTmpl)
 	require.NoError(t, err)
 	data := struct {
-		Source      redpandatest.RedpandaEndpoints
-		Destination redpandatest.RedpandaEndpoints
+		Src         redpandatest.RedpandaEndpoints
+		Dst         redpandatest.RedpandaEndpoints
 		Topic       string
 		TopicPrefix string
 	}{
-		Source:      source,
-		Destination: destination,
+		Src:         src,
+		Dst:         dst,
 		Topic:       topic,
 		TopicPrefix: topicPrefix,
 	}
 	var yamlBuf bytes.Buffer
 	require.NoError(t, tmpl.Execute(&yamlBuf, data))
 
-	streamBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamBuilder.SetYAML(yamlBuf.String()))
+	sb := service.NewStreamBuilder()
+	require.NoError(t, sb.SetYAML(yamlBuf.String()))
 	if suppressLogs {
-		require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
+		require.NoError(t, sb.SetLoggerYAML(`level: OFF`))
 	}
 
 	if callback != nil {
-		require.NoError(t, streamBuilder.AddConsumerFunc(func(_ context.Context, m *service.Message) error {
+		require.NoError(t, sb.AddConsumerFunc(func(_ context.Context, m *service.Message) error {
 			callback(m)
 			return nil
 		}))
 
 		// Ensure the callback function is called after the output wrote the message
-		streamBuilder.SetOutputBrokerPattern(service.OutputBrokerPatternFanOutSequential)
+		sb.SetOutputBrokerPattern(service.OutputBrokerPatternFanOutSequential)
 	}
 
-	stream, err := streamBuilder.Build()
+	stream, err := sb.Build()
 	require.NoError(t, err)
 
 	// Run stream in the background and shut it down when the test is finished
-	closeChan := make(chan struct{})
+	done := make(chan struct{})
 	go func() {
-		//nolint:usetesting // context.Background() could be replaced by t.Context()
-		err = stream.Run(context.Background())
-		require.NoError(t, err)
-
+		require.NoError(t, stream.Run(t.Context()))
 		t.Log("Migrator pipeline shut down")
-
-		close(closeChan)
+		close(done)
 	}()
 	t.Cleanup(func() {
 		require.NoError(t, stream.StopWithin(1*time.Second))
-
-		<-closeChan
+		<-done
 	})
 }
 
@@ -153,22 +148,22 @@ func TestRedpandaMigratorIntegration(t *testing.T) {
 	require.NoError(t, err)
 	pool.MaxWait = time.Minute
 
-	source, err := redpandatest.StartRedpanda(t, pool, true, true)
+	src, err := redpandatest.StartRedpanda(t, pool, true, true)
 	require.NoError(t, err)
-	destination, err := redpandatest.StartRedpanda(t, pool, true, false)
+	dst, err := redpandatest.StartRedpanda(t, pool, true, false)
 	require.NoError(t, err)
 
-	t.Logf("Source broker: %s", source.BrokerAddr)
-	t.Logf("Destination broker: %s", destination.BrokerAddr)
+	t.Logf("Source broker: %s", src.BrokerAddr)
+	t.Logf("Destination broker: %s", dst.BrokerAddr)
 
 	dummyTopic := "test"
 
 	// Create a schema associated with the test topic
-	createSchema(t, source.SchemaRegistryURL, dummyTopic, fmt.Sprintf(`{"name":"%s", "type": "record", "fields":[{"name":"test", "type": "string"}]}`, dummyTopic), nil)
+	createSchema(t, src.SchemaRegistryURL, dummyTopic, fmt.Sprintf(`{"name":"%s", "type": "record", "fields":[{"name":"test", "type": "string"}]}`, dummyTopic), nil)
 
 	// Produce one message
 	dummyMessage := `{"test":"foo"}`
-	produceMessages(t, source, dummyTopic, dummyMessage, 0, 1, true, 0)
+	produceMessages(t, src, dummyTopic, dummyMessage, 0, 1, true, 0)
 	t.Log("Finished producing first message in source")
 
 	// Run the Redpanda Migrator bundle
@@ -203,7 +198,7 @@ func TestRedpandaMigratorIntegration(t *testing.T) {
 	}
 
 	destTopicPrefix := "dest."
-	runMigratorBundle(t, source, destination, dummyTopic, destTopicPrefix, false, func(m *service.Message) {
+	runMigratorBundle(t, src, dst, dummyTopic, destTopicPrefix, false, func(m *service.Message) {
 		msgChan <- m
 	})
 
@@ -214,7 +209,7 @@ func TestRedpandaMigratorIntegration(t *testing.T) {
 
 	dummyCG := "foobar_cg"
 	// Read the message from source using a consumer group
-	readMessagesWithCG(t, source, dummyTopic, dummyCG, dummyMessage, 1, true)
+	readMessagesWithCG(t, src, dummyTopic, dummyCG, dummyMessage, 1, true)
 	checkMigrated("redpanda_migrator_offsets_input", func(_ string, meta map[string]string) {
 		assert.Equal(t, dummyTopic, meta["kafka_offset_topic"])
 	})
@@ -222,14 +217,14 @@ func TestRedpandaMigratorIntegration(t *testing.T) {
 
 	// Produce one more message in the source
 	secondDummyMessage := `{"test":"bar"}`
-	produceMessages(t, source, dummyTopic, secondDummyMessage, 0, 1, true, 0)
+	produceMessages(t, src, dummyTopic, secondDummyMessage, 0, 1, true, 0)
 	checkMigrated("redpanda_migrator_input", func(msg string, _ map[string]string) {
 		assert.Equal(t, "\x00\x00\x00\x00\x01\x06bar", msg)
 	})
 	t.Log("Finished producing second message in source")
 
 	// Read the new message from the destination using a consumer group
-	readMessagesWithCG(t, destination, destTopicPrefix+dummyTopic, dummyCG, secondDummyMessage, 1, true)
+	readMessagesWithCG(t, dst, destTopicPrefix+dummyTopic, dummyCG, secondDummyMessage, 1, true)
 	checkMigrated("redpanda_migrator_offsets_input", func(_ string, meta map[string]string) {
 		assert.Equal(t, dummyTopic, meta["kafka_offset_topic"])
 	})
@@ -265,13 +260,13 @@ func TestRedpandaMigratorOffsetsIntegration(t *testing.T) {
 			require.NoError(t, err)
 			pool.MaxWait = time.Minute
 
-			source, err := redpandatest.StartRedpanda(t, pool, true, true)
+			src, err := redpandatest.StartRedpanda(t, pool, true, true)
 			require.NoError(t, err)
-			destination, err := redpandatest.StartRedpanda(t, pool, true, true)
+			dst, err := redpandatest.StartRedpanda(t, pool, true, true)
 			require.NoError(t, err)
 
-			t.Logf("Source broker: %s", source.BrokerAddr)
-			t.Logf("Destination broker: %s", destination.BrokerAddr)
+			t.Logf("Source broker: %s", src.BrokerAddr)
+			t.Logf("Destination broker: %s", dst.BrokerAddr)
 
 			dummyTopic := "test"
 			dummyMessage := `{"test":"foo"}`
@@ -280,20 +275,20 @@ func TestRedpandaMigratorOffsetsIntegration(t *testing.T) {
 
 			// Produce messages in the source cluster.
 			// The message timestamps are produced in ascending order, starting from 1 all the way to messageCount.
-			produceMessages(t, source, dummyTopic, dummyMessage, 0, messageCount, false, 0)
+			produceMessages(t, src, dummyTopic, dummyMessage, 0, messageCount, false, 0)
 
 			// Produce the exact same messages in the destination cluster.
-			produceMessages(t, destination, dummyTopic, dummyMessage, 0, messageCount, false, 0)
+			produceMessages(t, dst, dummyTopic, dummyMessage, 0, messageCount, false, 0)
 
 			// Read the messages from the source cluster using a consumer group.
-			readMessagesWithCG(t, source, dummyTopic, dummyConsumerGroup, dummyMessage, messageCount, false)
+			readMessagesWithCG(t, src, dummyTopic, dummyConsumerGroup, dummyMessage, messageCount, false)
 
 			if test.extraCGUpdate || !test.cgAtEndOffset {
 				// Make sure both source and destination have extra messages after the current consumer group offset.
 				// The next messages need to have more recent timestamps than the existing messages, so we use
 				// `messageCount` as an offset for their timestamps.
-				produceMessages(t, source, dummyTopic, dummyMessage, messageCount, messageCount, false, 0)
-				produceMessages(t, destination, dummyTopic, dummyMessage, messageCount, messageCount, false, 0)
+				produceMessages(t, src, dummyTopic, dummyMessage, messageCount, messageCount, false, 0)
+				produceMessages(t, dst, dummyTopic, dummyMessage, messageCount, messageCount, false, 0)
 			}
 
 			t.Log("Finished setting up messages in the source and destination clusters")
@@ -310,7 +305,7 @@ input:
 output:
   redpanda_migrator_offsets:
     seed_brokers: [ %s ]
-`, source.BrokerAddr, dummyTopic, destination.BrokerAddr)))
+`, src.BrokerAddr, dummyTopic, dst.BrokerAddr)))
 			require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
 
 			migratorUpdateWG := sync.WaitGroup{}
@@ -348,11 +343,11 @@ output:
 			if test.extraCGUpdate {
 				// Trigger another consumer group update to get it to point to the end of the topic.
 				migratorUpdateWG.Add(1)
-				readMessagesWithCG(t, source, dummyTopic, dummyConsumerGroup, dummyMessage, messageCount, false)
+				readMessagesWithCG(t, src, dummyTopic, dummyConsumerGroup, dummyMessage, messageCount, false)
 				migratorUpdateWG.Wait()
 			}
 
-			client, err := kgo.NewClient(kgo.SeedBrokers([]string{destination.BrokerAddr}...))
+			client, err := kgo.NewClient(kgo.SeedBrokers([]string{dst.BrokerAddr}...))
 			require.NoError(t, err)
 			defer client.Close()
 
@@ -383,13 +378,13 @@ func TestRedpandaMigratorOffsetsSkipRewindsIntegration(t *testing.T) {
 	require.NoError(t, err)
 	pool.MaxWait = time.Minute
 
-	source, err := redpandatest.StartRedpanda(t, pool, true, true)
+	src, err := redpandatest.StartRedpanda(t, pool, true, true)
 	require.NoError(t, err)
-	destination, err := redpandatest.StartRedpanda(t, pool, true, true)
+	dst, err := redpandatest.StartRedpanda(t, pool, true, true)
 	require.NoError(t, err)
 
-	t.Logf("Source broker: %s", source.BrokerAddr)
-	t.Logf("Destination broker: %s", destination.BrokerAddr)
+	t.Logf("Source broker: %s", src.BrokerAddr)
+	t.Logf("Destination broker: %s", dst.BrokerAddr)
 
 	dummyTopic := "test"
 	dummyMessage := `{"test":"foo"}`
@@ -398,13 +393,13 @@ func TestRedpandaMigratorOffsetsSkipRewindsIntegration(t *testing.T) {
 
 	// Produce messages in the source cluster.
 	// The message timestamps are produced in ascending order, starting from 1 all the way to messageCount.
-	produceMessages(t, source, dummyTopic, dummyMessage, 0, messageCount, false, 0)
+	produceMessages(t, src, dummyTopic, dummyMessage, 0, messageCount, false, 0)
 
 	// Produce the exact same messages in the destination cluster.
-	produceMessages(t, destination, dummyTopic, dummyMessage, 0, messageCount, false, 0)
+	produceMessages(t, dst, dummyTopic, dummyMessage, 0, messageCount, false, 0)
 
 	// Read the messages from the source cluster using a consumer group.
-	readMessagesWithCG(t, source, dummyTopic, dummyConsumerGroup, dummyMessage, messageCount, false)
+	readMessagesWithCG(t, src, dummyTopic, dummyConsumerGroup, dummyMessage, messageCount, false)
 
 	t.Log("Finished setting up messages in the source and destination clusters")
 
@@ -420,7 +415,7 @@ input:
 output:
   redpanda_migrator_offsets:
     seed_brokers: [ %s ]
-`, source.BrokerAddr, dummyTopic, destination.BrokerAddr)))
+`, src.BrokerAddr, dummyTopic, dst.BrokerAddr)))
 		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
 
 		migratorUpdateWG := sync.WaitGroup{}
@@ -468,10 +463,10 @@ output:
 	assert.NotContains(t, logs, expectedWarning)
 
 	// Produce some more messages in the destination cluster.
-	produceMessages(t, destination, dummyTopic, dummyMessage, messageCount, messageCount, false, 0)
+	produceMessages(t, dst, dummyTopic, dummyMessage, messageCount, messageCount, false, 0)
 
 	// Read the new messages from the destination cluster using a consumer group.
-	readMessagesWithCG(t, destination, dummyTopic, dummyConsumerGroup, dummyMessage, messageCount, false)
+	readMessagesWithCG(t, dst, dummyTopic, dummyConsumerGroup, dummyMessage, messageCount, false)
 
 	t.Log("Finished writing extra messages and updating the consumer group in the destination cluster")
 
@@ -480,7 +475,7 @@ output:
 	t.Log(logs)
 	assert.Contains(t, logs, expectedWarning)
 
-	client, err := kgo.NewClient(kgo.SeedBrokers([]string{destination.BrokerAddr}...))
+	client, err := kgo.NewClient(kgo.SeedBrokers([]string{dst.BrokerAddr}...))
 	require.NoError(t, err)
 	defer client.Close()
 
@@ -502,13 +497,13 @@ func TestRedpandaMigratorOffsetsNonMonotonicallyIncreasingTimestampsIntegration(
 	require.NoError(t, err)
 	pool.MaxWait = time.Minute
 
-	source, err := redpandatest.StartRedpanda(t, pool, true, true)
+	src, err := redpandatest.StartRedpanda(t, pool, true, true)
 	require.NoError(t, err)
-	destination, err := redpandatest.StartRedpanda(t, pool, true, true)
+	dst, err := redpandatest.StartRedpanda(t, pool, true, true)
 	require.NoError(t, err)
 
-	t.Logf("Source broker: %s", source.BrokerAddr)
-	t.Logf("Destination broker: %s", destination.BrokerAddr)
+	t.Logf("Source broker: %s", src.BrokerAddr)
+	t.Logf("Destination broker: %s", dst.BrokerAddr)
 
 	dummyTopic := "test"
 	dummyMessage := `{"test":"foo"}`
@@ -516,22 +511,22 @@ func TestRedpandaMigratorOffsetsNonMonotonicallyIncreasingTimestampsIntegration(
 	messageCount := 5
 
 	// Produce a batch of messages in the source cluster.
-	produceMessages(t, source, dummyTopic, dummyMessage, 0, messageCount, false, 0)
+	produceMessages(t, src, dummyTopic, dummyMessage, 0, messageCount, false, 0)
 
 	// Produce 3 batches of messages in the destination cluster with out of order and overlapping timestamps.
 	// offsets: 0, 1, 2, 3, 4, 5
 	// timestamps: 3, 4, 5, 6, 7
-	produceMessages(t, destination, dummyTopic, dummyMessage, 2, messageCount, false, 0)
+	produceMessages(t, dst, dummyTopic, dummyMessage, 2, messageCount, false, 0)
 	// offsets: 6, 7, 8, 9, 10
 	// timestamps: 4, 5, 6, 7, 8
-	produceMessages(t, destination, dummyTopic, dummyMessage, 3, messageCount, false, 0)
+	produceMessages(t, dst, dummyTopic, dummyMessage, 3, messageCount, false, 0)
 	// offsets: 11, 12, 13, 14, 15
 	// timestamps: 1, 2, 3, 4, 5
-	produceMessages(t, destination, dummyTopic, dummyMessage, 0, messageCount, false, 0)
+	produceMessages(t, dst, dummyTopic, dummyMessage, 0, messageCount, false, 0)
 
 	// Read messageCount messages from the source cluster using a consumer group. The consumer group will point to the
 	// last message in the batch, which has timestamp 5.
-	readMessagesWithCG(t, source, dummyTopic, dummyConsumerGroup, dummyMessage, messageCount, false)
+	readMessagesWithCG(t, src, dummyTopic, dummyConsumerGroup, dummyMessage, messageCount, false)
 
 	t.Log("Finished setting up messages in the source and destination clusters")
 
@@ -547,7 +542,7 @@ input:
 output:
   redpanda_migrator_offsets:
     seed_brokers: [ %s ]
-`, source.BrokerAddr, dummyTopic, destination.BrokerAddr)))
+`, src.BrokerAddr, dummyTopic, dst.BrokerAddr)))
 	require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
 
 	migratorUpdateWG := sync.WaitGroup{}
@@ -582,7 +577,7 @@ output:
 
 	migratorUpdateWG.Wait()
 
-	client, err := kgo.NewClient(kgo.SeedBrokers([]string{destination.BrokerAddr}...))
+	client, err := kgo.NewClient(kgo.SeedBrokers([]string{dst.BrokerAddr}...))
 	require.NoError(t, err)
 	defer client.Close()
 
@@ -603,14 +598,14 @@ func TestRedpandaMigratorTopicConfigAndACLsIntegration(t *testing.T) {
 	require.NoError(t, err)
 	pool.MaxWait = time.Minute
 
-	source, err := redpandatest.StartRedpanda(t, pool, true, true)
+	src, err := redpandatest.StartRedpanda(t, pool, true, true)
 	require.NoError(t, err)
 
-	destination, err := redpandatest.StartRedpanda(t, pool, true, true)
+	dst, err := redpandatest.StartRedpanda(t, pool, true, true)
 	require.NoError(t, err)
 
-	t.Logf("Source broker: %s", source.BrokerAddr)
-	t.Logf("Destination broker: %s", destination.BrokerAddr)
+	t.Logf("Source broker: %s", src.BrokerAddr)
+	t.Logf("Destination broker: %s", dst.BrokerAddr)
 
 	dummyTopic := "test"
 
@@ -634,7 +629,7 @@ output:
     translate_schema_ids: false
     replication_factor_override: true
     replication_factor: -1
-`, source.BrokerAddr, dummyTopic, destination.BrokerAddr)))
+`, src.BrokerAddr, dummyTopic, dst.BrokerAddr)))
 		require.NoError(t, streamBuilder.SetLoggerYAML(`level: INFO`))
 
 		migratorUpdateWG := sync.WaitGroup{}
@@ -667,19 +662,19 @@ output:
 	dummyRetentionTime := strconv.Itoa(int((48 * time.Hour).Milliseconds()))
 	dummyPrincipal := "User:redpanda"
 	dummyACLOperation := kmsg.ACLOperationRead
-	createTopicWithACLs(t, source.BrokerAddr, dummyTopic, dummyRetentionTime, dummyPrincipal, dummyACLOperation)
+	createTopicWithACLs(t, src.BrokerAddr, dummyTopic, dummyRetentionTime, dummyPrincipal, dummyACLOperation)
 
 	// Produce one message
 	dummyMessage := `{"test":"foo"}`
-	produceMessages(t, source, dummyTopic, dummyMessage, 0, 1, true, 0)
+	produceMessages(t, src, dummyTopic, dummyMessage, 0, 1, true, 0)
 
 	// Run the Redpanda Migrator
 	runMigrator()
 
 	// Ensure that the topic and ACL were migrated correctly
-	checkTopic(t, destination.BrokerAddr, dummyTopic, dummyRetentionTime, dummyPrincipal, dummyACLOperation)
+	checkTopic(t, dst.BrokerAddr, dummyTopic, dummyRetentionTime, dummyPrincipal, dummyACLOperation)
 
-	client, err := kgo.NewClient(kgo.SeedBrokers([]string{source.BrokerAddr}...))
+	client, err := kgo.NewClient(kgo.SeedBrokers([]string{src.BrokerAddr}...))
 	require.NoError(t, err)
 	defer client.Close()
 
@@ -690,13 +685,13 @@ output:
 	updateTopicACL(t, adm, dummyTopic, dummyPrincipal, dummyACLOperation)
 
 	// Produce one more message so the consumerFunc will get triggered to indicate that Migrator ran successfully
-	produceMessages(t, source, dummyTopic, dummyMessage, 0, 1, true, 0)
+	produceMessages(t, src, dummyTopic, dummyMessage, 0, 1, true, 0)
 
 	// Run the Redpanda Migrator again
 	runMigrator()
 
 	// Ensure that the ACL was updated correctly
-	checkTopic(t, destination.BrokerAddr, dummyTopic, dummyRetentionTime, dummyPrincipal, dummyACLOperation)
+	checkTopic(t, dst.BrokerAddr, dummyTopic, dummyRetentionTime, dummyPrincipal, dummyACLOperation)
 }
 
 // fetchRecordKeys calls franz-go directly because we don't have any means to read a range of records using the
@@ -755,34 +750,34 @@ func TestRedpandaMigratorConsumerGroupConsistencyIntegration(t *testing.T) {
 	require.NoError(t, err)
 	pool.MaxWait = time.Minute
 
-	source, err := redpandatest.StartRedpanda(t, pool, true, false)
+	src, err := redpandatest.StartRedpanda(t, pool, true, false)
 	require.NoError(t, err)
 
-	destination, err := redpandatest.StartRedpanda(t, pool, true, false)
+	dst, err := redpandatest.StartRedpanda(t, pool, true, false)
 	require.NoError(t, err)
 
-	t.Logf("Source broker: %s", source.BrokerAddr)
-	t.Logf("Destination broker: %s", destination.BrokerAddr)
+	t.Logf("Source broker: %s", src.BrokerAddr)
+	t.Logf("Destination broker: %s", dst.BrokerAddr)
 
 	// Create the topic
 	dummyTopic := "foobar"
 	dummyRetentionTime := strconv.Itoa(int((1 * time.Hour).Milliseconds()))
-	createTopicWithACLs(t, source.BrokerAddr, dummyTopic, dummyRetentionTime, "User:redpanda", kmsg.ACLOperationAll)
+	createTopicWithACLs(t, src.BrokerAddr, dummyTopic, dummyRetentionTime, "User:redpanda", kmsg.ACLOperationAll)
 
 	// Create a schema associated with the test topic
-	createSchema(t, source.SchemaRegistryURL, dummyTopic, fmt.Sprintf(`{"name":"%s", "type": "record", "fields":[{"name":"test", "type": "string"}]}`, dummyTopic), nil)
+	createSchema(t, src.SchemaRegistryURL, dummyTopic, fmt.Sprintf(`{"name":"%s", "type": "record", "fields":[{"name":"test", "type": "string"}]}`, dummyTopic), nil)
 
 	dummyMessage := `{"test":"foo"}`
 	go func() {
 		t.Log("Producing messages...")
 
-		produceMessages(t, source, dummyTopic, dummyMessage, 0, 100, true, 50*time.Millisecond)
+		produceMessages(t, src, dummyTopic, dummyMessage, 0, 100, true, 50*time.Millisecond)
 
 		t.Log("Finished producing messages")
 	}()
 
 	// Run the Redpanda Migrator bundle
-	runMigratorBundle(t, source, destination, dummyTopic, "", true, nil)
+	runMigratorBundle(t, src, dst, dummyTopic, "", true, nil)
 	t.Log("Migrator started")
 
 	// Wait for a few records to be produced...
@@ -791,7 +786,7 @@ func TestRedpandaMigratorConsumerGroupConsistencyIntegration(t *testing.T) {
 	// Fetch the first few record keys from the source to create the consumer group
 	dummyConsumerGroup := "foobar_cg"
 	initialFetchCount := 5
-	keys := fetchRecordKeys(t, source.BrokerAddr, dummyTopic, dummyConsumerGroup, initialFetchCount)
+	keys := fetchRecordKeys(t, src.BrokerAddr, dummyTopic, dummyConsumerGroup, initialFetchCount)
 	require.Len(t, keys, 5)
 	require.Equal(t, 1, keys[0])
 	require.Equal(t, 5, keys[4])
@@ -799,7 +794,7 @@ func TestRedpandaMigratorConsumerGroupConsistencyIntegration(t *testing.T) {
 	// Wait for the topic and consumer group to be replicated in the destination first
 	require.Eventually(t, func() bool {
 		client, err := kgo.NewClient([]kgo.Opt{
-			kgo.SeedBrokers([]string{destination.BrokerAddr}...),
+			kgo.SeedBrokers([]string{dst.BrokerAddr}...),
 		}...)
 		require.NoError(t, err)
 		defer client.Close()
@@ -840,7 +835,7 @@ func TestRedpandaMigratorConsumerGroupConsistencyIntegration(t *testing.T) {
 
 	var prevSrcKeys []int
 	require.Eventually(t, func() bool {
-		srcKeys := fetchRecordKeys(t, source.BrokerAddr, dummyTopic, dummyConsumerGroup, 10)
+		srcKeys := fetchRecordKeys(t, src.BrokerAddr, dummyTopic, dummyConsumerGroup, 10)
 
 		// Allow some time for the consumer group update to be migrated before flipping the consumer to the destination.
 		// In practice, we'll have to figure out what is a safe window of time to wait or design a tool which can diff
@@ -848,7 +843,7 @@ func TestRedpandaMigratorConsumerGroupConsistencyIntegration(t *testing.T) {
 		// TODO: Maybe do this reliably by using AddConsumerFunc in the Migrator stream.
 		time.Sleep(1 * time.Second)
 
-		destKeys := fetchRecordKeys(t, destination.BrokerAddr, dummyTopic, dummyConsumerGroup, 10)
+		destKeys := fetchRecordKeys(t, dst.BrokerAddr, dummyTopic, dummyConsumerGroup, 10)
 		if destKeys == nil {
 			// Stop the tests if the producer finished and the destination consumer group reached the high water mark
 			if srcKeys == nil {
