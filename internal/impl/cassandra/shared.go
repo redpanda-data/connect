@@ -248,6 +248,6 @@ func fallbackPolicy(policy fallbackHostSelection, localDC, localRack string) (go
 	case roundRobin:
 		return gocql.RoundRobinHostPolicy(), nil
 	default:
-		return nil, fmt.Errorf("unknown primary host selection policy")
+		return nil, fmt.Errorf("unknown fallback host selection policy")
 	}
 }
