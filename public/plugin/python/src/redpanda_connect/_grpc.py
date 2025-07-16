@@ -361,10 +361,10 @@ async def _serve_component(register: Callable[[grpc.aio.Server, asyncio.Event], 
 
     async def stop(sig: int):
         if sig == signal.SIGTERM:
-            _logger.warning("Recieved SIGTERM stopping server immediately")
+            _logger.warning("Received SIGTERM stopping server immediately")
             await server.stop(grace=None)
         else:
-            _logger.info(f"Recieved {signal.strsignal(sig)} waiting for server close")
+            _logger.info(f"Received {signal.strsignal(sig)} waiting for server close")
             await closed_event.wait()
             await server.stop(grace=30)
         loop.remove_signal_handler(sig)
