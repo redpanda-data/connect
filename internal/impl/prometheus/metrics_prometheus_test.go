@@ -58,8 +58,9 @@ push_url: %v
 	assert.NotNil(t, p.pusher)
 
 	go func() {
-		err := p.Close(t.Context())
-		assert.NoError(t, err)
+		if err := p.Close(t.Context()); err != nil {
+			t.Error(err)
+		}
 	}()
 
 	// Wait for message for the PushGateway after close
