@@ -59,10 +59,12 @@ class _InputService(input_pb2_grpc.BatchInputServiceServicer):
     input: Input | None = None
     acks: dict[int, AckFn] = {}
     id_gen = _id_generator()
+    close_event: asyncio.Event
 
-    def __init__(self, ctor: InputConstructor):
+    def __init__(self, ctor: InputConstructor, close_event: asyncio.Event):
         super().__init__()
         self.ctor = ctor
+        self.close_event = close_event
 
     @override
     async def Init(
@@ -153,6 +155,7 @@ class _InputService(input_pb2_grpc.BatchInputServiceServicer):
             input_pb2.BatchInputCloseRequest, input_pb2.BatchInputCloseResponse
         ],
     ) -> input_pb2.BatchInputCloseResponse:
+        self.close_event.set()
         resp = input_pb2.BatchInputCloseResponse()
         if self.input is None:
             resp.error.CopyFrom(error_to_proto(BaseError("Input not initialized")))
@@ -170,10 +173,12 @@ class _InputService(input_pb2_grpc.BatchInputServiceServicer):
 class _ProcessorService(processor_pb2_grpc.BatchProcessorServiceServicer):
     ctor: ProcessorConstructor
     component: Processor | None = None
+    close_event: asyncio.Event
 
-    def __init__(self, ctor: ProcessorConstructor):
+    def __init__(self, ctor: ProcessorConstructor, close_event: asyncio.Event):
         super().__init__()
         self.ctor = ctor
+        self.close_event = close_event
 
     @override
     async def Init(
@@ -223,6 +228,7 @@ class _ProcessorService(processor_pb2_grpc.BatchProcessorServiceServicer):
             processor_pb2.BatchProcessorCloseRequest, processor_pb2.BatchProcessorCloseResponse
         ],
     ) -> processor_pb2.BatchProcessorCloseResponse:
+        self.close_event.set()
         resp = processor_pb2.BatchProcessorCloseResponse()
         if self.component is None:
             resp.error.CopyFrom(error_to_proto(BaseError("Processor not initialized")))
@@ -240,10 +246,12 @@ class _ProcessorService(processor_pb2_grpc.BatchProcessorServiceServicer):
 class _OutputService(output_pb2_grpc.BatchOutputServiceServicer):
     ctor: OutputConstructor
     component: Output | None = None
+    close_event: asyncio.Event
 
-    def __init__(self, ctor: OutputConstructor):
+    def __init__(self, ctor: OutputConstructor, close_event: asyncio.Event):
         super().__init__()
         self.ctor = ctor
+        self.close_event = close_event
 
     @override
     async def Init(
@@ -321,6 +329,7 @@ class _OutputService(output_pb2_grpc.BatchOutputServiceServicer):
             output_pb2.BatchOutputCloseRequest, output_pb2.BatchOutputCloseResponse
         ],
     ) -> output_pb2.BatchOutputCloseResponse:
+        self.close_event.set()
         resp = output_pb2.BatchOutputCloseResponse()
         if self.component is None:
             resp.error.CopyFrom(error_to_proto(BaseError("Output not initialized")))
@@ -334,7 +343,7 @@ class _OutputService(output_pb2_grpc.BatchOutputServiceServicer):
         return resp
 
 
-async def _serve_component(register: Callable[[grpc.aio.Server], None]):
+async def _serve_component(register: Callable[[grpc.aio.Server, asyncio.Event], None]):
     version = os.environ.get("REDPANDA_CONNECT_PLUGIN_VERSION", "1")
     if version != "1":
         _logger.fatal(f"Unsupported plugin version: {version}")
@@ -345,13 +354,19 @@ async def _serve_component(register: Callable[[grpc.aio.Server], None]):
         sys.exit(1)
     print("Successfully loaded Redpanda Connect RPC plugin")
     server = grpc.aio.server()
-    register(server)
+    closed_event = asyncio.Event()
+    register(server, closed_event)
     _ = server.add_insecure_port(addr)
     await server.start()
 
     async def stop(sig: int):
-        _logger.info("stopping server")
-        await server.stop(grace=None)
+        if sig == signal.SIGTERM:
+            _logger.warning("Recieved SIGTERM stopping server immediately")
+            await server.stop(grace=None)
+        else:
+            _logger.info(f"Recieved {signal.strsignal(sig)} waiting for server close")
+            await closed_event.wait()
+            await server.stop(grace=30)
         loop.remove_signal_handler(sig)
 
     try:
@@ -370,8 +385,8 @@ async def input_main(ctor: InputConstructor):
     """
     logging.basicConfig(encoding="utf-8", level=logging.DEBUG)
 
-    def register(server: grpc.aio.Server):
-        input_service = _InputService(ctor)
+    def register(server: grpc.aio.Server, close_event: asyncio.Event):
+        input_service = _InputService(ctor, close_event)
         input_pb2_grpc.add_BatchInputServiceServicer_to_server(input_service, server)
 
     await _serve_component(register)
@@ -384,8 +399,8 @@ async def processor_main(ctor: ProcessorConstructor):
     """
     logging.basicConfig(encoding="utf-8", level=logging.DEBUG)
 
-    def register(server: grpc.aio.Server):
-        processor_service = _ProcessorService(ctor)
+    def register(server: grpc.aio.Server, close_event: asyncio.Event):
+        processor_service = _ProcessorService(ctor, close_event)
         processor_pb2_grpc.add_BatchProcessorServiceServicer_to_server(processor_service, server)
 
     await _serve_component(register)
@@ -398,8 +413,8 @@ async def output_main(ctor: OutputConstructor):
     """
     logging.basicConfig(encoding="utf-8", level=logging.DEBUG)
 
-    def register(server: grpc.aio.Server):
-        output_service = _OutputService(ctor)
+    def register(server: grpc.aio.Server, close_event: asyncio.Event):
+        output_service = _OutputService(ctor, close_event)
         output_pb2_grpc.add_BatchOutputServiceServicer_to_server(output_service, server)
 
     await _serve_component(register)
