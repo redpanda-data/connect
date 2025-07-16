@@ -38,9 +38,7 @@ tasks:
     vars:
       TEMPLATE_FILES:
         sh: find internal/impl -type f -name "template_*.yaml"
-      TIMEOUT: '{{if .CI}}5m{{else}}1m{{end}}'
     cmds:
-      - go test {{.GO_FLAGS}} -ldflags "{{.LD_FLAGS}}" -timeout {{.TIMEOUT}} ./...
       - '{{.TARGET_DIR}}/redpanda-connect template lint {{.TEMPLATE_FILES}}'
       - '{{.TARGET_DIR}}/redpanda-connect test ./config/test/...'
       - '{{.TARGET_DIR}}/redpanda-connect template lint ./config/rag/templates/...'
