@@ -13,6 +13,48 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CGO_ENABLED: 0
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - ./internal/impl/amqp09
+          - ./internal/impl/amqp1
+          - ./internal/impl/aws
+          - ./internal/impl/azure
+          - ./internal/impl/beanstalkd
+          - ./internal/impl/cassandra
+          - ./internal/impl/cockroachdb
+          - ./internal/impl/couchbase
+          - ./internal/impl/elasticsearch/v8
+          - ./internal/impl/gcp
+          - ./internal/impl/gcp/enterprise
+          - ./internal/impl/gcp/enterprise/changestreams
+          - ./internal/impl/gcp/enterprise/changestreams/metadata
+          - ./internal/impl/hdfs
+          - ./internal/impl/influxdb
+          - ./internal/impl/kafka
+          - ./internal/impl/kafka/enterprise
+          - ./internal/impl/memcached
+          - ./internal/impl/mongodb
+          - ./internal/impl/mongodb/cdc
+          - ./internal/impl/mqtt
+          - ./internal/impl/mysql
+          - ./internal/impl/nanomsg
+          - ./internal/impl/nats
+          - ./internal/impl/nsq
+          - ./internal/impl/opensearch
+          - ./internal/impl/postgresql
+          - ./internal/impl/pulsar
+          - ./internal/impl/qdrant
+          - ./internal/impl/questdb
+          - ./internal/impl/redis
+          - ./internal/impl/sftp
+          - ./internal/impl/snowflake
+          - ./internal/impl/snowflake/streaming
+          - ./internal/impl/splunk
+          - ./internal/impl/sql
+          - ./internal/impl/zeromq
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -25,5 +67,6 @@ jobs:
       - name: Install Task
         uses: ./.github/actions/setup-task
 
-      - name: Run Integration Tests
-        run: task test:integration
+      - name: Run Integration Tests for ${{ matrix.package }}
+        run: task test:integration-package PKG=${{ matrix.package }}
+        timeout-minutes: 30

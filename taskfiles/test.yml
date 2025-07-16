@@ -17,68 +17,10 @@ tasks:
     cmds:
       - go test {{.GO_FLAGS}} -ldflags "{{.LD_FLAGS}}" -timeout 3m -shuffle=on -race ./...
 
-  integration:
-    desc: Run integration tests for each package with integration tests
-    aliases:
-      - it
-    vars:
-      CI_SKIP_PKG:
-        - ./internal/impl/azure
-        - ./internal/impl/couchbase
-        - ./internal/impl/elasticsearch/v8
-        - ./internal/impl/gcp
-        - ./internal/impl/gcp/enterprise/changestreams
-        - ./internal/impl/gcp/enterprise/changestreams/metadata
-        - ./internal/impl/hdfs
-        - ./internal/impl/kafka
-        - ./internal/impl/mongodb
-        - ./internal/impl/mqtt
-        - ./internal/impl/mysql
-        - ./internal/impl/nanomsg
-        - ./internal/impl/nats
-        - ./internal/impl/opensearch
-        - ./internal/impl/postgresql
-        - ./internal/impl/pulsar
-        - ./internal/impl/questdb
-        - ./internal/impl/snowflake
-        - ./internal/impl/splunk
-        - ./internal/impl/sql
-        - ./internal/impl/zeromq
-    cmds:
-      - |
-        set -e -o pipefail -u
-        failed=()
-        
-        for pkg in $(find . -name "*integration*_test.go" | xargs dirname | sort -R | uniq)
-        do
-          skip=0
-          if [ "{{.CI}}" == "true" ]; then
-            for skip_pkg in {{range .CI_SKIP_PKG}}"{{.}}" {{end}}
-            do
-              if [ "${pkg}" == "${skip_pkg}" ]; then
-                echo "Skipping package: $pkg"
-                skip=1
-                break
-              fi
-            done
-          fi
-          if [ $skip -eq 1 ]; then
-            continue
-          fi
-        
-          task test:integration-package PKG="$pkg" || failed+=("$pkg")
-        done
-        
-        if [ ${#failed[@]} -ne 0 ]
-        then
-          echo "FAILED PACKAGES:"
-          printf "  - %s\n" "${failed[@]}"
-          exit 1
-        fi
-    silent: true
-
   integration-package:
     desc: Run integration tests for package PKG
+    aliases:
+      - it
     requires:
       vars:
         - PKG
