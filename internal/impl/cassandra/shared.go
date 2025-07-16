@@ -16,6 +16,7 @@ package cassandra
 
 import (
 	"crypto/tls"
+	"fmt"
 	"strings"
 	"time"
 
@@ -96,7 +97,7 @@ func clientFields() []*service.ConfigField {
 				Optional(),
 		).
 			Description("Optional host selection policy configurations. Defaults to TokenAwareHostPolicy with fallback of RoundRobinHostPolicy").
-			LintRule(`root = if this.local_rack != "" && this.local_dc == "" { "local_dc must be set if local_rack is set" }`).
+			LintRule(`root = if this.local_rack != "" && (!this.exists("local_dc") || this.local_dc == "") { "local_dc must be set if local_rack is set" }`).
 			Advanced(),
 	}
 }
@@ -186,17 +187,22 @@ func clientConfFromParsed(conf *service.ParsedConfig) (c clientConf, err error) 
 		hostSelection := conf.Namespace(cFieldHostSelectionPolicy)
 		localDC, _ := hostSelection.FieldString(cFieldHostSelectionPolicyLocalDC)
 		localRack, _ := hostSelection.FieldString(cFieldHostSelectionPolicyLocalRack)
-		c.hostSelectionPolicy = newHostSelectionPolicy(localDC, localRack)
+		if c.hostSelectionPolicy, err = newHostSelectionPolicy(localDC, localRack); err != nil {
+			return
+		}
 	}
 	return
 }
 
-func newHostSelectionPolicy(localDC, localRack string) gocql.HostSelectionPolicy {
-	if localDC != "" && localRack != "" {
-		return gocql.RackAwareRoundRobinPolicy(localDC, localRack)
+func newHostSelectionPolicy(localDC, localRack string) (gocql.HostSelectionPolicy, error) {
+	if localRack != "" {
+		if localDC == "" {
+			return nil, fmt.Errorf("localDC cannot be empty when localRack is set")
+		}
+		return gocql.RackAwareRoundRobinPolicy(localDC, localRack), nil
 	}
 	if localDC != "" {
-		return gocql.DCAwareRoundRobinPolicy(localDC)
+		return gocql.DCAwareRoundRobinPolicy(localDC), nil
 	}
-	return gocql.RoundRobinHostPolicy()
+	return gocql.RoundRobinHostPolicy(), nil
 }

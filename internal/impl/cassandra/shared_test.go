@@ -14,6 +14,7 @@ func TestNewHostSelectionPolicy(t *testing.T) {
 		localDC            string
 		localRack          string
 		expectedPolicyType interface{}
+		expectedError      bool
 	}{
 		{
 			name:               "Rack Aware - Both DC and Rack provided",
@@ -34,19 +35,23 @@ func TestNewHostSelectionPolicy(t *testing.T) {
 			expectedPolicyType: gocql.RoundRobinHostPolicy(),
 		},
 		{
-			name:               "Round Robin - Only Rack provided",
+			name:               "Error - Only Rack provided, no DC",
 			localDC:            "",
 			localRack:          "rack2",
-			expectedPolicyType: gocql.RoundRobinHostPolicy(),
+			expectedPolicyType: nil,
+			expectedError:      true,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			policy := newHostSelectionPolicy(tc.localDC, tc.localRack)
-
-			require.NotNil(t, policy, "Expected a policy but got nil")
-			assert.IsType(t, tc.expectedPolicyType, policy, "Returned policy has an unexpected type")
+			policy, err := newHostSelectionPolicy(tc.localDC, tc.localRack)
+			if tc.expectedError {
+				assert.Error(t, err)
+			} else {
+				require.NotNil(t, policy, "Expected a policy but got nil")
+				assert.IsType(t, tc.expectedPolicyType, policy, "Returned policy has an unexpected type")
+			}
 		})
 	}
 }
