@@ -96,6 +96,7 @@ func clientFields() []*service.ConfigField {
 				Optional(),
 		).
 			Description("Optional host selection policy configurations. Defaults to TokenAwareHostPolicy with fallback of RoundRobinHostPolicy").
+			LintRule(`root = if this.local_rack != "" && this.local_dc == "" { "local_dc must be set if local_rack is set" }`).
 			Advanced(),
 	}
 }
