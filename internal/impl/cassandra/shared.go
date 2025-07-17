@@ -16,7 +16,7 @@ package cassandra
 
 import (
 	"crypto/tls"
-	"fmt"
+	"errors"
 	"strings"
 	"time"
 
