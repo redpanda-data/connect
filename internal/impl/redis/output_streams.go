@@ -177,7 +177,7 @@ func (r *redisStreamsWriter) WriteBatch(ctx context.Context, batch service.Messa
 	}
 
 	pipe := client.Pipeline()
-	for i := 0; i < len(batch); i++ {
+	for i := range batch {
 		stream, err := batch.TryInterpolatedString(i, r.stream)
 		if err != nil {
 			return fmt.Errorf("stream interpolation error: %w", err)

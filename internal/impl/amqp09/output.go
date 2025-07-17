@@ -204,7 +204,7 @@ func amqp09WriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) 
 		return nil, errors.New("must specify at least one URL")
 	}
 	for _, u := range urlStrs {
-		for _, splitURL := range strings.Split(u, ",") {
+		for splitURL := range strings.SplitSeq(u, ",") {
 			if trimmed := strings.TrimSpace(splitURL); trimmed != "" {
 				a.urls = append(a.urls, trimmed)
 			}

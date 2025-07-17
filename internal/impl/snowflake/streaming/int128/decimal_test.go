@@ -393,16 +393,16 @@ func TestFromStringFast(t *testing.T) {
 }
 
 func TestFromStringFastVsSlowRandomized(t *testing.T) {
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		precision := rand.N(36) + 2
 		scale := rand.N(precision - 1)
 		str := ""
-		for j := 0; j < precision; j++ {
+		for range precision {
 			str += strconv.Itoa(rand.N(10))
 		}
 		if scale > 0 {
 			str += "."
-			for j := 0; j < scale; j++ {
+			for range scale {
 				str += strconv.Itoa(rand.N(10))
 			}
 		}
@@ -434,7 +434,7 @@ func BenchmarkParsing(b *testing.B) {
 		scale := digitCount - leadingDigits
 		b.Run("fast_"+test, func(b *testing.B) {
 			b.SetBytes(int64(len(test)))
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				_, err := fromStringFast(test, digitCount, scale)
 				if err != nil {
 					b.Fatal(err)
@@ -443,7 +443,7 @@ func BenchmarkParsing(b *testing.B) {
 		})
 		b.Run("slow_"+test, func(b *testing.B) {
 			b.SetBytes(int64(len(test)))
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				_, err := fromStringSlow(test, digitCount, scale)
 				if err != nil {
 					b.Fatal(err)

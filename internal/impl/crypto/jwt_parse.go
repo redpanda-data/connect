@@ -57,7 +57,7 @@ func jwtParser(secretDecoder secretDecoderFunc, method jwt.SigningMethod) blobla
 		return bloblang.StringMethod(func(encoded string) (any, error) {
 			var claims jwt.MapClaims
 
-			_, err := jwt.ParseWithClaims(encoded, &claims, func(tok *jwt.Token) (interface{}, error) {
+			_, err := jwt.ParseWithClaims(encoded, &claims, func(tok *jwt.Token) (any, error) {
 				if tok.Method != method {
 					return nil, fmt.Errorf("%w: %v", errJWTIncorrectMethod, tok.Header["alg"])
 				}

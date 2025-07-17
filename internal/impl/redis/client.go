@@ -85,7 +85,7 @@ func getClient(parsedConf *service.ParsedConfig) (redis.UniversalClient, error) 
 	var addrs []string
 
 	// handle comma-separated urls
-	for _, v := range strings.Split(urlStr, ",") {
+	for v := range strings.SplitSeq(urlStr, ",") {
 		url, err := url.Parse(v)
 		if err != nil {
 			return nil, err

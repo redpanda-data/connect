@@ -59,7 +59,7 @@ func parsePartitions(expr string) ([]int32, error) {
 func ParseTopics(sourceTopics []string, defaultOffset int64, allowExplicitOffsets bool) (topics []string, topicPartitions map[string]map[int32]int64, err error) {
 	for _, t := range sourceTopics {
 		// Split out comma-sep topics such as `foo,bar`
-		for _, splitTopic := range strings.Split(t, ",") {
+		for splitTopic := range strings.SplitSeq(t, ",") {
 			// Trim whitespace so that `foo, bar` is still valid
 			trimmed := strings.TrimSpace(splitTopic)
 			if trimmed == "" {

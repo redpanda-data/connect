@@ -235,10 +235,7 @@ type cloudWatchStatVec struct {
 }
 
 func (c *cloudWatchStatVec) with(labelValues ...string) *cloudWatchStat {
-	lDim := len(c.labelNames)
-	if lDim >= maxCloudWatchDimensions {
-		lDim = maxCloudWatchDimensions
-	}
+	lDim := min(len(c.labelNames), maxCloudWatchDimensions)
 	dimensions := make([]types.Dimension, 0, lDim)
 	for i, k := range c.labelNames {
 		if len(labelValues) <= i || i >= maxCloudWatchDimensions {

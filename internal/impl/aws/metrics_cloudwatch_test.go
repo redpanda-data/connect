@@ -17,6 +17,7 @@ package aws
 import (
 	"context"
 	"fmt"
+	"maps"
 	"sync"
 	"testing"
 	"time"
@@ -223,7 +224,7 @@ func TestCloudWatchMoreThan20Items(t *testing.T) {
 	cw.ctx, cw.cancel = context.WithCancel(t.Context())
 
 	exp := map[string]checkedDatum{}
-	for i := 0; i < 30; i++ {
+	for i := range 30 {
 		name := fmt.Sprintf("counter.%v", i)
 		ctr := cw.NewCounterCtor(name)()
 		ctr.Incr(23)
@@ -243,9 +244,7 @@ func TestCloudWatchMoreThan20Items(t *testing.T) {
 	assert.Equal(t, "Benthos", *mockSvc.inputs[1].Namespace)
 
 	act := checkInput(mockSvc.inputs[0])
-	for k, v := range checkInput(mockSvc.inputs[1]) {
-		act[k] = v
-	}
+	maps.Copy(act, checkInput(mockSvc.inputs[1]))
 	assert.Equal(t, exp, act)
 }
 
@@ -380,7 +379,7 @@ func TestCloudWatchTagsMoreThan20(t *testing.T) {
 	expTagMap := map[string]string{}
 	tagNames := []string{}
 	tagValues := []string{}
-	for i := 0; i < 30; i++ {
+	for i := range 30 {
 		name := fmt.Sprintf("%v", i)
 		value := fmt.Sprintf("foo%v", i)
 		tagNames = append(tagNames, name)

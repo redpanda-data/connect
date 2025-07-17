@@ -80,8 +80,8 @@ type redisListWriter struct {
 	clientCtor   func() (redis.UniversalClient, error)
 	client       redis.UniversalClient
 	connMut      sync.RWMutex
-	clientPush   func(client redis.UniversalClient, ctx context.Context, key string, values ...interface{}) *redis.IntCmd
-	pipelinePush func(pipe redis.Pipeliner, ctx context.Context, key string, values ...interface{}) *redis.IntCmd
+	clientPush   func(client redis.UniversalClient, ctx context.Context, key string, values ...any) *redis.IntCmd
+	pipelinePush func(pipe redis.Pipeliner, ctx context.Context, key string, values ...any) *redis.IntCmd
 }
 
 func newRedisListWriter(conf *service.ParsedConfig, mgr *service.Resources) (r *redisListWriter, err error) {
@@ -107,18 +107,18 @@ func newRedisListWriter(conf *service.ParsedConfig, mgr *service.Resources) (r *
 
 	switch redisPushCommand(pushCommand) {
 	case rPush:
-		r.clientPush = func(client redis.UniversalClient, ctx context.Context, key string, values ...interface{}) *redis.IntCmd {
+		r.clientPush = func(client redis.UniversalClient, ctx context.Context, key string, values ...any) *redis.IntCmd {
 			return client.RPush(ctx, key, values)
 		}
-		r.pipelinePush = func(pipe redis.Pipeliner, ctx context.Context, key string, values ...interface{}) *redis.IntCmd {
+		r.pipelinePush = func(pipe redis.Pipeliner, ctx context.Context, key string, values ...any) *redis.IntCmd {
 			return pipe.RPush(ctx, key, values)
 		}
 
 	case lPush:
-		r.clientPush = func(client redis.UniversalClient, ctx context.Context, key string, values ...interface{}) *redis.IntCmd {
+		r.clientPush = func(client redis.UniversalClient, ctx context.Context, key string, values ...any) *redis.IntCmd {
 			return client.LPush(ctx, key, values)
 		}
-		r.pipelinePush = func(pipe redis.Pipeliner, ctx context.Context, key string, values ...interface{}) *redis.IntCmd {
+		r.pipelinePush = func(pipe redis.Pipeliner, ctx context.Context, key string, values ...any) *redis.IntCmd {
 			return pipe.LPush(ctx, key, values)
 		}
 
@@ -175,7 +175,7 @@ func (r *redisListWriter) WriteBatch(ctx context.Context, batch service.MessageB
 
 	pipe := client.Pipeline()
 
-	for i := 0; i < len(batch); i++ {
+	for i := range batch {
 		key, err := batch.TryInterpolatedString(i, r.key)
 		if err != nil {
 			return fmt.Errorf("key interpolation error: %w", err)

@@ -20,14 +20,14 @@ type logWrapper struct {
 	l *service.Logger
 }
 
-func (l *logWrapper) Errorf(format string, v ...interface{}) {
+func (l *logWrapper) Errorf(format string, v ...any) {
 	l.l.With("component", "resty").Debugf(format, v...)
 }
 
-func (*logWrapper) Warnf(string, ...interface{}) {
+func (*logWrapper) Warnf(string, ...any) {
 	// Ignore
 }
 
-func (*logWrapper) Debugf(string, ...interface{}) {
+func (*logWrapper) Debugf(string, ...any) {
 	// Ignore
 }

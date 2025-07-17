@@ -101,7 +101,7 @@ func newMemcachedCache(
 ) (*memcachedCache, error) {
 	addresses := []string{}
 	for _, addr := range inAddresses {
-		for _, splitAddr := range strings.Split(addr, ",") {
+		for splitAddr := range strings.SplitSeq(addr, ",") {
 			if splitAddr != "" {
 				addresses = append(addresses, splitAddr)
 			}

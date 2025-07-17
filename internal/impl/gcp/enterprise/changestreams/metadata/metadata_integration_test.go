@@ -366,7 +366,7 @@ func TestIntegrationRealStore(t *testing.T) {
 
 		var wg sync.WaitGroup
 		wg.Add(numWorkers)
-		for i := 0; i < numWorkers; i++ {
+		for i := range numWorkers {
 			go func(workerID int) {
 				defer wg.Done()
 
@@ -389,7 +389,7 @@ func TestIntegrationRealStore(t *testing.T) {
 
 		// Verify only one commit timestamp was set
 		var matchCount int
-		for i := 0; i < numWorkers; i++ {
+		for i := range numWorkers {
 			if workerCommitTs[i].Equal(*pm.ScheduledAt) {
 				matchCount++
 			}

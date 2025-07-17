@@ -26,14 +26,14 @@ func ptrLen(contentPtr, contentLen uint64) uint64 {
 	return (contentPtr << uint64(32)) | contentLen
 }
 
-var moduleRunnerFunctionCtors = map[string]func(r *moduleRunner) interface{}{}
+var moduleRunnerFunctionCtors = map[string]func(r *moduleRunner) any{}
 
-func registerModuleRunnerFunction(name string, ctor func(r *moduleRunner) interface{}) struct{} {
+func registerModuleRunnerFunction(name string, ctor func(r *moduleRunner) any) struct{} {
 	moduleRunnerFunctionCtors[name] = ctor
 	return struct{}{}
 }
 
-var _ = registerModuleRunnerFunction("v0_msg_set_bytes", func(r *moduleRunner) interface{} {
+var _ = registerModuleRunnerFunction("v0_msg_set_bytes", func(r *moduleRunner) any {
 	return func(ctx context.Context, _ api.Module, contentPtr, contentSize uint32) {
 		if r.targetMessage == nil {
 			r.funcErr(errors.New("attempted to set bytes of deleted message"))
@@ -49,7 +49,7 @@ var _ = registerModuleRunnerFunction("v0_msg_set_bytes", func(r *moduleRunner) i
 	}
 })
 
-var _ = registerModuleRunnerFunction("v0_msg_as_bytes", func(r *moduleRunner) interface{} {
+var _ = registerModuleRunnerFunction("v0_msg_as_bytes", func(r *moduleRunner) any {
 	return func(ctx context.Context, _ api.Module) (ptrSize uint64) {
 		if r.targetMessage == nil {
 			r.funcErr(errors.New("attempted to read bytes of deleted message"))
@@ -71,7 +71,7 @@ var _ = registerModuleRunnerFunction("v0_msg_as_bytes", func(r *moduleRunner) in
 	}
 })
 
-var _ = registerModuleRunnerFunction("v0_msg_set_meta", func(r *moduleRunner) interface{} {
+var _ = registerModuleRunnerFunction("v0_msg_set_meta", func(r *moduleRunner) any {
 	return func(ctx context.Context, _ api.Module, keyPtr, keySize, contentPtr, contentSize uint32) {
 		if r.targetMessage == nil {
 			r.funcErr(errors.New("attempted to set metadata of deleted message"))
@@ -94,7 +94,7 @@ var _ = registerModuleRunnerFunction("v0_msg_set_meta", func(r *moduleRunner) in
 	}
 })
 
-var _ = registerModuleRunnerFunction("v0_msg_get_meta", func(r *moduleRunner) interface{} {
+var _ = registerModuleRunnerFunction("v0_msg_get_meta", func(r *moduleRunner) any {
 	return func(ctx context.Context, _ api.Module, keyPtr, keySize uint32) (ptrSize uint64) {
 		if r.targetMessage == nil {
 			r.funcErr(errors.New("attempted to read meta of deleted message"))

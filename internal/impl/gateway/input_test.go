@@ -52,7 +52,7 @@ path: /testpost
 	defer server.Close()
 
 	// Test both single and multipart messages.
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		go func() {
 			batch, aFn, err := h.ReadBatch(tCtx)
 			require.NoError(t, err)
@@ -106,7 +106,7 @@ path: /testpost
 	defer server.Close()
 
 	// Test both single and multipart messages.
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		go func() {
 			batch, aFn, err := h.ReadBatch(tCtx)
 			require.NoError(t, err)

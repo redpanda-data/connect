@@ -17,8 +17,6 @@ package kafka
 import (
 	"slices"
 
-	"github.com/twmb/franz-go/pkg/kgo"
-
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
@@ -73,7 +71,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			clientOpts := append([]kgo.Opt{}, tmpOpts...)
+			clientOpts := slices.Clone(tmpOpts)
 
 			if tmpOpts, err = FranzConsumerOptsFromConfig(conf); err != nil {
 				return nil, err

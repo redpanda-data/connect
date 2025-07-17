@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"strconv"
 	"sync"
 	"time"
@@ -347,9 +348,7 @@ func (d *dynamoDBWriter) WriteBatch(ctx context.Context, b service.MessageBatch)
 				if attr, err := jsonToMap(v, jRoot); err == nil {
 					if k == "" {
 						if mv, ok := attr.(*types.AttributeValueMemberM); ok {
-							for ak, av := range mv.Value {
-								items[ak] = av
-							}
+							maps.Copy(items, mv.Value)
 						} else {
 							items[k] = attr
 						}

@@ -135,7 +135,7 @@ func registerArgon2CompareMethod() error {
 			return nil, err
 		}
 
-		return bloblang.StringMethod(func(source string) (interface{}, error) {
+		return bloblang.StringMethod(func(source string) (any, error) {
 			input := []byte(source)
 
 			if len(input) == 0 {

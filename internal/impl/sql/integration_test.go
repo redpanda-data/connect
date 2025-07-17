@@ -258,12 +258,12 @@ result_codec: json_array
 
 var testBatchProcessorBasic = testProcessors("basic", func(t *testing.T, insertProc, selectProc service.BatchProcessor) {
 	var insertBatch service.MessageBatch
-	for i := 0; i < 10; i++ {
-		insertBatch = append(insertBatch, service.NewMessage([]byte(fmt.Sprintf(`{
+	for i := range 10 {
+		insertBatch = append(insertBatch, service.NewMessage(fmt.Appendf(nil, `{
   "foo": "doc-%d",
   "bar": %d,
   "baz": "and this"
-}`, i, i))))
+}`, i, i)))
 	}
 
 	resBatches, err := insertProc.ProcessBatch(t.Context(), insertBatch)
@@ -275,8 +275,8 @@ var testBatchProcessorBasic = testProcessors("basic", func(t *testing.T, insertP
 	}
 
 	var queryBatch service.MessageBatch
-	for i := 0; i < 10; i++ {
-		queryBatch = append(queryBatch, service.NewMessage([]byte(fmt.Sprintf(`{"id":"doc-%d"}`, i))))
+	for i := range 10 {
+		queryBatch = append(queryBatch, service.NewMessage(fmt.Appendf(nil, `{"id":"doc-%d"}`, i)))
 	}
 
 	resBatches, err = selectProc.ProcessBatch(t.Context(), queryBatch)
@@ -299,15 +299,15 @@ var testBatchProcessorParallel = testProcessors("parallel", func(t *testing.T, i
 
 	startChan := make(chan struct{})
 	var wg sync.WaitGroup
-	for i := 0; i < nParallel; i++ {
+	for i := range nParallel {
 		var insertBatch service.MessageBatch
-		for j := 0; j < nLoops; j++ {
+		for j := range nLoops {
 			index := i*nLoops + j
-			insertBatch = append(insertBatch, service.NewMessage([]byte(fmt.Sprintf(`{
+			insertBatch = append(insertBatch, service.NewMessage(fmt.Appendf(nil, `{
   "foo": "doc-%d",
   "bar": %d,
   "baz": "and this"
-}`, index, index))))
+}`, index, index)))
 		}
 
 		wg.Add(1)
@@ -326,12 +326,12 @@ var testBatchProcessorParallel = testProcessors("parallel", func(t *testing.T, i
 
 	startChan = make(chan struct{})
 	wg = sync.WaitGroup{}
-	for i := 0; i < nParallel; i++ {
+	for i := range nParallel {
 		var queryBatch service.MessageBatch
 
-		for j := 0; j < nLoops; j++ {
+		for j := range nLoops {
 			index := i*nLoops + j
-			queryBatch = append(queryBatch, service.NewMessage([]byte(fmt.Sprintf(`{"id":"doc-%d"}`, index))))
+			queryBatch = append(queryBatch, service.NewMessage(fmt.Appendf(nil, `{"id":"doc-%d"}`, index)))
 		}
 
 		wg.Add(1)
@@ -354,12 +354,12 @@ var testBatchProcessorParallel = testProcessors("parallel", func(t *testing.T, i
 
 func rawProcessorTest(t *testing.T, insertProc, selectProc service.BatchProcessor) {
 	var insertBatch service.MessageBatch
-	for i := 0; i < 10; i++ {
-		insertBatch = append(insertBatch, service.NewMessage([]byte(fmt.Sprintf(`{
+	for i := range 10 {
+		insertBatch = append(insertBatch, service.NewMessage(fmt.Appendf(nil, `{
   "foo": "doc-%d",
   "bar": %d,
   "baz": "and this"
-}`, i, i))))
+}`, i, i)))
 	}
 
 	resBatches, err := insertProc.ProcessBatch(t.Context(), insertBatch)
@@ -371,8 +371,8 @@ func rawProcessorTest(t *testing.T, insertProc, selectProc service.BatchProcesso
 	}
 
 	var queryBatch service.MessageBatch
-	for i := 0; i < 10; i++ {
-		queryBatch = append(queryBatch, service.NewMessage([]byte(fmt.Sprintf(`{"id":"doc-%d"}`, i))))
+	for i := range 10 {
+		queryBatch = append(queryBatch, service.NewMessage(fmt.Appendf(nil, `{"id":"doc-%d"}`, i)))
 	}
 
 	resBatches, err = selectProc.ProcessBatch(t.Context(), queryBatch)
@@ -462,12 +462,12 @@ processors:
 		require.NoError(t, err)
 
 		var insertBatch service.MessageBatch
-		for i := 0; i < 10; i++ {
-			insertBatch = append(insertBatch, service.NewMessage([]byte(fmt.Sprintf(`{
+		for i := range 10 {
+			insertBatch = append(insertBatch, service.NewMessage(fmt.Appendf(nil, `{
 	"foo": "doc-%d",
 	"bar": %d,
 	"baz": "and this"
-}`, i, i))))
+}`, i, i)))
 		}
 		require.NoError(t, inFn(t.Context(), insertBatch))
 		require.NoError(t, streamIn.StopWithin(15*time.Second))
@@ -583,12 +583,12 @@ processors:
 		require.NoError(t, err)
 
 		var insertBatch service.MessageBatch
-		for i := 0; i < 10; i++ {
-			insertBatch = append(insertBatch, service.NewMessage([]byte(fmt.Sprintf(`{
+		for i := range 10 {
+			insertBatch = append(insertBatch, service.NewMessage(fmt.Appendf(nil, `{
 	"foo": "doc-%d",
 	"bar": %d,
 	"baz": "and this"
-}`, i, i))))
+}`, i, i)))
 		}
 		require.NoError(t, inFn(t.Context(), insertBatch))
 		require.NoError(t, streamIn.StopWithin(15*time.Second))

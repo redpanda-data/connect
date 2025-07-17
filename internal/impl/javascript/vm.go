@@ -88,7 +88,7 @@ func parseArgs(call goja.FunctionCall, ptrs ...any) error {
 		return fmt.Errorf("have %d arguments, but only %d pointers to parse into", len(call.Arguments), len(ptrs))
 	}
 
-	for i := 0; i < len(call.Arguments); i++ {
+	for i := range call.Arguments {
 		arg, ptr := call.Argument(i), ptrs[i]
 
 		if goja.IsUndefined(arg) {

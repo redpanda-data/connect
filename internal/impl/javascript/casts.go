@@ -20,36 +20,36 @@ import (
 	"github.com/dop251/goja"
 )
 
-func getMapFromValue(val goja.Value) (map[string]interface{}, error) {
+func getMapFromValue(val goja.Value) (map[string]any, error) {
 	outVal := val.Export()
-	v, ok := outVal.(map[string]interface{})
+	v, ok := outVal.(map[string]any)
 	if !ok {
 		return nil, errors.New("value is not of type map")
 	}
 	return v, nil
 }
 
-func getSliceFromValue(val goja.Value) ([]interface{}, error) {
+func getSliceFromValue(val goja.Value) ([]any, error) {
 	outVal := val.Export()
-	v, ok := outVal.([]interface{})
+	v, ok := outVal.([]any)
 	if !ok {
 		return nil, errors.New("value is not of type slice")
 	}
 	return v, nil
 }
 
-func getMapSliceFromValue(val goja.Value) ([]map[string]interface{}, error) {
+func getMapSliceFromValue(val goja.Value) ([]map[string]any, error) {
 	outVal := val.Export()
-	if v, ok := outVal.([]map[string]interface{}); ok {
+	if v, ok := outVal.([]map[string]any); ok {
 		return v, nil
 	}
-	vSlice, ok := outVal.([]interface{})
+	vSlice, ok := outVal.([]any)
 	if !ok {
 		return nil, errors.New("value is not of type map slice")
 	}
-	v := make([]map[string]interface{}, len(vSlice))
+	v := make([]map[string]any, len(vSlice))
 	for i, e := range vSlice {
-		v[i], ok = e.(map[string]interface{})
+		v[i], ok = e.(map[string]any)
 		if !ok {
 			return nil, errors.New("value is not of type map slice")
 		}

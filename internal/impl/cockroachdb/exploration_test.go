@@ -95,7 +95,7 @@ func TestIntegrationExploration(t *testing.T) {
 	require.NoError(t, err)
 
 	var latestCursor string
-	for j := 0; j < 100; j++ {
+	for j := range 100 {
 		require.True(t, rows.Next())
 
 		var a, b, c []byte
@@ -131,7 +131,7 @@ func TestIntegrationExploration(t *testing.T) {
 	rows, err = cfdb.QueryContext(rowsCtx, "EXPERIMENTAL CHANGEFEED FOR foo WITH UPDATED, CURSOR=\""+latestCursor+"\"")
 	require.NoError(t, err)
 
-	for j := 0; j < 50; j++ {
+	for j := range 50 {
 		require.True(t, rows.Next())
 
 		var a, b, c []byte

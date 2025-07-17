@@ -183,7 +183,7 @@ func TestIntegrationPostgresNoTxnMarkers(t *testing.T) {
 
 	require.NoError(t, err)
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		f := GetFakeFlightRecord()
 		_, err = db.Exec(`INSERT INTO "FlightsCompositePK" ("Seq", "Name", "CreatedAt") VALUES ($1, $2, $3);`, i, f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 		require.NoError(t, err)
@@ -376,7 +376,7 @@ func TestIntegrationPostgresIncludeTxnMarkers(t *testing.T) {
 	hostAndPortSplited := strings.Split(hostAndPort, ":")
 	password := "l]YLSc|4[i56%{gY"
 
-	for i := 0; i < 10000; i++ {
+	for range 10000 {
 		f := GetFakeFlightRecord()
 		_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 		require.NoError(t, err)
@@ -426,7 +426,7 @@ pg_stream:
 		return len(outBatches) == 10000
 	}, time.Second*25, time.Millisecond*100)
 
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		f := GetFakeFlightRecord()
 		_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 		require.NoError(t, err)
@@ -469,7 +469,7 @@ pg_stream:
 	}()
 
 	time.Sleep(time.Second * 5)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		f := GetFakeFlightRecord()
 		_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 		require.NoError(t, err)
@@ -617,7 +617,7 @@ func TestIntegrationMultiplePostgresVersions(t *testing.T) {
 			hostAndPortSplited := strings.Split(hostAndPort, ":")
 			password := "l]YLSc|4[i56%{gY"
 
-			for i := 0; i < 1000; i++ {
+			for range 1000 {
 				f := GetFakeFlightRecord()
 				_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 				require.NoError(t, err)
@@ -669,7 +669,7 @@ pg_stream:
 				return len(outBatches) == 1000
 			}, time.Second*15, time.Millisecond*100)
 
-			for i := 0; i < 1000; i++ {
+			for range 1000 {
 				f := GetFakeFlightRecord()
 				_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 				require.NoError(t, err)
@@ -712,7 +712,7 @@ pg_stream:
 			}()
 
 			time.Sleep(time.Second * 5)
-			for i := 0; i < 1000; i++ {
+			for range 1000 {
 				f := GetFakeFlightRecord()
 				_, err = db.Exec("INSERT INTO flights (name, created_at) VALUES ($1, $2);", f.RealAddress.City, time.Unix(f.CreatedAt, 0).Format(time.RFC3339))
 				require.NoError(t, err)

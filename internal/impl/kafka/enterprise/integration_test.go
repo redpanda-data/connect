@@ -142,7 +142,7 @@ max_message_bytes: 1MB
 	inputLogs := 10
 
 	tmpLogger := slog.New(gmgr.SlogHandler())
-	for i := 0; i < inputLogs; i++ {
+	for i := range inputLogs {
 		tmpLogger.With("v", i).Info("This is a log message")
 	}
 
@@ -209,7 +209,7 @@ max_message_bytes: 1MB
 	inputLogs := 10
 
 	tmpLogger := slog.New(gmgr.SlogHandler())
-	for i := 0; i < inputLogs; i++ {
+	for i := range inputLogs {
 		tmpLogger.With("v", i).Info("This is a log message")
 	}
 
@@ -261,14 +261,14 @@ mapping: 'root = content().uppercase()'
 		assert.NoError(t, strm.Run(ctx))
 	}()
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		require.NoError(t, prodFn(ctx, service.NewMessage(fmt.Appendf(nil, "Meow%v", i))))
 	}
 
 	outRecords = readNKafkaMessages(ctx, t, brokerAddr, topicCustom, 10)
 	assert.Len(t, outRecords, inputLogs)
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		assert.Equal(t, fmt.Sprintf("MEOW%v", i), string(outRecords[i].Value))
 	}
 
@@ -299,7 +299,7 @@ max_message_bytes: 1MB
 	inputLogs := 10
 
 	tmpLogger := slog.New(gmgr.SlogHandler())
-	for i := 0; i < inputLogs; i++ {
+	for i := range inputLogs {
 		tmpLogger.With("v", i).Info("This is a log message")
 	}
 

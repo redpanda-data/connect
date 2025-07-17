@@ -480,7 +480,7 @@ func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mapper
 				// This might be a little simplistic, we may need to handle escaped values
 				// here...
 				out := []any{}
-				for _, elem := range strings.Split(s, ",") {
+				for elem := range strings.SplitSeq(s, ",") {
 					out = append(out, elem)
 				}
 				return out, nil
