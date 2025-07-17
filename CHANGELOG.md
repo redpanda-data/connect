@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## TBD
+
+### Added
+
+- Added `host_selection_policy` for `cassandra` input and output. (@jonny7)
+
 ## 4.60.2 - 2025-07-14
 
 ### Added
