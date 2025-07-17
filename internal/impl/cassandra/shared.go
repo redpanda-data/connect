@@ -197,7 +197,7 @@ func clientConfFromParsed(conf *service.ParsedConfig) (c clientConf, err error) 
 func newHostSelectionPolicy(localDC, localRack string) (gocql.HostSelectionPolicy, error) {
 	if localRack != "" {
 		if localDC == "" {
-			return nil, fmt.Errorf("localDC cannot be empty when localRack is set")
+			return nil, errors.New("localDC cannot be empty when localRack is set")
 		}
 		return gocql.RackAwareRoundRobinPolicy(localDC, localRack), nil
 	}
