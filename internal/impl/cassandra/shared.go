@@ -16,6 +16,7 @@ package cassandra
 
 import (
 	"crypto/tls"
+	"fmt"
 	"strings"
 	"time"
 
@@ -25,18 +26,21 @@ import (
 )
 
 const (
-	cFieldAddresses           = "addresses"
-	cFieldTLS                 = "tls"
-	cFieldPassAuth            = "password_authenticator"
-	cFieldPassAuthEnabled     = "enabled"
-	cFieldPassAuthUsername    = "username"
-	cFieldPassAuthPassword    = "password"
-	cFieldDisableIHL          = "disable_initial_host_lookup"
-	cFieldMaxRetries          = "max_retries"
-	cFieldBackoff             = "backoff"
-	cFieldBackoffInitInterval = "initial_interval"
-	cFieldBackoffMaxInterval  = "max_interval"
-	cFieldTimeout             = "timeout"
+	cFieldAddresses                    = "addresses"
+	cFieldTLS                          = "tls"
+	cFieldPassAuth                     = "password_authenticator"
+	cFieldPassAuthEnabled              = "enabled"
+	cFieldPassAuthUsername             = "username"
+	cFieldPassAuthPassword             = "password"
+	cFieldDisableIHL                   = "disable_initial_host_lookup"
+	cFieldMaxRetries                   = "max_retries"
+	cFieldBackoff                      = "backoff"
+	cFieldBackoffInitInterval          = "initial_interval"
+	cFieldBackoffMaxInterval           = "max_interval"
+	cFieldTimeout                      = "timeout"
+	cFieldHostSelectionPolicy          = "host_selection_policy"
+	cFieldHostSelectionPolicyLocalDC   = "local_dc"
+	cFieldHostSelectionPolicyLocalRack = "local_rack"
 )
 
 func clientFields() []*service.ConfigField {
@@ -84,6 +88,17 @@ func clientFields() []*service.ConfigField {
 		service.NewDurationField(cFieldTimeout).
 			Description("The client connection timeout.").
 			Default("600ms"),
+		service.NewObjectField(cFieldHostSelectionPolicy,
+			service.NewStringField(cFieldHostSelectionPolicyLocalDC).
+				Description("The local DC to use, this is only applicable for the DC Aware & Rack Aware policies").
+				Optional(),
+			service.NewStringField(cFieldHostSelectionPolicyLocalRack).
+				Description("The local Rack to use, this is only applicable for the Rack Aware Policy").
+				Optional(),
+		).
+			Description("Optional host selection policy configurations. Defaults to TokenAwareHostPolicy with fallback of RoundRobinHostPolicy").
+			LintRule(`root = if this.local_rack != "" && (!this.exists("local_dc") || this.local_dc == "") { "local_dc must be set if local_rack is set" }`).
+			Advanced(),
 	}
 }
 
@@ -99,6 +114,7 @@ type clientConf struct {
 	backoffInitInterval time.Duration
 	backoffMaxInterval  time.Duration
 	timeout             time.Duration
+	hostSelectionPolicy gocql.HostSelectionPolicy
 }
 
 func (c *clientConf) Create() (*gocql.ClusterConfig, error) {
@@ -118,6 +134,8 @@ func (c *clientConf) Create() (*gocql.ClusterConfig, error) {
 			Password: c.authPassword,
 		}
 	}
+
+	conn.PoolConfig.HostSelectionPolicy = gocql.TokenAwareHostPolicy(c.hostSelectionPolicy, gocql.ShuffleReplicas(), gocql.NonLocalReplicasFallback())
 
 	conn.RetryPolicy = &decorator{
 		NumRetries: c.maxRetries,
@@ -164,5 +182,27 @@ func clientConfFromParsed(conf *service.ParsedConfig) (c clientConf, err error) 
 	if c.timeout, err = conf.FieldDuration(cFieldTimeout); err != nil {
 		return
 	}
+
+	{
+		hostSelection := conf.Namespace(cFieldHostSelectionPolicy)
+		localDC, _ := hostSelection.FieldString(cFieldHostSelectionPolicyLocalDC)
+		localRack, _ := hostSelection.FieldString(cFieldHostSelectionPolicyLocalRack)
+		if c.hostSelectionPolicy, err = newHostSelectionPolicy(localDC, localRack); err != nil {
+			return
+		}
+	}
 	return
+}
+
+func newHostSelectionPolicy(localDC, localRack string) (gocql.HostSelectionPolicy, error) {
+	if localRack != "" {
+		if localDC == "" {
+			return nil, errors.New("localDC cannot be empty when localRack is set")
+		}
+		return gocql.RackAwareRoundRobinPolicy(localDC, localRack), nil
+	}
+	if localDC != "" {
+		return gocql.DCAwareRoundRobinPolicy(localDC), nil
+	}
+	return gocql.RoundRobinHostPolicy(), nil
 }

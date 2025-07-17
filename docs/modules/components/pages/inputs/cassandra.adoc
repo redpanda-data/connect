@@ -71,6 +71,9 @@ input:
       initial_interval: 1s
       max_interval: 5s
     timeout: 600ms
+    host_selection_policy:
+      local_dc: "" # No default (optional)
+      local_rack: "" # No default (optional)
     query: "" # No default (required)
     auto_replay_nacks: true
 ```
@@ -389,6 +392,30 @@ The client connection timeout.
 *Type*: `string`
 
 *Default*: `"600ms"`
+
+=== `host_selection_policy`
+
+Optional host selection policy configurations. Defaults to TokenAwareHostPolicy with fallback of RoundRobinHostPolicy
+
+
+*Type*: `object`
+
+
+=== `host_selection_policy.local_dc`
+
+The local DC to use, this is only applicable for the DC Aware & Rack Aware policies
+
+
+*Type*: `string`
+
+
+=== `host_selection_policy.local_rack`
+
+The local Rack to use, this is only applicable for the Rack Aware Policy
+
+
+*Type*: `string`
+
 
 === `query`
 
