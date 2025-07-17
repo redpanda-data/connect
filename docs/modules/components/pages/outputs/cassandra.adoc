@@ -433,7 +433,7 @@ The client connection timeout.
 
 === `host_selection_policy`
 
-Optional host selection policy configurations. Defaults to TokenAwareHostPolicy with fallback of RoundRobinHostPolicy
+Optional host selection policy configurations. Highly recommended in deployments with multiple DCs. Host selection is always token aware if the token can be calculated from query. By default the underlying policy is round robin over all nodes. Users can specify a local DC and rack to use for the DC Aware & Rack Aware policies.
 
 
 *Type*: `object`
@@ -441,7 +441,7 @@ Optional host selection policy configurations. Defaults to TokenAwareHostPolicy 
 
 === `host_selection_policy.local_dc`
 
-The local DC to use, this is only applicable for the DC Aware & Rack Aware policies
+The local DC to use, enables DC aware policy.
 
 
 *Type*: `string`
@@ -449,7 +449,7 @@ The local DC to use, this is only applicable for the DC Aware & Rack Aware polic
 
 === `host_selection_policy.local_rack`
 
-The local Rack to use, this is only applicable for the Rack Aware Policy
+The local rack to use, requires local_dc to be set, enables rack aware policy.
 
 
 *Type*: `string`

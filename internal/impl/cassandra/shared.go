@@ -90,13 +90,17 @@ func clientFields() []*service.ConfigField {
 			Default("600ms"),
 		service.NewObjectField(cFieldHostSelectionPolicy,
 			service.NewStringField(cFieldHostSelectionPolicyLocalDC).
-				Description("The local DC to use, this is only applicable for the DC Aware & Rack Aware policies").
+				Description("The local DC to use, enables DC aware policy.").
 				Optional(),
 			service.NewStringField(cFieldHostSelectionPolicyLocalRack).
-				Description("The local Rack to use, this is only applicable for the Rack Aware Policy").
+				Description("The local rack to use, requires local_dc to be set, enables rack aware policy.").
 				Optional(),
 		).
-			Description("Optional host selection policy configurations. Defaults to TokenAwareHostPolicy with fallback of RoundRobinHostPolicy").
+			Description("Optional host selection policy configurations. " +
+				"Highly recommended in deployments with multiple DCs. " +
+				"Host selection is always token aware if the token can be calculated from query. " +
+				"By default the underlying policy is round robin over all nodes. " +
+				"Users can specify a local DC and rack to use for the DC Aware & Rack Aware policies. ").
 			LintRule(`root = if this.local_rack != "" && (!this.exists("local_dc") || this.local_dc == "") { "local_dc must be set if local_rack is set" }`).
 			Advanced(),
 	}
