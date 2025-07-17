@@ -1,10 +1,10 @@
-# input:
-#   json_gen:
-#     count: 3
+input:
+  json_gen:
+    count: 3
 
 # pipeline:
 #   processors:
 #     - fizzbuzz: {}
 
-output:
-  py_log: {}
+# output:
+#   py_log: {}

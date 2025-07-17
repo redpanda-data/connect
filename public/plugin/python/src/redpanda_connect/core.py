@@ -70,7 +70,7 @@ class Input(Protocol):
 
     async def connect(self) -> None:
         """
-        Connect to the input source. This is called before any messages are read>
+        Connect to the input source. This is called before any messages are read
         """
         ...
 

@@ -23,7 +23,6 @@ def yell(msg: redpanda_connect.Message) -> redpanda_connect.Message:
     return msg
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
     asyncio.run(redpanda_connect.processor_main(yell))
 EOF
 
@@ -41,5 +40,5 @@ pipeline:
     - foo: {}
 EOF
 
-rpk connect run --rpc-plugin=plugin.yaml connect.yaml
+rpk connect run --rpc-plugins=plugin.yaml connect.yaml
 ```
