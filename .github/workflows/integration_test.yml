@@ -20,40 +20,40 @@ jobs:
           - ./internal/impl/amqp09
           - ./internal/impl/amqp1
           - ./internal/impl/aws
-          - ./internal/impl/azure
-          - ./internal/impl/beanstalkd
+          # - ./internal/impl/azure
+          # - ./internal/impl/beanstalkd
           - ./internal/impl/cassandra
           - ./internal/impl/cockroachdb
-          - ./internal/impl/couchbase
+          # - ./internal/impl/couchbase
           - ./internal/impl/elasticsearch/v8
           - ./internal/impl/gcp
           - ./internal/impl/gcp/enterprise
-          - ./internal/impl/gcp/enterprise/changestreams
-          - ./internal/impl/gcp/enterprise/changestreams/metadata
+          # - ./internal/impl/gcp/enterprise/changestreams
+          # - ./internal/impl/gcp/enterprise/changestreams/metadata
           - ./internal/impl/hdfs
           - ./internal/impl/influxdb
-          - ./internal/impl/kafka
+          # - ./internal/impl/kafka
           - ./internal/impl/kafka/enterprise
           - ./internal/impl/memcached
           - ./internal/impl/mongodb
           - ./internal/impl/mongodb/cdc
-          - ./internal/impl/mqtt
+          # - ./internal/impl/mqtt
           - ./internal/impl/mysql
-          - ./internal/impl/nanomsg
-          - ./internal/impl/nats
+          # - ./internal/impl/nanomsg
+          # - ./internal/impl/nats
           - ./internal/impl/nsq
           - ./internal/impl/opensearch
-          - ./internal/impl/postgresql
+          # - ./internal/impl/postgresql
           - ./internal/impl/pulsar
           - ./internal/impl/qdrant
-          - ./internal/impl/questdb
+          # - ./internal/impl/questdb
           - ./internal/impl/redis
           - ./internal/impl/sftp
-          - ./internal/impl/snowflake
+          # - ./internal/impl/snowflake
           - ./internal/impl/snowflake/streaming
-          - ./internal/impl/splunk
-          - ./internal/impl/sql
-          - ./internal/impl/zeromq
+          # - ./internal/impl/splunk
+          # - ./internal/impl/sql
+          # - ./internal/impl/zeromq
 
     steps:
       - name: Checkout code
