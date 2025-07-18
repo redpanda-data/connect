@@ -58,6 +58,9 @@ output:
     subject: "" # No default (required)
     backfill_dependencies: true
     translate_ids: false
+    normalize: true
+    remove_metadata: true
+    remove_rule_set: true
     input_resource: schema_registry_input
     tls:
       enabled: false
@@ -161,6 +164,33 @@ Translate schema IDs.
 *Type*: `bool`
 
 *Default*: `false`
+
+=== `normalize`
+
+Normalize schemas.
+
+
+*Type*: `bool`
+
+*Default*: `true`
+
+=== `remove_metadata`
+
+Remove metadata from schemas.
+
+
+*Type*: `bool`
+
+*Default*: `true`
+
+=== `remove_rule_set`
+
+Remove rule set from schemas.
+
+
+*Type*: `bool`
+
+*Default*: `true`
 
 === `input_resource`
 

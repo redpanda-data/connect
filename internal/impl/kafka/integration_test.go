@@ -31,6 +31,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
+	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka/redpandatest"
 	_ "github.com/redpanda-data/connect/v4/public/components/confluent"
 
@@ -819,6 +820,185 @@ output:
 			}
 		})
 	}
+}
+
+func writeSchema(t *testing.T, sr redpandatest.RedpandaEndpoints, schema []byte, normalize, removeMetadata, removeRuleSet bool) {
+	streamBuilder := service.NewStreamBuilder()
+
+	// Set up a dummy `schema_registry` input which the output can connect to even though it won't need to fetch any
+	// schemas from it.
+	input := fmt.Sprintf(`
+schema_registry:
+  url: %s
+  subject_filter: does_not_exist
+`, sr.SchemaRegistryURL)
+	require.NoError(t, streamBuilder.AddInputYAML(input))
+
+	output := fmt.Sprintf(`
+schema_registry:
+  url: %s
+  subject: ${! json("subject") }
+  backfill_dependencies: true
+  normalize: %t
+  remove_metadata: %t
+  remove_rule_set: %t
+`, sr.SchemaRegistryURL, normalize, removeMetadata, removeRuleSet)
+	require.NoError(t, streamBuilder.AddOutputYAML(output))
+
+	prodFn, err := streamBuilder.AddProducerFunc()
+	require.NoError(t, err)
+
+	stream, err := streamBuilder.Build()
+	require.NoError(t, err)
+
+	doneChan := make(chan struct{})
+	go func() {
+		require.NoError(t, stream.Run(t.Context()))
+		close(doneChan)
+	}()
+	defer func() {
+		require.NoError(t, stream.StopWithin(3*time.Second))
+		<-doneChan
+	}()
+
+	require.NoError(t, prodFn(t.Context(), service.NewMessage(schema)))
+}
+
+func TestSchemaRegistryProtobufSchemasIntegration(t *testing.T) {
+	integration.CheckSkip(t)
+
+	pool, err := dockertest.NewPool("")
+	require.NoError(t, err)
+	pool.MaxWait = time.Minute
+
+	sr, err := redpandatest.StartRedpanda(t, pool, false, true)
+	require.NoError(t, err)
+
+	t.Logf("Schema Registry URL: %s", sr.SchemaRegistryURL)
+
+	testFn := func(t *testing.T, subject string, normalize bool, metadata, ruleSet string) {
+		const dummyProtoSchema = `syntax = "proto3";
+package com.mycorp.mynamespace;
+
+message SampleRecord {
+  int32 my_field1 = 1;
+  double my_field2 = 2;
+  string my_field3 = 3;
+}`
+
+		// This denormalized schema has 2 fields in a different order than the normalized one.
+		const dummyDenormalizedProtoSchema = `syntax = "proto3";
+package com.mycorp.mynamespace;
+
+message SampleRecord {
+  int32 my_field1 = 1;
+  string my_field3 = 3;
+  double my_field2 = 2;
+}`
+
+		dummySchema := dummyProtoSchema
+		if normalize {
+			dummySchema = dummyDenormalizedProtoSchema
+		}
+
+		var schemaMetadata *franz_sr.SchemaMetadata
+		if metadata != "" {
+			require.NoError(t, json.Unmarshal([]byte(metadata), &schemaMetadata))
+		}
+		var schemaRuleSet *franz_sr.SchemaRuleSet
+		if ruleSet != "" {
+			require.NoError(t, json.Unmarshal([]byte(ruleSet), &schemaRuleSet))
+		}
+
+		inputSS := franz_sr.SubjectSchema{
+			Subject: subject,
+			Version: 1,
+			ID:      1,
+			Schema: franz_sr.Schema{
+				Schema:         dummySchema,
+				Type:           franz_sr.TypeProtobuf,
+				SchemaMetadata: schemaMetadata,
+				SchemaRuleSet:  schemaRuleSet,
+			},
+		}
+		schema, err := json.Marshal(inputSS)
+		require.NoError(t, err)
+
+		writeSchema(t, sr, schema, normalize, metadata != "", ruleSet != "")
+
+		resp, err := http.DefaultClient.Get(fmt.Sprintf("%s/subjects/%s/versions/%d", sr.SchemaRegistryURL, subject, 1))
+		require.NoError(t, err)
+		body, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		require.NoError(t, resp.Body.Close())
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var returnedSS franz_sr.SubjectSchema
+		require.NoError(t, json.Unmarshal(body, &returnedSS))
+		assert.Equal(t, subject, returnedSS.Subject)
+		assert.Equal(t, 1, returnedSS.Version)
+
+		if normalize {
+			inputSS.Schema.Schema = dummyProtoSchema
+		}
+		if metadata != "" {
+			inputSS.SchemaMetadata = nil
+		}
+		if ruleSet != "" {
+			inputSS.SchemaRuleSet = nil
+		}
+		assert.True(t, kafka.SchemasEqual(inputSS, returnedSS))
+	}
+
+	const dummySubject = "foo"
+
+	deleteSubject := func() {
+		// Clean up the subject at the end of each subtest.
+		deleteSubject(t, sr.SchemaRegistryURL, dummySubject, false)
+		deleteSubject(t, sr.SchemaRegistryURL, dummySubject, true)
+	}
+
+	t.Run("allows creating the same schema twice", func(t *testing.T) {
+		defer deleteSubject()
+
+		for range 2 {
+			testFn(t, dummySubject, false, "", "")
+		}
+	})
+
+	t.Run("normalises schemas", func(t *testing.T) {
+		defer deleteSubject()
+
+		testFn(t, dummySubject, true, "", "")
+	})
+
+	t.Run("removes metadata", func(t *testing.T) {
+		defer deleteSubject()
+
+		const metadata = `{
+  "properties": {
+    "confluent:version": "1"
+  }
+}`
+		testFn(t, dummySubject, true, metadata, "")
+	})
+
+	t.Run("removes rule sets", func(t *testing.T) {
+		defer deleteSubject()
+
+		const ruleSet = `{
+  "domainRules": [
+    {
+      "name": "checkSsnLen",
+      "kind": "CONDITION",
+      "type": "CEL",
+      "mode": "WRITE",
+      "expr": "size(message.ssn) == 9"
+    }
+  ]
+}`
+		testFn(t, dummySubject, true, "", ruleSet)
+	})
 }
 
 func TestSchemaRegistryDuplicateSchemaIntegration(t *testing.T) {

@@ -14,5 +14,29 @@
 
 package kafka
 
+import (
+	"strings"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	franz_sr "github.com/twmb/franz-go/pkg/sr"
+)
+
 // srResourceKey is a type that represents a key for registering a `schema_registry` resource.
 type srResourceKey string
+
+// SchemasEqual compares two schema objects for equality, ignoring newlines and leading/trailing spaces in the schema string.
+func SchemasEqual(lhs, rhs franz_sr.SubjectSchema) bool {
+	// TODO: Remove this utility after https://github.com/redpanda-data/redpanda/issues/26331 is resolved.
+
+	// Remove newlines and leading/trailing spaces from the schemas before comparison.
+	lhsSchema := strings.TrimSpace(strings.ReplaceAll(lhs.Schema.Schema, "\n", ""))
+	rhsSchema := strings.TrimSpace(strings.ReplaceAll(rhs.Schema.Schema, "\n", ""))
+
+	if lhsSchema != rhsSchema {
+		return false
+	}
+
+	// Compare the rest of the fields.
+	return cmp.Equal(lhs, rhs, cmpopts.IgnoreFields(franz_sr.Schema{}, "Schema"))
+}

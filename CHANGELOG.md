@@ -3,11 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## TBD
+## 4.61.0 - TBD
 
 ### Added
 
 - Added `host_selection_policy` for `cassandra` input and output. (@jonny7)
+- Fields `normalize`, `remove_metadata` and `remove_rule_set` added to `schema_registry` output. (@mihaitodor)
 
 ## 4.60.2 - 2025-07-14
 

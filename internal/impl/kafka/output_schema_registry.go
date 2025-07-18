@@ -23,11 +23,10 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 
-	"cuelang.org/go/pkg/strings"
-	"github.com/google/go-cmp/cmp"
 	franz_sr "github.com/twmb/franz-go/pkg/sr"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -40,6 +39,9 @@ const (
 	sroFieldSubject              = "subject"
 	sroFieldBackfillDependencies = "backfill_dependencies"
 	sroFieldTranslateIDs         = "translate_ids"
+	sroFieldNormalize            = "normalize"
+	sroFieldRemoveMetadata       = "remove_metadata"
+	sroFieldRemoveRuleSet        = "remove_rule_set"
 	sroFieldInputResource        = "input_resource"
 	sroFieldTLS                  = "tls"
 
@@ -83,6 +85,9 @@ func schemaRegistryOutputConfigFields() []*service.ConfigField {
 		service.NewInterpolatedStringField(sroFieldSubject).Description("Subject."),
 		service.NewBoolField(sroFieldBackfillDependencies).Description("Backfill schema references and previous versions.").Default(true).Advanced(),
 		service.NewBoolField(sroFieldTranslateIDs).Description("Translate schema IDs.").Default(false).Advanced(),
+		service.NewBoolField(sroFieldNormalize).Description("Normalize schemas.").Default(true).Advanced(),
+		service.NewBoolField(sroFieldRemoveMetadata).Description("Remove metadata from schemas.").Default(true).Advanced(),
+		service.NewBoolField(sroFieldRemoveRuleSet).Description("Remove rule set from schemas.").Default(true).Advanced(),
 		service.NewStringField(sroFieldInputResource).
 			Description("The label of the schema_registry input from which to read source schemas.").
 			Default(sriResourceDefaultLabel).
@@ -110,6 +115,9 @@ type schemaRegistryOutput struct {
 	subject              *service.InterpolatedString
 	backfillDependencies bool
 	translateIDs         bool
+	normalize            bool
+	removeMetadata       bool
+	removeRuleSet        bool
 	inputResource        srResourceKey
 
 	client      *sr.Client
@@ -143,6 +151,18 @@ func outputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (o *s
 	}
 
 	if o.translateIDs, err = pConf.FieldBool(sroFieldTranslateIDs); err != nil {
+		return
+	}
+
+	if o.normalize, err = pConf.FieldBool(sroFieldNormalize); err != nil {
+		return
+	}
+
+	if o.removeMetadata, err = pConf.FieldBool(sroFieldRemoveMetadata); err != nil {
+		return
+	}
+
+	if o.removeRuleSet, err = pConf.FieldBool(sroFieldRemoveRuleSet); err != nil {
 		return
 	}
 
@@ -226,14 +246,14 @@ func (o *schemaRegistryOutput) Write(ctx context.Context, m *service.Message) er
 		return fmt.Errorf("failed to extract message bytes: %s", err)
 	}
 
-	var sd franz_sr.SubjectSchema
-	if err := json.Unmarshal(payload, &sd); err != nil {
+	var ss franz_sr.SubjectSchema
+	if err := json.Unmarshal(payload, &ss); err != nil {
 		return fmt.Errorf("failed to unmarshal schema details: %s", err)
 	}
 	// Populate the subject from the metadata.
-	sd.Subject = subject
+	ss.Subject = subject
 
-	destinationID, err := o.getOrCreateSchemaID(ctx, sd)
+	destinationID, err := o.getOrCreateSchemaID(ctx, ss)
 	if err != nil {
 		return err
 	}
@@ -379,16 +399,24 @@ func (o *schemaRegistryOutput) createSchema(ctx context.Context, key schemaLinea
 		return destinationID.(int), nil
 	}
 
+	if o.removeMetadata {
+		ss.SchemaMetadata = nil
+	}
+
+	if o.removeRuleSet {
+		ss.SchemaRuleSet = nil
+	}
+
 	var destinationID int
 	var err error
 	if o.translateIDs {
 		// This should return the destination ID without an error if the schema already exists.
-		destinationID, err = o.client.CreateSchema(ctx, ss.Subject, ss.Schema)
+		destinationID, err = o.client.CreateSchema(ctx, ss.Subject, ss.Schema, o.normalize)
 		if err != nil {
 			return -1, err
 		}
 	} else {
-		destinationID, err = o.client.CreateSchemaWithIDAndVersion(ctx, ss.Subject, ss.Schema, ss.ID, ss.Version)
+		destinationID, err = o.client.CreateSchemaWithIDAndVersion(ctx, ss.Subject, ss.Schema, ss.ID, ss.Version, o.normalize)
 		if err != nil {
 			// Temporary hack until https://github.com/redpanda-data/redpanda/issues/26331 is resolved.
 			// If the schema already exists and is identical to the one we're trying to create, Redpanda should not
@@ -399,7 +427,7 @@ func (o *schemaRegistryOutput) createSchema(ctx context.Context, key schemaLinea
 					return -1, errGet
 				}
 
-				if !cmp.Equal(ss, existingSchema) {
+				if !SchemasEqual(ss, existingSchema) {
 					// If the schemas differ, then we encountered a genuine conflict.
 					return -1, err
 				}

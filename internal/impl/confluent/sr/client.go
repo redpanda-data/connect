@@ -158,7 +158,11 @@ func (c *Client) GetVersionsForSubject(ctx context.Context, subject string, incl
 }
 
 // CreateSchema creates a new schema for the given subject.
-func (c *Client) CreateSchema(ctx context.Context, subject string, schema sr.Schema) (int, error) {
+func (c *Client) CreateSchema(ctx context.Context, subject string, schema sr.Schema, normalize bool) (int, error) {
+	if normalize {
+		ctx = sr.WithParams(ctx, sr.Normalize)
+	}
+
 	ss, err := c.Client.CreateSchema(ctx, subject, schema)
 	if err != nil {
 		return -1, fmt.Errorf("failed to create schema for subject %q: %s", subject, err)
@@ -168,7 +172,11 @@ func (c *Client) CreateSchema(ctx context.Context, subject string, schema sr.Sch
 }
 
 // CreateSchemaWithIDAndVersion creates a new schema for the given subject, ID and version.
-func (c *Client) CreateSchemaWithIDAndVersion(ctx context.Context, subject string, schema sr.Schema, id, version int) (int, error) {
+func (c *Client) CreateSchemaWithIDAndVersion(ctx context.Context, subject string, schema sr.Schema, id, version int, normalize bool) (int, error) {
+	if normalize {
+		ctx = sr.WithParams(ctx, sr.Normalize)
+	}
+
 	ss, err := c.Client.CreateSchemaWithIDAndVersion(ctx, subject, schema, id, version)
 	if err != nil {
 		return -1, fmt.Errorf("failed to create schema for subject %q with id %d and version %d: %s", subject, id, version, err)
