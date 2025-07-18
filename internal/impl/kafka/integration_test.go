@@ -1000,7 +1000,7 @@ message SampleRecord {
 		testFn(t, dummySubject, true, "", ruleSet)
 	})
 
-	t.Run("", func(t *testing.T) {
+	t.Run("associates the same schema with multiple subjects", func(t *testing.T) {
 		extraSubject := "bar"
 
 		testFn(t, dummySubject, false, "", "")
