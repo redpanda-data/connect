@@ -947,19 +947,19 @@ message SampleRecord {
 		if ruleSet != "" {
 			inputSS.SchemaRuleSet = nil
 		}
-		assert.True(t, kafka.SchemasEqual(inputSS, returnedSS))
+		assert.True(t, kafka.SchemasEqual(inputSS.Schema, returnedSS.Schema))
 	}
 
 	const dummySubject = "foo"
 
-	deleteSubject := func() {
+	deleteDummySubject := func() {
 		// Clean up the subject at the end of each subtest.
 		deleteSubject(t, sr.SchemaRegistryURL, dummySubject, false)
 		deleteSubject(t, sr.SchemaRegistryURL, dummySubject, true)
 	}
 
 	t.Run("allows creating the same schema twice", func(t *testing.T) {
-		defer deleteSubject()
+		defer deleteDummySubject()
 
 		for range 2 {
 			testFn(t, dummySubject, false, "", "")
@@ -967,13 +967,13 @@ message SampleRecord {
 	})
 
 	t.Run("normalises schemas", func(t *testing.T) {
-		defer deleteSubject()
+		defer deleteDummySubject()
 
 		testFn(t, dummySubject, true, "", "")
 	})
 
 	t.Run("removes metadata", func(t *testing.T) {
-		defer deleteSubject()
+		defer deleteDummySubject()
 
 		const metadata = `{
   "properties": {
@@ -984,7 +984,7 @@ message SampleRecord {
 	})
 
 	t.Run("removes rule sets", func(t *testing.T) {
-		defer deleteSubject()
+		defer deleteDummySubject()
 
 		const ruleSet = `{
   "domainRules": [
@@ -998,6 +998,17 @@ message SampleRecord {
   ]
 }`
 		testFn(t, dummySubject, true, "", ruleSet)
+	})
+
+	t.Run("", func(t *testing.T) {
+		extraSubject := "bar"
+
+		testFn(t, dummySubject, false, "", "")
+		testFn(t, extraSubject, false, "", "")
+
+		// Cleanup the extra subject.
+		deleteSubject(t, sr.SchemaRegistryURL, extraSubject, false)
+		deleteSubject(t, sr.SchemaRegistryURL, extraSubject, true)
 	})
 }
 

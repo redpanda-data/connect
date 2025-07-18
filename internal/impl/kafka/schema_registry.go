@@ -26,12 +26,12 @@ import (
 type srResourceKey string
 
 // SchemasEqual compares two schema objects for equality, ignoring newlines and leading/trailing spaces in the schema string.
-func SchemasEqual(lhs, rhs franz_sr.SubjectSchema) bool {
+func SchemasEqual(lhs, rhs franz_sr.Schema) bool {
 	// TODO: Remove this utility after https://github.com/redpanda-data/redpanda/issues/26331 is resolved.
 
 	// Remove newlines and leading/trailing spaces from the schemas before comparison.
-	lhsSchema := strings.TrimSpace(strings.ReplaceAll(lhs.Schema.Schema, "\n", ""))
-	rhsSchema := strings.TrimSpace(strings.ReplaceAll(rhs.Schema.Schema, "\n", ""))
+	lhsSchema := strings.TrimSpace(strings.ReplaceAll(lhs.Schema, "\n", ""))
+	rhsSchema := strings.TrimSpace(strings.ReplaceAll(rhs.Schema, "\n", ""))
 
 	if lhsSchema != rhsSchema {
 		return false

@@ -422,18 +422,24 @@ func (o *schemaRegistryOutput) createSchema(ctx context.Context, key schemaLinea
 			// If the schema already exists and is identical to the one we're trying to create, Redpanda should not
 			// return an error, but right now it does.
 			if strings.HasSuffix(err.Error(), fmt.Sprintf("Overwrite new schema with id %d is not permitted.", ss.ID)) {
-				existingSchema, errGet := o.client.GetSchemaBySubjectAndVersion(ctx, ss.Subject, &ss.Version, true)
+				existingSchema, errGet := o.client.GetSchemaByID(ctx, ss.ID, true)
 				if errGet != nil {
 					return -1, errGet
 				}
 
-				if !SchemasEqual(ss, existingSchema) {
+				if !SchemasEqual(ss.Schema, existingSchema) {
 					// If the schemas differ, then we encountered a genuine conflict.
 					return -1, err
 				}
 
-				destinationID = existingSchema.ID
-
+				// Even though this schema already exists, we still need to make sure it's associated with the current
+				// subject.
+				// We use the schema we got from the destination which ensures that we don't allocate a new ID for it
+				// due to normalization differences.
+				destinationID, err = o.client.CreateSchema(ctx, ss.Subject, existingSchema, o.normalize)
+				if err != nil {
+					return -1, fmt.Errorf("failed to associate schema ID %d with subject %q: %s", ss.ID, ss.Subject, err)
+				}
 			} else {
 				// Fail if we get any other errors.
 				return -1, err

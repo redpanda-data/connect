@@ -10,6 +10,10 @@ All notable changes to this project will be documented in this file.
 - Added `host_selection_policy` for `cassandra` input and output. (@jonny7)
 - Fields `normalize`, `remove_metadata` and `remove_rule_set` added to `schema_registry` output. (@mihaitodor)
 
+### Fixed
+
+- Fixed an issue with the `schema_registry` output where schemas with the same ID weren't successfully associated with multiple subjects when `translate_ids` was set to `false`. (@mihaitodor)
+
 ## 4.60.2 - 2025-07-14
 
 ### Added
@@ -21,7 +25,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- Fixed using a `credentials_json` with `gcp_vertex_ai_chat`
+- Fixed using a `credentials_json` with `gcp_vertex_ai_chat`. (@rockwotj)
 
 ## 4.60.0 - 2025-07-10
 
