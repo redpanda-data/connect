@@ -58,6 +58,7 @@ This input adds the following metadata fields to each message:
 
 `+"```text"+`
 - schema_registry_subject
+- schema_registry_subject_compatibility_level
 - schema_registry_version
 `+"```"+`
 
@@ -105,14 +106,15 @@ type schemaRegistryInput struct {
 	fetchInOrder   bool
 	includeDeleted bool
 
-	client    *sr.Client
-	connMut   sync.Mutex
-	connected bool
-	subjects  []string
-	subject   string
-	versions  []int
-	schemas   []franz_sr.SubjectSchema
-	mgr       *service.Resources
+	client                    *sr.Client
+	connMut                   sync.Mutex
+	connected                 bool
+	subjects                  []string
+	subjectCompatibilityLevel map[string]string
+	subject                   string
+	versions                  []int
+	schemas                   []franz_sr.SubjectSchema
+	mgr                       *service.Resources
 }
 
 func inputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (i *schemaRegistryInput, err error) {
@@ -188,6 +190,12 @@ func (i *schemaRegistryInput) Connect(ctx context.Context) error {
 		if i.subjectFilter.MatchString(s) {
 			i.subjects = append(i.subjects, s)
 		}
+	}
+
+	i.subjectCompatibilityLevel = make(map[string]string, len(i.subjects))
+	scl := i.client.GetCompatibilityLevel(ctx, i.subjects...)
+	for pos, s := range i.subjects {
+		i.subjectCompatibilityLevel[s] = scl[pos].String()
 	}
 
 	if i.fetchInOrder {
@@ -293,6 +301,7 @@ func (i *schemaRegistryInput) Read(ctx context.Context) (*service.Message, servi
 	msg := service.NewMessage(schema)
 
 	msg.MetaSetMut("schema_registry_subject", si.Subject)
+	msg.MetaSetMut("schema_registry_subject_compatibility_level", i.subjectCompatibilityLevel[si.Subject])
 	msg.MetaSetMut("schema_registry_version", si.Version)
 
 	return msg, func(context.Context, error) error {

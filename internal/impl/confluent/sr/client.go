@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strings"
 
 	"github.com/twmb/franz-go/pkg/sr"
 
@@ -222,4 +223,66 @@ func (c *Client) walkReferencesTracked(ctx context.Context, seen map[string]int,
 		}
 	}
 	return nil
+}
+
+// CompatibilityLevelUnknown is used when the compatibility level of a subject
+// could not be determined.
+const CompatibilityLevelUnknown = sr.CompatibilityLevel(0)
+
+// GetCompatibilityLevel returns the compatibility level of the given subjects.
+//
+// If the client could not query the compatibility level for a subject (i.e. due
+// to a network error) the subject is associated with the
+// CompatibilityLevelUnknown value.
+//
+// The order of the returned values is the same as the order of the given
+// subjects.
+func (c *Client) GetCompatibilityLevel(ctx context.Context, subject ...string) []sr.CompatibilityLevel {
+	res := c.Client.Compatibility(ctx, subject...)
+
+	levels := make([]sr.CompatibilityLevel, len(res))
+	for i, res := range res {
+		if res.Err != nil {
+			levels[i] = CompatibilityLevelUnknown
+		} else {
+			levels[i] = res.Level
+		}
+	}
+
+	return levels
+}
+
+// UpdateCompatibilityLevel updates the compatibility level of a subject if it
+// differs from the given `level`. If the `level` is `CompatibilityLevelUnknown`
+// no update is performed.
+func (c *Client) UpdateCompatibilityLevel(ctx context.Context, subject string, level sr.CompatibilityLevel) error {
+	if level == CompatibilityLevelUnknown {
+		return nil
+	}
+
+	res := c.Client.Compatibility(ctx, subject)[0]
+	if err := res.Err; err != nil && !strings.Contains(err.Error(),
+		"does not have subject-level compatibility configured") {
+		return err
+	}
+	if res.Level == level {
+		return nil
+	}
+
+	sc := asSetCompatibility(res)
+	sc.Level = level
+	return c.Client.SetCompatibility(ctx, sc, subject)[0].Err
+}
+
+func asSetCompatibility(cr sr.CompatibilityResult) sr.SetCompatibility {
+	return sr.SetCompatibility{
+		Level:            cr.Level,
+		Alias:            cr.Alias,
+		Normalize:        cr.Normalize,
+		Group:            cr.Group,
+		DefaultMetadata:  cr.DefaultMetadata,
+		OverrideMetadata: cr.OverrideMetadata,
+		DefaultRuleSet:   cr.DefaultRuleSet,
+		OverrideRuleSet:  cr.OverrideRuleSet,
+	}
 }

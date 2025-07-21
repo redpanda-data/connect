@@ -35,15 +35,16 @@ import (
 )
 
 const (
-	sroFieldURL                  = "url"
-	sroFieldSubject              = "subject"
-	sroFieldBackfillDependencies = "backfill_dependencies"
-	sroFieldTranslateIDs         = "translate_ids"
-	sroFieldNormalize            = "normalize"
-	sroFieldRemoveMetadata       = "remove_metadata"
-	sroFieldRemoveRuleSet        = "remove_rule_set"
-	sroFieldInputResource        = "input_resource"
-	sroFieldTLS                  = "tls"
+	sroFieldURL                       = "url"
+	sroFieldSubject                   = "subject"
+	sroFieldSubjectCompatibilityLevel = "subject_compatibility_level"
+	sroFieldBackfillDependencies      = "backfill_dependencies"
+	sroFieldTranslateIDs              = "translate_ids"
+	sroFieldNormalize                 = "normalize"
+	sroFieldRemoveMetadata            = "remove_metadata"
+	sroFieldRemoveRuleSet             = "remove_rule_set"
+	sroFieldInputResource             = "input_resource"
+	sroFieldTLS                       = "tls"
 
 	sroResourceDefaultLabel = "schema_registry_output"
 )
@@ -65,6 +66,7 @@ output:
     - schema_registry:
         url: http://localhost:8082
         subject: ${! @schema_registry_subject }
+        subject_compatibility_level: ${! @schema_registry_subject_compatibility_level }
     - switch:
         cases:
           - check: '@fallback_error == "request returned status: 422"'
@@ -83,6 +85,10 @@ func schemaRegistryOutputConfigFields() []*service.ConfigField {
 	return append([]*service.ConfigField{
 		service.NewStringField(sroFieldURL).Description("The base URL of the schema registry service."),
 		service.NewInterpolatedStringField(sroFieldSubject).Description("Subject."),
+		service.NewInterpolatedStringField(sroFieldSubjectCompatibilityLevel).
+			Description("The compatibility level for the subject. Can be one of BACKWARD, BACKWARD_TRANSITIVE, FORWARD, FORWARD_TRANSITIVE, FULL, FULL_TRANSITIVE, NONE.").
+			Optional().
+			Advanced(),
 		service.NewBoolField(sroFieldBackfillDependencies).Description("Backfill schema references and previous versions.").Default(true).Advanced(),
 		service.NewBoolField(sroFieldTranslateIDs).Description("Translate schema IDs.").Default(false).Advanced(),
 		service.NewBoolField(sroFieldNormalize).Description("Normalize schemas.").Default(true).Advanced(),
@@ -113,6 +119,7 @@ func init() {
 
 type schemaRegistryOutput struct {
 	subject              *service.InterpolatedString
+	compatibilityLevel   *service.InterpolatedString
 	backfillDependencies bool
 	translateIDs         bool
 	normalize            bool
@@ -124,13 +131,17 @@ type schemaRegistryOutput struct {
 	inputClient *sr.Client
 	connected   atomic.Bool
 	mgr         *service.Resources
+	log         *service.Logger
+
 	// Stores <SchemaID, SchemaVersionID, Subject> as key and destination SchemaID as value.
-	schemaLineageCache sync.Map
+	compatibilityLevelCache sync.Map
+	schemaLineageCache      sync.Map
 }
 
 func outputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (o *schemaRegistryOutput, err error) {
 	o = &schemaRegistryOutput{
 		mgr: mgr,
+		log: mgr.Logger(),
 	}
 
 	var srURLStr string
@@ -144,6 +155,12 @@ func outputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (o *s
 
 	if o.subject, err = pConf.FieldInterpolatedString(sroFieldSubject); err != nil {
 		return
+	}
+
+	if pConf.Contains(sroFieldSubjectCompatibilityLevel) {
+		if o.compatibilityLevel, err = pConf.FieldInterpolatedString(sroFieldSubjectCompatibilityLevel); err != nil {
+			return
+		}
 	}
 
 	if o.backfillDependencies, err = pConf.FieldBool(sroFieldBackfillDependencies); err != nil {
@@ -235,23 +252,31 @@ func (o *schemaRegistryOutput) Write(ctx context.Context, m *service.Message) er
 		return service.ErrNotConnected
 	}
 
-	var subject string
 	var err error
+
+	var subject string
 	if subject, err = o.subject.TryString(m); err != nil {
 		return fmt.Errorf("failed subject interpolation: %s", err)
+	}
+
+	// Update compatibility level for the subject before creating the schema.
+	var compatLevel franz_sr.CompatibilityLevel
+	if compatLevel, err = o.compatibilityLevelFromMessage(subject, m); err != nil {
+		return err
+	}
+	if err := o.maybeUpdateCompatibilityLevel(ctx, subject, compatLevel); err != nil {
+		return fmt.Errorf("failed to update compatibility level: %s", err)
 	}
 
 	var payload []byte
 	if payload, err = m.AsBytes(); err != nil {
 		return fmt.Errorf("failed to extract message bytes: %s", err)
 	}
-
 	var ss franz_sr.SubjectSchema
 	if err := json.Unmarshal(payload, &ss); err != nil {
 		return fmt.Errorf("failed to unmarshal schema details: %s", err)
 	}
-	// Populate the subject from the metadata.
-	ss.Subject = subject
+	ss.Subject = subject // subject from the metadata
 
 	destinationID, err := o.getOrCreateSchemaID(ctx, ss)
 	if err != nil {
@@ -263,6 +288,35 @@ func (o *schemaRegistryOutput) Write(ctx context.Context, m *service.Message) er
 	return nil
 }
 
+func (o *schemaRegistryOutput) compatibilityLevelFromMessage(subject string, m *service.Message) (franz_sr.CompatibilityLevel, error) {
+	compatLevel := sr.CompatibilityLevelUnknown
+
+	if o.compatibilityLevel == nil {
+		return compatLevel, nil
+	}
+
+	// Ignore the compatibility level if the subject is already in the cache.
+	if _, ok := o.compatibilityLevelCache.Load(subject); ok {
+		return compatLevel, nil
+	}
+
+	b, err := o.compatibilityLevel.TryBytes(m)
+	if err != nil {
+		return compatLevel, fmt.Errorf("failed compatibility level interpolation: %s", err)
+	}
+
+	if len(b) == 0 {
+		return compatLevel, nil
+	}
+
+	if err := compatLevel.UnmarshalText(b); err != nil {
+		return compatLevel, fmt.Errorf("failed to unmarshal compatibility level: %s", err)
+	}
+	o.log.Debugf("Got compatibility level: %s", string(b))
+
+	return compatLevel, nil
+}
+
 func (o *schemaRegistryOutput) Close(_ context.Context) error {
 	o.connected.Store(false)
 
@@ -271,8 +325,9 @@ func (o *schemaRegistryOutput) Close(_ context.Context) error {
 
 //------------------------------------------------------------------------------
 
-// GetDestinationSchemaID attempts to fetch the schema ID for the provided source schema ID. It will first migrate it to
-// the destination Schema Registry if it doesn't exist there yet.
+// GetDestinationSchemaID attempts to fetch the schema ID for the provided
+// source schema ID. It will first migrate it to the destination Schema Registry
+// if it doesn't exist there yet.
 func (o *schemaRegistryOutput) GetDestinationSchemaID(ctx context.Context, id int) (int, error) {
 	schema, err := o.inputClient.GetSchemaByID(ctx, id, false)
 	if err != nil {
@@ -288,10 +343,18 @@ func (o *schemaRegistryOutput) GetDestinationSchemaID(ctx context.Context, id in
 		return -1, fmt.Errorf("no subjects found for schema ID %d", id)
 	}
 
-	// Register the schema with all the subjects it's associated with in the source Schema Registry. Each call should
-	// return the same destination schema ID.
+	// Register the schema with all the subjects it's associated with in the
+	// source Schema Registry. Each call should return the same destination schema ID.
 	var destinationID int
 	for _, subject := range schemaSubjects {
+		// Update compatibility level for the subject before creating the schema.		// the schema
+		compatLevels := o.inputClient.GetCompatibilityLevel(ctx, subject)
+		if len(compatLevels) > 0 && compatLevels[0] != sr.CompatibilityLevelUnknown {
+			if err := o.maybeUpdateCompatibilityLevel(ctx, subject, compatLevels[0]); err != nil {
+				o.log.Warnf("failed to update compatibility level for subject %q: %s", subject, err)
+			}
+		}
+
 		latestVersion, err := o.inputClient.GetLatestSchemaVersionForSchemaIDAndSubject(ctx, id, subject)
 		if err != nil {
 			return -1, fmt.Errorf("failed to get schema for ID %d and subject %q: %s", id, subject, err)
@@ -451,4 +514,16 @@ func (o *schemaRegistryOutput) createSchema(ctx context.Context, key schemaLinea
 	o.schemaLineageCache.Store(key, destinationID)
 
 	return destinationID, nil
+}
+
+func (o *schemaRegistryOutput) maybeUpdateCompatibilityLevel(ctx context.Context, subject string, compatLevel franz_sr.CompatibilityLevel) error {
+	if compatLevel == sr.CompatibilityLevelUnknown {
+		return nil
+	}
+
+	err := o.client.UpdateCompatibilityLevel(ctx, subject, compatLevel)
+	if err == nil {
+		o.compatibilityLevelCache.Store(subject, struct{}{})
+	}
+	return err
 }

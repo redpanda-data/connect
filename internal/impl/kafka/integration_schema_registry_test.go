@@ -532,6 +532,72 @@ output:
 	}
 }
 
+func TestSchemaRegistryCompatibilityLevelIntegration(t *testing.T) {
+	integration.CheckSkip(t)
+
+	src, dst := runRedpandaPairForSchemaMigration(t)
+
+	compatLevel := franz_sr.CompatFull
+
+	// Generate a unique subject name
+	u4, err := uuid.NewV4()
+	require.NoError(t, err)
+	subject := fmt.Sprintf("compatibility-test-%s", u4.String())
+
+	// Define a simple schema
+	schema := `{"type":"record","name":"test","fields":[{"name":"field1","type":"string"}]}`
+
+	// Create schema in source registry
+	createSchema(t, src.SchemaRegistryURL, subject, schema, nil)
+
+	// Set compatibility level on the source subject first
+	srcClient, err := franz_sr.NewClient(franz_sr.URLs(src.SchemaRegistryURL))
+	require.NoError(t, err)
+	setCompatResp := srcClient.SetCompatibility(t.Context(), franz_sr.SetCompatibility{
+		Level: compatLevel,
+	}, subject)
+	require.NoError(t, setCompatResp[0].Err)
+
+	// Verify the compatibility level was set correctly on source
+	compatRespSrc := srcClient.Compatibility(t.Context(), subject)
+	require.NoError(t, compatRespSrc[0].Err)
+	assert.Equal(t, compatLevel, compatRespSrc[0].Level, "Source compatibility level not set correctly")
+
+	// Create a stream that transfers the schema and compatibility level
+	streamBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
+input:
+  schema_registry:
+    url: %s
+    subject_filter: %s
+output:
+  schema_registry:
+    url: %s
+    subject: ${! @schema_registry_subject }
+    subject_compatibility_level: ${! @schema_registry_subject_compatibility_level }
+    max_in_flight: 1
+`, src.SchemaRegistryURL, subject, dst.SchemaRegistryURL)))
+	require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
+
+	stream, err := streamBuilder.Build()
+	require.NoError(t, err)
+
+	// Run the stream with a timeout
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+
+	require.NoError(t, stream.Run(ctx))
+	require.NoError(t, stream.StopWithin(1*time.Second))
+
+	// Verify the compatibility level was propagated to the destination
+	dstClient, err := franz_sr.NewClient(franz_sr.URLs(dst.SchemaRegistryURL))
+	require.NoError(t, err)
+	compatRespDst := dstClient.Compatibility(t.Context(), subject)
+	require.NoError(t, compatRespDst[0].Err)
+	assert.Equal(t, compatLevel, compatRespDst[0].Level,
+		"Compatibility level not properly propagated to destination")
+}
+
 func createSchema(t *testing.T, url, subject, schema string, references []franz_sr.SchemaReference) {
 	t.Helper()
 
