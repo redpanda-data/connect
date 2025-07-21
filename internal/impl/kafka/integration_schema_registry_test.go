@@ -42,6 +42,16 @@ func runRedpandaPairForSchemaMigration(t *testing.T) (src, dst redpandatest.Redp
 	require.NoError(t, err)
 	pool.MaxWait = time.Minute
 
+	src, err = redpandatest.StartRedpanda(t, pool, false, true)
+	require.NoError(t, err)
+	dst, err = redpandatest.StartRedpanda(t, pool, false, true)
+	require.NoError(t, err)
+	return
+}
+
+func TestSchemaRegistryIntegration(t *testing.T) {
+	integration.CheckSkip(t)
+
 	dummySchema := `{"name":"foo", "type": "string"}`
 	dummySchemaWithReference := `{"name":"bar", "type": "record", "fields":[{"name":"data", "type": "foo"}]}`
 	tests := []struct {
@@ -71,10 +81,7 @@ func runRedpandaPairForSchemaMigration(t *testing.T) (src, dst redpandatest.Redp
 		},
 	}
 
-	source, err := redpandatest.StartRedpanda(t, pool, false, true)
-	require.NoError(t, err)
-	destination, err := redpandatest.StartRedpanda(t, pool, false, true)
-	require.NoError(t, err)
+	src, dst := runRedpandaPairForSchemaMigration(t)
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -85,35 +92,35 @@ func runRedpandaPairForSchemaMigration(t *testing.T) (src, dst redpandatest.Redp
 			defer func() {
 				// Clean up the extraSubject first since it may contain schemas with references.
 				if test.extraSubject != "" {
-					deleteSubject(t, source.SchemaRegistryURL, test.extraSubject, false)
-					deleteSubject(t, source.SchemaRegistryURL, test.extraSubject, true)
+					deleteSubject(t, src.SchemaRegistryURL, test.extraSubject, false)
+					deleteSubject(t, src.SchemaRegistryURL, test.extraSubject, true)
 					if test.subjectFilter == "" {
-						deleteSubject(t, destination.SchemaRegistryURL, test.extraSubject, false)
-						deleteSubject(t, destination.SchemaRegistryURL, test.extraSubject, true)
+						deleteSubject(t, dst.SchemaRegistryURL, test.extraSubject, false)
+						deleteSubject(t, dst.SchemaRegistryURL, test.extraSubject, true)
 					}
 				}
 
 				if !test.includeSoftDeletedSubjects {
-					deleteSubject(t, source.SchemaRegistryURL, subject, false)
+					deleteSubject(t, src.SchemaRegistryURL, subject, false)
 				}
-				deleteSubject(t, source.SchemaRegistryURL, subject, true)
+				deleteSubject(t, src.SchemaRegistryURL, subject, true)
 
-				deleteSubject(t, destination.SchemaRegistryURL, subject, false)
-				deleteSubject(t, destination.SchemaRegistryURL, subject, true)
+				deleteSubject(t, dst.SchemaRegistryURL, subject, false)
+				deleteSubject(t, dst.SchemaRegistryURL, subject, true)
 			}()
 
-			createSchema(t, source.SchemaRegistryURL, subject, dummySchema, nil)
+			createSchema(t, src.SchemaRegistryURL, subject, dummySchema, nil)
 
 			if test.subjectFilter != "" {
-				createSchema(t, source.SchemaRegistryURL, test.extraSubject, dummySchema, nil)
+				createSchema(t, src.SchemaRegistryURL, test.extraSubject, dummySchema, nil)
 			}
 
 			if test.includeSoftDeletedSubjects {
-				deleteSubject(t, source.SchemaRegistryURL, subject, false)
+				deleteSubject(t, src.SchemaRegistryURL, subject, false)
 			}
 
 			if test.schemaWithReference {
-				createSchema(t, source.SchemaRegistryURL, test.extraSubject, dummySchemaWithReference, []franz_sr.SchemaReference{{Name: "foo", Subject: subject, Version: 1}})
+				createSchema(t, src.SchemaRegistryURL, test.extraSubject, dummySchemaWithReference, []franz_sr.SchemaReference{{Name: "foo", Subject: subject, Version: 1}})
 			}
 
 			streamBuilder := service.NewStreamBuilder()
@@ -133,7 +140,7 @@ output:
         max_in_flight: 1
     # Don't retry the same message multiple times so we do fail if schemas with references are sent in the wrong order
     - drop: {}
-`, source.SchemaRegistryURL, test.includeSoftDeletedSubjects, test.subjectFilter, test.schemaWithReference, destination.SchemaRegistryURL)))
+`, src.SchemaRegistryURL, test.includeSoftDeletedSubjects, test.subjectFilter, test.schemaWithReference, dst.SchemaRegistryURL)))
 			require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
 
 			stream, err := streamBuilder.Build()
@@ -149,7 +156,7 @@ output:
 				require.NoError(t, stream.StopWithin(1*time.Second))
 			}()
 
-			resp, err := http.DefaultClient.Get(fmt.Sprintf("%s/subjects", destination.SchemaRegistryURL))
+			resp, err := http.DefaultClient.Get(fmt.Sprintf("%s/subjects", dst.SchemaRegistryURL))
 			require.NoError(t, err)
 			body, err := io.ReadAll(resp.Body)
 			require.NoError(t, err)
@@ -160,7 +167,7 @@ output:
 				assert.NotContains(t, string(body), test.extraSubject)
 			}
 
-			resp, err = http.DefaultClient.Get(fmt.Sprintf("%s/subjects/%s/versions/1", destination.SchemaRegistryURL, subject))
+			resp, err = http.DefaultClient.Get(fmt.Sprintf("%s/subjects/%s/versions/1", dst.SchemaRegistryURL, subject))
 			require.NoError(t, err)
 			body, err = io.ReadAll(resp.Body)
 			require.NoError(t, err)
@@ -174,7 +181,7 @@ output:
 			assert.JSONEq(t, dummySchema, sd.Schema.Schema)
 
 			if test.schemaWithReference {
-				resp, err = http.DefaultClient.Get(fmt.Sprintf("%s/subjects/%s/versions/1", destination.SchemaRegistryURL, test.extraSubject))
+				resp, err = http.DefaultClient.Get(fmt.Sprintf("%s/subjects/%s/versions/1", dst.SchemaRegistryURL, test.extraSubject))
 				require.NoError(t, err)
 				body, err = io.ReadAll(resp.Body)
 				require.NoError(t, err)
@@ -384,18 +391,11 @@ message SampleRecord {
 func TestSchemaRegistryDuplicateSchemaIntegration(t *testing.T) {
 	integration.CheckSkip(t)
 
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
-	pool.MaxWait = time.Minute
-
-	source, err := redpandatest.StartRedpanda(t, pool, false, true)
-	require.NoError(t, err)
-	destination, err := redpandatest.StartRedpanda(t, pool, false, true)
-	require.NoError(t, err)
+	src, dst := runRedpandaPairForSchemaMigration(t)
 
 	dummySubject := "foobar"
 	dummySchema := `{"name":"foo", "type": "string"}`
-	createSchema(t, source.SchemaRegistryURL, dummySubject, dummySchema, nil)
+	createSchema(t, src.SchemaRegistryURL, dummySubject, dummySchema, nil)
 
 	streamBuilder := service.NewStreamBuilder()
 	require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
@@ -407,7 +407,7 @@ output:
     url: %s
     subject: ${! @schema_registry_subject }
     translate_ids: false
-`, source.SchemaRegistryURL, destination.SchemaRegistryURL)))
+`, src.SchemaRegistryURL, dst.SchemaRegistryURL)))
 	require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
 
 	runStream := func() {
@@ -425,7 +425,7 @@ output:
 	runStream()
 
 	dummyVersion := 1
-	resp, err := http.DefaultClient.Get(fmt.Sprintf("%s/subjects/%s/versions/%d", destination.SchemaRegistryURL, dummySubject, dummyVersion))
+	resp, err := http.DefaultClient.Get(fmt.Sprintf("%s/subjects/%s/versions/%d", dst.SchemaRegistryURL, dummySubject, dummyVersion))
 	require.NoError(t, err)
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
@@ -442,29 +442,22 @@ output:
 func TestSchemaRegistryIDTranslationIntegration(t *testing.T) {
 	integration.CheckSkip(t)
 
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
-	pool.MaxWait = time.Minute
-
-	source, err := redpandatest.StartRedpanda(t, pool, false, true)
-	require.NoError(t, err)
-	destination, err := redpandatest.StartRedpanda(t, pool, false, true)
-	require.NoError(t, err)
+	src, dst := runRedpandaPairForSchemaMigration(t)
 
 	// Create two schemas under subject `foo`.
-	createSchema(t, source.SchemaRegistryURL, "foo", `{"name":"foo", "type": "record", "fields":[{"name":"str", "type": "string"}]}`, nil)
-	createSchema(t, source.SchemaRegistryURL, "foo", `{"name":"foo", "type": "record", "fields":[{"name":"str", "type": "string"}, {"name":"num", "type": "int", "default": 42}]}`, nil)
+	createSchema(t, src.SchemaRegistryURL, "foo", `{"name":"foo", "type": "record", "fields":[{"name":"str", "type": "string"}]}`, nil)
+	createSchema(t, src.SchemaRegistryURL, "foo", `{"name":"foo", "type": "record", "fields":[{"name":"str", "type": "string"}, {"name":"num", "type": "int", "default": 42}]}`, nil)
 
 	// Create a schema under subject `bar` which references the second schema under `foo`.
-	createSchema(t, source.SchemaRegistryURL, "bar", `{"name":"bar", "type": "record", "fields":[{"name":"data", "type": "foo"}]}`,
+	createSchema(t, src.SchemaRegistryURL, "bar", `{"name":"bar", "type": "record", "fields":[{"name":"data", "type": "foo"}]}`,
 		[]franz_sr.SchemaReference{{Name: "foo", Subject: "foo", Version: 2}},
 	)
 
-	// Create a schema at the destination which will have ID 1 so we can check that the ID translation works
+	// Create a schema at the dst which will have ID 1 so we can check that the ID translation works
 	// correctly.
-	createSchema(t, destination.SchemaRegistryURL, "baz", `{"name":"baz", "type": "record", "fields":[{"name":"num", "type": "int"}]}`, nil)
+	createSchema(t, dst.SchemaRegistryURL, "baz", `{"name":"baz", "type": "record", "fields":[{"name":"num", "type": "int"}]}`, nil)
 
-	// Use a Stream with a mapping filter to send only the schema with the reference to the destination in order
+	// Use a Stream with a mapping filter to send only the schema with the reference to the dst in order
 	// to force the output to backfill the rest of the schemas.
 	streamBuilder := service.NewStreamBuilder()
 	require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
@@ -484,7 +477,7 @@ output:
         translate_ids: true
     # Don't retry the same message multiple times so we do fail if schemas with references are sent in the wrong order
     - drop: {}
-`, source.SchemaRegistryURL, destination.SchemaRegistryURL)))
+`, src.SchemaRegistryURL, dst.SchemaRegistryURL)))
 	require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
 
 	stream, err := streamBuilder.Build()
@@ -523,7 +516,7 @@ output:
 
 	for _, test := range tests {
 		t.Run("", func(t *testing.T) {
-			resp, err := http.DefaultClient.Get(fmt.Sprintf("%s/subjects/%s/versions/%d", destination.SchemaRegistryURL, test.subject, test.version))
+			resp, err := http.DefaultClient.Get(fmt.Sprintf("%s/subjects/%s/versions/%d", dst.SchemaRegistryURL, test.subject, test.version))
 			require.NoError(t, err)
 			body, err := io.ReadAll(resp.Body)
 			require.NoError(t, err)
