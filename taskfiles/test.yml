@@ -37,7 +37,7 @@ tasks:
       - :build:redpanda-connect
     vars:
       TEMPLATE_FILES:
-        sh: find internal/impl -type f -name "*tmpl.yaml"
+        sh: find internal/impl -type f -name "*tmpl.yaml" | tr '\n' ' '
     cmds:
       - '{{.TARGET_DIR}}/redpanda-connect template lint {{.TEMPLATE_FILES}}'
       - '{{.TARGET_DIR}}/redpanda-connect test ./config/test/...'
