@@ -57,6 +57,7 @@ func FranzKafkaOutputConfigFields() []*service.ConfigField {
 				Description("The maximum number of batches to be sending in parallel at any given time.").
 				Default(10),
 			service.NewBatchPolicyField(kfoFieldBatching),
+			service.NewInjectTracingSpanMappingField(),
 
 			// Deprecated
 			service.NewStringField(kfoFieldRackID).Deprecated(),
@@ -118,6 +119,11 @@ func init() {
 						client = nil
 						return nil
 					}))
+			if err != nil {
+				return
+			}
+
+			output, err = conf.WrapBatchOutputExtractTracingSpanMapping("kafka_franz", output)
 			return
 		})
 }
