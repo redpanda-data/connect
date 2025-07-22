@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## TBD
+
+### Added
+
+- Added `subject_compatibility_level` to the `schema_registry` output. (@mmatczuk) 
+
 ## 4.61.0 - 2025-07-18
 
 ### Added
