@@ -107,6 +107,7 @@ mapping: |
   let schemaRegistry = if this.schema_registry.length() > 0 {
     this.schema_registry.assign({
       "subject": "${! @schema_registry_subject }",
+      "subject_compatibility_level": "${! @schema_registry_subject_compatibility_level }",
       "max_in_flight": $srMaxInFlight,
       "input_resource": "%s_schema_registry_input".format($inputBundleLabel),
       "translate_ids": this.translate_schema_ids.or(false)
@@ -217,6 +218,7 @@ tests:
                 - label: redpanda_migrator_bundle_schema_registry_output
                   schema_registry:
                     subject: ${! @schema_registry_subject }
+                    subject_compatibility_level: ${! @schema_registry_subject_compatibility_level }
                     url: http://localhost:8081
                     max_in_flight: 1
                     translate_ids: false
@@ -282,6 +284,7 @@ tests:
                 - label: redpanda_migrator_bundle_schema_registry_output
                   schema_registry:
                     subject: ${! @schema_registry_subject }
+                    subject_compatibility_level: ${! @schema_registry_subject_compatibility_level }
                     url: http://localhost:8081
                     max_in_flight: 1
                     translate_ids: false
@@ -344,6 +347,7 @@ tests:
                 - label: redpanda_migrator_bundle_schema_registry_output
                   schema_registry:
                     subject: ${! @schema_registry_subject }
+                    subject_compatibility_level: ${! @schema_registry_subject_compatibility_level }
                     url: http://localhost:8081
                     max_in_flight: 1
                     translate_ids: true
