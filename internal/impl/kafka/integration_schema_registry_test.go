@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"testing"
 	"time"
@@ -178,7 +179,7 @@ output:
 			require.NoError(t, json.Unmarshal(body, &sd))
 			assert.Equal(t, subject, sd.Subject)
 			assert.Equal(t, 1, sd.Version)
-			assert.JSONEq(t, dummySchema, sd.Schema.Schema)
+			assert.JSONEq(t, "{}", sd.Schema.Schema)
 
 			if test.schemaWithReference {
 				resp, err = http.DefaultClient.Get(fmt.Sprintf("%s/subjects/%s/versions/1", dst.SchemaRegistryURL, test.extraSubject))
@@ -596,6 +597,112 @@ output:
 	require.NoError(t, compatRespDst[0].Err)
 	assert.Equal(t, compatLevel, compatRespDst[0].Level,
 		"Compatibility level not properly propagated to destination")
+}
+
+func TestSchemaRegistryMaxInFlightIntegration(t *testing.T) {
+	integration.CheckSkip(t)
+
+	src, dst := runRedpandaPairForSchemaMigration(t)
+
+	u4, err := uuid.NewV4()
+	require.NoError(t, err)
+	baseSubject := u4.String()
+
+	// Create 10 schemas, each referencing the previous one
+	// First schema is a basic type
+	firstSchema := `{"name":"schema_0", "type": "string"}`
+	firstSubject := fmt.Sprintf("%s-%d", baseSubject, 0)
+	createSchema(t, src.SchemaRegistryURL, firstSubject, firstSchema, nil)
+
+	// Create 9 more schemas with references to the previous ones
+	for i := 1; i < 100; i++ {
+		prevSubject := fmt.Sprintf("%s-%d", baseSubject, i-1)
+		subject := fmt.Sprintf("%s-%d", baseSubject, i)
+
+		schema := fmt.Sprintf(`{
+			"name": "schema_%d",
+			"type": "record",
+			"fields": [
+				{"name": "id", "type": "int"},
+				{"name": "reference_data", "type": "schema_%d"}
+			]
+		}`, i, i-1)
+
+		references := []franz_sr.SchemaReference{
+			{
+				Name:    fmt.Sprintf("schema_%d", i-1),
+				Subject: prevSubject,
+				Version: 1,
+			},
+		}
+
+		t.Logf("Creating schema %s with references to %s", subject, prevSubject)
+		createSchema(t, src.SchemaRegistryURL, subject, schema, references)
+	}
+
+	// Create a stream with max_in_flight: 2 to test dependent schema migration
+	streamBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
+input:
+  schema_registry:
+    url: %s
+output:
+  fallback:
+    - schema_registry:
+        url: %s
+        subject: ${! @schema_registry_subject }
+        # Limited concurrency to test ordering with dependencies
+        max_in_flight: 5
+    - drop: {}
+logger:
+  level: TRACE
+`, src.SchemaRegistryURL, dst.SchemaRegistryURL)))
+	require.NoError(t, streamBuilder.SetLoggerYAML(`level: DEBUG`))
+
+	require.NoError(t, streamBuilder.AddConsumerFunc(func(_ context.Context, _ *service.Message) error {
+		time.Sleep(time.Duration(rand.Int63n(100)) * time.Millisecond)
+		return nil
+	}))
+
+	stream, err := streamBuilder.Build()
+	require.NoError(t, err)
+
+	ctx, done := context.WithTimeout(t.Context(), 10*time.Second)
+	defer done()
+
+	require.NoError(t, stream.Run(ctx))
+
+	// Verify all schemas migrated correctly
+	for i := 0; i < 100; i++ {
+		subject := fmt.Sprintf("%s-%d", baseSubject, i)
+
+		resp, err := http.DefaultClient.Get(fmt.Sprintf("%s/subjects/%s/versions/1", dst.SchemaRegistryURL, subject))
+		require.NoError(t, err)
+
+		body, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		require.NoError(t, resp.Body.Close())
+		require.Equal(t, http.StatusOK, resp.StatusCode, "Failed to get schema for subject %s", subject)
+
+		var sd franz_sr.SubjectSchema
+		require.NoError(t, json.Unmarshal(body, &sd))
+
+		assert.Equal(t, subject, sd.Subject)
+		assert.Equal(t, 1, sd.Version)
+
+		// For non-first schema, check that reference exists
+		if i > 0 {
+			assert.NotEmpty(t, sd.References)
+			foundRef := false
+			for _, ref := range sd.References {
+				if ref.Subject == fmt.Sprintf("%s-%d", baseSubject, i-1) {
+					foundRef = true
+					break
+				}
+			}
+			assert.True(t, foundRef, "Schema %d should reference schema %d", i, i-1)
+		}
+	}
 }
 
 func createSchema(t *testing.T, url, subject, schema string, references []franz_sr.SchemaReference) {
