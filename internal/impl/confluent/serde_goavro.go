@@ -238,33 +238,31 @@ func avroTypeToCommonType(t string) schema.CommonType {
 	return schema.CommonType(-1)
 }
 
-func avroAnyToCommonSchema(aRoot any) (*schema.Common, error) {
+func avroAnyToCommonSchema(aRoot any) (schema.Common, error) {
 	switch t := aRoot.(type) {
 	case map[string]any:
 		return avroAnyMapToCommonSchema(t)
 	case []any:
-		root := schema.Common{
-			Type: schema.Union,
-		}
+		root := schema.Common{Type: schema.Union}
 		for i, e := range t {
 			eObj, ok := e.(map[string]any)
 			if !ok {
-				return nil, fmt.Errorf("expected element %v of root array to be an object, got %T", i, e)
+				return schema.Common{}, fmt.Errorf("expected element %v of root array to be an object, got %T", i, e)
 			}
 
 			cObj, err := avroAnyMapToCommonSchema(eObj)
 			if err != nil {
-				return nil, fmt.Errorf("expected element %v: %w", i, err)
+				return schema.Common{}, fmt.Errorf("expected element %v: %w", i, err)
 			}
 
 			root.Children = append(root.Children, cObj)
 		}
-		return &root, nil
+		return root, nil
 	}
-	return nil, fmt.Errorf("expected either an array or object at root of schema, got %T", aRoot)
+	return schema.Common{}, fmt.Errorf("expected either an array or object at root of schema, got %T", aRoot)
 }
 
-func avroAnyMapToCommonSchema(as map[string]any) (*schema.Common, error) {
+func avroAnyMapToCommonSchema(as map[string]any) (schema.Common, error) {
 	var c schema.Common
 	c.Name, _ = as["name"].(string)
 
@@ -275,13 +273,13 @@ func avroAnyMapToCommonSchema(as map[string]any) (*schema.Common, error) {
 			for i, uObj := range t {
 				switch ut := uObj.(type) {
 				case string:
-					c.Children = append(c.Children, &schema.Common{
+					c.Children = append(c.Children, schema.Common{
 						Type: avroTypeToCommonType(ut),
 					})
 				case map[string]any:
 					tmpC, err := avroAnyMapToCommonSchema(ut)
 					if err != nil {
-						return nil, fmt.Errorf("union `%v` child '%v': %w", c.Name, i, err)
+						return c, fmt.Errorf("union `%v` child '%v': %w", c.Name, i, err)
 					}
 					c.Children = append(c.Children, tmpC)
 				}
@@ -295,20 +293,20 @@ func avroAnyMapToCommonSchema(as map[string]any) (*schema.Common, error) {
 		if typeStr, ok := t["type"].(string); ok {
 			c.Type = avroTypeToCommonType(typeStr)
 		} else {
-			return nil, errors.New("detected an unrecognized `type` field of type object, missing a `type` field")
+			return schema.Common{}, errors.New("detected an unrecognized `type` field of type object, missing a `type` field")
 		}
 	default:
-		return nil, fmt.Errorf("expected `type` field of type string or array, got %T", t)
+		return schema.Common{}, fmt.Errorf("expected `type` field of type string or array, got %T", t)
 	}
 
 	switch c.Type {
 	case schema.Map:
 		valuesType, exists := as["values"].(string)
 		if !exists {
-			return nil, fmt.Errorf("expected `values` field of type string, got %T", as["values"])
+			return schema.Common{}, fmt.Errorf("expected `values` field of type string, got %T", as["values"])
 		}
 
-		c.Children = []*schema.Common{
+		c.Children = []schema.Common{
 			{
 				Type: avroTypeToCommonType(valuesType),
 			},
@@ -317,10 +315,10 @@ func avroAnyMapToCommonSchema(as map[string]any) (*schema.Common, error) {
 	case schema.Array:
 		itemsType, exists := as["items"].(string)
 		if !exists {
-			return nil, fmt.Errorf("expected `items` field of type string, got %T", as["items"])
+			return schema.Common{}, fmt.Errorf("expected `items` field of type string, got %T", as["items"])
 		}
 
-		c.Children = []*schema.Common{
+		c.Children = []schema.Common{
 			{
 				Type: avroTypeToCommonType(itemsType),
 			},
@@ -329,23 +327,23 @@ func avroAnyMapToCommonSchema(as map[string]any) (*schema.Common, error) {
 	case schema.Object:
 		fields, exists := as["fields"].([]any)
 		if !exists {
-			return nil, fmt.Errorf("expected `fields` field of type array, got %T", as["fields"])
+			return schema.Common{}, fmt.Errorf("expected `fields` field of type array, got %T", as["fields"])
 		}
 
 		for i, f := range fields {
 			fobj, ok := f.(map[string]any)
 			if !ok {
-				return nil, fmt.Errorf("record `%v` field '%v': expected object, got %T", c.Name, i, f)
+				return schema.Common{}, fmt.Errorf("record `%v` field '%v': expected object, got %T", c.Name, i, f)
 			}
 
 			cField, err := avroAnyMapToCommonSchema(fobj)
 			if err != nil {
-				return nil, fmt.Errorf("record `%v` field '%v': %w", c.Name, i, err)
+				return schema.Common{}, fmt.Errorf("record `%v` field '%v': %w", c.Name, i, err)
 			}
 
 			c.Children = append(c.Children, cField)
 		}
 	}
 
-	return &c, nil
+	return c, nil
 }

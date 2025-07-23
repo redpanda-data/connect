@@ -191,26 +191,30 @@ func parquetGroupFromConfig(columnConfs []*service.ParsedConfig, encodingFn enco
 //------------------------------------------------------------------------------
 
 func newParquetEncodeProcessorFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*parquetEncodeProcessor, error) {
-	schemaConfs, err := conf.FieldObjectList("schema")
-	if err != nil {
-		return nil, err
-	}
+	var schema *parquet.Schema
+	if conf.Contains("schema") {
+		schemaConfs, err := conf.FieldObjectList("schema")
+		if err != nil {
+			return nil, err
+		}
 
-	customEncoding, err := conf.FieldString("default_encoding")
-	if err != nil {
-		return nil, err
-	}
-	var encoding encodingFn
-	switch customEncoding {
-	case "PLAIN":
-		encoding = plainEncodingFn
-	default:
-		encoding = defaultEncodingFn
-	}
+		customEncoding, err := conf.FieldString("default_encoding")
+		if err != nil {
+			return nil, err
+		}
+		var encoding encodingFn
+		switch customEncoding {
+		case "PLAIN":
+			encoding = plainEncodingFn
+		default:
+			encoding = defaultEncodingFn
+		}
 
-	node, err := parquetGroupFromConfig(schemaConfs, encoding)
-	if err != nil {
-		return nil, err
+		node, err := parquetGroupFromConfig(schemaConfs, encoding)
+		if err != nil {
+			return nil, err
+		}
+		schema = parquet.NewSchema("", node)
 	}
 
 	schemaMeta, err := conf.FieldString("schema_metadata")
@@ -218,7 +222,6 @@ func newParquetEncodeProcessorFromConfig(conf *service.ParsedConfig, logger *ser
 		return nil, err
 	}
 
-	schema := parquet.NewSchema("", node)
 	compressStr, err := conf.FieldString("default_compression")
 	if err != nil {
 		return nil, err
@@ -339,7 +342,7 @@ func (*parquetEncodeProcessor) Close(context.Context) error {
 	return nil
 }
 
-func parquetNodeFromCommonField(field *schema.Common) (parquet.Node, error) {
+func parquetNodeFromCommonField(field schema.Common) (parquet.Node, error) {
 	var n parquet.Node
 
 	switch field.Type {
@@ -389,7 +392,7 @@ func parquetNodeFromCommonField(field *schema.Common) (parquet.Node, error) {
 	return n, nil
 }
 
-func parquetGroupFromCommonFields(fields []*schema.Common) (parquet.Group, error) {
+func parquetGroupFromCommonFields(fields []schema.Common) (parquet.Group, error) {
 	g := parquet.Group{}
 
 	for _, f := range fields {

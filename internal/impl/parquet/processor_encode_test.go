@@ -517,7 +517,7 @@ func TestParquetEncodeDynamicSchemaProcessor(t *testing.T) {
 
 	commonSchema := &schema.Common{
 		Type: schema.Object,
-		Children: []*schema.Common{
+		Children: []schema.Common{
 			{
 				Name: "foo",
 				Type: schema.String,
@@ -525,7 +525,7 @@ func TestParquetEncodeDynamicSchemaProcessor(t *testing.T) {
 			{
 				Name: "bar",
 				Type: schema.Object,
-				Children: []*schema.Common{
+				Children: []schema.Common{
 					{
 						Name:     "a",
 						Type:     schema.Int64,
@@ -546,14 +546,14 @@ func TestParquetEncodeDynamicSchemaProcessor(t *testing.T) {
 			{
 				Name: "baz",
 				Type: schema.Array,
-				Children: []*schema.Common{
+				Children: []schema.Common{
 					{
 						Type: schema.Object,
-						Children: []*schema.Common{
+						Children: []schema.Common{
 							{
 								Name: "nested",
 								Type: schema.Array,
-								Children: []*schema.Common{
+								Children: []schema.Common{
 									{
 										Type: schema.Int64,
 									},
