@@ -17,6 +17,7 @@ package parquet
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/parquet-go/parquet-go"
@@ -74,7 +75,8 @@ output:
               - name: content
                 type: BYTE_ARRAY
             default_compression: zstd
-`)
+`).
+		LintRule(`root = if this.schema.or([]).length() == 0 && this.schema_metadata.or("") == "" { "either a schema or schema_metadata must be specified" }`)
 }
 
 func init() {
@@ -222,6 +224,10 @@ func newParquetEncodeProcessorFromConfig(conf *service.ParsedConfig, logger *ser
 		return nil, err
 	}
 
+	if schemaMeta == "" && schema == nil {
+		return nil, errors.New("either a schema or schema_metadata must be specified")
+	}
+
 	compressStr, err := conf.FieldString("default_compression")
 	if err != nil {
 		return nil, err
@@ -358,6 +364,9 @@ func parquetNodeFromCommonField(field schema.Common) (parquet.Node, error) {
 		n = parquet.Leaf(parquet.DoubleType)
 	case schema.String:
 		n = parquet.String()
+	case schema.Timestamp:
+		// TODO: add field to specify timestamp unit
+		n = parquet.Timestamp(parquet.Nanosecond)
 	case schema.ByteArray:
 		n = parquet.Leaf(parquet.ByteArrayType)
 	case schema.Array:
