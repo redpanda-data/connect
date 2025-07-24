@@ -619,3 +619,49 @@ func TestParquetEncodeDynamicSchemaProcessor(t *testing.T) {
 
 	assert.JSONEq(t, string(expectedBytes), string(actualBytes))
 }
+
+func TestParquetEncodeProcessorConfigLinting(t *testing.T) {
+	configTests := []struct {
+		name        string
+		config      string
+		errContains string
+	}{
+		{
+			name: "no schema or schema metadata",
+			config: `
+parquet_encode: {}
+`,
+			errContains: "either a schema or schema_metadata must be specified",
+		},
+		{
+			name: "no schema",
+			config: `
+parquet_encode:
+  schema_metadata: foo
+`,
+		},
+		{
+			name: "no schema_metadata",
+			config: `
+parquet_encode:
+  schema:
+    - name: foo
+      type: INT64
+`,
+		},
+	}
+
+	env := service.NewEnvironment()
+	for _, test := range configTests {
+		t.Run(test.name, func(t *testing.T) {
+			strm := env.NewStreamBuilder()
+			err := strm.AddProcessorYAML(test.config)
+			if test.errContains == "" {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), test.errContains)
+			}
+		})
+	}
+}

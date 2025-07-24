@@ -545,7 +545,7 @@ func TestHambaAvroSchemaExtraction(t *testing.T) {
 	]
 }`
 
-	urlStr := runSchemaRegistryServer(t, func(path string) ([]byte, error) {
+	urlStr := runSchemaRegistryServer(t, func(_ string) ([]byte, error) {
 		return mustJBytes(t, map[string]any{
 			"id": 2, "version": 10, "schemaType": "AVRO",
 			"schema": fooSchema,
