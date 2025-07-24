@@ -193,7 +193,17 @@ func TestAvroSchemaExtraction(t *testing.T) {
 	"type": "record",
 	"name": "foo",
 	"fields": [
-		{ "name": "Woof", "type": "string"}
+		{ "name": "A", "type": "string" },
+		{ "name": "B", "type": "null" },
+		{ "name": "C", "type": ["null", "int"] },
+		{ "name": "D", "type": "long", "default": 99 },
+		{ "name": "E", "type": "float" },
+		{ "name": "F", "type": "double" },
+		{ "name": "G", "type": "boolean", "default": true },
+		{ "name": "H", "type": "bytes" },
+		{ "name": "I", "type": "enum", "symbols": [ "MOO", "WOOF" ] },
+		{ "name": "J", "type": "map", "values" : "long" },
+		{ "name": "K", "type": "array", "items": "boolean" }
 	]
 }`
 
@@ -222,21 +232,19 @@ func TestAvroSchemaExtraction(t *testing.T) {
 	})
 
 	inBatch := service.MessageBatch{
-		service.NewMessage([]byte(`{ "Woof" : "woof one" }`)),
-		service.NewMessage([]byte(`{ "Woof" : "woof two" }`)),
-		service.NewMessage([]byte(`{ "Woof" : "woof three" }`)),
+		service.NewMessage([]byte(`{ "A" : "woof one", "B": null, "C": 1, "D": 11, "E": 1.1, "F": 11.1, "G": true, "H": "foo", "I": "MOO", "J": { "i": 3 }, "K": [ true, false] }`)),
+		service.NewMessage([]byte(`{ "A" : "woof two", "B": null, "C": 2, "D": 12, "E": 2.1, "F": 12.1, "G": false, "H": "bar", "I": "WOOF", "J": { "i": 4 }, "K": [ true, false] }`)),
 	}
 
 	outBatch := []string{
-		`{"Woof":"woof one"}`,
-		`{"Woof":"woof two"}`,
-		`{"Woof":"woof three"}`,
+		`{"A":"woof one","B":null,"C":1,"D":11,"E":1.1,"F":11.1,"G":true,"H":"foo","I":"MOO","J":{"i":3},"K":[true,false]}`,
+		`{"A":"woof two","B":null,"C":2,"D":12,"E":2.1,"F":12.1,"G":false,"H":"bar","I":"WOOF","J":{"i":4},"K":[true,false]}`,
 	}
 
 	encodedBatches, err := encoder.ProcessBatch(tCtx, inBatch)
 	require.NoError(t, err)
 	require.Len(t, encodedBatches, 1)
-	require.Len(t, encodedBatches[0], 3)
+	require.Len(t, encodedBatches[0], 2)
 
 	for i, encodedMsg := range encodedBatches[0] {
 		b, err := encodedMsg.AsBytes()
@@ -264,7 +272,21 @@ func TestAvroSchemaExtraction(t *testing.T) {
 		assert.Equal(t, map[string]any{
 			"name": "foo", "type": "OBJECT",
 			"children": []any{
-				map[string]any{"name": "Woof", "type": "STRING"},
+				map[string]any{"name": "A", "type": "STRING"},
+				map[string]any{"name": "B", "type": "NULL"},
+				map[string]any{"name": "C", "type": "INT32", "optional": true},
+				map[string]any{"name": "D", "type": "INT64"},
+				map[string]any{"name": "E", "type": "FLOAT32"},
+				map[string]any{"name": "F", "type": "FLOAT64"},
+				map[string]any{"name": "G", "type": "BOOLEAN"},
+				map[string]any{"name": "H", "type": "BYTE_ARRAY"},
+				map[string]any{"name": "I", "type": "STRING"},
+				map[string]any{"name": "J", "type": "MAP", "children": []any{
+					map[string]any{"type": "INT64"},
+				}},
+				map[string]any{"name": "K", "type": "ARRAY", "children": []any{
+					map[string]any{"type": "BOOLEAN"},
+				}},
 			},
 		}, schema)
 	}
