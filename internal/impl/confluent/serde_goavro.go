@@ -224,6 +224,8 @@ func avroTypeToCommonType(t string) schema.CommonType {
 		return schema.Float32
 	case "double":
 		return schema.Float64
+	case "boolean":
+		return schema.Boolean
 	case "bytes":
 		return schema.ByteArray
 	case "string":
