@@ -38,7 +38,8 @@ Common::
 # Common config fields, showing default values
 label: ""
 parquet_encode:
-  schema: [] # No default (required)
+  schema: [] # No default (optional)
+  schema_metadata: ""
   default_compression: uncompressed
 ```
 
@@ -51,7 +52,8 @@ Advanced::
 # All config fields, showing default values
 label: ""
 parquet_encode:
-  schema: [] # No default (required)
+  schema: [] # No default (optional)
+  schema_metadata: ""
   default_compression: uncompressed
   default_encoding: DELTA_LENGTH_BYTE_ARRAY
 ```
@@ -171,6 +173,15 @@ fields:
   - name: bar
     type: BYTE_ARRAY
 ```
+
+=== `schema_metadata`
+
+Optionally specify a metadata field containing a schema definition to use for encoding instead of a statically defined schema. For batches of messages the first messages schema will be applied for all subsequent messages of the batch.
+
+
+*Type*: `string`
+
+*Default*: `""`
 
 === `default_compression`
 
