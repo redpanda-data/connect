@@ -123,13 +123,13 @@ func (s *schemaRegistryEncoder) getAvroEncoder(ctx context.Context, schema franz
 	}, nil
 }
 
-func tryExtractCommonSchema(specBytes []byte) (any, error) {
+func tryExtractCommonSchemaFromAvroBytes(rawUnion bool, specBytes []byte) (any, error) {
 	var as any
 	if err := json.Unmarshal(specBytes, &as); err != nil {
 		return nil, err
 	}
 
-	commonSchema, err := avroAnyToCommonSchema(as)
+	commonSchema, err := avroAnyToCommonSchema(rawUnion, as)
 	if err != nil {
 		return nil, err
 	}
@@ -155,7 +155,7 @@ func (s *schemaRegistryDecoder) getGoAvroDecoder(ctx context.Context, aschema fr
 
 	var commonSchemaAny any
 	if s.cfg.avro.storeSchemaMeta != "" {
-		if commonSchemaAny, err = tryExtractCommonSchema([]byte(schemaSpec)); err != nil {
+		if commonSchemaAny, err = tryExtractCommonSchemaFromAvroBytes(s.cfg.avro.rawUnions, []byte(schemaSpec)); err != nil {
 			s.logger.With("error", err).Error("Failed to extract common schema for meta storage")
 		}
 	}
@@ -240,10 +240,10 @@ func avroTypeToCommonType(t string) schema.CommonType {
 	return schema.CommonType(-1)
 }
 
-func avroAnyToCommonSchema(aRoot any) (schema.Common, error) {
+func avroAnyToCommonSchema(rawUnion bool, aRoot any) (schema.Common, error) {
 	switch t := aRoot.(type) {
 	case map[string]any:
-		return avroAnyMapToCommonSchema(t)
+		return avroAnyMapToCommonSchema(rawUnion, t)
 	case []any:
 		root := schema.Common{Type: schema.Union}
 		for i, e := range t {
@@ -252,7 +252,7 @@ func avroAnyToCommonSchema(aRoot any) (schema.Common, error) {
 				return schema.Common{}, fmt.Errorf("expected element %v of root array to be an object, got %T", i, e)
 			}
 
-			cObj, err := avroAnyMapToCommonSchema(eObj)
+			cObj, err := avroAnyMapToCommonSchema(rawUnion, eObj)
 			if err != nil {
 				return schema.Common{}, fmt.Errorf("expected element %v: %w", i, err)
 			}
@@ -264,27 +264,76 @@ func avroAnyToCommonSchema(aRoot any) (schema.Common, error) {
 	return schema.Common{}, fmt.Errorf("expected either an array or object at root of schema, got %T", aRoot)
 }
 
-func avroAnyMapToCommonSchema(as map[string]any) (schema.Common, error) {
+func avroHydrateRawUnion(c *schema.Common, types []any) error {
+	if c.Type, c.Optional = isUnionJustOptional(types); !c.Optional {
+		c.Type = schema.Union
+		for i, uObj := range types {
+			switch ut := uObj.(type) {
+			case string:
+				c.Children = append(c.Children, schema.Common{
+					Type: avroTypeToCommonType(ut),
+				})
+			case map[string]any:
+				tmpC, err := avroAnyMapToCommonSchema(true, ut)
+				if err != nil {
+					return fmt.Errorf("union `%v` child '%v': %w", c.Name, i, err)
+				}
+				c.Children = append(c.Children, tmpC)
+			}
+		}
+	}
+	return nil
+}
+
+func avroHydrateLameUnion(c *schema.Common, types []any) error {
+	c.Type = schema.Union
+	for i, uObj := range types {
+		var childT schema.Common
+
+		switch ut := uObj.(type) {
+		case string:
+			childT = schema.Common{
+				Name: ut,
+				Type: avroTypeToCommonType(ut),
+			}
+		case map[string]any:
+			var err error
+			if childT, err = avroAnyMapToCommonSchema(true, ut); err != nil {
+				return fmt.Errorf("union `%v` child '%v': %w", c.Name, i, err)
+			}
+		}
+
+		if childT.Type == schema.Null {
+			// Null is the only type that encodes in its raw form:
+			// https://avro.apache.org/docs/1.10.2/spec.html#json_encoding
+			// It's all very silly.
+			childT.Name = ""
+			c.Children = append(c.Children, childT)
+			continue
+		}
+
+		c.Children = append(c.Children, schema.Common{
+			Type:     schema.Object,
+			Children: []schema.Common{childT},
+		})
+	}
+
+	return nil
+}
+
+func avroAnyMapToCommonSchema(rawUnion bool, as map[string]any) (schema.Common, error) {
 	var c schema.Common
 	c.Name, _ = as["name"].(string)
 
 	switch t := as["type"].(type) {
 	case []any:
-		if c.Type, c.Optional = isUnionJustOptional(t); !c.Optional {
-			c.Type = schema.Union
-			for i, uObj := range t {
-				switch ut := uObj.(type) {
-				case string:
-					c.Children = append(c.Children, schema.Common{
-						Type: avroTypeToCommonType(ut),
-					})
-				case map[string]any:
-					tmpC, err := avroAnyMapToCommonSchema(ut)
-					if err != nil {
-						return c, fmt.Errorf("union `%v` child '%v': %w", c.Name, i, err)
-					}
-					c.Children = append(c.Children, tmpC)
-				}
+		if rawUnion {
+			if err := avroHydrateRawUnion(&c, t); err != nil {
+				return c, err
+			}
+		} else {
+			if err := avroHydrateLameUnion(&c, t); err != nil {
+				return c, err
 			}
 		}
 	case string:
@@ -338,7 +387,7 @@ func avroAnyMapToCommonSchema(as map[string]any) (schema.Common, error) {
 				return schema.Common{}, fmt.Errorf("record `%v` field '%v': expected object, got %T", c.Name, i, f)
 			}
 
-			cField, err := avroAnyMapToCommonSchema(fobj)
+			cField, err := avroAnyMapToCommonSchema(rawUnion, fobj)
 			if err != nil {
 				return schema.Common{}, fmt.Errorf("record `%v` field '%v': %w", c.Name, i, err)
 			}
