@@ -35,7 +35,7 @@ func parquetEncodeProcessorConfig() *service.ConfigSpec {
 		Fields(
 			parquetSchemaConfig().Optional(),
 			service.NewStringField("schema_metadata").
-				Description("Optionally specify a metadata field containing a schema definition to use for encoding instead of a statically defined schema. For batches of messages the first messages schema will be applied for all subsequent messages of the batch.").
+				Description("Optionally specify a metadata field containing a schema definition to use for encoding instead of a statically defined schema. For batches of messages, the first message's schema will be applied to all subsequent messages of the batch.").
 				Default(""),
 			service.NewStringEnumField("default_compression",
 				"uncompressed", "snappy", "gzip", "brotli", "zstd", "lz4raw",
