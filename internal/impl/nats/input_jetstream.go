@@ -335,7 +335,10 @@ func (j *jetStreamReader) Read(ctx context.Context) (*service.Message, service.A
 	if !j.pull {
 		nmsg, err := natsSub.NextMsgWithContext(ctx)
 		if err != nil {
-			// TODO: Any errors need capturing here to signal a lost connection?
+			if errors.Is(err, nats.ErrConnectionClosed) {
+				j.disconnect()
+				return nil, nil, service.ErrNotConnected
+			}
 			return nil, nil, err
 		}
 		return convertMessage(nmsg)
@@ -353,6 +356,9 @@ func (j *jetStreamReader) Read(ctx context.Context) (*service.Message, service.A
 				default:
 					continue
 				}
+			} else if errors.Is(err, nats.ErrConnectionClosed) {
+				j.disconnect()
+				return nil, nil, service.ErrNotConnected
 			}
 			return nil, nil, err
 		}

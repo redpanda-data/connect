@@ -14,6 +14,10 @@ All notable changes to this project will be documented in this file.
 
 - Fixed an issue with the `schema_registry` output where schemas with the same ID weren't successfully associated with multiple subjects when `translate_ids` was set to `false`. (@mihaitodor)
 
+### Fixed
+
+- Fixed an issue where NATS JetStream input fails to handle a closed NATS connection. (@josephwoodward)
+
 ## 4.60.2 - 2025-07-14
 
 ### Added
