@@ -60,6 +60,7 @@ func FranzKafkaInputConfigFields() []*service.ConfigField {
 		FranzReaderUnorderedConfigFields(),
 		[]*service.ConfigField{
 			service.NewAutoRetryNacksToggleField(),
+			service.NewExtractTracingSpanMappingField(),
 		},
 	)
 }
@@ -83,6 +84,11 @@ func init() {
 				return nil, err
 			}
 
-			return service.AutoRetryNacksBatchedToggled(conf, rdr)
+			r, err := service.AutoRetryNacksBatchedToggled(conf, rdr)
+			if err != nil {
+				return nil, err
+			}
+
+			return conf.WrapBatchInputExtractTracingSpanMapping("kafka_franz", r)
 		})
 }

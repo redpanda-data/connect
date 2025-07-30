@@ -91,6 +91,7 @@ output:
       period: ""
       check: ""
       processors: [] # No default (optional)
+    inject_tracing_map: meta = @.merge(this) # No default (optional)
     partitioner: "" # No default (optional)
     idempotent_write: true
     compression: "" # No default (optional)
@@ -714,6 +715,23 @@ processors:
 processors:
   - archive:
       format: json_array
+```
+
+=== `inject_tracing_map`
+
+EXPERIMENTAL: A xref:guides:bloblang/about.adoc[Bloblang mapping] used to inject an object containing tracing propagation information into outbound messages. The specification of the injected fields will match the format used by the service wide tracer.
+
+
+*Type*: `string`
+
+Requires version 3.45.0 or newer
+
+```yml
+# Examples
+
+inject_tracing_map: meta = @.merge(this)
+
+inject_tracing_map: root.meta.span = this
 ```
 
 === `partitioner`
