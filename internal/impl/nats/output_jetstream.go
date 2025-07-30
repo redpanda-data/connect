@@ -16,6 +16,7 @@ package nats
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -198,8 +199,14 @@ func (j *jetStreamOutput) Write(_ context.Context, msg *service.Message) error {
 		return nil
 	})
 
-	_, err = jCtx.PublishMsg(jsmsg)
-	return err
+	if _, err = jCtx.PublishMsg(jsmsg); err != nil {
+		if errors.Is(err, nats.ErrConnectionClosed) {
+			j.disconnect()
+			return service.ErrNotConnected
+		}
+		return err
+	}
+	return nil
 }
 
 func (j *jetStreamOutput) Close(ctx context.Context) error {
