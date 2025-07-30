@@ -1,17 +1,3 @@
-// Copyright 2024 Redpanda Data, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 package mongodb
 
 import (
@@ -40,6 +26,10 @@ func mongodbCacheConfig() *service.ConfigSpec {
 				Description("The field in the document that is used as the key."),
 			service.NewStringField("value_field").
 				Description("The field in the document that is used as the value."),
+			service.NewStringField("ttl_field").
+				Description("The field in the document that is used as the TTL. A TTL index on that field has to be manually added in MongoDB."),
+			service.NewStringField("default_ttl").
+				Description("The default TTL value."),
 		)
 }
 
@@ -72,7 +62,17 @@ func newMongodbCacheFromConfig(parsedConf *service.ParsedConfig) (*mongodbCache,
 		return nil, err
 	}
 
-	return newMongodbCache(collectionName, keyField, valueField, client, database)
+	ttlField, err := parsedConf.FieldString("ttl_field")
+	if err != nil {
+		return nil, err
+	}
+
+	defaultTTL, err := parsedConf.FieldDuration("default_ttl")
+	if err != nil {
+		return nil, err
+	}
+
+	return newMongodbCache(collectionName, keyField, valueField, ttlField, defaultTTL, client, database)
 }
 
 //------------------------------------------------------------------------------
@@ -83,14 +83,18 @@ type mongodbCache struct {
 
 	keyField   string
 	valueField string
+	ttlField   string
+	defaultTTL time.Duration
 }
 
-func newMongodbCache(collectionName, keyField, valueField string, client *mongo.Client, database *mongo.Database) (*mongodbCache, error) {
+func newMongodbCache(collectionName, keyField, valueField, ttlField string, defaultTTL time.Duration, client *mongo.Client, database *mongo.Database) (*mongodbCache, error) {
 	return &mongodbCache{
 		client:     client,
 		collection: database.Collection(collectionName),
 		keyField:   keyField,
 		valueField: valueField,
+		ttlField:   ttlField,
+		defaultTTL: defaultTTL,
 	}, nil
 }
 
@@ -110,17 +114,31 @@ func (m *mongodbCache) Get(ctx context.Context, key string) ([]byte, error) {
 	return []byte(valueStr), nil
 }
 
-func (m *mongodbCache) Set(ctx context.Context, key string, value []byte, _ *time.Duration) error {
+func (m *mongodbCache) Set(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
+	var expires time.Time
+	if ttl != nil {
+		expires = time.Now().Add(*ttl)
+	} else {
+		expires = time.Now().Add(m.defaultTTL)
+	}
+
 	opts := options.UpdateOne().SetUpsert(true)
 	filter := bson.M{m.keyField: key}
-	update := bson.M{"$set": bson.M{m.valueField: string(value)}}
+	update := bson.M{"$set": bson.M{m.valueField: string(value), m.ttlField: expires}}
 
 	_, err := m.collection.UpdateOne(ctx, filter, update, opts)
 	return err
 }
 
-func (m *mongodbCache) Add(ctx context.Context, key string, value []byte, _ *time.Duration) error {
-	document := bson.M{m.keyField: key, m.valueField: string(value)}
+func (m *mongodbCache) Add(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
+	var expires time.Time
+	if ttl != nil {
+		expires = time.Now().Add(*ttl)
+	} else {
+		expires = time.Now().Add(m.defaultTTL)
+	}
+
+	document := bson.M{m.keyField: key, m.valueField: string(value), m.ttlField: expires}
 	_, err := m.collection.InsertOne(ctx, document)
 	if err != nil {
 		if errCode := getMongoErrorCode(err); errCode == mongoDuplicateKeyErrCode {
