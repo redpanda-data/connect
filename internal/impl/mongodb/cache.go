@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package mongodb
 
 import (
@@ -27,9 +41,11 @@ func mongodbCacheConfig() *service.ConfigSpec {
 			service.NewStringField("value_field").
 				Description("The field in the document that is used as the value."),
 			service.NewStringField("ttl_field").
-				Description("The field in the document that is used as the TTL. A TTL index on that field has to be manually added in MongoDB."),
+				Description("The field in the document that is used as the TTL. A TTL index on that field has to be manually added in MongoDB.").
+				Optional(),
 			service.NewStringField("default_ttl").
-				Description("The default TTL value."),
+				Description("The default TTL of each item. After this period an item will be eligible for removal during the next MongoDB cleanup.").
+				Optional(),
 		)
 }
 
@@ -62,14 +78,22 @@ func newMongodbCacheFromConfig(parsedConf *service.ParsedConfig) (*mongodbCache,
 		return nil, err
 	}
 
-	ttlField, err := parsedConf.FieldString("ttl_field")
-	if err != nil {
-		return nil, err
+	var ttlField *string
+	if parsedConf.Contains("ttl_field") {
+		var ttlf, err = parsedConf.FieldString("ttl_field")
+		if err != nil {
+			return nil, err
+		}
+		ttlField = &ttlf
 	}
 
-	defaultTTL, err := parsedConf.FieldDuration("default_ttl")
-	if err != nil {
-		return nil, err
+	var defaultTTL *time.Duration
+	if parsedConf.Contains("default_ttl") {
+		var defTTL, err = parsedConf.FieldDuration("default_ttl")
+		if err != nil {
+			return nil, err
+		}
+		defaultTTL = &defTTL
 	}
 
 	return newMongodbCache(collectionName, keyField, valueField, ttlField, defaultTTL, client, database)
@@ -83,11 +107,11 @@ type mongodbCache struct {
 
 	keyField   string
 	valueField string
-	ttlField   string
-	defaultTTL time.Duration
+	ttlField   *string
+	defaultTTL *time.Duration
 }
 
-func newMongodbCache(collectionName, keyField, valueField, ttlField string, defaultTTL time.Duration, client *mongo.Client, database *mongo.Database) (*mongodbCache, error) {
+func newMongodbCache(collectionName, keyField, valueField string, ttlField *string, defaultTTL *time.Duration, client *mongo.Client, database *mongo.Database) (*mongodbCache, error) {
 	return &mongodbCache{
 		client:     client,
 		collection: database.Collection(collectionName),
@@ -115,30 +139,34 @@ func (m *mongodbCache) Get(ctx context.Context, key string) ([]byte, error) {
 }
 
 func (m *mongodbCache) Set(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
-	var expires time.Time
-	if ttl != nil {
-		expires = time.Now().Add(*ttl)
-	} else {
-		expires = time.Now().Add(m.defaultTTL)
-	}
-
 	opts := options.UpdateOne().SetUpsert(true)
 	filter := bson.M{m.keyField: key}
-	update := bson.M{"$set": bson.M{m.valueField: string(value), m.ttlField: expires}}
+	val := bson.M{m.valueField: string(value)}
 
+	if m.ttlField != nil {
+		if ttl != nil {
+			val[*m.ttlField] = time.Now().Add(*ttl)
+		} else if m.defaultTTL != nil {
+			val[*m.ttlField] = time.Now().Add(*m.defaultTTL)
+		}
+	}
+
+	update := bson.M{"$set": val}
 	_, err := m.collection.UpdateOne(ctx, filter, update, opts)
 	return err
 }
 
 func (m *mongodbCache) Add(ctx context.Context, key string, value []byte, ttl *time.Duration) error {
-	var expires time.Time
-	if ttl != nil {
-		expires = time.Now().Add(*ttl)
-	} else {
-		expires = time.Now().Add(m.defaultTTL)
+	document := bson.M{m.keyField: key, m.valueField: string(value)}
+
+	if m.ttlField != nil {
+		if ttl != nil {
+			document[*m.ttlField] = time.Now().Add(*ttl)
+		} else if m.defaultTTL != nil {
+			document[*m.ttlField] = time.Now().Add(*m.defaultTTL)
+		}
 	}
 
-	document := bson.M{m.keyField: key, m.valueField: string(value), m.ttlField: expires}
 	_, err := m.collection.InsertOne(ctx, document)
 	if err != nil {
 		if errCode := getMongoErrorCode(err); errCode == mongoDuplicateKeyErrCode {
