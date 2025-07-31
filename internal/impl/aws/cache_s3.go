@@ -52,7 +52,8 @@ func s3CacheConfig() *service.ConfigSpec {
 			Advanced().
 			Default(false)).
 		Field(service.NewBackOffField("retries", false, retriesDefaults).
-			Advanced())
+			Advanced()).
+		Field(service.NewTLSToggledField("tls"))
 
 	for _, f := range config.SessionFields() {
 		spec = spec.Field(f)
