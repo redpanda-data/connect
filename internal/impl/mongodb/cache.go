@@ -80,7 +80,7 @@ func newMongodbCacheFromConfig(parsedConf *service.ParsedConfig) (*mongodbCache,
 
 	var ttlField *string
 	if parsedConf.Contains("ttl_field") {
-		var ttlf, err = parsedConf.FieldString("ttl_field")
+		ttlf, err := parsedConf.FieldString("ttl_field")
 		if err != nil {
 			return nil, err
 		}
@@ -89,7 +89,7 @@ func newMongodbCacheFromConfig(parsedConf *service.ParsedConfig) (*mongodbCache,
 
 	var defaultTTL *time.Duration
 	if parsedConf.Contains("default_ttl") {
-		var defTTL, err = parsedConf.FieldDuration("default_ttl")
+		defTTL, err := parsedConf.FieldDuration("default_ttl")
 		if err != nil {
 			return nil, err
 		}
