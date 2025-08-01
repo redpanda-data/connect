@@ -531,3 +531,90 @@ func TestHambaDecodeKafkaConnectTypes(t *testing.T) {
 		})
 	}
 }
+
+func TestHambaAvroSchemaExtraction(t *testing.T) {
+	tCtx, done := context.WithTimeout(t.Context(), time.Second*10)
+	defer done()
+
+	fooSchema := `{
+	"namespace": "benthos.namespace.com",
+	"type": "record",
+	"name": "foo",
+	"fields": [
+		{ "name": "Woof", "type": "string"}
+	]
+}`
+
+	urlStr := runSchemaRegistryServer(t, func(_ string) ([]byte, error) {
+		return mustJBytes(t, map[string]any{
+			"id": 2, "version": 10, "schemaType": "AVRO",
+			"schema": fooSchema,
+		}), nil
+	})
+
+	subj, err := service.NewInterpolatedString("root")
+	require.NoError(t, err)
+
+	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, true, time.Minute*10, time.Minute, service.MockResources())
+	require.NoError(t, err)
+
+	cfg := decodingConfig{}
+	cfg.avro.rawUnions = true
+	cfg.avro.useHamba = true
+	cfg.avro.storeSchemaMeta = "testschema"
+	decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, cfg, schemaStaleAfter, service.MockResources())
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		_ = encoder.Close(tCtx)
+		_ = decoder.Close(tCtx)
+	})
+
+	inBatch := service.MessageBatch{
+		service.NewMessage([]byte(`{ "Woof" : "woof one" }`)),
+		service.NewMessage([]byte(`{ "Woof" : "woof two" }`)),
+		service.NewMessage([]byte(`{ "Woof" : "woof three" }`)),
+	}
+
+	outBatch := []string{
+		`{"Woof":"woof one"}`,
+		`{"Woof":"woof two"}`,
+		`{"Woof":"woof three"}`,
+	}
+
+	encodedBatches, err := encoder.ProcessBatch(tCtx, inBatch)
+	require.NoError(t, err)
+	require.Len(t, encodedBatches, 1)
+	require.Len(t, encodedBatches[0], 3)
+
+	for i, encodedMsg := range encodedBatches[0] {
+		b, err := encodedMsg.AsBytes()
+		require.NoError(t, err)
+		require.NoError(t, encodedMsg.GetError())
+
+		var n any
+		require.Error(t, json.Unmarshal(b, &n), "message contents should no longer be valid JSON")
+
+		decodedBatch, err := decoder.Process(tCtx, encodedMsg)
+		require.NoError(t, err)
+		require.Len(t, decodedBatch, 1)
+
+		decodedMsg := decodedBatch[0]
+
+		b, err = decodedMsg.AsBytes()
+		require.NoError(t, err)
+
+		require.NoError(t, decodedMsg.GetError())
+		require.JSONEq(t, outBatch[i], string(b))
+
+		schema, exists := decodedMsg.MetaGetMut("testschema")
+		assert.True(t, exists)
+
+		assert.Equal(t, map[string]any{
+			"name": "foo", "type": "OBJECT",
+			"children": []any{
+				map[string]any{"name": "Woof", "type": "STRING"},
+			},
+		}, schema)
+	}
+}

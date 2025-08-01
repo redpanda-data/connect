@@ -3187,6 +3187,10 @@ root.doc = this.doc.format_yaml().string()
 # Out: {"doc":"foo: bar\n"}
 ```
 
+=== `infer_schema`
+
+Attempt to infer the schema of a given value. The resulting schema can then be used as an input to schema conversion and enforcement methods.
+
 === `parse_csv`
 
 Attempts to parse a string into an array of objects by following the CSV format described in RFC 4180.
