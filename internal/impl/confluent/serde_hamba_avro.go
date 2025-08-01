@@ -75,9 +75,11 @@ func (s *schemaRegistryDecoder) getHambaAvroDecoder(ctx context.Context, schema 
 		}
 	}
 
-	var commonSchemaAny any
+	var commonSchema any
 	if s.cfg.avro.storeSchemaMeta != "" {
-		if commonSchemaAny, err = tryExtractCommonSchemaFromAvroBytes(s.cfg.avro.rawUnions, []byte(schema.Schema)); err != nil {
+		if commonSchema, err = ecsAvroFromBytes(ecsAvroConfig{
+			rawUnion: s.cfg.avro.rawUnions,
+		}, []byte(schema.Schema)); err != nil {
 			s.logger.With("error", err).Error("Failed to extract common schema for meta storage")
 		}
 	}
@@ -102,8 +104,8 @@ func (s *schemaRegistryDecoder) getHambaAvroDecoder(ctx context.Context, schema 
 		}
 		m.SetStructuredMut(native)
 
-		if commonSchemaAny != nil {
-			m.MetaSetMut(s.cfg.avro.storeSchemaMeta, commonSchemaAny)
+		if commonSchema != nil {
+			m.MetaSetMut(s.cfg.avro.storeSchemaMeta, commonSchema)
 		}
 		return nil
 	}

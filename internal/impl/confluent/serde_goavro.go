@@ -17,14 +17,12 @@ package confluent
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 
 	"github.com/linkedin/goavro/v2"
 	franz_sr "github.com/twmb/franz-go/pkg/sr"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
-	"github.com/redpanda-data/benthos/v4/public/schema"
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
@@ -123,20 +121,6 @@ func (s *schemaRegistryEncoder) getAvroEncoder(ctx context.Context, schema franz
 	}, nil
 }
 
-func tryExtractCommonSchemaFromAvroBytes(rawUnion bool, specBytes []byte) (any, error) {
-	var as any
-	if err := json.Unmarshal(specBytes, &as); err != nil {
-		return nil, err
-	}
-
-	commonSchema, err := avroAnyToCommonSchema(rawUnion, as)
-	if err != nil {
-		return nil, err
-	}
-
-	return commonSchema.ToAny(), nil
-}
-
 func (s *schemaRegistryDecoder) getGoAvroDecoder(ctx context.Context, aschema franz_sr.Schema) (schemaDecoder, error) {
 	schemaSpec, err := resolveGoAvroReferences(ctx, s.client, s.cfg.avro.mapping, aschema)
 	if err != nil {
@@ -153,9 +137,11 @@ func (s *schemaRegistryDecoder) getGoAvroDecoder(ctx context.Context, aschema fr
 		return nil, err
 	}
 
-	var commonSchemaAny any
+	var commonSchema any
 	if s.cfg.avro.storeSchemaMeta != "" {
-		if commonSchemaAny, err = tryExtractCommonSchemaFromAvroBytes(s.cfg.avro.rawUnions, []byte(schemaSpec)); err != nil {
+		if commonSchema, err = ecsAvroFromBytes(ecsAvroConfig{
+			rawUnion: s.cfg.avro.rawUnions,
+		}, []byte(schemaSpec)); err != nil {
 			s.logger.With("error", err).Error("Failed to extract common schema for meta storage")
 		}
 	}
@@ -177,224 +163,11 @@ func (s *schemaRegistryDecoder) getGoAvroDecoder(ctx context.Context, aschema fr
 		}
 		m.SetBytes(jb)
 
-		if commonSchemaAny != nil {
-			m.MetaSetMut(s.cfg.avro.storeSchemaMeta, commonSchemaAny)
+		if commonSchema != nil {
+			m.MetaSetMut(s.cfg.avro.storeSchemaMeta, commonSchema)
 		}
 		return nil
 	}
 
 	return decoder, nil
-}
-
-// If the union is actually just a verbose way of defining an optional field
-// then we return the real type and true. E.g. if we see:
-//
-// `"type": [ "null", "string" ]`
-//
-// Then we return string and true.
-func isUnionJustOptional(types []any) (schema.CommonType, bool) {
-	if len(types) != 2 {
-		return schema.CommonType(-1), false
-	}
-
-	firstTypeStr, ok := types[0].(string)
-	if !ok || firstTypeStr != "null" {
-		return schema.CommonType(-1), false
-	}
-
-	secondTypeStr, ok := types[1].(string)
-	if !ok {
-		return schema.CommonType(-1), false
-	}
-
-	return avroTypeToCommonType(secondTypeStr), true
-}
-
-func avroTypeToCommonType(t string) schema.CommonType {
-	switch t {
-	case "record":
-		return schema.Object
-	case "null":
-		return schema.Null
-	case "int":
-		return schema.Int32
-	case "long":
-		return schema.Int64
-	case "float":
-		return schema.Float32
-	case "double":
-		return schema.Float64
-	case "boolean":
-		return schema.Boolean
-	case "bytes":
-		return schema.ByteArray
-	case "string":
-		return schema.String
-	case "enum":
-		return schema.String
-	case "map":
-		return schema.Map
-	case "array":
-		return schema.Array
-	}
-	return schema.CommonType(-1)
-}
-
-func avroAnyToCommonSchema(rawUnion bool, aRoot any) (schema.Common, error) {
-	switch t := aRoot.(type) {
-	case map[string]any:
-		return avroAnyMapToCommonSchema(rawUnion, t)
-	case []any:
-		root := schema.Common{Type: schema.Union}
-		for i, e := range t {
-			eObj, ok := e.(map[string]any)
-			if !ok {
-				return schema.Common{}, fmt.Errorf("expected element %v of root array to be an object, got %T", i, e)
-			}
-
-			cObj, err := avroAnyMapToCommonSchema(rawUnion, eObj)
-			if err != nil {
-				return schema.Common{}, fmt.Errorf("expected element %v: %w", i, err)
-			}
-
-			root.Children = append(root.Children, cObj)
-		}
-		return root, nil
-	}
-	return schema.Common{}, fmt.Errorf("expected either an array or object at root of schema, got %T", aRoot)
-}
-
-func avroHydrateRawUnion(c *schema.Common, types []any) error {
-	if c.Type, c.Optional = isUnionJustOptional(types); !c.Optional {
-		c.Type = schema.Union
-		for i, uObj := range types {
-			switch ut := uObj.(type) {
-			case string:
-				c.Children = append(c.Children, schema.Common{
-					Type: avroTypeToCommonType(ut),
-				})
-			case map[string]any:
-				tmpC, err := avroAnyMapToCommonSchema(true, ut)
-				if err != nil {
-					return fmt.Errorf("union `%v` child '%v': %w", c.Name, i, err)
-				}
-				c.Children = append(c.Children, tmpC)
-			}
-		}
-	}
-	return nil
-}
-
-func avroHydrateLameUnion(c *schema.Common, types []any) error {
-	c.Type = schema.Union
-	for i, uObj := range types {
-		var childT schema.Common
-
-		switch ut := uObj.(type) {
-		case string:
-			childT = schema.Common{
-				Name: ut,
-				Type: avroTypeToCommonType(ut),
-			}
-		case map[string]any:
-			var err error
-			if childT, err = avroAnyMapToCommonSchema(true, ut); err != nil {
-				return fmt.Errorf("union `%v` child '%v': %w", c.Name, i, err)
-			}
-		}
-
-		if childT.Type == schema.Null {
-			// Null is the only type that encodes in its raw form:
-			// https://avro.apache.org/docs/1.10.2/spec.html#json_encoding
-			// It's all very silly.
-			childT.Name = ""
-			c.Children = append(c.Children, childT)
-			continue
-		}
-
-		c.Children = append(c.Children, schema.Common{
-			Type:     schema.Object,
-			Children: []schema.Common{childT},
-		})
-	}
-
-	return nil
-}
-
-func avroAnyMapToCommonSchema(rawUnion bool, as map[string]any) (schema.Common, error) {
-	var c schema.Common
-	c.Name, _ = as["name"].(string)
-
-	switch t := as["type"].(type) {
-	case []any:
-		if rawUnion {
-			if err := avroHydrateRawUnion(&c, t); err != nil {
-				return c, err
-			}
-		} else {
-			if err := avroHydrateLameUnion(&c, t); err != nil {
-				return c, err
-			}
-		}
-	case string:
-		c.Type = avroTypeToCommonType(t)
-	case map[string]any:
-		// This is so ridiculous, I can't believe they've allowed the type field
-		// to be a union of three different types SMDH.
-		if typeStr, ok := t["type"].(string); ok {
-			c.Type = avroTypeToCommonType(typeStr)
-		} else {
-			return schema.Common{}, errors.New("detected an unrecognized `type` field of type object, missing a `type` field")
-		}
-	default:
-		return schema.Common{}, fmt.Errorf("expected `type` field of type string or array, got %T", t)
-	}
-
-	switch c.Type {
-	case schema.Map:
-		valuesType, exists := as["values"].(string)
-		if !exists {
-			return schema.Common{}, fmt.Errorf("expected `values` field of type string, got %T", as["values"])
-		}
-
-		c.Children = []schema.Common{
-			{
-				Type: avroTypeToCommonType(valuesType),
-			},
-		}
-
-	case schema.Array:
-		itemsType, exists := as["items"].(string)
-		if !exists {
-			return schema.Common{}, fmt.Errorf("expected `items` field of type string, got %T", as["items"])
-		}
-
-		c.Children = []schema.Common{
-			{
-				Type: avroTypeToCommonType(itemsType),
-			},
-		}
-
-	case schema.Object:
-		fields, exists := as["fields"].([]any)
-		if !exists {
-			return schema.Common{}, fmt.Errorf("expected `fields` field of type array, got %T", as["fields"])
-		}
-
-		for i, f := range fields {
-			fobj, ok := f.(map[string]any)
-			if !ok {
-				return schema.Common{}, fmt.Errorf("record `%v` field '%v': expected object, got %T", c.Name, i, f)
-			}
-
-			cField, err := avroAnyMapToCommonSchema(rawUnion, fobj)
-			if err != nil {
-				return schema.Common{}, fmt.Errorf("record `%v` field '%v': %w", c.Name, i, err)
-			}
-
-			c.Children = append(c.Children, cField)
-		}
-	}
-
-	return c, nil
 }
