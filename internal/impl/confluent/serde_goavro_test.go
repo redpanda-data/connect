@@ -112,17 +112,17 @@ func TestAvroReferences(t *testing.T) {
 	}{
 		{
 			name:   "a foo",
-			input:  `{"Woof":"hhnnnnnnroooo"}`,
+			input:  `{ "Woof" : "hhnnnnnnroooo" }`,
 			output: `{"Woof":"hhnnnnnnroooo"}`,
 		},
 		{
 			name:   "a bar",
-			input:  `{"Moo":"mmuuuuuueew"}`,
+			input:  `{ "Moo" : "mmuuuuuueew" }`,
 			output: `{"Moo":"mmuuuuuueew"}`,
 		},
 		{
 			name:   "a baz",
-			input:  `{"Miao":{"Woof":"tsssssssuuuuuuuu"}}`,
+			input:  `{ "Miao" : { "Woof" : "tsssssssuuuuuuuu" } }`,
 			output: `{"Miao":{"Woof":"tsssssssuuuuuuuu"}}`,
 		},
 	}
@@ -181,5 +181,226 @@ func TestAvroReferences(t *testing.T) {
 			require.NoError(t, decodedMsg.GetError())
 			require.JSONEq(t, test.output, string(b))
 		})
+	}
+}
+
+func TestAvroSchemaExtraction(t *testing.T) {
+	tCtx, done := context.WithTimeout(t.Context(), time.Second*10)
+	defer done()
+
+	fooSchema := `{
+	"namespace": "benthos.namespace.com",
+	"type": "record",
+	"name": "foo",
+	"fields": [
+		{ "name": "A", "type": "string" },
+		{ "name": "B", "type": "null" },
+		{ "name": "C", "type": ["null", "int"] },
+		{ "name": "D", "type": "long", "default": 99 },
+		{ "name": "E", "type": "float" },
+		{ "name": "F", "type": "double" },
+		{ "name": "G", "type": "boolean", "default": true },
+		{ "name": "H", "type": "bytes" },
+		{ "name": "I", "type": "enum", "symbols": [ "MOO", "WOOF" ] },
+		{ "name": "J", "type": "map", "values" : "long" },
+		{ "name": "K", "type": "array", "items": "boolean" }
+	]
+}`
+
+	urlStr := runSchemaRegistryServer(t, func(_ string) ([]byte, error) {
+		return mustJBytes(t, map[string]any{
+			"id": 2, "version": 10, "schemaType": "AVRO",
+			"schema": fooSchema,
+		}), nil
+	})
+
+	subj, err := service.NewInterpolatedString("root")
+	require.NoError(t, err)
+
+	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, true, time.Minute*10, time.Minute, service.MockResources())
+	require.NoError(t, err)
+
+	cfg := decodingConfig{}
+	cfg.avro.rawUnions = true
+	cfg.avro.storeSchemaMeta = "testschema"
+	decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, cfg, schemaStaleAfter, service.MockResources())
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		_ = encoder.Close(tCtx)
+		_ = decoder.Close(tCtx)
+	})
+
+	inBatch := service.MessageBatch{
+		service.NewMessage([]byte(`{ "A" : "woof one", "B": null, "C": 1, "D": 11, "E": 1.1, "F": 11.1, "G": true, "H": "foo", "I": "MOO", "J": { "i": 3 }, "K": [ true, false] }`)),
+		service.NewMessage([]byte(`{ "A" : "woof two", "B": null, "C": 2, "D": 12, "E": 2.1, "F": 12.1, "G": false, "H": "bar", "I": "WOOF", "J": { "i": 4 }, "K": [ true, false] }`)),
+	}
+
+	outBatch := []string{
+		`{"A":"woof one","B":null,"C":1,"D":11,"E":1.1,"F":11.1,"G":true,"H":"foo","I":"MOO","J":{"i":3},"K":[true,false]}`,
+		`{"A":"woof two","B":null,"C":2,"D":12,"E":2.1,"F":12.1,"G":false,"H":"bar","I":"WOOF","J":{"i":4},"K":[true,false]}`,
+	}
+
+	encodedBatches, err := encoder.ProcessBatch(tCtx, inBatch)
+	require.NoError(t, err)
+	require.Len(t, encodedBatches, 1)
+	require.Len(t, encodedBatches[0], 2)
+
+	for i, encodedMsg := range encodedBatches[0] {
+		b, err := encodedMsg.AsBytes()
+		require.NoError(t, err)
+		require.NoError(t, encodedMsg.GetError())
+
+		var n any
+		require.Error(t, json.Unmarshal(b, &n), "message contents should no longer be valid JSON")
+
+		decodedBatch, err := decoder.Process(tCtx, encodedMsg)
+		require.NoError(t, err)
+		require.Len(t, decodedBatch, 1)
+
+		decodedMsg := decodedBatch[0]
+
+		b, err = decodedMsg.AsBytes()
+		require.NoError(t, err)
+
+		require.NoError(t, decodedMsg.GetError())
+		require.JSONEq(t, outBatch[i], string(b))
+
+		schema, exists := decodedMsg.MetaGetMut("testschema")
+		assert.True(t, exists)
+
+		assert.Equal(t, map[string]any{
+			"name": "foo", "type": "OBJECT",
+			"children": []any{
+				map[string]any{"name": "A", "type": "STRING"},
+				map[string]any{"name": "B", "type": "NULL"},
+				map[string]any{"name": "C", "type": "INT32", "optional": true},
+				map[string]any{"name": "D", "type": "INT64"},
+				map[string]any{"name": "E", "type": "FLOAT32"},
+				map[string]any{"name": "F", "type": "FLOAT64"},
+				map[string]any{"name": "G", "type": "BOOLEAN"},
+				map[string]any{"name": "H", "type": "BYTE_ARRAY"},
+				map[string]any{"name": "I", "type": "STRING"},
+				map[string]any{"name": "J", "type": "MAP", "children": []any{
+					map[string]any{"type": "INT64"},
+				}},
+				map[string]any{"name": "K", "type": "ARRAY", "children": []any{
+					map[string]any{"type": "BOOLEAN"},
+				}},
+			},
+		}, schema)
+	}
+}
+
+func TestAvroSchemaExtractionLameUnions(t *testing.T) {
+	tCtx, done := context.WithTimeout(t.Context(), time.Second*10)
+	defer done()
+
+	fooSchema := `{
+	"namespace": "benthos.namespace.com",
+	"type": "record",
+	"name": "foo",
+	"fields": [
+		{ "name": "A", "type": "string" },
+		{ "name": "B", "type": "null" },
+		{ "name": "C", "type": ["null", "int"] },
+		{ "name": "D", "type": "long", "default": 99 },
+		{ "name": "E", "type": "float" },
+		{ "name": "F", "type": "double" },
+		{ "name": "G", "type": "boolean", "default": true },
+		{ "name": "H", "type": "bytes" },
+		{ "name": "I", "type": "enum", "symbols": [ "MOO", "WOOF" ] },
+		{ "name": "J", "type": "map", "values" : "long" },
+		{ "name": "K", "type": "array", "items": "boolean" }
+	]
+}`
+
+	urlStr := runSchemaRegistryServer(t, func(_ string) ([]byte, error) {
+		return mustJBytes(t, map[string]any{
+			"id": 2, "version": 10, "schemaType": "AVRO",
+			"schema": fooSchema,
+		}), nil
+	})
+
+	subj, err := service.NewInterpolatedString("root")
+	require.NoError(t, err)
+
+	encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, true, time.Minute*10, time.Minute, service.MockResources())
+	require.NoError(t, err)
+
+	cfg := decodingConfig{}
+	cfg.avro.rawUnions = false
+	cfg.avro.storeSchemaMeta = "testschema"
+	decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, cfg, schemaStaleAfter, service.MockResources())
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		_ = encoder.Close(tCtx)
+		_ = decoder.Close(tCtx)
+	})
+
+	inBatch := service.MessageBatch{
+		service.NewMessage([]byte(`{ "A" : "woof one", "B": null, "C": 1, "D": 11, "E": 1.1, "F": 11.1, "G": true, "H": "foo", "I": "MOO", "J": { "i": 3 }, "K": [ true, false] }`)),
+		service.NewMessage([]byte(`{ "A" : "woof two", "B": null, "C": 2, "D": 12, "E": 2.1, "F": 12.1, "G": false, "H": "bar", "I": "WOOF", "J": { "i": 4 }, "K": [ true, false] }`)),
+	}
+
+	outBatch := []string{
+		`{"A":"woof one","B":null,"C":{"int":1},"D":11,"E":1.1,"F":11.1,"G":true,"H":"foo","I":"MOO","J":{"i":3},"K":[true,false]}`,
+		`{"A":"woof two","B":null,"C":{"int":2},"D":12,"E":2.1,"F":12.1,"G":false,"H":"bar","I":"WOOF","J":{"i":4},"K":[true,false]}`,
+	}
+
+	encodedBatches, err := encoder.ProcessBatch(tCtx, inBatch)
+	require.NoError(t, err)
+	require.Len(t, encodedBatches, 1)
+	require.Len(t, encodedBatches[0], 2)
+
+	for i, encodedMsg := range encodedBatches[0] {
+		b, err := encodedMsg.AsBytes()
+		require.NoError(t, err)
+		require.NoError(t, encodedMsg.GetError())
+
+		var n any
+		require.Error(t, json.Unmarshal(b, &n), "message contents should no longer be valid JSON")
+
+		decodedBatch, err := decoder.Process(tCtx, encodedMsg)
+		require.NoError(t, err)
+		require.Len(t, decodedBatch, 1)
+
+		decodedMsg := decodedBatch[0]
+
+		b, err = decodedMsg.AsBytes()
+		require.NoError(t, err)
+
+		require.NoError(t, decodedMsg.GetError())
+		require.JSONEq(t, outBatch[i], string(b))
+
+		schema, exists := decodedMsg.MetaGetMut("testschema")
+		assert.True(t, exists)
+
+		assert.Equal(t, map[string]any{
+			"name": "foo", "type": "OBJECT",
+			"children": []any{
+				map[string]any{"name": "A", "type": "STRING"},
+				map[string]any{"name": "B", "type": "NULL"},
+				map[string]any{"name": "C", "type": "UNION", "children": []any{
+					map[string]any{"type": "NULL"},
+					map[string]any{"type": "OBJECT", "children": []any{
+						map[string]any{"name": "int", "type": "INT32"},
+					}},
+				}},
+				map[string]any{"name": "D", "type": "INT64"},
+				map[string]any{"name": "E", "type": "FLOAT32"},
+				map[string]any{"name": "F", "type": "FLOAT64"},
+				map[string]any{"name": "G", "type": "BOOLEAN"},
+				map[string]any{"name": "H", "type": "BYTE_ARRAY"},
+				map[string]any{"name": "I", "type": "STRING"},
+				map[string]any{"name": "J", "type": "MAP", "children": []any{
+					map[string]any{"type": "INT64"},
+				}},
+				map[string]any{"name": "K", "type": "ARRAY", "children": []any{
+					map[string]any{"type": "BOOLEAN"},
+				}},
+			},
+		}, schema)
 	}
 }

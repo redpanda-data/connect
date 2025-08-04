@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/redpanda-data/benthos/v4/public/schema"
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
@@ -333,7 +334,7 @@ func TestParquetEncodeProcessor(t *testing.T) {
 			expectedDataBytes, err := json.Marshal(test.input)
 			require.NoError(t, err)
 
-			reader, err := newParquetEncodeProcessor(nil, testPMSchema(), &parquet.Uncompressed)
+			reader, err := newParquetEncodeProcessor(nil, testPMSchema(), "", &parquet.Uncompressed)
 			require.NoError(t, err)
 
 			readerResBatches, err := reader.ProcessBatch(t.Context(), service.MessageBatch{
@@ -380,7 +381,7 @@ func TestParquetEncodeProcessor(t *testing.T) {
 			inBatch = append(inBatch, service.NewMessage(dataBytes))
 		}
 
-		reader, err := newParquetEncodeProcessor(nil, testPMSchema(), &parquet.Uncompressed)
+		reader, err := newParquetEncodeProcessor(nil, testPMSchema(), "", &parquet.Uncompressed)
 		require.NoError(t, err)
 
 		readerResBatches, err := reader.ProcessBatch(t.Context(), inBatch)
@@ -474,4 +475,193 @@ schema:
 		})
 	}
 	wg.Wait()
+}
+
+func TestParquetEncodeDynamicSchemaProcessor(t *testing.T) {
+	type obj map[string]any
+	type arr []any
+
+	var expected []any
+
+	var inBatch service.MessageBatch
+	for _, inObj := range []any{
+		obj{
+			"foo": "hello world",
+			"bar": obj{"a": 23, "b": true, "c": 0.5},
+			"baz": arr{
+				obj{"nested": arr{1, 2, 3}},
+				obj{"nested": arr{4, 5, 6}},
+			},
+		},
+		obj{
+			"foo": "this is",
+			"bar": obj{"a": nil, "b": true, "c": nil},
+			"baz": arr{
+				obj{"nested": arr{7}},
+				obj{"nested": arr{8, 9}},
+			},
+		},
+		obj{
+			"foo": "my data",
+			"bar": obj{"a": nil, "b": nil, "c": nil},
+			"baz": arr{},
+		},
+	} {
+		expected = append(expected, inObj)
+
+		dataBytes, err := json.Marshal(inObj)
+		require.NoError(t, err)
+
+		inBatch = append(inBatch, service.NewMessage(dataBytes))
+	}
+
+	commonSchema := &schema.Common{
+		Type: schema.Object,
+		Children: []schema.Common{
+			{
+				Name: "foo",
+				Type: schema.String,
+			},
+			{
+				Name: "bar",
+				Type: schema.Object,
+				Children: []schema.Common{
+					{
+						Name:     "a",
+						Type:     schema.Int64,
+						Optional: true,
+					},
+					{
+						Name:     "b",
+						Type:     schema.Boolean,
+						Optional: true,
+					},
+					{
+						Name:     "c",
+						Type:     schema.Float64,
+						Optional: true,
+					},
+				},
+			},
+			{
+				Name: "baz",
+				Type: schema.Array,
+				Children: []schema.Common{
+					{
+						Type: schema.Object,
+						Children: []schema.Common{
+							{
+								Name: "nested",
+								Type: schema.Array,
+								Children: []schema.Common{
+									{
+										Type: schema.Int64,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	parquetSchema := parquet.NewSchema("test", parquet.Group{
+		"foo": parquet.String(),
+		"bar": parquet.Group{
+			"a": parquet.Optional(parquet.Int(64)),
+			"b": parquet.Optional(parquet.Leaf(parquet.BooleanType)),
+			"c": parquet.Optional(parquet.Leaf(parquet.DoubleType)),
+		},
+		"baz": parquet.Repeated(parquet.Group{
+			"nested": parquet.Repeated(parquet.Int(64)),
+		}),
+	})
+
+	inBatch[0].MetaSetMut("foobar", commonSchema.ToAny())
+
+	reader, err := newParquetEncodeProcessor(nil, nil, "foobar", &parquet.Uncompressed)
+	require.NoError(t, err)
+
+	readerResBatches, err := reader.ProcessBatch(t.Context(), inBatch)
+	require.NoError(t, err)
+
+	require.Len(t, readerResBatches, 1)
+	require.Len(t, readerResBatches[0], 1)
+
+	pqDataBytes, err := readerResBatches[0][0].AsBytes()
+	require.NoError(t, err)
+
+	pRdr := parquet.NewGenericReader[any](bytes.NewReader(pqDataBytes), parquetSchema)
+	require.NoError(t, err)
+
+	var outRows []any
+	for {
+		outRowsTmp := make([]any, 1)
+		n, err := pRdr.Read(outRowsTmp)
+		if !errors.Is(err, io.EOF) {
+			require.NoError(t, err)
+		}
+		if n == 0 {
+			if err != nil {
+				require.ErrorIs(t, err, io.EOF)
+			}
+			break
+		}
+		outRows = append(outRows, outRowsTmp[0])
+	}
+	require.NoError(t, pRdr.Close())
+
+	expectedBytes, err := json.Marshal(expected)
+	require.NoError(t, err)
+	actualBytes, err := json.Marshal(outRows)
+	require.NoError(t, err)
+
+	assert.JSONEq(t, string(expectedBytes), string(actualBytes))
+}
+
+func TestParquetEncodeProcessorConfigLinting(t *testing.T) {
+	configTests := []struct {
+		name        string
+		config      string
+		errContains string
+	}{
+		{
+			name: "no schema or schema metadata",
+			config: `
+parquet_encode: {}
+`,
+			errContains: "either a schema or schema_metadata must be specified",
+		},
+		{
+			name: "no schema",
+			config: `
+parquet_encode:
+  schema_metadata: foo
+`,
+		},
+		{
+			name: "no schema_metadata",
+			config: `
+parquet_encode:
+  schema:
+    - name: foo
+      type: INT64
+`,
+		},
+	}
+
+	env := service.NewEnvironment()
+	for _, test := range configTests {
+		t.Run(test.name, func(t *testing.T) {
+			strm := env.NewStreamBuilder()
+			err := strm.AddProcessorYAML(test.config)
+			if test.errContains == "" {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), test.errContains)
+			}
+		})
+	}
 }

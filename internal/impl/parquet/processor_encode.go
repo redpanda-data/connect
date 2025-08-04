@@ -17,11 +17,13 @@ package parquet
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/parquet-go/parquet-go"
 	"github.com/parquet-go/parquet-go/compress"
 
+	"github.com/redpanda-data/benthos/v4/public/schema"
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
@@ -30,19 +32,24 @@ func parquetEncodeProcessorConfig() *service.ConfigSpec {
 		// Stable(). TODO
 		Categories("Parsing").
 		Summary("Encodes https://parquet.apache.org/docs/[Parquet files^] from a batch of structured messages.").
-		Field(parquetSchemaConfig()).
-		Field(service.NewStringEnumField("default_compression",
-			"uncompressed", "snappy", "gzip", "brotli", "zstd", "lz4raw",
+		Fields(
+			parquetSchemaConfig().Optional(),
+			service.NewStringField("schema_metadata").
+				Description("Optionally specify a metadata field containing a schema definition to use for encoding instead of a statically defined schema. For batches of messages, the first message's schema will be applied to all subsequent messages of the batch.").
+				Default(""),
+			service.NewStringEnumField("default_compression",
+				"uncompressed", "snappy", "gzip", "brotli", "zstd", "lz4raw",
+			).
+				Description("The default compression type to use for fields.").
+				Default("uncompressed"),
+			service.NewStringEnumField("default_encoding",
+				"DELTA_LENGTH_BYTE_ARRAY", "PLAIN",
+			).
+				Description("The default encoding type to use for fields. A custom default encoding is only necessary when consuming data with libraries that do not support `DELTA_LENGTH_BYTE_ARRAY` and is therefore best left unset where possible.").
+				Default("DELTA_LENGTH_BYTE_ARRAY").
+				Advanced().
+				Version("4.11.0"),
 		).
-			Description("The default compression type to use for fields.").
-			Default("uncompressed")).
-		Field(service.NewStringEnumField("default_encoding",
-			"DELTA_LENGTH_BYTE_ARRAY", "PLAIN",
-		).
-			Description("The default encoding type to use for fields. A custom default encoding is only necessary when consuming data with libraries that do not support `DELTA_LENGTH_BYTE_ARRAY` and is therefore best left unset where possible.").
-			Default("DELTA_LENGTH_BYTE_ARRAY").
-			Advanced().
-			Version("4.11.0")).
 		Description(`
 This processor uses https://github.com/parquet-go/parquet-go[https://github.com/parquet-go/parquet-go^], which is itself experimental. Therefore changes could be made into how this processor functions outside of major version releases.
 `).
@@ -68,7 +75,8 @@ output:
               - name: content
                 type: BYTE_ARRAY
             default_compression: zstd
-`)
+`).
+		LintRule(`root = if this.schema.or([]).length() == 0 && this.schema_metadata.or("") == "" { "either a schema or schema_metadata must be specified" }`)
 }
 
 func init() {
@@ -147,7 +155,7 @@ func parquetGroupFromConfig(columnConfs []*service.ParsedConfig, encodingFn enco
 			case "UTF8":
 				n = parquet.String()
 			case "TIMESTAMP":
-				// TODO: add field to specify timestamp unit
+				// TODO: add field to specify timestamp unit (https://github.com/redpanda-data/connect/issues/3570)
 				n = parquet.Timestamp(parquet.Nanosecond)
 			case "BSON":
 				n = parquet.BSON()
@@ -185,29 +193,41 @@ func parquetGroupFromConfig(columnConfs []*service.ParsedConfig, encodingFn enco
 //------------------------------------------------------------------------------
 
 func newParquetEncodeProcessorFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*parquetEncodeProcessor, error) {
-	schemaConfs, err := conf.FieldObjectList("schema")
+	var schema *parquet.Schema
+	if conf.Contains("schema") {
+		schemaConfs, err := conf.FieldObjectList("schema")
+		if err != nil {
+			return nil, err
+		}
+
+		customEncoding, err := conf.FieldString("default_encoding")
+		if err != nil {
+			return nil, err
+		}
+		var encoding encodingFn
+		switch customEncoding {
+		case "PLAIN":
+			encoding = plainEncodingFn
+		default:
+			encoding = defaultEncodingFn
+		}
+
+		node, err := parquetGroupFromConfig(schemaConfs, encoding)
+		if err != nil {
+			return nil, err
+		}
+		schema = parquet.NewSchema("", node)
+	}
+
+	schemaMeta, err := conf.FieldString("schema_metadata")
 	if err != nil {
 		return nil, err
 	}
 
-	customEncoding, err := conf.FieldString("default_encoding")
-	if err != nil {
-		return nil, err
-	}
-	var encoding encodingFn
-	switch customEncoding {
-	case "PLAIN":
-		encoding = plainEncodingFn
-	default:
-		encoding = defaultEncodingFn
+	if schemaMeta == "" && schema == nil {
+		return nil, errors.New("either a schema or schema_metadata must be specified")
 	}
 
-	node, err := parquetGroupFromConfig(schemaConfs, encoding)
-	if err != nil {
-		return nil, err
-	}
-
-	schema := parquet.NewSchema("", node)
 	compressStr, err := conf.FieldString("default_compression")
 	if err != nil {
 		return nil, err
@@ -230,19 +250,21 @@ func newParquetEncodeProcessorFromConfig(conf *service.ParsedConfig, logger *ser
 	default:
 		return nil, fmt.Errorf("default_compression type %v not recognised", compressStr)
 	}
-	return newParquetEncodeProcessor(logger, schema, compressDefault)
+	return newParquetEncodeProcessor(logger, schema, schemaMeta, compressDefault)
 }
 
 type parquetEncodeProcessor struct {
 	logger          *service.Logger
 	schema          *parquet.Schema
+	schemaMeta      string
 	compressionType compress.Codec
 }
 
-func newParquetEncodeProcessor(logger *service.Logger, schema *parquet.Schema, compressionType compress.Codec) (*parquetEncodeProcessor, error) {
+func newParquetEncodeProcessor(logger *service.Logger, schema *parquet.Schema, schemaMeta string, compressionType compress.Codec) (*parquetEncodeProcessor, error) {
 	s := &parquetEncodeProcessor{
 		logger:          logger,
 		schema:          schema,
+		schemaMeta:      schemaMeta,
 		compressionType: compressionType,
 	}
 	return s, nil
@@ -275,8 +297,21 @@ func (s *parquetEncodeProcessor) ProcessBatch(_ context.Context, batch service.M
 		return nil, nil
 	}
 
+	schema := s.schema
+	if s.schemaMeta != "" {
+		metaAny, exists := batch[0].MetaGetMut(s.schemaMeta)
+		if !exists {
+			return nil, fmt.Errorf("schema_metadata '%v' specified but field was missing from input data", s.schemaMeta)
+		}
+
+		var err error
+		if schema, err = parquetSchemaFromCommon(metaAny); err != nil {
+			return nil, err
+		}
+	}
+
 	buf := bytes.NewBuffer(nil)
-	pWtr := parquet.NewGenericWriter[any](buf, s.schema, parquet.Compression(s.compressionType))
+	pWtr := parquet.NewGenericWriter[any](buf, schema, parquet.Compression(s.compressionType))
 
 	batch = batch.Copy()
 	rows := make([]any, len(batch))
@@ -291,7 +326,7 @@ func (s *parquetEncodeProcessor) ProcessBatch(_ context.Context, batch service.M
 			return nil, fmt.Errorf("unable to encode message type %T as parquet row", ms)
 		}
 
-		rows[i], err = visitWithSchema(encodingCoercionVisitor{}, rows[i], s.schema)
+		rows[i], err = visitWithSchema(encodingCoercionVisitor{}, rows[i], schema)
 		if err != nil {
 			return nil, fmt.Errorf("coercing logical types: %w", err)
 		}
@@ -311,4 +346,93 @@ func (s *parquetEncodeProcessor) ProcessBatch(_ context.Context, batch service.M
 
 func (*parquetEncodeProcessor) Close(context.Context) error {
 	return nil
+}
+
+func parquetNodeFromCommonField(field schema.Common) (parquet.Node, error) {
+	var n parquet.Node
+
+	switch field.Type {
+	case schema.Boolean:
+		n = parquet.Leaf(parquet.BooleanType)
+	case schema.Int32:
+		n = parquet.Int(32)
+	case schema.Int64:
+		n = parquet.Int(64)
+	case schema.Float32:
+		n = parquet.Leaf(parquet.FloatType)
+	case schema.Float64:
+		n = parquet.Leaf(parquet.DoubleType)
+	case schema.String:
+		n = parquet.String()
+	case schema.Timestamp:
+		// TODO: add field to specify timestamp unit (https://github.com/redpanda-data/connect/issues/3570)
+		n = parquet.Timestamp(parquet.Nanosecond)
+	case schema.ByteArray:
+		n = parquet.Leaf(parquet.ByteArrayType)
+	case schema.Array:
+		if len(field.Children) != 1 {
+			return nil, fmt.Errorf("source schema contains array '%v' that does not define a child type", field.Name)
+		}
+
+		var err error
+		if n, err = parquetNodeFromCommonField(field.Children[0]); err != nil {
+			return nil, err
+		}
+		n = parquet.Repeated(n)
+
+	case schema.Object:
+		if len(field.Children) == 0 {
+			return nil, fmt.Errorf("source schema contains object '%v' that contains zero children", field.Name)
+		}
+
+		var err error
+		if n, err = parquetGroupFromCommonFields(field.Children); err != nil {
+			return nil, err
+		}
+
+	default:
+		return nil, fmt.Errorf("source schema contains field '%v' of type '%v' that is not supported by this processor", field.Name, field.Type)
+	}
+
+	if field.Type != schema.Array && field.Optional {
+		n = parquet.Optional(n)
+	}
+
+	return n, nil
+}
+
+func parquetGroupFromCommonFields(fields []schema.Common) (parquet.Group, error) {
+	g := parquet.Group{}
+
+	for _, f := range fields {
+		n, err := parquetNodeFromCommonField(f)
+		if err != nil {
+			return nil, err
+		}
+		g[f.Name] = n
+	}
+
+	return g, nil
+}
+
+func parquetSchemaFromCommon(a any) (*parquet.Schema, error) {
+	commonSchema, err := schema.ParseFromAny(a)
+	if err != nil {
+		return nil, err
+	}
+
+	if commonSchema.Type != schema.Object {
+		return nil, fmt.Errorf("source schema must be an object at the root, got %v", commonSchema.Type)
+	}
+
+	if len(commonSchema.Children) == 0 {
+		return nil, fmt.Errorf("source schema must have at least one field, got %v", len(commonSchema.Children))
+	}
+
+	groupNode, err := parquetGroupFromCommonFields(commonSchema.Children)
+	if err != nil {
+		return nil, err
+	}
+
+	return parquet.NewSchema("", groupNode), nil
 }
