@@ -155,7 +155,7 @@ func parquetGroupFromConfig(columnConfs []*service.ParsedConfig, encodingFn enco
 			case "UTF8":
 				n = parquet.String()
 			case "TIMESTAMP":
-				// TODO: add field to specify timestamp unit
+				// TODO: add field to specify timestamp unit (https://github.com/redpanda-data/connect/issues/3570)
 				n = parquet.Timestamp(parquet.Nanosecond)
 			case "BSON":
 				n = parquet.BSON()
@@ -365,7 +365,7 @@ func parquetNodeFromCommonField(field schema.Common) (parquet.Node, error) {
 	case schema.String:
 		n = parquet.String()
 	case schema.Timestamp:
-		// TODO: add field to specify timestamp unit
+		// TODO: add field to specify timestamp unit (https://github.com/redpanda-data/connect/issues/3570)
 		n = parquet.Timestamp(parquet.Nanosecond)
 	case schema.ByteArray:
 		n = parquet.Leaf(parquet.ByteArrayType)
