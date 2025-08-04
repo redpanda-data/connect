@@ -15,7 +15,6 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"net/url"
 	"path/filepath"
@@ -47,18 +46,11 @@ func newUploader(fileLocationInfo fileLocationInfo) (uploader, error) {
 		awsKeyID := creds["AWS_KEY_ID"]
 		awsSecretKey := creds["AWS_SECRET_KEY"]
 		awsToken := creds["AWS_TOKEN"]
-		// TODO: Handle regional URLs
-		if fileLocationInfo.UseS3RegionalURL {
-			return nil, errors.New("S3 Regional URLs are not supported")
-		}
-		// TODO: Handle EndPoint, the Java SDK says this is only for Azure, but
-		// that doesn't seem to be the case from reading the Java JDBC driver,
-		// the Golang driver says this is used for FIPS in GovCloud.
-		if fileLocationInfo.EndPoint != "" {
-			return nil, errors.New("custom S3 endpoint is not supported")
-		}
+		endpoint := buildS3Endpoint(fileLocationInfo)
+
 		client := s3.New(s3.Options{
-			Region: fileLocationInfo.Region,
+			Region:       fileLocationInfo.Region,
+			BaseEndpoint: endpoint,
 			Credentials: credentials.NewStaticCredentialsProvider(
 				awsKeyID,
 				awsSecretKey,
@@ -193,6 +185,20 @@ func splitBucketAndPath(stageLocation string) (string, string, error) {
 		return "", "", fmt.Errorf("unexpected stage location: %s", stageLocation)
 	}
 	return bucketAndPath[0], bucketAndPath[1], nil
+}
+
+func buildS3Endpoint(info fileLocationInfo) *string {
+	var endpoint *string
+	if info.EndPoint != "" {
+		endpoint = aws.String("https://" + info.EndPoint)
+	} else if info.UseS3RegionalURL && info.Region != "" {
+		domainSuffixForRegionalURL := "amazonaws.com"
+		if strings.HasPrefix(strings.ToLower(info.Region), "cn-") {
+			domainSuffixForRegionalURL = "amazonaws.com.cn"
+		}
+		endpoint = aws.String(fmt.Sprintf("https://s3.%s.%s", info.Region, domainSuffixForRegionalURL))
+	}
+	return endpoint
 }
 
 type (
