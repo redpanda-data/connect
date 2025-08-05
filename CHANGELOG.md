@@ -11,6 +11,11 @@ All notable changes to this project will be documented in this file.
 - Field `schema_metadata` added to the `parquet_encode` processor. (@Jeffail)
 - (Benthos) Added TLS support to the input and output `socket` components. (@eadwright)
 - (Benthos) New Bloblang method `infer_schema`. (@Jeffail)
+- Custom s3 endpoints support in `snowflake_streaming` output. (@josephwoodward)
+
+### Fixed
+
+- `nats_jetstream` output detects disconnects from NATS JetStream server. (@josephwoodward)
 
 ## 4.61.0 - 2025-07-18
 
@@ -22,9 +27,6 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Fixed an issue with the `schema_registry` output where schemas with the same ID weren't successfully associated with multiple subjects when `translate_ids` was set to `false`. (@mihaitodor)
-
-### Fixed
-
 - Fixed an issue where NATS JetStream input fails to handle a closed NATS connection. (@josephwoodward)
 
 ## 4.60.2 - 2025-07-14
