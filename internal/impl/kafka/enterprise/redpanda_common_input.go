@@ -31,6 +31,7 @@ func redpandaCommonInputConfig() *service.ConfigSpec {
 				kafka.FranzReaderOrderedConfigFields(),
 				[]*service.ConfigField{
 					service.NewAutoRetryNacksToggleField(),
+					service.NewForceTimelyNacksField(),
 				},
 			)...,
 		).
@@ -101,7 +102,8 @@ func init() {
 				return nil, err
 			}
 
-			rdr, err := kafka.NewFranzReaderOrderedFromConfig(conf, mgr, func() (clientOpts []kgo.Opt, err error) {
+			var rdr service.BatchInput
+			if rdr, err = kafka.NewFranzReaderOrderedFromConfig(conf, mgr, func() (clientOpts []kgo.Opt, err error) {
 				// Make multiple attempts here just to allow the redpanda logger
 				// to initialise in the background. Otherwise we get an annoying
 				// log.
@@ -116,11 +118,18 @@ func init() {
 					time.Sleep(time.Millisecond * 100)
 				}
 				return
-			})
-			if err != nil {
+			}); err != nil {
 				return nil, err
 			}
 
-			return service.AutoRetryNacksBatchedToggled(conf, rdr)
+			if rdr, err = service.AutoRetryNacksBatchedToggled(conf, rdr); err != nil {
+				return nil, err
+			}
+
+			if rdr, err = service.ForceTimelyNacksBatched(conf, rdr); err != nil {
+				return nil, err
+			}
+
+			return rdr, nil
 		})
 }
