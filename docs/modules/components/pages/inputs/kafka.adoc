@@ -79,6 +79,7 @@ input:
     start_from_oldest: true
     checkpoint_limit: 1024
     auto_replay_nacks: true
+    timely_nacks_maximum_wait: "" # No default (optional)
     commit_period: 1s
     max_processing_period: 100ms
     extract_tracing_map: root = @ # No default (optional)
@@ -525,6 +526,14 @@ Whether messages that are rejected (nacked) at the output level should be automa
 *Type*: `bool`
 
 *Default*: `true`
+
+=== `timely_nacks_maximum_wait`
+
+EXPERIMENTAL: Specify a maximum period of time in which each message can be consumed and awaiting either acknowledgement or rejection before rejection is instead forced. This can be useful for avoiding situations where certain downstream components can result in blocked confirmation of delivery that exceeds SLAs.
+
+
+*Type*: `string`
+
 
 === `commit_period`
 

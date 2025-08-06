@@ -95,6 +95,7 @@ input:
       processors: [] # No default (optional)
     topic_lag_refresh_period: 5s
     auto_replay_nacks: true
+    timely_nacks_maximum_wait: "" # No default (optional)
 ```
 
 --
@@ -839,5 +840,13 @@ Whether messages that are rejected (nacked) at the output level should be automa
 *Type*: `bool`
 
 *Default*: `true`
+
+=== `timely_nacks_maximum_wait`
+
+EXPERIMENTAL: Specify a maximum period of time in which each message can be consumed and awaiting either acknowledgement or rejection before rejection is instead forced. This can be useful for avoiding situations where certain downstream components can result in blocked confirmation of delivery that exceeds SLAs.
+
+
+*Type*: `string`
+
 
 
