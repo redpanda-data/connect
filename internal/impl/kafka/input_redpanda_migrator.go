@@ -80,6 +80,7 @@ func redpandaMigratorInputConfigFields() []*service.ConfigField {
 		FranzReaderOrderedConfigFields(),
 		[]*service.ConfigField{
 			service.NewAutoRetryNacksToggleField(),
+			service.NewForceTimelyNacksField(),
 
 			// Deprecated fields
 			service.NewStringField(rmiFieldOutputResource).
@@ -130,7 +131,7 @@ func init() {
 				clientLabel = rmiResourceDefaultLabel
 			}
 
-			rdr, err := NewFranzReaderOrderedFromConfig(conf, mgr,
+			fr, err := NewFranzReaderOrderedFromConfig(conf, mgr,
 				func() ([]kgo.Opt, error) {
 					return clientOpts, nil
 				})
@@ -138,11 +139,20 @@ func init() {
 				return nil, err
 			}
 
-			return service.AutoRetryNacksBatchedToggled(conf, &redpandaMigratorInput{
-				FranzReaderOrdered: rdr,
+			var rdr service.BatchInput
+			if rdr, err = service.AutoRetryNacksBatchedToggled(conf, &redpandaMigratorInput{
+				FranzReaderOrdered: fr,
 				clientLabel:        clientLabel,
 				mgr:                mgr,
-			})
+			}); err != nil {
+				return nil, err
+			}
+
+			if rdr, err = service.ForceTimelyNacksBatched(conf, rdr); err != nil {
+				return nil, err
+			}
+
+			return rdr, nil
 		})
 }
 

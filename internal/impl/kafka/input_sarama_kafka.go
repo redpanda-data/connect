@@ -137,6 +137,7 @@ Unfortunately this error message will appear for a wide range of connection prob
 				Description("The maximum number of messages of the same topic and partition that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level to work on individual partitions. Any given offset will not be committed unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
 				Version("3.33.0").Default(1024),
 			service.NewAutoRetryNacksToggleField(),
+			service.NewForceTimelyNacksField(),
 			service.NewDurationField(iskFieldCommitPeriod).
 				Description("The period of time between each commit of the current partition offsets. Offsets are always committed during shutdown.").
 				Advanced().Default("1s"),
@@ -168,18 +169,20 @@ Unfortunately this error message will appear for a wide range of connection prob
 }
 
 func init() {
-	service.MustRegisterBatchInput("kafka", iskConfigSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
-		i, err := newKafkaReaderFromParsed(conf, mgr)
-		if err != nil {
-			return nil, err
+	service.MustRegisterBatchInput("kafka", iskConfigSpec(), func(conf *service.ParsedConfig, mgr *service.Resources) (rdr service.BatchInput, err error) {
+		if rdr, err = newKafkaReaderFromParsed(conf, mgr); err != nil {
+			return
 		}
 
-		r, err := service.AutoRetryNacksBatchedToggled(conf, i)
-		if err != nil {
-			return nil, err
+		if rdr, err = service.AutoRetryNacksBatchedToggled(conf, rdr); err != nil {
+			return
 		}
 
-		return conf.WrapBatchInputExtractTracingSpanMapping("kafka", r)
+		if rdr, err = service.ForceTimelyNacksBatched(conf, rdr); err != nil {
+			return
+		}
+
+		return conf.WrapBatchInputExtractTracingSpanMapping("kafka", rdr)
 	})
 }
 
