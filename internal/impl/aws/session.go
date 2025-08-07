@@ -16,6 +16,7 @@ package aws
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -78,5 +79,20 @@ func GetSession(ctx context.Context, parsedConf *service.ParsedConfig, opts ...f
 	if useEC2, _ := credsConf.FieldBool("from_ec2_role"); useEC2 {
 		conf.Credentials = aws.NewCredentialsCache(ec2rolecreds.New())
 	}
+
+	if parsedConf.Contains("tls") {
+		tlsConf, tlsEnabled, err := parsedConf.FieldTLSToggled("tls")
+		if err != nil {
+			return conf, err
+		}
+		if tlsEnabled {
+			customTransport := http.DefaultTransport.(*http.Transport).Clone()
+			customTransport.TLSClientConfig = tlsConf
+			conf.HTTPClient = &http.Client{
+				Transport: customTransport,
+			}
+		}
+	}
+
 	return conf, nil
 }
