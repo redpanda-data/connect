@@ -91,6 +91,11 @@ func NewGlobalRedpandaManager(id string) *GlobalRedpandaManager {
 	return t
 }
 
+// SetTopicLoggerLevel sets the level of the topic logger.
+func (l *GlobalRedpandaManager) SetTopicLoggerLevel(lvl *slog.Level) {
+	l.topicLogger.level.Store(lvl)
+}
+
 // SetFallbackLogger configures a fallback logger.
 func (l *GlobalRedpandaManager) SetFallbackLogger(fLogger *service.Logger) {
 	l.fallbackLogger = fLogger
@@ -119,7 +124,7 @@ func (l *GlobalRedpandaManager) SlogHandler() slog.Handler {
 // status emitter, not for the shared redpanda common components.
 //
 // This should always be called before any configuration based initialisation.
-func (l *GlobalRedpandaManager) InitWithCustomDetails(pipelineID, logsTopic, statusTopic string, connDetails *kafka.FranzConnectionDetails) error {
+func (l *GlobalRedpandaManager) InitWithCustomDetails(pipelineID, logsTopic, statusTopic string, connDetails *kafka.FranzConnectionDetails, defaultLevel slog.Level) error {
 	connDetails.Logger = l.fallbackLogger
 
 	w, err := newTopicLoggerWriterFromExplicit(l.fallbackLogger, connDetails)
@@ -140,7 +145,7 @@ func (l *GlobalRedpandaManager) InitWithCustomDetails(pipelineID, logsTopic, sta
 	}
 
 	l.oCustom = tmpO
-	l.topicLogger.InitWithOutput(pipelineID, logsTopic, slog.LevelInfo, l.oCustom)
+	l.topicLogger.InitWithOutput(pipelineID, logsTopic, defaultLevel, l.oCustom)
 	l.statusEmitter.InitWithOutput(pipelineID, statusTopic, l.fallbackLogger, l.oCustom)
 
 	return nil
