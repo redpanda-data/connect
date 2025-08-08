@@ -203,7 +203,7 @@ max_message_bytes: 1MB
 	cd, err := kafka.FranzConnectionDetailsFromConfig(pConf, conf.Resources().Logger())
 	require.NoError(t, err)
 
-	require.NoError(t, gmgr.InitWithCustomDetails("meowcustom", logsTopicOverride, statusTopicOverride, cd))
+	require.NoError(t, gmgr.InitWithCustomDetails("meowcustom", logsTopicOverride, statusTopicOverride, cd, slog.LevelInfo))
 	require.NoError(t, gmgr.InitFromParsedConfig(conf))
 
 	inputLogs := 10
