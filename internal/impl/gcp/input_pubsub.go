@@ -17,6 +17,7 @@ package gcp
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -233,6 +234,20 @@ func (c *gcpPubSubReader) Connect(context.Context) error {
 	}
 
 	sub := c.client.Subscription(c.conf.SubscriptionID)
+
+	subExists, err := sub.Exists(context.Background())
+	if err != nil {
+		return service.NewErrBackOff(
+			fmt.Errorf("could not check whether subscription %q exists: %w",
+				c.conf.SubscriptionID, err),
+			5*time.Second)
+	}
+	if !subExists {
+		return service.NewErrBackOff(
+			fmt.Errorf("subscription %q does not exist", c.conf.SubscriptionID),
+			5*time.Second)
+	}
+
 	sub.ReceiveSettings.MaxOutstandingMessages = c.conf.MaxOutstandingMessages
 	sub.ReceiveSettings.MaxOutstandingBytes = c.conf.MaxOutstandingBytes
 	sub.ReceiveSettings.Synchronous = c.conf.Sync
