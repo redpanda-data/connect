@@ -232,7 +232,7 @@ const CompatibilityLevelUnknown = sr.CompatibilityLevel(0)
 // GetCompatibilityLevel returns the compatibility level of the given subjects.
 //
 // If the client could not query the compatibility level for a subject (i.e. due
-// to a network error) the subject is associated with the
+// to a network error), the subject is associated with the
 // CompatibilityLevelUnknown value.
 //
 // The order of the returned values is the same as the order of the given
