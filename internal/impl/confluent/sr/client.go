@@ -253,7 +253,7 @@ func (c *Client) GetCompatibilityLevel(ctx context.Context, subject ...string) [
 }
 
 // UpdateCompatibilityLevel updates the compatibility level of a subject if it
-// differs from the given `level`. If the `level` is `CompatibilityLevelUnknown`
+// differs from the given `level`. If the `level` is `CompatibilityLevelUnknown`,
 // no update is performed.
 func (c *Client) UpdateCompatibilityLevel(ctx context.Context, subject string, level sr.CompatibilityLevel) error {
 	if level == CompatibilityLevelUnknown {
