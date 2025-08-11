@@ -205,6 +205,7 @@ them individually via `go test -run "^Test.*Integration.*$" ./internal/impl/<con
 [getting-started]: https://docs.redpanda.com/redpanda-connect/guides/getting_started
 
 [godoc-badge]: https://pkg.go.dev/badge/github.com/redpanda-data/benthos/v4/public
+[godoc-url]: https://pkg.go.dev/github.com/redpanda-data/benthos/v4/public
 [godoc-url-apache]: https://pkg.go.dev/github.com/redpanda-data/connect/public/bundle/free/v4
 [godoc-url-enterprise]: https://pkg.go.dev/github.com/redpanda-data/connect/public/bundle/enterprise/v4
 [actions-badge]: https://github.com/redpanda-data/connect/actions/workflows/test.yml/badge.svg

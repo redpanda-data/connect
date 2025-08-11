@@ -121,8 +121,8 @@ func (s *schemaRegistryEncoder) getAvroEncoder(ctx context.Context, schema franz
 	}, nil
 }
 
-func (s *schemaRegistryDecoder) getGoAvroDecoder(ctx context.Context, schema franz_sr.Schema) (schemaDecoder, error) {
-	schemaSpec, err := resolveGoAvroReferences(ctx, s.client, s.cfg.avro.mapping, schema)
+func (s *schemaRegistryDecoder) getGoAvroDecoder(ctx context.Context, aschema franz_sr.Schema) (schemaDecoder, error) {
+	schemaSpec, err := resolveGoAvroReferences(ctx, s.client, s.cfg.avro.mapping, aschema)
 	if err != nil {
 		return nil, err
 	}
@@ -135,6 +135,15 @@ func (s *schemaRegistryDecoder) getGoAvroDecoder(ctx context.Context, schema fra
 	}
 	if err != nil {
 		return nil, err
+	}
+
+	var commonSchema any
+	if s.cfg.avro.storeSchemaMeta != "" {
+		if commonSchema, err = ecsAvroFromBytes(ecsAvroConfig{
+			rawUnion: s.cfg.avro.rawUnions,
+		}, []byte(schemaSpec)); err != nil {
+			s.logger.With("error", err).Error("Failed to extract common schema for meta storage")
+		}
 	}
 
 	decoder := func(m *service.Message) error {
@@ -154,6 +163,9 @@ func (s *schemaRegistryDecoder) getGoAvroDecoder(ctx context.Context, schema fra
 		}
 		m.SetBytes(jb)
 
+		if commonSchema != nil {
+			m.MetaSetMut(s.cfg.avro.storeSchemaMeta, commonSchema)
+		}
 		return nil
 	}
 

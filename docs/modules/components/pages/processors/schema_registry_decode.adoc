@@ -40,6 +40,7 @@ schema_registry_decode:
     raw_unions: false # No default (optional)
     preserve_logical_types: false
     translate_kafka_connect_types: false
+    store_schema_metadata: "" # No default (optional)
   protobuf:
     use_proto_names: false
     use_enum_numbers: false
@@ -77,6 +78,7 @@ schema_registry_decode:
         }
       }
       root = this.apply("debeziumTimestampToAvroTimestamp")
+    store_schema_metadata: "" # No default (optional)
   protobuf:
     use_proto_names: false
     use_enum_numbers: false
@@ -258,6 +260,14 @@ mapping: |2
   }
   root = this.apply("debeziumTimestampToAvroTimestamp")
 ```
+
+=== `avro.store_schema_metadata`
+
+Optionally store the schema used to decode messages as a metadata field under the given name. This field can later be referenced in other components such as a `parquet_encode` processor in order to automatically infer their schema.
+
+
+*Type*: `string`
+
 
 === `protobuf`
 

@@ -152,6 +152,9 @@ map debeziumTimestampToAvroTimestamp {
 }
 root = this.apply("debeziumTimestampToAvroTimestamp")
 `),
+				service.NewStringField("store_schema_metadata").
+					Description("Optionally store the schema used to decode messages as a metadata field under the given name. This field can later be referenced in other components such as a `parquet_encode` processor in order to automatically infer their schema.").
+					Optional(),
 			).Description("Configuration for how to decode schemas that are of type AVRO."),
 		).
 		Fields(
@@ -201,6 +204,7 @@ type decodingConfig struct {
 		rawUnions                  bool
 		translateKafkaConnectTypes bool
 		mapping                    *bloblang.Executor
+		storeSchemaMeta            string
 	}
 	protobuf struct {
 		useProtoNames     bool
@@ -259,6 +263,11 @@ func newSchemaRegistryDecoderFromConfig(conf *service.ParsedConfig, mgr *service
 	if conf.Contains("avro", "mapping") {
 		cfg.avro.mapping, err = conf.FieldBloblang("avro", "mapping")
 		if err != nil {
+			return nil, err
+		}
+	}
+	if conf.Contains("avro", "store_schema_metadata") {
+		if cfg.avro.storeSchemaMeta, err = conf.FieldString("avro", "store_schema_metadata"); err != nil {
 			return nil, err
 		}
 	}

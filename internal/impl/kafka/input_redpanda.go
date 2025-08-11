@@ -92,6 +92,7 @@ func redpandaInputConfigFields() []*service.ConfigField {
 		FranzReaderOrderedConfigFields(),
 		[]*service.ConfigField{
 			service.NewAutoRetryNacksToggleField(),
+			service.NewForceTimelyNacksField(),
 		},
 	)
 }
@@ -110,13 +111,21 @@ func init() {
 			}
 			clientOpts = append(clientOpts, tmpOpts...)
 
-			rdr, err := NewFranzReaderOrderedFromConfig(conf, mgr, func() ([]kgo.Opt, error) {
+			var rdr service.BatchInput
+			if rdr, err = NewFranzReaderOrderedFromConfig(conf, mgr, func() ([]kgo.Opt, error) {
 				return clientOpts, nil
-			})
-			if err != nil {
+			}); err != nil {
 				return nil, err
 			}
 
-			return service.AutoRetryNacksBatchedToggled(conf, rdr)
+			if rdr, err = service.AutoRetryNacksBatchedToggled(conf, rdr); err != nil {
+				return nil, err
+			}
+
+			if rdr, err = service.ForceTimelyNacksBatched(conf, rdr); err != nil {
+				return nil, err
+			}
+
+			return rdr, nil
 		})
 }

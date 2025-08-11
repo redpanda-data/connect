@@ -14,6 +14,7 @@ import (
 	"log/slog"
 	"os"
 	"slices"
+	"strings"
 
 	"github.com/rs/xid"
 	"github.com/urfave/cli/v2"
@@ -102,6 +103,29 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 			// Kick off license service, it's important we do this before chroot and telemetry
 			license.RegisterService(pConf.Resources(), licenseConfig)
 
+			// Now we've parsed config, ensure preconfigured topic logger level matches logger.level
+			cfg := pConf.Namespace("logger")
+			logsLevelStr, err := cfg.FieldString("level")
+			if err != nil {
+				fbLogger.Errorf("Failed reading log level from config: %v", err)
+			}
+
+			var logsLevel slog.Level
+			switch strings.ToLower(logsLevelStr) {
+			case "debug":
+				logsLevel = slog.LevelDebug
+			case "info":
+				logsLevel = slog.LevelInfo
+			case "warn":
+				logsLevel = slog.LevelWarn
+			case "error":
+				logsLevel = slog.LevelError
+			default:
+				fbLogger.Errorf("Log level '%s' not recognized, using to default level %s", logsLevelStr, logsLevel)
+			}
+
+			rpMgr.SetTopicLoggerLevel(&logsLevel)
+
 			// Chroot if needed
 			if chrootPath != "" {
 				fbLogger.Infof("Chrooting to '%v'", chrootPath)
@@ -164,7 +188,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 				rpMgr.SetFallbackLogger(service.NewLoggerFromSlog(slog.Default()))
 
 				if pipelineID != "" && connDetails != nil {
-					if err = rpMgr.InitWithCustomDetails(pipelineID, logsTopic, statusTopic, connDetails); err != nil {
+					if err = rpMgr.InitWithCustomDetails(pipelineID, logsTopic, statusTopic, connDetails, slog.LevelInfo); err != nil {
 						return err
 					}
 				}

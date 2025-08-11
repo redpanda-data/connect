@@ -54,7 +54,7 @@ This processor adds the following metadata fields to each message:
 
 ```text
 - retry_count - The number of retry attempts.
-- backoff_duration - The total time elapsed while performing retries.
+- backoff_duration - The total time (in nanoseconds) elapsed while performing retries.
 ```
 
 [CAUTION]
