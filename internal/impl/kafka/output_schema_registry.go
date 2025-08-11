@@ -347,7 +347,7 @@ func (o *schemaRegistryOutput) GetDestinationSchemaID(ctx context.Context, id in
 	// source Schema Registry. Each call should return the same destination schema ID.
 	var destinationID int
 	for _, subject := range schemaSubjects {
-		// Update compatibility level for the subject before creating the schema.		// the schema
+		// Update compatibility level for the subject before creating the schema.
 		compatLevels := o.inputClient.GetCompatibilityLevel(ctx, subject)
 		if len(compatLevels) > 0 && compatLevels[0] != sr.CompatibilityLevelUnknown {
 			if err := o.maybeUpdateCompatibilityLevel(ctx, subject, compatLevels[0]); err != nil {
