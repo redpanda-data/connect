@@ -107,7 +107,7 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 			cfg := pConf.Namespace("logger")
 			logsLevelStr, err := cfg.FieldString("level")
 			if err != nil {
-				fbLogger.Errorf("Failed reading logging level from config: %v", err)
+				fbLogger.Errorf("Failed reading log level from config: %v", err)
 			}
 
 			var logsLevel slog.Level
@@ -121,8 +121,9 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 			case "error":
 				logsLevel = slog.LevelError
 			default:
-				return fmt.Errorf("log level not recognized: %v", logsLevelStr)
+				fbLogger.Errorf("Log level '%s' not recognized, using to default level %s", logsLevelStr, logsLevel)
 			}
+
 			rpMgr.SetTopicLoggerLevel(&logsLevel)
 
 			// Chroot if needed
