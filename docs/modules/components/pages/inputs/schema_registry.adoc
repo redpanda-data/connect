@@ -92,6 +92,7 @@ This input adds the following metadata fields to each message:
 
 ```text
 - schema_registry_subject
+- schema_registry_subject_compatibility_level
 - schema_registry_version
 ```
 

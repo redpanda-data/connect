@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - (Benthos) New Bloblang method `infer_schema`. (@Jeffail)
 - Custom s3 endpoints support in `snowflake_streaming` output. (@josephwoodward)
 - Experimental field `timely_nacks_maximum_wait` added to all kafka protocol inputs. (@Jeffail)
+- Added `subject_compatibility_level` to the `schema_registry` output. (@mmatczuk) 
 
 ### Fixed
 

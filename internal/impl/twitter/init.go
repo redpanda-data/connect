@@ -24,7 +24,7 @@ import (
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 )
 
-//go:embed template_search_input.yaml
+//go:embed search_input.tmpl.yaml
 var searchInputTemplate []byte
 
 func init() {
