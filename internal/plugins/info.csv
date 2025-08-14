@@ -7,8 +7,8 @@ archive                   ,processor ,archive                   ,0.0.0   ,certif
 avro                      ,processor ,avro                      ,0.0.0   ,community  ,n          ,y     ,y
 avro                      ,scanner   ,avro                      ,0.0.0   ,community  ,n          ,y     ,y
 awk                       ,processor ,awk                       ,0.0.0   ,community  ,n          ,n     ,n
-aws_bedrock_chat          ,processor ,aws_bedrock_chat          ,4.34.0  ,enterprise ,n          ,y     ,y
-aws_bedrock_embeddings    ,processor ,aws_bedrock_embeddings    ,4.37.0  ,enterprise ,n          ,y     ,y
+aws_bedrock_chat          ,processor ,aws_bedrock_chat          ,4.34.0  ,certified  ,n          ,y     ,y
+aws_bedrock_embeddings    ,processor ,aws_bedrock_embeddings    ,4.37.0  ,certified  ,n          ,y     ,y
 aws_cloudwatch            ,metric    ,aws_cloudwatch            ,3.36.0  ,community  ,n          ,n     ,n
 aws_dynamodb              ,cache     ,AWS DynamoDB              ,3.36.0  ,community  ,n          ,y     ,y
 aws_dynamodb              ,output    ,AWS DynamoDB              ,3.36.0  ,community  ,n          ,y     ,y
@@ -50,9 +50,9 @@ cassandra                 ,output    ,cassandra                 ,0.0.0   ,commun
 catch                     ,processor ,catch                     ,0.0.0   ,certified  ,n          ,y     ,y
 chunker                   ,scanner   ,chunker                   ,0.0.0   ,certified  ,n          ,y     ,y
 cockroachdb_changefeed    ,input     ,cockroachdb_changefeed    ,0.0.0   ,community  ,n          ,n     ,n
-cohere_chat               ,processor ,cohere_chat               ,4.37.0  ,enterprise ,n          ,y     ,y
-cohere_embeddings         ,processor ,cohere_embeddings         ,4.37.0  ,enterprise ,n          ,y     ,y
-cohere_rerank             ,processor ,cohere_rerank             ,4.53.0  ,enterprise ,n          ,y     ,y
+cohere_chat               ,processor ,cohere_chat               ,4.37.0  ,certified  ,n          ,y     ,y
+cohere_embeddings         ,processor ,cohere_embeddings         ,4.37.0  ,certified  ,n          ,y     ,y
+cohere_rerank             ,processor ,cohere_rerank             ,4.53.0  ,certified  ,n          ,y     ,y
 command                   ,processor ,command                   ,4.21.0  ,certified  ,n          ,n     ,n
 compress                  ,processor ,compress                  ,0.0.0   ,certified  ,n          ,y     ,y
 couchbase                 ,cache     ,Couchbase                 ,4.12.0  ,community  ,n          ,n     ,n
@@ -88,8 +88,8 @@ gcp_cloudtrace            ,tracer    ,GCP Cloud Trace           ,4.2.0   ,certif
 gcp_pubsub                ,input     ,GCP PubSub                ,0.0.0   ,certified  ,n          ,y     ,y
 gcp_pubsub                ,output    ,GCP PubSub                ,0.0.0   ,certified  ,n          ,y     ,y
 gcp_spanner_cdc           ,input     ,gcp_spanner_cdc           ,0.0.0   ,enterprise ,n          ,y     ,y
-gcp_vertex_ai_chat        ,processor ,GCP Vertex AI             ,4.34.0  ,enterprise ,n          ,y     ,y
-gcp_vertex_ai_embeddings  ,processor ,gcp_vertex_ai_embeddings  ,4.37.0  ,enterprise ,n          ,y     ,y
+gcp_vertex_ai_chat        ,processor ,GCP Vertex AI             ,4.34.0  ,certified  ,n          ,y     ,y
+gcp_vertex_ai_embeddings  ,processor ,gcp_vertex_ai_embeddings  ,4.37.0  ,certified  ,n          ,y     ,y
 generate                  ,input     ,generate                  ,3.40.0  ,certified  ,n          ,y     ,y
 git                       ,input     ,git                       ,4.51.0  ,certified  ,n          ,y     ,y
 google_drive_download     ,processor ,google_drive_download     ,4.53.0  ,enterprise ,n          ,y     ,y
@@ -163,16 +163,16 @@ nsq                       ,input     ,nsq                       ,0.0.0   ,commun
 nsq                       ,output    ,nsq                       ,0.0.0   ,community  ,n          ,n     ,n
 ockam_kafka               ,input     ,ockam_kafka               ,0.0.0   ,community  ,n          ,n     ,n
 ockam_kafka               ,output    ,ockam_kafka               ,0.0.0   ,community  ,n          ,n     ,n
-ollama_chat               ,processor ,ollama_chat               ,4.32.0  ,enterprise ,n          ,n     ,y
-ollama_embeddings         ,processor ,ollama_embeddings         ,4.32.0  ,enterprise ,n          ,n     ,y
-ollama_moderation         ,processor ,ollama_moderation         ,4.42.0  ,enterprise ,n          ,n     ,y
+ollama_chat               ,processor ,ollama_chat               ,4.32.0  ,certified  ,n          ,n     ,y
+ollama_embeddings         ,processor ,ollama_embeddings         ,4.32.0  ,certified  ,n          ,n     ,y
+ollama_moderation         ,processor ,ollama_moderation         ,4.42.0  ,certified  ,n          ,n     ,y
 open_telemetry_collector  ,tracer    ,open_telemetry_collector  ,0.0.0   ,community  ,n          ,n     ,n
-openai_chat_completion    ,processor ,openai_chat_completion    ,4.32.0  ,enterprise ,n          ,y     ,y
-openai_embeddings         ,processor ,openai_embeddings         ,4.32.0  ,enterprise ,n          ,y     ,y
-openai_image_generation   ,processor ,openai_image_generation   ,4.32.0  ,enterprise ,n          ,y     ,y
-openai_speech             ,processor ,openai_speech             ,4.32.0  ,enterprise ,n          ,y     ,y
-openai_transcription      ,processor ,openai_transcription      ,4.32.0  ,enterprise ,n          ,y     ,y
-openai_translation        ,processor ,openai_translation        ,4.32.0  ,enterprise ,n          ,y     ,y
+openai_chat_completion    ,processor ,openai_chat_completion    ,4.32.0  ,certified  ,n          ,y     ,y
+openai_embeddings         ,processor ,openai_embeddings         ,4.32.0  ,certified  ,n          ,y     ,y
+openai_image_generation   ,processor ,openai_image_generation   ,4.32.0  ,certified  ,n          ,y     ,y
+openai_speech             ,processor ,openai_speech             ,4.32.0  ,certified  ,n          ,y     ,y
+openai_transcription      ,processor ,openai_transcription      ,4.32.0  ,certified  ,n          ,y     ,y
+openai_translation        ,processor ,openai_translation        ,4.32.0  ,certified  ,n          ,y     ,y
 opensearch                ,output    ,OpenSearch                ,0.0.0   ,certified  ,n          ,y     ,y
 parallel                  ,processor ,parallel                  ,0.0.0   ,certified  ,n          ,y     ,y
 parquet                   ,input     ,parquet                   ,4.8.0   ,certified  ,n          ,n     ,n

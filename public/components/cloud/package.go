@@ -15,7 +15,6 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/amqp09"
 	_ "github.com/redpanda-data/connect/v4/public/components/avro"
 	_ "github.com/redpanda-data/connect/v4/public/components/aws"
-	_ "github.com/redpanda-data/connect/v4/public/components/aws/enterprise"
 	_ "github.com/redpanda-data/connect/v4/public/components/azure"
 	_ "github.com/redpanda-data/connect/v4/public/components/changelog"
 	_ "github.com/redpanda-data/connect/v4/public/components/cohere"
