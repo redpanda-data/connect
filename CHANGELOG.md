@@ -3,7 +3,7 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.62.0 - TBD
+## 4.62.0 - 2025-08-15
 
 ### Added
 
@@ -19,6 +19,10 @@ All notable changes to this project will be documented in this file.
 
 - `nats_jetstream` output detects disconnects from NATS JetStream server. (@josephwoodward)
 - (Benthos) The `/debug/stack` endpoint no longer truncates large traces. (@Jeffail)
+
+### Changed
+
+- All AI processors are now Apache 2.0 licensed. (@Jeffail)
 
 ## 4.61.0 - 2025-07-18
 
