@@ -44,7 +44,6 @@ builds:
         - cmd: ./resources/scripts/fips_patchelf.sh "{{ .Path }}"
     tool: 'microsoft-go'
     env:
-      - GOEXPERIMENT=systemcrypto
       - CGO_ENABLED=1
     ldflags:
       -s -w
