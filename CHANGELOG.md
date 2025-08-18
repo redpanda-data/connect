@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## TBD
+
+### Changed
+
+- (MSSQL) Migrate from stale denisenkom/go-mssqldb dependency to actively maintained microsoft/go-mssqldb
+
 ## 4.62.0 - 2025-08-18
 
 ### Added
