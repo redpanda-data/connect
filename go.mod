@@ -61,7 +61,6 @@ require (
 	github.com/clbanning/mxj/v2 v2.7.0
 	github.com/colinmarc/hdfs v1.1.3
 	github.com/couchbase/gocb/v2 v2.9.1
-	github.com/denisenkom/go-mssqldb v0.12.3
 	github.com/dgraph-io/ristretto/v2 v2.0.0
 	github.com/dop251/goja v0.0.0-20240927123429-241b342198c2
 	github.com/dop251/goja_nodejs v0.0.0-20240728170619-29b559befffc
@@ -94,6 +93,7 @@ require (
 	github.com/mark3labs/mcp-go v0.31.0
 	github.com/matoous/go-nanoid/v2 v2.1.0
 	github.com/microcosm-cc/bluemonday v1.0.27
+	github.com/microsoft/go-mssqldb v1.8.2
 	github.com/microsoft/gocosmos v1.1.1
 	github.com/nats-io/nats.go v1.37.0
 	github.com/nats-io/nkeys v0.4.7
