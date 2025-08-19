@@ -38,6 +38,13 @@ const (
 	fieldDiscardUnknown = "discard_unknown"
 	fieldUseProtoNames  = "use_proto_names"
 	fieldUseEnumNumbers = "use_enum_numbers"
+
+	// BSR Config
+	fieldBSRConfig  = "bsr"
+	fieldBSRModule  = "module"
+	fieldBSRUrl     = "url"
+	fieldBSRAPIKey  = "api_key"
+	fieldBSRVersion = "version"
 )
 
 func protobufProcessorSpec() *service.ConfigSpec {
@@ -47,22 +54,22 @@ func protobufProcessorSpec() *service.ConfigSpec {
 		Summary(`
 Performs conversions to or from a protobuf message. This processor uses reflection, meaning conversions can be made directly from the target .proto files.
 `).Description(`
-The main functionality of this processor is to map to and from JSON documents, you can read more about JSON mapping of protobuf messages here: https://developers.google.com/protocol-buffers/docs/proto3#json[https://developers.google.com/protocol-buffers/docs/proto3#json^]
+The main functionality of this processor is to map to and from JSON documents, you can read more about JSON mapping of protobuf messages here: [https://developers.google.com/protocol-buffers/docs/proto3#json](https://developers.google.com/protocol-buffers/docs/proto3#json)
 
-Using reflection for processing protobuf messages in this way is less performant than generating and using native code. Therefore when performance is critical it is recommended that you use Redpanda Connect plugins instead for processing protobuf messages natively, you can find an example of Redpanda Connect plugins at https://github.com/benthosdev/benthos-plugin-example[https://github.com/benthosdev/benthos-plugin-example^]
+Using reflection for processing protobuf messages in this way is less performant than generating and using native code. Therefore when performance is critical it is recommended that you use Redpanda Connect plugins instead for processing protobuf messages natively, you can find an example of Redpanda Connect plugins at [https://github.com/redpanda-data/redpanda-connect-plugin-example](https://github.com/redpanda-data/redpanda-connect-plugin-example)
 
 == Operators
 
 === `+"`to_json`"+`
 
-Converts protobuf messages into a generic JSON structure. This makes it easier to manipulate the contents of the document within Benthos.
+Converts protobuf messages into a generic JSON structure. This makes it easier to manipulate the contents of the document within Redpanda Connect.
 
 === `+"`from_json`"+`
 
 Attempts to create a target protobuf message from a generic JSON structure.
 `).Fields(
 		service.NewStringEnumField(fieldOperator, "to_json", "from_json").
-			Description("The <<operators, operator>> to execute"),
+			Description("The [operator](#operators) to execute"),
 		service.NewStringField(fieldMessage).
 			Description("The fully qualified name of the protobuf message to convert to/from."),
 		service.NewBoolField(fieldDiscardUnknown).
@@ -72,13 +79,29 @@ Attempts to create a target protobuf message from a generic JSON structure.
 			Description("If `true`, the `to_json` operator deserializes fields exactly as named in schema file.").
 			Default(false),
 		service.NewStringListField(fieldImportPaths).
-			Description("A list of directories containing .proto files, including all definitions required for parsing the target message. If left empty the current directory is used. Each directory listed will be walked with all found .proto files imported.").
+			Description("A list of directories containing .proto files, including all definitions required for parsing the target message. If left empty the current directory is used. Each directory listed will be walked with all found .proto files imported. Either this field or `bsr` must be populated.").
 			Default([]string{}),
-		service.NewBoolField(fieldUseEnumNumbers).
-			Description("If `true`, the `to_json` operator deserializes enums as numerical values instead of string names.").
-			Default(false),
-	).Example(
-		"JSON to Protobuf", `
+		service.NewObjectListField(fieldBSRConfig,
+			service.NewStringField(fieldBSRModule).
+				Description("Module to fetch from a Buf Schema Registry e.g. 'buf.build/exampleco/mymodule'."),
+			service.NewStringField(fieldBSRUrl).
+				Description("Buf Schema Registry URL, leave blank to extract from module.").
+				Default("").Advanced(),
+			service.NewStringField(fieldBSRAPIKey).
+				Description("Buf Schema Registry server API key, can be left blank for a public registry.").
+				Secret().
+				Default(""),
+			service.NewStringField(fieldBSRVersion).
+				Description("Version to retrieve from the Buf Schema Registry, leave blank for latest.").
+				Default("").Advanced(),
+		).Description("Buf Schema Registry configuration. Either this field or `import_paths` must be populated. Note that this field is an array, and multiple BSR configurations can be provided.").
+			Default([]any{}),
+	).LintRule(`
+root = match {
+this.import_paths.type() == "unknown" && this.bsr.length() == 0 => [ "at least one of `+"`import_paths`"+`and `+"`bsr`"+` must be set" ],
+this.import_paths.type() == "array" && this.import_paths.length() > 0 && this.bsr.length() > 0 => [ "both `+"`import_paths`"+` and `+"`bsr`"+` can't be set simultaneously" ],
+}`).Example(
+		"JSON to Protobuf using Schema from Disk", `
 If we have the following protobuf definition within a directory called `+"`testing/schema`"+`:
 
 `+"```protobuf"+`
@@ -117,7 +140,7 @@ pipeline:
         message: testing.Person
         import_paths: [ testing/schema ]
 `).Example(
-		"Protobuf to JSON", `
+		"Protobuf to JSON using Schema from Disk", `
 If we have the following protobuf definition within a directory called `+"`testing/schema`"+`:
 
 `+"```protobuf"+`
@@ -155,6 +178,87 @@ pipeline:
         operator: to_json
         message: testing.Person
         import_paths: [ testing/schema ]
+`).Example(
+		"JSON to Protobuf using Buf Schema Registry", `
+If we have the following protobuf definition within a BSR module hosted at `+"`buf.build/exampleco/mymodule`"+`:
+
+`+"```protobuf"+`
+syntax = "proto3";
+package testing;
+
+import "google/protobuf/timestamp.proto";
+
+message Person {
+  string first_name = 1;
+  string last_name = 2;
+  string full_name = 3;
+  int32 age = 4;
+  int32 id = 5; // Unique ID number for this person.
+  string email = 6;
+
+  google.protobuf.Timestamp last_updated = 7;
+}
+`+"```"+`
+
+And a stream of JSON documents of the form:
+
+`+"```json"+`
+{
+	"firstName": "caleb",
+	"lastName": "quaye",
+	"email": "caleb@myspace.com"
+}
+`+"```"+`
+
+We can convert the documents into protobuf messages with the following config:`, `
+pipeline:
+  processors:
+    - protobuf:
+        operator: from_json
+        message: testing.Person
+        bsr:
+          - module: buf.build/exampleco/mymodule
+            api_key: xxx
+`).Example(
+		"Protobuf to JSON using Buf Schema Registry", `
+If we have the following protobuf definition within a BSR module hosted at `+"`buf.build/exampleco/mymodule`"+`:
+`+"```protobuf"+`
+syntax = "proto3";
+package testing;
+
+import "google/protobuf/timestamp.proto";
+
+message Person {
+  string first_name = 1;
+  string last_name = 2;
+  string full_name = 3;
+  int32 age = 4;
+  int32 id = 5; // Unique ID number for this person.
+  string email = 6;
+
+  google.protobuf.Timestamp last_updated = 7;
+}
+`+"```"+`
+
+And a stream of protobuf messages of the type `+"`Person`"+`, we could convert them into JSON documents of the format:
+
+`+"```json"+`
+{
+	"firstName": "caleb",
+	"lastName": "quaye",
+	"email": "caleb@myspace.com"
+}
+`+"```"+`
+
+With the following config:`, `
+pipeline:
+  processors:
+    - protobuf:
+        operator: to_json
+        message: testing.Person
+        bsr:
+          - module: buf.build/exampleco/mymodule
+            api_key: xxxx
 `)
 }
 
