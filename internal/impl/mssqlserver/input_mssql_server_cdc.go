@@ -12,6 +12,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sync"
+
+	_ "github.com/microsoft/go-mssqldb"
 
 	"github.com/Jeffail/shutdown"
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -36,10 +39,14 @@ var mssqlStreamConfigSpec = service.NewConfigSpec().
 	Fields(
 		service.NewAutoRetryNacksToggleField(),
 		service.NewBatchPolicyField(fieldBatching),
+		service.NewStringListField(fieldMSSQLTables).
+			Description("A list of tables to stream from the database.").
+			Example([]string{"table1", "table2"}).
+			LintRule("root = if this.length() == 0 { [ \"field 'tables' must contain at least one table\" ] }"),
 
 		service.NewStringField(fieldConnectionString).
 			Description("The connection string of the Microsoft SQL Server database to connect to.").
-			Example("sqlserver://username:password@host/instance"),
+			Example("sqlserver://username:password@host/instance?param1=value&param2=value"),
 	)
 
 type asyncMessage struct {
@@ -53,7 +60,11 @@ type msSqlServerCDCReader struct {
 	batchPolicy      *service.Batcher
 	logger           *service.Logger
 	res              *service.Resources
-	db               *sql.DB
+
+	dbMu sync.Mutex
+	db   *sql.DB
+
+	tables []string
 
 	resCh   chan asyncMessage
 	stopSig *shutdown.Signaller
@@ -65,12 +76,18 @@ func newMssqlCDCReader(conf *service.ParsedConfig, res *service.Resources) (s se
 	// }
 
 	r := msSqlServerCDCReader{
-		logger: res.Logger(),
-		resCh:  make(chan asyncMessage),
-		res:    res,
+		logger:  res.Logger(),
+		res:     res,
+		resCh:   make(chan asyncMessage),
+		stopSig: shutdown.NewSignaller(),
 	}
 
+	//TODO: Can we validate the connection string?
 	if r.connectionString, err = conf.FieldString(fieldConnectionString); err != nil {
+		return nil, err
+	}
+
+	if r.tables, err = conf.FieldStringList(fieldMSSQLTables); err != nil {
 		return nil, err
 	}
 
@@ -98,11 +115,18 @@ func newMssqlCDCReader(conf *service.ParsedConfig, res *service.Resources) (s se
 }
 
 func (r *msSqlServerCDCReader) Connect(_ context.Context) error {
-	db, err := sql.Open("sqlserver", r.connectionString)
+	db, err := sql.Open("mssql", r.connectionString)
 	if err != nil {
 		return fmt.Errorf("failed to connect to Microsoft SQL Server: %s", err)
 	}
+
+	r.dbMu.Lock()
 	r.db = db
+	r.dbMu.Unlock()
+
+	// Reset our stop signal
+	r.stopSig = shutdown.NewSignaller()
+	// ctx, cancel := r.stopSig.SoftStopCtx(context.Background())
 
 	return nil
 }
@@ -119,6 +143,8 @@ func (r *msSqlServerCDCReader) ReadBatch(ctx context.Context) (service.MessageBa
 }
 
 func (r *msSqlServerCDCReader) Close(ctx context.Context) error {
+	r.dbMu.Lock()
+	defer r.dbMu.Unlock()
 	if r.db != nil {
 		return r.db.Close()
 	}
