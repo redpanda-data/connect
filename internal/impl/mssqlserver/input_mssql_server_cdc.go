@@ -15,8 +15,6 @@ import (
 
 	"github.com/Jeffail/shutdown"
 	"github.com/redpanda-data/benthos/v4/public/service"
-
-	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 const (
@@ -62,9 +60,9 @@ type msSqlServerCDCReader struct {
 }
 
 func newMssqlCDCReader(conf *service.ParsedConfig, res *service.Resources) (s service.BatchInput, err error) {
-	if err := license.CheckRunningEnterprise(res); err != nil {
-		return nil, err
-	}
+	// if err := license.CheckRunningEnterprise(res); err != nil {
+	// 	return nil, err
+	// }
 
 	r := msSqlServerCDCReader{
 		logger: res.Logger(),
