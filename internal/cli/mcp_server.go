@@ -24,7 +24,7 @@ import (
 )
 
 func mcpServerCli(rpMgr *enterprise.GlobalRedpandaManager) *cli.Command {
-	flags := []cli.Flag{
+	flags := append([]cli.Flag{
 		&cli.StringFlag{
 			Name:  "address",
 			Usage: "An optional address to bind the MCP server to instead of running in stdio mode.",
@@ -36,7 +36,7 @@ func mcpServerCli(rpMgr *enterprise.GlobalRedpandaManager) *cli.Command {
 		secretsFlag,
 		envFileFlag,
 		licenseFlag,
-	}
+	}, redpandaFlags()...)
 	if shouldAddChrootFlag() {
 		flags = append(flags, chrootFlag, chrootPassthroughFlag)
 	}
@@ -86,7 +86,19 @@ Each resource will be exposed as a tool that AI can interact with:
 			}
 
 			rpMgr.SetFallbackLogger(service.NewLoggerFromSlog(fallbackLogger))
-			// TODO: rpMgr.Init...
+
+			// Parse and initialize Redpanda flags for logging support
+			pipelineID, logsTopic, statusTopic, connDetails, err := parseRedpandaFlags(c)
+			if err != nil {
+				return err
+			}
+
+			if pipelineID != "" && connDetails != nil {
+				if err = rpMgr.InitWithCustomDetails(pipelineID, logsTopic, statusTopic, connDetails, slog.LevelInfo); err != nil {
+					return err
+				}
+			}
+
 			logger := slog.New(newTeeLogger(fallbackLogger.Handler(), rpMgr.SlogHandler()))
 
 			secretLookupFn, err := parseSecretsFlag(logger, c)
