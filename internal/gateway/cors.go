@@ -47,7 +47,7 @@ func (conf CORSConfig) WrapHandler(handler http.Handler) http.Handler {
 	}
 	return handlers.CORS(
 		handlers.AllowedOrigins(conf.allowedOrigins),
-		handlers.AllowedHeaders([]string{"Content-Type", "Authorization"}),
+		handlers.AllowedHeaders([]string{"Content-Type", "Authorization", "Mcp-Session-Id"}),
 		handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"}),
 	)(handler)
 }
