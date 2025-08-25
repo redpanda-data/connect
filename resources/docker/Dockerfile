@@ -31,7 +31,6 @@ COPY . /go/src/github.com/redpanda-data/connect/
 # Tag timetzdata required for busybox base image:
 # https://github.com/benthosdev/benthos/issues/897
 RUN TAGS="timetzdata" task build:redpanda-connect
-RUN setcap 'cap_sys_chroot=+ep' target/redpanda-connect
 
 # Pack
 FROM busybox AS package
