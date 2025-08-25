@@ -11,10 +11,12 @@ package mssqlserver
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"sync"
 
 	_ "github.com/microsoft/go-mssqldb"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/Jeffail/shutdown"
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -64,7 +66,8 @@ type msSqlServerCDCReader struct {
 	dbMu sync.Mutex
 	db   *sql.DB
 
-	tables []string
+	tables        []string
+	trackedTables []changeTable
 
 	resCh   chan asyncMessage
 	stopSig *shutdown.Signaller
@@ -87,6 +90,7 @@ func newMssqlCDCReader(conf *service.ParsedConfig, res *service.Resources) (s se
 		return nil, err
 	}
 
+	// TODO: support regular expression on tablenames
 	if r.tables, err = conf.FieldStringList(fieldMSSQLTables); err != nil {
 		return nil, err
 	}
@@ -114,19 +118,34 @@ func newMssqlCDCReader(conf *service.ParsedConfig, res *service.Resources) (s se
 	return conf.WrapBatchInputExtractTracingSpanMapping("mssql_server_cdc", batchInput)
 }
 
-func (r *msSqlServerCDCReader) Connect(_ context.Context) error {
+func (r *msSqlServerCDCReader) Connect(ctx context.Context) error {
 	db, err := sql.Open("mssql", r.connectionString)
 	if err != nil {
 		return fmt.Errorf("failed to connect to Microsoft SQL Server: %s", err)
 	}
 
 	r.dbMu.Lock()
+	defer r.dbMu.Unlock()
 	r.db = db
-	r.dbMu.Unlock()
 
-	// Reset our stop signal
-	r.stopSig = shutdown.NewSignaller()
-	// ctx, cancel := r.stopSig.SoftStopCtx(context.Background())
+	if r.trackedTables, err = r.fetchChangeTables(ctx); err != nil {
+		return fmt.Errorf("failed to connect to Microsoft SQL Server: %s", err)
+	}
+
+	sig := shutdown.NewSignaller()
+	r.stopSig = sig
+	go func() {
+		ctx, _ = r.stopSig.SoftStopCtx(context.Background())
+		wg, ctx := errgroup.WithContext(ctx)
+
+		wg.Go(func() error { return r.readMessages(ctx) })
+		if err := wg.Wait(); err != nil && !errors.Is(err, context.Canceled) {
+			r.logger.Errorf("error during Microsoft SQL Server CDC: %s", err)
+		} else {
+			r.logger.Info("successfully shutdown Microsoft SQL Server CDC stream")
+		}
+		sig.TriggerHasStopped()
+	}()
 
 	return nil
 }
@@ -142,6 +161,10 @@ func (r *msSqlServerCDCReader) ReadBatch(ctx context.Context) (service.MessageBa
 	}
 }
 
+func (r *msSqlServerCDCReader) readMessages(ctx context.Context) error {
+	return nil
+}
+
 func (r *msSqlServerCDCReader) Close(ctx context.Context) error {
 	r.dbMu.Lock()
 	defer r.dbMu.Unlock()
@@ -149,4 +172,27 @@ func (r *msSqlServerCDCReader) Close(ctx context.Context) error {
 		return r.db.Close()
 	}
 	return nil
+}
+
+type changeTable struct {
+	captureInstance string
+	startLSN        []byte
+}
+
+// fetchChangeTables returns a slice of all change tables matching those configured.
+func (r *msSqlServerCDCReader) fetchChangeTables(ctx context.Context) ([]changeTable, error) {
+	rows, err := r.db.QueryContext(ctx, "SELECT capture_instance, start_lsn FROM cdc.change_tables")
+	if err != nil {
+		return nil, fmt.Errorf("fetching change tables: %w", err)
+	}
+
+	var result []changeTable
+	for rows.Next() {
+		var t changeTable
+		if err := rows.Scan(&t.captureInstance, &t.startLSN); err != nil {
+			return nil, fmt.Errorf("loading table: %w", err)
+		}
+		result = append(result, t)
+	}
+	return result, nil
 }
