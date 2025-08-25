@@ -25,7 +25,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/klauspost/compress/gzip"
 
@@ -51,23 +50,7 @@ type hsiConfig struct {
 
 	// Set via environment variables
 	Address string
-	CORS    corsConfig
-}
-
-type corsConfig struct {
-	enabled        bool
-	allowedOrigins []string
-}
-
-func (conf corsConfig) WrapHandler(handler http.Handler) http.Handler {
-	if !conf.enabled {
-		return handler
-	}
-	return handlers.CORS(
-		handlers.AllowedOrigins(conf.allowedOrigins),
-		handlers.AllowedHeaders([]string{"Content-Type", "Authorization"}),
-		handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"}),
-	)(handler)
+	CORS    gateway.CORSConfig
 }
 
 type hsiResponseConfig struct {
@@ -90,8 +73,7 @@ func hsiConfigFromParsed(pConf *service.ParsedConfig) (conf hsiConfig, err error
 }
 
 const (
-	rpEnvAddress     = "REDPANDA_CLOUD_GATEWAY_ADDRESS"
-	rpEnvCorsOrigins = "REDPANDA_CLOUD_GATEWAY_CORS_ORIGINS"
+	rpEnvAddress = "REDPANDA_CLOUD_GATEWAY_ADDRESS"
 )
 
 func (h *hsiConfig) applyEnvVarOverrides() error {
@@ -99,13 +81,7 @@ func (h *hsiConfig) applyEnvVarOverrides() error {
 		return errors.New("an address must be specified via env var for this input to be functional")
 	}
 
-	if v := os.Getenv(rpEnvCorsOrigins); v != "" {
-		h.CORS.enabled = true
-		h.CORS.allowedOrigins = strings.Split(v, ",")
-		for i, o := range h.CORS.allowedOrigins {
-			h.CORS.allowedOrigins[i] = strings.TrimSpace(o)
-		}
-	}
+	h.CORS = gateway.NewCORSConfigFromEnv()
 
 	return nil
 }
