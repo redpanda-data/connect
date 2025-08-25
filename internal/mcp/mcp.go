@@ -23,9 +23,7 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"strings"
 
-	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/mark3labs/mcp-go/server"
 	"go.opentelemetry.io/otel/propagation"
@@ -49,33 +47,13 @@ func (g *gMux) HandleFunc(pattern string, handler func(http.ResponseWriter, *htt
 	g.m.Path(pattern).HandlerFunc(handler) // TODO: PathPrefix?
 }
 
-type corsConfig struct {
-	enabled        bool
-	allowedOrigins []string
-}
-
-func (conf corsConfig) WrapHandler(handler http.Handler) http.Handler {
-	if !conf.enabled {
-		return handler
-	}
-	return handlers.CORS(
-		handlers.AllowedOrigins(conf.allowedOrigins),
-		handlers.AllowedHeaders([]string{"Content-Type", "Authorization"}),
-		handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"}),
-	)(handler)
-}
-
-const (
-	rpEnvCorsOrigins = "REDPANDA_CLOUD_GATEWAY_CORS_ORIGINS"
-)
-
 // Server runs an mcp server against a target directory, with an optiona base
 // URL for an HTTP server.
 type Server struct {
 	base  *server.MCPServer
 	mux   *mux.Router
 	rpJWT *gateway.RPJWTMiddleware
-	cors  corsConfig
+	cors  gateway.CORSConfig
 }
 
 // NewServer initializes the MCP server.
@@ -181,14 +159,7 @@ func NewServer(
 		return nil, err
 	}
 
-	var cors corsConfig
-	if v := os.Getenv(rpEnvCorsOrigins); v != "" {
-		cors.enabled = true
-		cors.allowedOrigins = strings.Split(v, ",")
-		for i, o := range cors.allowedOrigins {
-			cors.allowedOrigins[i] = strings.TrimSpace(o)
-		}
-	}
+	cors := gateway.NewCORSConfigFromEnv()
 
 	return &Server{s, mux, rpJWT, cors}, nil
 }
