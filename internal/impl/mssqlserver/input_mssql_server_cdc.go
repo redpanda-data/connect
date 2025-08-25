@@ -26,6 +26,7 @@ const (
 	fieldMSSQLTables      = "tables"
 	fieldConnectionString = "connection_string"
 	fieldBatching         = "batching"
+	fieldStreamSnapshot   = "stream_snapshot"
 )
 
 func init() {
@@ -49,6 +50,8 @@ var mssqlStreamConfigSpec = service.NewConfigSpec().
 		service.NewStringField(fieldConnectionString).
 			Description("The connection string of the Microsoft SQL Server database to connect to.").
 			Example("sqlserver://username:password@host/instance?param1=value&param2=value"),
+		service.NewBoolField(fieldStreamSnapshot).
+			Description("If set to true, the connector will query all the existing data as a part of snapshot process. Otherwise, it will start from the current Log Sequence Number position."),
 	)
 
 type asyncMessage struct {
@@ -57,17 +60,19 @@ type asyncMessage struct {
 }
 
 type msSqlServerCDCReader struct {
-	connectionString string
-	batching         service.BatchPolicy
-	batchPolicy      *service.Batcher
-	logger           *service.Logger
-	res              *service.Resources
+	batching    service.BatchPolicy
+	batchPolicy *service.Batcher
 
 	dbMu sync.Mutex
 	db   *sql.DB
 
-	tables        []string
-	trackedTables []changeTable
+	connectionString string
+	streamSnapshot   bool
+	tables           []string
+	trackedTables    []changeTable
+
+	logger *service.Logger
+	res    *service.Resources
 
 	resCh   chan asyncMessage
 	stopSig *shutdown.Signaller
@@ -92,6 +97,10 @@ func newMssqlCDCReader(conf *service.ParsedConfig, res *service.Resources) (s se
 
 	// TODO: support regular expression on tablenames
 	if r.tables, err = conf.FieldStringList(fieldMSSQLTables); err != nil {
+		return nil, err
+	}
+
+	if r.streamSnapshot, err = conf.FieldBool(fieldStreamSnapshot); err != nil {
 		return nil, err
 	}
 
@@ -128,12 +137,29 @@ func (r *msSqlServerCDCReader) Connect(ctx context.Context) error {
 	defer r.dbMu.Unlock()
 	r.db = db
 
+	// TODO: Get lsn from cache
+
+	var snapshot *Snapshot
+	if r.streamSnapshot {
+		snapshot = NewSnapshot(r.logger, r.db)
+	}
+
+	sig := shutdown.NewSignaller()
+	ctx, done := sig.SoftStopCtx(context.Background())
+	defer done()
+
+	// var startLSN LSN
+	if snapshot != nil {
+		if err := snapshot.prepare(ctx, r.tables); err != nil {
+			return fmt.Errorf("failed to process snapshot: %w", err)
+		}
+	}
+
 	if r.trackedTables, err = r.fetchChangeTables(ctx); err != nil {
 		return fmt.Errorf("failed to connect to Microsoft SQL Server: %s", err)
 	}
 
-	sig := shutdown.NewSignaller()
-	r.stopSig = sig
+	r.stopSig = shutdown.NewSignaller()
 	go func() {
 		ctx, _ = r.stopSig.SoftStopCtx(context.Background())
 		wg, ctx := errgroup.WithContext(ctx)
@@ -144,6 +170,7 @@ func (r *msSqlServerCDCReader) Connect(ctx context.Context) error {
 		} else {
 			r.logger.Info("successfully shutdown Microsoft SQL Server CDC stream")
 		}
+
 		sig.TriggerHasStopped()
 	}()
 
