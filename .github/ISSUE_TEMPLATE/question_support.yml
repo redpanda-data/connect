@@ -1,0 +1,152 @@
+name: ❓ Question / Support Request
+description: Ask a question or get help with Redpanda Connect usage
+title: "[Question]: "
+labels: ["question", "support", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For complex questions or extended discussions, consider using [GitHub Discussions](https://github.com/redpanda-data/connect/discussions) or joining our [Slack community](https://redpanda.com/slack).
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: What would you like to know or what problem are you trying to solve?
+      placeholder: Describe your question or the problem you're trying to solve
+    validations:
+      required: true
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: What I'm Trying to Do
+      description: Describe your goal or use case
+      placeholder: |
+        - What type of data pipeline are you building?
+        - What sources and destinations are you connecting?
+        - What transformations or processing do you need?
+    validations:
+      required: true
+
+  - type: textarea
+    id: current-approach
+    attributes:
+      label: Current Approach
+      description: What have you tried so far?
+      placeholder: Describe what you've attempted and any configuration you've tried
+    validations:
+      required: true
+
+  - type: textarea
+    id: configuration
+    attributes:
+      label: Current Configuration
+      description: Share your current configuration (remove sensitive information)
+      render: yaml
+      placeholder: |
+        input:
+          # your input configuration
+
+        pipeline:
+          processors:
+            # your processing pipeline
+
+        output:
+          # your output configuration
+
+  - type: textarea
+    id: specific-questions
+    attributes:
+      label: Specific Questions
+      description: List your specific questions
+      placeholder: |
+        1. How do I configure X?
+        2. What's the best way to handle Y?
+        3. Why am I seeing error Z?
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Redpanda Connect Version
+      placeholder: "e.g., v4.32.0"
+
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment Method
+      description: How are you running Redpanda Connect?
+      options:
+        - Docker
+        - Binary (direct execution)
+        - Kubernetes
+        - Docker Compose
+        - Other
+        - Not yet deployed
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      options:
+        - Ubuntu/Debian
+        - CentOS/RHEL
+        - macOS
+        - Windows
+        - Other Linux
+        - Other
+
+  - type: checkboxes
+    id: research-done
+    attributes:
+      label: What I've Already Tried
+      description: What research or attempts have you made?
+      options:
+        - label: Read the official documentation
+        - label: Searched existing issues and discussions
+        - label: Tried different configuration options
+        - label: Consulted community resources
+        - label: Other
+
+  - type: textarea
+    id: research-links
+    attributes:
+      label: Documentation/Resources Checked
+      description: Links to documentation or resources you've already reviewed
+      placeholder: |
+        - https://docs.redpanda.com/redpanda-connect/...
+        - GitHub issue #123
+        - Community discussion link
+
+  - type: textarea
+    id: expected-outcome
+    attributes:
+      label: Expected Outcome
+      description: What would a successful solution look like for you?
+      placeholder: Describe what you're hoping to achieve
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Any other information that might be relevant
+      placeholder: |
+        - Error messages (if any)
+        - Performance requirements
+        - Constraints or limitations
+        - Timeline or urgency
+
+  - type: dropdown
+    id: urgency
+    attributes:
+      label: Urgency
+      description: How urgent is this question?
+      options:
+        - Low - Learning/exploring
+        - Medium - Working on implementation
+        - High - Blocking current work
+        - Critical - Production issue

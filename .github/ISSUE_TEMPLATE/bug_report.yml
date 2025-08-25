@@ -1,0 +1,155 @@
+name: 🐛 Bug Report
+description: Report a bug or unexpected behavior in Redpanda Connect
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for taking the time to file a bug report! Please fill out this form as completely as possible.
+
+  - type: textarea
+    id: bug-description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+      placeholder: Describe the bug you encountered
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: Please provide detailed steps to reproduce the issue
+      placeholder: |
+        1. Go to '...'
+        2. Run command '...'
+        3. Configure '...'
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected Behavior
+      description: A clear and concise description of what you expected to happen.
+      placeholder: What should have happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: Actual Behavior
+      description: A clear and concise description of what actually happened.
+      placeholder: What actually happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: configuration
+    attributes:
+      label: Configuration
+      description: Please share the relevant parts of your Redpanda Connect configuration (remove sensitive information)
+      render: yaml
+      placeholder: |
+        input:
+          # your input configuration
+
+        pipeline:
+          processors:
+            # your processor configuration
+
+        output:
+          # your output configuration
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Redpanda Connect Version
+      description: What version of Redpanda Connect are you running?
+      placeholder: "e.g., v4.32.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      description: What operating system are you using?
+      options:
+        - Ubuntu
+        - CentOS/RHEL
+        - macOS
+        - Windows
+        - Alpine Linux
+        - Other Linux
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: architecture
+    attributes:
+      label: Architecture
+      description: What architecture are you running on?
+      options:
+        - amd64 (x86_64)
+        - arm64 (aarch64)
+        - arm
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment Method
+      description: How are you running Redpanda Connect?
+      options:
+        - Docker
+        - Binary (direct execution)
+        - Kubernetes
+        - Docker Compose
+        - Systemd service
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: error-logs
+    attributes:
+      label: Error Logs
+      description: "Please paste any relevant error logs (enable debug logging with log.level: DEBUG if needed)"
+      render: text
+      placeholder: Paste error logs here...
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Add any other context about the problem
+      placeholder: |
+        - Are you using any specific connectors or processors?
+        - Does this occur with specific data patterns or volumes?
+        - Have you tried any workarounds?
+        - Any relevant performance metrics or resource usage?
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      description: Please confirm the following
+      options:
+        - label: I have searched existing issues to ensure this is not a duplicate
+          required: true
+        - label: I have included the complete error message and stack trace
+          required: false
+        - label: I have provided my configuration (with sensitive data removed)
+          required: true
+        - label: I have tested with the latest version of Redpanda Connect
+          required: false

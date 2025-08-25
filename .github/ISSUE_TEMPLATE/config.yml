@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 🔒 Security Vulnerability Report
+    url: mailto:security@redpanda.com
+    about: Please report security vulnerabilities privately via email
+  - name: 📚 Documentation
+    url: https://docs.redpanda.com/redpanda-connect/
+    about: Browse the official Redpanda Connect documentation
+  - name: 💬 Community Discussion
+    url: https://github.com/redpanda-data/connect/discussions
+    about: Ask questions and discuss ideas with the community
+  - name: 🔗 Redpanda Community Slack
+    url: https://redpanda.com/slack
+    about: Join our Slack community for real-time support and discussion

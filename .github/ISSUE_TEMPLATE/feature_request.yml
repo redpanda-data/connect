@@ -1,0 +1,116 @@
+name: 🚀 Feature Request
+description: Suggest a new feature or enhancement for Redpanda Connect
+title: "[Feature]: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for suggesting a new feature! Please provide as much detail as possible to help us understand your request.
+
+  - type: textarea
+    id: feature-description
+    attributes:
+      label: Feature Description
+      description: A clear and concise description of the feature you'd like to see implemented.
+      placeholder: Describe the feature you want to see in Redpanda Connect
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem-statement
+    attributes:
+      label: Problem Statement
+      description: Describe the problem this feature would solve. Why do you need this feature?
+      placeholder: What problem are you trying to solve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: Proposed Solution
+      description: Describe the solution you'd like in detail. How should this feature work?
+      placeholder: How do you envision this feature working?
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use Case
+      description: Describe your specific use case and how this feature would benefit your workflow
+      placeholder: |
+        - What type of data are you processing?
+        - What connectors/components are involved?
+        - What is your current workaround (if any)?
+    validations:
+      required: true
+
+  - type: textarea
+    id: configuration-example
+    attributes:
+      label: Configuration Example
+      description: Provide an example of how you envision this feature would be configured
+      render: yaml
+      placeholder: |
+        input:
+          # Example configuration
+
+        pipeline:
+          processors:
+            - your_proposed_feature:
+                setting1: value1
+                setting2: value2
+
+        output:
+          # Example output
+
+  - type: textarea
+    id: alternatives-considered
+    attributes:
+      label: Alternatives Considered
+      description: Describe any alternative solutions or features you've considered.
+      placeholder: What other approaches have you considered?
+
+  - type: dropdown
+    id: feature-type
+    attributes:
+      label: Feature Type
+      description: What type of feature is this?
+      options:
+        - New input connector
+        - New output connector
+        - New processor
+        - Core functionality enhancement
+        - Performance improvement
+        - Developer experience improvement
+        - Documentation improvement
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Add any other context about the feature request
+      placeholder: |
+        - Would you be willing to contribute this feature?
+        - Are there similar features in other tools that could serve as reference?
+        - Any performance or compatibility considerations?
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      description: Please confirm the following
+      options:
+        - label: I have searched existing issues and feature requests
+          required: true
+        - label: I have clearly described the problem this solves
+          required: true
+        - label: I have provided a concrete use case
+          required: true
+        - label: I have considered how this fits with existing functionality
+          required: false

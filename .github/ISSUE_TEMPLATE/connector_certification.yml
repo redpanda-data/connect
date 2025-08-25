@@ -1,0 +1,192 @@
+name: 🔌 Connector Certification Request
+description: Request certification of a new or existing connector
+title: "[Connector]: "
+labels: ["connector", "certification", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please review the [Connector Certification Guidelines](../CONTRIBUTING.md) before submitting this request.
+
+  - type: input
+    id: connector-name
+    attributes:
+      label: Connector Name
+      description: Name of the connector (e.g., MongoDB Atlas, Snowflake, Elasticsearch)
+      placeholder: "e.g., Snowflake"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: connector-type
+    attributes:
+      label: Connector Type
+      description: What type of connector is this?
+      options:
+        - Input
+        - Output
+        - Both (Input and Output)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: current-status
+    attributes:
+      label: Current Status
+      description: What's the current status of this connector?
+      options:
+        - New connector request
+        - Existing connector to certify
+        - Enhancement to existing certified connector
+    validations:
+      required: true
+
+  - type: dropdown
+    id: implementation-type
+    attributes:
+      label: Proposed Implementation
+      description: Who will implement this connector?
+      options:
+        - Community contribution
+        - Redpanda authored
+        - Joint effort
+        - Not yet determined
+    validations:
+      required: true
+
+  - type: textarea
+    id: market-relevance
+    attributes:
+      label: Market Relevance & Business Justification
+      description: Explain why this connector should be certified
+      placeholder: |
+        - How widely used is this technology in the data engineering ecosystem?
+        - What is the user demand for this connector?
+        - How does it integrate with Redpanda's ecosystem?
+        - What specific use cases does this enable?
+    validations:
+      required: true
+
+  - type: textarea
+    id: user-value
+    attributes:
+      label: User Value & Use Cases
+      description: What problems does this solve for users?
+      placeholder: |
+        - What specific use cases does this enable?
+        - What problems does it solve for users?
+        - Are there existing workarounds that this would replace?
+    validations:
+      required: true
+
+  - type: textarea
+    id: configuration-schema
+    attributes:
+      label: Proposed Configuration Schema
+      description: How would users configure this connector?
+      render: yaml
+      placeholder: |
+        connector_name:
+          # Required fields
+          field1: "value"
+          field2: 123
+          
+          # Optional fields  
+          timeout: "30s"
+          retries: 3
+    validations:
+      required: true
+
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Technical Dependencies
+      description: List any external libraries, services, or requirements
+      placeholder: |
+        - Client libraries required
+        - External services dependencies
+        - Authentication methods to support
+        - Testing environment requirements
+
+  - type: textarea
+    id: implementation-timeline
+    attributes:
+      label: Implementation Timeline
+      description: Estimated timeline and resources
+      placeholder: |
+        - Estimated development time: 2-4 weeks
+        - Target release: v4.35.0
+        - Dependencies or blockers
+        - Who will implement this?
+
+  - type: checkboxes
+    id: core-functionality
+    attributes:
+      label: Core Functionality Requirements
+      description: Confirm these requirements will be met
+      options:
+        - label: Clear documentation with configuration examples
+          required: false
+        - label: Intuitive UX requiring minimal explanation
+          required: false
+        - label: Proper error handling and validation
+          required: false
+        - label: Integration tests that are runnable in CI
+          required: false
+        - label: Observability (metrics, logging, tracing)
+          required: false
+
+  - type: checkboxes
+    id: implementation-standards
+    attributes:
+      label: Implementation Standards
+      description: Confirm these standards will be met
+      options:
+        - label: Code follows Go best practices
+          required: false
+        - label: Consistent with other Redpanda Connect connectors
+          required: false
+        - label: Complete implementation with no known bugs
+          required: false
+        - label: Supports live credential rotation (if applicable)
+          required: false
+        - label: Easy to test locally and in CI environments
+          required: false
+
+  - type: checkboxes
+    id: certification-checklist
+    attributes:
+      label: Certification Requirements Checklist
+      description: Review against the certification guidelines
+      options:
+        - label: "1.1.1 - Concise, well-organized documentation with examples"
+          required: false
+        - label: "1.1.2 - Usage patterns, troubleshooting, known pitfalls documented"
+          required: false
+        - label: "1.1.3 - Intuitive UX following 'don't make me think' philosophy"
+          required: false
+        - label: "1.2.1 - Useful metrics that avoid excessive cardinality"
+          required: false
+        - label: "1.2.2 - Relevant logging for troubleshooting"
+          required: false
+        - label: "1.2.3 - Known limitations and edge cases documented"
+          required: false
+        - label: "1.2.4 - Strong validation of user configuration"
+          required: false
+        - label: "1.3.1 - Idiomatic Go code consistent with codebase"
+          required: false
+        - label: "1.3.2 - End-to-end functionality tests"
+          required: false
+        - label: "1.3.3 - Integration tests runnable in CI"
+          required: false
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Any other relevant information
+      placeholder: |
+        - Link to connector documentation/API reference
+        - Similar implementations in other tools
+        - Community feedback or feature requests
+        - Performance expectations or benchmarks

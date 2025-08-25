@@ -1,0 +1,195 @@
+name: ⚡ Performance Issue
+description: Report performance degradation, memory leaks, or resource usage problems
+title: "[Performance]: "
+labels: ["performance", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting a performance issue. Please provide as much detail as possible to help us diagnose and fix the problem.
+
+  - type: textarea
+    id: performance-description
+    attributes:
+      label: Performance Issue Description
+      description: Clearly describe the performance problem you're experiencing
+      placeholder: What performance issue are you experiencing?
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: performance-symptoms
+    attributes:
+      label: Performance Symptoms
+      description: What symptoms are you observing?
+      options:
+        - label: High CPU usage
+        - label: High memory usage
+        - label: Memory leaks
+        - label: Slow throughput
+        - label: High latency
+        - label: Connection timeouts
+        - label: Resource exhaustion
+        - label: Other
+
+  - type: textarea
+    id: expected-performance
+    attributes:
+      label: Expected Performance
+      description: Describe the performance you expected or were previously achieving
+      placeholder: |
+        - Expected throughput: 10,000 messages/second
+        - Expected latency: <100ms p99
+        - Expected resource usage: <500MB RAM, <50% CPU
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual-performance
+    attributes:
+      label: Actual Performance
+      description: Describe the actual performance you're seeing
+      placeholder: |
+        - Actual throughput: 1,000 messages/second
+        - Actual latency: 2s p99
+        - Actual resource usage: 2GB RAM, 90% CPU
+    validations:
+      required: true
+
+  - type: textarea
+    id: configuration
+    attributes:
+      label: Configuration
+      description: Please share your complete configuration (remove sensitive information)
+      render: yaml
+      placeholder: |
+        input:
+          # your input configuration
+
+        pipeline:
+          processors:
+            # your processor configuration
+
+        output:
+          # your output configuration
+
+        # Include any performance-related settings
+        resources:
+          # resource configuration if applicable
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Redpanda Connect Version
+      placeholder: "e.g., v4.32.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment Method
+      options:
+        - Docker
+        - Kubernetes
+        - Bare metal
+        - Docker Compose
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment Details
+      description: Provide details about your environment
+      placeholder: |
+        - OS: Ubuntu 22.04
+        - Architecture: amd64
+        - Hardware: 4 CPU cores, 8GB RAM
+        - Go Version: 1.21 (if building from source)
+
+  - type: textarea
+    id: workload-characteristics
+    attributes:
+      label: Workload Characteristics
+      description: Describe your workload
+      placeholder: |
+        - Message Size: average 1KB, max 10KB
+        - Message Rate: 1000 msgs/sec
+        - Data Pattern: JSON, binary, streaming
+        - Batch Size: (if applicable)
+        - Parallelism: number of parallel processes/goroutines
+    validations:
+      required: true
+
+  - type: textarea
+    id: monitoring-data
+    attributes:
+      label: Monitoring Data
+      description: Share any monitoring data you have (resource usage, metrics, etc.)
+      render: text
+      placeholder: |
+        # CPU/Memory usage over time
+        # Redpanda Connect metrics output
+        # System monitoring output (htop, iostat, etc.)
+
+  - type: textarea
+    id: reproduction-steps
+    attributes:
+      label: Reproduction Steps
+      description: How can we reproduce this performance issue?
+      placeholder: |
+        1. Set up environment: ___
+        2. Start Redpanda Connect with configuration
+        3. Generate load: ___
+        4. Observe performance degradation after: ___
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: profiling-done
+    attributes:
+      label: Performance Profiling
+      description: Have you done any profiling?
+      options:
+        - label: CPU profile (go tool pprof)
+        - label: Memory profile (go tool pprof)
+        - label: Goroutine profile
+        - label: Custom benchmark results
+        - label: Load testing results
+
+  - type: textarea
+    id: timeline
+    attributes:
+      label: Timeline & Pattern
+      description: When did this issue start and how consistent is it?
+      placeholder: |
+        - When did this start?: after upgrade to v4.32.0
+        - How long to reproduce?: immediately / after 1 hour
+        - Is it consistent?: always happens / intermittent
+
+  - type: checkboxes
+    id: attempted-solutions
+    attributes:
+      label: Attempted Solutions
+      description: What have you tried to fix or work around this issue?
+      options:
+        - label: Adjusted configuration parameters
+        - label: Increased resource limits
+        - label: Changed deployment method
+        - label: Updated to different version
+        - label: Other solutions
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Any other context that might be relevant
+      placeholder: |
+        - Are you processing specific types of data?
+        - Any error messages in logs?
+        - Does the issue correlate with specific events or times?
+        - Any recent changes to your setup?
