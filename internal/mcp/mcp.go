@@ -236,7 +236,7 @@ func (m *Server) ServeHTTP(ctx context.Context, l net.Listener) error {
 	m.addStreamableEndpoints()
 
 	srv := &http.Server{
-		Handler: m.rpJWT.Wrap(m.cors.WrapHandler(m.mux)),
+		Handler: m.cors.WrapHandler(m.rpJWT.Wrap(m.mux)),
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
