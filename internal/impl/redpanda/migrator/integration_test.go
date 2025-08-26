@@ -17,12 +17,16 @@ package migrator_test
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"testing"
 	"text/template"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/twmb/franz-go/pkg/sr"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
@@ -40,15 +44,19 @@ input:
       - {{.Topic}}
     consumer_group: migrator_cg
     start_from_oldest: true
+    {{- if .Src.SchemaRegistryURL }}
     schema_registry:
       url: {{.Src.SchemaRegistryURL}}
+    {{- end }}
 output:
   redpanda_migrator2:
     seed_brokers: [ {{.Dst.BrokerAddr}} ]
     topic: ${! metadata("kafka_topic").or(throw("missing kafka_topic metadata")) }
     sync_topic_acls: true
+    {{- if .Dst.SchemaRegistryURL }}
     schema_registry:
       url: {{.Dst.SchemaRegistryURL}}
+    {{- end }}
 logger:
   level: DEBUG
 `
@@ -113,6 +121,8 @@ func TestIntegrationMigrator(t *testing.T) {
 
 	t.Log("Given: Redpanda clusters")
 	src, dst := startRedpandaSourceAndDestination(t)
+	src.SchemaRegistryURL = ""
+	dst.SchemaRegistryURL = ""
 
 	t.Log("When: Messages are written to the source cluster")
 	writeToTopic(src, numMessages)
@@ -120,7 +130,50 @@ func TestIntegrationMigrator(t *testing.T) {
 	t.Log("And: Migrator is started")
 	startMigratorAndWaitForMessages(t, src, dst, numMessages)
 
-	// Verify that all messages were copied to the destination
-	t.Logf("Verifying messages in destination topic %s", migratorTestTopic)
+	t.Logf("Then: %d messages are present in destination topic %s", numMessages, migratorTestTopic)
 	assertTopicContent(dst, numMessages)
+}
+
+func TestIntegrationMigratorWithSchema(t *testing.T) {
+	integration.CheckSkip(t)
+
+	const (
+		numMessages = 10
+		subj        = "foo"
+		schema      = `{"type":"int"}`
+	)
+
+	t.Log("Given: Redpanda clusters")
+	src, dst := startRedpandaSourceAndDestination(t)
+
+	t.Log("And: Schema registry containing a subject and schema")
+	srScr, err := sr.NewClient(sr.URLs(src.SchemaRegistryURL))
+	require.NoError(t, err)
+	ss, err := srScr.CreateSchema(t.Context(), subj, sr.Schema{Schema: schema})
+	require.NoError(t, err)
+
+	t.Log("When: Messages are written to the source cluster")
+	writeToTopic(src, numMessages, ProduceWithSchemaIDOpt(ss.ID))
+
+	t.Log("And: Migrator is started")
+	startMigratorAndWaitForMessages(t, src, dst, numMessages)
+
+	t.Log("Then: Schema is visible at destination")
+	srDst, err := sr.NewClient(sr.URLs(dst.SchemaRegistryURL))
+	require.NoError(t, err)
+	txt, err := srDst.SchemaTextByVersion(t.Context(), subj, 1)
+	require.NoError(t, err)
+	assert.Equal(t, schema, txt)
+
+	t.Logf("And: %d schema-encoded messages are present in destination topic %s", numMessages, migratorTestTopic)
+	withSchema := func(fn func(int) []byte, schemaID int) func(int) []byte {
+		hdr := make([]byte, 5)
+		hdr[0] = 0
+		binary.BigEndian.PutUint32(hdr[1:], uint32(schemaID))
+
+		return func(i int) []byte {
+			return append(hdr, fn(i)...)
+		}
+	}
+	assertTopicContentWithGoldenFunc(dst, numMessages, withSchema(goldenIntMsg, ss.ID))
 }
