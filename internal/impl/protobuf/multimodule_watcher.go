@@ -53,6 +53,8 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
+const watcherTimeout = 10 * time.Second
+
 type multiModuleWatcher struct {
 	bsrClients map[string]*prototransform.SchemaWatcher
 }
@@ -127,7 +129,7 @@ func newSchemaWatcher(ctx context.Context, bsrURL string, bsrAPIKey string, modu
 		return nil, fmt.Errorf("failed to create schema watcher: %w", err)
 	}
 
-	ctxWithTimeout, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, watcherTimeout)
 	defer cancel()
 	if err = watcher.AwaitReady(ctxWithTimeout); err != nil {
 		return nil, fmt.Errorf("schema watcher never became ready: %w", err)
