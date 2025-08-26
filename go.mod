@@ -8,6 +8,7 @@ replace github.com/99designs/keyring => github.com/Jeffail/keyring v1.2.3
 
 require (
 	buf.build/gen/go/bufbuild/reflect/connectrpc/go v1.18.1-20240117202343-bf8f65e8876c.1
+	buf.build/gen/go/bufbuild/reflect/protocolbuffers/go v1.36.2-20240117202343-bf8f65e8876c.1
 	cloud.google.com/go/aiplatform v1.85.0
 	cloud.google.com/go/bigquery v1.67.0
 	cloud.google.com/go/pubsub v1.49.0
@@ -173,7 +174,6 @@ require (
 )
 
 require (
-	buf.build/gen/go/bufbuild/reflect/protocolbuffers/go v1.36.2-20240117202343-bf8f65e8876c.1 // indirect
 	cel.dev/expr v0.23.1 // indirect
 	cloud.google.com/go/longrunning v0.6.7 // indirect
 	cloud.google.com/go/monitoring v1.24.2 // indirect

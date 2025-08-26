@@ -357,6 +357,71 @@ import_paths: [ %v ]
 	}
 }
 
+func TestProcessorConfigLinting(t *testing.T) {
+
+	type testCase struct {
+		name        string
+		input       string
+		errContains string
+	}
+
+	var testCases = []testCase{
+		{
+			name: "valid import_paths config",
+			input: `
+protobuf:
+  operator: to_json
+  message: testing.Person
+  import_paths: [ ./mypath ]
+`,
+		},
+		{
+			name: "valid bsr config",
+			input: `
+protobuf:
+  operator: to_json
+  message: testing.Person
+  bsr:
+    - module: "testing"
+`,
+		},
+		{
+			name: "can't set both import_paths and bsr",
+			input: `
+protobuf:
+  operator: to_json
+  message: testing.Person
+  import_paths: [ ./mypath ]
+  bsr:
+    - module: "buf.build/exampleco/mymodule"
+`,
+			errContains: "both `import_paths` and `bsr` can't be set simultaneously",
+		},
+		{
+			name: "require one of import_paths and bsr",
+			input: `
+protobuf:
+  operator: to_json
+  message: testing.Person
+`,
+			errContains: "at least one of `import_paths`and `bsr` must be set",
+		},
+	}
+	env := service.NewEnvironment()
+	for _, test := range testCases {
+		t.Run(test.name, func(tt *testing.T) {
+			strm := env.NewStreamBuilder()
+			err := strm.AddProcessorYAML(test.input)
+			if test.errContains == "" {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), test.errContains)
+			}
+		})
+	}
+}
+
 type fileDescriptorSetServer struct {
 	fileDescriptorSet *descriptorpb.FileDescriptorSet
 }
