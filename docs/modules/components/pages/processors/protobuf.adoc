@@ -37,17 +37,18 @@ protobuf:
   use_proto_names: false
   import_paths: []
   use_enum_numbers: false
+  bsr: []
 ```
 
-The main functionality of this processor is to map to and from JSON documents, you can read more about JSON mapping of protobuf messages here: https://developers.google.com/protocol-buffers/docs/proto3#json[https://developers.google.com/protocol-buffers/docs/proto3#json^]
+The main functionality of this processor is to map to and from JSON documents, you can read more about JSON mapping of protobuf messages here: [https://developers.google.com/protocol-buffers/docs/proto3#json](https://developers.google.com/protocol-buffers/docs/proto3#json)
 
-Using reflection for processing protobuf messages in this way is less performant than generating and using native code. Therefore when performance is critical it is recommended that you use Redpanda Connect plugins instead for processing protobuf messages natively, you can find an example of Redpanda Connect plugins at https://github.com/benthosdev/benthos-plugin-example[https://github.com/benthosdev/benthos-plugin-example^]
+Using reflection for processing protobuf messages in this way is less performant than generating and using native code. Therefore when performance is critical it is recommended that you use Redpanda Connect plugins instead for processing protobuf messages natively, you can find an example of Redpanda Connect plugins at [https://github.com/redpanda-data/redpanda-connect-plugin-example](https://github.com/redpanda-data/redpanda-connect-plugin-example)
 
 == Operators
 
 === `to_json`
 
-Converts protobuf messages into a generic JSON structure. This makes it easier to manipulate the contents of the document within Benthos.
+Converts protobuf messages into a generic JSON structure. This makes it easier to manipulate the contents of the document within Redpanda Connect.
 
 === `from_json`
 
@@ -58,7 +59,7 @@ Attempts to create a target protobuf message from a generic JSON structure.
 
 [tabs]
 ======
-JSON to Protobuf::
+JSON to Protobuf using Schema from Disk::
 +
 --
 
@@ -105,7 +106,7 @@ pipeline:
 ```
 
 --
-Protobuf to JSON::
+Protobuf to JSON using Schema from Disk::
 +
 --
 
@@ -152,13 +153,110 @@ pipeline:
 ```
 
 --
+JSON to Protobuf using Buf Schema Registry::
++
+--
+
+
+If we have the following protobuf definition within a BSR module hosted at `buf.build/exampleco/mymodule`:
+
+```protobuf
+syntax = "proto3";
+package testing;
+
+import "google/protobuf/timestamp.proto";
+
+message Person {
+  string first_name = 1;
+  string last_name = 2;
+  string full_name = 3;
+  int32 age = 4;
+  int32 id = 5; // Unique ID number for this person.
+  string email = 6;
+
+  google.protobuf.Timestamp last_updated = 7;
+}
+```
+
+And a stream of JSON documents of the form:
+
+```json
+{
+	"firstName": "caleb",
+	"lastName": "quaye",
+	"email": "caleb@myspace.com"
+}
+```
+
+We can convert the documents into protobuf messages with the following config:
+
+```yaml
+pipeline:
+  processors:
+    - protobuf:
+        operator: from_json
+        message: testing.Person
+        bsr:
+          - module: buf.build/exampleco/mymodule
+            api_key: xxx
+```
+
+--
+Protobuf to JSON using Buf Schema Registry::
++
+--
+
+
+If we have the following protobuf definition within a BSR module hosted at `buf.build/exampleco/mymodule`:
+```protobuf
+syntax = "proto3";
+package testing;
+
+import "google/protobuf/timestamp.proto";
+
+message Person {
+  string first_name = 1;
+  string last_name = 2;
+  string full_name = 3;
+  int32 age = 4;
+  int32 id = 5; // Unique ID number for this person.
+  string email = 6;
+
+  google.protobuf.Timestamp last_updated = 7;
+}
+```
+
+And a stream of protobuf messages of the type `Person`, we could convert them into JSON documents of the format:
+
+```json
+{
+	"firstName": "caleb",
+	"lastName": "quaye",
+	"email": "caleb@myspace.com"
+}
+```
+
+With the following config:
+
+```yaml
+pipeline:
+  processors:
+    - protobuf:
+        operator: to_json
+        message: testing.Person
+        bsr:
+          - module: buf.build/exampleco/mymodule
+            api_key: xxxx
+```
+
+--
 ======
 
 == Fields
 
 === `operator`
 
-The <<operators, operator>> to execute
+The [operator](#operators) to execute
 
 
 *Type*: `string`
@@ -197,7 +295,7 @@ If `true`, the `to_json` operator deserializes fields exactly as named in schema
 
 === `import_paths`
 
-A list of directories containing .proto files, including all definitions required for parsing the target message. If left empty the current directory is used. Each directory listed will be walked with all found .proto files imported.
+A list of directories containing .proto files, including all definitions required for parsing the target message. If left empty the current directory is used. Each directory listed will be walked with all found .proto files imported. Either this field or `bsr` must be populated.
 
 
 *Type*: `array`
@@ -212,5 +310,54 @@ If `true`, the `to_json` operator deserializes enums as numerical values instead
 *Type*: `bool`
 
 *Default*: `false`
+
+=== `bsr`
+
+Buf Schema Registry configuration. Either this field or `import_paths` must be populated. Note that this field is an array, and multiple BSR configurations can be provided.
+
+
+*Type*: `array`
+
+*Default*: `[]`
+
+=== `bsr[].module`
+
+Module to fetch from a Buf Schema Registry e.g. 'buf.build/exampleco/mymodule'.
+
+
+*Type*: `string`
+
+
+=== `bsr[].url`
+
+Buf Schema Registry URL, leave blank to extract from module.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `bsr[].api_key`
+
+Buf Schema Registry server API key, can be left blank for a public registry.
+[CAUTION]
+====
+This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
+====
+
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `bsr[].version`
+
+Version to retrieve from the Buf Schema Registry, leave blank for latest.
+
+
+*Type*: `string`
+
+*Default*: `""`
 
 
