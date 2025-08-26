@@ -1,6 +1,6 @@
 name: catshout
 summary: Add your summary here
-command: ["./main"]
+command: ["go", "run", "."] # /testdata/catshout"]
 type: processor
 fields: []
 # Example of how to add configuration fields:

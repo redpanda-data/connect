@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -23,6 +24,13 @@ var _ service.BatchProcessor = (*myProcessor)(nil)
 
 // ProcessBatch implements service.BatchProcessor.
 func (*myProcessor) ProcessBatch(_ context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	for _, m := range batch {
+		mBytes, err := m.AsBytes()
+		if err != nil {
+			return nil, err
+		}
+		m.SetBytes(append(bytes.ToUpper(mBytes), []byte(" MEOW!")...))
+	}
 	return []service.MessageBatch{batch}, nil
 }
 
