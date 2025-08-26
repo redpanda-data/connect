@@ -15,12 +15,26 @@
 package protobuf
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"net"
+	"net/http"
 	"strconv"
+	"strings"
 	"testing"
 
+	"buf.build/gen/go/bufbuild/reflect/connectrpc/go/buf/reflect/v1beta1/reflectv1beta1connect"
+	v1beta1 "buf.build/gen/go/bufbuild/reflect/protocolbuffers/go/buf/reflect/v1beta1"
+	"connectrpc.com/connect"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
+	"google.golang.org/protobuf/reflect/protodesc"
+	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/reflect/protoregistry"
+	"google.golang.org/protobuf/types/descriptorpb"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -102,6 +116,36 @@ discard_unknown: %t
 			require.NoError(t, err)
 
 			msgs, res := proc.Process(t.Context(), service.NewMessage([]byte(test.input)))
+			require.NoError(t, res)
+			require.Len(t, msgs, 1)
+
+			mBytes, err := msgs[0].AsBytes()
+			require.NoError(t, err)
+
+			assert.NotEqual(t, test.input, string(mBytes))
+			for _, exp := range test.outputContains {
+				assert.Contains(t, string(mBytes), exp)
+			}
+			require.NoError(t, msgs[0].GetError())
+		})
+
+		t.Run(test.name+" bsr", func(t *testing.T) {
+			mockBSRServerAddress := runMockBSRServer(t, test.importPath)
+
+			conf, err := protobufProcessorSpec().ParseYAML(fmt.Sprintf(`
+operator: from_json
+message: %v
+bsr:
+  - module: "testing"
+    url: %s
+discard_unknown: %t
+`, test.message, "http://"+mockBSRServerAddress, test.discardUnknown), nil)
+			require.NoError(t, err)
+
+			proc, err := newProtobuf(conf, service.MockResources())
+			require.NoError(t, err)
+
+			msgs, res := proc.Process(context.Background(), service.NewMessage([]byte(test.input)))
 			require.NoError(t, res)
 			require.Len(t, msgs, 1)
 
@@ -226,6 +270,34 @@ use_enum_numbers: %t
 			assert.JSONEq(t, test.output, string(mBytes))
 			require.NoError(t, msgs[0].GetError())
 		})
+
+		t.Run(test.name+" bsr", func(t *testing.T) {
+			mockBSRServerAddress := runMockBSRServer(t, test.importPath)
+
+			conf, err := protobufProcessorSpec().ParseYAML(fmt.Sprintf(`
+operator: to_json
+message: %v
+bsr:
+  - module: "testing"
+    url: %s
+use_proto_names: %t
+use_enum_numbers: %t
+`, test.message, "http://"+mockBSRServerAddress, test.useProtoNames, test.useEnumNumbers), nil)
+			require.NoError(t, err)
+
+			proc, err := newProtobuf(conf, service.MockResources())
+			require.NoError(t, err)
+
+			msgs, res := proc.Process(context.Background(), service.NewMessage(test.input))
+			require.NoError(t, res)
+			require.Len(t, msgs, 1)
+
+			mBytes, err := msgs[0].AsBytes()
+			require.NoError(t, err)
+
+			assert.JSONEq(t, test.output, string(mBytes))
+			require.NoError(t, msgs[0].GetError())
+		})
 	}
 }
 
@@ -283,4 +355,57 @@ import_paths: [ %v ]
 			require.Contains(t, err.Error(), test.output)
 		})
 	}
+}
+
+type fileDescriptorSetServer struct {
+	fileDescriptorSet *descriptorpb.FileDescriptorSet
+}
+
+func (s *fileDescriptorSetServer) GetFileDescriptorSet(_ context.Context, request *connect.Request[v1beta1.GetFileDescriptorSetRequest]) (*connect.Response[v1beta1.GetFileDescriptorSetResponse], error) {
+	resp := &v1beta1.GetFileDescriptorSetResponse{FileDescriptorSet: s.fileDescriptorSet, Version: request.Msg.GetVersion()}
+	return connect.NewResponse(resp), nil
+}
+
+func runMockBSRServer(t *testing.T, importPath string) string {
+	// load files into protoregistry.Files
+	mockResources := service.MockResources()
+	files, _, err := loadDescriptors(mockResources.FS(), []string{importPath})
+	require.NoError(t, err)
+
+	// populate into a FileDescriptorSet
+	fileDescriptorSet := &descriptorpb.FileDescriptorSet{}
+	standardImportPaths := make(map[string]bool)
+	files.RangeFiles(func(fd protoreflect.FileDescriptor) bool {
+		fileDescriptorSet.File = append(fileDescriptorSet.File, protodesc.ToFileDescriptorProto(fd))
+		// find any standard imports used https://protobuf.com/docs/descriptors#standard-imports
+		for i := 0; i < fd.Imports().Len(); i++ {
+			imp := fd.Imports().Get(i)
+			if strings.HasPrefix(imp.Path(), "google/protobuf/") {
+				standardImportPaths[imp.Path()] = true
+			}
+		}
+		return true
+	})
+
+	// add standard imports to the FileDescriptorSet
+	for standardImportPath := range standardImportPaths {
+		fd, err := protoregistry.GlobalFiles.FindFileByPath(standardImportPath)
+		require.NoError(t, err)
+		fileDescriptorSet.File = append(fileDescriptorSet.File, protodesc.ToFileDescriptorProto(fd))
+	}
+
+	// run GRPC server on an available port
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+
+	mux := http.NewServeMux()
+	fileDescriptorSetServer := &fileDescriptorSetServer{fileDescriptorSet: fileDescriptorSet}
+	mux.Handle(reflectv1beta1connect.NewFileDescriptorSetServiceHandler(fileDescriptorSetServer))
+	go func() {
+		if err := http.Serve(listener, h2c.NewHandler(mux, &http2.Server{})); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			require.NoError(t, err)
+		}
+	}()
+
+	return listener.Addr().String()
 }
