@@ -24,7 +24,6 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
 )
 
@@ -60,7 +59,7 @@ func migratorOutputConfig() *service.ConfigSpec {
 		Fields(kafka.FranzProducerFields()...).
 		Fields(kafka.FranzWriterConfigFields()...).
 		// Schema registry fields
-		Field(schemaRegistryField().Optional()).
+		Field(schemaRegistryField(schemaRegistryMigratorFields()...).Optional()).
 		// Topic fields
 		Field(service.NewInterpolatedStringField(rmoFieldTopic).
 			Description("The topic to write messages to, the source topic name is passed as kafka_topic metadata.").
@@ -77,7 +76,7 @@ func migratorOutputConfig() *service.ConfigSpec {
 			Description("The maximum number of batches to be sending in parallel at any given time.").
 			Default(256)).
 		Field(service.NewBoolField(rmoFieldServerless).
-			Description("Set this to `true` when using Serverless clusters in Redpanda Cloud.").
+			Description("Set this to `true` when using Serverless clusters in Redpanda Cloud as the destination cluster.").
 			Default(false).
 			Advanced())
 }
@@ -168,10 +167,8 @@ func init() {
 // registry support.
 type Migrator struct {
 	topic topicMigrator
+	sr    schemaRegistryMigrator
 	log   *service.Logger
-
-	sri *sr.Client
-	sro *sr.Client
 
 	plumbing uint8
 
@@ -189,6 +186,11 @@ func NewMigrator(mgr *service.Resources) *Migrator {
 			log:         log,
 			knownTopics: make(map[string]string),
 		},
+		sr: schemaRegistryMigrator{
+			log:          log,
+			knownSchemas: make(map[int]schemaInfo),
+			compatSet:    make(map[string]struct{}),
+		},
 		log: log,
 	}
 }
@@ -196,7 +198,7 @@ func NewMigrator(mgr *service.Resources) *Migrator {
 func (m *Migrator) initInputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) error {
 	var err error
 
-	m.sri, err = schemaRegistryClientFromParsed(pConf, mgr)
+	m.sr.src, err = schemaRegistryClientFromParsed(pConf, mgr)
 	if err != nil {
 		return err
 	}
@@ -208,12 +210,15 @@ func (m *Migrator) initInputFromParsed(pConf *service.ParsedConfig, mgr *service
 func (m *Migrator) initOutputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) error {
 	var err error
 
-	m.sro, err = schemaRegistryClientFromParsed(pConf, mgr)
-	if err != nil {
+	if err := m.topic.conf.initFromParsed(pConf); err != nil {
 		return err
 	}
 
-	if err := m.topic.conf.initFromParsed(pConf); err != nil {
+	m.sr.dst, err = schemaRegistryClientFromParsed(pConf, mgr)
+	if err != nil {
+		return err
+	}
+	if err := m.sr.conf.initFromParsed(pConf); err != nil {
 		return err
 	}
 
@@ -248,9 +253,6 @@ func (m *Migrator) validateInitialized() error {
 	}
 	if m.plumbing&outputInitialized == 0 {
 		return errors.New("output not initialized")
-	}
-	if m.sri != nil && m.sro == nil || m.sro != nil && m.sri == nil {
-		return errors.New("schema registry mismatch both input and output must be set")
 	}
 	return nil
 }
