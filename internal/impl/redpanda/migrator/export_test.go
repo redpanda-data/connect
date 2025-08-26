@@ -19,12 +19,15 @@ import (
 	"log/slog"
 	"testing"
 
+	"github.com/twmb/franz-go/pkg/sr"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 var (
 	TopicDetailsWithClient = topicDetailsWithClient
 	DescribeACLs           = describeACLs
+	SchemaStringEquals     = schemaStringEquals
 )
 
 func NewTopicMigratorForTesting(t *testing.T, conf TopicMigratorConfig) *topicMigrator {
@@ -39,5 +42,22 @@ func NewTopicMigratorForTesting(t *testing.T, conf TopicMigratorConfig) *topicMi
 				Level: slog.LevelDebug,
 			}))),
 		knownTopics: make(map[string]string),
+	}
+}
+
+func NewSchemaRegistryMigratorForTesting(t *testing.T, conf SchemaRegistryMigratorConfig, src, dst *sr.Client) *schemaRegistryMigrator {
+	var buf bytes.Buffer
+	t.Cleanup(func() {
+		t.Log(buf.String())
+	})
+	return &schemaRegistryMigrator{
+		conf: conf,
+		src:  src,
+		dst:  dst,
+		log: service.NewLoggerFromSlog(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{
+			Level: slog.LevelDebug,
+		}))),
+		knownSchemas: make(map[int]schemaInfo),
+		compatSet:    make(map[string]struct{}),
 	}
 }
