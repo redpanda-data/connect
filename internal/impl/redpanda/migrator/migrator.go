@@ -20,11 +20,12 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/Jeffail/shutdown"
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
+	"github.com/twmb/franz-go/pkg/sr"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
 )
 
@@ -59,7 +60,7 @@ func migratorOutputConfig() *service.ConfigSpec {
 		Fields(kafka.FranzProducerFields()...).
 		Fields(kafka.FranzWriterConfigFields()...).
 		// Schema registry fields
-		Field(schemaRegistryField().Optional()).
+		Field(schemaRegistryField(schemaRegistryMigratorFields()...).Optional()).
 		// Topic fields
 		Field(service.NewInterpolatedStringField(rmoFieldTopic).
 			Description("The topic to write messages to, the source topic name is passed as kafka_topic metadata.").
@@ -72,7 +73,7 @@ func migratorOutputConfig() *service.ConfigSpec {
 			Description("Whether to configure remote topic ACLs to match their corresponding upstream topics.").
 			Default(false)).
 		Field(service.NewBoolField(rmoFieldServerless).
-			Description("Set this to `true` when using Serverless clusters in Redpanda Cloud.").
+			Description("Set this to `true` when using Serverless clusters in Redpanda Cloud as the destination cluster.").
 			Default(false).
 			Advanced())
 }
@@ -161,12 +162,11 @@ func init() {
 // registry support.
 type Migrator struct {
 	topic topicMigrator
+	sr    schemaRegistryMigrator
 	log   *service.Logger
 
-	sri *sr.Client
-	sro *sr.Client
-
 	plumbing uint8
+	stopSig  *shutdown.Signaller
 
 	mu     sync.RWMutex
 	src    *kgo.Client
@@ -182,14 +182,21 @@ func NewMigrator(mgr *service.Resources) *Migrator {
 			log:         log,
 			knownTopics: make(map[string]string),
 		},
-		log: log,
+		sr: schemaRegistryMigrator{
+			metrics:      newSchemaRegistryMetrics(mgr.Metrics()),
+			log:          log,
+			knownSchemas: make(map[int]schemaInfo),
+			compatSet:    make(map[string]struct{}),
+		},
+		log:     log,
+		stopSig: shutdown.NewSignaller(),
 	}
 }
 
 func (m *Migrator) initInputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) error {
 	var err error
 
-	m.sri, err = schemaRegistryClientFromParsed(pConf, mgr)
+	m.sr.src, err = schemaRegistryClientFromParsed(pConf, mgr)
 	if err != nil {
 		return err
 	}
@@ -201,12 +208,15 @@ func (m *Migrator) initInputFromParsed(pConf *service.ParsedConfig, mgr *service
 func (m *Migrator) initOutputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) error {
 	var err error
 
-	m.sro, err = schemaRegistryClientFromParsed(pConf, mgr)
-	if err != nil {
+	if err := m.topic.conf.initFromParsed(pConf); err != nil {
 		return err
 	}
 
-	if err := m.topic.conf.initFromParsed(pConf); err != nil {
+	m.sr.dst, err = schemaRegistryClientFromParsed(pConf, mgr)
+	if err != nil {
+		return err
+	}
+	if err := m.sr.conf.initFromParsed(pConf); err != nil {
 		return err
 	}
 
@@ -214,7 +224,7 @@ func (m *Migrator) initOutputFromParsed(pConf *service.ParsedConfig, mgr *servic
 	return nil
 }
 
-func (m *Migrator) OnInputConnected(ctx context.Context, fr *kafka.FranzReaderOrdered) error { //nolint:revive
+func (m *Migrator) OnInputConnected(_ context.Context, fr *kafka.FranzReaderOrdered) error { //nolint:revive
 	if err := m.validateInitialized(); err != nil {
 		return err
 	}
@@ -227,10 +237,26 @@ func (m *Migrator) OnInputConnected(ctx context.Context, fr *kafka.FranzReaderOr
 	return nil
 }
 
-func (m *Migrator) OnOutputConnected(ctx context.Context, fw franzWriter) error { //nolint:revive
+func (m *Migrator) OnOutputConnected(_ context.Context, fw franzWriter) error { //nolint:revive
 	if err := m.validateInitialized(); err != nil {
 		return err
 	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		defer cancel()
+		<-m.stopSig.SoftStopChan()
+	}()
+
+	// Syncing topics is deferred until the first message is received because
+	// we use GetConsumeTopics, which is only available after the first message
+	// is received.
+
+	// Sync the schema registry
+	if err := m.sr.Sync(ctx); err != nil {
+		return err
+	}
+	go m.sr.SyncLoop(ctx)
 
 	return nil
 }
@@ -242,7 +268,11 @@ func (m *Migrator) validateInitialized() error {
 	if m.plumbing&outputInitialized == 0 {
 		return errors.New("output not initialized")
 	}
-	if m.sri != nil && m.sro == nil || m.sro != nil && m.sri == nil {
+	// If schema registry migration is disabled, allow client mismatch.
+	if !m.sr.conf.Enabled {
+		return nil
+	}
+	if m.sr.src != nil && m.sr.dst == nil || m.sr.dst != nil && m.sr.src == nil {
 		return errors.New("schema registry mismatch: both input and output must be set")
 	}
 	return nil
@@ -265,11 +295,12 @@ func (m *Migrator) onWrite(
 	}
 
 	var (
-		lastTopic    string
-		lastDstTopic string
+		lastTopic       string
+		lastDstTopic    string
+		lastSchemaID    int
+		lastDstSchemaID int
 	)
 	for _, record := range records {
-		// Update topic
 		if record.Topic != lastTopic {
 			topic, err := m.topic.CreateTopicIfNeeded(ctx, srcAdm, dstAdm, record.Topic)
 			if err != nil {
@@ -278,7 +309,43 @@ func (m *Migrator) onWrite(
 			lastTopic, lastDstTopic = record.Topic, topic
 		}
 		record.Topic = lastDstTopic
+
+		// Update schema ID
+		schemaID, err := parseSchemaID(record.Value)
+		if err != nil {
+			return fmt.Errorf("parse schema ID: %w", err)
+		}
+		if schemaID != 0 {
+			if schemaID != lastSchemaID {
+				id, err := m.sr.DestinationSchemaID(ctx, schemaID)
+				if err != nil {
+					return fmt.Errorf("resolve destination schema ID: %w", err)
+				}
+				lastSchemaID, lastDstSchemaID = schemaID, id
+			}
+			if err := updateSchemaID(record.Value, lastDstSchemaID); err != nil {
+				return fmt.Errorf("update schema ID: %w", err)
+			}
+		}
 	}
 
 	return nil
+}
+
+func parseSchemaID(b []byte) (int, error) {
+	if b == nil {
+		return 0, nil
+	}
+
+	var ch sr.ConfluentHeader
+	schemaID, _, err := ch.DecodeID(b)
+	if err != nil && !errors.Is(err, sr.ErrBadHeader) {
+		return 0, fmt.Errorf("decode schema ID: %w", err)
+	}
+	return schemaID, nil
+}
+
+func updateSchemaID(b []byte, schemaID int) error {
+	var ch sr.ConfluentHeader
+	return ch.UpdateID(b, uint32(schemaID))
 }
