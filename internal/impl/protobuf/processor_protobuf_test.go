@@ -167,7 +167,7 @@ discard_unknown: %t
 			proc, err := newProtobuf(conf, service.MockResources())
 			require.NoError(t, err)
 
-			msgs, res := proc.Process(context.Background(), service.NewMessage([]byte(test.input)))
+			msgs, res := proc.Process(t.Context(), service.NewMessage([]byte(test.input)))
 			require.NoError(t, res)
 			require.Len(t, msgs, 1)
 
@@ -310,7 +310,7 @@ use_enum_numbers: %t
 			proc, err := newProtobuf(conf, service.MockResources())
 			require.NoError(t, err)
 
-			msgs, res := proc.Process(context.Background(), service.NewMessage(test.input))
+			msgs, res := proc.Process(t.Context(), service.NewMessage(test.input))
 			require.NoError(t, res)
 			require.Len(t, msgs, 1)
 
@@ -380,14 +380,13 @@ import_paths: [ %v ]
 }
 
 func TestProcessorConfigLinting(t *testing.T) {
-
 	type testCase struct {
 		name        string
 		input       string
 		errContains string
 	}
 
-	var testCases = []testCase{
+	testCases := []testCase{
 		{
 			name: "valid import_paths config",
 			input: `
@@ -431,7 +430,7 @@ protobuf:
 	}
 	env := service.NewEnvironment()
 	for _, test := range testCases {
-		t.Run(test.name, func(tt *testing.T) {
+		t.Run(test.name, func(_ *testing.T) {
 			strm := env.NewStreamBuilder()
 			err := strm.AddProcessorYAML(test.input)
 			if test.errContains == "" {

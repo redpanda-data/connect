@@ -101,7 +101,7 @@ func newMultiModuleWatcher(bsrModules []*service.ParsedConfig) (*multiModuleWatc
 	return multiModuleWatcher, nil
 }
 
-func newSchemaWatcher(ctx context.Context, bsrURL string, bsrAPIKey string, module string, version string) (*prototransform.SchemaWatcher, error) {
+func newSchemaWatcher(ctx context.Context, bsrURL, bsrAPIKey, module, version string) (*prototransform.SchemaWatcher, error) {
 	// If no BSR URL provided, extract from module
 	if bsrURL == "" {
 		segments := strings.Split(module, "/")
@@ -113,7 +113,8 @@ func newSchemaWatcher(ctx context.Context, bsrURL string, bsrAPIKey string, modu
 
 	opts := []connectrpc.ClientOption{
 		connectrpc.WithHTTPGet(),
-		connectrpc.WithHTTPGetMaxURLSize(8192, true)}
+		connectrpc.WithHTTPGetMaxURLSize(8192, true),
+	}
 
 	if bsrAPIKey != "" {
 		opts = append(opts, connectrpc.WithInterceptors(prototransform.NewAuthInterceptor(bsrAPIKey)))
