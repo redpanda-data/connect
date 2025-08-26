@@ -16,6 +16,7 @@ package migrator_test
 
 import (
 	"context"
+	"encoding/binary"
 	"strconv"
 	"testing"
 	"time"
@@ -127,20 +128,8 @@ func (e *EmbeddedRedpandaCluster) DescribeTopicACLs(topic string) ([]kadm.Descri
 	return migrator.DescribeACLs(ctx, e.Admin, topic)
 }
 
-// Produce sends a message with the given value to the specified topic
-func (e *EmbeddedRedpandaCluster) Produce(topic string, value []byte) {
-	e.t.Helper()
-
-	ctx, cancel := context.WithTimeout(e.t.Context(), redpandaTestOpTimeout)
-	defer cancel()
-
-	record := &kgo.Record{
-		Topic: topic,
-		Value: value,
-	}
-	require.NoError(e.t, e.Client.ProduceSync(ctx, record).FirstErr())
-}
-
+// TopicConfig returns the value of the configuration entry with key `key` for
+// topic `topic`, or nil if the key is not found.
 func (e *EmbeddedRedpandaCluster) TopicConfig(topic, key string) *string {
 	e.t.Helper()
 	_, rc, err := migrator.TopicDetailsWithClient(e.t.Context(), e.Admin, topic)
@@ -155,10 +144,36 @@ func (e *EmbeddedRedpandaCluster) TopicConfig(topic, key string) *string {
 	return nil
 }
 
-// writeToTopic produces the specified number of messages to a topic.
-func writeToTopic(cluster EmbeddedRedpandaCluster, numMessages int) {
+// Produce sends a message with the given value to the specified topic
+func (e *EmbeddedRedpandaCluster) Produce(topic string, value []byte, opts ...func(*kgo.Record)) {
+	e.t.Helper()
+
+	ctx, cancel := context.WithTimeout(e.t.Context(), redpandaTestOpTimeout)
+	defer cancel()
+
+	record := &kgo.Record{
+		Topic: topic,
+		Value: value,
+	}
+	for _, opt := range opts {
+		opt(record)
+	}
+	require.NoError(e.t, e.Client.ProduceSync(ctx, record).FirstErr())
+}
+
+func ProduceWithSchemaIDOpt(schemaID int) func(*kgo.Record) {
+	return func(r *kgo.Record) {
+		hdr := make([]byte, 5)
+		hdr[0] = 0
+		binary.BigEndian.PutUint32(hdr[1:], uint32(schemaID))
+		r.Value = append(hdr, r.Value...)
+	}
+}
+
+// writeToTopic produces num messages to a topic.
+func writeToTopic(cluster EmbeddedRedpandaCluster, numMessages int, opts ...func(*kgo.Record)) {
 	for i := range numMessages {
-		cluster.Produce(migratorTestTopic, []byte(strconv.Itoa(i)))
+		cluster.Produce(migratorTestTopic, []byte(strconv.Itoa(i)), opts...)
 	}
 	cluster.t.Logf("Successfully wrote %d messages to topic %s", numMessages, migratorTestTopic)
 }
@@ -166,18 +181,24 @@ func writeToTopic(cluster EmbeddedRedpandaCluster, numMessages int) {
 // assertTopicContent asserts that the specified number of messages created with
 // the writeToTopic function are present in the topic.
 func assertTopicContent(cluster EmbeddedRedpandaCluster, numMessages int) {
+	assertTopicContentWithGoldenFunc(cluster, numMessages, goldenIntMsg)
+}
+
+// assertTopicContent asserts that the specified number of messages matching the
+// golden function are present in the topic.
+func assertTopicContentWithGoldenFunc(cluster EmbeddedRedpandaCluster, numMessages int, golden func(int) []byte) {
 	ctx := cluster.t.Context()
 	t := cluster.t
 	client := cluster.Client
 
-	messages := make([]string, 0, numMessages)
+	messages := make([][]byte, 0, numMessages)
 	for len(messages) < numMessages {
 		fetches := client.PollFetches(ctx)
 		if errs := fetches.Errors(); len(errs) > 0 {
 			require.NoError(t, errs[0].Err)
 		}
 		fetches.EachRecord(func(r *kgo.Record) {
-			messages = append(messages, string(r.Value))
+			messages = append(messages, r.Value)
 		})
 
 		select {
@@ -193,9 +214,13 @@ func assertTopicContent(cluster EmbeddedRedpandaCluster, numMessages int) {
 
 	t.Logf("Successfully read %d messages from topic %s", len(messages), migratorTestTopic)
 
-	expected := make([]string, 0, numMessages)
+	expected := make([][]byte, 0, numMessages)
 	for i := 0; i < numMessages; i++ {
-		expected = append(expected, strconv.Itoa(i))
+		expected = append(expected, golden(i))
 	}
 	assert.ElementsMatch(t, expected, messages)
+}
+
+func goldenIntMsg(i int) []byte {
+	return []byte(strconv.Itoa(i))
 }
