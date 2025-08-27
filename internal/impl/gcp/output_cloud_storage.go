@@ -57,7 +57,7 @@ const (
 )
 
 type csoConfig struct {
-	Bucket          string
+	Bucket          *service.InterpolatedString
 	Path            *service.InterpolatedString
 	ContentType     *service.InterpolatedString
 	ContentEncoding *service.InterpolatedString
@@ -68,7 +68,7 @@ type csoConfig struct {
 }
 
 func csoConfigFromParsed(pConf *service.ParsedConfig) (conf csoConfig, err error) {
-	if conf.Bucket, err = pConf.FieldString(csoFieldBucket); err != nil {
+	if conf.Bucket, err = pConf.FieldInterpolatedString(csoFieldBucket); err != nil {
 		return
 	}
 	if conf.Path, err = pConf.FieldInterpolatedString(csoFieldPath); err != nil {
@@ -147,7 +147,7 @@ output:
             format: json_array
 `+"```"+``+service.OutputPerformanceDocs(true, true)).
 		Fields(
-			service.NewStringField(csoFieldBucket).
+			service.NewInterpolatedStringField(csoFieldBucket).
 				Description("The bucket to upload messages to."),
 			service.NewInterpolatedStringField(csoFieldPath).
 				Description("The path of each message to upload.").
@@ -280,9 +280,13 @@ func (g *gcpCloudStorageOutput) WriteBatch(ctx context.Context, batch service.Me
 		if err != nil {
 			return fmt.Errorf("collision mode interpolation error: %w", err)
 		}
+		bucket, err := g.conf.Bucket.TryString(msg)
+		if err != nil {
+			return fmt.Errorf("bucket interpolation error: %w", err)
+		}
 
 		if collisionMode != GCPCloudStorageOverwriteCollisionMode {
-			_, err = client.Bucket(g.conf.Bucket).Object(outputPath).Attrs(ctx)
+			_, err = client.Bucket(bucket).Object(outputPath).Attrs(ctx)
 		}
 
 		isMerge := false
@@ -314,7 +318,7 @@ func (g *gcpCloudStorageOutput) WriteBatch(ctx context.Context, batch service.Me
 			g.log.Tracef("creating temporary file for the merge %q", tempPath)
 		}
 
-		src := client.Bucket(g.conf.Bucket).Object(tempPath)
+		src := client.Bucket(bucket).Object(tempPath)
 
 		w := src.NewWriter(ctx)
 
@@ -350,7 +354,7 @@ func (g *gcpCloudStorageOutput) WriteBatch(ctx context.Context, batch service.Me
 		}
 
 		if isMerge {
-			dst := client.Bucket(g.conf.Bucket).Object(outputPath)
+			dst := client.Bucket(bucket).Object(outputPath)
 
 			if aerr := appendToFile(ctx, src, dst); aerr != nil {
 				return aerr
