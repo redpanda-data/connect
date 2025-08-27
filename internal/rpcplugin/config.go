@@ -226,8 +226,8 @@ func (c *Config) Validate() error {
 func (c *Config) setDefaultCWD(cpath string) {
 	configDir := filepath.Dir(cpath)
 	if c.Cwd != "" {
-		if tmpPath, err := filepath.Rel(configDir, cpath); err == nil {
-			c.Cwd = tmpPath
+		if !filepath.IsAbs(c.Cwd) {
+			c.Cwd = filepath.Join(configDir, c.Cwd)
 		}
 	} else {
 		c.Cwd = configDir

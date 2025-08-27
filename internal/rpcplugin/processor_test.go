@@ -52,3 +52,29 @@ catshout:
 
 	require.NoError(t, done(t.Context()))
 }
+
+func TestProcessorCustomCwd(t *testing.T) {
+	require.NoError(t, rpcplugin.DiscoverAndRegisterPlugins(service.OSFS(), service.GlobalEnvironment(), []string{"./testdata/catshout/plugin.custom_dir.yaml"}))
+
+	resBuilder := service.NewResourceBuilder()
+	require.NoError(t, resBuilder.AddProcessorYAML(`
+label: foo
+catshout: {}
+`))
+
+	res, done, err := resBuilder.Build()
+	require.NoError(t, err)
+
+	require.NoError(t, res.AccessProcessor(t.Context(), "foo", func(proc *service.ResourceProcessor) {
+		b, err := proc.Process(t.Context(), service.NewMessage([]byte("hello world")))
+		require.NoError(t, err)
+		require.Len(t, b, 1)
+
+		bBytes, err := b[0].AsBytes()
+		require.NoError(t, err)
+
+		assert.Equal(t, "MEOW! HELLO WORLD, eh?", string(bBytes))
+	}))
+
+	require.NoError(t, done(t.Context()))
+}
