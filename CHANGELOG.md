@@ -3,11 +3,21 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## TBD
+## 4.63.0 - 2025-08-27
+
+### Added
+
+- (protobuf) Added Buf Schema Registry support (@josephwoodward)
+
+### Fixed
+
+- (Docker) Remove setcap on community Docker image (@mmatczuk)
 
 ### Changed
 
-- (MSSQL) Migrate from stale denisenkom/go-mssqldb dependency to actively maintained microsoft/go-mssqldb
+- (MSSQL) Migrate from stale denisenkom/go-mssqldb dependency to actively maintained microsoft/go-mssqldb (@josephwoodward)
+- (MCP) Apply CORS as in gateway input (@birdayz)
+- (MCP) Support rp internal flags (@birdayz)
 
 ## 4.62.0 - 2025-08-18
 
