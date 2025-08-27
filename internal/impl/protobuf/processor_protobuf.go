@@ -43,6 +43,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
@@ -80,6 +81,7 @@ The main functionality of this processor is to map to and from JSON documents, y
 
 Using reflection for processing protobuf messages in this way is less performant than generating and using native code. Therefore when performance is critical it is recommended that you use Redpanda Connect plugins instead for processing protobuf messages natively, you can find an example of Redpanda Connect plugins at [https://github.com/redpanda-data/redpanda-connect-plugin-example](https://github.com/redpanda-data/redpanda-connect-plugin-example)
 
+The processor will ignore any files that begin with a dot ("."g), a convention for hidden files, when loading protocol buffer definitions.
 == Operators
 
 === `+"`to_json`"+`
@@ -486,7 +488,7 @@ func loadDescriptors(f fs.FS, importPaths []string) (*protoregistry.Files, *prot
 			if ferr != nil || info.IsDir() {
 				return ferr
 			}
-			if filepath.Ext(info.Name()) == ".proto" {
+			if filepath.Ext(info.Name()) == ".proto" && !strings.HasPrefix(info.Name(), ".") {
 				rPath, ferr := filepath.Rel(importPath, path)
 				if ferr != nil {
 					return fmt.Errorf("failed to get relative path: %v", ferr)
