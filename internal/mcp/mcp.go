@@ -53,6 +53,7 @@ type Server struct {
 	base  *server.MCPServer
 	mux   *mux.Router
 	rpJWT *gateway.RPJWTMiddleware
+	cors  gateway.CORSConfig
 }
 
 // NewServer initializes the MCP server.
@@ -158,7 +159,9 @@ func NewServer(
 		return nil, err
 	}
 
-	return &Server{s, mux, rpJWT}, nil
+	cors := gateway.NewCORSConfigFromEnv()
+
+	return &Server{s, mux, rpJWT, cors}, nil
 }
 
 // ServeStdio attempts to run the MCP server in stdio mode.
@@ -204,7 +207,7 @@ func (m *Server) ServeHTTP(ctx context.Context, l net.Listener) error {
 	m.addStreamableEndpoints()
 
 	srv := &http.Server{
-		Handler: m.rpJWT.Wrap(m.mux),
+		Handler: m.cors.WrapHandler(m.rpJWT.Wrap(m.mux)),
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
