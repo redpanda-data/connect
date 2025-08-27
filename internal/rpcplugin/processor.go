@@ -78,6 +78,7 @@ func RegisterProcessorPlugin(env *service.Environment, spec ProcessorConfig) err
 				}
 			}
 		}()
+
 		// No I/O happens in NewClient, so we can do this before we start the subprocess.
 		// This simplifies the cleanup if there is a failure.
 		conn, err := grpc.NewClient(
@@ -87,8 +88,10 @@ func RegisterProcessorPlugin(env *service.Environment, spec ProcessorConfig) err
 		if err != nil {
 			return nil, err
 		}
+
 		cleanup = append(cleanup, conn.Close)
 		spec.Env["REDPANDA_CONNECT_PLUGIN_ADDRESS"] = socketPath
+
 		proc, err := subprocess.New(
 			spec.Cmd,
 			spec.Env,
@@ -99,13 +102,15 @@ func RegisterProcessorPlugin(env *service.Environment, spec ProcessorConfig) err
 			err = fmt.Errorf("invalid subprocess: %w", err)
 			return nil, err
 		}
+
 		ctx, cancel := context.WithTimeout(context.Background(), maxStartupTime)
 		defer cancel()
+
 		client := runtimepb.NewBatchProcessorServiceClient(conn)
-		err = startProcessorPlugin(ctx, proc, client, cfgValue)
-		if err != nil {
-			return nil, fmt.Errorf("unable to restart plugin: %w", err)
+		if err = startProcessorPlugin(ctx, proc, client, cfgValue); err != nil {
+			return nil, fmt.Errorf("unable to start plugin: %w", err)
 		}
+
 		p := &processor{
 			cfgValue: cfgValue,
 			proc:     proc,
@@ -127,13 +132,15 @@ func startProcessorPlugin(
 		if errors.Is(err, subprocess.ErrProcessAlreadyStarted) {
 			return nil
 		}
-		return fmt.Errorf("unable to restart plugin: %w", err)
+		return fmt.Errorf("unable to start plugin: %w", err)
 	}
+
 	value, err := runtimepb.AnyToProto(cfgValue)
 	if err != nil {
 		_ = proc.Close(ctx)
 		return fmt.Errorf("unable to convert config to proto: %w", err)
 	}
+
 	// Retry to wait for the process to start
 	err = backoff.Retry(func() error {
 		resp, err := client.Init(ctx, &runtimepb.BatchProcessorInitRequest{
