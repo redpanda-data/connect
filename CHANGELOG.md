@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.64.0 - TBD
+
+### Changed
+
+- (google_cloud_storage) Field `bucket` can now be interpolated (@rockwotj)
+
 ## 4.63.0 - 2025-08-27
 
 ### Added
