@@ -7,12 +7,15 @@ toolchain go1.24.2
 replace github.com/99designs/keyring => github.com/Jeffail/keyring v1.2.3
 
 require (
+	buf.build/gen/go/bufbuild/reflect/connectrpc/go v1.18.1-20240117202343-bf8f65e8876c.1
+	buf.build/gen/go/bufbuild/reflect/protocolbuffers/go v1.36.2-20240117202343-bf8f65e8876c.1
 	cloud.google.com/go/aiplatform v1.85.0
 	cloud.google.com/go/bigquery v1.67.0
 	cloud.google.com/go/pubsub v1.49.0
 	cloud.google.com/go/spanner v1.82.0
 	cloud.google.com/go/storage v1.53.0
 	cloud.google.com/go/vertexai v0.12.0
+	connectrpc.com/connect v1.18.1
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.18.0
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.9.0
 	github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos v1.3.0
@@ -55,6 +58,7 @@ require (
 	github.com/benhoyt/goawk v1.29.1
 	github.com/bmatcuk/doublestar/v4 v4.8.1
 	github.com/bradfitz/gomemcache v0.0.0-20230124162541-5f7a7d875746
+	github.com/bufbuild/prototransform v0.4.0
 	github.com/bwmarrin/discordgo v0.28.1
 	github.com/bwmarrin/snowflake v0.3.0
 	github.com/cenkalti/backoff/v4 v4.3.0
