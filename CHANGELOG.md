@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - (google_cloud_storage) Field `bucket` can now be interpolated (@rockwotj)
+- (output_sns) Field `topic_arn` can now be interpolation (@josephwoodward)
 
 ## 4.63.0 - 2025-08-27
 

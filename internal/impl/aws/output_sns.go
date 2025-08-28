@@ -41,7 +41,7 @@ const (
 )
 
 type snsoConfig struct {
-	TopicArn               string
+	TopicArn               *service.InterpolatedString
 	MessageGroupID         *service.InterpolatedString
 	MessageDeduplicationID *service.InterpolatedString
 	Timeout                time.Duration
@@ -51,8 +51,10 @@ type snsoConfig struct {
 }
 
 func snsoConfigFromParsed(pConf *service.ParsedConfig) (conf snsoConfig, err error) {
-	if conf.TopicArn, err = pConf.FieldString(snsoFieldTopicARN); err != nil {
-		return
+	if pConf.Contains(snsoFieldTopicARN) {
+		if conf.TopicArn, err = pConf.FieldInterpolatedString(snsoFieldTopicARN); err != nil {
+			return
+		}
 	}
 	if pConf.Contains(snsoFieldMessageGroupID) {
 		if conf.MessageGroupID, err = pConf.FieldInterpolatedString(snsoFieldMessageGroupID); err != nil {
@@ -87,7 +89,7 @@ func snsoOutputSpec() *service.ConfigSpec {
 
 By default Redpanda Connect will use a shared credentials file when connecting to AWS services. It's also possible to set them explicitly at the component level, allowing you to transfer data across accounts. You can find out more in xref:guides:cloud/aws.adoc[].`+service.OutputPerformanceDocs(true, false)).
 		Fields(
-			service.NewStringField(snsoFieldTopicARN).
+			service.NewInterpolatedStringField(snsoFieldTopicARN).
 				Description("The topic to publish to."),
 			service.NewInterpolatedStringField(snsoFieldMessageGroupID).
 				Description("An optional group ID to set for messages.").
@@ -205,6 +207,18 @@ func (a *snsWriter) getSNSAttributes(msg *service.Message) (snsAttributes, error
 	}, nil
 }
 
+func (a *snsWriter) parseTopicARN(msg *service.Message) (*string, error) {
+	var topicARN *string
+	if a.conf.TopicArn != nil {
+		topicARNStr, err := a.conf.TopicArn.TryString(msg)
+		if err != nil {
+			return nil, fmt.Errorf("%s interpolation error: %s", snsoFieldTopicARN, err)
+		}
+		topicARN = &topicARNStr
+	}
+	return topicARN, nil
+}
+
 func (a *snsWriter) Write(wctx context.Context, msg *service.Message) error {
 	if a.sns == nil {
 		return service.ErrNotConnected
@@ -218,12 +232,17 @@ func (a *snsWriter) Write(wctx context.Context, msg *service.Message) error {
 		return err
 	}
 
+	topicARN, err := a.parseTopicARN(msg)
+	if err != nil {
+		return err
+	}
+
 	mBytes, err := msg.AsBytes()
 	if err != nil {
 		return err
 	}
 	message := &sns.PublishInput{
-		TopicArn:               aws.String(a.conf.TopicArn),
+		TopicArn:               topicARN,
 		Message:                aws.String(string(mBytes)),
 		MessageAttributes:      attrs.attrMap,
 		MessageGroupId:         attrs.groupID,
