@@ -207,7 +207,7 @@ func (a *snsWriter) getSNSAttributes(msg *service.Message) (snsAttributes, error
 	}, nil
 }
 
-func (a *snsWriter) parseTopicARN(msg *service.Message) (*string, error) {
+func (a *snsWriter) resolveTopicARN(msg *service.Message) (*string, error) {
 	var topicARN *string
 	if a.conf.TopicArn != nil {
 		topicARNStr, err := a.conf.TopicArn.TryString(msg)
@@ -232,7 +232,7 @@ func (a *snsWriter) Write(wctx context.Context, msg *service.Message) error {
 		return err
 	}
 
-	topicARN, err := a.parseTopicARN(msg)
+	topicARN, err := a.resolveTopicARN(msg)
 	if err != nil {
 		return err
 	}
