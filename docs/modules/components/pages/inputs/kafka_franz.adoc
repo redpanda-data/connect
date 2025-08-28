@@ -496,6 +496,7 @@ An external ID to provide when assuming a role.
 
 The maximum age of metadata before it is refreshed.
 
+When `regexp_topics` is set this setting controls the refresh period of the list of topics and partitions covered by the consumer group. This means that new topics, which match the regexp, will be added to the consumer group every time the metadata refreshes.
 
 *Type*: `string`
 
