@@ -1,8 +1,8 @@
 name: catshout
 summary: Add your summary here
-command: ["go", "run", "./catshout"]
+command: ["go", "run", ".."]
 type: processor
-cwd: "./.."
+cwd: "./inner"
 fields:
   - name: suffix
     description: "Text to add onto the end of each message"
