@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -222,6 +223,17 @@ func (c *Config) Validate() error {
 	return nil
 }
 
+func (c *Config) setDefaultCWD(cpath string) {
+	configDir := filepath.Dir(cpath)
+	if c.Cwd != "" {
+		if !filepath.IsAbs(c.Cwd) {
+			c.Cwd = filepath.Join(configDir, c.Cwd)
+		}
+	} else {
+		c.Cwd = configDir
+	}
+}
+
 func (c *Config) toSpec() (*service.ConfigSpec, error) {
 	spec := service.NewConfigSpec()
 	if c.Summary != "" {
@@ -264,6 +276,7 @@ func DiscoverAndRegisterPlugins(fs fs.FS, env *service.Environment, paths []stri
 		if err := cfg.Validate(); err != nil {
 			return fmt.Errorf("failed to validate plugin config file %s: %w", path, err)
 		}
+		cfg.setDefaultCWD(path)
 		if err := registerPlugin(env, &cfg); err != nil {
 			return fmt.Errorf("failed to register plugin %s: %w", cfg.Name, err)
 		}
