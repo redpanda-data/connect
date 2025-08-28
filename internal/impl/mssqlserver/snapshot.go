@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2025 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -14,13 +14,10 @@ import (
 	"errors"
 	"fmt"
 
-	_ "github.com/microsoft/go-mssqldb"
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-type LSN []byte
-
-type Snapshot struct {
+type snapshot struct {
 	db *sql.DB
 	tx *sql.Tx
 
@@ -30,14 +27,14 @@ type Snapshot struct {
 }
 
 // NewSnapshot creates a new instance of Snapshot.
-func NewSnapshot(logger *service.Logger, db *sql.DB) *Snapshot {
-	return &Snapshot{
+func NewSnapshot(logger *service.Logger, db *sql.DB) *snapshot {
+	return &snapshot{
 		db:     db,
 		logger: logger,
 	}
 }
 
-func (s *Snapshot) prepare(ctx context.Context, tables []string) error {
+func (s *snapshot) prepare(ctx context.Context, tables []string) error {
 	if len(tables) == 0 {
 		return errors.New("no tables provided")
 	}
