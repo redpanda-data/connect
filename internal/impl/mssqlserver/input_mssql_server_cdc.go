@@ -144,25 +144,22 @@ func (r *msSqlServerCDCReader) Connect(ctx context.Context) error {
 		snapshot = NewSnapshot(r.logger, r.db)
 	}
 
-	go func() {
-		sig := shutdown.NewSignaller()
-		ctx, done := sig.SoftStopCtx(context.Background())
+	sig := shutdown.NewSignaller()
+	ctx, done := sig.SoftStopCtx(context.Background())
+	defer done()
 
-		defer done()
-		// var startLSN LSN
-		if snapshot != nil {
-			if err := snapshot.prepare(ctx, r.tables); err != nil {
-
-			}
+	// var startLSN LSN
+	if snapshot != nil {
+		if err := snapshot.prepare(ctx, r.tables); err != nil {
+			return fmt.Errorf("failed to process snapshot: %w", err)
 		}
-	}()
+	}
 
 	if r.trackedTables, err = r.fetchChangeTables(ctx); err != nil {
 		return fmt.Errorf("failed to connect to Microsoft SQL Server: %s", err)
 	}
 
-	sig := shutdown.NewSignaller()
-	r.stopSig = sig
+	r.stopSig = shutdown.NewSignaller()
 	go func() {
 		ctx, _ = r.stopSig.SoftStopCtx(context.Background())
 		wg, ctx := errgroup.WithContext(ctx)
