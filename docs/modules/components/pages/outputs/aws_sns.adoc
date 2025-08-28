@@ -92,6 +92,7 @@ This output benefits from sending multiple messages in flight in parallel for im
 === `topic_arn`
 
 The topic to publish to.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
 
 
 *Type*: `string`
