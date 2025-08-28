@@ -23,10 +23,13 @@ import (
 )
 
 const (
-	fieldMSSQLTables      = "tables"
-	fieldConnectionString = "connection_string"
-	fieldBatching         = "batching"
-	fieldStreamSnapshot   = "stream_snapshot"
+	fieldConnectionString     = "connection_string"
+	fieldStreamSnapshot       = "stream_snapshot"
+	fieldSnapshotMaxBatchSize = "snapshot_max_batch_size"
+	fieldTables               = "tables"
+	fieldCheckpointCache      = "checkpoint_cache"
+	fieldCheckpointKey        = "checkpoint_key"
+	fieldBatching             = "batching"
 )
 
 func init() {
@@ -39,20 +42,31 @@ var mssqlStreamConfigSpec = service.NewConfigSpec().
 	Version("4.45.0").
 	Summary("Creates an input that consumes from a Microsoft SQL Server's change log.").
 	Description(``).
-	Fields(
-		service.NewAutoRetryNacksToggleField(),
-		service.NewBatchPolicyField(fieldBatching),
-		service.NewStringListField(fieldMSSQLTables).
-			Description("A list of tables to stream from the database.").
-			Example([]string{"table1", "table2"}).
-			LintRule("root = if this.length() == 0 { [ \"field 'tables' must contain at least one table\" ] }"),
-
-		service.NewStringField(fieldConnectionString).
-			Description("The connection string of the Microsoft SQL Server database to connect to.").
-			Example("sqlserver://username:password@host/instance?param1=value&param2=value"),
-		service.NewBoolField(fieldStreamSnapshot).
-			Description("If set to true, the connector will query all the existing data as a part of snapshot process. Otherwise, it will start from the current Log Sequence Number position."),
-	)
+	Field(service.NewStringField(fieldConnectionString).
+		Description("The connection string of the Microsoft SQL Server database to connect to.").
+		Example("sqlserver://username:password@host/instance?param1=value&param2=value"),
+	).
+	Field(service.NewBoolField(fieldStreamSnapshot).
+		Description("If set to true, the connector will query all the existing data as a part of snapshot process. Otherwise, it will start from the current Log Sequence Number position."),
+	).
+	Field(service.NewIntField(fieldSnapshotMaxBatchSize).
+		Description("The maximum number of rows to be streamed in a single batch when taking a snapshot.").
+		Default(1000),
+	).
+	Field(service.NewStringListField(fieldTables).
+		Description("A list of tables to stream from the database.").
+		Example([]string{"table1", "table2"}).
+		LintRule("root = if this.length() == 0 { [ \"field 'tables' must contain at least one table\" ] }"),
+	).
+	Field(service.NewStringField(fieldCheckpointCache).
+		Description("A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current latest BinLog Position that has been successfully delivered, this allows Redpanda Connect to continue from that BinLog Position upon restart, rather than consume the entire state of the table."),
+	).
+	Field(service.NewStringField(fieldCheckpointKey).
+		Description("The key to use to store the snapshot position in `" + fieldCheckpointCache + "`. An alternative key can be provided if multiple CDC inputs share the same cache.").
+		Default("mssql_cdc_position"),
+	).
+	Field(service.NewAutoRetryNacksToggleField()).
+	Field(service.NewBatchPolicyField(fieldBatching))
 
 type asyncMessage struct {
 	msg   service.MessageBatch
@@ -60,22 +74,23 @@ type asyncMessage struct {
 }
 
 type msSqlServerCDCReader struct {
-	batching    service.BatchPolicy
-	batchPolicy *service.Batcher
-
-	dbMu sync.Mutex
-	db   *sql.DB
-
-	connectionString string
-	streamSnapshot   bool
-	tables           []string
-	trackedTables    []changeTable
+	connectionString     string
+	streamSnapshot       bool
+	snapshotMaxBatchSize int
+	tables               []string
+	lsnCache             string
+	lsnCacheKey          string
+	batching             service.BatchPolicy
+	batchPolicy          *service.Batcher
 
 	logger *service.Logger
 	res    *service.Resources
 
-	resCh   chan asyncMessage
-	stopSig *shutdown.Signaller
+	dbMu          sync.Mutex
+	db            *sql.DB
+	trackedTables []changeTable
+	resCh         chan asyncMessage
+	stopSig       *shutdown.Signaller
 }
 
 func newMssqlCDCReader(conf *service.ParsedConfig, res *service.Resources) (s service.BatchInput, err error) {
@@ -94,13 +109,23 @@ func newMssqlCDCReader(conf *service.ParsedConfig, res *service.Resources) (s se
 	if r.connectionString, err = conf.FieldString(fieldConnectionString); err != nil {
 		return nil, err
 	}
-
-	// TODO: support regular expression on tablenames
-	if r.tables, err = conf.FieldStringList(fieldMSSQLTables); err != nil {
+	if r.streamSnapshot, err = conf.FieldBool(fieldStreamSnapshot); err != nil {
 		return nil, err
 	}
-
-	if r.streamSnapshot, err = conf.FieldBool(fieldStreamSnapshot); err != nil {
+	if r.snapshotMaxBatchSize, err = conf.FieldInt(fieldSnapshotMaxBatchSize); err != nil {
+		return nil, err
+	}
+	// TODO: support regular expression on tablenames
+	if r.tables, err = conf.FieldStringList(fieldTables); err != nil {
+		return nil, err
+	}
+	if r.lsnCache, err = conf.FieldString(fieldCheckpointCache); err != nil {
+		return nil, err
+	}
+	if !conf.Resources().HasCache(r.lsnCache) {
+		return nil, fmt.Errorf("unknown cache resource: %s", r.lsnCache)
+	}
+	if r.lsnCacheKey, err = conf.FieldString(fieldCheckpointKey); err != nil {
 		return nil, err
 	}
 
@@ -151,12 +176,12 @@ func (r *msSqlServerCDCReader) Connect(ctx context.Context) error {
 	// var startLSN LSN
 	if snapshot != nil {
 		if err := snapshot.prepare(ctx, r.tables); err != nil {
-			return fmt.Errorf("failed to process snapshot: %w", err)
+			return fmt.Errorf("processing snapshot: %w", err)
 		}
 	}
 
 	if r.trackedTables, err = r.fetchChangeTables(ctx); err != nil {
-		return fmt.Errorf("failed to connect to Microsoft SQL Server: %s", err)
+		return fmt.Errorf("connecting to Microsoft SQL Server: %s", err)
 	}
 
 	r.stopSig = shutdown.NewSignaller()
