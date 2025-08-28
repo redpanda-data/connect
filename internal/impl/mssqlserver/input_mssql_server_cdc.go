@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2025 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -20,6 +20,7 @@ import (
 
 	"github.com/Jeffail/shutdown"
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 const (
@@ -94,9 +95,9 @@ type msSqlServerCDCReader struct {
 }
 
 func newMssqlCDCReader(conf *service.ParsedConfig, res *service.Resources) (s service.BatchInput, err error) {
-	// if err := license.CheckRunningEnterprise(res); err != nil {
-	// 	return nil, err
-	// }
+	if err := license.CheckRunningEnterprise(res); err != nil {
+		return nil, err
+	}
 
 	r := msSqlServerCDCReader{
 		logger:  res.Logger(),
@@ -213,7 +214,7 @@ func (r *msSqlServerCDCReader) ReadBatch(ctx context.Context) (service.MessageBa
 	}
 }
 
-func (r *msSqlServerCDCReader) readMessages(ctx context.Context) error {
+func (r *msSqlServerCDCReader) readMessages(_ context.Context) error {
 	return nil
 }
 
