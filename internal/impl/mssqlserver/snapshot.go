@@ -14,11 +14,8 @@ import (
 	"errors"
 	"fmt"
 
-	_ "github.com/microsoft/go-mssqldb"
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
-
-type LSN []byte
 
 type Snapshot struct {
 	db *sql.DB

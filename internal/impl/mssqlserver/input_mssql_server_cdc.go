@@ -15,10 +15,9 @@ import (
 	"fmt"
 	"sync"
 
-	_ "github.com/microsoft/go-mssqldb"
+	"github.com/Jeffail/shutdown"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/Jeffail/shutdown"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
@@ -106,7 +105,7 @@ func newMssqlCDCReader(conf *service.ParsedConfig, res *service.Resources) (s se
 		stopSig: shutdown.NewSignaller(),
 	}
 
-	//TODO: Can we validate the connection string?
+	// TODO: Can we validate the connection string?
 	if r.connectionString, err = conf.FieldString(fieldConnectionString); err != nil {
 		return nil, err
 	}
@@ -214,11 +213,11 @@ func (r *msSqlServerCDCReader) ReadBatch(ctx context.Context) (service.MessageBa
 	}
 }
 
-func (r *msSqlServerCDCReader) readMessages(_ context.Context) error {
+func (_ *msSqlServerCDCReader) readMessages(_ context.Context) error {
 	return nil
 }
 
-func (r *msSqlServerCDCReader) Close(ctx context.Context) error {
+func (r *msSqlServerCDCReader) Close(_ context.Context) error {
 	r.dbMu.Lock()
 	defer r.dbMu.Unlock()
 	if r.db != nil {
