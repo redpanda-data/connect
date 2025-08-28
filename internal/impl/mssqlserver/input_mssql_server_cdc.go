@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2025 Redpanda Data, Inc.
 //
 // Licensed as a Redpanda Enterprise file under the Redpanda Community
 // License (the "License"); you may not use this file except in compliance with
@@ -15,11 +15,11 @@ import (
 	"fmt"
 	"sync"
 
-	_ "github.com/microsoft/go-mssqldb"
+	"github.com/Jeffail/shutdown"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/Jeffail/shutdown"
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 const (
@@ -86,17 +86,16 @@ type msSqlServerCDCReader struct {
 	logger *service.Logger
 	res    *service.Resources
 
-	dbMu          sync.Mutex
-	db            *sql.DB
-	trackedTables []changeTable
-	resCh         chan asyncMessage
-	stopSig       *shutdown.Signaller
+	dbMu    sync.Mutex
+	db      *sql.DB
+	resCh   chan asyncMessage
+	stopSig *shutdown.Signaller
 }
 
 func newMssqlCDCReader(conf *service.ParsedConfig, res *service.Resources) (s service.BatchInput, err error) {
-	// if err := license.CheckRunningEnterprise(res); err != nil {
-	// 	return nil, err
-	// }
+	if err := license.CheckRunningEnterprise(res); err != nil {
+		return nil, err
+	}
 
 	r := msSqlServerCDCReader{
 		logger:  res.Logger(),
@@ -105,7 +104,7 @@ func newMssqlCDCReader(conf *service.ParsedConfig, res *service.Resources) (s se
 		stopSig: shutdown.NewSignaller(),
 	}
 
-	//TODO: Can we validate the connection string?
+	// TODO: Can we validate the connection string?
 	if r.connectionString, err = conf.FieldString(fieldConnectionString); err != nil {
 		return nil, err
 	}
@@ -159,44 +158,59 @@ func (r *msSqlServerCDCReader) Connect(ctx context.Context) error {
 	}
 
 	r.dbMu.Lock()
-	defer r.dbMu.Unlock()
 	r.db = db
+	r.dbMu.Unlock()
 
-	// TODO: Get lsn from cache
-
-	var snapshot *Snapshot
+	// TODO: Load LSN from checkpoint/cache
+	var snapshot *snapshot
 	if r.streamSnapshot {
 		snapshot = NewSnapshot(r.logger, r.db)
 	}
 
-	sig := shutdown.NewSignaller()
-	ctx, done := sig.SoftStopCtx(context.Background())
+	r.stopSig = shutdown.NewSignaller()
+	ctx, done := r.stopSig.SoftStopCtx(context.Background())
 	defer done()
 
-	// var startLSN LSN
 	if snapshot != nil {
 		if err := snapshot.prepare(ctx, r.tables); err != nil {
-			return fmt.Errorf("processing snapshot: %w", err)
+			return fmt.Errorf("processing snapshot: %s", err)
 		}
 	}
 
-	if r.trackedTables, err = r.fetchChangeTables(ctx); err != nil {
-		return fmt.Errorf("connecting to Microsoft SQL Server: %s", err)
+	ctStream := &changeTableStream{
+		logger: r.logger,
 	}
 
-	r.stopSig = shutdown.NewSignaller()
+	if err := ctStream.verifyChangeTables(ctx, r.db); err != nil {
+		return fmt.Errorf("verifying MS MSQL Server change tables: %s", err)
+	}
+
 	go func() {
 		ctx, _ = r.stopSig.SoftStopCtx(context.Background())
 		wg, ctx := errgroup.WithContext(ctx)
 
-		wg.Go(func() error { return r.readMessages(ctx) })
+		wg.Go(func() error {
+			err := ctStream.read(ctx, r.db, func(c *change) ([]byte, error) {
+				fmt.Printf("LSN=%x, CommandID=%d, SeqVal=%x, op=%d table=%s cols=%d\n", c.StartLSN, c.CommandID, c.SeqVal, c.Operation, c.Table, len(c.Columns))
+				// To read: https://github.com/Jeffail/checkpoint
+				// r.resCh <- asyncMessage{
+				// 	msg: service.MessageBatch{},
+				// 	ackFn: func(ctx context.Context, err error) error {
+				// 		// r.cache.lastLSN = c.StartLSN
+				// 		return nil
+				// 	}}
+				return c.StartLSN, nil
+			})
+			return fmt.Errorf("streaming from change tables: %w", err)
+		})
+
 		if err := wg.Wait(); err != nil && !errors.Is(err, context.Canceled) {
 			r.logger.Errorf("error during Microsoft SQL Server CDC: %s", err)
 		} else {
 			r.logger.Info("successfully shutdown Microsoft SQL Server CDC stream")
 		}
 
-		sig.TriggerHasStopped()
+		r.stopSig.TriggerHasStopped()
 	}()
 
 	return nil
@@ -213,38 +227,11 @@ func (r *msSqlServerCDCReader) ReadBatch(ctx context.Context) (service.MessageBa
 	}
 }
 
-func (r *msSqlServerCDCReader) readMessages(ctx context.Context) error {
-	return nil
-}
-
-func (r *msSqlServerCDCReader) Close(ctx context.Context) error {
+func (r *msSqlServerCDCReader) Close(_ context.Context) error {
 	r.dbMu.Lock()
 	defer r.dbMu.Unlock()
 	if r.db != nil {
 		return r.db.Close()
 	}
 	return nil
-}
-
-type changeTable struct {
-	captureInstance string
-	startLSN        []byte
-}
-
-// fetchChangeTables returns a slice of all change tables matching those configured.
-func (r *msSqlServerCDCReader) fetchChangeTables(ctx context.Context) ([]changeTable, error) {
-	rows, err := r.db.QueryContext(ctx, "SELECT capture_instance, start_lsn FROM cdc.change_tables")
-	if err != nil {
-		return nil, fmt.Errorf("fetching change tables: %w", err)
-	}
-
-	var result []changeTable
-	for rows.Next() {
-		var t changeTable
-		if err := rows.Scan(&t.captureInstance, &t.startLSN); err != nil {
-			return nil, fmt.Errorf("loading table: %w", err)
-		}
-		result = append(result, t)
-	}
-	return result, nil
 }

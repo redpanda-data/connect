@@ -9,8 +9,10 @@
 package mssqlserver
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -23,7 +25,9 @@ import (
 
 	_ "github.com/redpanda-data/benthos/v4/public/components/io"
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
+	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 type testDB struct {
@@ -37,9 +41,13 @@ func (db *testDB) Exec(query string, args ...any) {
 	require.NoError(db.t, err)
 }
 
-func TestIntegrationMSSQLServerSnapshotAndCDC(t *testing.T) {
-	_, db := setupTestWithMSSQLServerVersion(t, "2022-latest")
-	require.NotNil(t, db)
+func (db *testDB) CreateTableIfNotExists(tableName, query string, args ...any) {
+	q := fmt.Sprintf(`
+		IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = '%s' AND schema_id = SCHEMA_ID('dbo'))
+		BEGIN
+			%s
+		END;`, tableName, query)
+	db.Exec(q)
 }
 
 func setupTestWithMSSQLServerVersion(t *testing.T, version string) (string, *testDB) {
@@ -101,7 +109,7 @@ func setupTestWithMSSQLServerVersion(t *testing.T, version string) (string, *tes
 		}
 		db.Close()
 
-		connectionString := fmt.Sprintf("sqlserver://sa:YourStrong!Passw0rd@localhost:%s?database=%s&encrypt=disable", port, "testdb")
+		connectionString = fmt.Sprintf("sqlserver://sa:YourStrong!Passw0rd@localhost:%s?database=%s&encrypt=disable", port, "testdb")
 		db, err = sql.Open("mssql", connectionString)
 		if err != nil {
 			return err
@@ -135,4 +143,90 @@ func setupTestWithMSSQLServerVersion(t *testing.T, version string) (string, *tes
 		assert.NoError(t, db.Close())
 	})
 	return connectionString, &testDB{db, t}
+}
+
+func TestIntegrationMSSQLServer(t *testing.T) {
+	t.Skip()
+	_, db := setupTestWithMSSQLServerVersion(t, "2022-latest")
+	require.NotNil(t, db)
+}
+
+func TestIntegrationMSSQLServerSnapshotAndCDC(t *testing.T) {
+	connStr, db := setupTestWithMSSQLServerVersion(t, "2022-latest")
+
+	// Create table
+	db.CreateTableIfNotExists("foo", `
+    CREATE TABLE foo (
+        a INT PRIMARY KEY
+    )`)
+
+	db.Exec(`
+		EXEC sys.sp_cdc_enable_table
+		@source_schema = 'dbo',
+		@source_name   = 'foo',
+		@role_name     = NULL;`)
+
+	// Insert 1000 rows for initial snapshot streaming
+	for i := range 1000 {
+		db.Exec("INSERT INTO foo VALUES (?)", i)
+	}
+
+	template := fmt.Sprintf(`
+mssql_server_cdc:
+  connection_string: %s
+  stream_snapshot: false
+  snapshot_max_batch_size: 100
+  tables:
+    - foo
+  checkpoint_cache: "foocache"
+`, connStr)
+
+	cacheConf := fmt.Sprintf(`
+label: foocache
+file:
+  directory: %s`, t.TempDir())
+
+	streamOutBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: DEBUG`))
+	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
+	require.NoError(t, streamOutBuilder.AddInputYAML(template))
+
+	var outBatches []string
+	var outBatchMut sync.Mutex
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		msgBytes, err := mb[0].AsBytes()
+		require.NoError(t, err)
+		outBatchMut.Lock()
+		outBatches = append(outBatches, string(msgBytes))
+		outBatchMut.Unlock()
+		return nil
+	}))
+
+	streamOut, err := streamOutBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(streamOut.Resources())
+
+	go func() {
+		err = streamOut.Run(t.Context())
+		require.NoError(t, err)
+	}()
+
+	time.Sleep(time.Second * 5)
+	for i := 1000; i < 2000; i++ {
+		// Insert 10000 rows
+		db.Exec("INSERT INTO foo VALUES (?)", i)
+	}
+
+	assert.Eventually(t, func() bool {
+		outBatchMut.Lock()
+		defer outBatchMut.Unlock()
+		return len(outBatches) == 2000
+	}, time.Minute*5, time.Millisecond*100)
+
+	require.NoError(t, streamOut.StopWithin(time.Second*10))
+}
+
+func FuncIntegrationTestOrderingOfIterator(t *testing.T) {
+	// TODO: Test to verify ordering of SQL query (lsn, seqval, command id) and minheap sorting
+	t.Skip()
 }
