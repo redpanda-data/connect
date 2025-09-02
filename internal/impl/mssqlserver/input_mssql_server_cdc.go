@@ -19,7 +19,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 const (
@@ -93,9 +92,9 @@ type msSqlServerCDCReader struct {
 }
 
 func newMssqlCDCReader(conf *service.ParsedConfig, res *service.Resources) (s service.BatchInput, err error) {
-	if err := license.CheckRunningEnterprise(res); err != nil {
-		return nil, err
-	}
+	// if err := license.CheckRunningEnterprise(res); err != nil {
+	// 	return nil, err
+	// }
 
 	r := msSqlServerCDCReader{
 		logger:  res.Logger(),
@@ -178,10 +177,11 @@ func (r *msSqlServerCDCReader) Connect(ctx context.Context) error {
 	}
 
 	ctStream := &changeTableStream{
-		logger: r.logger,
+		logger:        r.logger,
+		trackedTables: make(map[string]changeTable, len(r.tables)),
 	}
 
-	if err := ctStream.verifyChangeTables(ctx, r.db); err != nil {
+	if err := ctStream.verifyChangeTables(ctx, r.db, r.tables); err != nil {
 		return fmt.Errorf("verifying MS MSQL Server change tables: %s", err)
 	}
 
