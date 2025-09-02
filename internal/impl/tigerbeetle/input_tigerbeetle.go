@@ -293,7 +293,7 @@ func newTigerbeetleInput(config *service.ParsedConfig, resources *service.Resour
 		return nil, err
 	}
 	if !config.Resources().HasCache(progressCache) {
-		return nil, fmt.Errorf("cache resource '%s' not defined", progressCache)
+		return nil, fmt.Errorf("cache resource '%s' not found", progressCache)
 	}
 
 	if eventCountMax, err = config.FieldInt(fieldEventCountMax); err != nil {
