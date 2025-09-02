@@ -15,13 +15,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-type heapItem struct {
-	iter *changeTableRowIter
-}
+type heapItem struct{ iter *changeTableRowIter }
 
 // rowIteratorMinHeap is used for sorting iterators by LSN to ensure they're in order across tables
 type rowIteratorMinHeap []*heapItem
@@ -160,25 +159,41 @@ func (ct *changeTableRowIter) valsToChange(vals []any) *change {
 type changeTableStream struct {
 	logger *service.Logger
 
-	trackedTables []changeTable
+	trackedTables map[string]changeTable
 	resCh         chan asyncMessage
 }
 
-func (r *changeTableStream) verifyChangeTables(ctx context.Context, db *sql.DB) error {
+func (r *changeTableStream) verifyChangeTables(ctx context.Context, db *sql.DB, configTables []string) error {
 	rows, err := db.QueryContext(ctx, "SELECT capture_instance, start_lsn FROM cdc.change_tables")
 	if err != nil {
 		return fmt.Errorf("fetching change tables: %w", err)
 	}
 
-	var result []changeTable
+	var changeTables []changeTable
 	for rows.Next() {
 		var t changeTable
 		if err := rows.Scan(&t.captureInstance, &t.startLSN); err != nil {
 			return fmt.Errorf("loading change table: %w", err)
 		}
-		result = append(result, t)
+		changeTables = append(changeTables, t)
 	}
-	r.trackedTables = result
+
+	for _, t := range configTables {
+		for _, ct := range changeTables {
+			if strings.HasSuffix(ct.captureInstance, "dbo_"+t) {
+				r.trackedTables[ct.captureInstance] = ct
+				r.logger.Debugf("Found change table '%s'", ct.captureInstance)
+				goto next
+			}
+		}
+		r.logger.Warnf("Change table for table '%s' not found", t)
+	next:
+	}
+
+	if len(r.trackedTables) != len(configTables) {
+		return fmt.Errorf("could not find all change tables")
+	}
+
 	return nil
 }
 
@@ -214,9 +229,6 @@ func (r *changeTableStream) read(ctx context.Context, db *sql.DB, handle func(c 
 				it.Close()
 			}
 		}
-
-		// handle := func(c *Change) error {
-		// }
 
 		for h.Len() > 0 {
 			// Pop the smallest LSN change
