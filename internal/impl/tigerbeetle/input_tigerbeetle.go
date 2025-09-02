@@ -119,10 +119,16 @@ with an error message if so.
 Requires TigerBeetle cluster version 0.16.57 or greater.`).
 		Fields(
 			service.NewStringField(fieldClusterID).
-				Description("The TigerBeetle unique 128-bit cluster ID."),
+				Description("The TigerBeetle unique 128-bit cluster ID.").
+				LintRule(`root = if !this.re_match("^[0-9]+$") {
+						[ "field '`+fieldClusterID+`' must be a valid integer" ]
+					}`),
 			service.NewStringListField(fieldAddresses).
 				Description("A list of IP addresses of all the TigerBeetle replicas in the cluster. "+
-					"The order of addresses must correspond to the order of replicas."),
+					"The order of addresses must correspond to the order of replicas.").
+				LintRule(`root = if this.length() == 0 {
+				 		[ "field '`+fieldAddresses+`' must contain at least one address" ]
+					}`),
 			service.NewStringField(fieldProgressCache).
 				Description("A https://docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] "+
 					"used to track progress by storing the last acknowledged timestamp.\n"+
@@ -131,18 +137,27 @@ Requires TigerBeetle cluster version 0.16.57 or greater.`).
 			service.NewIntField(fieldEventCountMax).
 				Description("The maximum number of events fetched from TigerBeetle per batch.\n"+
 					"Must be greater than zero.").
-				Default(eventCountDefault),
+				Default(eventCountDefault).
+				LintRule(`root = if this <= 0 {
+						[ "field '`+fieldEventCountMax+`' must be greater than 0" ]
+					}`),
 			service.NewIntField(fieldIdleInterval).
 				Description("The time interval in milliseconds to wait before querying again when "+
 					"the last query returned no events.\n"+
 					"Must be greater than zero.").
-				Default(idleIntervalDefault),
+				Default(idleIntervalDefault).
+				LintRule(`root = if this <= 0 {
+						[ "field '`+fieldIdleInterval+`' must be greater than 0" ]
+					}`),
 			service.NewStringField(fieldTimestampInitial).
 				Description("The initial timestamp to start extracting events from. "+
 					"If not defined, all events since the beginning will be included.\n"+
 					"Ignored if a more recent timestamp has already been acknowledged.\n"+
 					"This is a TigerBeetle timestamp with nanosecond precision.").
-				Default(""),
+				Default("").
+				LintRule(`root = if this.length() > 0 && !this.re_match("^[0-9]+$") {
+						[ "field '`+fieldTimestampInitial+`' must be a valid integer" ]
+					}`),
 			service.NewAutoRetryNacksToggleField(),
 		)
 }
