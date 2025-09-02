@@ -36,18 +36,18 @@ type testDB struct {
 	t *testing.T
 }
 
-func (db *testDB) Exec(query string, args ...any) {
+func (db *testDB) exec(query string, args ...any) {
 	_, err := db.DB.Exec(query, args...)
 	require.NoError(db.t, err)
 }
 
-func (db *testDB) CreateTableIfNotExists(tableName, query string, args ...any) {
+func (db *testDB) createTableIfNotExists(tableName, query string, args ...any) {
 	q := fmt.Sprintf(`
 		IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = '%s' AND schema_id = SCHEMA_ID('dbo'))
 		BEGIN
 			%s
 		END;`, tableName, query)
-	db.Exec(q)
+	db.exec(q)
 }
 
 func setupTestWithMSSQLServerVersion(t *testing.T, version string) (string, *testDB) {
@@ -151,16 +151,16 @@ func TestIntegrationMSSQLServer(t *testing.T) {
 	require.NotNil(t, db)
 }
 
-func TestIntegrationMSSQLServerSnapshotAndCDC(t *testing.T) {
+func TestIntegrationMSSQLServerCDC(t *testing.T) {
 	connStr, db := setupTestWithMSSQLServerVersion(t, "2022-latest")
 
 	// Create table
-	db.CreateTableIfNotExists("foo", `
+	db.createTableIfNotExists("foo", `
     CREATE TABLE foo (
         a INT PRIMARY KEY
     )`)
 
-	db.Exec(`
+	db.exec(`
 		EXEC sys.sp_cdc_enable_table
 		@source_schema = 'dbo',
 		@source_name   = 'foo',
@@ -168,7 +168,7 @@ func TestIntegrationMSSQLServerSnapshotAndCDC(t *testing.T) {
 
 	// Insert 1000 rows for initial snapshot streaming
 	for i := range 1000 {
-		db.Exec("INSERT INTO foo VALUES (?)", i)
+		db.exec("INSERT INTO foo VALUES (?)", i)
 	}
 
 	template := fmt.Sprintf(`
@@ -214,7 +214,7 @@ file:
 	time.Sleep(time.Second * 5)
 	for i := 1000; i < 2000; i++ {
 		// Insert 10000 rows
-		db.Exec("INSERT INTO foo VALUES (?)", i)
+		db.exec("INSERT INTO foo VALUES (?)", i)
 	}
 
 	assert.Eventually(t, func() bool {
