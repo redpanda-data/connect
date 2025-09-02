@@ -53,58 +53,19 @@ func BenchmarkStreamingCDCChanges2(b *testing.B) {
 	require.NoError(b, err)
 	defer db.Close()
 
-	var (
-		fromLSN   []byte
-		toLSN     []byte
-		lastLSN   []byte
-		instances = []string{"dbo_users", "dbo_products"}
-	)
+	ctStream := &changeTableStream{}
+
+	err = ctStream.verifyChangeTables(b.Context(), db, []string{"users", "products"})
+	require.NoError(b, err)
 
 	b.ReportAllocs()
-
 	// Reset timer to exclude setup time
 	for b.Loop() {
-		err := db.QueryRow(`SELECT sys.fn_cdc_get_max_lsn()`).Scan(&toLSN)
+		err := ctStream.read(context.Background(), db, func(c *change) ([]byte, error) {
+			fmt.Printf("LSN=%x, CommandID=%d, SeqVal=%x, op=%d table=%s cols=%d\n", c.StartLSN, c.CommandID, c.SeqVal, c.Operation, c.Table, len(c.Columns))
+			return c.StartLSN, nil
+		})
 		require.NoError(b, err)
-
-		ctx := context.Background()
-		h := &rowIteratorMinHeap{}
-		heap.Init(h)
-
-		iters := make([]*changeTableRowIter, 0, len(instances))
-		for _, inst := range instances {
-			it, err := newChangeTableRowIter(ctx, db, inst, fromLSN, toLSN)
-			require.NoError(b, err)
-
-			if it != nil && it.current != nil {
-				iters = append(iters, it)
-				heap.Push(h, &heapItem{iter: it})
-			} else if it != nil {
-				it.Close()
-			}
-		}
-
-		maxChanges := 1000 // per benchmark iteration
-		count := 0
-		for h.Len() > 0 && count < maxChanges {
-			item := heap.Pop(h).(*heapItem)
-			cur := item.iter.current
-
-			// simulate handling, but don’t print (printing dominates cost)
-			_ = cur.StartLSN
-			lastLSN = cur.StartLSN
-
-			if err := item.iter.next(); err != nil {
-				item.iter.Close()
-			} else {
-				heap.Push(h, item)
-			}
-			count++
-		}
-
-		if lastLSN != nil {
-			fromLSN = lastLSN
-		}
 	}
 }
 
