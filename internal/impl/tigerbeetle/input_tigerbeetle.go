@@ -76,7 +76,9 @@ func configSpec() *service.ConfigSpec {
 			Timestamp:      "1745328270103401031",
 		},
 	}, "", "  ")
-	assertTrue(err == nil, "invalid JSON object")
+	if err != nil {
+		panic("assertion failed: cannot marshal JSON object")
+	}
 
 	return service.NewConfigSpec().
 		Beta().
@@ -374,7 +376,9 @@ func (input *tigerbeetleInput) produce(ctx context.Context, client tb.Client, ti
 			// before issuing a new query, avoiding unnecessary idle time for workloads
 			// with high frequency but low volume per batch.
 			rescheduled := idleTimer.Reset(input.config.idleInterval)
-			assertTrue(!rescheduled, "idle timer was already running")
+			if rescheduled {
+				return errors.New("assertion failed: idle timer was already running")
+			}
 
 			input.logger.Debugf("producer: idle: %d ms", input.config.idleInterval.Milliseconds())
 
@@ -406,9 +410,13 @@ func (input *tigerbeetleInput) consume(ctx context.Context) error {
 	for {
 		select {
 		case results := <-input.producerChan:
-			assertTrue(len(results) > 0, "unexpected empty results")
-			assertTrue(len(results) <= int(input.config.eventCountMax), "too many results")
-			assertTrue(len(batch) == 0, "pending messages to flush")
+			if len(results) == 0 {
+				return errors.New("assertion failed: unexpected empty results")
+			} else if len(results) > int(input.config.eventCountMax) {
+				return errors.New("assertion failed: too many results")
+			} else if len(batch) != 0 {
+				return errors.New("assertion failed: pending messages to flush")
+			}
 
 			for _, result := range results {
 				bytes, err := jsonSerialize(result)
@@ -635,10 +643,4 @@ func (input *tigerbeetleInput) setTimestampLast(ctx context.Context, timestamp u
 		return fmt.Errorf("unable to persist the last timestamp to cache:: %w", cErr)
 	}
 	return nil
-}
-
-func assertTrue(ok bool, message string) {
-	if !ok {
-		panic("assertion failed: " + message)
-	}
 }
