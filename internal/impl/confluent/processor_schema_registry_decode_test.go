@@ -680,6 +680,81 @@ func TestSchemaRegistryDecodeProtobuf(t *testing.T) {
 	decoder.cacheMut.Unlock()
 }
 
+func TestSchemaRegistryDecodeWithDefaultSchemaID(t *testing.T) {
+	urlStr := runSchemaRegistryServer(t, func(path string) ([]byte, error) {
+		if path == "/schemas/ids/3" {
+			return mustJBytes(t, map[string]any{
+				"schema": testSchema,
+			}), nil
+		}
+		return nil, nil
+	})
+
+	tests := []struct {
+		name        string
+		input       string
+		output      string
+		defaultID   int
+		errContains string
+	}{
+		{
+			name:        "error when no default schema is set",
+			input:       "\x06foo\x02\x02\x06foo\x06bar\x02\x0edancing", // Invalid header
+			errContains: "5 byte header for value is missing or does not have 0 magic byte",
+		},
+		{
+			name:        "different error doesn't use default schema",
+			input:       "\x00\x00\x00\x00\x09", // Valid header but non-existent schema
+			defaultID:   3,
+			errContains: "schema 9 not found by registry: not found",
+		},
+		{
+			name:      "no header uses default schema",
+			input:     "\x06foo\x02\x02\x06foo\x06bar\x02\x0edancing", // No valid header at all
+			output:    `{"Address":{"my.namespace.com.address":{"City":{"string":"foo"},"State":"bar"}},"MaybeHobby":{"string":"dancing"},"Name":"foo"}`,
+			defaultID: 3,
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			cfg := decodingConfig{}
+			cfg.avro.rawUnions = false
+			if test.defaultID != 0 {
+				cfg.defaultSchemaID = test.defaultID
+			}
+
+			decoder, err := newSchemaRegistryDecoder(urlStr, noopReqSign, nil, cfg, schemaStaleAfter, service.MockResources())
+			require.NoError(t, err)
+			defer func() {
+				require.NoError(t, decoder.Close(t.Context()))
+			}()
+
+			outMsgs, err := decoder.Process(t.Context(), service.NewMessage([]byte(test.input)))
+			if test.errContains != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), test.errContains)
+			} else {
+				require.NoError(t, err)
+				require.Len(t, outMsgs, 1)
+
+				b, err := outMsgs[0].AsBytes()
+				require.NoError(t, err)
+
+				jdopts := jsondiff.DefaultJSONOptions()
+				diff, explanation := jsondiff.Compare(b, []byte(test.output), &jdopts)
+				assert.JSONEq(t, test.output, string(b))
+				assert.Equalf(t, jsondiff.FullMatch.String(), diff.String(), "%s: %s", test.name, explanation)
+
+				v, ok := outMsgs[0].MetaGetMut("schema_id")
+				assert.True(t, ok)
+				assert.Equal(t, test.defaultID, v)
+			}
+		})
+	}
+}
+
 func TestSchemaRegistryDecodeJson(t *testing.T) {
 	returnedSchema3 := false
 	urlStr := runSchemaRegistryServer(t, func(path string) ([]byte, error) {

@@ -48,6 +48,7 @@ schema_registry_decode:
     emit_default_values: false
   cache_duration: 10m
   url: "" # No default (required)
+  default_schema_id: 0 # No default (optional)
 ```
 
 --
@@ -86,6 +87,7 @@ schema_registry_decode:
     emit_default_values: false
   cache_duration: 10m
   url: "" # No default (required)
+  default_schema_id: 0 # No default (optional)
   oauth:
     enabled: false
     consumer_key: ""
@@ -336,6 +338,14 @@ The base URL of the schema registry service.
 
 
 *Type*: `string`
+
+
+=== `default_schema_id`
+
+If set, this schema ID will be used when a message's schema header cannot be read (ErrBadHeader). If not set, schema header errors will be returned.
+
+
+*Type*: `int`
 
 
 === `oauth`

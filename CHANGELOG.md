@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## 4.64.0 - TBD
 
+### Added
+
+- Added `default_schema_id` field to the `schema_registry_decode` processor. (@mmatczuk)
+
 ### Changed
 
 - (google_cloud_storage) Field `bucket` can now be interpolated (@rockwotj)
