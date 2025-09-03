@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -100,6 +101,20 @@ func (m *TopicMigratorConfig) supportedTopicConfigs() []string {
 	}
 }
 
+// TopicInfo describes a topic by name and partition count as observed on a
+// cluster. Partitions is the number of partitions currently reported.
+type TopicInfo struct {
+	Topic      string
+	Partitions int
+}
+
+// TopicMapping pairs a source topic with its resolved destination topic,
+// including their names and partition counts.
+type TopicMapping struct {
+	Src TopicInfo
+	Dst TopicInfo
+}
+
 // topicMigrator coordinates topic migration between clusters.
 //
 // Responsibilities:
@@ -114,7 +129,7 @@ type topicMigrator struct {
 	log     *service.Logger
 
 	mu          sync.RWMutex
-	knownTopics map[string]string // source topic -> destination topic
+	knownTopics map[string]TopicMapping // source topic name -> source and destination topic info
 }
 
 // SyncOnce runs the topic sync once if the set of known topics is empty, and
@@ -171,11 +186,10 @@ func (m *topicMigrator) Sync(
 			m.log.Debugf("Topic migration: topic '%s' already known, skipping creation", t)
 			continue
 		}
-		dstTopic, err := m.createTopicLocked(ctx, srcAdm, dstAdm, t)
-		if err != nil {
+
+		if err := m.createTopicLocked(ctx, srcAdm, dstAdm, t); err != nil {
 			return fmt.Errorf("create topic %s: %w", t, err)
 		}
-		m.knownTopics[t] = dstTopic
 	}
 
 	return nil
@@ -198,25 +212,29 @@ func (m *topicMigrator) CreateTopicIfNeeded(
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	return m.createTopicLocked(ctx, srcAdm, dstAdm, topic)
+	if err := m.createTopicLocked(ctx, srcAdm, dstAdm, topic); err != nil {
+		return "", err
+	}
+
+	return m.knownTopics[topic].Dst.Topic, nil
 }
 
-func (m *topicMigrator) createTopicLocked(ctx context.Context, srcAdm, dstAdm *kadm.Client, topic string) (string, error) {
-	if dstTopic, ok := m.cachedTopicLocked(topic); ok {
-		return dstTopic, nil
+func (m *topicMigrator) createTopicLocked(ctx context.Context, srcAdm, dstAdm *kadm.Client, topic string) error {
+	if _, ok := m.cachedTopicLocked(topic); ok {
+		return nil
 	}
 
 	m.log.Debugf("Topic migration: creating topic '%s'", topic)
 
 	dstTopic, err := m.resolveTopic(topic)
 	if err != nil {
-		return "", err
+		return err
 	}
 	m.log.Debugf("Topic migration: resolved '%s' to destination topic '%s'", topic, dstTopic)
 
 	info, rc, err := topicDetailsWithClient(ctx, srcAdm, topic)
 	if err != nil {
-		return "", fmt.Errorf("get topic details %s: %w", topic, err)
+		return fmt.Errorf("get topic details %s: %w", topic, err)
 	}
 	partitions := int32(len(info.Partitions))
 	if partitions == 0 {
@@ -228,13 +246,33 @@ func (m *topicMigrator) createTopicLocked(ctx context.Context, srcAdm, dstAdm *k
 	conf := newTopicConfig(rc.Configs, m.conf.supportedTopicConfigs())
 	m.log.Debugf("Topic migration: configuration for '%s':\n%s", topic, conf)
 
+	tm := TopicMapping{
+		Src: TopicInfo{
+			Topic:      topic,
+			Partitions: len(info.Partitions),
+		},
+		Dst: TopicInfo{
+			Topic:      dstTopic,
+			Partitions: len(info.Partitions),
+		},
+	}
+
 	t0 := time.Now()
 	_, err = dstAdm.CreateTopic(ctx, partitions, rf, conf, dstTopic)
 	if err != nil && errors.Is(err, kerr.TopicAlreadyExists) {
-		m.log.Debugf("Topic migration: destination topic '%s' already exists", dstTopic)
+		m.log.Infof("Topic migration: destination topic '%s' for source '%s' already exists", dstTopic, topic)
+
+		dstInfo, _, err := topicDetailsWithClient(ctx, srcAdm, dstTopic)
+		if err != nil {
+			return fmt.Errorf("get destination topic details %s: %w", dstTopic, err)
+		}
+		if len(dstInfo.Partitions) != len(info.Partitions) {
+			m.log.Warnf("Topic migration: topic partitions mismatch: got %d expected %d - this would disable conumer group migration for this topic", len(dstInfo.Partitions), len(info.Partitions))
+			tm.Dst.Partitions = len(dstInfo.Partitions)
+		}
 	} else if err != nil {
 		m.metrics.IncCreateErrors()
-		return "", fmt.Errorf("create topic %q: %w", topic, err)
+		return fmt.Errorf("create topic %q: %w", topic, err)
 	} else {
 		m.metrics.ObserveCreateLatency(time.Since(t0))
 		m.metrics.IncCreated()
@@ -242,11 +280,11 @@ func (m *topicMigrator) createTopicLocked(ctx context.Context, srcAdm, dstAdm *k
 	}
 
 	if syncErr := m.SyncACLs(ctx, srcAdm, dstAdm, topic, dstTopic); syncErr != nil {
-		return "", fmt.Errorf("sync ACLs for topic %s: %w", dstTopic, syncErr)
+		return fmt.Errorf("sync ACLs for topic %s: %w", dstTopic, syncErr)
 	}
 
-	m.knownTopics[topic] = dstTopic
-	return dstTopic, nil
+	m.knownTopics[topic] = tm
+	return nil
 }
 
 func (m *topicMigrator) cachedTopic(topic string) (dstTopic string, ok bool) {
@@ -257,8 +295,8 @@ func (m *topicMigrator) cachedTopic(topic string) (dstTopic string, ok bool) {
 }
 
 func (m *topicMigrator) cachedTopicLocked(topic string) (dstTopic string, ok bool) {
-	dstTopic, ok = m.knownTopics[topic]
-	return
+	v, ok := m.knownTopics[topic]
+	return v.Dst.Topic, ok
 }
 
 func (m *topicMigrator) resolveTopic(topic string) (string, error) {
@@ -471,6 +509,25 @@ func aclBuilderFromDescribed(topic string, acl kadm.DescribedACL) *kadm.ACLBuild
 	}
 
 	return b
+}
+
+// TopicMapping returns a slice of known topic mappings, sorted by source topic name.
+// The slice is read-only and valid until the next call to `Sync` or `SyncOnce`.
+// Each TopicMapping describes a topic by name and partition count as observed on a
+// cluster. Partitions is the number of partitions currently reported.
+func (m *topicMigrator) TopicMapping() []TopicMapping {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	s := make([]TopicMapping, 0, len(m.knownTopics))
+	for _, tm := range m.knownTopics {
+		s = append(s, tm)
+	}
+	slices.SortFunc(s, func(a, b TopicMapping) int {
+		return strings.Compare(a.Src.Topic, b.Src.Topic)
+	})
+
+	return s
 }
 
 type topicMetrics struct {

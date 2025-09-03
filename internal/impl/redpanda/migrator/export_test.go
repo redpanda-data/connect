@@ -41,7 +41,7 @@ func NewTopicMigratorForTesting(t *testing.T, conf TopicMigratorConfig) *topicMi
 			slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{
 				Level: slog.LevelDebug,
 			}))),
-		knownTopics: make(map[string]string),
+		knownTopics: make(map[string]TopicMapping),
 	}
 }
 
