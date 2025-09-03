@@ -180,7 +180,7 @@ func NewMigrator(mgr *service.Resources) *Migrator {
 		topic: topicMigrator{
 			metrics:     newTopicMetrics(mgr.Metrics()),
 			log:         log,
-			knownTopics: make(map[string]string),
+			knownTopics: make(map[string]TopicMapping),
 		},
 		sr: schemaRegistryMigrator{
 			metrics:      newSchemaRegistryMetrics(mgr.Metrics()),
