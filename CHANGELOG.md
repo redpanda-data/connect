@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## TBD
 
+### Added
+
+- Added `default_schema_id` field to the `schema_registry_decode` processor. (@mmatczuk)
+
 ### Changed
 
 - (MSSQL) Migrate from stale denisenkom/go-mssqldb dependency to actively maintained microsoft/go-mssqldb

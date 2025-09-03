@@ -179,7 +179,10 @@ root = this.apply("debeziumTimestampToAvroTimestamp")
 				Description("The duration after which a schema is considered stale and will be removed from the cache.").
 				Default("10m").Example("1h").Example("5m"),
 		).
-		Field(service.NewURLField("url").Description("The base URL of the schema registry service."))
+		Field(service.NewURLField("url").Description("The base URL of the schema registry service.")).
+		Field(service.NewIntField("default_schema_id").
+			Description("If set, this schema ID will be used when a message's schema header cannot be read (ErrBadHeader). If not set, schema header errors will be returned.").
+			Optional())
 
 	for _, f := range service.NewHTTPRequestAuthSignerFields() {
 		spec = spec.Field(f.Version("4.7.0"))
@@ -212,6 +215,7 @@ type decodingConfig struct {
 		emitUnpopulated   bool
 		emitDefaultValues bool
 	}
+	defaultSchemaID int
 }
 
 type schemaRegistryDecoder struct {
@@ -287,6 +291,14 @@ func newSchemaRegistryDecoderFromConfig(conf *service.ParsedConfig, mgr *service
 	if err != nil {
 		return nil, err
 	}
+
+	if conf.Contains("default_schema_id") {
+		cfg.defaultSchemaID, err = conf.FieldInt("default_schema_id")
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	cacheDuration, err := conf.FieldDuration("cache_duration")
 	if err != nil {
 		return nil, err
@@ -335,7 +347,11 @@ func (s *schemaRegistryDecoder) Process(_ context.Context, msg *service.Message)
 
 	var ch franz_sr.ConfluentHeader
 	id, remaining, err := ch.DecodeID(b)
-	if err != nil {
+	if errors.Is(err, franz_sr.ErrBadHeader) && s.cfg.defaultSchemaID != 0 {
+		// Use default schema ID when header cannot be read
+		id = s.cfg.defaultSchemaID
+		remaining = b
+	} else if err != nil {
 		return nil, err
 	}
 
