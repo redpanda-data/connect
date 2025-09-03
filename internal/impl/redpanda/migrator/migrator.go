@@ -61,6 +61,8 @@ func migratorOutputConfig() *service.ConfigSpec {
 		Fields(kafka.FranzWriterConfigFields()...).
 		// Schema registry fields
 		Field(schemaRegistryField(schemaRegistryMigratorFields()...).Optional()).
+		// Consumer groups fields
+		Field(service.NewObjectField(groupsObjectField, groupsMigratorFields()...).Optional()).
 		// Topic fields
 		Field(service.NewInterpolatedStringField(rmoFieldTopic).
 			Description("The topic to write messages to, the source topic name is passed as kafka_topic metadata.").
@@ -161,9 +163,10 @@ func init() {
 // Migrator handles the migration of data between Kafka clusters with schema
 // registry support.
 type Migrator struct {
-	topic topicMigrator
-	sr    schemaRegistryMigrator
-	log   *service.Logger
+	topic  topicMigrator
+	sr     schemaRegistryMigrator
+	groups groupsMigrator
+	log    *service.Logger
 
 	plumbing uint8
 	stopSig  *shutdown.Signaller
@@ -187,6 +190,12 @@ func NewMigrator(mgr *service.Resources) *Migrator {
 			log:          log,
 			knownSchemas: make(map[int]schemaInfo),
 			compatSet:    make(map[string]struct{}),
+		},
+		groups: groupsMigrator{
+			metrics:         newGroupsMetrics(mgr.Metrics()),
+			log:             log,
+			topicIDs:        make(map[string]kadm.TopicID),
+			commitedOffsets: make(map[string]map[string]map[int32][2]int64),
 		},
 		log:     log,
 		stopSig: shutdown.NewSignaller(),
@@ -220,6 +229,10 @@ func (m *Migrator) initOutputFromParsed(pConf *service.ParsedConfig, mgr *servic
 		return err
 	}
 
+	if err := m.groups.conf.initFromParsed(pConf); err != nil {
+		return err
+	}
+
 	m.plumbing |= outputInitialized
 	return nil
 }
@@ -232,6 +245,8 @@ func (m *Migrator) OnInputConnected(_ context.Context, fr *kafka.FranzReaderOrde
 	m.mu.Lock()
 	m.src = fr.Client
 	m.srcAdm = kadm.NewClient(fr.Client)
+	m.groups.src = fr.Client
+	m.groups.srcAdm = m.srcAdm
 	m.mu.Unlock()
 
 	return nil
@@ -248,6 +263,15 @@ func (m *Migrator) OnOutputConnected(_ context.Context, fw franzWriter) error { 
 		<-m.stopSig.SoftStopChan()
 	}()
 
+	// Set up destination admin client for groups migrator
+	clientInfo, err := fw.GetClient(ctx)
+	if err != nil {
+		return fmt.Errorf("get franz client: %w", err)
+	}
+	m.mu.Lock()
+	m.groups.dstAdm = kadm.NewClient(clientInfo.Client)
+	m.mu.Unlock()
+
 	// Syncing topics is deferred until the first message is received because
 	// we use GetConsumeTopics, which is only available after the first message
 	// is received.
@@ -257,6 +281,10 @@ func (m *Migrator) OnOutputConnected(_ context.Context, fw franzWriter) error { 
 		return err
 	}
 	go m.sr.SyncLoop(ctx)
+
+	// Start groups sync loop - there is no point in syncing groups before
+	// syncing topics
+	go m.groups.SyncLoop(ctx, m.topic.TopicMapping)
 
 	return nil
 }
