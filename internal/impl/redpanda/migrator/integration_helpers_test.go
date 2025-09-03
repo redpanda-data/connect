@@ -58,7 +58,9 @@ func startRedpandaSourceAndDestination(t *testing.T) (src, dst EmbeddedRedpandaC
 	dst.RedpandaEndpoints, err = redpandatest.StartRedpanda(t, pool, true, false)
 	require.NoError(t, err)
 
-	src.Client, err = kgo.NewClient(kgo.SeedBrokers(src.BrokerAddr))
+	src.Client, err = kgo.NewClient(
+		kgo.SeedBrokers(src.BrokerAddr),
+		kgo.RecordPartitioner(kgo.ManualPartitioner()))
 	require.NoError(t, err)
 	t.Cleanup(func() { src.Client.Close() })
 
@@ -96,7 +98,7 @@ func (e *EmbeddedRedpandaCluster) CreateTopicWithConfigs(topic string, configs m
 	ctx, cancel := context.WithTimeout(e.t.Context(), redpandaTestOpTimeout)
 	defer cancel()
 
-	_, err := e.Admin.CreateTopic(ctx, 1, 1, configs, topic)
+	_, err := e.Admin.CreateTopic(ctx, 2, 1, configs, topic)
 	if err != nil {
 		e.t.Errorf("Failed to create topic %s: %v", topic, err)
 	}
@@ -161,6 +163,18 @@ func (e *EmbeddedRedpandaCluster) Produce(topic string, value []byte, opts ...fu
 	require.NoError(e.t, e.Client.ProduceSync(ctx, record).FirstErr())
 }
 
+func ProduceToTopicOpt(topic string) func(*kgo.Record) {
+	return func(r *kgo.Record) {
+		r.Topic = topic
+	}
+}
+
+func ProduceToPartitionOpt(partition int) func(*kgo.Record) {
+	return func(r *kgo.Record) {
+		r.Partition = int32(partition)
+	}
+}
+
 func ProduceWithSchemaIDOpt(schemaID int) func(*kgo.Record) {
 	return func(r *kgo.Record) {
 		hdr := make([]byte, 5)
@@ -168,6 +182,22 @@ func ProduceWithSchemaIDOpt(schemaID int) func(*kgo.Record) {
 		binary.BigEndian.PutUint32(hdr[1:], uint32(schemaID))
 		r.Value = append(hdr, r.Value...)
 	}
+}
+
+func (e *EmbeddedRedpandaCluster) CommitOffset(group, topic string, part, at int) {
+	e.t.Helper()
+
+	ctx, cancel := context.WithTimeout(e.t.Context(), redpandaTestOpTimeout)
+	defer cancel()
+
+	var offs kadm.Offsets
+	offs.Add(kadm.Offset{
+		Topic:     topic,
+		Partition: int32(part),
+		At:        int64(at),
+	})
+	_, err := e.Admin.CommitOffsets(ctx, group, offs)
+	require.NoError(e.t, err)
 }
 
 // writeToTopic produces num messages to a topic.
