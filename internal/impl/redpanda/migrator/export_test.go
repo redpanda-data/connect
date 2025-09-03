@@ -19,6 +19,8 @@ import (
 	"log/slog"
 	"testing"
 
+	"github.com/twmb/franz-go/pkg/kadm"
+	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/sr"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -28,6 +30,7 @@ var (
 	TopicDetailsWithClient = topicDetailsWithClient
 	DescribeACLs           = describeACLs
 	SchemaStringEquals     = schemaStringEquals
+	ReadRecordTimestamp    = readRecordTimestamp
 )
 
 func NewTopicMigratorForTesting(t *testing.T, conf TopicMigratorConfig) *topicMigrator {
@@ -59,5 +62,23 @@ func NewSchemaRegistryMigratorForTesting(t *testing.T, conf SchemaRegistryMigrat
 		}))),
 		knownSchemas: make(map[int]schemaInfo),
 		compatSet:    make(map[string]struct{}),
+	}
+}
+
+func NewGroupsMigratorForTesting(t *testing.T, conf GroupsMigratorConfig, src *kgo.Client, srcAdm, dstAdm *kadm.Client) *groupsMigrator {
+	var buf bytes.Buffer
+	t.Cleanup(func() {
+		t.Log(buf.String())
+	})
+	return &groupsMigrator{
+		conf:   conf,
+		src:    src,
+		srcAdm: srcAdm,
+		dstAdm: dstAdm,
+		log: service.NewLoggerFromSlog(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{
+			Level: slog.LevelDebug,
+		}))),
+		topicIDs:        make(map[string]kadm.TopicID),
+		commitedOffsets: make(map[string]map[string]map[int32][2]int64),
 	}
 }
