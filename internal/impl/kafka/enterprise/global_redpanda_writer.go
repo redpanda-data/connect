@@ -62,7 +62,7 @@ func GlobalRedpandaFields() []*service.ConfigField {
 				Example("__redpanda.connect.status"),
 
 			// Deprecated
-			service.NewStringField(grwFieldRackID).Deprecated(),
+			service.NewStringField(grwFieldRackID).Default("").Deprecated(),
 		},
 		kafka.FranzProducerFields(),
 	)
