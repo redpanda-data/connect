@@ -34,6 +34,7 @@ linters-settings:
 
 linters:
   disable-all: true
+  default: none
   enable:
     # Default linters reported by `golangci-lint help linters` in v1.41.1
     # Disabled for Go 1.18
@@ -59,3 +60,23 @@ linters:
     # - gosec
     # - misspell
     # - prealloc
+    - errorlint
+    - varnamelen
+  settings:
+    varnamelen:
+      max-distance: 5
+      min-name-length: 3
+      check-receiver: true
+      check-return: true
+      check-type-param: true
+      ignore-names:
+        - err
+        - ch
+        - db
+        - tx
+      ignore-type-assert-ok: true
+      ignore-map-index-ok: true
+      ignore-chan-recv-ok: true
+formatters:
+  enable:
+    - gofmt
