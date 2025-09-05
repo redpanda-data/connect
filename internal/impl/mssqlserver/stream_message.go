@@ -39,11 +39,12 @@ const (
 
 // MessageEvent represents a single change from Table's change table in the database
 type MessageEvent struct {
-	LSN           LSN            `json:"lsn"`
-	Operation     OpType         `json:"operation"`
 	Table         string         `json:"table"`
+	StartLSN      LSN            `json:"start_lsn"`
+	EndLSN        LSN            `json:"end_lsn"`
 	SequenceValue []byte         `json:"sequence_value"`
-	CommandID     int            `json:"command_id"`
+	Operation     OpType         `json:"operation"`
 	UpdateMask    []byte         `json:"update_mask"`
 	Data          map[string]any `json:"data"`
+	CommandID     int            `json:"command_id"`
 }
