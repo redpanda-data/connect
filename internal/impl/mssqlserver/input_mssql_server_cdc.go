@@ -11,10 +11,13 @@ package mssqlserver
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
+	"github.com/Jeffail/checkpoint"
 	"github.com/Jeffail/shutdown"
 	"golang.org/x/sync/errgroup"
 
@@ -82,13 +85,17 @@ type msSqlServerCDCReader struct {
 	batching             service.BatchPolicy
 	batchPolicy          *service.Batcher
 
+	cp *checkpoint.Capped[[]byte]
+
 	logger *service.Logger
 	res    *service.Resources
 
-	dbMu    sync.Mutex
-	db      *sql.DB
-	resCh   chan asyncMessage
-	stopSig *shutdown.Signaller
+	lsnMu            sync.Mutex
+	dbMu             sync.Mutex
+	db               *sql.DB
+	msgChan          chan asyncMessage
+	rawMessageEvents chan MessageEvent
+	stopSig          *shutdown.Signaller
 }
 
 func newMssqlCDCReader(conf *service.ParsedConfig, res *service.Resources) (s service.BatchInput, err error) {
@@ -97,13 +104,13 @@ func newMssqlCDCReader(conf *service.ParsedConfig, res *service.Resources) (s se
 	// }
 
 	r := msSqlServerCDCReader{
-		logger:  res.Logger(),
-		res:     res,
-		resCh:   make(chan asyncMessage),
-		stopSig: shutdown.NewSignaller(),
+		logger:           res.Logger(),
+		res:              res,
+		msgChan:          make(chan asyncMessage),
+		rawMessageEvents: make(chan MessageEvent),
+		stopSig:          shutdown.NewSignaller(),
 	}
 
-	// TODO: Can we validate the connection string?
 	if r.connectionString, err = conf.FieldString(fieldConnectionString); err != nil {
 		return nil, err
 	}
@@ -146,6 +153,9 @@ func newMssqlCDCReader(conf *service.ParsedConfig, res *service.Resources) (s se
 	if err != nil {
 		return nil, err
 	}
+
+	//TODO: remove temp. hard coded value
+	r.cp = checkpoint.NewCapped[[]byte](int64(50))
 
 	return conf.WrapBatchInputExtractTracingSpanMapping("mssql_server_cdc", batchInput)
 }
@@ -190,16 +200,64 @@ func (r *msSqlServerCDCReader) Connect(ctx context.Context) error {
 		wg, ctx := errgroup.WithContext(ctx)
 
 		wg.Go(func() error {
+			var nextTimedBatchChan <-chan time.Time
+			for {
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-nextTimedBatchChan:
+					nextTimedBatchChan = nil
+					flushedBatch, err := r.batchPolicy.Flush(ctx)
+					if err != nil {
+						return fmt.Errorf("timed flush batch error: %w", err)
+					}
+
+					if err := r.flushBatch(ctx, r.cp, flushedBatch); err != nil {
+						return fmt.Errorf("failed to flush periodic batch: %w", err)
+					}
+				case c := <-r.rawMessageEvents:
+					data, err := json.Marshal(c.Data)
+					if err != nil {
+						return fmt.Errorf("failure to marshal message: %s", err)
+					}
+					mb := service.NewMessage(data)
+					mb.MetaSet("operation", fmt.Sprint(c.Operation))
+					mb.MetaSet("update_mask", string(c.UpdateMask))
+					mb.MetaSet("table", c.Table)
+					if c.LSN != nil {
+						mb.MetaSet("lsn", string(c.LSN))
+					}
+
+					if r.batchPolicy.Add(mb) {
+						nextTimedBatchChan = nil
+						flushedBatch, err := r.batchPolicy.Flush(ctx)
+						if err != nil {
+							return fmt.Errorf("flush batch error: %w", err)
+						}
+						if err := r.flushBatch(ctx, r.cp, flushedBatch); err != nil {
+							return fmt.Errorf("failed to flush batch: %w", err)
+						}
+					} else {
+						d, ok := r.batchPolicy.UntilNext()
+						if ok {
+							nextTimedBatchChan = time.After(d)
+						}
+					}
+				}
+			}
+		})
+		wg.Go(func() error {
 			err := ctStream.read(ctx, r.db, func(c *change) ([]byte, error) {
-				fmt.Printf("LSN=%x, CommandID=%d, SeqVal=%x, op=%d table=%s cols=%d\n", c.StartLSN, c.CommandID, c.SeqVal, c.Operation, c.Table, len(c.Columns))
-				// To read: https://github.com/Jeffail/checkpoint
-				// r.resCh <- asyncMessage{
-				// 	msg: service.MessageBatch{},
-				// 	ackFn: func(ctx context.Context, err error) error {
-				// 		// r.cache.lastLSN = c.StartLSN
-				// 		return nil
-				// 	}}
-				return c.StartLSN, nil
+				// fmt.Printf("LSN=%x, CommandID=%d, SeqVal=%x, op=%d table=%s cols=%d\n", c.startLSN, c.commandID, c.seqVal, c.operation, c.table, len(c.columns))
+				r.rawMessageEvents <- MessageEvent{
+					Table:         c.table,
+					Data:          c.columns,
+					Operation:     OpType(c.operation),
+					SequenceValue: c.seqVal,
+					CommandID:     c.commandID,
+					LSN:           c.startLSN,
+				}
+				return c.startLSN, nil
 			})
 			return fmt.Errorf("streaming from change tables: %w", err)
 		})
@@ -216,15 +274,70 @@ func (r *msSqlServerCDCReader) Connect(ctx context.Context) error {
 	return nil
 }
 
+func (i *msSqlServerCDCReader) flushBatch(ctx context.Context, checkpointer *checkpoint.Capped[[]byte], batch service.MessageBatch) error {
+	if len(batch) == 0 {
+		return nil
+	}
+
+	lastMsg := batch[len(batch)-1]
+	var startLSN []byte
+	if lsn, ok := lastMsg.MetaGet("start_lsn"); ok {
+		startLSN = []byte(lsn)
+	}
+
+	resolveFn, err := checkpointer.Track(ctx, startLSN, int64(len(batch)))
+	if err != nil {
+		return fmt.Errorf("failed to track LSN checkpoint for batch: %w", err)
+	}
+	msg := asyncMessage{
+		msg: batch,
+		ackFn: func(ctx context.Context, _ error) error {
+			i.lsnMu.Lock()
+			defer i.lsnMu.Unlock()
+			maxOffset := resolveFn()
+			// Nothing to commit, this wasn't the latest message
+			if maxOffset == nil {
+				return nil
+			}
+			offset := *maxOffset
+			// This has no offset - it's a snapshot message
+			if offset == nil {
+				return nil
+			}
+			return i.setCachedLSNPosition(ctx, offset)
+		},
+	}
+	select {
+	case i.msgChan <- msg:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (r *msSqlServerCDCReader) setCachedLSNPosition(ctx context.Context, lsn []byte) error {
+	var cErr error
+	if err := r.res.AccessCache(ctx, r.lsnCache, func(c service.Cache) {
+		cErr = c.Set(ctx, r.lsnCacheKey, lsn, nil)
+	}); err != nil {
+		return fmt.Errorf("unable to access cache for writing: %w", err)
+	}
+	if cErr != nil {
+		return fmt.Errorf("unable persist checkpoint to cache: %w", cErr)
+	}
+	return nil
+}
+
 func (r *msSqlServerCDCReader) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
 	select {
-	case <-ctx.Done():
-		return nil, nil, ctx.Err()
+	case m := <-r.msgChan:
+		// r.logger.Debugf("Reading batch of size %d", len(m.msg))
+		return m.msg, m.ackFn, nil
 	case <-r.stopSig.HasStoppedChan():
 		return nil, nil, service.ErrNotConnected
-	case am := <-r.resCh:
-		return am.msg, am.ackFn, nil
+	case <-ctx.Done():
 	}
+	return nil, nil, ctx.Err()
 }
 
 func (r *msSqlServerCDCReader) Close(_ context.Context) error {

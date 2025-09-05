@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -29,7 +30,7 @@ func (h rowIteratorMinHeap) Len() int { return len(h) }
 func (h rowIteratorMinHeap) Less(i, j int) bool {
 	// Compare LSNs as byte slices. CDC LSNs are fixed-length varbinary(10) so lexicographic == numeric order.
 	// TODO: I think we also need to order by CommandID, add test to verify
-	return bytes.Compare(h[i].iter.current.StartLSN, h[j].iter.current.StartLSN) < 0
+	return bytes.Compare(h[i].iter.current.startLSN, h[j].iter.current.startLSN) < 0
 }
 func (h rowIteratorMinHeap) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
 func (h *rowIteratorMinHeap) Push(x any)   { *h = append(*h, x.(*heapItem)) }
@@ -44,17 +45,19 @@ func (h *rowIteratorMinHeap) Pop() any {
 // changeTable is a valid, working change table configured by MS SQL Server that has change tracking enabled.
 type changeTable struct {
 	captureInstance string
-	startLSN        []byte
+	startLSN        LSN
 }
 
 // change represents a logical change row from the change table set in Table.
 type change struct {
-	Table     string
-	StartLSN  []byte // varbinary(10)
-	Operation int    // 1=delete, 2=insert, 3=update (before), 4=update (after), 5=merge
-	SeqVal    []byte
-	CommandID int
-	Columns   map[string]any
+	table      string
+	startLSN   LSN // varbinary(10)
+	endLSN     LSN // varbinary(10)
+	operation  int // 1=delete, 2=insert, 3=update (before), 4=update (after), 5=merge
+	updateMask []byte
+	seqVal     []byte
+	commandID  int
+	columns    map[string]any
 }
 
 type changeTableRowIter struct {
@@ -87,8 +90,8 @@ func newChangeTableRowIter(ctx context.Context, db *sql.DB, changeTable string, 
 	// Prime the iterator by loading the first row
 	if err := itor.next(); err != nil {
 		// Already exhausted iterator
-		err := itor.Close()
-		return nil, err
+		closeErr := itor.Close()
+		return nil, errors.Join(err, closeErr)
 	}
 
 	return itor, nil
@@ -119,48 +122,54 @@ func (ct *changeTableRowIter) Close() error {
 func (ct *changeTableRowIter) valsToChange(vals []any) *change {
 	// TODO: We should be able to remove this allocation
 	ch := &change{
-		Table:   ct.table,
-		Columns: make(map[string]any, len(ct.cols)),
+		table:   ct.table,
+		columns: make(map[string]any, len(ct.cols)),
 	}
 	for i, c := range ct.cols {
 		v := *(vals[i].(*any))
 		switch c {
 		case "__$start_lsn":
 			if b, ok := v.([]byte); ok {
-				ch.StartLSN = b
+				ch.startLSN = b
+			}
+		case "__$end_lsn":
+			if b, ok := v.([]byte); ok {
+				ch.endLSN = b
+			}
+		case "__$update_mask":
+			if b, ok := v.([]byte); ok {
+				ch.updateMask = b
 			}
 		case "__$operation":
 			switch x := v.(type) {
 			case int64:
-				ch.Operation = int(x)
+				ch.operation = int(x)
 			case int32:
-				ch.Operation = int(x)
+				ch.operation = int(x)
 			default:
 			}
 		case "__$command_id":
 			switch x := v.(type) {
 			case int64:
-				ch.CommandID = int(x)
+				ch.commandID = int(x)
 			case int32:
-				ch.CommandID = int(x)
+				ch.commandID = int(x)
 			default:
 			}
 		case "__$seqval":
 			if b, ok := v.([]byte); ok {
-				ch.SeqVal = b
+				ch.seqVal = b
 			}
 		default:
-			ch.Columns[c] = v
+			ch.columns[c] = v
 		}
 	}
 	return ch
 }
 
 type changeTableStream struct {
-	logger *service.Logger
-
+	logger        *service.Logger
 	trackedTables map[string]changeTable
-	resCh         chan asyncMessage
 }
 
 func (r *changeTableStream) verifyChangeTables(ctx context.Context, db *sql.DB, configTables []string) error {
@@ -191,7 +200,7 @@ func (r *changeTableStream) verifyChangeTables(ctx context.Context, db *sql.DB, 
 	}
 
 	if len(r.trackedTables) != len(configTables) {
-		return fmt.Errorf("could not find all change tables")
+		return errors.New("could not find all change tables")
 	}
 
 	return nil
@@ -206,7 +215,7 @@ func (r *changeTableStream) read(ctx context.Context, db *sql.DB, handle func(c 
 
 	for {
 		// Fetch a upper bound so the run is repeatable
-		if err := db.QueryRowContext(ctx, `SELECT sys.fn_cdc_get_max_lsn()`).Scan(&toLSN); err != nil {
+		if err := db.QueryRowContext(ctx, "SELECT sys.fn_cdc_get_max_lsn()").Scan(&toLSN); err != nil {
 			return err
 		}
 
@@ -217,8 +226,18 @@ func (r *changeTableStream) read(ctx context.Context, db *sql.DB, handle func(c 
 
 		iters := make([]*changeTableRowIter, 0, len(r.trackedTables))
 		for _, inst := range r.trackedTables {
+			if fromLSN == nil {
+				fromLSN = inst.startLSN
+			}
+
 			it, err := newChangeTableRowIter(ctx, db, inst.captureInstance, fromLSN, toLSN)
 			if err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					// No data means we can skip adding it to the heap below
+					r.logger.Debugf("Exhausted all rows for change table '%s'", inst.captureInstance)
+					continue
+				}
+
 				return fmt.Errorf("initialising iterator for change table %s: %w", inst.captureInstance, err)
 			}
 
@@ -242,7 +261,6 @@ func (r *changeTableStream) read(ctx context.Context, db *sql.DB, handle func(c 
 				}
 				return err
 			} else {
-				// TODO: This should be set via the ackFn
 				lastLSN = lsn
 			}
 
@@ -260,7 +278,12 @@ func (r *changeTableStream) read(ctx context.Context, db *sql.DB, handle func(c 
 		}
 
 		if lastLSN != nil {
-			fromLSN = lastLSN
+			if !bytes.Equal(fromLSN, lastLSN) {
+				fromLSN = lastLSN
+			} else {
+				r.logger.Debug("No more changes across all change tables, backing off...")
+				time.Sleep(2 * time.Second)
+			}
 		}
 	}
 }
