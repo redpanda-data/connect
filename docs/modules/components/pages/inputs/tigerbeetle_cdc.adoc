@@ -35,6 +35,7 @@ input:
     cluster_id: "" # No default (required)
     addresses: [] # No default (required)
     progress_cache: "" # No default (required)
+    rate_limit: ""
     event_count_max: 2730
     idle_interval_ms: 1000
     timestamp_initial: ""
@@ -147,9 +148,18 @@ This allows Redpanda Connect to resume from the latest delivered event upon rest
 *Type*: `string`
 
 
+=== `rate_limit`
+
+An optional https://docs.redpanda.com/redpanda-connect/components/rate_limits/about/[rate limit^] to throttle the number of **requests** made to TigerBeetle.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
 === `event_count_max`
 
-The maximum number of events fetched from TigerBeetle per batch.
+The maximum number of events fetched from TigerBeetle per **request**.
 Must be greater than zero.
 
 
@@ -159,7 +169,7 @@ Must be greater than zero.
 
 === `idle_interval_ms`
 
-The time interval in milliseconds to wait before querying again when the last query returned no events.
+The time interval in milliseconds to wait before querying again when the last request returned no events.
 Must be greater than zero.
 
 

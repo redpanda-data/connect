@@ -23,6 +23,7 @@ const (
 	fieldClusterID        = "cluster_id"
 	fieldAddresses        = "addresses"
 	fieldProgressCache    = "progress_cache"
+	fieldRateLimit        = "rate_limit"
 	fieldEventCountMax    = "event_count_max"
 	fieldIdleInterval     = "idle_interval_ms"
 	fieldTimestampInitial = "timestamp_initial"
@@ -136,8 +137,12 @@ Requires TigerBeetle cluster version 0.16.57 or greater.`).
 					"used to track progress by storing the last acknowledged timestamp.\n"+
 					"This allows Redpanda Connect to resume from the latest delivered event "+
 					"upon restart."),
+			service.NewStringField(fieldRateLimit).
+				Description("An optional https://docs.redpanda.com/redpanda-connect/components/rate_limits/about/[rate limit^] "+
+					"to throttle the number of **requests** made to TigerBeetle.").
+				Default(""),
 			service.NewIntField(fieldEventCountMax).
-				Description("The maximum number of events fetched from TigerBeetle per batch.\n"+
+				Description("The maximum number of events fetched from TigerBeetle per **request**.\n"+
 					"Must be greater than zero.").
 				Default(eventCountDefault).
 				LintRule(`root = if this <= 0 {
@@ -145,7 +150,7 @@ Requires TigerBeetle cluster version 0.16.57 or greater.`).
 					}`),
 			service.NewIntField(fieldIdleInterval).
 				Description("The time interval in milliseconds to wait before querying again when "+
-					"the last query returned no events.\n"+
+					"the last request returned no events.\n"+
 					"Must be greater than zero.").
 				Default(idleIntervalDefault).
 				LintRule(`root = if this <= 0 {
@@ -171,6 +176,7 @@ type tigerbeetleConfig struct {
 	idleInterval     time.Duration
 	timestampInitial uint64
 	progressCache    string
+	rateLimit        string
 	timestampLastKey string
 }
 
@@ -265,11 +271,12 @@ func newTigerbeetleInput(config *service.ParsedConfig, resources *service.Resour
 	var (
 		clusterID           string
 		addresses           []string
+		progressCache       string
+		rateLimit           string
 		eventCountMax       int
 		idleInterval        int
 		timestampInitialStr string
 		timestampInitial    uint64 = 0
-		progressCache       string
 	)
 
 	logger := resources.Logger()
@@ -294,6 +301,15 @@ func newTigerbeetleInput(config *service.ParsedConfig, resources *service.Resour
 	}
 	if !config.Resources().HasCache(progressCache) {
 		return nil, fmt.Errorf("cache resource '%s' not found", progressCache)
+	}
+
+	if rateLimit, err = config.FieldString(fieldRateLimit); err != nil {
+		return nil, err
+	}
+	if rateLimit != "" {
+		if !config.Resources().HasRateLimit(rateLimit) {
+			return nil, fmt.Errorf("rate limit resource '%s' not found", rateLimit)
+		}
 	}
 
 	if eventCountMax, err = config.FieldInt(fieldEventCountMax); err != nil {
@@ -321,6 +337,7 @@ func newTigerbeetleInput(config *service.ParsedConfig, resources *service.Resour
 			clusterID:        clusterID128,
 			addresses:        addresses,
 			progressCache:    progressCache,
+			rateLimit:        rateLimit,
 			timestampLastKey: "timestamp_last_" + clusterID,
 			eventCountMax:    uint32(eventCountMax),
 			idleInterval:     time.Duration(idleInterval) * time.Millisecond,
@@ -351,6 +368,11 @@ func (input *tigerbeetleInput) produce(ctx context.Context, client tb.Client, ti
 	_ = idleTimer.Stop()
 
 	for {
+		err := input.checkRateLimit(ctx)
+		if err != nil {
+			return err
+		}
+
 		input.logger.Debugf("producer: get_change_events: timestamp_min=%d limit=%d",
 			timestampLast+1,
 			input.config.eventCountMax,
@@ -471,6 +493,39 @@ func (input *tigerbeetleInput) consume(ctx context.Context) error {
 			return ctx.Err()
 		}
 	}
+}
+
+func (input *tigerbeetleInput) checkRateLimit(ctx context.Context) error {
+	if input.config.rateLimit != "" {
+		const max_tries = 5
+		var attempt int
+		for attempt = 0; attempt < max_tries; attempt++ {
+			var duration time.Duration
+			var accessErr error
+			err := input.resources.AccessRateLimit(
+				ctx,
+				input.config.rateLimit,
+				func(rate_limit service.RateLimit) {
+					duration, accessErr = rate_limit.Access(ctx)
+				})
+			if err != nil {
+				return err
+			} else if accessErr != nil {
+				return accessErr
+			}
+
+			if duration > 0 {
+				input.logger.Debugf("rate_limit: waiting for %d ms", duration.Milliseconds())
+				_ = <-time.After(duration)
+			} else {
+				break
+			}
+		}
+		if attempt == max_tries {
+			return fmt.Errorf("failed to access the rate limit after %d attemps", max_tries)
+		}
+	}
+	return nil
 }
 
 // JsonChangeEvent represents the structure of a CDC event as serialized to JSON.
