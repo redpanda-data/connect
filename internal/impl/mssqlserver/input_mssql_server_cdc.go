@@ -125,10 +125,11 @@ func newMssqlCDCReader(conf *service.ParsedConfig, res *service.Resources) (s se
 	if r.snapshotMaxBatchSize, err = conf.FieldInt(fieldSnapshotMaxBatchSize); err != nil {
 		return nil, err
 	}
-	if r.checkPointLimit, err = conf.FieldInt(fieldCheckpointLimit); err != nil {
+	var checkpointLimit int
+	if checkpointLimit, err = conf.FieldInt(fieldCheckpointLimit); err != nil {
 		return nil, err
 	}
-	r.checkpoint = checkpoint.NewCapped[LSN](int64(r.checkPointLimit))
+	r.checkpoint = checkpoint.NewCapped[LSN](int64(checkpointLimit))
 
 	// TODO: support regular expression on tablenames
 	if r.tables, err = conf.FieldStringList(fieldTables); err != nil {
@@ -145,14 +146,13 @@ func newMssqlCDCReader(conf *service.ParsedConfig, res *service.Resources) (s se
 	}
 
 	var batching service.BatchPolicy
-
 	if batching, err = conf.FieldBatchPolicy(fieldBatching); err != nil {
 		return nil, err
 	} else if batching.IsNoop() {
 		batching.Count = 1
 	}
-
 	r.batching = batching
+
 	if r.batchPolicy, err = r.batching.NewBatcher(res); err != nil {
 		return nil, err
 	} else if batching.IsNoop() {
