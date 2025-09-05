@@ -191,7 +191,7 @@ type batchedMesssage struct {
 }
 
 func init() {
-	service.MustRegisterBatchInput("tigerbeetle", configSpec(), newTigerbeetleInput)
+	service.MustRegisterBatchInput("tigerbeetle_cdc", configSpec(), newTigerbeetleInput)
 }
 
 func (input *tigerbeetleInput) Connect(ctx context.Context) error {

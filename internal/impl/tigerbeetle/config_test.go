@@ -20,7 +20,7 @@ func TestConfigLinting(t *testing.T) {
 		{
 			name: "basic config",
 			conf: `
-tigerbeetle:
+tigerbeetle_cdc:
   cluster_id: 0
   addresses: [ "3000" ]
   progress_cache: foocache
@@ -29,7 +29,7 @@ tigerbeetle:
 		{
 			name: "advanced config",
 			conf: `
-tigerbeetle:
+tigerbeetle_cdc:
   cluster_id: 181161957064799711348825326453165787824
   addresses: [ "127.0.0.1:3000", "127.0.0.1:3001", "127.0.0.1:3002" ]
   progress_cache: foocache
@@ -41,7 +41,7 @@ tigerbeetle:
 		{
 			name: "invalid cluster_id",
 			conf: `
-tigerbeetle:
+tigerbeetle_cdc:
   cluster_id: xyz
   addresses: [ "3000" ]
   progress_cache: foocache
@@ -51,7 +51,7 @@ tigerbeetle:
 		{
 			name: "empty cluster_id",
 			conf: `
-tigerbeetle:
+tigerbeetle_cdc:
   cluster_id:
   addresses: [ "3000" ]
   progress_cache: foocache
@@ -61,7 +61,7 @@ tigerbeetle:
 		{
 			name: "missing cluster_id",
 			conf: `
-tigerbeetle:
+tigerbeetle_cdc:
   addresses: [ "3000" ]
   progress_cache: foocache
 `,
@@ -70,7 +70,7 @@ tigerbeetle:
 		{
 			name: "empty addresses",
 			conf: `
-tigerbeetle:
+tigerbeetle_cdc:
   cluster_id: 0
   addresses: [ ]
   progress_cache: foocache
@@ -80,7 +80,7 @@ tigerbeetle:
 		{
 			name: "missing progress_cache",
 			conf: `
-tigerbeetle:
+tigerbeetle_cdc:
   cluster_id: 0
   addresses: [ "3000" ]
 `,
@@ -89,7 +89,7 @@ tigerbeetle:
 		{
 			name: "zeroed event_count_max",
 			conf: `
-tigerbeetle:
+tigerbeetle_cdc:
   cluster_id: 0
   addresses: [ "3000" ]
   progress_cache: foocache
@@ -100,7 +100,7 @@ tigerbeetle:
 		{
 			name: "negative event_count_max",
 			conf: `
-tigerbeetle:
+tigerbeetle_cdc:
   cluster_id: 0
   addresses: [ "3000" ]
   progress_cache: foocache
@@ -111,7 +111,7 @@ tigerbeetle:
 		{
 			name: "zeroed idle_interval_ms",
 			conf: `
-tigerbeetle:
+tigerbeetle_cdc:
   cluster_id: 0
   addresses: [ "3000" ]
   progress_cache: foocache
@@ -122,7 +122,7 @@ tigerbeetle:
 		{
 			name: "negative idle_interval_ms",
 			conf: `
-tigerbeetle:
+tigerbeetle_cdc:
   cluster_id: 0
   addresses: [ "3000" ]
   progress_cache: foocache
@@ -133,7 +133,7 @@ tigerbeetle:
 		{
 			name: "negative timestamp_initial",
 			conf: `
-tigerbeetle:
+tigerbeetle_cdc:
   cluster_id: 0
   addresses: [ "3000" ]
   progress_cache: foocache
@@ -144,7 +144,7 @@ tigerbeetle:
 		{
 			name: "invalid timestamp_initial",
 			conf: `
-tigerbeetle:
+tigerbeetle_cdc:
   cluster_id: 0
   addresses: [ "3000" ]
   progress_cache: foocache

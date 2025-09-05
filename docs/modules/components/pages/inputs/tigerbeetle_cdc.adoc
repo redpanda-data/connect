@@ -1,4 +1,4 @@
-= tigerbeetle
+= tigerbeetle_cdc
 :type: input
 :status: beta
 :categories: ["Services"]
@@ -31,7 +31,7 @@ Introduced in version 0.0.1.
 # Config fields, showing default values
 input:
   label: ""
-  tigerbeetle:
+  tigerbeetle_cdc:
     cluster_id: "" # No default (required)
     addresses: [] # No default (required)
     progress_cache: "" # No default (required)

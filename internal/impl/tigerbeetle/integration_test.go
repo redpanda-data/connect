@@ -29,7 +29,7 @@ const (
 	messageCount = 5_000
 
 	connectorYaml = `
-tigerbeetle:
+tigerbeetle_cdc:
   cluster_id: 0
   addresses: [ %s ]
   progress_cache: foocache
