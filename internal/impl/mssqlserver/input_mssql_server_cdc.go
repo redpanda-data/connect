@@ -28,6 +28,7 @@ const (
 	fieldConnectionString     = "connection_string"
 	fieldStreamSnapshot       = "stream_snapshot"
 	fieldSnapshotMaxBatchSize = "snapshot_max_batch_size"
+	fieldCheckpointLimit      = "checkpoint_limit"
 	fieldTables               = "tables"
 	fieldCheckpointCache      = "checkpoint_cache"
 	fieldCheckpointKey        = "checkpoint_key"
@@ -67,6 +68,10 @@ var mssqlStreamConfigSpec = service.NewConfigSpec().
 		Description("The key to use to store the snapshot position in `" + fieldCheckpointCache + "`. An alternative key can be provided if multiple CDC inputs share the same cache.").
 		Default("mssql_cdc_position"),
 	).
+	Field(service.NewIntField(fieldCheckpointLimit).
+		Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given BinLog Position will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
+		Default(1024),
+	).
 	Field(service.NewAutoRetryNacksToggleField()).
 	Field(service.NewBatchPolicyField(fieldBatching))
 
@@ -79,13 +84,13 @@ type msSqlServerCDCReader struct {
 	connectionString     string
 	streamSnapshot       bool
 	snapshotMaxBatchSize int
+	checkPointLimit      int
 	tables               []string
 	lsnCache             string
 	lsnCacheKey          string
 	batching             service.BatchPolicy
 	batchPolicy          *service.Batcher
-
-	cp *checkpoint.Capped[[]byte]
+	checkpoint           *checkpoint.Capped[LSN]
 
 	logger *service.Logger
 	res    *service.Resources
@@ -120,6 +125,11 @@ func newMssqlCDCReader(conf *service.ParsedConfig, res *service.Resources) (s se
 	if r.snapshotMaxBatchSize, err = conf.FieldInt(fieldSnapshotMaxBatchSize); err != nil {
 		return nil, err
 	}
+	if r.checkPointLimit, err = conf.FieldInt(fieldCheckpointLimit); err != nil {
+		return nil, err
+	}
+	r.checkpoint = checkpoint.NewCapped[LSN](int64(r.checkPointLimit))
+
 	// TODO: support regular expression on tablenames
 	if r.tables, err = conf.FieldStringList(fieldTables); err != nil {
 		return nil, err
@@ -153,9 +163,6 @@ func newMssqlCDCReader(conf *service.ParsedConfig, res *service.Resources) (s se
 	if err != nil {
 		return nil, err
 	}
-
-	//TODO: remove temp. hard coded value
-	r.cp = checkpoint.NewCapped[[]byte](int64(50))
 
 	return conf.WrapBatchInputExtractTracingSpanMapping("mssql_server_cdc", batchInput)
 }
@@ -211,8 +218,7 @@ func (r *msSqlServerCDCReader) Connect(ctx context.Context) error {
 					if err != nil {
 						return fmt.Errorf("timed flush batch error: %w", err)
 					}
-
-					if err := r.flushBatch(ctx, r.cp, flushedBatch); err != nil {
+					if err := r.flushBatch(ctx, r.checkpoint, flushedBatch); err != nil {
 						return fmt.Errorf("failed to flush periodic batch: %w", err)
 					}
 				case c := <-r.rawMessageEvents:
@@ -220,21 +226,26 @@ func (r *msSqlServerCDCReader) Connect(ctx context.Context) error {
 					if err != nil {
 						return fmt.Errorf("failure to marshal message: %s", err)
 					}
-					mb := service.NewMessage(data)
-					mb.MetaSet("operation", fmt.Sprint(c.Operation))
-					mb.MetaSet("update_mask", string(c.UpdateMask))
-					mb.MetaSet("table", c.Table)
-					if c.LSN != nil {
-						mb.MetaSet("lsn", string(c.LSN))
+					msg := service.NewMessage(data)
+					msg.MetaSet("table", c.Table)
+					if c.StartLSN != nil {
+						msg.MetaSet("start_lsn", string(c.StartLSN))
 					}
+					if c.EndLSN != nil {
+						msg.MetaSet("end_lsn", string(c.EndLSN))
+					}
+					msg.MetaSet("sequence_value", string(c.SequenceValue))
+					msg.MetaSet("operation", fmt.Sprint(c.Operation))
+					msg.MetaSet("update_mask", string(c.UpdateMask))
+					msg.MetaSet("command_id", fmt.Sprint(c.CommandID))
 
-					if r.batchPolicy.Add(mb) {
+					if r.batchPolicy.Add(msg) {
 						nextTimedBatchChan = nil
 						flushedBatch, err := r.batchPolicy.Flush(ctx)
 						if err != nil {
 							return fmt.Errorf("flush batch error: %w", err)
 						}
-						if err := r.flushBatch(ctx, r.cp, flushedBatch); err != nil {
+						if err := r.flushBatch(ctx, r.checkpoint, flushedBatch); err != nil {
 							return fmt.Errorf("failed to flush batch: %w", err)
 						}
 					} else {
@@ -255,7 +266,7 @@ func (r *msSqlServerCDCReader) Connect(ctx context.Context) error {
 					Operation:     OpType(c.operation),
 					SequenceValue: c.seqVal,
 					CommandID:     c.commandID,
-					LSN:           c.startLSN,
+					StartLSN:      c.startLSN,
 				}
 				return c.startLSN, nil
 			})
@@ -274,7 +285,7 @@ func (r *msSqlServerCDCReader) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (i *msSqlServerCDCReader) flushBatch(ctx context.Context, checkpointer *checkpoint.Capped[[]byte], batch service.MessageBatch) error {
+func (i *msSqlServerCDCReader) flushBatch(ctx context.Context, checkpointer *checkpoint.Capped[LSN], batch service.MessageBatch) error {
 	if len(batch) == 0 {
 		return nil
 	}
