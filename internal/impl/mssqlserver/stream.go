@@ -168,8 +168,14 @@ func (ct *changeTableRowIter) valsToChange(vals []any) *change {
 }
 
 type changeTableStream struct {
-	logger        *service.Logger
-	trackedTables map[string]changeTable
+	logger           *service.Logger
+	trackedTables    map[string]changeTable
+	rawMessageEvents chan MessageEvent
+	cachedLSN        LSN
+}
+
+func (r *changeTableStream) Messages() chan MessageEvent {
+	return r.rawMessageEvents
 }
 
 func (r *changeTableStream) verifyChangeTables(ctx context.Context, db *sql.DB, configTables []string) error {
@@ -206,10 +212,10 @@ func (r *changeTableStream) verifyChangeTables(ctx context.Context, db *sql.DB, 
 	return nil
 }
 
-func (r *changeTableStream) read(ctx context.Context, db *sql.DB, handle func(c *change) ([]byte, error)) error {
+func (r *changeTableStream) readChangeTables(ctx context.Context, db *sql.DB, handle func(c *change) ([]byte, error)) error {
 	var (
-		fromLSN []byte // load last checkpoint; nil means start from beginning in tables
-		toLSN   []byte // often set to fn_cdc_get_max_lsn(); nil means no upper bound
+		fromLSN []byte = r.cachedLSN // load last checkpoint; nil means start from beginning in tables
+		toLSN   []byte               // often set to fn_cdc_get_max_lsn(); nil means no upper bound
 		lastLSN []byte
 	)
 
@@ -227,14 +233,15 @@ func (r *changeTableStream) read(ctx context.Context, db *sql.DB, handle func(c 
 		iters := make([]*changeTableRowIter, 0, len(r.trackedTables))
 		for _, inst := range r.trackedTables {
 			if fromLSN == nil {
+				// if no previous LSN is set, start from beginning dictated by tracking table
 				fromLSN = inst.startLSN
 			}
 
 			it, err := newChangeTableRowIter(ctx, db, inst.captureInstance, fromLSN, toLSN)
 			if err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
-					// No data means we can skip adding it to the heap below
-					r.logger.Debugf("Exhausted all rows for change table '%s'", inst.captureInstance)
+					// No data means we can skip adding row iterator to the heap below
+					r.logger.Debugf("Exhausted all changes for change table '%s'", inst.captureInstance)
 					continue
 				}
 
@@ -285,5 +292,7 @@ func (r *changeTableStream) read(ctx context.Context, db *sql.DB, handle func(c 
 				time.Sleep(2 * time.Second)
 			}
 		}
+
+		time.Sleep(2 * time.Second)
 	}
 }
