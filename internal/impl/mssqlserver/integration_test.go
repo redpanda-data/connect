@@ -37,11 +37,11 @@ type testDB struct {
 }
 
 func (db *testDB) exec(query string, args ...any) {
-	_, err := db.DB.Exec(query, args...)
+	_, err := db.Exec(query, args...)
 	require.NoError(db.t, err)
 }
 
-func (db *testDB) createTableIfNotExists(tableName, query string, args ...any) {
+func (db *testDB) createTableIfNotExists(tableName, query string, _ ...any) {
 	q := fmt.Sprintf(`
 		IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = '%s' AND schema_id = SCHEMA_ID('dbo'))
 		BEGIN
