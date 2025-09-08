@@ -75,7 +75,8 @@ func newChangeTableRowIter(ctx context.Context, db *sql.DB, changeTable string, 
 	// "Sequence of the operation as represented in the transaction log. Should not be used for ordering. Instead, use the __$command_id column"
 	// source: https://learn.microsoft.com/en-us/sql/relational-databases/system-tables/cdc-capture-instance-ct-transact-sql?view=sql-server-ver17
 	q := fmt.Sprintf("SELECT * FROM cdc.%s_CT WITH (NOLOCK) WHERE (? IS NULL OR [__$start_lsn] > ?) AND (? IS NULL OR [__$start_lsn] <= ?) ORDER BY [__$start_lsn] ASC, [__$command_id] ASC, [__$seqval] ASC, [__$operation] ASC", changeTable)
-	rows, err := db.QueryContext(ctx, q, fromLSN, fromLSN, toLSN, toLSN)
+
+	rows, err := db.QueryContext(ctx, q, fromLSN, fromLSN, toLSN, toLSN) //nolint:rowserrcheck
 	if err != nil {
 		return nil, err
 	}
@@ -99,6 +100,10 @@ func newChangeTableRowIter(ctx context.Context, db *sql.DB, changeTable string, 
 
 func (ct *changeTableRowIter) next() error {
 	if !ct.rows.Next() {
+		// consult iterator error result before we can infer it's due to no rows.
+		if err := ct.rows.Err(); err != nil {
+			return err
+		}
 		return sql.ErrNoRows
 	}
 
@@ -188,9 +193,12 @@ func (r *changeTableStream) verifyChangeTables(ctx context.Context, db *sql.DB, 
 	for rows.Next() {
 		var t changeTable
 		if err := rows.Scan(&t.captureInstance, &t.startLSN); err != nil {
-			return fmt.Errorf("loading change table: %w", err)
+			return fmt.Errorf("scanning change table row: %w", err)
 		}
 		changeTables = append(changeTables, t)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterating through change tables: %w", err)
 	}
 
 	for _, t := range configTables {
