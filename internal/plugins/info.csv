@@ -138,6 +138,7 @@ mongodb_cdc               ,input     ,MongoDB CDC               ,4.48.0  ,enterp
 mqtt                      ,input     ,mqtt                      ,4.37.0  ,certified  ,n          ,y     ,y
 mqtt                      ,output    ,mqtt                      ,4.37.0  ,certified  ,n          ,y     ,y
 msgpack                   ,processor ,msgpack                   ,3.59.0  ,community  ,n          ,n     ,n
+mssql_server_cdc          ,input     ,mssql_server_cdc          ,0.0.0   ,community  ,n          ,n     ,n
 multilevel                ,cache     ,Multilevel                ,0.0.0   ,certified  ,n          ,y     ,y
 mutation                  ,processor ,mutation                  ,4.5.0   ,certified  ,n          ,y     ,y
 mysql_cdc                 ,input     ,mysql_cdc                 ,4.45.0  ,enterprise ,n          ,y     ,y
