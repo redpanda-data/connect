@@ -11,6 +11,7 @@ package mssqlserver
 import (
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -177,9 +178,13 @@ func (r *msSqlServerCDCReader) Connect(ctx context.Context) error {
 	r.db = db
 	r.dbMu.Unlock()
 
-	// TODO: Load LSN from checkpoint/cache
+	cachedLSN, err := r.getCachedLSN(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to get cached LSN: %s", err)
+	}
+
 	var snapshot *snapshot
-	if r.streamSnapshot {
+	if r.streamSnapshot && cachedLSN == nil {
 		snapshot = NewSnapshot(r.logger, r.db)
 	}
 
@@ -196,6 +201,7 @@ func (r *msSqlServerCDCReader) Connect(ctx context.Context) error {
 	ctStream := &changeTableStream{
 		logger:        r.logger,
 		trackedTables: make(map[string]changeTable, len(r.tables)),
+		cachedLSN:     cachedLSN,
 	}
 
 	if err := ctStream.verifyChangeTables(ctx, r.db, r.tables); err != nil {
@@ -205,87 +211,89 @@ func (r *msSqlServerCDCReader) Connect(ctx context.Context) error {
 	go func() {
 		ctx, _ = r.stopSig.SoftStopCtx(context.Background())
 		wg, ctx := errgroup.WithContext(ctx)
-
-		wg.Go(func() error {
-			var nextTimedBatchChan <-chan time.Time
-			for {
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				case <-nextTimedBatchChan:
-					nextTimedBatchChan = nil
-					flushedBatch, err := r.batchPolicy.Flush(ctx)
-					if err != nil {
-						return fmt.Errorf("timed flush batch error: %w", err)
-					}
-					if err := r.flushBatch(ctx, r.checkpoint, flushedBatch); err != nil {
-						return fmt.Errorf("failed to flush periodic batch: %w", err)
-					}
-				case c := <-r.rawMessageEvents:
-					data, err := json.Marshal(c.Data)
-					if err != nil {
-						return fmt.Errorf("failure to marshal message: %s", err)
-					}
-					msg := service.NewMessage(data)
-					msg.MetaSet("table", c.Table)
-					if c.StartLSN != nil {
-						msg.MetaSet("start_lsn", string(c.StartLSN))
-					}
-					if c.EndLSN != nil {
-						msg.MetaSet("end_lsn", string(c.EndLSN))
-					}
-					msg.MetaSet("sequence_value", string(c.SequenceValue))
-					msg.MetaSet("operation", fmt.Sprint(c.Operation))
-					msg.MetaSet("update_mask", string(c.UpdateMask))
-					msg.MetaSet("command_id", fmt.Sprint(c.CommandID))
-
-					if r.batchPolicy.Add(msg) {
-						nextTimedBatchChan = nil
-						flushedBatch, err := r.batchPolicy.Flush(ctx)
-						if err != nil {
-							return fmt.Errorf("flush batch error: %w", err)
-						}
-						if err := r.flushBatch(ctx, r.checkpoint, flushedBatch); err != nil {
-							return fmt.Errorf("failed to flush batch: %w", err)
-						}
-					} else {
-						d, ok := r.batchPolicy.UntilNext()
-						if ok {
-							nextTimedBatchChan = time.After(d)
-						}
-					}
-				}
-			}
-		})
-		wg.Go(func() error {
-			err := ctStream.read(ctx, r.db, func(c *change) ([]byte, error) {
-				// fmt.Printf("LSN=%x, CommandID=%d, SeqVal=%x, op=%d table=%s cols=%d\n", c.startLSN, c.commandID, c.seqVal, c.operation, c.table, len(c.columns))
-				r.rawMessageEvents <- MessageEvent{
-					Table:         c.table,
-					Data:          c.columns,
-					Operation:     OpType(c.operation),
-					SequenceValue: c.seqVal,
-					CommandID:     c.commandID,
-					StartLSN:      c.startLSN,
-				}
-				return c.startLSN, nil
-			})
-			return fmt.Errorf("streaming from change tables: %w", err)
-		})
+		wg.Go(func() error { return r.readMessages(ctx, ctStream) })
+		wg.Go(func() error { return r.batchMessages(ctx) })
 
 		if err := wg.Wait(); err != nil && !errors.Is(err, context.Canceled) {
 			r.logger.Errorf("error during Microsoft SQL Server CDC: %s", err)
 		} else {
 			r.logger.Info("successfully shutdown Microsoft SQL Server CDC stream")
 		}
-
 		r.stopSig.TriggerHasStopped()
 	}()
 
 	return nil
 }
 
-func (i *msSqlServerCDCReader) flushBatch(ctx context.Context, checkpointer *checkpoint.Capped[LSN], batch service.MessageBatch) error {
+func (r *msSqlServerCDCReader) batchMessages(ctx context.Context) error {
+	var nextTimedBatchChan <-chan time.Time
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-nextTimedBatchChan:
+			nextTimedBatchChan = nil
+			flushedBatch, err := r.batchPolicy.Flush(ctx)
+			if err != nil {
+				return fmt.Errorf("timed flush batch error: %w", err)
+			}
+			if err := r.flushBatch(ctx, r.checkpoint, flushedBatch); err != nil {
+				return fmt.Errorf("failed to flush periodic batch: %w", err)
+			}
+		case c := <-r.rawMessageEvents:
+			data, err := json.Marshal(c.Data)
+			if err != nil {
+				return fmt.Errorf("failure to marshal message: %s", err)
+			}
+			msg := service.NewMessage(data)
+			msg.MetaSet("table", c.Table)
+			if c.StartLSN != nil {
+				msg.MetaSet("start_lsn", string(c.StartLSN))
+			}
+			if c.EndLSN != nil {
+				msg.MetaSet("end_lsn", string(c.EndLSN))
+			}
+			msg.MetaSet("sequence_value", string(c.SequenceValue))
+			msg.MetaSet("operation", fmt.Sprint(c.Operation))
+			msg.MetaSet("update_mask", string(c.UpdateMask))
+			msg.MetaSet("command_id", fmt.Sprint(c.CommandID))
+
+			if r.batchPolicy.Add(msg) {
+				nextTimedBatchChan = nil
+				flushedBatch, err := r.batchPolicy.Flush(ctx)
+				if err != nil {
+					return fmt.Errorf("flush batch error: %w", err)
+				}
+				if err := r.flushBatch(ctx, r.checkpoint, flushedBatch); err != nil {
+					return fmt.Errorf("failed to flush batch: %w", err)
+				}
+			} else {
+				d, ok := r.batchPolicy.UntilNext()
+				if ok {
+					nextTimedBatchChan = time.After(d)
+				}
+			}
+		}
+	}
+}
+
+func (r *msSqlServerCDCReader) readMessages(ctx context.Context, stream *changeTableStream) error {
+	err := stream.readChangeTables(ctx, r.db, func(c *change) ([]byte, error) {
+		// fmt.Printf("LSN=%x, CommandID=%d, SeqVal=%x, op=%d table=%s cols=%d\n", c.startLSN, c.commandID, c.seqVal, c.operation, c.table, len(c.columns))
+		r.rawMessageEvents <- MessageEvent{
+			Table:         c.table,
+			Data:          c.columns,
+			Operation:     OpType(c.operation),
+			SequenceValue: c.seqVal,
+			CommandID:     c.commandID,
+			StartLSN:      c.startLSN,
+		}
+		return c.startLSN, nil
+	})
+	return fmt.Errorf("streaming from change tables: %w", err)
+}
+
+func (r *msSqlServerCDCReader) flushBatch(ctx context.Context, checkpointer *checkpoint.Capped[LSN], batch service.MessageBatch) error {
 	if len(batch) == 0 {
 		return nil
 	}
@@ -303,10 +311,9 @@ func (i *msSqlServerCDCReader) flushBatch(ctx context.Context, checkpointer *che
 	msg := asyncMessage{
 		msg: batch,
 		ackFn: func(ctx context.Context, _ error) error {
-			i.lsnMu.Lock()
-			defer i.lsnMu.Unlock()
+			r.lsnMu.Lock()
+			defer r.lsnMu.Unlock()
 			maxOffset := resolveFn()
-			// Nothing to commit, this wasn't the latest message
 			if maxOffset == nil {
 				return nil
 			}
@@ -315,18 +322,39 @@ func (i *msSqlServerCDCReader) flushBatch(ctx context.Context, checkpointer *che
 			if offset == nil {
 				return nil
 			}
-			return i.setCachedLSNPosition(ctx, offset)
+			return r.setCachedLSN(ctx, offset)
 		},
 	}
 	select {
-	case i.msgChan <- msg:
+	case r.msgChan <- msg:
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
 	}
 }
 
-func (r *msSqlServerCDCReader) setCachedLSNPosition(ctx context.Context, lsn []byte) error {
+func (r *msSqlServerCDCReader) getCachedLSN(ctx context.Context) (LSN, error) {
+	var (
+		cacheVal []byte
+		cErr     error
+	)
+	if err := r.res.AccessCache(ctx, r.lsnCache, func(c service.Cache) {
+		cacheVal, cErr = c.Get(ctx, r.lsnCacheKey)
+	}); err != nil {
+		return nil, fmt.Errorf("unable to access cache for reading: %w", err)
+	}
+	if errors.Is(cErr, service.ErrKeyNotFound) {
+		return nil, nil
+	} else if cErr != nil {
+		return nil, fmt.Errorf("unable read checkpoint from cache: %w", cErr)
+	} else if cacheVal == nil {
+		return nil, nil
+	}
+	pos := LSN(cacheVal)
+	return pos, nil
+}
+
+func (r *msSqlServerCDCReader) setCachedLSN(ctx context.Context, lsn []byte) error {
 	var cErr error
 	if err := r.res.AccessCache(ctx, r.lsnCache, func(c service.Cache) {
 		cErr = c.Set(ctx, r.lsnCacheKey, lsn, nil)
@@ -342,7 +370,6 @@ func (r *msSqlServerCDCReader) setCachedLSNPosition(ctx context.Context, lsn []b
 func (r *msSqlServerCDCReader) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
 	select {
 	case m := <-r.msgChan:
-		// r.logger.Debugf("Reading batch of size %d", len(m.msg))
 		return m.msg, m.ackFn, nil
 	case <-r.stopSig.HasStoppedChan():
 		return nil, nil, service.ErrNotConnected
@@ -358,4 +385,11 @@ func (r *msSqlServerCDCReader) Close(_ context.Context) error {
 		return r.db.Close()
 	}
 	return nil
+}
+
+func lsnToHex(lsn []byte) string {
+	if len(lsn) == 0 {
+		return ""
+	}
+	return "0x" + hex.EncodeToString(lsn)
 }
