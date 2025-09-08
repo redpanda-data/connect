@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -85,7 +86,6 @@ type msSqlServerCDCReader struct {
 	connectionString     string
 	streamSnapshot       bool
 	snapshotMaxBatchSize int
-	checkPointLimit      int
 	tables               []string
 	lsnCache             string
 	lsnCacheKey          string
@@ -256,7 +256,7 @@ func (r *msSqlServerCDCReader) batchMessages(ctx context.Context) error {
 			msg.MetaSet("sequence_value", string(c.SequenceValue))
 			msg.MetaSet("operation", fmt.Sprint(c.Operation))
 			msg.MetaSet("update_mask", string(c.UpdateMask))
-			msg.MetaSet("command_id", fmt.Sprint(c.CommandID))
+			msg.MetaSet("command_id", strconv.Itoa(c.CommandID))
 
 			if r.batchPolicy.Add(msg) {
 				nextTimedBatchChan = nil
@@ -387,6 +387,7 @@ func (r *msSqlServerCDCReader) Close(_ context.Context) error {
 	return nil
 }
 
+//nolint:unused
 func lsnToHex(lsn []byte) string {
 	if len(lsn) == 0 {
 		return ""

@@ -21,6 +21,8 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
+const backoffDuration = 2 * time.Second
+
 type heapItem struct{ iter *changeTableRowIter }
 
 // rowIteratorMinHeap is used for sorting iterators by LSN to ensure they're in order across tables
@@ -297,10 +299,8 @@ func (r *changeTableStream) readChangeTables(ctx context.Context, db *sql.DB, ha
 				fromLSN = lastLSN
 			} else {
 				r.logger.Debug("No more changes across all change tables, backing off...")
-				time.Sleep(2 * time.Second)
+				time.Sleep(backoffDuration)
 			}
 		}
-
-		time.Sleep(2 * time.Second)
 	}
 }
