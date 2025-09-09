@@ -96,7 +96,6 @@ type msSqlServerCDCReader struct {
 	logger *service.Logger
 	res    *service.Resources
 
-	lsnMu            sync.Mutex
 	dbMu             sync.Mutex
 	db               *sql.DB
 	msgChan          chan asyncMessage
@@ -215,9 +214,9 @@ func (r *msSqlServerCDCReader) Connect(ctx context.Context) error {
 		wg.Go(func() error { return r.batchMessages(ctx) })
 
 		if err := wg.Wait(); err != nil && !errors.Is(err, context.Canceled) {
-			r.logger.Errorf("error during Microsoft SQL Server CDC: %s", err)
+			r.logger.Errorf("Error during Microsoft SQL Server CDC: %s", err)
 		} else {
-			r.logger.Info("successfully shutdown Microsoft SQL Server CDC stream")
+			r.logger.Info("Successfully shutdown Microsoft SQL Server CDC stream")
 		}
 		r.stopSig.TriggerHasStopped()
 	}()
@@ -243,7 +242,7 @@ func (r *msSqlServerCDCReader) batchMessages(ctx context.Context) error {
 		case c := <-r.rawMessageEvents:
 			data, err := json.Marshal(c.Data)
 			if err != nil {
-				return fmt.Errorf("failure to marshal message: %s", err)
+				return fmt.Errorf("failure to marshal message: %w", err)
 			}
 			msg := service.NewMessage(data)
 			msg.MetaSet("table", c.Table)
@@ -278,7 +277,7 @@ func (r *msSqlServerCDCReader) batchMessages(ctx context.Context) error {
 }
 
 func (r *msSqlServerCDCReader) readMessages(ctx context.Context, stream *changeTableStream) error {
-	err := stream.readChangeTables(ctx, r.db, func(c *change) ([]byte, error) {
+	err := stream.readChangeTables(ctx, r.db, func(c *change) (LSN, error) {
 		// fmt.Printf("LSN=%x, CommandID=%d, SeqVal=%x, op=%d table=%s cols=%d\n", c.startLSN, c.commandID, c.seqVal, c.operation, c.table, len(c.columns))
 		r.rawMessageEvents <- MessageEvent{
 			Table:         c.table,
@@ -311,18 +310,10 @@ func (r *msSqlServerCDCReader) flushBatch(ctx context.Context, checkpointer *che
 	msg := asyncMessage{
 		msg: batch,
 		ackFn: func(ctx context.Context, _ error) error {
-			r.lsnMu.Lock()
-			defer r.lsnMu.Unlock()
-			maxOffset := resolveFn()
-			if maxOffset == nil {
-				return nil
+			if lsn := resolveFn(); lsn != nil {
+				return r.setCachedLSN(ctx, *lsn)
 			}
-			offset := *maxOffset
-			// This has no offset - it's a snapshot message
-			if offset == nil {
-				return nil
-			}
-			return r.setCachedLSN(ctx, offset)
+			return nil
 		},
 	}
 	select {
@@ -350,11 +341,10 @@ func (r *msSqlServerCDCReader) getCachedLSN(ctx context.Context) (LSN, error) {
 	} else if cacheVal == nil {
 		return nil, nil
 	}
-	pos := LSN(cacheVal)
-	return pos, nil
+	return LSN(cacheVal), nil
 }
 
-func (r *msSqlServerCDCReader) setCachedLSN(ctx context.Context, lsn []byte) error {
+func (r *msSqlServerCDCReader) setCachedLSN(ctx context.Context, lsn LSN) error {
 	var cErr error
 	if err := r.res.AccessCache(ctx, r.lsnCache, func(c service.Cache) {
 		cErr = c.Set(ctx, r.lsnCacheKey, lsn, nil)
@@ -387,7 +377,6 @@ func (r *msSqlServerCDCReader) Close(_ context.Context) error {
 	return nil
 }
 
-//nolint:unused
 func lsnToHex(lsn []byte) string {
 	if len(lsn) == 0 {
 		return ""
