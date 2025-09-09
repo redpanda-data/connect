@@ -4,7 +4,7 @@
 // License (the "License"); you may not use this file except in compliance with
 // the License. You may obtain a copy of the License at
 //
-// https://github.com/redpanda-data/connect/v4/blob/main/licenses/rcl.md
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
 package mssqlserver
 
@@ -134,7 +134,7 @@ func Test_ManualTesting_AddTestDataWithUniqueLSN(t *testing.T) {
 	// require.NoError(t, err)
 }
 
-func TestIntegrationMSSQLServerCDC(t *testing.T) {
+func TestIntegration_MSSQLServerCDC(t *testing.T) {
 	connStr, db := setupTestWithMSSQLServerVersion(t, "2022-latest")
 
 	// Create table
@@ -200,6 +200,90 @@ file:
 	}, time.Minute*5, time.Millisecond*100)
 
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
+}
+
+func TestIntegration_MSSQLServerCDC_ResumesFromCheckpoint(t *testing.T) {
+	connStr, db := setupTestWithMSSQLServerVersion(t, "2022-latest")
+
+	// Create table
+	db.createTableWithCDCEnabledIfNotExists("foo", `
+    CREATE TABLE foo (
+        a INT PRIMARY KEY
+    );`)
+
+	template := fmt.Sprintf(`
+mssql_server_cdc:
+  connection_string: %s
+  stream_snapshot: false
+  snapshot_max_batch_size: 100
+  tables:
+    - foo
+  checkpoint_cache: "foocache"
+`, connStr)
+
+	cacheConf := fmt.Sprintf(`
+label: foocache
+file:
+  directory: %s`, t.TempDir())
+
+	streamOutBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: DEBUG`))
+	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
+	require.NoError(t, streamOutBuilder.AddInputYAML(template))
+
+	var outBatches []string
+	var outBatchMut sync.Mutex
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		msgBytes, err := mb[0].AsBytes()
+		require.NoError(t, err)
+		outBatchMut.Lock()
+		outBatches = append(outBatches, string(msgBytes))
+		outBatchMut.Unlock()
+		return nil
+	}))
+
+	streamOut, err := streamOutBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(streamOut.Resources())
+
+	// --- launch input and insert initial rows for consumption
+	for i := range 1000 {
+		db.exec("INSERT INTO foo VALUES (?)", i)
+	}
+	go func() {
+		require.NoError(t, streamOut.Run(t.Context()))
+	}()
+
+	time.Sleep(time.Second * 5)
+
+	assert.Eventually(t, func() bool {
+		outBatchMut.Lock()
+		defer outBatchMut.Unlock()
+		return len(outBatches) == 1000
+	}, time.Minute*5, time.Millisecond*100)
+
+	// --- stop initial input and then insert more rows
+	require.NoError(t, streamOut.StopWithin(time.Second*10))
+	for i := 1000; i < 2000; i++ {
+		db.exec("INSERT INTO foo VALUES (?)", i)
+	}
+
+	// --- relaunched input should load checkpoint
+	streamOutResume, err := streamOutBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(streamOutResume.Resources())
+	go func() {
+		require.NoError(t, streamOutResume.Run(t.Context()))
+	}()
+
+	assert.Eventually(t, func() bool {
+		outBatchMut.Lock()
+		defer outBatchMut.Unlock()
+		return len(outBatches) == 2000
+	}, time.Minute*5, time.Millisecond*100)
+
+	require.Contains(t, outBatches[len(outBatches)-1], "1999")
+	require.NoError(t, streamOutResume.StopWithin(time.Second*10))
 }
 
 func FuncIntegrationTestOrderingOfIterator(t *testing.T) {
