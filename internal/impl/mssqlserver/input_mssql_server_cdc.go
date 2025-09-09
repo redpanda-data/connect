@@ -4,7 +4,7 @@
 // License (the "License"); you may not use this file except in compliance with
 // the License. You may obtain a copy of the License at
 //
-// https://github.com/redpanda-data/connect/v4/blob/main/licenses/rcl.md
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
 package mssqlserver
 
@@ -24,6 +24,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 const (
@@ -104,11 +105,11 @@ type msSqlServerCDCReader struct {
 }
 
 func newMssqlCDCReader(conf *service.ParsedConfig, res *service.Resources) (s service.BatchInput, err error) {
-	// if err := license.CheckRunningEnterprise(res); err != nil {
-	// 	return nil, err
-	// }
+	if err := license.CheckRunningEnterprise(res); err != nil {
+		return nil, err
+	}
 
-	r := msSqlServerCDCReader{
+	reader := msSqlServerCDCReader{
 		logger:           res.Logger(),
 		res:              res,
 		msgChan:          make(chan asyncMessage),
@@ -116,32 +117,32 @@ func newMssqlCDCReader(conf *service.ParsedConfig, res *service.Resources) (s se
 		stopSig:          shutdown.NewSignaller(),
 	}
 
-	if r.connectionString, err = conf.FieldString(fieldConnectionString); err != nil {
+	if reader.connectionString, err = conf.FieldString(fieldConnectionString); err != nil {
 		return nil, err
 	}
-	if r.streamSnapshot, err = conf.FieldBool(fieldStreamSnapshot); err != nil {
+	if reader.streamSnapshot, err = conf.FieldBool(fieldStreamSnapshot); err != nil {
 		return nil, err
 	}
-	if r.snapshotMaxBatchSize, err = conf.FieldInt(fieldSnapshotMaxBatchSize); err != nil {
+	if reader.snapshotMaxBatchSize, err = conf.FieldInt(fieldSnapshotMaxBatchSize); err != nil {
 		return nil, err
 	}
 	var checkpointLimit int
 	if checkpointLimit, err = conf.FieldInt(fieldCheckpointLimit); err != nil {
 		return nil, err
 	}
-	r.checkpoint = checkpoint.NewCapped[LSN](int64(checkpointLimit))
+	reader.checkpoint = checkpoint.NewCapped[LSN](int64(checkpointLimit))
 
 	// TODO: support regular expression on tablenames
-	if r.tables, err = conf.FieldStringList(fieldTables); err != nil {
+	if reader.tables, err = conf.FieldStringList(fieldTables); err != nil {
 		return nil, err
 	}
-	if r.lsnCache, err = conf.FieldString(fieldCheckpointCache); err != nil {
+	if reader.lsnCache, err = conf.FieldString(fieldCheckpointCache); err != nil {
 		return nil, err
 	}
-	if !conf.Resources().HasCache(r.lsnCache) {
-		return nil, fmt.Errorf("unknown cache resource: %s", r.lsnCache)
+	if !conf.Resources().HasCache(reader.lsnCache) {
+		return nil, fmt.Errorf("unknown cache resource: %s", reader.lsnCache)
 	}
-	if r.lsnCacheKey, err = conf.FieldString(fieldCheckpointKey); err != nil {
+	if reader.lsnCacheKey, err = conf.FieldString(fieldCheckpointKey); err != nil {
 		return nil, err
 	}
 
@@ -151,15 +152,15 @@ func newMssqlCDCReader(conf *service.ParsedConfig, res *service.Resources) (s se
 	} else if batching.IsNoop() {
 		batching.Count = 1
 	}
-	r.batching = batching
+	reader.batching = batching
 
-	if r.batchPolicy, err = r.batching.NewBatcher(res); err != nil {
+	if reader.batchPolicy, err = reader.batching.NewBatcher(res); err != nil {
 		return nil, err
 	} else if batching.IsNoop() {
 		batching.Count = 1
 	}
 
-	batchInput, err := service.AutoRetryNacksBatchedToggled(conf, &r)
+	batchInput, err := service.AutoRetryNacksBatchedToggled(conf, &reader)
 	if err != nil {
 		return nil, err
 	}
@@ -267,9 +268,10 @@ func (r *msSqlServerCDCReader) batchMessages(ctx context.Context) error {
 					return fmt.Errorf("failed to flush batch: %w", err)
 				}
 			} else {
-				d, ok := r.batchPolicy.UntilNext()
-				if ok {
-					nextTimedBatchChan = time.After(d)
+				if d, ok := r.batchPolicy.UntilNext(); ok {
+					if nextTimedBatchChan == nil {
+						nextTimedBatchChan = time.After(d)
+					}
 				}
 			}
 		}
@@ -279,13 +281,17 @@ func (r *msSqlServerCDCReader) batchMessages(ctx context.Context) error {
 func (r *msSqlServerCDCReader) readMessages(ctx context.Context, stream *changeTableStream) error {
 	err := stream.readChangeTables(ctx, r.db, func(c *change) (LSN, error) {
 		// fmt.Printf("LSN=%x, CommandID=%d, SeqVal=%x, op=%d table=%s cols=%d\n", c.startLSN, c.commandID, c.seqVal, c.operation, c.table, len(c.columns))
-		r.rawMessageEvents <- MessageEvent{
+		select {
+		case r.rawMessageEvents <- MessageEvent{
 			Table:         c.table,
 			Data:          c.columns,
 			Operation:     OpType(c.operation),
 			SequenceValue: c.seqVal,
 			CommandID:     c.commandID,
 			StartLSN:      c.startLSN,
+		}:
+		case <-ctx.Done():
+			return nil, ctx.Err()
 		}
 		return c.startLSN, nil
 	})
