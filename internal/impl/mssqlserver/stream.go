@@ -21,7 +21,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-const backoffDuration = 2 * time.Second
+const backoffDuration = 5 * time.Second
 
 type heapItem struct{ iter *changeTableRowIter }
 
@@ -222,12 +222,18 @@ func (r *changeTableStream) verifyChangeTables(ctx context.Context, db *sql.DB, 
 	return nil
 }
 
-func (r *changeTableStream) readChangeTables(ctx context.Context, db *sql.DB, handle func(c *change) ([]byte, error)) error {
+func (r *changeTableStream) readChangeTables(ctx context.Context, db *sql.DB, handle func(c *change) (LSN, error)) error {
 	var (
-		fromLSN []byte = r.cachedLSN // load last checkpoint; nil means start from beginning in tables
-		toLSN   []byte               // often set to fn_cdc_get_max_lsn(); nil means no upper bound
-		lastLSN []byte
+		fromLSN LSN // load last checkpoint; nil means start from beginning in tables
+		toLSN   LSN // often set to fn_cdc_get_max_lsn(); nil means no upper bound
+		lastLSN LSN
 	)
+
+	if r.cachedLSN != nil {
+		fromLSN = r.cachedLSN
+		lastLSN = r.cachedLSN
+		r.logger.Debugf("Resuming from cached LSN position '%s'", lsnToHex(r.cachedLSN))
+	}
 
 	for {
 		// Fetch a upper bound so the run is repeatable
@@ -254,8 +260,7 @@ func (r *changeTableStream) readChangeTables(ctx context.Context, db *sql.DB, ha
 					r.logger.Debugf("Exhausted all changes for change table '%s'", inst.captureInstance)
 					continue
 				}
-
-				return fmt.Errorf("initialising iterator for change table %s: %w", inst.captureInstance, err)
+				return fmt.Errorf("initialising iterator for change table '%s': %w", inst.captureInstance, err)
 			}
 
 			if it != nil && it.current != nil {
