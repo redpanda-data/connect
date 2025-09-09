@@ -85,7 +85,7 @@ func configSpec() *service.ConfigSpec {
 		Beta().
 		Categories("Services").
 		Version("0.0.1").
-		Summary("Enables TigerBeetle CDC streaming for RedPanda Connect.").
+		Summary("Enables TigerBeetle CDC streaming for Redpanda Connect.").
 		Description(`Listens to a TigerBeetle cluster and creates a message for each change.
 
 Each message is a JSON object like:
@@ -203,8 +203,7 @@ func init() {
 func (input *tigerbeetleInput) Connect(ctx context.Context) error {
 	timestampLast, err := input.getTimestampLast(ctx)
 	if err != nil {
-		input.logger.Errorf("Could not retrieve the last timestamp from cache: %w", err)
-		return err
+		return fmt.Errorf("Could not retrieve the last timestamp from cache: %w", err)
 	}
 	// Overriding the timestamp with the configured initial value:
 	if input.config.timestampInitial > timestampLast {
@@ -213,8 +212,7 @@ func (input *tigerbeetleInput) Connect(ctx context.Context) error {
 
 	client, err := tb.NewClient(input.config.clusterID, input.config.addresses)
 	if err != nil {
-		input.logger.Errorf("Could not initialize the TigerBeetle client: %w", err)
-		return err
+		return fmt.Errorf("Could not initialize the TigerBeetle client: %w", err)
 	}
 
 	input.stopSignaller = shutdown.NewSignaller()
@@ -225,7 +223,7 @@ func (input *tigerbeetleInput) Connect(ctx context.Context) error {
 		wg.Go(func() error { return input.consume(ctx) })
 
 		if err := wg.Wait(); err != nil && !errors.Is(err, context.Canceled) {
-			input.logger.Errorf("Error during TigerBeetle CDC: %w", err)
+			input.logger.Errorf("Error during TigerBeetle CDC: %s", err)
 		} else {
 			input.logger.Info("Successfully shutdown TigerBeetle CDC stream")
 		}
@@ -279,12 +277,10 @@ func newTigerbeetleInput(config *service.ParsedConfig, resources *service.Resour
 		timestampInitial    uint64 = 0
 	)
 
-	logger := resources.Logger()
-
 	if clusterID, err = config.FieldString(fieldClusterID); err != nil {
 		return nil, err
 	}
-	clusterID128, success := StringToUint128(clusterID)
+	clusterID128, success := stringToUint128(clusterID)
 	if !success {
 		return nil, fmt.Errorf("invalid config: %s='%s'", fieldClusterID, clusterID)
 	}
@@ -345,7 +341,7 @@ func newTigerbeetleInput(config *service.ParsedConfig, resources *service.Resour
 		},
 		producerChan: make(chan []tb_types.ChangeEvent, 1),
 		consumerChan: make(chan batchedMesssage, 1),
-		logger:       logger,
+		logger:       resources.Logger(),
 		resources:    resources,
 	}
 
@@ -368,8 +364,7 @@ func (input *tigerbeetleInput) produce(ctx context.Context, client tb.Client, ti
 	_ = idleTimer.Stop()
 
 	for {
-		err := input.checkRateLimit(ctx)
-		if err != nil {
+		if err := input.checkRateLimit(ctx); err != nil {
 			return err
 		}
 
@@ -397,8 +392,7 @@ func (input *tigerbeetleInput) produce(ctx context.Context, client tb.Client, ti
 			// However, we wait for the *consumer* to begin flushing the current results
 			// before issuing a new query, avoiding unnecessary idle time for workloads
 			// with high frequency but low volume per batch.
-			rescheduled := idleTimer.Reset(input.config.idleInterval)
-			if rescheduled {
+			if rescheduled := idleTimer.Reset(input.config.idleInterval); rescheduled {
 				return errors.New("assertion failed: idle timer was already running")
 			}
 
@@ -443,8 +437,7 @@ func (input *tigerbeetleInput) consume(ctx context.Context) error {
 			for _, result := range results {
 				bytes, err := jsonSerialize(result)
 				if err != nil {
-					input.logger.Errorf("Unable to serialize as JSON: %w", err)
-					return err
+					return fmt.Errorf("Unable to serialize as JSON: %w", err)
 				}
 				message := service.NewMessage(bytes)
 				message.MetaSet("timestamp", strconv.FormatUint(result.Timestamp, 10))
@@ -522,7 +515,7 @@ func (input *tigerbeetleInput) checkRateLimit(ctx context.Context) error {
 			}
 		}
 		if attempt == max_tries {
-			return fmt.Errorf("failed to access the rate limit after %d attemps", max_tries)
+			return fmt.Errorf("failed to access the rate limit after %d attempts", max_tries)
 		}
 	}
 	return nil
@@ -573,10 +566,10 @@ func jsonSerialize(result tb_types.ChangeEvent) ([]byte, error) {
 		Type:      eventTypeString(result.Type),
 		Ledger:    result.Ledger,
 		Transfer: JsonTransfer{
-			ID:          Uint128ToString(result.TransferID),
-			Amount:      Uint128ToString(result.TransferAmount),
-			PendingID:   Uint128ToString(result.TransferPendingID),
-			UserData128: Uint128ToString(result.TransferUserData128),
+			ID:          uint128ToString(result.TransferID),
+			Amount:      uint128ToString(result.TransferAmount),
+			PendingID:   uint128ToString(result.TransferPendingID),
+			UserData128: uint128ToString(result.TransferUserData128),
 			UserData64:  strconv.FormatUint(result.TransferUserData64, 10),
 			UserData32:  result.TransferUserData32,
 			Timeout:     result.TransferTimeout,
@@ -585,12 +578,12 @@ func jsonSerialize(result tb_types.ChangeEvent) ([]byte, error) {
 			Timestamp:   strconv.FormatUint(result.TransferTimestamp, 10),
 		},
 		DebitAccount: JsonAccount{
-			ID:             Uint128ToString(result.DebitAccountID),
-			DebitsPending:  Uint128ToString(result.DebitAccountDebitsPending),
-			DebitsPosted:   Uint128ToString(result.DebitAccountDebitsPosted),
-			CreditsPending: Uint128ToString(result.DebitAccountCreditsPending),
-			CreditsPosted:  Uint128ToString(result.DebitAccountCreditsPosted),
-			UserData128:    Uint128ToString(result.DebitAccountUserData128),
+			ID:             uint128ToString(result.DebitAccountID),
+			DebitsPending:  uint128ToString(result.DebitAccountDebitsPending),
+			DebitsPosted:   uint128ToString(result.DebitAccountDebitsPosted),
+			CreditsPending: uint128ToString(result.DebitAccountCreditsPending),
+			CreditsPosted:  uint128ToString(result.DebitAccountCreditsPosted),
+			UserData128:    uint128ToString(result.DebitAccountUserData128),
 			UserData64:     strconv.FormatUint(result.DebitAccountUserData64, 10),
 			UserData32:     result.DebitAccountUserData32,
 			Code:           result.DebitAccountCode,
@@ -598,12 +591,12 @@ func jsonSerialize(result tb_types.ChangeEvent) ([]byte, error) {
 			Timestamp:      strconv.FormatUint(result.DebitAccountTimestamp, 10),
 		},
 		CreditAccount: JsonAccount{
-			ID:             Uint128ToString(result.CreditAccountID),
-			DebitsPending:  Uint128ToString(result.CreditAccountDebitsPending),
-			DebitsPosted:   Uint128ToString(result.CreditAccountDebitsPosted),
-			CreditsPending: Uint128ToString(result.CreditAccountCreditsPending),
-			CreditsPosted:  Uint128ToString(result.CreditAccountCreditsPosted),
-			UserData128:    Uint128ToString(result.CreditAccountUserData128),
+			ID:             uint128ToString(result.CreditAccountID),
+			DebitsPending:  uint128ToString(result.CreditAccountDebitsPending),
+			DebitsPosted:   uint128ToString(result.CreditAccountDebitsPosted),
+			CreditsPending: uint128ToString(result.CreditAccountCreditsPending),
+			CreditsPosted:  uint128ToString(result.CreditAccountCreditsPosted),
+			UserData128:    uint128ToString(result.CreditAccountUserData128),
 			UserData64:     strconv.FormatUint(result.CreditAccountUserData64, 10),
 			UserData32:     result.CreditAccountUserData32,
 			Code:           result.CreditAccountCode,
@@ -613,8 +606,8 @@ func jsonSerialize(result tb_types.ChangeEvent) ([]byte, error) {
 	})
 }
 
-// StringToUint128 parses a base 10 string and returns the corresponding value as a Uint128.
-func StringToUint128(str string) (tb_types.Uint128, bool) {
+// stringToUint128 parses a base 10 string and returns the corresponding value as a Uint128.
+func stringToUint128(str string) (tb_types.Uint128, bool) {
 	if len(str) == 0 {
 		return tb_types.Uint128{}, false
 	}
@@ -626,8 +619,8 @@ func StringToUint128(str string) (tb_types.Uint128, bool) {
 	return tb_types.BigIntToUint128(*bigInt), true
 }
 
-// Uint128ToString formats a Uint128 number as a base10 string.
-func Uint128ToString(value tb_types.Uint128) string {
+// uint128ToString formats a Uint128 number as a base10 string.
+func uint128ToString(value tb_types.Uint128) string {
 	bigInt := value.BigInt()
 	return bigInt.Text(10)
 }

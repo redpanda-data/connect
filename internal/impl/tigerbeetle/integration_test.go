@@ -237,25 +237,25 @@ func TestIntegrationTigerBeetle(t *testing.T) {
 				require.Equal(t, timestampMeta, timestampEvent)
 
 				// Assert Transfer:
-				require.Equal(t, Uint128ToString(transfer.ID), changeEvent.Transfer.ID)
+				require.Equal(t, uint128ToString(transfer.ID), changeEvent.Transfer.ID)
 				require.Equal(t,
-					Uint128ToString(transfer.DebitAccountID),
+					uint128ToString(transfer.DebitAccountID),
 					changeEvent.DebitAccount.ID,
 				)
 				require.Equal(t,
-					Uint128ToString(transfer.CreditAccountID),
+					uint128ToString(transfer.CreditAccountID),
 					changeEvent.CreditAccount.ID,
 				)
 				require.Equal(t,
-					Uint128ToString(transfer.Amount),
+					uint128ToString(transfer.Amount),
 					changeEvent.Transfer.Amount,
 				)
 				require.Equal(t,
-					Uint128ToString(transfer.PendingID),
+					uint128ToString(transfer.PendingID),
 					changeEvent.Transfer.PendingID,
 				)
 				require.Equal(t,
-					Uint128ToString(transfer.UserData128),
+					uint128ToString(transfer.UserData128),
 					changeEvent.Transfer.UserData128,
 				)
 				require.Equal(t,
@@ -273,7 +273,7 @@ func TestIntegrationTigerBeetle(t *testing.T) {
 
 				// Assert DebitAccount:
 				require.Equal(t,
-					Uint128ToString(debitAccount.UserData128),
+					uint128ToString(debitAccount.UserData128),
 					changeEvent.DebitAccount.UserData128,
 				)
 				require.Equal(t,
@@ -290,7 +290,7 @@ func TestIntegrationTigerBeetle(t *testing.T) {
 
 				// Assert CreditAccount:
 				require.Equal(t,
-					Uint128ToString(creditAccount.UserData128),
+					uint128ToString(creditAccount.UserData128),
 					changeEvent.CreditAccount.UserData128,
 				)
 				require.Equal(t,

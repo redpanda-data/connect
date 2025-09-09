@@ -23,7 +23,7 @@
 component_type_dropdown::[]
 
 
-Enables TigerBeetle CDC streaming for RedPanda Connect.
+Enables TigerBeetle CDC streaming for Redpanda Connect.
 
 Introduced in version 0.0.1.
 
