@@ -16,6 +16,7 @@ package nats
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/nats-io/nats.go"
@@ -42,12 +43,16 @@ xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions],
 you to create a unique key for each message.
 
 ` + connectionNameDescription() + authDescription()).
-		Fields(kvDocs([]*service.ConfigField{
+		Fields(Docs("KV", []*service.ConfigField{
 			service.NewInterpolatedStringField(kvoFieldKey).
 				Description("The key for each message.").
 				Example("foo").
 				Example("foo.bar.baz").
 				Example(`foo.${! json("meta.type") }`),
+			service.NewBoolField("create_bucket").
+				Description("Whether to automatically create the bucket if it doesn't exist.").
+				Advanced().
+				Default(false),
 			service.NewOutputMaxInFlightField().Default(1024),
 		}...)...)
 }
@@ -68,10 +73,11 @@ func init() {
 //------------------------------------------------------------------------------
 
 type kvOutput struct {
-	connDetails connectionDetails
-	bucket      string
-	key         *service.InterpolatedString
-	keyRaw      string
+	connDetails  connectionDetails
+	bucket       string
+	key          *service.InterpolatedString
+	keyRaw       string
+	createBucket bool
 
 	log *service.Logger
 
@@ -94,6 +100,10 @@ func newKVOutput(conf *service.ParsedConfig, mgr *service.Resources) (*kvOutput,
 	}
 
 	if kv.bucket, err = conf.FieldString(kvFieldBucket); err != nil {
+		return nil, err
+	}
+
+	if kv.createBucket, err = conf.FieldBool("create_bucket"); err != nil {
 		return nil, err
 	}
 
@@ -134,9 +144,20 @@ func (kv *kvOutput) Connect(ctx context.Context) (err error) {
 		return err
 	}
 
+	// Check if bucket exists first, create only if config allows
 	kv.keyValue, err = jsc.KeyValue(ctx, kv.bucket)
 	if err != nil {
-		return err
+		if kv.createBucket {
+			kv.keyValue, err = jsc.CreateKeyValue(ctx, jetstream.KeyValueConfig{
+				Bucket: kv.bucket,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to create bucket %s: %w", kv.bucket, err)
+			}
+			kv.log.Infof("Created bucket %s", kv.bucket)
+		} else {
+			return fmt.Errorf("bucket %s does not exist and create_bucket is false", kv.bucket)
+		}
 	}
 
 	kv.natsConn = natsConn
