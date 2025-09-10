@@ -11,7 +11,6 @@ package mssqlserver
 import (
 	"context"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -381,11 +380,4 @@ func (r *msSqlServerCDCReader) Close(_ context.Context) error {
 		return r.db.Close()
 	}
 	return nil
-}
-
-func lsnToHex(lsn []byte) string {
-	if len(lsn) == 0 {
-		return ""
-	}
-	return "0x" + hex.EncodeToString(lsn)
 }

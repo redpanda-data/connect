@@ -232,7 +232,7 @@ func (r *changeTableStream) readChangeTables(ctx context.Context, db *sql.DB, ha
 	if r.cachedLSN != nil {
 		fromLSN = r.cachedLSN
 		lastLSN = r.cachedLSN
-		r.logger.Debugf("Resuming from cached LSN position '%s'", lsnToHex(r.cachedLSN))
+		r.logger.Debugf("Resuming from cached LSN position '%s'", r.cachedLSN)
 	}
 
 	for {

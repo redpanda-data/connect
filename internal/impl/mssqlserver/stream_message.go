@@ -8,8 +8,40 @@
 
 package mssqlserver
 
+import (
+	"encoding/hex"
+	"fmt"
+)
+
 // LSN represents a Microsoft SQL Server Log Sequence Number
 type LSN []byte
+
+// Scan implements the Scanner interface.
+func (lsn *LSN) Scan(src any) error {
+	if src == nil { // db returned nil, CDC record may not exist yet
+		*lsn = nil
+		return nil
+	}
+
+	switch v := src.(type) {
+	case []byte:
+		// *lsn = append((*lsn)[:0], v...) // reuse underlying array?
+		*lsn = LSN(v)
+	default:
+		*lsn = nil
+		return fmt.Errorf("cannot scan %T to LSN", src)
+	}
+
+	return nil
+}
+
+// String formats the LSN to the hexidecimal equivalent
+func (lsn LSN) String() string {
+	if len(lsn) == 0 {
+		return ""
+	}
+	return "0x%s" + hex.EncodeToString(lsn)
+}
 
 // StreamMode represents the mode of the stream at the time of the message
 type StreamMode string
