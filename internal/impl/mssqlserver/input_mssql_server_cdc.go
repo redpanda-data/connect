@@ -64,14 +64,14 @@ var mssqlStreamConfigSpec = service.NewConfigSpec().
 		LintRule("root = if this.length() == 0 { [ \"field 'tables' must contain at least one table\" ] }"),
 	).
 	Field(service.NewStringField(fieldCheckpointCache).
-		Description("A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current latest BinLog Position that has been successfully delivered, this allows Redpanda Connect to continue from that BinLog Position upon restart, rather than consume the entire state of the table."),
+		Description("A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current latest Log Sequence Number (LSN) that has been successfully delivered, this allows Redpanda Connect to continue from that Log Sequence Number (LSN) upon restart, rather than consume the entire state of the change table."),
 	).
 	Field(service.NewStringField(fieldCheckpointKey).
 		Description("The key to use to store the snapshot position in `" + fieldCheckpointCache + "`. An alternative key can be provided if multiple CDC inputs share the same cache.").
 		Default("mssql_cdc_position"),
 	).
 	Field(service.NewIntField(fieldCheckpointLimit).
-		Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given BinLog Position will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
+		Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given Log Sequence Number (LSN) will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
 		Default(1024),
 	).
 	Field(service.NewAutoRetryNacksToggleField()).
@@ -294,7 +294,12 @@ func (r *msSqlServerCDCReader) readMessages(ctx context.Context, stream *changeT
 		}
 		return c.startLSN, nil
 	})
+
+	// if err != nil { //nolint:staticcheck
 	return fmt.Errorf("streaming from change tables: %w", err)
+	// }
+
+	// return nil
 }
 
 func (r *msSqlServerCDCReader) flushBatch(ctx context.Context, checkpointer *checkpoint.Capped[LSN], batch service.MessageBatch) error {
