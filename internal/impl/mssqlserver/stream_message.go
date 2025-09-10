@@ -40,7 +40,7 @@ func (lsn LSN) String() string {
 	if len(lsn) == 0 {
 		return ""
 	}
-	return "0x%s" + hex.EncodeToString(lsn)
+	return "0x" + hex.EncodeToString(lsn)
 }
 
 // StreamMode represents the mode of the stream at the time of the message
