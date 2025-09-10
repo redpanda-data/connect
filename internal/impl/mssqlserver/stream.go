@@ -31,8 +31,10 @@ type rowIteratorMinHeap []*heapItem
 func (h rowIteratorMinHeap) Len() int { return len(h) }
 func (h rowIteratorMinHeap) Less(i, j int) bool {
 	// Compare LSNs as byte slices. CDC LSNs are fixed-length varbinary(10) so lexicographic == numeric order.
-	// TODO: I think we also need to order by CommandID, add test to verify
-	return bytes.Compare(h[i].iter.current.startLSN, h[j].iter.current.startLSN) < 0
+	// We also need to order by command_id, see below for more details:
+	// https://learn.microsoft.com/en-us/sql/relational-databases/system-tables/cdc-capture-instance-ct-transact-sql?view=sql-server-ver17
+	return bytes.Compare(h[i].iter.current.startLSN, h[j].iter.current.startLSN) < 0 &&
+		h[i].iter.current.commandID < h[j].iter.current.commandID
 }
 func (h rowIteratorMinHeap) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
 func (h *rowIteratorMinHeap) Push(x any)   { *h = append(*h, x.(*heapItem)) }
@@ -76,8 +78,7 @@ func newChangeTableRowIter(ctx context.Context, db *sql.DB, changeTable string, 
 
 	// "Sequence of the operation as represented in the transaction log. Should not be used for ordering. Instead, use the __$command_id column"
 	// source: https://learn.microsoft.com/en-us/sql/relational-databases/system-tables/cdc-capture-instance-ct-transact-sql?view=sql-server-ver17
-	q := fmt.Sprintf("SELECT * FROM cdc.%s_CT WITH (NOLOCK) WHERE (? IS NULL OR [__$start_lsn] > ?) AND (? IS NULL OR [__$start_lsn] <= ?) ORDER BY [__$start_lsn] ASC, [__$command_id] ASC, [__$seqval] ASC, [__$operation] ASC", changeTable)
-
+	q := fmt.Sprintf("SELECT * FROM cdc.%s_CT WITH (NOLOCK) WHERE (? IS NULL OR [__$start_lsn] > ?) AND (? IS NULL OR [__$start_lsn] <= ?) ORDER BY [__$start_lsn] ASC, [__$command_id] ASC, [__$operation] ASC", changeTable)
 	rows, err := db.QueryContext(ctx, q, fromLSN, fromLSN, toLSN, toLSN) //nolint:rowserrcheck
 	if err != nil {
 		return nil, err

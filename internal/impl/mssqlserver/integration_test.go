@@ -138,10 +138,7 @@ func TestIntegration_MSSQLServerCDC(t *testing.T) {
 	connStr, db := setupTestWithMSSQLServerVersion(t, "2022-latest")
 
 	// Create table
-	db.createTableWithCDCEnabledIfNotExists("foo", `
-    CREATE TABLE foo (
-        a INT PRIMARY KEY
-    );`)
+	db.createTableWithCDCEnabledIfNotExists("foo", `CREATE TABLE foo (a INT PRIMARY KEY);`)
 
 	// Insert 1000 rows for initial snapshot streaming
 	for i := range 1000 {
@@ -206,16 +203,12 @@ func TestIntegration_MSSQLServerCDC_ResumesFromCheckpoint(t *testing.T) {
 	connStr, db := setupTestWithMSSQLServerVersion(t, "2022-latest")
 
 	// Create table
-	db.createTableWithCDCEnabledIfNotExists("foo", `
-    CREATE TABLE foo (
-        a INT PRIMARY KEY
-    );`)
+	db.createTableWithCDCEnabledIfNotExists("foo", `CREATE TABLE foo (a INT PRIMARY KEY);`)
 
 	template := fmt.Sprintf(`
 mssql_server_cdc:
   connection_string: %s
   stream_snapshot: false
-  snapshot_max_batch_size: 100
   tables:
     - foo
   checkpoint_cache: "foocache"
@@ -227,7 +220,7 @@ file:
   directory: %s`, t.TempDir())
 
 	streamOutBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: DEBUG`))
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: INFO`))
 	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
 	require.NoError(t, streamOutBuilder.AddInputYAML(template))
 
@@ -286,9 +279,80 @@ file:
 	require.NoError(t, streamOutResume.StopWithin(time.Second*10))
 }
 
-func FuncIntegrationTestOrderingOfIterator(t *testing.T) {
-	// TODO: Test to verify ordering of SQL query (lsn, seqval, command id) and minheap sorting
-	t.Skip()
+func TestFuncIntegrationTestOrderingOfIterator(t *testing.T) {
+	connStr, db := setupTestWithMSSQLServerVersion(t, "2022-latest")
+
+	// Create table
+	db.createTableWithCDCEnabledIfNotExists("foo", `CREATE TABLE foo (a INT PRIMARY KEY);`)
+	db.createTableWithCDCEnabledIfNotExists("bar", `CREATE TABLE bar (b INT PRIMARY KEY);`)
+
+	// Data across change tables will have the same LSN but unique
+	// command IDs (and in rare cases sequence values that are harder to test)
+	_, err := db.Exec(`
+	BEGIN TRANSACTION
+	DECLARE @i INT = 1;
+	WHILE @i <= 10
+	BEGIN
+		INSERT INTO foo (a) VALUES (@i);
+		INSERT INTO bar (b) VALUES (@i);
+		SET @i += 1;
+	END
+	COMMIT TRANSACTION`)
+	require.NoError(t, err)
+
+	template := fmt.Sprintf(`
+mssql_server_cdc:
+  connection_string: %s
+  stream_snapshot: false
+  tables:
+    - foo
+    - bar
+  checkpoint_cache: "foocache"
+`, connStr)
+
+	cacheConf := fmt.Sprintf(`
+label: foocache
+file:
+  directory: %s`, t.TempDir())
+
+	streamOutBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: INFO`))
+	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
+	require.NoError(t, streamOutBuilder.AddInputYAML(template))
+
+	var outBatches []string
+	var outBatchMut sync.Mutex
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		msgBytes, err := mb[0].AsBytes()
+		require.NoError(t, err)
+		outBatchMut.Lock()
+		outBatches = append(outBatches, string(msgBytes))
+		outBatchMut.Unlock()
+		return nil
+	}))
+
+	streamOut, err := streamOutBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(streamOut.Resources())
+
+	go func() {
+		err = streamOut.Run(t.Context())
+		require.NoError(t, err)
+	}()
+
+	assert.Eventually(t, func() bool {
+		outBatchMut.Lock()
+		defer outBatchMut.Unlock()
+		return len(outBatches) == 20
+	}, time.Minute*5, time.Millisecond*100)
+
+	var want []string
+	for i := 1; i <= 10; i++ {
+		want = append(want, fmt.Sprintf(`{"a":%d}`, i))
+		want = append(want, fmt.Sprintf(`{"b":%d}`, i))
+	}
+	require.Equal(t, want, outBatches, "Order of output does not match expected")
+	require.NoError(t, streamOut.StopWithin(time.Second*10))
 }
 
 func BenchmarkStreamingCDCChanges(b *testing.B) {
