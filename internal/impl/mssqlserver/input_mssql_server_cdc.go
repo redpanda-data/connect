@@ -375,8 +375,8 @@ func (r *msSqlServerCDCInput) ReadBatch(ctx context.Context) (service.MessageBat
 	case <-r.stopSig.HasStoppedChan():
 		return nil, nil, service.ErrNotConnected
 	case <-ctx.Done():
+		return nil, nil, ctx.Err()
 	}
-	return nil, nil, ctx.Err()
 }
 
 func (r *msSqlServerCDCInput) Close(_ context.Context) error {
