@@ -39,7 +39,20 @@ const (
 func migratorInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services").
-		Version("TODO").
+		Version("4.37.0").
+		Summary("Kafka consumer for migration pipelines. All migration logic is handled by the redpanda_migrator output.").
+		Description(`
+The ` + "`redpanda_migrator`" + ` input simply consumes records from the source cluster and forwards them downstream. 
+It does not perform topic/schema/group synchronisation. 
+All migration features and coordination live in the paired ` + "`redpanda_migrator`" + ` output.
+
+**IMPORTANT:** This input requires a corresponding ` + "`redpanda_migrator`" + ` output in the same pipeline. 
+Each pipeline must have both input and output components configured.
+For capabilities, guarantees, scheduling, and examples, see the output documentation.
+
+**Multiple migrator pairs:** When using multiple migrator pairs in a single pipeline, 
+the mapping between input and output components is done based on the label field. 
+The label of the input and output must match exactly for proper coordination.`).
 		// Kafka fields
 		Fields(kafka.FranzConnectionFields()...).
 		Fields(kafka.FranzConsumerFields()...).
@@ -54,7 +67,115 @@ func migratorInputConfig() *service.ConfigSpec {
 func migratorOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services").
-		Version("TODO").
+		Version("4.37.0").
+		Summary("A specialised Kafka producer for comprehensive data migration between Apache Kafka and Redpanda clusters.").
+		Description(`
+The `+"`redpanda_migrator`"+` output performs all migration work. 
+It coordinates topics, schema registry, and consumer groups to migrate data from a source Kafka/Redpanda cluster to a destination cluster.
+
+**IMPORTANT:** This output requires a corresponding `+"`redpanda_migrator`"+` input in the same pipeline. 
+Each pipeline must have both input and output components configured.
+
+**Multiple migrator pairs:** When using multiple migrator pairs in a single pipeline, 
+the mapping between input and output components is done based on the label field. 
+The label of the input and output must match exactly for proper coordination.
+
+What gets synchronised:
+
+- Topics
+  - Name resolution with interpolation (default: preserve source name)
+  - Automatic creation with mirrored partition counts
+  - Selectable replication factor (default: inherit from source)
+  - Copy of supported topic configuration keys (serverless-aware subset)
+  - Optional ACL replication with safe transforms:
+    - Excludes `+"`ALLOW WRITE`"+` entries
+    - Downgrades `+"`ALLOW ALL`"+` to `+"`READ`"+`
+    - Preserves resource pattern type and host filters
+
+- Schema Registry
+  - One-shot or periodic syncing
+  - Subject selection via include/exclude regex
+  - Subject renaming with interpolation
+  - Versions: `+"`latest`"+` or `+"`all`"+` (default: `+"`all`"+`)
+  - Optional include of soft-deleted subjects
+  - ID handling: translate IDs (create-or-reuse) or keep fixed IDs and versions
+  - Optional schema normalisation on create
+  - Optional per-subject compatibility propagation when explicitly set on source (global mode is not forced)
+  - Serverless note: schema metadata and rule sets are not copied in serverless mode
+
+- Consumer Groups
+  - Periodic syncing
+  - Group selection via include/exclude regex
+  - Only groups in `+"`Empty`"+` state are migrated (active groups are skipped)
+  - Timestamp-based offset translation (approximate) per partition using previous-record timestamp and `+"`ListOffsetsAfterMilli`"+`
+  - No rewind guarantee: destination offsets are never moved backwards
+  - Commit performed in parallel with per-group metrics
+  - Requires matching partition counts between source and destination topics
+
+How it runs:
+
+- Topics: synced on demand. The first write triggers discovery and creation; subsequent writes create on first encounter per topic.
+- Schema Registry: one sync at connect, then triggered when topic record has unknown schema; optional background loop controlled by `+"`schema_registry.interval`"+`.
+- Consumer Groups: background loop controlled by `+"`consumer_groups.interval`"+` and filtered by the current topic mappings.
+
+Guarantees:
+
+- Topics are created with the intended partitioning and configured replication factor. Existing topics are respected; partition mismatches are logged and consumer group migration for mismatched topics is skipped.
+- Consumer group offsets are never rewound. Only translated forward positions are committed.
+- ACL replication excludes `+"`ALLOW WRITE`"+` operations and downgrades `+"`ALLOW ALL`"+` to `+"`READ`"+` to avoid unsafe grants.
+
+Limitations and requirements:
+
+- Destination Schema Registry must be in `+"`READWRITE`"+` or `+"`IMPORT`"+` mode.
+- Offset translation is best-effort: if the previous-offset timestamp cannot be read, or no destination offset exists after the timestamp, that partition is skipped.
+- Consumer group migration requires identical partition counts for source and destination topics.
+
+Metrics:
+
+The component exposes comprehensive metrics for monitoring migration operations:
+
+Topic Migration Metrics:
+- `+"`migrator_topics_created_total`"+` (counter): Total number of topics successfully created on the destination cluster
+- `+"`migrator_topic_create_errors_total`"+` (counter): Total number of errors encountered when creating topics
+- `+"`migrator_topic_create_latency_ns`"+` (timer): Latency in nanoseconds for topic creation operations
+
+Schema Registry Migration Metrics:
+- `+"`migrator_sr_schemas_created_total`"+` (counter): Total number of schemas successfully created in the destination schema registry
+- `+"`migrator_sr_schema_create_errors_total`"+` (counter): Total number of errors encountered when creating schemas
+- `+"`migrator_sr_schema_create_latency_ns`"+` (timer): Latency in nanoseconds for schema creation operations
+- `+"`migrator_sr_compatibility_updates_total`"+` (counter): Total number of compatibility level updates applied to subjects
+- `+"`migrator_sr_compatibility_update_errors_total`"+` (counter): Total number of errors encountered when updating compatibility levels
+- `+"`migrator_sr_compatibility_update_latency_ns`"+` (timer): Latency in nanoseconds for compatibility level update operations
+
+Consumer Group Migration Metrics (with group label):
+- `+"`migrator_cg_offsets_translated_total`"+` (counter): Total number of offsets successfully translated per consumer group
+- `+"`migrator_cg_offset_translation_errors_total`"+` (counter): Total number of errors encountered when translating offsets per consumer group
+- `+"`migrator_cg_offset_translation_latency_ns`"+` (timer): Latency in nanoseconds for offset translation operations per consumer group
+- `+"`migrator_cg_offsets_committed_total`"+` (counter): Total number of offsets successfully committed per consumer group
+- `+"`migrator_cg_offset_commit_errors_total`"+` (counter): Total number of errors encountered when committing offsets per consumer group
+- `+"`migrator_cg_offset_commit_latency_ns`"+` (timer): Latency in nanoseconds for offset commit operations per consumer group
+
+This component must be paired with the `+"`redpanda_migrator`"+` input in the same pipeline.`).
+		Example(
+			"Basic migration",
+			"Migrate topics, schemas and consumer groups from source to destination.",
+			`input:
+  redpanda_migrator:
+    seed_brokers: ["source:9092"]
+    topics: ["orders", "payments"]
+    consumer_group: "migration"
+
+output:
+  redpanda_migrator:
+    seed_brokers: ["destination:9092"]
+    # Write to the same topic name
+    topic: ${! metadata("kafka_topic") }
+    schema_registry:
+      url: "http://dest-registry:8081"
+      translate_ids: true
+    consumer_groups:
+      interval: 1m
+`).
 		// Kafka fields
 		Fields(kafka.FranzConnectionFields()...).
 		Fields(kafka.FranzProducerFields()...).
@@ -65,17 +186,21 @@ func migratorOutputConfig() *service.ConfigSpec {
 		Field(service.NewObjectField(groupsObjectField, groupsMigratorFields()...).Optional()).
 		// Topic fields
 		Field(service.NewInterpolatedStringField(rmoFieldTopic).
-			Description("The topic to write messages to, the source topic name is passed as kafka_topic metadata.").
+			Description("The topic to write messages to. Use interpolation to derive destination topic names from source topics. The source topic name is available as 'kafka_topic' metadata.").
+			Example("${! metadata('kafka_topic') }").
+			Example("prod_${! metadata('kafka_topic') }").
 			Optional()).
 		Field(service.NewIntField(rmoFieldTopicReplicationFactor).
-			Description("The replication factor for the created topics if different from the source cluster.").
+			Description("The replication factor for created topics. If not specified, inherits the replication factor from source topics. Useful when migrating to clusters with different sizes.").
+			Example("3").
+			Example("1  # For single-node clusters").
 			Optional()).
 		// ACL fields
 		Field(service.NewBoolField(rmoFieldSyncTopicACLs).
-			Description("Whether to configure remote topic ACLs to match their corresponding upstream topics.").
+			Description("Whether to synchronise topic ACLs from source to destination cluster. ACLs are transformed safely: ALLOW WRITE permissions are excluded, and ALLOW ALL is downgraded to ALLOW READ to prevent conflicts.").
 			Default(false)).
 		Field(service.NewBoolField(rmoFieldServerless).
-			Description("Set this to `true` when using Serverless clusters in Redpanda Cloud as the destination cluster.").
+			Description("Enable serverless mode for Redpanda Cloud serverless clusters. This restricts topic configurations and schema features to those supported by serverless environments.").
 			Default(false).
 			Advanced())
 }
@@ -119,7 +244,7 @@ func (w migratorBatchOutput) Connect(ctx context.Context) error {
 }
 
 func init() {
-	service.MustRegisterBatchInput("redpanda_migrator2", migratorInputConfig(),
+	service.MustRegisterBatchInput("redpanda_migrator", migratorInputConfig(),
 		func(pConf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
 			m := newMigratorFrom(mgr)
 			if err := m.initInputFromParsed(pConf, mgr); err != nil {
@@ -135,7 +260,7 @@ func init() {
 			return service.AutoRetryNacksBatchedToggled(pConf, migratorBatchInput{fr, m})
 		})
 
-	service.MustRegisterBatchOutput("redpanda_migrator2", migratorOutputConfig(),
+	service.MustRegisterBatchOutput("redpanda_migrator", migratorOutputConfig(),
 		func(pConf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPolicy service.BatchPolicy, maxInFlight int, err error) {
 			m := newMigratorFrom(mgr)
 
@@ -160,8 +285,16 @@ func init() {
 
 //------------------------------------------------------------------------------
 
-// Migrator handles the migration of data between Kafka clusters with schema
-// registry support.
+// Migrator orchestrates comprehensive data migration between Kafka clusters.
+// It coordinates the migration of messages, topics, schemas, consumer groups,
+// and ACLs between source and destination Kafka/Redpanda clusters.
+//
+// The Migrator operates as a stateful coordinator that:
+//   - Manages topic creation and synchronisation on the destination cluster
+//   - Handles schema registry migration with ID translation
+//   - Migrates consumer group offsets using timestamp-based correlation
+//   - Synchronises topic ACLs with appropriate security transformations
+//   - Provides metrics and monitoring for all migration operations
 type Migrator struct {
 	topic  topicMigrator
 	sr     schemaRegistryMigrator

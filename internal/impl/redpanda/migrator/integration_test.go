@@ -37,7 +37,7 @@ func startMigrator(t *testing.T, src, dst EmbeddedRedpandaCluster, cb service.Me
 
 	const yamlTmpl = `
 input:
-  redpanda_migrator2:
+  redpanda_migrator:
     seed_brokers: 
       - {{.Src.BrokerAddr}}
     topics: 
@@ -49,7 +49,7 @@ input:
       url: {{.Src.SchemaRegistryURL}}
     {{- end }}
 output:
-  redpanda_migrator2:
+  redpanda_migrator:
     seed_brokers: [ {{.Dst.BrokerAddr}} ]
     topic: ${! metadata("kafka_topic").or(throw("missing kafka_topic metadata")) }
     sync_topic_acls: true
