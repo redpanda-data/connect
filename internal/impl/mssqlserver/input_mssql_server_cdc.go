@@ -82,7 +82,7 @@ type asyncMessage struct {
 	ackFn service.AckFunc
 }
 
-type msSqlServerCDCReader struct {
+type msSqlServerCDCInput struct {
 	connectionString     string
 	streamSnapshot       bool
 	snapshotMaxBatchSize int
@@ -108,7 +108,7 @@ func newMssqlCDCReader(conf *service.ParsedConfig, res *service.Resources) (s se
 		return nil, err
 	}
 
-	reader := msSqlServerCDCReader{
+	i := msSqlServerCDCInput{
 		logger:           res.Logger(),
 		res:              res,
 		msgChan:          make(chan asyncMessage),
@@ -116,32 +116,32 @@ func newMssqlCDCReader(conf *service.ParsedConfig, res *service.Resources) (s se
 		stopSig:          shutdown.NewSignaller(),
 	}
 
-	if reader.connectionString, err = conf.FieldString(fieldConnectionString); err != nil {
+	if i.connectionString, err = conf.FieldString(fieldConnectionString); err != nil {
 		return nil, err
 	}
-	if reader.streamSnapshot, err = conf.FieldBool(fieldStreamSnapshot); err != nil {
+	if i.streamSnapshot, err = conf.FieldBool(fieldStreamSnapshot); err != nil {
 		return nil, err
 	}
-	if reader.snapshotMaxBatchSize, err = conf.FieldInt(fieldSnapshotMaxBatchSize); err != nil {
+	if i.snapshotMaxBatchSize, err = conf.FieldInt(fieldSnapshotMaxBatchSize); err != nil {
 		return nil, err
 	}
 	var checkpointLimit int
 	if checkpointLimit, err = conf.FieldInt(fieldCheckpointLimit); err != nil {
 		return nil, err
 	}
-	reader.checkpoint = checkpoint.NewCapped[LSN](int64(checkpointLimit))
+	i.checkpoint = checkpoint.NewCapped[LSN](int64(checkpointLimit))
 
 	// TODO: support regular expression on tablenames
-	if reader.tables, err = conf.FieldStringList(fieldTables); err != nil {
+	if i.tables, err = conf.FieldStringList(fieldTables); err != nil {
 		return nil, err
 	}
-	if reader.lsnCache, err = conf.FieldString(fieldCheckpointCache); err != nil {
+	if i.lsnCache, err = conf.FieldString(fieldCheckpointCache); err != nil {
 		return nil, err
 	}
-	if !conf.Resources().HasCache(reader.lsnCache) {
-		return nil, fmt.Errorf("unknown cache resource: %s", reader.lsnCache)
+	if !conf.Resources().HasCache(i.lsnCache) {
+		return nil, fmt.Errorf("unknown cache resource: %s", i.lsnCache)
 	}
-	if reader.lsnCacheKey, err = conf.FieldString(fieldCheckpointKey); err != nil {
+	if i.lsnCacheKey, err = conf.FieldString(fieldCheckpointKey); err != nil {
 		return nil, err
 	}
 
@@ -151,15 +151,15 @@ func newMssqlCDCReader(conf *service.ParsedConfig, res *service.Resources) (s se
 	} else if batching.IsNoop() {
 		batching.Count = 1
 	}
-	reader.batching = batching
+	i.batching = batching
 
-	if reader.batchPolicy, err = reader.batching.NewBatcher(res); err != nil {
+	if i.batchPolicy, err = i.batching.NewBatcher(res); err != nil {
 		return nil, err
 	} else if batching.IsNoop() {
 		batching.Count = 1
 	}
 
-	batchInput, err := service.AutoRetryNacksBatchedToggled(conf, &reader)
+	batchInput, err := service.AutoRetryNacksBatchedToggled(conf, &i)
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +167,7 @@ func newMssqlCDCReader(conf *service.ParsedConfig, res *service.Resources) (s se
 	return conf.WrapBatchInputExtractTracingSpanMapping("mssql_server_cdc", batchInput)
 }
 
-func (r *msSqlServerCDCReader) Connect(ctx context.Context) error {
+func (r *msSqlServerCDCInput) Connect(ctx context.Context) error {
 	db, err := sql.Open("mssql", r.connectionString)
 	if err != nil {
 		return fmt.Errorf("failed to connect to Microsoft SQL Server: %s", err)
@@ -183,6 +183,7 @@ func (r *msSqlServerCDCReader) Connect(ctx context.Context) error {
 	}
 
 	var snapshot *snapshot
+	// no cached LSN means we're not recovering from a restart
 	if r.streamSnapshot && cachedLSN == nil {
 		snapshot = NewSnapshot(r.logger, r.db)
 	}
@@ -224,7 +225,7 @@ func (r *msSqlServerCDCReader) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (r *msSqlServerCDCReader) batchMessages(ctx context.Context) error {
+func (r *msSqlServerCDCInput) batchMessages(ctx context.Context) error {
 	var nextTimedBatchChan <-chan time.Time
 	for {
 		select {
@@ -277,7 +278,7 @@ func (r *msSqlServerCDCReader) batchMessages(ctx context.Context) error {
 	}
 }
 
-func (r *msSqlServerCDCReader) readMessages(ctx context.Context, stream *changeTableStream) error {
+func (r *msSqlServerCDCInput) readMessages(ctx context.Context, stream *changeTableStream) error {
 	err := stream.readChangeTables(ctx, r.db, func(c *change) (LSN, error) {
 		// fmt.Printf("LSN=%x, CommandID=%d, SeqVal=%x, op=%d table=%s cols=%d\n", c.startLSN, c.commandID, c.seqVal, c.operation, c.table, len(c.columns))
 		select {
@@ -302,7 +303,7 @@ func (r *msSqlServerCDCReader) readMessages(ctx context.Context, stream *changeT
 	// return nil
 }
 
-func (r *msSqlServerCDCReader) flushBatch(ctx context.Context, checkpointer *checkpoint.Capped[LSN], batch service.MessageBatch) error {
+func (r *msSqlServerCDCInput) flushBatch(ctx context.Context, checkpointer *checkpoint.Capped[LSN], batch service.MessageBatch) error {
 	if len(batch) == 0 {
 		return nil
 	}
@@ -334,7 +335,7 @@ func (r *msSqlServerCDCReader) flushBatch(ctx context.Context, checkpointer *che
 	}
 }
 
-func (r *msSqlServerCDCReader) getCachedLSN(ctx context.Context) (LSN, error) {
+func (r *msSqlServerCDCInput) getCachedLSN(ctx context.Context) (LSN, error) {
 	var (
 		cacheVal []byte
 		cErr     error
@@ -354,7 +355,7 @@ func (r *msSqlServerCDCReader) getCachedLSN(ctx context.Context) (LSN, error) {
 	return LSN(cacheVal), nil
 }
 
-func (r *msSqlServerCDCReader) setCachedLSN(ctx context.Context, lsn LSN) error {
+func (r *msSqlServerCDCInput) setCachedLSN(ctx context.Context, lsn LSN) error {
 	var cErr error
 	if err := r.res.AccessCache(ctx, r.lsnCache, func(c service.Cache) {
 		cErr = c.Set(ctx, r.lsnCacheKey, lsn, nil)
@@ -367,7 +368,7 @@ func (r *msSqlServerCDCReader) setCachedLSN(ctx context.Context, lsn LSN) error 
 	return nil
 }
 
-func (r *msSqlServerCDCReader) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
+func (r *msSqlServerCDCInput) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
 	select {
 	case m := <-r.msgChan:
 		return m.msg, m.ackFn, nil
@@ -378,7 +379,7 @@ func (r *msSqlServerCDCReader) ReadBatch(ctx context.Context) (service.MessageBa
 	return nil, nil, ctx.Err()
 }
 
-func (r *msSqlServerCDCReader) Close(_ context.Context) error {
+func (r *msSqlServerCDCInput) Close(_ context.Context) error {
 	r.dbMu.Lock()
 	defer r.dbMu.Unlock()
 	if r.db != nil {
