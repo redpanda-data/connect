@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 
 - (google_cloud_storage) Field `bucket` can now be interpolated (@rockwotj)
 - (output_sns) Field `topic_arn` can now be interpolation (@josephwoodward)
+- (Benthos) Logging: Enable timestamp output by default (@josephwoodward)
 
 ## 4.63.0 - 2025-08-27
 
