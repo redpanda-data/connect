@@ -26,12 +26,13 @@ import (
 	_ "github.com/redpanda-data/benthos/v4/public/components/io"
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 // Test_ManualTesting_AddTestDataWithUniqueLSN adds data to an existing table and ensures each change has its own LSN
 func Test_ManualTesting_AddTestDataWithUniqueLSN(t *testing.T) {
-	t.Skip("This test requires a remote database to run. Aimed to test remote databases")
+	t.Skip("This test requires a remote database to run. Aimed to seed initial data in a remote test databases")
 
 	// --- create database as master
 	port := "1433"
@@ -135,6 +136,9 @@ func Test_ManualTesting_AddTestDataWithUniqueLSN(t *testing.T) {
 }
 
 func TestIntegration_MSSQLServerCDC(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Parallel()
+
 	connStr, db := setupTestWithMSSQLServerVersion(t, "2022-latest")
 
 	// Create table
@@ -200,6 +204,9 @@ file:
 }
 
 func TestIntegration_MSSQLServerCDC_ResumesFromCheckpoint(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Parallel()
+
 	connStr, db := setupTestWithMSSQLServerVersion(t, "2022-latest")
 
 	// Create table
@@ -280,6 +287,9 @@ file:
 }
 
 func TestFuncIntegrationTestOrderingOfIterator(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Parallel()
+
 	connStr, db := setupTestWithMSSQLServerVersion(t, "2022-latest")
 
 	// Create table
@@ -406,7 +416,6 @@ func (db *testDB) createTableWithCDCEnabledIfNotExists(tableName, query string, 
 }
 
 func setupTestWithMSSQLServerVersion(t *testing.T, version string) (string, *testDB) {
-	t.Parallel()
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
 
