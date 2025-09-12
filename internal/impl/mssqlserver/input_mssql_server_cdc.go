@@ -14,8 +14,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
-	"sync"
 	"time"
 
 	"github.com/Jeffail/checkpoint"
@@ -96,7 +94,6 @@ type msSqlServerCDCInput struct {
 	logger *service.Logger
 	res    *service.Resources
 
-	dbMu             sync.Mutex
 	db               *sql.DB
 	msgChan          chan asyncMessage
 	rawMessageEvents chan MessageEvent
@@ -173,9 +170,11 @@ func (r *msSqlServerCDCInput) Connect(ctx context.Context) error {
 		return fmt.Errorf("failed to connect to Microsoft SQL Server: %s", err)
 	}
 
-	r.dbMu.Lock()
 	r.db = db
-	r.dbMu.Unlock()
+	// TODO:
+	// - Fix connection sharing, one connection for snapshot and one for reading CDC tables
+	// - Refactor snapshot functions on this input into snapshot package
+	// - Refactor errgroup
 
 	cachedLSN, err := r.getCachedLSN(ctx)
 	if err != nil {
@@ -184,19 +183,17 @@ func (r *msSqlServerCDCInput) Connect(ctx context.Context) error {
 
 	var snapshot *snapshot
 	// no cached LSN means we're not recovering from a restart
-	if r.streamSnapshot && cachedLSN == nil {
-		snapshot = NewSnapshot(r.logger, r.db)
+	if r.streamSnapshot && len(cachedLSN) == 0 {
+		db, err := sql.Open("mssql", r.connectionString)
+		if err != nil {
+			return fmt.Errorf("Connecting to Microsoft SQL Server for snapshotting: %s", err)
+		}
+		snapshot = NewSnapshot(r.logger, db)
 	}
 
 	r.stopSig = shutdown.NewSignaller()
 	ctx, done := r.stopSig.SoftStopCtx(context.Background())
 	defer done()
-
-	if snapshot != nil {
-		if err := snapshot.prepare(ctx, r.tables); err != nil {
-			return fmt.Errorf("processing snapshot: %s", err)
-		}
-	}
 
 	ctStream := &changeTableStream{
 		logger:        r.logger,
@@ -211,9 +208,18 @@ func (r *msSqlServerCDCInput) Connect(ctx context.Context) error {
 	go func() {
 		ctx, _ = r.stopSig.SoftStopCtx(context.Background())
 		wg, ctx := errgroup.WithContext(ctx)
-		wg.Go(func() error { return r.readMessages(ctx, ctStream) })
+		wg.Go(func() error {
+			var err error
+			if ctStream.cachedLSN, err = r.snapshot(ctx, snapshot); err != nil {
+				return fmt.Errorf("running snapshotting process: %w", err)
+			}
+			if err = r.readMessages(ctx, ctStream); err != nil {
+				return fmt.Errorf("streaming CDC changes: %w", err)
+			}
+			return nil
+		})
+		// wg.Go(func() error { return r.readMessages(ctx, ctStream) })
 		wg.Go(func() error { return r.batchMessages(ctx) })
-
 		if err := wg.Wait(); err != nil && !errors.Is(err, context.Canceled) {
 			r.logger.Errorf("Error during Microsoft SQL Server CDC: %s", err)
 		} else {
@@ -247,16 +253,9 @@ func (r *msSqlServerCDCInput) batchMessages(ctx context.Context) error {
 			}
 			msg := service.NewMessage(data)
 			msg.MetaSet("table", c.Table)
-			if c.StartLSN != nil {
-				msg.MetaSet("start_lsn", string(c.StartLSN))
+			if c.LSN != nil {
+				msg.MetaSet("start_lsn", string(c.LSN))
 			}
-			if c.EndLSN != nil {
-				msg.MetaSet("end_lsn", string(c.EndLSN))
-			}
-			msg.MetaSet("sequence_value", string(c.SequenceValue))
-			msg.MetaSet("operation", fmt.Sprint(c.Operation))
-			msg.MetaSet("update_mask", string(c.UpdateMask))
-			msg.MetaSet("command_id", strconv.Itoa(c.CommandID))
 
 			if r.batchPolicy.Add(msg) {
 				nextTimedBatchChan = nil
@@ -283,12 +282,10 @@ func (r *msSqlServerCDCInput) readMessages(ctx context.Context, stream *changeTa
 		// fmt.Printf("LSN=%x, CommandID=%d, SeqVal=%x, op=%d table=%s cols=%d\n", c.startLSN, c.commandID, c.seqVal, c.operation, c.table, len(c.columns))
 		select {
 		case r.rawMessageEvents <- MessageEvent{
-			Table:         c.table,
-			Data:          c.columns,
-			Operation:     OpType(c.operation),
-			SequenceValue: c.seqVal,
-			CommandID:     c.commandID,
-			StartLSN:      c.startLSN,
+			Table:     c.table,
+			Data:      c.columns,
+			Operation: c.operation,
+			LSN:       c.startLSN,
 		}:
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -349,7 +346,7 @@ func (r *msSqlServerCDCInput) getCachedLSN(ctx context.Context) (LSN, error) {
 		return nil, nil
 	} else if cErr != nil {
 		return nil, fmt.Errorf("unable read checkpoint from cache: %w", cErr)
-	} else if cacheVal == nil {
+	} else if len(cacheVal) == 0 {
 		return nil, nil
 	}
 	return LSN(cacheVal), nil
@@ -379,9 +376,114 @@ func (r *msSqlServerCDCInput) ReadBatch(ctx context.Context) (service.MessageBat
 	}
 }
 
+func (i *msSqlServerCDCInput) snapshot(ctx context.Context, snapshot *snapshot) (LSN, error) {
+	var (
+		lsn LSN
+		err error
+	)
+	// If we are given a snapshot, then we need to read it.
+	if snapshot != nil {
+		if lsn, err = snapshot.prepare(ctx, i.tables); err != nil {
+			_ = snapshot.close()
+			return nil, fmt.Errorf("preparing snapshot: %w", err)
+		}
+		if err = i.readSnapshot(ctx, snapshot); err != nil {
+			_ = snapshot.close()
+			return nil, fmt.Errorf("reading snapshot: %w", err)
+		}
+		if err = snapshot.close(); err != nil {
+			return nil, fmt.Errorf("closing snapshot connections: %w", err)
+		}
+		i.logger.Infof("Completed running snapshot process")
+	}
+	return lsn, nil
+}
+
+func (i *msSqlServerCDCInput) readSnapshot(ctx context.Context, snapshot *snapshot) error {
+	for _, table := range i.tables {
+		tablePks, err := snapshot.getTablePrimaryKeys(ctx, table)
+		if err != nil {
+			return err
+		}
+		i.logger.Tracef("primary keys for table %s: %v", table, tablePks)
+		lastSeenPksValues := map[string]any{}
+		for _, pk := range tablePks {
+			lastSeenPksValues[pk] = nil
+		}
+
+		var numRowsProcessed int
+
+		i.logger.Infof("Beginning snapshot process for table '%s'", table)
+		for {
+			var batchRows *sql.Rows
+			if numRowsProcessed == 0 {
+				batchRows, err = snapshot.querySnapshotTable(ctx, table, tablePks, nil, i.snapshotMaxBatchSize)
+			} else {
+				batchRows, err = snapshot.querySnapshotTable(ctx, table, tablePks, &lastSeenPksValues, i.snapshotMaxBatchSize)
+			}
+			if err != nil {
+				return fmt.Errorf("failed to execute snapshot table query: %s", err)
+			}
+
+			types, err := batchRows.ColumnTypes()
+			if err != nil {
+				return fmt.Errorf("failed to fetch column types: %s", err)
+			}
+
+			values, mappers := prepSnapshotScannerAndMappers(types)
+
+			columns, err := batchRows.Columns()
+			if err != nil {
+				return fmt.Errorf("failed to fetch columns: %s", err)
+			}
+
+			var batchRowsCount int
+			for batchRows.Next() {
+				numRowsProcessed++
+				batchRowsCount++
+
+				if err := batchRows.Scan(values...); err != nil {
+					return err
+				}
+
+				row := map[string]any{}
+				for idx, value := range values {
+					v, err := mappers[idx](value)
+					if err != nil {
+						return err
+					}
+					row[columns[idx]] = v
+					if _, ok := lastSeenPksValues[columns[idx]]; ok {
+						lastSeenPksValues[columns[idx]] = value
+					}
+				}
+
+				select {
+				case i.rawMessageEvents <- MessageEvent{
+					LSN:       nil,
+					Operation: int(MessageOperationRead),
+					Table:     table,
+					Data:      row,
+				}:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			}
+
+			if err := batchRows.Err(); err != nil {
+				return fmt.Errorf("failed to iterate snapshot table: %s", err)
+			}
+
+			if batchRowsCount < i.snapshotMaxBatchSize {
+				break
+			}
+		}
+		i.logger.Infof("Completed snapshot process for table '%s'", table)
+	}
+	return nil
+}
+
 func (r *msSqlServerCDCInput) Close(_ context.Context) error {
-	r.dbMu.Lock()
-	defer r.dbMu.Unlock()
 	if r.db != nil {
 		return r.db.Close()
 	}

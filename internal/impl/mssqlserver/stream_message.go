@@ -57,6 +57,8 @@ const (
 type OpType int
 
 const (
+	// MessageOperationRead represents a snapshot read operation
+	MessageOperationRead OpType = 0
 	// MessageOperationDelete represents a delete operation from MS SQL Server's CDC table
 	MessageOperationDelete OpType = 1
 	// MessageOperationInsert represents a insert operation from MS SQL Server's CDC table
@@ -71,12 +73,8 @@ const (
 
 // MessageEvent represents a single change from Table's change table in the database
 type MessageEvent struct {
-	Table         string         `json:"table"`
-	StartLSN      LSN            `json:"start_lsn"`
-	EndLSN        LSN            `json:"end_lsn"`
-	SequenceValue []byte         `json:"sequence_value"`
-	Operation     OpType         `json:"operation"`
-	UpdateMask    []byte         `json:"update_mask"`
-	Data          map[string]any `json:"data"`
-	CommandID     int            `json:"command_id"`
+	LSN       LSN    `json:"start_lsn"`
+	Operation int    `json:"operation"`
+	Table     string `json:"table"`
+	Data      any    `json:"data"`
 }
