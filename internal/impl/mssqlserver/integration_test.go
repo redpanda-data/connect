@@ -54,6 +54,7 @@ func Test_ManualTesting_AddTestDataWithUniqueLSN(t *testing.T) {
 			IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = N'testdb')
 			BEGIN
 				CREATE DATABASE testdb;
+				ALTER DATABASE testdb SET ALLOW_SNAPSHOT_ISOLATION ON;
 			END;`)
 	require.NoError(t, err)
 	db.Close()
