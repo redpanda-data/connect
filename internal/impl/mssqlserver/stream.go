@@ -176,14 +176,9 @@ func (ct *changeTableRowIter) valsToChange(vals []any) *change {
 }
 
 type changeTableStream struct {
-	logger           *service.Logger
-	trackedTables    map[string]changeTable
-	rawMessageEvents chan MessageEvent
-	cachedLSN        LSN
-}
-
-func (r *changeTableStream) Messages() chan MessageEvent {
-	return r.rawMessageEvents
+	logger        *service.Logger
+	trackedTables map[string]changeTable
+	cachedLSN     LSN
 }
 
 func (r *changeTableStream) verifyChangeTables(ctx context.Context, db *sql.DB, configTables []string) error {
@@ -230,7 +225,7 @@ func (r *changeTableStream) readChangeTables(ctx context.Context, db *sql.DB, ha
 		lastLSN LSN
 	)
 
-	if r.cachedLSN != nil {
+	if len(r.cachedLSN) != 0 {
 		fromLSN = r.cachedLSN
 		lastLSN = r.cachedLSN
 		r.logger.Debugf("Resuming from cached LSN position '%s'", r.cachedLSN)
@@ -249,7 +244,7 @@ func (r *changeTableStream) readChangeTables(ctx context.Context, db *sql.DB, ha
 
 		iters := make([]*changeTableRowIter, 0, len(r.trackedTables))
 		for _, inst := range r.trackedTables {
-			if fromLSN == nil {
+			if len(fromLSN) == 0 {
 				// if no previous LSN is set, start from beginning dictated by tracking table
 				fromLSN = inst.startLSN
 			}
@@ -300,7 +295,7 @@ func (r *changeTableStream) readChangeTables(ctx context.Context, db *sql.DB, ha
 			}
 		}
 
-		if lastLSN != nil {
+		if len(lastLSN) != 0 {
 			if !bytes.Equal(fromLSN, lastLSN) {
 				fromLSN = lastLSN
 			} else {
