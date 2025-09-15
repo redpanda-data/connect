@@ -418,7 +418,7 @@ CREATE TABLE all_data_types (
 	time.Sleep(5 * time.Second)
 
 	// insert min
-	query := `
+	allDataTypesQuery := `
 INSERT INTO all_data_types (
     tinyint_col, smallint_col, int_col, bigint_col,
     decimal_col, numeric_col, float_col, real_col,
@@ -434,7 +434,7 @@ INSERT INTO all_data_types (
     ?, ?, ?, ?,
     ?, ?, ?, ?,
     ?, ?, ?, ?, ?, ?);`
-	_, err := db.ExecContext(t.Context(), query,
+	_, err := db.ExecContext(t.Context(), allDataTypesQuery,
 		0,                    // tinyint min
 		-32768,               // smallint min
 		-2147483648,          // int min
@@ -462,7 +462,7 @@ INSERT INTO all_data_types (
 		"<root></root>",                            // xml
 		"{}",
 	)
-	require.NoError(t, err, "inserting test data type data")
+	require.NoError(t, err, "Inserting snapshot test data to verify data types")
 
 	template := fmt.Sprintf(`
 mssql_server_cdc:
@@ -504,31 +504,95 @@ file:
 		require.NoError(t, err)
 	}()
 
+	time.Sleep(time.Second * 5)
+
+	// max
+	_, err = db.ExecContext(t.Context(), allDataTypesQuery,
+		255,                 // tinyint max
+		32767,               // smallint max
+		2147483647,          // int max
+		9223372036854775807, // bigint max
+		"9999999999999999999999999999.9999999999", // decimal max as string
+		"999999999999999.99999",                   // numeric max as string
+		1.79e+308,                                 // float max
+		3.40e+38,                                  // real max
+		"9999-12-31",                              // date max
+		"9999-12-31 23:59:59.997",                 // datetime max
+		"9999-12-31 23:59:59.9999999",             // datetime2 max
+		"2079-06-06 23:59:00",                     // smalldatetime max
+		"23:59:59.9999999",                        // time max
+		"9999-12-31 23:59:59.9999999 +14:00",      // datetimeoffset max
+		"ZZZZZZZZZZ",                              // char(10)
+		"Max varchar value",                       // varchar(255)
+		"ZZZZZZZZZZ",                              // nchar(10)
+		"Max nvarchar value",                      // nvarchar(255)
+		make([]byte, 16),                          // binary(16) filled with zeros (max size is fixed)
+		make([]byte, 255),                         // varbinary(255) max
+		"Max varchar(max)",                        // varchar(max)
+		"Max nvarchar(max)",                       // nvarchar(max)
+		make([]byte, 65535),                       // varbinary(max) (big buffer for testing)
+		true,                                      // bit max
+		"<root>max</root>",                        // xml
+		`{"max": true}`,                           // json
+	)
+	require.NoError(t, err, "Inserting CDC test data to verify data types")
+
 	assert.Eventually(t, func() bool {
 		outBatchMut.Lock()
 		defer outBatchMut.Unlock()
-		return len(outBatches) == 1
+		return len(outBatches) == 2
 	}, time.Second*30, time.Millisecond*100)
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
 
+	// assert min
+	require.JSONEq(t, `{
+	"bigint_col": -9223372036854775808,
+	"binary_col": "AAAAAAAAAAAAAAAAAAAAAA==",
+	"bit_col": "false",
+	"char_col": "AAAAAAAAAA",
+	"date_col": "0001-01-01T00:00:00Z",
+	"datetime2_col": "0001-01-01T00:00:00Z",
+	"datetime_col": "1753-01-01T00:00:00Z",
+	"datetimeoffset_col": "0001-01-01T00:00:00-14:00",
+	"decimal_col": -9999999999999999999999999999.9999999999,
+	"float_col": -1.79e+308,
+	"int_col": -2147483648,
+	"json_col": "{}",
+	"nchar_col": "АААААААААА",
+	"numeric_col": -999999999999999.99999,
+	"nvarchar_col": "",
+	"nvarcharmax_col": "",
+	"real_col": "-3.3999999521443642e+38",
+	"smalldatetime_col": "1900-01-01T00:00:00Z",
+	"smallint_col": -32768,
+	"time_col": "0001-01-01T00:00:00Z",
+	"tinyint_col": 0,
+	"varbinary_col": "AA==",
+	"varbinarymax_col": "AA==",
+	"varchar_col": "",
+	"varcharmax_col": "",
+	"xml_col": "\u003croot/\u003e"
+	}`, outBatches[0])
+
+	// assert max
 	require.JSONEq(t, `{
     "bigint_col": -9223372036854775808,
     "binary_col": "AAAAAAAAAAAAAAAAAAAAAA==",
-    "bit_col": "false",
+    "bit_col": false,
     "char_col": "AAAAAAAAAA",
     "date_col": "0001-01-01T00:00:00Z",
     "datetime2_col": "0001-01-01T00:00:00Z",
     "datetime_col": "1753-01-01T00:00:00Z",
     "datetimeoffset_col": "0001-01-01T00:00:00-14:00",
-    "decimal_col": -9999999999999999999999999999.9999999999,
+    "decimal_col": "LTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTkuOTk5OTk5OTk5OQ==",
     "float_col": -1.79e+308,
     "int_col": -2147483648,
     "json_col": "{}",
     "nchar_col": "АААААААААА",
-    "numeric_col": -999999999999999.99999,
+    "numeric_col": "LTk5OTk5OTk5OTk5OTk5OS45OTk5OQ==",
     "nvarchar_col": "",
     "nvarcharmax_col": "",
-    "real_col": "-3.3999999521443642e+38",
+    "real_col": -3.3999999521443642e+38,
     "smalldatetime_col": "1900-01-01T00:00:00Z",
     "smallint_col": -32768,
     "time_col": "0001-01-01T00:00:00Z",
@@ -538,37 +602,7 @@ file:
     "varchar_col": "",
     "varcharmax_col": "",
     "xml_col": "\u003croot/\u003e"
-}`, outBatches[0])
-	// require.JSONEq(t, `{
-	// "tinyint_col": 255,
-	// "smallint_col": 32767,
-	// "int_col": 2147483647,
-	// "bigint_col": 9223372036854775807,
-	// "decimal_col": "9999999999999999999999999999.9999999999",
-	// "numeric_col": "99999999999999999999.99999",
-	// "float_col": 1.79e+308,
-	// "real_col": 3.40e+38,
-	// "date_col": "9999-12-31",
-	// "datetime_col": "9999-12-31 23:59:59.997",
-	// "datetime2_col": "9999-12-31 23:59:59.9999999",
-	// "smalldatetime_col": "2079-06-06 23:59:00",
-	// "time_col": "23:59:59.9999999",
-	// "datetimeoffset_col": "9999-12-31 23:59:59.9999999 +14:00",
-	// "char_col": "ZZZZZZZZZZ",
-	// "varchar_col": "MaxVarcharValue",
-	// "nchar_col": "ЯЯЯЯЯЯЯЯЯЯ",
-	// "nvarchar_col": "MaxNVarCharValue",
-	// "binary_col": "FF",
-	// "varbinary_col": "FF",
-	// "varcharmax_col": "MaxVarcharMaxValue",
-	// "nvarcharmax_col": "MaxNVarCharMaxValue",
-	// "varbinarymax_col": "FF",
-	// "bit_col": 1,
-	// "xml_col": "<root><max/></root>",
-	// "json_col": "{\"max\":true}",
-	// "geometry_col": "POINT(180 90)",
-	// "geography_col": "POINT(180 90)"
-	// }`, outBatches[1])
+	}`, outBatches[1])
 }
 
 func BenchmarkStreamingCDCChanges(b *testing.B) {
