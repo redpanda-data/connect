@@ -202,7 +202,26 @@ output:
 		Field(service.NewBoolField(rmoFieldServerless).
 			Description("Enable serverless mode for Redpanda Cloud serverless clusters. This restricts topic configurations and schema features to those supported by serverless environments.").
 			Default(false).
-			Advanced())
+			Advanced()).
+		LintRule(`
+root = [
+  if this.key.or("") != "" {
+    "key field is not supported by migrator, setting it could break consumer group migration"
+  },
+  if this.partitioner.or("") != "" {
+    "partitioner field is not supported by migrator, setting it could break consumer group migration"
+  },
+  if this.partition.or("") != "" {
+    "partition field is not supported by migrator, setting it could break consumer group migration"
+  },
+  if this.timestamp.or("") != "" {
+    "timestamp field is not supported by migrator, setting it could break consumer group migration"
+  },
+  if this.timestamp_ms.or("") != "" {
+    "timestamp_ms field is not supported by migrator, setting it could break consumer group migration"
+  }
+]
+`)
 }
 
 type migratorResKey string
@@ -241,6 +260,12 @@ func (w migratorBatchOutput) Connect(ctx context.Context) error {
 		return err
 	}
 	return w.m.OnOutputConnected(ctx, w.BatchOutput.(franzWriter))
+}
+
+func (w migratorBatchOutput) Close(ctx context.Context) error {
+	err := w.BatchOutput.Close(ctx)
+	w.m.stopSig.TriggerHardStop()
+	return err
 }
 
 func init() {
@@ -390,15 +415,12 @@ func (m *Migrator) OnOutputConnected(_ context.Context, fw franzWriter) error { 
 		return err
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		defer cancel()
-		<-m.stopSig.SoftStopChan()
-	}()
+	ctx, cancel := m.stopSig.SoftStopCtx(context.Background())
 
 	// Set up destination admin client for groups migrator
 	clientInfo, err := fw.GetClient(ctx)
 	if err != nil {
+		cancel()
 		return fmt.Errorf("get franz client: %w", err)
 	}
 	m.mu.Lock()
@@ -409,8 +431,9 @@ func (m *Migrator) OnOutputConnected(_ context.Context, fw franzWriter) error { 
 	// we use GetConsumeTopics, which is only available after the first message
 	// is received.
 
-	// Sync the schema registry
+	// Sync the schema registry once
 	if err := m.sr.Sync(ctx); err != nil {
+		cancel()
 		return err
 	}
 	go m.sr.SyncLoop(ctx)
