@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Added `default_schema_id` field to the `schema_registry_decode` processor. (@mmatczuk)
+- Go API: Component linter added to `public/schema`, including Redpanda build meta fields. (@Jeffail)
 
 ### Changed
 
