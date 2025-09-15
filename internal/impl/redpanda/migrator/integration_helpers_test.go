@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/ory/dockertest/v3"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -208,49 +207,32 @@ func writeToTopic(cluster EmbeddedRedpandaCluster, numMessages int, opts ...func
 	cluster.t.Logf("Successfully wrote %d messages to topic %s", numMessages, migratorTestTopic)
 }
 
-// assertTopicContent asserts that the specified number of messages created with
-// the writeToTopic function are present in the topic.
-func assertTopicContent(cluster EmbeddedRedpandaCluster, numMessages int) {
-	assertTopicContentWithGoldenFunc(cluster, numMessages, goldenIntMsg)
-}
-
-// assertTopicContent asserts that the specified number of messages matching the
-// golden function are present in the topic.
-func assertTopicContentWithGoldenFunc(cluster EmbeddedRedpandaCluster, numMessages int, golden func(int) []byte) {
+// readTopicContent reads specified number of messages from a topic.
+func readTopicContent(cluster EmbeddedRedpandaCluster, numMessages int) []*kgo.Record {
 	ctx := cluster.t.Context()
 	t := cluster.t
 	client := cluster.Client
 
-	messages := make([][]byte, 0, numMessages)
-	for len(messages) < numMessages {
+	records := make([]*kgo.Record, 0, numMessages)
+	for len(records) < numMessages {
 		fetches := client.PollFetches(ctx)
 		if errs := fetches.Errors(); len(errs) > 0 {
 			require.NoError(t, errs[0].Err)
 		}
 		fetches.EachRecord(func(r *kgo.Record) {
-			messages = append(messages, r.Value)
+			records = append(records, r)
 		})
 
 		select {
 		case <-ctx.Done():
 			require.Fail(t, "Timed out waiting for messages")
-			return
+			return nil
 		default:
-			if len(messages) < numMessages {
+			if len(records) < numMessages {
 				time.Sleep(100 * time.Millisecond)
 			}
 		}
 	}
 
-	t.Logf("Successfully read %d messages from topic %s", len(messages), migratorTestTopic)
-
-	expected := make([][]byte, 0, numMessages)
-	for i := 0; i < numMessages; i++ {
-		expected = append(expected, golden(i))
-	}
-	assert.ElementsMatch(t, expected, messages)
-}
-
-func goldenIntMsg(i int) []byte {
-	return []byte(strconv.Itoa(i))
+	return records
 }

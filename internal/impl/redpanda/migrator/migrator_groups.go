@@ -277,6 +277,7 @@ func (m *groupsMigrator) SyncLoop(ctx context.Context, getTopics func() []TopicM
 		return
 	}
 	if m.conf.Interval <= 0 {
+		m.log.Info("Consumer group migration: consumer group sync disabled (interval <= 0)")
 		return
 	}
 
