@@ -16,6 +16,7 @@ package migrator
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"sync/atomic"
 
@@ -122,6 +123,7 @@ func newFranzWriter(pConf *service.ParsedConfig, mgr *service.Resources) (franzW
 		return franzWriter{}, err
 	}
 	opts = append(opts, producerOpts...)
+	opts = append(opts, kgo.RecordPartitioner(kgo.ManualPartitioner()))
 
 	lazy := lazyFranzSharedClientInfo{
 		opts: opts,
@@ -139,6 +141,30 @@ func newFranzWriter(pConf *service.ParsedConfig, mgr *service.Resources) (franzW
 	if err != nil {
 		return franzWriter{}, err
 	}
+
+	// Partition and timestamp are mandatory fields that are passed as metadata.
+	// They must not be changed by the migrator otherwise consumer group
+	// migration will break.
+	if fw.Key != nil {
+		return franzWriter{}, errors.New("key field is not supported by migrator, setting it could break consumer group migration")
+	}
+	if fw.Partition != nil {
+		return franzWriter{}, errors.New("partition field is not supported by migrator, setting it could break consumer group migration")
+	}
+	if fw.Timestamp != nil {
+		return franzWriter{}, errors.New("timestamp and timestamp_ms fields are not supported by migrator, setting it could break consumer group migration")
+	}
+
+	fw.Partition, err = service.NewInterpolatedString(`${! @kafka_partition }`)
+	if err != nil {
+		return franzWriter{}, err
+	}
+
+	fw.Timestamp, err = service.NewInterpolatedString(`${! @kafka_timestamp_ms }`)
+	if err != nil {
+		return franzWriter{}, err
+	}
+	fw.IsTimestampMs = true
 
 	return franzWriter{fw, &lazy}, nil
 }
