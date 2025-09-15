@@ -186,7 +186,7 @@ func (r *msSqlServerCDCInput) Connect(ctx context.Context) error {
 	if r.streamSnapshot && len(cachedLSN) == 0 {
 		db, err := sql.Open("mssql", r.connectionString)
 		if err != nil {
-			return fmt.Errorf("Connecting to Microsoft SQL Server for snapshotting: %s", err)
+			return fmt.Errorf("connecting to Microsoft SQL Server for snapshotting: %s", err)
 		}
 		snapshot = NewSnapshot(r.logger, db)
 	}
@@ -400,6 +400,7 @@ func (i *msSqlServerCDCInput) snapshot(ctx context.Context, snapshot *snapshot) 
 }
 
 func (i *msSqlServerCDCInput) readSnapshot(ctx context.Context, snapshot *snapshot) error {
+	// TODO: Process tables in parallel
 	for _, table := range i.tables {
 		tablePks, err := snapshot.getTablePrimaryKeys(ctx, table)
 		if err != nil {

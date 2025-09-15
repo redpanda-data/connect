@@ -147,7 +147,7 @@ func TestIntegration_MSSQLServerCDC(t *testing.T) {
 
 	// Insert 1000 rows for initial snapshot streaming
 	for i := range 1000 {
-		db.exec("INSERT INTO foo VALUES (?)", i)
+		db.MustExec("INSERT INTO foo VALUES (?)", i)
 	}
 
 	template := fmt.Sprintf(`
@@ -192,7 +192,7 @@ file:
 
 	time.Sleep(time.Second * 5)
 	for i := 1000; i < 2000; i++ {
-		db.exec("INSERT INTO foo VALUES (?)", i)
+		db.MustExec("INSERT INTO foo VALUES (?)", i)
 	}
 
 	assert.Eventually(t, func() bool {
@@ -249,7 +249,7 @@ file:
 
 	// --- launch input and insert initial rows for consumption
 	for i := range 1000 {
-		db.exec("INSERT INTO foo VALUES (?)", i)
+		db.MustExec("INSERT INTO foo VALUES (?)", i)
 	}
 	go func() {
 		require.NoError(t, streamOut.Run(t.Context()))
@@ -266,7 +266,7 @@ file:
 	// --- stop initial input and then insert more rows
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
 	for i := 1000; i < 2000; i++ {
-		db.exec("INSERT INTO foo VALUES (?)", i)
+		db.MustExec("INSERT INTO foo VALUES (?)", i)
 	}
 
 	// --- relaunched input should load checkpoint
@@ -366,6 +366,211 @@ file:
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
 }
 
+func TestIntegrationMSSQLCDCAllTypes(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Parallel()
+
+	connStr, db := setupTestWithMSSQLServerVersion(t, "2022-latest")
+	q := `
+CREATE TABLE all_data_types (
+    -- Numeric Data Types
+    tinyint_col       TINYINT        PRIMARY KEY,   -- 0 to 255
+    smallint_col      SMALLINT,                     -- -32,768 to 32,767
+    int_col           INT,                          -- -2,147,483,648 to 2,147,483,647
+    bigint_col        BIGINT,                       -- -9e18 to 9e18
+    decimal_col       DECIMAL(38, 10),              -- arbitrary precision
+    numeric_col       NUMERIC(20, 5),               -- alias of DECIMAL
+    float_col         FLOAT(53),                    -- double precision
+    real_col          REAL,                         -- single precision
+
+    -- Date and Time Data Types
+    date_col          DATE,
+    datetime_col      DATETIME,                     -- 1753-01-01 through 9999-12-31
+    datetime2_col     DATETIME2(7),                 -- 0001-01-01 through 9999-12-31
+    smalldatetime_col SMALLDATETIME,                -- 1900-01-01 through 2079-06-06
+    time_col          TIME(7),
+    datetimeoffset_col DATETIMEOFFSET(7),           -- includes time zone offset
+
+    -- Character Data Types
+    char_col          CHAR(10),
+    varchar_col       VARCHAR(255),
+    nchar_col         NCHAR(10),                    -- Unicode fixed-length
+    nvarchar_col      NVARCHAR(255),                -- Unicode variable-length
+
+    -- Binary Data Types
+    binary_col        BINARY(16),
+    varbinary_col     VARBINARY(255),
+
+    -- Large Object Data Types
+    varcharmax_col    VARCHAR(MAX),
+    nvarcharmax_col   NVARCHAR(MAX),
+    varbinarymax_col  VARBINARY(MAX),
+
+    -- Other Data Types
+    bit_col           BIT,                          -- Boolean-like (0,1,NULL)
+    xml_col           XML,
+    json_col          NVARCHAR(MAX)                -- SQL Server has no native JSON, stored as NVARCHAR
+);
+`
+	db.createTableWithCDCEnabledIfNotExists("all_data_types", q)
+
+	// give SQL agent time to start
+	time.Sleep(5 * time.Second)
+
+	// insert min
+	query := `
+INSERT INTO all_data_types (
+    tinyint_col, smallint_col, int_col, bigint_col,
+    decimal_col, numeric_col, float_col, real_col,
+    date_col, datetime_col, datetime2_col, smalldatetime_col,
+    time_col, datetimeoffset_col, char_col, varchar_col,
+    nchar_col, nvarchar_col, binary_col, varbinary_col,
+    varcharmax_col, nvarcharmax_col, varbinarymax_col,
+    bit_col, xml_col, json_col
+) VALUES (
+    ?, ?, ?, ?,
+    ?, ?, ?, ?,
+    ?, ?, ?, ?,
+    ?, ?, ?, ?,
+    ?, ?, ?, ?,
+    ?, ?, ?, ?, ?, ?);`
+	_, err := db.ExecContext(t.Context(), query,
+		0,                    // tinyint min
+		-32768,               // smallint min
+		-2147483648,          // int min
+		-9223372036854775808, // bigint min
+		"-9999999999999999999999999999.9999999999", // decimal min as string
+		"-999999999999999.99999",                   // numeric min as string
+		-1.79e+308,                                 // float min
+		-3.40e+38,                                  // real min
+		"0001-01-01",                               // date min
+		"1753-01-01 00:00:00.000",                  // datetime min
+		"0001-01-01 00:00:00.0000000",              // datetime2 min
+		"1900-01-01 00:00:00",                      // smalldatetime min
+		"00:00:00.0000000",                         // time min
+		"0001-01-01 00:00:00.0000000 -14:00",       // datetimeoffset min
+		"AAAAAAAAAA",                               // char(10)
+		"",                                         // varchar(255)
+		"АААААААААА",                               // nchar(10)
+		"",                                         // nvarchar(255)
+		[]byte{0x00},                               // binary(1)
+		[]byte{0x00},                               // varbinary(1)
+		"",                                         // varchar(max)
+		"",                                         // nvarchar(max)
+		[]byte{0x00},                               // varbinary(max)
+		false,                                      // bit
+		"<root></root>",                            // xml
+		"{}",
+	)
+	require.NoError(t, err, "inserting test data type data")
+
+	template := fmt.Sprintf(`
+mssql_server_cdc:
+  connection_string: %s
+  stream_snapshot: true
+  checkpoint_cache: "foocache"
+  snapshot_max_batch_size: 100
+  tables:
+    - all_data_types
+`, connStr)
+
+	cacheConf := fmt.Sprintf(`
+label: foocache
+file:
+  directory: %s`, t.TempDir())
+
+	streamOutBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: DEBUG`))
+	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
+	require.NoError(t, streamOutBuilder.AddInputYAML(template))
+
+	var outBatches []string
+	var outBatchMut sync.Mutex
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+		msgBytes, err := mb[0].AsBytes()
+		require.NoError(t, err)
+		outBatchMut.Lock()
+		outBatches = append(outBatches, string(msgBytes))
+		outBatchMut.Unlock()
+		return nil
+	}))
+
+	streamOut, err := streamOutBuilder.Build()
+	require.NoError(t, err)
+	license.InjectTestService(streamOut.Resources())
+
+	go func() {
+		err = streamOut.Run(t.Context())
+		require.NoError(t, err)
+	}()
+
+	assert.Eventually(t, func() bool {
+		outBatchMut.Lock()
+		defer outBatchMut.Unlock()
+		return len(outBatches) == 1
+	}, time.Second*30, time.Millisecond*100)
+	require.NoError(t, streamOut.StopWithin(time.Second*10))
+
+	require.JSONEq(t, `{
+    "bigint_col": -9223372036854775808,
+    "binary_col": "AAAAAAAAAAAAAAAAAAAAAA==",
+    "bit_col": "false",
+    "char_col": "AAAAAAAAAA",
+    "date_col": "0001-01-01T00:00:00Z",
+    "datetime2_col": "0001-01-01T00:00:00Z",
+    "datetime_col": "1753-01-01T00:00:00Z",
+    "datetimeoffset_col": "0001-01-01T00:00:00-14:00",
+    "decimal_col": -9999999999999999999999999999.9999999999,
+    "float_col": -1.79e+308,
+    "int_col": -2147483648,
+    "json_col": "{}",
+    "nchar_col": "АААААААААА",
+    "numeric_col": -999999999999999.99999,
+    "nvarchar_col": "",
+    "nvarcharmax_col": "",
+    "real_col": "-3.3999999521443642e+38",
+    "smalldatetime_col": "1900-01-01T00:00:00Z",
+    "smallint_col": -32768,
+    "time_col": "0001-01-01T00:00:00Z",
+    "tinyint_col": 0,
+    "varbinary_col": "AA==",
+    "varbinarymax_col": "AA==",
+    "varchar_col": "",
+    "varcharmax_col": "",
+    "xml_col": "\u003croot/\u003e"
+}`, outBatches[0])
+	// require.JSONEq(t, `{
+	// "tinyint_col": 255,
+	// "smallint_col": 32767,
+	// "int_col": 2147483647,
+	// "bigint_col": 9223372036854775807,
+	// "decimal_col": "9999999999999999999999999999.9999999999",
+	// "numeric_col": "99999999999999999999.99999",
+	// "float_col": 1.79e+308,
+	// "real_col": 3.40e+38,
+	// "date_col": "9999-12-31",
+	// "datetime_col": "9999-12-31 23:59:59.997",
+	// "datetime2_col": "9999-12-31 23:59:59.9999999",
+	// "smalldatetime_col": "2079-06-06 23:59:00",
+	// "time_col": "23:59:59.9999999",
+	// "datetimeoffset_col": "9999-12-31 23:59:59.9999999 +14:00",
+	// "char_col": "ZZZZZZZZZZ",
+	// "varchar_col": "MaxVarcharValue",
+	// "nchar_col": "ЯЯЯЯЯЯЯЯЯЯ",
+	// "nvarchar_col": "MaxNVarCharValue",
+	// "binary_col": "FF",
+	// "varbinary_col": "FF",
+	// "varcharmax_col": "MaxVarcharMaxValue",
+	// "nvarcharmax_col": "MaxNVarCharMaxValue",
+	// "varbinarymax_col": "FF",
+	// "bit_col": 1,
+	// "xml_col": "<root><max/></root>",
+	// "json_col": "{\"max\":true}",
+	// "geometry_col": "POINT(180 90)",
+	// "geography_col": "POINT(180 90)"
+	// }`, outBatches[1])
+}
+
 func BenchmarkStreamingCDCChanges(b *testing.B) {
 	b.Skip()
 	port := "1433"
@@ -396,13 +601,14 @@ type testDB struct {
 	t *testing.T
 }
 
-func (db *testDB) exec(query string, args ...any) {
+func (db *testDB) MustExec(query string, args ...any) {
 	_, err := db.Exec(query, args...)
 	require.NoError(db.t, err)
 }
 
-func (db *testDB) createTableWithCDCEnabledIfNotExists(tableName, query string, _ ...any) {
-	cdc := fmt.Sprintf(`
+func (db *testDB) createTableWithCDCEnabledIfNotExists(tableName, createTableQuery string, _ ...any) {
+	enableSnapshot := `ALTER DATABASE testdb SET ALLOW_SNAPSHOT_ISOLATION ON;`
+	enableCDC := fmt.Sprintf(`
 		EXEC sys.sp_cdc_enable_table
 		@source_schema = 'dbo',
 		@source_name   = '%s',
@@ -412,8 +618,9 @@ func (db *testDB) createTableWithCDCEnabledIfNotExists(tableName, query string, 
 		BEGIN
 			%s
 			%s
-		END;`, tableName, query, cdc)
-	db.exec(q)
+			%s
+		END;`, tableName, createTableQuery, enableCDC, enableSnapshot)
+	db.MustExec(q)
 }
 
 func setupTestWithMSSQLServerVersion(t *testing.T, version string) (string, *testDB) {
