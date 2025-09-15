@@ -396,6 +396,7 @@ func (m *schemaRegistryMigrator) SyncLoop(ctx context.Context) {
 		return
 	}
 	if m.conf.Interval <= 0 {
+		m.log.Info("Schema migration: schema registry sync disabled (interval <= 0)")
 		return
 	}
 
