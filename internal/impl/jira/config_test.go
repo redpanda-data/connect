@@ -1,0 +1,126 @@
+package jira
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestJiraProcessorConfigValidation(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		yaml       string
+		wantErrSub string
+	}{
+		{
+			name: "missing base_url",
+			yaml: `
+username: "user" # no base_url
+api_token: "token"
+max_results_per_page: 50
+max_retries: 5
+`,
+			wantErrSub: "base_url",
+		},
+		{
+			name: "invalid base_url",
+			yaml: `
+base_url: "not a url"
+username: "user"
+api_token: "token"
+max_results_per_page: 50
+max_retries: 5
+`,
+			wantErrSub: "base_url",
+		},
+		{
+			name: "missing username",
+			yaml: `
+username: ""
+base_url: "https://example.com"
+api_token: "token"
+`,
+			wantErrSub: "username",
+		},
+		{
+			name: "missing api_token",
+			yaml: `base_url: "http://example.invalid"
+username: "user"
+api_token: ""
+base_url: "https://example.com"
+`,
+			wantErrSub: "api_token",
+		},
+		{
+			name: "max_results_per_page too small",
+			yaml: `base_url: "http://example.invalid"
+username: "user"
+api_token: "token"
+max_results_per_page: 0
+`,
+			wantErrSub: "max_results_per_page",
+		},
+		{
+			name: "max_results_per_page too large",
+			yaml: `base_url: "http://example.invalid"
+username: "user"
+api_token: "token"
+max_results_per_page: 100000
+`,
+			wantErrSub: "max_results_per_page",
+		},
+		{
+			name: "max_retries negative",
+			yaml: `base_url: "http://example.invalid"
+username: "user"
+api_token: "token"
+max_retries: -1
+`,
+			wantErrSub: "max_retries",
+		},
+		{
+			name: "valid minimal (defaults kick in)",
+			yaml: `
+base_url: "http://example.invalid"
+username: "user"
+api_token: "token"
+`,
+			wantErrSub: "",
+		},
+		{
+			name: "valid explicit",
+			yaml: `base_url: "http://example.invalid"
+username: "user"
+api_token: "token"
+max_results_per_page: 200
+max_retries: 5
+`,
+			wantErrSub: "",
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			conf, err := jiraProcessorConfigSpec.ParseYAML(tc.yaml, nil)
+			proc, procErr := newJiraProcessor(conf, conf.Resources())
+
+			if tc.wantErrSub == "" {
+				require.NoError(t, err, "expected config to be valid")
+				assert.NotNil(t, proc)
+			} else {
+				if err != nil {
+					require.Error(t, err, "expected config validation error")
+					require.Contains(t, err.Error(), tc.wantErrSub)
+				}
+				if procErr != nil {
+					require.Error(t, procErr, "expected config validation error")
+					require.Contains(t, procErr.Error(), tc.wantErrSub)
+				}
+			}
+		})
+	}
+}
