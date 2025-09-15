@@ -172,7 +172,6 @@ func (r *msSqlServerCDCInput) Connect(ctx context.Context) error {
 
 	r.db = db
 	// TODO:
-	// - Fix connection sharing, one connection for snapshot and one for reading CDC tables
 	// - Refactor snapshot functions on this input into snapshot package
 	// - Refactor errgroup
 
