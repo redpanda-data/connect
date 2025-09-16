@@ -6,7 +6,7 @@
 //
 // https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
-package mssqlserver
+package sqlserver
 
 import (
 	"bytes"
@@ -177,9 +177,15 @@ func (ct *changeTableRowIter) valsToChange(vals []any) *change {
 
 type changeTableStream struct {
 	trackedTables map[string]changeTable
-	// maxLSN is the log sequence position to which to resume from, either captured from a snapshot process or change tables.
-	maxLSN LSN
-	logger *service.Logger
+	logger        *service.Logger
+}
+
+func newChangeTableStream(tables []string, logger *service.Logger) *changeTableStream {
+	s := &changeTableStream{
+		trackedTables: make(map[string]changeTable, len(tables)),
+		logger:        logger,
+	}
+	return s
 }
 
 func (r *changeTableStream) verifyChangeTables(ctx context.Context, db *sql.DB, configTables []string) error {
@@ -219,21 +225,21 @@ func (r *changeTableStream) verifyChangeTables(ctx context.Context, db *sql.DB, 
 	return nil
 }
 
-func (r *changeTableStream) readChangeTables(ctx context.Context, db *sql.DB, handle func(c *change) (LSN, error)) error {
+func (r *changeTableStream) readChangeTables(ctx context.Context, db *sql.DB, startPos LSN, handle handler) error {
 	var (
 		fromLSN LSN // load last checkpoint; nil means start from beginning in tables
 		toLSN   LSN // often set to fn_cdc_get_max_lsn(); nil means no upper bound
 		lastLSN LSN
 	)
 
-	if len(r.maxLSN) != 0 {
-		fromLSN = r.maxLSN
-		lastLSN = r.maxLSN
-		r.logger.Debugf("Resuming from recorded LSN position '%s'", r.maxLSN)
+	if len(startPos) != 0 {
+		fromLSN = startPos
+		lastLSN = startPos
+		r.logger.Debugf("Resuming from recorded LSN position '%s'", startPos)
 	}
 
 	for {
-		// Fetch a upper bound so the run is repeatable
+		// We have the "from" position, now fetch the "to" upper bound
 		if err := db.QueryRowContext(ctx, "SELECT sys.fn_cdc_get_max_lsn()").Scan(&toLSN); err != nil {
 			return err
 		}
@@ -272,21 +278,28 @@ func (r *changeTableStream) readChangeTables(ctx context.Context, db *sql.DB, ha
 			// Pop the smallest LSN change
 			item := heap.Pop(h).(*heapItem)
 			cur := item.iter.current
+			m := MessageEvent{
+				Table:     cur.table,
+				Data:      cur.columns,
+				Operation: cur.operation,
+				LSN:       cur.startLSN,
+			}
 
-			if lsn, err := handle(cur); err != nil {
+			if err := handle(ctx, m); err != nil {
 				// Clean up before returning error
 				for _, it := range iters {
 					_ = it.Close()
 				}
 				return err
 			} else {
-				lastLSN = lsn
+				// next page
+				lastLSN = cur.startLSN
 			}
 
 			// Advance the iterator and push back on heap to be sorted
 			if err := item.iter.next(); err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
-					r.logger.Debugf("Reached end of rows for table %s", item.iter.table)
+					r.logger.Debugf("Reached end of rows for table '%s'", item.iter.table)
 				}
 				// exhausted all rows
 				item.iter.Close()

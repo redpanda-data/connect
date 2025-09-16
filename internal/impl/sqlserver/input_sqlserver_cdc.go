@@ -6,7 +6,7 @@
 //
 // https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
-package mssqlserver
+package sqlserver
 
 import (
 	"context"
@@ -36,14 +36,14 @@ const (
 )
 
 func init() {
-	service.MustRegisterBatchInput("mssql_server_cdc", mssqlStreamConfigSpec, newMssqlCDCReader)
+	service.MustRegisterBatchInput("sql_server_cdc", mssqlStreamConfigSpec, newSqlServerCDCInput)
 }
 
 var mssqlStreamConfigSpec = service.NewConfigSpec().
 	Beta().
 	Categories("Services").
 	Version("4.45.0").
-	Summary("Creates an input that consumes from a Microsoft SQL Server's change log.").
+	Summary("Creates an input that consumes from a Microsoft SQL Server's change tables.").
 	Description(``).
 	Field(service.NewStringField(fieldConnectionString).
 		Description("The connection string of the Microsoft SQL Server database to connect to.").
@@ -66,7 +66,7 @@ var mssqlStreamConfigSpec = service.NewConfigSpec().
 	).
 	Field(service.NewStringField(fieldCheckpointKey).
 		Description("The key to use to store the snapshot position in `" + fieldCheckpointCache + "`. An alternative key can be provided if multiple CDC inputs share the same cache.").
-		Default("mssql_cdc_position"),
+		Default("sql_server_cdc_position"),
 	).
 	Field(service.NewIntField(fieldCheckpointLimit).
 		Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given Log Sequence Number (LSN) will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
@@ -80,7 +80,7 @@ type asyncMessage struct {
 	ackFn service.AckFunc
 }
 
-type msSqlServerCDCInput struct {
+type sqlServerCDCInput struct {
 	connectionString     string
 	streamSnapshot       bool
 	snapshotMaxBatchSize int
@@ -100,17 +100,17 @@ type msSqlServerCDCInput struct {
 	stopSig          *shutdown.Signaller
 }
 
-func newMssqlCDCReader(conf *service.ParsedConfig, res *service.Resources) (s service.BatchInput, err error) {
+func newSqlServerCDCInput(conf *service.ParsedConfig, res *service.Resources) (s service.BatchInput, err error) {
 	if err := license.CheckRunningEnterprise(res); err != nil {
 		return nil, err
 	}
 
-	i := msSqlServerCDCInput{
-		logger:           res.Logger(),
+	i := sqlServerCDCInput{
 		res:              res,
 		msgChan:          make(chan asyncMessage),
 		rawMessageEvents: make(chan MessageEvent),
 		stopSig:          shutdown.NewSignaller(),
+		logger:           res.Logger(),
 	}
 
 	if i.connectionString, err = conf.FieldString(fieldConnectionString); err != nil {
@@ -161,47 +161,39 @@ func newMssqlCDCReader(conf *service.ParsedConfig, res *service.Resources) (s se
 		return nil, err
 	}
 
-	return conf.WrapBatchInputExtractTracingSpanMapping("mssql_server_cdc", batchInput)
+	return conf.WrapBatchInputExtractTracingSpanMapping("sql_server_cdc", batchInput)
 }
 
-func (i *msSqlServerCDCInput) Connect(ctx context.Context) error {
+func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 	db, err := sql.Open("mssql", i.connectionString)
 	if err != nil {
-		return fmt.Errorf("failed to connect to Microsoft SQL Server: %s", err)
+		return fmt.Errorf("failed to connect to sql server: %s", err)
 	}
 
 	i.db = db
-	// TODO:
-	// - Refactor snapshot functions on this input into snapshot package
-	// - Refactor errgroup
 
 	cachedLSN, err := i.getCachedLSN(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to get cached LSN: %s", err)
 	}
 
-	var snapshot *snapshot
+	var snapshotter *snapshot
 	// no cached LSN means we're not recovering from a restart
 	if i.streamSnapshot && len(cachedLSN) == 0 {
 		db, err := sql.Open("mssql", i.connectionString)
 		if err != nil {
-			return fmt.Errorf("connecting to Microsoft SQL Server for snapshotting: %s", err)
+			return fmt.Errorf("connecting to sql server for snapshotting: %s", err)
 		}
-		snapshot = NewSnapshot(db, i.tables, i.logger)
+		snapshotter = NewSnapshot(db, i.tables, i.logger)
 	}
 
 	i.stopSig = shutdown.NewSignaller()
 	ctx, done := i.stopSig.SoftStopCtx(context.Background())
 	defer done()
 
-	stream := &changeTableStream{
-		trackedTables: make(map[string]changeTable, len(i.tables)),
-		maxLSN:        cachedLSN,
-		logger:        i.logger,
-	}
-
-	if err := stream.verifyChangeTables(ctx, i.db, i.tables); err != nil {
-		return fmt.Errorf("verifying MS MSQL Server change tables: %s", err)
+	streamer := newChangeTableStream(i.tables, i.logger)
+	if err := streamer.verifyChangeTables(ctx, i.db, i.tables); err != nil {
+		return fmt.Errorf("verifying sql server change tables: %s", err)
 	}
 
 	go func() {
@@ -209,22 +201,32 @@ func (i *msSqlServerCDCInput) Connect(ctx context.Context) error {
 		wg, softCtx := errgroup.WithContext(ctx)
 
 		wg.Go(func() error {
-			var err error
-			if stream.maxLSN, err = i.processSnapshot(softCtx, snapshot); err != nil {
-				return fmt.Errorf("running snapshotting process: %w", err)
+			var (
+				err    error
+				maxLSN = cachedLSN
+			)
+
+			// snapshot if no LSN exists then store checkpoint once complete
+			if snapshotter != nil {
+				if maxLSN, err = i.processSnapshot(ctx, snapshotter); err != nil {
+					return fmt.Errorf("processing snapshotting: %w", err)
+				}
+				if err := i.cacheLSN(ctx, maxLSN); err != nil {
+					return fmt.Errorf("caching LSN after snapshotting: %w", err)
+				}
 			}
-			if err = i.changeTables(softCtx, stream); err != nil {
-				return fmt.Errorf("streaming CDC changes: %w", err)
+			// start streaming changes
+			if err = i.streamChanges(ctx, streamer, maxLSN); err != nil {
+				return fmt.Errorf("streaming changes: %w", err)
 			}
 			return nil
 		})
-		// wg.Go(func() error { return r.readMessages(ctx, ctStream) })
-		wg.Go(func() error { return i.batchMessages(softCtx) })
+		wg.Go(func() error { return i.consume(softCtx) })
 
 		if err := wg.Wait(); err != nil && !errors.Is(err, context.Canceled) {
-			i.logger.Errorf("Error during Microsoft SQL Server CDC: %s", err)
+			i.logger.Errorf("Error during SQL Server CDC: %s", err)
 		} else {
-			i.logger.Info("Successfully shutdown Microsoft SQL Server CDC stream")
+			i.logger.Info("Successfully shutdown SQL Server CDC stream")
 		}
 		i.stopSig.TriggerHasStopped()
 	}()
@@ -232,7 +234,7 @@ func (i *msSqlServerCDCInput) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (i *msSqlServerCDCInput) batchMessages(ctx context.Context) error {
+func (i *sqlServerCDCInput) consume(ctx context.Context) error {
 	var nextTimedBatchChan <-chan time.Time
 	for {
 		select {
@@ -278,51 +280,47 @@ func (i *msSqlServerCDCInput) batchMessages(ctx context.Context) error {
 	}
 }
 
-func (i *msSqlServerCDCInput) changeTables(ctx context.Context, stream *changeTableStream) error {
-	// TODO: Improve this
-	h := func(c *change) (LSN, error) {
+func (i *sqlServerCDCInput) publish() handler {
+	return func(ctx context.Context, msg MessageEvent) error {
 		// r.logger.Debugf("LSN=%x, CommandID=%d, SeqVal=%x, op=%d table=%s cols=%d\n", c.startLSN, c.commandID, c.seqVal, c.operation, c.table, len(c.columns))
 		select {
-		case i.rawMessageEvents <- MessageEvent{
-			Table:     c.table,
-			Data:      c.columns,
-			Operation: c.operation,
-			LSN:       c.startLSN,
-		}:
+		case i.rawMessageEvents <- msg:
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return ctx.Err()
 		}
-		return c.startLSN, nil
+		return nil
 	}
-	err := stream.readChangeTables(ctx, i.db, h)
-
-	// if err != nil { //nolint:staticcheck
-	return fmt.Errorf("streaming from change tables: %w", err)
-	// }
-
-	// return nil
 }
 
-func (i *msSqlServerCDCInput) flushBatch(ctx context.Context, checkpointer *checkpoint.Capped[LSN], batch service.MessageBatch) error {
+func (i *sqlServerCDCInput) streamChanges(ctx context.Context, stream *changeTableStream, startPos LSN) error {
+	i.logger.Infof("Starting streaming %d change tables", len(i.tables))
+	if err := stream.readChangeTables(ctx, i.db, startPos, i.publish()); err != nil {
+		return fmt.Errorf("streaming from change tables: %w", err)
+	}
+	return nil
+}
+
+func (i *sqlServerCDCInput) flushBatch(ctx context.Context, checkpointer *checkpoint.Capped[LSN], batch service.MessageBatch) error {
 	if len(batch) == 0 {
 		return nil
 	}
 
 	lastMsg := batch[len(batch)-1]
-	var startLSN []byte
+	var checkpointLSN []byte
 	if lsn, ok := lastMsg.MetaGet("start_lsn"); ok {
-		startLSN = []byte(lsn)
+		checkpointLSN = LSN(lsn)
 	}
+	// TODO: Do we want to log an error here or even abort if we can't find checkpoint?
 
-	resolveFn, err := checkpointer.Track(ctx, startLSN, int64(len(batch)))
+	resolveFn, err := checkpointer.Track(ctx, checkpointLSN, int64(len(batch)))
 	if err != nil {
 		return fmt.Errorf("failed to track LSN checkpoint for batch: %w", err)
 	}
 	msg := asyncMessage{
 		msg: batch,
 		ackFn: func(ctx context.Context, _ error) error {
-			if lsn := resolveFn(); lsn != nil {
-				return i.setCachedLSN(ctx, *lsn)
+			if lsn := resolveFn(); len(*lsn) != 0 {
+				return i.cacheLSN(ctx, *lsn)
 			}
 			return nil
 		},
@@ -335,7 +333,7 @@ func (i *msSqlServerCDCInput) flushBatch(ctx context.Context, checkpointer *chec
 	}
 }
 
-func (i *msSqlServerCDCInput) getCachedLSN(ctx context.Context) (LSN, error) {
+func (i *sqlServerCDCInput) getCachedLSN(ctx context.Context) (LSN, error) {
 	var (
 		cacheVal []byte
 		cErr     error
@@ -355,7 +353,11 @@ func (i *msSqlServerCDCInput) getCachedLSN(ctx context.Context) (LSN, error) {
 	return LSN(cacheVal), nil
 }
 
-func (i *msSqlServerCDCInput) setCachedLSN(ctx context.Context, lsn LSN) error {
+func (i *sqlServerCDCInput) cacheLSN(ctx context.Context, lsn LSN) error {
+	if len(lsn) == 0 {
+		return errors.New("lsn for caching is empty")
+	}
+
 	var cErr error
 	if err := i.res.AccessCache(ctx, i.lsnCache, func(c service.Cache) {
 		cErr = c.Set(ctx, i.lsnCacheKey, lsn, nil)
@@ -368,7 +370,7 @@ func (i *msSqlServerCDCInput) setCachedLSN(ctx context.Context, lsn LSN) error {
 	return nil
 }
 
-func (i *msSqlServerCDCInput) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
+func (i *sqlServerCDCInput) ReadBatch(ctx context.Context) (service.MessageBatch, service.AckFunc, error) {
 	select {
 	case m := <-i.msgChan:
 		return m.msg, m.ackFn, nil
@@ -379,42 +381,29 @@ func (i *msSqlServerCDCInput) ReadBatch(ctx context.Context) (service.MessageBat
 	}
 }
 
-func (i *msSqlServerCDCInput) processSnapshot(ctx context.Context, snapshot *snapshot) (LSN, error) {
+func (i *sqlServerCDCInput) processSnapshot(ctx context.Context, snapshot *snapshot) (LSN, error) {
 	var (
 		lsn LSN
 		err error
 	)
-	// If we are given a snapshot, then we need to read it.
-	if snapshot != nil {
-		i.logger.Infof("Starting snapshot of %d tables", len(snapshot.tables))
-
-		if lsn, err = snapshot.prepare(ctx); err != nil {
-			_ = snapshot.close()
-			return nil, fmt.Errorf("preparing snapshot: %w", err)
-		}
-		// TODO: Improve this
-		h := func(c MessageEvent) error {
-			select {
-			case i.rawMessageEvents <- c:
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-			return nil
-		}
-		if err = snapshot.read(ctx, i.snapshotMaxBatchSize, h); err != nil {
-			_ = snapshot.close()
-			return nil, fmt.Errorf("reading snapshot: %w", err)
-		}
-		if err = snapshot.close(); err != nil {
-			return nil, fmt.Errorf("closing snapshot connections: %w", err)
-		}
-
-		i.logger.Infof("Completed running snapshot process")
+	i.logger.Infof("Starting snapshot of %d tables", len(snapshot.tables))
+	if lsn, err = snapshot.prepare(ctx); err != nil {
+		_ = snapshot.close()
+		return nil, fmt.Errorf("preparing snapshot: %w", err)
 	}
+	if err = snapshot.read(ctx, i.snapshotMaxBatchSize, i.publish()); err != nil {
+		_ = snapshot.close()
+		return nil, fmt.Errorf("reading snapshot: %w", err)
+	}
+	if err = snapshot.close(); err != nil {
+		return nil, fmt.Errorf("closing snapshot connections: %w", err)
+	}
+	i.logger.Infof("Completed running snapshot process")
+
 	return lsn, nil
 }
 
-func (i *msSqlServerCDCInput) Close(_ context.Context) error {
+func (i *sqlServerCDCInput) Close(_ context.Context) error {
 	if i.db != nil {
 		return i.db.Close()
 	}
