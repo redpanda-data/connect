@@ -24,23 +24,30 @@ type snapshot struct {
 	db *sql.DB
 	tx *sql.Tx
 
-	snapshotLSN  LSN
 	snapshotConn *sql.Conn
 	lockConn     *sql.Conn
+	message      chan MessageEvent
+	tables       []string
 
 	logger *service.Logger
 }
 
 // NewSnapshot creates a new instance of Snapshot.
-func NewSnapshot(logger *service.Logger, db *sql.DB) *snapshot {
+func NewSnapshot(db *sql.DB, tables []string, logger *service.Logger) *snapshot {
 	return &snapshot{
-		db:     db,
-		logger: logger,
+		db:      db,
+		tables:  tables,
+		logger:  logger,
+		message: make(chan MessageEvent),
 	}
 }
 
-func (s *snapshot) prepare(ctx context.Context, tables []string) (LSN, error) {
-	if len(tables) == 0 {
+func (s *snapshot) Message() chan MessageEvent {
+	return s.message
+}
+
+func (s *snapshot) prepare(ctx context.Context) (LSN, error) {
+	if len(s.tables) == 0 {
 		return nil, errors.New("no tables provided")
 	}
 
@@ -66,9 +73,6 @@ func (s *snapshot) prepare(ctx context.Context, tables []string) (LSN, error) {
 	if err := s.snapshotConn.QueryRowContext(ctx, "SELECT sys.fn_cdc_get_max_lsn()").Scan(&toLSN); err != nil {
 		return nil, err
 	}
-
-	// TODO: We need to ensure snapshotting and streaming CDC changes are using the same LSN
-	s.snapshotLSN = toLSN
 
 	return toLSN, nil
 }
@@ -118,7 +122,6 @@ func (s *snapshot) querySnapshotTable(ctx context.Context, table string, pk []st
 		snapshotQueryParts = append(snapshotQueryParts, buildOrderByClause(pk))
 
 		q := strings.Join(snapshotQueryParts, " ")
-		// s.logger.Infof("Querying snapshot 1: %s", q)
 		return s.tx.QueryContext(ctx, q)
 	}
 
@@ -134,9 +137,7 @@ func (s *snapshot) querySnapshotTable(ctx context.Context, table string, pk []st
 	res := fmt.Sprintf("WHERE (%s) > (%s)", ph1, ph2)
 	snapshotQueryParts = append(snapshotQueryParts, res)
 	snapshotQueryParts = append(snapshotQueryParts, buildOrderByClause(pk))
-	// snapshotQueryParts = append(snapshotQueryParts, fmt.Sprintf("LIMIT %d", limit))
 	q := strings.Join(snapshotQueryParts, " ")
-	// s.logger.Infof("Querying snapshot 2: %s", q)
 	return s.tx.QueryContext(ctx, q, lastSeenPkVals...)
 }
 
@@ -166,6 +167,101 @@ func (s *snapshot) close() error {
 	}
 
 	return errors.Join(errs...)
+}
+
+func (s *snapshot) read(ctx context.Context, maxBatchSize int, handle func(c MessageEvent) error) error {
+	// TODO: Process tables in parallel
+	for _, table := range s.tables {
+		tablePks, err := s.getTablePrimaryKeys(ctx, table)
+		if err != nil {
+			return err
+		}
+		s.logger.Tracef("primary keys for table %s: %v", table, tablePks)
+		lastSeenPksValues := map[string]any{}
+		for _, pk := range tablePks {
+			lastSeenPksValues[pk] = nil
+		}
+
+		var numRowsProcessed int
+
+		s.logger.Infof("Beginning snapshot process for table '%s'", table)
+		for {
+			var batchRows *sql.Rows
+			if numRowsProcessed == 0 {
+				batchRows, err = s.querySnapshotTable(ctx, table, tablePks, nil, maxBatchSize)
+			} else {
+				batchRows, err = s.querySnapshotTable(ctx, table, tablePks, &lastSeenPksValues, maxBatchSize)
+			}
+			if err != nil {
+				return fmt.Errorf("failed to execute snapshot table query: %s", err)
+			}
+
+			types, err := batchRows.ColumnTypes()
+			if err != nil {
+				return fmt.Errorf("failed to fetch column types: %s", err)
+			}
+
+			values, mappers := prepSnapshotScannerAndMappers(types)
+
+			columns, err := batchRows.Columns()
+			if err != nil {
+				return fmt.Errorf("failed to fetch columns: %s", err)
+			}
+
+			var batchRowsCount int
+			for batchRows.Next() {
+				numRowsProcessed++
+				batchRowsCount++
+
+				if err := batchRows.Scan(values...); err != nil {
+					return err
+				}
+
+				row := map[string]any{}
+				for idx, value := range values {
+					v, err := mappers[idx](value)
+					if err != nil {
+						return err
+					}
+					row[columns[idx]] = v
+					if _, ok := lastSeenPksValues[columns[idx]]; ok {
+						lastSeenPksValues[columns[idx]] = value
+					}
+				}
+
+				m := MessageEvent{
+					LSN:       nil,
+					Operation: int(MessageOperationRead),
+					Table:     table,
+					Data:      row,
+				}
+				if err := handle(m); err != nil {
+					return fmt.Errorf("handling snapshot table row: %w", err)
+				}
+
+				// select {
+				// // case s.message <- MessageEvent{
+				// // 	LSN:       nil,
+				// // 	Operation: int(MessageOperationRead),
+				// // 	Table:     table,
+				// // 	Data:      row,
+				// // }:
+				// case <-ctx.Done():
+				// 	return ctx.Err()
+				// }
+			}
+
+			if err := batchRows.Err(); err != nil {
+				return fmt.Errorf("iterating snapshot table row: %w", err)
+			}
+
+			if batchRowsCount < maxBatchSize {
+				break
+			}
+		}
+		s.logger.Infof("Completed snapshot process for table '%s'", table)
+	}
+	return nil
 }
 
 func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mappers []func(any) (any, error)) {

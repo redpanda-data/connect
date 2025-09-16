@@ -176,9 +176,10 @@ func (ct *changeTableRowIter) valsToChange(vals []any) *change {
 }
 
 type changeTableStream struct {
-	logger        *service.Logger
 	trackedTables map[string]changeTable
-	cachedLSN     LSN
+	// maxLSN is the log sequence position to which to resume from, either captured from a snapshot process or change tables.
+	maxLSN LSN
+	logger *service.Logger
 }
 
 func (r *changeTableStream) verifyChangeTables(ctx context.Context, db *sql.DB, configTables []string) error {
@@ -225,10 +226,10 @@ func (r *changeTableStream) readChangeTables(ctx context.Context, db *sql.DB, ha
 		lastLSN LSN
 	)
 
-	if len(r.cachedLSN) != 0 {
-		fromLSN = r.cachedLSN
-		lastLSN = r.cachedLSN
-		r.logger.Debugf("Resuming from cached LSN position '%s'", r.cachedLSN)
+	if len(r.maxLSN) != 0 {
+		fromLSN = r.maxLSN
+		lastLSN = r.maxLSN
+		r.logger.Debugf("Resuming from recorded LSN position '%s'", r.maxLSN)
 	}
 
 	for {
