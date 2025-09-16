@@ -64,6 +64,8 @@ type change struct {
 	columns    map[string]any
 }
 
+// changeTableRowIter is responsible for handling the iteration of table change records row by row.
+// It moves to the next row, sorts them by min-heap, parses the data and sends it for processing.
 type changeTableRowIter struct {
 	table   string
 	rows    *sql.Rows
