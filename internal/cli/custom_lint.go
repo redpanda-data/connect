@@ -19,6 +19,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/mcp/repository"
+	"github.com/redpanda-data/connect/v4/public/schema"
 )
 
 var (
@@ -93,7 +94,7 @@ func directoryMode(c *cli.Context, repositoryDir string) error {
 
 	env := service.NewEnvironment()
 
-	cLinter := env.NewComponentConfigLinter()
+	cLinter := schema.ComponentLinter(env)
 	cLinter.SetRejectDeprecated(c.Bool("deprecated"))
 	cLinter.SetRequireLabels(c.Bool("labels"))
 	cLinter.SetSkipEnvVarCheck(c.Bool("skip-env-var-check"))

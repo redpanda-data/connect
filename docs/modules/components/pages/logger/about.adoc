@@ -26,7 +26,7 @@ Common::
 logger:
   level: INFO
   format: logfmt
-  add_timestamp: false
+  add_timestamp: true
   static_fields:
     '@service': redpanda-connect
 ```
@@ -41,7 +41,7 @@ Advanced::
 logger:
   level: INFO
   format: logfmt
-  add_timestamp: false
+  add_timestamp: true
   level_name: level
   timestamp_name: time
   message_name: msg
@@ -100,7 +100,7 @@ Whether to include timestamps in logs.
 
 *Type*: `bool`
 
-*Default*: `false`
+*Default*: `true`
 
 === `level_name`
 
