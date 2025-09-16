@@ -22,11 +22,11 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/google"
 	_ "github.com/redpanda-data/connect/v4/public/components/kafka/enterprise"
 	_ "github.com/redpanda-data/connect/v4/public/components/mongodb/enterprise"
-	_ "github.com/redpanda-data/connect/v4/public/components/mssqlserver"
 	_ "github.com/redpanda-data/connect/v4/public/components/mysql"
 	_ "github.com/redpanda-data/connect/v4/public/components/postgresql"
 	_ "github.com/redpanda-data/connect/v4/public/components/slack"
 	_ "github.com/redpanda-data/connect/v4/public/components/snowflake"
 	_ "github.com/redpanda-data/connect/v4/public/components/splunk"
+	_ "github.com/redpanda-data/connect/v4/public/components/sqlserver"
 	_ "github.com/redpanda-data/connect/v4/public/components/tigerbeetle"
 )

@@ -6,7 +6,7 @@
 //
 // https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
-package mssqlserver
+package sqlserver
 
 import (
 	"context"
@@ -20,30 +20,26 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
+type handler func(ctx context.Context, c MessageEvent) error
+
 type snapshot struct {
 	db *sql.DB
 	tx *sql.Tx
 
 	snapshotConn *sql.Conn
 	lockConn     *sql.Conn
-	message      chan MessageEvent
-	tables       []string
 
+	tables []string
 	logger *service.Logger
 }
 
-// NewSnapshot creates a new instance of Snapshot.
+// NewSnapshot creates a new instance of snapshot capable of snapshotting provided tables.
 func NewSnapshot(db *sql.DB, tables []string, logger *service.Logger) *snapshot {
 	return &snapshot{
-		db:      db,
-		tables:  tables,
-		logger:  logger,
-		message: make(chan MessageEvent),
+		db:     db,
+		tables: tables,
+		logger: logger,
 	}
-}
-
-func (s *snapshot) Message() chan MessageEvent {
-	return s.message
 }
 
 func (s *snapshot) prepare(ctx context.Context) (LSN, error) {
@@ -169,7 +165,7 @@ func (s *snapshot) close() error {
 	return errors.Join(errs...)
 }
 
-func (s *snapshot) read(ctx context.Context, maxBatchSize int, handle func(c MessageEvent) error) error {
+func (s *snapshot) read(ctx context.Context, maxBatchSize int, handle handler) error {
 	// TODO: Process tables in parallel
 	for _, table := range s.tables {
 		tablePks, err := s.getTablePrimaryKeys(ctx, table)
@@ -235,20 +231,9 @@ func (s *snapshot) read(ctx context.Context, maxBatchSize int, handle func(c Mes
 					Table:     table,
 					Data:      row,
 				}
-				if err := handle(m); err != nil {
+				if err := handle(ctx, m); err != nil {
 					return fmt.Errorf("handling snapshot table row: %w", err)
 				}
-
-				// select {
-				// // case s.message <- MessageEvent{
-				// // 	LSN:       nil,
-				// // 	Operation: int(MessageOperationRead),
-				// // 	Table:     table,
-				// // 	Data:      row,
-				// // }:
-				// case <-ctx.Done():
-				// 	return ctx.Err()
-				// }
 			}
 
 			if err := batchRows.Err(); err != nil {

@@ -6,7 +6,7 @@
 //
 // https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
-package mssqlserver
+package sqlserver
 
 import (
 	"context"
@@ -136,11 +136,11 @@ func Test_ManualTesting_AddTestDataWithUniqueLSN(t *testing.T) {
 	// require.NoError(t, err)
 }
 
-func TestIntegration_MSSQLServerCDC(t *testing.T) {
+func TestIntegration_SQLServerCDC(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	connStr, db := setupTestWithMSSQLServerVersion(t, "2022-latest")
+	connStr, db := setupTestWithSQLServerVersion(t, "2022-latest")
 
 	// Create table
 	db.createTableWithCDCEnabledIfNotExists("foo", `CREATE TABLE foo (a INT PRIMARY KEY);`)
@@ -151,7 +151,7 @@ func TestIntegration_MSSQLServerCDC(t *testing.T) {
 	}
 
 	template := fmt.Sprintf(`
-mssql_server_cdc:
+sql_server_cdc:
   connection_string: %s
   stream_snapshot: false
   snapshot_max_batch_size: 100
@@ -204,17 +204,17 @@ file:
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
 }
 
-func TestIntegration_MSSQLServerCDC_ResumesFromCheckpoint(t *testing.T) {
+func TestIntegration_SQLServerCDC_ResumesFromCheckpoint(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	connStr, db := setupTestWithMSSQLServerVersion(t, "2022-latest")
+	connStr, db := setupTestWithSQLServerVersion(t, "2022-latest")
 
 	// Create table
 	db.createTableWithCDCEnabledIfNotExists("foo", `CREATE TABLE foo (a INT PRIMARY KEY);`)
 
 	template := fmt.Sprintf(`
-mssql_server_cdc:
+sql_server_cdc:
   connection_string: %s
   stream_snapshot: false
   tables:
@@ -291,7 +291,7 @@ func TestFuncIntegrationTestOrderingOfIterator(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	connStr, db := setupTestWithMSSQLServerVersion(t, "2022-latest")
+	connStr, db := setupTestWithSQLServerVersion(t, "2022-latest")
 
 	// Create table
 	db.createTableWithCDCEnabledIfNotExists("foo", `CREATE TABLE foo (a INT PRIMARY KEY);`)
@@ -312,7 +312,7 @@ func TestFuncIntegrationTestOrderingOfIterator(t *testing.T) {
 	require.NoError(t, err)
 
 	template := fmt.Sprintf(`
-mssql_server_cdc:
+sql_server_cdc:
   connection_string: %s
   stream_snapshot: false
   tables:
@@ -366,11 +366,11 @@ file:
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
 }
 
-func TestIntegrationMSSQLCDCAllTypes(t *testing.T) {
+func TestIntegrationSQLCDCAllTypes(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	connStr, db := setupTestWithMSSQLServerVersion(t, "2022-latest")
+	connStr, db := setupTestWithSQLServerVersion(t, "2022-latest")
 	q := `
 CREATE TABLE all_data_types (
     -- Numeric Data Types
@@ -465,7 +465,7 @@ INSERT INTO all_data_types (
 	require.NoError(t, err, "Inserting snapshot test data to verify data types")
 
 	template := fmt.Sprintf(`
-mssql_server_cdc:
+sql_server_cdc:
   connection_string: %s
   stream_snapshot: true
   checkpoint_cache: "foocache"
@@ -621,9 +621,9 @@ func BenchmarkStreamingCDCChanges(b *testing.B) {
 	b.ReportAllocs()
 	// Reset timer to exclude setup time
 	for b.Loop() {
-		err := ctStream.readChangeTables(b.Context(), db, func(c *change) (LSN, error) {
-			fmt.Printf("LSN=%x, CommandID=%d, SeqVal=%x, op=%d table=%s cols=%d\n", c.startLSN, c.commandID, c.seqVal, c.operation, c.table, len(c.columns))
-			return c.startLSN, nil
+		err := ctStream.readChangeTables(b.Context(), db, nil, func(_ context.Context, _ MessageEvent) error {
+			// fmt.Printf("LSN=%x, CommandID=%d, SeqVal=%x, op=%d table=%s cols=%d\n", c.startLSN, c.commandID, c.seqVal, c.operation, c.table, len(c.columns))
+			return nil
 		})
 		require.NoError(b, err)
 	}
@@ -657,7 +657,7 @@ func (db *testDB) createTableWithCDCEnabledIfNotExists(tableName, createTableQue
 	db.MustExec(q)
 }
 
-func setupTestWithMSSQLServerVersion(t *testing.T, version string) (string, *testDB) {
+func setupTestWithSQLServerVersion(t *testing.T, version string) (string, *testDB) {
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
 
