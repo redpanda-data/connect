@@ -27,6 +27,7 @@ import (
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
+	. "github.com/redpanda-data/connect/v4/internal/impl/sqlserver/replication"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
@@ -136,7 +137,7 @@ func Test_ManualTesting_AddTestDataWithUniqueLSN(t *testing.T) {
 	// require.NoError(t, err)
 }
 
-func TestIntegration_SQLServerCDC(t *testing.T) {
+func TestIntegration_SQLServerCDC_SnapshotAndCDC(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
@@ -153,8 +154,8 @@ func TestIntegration_SQLServerCDC(t *testing.T) {
 	template := fmt.Sprintf(`
 sql_server_cdc:
   connection_string: %s
-  stream_snapshot: false
-  snapshot_max_batch_size: 100
+  stream_snapshot: true
+  snapshot_max_batch_size: 10
   tables:
     - foo
   checkpoint_cache: "foocache"
@@ -190,6 +191,7 @@ file:
 		require.NoError(t, err)
 	}()
 
+	// insert 1000 more for streaming changes
 	time.Sleep(time.Second * 5)
 	for i := 1000; i < 2000; i++ {
 		db.MustExec("INSERT INTO foo VALUES (?)", i)
@@ -287,7 +289,7 @@ file:
 	require.NoError(t, streamOutResume.StopWithin(time.Second*10))
 }
 
-func TestFuncIntegrationTestOrderingOfIterator(t *testing.T) {
+func TestIntegration_SQLServerCDC_OrderingOfIterator(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
@@ -366,7 +368,7 @@ file:
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
 }
 
-func TestIntegrationSQLCDCAllTypes(t *testing.T) {
+func TestIntegration_SQLServerCDC_AllTypes(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
@@ -613,15 +615,15 @@ func BenchmarkStreamingCDCChanges(b *testing.B) {
 	require.NoError(b, err)
 	defer db.Close()
 
-	ctStream := &changeTableStream{}
+	ctStream := &ChangeTableStream{}
 
-	err = ctStream.verifyChangeTables(b.Context(), db, []string{"users", "products"})
+	err = ctStream.VerifyChangeTables(b.Context(), db, []string{"users", "products"})
 	require.NoError(b, err)
 
 	b.ReportAllocs()
 	// Reset timer to exclude setup time
 	for b.Loop() {
-		err := ctStream.readChangeTables(b.Context(), db, nil, func(_ context.Context, _ MessageEvent) error {
+		err := ctStream.ReadChangeTables(b.Context(), db, nil, func(_ context.Context, _ MessageEvent) error {
 			// fmt.Printf("LSN=%x, CommandID=%d, SeqVal=%x, op=%d table=%s cols=%d\n", c.startLSN, c.commandID, c.seqVal, c.operation, c.table, len(c.columns))
 			return nil
 		})
@@ -714,6 +716,7 @@ func setupTestWithSQLServerVersion(t *testing.T, version string) (string, *testD
 		}
 		db.Close()
 
+		// switch from using master to testdb as it avoids lots of permission issues with enabling CDC on tables
 		connectionString = fmt.Sprintf("sqlserver://sa:YourStrong!Passw0rd@localhost:%s?database=%s&encrypt=disable", port, "testdb")
 		db, err = sql.Open("mssql", connectionString)
 		if err != nil {

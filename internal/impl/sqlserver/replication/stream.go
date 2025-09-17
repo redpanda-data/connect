@@ -6,7 +6,7 @@
 //
 // https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
-package sqlserver
+package replication
 
 import (
 	"bytes"
@@ -177,20 +177,24 @@ func (ct *changeTableRowIter) valsToChange(vals []any) *change {
 	return ch
 }
 
-type changeTableStream struct {
+// ChangeTableStream tracks and streams all change events added to the tracked tables change tables
+type ChangeTableStream struct {
 	trackedTables map[string]changeTable
 	logger        *service.Logger
 }
 
-func newChangeTableStream(tables []string, logger *service.Logger) *changeTableStream {
-	s := &changeTableStream{
+// NewChangeTableStream creates a new instance of NewChangeTableStream, responsible for paging through change events
+// based on the tables param.
+func NewChangeTableStream(tables []string, logger *service.Logger) *ChangeTableStream {
+	s := &ChangeTableStream{
 		trackedTables: make(map[string]changeTable, len(tables)),
 		logger:        logger,
 	}
 	return s
 }
 
-func (r *changeTableStream) verifyChangeTables(ctx context.Context, db *sql.DB, configTables []string) error {
+// VerifyChangeTables ensures change tables are configured for _all_ provided configTables.
+func (r *ChangeTableStream) VerifyChangeTables(ctx context.Context, db *sql.DB, configTables []string) error {
 	rows, err := db.QueryContext(ctx, "SELECT capture_instance, start_lsn FROM cdc.change_tables")
 	if err != nil {
 		return fmt.Errorf("fetching change tables: %w", err)
@@ -227,7 +231,8 @@ func (r *changeTableStream) verifyChangeTables(ctx context.Context, db *sql.DB, 
 	return nil
 }
 
-func (r *changeTableStream) readChangeTables(ctx context.Context, db *sql.DB, startPos LSN, handle handler) error {
+// ReadChangeTables streams the change events from the configured SQL Server change tables.
+func (r *ChangeTableStream) ReadChangeTables(ctx context.Context, db *sql.DB, startPos LSN, handle Handler) error {
 	var (
 		fromLSN LSN // load last checkpoint; nil means start from beginning in tables
 		toLSN   LSN // often set to fn_cdc_get_max_lsn(); nil means no upper bound

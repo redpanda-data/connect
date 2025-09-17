@@ -21,6 +21,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/impl/sqlserver/replication"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
@@ -80,80 +81,99 @@ type asyncMessage struct {
 	ackFn service.AckFunc
 }
 
-type sqlServerCDCInput struct {
+type config struct {
 	connectionString     string
 	streamSnapshot       bool
 	snapshotMaxBatchSize int
 	tables               []string
 	lsnCache             string
 	lsnCacheKey          string
-	batching             service.BatchPolicy
-	batchPolicy          *service.Batcher
-	checkpoint           *checkpoint.Capped[LSN]
+	batcher              *service.Batcher
+}
 
-	logger *service.Logger
-	res    *service.Resources
+type sqlServerCDCInput struct {
+	config *config
+	db     *sql.DB
 
-	db               *sql.DB
+	res        *service.Resources
+	checkpoint *checkpoint.Capped[replication.LSN]
+
 	msgChan          chan asyncMessage
-	rawMessageEvents chan MessageEvent
+	rawMessageEvents chan replication.MessageEvent
 	stopSig          *shutdown.Signaller
+	logger           *service.Logger
 }
 
 func newSqlServerCDCInput(conf *service.ParsedConfig, res *service.Resources) (s service.BatchInput, err error) {
+	var (
+		connectionString     string
+		streamSnapshot       bool
+		snapshotMaxBatchSize int
+		tables               []string
+		lsnCache             string
+		lsnCacheKey          string
+		batcher              *service.Batcher
+		cp                   *checkpoint.Capped[replication.LSN]
+	)
+
 	if err := license.CheckRunningEnterprise(res); err != nil {
 		return nil, err
 	}
-
-	i := sqlServerCDCInput{
-		res:              res,
-		msgChan:          make(chan asyncMessage),
-		rawMessageEvents: make(chan MessageEvent),
-		stopSig:          shutdown.NewSignaller(),
-		logger:           res.Logger(),
-	}
-
-	if i.connectionString, err = conf.FieldString(fieldConnectionString); err != nil {
+	if connectionString, err = conf.FieldString(fieldConnectionString); err != nil {
 		return nil, err
 	}
-	if i.streamSnapshot, err = conf.FieldBool(fieldStreamSnapshot); err != nil {
+	if streamSnapshot, err = conf.FieldBool(fieldStreamSnapshot); err != nil {
 		return nil, err
 	}
-	if i.snapshotMaxBatchSize, err = conf.FieldInt(fieldSnapshotMaxBatchSize); err != nil {
+	if snapshotMaxBatchSize, err = conf.FieldInt(fieldSnapshotMaxBatchSize); err != nil {
 		return nil, err
 	}
 	var checkpointLimit int
 	if checkpointLimit, err = conf.FieldInt(fieldCheckpointLimit); err != nil {
 		return nil, err
 	}
-	i.checkpoint = checkpoint.NewCapped[LSN](int64(checkpointLimit))
+	cp = checkpoint.NewCapped[replication.LSN](int64(checkpointLimit))
 
 	// TODO: support regular expression on tablenames
-	if i.tables, err = conf.FieldStringList(fieldTables); err != nil {
+	if tables, err = conf.FieldStringList(fieldTables); err != nil {
 		return nil, err
 	}
-	if i.lsnCache, err = conf.FieldString(fieldCheckpointCache); err != nil {
+	if lsnCache, err = conf.FieldString(fieldCheckpointCache); err != nil {
 		return nil, err
 	}
-	if !conf.Resources().HasCache(i.lsnCache) {
-		return nil, fmt.Errorf("unknown cache resource: %s", i.lsnCache)
+	if !conf.Resources().HasCache(lsnCache) {
+		return nil, fmt.Errorf("unknown cache resource: %s", lsnCache)
 	}
-	if i.lsnCacheKey, err = conf.FieldString(fieldCheckpointKey); err != nil {
+	if lsnCacheKey, err = conf.FieldString(fieldCheckpointKey); err != nil {
 		return nil, err
 	}
 
-	var batching service.BatchPolicy
-	if batching, err = conf.FieldBatchPolicy(fieldBatching); err != nil {
+	var policy service.BatchPolicy
+	if policy, err = conf.FieldBatchPolicy(fieldBatching); err != nil {
 		return nil, err
-	} else if batching.IsNoop() {
-		batching.Count = 1
+	} else if policy.IsNoop() {
+		policy.Count = 1
 	}
-	i.batching = batching
-
-	if i.batchPolicy, err = i.batching.NewBatcher(res); err != nil {
+	if batcher, err = policy.NewBatcher(res); err != nil {
 		return nil, err
-	} else if batching.IsNoop() {
-		batching.Count = 1
+	}
+
+	i := sqlServerCDCInput{
+		config: &config{
+			connectionString:     connectionString,
+			streamSnapshot:       streamSnapshot,
+			snapshotMaxBatchSize: snapshotMaxBatchSize,
+			tables:               tables,
+			lsnCache:             lsnCache,
+			lsnCacheKey:          lsnCacheKey,
+			batcher:              batcher,
+		},
+		checkpoint:       cp,
+		res:              res,
+		msgChan:          make(chan asyncMessage),
+		rawMessageEvents: make(chan replication.MessageEvent),
+		stopSig:          shutdown.NewSignaller(),
+		logger:           res.Logger(),
 	}
 
 	batchInput, err := service.AutoRetryNacksBatchedToggled(conf, &i)
@@ -165,7 +185,7 @@ func newSqlServerCDCInput(conf *service.ParsedConfig, res *service.Resources) (s
 }
 
 func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
-	db, err := sql.Open("mssql", i.connectionString)
+	db, err := sql.Open("mssql", i.config.connectionString)
 	if err != nil {
 		return fmt.Errorf("failed to connect to sql server: %s", err)
 	}
@@ -177,22 +197,22 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 		return fmt.Errorf("unable to get cached LSN: %s", err)
 	}
 
-	var snapshotter *snapshot
+	var snapshotter *replication.Snapshot
 	// no cached LSN means we're not recovering from a restart
-	if i.streamSnapshot && len(cachedLSN) == 0 {
-		db, err := sql.Open("mssql", i.connectionString)
+	if i.config.streamSnapshot && len(cachedLSN) == 0 {
+		db, err := sql.Open("mssql", i.config.connectionString)
 		if err != nil {
 			return fmt.Errorf("connecting to sql server for snapshotting: %s", err)
 		}
-		snapshotter = NewSnapshot(db, i.tables, i.logger)
+		snapshotter = replication.NewSnapshot(db, i.config.tables, i.logger)
 	}
 
 	i.stopSig = shutdown.NewSignaller()
 	ctx, done := i.stopSig.SoftStopCtx(context.Background())
 	defer done()
 
-	streamer := newChangeTableStream(i.tables, i.logger)
-	if err := streamer.verifyChangeTables(ctx, i.db, i.tables); err != nil {
+	streamer := replication.NewChangeTableStream(i.config.tables, i.logger)
+	if err := streamer.VerifyChangeTables(ctx, i.db, i.config.tables); err != nil {
 		return fmt.Errorf("verifying sql server change tables: %s", err)
 	}
 
@@ -242,7 +262,7 @@ func (i *sqlServerCDCInput) consume(ctx context.Context) error {
 			return ctx.Err()
 		case <-nextTimedBatchChan:
 			nextTimedBatchChan = nil
-			flushedBatch, err := i.batchPolicy.Flush(ctx)
+			flushedBatch, err := i.config.batcher.Flush(ctx)
 			if err != nil {
 				return fmt.Errorf("timed flush batch error: %w", err)
 			}
@@ -260,9 +280,9 @@ func (i *sqlServerCDCInput) consume(ctx context.Context) error {
 				msg.MetaSet("start_lsn", string(c.LSN))
 			}
 
-			if i.batchPolicy.Add(msg) {
+			if i.config.batcher.Add(msg) {
 				nextTimedBatchChan = nil
-				flushedBatch, err := i.batchPolicy.Flush(ctx)
+				flushedBatch, err := i.config.batcher.Flush(ctx)
 				if err != nil {
 					return fmt.Errorf("flush batch error: %w", err)
 				}
@@ -270,7 +290,7 @@ func (i *sqlServerCDCInput) consume(ctx context.Context) error {
 					return fmt.Errorf("failed to flush batch: %w", err)
 				}
 			} else {
-				if d, ok := i.batchPolicy.UntilNext(); ok {
+				if d, ok := i.config.batcher.UntilNext(); ok {
 					if nextTimedBatchChan == nil {
 						nextTimedBatchChan = time.After(d)
 					}
@@ -280,8 +300,8 @@ func (i *sqlServerCDCInput) consume(ctx context.Context) error {
 	}
 }
 
-func (i *sqlServerCDCInput) publish() handler {
-	return func(ctx context.Context, msg MessageEvent) error {
+func (i *sqlServerCDCInput) publish() replication.Handler {
+	return func(ctx context.Context, msg replication.MessageEvent) error {
 		// r.logger.Debugf("LSN=%x, CommandID=%d, SeqVal=%x, op=%d table=%s cols=%d\n", c.startLSN, c.commandID, c.seqVal, c.operation, c.table, len(c.columns))
 		select {
 		case i.rawMessageEvents <- msg:
@@ -292,15 +312,15 @@ func (i *sqlServerCDCInput) publish() handler {
 	}
 }
 
-func (i *sqlServerCDCInput) streamChanges(ctx context.Context, stream *changeTableStream, startPos LSN) error {
-	i.logger.Infof("Starting streaming %d change tables", len(i.tables))
-	if err := stream.readChangeTables(ctx, i.db, startPos, i.publish()); err != nil {
+func (i *sqlServerCDCInput) streamChanges(ctx context.Context, stream *replication.ChangeTableStream, startPos replication.LSN) error {
+	i.logger.Infof("Starting streaming %d change table(s)", len(i.config.tables))
+	if err := stream.ReadChangeTables(ctx, i.db, startPos, i.publish()); err != nil {
 		return fmt.Errorf("streaming from change tables: %w", err)
 	}
 	return nil
 }
 
-func (i *sqlServerCDCInput) flushBatch(ctx context.Context, checkpointer *checkpoint.Capped[LSN], batch service.MessageBatch) error {
+func (i *sqlServerCDCInput) flushBatch(ctx context.Context, checkpointer *checkpoint.Capped[replication.LSN], batch service.MessageBatch) error {
 	if len(batch) == 0 {
 		return nil
 	}
@@ -308,7 +328,7 @@ func (i *sqlServerCDCInput) flushBatch(ctx context.Context, checkpointer *checkp
 	lastMsg := batch[len(batch)-1]
 	var checkpointLSN []byte
 	if lsn, ok := lastMsg.MetaGet("start_lsn"); ok {
-		checkpointLSN = LSN(lsn)
+		checkpointLSN = replication.LSN(lsn)
 	}
 	// TODO: Do we want to log an error here or even abort if we can't find checkpoint?
 
@@ -333,13 +353,13 @@ func (i *sqlServerCDCInput) flushBatch(ctx context.Context, checkpointer *checkp
 	}
 }
 
-func (i *sqlServerCDCInput) getCachedLSN(ctx context.Context) (LSN, error) {
+func (i *sqlServerCDCInput) getCachedLSN(ctx context.Context) (replication.LSN, error) {
 	var (
 		cacheVal []byte
 		cErr     error
 	)
-	if err := i.res.AccessCache(ctx, i.lsnCache, func(c service.Cache) {
-		cacheVal, cErr = c.Get(ctx, i.lsnCacheKey)
+	if err := i.res.AccessCache(ctx, i.config.lsnCache, func(c service.Cache) {
+		cacheVal, cErr = c.Get(ctx, i.config.lsnCacheKey)
 	}); err != nil {
 		return nil, fmt.Errorf("unable to access cache for reading: %w", err)
 	}
@@ -350,17 +370,17 @@ func (i *sqlServerCDCInput) getCachedLSN(ctx context.Context) (LSN, error) {
 	} else if len(cacheVal) == 0 {
 		return nil, nil
 	}
-	return LSN(cacheVal), nil
+	return replication.LSN(cacheVal), nil
 }
 
-func (i *sqlServerCDCInput) cacheLSN(ctx context.Context, lsn LSN) error {
+func (i *sqlServerCDCInput) cacheLSN(ctx context.Context, lsn replication.LSN) error {
 	if len(lsn) == 0 {
 		return errors.New("lsn for caching is empty")
 	}
 
 	var cErr error
-	if err := i.res.AccessCache(ctx, i.lsnCache, func(c service.Cache) {
-		cErr = c.Set(ctx, i.lsnCacheKey, lsn, nil)
+	if err := i.res.AccessCache(ctx, i.config.lsnCache, func(c service.Cache) {
+		cErr = c.Set(ctx, i.config.lsnCacheKey, lsn, nil)
 	}); err != nil {
 		return fmt.Errorf("unable to access cache for writing: %w", err)
 	}
@@ -381,21 +401,21 @@ func (i *sqlServerCDCInput) ReadBatch(ctx context.Context) (service.MessageBatch
 	}
 }
 
-func (i *sqlServerCDCInput) processSnapshot(ctx context.Context, snapshot *snapshot) (LSN, error) {
+func (i *sqlServerCDCInput) processSnapshot(ctx context.Context, snapshot *replication.Snapshot) (replication.LSN, error) {
 	var (
-		lsn LSN
+		lsn replication.LSN
 		err error
 	)
-	i.logger.Infof("Starting snapshot of %d tables", len(snapshot.tables))
-	if lsn, err = snapshot.prepare(ctx); err != nil {
-		_ = snapshot.close()
+	i.logger.Infof("Starting snapshot of %d tables", len(snapshot.Tables))
+	if lsn, err = snapshot.Prepare(ctx); err != nil {
+		_ = snapshot.Close()
 		return nil, fmt.Errorf("preparing snapshot: %w", err)
 	}
-	if err = snapshot.read(ctx, i.snapshotMaxBatchSize, i.publish()); err != nil {
-		_ = snapshot.close()
+	if err = snapshot.Read(ctx, i.config.snapshotMaxBatchSize, i.publish()); err != nil {
+		_ = snapshot.Close()
 		return nil, fmt.Errorf("reading snapshot: %w", err)
 	}
-	if err = snapshot.close(); err != nil {
+	if err = snapshot.Close(); err != nil {
 		return nil, fmt.Errorf("closing snapshot connections: %w", err)
 	}
 	i.logger.Infof("Completed running snapshot process")

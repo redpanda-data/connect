@@ -6,7 +6,7 @@
 //
 // https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
-package sqlserver
+package replication
 
 import (
 	"context"
@@ -20,30 +20,35 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-type handler func(ctx context.Context, c MessageEvent) error
+// Handler should be used for processes change events coming from configured change tables and sends them for batching.
+type Handler func(ctx context.Context, c MessageEvent) error
 
-type snapshot struct {
+// Snapshot is responsible for creating snapshots of existing tables based on the Tables configuration value.
+// It will first valiate the list of tables
+type Snapshot struct {
 	db *sql.DB
 	tx *sql.Tx
 
 	snapshotConn *sql.Conn
 	lockConn     *sql.Conn
 
-	tables []string
+	Tables []string
 	logger *service.Logger
 }
 
 // NewSnapshot creates a new instance of snapshot capable of snapshotting provided tables.
-func NewSnapshot(db *sql.DB, tables []string, logger *service.Logger) *snapshot {
-	return &snapshot{
+// It does this by creating a transaction with snapshot level isolation before paging through rows, sending them to be batched.
+func NewSnapshot(db *sql.DB, tables []string, logger *service.Logger) *Snapshot {
+	return &Snapshot{
 		db:     db,
-		tables: tables,
+		Tables: tables,
 		logger: logger,
 	}
 }
 
-func (s *snapshot) prepare(ctx context.Context) (LSN, error) {
-	if len(s.tables) == 0 {
+// Prepare performs initial validation, creating of connections in preparation for snapshotting tables.
+func (s *Snapshot) Prepare(ctx context.Context) (LSN, error) {
+	if len(s.Tables) == 0 {
 		return nil, errors.New("no tables provided")
 	}
 
@@ -73,7 +78,7 @@ func (s *snapshot) prepare(ctx context.Context) (LSN, error) {
 	return toLSN, nil
 }
 
-func (s *snapshot) getTablePrimaryKeys(ctx context.Context, table string) ([]string, error) {
+func (s *Snapshot) getTablePrimaryKeys(ctx context.Context, table string) ([]string, error) {
 	pkSql := `
 	SELECT c.name AS column_name FROM sys.indexes i
 	JOIN sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id
@@ -109,7 +114,7 @@ func (s *snapshot) getTablePrimaryKeys(ctx context.Context, table string) ([]str
 	return pks, nil
 }
 
-func (s *snapshot) querySnapshotTable(ctx context.Context, table string, pk []string, lastSeenPkVal *map[string]any, limit int) (*sql.Rows, error) {
+func (s *Snapshot) querySnapshotTable(ctx context.Context, table string, pk []string, lastSeenPkVal *map[string]any, limit int) (*sql.Rows, error) {
 	snapshotQueryParts := []string{
 		fmt.Sprintf("SELECT TOP (%d) * FROM %s", limit, table),
 	}
@@ -137,7 +142,9 @@ func (s *snapshot) querySnapshotTable(ctx context.Context, table string, pk []st
 	return s.tx.QueryContext(ctx, q, lastSeenPkVals...)
 }
 
-func (s *snapshot) close() error {
+// Close safely closes all open connections opened for the snapshotting process.
+// It should be called after a non-recoverale error or once the snapshot process has completed.
+func (s *Snapshot) Close() error {
 	var errs []error
 
 	if s.tx != nil {
@@ -165,9 +172,10 @@ func (s *snapshot) close() error {
 	return errors.Join(errs...)
 }
 
-func (s *snapshot) read(ctx context.Context, maxBatchSize int, handle handler) error {
+// Read starts the process of iterating through each table, reading rows based on maxBatchSize, sending the row to handle for processing.
+func (s *Snapshot) Read(ctx context.Context, maxBatchSize int, handle Handler) error {
 	// TODO: Process tables in parallel
-	for _, table := range s.tables {
+	for _, table := range s.Tables {
 		tablePks, err := s.getTablePrimaryKeys(ctx, table)
 		if err != nil {
 			return err
