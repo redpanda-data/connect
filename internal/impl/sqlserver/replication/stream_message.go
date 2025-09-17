@@ -25,14 +25,17 @@ func (lsn *LSN) Scan(src any) error {
 
 	switch v := src.(type) {
 	case []byte:
-		// *lsn = append((*lsn)[:0], v...) // reuse underlying array?
-		*lsn = LSN(v)
+		if len(v) == 0 {
+			*lsn = nil
+		} else {
+			// copy to avoid driver buffer reuse
+			*lsn = append((*lsn)[:0], v...)
+		}
+		return nil
 	default:
 		*lsn = nil
 		return fmt.Errorf("cannot scan %T to LSN", src)
 	}
-
-	return nil
 }
 
 // String formats the LSN to the hexidecimal equivalent

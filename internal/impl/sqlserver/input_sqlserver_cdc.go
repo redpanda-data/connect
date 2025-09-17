@@ -327,10 +327,10 @@ func (i *sqlServerCDCInput) flushBatch(ctx context.Context, checkpointer *checkp
 
 	lastMsg := batch[len(batch)-1]
 	var checkpointLSN []byte
+	// snapshot records don't have a start_lsn as we don't track those
 	if lsn, ok := lastMsg.MetaGet("start_lsn"); ok {
 		checkpointLSN = replication.LSN(lsn)
 	}
-	// TODO: Do we want to log an error here or even abort if we can't find checkpoint?
 
 	resolveFn, err := checkpointer.Track(ctx, checkpointLSN, int64(len(batch)))
 	if err != nil {
@@ -339,7 +339,8 @@ func (i *sqlServerCDCInput) flushBatch(ctx context.Context, checkpointer *checkp
 	msg := asyncMessage{
 		msg: batch,
 		ackFn: func(ctx context.Context, _ error) error {
-			if lsn := resolveFn(); len(*lsn) != 0 {
+			lsn := resolveFn()
+			if lsn != nil && len(*lsn) != 0 {
 				return i.cacheLSN(ctx, *lsn)
 			}
 			return nil
@@ -406,7 +407,7 @@ func (i *sqlServerCDCInput) processSnapshot(ctx context.Context, snapshot *repli
 		lsn replication.LSN
 		err error
 	)
-	i.logger.Infof("Starting snapshot of %d tables", len(snapshot.Tables))
+	i.logger.Infof("Starting snapshot of %d table(s)", len(snapshot.Tables))
 	if lsn, err = snapshot.Prepare(ctx); err != nil {
 		_ = snapshot.Close()
 		return nil, fmt.Errorf("preparing snapshot: %w", err)
