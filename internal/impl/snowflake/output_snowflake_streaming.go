@@ -391,7 +391,7 @@ func newSnowflakeStreamer(
 	}
 	var url string
 	if conf.Contains(ssoFieldURL) {
-		url, err = conf.FieldString(ssoFieldAccount)
+		url, err = conf.FieldString(ssoFieldURL)
 		if err != nil {
 			return nil, err
 		}
