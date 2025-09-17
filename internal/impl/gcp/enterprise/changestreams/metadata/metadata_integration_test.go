@@ -349,7 +349,7 @@ func TestIntegrationRealStore(t *testing.T) {
 
 	defer func() {
 		if err := DeletePartitionMetadataTableWithDatabaseAdminClient(
-			context.Background(), s.conf, r.DatabaseAdminClient()); err != nil { //nolint:usetesting // use context.Background
+			context.Background(), s.conf, r.DatabaseAdminClient()); err != nil {
 			t.Log(err)
 		}
 	}()
