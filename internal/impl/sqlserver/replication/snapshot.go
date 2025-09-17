@@ -73,6 +73,9 @@ func (s *Snapshot) Prepare(ctx context.Context) (LSN, error) {
 	// capture max LSN _after_ beginning snapshot transaction
 	if err := s.snapshotConn.QueryRowContext(ctx, "SELECT sys.fn_cdc_get_max_lsn()").Scan(&toLSN); err != nil {
 		return nil, err
+	} else if len(toLSN) == 0 {
+		// rare, but possible if the user enabled CDC on a table seconds before running snapshot or the agent has stopped working for some reason
+		return nil, errors.New("unable to captue max_lsn, this can be due to reasons such as the log scanning agent has stopped")
 	}
 
 	return toLSN, nil
@@ -174,7 +177,6 @@ func (s *Snapshot) Close() error {
 
 // Read starts the process of iterating through each table, reading rows based on maxBatchSize, sending the row to handle for processing.
 func (s *Snapshot) Read(ctx context.Context, maxBatchSize int, handle Handler) error {
-	// TODO: Process tables in parallel
 	for _, table := range s.Tables {
 		tablePks, err := s.getTablePrimaryKeys(ctx, table)
 		if err != nil {
