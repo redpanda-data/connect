@@ -347,7 +347,7 @@ func (m *groupsMigrator) Sync(ctx context.Context, getTopics func() []TopicMappi
 		return false
 	})
 	if len(gcos) == 0 {
-		m.log.Infof("Consumer group migration: no groups to sync")
+		m.log.Infof("Consumer group migration: nothing to do")
 		return nil
 	}
 	topics = extractTopics(gcos)
@@ -386,6 +386,9 @@ func (m *groupsMigrator) Sync(ctx context.Context, getTopics func() []TopicMappi
 		if o1 == unknownOffset {
 			return errors.New("unknown offset")
 		}
+
+		m.log.Debugf("Consumer group migration: translated group '%s' topic '%s' partition %d offset %d to %d",
+			g.Group, g.Topic, g.Partition, offset, o1)
 
 		dstOffset[i] = o1
 		return nil
@@ -430,10 +433,6 @@ func (m *groupsMigrator) Sync(ctx context.Context, getTopics func() []TopicMappi
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-
-			m.log.Debugf("Consumer group migration: translating group '%s' topic '%s' partition %d offset %d",
-				g.Group, g.Topic, g.Partition, o)
-
 			t0 := time.Now()
 			if err := translateOffsetFn(i, o); err != nil {
 				m.log.Errorf("Consumer group migration: group '%s' topic '%s' partition %d failed to translate offset %d to destination cluster: %v - skipping",
@@ -455,7 +454,7 @@ func (m *groupsMigrator) Sync(ctx context.Context, getTopics func() []TopicMappi
 		o := dstOffset[i]
 
 		// Skip invalid offsets, or offsets that failed to translate
-		if o == unknownOffset {
+		if o <= 0 {
 			continue
 		}
 
@@ -465,7 +464,7 @@ func (m *groupsMigrator) Sync(ctx context.Context, getTopics func() []TopicMappi
 
 		// Do not rewind offset
 		if cur, ok := dstOffsets[g].Fetched.Lookup(t, p); ok && cur.Err == nil && cur.At >= o {
-			m.log.Debugf("Consumer group migration: group '%s' topic '%s' partition %d offset %d >= group offset %d - skipping",
+			m.log.Debugf("Consumer group migration: group '%s' topic '%s' partition %d in destination is ahead of translated offset %d >= %d - skipping",
 				g, t, p, cur.At, o)
 			continue
 		}
@@ -504,7 +503,7 @@ func (m *groupsMigrator) Sync(ctx context.Context, getTopics func() []TopicMappi
 		go func(idx int) {
 			defer wg.Done()
 
-			m.log.Debugf("Consumer group migration: committing offsets for group '%s'", g)
+			m.log.Debugf("Consumer group migration: committing offsets for group '%s' %+v", g, offsets)
 
 			t0 := time.Now()
 			resp, err := m.dstAdm.CommitOffsets(ctx, g, offsets)
