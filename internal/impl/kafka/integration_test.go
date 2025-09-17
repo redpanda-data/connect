@@ -319,8 +319,7 @@ output:
 		// Run stream in the background and shut it down when the test is finished
 		closeChan := make(chan struct{})
 		go func() {
-			//nolint:usetesting // context.Background() could be replaced by t.Context()
-			err = stream.Run(context.Background())
+			err = stream.Run(t.Context())
 			require.NoError(t, err)
 
 			t.Log("Migrator pipeline shut down")
