@@ -6,7 +6,7 @@
 //
 // https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
-package sqlserver
+package replication
 
 import (
 	"encoding/hex"
