@@ -145,7 +145,7 @@ func newOutputWriter(conf *service.ParsedConfig, mgr *service.Resources) (*outpu
 		return nil, err
 	}
 	
-	// Build base URL from host - add protocol if not present
+	// Build base URL from host
 	baseURL := host
 	if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
 		baseURL = "https://" + host
@@ -232,23 +232,23 @@ func newOutputWriter(conf *service.ParsedConfig, mgr *service.Resources) (*outpu
 
 // resolveIndexKey resolves encryption key with priority: ENV > existing file > generate new
 func resolveIndexKey(indexName string, logger *service.Logger) ([]byte, error) {
-	// 1. First priority: Check environment variable
+	// Check environment variable
 	if envKey := os.Getenv("CYBORGDB_INDEX_KEY"); envKey != "" {
 		logger.Infof("Using encryption key from CYBORGDB_INDEX_KEY environment variable")
 		return decodeBase64Key(envKey)
 	}
 	
-	// 2. Second priority: Load from existing local file (reuse generated key)
+	// Load from existing local file (reuse generated key)
 	keyFile := filepath.Join(".cyborgdb", fmt.Sprintf("%s.key", indexName))
 	if keyData, err := os.ReadFile(keyFile); err == nil {
 		logger.Debugf("Reusing existing encryption key from: %s", keyFile)
 		return decodeKeyFromFile(string(keyData))
 	}
 	
-	// 3. Last resort: Generate and store new key using CyborgDB SDK (DEV/TEST ONLY)
+	// Generate and store new key using CyborgDB SDK (DEV/TEST ONLY)
 	logger.Infof("No existing key found. Generating new encryption key for index: %s", indexName)
-	logger.Warnf("⚠️  Auto-generating encryption keys is for DEVELOPMENT and TESTING only!")
-	logger.Warnf("⚠️  For production, set CYBORGDB_INDEX_KEY environment variable!")
+	logger.Warnf("Auto-generating encryption keys is for DEVELOPMENT and TESTING only!")
+	logger.Warnf("For production, set CYBORGDB_INDEX_KEY environment variable!")
 	
 	// Generate a new 32-byte key for AES-256 encryption
 	key := make([]byte, KeySize)
@@ -266,9 +266,9 @@ func resolveIndexKey(indexName string, logger *service.Logger) ([]byte, error) {
 	keyFile = filepath.Join(".cyborgdb", fmt.Sprintf("%s.key", indexName))
 	keyFileContent := fmt.Sprintf(`# CyborgDB Development/Testing Encryption Key
 # 
-# ⚠️  WARNING: This is an AUTO-GENERATED key for DEVELOPMENT and TESTING only!
-# ⚠️  DO NOT use auto-generated keys in production environments!
-# ⚠️  DO NOT commit this file to version control!
+#   WARNING: This is an AUTO-GENERATED key for DEVELOPMENT and TESTING only!
+#   DO NOT use auto-generated keys in production environments!
+#   DO NOT commit this file to version control!
 #
 # Generated for index: %s
 # Created by: CyborgDB Go SDK
@@ -286,10 +286,10 @@ func resolveIndexKey(indexName string, logger *service.Logger) ([]byte, error) {
 		logger.Errorf("Failed to save encryption key to %s: %v", keyFile, err)
 		logger.Warnf("Key will only be available for this session!")
 	} else {
-		logger.Infof("🔐 Development key saved to: %s", keyFile)
-		logger.Warnf("📝 Add .cyborgdb/ to your .gitignore file!")
-		logger.Warnf("💾 Keep this development key secure - it's needed to decrypt your data!")
-		logger.Warnf("🏭 For production: export CYBORGDB_INDEX_KEY=\"your-secure-key\"")
+		logger.Infof("Development key saved to: %s", keyFile)
+		logger.Warnf("Add .cyborgdb/ to your .gitignore file!")
+		logger.Warnf("Keep this development key secure - it's needed to decrypt your data!")
+		logger.Warnf("For production: export CYBORGDB_INDEX_KEY=\"your-secure-key\"")
 	}
 	
 	return key, nil
@@ -297,7 +297,7 @@ func resolveIndexKey(indexName string, logger *service.Logger) ([]byte, error) {
 
 // decodeKeyFromFile decodes a base64-encoded key from a key file
 func decodeKeyFromFile(content string) ([]byte, error) {
-	// Extract the key from file content (skip comments)
+	// Extract the key from file content
 	lines := strings.Split(content, "\n")
 	var keyStr string
 	for _, line := range lines {
@@ -424,10 +424,10 @@ func (w *outputWriter) upsertBatch(ctx context.Context, batch service.MessageBat
 		return nil // Nothing to do for empty batch
 	}
 
-	// Pre-allocate with exact size for better memory efficiency
+	// Pre-allocate
 	items := make([]cyborgdb.VectorItem, 0, batchSize)
 
-	// Use batch executors for better performance and consistency
+	// Use batch executors
 	idExec := batch.InterpolationExecutor(w.id)
 	var vectorExec *service.MessageBatchBloblangExecutor
 	if w.vectorMapping != nil {
@@ -480,20 +480,17 @@ func (w *outputWriter) upsertBatch(ctx context.Context, batch service.MessageBat
 			}
 		}
 		
-		// Handle different vector result types - optimized to avoid unnecessary conversions
+		// Handle different vector result types
 		var vector []float32
 		switch v := vecResult.(type) {
 		case []float32:
-			// Direct use - no conversion needed!
 			vector = v
 		case []float64:
-			// Direct conversion without intermediate []interface{}
 			vector = make([]float32, len(v))
 			for i, val := range v {
 				vector[i] = float32(val)
 			}
 		case []interface{}:
-			// Only convert when necessary
 			vector = make([]float32, len(v))
 			for i, elem := range v {
 				switch val := elem.(type) {
@@ -506,7 +503,6 @@ func (w *outputWriter) upsertBatch(ctx context.Context, batch service.MessageBat
 				case int64:
 					vector[i] = float32(val)
 				case json.Number:
-					// Handle json.Number type (common when parsing JSON)
 					f, err := val.Float64()
 					if err != nil {
 						return fmt.Errorf("vector element %d cannot be converted to float: %w", i, err)
@@ -547,7 +543,6 @@ func (w *outputWriter) upsertBatch(ctx context.Context, batch service.MessageBat
 			}
 		} else if w.metadataMapping == nil {
 			// Extract metadata from structured message only if no mapping provided
-			// Get all fields except id and vector as metadata
 			msg := batch[i]
 			structured, err := msg.AsStructured()
 			if err == nil {
@@ -585,7 +580,7 @@ func (w *outputWriter) upsertBatch(ctx context.Context, batch service.MessageBat
 
 func (w *outputWriter) deleteBatch(ctx context.Context, batch service.MessageBatch) error {
 	if len(batch) == 0 {
-		return nil // Nothing to do for empty batch
+		return nil
 	}
 
 	ids := make([]string, 0, len(batch))

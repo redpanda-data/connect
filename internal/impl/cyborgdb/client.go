@@ -47,18 +47,16 @@ func (c *realClient) ListIndexes(ctx context.Context) ([]string, error) {
 
 func (c *realClient) CreateIndex(ctx context.Context, indexName string, indexKey []byte) (*cyborgdb.EncryptedIndex, error) {
 	// Create index with IVFFlat configuration - CyborgDB will auto-detect dimension
-	// We use dimension 0 initially as CyborgDB will auto-detect from first vector
 	params := &cyborgdb.CreateIndexParams{
 		IndexName:   indexName,
 		IndexKey:    indexKey,
-		IndexConfig: cyborgdb.IndexIVFFlat(0), // Auto-detect dimension
+		IndexConfig: cyborgdb.IndexIVFFlat(0),
 	}
 
 	return c.client.CreateIndex(ctx, params)
 }
 
 func (c *realClient) GetIndex(ctx context.Context, indexName string, indexKey []byte) (*cyborgdb.EncryptedIndex, error) {
-	// LoadIndex loads an existing index
 	return c.client.LoadIndex(ctx, indexName, indexKey)
 }
 
@@ -75,15 +73,12 @@ func (c *realIndexClient) Delete(ctx context.Context, ids []string) error {
 }
 
 func (c *realIndexClient) Close() error {
-	// CyborgDB doesn't need explicit connection closing
 	return nil
 }
 
-// Helper function to convert error if index not found
 func isIndexNotFound(err error) bool {
 	if err == nil {
 		return false
 	}
-	// Check if error message contains index not found indication
 	return fmt.Sprintf("%v", err) == "index not found" || fmt.Sprintf("%v", err) == "404 Not Found"
 }

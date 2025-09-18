@@ -66,8 +66,7 @@ func (c *mockClient) CreateIndex(ctx context.Context, indexName string, indexKey
 		closed:  false,
 	}
 	c.indexes[indexName] = idx
-	
-	// Return a fake EncryptedIndex - in real tests we'd need to properly mock this
+
 	return nil, nil
 }
 
@@ -80,7 +79,6 @@ func (c *mockClient) GetIndex(ctx context.Context, indexName string, indexKey []
 		return nil, fmt.Errorf("index not found")
 	}
 	
-	// Return a fake EncryptedIndex - in real tests we'd need to properly mock this
 	return nil, nil
 }
 
@@ -240,8 +238,6 @@ func TestOutputWriter_UpsertBatch(t *testing.T) {
 	
 	indexKey, _ := base64.StdEncoding.DecodeString(generateTestKey())
 	
-	// Don't use vector mapping in the test - it doesn't work with structured messages
-	// The real usage would have JSON content, not structured
 	var vectorMapping *bloblang.Executor = nil
 	var metadataMapping *bloblang.Executor = nil
 	
@@ -340,7 +336,7 @@ func TestOutputWriter_DeleteBatch(t *testing.T) {
 	// Verify vectors were deleted
 	assert.Equal(t, 1, len(mockIndex.vectors))
 	assert.Nil(t, mockIndex.vectors["vec1"])
-	assert.NotNil(t, mockIndex.vectors["vec2"]) // Should still exist
+	assert.NotNil(t, mockIndex.vectors["vec2"])
 	assert.Nil(t, mockIndex.vectors["vec3"])
 }
 
@@ -420,7 +416,7 @@ func TestOutputWriter_InvalidVectorType(t *testing.T) {
 		"id": "test-vec",
 		"vector": []interface{}{
 			0.1,
-			"invalid", // String instead of number
+			"invalid", // Invalid type
 			0.3,
 		},
 	})

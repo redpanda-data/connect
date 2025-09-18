@@ -106,7 +106,6 @@ metadata_mapping: root = this.metadata
 	mgr := service.MockResources()
 	
 	// Create output
-	
 	writer, err := newOutputWriter(outputParsedConf, mgr)
 	require.NoError(t, err)
 	
