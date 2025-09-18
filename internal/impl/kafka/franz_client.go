@@ -52,7 +52,7 @@ func FranzConnectionFields() []*service.ConfigField {
 		service.NewTLSToggledField(kfcFieldTLS),
 		SASLFields(),
 		service.NewDurationField(kfcFieldMetadataMaxAge).
-			Description("The maximum age of metadata before it is refreshed.").
+			Description("The maximum age of metadata before it is refreshed. This interval also controls how frequently regex topic patterns are re-evaluated to discover new matching topics.").
 			Default("5m").
 			Advanced(),
 		service.NewDurationField(kfcFieldRequestTimeoutOverhead).
