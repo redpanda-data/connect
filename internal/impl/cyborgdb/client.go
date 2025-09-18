@@ -37,15 +37,15 @@ type (
 	}
 )
 
-type realClient struct {
+type cyborgdbClient struct {
 	client *cyborgdb.Client
 }
 
-func (c *realClient) ListIndexes(ctx context.Context) ([]string, error) {
+func (c *cyborgdbClient) ListIndexes(ctx context.Context) ([]string, error) {
 	return c.client.ListIndexes(ctx)
 }
 
-func (c *realClient) CreateIndex(ctx context.Context, indexName string, indexKey []byte) (*cyborgdb.EncryptedIndex, error) {
+func (c *cyborgdbClient) CreateIndex(ctx context.Context, indexName string, indexKey []byte) (*cyborgdb.EncryptedIndex, error) {
 	// Create index with IVFFlat configuration - CyborgDB will auto-detect dimension
 	params := &cyborgdb.CreateIndexParams{
 		IndexName:   indexName,
@@ -56,23 +56,23 @@ func (c *realClient) CreateIndex(ctx context.Context, indexName string, indexKey
 	return c.client.CreateIndex(ctx, params)
 }
 
-func (c *realClient) GetIndex(ctx context.Context, indexName string, indexKey []byte) (*cyborgdb.EncryptedIndex, error) {
+func (c *cyborgdbClient) GetIndex(ctx context.Context, indexName string, indexKey []byte) (*cyborgdb.EncryptedIndex, error) {
 	return c.client.LoadIndex(ctx, indexName, indexKey)
 }
 
-type realIndexClient struct {
+type cyborgdbEncryptedIndex struct {
 	index *cyborgdb.EncryptedIndex
 }
 
-func (c *realIndexClient) Upsert(ctx context.Context, items []cyborgdb.VectorItem) error {
+func (c *cyborgdbEncryptedIndex) Upsert(ctx context.Context, items []cyborgdb.VectorItem) error {
 	return c.index.Upsert(ctx, items)
 }
 
-func (c *realIndexClient) Delete(ctx context.Context, ids []string) error {
+func (c *cyborgdbEncryptedIndex) Delete(ctx context.Context, ids []string) error {
 	return c.index.Delete(ctx, ids)
 }
 
-func (c *realIndexClient) Close() error {
+func (c *cyborgdbEncryptedIndex) Close() error {
 	return nil
 }
 

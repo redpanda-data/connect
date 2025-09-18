@@ -215,7 +215,7 @@ func newOutputWriter(conf *service.ParsedConfig, mgr *service.Resources) (*outpu
 	}
 	
 	w := outputWriter{
-		client:          &realClient{cyborgClient},
+		client:          &cyborgdbClient{cyborgClient},
 		host:            host,
 		indexName:       indexName,
 		indexKey:        indexKey,
@@ -394,7 +394,7 @@ func (w *outputWriter) Connect(ctx context.Context) error {
 		w.logger.Infof("Successfully created CyborgDB index %s", w.indexName)
 	}
 	
-	w.index = &realIndexClient{index}
+	w.index = &cyborgdbEncryptedIndex{index}
 	w.init = true
 	w.logger.Tracef("Connected to CyborgDB index %s", w.indexName)
 	
