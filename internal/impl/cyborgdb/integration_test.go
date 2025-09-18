@@ -48,7 +48,21 @@ func TestIntegration(t *testing.T) {
 	if apiKey == "" {
 		t.Skip("CYBORGDB_API_KEY not set")
 	}
-	
+
+	// Check if CyborgDB server is available
+	client, err := cyborgdb.NewClient(baseURL, apiKey, false)
+	if err != nil {
+		t.Skipf("Failed to create CyborgDB client: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err = client.ListIndexes(ctx)
+	if err != nil {
+		t.Skipf("CyborgDB server not available at %s: %v", baseURL, err)
+	}
+
 	// Generate a unique index name for this test run
 	indexName := fmt.Sprintf("test-index-%d", time.Now().Unix())
 
