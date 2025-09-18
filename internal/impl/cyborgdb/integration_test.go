@@ -50,7 +50,7 @@ func TestIntegration(t *testing.T) {
 	}
 
 	// Check if CyborgDB server is available, skip cyborgdb integrated tests if not
-	client, err := cyborgdb.NewClient(baseURL, apiKey, false)
+	client, err := cyborgdb.NewClient(baseURL, apiKey)
 	if err != nil {
 		t.Skipf("Failed to create CyborgDB client: %v", err)
 	}

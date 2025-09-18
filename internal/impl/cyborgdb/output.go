@@ -156,7 +156,7 @@ func newOutputWriter(conf *service.ParsedConfig, mgr *service.Resources) (*outpu
 		return nil, err
 	}
 	
-	cyborgClient, err := cyborgdb.NewClient(baseURL, apiKey, false)
+	cyborgClient, err := cyborgdb.NewClient(baseURL, apiKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create CyborgDB client: %w", err)
 	}
