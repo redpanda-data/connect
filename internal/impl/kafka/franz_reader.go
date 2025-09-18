@@ -132,7 +132,7 @@ Finally, it's also possible to specify an explicit offset to consume from by add
 			Example([]string{"foo:0,bar:1,bar:3"}).
 			Example([]string{"foo:0-5"}),
 		service.NewBoolField(kfrFieldRegexpTopics).
-			Description("Whether listed topics should be interpreted as regular expression patterns for matching multiple topics. When topics are specified with explicit partitions this field must remain set to `false`.").
+			Description("Whether listed topics should be interpreted as regular expression patterns for matching multiple topics. When enabled, the client will periodically refresh the list of matching topics based on the `metadata_max_age` interval. When topics are specified with explicit partitions this field must remain set to `false`.").
 			Default(false),
 		service.NewStringField(kfrFieldRackID).
 			Description("A rack specifies where the client is physically located and changes fetch requests to consume from the closest replica as opposed to the leader replica.").
