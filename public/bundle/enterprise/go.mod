@@ -305,7 +305,7 @@ require (
 	github.com/prometheus/procfs v0.17.0 // indirect
 	github.com/pusher/pusher-http-go v4.0.1+incompatible // indirect
 	github.com/qdrant/go-client v1.15.2 // indirect
-	github.com/questdb/go-questdb-client/v3 v3.2.0 // indirect
+	github.com/questdb/go-questdb-client/v4 v4.0.0 // indirect
 	github.com/quipo/dependencysolver v0.0.0-20170801134659-2b009cb4ddcc // indirect
 	github.com/r3labs/diff/v3 v3.0.2 // indirect
 	github.com/rabbitmq/amqp091-go v1.10.0 // indirect

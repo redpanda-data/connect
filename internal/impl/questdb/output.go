@@ -22,7 +22,7 @@ import (
 	"net/http"
 	"time"
 
-	qdb "github.com/questdb/go-questdb-client/v3"
+	qdb "github.com/questdb/go-questdb-client/v4"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
