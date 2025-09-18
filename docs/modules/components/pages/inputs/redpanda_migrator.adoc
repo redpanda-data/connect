@@ -505,7 +505,7 @@ An external ID to provide when assuming a role.
 
 === `metadata_max_age`
 
-The maximum age of metadata before it is refreshed.
+The maximum age of metadata before it is refreshed. This interval also controls how frequently regex topic patterns are re-evaluated to discover new matching topics.
 
 
 *Type*: `string`
@@ -569,7 +569,7 @@ topics:
 
 === `regexp_topics`
 
-Whether listed topics should be interpreted as regular expression patterns for matching multiple topics. When topics are specified with explicit partitions this field must remain set to `false`.
+Whether listed topics should be interpreted as regular expression patterns for matching multiple topics. When enabled, the client will periodically refresh the list of matching topics based on the `metadata_max_age` interval. When topics are specified with explicit partitions this field must remain set to `false`.
 
 
 *Type*: `bool`
