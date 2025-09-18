@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package jira
 
 import (
@@ -13,13 +27,14 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/jira/helpers/jira_helper"
 )
 
-/*
-This is the general function that calls Jira API on a specific URL using the URL object.
-It applies standard header parameters to all calls, Authorization, User-Agent and Accept.
-It uses the helper functions to check against possible response codes and handling the retry-after mechanism
-*/
+// JiraAPIBasePath is the base path for Jira Rest API
+const JiraAPIBasePath = "/rest/api/3"
+
+// This is the general function that calls Jira API on a specific URL using the URL object.
+// It applies standard header parameters to all calls, Authorization, User-Agent and Accept.
+// It uses the helper functions to check against possible response codes and handling the retry-after mechanism
 func (j *jiraProc) callJiraApi(ctx context.Context, u *url.URL) ([]byte, error) {
-	j.debug("API call: %s", u.String())
+	j.log.Debugf("API call: %s", u.String())
 
 	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
 	if err != nil {
@@ -42,13 +57,11 @@ func (j *jiraProc) callJiraApi(ctx context.Context, u *url.URL) ([]byte, error) 
 	return body, nil
 }
 
-/*
-Function to get all Custom Fields from Jira API and placing them into a map
-Then iterate over the map and the fields from a Fields input message to check if any of the fields are custom
-
-Note that this supports custom fields that are nested, like if "Sprint.name" is present into the Fields input message -> this will be translated to "custom_field_10022.name"
-Returns only the custom fields present in the Fields input message as a map[fieldName]=customFieldName
-*/
+// Function to get all Custom Fields from Jira API and placing them into a map
+// Then iterate over the map and the fields from a Fields input message to check if any of the fields are custom
+//
+// Note that this supports custom fields that are nested, like if "Sprint.name" is present into the Fields input message -> this will be translated to "custom_field_10022.name"
+// Returns only the custom fields present in the Fields input message as a map[fieldName]=customFieldName
 func (j *jiraProc) getAllCustomFields(ctx context.Context, fieldsToSearch []string) (map[string]string, error) {
 	j.log.Debug("Fetching custom fields from API")
 

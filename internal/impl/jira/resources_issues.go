@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package jira
 
 import (
@@ -10,42 +24,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-/*
-SearchResource performs a search for a specific resource
-*/
-func SearchResource(
-	ctx context.Context,
-	j *jiraProc,
-	resource ResourceType,
-	inputQuery *JsonInputQuery,
-	customFields map[string]string,
-	params map[string]string,
-) (service.MessageBatch, error) {
-	switch resource {
-	case ResourceIssue:
-		return j.searchIssuesResource(ctx, inputQuery, customFields, params)
-	case ResourceIssueTransition:
-		return j.searchIssueTransitionsResource(ctx, inputQuery, customFields, params)
-	case ResourceProject:
-		return j.searchProjectsResource(ctx, inputQuery, customFields, params)
-	case ResourceProjectType:
-		return j.searchProjectTypesResource(ctx, inputQuery, customFields)
-	case ResourceProjectCategory:
-		return j.searchProjectCategoriesResource(ctx, inputQuery, customFields)
-	case ResourceRole:
-		return j.searchRolesResource(ctx, inputQuery, customFields)
-	case ResourceProjectVersion:
-		return j.searchProjectVersionsResource(ctx, inputQuery, customFields)
-	case ResourceUser:
-		return j.searchUsersResource(ctx, inputQuery, customFields, params)
-	default:
-		return nil, fmt.Errorf("unhandled resource type: %s", resource)
-	}
-}
-
-/**
- * Search issues resource
- */
+// searchIssuesResource performs a search for the issues resource
 func (j *jiraProc) searchIssuesResource(
 	ctx context.Context,
 	inputQuery *JsonInputQuery,
@@ -94,11 +73,9 @@ func (j *jiraProc) searchIssuesResource(
 	return batch, nil
 }
 
-/*
-Function to get all Issues from Jira API and placing them into an array of issues.
-If the nextPageToken is present in the response, then it will fetch the next page until isLast is true
-Returns the array of []Issue
-*/
+// searchAllIssues function to get all Issues from Jira API and placing them into an array of issues.
+// If the nextPageToken is present in the response, then it will fetch the next page until isLast is true.
+// Returns the array of []Issue
 func (j *jiraProc) searchAllIssues(ctx context.Context, queryParams map[string]string) ([]Issue, error) {
 	var all []Issue
 	next := ""
@@ -116,10 +93,8 @@ func (j *jiraProc) searchAllIssues(ctx context.Context, queryParams map[string]s
 	return all, nil
 }
 
-/*
-Function to get a single page of issues using nextPageToken strategy
-The maxResults can be overridden by the processor parameters (up to 5000 - default 50)
-*/
+// searchIssuesPage function to get a single page of issues using nextPageToken strategy
+// The maxResults can be overridden by the processor parameters (up to 5000 - default 50)
 func (j *jiraProc) searchIssuesPage(ctx context.Context, qp map[string]string, nextPageToken string) (*JQLSearchResponse, error) {
 	apiUrl, err := url.Parse(j.baseURL + JiraAPIBasePath + "/search/jql")
 	if err != nil {
@@ -148,20 +123,16 @@ func (j *jiraProc) searchIssuesPage(ctx context.Context, qp map[string]string, n
 	return &result, nil
 }
 
-/*
-searchIssueTransitionsResource retrieves all possible transitions for a given
-Jira issue and converts them into a batch of service messages.
-
-Parameters:
-- ctx: context.Context → request-scoped context for cancellation and timeouts
-- q: *JsonInputQuery → input query containing issue details and requested fields
-- custom: map[string]string → mapping of display names to custom field keys
-- params: map[string]string → query parameters for the Jira API request
-
-Returns:
-- service.MessageBatch → batch of messages containing transformed transitions
-- error → error if the API call, response parsing, or field processing fails
-*/
+// searchIssueTransitionsResource retrieves all possible transitions for a given
+// Jira issue and converts them into a batch of service messages.
+// Parameters:
+// - ctx: context.Context → request-scoped context for cancellation and timeouts
+// - q: *JsonInputQuery → input query containing issue details and requested fields
+// - custom: map[string]string → mapping of display names to custom field keys
+// - params: map[string]string → query parameters for the Jira API request
+// Returns:
+// - service.MessageBatch → batch of messages containing transformed transitions
+// - error → error if the API call, response parsing, or field processing fails
 func (j *jiraProc) searchIssueTransitionsResource(ctx context.Context, q *JsonInputQuery, custom, params map[string]string) (service.MessageBatch, error) {
 	var batch service.MessageBatch
 

@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package jira
 
 import (
@@ -10,11 +24,9 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-/*
-Function to get a single page of issues using startAt offset strategy
-The maxResults can be overridden by the processor parameters (up to 5000 - default 50)
-*/
-func (j *jiraProc) searchUsersPage(ctx context.Context, queryParams map[string]string, startAt int) ([]interface{}, error) {
+// searchUsersPage is a function which gets a single page of issues using startAt offset strategy
+// The maxResults can be overridden by the processor parameters (up to 5000 - default 50)
+func (j *jiraProc) searchUsersPage(ctx context.Context, queryParams map[string]string, startAt int) ([]any, error) {
 	apiUrl, err := url.Parse(j.baseURL + JiraAPIBasePath + "/users/search")
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL: %v", err)
@@ -35,7 +47,7 @@ func (j *jiraProc) searchUsersPage(ctx context.Context, queryParams map[string]s
 		return nil, err
 	}
 
-	var results []interface{}
+	var results []any
 	if err := json.Unmarshal(body, &results); err != nil {
 		return nil, fmt.Errorf("cannot map response to struct: %w", err)
 	}
@@ -43,20 +55,16 @@ func (j *jiraProc) searchUsersPage(ctx context.Context, queryParams map[string]s
 	return results, nil
 }
 
-/*
-searchAllUsers retrieves all Jira users by performing paginated API calls until
-no more results are returned.
-
-Parameters:
-- ctx: context.Context → request context for cancellation and timeouts
-- queryParams: map[string]string → query parameters for the Jira API request
-
-Returns:
-- []interface{} → list of all retrieved users
-- error → error if a paginated request fails
-*/
-func (j *jiraProc) searchAllUsers(ctx context.Context, queryParams map[string]string) ([]interface{}, error) {
-	var allUsers []interface{}
+// searchAllUsers retrieves all Jira users by performing paginated API calls until
+// no more results are returned.
+// Parameters:
+// - ctx: context.Context → request context for cancellation and timeouts
+// - queryParams: map[string]string → query parameters for the Jira API request
+// Returns:
+// - []any → list of all retrieved users
+// - error → error if a paginated request fails
+func (j *jiraProc) searchAllUsers(ctx context.Context, queryParams map[string]string) ([]any, error) {
+	var allUsers []any
 
 	startAt := 0
 	for {
@@ -77,20 +85,16 @@ func (j *jiraProc) searchAllUsers(ctx context.Context, queryParams map[string]st
 	return allUsers, nil
 }
 
-/*
-searchUsersResource queries Jira for users based on the provided parameters and
-returns them as a batch of service messages.
-
-Parameters:
-- ctx: context.Context → request context for cancellation and timeouts
-- inputQuery: *JsonInputQuery → user input specifying requested fields
-- customFields: map[string]string → mapping of display names to custom field keys
-- params: map[string]string → query parameters for the Jira API request
-
-Returns:
-- service.MessageBatch → batch of messages containing transformed users
-- error → error if the API call, response parsing, or field processing fails
-*/
+// searchUsersResource queries Jira for users based on the provided parameters and
+// returns them as a batch of service messages.
+// Parameters:
+// - ctx: context.Context → request context for cancellation and timeouts
+// - inputQuery: *JsonInputQuery → user input specifying requested fields
+// - customFields: map[string]string → mapping of display names to custom field keys
+// - params: map[string]string → query parameters for the Jira API request
+// Returns:
+// - service.MessageBatch → batch of messages containing transformed users
+// - error → error if the API call, response parsing, or field processing fails
 func (j *jiraProc) searchUsersResource(
 	ctx context.Context,
 	inputQuery *JsonInputQuery,

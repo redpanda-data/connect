@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package jira
 
 import (
@@ -91,8 +105,8 @@ func TestProcessor_EndToEnd_Issues(t *testing.T) {
 			if q.Get("nextPageToken") == "" {
 				_ = json.NewEncoder(w).Encode(JQLSearchResponse{
 					Issues: []Issue{
-						{ID: "10001", Key: "DEMO-1", Fields: map[string]interface{}{"summary": "A1"}},
-						{ID: "10002", Key: "DEMO-2", Fields: map[string]interface{}{"summary": "A2"}},
+						{ID: "10001", Key: "DEMO-1", Fields: map[string]any{"summary": "A1"}},
+						{ID: "10002", Key: "DEMO-2", Fields: map[string]any{"summary": "A2"}},
 					},
 					IsLast:        false,
 					NextPageToken: "tok-2",
@@ -106,7 +120,7 @@ func TestProcessor_EndToEnd_Issues(t *testing.T) {
 			}
 			_ = json.NewEncoder(w).Encode(JQLSearchResponse{
 				Issues: []Issue{
-					{ID: "10003", Key: "DEMO-3", Fields: map[string]interface{}{"summary": "A3"}},
+					{ID: "10003", Key: "DEMO-3", Fields: map[string]any{"summary": "A3"}},
 				},
 				IsLast: true,
 			})
@@ -159,7 +173,7 @@ func TestProcessor_EndToEnd_Issues(t *testing.T) {
 	}
 
 	// Make sure custom fields were passed through normalization/filtering:
-	fields0 := out0.Fields.(map[string]interface{})
+	fields0 := out0.Fields.(map[string]any)
 	// We expect fields to include "summary" and possibly "changelog" (added by Transform).
 	if _, ok := fields0["summary"]; !ok {
 		t.Fatalf("expected summary in filtered fields")
@@ -214,9 +228,9 @@ func TestProcessor_EndToEnd_Projects(t *testing.T) {
 			// First call: no startAt -> provide NextPage with startAt=2
 			if callsProject == 1 {
 				_ = json.NewEncoder(w).Encode(ProjectSearchResponse{
-					Projects: []interface{}{
-						map[string]interface{}{"id": "P1", "key": "PRJ-1", "name": "Project 1"},
-						map[string]interface{}{"id": "P2", "key": "PRJ-2", "name": "Project 2"},
+					Projects: []any{
+						map[string]any{"id": "P1", "key": "PRJ-1", "name": "Project 1"},
+						map[string]any{"id": "P2", "key": "PRJ-2", "name": "Project 2"},
 					},
 					IsLast:   false,
 					NextPage: "https://" + r.Host + "/rest/api/3/project/search?startAt=2",
@@ -228,8 +242,8 @@ func TestProcessor_EndToEnd_Projects(t *testing.T) {
 				t.Errorf("expected startAt=2, got %q", q.Get("startAt"))
 			}
 			_ = json.NewEncoder(w).Encode(ProjectSearchResponse{
-				Projects: []interface{}{
-					map[string]interface{}{"id": "P3", "key": "PRJ-3", "name": "Project 3"},
+				Projects: []any{
+					map[string]any{"id": "P3", "key": "PRJ-3", "name": "Project 3"},
 				},
 				IsLast: true,
 			})

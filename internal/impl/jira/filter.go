@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package jira
 
 import (
@@ -6,10 +20,8 @@ import (
 	"strings"
 )
 
-/*
-selectorTree is used to build a tree from the elements present in Fields input message
-The tree is then used for filtering output messages and including only what is present in the Fields
-*/
+// selectorTree is used to build a tree from the elements present in Fields input message
+// The tree is then used for filtering output messages and including only what is present in the Fields
 type selectorTree map[string]selectorTree
 
 /*
@@ -52,7 +64,7 @@ Will result in returning a tree of the form:
 	}
 */
 func (j *jiraProc) buildSelectorTree(fields []string, custom map[string]string) (selectorTree, error) {
-	j.debug("building selector tree based on filters: %v", fields)
+	j.log.Debugf("building selector tree based on filters: %v", fields)
 	tree := make(selectorTree)
 	for _, field := range fields {
 		if strings.TrimSpace(field) == "" {
@@ -81,16 +93,14 @@ func (j *jiraProc) buildSelectorTree(fields []string, custom map[string]string) 
 	return tree, nil
 }
 
-/*
-The filter function takes the data JSON and selectorTree and returns only what is
-found in the selectorTree by comparing keys from data and keys from selectorTree.
-If customFields are present in the data, they will also be replaced with their real name;
-example: custom_field_10100 will be replaced with "Story Points"
-*/
-func (j *jiraProc) filter(data interface{}, selectors selectorTree, custom map[string]string) (interface{}, error) {
+// The filter function takes the data JSON and selectorTree and returns only what is
+// found in the selectorTree by comparing keys from data and keys from selectorTree.
+// If customFields are present in the data, they will also be replaced with their real name;
+// example: custom_field_10100 will be replaced with "Story Points"
+func (j *jiraProc) filter(data any, selectors selectorTree, custom map[string]string) (any, error) {
 	switch val := data.(type) {
-	case map[string]interface{}:
-		res := make(map[string]interface{})
+	case map[string]any:
+		res := make(map[string]any)
 		for key, sub := range selectors {
 			if subData, ok := val[key]; ok {
 				if len(sub) > 0 {
@@ -113,8 +123,8 @@ func (j *jiraProc) filter(data interface{}, selectors selectorTree, custom map[s
 			}
 		}
 		return res, nil
-	case []interface{}:
-		out := make([]interface{}, 0, len(val))
+	case []any:
+		out := make([]any, 0, len(val))
 		for _, it := range val {
 			filtered, err := j.filter(it, selectors, custom)
 			if err != nil {
@@ -133,15 +143,11 @@ func (j *jiraProc) filter(data interface{}, selectors selectorTree, custom map[s
 	}
 }
 
-/*
-reverseCustomFields creates a new map by swapping keys and values from the input map.
-
-Parameters:
-- m: map[string]string → input map to reverse
-
-Returns:
-- map[string]string → new map with values as keys and keys as values
-*/
+// reverseCustomFields creates a new map by swapping keys and values from the input map.
+// Parameters:
+// - m: map[string]string → input map to reverse
+// Returns:
+// - map[string]string → new map with values as keys and keys as values
 func reverseCustomFields(m map[string]string) map[string]string {
 	r := make(map[string]string, len(m))
 	for k, v := range m {
@@ -150,17 +156,12 @@ func reverseCustomFields(m map[string]string) map[string]string {
 	return r
 }
 
-/*
-normalizeInputFields replaces field names in the query with their corresponding
-custom field keys when available.
-
-Parameters:
-- q: *JsonInputQuery → query object containing the list of fields
-- custom: map[string]string → mapping of display names to custom field keys
-
-Returns:
-- none (modifies q.Fields in place)
-*/
+// normalizeInputFields replaces field names in the query with their corresponding  custom field keys when available.
+// Parameters:
+// - q: *JsonInputQuery → query object containing the list of fields
+// - custom: map[string]string → mapping of display names to custom field keys
+// Returns:
+// - none (modifies q.Fields in place)
 func normalizeInputFields(q *JsonInputQuery, custom map[string]string) {
 	for i, v := range q.Fields {
 		if dot := strings.Index(v, "."); dot != -1 {

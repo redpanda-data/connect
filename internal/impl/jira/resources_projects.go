@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package jira
 
 import (
@@ -10,20 +24,16 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-/*
-searchProjectsResource retrieves Jira projects based on the provided parameters
-and returns them as a batch of service messages.
-
-Parameters:
-- ctx: context.Context → request context for cancellation and timeouts
-- inputQuery: *JsonInputQuery → query object containing requested fields
-- customFields: map[string]string → mapping of display names to custom field keys
-- params: map[string]string → query parameters for the Jira API request
-
-Returns:
-- service.MessageBatch → batch of messages containing transformed projects
-- error → error if the API call, response parsing, or field processing fails
-*/
+// searchProjectsResource retrieves Jira projects based on the provided parameters
+// and returns them as a batch of service messages.
+// Parameters:
+// - ctx: context.Context → request context for cancellation and timeouts
+// - inputQuery: *JsonInputQuery → query object containing requested fields
+// - customFields: map[string]string → mapping of display names to custom field keys
+// - params: map[string]string → query parameters for the Jira API request
+// Returns:
+// - service.MessageBatch → batch of messages containing transformed projects
+// - error → error if the API call, response parsing, or field processing fails
 func (j *jiraProc) searchProjectsResource(
 	ctx context.Context,
 	inputQuery *JsonInputQuery,
@@ -69,20 +79,15 @@ func (j *jiraProc) searchProjectsResource(
 	return batch, nil
 }
 
-/*
-searchAllProjects retrieves all Jira projects by performing paginated API calls
-until all results are collected.
-
-Parameters:
-- ctx: context.Context → request context for cancellation and timeouts
-- queryParams: map[string]string → query parameters for the Jira API request
-
-Returns:
-- []interface{} → list of all retrieved projects
-- error → error if a paginated request or response parsing fails
-*/
-func (j *jiraProc) searchAllProjects(ctx context.Context, queryParams map[string]string) ([]interface{}, error) {
-	var all []interface{}
+// searchAllProjects retrieves all Jira projects by performing paginated API calls until all results are collected.
+// Parameters:
+// - ctx: context.Context → request context for cancellation and timeouts
+// - queryParams: map[string]string → query parameters for the Jira API request
+// Returns:
+// - []any → list of all retrieved projects
+// - error → error if a paginated request or response parsing fails
+func (j *jiraProc) searchAllProjects(ctx context.Context, queryParams map[string]string) ([]any, error) {
+	var all []any
 	startAt := 0
 	for {
 		res, err := j.searchProjectsPage(ctx, queryParams, startAt)
@@ -110,10 +115,8 @@ func (j *jiraProc) searchAllProjects(ctx context.Context, queryParams map[string
 	return all, nil
 }
 
-/*
-Function to get a single page of issues using startAt offset strategy
-The maxResults can be overridden by the processor parameters (up to 5000 - default 50)
-*/
+// Function to get a single page of issues using startAt offset strategy
+// The maxResults can be overridden by the processor parameters (up to 5000 - default 50)
 func (j *jiraProc) searchProjectsPage(ctx context.Context, qp map[string]string, startAt int) (*ProjectSearchResponse, error) {
 	urlString, err := url.Parse(j.baseURL + JiraAPIBasePath + "/project/search")
 	if err != nil {
@@ -142,19 +145,14 @@ func (j *jiraProc) searchProjectsPage(ctx context.Context, qp map[string]string,
 	return &result, nil
 }
 
-/*
-searchProjectTypesResource retrieves all Jira project types and returns them as
-a batch of service messages.
-
-Parameters:
-- ctx: context.Context → request context for cancellation and timeouts
-- q: *JsonInputQuery → query object containing requested fields
-- custom: map[string]string → mapping of display names to custom field keys
-
-Returns:
-- service.MessageBatch → batch of messages containing transformed project types
-- error → error if the API call, response parsing, or field processing fails
-*/
+// searchProjectTypesResource retrieves all Jira project types and returns them as a batch of service messages.
+// Parameters:
+// - ctx: context.Context → request context for cancellation and timeouts
+// - q: *JsonInputQuery → query object containing requested fields
+// - custom: map[string]string → mapping of display names to custom field keys
+// Returns:
+// - service.MessageBatch → batch of messages containing transformed project types
+// - error → error if the API call, response parsing, or field processing fails
 func (j *jiraProc) searchProjectTypesResource(ctx context.Context, q *JsonInputQuery, custom map[string]string) (service.MessageBatch, error) {
 	var batch service.MessageBatch
 
@@ -167,7 +165,7 @@ func (j *jiraProc) searchProjectTypesResource(ctx context.Context, q *JsonInputQ
 		return nil, err
 	}
 
-	var results []interface{}
+	var results []any
 	if err := json.Unmarshal(body, &results); err != nil {
 		return nil, fmt.Errorf("cannot map response to struct: %w", err)
 	}
@@ -197,19 +195,14 @@ func (j *jiraProc) searchProjectTypesResource(ctx context.Context, q *JsonInputQ
 	return batch, nil
 }
 
-/*
-searchProjectCategoriesResource retrieves all Jira project categories and returns
-them as a batch of service messages.
-
-Parameters:
-- ctx: context.Context → request context for cancellation and timeouts
-- q: *JsonInputQuery → query object containing requested fields
-- custom: map[string]string → mapping of display names to custom field keys
-
-Returns:
-- service.MessageBatch → batch of messages containing transformed project categories
-- error → error if the API call, response parsing, or field processing fails
-*/
+// searchProjectCategoriesResource retrieves all Jira project categories and returns them as a batch of service messages.
+// Parameters:
+// - ctx: context.Context → request context for cancellation and timeouts
+// - q: *JsonInputQuery → query object containing requested fields
+// - custom: map[string]string → mapping of display names to custom field keys
+// Returns:
+// - service.MessageBatch → batch of messages containing transformed project categories
+// - error → error if the API call, response parsing, or field processing fails
 func (j *jiraProc) searchProjectCategoriesResource(ctx context.Context, q *JsonInputQuery, custom map[string]string) (service.MessageBatch, error) {
 	var batch service.MessageBatch
 
@@ -222,7 +215,7 @@ func (j *jiraProc) searchProjectCategoriesResource(ctx context.Context, q *JsonI
 		return nil, err
 	}
 
-	var results []interface{}
+	var results []any
 	if err := json.Unmarshal(body, &results); err != nil {
 		return nil, fmt.Errorf("cannot map response to struct: %w", err)
 	}
@@ -254,19 +247,15 @@ func (j *jiraProc) searchProjectCategoriesResource(ctx context.Context, q *JsonI
 	return batch, nil
 }
 
-/*
-searchProjectVersionsResource retrieves all versions of a given Jira project and
-returns them as a batch of service messages.
-
-Parameters:
-- ctx: context.Context → request context for cancellation and timeouts
-- inputQuery: *JsonInputQuery → query object containing the project key and requested fields
-- customFields: map[string]string → mapping of display names to custom field keys
-
-Returns:
-- service.MessageBatch → batch of messages containing transformed project versions
-- error → error if the API call, response parsing, or field processing fails
-*/
+// searchProjectVersionsResource retrieves all versions of a given Jira project and
+// returns them as a batch of service messages.
+// Parameters:
+// - ctx: context.Context → request context for cancellation and timeouts
+// - inputQuery: *JsonInputQuery → query object containing the project key and requested fields
+// - customFields: map[string]string → mapping of display names to custom field keys
+// Returns:
+// - service.MessageBatch → batch of messages containing transformed project versions
+// - error → error if the API call, response parsing, or field processing fails
 func (j *jiraProc) searchProjectVersionsResource(
 	ctx context.Context,
 	inputQuery *JsonInputQuery,
@@ -284,7 +273,7 @@ func (j *jiraProc) searchProjectVersionsResource(
 		return nil, err
 	}
 
-	var results []interface{}
+	var results []any
 	if err := json.Unmarshal(body, &results); err != nil {
 		return nil, fmt.Errorf("cannot map response to struct: %w", err)
 	}
