@@ -179,7 +179,6 @@ output:
 		// Kafka fields
 		Fields(kafka.FranzConnectionFields()...).
 		Fields(kafka.FranzProducerFields()...).
-		Fields(kafka.FranzWriterConfigFields()...).
 		// Schema registry fields
 		Field(schemaRegistryField(schemaRegistryMigratorFields()...).Optional()).
 		// Consumer groups fields
