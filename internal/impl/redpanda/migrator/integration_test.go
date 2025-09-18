@@ -57,7 +57,6 @@ input:
 output:
   redpanda_migrator:
     seed_brokers: [ {{.Dst.BrokerAddr}} ]
-    topic: ${! metadata("kafka_topic").or(throw("missing kafka_topic metadata")) }
     sync_topic_acls: true
     {{- if .Dst.SchemaRegistryURL }}
     schema_registry:
