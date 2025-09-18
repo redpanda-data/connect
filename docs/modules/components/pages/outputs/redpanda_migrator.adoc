@@ -40,12 +40,6 @@ output:
   label: ""
   redpanda_migrator:
     seed_brokers: [] # No default (required)
-    topic: ${! metadata('kafka_topic') } # No default (optional)
-    key: "" # No default (optional)
-    partition: ${! meta("partition") } # No default (optional)
-    metadata:
-      include_prefixes: []
-      include_patterns: []
     schema_registry:
       url: http://localhost:8081 # No default (required)
       enabled: true
@@ -64,6 +58,7 @@ output:
       include: [] # No default (optional)
       exclude: [] # No default (optional)
       only_empty: false
+    topic: ${! @kafka_topic }
     topic_replication_factor: "3" # No default (optional)
     sync_topic_acls: false
 ```
@@ -98,13 +93,6 @@ output:
     timeout: 10s
     max_message_bytes: 1MiB
     broker_write_max_bytes: 100MiB
-    topic: ${! metadata('kafka_topic') } # No default (optional)
-    key: "" # No default (optional)
-    partition: ${! meta("partition") } # No default (optional)
-    metadata:
-      include_prefixes: []
-      include_patterns: []
-    timestamp_ms: ${! timestamp_unix_milli() } # No default (optional)
     schema_registry:
       url: http://localhost:8081 # No default (required)
       tls:
@@ -146,6 +134,7 @@ output:
       include: [] # No default (optional)
       exclude: [] # No default (optional)
       only_empty: false
+    topic: ${! @kafka_topic }
     topic_replication_factor: "3" # No default (optional)
     sync_topic_acls: false
     serverless: false
@@ -644,7 +633,7 @@ An external ID to provide when assuming a role.
 
 === `metadata_max_age`
 
-The maximum age of metadata before it is refreshed.
+The maximum age of metadata before it is refreshed. This interval also controls how frequently regex topic patterns are re-evaluated to discover new matching topics.
 
 
 *Type*: `string`
@@ -766,114 +755,6 @@ The upper bound for the number of bytes written to a broker connection in a sing
 broker_write_max_bytes: 128MB
 
 broker_write_max_bytes: 50mib
-```
-
-=== `topic`
-
-The topic to write messages to. Use interpolation to derive destination topic names from source topics. The source topic name is available as 'kafka_topic' metadata.
-This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
-
-
-*Type*: `string`
-
-
-```yml
-# Examples
-
-topic: ${! metadata('kafka_topic') }
-
-topic: prod_${! metadata('kafka_topic') }
-```
-
-=== `key`
-
-An optional key to populate for each message.
-This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
-
-
-*Type*: `string`
-
-
-=== `partition`
-
-An optional explicit partition to set for each message. This field is only relevant when the `partitioner` is set to `manual`. The provided interpolation string must be a valid integer.
-This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
-
-
-*Type*: `string`
-
-
-```yml
-# Examples
-
-partition: ${! meta("partition") }
-```
-
-=== `metadata`
-
-Determine which (if any) metadata values should be added to messages as headers.
-
-
-*Type*: `object`
-
-
-=== `metadata.include_prefixes`
-
-Provide a list of explicit metadata key prefixes to match against.
-
-
-*Type*: `array`
-
-*Default*: `[]`
-
-```yml
-# Examples
-
-include_prefixes:
-  - foo_
-  - bar_
-
-include_prefixes:
-  - kafka_
-
-include_prefixes:
-  - content-
-```
-
-=== `metadata.include_patterns`
-
-Provide a list of explicit metadata key regular expression (re2) patterns to match against.
-
-
-*Type*: `array`
-
-*Default*: `[]`
-
-```yml
-# Examples
-
-include_patterns:
-  - .*
-
-include_patterns:
-  - _timestamp_unix$
-```
-
-=== `timestamp_ms`
-
-An optional timestamp to set for each message expressed in milliseconds. When left empty, the current timestamp is used.
-This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
-
-
-*Type*: `string`
-
-
-```yml
-# Examples
-
-timestamp_ms: ${! timestamp_unix_milli() }
-
-timestamp_ms: ${! metadata("kafka_timestamp_ms") }
 ```
 
 === `schema_registry`
@@ -1427,6 +1308,22 @@ Whether to only migrate Empty consumer groups. When false (default), all statuse
 *Type*: `bool`
 
 *Default*: `false`
+
+=== `topic`
+
+The topic to write messages to. Use interpolation to derive destination topic names from source topics. The source topic name is available as 'kafka_topic' metadata.
+This field supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions].
+
+
+*Type*: `string`
+
+*Default*: `"${! @kafka_topic }"`
+
+```yml
+# Examples
+
+topic: prod_${! @kafka_topic }
+```
 
 === `topic_replication_factor`
 

@@ -179,7 +179,6 @@ output:
 		// Kafka fields
 		Fields(kafka.FranzConnectionFields()...).
 		Fields(kafka.FranzProducerFields()...).
-		Fields(kafka.FranzWriterConfigFields()...).
 		// Schema registry fields
 		Field(schemaRegistryField(schemaRegistryMigratorFields()...).Optional()).
 		// Consumer groups fields
@@ -187,9 +186,8 @@ output:
 		// Topic fields
 		Field(service.NewInterpolatedStringField(rmoFieldTopic).
 			Description("The topic to write messages to. Use interpolation to derive destination topic names from source topics. The source topic name is available as 'kafka_topic' metadata.").
-			Example("${! metadata('kafka_topic') }").
-			Example("prod_${! metadata('kafka_topic') }").
-			Optional()).
+			Default("${! @kafka_topic }").
+			Example("prod_${! @kafka_topic }")).
 		Field(service.NewIntField(rmoFieldTopicReplicationFactor).
 			Description("The replication factor for created topics. If not specified, inherits the replication factor from source topics. Useful when migrating to clusters with different sizes.").
 			Example("3").
