@@ -21,7 +21,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - (google_cloud_storage) Field `bucket` can now be interpolated. (@rockwotj)
-- (output_sns) Field `topic_arn` can now be interpolation. (@josephwoodward)
+- (output_sns) Field `topic_arn` can now be interpolated. (@josephwoodward)
 - (Benthos) Logging: Enable timestamp output by default. (@josephwoodward)
 - (QuestDB) Bump QuestDB package from v3 to v4. (@sklarsa)
 - (Sarama) Bump Sarama package from v1.43.3 to v1.46.0. (@josephwoodward)
