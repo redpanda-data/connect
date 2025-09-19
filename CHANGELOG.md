@@ -9,7 +9,6 @@ All notable changes to this project will be documented in this file.
 
 - Added `default_schema_id` field to the `schema_registry_decode` processor. (@mmatczuk)
 - Go API: Component linter added to `public/schema`, including Redpanda build meta fields. (@Jeffail)
-- (Config) Add RegexpFilter helper. (@mmatczuk)
 - (Confluent) Add `default_schema_id` field to the `schema_registry_decode` processor.
 
 ### Fixed
@@ -23,8 +22,6 @@ All notable changes to this project will be documented in this file.
 - (google_cloud_storage) Field `bucket` can now be interpolated. (@rockwotj)
 - (output_sns) Field `topic_arn` can now be interpolated. (@josephwoodward)
 - (Benthos) Logging: Enable timestamp output by default. (@josephwoodward)
-- (QuestDB) Bump QuestDB package from v3 to v4. (@sklarsa)
-- (Sarama) Bump Sarama package from v1.43.3 to v1.46.0. (@josephwoodward)
 
 ## 4.63.0 - 2025-08-27
 
