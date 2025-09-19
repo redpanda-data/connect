@@ -3,18 +3,28 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.64.0 - TBD
+## 4.64.0 - 2025-09-19
 
 ### Added
 
 - Added `default_schema_id` field to the `schema_registry_decode` processor. (@mmatczuk)
 - Go API: Component linter added to `public/schema`, including Redpanda build meta fields. (@Jeffail)
+- (Config) Add RegexpFilter helper. (@mmatczuk)
+- (Confluent) Add `default_schema_id` field to the `schema_registry_decode` processor.
+
+### Fixed
+
+- (Snowflake) URL field reference. (@ToriBench)
+- (Redpanda) Ensure `redpanda.rack_id` has a default value (and thus optional) for schema definitions. (@josephwoodward)
+- (Protobuf) Ignore hidden files to fix duplicate descriptor errors. (@dubyte)
 
 ### Changed
 
-- (google_cloud_storage) Field `bucket` can now be interpolated (@rockwotj)
-- (output_sns) Field `topic_arn` can now be interpolation (@josephwoodward)
-- (Benthos) Logging: Enable timestamp output by default (@josephwoodward)
+- (google_cloud_storage) Field `bucket` can now be interpolated. (@rockwotj)
+- (output_sns) Field `topic_arn` can now be interpolation. (@josephwoodward)
+- (Benthos) Logging: Enable timestamp output by default. (@josephwoodward)
+- (QuestDB) Bump QuestDB package from v3 to v4. (@sklarsa)
+- (Sarama) Bump Sarama package from v1.43.3 to v1.46.0. (@josephwoodward)
 
 ## 4.63.0 - 2025-08-27
 
