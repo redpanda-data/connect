@@ -65,14 +65,14 @@ type IssueTransitionsSearchResponse struct {
 	Transitions []any `json:"transitions"`
 }
 
-// Project represents a single Jira project from this processor output/*
+// Project represents a single Jira project from this processor output
 type Project struct {
 	ID     string `json:"id"`
 	Key    string `json:"key"`
 	Fields any    `json:"fields"`
 }
 
-// ProjectResponse represents a single Jira project from this processor output/*
+// ProjectResponse represents a single Jira project from this processor output
 type ProjectResponse struct {
 	ID     string `json:"id"`
 	Key    string `json:"key"`
@@ -86,14 +86,14 @@ type ProjectSearchResponse struct {
 	NextPage string `json:"nextPage"`
 }
 
-// ProjectTypeResponse represents a single Jira project type from this processor output/*
+// ProjectTypeResponse represents a single Jira project type from this processor output
 type ProjectTypeResponse struct {
 	Key          string `json:"key"`
 	FormattedKey string `json:"formattedKey"`
 	Fields       any    `json:"fields"`
 }
 
-// ProjectCategoryResponse represents a single Jira project category from this processor output/*
+// ProjectCategoryResponse represents a single Jira project category from this processor output
 type ProjectCategoryResponse struct {
 	ID     string `json:"id"`
 	Fields any    `json:"fields"`
@@ -126,7 +126,7 @@ type JQLSearchResponse struct {
 	NextPageToken string  `json:"nextPageToken"`
 }
 
-// UserResponse represents a Jira user from this processor output/*
+// UserResponse represents a Jira user from this processor output
 type UserResponse struct {
 	ID     string `json:"accountId"`
 	Fields any    `json:"fields"`
@@ -137,13 +137,13 @@ type UsersSearchResponse struct {
 	Users []any `json:"values"`
 }
 
-// RoleResponse represents a single Jira role from this processor output/*
+// RoleResponse represents a single Jira role from this processor output
 type RoleResponse struct {
 	ID     string `json:"id"`
 	Fields any    `json:"fields"`
 }
 
-// ProjectVersionResponse represents a single Jira project version from this processor output/*
+// ProjectVersionResponse represents a single Jira project version from this processor output
 type ProjectVersionResponse struct {
 	ID     string `json:"id"`
 	Fields any    `json:"fields"`
