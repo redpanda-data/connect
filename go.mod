@@ -138,6 +138,7 @@ require (
 	github.com/testcontainers/testcontainers-go/modules/ollama v0.39.0
 	github.com/testcontainers/testcontainers-go/modules/qdrant v0.39.0
 	github.com/tetratelabs/wazero v1.9.0
+  github.com/tigerbeetle/tigerbeetle-go v0.16.57
 	github.com/timeplus-io/proton-go-driver/v2 v2.1.2
 	github.com/tmc/langchaingo v0.1.13
 	github.com/trinodb/trino-go-client v0.328.0
