@@ -29,13 +29,23 @@ type heapItem struct{ iter *changeTableRowIter }
 type rowIteratorMinHeap []*heapItem
 
 func (h rowIteratorMinHeap) Len() int { return len(h) }
+
 func (h rowIteratorMinHeap) Less(i, j int) bool {
 	// Compare LSNs as byte slices. CDC LSNs are fixed-length varbinary(10) so lexicographic == numeric order.
 	// We also need to order by command_id, see below for more details:
 	// https://learn.microsoft.com/en-us/sql/relational-databases/system-tables/cdc-capture-instance-ct-transact-sql?view=sql-server-ver17
-	return bytes.Compare(h[i].iter.current.startLSN, h[j].iter.current.startLSN) < 0 &&
-		h[i].iter.current.commandID < h[j].iter.current.commandID
+	// First compare LSNs
+	if cmp := bytes.Compare(h[i].iter.current.startLSN, h[j].iter.current.startLSN); cmp != 0 {
+		return cmp < 0
+	}
+	// If LSN equal, compare command_id
+	if h[i].iter.current.commandID != h[j].iter.current.commandID {
+		return h[i].iter.current.commandID < h[j].iter.current.commandID
+	}
+	// If command_id equal, compare operation
+	return h[i].iter.current.operation < h[j].iter.current.operation
 }
+
 func (h rowIteratorMinHeap) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
 func (h *rowIteratorMinHeap) Push(x any)   { *h = append(*h, x.(*heapItem)) }
 func (h *rowIteratorMinHeap) Pop() any {
@@ -64,6 +74,20 @@ type change struct {
 	columns    map[string]any
 }
 
+func (c *change) reset() {
+	if c != nil {
+		for k := range c.columns {
+			delete(c.columns, k)
+		}
+		c.startLSN = nil
+		c.endLSN = nil
+		c.updateMask = nil
+		c.seqVal = nil
+		c.operation = 0
+		c.commandID = 0
+	}
+}
+
 // changeTableRowIter is responsible for handling the iteration of table change records row by row.
 // It moves to the next row, sorts them by min-heap, parses the data and sends it for processing.
 type changeTableRowIter struct {
@@ -71,10 +95,13 @@ type changeTableRowIter struct {
 	rows    *sql.Rows
 	cols    []string
 	current *change
+	log     *service.Logger
+
+	vals []any
 }
 
 // newChangeTableRowIter returns an custom row iterator for the given changeTable.
-func newChangeTableRowIter(ctx context.Context, db *sql.DB, changeTable string, fromLSN, toLSN []byte) (*changeTableRowIter, error) {
+func newChangeTableRowIter(ctx context.Context, db *sql.DB, changeTable string, fromLSN, toLSN LSN, logger *service.Logger) (*changeTableRowIter, error) {
 	// Note: LSN is varbinary type so can sort correctly for LSNs
 	// Inspired by Debezium https://github.com/debezium/debezium/blob/main/debezium-connector-sqlserver/src/main/java/io/debezium/connector/sqlserver/SqlServerConnection.java?plain=1#L177
 
@@ -92,7 +119,20 @@ func newChangeTableRowIter(ctx context.Context, db *sql.DB, changeTable string, 
 		return nil, err
 	}
 
-	itor := &changeTableRowIter{table: changeTable, rows: rows, cols: cols}
+	// pre-allocate slice of pointers for sql.Scan operations
+	vals := make([]any, len(cols))
+	for i := range vals {
+		var v any
+		vals[i] = &v
+	}
+
+	itor := &changeTableRowIter{
+		table: changeTable,
+		rows:  rows,
+		cols:  cols,
+		vals:  vals,
+		log:   logger,
+	}
 	// Prime the iterator by loading the first row
 	if err := itor.next(); err != nil {
 		// Already exhausted iterator
@@ -112,16 +152,21 @@ func (ct *changeTableRowIter) next() error {
 		return sql.ErrNoRows
 	}
 
-	vals := make([]any, len(ct.cols))
-	for i := range vals {
-		var v any
-		vals[i] = &v
-	}
-	if err := ct.rows.Scan(vals...); err != nil {
+	// read row into ct.vals, reusing pre-allocated slice of pointer
+	if err := ct.rows.Scan(ct.vals...); err != nil {
 		return err
 	}
 
-	ct.current = ct.valsToChange(vals)
+	if ct.current == nil {
+		ct.current = &change{columns: make(map[string]any, len(ct.cols))}
+	} else {
+		ct.current.reset()
+	}
+
+	if err := ct.mapValsToChange(ct.vals, ct.current); err != nil {
+		return fmt.Errorf("mapping change table columns to iterator row: %w", err)
+	}
+
 	return nil
 }
 
@@ -129,72 +174,93 @@ func (ct *changeTableRowIter) Close() error {
 	return ct.rows.Close()
 }
 
-func (ct *changeTableRowIter) valsToChange(vals []any) *change {
-	// TODO: We should be able to remove this allocation
-	ch := &change{
-		table:   ct.table,
-		columns: make(map[string]any, len(ct.cols)),
-	}
+// mapValsToChange maps the values from vals to the dst out parameter
+func (ct *changeTableRowIter) mapValsToChange(vals []any, dst *change) error {
 	for i, c := range ct.cols {
 		v := *(vals[i].(*any))
 		switch c {
 		case "__$start_lsn":
 			if b, ok := v.([]byte); ok {
-				ch.startLSN = b
+				dst.startLSN = b
+			} else {
+				return errors.New("failed to map 'start_lsn' column from change table")
 			}
 		case "__$end_lsn":
+			// "In SQL Server 2012 (11.x), this column is always NULL."
+			// https://learn.microsoft.com/en-us/sql/relational-databases/system-tables/cdc-capture-instance-ct-transact-sql?view=sql-server-ver16
 			if b, ok := v.([]byte); ok {
-				ch.endLSN = b
+				dst.endLSN = b
+			} else if v == nil {
+				dst.endLSN = nil
+			} else {
+				ct.log.Warnf("failed to map 'end_lsn' column from change table")
 			}
 		case "__$update_mask":
 			if b, ok := v.([]byte); ok {
-				ch.updateMask = b
+				dst.updateMask = b
+			} else {
+				return errors.New("failed to map 'update_mask' column from change table")
 			}
 		case "__$operation":
 			switch x := v.(type) {
 			case int64:
-				ch.operation = int(x)
+				dst.operation = int(x)
 			case int32:
-				ch.operation = int(x)
+				dst.operation = int(x)
 			default:
+				return errors.New("failed to map 'operation' column from change table")
 			}
 		case "__$command_id":
 			switch x := v.(type) {
 			case int64:
-				ch.commandID = int(x)
+				dst.commandID = int(x)
 			case int32:
-				ch.commandID = int(x)
+				dst.commandID = int(x)
 			default:
+				return errors.New("failed to map 'command_id' column from change table")
 			}
 		case "__$seqval":
 			if b, ok := v.([]byte); ok {
-				ch.seqVal = b
+				dst.seqVal = b
+			} else {
+				return errors.New("failed to map 'seqval' column from change table")
 			}
 		default:
-			ch.columns[c] = v
+			dst.columns[c] = v
 		}
 	}
-	return ch
+	return nil
+}
+
+// ChangePublisher is responsible for handling and processing of a replication.MessageEvent
+type ChangePublisher interface {
+	Publish(ctx context.Context, msg MessageEvent) error
 }
 
 // ChangeTableStream tracks and streams all change events added to the tracked tables change tables
 type ChangeTableStream struct {
+	// cfgTables are those provided by the user
+	cfgTables []string
+	// trackedTables are tables that actually exist
 	trackedTables map[string]changeTable
-	logger        *service.Logger
+	publisher     ChangePublisher
+	log           *service.Logger
 }
 
 // NewChangeTableStream creates a new instance of NewChangeTableStream, responsible for paging through change events
 // based on the tables param.
-func NewChangeTableStream(tables []string, logger *service.Logger) *ChangeTableStream {
+func NewChangeTableStream(cfgTables []string, publisher ChangePublisher, logger *service.Logger) *ChangeTableStream {
 	s := &ChangeTableStream{
-		trackedTables: make(map[string]changeTable, len(tables)),
-		logger:        logger,
+		cfgTables:     cfgTables,
+		trackedTables: make(map[string]changeTable, len(cfgTables)),
+		publisher:     publisher,
+		log:           logger,
 	}
 	return s
 }
 
-// VerifyChangeTables ensures change tables are configured for _all_ provided configTables.
-func (r *ChangeTableStream) VerifyChangeTables(ctx context.Context, db *sql.DB, configTables []string) error {
+// VerifyChangeTables ensures change tables are configured for _all_ provided config supplied tables.
+func (r *ChangeTableStream) VerifyChangeTables(ctx context.Context, db *sql.DB) error {
 	rows, err := db.QueryContext(ctx, "SELECT capture_instance, start_lsn FROM cdc.change_tables")
 	if err != nil {
 		return fmt.Errorf("fetching change tables: %w", err)
@@ -212,19 +278,20 @@ func (r *ChangeTableStream) VerifyChangeTables(ctx context.Context, db *sql.DB, 
 		return fmt.Errorf("iterating through change tables: %w", err)
 	}
 
-	for _, t := range configTables {
+	// verify all tables passed have associated change tables and fail if not.
+	for _, t := range r.cfgTables {
 		for _, ct := range changeTables {
 			if strings.HasSuffix(ct.captureInstance, "dbo_"+t) {
 				r.trackedTables[ct.captureInstance] = ct
-				r.logger.Debugf("Found change table '%s'", ct.captureInstance)
+				r.log.Debugf("Found change table '%s'", ct.captureInstance)
 				goto next
 			}
 		}
-		r.logger.Warnf("Change table for table '%s' not found", t)
+		r.log.Warnf("Change table for table '%s' not found", t)
 	next:
 	}
 
-	if len(r.trackedTables) != len(configTables) {
+	if len(r.trackedTables) != len(r.cfgTables) {
 		return errors.New("could not find all change tables")
 	}
 
@@ -232,7 +299,8 @@ func (r *ChangeTableStream) VerifyChangeTables(ctx context.Context, db *sql.DB, 
 }
 
 // ReadChangeTables streams the change events from the configured SQL Server change tables.
-func (r *ChangeTableStream) ReadChangeTables(ctx context.Context, db *sql.DB, startPos LSN, handle Handler) error {
+func (r *ChangeTableStream) ReadChangeTables(ctx context.Context, db *sql.DB, startPos LSN) error {
+	r.log.Infof("Starting streaming %d change table(s)", len(r.cfgTables))
 	var (
 		fromLSN LSN // load last checkpoint; nil means start from beginning in tables
 		toLSN   LSN // often set to fn_cdc_get_max_lsn(); nil means no upper bound
@@ -242,7 +310,7 @@ func (r *ChangeTableStream) ReadChangeTables(ctx context.Context, db *sql.DB, st
 	if len(startPos) != 0 {
 		fromLSN = startPos
 		lastLSN = startPos
-		r.logger.Debugf("Resuming from recorded LSN position '%s'", startPos)
+		r.log.Debugf("Resuming from recorded LSN position '%s'", startPos)
 	}
 
 	for {
@@ -263,11 +331,11 @@ func (r *ChangeTableStream) ReadChangeTables(ctx context.Context, db *sql.DB, st
 				fromLSN = inst.startLSN
 			}
 
-			it, err := newChangeTableRowIter(ctx, db, inst.captureInstance, fromLSN, toLSN)
+			it, err := newChangeTableRowIter(ctx, db, inst.captureInstance, fromLSN, toLSN, r.log)
 			if err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
 					// No data means we can skip adding row iterator to the heap below
-					r.logger.Debugf("Exhausted all changes for change table '%s'", inst.captureInstance)
+					r.log.Debugf("Exhausted all changes for change table '%s'", inst.captureInstance)
 					continue
 				}
 				return fmt.Errorf("initialising iterator for change table '%s': %w", inst.captureInstance, err)
@@ -285,14 +353,15 @@ func (r *ChangeTableStream) ReadChangeTables(ctx context.Context, db *sql.DB, st
 			// Pop the smallest LSN change
 			item := heap.Pop(h).(*heapItem)
 			cur := item.iter.current
-			m := MessageEvent{
-				Table:     cur.table,
+
+			msg := MessageEvent{
 				Data:      cur.columns,
-				Operation: cur.operation,
 				LSN:       cur.startLSN,
+				Operation: cur.operation,
+				Table:     cur.table,
 			}
 
-			if err := handle(ctx, m); err != nil {
+			if err := r.publisher.Publish(ctx, msg); err != nil {
 				// Clean up before returning error
 				for _, it := range iters {
 					_ = it.Close()
@@ -306,7 +375,7 @@ func (r *ChangeTableStream) ReadChangeTables(ctx context.Context, db *sql.DB, st
 			// Advance the iterator and push back on heap to be sorted
 			if err := item.iter.next(); err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
-					r.logger.Debugf("Reached end of rows for table '%s'", item.iter.table)
+					r.log.Debugf("Reached end of rows for table '%s'", item.iter.table)
 				}
 				// exhausted all rows
 				item.iter.Close()
@@ -320,7 +389,7 @@ func (r *ChangeTableStream) ReadChangeTables(ctx context.Context, db *sql.DB, st
 			if !bytes.Equal(fromLSN, lastLSN) {
 				fromLSN = lastLSN
 			} else {
-				r.logger.Debug("No more changes across all change tables, backing off...")
+				r.log.Debug("No more changes across all change tables, backing off...")
 				time.Sleep(backoffDuration)
 			}
 		}
