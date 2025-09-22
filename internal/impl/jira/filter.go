@@ -13,7 +13,7 @@
 // limitations under the License.
 
 // filter.go provides utilities for filtering and normalizing Jira data based on requested fields.
-// It defines the selectorTree type for building hierarchical field selectors and implements logic to:
+// It defines the SelectorTree type for building hierarchical field selectors and implements logic to:
 //
 //   - Construct selector trees from input field lists
 //   - Filter JSON payloads by traversing these selectors
@@ -30,54 +30,55 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-// selectorTree is used to build a tree from the elements present in Fields input message
+// SelectorTree is used to build a tree from the elements present in Fields input message
 // The tree is then used for filtering output messages and including only what is present in the Fields
-type selectorTree map[string]selectorTree
+type SelectorTree map[string]SelectorTree
 
-/*
-Function to build selectorTree from the Fields []string object in the input message used for the attribute filtering
-
-Example: '"fields": ["summary", "assignee.displayName", "status.name", "parent.key", "parent.fields.status.name"]'
-Will result in returning a tree of the form:
-
-	{
-		"assignee": {
-			"displayName": {}
-		},
-		"parent": {
-			"fields": {
-				"status": {
-					"name": {}
-				}
-			},
-			"key": {}
-		},
-		"status": {
-			"name": {}
-		},
-		"summary": {}
-	}
-
-If custom fields are present, they will also be included in the selectorTree
-Example: '"fields": ["summary", "Sprint.name", "assignee.displayName", "Story Points"]'
-Will result in returning a tree of the form:
-
-	{
-	"assignee": {
-		"displayName": {}
-	},
-	"custom_field_10022": {
-		"name": {}
-	},
-	"custom_field_10100": {},
-	"summary": {}
-	}
-*/
-func (j *jiraProc) buildSelectorTree(fields []string, custom map[string]string) (selectorTree, error) {
-	j.log.Debugf("building selector tree based on filters: %v", fields)
-	tree := make(selectorTree)
+// SelectorTreeFrom builds a SelectorTree from the Fields []string object
+// in the input message used for the attribute filtering
+//
+// Example: '"fields": ["summary", "assignee.displayName", "status.name", "parent.key", "parent.fields.status.name"]'
+// Will result in returning a tree of the form:
+//
+//	{
+//		"assignee": {
+//			"displayName": {}
+//		},
+//		"parent": {
+//			"fields": {
+//				"status": {
+//					"name": {}
+//				}
+//			},
+//			"key": {}
+//		},
+//		"status": {
+//			"name": {}
+//		},
+//		"summary": {}
+//	}
+//
+// If custom fields are present, they will also be included in the SelectorTree
+// Example: '"fields": ["summary", "Sprint.name", "assignee.displayName", "Story Points"]'
+// Will result in returning a tree of the form:
+//
+//	{
+//	"assignee": {
+//		"displayName": {}
+//	},
+//	"custom_field_10022": {
+//		"name": {}
+//	},
+//	"custom_field_10100": {},
+//	"summary": {}
+//	}
+func SelectorTreeFrom(log *service.Logger, fields []string, custom map[string]string) (SelectorTree, error) {
+	log.Debugf("building selector tree based on filters: %v", fields)
+	tree := make(SelectorTree)
 	for _, field := range fields {
 		if strings.TrimSpace(field) == "" {
 			return nil, errors.New("invalid field: empty string")
@@ -89,7 +90,7 @@ func (j *jiraProc) buildSelectorTree(fields []string, custom map[string]string) 
 				return nil, fmt.Errorf("invalid field path: %q", field)
 			}
 			if _, ok := cur[part]; !ok {
-				cur[part] = make(selectorTree)
+				cur[part] = make(SelectorTree)
 			}
 			cur = cur[part]
 		}
@@ -99,17 +100,17 @@ func (j *jiraProc) buildSelectorTree(fields []string, custom map[string]string) 
 			return nil, errors.New("invalid field: empty string")
 		}
 		if _, ok := tree[value]; !ok {
-			tree[value] = make(selectorTree)
+			tree[value] = make(SelectorTree)
 		}
 	}
 	return tree, nil
 }
 
-// The filter function takes the data JSON and selectorTree and returns only what is
-// found in the selectorTree by comparing keys from data and keys from selectorTree.
+// The filter function takes the data JSON and SelectorTree and returns only what is
+// found in the SelectorTree by comparing keys from data and keys from SelectorTree.
 // If customFields are present in the data, they will also be replaced with their real name;
 // example: custom_field_10100 will be replaced with "Story Points"
-func (j *jiraProc) filter(data any, selectors selectorTree, custom map[string]string) (any, error) {
+func (j *jiraProc) filter(data any, selectors SelectorTree, custom map[string]string) (any, error) {
 	switch val := data.(type) {
 	case map[string]any:
 		res := make(map[string]any)

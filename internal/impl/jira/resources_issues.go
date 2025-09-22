@@ -47,7 +47,7 @@ func (j *jiraProc) searchIssuesResource(
 	// Normalize input fields
 	normalizeInputFields(inputQuery, customFields)
 
-	tree, err := j.buildSelectorTree(inputQuery.Fields, customFields)
+	tree, err := SelectorTreeFrom(j.log, inputQuery.Fields, customFields)
 	if err != nil {
 		return nil, err
 	}
@@ -164,7 +164,7 @@ func (j *jiraProc) searchIssueTransitionsResource(ctx context.Context, q *JsonIn
 	}
 
 	normalizeInputFields(q, custom)
-	tree, err := j.buildSelectorTree(q.Fields, custom)
+	tree, err := SelectorTreeFrom(j.log, q.Fields, custom)
 	if err != nil {
 		return nil, err
 	}

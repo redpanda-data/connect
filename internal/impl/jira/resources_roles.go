@@ -45,7 +45,7 @@ func (j *jiraProc) searchRolesResource(
 
 	normalizeInputFields(inputQuery, customFields)
 
-	tree, err := j.buildSelectorTree(inputQuery.Fields, customFields)
+	tree, err := SelectorTreeFrom(j.log, inputQuery.Fields, customFields)
 	if err != nil {
 		return nil, err
 	}

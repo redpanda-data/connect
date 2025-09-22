@@ -56,7 +56,7 @@ func (j *jiraProc) searchProjectsResource(
 
 	normalizeInputFields(inputQuery, customFields)
 
-	tree, err := j.buildSelectorTree(inputQuery.Fields, customFields)
+	tree, err := SelectorTreeFrom(j.log, inputQuery.Fields, customFields)
 	if err != nil {
 		return nil, err
 	}
@@ -175,7 +175,7 @@ func (j *jiraProc) searchProjectTypesResource(ctx context.Context, q *JsonInputQ
 	}
 
 	normalizeInputFields(q, custom)
-	tree, err := j.buildSelectorTree(q.Fields, custom)
+	tree, err := SelectorTreeFrom(j.log, q.Fields, custom)
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +225,7 @@ func (j *jiraProc) searchProjectCategoriesResource(ctx context.Context, q *JsonI
 	}
 
 	normalizeInputFields(q, custom)
-	tree, err := j.buildSelectorTree(q.Fields, custom)
+	tree, err := SelectorTreeFrom(j.log, q.Fields, custom)
 	if err != nil {
 		return nil, err
 	}
@@ -283,7 +283,7 @@ func (j *jiraProc) searchProjectVersionsResource(
 	}
 
 	normalizeInputFields(inputQuery, customFields)
-	tree, err := j.buildSelectorTree(inputQuery.Fields, customFields)
+	tree, err := SelectorTreeFrom(j.log, inputQuery.Fields, customFields)
 	if err != nil {
 		return nil, err
 	}

@@ -27,9 +27,9 @@ func TestBuildSelectorTree(t *testing.T) {
 		"Sprint":       "custom_field_10022",
 	}
 
-	tree, err := j.buildSelectorTree(fields, custom)
+	tree, err := SelectorTreeFrom(j.log, fields, custom)
 	if err != nil {
-		t.Fatalf("buildSelectorTree error: %v", err)
+		t.Fatalf("SelectorTreeFrom error: %v", err)
 	}
 
 	// spot checks
@@ -90,7 +90,7 @@ func TestFilter_MapAndArray(t *testing.T) {
 	}
 
 	// selectors pick summary, assignee.displayName, labels, Story Points
-	selectors := selectorTree{
+	selectors := SelectorTree{
 		"summary":            {},
 		"assignee":           {"displayName": {}},
 		"labels":             {},
