@@ -1,3 +1,20 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// resources_roles.go implements Jira resource handlers for roles.
+// It fetches Jira roles from the API and transforms them into service messages with optional field filtering.
+
 package jira
 
 import (
@@ -9,10 +26,8 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-/*
-searchRolesResource retrieves all Jira roles and returns them as a batch
-of service messages after optional field filtering.
-*/
+// searchRolesResource retrieves all Jira roles and returns them as a batch
+// of service messages after optional field filtering.
 func (j *jiraProc) searchRolesResource(
 	ctx context.Context,
 	inputQuery *JsonInputQuery,
@@ -30,7 +45,7 @@ func (j *jiraProc) searchRolesResource(
 
 	normalizeInputFields(inputQuery, customFields)
 
-	tree, err := j.buildSelectorTree(inputQuery.Fields, customFields)
+	tree, err := SelectorTreeFrom(j.log, inputQuery.Fields, customFields)
 	if err != nil {
 		return nil, err
 	}
@@ -61,10 +76,8 @@ func (j *jiraProc) searchRolesResource(
 	return batch, nil
 }
 
-/*
-searchRoles fetches all Jira roles from the API and returns them as a list.
-*/
-func (j *jiraProc) searchRoles(ctx context.Context) ([]interface{}, error) {
+// searchRoles fetches all Jira roles from the API and returns them as a list.
+func (j *jiraProc) searchRoles(ctx context.Context) ([]any, error) {
 	apiUrl, err := url.Parse(j.baseURL + JiraAPIBasePath + "/role")
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL: %v", err)
@@ -75,7 +88,7 @@ func (j *jiraProc) searchRoles(ctx context.Context) ([]interface{}, error) {
 		return nil, err
 	}
 
-	var results []interface{}
+	var results []any
 	if err := json.Unmarshal(body, &results); err != nil {
 		return nil, fmt.Errorf("cannot map response to struct: %w", err)
 	}

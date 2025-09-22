@@ -1,54 +1,66 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// transform.go provides helper functions to convert raw Jira API objects into
+// strongly typed response structs (issues, users, projects, roles, categories, versions, and transitions).
+
 package jira
 
 import "fmt"
 
-/*
-TransformIssue takes a JiraIssue and returns a JiraIssueResponse
-with the changelog moved into the fields.
-*/
+// TransformIssue takes a JiraIssue and returns a JiraIssueResponse with the changelog moved into the fields.
 func TransformIssue(orig Issue) IssueResponse {
 	var r IssueResponse
 	r.ID = orig.ID
 	r.Key = orig.Key
 
-	var fields map[string]interface{}
+	var fields map[string]any
 	switch origFields := orig.Fields.(type) {
 	case nil:
-		fields = map[string]interface{}{}
-	case map[string]interface{}:
-		fields = make(map[string]interface{}, len(origFields))
+		fields = map[string]any{}
+	case map[string]any:
+		fields = make(map[string]any, len(origFields))
 		for k, v := range origFields {
 			fields[k] = v
 		}
 	default:
 		fmt.Printf("Warning: issue.Fields type %T not map/nil (id=%s)\n", orig.Fields, orig.ID)
-		fields = map[string]interface{}{}
+		fields = map[string]any{}
 	}
 	fields["changelog"] = orig.Changelog
 	r.Fields = fields
 	return r
 }
 
-/*
-TransformIssueTransition converts a raw issue transition object into a
-IssueTransitionResponse, safely handling unexpected types and extracting the ID.
-*/
-func TransformIssueTransition(orig interface{}) IssueTransitionResponse {
+// TransformIssueTransition converts a raw issue transition object into a
+// IssueTransitionResponse, safely handling unexpected types and extracting the ID.
+func TransformIssueTransition(orig any) IssueTransitionResponse {
 	var r IssueTransitionResponse
 
-	var fields map[string]interface{}
+	var fields map[string]any
 
 	switch origFields := orig.(type) {
 	case nil:
-		fields = map[string]interface{}{}
-	case map[string]interface{}:
-		fields = make(map[string]interface{}, len(origFields))
+		fields = map[string]any{}
+	case map[string]any:
+		fields = make(map[string]any, len(origFields))
 		for k, v := range origFields {
 			fields[k] = v
 		}
 	default:
 		fmt.Printf("Warning: issueTransition type %T not map/nil\n", orig)
-		fields = map[string]interface{}{}
+		fields = map[string]any{}
 	}
 
 	r.Fields = fields
@@ -62,20 +74,18 @@ func TransformIssueTransition(orig interface{}) IssueTransitionResponse {
 	return r
 }
 
-/*
-TransformProject converts a raw project object into a ProjectResponse,
-copying its fields and extracting the ID and key.
-*/
-func TransformProject(orig interface{}) ProjectResponse {
+// TransformProject converts a raw project object into a ProjectResponse,
+// copying its fields and extracting the ID and key.
+func TransformProject(orig any) ProjectResponse {
 	var r ProjectResponse
-	fields := map[string]interface{}{}
+	fields := map[string]any{}
 
-	if m, ok := orig.(map[string]interface{}); ok && m != nil {
+	if m, ok := orig.(map[string]any); ok && m != nil {
 		for k, v := range m {
 			fields[k] = v
 		}
 	} else if orig != nil {
-		fmt.Printf("Warning: project not map[string]interface{} (type=%T)\n", orig)
+		fmt.Printf("Warning: project not map[string]any (type=%T)\n", orig)
 	}
 
 	r.Fields = fields
@@ -94,25 +104,22 @@ func TransformProject(orig interface{}) ProjectResponse {
 	return r
 }
 
-/*
-TransformUser converts a raw user object into a UserResponse,
-copying its fields and extracting the account ID.
-*/
-func TransformUser(orig interface{}) UserResponse {
+// TransformUser converts a raw user object into a UserResponse,copying its fields and extracting the account ID.
+func TransformUser(orig any) UserResponse {
 	var response UserResponse
-	var fields map[string]interface{}
+	var fields map[string]any
 
 	switch msg := orig.(type) {
 	case nil:
-		fields = map[string]interface{}{}
-	case map[string]interface{}:
-		fields = make(map[string]interface{}, len(msg))
+		fields = map[string]any{}
+	case map[string]any:
+		fields = make(map[string]any, len(msg))
 		for k, v := range msg {
 			fields[k] = v
 		}
 	default:
 		fmt.Printf("Warning: user type %T not map/nil\n", orig)
-		fields = map[string]interface{}{}
+		fields = map[string]any{}
 	}
 
 	response.Fields = fields
@@ -126,20 +133,18 @@ func TransformUser(orig interface{}) UserResponse {
 	return response
 }
 
-/*
-TransformProjectType converts a raw project type object into a ProjectTypeResponse,
-copying its fields and extracting the key and formatted key.
-*/
-func TransformProjectType(orig interface{}) ProjectTypeResponse {
+// TransformProjectType converts a raw project type object into a ProjectTypeResponse,
+// copying its fields and extracting the key and formatted key.
+func TransformProjectType(orig any) ProjectTypeResponse {
 	var response ProjectTypeResponse
-	fields := map[string]interface{}{}
+	fields := map[string]any{}
 
-	if message, ok := orig.(map[string]interface{}); ok && message != nil {
+	if message, ok := orig.(map[string]any); ok && message != nil {
 		for key, value := range message {
 			fields[key] = value
 		}
 	} else if orig != nil {
-		fmt.Printf("Warning: projectType not map[string]interface{} (type=%T)\n", orig)
+		fmt.Printf("Warning: projectType not map[string]any (type=%T)\n", orig)
 	}
 
 	response.Fields = fields
@@ -158,20 +163,18 @@ func TransformProjectType(orig interface{}) ProjectTypeResponse {
 	return response
 }
 
-/*
-TransformProjectCategory converts a raw project category object into a
-ProjectCategoryResponse, copying its fields and extracting the ID.
-*/
-func TransformProjectCategory(orig interface{}) ProjectCategoryResponse {
+// TransformProjectCategory converts a raw project category object into a
+// ProjectCategoryResponse, copying its fields and extracting the ID.
+func TransformProjectCategory(orig any) ProjectCategoryResponse {
 	var projectCatRes ProjectCategoryResponse
-	fields := map[string]interface{}{}
+	fields := map[string]any{}
 
-	if msg, ok := orig.(map[string]interface{}); ok && msg != nil {
+	if msg, ok := orig.(map[string]any); ok && msg != nil {
 		for key, value := range msg {
 			fields[key] = value
 		}
 	} else if orig != nil {
-		fmt.Printf("Warning: projectCategory not map[string]interface{} (type=%T)\n", orig)
+		fmt.Printf("Warning: projectCategory not map[string]any (type=%T)\n", orig)
 	}
 
 	projectCatRes.Fields = fields
@@ -185,25 +188,22 @@ func TransformProjectCategory(orig interface{}) ProjectCategoryResponse {
 	return projectCatRes
 }
 
-/*
-TransformRole converts a raw role object into a RoleResponse,
-copying its fields and extracting the ID.
-*/
-func TransformRole(orig interface{}) RoleResponse {
+// TransformRole converts a raw role object into a RoleResponse, copying its fields and extracting the ID.
+func TransformRole(orig any) RoleResponse {
 	var roleResponse RoleResponse
-	var fields map[string]interface{}
+	var fields map[string]any
 
 	switch msg := orig.(type) {
 	case nil:
-		fields = map[string]interface{}{}
-	case map[string]interface{}:
-		fields = make(map[string]interface{}, len(msg))
+		fields = map[string]any{}
+	case map[string]any:
+		fields = make(map[string]any, len(msg))
 		for key, value := range msg {
 			fields[key] = value
 		}
 	default:
 		fmt.Printf("Warning: role type %T not map/nil\n", orig)
-		fields = map[string]interface{}{}
+		fields = map[string]any{}
 	}
 
 	roleResponse.Fields = fields
@@ -217,25 +217,23 @@ func TransformRole(orig interface{}) RoleResponse {
 	return roleResponse
 }
 
-/*
-TransformProjectVersion converts a raw project version object into a
-ProjectVersionResponse, copying its fields and extracting the ID.
-*/
-func TransformProjectVersion(orig interface{}) ProjectVersionResponse {
+// TransformProjectVersion converts a raw project version object into a
+// ProjectVersionResponse, copying its fields and extracting the ID.
+func TransformProjectVersion(orig any) ProjectVersionResponse {
 	var versionRes ProjectVersionResponse
-	var fields map[string]interface{}
+	var fields map[string]any
 
 	switch msg := orig.(type) {
 	case nil:
-		fields = map[string]interface{}{}
-	case map[string]interface{}:
-		fields = make(map[string]interface{}, len(msg))
+		fields = map[string]any{}
+	case map[string]any:
+		fields = make(map[string]any, len(msg))
 		for key, value := range msg {
 			fields[key] = value
 		}
 	default:
 		fmt.Printf("Warning: project version type %T not map/nil\n", orig)
-		fields = map[string]interface{}{}
+		fields = map[string]any{}
 	}
 
 	versionRes.Fields = fields

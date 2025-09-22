@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package jira
 
 import (
@@ -13,9 +27,9 @@ func TestBuildSelectorTree(t *testing.T) {
 		"Sprint":       "custom_field_10022",
 	}
 
-	tree, err := j.buildSelectorTree(fields, custom)
+	tree, err := SelectorTreeFrom(j.log, fields, custom)
 	if err != nil {
-		t.Fatalf("buildSelectorTree error: %v", err)
+		t.Fatalf("SelectorTreeFrom error: %v", err)
 	}
 
 	// spot checks
@@ -62,13 +76,13 @@ func TestNormalizeAndReverseCustomFields(t *testing.T) {
 func TestFilter_MapAndArray(t *testing.T) {
 	j := &jiraProc{}
 	// data represents a simplified issue.Fields payload
-	data := map[string]interface{}{
+	data := map[string]any{
 		"summary": "Fix bug",
-		"assignee": map[string]interface{}{
+		"assignee": map[string]any{
 			"displayName": "Alice",
 			"id":          "user-1",
 		},
-		"labels":             []interface{}{"bug", "p1"},
+		"labels":             []any{"bug", "p1"},
 		"custom_field_10100": 8, // Story Points
 	}
 	customRev := map[string]string{
@@ -76,7 +90,7 @@ func TestFilter_MapAndArray(t *testing.T) {
 	}
 
 	// selectors pick summary, assignee.displayName, labels, Story Points
-	selectors := selectorTree{
+	selectors := SelectorTree{
 		"summary":            {},
 		"assignee":           {"displayName": {}},
 		"labels":             {},
@@ -87,12 +101,12 @@ func TestFilter_MapAndArray(t *testing.T) {
 	if err != nil {
 		t.Fatalf("filter error: %v", err)
 	}
-	got := out.(map[string]interface{})
+	got := out.(map[string]any)
 
 	if got["summary"] != "Fix bug" {
 		t.Fatalf("missing summary")
 	}
-	if got["assignee"].(map[string]interface{})["displayName"] != "Alice" {
+	if got["assignee"].(map[string]any)["displayName"] != "Alice" {
 		t.Fatalf("missing assignee.displayName")
 	}
 	if _, ok := got["labels"]; !ok {

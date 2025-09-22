@@ -1,3 +1,17 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 /*
 Package jira_helper provides helpers for making HTTP requests
 with Jira-specific authentication and rate-limiting handling.
@@ -171,45 +185,34 @@ import (
 	"net/http"
 )
 
-/*
-JiraError represents an error returned by the Jira API.
-It wraps the HTTP status code, a high-level reason,
-the response body (truncated by caller if necessary),
-and any relevant response headers.
-*/
+// JiraError represents an error returned by the Jira API.
+// It wraps the HTTP status code, a high-level reason, the response body (truncated by caller if necessary)
+// and any relevant response headers.
 type JiraError struct {
 	StatusCode int
 	Reason     string
 	Headers    http.Header
 }
 
-/*
-Error implements the error interface for JiraError,
-returning a human-readable error string.
-*/
+// Error implements the error interface for JiraError, returning a human-readable error string.
 func (e *JiraError) Error() string {
 	return fmt.Sprintf("Jira API error: %d %s", e.StatusCode, e.Reason)
 }
 
-/*
-CheckJiraAuth inspects an HTTP response from Jira and
-returns a *JiraError if an authentication or rate-limiting
-problem is detected.
-
-The following cases are handled:
-  - 401 Unauthorized: Invalid credentials (e.g., bad API token).
-  - 403 Forbidden: Valid credentials but insufficient permissions.
-  - 429 Too Many Requests: Jira API throttling; caller should retry
-    after the delay indicated in the Retry-After header.
-  - 200 OK with X-Seraph-LoginReason header: Jira sometimes returns
-    200 but indicates authentication issues in this header.
-
-For all other 4xx/5xx statuses, a JiraError is returned with
-the status text as the reason.
-
-On success (no detected problem), CheckJiraAuth returns nil
-and the caller should proceed to read from the response body.
-*/
+// CheckJiraAuth inspects an HTTP response from Jira and
+// returns a *JiraError if an authentication or rate-limiting
+// problem is detected.
+//
+// The following cases are handled:
+//   - 401 Unauthorized: Invalid credentials (e.g., bad API token).
+//   - 403 Forbidden: Valid credentials but insufficient permissions.
+//   - 429 Too Many Requests: Jira API throttling; caller should retry
+//     after the delay indicated in the Retry-After header.
+//   - 200 OK with X-Seraph-LoginReason header: Jira sometimes returns
+//     200 but indicates authentication issues in this header.
+//
+// For all other 4xx/5xx statuses, a JiraError is returned with the status text as the reason.
+// On success (no detected problem), CheckJiraAuth returns nil and the caller should proceed to read from the response body.
 func CheckJiraAuth(resp *http.Response) ([]byte, error) {
 	if resp == nil {
 		return nil, errors.New("no response received from Jira API")

@@ -1,3 +1,20 @@
+// Copyright 2024 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// query.go contains helpers for parsing input messages into query structures and preparing Jira Search API parameters.
+// These helpers are used by the Jira processor to translate user-facing query input into valid request parameters.
+
 package jira
 
 import (
@@ -9,10 +26,9 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-/*
-expandableFieldsSet is a set of special fields that are not retrieved from the Jira API when using *all on fields param.
-Special fields are retrieved by placing them in the "expand" key in query params when making the call to Jira API
-*/
+// expandableFieldsSet is a set of special fields that are not retrieved from the Jira API
+// when using *all on fields param. Special fields are retrieved by placing them in the "expand" key
+// in query params when making the call to Jira API.
 var expandableFieldsSet = map[string]struct{}{
 	"renderedFields":           {},
 	"names":                    {},
@@ -24,10 +40,8 @@ var expandableFieldsSet = map[string]struct{}{
 	"transitions.fields":       {},
 }
 
-/*
-extractExpandableFields is a method to extract special fields directly from the Fields []string input message
-This is designed so that the input message won't need the "expand" property, which will make everything more readable
-*/
+// extractExpandableFields is a method to extract special fields directly from the Fields []string input message
+// This is designed so that the input message won't need the "expand" property, which will make everything more readable
 func extractExpandableFields(fields []string) []string {
 	var result []string
 	for _, f := range fields {
@@ -42,10 +56,8 @@ func extractExpandableFields(fields []string) []string {
 	return result
 }
 
-/*
-The method extractQueryFromMessage receives the input message from the processor
-and parses it into a JsonInputQuery object
-*/
+// extractQueryFromMessage method receives the input message from the processor
+// and parses it into a JsonInputQuery object
 func (j *jiraProc) extractQueryFromMessage(msg *service.Message) (*JsonInputQuery, error) {
 	var queryData *JsonInputQuery
 	msgBytes, err := msg.AsBytes()
@@ -55,23 +67,21 @@ func (j *jiraProc) extractQueryFromMessage(msg *service.Message) (*JsonInputQuer
 	if err := json.Unmarshal(msgBytes, &queryData); err != nil {
 		return nil, fmt.Errorf("cannot parse input JSON: %s", string(msgBytes))
 	}
-	j.debug("Input queryData: %v", queryData)
+	j.log.Debugf("Input queryData: %v", queryData)
 	return queryData, nil
 }
 
-/*
-The prepareJiraQuery is used to form the JQL used in Jira Search API as this is the only possible method to retrieve issues
-
-If nested fields are present in the Fields array, we take only the first part of the string, until the dot(.) as Jira API does not support nested fields filtering
-If no fields are present in the Fields array, we get all possible fields from Jira using *all
-
-This method also creates the custom field map as we don't know if the fields present into the Fields parameter are custom or not
-This is to facilitate the input message to have a cleaner look, for example,
-Instead of 'fields: ["summary","custom_field_10100"]' to have 'fields: ["summary", "Story Points"]'
-This will check the fields against custom fields retrieved by the Custom Field Jira API
-
-This method also returns all the query params used for the Issue Search API
-*/
+// prepareJiraQuery is used to form the JQL used in Jira Search API as this is the only possible method to retrieve issues
+//
+// If nested fields are present in the Fields array, we take only the first part of the string, until the dot(.) as Jira API does not support nested fields filtering
+// If no fields are present in the Fields array, we get all possible fields from Jira using *all
+//
+// This method also creates the custom field map as we don't know if the fields present into the Fields parameter are custom or not
+// This is to facilitate the input message to have a cleaner look, for example,
+// Instead of 'fields: ["summary","custom_field_10100"]' to have 'fields: ["summary", "Story Points"]'
+// This will check the fields against custom fields retrieved by the Custom Field Jira API
+//
+// This method also returns all the query params used for the Issue Search API
 func (j *jiraProc) prepareJiraQuery(ctx context.Context, q *JsonInputQuery) (ResourceType, map[string]string, map[string]string, error) {
 	params := make(map[string]string)
 	resource := ResourceIssue
@@ -145,17 +155,15 @@ func (j *jiraProc) prepareJiraQuery(ctx context.Context, q *JsonInputQuery) (Res
 		params["fields"] = "*all"
 	}
 
-	j.debug("JQL result: %s", params["jql"])
-	j.debug("Fields selected: %s", params["fields"])
-	j.debug("Expand fields: %s", params["expand"])
+	j.log.Debugf("JQL result: %s", params["jql"])
+	j.log.Debugf("Fields selected: %s", params["fields"])
+	j.log.Debugf("Expand fields: %s", params["expand"])
 
 	return resource, customFields, params, nil
 }
 
-/*
-parseOperatorField parses an input string of the form "<1d", "<= 1d", "> 2010/12/31 14:00", ">-2w", etc.
-it returns the operator (one of =, !=, >, >=, <, <=) and the rest of the string (trimmed).
-*/
+// parseOperatorField parses an input string of the form "<1d", "<= 1d", "> 2010/12/31 14:00", ">-2w", etc.
+// it returns the operator (one of =, !=, >, >=, <, <=) and the rest of the string (trimmed).
 func parseOperatorField(input string) (string, string, error) {
 	input = strings.TrimSpace(input)
 	operators := []string{"!=", ">=", "<=", "=", ">", "<"}
