@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// resources_roles.go implements Jira resource handlers for roles.
+// It fetches Jira roles from the API and transforms them into service messages with optional field filtering.
+
 package jira
 
 import (

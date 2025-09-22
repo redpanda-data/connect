@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// transform.go provides helper functions to convert raw Jira API objects into
+// strongly typed response structs (issues, users, projects, roles, categories, versions, and transitions).
+
 package jira
 
 import "fmt"

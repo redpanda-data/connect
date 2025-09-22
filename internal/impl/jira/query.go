@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// query.go contains helpers for parsing input messages into query structures and preparing Jira Search API parameters.
+// These helpers are used by the Jira processor to translate user-facing query input into valid request parameters.
+
 package jira
 
 import (

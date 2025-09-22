@@ -12,6 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// client.go implements low-level interactions with the Jira REST API.
+// It defines the base API path, provides a helper for making authenticated Jira API requests with retry
+// and error handling, and exposes utilities for retrieving custom fields.
+//
+// These functions are primarily used by the Jira processor when preparing
+// queries and resolving custom field identifiers.
+
 package jira
 
 import (

@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// resources_users.go implements Jira resource handlers for users.
+// It performs paginated searches against the Jira API and transforms user
+// data into service messages with optional field filtering.
+
 package jira
 
 import (

@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// resources_issues.go implements Jira resource handlers for issues and issue transitions.
+// These functions are called by the resource dispatcher in resources.go.
+
 package jira
 
 import (

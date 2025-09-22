@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// resources_projects.go implements Jira resource handlers for projects,
+// including project search, types, categories, and versions.
+// These helpers fetch and transform project-related data into service messages.
+
 package jira
 
 import (

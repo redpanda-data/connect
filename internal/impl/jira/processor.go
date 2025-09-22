@@ -12,6 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package jira provides a Benthos processor that integrates with the Jira API
+// to fetch data based on input messages. It allows querying Jira resources
+// such as issues, projects, users, roles, transitions, and more.
+//
+// The processor is configured with Jira connection details (base URL, user
+// credentials, API token) along with query and pagination options. Each input
+// message is parsed into a Jira query, which is then executed against the Jira
+// Search API or related resource APIs.
+//
+// Typical use cases include:
+//   - Retrieving issues by JQL or project filters
+//   - Fetching transitions, roles, or project metadata
+//   - Enriching message streams with data queried from Jira
+//
+// The processor handles pagination, retries, and optional field expansion in
+// order to make working with Jira’s API more convenient inside message-oriented
+// workflows.
 package jira
 
 import (

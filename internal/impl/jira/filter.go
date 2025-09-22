@@ -12,6 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// filter.go provides utilities for filtering and normalizing Jira data based on requested fields.
+// It defines the selectorTree type for building hierarchical field selectors and implements logic to:
+//
+//   - Construct selector trees from input field lists
+//   - Filter JSON payloads by traversing these selectors
+//   - Handle custom fields by mapping between Jira's internal keys
+//     (e.g. "custom_field_10100") and user-friendly names (e.g. "Story Points")
+//   - Normalize input queries so field references are resolved consistently
+//
+// These helpers are used by the Jira processor to return only the fields
+// requested in user queries while preserving correct custom field mappings.
+
 package jira
 
 import (
