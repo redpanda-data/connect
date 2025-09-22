@@ -32,17 +32,19 @@ type Snapshot struct {
 	snapshotConn *sql.Conn
 	lockConn     *sql.Conn
 
-	Tables []string
-	logger *service.Logger
+	Tables    []string
+	publisher ChangePublisher
+	log       *service.Logger
 }
 
 // NewSnapshot creates a new instance of snapshot capable of snapshotting provided tables.
 // It does this by creating a transaction with snapshot level isolation before paging through rows, sending them to be batched.
-func NewSnapshot(db *sql.DB, tables []string, logger *service.Logger) *Snapshot {
+func NewSnapshot(db *sql.DB, tables []string, publisher ChangePublisher, logger *service.Logger) *Snapshot {
 	return &Snapshot{
-		db:     db,
-		Tables: tables,
-		logger: logger,
+		db:        db,
+		Tables:    tables,
+		publisher: publisher,
+		log:       logger,
 	}
 }
 
@@ -61,8 +63,6 @@ func (s *Snapshot) Prepare(ctx context.Context) (LSN, error) {
 	if s.snapshotConn, err = s.db.Conn(ctx); err != nil {
 		return nil, fmt.Errorf("creating snapshot connection: %v", err)
 	}
-
-	// TODO: Before snapshotting, can we verify snapshotting isolation on the given tables are enabled?
 
 	// Use context.Background() because we want the Tx to be long lived, we explicitly close it in the close method
 	if s.tx, err = s.snapshotConn.BeginTx(context.Background(), &sql.TxOptions{Isolation: sql.LevelSnapshot}); err != nil {
@@ -175,14 +175,15 @@ func (s *Snapshot) Close() error {
 	return errors.Join(errs...)
 }
 
-// Read starts the process of iterating through each table, reading rows based on maxBatchSize, sending the row to handle for processing.
-func (s *Snapshot) Read(ctx context.Context, maxBatchSize int, handle Handler) error {
+// Read starts the process of iterating through each table, reading rows based on maxBatchSize, sending the row as a
+// replication.MessageEvent to the configured publisher.
+func (s *Snapshot) Read(ctx context.Context, maxBatchSize int) error {
 	for _, table := range s.Tables {
 		tablePks, err := s.getTablePrimaryKeys(ctx, table)
 		if err != nil {
 			return err
 		}
-		s.logger.Tracef("primary keys for table %s: %v", table, tablePks)
+		s.log.Tracef("Primary keys for table '%s': %v", table, tablePks)
 		lastSeenPksValues := map[string]any{}
 		for _, pk := range tablePks {
 			lastSeenPksValues[pk] = nil
@@ -190,7 +191,7 @@ func (s *Snapshot) Read(ctx context.Context, maxBatchSize int, handle Handler) e
 
 		var numRowsProcessed int
 
-		s.logger.Infof("Beginning snapshot process for table '%s'", table)
+		s.log.Infof("Beginning snapshot process for table '%s'", table)
 		for {
 			var batchRows *sql.Rows
 			if numRowsProcessed == 0 {
@@ -236,12 +237,12 @@ func (s *Snapshot) Read(ctx context.Context, maxBatchSize int, handle Handler) e
 				}
 
 				m := MessageEvent{
+					Data:      row,
 					LSN:       nil,
 					Operation: int(MessageOperationRead),
 					Table:     table,
-					Data:      row,
 				}
-				if err := handle(ctx, m); err != nil {
+				if err := s.publisher.Publish(ctx, m); err != nil {
 					return fmt.Errorf("handling snapshot table row: %w", err)
 				}
 			}
@@ -254,7 +255,7 @@ func (s *Snapshot) Read(ctx context.Context, maxBatchSize int, handle Handler) e
 				break
 			}
 		}
-		s.logger.Infof("Completed snapshot process for table '%s'", table)
+		s.log.Infof("Completed snapshot process for table '%s'", table)
 	}
 	return nil
 }

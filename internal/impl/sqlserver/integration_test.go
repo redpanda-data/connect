@@ -6,7 +6,7 @@
 //
 // https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
-package sqlserver
+package sqlserver_test
 
 import (
 	"context"
@@ -27,7 +27,8 @@ import (
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
-	. "github.com/redpanda-data/connect/v4/internal/impl/sqlserver/replication"
+
+	// . "github.com/redpanda-data/connect/v4/internal/impl/sqlserver/replication"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
@@ -140,7 +141,7 @@ func Test_ManualTesting_AddTestDataWithUniqueLSN(t *testing.T) {
 	// require.NoError(t, err)
 }
 
-func TestIntegration_SQLServerCDC_SnapshotAndCDC(t *testing.T) {
+func TestIntegration_SQLServerCDC_SnapshotAndStreaming(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
@@ -201,13 +202,14 @@ file:
 		db.MustExec("INSERT INTO foo VALUES (?)", i)
 	}
 
+	want := 2000
 	assert.Eventually(t, func() bool {
 		outBatchMut.Lock()
 		defer outBatchMut.Unlock()
 
-		l := len(outBatches)
-		fmt.Printf("found %d messages\n", l)
-		return l == 2000
+		got := len(outBatches)
+		t.Logf("found %d messages of %d", got, want)
+		return got == want
 	}, time.Minute*5, time.Millisecond*100)
 
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
@@ -615,29 +617,29 @@ file:
 	}`, outBatches[1])
 }
 
-func BenchmarkStreamingCDCChanges(b *testing.B) {
-	b.Skip()
-	port := "1433"
-	connectionString := fmt.Sprintf("sqlserver://sa:YourStrong!Passw0rd@localhost:%s?database=%s&encrypt=disable", port, "mydb")
-	db, err := sql.Open("mssql", connectionString)
-	require.NoError(b, err)
-	defer db.Close()
+// func BenchmarkStreamingCDCChanges(b *testing.B) {
+// 	b.Skip()
+// 	port := "1433"
+// 	connectionString := fmt.Sprintf("sqlserver://sa:YourStrong!Passw0rd@localhost:%s?database=%s&encrypt=disable", port, "mydb")
+// 	db, err := sql.Open("mssql", connectionString)
+// 	require.NoError(b, err)
+// 	defer db.Close()
 
-	ctStream := &ChangeTableStream{}
+// 	ctStream := &ChangeTableStream{}
 
-	err = ctStream.VerifyChangeTables(b.Context(), db, []string{"users", "products"})
-	require.NoError(b, err)
+// 	err = ctStream.VerifyChangeTables(b.Context(), db, []string{"users", "products"})
+// 	require.NoError(b, err)
 
-	b.ReportAllocs()
-	// Reset timer to exclude setup time
-	for b.Loop() {
-		err := ctStream.ReadChangeTables(b.Context(), db, nil, func(_ context.Context, _ MessageEvent) error {
-			// fmt.Printf("LSN=%x, CommandID=%d, SeqVal=%x, op=%d table=%s cols=%d\n", c.startLSN, c.commandID, c.seqVal, c.operation, c.table, len(c.columns))
-			return nil
-		})
-		require.NoError(b, err)
-	}
-}
+// 	b.ReportAllocs()
+// 	// Reset timer to exclude setup time
+// 	for b.Loop() {
+// 		err := ctStream.ReadChangeTables(b.Context(), db, nil, func(_ context.Context, _ MessageEvent) error {
+// 			// fmt.Printf("LSN=%x, CommandID=%d, SeqVal=%x, op=%d table=%s cols=%d\n", c.startLSN, c.commandID, c.seqVal, c.operation, c.table, len(c.columns))
+// 			return nil
+// 		})
+// 		require.NoError(b, err)
+// 	}
+// }
 
 type testDB struct {
 	*sql.DB

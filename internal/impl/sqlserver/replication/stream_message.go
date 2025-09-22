@@ -46,16 +46,6 @@ func (lsn LSN) String() string {
 	return "0x" + hex.EncodeToString(lsn)
 }
 
-// StreamMode represents the mode of the stream at the time of the message
-type StreamMode string
-
-const (
-	// StreamModeStreaming indicates that the stream is in streaming mode
-	StreamModeStreaming StreamMode = "streaming"
-	// StreamModeSnapshot indicates that the stream is in snapshot mode
-	StreamModeSnapshot StreamMode = "snapshot"
-)
-
 // OpType is the type of operation from the database
 type OpType int
 
