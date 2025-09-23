@@ -3,6 +3,13 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.65.0 - 2025-09-23
+
+### Added
+
+- New `tigerbeetle_cdc` input. NOTE: This component will only be present in `cgo` builds. (@batiati)
+- (Benthos) New `json_array` scanner. (@Jeffail)
+
 ## 4.64.0 - 2025-09-19
 
 ### Added
