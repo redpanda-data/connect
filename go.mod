@@ -65,7 +65,7 @@ require (
 	github.com/clbanning/mxj/v2 v2.7.0
 	github.com/colinmarc/hdfs v1.1.3
 	github.com/couchbase/gocb/v2 v2.9.1
-	github.com/cyborginc/cyborgdb-go v0.1.0
+	github.com/cyborginc/cyborgdb-go v0.12.0
 	github.com/dgraph-io/ristretto/v2 v2.0.0
 	github.com/dop251/goja v0.0.0-20240927123429-241b342198c2
 	github.com/dop251/goja_nodejs v0.0.0-20240728170619-29b559befffc
