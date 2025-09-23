@@ -454,7 +454,7 @@ func (m *groupsMigrator) Sync(ctx context.Context, getTopics func() []TopicMappi
 		o := dstOffset[i]
 
 		// Skip invalid offsets, or offsets that failed to translate
-		if o == unknownOffset {
+		if o <= 0 {
 			continue
 		}
 
