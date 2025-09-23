@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -556,6 +557,11 @@ func (m *schemaRegistryMigrator) syncSubjectSchemaLocked(ctx context.Context, ss
 	} else {
 		dss, err := m.dst.CreateSchemaWithIDAndVersion(ctx, dstSubject, sch, ss.ID, ss.Version)
 		if err != nil {
+			const conflictPattern = `Schema already registered with id \d+ instead of input id \d+`
+			if ok, _ := regexp.MatchString(conflictPattern, err.Error()); ok {
+				return fmt.Errorf("create schema: %w - try enabling translate-ids", err)
+			}
+
 			// This is a workaround for Allow POSTing the same schemas with
 			// a fixed ID multiple times [1]. We manually check if the schema
 			// already exists and if it is identical to the one we're trying to
