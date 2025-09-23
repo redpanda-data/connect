@@ -37,12 +37,11 @@ builds:
   - id: connect-cgo
     main: cmd/redpanda-connect/main.go
     binary: redpanda-connect
-    goos: [ darwin, linux ]
+    goos: [ linux ]
     goarch: [ amd64 ]
     env:
       - CGO_ENABLED=1
     ldflags: >
-      -s -w
       -X main.Version={{.Version}}
       -X main.DateBuilt={{.Date}}
       -X main.BinaryName=redpanda-connect
