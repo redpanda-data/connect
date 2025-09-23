@@ -17,16 +17,20 @@ package migrator_test
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
+	"net/http"
 	"strconv"
 	"testing"
 	"time"
 
 	"github.com/ory/dockertest/v3"
+	"github.com/ory/dockertest/v3/docker"
 	"github.com/stretchr/testify/require"
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
 
+	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka/redpandatest"
 	"github.com/redpanda-data/connect/v4/internal/impl/redpanda/migrator"
 )
@@ -235,4 +239,158 @@ func readTopicContent(cluster EmbeddedRedpandaCluster, numMessages int) []*kgo.R
 	}
 
 	return records
+}
+
+type EmbeddedConfluentCluster EmbeddedRedpandaCluster
+
+// startConfluent starts a Confluent CP cluster using Docker. Adapted from
+// https://github.com/confluentinc/cp-all-in-one/.
+func startConfluent(t *testing.T) EmbeddedConfluentCluster {
+	t.Helper()
+
+	const containerExpireSeconds = 900
+
+	pool, err := dockertest.NewPool("")
+	require.NoError(t, err)
+	pool.MaxWait = 2 * time.Minute
+
+	// Get free ports for Kafka and Schema Registry
+	kafkaPort, err := integration.GetFreePort()
+	require.NoError(t, err)
+	schemaRegistryPort, err := integration.GetFreePort()
+	require.NoError(t, err)
+
+	// Start Kafka container (Confluent CP Server)
+	kafkaOptions := &dockertest.RunOptions{
+		Repository: "confluentinc/cp-server",
+		Tag:        "latest",
+		Hostname:   "broker",
+		Env: []string{
+			"KAFKA_NODE_ID=1",
+			"KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT",
+			fmt.Sprintf("KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://broker:29092,PLAINTEXT_HOST://localhost:%d", kafkaPort),
+			"KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1",
+			"KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0",
+			"KAFKA_CONFLUENT_LICENSE_TOPIC_REPLICATION_FACTOR=1",
+			"KAFKA_CONFLUENT_BALANCER_TOPIC_REPLICATION_FACTOR=1",
+			"KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1",
+			"KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1",
+			"KAFKA_DEFAULT_REPLICATION_FACTOR=1",
+			"KAFKA_MIN_INSYNC_REPLICAS=1",
+			"KAFKA_PROCESS_ROLES=broker,controller",
+			"KAFKA_CONTROLLER_QUORUM_VOTERS=1@broker:29093",
+			"KAFKA_LISTENERS=PLAINTEXT://broker:29092,CONTROLLER://broker:29093,PLAINTEXT_HOST://0.0.0.0:9092",
+			"KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT",
+			"KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER",
+			"KAFKA_LOG_DIRS=/tmp/kraft-combined-logs",
+			"CLUSTER_ID=MkU3OEVBNTcwNTJENDM2Qk",
+			"CONFLUENT_METRICS_ENABLE=false",
+			"CONFLUENT_SUPPORT_CUSTOMER_ID=anonymous",
+			// Prevent log cleanup during testing
+			"KAFKA_LOG_RETENTION_MS=-1",
+			"KAFKA_LOG_RETENTION_BYTES=-1",
+			"KAFKA_LOG_SEGMENT_BYTES=1073741824",
+			"KAFKA_LOG_CLEANUP_POLICY=delete",
+			"KAFKA_LOG_CLEANER_ENABLE=false",
+		},
+		ExposedPorts: []string{"9092/tcp"},
+		PortBindings: map[docker.Port][]docker.PortBinding{
+			"9092/tcp": {{HostPort: fmt.Sprintf("%d", kafkaPort)}},
+		},
+	}
+
+	kafkaResource, err := pool.RunWithOptions(kafkaOptions)
+	require.NoError(t, err)
+	require.NoError(t, kafkaResource.Expire(containerExpireSeconds))
+
+	t.Cleanup(func() {
+		require.NoError(t, pool.Purge(kafkaResource))
+	})
+
+	// Wait for Kafka to be healthy
+	brokerAddr := fmt.Sprintf("localhost:%d", kafkaPort)
+	require.NoError(t, pool.Retry(func() error {
+		client, err := kgo.NewClient(
+			kgo.SeedBrokers(brokerAddr),
+			kgo.ClientID("health-check"),
+		)
+		if err != nil {
+			return err
+		}
+		defer client.Close()
+
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+		defer cancel()
+		return client.Ping(ctx)
+	}))
+	t.Log("Kafka container is healthy")
+
+	// Start Schema Registry container (Confluent CP Schema Registry)
+	schemaRegistryOptions := &dockertest.RunOptions{
+		Repository: "confluentinc/cp-schema-registry",
+		Tag:        "latest",
+		Hostname:   "schema-registry",
+		Env: []string{
+			"SCHEMA_REGISTRY_HOST_NAME=schema-registry",
+			"SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS=broker:29092",
+			"SCHEMA_REGISTRY_LISTENERS=http://0.0.0.0:8081",
+		},
+		ExposedPorts: []string{"8081/tcp"},
+		PortBindings: map[docker.Port][]docker.PortBinding{
+			"8081/tcp": {{HostPort: fmt.Sprintf("%d", schemaRegistryPort)}},
+		},
+		Links: []string{fmt.Sprintf("%s:broker", kafkaResource.Container.Name)},
+	}
+
+	schemaRegistryResource, err := pool.RunWithOptions(schemaRegistryOptions)
+	require.NoError(t, err)
+	require.NoError(t, schemaRegistryResource.Expire(containerExpireSeconds))
+
+	t.Cleanup(func() {
+		require.NoError(t, pool.Purge(schemaRegistryResource))
+	})
+
+	schemaRegistryURL := fmt.Sprintf("http://localhost:%d", schemaRegistryPort)
+
+	// Wait for Schema Registry to be healthy
+	require.NoError(t, pool.Retry(func() error {
+		ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+		defer cancel()
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, schemaRegistryURL+"/subjects", nil)
+		if err != nil {
+			return err
+		}
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("schema registry not ready, status: %d", resp.StatusCode)
+		}
+		return nil
+	}))
+	t.Log("Kafka container is healthy")
+
+	// Create Kafka client and admin
+	client, err := kgo.NewClient(
+		kgo.SeedBrokers(brokerAddr),
+		kgo.RecordPartitioner(kgo.ManualPartitioner()),
+	)
+	require.NoError(t, err)
+	t.Cleanup(func() { client.Close() })
+
+	admin := kadm.NewClient(client)
+
+	return EmbeddedConfluentCluster{
+		RedpandaEndpoints: redpandatest.RedpandaEndpoints{
+			BrokerAddr:        brokerAddr,
+			SchemaRegistryURL: schemaRegistryURL,
+		},
+		Client: client,
+		Admin:  admin,
+	}
 }
