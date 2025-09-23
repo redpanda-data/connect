@@ -1,5 +1,9 @@
 version: '3'
 
+vars:
+  GOBIN:
+    sh: realpath {{.TOOLS_BIN_DIR}}
+
 tasks:
   install-all:
     deps:

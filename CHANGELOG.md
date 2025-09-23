@@ -3,18 +3,32 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.64.0 - TBD
+## 4.65.0 - 2025-09-23
+
+### Added
+
+- New `tigerbeetle_cdc` input. NOTE: This component will only be present in `cgo` builds. (@batiati)
+- (Benthos) New `json_array` scanner. (@Jeffail)
+
+## 4.64.0 - 2025-09-19
 
 ### Added
 
 - Added `default_schema_id` field to the `schema_registry_decode` processor. (@mmatczuk)
 - Go API: Component linter added to `public/schema`, including Redpanda build meta fields. (@Jeffail)
+- (Confluent) Add `default_schema_id` field to the `schema_registry_decode` processor.
+
+### Fixed
+
+- (Snowflake) URL field reference. (@ToriBench)
+- (Redpanda) Ensure `redpanda.rack_id` has a default value (and thus optional) for schema definitions. (@josephwoodward)
+- (Protobuf) Ignore hidden files to fix duplicate descriptor errors. (@dubyte)
 
 ### Changed
 
-- (google_cloud_storage) Field `bucket` can now be interpolated (@rockwotj)
-- (output_sns) Field `topic_arn` can now be interpolation (@josephwoodward)
-- (Benthos) Logging: Enable timestamp output by default (@josephwoodward)
+- (google_cloud_storage) Field `bucket` can now be interpolated. (@rockwotj)
+- (output_sns) Field `topic_arn` can now be interpolated. (@josephwoodward)
+- (Benthos) Logging: Enable timestamp output by default. (@josephwoodward)
 
 ## 4.63.0 - 2025-08-27
 

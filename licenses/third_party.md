@@ -279,7 +279,7 @@
 | github.com/prometheus/procfs | Apache-2.0 |
 | github.com/pusher/pusher-http-go | MIT |
 | github.com/qdrant/go-client/qdrant | Apache-2.0 |
-| github.com/questdb/go-questdb-client/v3 | Apache-2.0 |
+| github.com/questdb/go-questdb-client/v4 | Apache-2.0 |
 | github.com/quipo/dependencysolver | MIT |
 | github.com/r3labs/diff/v3 | MPL-2.0 |
 | github.com/rabbitmq/amqp091-go | BSD-2-Clause |

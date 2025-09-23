@@ -53,6 +53,7 @@ jobs:
           - ./internal/impl/snowflake/streaming
           # - ./internal/impl/splunk
           # - ./internal/impl/sql
+          - ./internal/impl/tigerbeetle
           # - ./internal/impl/zeromq
 
     steps:
