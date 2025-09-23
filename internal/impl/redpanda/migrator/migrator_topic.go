@@ -140,7 +140,6 @@ func (m *topicMigrator) SyncOnce(
 	topics func() []string,
 ) error {
 	if m.hasKnownTopics() {
-		m.log.Debugf("Topic migration: skipping topic sync, topics already cached")
 		return nil
 	}
 	m.log.Infof("Topic migration: starting initial topic sync")
