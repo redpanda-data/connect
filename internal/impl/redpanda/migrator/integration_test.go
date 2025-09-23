@@ -249,6 +249,117 @@ func TestIntegrationMigratorMultiPartitionSchemaAwareWithConsumerGroups(t *testi
 	}, redpandaTestWaitTimeout, time.Second)
 }
 
+func TestIntegrationMigratorWithInputKafkaFranz(t *testing.T) {
+	integration.CheckSkip(t)
+
+	const group = "foobar_cg"
+
+	// readMessageWithKafkaFranzInput reads 1 message from the given topic with
+	// the test consumer group.
+	readMessageWithKafkaFranzInput := func(cluster EmbeddedRedpandaCluster) string {
+		configYAML := fmt.Sprintf(`
+input:
+  kafka_franz:
+    seed_brokers: [ %s ]
+    topics: [ %s ]
+    consumer_group: %s
+    start_from_oldest: true
+
+output:
+  drop: {}
+
+logger:
+  level: DEBUG
+`, cluster.BrokerAddr, migratorTestTopic, group)
+
+		sb := service.NewStreamBuilder()
+		require.NoError(t, sb.SetYAML(configYAML))
+
+		msgCh := make(chan []byte)
+		require.NoError(t, sb.AddConsumerFunc(func(_ context.Context, m *service.Message) error {
+			b, err := m.AsBytes()
+			require.NoError(t, err)
+			msgCh <- b
+			return nil
+		}))
+
+		stream, err := sb.Build()
+		require.NoError(t, err)
+
+		go func() {
+			ctx, cancel := context.WithTimeout(t.Context(), redpandaTestWaitTimeout)
+			defer cancel()
+			require.NoError(t, stream.Run(ctx))
+		}()
+
+		msg := <-msgCh
+		require.NoError(t, stream.StopWithin(3*time.Second))
+		return string(msg)
+	}
+
+	t.Log("Given: Redpanda clusters")
+	src, dst := startRedpandaSourceAndDestination(t)
+	src.SchemaRegistryURL = ""
+	dst.SchemaRegistryURL = ""
+
+	t.Log("When: first message is produced to source")
+	msg1 := `{"test":"foo"}`
+	src.Produce(migratorTestTopic, []byte(msg1))
+
+	t.Log("And: migrator is started")
+	msgChan := make(chan *service.Message, 10)
+
+	startMigrator(t, src, dst, func(_ context.Context, m *service.Message) error {
+		msgChan <- m
+		return nil
+	})
+
+	t.Log("Then: the first message is migrated")
+	select {
+	case <-msgChan:
+		t.Log("First message migrated")
+	case <-time.After(redpandaTestWaitTimeout):
+		require.FailNow(t, "timed out waiting for migrator transfer")
+	}
+
+	t.Log("And: Consumer group reads from source using connect pipeline")
+	assert.Equal(t, msg1, readMessageWithKafkaFranzInput(src))
+
+	t.Log("When: Second message is produced to source")
+	msg2 := `{"test":"bar"}`
+	src.Produce(migratorTestTopic, []byte(msg2))
+
+	select {
+	case <-msgChan:
+		t.Log("Second message migrated")
+	case <-time.After(redpandaTestWaitTimeout):
+		require.FailNow(t, "timed out waiting for second message migration")
+	}
+
+	t.Log("And: consumer group is updated in destination cluster")
+	assert.Eventually(t, func() bool {
+		cgo, err := dst.Admin.FetchOffsets(t.Context(), group)
+		if err != nil {
+			t.Logf("Failed to fetch offsets: %v", err)
+			return false
+		}
+		t.Logf("Consumer group offsets: %+v", cgo)
+
+		var ok bool
+		cgo.Each(func(resp kadm.OffsetResponse) {
+			require.NoError(t, resp.Err)
+			require.Equal(t, migratorTestTopic, resp.Topic)
+			if resp.At > 0 {
+				ok = true
+			}
+		})
+		return ok
+	}, 1*time.Minute, 5*time.Second)
+
+	t.Log("Then: Consumer group reads from destination using connect pipeline")
+	assert.Equal(t, msg2, readMessageWithKafkaFranzInput(dst))
+}
+
 // TestIntegrationRealMigratorConfluentToServerless tests the migration from
 // Confluent to Redpanda Serverless. Confluent is running in a Docker container
 // and Redpanda Serverless is a hand provisioned cluster.
