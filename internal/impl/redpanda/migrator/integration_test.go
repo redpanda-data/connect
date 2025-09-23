@@ -17,8 +17,12 @@ package migrator_test
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"os"
 	"sort"
 	"strconv"
 	"testing"
@@ -29,12 +33,17 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
+	"github.com/twmb/franz-go/pkg/kmsg"
+	"github.com/twmb/franz-go/pkg/sasl/scram"
 
 	"github.com/twmb/franz-go/pkg/sr"
 
+	_ "github.com/redpanda-data/benthos/v4/public/components/io"
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
+
+	_ "github.com/redpanda-data/connect/v4/public/components/confluent"
 )
 
 func startMigrator(t *testing.T, src, dst EmbeddedRedpandaCluster, cb service.MessageHandlerFunc) {
@@ -57,7 +66,6 @@ input:
 output:
   redpanda_migrator:
     seed_brokers: [ {{.Dst.BrokerAddr}} ]
-    sync_topic_acls: true
     {{- if .Dst.SchemaRegistryURL }}
     schema_registry:
       url: {{.Dst.SchemaRegistryURL}}
@@ -102,7 +110,7 @@ logger:
 		t.Log("Migrator pipeline shutdown")
 	}()
 	t.Cleanup(func() {
-		require.NoError(t, stream.StopWithin(time.Second))
+		require.NoError(t, stream.StopWithin(stopStreamTimeout))
 	})
 }
 
@@ -239,5 +247,437 @@ func TestIntegrationMigratorMultiPartitionSchemaAwareWithConsumerGroups(t *testi
 		require.NoError(t, err)
 		t.Log(offsets)
 		return offsets[migratorTestTopic][0].At == 1000 && offsets[migratorTestTopic][1].At == 1002
-	}, 10*time.Second, time.Second)
+	}, redpandaTestWaitTimeout, time.Second)
+}
+
+// TestIntegrationRealMigratorConfluentToServerless tests the migration from
+// Confluent to Redpanda Serverless. Confluent is running in a Docker container
+// and Redpanda Serverless is a hand provisioned cluster.
+//
+// In order to run this test, you need to set the REDPANDA_SERVERLESS_SEED and
+// REDPANDA_SCHEMA_REGISTRY_URL environment variables pointing to a Redpanda
+// Serverless cluster seed node address and Schema Registry URL. You can copy
+// them from the Redpanda Serverless UI.
+//
+// The Redpanda Serverless cluster must have user migrator with permissions to
+// read and write to all topics and Schema Registry.
+func TestIntegrationRealMigratorConfluentToServerless(t *testing.T) {
+	integration.CheckSkip(t)
+
+	redpandaServerlessSeed := os.Getenv("REDPANDA_SERVERLESS_SEED")
+	if redpandaServerlessSeed == "" {
+		t.Skip("Skipping because of missing REDPANDA_SERVERLESS_SEED")
+	}
+	redpandaServerlessSchemaRegistryURL := os.Getenv("REDPANDA_SCHEMA_REGISTRY_URL")
+	if redpandaServerlessSchemaRegistryURL == "" {
+		t.Skip("Skipping because of missing REDPANDA_SCHEMA_REGISTRY_URL")
+	}
+
+	const (
+		numMessages = 10_000
+		batchSize   = 1_000
+	)
+	topics := []string{"foo", "bar"}
+
+	t.Log("Given: Confluent server with Schema Registry as source")
+	src := startConfluent(t)
+	ctx := t.Context()
+
+	t.Log("And: Topics and ACLs initialized on source")
+	{
+		// Create topics
+		for _, topic := range topics {
+			_, err := src.Admin.CreateTopic(ctx, 2, 1, nil, topic)
+			require.NoError(t, err)
+			t.Logf("Created topic: %s", topic)
+		}
+
+		// Create ACLs...
+		// Allow redpanda user to read from foo topic
+		allowACL := kadm.NewACLs().
+			Topics("foo").
+			ResourcePatternType(kadm.ACLPatternLiteral).
+			Operations(kmsg.ACLOperationRead).
+			Allow("User:redpanda")
+		_, err := src.Admin.CreateACLs(ctx, allowACL)
+		require.NoError(t, err)
+		t.Log("Created ALLOW ACL for User:redpanda on topic foo")
+
+		// Deny redpanda user to read from bar topic
+		denyACL := kadm.NewACLs().
+			Topics("bar").
+			ResourcePatternType(kadm.ACLPatternLiteral).
+			Operations(kmsg.ACLOperationRead).
+			Deny("User:redpanda")
+		_, err = src.Admin.CreateACLs(ctx, denyACL)
+		require.NoError(t, err)
+	}
+
+	t.Log("And: Schema Registry initialized on source with two identical schemas with different IDs")
+	{
+		const schema = `{"type":"record","name":"SyntheticData","fields":[{"name":"data","type":"int"}]}`
+
+		srClient, err := sr.NewClient(sr.URLs(src.SchemaRegistryURL))
+		require.NoError(t, err)
+
+		fooSchema, err := srClient.CreateSchema(t.Context(), "foo", sr.Schema{
+			Schema: schema,
+			SchemaMetadata: &sr.SchemaMetadata{
+				Tags: map[string][]string{
+					"confluent.io/subject": {"foo"},
+				},
+			},
+		})
+		require.NoError(t, err)
+
+		barSchema, err := srClient.CreateSchema(t.Context(), "bar", sr.Schema{
+			Schema: schema,
+			SchemaMetadata: &sr.SchemaMetadata{
+				Tags: map[string][]string{
+					"confluent.io/subject": {"bar"},
+				},
+			},
+		})
+		require.NoError(t, err)
+
+		assert.NotEqual(t, fooSchema.ID, barSchema.ID)
+	}
+
+	t.Logf("When: running data generator with %d messages", numMessages)
+	{
+		configYAML := fmt.Sprintf(`
+http:
+  enabled: false
+
+input:
+  generate:
+    mapping: |
+      let msg = counter()
+      root.data = $msg
+      
+      meta kafka_topic = match $msg %% 2 {
+        0 => "foo"
+        1 => "bar"
+      }
+      
+      # Set manual timestamp (1 second per message)
+      meta timestamp = 489621600 + $msg
+    count: %d
+    batch_size: %d
+
+  processors:
+    - schema_registry_encode:
+        url: "%s"
+        subject: ${! metadata("kafka_topic") }
+        avro_raw_json: true
+
+output:
+  kafka_franz:
+    seed_brokers: [ "%s" ]
+    topic: ${! @kafka_topic }
+    partitioner: manual
+    partition: ${! random_int(min:0, max:1) }
+    timestamp: ${! @timestamp }
+
+logger:
+  level: info
+`, numMessages, batchSize, src.SchemaRegistryURL, src.BrokerAddr)
+
+		sb := service.NewStreamBuilder()
+		require.NoError(t, sb.SetYAML(configYAML))
+		stream, err := sb.Build()
+		require.NoError(t, err)
+		require.NoError(t, stream.Run(ctx))
+
+		t.Log("Then: data is written to all partitions in all topics")
+		eo, err := src.Admin.ListEndOffsets(t.Context(), topics...)
+		require.NoError(t, err)
+		total := int64(0)
+		eo.Each(func(lo kadm.ListedOffset) {
+			total += lo.Offset
+			t.Logf("Topic %s partition %d: end offset=%d", lo.Topic, lo.Partition, lo.Offset)
+			assert.InEpsilon(t, numMessages/4, lo.Offset, 0.1)
+		})
+		assert.Equal(t, int64(numMessages), total)
+	}
+
+	t.Log("When: consumer group has read from topic 'foo'")
+	const group = "foobar_cg"
+	{
+		configYAML := fmt.Sprintf(`
+input:
+  kafka_franz:
+    seed_brokers: [ "%s" ]
+    topics: [ "%s" ]
+    consumer_group: "%s"
+    fetch_max_partition_bytes: 100B
+    batching:
+      count: 1
+
+  processors:
+    - schema_registry_decode:
+        url: "%s"
+
+output:
+  drop: {}
+  # Replace drop with the following to see the messages in stdout
+  #stdout: {}
+  #processors:
+  #  - mapping: |
+  #      root = this.merge({"count": counter(), "topic": @kafka_topic, "partition": @kafka_partition})
+`, src.BrokerAddr, "foo", group, src.SchemaRegistryURL)
+		sb := service.NewStreamBuilder()
+		require.NoError(t, sb.SetYAML(configYAML))
+
+		msgCh := make(chan *service.Message)
+		require.NoError(t, sb.AddConsumerFunc(func(ctx context.Context, msg *service.Message) error {
+			select {
+			case msgCh <- msg:
+			case <-ctx.Done():
+			}
+			return nil
+		}))
+
+		stream, err := sb.Build()
+		require.NoError(t, err)
+
+		go func() {
+			require.NoError(t, stream.Run(ctx))
+		}()
+
+		for range 1_000 {
+			select {
+			case <-msgCh:
+			case <-time.After(redpandaTestOpTimeout):
+				t.Fatal("timeout waiting for message")
+			}
+		}
+		stopStreamAndWait(t, stream, stopStreamTimeout)
+	}
+
+	t.Log("Then: consumer group metadata is updated in source cluster")
+	{
+		cgo, err := src.Admin.FetchOffsets(ctx, group)
+		require.NoError(t, err)
+		assert.Len(t, cgo["foo"], 2)
+		cgo.Each(func(resp kadm.OffsetResponse) {
+			require.NoError(t, resp.Err)
+			t.Logf("Topic %s partition %d: offset=%d", resp.Topic, resp.Partition, resp.At)
+			require.Equal(t, "foo", resp.Topic)
+			require.Greater(t, resp.At, int64(0))
+		})
+	}
+
+	// Create dstAdmin client to verify consumer group migration
+	opts := []kgo.Opt{
+		kgo.SeedBrokers(redpandaServerlessSeed),
+		kgo.DialTLSConfig(new(tls.Config)),
+		kgo.SASL(scram.Auth{
+			User: "migrator",
+			Pass: "migrator",
+		}.AsSha256Mechanism()),
+	}
+	client, err := kgo.NewClient(opts...)
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+	defer client.Close()
+
+	dstAdmin := kadm.NewClient(client)
+	defer dstAdmin.Close()
+
+	t.Log("When: Migrator is started")
+	{
+		configYAML := fmt.Sprintf(`
+http:
+  enabled: true
+
+input:
+  redpanda_migrator:
+    seed_brokers: [ "%s" ]
+    topics:
+      - '^[^_]'
+    regexp_topics: true
+    start_from_oldest: true
+    consumer_group: migrator_cg
+    schema_registry:
+      url: "%s"
+
+output:
+  redpanda_migrator:
+    seed_brokers: [ "%s" ]
+    tls:
+      enabled: true
+    sasl:
+      - mechanism: SCRAM-SHA-256
+        username: migrator
+        password: migrator
+    schema_registry:
+      url: "%s"
+      basic_auth:
+        enabled: true
+        username: migrator
+        password: migrator
+      translate_ids: true
+    consumer_groups:
+      interval: 2s
+      only_empty: true
+    serverless: true
+
+logger:
+  level: debug
+`, src.BrokerAddr, src.SchemaRegistryURL, redpandaServerlessSeed, redpandaServerlessSchemaRegistryURL)
+
+		sb := service.NewStreamBuilder()
+		require.NoError(t, sb.SetYAML(configYAML))
+
+		msgCh := make(chan *service.Message)
+		require.NoError(t, sb.AddConsumerFunc(func(ctx context.Context, msg *service.Message) error {
+			select {
+			case msgCh <- msg:
+			case <-ctx.Done():
+			}
+			return nil
+		}))
+
+		stream, err := sb.Build()
+		require.NoError(t, err)
+
+		t.Log("Starting data migration from source to serverless destination...")
+		go func() {
+			require.NoError(t, stream.Run(ctx))
+		}()
+
+		count := 0
+		for range numMessages {
+			select {
+			case <-msgCh:
+				count += 1
+				if count%1000 == 0 {
+					t.Logf("Migrated %d messages", count)
+				}
+			case <-time.After(30 * time.Second):
+				t.Fatal("timeout waiting for message")
+			}
+		}
+
+		t.Log("Waiting for consumer group migration to complete...")
+		assert.Eventually(t, func() bool {
+			cgo, err := dstAdmin.FetchOffsets(ctx, group)
+			if err != nil {
+				t.Logf("Failed to fetch offsets: %v", err)
+				return false
+			}
+			t.Logf("Consumer group offsets: %+v", cgo)
+
+			p0, ok := cgo.Lookup("foo", 0)
+			if !ok {
+				return false
+			}
+			if p0.At == 0 {
+				return false
+			}
+			p1, ok := cgo.Lookup("foo", 1)
+			if !ok {
+				return false
+			}
+			if p1.At == 0 {
+				return false
+			}
+
+			return true
+		}, 1*time.Minute, redpandaTestWaitTimeout)
+
+		stopStreamAndWait(t, stream, stopStreamTimeout)
+	}
+
+	t.Log("Then: consumer group metadata is updated in destination cluster")
+	{
+		cgo, err := dstAdmin.FetchOffsets(ctx, group)
+		require.NoError(t, err)
+		assert.Len(t, cgo["foo"], 2)
+		cgo.Each(func(resp kadm.OffsetResponse) {
+			require.NoError(t, resp.Err)
+			t.Logf("Destination topic %s partition %d: offset=%d", resp.Topic, resp.Partition, resp.At)
+			require.Equal(t, "foo", resp.Topic)
+			require.Greater(t, resp.At, int64(0))
+		})
+	}
+
+	t.Log("Then: consumer group can continue to read from topic 'foo' in destination cluster")
+	{
+		configYAML := fmt.Sprintf(`
+input:
+  kafka_franz:
+    seed_brokers: [ "%s" ]
+    tls:
+      enabled: true
+    sasl:
+      - mechanism: SCRAM-SHA-256
+        username: migrator
+        password: migrator
+    topics: [ "%s" ]
+    consumer_group: "%s"
+
+  processors:
+    - schema_registry_decode:
+        url: "%s"
+        basic_auth:
+          enabled: true
+          username: migrator
+          password: migrator
+        avro_raw_json: true
+
+output:
+  stdout: {}
+  processors:
+    - mapping: |
+        root = this.merge({"count": counter(), "topic": @kafka_topic, "partition": @kafka_partition})
+`, redpandaServerlessSeed, "foo", group, redpandaServerlessSchemaRegistryURL)
+		sb := service.NewStreamBuilder()
+		require.NoError(t, sb.SetYAML(configYAML))
+
+		msgCh := make(chan *service.Message)
+		require.NoError(t, sb.AddConsumerFunc(func(ctx context.Context, msg *service.Message) error {
+			b, err := msg.AsBytes()
+			require.NoError(t, err)
+			v := struct {
+				Data int `json:"data"`
+			}{}
+			require.NoError(t, json.Unmarshal(b, &v))
+
+			select {
+			case msgCh <- msg:
+			case <-ctx.Done():
+			}
+			return nil
+		}))
+
+		stream, err := sb.Build()
+		require.NoError(t, err)
+
+		go func() {
+			require.NoError(t, stream.Run(ctx))
+		}()
+
+		for range 10 {
+			select {
+			case <-msgCh:
+			case <-time.After(10 * time.Second):
+				t.Fatal("timeout waiting for message")
+			}
+		}
+		require.NoError(t, stream.StopWithin(stopStreamTimeout))
+	}
+}
+
+const stopStreamTimeout = 3 * time.Second
+
+func stopStreamAndWait(t *testing.T, stream *service.Stream, d time.Duration) {
+	start := time.Now()
+	require.NoError(t, stream.StopWithin(d))
+	d = d - time.Since(start)
+	if d > 0 {
+		time.Sleep(d)
+	}
 }
