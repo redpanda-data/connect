@@ -476,9 +476,11 @@ func (m *groupsMigrator) Sync(ctx context.Context, getTopics func() []TopicMappi
 			offsetsToCommit[g][t] = make(map[int32]kadm.Offset)
 		}
 		offsetsToCommit[g][t][p] = kadm.Offset{
-			Topic:     t,
-			Partition: p,
-			At:        o,
+			Topic:       t,
+			Partition:   p,
+			At:          o,
+			LeaderEpoch: -1,
+			Metadata:    gco.Metadata,
 		}
 		offsetsToCommitCount += 1
 	}
