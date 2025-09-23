@@ -412,6 +412,10 @@ func (m *topicMigrator) SyncACLs(
 
 	described, err := describeACLs(ctx, srcAdm, srcTopic)
 	if err != nil {
+		if errors.Is(err, kerr.SecurityDisabled) {
+			m.log.Warnf("Topic migration: security features disabled on source cluster - skipping ACL sync for topic '%s'", srcTopic)
+			return nil
+		}
 		return fmt.Errorf("describe ACLs for topic %s: %w", srcTopic, err)
 	}
 	if len(described) == 0 {
