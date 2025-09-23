@@ -292,7 +292,7 @@ func makeChatProcessor(conf *service.ParsedConfig, mgr *service.Resources) (serv
 		}
 	case "text":
 		responseFormat.Type = "text"
-		responseFormat.Text = &cohere.TextResponseFormatV2{}
+		responseFormat.Text = &cohere.ChatTextResponseFormatV2{}
 	default:
 		return nil, fmt.Errorf("unknown %s: %q", ccpFieldResponseFormat, v)
 	}
@@ -454,7 +454,7 @@ func (p *chatProcessor) Process(ctx context.Context, msg *service.Message) (serv
 		}
 		body.Messages = append(body.Messages, &cohere.ChatMessageV2{
 			Role:   "system",
-			System: &cohere.SystemMessage{Content: &cohere.SystemMessageContent{String: s}},
+			System: &cohere.SystemMessageV2{Content: &cohere.SystemMessageV2Content{String: s}},
 		})
 	}
 	if p.userPrompt != nil {
@@ -464,7 +464,7 @@ func (p *chatProcessor) Process(ctx context.Context, msg *service.Message) (serv
 		}
 		body.Messages = append(body.Messages, &cohere.ChatMessageV2{
 			Role: "user",
-			User: &cohere.UserMessage{Content: &cohere.UserMessageContent{String: s}},
+			User: &cohere.UserMessageV2{Content: &cohere.UserMessageV2Content{String: s}},
 		})
 	} else {
 		b, err := msg.AsBytes()
@@ -473,14 +473,14 @@ func (p *chatProcessor) Process(ctx context.Context, msg *service.Message) (serv
 		}
 		body.Messages = append(body.Messages, &cohere.ChatMessageV2{
 			Role: "user",
-			User: &cohere.UserMessage{Content: &cohere.UserMessageContent{String: string(b)}},
+			User: &cohere.UserMessageV2{Content: &cohere.UserMessageV2Content{String: string(b)}},
 		})
 	}
 	for _, tool := range p.tools {
 		body.Tools = append(body.Tools, &tool.tool)
 	}
 	var err error
-	var resp *cohere.ChatResponse
+	var resp *cohere.V2ChatResponse
 	for i := 0; i <= p.maxToolCalls; i++ {
 		if i == p.maxToolCalls {
 			body.Tools = nil // Disallow tools
@@ -544,7 +544,7 @@ func (p *chatProcessor) Process(ctx context.Context, msg *service.Message) (serv
 				}
 				outputs = append(outputs, &cohere.ToolContent{
 					Type: "text",
-					Text: &cohere.TextContent{Text: string(v)},
+					Text: &cohere.ChatTextContent{Text: string(v)},
 				})
 			}
 			body.Messages = append(body.Messages, &cohere.ChatMessageV2{
