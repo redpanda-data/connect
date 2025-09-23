@@ -176,6 +176,41 @@ output:
     consumer_groups:
       interval: 1m
 `).
+		Example(
+			"Migration to Redpanda Serverless",
+			"Migrate from Confluent/Kafka to Redpanda Cloud serverless cluster with authentication.",
+			`input:
+  redpanda_migrator:
+    seed_brokers: ["source-kafka:9092"]
+    topics:
+      - '^[^_]'  # All topics not starting with underscore
+    regexp_topics: true
+    start_from_oldest: true
+    consumer_group: "migrator_cg"
+    schema_registry:
+      url: "http://source-registry:8081"
+
+output:
+  redpanda_migrator:
+    seed_brokers: ["serverless-cluster.redpanda.com:9092"]
+    tls:
+      enabled: true
+    sasl:
+      - mechanism: SCRAM-SHA-256
+        username: "migrator"
+        password: "migrator"
+    schema_registry:
+      url: "https://serverless-cluster.redpanda.com:8081"
+      basic_auth:
+        enabled: true
+        username: "migrator"
+        password: "migrator"
+      translate_ids: true
+    consumer_groups:
+      exclude:
+        - "migrator_cg"  # Exclude the migration consumer group itself
+    serverless: true  # Enable serverless mode for restricted configurations
+`).
 		// Kafka fields
 		Fields(kafka.FranzConnectionFields()...).
 		Fields(kafka.FranzProducerFields()...).
