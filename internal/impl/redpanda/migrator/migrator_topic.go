@@ -239,8 +239,15 @@ func (m *topicMigrator) createTopicLocked(ctx context.Context, srcAdm, dstAdm *k
 	if partitions == 0 {
 		partitions = -1
 	}
-	rf := m.topicReplicationFactor(info.Partitions.NumReplicas())
-	m.log.Debugf("Topic migration: source '%s' has %d partitions with replication factor %d", topic, partitions, rf)
+	m.log.Debugf("Topic migration: partition count for '%s': %d", topic, partitions)
+
+	var rf int16
+	if m.conf.Serverless {
+		rf = -1
+	} else {
+		rf = m.topicReplicationFactor(info.Partitions.NumReplicas())
+	}
+	m.log.Debugf("Topic migration: replication factor for '%s': %d", topic, rf)
 
 	conf := newTopicConfig(rc.Configs, m.conf.supportedTopicConfigs())
 	m.log.Debugf("Topic migration: configuration for '%s':\n%s", topic, conf)
