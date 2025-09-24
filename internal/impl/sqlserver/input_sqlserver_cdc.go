@@ -93,9 +93,8 @@ type sqlServerCDCInput struct {
 	cfg *config
 	db  *sql.DB
 
-	res        *service.Resources
-	checkpoint *checkpoint.Capped[replication.LSN]
-	publisher  *batchPublisher
+	res       *service.Resources
+	publisher *batchPublisher
 
 	stopSig *shutdown.Signaller
 	log     *service.Logger
@@ -166,11 +165,10 @@ func newSqlServerCDCInput(conf *service.ParsedConfig, res *service.Resources) (s
 			lsnCache:             lsnCache,
 			lsnCacheKey:          lsnCacheKey,
 		},
-		checkpoint: cp,
-		res:        res,
-		stopSig:    shutdown.NewSignaller(),
-		log:        logger,
-		publisher:  publisher,
+		res:       res,
+		stopSig:   shutdown.NewSignaller(),
+		log:       logger,
+		publisher: publisher,
 	}
 
 	i.publisher.cacheLSN = func(ctx context.Context, lsn replication.LSN) error {
