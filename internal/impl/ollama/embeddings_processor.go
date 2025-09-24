@@ -93,6 +93,7 @@ output:
   cyborgdb:
     host: "${CYBORGDB_HOST}"
     api_key: "${CYBORGDB_API_KEY}"
+    index_key: "${CYBORGDB_INDEX_KEY}"
     index_name: "my_encrypted_index"
     operation: "upsert"
     id: "root = uuid_v4()"
