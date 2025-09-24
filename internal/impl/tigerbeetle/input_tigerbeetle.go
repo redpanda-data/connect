@@ -219,7 +219,7 @@ func init() {
 func (input *tigerbeetleInput) Connect(ctx context.Context) error {
 	timestampLast, err := input.getTimestampLast(ctx)
 	if err != nil {
-		return fmt.Errorf("Could not retrieve the last timestamp from cache: %w", err)
+		return fmt.Errorf("could not retrieve the last timestamp from cache: %w", err)
 	}
 	// Overriding the timestamp with the configured initial value:
 	if input.config.timestampInitial > timestampLast {
@@ -228,7 +228,7 @@ func (input *tigerbeetleInput) Connect(ctx context.Context) error {
 
 	client, err := tb.NewClient(input.config.clusterID, input.config.addresses)
 	if err != nil {
-		return fmt.Errorf("Could not initialize the TigerBeetle client: %w", err)
+		return fmt.Errorf("could not initialize the TigerBeetle client: %w", err)
 	}
 
 	input.stopSignaller = shutdown.NewSignaller()
@@ -453,7 +453,7 @@ func (input *tigerbeetleInput) consume(ctx context.Context) error {
 			for _, result := range results {
 				bytes, err := jsonSerialize(result)
 				if err != nil {
-					return fmt.Errorf("Unable to serialize as JSON: %w", err)
+					return fmt.Errorf("unable to serialize as JSON: %w", err)
 				}
 				message := service.NewMessage(bytes)
 				message.MetaSet("timestamp", strconv.FormatUint(result.Timestamp, 10))
@@ -525,7 +525,7 @@ func (input *tigerbeetleInput) checkRateLimit(ctx context.Context) error {
 
 			if duration > 0 {
 				input.logger.Debugf("rate_limit: waiting for %d ms", duration.Milliseconds())
-				_ = <-time.After(duration)
+				<-time.After(duration)
 			} else {
 				break
 			}
