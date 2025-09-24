@@ -50,8 +50,6 @@ func mcpServerCli(rpMgr *enterprise.GlobalRedpandaManager) *cli.Command {
 			customLintCli(),
 		},
 		Description: `
-!!EXPERIMENTAL!!
-
 Each resource will be exposed as a tool that AI can interact with:
 
   {{.BinaryName}} mcp-server ./repo
