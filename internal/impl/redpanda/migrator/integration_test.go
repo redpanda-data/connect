@@ -57,7 +57,6 @@ input:
     topics: 
       - {{.Topic}}
     consumer_group: migrator_cg
-    start_from_oldest: true
     fetch_max_bytes: 512B
     {{- if .Src.SchemaRegistryURL }}
     schema_registry:
@@ -264,7 +263,6 @@ input:
     seed_brokers: [ %s ]
     topics: [ %s ]
     consumer_group: %s
-    start_from_oldest: true
 
 output:
   drop: {}
@@ -609,7 +607,6 @@ input:
     topics:
       - '^[^_]'
     regexp_topics: true
-    start_from_oldest: true
     consumer_group: migrator_cg
     schema_registry:
       url: "%s"
