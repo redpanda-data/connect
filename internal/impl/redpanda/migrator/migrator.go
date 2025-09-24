@@ -185,7 +185,6 @@ output:
     topics:
       - '^[^_]'  # All topics not starting with underscore
     regexp_topics: true
-    start_from_oldest: true
     consumer_group: "migrator_cg"
     schema_registry:
       url: "http://source-registry:8081"
