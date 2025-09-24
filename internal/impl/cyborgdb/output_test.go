@@ -19,8 +19,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"math/rand"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/cyborginc/cyborgdb-go"
@@ -424,7 +422,7 @@ func TestOutputWriter_InvalidVectorType(t *testing.T) {
 	batch := service.MessageBatch{msg}
 	err := w.WriteBatch(context.Background(), batch)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "vector element 1 is not a number")
+	assert.Contains(t, err.Error(), "cannot be converted to float32")
 }
 
 func TestOutputWriter_EmptyBatch(t *testing.T) {
@@ -479,26 +477,22 @@ func TestOutputWriter_Close(t *testing.T) {
 	require.NoError(t, err)
 }
 
-
-
 // Constructor tests
 func TestNewOutputWriter(t *testing.T) {
-	// Clean up any existing keys
-	os.RemoveAll(".cyborgdb")
-	defer os.RemoveAll(".cyborgdb")
-
 	t.Run("valid config", func(t *testing.T) {
 		config := `
 host: api.cyborg.com
 api_key: test-key
 index_name: test-index
+index_key: ` + generateTestKey() + `
 operation: upsert
 id: ${! json("id") }
 vector_mapping: root = this.vector
 create_if_missing: true
 `
 		spec := outputSpec()
-		parsedConf, err := spec.ParseYAML(config, nil)
+		env := service.NewEnvironment()
+		parsedConf, err := spec.ParseYAML(config, env)
 		require.NoError(t, err)
 
 		writer, err := newOutputWriter(parsedConf, service.MockResources())
@@ -511,43 +505,107 @@ create_if_missing: true
 		config := `
 api_key: test-key
 index_name: test-index
+index_key: ` + generateTestKey() + `
 operation: upsert
 id: ${! json("id") }
 vector_mapping: root = this.vector
 `
 		spec := outputSpec()
-		_, err := spec.ParseYAML(config, nil)
-		assert.Error(t, err) // Should fail during YAML parsing
+		env := service.NewEnvironment()
+		_, err := spec.ParseYAML(config, env)
+		assert.Error(t, err) // Should fail during YAML parsing due to missing host
 	})
 }
 
-func TestResolveIndexKey(t *testing.T) {
-	// Clean up before and after
-	os.RemoveAll(".cyborgdb")
-	defer os.RemoveAll(".cyborgdb")
-
-	logger := service.MockResources().Logger()
-
-	t.Run("generate new key", func(t *testing.T) {
-		key, err := resolveIndexKey("test-index", logger)
-		require.NoError(t, err)
-		assert.Len(t, key, 32)
-
-		// Check file was created
-		keyFile := filepath.Join(".cyborgdb", "test-index.key")
-		_, err = os.Stat(keyFile)
-		assert.NoError(t, err)
-	})
-
-	t.Run("use environment variable", func(t *testing.T) {
+func TestDecodeBase64Key(t *testing.T) {
+	t.Run("valid key", func(t *testing.T) {
 		testKey := generateTestKey()
-		os.Setenv("CYBORGDB_INDEX_KEY", testKey)
-		defer os.Unsetenv("CYBORGDB_INDEX_KEY")
-
-		key, err := resolveIndexKey("test-index", logger)
+		key, err := decodeBase64Key(testKey)
 		require.NoError(t, err)
 		assert.Len(t, key, 32)
 	})
+
+	t.Run("empty key", func(t *testing.T) {
+		_, err := decodeBase64Key("")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "key string is empty")
+	})
+
+	t.Run("invalid base64", func(t *testing.T) {
+		_, err := decodeBase64Key("invalid-base64!")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid key encoding")
+	})
+
+	t.Run("wrong key size", func(t *testing.T) {
+		shortKey := base64.StdEncoding.EncodeToString([]byte("short"))
+		_, err := decodeBase64Key(shortKey)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "key must be exactly 32 bytes")
+	})
 }
 
+func TestSecretsIntegration(t *testing.T) {
+	t.Run("direct key works", func(t *testing.T) {
+		testKey := generateTestKey()
+		config := `
+host: api.cyborg.com
+api_key: test-api-key
+index_name: test-index
+index_key: ` + testKey + `
+operation: upsert
+id: ${! json("id") }
+vector_mapping: root = this.vector
+`
+		spec := outputSpec()
+		env := service.NewEnvironment()
+		parsedConf, err := spec.ParseYAML(config, env)
+		require.NoError(t, err)
 
+		writer, err := newOutputWriter(parsedConf, service.MockResources())
+		require.NoError(t, err)
+		assert.NotNil(t, writer)
+		
+		// Verify configuration
+		assert.Equal(t, "test-index", writer.indexName)
+		assert.Len(t, writer.indexKey, 32) // Should be decoded 32-byte key
+	})
+
+	t.Run("invalid key fails", func(t *testing.T) {
+		config := `
+host: api.cyborg.com
+api_key: test-api-key
+index_name: test-index
+index_key: invalid-base64-key!
+operation: upsert
+id: ${! json("id") }
+`
+		spec := outputSpec()
+		env := service.NewEnvironment()
+		parsedConf, err := spec.ParseYAML(config, env)
+		require.NoError(t, err)
+
+		_, err = newOutputWriter(parsedConf, service.MockResources())
+		assert.Error(t, err) // Should fail due to invalid base64 key
+		assert.Contains(t, err.Error(), "invalid index_key")
+	})
+
+	t.Run("empty key fails", func(t *testing.T) {
+		config := `
+host: api.cyborg.com
+api_key: test-api-key
+index_name: test-index
+index_key: ""
+operation: upsert
+id: ${! json("id") }
+`
+		spec := outputSpec()
+		env := service.NewEnvironment()
+		parsedConf, err := spec.ParseYAML(config, env)
+		require.NoError(t, err)
+
+		_, err = newOutputWriter(parsedConf, service.MockResources())
+		assert.Error(t, err) // Should fail due to empty key
+		assert.Contains(t, err.Error(), "key string is empty")
+	})
+}

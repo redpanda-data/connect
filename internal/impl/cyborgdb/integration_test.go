@@ -23,8 +23,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -91,16 +89,18 @@ func testOutputOperations(t *testing.T, baseURL, apiKey, indexName, indexKey str
 host: %s
 api_key: %s
 index_name: %s
+index_key: %s
 create_if_missing: true
 operation: upsert
 id: ${! json("id") }
 vector_mapping: root = this.vector
 metadata_mapping: root = this.metadata
-`, baseURL, apiKey, indexName)
+`, baseURL, apiKey, indexName, indexKey)
 	
 	// Parse output config
-	outputSpec := outputSpec()
-	outputParsedConf, err := outputSpec.ParseYAML(outputConf, nil)
+	outputSpecObj := outputSpec()
+	env := service.NewEnvironment()
+	outputParsedConf, err := outputSpecObj.ParseYAML(outputConf, env)
 	require.NoError(t, err)
 	
 	mgr := service.MockResources()
@@ -171,16 +171,18 @@ func testBatchOperations(t *testing.T, baseURL, apiKey, indexName, indexKey stri
 host: %s
 api_key: %s
 index_name: %s
+index_key: %s
 operation: upsert
 id: ${! json("id") }
 vector_mapping: root = this.vector
 batching:
   count: 3
   period: 1s
-`, baseURL, apiKey, indexName)
+`, baseURL, apiKey, indexName, indexKey)
 	
-	outputSpec := outputSpec()
-	outputParsedConf, err := outputSpec.ParseYAML(outputConf, nil)
+	outputSpecObj := outputSpec()
+	env := service.NewEnvironment()
+	outputParsedConf, err := outputSpecObj.ParseYAML(outputConf, env)
 	require.NoError(t, err)
 	
 	writer, err := newOutputWriter(outputParsedConf, mgr)
@@ -210,11 +212,14 @@ batching:
 host: %s
 api_key: %s
 index_name: %s
+index_key: %s
 operation: delete
 id: ${! json("id") }
-`, baseURL, apiKey, indexName)
+`, baseURL, apiKey, indexName, indexKey)
 	
-	deleteParsedConf, err := outputSpec.ParseYAML(deleteConf, nil)
+	env2 := service.NewEnvironment()
+	deleteSpec := outputSpec()
+	deleteParsedConf, err := deleteSpec.ParseYAML(deleteConf, env2)
 	require.NoError(t, err)
 	
 	deleter, err := newOutputWriter(deleteParsedConf, mgr)
@@ -275,32 +280,9 @@ func cleanupTestIndex(t *testing.T, baseURL, apiKey, indexName, indexKeyStr stri
 	client, err := cyborgdb.NewClient(baseURL, apiKey)
 	require.NoError(t, err)
 
-	// Try to load the key from the auto-generated file
-	keyFile := filepath.Join(".cyborgdb", fmt.Sprintf("%s.key", indexName))
-	var indexKey []byte
-
-	keyData, err := os.ReadFile(keyFile)
-	if err == nil {
-		// Parse the key from the file (skip comments, extract base64 key)
-		lines := strings.Split(string(keyData), "\n")
-		for _, line := range lines {
-			line = strings.TrimSpace(line)
-			if line != "" && !strings.HasPrefix(line, "#") {
-				indexKey, err = base64.StdEncoding.DecodeString(line)
-				if err != nil {
-					t.Logf("Failed to decode key from file: %v", err)
-					// Fall back to the provided key
-					indexKey, err = base64.StdEncoding.DecodeString(indexKeyStr)
-					require.NoError(t, err)
-				}
-				break
-			}
-		}
-	} else {
-		// Fall back to the provided key if file doesn't exist
-		indexKey, err = base64.StdEncoding.DecodeString(indexKeyStr)
-		require.NoError(t, err)
-	}
+	// Decode the provided key string
+	indexKey, err := base64.StdEncoding.DecodeString(indexKeyStr)
+	require.NoError(t, err)
 	
 	ctx := context.Background()
 	
@@ -318,16 +300,4 @@ func cleanupTestIndex(t *testing.T, baseURL, apiKey, indexName, indexKeyStr stri
 	} else {
 		t.Logf("Successfully deleted test index: %s", indexName)
 	}
-
-	// Clean up the auto-generated key file
-	if _, err := os.Stat(keyFile); err == nil {
-		if err := os.Remove(keyFile); err != nil {
-			t.Logf("Could not remove key file: %v", err)
-		} else {
-			t.Logf("Removed auto-generated key file: %s", keyFile)
-		}
-	}
-
-	// Try to remove the .cyborgdb directory if it's empty
-	_ = os.Remove(".cyborgdb")
 }

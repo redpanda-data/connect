@@ -16,12 +16,8 @@ package cyborgdb
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 
@@ -36,6 +32,7 @@ const (
 	poFieldHost            = "host"
 	poFieldAPIKey          = "api_key"
 	poFieldIndexName       = "index_name"
+	poFieldIndexKey        = "index_key"
 	poFieldID              = "id"
 	poFieldOp              = "operation"
 	poFieldVectorMapping   = "vector_mapping"
@@ -48,7 +45,6 @@ const (
 
 func outputSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Version("4.40.0").
 		Categories("AI").
 		Summary("Inserts items into a CyborgDB encrypted vector index.").
 		Description(`
@@ -70,7 +66,11 @@ data privacy. The encryption key never leaves your infrastructure.
 				Description("The CyborgDB API key for authentication."),
 			service.NewStringField(poFieldIndexName).
 				Default("redpanda-vectors").
-				Description("The name of the index to write to. Encryption keys are auto-generated and stored securely in .cyborgdb/ directory."),
+				Description("The name of the index to write to."),
+			service.NewStringField(poFieldIndexKey).
+				Secret().
+				Description("The base64-encoded encryption key for the index. Must be exactly 32 bytes when decoded.").
+				Example("your-base64-encoded-32-byte-key"),
 			service.NewBoolField(poFieldCreateIfMissing).
 				Default(false).
 				Advanced().
@@ -166,10 +166,15 @@ func newOutputWriter(conf *service.ParsedConfig, mgr *service.Resources) (*outpu
 		return nil, err
 	}
 	
-	// Generate or load encryption key from local storage
-	indexKey, err := resolveIndexKey(indexName, mgr.Logger())
+	// Get encryption key from configuration
+	indexKeyStr, err := conf.FieldString(poFieldIndexKey)
 	if err != nil {
 		return nil, err
+	}
+	
+	indexKey, err := decodeBase64Key(indexKeyStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid index_key: %w", err)
 	}
 	
 	rawOp, err := conf.FieldString(poFieldOp)
@@ -228,100 +233,6 @@ func newOutputWriter(conf *service.ParsedConfig, mgr *service.Resources) (*outpu
 	}
 	
 	return &w, nil
-}
-
-// resolveIndexKey resolves encryption key with priority: ENV > existing file > generate new
-func resolveIndexKey(indexName string, logger *service.Logger) ([]byte, error) {
-	// Check environment variable
-	if envKey := os.Getenv("CYBORGDB_INDEX_KEY"); envKey != "" {
-		logger.Infof("Using encryption key from CYBORGDB_INDEX_KEY environment variable")
-		return decodeBase64Key(envKey)
-	}
-	
-	// Load from existing local file (reuse generated key)
-	keyFile := filepath.Join(".cyborgdb", fmt.Sprintf("%s.key", indexName))
-	if keyData, err := os.ReadFile(keyFile); err == nil {
-		logger.Debugf("Reusing existing encryption key from: %s", keyFile)
-		return decodeKeyFromFile(string(keyData))
-	}
-	
-	// Generate and store new key using CyborgDB SDK (DEV/TEST ONLY)
-	logger.Infof("No existing key found. Generating new encryption key for index: %s", indexName)
-	logger.Warnf("Auto-generating encryption keys is for DEVELOPMENT and TESTING only!")
-	logger.Warnf("For production, set CYBORGDB_INDEX_KEY environment variable!")
-	
-	// Generate a new 32-byte key for AES-256 encryption
-	key := make([]byte, KeySize)
-	if _, err := rand.Read(key); err != nil {
-		return nil, fmt.Errorf("failed to generate encryption key: %w", err)
-	}
-	
-	keyStr := base64.StdEncoding.EncodeToString(key)
-	
-	// Create secure storage directory
-	if err := os.MkdirAll(".cyborgdb", 0700); err != nil {
-		return nil, fmt.Errorf("failed to create .cyborgdb directory: %w", err)
-	}
-	
-	keyFile = filepath.Join(".cyborgdb", fmt.Sprintf("%s.key", indexName))
-	keyFileContent := fmt.Sprintf(`# CyborgDB Development/Testing Encryption Key
-# 
-#   WARNING: This is an AUTO-GENERATED key for DEVELOPMENT and TESTING only!
-#   DO NOT use auto-generated keys in production environments!
-#   DO NOT commit this file to version control!
-#
-# Generated for index: %s
-# Created by: CyborgDB Go SDK
-# 
-# This key is required to decrypt your vector data.
-# For development/testing: Keep this file secure and back it up safely!
-# Add .cyborgdb/ to your .gitignore to avoid committing keys.
-#
-# For PRODUCTION, use environment variable instead:
-#   export CYBORGDB_INDEX_KEY="your-secure-production-key"
-#
-%s`, indexName, keyStr)
-	
-	if err := os.WriteFile(keyFile, []byte(keyFileContent), 0600); err != nil {
-		logger.Errorf("Failed to save encryption key to %s: %v", keyFile, err)
-		logger.Warnf("Key will only be available for this session!")
-	} else {
-		logger.Infof("Development key saved to: %s", keyFile)
-		logger.Warnf("Add .cyborgdb/ to your .gitignore file!")
-		logger.Warnf("Keep this development key secure - it's needed to decrypt your data!")
-		logger.Warnf("For production: export CYBORGDB_INDEX_KEY=\"your-secure-key\"")
-	}
-	
-	return key, nil
-}
-
-// decodeKeyFromFile decodes a base64-encoded key from a key file
-func decodeKeyFromFile(content string) ([]byte, error) {
-	// Extract the key from file content
-	lines := strings.Split(content, "\n")
-	var keyStr string
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line != "" && !strings.HasPrefix(line, "#") {
-			keyStr = line
-			break
-		}
-	}
-	
-	if keyStr == "" {
-		return nil, fmt.Errorf("no key found in file")
-	}
-	
-	indexKey, err := base64.StdEncoding.DecodeString(keyStr)
-	if err != nil {
-		return nil, fmt.Errorf("invalid key encoding (must be base64): %w", err)
-	}
-	
-	if len(indexKey) != KeySize {
-		return nil, fmt.Errorf("key must be exactly %d bytes, got %d", KeySize, len(indexKey))
-	}
-	
-	return indexKey, nil
 }
 
 // decodeBase64Key decodes and validates a base64-encoded key string
@@ -402,12 +313,6 @@ func (w *outputWriter) Connect(ctx context.Context) error {
 }
 
 func (w *outputWriter) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
-	if !w.init {
-		if err := w.Connect(ctx); err != nil {
-			return err
-		}
-	}
-	
 	switch w.op {
 	case operationUpsert:
 		return w.upsertBatch(ctx, batch)
@@ -480,7 +385,7 @@ func (w *outputWriter) upsertBatch(ctx context.Context, batch service.MessageBat
 			}
 		}
 		
-		// Handle different vector result types
+		// Handle different vector result types using bloblang conversion utilities
 		var vector []float32
 		switch v := vecResult.(type) {
 		case []float32:
@@ -493,24 +398,11 @@ func (w *outputWriter) upsertBatch(ctx context.Context, batch service.MessageBat
 		case []interface{}:
 			vector = make([]float32, len(v))
 			for i, elem := range v {
-				switch val := elem.(type) {
-				case float64:
-					vector[i] = float32(val)
-				case float32:
-					vector[i] = val
-				case int:
-					vector[i] = float32(val)
-				case int64:
-					vector[i] = float32(val)
-				case json.Number:
-					f, err := val.Float64()
-					if err != nil {
-						return fmt.Errorf("vector element %d cannot be converted to float: %w", i, err)
-					}
-					vector[i] = float32(f)
-				default:
-					return fmt.Errorf("vector element %d is not a number: %T", i, val)
+				f32, err := bloblang.ValueAsFloat32(elem)
+				if err != nil {
+					return fmt.Errorf("vector element %d cannot be converted to float32: %w", i, err)
 				}
+				vector[i] = f32
 			}
 		case nil:
 			return fmt.Errorf("vector mapping returned nil - check that vector field exists in message")
