@@ -61,7 +61,7 @@ couchbase                 ,processor ,Couchbase                 ,4.11.0  ,commun
 crash                     ,processor ,crash                     ,4.47.0  ,certified  ,n          ,n     ,n
 csv                       ,input     ,csv                       ,0.0.0   ,certified  ,n          ,n     ,n
 csv                       ,scanner   ,csv                       ,0.0.0   ,certified  ,n          ,y     ,y
-cyborgdb                  ,output    ,cyborgdb                  ,4.40.0  ,community  ,n          ,y     ,y
+cyborgdb                  ,output    ,cyborgdb                  ,4.66.0  ,community  ,n          ,y     ,y
 cypher                    ,output    ,cypher                    ,4.37.0  ,community  ,n          ,n     ,n
 decompress                ,processor ,decompress                ,0.0.0   ,certified  ,n          ,y     ,y
 decompress                ,scanner   ,decompress                ,0.0.0   ,certified  ,n          ,y     ,y
