@@ -16,10 +16,9 @@ import (
 	"testing"
 	"time"
 
+	_ "github.com/microsoft/go-mssqldb"
 	"github.com/ory/dockertest/v3"
 	"github.com/ory/dockertest/v3/docker"
-
-	_ "github.com/microsoft/go-mssqldb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -28,7 +27,6 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
-	// . "github.com/redpanda-data/connect/v4/internal/impl/sqlserver/replication"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
@@ -79,20 +77,21 @@ func Test_ManualTesting_AddTestDataWithUniqueLSN(t *testing.T) {
 	require.NoError(t, err)
 
 	// --- create tables and enable CDC on them
-	t.Log("Creating test tables...")
+	t.Log("Creating test tables 'users'...")
 	testDB := &testDB{db, t}
 	err = testDB.createTableWithCDCEnabledIfNotExists(t.Context(), "users", `
-    CREATE TABLE users (
-		id INT PRIMARY KEY,
+	CREATE TABLE users (
+		id INT IDENTITY(1,1) PRIMARY KEY,
 		name NVARCHAR(100)
-    );`)
+	);`)
 	require.NoError(t, err)
 
+	t.Log("Creating test tables 'products'...")
 	err = testDB.createTableWithCDCEnabledIfNotExists(t.Context(), "products", `
-    CREATE TABLE products (
-		id INT PRIMARY KEY,
+	CREATE TABLE products (
+		id INT IDENTITY(1,1) PRIMARY KEY,
 		name NVARCHAR(100)
-    );`)
+	);`)
 	require.NoError(t, err)
 
 	// --- insert test data
@@ -125,9 +124,11 @@ func Test_ManualTesting_AddTestDataWithUniqueLSN(t *testing.T) {
 	// 		FROM sys.all_objects a
 	// 		CROSS JOIN sys.all_objects b
 	// 	)
-	// 	INSERT INTO users (id, name)
-	// 	SELECT n, CONCAT('user-', n) FROM Numbers;
+	// 	INSERT INTO users (name)
+	// 	SELECT CONCAT('user-', n)
+	// 	FROM Numbers;
 	// `)
+
 	// require.NoError(t, err)
 	// _, err = db.Exec(`
 	// 	WITH Numbers AS (
@@ -135,8 +136,9 @@ func Test_ManualTesting_AddTestDataWithUniqueLSN(t *testing.T) {
 	// 		FROM sys.all_objects a
 	// 		CROSS JOIN sys.all_objects b
 	// 	)
-	// 	INSERT INTO products (id, name)
-	// 	SELECT n, CONCAT('product-', n) FROM Numbers;
+	// 	INSERT INTO products (name)
+	// 	SELECT CONCAT('product-', n)
+	// 	FROM Numbers;
 	// `)
 	// require.NoError(t, err)
 }
@@ -616,30 +618,6 @@ file:
     "xml_col": "\u003croot/\u003e"
 	}`, outBatches[1])
 }
-
-// func BenchmarkStreamingCDCChanges(b *testing.B) {
-// 	b.Skip()
-// 	port := "1433"
-// 	connectionString := fmt.Sprintf("sqlserver://sa:YourStrong!Passw0rd@localhost:%s?database=%s&encrypt=disable", port, "mydb")
-// 	db, err := sql.Open("mssql", connectionString)
-// 	require.NoError(b, err)
-// 	defer db.Close()
-
-// 	ctStream := &ChangeTableStream{}
-
-// 	err = ctStream.VerifyChangeTables(b.Context(), db, []string{"users", "products"})
-// 	require.NoError(b, err)
-
-// 	b.ReportAllocs()
-// 	// Reset timer to exclude setup time
-// 	for b.Loop() {
-// 		err := ctStream.ReadChangeTables(b.Context(), db, nil, func(_ context.Context, _ MessageEvent) error {
-// 			// fmt.Printf("LSN=%x, CommandID=%d, SeqVal=%x, op=%d table=%s cols=%d\n", c.startLSN, c.commandID, c.seqVal, c.operation, c.table, len(c.columns))
-// 			return nil
-// 		})
-// 		require.NoError(b, err)
-// 	}
-// }
 
 type testDB struct {
 	*sql.DB
