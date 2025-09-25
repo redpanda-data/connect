@@ -209,8 +209,6 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 	softCtx, done := i.stopSig.SoftStopCtx(context.Background())
 	defer done()
 
-	i.publisher.startBatchFlusher(softCtx)
-
 	streaming := replication.NewChangeTableStream(i.cfg.tables, i.publisher, i.log)
 	if err := streaming.VerifyChangeTables(softCtx, i.db); err != nil {
 		return fmt.Errorf("verifying sql server change tables: %s", err)

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/checkpoint"
+	"github.com/Jeffail/shutdown"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/sqlserver/replication"
@@ -30,6 +31,7 @@ type batchPublisher struct {
 	msgChan    chan asyncMessage
 	logger     *service.Logger
 	cacheLSN   func(ctx context.Context, lsn replication.LSN) error
+	shutSig    *shutdown.Signaller
 }
 
 // newBatchPublisher creates an instance of batchPublisher.
@@ -39,74 +41,87 @@ func newBatchPublisher(batcher *service.Batcher, checkpoint *checkpoint.Capped[r
 		checkpoint: checkpoint,
 		logger:     logger,
 		msgChan:    make(chan asyncMessage),
+		shutSig:    shutdown.NewSignaller(),
 	}
+	go b.loop()
 	return b
 }
 
-// startBatchFlusher creates a long-running process that periodically flushes batches by configured interval.
-func (b *batchPublisher) startBatchFlusher(ctx context.Context) {
-	go func() {
-		// user a Timer instead of a Ticker so we can reset it.
-		var timer *time.Timer
-		defer func() {
-			if b.batcher != nil {
-				b.batcher.Close(context.Background())
-			}
-			if timer != nil {
-				timer.Stop()
-			}
-		}()
+// loop creates a long-running process that periodically flushes batches by configured interval.
+// inspired by internal/impl/kafka/franz_reader_ordered.go
+func (p *batchPublisher) loop() {
+	defer func() {
+		if p.batcher != nil {
+			p.batcher.Close(context.Background())
+		}
+		p.shutSig.TriggerHasStopped()
+	}()
 
-		// not needed if batcher does not exist
-		if b.batcher == nil {
+	// No need to loop when there's no batcher for async writes.
+	if p.batcher == nil {
+		return
+	}
+
+	var flushBatch <-chan time.Time
+	var flushBatchTicker *time.Ticker
+	adjustTimedFlush := func() {
+		if flushBatch != nil || p.batcher == nil {
 			return
 		}
 
-		for {
-			d, ok := b.batcher.UntilNext()
-			if !ok {
-				// No flush scheduled, wait for cancellation
-				select {
-				case <-ctx.Done():
-					return
-				default:
-					time.Sleep(50 * time.Millisecond) // cheap idle sleep
-					continue
-				}
+		tNext, exists := p.batcher.UntilNext()
+		if !exists {
+			if flushBatchTicker != nil {
+				flushBatchTicker.Stop()
+				flushBatchTicker = nil
 			}
-
-			if timer == nil {
-				timer = time.NewTimer(d)
-			} else {
-				if !timer.Stop() {
-					// Safely drain the channel
-					select {
-					case <-timer.C:
-					default:
-					}
-				}
-				timer.Reset(d)
-			}
-
-			// flush batch
-			select {
-			case <-ctx.Done():
-				return
-			case <-timer.C:
-				// lock batcher from being added to whilst we flush it
-				b.batcherMu.Lock()
-				msgBatch, err := b.batcher.Flush(ctx)
-				b.batcherMu.Unlock()
-				if err != nil {
-					b.logger.Errorf("timed flush batch error: %v", err)
-					return
-				}
-				if err := b.publishBatch(ctx, msgBatch); err != nil {
-					b.logger.Errorf("failed to flush periodic batch: %v", err)
-				}
-			}
+			return
 		}
-	}()
+
+		if flushBatchTicker != nil {
+			flushBatchTicker.Reset(tNext)
+		} else {
+			flushBatchTicker = time.NewTicker(tNext)
+		}
+		flushBatch = flushBatchTicker.C
+	}
+
+	closeAtLeisureCtx, done := p.shutSig.SoftStopCtx(context.Background())
+	defer done()
+
+	for {
+		adjustTimedFlush()
+		select {
+		case <-flushBatch:
+			var sendBatch service.MessageBatch
+
+			// Wrap this in a closure to make locking/unlocking easier.
+			func() {
+				p.batcherMu.Lock()
+				defer p.batcherMu.Unlock()
+
+				flushBatch = nil
+				if tNext, exists := p.batcher.UntilNext(); !exists || tNext > 1 {
+					// This can happen if a pushed message triggered a batch before
+					// the last known flush period. In this case we simply enter the
+					// loop again which readjusts our flush batch timer.
+					return
+				}
+
+				if sendBatch, _ = p.batcher.Flush(closeAtLeisureCtx); len(sendBatch) == 0 {
+					return
+				}
+			}()
+
+			if len(sendBatch) > 0 {
+				if err := p.publishBatch(closeAtLeisureCtx, sendBatch); err != nil {
+					return
+				}
+			}
+		case <-p.shutSig.SoftStopChan():
+			return
+		}
+	}
 }
 
 // Publish turns the provided message into a service.Message before batching and flushing them based on batch size or time elapsed.
