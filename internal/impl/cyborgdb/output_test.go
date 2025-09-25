@@ -16,9 +16,9 @@ package cyborgdb
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/base64"
 	"fmt"
-	"math/rand"
 	"testing"
 
 	"github.com/cyborginc/cyborgdb-go"
@@ -41,11 +41,11 @@ func newMockClient() *mockClient {
 	}
 }
 
-func (c *mockClient) ListIndexes(ctx context.Context) ([]string, error) {
+func (c *mockClient) ListIndexes(_ context.Context) ([]string, error) {
 	if c.err != nil {
 		return nil, c.err
 	}
-	
+
 	var names []string
 	for name := range c.indexes {
 		names = append(names, name)
@@ -53,11 +53,11 @@ func (c *mockClient) ListIndexes(ctx context.Context) ([]string, error) {
 	return names, nil
 }
 
-func (c *mockClient) CreateIndex(ctx context.Context, indexName string, indexKey []byte) (*cyborgdb.EncryptedIndex, error) {
+func (c *mockClient) CreateIndex(_ context.Context, indexName string, _ []byte) (*cyborgdb.EncryptedIndex, error) {
 	if c.err != nil {
 		return nil, c.err
 	}
-	
+
 	idx := &mockIndex{
 		name:    indexName,
 		vectors: make(map[string]*cyborgdb.VectorItem),
@@ -68,15 +68,15 @@ func (c *mockClient) CreateIndex(ctx context.Context, indexName string, indexKey
 	return nil, nil
 }
 
-func (c *mockClient) GetIndex(ctx context.Context, indexName string, indexKey []byte) (*cyborgdb.EncryptedIndex, error) {
+func (c *mockClient) GetIndex(_ context.Context, indexName string, _ []byte) (*cyborgdb.EncryptedIndex, error) {
 	if c.err != nil {
 		return nil, c.err
 	}
-	
+
 	if _, exists := c.indexes[indexName]; !exists {
 		return nil, fmt.Errorf("index not found")
 	}
-	
+
 	return nil, nil
 }
 
@@ -90,11 +90,11 @@ type mockIndexClient struct {
 	index *mockIndex
 }
 
-func (m *mockIndexClient) Upsert(ctx context.Context, items []cyborgdb.VectorItem) error {
+func (m *mockIndexClient) Upsert(_ context.Context, items []cyborgdb.VectorItem) error {
 	if m.index.closed {
 		return fmt.Errorf("index is closed")
 	}
-	
+
 	for _, item := range items {
 		m.index.vectors[item.Id] = &cyborgdb.VectorItem{
 			Id:       item.Id,
@@ -105,18 +105,18 @@ func (m *mockIndexClient) Upsert(ctx context.Context, items []cyborgdb.VectorIte
 	return nil
 }
 
-func (m *mockIndexClient) Delete(ctx context.Context, ids []string) error {
+func (m *mockIndexClient) Delete(_ context.Context, ids []string) error {
 	if m.index.closed {
 		return fmt.Errorf("index is closed")
 	}
-	
+
 	for _, id := range ids {
 		delete(m.index.vectors, id)
 	}
 	return nil
 }
 
-func (m *mockIndexClient) Close() error {
+func (*mockIndexClient) Close() error {
 	// Don't actually close the index in tests
 	return nil
 }
@@ -124,33 +124,31 @@ func (m *mockIndexClient) Close() error {
 // Test helper functions
 func generateTestKey() string {
 	key := make([]byte, 32)
-	rand.Read(key)
+	_, _ = rand.Read(key)
 	return base64.StdEncoding.EncodeToString(key)
 }
 
 func createTestMessage(id string, vector []float32, metadata map[string]interface{}) *service.Message {
 	msg := service.NewMessage(nil)
-	
+
 	// Convert vector to interface slice
 	vecInterface := make([]interface{}, len(vector))
 	for i, v := range vector {
 		vecInterface[i] = v
 	}
-	
+
 	structured := map[string]interface{}{
 		"id":     id,
 		"vector": vecInterface,
 	}
-	
+
 	// Add metadata fields to structured data for mapping
-	if metadata != nil {
-		for k, v := range metadata {
-			structured[k] = v
-		}
+	for k, v := range metadata {
+		structured[k] = v
 	}
-	
+
 	msg.SetStructuredMut(structured)
-	
+
 	return msg
 }
 
@@ -182,21 +180,21 @@ func TestOutputWriter_Connect(t *testing.T) {
 			expectError:     false,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockClient := newMockClient()
-			
+
 			if tt.indexExists {
 				// Pre-create the index
 				mockClient.indexes["test-index"] = &mockIndex{
-					name:      "test-index",
-					vectors:   make(map[string]*cyborgdb.VectorItem),
+					name:    "test-index",
+					vectors: make(map[string]*cyborgdb.VectorItem),
 				}
 			}
-			
+
 			indexKey, _ := base64.StdEncoding.DecodeString(generateTestKey())
-			
+
 			w := &outputWriter{
 				client:          mockClient,
 				indexName:       "test-index",
@@ -204,9 +202,9 @@ func TestOutputWriter_Connect(t *testing.T) {
 				createIfMissing: tt.createIfMissing,
 				logger:          service.MockResources().Logger(),
 			}
-			
+
 			err := w.Connect(context.Background())
-			
+
 			if tt.expectError {
 				require.Error(t, err)
 				if tt.errorContains != "" {
@@ -215,7 +213,7 @@ func TestOutputWriter_Connect(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				assert.True(t, w.init)
-				
+
 				if !tt.indexExists && tt.createIfMissing {
 					// Verify index was created
 					_, exists := mockClient.indexes["test-index"]
@@ -233,14 +231,14 @@ func TestOutputWriter_UpsertBatch(t *testing.T) {
 		vectors: make(map[string]*cyborgdb.VectorItem),
 	}
 	mockClient.indexes["test-index"] = mockIndex
-	
+
 	indexKey, _ := base64.StdEncoding.DecodeString(generateTestKey())
-	
-	var vectorMapping *bloblang.Executor = nil
-	var metadataMapping *bloblang.Executor = nil
-	
+
+	var vectorMapping *bloblang.Executor
+	var metadataMapping *bloblang.Executor
+
 	idField, _ := service.NewInterpolatedString("${! json(\"id\") }")
-	
+
 	w := &outputWriter{
 		client:          mockClient,
 		index:           &mockIndexClient{mockIndex},
@@ -253,7 +251,7 @@ func TestOutputWriter_UpsertBatch(t *testing.T) {
 		logger:          service.MockResources().Logger(),
 		init:            true,
 	}
-	
+
 	// Create test batch
 	batch := service.MessageBatch{
 		createTestMessage("vec1", []float32{0.1, 0.2, 0.3}, map[string]interface{}{
@@ -261,23 +259,23 @@ func TestOutputWriter_UpsertBatch(t *testing.T) {
 			"score":    0.95,
 		}),
 		createTestMessage("vec2", []float32{0.4, 0.5, 0.6}, map[string]interface{}{
-			"category": "example", 
+			"category": "example",
 			"score":    0.87,
 		}),
 	}
-	
+
 	err := w.WriteBatch(context.Background(), batch)
 	require.NoError(t, err)
-	
+
 	// Verify vectors were upserted
-	assert.Equal(t, 2, len(mockIndex.vectors))
-	
+	assert.Len(t, mockIndex.vectors, 2)
+
 	vec1 := mockIndex.vectors["vec1"]
 	assert.NotNil(t, vec1)
 	assert.Equal(t, []float32{0.1, 0.2, 0.3}, vec1.Vector)
 	assert.Equal(t, "test", vec1.Metadata["category"])
 	assert.Equal(t, float64(0.95), vec1.Metadata["score"])
-	
+
 	vec2 := mockIndex.vectors["vec2"]
 	assert.NotNil(t, vec2)
 	assert.Equal(t, []float32{0.4, 0.5, 0.6}, vec2.Vector)
@@ -291,7 +289,7 @@ func TestOutputWriter_DeleteBatch(t *testing.T) {
 		name:    "test-index",
 		vectors: make(map[string]*cyborgdb.VectorItem),
 	}
-	
+
 	// Pre-populate some vectors
 	mockIndex.vectors["vec1"] = &cyborgdb.VectorItem{
 		Id:     "vec1",
@@ -305,12 +303,12 @@ func TestOutputWriter_DeleteBatch(t *testing.T) {
 		Id:     "vec3",
 		Vector: []float32{0.7, 0.8, 0.9},
 	}
-	
+
 	mockClient.indexes["test-index"] = mockIndex
-	
+
 	indexKey, _ := base64.StdEncoding.DecodeString(generateTestKey())
 	idField, _ := service.NewInterpolatedString("${! json(\"id\") }")
-	
+
 	w := &outputWriter{
 		client:    mockClient,
 		index:     &mockIndexClient{mockIndex},
@@ -321,18 +319,18 @@ func TestOutputWriter_DeleteBatch(t *testing.T) {
 		logger:    service.MockResources().Logger(),
 		init:      true,
 	}
-	
+
 	// Create test batch for deletion
 	batch := service.MessageBatch{
 		createTestMessage("vec1", nil, nil),
 		createTestMessage("vec3", nil, nil),
 	}
-	
+
 	err := w.WriteBatch(context.Background(), batch)
 	require.NoError(t, err)
-	
+
 	// Verify vectors were deleted
-	assert.Equal(t, 1, len(mockIndex.vectors))
+	assert.Len(t, mockIndex.vectors, 1)
 	assert.Nil(t, mockIndex.vectors["vec1"])
 	assert.NotNil(t, mockIndex.vectors["vec2"])
 	assert.Nil(t, mockIndex.vectors["vec3"])
@@ -345,11 +343,11 @@ func TestOutputWriter_VectorTypeConversion(t *testing.T) {
 		vectors: make(map[string]*cyborgdb.VectorItem),
 	}
 	mockClient.indexes["test-index"] = mockIndex
-	
+
 	indexKey, _ := base64.StdEncoding.DecodeString(generateTestKey())
-	var vectorMapping *bloblang.Executor = nil
+	var vectorMapping *bloblang.Executor
 	idField, _ := service.NewInterpolatedString("${! json(\"id\") }")
-	
+
 	w := &outputWriter{
 		client:        mockClient,
 		index:         &mockIndexClient{mockIndex},
@@ -361,7 +359,7 @@ func TestOutputWriter_VectorTypeConversion(t *testing.T) {
 		logger:        service.MockResources().Logger(),
 		init:          true,
 	}
-	
+
 	// Test different numeric types
 	msg := service.NewMessage(nil)
 	msg.SetStructuredMut(map[string]interface{}{
@@ -373,11 +371,11 @@ func TestOutputWriter_VectorTypeConversion(t *testing.T) {
 			int64(4),
 		},
 	})
-	
+
 	batch := service.MessageBatch{msg}
 	err := w.WriteBatch(context.Background(), batch)
 	require.NoError(t, err)
-	
+
 	// Verify all values were converted to float32
 	vec := mockIndex.vectors["test-vec"]
 	assert.NotNil(t, vec)
@@ -391,11 +389,11 @@ func TestOutputWriter_InvalidVectorType(t *testing.T) {
 		vectors: make(map[string]*cyborgdb.VectorItem),
 	}
 	mockClient.indexes["test-index"] = mockIndex
-	
+
 	indexKey, _ := base64.StdEncoding.DecodeString(generateTestKey())
-	var vectorMapping *bloblang.Executor = nil
+	var vectorMapping *bloblang.Executor
 	idField, _ := service.NewInterpolatedString("${! json(\"id\") }")
-	
+
 	w := &outputWriter{
 		client:        mockClient,
 		index:         &mockIndexClient{mockIndex},
@@ -407,7 +405,7 @@ func TestOutputWriter_InvalidVectorType(t *testing.T) {
 		logger:        service.MockResources().Logger(),
 		init:          true,
 	}
-	
+
 	// Test with invalid vector element type
 	msg := service.NewMessage(nil)
 	msg.SetStructuredMut(map[string]interface{}{
@@ -418,7 +416,7 @@ func TestOutputWriter_InvalidVectorType(t *testing.T) {
 			0.3,
 		},
 	})
-	
+
 	batch := service.MessageBatch{msg}
 	err := w.WriteBatch(context.Background(), batch)
 	require.Error(t, err)
@@ -432,9 +430,9 @@ func TestOutputWriter_EmptyBatch(t *testing.T) {
 		vectors: make(map[string]*cyborgdb.VectorItem),
 	}
 	mockClient.indexes["test-index"] = mockIndex
-	
+
 	indexKey, _ := base64.StdEncoding.DecodeString(generateTestKey())
-	
+
 	w := &outputWriter{
 		client:    mockClient,
 		index:     &mockIndexClient{mockIndex},
@@ -444,14 +442,14 @@ func TestOutputWriter_EmptyBatch(t *testing.T) {
 		logger:    service.MockResources().Logger(),
 		init:      true,
 	}
-	
+
 	// Test with empty batch
 	batch := service.MessageBatch{}
 	err := w.WriteBatch(context.Background(), batch)
 	require.NoError(t, err)
-	
+
 	// Verify no vectors were added
-	assert.Equal(t, 0, len(mockIndex.vectors))
+	assert.Empty(t, mockIndex.vectors)
 }
 
 func TestOutputWriter_Close(t *testing.T) {
@@ -565,7 +563,7 @@ vector_mapping: root = this.vector
 		writer, err := newOutputWriter(parsedConf, service.MockResources())
 		require.NoError(t, err)
 		assert.NotNil(t, writer)
-		
+
 		// Verify configuration
 		assert.Equal(t, "test-index", writer.indexName)
 		assert.Len(t, writer.indexKey, 32) // Should be decoded 32-byte key

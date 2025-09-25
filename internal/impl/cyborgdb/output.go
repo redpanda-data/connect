@@ -17,6 +17,7 @@ package cyborgdb
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -239,7 +240,7 @@ func newOutputWriter(conf *service.ParsedConfig, mgr *service.Resources) (*outpu
 func decodeBase64Key(keyStr string) ([]byte, error) {
 	keyStr = strings.TrimSpace(keyStr)
 	if keyStr == "" {
-		return nil, fmt.Errorf("key string is empty")
+		return nil, errors.New("key string is empty")
 	}
 	
 	indexKey, err := base64.StdEncoding.DecodeString(keyStr)
@@ -377,7 +378,7 @@ func (w *outputWriter) upsertBatch(ctx context.Context, batch service.MessageBat
 				if vec, exists := structMap["vector"]; exists {
 					vecResult = vec
 				} else {
-					return fmt.Errorf("no 'vector' field found in structured message")
+					return errors.New("no 'vector' field found in structured message")
 				}
 			} else {
 				// Otherwise assume the entire structured message is the vector
@@ -405,7 +406,7 @@ func (w *outputWriter) upsertBatch(ctx context.Context, batch service.MessageBat
 				vector[i] = f32
 			}
 		case nil:
-			return fmt.Errorf("vector mapping returned nil - check that vector field exists in message")
+			return errors.New("vector mapping returned nil - check that vector field exists in message")
 		default:
 			return fmt.Errorf("vector mapping must return an array, got %T", vecResult)
 		}
@@ -495,7 +496,7 @@ func (w *outputWriter) deleteBatch(ctx context.Context, batch service.MessageBat
 	return nil
 }
 
-func (w *outputWriter) Close(ctx context.Context) error {
+func (w *outputWriter) Close(_ context.Context) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	

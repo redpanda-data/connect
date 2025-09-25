@@ -16,7 +16,6 @@ package cyborgdb
 
 import (
 	"context"
-	"fmt"
 	"io"
 
 	"github.com/cyborginc/cyborgdb-go"
@@ -29,7 +28,7 @@ type (
 		CreateIndex(ctx context.Context, indexName string, indexKey []byte) (*cyborgdb.EncryptedIndex, error)
 		GetIndex(ctx context.Context, indexName string, indexKey []byte) (*cyborgdb.EncryptedIndex, error)
 	}
-	
+
 	indexClient interface {
 		Upsert(ctx context.Context, items []cyborgdb.VectorItem) error
 		Delete(ctx context.Context, ids []string) error
@@ -72,13 +71,6 @@ func (c *cyborgdbEncryptedIndex) Delete(ctx context.Context, ids []string) error
 	return c.index.Delete(ctx, ids)
 }
 
-func (c *cyborgdbEncryptedIndex) Close() error {
+func (*cyborgdbEncryptedIndex) Close() error {
 	return nil
-}
-
-func isIndexNotFound(err error) bool {
-	if err == nil {
-		return false
-	}
-	return fmt.Sprintf("%v", err) == "index not found" || fmt.Sprintf("%v", err) == "404 Not Found"
 }
