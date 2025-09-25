@@ -38,7 +38,7 @@ func (lsn *LSN) Scan(src any) error {
 	}
 }
 
-// String formats the LSN to the hexidecimal equivalent
+// String formats the LSN to the hexidecimal equivalent.
 func (lsn LSN) String() string {
 	if len(lsn) == 0 {
 		return ""
