@@ -13,6 +13,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/Jeffail/checkpoint"
 	"github.com/Jeffail/shutdown"
@@ -32,6 +33,8 @@ const (
 	fieldCheckpointCache      = "checkpoint_cache"
 	fieldCheckpointKey        = "checkpoint_key"
 	fieldBatching             = "batching"
+
+	shutdownTimeout = 5 * time.Second
 )
 
 func init() {
@@ -86,7 +89,6 @@ type config struct {
 	tables               []string
 	lsnCache             string
 	lsnCacheKey          string
-	// batcher              *service.Batcher
 }
 
 type sqlServerCDCInput struct {
@@ -207,7 +209,9 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 		snapshotter = replication.NewSnapshot(db, i.cfg.tables, i.publisher, i.log)
 	}
 
-	i.stopSig = shutdown.NewSignaller()
+	if i.stopSig == nil {
+		i.stopSig = shutdown.NewSignaller()
+	}
 	softCtx, done := i.stopSig.SoftStopCtx(context.Background())
 	defer done()
 
@@ -326,7 +330,24 @@ func (i *sqlServerCDCInput) processSnapshot(ctx context.Context, snapshot *repli
 	return lsn, nil
 }
 
-func (i *sqlServerCDCInput) Close(_ context.Context) error {
+func (i *sqlServerCDCInput) Close(ctx context.Context) error {
+	if i.stopSig == nil {
+		return nil // Never connected
+	}
+	i.stopSig.TriggerSoftStop()
+	select {
+	case <-ctx.Done():
+	case <-time.After(shutdownTimeout):
+	case <-i.stopSig.HasStoppedChan():
+	}
+
+	i.stopSig.TriggerHardStop()
+	select {
+	case <-ctx.Done():
+	case <-time.After(shutdownTimeout):
+		i.log.Error("failed to shutdown sqlserver_cdc within the timeout")
+	case <-i.stopSig.HasStoppedChan():
+	}
 	if i.db != nil {
 		return i.db.Close()
 	}
