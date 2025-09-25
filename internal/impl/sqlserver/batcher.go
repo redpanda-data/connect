@@ -29,7 +29,7 @@ type batchPublisher struct {
 
 	checkpoint *checkpoint.Capped[replication.LSN]
 	msgChan    chan asyncMessage
-	logger     *service.Logger
+	log        *service.Logger
 	cacheLSN   func(ctx context.Context, lsn replication.LSN) error
 	shutSig    *shutdown.Signaller
 }
@@ -39,7 +39,7 @@ func newBatchPublisher(batcher *service.Batcher, checkpoint *checkpoint.Capped[r
 	b := &batchPublisher{
 		batcher:    batcher,
 		checkpoint: checkpoint,
-		logger:     logger,
+		log:        logger,
 		msgChan:    make(chan asyncMessage),
 		shutSig:    shutdown.NewSignaller(),
 	}
