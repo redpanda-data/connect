@@ -1,0 +1,242 @@
+= Upgrading from Legacy Migrator Components to the Unified `redpanda_migrator`
+
+This guide explains how to migrate your Redpanda Connect configuration from the legacy migrator components (`redpanda_migrator_bundle`, `redpanda_migrator`, `redpanda_migrator_offsets`, `schema_registry`) to the new, unified `redpanda_migrator` input and output pair. The new implementation simplifies the migration process by centralizing all coordination and migration logic into the output component, but it is not backward-compatible with the old components.
+
+IMPORTANT: The unified migrator is not backward-compatible.
+
+== At a glance
+
+* One input and one output only; no bundle.
+* All migration behavior is controlled by the output.
+* Pair input and output by matching the same `label`.
+* Source Schema Registry is configured at `input.redpanda_migrator.schema_registry`.
+* Destination Schema Registry is configured at `output.redpanda_migrator.schema_registry`.
+* Consumer group migration is configured at `output.redpanda_migrator.consumer_groups`.
+
+== Architectural Changes
+
+The fundamental change is the move from a complex, multi-component system to a simple, coordinated pair:
+
+*   **Old Architecture**: This involved a wrapper component, `redpanda_migrator_bundle`, that internally managed three separate component pairs: `redpanda_migrator` for data, `schema_registry` for schemas, and `redpanda_migrator_offsets` for consumer group offsets. This required complex internal routing and sequencing.
+
+*   **New Architecture**: This is a single, unified `redpanda_migrator` input/output pair. The `redpanda_migrator` input acts as a simple Kafka consumer for the source cluster. All the migration logic—including topic creation, schema synchronization, and consumer group offset translation—is now handled exclusively by the `redpanda_migrator` output.
+
+This new design offers several advantages:
+
+*   **Simplified Configuration**: All migration settings are in one place (the output), making configurations easier to read and manage.
+*   **Improved Coordination**: The direct input-output pairing removes the need for complex internal routing, leading to more reliable and predictable behavior.
+*   **Enhanced Features**: The new component includes advanced features like serverless-aware migrations, fine-grained control over topic and schema synchronization, and improved ACL handling.
+
+== Migration checklist
+
+. Add a new `input.redpanda_migrator` and `output.redpanda_migrator`.
+. Move source Kafka and Schema Registry settings into the input.
+. Move destination Kafka and Schema Registry settings into the output.
+. Replace `topic_prefix` with `topic` using interpolation, for example `topic: 'new_${! @kafka_topic }'`.
+. Move any offset settings into `output.redpanda_migrator.consumer_groups`.
+. Remove fields that no longer exist in the unified components.
+. Test on a small set of topics before migrating everything.
+
+== Detailed Field Mapping
+
+To migrate, you will replace the legacy sections in your configuration with the new `redpanda_migrator` input and output. The following tables provide a detailed, field-by-field mapping.
+
+=== `redpanda_migrator_bundle` Wrapper Fields
+
+The `redpanda_migrator_bundle` itself was a wrapper with its own set of fields. Here is how they map to the new structure.
+
+.Input: `redpanda_migrator_bundle` Field Mapping
+[width="100%",options="header"]
+|===
+| Old Field | New Location | Status & Migration Notes
+
+| `redpanda_migrator` (object)
+| `input.redpanda_migrator`
+| **Container Mapped**. The fields within this object are moved to the new `input.redpanda_migrator`. See the table below for a detailed breakdown.
+
+| `schema_registry` (object)
+| `input.redpanda_migrator.schema_registry`
+| **Container Mapped**. The fields for the *source* schema registry are moved into a `schema_registry` block inside the new `input.redpanda_migrator`.
+
+| `migrate_schemas_before_data`
+| (none)
+| **Deleted**. This behavior is now managed by the `output.redpanda_migrator.schema_registry.interval` field. Schema synchronization is triggered on-demand, with an optional background sync.
+
+| `consumer_group_offsets_poll_interval`
+| `output.redpanda_migrator.consumer_groups.interval`
+| **Replaced**. This is now controlled by the `interval` field in the `consumer_groups` block of the new output, which manages how often to sync offsets.
+|===
+
+.Output: `redpanda_migrator_bundle` Field Mapping
+[width="100%",options="header"]
+|===
+| Old Field | New Location | Status & Migration Notes
+
+| `redpanda_migrator` (object)
+| `output.redpanda_migrator`
+| **Container Mapped**. The fields for the *destination* Kafka cluster are moved to the new `output.redpanda_migrator`.
+
+| `schema_registry` (object)
+| `output.redpanda_migrator.schema_registry`
+| **Container Mapped**. The fields for the *destination* schema registry are moved into the `schema_registry` block inside the new `output.redpanda_migrator`.
+
+| `translate_schema_ids`
+| `output.redpanda_migrator.schema_registry.translate_ids`
+| **Moved**. This flag is now located inside the `schema_registry` configuration block of the new output.
+
+| `input_bundle_label`
+| `label` on input/output
+| **Replaced**. The new components are paired using matching `label` fields on the `input` and `output` blocks. Assign the same label to both to link them.
+|===
+
+=== Legacy Component Field-by-Field Breakdown
+
+Here is a detailed breakdown of the fields from the individual components that were part of the old bundle.
+
+==== Data Migration: `redpanda_migrator`
+
+.Input: `redpanda_migrator` Field Mapping
+[width="100%",options="header"]
+|===
+| Old Field | New Location | Status & Migration Notes
+| `*` | `input.redpanda_migrator.*` | **Mapped**. All legacy input fields map directly to the new input.
+|===
+
+.Output: `redpanda_migrator` Field Mapping
+[width="100%",options="header"]
+|===
+| Old Field | New Location | Status & Migration Notes
+| Connection: `seed_brokers`, `client_id`, `tls`, `sasl`, `metadata_max_age`, `request_timeout_overhead`, `conn_idle_timeout` | `output.redpanda_migrator.*` | **Mapped**. Kafka connection settings.
+| Producer: `idempotent_write`, `compression`, `timeout`, `max_message_bytes`, `broker_write_max_bytes` | `output.redpanda_migrator.*` | **Mapped**. Kafka producer settings.
+| `translate_schema_ids` | `output.redpanda_migrator.schema_registry.translate_ids` | **Moved**. Schema ID translation is configured under the `schema_registry` block.
+| `is_serverless` | `output.redpanda_migrator.serverless` | **Renamed**. Field renamed to `serverless`.
+| `topic_prefix` | `output.redpanda_migrator.topic` | **Replaced**. Use `topic` with interpolation, e.g. `topic: 'new_${! @kafka_topic }'`.
+| `replication_factor_override`, `replication_factor` | `output.redpanda_migrator.topic_replication_factor` | **Replaced**. Use unified `topic_replication_factor` when creating topics.
+| `schema_registry_output_resource` | `output.redpanda_migrator.schema_registry.*` | **Replaced**. Configure destination Schema Registry inline.
+| `input_resource` | `label` on input/output | **Replaced**. Pair by matching `label` on input and output.
+| `max_in_flight`; `key`; `partition`; `partitioner`; `timestamp_ms`; `metadata.include_prefixes`; `metadata.include_patterns`; `allow_auto_topic_creation` | (none) | **Deleted**. Behaviour is internalised by the unified migrator; per-message routing and metadata selection are automatic.
+|===
+
+==== Schema Migration: `schema_registry`
+
+.Input: `schema_registry` Field Mapping
+[width="100%",options="header"]
+|===
+| Old Field | New Location | Status & Migration Notes
+| `url`, `tls`, `oauth`, `basic_auth`, `jwt` | `input.redpanda_migrator.schema_registry.*` | **Mapped**. These connection fields for the *source* schema registry are moved to the `schema_registry` block in the new `input.redpanda_migrator`.
+| `subject_filter` | `output.redpanda_migrator.schema_registry.include`, `output.redpanda_migrator.schema_registry.exclude` | **Replaced**. Use the `include` and `exclude` regex lists in the new output's `schema_registry` block to filter subjects.
+| `include_deleted` | `output.redpanda_migrator.schema_registry.include_deleted` | **Moved**. This setting is now configured on the destination `schema_registry` block in the new output.
+| `fetch_in_order` | (none) | **Deleted**. The new migrator handles schema dependency resolution internally.
+| `auto_replay_nacks` | (none) | **Deleted**. There is no standalone `schema_registry` input in the unified design; this input-only reliability toggle no longer applies.
+|===
+
+.Output: `schema_registry` Field Mapping
+[width="100%",options="header"]
+|===
+| Old Field | New Location | Status & Migration Notes
+| Connection: `url`, `tls`, `oauth`, `basic_auth`, `jwt` | `output.redpanda_migrator.schema_registry.*` | **Mapped**. Connection settings.
+| IDs: `translate_ids` | `output.redpanda_migrator.schema_registry.translate_ids` | **Mapped**. Control schema ID translation.
+| `subject` | `output.redpanda_migrator.schema_registry.subject` | **Moved**. Configured within the unified output `schema_registry` block.
+| `normalize` | `output.redpanda_migrator.schema_registry.normalize` | **Moved**. Configured within the unified output `schema_registry` block.
+| `subject_compatibility_level` | (none) | **Replaced**. Compatibility is propagated from source when explicitly set.
+| `backfill_dependencies` | `output.redpanda_migrator.schema_registry.versions` | **Replaced**. Choose `all` or `latest`.
+| `remove_metadata`, `remove_rule_set` | `output.redpanda_migrator.serverless` | **Replaced**. Enabled implicitly when `serverless: true`.
+| `max_in_flight`; `input_resource` | (none) | **Deleted**. Parallelism and source binding are handled by the unified design.
+|===
+
+==== Consumer Group Offset Migration: `redpanda_migrator_offsets`
+
+The entire `redpanda_migrator_offsets` input/output pair has been deprecated and its functionality absorbed into the new `redpanda_migrator` output.
+
+.Input: `redpanda_migrator_offsets` Field Mapping
+[width="100%",options="header"]
+|===
+| Old Field | New Location | Status & Migration Notes
+| `*` | `output.redpanda_migrator.consumer_groups` | **Replaced**. All consumer group migration is now configured in the `consumer_groups` block of the new `output.redpanda_migrator`. The consumer group migration uses the same source Kafka connection as the main input.
+|===
+
+.Output: `redpanda_migrator_offsets` Field Mapping
+[width="100%",options="header"]
+|===
+| Old Field | New Location | Status & Migration Notes
+| `*` | `output.redpanda_migrator.consumer_groups` | **Replaced**. The consumer group migration uses the same destination Kafka connection as the main output. Topic renaming is handled by the main `topic` field.
+|===
+
+== Example Migration
+
+Here is a complete example of migrating a configuration from the old bundle to the new unified components.
+
+=== Before: Legacy `redpanda_migrator_bundle`
+
+```yaml
+input:
+  label: "source_cluster"
+  redpanda_migrator_bundle:
+    redpanda_migrator:
+      seed_brokers: [ "source-kafka:9092" ]
+      topics: [ "orders", "payments" ]
+      consumer_group: "migration_group"
+    schema_registry:
+      url: "http://source-registry:8081"
+    migrate_schemas_before_data: false
+    consumer_group_offsets_poll_interval: 30s
+
+output:
+  redpanda_migrator_bundle:
+    redpanda_migrator:
+      seed_brokers: [ "destination-redpanda:9092" ]
+      topic_prefix: "migrated_"
+    schema_registry:
+      url: "http://destination-registry:8081"
+    translate_schema_ids: true
+    input_bundle_label: "source_cluster"
+```
+
+=== After: Unified `redpanda_migrator`
+
+```yaml
+input:
+  label: "migration_pipeline" # Labels are now used for pairing
+  redpanda_migrator:
+    # Source Kafka settings
+    seed_brokers: [ "source-kafka:9092" ]
+    topics: [ "orders", "payments" ]
+    consumer_group: "migration_group"
+
+    # Source Schema Registry settings
+    schema_registry:
+      url: "http://source-registry:8081"
+
+output:
+  label: "migration_pipeline" # Matching label pairs the input and output
+  redpanda_migrator:
+    # Destination Redpanda settings
+    seed_brokers: [ "destination-redpanda:9092" ]
+
+    # Topic mapping (replicates old topic_prefix)
+    topic: 'migrated_${! @kafka_topic }'
+
+    # Destination Schema Registry and migration settings
+    schema_registry:
+      url: "http://destination-registry:8081"
+      translate_ids: true
+      # Rename subjects, for example:
+      subject: 'migrated_${! metadata("schema_registry_subject") }'
+
+    # Consumer group migration settings
+    consumer_groups:
+      enabled: true
+      interval: 30s # Formerly consumer_group_offsets_poll_interval
+      exclude: [ "migration_group" ] # Exclude the migrator's own group
+```
+
+== Compatibility notes
+
+* Exclude the migrator's own consumer group in `consumer_groups` to avoid feedback loops.
+* Batching and in-flight management are handled by the output; remove `max_in_flight` from old configs.
+* Subject compatibility is copied when explicitly set on the source; there is no override field in the output.
+* When `serverless: true`, schema metadata and rule sets are stripped automatically.
+* Topic rename is driven by the `topic` interpolation, not a fixed prefix.
+* Consumer group migration uses the same source connection as the input and the same destination connection as the output.
+
+By following this guide, you can smoothly transition to the new `redpanda_migrator` components and take advantage of the simplified and more powerful migration capabilities.
