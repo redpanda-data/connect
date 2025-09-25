@@ -60,8 +60,6 @@ const (
 	MessageOperationUpdateBefore OpType = 3
 	// MessageOperationUpdateAfter represents a update (after) operation from MS SQL Server's CDC table
 	MessageOperationUpdateAfter OpType = 4
-	// MessageOperationMerge represents a merge operation from MS SQL Server's CDC table
-	MessageOperationMerge OpType = 5
 )
 
 // String converts the operation type to a string equivalent.
@@ -77,8 +75,6 @@ func (op OpType) String() string {
 		return "update_before"
 	case MessageOperationUpdateAfter:
 		return "update_after"
-	case MessageOperationMerge:
-		return "merge"
 	default:
 		return fmt.Sprintf("unknown(%d)", int(op))
 	}
