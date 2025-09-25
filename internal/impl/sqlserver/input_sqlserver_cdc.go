@@ -100,7 +100,7 @@ type sqlServerCDCInput struct {
 	log     *service.Logger
 }
 
-func newSqlServerCDCInput(conf *service.ParsedConfig, res *service.Resources) (s service.BatchInput, err error) {
+func newSqlServerCDCInput(conf *service.ParsedConfig, resources *service.Resources) (s service.BatchInput, err error) {
 	var (
 		connectionString     string
 		streamSnapshot       bool
@@ -112,7 +112,7 @@ func newSqlServerCDCInput(conf *service.ParsedConfig, res *service.Resources) (s
 		cp                   *checkpoint.Capped[replication.LSN]
 	)
 
-	if err := license.CheckRunningEnterprise(res); err != nil {
+	if err := license.CheckRunningEnterprise(resources); err != nil {
 		return nil, err
 	}
 	if connectionString, err = conf.FieldString(fieldConnectionString); err != nil {
@@ -129,6 +129,8 @@ func newSqlServerCDCInput(conf *service.ParsedConfig, res *service.Resources) (s
 		return nil, err
 	}
 	cp = checkpoint.NewCapped[replication.LSN](int64(checkpointLimit))
+
+	// TODO: Implement regex filtering of tables
 
 	if tables, err = conf.FieldStringList(fieldTables); err != nil {
 		return nil, err
@@ -149,11 +151,11 @@ func newSqlServerCDCInput(conf *service.ParsedConfig, res *service.Resources) (s
 	} else if policy.IsNoop() {
 		policy.Count = 1
 	}
-	if batcher, err = policy.NewBatcher(res); err != nil {
+	if batcher, err = policy.NewBatcher(resources); err != nil {
 		return nil, err
 	}
 
-	logger := res.Logger()
+	logger := resources.Logger()
 	publisher := newBatchPublisher(batcher, cp, logger)
 
 	i := sqlServerCDCInput{
@@ -165,7 +167,7 @@ func newSqlServerCDCInput(conf *service.ParsedConfig, res *service.Resources) (s
 			lsnCache:             lsnCache,
 			lsnCacheKey:          lsnCacheKey,
 		},
-		res:       res,
+		res:       resources,
 		stopSig:   shutdown.NewSignaller(),
 		log:       logger,
 		publisher: publisher,
