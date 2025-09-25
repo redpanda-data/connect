@@ -357,7 +357,7 @@ func (r *ChangeTableStream) ReadChangeTables(ctx context.Context, db *sql.DB, st
 			msg := MessageEvent{
 				Data:      cur.columns,
 				LSN:       cur.startLSN,
-				Operation: cur.operation,
+				Operation: OpType(cur.operation).String(),
 				Table:     cur.table,
 			}
 
