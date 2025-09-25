@@ -25,7 +25,7 @@ component_type_dropdown::[]
 
 A specialised Kafka producer for comprehensive data migration between Apache Kafka and Redpanda clusters.
 
-Introduced in version 4.37.0.
+Introduced in version 4.66.0.
 
 
 [tabs]
