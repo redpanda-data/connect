@@ -25,7 +25,7 @@ const backoffDuration = 5 * time.Second
 
 type heapItem struct{ iter *changeTableRowIter }
 
-// rowIteratorMinHeap is used for sorting iterators by LSN to ensure they're in order across tables
+// rowIteratorMinHeap is used for sorting iterators by LSN to ensure they're in order across tables.
 type rowIteratorMinHeap []*heapItem
 
 func (h rowIteratorMinHeap) Len() int { return len(h) }
@@ -174,7 +174,7 @@ func (ct *changeTableRowIter) Close() error {
 	return ct.rows.Close()
 }
 
-// mapValsToChange maps the values from vals to the dst out parameter
+// mapValsToChange maps the values from vals to the dst out parameter.
 func (ct *changeTableRowIter) mapValsToChange(vals []any, dst *change) error {
 	for i, c := range ct.cols {
 		v := *(vals[i].(*any))
@@ -232,12 +232,12 @@ func (ct *changeTableRowIter) mapValsToChange(vals []any, dst *change) error {
 	return nil
 }
 
-// ChangePublisher is responsible for handling and processing of a replication.MessageEvent
+// ChangePublisher is responsible for handling and processing of a replication.MessageEvent.
 type ChangePublisher interface {
 	Publish(ctx context.Context, msg MessageEvent) error
 }
 
-// ChangeTableStream tracks and streams all change events added to the tracked tables change tables
+// ChangeTableStream tracks and streams all change events added to the tracked tables change tables.
 type ChangeTableStream struct {
 	// cfgTables are those provided by the user
 	cfgTables []string
