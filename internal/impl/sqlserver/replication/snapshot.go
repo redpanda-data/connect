@@ -20,11 +20,8 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-// Handler should be used for processes change events coming from configured change tables and sends them for batching.
-type Handler func(ctx context.Context, c MessageEvent) error
-
 // Snapshot is responsible for creating snapshots of existing tables based on the Tables configuration value.
-// It will first valiate the list of tables
+// It will first valiate the list of tables.
 type Snapshot struct {
 	db *sql.DB
 	tx *sql.Tx
@@ -239,7 +236,7 @@ func (s *Snapshot) Read(ctx context.Context, maxBatchSize int) error {
 				m := MessageEvent{
 					Data:      row,
 					LSN:       nil,
-					Operation: int(MessageOperationRead),
+					Operation: MessageOperationRead.String(),
 					Table:     table,
 				}
 				if err := s.publisher.Publish(ctx, m); err != nil {

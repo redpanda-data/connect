@@ -64,10 +64,30 @@ const (
 	MessageOperationMerge OpType = 5
 )
 
+// String converts the operation type to a string equivalent.
+func (op OpType) String() string {
+	switch op {
+	case MessageOperationRead:
+		return "read"
+	case MessageOperationDelete:
+		return "delete"
+	case MessageOperationInsert:
+		return "insert"
+	case MessageOperationUpdateBefore:
+		return "update_before"
+	case MessageOperationUpdateAfter:
+		return "update_after"
+	case MessageOperationMerge:
+		return "merge"
+	default:
+		return fmt.Sprintf("unknown(%d)", int(op))
+	}
+}
+
 // MessageEvent represents a single change from Table's change table in the database
 type MessageEvent struct {
 	LSN       LSN    `json:"start_lsn"`
-	Operation int    `json:"operation"`
+	Operation string `json:"operation"`
 	Table     string `json:"table"`
 	Data      any    `json:"data"`
 }

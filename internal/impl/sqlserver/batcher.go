@@ -132,6 +132,7 @@ func (b *batchPublisher) Publish(ctx context.Context, m replication.MessageEvent
 	}
 	msg := service.NewMessage(data)
 	msg.MetaSet("table", m.Table)
+	msg.MetaSet("operation", m.Operation)
 	if len(m.LSN) != 0 {
 		msg.MetaSet("start_lsn", string(m.LSN))
 	}
