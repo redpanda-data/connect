@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.66.0 - TBD
+
+### Changed
+
+ - Unified migrator: Introduced a single `redpanda_migrator` input/output pair replacing legacy `redpanda_migrator_bundle`, `redpanda_migrator_offsets`, and the standalone `schema_registry` output; pair components by matching `label`; all migration logic is centralised in the output. (@mmatczuk)
+
 ## 4.65.1 - 2025-10-02
 
 ### Fixed
