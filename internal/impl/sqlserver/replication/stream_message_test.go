@@ -25,3 +25,24 @@ func TestLSNScanner(t *testing.T) {
 	require.Error(t, lsn.Scan(lsnText))
 	require.Nil(t, lsn)
 }
+
+func TestOpTypeToString(t *testing.T) {
+	tests := []struct {
+		name  string
+		given int
+	}{
+		{name: "read", given: 0},
+		{name: "delete", given: 1},
+		{name: "insert", given: 2},
+		{name: "update_before", given: 3},
+		{name: "update_after", given: 4},
+		{name: "unknown(5)", given: 5},
+		{name: "unknown(-1)", given: -1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := OpType(tt.given).String()
+			require.Equal(t, got, tt.name)
+		})
+	}
+}
