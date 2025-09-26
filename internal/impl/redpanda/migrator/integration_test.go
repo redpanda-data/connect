@@ -71,7 +71,6 @@ output:
     {{- end }}
     consumer_groups:
       interval: 1s
-      only_empty: true
 logger:
   level: DEBUG
 `
@@ -629,7 +628,6 @@ output:
       translate_ids: true
     consumer_groups:
       interval: 2s
-      only_empty: true
     serverless: true
 
 logger:

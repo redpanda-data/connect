@@ -56,6 +56,9 @@ type GroupsMigratorConfig struct {
 	// When false (default), all statuses except Dead are included.
 	// When true, only Empty groups are considered.
 	OnlyEmpty bool
+	// SkipSourceGroup when set prevents the migrator from attempting to migrate
+	// its own consumer group.
+	SkipSourceGroup string
 }
 
 // groupsMigratorFields returns the config fields for consumer groups migrator.
@@ -142,6 +145,24 @@ func (c *GroupsMigratorConfig) initFromParsed(pConf *service.ParsedConfig) error
 	// OnlyEmpty setting
 	if c.OnlyEmpty, err = pConf.FieldBool(cgFieldOnlyEmpty); err != nil {
 		return fmt.Errorf("parse only_empty setting: %w", err)
+	}
+
+	return nil
+}
+
+// initFromParsedInput initializes the groups migrator config from input config.
+// This reads the consumer group from the input configuration and sets it as
+// the source group to skip during migration.
+func (c *GroupsMigratorConfig) initFromParsedInput(pConf *service.ParsedConfig) error {
+	if pConf == nil {
+		return nil
+	}
+
+	var err error
+
+	c.SkipSourceGroup, err = pConf.FieldString("consumer_group")
+	if err != nil {
+		return fmt.Errorf("parse consumer_group from input: %w", err)
 	}
 
 	return nil
@@ -327,6 +348,10 @@ func (m *groupsMigrator) Sync(ctx context.Context, getTopics func() []TopicMappi
 		g := gco.Group
 		t := gco.Topic
 		p := gco.Partition
+
+		if g == m.conf.SkipSourceGroup {
+			return true
+		}
 
 		if m.commitedOffsets[g] == nil {
 			m.commitedOffsets[g] = make(map[string]map[int32][2]int64)

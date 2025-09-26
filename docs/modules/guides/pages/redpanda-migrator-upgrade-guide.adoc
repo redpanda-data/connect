@@ -232,7 +232,6 @@ output:
 
 == Compatibility notes
 
-* Exclude the migrator's own consumer group in `consumer_groups` to avoid feedback loops.
 * Batching and in-flight management are handled by the output; remove `max_in_flight` from old configs.
 * Subject compatibility is copied when explicitly set on the source; there is no override field in the output.
 * When `serverless: true`, schema metadata and rule sets are stripped automatically.

@@ -400,6 +400,10 @@ func (m *Migrator) initInputFromParsed(pConf *service.ParsedConfig, mgr *service
 		return err
 	}
 
+	if err := m.groups.conf.initFromParsedInput(pConf); err != nil {
+		return err
+	}
+
 	m.plumbing |= inputInitialized
 	return nil
 }
