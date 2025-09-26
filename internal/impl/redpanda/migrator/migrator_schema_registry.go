@@ -752,12 +752,12 @@ type schemaRegistryMetrics struct {
 
 func newSchemaRegistryMetrics(m *service.Metrics) *schemaRegistryMetrics {
 	return &schemaRegistryMetrics{
-		schemasCreated:      m.NewCounter("migrator_sr_schemas_created_total"),
-		schemaCreateErrors:  m.NewCounter("migrator_sr_schema_create_errors_total"),
-		schemaCreateLatency: m.NewTimer("migrator_sr_schema_create_latency_ns"),
-		compatUpdates:       m.NewCounter("migrator_sr_compatibility_updates_total"),
-		compatUpdateErrors:  m.NewCounter("migrator_sr_compatibility_update_errors_total"),
-		compatUpdateLatency: m.NewTimer("migrator_sr_compatibility_update_latency_ns"),
+		schemasCreated:      m.NewCounter("redpanda_migrator_sr_schemas_created_total"),
+		schemaCreateErrors:  m.NewCounter("redpanda_migrator_sr_schema_create_errors_total"),
+		schemaCreateLatency: m.NewTimer("redpanda_migrator_sr_schema_create_latency_ns"),
+		compatUpdates:       m.NewCounter("redpanda_migrator_sr_compatibility_updates_total"),
+		compatUpdateErrors:  m.NewCounter("redpanda_migrator_sr_compatibility_update_errors_total"),
+		compatUpdateLatency: m.NewTimer("redpanda_migrator_sr_compatibility_update_latency_ns"),
 	}
 }
 

@@ -814,12 +814,12 @@ type groupsMetrics struct {
 
 func newGroupsMetrics(m *service.Metrics) *groupsMetrics {
 	return &groupsMetrics{
-		offsetsTranslated:        m.NewCounter("migrator_cg_offsets_translated_total", "group"),
-		offsetTranslationErrors:  m.NewCounter("migrator_cg_offset_translation_errors_total", "group"),
-		offsetTranslationLatency: m.NewTimer("migrator_cg_offset_translation_latency_ns", "group"),
-		offsetsCommitted:         m.NewCounter("migrator_cg_offsets_committed_total", "group"),
-		offsetCommitErrors:       m.NewCounter("migrator_cg_offset_commit_errors_total", "group"),
-		offsetCommitLatency:      m.NewTimer("migrator_cg_offset_commit_latency_ns", "group"),
+		offsetsTranslated:        m.NewCounter("redpanda_migrator_cg_offsets_translated_total", "group"),
+		offsetTranslationErrors:  m.NewCounter("redpanda_migrator_cg_offset_translation_errors_total", "group"),
+		offsetTranslationLatency: m.NewTimer("redpanda_migrator_cg_offset_translation_latency_ns", "group"),
+		offsetsCommitted:         m.NewCounter("redpanda_migrator_cg_offsets_committed_total", "group"),
+		offsetCommitErrors:       m.NewCounter("redpanda_migrator_cg_offset_commit_errors_total", "group"),
+		offsetCommitLatency:      m.NewTimer("redpanda_migrator_cg_offset_commit_latency_ns", "group"),
 	}
 }
 
