@@ -548,9 +548,9 @@ type topicMetrics struct {
 
 func newTopicMetrics(m *service.Metrics) *topicMetrics {
 	return &topicMetrics{
-		created:       m.NewCounter("migrator_topics_created_total"),
-		createErrors:  m.NewCounter("migrator_topic_create_errors_total"),
-		createLatency: m.NewTimer("migrator_topic_create_latency_ns"),
+		created:       m.NewCounter("redpanda_migrator_topics_created_total"),
+		createErrors:  m.NewCounter("redpanda_migrator_topic_create_errors_total"),
+		createLatency: m.NewTimer("redpanda_migrator_topic_create_latency_ns"),
 	}
 }
 
