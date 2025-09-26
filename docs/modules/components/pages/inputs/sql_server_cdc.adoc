@@ -42,7 +42,8 @@ input:
     connection_string: sqlserver://username:password@host/instance?param1=value&param2=value # No default (required)
     stream_snapshot: false # No default (required)
     snapshot_max_batch_size: 1000
-    tables: [] # No default (required)
+    include: [] # No default (required)
+    exclude: [] # No default (optional)
     checkpoint_cache: "" # No default (required)
     checkpoint_key: sql_server_cdc_position
     checkpoint_limit: 1024
@@ -67,7 +68,8 @@ input:
     connection_string: sqlserver://username:password@host/instance?param1=value&param2=value # No default (required)
     stream_snapshot: false # No default (required)
     snapshot_max_batch_size: 1000
-    tables: [] # No default (required)
+    include: [] # No default (required)
+    exclude: [] # No default (optional)
     checkpoint_cache: "" # No default (required)
     checkpoint_key: sql_server_cdc_position
     checkpoint_limit: 1024
@@ -116,21 +118,21 @@ The maximum number of rows to be streamed in a single batch when taking a snapsh
 
 *Default*: `1000`
 
-=== `tables`
+=== `include`
 
-A list of tables to stream from the database.
+Regular expressions for tables to include.
 
 
 *Type*: `array`
 
 
-```yml
-# Examples
+=== `exclude`
 
-tables:
-  - table1
-  - table2
-```
+Regular expressions for tables to exclude.
+
+
+*Type*: `array`
+
 
 === `checkpoint_cache`
 
