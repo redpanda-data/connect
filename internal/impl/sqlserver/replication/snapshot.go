@@ -29,14 +29,14 @@ type Snapshot struct {
 	snapshotConn *sql.Conn
 	lockConn     *sql.Conn
 
-	Tables    []string
+	Tables    []UserTable
 	publisher ChangePublisher
 	log       *service.Logger
 }
 
 // NewSnapshot creates a new instance of Snapshot capable of snapshotting provided tables.
 // It does this by creating a transaction with snapshot level isolation before paging through rows, sending them to be batched.
-func NewSnapshot(db *sql.DB, tables []string, publisher ChangePublisher, logger *service.Logger) *Snapshot {
+func NewSnapshot(db *sql.DB, tables []UserTable, publisher ChangePublisher, logger *service.Logger) *Snapshot {
 	return &Snapshot{
 		db:        db,
 		Tables:    tables,
@@ -78,7 +78,7 @@ func (s *Snapshot) Prepare(ctx context.Context) (LSN, error) {
 	return toLSN, nil
 }
 
-func (s *Snapshot) getTablePrimaryKeys(ctx context.Context, table string) ([]string, error) {
+func (s *Snapshot) getTablePrimaryKeys(ctx context.Context, table UserTable) ([]string, error) {
 	pkSql := `
 	SELECT c.name AS column_name FROM sys.indexes i
 	JOIN sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id
@@ -88,7 +88,7 @@ func (s *Snapshot) getTablePrimaryKeys(ctx context.Context, table string) ([]str
 	WHERE i.is_primary_key = 1 AND t.name = ? AND s.name = SCHEMA_NAME()
 	ORDER BY ic.key_ordinal;`
 
-	rows, err := s.tx.QueryContext(ctx, pkSql, table)
+	rows, err := s.tx.QueryContext(ctx, pkSql, table.Name)
 	if err != nil {
 		return nil, fmt.Errorf("get primary key: %v", err)
 	}
@@ -102,21 +102,19 @@ func (s *Snapshot) getTablePrimaryKeys(ctx context.Context, table string) ([]str
 		}
 		pks = append(pks, pk)
 	}
-
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("discovering primary keys for table '%s': %w", table, err)
+		return nil, fmt.Errorf("discovering primary keys for table '%s': %w", table.FullName(), err)
 	}
 
 	if len(pks) == 0 {
-		return nil, fmt.Errorf("unable to find primary key for table %s - does the table exist and does it have a primary key set?", table)
+		return nil, fmt.Errorf("unable to find primary key for table '%s' - does the table exist and does it have a primary key set?", table.FullName())
 	}
-
 	return pks, nil
 }
 
-func (s *Snapshot) querySnapshotTable(ctx context.Context, table string, pk []string, lastSeenPkVal *map[string]any, limit int) (*sql.Rows, error) {
+func (s *Snapshot) querySnapshotTable(ctx context.Context, table UserTable, pk []string, lastSeenPkVal *map[string]any, limit int) (*sql.Rows, error) {
 	snapshotQueryParts := []string{
-		fmt.Sprintf("SELECT TOP (%d) * FROM %s", limit, table),
+		fmt.Sprintf("SELECT TOP (%d) * FROM %s.%s", limit, table.Schema, table.Name),
 	}
 
 	if lastSeenPkVal == nil {
@@ -188,7 +186,7 @@ func (s *Snapshot) Read(ctx context.Context, maxBatchSize int) error {
 
 		var numRowsProcessed int
 
-		s.log.Infof("Beginning snapshot process for table '%s'", table)
+		s.log.Infof("Beginning snapshot process for table '%s'", table.FullName())
 		for {
 			var batchRows *sql.Rows
 			if numRowsProcessed == 0 {
@@ -234,10 +232,11 @@ func (s *Snapshot) Read(ctx context.Context, maxBatchSize int) error {
 				}
 
 				m := MessageEvent{
+					Table:     table.Name,
+					Schema:    table.Schema,
 					Data:      row,
-					LSN:       nil,
 					Operation: MessageOperationRead.String(),
-					Table:     table,
+					LSN:       nil,
 				}
 				if err := s.publisher.Publish(ctx, m); err != nil {
 					return fmt.Errorf("handling snapshot table row: %w", err)

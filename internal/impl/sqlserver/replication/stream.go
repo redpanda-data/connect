@@ -15,7 +15,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -56,15 +55,8 @@ func (h *rowIteratorMinHeap) Pop() any {
 	return item
 }
 
-// changeTable is a valid, working change table configured by MS SQL Server that has change tracking enabled.
-type changeTable struct {
-	captureInstance string
-	startLSN        LSN
-}
-
-// change represents a logical change row from the change table set in Table.
+// change represents a logical change row from the change table.
 type change struct {
-	table      string
 	startLSN   LSN // varbinary(10)
 	endLSN     LSN // varbinary(10)
 	operation  int // 1=delete, 2=insert, 3=update (before), 4=update (after), 5=merge
@@ -91,7 +83,7 @@ func (c *change) reset() {
 // changeTableRowIter is responsible for handling the iteration of table change records row by row.
 // It moves to the next row, sorts them by min-heap, parses the data and sends it for processing.
 type changeTableRowIter struct {
-	table   string
+	table   UserTable
 	rows    *sql.Rows
 	cols    []string
 	current *change
@@ -101,13 +93,13 @@ type changeTableRowIter struct {
 }
 
 // newChangeTableRowIter returns an custom row iterator for the given changeTable.
-func newChangeTableRowIter(ctx context.Context, db *sql.DB, changeTable string, fromLSN, toLSN LSN, logger *service.Logger) (*changeTableRowIter, error) {
+func newChangeTableRowIter(ctx context.Context, db *sql.DB, changeTable UserTable, fromLSN, toLSN LSN, logger *service.Logger) (*changeTableRowIter, error) {
 	// Note: LSN is varbinary type so can sort correctly for LSNs
 	// Inspired by Debezium https://github.com/debezium/debezium/blob/main/debezium-connector-sqlserver/src/main/java/io/debezium/connector/sqlserver/SqlServerConnection.java?plain=1#L177
 
 	// "Sequence of the operation as represented in the transaction log. Should not be used for ordering. Instead, use the __$command_id column"
 	// source: https://learn.microsoft.com/en-us/sql/relational-databases/system-tables/cdc-capture-instance-ct-transact-sql?view=sql-server-ver17
-	q := fmt.Sprintf("SELECT * FROM cdc.%s_CT WITH (NOLOCK) WHERE (? IS NULL OR [__$start_lsn] > ?) AND (? IS NULL OR [__$start_lsn] <= ?) ORDER BY [__$start_lsn] ASC, [__$command_id] ASC, [__$operation] ASC", changeTable)
+	q := fmt.Sprintf("SELECT * FROM %s WITH (NOLOCK) WHERE (? IS NULL OR [__$start_lsn] > ?) AND (? IS NULL OR [__$start_lsn] <= ?) ORDER BY [__$start_lsn] ASC, [__$command_id] ASC, [__$operation] ASC", changeTable.ToChangeTable())
 	rows, err := db.QueryContext(ctx, q, fromLSN, fromLSN, toLSN, toLSN) //nolint:rowserrcheck
 	if err != nil {
 		return nil, err
@@ -239,68 +231,43 @@ type ChangePublisher interface {
 
 // ChangeTableStream tracks and streams all change events added to the tracked tables change tables.
 type ChangeTableStream struct {
-	// cfgTables are those provided by the user
-	cfgTables []string
-	// trackedTables are tables that actually exist
-	trackedTables map[string]changeTable
-	publisher     ChangePublisher
-	log           *service.Logger
+	tables    []UserTable
+	publisher ChangePublisher
+	log       *service.Logger
 }
 
 // NewChangeTableStream creates a new instance of NewChangeTableStream, responsible for paging through change events
 // based on the tables param.
-func NewChangeTableStream(cfgTables []string, publisher ChangePublisher, logger *service.Logger) *ChangeTableStream {
+func NewChangeTableStream(tables []UserTable, publisher ChangePublisher, logger *service.Logger) *ChangeTableStream {
 	s := &ChangeTableStream{
-		cfgTables:     cfgTables,
-		trackedTables: make(map[string]changeTable, len(cfgTables)),
-		publisher:     publisher,
-		log:           logger,
+		tables:    tables,
+		publisher: publisher,
+		log:       logger,
 	}
 	return s
 }
 
 // VerifyChangeTables ensures change tables are configured for _all_ provided config supplied tables.
 func (r *ChangeTableStream) VerifyChangeTables(ctx context.Context, db *sql.DB) error {
-	rows, err := db.QueryContext(ctx, "SELECT capture_instance, start_lsn FROM cdc.change_tables")
-	if err != nil {
-		return fmt.Errorf("fetching change tables: %w", err)
-	}
-
-	var changeTables []changeTable
-	for rows.Next() {
-		var t changeTable
-		if err := rows.Scan(&t.captureInstance, &t.startLSN); err != nil {
-			return fmt.Errorf("scanning change table row: %w", err)
+	var userTables []UserTable
+	for _, tbl := range r.tables {
+		q := fmt.Sprintf("SELECT TOP 1 start_lsn FROM cdc.change_tables WHERE capture_instance ='%s_%s'", tbl.Schema, tbl.Name)
+		if err := db.QueryRowContext(ctx, q).Scan(&tbl.startLSN); err != nil {
+			return fmt.Errorf("fetching change tables: %w", err)
 		}
-		changeTables = append(changeTables, t)
-	}
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("iterating through change tables: %w", err)
-	}
-
-	// verify all tables passed have associated change tables and fail if not.
-	for _, t := range r.cfgTables {
-		for _, ct := range changeTables {
-			if strings.HasSuffix(ct.captureInstance, "dbo_"+t) {
-				r.trackedTables[ct.captureInstance] = ct
-				r.log.Debugf("Found change table '%s'", ct.captureInstance)
-				goto next
-			}
+		if len(tbl.startLSN) == 0 {
+			return fmt.Errorf("could not find associated change table for table '%s'", tbl.FullName())
 		}
-		r.log.Warnf("Change table for table '%s' not found", t)
-	next:
+		userTables = append(userTables, tbl)
 	}
 
-	if len(r.trackedTables) != len(r.cfgTables) {
-		return errors.New("could not find all change tables")
-	}
-
+	r.tables = userTables
 	return nil
 }
 
 // ReadChangeTables streams the change events from the configured SQL Server change tables.
 func (r *ChangeTableStream) ReadChangeTables(ctx context.Context, db *sql.DB, startPos LSN) error {
-	r.log.Infof("Starting streaming %d change table(s)", len(r.cfgTables))
+	r.log.Infof("Starting streaming %d change table(s)", len(r.tables))
 	var (
 		fromLSN LSN // load last checkpoint; nil means start from beginning in tables
 		toLSN   LSN // often set to fn_cdc_get_max_lsn(); nil means no upper bound
@@ -324,21 +291,21 @@ func (r *ChangeTableStream) ReadChangeTables(ctx context.Context, db *sql.DB, st
 		h := &rowIteratorMinHeap{}
 		heap.Init(h)
 
-		iters := make([]*changeTableRowIter, 0, len(r.trackedTables))
-		for _, inst := range r.trackedTables {
+		iters := make([]*changeTableRowIter, 0, len(r.tables))
+		for _, changeTable := range r.tables {
 			if len(fromLSN) == 0 {
 				// if no previous LSN is set, start from beginning dictated by tracking table
-				fromLSN = inst.startLSN
+				fromLSN = changeTable.startLSN
 			}
 
-			it, err := newChangeTableRowIter(ctx, db, inst.captureInstance, fromLSN, toLSN, r.log)
+			it, err := newChangeTableRowIter(ctx, db, changeTable, fromLSN, toLSN, r.log)
 			if err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
 					// No data means we can skip adding row iterator to the heap below
-					r.log.Debugf("Exhausted all changes for change table '%s'", inst.captureInstance)
+					r.log.Debugf("Exhausted all changes for change table '%s'", changeTable.ToChangeTable())
 					continue
 				}
-				return fmt.Errorf("initialising iterator for change table '%s': %w", inst.captureInstance, err)
+				return fmt.Errorf("initialising iterator for change table '%s': %w", changeTable.ToChangeTable(), err)
 			}
 
 			if it != nil && it.current != nil {
@@ -355,10 +322,11 @@ func (r *ChangeTableStream) ReadChangeTables(ctx context.Context, db *sql.DB, st
 			cur := item.iter.current
 
 			msg := MessageEvent{
+				Table:     item.iter.table.Name,
+				Schema:    item.iter.table.Schema,
 				Data:      cur.columns,
 				LSN:       cur.startLSN,
 				Operation: OpType(cur.operation).String(),
-				Table:     cur.table,
 			}
 
 			if err := r.publisher.Publish(ctx, msg); err != nil {
@@ -375,7 +343,7 @@ func (r *ChangeTableStream) ReadChangeTables(ctx context.Context, db *sql.DB, st
 			// Advance the iterator and push back on heap to be sorted
 			if err := item.iter.next(); err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
-					r.log.Debugf("Reached end of rows for table '%s'", item.iter.table)
+					r.log.Debugf("Reached end of rows for change table '%s'", item.iter.table.ToChangeTable())
 				}
 				// exhausted all rows
 				item.iter.Close()
@@ -394,4 +362,21 @@ func (r *ChangeTableStream) ReadChangeTables(ctx context.Context, db *sql.DB, st
 			}
 		}
 	}
+}
+
+// UserTable represents a found user's SQL Server table
+type UserTable struct {
+	Schema   string
+	Name     string
+	startLSN LSN
+}
+
+// ToChangeTable returns a string in the SQL Server change table format of cdc.<schema>_<tablename>_CT
+func (t *UserTable) ToChangeTable() string {
+	return fmt.Sprintf("cdc.%s_%s_CT", t.Schema, t.Name)
+}
+
+// FullName returns a string of the table name including the schema (ie dbo.<tablename>)
+func (t *UserTable) FullName() string {
+	return fmt.Sprintf("%s.%s", t.Schema, t.Name)
 }
