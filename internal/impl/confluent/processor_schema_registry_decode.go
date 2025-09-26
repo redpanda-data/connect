@@ -181,7 +181,7 @@ root = this.apply("debeziumTimestampToAvroTimestamp")
 		).
 		Field(service.NewURLField("url").Description("The base URL of the schema registry service.")).
 		Field(service.NewIntField("default_schema_id").
-			Description("If set, this schema ID will be used when a message's schema header cannot be read (ErrBadHeader). If not set, schema header errors will be returned.").
+			Description("If set, this schema ID will be used when a message's schema header cannot be read (ErrBadHeader). If not set, schema header errors will be returned. WARNING: This is configuration does not work with PROTOBUF schemas. You may also use `with_schema_registry_header` bloblang function to add a schema ID to messages.").
 			Optional())
 
 	for _, f := range service.NewHTTPRequestAuthSignerFields() {
