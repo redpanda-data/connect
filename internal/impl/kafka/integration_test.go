@@ -24,6 +24,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/twmb/franz-go/pkg/kadm"
+
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka/redpandatest"
@@ -374,6 +376,121 @@ output:
 
 		return false
 	}, 30*time.Second, 1*time.Nanosecond)
+}
+
+func createTopicWithACLs(t *testing.T, brokerAddr, topic, retentionTime, principal string, operation kadm.ACLOperation) {
+	client, err := kgo.NewClient(kgo.SeedBrokers([]string{brokerAddr}...))
+	require.NoError(t, err)
+	defer client.Close()
+
+	adm := kadm.NewClient(client)
+
+	configs := map[string]*string{"retention.ms": &retentionTime}
+	_, err = adm.CreateTopic(t.Context(), 1, -1, configs, topic)
+	require.NoError(t, err)
+
+	updateTopicACL(t, adm, topic, principal, operation)
+}
+
+func updateTopicACL(t *testing.T, client *kadm.Client, topic, principal string, operation kadm.ACLOperation) {
+	builder := kadm.NewACLs().Allow(principal).AllowHosts("*").Topics(topic).ResourcePatternType(kadm.ACLPatternLiteral).Operations(operation)
+	res, err := client.CreateACLs(t.Context(), builder)
+	require.NoError(t, err)
+	require.Len(t, res, 1)
+	assert.NoError(t, res[0].Err)
+}
+
+// produceMessages produces `count` messages to the given `topic` with the given `message` content. The
+// `timestampOffset` indicates an offset which gets added to the `counter()` Bloblang function which is used to generate
+// the message timestamps sequentially, the first one being `1 + timestampOffset`.
+func produceMessages(t *testing.T, rpe redpandatest.RedpandaEndpoints, topic, message string, timestampOffset, count int, encode bool, delay time.Duration) {
+	streamBuilder := service.NewStreamBuilder()
+	config := ""
+	if encode {
+		config = fmt.Sprintf(`
+pipeline:
+  processors:
+    - schema_registry_encode:
+        url: %s
+        subject: %s
+        avro_raw_json: true
+`, rpe.SchemaRegistryURL, topic)
+	}
+	config += fmt.Sprintf(`
+output:
+  kafka_franz:
+    seed_brokers: [ %s ]
+    topic: %s
+    key: ${! counter() }
+    timestamp_ms: ${! counter() + %d}
+    max_in_flight: 1
+`, rpe.BrokerAddr, topic, timestampOffset)
+	require.NoError(t, streamBuilder.SetYAML(config))
+	require.NoError(t, streamBuilder.SetLoggerYAML(`level: OFF`))
+
+	inFunc, err := streamBuilder.AddProducerFunc()
+	require.NoError(t, err)
+
+	stream, err := streamBuilder.Build()
+	require.NoError(t, err)
+
+	go func() {
+		err = stream.Run(t.Context())
+		require.NoError(t, err)
+	}()
+
+	for range count {
+		ctx, done := context.WithTimeout(t.Context(), 3*time.Second)
+		require.NoError(t, inFunc(ctx, service.NewMessage([]byte(message))))
+		done()
+
+		if delay > 0 {
+			time.Sleep(delay)
+		}
+	}
+
+	require.NoError(t, stream.StopWithin(1*time.Second))
+}
+
+// fetchRecordKeys calls franz-go directly because we don't have any means to
+// read a range of records using the kafka_franz input.
+func fetchRecordKeys(t *testing.T, brokerAddress, topic, consumerGroup string, count int) []int {
+	client, err := kgo.NewClient([]kgo.Opt{
+		kgo.SeedBrokers([]string{brokerAddress}...),
+		kgo.ConsumeTopics([]string{topic}...),
+		kgo.ConsumerGroup(consumerGroup),
+	}...)
+	require.NoError(t, err)
+
+	defer func() {
+		// We need to manually trigger a commit before closing the client because the default is to autocommit every 5s
+		require.NoError(t, client.CommitUncommittedOffsets(t.Context()))
+		client.Close()
+	}()
+
+	ctx, cancel := context.WithTimeout(t.Context(), 1*time.Second)
+	defer cancel()
+	fetches := client.PollRecords(ctx, count)
+	require.False(t, fetches.IsClientClosed())
+
+	err = fetches.Err()
+	// If the context was cancelled, the producer finished so we won't get
+	// any more messages.
+	if errors.Is(err, context.DeadlineExceeded) {
+		return nil
+	}
+	require.NoError(t, err)
+
+	it := fetches.RecordIter()
+
+	var keys []int
+	for !it.Done() {
+		rec := it.Next()
+		key, err := strconv.Atoi(string(rec.Key))
+		require.NoError(t, err)
+		keys = append(keys, key)
+	}
+	return keys
 }
 
 func TestRedpandaSaslIntegration(t *testing.T) {
