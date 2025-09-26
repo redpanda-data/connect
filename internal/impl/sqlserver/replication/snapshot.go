@@ -251,7 +251,7 @@ func (s *Snapshot) Read(ctx context.Context, maxBatchSize int) error {
 				break
 			}
 		}
-		s.log.Infof("Completed snapshot process for table '%s'", table)
+		s.log.Infof("Completed snapshot process for table '%s'", table.FullName())
 	}
 	return nil
 }
