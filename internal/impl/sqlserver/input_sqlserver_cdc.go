@@ -13,6 +13,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"regexp"
 	"time"
 
 	"github.com/Jeffail/checkpoint"
@@ -20,6 +21,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/confx"
 	"github.com/redpanda-data/connect/v4/internal/impl/sqlserver/replication"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
@@ -29,7 +31,8 @@ const (
 	fieldStreamSnapshot       = "stream_snapshot"
 	fieldSnapshotMaxBatchSize = "snapshot_max_batch_size"
 	fieldCheckpointLimit      = "checkpoint_limit"
-	fieldTables               = "tables"
+	fieldExclude              = "exclude"
+	fieldInclude              = "include"
 	fieldCheckpointCache      = "checkpoint_cache"
 	fieldCheckpointKey        = "checkpoint_key"
 	fieldBatching             = "batching"
@@ -58,10 +61,13 @@ var mssqlStreamConfigSpec = service.NewConfigSpec().
 		Description("The maximum number of rows to be streamed in a single batch when taking a snapshot.").
 		Default(1000),
 	).
-	Field(service.NewStringListField(fieldTables).
-		Description("A list of tables to stream from the database.").
-		Example([]string{"table1", "table2"}).
-		LintRule("root = if this.length() == 0 { [ \"field 'tables' must contain at least one table\" ] }"),
+	Field(service.NewStringListField(fieldInclude).
+		Description("Regular expressions for tables to include.").
+		Optional(),
+	).
+	Field(service.NewStringListField(fieldExclude).
+		Description("Regular expressions for tables to exclude.").
+		Optional(),
 	).
 	Field(service.NewStringField(fieldCheckpointCache).
 		Description("A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current latest Log Sequence Number (LSN) that has been successfully delivered, this allows Redpanda Connect to continue from that Log Sequence Number (LSN) upon restart, rather than consume the entire state of the change table."),
@@ -86,7 +92,7 @@ type config struct {
 	connectionString     string
 	streamSnapshot       bool
 	snapshotMaxBatchSize int
-	tables               []string
+	tablesFilter         *confx.RegexpFilter
 	lsnCache             string
 	lsnCacheKey          string
 }
@@ -104,14 +110,13 @@ type sqlServerCDCInput struct {
 
 func newSqlServerCDCInput(conf *service.ParsedConfig, resources *service.Resources) (s service.BatchInput, err error) {
 	var (
-		connectionString     string
-		streamSnapshot       bool
-		snapshotMaxBatchSize int
-		tables               []string
-		lsnCache             string
-		lsnCacheKey          string
-		batcher              *service.Batcher
-		cp                   *checkpoint.Capped[replication.LSN]
+		connectionString             string
+		streamSnapshot               bool
+		snapshotMaxBatchSize         int
+		lsnCache, lsnCacheKey        string
+		tableIncludes, tableExcludes []*regexp.Regexp
+		batcher                      *service.Batcher
+		cp                           *checkpoint.Capped[replication.LSN]
 	)
 
 	if err := license.CheckRunningEnterprise(resources); err != nil {
@@ -126,17 +131,18 @@ func newSqlServerCDCInput(conf *service.ParsedConfig, resources *service.Resourc
 	if snapshotMaxBatchSize, err = conf.FieldInt(fieldSnapshotMaxBatchSize); err != nil {
 		return nil, err
 	}
-	var checkpointLimit int
-	if checkpointLimit, err = conf.FieldInt(fieldCheckpointLimit); err != nil {
+	// tables
+	if includes, err := conf.FieldStringList(fieldInclude); err != nil {
+		return nil, err
+	} else if tableIncludes, err = confx.ParseRegexpPatterns(includes); err != nil {
 		return nil, err
 	}
-	cp = checkpoint.NewCapped[replication.LSN](int64(checkpointLimit))
-
-	// TODO: Implement regex filtering of tables
-
-	if tables, err = conf.FieldStringList(fieldTables); err != nil {
+	if excludes, err := conf.FieldStringList(fieldExclude); err != nil {
+		return nil, err
+	} else if tableExcludes, err = confx.ParseRegexpPatterns(excludes); err != nil {
 		return nil, err
 	}
+	// cache
 	if lsnCache, err = conf.FieldString(fieldCheckpointCache); err != nil {
 		return nil, err
 	}
@@ -146,7 +152,14 @@ func newSqlServerCDCInput(conf *service.ParsedConfig, resources *service.Resourc
 	if lsnCacheKey, err = conf.FieldString(fieldCheckpointKey); err != nil {
 		return nil, err
 	}
+	// checkpointing
+	var checkpointLimit int
+	if checkpointLimit, err = conf.FieldInt(fieldCheckpointLimit); err != nil {
+		return nil, err
+	}
+	cp = checkpoint.NewCapped[replication.LSN](int64(checkpointLimit))
 
+	// batching
 	var policy service.BatchPolicy
 	if policy, err = conf.FieldBatchPolicy(fieldBatching); err != nil {
 		return nil, err
@@ -158,21 +171,22 @@ func newSqlServerCDCInput(conf *service.ParsedConfig, resources *service.Resourc
 	}
 
 	logger := resources.Logger()
-	publisher := newBatchPublisher(batcher, cp, logger)
-
 	i := sqlServerCDCInput{
 		cfg: &config{
 			connectionString:     connectionString,
 			streamSnapshot:       streamSnapshot,
 			snapshotMaxBatchSize: snapshotMaxBatchSize,
-			tables:               tables,
 			lsnCache:             lsnCache,
 			lsnCacheKey:          lsnCacheKey,
+			tablesFilter: &confx.RegexpFilter{
+				Include: tableIncludes,
+				Exclude: tableExcludes,
+			},
 		},
 		res:       resources,
 		stopSig:   shutdown.NewSignaller(),
 		log:       logger,
-		publisher: publisher,
+		publisher: newBatchPublisher(batcher, cp, logger),
 	}
 
 	i.publisher.cacheLSN = func(ctx context.Context, lsn replication.LSN) error {
@@ -187,13 +201,45 @@ func newSqlServerCDCInput(conf *service.ParsedConfig, resources *service.Resourc
 	return conf.WrapBatchInputExtractTracingSpanMapping("sql_server_cdc", batchInput)
 }
 
-func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
-	db, err := sql.Open("mssql", i.cfg.connectionString)
+// verifyUserTables verifies underlying user tables based on supplied include and exclude filters.
+func (i *sqlServerCDCInput) verifyUserTables(ctx context.Context) ([]replication.UserTable, error) {
+	rows, err := i.db.QueryContext(ctx, "SELECT s.name AS SchemaName, t.name AS TableName FROM sys.tables t INNER JOIN sys.schemas s ON t.schema_id = s.schema_id WHERE s.name != 'cdc' ORDER BY s.name, t.name;")
 	if err != nil {
+		return nil, fmt.Errorf("fetching user tables from sys.tables for verification: %w", err)
+	}
+
+	var userTables []replication.UserTable
+	for rows.Next() {
+		var ut replication.UserTable
+		if err := rows.Scan(&ut.Schema, &ut.Name); err != nil {
+			return nil, fmt.Errorf("scanning sys.tables row for user tables: %w", err)
+		}
+		if i.cfg.tablesFilter.Matches(ut.Name) {
+			userTables = append(userTables, ut)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating through sys.tables for user tables: %w", err)
+	}
+
+	if len(userTables) == 0 {
+		return nil, errors.New("no tables found for given include and exclude filters")
+	}
+	return userTables, nil
+}
+
+func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
+	var (
+		err        error
+		userTables []replication.UserTable
+	)
+
+	if i.db, err = sql.Open("mssql", i.cfg.connectionString); err != nil {
 		return fmt.Errorf("failed to connect to sql server: %s", err)
 	}
-	i.db = db
-
+	if userTables, err = i.verifyUserTables(ctx); err != nil {
+		return fmt.Errorf("verifying user tables:  %w", err)
+	}
 	cachedLSN, err := i.getCachedLSN(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to get cached LSN: %s", err)
@@ -206,7 +252,7 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("connecting to sql server for snapshotting: %s", err)
 		}
-		snapshotter = replication.NewSnapshot(db, i.cfg.tables, i.publisher, i.log)
+		snapshotter = replication.NewSnapshot(db, userTables, i.publisher, i.log)
 	}
 
 	if i.stopSig == nil {
@@ -215,7 +261,7 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 	softCtx, done := i.stopSig.SoftStopCtx(context.Background())
 	defer done()
 
-	streaming := replication.NewChangeTableStream(i.cfg.tables, i.publisher, i.log)
+	streaming := replication.NewChangeTableStream(userTables, i.publisher, i.log)
 	if err := streaming.VerifyChangeTables(softCtx, i.db); err != nil {
 		return fmt.Errorf("verifying sql server change tables: %s", err)
 	}
@@ -234,6 +280,7 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 				if maxLSN, err = i.processSnapshot(softCtx, snapshotter); err != nil {
 					return fmt.Errorf("processing snapshotting: %w", err)
 				}
+				i.log.Warnf("caching LSN %s", maxLSN)
 				if err := i.cacheLSN(softCtx, maxLSN); err != nil {
 					return fmt.Errorf("caching LSN after snapshotting: %w", err)
 				}

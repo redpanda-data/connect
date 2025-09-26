@@ -131,6 +131,7 @@ func (b *batchPublisher) Publish(ctx context.Context, m replication.MessageEvent
 		return fmt.Errorf("failure to marshal message: %w", err)
 	}
 	msg := service.NewMessage(data)
+	msg.MetaSet("schema", m.Schema)
 	msg.MetaSet("table", m.Table)
 	msg.MetaSet("operation", m.Operation)
 	if len(m.LSN) != 0 {

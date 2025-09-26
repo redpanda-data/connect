@@ -84,6 +84,7 @@ func (op OpType) String() string {
 type MessageEvent struct {
 	LSN       LSN    `json:"start_lsn"`
 	Operation string `json:"operation"`
+	Schema    string `json:"schema"`
 	Table     string `json:"table"`
 	Data      any    `json:"data"`
 }
