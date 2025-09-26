@@ -30,119 +30,6 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
-// Test_ManualTesting_AddTestDataWithUniqueLSN adds data to an existing table and ensures each change has its own LSN
-func Test_ManualTesting_AddTestDataWithUniqueLSN(t *testing.T) {
-	t.Skip("This test requires a remote database to run. Aimed to seed initial data in a remote test databases")
-
-	// --- create database as master
-	port := "1433"
-	connectionString := fmt.Sprintf("sqlserver://sa:YourStrong!Passw0rd@localhost:%s?database=%s&encrypt=disable", port, "master")
-	var db *sql.DB
-	var err error
-	db, err = sql.Open("mssql", connectionString)
-	require.NoError(t, err)
-
-	db.SetMaxOpenConns(10)
-	db.SetMaxIdleConns(5)
-	db.SetConnMaxLifetime(time.Minute * 5)
-
-	err = db.Ping()
-	require.NoError(t, err)
-
-	t.Log("Creating test database...")
-	_, err = db.Exec(`
-			IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = N'testdb')
-			BEGIN
-				CREATE DATABASE testdb;
-				ALTER DATABASE testdb SET ALLOW_SNAPSHOT_ISOLATION ON;
-			END;`)
-	require.NoError(t, err)
-	db.Close()
-
-	// --- connect to database and enable CDC
-	connectionString = fmt.Sprintf("sqlserver://sa:YourStrong!Passw0rd@localhost:%s?database=%s&encrypt=disable", port, "testdb")
-	db, err = sql.Open("mssql", connectionString)
-	require.NoError(t, err)
-
-	db.SetMaxOpenConns(10)
-	db.SetMaxIdleConns(5)
-	db.SetConnMaxLifetime(time.Minute * 5)
-
-	err = db.Ping()
-	require.NoError(t, err)
-
-	// enable CDC on database
-	t.Log("Enabling CDC on server...")
-	_, err = db.Exec("EXEC sys.sp_cdc_enable_db;")
-	require.NoError(t, err)
-
-	// --- create tables and enable CDC on them
-	t.Log("Creating test tables 'users'...")
-	testDB := &testDB{db, t}
-	err = testDB.createTableWithCDCEnabledIfNotExists(t.Context(), "users", `
-	CREATE TABLE users (
-		id INT IDENTITY(1,1) PRIMARY KEY,
-		name NVARCHAR(100)
-	);`)
-	require.NoError(t, err)
-
-	t.Log("Creating test tables 'products'...")
-	err = testDB.createTableWithCDCEnabledIfNotExists(t.Context(), "products", `
-	CREATE TABLE products (
-		id INT IDENTITY(1,1) PRIMARY KEY,
-		name NVARCHAR(100)
-	);`)
-	require.NoError(t, err)
-
-	// --- insert test data
-	t.Log("Inserting test data into products table...")
-	_, err = testDB.Exec(`
-	DECLARE @i INT = 1;
-	WHILE @i <= 50000
-	BEGIN
-		INSERT INTO products (id, name)
-		VALUES (@i, CONCAT('product-', @i));
-		SET @i += 1;
-	END`)
-	require.NoError(t, err)
-
-	t.Log("Inserting test data into users table...")
-	_, err = testDB.Exec(`
-	DECLARE @i INT = 1;
-	WHILE @i <= 50000
-	BEGIN
-		INSERT INTO users (id, name)
-		VALUES (@i, CONCAT('user-', @i));
-		SET @i += 1;
-	END`)
-	require.NoError(t, err)
-
-	// Note: use this rather than above for much larger data sets, though they result in the same LSN
-	// _, err = db.Exec(`
-	// 	WITH Numbers AS (
-	// 		SELECT TOP (1000000) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n
-	// 		FROM sys.all_objects a
-	// 		CROSS JOIN sys.all_objects b
-	// 	)
-	// 	INSERT INTO users (name)
-	// 	SELECT CONCAT('user-', n)
-	// 	FROM Numbers;
-	// `)
-
-	// require.NoError(t, err)
-	// _, err = db.Exec(`
-	// 	WITH Numbers AS (
-	// 		SELECT TOP (1000000) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n
-	// 		FROM sys.all_objects a
-	// 		CROSS JOIN sys.all_objects b
-	// 	)
-	// 	INSERT INTO products (name)
-	// 	SELECT CONCAT('product-', n)
-	// 	FROM Numbers;
-	// `)
-	// require.NoError(t, err)
-}
-
 func TestIntegration_SQLServerCDC_SnapshotAndStreaming(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
@@ -163,8 +50,7 @@ sql_server_cdc:
   connection_string: %s
   stream_snapshot: true
   snapshot_max_batch_size: 10
-  tables:
-    - foo
+  include: ["foo"]
   checkpoint_cache: "foocache"
 `, connStr)
 
@@ -231,8 +117,7 @@ func TestIntegration_SQLServerCDC_ResumesFromCheckpoint(t *testing.T) {
 sql_server_cdc:
   connection_string: %s
   stream_snapshot: false
-  tables:
-    - foo
+  include: ["foo"]
   checkpoint_cache: "foocache"
 `, connStr)
 
@@ -331,9 +216,7 @@ func TestIntegration_SQLServerCDC_OrderingOfIterator(t *testing.T) {
 sql_server_cdc:
   connection_string: %s
   stream_snapshot: false
-  tables:
-    - foo
-    - bar
+  include: ["foo", "bar"]
   checkpoint_cache: "foocache"
 `, connStr)
 
@@ -484,8 +367,7 @@ sql_server_cdc:
   stream_snapshot: true
   checkpoint_cache: "foocache"
   snapshot_max_batch_size: 100
-  tables:
-    - all_data_types
+  include: ["all_data_types"]
 `, connStr)
 
 	cacheConf := fmt.Sprintf(`
@@ -617,6 +499,134 @@ file:
     "varcharmax_col": "",
     "xml_col": "\u003croot/\u003e"
 	}`, outBatches[1])
+}
+
+// Test_ManualTesting_AddTestDataWithUniqueLSN adds data to an existing table and ensures each change has its own LSN
+func Test_ManualTesting_AddTestDataWithUniqueLSN(t *testing.T) {
+	t.Skip("This test requires a remote database to run. Aimed to seed initial data in a remote test databases")
+
+	// --- create database as master
+	port := "1433"
+	connectionString := fmt.Sprintf("sqlserver://sa:YourStrong!Passw0rd@localhost:%s?database=%s&encrypt=disable", port, "master")
+	var db *sql.DB
+	var err error
+	db, err = sql.Open("mssql", connectionString)
+	require.NoError(t, err)
+
+	db.SetMaxOpenConns(10)
+	db.SetMaxIdleConns(5)
+	db.SetConnMaxLifetime(time.Minute * 5)
+
+	err = db.Ping()
+	require.NoError(t, err)
+
+	t.Log("Creating test database...")
+	_, err = db.Exec(`
+			IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = N'testdb')
+			BEGIN
+				CREATE DATABASE testdb;
+				ALTER DATABASE testdb SET ALLOW_SNAPSHOT_ISOLATION ON;
+			END;`)
+	require.NoError(t, err)
+	db.Close()
+
+	// --- connect to database and enable CDC
+	connectionString = fmt.Sprintf("sqlserver://sa:YourStrong!Passw0rd@localhost:%s?database=%s&encrypt=disable", port, "testdb")
+	db, err = sql.Open("mssql", connectionString)
+	require.NoError(t, err)
+
+	db.SetMaxOpenConns(10)
+	db.SetMaxIdleConns(5)
+	db.SetConnMaxLifetime(time.Minute * 5)
+
+	err = db.Ping()
+	require.NoError(t, err)
+
+	// enable CDC on database
+	t.Log("Enabling CDC on server...")
+	_, err = db.Exec("EXEC sys.sp_cdc_enable_db;")
+	require.NoError(t, err)
+
+	// --- create tables and enable CDC on them
+	t.Log("Creating test tables 'users'...")
+	testDB := &testDB{db, t}
+	err = testDB.createTableWithCDCEnabledIfNotExists(t.Context(), "users", `
+		CREATE TABLE users (
+			id INT IDENTITY(1,1) PRIMARY KEY,
+			name NVARCHAR(100) NOT NULL,
+			email NVARCHAR(255) NOT NULL,
+			date_of_birth DATE NULL,
+			created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+			is_active BIT NOT NULL DEFAULT 1,
+			login_count INT NOT NULL DEFAULT 0,
+			balance DECIMAL(10,2) NOT NULL DEFAULT 0.00
+		);`)
+	require.NoError(t, err)
+
+	t.Log("Creating test tables 'products'...")
+	err = testDB.createTableWithCDCEnabledIfNotExists(t.Context(), "products", `
+	CREATE TABLE products (
+		id INT IDENTITY(1,1) PRIMARY KEY,
+		name NVARCHAR(100)
+		created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+		balance DECIMAL(10,2) NOT NULL DEFAULT 0.00
+	);`)
+	require.NoError(t, err)
+
+	// --- insert test data
+	// t.Log("Inserting test data into products table...")
+	// _, err = testDB.Exec(`
+	// DECLARE @i INT = 1;
+	// WHILE @i <= 50000
+	// BEGIN
+	// 	INSERT INTO products (id, name)
+	// 	VALUES (@i, CONCAT('product-', @i));
+	// 	SET @i += 1;
+	// END`)
+	// require.NoError(t, err)
+
+	// t.Log("Inserting test data into users table...")
+	// _, err = testDB.Exec(`
+	// DECLARE @i INT = 1;
+	// WHILE @i <= 50000
+	// BEGIN
+	// 	INSERT INTO users (id, name)
+	// 	VALUES (@i, CONCAT('user-', @i));
+	// 	SET @i += 1;
+	// END`)
+	// require.NoError(t, err)
+
+	// Note: use this rather than above for much larger data sets, though they result in the same LSN
+	// _, err = db.Exec(`
+	// WITH Numbers AS (
+	// SELECT TOP (5000000) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n
+	// FROM sys.all_objects a
+	// CROSS JOIN sys.all_objects b
+	// )
+	// INSERT INTO users (name, email, date_of_birth, created_at, is_active, login_count, balance)
+	// SELECT
+	// CONCAT('user-', n),                                   -- name
+	// CONCAT('user', n, '@example.com'),                   -- email
+	// DATEADD(DAY, -n % 10000, GETDATE()),                -- date_of_birth, spread over ~27 years
+	// SYSUTCDATETIME(),                                   -- created_at
+	// CASE WHEN n % 2 = 0 THEN 1 ELSE 0 END,             -- is_active alternating 1/0
+	// n % 100,                                            -- login_count between 0-99
+	// CAST((n % 1000) + RAND(CHECKSUM(NEWID())) * 100 AS DECIMAL(10,2)) -- balance
+	// FROM Numbers;
+	// `)
+
+	// require.NoError(t, err)
+	// _, err = db.Exec(`
+	// 	WITH Numbers AS (
+	// 		SELECT TOP (5000000) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n
+	// 		FROM sys.all_objects a
+	// 		CROSS JOIN sys.all_objects b
+	// 	)
+	// 	INSERT INTO products (name)
+	// 	SELECT CONCAT('product-', n)
+	// 	FROM Numbers;
+	// `)
+	// require.NoError(t, err)
 }
 
 type testDB struct {

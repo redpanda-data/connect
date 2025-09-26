@@ -238,7 +238,7 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 		return fmt.Errorf("failed to connect to sql server: %s", err)
 	}
 	if userTables, err = i.verifyUserTables(ctx); err != nil {
-		return fmt.Errorf("verifying user tables:  %w", err)
+		return fmt.Errorf("verifying user tables: %w", err)
 	}
 	cachedLSN, err := i.getCachedLSN(ctx)
 	if err != nil {
@@ -280,10 +280,10 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 				if maxLSN, err = i.processSnapshot(softCtx, snapshotter); err != nil {
 					return fmt.Errorf("processing snapshotting: %w", err)
 				}
-				i.log.Warnf("caching LSN %s", maxLSN)
 				if err := i.cacheLSN(softCtx, maxLSN); err != nil {
 					return fmt.Errorf("caching LSN after snapshotting: %w", err)
 				}
+				i.log.Debugf("Cached LSN following snapshot: '%s'", maxLSN)
 			}
 
 			// start streaming changes
