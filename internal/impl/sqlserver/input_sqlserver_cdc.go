@@ -229,7 +229,10 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 			return fmt.Errorf("connecting to sql server for snapshotting: %s", err)
 		}
 		snapshotter = replication.NewSnapshot(db, userTables, i.publisher, i.log)
+	} else {
+		i.log.Infof("Snapshotting disabled, skipping...")
 	}
+
 	streaming = replication.NewChangeTableStream(userTables, i.publisher, i.log)
 
 	if i.stopSig == nil {
