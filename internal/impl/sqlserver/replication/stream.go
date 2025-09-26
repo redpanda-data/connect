@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/confx"
 )
 
 const backoffDuration = 5 * time.Second
@@ -247,24 +248,6 @@ func NewChangeTableStream(tables []UserTable, publisher ChangePublisher, logger 
 	return s
 }
 
-// VerifyChangeTables ensures change tables are configured for _all_ provided config supplied tables.
-func (r *ChangeTableStream) VerifyChangeTables(ctx context.Context, db *sql.DB) error {
-	var userTables []UserTable
-	for _, tbl := range r.tables {
-		q := fmt.Sprintf("SELECT TOP 1 start_lsn FROM cdc.change_tables WHERE capture_instance ='%s_%s'", tbl.Schema, tbl.Name)
-		if err := db.QueryRowContext(ctx, q).Scan(&tbl.startLSN); err != nil {
-			return fmt.Errorf("fetching change tables: %w", err)
-		}
-		if len(tbl.startLSN) == 0 {
-			return fmt.Errorf("could not find associated change table for table '%s'", tbl.FullName())
-		}
-		userTables = append(userTables, tbl)
-	}
-
-	r.tables = userTables
-	return nil
-}
-
 // ReadChangeTables streams the change events from the configured SQL Server change tables.
 func (r *ChangeTableStream) ReadChangeTables(ctx context.Context, db *sql.DB, startPos LSN) error {
 	r.log.Infof("Starting streaming %d change table(s)", len(r.tables))
@@ -379,4 +362,47 @@ func (t *UserTable) ToChangeTable() string {
 // FullName returns a string of the table name including the schema (ie dbo.<tablename>)
 func (t *UserTable) FullName() string {
 	return fmt.Sprintf("%s.%s", t.Schema, t.Name)
+}
+
+// VerifyUserTables verifies underlying user tables based on supplied include and exclude filters, validating the associated change table also exists.
+func VerifyUserTables(ctx context.Context, db *sql.DB, tableFilter *confx.RegexpFilter, log *service.Logger) ([]UserTable, error) {
+	rows, err := db.QueryContext(ctx, "SELECT s.name AS SchemaName, t.name AS TableName FROM sys.tables t INNER JOIN sys.schemas s ON t.schema_id = s.schema_id WHERE s.name != 'cdc' ORDER BY s.name, t.name;")
+	if err != nil {
+		return nil, fmt.Errorf("fetching user tables from sys.tables for verification: %w", err)
+	}
+
+	var userTables []UserTable
+	for rows.Next() {
+		var ut UserTable
+		if err := rows.Scan(&ut.Schema, &ut.Name); err != nil {
+			return nil, fmt.Errorf("scanning sys.tables row for user tables: %w", err)
+		}
+		if tableFilter.Matches(ut.Name) {
+			userTables = append(userTables, ut)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating through sys.tables for user tables: %w", err)
+	}
+
+	if len(userTables) == 0 {
+		return nil, errors.New("no tables found for given include and exclude filters")
+	}
+
+	for i, tbl := range userTables {
+		q := fmt.Sprintf("SELECT TOP 1 start_lsn FROM cdc.change_tables WHERE capture_instance ='%s_%s'", tbl.Schema, tbl.Name)
+		if err := db.QueryRowContext(ctx, q).Scan(&tbl.startLSN); err != nil {
+			return nil, fmt.Errorf("fetching change tables: %w", err)
+		}
+		if len(tbl.startLSN) == 0 {
+			return nil, fmt.Errorf("could not find associated change table for table '%s'", tbl.FullName())
+		}
+		userTables[i] = tbl
+	}
+
+	for _, t := range userTables {
+		log.Infof("Found table '%s' and change table '%s'", t.FullName(), t.ToChangeTable())
+	}
+
+	return userTables, nil
 }

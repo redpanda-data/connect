@@ -201,51 +201,27 @@ func newSqlServerCDCInput(conf *service.ParsedConfig, resources *service.Resourc
 	return conf.WrapBatchInputExtractTracingSpanMapping("sql_server_cdc", batchInput)
 }
 
-// verifyUserTables verifies underlying user tables based on supplied include and exclude filters.
-func (i *sqlServerCDCInput) verifyUserTables(ctx context.Context) ([]replication.UserTable, error) {
-	rows, err := i.db.QueryContext(ctx, "SELECT s.name AS SchemaName, t.name AS TableName FROM sys.tables t INNER JOIN sys.schemas s ON t.schema_id = s.schema_id WHERE s.name != 'cdc' ORDER BY s.name, t.name;")
-	if err != nil {
-		return nil, fmt.Errorf("fetching user tables from sys.tables for verification: %w", err)
-	}
-
-	var userTables []replication.UserTable
-	for rows.Next() {
-		var ut replication.UserTable
-		if err := rows.Scan(&ut.Schema, &ut.Name); err != nil {
-			return nil, fmt.Errorf("scanning sys.tables row for user tables: %w", err)
-		}
-		if i.cfg.tablesFilter.Matches(ut.Name) {
-			userTables = append(userTables, ut)
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterating through sys.tables for user tables: %w", err)
-	}
-
-	if len(userTables) == 0 {
-		return nil, errors.New("no tables found for given include and exclude filters")
-	}
-	return userTables, nil
-}
-
 func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 	var (
 		err        error
 		userTables []replication.UserTable
+		cachedLSN  replication.LSN
 	)
-
 	if i.db, err = sql.Open("mssql", i.cfg.connectionString); err != nil {
 		return fmt.Errorf("failed to connect to sql server: %s", err)
 	}
-	if userTables, err = i.verifyUserTables(ctx); err != nil {
+	if userTables, err = replication.VerifyUserTables(ctx, i.db, i.cfg.tablesFilter, i.log); err != nil {
 		return fmt.Errorf("verifying user tables: %w", err)
 	}
-	cachedLSN, err := i.getCachedLSN(ctx)
-	if err != nil {
+	if cachedLSN, err = i.getCachedLSN(ctx); err != nil {
 		return fmt.Errorf("unable to get cached LSN: %s", err)
 	}
 
-	var snapshotter *replication.Snapshot
+	// setup snapshotting and streaming
+	var (
+		snapshotter *replication.Snapshot
+		streaming   *replication.ChangeTableStream
+	)
 	// no cached LSN means we're not recovering from a restart
 	if i.cfg.streamSnapshot && len(cachedLSN) == 0 {
 		db, err := sql.Open("mssql", i.cfg.connectionString)
@@ -254,16 +230,10 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 		}
 		snapshotter = replication.NewSnapshot(db, userTables, i.publisher, i.log)
 	}
+	streaming = replication.NewChangeTableStream(userTables, i.publisher, i.log)
 
 	if i.stopSig == nil {
 		i.stopSig = shutdown.NewSignaller()
-	}
-	softCtx, done := i.stopSig.SoftStopCtx(context.Background())
-	defer done()
-
-	streaming := replication.NewChangeTableStream(userTables, i.publisher, i.log)
-	if err := streaming.VerifyChangeTables(softCtx, i.db); err != nil {
-		return fmt.Errorf("verifying sql server change tables: %s", err)
 	}
 
 	go func() {
