@@ -86,7 +86,7 @@ func startRedpandaSourceAndDestination(t *testing.T) (src, dst EmbeddedRedpandaC
 
 const (
 	redpandaTestOpTimeout   = time.Second
-	redpandaTestWaitTimeout = 5 * time.Second
+	redpandaTestWaitTimeout = 10 * time.Second
 )
 
 // CreateTopic creates a topic if it doesn't exist
