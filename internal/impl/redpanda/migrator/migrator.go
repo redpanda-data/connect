@@ -155,6 +155,9 @@ Consumer Group Migration Metrics (with group label):
 - `+"`redpanda_migrator_cg_offset_commit_errors_total`"+` (counter): Total number of errors encountered when committing offsets per consumer group
 - `+"`redpanda_migrator_cg_offset_commit_latency_ns`"+` (timer): Latency in nanoseconds for offset commit operations per consumer group
 
+Consumer Lag Metrics (with topic and partition labels):
+- `+"`redpanda_lag`"+` (gauge): Current consumer lag in messages for each topic partition being consumed by the migrator input. This metric shows the difference between the high water mark and the current consumer position, providing visibility into how far behind the consumer is on each partition. The metric includes labels for topic name and partition number to enable per-partition monitoring.
+
 This component must be paired with the `+"`redpanda_migrator`"+` input in the same pipeline.`).
 		Example(
 			"Basic migration",
