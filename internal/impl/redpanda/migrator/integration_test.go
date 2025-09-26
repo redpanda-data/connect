@@ -22,9 +22,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"sort"
 	"strconv"
+	"strings"
 	"testing"
 	"text/template"
 	"time"
@@ -46,17 +49,23 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/confluent"
 )
 
+const httpAddr = "127.0.0.1:8080"
+
 func startMigrator(t *testing.T, src, dst EmbeddedRedpandaCluster, cb service.MessageHandlerFunc) {
 	t.Helper()
 
 	const yamlTmpl = `
+http:
+  enabled: true
+  address: {{.HTTPAddr}}
+
 input:
   redpanda_migrator:
     seed_brokers: 
       - {{.Src.BrokerAddr}}
     topics: 
       - {{.Topic}}
-    consumer_group: migrator_cg
+    consumer_group: redpanda_migrator_cg
     fetch_max_bytes: 512B
     {{- if .Src.SchemaRegistryURL }}
     schema_registry:
@@ -71,6 +80,8 @@ output:
     {{- end }}
     consumer_groups:
       interval: 1s
+metrics:
+  json_api: {}
 logger:
   level: DEBUG
 `
@@ -78,13 +89,15 @@ logger:
 	require.NoError(t, err)
 
 	data := struct {
-		Src   EmbeddedRedpandaCluster
-		Dst   EmbeddedRedpandaCluster
-		Topic string
+		Src      EmbeddedRedpandaCluster
+		Dst      EmbeddedRedpandaCluster
+		Topic    string
+		HTTPAddr string
 	}{
-		Src:   src,
-		Dst:   dst,
-		Topic: migratorTestTopic,
+		Src:      src,
+		Dst:      dst,
+		Topic:    migratorTestTopic,
+		HTTPAddr: httpAddr,
 	}
 	var yamlBuf bytes.Buffer
 	require.NoError(t, tmpl.Execute(&yamlBuf, data))
@@ -110,6 +123,36 @@ logger:
 	t.Cleanup(func() {
 		require.NoError(t, stream.StopWithin(stopStreamTimeout))
 	})
+}
+
+func readMetrics(t *testing.T, baseURL string) map[string]any {
+	t.Helper()
+
+	resp, err := http.Get(baseURL + "/stats")
+	if err != nil {
+		t.Logf("Failed to fetch metrics: %v", err)
+		return nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Logf("Metrics endpoint returned status %d", resp.StatusCode)
+		return nil
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Logf("Failed to read metrics response: %v", err)
+		return nil
+	}
+
+	var metrics map[string]any
+	if err := json.Unmarshal(body, &metrics); err != nil {
+		t.Logf("Failed to parse metrics JSON: %v", err)
+		return nil
+	}
+
+	return metrics
 }
 
 func startMigratorAndWaitForMessages(t *testing.T, src, dst EmbeddedRedpandaCluster, numMessages int) {
@@ -246,6 +289,16 @@ func TestIntegrationMigratorMultiPartitionSchemaAwareWithConsumerGroups(t *testi
 		t.Log(offsets)
 		return offsets[migratorTestTopic][0].At == 1000 && offsets[migratorTestTopic][1].At == 1002
 	}, redpandaTestWaitTimeout, time.Second)
+
+	t.Log("And: Metrics are available and can be listed")
+	metrics := readMetrics(t, "http://"+httpAddr)
+	require.NotEmpty(t, metrics)
+
+	for key, value := range metrics {
+		if strings.Contains(key, "redpanda") {
+			t.Logf("  %s: %v", key, value)
+		}
+	}
 }
 
 func TestIntegrationMigratorInputKafkaFranzConsumerGroup(t *testing.T) {
