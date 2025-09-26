@@ -106,6 +106,34 @@ output:
 ```
 
 --
+Store embedding vectors in CyborgDB::
++
+--
+
+Compute embeddings for some generated data and store it within xrefs:component:outputs/cyborgdb.adoc[CyborgDB]
+
+```yamlinput:
+  generate:
+    interval: 1s
+    mapping: |
+      root = {"text": fake("paragraph")}
+pipeline:
+  processors:
+  - ollama_embeddings:
+      model: snowflake-artic-embed
+      text: "${!this.text}"
+output:
+  cyborgdb:
+    host: "${CYBORGDB_HOST}"
+    api_key: "${CYBORGDB_API_KEY}"
+    index_key: "${CYBORGDB_INDEX_KEY}"
+    index_name: "my_encrypted_index"
+    operation: "upsert"
+    id: "root = uuid_v4()"
+    vector_mapping: "root = this"
+```
+
+--
 Store embedding vectors in Clickhouse::
 +
 --

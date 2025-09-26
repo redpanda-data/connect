@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.66.0 - TBD
+
+### Added
+
+- New `cyborgdb` output. (@ahellegit)
+
 ## 4.65.0 - 2025-09-23
 
 ### Added

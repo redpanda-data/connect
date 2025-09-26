@@ -126,6 +126,7 @@
 | github.com/couchbase/gocbcoreps | Apache-2.0 |
 | github.com/couchbaselabs/gocbconnstr/v2 | Apache-2.0 |
 | github.com/cpuguy83/go-md2man/v2/md2man | MIT |
+| github.com/cyborginc/cyborgdb-go | MIT |
 | github.com/davecgh/go-spew/spew | ISC |
 | github.com/denisenkom/go-mssqldb | BSD-3-Clause |
 | github.com/dgraph-io/ristretto/v2 | Apache-2.0 |
