@@ -27,5 +27,6 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/slack"
 	_ "github.com/redpanda-data/connect/v4/public/components/snowflake"
 	_ "github.com/redpanda-data/connect/v4/public/components/splunk"
+	_ "github.com/redpanda-data/connect/v4/public/components/sqlserver"
 	_ "github.com/redpanda-data/connect/v4/public/components/tigerbeetle"
 )

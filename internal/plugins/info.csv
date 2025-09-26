@@ -272,6 +272,7 @@ sql_raw                   ,output    ,sql_raw                   ,3.65.0  ,certif
 sql_raw                   ,processor ,sql_raw                   ,3.65.0  ,certified  ,n          ,y     ,y
 sql_select                ,input     ,sql_select                ,3.59.0  ,certified  ,n          ,y     ,y
 sql_select                ,processor ,sql_select                ,3.59.0  ,certified  ,n          ,y     ,y
+sql_server_cdc            ,input     ,sql_server_cdc            ,0.0.0   ,community  ,n          ,n     ,n
 sqlite                    ,buffer    ,sqlite                    ,0.0.0   ,community  ,n          ,n     ,n
 statsd                    ,metric    ,statsd                    ,0.0.0   ,certified  ,n          ,n     ,n
 stdin                     ,input     ,stdin                     ,0.0.0   ,certified  ,n          ,n     ,n
