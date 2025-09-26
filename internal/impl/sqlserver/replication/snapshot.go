@@ -21,7 +21,6 @@ import (
 )
 
 // Snapshot is responsible for creating snapshots of existing tables based on the Tables configuration value.
-// It will first valiate the list of tables.
 type Snapshot struct {
 	db *sql.DB
 	tx *sql.Tx
@@ -200,14 +199,14 @@ func (s *Snapshot) Read(ctx context.Context, maxBatchSize int) error {
 
 			types, err := batchRows.ColumnTypes()
 			if err != nil {
-				return fmt.Errorf("failed to fetch column types: %s", err)
+				return fmt.Errorf("failed to fetch column types: %w", err)
 			}
 
 			values, mappers := prepSnapshotScannerAndMappers(types)
 
 			columns, err := batchRows.Columns()
 			if err != nil {
-				return fmt.Errorf("failed to fetch columns: %s", err)
+				return fmt.Errorf("failed to fetch columns: %w", err)
 			}
 
 			var batchRowsCount int

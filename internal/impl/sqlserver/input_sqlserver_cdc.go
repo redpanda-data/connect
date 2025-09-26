@@ -41,10 +41,10 @@ const (
 )
 
 func init() {
-	service.MustRegisterBatchInput("sql_server_cdc", mssqlStreamConfigSpec, newSqlServerCDCInput)
+	service.MustRegisterBatchInput("sql_server_cdc", sqlServerStreamConfigSpec, newSqlServerCDCInput)
 }
 
-var mssqlStreamConfigSpec = service.NewConfigSpec().
+var sqlServerStreamConfigSpec = service.NewConfigSpec().
 	Beta().
 	Categories("Services").
 	Version("4.45.0").

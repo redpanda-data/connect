@@ -48,7 +48,7 @@ func newBatchPublisher(batcher *service.Batcher, checkpoint *checkpoint.Capped[r
 }
 
 // loop creates a long-running process that periodically flushes batches by configured interval.
-// inspired by internal/impl/kafka/franz_reader_ordered.go
+// lifted from internal/impl/kafka/franz_reader_ordered.go
 func (p *batchPublisher) loop() {
 	defer func() {
 		if p.batcher != nil {
@@ -130,6 +130,7 @@ func (b *batchPublisher) Publish(ctx context.Context, m replication.MessageEvent
 	if err != nil {
 		return fmt.Errorf("failure to marshal message: %w", err)
 	}
+
 	msg := service.NewMessage(data)
 	msg.MetaSet("schema", m.Schema)
 	msg.MetaSet("table", m.Table)

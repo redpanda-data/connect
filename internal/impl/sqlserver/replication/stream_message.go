@@ -46,7 +46,7 @@ func (lsn LSN) String() string {
 	return "0x" + hex.EncodeToString(lsn)
 }
 
-// OpType is the type of operation from the database
+// OpType is the type of operation from the database.
 type OpType int
 
 const (
@@ -80,7 +80,7 @@ func (op OpType) String() string {
 	}
 }
 
-// MessageEvent represents a single change from Table's change table in the database
+// MessageEvent represents a single change from Table's change table in the database.
 type MessageEvent struct {
 	LSN       LSN    `json:"start_lsn"`
 	Operation string `json:"operation"`

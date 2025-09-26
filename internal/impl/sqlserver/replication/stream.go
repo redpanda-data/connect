@@ -60,7 +60,7 @@ func (h *rowIteratorMinHeap) Pop() any {
 type change struct {
 	startLSN   LSN // varbinary(10)
 	endLSN     LSN // varbinary(10)
-	operation  int // 1=delete, 2=insert, 3=update (before), 4=update (after), 5=merge
+	operation  int // 1=delete, 2=insert, 3=update (before), 4=update (after)
 	updateMask []byte
 	seqVal     []byte
 	commandID  int
@@ -81,8 +81,8 @@ func (c *change) reset() {
 	}
 }
 
-// changeTableRowIter is responsible for handling the iteration of table change records row by row.
-// It moves to the next row, sorts them by min-heap, parses the data and sends it for processing.
+// changeTableRowIter is responsible for handling the iteration of change table records, row by row.
+// It moves to the next row, sorts them by min-heap based on LSN ordering criteria, parses the data and sends it for processing.
 type changeTableRowIter struct {
 	table   UserTable
 	rows    *sql.Rows
@@ -230,7 +230,7 @@ type ChangePublisher interface {
 	Publish(ctx context.Context, msg MessageEvent) error
 }
 
-// ChangeTableStream tracks and streams all change events added to the tracked tables change tables.
+// ChangeTableStream tracks and streams all change events from the configured change tables tracked in tables.
 type ChangeTableStream struct {
 	tables    []UserTable
 	publisher ChangePublisher
@@ -347,19 +347,19 @@ func (r *ChangeTableStream) ReadChangeTables(ctx context.Context, db *sql.DB, st
 	}
 }
 
-// UserTable represents a found user's SQL Server table
+// UserTable represents a found user's SQL Server table.
 type UserTable struct {
 	Schema   string
 	Name     string
 	startLSN LSN
 }
 
-// ToChangeTable returns a string in the SQL Server change table format of cdc.<schema>_<tablename>_CT
+// ToChangeTable returns a string in the SQL Server change table format of cdc.<schema>_<tablename>_CT.
 func (t *UserTable) ToChangeTable() string {
 	return fmt.Sprintf("cdc.%s_%s_CT", t.Schema, t.Name)
 }
 
-// FullName returns a string of the table name including the schema (ie dbo.<tablename>)
+// FullName returns a string of the table name including the schema (ie dbo.<tablename>).
 func (t *UserTable) FullName() string {
 	return fmt.Sprintf("%s.%s", t.Schema, t.Name)
 }
