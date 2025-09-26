@@ -31,8 +31,8 @@ const (
 	fieldStreamSnapshot       = "stream_snapshot"
 	fieldSnapshotMaxBatchSize = "snapshot_max_batch_size"
 	fieldCheckpointLimit      = "checkpoint_limit"
-	fieldExclude              = "exclude"
-	fieldInclude              = "include"
+	fieldTablesExclude        = "exclude"
+	fieldTablesInclude        = "include"
 	fieldCheckpointCache      = "checkpoint_cache"
 	fieldCheckpointKey        = "checkpoint_key"
 	fieldBatching             = "batching"
@@ -61,11 +61,10 @@ var mssqlStreamConfigSpec = service.NewConfigSpec().
 		Description("The maximum number of rows to be streamed in a single batch when taking a snapshot.").
 		Default(1000),
 	).
-	Field(service.NewStringListField(fieldInclude).
-		Description("Regular expressions for tables to include.").
-		Optional(),
+	Field(service.NewStringListField(fieldTablesInclude).
+		Description("Regular expressions for tables to include."),
 	).
-	Field(service.NewStringListField(fieldExclude).
+	Field(service.NewStringListField(fieldTablesExclude).
 		Description("Regular expressions for tables to exclude.").
 		Optional(),
 	).
@@ -132,12 +131,12 @@ func newSqlServerCDCInput(conf *service.ParsedConfig, resources *service.Resourc
 		return nil, err
 	}
 	// tables
-	if includes, err := conf.FieldStringList(fieldInclude); err != nil {
+	if includes, err := conf.FieldStringList(fieldTablesInclude); err != nil {
 		return nil, err
 	} else if tableIncludes, err = confx.ParseRegexpPatterns(includes); err != nil {
 		return nil, err
 	}
-	if excludes, err := conf.FieldStringList(fieldExclude); err != nil {
+	if excludes, err := conf.FieldStringList(fieldTablesExclude); err != nil {
 		return nil, err
 	} else if tableExcludes, err = confx.ParseRegexpPatterns(excludes); err != nil {
 		return nil, err
