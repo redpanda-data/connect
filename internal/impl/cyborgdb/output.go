@@ -39,7 +39,7 @@ const (
 	poFieldVectorMapping   = "vector_mapping"
 	poFieldMetadataMapping = "metadata_mapping"
 	poFieldCreateIfMissing = "create_if_missing"
-	
+
 	// KeySize is the required size for CyborgDB encryption keys (32 bytes for AES-256)
 	KeySize = 32
 )
@@ -101,15 +101,15 @@ func init() {
 		outputSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPol service.BatchPolicy, mif int, err error) {
 			if batchPol, err = conf.FieldBatchPolicy(poFieldBatching); err != nil {
-				return
+				return out, batchPol, mif, err
 			}
 			if mif, err = conf.FieldMaxInFlight(); err != nil {
-				return
+				return out, batchPol, mif, err
 			}
 			if out, err = newOutputWriter(conf, mgr); err != nil {
-				return
+				return out, batchPol, mif, err
 			}
-			return
+			return out, batchPol, mif, err
 		})
 }
 
@@ -123,7 +123,7 @@ const (
 type outputWriter struct {
 	client client
 	index  indexClient
-	
+
 	host      string
 	indexName string
 	indexKey  []byte
@@ -145,44 +145,44 @@ func newOutputWriter(conf *service.ParsedConfig, mgr *service.Resources) (*outpu
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Build base URL from host
 	baseURL := host
 	if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
 		baseURL = "https://" + host
 	}
-	
+
 	apiKey, err := conf.FieldString(poFieldAPIKey)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	cyborgClient, err := cyborgdb.NewClient(baseURL, apiKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create CyborgDB client: %w", err)
 	}
-	
+
 	indexName, err := conf.FieldString(poFieldIndexName)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Get encryption key from configuration
 	indexKeyStr, err := conf.FieldString(poFieldIndexKey)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	indexKey, err := decodeBase64Key(indexKeyStr)
 	if err != nil {
 		return nil, fmt.Errorf("invalid index_key: %w", err)
 	}
-	
+
 	rawOp, err := conf.FieldString(poFieldOp)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var op operation
 	switch rawOp {
 	case string(operationUpsert):
@@ -192,26 +192,26 @@ func newOutputWriter(conf *service.ParsedConfig, mgr *service.Resources) (*outpu
 	default:
 		return nil, fmt.Errorf("invalid operation: %s", rawOp)
 	}
-	
+
 	id, err := conf.FieldInterpolatedString(poFieldID)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	createIfMissing, err := conf.FieldBool(poFieldCreateIfMissing)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var vectorMapping *bloblang.Executor
 	var metadataMapping *bloblang.Executor
-	
+
 	if op == operationUpsert {
 		vectorMapping, err = conf.FieldBloblang(poFieldVectorMapping)
 		if err != nil {
 			return nil, err
 		}
-		
+
 		if conf.Contains(poFieldMetadataMapping) {
 			metadataMapping, err = conf.FieldBloblang(poFieldMetadataMapping)
 			if err != nil {
@@ -219,7 +219,7 @@ func newOutputWriter(conf *service.ParsedConfig, mgr *service.Resources) (*outpu
 			}
 		}
 	}
-	
+
 	w := outputWriter{
 		client:          &cyborgdbClient{cyborgClient},
 		host:            host,
@@ -232,7 +232,7 @@ func newOutputWriter(conf *service.ParsedConfig, mgr *service.Resources) (*outpu
 		vectorMapping:   vectorMapping,
 		metadataMapping: metadataMapping,
 	}
-	
+
 	return &w, nil
 }
 
@@ -242,35 +242,35 @@ func decodeBase64Key(keyStr string) ([]byte, error) {
 	if keyStr == "" {
 		return nil, errors.New("key string is empty")
 	}
-	
+
 	indexKey, err := base64.StdEncoding.DecodeString(keyStr)
 	if err != nil {
 		return nil, fmt.Errorf("invalid key encoding (must be base64): %w", err)
 	}
-	
+
 	if len(indexKey) != KeySize {
 		return nil, fmt.Errorf("key must be exactly %d bytes, got %d", KeySize, len(indexKey))
 	}
-	
+
 	return indexKey, nil
 }
 
 func (w *outputWriter) Connect(ctx context.Context) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	
+
 	if w.init {
 		return nil
 	}
-	
+
 	w.logger.Tracef("Connecting to CyborgDB index %s", w.indexName)
-	
+
 	// Check if index exists first
 	indexes, err := w.client.ListIndexes(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to list indexes: %w", err)
 	}
-	
+
 	indexExists := false
 	for _, name := range indexes {
 		if name == w.indexName {
@@ -278,9 +278,9 @@ func (w *outputWriter) Connect(ctx context.Context) error {
 			break
 		}
 	}
-	
+
 	var index *cyborgdb.EncryptedIndex
-	
+
 	if indexExists {
 		// Get existing index
 		w.logger.Tracef("Getting existing index %s", w.indexName)
@@ -293,23 +293,23 @@ func (w *outputWriter) Connect(ctx context.Context) error {
 		if !w.createIfMissing {
 			return fmt.Errorf("index %s does not exist and create_if_missing is false", w.indexName)
 		}
-		
+
 		// Create new index with hardcoded ivfflat type
 		// CyborgDB will auto-detect dimension and auto-train
 		w.logger.Infof("Creating new CyborgDB index %s with IVFFlat (auto-dimension, auto-train)", w.indexName)
-		
+
 		index, err = w.client.CreateIndex(ctx, w.indexName, w.indexKey)
 		if err != nil {
 			return fmt.Errorf("failed to create index %s: %w", w.indexName, err)
 		}
-		
+
 		w.logger.Infof("Successfully created CyborgDB index %s", w.indexName)
 	}
-	
+
 	w.index = &cyborgdbEncryptedIndex{index}
 	w.init = true
 	w.logger.Tracef("Connected to CyborgDB index %s", w.indexName)
-	
+
 	return nil
 }
 
@@ -385,7 +385,7 @@ func (w *outputWriter) upsertBatch(ctx context.Context, batch service.MessageBat
 				vecResult = structured
 			}
 		}
-		
+
 		// Handle different vector result types using bloblang conversion utilities
 		var vector []float32
 		switch v := vecResult.(type) {
@@ -410,12 +410,12 @@ func (w *outputWriter) upsertBatch(ctx context.Context, batch service.MessageBat
 		default:
 			return fmt.Errorf("vector mapping must return an array, got %T", vecResult)
 		}
-		
+
 		item := cyborgdb.VectorItem{
 			Id:     id,
 			Vector: vector,
 		}
-		
+
 		// Process metadata
 		if metadataExec != nil {
 			// Use metadata mapping with batch executor
@@ -460,14 +460,14 @@ func (w *outputWriter) upsertBatch(ctx context.Context, batch service.MessageBat
 				}
 			}
 		}
-		
+
 		items = append(items, item)
 	}
-	
+
 	if err := w.index.Upsert(ctx, items); err != nil {
 		return fmt.Errorf("failed to upsert vectors: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -488,18 +488,18 @@ func (w *outputWriter) deleteBatch(ctx context.Context, batch service.MessageBat
 		}
 		ids = append(ids, id)
 	}
-	
+
 	if err := w.index.Delete(ctx, ids); err != nil {
 		return fmt.Errorf("failed to delete vectors: %w", err)
 	}
-	
+
 	return nil
 }
 
 func (w *outputWriter) Close(_ context.Context) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	
+
 	if w.index != nil {
 		return w.index.Close()
 	}

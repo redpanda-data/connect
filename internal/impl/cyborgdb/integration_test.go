@@ -35,13 +35,13 @@ import (
 
 func TestIntegration(t *testing.T) {
 	integration.CheckSkip(t)
-	
+
 	// Get environment variables for CyborgDB connection
 	baseURL := os.Getenv("CYBORGDB_BASE_URL")
 	if baseURL == "" {
 		baseURL = "http://localhost:8000"
 	}
-	
+
 	apiKey := os.Getenv("CYBORGDB_API_KEY")
 	if apiKey == "" {
 		t.Skip("CYBORGDB_API_KEY not set")
@@ -96,24 +96,24 @@ id: ${! json("id") }
 vector_mapping: root = this.vector
 metadata_mapping: root = this.metadata
 `, baseURL, apiKey, indexName, indexKey)
-	
+
 	// Parse output config
 	outputSpecObj := outputSpec()
 	env := service.NewEnvironment()
 	outputParsedConf, err := outputSpecObj.ParseYAML(outputConf, env)
 	require.NoError(t, err)
-	
+
 	mgr := service.MockResources()
-	
+
 	// Create output
 	writer, err := newOutputWriter(outputParsedConf, mgr)
 	require.NoError(t, err)
-	
+
 	// Connect
 	ctx := context.Background()
 	err = writer.Connect(ctx)
 	require.NoError(t, err)
-	
+
 	// Create test messages
 	testVectors := []struct {
 		id       string
@@ -145,7 +145,7 @@ metadata_mapping: root = this.metadata
 			},
 		},
 	}
-	
+
 	// Write vectors
 	for _, tv := range testVectors {
 		msg := createIntegrationTestMessage(tv.id, tv.vector, tv.metadata)
@@ -153,10 +153,10 @@ metadata_mapping: root = this.metadata
 		err = writer.WriteBatch(ctx, batch)
 		require.NoError(t, err)
 	}
-	
+
 	// Verify vectors were written successfully
 	t.Logf("Successfully wrote %d vectors to CyborgDB index", len(testVectors))
-	
+
 	// Close connections
 	err = writer.Close(ctx)
 	require.NoError(t, err)
@@ -165,7 +165,7 @@ metadata_mapping: root = this.metadata
 func testBatchOperations(t *testing.T, baseURL, apiKey, indexName, indexKey string) {
 	ctx := context.Background()
 	mgr := service.MockResources()
-	
+
 	// Create output for batch upsert
 	outputConf := fmt.Sprintf(`
 host: %s
@@ -179,18 +179,18 @@ batching:
   count: 3
   period: 1s
 `, baseURL, apiKey, indexName, indexKey)
-	
+
 	outputSpecObj := outputSpec()
 	env := service.NewEnvironment()
 	outputParsedConf, err := outputSpecObj.ParseYAML(outputConf, env)
 	require.NoError(t, err)
-	
+
 	writer, err := newOutputWriter(outputParsedConf, mgr)
 	require.NoError(t, err)
-	
+
 	err = writer.Connect(ctx)
 	require.NoError(t, err)
-	
+
 	// Create batch of messages
 	batch := service.MessageBatch{}
 	for i := 0; i < 5; i++ {
@@ -199,14 +199,14 @@ batching:
 		msg := createIntegrationTestMessage(id, vector, nil)
 		batch = append(batch, msg)
 	}
-	
+
 	// Write batch
 	err = writer.WriteBatch(ctx, batch)
 	require.NoError(t, err)
-	
+
 	// Verify batch was written successfully
 	t.Logf("Successfully wrote batch of %d vectors", len(batch))
-	
+
 	// Test batch delete
 	deleteConf := fmt.Sprintf(`
 host: %s
@@ -216,18 +216,18 @@ index_key: %s
 operation: delete
 id: ${! json("id") }
 `, baseURL, apiKey, indexName, indexKey)
-	
+
 	env2 := service.NewEnvironment()
 	deleteSpec := outputSpec()
 	deleteParsedConf, err := deleteSpec.ParseYAML(deleteConf, env2)
 	require.NoError(t, err)
-	
+
 	deleter, err := newOutputWriter(deleteParsedConf, mgr)
 	require.NoError(t, err)
-	
+
 	err = deleter.Connect(ctx)
 	require.NoError(t, err)
-	
+
 	// Delete batch
 	deleteBatch := service.MessageBatch{}
 	for i := 0; i < 3; i++ {
@@ -235,14 +235,14 @@ id: ${! json("id") }
 		msg := createIntegrationTestMessage(id, nil, nil)
 		deleteBatch = append(deleteBatch, msg)
 	}
-	
+
 	err = deleter.WriteBatch(ctx, deleteBatch)
 	require.NoError(t, err)
-	
+
 	// Close connections
 	err = writer.Close(ctx)
 	require.NoError(t, err)
-	
+
 	err = deleter.Close(ctx)
 	require.NoError(t, err)
 }
@@ -283,9 +283,9 @@ func cleanupTestIndex(t *testing.T, baseURL, apiKey, indexName, indexKeyStr stri
 	// Decode the provided key string
 	indexKey, err := base64.StdEncoding.DecodeString(indexKeyStr)
 	require.NoError(t, err)
-	
+
 	ctx := context.Background()
-	
+
 	// Load and delete the index
 	index, err := client.LoadIndex(ctx, indexName, indexKey)
 	if err != nil {
@@ -293,7 +293,7 @@ func cleanupTestIndex(t *testing.T, baseURL, apiKey, indexName, indexKeyStr stri
 		t.Logf("Could not load index for cleanup: %v", err)
 		return
 	}
-	
+
 	err = index.DeleteIndex(ctx)
 	if err != nil {
 		t.Logf("Could not delete index: %v", err)
