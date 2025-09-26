@@ -146,7 +146,7 @@ func startProcessorPlugin(
 			return err
 		}
 		return runtimepb.ProtoToError(resp.Error)
-	}, backoff.NewExponentialBackOff(backoff.WithMaxElapsedTime(maxStartupTime)))
+	}, backoff.NewExponentialBackOff(exponentialBackoffOpts...))
 	if err != nil {
 		_ = proc.Close(ctx)
 		return fmt.Errorf("unable to initialize plugin: %w", err)
