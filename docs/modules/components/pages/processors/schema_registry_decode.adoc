@@ -342,7 +342,7 @@ The base URL of the schema registry service.
 
 === `default_schema_id`
 
-If set, this schema ID will be used when a message's schema header cannot be read (ErrBadHeader). If not set, schema header errors will be returned.
+If set, this schema ID will be used when a message's schema header cannot be read (ErrBadHeader). If not set, schema header errors will be returned. WARNING: This is configuration does not work with PROTOBUF schemas. You may also use `with_schema_registry_header` bloblang function to add a schema ID to messages.
 
 
 *Type*: `int`
