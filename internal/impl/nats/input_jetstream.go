@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 
 	"github.com/Jeffail/shutdown"
 
@@ -78,6 +79,10 @@ xref:configuration:interpolation.adoc#bloblang-queries[function interpolation].
 		Field(service.NewBoolField("bind").
 			Description("Indicates that the subscription should use an existing consumer.").
 			Optional()).
+		Field(service.NewBoolField("create_stream").
+			Description("Whether to automatically create the stream if it doesn't exist (requires the stream field to be set).").
+			Advanced().
+			Default(false)).
 		Field(service.NewStringAnnotatedEnumField("deliver", map[string]string{
 			"all":              "Deliver all available messages.",
 			"last":             "Deliver starting with the last published messages.",
@@ -121,6 +126,7 @@ type jetStreamReader struct {
 	queue         string
 	stream        string
 	bind          bool
+	createStream  bool
 	pull          bool
 	durable       string
 	ackWait       time.Duration
@@ -192,6 +198,11 @@ func newJetStreamReaderFromConfig(conf *service.ParsedConfig, mgr *service.Resou
 			return nil, err
 		}
 	}
+	if conf.Contains("create_stream") {
+		if j.createStream, err = conf.FieldBool("create_stream"); err != nil {
+			return nil, err
+		}
+	}
 	if j.bind {
 		if j.stream == "" && j.durable == "" {
 			return nil, errors.New("stream or durable is required, when bind is true")
@@ -247,13 +258,18 @@ func (j *jetStreamReader) Connect(ctx context.Context) (err error) {
 		return err
 	}
 
-	jCtx, err := natsConn.JetStream()
+	js, err := jetstream.New(natsConn)
 	if err != nil {
 		return err
 	}
 
 	if j.bind && j.stream != "" && j.durable != "" {
-		info, err := jCtx.ConsumerInfo(j.stream, j.durable)
+		consumer, err := js.Consumer(ctx, j.stream, j.durable)
+		if err != nil {
+			return err
+		}
+
+		info, err := consumer.Info(ctx)
 		if err != nil {
 			return err
 		}
@@ -261,12 +277,56 @@ func (j *jetStreamReader) Connect(ctx context.Context) (err error) {
 		if j.subject == "" {
 			if info.Config.DeliverSubject != "" {
 				j.subject = info.Config.DeliverSubject
+			} else if len(info.Config.FilterSubjects) > 0 {
+				j.subject = info.Config.FilterSubjects[0]
 			} else if info.Config.FilterSubject != "" {
 				j.subject = info.Config.FilterSubject
 			}
 		}
 
 		j.pull = info.Config.DeliverSubject == ""
+	}
+	// TODO: surely we should switch everything over
+	// Use the legacy subscription approach but with modern jetstream context
+	jCtx, err := natsConn.JetStream()
+	if err != nil {
+		return err
+	}
+
+	// Handle stream/consumer existence checks based on binding mode
+	if j.stream != "" {
+		if j.bind {
+			// When binding, check if the consumer exists
+			if j.durable != "" {
+				_, err = js.Consumer(ctx, j.stream, j.durable)
+				if err != nil {
+					return fmt.Errorf("consumer %s on stream %s does not exist for bind mode: %w", j.durable, j.stream, err)
+				}
+			}
+		} else {
+			// When not binding, check if stream exists and optionally create it
+			_, err = js.Stream(ctx, j.stream)
+			if err != nil {
+				if j.createStream {
+					// Use the subject as the stream subject if specified, otherwise use a wildcard
+					subjects := []string{j.subject}
+					if j.subject == "" {
+						subjects = []string{"*"}
+					}
+
+					_, err = js.CreateStream(ctx, jetstream.StreamConfig{
+						Name:     j.stream,
+						Subjects: subjects,
+					})
+					if err != nil {
+						return fmt.Errorf("failed to create stream %s: %w", j.stream, err)
+					}
+					j.log.Infof("Created stream %s", j.stream)
+				} else {
+					return fmt.Errorf("stream %s does not exist and create_stream is false", j.stream)
+				}
+			}
+		}
 	}
 
 	options := []nats.SubOpt{

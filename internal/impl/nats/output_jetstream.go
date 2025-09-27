@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 
 	"github.com/Jeffail/shutdown"
 
@@ -85,7 +86,7 @@ type jetStreamOutput struct {
 
 	connMut  sync.Mutex
 	natsConn *nats.Conn
-	jCtx     nats.JetStreamContext
+	js       jetstream.JetStream
 
 	shutSig *shutdown.Signaller
 }
@@ -132,7 +133,6 @@ func (j *jetStreamOutput) Connect(ctx context.Context) (err error) {
 	}
 
 	var natsConn *nats.Conn
-	var jCtx nats.JetStreamContext
 
 	defer func() {
 		if err != nil && natsConn != nil {
@@ -144,12 +144,11 @@ func (j *jetStreamOutput) Connect(ctx context.Context) (err error) {
 		return err
 	}
 
-	if jCtx, err = natsConn.JetStream(); err != nil {
+	if j.js, err = jetstream.New(natsConn); err != nil {
 		return err
 	}
 
 	j.natsConn = natsConn
-	j.jCtx = jCtx
 	return nil
 }
 
@@ -161,16 +160,16 @@ func (j *jetStreamOutput) disconnect() {
 		j.natsConn.Close()
 		j.natsConn = nil
 	}
-	j.jCtx = nil
+	j.js = nil
 }
 
 //------------------------------------------------------------------------------
 
-func (j *jetStreamOutput) Write(_ context.Context, msg *service.Message) error {
+func (j *jetStreamOutput) Write(ctx context.Context, msg *service.Message) error {
 	j.connMut.Lock()
-	jCtx := j.jCtx
+	js := j.js
 	j.connMut.Unlock()
-	if jCtx == nil {
+	if js == nil {
 		return service.ErrNotConnected
 	}
 
@@ -199,7 +198,7 @@ func (j *jetStreamOutput) Write(_ context.Context, msg *service.Message) error {
 		return nil
 	})
 
-	if _, err = jCtx.PublishMsg(jsmsg); err != nil {
+	if _, err = js.PublishMsg(ctx, jsmsg); err != nil {
 		if errors.Is(err, nats.ErrConnectionClosed) {
 			j.disconnect()
 			return service.ErrNotConnected
