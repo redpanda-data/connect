@@ -16,6 +16,7 @@ package nats
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"sync"
@@ -101,7 +102,7 @@ This processor adds the following metadata fields to each message, depending on 
 ` + "```" + `
 
 ` + connectionNameDescription() + authDescription()).
-		Fields(kvDocs([]*service.ConfigField{
+		Fields(Docs("KV", []*service.ConfigField{
 			service.NewStringAnnotatedEnumField(kvpFieldOperation, kvpOperations).
 				Description("The operation to perform on the KV bucket."),
 			service.NewInterpolatedStringField(kvpFieldKey).
@@ -111,6 +112,10 @@ This processor adds the following metadata fields to each message, depending on 
 				Example("foo.*").
 				Example("foo.>").
 				Example(`foo.${! json("meta.type") }`).LintRule(`if this == "" {[ "'key' must be set to a non-empty string" ]}`),
+			service.NewBoolField("create_bucket").
+				Description("Whether to automatically create the bucket if it doesn't exist.").
+				Advanced().
+				Default(false),
 			service.NewInterpolatedStringField(kvpFieldRevision).
 				Description("The revision of the key to operate on. Used for `get_revision` and `update` operations.").
 				Example("42").
@@ -137,12 +142,13 @@ func init() {
 }
 
 type kvProcessor struct {
-	connDetails connectionDetails
-	bucket      string
-	operation   kvpOperationType
-	key         *service.InterpolatedString
-	revision    *service.InterpolatedString
-	timeout     time.Duration
+	connDetails  connectionDetails
+	bucket       string
+	operation    kvpOperationType
+	key          *service.InterpolatedString
+	revision     *service.InterpolatedString
+	timeout      time.Duration
+	createBucket bool
 
 	log *service.Logger
 
@@ -165,6 +171,10 @@ func newKVProcessor(conf *service.ParsedConfig, mgr *service.Resources) (*kvProc
 	}
 
 	if p.bucket, err = conf.FieldString(kvFieldBucket); err != nil {
+		return nil, err
+	}
+
+	if p.createBucket, err = conf.FieldBool("create_bucket"); err != nil {
 		return nil, err
 	}
 
@@ -395,9 +405,23 @@ func (p *kvProcessor) Connect(ctx context.Context) (err error) {
 		return err
 	}
 
-	p.kv, err = js.KeyValue(ctx, p.bucket)
-	if err != nil {
-		return err
+	// Try to get existing bucket first
+	if p.kv, err = js.KeyValue(ctx, p.bucket); err != nil {
+		if errors.Is(err, jetstream.ErrBucketNotFound) {
+			if p.createBucket {
+				// Create the bucket if it doesn't exist
+				p.log.Infof("Creating KV bucket: %s", p.bucket)
+				if p.kv, err = js.CreateKeyValue(ctx, jetstream.KeyValueConfig{
+					Bucket: p.bucket,
+				}); err != nil {
+					return fmt.Errorf("failed to create bucket %s: %w", p.bucket, err)
+				}
+			} else {
+				return fmt.Errorf("bucket %s does not exist and create_bucket is false", p.bucket)
+			}
+		} else {
+			return err
+		}
 	}
 	return nil
 }

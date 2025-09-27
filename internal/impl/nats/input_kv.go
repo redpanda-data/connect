@@ -16,6 +16,7 @@ package nats
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/nats-io/nats.go"
@@ -54,11 +55,15 @@ This input adds the following metadata fields to each message:
 ` + "```" + `
 
 ` + connectionNameDescription() + authDescription()).
-		Fields(kvDocs([]*service.ConfigField{
+		Fields(Docs("KV", []*service.ConfigField{
 			service.NewStringField(kviFieldKey).
 				Description("Key to watch for updates, can include wildcards.").
 				Default(">").
 				Example("foo.bar.baz").Example("foo.*.baz").Example("foo.bar.*").Example("foo.>"),
+			service.NewBoolField("create_bucket").
+				Description("Whether to automatically create the bucket if it doesn't exist.").
+				Advanced().
+				Default(false),
 			service.NewAutoRetryNacksToggleField(),
 			service.NewBoolField(kviFieldIgnoreDeletes).
 				Description("Do not send delete markers as messages.").
@@ -92,6 +97,7 @@ type kvReader struct {
 	connDetails    connectionDetails
 	bucket         string
 	key            string
+	createBucket   bool
 	ignoreDeletes  bool
 	includeHistory bool
 	metaOnly       bool
@@ -117,6 +123,10 @@ func newKVReader(conf *service.ParsedConfig, mgr *service.Resources) (*kvReader,
 	}
 
 	if r.bucket, err = conf.FieldString(kvFieldBucket); err != nil {
+		return nil, err
+	}
+
+	if r.createBucket, err = conf.FieldBool("create_bucket"); err != nil {
 		return nil, err
 	}
 
@@ -167,9 +177,20 @@ func (r *kvReader) Connect(ctx context.Context) (err error) {
 		return err
 	}
 
+	// Check if bucket exists first, create only if config allows
 	kv, err := js.KeyValue(ctx, r.bucket)
 	if err != nil {
-		return err
+		if r.createBucket {
+			kv, err = js.CreateKeyValue(ctx, jetstream.KeyValueConfig{
+				Bucket: r.bucket,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to create bucket %s: %w", r.bucket, err)
+			}
+			r.log.Infof("Created bucket %s", r.bucket)
+		} else {
+			return fmt.Errorf("bucket %s does not exist and create_bucket is false", r.bucket)
+		}
 	}
 
 	var watchOpts []jetstream.WatchOpt
