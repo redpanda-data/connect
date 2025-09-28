@@ -12,6 +12,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -37,12 +38,20 @@ func TestIntegration_SQLServerCDC_SnapshotAndStreaming(t *testing.T) {
 	connStr, db := setupTestWithSQLServerVersion(t, "2022-latest")
 
 	// Create table
-	err := db.createTableWithCDCEnabledIfNotExists(t.Context(), "foo", `CREATE TABLE foo (a INT PRIMARY KEY);`)
+	q := `
+	CREATE TABLE test.foo (a INT PRIMARY KEY);`
+	err := db.createTableWithCDCEnabledIfNotExists(t.Context(), "test.foo", q)
 	require.NoError(t, err)
 
-	// Insert 1000 rows for initial snapshot streaming
+	q = `
+	CREATE TABLE dbo.bar (a INT PRIMARY KEY);`
+	err = db.createTableWithCDCEnabledIfNotExists(t.Context(), "dbo.bar", q)
+	require.NoError(t, err)
+
+	// Insert 2000 rows across both tables for initial snapshot streaming
 	for i := range 1000 {
-		db.MustExec("INSERT INTO foo VALUES (?)", i)
+		db.MustExec("INSERT INTO test.foo VALUES (?)", i)
+		db.MustExec("INSERT INTO dbo.bar VALUES (?)", i)
 	}
 
 	template := fmt.Sprintf(`
@@ -50,7 +59,8 @@ sql_server_cdc:
   connection_string: %s
   stream_snapshot: true
   snapshot_max_batch_size: 10
-  include: ["foo"]
+  include: ["test.foo", "dbo.bar"]
+  exclude: ["dbo.doesnotexist"]
   checkpoint_cache: "foocache"
 `, connStr)
 
@@ -87,10 +97,11 @@ file:
 	// insert 1000 more for streaming changes
 	time.Sleep(time.Second * 5)
 	for i := 1000; i < 2000; i++ {
-		db.MustExec("INSERT INTO foo VALUES (?)", i)
+		db.MustExec("INSERT INTO test.foo VALUES (?)", i)
+		db.MustExec("INSERT INTO dbo.bar VALUES (?)", i)
 	}
 
-	want := 2000
+	want := 4000
 	assert.Eventually(t, func() bool {
 		outBatchMut.Lock()
 		defer outBatchMut.Unlock()
@@ -98,7 +109,7 @@ file:
 		got := len(outBatches)
 		t.Logf("found %d messages of %d", got, want)
 		return got == want
-	}, time.Minute*5, time.Millisecond*100)
+	}, time.Minute*5, time.Second*1)
 
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
 }
@@ -110,14 +121,14 @@ func TestIntegration_SQLServerCDC_ResumesFromCheckpoint(t *testing.T) {
 	connStr, db := setupTestWithSQLServerVersion(t, "2022-latest")
 
 	// Create table
-	err := db.createTableWithCDCEnabledIfNotExists(t.Context(), "foo", `CREATE TABLE foo (a INT PRIMARY KEY);`)
+	err := db.createTableWithCDCEnabledIfNotExists(t.Context(), "test.foo", `CREATE TABLE test.foo (a INT PRIMARY KEY);`)
 	require.NoError(t, err)
 
 	template := fmt.Sprintf(`
 sql_server_cdc:
   connection_string: %s
   stream_snapshot: false
-  include: ["foo"]
+  include: ["test.foo"]
   checkpoint_cache: "foocache"
 `, connStr)
 
@@ -148,7 +159,7 @@ file:
 
 	// --- launch input and insert initial rows for consumption
 	for i := range 1000 {
-		db.MustExec("INSERT INTO foo VALUES (?)", i)
+		db.MustExec("INSERT INTO test.foo VALUES (?)", i)
 	}
 	go func() {
 		require.NoError(t, streamOut.Run(t.Context()))
@@ -165,7 +176,7 @@ file:
 	// --- stop initial input and then insert more rows
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
 	for i := 1000; i < 2000; i++ {
-		db.MustExec("INSERT INTO foo VALUES (?)", i)
+		db.MustExec("INSERT INTO test.foo VALUES (?)", i)
 	}
 
 	// --- relaunched input should load checkpoint
@@ -193,9 +204,9 @@ func TestIntegration_SQLServerCDC_OrderingOfIterator(t *testing.T) {
 	connStr, db := setupTestWithSQLServerVersion(t, "2022-latest")
 
 	// Create table
-	err := db.createTableWithCDCEnabledIfNotExists(t.Context(), "foo", `CREATE TABLE foo (a INT PRIMARY KEY);`)
+	err := db.createTableWithCDCEnabledIfNotExists(t.Context(), "dbo.foo", `CREATE TABLE dbo.foo (a INT PRIMARY KEY);`)
 	require.NoError(t, err)
-	err = db.createTableWithCDCEnabledIfNotExists(t.Context(), "bar", `CREATE TABLE bar (b INT PRIMARY KEY);`)
+	err = db.createTableWithCDCEnabledIfNotExists(t.Context(), "boo.bar", `CREATE TABLE boo.bar (b INT PRIMARY KEY);`)
 	require.NoError(t, err)
 
 	// Data across change tables will have the same LSN but unique
@@ -205,8 +216,8 @@ func TestIntegration_SQLServerCDC_OrderingOfIterator(t *testing.T) {
 	DECLARE @i INT = 1;
 	WHILE @i <= 10
 	BEGIN
-		INSERT INTO foo (a) VALUES (@i);
-		INSERT INTO bar (b) VALUES (@i);
+		INSERT INTO dbo.foo (a) VALUES (@i);
+		INSERT INTO boo.bar (b) VALUES (@i);
 		SET @i += 1;
 	END
 	COMMIT TRANSACTION`)
@@ -216,7 +227,7 @@ func TestIntegration_SQLServerCDC_OrderingOfIterator(t *testing.T) {
 sql_server_cdc:
   connection_string: %s
   stream_snapshot: false
-  include: ["foo", "bar"]
+  include: ["dbo.foo", "boo.bar"]
   checkpoint_cache: "foocache"
 `, connStr)
 
@@ -271,7 +282,7 @@ func TestIntegration_SQLServerCDC_AllTypes(t *testing.T) {
 
 	connStr, db := setupTestWithSQLServerVersion(t, "2022-latest")
 	q := `
-CREATE TABLE all_data_types (
+CREATE TABLE dbo.all_data_types (
     -- Numeric Data Types
     tinyint_col       TINYINT        PRIMARY KEY,   -- 0 to 255
     smallint_col      SMALLINT,                     -- -32,768 to 32,767
@@ -311,12 +322,12 @@ CREATE TABLE all_data_types (
     json_col          NVARCHAR(MAX)                -- SQL Server has no native JSON, stored as NVARCHAR
 );
 `
-	err := db.createTableWithCDCEnabledIfNotExists(t.Context(), "all_data_types", q)
+	err := db.createTableWithCDCEnabledIfNotExists(t.Context(), "dbo.all_data_types", q)
 	require.NoError(t, err)
 
 	// insert min
 	allDataTypesQuery := `
-INSERT INTO all_data_types (
+INSERT INTO dbo.all_data_types (
     tinyint_col, smallint_col, int_col, bigint_col,
     decimal_col, numeric_col, float_col, real_col,
     date_col, datetime_col, datetime2_col, smalldatetime_col,
@@ -548,10 +559,10 @@ func Test_ManualTesting_AddTestDataWithUniqueLSN(t *testing.T) {
 	require.NoError(t, err)
 
 	// --- create tables and enable CDC on them
-	t.Log("Creating test tables 'users'...")
+	t.Log("Creating test tables 'test.users'...")
 	testDB := &testDB{db, t}
-	err = testDB.createTableWithCDCEnabledIfNotExists(t.Context(), "users", `
-		CREATE TABLE users (
+	err = testDB.createTableWithCDCEnabledIfNotExists(t.Context(), "test.users", `
+		CREATE TABLE test.users (
 			id INT IDENTITY(1,1) PRIMARY KEY,
 			name NVARCHAR(100) NOT NULL,
 			email NVARCHAR(255) NOT NULL,
@@ -563,9 +574,9 @@ func Test_ManualTesting_AddTestDataWithUniqueLSN(t *testing.T) {
 		);`)
 	require.NoError(t, err)
 
-	t.Log("Creating test tables 'products'...")
-	err = testDB.createTableWithCDCEnabledIfNotExists(t.Context(), "products", `
-	CREATE TABLE products (
+	t.Log("Creating test tables 'dbo.products'...")
+	err = testDB.createTableWithCDCEnabledIfNotExists(t.Context(), "dbo.products", `
+	CREATE TABLE dbo.products (
 		id INT IDENTITY(1,1) PRIMARY KEY,
 		name NVARCHAR(100),
 		created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
@@ -603,7 +614,7 @@ func Test_ManualTesting_AddTestDataWithUniqueLSN(t *testing.T) {
 		FROM sys.all_objects a
 		CROSS JOIN sys.all_objects b
 	)
-	INSERT INTO users (name, email, date_of_birth, created_at, is_active, login_count, balance)
+	INSERT INTO test.users (name, email, date_of_birth, created_at, is_active, login_count, balance)
 	SELECT
 		CONCAT('user-', n),                                -- name
 		CONCAT('user', n, '@example.com'),                 -- email
@@ -622,7 +633,7 @@ func Test_ManualTesting_AddTestDataWithUniqueLSN(t *testing.T) {
 		FROM sys.all_objects a
 		CROSS JOIN sys.all_objects b
 	)
-	INSERT INTO products (name, created_at, balance)
+	INSERT INTO dbo.products (name, created_at, balance)
 		SELECT
 		CONCAT('product-', n),                             -- name
 		SYSUTCDATETIME(),                                  -- created_at
@@ -643,20 +654,37 @@ func (db *testDB) MustExec(query string, args ...any) {
 	require.NoError(db.t, err)
 }
 
-func (db *testDB) createTableWithCDCEnabledIfNotExists(ctx context.Context, tableName, createTableQuery string, _ ...any) error {
+func (db *testDB) createTableWithCDCEnabledIfNotExists(ctx context.Context, fullTableName, createTableQuery string, _ ...any) error {
+	// default to dbo if not found
+	table := strings.Split(fullTableName, ".")
+	if len(table) != 2 {
+		table = []string{"dbo", table[0]}
+	}
+	schema := table[0]
+	tableName := table[1]
+
+	q := `
+	IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = '%s')
+	BEGIN
+		EXEC('CREATE SCHEMA %s');
+	END`
+	if _, err := db.Exec(fmt.Sprintf(q, schema, schema)); err != nil {
+		return err
+	}
+
 	enableSnapshot := `ALTER DATABASE testdb SET ALLOW_SNAPSHOT_ISOLATION ON;`
 	enableCDC := fmt.Sprintf(`
 		EXEC sys.sp_cdc_enable_table
-		@source_schema = 'dbo',
+		@source_schema = '%s',
 		@source_name   = '%s',
-		@role_name     = NULL;`, tableName)
-	q := fmt.Sprintf(`
-		IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = '%s' AND schema_id = SCHEMA_ID('dbo'))
+		@role_name     = NULL;`, schema, tableName)
+	q = fmt.Sprintf(`
+		IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = '%s' AND schema_id = SCHEMA_ID('%s'))
 		BEGIN
 			%s
 			%s
 			%s
-		END;`, tableName, createTableQuery, enableCDC, enableSnapshot)
+		END;`, tableName, schema, createTableQuery, enableCDC, enableSnapshot)
 	if _, err := db.Exec(q); err != nil {
 		return err
 	}
@@ -665,7 +693,7 @@ func (db *testDB) createTableWithCDCEnabledIfNotExists(ctx context.Context, tabl
 	for {
 		var minLSN, maxLSN []byte
 		// table isn't ready yet
-		if err := db.QueryRowContext(ctx, "SELECT sys.fn_cdc_get_min_lsn(?)", tableName).Scan(&minLSN); err != nil {
+		if err := db.QueryRowContext(ctx, "SELECT sys.fn_cdc_get_min_lsn(?)", fullTableName).Scan(&minLSN); err != nil {
 			return err
 		}
 		// cdc agent still preparing
@@ -681,7 +709,6 @@ func (db *testDB) createTableWithCDCEnabledIfNotExists(ctx context.Context, tabl
 		case <-time.After(time.Second):
 		}
 	}
-
 	return nil
 }
 

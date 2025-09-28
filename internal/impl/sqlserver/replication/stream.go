@@ -377,7 +377,7 @@ func VerifyUserTables(ctx context.Context, db *sql.DB, tableFilter *confx.Regexp
 		if err := rows.Scan(&ut.Schema, &ut.Name); err != nil {
 			return nil, fmt.Errorf("scanning sys.tables row for user tables: %w", err)
 		}
-		if tableFilter.Matches(ut.Name) {
+		if tableFilter.Matches(fmt.Sprintf("%s.%s", ut.Schema, ut.Name)) {
 			userTables = append(userTables, ut)
 		}
 	}
@@ -392,10 +392,13 @@ func VerifyUserTables(ctx context.Context, db *sql.DB, tableFilter *confx.Regexp
 	for i, tbl := range userTables {
 		q := fmt.Sprintf("SELECT TOP 1 start_lsn FROM cdc.change_tables WHERE capture_instance ='%s_%s'", tbl.Schema, tbl.Name)
 		if err := db.QueryRowContext(ctx, q).Scan(&tbl.startLSN); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, fmt.Errorf("no change table found for table '%s'", tbl.FullName())
+			}
 			return nil, fmt.Errorf("fetching change tables: %w", err)
 		}
 		if len(tbl.startLSN) == 0 {
-			return nil, fmt.Errorf("could not find associated change table for table '%s'", tbl.FullName())
+			return nil, fmt.Errorf("field 'start_lsn' in change table '%s' expected to be set but was not", tbl.ToChangeTable())
 		}
 		userTables[i] = tbl
 	}

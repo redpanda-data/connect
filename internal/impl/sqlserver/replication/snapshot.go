@@ -84,10 +84,10 @@ func (s *Snapshot) getTablePrimaryKeys(ctx context.Context, table UserTable) ([]
 	JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id
 	JOIN sys.tables t ON i.object_id = t.object_id
 	JOIN sys.schemas s ON t.schema_id = s.schema_id
-	WHERE i.is_primary_key = 1 AND t.name = ? AND s.name = SCHEMA_NAME()
+	WHERE i.is_primary_key = 1 AND t.name = ? AND s.name = ?
 	ORDER BY ic.key_ordinal;`
 
-	rows, err := s.tx.QueryContext(ctx, pkSql, table.Name)
+	rows, err := s.tx.QueryContext(ctx, pkSql, table.Name, table.Schema)
 	if err != nil {
 		return nil, fmt.Errorf("get primary key: %v", err)
 	}
