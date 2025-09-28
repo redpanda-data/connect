@@ -44,13 +44,19 @@ func TestIntegration_SQLServerCDC_SnapshotAndStreaming(t *testing.T) {
 	require.NoError(t, err)
 
 	q = `
+	CREATE TABLE dbo.foo (a INT PRIMARY KEY);`
+	err = db.createTableWithCDCEnabledIfNotExists(t.Context(), "dbo.foo", q)
+	require.NoError(t, err)
+
+	q = `
 	CREATE TABLE dbo.bar (a INT PRIMARY KEY);`
 	err = db.createTableWithCDCEnabledIfNotExists(t.Context(), "dbo.bar", q)
 	require.NoError(t, err)
 
-	// Insert 2000 rows across both tables for initial snapshot streaming
+	// Insert 3000 rows across tables for initial snapshot streaming
 	for i := range 1000 {
 		db.MustExec("INSERT INTO test.foo VALUES (?)", i)
+		db.MustExec("INSERT INTO dbo.foo VALUES (?)", i)
 		db.MustExec("INSERT INTO dbo.bar VALUES (?)", i)
 	}
 
@@ -59,7 +65,7 @@ sql_server_cdc:
   connection_string: %s
   stream_snapshot: true
   snapshot_max_batch_size: 10
-  include: ["test.foo", "dbo.bar"]
+  include: ["test.foo", "dbo.foo", "dbo.bar"]
   exclude: ["dbo.doesnotexist"]
   checkpoint_cache: "foocache"
 `, connStr)
@@ -94,14 +100,15 @@ file:
 		require.NoError(t, err)
 	}()
 
-	// insert 1000 more for streaming changes
+	// insert 3000 more for streaming changes
 	time.Sleep(time.Second * 5)
 	for i := 1000; i < 2000; i++ {
 		db.MustExec("INSERT INTO test.foo VALUES (?)", i)
+		db.MustExec("INSERT INTO dbo.foo VALUES (?)", i)
 		db.MustExec("INSERT INTO dbo.bar VALUES (?)", i)
 	}
 
-	want := 4000
+	want := 6000
 	assert.Eventually(t, func() bool {
 		outBatchMut.Lock()
 		defer outBatchMut.Unlock()
