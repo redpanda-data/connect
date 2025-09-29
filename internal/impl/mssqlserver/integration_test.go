@@ -515,7 +515,7 @@ file:
 
 // Test_ManualTesting_AddTestDataWithUniqueLSN adds data to an existing table and ensures each change has its own LSN
 func Test_ManualTesting_AddTestDataWithUniqueLSN(t *testing.T) {
-	// t.Skip("This test requires a remote database to run. Aimed to seed initial data in a remote test databases")
+	t.Skip("This test requires a remote database to run. Aimed to seed initial data in a remote test databases")
 
 	// --- create database as master
 	port := "1433"
