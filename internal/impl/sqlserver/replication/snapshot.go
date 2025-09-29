@@ -26,7 +26,6 @@ type Snapshot struct {
 	tx *sql.Tx
 
 	snapshotConn *sql.Conn
-	lockConn     *sql.Conn
 
 	Tables    []UserTable
 	publisher ChangePublisher
@@ -51,11 +50,8 @@ func (s *Snapshot) Prepare(ctx context.Context) (LSN, error) {
 	}
 
 	var err error
-	// Create a separate connection for table locks
-	if s.lockConn, err = s.db.Conn(ctx); err != nil {
-		return nil, fmt.Errorf("create lock connection: %v", err)
-	}
 
+	// create separate connection for snapshotting
 	if s.snapshotConn, err = s.db.Conn(ctx); err != nil {
 		return nil, fmt.Errorf("creating snapshot connection: %v", err)
 	}
@@ -75,98 +71,6 @@ func (s *Snapshot) Prepare(ctx context.Context) (LSN, error) {
 	}
 
 	return toLSN, nil
-}
-
-func (s *Snapshot) getTablePrimaryKeys(ctx context.Context, table UserTable) ([]string, error) {
-	pkSql := `
-	SELECT c.name AS column_name FROM sys.indexes i
-	JOIN sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id
-	JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id
-	JOIN sys.tables t ON i.object_id = t.object_id
-	JOIN sys.schemas s ON t.schema_id = s.schema_id
-	WHERE i.is_primary_key = 1 AND t.name = ? AND s.name = ?
-	ORDER BY ic.key_ordinal;`
-
-	rows, err := s.tx.QueryContext(ctx, pkSql, table.Name, table.Schema)
-	if err != nil {
-		return nil, fmt.Errorf("get primary key: %v", err)
-	}
-	defer rows.Close()
-
-	var pks []string
-	for rows.Next() {
-		var pk string
-		if err := rows.Scan(&pk); err != nil {
-			return nil, err
-		}
-		pks = append(pks, pk)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("discovering primary keys for table '%s': %w", table.FullName(), err)
-	}
-
-	if len(pks) == 0 {
-		return nil, fmt.Errorf("unable to find primary key for table '%s' - does the table exist and does it have a primary key set?", table.FullName())
-	}
-	return pks, nil
-}
-
-func (s *Snapshot) querySnapshotTable(ctx context.Context, table UserTable, pk []string, lastSeenPkVal *map[string]any, limit int) (*sql.Rows, error) {
-	snapshotQueryParts := []string{
-		fmt.Sprintf("SELECT TOP (%d) * FROM %s.%s", limit, table.Schema, table.Name),
-	}
-
-	if lastSeenPkVal == nil {
-		snapshotQueryParts = append(snapshotQueryParts, buildOrderByClause(pk))
-
-		q := strings.Join(snapshotQueryParts, " ")
-		return s.tx.QueryContext(ctx, q)
-	}
-
-	var lastSeenPkVals []any
-	var placeholders []string
-	for _, pkCol := range *lastSeenPkVal {
-		lastSeenPkVals = append(lastSeenPkVals, pkCol)
-		placeholders = append(placeholders, "?")
-	}
-
-	ph1 := strings.Join(pk, ", ")
-	ph2 := strings.Join(placeholders, ", ")
-	res := fmt.Sprintf("WHERE (%s) > (%s)", ph1, ph2)
-	snapshotQueryParts = append(snapshotQueryParts, res)
-	snapshotQueryParts = append(snapshotQueryParts, buildOrderByClause(pk))
-	q := strings.Join(snapshotQueryParts, " ")
-	return s.tx.QueryContext(ctx, q, lastSeenPkVals...)
-}
-
-// Close safely closes all open connections opened for the snapshotting process.
-// It should be called after a non-recoverale error or once the snapshot process has completed.
-func (s *Snapshot) Close() error {
-	var errs []error
-
-	if s.tx != nil {
-		if err := s.tx.Rollback(); err != nil {
-			errs = append(errs, fmt.Errorf("rollback transaction: %w", err))
-		}
-		s.tx = nil
-	}
-
-	for _, conn := range []*sql.Conn{s.lockConn, s.snapshotConn} {
-		if conn == nil {
-			continue
-		}
-		if err := conn.Close(); err != nil {
-			errs = append(errs, fmt.Errorf("close connection: %w", err))
-		}
-	}
-
-	if s.db != nil {
-		if err := s.db.Close(); err != nil {
-			errs = append(errs, fmt.Errorf("close db: %w", err))
-		}
-	}
-
-	return errors.Join(errs...)
 }
 
 // Read starts the process of iterating through each table, reading rows based on maxBatchSize, sending the row as a
@@ -253,6 +157,98 @@ func (s *Snapshot) Read(ctx context.Context, maxBatchSize int) error {
 		s.log.Infof("Completed snapshot process for table '%s'", table.FullName())
 	}
 	return nil
+}
+
+func (s *Snapshot) getTablePrimaryKeys(ctx context.Context, table UserTable) ([]string, error) {
+	pkSql := `
+	SELECT c.name AS column_name FROM sys.indexes i
+	JOIN sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id
+	JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id
+	JOIN sys.tables t ON i.object_id = t.object_id
+	JOIN sys.schemas s ON t.schema_id = s.schema_id
+	WHERE i.is_primary_key = 1 AND t.name = ? AND s.name = ?
+	ORDER BY ic.key_ordinal;`
+
+	rows, err := s.tx.QueryContext(ctx, pkSql, table.Name, table.Schema)
+	if err != nil {
+		return nil, fmt.Errorf("get primary key: %v", err)
+	}
+	defer rows.Close()
+
+	var pks []string
+	for rows.Next() {
+		var pk string
+		if err := rows.Scan(&pk); err != nil {
+			return nil, err
+		}
+		pks = append(pks, pk)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("discovering primary keys for table '%s': %w", table.FullName(), err)
+	}
+
+	if len(pks) == 0 {
+		return nil, fmt.Errorf("unable to find primary key for table '%s' - does the table exist and does it have a primary key set?", table.FullName())
+	}
+	return pks, nil
+}
+
+func (s *Snapshot) querySnapshotTable(ctx context.Context, table UserTable, pk []string, lastSeenPkVal *map[string]any, limit int) (*sql.Rows, error) {
+	snapshotQueryParts := []string{
+		fmt.Sprintf("SELECT TOP (%d) * FROM %s.%s", limit, table.Schema, table.Name),
+	}
+
+	if lastSeenPkVal == nil {
+		snapshotQueryParts = append(snapshotQueryParts, buildOrderByClause(pk))
+
+		q := strings.Join(snapshotQueryParts, " ")
+		return s.tx.QueryContext(ctx, q)
+	}
+
+	var lastSeenPkVals []any
+	var placeholders []string
+	for _, pkCol := range *lastSeenPkVal {
+		lastSeenPkVals = append(lastSeenPkVals, pkCol)
+		placeholders = append(placeholders, "?")
+	}
+
+	ph1 := strings.Join(pk, ", ")
+	ph2 := strings.Join(placeholders, ", ")
+	res := fmt.Sprintf("WHERE (%s) > (%s)", ph1, ph2)
+	snapshotQueryParts = append(snapshotQueryParts, res)
+	snapshotQueryParts = append(snapshotQueryParts, buildOrderByClause(pk))
+	q := strings.Join(snapshotQueryParts, " ")
+	return s.tx.QueryContext(ctx, q, lastSeenPkVals...)
+}
+
+// Close safely closes all open connections opened for the snapshotting process.
+// It should be called after a non-recoverale error or once the snapshot process has completed.
+func (s *Snapshot) Close() error {
+	var errs []error
+
+	if s.tx != nil {
+		if err := s.tx.Rollback(); err != nil {
+			errs = append(errs, fmt.Errorf("rollback transaction: %w", err))
+		}
+		s.tx = nil
+	}
+
+	for _, conn := range []*sql.Conn{s.snapshotConn} {
+		if conn == nil {
+			continue
+		}
+		if err := conn.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("close connection: %w", err))
+		}
+	}
+
+	if s.db != nil {
+		if err := s.db.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("close db: %w", err))
+		}
+	}
+
+	return errors.Join(errs...)
 }
 
 func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mappers []func(any) (any, error)) {
