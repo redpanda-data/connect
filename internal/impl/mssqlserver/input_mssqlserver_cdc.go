@@ -41,14 +41,14 @@ const (
 )
 
 func init() {
-	service.MustRegisterBatchInput("microsoft_sql_server_cdc", sqlServerStreamConfigSpec, newSqlServerCDCInput)
+	service.MustRegisterBatchInput("microsoft_sql_server_cdc", msSQLServerStreamConfigSpec, newMSSQLServerCDCInput)
 }
 
-var sqlServerStreamConfigSpec = service.NewConfigSpec().
+var msSQLServerStreamConfigSpec = service.NewConfigSpec().
 	Beta().
 	Categories("Services").
-	Version("4.45.0").
-	Summary("Creates an input that consumes from a Microsoft SQL Server's change tables.").
+	Version("0.0.1").
+	Summary("Creates an input that enables change data capture by consuming from Microsoft SQL Server's change tables.").
 	Description(``).
 	Field(service.NewStringField(fieldConnectionString).
 		Description("The connection string of the Microsoft SQL Server database to connect to.").
@@ -62,10 +62,12 @@ var sqlServerStreamConfigSpec = service.NewConfigSpec().
 		Default(1000),
 	).
 	Field(service.NewStringListField(fieldTablesInclude).
-		Description("Regular expressions for tables to include."),
+		Description("Regular expressions for tables to include.").
+		Example("dbo.products"),
 	).
 	Field(service.NewStringListField(fieldTablesExclude).
 		Description("Regular expressions for tables to exclude.").
+		Example("dbo.privatetable").
 		Optional(),
 	).
 	Field(service.NewStringField(fieldCheckpointCache).
@@ -107,7 +109,7 @@ type sqlServerCDCInput struct {
 	log     *service.Logger
 }
 
-func newSqlServerCDCInput(conf *service.ParsedConfig, resources *service.Resources) (s service.BatchInput, err error) {
+func newMSSQLServerCDCInput(conf *service.ParsedConfig, resources *service.Resources) (s service.BatchInput, err error) {
 	var (
 		connectionString             string
 		streamSnapshot               bool

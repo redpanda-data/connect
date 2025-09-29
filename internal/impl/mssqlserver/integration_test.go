@@ -31,26 +31,20 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
-func TestIntegration_SQLServerCDC_SnapshotAndStreaming(t *testing.T) {
+func TestIntegration_MicrosoftSQLServerCDC_SnapshotAndStreaming(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	connStr, db := setupTestWithSQLServerVersion(t, "2022-latest")
+	connStr, db := setupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
 
-	// Create table
-	q := `
-	CREATE TABLE test.foo (a INT PRIMARY KEY);`
-	err := db.createTableWithCDCEnabledIfNotExists(t.Context(), "test.foo", q)
+	// Create tables
+	err := db.createTableWithCDCEnabledIfNotExists(t.Context(), "test.foo", "CREATE TABLE test.foo (a INT PRIMARY KEY);")
 	require.NoError(t, err)
 
-	q = `
-	CREATE TABLE dbo.foo (a INT PRIMARY KEY);`
-	err = db.createTableWithCDCEnabledIfNotExists(t.Context(), "dbo.foo", q)
+	err = db.createTableWithCDCEnabledIfNotExists(t.Context(), "dbo.foo", "CREATE TABLE dbo.foo (a INT PRIMARY KEY);")
 	require.NoError(t, err)
 
-	q = `
-	CREATE TABLE dbo.bar (a INT PRIMARY KEY);`
-	err = db.createTableWithCDCEnabledIfNotExists(t.Context(), "dbo.bar", q)
+	err = db.createTableWithCDCEnabledIfNotExists(t.Context(), "dbo.bar", "CREATE TABLE dbo.bar (a INT PRIMARY KEY);")
 	require.NoError(t, err)
 
 	// Insert 3000 rows across tables for initial snapshot streaming
@@ -121,11 +115,11 @@ file:
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
 }
 
-func TestIntegration_SQLServerCDC_ResumesFromCheckpoint(t *testing.T) {
+func TestIntegration_MicrosoftSQLServerCDC_ResumesFromCheckpoint(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	connStr, db := setupTestWithSQLServerVersion(t, "2022-latest")
+	connStr, db := setupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
 
 	// Create table
 	err := db.createTableWithCDCEnabledIfNotExists(t.Context(), "test.foo", `CREATE TABLE test.foo (a INT PRIMARY KEY);`)
@@ -204,11 +198,11 @@ file:
 	require.NoError(t, streamOutResume.StopWithin(time.Second*10))
 }
 
-func TestIntegration_SQLServerCDC_OrderingOfIterator(t *testing.T) {
+func TestIntegration_MicrosoftSQLServerCDC_OrderingOfIterator(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	connStr, db := setupTestWithSQLServerVersion(t, "2022-latest")
+	connStr, db := setupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
 
 	// Create table
 	err := db.createTableWithCDCEnabledIfNotExists(t.Context(), "dbo.foo", `CREATE TABLE dbo.foo (a INT PRIMARY KEY);`)
@@ -283,11 +277,11 @@ file:
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
 }
 
-func TestIntegration_SQLServerCDC_AllTypes(t *testing.T) {
+func TestIntegration_MicrosoftSQLServerCDC_AllTypes(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	connStr, db := setupTestWithSQLServerVersion(t, "2022-latest")
+	connStr, db := setupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
 	q := `
 CREATE TABLE dbo.all_data_types (
     -- Numeric Data Types
@@ -521,7 +515,7 @@ file:
 
 // Test_ManualTesting_AddTestDataWithUniqueLSN adds data to an existing table and ensures each change has its own LSN
 func Test_ManualTesting_AddTestDataWithUniqueLSN(t *testing.T) {
-	t.Skip("This test requires a remote database to run. Aimed to seed initial data in a remote test databases")
+	// t.Skip("This test requires a remote database to run. Aimed to seed initial data in a remote test databases")
 
 	// --- create database as master
 	port := "1433"
@@ -719,7 +713,7 @@ func (db *testDB) createTableWithCDCEnabledIfNotExists(ctx context.Context, full
 	return nil
 }
 
-func setupTestWithSQLServerVersion(t *testing.T, version string) (string, *testDB) {
+func setupTestWithMicrosoftSQLServerVersion(t *testing.T, version string) (string, *testDB) {
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
 

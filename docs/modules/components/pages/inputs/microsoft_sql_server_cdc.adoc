@@ -23,9 +23,9 @@
 component_type_dropdown::[]
 
 
-Creates an input that consumes from a Microsoft SQL Server's change tables.
+Creates an input that enables change data capture by consuming from Microsoft SQL Server's change tables.
 
-Introduced in version 4.45.0.
+Introduced in version 0.0.1.
 
 
 [tabs]
@@ -126,6 +126,12 @@ Regular expressions for tables to include.
 *Type*: `array`
 
 
+```yml
+# Examples
+
+include: dbo.products
+```
+
 === `exclude`
 
 Regular expressions for tables to exclude.
@@ -133,6 +139,12 @@ Regular expressions for tables to exclude.
 
 *Type*: `array`
 
+
+```yml
+# Examples
+
+exclude: dbo.privatetable
+```
 
 === `checkpoint_cache`
 
