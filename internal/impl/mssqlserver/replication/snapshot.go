@@ -36,7 +36,12 @@ type Snapshot struct {
 
 // NewSnapshot creates a new instance of Snapshot capable of snapshotting provided tables.
 // It does this by creating a transaction with snapshot level isolation before paging through rows, sending them to be batched.
-func NewSnapshot(db *sql.DB, tables []UserTable, publisher ChangePublisher, logger *service.Logger, metrics *service.Metrics) *Snapshot {
+func NewSnapshot(
+	db *sql.DB,
+	tables []UserTable,
+	publisher ChangePublisher,
+	logger *service.Logger,
+	metrics *service.Metrics) *Snapshot {
 	return &Snapshot{
 		db:                      db,
 		Tables:                  tables,
@@ -65,16 +70,16 @@ func (s *Snapshot) Prepare(ctx context.Context) (LSN, error) {
 		return nil, fmt.Errorf("starting snapshot transaction: %v", err)
 	}
 
-	var toLSN LSN
+	var maxLSN LSN
 	// capture max LSN _after_ beginning snapshot transaction
-	if err := s.snapshotConn.QueryRowContext(ctx, "SELECT sys.fn_cdc_get_max_lsn()").Scan(&toLSN); err != nil {
+	if err := s.snapshotConn.QueryRowContext(ctx, "SELECT sys.fn_cdc_get_max_lsn()").Scan(&maxLSN); err != nil {
 		return nil, err
-	} else if len(toLSN) == 0 {
+	} else if len(maxLSN) == 0 {
 		// rare, but possible if the user enabled CDC on a table seconds before running snapshot or the agent has stopped working for some reason
 		return nil, errors.New("unable to captue max_lsn, this can be due to reasons such as the log scanning agent has stopped")
 	}
 
-	return toLSN, nil
+	return maxLSN, nil
 }
 
 // Read starts the process of iterating through each table, reading rows based on maxBatchSize, sending the row as a
@@ -105,7 +110,7 @@ func (s *Snapshot) Read(ctx context.Context, maxBatchSize int) error {
 			if numRowsProcessed == 0 {
 				batchRows, err = s.querySnapshotTable(ctx, table, tablePks, nil, maxBatchSize)
 			} else {
-				batchRows, err = s.querySnapshotTable(ctx, table, tablePks, &lastSeenPksValues, maxBatchSize)
+				batchRows, err = s.querySnapshotTable(ctx, table, tablePks, lastSeenPksValues, maxBatchSize)
 			}
 			if err != nil {
 				return fmt.Errorf("failed to execute snapshot table query: %s", err)
@@ -172,7 +177,7 @@ func (s *Snapshot) Read(ctx context.Context, maxBatchSize int) error {
 }
 
 func (s *Snapshot) getTablePrimaryKeys(ctx context.Context, table UserTable) ([]string, error) {
-	pkSql := `
+	pkSQL := `
 	SELECT c.name AS column_name FROM sys.indexes i
 	JOIN sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id
 	JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id
@@ -181,7 +186,7 @@ func (s *Snapshot) getTablePrimaryKeys(ctx context.Context, table UserTable) ([]
 	WHERE i.is_primary_key = 1 AND t.name = ? AND s.name = ?
 	ORDER BY ic.key_ordinal;`
 
-	rows, err := s.tx.QueryContext(ctx, pkSql, table.Name, table.Schema)
+	rows, err := s.tx.QueryContext(ctx, pkSQL, table.Name, table.Schema)
 	if err != nil {
 		return nil, fmt.Errorf("get primary key: %v", err)
 	}
@@ -205,7 +210,13 @@ func (s *Snapshot) getTablePrimaryKeys(ctx context.Context, table UserTable) ([]
 	return pks, nil
 }
 
-func (s *Snapshot) querySnapshotTable(ctx context.Context, table UserTable, pk []string, lastSeenPkVal *map[string]any, limit int) (*sql.Rows, error) {
+func (s *Snapshot) querySnapshotTable(
+	ctx context.Context,
+	table UserTable,
+	pk []string,
+	lastSeenPkVal map[string]any,
+	limit int,
+) (*sql.Rows, error) {
 	snapshotQueryParts := []string{
 		fmt.Sprintf("SELECT TOP (%d) * FROM [%s].[%s]", limit, table.Schema, table.Name),
 	}
@@ -219,7 +230,7 @@ func (s *Snapshot) querySnapshotTable(ctx context.Context, table UserTable, pk [
 
 	var lastSeenPkVals []any
 	var placeholders []string
-	for _, pkCol := range *lastSeenPkVal {
+	for _, pkCol := range lastSeenPkVal {
 		lastSeenPkVals = append(lastSeenPkVals, pkCol)
 		placeholders = append(placeholders, "?")
 	}
