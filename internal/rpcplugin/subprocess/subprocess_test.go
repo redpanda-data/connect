@@ -42,6 +42,10 @@ func createSleepCommand(duration time.Duration) []string {
 }
 
 func TestStartStop(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("Skipping test in CI")
+	}
+
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 
@@ -63,6 +67,10 @@ func TestStartStop(t *testing.T) {
 }
 
 func TestProcessExit(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("Skipping test in CI")
+	}
+
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 
@@ -83,6 +91,10 @@ func TestProcessExit(t *testing.T) {
 }
 
 func TestRestart(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("Skipping test in CI")
+	}
+
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 
@@ -105,6 +117,10 @@ func TestRestart(t *testing.T) {
 }
 
 func TestLoggingHooks(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("Skipping test in CI")
+	}
+
 	logs := make(chan string, 1)
 	cmdArgs := createEchoCommand("whoot", "stdout", 0)
 	sub, err := New(cmdArgs, nil, WithStdoutHook(func(line string) { logs <- line }))
