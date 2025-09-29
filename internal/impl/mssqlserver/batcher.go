@@ -136,7 +136,7 @@ func (b *batchPublisher) Publish(ctx context.Context, m replication.MessageEvent
 	msg.MetaSet("table", m.Table)
 	msg.MetaSet("operation", m.Operation)
 	if len(m.LSN) != 0 {
-		msg.MetaSet("start_lsn", string(m.LSN))
+		msg.MetaSet("lsn", string(m.LSN))
 	}
 
 	var flushedBatch []*service.Message
@@ -166,8 +166,8 @@ func (b *batchPublisher) publishBatch(ctx context.Context, batch service.Message
 
 	lastMsg := batch[len(batch)-1]
 	var checkpointLSN []byte
-	// snapshot records don't have a start_lsn as we don't track those
-	if lsn, ok := lastMsg.MetaGet("start_lsn"); ok {
+	// snapshot records don't have a lsn as we don't track those
+	if lsn, ok := lastMsg.MetaGet("lsn"); ok {
 		checkpointLSN = replication.LSN(lsn)
 	}
 

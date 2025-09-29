@@ -48,8 +48,18 @@ var msSQLServerStreamConfigSpec = service.NewConfigSpec().
 	Beta().
 	Categories("Services").
 	Version("0.0.1").
-	Summary("Creates an input that enables change data capture by consuming from Microsoft SQL Server's change tables.").
-	Description(``).
+	Summary("Enables Change Data Capture by consuming from Microsoft SQL Server's change tables.").
+	Description(`Streams changes from a Microsoft SQL Server database for Change Data Capture (CDC).
+Additionally, if ` + "`" + fieldStreamSnapshot + "`" + ` is set to true, then the existing data in the database is also streamed too.
+
+== Metadata
+
+This input adds the following metadata fields to each message:
+- schema (Schema of the table that the message originated from)
+- table (Name of the table that the message originated from)
+- operation (Type of operation that generated the message: "read", "delete", "insert", or "update_before" and "update_after". "read" is from messages that are read in the initial snapshot phase.)
+- lsn (the Log Sequence Number in Microsoft SQL Server)
+		`).
 	Field(service.NewStringField(fieldConnectionString).
 		Description("The connection string of the Microsoft SQL Server database to connect to.").
 		Example("sqlserver://username:password@host/instance?param1=value&param2=value"),
