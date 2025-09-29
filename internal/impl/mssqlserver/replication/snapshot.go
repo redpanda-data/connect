@@ -27,19 +27,23 @@ type Snapshot struct {
 
 	snapshotConn *sql.Conn
 
-	Tables    []UserTable
-	publisher ChangePublisher
-	log       *service.Logger
+	Tables                  []UserTable
+	publisher               ChangePublisher
+	log                     *service.Logger
+	snapshotStatusMetric    *service.MetricGauge
+	snapshotRowsTotalMetric *service.MetricCounter
 }
 
 // NewSnapshot creates a new instance of Snapshot capable of snapshotting provided tables.
 // It does this by creating a transaction with snapshot level isolation before paging through rows, sending them to be batched.
-func NewSnapshot(db *sql.DB, tables []UserTable, publisher ChangePublisher, logger *service.Logger) *Snapshot {
+func NewSnapshot(db *sql.DB, tables []UserTable, publisher ChangePublisher, logger *service.Logger, metrics *service.Metrics) *Snapshot {
 	return &Snapshot{
-		db:        db,
-		Tables:    tables,
-		publisher: publisher,
-		log:       logger,
+		db:                      db,
+		Tables:                  tables,
+		publisher:               publisher,
+		log:                     logger,
+		snapshotStatusMetric:    metrics.NewGauge("microsoft_sql_server_snapshot_status", "table"),
+		snapshotRowsTotalMetric: metrics.NewCounter("microsoft_sql_server_snapshot_rows_processed_total", "table"),
 	}
 }
 
@@ -77,6 +81,10 @@ func (s *Snapshot) Prepare(ctx context.Context) (LSN, error) {
 // replication.MessageEvent to the configured publisher.
 func (s *Snapshot) Read(ctx context.Context, maxBatchSize int) error {
 	for _, table := range s.Tables {
+		s.snapshotStatusMetric.Set(0, table.FullName())
+	}
+
+	for _, table := range s.Tables {
 		tablePks, err := s.getTablePrimaryKeys(ctx, table)
 		if err != nil {
 			return err
@@ -89,8 +97,10 @@ func (s *Snapshot) Read(ctx context.Context, maxBatchSize int) error {
 
 		var numRowsProcessed int
 
-		s.log.Infof("Beginning snapshot process for table '%s'", table.FullName())
+		fullTableName := table.FullName()
+		s.log.Infof("Beginning snapshot process for table '%s'", fullTableName)
 		for {
+			s.snapshotRowsTotalMetric.Incr(int64(numRowsProcessed), fullTableName)
 			var batchRows *sql.Rows
 			if numRowsProcessed == 0 {
 				batchRows, err = s.querySnapshotTable(ctx, table, tablePks, nil, maxBatchSize)
@@ -154,7 +164,9 @@ func (s *Snapshot) Read(ctx context.Context, maxBatchSize int) error {
 				break
 			}
 		}
-		s.log.Infof("Completed snapshot process for table '%s'", table.FullName())
+
+		s.snapshotStatusMetric.Set(1, fullTableName)
+		s.log.Infof("Completed snapshot process for table '%s'", fullTableName)
 	}
 	return nil
 }
@@ -195,7 +207,7 @@ func (s *Snapshot) getTablePrimaryKeys(ctx context.Context, table UserTable) ([]
 
 func (s *Snapshot) querySnapshotTable(ctx context.Context, table UserTable, pk []string, lastSeenPkVal *map[string]any, limit int) (*sql.Rows, error) {
 	snapshotQueryParts := []string{
-		fmt.Sprintf("SELECT TOP (%d) * FROM %s.%s", limit, table.Schema, table.Name),
+		fmt.Sprintf("SELECT TOP (%d) * FROM [%s].[%s]", limit, table.Schema, table.Name),
 	}
 
 	if lastSeenPkVal == nil {

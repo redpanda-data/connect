@@ -114,6 +114,7 @@ type sqlServerCDCInput struct {
 
 	res       *service.Resources
 	publisher *batchPublisher
+	metrics   *service.Metrics
 
 	stopSig *shutdown.Signaller
 	log     *service.Logger
@@ -182,6 +183,7 @@ func newMSSQLServerCDCInput(conf *service.ParsedConfig, resources *service.Resou
 	}
 
 	logger := resources.Logger()
+
 	i := sqlServerCDCInput{
 		cfg: &config{
 			connectionString:     connectionString,
@@ -195,8 +197,9 @@ func newMSSQLServerCDCInput(conf *service.ParsedConfig, resources *service.Resou
 			},
 		},
 		res:       resources,
-		stopSig:   shutdown.NewSignaller(),
 		log:       logger,
+		metrics:   resources.Metrics(),
+		stopSig:   shutdown.NewSignaller(),
 		publisher: newBatchPublisher(batcher, cp, logger),
 	}
 
@@ -239,7 +242,7 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("connecting to sql server for snapshotting: %s", err)
 		}
-		snapshotter = replication.NewSnapshot(db, userTables, i.publisher, i.log)
+		snapshotter = replication.NewSnapshot(db, userTables, i.publisher, i.log, i.metrics)
 	} else {
 		i.log.Infof("Snapshotting disabled, skipping...")
 	}
