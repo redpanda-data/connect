@@ -6,7 +6,7 @@
 //
 // https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
-package sqlserver
+package mssqlserver
 
 import (
 	"context"
@@ -22,7 +22,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/confx"
-	"github.com/redpanda-data/connect/v4/internal/impl/sqlserver/replication"
+	"github.com/redpanda-data/connect/v4/internal/impl/mssqlserver/replication"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
@@ -41,7 +41,7 @@ const (
 )
 
 func init() {
-	service.MustRegisterBatchInput("sql_server_cdc", sqlServerStreamConfigSpec, newSqlServerCDCInput)
+	service.MustRegisterBatchInput("microsoft_sql_server_cdc", sqlServerStreamConfigSpec, newSqlServerCDCInput)
 }
 
 var sqlServerStreamConfigSpec = service.NewConfigSpec().
@@ -73,7 +73,7 @@ var sqlServerStreamConfigSpec = service.NewConfigSpec().
 	).
 	Field(service.NewStringField(fieldCheckpointKey).
 		Description("The key to use to store the snapshot position in `" + fieldCheckpointCache + "`. An alternative key can be provided if multiple CDC inputs share the same cache.").
-		Default("sql_server_cdc_position"),
+		Default("microsoft_sql_server_cdc"),
 	).
 	Field(service.NewIntField(fieldCheckpointLimit).
 		Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given Log Sequence Number (LSN) will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
@@ -197,7 +197,7 @@ func newSqlServerCDCInput(conf *service.ParsedConfig, resources *service.Resourc
 		return nil, err
 	}
 
-	return conf.WrapBatchInputExtractTracingSpanMapping("sql_server_cdc", batchInput)
+	return conf.WrapBatchInputExtractTracingSpanMapping("microsoft_sql_server_cdc", batchInput)
 }
 
 func (i *sqlServerCDCInput) Connect(ctx context.Context) error {

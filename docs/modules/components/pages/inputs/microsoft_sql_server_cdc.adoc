@@ -1,4 +1,4 @@
-= sql_server_cdc
+= microsoft_sql_server_cdc
 :type: input
 :status: beta
 :categories: ["Services"]
@@ -38,14 +38,14 @@ Common::
 # Common config fields, showing default values
 input:
   label: ""
-  sql_server_cdc:
+  microsoft_sql_server_cdc:
     connection_string: sqlserver://username:password@host/instance?param1=value&param2=value # No default (required)
     stream_snapshot: false # No default (required)
     snapshot_max_batch_size: 1000
     include: [] # No default (required)
     exclude: [] # No default (optional)
     checkpoint_cache: "" # No default (required)
-    checkpoint_key: sql_server_cdc_position
+    checkpoint_key: microsoft_sql_server_cdc
     checkpoint_limit: 1024
     auto_replay_nacks: true
     batching:
@@ -64,14 +64,14 @@ Advanced::
 # All config fields, showing default values
 input:
   label: ""
-  sql_server_cdc:
+  microsoft_sql_server_cdc:
     connection_string: sqlserver://username:password@host/instance?param1=value&param2=value # No default (required)
     stream_snapshot: false # No default (required)
     snapshot_max_batch_size: 1000
     include: [] # No default (required)
     exclude: [] # No default (optional)
     checkpoint_cache: "" # No default (required)
-    checkpoint_key: sql_server_cdc_position
+    checkpoint_key: microsoft_sql_server_cdc
     checkpoint_limit: 1024
     auto_replay_nacks: true
     batching:
@@ -149,7 +149,7 @@ The key to use to store the snapshot position in `checkpoint_cache`. An alternat
 
 *Type*: `string`
 
-*Default*: `"sql_server_cdc_position"`
+*Default*: `"microsoft_sql_server_cdc"`
 
 === `checkpoint_limit`
 

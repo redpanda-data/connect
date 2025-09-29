@@ -6,7 +6,7 @@
 //
 // https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
-package sqlserver_test
+package mssqlserver_test
 
 import (
 	"context"
@@ -61,7 +61,7 @@ func TestIntegration_SQLServerCDC_SnapshotAndStreaming(t *testing.T) {
 	}
 
 	template := fmt.Sprintf(`
-sql_server_cdc:
+microsoft_sql_server_cdc:
   connection_string: %s
   stream_snapshot: true
   snapshot_max_batch_size: 10
@@ -132,7 +132,7 @@ func TestIntegration_SQLServerCDC_ResumesFromCheckpoint(t *testing.T) {
 	require.NoError(t, err)
 
 	template := fmt.Sprintf(`
-sql_server_cdc:
+microsoft_sql_server_cdc:
   connection_string: %s
   stream_snapshot: false
   include: ["test.foo"]
@@ -231,7 +231,7 @@ func TestIntegration_SQLServerCDC_OrderingOfIterator(t *testing.T) {
 	require.NoError(t, err)
 
 	template := fmt.Sprintf(`
-sql_server_cdc:
+microsoft_sql_server_cdc:
   connection_string: %s
   stream_snapshot: false
   include: ["dbo.foo", "boo.bar"]
@@ -380,7 +380,7 @@ INSERT INTO dbo.all_data_types (
 	require.NoError(t, err, "Inserting snapshot test data to verify data types")
 
 	template := fmt.Sprintf(`
-sql_server_cdc:
+microsoft_sql_server_cdc:
   connection_string: %s
   stream_snapshot: true
   checkpoint_cache: "foocache"

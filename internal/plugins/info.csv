@@ -132,6 +132,7 @@ memcached                 ,cache     ,Memcached                 ,0.0.0   ,commun
 memory                    ,buffer    ,Memory                    ,0.0.0   ,certified  ,n          ,y     ,y
 memory                    ,cache     ,Memory                    ,0.0.0   ,certified  ,n          ,y     ,y
 metric                    ,processor ,metric                    ,0.0.0   ,certified  ,n          ,y     ,y
+microsoft_sql_server_cdc  ,input     ,microsoft_sql_server_cdc  ,0.0.0   ,community  ,n          ,n     ,n
 mongodb                   ,cache     ,MongoDB                   ,3.43.0  ,certified  ,n          ,y     ,y
 mongodb                   ,input     ,MongoDB                   ,3.64.0  ,certified  ,n          ,y     ,y
 mongodb                   ,output    ,MongoDB                   ,3.43.0  ,certified  ,n          ,y     ,y
@@ -273,7 +274,6 @@ sql_raw                   ,output    ,sql_raw                   ,3.65.0  ,certif
 sql_raw                   ,processor ,sql_raw                   ,3.65.0  ,certified  ,n          ,y     ,y
 sql_select                ,input     ,sql_select                ,3.59.0  ,certified  ,n          ,y     ,y
 sql_select                ,processor ,sql_select                ,3.59.0  ,certified  ,n          ,y     ,y
-sql_server_cdc            ,input     ,sql_server_cdc            ,0.0.0   ,community  ,n          ,n     ,n
 sqlite                    ,buffer    ,sqlite                    ,0.0.0   ,community  ,n          ,n     ,n
 statsd                    ,metric    ,statsd                    ,0.0.0   ,certified  ,n          ,n     ,n
 stdin                     ,input     ,stdin                     ,0.0.0   ,certified  ,n          ,n     ,n

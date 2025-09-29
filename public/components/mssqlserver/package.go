@@ -8,9 +8,9 @@
  * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
  */
 
-package sqlserver
+package mssqlserver
 
 import (
 	// Bring in the internal plugin definitions.
-	_ "github.com/redpanda-data/connect/v4/internal/impl/sqlserver"
+	_ "github.com/redpanda-data/connect/v4/internal/impl/mssqlserver"
 )

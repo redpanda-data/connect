@@ -6,7 +6,7 @@
 //
 // https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
-package sqlserver
+package mssqlserver
 
 import (
 	"context"
@@ -19,7 +19,7 @@ import (
 	"github.com/Jeffail/shutdown"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"github.com/redpanda-data/connect/v4/internal/impl/sqlserver/replication"
+	"github.com/redpanda-data/connect/v4/internal/impl/mssqlserver/replication"
 )
 
 // batchPublisher is responsible processing individual events into a batch and flushing them to the pipeline using service.Batcher.
