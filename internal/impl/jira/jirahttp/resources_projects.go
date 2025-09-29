@@ -16,7 +16,7 @@
 // including project search, types, categories, and versions.
 // These helpers fetch and transform project-related data into service messages.
 
-package jira
+package jirahttp
 
 import (
 	"context"
@@ -32,15 +32,15 @@ import (
 // and returns them as a batch of service messages.
 // Parameters:
 // - ctx: context.Context → request context for cancellation and timeouts
-// - inputQuery: *JsonInputQuery → query object containing requested fields
+// - inputQuery: *jsonInputQuery → query object containing requested fields
 // - customFields: map[string]string → mapping of display names to custom field keys
 // - params: map[string]string → query parameters for the Jira API request
 // Returns:
 // - service.MessageBatch → batch of messages containing transformed projects
 // - error → error if the API call, response parsing, or field processing fails
-func (j *jiraProc) searchProjectsResource(
+func (j *JiraProc) searchProjectsResource(
 	ctx context.Context,
-	inputQuery *JsonInputQuery,
+	inputQuery *jsonInputQuery,
 	customFields map[string]string,
 	params map[string]string,
 ) (service.MessageBatch, error) {
@@ -56,14 +56,14 @@ func (j *jiraProc) searchProjectsResource(
 
 	normalizeInputFields(inputQuery, customFields)
 
-	tree, err := SelectorTreeFrom(j.log, inputQuery.Fields, customFields)
+	tree, err := selectorTreeFrom(j.Log, inputQuery.Fields, customFields)
 	if err != nil {
 		return nil, err
 	}
 	customRev := reverseCustomFields(customFields)
 
 	for _, project := range projects {
-		projectResponse := TransformProject(project)
+		projectResponse := transformProject(project)
 		if len(tree) > 0 {
 			filtered, err := j.filter(projectResponse.Fields, tree, customRev)
 			if err != nil {
@@ -90,7 +90,7 @@ func (j *jiraProc) searchProjectsResource(
 // Returns:
 // - []any → list of all retrieved projects
 // - error → error if a paginated request or response parsing fails
-func (j *jiraProc) searchAllProjects(ctx context.Context, queryParams map[string]string) ([]any, error) {
+func (j *JiraProc) searchAllProjects(ctx context.Context, queryParams map[string]string) ([]any, error) {
 	var all []any
 	startAt := 0
 	for {
@@ -120,9 +120,9 @@ func (j *jiraProc) searchAllProjects(ctx context.Context, queryParams map[string
 }
 
 // Function to get a single page of issues using startAt offset strategy
-// The maxResults can be overridden by the processor parameters (up to 5000 - default 50)
-func (j *jiraProc) searchProjectsPage(ctx context.Context, qp map[string]string, startAt int) (*ProjectSearchResponse, error) {
-	urlString, err := url.Parse(j.baseURL + JiraAPIBasePath + "/project/search")
+// The MaxResults can be overridden by the processor parameters (up to 5000 - default 50)
+func (j *JiraProc) searchProjectsPage(ctx context.Context, qp map[string]string, startAt int) (*projectSearchResponse, error) {
+	urlString, err := url.Parse(j.BaseURL + jiraAPIBasePath + "/project/search")
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL: %v", err)
 	}
@@ -131,7 +131,7 @@ func (j *jiraProc) searchProjectsPage(ctx context.Context, qp map[string]string,
 	for key, value := range qp {
 		query.Set(key, value)
 	}
-	query.Set("maxResults", strconv.Itoa(j.maxResults))
+	query.Set("maxResults", strconv.Itoa(j.MaxResults))
 	if startAt != 0 {
 		query.Set("startAt", strconv.Itoa(startAt))
 	}
@@ -142,7 +142,7 @@ func (j *jiraProc) searchProjectsPage(ctx context.Context, qp map[string]string,
 		return nil, err
 	}
 
-	var result ProjectSearchResponse
+	var result projectSearchResponse
 	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, fmt.Errorf("cannot map response to struct: %w", err)
 	}
@@ -152,15 +152,15 @@ func (j *jiraProc) searchProjectsPage(ctx context.Context, qp map[string]string,
 // searchProjectTypesResource retrieves all Jira project types and returns them as a batch of service messages.
 // Parameters:
 // - ctx: context.Context → request context for cancellation and timeouts
-// - q: *JsonInputQuery → query object containing requested fields
+// - q: *jsonInputQuery → query object containing requested fields
 // - custom: map[string]string → mapping of display names to custom field keys
 // Returns:
 // - service.MessageBatch → batch of messages containing transformed project types
 // - error → error if the API call, response parsing, or field processing fails
-func (j *jiraProc) searchProjectTypesResource(ctx context.Context, q *JsonInputQuery, custom map[string]string) (service.MessageBatch, error) {
+func (j *JiraProc) searchProjectTypesResource(ctx context.Context, q *jsonInputQuery, custom map[string]string) (service.MessageBatch, error) {
 	var batch service.MessageBatch
 
-	urlString, err := url.Parse(j.baseURL + JiraAPIBasePath + "/project/type")
+	urlString, err := url.Parse(j.BaseURL + jiraAPIBasePath + "/project/type")
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL: %v", err)
 	}
@@ -175,14 +175,14 @@ func (j *jiraProc) searchProjectTypesResource(ctx context.Context, q *JsonInputQ
 	}
 
 	normalizeInputFields(q, custom)
-	tree, err := SelectorTreeFrom(j.log, q.Fields, custom)
+	tree, err := selectorTreeFrom(j.Log, q.Fields, custom)
 	if err != nil {
 		return nil, err
 	}
 	customRev := reverseCustomFields(custom)
 
 	for _, projectType := range results {
-		resp := TransformProjectType(projectType)
+		resp := transformProjectType(projectType)
 		if len(tree) > 0 {
 			filtered, err := j.filter(resp.Fields, tree, customRev)
 			if err != nil {
@@ -202,15 +202,15 @@ func (j *jiraProc) searchProjectTypesResource(ctx context.Context, q *JsonInputQ
 // searchProjectCategoriesResource retrieves all Jira project categories and returns them as a batch of service messages.
 // Parameters:
 // - ctx: context.Context → request context for cancellation and timeouts
-// - q: *JsonInputQuery → query object containing requested fields
+// - q: *jsonInputQuery → query object containing requested fields
 // - custom: map[string]string → mapping of display names to custom field keys
 // Returns:
 // - service.MessageBatch → batch of messages containing transformed project categories
 // - error → error if the API call, response parsing, or field processing fails
-func (j *jiraProc) searchProjectCategoriesResource(ctx context.Context, q *JsonInputQuery, custom map[string]string) (service.MessageBatch, error) {
+func (j *JiraProc) searchProjectCategoriesResource(ctx context.Context, q *jsonInputQuery, custom map[string]string) (service.MessageBatch, error) {
 	var batch service.MessageBatch
 
-	urlString, err := url.Parse(j.baseURL + JiraAPIBasePath + "/projectCategory")
+	urlString, err := url.Parse(j.BaseURL + jiraAPIBasePath + "/projectCategory")
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL: %v", err)
 	}
@@ -225,14 +225,14 @@ func (j *jiraProc) searchProjectCategoriesResource(ctx context.Context, q *JsonI
 	}
 
 	normalizeInputFields(q, custom)
-	tree, err := SelectorTreeFrom(j.log, q.Fields, custom)
+	tree, err := selectorTreeFrom(j.Log, q.Fields, custom)
 	if err != nil {
 		return nil, err
 	}
 	customRev := reverseCustomFields(custom)
 
 	for _, projectCategory := range results {
-		resp := TransformProjectCategory(projectCategory)
+		resp := transformProjectCategory(projectCategory)
 		if len(tree) > 0 {
 			filtered, err := j.filter(resp.Fields, tree, customRev)
 			if err != nil {
@@ -255,19 +255,19 @@ func (j *jiraProc) searchProjectCategoriesResource(ctx context.Context, q *JsonI
 // returns them as a batch of service messages.
 // Parameters:
 // - ctx: context.Context → request context for cancellation and timeouts
-// - inputQuery: *JsonInputQuery → query object containing the project key and requested fields
+// - inputQuery: *jsonInputQuery → query object containing the project key and requested fields
 // - customFields: map[string]string → mapping of display names to custom field keys
 // Returns:
 // - service.MessageBatch → batch of messages containing transformed project versions
 // - error → error if the API call, response parsing, or field processing fails
-func (j *jiraProc) searchProjectVersionsResource(
+func (j *JiraProc) searchProjectVersionsResource(
 	ctx context.Context,
-	inputQuery *JsonInputQuery,
+	inputQuery *jsonInputQuery,
 	customFields map[string]string,
 ) (service.MessageBatch, error) {
 	var batch service.MessageBatch
 
-	apiUrl, err := url.Parse(j.baseURL + JiraAPIBasePath + "/project/" + inputQuery.Project + "/versions")
+	apiUrl, err := url.Parse(j.BaseURL + jiraAPIBasePath + "/project/" + inputQuery.Project + "/versions")
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL: %v", err)
 	}
@@ -283,14 +283,14 @@ func (j *jiraProc) searchProjectVersionsResource(
 	}
 
 	normalizeInputFields(inputQuery, customFields)
-	tree, err := SelectorTreeFrom(j.log, inputQuery.Fields, customFields)
+	tree, err := selectorTreeFrom(j.Log, inputQuery.Fields, customFields)
 	if err != nil {
 		return nil, err
 	}
 	customRev := reverseCustomFields(customFields)
 
 	for _, projectVersion := range results {
-		resp := TransformProjectVersion(projectVersion)
+		resp := transformProjectVersion(projectVersion)
 		if len(tree) > 0 {
 			filtered, err := j.filter(resp.Fields, tree, customRev)
 			if err != nil {

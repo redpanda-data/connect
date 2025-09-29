@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package jira
+package jirahttp
 
 import (
 	"net/http"
@@ -29,12 +29,12 @@ func newUsersTestServer(t *testing.T, h http.HandlerFunc) *httptest.Server {
 	return httptest.NewServer(h)
 }
 
-// newTestJiraProc creates a minimal jiraProc configured to use the provided server.
-func newUsersJiraProc(srv *httptest.Server, maxResults int) *jiraProc {
-	return &jiraProc{
-		baseURL:    srv.URL,
-		httpClient: &http.Client{Timeout: 10 * time.Second},
-		maxResults: maxResults,
+// newTestJiraProc creates a minimal JiraProc configured to use the provided server.
+func newUsersJiraProc(srv *httptest.Server, maxResults int) *JiraProc {
+	return &JiraProc{
+		BaseURL:    srv.URL,
+		HttpClient: &http.Client{Timeout: 10 * time.Second},
+		MaxResults: maxResults,
 		// other fields of jiraProc are not required for these tests
 	}
 }
@@ -141,7 +141,7 @@ func TestSearchUsersResource_EmptyBatchWhenNoUsers(t *testing.T) {
 
 	j := newUsersJiraProc(srv, 50)
 
-	q := &JsonInputQuery{
+	q := &jsonInputQuery{
 		Fields: []string{},
 	}
 	batch, err := j.searchUsersResource(t.Context(), q, map[string]string{}, map[string]string{})

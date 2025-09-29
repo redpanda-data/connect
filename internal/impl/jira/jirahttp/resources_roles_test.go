@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package jira
+package jirahttp
 
 import (
 	"net/http"
@@ -27,10 +27,10 @@ func newRolesTestServer(t *testing.T, handler http.HandlerFunc) *httptest.Server
 	return httptest.NewServer(handler)
 }
 
-func newRolesTestJiraProc(server *httptest.Server) *jiraProc {
-	return &jiraProc{
-		baseURL:    server.URL,
-		httpClient: &http.Client{Timeout: 10 * time.Second},
+func newRolesTestJiraProc(server *httptest.Server) *JiraProc {
+	return &JiraProc{
+		BaseURL:    server.URL,
+		HttpClient: &http.Client{Timeout: 10 * time.Second},
 	}
 }
 
@@ -90,7 +90,7 @@ func TestSearchRolesResource_NoRoles(t *testing.T) {
 	j := newRolesTestJiraProc(srv)
 
 	// Minimal input query: no fields trigger a basic path without filtering.
-	q := &JsonInputQuery{
+	q := &jsonInputQuery{
 		Fields: nil,
 	}
 

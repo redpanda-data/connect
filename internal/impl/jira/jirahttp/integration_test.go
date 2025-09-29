@@ -12,17 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package jira
+package jirahttp
 
 import (
 	"encoding/json"
+	"github.com/redpanda-data/connect/v4/internal/impl/jira/helpers/http_helper"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/redpanda-data/connect/v4/internal/impl/jira/helpers/http_helper"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -68,8 +67,8 @@ func TestProcessor_EndToEnd_Issues(t *testing.T) {
 
 			// A single page of custom fields is enough for the test (IsLast: true)
 			if startAt == "" || startAt == "0" {
-				_ = json.NewEncoder(w).Encode(CustomFieldSearchResponse{
-					Fields: []CustomField{
+				_ = json.NewEncoder(w).Encode(customFieldSearchResponse{
+					Fields: []customField{
 						{FieldID: "custom_field_10100", FieldName: "Story Points"},
 						{FieldID: "custom_field_10022", FieldName: "Sprint"},
 					},
@@ -80,8 +79,8 @@ func TestProcessor_EndToEnd_Issues(t *testing.T) {
 				})
 				return
 			}
-			_ = json.NewEncoder(w).Encode(CustomFieldSearchResponse{
-				Fields:     []CustomField{},
+			_ = json.NewEncoder(w).Encode(customFieldSearchResponse{
+				Fields:     []customField{},
 				IsLast:     true,
 				StartAt:    0,
 				MaxResults: 50,
@@ -103,8 +102,8 @@ func TestProcessor_EndToEnd_Issues(t *testing.T) {
 
 			// Page 1:
 			if q.Get("nextPageToken") == "" {
-				_ = json.NewEncoder(w).Encode(JQLSearchResponse{
-					Issues: []Issue{
+				_ = json.NewEncoder(w).Encode(searchJQLResponse{
+					Issues: []issue{
 						{ID: "10001", Key: "DEMO-1", Fields: map[string]any{"summary": "A1"}},
 						{ID: "10002", Key: "DEMO-2", Fields: map[string]any{"summary": "A2"}},
 					},
@@ -118,8 +117,8 @@ func TestProcessor_EndToEnd_Issues(t *testing.T) {
 			if q.Get("nextPageToken") != "tok-2" {
 				t.Fatalf("expected nextPageToken=tok-2, got %q", q.Get("nextPageToken"))
 			}
-			_ = json.NewEncoder(w).Encode(JQLSearchResponse{
-				Issues: []Issue{
+			_ = json.NewEncoder(w).Encode(searchJQLResponse{
+				Issues: []issue{
 					{ID: "10003", Key: "DEMO-3", Fields: map[string]any{"summary": "A3"}},
 				},
 				IsLast: true,
@@ -132,18 +131,18 @@ func TestProcessor_EndToEnd_Issues(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	j := &jiraProc{
-		baseURL:    srv.URL,
-		username:   user,
-		apiToken:   token,
-		maxResults: 2,
-		retryOpts:  http_helper.RetryOptions{MaxRetries: 0},
-		httpClient: &http.Client{Timeout: 5 * time.Second},
+	j := &JiraProc{
+		BaseURL:    srv.URL,
+		Username:   user,
+		ApiToken:   token,
+		MaxResults: 2,
+		RetryOpts:  http_helper.RetryOptions{MaxRetries: 0},
+		HttpClient: &http.Client{Timeout: 5 * time.Second},
 	}
 
 	// Input asks for issues, custom "Story Points" and nested Sprint.name to
 	// ensure custom-field mapping and normalization occur.
-	in := JsonInputQuery{
+	in := jsonInputQuery{
 		Resource: "issue",
 		Project:  "DEMO",
 		Fields:   []string{"summary", "Story Points", "Sprint.name"},
@@ -164,7 +163,7 @@ func TestProcessor_EndToEnd_Issues(t *testing.T) {
 
 	// Spot-check first message payload and metadata
 	b0, _ := batch[0].AsBytes()
-	var out0 IssueResponse
+	var out0 issueResponse
 	if err := json.Unmarshal(b0, &out0); err != nil {
 		t.Fatalf("cannot unmarshal issue response: %v", err)
 	}
@@ -208,8 +207,8 @@ func TestProcessor_EndToEnd_Projects(t *testing.T) {
 				t.Errorf("field/search missing type=custom, got %v", q)
 			}
 			// Return a single-page response (IsLast=true) so we don’t paginate.
-			_ = json.NewEncoder(w).Encode(CustomFieldSearchResponse{
-				Fields: []CustomField{
+			_ = json.NewEncoder(w).Encode(customFieldSearchResponse{
+				Fields: []customField{
 					{FieldID: "custom_field_10100", FieldName: "Story Points"},
 				},
 				IsLast:     true,
@@ -227,10 +226,10 @@ func TestProcessor_EndToEnd_Projects(t *testing.T) {
 			}
 			// First call: no startAt -> provide NextPage with startAt=2
 			if callsProject == 1 {
-				_ = json.NewEncoder(w).Encode(ProjectSearchResponse{
+				_ = json.NewEncoder(w).Encode(projectSearchResponse{
 					Projects: []any{
-						map[string]any{"id": "P1", "key": "PRJ-1", "name": "Project 1"},
-						map[string]any{"id": "P2", "key": "PRJ-2", "name": "Project 2"},
+						map[string]any{"id": "P1", "key": "PRJ-1", "name": "project 1"},
+						map[string]any{"id": "P2", "key": "PRJ-2", "name": "project 2"},
 					},
 					IsLast:   false,
 					NextPage: "https://" + r.Host + "/rest/api/3/project/search?startAt=2",
@@ -241,9 +240,9 @@ func TestProcessor_EndToEnd_Projects(t *testing.T) {
 			if q.Get("startAt") != "2" {
 				t.Errorf("expected startAt=2, got %q", q.Get("startAt"))
 			}
-			_ = json.NewEncoder(w).Encode(ProjectSearchResponse{
+			_ = json.NewEncoder(w).Encode(projectSearchResponse{
 				Projects: []any{
-					map[string]any{"id": "P3", "key": "PRJ-3", "name": "Project 3"},
+					map[string]any{"id": "P3", "key": "PRJ-3", "name": "project 3"},
 				},
 				IsLast: true,
 			})
@@ -257,17 +256,17 @@ func TestProcessor_EndToEnd_Projects(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	j := &jiraProc{
-		baseURL:    srv.URL,
-		username:   user,
-		apiToken:   token,
-		maxResults: 2,
-		retryOpts:  http_helper.RetryOptions{MaxRetries: 0},
-		httpClient: &http.Client{Timeout: 5 * time.Second},
+	j := &JiraProc{
+		BaseURL:    srv.URL,
+		Username:   user,
+		ApiToken:   token,
+		MaxResults: 2,
+		RetryOpts:  http_helper.RetryOptions{MaxRetries: 0},
+		HttpClient: &http.Client{Timeout: 5 * time.Second},
 	}
 
 	// Input selects projects; include some fields (ok, because handler now supports field/search).
-	in := JsonInputQuery{
+	in := jsonInputQuery{
 		Resource: "project",
 		Fields:   []string{"key", "name"},
 	}
@@ -285,7 +284,7 @@ func TestProcessor_EndToEnd_Projects(t *testing.T) {
 
 	// Validate one payload & metadata
 	b0, _ := batch[0].AsBytes()
-	var out0 ProjectResponse
+	var out0 projectResponse
 	if err := json.Unmarshal(b0, &out0); err != nil {
 		t.Fatalf("cannot unmarshal project response: %v", err)
 	}

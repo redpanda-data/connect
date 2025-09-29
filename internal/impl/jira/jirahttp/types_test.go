@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package jira
+package jirahttp
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestParseResource(t *testing.T) {
 	cases := []struct {
@@ -34,9 +36,9 @@ func TestParseResource(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		_, err := ParseResource(c.in)
+		_, err := parseResource(c.in)
 		if (err != nil) != c.wantErr {
-			t.Fatalf("ParseResource(%q) error=%v wantErr=%v", c.in, err, c.wantErr)
+			t.Fatalf("parseResource(%q) error=%v wantErr=%v", c.in, err, c.wantErr)
 		}
 	}
 }

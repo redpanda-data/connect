@@ -15,7 +15,7 @@
 // query.go contains helpers for parsing input messages into query structures and preparing Jira Search API parameters.
 // These helpers are used by the Jira processor to translate user-facing query input into valid request parameters.
 
-package jira
+package jirahttp
 
 import (
 	"context"
@@ -57,9 +57,9 @@ func extractExpandableFields(fields []string) []string {
 }
 
 // extractQueryFromMessage method receives the input message from the processor
-// and parses it into a JsonInputQuery object
-func (j *jiraProc) extractQueryFromMessage(msg *service.Message) (*JsonInputQuery, error) {
-	var queryData *JsonInputQuery
+// and parses it into a jsonInputQuery object
+func (j *JiraProc) extractQueryFromMessage(msg *service.Message) (*jsonInputQuery, error) {
+	var queryData *jsonInputQuery
 	msgBytes, err := msg.AsBytes()
 	if err != nil {
 		return nil, err
@@ -67,7 +67,7 @@ func (j *jiraProc) extractQueryFromMessage(msg *service.Message) (*JsonInputQuer
 	if err := json.Unmarshal(msgBytes, &queryData); err != nil {
 		return nil, fmt.Errorf("cannot parse input JSON: %s", string(msgBytes))
 	}
-	j.log.Debugf("Input queryData: %v", queryData)
+	j.Log.Debugf("Input queryData: %v", queryData)
 	return queryData, nil
 }
 
@@ -81,13 +81,13 @@ func (j *jiraProc) extractQueryFromMessage(msg *service.Message) (*JsonInputQuer
 // Instead of 'fields: ["summary","custom_field_10100"]' to have 'fields: ["summary", "Story Points"]'
 // This will check the fields against custom fields retrieved by the Custom Field Jira API
 //
-// This method also returns all the query params used for the Issue Search API
-func (j *jiraProc) prepareJiraQuery(ctx context.Context, q *JsonInputQuery) (ResourceType, map[string]string, map[string]string, error) {
+// This method also returns all the query params used for the issue Search API
+func (j *JiraProc) prepareJiraQuery(ctx context.Context, q *jsonInputQuery) (resourceType, map[string]string, map[string]string, error) {
 	params := make(map[string]string)
 	resource := ResourceIssue
 
 	if q.Resource != "" {
-		r, err := ParseResource(q.Resource)
+		r, err := parseResource(q.Resource)
 		if err != nil {
 			return resource, nil, nil, err
 		}
@@ -155,9 +155,9 @@ func (j *jiraProc) prepareJiraQuery(ctx context.Context, q *JsonInputQuery) (Res
 		params["fields"] = "*all"
 	}
 
-	j.log.Debugf("JQL result: %s", params["jql"])
-	j.log.Debugf("Fields selected: %s", params["fields"])
-	j.log.Debugf("Expand fields: %s", params["expand"])
+	j.Log.Debugf("JQL result: %s", params["jql"])
+	j.Log.Debugf("Fields selected: %s", params["fields"])
+	j.Log.Debugf("Expand fields: %s", params["expand"])
 
 	return resource, customFields, params, nil
 }
