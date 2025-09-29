@@ -19,39 +19,38 @@
 // These functions are primarily used by the Jira processor when preparing
 // queries and resolving custom field identifiers.
 
-package jira
+package jirahttp
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/redpanda-data/connect/v4/internal/impl/jira/helpers/http_helper"
+	"github.com/redpanda-data/connect/v4/internal/impl/jira/helpers/jira_helper"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
-
-	"github.com/redpanda-data/connect/v4/internal/impl/jira/helpers/http_helper"
-	"github.com/redpanda-data/connect/v4/internal/impl/jira/helpers/jira_helper"
 )
 
-// JiraAPIBasePath is the base path for Jira Rest API
-const JiraAPIBasePath = "/rest/api/3"
+// jiraAPIBasePath is the base path for Jira Rest API
+const jiraAPIBasePath = "/rest/api/3"
 
 // This is the general function that calls Jira API on a specific URL using the URL object.
 // It applies standard header parameters to all calls, Authorization, User-Agent and Accept.
 // It uses the helper functions to check against possible response codes and handling the retry-after mechanism
-func (j *jiraProc) callJiraApi(ctx context.Context, u *url.URL) ([]byte, error) {
-	j.log.Debugf("API call: %s", u.String())
+func (j *JiraProc) callJiraApi(ctx context.Context, u *url.URL) ([]byte, error) {
+	j.Log.Debugf("API call: %s", u.String())
 
 	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
-	req.SetBasicAuth(j.username, j.apiToken)
+	req.SetBasicAuth(j.Username, j.ApiToken)
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "Redpanda-Connect")
 
-	resp, err := http_helper.DoRequestWithRetries(ctx, j.httpClient, req, j.retryOpts)
+	resp, err := http_helper.DoRequestWithRetries(ctx, j.HttpClient, req, j.RetryOpts)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %v", err)
 	}
@@ -69,10 +68,10 @@ func (j *jiraProc) callJiraApi(ctx context.Context, u *url.URL) ([]byte, error) 
 //
 // Note that this supports custom fields that are nested, like if "Sprint.name" is present into the Fields input message -> this will be translated to "custom_field_10022.name"
 // Returns only the custom fields present in the Fields input message as a map[fieldName]=customFieldName
-func (j *jiraProc) getAllCustomFields(ctx context.Context, fieldsToSearch []string) (map[string]string, error) {
-	j.log.Debug("Fetching custom fields from API")
+func (j *JiraProc) getAllCustomFields(ctx context.Context, fieldsToSearch []string) (map[string]string, error) {
+	j.Log.Debug("Fetching custom fields from API")
 
-	var allFields []CustomField
+	var allFields []customField
 	startAt := 0
 
 	for {
@@ -106,8 +105,8 @@ func (j *jiraProc) getAllCustomFields(ctx context.Context, fieldsToSearch []stri
 }
 
 // Function to get a single page of custom fields using startAt strategy as the maximum number of custom fields to be retrieved is capped at 50
-func (j *jiraProc) getCustomFieldsPage(ctx context.Context, startAt int) (*CustomFieldSearchResponse, error) {
-	apiUrl, err := url.Parse(j.baseURL + JiraAPIBasePath + "/field/search")
+func (j *JiraProc) getCustomFieldsPage(ctx context.Context, startAt int) (*customFieldSearchResponse, error) {
+	apiUrl, err := url.Parse(j.BaseURL + jiraAPIBasePath + "/field/search")
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL: %v", err)
 	}
@@ -120,7 +119,7 @@ func (j *jiraProc) getCustomFieldsPage(ctx context.Context, startAt int) (*Custo
 	if err != nil {
 		return nil, err
 	}
-	var result CustomFieldSearchResponse
+	var result customFieldSearchResponse
 	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, fmt.Errorf("cannot map response to custom field struct: %w", err)
 	}

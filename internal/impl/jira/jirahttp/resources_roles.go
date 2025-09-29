@@ -15,7 +15,7 @@
 // resources_roles.go implements Jira resource handlers for roles.
 // It fetches Jira roles from the API and transforms them into service messages with optional field filtering.
 
-package jira
+package jirahttp
 
 import (
 	"context"
@@ -28,9 +28,9 @@ import (
 
 // searchRolesResource retrieves all Jira roles and returns them as a batch
 // of service messages after optional field filtering.
-func (j *jiraProc) searchRolesResource(
+func (j *JiraProc) searchRolesResource(
 	ctx context.Context,
-	inputQuery *JsonInputQuery,
+	inputQuery *jsonInputQuery,
 	customFields map[string]string,
 ) (service.MessageBatch, error) {
 	var batch service.MessageBatch
@@ -45,7 +45,7 @@ func (j *jiraProc) searchRolesResource(
 
 	normalizeInputFields(inputQuery, customFields)
 
-	tree, err := SelectorTreeFrom(j.log, inputQuery.Fields, customFields)
+	tree, err := selectorTreeFrom(j.Log, inputQuery.Fields, customFields)
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +53,7 @@ func (j *jiraProc) searchRolesResource(
 	customFieldsReversed := reverseCustomFields(customFields)
 
 	for _, role := range roles {
-		resp := TransformRole(role)
+		resp := transformRole(role)
 
 		if len(tree) > 0 {
 			filtered, err := j.filter(resp.Fields, tree, customFieldsReversed)
@@ -77,8 +77,8 @@ func (j *jiraProc) searchRolesResource(
 }
 
 // searchRoles fetches all Jira roles from the API and returns them as a list.
-func (j *jiraProc) searchRoles(ctx context.Context) ([]any, error) {
-	apiUrl, err := url.Parse(j.baseURL + JiraAPIBasePath + "/role")
+func (j *JiraProc) searchRoles(ctx context.Context) ([]any, error) {
+	apiUrl, err := url.Parse(j.BaseURL + jiraAPIBasePath + "/role")
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL: %v", err)
 	}

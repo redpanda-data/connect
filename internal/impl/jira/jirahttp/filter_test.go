@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package jira
+package jirahttp
 
 import (
 	"reflect"
@@ -20,16 +20,16 @@ import (
 )
 
 func TestBuildSelectorTree(t *testing.T) {
-	j := &jiraProc{}
+	j := &JiraProc{}
 	fields := []string{"summary", "assignee.displayName", "status.name", "parent.fields.status.name", "Story Points", "Sprint.name"}
 	custom := map[string]string{
 		"Story Points": "custom_field_10100",
 		"Sprint":       "custom_field_10022",
 	}
 
-	tree, err := SelectorTreeFrom(j.log, fields, custom)
+	tree, err := selectorTreeFrom(j.Log, fields, custom)
 	if err != nil {
-		t.Fatalf("SelectorTreeFrom error: %v", err)
+		t.Fatalf("selectorTreeFrom error: %v", err)
 	}
 
 	// spot checks
@@ -58,7 +58,7 @@ func TestNormalizeAndReverseCustomFields(t *testing.T) {
 		"Story Points": "custom_field_10100",
 		"Sprint":       "custom_field_10022",
 	}
-	q := &JsonInputQuery{
+	q := &jsonInputQuery{
 		Fields: []string{"summary", "Story Points", "Sprint.name"},
 	}
 	normalizeInputFields(q, custom)
@@ -74,7 +74,7 @@ func TestNormalizeAndReverseCustomFields(t *testing.T) {
 }
 
 func TestFilter_MapAndArray(t *testing.T) {
-	j := &jiraProc{}
+	j := &JiraProc{}
 	// data represents a simplified issue.Fields payload
 	data := map[string]any{
 		"summary": "Fix bug",
@@ -90,7 +90,7 @@ func TestFilter_MapAndArray(t *testing.T) {
 	}
 
 	// selectors pick summary, assignee.displayName, labels, Story Points
-	selectors := SelectorTree{
+	selectors := selectorTree{
 		"summary":            {},
 		"assignee":           {"displayName": {}},
 		"labels":             {},

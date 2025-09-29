@@ -21,26 +21,22 @@
 // message is parsed into a Jira query, which is then executed against the Jira
 // Search API or related resource APIs.
 //
-// Typical use cases include:
-//   - Retrieving issues by JQL or project filters
-//   - Fetching transitions, roles, or project metadata
-//   - Enriching message streams with data queried from Jira
-//
 // The processor handles pagination, retries, and optional field expansion in
 // order to make working with Jira’s API more convenient inside message-oriented
 // workflows.
 package jira
 
 import (
-	"context"
 	"errors"
 	"net/http"
 	"net/url"
 
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/jira/helpers/http_helper"
 	"github.com/redpanda-data/connect/v4/internal/impl/jira/helpers/http_metrics"
+	"github.com/redpanda-data/connect/v4/internal/impl/jira/jirahttp"
 	"github.com/redpanda-data/connect/v4/internal/license"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 // Configuration specification for the Jira processor
@@ -97,7 +93,7 @@ pipeline:
 		Description("Maximum number of retries in case of 429 HTTP Status Code").
 		Default(10))
 
-func newJiraProcessor(conf *service.ParsedConfig, mgr *service.Resources) (*jiraProc, error) {
+func newJiraProcessor(conf *service.ParsedConfig, mgr *service.Resources) (*jirahttp.JiraProc, error) {
 	if err := license.CheckRunningEnterprise(mgr); err != nil {
 		return nil, err
 	}
@@ -138,18 +134,18 @@ func newJiraProcessor(conf *service.ParsedConfig, mgr *service.Resources) (*jira
 
 	httpClient := &http.Client{Timeout: timeout}
 
-	return &jiraProc{
-		baseURL:    baseURL,
-		username:   username,
-		apiToken:   apiToken,
-		maxResults: maxResults,
-		retryOpts: http_helper.RetryOptions{
+	return &jirahttp.JiraProc{
+		BaseURL:    baseURL,
+		Username:   username,
+		ApiToken:   apiToken,
+		MaxResults: maxResults,
+		RetryOpts: http_helper.RetryOptions{
 			MaxRetries: maxRetries,
 		},
-		httpClient: http_metrics.NewInstrumentedClient(
+		HttpClient: http_metrics.NewInstrumentedClient(
 			mgr.Metrics(), "jira_http",
 			httpClient),
-		log: mgr.Logger(),
+		Log: mgr.Logger(),
 	}, nil
 }
 
@@ -163,25 +159,3 @@ func init() {
 		panic(err)
 	}
 }
-
-func (j *jiraProc) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
-	inputMsg, err := msg.AsBytes()
-	if err != nil {
-		return nil, err
-	}
-	j.log.Debugf("Fetching from Jira.. Input: %s", string(inputMsg))
-
-	inputQuery, err := j.extractQueryFromMessage(msg)
-	if err != nil {
-		return nil, err
-	}
-
-	resource, customFields, params, err := j.prepareJiraQuery(ctx, inputQuery)
-	if err != nil {
-		return nil, err
-	}
-
-	return SearchResource(ctx, j, resource, inputQuery, customFields, params)
-}
-
-func (*jiraProc) Close(context.Context) error { return nil }

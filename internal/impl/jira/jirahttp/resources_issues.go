@@ -15,7 +15,7 @@
 // resources_issues.go implements Jira resource handlers for issues and issue transitions.
 // These functions are called by the resource dispatcher in resources.go.
 
-package jira
+package jirahttp
 
 import (
 	"context"
@@ -28,9 +28,9 @@ import (
 )
 
 // searchIssuesResource performs a search for the issues resource
-func (j *jiraProc) searchIssuesResource(
+func (j *JiraProc) searchIssuesResource(
 	ctx context.Context,
-	inputQuery *JsonInputQuery,
+	inputQuery *jsonInputQuery,
 	customFields map[string]string,
 	params map[string]string,
 ) (service.MessageBatch, error) {
@@ -47,7 +47,7 @@ func (j *jiraProc) searchIssuesResource(
 	// Normalize input fields
 	normalizeInputFields(inputQuery, customFields)
 
-	tree, err := SelectorTreeFrom(j.log, inputQuery.Fields, customFields)
+	tree, err := selectorTreeFrom(j.Log, inputQuery.Fields, customFields)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +55,7 @@ func (j *jiraProc) searchIssuesResource(
 	customRev := reverseCustomFields(customFields)
 
 	for _, iss := range issues {
-		resp := TransformIssue(iss)
+		resp := transformIssue(iss)
 		if len(tree) > 0 {
 			filtered, err := j.filter(resp.Fields, tree, customRev)
 			if err != nil {
@@ -78,9 +78,9 @@ func (j *jiraProc) searchIssuesResource(
 
 // searchAllIssues function to get all Issues from Jira API and placing them into an array of issues.
 // If the nextPageToken is present in the response, then it will fetch the next page until isLast is true.
-// Returns the array of []Issue
-func (j *jiraProc) searchAllIssues(ctx context.Context, queryParams map[string]string) ([]Issue, error) {
-	var all []Issue
+// Returns the array of []issue
+func (j *JiraProc) searchAllIssues(ctx context.Context, queryParams map[string]string) ([]issue, error) {
+	var all []issue
 	next := ""
 	for {
 		res, err := j.searchIssuesPage(ctx, queryParams, next)
@@ -97,9 +97,9 @@ func (j *jiraProc) searchAllIssues(ctx context.Context, queryParams map[string]s
 }
 
 // searchIssuesPage function to get a single page of issues using nextPageToken strategy
-// The maxResults can be overridden by the processor parameters (up to 5000 - default 50)
-func (j *jiraProc) searchIssuesPage(ctx context.Context, qp map[string]string, nextPageToken string) (*JQLSearchResponse, error) {
-	apiUrl, err := url.Parse(j.baseURL + JiraAPIBasePath + "/search/jql")
+// The MaxResults can be overridden by the processor parameters (up to 5000 - default 50)
+func (j *JiraProc) searchIssuesPage(ctx context.Context, qp map[string]string, nextPageToken string) (*searchJQLResponse, error) {
+	apiUrl, err := url.Parse(j.BaseURL + jiraAPIBasePath + "/search/jql")
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL: %v", err)
 	}
@@ -108,7 +108,7 @@ func (j *jiraProc) searchIssuesPage(ctx context.Context, qp map[string]string, n
 	for k, v := range qp {
 		query.Set(k, v)
 	}
-	query.Set("maxResults", strconv.Itoa(j.maxResults))
+	query.Set("maxResults", strconv.Itoa(j.MaxResults))
 	if nextPageToken != "" {
 		query.Set("nextPageToken", nextPageToken)
 	}
@@ -119,7 +119,7 @@ func (j *jiraProc) searchIssuesPage(ctx context.Context, qp map[string]string, n
 		return nil, err
 	}
 
-	var result JQLSearchResponse
+	var result searchJQLResponse
 	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, fmt.Errorf("cannot map response to struct: %w", err)
 	}
@@ -130,16 +130,16 @@ func (j *jiraProc) searchIssuesPage(ctx context.Context, qp map[string]string, n
 // Jira issue and converts them into a batch of service messages.
 // Parameters:
 // - ctx: context.Context → request-scoped context for cancellation and timeouts
-// - q: *JsonInputQuery → input query containing issue details and requested fields
+// - q: *jsonInputQuery → input query containing issue details and requested fields
 // - custom: map[string]string → mapping of display names to custom field keys
 // - params: map[string]string → query parameters for the Jira API request
 // Returns:
 // - service.MessageBatch → batch of messages containing transformed transitions
 // - error → error if the API call, response parsing, or field processing fails
-func (j *jiraProc) searchIssueTransitionsResource(ctx context.Context, q *JsonInputQuery, custom, params map[string]string) (service.MessageBatch, error) {
+func (j *JiraProc) searchIssueTransitionsResource(ctx context.Context, q *jsonInputQuery, custom, params map[string]string) (service.MessageBatch, error) {
 	var batch service.MessageBatch
 
-	apiUrl, err := url.Parse(j.baseURL + JiraAPIBasePath + "/issue/" + q.Issue + "/transitions")
+	apiUrl, err := url.Parse(j.BaseURL + jiraAPIBasePath + "/issue/" + q.Issue + "/transitions")
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL: %v", err)
 	}
@@ -155,7 +155,7 @@ func (j *jiraProc) searchIssueTransitionsResource(ctx context.Context, q *JsonIn
 		return nil, err
 	}
 
-	var result IssueTransitionsSearchResponse
+	var result issueTransitionsSearchResponse
 	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, fmt.Errorf("cannot map response to struct: %w", err)
 	}
@@ -164,14 +164,14 @@ func (j *jiraProc) searchIssueTransitionsResource(ctx context.Context, q *JsonIn
 	}
 
 	normalizeInputFields(q, custom)
-	tree, err := SelectorTreeFrom(j.log, q.Fields, custom)
+	tree, err := selectorTreeFrom(j.Log, q.Fields, custom)
 	if err != nil {
 		return nil, err
 	}
 	customRev := reverseCustomFields(custom)
 
 	for _, issueTransition := range result.Transitions {
-		resp := TransformIssueTransition(issueTransition)
+		resp := transformIssueTransition(issueTransition)
 		if len(tree) > 0 {
 			filtered, err := j.filter(resp.Fields, tree, customRev)
 			if err != nil {

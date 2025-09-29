@@ -13,7 +13,7 @@
 // limitations under the License.
 
 // filter.go provides utilities for filtering and normalizing Jira data based on requested fields.
-// It defines the SelectorTree type for building hierarchical field selectors and implements logic to:
+// It defines the selectorTree type for building hierarchical field selectors and implements logic to:
 //
 //   - Construct selector trees from input field lists
 //   - Filter JSON payloads by traversing these selectors
@@ -24,7 +24,7 @@
 // These helpers are used by the Jira processor to return only the fields
 // requested in user queries while preserving correct custom field mappings.
 
-package jira
+package jirahttp
 
 import (
 	"errors"
@@ -34,11 +34,11 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-// SelectorTree is used to build a tree from the elements present in Fields input message
+// selectorTree is used to build a tree from the elements present in Fields input message
 // The tree is then used for filtering output messages and including only what is present in the Fields
-type SelectorTree map[string]SelectorTree
+type selectorTree map[string]selectorTree
 
-// SelectorTreeFrom builds a SelectorTree from the Fields []string object
+// selectorTreeFrom builds a selectorTree from the Fields []string object
 // in the input message used for the attribute filtering
 //
 // Example: '"fields": ["summary", "assignee.displayName", "status.name", "parent.key", "parent.fields.status.name"]'
@@ -62,7 +62,7 @@ type SelectorTree map[string]SelectorTree
 //		"summary": {}
 //	}
 //
-// If custom fields are present, they will also be included in the SelectorTree
+// If custom fields are present, they will also be included in the selectorTree
 // Example: '"fields": ["summary", "Sprint.name", "assignee.displayName", "Story Points"]'
 // Will result in returning a tree of the form:
 //
@@ -76,9 +76,9 @@ type SelectorTree map[string]SelectorTree
 //	"custom_field_10100": {},
 //	"summary": {}
 //	}
-func SelectorTreeFrom(log *service.Logger, fields []string, custom map[string]string) (SelectorTree, error) {
+func selectorTreeFrom(log *service.Logger, fields []string, custom map[string]string) (selectorTree, error) {
 	log.Debugf("building selector tree based on filters: %v", fields)
-	tree := make(SelectorTree)
+	tree := make(selectorTree)
 	for _, field := range fields {
 		if strings.TrimSpace(field) == "" {
 			return nil, errors.New("invalid field: empty string")
@@ -90,7 +90,7 @@ func SelectorTreeFrom(log *service.Logger, fields []string, custom map[string]st
 				return nil, fmt.Errorf("invalid field path: %q", field)
 			}
 			if _, ok := cur[part]; !ok {
-				cur[part] = make(SelectorTree)
+				cur[part] = make(selectorTree)
 			}
 			cur = cur[part]
 		}
@@ -100,17 +100,17 @@ func SelectorTreeFrom(log *service.Logger, fields []string, custom map[string]st
 			return nil, errors.New("invalid field: empty string")
 		}
 		if _, ok := tree[value]; !ok {
-			tree[value] = make(SelectorTree)
+			tree[value] = make(selectorTree)
 		}
 	}
 	return tree, nil
 }
 
-// The filter function takes the data JSON and SelectorTree and returns only what is
-// found in the SelectorTree by comparing keys from data and keys from SelectorTree.
+// The filter function takes the data JSON and selectorTree and returns only what is
+// found in the selectorTree by comparing keys from data and keys from selectorTree.
 // If customFields are present in the data, they will also be replaced with their real name;
 // example: custom_field_10100 will be replaced with "Story Points"
-func (j *jiraProc) filter(data any, selectors SelectorTree, custom map[string]string) (any, error) {
+func (j *JiraProc) filter(data any, selectors selectorTree, custom map[string]string) (any, error) {
 	switch val := data.(type) {
 	case map[string]any:
 		res := make(map[string]any)
@@ -171,11 +171,11 @@ func reverseCustomFields(m map[string]string) map[string]string {
 
 // normalizeInputFields replaces field names in the query with their corresponding  custom field keys when available.
 // Parameters:
-// - q: *JsonInputQuery → query object containing the list of fields
+// - q: *jsonInputQuery → query object containing the list of fields
 // - custom: map[string]string → mapping of display names to custom field keys
 // Returns:
 // - none (modifies q.Fields in place)
-func normalizeInputFields(q *JsonInputQuery, custom map[string]string) {
+func normalizeInputFields(q *jsonInputQuery, custom map[string]string) {
 	for i, v := range q.Fields {
 		if dot := strings.Index(v, "."); dot != -1 {
 			if cf, ok := custom[v[:dot]]; ok {

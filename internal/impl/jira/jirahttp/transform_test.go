@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package jira
+package jirahttp
 
 import (
 	"reflect"
@@ -20,7 +20,7 @@ import (
 )
 
 func TestTransformIssue(t *testing.T) {
-	orig := Issue{
+	orig := issue{
 		ID:  "10001",
 		Key: "DEMO-1",
 		Fields: map[string]any{
@@ -28,7 +28,7 @@ func TestTransformIssue(t *testing.T) {
 		},
 		Changelog: map[string]any{"total": 2},
 	}
-	out := TransformIssue(orig)
+	out := transformIssue(orig)
 	if out.ID != "10001" || out.Key != "DEMO-1" {
 		t.Fatalf("id/key mismatch")
 	}
@@ -42,19 +42,19 @@ func TestTransformIssue(t *testing.T) {
 }
 
 func TestTransformProject(t *testing.T) {
-	in := map[string]any{"id": "P1", "key": "DEMO", "name": "Demo Project"}
-	out := TransformProject(in)
+	in := map[string]any{"id": "P1", "key": "DEMO", "name": "Demo project"}
+	out := transformProject(in)
 	if out.ID != "P1" || out.Key != "DEMO" {
 		t.Fatalf("id/key mismatch")
 	}
-	if !reflect.DeepEqual(out.Fields.(map[string]any)["name"], "Demo Project") {
+	if !reflect.DeepEqual(out.Fields.(map[string]any)["name"], "Demo project") {
 		t.Fatalf("missing field copy")
 	}
 }
 
 func TestTransformProjectType(t *testing.T) {
 	in := map[string]any{"key": "business", "formattedKey": "Business"}
-	out := TransformProjectType(in)
+	out := transformProjectType(in)
 	if out.Key != "business" || out.FormattedKey != "Business" {
 		t.Fatalf("key/formattedKey mismatch")
 	}
@@ -62,7 +62,7 @@ func TestTransformProjectType(t *testing.T) {
 
 func TestTransformProjectCategory(t *testing.T) {
 	in := map[string]any{"id": "10010", "name": "Internal"}
-	out := TransformProjectCategory(in)
+	out := transformProjectCategory(in)
 	if out.ID != "10010" {
 		t.Fatalf("id mismatch")
 	}

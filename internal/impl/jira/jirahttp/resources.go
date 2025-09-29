@@ -13,36 +13,24 @@
 // limitations under the License.
 
 // resources.go defines the jiraProc processor struct and implements the resource dispatcher.
-// The SearchResource function routes incoming queries to the appropriate Jira resource handler (issues, projects,
-// users, roles, etc.).
+// The searchResource function routes incoming queries to the appropriate
+// Jira resource handler (issues, projects, users, roles, etc.).
 
-package jira
+package jirahttp
 
 import (
 	"context"
 	"fmt"
-	"net/http"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"github.com/redpanda-data/connect/v4/internal/impl/jira/helpers/http_helper"
 )
 
-type jiraProc struct {
-	baseURL    string
-	username   string
-	apiToken   string
-	maxResults int
-	retryOpts  http_helper.RetryOptions
-	httpClient *http.Client
-	log        *service.Logger
-}
-
-// SearchResource performs a search for a specific resource
-func SearchResource(
+// searchResource performs a search for a specific resource
+func searchResource(
 	ctx context.Context,
-	j *jiraProc,
-	resource ResourceType,
-	inputQuery *JsonInputQuery,
+	j *JiraProc,
+	resource resourceType,
+	inputQuery *jsonInputQuery,
 	customFields map[string]string,
 	params map[string]string,
 ) (service.MessageBatch, error) {

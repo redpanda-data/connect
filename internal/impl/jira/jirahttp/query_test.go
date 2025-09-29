@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package jira
+package jirahttp
 
 import (
 	"encoding/json"
@@ -78,8 +78,8 @@ func TestParseOperatorField(t *testing.T) {
 }
 
 func TestExtractQueryFromMessage(t *testing.T) {
-	j := &jiraProc{}
-	input := JsonInputQuery{
+	j := &JiraProc{}
+	input := jsonInputQuery{
 		Resource: "issue",
 		Project:  "DEMO",
 		Fields:   []string{"summary", "status.name"},
@@ -101,7 +101,7 @@ func TestExtractQueryFromMessage(t *testing.T) {
 }
 
 func TestExtractQueryFromMessage_InvalidJSON(t *testing.T) {
-	j := &jiraProc{}
+	j := &JiraProc{}
 	msg := service.NewMessage([]byte("{not-json}"))
 	if _, err := j.extractQueryFromMessage(msg); err == nil {
 		t.Fatalf("expected error for invalid json")

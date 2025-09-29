@@ -15,13 +15,15 @@
 // transform.go provides helper functions to convert raw Jira API objects into
 // strongly typed response structs (issues, users, projects, roles, categories, versions, and transitions).
 
-package jira
+package jirahttp
 
-import "fmt"
+import (
+	"fmt"
+)
 
-// TransformIssue takes a JiraIssue and returns a JiraIssueResponse with the changelog moved into the fields.
-func TransformIssue(orig Issue) IssueResponse {
-	var r IssueResponse
+// transformIssue takes a JiraIssue and returns a JiraIssueResponse with the changelog moved into the fields.
+func transformIssue(orig issue) issueResponse {
+	var r issueResponse
 	r.ID = orig.ID
 	r.Key = orig.Key
 
@@ -43,10 +45,10 @@ func TransformIssue(orig Issue) IssueResponse {
 	return r
 }
 
-// TransformIssueTransition converts a raw issue transition object into a
-// IssueTransitionResponse, safely handling unexpected types and extracting the ID.
-func TransformIssueTransition(orig any) IssueTransitionResponse {
-	var r IssueTransitionResponse
+// transformIssueTransition converts a raw issue transition object into a
+// issueTransitionResponse, safely handling unexpected types and extracting the ID.
+func transformIssueTransition(orig any) issueTransitionResponse {
+	var r issueTransitionResponse
 
 	var fields map[string]any
 
@@ -74,10 +76,10 @@ func TransformIssueTransition(orig any) IssueTransitionResponse {
 	return r
 }
 
-// TransformProject converts a raw project object into a ProjectResponse,
+// transformProject converts a raw project object into a projectResponse,
 // copying its fields and extracting the ID and key.
-func TransformProject(orig any) ProjectResponse {
-	var r ProjectResponse
+func transformProject(orig any) projectResponse {
+	var r projectResponse
 	fields := map[string]any{}
 
 	if m, ok := orig.(map[string]any); ok && m != nil {
@@ -104,9 +106,9 @@ func TransformProject(orig any) ProjectResponse {
 	return r
 }
 
-// TransformUser converts a raw user object into a UserResponse,copying its fields and extracting the account ID.
-func TransformUser(orig any) UserResponse {
-	var response UserResponse
+// transformUser converts a raw user object into a userResponse,copying its fields and extracting the account ID.
+func transformUser(orig any) userResponse {
+	var response userResponse
 	var fields map[string]any
 
 	switch msg := orig.(type) {
@@ -133,10 +135,10 @@ func TransformUser(orig any) UserResponse {
 	return response
 }
 
-// TransformProjectType converts a raw project type object into a ProjectTypeResponse,
+// transformProjectType converts a raw project type object into a projectTypeResponse,
 // copying its fields and extracting the key and formatted key.
-func TransformProjectType(orig any) ProjectTypeResponse {
-	var response ProjectTypeResponse
+func transformProjectType(orig any) projectTypeResponse {
+	var response projectTypeResponse
 	fields := map[string]any{}
 
 	if message, ok := orig.(map[string]any); ok && message != nil {
@@ -163,10 +165,10 @@ func TransformProjectType(orig any) ProjectTypeResponse {
 	return response
 }
 
-// TransformProjectCategory converts a raw project category object into a
-// ProjectCategoryResponse, copying its fields and extracting the ID.
-func TransformProjectCategory(orig any) ProjectCategoryResponse {
-	var projectCatRes ProjectCategoryResponse
+// transformProjectCategory converts a raw project category object into a
+// projectCategoryResponse, copying its fields and extracting the ID.
+func transformProjectCategory(orig any) projectCategoryResponse {
+	var projectCatRes projectCategoryResponse
 	fields := map[string]any{}
 
 	if msg, ok := orig.(map[string]any); ok && msg != nil {
@@ -188,9 +190,9 @@ func TransformProjectCategory(orig any) ProjectCategoryResponse {
 	return projectCatRes
 }
 
-// TransformRole converts a raw role object into a RoleResponse, copying its fields and extracting the ID.
-func TransformRole(orig any) RoleResponse {
-	var roleResponse RoleResponse
+// transformRole converts a raw role object into a roleResponse, copying its fields and extracting the ID.
+func transformRole(orig any) roleResponse {
+	var roleResponse roleResponse
 	var fields map[string]any
 
 	switch msg := orig.(type) {
@@ -217,10 +219,10 @@ func TransformRole(orig any) RoleResponse {
 	return roleResponse
 }
 
-// TransformProjectVersion converts a raw project version object into a
-// ProjectVersionResponse, copying its fields and extracting the ID.
-func TransformProjectVersion(orig any) ProjectVersionResponse {
-	var versionRes ProjectVersionResponse
+// transformProjectVersion converts a raw project version object into a
+// projectVersionResponse, copying its fields and extracting the ID.
+func transformProjectVersion(orig any) projectVersionResponse {
+	var versionRes projectVersionResponse
 	var fields map[string]any
 
 	switch msg := orig.(type) {
