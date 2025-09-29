@@ -27,7 +27,7 @@ type Snapshot struct {
 
 	snapshotConn *sql.Conn
 
-	Tables                  []UserTable
+	tables                  []UserTable
 	publisher               ChangePublisher
 	log                     *service.Logger
 	snapshotStatusMetric    *service.MetricGauge
@@ -44,7 +44,7 @@ func NewSnapshot(
 	metrics *service.Metrics) *Snapshot {
 	return &Snapshot{
 		db:                      db,
-		Tables:                  tables,
+		tables:                  tables,
 		publisher:               publisher,
 		log:                     logger,
 		snapshotStatusMetric:    metrics.NewGauge("microsoft_sql_server_snapshot_status", "table"),
@@ -54,7 +54,7 @@ func NewSnapshot(
 
 // Prepare performs initial validation, creating of connections in preparation for snapshotting tables.
 func (s *Snapshot) Prepare(ctx context.Context) (LSN, error) {
-	if len(s.Tables) == 0 {
+	if len(s.tables) == 0 {
 		return nil, errors.New("no tables provided")
 	}
 
@@ -85,11 +85,13 @@ func (s *Snapshot) Prepare(ctx context.Context) (LSN, error) {
 // Read starts the process of iterating through each table, reading rows based on maxBatchSize, sending the row as a
 // replication.MessageEvent to the configured publisher.
 func (s *Snapshot) Read(ctx context.Context, maxBatchSize int) error {
-	for _, table := range s.Tables {
+	s.log.Infof("Starting snapshot of %d table(s)", len(s.tables))
+
+	for _, table := range s.tables {
 		s.snapshotStatusMetric.Set(0, table.FullName())
 	}
 
-	for _, table := range s.Tables {
+	for _, table := range s.tables {
 		tablePks, err := s.getTablePrimaryKeys(ctx, table)
 		if err != nil {
 			return err

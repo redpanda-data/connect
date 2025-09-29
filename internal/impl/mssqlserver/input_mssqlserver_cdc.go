@@ -345,17 +345,14 @@ func (i *sqlServerCDCInput) processSnapshot(ctx context.Context, snapshot *repli
 		lsn replication.LSN
 		err error
 	)
-	i.log.Infof("Starting snapshot of %d table(s)", len(snapshot.Tables))
 	if lsn, err = snapshot.Prepare(ctx); err != nil {
 		_ = snapshot.Close()
 		return nil, fmt.Errorf("preparing snapshot: %w", err)
 	}
-
 	if err = snapshot.Read(ctx, i.cfg.snapshotMaxBatchSize); err != nil {
 		_ = snapshot.Close()
 		return nil, fmt.Errorf("reading snapshot: %w", err)
 	}
-
 	if err = snapshot.Close(); err != nil {
 		return nil, fmt.Errorf("closing snapshot connections: %w", err)
 	}
