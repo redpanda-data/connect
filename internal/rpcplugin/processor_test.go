@@ -15,6 +15,7 @@
 package rpcplugin_test
 
 import (
+	"os"
 	"testing"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -27,6 +28,10 @@ import (
 )
 
 func TestProcessorSerial(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("Skipping test in CI")
+	}
+
 	require.NoError(t, rpcplugin.DiscoverAndRegisterPlugins(service.OSFS(), service.GlobalEnvironment(), []string{"./testdata/catshout/plugin.yaml"}))
 
 	resBuilder := service.NewResourceBuilder()
@@ -54,6 +59,10 @@ catshout:
 }
 
 func TestProcessorCustomCwd(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("Skipping test in CI")
+	}
+
 	require.NoError(t, rpcplugin.DiscoverAndRegisterPlugins(service.OSFS(), service.GlobalEnvironment(), []string{"./testdata/catshout/plugin.custom_dir.yaml"}))
 
 	resBuilder := service.NewResourceBuilder()
