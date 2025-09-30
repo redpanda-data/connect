@@ -125,7 +125,7 @@ func newChangeTableRowIter(
 		vals[i] = &v
 	}
 
-	itor := &changeTableRowIter{
+	iter := &changeTableRowIter{
 		table: changeTable,
 		rows:  rows,
 		cols:  cols,
@@ -133,13 +133,13 @@ func newChangeTableRowIter(
 		log:   logger,
 	}
 	// Prime the iterator by loading the first row
-	if err := itor.next(); err != nil {
+	if err := iter.next(); err != nil {
 		// Already exhausted iterator
-		closeErr := itor.Close()
+		closeErr := iter.Close()
 		return nil, errors.Join(err, closeErr)
 	}
 
-	return itor, nil
+	return iter, nil
 }
 
 func (ct *changeTableRowIter) next() error {
