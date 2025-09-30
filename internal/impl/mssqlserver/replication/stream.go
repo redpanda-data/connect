@@ -258,20 +258,20 @@ func NewChangeTableStream(tables []UserTable, publisher ChangePublisher, logger 
 func (r *ChangeTableStream) ReadChangeTables(ctx context.Context, db *sql.DB, startPos LSN) error {
 	r.log.Infof("Starting streaming %d change table(s)", len(r.tables))
 	var (
-		fromLSN LSN // load last checkpoint; nil means start from beginning in tables
-		toLSN   LSN // often set to fn_cdc_get_max_lsn(); nil means no upper bound
-		lastLSN LSN
+		startLSN LSN // load last checkpoint; nil means start from beginning in tables
+		endLSN   LSN // often set to fn_cdc_get_max_lsn(); nil means no upper bound
+		lastLSN  LSN
 	)
 
 	if len(startPos) != 0 {
-		fromLSN = startPos
+		startLSN = startPos
 		lastLSN = startPos
-		r.log.Debugf("Resuming from recorded LSN position '%s'", startPos)
+		r.log.Infof("Resuming from recorded LSN position '%s'", startPos)
 	}
 
 	for {
 		// We have the "from" position, now fetch the "to" upper bound
-		if err := db.QueryRowContext(ctx, "SELECT sys.fn_cdc_get_max_lsn()").Scan(&toLSN); err != nil {
+		if err := db.QueryRowContext(ctx, "SELECT sys.fn_cdc_get_max_lsn()").Scan(&endLSN); err != nil {
 			return err
 		}
 
@@ -282,12 +282,12 @@ func (r *ChangeTableStream) ReadChangeTables(ctx context.Context, db *sql.DB, st
 
 		iters := make([]*changeTableRowIter, 0, len(r.tables))
 		for _, changeTable := range r.tables {
-			if len(fromLSN) == 0 {
+			if len(startLSN) == 0 {
 				// if no previous LSN is set, start from beginning dictated by tracking table
-				fromLSN = changeTable.startLSN
+				startLSN = changeTable.startLSN
 			}
 
-			it, err := newChangeTableRowIter(ctx, db, changeTable, fromLSN, toLSN, r.log)
+			it, err := newChangeTableRowIter(ctx, db, changeTable, startLSN, endLSN, r.log)
 			if err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
 					// No data means we can skip adding row iterator to the heap below
@@ -343,8 +343,8 @@ func (r *ChangeTableStream) ReadChangeTables(ctx context.Context, db *sql.DB, st
 		}
 
 		if len(lastLSN) != 0 {
-			if !bytes.Equal(fromLSN, lastLSN) {
-				fromLSN = lastLSN
+			if !bytes.Equal(startLSN, lastLSN) {
+				startLSN = lastLSN
 			} else {
 				r.log.Debug("No more changes across all change tables, backing off...")
 				time.Sleep(backoffDuration)
