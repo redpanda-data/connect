@@ -1,0 +1,66 @@
+name: Bump Bundle Versions
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  bump-bundles:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Check Out Repo
+        uses: actions/checkout@v4
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          # Extract version from tag (e.g., refs/tags/v4.62.0 -> v4.62.0)
+          VERSION="${GITHUB_REF#refs/tags/}"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Update free go.mod
+        working-directory: public/bundle/free
+        run: |
+          go get "github.com/redpanda-data/connect/v4@${{ steps.version.outputs.version }}"
+          go mod tidy
+
+      - name: Update enterprise go.mod
+        working-directory: public/bundle/enterprise
+        run: |
+          go get "github.com/redpanda-data/connect/v4@${{ steps.version.outputs.version }}"
+          go mod tidy
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: "chore: bump bundle versions to ${{ steps.version.outputs.version }}"
+          branch: bump-bundles-${{ steps.version.outputs.version }}
+          delete-branch: true
+          title: "chore: bump bundle versions to ${{ steps.version.outputs.version }}"
+          body: |
+            Automated PR to bump bundle versions following release ${{ steps.version.outputs.version }}.
+
+            ## Changes
+            - Updated `public/bundle/free/go.mod` to require connect ${{ steps.version.outputs.version }}
+            - Updated `public/bundle/enterprise/go.mod` to require connect ${{ steps.version.outputs.version }}
+            - Regenerated go.sum files via `go mod tidy`
+
+            ## Next Steps
+            After merging, manually tag the bundle releases if needed:
+            ```bash
+            git tag bundle/free/${{ steps.version.outputs.version }}
+            git tag bundle/enterprise/${{ steps.version.outputs.version }}
+            git push origin bundle/free/${{ steps.version.outputs.version }}
+            git push origin bundle/enterprise/${{ steps.version.outputs.version }}
+            ```
+          labels: |
+            dependencies
+            automated
