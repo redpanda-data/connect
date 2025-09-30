@@ -23,7 +23,7 @@
 component_type_dropdown::[]
 
 
-Creates an input that enables change data capture by consuming from Microsoft SQL Server's change tables.
+Enables Change Data Capture by consuming from Microsoft SQL Server's change tables.
 
 Introduced in version 0.0.1.
 
@@ -84,6 +84,18 @@ input:
 
 --
 ======
+
+Streams changes from a Microsoft SQL Server database for Change Data Capture (CDC).
+Additionally, if `stream_snapshot` is set to true, then the existing data in the database is also streamed too.
+
+== Metadata
+
+This input adds the following metadata fields to each message:
+- schema (Schema of the table that the message originated from)
+- table (Name of the table that the message originated from)
+- operation (Type of operation that generated the message: "read", "delete", "insert", or "update_before" and "update_after". "read" is from messages that are read in the initial snapshot phase.)
+- lsn (the Log Sequence Number in Microsoft SQL Server)
+		
 
 == Fields
 
