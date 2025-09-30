@@ -27,7 +27,7 @@ type Snapshot struct {
 
 	snapshotConn *sql.Conn
 
-	tables                  []UserTable
+	tables                  []UserDefinedTable
 	publisher               ChangePublisher
 	log                     *service.Logger
 	snapshotStatusMetric    *service.MetricGauge
@@ -38,10 +38,11 @@ type Snapshot struct {
 // It does this by creating a transaction with snapshot level isolation before paging through rows, sending them to be batched.
 func NewSnapshot(
 	db *sql.DB,
-	tables []UserTable,
+	tables []UserDefinedTable,
 	publisher ChangePublisher,
 	logger *service.Logger,
-	metrics *service.Metrics) *Snapshot {
+	metrics *service.Metrics,
+) *Snapshot {
 	return &Snapshot{
 		db:                      db,
 		tables:                  tables,
@@ -178,7 +179,7 @@ func (s *Snapshot) Read(ctx context.Context, maxBatchSize int) error {
 	return nil
 }
 
-func (s *Snapshot) getTablePrimaryKeys(ctx context.Context, table UserTable) ([]string, error) {
+func (s *Snapshot) getTablePrimaryKeys(ctx context.Context, table UserDefinedTable) ([]string, error) {
 	pkSQL := `
 	SELECT c.name AS column_name FROM sys.indexes i
 	JOIN sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id
@@ -214,7 +215,7 @@ func (s *Snapshot) getTablePrimaryKeys(ctx context.Context, table UserTable) ([]
 
 func (s *Snapshot) querySnapshotTable(
 	ctx context.Context,
-	table UserTable,
+	table UserDefinedTable,
 	pk []string,
 	lastSeenPkVal map[string]any,
 	limit int,

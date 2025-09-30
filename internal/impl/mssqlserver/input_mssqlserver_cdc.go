@@ -218,7 +218,7 @@ func newMSSQLServerCDCInput(conf *service.ParsedConfig, resources *service.Resou
 func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 	var (
 		err        error
-		userTables []replication.UserTable
+		userTables []replication.UserDefinedTable
 		cachedLSN  replication.LSN
 	)
 	if i.db, err = sql.Open("mssql", i.cfg.connectionString); err != nil {

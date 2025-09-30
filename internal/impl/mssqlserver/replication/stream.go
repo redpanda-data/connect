@@ -84,7 +84,7 @@ func (c *change) reset() {
 // changeTableRowIter is responsible for handling the iteration of change table records, row by row.
 // It moves to the next row, sorts them by min-heap based on LSN ordering criteria, parses the data and sends it for processing.
 type changeTableRowIter struct {
-	table   UserTable
+	table   UserDefinedTable
 	rows    *sql.Rows
 	cols    []string
 	current *change
@@ -97,7 +97,7 @@ type changeTableRowIter struct {
 func newChangeTableRowIter(
 	ctx context.Context,
 	db *sql.DB,
-	changeTable UserTable,
+	changeTable UserDefinedTable,
 	fromLSN, toLSN LSN,
 	logger *service.Logger,
 ) (*changeTableRowIter, error) {
@@ -238,14 +238,14 @@ type ChangePublisher interface {
 
 // ChangeTableStream tracks and streams all change events from the configured change tables tracked in tables.
 type ChangeTableStream struct {
-	tables    []UserTable
+	tables    []UserDefinedTable
 	publisher ChangePublisher
 	log       *service.Logger
 }
 
 // NewChangeTableStream creates a new instance of NewChangeTableStream, responsible for paging through change events
 // based on the tables param.
-func NewChangeTableStream(tables []UserTable, publisher ChangePublisher, logger *service.Logger) *ChangeTableStream {
+func NewChangeTableStream(tables []UserDefinedTable, publisher ChangePublisher, logger *service.Logger) *ChangeTableStream {
 	s := &ChangeTableStream{
 		tables:    tables,
 		publisher: publisher,
@@ -353,33 +353,33 @@ func (r *ChangeTableStream) ReadChangeTables(ctx context.Context, db *sql.DB, st
 	}
 }
 
-// UserTable represents a found user's SQL Server table.
-type UserTable struct {
+// UserDefinedTable represents a found user's SQL Server table (called a user-defined table) in SQL.
+type UserDefinedTable struct {
 	Schema   string
 	Name     string
 	startLSN LSN
 }
 
 // ToChangeTable returns a string in the SQL Server change table format of cdc.<schema>_<tablename>_CT.
-func (t *UserTable) ToChangeTable() string {
+func (t *UserDefinedTable) ToChangeTable() string {
 	return fmt.Sprintf("cdc.%s_%s_CT", t.Schema, t.Name)
 }
 
 // FullName returns a string of the table name including the schema (ie dbo.<tablename>).
-func (t *UserTable) FullName() string {
+func (t *UserDefinedTable) FullName() string {
 	return fmt.Sprintf("%s.%s", t.Schema, t.Name)
 }
 
 // VerifyUserTables verifies underlying user tables based on supplied include and exclude filters, validating the associated change table also exists.
-func VerifyUserTables(ctx context.Context, db *sql.DB, tableFilter *confx.RegexpFilter, log *service.Logger) ([]UserTable, error) {
+func VerifyUserTables(ctx context.Context, db *sql.DB, tableFilter *confx.RegexpFilter, log *service.Logger) ([]UserDefinedTable, error) {
 	rows, err := db.QueryContext(ctx, "SELECT s.name AS SchemaName, t.name AS TableName FROM sys.tables t INNER JOIN sys.schemas s ON t.schema_id = s.schema_id WHERE s.name != 'cdc' ORDER BY s.name, t.name;")
 	if err != nil {
 		return nil, fmt.Errorf("fetching user tables from sys.tables for verification: %w", err)
 	}
 
-	var userTables []UserTable
+	var userTables []UserDefinedTable
 	for rows.Next() {
-		var ut UserTable
+		var ut UserDefinedTable
 		if err := rows.Scan(&ut.Schema, &ut.Name); err != nil {
 			return nil, fmt.Errorf("scanning sys.tables row for user tables: %w", err)
 		}
