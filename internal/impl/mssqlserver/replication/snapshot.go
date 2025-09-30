@@ -230,8 +230,10 @@ func (s *Snapshot) querySnapshotTable(
 		return s.tx.QueryContext(ctx, q)
 	}
 
-	var lastSeenPkVals []any
-	var placeholders []string
+	var (
+		lastSeenPkVals []any
+		placeholders   []string
+	)
 	for _, pkCol := range lastSeenPkVal {
 		lastSeenPkVals = append(lastSeenPkVals, pkCol)
 		placeholders = append(placeholders, "?")

@@ -94,7 +94,13 @@ type changeTableRowIter struct {
 }
 
 // newChangeTableRowIter returns an custom row iterator for the given changeTable.
-func newChangeTableRowIter(ctx context.Context, db *sql.DB, changeTable UserTable, fromLSN, toLSN LSN, logger *service.Logger) (*changeTableRowIter, error) {
+func newChangeTableRowIter(
+	ctx context.Context,
+	db *sql.DB,
+	changeTable UserTable,
+	fromLSN, toLSN LSN,
+	logger *service.Logger,
+) (*changeTableRowIter, error) {
 	// Note: LSN is varbinary type so can sort correctly for LSNs
 	// Inspired by Debezium https://github.com/debezium/debezium/blob/main/debezium-connector-sqlserver/src/main/java/io/debezium/connector/sqlserver/SqlServerConnection.java?plain=1#L177
 
