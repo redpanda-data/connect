@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.66.0 - TBD
+
+### Changed
+
+- Fixed an issue where MCP output tools would yield invalid JSON Schema properties. (@Jeffail)
+
 ## 4.65.0 - 2025-09-23
 
 ### Added
