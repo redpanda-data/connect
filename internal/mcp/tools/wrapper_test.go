@@ -25,6 +25,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/xeipuuv/gojsonschema"
 
 	"github.com/redpanda-data/connect/v4/internal/mcp/tools"
 
@@ -157,6 +158,96 @@ meta:
 
 	assert.False(t, res.HasCache("bazcache"))
 	assert.True(t, res.HasCache("buzcache"))
+
+	defer r.Close(ctx)
+}
+
+func TestOutputSchemaDefaultProps(t *testing.T) {
+	s := server.NewMCPServer("Testing", "1.0.0")
+
+	r := tools.NewResourcesWrapper(slog.New(discardHandler{}), s, nil, nil)
+
+	require.NoError(t, r.AddOutputYAML([]byte(`
+label: foooutput
+drop: {}
+meta:
+  mcp:
+    enabled: true
+    description: my foo output
+`)))
+
+	_, err := r.Build()
+	require.NoError(t, err)
+
+	ctx, done := context.WithTimeout(t.Context(), time.Minute)
+	defer done()
+
+	toolsList, ok := s.HandleMessage(ctx, []byte(`{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/list"
+}`)).(mcp.JSONRPCResponse)
+	require.True(t, ok)
+
+	tools := toolsList.Result.(mcp.ListToolsResult).Tools
+	require.Len(t, tools, 1)
+
+	tool := tools[0]
+	assert.Equal(t, "foooutput", tool.Name)
+	assert.Contains(t, tool.Description, "my foo output")
+
+	_, err = gojsonschema.NewSchemaLoader().Compile(gojsonschema.NewGoLoader(tool.InputSchema))
+	require.NoError(t, err)
+
+	defer r.Close(ctx)
+}
+
+func TestOutputSchemaCustomProps(t *testing.T) {
+	s := server.NewMCPServer("Testing", "1.0.0")
+
+	r := tools.NewResourcesWrapper(slog.New(discardHandler{}), s, nil, nil)
+
+	require.NoError(t, r.AddOutputYAML([]byte(`
+label: baroutput
+drop: {}
+meta:
+  mcp:
+    enabled: true
+    properties:
+      - name: topic_name
+        type: string
+        required: true
+        description: "The topic name"
+
+      - name: content
+        type: string
+        description: "The content"
+        required: true
+    description: my bar output
+`)))
+
+	_, err := r.Build()
+	require.NoError(t, err)
+
+	ctx, done := context.WithTimeout(t.Context(), time.Minute)
+	defer done()
+
+	toolsList, ok := s.HandleMessage(ctx, []byte(`{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/list"
+}`)).(mcp.JSONRPCResponse)
+	require.True(t, ok)
+
+	tools := toolsList.Result.(mcp.ListToolsResult).Tools
+	require.Len(t, tools, 1)
+
+	tool := tools[0]
+	assert.Equal(t, "baroutput", tool.Name)
+	assert.Contains(t, tool.Description, "my bar output")
+
+	_, err = gojsonschema.NewSchemaLoader().Compile(gojsonschema.NewGoLoader(tool.InputSchema))
+	require.NoError(t, err)
 
 	defer r.Close(ctx)
 }

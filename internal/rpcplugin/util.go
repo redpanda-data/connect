@@ -19,12 +19,27 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/cenkalti/backoff/v4"
 )
 
-const (
+var (
 	retryCount     = 3
 	maxStartupTime = 30 * time.Second
 )
+
+func exponentialBackoffOpts() []backoff.ExponentialBackOffOpts {
+	mst := maxStartupTime
+	if os.Getenv("CI") != "" {
+		mst = 120 * time.Second
+	}
+
+	return []backoff.ExponentialBackOffOpts{
+		backoff.WithInitialInterval(100 * time.Millisecond),
+		backoff.WithMaxInterval(5 * time.Second),
+		backoff.WithMaxElapsedTime(mst),
+	}
+}
 
 func newUnixSocketAddr() (string, error) {
 	dir, err := os.MkdirTemp(os.TempDir(), "rpcn_plugin_*")

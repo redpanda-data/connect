@@ -114,13 +114,11 @@ type mcpProperty struct {
 	Required    bool   `yaml:"required"`
 }
 
-func (p mcpProperty) rawOption() (any, error) {
+func (p mcpProperty) rawOption() (any, bool, error) {
 	return map[string]any{
-		"name":        p.Name,
 		"type":        p.Type,
 		"description": p.Description,
-		"required":    p.Required,
-	}, nil
+	}, p.Required, nil
 }
 
 func (p mcpProperty) toolOption() (mcp.ToolOption, error) {
@@ -578,9 +576,10 @@ func (w *ResourcesWrapper) AddOutputYAML(fileBytes []byte) error {
 	w.logger.With("label", res.Label).Info("Registering output tool")
 
 	messageProperties := map[string]any{}
+	requiredProperties := []string{}
 
 	for _, p := range res.Meta.MCP.Properties {
-		o, err := p.rawOption()
+		o, required, err := p.rawOption()
 		if err != nil {
 			return fmt.Errorf("property '%v': %w", p.Name, err)
 		}
@@ -588,14 +587,17 @@ func (w *ResourcesWrapper) AddOutputYAML(fileBytes []byte) error {
 			return fmt.Errorf("duplicate property '%v' detected", p.Name)
 		}
 		messageProperties[p.Name] = o
+		if required {
+			requiredProperties = append(requiredProperties, p.Name)
+		}
 	}
 
 	if len(res.Meta.MCP.Properties) == 0 {
 		messageProperties["value"] = map[string]any{
 			"type":        "string",
 			"description": "The raw contents of the message",
-			"required":    true,
 		}
+		requiredProperties = append(requiredProperties, "value")
 	}
 
 	opts := []mcp.ToolOption{
@@ -605,6 +607,7 @@ func (w *ResourcesWrapper) AddOutputYAML(fileBytes []byte) error {
 			mcp.Items(map[string]any{
 				"type":       "object",
 				"properties": messageProperties,
+				"required":   requiredProperties,
 			}),
 		),
 	}

@@ -150,7 +150,7 @@ func startOutputPlugin(
 			return nil, backoff.Permanent(err)
 		}
 		return resp, nil
-	}, backoff.NewExponentialBackOff(backoff.WithMaxElapsedTime(maxStartupTime)))
+	}, backoff.NewExponentialBackOff(exponentialBackoffOpts()...))
 	if err != nil {
 		_ = proc.Close(ctx)
 		return 0, service.BatchPolicy{}, fmt.Errorf("unable to initialize plugin: %w", err)

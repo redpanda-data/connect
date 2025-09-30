@@ -151,7 +151,7 @@ func startInputPlugin(
 			return false, backoff.Permanent(err)
 		}
 		return resp.AutoReplayNacks, nil
-	}, backoff.NewExponentialBackOff(backoff.WithMaxElapsedTime(maxStartupTime)))
+	}, backoff.NewExponentialBackOff(exponentialBackoffOpts()...))
 	if err != nil {
 		_ = proc.Close(ctx)
 		return false, fmt.Errorf("unable to initialize plugin: %w", err)
