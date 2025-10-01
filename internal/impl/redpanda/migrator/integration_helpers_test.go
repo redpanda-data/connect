@@ -15,9 +15,12 @@
 package migrator_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"testing"
@@ -242,18 +245,26 @@ func readTopicContent(cluster EmbeddedRedpandaCluster, numMessages int) []*kgo.R
 	return records
 }
 
-type EmbeddedConfluentCluster EmbeddedRedpandaCluster
+type EmbeddedConfluentCluster struct {
+	EmbeddedRedpandaCluster
+	ConnectURL string
+}
 
 // startConfluent starts a Confluent CP cluster using Docker. Adapted from
 // https://github.com/confluentinc/cp-all-in-one/.
 func startConfluent(t *testing.T) EmbeddedConfluentCluster {
-	t.Helper()
-
-	const containerExpireSeconds = 900
-
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
 	pool.MaxWait = 2 * time.Minute
+	return startConfluentInPool(t, pool, false)
+}
+
+const containerExpireSeconds = 3600
+
+// startConfluent starts a Confluent CP cluster using Docker. Adapted from
+// https://github.com/confluentinc/cp-all-in-one/.
+func startConfluentInPool(t *testing.T, pool *dockertest.Pool, connect bool) EmbeddedConfluentCluster {
+	t.Helper()
 
 	// Get free ports for Kafka and Schema Registry
 	kafkaPort, err := integration.GetFreePort()
@@ -264,7 +275,7 @@ func startConfluent(t *testing.T) EmbeddedConfluentCluster {
 	// Start Kafka container (Confluent CP Server)
 	kafkaOptions := &dockertest.RunOptions{
 		Repository: "confluentinc/cp-server",
-		Tag:        "latest",
+		Tag:        "8.0.0",
 		Hostname:   "broker",
 		Env: []string{
 			"KAFKA_NODE_ID=1",
@@ -300,7 +311,7 @@ func startConfluent(t *testing.T) EmbeddedConfluentCluster {
 		},
 	}
 
-	kafkaResource, err := pool.RunWithOptions(kafkaOptions)
+	kafkaResource, err := pool.RunWithOptions(kafkaOptions, autoRemove)
 	require.NoError(t, err)
 	require.NoError(t, kafkaResource.Expire(containerExpireSeconds))
 
@@ -329,7 +340,7 @@ func startConfluent(t *testing.T) EmbeddedConfluentCluster {
 	// Start Schema Registry container (Confluent CP Schema Registry)
 	schemaRegistryOptions := &dockertest.RunOptions{
 		Repository: "confluentinc/cp-schema-registry",
-		Tag:        "latest",
+		Tag:        "8.0.0",
 		Hostname:   "schema-registry",
 		Env: []string{
 			"SCHEMA_REGISTRY_HOST_NAME=schema-registry",
@@ -343,7 +354,7 @@ func startConfluent(t *testing.T) EmbeddedConfluentCluster {
 		Links: []string{fmt.Sprintf("%s:broker", kafkaResource.Container.Name)},
 	}
 
-	schemaRegistryResource, err := pool.RunWithOptions(schemaRegistryOptions)
+	schemaRegistryResource, err := pool.RunWithOptions(schemaRegistryOptions, autoRemove)
 	require.NoError(t, err)
 	require.NoError(t, schemaRegistryResource.Expire(containerExpireSeconds))
 
@@ -374,7 +385,80 @@ func startConfluent(t *testing.T) EmbeddedConfluentCluster {
 		}
 		return nil
 	}))
-	t.Log("Kafka container is healthy")
+	t.Log("Schema Registry container is healthy")
+
+	// Start datagen connect
+	var connectURL string
+	if connect {
+		connectPort, err := integration.GetFreePort()
+		require.NoError(t, err)
+
+		connectOptions := &dockertest.RunOptions{
+			Repository: "cnfldemos/cp-server-connect-datagen",
+			Tag:        "0.6.4-7.6.0",
+			Hostname:   "connect",
+			Env: []string{
+				"CONNECT_BOOTSTRAP_SERVERS=broker:29092",
+				"CONNECT_REST_ADVERTISED_HOST_NAME=connect",
+				"CONNECT_GROUP_ID=compose-connect-group",
+				"CONNECT_CONFIG_STORAGE_TOPIC=docker-connect-configs",
+				"CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR=1",
+				"CONNECT_OFFSET_FLUSH_INTERVAL_MS=10000",
+				"CONNECT_OFFSET_STORAGE_TOPIC=docker-connect-offsets",
+				"CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR=1",
+				"CONNECT_STATUS_STORAGE_TOPIC=docker-connect-status",
+				"CONNECT_STATUS_STORAGE_REPLICATION_FACTOR=1",
+				"CONNECT_KEY_CONVERTER=org.apache.kafka.connect.storage.StringConverter",
+				"CONNECT_VALUE_CONVERTER=io.confluent.connect.avro.AvroConverter",
+				"CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL=http://schema-registry:8081",
+				"CLASSPATH=/usr/share/java/monitoring-interceptors/monitoring-interceptors-8.0.0.jar",
+				"CONNECT_PRODUCER_INTERCEPTOR_CLASSES=io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor",
+				"CONNECT_CONSUMER_INTERCEPTOR_CLASSES=io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor",
+				"CONNECT_PLUGIN_PATH=/usr/share/java,/usr/share/confluent-hub-components",
+			},
+			ExposedPorts: []string{"8083/tcp"},
+			PortBindings: map[docker.Port][]docker.PortBinding{
+				"8083/tcp": {{HostPort: fmt.Sprintf("%d", connectPort)}},
+			},
+			Links: []string{
+				fmt.Sprintf("%s:broker", kafkaResource.Container.Name),
+				fmt.Sprintf("%s:schema-registry", schemaRegistryResource.Container.Name),
+			},
+		}
+
+		connectResource, err := pool.RunWithOptions(connectOptions, autoRemove)
+		require.NoError(t, err)
+		require.NoError(t, connectResource.Expire(containerExpireSeconds))
+
+		t.Cleanup(func() {
+			require.NoError(t, pool.Purge(connectResource))
+		})
+
+		connectURL = fmt.Sprintf("http://localhost:%d", connectPort)
+
+		// Wait for Kafka Connect to be healthy
+		require.NoError(t, pool.Retry(func() error {
+			ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+			defer cancel()
+
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, connectURL, nil)
+			if err != nil {
+				return err
+			}
+
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				return err
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != http.StatusOK {
+				return fmt.Errorf("kafka connect not ready, status: %d", resp.StatusCode)
+			}
+			return nil
+		}))
+		t.Log("Kafka Connect container is healthy")
+	}
 
 	// Create Kafka client and admin
 	client, err := kgo.NewClient(
@@ -387,11 +471,48 @@ func startConfluent(t *testing.T) EmbeddedConfluentCluster {
 	admin := kadm.NewClient(client)
 
 	return EmbeddedConfluentCluster{
-		RedpandaEndpoints: redpandatest.RedpandaEndpoints{
-			BrokerAddr:        brokerAddr,
-			SchemaRegistryURL: schemaRegistryURL,
+		EmbeddedRedpandaCluster: EmbeddedRedpandaCluster{
+			RedpandaEndpoints: redpandatest.RedpandaEndpoints{
+				BrokerAddr:        brokerAddr,
+				SchemaRegistryURL: schemaRegistryURL,
+			},
+			Client: client,
+			Admin:  admin,
 		},
-		Client: client,
-		Admin:  admin,
+		ConnectURL: connectURL,
 	}
+}
+
+// createConnector creates a Kafka Connect connector via REST API.
+func createConnector(t *testing.T, connectURL, name string, config map[string]any) error {
+	t.Helper()
+
+	configJSON, err := json.Marshal(config)
+	if err != nil {
+		return fmt.Errorf("marshal config: %w", err)
+	}
+
+	url := fmt.Sprintf("%s/connectors/%s/config", connectURL, name)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPut, url, bytes.NewReader(configJSON))
+	if err != nil {
+		return fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("do request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("create connector failed, status: %d, body: %s", resp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
+func autoRemove(hc *docker.HostConfig) {
+	hc.AutoRemove = true
 }
