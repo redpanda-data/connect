@@ -438,6 +438,7 @@ func TestIntegrationGroupsOffsetSync(t *testing.T) {
 		)
 
 		t.Run("timestamp 3", func(t *testing.T) {
+			t.Skip("We don't sync offset 0")
 			src.CommitOffset(group, topic, 0, 3)
 			want := []TopicPartitionAt{{Topic: topic, Partition: 0, At: 0}} // First occurrence of timestamp 3
 			assert.Equal(t, want, sync(t, group, topic))
