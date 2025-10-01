@@ -42,9 +42,9 @@ const (
 	cFieldHostSelectionPolicyLocalDC              = "local_dc"
 	cFieldHostSelectionPolicyLocalRack            = "local_rack"
 	cFieldExponentialReconnectionPolicy           = "exponential_reconnection"
-	cFieldExponentialReconnectionPolicyMaxRetries = "reconnection_max_retries"
-	cFieldExponentialReconnectionInitialInterval  = "reconnection_initial_interval"
-	cFieldExponentialReconnectionMaxInterval      = "reconnection_max_interval"
+	cFieldExponentialReconnectionPolicyMaxRetries = "max_retries"
+	cFieldExponentialReconnectionInitialInterval  = "initial_interval"
+	cFieldExponentialReconnectionMaxInterval      = "max_interval"
 	cFieldReconnectInterval                       = "reconnect_interval"
 )
 
@@ -114,13 +114,13 @@ func clientFields() []*service.ConfigField {
 		service.NewObjectField(cFieldExponentialReconnectionPolicy,
 			service.NewIntField(cFieldExponentialReconnectionPolicyMaxRetries).
 				Description("The maximum number of retry attempts.").
-				LintRule(`root = if this < 1 { "reconnection_max_retries must be greater than or equal to 1" }`),
+				LintRule(`root = if this < 1 { "reconnection.max_retries must be greater than or equal to 1" }`),
 			service.NewDurationField(cFieldExponentialReconnectionInitialInterval).
 				Description("The initial period to wait between retry attempts.").
-				LintRule(`root = if this.parse_duration().catch(0) < 1 { "reconnection_initial_interval must be a positive duration"}`),
+				LintRule(`root = if this.parse_duration().catch(0) < 1 { "reconnection.initial_interval must be a positive duration"}`),
 			service.NewDurationField(cFieldExponentialReconnectionMaxInterval).
 				Description("The maximum period to wait between retry attempts.").
-				LintRule(`root = if this.parse_duration().catch(0) < 1 { "reconnection_max_interval must be a positive duration"}`),
+				LintRule(`root = if this.parse_duration().catch(0) < 1 { "reconnection.max_interval must be a positive duration"}`),
 		).
 			Description("Optional exponential reconnection policy, this replaces the default constant policy of the driver.").
 			Optional().

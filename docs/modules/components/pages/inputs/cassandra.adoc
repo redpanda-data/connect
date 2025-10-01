@@ -77,9 +77,9 @@ input:
       local_rack: "" # No default (optional)
     reconnect_interval: 60s
     exponential_reconnection:
-      reconnection_max_retries: 0 # No default (required)
-      reconnection_initial_interval: "" # No default (required)
-      reconnection_max_interval: "" # No default (required)
+      max_retries: 0 # No default (required)
+      initial_interval: "" # No default (required)
+      max_interval: "" # No default (required)
     query: "" # No default (required)
     auto_replay_nacks: true
 ```
@@ -440,7 +440,7 @@ Optional exponential reconnection policy, this replaces the default constant pol
 *Type*: `object`
 
 
-=== `exponential_reconnection.reconnection_max_retries`
+=== `exponential_reconnection.max_retries`
 
 The maximum number of retry attempts.
 
@@ -448,7 +448,7 @@ The maximum number of retry attempts.
 *Type*: `int`
 
 
-=== `exponential_reconnection.reconnection_initial_interval`
+=== `exponential_reconnection.initial_interval`
 
 The initial period to wait between retry attempts.
 
@@ -456,7 +456,7 @@ The initial period to wait between retry attempts.
 *Type*: `string`
 
 
-=== `exponential_reconnection.reconnection_max_interval`
+=== `exponential_reconnection.max_interval`
 
 The maximum period to wait between retry attempts.
 
