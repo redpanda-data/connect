@@ -370,34 +370,34 @@ func (t *UserDefinedTable) FullName() string {
 	return fmt.Sprintf("%s.%s", t.Schema, t.Name)
 }
 
-// VerifyUserTables verifies underlying user tables based on supplied include and exclude filters, validating the associated change table also exists.
+// VerifyUserTables verifies underlying user defined tables based on supplied include and exclude filters, validating the associated change table also exists.
 func VerifyUserTables(ctx context.Context, db *sql.DB, tableFilter *confx.RegexpFilter, log *service.Logger) ([]UserDefinedTable, error) {
 	rows, err := db.QueryContext(ctx, "SELECT s.name AS SchemaName, t.name AS TableName FROM sys.tables t INNER JOIN sys.schemas s ON t.schema_id = s.schema_id WHERE s.name != 'cdc' ORDER BY s.name, t.name;")
 	if err != nil {
-		return nil, fmt.Errorf("fetching user tables from sys.tables for verification: %w", err)
+		return nil, fmt.Errorf("fetching user defined tables from sys.tables for verification: %w", err)
 	}
 
 	var userTables []UserDefinedTable
 	for rows.Next() {
 		var ut UserDefinedTable
 		if err := rows.Scan(&ut.Schema, &ut.Name); err != nil {
-			return nil, fmt.Errorf("scanning sys.tables row for user tables: %w", err)
+			return nil, fmt.Errorf("scanning sys.tables row for user defined tables: %w", err)
 		}
 		if tableFilter.Matches(fmt.Sprintf("%s.%s", ut.Schema, ut.Name)) {
 			userTables = append(userTables, ut)
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterating through sys.tables for user tables: %w", err)
+		return nil, fmt.Errorf("iterating through sys.tables for user defined tables: %w", err)
 	}
 
 	if len(userTables) == 0 {
-		return nil, errors.New("no tables found for given include and exclude filters")
+		return nil, errors.New("no user defined tables found for given include and exclude filters")
 	}
 
 	for i, tbl := range userTables {
-		q := fmt.Sprintf("SELECT TOP 1 start_lsn FROM cdc.change_tables WHERE capture_instance ='%s_%s'", tbl.Schema, tbl.Name)
-		if err := db.QueryRowContext(ctx, q).Scan(&tbl.startLSN); err != nil {
+		q := "SELECT TOP 1 start_lsn FROM cdc.change_tables WHERE capture_instance = ?"
+		if err := db.QueryRowContext(ctx, q, fmt.Sprintf("%s_%s", tbl.Schema, tbl.Name)).Scan(&tbl.startLSN); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil, fmt.Errorf("no change table found for table '%s'", tbl.FullName())
 			}
