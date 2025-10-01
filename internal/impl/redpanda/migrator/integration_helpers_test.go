@@ -158,6 +158,7 @@ func (e *EmbeddedRedpandaCluster) Produce(topic string, value []byte, opts ...fu
 
 	record := &kgo.Record{
 		Topic: topic,
+		Key:   value,
 		Value: value,
 	}
 	for _, opt := range opts {
