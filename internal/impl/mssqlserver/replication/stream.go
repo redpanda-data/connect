@@ -60,7 +60,7 @@ func (h *rowIteratorMinHeap) Pop() any {
 type change struct {
 	startLSN   LSN // varbinary(10)
 	endLSN     LSN // varbinary(10)
-	operation  int // 1=delete, 2=insert, 3=update (before), 4=update (after)
+	operation  OpType
 	updateMask []byte
 	seqVal     []byte
 	commandID  int
@@ -203,9 +203,9 @@ func (ct *changeTableRowIter) mapValsToChange(vals []any, dst *change) error {
 		case "__$operation":
 			switch x := v.(type) {
 			case int64:
-				dst.operation = int(x)
+				dst.operation = OpType(x)
 			case int32:
-				dst.operation = int(x)
+				dst.operation = OpType(x)
 			default:
 				return errors.New("failed to map 'operation' column from change table")
 			}
@@ -315,7 +315,7 @@ func (r *ChangeTableStream) ReadChangeTables(ctx context.Context, db *sql.DB, st
 				Schema:    item.iter.table.Schema,
 				Data:      cur.columns,
 				LSN:       cur.startLSN,
-				Operation: OpType(cur.operation).String(),
+				Operation: cur.operation.String(),
 			}
 
 			if err := r.publisher.Publish(ctx, msg); err != nil {
