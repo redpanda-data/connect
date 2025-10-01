@@ -23,6 +23,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -243,6 +244,89 @@ func readTopicContent(cluster EmbeddedRedpandaCluster, numMessages int) []*kgo.R
 	}
 
 	return records
+}
+
+func consume(cluster EmbeddedRedpandaCluster, topic, group string, numMessages int, opts ...kgo.Opt) []kgo.Record {
+	ctx := cluster.t.Context()
+	t := cluster.t
+
+	clientOpts := []kgo.Opt{
+		kgo.SeedBrokers(cluster.BrokerAddr),
+		kgo.ConsumerGroup(group),
+		kgo.ConsumeTopics(topic),
+	}
+	clientOpts = append(clientOpts, opts...)
+
+	client, err := kgo.NewClient(clientOpts...)
+	require.NoError(t, err)
+	defer client.Close()
+
+	records := make([]kgo.Record, 0, numMessages)
+	for len(records) < numMessages {
+		fetches := client.PollFetches(ctx)
+		if errs := fetches.Errors(); len(errs) > 0 {
+			require.NoError(t, errs[0].Err)
+		}
+		fetches.EachRecord(func(r *kgo.Record) {
+			records = append(records, *r)
+		})
+
+		if len(records) < numMessages {
+			select {
+			case <-ctx.Done():
+				require.Fail(t, "timed out consuming messages")
+			case <-time.After(100 * time.Millisecond):
+			}
+		}
+	}
+	require.NoError(t, client.CommitUncommittedOffsets(ctx))
+
+	return records
+}
+
+// ListTopics lists all topics.
+func (e *EmbeddedRedpandaCluster) ListTopics() []string {
+	metadata, err := e.Admin.Metadata(e.t.Context())
+	require.NoError(e.t, err)
+
+	topics := make([]string, 0, len(metadata.Topics))
+	for name := range metadata.Topics {
+		if strings.HasPrefix(name, "_") {
+			continue
+		}
+		topics = append(topics, name)
+	}
+
+	return topics
+}
+
+// DescribeTopic describes a topic with partition details.
+func (e *EmbeddedRedpandaCluster) DescribeTopic(topic string) kadm.TopicDetail {
+	details, err := e.Admin.ListTopics(e.t.Context(), topic)
+	require.NoError(e.t, err)
+	require.Contains(e.t, details, topic)
+	return details[topic]
+}
+
+// ListGroups lists all consumer groups and logs the output.
+func (e *EmbeddedRedpandaCluster) ListGroups() []string {
+	groups, err := e.Admin.ListGroups(e.t.Context())
+	require.NoError(e.t, err)
+
+	groupNames := make([]string, 0, len(groups))
+	for _, g := range groups {
+		groupNames = append(groupNames, g.Group)
+	}
+	return groupNames
+}
+
+// DescribeGroup describes a consumer group.
+func (e *EmbeddedRedpandaCluster) DescribeGroup(group string) kadm.DescribedGroup {
+	groups, err := e.Admin.DescribeGroups(e.t.Context(), group)
+	require.NoError(e.t, err)
+	require.Len(e.t, groups, 1)
+
+	return groups[group]
 }
 
 type EmbeddedConfluentCluster struct {
@@ -478,22 +562,21 @@ func startConfluentInPool(t *testing.T, pool *dockertest.Pool, connect bool) Emb
 			},
 			Client: client,
 			Admin:  admin,
+			t:      t,
 		},
 		ConnectURL: connectURL,
 	}
 }
 
 // createConnector creates a Kafka Connect connector via REST API.
-func createConnector(t *testing.T, connectURL, name string, config map[string]any) error {
-	t.Helper()
-
+func createConnector(ctx context.Context, connectURL, name string, config map[string]any) error {
 	configJSON, err := json.Marshal(config)
 	if err != nil {
 		return fmt.Errorf("marshal config: %w", err)
 	}
 
 	url := fmt.Sprintf("%s/connectors/%s/config", connectURL, name)
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodPut, url, bytes.NewReader(configJSON))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(configJSON))
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
