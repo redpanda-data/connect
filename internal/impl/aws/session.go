@@ -16,6 +16,7 @@ package aws
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -24,6 +25,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 
+	"github.com/redpanda-data/benthos/v4/public/netclient"
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
@@ -52,6 +54,10 @@ func GetSession(ctx context.Context, parsedConf *service.ParsedConfig, opts ...f
 		)))
 	}
 
+	if httpClient := httpClientFromParsedConfig(parsedConf); httpClient != nil {
+		opts = append(opts, config.WithHTTPClient(httpClient))
+	}
+
 	conf, err := config.LoadDefaultConfig(ctx, opts...)
 	if err != nil {
 		return conf, err
@@ -78,5 +84,35 @@ func GetSession(ctx context.Context, parsedConf *service.ParsedConfig, opts ...f
 	if useEC2, _ := credsConf.FieldBool("from_ec2_role"); useEC2 {
 		conf.Credentials = aws.NewCredentialsCache(ec2rolecreds.New())
 	}
+
 	return conf, nil
+}
+
+// httpClientFromParsedConfig creates an HTTP client with TCP configuration
+func httpClientFromParsedConfig(parsedConf *service.ParsedConfig) *http.Client {
+	// Parse TCP config from the component config
+	tcpCfg, err := netclient.ParseConfig(parsedConf.Namespace("tcp"))
+	if err != nil {
+		return nil
+	}
+
+	// If no TCP config specified, return nil to use defaults
+	if tcpCfg.TCPUserTimeout == 0 {
+		return nil
+	}
+
+	// Create custom dialer with TCP options
+	dialer, err := netclient.NewDialerFrom(&tcpCfg)
+	if err != nil {
+		return nil
+	}
+
+	// Create HTTP transport with custom dialer
+	transport := &http.Transport{
+		DialContext: dialer.DialContext,
+	}
+
+	return &http.Client{
+		Transport: transport,
+	}
 }

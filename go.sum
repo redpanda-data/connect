@@ -1962,8 +1962,6 @@ github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9 h1:bsUq1dX0N8A
 github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9/go.mod h1:bCqnVzQkZxMG4s8nGwiZ5l3QUCyqpo9Y+/ZMZ9VjZe4=
 github.com/redis/go-redis/v9 v9.12.1 h1:k5iquqv27aBtnTm2tIkROUDp8JBXhXZIVu1InSgvovg=
 github.com/redis/go-redis/v9 v9.12.1/go.mod h1:huWgSWd8mW6+m0VPhJjSSQ+d6Nh1VICQ6Q5lHuCH/Iw=
-github.com/redpanda-data/benthos/v4 v4.57.0 h1:oxhKhB/Ha5MJQEDhITs5yE8vvofvjW5aU/+yhClgAWU=
-github.com/redpanda-data/benthos/v4 v4.57.0/go.mod h1:NQBR+ek5JR3QICSV9S3UNcj9z/0Mww2+/1JkKt/3Ino=
 github.com/redpanda-data/common-go/secrets v0.1.4 h1:CGp3KolGnjcJvIafTwf7Hlj5ztLOJCjgkegRu7IAkSw=
 github.com/redpanda-data/common-go/secrets v0.1.4/go.mod h1:WjUU/5saSXwItZx6veFOGbQZUgPQz4MQ65z22y0Ky84=
 github.com/redpanda-data/connect/public/bundle/free/v4 v4.62.0 h1:gy32d4y7AAnHlUHeaphostHpo2TKwGaFzSF9D4pr64Y=
