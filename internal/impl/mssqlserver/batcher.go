@@ -22,7 +22,8 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/mssqlserver/replication"
 )
 
-// batchPublisher is responsible processing individual events into a batch and flushing them to the pipeline using service.Batcher.
+// batchPublisher is responsible processing individual events into a batch and flushing
+// them to the pipeline using service.Batcher.
 type batchPublisher struct {
 	batcher   *service.Batcher
 	batcherMu sync.Mutex
@@ -124,7 +125,8 @@ func (p *batchPublisher) loop() {
 	}
 }
 
-// Publish turns the provided message into a service.Message before batching and flushing them based on batch size or time elapsed.
+// Publish turns the provided message into a service.Message before batching and
+// flushing them based on batch size or time elapsed.
 func (b *batchPublisher) Publish(ctx context.Context, m replication.MessageEvent) error {
 	data, err := json.Marshal(m.Data)
 	if err != nil {

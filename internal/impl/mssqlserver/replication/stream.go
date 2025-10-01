@@ -80,7 +80,8 @@ func (c *change) reset() {
 }
 
 // changeTableRowIter is responsible for handling the iteration of change table records, row by row.
-// It moves to the next row, sorts them by min-heap based on LSN ordering criteria, parses the data and sends it for processing.
+// It moves to the next row, sorts them by min-heap based on LSN ordering criteria,
+// parses the data and sends it for processing.
 type changeTableRowIter struct {
 	table   UserDefinedTable
 	rows    *sql.Rows
@@ -234,7 +235,8 @@ type ChangePublisher interface {
 	Publish(ctx context.Context, msg MessageEvent) error
 }
 
-// ChangeTableStream tracks and streams all change events from the configured change tables tracked in tables.
+// ChangeTableStream tracks and streams all change events from the configured change
+// tables tracked in tables.
 type ChangeTableStream struct {
 	tables          []UserDefinedTable
 	backoffInterval time.Duration
@@ -242,8 +244,8 @@ type ChangeTableStream struct {
 	log             *service.Logger
 }
 
-// NewChangeTableStream creates a new instance of NewChangeTableStream, responsible for paging through change events
-// based on the tables param.
+// NewChangeTableStream creates a new instance of NewChangeTableStream, responsible
+// for paging through change events based on the tables param.
 func NewChangeTableStream(tables []UserDefinedTable, publisher ChangePublisher, backoffInterval time.Duration, logger *service.Logger) *ChangeTableStream {
 	s := &ChangeTableStream{
 		tables:          tables,
@@ -370,9 +372,16 @@ func (t *UserDefinedTable) FullName() string {
 	return fmt.Sprintf("%s.%s", t.Schema, t.Name)
 }
 
-// VerifyUserDefinedTables verifies underlying user defined tables based on supplied include and exclude filters, validating the associated change table also exists.
+// VerifyUserDefinedTables verifies underlying user defined tables based on supplied
+// include and exclude filters, validating the associated change table also exists.
 func VerifyUserDefinedTables(ctx context.Context, db *sql.DB, tableFilter *confx.RegexpFilter, log *service.Logger) ([]UserDefinedTable, error) {
-	rows, err := db.QueryContext(ctx, "SELECT s.name AS SchemaName, t.name AS TableName FROM sys.tables t INNER JOIN sys.schemas s ON t.schema_id = s.schema_id WHERE s.name != 'cdc' ORDER BY s.name, t.name;")
+	q := `
+	SELECT s.name AS SchemaName, t.name AS TableName
+	FROM sys.tables t
+	INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
+	WHERE s.name != 'cdc'
+	ORDER BY s.name, t.name;`
+	rows, err := db.QueryContext(ctx, q)
 	if err != nil {
 		return nil, fmt.Errorf("fetching user defined tables from sys.tables for verification: %w", err)
 	}

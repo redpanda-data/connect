@@ -35,7 +35,8 @@ type Snapshot struct {
 }
 
 // NewSnapshot creates a new instance of Snapshot capable of snapshotting provided tables.
-// It does this by creating a transaction with snapshot level isolation before paging through rows, sending them to be batched.
+// It does this by creating a transaction with snapshot level isolation before paging
+// through rows, sending them to be batched.
 func NewSnapshot(
 	db *sql.DB,
 	tables []UserDefinedTable,
