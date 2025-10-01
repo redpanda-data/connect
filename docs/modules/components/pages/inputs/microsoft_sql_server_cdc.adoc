@@ -47,6 +47,7 @@ input:
     checkpoint_cache: "" # No default (required)
     checkpoint_key: microsoft_sql_server_cdc
     checkpoint_limit: 1024
+    stream_backoff_interval: 5s
     auto_replay_nacks: true
     batching:
       count: 0
@@ -73,6 +74,7 @@ input:
     checkpoint_cache: "" # No default (required)
     checkpoint_key: microsoft_sql_server_cdc
     checkpoint_limit: 1024
+    stream_backoff_interval: 5s
     auto_replay_nacks: true
     batching:
       count: 0
@@ -183,6 +185,23 @@ The maximum number of messages that can be processed at a given time. Increasing
 *Type*: `int`
 
 *Default*: `1024`
+
+=== `stream_backoff_interval`
+
+The interval between attempts to check for new changes once all data is processed. For low traffic tables increasing this value can reduce network traffic to the server.
+
+
+*Type*: `string`
+
+*Default*: `"5s"`
+
+```yml
+# Examples
+
+stream_backoff_interval: 5s
+
+stream_backoff_interval: 1m
+```
 
 === `auto_replay_nacks`
 

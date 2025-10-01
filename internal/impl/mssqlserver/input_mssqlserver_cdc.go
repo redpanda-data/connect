@@ -27,15 +27,16 @@ import (
 )
 
 const (
-	fieldConnectionString     = "connection_string"
-	fieldStreamSnapshot       = "stream_snapshot"
-	fieldSnapshotMaxBatchSize = "snapshot_max_batch_size"
-	fieldCheckpointLimit      = "checkpoint_limit"
-	fieldTablesExclude        = "exclude"
-	fieldTablesInclude        = "include"
-	fieldCheckpointCache      = "checkpoint_cache"
-	fieldCheckpointKey        = "checkpoint_key"
-	fieldBatching             = "batching"
+	fieldConnectionString      = "connection_string"
+	fieldStreamSnapshot        = "stream_snapshot"
+	fieldSnapshotMaxBatchSize  = "snapshot_max_batch_size"
+	fieldStreamBackoffInterval = "stream_backoff_interval"
+	fieldTablesExclude         = "exclude"
+	fieldTablesInclude         = "include"
+	fieldCheckpointLimit       = "checkpoint_limit"
+	fieldCheckpointCache       = "checkpoint_cache"
+	fieldCheckpointKey         = "checkpoint_key"
+	fieldBatching              = "batching"
 
 	shutdownTimeout = 5 * time.Second
 )
@@ -91,6 +92,11 @@ This input adds the following metadata fields to each message:
 		Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given Log Sequence Number (LSN) will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
 		Default(1024),
 	).
+	Field(service.NewDurationField(fieldStreamBackoffInterval).
+		Description("The interval between attempts to check for new changes once all data is processed. For low traffic tables increasing this value can reduce network traffic to the server.").
+		Default("5s").
+		Example("5s").Example("1m"),
+	).
 	Field(service.NewAutoRetryNacksToggleField()).
 	Field(service.NewBatchPolicyField(fieldBatching))
 
@@ -100,12 +106,13 @@ type asyncMessage struct {
 }
 
 type config struct {
-	connectionString     string
-	streamSnapshot       bool
-	snapshotMaxBatchSize int
-	tablesFilter         *confx.RegexpFilter
-	lsnCache             string
-	lsnCacheKey          string
+	connectionString      string
+	streamSnapshot        bool
+	streamBackoffInterval time.Duration
+	snapshotMaxBatchSize  int
+	tablesFilter          *confx.RegexpFilter
+	lsnCache              string
+	lsnCacheKey           string
 }
 
 type sqlServerCDCInput struct {
@@ -124,6 +131,7 @@ func newMSSQLServerCDCInput(conf *service.ParsedConfig, resources *service.Resou
 	var (
 		connectionString             string
 		streamSnapshot               bool
+		streamBackoffInterval        time.Duration
 		snapshotMaxBatchSize         int
 		lsnCache, lsnCacheKey        string
 		tableIncludes, tableExcludes []*regexp.Regexp
@@ -141,6 +149,9 @@ func newMSSQLServerCDCInput(conf *service.ParsedConfig, resources *service.Resou
 		return nil, err
 	}
 	if snapshotMaxBatchSize, err = conf.FieldInt(fieldSnapshotMaxBatchSize); err != nil {
+		return nil, err
+	}
+	if streamBackoffInterval, err = conf.FieldDuration(fieldStreamBackoffInterval); err != nil {
 		return nil, err
 	}
 	// tables
@@ -186,11 +197,12 @@ func newMSSQLServerCDCInput(conf *service.ParsedConfig, resources *service.Resou
 
 	i := sqlServerCDCInput{
 		cfg: &config{
-			connectionString:     connectionString,
-			streamSnapshot:       streamSnapshot,
-			snapshotMaxBatchSize: snapshotMaxBatchSize,
-			lsnCache:             lsnCache,
-			lsnCacheKey:          lsnCacheKey,
+			connectionString:      connectionString,
+			streamSnapshot:        streamSnapshot,
+			streamBackoffInterval: streamBackoffInterval,
+			snapshotMaxBatchSize:  snapshotMaxBatchSize,
+			lsnCache:              lsnCache,
+			lsnCacheKey:           lsnCacheKey,
 			tablesFilter: &confx.RegexpFilter{
 				Include: tableIncludes,
 				Exclude: tableExcludes,
@@ -247,7 +259,7 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 		i.log.Infof("Snapshotting disabled, skipping...")
 	}
 
-	streaming = replication.NewChangeTableStream(userTables, i.publisher, i.log)
+	streaming = replication.NewChangeTableStream(userTables, i.publisher, i.cfg.streamBackoffInterval, i.log)
 
 	if i.stopSig == nil {
 		i.stopSig = shutdown.NewSignaller()

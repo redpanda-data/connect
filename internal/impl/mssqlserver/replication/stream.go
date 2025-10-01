@@ -21,8 +21,6 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/confx"
 )
 
-const backoffDuration = 5 * time.Second
-
 type heapItem struct{ iter *changeTableRowIter }
 
 // rowIteratorMinHeap is used for sorting iterators by LSN to ensure they're in order across tables.
@@ -238,18 +236,20 @@ type ChangePublisher interface {
 
 // ChangeTableStream tracks and streams all change events from the configured change tables tracked in tables.
 type ChangeTableStream struct {
-	tables    []UserDefinedTable
-	publisher ChangePublisher
-	log       *service.Logger
+	tables          []UserDefinedTable
+	backoffInterval time.Duration
+	publisher       ChangePublisher
+	log             *service.Logger
 }
 
 // NewChangeTableStream creates a new instance of NewChangeTableStream, responsible for paging through change events
 // based on the tables param.
-func NewChangeTableStream(tables []UserDefinedTable, publisher ChangePublisher, logger *service.Logger) *ChangeTableStream {
+func NewChangeTableStream(tables []UserDefinedTable, publisher ChangePublisher, backoffInterval time.Duration, logger *service.Logger) *ChangeTableStream {
 	s := &ChangeTableStream{
-		tables:    tables,
-		publisher: publisher,
-		log:       logger,
+		tables:          tables,
+		publisher:       publisher,
+		backoffInterval: backoffInterval,
+		log:             logger,
 	}
 	return s
 }
@@ -347,7 +347,7 @@ func (r *ChangeTableStream) ReadChangeTables(ctx context.Context, db *sql.DB, st
 				startLSN = lastLSN
 			} else {
 				r.log.Debug("No more changes across all change tables, backing off...")
-				time.Sleep(backoffDuration)
+				time.Sleep(r.backoffInterval)
 			}
 		}
 	}
