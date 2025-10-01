@@ -29,6 +29,11 @@ func SessionFields() []*service.ConfigField {
 			Description("Allows you to specify a custom endpoint for the AWS API.").
 			Optional().
 			Advanced(),
+		service.NewDurationField("tcp_user_timeout").
+			Description("Linux-specific TCP_USER_TIMEOUT for more fine grained connection stalling detection. How long to wait for acknowledgment of transmitted data on an established conenction before killing the connection. Only applies to connections in ESTAB state. Set to 0 (default) to disable.").
+			Default("0s").
+			Optional().
+			Advanced(),
 		service.NewObjectField("credentials",
 			service.NewStringField("profile").
 				Description("A profile from `~/.aws/credentials` to use.").
@@ -52,7 +57,6 @@ func SessionFields() []*service.ConfigField {
 				Description("An external ID to provide when assuming a role.").
 				Optional().Advanced()).
 			Advanced().
-			Optional().
 			Description("Optional manual configuration of AWS credentials to use. More information can be found in xref:guides:cloud/aws.adoc[]."),
 	}
 }
