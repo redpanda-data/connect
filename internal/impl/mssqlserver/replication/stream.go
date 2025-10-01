@@ -370,8 +370,8 @@ func (t *UserDefinedTable) FullName() string {
 	return fmt.Sprintf("%s.%s", t.Schema, t.Name)
 }
 
-// VerifyUserTables verifies underlying user defined tables based on supplied include and exclude filters, validating the associated change table also exists.
-func VerifyUserTables(ctx context.Context, db *sql.DB, tableFilter *confx.RegexpFilter, log *service.Logger) ([]UserDefinedTable, error) {
+// VerifyUserDefinedTables verifies underlying user defined tables based on supplied include and exclude filters, validating the associated change table also exists.
+func VerifyUserDefinedTables(ctx context.Context, db *sql.DB, tableFilter *confx.RegexpFilter, log *service.Logger) ([]UserDefinedTable, error) {
 	rows, err := db.QueryContext(ctx, "SELECT s.name AS SchemaName, t.name AS TableName FROM sys.tables t INNER JOIN sys.schemas s ON t.schema_id = s.schema_id WHERE s.name != 'cdc' ORDER BY s.name, t.name;")
 	if err != nil {
 		return nil, fmt.Errorf("fetching user defined tables from sys.tables for verification: %w", err)

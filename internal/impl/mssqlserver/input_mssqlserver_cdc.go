@@ -222,10 +222,10 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 		cachedLSN  replication.LSN
 	)
 	if i.db, err = sql.Open("mssql", i.cfg.connectionString); err != nil {
-		return fmt.Errorf("failed to connect to sql server: %s", err)
+		return fmt.Errorf("failed to connect to microsoft sql server: %s", err)
 	}
-	if userTables, err = replication.VerifyUserTables(ctx, i.db, i.cfg.tablesFilter, i.log); err != nil {
-		return fmt.Errorf("verifying user tables: %w", err)
+	if userTables, err = replication.VerifyUserDefinedTables(ctx, i.db, i.cfg.tablesFilter, i.log); err != nil {
+		return fmt.Errorf("verifying user defined tables: %w", err)
 	}
 	if cachedLSN, err = i.getCachedLSN(ctx); err != nil {
 		return fmt.Errorf("unable to get cached LSN: %s", err)
@@ -240,7 +240,7 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 	if i.cfg.streamSnapshot && len(cachedLSN) == 0 {
 		db, err := sql.Open("mssql", i.cfg.connectionString)
 		if err != nil {
-			return fmt.Errorf("connecting to sql server for snapshotting: %s", err)
+			return fmt.Errorf("connecting to microsoft sql server for snapshotting: %s", err)
 		}
 		snapshotter = replication.NewSnapshot(db, userTables, i.publisher, i.log, i.metrics)
 	} else {
@@ -282,9 +282,9 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 		})
 
 		if err := wg.Wait(); err != nil && !errors.Is(err, context.Canceled) {
-			i.log.Errorf("Error during SQL Server CDC: %s", err)
+			i.log.Errorf("Error during Microsoft SQL Server CDC: %s", err)
 		} else {
-			i.log.Info("Successfully shutdown SQL Server CDC stream")
+			i.log.Info("Successfully shutdown Microsoft SQL Server CDC stream")
 		}
 		i.stopSig.TriggerHasStopped()
 	}()
@@ -314,7 +314,7 @@ func (i *sqlServerCDCInput) getCachedLSN(ctx context.Context) (replication.LSN, 
 
 func (i *sqlServerCDCInput) cacheLSN(ctx context.Context, lsn replication.LSN) error {
 	if len(lsn) == 0 {
-		return errors.New("lsn for caching is empty")
+		return errors.New("LSN for caching is empty")
 	}
 
 	var cErr error
@@ -376,7 +376,7 @@ func (i *sqlServerCDCInput) Close(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 	case <-time.After(shutdownTimeout):
-		i.log.Error("failed to shutdown sqlserver_cdc within the timeout")
+		i.log.Error("failed to shutdown 'microsoft_sql_server_cdc' component within the timeout")
 	case <-i.stopSig.HasStoppedChan():
 	}
 	if i.db != nil {
