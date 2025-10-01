@@ -155,11 +155,14 @@ func newFranzWriter(pConf *service.ParsedConfig, mgr *service.Resources) (franzW
 		return franzWriter{}, errors.New("timestamp and timestamp_ms fields are not supported by migrator, setting it could break consumer group migration")
 	}
 
+	fw.Key, err = service.NewInterpolatedString(`${! @kafka_key }`)
+	if err != nil {
+		return franzWriter{}, err
+	}
 	fw.Partition, err = service.NewInterpolatedString(`${! @kafka_partition }`)
 	if err != nil {
 		return franzWriter{}, err
 	}
-
 	fw.Timestamp, err = service.NewInterpolatedString(`${! @kafka_timestamp_ms }`)
 	if err != nil {
 		return franzWriter{}, err

@@ -194,6 +194,7 @@ func TestIntegrationMigratorSinglePartition(t *testing.T) {
 	t.Log("And: Messages are in correct order in partition 0")
 	for i, record := range records {
 		assert.Equal(t, int32(0), record.Partition, "Message %d should be in partition 0", i)
+		assert.Equal(t, []byte(strconv.Itoa(i)), record.Key, "Message %d should have correct key", i)
 		assert.Equal(t, []byte(strconv.Itoa(i)), record.Value, "Message %d should have correct value", i)
 	}
 }
