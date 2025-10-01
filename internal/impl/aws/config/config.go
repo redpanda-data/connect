@@ -14,7 +14,10 @@
 
 package config
 
-import "github.com/redpanda-data/benthos/v4/public/service"
+import (
+	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/netclient"
+)
 
 // SessionFields defines a re-usable set of config fields for an AWS session
 // that is compatible with the public service APIs and avoids importing the full
@@ -27,6 +30,12 @@ func SessionFields() []*service.ConfigField {
 			Advanced(),
 		service.NewStringField("endpoint").
 			Description("Allows you to specify a custom endpoint for the AWS API.").
+			Optional().
+			Advanced(),
+		netclient.ConfigSpec(),
+		service.NewDurationField("tcp_user_timeout").
+			Description("Linux-specific TCP_USER_TIMEOUT for more fine grained connection stalling detection. How long to wait for acknowledgment of transmitted data on an established conenction before killing the connection. Only applies to connections in ESTAB state. Set to 0 (default) to disable.").
+			Default("0s").
 			Optional().
 			Advanced(),
 		service.NewObjectField("credentials",
@@ -52,7 +61,6 @@ func SessionFields() []*service.ConfigField {
 				Description("An external ID to provide when assuming a role.").
 				Optional().Advanced()).
 			Advanced().
-			Optional().
 			Description("Optional manual configuration of AWS credentials to use. More information can be found in xref:guides:cloud/aws.adoc[]."),
 	}
 }
