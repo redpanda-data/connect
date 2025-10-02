@@ -3,11 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.66.0 - TBD
+## 4.65.1 - 2025-10-02
 
-### Changed
+### Fixed
 
 - Fixed an issue where MCP output tools would yield invalid JSON Schema properties. (@Jeffail)
+- The `test` subcommand no longer ignores environment variables. (@Nimon77)
 
 ## 4.65.0 - 2025-09-23
 
