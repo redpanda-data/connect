@@ -68,7 +68,7 @@ Long-running stability test with configurable timing parameters.
 - Validates:
   - Topic lists match between source and destination
   - Partition counts match for pageviews topic
-  - Consumer group offsets are synchronized
+  - Consumer group offsets and data are synchronized
   - System remains stable under continuous load
 
 ## Consumer Groups Tests (`migrator_groups_integration_test.go`)
@@ -91,7 +91,7 @@ Verifies correct extraction of record timestamps during migration.
 - Produces messages with specific timestamps to source cluster
 - Uses migrator to read and translate timestamps
 - Validates timestamp preservation across migration
-- Tests edge cases with various timestamp formats
+- Tests edge cases with various timestamps
 
 ### `TestIntegrationGroupsOffsetSync`
 
