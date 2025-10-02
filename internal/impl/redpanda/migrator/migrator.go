@@ -534,20 +534,22 @@ func (m *Migrator) onWrite(
 		record.Topic = lastDstTopic
 
 		// Update schema ID
-		schemaID, err := parseSchemaID(record.Value)
-		if err != nil {
-			return fmt.Errorf("parse schema ID: %w", err)
-		}
-		if schemaID != 0 {
-			if schemaID != lastSchemaID {
-				id, err := m.sr.DestinationSchemaID(ctx, schemaID)
-				if err != nil {
-					return fmt.Errorf("resolve destination schema ID: %w", err)
-				}
-				lastSchemaID, lastDstSchemaID = schemaID, id
+		if m.sr.enabled() && m.sr.conf.TranslateIDs {
+			schemaID, err := parseSchemaID(record.Value)
+			if err != nil {
+				return fmt.Errorf("parse schema ID: %w", err)
 			}
-			if err := updateSchemaID(record.Value, lastDstSchemaID); err != nil {
-				return fmt.Errorf("update schema ID: %w", err)
+			if schemaID != 0 {
+				if schemaID != lastSchemaID {
+					id, err := m.sr.DestinationSchemaID(schemaID)
+					if err != nil {
+						return fmt.Errorf("resolve destination schema ID: %w", err)
+					}
+					lastSchemaID, lastDstSchemaID = schemaID, id
+				}
+				if err := updateSchemaID(record.Value, lastDstSchemaID); err != nil {
+					return fmt.Errorf("update schema ID: %w", err)
+				}
 			}
 		}
 	}

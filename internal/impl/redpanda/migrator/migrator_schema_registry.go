@@ -79,6 +79,7 @@ const (
 	srFieldIncludeDeleted = "include_deleted"
 	srFieldTranslateIDs   = "translate_ids"
 	srFieldNormalize      = "normalize"
+	srFieldStrict         = "strict"
 )
 
 func schemaRegistryField(extraFields ...*service.ConfigField) *service.ConfigField {
@@ -103,7 +104,7 @@ func schemaRegistryMigratorFields() []*service.ConfigField {
 			Description("Whether schema registry migration is enabled. When disabled, no schema operations are performed.").
 			Default(true),
 		service.NewDurationField(srFieldInterval).
-			Description("How often to synchronise schema registry subjects. Set to 0s for one-time sync at startup only, with additional syncs triggered when unknown subjects are encountered.").
+			Description("How often to synchronise schema registry subjects. Set to 0s for one-time sync at startup only.").
 			Example("0s     # One-time sync only").
 			Example("5m     # Sync every 5 minutes").
 			Example("30m    # Sync every 30 minutes").
@@ -135,6 +136,13 @@ func schemaRegistryMigratorFields() []*service.ConfigField {
 		service.NewBoolField(srFieldNormalize).
 			Description("Whether to normalize schemas when creating them in the destination registry.").
 			Default(false),
+		service.NewBoolField(srFieldStrict).
+			Description("Error on unknown schema IDs. Only relevant when translate_ids is true. " +
+				"When false (default), unknown schema IDs are passed through unchanged, " +
+				"allowing migration of topics with mixed message formats. " +
+				"Note: messages with 0-byte prefixes (e.g., protobuf) cannot be distinguished from schema registry headers and may fail when strict is enabled.").
+			Default(false).
+			LintRule(`root = if this && !this.schema_registry.translate_ids { "strict is only relevant when translate_ids is true" }`),
 	}
 }
 
@@ -204,6 +212,9 @@ type SchemaRegistryMigratorConfig struct {
 	TranslateIDs bool
 	// Normalize toggles schema normalization on create.
 	Normalize bool
+	// Strict controls if DestinationSchemaID should error if the
+	// source schema ID is unknown.
+	Strict bool
 	// Serverless narrows the set of schema configuration keys to those
 	// supported by serverless clusters.
 	Serverless bool
@@ -279,6 +290,9 @@ func (m *SchemaRegistryMigratorConfig) initFromParsed(pConf *service.ParsedConfi
 	if m.Normalize, err = pConf.FieldBool(srObjectField, srFieldNormalize); err != nil {
 		return fmt.Errorf("parse normalize setting: %w", err)
 	}
+	if m.Strict, err = pConf.FieldBool(srObjectField, srFieldStrict); err != nil {
+		return fmt.Errorf("parse strict setting: %w", err)
+	}
 
 	// Use serverless from migrator config
 	m.Serverless, err = pConf.FieldBool(rmoFieldServerless)
@@ -301,12 +315,6 @@ func schemaInfoFromSubjectSchema(ss sr.SubjectSchema) schemaInfo {
 		Version: ss.Version,
 		ID:      ss.ID,
 	}
-}
-
-var unknownSchemaInfo = schemaInfo{
-	Subject: "",
-	Version: -1,
-	ID:      -1,
 }
 
 // schemaRegistryMigrator coordinates migration between a source and destination
@@ -698,15 +706,10 @@ func srGlobalMode(ctx context.Context, client *sr.Client) (string, error) {
 }
 
 // DestinationSchemaID attempts to fetch the destination schema ID for the
-// provided source schema ID. It returns 0 and error if the mapping is unknown.
-//
-// If the mapping is unknown, it will force a sync to update the cache and
-// return the new mapping if it is known after sync. If the mapping is still
-// unknown after sync, it marks the schema as unknown in the cache to avoid
-// future syncs.
-func (m *schemaRegistryMigrator) DestinationSchemaID(ctx context.Context, schemaID int) (int, error) {
+// provided source schema ID.
+func (m *schemaRegistryMigrator) DestinationSchemaID(schemaID int) (int, error) {
 	if !m.enabled() {
-		return 0, nil
+		return schemaID, nil
 	}
 
 	// Try reading from cache
@@ -714,31 +717,15 @@ func (m *schemaRegistryMigrator) DestinationSchemaID(ctx context.Context, schema
 	info, ok := m.knownSchemas[schemaID]
 	m.mu.RUnlock()
 	if ok {
-		if info == unknownSchemaInfo {
-			return 0, fmt.Errorf("unknown schema id %d mapping", schemaID)
-		}
 		return info.ID, nil
 	}
 
-	// Force sync if the schema is unknown
-	m.log.Infof("Schema migration: unknown schema id %d mapping - forcing sync", schemaID)
-	if err := m.Sync(ctx); err != nil {
-		return 0, fmt.Errorf("sync: %w", err)
+	// Schema not found in cache
+	if m.conf.Strict {
+		return 0, fmt.Errorf("schema ID %d not found in registry", schemaID)
 	}
 
-	// Mark the schema if it is unknown after sync to avoid future syncs
-	m.mu.Lock()
-	info, ok = m.knownSchemas[schemaID]
-	if !ok {
-		m.knownSchemas[schemaID] = unknownSchemaInfo
-		info = unknownSchemaInfo
-	}
-	m.mu.Unlock()
-
-	if info == unknownSchemaInfo {
-		return 0, fmt.Errorf("unknown schema id %d mapping", schemaID)
-	}
-	return info.ID, nil
+	return schemaID, nil
 }
 
 type schemaRegistryMetrics struct {
