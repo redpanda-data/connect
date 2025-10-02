@@ -26,21 +26,26 @@ import (
 )
 
 const (
-	cFieldAddresses                    = "addresses"
-	cFieldTLS                          = "tls"
-	cFieldPassAuth                     = "password_authenticator"
-	cFieldPassAuthEnabled              = "enabled"
-	cFieldPassAuthUsername             = "username"
-	cFieldPassAuthPassword             = "password"
-	cFieldDisableIHL                   = "disable_initial_host_lookup"
-	cFieldMaxRetries                   = "max_retries"
-	cFieldBackoff                      = "backoff"
-	cFieldBackoffInitInterval          = "initial_interval"
-	cFieldBackoffMaxInterval           = "max_interval"
-	cFieldTimeout                      = "timeout"
-	cFieldHostSelectionPolicy          = "host_selection_policy"
-	cFieldHostSelectionPolicyLocalDC   = "local_dc"
-	cFieldHostSelectionPolicyLocalRack = "local_rack"
+	cFieldAddresses                               = "addresses"
+	cFieldTLS                                     = "tls"
+	cFieldPassAuth                                = "password_authenticator"
+	cFieldPassAuthEnabled                         = "enabled"
+	cFieldPassAuthUsername                        = "username"
+	cFieldPassAuthPassword                        = "password"
+	cFieldDisableIHL                              = "disable_initial_host_lookup"
+	cFieldMaxRetries                              = "max_retries"
+	cFieldBackoff                                 = "backoff"
+	cFieldBackoffInitInterval                     = "initial_interval"
+	cFieldBackoffMaxInterval                      = "max_interval"
+	cFieldTimeout                                 = "timeout"
+	cFieldHostSelectionPolicy                     = "host_selection_policy"
+	cFieldHostSelectionPolicyLocalDC              = "local_dc"
+	cFieldHostSelectionPolicyLocalRack            = "local_rack"
+	cFieldExponentialReconnectionPolicy           = "exponential_reconnection"
+	cFieldExponentialReconnectionPolicyMaxRetries = "max_retries"
+	cFieldExponentialReconnectionInitialInterval  = "initial_interval"
+	cFieldExponentialReconnectionMaxInterval      = "max_interval"
+	cFieldReconnectInterval                       = "reconnect_interval"
 )
 
 func clientFields() []*service.ConfigField {
@@ -103,6 +108,23 @@ func clientFields() []*service.ConfigField {
 				"Users can specify a local DC and rack to use for the DC Aware & Rack Aware policies. ").
 			LintRule(`root = if this.local_rack != "" && (!this.exists("local_dc") || this.local_dc == "") { "local_dc must be set if local_rack is set" }`).
 			Advanced(),
+		service.NewDurationField(cFieldReconnectInterval).
+			Description("Attempts to reconnect known DOWN nodes in every ReconnectInterval.").
+			Default("60s"),
+		service.NewObjectField(cFieldExponentialReconnectionPolicy,
+			service.NewIntField(cFieldExponentialReconnectionPolicyMaxRetries).
+				Description("The maximum number of retry attempts.").
+				LintRule(`root = if this < 1 { "reconnection.max_retries must be greater than or equal to 1" }`),
+			service.NewDurationField(cFieldExponentialReconnectionInitialInterval).
+				Description("The initial period to wait between retry attempts.").
+				LintRule(`root = if this.parse_duration().catch(0) < 1 { "reconnection.initial_interval must be a positive duration"}`),
+			service.NewDurationField(cFieldExponentialReconnectionMaxInterval).
+				Description("The maximum period to wait between retry attempts.").
+				LintRule(`root = if this.parse_duration().catch(0) < 1 { "reconnection.max_interval must be a positive duration"}`),
+		).
+			Description("Optional exponential reconnection policy, this replaces the default constant policy of the driver.").
+			Optional().
+			Advanced(),
 	}
 }
 
@@ -119,6 +141,8 @@ type clientConf struct {
 	backoffMaxInterval  time.Duration
 	timeout             time.Duration
 	hostSelectionPolicy gocql.HostSelectionPolicy
+	reconnectInterval   time.Duration
+	connectionPolicy    gocql.ReconnectionPolicy
 }
 
 func (c *clientConf) Create() (*gocql.ClusterConfig, error) {
@@ -146,6 +170,9 @@ func (c *clientConf) Create() (*gocql.ClusterConfig, error) {
 		Min:        c.backoffInitInterval,
 		Max:        c.backoffMaxInterval,
 	}
+
+	conn.ReconnectInterval = c.reconnectInterval
+	conn.ReconnectionPolicy = c.connectionPolicy
 
 	conn.Timeout = c.timeout
 	return conn, nil
@@ -195,6 +222,14 @@ func clientConfFromParsed(conf *service.ParsedConfig) (c clientConf, err error) 
 			return
 		}
 	}
+
+	{
+		reconnectionPolicy := conf.Namespace(cFieldExponentialReconnectionPolicy)
+		maxRetries, _ := reconnectionPolicy.FieldInt(cFieldExponentialReconnectionPolicyMaxRetries)
+		initialInterval, _ := reconnectionPolicy.FieldDuration(cFieldExponentialReconnectionInitialInterval)
+		maxInterval, _ := reconnectionPolicy.FieldDuration(cFieldExponentialReconnectionMaxInterval)
+		c.connectionPolicy = newReconnectionPolicy(initialInterval, maxRetries, maxInterval)
+	}
 	return
 }
 
@@ -209,4 +244,15 @@ func newHostSelectionPolicy(localDC, localRack string) (gocql.HostSelectionPolic
 		return gocql.DCAwareRoundRobinPolicy(localDC), nil
 	}
 	return gocql.RoundRobinHostPolicy(), nil
+}
+
+func newReconnectionPolicy(initialInterval time.Duration, MaxRetries int, MaxInterval time.Duration) gocql.ReconnectionPolicy {
+	if initialInterval == 0 || MaxRetries == 0 || MaxInterval == 0 {
+		return &gocql.ConstantReconnectionPolicy{MaxRetries: 3, Interval: 1 * time.Second}
+	}
+	return &gocql.ExponentialReconnectionPolicy{
+		MaxRetries:      MaxRetries,
+		InitialInterval: initialInterval,
+		MaxInterval:     MaxInterval,
+	}
 }
