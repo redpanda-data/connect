@@ -21,7 +21,9 @@ output:
     ]'
 
 metrics:
-  prometheus: {}
+  prometheus:
+    add_process_metrics: true
+    add_go_metrics: true
 
 # tracer:
 #   jaeger:
