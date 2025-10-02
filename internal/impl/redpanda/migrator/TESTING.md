@@ -13,6 +13,18 @@ Verifies basic single-partition migration functionality.
 - Validates all messages arrive at destination in correct order
 - Confirms message keys and values match exactly
 
+### `TestIntegrationMigratorSinglePartitionMalformedSchemaID`
+
+Tests graceful handling of messages with malformed schema ID headers.
+- Creates source and destination clusters with Schema Registry enabled
+- Registers a schema in source Schema Registry
+- Produces 100 messages with malformed 5-byte schema ID headers (non-conformant to wire format)
+- Starts migrator and waits for message transfer
+- Validates:
+  - All messages arrive at destination without migration failure
+  - Malformed schema ID headers are preserved unchanged
+  - Message values remain intact
+
 ### `TestIntegrationMigratorMultiPartitionSchemaAwareWithConsumerGroups`
 
 Tests multi-partition migration with Schema Registry and consumer group synchronization.
