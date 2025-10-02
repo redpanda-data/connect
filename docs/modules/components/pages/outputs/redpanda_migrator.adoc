@@ -51,6 +51,7 @@ output:
       include_deleted: false
       translate_ids: false
       normalize: false
+      strict: false
     consumer_groups:
       enabled: true
       interval: 1m
@@ -127,6 +128,7 @@ output:
       include_deleted: false
       translate_ids: false
       normalize: false
+      strict: false
     consumer_groups:
       enabled: true
       interval: 1m
@@ -1150,7 +1152,7 @@ Whether schema registry migration is enabled. When disabled, no schema operation
 
 === `schema_registry.interval`
 
-How often to synchronise schema registry subjects. Set to 0s for one-time sync at startup only, with additional syncs triggered when unknown subjects are encountered.
+How often to synchronise schema registry subjects. Set to 0s for one-time sync at startup only.
 
 
 *Type*: `string`
@@ -1251,6 +1253,15 @@ Whether to translate schema IDs during migration.
 === `schema_registry.normalize`
 
 Whether to normalize schemas when creating them in the destination registry.
+
+
+*Type*: `bool`
+
+*Default*: `false`
+
+=== `schema_registry.strict`
+
+Error on unknown schema IDs. Only relevant when translate_ids is true. When false (default), unknown schema IDs are passed through unchanged, allowing migration of topics with mixed message formats. Note: messages with 0-byte prefixes (e.g., protobuf) cannot be distinguished from schema registry headers and may fail when strict is enabled.
 
 
 *Type*: `bool`
