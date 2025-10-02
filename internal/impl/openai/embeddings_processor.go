@@ -82,6 +82,29 @@ output:
     host: "${PINECONE_HOST}"
     api_key: "${PINECONE_API_KEY}"
     id: "root = uuid_v4()"
+    vector_mapping: "root = this"`).
+		Example(
+			"Store embedding vectors in CyborgDB",
+			"Compute embeddings for some generated data and store it within xrefs:component:outputs/cyborgdb.adoc[CyborgDB]",
+			`input:
+  generate:
+    interval: 1s
+    mapping: |
+      root = {"text": fake("paragraph")}
+pipeline:
+  processors:
+  - openai_embeddings:
+      model: text-embedding-3-large
+      api_key: "${OPENAI_API_KEY}"
+      text_mapping: "root = this.text"
+output:
+  cyborgdb:
+    host: "${CYBORGDB_HOST}"
+    api_key: "${CYBORGDB_API_KEY}"
+    index_key: "${CYBORGDB_INDEX_KEY}"
+    index_name: "my_encrypted_index"
+    operation: "upsert"
+    id: "root = uuid_v4()"
     vector_mapping: "root = this"`)
 }
 

@@ -32,6 +32,7 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/confluent"
 	_ "github.com/redpanda-data/connect/v4/public/components/couchbase"
 	_ "github.com/redpanda-data/connect/v4/public/components/crypto"
+	_ "github.com/redpanda-data/connect/v4/public/components/cyborgdb"
 	_ "github.com/redpanda-data/connect/v4/public/components/cypher"
 	_ "github.com/redpanda-data/connect/v4/public/components/dgraph"
 	_ "github.com/redpanda-data/connect/v4/public/components/discord"

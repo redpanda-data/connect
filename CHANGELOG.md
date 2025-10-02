@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 
 ## 4.65.1 - 2025-10-02
 
+### Added
+
+- New `cyborgdb` output. (@ahellegit)
+
 ### Fixed
 
 - Fixed an issue where MCP output tools would yield invalid JSON Schema properties. (@Jeffail)
