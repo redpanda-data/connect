@@ -38,6 +38,7 @@ output:
   cassandra:
     addresses: [] # No default (required)
     timeout: 600ms
+    reconnect_interval: 60s
     query: "" # No default (required)
     args_mapping: "" # No default (optional)
     max_in_flight: 64
@@ -79,6 +80,11 @@ output:
     host_selection_policy:
       local_dc: "" # No default (optional)
       local_rack: "" # No default (optional)
+    reconnect_interval: 60s
+    exponential_reconnection:
+      max_retries: 0 # No default (required)
+      initial_interval: "" # No default (required)
+      max_interval: "" # No default (required)
     query: "" # No default (required)
     args_mapping: "" # No default (optional)
     consistency: QUORUM
@@ -450,6 +456,47 @@ The local DC to use, enables DC aware policy.
 === `host_selection_policy.local_rack`
 
 The local rack to use, requires local_dc to be set, enables rack aware policy.
+
+
+*Type*: `string`
+
+
+=== `reconnect_interval`
+
+Attempts to reconnect known DOWN nodes in every ReconnectInterval.
+
+
+*Type*: `string`
+
+*Default*: `"60s"`
+
+=== `exponential_reconnection`
+
+Optional exponential reconnection policy, this replaces the default constant policy of the driver.
+
+
+*Type*: `object`
+
+
+=== `exponential_reconnection.max_retries`
+
+The maximum number of retry attempts.
+
+
+*Type*: `int`
+
+
+=== `exponential_reconnection.initial_interval`
+
+The initial period to wait between retry attempts.
+
+
+*Type*: `string`
+
+
+=== `exponential_reconnection.max_interval`
+
+The maximum period to wait between retry attempts.
 
 
 *Type*: `string`
