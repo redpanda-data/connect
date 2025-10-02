@@ -199,6 +199,47 @@ func TestIntegrationMigratorSinglePartition(t *testing.T) {
 	}
 }
 
+func TestIntegrationMigratorSinglePartitionMalformedSchemaID(t *testing.T) {
+	integration.CheckSkip(t)
+
+	const (
+		numMessages = 100
+		subj        = "foo"
+		schema      = `{"type":"int"}`
+	)
+
+	t.Log("Given: Redpanda clusters")
+	src, dst := startRedpandaSourceAndDestination(t)
+
+	t.Log("And: Schema registry containing a subject and schema")
+	{
+		srScr, err := sr.NewClient(sr.URLs(src.SchemaRegistryURL))
+		require.NoError(t, err)
+		_, err = srScr.CreateSchema(t.Context(), subj, sr.Schema{Schema: schema})
+		require.NoError(t, err)
+	}
+
+	pfx := []byte{0x00, 0x01, 0x02, 0x03, 0x04}
+
+	t.Log("When: Messages with malformed schema ID headers are written to source cluster")
+	for i := range numMessages {
+		src.Produce(migratorTestTopic, append(pfx, []byte(strconv.Itoa(i))...))
+	}
+	t.Logf("Successfully wrote %d messages with malformed headers to topic %s", numMessages, migratorTestTopic)
+
+	t.Log("And: Migrator is started")
+	startMigratorAndWaitForMessages(t, src, dst, numMessages)
+
+	t.Logf("Then: %d messages are present in destination topic %s", numMessages, migratorTestTopic)
+	records := readTopicContent(dst, numMessages)
+	assert.Len(t, records, numMessages)
+
+	t.Log("And: Messages have correct value")
+	for i, record := range records {
+		assert.Equal(t, append(pfx, []byte(strconv.Itoa(i))...), record.Value, "Message %d should have correct value", i)
+	}
+}
+
 func TestIntegrationMigratorMultiPartitionSchemaAwareWithConsumerGroups(t *testing.T) {
 	integration.CheckSkip(t)
 
