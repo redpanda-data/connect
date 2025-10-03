@@ -148,7 +148,9 @@ output:
 	// Run stream in the background and shut it down when the test is finished
 	done := make(chan struct{})
 	go func() {
-		require.NoError(t, stream.Run(t.Context()))
+		if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Error(err)
+		}
 		t.Log("Migrator pipeline shut down")
 		close(done)
 	}()
