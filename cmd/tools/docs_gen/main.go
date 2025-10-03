@@ -138,6 +138,11 @@ func viewForDir(docsDir string) func(string, *service.ConfigView) {
 		if view.IsDeprecated() {
 			return
 		}
+		// This works around lack of deprecation for templates.
+		if name == "redpanda_migrator_bundle" {
+			return
+		}
+
 		data, err := view.TemplateData()
 		if err != nil {
 			panic(fmt.Sprintf("Failed to prepare docs for '%v': %v", name, err))

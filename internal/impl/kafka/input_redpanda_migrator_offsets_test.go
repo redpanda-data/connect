@@ -114,7 +114,7 @@ func TestRedpandaMigratorOffsetsInput(t *testing.T) {
 
 	streamBuilder := service.NewStreamBuilder()
 	require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(`
-redpanda_migrator_offsets:
+legacy_redpanda_migrator_offsets:
   seed_brokers: %v
   topics: [ %s ]
   poll_interval: 3s
@@ -230,7 +230,7 @@ func TestRedpandaMigratorOffsetsInputTruncatedTopic(t *testing.T) {
 
 	streamBuilder := service.NewStreamBuilder()
 	require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(`
-redpanda_migrator_offsets:
+legacy_redpanda_migrator_offsets:
   seed_brokers: %v
   topics: [ %s ]
   poll_interval: 3s

@@ -51,7 +51,7 @@ func redpandaMigratorOffsetsOutputConfig() *service.ConfigSpec {
 		Categories("Services").
 		Version("4.37.0").
 		Summary("Redpanda Migrator consumer group offsets output using the https://github.com/twmb/franz-go[Franz Kafka client library^].").
-		Description("This output should be used in combination with the `redpanda_migrator_offsets` input").
+		Description("This output should be used in combination with the `legacy_redpanda_migrator_offsets` input").
 		Fields(redpandaMigratorOffsetsOutputConfigFields()...)
 }
 
@@ -89,7 +89,7 @@ func redpandaMigratorOffsetsOutputConfigFields() []*service.ConfigField {
 }
 
 func init() {
-	service.MustRegisterOutput("redpanda_migrator_offsets", redpandaMigratorOffsetsOutputConfig(),
+	service.MustRegisterOutput("legacy_redpanda_migrator_offsets", redpandaMigratorOffsetsOutputConfig().Deprecated(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (
 			output service.Output,
 			maxInFlight int,
