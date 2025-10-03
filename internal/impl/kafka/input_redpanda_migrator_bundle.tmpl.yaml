@@ -1,0 +1,257 @@
+# Copyright 2024 Redpanda Data, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: redpanda_migrator_bundle
+type: input
+status: experimental
+categories: [ Services ]
+summary: Redpanda Migrator bundle input
+description: |
+  All-in-one input which reads messages and schemas from a Kafka or Redpanda cluster. This input is meant to be used
+  together with the `redpanda_migrator_bundle` output.
+
+fields:
+  - name: redpanda_migrator
+    type: unknown
+    kind: map
+    description: |
+      The `redpanda_migrator` input configuration.
+
+  - name: schema_registry
+    type: unknown
+    kind: map
+    description: |
+      The `schema_registry` input configuration.
+
+  - name: migrate_schemas_before_data
+    type: bool
+    kind: scalar
+    default: true
+    description: |
+      Migrate all schemas first before starting to migrate data.
+
+  - name: consumer_group_offsets_poll_interval
+    type: string
+    kind: scalar
+    default: 15s
+    description: |
+      Duration between OffsetFetch polling attempts in redpanda_migrator_offsets input.
+
+mapping: |
+  #!blobl
+
+  let labelPrefix = @label.not_empty().or("redpanda_migrator_bundle")
+
+  let redpandaMigratorOffsets = this.redpanda_migrator.with(
+    "seed_brokers",
+    "client_id",
+    "tls",
+    "sasl",
+    "metadata_max_age",
+    "request_timeout_overhead",
+    "conn_idle_timeout",
+    "topics",
+    "regexp_topics",
+    "topic_lag_refresh_period",
+    "rack_id",
+    "auto_replay_nacks").assign(
+      if this.exists("consumer_group_offsets_poll_interval") {
+        {"poll_interval": this.consumer_group_offsets_poll_interval}
+      } else {
+        {}
+      }
+    )
+
+  root = if this.redpanda_migrator.length() == 0 {
+    throw("the redpanda_migrator input must be configured")
+  } else if this.migrate_schemas_before_data && this.schema_registry.length() > 0 {
+    """
+      sequence:
+        inputs:
+          - sequence:
+              inputs:
+                - label: %s_schema_registry_input
+                  schema_registry: %s
+                  processors:
+                    - mapping: meta input_label = "schema_registry_input"
+                - generate:
+                    count: 1
+                    mapping: root = ""
+                  processors:
+                    - log:
+                        message: Finished importing schemas
+                    - mapping: root = deleted()
+          - broker:
+              inputs:
+                - label: %s_redpanda_migrator_input
+                  redpanda_migrator: %s
+                  processors:
+                    - mapping: meta input_label = "redpanda_migrator_input"
+                - label: %s_redpanda_migrator_offsets_input
+                  redpanda_migrator_offsets: %s
+                  processors:
+                    - mapping: meta input_label = "redpanda_migrator_offsets_input"
+    """.format($labelPrefix, this.schema_registry.string(), $labelPrefix, this.redpanda_migrator.string(), $labelPrefix, $redpandaMigratorOffsets.string()).parse_yaml()
+  } else if this.schema_registry.length() > 0 {
+    """
+      broker:
+        inputs:
+          - sequence:
+              inputs:
+                - label: %s_schema_registry_input
+                  schema_registry: %s
+                  processors:
+                    - mapping: meta input_label = "schema_registry_input"
+                - generate:
+                    count: 1
+                    mapping: root = ""
+                  processors:
+                    - log:
+                        message: Finished importing schemas
+                    - mapping: root = deleted()
+          - label: %s_redpanda_migrator_input
+            redpanda_migrator: %s
+            processors:
+              - mapping: meta input_label = "redpanda_migrator_input"
+          - label: %s_redpanda_migrator_offsets_input
+            redpanda_migrator_offsets: %s
+            processors:
+              - mapping: meta input_label = "redpanda_migrator_offsets_input"
+    """.format($labelPrefix, this.schema_registry.string(), $labelPrefix, this.redpanda_migrator.string(), $labelPrefix, $redpandaMigratorOffsets.string()).parse_yaml()
+  } else {
+    """
+      broker:
+        inputs:
+          - label: %s_redpanda_migrator_input
+            redpanda_migrator: %s
+            processors:
+              - mapping: meta input_label = "redpanda_migrator_input"
+          - label: %s_redpanda_migrator_offsets_input
+            redpanda_migrator_offsets: %s
+            processors:
+              - mapping: meta input_label = "redpanda_migrator_offsets_input"
+    """.format($labelPrefix, this.redpanda_migrator.string(), $labelPrefix, $redpandaMigratorOffsets.string()).parse_yaml()
+  }
+
+tests:
+  - name: Migrate messages, offsets and schemas simultaneously
+    config:
+      redpanda_migrator:
+        seed_brokers: [ "127.0.0.1:9092" ]
+        topics: [ "foobar" ]
+        consumer_group: "migrator"
+      schema_registry:
+        url: http://localhost:8081
+
+      migrate_schemas_before_data: false
+
+    expected:
+      broker:
+        inputs:
+          - sequence:
+              inputs:
+                - processors:
+                    - mapping: meta input_label = "schema_registry_input"
+                  label: redpanda_migrator_bundle_schema_registry_input
+                  schema_registry:
+                     url: http://localhost:8081
+                - generate:
+                    count: 1
+                    mapping: root = ""
+                  processors:
+                    - log:
+                        message: Finished importing schemas
+                    - mapping: root = deleted()
+          - label: redpanda_migrator_bundle_redpanda_migrator_input
+            redpanda_migrator:
+              seed_brokers: [ "127.0.0.1:9092" ]
+              topics: [ "foobar" ]
+              consumer_group: "migrator"
+            processors:
+              - mapping: meta input_label = "redpanda_migrator_input"
+          - label: redpanda_migrator_bundle_redpanda_migrator_offsets_input
+            redpanda_migrator_offsets:
+              seed_brokers: [ "127.0.0.1:9092" ]
+              topics: [ "foobar" ]
+              poll_interval: "15s"
+            processors:
+              - mapping: meta input_label = "redpanda_migrator_offsets_input"
+
+  - name: Migrate schemas first, then messages and offsets
+    config:
+      redpanda_migrator:
+        seed_brokers: [ "127.0.0.1:9092" ]
+        topics: [ "foobar" ]
+        consumer_group: "migrator"
+      schema_registry:
+        url: http://localhost:8081
+
+    expected:
+      sequence:
+        inputs:
+          - sequence:
+              inputs:
+                - processors:
+                    - mapping: meta input_label = "schema_registry_input"
+                  label: redpanda_migrator_bundle_schema_registry_input
+                  schema_registry:
+                     url: http://localhost:8081
+                - generate:
+                    count: 1
+                    mapping: root = ""
+                  processors:
+                    - log:
+                        message: Finished importing schemas
+                    - mapping: root = deleted()
+          - broker:
+              inputs:
+                - label: redpanda_migrator_bundle_redpanda_migrator_input
+                  redpanda_migrator:
+                    seed_brokers: [ "127.0.0.1:9092" ]
+                    topics: [ "foobar" ]
+                    consumer_group: "migrator"
+                  processors:
+                    - mapping: meta input_label = "redpanda_migrator_input"
+                - label: redpanda_migrator_bundle_redpanda_migrator_offsets_input
+                  redpanda_migrator_offsets:
+                    seed_brokers: [ "127.0.0.1:9092" ]
+                    topics: [ "foobar" ]
+                    poll_interval: "15s"
+                  processors:
+                    - mapping: meta input_label = "redpanda_migrator_offsets_input"
+
+  - name: Migrate messages and offsets without schemas
+    config:
+      redpanda_migrator:
+        seed_brokers: [ "127.0.0.1:9092" ]
+        topics: [ "foobar" ]
+        consumer_group: "migrator"
+
+    expected:
+      broker:
+        inputs:
+          - label: redpanda_migrator_bundle_redpanda_migrator_input
+            redpanda_migrator:
+              seed_brokers: [ "127.0.0.1:9092" ]
+              topics: [ "foobar" ]
+              consumer_group: "migrator"
+            processors:
+              - mapping: meta input_label = "redpanda_migrator_input"
+          - label: redpanda_migrator_bundle_redpanda_migrator_offsets_input
+            redpanda_migrator_offsets:
+              seed_brokers: [ "127.0.0.1:9092" ]
+              topics: [ "foobar" ]
+              poll_interval: "15s"
+            processors:
+              - mapping: meta input_label = "redpanda_migrator_offsets_input"
