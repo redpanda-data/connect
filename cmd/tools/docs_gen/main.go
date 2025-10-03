@@ -16,6 +16,7 @@ package main
 
 import (
 	"bytes"
+	_ "embed"
 	"flag"
 	"fmt"
 	"os"
@@ -30,8 +31,6 @@ import (
 	"github.com/redpanda-data/connect/v4/public/schema"
 
 	_ "github.com/redpanda-data/connect/v4/public/components/all"
-
-	_ "embed"
 )
 
 //go:embed templates/bloblang_functions.adoc.tmpl
@@ -136,6 +135,9 @@ func main() {
 
 func viewForDir(docsDir string) func(string, *service.ConfigView) {
 	return func(name string, view *service.ConfigView) {
+		if view.IsDeprecated() {
+			return
+		}
 		data, err := view.TemplateData()
 		if err != nil {
 			panic(fmt.Sprintf("Failed to prepare docs for '%v': %v", name, err))
