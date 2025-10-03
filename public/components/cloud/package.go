@@ -37,6 +37,7 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/mongodb/enterprise"
 	_ "github.com/redpanda-data/connect/v4/public/components/mqtt"
 	_ "github.com/redpanda-data/connect/v4/public/components/msgpack"
+	_ "github.com/redpanda-data/connect/v4/public/components/mssqlserver"
 	_ "github.com/redpanda-data/connect/v4/public/components/mysql"
 	_ "github.com/redpanda-data/connect/v4/public/components/nats"
 	_ "github.com/redpanda-data/connect/v4/public/components/openai"
