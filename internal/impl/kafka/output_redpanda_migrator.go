@@ -57,7 +57,7 @@ func redpandaMigratorOutputSpec() *service.ConfigSpec {
 		Description(`
 Writes a batch of messages to a Kafka broker and waits for acknowledgement before propagating it back to the input.
 
-This output should be used in combination with a `+"`redpanda_migrator`"+` input identified by the label specified in
+This output should be used in combination with a `+"`legacy_redpanda_migrator`"+` input identified by the label specified in
 `+"`input_resource`"+` which it can query for topic and ACL configurations. Once connected, the output will attempt to
 create all topics which the input consumes from along with their ACLs.
 
@@ -74,7 +74,7 @@ ACL migration adheres to the following principles:
 		LintRule(FranzWriterConfigLints()).
 		Example("Transfer data", "Writes messages to the configured broker and creates topics and topic ACLs if they don't exist. It also ensures that the message order is preserved.", `
 output:
-  redpanda_migrator:
+  legacy_redpanda_migrator:
     seed_brokers: [ "127.0.0.1:9093" ]
     topic: ${! metadata("kafka_topic").or(throw("missing kafka_topic metadata")) }
     key: ${! metadata("kafka_key") }
@@ -97,7 +97,7 @@ func redpandaMigratorOutputConfigFields() []*service.ConfigField {
 				Description("The maximum number of batches to be sending in parallel at any given time.").
 				Default(256),
 			service.NewStringField(rmoFieldInputResource).
-				Description("The label of the redpanda_migrator input from which to read the configurations for topics and ACLs which need to be created.").
+				Description("The label of the legacy_redpanda_migrator input from which to read the configurations for topics and ACLs which need to be created.").
 				Default(rmiResourceDefaultLabel).
 				Advanced(),
 			service.NewBoolField(rmoFieldRepFactorOverride).
@@ -124,7 +124,7 @@ func redpandaMigratorOutputConfigFields() []*service.ConfigField {
 }
 
 func init() {
-	service.MustRegisterBatchOutput("redpanda_migrator", redpandaMigratorOutputSpec(),
+	service.MustRegisterBatchOutput("legacy_redpanda_migrator", redpandaMigratorOutputSpec().Deprecated(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (
 			output service.BatchOutput,
 			batchPolicy service.BatchPolicy,

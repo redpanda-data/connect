@@ -95,11 +95,11 @@ mapping: |
           - broker:
               inputs:
                 - label: %s_redpanda_migrator_input
-                  redpanda_migrator: %s
+                  legacy_redpanda_migrator: %s
                   processors:
                     - mapping: meta input_label = "redpanda_migrator_input"
                 - label: %s_redpanda_migrator_offsets_input
-                  redpanda_migrator_offsets: %s
+                  legacy_redpanda_migrator_offsets: %s
                   processors:
                     - mapping: meta input_label = "redpanda_migrator_offsets_input"
     """.format($labelPrefix, this.schema_registry.string(), $labelPrefix, this.redpanda_migrator.string(), $labelPrefix, $redpandaMigratorOffsets.string()).parse_yaml()
@@ -121,11 +121,11 @@ mapping: |
                         message: Finished importing schemas
                     - mapping: root = deleted()
           - label: %s_redpanda_migrator_input
-            redpanda_migrator: %s
+            legacy_redpanda_migrator: %s
             processors:
               - mapping: meta input_label = "redpanda_migrator_input"
           - label: %s_redpanda_migrator_offsets_input
-            redpanda_migrator_offsets: %s
+            legacy_redpanda_migrator_offsets: %s
             processors:
               - mapping: meta input_label = "redpanda_migrator_offsets_input"
     """.format($labelPrefix, this.schema_registry.string(), $labelPrefix, this.redpanda_migrator.string(), $labelPrefix, $redpandaMigratorOffsets.string()).parse_yaml()
@@ -134,11 +134,11 @@ mapping: |
       broker:
         inputs:
           - label: %s_redpanda_migrator_input
-            redpanda_migrator: %s
+            legacy_redpanda_migrator: %s
             processors:
               - mapping: meta input_label = "redpanda_migrator_input"
           - label: %s_redpanda_migrator_offsets_input
-            redpanda_migrator_offsets: %s
+            legacy_redpanda_migrator_offsets: %s
             processors:
               - mapping: meta input_label = "redpanda_migrator_offsets_input"
     """.format($labelPrefix, this.redpanda_migrator.string(), $labelPrefix, $redpandaMigratorOffsets.string()).parse_yaml()
@@ -174,14 +174,14 @@ tests:
                         message: Finished importing schemas
                     - mapping: root = deleted()
           - label: redpanda_migrator_bundle_redpanda_migrator_input
-            redpanda_migrator:
+            legacy_redpanda_migrator:
               seed_brokers: [ "127.0.0.1:9092" ]
               topics: [ "foobar" ]
               consumer_group: "migrator"
             processors:
               - mapping: meta input_label = "redpanda_migrator_input"
           - label: redpanda_migrator_bundle_redpanda_migrator_offsets_input
-            redpanda_migrator_offsets:
+            legacy_redpanda_migrator_offsets:
               seed_brokers: [ "127.0.0.1:9092" ]
               topics: [ "foobar" ]
               poll_interval: "15s"
@@ -217,14 +217,14 @@ tests:
           - broker:
               inputs:
                 - label: redpanda_migrator_bundle_redpanda_migrator_input
-                  redpanda_migrator:
+                  legacy_redpanda_migrator:
                     seed_brokers: [ "127.0.0.1:9092" ]
                     topics: [ "foobar" ]
                     consumer_group: "migrator"
                   processors:
                     - mapping: meta input_label = "redpanda_migrator_input"
                 - label: redpanda_migrator_bundle_redpanda_migrator_offsets_input
-                  redpanda_migrator_offsets:
+                  legacy_redpanda_migrator_offsets:
                     seed_brokers: [ "127.0.0.1:9092" ]
                     topics: [ "foobar" ]
                     poll_interval: "15s"
@@ -242,14 +242,14 @@ tests:
       broker:
         inputs:
           - label: redpanda_migrator_bundle_redpanda_migrator_input
-            redpanda_migrator:
+            legacy_redpanda_migrator:
               seed_brokers: [ "127.0.0.1:9092" ]
               topics: [ "foobar" ]
               consumer_group: "migrator"
             processors:
               - mapping: meta input_label = "redpanda_migrator_input"
           - label: redpanda_migrator_bundle_redpanda_migrator_offsets_input
-            redpanda_migrator_offsets:
+            legacy_redpanda_migrator_offsets:
               seed_brokers: [ "127.0.0.1:9092" ]
               topics: [ "foobar" ]
               poll_interval: "15s"

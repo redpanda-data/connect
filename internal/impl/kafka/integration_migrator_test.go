@@ -178,13 +178,13 @@ func (m *migratorPipeline) Cleanup(t *testing.T) {
 func runOffsetsMigratorPipeline(t *testing.T, src, dst redpandatest.RedpandaEndpoints, topic string) *migratorPipeline {
 	yamlStr := fmt.Sprintf(`
 input:
-  redpanda_migrator_offsets:
+  legacy_redpanda_migrator_offsets:
     seed_brokers: [ %s ]
     topics: [ %s ]
     poll_interval: 2s
 
 output:
-  redpanda_migrator_offsets:
+  legacy_redpanda_migrator_offsets:
     seed_brokers: [ %s ]
 `, src.BrokerAddr, topic, dst.BrokerAddr)
 
