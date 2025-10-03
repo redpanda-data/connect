@@ -57,8 +57,8 @@ func redpandaMigratorOutputSpec() *service.ConfigSpec {
 		Description(`
 Writes a batch of messages to a Kafka broker and waits for acknowledgement before propagating it back to the input.
 
-This output should be used in combination with a `+"`legacy_redpanda_migrator`"+` input identified by the label specified in
-`+"`input_resource`"+` which it can query for topic and ACL configurations. Once connected, the output will attempt to
+This output should be used in combination with a ` + "`legacy_redpanda_migrator`" + ` input identified by the label specified in
+` + "`input_resource`" + ` which it can query for topic and ACL configurations. Once connected, the output will attempt to
 create all topics which the input consumes from along with their ACLs.
 
 If the configured broker does not contain the current message topic, this output attempts to create it along with its
@@ -66,24 +66,12 @@ ACLs.
 
 ACL migration adheres to the following principles:
 
-- `+"`ALLOW WRITE`"+` ACLs for topics are not migrated
-- `+"`ALLOW ALL`"+` ACLs for topics are downgraded to `+"`ALLOW READ`"+`
+- ` + "`ALLOW WRITE`" + ` ACLs for topics are not migrated
+- ` + "`ALLOW ALL`" + ` ACLs for topics are downgraded to ` + "`ALLOW READ`" + `
 - Only topic ACLs are migrated, group ACLs are not migrated
 `).
 		Fields(redpandaMigratorOutputConfigFields()...).
-		LintRule(FranzWriterConfigLints()).
-		Example("Transfer data", "Writes messages to the configured broker and creates topics and topic ACLs if they don't exist. It also ensures that the message order is preserved.", `
-output:
-  legacy_redpanda_migrator:
-    seed_brokers: [ "127.0.0.1:9093" ]
-    topic: ${! metadata("kafka_topic").or(throw("missing kafka_topic metadata")) }
-    key: ${! metadata("kafka_key") }
-    partitioner: manual
-    partition: ${! metadata("kafka_partition").or(throw("missing kafka_partition metadata")) }
-    timestamp_ms: ${! metadata("kafka_timestamp_ms").or(timestamp_unix_milli()) }
-    input_resource: redpanda_migrator_input
-    max_in_flight: 1
-`)
+		LintRule(FranzWriterConfigLints())
 }
 
 func redpandaMigratorOutputConfigFields() []*service.ConfigField {
