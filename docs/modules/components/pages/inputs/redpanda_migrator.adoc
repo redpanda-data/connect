@@ -424,6 +424,15 @@ Allows you to specify a custom endpoint for the AWS API.
 *Type*: `string`
 
 
+=== `sasl[].aws.tcp_user_timeout`
+
+Linux-specific TCP_USER_TIMEOUT for more fine grained connection stalling detection. How long to wait for acknowledgment of transmitted data on an established conenction before killing the connection. Only applies to connections in ESTAB state. Set to 0 (default) to disable.
+
+
+*Type*: `string`
+
+*Default*: `"0s"`
+
 === `sasl[].aws.credentials`
 
 Optional manual configuration of AWS credentials to use. More information can be found in xref:guides:cloud/aws.adoc[].

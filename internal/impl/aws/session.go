@@ -51,6 +51,13 @@ func GetSession(ctx context.Context, parsedConf *service.ParsedConfig, opts ...f
 			id, secret, token,
 		)))
 	}
+	// check if tcp_user_timeout is set.
+	// Note: this setting only applies to linux. It will build
+	// with the http_client_linux.go file, otherwise, if another OS is being used
+	// then this setting won't do anything.
+	if httpClient := httpClientFromConfig(parsedConf); httpClient != nil {
+		opts = append(opts, config.WithHTTPClient(httpClient))
+	}
 
 	conf, err := config.LoadDefaultConfig(ctx, opts...)
 	if err != nil {
@@ -78,5 +85,6 @@ func GetSession(ctx context.Context, parsedConf *service.ParsedConfig, opts ...f
 	if useEC2, _ := credsConf.FieldBool("from_ec2_role"); useEC2 {
 		conf.Credentials = aws.NewCredentialsCache(ec2rolecreds.New())
 	}
+
 	return conf, nil
 }
