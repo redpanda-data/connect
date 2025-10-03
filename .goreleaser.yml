@@ -57,10 +57,9 @@ builds:
     hooks:
       post:
         - cmd: ./resources/scripts/fips_patchelf.sh "{{ .Path }}"
-    tool: 'microsoft-go'
     env:
-      - GOEXPERIMENT=systemcrypto
       - CGO_ENABLED=1
+      - PATH={{ .Env.RUNNER_TEMP }}/microsoft/go/bin:{{ .Env.PATH }}
     ldflags:
       -s -w
       -X main.Version={{.Version}}
