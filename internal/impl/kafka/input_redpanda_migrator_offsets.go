@@ -54,7 +54,7 @@ func redpandaMigratorOffsetsInputConfig() *service.ConfigSpec {
 		Version("4.45.0").
 		Summary(`Redpanda Migrator consumer group offsets input using the https://github.com/twmb/franz-go[Franz Kafka client library^].`).
 		Description(`
-This input reads consumer group updates via the ` + "`OffsetFetch`" + ` API and should be used in combination with the ` + "`redpanda_migrator_offsets`" + ` output.
+This input reads consumer group updates via the ` + "`OffsetFetch`" + ` API and should be used in combination with the ` + "`legacy_redpanda_migrator_offsets`" + ` output.
 
 == Metadata
 
@@ -107,7 +107,7 @@ A list of topics to consume from. Multiple comma separated topics can be listed 
 }
 
 func init() {
-	service.MustRegisterInput("redpanda_migrator_offsets", redpandaMigratorOffsetsInputConfig(),
+	service.MustRegisterInput("legacy_redpanda_migrator_offsets", redpandaMigratorOffsetsInputConfig().Deprecated(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
 			clientOpts, err := FranzConnectionOptsFromConfig(conf, mgr.Logger())
 			if err != nil {

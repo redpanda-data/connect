@@ -43,7 +43,7 @@ func redpandaMigratorInputConfig() *service.ConfigSpec {
 		Description(`
 Reads a batch of messages from a Kafka broker and waits for the output to acknowledge the writes before updating the Kafka consumer group offset.
 
-This input should be used in combination with a ` + "`redpanda_migrator`" + ` output.
+This input should be used in combination with a ` + "`legacy_redpanda_migrator`" + ` output.
 
 When a consumer group is specified this input consumes one or more topics where partitions will automatically balance across any other connected clients with the same consumer group. When a consumer group is not specified topics can either be consumed in their entirety or with explicit partitions.
 
@@ -113,7 +113,7 @@ func redpandaMigratorInputConfigFields() []*service.ConfigField {
 }
 
 func init() {
-	service.MustRegisterBatchInput("redpanda_migrator", redpandaMigratorInputConfig(),
+	service.MustRegisterBatchInput("legacy_redpanda_migrator", redpandaMigratorInputConfig().Deprecated(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
 			tmpOpts, err := FranzConnectionOptsFromConfig(conf, mgr.Logger())
 			if err != nil {

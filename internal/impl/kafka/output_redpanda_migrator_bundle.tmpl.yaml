@@ -123,14 +123,14 @@ mapping: |
           - check: metadata("input_label") == "redpanda_migrator_input"
             output:
               label: %s_redpanda_migrator_output
-              redpanda_migrator: %s
+              legacy_redpanda_migrator: %s
               processors:
                 - mapping: |
                     meta input_label = deleted()
           - check: metadata("input_label") == "redpanda_migrator_offsets_input"
             output:
               label: %s_redpanda_migrator_offsets_output
-              redpanda_migrator_offsets: %s
+              legacy_redpanda_migrator_offsets: %s
           - check: metadata("input_label") == "schema_registry_input"
             output:
               fallback:
@@ -158,14 +158,14 @@ mapping: |
           - check: metadata("input_label") == "redpanda_migrator_input"
             output:
               label: %s_redpanda_migrator_output
-              redpanda_migrator: %s
+              legacy_redpanda_migrator: %s
               processors:
                 - mapping: |
                     meta input_label = deleted()
           - check: metadata("input_label") == "redpanda_migrator_offsets_input"
             output:
               label: %s_redpanda_migrator_offsets_output
-              redpanda_migrator_offsets: %s
+              legacy_redpanda_migrator_offsets: %s
     """.format($labelPrefix, $redpandaMigrator.string(), $labelPrefix, $redpandaMigratorOffsets.string()).parse_yaml()
   }
 
@@ -186,7 +186,7 @@ tests:
           - check: metadata("input_label") == "redpanda_migrator_input"
             output:
               label: redpanda_migrator_bundle_redpanda_migrator_output
-              redpanda_migrator:
+              legacy_redpanda_migrator:
                 key: ${! metadata("kafka_key") }
                 max_in_flight: 1
                 partition: ${! metadata("kafka_partition").or(throw("missing kafka_partition metadata")) }
@@ -208,7 +208,7 @@ tests:
           - check: metadata("input_label") == "redpanda_migrator_offsets_input"
             output:
               label: redpanda_migrator_bundle_redpanda_migrator_offsets_output
-              redpanda_migrator_offsets:
+              legacy_redpanda_migrator_offsets:
                 seed_brokers:
                   - 127.0.0.1:9092
                 offset_topic_prefix: "dest."
@@ -252,7 +252,7 @@ tests:
           - check: metadata("input_label") == "redpanda_migrator_input"
             output:
               label: redpanda_migrator_bundle_redpanda_migrator_output
-              redpanda_migrator:
+              legacy_redpanda_migrator:
                 key: ${! metadata("kafka_key") }
                 max_in_flight: 1
                 partition: ${! metadata("kafka_partition").or(throw("missing kafka_partition metadata")) }
@@ -274,7 +274,7 @@ tests:
           - check: metadata("input_label") == "redpanda_migrator_offsets_input"
             output:
               label: redpanda_migrator_bundle_redpanda_migrator_offsets_output
-              redpanda_migrator_offsets:
+              legacy_redpanda_migrator_offsets:
                 seed_brokers:
                   - 127.0.0.1:9092
                 offset_topic_prefix: "dest."
@@ -317,7 +317,7 @@ tests:
           - check: metadata("input_label") == "redpanda_migrator_input"
             output:
               label: redpanda_migrator_bundle_redpanda_migrator_output
-              redpanda_migrator:
+              legacy_redpanda_migrator:
                 key: ${! metadata("kafka_key") }
                 max_in_flight: 1
                 partition: ${! metadata("kafka_partition").or(throw("missing kafka_partition metadata")) }
@@ -338,7 +338,7 @@ tests:
           - check: metadata("input_label") == "redpanda_migrator_offsets_input"
             output:
               label: redpanda_migrator_bundle_redpanda_migrator_offsets_output
-              redpanda_migrator_offsets:
+              legacy_redpanda_migrator_offsets:
                 seed_brokers:
                   - 127.0.0.1:9092
           - check: metadata("input_label") == "schema_registry_input"
@@ -376,7 +376,7 @@ tests:
           - check: metadata("input_label") == "redpanda_migrator_input"
             output:
               label: redpanda_migrator_bundle_redpanda_migrator_output
-              redpanda_migrator:
+              legacy_redpanda_migrator:
                 key: ${! metadata("kafka_key") }
                 max_in_flight: 1
                 partition: ${! metadata("kafka_partition").or(throw("missing kafka_partition metadata")) }
@@ -396,6 +396,6 @@ tests:
           - check: metadata("input_label") == "redpanda_migrator_offsets_input"
             output:
               label: redpanda_migrator_bundle_redpanda_migrator_offsets_output
-              redpanda_migrator_offsets:
+              legacy_redpanda_migrator_offsets:
                 seed_brokers:
                   - 127.0.0.1:9092
