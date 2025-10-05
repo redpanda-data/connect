@@ -54,6 +54,7 @@ metrics:
     flush_period: 100ms
     region: "" # No default (optional)
     endpoint: "" # No default (optional)
+    tcp_user_timeout: 0s
     credentials:
       profile: "" # No default (optional)
       id: "" # No default (optional)
@@ -123,6 +124,15 @@ Allows you to specify a custom endpoint for the AWS API.
 
 *Type*: `string`
 
+
+=== `tcp_user_timeout`
+
+Linux-specific TCP_USER_TIMEOUT for more fine grained connection stalling detection. How long to wait for acknowledgment of transmitted data on an established conenction before killing the connection. Only applies to connections in ESTAB state. Set to 0 (default) to disable.
+
+
+*Type*: `string`
+
+*Default*: `"0s"`
 
 === `credentials`
 
