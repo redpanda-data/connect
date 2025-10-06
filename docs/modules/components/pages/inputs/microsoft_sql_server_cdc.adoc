@@ -44,8 +44,8 @@ input:
     snapshot_max_batch_size: 1000
     include: [] # No default (required)
     exclude: [] # No default (optional)
-    checkpoint_cache: "" # No default (required)
-    checkpoint_key: microsoft_sql_server_cdc
+    checkpoint_cache: "" # No default (optional)
+    checkpoint_cache_key: microsoft_sql_server_cdc
     checkpoint_limit: 1024
     stream_backoff_interval: 5s
     auto_replay_nacks: true
@@ -71,8 +71,8 @@ input:
     snapshot_max_batch_size: 1000
     include: [] # No default (required)
     exclude: [] # No default (optional)
-    checkpoint_cache: "" # No default (required)
-    checkpoint_key: microsoft_sql_server_cdc
+    checkpoint_cache: "" # No default (optional)
+    checkpoint_cache_key: microsoft_sql_server_cdc
     checkpoint_limit: 1024
     stream_backoff_interval: 5s
     auto_replay_nacks: true
@@ -168,7 +168,7 @@ A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache r
 *Type*: `string`
 
 
-=== `checkpoint_key`
+=== `checkpoint_cache_key`
 
 The key to use to store the snapshot position in `checkpoint_cache`. An alternative key can be provided if multiple CDC inputs share the same cache.
 

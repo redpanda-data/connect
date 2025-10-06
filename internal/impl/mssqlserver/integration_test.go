@@ -33,186 +33,301 @@ import (
 
 func TestIntegration_MicrosoftSQLServerCDC_SnapshotAndStreaming(t *testing.T) {
 	integration.CheckSkip(t)
-	t.Parallel()
 
-	connStr, db := setupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
+	t.Run("With Default SQL Server Cache", func(t *testing.T) {
+		t.Parallel()
 
-	// Create tables
-	err := db.createTableWithCDCEnabledIfNotExists(t.Context(), "test.foo", "CREATE TABLE test.foo (a INT PRIMARY KEY);")
-	require.NoError(t, err)
+		// Create tables
+		connStr, db := setupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
+		require.NoError(t, db.createTableWithCDCEnabledIfNotExists(t.Context(), "test.foo", "CREATE TABLE test.foo (id INT IDENTITY(1,1) PRIMARY KEY);"))
+		require.NoError(t, db.createTableWithCDCEnabledIfNotExists(t.Context(), "dbo.foo", "CREATE TABLE dbo.foo (id INT IDENTITY(1,1) PRIMARY KEY);"))
+		require.NoError(t, db.createTableWithCDCEnabledIfNotExists(t.Context(), "dbo.bar", "CREATE TABLE dbo.bar (id INT IDENTITY(1,1) PRIMARY KEY);"))
 
-	err = db.createTableWithCDCEnabledIfNotExists(t.Context(), "dbo.foo", "CREATE TABLE dbo.foo (a INT PRIMARY KEY);")
-	require.NoError(t, err)
+		// Insert 3000 rows across tables for initial snapshot streaming
+		want := 3000
+		for range 1000 {
+			db.MustExec("INSERT INTO test.foo DEFAULT VALUES")
+			db.MustExec("INSERT INTO dbo.foo DEFAULT VALUES")
+			db.MustExec("INSERT INTO dbo.bar DEFAULT VALUES")
+		}
 
-	err = db.createTableWithCDCEnabledIfNotExists(t.Context(), "dbo.bar", "CREATE TABLE dbo.bar (a INT PRIMARY KEY);")
-	require.NoError(t, err)
+		// wait for changes to propagate to change tables
+		time.Sleep(5 * time.Second)
 
-	// Insert 3000 rows across tables for initial snapshot streaming
-	for i := range 1000 {
-		db.MustExec("INSERT INTO test.foo VALUES (?)", i)
-		db.MustExec("INSERT INTO dbo.foo VALUES (?)", i)
-		db.MustExec("INSERT INTO dbo.bar VALUES (?)", i)
-	}
+		var (
+			outBatches   []string
+			outBatchesMu sync.Mutex
+			stream       *service.Stream
+			err          error
+		)
+		t.Log("Lauching component...")
+		{
+			cfg := `
+microsoft_sql_server_cdc:
+  connection_string: %s
+  stream_snapshot: true
+  snapshot_max_batch_size: 10
+  include: ["test.foo", "dbo.foo", "dbo.bar"]
+  exclude: ["dbo.doesnotexist"]`
 
-	template := fmt.Sprintf(`
+			streamBuilder := service.NewStreamBuilder()
+			require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
+			// require.NoError(t, streamBuilder.SetLoggerYAML(`level: DEBUG`))
+
+			require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+				msgBytes, err := mb[0].AsBytes()
+				require.NoError(t, err)
+				outBatchesMu.Lock()
+				outBatches = append(outBatches, string(msgBytes))
+				outBatchesMu.Unlock()
+				return nil
+			}))
+
+			stream, err = streamBuilder.Build()
+			require.NoError(t, err)
+			license.InjectTestService(stream.Resources())
+
+			go func() {
+				err = stream.Run(t.Context())
+				require.NoError(t, err)
+			}()
+
+			t.Log("Verifying snapshot changes...")
+			assert.Eventually(t, func() bool {
+				outBatchesMu.Lock()
+				defer outBatchesMu.Unlock()
+
+				got := len(outBatches)
+				if got > want {
+					t.Fatalf("Wanted %d snapshot messages but got %d", want, got)
+				}
+				return got == want
+			}, time.Minute*5, time.Second*1)
+		}
+
+		t.Log("Verifying streaming changes...")
+		{
+			// insert 3000 more for streaming changes
+			for range 1000 {
+				db.MustExec("INSERT INTO test.foo DEFAULT VALUES")
+				db.MustExec("INSERT INTO dbo.foo DEFAULT VALUES")
+				db.MustExec("INSERT INTO dbo.bar DEFAULT VALUES")
+			}
+
+			outBatches = nil
+			assert.Eventually(t, func() bool {
+				outBatchesMu.Lock()
+				defer outBatchesMu.Unlock()
+
+				got := len(outBatches)
+				if got > want {
+					t.Fatalf("Wanted %d streaming changes but got %d", want, got)
+				}
+				return got == want
+			}, time.Minute*5, time.Second*1)
+
+		}
+
+		require.NoError(t, stream.StopWithin(time.Second*10))
+	})
+
+	t.Run("With Cache Component", func(t *testing.T) {
+		t.Parallel()
+
+		// Create tables
+		connStr, db := setupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
+		require.NoError(t, db.createTableWithCDCEnabledIfNotExists(t.Context(), "test.foo", "CREATE TABLE test.foo (id INT IDENTITY(1,1) PRIMARY KEY);"))
+		require.NoError(t, db.createTableWithCDCEnabledIfNotExists(t.Context(), "dbo.foo", "CREATE TABLE dbo.foo (id INT IDENTITY(1,1) PRIMARY KEY);"))
+		require.NoError(t, db.createTableWithCDCEnabledIfNotExists(t.Context(), "dbo.bar", "CREATE TABLE dbo.bar (id INT IDENTITY(1,1) PRIMARY KEY);"))
+
+		// Insert 3000 rows across tables for initial snapshot streaming
+		want := 3000
+		for range 1000 {
+			db.MustExec("INSERT INTO test.foo DEFAULT VALUES")
+			db.MustExec("INSERT INTO dbo.foo DEFAULT VALUES")
+			db.MustExec("INSERT INTO dbo.bar DEFAULT VALUES")
+		}
+
+		// wait for changes to propagate to change tables
+		time.Sleep(5 * time.Second)
+
+		var (
+			outBatches   []string
+			outBatchesMu sync.Mutex
+			stream       *service.Stream
+			err          error
+		)
+		t.Log("Lauching component...")
+		{
+			cfg := `
 microsoft_sql_server_cdc:
   connection_string: %s
   stream_snapshot: true
   snapshot_max_batch_size: 10
   include: ["test.foo", "dbo.foo", "dbo.bar"]
   exclude: ["dbo.doesnotexist"]
-  checkpoint_cache: "foocache"
-`, connStr)
+  checkpoint_cache: "foocache"`
 
-	cacheConf := fmt.Sprintf(`
+			cacheConf := fmt.Sprintf(`
 label: foocache
 file:
   directory: %s`, t.TempDir())
 
-	streamOutBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: DEBUG`))
-	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
-	require.NoError(t, streamOutBuilder.AddInputYAML(template))
+			streamBuilder := service.NewStreamBuilder()
+			require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
+			require.NoError(t, streamBuilder.AddCacheYAML(cacheConf))
+			// require.NoError(t, streamBuilder.SetLoggerYAML(`level: DEBUG`))
 
-	var outBatches []string
-	var outBatchMut sync.Mutex
-	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-		msgBytes, err := mb[0].AsBytes()
-		require.NoError(t, err)
-		outBatchMut.Lock()
-		outBatches = append(outBatches, string(msgBytes))
-		outBatchMut.Unlock()
-		return nil
-	}))
+			require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+				msgBytes, err := mb[0].AsBytes()
+				require.NoError(t, err)
+				outBatchesMu.Lock()
+				outBatches = append(outBatches, string(msgBytes))
+				outBatchesMu.Unlock()
+				return nil
+			}))
 
-	streamOut, err := streamOutBuilder.Build()
-	require.NoError(t, err)
-	license.InjectTestService(streamOut.Resources())
+			stream, err = streamBuilder.Build()
+			require.NoError(t, err)
+			license.InjectTestService(stream.Resources())
 
-	go func() {
-		err = streamOut.Run(t.Context())
-		require.NoError(t, err)
-	}()
+			go func() {
+				err = stream.Run(t.Context())
+				require.NoError(t, err)
+			}()
 
-	// insert 3000 more for streaming changes
-	time.Sleep(time.Second * 5)
-	for i := 1000; i < 2000; i++ {
-		db.MustExec("INSERT INTO test.foo VALUES (?)", i)
-		db.MustExec("INSERT INTO dbo.foo VALUES (?)", i)
-		db.MustExec("INSERT INTO dbo.bar VALUES (?)", i)
-	}
+			t.Log("Verifying snapshot changes...")
+			assert.Eventually(t, func() bool {
+				outBatchesMu.Lock()
+				defer outBatchesMu.Unlock()
 
-	want := 6000
-	assert.Eventually(t, func() bool {
-		outBatchMut.Lock()
-		defer outBatchMut.Unlock()
+				got := len(outBatches)
+				if got > want {
+					t.Fatalf("Wanted %d snapshot changes but got %d", want, got)
+				}
+				return got == want
+			}, time.Minute*5, time.Second*1)
+		}
 
-		got := len(outBatches)
-		t.Logf("found %d messages of %d", got, want)
-		return got == want
-	}, time.Minute*5, time.Second*1)
+		t.Log("Verifying streaming changes...")
+		{
+			// insert 3000 more for streaming changes
+			for range 1000 {
+				db.MustExec("INSERT INTO test.foo DEFAULT VALUES")
+				db.MustExec("INSERT INTO dbo.foo DEFAULT VALUES")
+				db.MustExec("INSERT INTO dbo.bar DEFAULT VALUES")
+			}
 
-	require.NoError(t, streamOut.StopWithin(time.Second*10))
+			outBatches = nil
+			assert.Eventually(t, func() bool {
+				outBatchesMu.Lock()
+				defer outBatchesMu.Unlock()
+
+				got := len(outBatches)
+				if got > want {
+					t.Fatalf("Wanted %d streaming changes but got %d", want, got)
+				}
+				return got == want
+			}, time.Minute*5, time.Second*1)
+
+		}
+
+		require.NoError(t, stream.StopWithin(time.Second*10))
+	})
 }
 
 func TestIntegration_MicrosoftSQLServerCDC_ResumesFromCheckpoint(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	connStr, db := setupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
-
 	// Create table
-	err := db.createTableWithCDCEnabledIfNotExists(t.Context(), "test.foo", `CREATE TABLE test.foo (a INT PRIMARY KEY);`)
-	require.NoError(t, err)
+	connStr, db := setupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
+	require.NoError(t, db.createTableWithCDCEnabledIfNotExists(t.Context(), "test.foo", "CREATE TABLE test.foo (id INT IDENTITY(1,1) PRIMARY KEY);"))
 
-	template := fmt.Sprintf(`
+	cfg := `
 microsoft_sql_server_cdc:
   connection_string: %s
   stream_snapshot: false
-  include: ["test.foo"]
-  checkpoint_cache: "foocache"
-`, connStr)
+  include: ["test.foo"]`
 
-	cacheConf := fmt.Sprintf(`
-label: foocache
-file:
-  directory: %s`, t.TempDir())
+	streamBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
 
-	streamOutBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: INFO`))
-	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
-	require.NoError(t, streamOutBuilder.AddInputYAML(template))
+	var (
+		outBatches   []string
+		outBatchesMu sync.Mutex
+	)
 
-	var outBatches []string
-	var outBatchMut sync.Mutex
-	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-		msgBytes, err := mb[0].AsBytes()
+	t.Log("Lauching component to stream initial data...")
+	{
+		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+			msgBytes, err := mb[0].AsBytes()
+			require.NoError(t, err)
+			outBatchesMu.Lock()
+			outBatches = append(outBatches, string(msgBytes))
+			outBatchesMu.Unlock()
+			return nil
+		}))
+
+		stream, err := streamBuilder.Build()
 		require.NoError(t, err)
-		outBatchMut.Lock()
-		outBatches = append(outBatches, string(msgBytes))
-		outBatchMut.Unlock()
-		return nil
-	}))
+		license.InjectTestService(stream.Resources())
 
-	streamOut, err := streamOutBuilder.Build()
-	require.NoError(t, err)
-	license.InjectTestService(streamOut.Resources())
+		// --- launch input and insert initial rows for consumption
+		for range 1000 {
+			db.MustExec("INSERT INTO test.foo DEFAULT VALUES")
+		}
+		go func() {
+			require.NoError(t, stream.Run(t.Context()))
+		}()
 
-	// --- launch input and insert initial rows for consumption
-	for i := range 1000 {
-		db.MustExec("INSERT INTO test.foo VALUES (?)", i)
-	}
-	go func() {
-		require.NoError(t, streamOut.Run(t.Context()))
-	}()
+		time.Sleep(time.Second * 5)
 
-	time.Sleep(time.Second * 5)
-
-	assert.Eventually(t, func() bool {
-		outBatchMut.Lock()
-		defer outBatchMut.Unlock()
-		return len(outBatches) == 1000
-	}, time.Minute*5, time.Millisecond*100)
-
-	// --- stop initial input and then insert more rows
-	require.NoError(t, streamOut.StopWithin(time.Second*10))
-	for i := 1000; i < 2000; i++ {
-		db.MustExec("INSERT INTO test.foo VALUES (?)", i)
+		assert.Eventually(t, func() bool {
+			outBatchesMu.Lock()
+			defer outBatchesMu.Unlock()
+			return len(outBatches) == 1000
+		}, time.Minute*5, time.Millisecond*100)
+		require.NoError(t, stream.StopWithin(time.Second*10))
 	}
 
-	// --- relaunched input should load checkpoint
-	streamOutResume, err := streamOutBuilder.Build()
-	require.NoError(t, err)
-	license.InjectTestService(streamOutResume.Resources())
-	go func() {
-		require.NoError(t, streamOutResume.Run(t.Context()))
-	}()
+	t.Log("Relaunching component to resume from checkpoint...")
+	{
+		// --- now stopped, insert more rows
+		for range 1000 {
+			db.MustExec("INSERT INTO test.foo DEFAULT VALUES")
+		}
 
-	assert.Eventually(t, func() bool {
-		outBatchMut.Lock()
-		defer outBatchMut.Unlock()
-		return len(outBatches) == 2000
-	}, time.Minute*5, time.Millisecond*100)
+		streamResume, err := streamBuilder.Build()
+		require.NoError(t, err)
+		license.InjectTestService(streamResume.Resources())
+		go func() {
+			require.NoError(t, streamResume.Run(t.Context()))
+		}()
 
-	require.Contains(t, outBatches[len(outBatches)-1], "1999")
-	require.NoError(t, streamOutResume.StopWithin(time.Second*10))
+		assert.Eventually(t, func() bool {
+			outBatchesMu.Lock()
+			defer outBatchesMu.Unlock()
+			return len(outBatches) == 2000
+		}, time.Minute*5, time.Millisecond*100)
+
+		require.Contains(t, outBatches[len(outBatches)-1], "2000")
+		require.NoError(t, streamResume.StopWithin(time.Second*10))
+	}
 }
 
 func TestIntegration_MicrosoftSQLServerCDC_OrderingOfIterator(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	connStr, db := setupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
-
 	// Create table
-	err := db.createTableWithCDCEnabledIfNotExists(t.Context(), "dbo.foo", `CREATE TABLE dbo.foo (a INT PRIMARY KEY);`)
-	require.NoError(t, err)
-	err = db.createTableWithCDCEnabledIfNotExists(t.Context(), "boo.bar", `CREATE TABLE boo.bar (b INT PRIMARY KEY);`)
-	require.NoError(t, err)
+	connStr, db := setupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
+	require.NoError(t, db.createTableWithCDCEnabledIfNotExists(t.Context(), "dbo.foo", `CREATE TABLE dbo.foo (a INT PRIMARY KEY);`))
+	require.NoError(t, db.createTableWithCDCEnabledIfNotExists(t.Context(), "boo.bar", `CREATE TABLE boo.bar (b INT PRIMARY KEY);`))
 
 	// Data across change tables will have the same LSN but unique
 	// command IDs (and in rare cases sequence values that are harder to test)
-	_, err = db.Exec(`
+	_, err := db.Exec(`
 	BEGIN TRANSACTION
 	DECLARE @i INT = 1;
 	WHILE @i <= 10
@@ -224,47 +339,38 @@ func TestIntegration_MicrosoftSQLServerCDC_OrderingOfIterator(t *testing.T) {
 	COMMIT TRANSACTION`)
 	require.NoError(t, err)
 
-	template := fmt.Sprintf(`
+	cfg := `
 microsoft_sql_server_cdc:
   connection_string: %s
   stream_snapshot: false
-  include: ["dbo.foo", "boo.bar"]
-  checkpoint_cache: "foocache"
-`, connStr)
+  include: ["dbo.foo", "boo.bar"]`
 
-	cacheConf := fmt.Sprintf(`
-label: foocache
-file:
-  directory: %s`, t.TempDir())
-
-	streamOutBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: INFO`))
-	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
-	require.NoError(t, streamOutBuilder.AddInputYAML(template))
+	streamBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
 
 	var outBatches []string
-	var outBatchMut sync.Mutex
-	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+	var outBatchesMu sync.Mutex
+	require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 		msgBytes, err := mb[0].AsBytes()
 		require.NoError(t, err)
-		outBatchMut.Lock()
+		outBatchesMu.Lock()
 		outBatches = append(outBatches, string(msgBytes))
-		outBatchMut.Unlock()
+		outBatchesMu.Unlock()
 		return nil
 	}))
 
-	streamOut, err := streamOutBuilder.Build()
+	stream, err := streamBuilder.Build()
 	require.NoError(t, err)
-	license.InjectTestService(streamOut.Resources())
+	license.InjectTestService(stream.Resources())
 
 	go func() {
-		err = streamOut.Run(t.Context())
+		err = stream.Run(t.Context())
 		require.NoError(t, err)
 	}()
 
 	assert.Eventually(t, func() bool {
-		outBatchMut.Lock()
-		defer outBatchMut.Unlock()
+		outBatchesMu.Lock()
+		defer outBatchesMu.Unlock()
 		return len(outBatches) == 20
 	}, time.Minute*5, time.Millisecond*100)
 
@@ -274,7 +380,7 @@ file:
 		want = append(want, fmt.Sprintf(`{"b":%d}`, i))
 	}
 	require.Equal(t, want, outBatches, "Order of output does not match expected")
-	require.NoError(t, streamOut.StopWithin(time.Second*10))
+	require.NoError(t, stream.StopWithin(time.Second*10))
 }
 
 func TestIntegration_MicrosoftSQLServerCDC_AllTypes(t *testing.T) {
@@ -283,66 +389,65 @@ func TestIntegration_MicrosoftSQLServerCDC_AllTypes(t *testing.T) {
 
 	connStr, db := setupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
 	q := `
-CREATE TABLE dbo.all_data_types (
-    -- Numeric Data Types
-    tinyint_col       TINYINT        PRIMARY KEY,   -- 0 to 255
-    smallint_col      SMALLINT,                     -- -32,768 to 32,767
-    int_col           INT,                          -- -2,147,483,648 to 2,147,483,647
-    bigint_col        BIGINT,                       -- -9e18 to 9e18
-    decimal_col       DECIMAL(38, 10),              -- arbitrary precision
-    numeric_col       NUMERIC(20, 5),               -- alias of DECIMAL
-    float_col         FLOAT(53),                    -- double precision
-    real_col          REAL,                         -- single precision
+	CREATE TABLE dbo.all_data_types (
+		-- Numeric Data Types
+		tinyint_col       TINYINT        PRIMARY KEY,   -- 0 to 255
+		smallint_col      SMALLINT,                     -- -32,768 to 32,767
+		int_col           INT,                          -- -2,147,483,648 to 2,147,483,647
+		bigint_col        BIGINT,                       -- -9e18 to 9e18
+		decimal_col       DECIMAL(38, 10),              -- arbitrary precision
+		numeric_col       NUMERIC(20, 5),               -- alias of DECIMAL
+		float_col         FLOAT(53),                    -- double precision
+		real_col          REAL,                         -- single precision
 
-    -- Date and Time Data Types
-    date_col          DATE,
-    datetime_col      DATETIME,                     -- 1753-01-01 through 9999-12-31
-    datetime2_col     DATETIME2(7),                 -- 0001-01-01 through 9999-12-31
-    smalldatetime_col SMALLDATETIME,                -- 1900-01-01 through 2079-06-06
-    time_col          TIME(7),
-    datetimeoffset_col DATETIMEOFFSET(7),           -- includes time zone offset
+		-- Date and Time Data Types
+		date_col          DATE,
+		datetime_col      DATETIME,                     -- 1753-01-01 through 9999-12-31
+		datetime2_col     DATETIME2(7),                 -- 0001-01-01 through 9999-12-31
+		smalldatetime_col SMALLDATETIME,                -- 1900-01-01 through 2079-06-06
+		time_col          TIME(7),
+		datetimeoffset_col DATETIMEOFFSET(7),           -- includes time zone offset
 
-    -- Character Data Types
-    char_col          CHAR(10),
-    varchar_col       VARCHAR(255),
-    nchar_col         NCHAR(10),                    -- Unicode fixed-length
-    nvarchar_col      NVARCHAR(255),                -- Unicode variable-length
+		-- Character Data Types
+		char_col          CHAR(10),
+		varchar_col       VARCHAR(255),
+		nchar_col         NCHAR(10),                    -- Unicode fixed-length
+		nvarchar_col      NVARCHAR(255),                -- Unicode variable-length
 
-    -- Binary Data Types
-    binary_col        BINARY(16),
-    varbinary_col     VARBINARY(255),
+		-- Binary Data Types
+		binary_col        BINARY(16),
+		varbinary_col     VARBINARY(255),
 
-    -- Large Object Data Types
-    varcharmax_col    VARCHAR(MAX),
-    nvarcharmax_col   NVARCHAR(MAX),
-    varbinarymax_col  VARBINARY(MAX),
+		-- Large Object Data Types
+		varcharmax_col    VARCHAR(MAX),
+		nvarcharmax_col   NVARCHAR(MAX),
+		varbinarymax_col  VARBINARY(MAX),
 
-    -- Other Data Types
-    bit_col           BIT,                          -- Boolean-like (0,1,NULL)
-    xml_col           XML,
-    json_col          NVARCHAR(MAX)                -- SQL Server has no native JSON, stored as NVARCHAR
-);
-`
+		-- Other Data Types
+		bit_col           BIT,                          -- Boolean-like (0,1,NULL)
+		xml_col           XML,
+		json_col          NVARCHAR(MAX)                -- SQL Server has no native JSON, stored as NVARCHAR
+	);`
 	err := db.createTableWithCDCEnabledIfNotExists(t.Context(), "dbo.all_data_types", q)
 	require.NoError(t, err)
 
 	// insert min
 	allDataTypesQuery := `
-INSERT INTO dbo.all_data_types (
-    tinyint_col, smallint_col, int_col, bigint_col,
-    decimal_col, numeric_col, float_col, real_col,
-    date_col, datetime_col, datetime2_col, smalldatetime_col,
-    time_col, datetimeoffset_col, char_col, varchar_col,
-    nchar_col, nvarchar_col, binary_col, varbinary_col,
-    varcharmax_col, nvarcharmax_col, varbinarymax_col,
-    bit_col, xml_col, json_col
-) VALUES (
-    ?, ?, ?, ?,
-    ?, ?, ?, ?,
-    ?, ?, ?, ?,
-    ?, ?, ?, ?,
-    ?, ?, ?, ?,
-    ?, ?, ?, ?, ?, ?);`
+	INSERT INTO dbo.all_data_types (
+		tinyint_col, smallint_col, int_col, bigint_col,
+		decimal_col, numeric_col, float_col, real_col,
+		date_col, datetime_col, datetime2_col, smalldatetime_col,
+		time_col, datetimeoffset_col, char_col, varchar_col,
+		nchar_col, nvarchar_col, binary_col, varbinary_col,
+		varcharmax_col, nvarcharmax_col, varbinarymax_col,
+		bit_col, xml_col, json_col
+	) VALUES (
+		?, ?, ?, ?,
+		?, ?, ?, ?,
+		?, ?, ?, ?,
+		?, ?, ?, ?,
+		?, ?, ?, ?,
+		?, ?, ?, ?, ?, ?);`
 	_, err = db.ExecContext(t.Context(), allDataTypesQuery,
 		0,                    // tinyint min
 		-32768,               // smallint min
@@ -373,42 +478,33 @@ INSERT INTO dbo.all_data_types (
 	)
 	require.NoError(t, err, "Inserting snapshot test data to verify data types")
 
-	template := fmt.Sprintf(`
+	cfg := `
 microsoft_sql_server_cdc:
   connection_string: %s
   stream_snapshot: true
-  checkpoint_cache: "foocache"
   snapshot_max_batch_size: 100
-  include: ["all_data_types"]
-`, connStr)
+  include: ["all_data_types"]`
 
-	cacheConf := fmt.Sprintf(`
-label: foocache
-file:
-  directory: %s`, t.TempDir())
-
-	streamOutBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: DEBUG`))
-	require.NoError(t, streamOutBuilder.AddCacheYAML(cacheConf))
-	require.NoError(t, streamOutBuilder.AddInputYAML(template))
+	streamBuilder := service.NewStreamBuilder()
+	require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
 
 	var outBatches []string
-	var outBatchMut sync.Mutex
-	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+	var outBatchesMu sync.Mutex
+	require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 		msgBytes, err := mb[0].AsBytes()
 		require.NoError(t, err)
-		outBatchMut.Lock()
+		outBatchesMu.Lock()
 		outBatches = append(outBatches, string(msgBytes))
-		outBatchMut.Unlock()
+		outBatchesMu.Unlock()
 		return nil
 	}))
 
-	streamOut, err := streamOutBuilder.Build()
+	stream, err := streamBuilder.Build()
 	require.NoError(t, err)
-	license.InjectTestService(streamOut.Resources())
+	license.InjectTestService(stream.Resources())
 
 	go func() {
-		err = streamOut.Run(t.Context())
+		err = stream.Run(t.Context())
 		require.NoError(t, err)
 	}()
 
@@ -446,11 +542,11 @@ file:
 	require.NoError(t, err, "Inserting CDC test data to verify data types")
 
 	assert.Eventually(t, func() bool {
-		outBatchMut.Lock()
-		defer outBatchMut.Unlock()
+		outBatchesMu.Lock()
+		defer outBatchesMu.Unlock()
 		return len(outBatches) == 2
 	}, time.Second*30, time.Millisecond*100)
-	require.NoError(t, streamOut.StopWithin(time.Second*10))
+	require.NoError(t, stream.StopWithin(time.Second*10))
 
 	// assert min
 	require.JSONEq(t, `{
@@ -628,7 +724,7 @@ func Test_ManualTesting_AddTestDataWithUniqueLSN(t *testing.T) {
 	// Note: use this rather than above for much larger data sets, though they result in the same LSN
 	_, err = db.Exec(`
 	WITH Numbers AS (
-		SELECT TOP (5000000) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n
+		SELECT TOP (1000000) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n
 		FROM sys.all_objects a
 		CROSS JOIN sys.all_objects b
 	)
@@ -650,7 +746,7 @@ func Test_ManualTesting_AddTestDataWithUniqueLSN(t *testing.T) {
 	require.NoError(t, err)
 	_, err = db.Exec(`
 	WITH Numbers AS (
-		SELECT TOP (5000000) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n
+		SELECT TOP (1000000) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n
 		FROM sys.all_objects a
 		CROSS JOIN sys.all_objects b
 	)
@@ -665,7 +761,7 @@ func Test_ManualTesting_AddTestDataWithUniqueLSN(t *testing.T) {
 
 	_, err = db.Exec(`
 	WITH Numbers AS (
-		SELECT TOP (5000000) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n
+		SELECT TOP (1000000) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n
 		FROM sys.all_objects a
 		CROSS JOIN sys.all_objects b
 	)
