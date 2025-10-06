@@ -1,51 +1,23 @@
 version: '3'
 
-vars:
-  DOCKER_IMAGE: '{{default "docker.redpanda.com/redpandadata/connect" .DOCKER_IMAGE}}'
-
 tasks:
-  all:
-    desc: Build all Docker images
-    deps:
-      - main
-      - cloud
-      - ai
-
   redpanda-connect:
-    desc: Build main Docker image
-    requires:
-      vars:
-        - VERSION
-    vars:
-      DOCKERFILE: ./resources/docker/Dockerfile
+    desc: Build main Docker image using goreleaser for local development
+    aliases:
+      - main
     cmds:
-      - docker build -f {{.DOCKERFILE}} . -t {{.DOCKER_IMAGE}}:{{.VERSION}}{{.TAG_SUFFIX}}
-      - docker tag {{.DOCKER_IMAGE}}:{{.VERSION}}{{.TAG_SUFFIX}} {{.DOCKER_IMAGE}}:latest{{.TAG_SUFFIX}}
+      - goreleaser release --snapshot --clean --skip=archive,publish --config=.goreleaser.local/connect.yaml
 
   redpanda-connect-cloud:
-    desc: Build cloud Docker image
+    desc: Build cloud Docker image using goreleaser for local development
     aliases:
       - cloud
-    requires:
-      vars:
-        - VERSION
-    vars:
-      DOCKERFILE: ./resources/docker/Dockerfile.cloud
-      TAG_SUFFIX: '-cloud'
     cmds:
-      - docker build -f {{.DOCKERFILE}} . -t {{.DOCKER_IMAGE}}:{{.VERSION}}{{.TAG_SUFFIX}}
-      - docker tag {{.DOCKER_IMAGE}}:{{.VERSION}}{{.TAG_SUFFIX}} {{.DOCKER_IMAGE}}:latest{{.TAG_SUFFIX}}
+      - goreleaser release --snapshot --clean --skip=archive,publish --config=.goreleaser.local/connect-cloud.yaml
 
   redpanda-connect-ai:
-    desc: Build AI Docker image
+    desc: Build AI Docker image using goreleaser for local development
     aliases:
       - ai
-    requires:
-      vars:
-        - VERSION
-    vars:
-      DOCKERFILE: ./resources/docker/Dockerfile.ai
-      TAG_SUFFIX: '-ai'
     cmds:
-      - docker build -f {{.DOCKERFILE}} . -t {{.DOCKER_IMAGE}}:{{.VERSION}}{{.TAG_SUFFIX}}
-      - docker tag {{.DOCKER_IMAGE}}:{{.VERSION}}{{.TAG_SUFFIX}} {{.DOCKER_IMAGE}}:latest{{.TAG_SUFFIX}}
+      - goreleaser release --snapshot --clean --skip=archive,publish --config=.goreleaser.local/connect-ai.yaml
