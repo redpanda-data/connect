@@ -6,30 +6,17 @@
 #
 # https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
-FROM golang:1.25.1 AS build
+FROM debian:12-slim AS build
+ARG TARGETPLATFORM
 
-ENV CGO_ENABLED=0
-ENV GOOS=linux
+RUN apt-get update && apt-get install -y ca-certificates libcap2-bin
 RUN useradd -u 10001 connect
 
-RUN apt-get update && apt-get install -y libcap2-bin
-RUN go install github.com/go-task/task/v3/cmd/task@latest
-
-WORKDIR /go/src/github.com/redpanda-data/connect/
-# Update dependencies: On unchanged dependencies, cached layer will be reused
-COPY go.* /go/src/github.com/redpanda-data/connect/
-RUN go mod download
-
-# Build
-COPY . /go/src/github.com/redpanda-data/connect/
-# Tag timetzdata required for busybox base image:
-# https://github.com/benthosdev/benthos/issues/897
-RUN TAGS="timetzdata" task build:redpanda-connect-ai
-RUN setcap 'cap_sys_chroot=+ep' target/redpanda-connect-ai
+COPY $TARGETPLATFORM/redpanda-connect-ai /tmp/redpanda-connect-ai
+RUN setcap 'cap_sys_chroot=+ep' /tmp/redpanda-connect-ai
 
 RUN touch /tmp/keep
 
-# Pack
 FROM ollama/ollama AS package
 
 # Override the HOST from the ollama dockerfile
@@ -42,8 +29,8 @@ WORKDIR /
 
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /etc/passwd /etc/passwd
-COPY --from=build /go/src/github.com/redpanda-data/connect/target/redpanda-connect-ai ./redpanda-connect
-COPY ./config/docker.yaml /connect.yaml
+COPY --from=build /tmp/redpanda-connect-ai /redpanda-connect
+COPY config/docker.yaml /connect.yaml
 
 USER connect
 

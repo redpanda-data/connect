@@ -25,6 +25,8 @@ builds:
         goarch: arm
     env:
       - CGO_ENABLED=0
+    tags:
+      - timetzdata
     ldflags: >
       -s -w
       -X main.Version={{.Version}}
@@ -41,6 +43,8 @@ builds:
     goarch: [ amd64 ]
     env:
       - CGO_ENABLED=1
+    tags:
+      - timetzdata
     ldflags: >
       -X main.Version={{.Version}}
       -X main.DateBuilt={{.Date}}
@@ -60,6 +64,8 @@ builds:
     env:
       - CGO_ENABLED=1
       - PATH={{ .Env.RUNNER_TEMP }}/microsoft/go/bin:{{ .Env.PATH }}
+    tags:
+      - timetzdata
     ldflags:
       -s -w
       -X main.Version={{.Version}}
@@ -71,22 +77,41 @@ builds:
 
   - id: connect-cloud
     main: cmd/redpanda-connect-cloud/main.go
-    binary: redpanda-connect
-    goos: [ darwin, linux ]
+    binary: redpanda-connect-cloud
+    goos: [ linux ]
     goarch: [ amd64, arm64 ]
     env:
       - CGO_ENABLED=0
+    tags:
+      - timetzdata
     ldflags: >
       -s -w
       -X main.Version={{.Version}}
       -X main.DateBuilt={{.Date}}
       -X main.BinaryName=redpanda-connect
 
+  - id: connect-ai
+    main: cmd/redpanda-connect-ai/main.go
+    binary: redpanda-connect-ai
+    goos: [ linux ]
+    goarch: [ amd64, arm64 ]
+    env:
+      - CGO_ENABLED=0
+    tags:
+      - timetzdata
+    ldflags: >
+      -s -w
+      -X main.Version={{.Version}}
+      -X main.DateBuilt={{.Date}}
+      -X main.BinaryName=redpanda-connect-ai
+
   - id: connect-lambda
     main: cmd/serverless/connect-lambda/main.go
     binary: redpanda-connect-lambda
     env:
       - CGO_ENABLED=0
+    tags:
+      - timetzdata
     goos: [ linux ]
     goarch: [ amd64 ]
 
@@ -95,6 +120,8 @@ builds:
     binary: bootstrap
     env:
       - CGO_ENABLED=0
+    tags:
+      - timetzdata
     goos: [ linux ]
     goarch: [ amd64, arm64 ]
 
@@ -199,6 +226,59 @@ nfpms:
     formats:
       - deb
       - rpm
+
+dockers_v2:
+  - id: connect
+    dockerfile: resources/docker/Dockerfile
+    ids:
+      - connect
+    images:
+      - redpandadata/connect
+      - public.ecr.aws/l9j0i2e0/connect
+    tags:
+      - "{{ .Version }}"
+      - "{{ .Major }}.{{ .Minor }}"
+      - "{{ .Major }}"
+      - latest
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    extra_files:
+      - config/docker.yaml
+
+  - id: connect-cloud
+    dockerfile: resources/docker/cloud.Dockerfile
+    ids:
+      - connect-cloud
+    images:
+      - redpandadata/connect
+      - public.ecr.aws/l9j0i2e0/connect
+    tags:
+      - "{{ .Version }}-cloud"
+      - "{{ .Major }}.{{ .Minor }}-cloud"
+      - "{{ .Major }}-cloud"
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    extra_files:
+      - config/docker.yaml
+
+  - id: connect-ai
+    dockerfile: resources/docker/ai.Dockerfile
+    ids:
+      - connect-ai
+    images:
+      - redpandadata/connect
+      - public.ecr.aws/l9j0i2e0/connect
+    tags:
+      - "{{ .Version }}-ai"
+      - "{{ .Major }}.{{ .Minor }}-ai"
+      - "{{ .Major }}-ai"
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    extra_files:
+      - config/docker.yaml
 
 publishers:
   # Gets run once per artifact (deb or rpm)

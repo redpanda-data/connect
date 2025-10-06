@@ -12,28 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM golang:1.25.1 AS build
+FROM debian:12-slim AS build
 
-ENV CGO_ENABLED=0
-ENV GOOS=linux
+RUN apt-get update && apt-get install -y ca-certificates
 RUN useradd -u 10001 connect
 
-RUN apt-get update && apt-get install -y libcap2-bin
-RUN go install github.com/go-task/task/v3/cmd/task@latest
-
-WORKDIR /go/src/github.com/redpanda-data/connect/
-# Update dependencies: On unchanged dependencies, cached layer will be reused
-COPY go.* /go/src/github.com/redpanda-data/connect/
-RUN go mod download
-
-# Build
-COPY . /go/src/github.com/redpanda-data/connect/
-# Tag timetzdata required for busybox base image:
-# https://github.com/benthosdev/benthos/issues/897
-RUN TAGS="timetzdata" task build:redpanda-connect
-
-# Pack
 FROM busybox AS package
+ARG TARGETPLATFORM
 
 LABEL maintainer="Ashley Jeffs <ash.jeffs@redpanda.com>"
 LABEL org.opencontainers.image.source="https://github.com/redpanda-data/connect"
@@ -42,8 +27,8 @@ WORKDIR /
 
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /etc/passwd /etc/passwd
-COPY --from=build /go/src/github.com/redpanda-data/connect/target/redpanda-connect .
-COPY ./config/docker.yaml /connect.yaml
+COPY $TARGETPLATFORM/redpanda-connect /redpanda-connect
+COPY config/docker.yaml /connect.yaml
 
 USER connect
 
