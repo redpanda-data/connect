@@ -393,6 +393,15 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 		return fmt.Errorf("unable to decode replication info: %w", err)
 	}
 	ts, ok := bsonGetPath(helloReply, "lastWrite", "majorityOpTime", "ts").(bson.Timestamp)
+	var initialResumeToken bson.Raw = nil
+	if !ok && bsonGetPath(helloReply, "msg") == "isdbgrid" {
+		token, err := m.getCurrentResumeToken(ctx)
+		if err != nil {
+			return fmt.Errorf("unable to compute stream start position: %w", err)
+		}
+		initialResumeToken = token
+		ok = true
+	}
 	if !ok {
 		return fmt.Errorf("unable to get oplog last commit timestamp, got %s", helloReply.String())
 	}
@@ -428,6 +437,8 @@ func (m *mongoCDC) Connect(ctx context.Context) error {
 			if m.resumeToken != nil {
 				// TODO: Handle the resume token becoming invalid due to collection rename/drop
 				opts = opts.SetResumeAfter(m.resumeToken)
+			} else if initialResumeToken != nil {
+				opts = opts.SetResumeAfter(initialResumeToken)
 			} else {
 				// If there are no writes between snapshot and streaming, we want to skip the last
 				// document that will be read in the snapshot.
@@ -667,6 +678,27 @@ func (m *mongoCDC) readSnapshotRange(
 		return fmt.Errorf("failed to read snapshot: %w", err)
 	}
 	return nil
+}
+
+func (m *mongoCDC) getCurrentResumeToken(ctx context.Context) (bson.Raw, error) {
+	filter := []bson.M{{"$match": bson.M{
+		"ns.coll": bson.M{"$in": slices.Clone(m.collections)},
+	}}}
+	stream, err := m.db.Watch(
+		ctx,
+		filter,
+		options.ChangeStream().
+			SetBatchSize(int32(0)).
+			SetMaxAwaitTime(0*time.Millisecond),
+	)
+	if err != nil {
+		return nil, err
+	}
+	_ = stream.TryNext(ctx)
+	if rt := stream.ResumeToken(); rt != nil {
+		return rt, nil
+	}
+	return nil, errors.New("unable to determine start position prior to snapshot phase")
 }
 
 func (m *mongoCDC) readFromStream(ctx context.Context, cp *checkpoint.Capped[bson.Raw], opts *options.ChangeStreamOptionsBuilder) error {
