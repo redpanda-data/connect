@@ -524,6 +524,10 @@ func (m *Migrator) onWrite(
 		lastDstSchemaID int
 	)
 	for _, record := range records {
+		if record == nil {
+			continue
+		}
+
 		if record.Topic != lastTopic {
 			topic, err := m.topic.CreateTopicIfNeeded(ctx, srcAdm, dstAdm, record.Topic)
 			if err != nil {
