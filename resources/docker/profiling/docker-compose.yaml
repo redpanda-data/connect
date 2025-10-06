@@ -3,12 +3,6 @@ volumes:
   grafana_data: {}
 
 services:
-  jaeger:
-    image: jaegertracing/all-in-one
-    ports:
-      - 6831:6831/udp
-      - 16686:16686
-
   prometheus:
     image: prom/prometheus
     volumes:
@@ -22,14 +16,15 @@ services:
       - '--web.console.libraries=/usr/share/prometheus/console_libraries'
       - '--web.console.templates=/usr/share/prometheus/consoles'
     ports:
-      - 9090:9090
+      - "9090:9090"
+    cpus: 0.5
 
   grafana:
     image: grafana/grafana
     depends_on:
       - prometheus
     ports:
-      - 3000:3000
+      - "3000:3000"
     volumes:
       - grafana_data:/var/lib/grafana
       - ./grafana/provisioning/:/etc/grafana/provisioning/
@@ -39,3 +34,10 @@ services:
       - GF_AUTH_DISABLE_LOGIN_FORM=true
     env_file:
       - ./grafana/config.monitoring
+    cpus: 0.5
+
+# jaeger:
+#   image: jaegertracing/all-in-one
+#   ports:
+#     - "6831:6831/udp"
+#     - "16686:16686"

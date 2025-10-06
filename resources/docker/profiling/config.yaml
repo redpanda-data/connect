@@ -25,6 +25,7 @@ metrics:
     add_process_metrics: true
     add_go_metrics: true
 
+# Also enable jaeger service in docker-compose.yml
 # tracer:
 #   jaeger:
 #     agent_address: 'localhost:6831'
