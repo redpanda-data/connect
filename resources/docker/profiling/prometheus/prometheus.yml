@@ -5,13 +5,7 @@ global:
     monitor: 'rpcn-benchmark'
 
 scrape_configs:
-  - job_name: 'prometheus'
-    scrape_interval: 5s
-    static_configs:
-      - targets: ['localhost:9090']
-
   - job_name: 'rpcn'
     scrape_interval: 5s
     static_configs:
       - targets: ['host.docker.internal:4195']
-
