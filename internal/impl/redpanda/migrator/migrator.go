@@ -39,7 +39,7 @@ const (
 func migratorInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services").
-		Version("4.66.0").
+		Version("4.67.0").
 		Summary("Kafka consumer for migration pipelines. All migration logic is handled by the redpanda_migrator output.").
 		Description(`
 The ` + "`redpanda_migrator`" + ` input simply consumes records from the source cluster and forwards them downstream. 
@@ -67,7 +67,7 @@ The label of the input and output must match exactly for proper coordination.`).
 func migratorOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Categories("Services").
-		Version("4.66.0").
+		Version("4.67.0").
 		Summary("A specialised Kafka producer for comprehensive data migration between Apache Kafka and Redpanda clusters.").
 		Description(`
 The `+"`redpanda_migrator`"+` output performs all migration work. 
