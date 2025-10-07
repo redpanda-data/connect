@@ -12,6 +12,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/url"
 	"strconv"
 	"strings"
@@ -121,6 +122,22 @@ type databaseHelper struct {
 func (d *databaseHelper) CreateCollection(t *testing.T, collection string, opts ...options.Lister[options.CreateCollectionOptions]) {
 	err := d.Database.CreateCollection(t.Context(), collection, opts...)
 	require.NoError(t, err)
+}
+
+func (d *databaseHelper) CreateShardedCollection(t *testing.T, collection string, opts ...options.Lister[options.CreateCollectionOptions]) {
+	require.NoError(t, d.Client().Database("admin").RunCommand(
+		t.Context(),
+		bson.D{{Key: "enableSharding", Value: d.Database.Name()}},
+	).Err())
+	err := d.Database.CreateCollection(t.Context(), collection, opts...)
+	require.NoError(t, err)
+	require.NoError(t, d.Client().Database("admin").RunCommand(
+		t.Context(),
+		bson.D{
+			{Key: "shardCollection", Value: fmt.Sprintf("%s.%s", d.Database.Name(), collection)},
+			{Key: "key", Value: bson.M{"_id": "hashed"}},
+		},
+	).Err())
 }
 
 func (d *databaseHelper) FindOne(t *testing.T, collection string, id any) (doc any) {
@@ -790,4 +807,80 @@ mongodb_cdc:
 	stream.Stop(t)
 	wait()
 	require.JSONEq(t, `[{"_id":1,"data":"hello"}, {"_id":2,"data":"hello"}, {"_id":3,"data":"hello"}]`, output.MessagesJSON(t))
+}
+
+func TestIntegrationMongoCDCWithSnapshotShardedCluster(t *testing.T) {
+	integration.CheckSkipExact(t)
+	// You can setup a sharded cluster with https://github.com/pkdone/sharded-mongodb-docker
+	builder := service.NewStreamBuilder()
+	require.NoError(t,
+		builder.AddInputYAML(`
+read_until:
+  idle_timeout: 60s # Sharded DBs are *super* slow for some reason to emit changes
+  input:
+    mongodb_cdc:
+      url: 'mongodb://localhost:27017'
+      database: 'test'
+      checkpoint_cache: 'filecache'
+      stream_snapshot: true
+      collections:
+        - 'foo'
+`))
+	require.NoError(t, builder.AddCacheYAML(`
+label: filecache
+file:
+  directory: '`+t.TempDir()+`'`))
+	output := &outputHelper{}
+	require.NoError(t, builder.AddBatchConsumerFunc(output.AddBatch))
+	stream := &streamHelper{builder: builder}
+	mongoClient, err := mongo.Connect(options.Client().
+		SetConnectTimeout(5 * time.Second).
+		SetTimeout(10 * time.Second).
+		SetServerSelectionTimeout(10 * time.Second).
+		ApplyURI("mongodb://localhost:27017"))
+	require.NoError(t, err)
+	db := &databaseHelper{mongoClient.Database("test")}
+	// Since this is an external database, let's ensure we have a clean slate
+	_ = db.Collection("foo").Drop(t.Context())
+	db.CreateCollection(t, "foo")
+	var id atomic.Int64
+	writer := asyncroutine.NewPeriodic(time.Microsecond, func() {
+		db.InsertOne(t, "foo", bson.M{"_id": int(id.Add(1)), "data": "hello"})
+	})
+	writer.Start()
+	time.Sleep(time.Second)
+	wait := stream.RunAsync(t)
+	time.Sleep(time.Second) // pump some data to the stream
+	writer.Stop()
+	wait()
+	stream.Stop(t)
+	// Ensure that we got some data via reads and we got some data via change stream
+	require.Contains(t, output.Metadata(t), map[string]any{
+		"operation":      "insert",
+		"collection":     "foo",
+		"operation_time": "$timestamp",
+	})
+	require.Contains(t, output.Metadata(t), map[string]any{
+		"operation":      "read",
+		"collection":     "foo",
+		"operation_time": "$timestamp",
+	})
+	// Require that we saw all messages at least once, it's possible we get duplicates
+	// when replaying the cdc stream after the snapshot completes, but everything should
+	// be there. We assert the change stream is ordered in other places, this real goal
+	// here is to make sure we're not missing anything.
+	actual := output.Messages(t)
+	c, err := db.Collection("foo").CountDocuments(t.Context(), bson.D{})
+	require.NoError(t, err)
+	t.Log("wrote", id.Load(), "documents, read", len(actual), "documents, counting found:", c)
+	require.GreaterOrEqual(t, len(actual), int(id.Load()))
+	for i := range int(id.Load()) {
+		expected := map[string]any{
+			"_id":  map[string]any{"$numberInt": strconv.Itoa(i + 1)},
+			"data": "hello",
+		}
+		if !assert.Containsf(t, actual, expected, "actual: %v missing: %v", actual, i+1) {
+			return
+		}
+	}
 }
