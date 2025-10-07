@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.67.0 - TBD
+
+### Fixed
+
+- (MongoDB CDC) Fixed an issue with connecting to sharded databases. (@rockwotj)
+
 ## 4.66.0 - 2025-10-03
 
 ### Added
