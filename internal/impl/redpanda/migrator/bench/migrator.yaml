@@ -1,0 +1,37 @@
+http:
+  debug_endpoints: true
+
+input:
+  redpanda_migrator:
+    seed_brokers:
+      - src:9092
+    topics:
+      - test-topic
+    regexp_topics: true
+    start_from_oldest: true
+    consumer_group: migrator_cg
+    partition_buffer_bytes: 10MB
+    max_yield_batch_bytes: 100MB
+
+output:
+  processors:
+    - benchmark:
+        interval: 2s
+        count_bytes: true
+
+  redpanda_migrator:
+    seed_brokers:
+      - dst:9092
+    consumer_groups:
+      enabled: false
+    schema_registry:
+      url: ""
+      enabled: false
+
+metrics:
+  prometheus:
+    add_go_metrics: true
+    add_process_metrics: true
+
+logger:
+  level: DEBUG

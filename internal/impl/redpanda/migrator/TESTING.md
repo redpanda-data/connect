@@ -2,6 +2,19 @@
 
 This document contains a list of integration tests for the Redpanda Migrator component.
 
+## Performance Benchmarks
+
+The migrator has been benchmarked to handle high-throughput scenarios, demonstrating stable 1GB/s+ throughput in production-like conditions. See the `bench/` directory for configuration details and test setup.
+
+Example benchmark output showing 1GB/s+ throughput:
+```
+[output.processors.0] time="2025-10-10T11:56:50Z" level=info msg="rolling stats: 1035873 msg/sec, 1.0 GB/sec"
+[output.processors.0] time="2025-10-10T11:57:10Z" level=info msg="rolling stats: 1035211.5 msg/sec, 1.0 GB/sec"
+[output.processors.0] time="2025-10-10T11:57:12Z" level=info msg="rolling stats: 1037427.5 msg/sec, 1.0 GB/sec"
+```
+
+## Core Migration Tests
+
 ## Core Migration Tests (`integration_test.go`)
 
 ### `TestIntegrationMigratorSinglePartition`
