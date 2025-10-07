@@ -1,0 +1,22 @@
+name: redpanda-write-caching-benchmark
+
+# Based on https://www.redpanda.com/blog/write-caching-performance-benchmark
+# scaled to single core, the AWS im4gn.8xlarge instance has 32 vCPUs (cores)
+
+topics: 1
+partitionsPerTopic: 40
+producersPerTopic: 8
+# Disable consumers
+subscriptionsPerTopic: 0
+consumerPerSubscription: 0
+
+messageSize: 1024
+payloadFile: "payload/payload-1Kb.data"
+
+useRandomizedPayloads: true
+randomBytesRatio: 0.5
+randomizedPayloadPoolSize: 1000
+
+producerRate: 0 # unlimited
+consumerBacklogSizeGB: 0
+testDurationMinutes: 2
