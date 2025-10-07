@@ -25,7 +25,7 @@ dockers_v2:
     images:
       - redpandadata/connect
     tags:
-      - "{{ .Version }}-ai"
+      - dev-ai
     platforms:
       - linux/arm64
     extra_files:
