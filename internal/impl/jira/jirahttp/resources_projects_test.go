@@ -16,12 +16,13 @@ package jirahttp
 
 import (
 	"encoding/json"
-	"github.com/redpanda-data/connect/v4/internal/impl/jira/helpers/http_helper"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strconv"
 	"testing"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/jira/helpers/http_helper"
 )
 
 func TestSearchAllProjects_PaginatesViaStartAt(t *testing.T) {
@@ -38,7 +39,7 @@ func TestSearchAllProjects_PaginatesViaStartAt(t *testing.T) {
 			// startAt omitted or 0 on first call
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			_ = json.NewEncoder(w).Encode(projectSearchResponse{
+			_ = json.NewEncoder(w).Encode(ProjectSearchResponse{
 				Projects: []any{
 					map[string]any{"id": "P1", "key": "PRJ-1"},
 					map[string]any{"id": "P2", "key": "PRJ-2"},
@@ -53,7 +54,7 @@ func TestSearchAllProjects_PaginatesViaStartAt(t *testing.T) {
 			}
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			_ = json.NewEncoder(w).Encode(projectSearchResponse{
+			_ = json.NewEncoder(w).Encode(ProjectSearchResponse{
 				Projects: []any{
 					map[string]any{"id": "P3", "key": "PRJ-3"},
 				},
@@ -65,13 +66,13 @@ func TestSearchAllProjects_PaginatesViaStartAt(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	j := &JiraProc{
-		BaseURL:    srv.URL,
-		Username:   "u",
-		ApiToken:   "t",
-		MaxResults: 2,
-		HttpClient: srv.Client(),
-		RetryOpts:  http_helper.RetryOptions{MaxRetries: 0},
+	j := &JiraHttp{
+		baseURL:    srv.URL,
+		username:   "u",
+		apiToken:   "t",
+		maxResults: 2,
+		httpClient: srv.Client(),
+		retryOpts:  http_helper.RetryOptions{MaxRetries: 0},
 	}
 
 	ctx := t.Context()
@@ -95,17 +96,17 @@ func TestSearchProjectsPage_SendsParamsAndMaxResults(t *testing.T) {
 		got = r.URL.Query()
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(projectSearchResponse{IsLast: true})
+		_ = json.NewEncoder(w).Encode(ProjectSearchResponse{IsLast: true})
 	}))
 	defer srv.Close()
 
-	j := &JiraProc{
-		BaseURL:    srv.URL,
-		Username:   "u",
-		ApiToken:   "t",
-		MaxResults: 50,
-		HttpClient: srv.Client(),
-		RetryOpts:  http_helper.RetryOptions{MaxRetries: 0},
+	j := &JiraHttp{
+		baseURL:    srv.URL,
+		username:   "u",
+		apiToken:   "t",
+		maxResults: 50,
+		httpClient: srv.Client(),
+		retryOpts:  http_helper.RetryOptions{MaxRetries: 0},
 	}
 
 	ctx := t.Context()

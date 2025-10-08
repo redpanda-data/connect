@@ -20,14 +20,14 @@ import (
 )
 
 func TestBuildSelectorTree(t *testing.T) {
-	j := &JiraProc{}
+	j := &JiraHttp{}
 	fields := []string{"summary", "assignee.displayName", "status.name", "parent.fields.status.name", "Story Points", "Sprint.name"}
 	custom := map[string]string{
 		"Story Points": "custom_field_10100",
 		"Sprint":       "custom_field_10022",
 	}
 
-	tree, err := selectorTreeFrom(j.Log, fields, custom)
+	tree, err := selectorTreeFrom(j.log, fields, custom)
 	if err != nil {
 		t.Fatalf("selectorTreeFrom error: %v", err)
 	}
@@ -58,7 +58,7 @@ func TestNormalizeAndReverseCustomFields(t *testing.T) {
 		"Story Points": "custom_field_10100",
 		"Sprint":       "custom_field_10022",
 	}
-	q := &jsonInputQuery{
+	q := &JsonInputQuery{
 		Fields: []string{"summary", "Story Points", "Sprint.name"},
 	}
 	normalizeInputFields(q, custom)
@@ -74,7 +74,7 @@ func TestNormalizeAndReverseCustomFields(t *testing.T) {
 }
 
 func TestFilter_MapAndArray(t *testing.T) {
-	j := &JiraProc{}
+	j := &JiraHttp{}
 	// data represents a simplified issue.Fields payload
 	data := map[string]any{
 		"summary": "Fix bug",

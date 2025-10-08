@@ -27,10 +27,10 @@ func newRolesTestServer(t *testing.T, handler http.HandlerFunc) *httptest.Server
 	return httptest.NewServer(handler)
 }
 
-func newRolesTestJiraProc(server *httptest.Server) *JiraProc {
-	return &JiraProc{
-		BaseURL:    server.URL,
-		HttpClient: &http.Client{Timeout: 10 * time.Second},
+func newRolesTestJiraHttp(server *httptest.Server) *JiraHttp {
+	return &JiraHttp{
+		baseURL:    server.URL,
+		httpClient: &http.Client{Timeout: 10 * time.Second},
 	}
 }
 
@@ -47,7 +47,7 @@ func TestSearchRoles_Success(t *testing.T) {
 	})
 	defer srv.Close()
 
-	j := newRolesTestJiraProc(srv)
+	j := newRolesTestJiraHttp(srv)
 
 	got, err := j.searchRoles(t.Context())
 	if err != nil {
@@ -68,7 +68,7 @@ func TestSearchRoles_InvalidJSON(t *testing.T) {
 	})
 	defer srv.Close()
 
-	j := newRolesTestJiraProc(srv)
+	j := newRolesTestJiraHttp(srv)
 
 	_, err := j.searchRoles(t.Context())
 	if err == nil {
@@ -87,14 +87,14 @@ func TestSearchRolesResource_NoRoles(t *testing.T) {
 	})
 	defer srv.Close()
 
-	j := newRolesTestJiraProc(srv)
+	j := newRolesTestJiraHttp(srv)
 
 	// Minimal input query: no fields trigger a basic path without filtering.
-	q := &jsonInputQuery{
+	q := &JsonInputQuery{
 		Fields: nil,
 	}
 
-	batch, err := j.searchRolesResource(t.Context(), q, map[string]string{})
+	batch, err := j.SearchRolesResource(t.Context(), q, map[string]string{})
 	if err != nil {
 		t.Fatalf("searchRolesResource returned error: %v", err)
 	}

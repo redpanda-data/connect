@@ -78,8 +78,8 @@ func TestParseOperatorField(t *testing.T) {
 }
 
 func TestExtractQueryFromMessage(t *testing.T) {
-	j := &JiraProc{}
-	input := jsonInputQuery{
+	j := &JiraHttp{}
+	input := JsonInputQuery{
 		Resource: "issue",
 		Project:  "DEMO",
 		Fields:   []string{"summary", "status.name"},
@@ -90,7 +90,7 @@ func TestExtractQueryFromMessage(t *testing.T) {
 	raw, _ := json.Marshal(input)
 	msg := service.NewMessage(raw)
 
-	got, err := j.extractQueryFromMessage(msg)
+	got, err := j.ExtractQueryFromMessage(msg)
 	if err != nil {
 		t.Fatalf("extractQueryFromMessage error: %v", err)
 	}
@@ -101,9 +101,9 @@ func TestExtractQueryFromMessage(t *testing.T) {
 }
 
 func TestExtractQueryFromMessage_InvalidJSON(t *testing.T) {
-	j := &JiraProc{}
+	j := &JiraHttp{}
 	msg := service.NewMessage([]byte("{not-json}"))
-	if _, err := j.extractQueryFromMessage(msg); err == nil {
+	if _, err := j.ExtractQueryFromMessage(msg); err == nil {
 		t.Fatalf("expected error for invalid json")
 	}
 }

@@ -21,10 +21,10 @@ import "errors"
 
 /*** Input / DTOs ***/
 
-// jsonInputQuery represents the input message that is received and processed by the processor
+// JsonInputQuery represents the input message that is received and processed by the processor
 // The JQL parameter has precedence over the project, Updated and Created fields
 // None of the fields are mandatory
-type jsonInputQuery struct {
+type JsonInputQuery struct {
 	Resource string   `json:"resource"`
 	Project  string   `json:"project"`
 	Issue    string   `json:"issue"`
@@ -34,46 +34,46 @@ type jsonInputQuery struct {
 	Created  string   `json:"created"`
 }
 
-// issue represents a single Jira issue/task retrieved by the Jira API.
+// Issue represents a single Jira Issue/task retrieved by the Jira API.
 // Changelog is a special field retrieved by using "expand" in query params when making the call to Jira API.
 // Changelog will not be exposed as it comes from the API, instead it will be merged into the Fields any
 // to make use of the custom filtering
-type issue struct {
+type Issue struct {
 	ID        string `json:"id"`
 	Key       string `json:"key"`
 	Fields    any    `json:"fields"`
 	Changelog any    `json:"changelog"`
 }
 
-// issueResponse represents a single Jira issue/task from this processor output
+// IssueResponse represents a single Jira Issue/task from this processor output
 // All the fields from Fields any will be filtered accordingly using the Fields from JSON input message
-type issueResponse struct {
+type IssueResponse struct {
 	ID     string `json:"id"`
 	Key    string `json:"key"`
 	Fields any    `json:"fields"`
 }
 
-// issueTransitionResponse represents a single Jira issue transition from this processor output
+// issueTransitionResponse represents a single Jira Issue transition from this processor output
 // All the fields from Fields any will be filtered accordingly using the Fields from JSON input message
 type issueTransitionResponse struct {
 	ID     string `json:"id"`
 	Fields any    `json:"fields"`
 }
 
-// issueTransitionsSearchResponse represents the response from Jira issue transitions search API
+// issueTransitionsSearchResponse represents the response from Jira Issue transitions search API
 type issueTransitionsSearchResponse struct {
 	Transitions []any `json:"transitions"`
 }
 
-// projectResponse represents a single Jira project from this processor output
-type projectResponse struct {
+// ProjectResponse represents a single Jira project from this processor output
+type ProjectResponse struct {
 	ID     string `json:"id"`
 	Key    string `json:"key"`
 	Fields any    `json:"fields"`
 }
 
-// projectSearchResponse represents the response from Jira project search API
-type projectSearchResponse struct {
+// ProjectSearchResponse represents the response from Jira project search API
+type ProjectSearchResponse struct {
 	Projects []any  `json:"values"`
 	IsLast   bool   `json:"isLast"`
 	NextPage string `json:"nextPage"`
@@ -92,29 +92,29 @@ type projectCategoryResponse struct {
 	Fields any    `json:"fields"`
 }
 
-// customField is a Jira object that maps custom fields that are coming from different plugins to a custom name
+// CustomField is a Jira object that maps custom fields that are coming from different plugins to a custom name
 // Example: Field "Story Points" is represented in the message as "custom_field_10100" as it is not an official Jira field
-type customField struct {
+type CustomField struct {
 	FieldID   string `json:"id"`
 	FieldName string `json:"name"`
 }
 
-// customFieldSearchResponse represents the response from the custom fields Jira search API
+// CustomFieldSearchResponse represents the response from the custom fields Jira search API
 // The Custom Field Search API is using pagination and is limited to 50 results/page max
 // We are using JiraCustomFieldSearchResponse in this context to get the whole array of []customField object directly from Jira
-type customFieldSearchResponse struct {
-	Fields     []customField `json:"values"`
+type CustomFieldSearchResponse struct {
+	Fields     []CustomField `json:"values"`
 	IsLast     bool          `json:"isLast"`
 	StartAt    int           `json:"startAt"`
 	MaxResults int           `json:"maxResults"`
 	Total      int           `json:"total"`
 }
 
-// searchJQLResponse represents the response from Jira JQL search API
+// SearchJQLResponse represents the response from Jira JQL search API
 // This is the only possible way at this moment to retrieve issues/tasks from Jira
 // The pagination method of the JQL Search API is using a nextPageToken that can be used to retrieve next pages of issues
-type searchJQLResponse struct {
-	Issues        []issue `json:"issues"`
+type SearchJQLResponse struct {
+	Issues        []Issue `json:"issues"`
 	IsLast        bool    `json:"isLast"`
 	NextPageToken string  `json:"nextPageToken"`
 }
@@ -139,28 +139,28 @@ type projectVersionResponse struct {
 
 /*** Resource enum ***/
 
-// resourceType is an enum that holds the resource types that we can query for
-type resourceType string
+// ResourceType is an enum that holds the resource types that we can query for
+type ResourceType string
 
-// list of resourceType values
+// list of ResourceType values
 const (
-	ResourceIssue           resourceType = "issue"
-	ResourceIssueTransition resourceType = "issue_transition"
-	ResourceRole            resourceType = "role"
-	ResourceUser            resourceType = "user"
-	ResourceProject         resourceType = "project"
-	ResourceProjectCategory resourceType = "project_category"
-	ResourceProjectType     resourceType = "project_type"
-	ResourceProjectVersion  resourceType = "project_version"
+	ResourceIssue           ResourceType = "issue"
+	ResourceIssueTransition ResourceType = "issue_transition"
+	ResourceRole            ResourceType = "role"
+	ResourceUser            ResourceType = "user"
+	ResourceProject         ResourceType = "project"
+	ResourceProjectCategory ResourceType = "project_category"
+	ResourceProjectType     ResourceType = "project_type"
+	ResourceProjectVersion  ResourceType = "project_version"
 )
 
-// parseResource safely converts a string into resourceType or returns an error
-func parseResource(s string) (resourceType, error) {
-	switch resourceType(s) {
+// parseResource safely converts a string into ResourceType or returns an error
+func parseResource(s string) (ResourceType, error) {
+	switch ResourceType(s) {
 	case ResourceIssue, ResourceIssueTransition, ResourceRole,
 		ResourceUser, ResourceProjectVersion, ResourceProject,
 		ResourceProjectCategory, ResourceProjectType:
-		return resourceType(s), nil
+		return ResourceType(s), nil
 	}
 	return "", errors.New("invalid resource type: " + s)
 }

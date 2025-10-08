@@ -25,43 +25,38 @@
 package jirahttp
 
 import (
-	"context"
-	"github.com/redpanda-data/connect/v4/internal/impl/jira/helpers/http_helper"
 	"net/http"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/jira/helpers/http_helper"
+	"github.com/redpanda-data/connect/v4/internal/impl/jira/helpers/http_metrics"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-// JiraProc is the Benthos processor implementation for Jira queries.
-// It holds the client state and orchestrates calls into the jirahttp package.
-type JiraProc struct {
-	BaseURL    string
-	Username   string
-	ApiToken   string
-	MaxResults int
-	RetryOpts  http_helper.RetryOptions
-	HttpClient *http.Client
-	Log        *service.Logger
+// JiraHttp is the implementation of Jira API queries. It holds the client state and orchestrates calls into the jirahttp package.
+type JiraHttp struct {
+	baseURL    string
+	username   string
+	apiToken   string
+	maxResults int
+	retryOpts  http_helper.RetryOptions
+	httpClient *http.Client
+	log        *service.Logger
 }
 
-func (j *JiraProc) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
-	inputMsg, err := msg.AsBytes()
-	if err != nil {
-		return nil, err
-	}
-	j.Log.Debugf("Fetching from Jira.. Input: %s", string(inputMsg))
-
-	inputQuery, err := j.extractQueryFromMessage(msg)
-	if err != nil {
-		return nil, err
-	}
-
-	resource, customFields, params, err := j.prepareJiraQuery(ctx, inputQuery)
-	if err != nil {
-		return nil, err
-	}
-
-	return searchResource(ctx, j, resource, inputQuery, customFields, params)
+// NewJiraHttp is the constructor ofr a JiraHttp object
+func NewJiraHttp(log *service.Logger, baseUrl, username, apiToken string, maxResults, maxRetries int, metrics *service.Metrics, httpClient *http.Client) (*JiraHttp, error) {
+	return &JiraHttp{
+		log:        log,
+		baseURL:    baseUrl,
+		username:   username,
+		apiToken:   apiToken,
+		maxResults: maxResults,
+		retryOpts: http_helper.RetryOptions{
+			MaxRetries: maxRetries,
+		},
+		httpClient: http_metrics.NewInstrumentedClient(
+			metrics, "jira_http",
+			httpClient),
+	}, nil
 }
-
-func (*JiraProc) Close(context.Context) error { return nil }

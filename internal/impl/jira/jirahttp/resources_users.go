@@ -29,9 +29,9 @@ import (
 )
 
 // searchUsersPage is a function which gets a single page of issues using startAt offset strategy
-// The MaxResults can be overridden by the processor parameters (up to 5000 - default 50)
-func (j *JiraProc) searchUsersPage(ctx context.Context, queryParams map[string]string, startAt int) ([]any, error) {
-	apiUrl, err := url.Parse(j.BaseURL + jiraAPIBasePath + "/users/search")
+// The maxResults can be overridden by the processor parameters (up to 5000 - default 50)
+func (j *JiraHttp) searchUsersPage(ctx context.Context, queryParams map[string]string, startAt int) ([]any, error) {
+	apiUrl, err := url.Parse(j.baseURL + jiraAPIBasePath + "/users/search")
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL: %v", err)
 	}
@@ -40,7 +40,7 @@ func (j *JiraProc) searchUsersPage(ctx context.Context, queryParams map[string]s
 	for key, value := range queryParams {
 		query.Set(key, value)
 	}
-	query.Set("maxResults", strconv.Itoa(j.MaxResults))
+	query.Set("maxResults", strconv.Itoa(j.maxResults))
 	if startAt != 0 {
 		query.Set("startAt", strconv.Itoa(startAt))
 	}
@@ -67,7 +67,7 @@ func (j *JiraProc) searchUsersPage(ctx context.Context, queryParams map[string]s
 // Returns:
 // - []any → list of all retrieved users
 // - error → error if a paginated request fails
-func (j *JiraProc) searchAllUsers(ctx context.Context, queryParams map[string]string) ([]any, error) {
+func (j *JiraHttp) searchAllUsers(ctx context.Context, queryParams map[string]string) ([]any, error) {
 	var allUsers []any
 
 	startAt := 0
@@ -89,19 +89,19 @@ func (j *JiraProc) searchAllUsers(ctx context.Context, queryParams map[string]st
 	return allUsers, nil
 }
 
-// searchUsersResource queries Jira for users based on the provided parameters and
+// SearchUsersResource queries Jira for users based on the provided parameters and
 // returns them as a batch of service messages.
 // Parameters:
 // - ctx: context.Context → request context for cancellation and timeouts
-// - inputQuery: *jsonInputQuery → user input specifying requested fields
+// - inputQuery: *JsonInputQuery → user input specifying requested fields
 // - customFields: map[string]string → mapping of display names to custom field keys
 // - params: map[string]string → query parameters for the Jira API request
 // Returns:
 // - service.MessageBatch → batch of messages containing transformed users
 // - error → error if the API call, response parsing, or field processing fails
-func (j *JiraProc) searchUsersResource(
+func (j *JiraHttp) SearchUsersResource(
 	ctx context.Context,
-	inputQuery *jsonInputQuery,
+	inputQuery *JsonInputQuery,
 	customFields map[string]string,
 	params map[string]string,
 ) (service.MessageBatch, error) {
@@ -117,7 +117,7 @@ func (j *JiraProc) searchUsersResource(
 
 	normalizeInputFields(inputQuery, customFields)
 
-	tree, err := selectorTreeFrom(j.Log, inputQuery.Fields, customFields)
+	tree, err := selectorTreeFrom(j.log, inputQuery.Fields, customFields)
 	if err != nil {
 		return nil, err
 	}
