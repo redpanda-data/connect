@@ -17,7 +17,7 @@ PATHINSTBIN        = $(DEST_DIR)/bin
 DOCKER_IMAGE       ?= docker.redpanda.com/redpandadata/connect
 
 VERSION   := $(shell git describe --tags 2> /dev/null || echo "v0.0.0")
-VER_CUT   := $(shell echo $(VERSION) | cut -c2-)
+VER_CUT   := $(shell echo $(VERSION) | sed 's/^v//' | tr '/' '-')
 VER_MAJOR := $(shell echo $(VER_CUT) | cut -f1 -d.)
 VER_MINOR := $(shell echo $(VER_CUT) | cut -f2 -d.)
 VER_PATCH := $(shell echo $(VER_CUT) | cut -f3 -d.)
