@@ -742,44 +742,59 @@ func TestIntegrationPostgres(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	var db *sql.DB
 	t.Cleanup(func() {
 		if err = pool.Purge(resource); err != nil {
 			t.Logf("Failed to clean up docker resource: %s", err)
 		}
-		if db != nil {
-			db.Close()
-		}
 	})
 
-	createTable := func(name string) (string, error) {
-		_, err := db.Exec(fmt.Sprintf(`create table %s (
-  "foo" varchar(50) not null,
-  "bar" integer not null,
-  "baz" varchar(50) not null,
-  primary key ("foo")
-		)`, name))
-		return name, err
-	}
-
 	dsn := fmt.Sprintf("postgres://testuser:testpass@localhost:%s/testdb?sslmode=disable", resource.GetPort("5432/tcp"))
-	require.NoError(t, pool.Retry(func() error {
-		db, err = sql.Open("postgres", dsn)
-		if err != nil {
-			return err
-		}
-		if err = db.Ping(); err != nil {
-			db.Close()
-			db = nil
-			return err
-		}
-		if _, err := createTable("footable"); err != nil {
-			return err
-		}
-		return nil
-	}))
 
-	testSuite(t, "postgres", dsn, createTable)
+	for _, driver := range []string{
+		"postgres",
+		"pgx",
+	} {
+		driver := driver
+		t.Run(fmt.Sprintf("driver %s", driver), func(t *testing.T) {
+			var db *sql.DB
+			t.Cleanup(func() {
+				if db != nil {
+					db.Close()
+				}
+			})
+
+			createTable := func(name string) (string, error) {
+				_, err := db.Exec(fmt.Sprintf(`create table %s (
+	  "foo" varchar(50) not null,
+	  "bar" integer not null,
+	  "baz" varchar(50) not null,
+	  primary key ("foo")
+		)`, name))
+				return name, err
+			}
+
+			require.NoError(t, pool.Retry(func() error {
+				conn, err := sql.Open(driver, dsn)
+				if err != nil {
+					return err
+				}
+				if err = conn.Ping(); err != nil {
+					conn.Close()
+					return err
+				}
+				db = conn
+				tableName := fmt.Sprintf("footable_%s", driver)
+				if _, err := createTable(tableName); err != nil {
+					db.Close()
+					db = nil
+					return err
+				}
+				return nil
+			}))
+
+			testSuite(t, driver, dsn, createTable)
+		})
+	}
 }
 
 func TestIntegrationPostgresVector(t *testing.T) {
@@ -804,93 +819,112 @@ func TestIntegrationPostgresVector(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	var db *sql.DB
 	t.Cleanup(func() {
 		if err = pool.Purge(resource); err != nil {
 			t.Logf("Failed to clean up docker resource: %s", err)
 		}
-		if db != nil {
-			db.Close()
-		}
 	})
 
 	dsn := fmt.Sprintf("postgres://testuser:testpass@localhost:%s/testdb?sslmode=disable", resource.GetPort("5432/tcp"))
-	require.NoError(t, pool.Retry(func() error {
-		db, err = sql.Open("postgres", dsn)
-		if err != nil {
-			return err
-		}
-		if err = db.Ping(); err != nil {
-			db.Close()
-			db = nil
-			return err
-		}
-		_, err := db.Exec(`CREATE EXTENSION IF NOT EXISTS vector`)
-		if err != nil {
-			return err
-		}
-		_, err = db.Exec(`CREATE TABLE items (
-      foo text PRIMARY KEY,
-      embedding vector(3)
-    )`)
-		if err != nil {
-			return err
-		}
-		return nil
-	}))
-
 	env := service.NewEnvironment()
 
-	insertConfig, err := isql.InsertProcessorConfig().ParseYAML(fmt.Sprintf(`
-driver: postgres
+	for _, driver := range []string{
+		"postgres",
+		"pgx",
+	} {
+		driver := driver
+		t.Run(fmt.Sprintf("driver %s", driver), func(t *testing.T) {
+			var db *sql.DB
+			t.Cleanup(func() {
+				if db != nil {
+					db.Close()
+				}
+			})
+
+			require.NoError(t, pool.Retry(func() error {
+				conn, err := sql.Open(driver, dsn)
+				if err != nil {
+					return err
+				}
+				if err = conn.Ping(); err != nil {
+					conn.Close()
+					return err
+				}
+				if _, err := conn.Exec(`CREATE EXTENSION IF NOT EXISTS vector`); err != nil {
+					conn.Close()
+					return err
+				}
+				db = conn
+				tableName := fmt.Sprintf("items_%s", driver)
+				if _, err := db.Exec(fmt.Sprintf(`DROP TABLE IF EXISTS %s`, tableName)); err != nil {
+					db.Close()
+					db = nil
+					return err
+				}
+				if _, err := db.Exec(fmt.Sprintf(`CREATE TABLE %s (
+	      foo text PRIMARY KEY,
+	      embedding vector(3)
+	    )`, tableName)); err != nil {
+					db.Close()
+					db = nil
+					return err
+				}
+				return nil
+			}))
+
+			tableName := fmt.Sprintf("items_%s", driver)
+			insertConfig, err := isql.InsertProcessorConfig().ParseYAML(fmt.Sprintf(`
+driver: %s
 dsn: %s
-table: items
+table: %s
 columns: ["foo", "embedding"]
 args_mapping: 'root = [ this.foo, this.embedding.vector() ]'
-`, dsn), env)
-	require.NoError(t, err)
-	insertProc, err := isql.NewSQLInsertProcessorFromConfig(insertConfig, service.MockResources())
-	require.NoError(t, err)
-	t.Cleanup(func() { insertProc.Close(t.Context()) })
+`, driver, dsn, tableName), env)
+			require.NoError(t, err)
+			insertProc, err := isql.NewSQLInsertProcessorFromConfig(insertConfig, service.MockResources())
+			require.NoError(t, err)
+			t.Cleanup(func() { insertProc.Close(t.Context()) })
 
-	insertBatch := service.MessageBatch{
-		service.NewMessage([]byte(`{"foo": "blob","embedding": [4,5,6]}`)),
-		service.NewMessage([]byte(`{"foo": "fish","embedding": [1,2,3]}`)),
-	}
+			insertBatch := service.MessageBatch{
+				service.NewMessage([]byte(`{"foo": "blob","embedding": [4,5,6]}`)),
+				service.NewMessage([]byte(`{"foo": "fish","embedding": [1,2,3]}`)),
+			}
 
-	resBatches, err := insertProc.ProcessBatch(t.Context(), insertBatch)
-	require.NoError(t, err)
-	require.Len(t, resBatches, 1)
-	require.Len(t, resBatches[0], len(insertBatch))
-	for _, v := range resBatches[0] {
-		require.NoError(t, v.GetError())
-	}
+			resBatches, err := insertProc.ProcessBatch(t.Context(), insertBatch)
+			require.NoError(t, err)
+			require.Len(t, resBatches, 1)
+			require.Len(t, resBatches[0], len(insertBatch))
+			for _, v := range resBatches[0] {
+				require.NoError(t, v.GetError())
+			}
 
-	queryConf := fmt.Sprintf(`
-driver: postgres
+			queryConf := fmt.Sprintf(`
+driver: %s
 dsn: %s
-table: items
+table: %s
 columns: [ "foo" ]
 suffix: ORDER BY embedding <-> '[3,1,2]' LIMIT 1
-`, dsn)
+`, driver, dsn, tableName)
 
-	selectConfig, err := isql.SelectProcessorConfig().ParseYAML(queryConf, env)
-	require.NoError(t, err)
+			selectConfig, err := isql.SelectProcessorConfig().ParseYAML(queryConf, env)
+			require.NoError(t, err)
 
-	selectProc, err := isql.NewSQLSelectProcessorFromConfig(selectConfig, service.MockResources())
-	require.NoError(t, err)
-	t.Cleanup(func() { selectProc.Close(t.Context()) })
+			selectProc, err := isql.NewSQLSelectProcessorFromConfig(selectConfig, service.MockResources())
+			require.NoError(t, err)
+			t.Cleanup(func() { selectProc.Close(t.Context()) })
 
-	queryBatch := service.MessageBatch{service.NewMessage([]byte(`{}`))}
-	resBatches, err = selectProc.ProcessBatch(t.Context(), queryBatch)
-	require.NoError(t, err)
-	require.Len(t, resBatches, 1)
-	require.Len(t, resBatches[0], 1)
-	m := resBatches[0][0]
-	require.NoError(t, m.GetError())
-	actBytes, err := m.AsBytes()
-	require.NoError(t, err)
-	assert.JSONEq(t, `[{"foo":"fish"}]`, string(actBytes))
+			queryBatch := service.MessageBatch{service.NewMessage([]byte(`{}`))}
+			resBatches, err = selectProc.ProcessBatch(t.Context(), queryBatch)
+			require.NoError(t, err)
+			require.Len(t, resBatches, 1)
+			require.Len(t, resBatches[0], 1)
+			m := resBatches[0][0]
+			require.NoError(t, m.GetError())
+			actBytes, err := m.AsBytes()
+			require.NoError(t, err)
+			assert.JSONEq(t, `[{"foo":"fish"}]`, string(actBytes))
+		})
+	}
 }
 
 func TestIntegrationMySQL(t *testing.T) {
