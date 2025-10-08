@@ -26,11 +26,11 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-// searchRolesResource retrieves all Jira roles and returns them as a batch
+// SearchRolesResource retrieves all Jira roles and returns them as a batch
 // of service messages after optional field filtering.
-func (j *JiraProc) searchRolesResource(
+func (j *JiraHttp) SearchRolesResource(
 	ctx context.Context,
-	inputQuery *jsonInputQuery,
+	inputQuery *JsonInputQuery,
 	customFields map[string]string,
 ) (service.MessageBatch, error) {
 	var batch service.MessageBatch
@@ -45,7 +45,7 @@ func (j *JiraProc) searchRolesResource(
 
 	normalizeInputFields(inputQuery, customFields)
 
-	tree, err := selectorTreeFrom(j.Log, inputQuery.Fields, customFields)
+	tree, err := selectorTreeFrom(j.log, inputQuery.Fields, customFields)
 	if err != nil {
 		return nil, err
 	}
@@ -77,8 +77,8 @@ func (j *JiraProc) searchRolesResource(
 }
 
 // searchRoles fetches all Jira roles from the API and returns them as a list.
-func (j *JiraProc) searchRoles(ctx context.Context) ([]any, error) {
-	apiUrl, err := url.Parse(j.BaseURL + jiraAPIBasePath + "/role")
+func (j *JiraHttp) searchRoles(ctx context.Context) ([]any, error) {
+	apiUrl, err := url.Parse(j.baseURL + jiraAPIBasePath + "/role")
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL: %v", err)
 	}

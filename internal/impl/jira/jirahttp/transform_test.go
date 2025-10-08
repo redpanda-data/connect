@@ -20,7 +20,7 @@ import (
 )
 
 func TestTransformIssue(t *testing.T) {
-	orig := issue{
+	orig := Issue{
 		ID:  "10001",
 		Key: "DEMO-1",
 		Fields: map[string]any{

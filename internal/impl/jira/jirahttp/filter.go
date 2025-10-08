@@ -110,7 +110,7 @@ func selectorTreeFrom(log *service.Logger, fields []string, custom map[string]st
 // found in the selectorTree by comparing keys from data and keys from selectorTree.
 // If customFields are present in the data, they will also be replaced with their real name;
 // example: custom_field_10100 will be replaced with "Story Points"
-func (j *JiraProc) filter(data any, selectors selectorTree, custom map[string]string) (any, error) {
+func (j *JiraHttp) filter(data any, selectors selectorTree, custom map[string]string) (any, error) {
 	switch val := data.(type) {
 	case map[string]any:
 		res := make(map[string]any)
@@ -171,11 +171,11 @@ func reverseCustomFields(m map[string]string) map[string]string {
 
 // normalizeInputFields replaces field names in the query with their corresponding  custom field keys when available.
 // Parameters:
-// - q: *jsonInputQuery → query object containing the list of fields
+// - q: *JsonInputQuery → query object containing the list of fields
 // - custom: map[string]string → mapping of display names to custom field keys
 // Returns:
 // - none (modifies q.Fields in place)
-func normalizeInputFields(q *jsonInputQuery, custom map[string]string) {
+func normalizeInputFields(q *JsonInputQuery, custom map[string]string) {
 	for i, v := range q.Fields {
 		if dot := strings.Index(v, "."); dot != -1 {
 			if cf, ok := custom[v[:dot]]; ok {

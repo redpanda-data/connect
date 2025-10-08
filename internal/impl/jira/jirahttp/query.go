@@ -13,7 +13,7 @@
 // limitations under the License.
 
 // query.go contains helpers for parsing input messages into query structures and preparing Jira Search API parameters.
-// These helpers are used by the Jira processor to translate user-facing query input into valid request parameters.
+// These helpers are used by the Jira jiraProcessor to translate user-facing query input into valid request parameters.
 
 package jirahttp
 
@@ -56,10 +56,10 @@ func extractExpandableFields(fields []string) []string {
 	return result
 }
 
-// extractQueryFromMessage method receives the input message from the processor
+// ExtractQueryFromMessage method receives the input message from the jiraProcessor
 // and parses it into a jsonInputQuery object
-func (j *JiraProc) extractQueryFromMessage(msg *service.Message) (*jsonInputQuery, error) {
-	var queryData *jsonInputQuery
+func (j *JiraHttp) ExtractQueryFromMessage(msg *service.Message) (*JsonInputQuery, error) {
+	var queryData *JsonInputQuery
 	msgBytes, err := msg.AsBytes()
 	if err != nil {
 		return nil, err
@@ -67,11 +67,11 @@ func (j *JiraProc) extractQueryFromMessage(msg *service.Message) (*jsonInputQuer
 	if err := json.Unmarshal(msgBytes, &queryData); err != nil {
 		return nil, fmt.Errorf("cannot parse input JSON: %s", string(msgBytes))
 	}
-	j.Log.Debugf("Input queryData: %v", queryData)
+	j.log.Debugf("Input queryData: %v", queryData)
 	return queryData, nil
 }
 
-// prepareJiraQuery is used to form the JQL used in Jira Search API as this is the only possible method to retrieve issues
+// PrepareJiraQuery is used to form the JQL used in Jira Search API as this is the only possible method to retrieve issues
 //
 // If nested fields are present in the Fields array, we take only the first part of the string, until the dot(.) as Jira API does not support nested fields filtering
 // If no fields are present in the Fields array, we get all possible fields from Jira using *all
@@ -82,7 +82,7 @@ func (j *JiraProc) extractQueryFromMessage(msg *service.Message) (*jsonInputQuer
 // This will check the fields against custom fields retrieved by the Custom Field Jira API
 //
 // This method also returns all the query params used for the issue Search API
-func (j *JiraProc) prepareJiraQuery(ctx context.Context, q *jsonInputQuery) (resourceType, map[string]string, map[string]string, error) {
+func (j *JiraHttp) PrepareJiraQuery(ctx context.Context, q *JsonInputQuery) (ResourceType, map[string]string, map[string]string, error) {
 	params := make(map[string]string)
 	resource := ResourceIssue
 
@@ -120,7 +120,7 @@ func (j *JiraProc) prepareJiraQuery(ctx context.Context, q *jsonInputQuery) (res
 		params["jql"] += " and created " + op + " \"" + val + "\""
 	}
 
-	customFields, err := j.getAllCustomFields(ctx, q.Fields)
+	customFields, err := j.GetAllCustomFields(ctx, q.Fields)
 	if err != nil {
 		return resource, nil, nil, err
 	}
@@ -155,9 +155,9 @@ func (j *JiraProc) prepareJiraQuery(ctx context.Context, q *jsonInputQuery) (res
 		params["fields"] = "*all"
 	}
 
-	j.Log.Debugf("JQL result: %s", params["jql"])
-	j.Log.Debugf("Fields selected: %s", params["fields"])
-	j.Log.Debugf("Expand fields: %s", params["expand"])
+	j.log.Debugf("JQL result: %s", params["jql"])
+	j.log.Debugf("Fields selected: %s", params["fields"])
+	j.log.Debugf("Expand fields: %s", params["expand"])
 
 	return resource, customFields, params, nil
 }

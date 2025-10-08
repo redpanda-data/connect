@@ -26,12 +26,12 @@ func TestJiraProcessorConfigValidation(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		yaml       string
+		configYAML string
 		wantErrSub string
 	}{
 		{
 			name: "missing base_url",
-			yaml: `
+			configYAML: `
 username: "user" # no base_url
 api_token: "token"
 max_results_per_page: 50
@@ -41,7 +41,7 @@ max_retries: 5
 		},
 		{
 			name: "invalid base_url",
-			yaml: `
+			configYAML: `
 base_url: "not a url"
 username: "user"
 api_token: "token"
@@ -52,7 +52,7 @@ max_retries: 5
 		},
 		{
 			name: "missing username",
-			yaml: `
+			configYAML: `
 username: ""
 base_url: "https://example.com"
 api_token: "token"
@@ -61,7 +61,7 @@ api_token: "token"
 		},
 		{
 			name: "missing api_token",
-			yaml: `base_url: "http://example.invalid"
+			configYAML: `base_url: "http://example.invalid"
 username: "user"
 api_token: ""
 base_url: "https://example.com"
@@ -70,7 +70,7 @@ base_url: "https://example.com"
 		},
 		{
 			name: "max_results_per_page too small",
-			yaml: `base_url: "http://example.invalid"
+			configYAML: `base_url: "http://example.invalid"
 username: "user"
 api_token: "token"
 max_results_per_page: 0
@@ -79,7 +79,7 @@ max_results_per_page: 0
 		},
 		{
 			name: "max_results_per_page too large",
-			yaml: `base_url: "http://example.invalid"
+			configYAML: `base_url: "http://example.invalid"
 username: "user"
 api_token: "token"
 max_results_per_page: 100000
@@ -88,7 +88,7 @@ max_results_per_page: 100000
 		},
 		{
 			name: "max_retries negative",
-			yaml: `base_url: "http://example.invalid"
+			configYAML: `base_url: "http://example.invalid"
 username: "user"
 api_token: "token"
 max_retries: -1
@@ -97,7 +97,7 @@ max_retries: -1
 		},
 		{
 			name: "valid minimal (defaults kick in)",
-			yaml: `
+			configYAML: `
 base_url: "http://example.invalid"
 username: "user"
 api_token: "token"
@@ -106,7 +106,7 @@ api_token: "token"
 		},
 		{
 			name: "valid explicit",
-			yaml: `base_url: "http://example.invalid"
+			configYAML: `base_url: "http://example.invalid"
 username: "user"
 api_token: "token"
 max_results_per_page: 200
@@ -119,7 +119,7 @@ max_retries: 5
 	for _, tc := range tests {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			conf, err := jiraProcessorConfigSpec.ParseYAML(tc.yaml, nil)
+			conf, err := newJiraProcessorConfigSpec().ParseYAML(tc.configYAML, nil)
 			proc, procErr := newJiraProcessor(conf, conf.Resources())
 
 			if tc.wantErrSub == "" {

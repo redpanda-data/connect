@@ -16,12 +16,13 @@ package jirahttp
 
 import (
 	"encoding/json"
-	"github.com/redpanda-data/connect/v4/internal/impl/jira/helpers/http_helper"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strconv"
 	"testing"
+
+	"github.com/redpanda-data/connect/v4/internal/impl/jira/helpers/http_helper"
 )
 
 func TestSearchAllIssues_PaginatesAndAggregates(t *testing.T) {
@@ -44,8 +45,8 @@ func TestSearchAllIssues_PaginatesAndAggregates(t *testing.T) {
 			// First page, no nextPageToken -> respond with IsLast:false and NextPageToken
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			_ = json.NewEncoder(w).Encode(searchJQLResponse{
-				Issues: []issue{
+			_ = json.NewEncoder(w).Encode(SearchJQLResponse{
+				Issues: []Issue{
 					{ID: "1", Key: "DEMO-1"},
 					{ID: "2", Key: "DEMO-2"},
 				},
@@ -59,8 +60,8 @@ func TestSearchAllIssues_PaginatesAndAggregates(t *testing.T) {
 			}
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			_ = json.NewEncoder(w).Encode(searchJQLResponse{
-				Issues: []issue{
+			_ = json.NewEncoder(w).Encode(SearchJQLResponse{
+				Issues: []Issue{
 					{ID: "3", Key: "DEMO-3"},
 				},
 				IsLast: true,
@@ -72,13 +73,13 @@ func TestSearchAllIssues_PaginatesAndAggregates(t *testing.T) {
 	defer srv.Close()
 
 	// Build a minimal jiraProc with our test server and short timeouts.
-	j := &JiraProc{
-		BaseURL:    srv.URL,
-		Username:   "u",
-		ApiToken:   "t",
-		MaxResults: 2,
-		HttpClient: srv.Client(),
-		RetryOpts:  http_helper.RetryOptions{MaxRetries: 0},
+	j := &JiraHttp{
+		baseURL:    srv.URL,
+		username:   "u",
+		apiToken:   "t",
+		maxResults: 2,
+		httpClient: srv.Client(),
+		retryOpts:  http_helper.RetryOptions{MaxRetries: 0},
 	}
 
 	// Act
@@ -117,17 +118,17 @@ func TestSearchIssuesPage_SendsExpectedQueryParams(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(searchJQLResponse{IsLast: true})
+		_ = json.NewEncoder(w).Encode(SearchJQLResponse{IsLast: true})
 	}))
 	defer srv.Close()
 
-	j := &JiraProc{
-		BaseURL:    srv.URL,
-		Username:   "u",
-		ApiToken:   "t",
-		MaxResults: 50,
-		HttpClient: srv.Client(),
-		RetryOpts:  http_helper.RetryOptions{MaxRetries: 0},
+	j := &JiraHttp{
+		baseURL:    srv.URL,
+		username:   "u",
+		apiToken:   "t",
+		maxResults: 50,
+		httpClient: srv.Client(),
+		retryOpts:  http_helper.RetryOptions{MaxRetries: 0},
 	}
 
 	ctx := t.Context()
@@ -150,17 +151,17 @@ func TestSearchIssuesPage_PropagatesParams(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got = r.URL.Query()
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(searchJQLResponse{IsLast: true})
+		_ = json.NewEncoder(w).Encode(SearchJQLResponse{IsLast: true})
 	}))
 	defer srv.Close()
 
-	j := &JiraProc{
-		BaseURL:    srv.URL,
-		Username:   "u",
-		ApiToken:   "t",
-		MaxResults: 10,
-		HttpClient: srv.Client(),
-		RetryOpts:  http_helper.RetryOptions{MaxRetries: 0},
+	j := &JiraHttp{
+		baseURL:    srv.URL,
+		username:   "u",
+		apiToken:   "t",
+		maxResults: 10,
+		httpClient: srv.Client(),
+		retryOpts:  http_helper.RetryOptions{MaxRetries: 0},
 	}
 
 	ctx := t.Context()

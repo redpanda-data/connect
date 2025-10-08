@@ -22,8 +22,8 @@ import (
 )
 
 // transformIssue takes a JiraIssue and returns a JiraIssueResponse with the changelog moved into the fields.
-func transformIssue(orig issue) issueResponse {
-	var r issueResponse
+func transformIssue(orig Issue) IssueResponse {
+	var r IssueResponse
 	r.ID = orig.ID
 	r.Key = orig.Key
 
@@ -45,7 +45,7 @@ func transformIssue(orig issue) issueResponse {
 	return r
 }
 
-// transformIssueTransition converts a raw issue transition object into a
+// transformIssueTransition converts a raw Issue transition object into a
 // issueTransitionResponse, safely handling unexpected types and extracting the ID.
 func transformIssueTransition(orig any) issueTransitionResponse {
 	var r issueTransitionResponse
@@ -76,10 +76,10 @@ func transformIssueTransition(orig any) issueTransitionResponse {
 	return r
 }
 
-// transformProject converts a raw project object into a projectResponse,
+// transformProject converts a raw project object into a ProjectResponse,
 // copying its fields and extracting the ID and key.
-func transformProject(orig any) projectResponse {
-	var r projectResponse
+func transformProject(orig any) ProjectResponse {
+	var r ProjectResponse
 	fields := map[string]any{}
 
 	if m, ok := orig.(map[string]any); ok && m != nil {

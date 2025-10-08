@@ -29,13 +29,13 @@ func newUsersTestServer(t *testing.T, h http.HandlerFunc) *httptest.Server {
 	return httptest.NewServer(h)
 }
 
-// newTestJiraProc creates a minimal JiraProc configured to use the provided server.
-func newUsersJiraProc(srv *httptest.Server, maxResults int) *JiraProc {
-	return &JiraProc{
-		BaseURL:    srv.URL,
-		HttpClient: &http.Client{Timeout: 10 * time.Second},
-		MaxResults: maxResults,
-		// other fields of jiraProc are not required for these tests
+// newTestJiraHttp creates a minimal JiraHttp configured to use the provided server.
+func newUsersJiraHttp(srv *httptest.Server, maxResults int) *JiraHttp {
+	return &JiraHttp{
+		baseURL:    srv.URL,
+		httpClient: &http.Client{Timeout: 10 * time.Second},
+		maxResults: maxResults,
+		// other fields of JiraHttp are not required for these tests
 	}
 }
 
@@ -56,7 +56,7 @@ func TestSearchUsersPage_SendsParamsAndParses(t *testing.T) {
 	})
 	defer srv.Close()
 
-	j := newUsersJiraProc(srv, 5)
+	j := newUsersJiraHttp(srv, 5)
 
 	ctx := t.Context()
 	qp := map[string]string{"query": "alice"}
@@ -83,7 +83,7 @@ func TestSearchUsersPage_WithStartAt(t *testing.T) {
 	})
 	defer srv.Close()
 
-	j := newUsersJiraProc(srv, 2)
+	j := newUsersJiraHttp(srv, 2)
 
 	ctx := t.Context()
 	users, err := j.searchUsersPage(ctx, map[string]string{}, 3)
@@ -116,7 +116,7 @@ func TestSearchAllUsers_PaginatesUntilEmpty(t *testing.T) {
 	})
 	defer srv.Close()
 
-	j := newUsersJiraProc(srv, 2)
+	j := newUsersJiraHttp(srv, 2)
 
 	ctx := t.Context()
 	got, err := j.searchAllUsers(ctx, map[string]string{"query": "any"})
@@ -139,12 +139,12 @@ func TestSearchUsersResource_EmptyBatchWhenNoUsers(t *testing.T) {
 	})
 	defer srv.Close()
 
-	j := newUsersJiraProc(srv, 50)
+	j := newUsersJiraHttp(srv, 50)
 
-	q := &jsonInputQuery{
+	q := &JsonInputQuery{
 		Fields: []string{},
 	}
-	batch, err := j.searchUsersResource(t.Context(), q, map[string]string{}, map[string]string{})
+	batch, err := j.SearchUsersResource(t.Context(), q, map[string]string{}, map[string]string{})
 	if err != nil {
 		t.Fatalf("searchUsersResource error: %v", err)
 	}
@@ -170,7 +170,7 @@ func TestSearchUsersPage_PropagatesQueryParams(t *testing.T) {
 	})
 	defer srv.Close()
 
-	j := newUsersJiraProc(srv, 1)
+	j := newUsersJiraHttp(srv, 1)
 	ctx := t.Context()
 	users, err := j.searchUsersPage(ctx, map[string]string{
 		"query": "alice",
@@ -210,7 +210,7 @@ func TestSearchAllUsers_StartAtIncrementsByPageSize(t *testing.T) {
 	})
 	defer srv.Close()
 
-	j := newUsersJiraProc(srv, 2)
+	j := newUsersJiraHttp(srv, 2)
 
 	_, err := j.searchAllUsers(t.Context(), nil)
 	if err != nil {
