@@ -323,6 +323,7 @@ output:
 				Default(string(types.ObjectCannedACLPrivate)).
 				Advanced(),
 			service.NewBatchPolicyField(s3oFieldBatching),
+			service.NewTLSToggledField("tls"),
 		).
 		Fields(config.SessionFields()...)
 }

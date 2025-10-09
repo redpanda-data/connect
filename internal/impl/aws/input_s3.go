@@ -221,6 +221,7 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 					Description("Whether to set the wait time. Enabling this activates long-polling. Valid values: 0 to 20.").
 					Default(0).
 					Advanced(),
+				service.NewTLSToggledField("tls"),
 			).
 				Description("Consume SQS messages in order to trigger key downloads.").
 				Optional(),
