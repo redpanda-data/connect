@@ -45,6 +45,7 @@ input:
     include: [] # No default (required)
     exclude: [] # No default (optional)
     checkpoint_cache: "" # No default (optional)
+    checkpoint_cache_table_name: rpcn.cdc_checkpoint_cache
     checkpoint_cache_key: microsoft_sql_server_cdc
     checkpoint_limit: 1024
     stream_backoff_interval: 5s
@@ -72,6 +73,7 @@ input:
     include: [] # No default (required)
     exclude: [] # No default (optional)
     checkpoint_cache: "" # No default (optional)
+    checkpoint_cache_table_name: rpcn.cdc_checkpoint_cache
     checkpoint_cache_key: microsoft_sql_server_cdc
     checkpoint_limit: 1024
     stream_backoff_interval: 5s
@@ -167,6 +169,21 @@ A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache r
 
 *Type*: `string`
 
+
+=== `checkpoint_cache_table_name`
+
+The multipart identifier for the checkpoint cache table name. If no `checkpoint_cache` field is specified, the Microsoft SQL Server CDC component will automatically create a table and stored procedure under the `rpcn` schema to act as a checkpoint cache. This table stores the latest Log Sequence Number (LSN) that has been successfully delivered, allowing Redpanda Connect to resume from that point upon restart rather than reconsume the entire change table.
+
+
+*Type*: `string`
+
+*Default*: `"rpcn.cdc_checkpoint_cache"`
+
+```yml
+# Examples
+
+checkpoint_cache_table_name: dbo.checkpoint_cache
+```
 
 === `checkpoint_cache_key`
 

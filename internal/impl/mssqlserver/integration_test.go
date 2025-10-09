@@ -72,7 +72,7 @@ microsoft_sql_server_cdc:
 
 			streamBuilder := service.NewStreamBuilder()
 			require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
-			// require.NoError(t, streamBuilder.SetLoggerYAML(`level: DEBUG`))
+			require.NoError(t, streamBuilder.SetLoggerYAML(`level: DEBUG`))
 
 			require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 				msgBytes, err := mb[0].AsBytes()
@@ -176,7 +176,7 @@ file:
 			streamBuilder := service.NewStreamBuilder()
 			require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
 			require.NoError(t, streamBuilder.AddCacheYAML(cacheConf))
-			// require.NoError(t, streamBuilder.SetLoggerYAML(`level: DEBUG`))
+			require.NoError(t, streamBuilder.SetLoggerYAML(`level: DEBUG`))
 
 			require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 				msgBytes, err := mb[0].AsBytes()
@@ -248,7 +248,8 @@ func TestIntegration_MicrosoftSQLServerCDC_ResumesFromCheckpoint(t *testing.T) {
 microsoft_sql_server_cdc:
   connection_string: %s
   stream_snapshot: false
-  include: ["test.foo"]`
+  include: ["test.foo"]
+  checkpoint_cache_table_name: dbo.checkpoint_cache`
 
 	streamBuilder := service.NewStreamBuilder()
 	require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
@@ -802,6 +803,7 @@ func (db *testDB) createTableWithCDCEnabledIfNotExists(ctx context.Context, full
 	q := `
 	IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = '%s')
 	BEGIN
+		EXEC('CREATE SCHEMA rpcn');
 		EXEC('CREATE SCHEMA %s');
 	END`
 	if _, err := db.Exec(fmt.Sprintf(q, schema, schema)); err != nil {
