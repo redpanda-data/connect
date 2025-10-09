@@ -61,6 +61,10 @@ This input adds the following metadata fields to each message:
 - table (Name of the table that the message originated from)
 - operation (Type of operation that generated the message: "read", "delete", "insert", or "update_before" and "update_after". "read" is from messages that are read in the initial snapshot phase.)
 - lsn (the Log Sequence Number in Microsoft SQL Server)
+
+== Permissions
+
+To use the default Microsoft SQL Server cache, the user must have permissions to create tables and stored procedures. Refer to ` + "`" + fieldCheckpointCacheTableName + "`" + ` for additional details.
 		`).
 	Field(service.NewStringField(fieldConnectionString).
 		Description("The connection string of the Microsoft SQL Server database to connect to.").
@@ -83,11 +87,11 @@ This input adds the following metadata fields to each message:
 		Optional(),
 	).
 	Field(service.NewStringField(fieldCheckpointCache).
-		Description("A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current latest Log Sequence Number (LSN) that has been successfully delivered, this allows Redpanda Connect to continue from that Log Sequence Number (LSN) upon restart, rather than consume the entire state of the change table.").
+		Description("A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current Log Sequence Number (LSN) that has been successfully delivered, this allows Redpanda Connect to continue from that Log Sequence Number (LSN) upon restart, rather than consume the entire state of the change table.").
 		Optional(),
 	).
 	Field(service.NewStringField(fieldCheckpointCacheTableName).
-		Description("The multipart identifier for the checkpoint cache table name. If no `" + fieldCheckpointCache + "` field is specified, the Microsoft SQL Server CDC component will automatically create a table and stored procedure under the `rpcn` schema to act as a checkpoint cache. This table stores the latest Log Sequence Number (LSN) that has been successfully delivered, allowing Redpanda Connect to resume from that point upon restart rather than reconsume the entire change table.").
+		Description("The multipart identifier for the checkpoint cache table name. If no `" + fieldCheckpointCache + "` field is specified, this input will automatically create a table and stored procedure under the `rpcn` schema to act as a checkpoint cache. This table stores the latest processed Log Sequence Number (LSN) that has been successfully delivered, allowing Redpanda Connect to resume from that point upon restart rather than reconsume the entire change table.").
 		Default(defaultCheckpointCache).
 		Example("dbo.checkpoint_cache").
 		Optional(),

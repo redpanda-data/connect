@@ -1,3 +1,11 @@
+// Copyright 2025 Redpanda Data, Inc.
+//
+// Licensed as a Redpanda Enterprise file under the Redpanda Community
+// License (the "License"); you may not use this file except in compliance with
+// the License. You may obtain a copy of the License at
+//
+// https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
+
 package mssqlserver
 
 import (
@@ -15,10 +23,17 @@ import (
 )
 
 const (
-	defaultCacheKey        = "max_lsn"
-	defaultCheckpointCache = "rpcn.cdc_checkpoint_cache"
-	storedProcName         = "CdcCheckpointUpsert"
+	// cache updates a single row so we use a fixed key
+	defaultCacheKey = "max_lsn"
+	// defaultCheckpointCache can be configured by the user
+	defaultCheckpointCache = "rpcn.CdcCheckpointCache"
+	// defaultStoredProcName schema is inferred from the provided checkpoint cache config
+	// the stored procedure name cannot be configured by the user
+	defaultStoredProcName = "CdcCheckpointCacheUpdate"
 )
+
+// allowedTableIdentifiers is used for validating cache table names
+var allowedTableIdentifiers = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_$]{0,127}$`)
 
 // cacheTable represents a formatted cache table name provided by the user configuration
 type cacheTable struct{ schema, name string }
@@ -81,7 +96,7 @@ func newCheckpointCache(
 	}
 
 	// create a prepared statement for calling the stored proc (created in same schema as cache table) during Set operations to remove avoidable overhead
-	if cacheSetStmt, err = db.PrepareContext(ctx, fmt.Sprintf("EXEC [%s].[%s] @Key=?, @Value=?", cacheTable.schema, storedProcName)); err != nil {
+	if cacheSetStmt, err = db.PrepareContext(ctx, fmt.Sprintf("EXEC [%s].[%s] @Key=?, @Value=?", cacheTable.schema, defaultStoredProcName)); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("preparing checkpoint cache statement: %w", err)
 	}
@@ -101,11 +116,10 @@ func newCheckpointCache(
 		_ = c.db.Close()
 		c.shutSig.TriggerHasStopped()
 	}()
-
 	return c, nil
 }
 
-// Get a cache item, we only do this at start up
+// Get a cache item, we only do this at start up, key can be ignored as we only ever store one entry
 func (c *checkpointCache) Get(ctx context.Context, _ string) ([]byte, error) {
 	if c.db == nil {
 		return nil, fmt.Errorf("checkpoint cache not initialised for get operation: %w", service.ErrNotConnected)
@@ -123,7 +137,7 @@ func (c *checkpointCache) Get(ctx context.Context, _ string) ([]byte, error) {
 }
 
 // Set a cache item, specifying an optional TTL. It is okay for caches to
-// ignore the ttl parameter if it isn't possible to implement.
+// ignore the ttl parameter if it isn't possible to implement. Key can be ignored as we only ever store one entry
 func (c *checkpointCache) Set(ctx context.Context, _ string, value []byte, _ *time.Duration) error {
 	if c.cacheSetStmt == nil {
 		return errors.New("prepared statement for cache set not initialised")
@@ -131,11 +145,10 @@ func (c *checkpointCache) Set(ctx context.Context, _ string, value []byte, _ *ti
 	if _, err := c.cacheSetStmt.ExecContext(ctx, defaultCacheKey, value); err != nil {
 		return fmt.Errorf("writing to checkpoint cache: %w", err)
 	}
-
 	return nil
 }
 
-// Close closes the cache
+// Close closes the cache and any underlying connections
 func (c *checkpointCache) Close(ctx context.Context) error {
 	c.shutSig.TriggerHardStop()
 	select {
@@ -167,7 +180,7 @@ func createCacheTable(ctx context.Context, db *sql.DB, tbl cacheTable) (bool, er
 }
 
 func createUpsertStoredProc(ctx context.Context, db *sql.DB, cacheTable cacheTable) error {
-	storedProcFullName := fmt.Sprintf("[%s].[%s]", cacheTable.schema, storedProcName)
+	storedProcFullName := fmt.Sprintf("[%s].[%s]", cacheTable.schema, defaultStoredProcName)
 	tableName := cacheTable.String()
 	// key length is based on default (fixed) cache key
 	q := `
@@ -201,12 +214,13 @@ func (*checkpointCache) Delete(_ context.Context, _ string) error {
 var (
 	errEmptyTableName               = errors.New("empty table name")
 	errInvalidTableLength           = errors.New("invalid table length")
-	errInvalidTableName             = errors.New("invalid table name")
+	errInvalidSchemaLength          = errors.New("invalid schema length")
 	errInvalidIdentifiedInTableName = errors.New("invalid identifier in table name")
 	errInvalidTableFormat           = errors.New("table name must be in the format schema.tablename")
 )
 
-// validateCacheTableName validates a table name including schema, e.g. "dbo.products"
+// validateCacheTableName is called at start up and validates a table name including schema, e.g. "dbo.products"
+// Rules from https://learn.microsoft.com/en-us/sql/relational-databases/databases/database-identifiers
 func validateCacheTableName(input string) (cacheTable, error) {
 	if input == "" {
 		return cacheTable{}, errEmptyTableName
@@ -219,21 +233,14 @@ func validateCacheTableName(input string) (cacheTable, error) {
 
 	ct := cacheTable{schema: parts[0], name: parts[1]}
 
-	if len(ct.schema) < 1 {
-		return cacheTable{}, errInvalidTableName
+	if ct.schema == "" || len(ct.schema) > 128 {
+		return cacheTable{}, errInvalidSchemaLength
 	}
-	// "table_name can be a maximum of 128 characters..."
-	// https://learn.microsoft.com/en-us/sql/t-sql/statements/create-table-transact-sql?view=sql-server-ver17&redirectedfrom=MSDN#table_name
-	if len(ct.name) > 128 {
+	if ct.name == "" || len(ct.name) > 128 {
 		return cacheTable{}, errInvalidTableLength
 	}
-
-	identifierRegex := regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
-	for _, part := range parts {
-		if !identifierRegex.MatchString(part) {
-			return cacheTable{}, errInvalidIdentifiedInTableName
-		}
+	if !allowedTableIdentifiers.MatchString(ct.schema) || !allowedTableIdentifiers.MatchString(ct.name) {
+		return cacheTable{}, errInvalidIdentifiedInTableName
 	}
-
 	return ct, nil
 }
