@@ -17,6 +17,7 @@ package jira
 import (
 	"testing"
 
+	"github.com/redpanda-data/connect/v4/internal/license"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -120,6 +121,8 @@ max_retries: 5
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			conf, err := newJiraProcessorConfigSpec().ParseYAML(tc.configYAML, nil)
+			resources := conf.Resources()
+			license.InjectTestService(resources)
 			proc, procErr := newJiraProcessor(conf, conf.Resources())
 
 			if tc.wantErrSub == "" {

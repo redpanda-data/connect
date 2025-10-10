@@ -20,7 +20,7 @@ import (
 )
 
 func TestBuildSelectorTree(t *testing.T) {
-	j := &JiraHttp{}
+	j := &Client{}
 	fields := []string{"summary", "assignee.displayName", "status.name", "parent.fields.status.name", "Story Points", "Sprint.name"}
 	custom := map[string]string{
 		"Story Points": "custom_field_10100",
@@ -74,7 +74,7 @@ func TestNormalizeAndReverseCustomFields(t *testing.T) {
 }
 
 func TestFilter_MapAndArray(t *testing.T) {
-	j := &JiraHttp{}
+	j := &Client{}
 	// data represents a simplified issue.Fields payload
 	data := map[string]any{
 		"summary": "Fix bug",

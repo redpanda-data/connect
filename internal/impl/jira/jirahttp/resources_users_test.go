@@ -29,13 +29,13 @@ func newUsersTestServer(t *testing.T, h http.HandlerFunc) *httptest.Server {
 	return httptest.NewServer(h)
 }
 
-// newTestJiraHttp creates a minimal JiraHttp configured to use the provided server.
-func newUsersJiraHttp(srv *httptest.Server, maxResults int) *JiraHttp {
-	return &JiraHttp{
+// newTestJiraHttp creates a minimal Client configured to use the provided server.
+func newUsersJiraHttp(srv *httptest.Server, maxResults int) *Client {
+	return &Client{
 		baseURL:    srv.URL,
 		httpClient: &http.Client{Timeout: 10 * time.Second},
 		maxResults: maxResults,
-		// other fields of JiraHttp are not required for these tests
+		// other fields of Client are not required for these tests
 	}
 }
 

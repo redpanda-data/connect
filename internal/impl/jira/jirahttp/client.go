@@ -30,17 +30,18 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/redpanda-data/connect/v4/internal/impl/jira/helpers/http_helper"
+	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/impl/jira/helpers/http_metrics"
 	"github.com/redpanda-data/connect/v4/internal/impl/jira/helpers/jira_helper"
 )
 
 // jiraAPIBasePath is the base path for Jira Rest API
 const jiraAPIBasePath = "/rest/api/3"
 
-// callJiraApi is the general function that calls Jira API on a specific URL using the URL object.
+// This is the general function that calls Jira API on a specific URL using the URL object.
 // It applies standard header parameters to all calls, Authorization, User-Agent and Accept.
 // It uses the helper functions to check against possible response codes and handling the retry-after mechanism
-func (j *JiraHttp) callJiraApi(ctx context.Context, u *url.URL) ([]byte, error) {
+func (j *Client) callJiraApi(ctx context.Context, u *url.URL) ([]byte, error) {
 	j.log.Debugf("API call: %s", u.String())
 
 	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
@@ -51,16 +52,11 @@ func (j *JiraHttp) callJiraApi(ctx context.Context, u *url.URL) ([]byte, error) 
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "Redpanda-Connect")
 
-	resp, err := http_helper.DoRequestWithRetries(ctx, j.httpClient, req, j.retryOpts)
+	body, err := jira_helper.DoRequestWithRetries(ctx, j.httpClient, req, j.retryOpts)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %v", err)
 	}
-	defer resp.Body.Close()
 
-	body, jiraErr := jira_helper.CheckJiraAuth(resp)
-	if jiraErr != nil {
-		return nil, fmt.Errorf("error calling JIRA API: %v - %s", jiraErr, string(body))
-	}
 	return body, nil
 }
 
@@ -69,7 +65,7 @@ func (j *JiraHttp) callJiraApi(ctx context.Context, u *url.URL) ([]byte, error) 
 //
 // Note that this supports custom fields that are nested, like if "Sprint.name" is present into the Fields input message -> this will be translated to "custom_field_10022.name"
 // Returns only the custom fields present in the Fields input message as a map[fieldName]=customFieldName
-func (j *JiraHttp) GetAllCustomFields(ctx context.Context, fieldsToSearch []string) (map[string]string, error) {
+func (j *Client) GetAllCustomFields(ctx context.Context, fieldsToSearch []string) (map[string]string, error) {
 	j.log.Debug("Fetching custom fields from API")
 
 	var allFields []CustomField
@@ -105,9 +101,8 @@ func (j *JiraHttp) GetAllCustomFields(ctx context.Context, fieldsToSearch []stri
 	return customFieldsInQuery, nil
 }
 
-// getCustomFieldsPage gets a single page of custom fields
-// using startAt strategy as the maximum number of custom fields to be retrieved is capped at 50
-func (j *JiraHttp) getCustomFieldsPage(ctx context.Context, startAt int) (*CustomFieldSearchResponse, error) {
+// Function to get a single page of custom fields using startAt strategy as the maximum number of custom fields to be retrieved is capped at 50
+func (j *Client) getCustomFieldsPage(ctx context.Context, startAt int) (*CustomFieldSearchResponse, error) {
 	apiUrl, err := url.Parse(j.baseURL + jiraAPIBasePath + "/field/search")
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL: %v", err)
@@ -126,4 +121,33 @@ func (j *JiraHttp) getCustomFieldsPage(ctx context.Context, startAt int) (*Custo
 		return nil, fmt.Errorf("cannot map response to custom field struct: %w", err)
 	}
 	return &result, nil
+}
+
+// Client is the implementation of Jira API queries. It holds the client state and orchestrates calls into the jirahttp package.
+type Client struct {
+	baseURL    string
+	username   string
+	apiToken   string
+	maxResults int
+	retryOpts  jira_helper.RetryOptions
+	httpClient *http.Client
+	log        *service.Logger
+}
+
+// NewClient is the constructor ofr a Client object
+func NewClient(log *service.Logger, baseUrl, username, apiToken string, maxResults, maxRetries int, metrics *service.Metrics, httpClient *http.Client, headerPolicy *jira_helper.AuthHeaderPolicy) (*Client, error) {
+	return &Client{
+		log:        log,
+		baseURL:    baseUrl,
+		username:   username,
+		apiToken:   apiToken,
+		maxResults: maxResults,
+		retryOpts: jira_helper.RetryOptions{
+			MaxRetries:       maxRetries,
+			AuthHeaderPolicy: headerPolicy,
+		},
+		httpClient: http_metrics.NewInstrumentedClient(
+			metrics, "jira_http",
+			httpClient),
+	}, nil
 }

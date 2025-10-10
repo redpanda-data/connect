@@ -22,7 +22,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/redpanda-data/connect/v4/internal/impl/jira/helpers/http_helper"
+	"github.com/redpanda-data/connect/v4/internal/impl/jira/helpers/jira_helper"
 )
 
 func TestSearchAllProjects_PaginatesViaStartAt(t *testing.T) {
@@ -66,13 +66,13 @@ func TestSearchAllProjects_PaginatesViaStartAt(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	j := &JiraHttp{
+	j := &Client{
 		baseURL:    srv.URL,
 		username:   "u",
 		apiToken:   "t",
 		maxResults: 2,
 		httpClient: srv.Client(),
-		retryOpts:  http_helper.RetryOptions{MaxRetries: 0},
+		retryOpts:  jira_helper.RetryOptions{MaxRetries: 0},
 	}
 
 	ctx := t.Context()
@@ -100,13 +100,13 @@ func TestSearchProjectsPage_SendsParamsAndMaxResults(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	j := &JiraHttp{
+	j := &Client{
 		baseURL:    srv.URL,
 		username:   "u",
 		apiToken:   "t",
 		maxResults: 50,
 		httpClient: srv.Client(),
-		retryOpts:  http_helper.RetryOptions{MaxRetries: 0},
+		retryOpts:  jira_helper.RetryOptions{MaxRetries: 0},
 	}
 
 	ctx := t.Context()

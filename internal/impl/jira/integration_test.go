@@ -132,7 +132,7 @@ func TestProcessor_EndToEnd_Issues(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	jiraHttp, err := jirahttp.NewJiraHttp(nil, srv.URL, user, token, 2, 0, nil, &http.Client{Timeout: 5 * time.Second})
+	jiraHttp, err := jirahttp.NewClient(nil, srv.URL, user, token, 2, 0, nil, &http.Client{Timeout: 5 * time.Second}, nil)
 	if err != nil {
 		t.Fatalf("Process error: %v", err)
 	}
@@ -257,7 +257,7 @@ func TestProcessor_EndToEnd_Projects(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	jiraHttp, err := jirahttp.NewJiraHttp(nil, srv.URL, user, token, 2, 0, nil, &http.Client{Timeout: 5 * time.Second})
+	jiraHttp, err := jirahttp.NewClient(nil, srv.URL, user, token, 2, 0, nil, &http.Client{Timeout: 5 * time.Second}, nil)
 	if err != nil {
 		t.Fatalf("Process error: %v", err)
 	}

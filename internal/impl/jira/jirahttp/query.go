@@ -58,7 +58,7 @@ func extractExpandableFields(fields []string) []string {
 
 // ExtractQueryFromMessage method receives the input message from the jiraProcessor
 // and parses it into a jsonInputQuery object
-func (j *JiraHttp) ExtractQueryFromMessage(msg *service.Message) (*JsonInputQuery, error) {
+func (j *Client) ExtractQueryFromMessage(msg *service.Message) (*JsonInputQuery, error) {
 	var queryData *JsonInputQuery
 	msgBytes, err := msg.AsBytes()
 	if err != nil {
@@ -82,7 +82,7 @@ func (j *JiraHttp) ExtractQueryFromMessage(msg *service.Message) (*JsonInputQuer
 // This will check the fields against custom fields retrieved by the Custom Field Jira API
 //
 // This method also returns all the query params used for the issue Search API
-func (j *JiraHttp) PrepareJiraQuery(ctx context.Context, q *JsonInputQuery) (ResourceType, map[string]string, map[string]string, error) {
+func (j *Client) PrepareJiraQuery(ctx context.Context, q *JsonInputQuery) (ResourceType, map[string]string, map[string]string, error) {
 	params := make(map[string]string)
 	resource := ResourceIssue
 

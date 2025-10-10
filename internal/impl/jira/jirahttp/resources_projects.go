@@ -38,7 +38,7 @@ import (
 // Returns:
 // - service.MessageBatch → batch of messages containing transformed projects
 // - error → error if the API call, response parsing, or field processing fails
-func (j *JiraHttp) SearchProjectsResource(
+func (j *Client) SearchProjectsResource(
 	ctx context.Context,
 	inputQuery *JsonInputQuery,
 	customFields map[string]string,
@@ -90,7 +90,7 @@ func (j *JiraHttp) SearchProjectsResource(
 // Returns:
 // - []any → list of all retrieved projects
 // - error → error if a paginated request or response parsing fails
-func (j *JiraHttp) searchAllProjects(ctx context.Context, queryParams map[string]string) ([]any, error) {
+func (j *Client) searchAllProjects(ctx context.Context, queryParams map[string]string) ([]any, error) {
 	var all []any
 	startAt := 0
 	for {
@@ -121,7 +121,7 @@ func (j *JiraHttp) searchAllProjects(ctx context.Context, queryParams map[string
 
 // Function to get a single page of issues using startAt offset strategy
 // The MaxResults can be overridden by the processor parameters (up to 5000 - default 50)
-func (j *JiraHttp) searchProjectsPage(ctx context.Context, qp map[string]string, startAt int) (*ProjectSearchResponse, error) {
+func (j *Client) searchProjectsPage(ctx context.Context, qp map[string]string, startAt int) (*ProjectSearchResponse, error) {
 	urlString, err := url.Parse(j.baseURL + jiraAPIBasePath + "/project/search")
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL: %v", err)
@@ -157,7 +157,7 @@ func (j *JiraHttp) searchProjectsPage(ctx context.Context, qp map[string]string,
 // Returns:
 // - service.MessageBatch → batch of messages containing transformed project types
 // - error → error if the API call, response parsing, or field processing fails
-func (j *JiraHttp) SearchProjectTypesResource(ctx context.Context, q *JsonInputQuery, custom map[string]string) (service.MessageBatch, error) {
+func (j *Client) SearchProjectTypesResource(ctx context.Context, q *JsonInputQuery, custom map[string]string) (service.MessageBatch, error) {
 	var batch service.MessageBatch
 
 	urlString, err := url.Parse(j.baseURL + jiraAPIBasePath + "/project/type")
@@ -207,7 +207,7 @@ func (j *JiraHttp) SearchProjectTypesResource(ctx context.Context, q *JsonInputQ
 // Returns:
 // - service.MessageBatch → batch of messages containing transformed project categories
 // - error → error if the API call, response parsing, or field processing fails
-func (j *JiraHttp) SearchProjectCategoriesResource(ctx context.Context, q *JsonInputQuery, custom map[string]string) (service.MessageBatch, error) {
+func (j *Client) SearchProjectCategoriesResource(ctx context.Context, q *JsonInputQuery, custom map[string]string) (service.MessageBatch, error) {
 	var batch service.MessageBatch
 
 	urlString, err := url.Parse(j.baseURL + jiraAPIBasePath + "/projectCategory")
@@ -260,7 +260,7 @@ func (j *JiraHttp) SearchProjectCategoriesResource(ctx context.Context, q *JsonI
 // Returns:
 // - service.MessageBatch → batch of messages containing transformed project versions
 // - error → error if the API call, response parsing, or field processing fails
-func (j *JiraHttp) SearchProjectVersionsResource(
+func (j *Client) SearchProjectVersionsResource(
 	ctx context.Context,
 	inputQuery *JsonInputQuery,
 	customFields map[string]string,

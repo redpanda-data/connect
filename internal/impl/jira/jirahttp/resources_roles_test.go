@@ -27,8 +27,8 @@ func newRolesTestServer(t *testing.T, handler http.HandlerFunc) *httptest.Server
 	return httptest.NewServer(handler)
 }
 
-func newRolesTestJiraHttp(server *httptest.Server) *JiraHttp {
-	return &JiraHttp{
+func newRolesTestJiraHttp(server *httptest.Server) *Client {
+	return &Client{
 		baseURL:    server.URL,
 		httpClient: &http.Client{Timeout: 10 * time.Second},
 	}
