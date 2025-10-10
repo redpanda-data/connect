@@ -236,7 +236,7 @@ max_message_bytes: 1MB
 	strmBuilder := service.NewStreamBuilder()
 
 	require.NoError(t, strmBuilder.AddOutputYAML(fmt.Sprintf(`
-redpanda_common:
+redpanda:
   topic: %v
 `, topicCustom)))
 
