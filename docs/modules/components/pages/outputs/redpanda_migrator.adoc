@@ -155,6 +155,9 @@ Each pipeline must have both input and output components configured.
 the mapping between input and output components is done based on the label field. 
 The label of the input and output must match exactly for proper coordination.
 
+**Performance tuning for high throughput:** For workloads with high message rates or large messages, 
+adjust buffer sizes on the paired input component to improve throughput. See the input documentation for details.
+
 What gets synchronised:
 
 - Topics
