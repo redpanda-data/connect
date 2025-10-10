@@ -17,6 +17,7 @@ services:
       - '--web.console.templates=/usr/share/prometheus/consoles'
     ports:
       - "9090:9090"
+    cpuset: "0"
     cpus: 0.5
 
   grafana:
@@ -34,6 +35,7 @@ services:
       - GF_AUTH_DISABLE_LOGIN_FORM=true
     env_file:
       - ./grafana/config.monitoring
+    cpuset: "0"
     cpus: 0.5
 
 # jaeger:
@@ -41,3 +43,5 @@ services:
 #   ports:
 #     - "6831:6831/udp"
 #     - "16686:16686"
+#   cpuset: "0"
+#   cpus: 0.5
