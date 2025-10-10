@@ -1,17 +1,53 @@
-Profiling
-=========
+# Profiling Tools
 
-This docker compose sets a Benthos instance up with a custom config, [Prometheus][prometheus], [Grafana][grafana] and [Jaeger][jaeger] in order to observe its performance under different configurations.
+This directory contains tools for profiling and monitoring Redpanda Connect performance using Prometheus, Grafana, and pprof.
 
-# Set up
+## Quick Start
 
-- Run Grafana and Prometheus with `docker-compose up`.
-- Edit `config.yaml` and add whatever components you want to profile with.
-- Run Redpanda Connect with `redpanda-connect -c ./config.yaml`.
-- Open up Grafana at [http://localhost:3000/d/PHrVlmniz/benthos-dash](http://localhost:3000/d/PHrVlmniz/benthos-dash)
-- Go to [http://localhost:16686](http://localhost:16686) in order to observe opentracing events with Jaeger.
-- Use `go tool pprof http://localhost:4195/debug/pprof/profile` and similar endpoints to get profiling data.
+1. Start the monitoring stack:
+   ```bash
+   task up
+   ```
 
-[prometheus]: https://prometheus.io/
-[grafana]: https://grafana.com/
-[jaeger]: https://www.jaegertracing.io/
+2. Run your Redpanda Connect instance with the desired configuration.
+
+3. Access the dashboards:
+   - Grafana: http://localhost:3000
+   - Prometheus: http://localhost:9090
+
+## Capturing Profiles
+
+In order to use profiling make sure your Redpanda Connect instance has the following configuration: 
+
+```yaml
+http:
+  debug_endpoints: true
+```
+
+Use the following Taskfile commands to capture different types of profiles:
+
+```bash
+# Capture all profiles (CPU, memory, blocking)
+task profile
+
+# Or capture specific profiles:
+task profile:cpu    # 30s CPU profile
+task profile:mem    # Memory profile
+task profile:block  # Goroutine blocking profile
+```
+
+Profiles are saved to the `./profiles` directory, you can use the `pprof` tasks to open them in a browser:
+
+```bash
+task pprof:cpu
+task pprof:mem
+task pprof:block
+```
+
+## Cleanup
+
+To stop and remove all containers:
+
+```bash
+task down
+```
