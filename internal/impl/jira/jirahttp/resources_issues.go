@@ -28,7 +28,7 @@ import (
 )
 
 // SearchIssuesResource performs a search for the issues resource
-func (j *JiraHttp) SearchIssuesResource(
+func (j *Client) SearchIssuesResource(
 	ctx context.Context,
 	inputQuery *JsonInputQuery,
 	customFields map[string]string,
@@ -79,7 +79,7 @@ func (j *JiraHttp) SearchIssuesResource(
 // searchAllIssues function to get all Issues from Jira API and placing them into an array of issues.
 // If the nextPageToken is present in the response, then it will fetch the next page until isLast is true.
 // Returns the array of []issue
-func (j *JiraHttp) searchAllIssues(ctx context.Context, queryParams map[string]string) ([]Issue, error) {
+func (j *Client) searchAllIssues(ctx context.Context, queryParams map[string]string) ([]Issue, error) {
 	var all []Issue
 	next := ""
 	for {
@@ -98,7 +98,7 @@ func (j *JiraHttp) searchAllIssues(ctx context.Context, queryParams map[string]s
 
 // searchIssuesPage function to get a single page of issues using nextPageToken strategy
 // The MaxResults can be overridden by the processor parameters (up to 5000 - default 50)
-func (j *JiraHttp) searchIssuesPage(ctx context.Context, qp map[string]string, nextPageToken string) (*SearchJQLResponse, error) {
+func (j *Client) searchIssuesPage(ctx context.Context, qp map[string]string, nextPageToken string) (*SearchJQLResponse, error) {
 	apiUrl, err := url.Parse(j.baseURL + jiraAPIBasePath + "/search/jql")
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL: %v", err)
@@ -136,7 +136,7 @@ func (j *JiraHttp) searchIssuesPage(ctx context.Context, qp map[string]string, n
 // Returns:
 // - service.MessageBatch → batch of messages containing transformed transitions
 // - error → error if the API call, response parsing, or field processing fails
-func (j *JiraHttp) SearchIssueTransitionsResource(ctx context.Context, q *JsonInputQuery, custom, params map[string]string) (service.MessageBatch, error) {
+func (j *Client) SearchIssueTransitionsResource(ctx context.Context, q *JsonInputQuery, custom, params map[string]string) (service.MessageBatch, error) {
 	var batch service.MessageBatch
 
 	apiUrl, err := url.Parse(j.baseURL + jiraAPIBasePath + "/issue/" + q.Issue + "/transitions")

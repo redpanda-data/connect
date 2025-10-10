@@ -22,7 +22,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/redpanda-data/connect/v4/internal/impl/jira/helpers/http_helper"
+	"github.com/redpanda-data/connect/v4/internal/impl/jira/helpers/jira_helper"
 )
 
 func TestSearchAllIssues_PaginatesAndAggregates(t *testing.T) {
@@ -73,13 +73,13 @@ func TestSearchAllIssues_PaginatesAndAggregates(t *testing.T) {
 	defer srv.Close()
 
 	// Build a minimal jiraProc with our test server and short timeouts.
-	j := &JiraHttp{
+	j := &Client{
 		baseURL:    srv.URL,
 		username:   "u",
 		apiToken:   "t",
 		maxResults: 2,
 		httpClient: srv.Client(),
-		retryOpts:  http_helper.RetryOptions{MaxRetries: 0},
+		retryOpts:  jira_helper.RetryOptions{MaxRetries: 0},
 	}
 
 	// Act
@@ -122,13 +122,13 @@ func TestSearchIssuesPage_SendsExpectedQueryParams(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	j := &JiraHttp{
+	j := &Client{
 		baseURL:    srv.URL,
 		username:   "u",
 		apiToken:   "t",
 		maxResults: 50,
 		httpClient: srv.Client(),
-		retryOpts:  http_helper.RetryOptions{MaxRetries: 0},
+		retryOpts:  jira_helper.RetryOptions{MaxRetries: 0},
 	}
 
 	ctx := t.Context()
@@ -155,13 +155,13 @@ func TestSearchIssuesPage_PropagatesParams(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	j := &JiraHttp{
+	j := &Client{
 		baseURL:    srv.URL,
 		username:   "u",
 		apiToken:   "t",
 		maxResults: 10,
 		httpClient: srv.Client(),
-		retryOpts:  http_helper.RetryOptions{MaxRetries: 0},
+		retryOpts:  jira_helper.RetryOptions{MaxRetries: 0},
 	}
 
 	ctx := t.Context()

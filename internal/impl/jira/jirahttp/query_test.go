@@ -78,7 +78,7 @@ func TestParseOperatorField(t *testing.T) {
 }
 
 func TestExtractQueryFromMessage(t *testing.T) {
-	j := &JiraHttp{}
+	j := &Client{}
 	input := JsonInputQuery{
 		Resource: "issue",
 		Project:  "DEMO",
@@ -101,7 +101,7 @@ func TestExtractQueryFromMessage(t *testing.T) {
 }
 
 func TestExtractQueryFromMessage_InvalidJSON(t *testing.T) {
-	j := &JiraHttp{}
+	j := &Client{}
 	msg := service.NewMessage([]byte("{not-json}"))
 	if _, err := j.ExtractQueryFromMessage(msg); err == nil {
 		t.Fatalf("expected error for invalid json")

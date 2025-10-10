@@ -32,6 +32,7 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/redpanda-data/connect/v4/internal/impl/jira/helpers/jira_helper"
 	"github.com/redpanda-data/connect/v4/internal/impl/jira/jirahttp"
 	"github.com/redpanda-data/connect/v4/internal/license"
 
@@ -42,7 +43,7 @@ import (
 // It holds the client state and orchestrates calls into the jirahttp package.
 type jiraProcessor struct {
 	log      *service.Logger
-	jiraHttp *jirahttp.JiraHttp
+	jiraHttp *jirahttp.Client
 }
 
 // newJiraProcessorConfigSpec creates a new Configuration specification for the Jira processor
@@ -146,7 +147,14 @@ func newJiraProcessor(conf *service.ParsedConfig, mgr *service.Resources) (*jira
 
 	httpClient := &http.Client{Timeout: timeout}
 
-	jiraHttp, err := jirahttp.NewJiraHttp(mgr.Logger(), baseURL, username, apiToken, maxResults, maxRetries, mgr.Metrics(), httpClient)
+	headerPolicy := &jira_helper.AuthHeaderPolicy{
+		HeaderName: "X-Seraph-LoginReason",
+		IsProblem: func(reason string) bool {
+			return reason != "" && reason != "OK" && reason != "AUTHENTICATED_TRUE"
+		},
+	}
+
+	jiraHttp, err := jirahttp.NewClient(mgr.Logger(), baseURL, username, apiToken, maxResults, maxRetries, mgr.Metrics(), httpClient, headerPolicy)
 	if err != nil {
 		return nil, err
 	}
@@ -157,8 +165,6 @@ func newJiraProcessor(conf *service.ParsedConfig, mgr *service.Resources) (*jira
 	}, nil
 }
 
-// Process executes the main Jira processor logic. It parses the incoming message, builds
-// and runs the corresponding Jira query using jirahttp. It returns the retrieved data as a message batch.
 func (j *jiraProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
 	inputMsg, err := msg.AsBytes()
 	if err != nil {

@@ -28,7 +28,7 @@ import (
 
 // SearchRolesResource retrieves all Jira roles and returns them as a batch
 // of service messages after optional field filtering.
-func (j *JiraHttp) SearchRolesResource(
+func (j *Client) SearchRolesResource(
 	ctx context.Context,
 	inputQuery *JsonInputQuery,
 	customFields map[string]string,
@@ -77,7 +77,7 @@ func (j *JiraHttp) SearchRolesResource(
 }
 
 // searchRoles fetches all Jira roles from the API and returns them as a list.
-func (j *JiraHttp) searchRoles(ctx context.Context) ([]any, error) {
+func (j *Client) searchRoles(ctx context.Context) ([]any, error) {
 	apiUrl, err := url.Parse(j.baseURL + jiraAPIBasePath + "/role")
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL: %v", err)

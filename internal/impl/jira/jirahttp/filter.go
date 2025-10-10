@@ -110,7 +110,7 @@ func selectorTreeFrom(log *service.Logger, fields []string, custom map[string]st
 // found in the selectorTree by comparing keys from data and keys from selectorTree.
 // If customFields are present in the data, they will also be replaced with their real name;
 // example: custom_field_10100 will be replaced with "Story Points"
-func (j *JiraHttp) filter(data any, selectors selectorTree, custom map[string]string) (any, error) {
+func (j *Client) filter(data any, selectors selectorTree, custom map[string]string) (any, error) {
 	switch val := data.(type) {
 	case map[string]any:
 		res := make(map[string]any)

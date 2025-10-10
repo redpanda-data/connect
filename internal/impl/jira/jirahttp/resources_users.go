@@ -30,7 +30,7 @@ import (
 
 // searchUsersPage is a function which gets a single page of issues using startAt offset strategy
 // The maxResults can be overridden by the processor parameters (up to 5000 - default 50)
-func (j *JiraHttp) searchUsersPage(ctx context.Context, queryParams map[string]string, startAt int) ([]any, error) {
+func (j *Client) searchUsersPage(ctx context.Context, queryParams map[string]string, startAt int) ([]any, error) {
 	apiUrl, err := url.Parse(j.baseURL + jiraAPIBasePath + "/users/search")
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL: %v", err)
@@ -67,7 +67,7 @@ func (j *JiraHttp) searchUsersPage(ctx context.Context, queryParams map[string]s
 // Returns:
 // - []any → list of all retrieved users
 // - error → error if a paginated request fails
-func (j *JiraHttp) searchAllUsers(ctx context.Context, queryParams map[string]string) ([]any, error) {
+func (j *Client) searchAllUsers(ctx context.Context, queryParams map[string]string) ([]any, error) {
 	var allUsers []any
 
 	startAt := 0
@@ -99,7 +99,7 @@ func (j *JiraHttp) searchAllUsers(ctx context.Context, queryParams map[string]st
 // Returns:
 // - service.MessageBatch → batch of messages containing transformed users
 // - error → error if the API call, response parsing, or field processing fails
-func (j *JiraHttp) SearchUsersResource(
+func (j *Client) SearchUsersResource(
 	ctx context.Context,
 	inputQuery *JsonInputQuery,
 	customFields map[string]string,
