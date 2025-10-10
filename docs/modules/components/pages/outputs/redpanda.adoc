@@ -93,6 +93,46 @@ output:
 Writes a batch of messages to Kafka brokers and waits for acknowledgement before propagating it back to the input.
 
 
+== Examples
+
+[tabs]
+======
+Simple Common Output::
++
+--
+
+Data is generated and written to a topic bar, targetting the cluster configured within the redpanda block at the bottom. This is useful as it allows us to configure TLS and SASL only once for potentially multiple inputs and outputs.
+
+```yaml
+input:
+  generate:
+    interval: 1s
+    mapping: 'root.name = fake("name")'
+
+pipeline:
+  processors:
+    - mutation: |
+        root.id = uuid_v4()
+        root.loud_name = this.name.uppercase()
+
+output:
+  redpanda:
+    topic: bar
+    key: ${! @id }
+
+redpanda:
+  seed_brokers: [ "127.0.0.1:9092" ]
+  tls:
+    enabled: true
+  sasl:
+    - mechanism: SCRAM-SHA-512
+      password: bar
+      username: foo
+```
+
+--
+======
+
 == Fields
 
 === `seed_brokers`
