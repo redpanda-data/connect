@@ -108,7 +108,7 @@ func init() {
 				// to initialise in the background. Otherwise we get an annoying
 				// log.
 				for range 20 {
-					if err = kafka.FranzSharedClientUse(SharedGlobalRedpandaClientKey, mgr, func(details *kafka.FranzSharedClientInfo) error {
+					if err = kafka.FranzSharedClientUse(kafka.SharedGlobalRedpandaClientKey, mgr, func(details *kafka.FranzSharedClientInfo) error {
 						clientOpts = append(clientOpts, details.ConnDetails.FranzOpts()...)
 						return nil
 					}); err == nil {

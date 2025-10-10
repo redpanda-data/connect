@@ -41,13 +41,14 @@ const (
 func FranzConnectionFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewStringListField(kfcFieldSeedBrokers).
-			Description("A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses.").
+			Description("A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses. When this field is omitted the global `redpanda` block will be referenced for connection details.").
+			Optional().
 			Example([]string{"localhost:9092"}).
 			Example([]string{"foo:9092", "bar:9092"}).
 			Example([]string{"foo:9092,bar:9092"}),
 		service.NewStringField(kfcFieldClientID).
 			Description("An identifier for the client connection.").
-			Default("benthos").
+			Default("redpanda connect").
 			Advanced(),
 		service.NewTLSToggledField(kfcFieldTLS),
 		SASLFields(),
@@ -69,6 +70,8 @@ func FranzConnectionFields() []*service.ConfigField {
 // FranzConnectionDetails describes information required to create a kafka
 // connection.
 type FranzConnectionDetails struct {
+	isConfigured bool
+
 	SeedBrokers            []string
 	ClientID               string
 	TLSEnabled             bool
@@ -86,6 +89,10 @@ type FranzConnectionDetails struct {
 func FranzConnectionDetailsFromConfig(conf *service.ParsedConfig, log *service.Logger) (*FranzConnectionDetails, error) {
 	d := FranzConnectionDetails{
 		Logger: log,
+	}
+
+	if d.isConfigured = conf.Contains(kfcFieldSeedBrokers); !d.isConfigured {
+		return &d, nil
 	}
 
 	brokerList, err := conf.FieldStringList(kfcFieldSeedBrokers)
@@ -121,6 +128,11 @@ func FranzConnectionDetailsFromConfig(conf *service.ParsedConfig, log *service.L
 	}
 
 	return &d, nil
+}
+
+// IsConfigured returns true if any of the connection fields have been set.
+func (d *FranzConnectionDetails) IsConfigured() bool {
+	return d.isConfigured
 }
 
 // FranzOpts returns a slice of franz-go opts that establish a connection

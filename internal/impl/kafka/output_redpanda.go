@@ -65,51 +65,66 @@ func init() {
 				return
 			}
 
-			var tmpOpts, clientOpts []kgo.Opt
-
 			var connDetails *FranzConnectionDetails
 			if connDetails, err = FranzConnectionDetailsFromConfig(conf, mgr.Logger()); err != nil {
 				return
 			}
-			clientOpts = append(clientOpts, connDetails.FranzOpts()...)
 
-			if tmpOpts, err = FranzProducerOptsFromConfig(conf); err != nil {
+			var producerOpts []kgo.Opt
+			if producerOpts, err = FranzProducerOptsFromConfig(conf); err != nil {
 				return
 			}
-			clientOpts = append(clientOpts, tmpOpts...)
 
-			var client *kgo.Client
-			var clientMut sync.Mutex
+			if connDetails.IsConfigured() {
+				var client *kgo.Client
+				var clientMut sync.Mutex
 
-			output, err = NewFranzWriterFromConfig(
-				conf,
-				NewFranzWriterHooks(
-					func(ctx context.Context, fn FranzSharedClientUseFn) error {
-						clientMut.Lock()
-						defer clientMut.Unlock()
+				output, err = NewFranzWriterFromConfig(
+					conf,
+					NewFranzWriterHooks(
+						func(ctx context.Context, fn FranzSharedClientUseFn) error {
+							clientMut.Lock()
+							defer clientMut.Unlock()
 
-						if client == nil {
-							var err error
-							if client, err = NewFranzClient(ctx, clientOpts...); err != nil {
-								return err
+							if client == nil {
+								var err error
+								if client, err = NewFranzClient(ctx, append(connDetails.FranzOpts(), producerOpts...)...); err != nil {
+									return err
+								}
 							}
-						}
-						return fn(&FranzSharedClientInfo{
-							Client:      client,
-							ConnDetails: connDetails,
-						})
-					}).WithYieldClientFn(
-					func(context.Context) error {
-						clientMut.Lock()
-						defer clientMut.Unlock()
+							return fn(&FranzSharedClientInfo{
+								Client:      client,
+								ConnDetails: connDetails,
+							})
+						}).WithYieldClientFn(
+						func(context.Context) error {
+							clientMut.Lock()
+							defer clientMut.Unlock()
 
-						if client == nil {
+							if client == nil {
+								return nil
+							}
+							client.Close()
+							client = nil
 							return nil
-						}
-						client.Close()
-						client = nil
-						return nil
-					}))
+						}))
+			} else {
+				mgr.Logger().Info("Connection fields omitted, falling back to common redpanda config.")
+
+				// We're using a common redpanda block to determine the connection.
+				output, err = NewFranzWriterFromConfig(
+					conf,
+					NewFranzWriterHooks(
+						func(_ context.Context, fn FranzSharedClientUseFn) error {
+							return FranzSharedClientUse(SharedGlobalRedpandaClientKey, mgr, fn)
+						},
+					).WithYieldClientFn(
+						func(context.Context) error { return nil },
+					),
+				)
+			}
+
 			return
 		})
+
 }
