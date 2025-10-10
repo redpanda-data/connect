@@ -41,7 +41,7 @@ const (
 // GlobalRedpandaFields returns the set of config fields found within the global `redpanda` config section.
 func GlobalRedpandaFields() []*service.ConfigField {
 	return slices.Concat(
-		kafka.FranzConnectionFields(),
+		kafka.FranzConnectionFields(false),
 		[]*service.ConfigField{
 			service.NewStringField(grwFieldPipelineID).
 				Description("An optional identifier for the pipeline, this will be present in logs and status updates sent to topics.").

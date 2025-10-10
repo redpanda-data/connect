@@ -76,7 +76,7 @@ ACL migration adheres to the following principles:
 
 func redpandaMigratorOutputConfigFields() []*service.ConfigField {
 	return slices.Concat(
-		FranzConnectionFields(),
+		FranzConnectionFields(false),
 		FranzWriterConfigFields(),
 		[]*service.ConfigField{
 			service.NewInterpolatedStringField(rmoFieldTopicPrefix).

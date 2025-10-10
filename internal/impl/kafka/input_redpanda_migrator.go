@@ -75,7 +75,7 @@ This input adds the following metadata fields to each message:
 
 func redpandaMigratorInputConfigFields() []*service.ConfigField {
 	return slices.Concat(
-		FranzConnectionFields(),
+		FranzConnectionFields(false),
 		FranzConsumerFields(),
 		FranzReaderOrderedConfigFields(),
 		[]*service.ConfigField{

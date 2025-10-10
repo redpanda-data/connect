@@ -59,7 +59,7 @@ func redpandaMigratorOffsetsOutputConfig() *service.ConfigSpec {
 // franz-go client library.
 func redpandaMigratorOffsetsOutputConfigFields() []*service.ConfigField {
 	return slices.Concat(
-		FranzConnectionFields(),
+		FranzConnectionFields(false),
 		[]*service.ConfigField{
 			service.NewInterpolatedStringField(rmooFieldOffsetTopic).
 				Description("Kafka offset topic.").Default("${! @kafka_offset_topic }"),

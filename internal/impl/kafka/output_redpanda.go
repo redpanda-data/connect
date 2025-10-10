@@ -42,7 +42,7 @@ Writes a batch of messages to Kafka brokers and waits for acknowledgement before
 
 func redpandaOutputConfigFields() []*service.ConfigField {
 	return slices.Concat(
-		FranzConnectionFields(),
+		FranzConnectionFields(true),
 		FranzWriterConfigFields(),
 		[]*service.ConfigField{
 			service.NewIntField(roFieldMaxInFlight).
@@ -126,5 +126,4 @@ func init() {
 
 			return
 		})
-
 }

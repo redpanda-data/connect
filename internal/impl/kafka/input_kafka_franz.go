@@ -55,7 +55,7 @@ This input adds the following metadata fields to each message:
 // kafka input using the franz-go client library.
 func FranzKafkaInputConfigFields() []*service.ConfigField {
 	return slices.Concat(
-		FranzConnectionFields(),
+		FranzConnectionFields(false),
 		FranzConsumerFields(),
 		FranzReaderUnorderedConfigFields(),
 		[]*service.ConfigField{

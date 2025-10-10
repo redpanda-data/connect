@@ -38,17 +38,25 @@ const (
 
 // FranzConnectionFields returns a slice of fields specifically for establishing
 // connections to kafka brokers via the franz-go library.
-func FranzConnectionFields() []*service.ConfigField {
+func FranzConnectionFields(optionalBrokers bool) []*service.ConfigField {
+	brokerDescription := "A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses."
+	brokersField := service.NewStringListField(kfcFieldSeedBrokers).
+		Description(brokerDescription).
+		Example([]string{"localhost:9092"}).
+		Example([]string{"foo:9092", "bar:9092"}).
+		Example([]string{"foo:9092,bar:9092"})
+
+	if optionalBrokers {
+		brokersField = brokersField.
+			Description(brokerDescription + " When this field is omitted the global `redpanda` block will be referenced for connection details.").
+			Optional()
+	}
+
 	return []*service.ConfigField{
-		service.NewStringListField(kfcFieldSeedBrokers).
-			Description("A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses. When this field is omitted the global `redpanda` block will be referenced for connection details.").
-			Optional().
-			Example([]string{"localhost:9092"}).
-			Example([]string{"foo:9092", "bar:9092"}).
-			Example([]string{"foo:9092,bar:9092"}),
+		brokersField,
 		service.NewStringField(kfcFieldClientID).
 			Description("An identifier for the client connection.").
-			Default("redpanda connect").
+			Default("redpanda-connect").
 			Advanced(),
 		service.NewTLSToggledField(kfcFieldTLS),
 		SASLFields(),
