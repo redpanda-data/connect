@@ -27,16 +27,17 @@ import (
 )
 
 const (
-	fieldConnectionString      = "connection_string"
-	fieldStreamSnapshot        = "stream_snapshot"
-	fieldSnapshotMaxBatchSize  = "snapshot_max_batch_size"
-	fieldStreamBackoffInterval = "stream_backoff_interval"
-	fieldTablesExclude         = "exclude"
-	fieldTablesInclude         = "include"
-	fieldCheckpointLimit       = "checkpoint_limit"
-	fieldCheckpointCache       = "checkpoint_cache"
-	fieldCheckpointKey         = "checkpoint_key"
-	fieldBatching              = "batching"
+	fieldConnectionString         = "connection_string"
+	fieldStreamSnapshot           = "stream_snapshot"
+	fieldSnapshotMaxBatchSize     = "snapshot_max_batch_size"
+	fieldStreamBackoffInterval    = "stream_backoff_interval"
+	fieldTablesExclude            = "exclude"
+	fieldTablesInclude            = "include"
+	fieldCheckpointLimit          = "checkpoint_limit"
+	fieldCheckpointCache          = "checkpoint_cache"
+	fieldCheckpointCacheKey       = "checkpoint_cache_key"
+	fieldCheckpointCacheTableName = "checkpoint_cache_table_name"
+	fieldBatching                 = "batching"
 
 	shutdownTimeout = 5 * time.Second
 )
@@ -60,6 +61,10 @@ This input adds the following metadata fields to each message:
 - table (Name of the table that the message originated from)
 - operation (Type of operation that generated the message: "read", "delete", "insert", or "update_before" and "update_after". "read" is from messages that are read in the initial snapshot phase.)
 - lsn (the Log Sequence Number in Microsoft SQL Server)
+
+== Permissions
+
+To use the default Microsoft SQL Server cache, the user must have permissions to create tables and stored procedures. Refer to ` + "`" + fieldCheckpointCacheTableName + "`" + ` for additional details.
 		`).
 	Field(service.NewStringField(fieldConnectionString).
 		Description("The connection string of the Microsoft SQL Server database to connect to.").
@@ -82,11 +87,19 @@ This input adds the following metadata fields to each message:
 		Optional(),
 	).
 	Field(service.NewStringField(fieldCheckpointCache).
-		Description("A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current latest Log Sequence Number (LSN) that has been successfully delivered, this allows Redpanda Connect to continue from that Log Sequence Number (LSN) upon restart, rather than consume the entire state of the change table."),
+		Description("A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current Log Sequence Number (LSN) that has been successfully delivered, this allows Redpanda Connect to continue from that Log Sequence Number (LSN) upon restart, rather than consume the entire state of the change table.").
+		Optional(),
 	).
-	Field(service.NewStringField(fieldCheckpointKey).
+	Field(service.NewStringField(fieldCheckpointCacheTableName).
+		Description("The multipart identifier for the checkpoint cache table name. If no `" + fieldCheckpointCache + "` field is specified, this input will automatically create a table and stored procedure under the `rpcn` schema to act as a checkpoint cache. This table stores the latest processed Log Sequence Number (LSN) that has been successfully delivered, allowing Redpanda Connect to resume from that point upon restart rather than reconsume the entire change table.").
+		Default(defaultCheckpointCache).
+		Example("dbo.checkpoint_cache").
+		Optional(),
+	).
+	Field(service.NewStringField(fieldCheckpointCacheKey).
 		Description("The key to use to store the snapshot position in `" + fieldCheckpointCache + "`. An alternative key can be provided if multiple CDC inputs share the same cache.").
-		Default("microsoft_sql_server_cdc"),
+		Default("microsoft_sql_server_cdc").
+		Optional(),
 	).
 	Field(service.NewIntField(fieldCheckpointLimit).
 		Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given Log Sequence Number (LSN) will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
@@ -113,6 +126,7 @@ type config struct {
 	tablesFilter          *confx.RegexpFilter
 	lsnCache              string
 	lsnCacheKey           string
+	cpCacheTableName      string
 }
 
 type sqlServerCDCInput struct {
@@ -125,6 +139,7 @@ type sqlServerCDCInput struct {
 
 	stopSig *shutdown.Signaller
 	log     *service.Logger
+	cpCache service.Cache
 }
 
 func newMSSQLServerCDCInput(conf *service.ParsedConfig, resources *service.Resources) (s service.BatchInput, err error) {
@@ -137,6 +152,8 @@ func newMSSQLServerCDCInput(conf *service.ParsedConfig, resources *service.Resou
 		tableIncludes, tableExcludes []*regexp.Regexp
 		batcher                      *service.Batcher
 		cp                           *checkpoint.Capped[replication.LSN]
+		cpCache                      service.Cache
+		cpCacheTableName             string
 	)
 
 	if err := license.CheckRunningEnterprise(resources); err != nil {
@@ -166,15 +183,22 @@ func newMSSQLServerCDCInput(conf *service.ParsedConfig, resources *service.Resou
 		return nil, err
 	}
 	// cache
-	if lsnCache, err = conf.FieldString(fieldCheckpointCache); err != nil {
-		return nil, err
+	// if no cache component is specified then we fallback to default sql based version
+	if conf.Contains(fieldCheckpointCache) {
+		if lsnCache, err = conf.FieldString(fieldCheckpointCache); err != nil {
+			return nil, err
+		}
+		if conf.Resources().HasCache(lsnCache) {
+			if lsnCacheKey, err = conf.FieldString(fieldCheckpointCacheKey); err != nil {
+				return nil, err
+			}
+		}
+	} else {
+		if cpCacheTableName, err = conf.FieldString(fieldCheckpointCacheTableName); err != nil {
+			return nil, err
+		}
 	}
-	if !conf.Resources().HasCache(lsnCache) {
-		return nil, fmt.Errorf("unknown cache resource: %s", lsnCache)
-	}
-	if lsnCacheKey, err = conf.FieldString(fieldCheckpointKey); err != nil {
-		return nil, err
-	}
+
 	// checkpointing
 	var checkpointLimit int
 	if checkpointLimit, err = conf.FieldInt(fieldCheckpointLimit); err != nil {
@@ -203,6 +227,7 @@ func newMSSQLServerCDCInput(conf *service.ParsedConfig, resources *service.Resou
 			snapshotMaxBatchSize:  snapshotMaxBatchSize,
 			lsnCache:              lsnCache,
 			lsnCacheKey:           lsnCacheKey,
+			cpCacheTableName:      cpCacheTableName,
 			tablesFilter: &confx.RegexpFilter{
 				Include: tableIncludes,
 				Exclude: tableExcludes,
@@ -213,6 +238,7 @@ func newMSSQLServerCDCInput(conf *service.ParsedConfig, resources *service.Resou
 		metrics:   resources.Metrics(),
 		stopSig:   shutdown.NewSignaller(),
 		publisher: newBatchPublisher(batcher, cp, logger),
+		cpCache:   cpCache,
 	}
 
 	i.publisher.cacheLSN = func(ctx context.Context, lsn replication.LSN) error {
@@ -236,6 +262,17 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 	if i.db, err = sql.Open("mssql", i.cfg.connectionString); err != nil {
 		return fmt.Errorf("failed to connect to microsoft sql server: %s", err)
 	}
+
+	// no cache specified so use default, custom sql cache
+	if i.cfg.lsnCache == "" {
+		// setup internal cache
+		cache, err := newCheckpointCache(ctx, i.cfg.connectionString, i.cfg.cpCacheTableName, i.log)
+		if err != nil {
+			return fmt.Errorf("initialising sql server based checkpoint cache: %s", err)
+		}
+		i.cpCache = cache
+	}
+
 	if userTables, err = replication.VerifyUserDefinedTables(ctx, i.db, i.cfg.tablesFilter, i.log); err != nil {
 		return fmt.Errorf("verifying user defined tables: %w", err)
 	}
@@ -294,9 +331,9 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 		})
 
 		if err := wg.Wait(); err != nil && !errors.Is(err, context.Canceled) {
-			i.log.Errorf("Error during Microsoft SQL Server CDC: %s", err)
+			i.log.Errorf("Error during Microsoft SQL Server CDC Component: %s", err)
 		} else {
-			i.log.Info("Successfully shutdown Microsoft SQL Server CDC stream")
+			i.log.Info("Successfully shutdown Microsoft SQL Server CDC Component")
 		}
 		i.stopSig.TriggerHasStopped()
 	}()
@@ -309,11 +346,18 @@ func (i *sqlServerCDCInput) getCachedLSN(ctx context.Context) (replication.LSN, 
 		cacheVal []byte
 		cErr     error
 	)
-	if err := i.res.AccessCache(ctx, i.cfg.lsnCache, func(c service.Cache) {
-		cacheVal, cErr = c.Get(ctx, i.cfg.lsnCacheKey)
-	}); err != nil {
-		return nil, fmt.Errorf("unable to access cache for reading: %w", err)
+
+	if i.cpCache != nil {
+		// use default custom sql server based cache
+		cacheVal, cErr = i.cpCache.Get(ctx, i.cfg.lsnCacheKey)
+	} else {
+		if err := i.res.AccessCache(ctx, i.cfg.lsnCache, func(c service.Cache) {
+			cacheVal, cErr = c.Get(ctx, i.cfg.lsnCacheKey)
+		}); err != nil {
+			return nil, fmt.Errorf("unable to access cache for reading: %w", err)
+		}
 	}
+
 	if errors.Is(cErr, service.ErrKeyNotFound) {
 		return nil, nil
 	} else if cErr != nil {
@@ -330,11 +374,16 @@ func (i *sqlServerCDCInput) cacheLSN(ctx context.Context, lsn replication.LSN) e
 	}
 
 	var cErr error
-	if err := i.res.AccessCache(ctx, i.cfg.lsnCache, func(c service.Cache) {
-		cErr = c.Set(ctx, i.cfg.lsnCacheKey, lsn, nil)
-	}); err != nil {
-		return fmt.Errorf("unable to access cache for writing: %w", err)
+	if i.cpCache != nil {
+		cErr = i.cpCache.Set(ctx, i.cfg.lsnCacheKey, lsn, nil)
+	} else {
+		if err := i.res.AccessCache(ctx, i.cfg.lsnCache, func(c service.Cache) {
+			cErr = c.Set(ctx, i.cfg.lsnCacheKey, lsn, nil)
+		}); err != nil {
+			return fmt.Errorf("unable to access cache for writing: %w", err)
+		}
 	}
+
 	if cErr != nil {
 		return fmt.Errorf("unable persist checkpoint to cache: %w", cErr)
 	}
@@ -390,6 +439,9 @@ func (i *sqlServerCDCInput) Close(ctx context.Context) error {
 	case <-time.After(shutdownTimeout):
 		i.log.Error("failed to shutdown 'microsoft_sql_server_cdc' component within the timeout")
 	case <-i.stopSig.HasStoppedChan():
+	}
+	if i.cpCache != nil {
+		return i.cpCache.Close(ctx)
 	}
 	if i.db != nil {
 		return i.db.Close()
