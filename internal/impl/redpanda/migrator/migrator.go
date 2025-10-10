@@ -54,7 +54,7 @@ For capabilities, guarantees, scheduling, and examples, see the output documenta
 the mapping between input and output components is done based on the label field. 
 The label of the input and output must match exactly for proper coordination.`).
 		// Kafka fields
-		Fields(kafka.FranzConnectionFields()...).
+		Fields(kafka.FranzConnectionFields(false)...).
 		Fields(kafka.FranzConsumerFields()...).
 		Fields(kafka.FranzReaderOrderedConfigFields()...).
 		LintRule(kafka.FranzConsumerFieldLintRules).
@@ -214,7 +214,7 @@ output:
     serverless: true  # Enable serverless mode for restricted configurations
 `).
 		// Kafka fields
-		Fields(kafka.FranzConnectionFields()...).
+		Fields(kafka.FranzConnectionFields(false)...).
 		Fields(kafka.FranzProducerFields()...).
 		// Schema registry fields
 		Field(schemaRegistryField(schemaRegistryMigratorFields()...).Optional()).

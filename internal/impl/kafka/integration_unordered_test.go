@@ -31,7 +31,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestIntegrationFranz(t *testing.T) {
+func TestIntegrationUnordered(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
@@ -76,25 +76,25 @@ func TestIntegrationFranz(t *testing.T) {
 
 	template := `
 output:
-  kafka_franz:
+  redpanda:
     seed_brokers: [ localhost:$PORT ]
     topic: topic-$ID
     max_in_flight: $MAX_IN_FLIGHT
     timeout: "5s"
     metadata:
       include_patterns: [ .* ]
-    batching:
-      count: $OUTPUT_BATCH_COUNT
 
 input:
-  kafka_franz:
+  redpanda:
     seed_brokers: [ localhost:$PORT ]
     topics: [ topic-$ID$VAR1 ]
     consumer_group: "$VAR4"
-    checkpoint_limit: 100
     commit_period: "1s"
-    batching:
-      count: $INPUT_BATCH_COUNT
+    unordered_processing:
+      enabled: true
+      checkpoint_limit: 100
+      batching:
+        count: $INPUT_BATCH_COUNT
 `
 
 	suite := integration.StreamTests(
@@ -104,7 +104,6 @@ input:
 		integration.StreamTestStreamSequential(1000),
 		integration.StreamTestStreamParallel(1000),
 		integration.StreamTestStreamParallelLossy(1000),
-		integration.StreamTestSendBatchCount(10),
 		integration.StreamTestStreamSaturatedUnacked(200),
 	)
 
@@ -167,7 +166,7 @@ input:
 
 	manualPartitionTemplate := `
 output:
-  kafka_franz:
+  redpanda:
     seed_brokers: [ localhost:$PORT ]
     topic: topic-$ID
     max_in_flight: $MAX_IN_FLIGHT
@@ -176,15 +175,15 @@ output:
     partition: "0"
     metadata:
       include_patterns: [ .* ]
-    batching:
-      count: $OUTPUT_BATCH_COUNT
 
 input:
-  kafka_franz:
+  redpanda:
     seed_brokers: [ localhost:$PORT ]
     topics: [ topic-$ID$VAR1 ]
     consumer_group: "$VAR4"
-    checkpoint_limit: 100
+    unordered_processing:
+      enabled: true
+      checkpoint_limit: 100
     commit_period: "1s"
 `
 	t.Run("manual_partitioner", func(t *testing.T) {
@@ -200,7 +199,7 @@ input:
 	})
 }
 
-func TestIntegrationFranzSasl(t *testing.T) {
+func TestIntegrationUnorderedSasl(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
@@ -266,21 +265,19 @@ func TestIntegrationFranzSasl(t *testing.T) {
 
 	template := `
 output:
-  kafka_franz:
+  redpanda:
     seed_brokers: [ localhost:$PORT ]
     topic: topic-$ID
     max_in_flight: $MAX_IN_FLIGHT
     metadata:
       include_patterns: [ .* ]
-    batching:
-      count: $OUTPUT_BATCH_COUNT
     sasl:
       - mechanism: SCRAM-SHA-256
         username: admin
         password: foobar
 
 input:
-  kafka_franz:
+  redpanda:
     seed_brokers: [ localhost:$PORT ]
     topics: [ topic-$ID$VAR1 ]
     consumer_group: "$VAR4"
@@ -288,6 +285,8 @@ input:
       - mechanism: SCRAM-SHA-256
         username: admin
         password: foobar
+    unordered_processing:
+      enabled: true
 `
 
 	suite := integration.StreamTests(
@@ -297,7 +296,6 @@ input:
 		integration.StreamTestStreamSequential(1000),
 		integration.StreamTestStreamParallel(1000),
 		integration.StreamTestStreamParallelLossy(1000),
-		integration.StreamTestSendBatchCount(10),
 	)
 
 	suite.Run(
@@ -311,80 +309,7 @@ input:
 	)
 }
 
-func TestIntegrationFranzOutputFixedTimestamp(t *testing.T) {
-	integration.CheckSkip(t)
-	t.Parallel()
-
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
-
-	kafkaPort, err := integration.GetFreePort()
-	require.NoError(t, err)
-
-	kafkaPortStr := strconv.Itoa(kafkaPort)
-
-	options := &dockertest.RunOptions{
-		Repository:   "docker.redpanda.com/redpandadata/redpanda",
-		Tag:          "latest",
-		Hostname:     "redpanda",
-		ExposedPorts: []string{"9092/tcp"},
-		PortBindings: map[docker.Port][]docker.PortBinding{
-			"9092/tcp": {{HostIP: "", HostPort: kafkaPortStr + "/tcp"}},
-		},
-		Cmd: []string{
-			"redpanda",
-			"start",
-			"--node-id 0",
-			"--mode dev-container",
-			"--set rpk.additional_start_flags=[--reactor-backend=epoll]",
-			"--kafka-addr 0.0.0.0:9092",
-			fmt.Sprintf("--advertise-kafka-addr localhost:%v", kafkaPort),
-		},
-	}
-
-	pool.MaxWait = time.Minute
-	resource, err := pool.RunWithOptions(options)
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
-
-	_ = resource.Expire(900)
-	require.NoError(t, pool.Retry(func() error {
-		return createKafkaTopic(t.Context(), "localhost:"+kafkaPortStr, "testingconnection", 1)
-	}))
-
-	template := `
-output:
-  kafka_franz:
-    seed_brokers: [ localhost:$PORT ]
-    topic: topic-$ID
-    timestamp_ms: 1000000000000
-
-input:
-  kafka_franz:
-    seed_brokers: [ localhost:$PORT ]
-    topics: [ topic-$ID ]
-    consumer_group: "blobfish"
-  processors:
-    - mapping: |
-        root = if metadata("kafka_timestamp_ms") != 1000000000000 { "error: invalid timestamp" }
-`
-
-	suite := integration.StreamTests(
-		integration.StreamTestOpenCloseIsolated(),
-	)
-
-	suite.Run(
-		t, template,
-		integration.StreamTestOptPreTest(func(t testing.TB, ctx context.Context, vars *integration.StreamTestConfigVars) {
-			require.NoError(t, createKafkaTopic(ctx, "localhost:"+kafkaPortStr, vars.ID, 1))
-		}),
-		integration.StreamTestOptPort(kafkaPortStr),
-	)
-}
-
-func BenchmarkIntegrationFranz(b *testing.B) {
+func BenchmarkIntegrationUnordered(b *testing.B) {
 	integration.CheckSkip(b)
 
 	pool, err := dockertest.NewPool("")
@@ -430,7 +355,7 @@ func BenchmarkIntegrationFranz(b *testing.B) {
 	b.Run("unordered", func(b *testing.B) {
 		template := `
 output:
-  kafka_franz:
+  redpanda:
     seed_brokers: [ localhost:$PORT ]
     topic: topic-$ID
     max_in_flight: 128
@@ -439,15 +364,17 @@ output:
       include_patterns: [ .* ]
 
 input:
-  kafka_franz:
+  redpanda:
     seed_brokers: [ localhost:$PORT ]
     topics: [ topic-$ID ]
     consumer_group: "$VAR3"
     checkpoint_limit: 100
     commit_period: "1s"
-    batching:
-      count: 20
-      period: 1ms
+    unordered_processing:
+      enabled: true
+      batching:
+        count: 20
+        period: 1ms
 `
 		suite := integration.StreamBenchs(
 			integration.StreamBenchSend(20, 1),

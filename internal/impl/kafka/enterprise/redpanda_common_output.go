@@ -19,7 +19,7 @@ import (
 
 func redpandaCommonOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Beta().
+		Deprecated().
 		Categories("Services").
 		Summary("Sends data to a Redpanda (Kafka) broker, using credentials defined in a common top-level `redpanda` config block.").
 		Fields(kafka.FranzWriterConfigFields()...).
@@ -28,33 +28,7 @@ func redpandaCommonOutputConfig() *service.ConfigSpec {
 				Default(10),
 			service.NewBatchPolicyField(roFieldBatching),
 		).
-		LintRule(kafka.FranzWriterConfigLints()).
-		Example("Simple Output", "Data is generated and written to a topic bar, targetting the cluster configured within the redpanda block at the bottom. This is useful as it allows us to configure TLS and SASL only once for potentially multiple inputs and outputs.", `
-input:
-  generate:
-    interval: 1s
-    mapping: 'root.name = fake("name")'
-
-pipeline:
-  processors:
-    - mutation: |
-        root.id = uuid_v4()
-        root.loud_name = this.name.uppercase()
-
-output:
-  redpanda_common:
-    topic: bar
-    key: ${! @id }
-
-redpanda:
-  seed_brokers: [ "127.0.0.1:9092" ]
-  tls:
-    enabled: true
-  sasl:
-    - mechanism: SCRAM-SHA-512
-      password: bar
-      username: foo
-`)
+		LintRule(kafka.FranzWriterConfigLints())
 }
 
 const (
@@ -83,7 +57,7 @@ func init() {
 				conf,
 				kafka.NewFranzWriterHooks(
 					func(_ context.Context, fn kafka.FranzSharedClientUseFn) error {
-						return kafka.FranzSharedClientUse(SharedGlobalRedpandaClientKey, mgr, fn)
+						return kafka.FranzSharedClientUse(kafka.SharedGlobalRedpandaClientKey, mgr, fn)
 					}).
 					WithYieldClientFn(
 						func(context.Context) error { return nil }),

@@ -50,7 +50,7 @@ This output often out-performs the traditional ` + "`kafka`" + ` output as well 
 // kafka output using the franz-go client library.
 func FranzKafkaOutputConfigFields() []*service.ConfigField {
 	return slices.Concat(
-		FranzConnectionFields(),
+		FranzConnectionFields(false),
 		FranzWriterConfigFields(),
 		[]*service.ConfigField{
 			service.NewIntField(kfoFieldMaxInFlight).

@@ -45,7 +45,7 @@ Topics that are used as caches should be compacted so that reads are less expens
 
 This cache does not support any special TTL mechanism, any TTL should be handled by the Kafka topic itself using data retention policies.
 `).
-		Fields(FranzConnectionFields()...).
+		Fields(FranzConnectionFields(false)...).
 		Fields(
 			service.NewStringField(rcFieldTopic).Description("The topic to store data in."),
 			service.NewBoolField(rcFieldAllowAutoTopicCreation).

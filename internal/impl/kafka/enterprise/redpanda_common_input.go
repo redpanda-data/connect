@@ -22,7 +22,7 @@ import (
 
 func redpandaCommonInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Beta().
+		Deprecated().
 		Categories("Services").
 		Summary("Consumes data from a Redpanda (Kafka) broker, using credentials defined in a common top-level `redpanda` config block.").
 		Fields(
@@ -108,7 +108,7 @@ func init() {
 				// to initialise in the background. Otherwise we get an annoying
 				// log.
 				for range 20 {
-					if err = kafka.FranzSharedClientUse(SharedGlobalRedpandaClientKey, mgr, func(details *kafka.FranzSharedClientInfo) error {
+					if err = kafka.FranzSharedClientUse(kafka.SharedGlobalRedpandaClientKey, mgr, func(details *kafka.FranzSharedClientInfo) error {
 						clientOpts = append(clientOpts, details.ConnDetails.FranzOpts()...)
 						return nil
 					}); err == nil {

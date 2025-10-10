@@ -172,7 +172,7 @@ func rpConnDetails(
 	saslMech, saslUser, saslPass string,
 ) (connDetails *kafka.FranzConnectionDetails, err error) {
 	var pConf *service.ParsedConfig
-	if pConf, err = service.NewConfigSpec().Fields(kafka.FranzConnectionFields()...).ParseYAML(`
+	if pConf, err = service.NewConfigSpec().Fields(kafka.FranzConnectionFields(false)...).ParseYAML(`
 seed_brokers: [ ]
 client_id: rpcn
 `, nil); err != nil {

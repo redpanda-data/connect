@@ -1,13 +1,13 @@
 input:
   broker:
     inputs:
-      - kafka:
-          addresses: [ TODO ]
+      - redpanda:
+          seed_brokers: [ TODO ]
           topics: [ comments ]
           consumer_group: benthos_comments_group
 
-      - kafka:
-          addresses: [ TODO ]
+      - redpanda:
+          seed_brokers: [ TODO ]
           topics: [ comments_retry ]
           consumer_group: benthos_comments_group
 
