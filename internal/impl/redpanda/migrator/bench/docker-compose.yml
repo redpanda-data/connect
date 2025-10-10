@@ -1,0 +1,94 @@
+services:
+  src:
+    image: redpandadata/redpanda:latest
+    command:
+      - redpanda
+      - start
+      - --node-id=0
+      - --mode dev-container
+      - --set rpk.additional_start_flags=[--reactor-backend=epoll]
+      - --smp=1
+      - --memory=2000M
+      - --kafka-addr=PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr=PLAINTEXT://src:9092
+    healthcheck:
+      test: ["CMD", "rpk", "cluster", "health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    cpuset: "1"
+    mem_limit: 2500M
+
+  dst:
+    image: redpandadata/redpanda
+    command:
+      - redpanda
+      - start
+      - --node-id=0
+      - --mode dev-container
+      - --set rpk.additional_start_flags=[--reactor-backend=epoll]
+      - --smp=1
+      - --memory=2000M
+      - --kafka-addr=PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr=PLAINTEXT://dst:9092
+    healthcheck:
+      test: ["CMD", "rpk", "cluster", "health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    cpuset: "2"
+    mem_limit: 2500M
+
+  setup:
+    image: redpandadata/redpanda:latest
+    depends_on:
+      src:
+        condition: service_healthy
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        rpk topic create test-topic-0 \
+          --brokers src:9092 \
+          --partitions 40 \
+          --topic-config write.caching=true \
+          --topic-config flush.ms=1000
+
+  loader:
+    image: redpandadata/connect:dev-arm64
+    depends_on:
+      setup:
+        condition: service_completed_successfully
+    volumes:
+# For STREAMING MODE replace config.yaml with loader-streaming.yaml
+#      - ./loader-streaming.yaml:/config.yaml:ro
+      - ./loader.yaml:/config.yaml:ro
+
+    command: ["-c", "/config.yaml"]
+    environment:
+      GOMAXPROCS: "2"
+      GOMEMLIMIT: "1GiB"
+    cpuset: "3,4"
+    mem_limit: 1500M
+
+  migrator:
+    image: redpandadata/connect:dev-arm64
+    depends_on:
+      src:
+        condition: service_healthy
+      dst:
+        condition: service_healthy
+      loader:
+# For STREAMING MODE replace service_completed_successfully with service_started
+#        condition: service_started
+        condition: service_completed_successfully
+    volumes:
+      - ./migrator.yaml:/config.yaml:ro
+    command: ["-c", "/config.yaml"]
+    ports:
+      - "4195:4195"
+    environment:
+      GOMAXPROCS: "3"
+      GOMEMLIMIT: "3GiB"
+    cpuset: "5,6,7"
+    mem_limit: 3500M

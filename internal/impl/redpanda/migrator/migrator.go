@@ -52,7 +52,15 @@ For capabilities, guarantees, scheduling, and examples, see the output documenta
 
 **Multiple migrator pairs:** When using multiple migrator pairs in a single pipeline, 
 the mapping between input and output components is done based on the label field. 
-The label of the input and output must match exactly for proper coordination.`).
+The label of the input and output must match exactly for proper coordination.
+
+**Performance tuning for high throughput:** For workloads with high message rates or large messages, 
+adjust the following fields to increase buffer sizes and batch processing:
+- ` + "`partition_buffer_bytes`" + `: Increase to 10MB or higher (default: 1MB)
+- ` + "`max_yield_batch_bytes`" + `: Increase to 100MB or higher (default: 10MB)
+
+These settings allow the consumer to buffer more data per partition and yield larger batches, 
+reducing overhead and improving throughput at the cost of higher memory usage.`).
 		// Kafka fields
 		Fields(kafka.FranzConnectionFields()...).
 		Fields(kafka.FranzConsumerFields()...).
@@ -79,6 +87,9 @@ Each pipeline must have both input and output components configured.
 **Multiple migrator pairs:** When using multiple migrator pairs in a single pipeline, 
 the mapping between input and output components is done based on the label field. 
 The label of the input and output must match exactly for proper coordination.
+
+**Performance tuning for high throughput:** For workloads with high message rates or large messages, 
+adjust buffer sizes on the paired input component to improve throughput. See the input documentation for details.
 
 What gets synchronised:
 
