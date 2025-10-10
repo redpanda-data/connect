@@ -243,7 +243,7 @@ NOTE: If attempting to do exactly-once its important that records are delivered 
 channel_name and offset_token first. Removing the offset_token is a safer option that will instruct Redpanda Connect to use its default at-least-once delivery model instead.`,
 			`
 input:
-  redpanda_common:
+  redpanda:
     topics: ["my_topic_going_to_snow"]
     consumer_group: "redpanda_connect_to_snowflake"
     # We want very large batches - each batch will be sent to Snowflake individually
@@ -282,7 +282,7 @@ output:
     # to Snowflake. See the ordering documentation for the "redpanda" input for more details.
     - retry:
         output:
-          redpanda_common:
+          redpanda:
             topic: "dead_letter_queue"
 `,
 		).

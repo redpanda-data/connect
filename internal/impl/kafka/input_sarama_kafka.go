@@ -52,7 +52,7 @@ const (
 
 func iskConfigSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Stable().
+		Deprecated().
 		Categories("Services").
 		Summary(`Connects to Kafka brokers and consumes one or more topics.`).
 		Description(`

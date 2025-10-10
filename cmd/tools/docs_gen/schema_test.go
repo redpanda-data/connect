@@ -31,7 +31,7 @@ func TestComponentExamples(t *testing.T) {
 	env := sch.Environment()
 
 	linter := sch.NewStreamConfigLinter()
-	linter.SetRejectDeprecated(true)
+	// linter.SetRejectDeprecated(true) TODO: Re-enable this once kafka is out of the benthos repo examples
 	linter.SetSkipEnvVarCheck(true)
 
 	testComponent := func(name string, config *service.ConfigView) {

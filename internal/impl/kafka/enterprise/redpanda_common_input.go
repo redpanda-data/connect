@@ -22,7 +22,7 @@ import (
 
 func redpandaCommonInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Beta().
+		Deprecated().
 		Categories("Services").
 		Summary("Consumes data from a Redpanda (Kafka) broker, using credentials defined in a common top-level `redpanda` config block.").
 		Fields(

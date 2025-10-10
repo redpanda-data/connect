@@ -193,7 +193,7 @@ max_message_bytes: 1MB
 	gmgr := enterprise.NewGlobalRedpandaManager("foo")
 
 	pConf, err := service.NewConfigSpec().
-		Fields(kafka.FranzConnectionFields()...).
+		Fields(kafka.FranzConnectionFields(false)...).
 		ParseYAML(
 			fmt.Sprintf(`seed_brokers: [ %v ]`, brokerAddr),
 			nil,
