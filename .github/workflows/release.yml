@@ -16,7 +16,7 @@ jobs:
     - name: Check Out Repo
       uses: actions/checkout@v4
 
-    - name: Configure AWS credentials
+    - name: Configure AWS credentials for access to AWS Secrets Manager
       uses: aws-actions/configure-aws-credentials@v4
       with:
         aws-region: ${{ vars.RP_AWS_CRED_REGION }}
@@ -29,6 +29,12 @@ jobs:
           ,sdlc/prod/github/cloudsmith
           ,sdlc/prod/github/dockerhub
         parse-json-secrets: true
+
+    - name: Configure AWS credentials for access to Amazon ECR Public
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-region: us-east-1
+        role-to-assume: arn:aws:iam::${{ secrets.RP_AWS_CRED_ACCOUNT_ID }}:role/${{ vars.RP_AWS_CRED_BASE_ROLE_NAME }}${{ github.event.repository.name }}
 
     - name: Login to Amazon ECR Public
       uses: aws-actions/amazon-ecr-login@v2
