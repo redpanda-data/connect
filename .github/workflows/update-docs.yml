@@ -16,11 +16,7 @@ jobs:
     steps:
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          # This is hardcoded because the org variable RP_AWS_CRED_REGION was set
-          # to us-east-2 and it broke our release process with the message:
-          # "GetAuthorizationToken command is only supported in us-east-1"
-          # And we do not have time to investigate further. Pray for us.
-          aws-region: us-east-1
+          aws-region: ${{ vars.RP_AWS_CRED_REGION }}
           role-to-assume: arn:aws:iam::${{ secrets.RP_AWS_CRED_ACCOUNT_ID }}:role/${{ vars.RP_AWS_CRED_BASE_ROLE_NAME }}${{ github.event.repository.name }}
       - uses: aws-actions/aws-secretsmanager-get-secrets@v2
         with:
@@ -39,11 +35,7 @@ jobs:
     steps:
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          # This is hardcoded because the org variable RP_AWS_CRED_REGION was set
-          # to us-east-2 and it broke our release process with the message:
-          # "GetAuthorizationToken command is only supported in us-east-1"
-          # And we do not have time to investigate further. Pray for us.
-          aws-region: us-east-1
+          aws-region: ${{ vars.RP_AWS_CRED_REGION }}
           role-to-assume: arn:aws:iam::${{ secrets.RP_AWS_CRED_ACCOUNT_ID }}:role/${{ vars.RP_AWS_CRED_BASE_ROLE_NAME }}${{ github.event.repository.name }}
       - uses: aws-actions/aws-secretsmanager-get-secrets@v2
         with:
