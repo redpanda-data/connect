@@ -16,10 +16,10 @@ import (
 
 func TestParseAgentCardURL(t *testing.T) {
 	tests := []struct {
-		name         string
-		input        string
-		wantBaseURL  string
-		wantPath     string
+		name        string
+		input       string
+		wantBaseURL string
+		wantPath    string
 	}{
 		{
 			name:         "base URL without path",
