@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 jobs:
   goreleaser:
@@ -93,10 +94,20 @@ jobs:
         git update-index --skip-worktree ./internal/telemetry/key.pem
         echo "$CONNECT_TELEMETRY_PRIV_KEY" > ./internal/telemetry/key.pem
 
-    - name: GoReleaser
+    - name: GoReleaser release
+      if: ${{ github.event_name == 'push' }}
       uses: goreleaser/goreleaser-action@v6
       with:
         args: release --release-notes=./release_notes.md --timeout 120m
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        CLOUDSMITH_API_KEY: ${{ env.CLOUDSMITH_API_KEY }}
+
+    - name: GoReleaser release snapshot skip publish
+      if: ${{ github.event_name == 'workflow_dispatch' }}
+      uses: goreleaser/goreleaser-action@v6
+      with:
+        args: release --timeout 120m --snapshot --skip publish
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         CLOUDSMITH_API_KEY: ${{ env.CLOUDSMITH_API_KEY }}
