@@ -150,21 +150,25 @@ func redpandaFlags() []cli.Flag {
 		},
 		&cli.StringFlag{
 			Name:   rfCloudTokenURL,
+			Usage:  "OAuth2 token URL for service-account authentication",
 			Hidden: true,
 			Value:  "",
 		},
 		&cli.StringFlag{
 			Name:   rfCloudClientID,
+			Usage:  "OAuth2 client ID for service-account authentication",
 			Hidden: true,
 			Value:  "",
 		},
 		&cli.StringFlag{
 			Name:   rfCloudClientSecret,
+			Usage:  "OAuth2 client secret for service-account authentication",
 			Hidden: true,
 			Value:  "",
 		},
 		&cli.StringFlag{
 			Name:   rfCloudAudience,
+			Usage:  "OAuth2 audience parameter for service-account authentication",
 			Hidden: true,
 			Value:  "",
 		},
