@@ -62,12 +62,12 @@ For more information about the A2A protocol, see https://a2a-protocol.org/latest
 				Description(`If true, returns only the text from the final agent message (concatenated from all text parts). If false, returns the complete Message or Task object as structured data with full history, artifacts, and metadata.
 
 Example with final_message_only: true (default):
-` + "```" + `
+`+"```"+`
 Here is the answer to your question...
-` + "```" + `
+`+"```"+`
 
 Example with final_message_only: false:
-` + "```json" + `
+`+"```json"+`
 {
   "id": "task-123",
   "contextId": "ctx-456",
@@ -80,7 +80,7 @@ Example with final_message_only: false:
   ],
   "artifacts": []
 }
-` + "```" + `
+`+"```"+`
 `).
 				Default(true).
 				Advanced(),
