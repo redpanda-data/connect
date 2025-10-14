@@ -53,7 +53,7 @@ For more information about the A2A protocol, see https://a2a-protocol.org/latest
 		Version("4.40.0").
 		Fields(
 			service.NewURLField(ampFieldAgentCardURL).
-				Description("The base URL where the A2A agent card is hosted. The processor fetches the agent card from `<base_url>/.well-known/agent-card.json` to discover the actual agent endpoint URL. Authentication uses hardcoded OAuth2 from environment variables (ignores card's security schemes)."),
+				Description("URL for the A2A agent card. Can be either a base URL (e.g., `https://example.com`) or a full path to the agent card (e.g., `https://example.com/.well-known/agent.json`). If no path is provided, defaults to `/.well-known/agent.json`. Authentication uses OAuth2 from environment variables."),
 			service.NewInterpolatedStringField(ampFieldPrompt).
 				Description("The user prompt to send to the agent. By default, the processor submits the entire payload as a string.").
 				Default(""),
@@ -114,9 +114,12 @@ func makeProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.
 		return nil, fmt.Errorf("failed to get OAuth2 token for agent card fetch: %w", err)
 	}
 
-	resolver := &agentcard.Resolver{BaseURL: agentCardURL}
+	// Parse the agent card URL to separate base URL and path
+	baseURL, cardPath := parseAgentCardURL(agentCardURL)
+
+	resolver := &agentcard.Resolver{BaseURL: baseURL}
 	card, err := resolver.Resolve(ctx,
-		agentcard.WithPath("/.well-known/agent.json"), // Use agent.json instead of agent-card.json
+		agentcard.WithPath(cardPath),
 		agentcard.WithRequestHeader("Authorization", "Bearer "+token.AccessToken))
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch agent card from %s: %w", agentCardURL, err)
@@ -386,4 +389,16 @@ func (p *messageProcessor) Close(_ context.Context) error {
 		return p.client.Destroy()
 	}
 	return nil
+}
+
+// parseAgentCardURL separates a URL into base URL and path.
+// If the URL contains a path component (e.g., /.well-known/agent.json), returns the base and path separately.
+// Otherwise returns the URL as base and "/.well-known/agent.json" as default path.
+func parseAgentCardURL(fullURL string) (baseURL, path string) {
+	// Check if URL contains /.well-known or similar path
+	if idx := strings.Index(fullURL, "/.well-known"); idx != -1 {
+		return fullURL[:idx], fullURL[idx:]
+	}
+	// Default path if no path component found
+	return fullURL, "/.well-known/agent.json"
 }
