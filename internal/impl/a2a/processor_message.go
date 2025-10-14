@@ -59,7 +59,29 @@ For more information about the A2A protocol, see https://a2a-protocol.org/latest
 				Description("The user prompt to send to the agent. By default, the processor submits the entire payload as a string.").
 				Default(""),
 			service.NewBoolField(ampFieldFinalMessageOnly).
-				Description("If true, returns only the text from the final agent message (concatenated from all text parts). If false, returns the complete Message or Task object as structured data with full history, artifacts, and metadata.").
+				Description(`If true, returns only the text from the final agent message (concatenated from all text parts). If false, returns the complete Message or Task object as structured data with full history, artifacts, and metadata.
+
+Example with final_message_only: true (default):
+` + "```" + `
+Here is the answer to your question...
+` + "```" + `
+
+Example with final_message_only: false:
+` + "```json" + `
+{
+  "id": "task-123",
+  "contextId": "ctx-456",
+  "status": {
+    "state": "completed"
+  },
+  "history": [
+    {"role": "user", "parts": [{"text": "Your question"}]},
+    {"role": "agent", "parts": [{"text": "Here is the answer to your question..."}]}
+  ],
+  "artifacts": []
+}
+` + "```" + `
+`).
 				Default(true).
 				Advanced(),
 		)
