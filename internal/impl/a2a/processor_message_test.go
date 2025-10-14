@@ -9,98 +9,67 @@
 package a2a
 
 import (
-	"context"
-	"errors"
-	"os"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
-	_ "github.com/redpanda-data/benthos/v4/public/components/io"
-	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
-	"github.com/redpanda-data/benthos/v4/public/service"
-	"github.com/redpanda-data/benthos/v4/public/service/integration"
-
-	"github.com/redpanda-data/connect/v4/internal/license"
+	"github.com/stretchr/testify/assert"
 )
 
-func TestA2AMessageIntegration(t *testing.T) {
-	integration.CheckSkip(t)
-
-	// Check required OAuth2 env vars
-	if os.Getenv(RPEnvTokenURL) == "" {
-		t.Skipf("Skipping test because %s is not set", RPEnvTokenURL)
+func TestParseAgentCardURL(t *testing.T) {
+	tests := []struct {
+		name         string
+		input        string
+		wantBaseURL  string
+		wantPath     string
+	}{
+		{
+			name:         "base URL without path",
+			input:        "https://example.com",
+			wantBaseURL:  "https://example.com",
+			wantPath:     "/.well-known/agent.json",
+		},
+		{
+			name:         "base URL with port without path",
+			input:        "https://example.com:8080",
+			wantBaseURL:  "https://example.com:8080",
+			wantPath:     "/.well-known/agent.json",
+		},
+		{
+			name:         "full URL with .well-known/agent.json",
+			input:        "https://example.com/.well-known/agent.json",
+			wantBaseURL:  "https://example.com",
+			wantPath:     "/.well-known/agent.json",
+		},
+		{
+			name:         "full URL with .well-known/agent-card.json",
+			input:        "https://example.com/.well-known/agent-card.json",
+			wantBaseURL:  "https://example.com",
+			wantPath:     "/.well-known/agent-card.json",
+		},
+		{
+			name:         "full URL with port and .well-known path",
+			input:        "https://example.com:8080/.well-known/agent.json",
+			wantBaseURL:  "https://example.com:8080",
+			wantPath:     "/.well-known/agent.json",
+		},
+		{
+			name:         "URL with path prefix before .well-known",
+			input:        "https://example.com/api/v1/.well-known/agent.json",
+			wantBaseURL:  "https://example.com/api/v1",
+			wantPath:     "/.well-known/agent.json",
+		},
+		{
+			name:         "base URL with trailing slash",
+			input:        "https://example.com/",
+			wantBaseURL:  "https://example.com/",
+			wantPath:     "/.well-known/agent.json",
+		},
 	}
-	if os.Getenv(RPEnvClientID) == "" {
-		t.Skipf("Skipping test because %s is not set", RPEnvClientID)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotBaseURL, gotPath := parseAgentCardURL(tt.input)
+			assert.Equal(t, tt.wantBaseURL, gotBaseURL, "baseURL mismatch")
+			assert.Equal(t, tt.wantPath, gotPath, "path mismatch")
+		})
 	}
-	if os.Getenv(RPEnvClientSecret) == "" {
-		t.Skipf("Skipping test because %s is not set", RPEnvClientSecret)
-	}
-
-	// Use a test agent card URL - update this to point to your test agent
-	agentCardURL := "https://your-test-agent.example.com"
-
-	builder := service.NewStreamBuilder()
-	handler, err := builder.AddProducerFunc()
-	require.NoError(t, err)
-
-	var receivedMsg *service.Message
-	require.NoError(t, builder.AddConsumerFunc(func(_ context.Context, msg *service.Message) error {
-		receivedMsg = msg
-		return nil
-	}))
-
-	err = builder.AddProcessorYAML(`
-a2a_message:
-  agent_card_url: "` + agentCardURL + `"
-  prompt: "Say 'Hello from integration test' and nothing else"
-`)
-	require.NoError(t, err)
-
-	stream, err := builder.Build()
-	license.InjectTestService(stream.Resources())
-	require.NoError(t, err)
-
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		err := stream.Run(ctx)
-		if errors.Is(err, context.Canceled) {
-			err = nil
-		}
-		require.NoError(t, err)
-	}()
-
-	// Send test message
-	require.NoError(t, handler(t.Context(), service.NewMessage([]byte("test input"))))
-
-	cancel()
-	<-done
-
-	// Verify response
-	require.NotNil(t, receivedMsg, "No response received from A2A agent")
-	responseBytes, err := receivedMsg.AsBytes()
-	require.NoError(t, err)
-	require.NotEmpty(t, responseBytes)
-
-	// Check metadata
-	taskID, exists := receivedMsg.MetaGetMut("a2a_task_id")
-	require.True(t, exists)
-	require.NotEmpty(t, taskID)
-
-	contextID, exists := receivedMsg.MetaGetMut("a2a_context_id")
-	require.True(t, exists)
-	require.NotEmpty(t, contextID)
-
-	status, exists := receivedMsg.MetaGetMut("a2a_status")
-	require.True(t, exists)
-	require.NotEmpty(t, status)
-
-	t.Logf("Received response: %s", string(responseBytes))
-	t.Logf("Task ID: %s", taskID)
-	t.Logf("Status: %s", status)
 }
