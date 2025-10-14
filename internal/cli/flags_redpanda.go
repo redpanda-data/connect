@@ -38,10 +38,10 @@ const (
 	rfSASLMechanism     = "x-redpanda-sasl-mechanism"
 	rfSASLUsername      = "x-redpanda-sasl-username"
 	rfSASLPassword      = "x-redpanda-sasl-password"
-	rfCloudTokenURL     = "x-redpanda-cloud-token-url"
-	rfCloudClientID     = "x-redpanda-cloud-client-id"
-	rfCloudClientSecret = "x-redpanda-cloud-client-secret"
-	rfCloudAudience     = "x-redpanda-cloud-audience"
+	rfCloudTokenURL     = "x-redpanda-cloud-service-account-token-url"
+	rfCloudClientID     = "x-redpanda-cloud-service-account-client-id"
+	rfCloudClientSecret = "x-redpanda-cloud-service-account-client-secret"
+	rfCloudAudience     = "x-redpanda-cloud-service-account-audience"
 )
 
 var secretsFlag = &cli.StringSliceFlag{
