@@ -6,7 +6,7 @@
 //
 // https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
-package a2a
+package serviceaccount
 
 import (
 	"context"

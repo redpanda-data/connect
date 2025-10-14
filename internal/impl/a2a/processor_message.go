@@ -22,6 +22,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/license"
+	"github.com/redpanda-data/connect/v4/internal/serviceaccount"
 )
 
 const (
@@ -94,7 +95,7 @@ func makeProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.
 		return nil, err
 	}
 
-	oauth2Cfg, err := NewOAuth2ConfigFromEnv()
+	oauth2Cfg, err := serviceaccount.NewOAuth2ConfigFromEnv()
 	if err != nil {
 		return nil, err
 	}
@@ -139,8 +140,8 @@ func makeProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.
 	})
 
 	// Create OAuth2 bearer interceptor
-	oauth2Interceptor := &oauth2BearerInterceptor{
-		tokenSource: tokenSource,
+	oauth2Interceptor := &serviceaccount.OAuth2BearerInterceptor{
+		TokenSource: tokenSource,
 	}
 
 	// Create A2A client factory

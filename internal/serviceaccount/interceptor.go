@@ -6,7 +6,7 @@
 //
 // https://github.com/redpanda-data/connect/blob/main/licenses/rcl.md
 
-package a2a
+package serviceaccount
 
 import (
 	"context"
@@ -16,14 +16,15 @@ import (
 	"golang.org/x/oauth2"
 )
 
-// oauth2BearerInterceptor adds OAuth2 Bearer tokens to outgoing requests.
-type oauth2BearerInterceptor struct {
+// OAuth2BearerInterceptor adds OAuth2 Bearer tokens to outgoing A2A requests.
+type OAuth2BearerInterceptor struct {
 	a2aclient.PassthroughInterceptor
-	tokenSource oauth2.TokenSource
+	TokenSource oauth2.TokenSource
 }
 
-func (i *oauth2BearerInterceptor) Before(ctx context.Context, req *a2aclient.Request) (context.Context, error) {
-	token, err := i.tokenSource.Token()
+// Before adds the OAuth2 Bearer token to the request metadata.
+func (i *OAuth2BearerInterceptor) Before(ctx context.Context, req *a2aclient.Request) (context.Context, error) {
+	token, err := i.TokenSource.Token()
 	if err != nil {
 		return ctx, fmt.Errorf("failed to get OAuth2 token: %w", err)
 	}
