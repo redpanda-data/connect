@@ -7,7 +7,8 @@ on:
 
 jobs:
   goreleaser:
-    runs-on: ubuntu-latest
+    # need larger than standard 4-CPU 14-GB storage runner
+    runs-on: ubuntu-latest-32
     permissions:
       id-token: write
       contents: write
@@ -40,27 +41,6 @@ jobs:
       uses: aws-actions/amazon-ecr-login@v2
       with:
         registry-type: public
-
-    - name: Free up some disk space on ubuntu
-      if: ${{ runner.os == 'Linux' }}
-      run: |
-        # Workaround to provide additional free space for testing.
-        #   https://github.com/actions/virtual-environments/issues/2840
-        sudo rm -rf /usr/share/dotnet
-        sudo rm -rf /opt/ghc
-        sudo rm -rf /usr/local/lib/android
-        sudo rm -rf /usr/local/share/powershell
-        sudo rm -rf "/opt/google/chrome"
-        sudo rm -rf "/opt/microsoft/msedge"
-        sudo rm -rf "/opt/microsoft/powershell"
-        sudo rm -rf "/opt/pipx"
-        sudo rm -rf "/usr/lib/mono"
-        sudo rm -rf "/usr/local/julia*"
-        sudo rm -rf "/usr/local/lib/node_modules"
-        sudo rm -rf "/usr/local/share/chromium"
-        sudo rm -rf "/usr/share/swift"
-        sudo rm -rf "/usr/local/share/boost"
-        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
 
     - name: Install Go
       uses: actions/setup-go@v5
