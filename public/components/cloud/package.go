@@ -12,6 +12,7 @@ package cloud
 
 import (
 	// Only import a subset of components for execution.
+	_ "github.com/redpanda-data/connect/v4/public/components/a2a"
 	_ "github.com/redpanda-data/connect/v4/public/components/amqp09"
 	_ "github.com/redpanda-data/connect/v4/public/components/avro"
 	_ "github.com/redpanda-data/connect/v4/public/components/aws"

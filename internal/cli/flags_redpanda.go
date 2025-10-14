@@ -25,6 +25,7 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
 	"github.com/redpanda-data/connect/v4/internal/license"
 	"github.com/redpanda-data/connect/v4/internal/secrets"
+	"github.com/redpanda-data/connect/v4/internal/serviceaccount"
 )
 
 const (
@@ -38,6 +39,10 @@ const (
 	rfSASLMechanism     = "x-redpanda-sasl-mechanism"
 	rfSASLUsername      = "x-redpanda-sasl-username"
 	rfSASLPassword      = "x-redpanda-sasl-password"
+	rfCloudTokenURL     = "x-redpanda-cloud-service-account-token-url"
+	rfCloudClientID     = "x-redpanda-cloud-service-account-client-id"
+	rfCloudClientSecret = "x-redpanda-cloud-service-account-client-secret"
+	rfCloudAudience     = "x-redpanda-cloud-service-account-audience"
 )
 
 var secretsFlag = &cli.StringSliceFlag{
@@ -144,6 +149,30 @@ func redpandaFlags() []cli.Flag {
 			Hidden: true,
 			Value:  "",
 		},
+		&cli.StringFlag{
+			Name:   rfCloudTokenURL,
+			Usage:  "OAuth2 token URL for service-account authentication",
+			Hidden: true,
+			Value:  "",
+		},
+		&cli.StringFlag{
+			Name:   rfCloudClientID,
+			Usage:  "OAuth2 client ID for service-account authentication",
+			Hidden: true,
+			Value:  "",
+		},
+		&cli.StringFlag{
+			Name:   rfCloudClientSecret,
+			Usage:  "OAuth2 client secret for service-account authentication",
+			Hidden: true,
+			Value:  "",
+		},
+		&cli.StringFlag{
+			Name:   rfCloudAudience,
+			Usage:  "OAuth2 audience parameter for service-account authentication",
+			Hidden: true,
+			Value:  "",
+		},
 	}
 }
 
@@ -226,4 +255,40 @@ client_id: rpcn
 	}
 
 	return
+}
+
+// resolveSecret resolves a value that may contain a ${secrets.KEY} reference
+// using the provided secret lookup function.
+func resolveSecret(ctx context.Context, value string, lookupFn secrets.LookupFn) string {
+	if value == "" {
+		return value
+	}
+
+	// Check if value is a secret reference: ${...}
+	if strings.HasPrefix(value, "${") && strings.HasSuffix(value, "}") {
+		key := strings.TrimSuffix(strings.TrimPrefix(value, "${"), "}")
+		if resolved, ok := lookupFn(ctx, key); ok {
+			return resolved
+		}
+	}
+
+	return value
+}
+
+// parseCloudAuthFlags parses the OAuth2/cloud authentication CLI flags,
+// resolves any secret references, and initializes the global service account configuration.
+func parseCloudAuthFlags(ctx context.Context, c *cli.Context, secretLookupFn secrets.LookupFn) error {
+	tokenURL := resolveSecret(ctx, c.String(rfCloudTokenURL), secretLookupFn)
+	clientID := resolveSecret(ctx, c.String(rfCloudClientID), secretLookupFn)
+	clientSecret := resolveSecret(ctx, c.String(rfCloudClientSecret), secretLookupFn)
+	audience := resolveSecret(ctx, c.String(rfCloudAudience), secretLookupFn)
+
+	// Initialize global service account config if credentials are provided
+	if tokenURL != "" && clientID != "" && clientSecret != "" {
+		if err := serviceaccount.InitGlobal(ctx, tokenURL, clientID, clientSecret, audience); err != nil {
+			return fmt.Errorf("failed to initialize service account authentication: %w", err)
+		}
+	}
+
+	return nil
 }
