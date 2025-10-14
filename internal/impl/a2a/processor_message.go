@@ -57,7 +57,7 @@ For more information about the A2A protocol, see https://a2a-protocol.org/latest
 				Description("URL for the A2A agent card. Can be either a base URL (e.g., `https://example.com`) or a full path to the agent card (e.g., `https://example.com/.well-known/agent.json`). If no path is provided, defaults to `/.well-known/agent.json`. Authentication uses OAuth2 from environment variables."),
 			service.NewInterpolatedStringField(ampFieldPrompt).
 				Description("The user prompt to send to the agent. By default, the processor submits the entire payload as a string.").
-				Default(""),
+				Optional(),
 			service.NewBoolField(ampFieldFinalMessageOnly).
 				Description(`If true, returns only the text from the final agent message (concatenated from all text parts). If false, returns the complete Message or Task object as structured data with full history, artifacts, and metadata.
 
@@ -107,9 +107,12 @@ func makeProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.
 		return nil, err
 	}
 
-	prompt, err := conf.FieldInterpolatedString(ampFieldPrompt)
-	if err != nil {
-		return nil, err
+	var prompt *service.InterpolatedString
+	if conf.Contains(ampFieldPrompt) {
+		prompt, err = conf.FieldInterpolatedString(ampFieldPrompt)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	finalMessageOnly, err := conf.FieldBool(ampFieldFinalMessageOnly)
@@ -197,13 +200,14 @@ func makeProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.
 
 func (p *messageProcessor) Process(ctx context.Context, msg *service.Message) (service.MessageBatch, error) {
 	// Get prompt text
-	promptText, err := p.prompt.TryString(msg)
-	if err != nil {
-		return nil, fmt.Errorf("failed to evaluate prompt: %w", err)
-	}
-
-	// If prompt is empty, use message payload as string
-	if promptText == "" {
+	var promptText string
+	if p.prompt != nil {
+		var err error
+		promptText, err = p.prompt.TryString(msg)
+		if err != nil {
+			return nil, fmt.Errorf("failed to evaluate prompt: %w", err)
+		}
+	} else {
 		payloadBytes, err := msg.AsBytes()
 		if err != nil {
 			return nil, fmt.Errorf("failed to get message payload: %w", err)
