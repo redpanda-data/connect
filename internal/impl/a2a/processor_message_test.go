@@ -46,7 +46,7 @@ func TestA2AMessageIntegration(t *testing.T) {
 	require.NoError(t, err)
 
 	var receivedMsg *service.Message
-	require.NoError(t, builder.AddConsumerFunc(func(ctx context.Context, msg *service.Message) error {
+	require.NoError(t, builder.AddConsumerFunc(func(_ context.Context, msg *service.Message) error {
 		receivedMsg = msg
 		return nil
 	}))

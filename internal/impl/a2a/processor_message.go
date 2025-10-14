@@ -131,7 +131,7 @@ func makeProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.
 	}
 
 	// Create HTTP transport factory
-	transportFactory := a2aclient.TransportFactoryFn(func(ctx context.Context, url string, card *a2a.AgentCard) (a2aclient.Transport, error) {
+	transportFactory := a2aclient.TransportFactoryFn(func(_ context.Context, url string, card *a2a.AgentCard) (a2aclient.Transport, error) {
 		return NewHTTPTransport(url, httpClient), nil
 	})
 
@@ -401,7 +401,7 @@ func (p *messageProcessor) pollTaskUntilComplete(ctx context.Context, taskID a2a
 	}
 }
 
-func (p *messageProcessor) Close(ctx context.Context) error {
+func (p *messageProcessor) Close(_ context.Context) error {
 	if p.client != nil {
 		return p.client.Destroy()
 	}

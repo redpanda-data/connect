@@ -323,7 +323,7 @@ func (t *httpTransport) parseSSEStream(ctx context.Context, body io.Reader, yiel
 }
 
 // parseEventByType parses an SSE event data based on the event type.
-func (t *httpTransport) parseEventByType(data []byte, eventType string) (a2a.Event, error) {
+func (*httpTransport) parseEventByType(data []byte, eventType string) (a2a.Event, error) {
 	var jsonResp jsonRPCResponse
 	if err := json.Unmarshal(data, &jsonResp); err == nil && jsonResp.JSONRPC == "2.0" {
 		if jsonResp.Error != nil {
@@ -358,7 +358,7 @@ func (t *httpTransport) parseEventByType(data []byte, eventType string) (a2a.Eve
 			return &msg, nil
 		}
 
-		return nil, fmt.Errorf("failed to parse event as Task or Message")
+		return nil, errors.New("failed to parse event as Task or Message")
 
 	case "message":
 		var msg a2a.Message
@@ -409,36 +409,36 @@ func (t *httpTransport) parseEventByType(data []byte, eventType string) (a2a.Eve
 }
 
 // CancelTask implements the tasks/cancel method.
-func (t *httpTransport) CancelTask(ctx context.Context, id *a2a.TaskIDParams) (*a2a.Task, error) {
+func (t *httpTransport) CancelTask(_ context.Context, id *a2a.TaskIDParams) (*a2a.Task, error) {
 	return nil, a2aclient.ErrNotImplemented
 }
 
 // GetTaskPushConfig implements the tasks/pushNotificationConfig/get method.
-func (t *httpTransport) GetTaskPushConfig(ctx context.Context, params *a2a.GetTaskPushConfigParams) (*a2a.TaskPushConfig, error) {
+func (t *httpTransport) GetTaskPushConfig(_ context.Context, params *a2a.GetTaskPushConfigParams) (*a2a.TaskPushConfig, error) {
 	return nil, a2aclient.ErrNotImplemented
 }
 
 // ListTaskPushConfig implements the tasks/pushNotificationConfig/list method.
-func (t *httpTransport) ListTaskPushConfig(ctx context.Context, params *a2a.ListTaskPushConfigParams) ([]*a2a.TaskPushConfig, error) {
+func (t *httpTransport) ListTaskPushConfig(_ context.Context, params *a2a.ListTaskPushConfigParams) ([]*a2a.TaskPushConfig, error) {
 	return nil, a2aclient.ErrNotImplemented
 }
 
 // SetTaskPushConfig implements the tasks/pushNotificationConfig/set method.
-func (t *httpTransport) SetTaskPushConfig(ctx context.Context, params *a2a.TaskPushConfig) (*a2a.TaskPushConfig, error) {
+func (t *httpTransport) SetTaskPushConfig(_ context.Context, params *a2a.TaskPushConfig) (*a2a.TaskPushConfig, error) {
 	return nil, a2aclient.ErrNotImplemented
 }
 
 // DeleteTaskPushConfig implements the tasks/pushNotificationConfig/delete method.
-func (t *httpTransport) DeleteTaskPushConfig(ctx context.Context, params *a2a.DeleteTaskPushConfigParams) error {
+func (t *httpTransport) DeleteTaskPushConfig(_ context.Context, params *a2a.DeleteTaskPushConfigParams) error {
 	return a2aclient.ErrNotImplemented
 }
 
 // GetAgentCard retrieves the agent card from /.well-known/agent.json.
-func (t *httpTransport) GetAgentCard(ctx context.Context) (*a2a.AgentCard, error) {
+func (t *httpTransport) GetAgentCard(_ context.Context) (*a2a.AgentCard, error) {
 	return nil, a2aclient.ErrNotImplemented
 }
 
 // Destroy cleans up resources.
-func (t *httpTransport) Destroy() error {
+func (*httpTransport) Destroy() error {
 	return nil
 }
