@@ -104,6 +104,11 @@ Each resource will be exposed as a tool that AI can interact with:
 				return err
 			}
 
+			// Parse and resolve cloud auth flags (for a2a processor OAuth2)
+			if err := parseCloudAuthFlags(c.Context, c, secretLookupFn); err != nil {
+				return err
+			}
+
 			tagFilterStrs := c.StringSlice("tag")
 			var tagFilterREs []*regexp.Regexp
 			for _, f := range tagFilterStrs {

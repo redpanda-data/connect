@@ -184,6 +184,11 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 					return err
 				}
 
+				// Parse and resolve cloud auth flags (for a2a processor OAuth2)
+				if err := parseCloudAuthFlags(c.Context, c, secretLookupFn); err != nil {
+					return err
+				}
+
 				// We need a fallback logger since the normal run cli isnt executed
 				rpMgr.SetFallbackLogger(service.NewLoggerFromSlog(slog.Default()))
 

@@ -32,6 +32,7 @@ require (
 	github.com/Masterminds/squirrel v1.5.4
 	github.com/PaesslerAG/gval v1.2.4
 	github.com/PaesslerAG/jsonpath v0.1.1
+	github.com/a2aproject/a2a-go v0.0.0-20251009070416-49deee794474
 	github.com/apache/pulsar-client-go v0.16.0
 	github.com/auth0/go-jwt-middleware/v2 v2.3.0
 	github.com/authzed/authzed-go v1.6.0

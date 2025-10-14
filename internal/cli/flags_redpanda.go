@@ -38,6 +38,10 @@ const (
 	rfSASLMechanism     = "x-redpanda-sasl-mechanism"
 	rfSASLUsername      = "x-redpanda-sasl-username"
 	rfSASLPassword      = "x-redpanda-sasl-password"
+	rfCloudTokenURL     = "x-redpanda-cloud-token-url"
+	rfCloudClientID     = "x-redpanda-cloud-client-id"
+	rfCloudClientSecret = "x-redpanda-cloud-client-secret"
+	rfCloudAudience     = "x-redpanda-cloud-audience"
 )
 
 var secretsFlag = &cli.StringSliceFlag{
@@ -144,6 +148,26 @@ func redpandaFlags() []cli.Flag {
 			Hidden: true,
 			Value:  "",
 		},
+		&cli.StringFlag{
+			Name:   rfCloudTokenURL,
+			Hidden: true,
+			Value:  "",
+		},
+		&cli.StringFlag{
+			Name:   rfCloudClientID,
+			Hidden: true,
+			Value:  "",
+		},
+		&cli.StringFlag{
+			Name:   rfCloudClientSecret,
+			Hidden: true,
+			Value:  "",
+		},
+		&cli.StringFlag{
+			Name:   rfCloudAudience,
+			Hidden: true,
+			Value:  "",
+		},
 	}
 }
 
@@ -226,4 +250,56 @@ client_id: rpcn
 	}
 
 	return
+}
+
+// resolveSecret resolves a value that may contain a ${secrets.KEY} reference
+// using the provided secret lookup function.
+func resolveSecret(ctx context.Context, value string, lookupFn secrets.LookupFn) string {
+	if value == "" {
+		return value
+	}
+
+	// Check if value is a secret reference: ${...}
+	if strings.HasPrefix(value, "${") && strings.HasSuffix(value, "}") {
+		key := strings.TrimSuffix(strings.TrimPrefix(value, "${"), "}")
+		if resolved, ok := lookupFn(ctx, key); ok {
+			return resolved
+		}
+	}
+
+	return value
+}
+
+// parseCloudAuthFlags parses the OAuth2/cloud authentication CLI flags,
+// resolves any secret references, and sets them as environment variables
+// for the a2a processor to use.
+func parseCloudAuthFlags(ctx context.Context, c *cli.Context, secretLookupFn secrets.LookupFn) error {
+	tokenURL := resolveSecret(ctx, c.String(rfCloudTokenURL), secretLookupFn)
+	clientID := resolveSecret(ctx, c.String(rfCloudClientID), secretLookupFn)
+	clientSecret := resolveSecret(ctx, c.String(rfCloudClientSecret), secretLookupFn)
+	audience := resolveSecret(ctx, c.String(rfCloudAudience), secretLookupFn)
+
+	// Set resolved values as environment variables if provided
+	if tokenURL != "" {
+		if err := os.Setenv("REDPANDA_CLOUD_TOKEN_URL", tokenURL); err != nil {
+			return fmt.Errorf("failed to set REDPANDA_CLOUD_TOKEN_URL: %w", err)
+		}
+	}
+	if clientID != "" {
+		if err := os.Setenv("REDPANDA_CLOUD_CLIENT_ID", clientID); err != nil {
+			return fmt.Errorf("failed to set REDPANDA_CLOUD_CLIENT_ID: %w", err)
+		}
+	}
+	if clientSecret != "" {
+		if err := os.Setenv("REDPANDA_CLOUD_CLIENT_SECRET", clientSecret); err != nil {
+			return fmt.Errorf("failed to set REDPANDA_CLOUD_CLIENT_SECRET: %w", err)
+		}
+	}
+	if audience != "" {
+		if err := os.Setenv("REDPANDA_CLOUD_AUDIENCE", audience); err != nil {
+			return fmt.Errorf("failed to set REDPANDA_CLOUD_AUDIENCE: %w", err)
+		}
+	}
+
+	return nil
 }
