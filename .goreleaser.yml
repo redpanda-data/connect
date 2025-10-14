@@ -20,13 +20,32 @@ builds:
             - QUILL_LOG_FILE=target/dist/quill-{{ .Target }}.log
     ignore:
       - goos: windows
-        goarch: arm64
+        goarch: arm
+      - goos: darwin
+        goarch: arm
     env:
       - CGO_ENABLED=0
     tags:
       - timetzdata
     ldflags: >
       -s -w
+      -X main.Version={{.Version}}
+      -X main.DateBuilt={{.Date}}
+      -X main.BinaryName=redpanda-connect
+      -X github.com/redpanda-data/connect/v4/internal/telemetry.ExportHost={{ if index .Env "CONNECT_TELEMETRY_HOST"  }}{{ .Env.CONNECT_TELEMETRY_HOST }}{{ else }}{{ end }}
+      -X github.com/redpanda-data/connect/v4/internal/telemetry.ExportDelay={{ if index .Env "CONNECT_TELEMETRY_DELAY"  }}{{ .Env.CONNECT_TELEMETRY_DELAY }}{{ else }}{{ end }}
+      -X github.com/redpanda-data/connect/v4/internal/telemetry.ExportPeriod={{ if index .Env "CONNECT_TELEMETRY_PERIOD"  }}{{ .Env.CONNECT_TELEMETRY_PERIOD }}{{ else }}{{ end }}
+
+  - id: connect-cgo
+    main: cmd/redpanda-connect/main.go
+    binary: redpanda-connect
+    goos: [ linux ]
+    goarch: [ amd64 ]
+    env:
+      - CGO_ENABLED=1
+    tags:
+      - timetzdata
+    ldflags: >
       -X main.Version={{.Version}}
       -X main.DateBuilt={{.Date}}
       -X main.BinaryName=redpanda-connect
@@ -114,6 +133,15 @@ archives:
       - README.md
       - CHANGELOG.md
       - licenses
+
+  - id: connect-cgo
+    ids: [ connect-cgo ]
+    formats: tar.gz
+    files:
+      - README.md
+      - CHANGELOG.md
+      - licenses
+    name_template: 'redpanda-connect-cgo_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ with .Arm }}v{{ . }}{{ end }}{{ with .Mips }}_{{ . }}{{ end }}{{ if not (eq .Amd64 "v1") }}{{ .Amd64 }}{{ end }}'
 
   - id: connect-fips
     ids: [ connect-fips ]

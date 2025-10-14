@@ -98,7 +98,7 @@ jobs:
       if: ${{ github.event_name == 'push' }}
       uses: goreleaser/goreleaser-action@v6
       with:
-        args: release --release-notes=./release_notes.md --timeout 120m
+        args: release --release-notes=./release_notes.md --timeout 120m --verbose
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         CLOUDSMITH_API_KEY: ${{ env.CLOUDSMITH_API_KEY }}
