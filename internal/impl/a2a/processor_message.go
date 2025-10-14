@@ -122,7 +122,7 @@ func makeProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.
 		return nil, fmt.Errorf("failed to fetch agent card from %s: %w", agentCardURL, err)
 	}
 
-	mgr.Logger().Infof("Fetched agent card: %s (version: %s, protocol: %s)", card.Name, card.Version, card.ProtocolVersion)
+	mgr.Logger().Debugf("Fetched agent card: %s (version: %s, protocol: %s)", card.Name, card.Version, card.ProtocolVersion)
 
 	// Extract the actual agent URL from the card
 	agentURL := card.URL
@@ -185,13 +185,13 @@ func (p *messageProcessor) Process(ctx context.Context, msg *service.Message) (s
 		promptText = string(payloadBytes)
 	}
 
-	p.logger.Infof("Processing A2A request with prompt: %q", promptText)
+	p.logger.Debugf("Processing A2A request with prompt: %q", promptText)
 
 	// Create A2A message
 	a2aMessage := a2a.NewMessage(a2a.MessageRoleUser, a2a.TextPart{Text: promptText})
 
 	// Send message
-	p.logger.Infof("Sending message/send to agent: %s", p.agentURL)
+	p.logger.Debugf("Sending message/send to agent: %s", p.agentURL)
 	result, err := p.client.SendMessage(ctx, &a2a.MessageSendParams{
 		Message: a2aMessage,
 	})
@@ -203,10 +203,10 @@ func (p *messageProcessor) Process(ctx context.Context, msg *service.Message) (s
 	// Handle result
 	switch r := result.(type) {
 	case *a2a.Task:
-		p.logger.Infof("Received Task response: ID=%s, Status=%s", r.ID, r.Status.State)
+		p.logger.Debugf("Received Task response: ID=%s, Status=%s", r.ID, r.Status.State)
 		return p.handleTaskResult(ctx, r)
 	case *a2a.Message:
-		p.logger.Infof("Received Message response: ID=%s", r.ID)
+		p.logger.Debugf("Received Message response: ID=%s", r.ID)
 		return p.handleMessageResult(r)
 	default:
 		return nil, fmt.Errorf("unexpected result type: %T", r)
@@ -216,7 +216,7 @@ func (p *messageProcessor) Process(ctx context.Context, msg *service.Message) (s
 func (p *messageProcessor) handleTaskResult(ctx context.Context, task *a2a.Task) (service.MessageBatch, error) {
 	// Poll for task completion if not terminal
 	if !task.Status.State.Terminal() {
-		p.logger.Infof("Task %s in state %s, starting polling for completion...", task.ID, task.Status.State)
+		p.logger.Debugf("Task %s in state %s, starting polling for completion...", task.ID, task.Status.State)
 		finalTask, err := p.pollTaskUntilComplete(ctx, task.ID)
 		if err != nil {
 			p.logger.Errorf("Task polling failed: %v", err)
@@ -224,7 +224,7 @@ func (p *messageProcessor) handleTaskResult(ctx context.Context, task *a2a.Task)
 		}
 		task = finalTask
 	} else {
-		p.logger.Infof("Task %s already in terminal state: %s", task.ID, task.Status.State)
+		p.logger.Debugf("Task %s already in terminal state: %s", task.ID, task.Status.State)
 	}
 
 	// Only return output if task completed successfully
@@ -238,14 +238,14 @@ func (p *messageProcessor) handleTaskResult(ctx context.Context, task *a2a.Task)
 	outMsg := service.NewMessage(nil)
 	outMsg.MetaSetMut("a2a_task_id", string(task.ID))
 	outMsg.MetaSetMut("a2a_context_id", task.ContextID)
-	outMsg.MetaSetMut("a2a_status", string(task.Status.State))
+	outMsg.MetaSetMut("a2a_state", string(task.Status.State))
 
 	if p.finalMessageOnly {
 		// Extract text from last agent message only
 		var responseText strings.Builder
 		var lastAgentMessage *a2a.Message
 
-		p.logger.Infof("Extracting final message only from task %s (total history: %d messages)", task.ID, len(task.History))
+		p.logger.Debugf("Extracting final message only from task %s (total history: %d messages)", task.ID, len(task.History))
 
 		// Log all history for debugging
 		for i, histMsg := range task.History {
@@ -255,22 +255,22 @@ func (p *messageProcessor) handleTaskResult(ctx context.Context, task *a2a.Task)
 		for i := len(task.History) - 1; i >= 0; i-- {
 			if task.History[i].Role == a2a.MessageRoleAgent {
 				lastAgentMessage = task.History[i]
-				p.logger.Infof("Found last agent message at history index %d (MessageID=%s)", i, lastAgentMessage.ID)
+				p.logger.Debugf("Found last agent message at history index %d (MessageID=%s)", i, lastAgentMessage.ID)
 				break
 			}
 		}
 
 		if lastAgentMessage != nil {
-			p.logger.Infof("Last agent message has %d parts", len(lastAgentMessage.Parts))
+			p.logger.Debugf("Last agent message has %d parts", len(lastAgentMessage.Parts))
 			for i, part := range lastAgentMessage.Parts {
 				if textPart, ok := part.(a2a.TextPart); ok {
-					p.logger.Infof("  Part %d: text with %d chars", i, len(textPart.Text))
+					p.logger.Debugf("  Part %d: text with %d chars", i, len(textPart.Text))
 					if responseText.Len() > 0 {
 						responseText.WriteString("\n")
 					}
 					responseText.WriteString(textPart.Text)
 				} else {
-					p.logger.Infof("  Part %d: %T (skipped)", i, part)
+					p.logger.Debugf("  Part %d: %T (skipped)", i, part)
 				}
 			}
 		}
@@ -281,11 +281,11 @@ func (p *messageProcessor) handleTaskResult(ctx context.Context, task *a2a.Task)
 		}
 
 		outMsg.SetBytes([]byte(responseText.String()))
-		p.logger.Infof("Task %s completed, returning ONLY final message text (%d bytes total)", task.ID, responseText.Len())
+		p.logger.Debugf("Task %s completed, returning ONLY final message text (%d bytes total)", task.ID, responseText.Len())
 	} else {
 		// Return the complete Task as a structured object
 		outMsg.SetStructuredMut(task)
-		p.logger.Infof("Task %s completed, returning full task object (history: %d msgs, artifacts: %d)",
+		p.logger.Debugf("Task %s completed, returning full task object (history: %d msgs, artifacts: %d)",
 			task.ID, len(task.History), len(task.Artifacts))
 	}
 
@@ -319,11 +319,11 @@ func (p *messageProcessor) handleMessageResult(msg *a2a.Message) (service.Messag
 		}
 
 		outMsg.SetBytes([]byte(responseText.String()))
-		p.logger.Infof("Returning message text only (%d bytes)", responseText.Len())
+		p.logger.Debugf("Returning message text only (%d bytes)", responseText.Len())
 	} else {
 		// Return the complete Message as a structured object
 		outMsg.SetStructuredMut(msg)
-		p.logger.Infof("Returning full message object (%d parts)", len(msg.Parts))
+		p.logger.Debugf("Returning full message object (%d parts)", len(msg.Parts))
 	}
 
 	return service.MessageBatch{outMsg}, nil
@@ -339,7 +339,7 @@ func (p *messageProcessor) pollTaskUntilComplete(ctx context.Context, taskID a2a
 	for {
 		select {
 		case <-ctx.Done():
-			p.logger.Infof("Context cancelled while waiting for task %s (polled %d times)", taskID, pollCount)
+			p.logger.Debugf("Context cancelled while waiting for task %s (polled %d times)", taskID, pollCount)
 			return nil, ctx.Err()
 
 		case <-timeout:
@@ -348,7 +348,7 @@ func (p *messageProcessor) pollTaskUntilComplete(ctx context.Context, taskID a2a
 
 		case <-ticker.C:
 			pollCount++
-			p.logger.Infof("Polling task %s (attempt %d) via tasks/get...", taskID, pollCount)
+			p.logger.Debugf("Polling task %s (attempt %d) via tasks/get...", taskID, pollCount)
 
 			task, err := p.client.GetTask(ctx, &a2a.TaskQueryParams{
 				ID: taskID,
@@ -358,7 +358,7 @@ func (p *messageProcessor) pollTaskUntilComplete(ctx context.Context, taskID a2a
 				return nil, fmt.Errorf("failed to get task status: %w", err)
 			}
 
-			p.logger.Infof("Task %s poll %d: state=%s", taskID, pollCount, task.Status.State)
+			p.logger.Debugf("Task %s poll %d: state=%s", taskID, pollCount, task.Status.State)
 
 			// Log status message if present
 			if task.Status.Message != nil && len(task.Status.Message.Parts) > 0 {
@@ -374,7 +374,7 @@ func (p *messageProcessor) pollTaskUntilComplete(ctx context.Context, taskID a2a
 			}
 
 			if task.Status.State.Terminal() {
-				p.logger.Infof("Task %s reached terminal state %s after %d polls", taskID, task.Status.State, pollCount)
+				p.logger.Debugf("Task %s reached terminal state %s after %d polls", taskID, task.Status.State, pollCount)
 				return task, nil
 			}
 		}
