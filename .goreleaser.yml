@@ -58,7 +58,7 @@ builds:
 
   - id: connect-cloud
     main: cmd/redpanda-connect-cloud/main.go
-    binary: redpanda-connect-cloud
+    binary: redpanda-connect
     goos: [ linux ]
     goarch: [ amd64, arm64 ]
     env:
@@ -73,7 +73,7 @@ builds:
 
   - id: connect-ai
     main: cmd/redpanda-connect-ai/main.go
-    binary: redpanda-connect-ai
+    binary: redpanda-connect
     goos: [ linux ]
     goarch: [ amd64, arm64 ]
     env:
