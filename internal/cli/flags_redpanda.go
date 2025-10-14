@@ -25,6 +25,7 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
 	"github.com/redpanda-data/connect/v4/internal/license"
 	"github.com/redpanda-data/connect/v4/internal/secrets"
+	"github.com/redpanda-data/connect/v4/internal/serviceaccount"
 )
 
 const (
@@ -275,33 +276,17 @@ func resolveSecret(ctx context.Context, value string, lookupFn secrets.LookupFn)
 }
 
 // parseCloudAuthFlags parses the OAuth2/cloud authentication CLI flags,
-// resolves any secret references, and sets them as environment variables
-// for the a2a processor to use.
+// resolves any secret references, and initializes the global service account configuration.
 func parseCloudAuthFlags(ctx context.Context, c *cli.Context, secretLookupFn secrets.LookupFn) error {
 	tokenURL := resolveSecret(ctx, c.String(rfCloudTokenURL), secretLookupFn)
 	clientID := resolveSecret(ctx, c.String(rfCloudClientID), secretLookupFn)
 	clientSecret := resolveSecret(ctx, c.String(rfCloudClientSecret), secretLookupFn)
 	audience := resolveSecret(ctx, c.String(rfCloudAudience), secretLookupFn)
 
-	// Set resolved values as environment variables if provided
-	if tokenURL != "" {
-		if err := os.Setenv("REDPANDA_CLOUD_TOKEN_URL", tokenURL); err != nil {
-			return fmt.Errorf("failed to set REDPANDA_CLOUD_TOKEN_URL: %w", err)
-		}
-	}
-	if clientID != "" {
-		if err := os.Setenv("REDPANDA_CLOUD_CLIENT_ID", clientID); err != nil {
-			return fmt.Errorf("failed to set REDPANDA_CLOUD_CLIENT_ID: %w", err)
-		}
-	}
-	if clientSecret != "" {
-		if err := os.Setenv("REDPANDA_CLOUD_CLIENT_SECRET", clientSecret); err != nil {
-			return fmt.Errorf("failed to set REDPANDA_CLOUD_CLIENT_SECRET: %w", err)
-		}
-	}
-	if audience != "" {
-		if err := os.Setenv("REDPANDA_CLOUD_AUDIENCE", audience); err != nil {
-			return fmt.Errorf("failed to set REDPANDA_CLOUD_AUDIENCE: %w", err)
+	// Initialize global service account config if credentials are provided
+	if tokenURL != "" && clientID != "" && clientSecret != "" {
+		if err := serviceaccount.InitGlobal(ctx, tokenURL, clientID, clientSecret, audience); err != nil {
+			return fmt.Errorf("failed to initialize service account authentication: %w", err)
 		}
 	}
 

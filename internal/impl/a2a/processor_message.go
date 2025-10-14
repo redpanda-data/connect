@@ -120,17 +120,17 @@ func makeProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.
 		return nil, err
 	}
 
-	oauth2Cfg, err := serviceaccount.NewOAuth2ConfigFromEnv()
-	if err != nil {
-		return nil, err
-	}
-
 	ctx := context.Background()
 
-	// Create authenticated HTTP client
-	httpClient, tokenSource, err := oauth2Cfg.CreateHTTPClient(ctx)
+	// Get authenticated HTTP client and token source from global service account config
+	httpClient, err := serviceaccount.GetHTTPClient()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create OAuth2 HTTP client: %w", err)
+		return nil, fmt.Errorf("failed to get service account HTTP client: %w", err)
+	}
+
+	tokenSource, err := serviceaccount.GetTokenSource()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get service account token source: %w", err)
 	}
 
 	// Fetch agent card to discover the actual agent endpoint URL
@@ -165,8 +165,8 @@ func makeProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.
 	})
 
 	// Create OAuth2 bearer interceptor
-	oauth2Interceptor := &serviceaccount.OAuth2BearerInterceptor{
-		TokenSource: tokenSource,
+	oauth2Interceptor := &oauth2BearerInterceptor{
+		tokenSource: tokenSource,
 	}
 
 	// Create A2A client factory

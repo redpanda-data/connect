@@ -10,82 +10,48 @@ package serviceaccount
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
-	"os"
+	"sync"
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 )
 
-const (
-	// RPEnvTokenURL is the OAuth2 token endpoint URL for client credentials grant.
-	RPEnvTokenURL = "REDPANDA_CLOUD_TOKEN_URL"
-	// RPEnvAudience is the OAuth2 audience parameter.
-	RPEnvAudience = "REDPANDA_CLOUD_AUDIENCE"
-	// RPEnvClientID is the OAuth2 client ID for service account authentication.
-	RPEnvClientID = "REDPANDA_CLOUD_CLIENT_ID"
-	// RPEnvClientSecret is the OAuth2 client secret for service account authentication.
-	RPEnvClientSecret = "REDPANDA_CLOUD_CLIENT_SECRET"
+var (
+	globalConfigMu sync.RWMutex
+	globalConfig   *oauth2Config
 )
 
-// OAuth2Config holds OAuth2 client credentials configuration from environment variables.
-type OAuth2Config struct {
-	TokenURL     string
-	Audience     string
-	ClientID     string
-	ClientSecret string
+// oauth2Config holds OAuth2 client credentials configuration.
+type oauth2Config struct {
+	tokenURL     string
+	audience     string
+	clientID     string
+	clientSecret string
+	tokenSource  oauth2.TokenSource
+	httpClient   *http.Client
 }
 
-// NewOAuth2ConfigFromEnv creates OAuth2 configuration from environment variables.
-// Returns nil if required env vars are not set (allowing processor to work without auth).
-func NewOAuth2ConfigFromEnv() (*OAuth2Config, error) {
-	tokenURL := os.Getenv(RPEnvTokenURL)
-	clientID := os.Getenv(RPEnvClientID)
-	clientSecret := os.Getenv(RPEnvClientSecret)
-	audience := os.Getenv(RPEnvAudience)
-
-	// Check each required field individually and report which ones are missing
-	var missing []string
-	if tokenURL == "" {
-		missing = append(missing, RPEnvTokenURL)
-	}
-	if clientID == "" {
-		missing = append(missing, RPEnvClientID)
-	}
-	if clientSecret == "" {
-		missing = append(missing, RPEnvClientSecret)
-	}
-
-	if len(missing) > 0 {
-		return nil, fmt.Errorf("OAuth2 configuration incomplete, missing environment variables: %v", missing)
-	}
-
-	return &OAuth2Config{
-		TokenURL:     tokenURL,
-		Audience:     audience,
-		ClientID:     clientID,
-		ClientSecret: clientSecret,
-	}, nil
-}
-
-// CreateHTTPClient creates an HTTP client with OAuth2 client credentials authentication.
-func (c *OAuth2Config) CreateHTTPClient(ctx context.Context) (*http.Client, oauth2.TokenSource, error) {
-	if c == nil {
-		return http.DefaultClient, nil, nil
+// InitGlobal initializes the global service account OAuth2 configuration.
+// This should be called once during application startup, typically from CLI flag parsing.
+func InitGlobal(ctx context.Context, tokenURL, clientID, clientSecret, audience string) error {
+	if tokenURL == "" || clientID == "" || clientSecret == "" {
+		return errors.New("tokenURL, clientID, and clientSecret are required")
 	}
 
 	config := &clientcredentials.Config{
-		ClientID:     c.ClientID,
-		ClientSecret: c.ClientSecret,
-		TokenURL:     c.TokenURL,
+		ClientID:     clientID,
+		ClientSecret: clientSecret,
+		TokenURL:     tokenURL,
 		Scopes:       []string{},
 	}
 
 	// Add audience parameter if provided
-	if c.Audience != "" {
+	if audience != "" {
 		config.EndpointParams = map[string][]string{
-			"audience": {c.Audience},
+			"audience": {audience},
 		}
 	}
 
@@ -93,8 +59,46 @@ func (c *OAuth2Config) CreateHTTPClient(ctx context.Context) (*http.Client, oaut
 
 	// Test token acquisition to fail fast if auth is misconfigured
 	if _, err := tokenSource.Token(); err != nil {
-		return nil, nil, fmt.Errorf("failed to acquire OAuth2 token: %w", err)
+		return fmt.Errorf("failed to acquire OAuth2 token: %w", err)
 	}
 
-	return config.Client(ctx), tokenSource, nil
+	globalConfigMu.Lock()
+	defer globalConfigMu.Unlock()
+
+	globalConfig = &oauth2Config{
+		tokenURL:     tokenURL,
+		audience:     audience,
+		clientID:     clientID,
+		clientSecret: clientSecret,
+		tokenSource:  tokenSource,
+		httpClient:   config.Client(ctx),
+	}
+
+	return nil
+}
+
+// GetTokenSource returns the global OAuth2 token source.
+// Returns an error if service account authentication has not been initialized.
+func GetTokenSource() (oauth2.TokenSource, error) {
+	globalConfigMu.RLock()
+	defer globalConfigMu.RUnlock()
+
+	if globalConfig == nil {
+		return nil, errors.New("service account authentication has not been set up")
+	}
+
+	return globalConfig.tokenSource, nil
+}
+
+// GetHTTPClient returns an HTTP client configured with OAuth2 authentication.
+// Returns an error if service account authentication has not been initialized.
+func GetHTTPClient() (*http.Client, error) {
+	globalConfigMu.RLock()
+	defer globalConfigMu.RUnlock()
+
+	if globalConfig == nil {
+		return nil, errors.New("service account authentication has not been set up")
+	}
+
+	return globalConfig.httpClient, nil
 }
