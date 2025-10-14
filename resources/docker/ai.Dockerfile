@@ -13,8 +13,8 @@ RUN apt-get update && apt-get install -y ca-certificates libcap2-bin
 RUN addgroup --gid 10001 connect
 RUN useradd -u 10001 -g connect connect
 
-COPY $TARGETPLATFORM/redpanda-connect-ai /tmp/redpanda-connect-ai
-RUN setcap 'cap_sys_chroot=+ep' /tmp/redpanda-connect-ai
+COPY $TARGETPLATFORM/redpanda-connect /tmp/redpanda-connect
+RUN setcap 'cap_sys_chroot=+ep' /tmp/redpanda-connect
 
 RUN touch /tmp/keep
 
@@ -31,7 +31,7 @@ WORKDIR /
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /etc/passwd /etc/passwd
 COPY --from=build /etc/group /etc/group
-COPY --from=build /tmp/redpanda-connect-ai /redpanda-connect
+COPY --from=build /tmp/redpanda-connect /redpanda-connect
 COPY config/docker.yaml /connect.yaml
 
 USER connect

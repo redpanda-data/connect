@@ -12,8 +12,8 @@ ARG TARGETPLATFORM
 RUN apt-get update && apt-get install -y ca-certificates libcap2-bin
 RUN useradd -u 10001 connect
 
-COPY $TARGETPLATFORM/redpanda-connect-cloud /tmp/redpanda-connect-cloud
-RUN setcap 'cap_sys_chroot=+ep' /tmp/redpanda-connect-cloud
+COPY $TARGETPLATFORM/redpanda-connect /tmp/redpanda-connect
+RUN setcap 'cap_sys_chroot=+ep' /tmp/redpanda-connect
 
 FROM busybox AS package
 
@@ -24,7 +24,7 @@ WORKDIR /
 
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /etc/passwd /etc/passwd
-COPY --from=build /tmp/redpanda-connect-cloud /redpanda-connect
+COPY --from=build /tmp/redpanda-connect /redpanda-connect
 COPY config/docker.yaml /connect.yaml
 
 USER connect
