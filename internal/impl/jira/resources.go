@@ -37,21 +37,21 @@ func (j *jiraProcessor) searchResource(
 ) (service.MessageBatch, error) {
 	switch resource {
 	case jirahttp.ResourceIssue:
-		return j.jiraHttp.SearchIssuesResource(ctx, inputQuery, customFields, params)
+		return j.client.SearchIssuesResource(ctx, inputQuery, customFields, params)
 	case jirahttp.ResourceIssueTransition:
-		return j.jiraHttp.SearchIssueTransitionsResource(ctx, inputQuery, customFields, params)
+		return j.client.SearchIssueTransitionsResource(ctx, inputQuery, customFields, params)
 	case jirahttp.ResourceProject:
-		return j.jiraHttp.SearchProjectsResource(ctx, inputQuery, customFields, params)
+		return j.client.SearchProjectsResource(ctx, inputQuery, customFields, params)
 	case jirahttp.ResourceProjectType:
-		return j.jiraHttp.SearchProjectTypesResource(ctx, inputQuery, customFields)
+		return j.client.SearchProjectTypesResource(ctx, inputQuery, customFields)
 	case jirahttp.ResourceProjectCategory:
-		return j.jiraHttp.SearchProjectCategoriesResource(ctx, inputQuery, customFields)
+		return j.client.SearchProjectCategoriesResource(ctx, inputQuery, customFields)
 	case jirahttp.ResourceRole:
-		return j.jiraHttp.SearchRolesResource(ctx, inputQuery, customFields)
+		return j.client.SearchRolesResource(ctx, inputQuery, customFields)
 	case jirahttp.ResourceProjectVersion:
-		return j.jiraHttp.SearchProjectVersionsResource(ctx, inputQuery, customFields)
+		return j.client.SearchProjectVersionsResource(ctx, inputQuery, customFields)
 	case jirahttp.ResourceUser:
-		return j.jiraHttp.SearchUsersResource(ctx, inputQuery, customFields, params)
+		return j.client.SearchUsersResource(ctx, inputQuery, customFields, params)
 	default:
 		return nil, fmt.Errorf("unhandled resource type: %s", resource)
 	}

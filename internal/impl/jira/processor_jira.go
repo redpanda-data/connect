@@ -32,7 +32,6 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/redpanda-data/connect/v4/internal/impl/jira/helpers/jira_helper"
 	"github.com/redpanda-data/connect/v4/internal/impl/jira/jirahttp"
 	"github.com/redpanda-data/connect/v4/internal/license"
 
@@ -42,8 +41,8 @@ import (
 // jiraProcessor is the Benthos jiraProcessor implementation for Jira queries.
 // It holds the client state and orchestrates calls into the jirahttp package.
 type jiraProcessor struct {
-	log      *service.Logger
-	jiraHttp *jirahttp.Client
+	log    *service.Logger
+	client *jirahttp.Client
 }
 
 // newJiraProcessorConfigSpec creates a new Configuration specification for the Jira processor
@@ -147,7 +146,7 @@ func newJiraProcessor(conf *service.ParsedConfig, mgr *service.Resources) (*jira
 
 	httpClient := &http.Client{Timeout: timeout}
 
-	headerPolicy := &jira_helper.AuthHeaderPolicy{
+	headerPolicy := &jirahttp.AuthHeaderPolicy{
 		HeaderName: "X-Seraph-LoginReason",
 		IsProblem: func(reason string) bool {
 			return reason != "" && reason != "OK" && reason != "AUTHENTICATED_TRUE"
@@ -160,8 +159,8 @@ func newJiraProcessor(conf *service.ParsedConfig, mgr *service.Resources) (*jira
 	}
 
 	return &jiraProcessor{
-		jiraHttp: jiraHttp,
-		log:      mgr.Logger(),
+		client: jiraHttp,
+		log:    mgr.Logger(),
 	}, nil
 }
 
@@ -172,12 +171,12 @@ func (j *jiraProcessor) Process(ctx context.Context, msg *service.Message) (serv
 	}
 	j.log.Debugf("Fetching from Jira.. Input: %s", string(inputMsg))
 
-	inputQuery, err := j.jiraHttp.ExtractQueryFromMessage(msg)
+	inputQuery, err := j.client.ExtractQueryFromMessage(msg)
 	if err != nil {
 		return nil, err
 	}
 
-	resource, customFields, params, err := j.jiraHttp.PrepareJiraQuery(ctx, inputQuery)
+	resource, customFields, params, err := j.client.PrepareJiraQuery(ctx, inputQuery)
 	if err != nil {
 		return nil, err
 	}

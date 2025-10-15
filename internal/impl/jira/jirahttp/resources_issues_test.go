@@ -21,8 +21,6 @@ import (
 	"net/url"
 	"strconv"
 	"testing"
-
-	"github.com/redpanda-data/connect/v4/internal/impl/jira/helpers/jira_helper"
 )
 
 func TestSearchAllIssues_PaginatesAndAggregates(t *testing.T) {
@@ -79,7 +77,7 @@ func TestSearchAllIssues_PaginatesAndAggregates(t *testing.T) {
 		apiToken:   "t",
 		maxResults: 2,
 		httpClient: srv.Client(),
-		retryOpts:  jira_helper.RetryOptions{MaxRetries: 0},
+		retryOpts:  RetryOptions{MaxRetries: 0},
 	}
 
 	// Act
@@ -128,7 +126,7 @@ func TestSearchIssuesPage_SendsExpectedQueryParams(t *testing.T) {
 		apiToken:   "t",
 		maxResults: 50,
 		httpClient: srv.Client(),
-		retryOpts:  jira_helper.RetryOptions{MaxRetries: 0},
+		retryOpts:  RetryOptions{MaxRetries: 0},
 	}
 
 	ctx := t.Context()
@@ -161,7 +159,7 @@ func TestSearchIssuesPage_PropagatesParams(t *testing.T) {
 		apiToken:   "t",
 		maxResults: 10,
 		httpClient: srv.Client(),
-		retryOpts:  jira_helper.RetryOptions{MaxRetries: 0},
+		retryOpts:  RetryOptions{MaxRetries: 0},
 	}
 
 	ctx := t.Context()

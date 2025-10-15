@@ -21,8 +21,6 @@ import (
 	"net/url"
 	"strconv"
 	"testing"
-
-	"github.com/redpanda-data/connect/v4/internal/impl/jira/helpers/jira_helper"
 )
 
 func TestSearchAllProjects_PaginatesViaStartAt(t *testing.T) {
@@ -72,7 +70,7 @@ func TestSearchAllProjects_PaginatesViaStartAt(t *testing.T) {
 		apiToken:   "t",
 		maxResults: 2,
 		httpClient: srv.Client(),
-		retryOpts:  jira_helper.RetryOptions{MaxRetries: 0},
+		retryOpts:  RetryOptions{MaxRetries: 0},
 	}
 
 	ctx := t.Context()
@@ -106,7 +104,7 @@ func TestSearchProjectsPage_SendsParamsAndMaxResults(t *testing.T) {
 		apiToken:   "t",
 		maxResults: 50,
 		httpClient: srv.Client(),
-		retryOpts:  jira_helper.RetryOptions{MaxRetries: 0},
+		retryOpts:  RetryOptions{MaxRetries: 0},
 	}
 
 	ctx := t.Context()

@@ -138,7 +138,7 @@ func TestProcessor_EndToEnd_Issues(t *testing.T) {
 	}
 
 	j := &jiraProcessor{
-		jiraHttp: jiraHttp,
+		client: jiraHttp,
 	}
 
 	// Input asks for issues, custom "Story Points" and nested Sprint.name to
@@ -263,7 +263,7 @@ func TestProcessor_EndToEnd_Projects(t *testing.T) {
 	}
 
 	j := &jiraProcessor{
-		jiraHttp: jiraHttp,
+		client: jiraHttp,
 	}
 
 	// Input selects projects; include some fields (ok, because handler now supports field/search).
