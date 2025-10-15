@@ -31,8 +31,7 @@ import (
 	"strings"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"github.com/redpanda-data/connect/v4/internal/impl/jira/helpers/http_metrics"
-	"github.com/redpanda-data/connect/v4/internal/impl/jira/helpers/jira_helper"
+	"github.com/redpanda-data/connect/v4/internal/impl/jira/jirahttp/http_metrics"
 )
 
 // jiraAPIBasePath is the base path for Jira Rest API
@@ -52,7 +51,7 @@ func (j *Client) callJiraApi(ctx context.Context, u *url.URL) ([]byte, error) {
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "Redpanda-Connect")
 
-	body, err := jira_helper.DoRequestWithRetries(ctx, j.httpClient, req, j.retryOpts)
+	body, err := DoRequestWithRetries(ctx, j.httpClient, req, j.retryOpts)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %v", err)
 	}
@@ -129,20 +128,20 @@ type Client struct {
 	username   string
 	apiToken   string
 	maxResults int
-	retryOpts  jira_helper.RetryOptions
+	retryOpts  RetryOptions
 	httpClient *http.Client
 	log        *service.Logger
 }
 
 // NewClient is the constructor ofr a Client object
-func NewClient(log *service.Logger, baseUrl, username, apiToken string, maxResults, maxRetries int, metrics *service.Metrics, httpClient *http.Client, headerPolicy *jira_helper.AuthHeaderPolicy) (*Client, error) {
+func NewClient(log *service.Logger, baseUrl, username, apiToken string, maxResults, maxRetries int, metrics *service.Metrics, httpClient *http.Client, headerPolicy *AuthHeaderPolicy) (*Client, error) {
 	return &Client{
 		log:        log,
 		baseURL:    baseUrl,
 		username:   username,
 		apiToken:   apiToken,
 		maxResults: maxResults,
-		retryOpts: jira_helper.RetryOptions{
+		retryOpts: RetryOptions{
 			MaxRetries:       maxRetries,
 			AuthHeaderPolicy: headerPolicy,
 		},
