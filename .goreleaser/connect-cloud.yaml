@@ -1,0 +1,58 @@
+---
+project_name: redpanda-connect
+dist: target/dist
+version: 2
+
+builds:
+  - id: connect-cloud
+    main: cmd/redpanda-connect-cloud/main.go
+    binary: redpanda-connect
+    goos: [ linux ]
+    goarch: [ amd64, arm64 ]
+    env:
+      - CGO_ENABLED=0
+    tags:
+      - timetzdata
+    ldflags: >
+      -s -w
+      -X main.Version={{.Version}}
+      -X main.DateBuilt={{.Date}}
+      -X main.BinaryName=redpanda-connect
+
+archives:
+  - id: connect-cloud
+    ids: [ connect-cloud ]
+    formats: tar.gz
+    name_template: 'redpanda-connect-cloud_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ with .Arm }}v{{ . }}{{ end }}{{ with .Mips }}_{{ . }}{{ end }}{{ if not (eq .Amd64 "v1") }}{{ .Amd64 }}{{ end }}'
+    files:
+      - README.md
+      - CHANGELOG.md
+      - licenses
+
+dockers_v2:
+  - id: connect-cloud
+    dockerfile: resources/docker/cloud.Dockerfile
+    ids:
+      - connect-cloud
+    images:
+      - redpandadata/connect
+      - public.ecr.aws/l9j0i2e0/connect
+    tags:
+      - "{{ if not .IsSnapshot }}{{ .Version }}-cloud{{ end }}"
+      - "{{ if not .IsSnapshot }}{{ .Major }}.{{.Minor}}-cloud{{ end }}"
+      - "{{ if not .IsSnapshot }}{{ .Major }}-cloud{{ end }}"
+      - "{{ if not .IsSnapshot }}latest-cloud{{ end }}"
+      - "{{ if .IsSnapshot }}edge-cloud{{ end }}"
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    extra_files:
+      - config/docker.yaml
+
+release:
+  github:
+    owner: redpanda-data
+    name: connect
+  prerelease: auto
+  mode: keep-existing
+

@@ -6,18 +6,18 @@ tasks:
     aliases:
       - main
     cmds:
-      - goreleaser release --snapshot --clean --skip=archive,publish --config=.goreleaser.local/connect.yaml
+      - goreleaser release --snapshot --clean --skip=archive,publish --config=.goreleaser/connect.yaml
 
   redpanda-connect-cloud:
     desc: Build cloud Docker image using goreleaser for local development
     aliases:
       - cloud
     cmds:
-      - goreleaser release --snapshot --clean --skip=archive,publish --config=.goreleaser.local/connect-cloud.yaml
+      - goreleaser release --snapshot --clean --skip=archive,publish --config=.goreleaser/connect-cloud.yaml
 
   redpanda-connect-ai:
     desc: Build AI Docker image using goreleaser for local development
     aliases:
       - ai
     cmds:
-      - goreleaser release --snapshot --clean --skip=archive,publish --config=.goreleaser.local/connect-ai.yaml
+      - goreleaser release --snapshot --clean --skip=archive,publish --config=.goreleaser/connect-ai.yaml

@@ -1,12 +1,14 @@
 ---
 project_name: redpanda-connect
+dist: target/dist
 version: 2
+
 builds:
   - id: connect-ai
     main: cmd/redpanda-connect-ai/main.go
-    binary: redpanda-connect-ai
+    binary: redpanda-connect
     goos: [ linux ]
-    goarch: [ arm64 ]
+    goarch: [ amd64, arm64 ]
     env:
       - CGO_ENABLED=0
     tags:
@@ -24,11 +26,16 @@ dockers_v2:
       - connect-ai
     images:
       - redpandadata/connect
+      - public.ecr.aws/l9j0i2e0/connect
     tags:
-      - dev-ai
+      - "{{ if not .IsSnapshot }}{{ .Version }}-ai{{ end }}"
+      - "{{ if not .IsSnapshot }}{{ .Major }}.{{.Minor}}-ai{{ end }}"
+      - "{{ if not .IsSnapshot }}{{ .Major }}-ai{{ end }}"
+      - "{{ if not .IsSnapshot }}latest-ai{{ end }}"
+      - "{{ if .IsSnapshot }}edge-ai{{ end }}"
     platforms:
+      - linux/amd64
       - linux/arm64
     extra_files:
       - config/docker.yaml
 
-dist: target/dist
