@@ -34,5 +34,9 @@ release:
     owner: redpanda-data
     name: connect
   prerelease: auto
+  replace_existing_artifacts: true
   mode: keep-existing
+
+checksum:
+  split: true
 

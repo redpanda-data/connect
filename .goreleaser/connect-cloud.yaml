@@ -39,10 +39,10 @@ dockers_v2:
       - public.ecr.aws/l9j0i2e0/connect
     tags:
       - "{{ if not .IsSnapshot }}{{ .Version }}-cloud{{ end }}"
-      - "{{ if not .IsSnapshot }}{{ .Major }}.{{.Minor}}-cloud{{ end }}"
-      - "{{ if not .IsSnapshot }}{{ .Major }}-cloud{{ end }}"
-      - "{{ if not .IsSnapshot }}latest-cloud{{ end }}"
-      - "{{ if .IsSnapshot }}edge-cloud{{ end }}"
+      - "{{ if not .IsSnapshot && .Prerelease == '' }}{{ .Major }}.{{.Minor}}-cloud{{ end }}"
+      - "{{ if not .IsSnapshot && .Prerelease == '' }}{{ .Major }}-cloud{{ end }}"
+      - "{{ if not .IsSnapshot && .Prerelease == '' }}latest-cloud{{ end }}"
+      - "{{ if .IsSnapshot || .Prerelease != '' }}edge-cloud{{ end }}"
     platforms:
       - linux/amd64
       - linux/arm64
@@ -54,5 +54,9 @@ release:
     owner: redpanda-data
     name: connect
   prerelease: auto
+  replace_existing_artifacts: true
   mode: keep-existing
+
+checksum:
+  split: true
 

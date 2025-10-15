@@ -73,10 +73,10 @@ dockers_v2:
       - public.ecr.aws/l9j0i2e0/connect
     tags:
       - "{{ if not .IsSnapshot }}{{ .Version }}{{ end }}"
-      - "{{ if not .IsSnapshot }}{{ .Major }}.{{.Minor}}{{ end }}"
-      - "{{ if not .IsSnapshot }}{{ .Major }}{{ end }}"
-      - "{{ if not .IsSnapshot }}latest{{ end }}"
-      - "{{ if .IsSnapshot }}edge{{ end }}"
+      - "{{ if not .IsSnapshot && .Prerelease == '' }}{{ .Major }}.{{.Minor}}{{ end }}"
+      - "{{ if not .IsSnapshot && .Prerelease == '' }}{{ .Major }}{{ end }}"
+      - "{{ if not .IsSnapshot && .Prerelease == '' }}latest{{ end }}"
+      - "{{ if .IsSnapshot || .Prerelease != '' }}edge{{ end }}"
     platforms:
       - linux/amd64
       - linux/arm64
@@ -97,5 +97,9 @@ release:
     owner: redpanda-data
     name: connect
   prerelease: auto
+  replace_existing_artifacts: true
   mode: replace
+
+checksum:
+  split: true
 

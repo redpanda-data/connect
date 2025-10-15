@@ -29,10 +29,10 @@ dockers_v2:
       - public.ecr.aws/l9j0i2e0/connect
     tags:
       - "{{ if not .IsSnapshot }}{{ .Version }}-ai{{ end }}"
-      - "{{ if not .IsSnapshot }}{{ .Major }}.{{.Minor}}-ai{{ end }}"
-      - "{{ if not .IsSnapshot }}{{ .Major }}-ai{{ end }}"
-      - "{{ if not .IsSnapshot }}latest-ai{{ end }}"
-      - "{{ if .IsSnapshot }}edge-ai{{ end }}"
+      - "{{ if not .IsSnapshot && .Prerelease == '' }}{{ .Major }}.{{.Minor}}-ai{{ end }}"
+      - "{{ if not .IsSnapshot && .Prerelease == '' }}{{ .Major }}-ai{{ end }}"
+      - "{{ if not .IsSnapshot && .Prerelease == '' }}latest-ai{{ end }}"
+      - "{{ if .IsSnapshot || .Prerelease != '' }}edge-ai{{ end }}"
     platforms:
       - linux/amd64
       - linux/arm64
