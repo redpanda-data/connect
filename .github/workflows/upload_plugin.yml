@@ -30,6 +30,7 @@ jobs:
       id-token: write
 
     strategy:
+      fail-fast: false
       matrix:
         binary-name: [ 'connect', 'connect-fips' ]
 
