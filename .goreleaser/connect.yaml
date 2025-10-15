@@ -73,10 +73,10 @@ dockers_v2:
       - public.ecr.aws/l9j0i2e0/connect
     tags:
       - "{{ if not .IsSnapshot }}{{ .Version }}{{ end }}"
-      - "{{ if not .IsSnapshot && .Prerelease == '' }}{{ .Major }}.{{.Minor}}{{ end }}"
-      - "{{ if not .IsSnapshot && .Prerelease == '' }}{{ .Major }}{{ end }}"
-      - "{{ if not .IsSnapshot && .Prerelease == '' }}latest{{ end }}"
-      - "{{ if .IsSnapshot || .Prerelease != '' }}edge{{ end }}"
+      - "{{ if and (not .IsSnapshot) (eq .Prerelease ``) }}{{ .Major }}.{{.Minor}}{{ end }}"
+      - "{{ if and (not .IsSnapshot) (eq .Prerelease ``) }}{{ .Major }}{{ end }}"
+      - "{{ if and (not .IsSnapshot) (eq .Prerelease ``) }}latest-cloud{{ end }}"
+      - "{{ if or .IsSnapshot (ne .Prerelease ``) }}edge{{ end }}"
     platforms:
       - linux/amd64
       - linux/arm64
