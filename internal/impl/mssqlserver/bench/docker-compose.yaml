@@ -11,18 +11,18 @@ services:
     ports:
       - "1433:1433"
 
-  connect:
-    image: redpandadata/connect
-    # depends_on:
-    #   src:
-    #     condition: service_healthy
-    volumes:
-      - ./config.yaml:/config.yaml:ro
-    command: ["-c", "/config.yaml"]
-    ports:
-      - "4195:4195"
-    environment:
-      GOMAXPROCS: "3"
-      GOMEMLIMIT: "3GiB"
-    cpuset: "5,6,7"
-    mem_limit: 3500M
+  # connect:
+  #   image: redpandadata/connect
+  #   # depends_on:
+  #   #   src:
+  #   #     condition: service_healthy
+  #   volumes:
+  #     - ./config.yaml:/config.yaml:ro
+  #   command: ["-c", "/config.yaml"]
+  #   ports:
+  #     - "4195:4195"
+  #   environment:
+  #     GOMAXPROCS: "3"
+  #     GOMEMLIMIT: "3GiB"
+  #   cpuset: "5,6,7"
+  #   mem_limit: 3500M
