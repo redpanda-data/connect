@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.68.0 - TBD
+
+### Added
+
+- New `a2a_message` processor. (@birdayz)
+
 ## 4.67.0 - 2025-10-13
 
 ### Changed
