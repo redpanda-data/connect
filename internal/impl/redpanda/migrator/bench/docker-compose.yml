@@ -55,7 +55,7 @@ services:
           --topic-config flush.ms=1000
 
   loader:
-    image: redpandadata/connect:dev-arm64
+    image: redpandadata/connect:edge-arm64
     depends_on:
       setup:
         condition: service_completed_successfully
@@ -72,7 +72,7 @@ services:
     mem_limit: 1500M
 
   migrator:
-    image: redpandadata/connect:dev-arm64
+    image: redpandadata/connect:edge-arm64
     depends_on:
       src:
         condition: service_healthy
