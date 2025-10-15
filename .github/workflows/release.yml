@@ -11,6 +11,17 @@ jobs:
     permissions:
       id-token: write
       contents: write
+
+    strategy:
+      matrix:
+        variant:
+          - connect-ai
+          - connect-cgo
+          - connect-cloud
+          - connect-fips
+          - connect-lambda
+          - connect
+
     steps:
 
     - name: Check Out Repo
@@ -40,27 +51,6 @@ jobs:
       uses: aws-actions/amazon-ecr-login@v2
       with:
         registry-type: public
-
-    - name: Free up some disk space on ubuntu
-      if: ${{ runner.os == 'Linux' }}
-      run: |
-        # Workaround to provide additional free space for testing.
-        #   https://github.com/actions/virtual-environments/issues/2840
-        sudo rm -rf /usr/share/dotnet
-        sudo rm -rf /opt/ghc
-        sudo rm -rf /usr/local/lib/android
-        sudo rm -rf /usr/local/share/powershell
-        sudo rm -rf "/opt/google/chrome"
-        sudo rm -rf "/opt/microsoft/msedge"
-        sudo rm -rf "/opt/microsoft/powershell"
-        sudo rm -rf "/opt/pipx"
-        sudo rm -rf "/usr/lib/mono"
-        sudo rm -rf "/usr/local/julia*"
-        sudo rm -rf "/usr/local/lib/node_modules"
-        sudo rm -rf "/usr/local/share/chromium"
-        sudo rm -rf "/usr/share/swift"
-        sudo rm -rf "/usr/local/share/boost"
-        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
 
     - name: Install Go
       uses: actions/setup-go@v6
@@ -116,7 +106,7 @@ jobs:
     - name: GoReleaser
       uses: goreleaser/goreleaser-action@v6
       with:
-        args: release --release-notes=./release_notes.md --timeout 120m
+        args: release --release-notes=./release_notes.md --timeout 120m --config ./.goreleaser/${{ matrix.variant }}.yaml
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         CLOUDSMITH_API_KEY: ${{ env.CLOUDSMITH_API_KEY }}

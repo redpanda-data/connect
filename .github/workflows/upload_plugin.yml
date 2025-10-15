@@ -24,19 +24,28 @@ jobs:
     # Let's make this fast by using a beefy runner.
     runs-on: ubuntu-latest-32
     if: ${{ github.repository == 'redpanda-data/connect' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == 'redpanda-data/connect') }}
+
     permissions:
       contents: read
       id-token: write
+
+    strategy:
+      matrix:
+        binary-name: [ 'connect', 'connect-fips' ]
+
     steps:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v5
         with:
           aws-region: ${{ vars.RP_AWS_CRED_REGION }}
           role-to-assume: arn:aws:iam::${{ secrets.RP_AWS_CRED_ACCOUNT_ID }}:role/${{ vars.RP_AWS_CRED_BASE_ROLE_NAME }}${{ github.event.repository.name }}
+
       - uses: actions/checkout@v5
+
       - uses: actions/setup-go@v6
         with:
           go-version: stable
+
       - name: Install Microsoft Go
         run: |
           GO_VERSION=$(go version | cut -d' ' -f3 | cut -d'.' -f1,2)
@@ -45,26 +54,23 @@ jobs:
           [[ -d "$RUNNER_TEMP/microsoft" ]] || install -d -m 0755 "$RUNNER_TEMP/microsoft"
           tar -C "$RUNNER_TEMP/microsoft" -xf "$RUNNER_TEMP/msgo.tgz"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
       - name: Install patchelf
         run: sudo apt-get update && sudo apt-get install -y patchelf
+
       - name: Write telemetry private key
         env:
           CONNECT_TELEMETRY_PRIV_KEY: ${{ secrets.TELEMETRY_PRIVATE_KEY }}
         run: |
           git update-index --skip-worktree ./internal/telemetry/key.pem
           echo "$CONNECT_TELEMETRY_PRIV_KEY" > ./internal/telemetry/key.pem
-      - name: Build binaries (dry run / snapshot mode)
-        if: ${{ env.DRY_RUN != 'false' }}
-        uses: goreleaser/goreleaser-action@v6
-        with:
-          args: build --snapshot
+
       - name: Build binaries
-        # Only one way to not dry run - see 'false'. All other cases, conservatively assume --dry-run
-        if: ${{ env.DRY_RUN == 'false' }}
         uses: goreleaser/goreleaser-action@v6
         with:
-          args: build
-      - name: Upload connect plugin to S3
+          args: build --config ./.goreleaser/${{ matrix.binary-name }}.yaml  ${{ env.DRY_RUN != 'false' && '--snapshot' || '' }}
+
+      - name: Upload plugin to S3
         uses: ./.github/actions/upload_managed_plugin
         with:
           aws_region: "us-west-2"
@@ -72,21 +78,9 @@ jobs:
           project_root_dir: ${{ github.workspace }}
           artifacts_file: ${{ github.workspace }}/target/dist/artifacts.json
           metadata_file: ${{ github.workspace }}/target/dist/metadata.json
-          plugin_name: "connect"
-          goos: linux,darwin
-          goarch: amd64,arm64
+          plugin_name: ${{ matrix.binary-name }}
+          goos: ${{ matrix.binary-name == 'connect' && 'linux,darwin' || 'linux' }}
+          goarch: ${{ matrix.binary-name == 'connect' && 'amd64,arm64' || 'amd64' }}
           repo_hostname: rpk-plugins.redpanda.com
           dry_run: ${{ env.DRY_RUN != 'false' }}
-      - name: Upload connect-fips plugin to S3
-        uses: ./.github/actions/upload_managed_plugin
-        with:
-          aws_region: "us-west-2"
-          aws_s3_bucket: "rpk-plugins-repo"
-          project_root_dir: ${{ github.workspace }}
-          artifacts_file: ${{ github.workspace }}/target/dist/artifacts.json
-          metadata_file: ${{ github.workspace }}/target/dist/metadata.json
-          plugin_name: "connect-fips"
-          goos: linux
-          goarch: amd64
-          repo_hostname: rpk-plugins.redpanda.com
-          dry_run: ${{ env.DRY_RUN != 'false' }}
+
