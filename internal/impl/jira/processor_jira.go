@@ -48,31 +48,37 @@ type jiraProcessor struct {
 // newJiraProcessorConfigSpec creates a new Configuration specification for the Jira processor
 func newJiraProcessorConfigSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Summary("Fetches data from Jira based on input messages").
-		Description(`This jiraProcessor takes input messages containing Jira queries and returns Jira data.
+		Categories("Services").
+		Version("4.68.0").
+		Summary("Queries Jira resources and returns structured data").
+		Description(`Executes Jira API queries based on input messages and returns structured results. The processor handles pagination, retries, and field expansion automatically.
 
-Supports the following Jira resources:
-- issues
-- issue transitions
-- users
-- roles
-- project versions
-- project categories
-- project types
-- projects
+Supports querying the following Jira resources:
+- Issues (JQL queries)
+- Issue transitions
+- Users
+- Roles
+- Project versions
+- Project categories
+- Project types
+- Projects
 
-Configuration examples:
-
-` + "```configYAML" + `
-# Minimal configuration
+The processor authenticates using basic authentication with username and API token. Input messages should contain valid Jira queries in JSON format.`).
+		Example(
+			"Minimal configuration",
+			"Basic Jira processor setup with required fields only",
+			`
 pipeline:
   processors:
     - jira:
         base_url: "https://your-domain.atlassian.net"
         username: "${JIRA_USERNAME}"
         api_token: "${JIRA_API_TOKEN}"
-
-# Full configuration
+`).
+		Example(
+			"Full configuration with tuning",
+			"Complete configuration with pagination, timeout, and retry settings",
+			`
 pipeline:
   processors:
     - jira:
@@ -82,7 +88,7 @@ pipeline:
         max_results_per_page: 200
         request_timeout: "30s"
         max_retries: 50
-` + "```").
+`).
 		Field(service.NewStringField("base_url").
 			Description("Jira instance base URL (e.g., https://your-domain.atlassian.net)")).
 		Field(service.NewStringField("username").
