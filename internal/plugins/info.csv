@@ -113,7 +113,7 @@ inproc                    ,output    ,inproc                    ,0.0.0   ,certif
 insert_part               ,processor ,insert_part               ,0.0.0   ,certified  ,n          ,y     ,y
 jaeger                    ,tracer    ,jaeger                    ,0.0.0   ,community  ,n          ,n     ,n
 javascript                ,processor ,javascript                ,4.14.0  ,certified  ,n          ,n     ,n
-jira                      ,processor ,jira                      ,0.0.0   ,certified  ,n          ,y     ,n
+jira                      ,processor ,jira                      ,4.68.0  ,certified  ,n          ,y     ,n
 jmespath                  ,processor ,JMESPath                  ,0.0.0   ,certified  ,n          ,y     ,y
 jq                        ,processor ,jq                        ,0.0.0   ,certified  ,n          ,y     ,y
 json_api                  ,metric    ,json_api                  ,0.0.0   ,certified  ,n          ,n     ,n
