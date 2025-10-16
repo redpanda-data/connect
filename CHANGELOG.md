@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - New `a2a_message` processor. (@birdayz)
+- New `jira` processor. (@zoltancsontosness, @atudose-ness)
 
 ## 4.67.0 - 2025-10-13
 
