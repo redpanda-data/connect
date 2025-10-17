@@ -10,6 +10,9 @@ PRINT CONCAT('Inserting test data into dbo.cart (', @cart_total, ' rows)...');
 DECLARE @cart_batch_size INT = 10000;
 DECLARE @cart_current INT = 0;
 
+-- Start the first transaction
+BEGIN TRANSACTION;
+
 WHILE @cart_current < @cart_total
 BEGIN
     DECLARE @batch_end INT = @cart_current + @cart_batch_size;
@@ -38,6 +41,12 @@ BEGIN
     
     -- Log progress after every batch
     PRINT CONCAT('Progress: ', @cart_current, '/', @cart_total, ' rows inserted into dbo.cart');
+    
+    -- Explicitly commit the current transaction
+    COMMIT;
+    
+    -- Start a new transaction for the next batch
+    BEGIN TRANSACTION;
 END
 
 PRINT CONCAT('Completed: ', @cart_current, ' rows inserted into dbo.cart');
