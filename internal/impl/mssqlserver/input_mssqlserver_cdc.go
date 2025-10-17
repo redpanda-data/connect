@@ -295,6 +295,16 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 		db.SetMaxOpenConns(100)
 		db.SetMaxIdleConns(100)
 
+		go func() {
+			t := time.NewTicker(time.Second)
+			for {
+				select {
+				case <-t.C:
+					fmt.Printf("XXX %+#v\n", db.Stats())
+				}
+			}
+		}()
+
 		snapshotter = replication.NewSnapshot(db, userTables, i.publisher, i.log, i.metrics)
 	} else {
 		i.log.Infof("Snapshotting disabled, skipping...")
