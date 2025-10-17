@@ -11,7 +11,7 @@ jobs:
       fail-fast: false
       matrix:
         go-version: [stable]
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest-32, macos-latest]
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write
@@ -28,19 +28,6 @@ jobs:
       uses: actions/setup-go@v6
       with:
         go-version: ${{ matrix.go-version }}
-
-    - name: Install Microsoft Go
-      if: ${{ runner.os == 'Linux' }}
-      run: |
-        GO_VERSION=$(go version | cut -d' ' -f3 | cut -d'.' -f1,2)
-        curl -sSLf -o "$RUNNER_TEMP/msgo.tgz" https://aka.ms/golang/release/latest/${GO_VERSION}.linux-amd64.tar.gz
-        [[ -d "$RUNNER_TEMP/bin" ]] || install -d -m 0755 "$RUNNER_TEMP/bin"
-        [[ -d "$RUNNER_TEMP/microsoft" ]] || install -d -m 0755 "$RUNNER_TEMP/microsoft"
-        tar -C "$RUNNER_TEMP/microsoft" -xf "$RUNNER_TEMP/msgo.tgz"
-        echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-
-    - name: Install patchelf
-      run: sudo apt-get update && sudo apt-get install -y patchelf
 
     - name: GoReleaser
       uses: goreleaser/goreleaser-action@v6
