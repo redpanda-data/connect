@@ -146,3 +146,30 @@ BEGIN
     PRINT 'Table dbo.cart already exists'
 END
 GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'cart2' AND schema_id = SCHEMA_ID('dbo'))
+BEGIN
+CREATE TABLE dbo.cart2 (
+                          id INT IDENTITY(1,1) PRIMARY KEY,
+                          name NVARCHAR(100) NOT NULL,
+                          info NVARCHAR(MAX) NOT NULL,
+                          email NVARCHAR(255) NOT NULL,
+                          date_of_birth DATE NULL,
+                          created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+                          is_active BIT NOT NULL DEFAULT 1,
+                          login_count INT NOT NULL DEFAULT 0,
+                          balance DECIMAL(10,2) NOT NULL DEFAULT 0.00
+);
+
+EXEC sys.sp_cdc_enable_table
+        @source_schema = 'dbo',
+        @source_name   = 'cart2',
+        @role_name     = NULL;
+
+    PRINT 'Table dbo.cart2 created and CDC enabled'
+END
+ELSE
+BEGIN
+    PRINT 'Table dbo.cart2 already exists'
+END
+GO

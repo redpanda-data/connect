@@ -262,6 +262,19 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 	if i.db, err = sql.Open("mssql", i.cfg.connectionString); err != nil {
 		return fmt.Errorf("failed to connect to microsoft sql server: %s", err)
 	}
+	i.db.SetConnMaxIdleTime(1 * time.Minute)
+	i.db.SetMaxOpenConns(100)
+	i.db.SetMaxIdleConns(100)
+
+	go func() {
+		t := time.NewTicker(time.Second)
+		for {
+			select {
+			case <-t.C:
+				fmt.Printf("XXX %+#v\n", i.db.Stats())
+			}
+		}
+	}()
 
 	// no cache specified so use default, custom sql cache
 	if i.cfg.lsnCache == "" {

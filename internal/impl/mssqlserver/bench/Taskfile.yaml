@@ -32,5 +32,8 @@ tasks:
   sqlcmd:data:cart:
     cmd: task sqlcmd EXTRA_ARGS="-i cart.sql"
 
+  sqlcmd:data:cart2:
+    cmd: task sqlcmd EXTRA_ARGS="-i cart2.sql"
+
   sqlcmd:drop-cache:
     cmd: task sqlcmd EXTRA_ARGS="-Q 'USE testdb; DROP TABLE rpcn.CdcCheckpointCache;'"

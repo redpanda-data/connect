@@ -4,11 +4,12 @@ http:
 input:
   microsoft_sql_server_cdc:
     connection_string: sqlserver://sa:YourStrong!Passw0rd@localhost:1433?database=testdb&encrypt=disable
-    stream_snapshot: true
+    stream_snapshot: false
     include:
       # - dbo.users
       # - dbo.products
       - dbo.cart
+      - dbo.cart2
     batching:
       count: 1000
 
