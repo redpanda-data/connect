@@ -165,7 +165,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.38.0
 	go.starlark.net v0.0.0-20250318223901-d9371fef63fe
 	go.uber.org/multierr v1.11.0
-	golang.org/x/crypto v0.43.0
+	golang.org/x/crypto v0.43.1-0.20251009181029-0b7aa0cfb07b
 	golang.org/x/net v0.46.0
 	golang.org/x/sync v0.17.0
 	golang.org/x/text v0.30.0
