@@ -11,7 +11,7 @@ jobs:
       fail-fast: false
       matrix:
         go-version: [stable]
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest-32, macos-latest]
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write
