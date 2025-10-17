@@ -291,6 +291,10 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("connecting to microsoft sql server for snapshotting: %s", err)
 		}
+		db.SetConnMaxIdleTime(1 * time.Minute)
+		db.SetMaxOpenConns(100)
+		db.SetMaxIdleConns(100)
+
 		snapshotter = replication.NewSnapshot(db, userTables, i.publisher, i.log, i.metrics)
 	} else {
 		i.log.Infof("Snapshotting disabled, skipping...")

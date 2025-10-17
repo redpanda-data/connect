@@ -4,25 +4,23 @@ http:
 input:
   microsoft_sql_server_cdc:
     connection_string: sqlserver://sa:YourStrong!Passw0rd@localhost:1433?database=testdb&encrypt=disable
-    stream_snapshot: false
+    stream_snapshot: true
     include:
       # - dbo.users
       # - dbo.products
       - dbo.cart
     batching:
-      count: 2000
-      period: "1s"
+      count: 1000
 
 output:
   processors:
     - benchmark:
-        interval: 2s
+        interval: 1s
         count_bytes: true
   drop: {}
 
 logger:
   level: DEBUG
-  add_timestamp: false
 
 metrics:
   prometheus:
