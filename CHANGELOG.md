@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - New `a2a_message` processor. (@birdayz)
 - New `jira` processor. (@zoltancsontosness, @atudose-ness)
 - (Benthos) Exporting a schema with the format `jsonschema` now includes `is_advanced`, `is_deprecated`, `is_optional`, `is_secret` extra fields. (@tomasz-sadura)
+- (MS SQL Server CDC) Now supports processing snapshots in parallel via the `max_parallel_snapshot_tables` configuration. (@josephwoodward)
 
 ### Changed
 

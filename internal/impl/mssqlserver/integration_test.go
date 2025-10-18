@@ -236,6 +236,82 @@ file:
 	})
 }
 
+func TestIntegration_MicrosoftSQLServerCDC_ConcurrentSnapshot(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Parallel()
+
+	// Create tables
+	connStr, db := setupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
+	require.NoError(t, db.createTableWithCDCEnabledIfNotExists(t.Context(), "test.foo", "CREATE TABLE test.foo (id INT IDENTITY(1,1) PRIMARY KEY);"))
+	require.NoError(t, db.createTableWithCDCEnabledIfNotExists(t.Context(), "dbo.foo", "CREATE TABLE dbo.foo (id INT IDENTITY(1,1) PRIMARY KEY);"))
+	require.NoError(t, db.createTableWithCDCEnabledIfNotExists(t.Context(), "dbo.bar", "CREATE TABLE dbo.bar (id INT IDENTITY(1,1) PRIMARY KEY);"))
+
+	// Insert 3000 rows across tables for initial snapshot streaming
+	want := 3000
+	for range 1000 {
+		db.MustExec("INSERT INTO test.foo DEFAULT VALUES")
+		db.MustExec("INSERT INTO dbo.foo DEFAULT VALUES")
+		db.MustExec("INSERT INTO dbo.bar DEFAULT VALUES")
+	}
+
+	// wait for changes to propagate to change tables
+	time.Sleep(5 * time.Second)
+
+	var (
+		outBatches   []string
+		outBatchesMu sync.Mutex
+		stream       *service.Stream
+		err          error
+	)
+	t.Log("Lauching component...")
+	{
+		cfg := `
+microsoft_sql_server_cdc:
+  connection_string: %s
+  stream_snapshot: true
+  snapshot_max_batch_size: 10
+  max_parallel_snapshot_tables: 3
+  include: ["test.foo", "dbo.foo", "dbo.bar"]
+  exclude: ["dbo.doesnotexist"]`
+
+		streamBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
+		require.NoError(t, streamBuilder.SetLoggerYAML(`level: DEBUG`))
+
+		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+			msgBytes, err := mb[0].AsBytes()
+			require.NoError(t, err)
+			outBatchesMu.Lock()
+			outBatches = append(outBatches, string(msgBytes))
+			outBatchesMu.Unlock()
+			return nil
+		}))
+
+		stream, err = streamBuilder.Build()
+		require.NoError(t, err)
+		license.InjectTestService(stream.Resources())
+
+		go func() {
+			err = stream.Run(t.Context())
+			require.NoError(t, err)
+		}()
+
+		t.Log("Verifying snapshot changes...")
+		assert.Eventually(t, func() bool {
+			outBatchesMu.Lock()
+			defer outBatchesMu.Unlock()
+
+			got := len(outBatches)
+			if got > want {
+				t.Fatalf("Wanted %d snapshot messages but got %d", want, got)
+			}
+			return got == want
+		}, time.Minute*5, time.Second*1)
+	}
+
+	require.NoError(t, stream.StopWithin(time.Second*10))
+}
+
 func TestIntegration_MicrosoftSQLServerCDC_ResumesFromCheckpoint(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
