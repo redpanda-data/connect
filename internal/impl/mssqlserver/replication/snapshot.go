@@ -18,16 +18,15 @@ import (
 	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+
+	"golang.org/x/sync/errgroup"
 )
 
 // Snapshot is responsible for creating snapshots of existing tables based on the Tables configuration value.
 type Snapshot struct {
-	db *sql.DB
-	tx *sql.Tx
-
-	snapshotConn *sql.Conn
-
+	db                      *sql.DB
 	tables                  []UserDefinedTable
+	maxReaders              int
 	publisher               ChangePublisher
 	log                     *service.Logger
 	snapshotStatusMetric    *service.MetricGauge
@@ -38,43 +37,38 @@ type Snapshot struct {
 // It does this by creating a transaction with snapshot level isolation before paging
 // through rows, sending them to be batched.
 func NewSnapshot(
-	db *sql.DB,
+	connectionString string,
 	tables []UserDefinedTable,
+	maxReaders int,
 	publisher ChangePublisher,
 	logger *service.Logger,
 	metrics *service.Metrics,
-) *Snapshot {
-	return &Snapshot{
+) (*Snapshot, error) {
+	db, err := sql.Open("mssql", connectionString)
+	if err != nil {
+		return nil, fmt.Errorf("connecting to microsoft sql server for snapshotting: %w", err)
+	}
+	s := &Snapshot{
 		db:                      db,
 		tables:                  tables,
 		publisher:               publisher,
+		maxReaders:              maxReaders,
 		log:                     logger,
 		snapshotStatusMetric:    metrics.NewGauge("microsoft_sql_server_snapshot_status", "table"),
 		snapshotRowsTotalMetric: metrics.NewCounter("microsoft_sql_server_snapshot_rows_processed_total", "table"),
 	}
+	return s, nil
 }
 
-// Prepare performs initial validation, creating of connections in preparation for snapshotting tables.
+// Prepare performs initial validation and captures the max LSN in preparation for snapshotting tables.
 func (s *Snapshot) Prepare(ctx context.Context) (LSN, error) {
 	if len(s.tables) == 0 {
 		return nil, errors.New("no tables provided")
 	}
 
-	var err error
-
-	// create separate connection for snapshotting
-	if s.snapshotConn, err = s.db.Conn(ctx); err != nil {
-		return nil, fmt.Errorf("creating snapshot connection: %v", err)
-	}
-
-	// Use context.Background() because we want the Tx to be long lived, we explicitly close it in the close method
-	if s.tx, err = s.snapshotConn.BeginTx(context.Background(), &sql.TxOptions{Isolation: sql.LevelSnapshot}); err != nil {
-		return nil, fmt.Errorf("starting snapshot transaction: %v", err)
-	}
-
 	var maxLSN LSN
-	// capture max LSN _after_ beginning snapshot transaction
-	if err := s.snapshotConn.QueryRowContext(ctx, "SELECT sys.fn_cdc_get_max_lsn()").Scan(&maxLSN); err != nil {
+	// capture max LSN before beginning snapshot transactions
+	if err := s.db.QueryRowContext(ctx, "SELECT sys.fn_cdc_get_max_lsn()").Scan(&maxLSN); err != nil {
 		return nil, err
 	} else if len(maxLSN) == 0 {
 		// rare, but possible if the user enabled CDC on a table seconds before running snapshot or the agent has stopped working for some reason
@@ -84,103 +78,141 @@ func (s *Snapshot) Prepare(ctx context.Context) (LSN, error) {
 	return maxLSN, nil
 }
 
-// Read starts the process of iterating through each table, reading rows based on maxBatchSize, sending the row as a
+// Read launches N number of go routines (based on s.maxReaders) and starts the process of
+// iterating through each table, reading rows based on maxBatchSize, sending the row as a
 // replication.MessageEvent to the configured publisher.
 func (s *Snapshot) Read(ctx context.Context, maxBatchSize int) error {
-	s.log.Infof("Starting snapshot of %d table(s)", len(s.tables))
+	s.log.Infof("Starting snapshot of %d table(s) using %d configured readers", len(s.tables), s.maxReaders)
 
 	for _, table := range s.tables {
 		s.snapshotStatusMetric.Set(0, table.FullName())
 	}
 
+	wg, _ := errgroup.WithContext(ctx)
+	wg.SetLimit(s.maxReaders)
+
 	for _, table := range s.tables {
-		tablePks, err := s.getTablePrimaryKeys(ctx, table)
-		if err != nil {
-			return err
-		}
-		s.log.Tracef("Primary keys for table '%s': %v", table, tablePks)
-		lastSeenPksValues := map[string]any{}
-		for _, pk := range tablePks {
-			lastSeenPksValues[pk] = nil
-		}
+		wg.Go(func() error {
+			var (
+				err           error
+				tx            *sql.Tx
+				fullTableName = table.FullName()
+			)
+			l := s.log.With("source_table", fullTableName)
+			l.Infof("Launching snapshot of table '%s'", fullTableName)
 
-		var numRowsProcessed int
-
-		fullTableName := table.FullName()
-		s.log.Infof("Beginning snapshot process for table '%s'", fullTableName)
-		for {
-			s.snapshotRowsTotalMetric.Incr(int64(numRowsProcessed), fullTableName)
-			var batchRows *sql.Rows
-			if numRowsProcessed == 0 {
-				batchRows, err = s.querySnapshotTable(ctx, table, tablePks, nil, maxBatchSize)
-			} else {
-				batchRows, err = s.querySnapshotTable(ctx, table, tablePks, lastSeenPksValues, maxBatchSize)
+			// BeginTx opens/reuses a dedicated connection for the given table based transaction, using context.Background()
+			// because we want the Tx to be long lived, we explicitly rollback/commit it on function exit
+			if tx, err = s.db.BeginTx(context.Background(), &sql.TxOptions{Isolation: sql.LevelSnapshot}); err != nil {
+				return fmt.Errorf("starting snapshot transaction: %w", err)
 			}
+			defer func() {
+				if err != nil {
+					if rbErr := tx.Rollback(); rbErr != nil {
+						l.Errorf("Failed to rollback snapshot transaction: %v", rbErr)
+					}
+				} else {
+					if cmErr := tx.Commit(); cmErr != nil {
+						l.Errorf("Failed to commit snapshot transaction: %v", cmErr)
+					}
+				}
+			}()
+
+			var tablePks []string
+			tablePks, err = getTablePrimaryKeys(ctx, tx, table)
 			if err != nil {
-				return fmt.Errorf("failed to execute snapshot table query: %s", err)
+				return err
+			}
+			l.Tracef("Primary keys for table '%s': %v", table, tablePks)
+			lastSeenPksValues := map[string]any{}
+			for _, pk := range tablePks {
+				lastSeenPksValues[pk] = nil
 			}
 
-			types, err := batchRows.ColumnTypes()
-			if err != nil {
-				return fmt.Errorf("failed to fetch column types: %w", err)
-			}
-
-			values, mappers := prepSnapshotScannerAndMappers(types)
-
-			columns, err := batchRows.Columns()
-			if err != nil {
-				return fmt.Errorf("failed to fetch columns: %w", err)
-			}
-
-			var batchRowsCount int
-			for batchRows.Next() {
-				numRowsProcessed++
-				batchRowsCount++
-
-				if err := batchRows.Scan(values...); err != nil {
-					return err
+			var numRowsProcessed int
+			for {
+				s.snapshotRowsTotalMetric.Incr(int64(numRowsProcessed), fullTableName)
+				var batchRows *sql.Rows
+				if numRowsProcessed == 0 {
+					batchRows, err = querySnapshotTable(ctx, tx, table, tablePks, nil, maxBatchSize)
+				} else {
+					batchRows, err = querySnapshotTable(ctx, tx, table, tablePks, lastSeenPksValues, maxBatchSize)
+				}
+				if err != nil {
+					return fmt.Errorf("failed to execute snapshot table query: %s", err)
 				}
 
-				row := map[string]any{}
-				for idx, value := range values {
-					v, err := mappers[idx](value)
-					if err != nil {
+				var types []*sql.ColumnType
+				types, err = batchRows.ColumnTypes()
+				if err != nil {
+					return fmt.Errorf("failed to fetch column types: %w", err)
+				}
+
+				values, mappers := prepSnapshotScannerAndMappers(types)
+
+				var columns []string
+				columns, err = batchRows.Columns()
+				if err != nil {
+					return fmt.Errorf("failed to fetch columns: %w", err)
+				}
+
+				var batchRowsCount int
+				for batchRows.Next() {
+					numRowsProcessed++
+					batchRowsCount++
+
+					if err := batchRows.Scan(values...); err != nil {
 						return err
 					}
-					row[columns[idx]] = v
-					if _, ok := lastSeenPksValues[columns[idx]]; ok {
-						lastSeenPksValues[columns[idx]] = value
+
+					row := map[string]any{}
+					var v any
+					for idx, value := range values {
+						v, err = mappers[idx](value)
+						if err != nil {
+							return err
+						}
+						row[columns[idx]] = v
+						if _, ok := lastSeenPksValues[columns[idx]]; ok {
+							lastSeenPksValues[columns[idx]] = value
+						}
+					}
+
+					m := MessageEvent{
+						Table:     table.Name,
+						Schema:    table.Schema,
+						Data:      row,
+						Operation: MessageOperationRead.String(),
+						LSN:       nil,
+					}
+					if err = s.publisher.Publish(ctx, m); err != nil {
+						return fmt.Errorf("handling snapshot table row: %w", err)
 					}
 				}
 
-				m := MessageEvent{
-					Table:     table.Name,
-					Schema:    table.Schema,
-					Data:      row,
-					Operation: MessageOperationRead.String(),
-					LSN:       nil,
+				if err = batchRows.Err(); err != nil {
+					return fmt.Errorf("iterating snapshot table row: %w", err)
 				}
-				if err := s.publisher.Publish(ctx, m); err != nil {
-					return fmt.Errorf("handling snapshot table row: %w", err)
+				if batchRowsCount < maxBatchSize {
+					break
 				}
 			}
 
-			if err := batchRows.Err(); err != nil {
-				return fmt.Errorf("iterating snapshot table row: %w", err)
-			}
+			s.snapshotStatusMetric.Set(1, fullTableName)
+			l.Infof("Table snapshot completed, %d rows processed", numRowsProcessed)
 
-			if batchRowsCount < maxBatchSize {
-				break
-			}
-		}
-
-		s.snapshotStatusMetric.Set(1, fullTableName)
-		s.log.Infof("Completed snapshot process for table '%s'", fullTableName)
+			return nil
+		})
 	}
+
+	if err := wg.Wait(); err != nil {
+		return fmt.Errorf("processing snapshots: %w", err)
+	}
+
 	return nil
 }
 
-func (s *Snapshot) getTablePrimaryKeys(ctx context.Context, table UserDefinedTable) ([]string, error) {
+func getTablePrimaryKeys(ctx context.Context, tx *sql.Tx, table UserDefinedTable) ([]string, error) {
 	pkSQL := `
 	SELECT c.name AS column_name FROM sys.indexes i
 	JOIN sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id
@@ -190,7 +222,7 @@ func (s *Snapshot) getTablePrimaryKeys(ctx context.Context, table UserDefinedTab
 	WHERE i.is_primary_key = 1 AND t.name = ? AND s.name = ?
 	ORDER BY ic.key_ordinal;`
 
-	rows, err := s.tx.QueryContext(ctx, pkSQL, table.Name, table.Schema)
+	rows, err := tx.QueryContext(ctx, pkSQL, table.Name, table.Schema)
 	if err != nil {
 		return nil, fmt.Errorf("get primary key: %v", err)
 	}
@@ -214,8 +246,9 @@ func (s *Snapshot) getTablePrimaryKeys(ctx context.Context, table UserDefinedTab
 	return pks, nil
 }
 
-func (s *Snapshot) querySnapshotTable(
+func querySnapshotTable(
 	ctx context.Context,
+	tx *sql.Tx,
 	table UserDefinedTable,
 	pk []string,
 	lastSeenPkVal map[string]any,
@@ -229,7 +262,7 @@ func (s *Snapshot) querySnapshotTable(
 		snapshotQueryParts = append(snapshotQueryParts, buildOrderByClause(pk))
 
 		q := strings.Join(snapshotQueryParts, " ")
-		return s.tx.QueryContext(ctx, q)
+		return tx.QueryContext(ctx, q)
 	}
 
 	var (
@@ -247,37 +280,18 @@ func (s *Snapshot) querySnapshotTable(
 	snapshotQueryParts = append(snapshotQueryParts, res)
 	snapshotQueryParts = append(snapshotQueryParts, buildOrderByClause(pk))
 	q := strings.Join(snapshotQueryParts, " ")
-	return s.tx.QueryContext(ctx, q, lastSeenPkVals...)
+	return tx.QueryContext(ctx, q, lastSeenPkVals...)
 }
 
 // Close safely closes all open connections opened for the snapshotting process.
 // It should be called after a non-recoverale error or once the snapshot process has completed.
 func (s *Snapshot) Close() error {
-	var errs []error
-
-	if s.tx != nil {
-		if err := s.tx.Rollback(); err != nil {
-			errs = append(errs, fmt.Errorf("rollback transaction: %w", err))
-		}
-		s.tx = nil
-	}
-
-	for _, conn := range []*sql.Conn{s.snapshotConn} {
-		if conn == nil {
-			continue
-		}
-		if err := conn.Close(); err != nil {
-			errs = append(errs, fmt.Errorf("close connection: %w", err))
-		}
-	}
-
 	if s.db != nil {
 		if err := s.db.Close(); err != nil {
-			errs = append(errs, fmt.Errorf("close db: %w", err))
+			return fmt.Errorf("closing database connection: %w", err)
 		}
 	}
-
-	return errors.Join(errs...)
+	return nil
 }
 
 func prepSnapshotScannerAndMappers(cols []*sql.ColumnType) (values []any, mappers []func(any) (any, error)) {
