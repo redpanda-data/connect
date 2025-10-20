@@ -27,40 +27,13 @@ import (
 	"google.golang.org/protobuf/types/dynamicpb"
 )
 
-// ParseProtosFromFS loads proto files from a filesystem and returns a FileDescriptorSet
-func ParseProtosFromFS(fsys fs.FS, importPaths []string) (*descriptorpb.FileDescriptorSet, error) {
-	files := map[string]string{}
-	for _, importPath := range importPaths {
-		if err := fs.WalkDir(fsys, importPath, func(path string, info fs.DirEntry, ferr error) error {
-			if ferr != nil || info.IsDir() {
-				return ferr
-			}
-			if filepath.Ext(info.Name()) == ".proto" && info.Name()[0] != '.' {
-				rPath, ferr := filepath.Rel(importPath, path)
-				if ferr != nil {
-					return ferr
-				}
-				content, ferr := os.ReadFile(path)
-				if ferr != nil {
-					return ferr
-				}
-				files[rPath] = string(content)
-			}
-			return nil
-		}); err != nil {
-			return nil, err
-		}
-	}
-	return ParseProtos(files)
-}
-
 // loadTestFileDescriptorSet loads test proto descriptors as a FileDescriptorSet
 func loadTestFileDescriptorSet(t testing.TB) (*descriptorpb.FileDescriptorSet, protoreflect.MessageDescriptor, *protoregistry.Types) {
 	t.Helper()
 	mockResources := service.MockResources()
 
 	// Load the schema as FileDescriptorSet
-	schema, err := ParseProtosFromFS(mockResources.FS(), []string{"../../../../config/test/protobuf/schema"})
+	schema, err := ParseFromFS(mockResources.FS(), []string{"../../../../config/test/protobuf/schema"})
 	if err != nil {
 		t.Fatal(err)
 	}

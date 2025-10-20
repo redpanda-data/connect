@@ -12,6 +12,8 @@
 package common
 
 import (
+	"sync"
+
 	"buf.build/go/hyperpb"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -27,19 +29,31 @@ func NewHyperPbDecoder(
 	if err != nil {
 		return nil, err
 	}
-	return &hyperPbParser{msgType}, nil
+	return &hyperPbParser{
+		msgType,
+		sync.Pool{
+			New: func() any {
+				return new(hyperpb.Shared)
+			},
+		},
+	}, nil
 }
 
 type hyperPbParser struct {
 	msgType *hyperpb.MessageType
+	pool    sync.Pool
 }
 
 var _ ProtobufDecoder = (*hyperPbParser)(nil)
 
 // WithDecoded implements ProtobufParser.
 func (p *hyperPbParser) WithDecoded(buf []byte, cb func(msg proto.Message) error) error {
-	// TODO: reuse allocs with hyperpb.Shared
-	msg := hyperpb.NewMessage(p.msgType)
+	shared := p.pool.Get().(*hyperpb.Shared)
+	defer func() {
+		shared.Free()
+		p.pool.Put(shared)
+	}()
+	msg := shared.NewMessage(p.msgType)
 	if err := msg.Unmarshal(buf); err != nil {
 		return err
 	}
