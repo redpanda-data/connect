@@ -5,19 +5,39 @@ tasks:
     desc: Build main Docker image using goreleaser for local development
     aliases:
       - main
-    cmds:
-      - goreleaser release --snapshot --clean --skip=archive,publish --config=.goreleaser/connect.yaml
+    cmd:
+      task: build
+      vars:
+        CONFIG_FILE: .goreleaser/connect.yaml
 
   redpanda-connect-cloud:
     desc: Build cloud Docker image using goreleaser for local development
     aliases:
       - cloud
-    cmds:
-      - goreleaser release --snapshot --clean --skip=archive,publish --config=.goreleaser/connect-cloud.yaml
+    cmd:
+      task: build
+      vars:
+        CONFIG_FILE: .goreleaser/connect-cloud.yaml
 
   redpanda-connect-ai:
     desc: Build AI Docker image using goreleaser for local development
     aliases:
       - ai
-    cmds:
-      - goreleaser release --snapshot --clean --skip=archive,publish --config=.goreleaser/connect-ai.yaml
+    cmd:
+      task: build
+      vars:
+        CONFIG_FILE: .goreleaser/connect-ai.yaml
+
+  build:
+    internal: true
+    vars:
+      CONFIG_FILE: '{{.CONFIG_FILE}}'
+      GOARCH: '{{.GOARCH | default "arm64"}}'
+    cmd: >
+      goreleaser release --snapshot --clean --skip=archive,nfpm,publish
+      --config=<(yq 
+      '.builds[0].goos = ["linux"] |
+      .builds[0].goarch = ["{{.GOARCH}}"] |
+      .dockers_v2[0].platforms = ["linux/{{.GOARCH}}"] |
+      .checksum.disable = true'
+      {{.CONFIG_FILE}})
