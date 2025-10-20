@@ -20,12 +20,11 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
-	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/dynamicpb"
 )
 
 // loadTestFileDescriptorSet loads test proto descriptors as a FileDescriptorSet
-func loadTestFileDescriptorSet(t testing.TB) (*descriptorpb.FileDescriptorSet, protoreflect.MessageDescriptor, *protoregistry.Types) {
+func loadTestFileDescriptorSet(t testing.TB) (protoreflect.MessageDescriptor, *protoregistry.Types) {
 	t.Helper()
 	mockResources := service.MockResources()
 
@@ -51,7 +50,7 @@ func loadTestFileDescriptorSet(t testing.TB) (*descriptorpb.FileDescriptorSet, p
 		t.Fatal("SerdeTest message not found")
 	}
 
-	return schema, md, types
+	return md, types
 }
 
 // BenchmarkProtobufToMessage benchmarks the complete pipeline of decoding protobuf
@@ -59,7 +58,7 @@ func loadTestFileDescriptorSet(t testing.TB) (*descriptorpb.FileDescriptorSet, p
 // - Decoding: dynamicpb vs hyperpb (with PGO)
 // - Conversion: Fast (SetStructuredMut) vs Slow (SetBytes)
 func BenchmarkProtobufToMessage(b *testing.B) {
-	schema, md, types := loadTestFileDescriptorSet(b)
+	md, types := loadTestFileDescriptorSet(b)
 
 	testCases := []struct {
 		name      string
@@ -109,8 +108,6 @@ func BenchmarkProtobufToMessage(b *testing.B) {
 		},
 	}
 
-	messageName := md.FullName()
-
 	b.StopTimer()
 	// Profile-guided optimization settings for hyperpb
 	pgoOpts := ProfilingOptions{
@@ -119,15 +116,9 @@ func BenchmarkProtobufToMessage(b *testing.B) {
 	}
 
 	// Create decoders
-	dynamicpbDecoder, err := NewDynamicPbDecoder(schema, messageName, ProfilingOptions{})
-	if err != nil {
-		b.Fatal(err)
-	}
+	dynamicpbDecoder := NewDynamicPbDecoder(md, ProfilingOptions{})
+	hyperpbDecoder := NewHyperPbDecoder(md, pgoOpts)
 
-	hyperpbDecoder, err := NewHyperPbDecoder(schema, messageName, pgoOpts)
-	if err != nil {
-		b.Fatal(err)
-	}
 	b.StartTimer()
 
 	marshalOpts := protojson.MarshalOptions{Resolver: types}

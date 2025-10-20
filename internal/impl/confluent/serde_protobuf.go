@@ -62,6 +62,18 @@ func (s *schemaRegistryDecoder) getProtobufDecoder(
 	}
 
 	msgTypes := targetFile.Messages()
+	opts := protojson.MarshalOptions{
+		Resolver:          types,
+		UseProtoNames:     useProtoNames,
+		UseEnumNumbers:    useEnumNumbers,
+		EmitUnpopulated:   emitUnpopulated,
+		EmitDefaultValues: emitDefaultValues,
+	}
+
+	// Cache a decoder as it's unlikely the type is going to change
+	// within a single processor for a given schema ID (which this is cached by)
+	var cachedMessageName protoreflect.FullName
+	var cachedDecoder common.ProtobufDecoder
 	return func(m *service.Message) error {
 		b, err := m.AsBytes()
 		if err != nil {
@@ -86,27 +98,17 @@ func (s *schemaRegistryDecoder) getProtobufDecoder(
 			}
 			msgDesc = targetDescriptors.Get(j)
 		}
-
-		dynMsg := dynamicpb.NewMessage(msgDesc)
+		if cachedMessageName != msgDesc.FullName() {
+			cachedMessageName = msgDesc.FullName()
+			cachedDecoder = common.NewHyperPbDecoder(msgDesc, common.ProfilingOptions{
+				Rate:              0.01,
+				RecompileInterval: 100_000,
+			})
+		}
 		remaining := b[bytesRead:]
-
-		if err := proto.Unmarshal(remaining, dynMsg); err != nil {
-			return fmt.Errorf("failed to unmarshal protobuf message: %w", err)
-		}
-
-		data, err := protojson.MarshalOptions{
-			Resolver:          types,
-			UseProtoNames:     useProtoNames,
-			UseEnumNumbers:    useEnumNumbers,
-			EmitUnpopulated:   emitUnpopulated,
-			EmitDefaultValues: emitDefaultValues,
-		}.Marshal(dynMsg)
-		if err != nil {
-			return fmt.Errorf("failed to marshal JSON protobuf message: %w", err)
-		}
-
-		m.SetBytes(data)
-		return nil
+		return cachedDecoder.WithDecoded(remaining, func(msg proto.Message) error {
+			return common.ToMessageFast(msg.ProtoReflect(), opts, m)
+		})
 	}, nil
 }
 
