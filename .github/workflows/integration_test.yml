@@ -4,12 +4,12 @@ on:
   schedule:
     # Run every day at 1AM UTC
     - cron: '0 1 * * *'
+  pull_request:
   workflow_dispatch:
-    # Allow manual triggering
 
 jobs:
   integration-test:
-    if: ${{ github.repository == 'redpanda-data/connect' }}
+    if: ${{ github.event_name != 'pull_request' || startsWith(github.event.pull_request.title, 'build(deps)') }}
     runs-on: ubuntu-latest-32
     env:
       CGO_ENABLED: 0
