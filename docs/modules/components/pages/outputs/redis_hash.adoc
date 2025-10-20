@@ -23,7 +23,7 @@
 component_type_dropdown::[]
 
 
-Sets Redis hash objects using the HMSET command.
+Sets Redis hash objects using the HSET command.
 
 
 [tabs]

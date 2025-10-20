@@ -36,7 +36,7 @@ const (
 func redisHashOutputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Stable().
-		Summary(`Sets Redis hash objects using the HMSET command.`).
+		Summary(`Sets Redis hash objects using the HSET command.`).
 		Description(`
 The field `+"`key`"+` supports xref:configuration:interpolation.adoc#bloblang-queries[interpolation functions], allowing you to create a unique key for each message.
 
@@ -191,7 +191,7 @@ func (r *redisHashWriter) Write(ctx context.Context, msg *service.Message) error
 	if r.walkJSON {
 		if err := walkForHashFields(msg, fields); err != nil {
 			err = fmt.Errorf("failed to walk JSON object: %v", err)
-			r.log.Errorf("HMSET error: %v\n", err)
+			r.log.Errorf("HSET error: %v\n", err)
 			return err
 		}
 	}
@@ -200,7 +200,7 @@ func (r *redisHashWriter) Write(ctx context.Context, msg *service.Message) error
 			return fmt.Errorf("field %v interpolation error: %w", k, err)
 		}
 	}
-	if err := client.HMSet(ctx, key, fields).Err(); err != nil {
+	if err := client.HSet(ctx, key, fields).Err(); err != nil {
 		_ = r.disconnect()
 		r.log.Errorf("Error from redis: %v\n", err)
 		return service.ErrNotConnected
