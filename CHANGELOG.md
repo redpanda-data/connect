@@ -10,6 +10,11 @@ All notable changes to this project will be documented in this file.
 - New `a2a_message` processor. (@birdayz)
 - New `jira` processor. (@zoltancsontosness, @atudose-ness)
 
+### Changed
+
+- (Schema Registry Decode) Improve performance and output numerical types always as numbers instead sometimes being strings. (@rockwotj)
+- (Protobuf) Improve performance and output numerical types always as numbers instead of sometimes being strings. (@rockwotj)
+
 ## 4.67.0 - 2025-10-13
 
 ### Changed
