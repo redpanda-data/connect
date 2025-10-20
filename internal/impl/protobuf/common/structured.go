@@ -18,9 +18,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/reflect/protoreflect"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 // ToMessageFast converts a protobuf message into a benthos message using protobuf JSON encoding rules.

@@ -19,7 +19,7 @@ import (
 	"google.golang.org/protobuf/types/dynamicpb"
 )
 
-// NewDynamicPbParser returns a new ProtobufDecoder based on standard proto reflection
+// NewDynamicPbDecoder returns a new ProtobufDecoder based on standard proto reflection
 // in the offical protobuf library.
 func NewDynamicPbDecoder(
 	md protoreflect.MessageDescriptor,

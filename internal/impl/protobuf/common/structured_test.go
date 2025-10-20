@@ -20,7 +20,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -28,6 +27,8 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
 	"google.golang.org/protobuf/types/dynamicpb"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 func loadTestDescriptors(t *testing.T) (protoreflect.FileDescriptor, protoreflect.MessageDescriptor, *protoregistry.Types) {
