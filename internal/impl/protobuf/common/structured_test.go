@@ -20,7 +20,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jhump/protoreflect/desc/protoparse"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -451,40 +450,5 @@ func loadDescriptors(f fs.FS, importPaths []string) (*protoregistry.Files, *prot
 			return nil, nil, err
 		}
 	}
-	return registriesFromMap(files)
-}
-
-// registriesFromMap creates registries from a map of proto file contents
-func registriesFromMap(filesMap map[string]string) (*protoregistry.Files, *protoregistry.Types, error) {
-	//nolint:staticcheck // Ignore SA1019 "github.com/jhump/protoreflect/desc/protoparse" is deprecated warning
-	var parser protoparse.Parser
-	parser.Accessor = protoparse.FileContentsFromMap(filesMap)
-
-	names := make([]string, 0, len(filesMap))
-	for k := range filesMap {
-		names = append(names, k)
-	}
-
-	fds, err := parser.ParseFiles(names...)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	files, types := &protoregistry.Files{}, &protoregistry.Types{}
-	for _, v := range fds {
-		if err := files.RegisterFile(v.UnwrapFile()); err != nil {
-			return nil, nil, err
-		}
-		for _, t := range v.GetMessageTypes() {
-			if err := types.RegisterMessage(dynamicpb.NewMessageType(t.UnwrapMessage())); err != nil {
-				return nil, nil, err
-			}
-			for _, nt := range t.GetNestedMessageTypes() {
-				if err := types.RegisterMessage(dynamicpb.NewMessageType(nt.UnwrapMessage())); err != nil {
-					return nil, nil, err
-				}
-			}
-		}
-	}
-	return files, types, nil
+	return RegistriesFromMap(files)
 }
