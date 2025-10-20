@@ -13,15 +13,13 @@ package common
 
 import (
 	"google.golang.org/protobuf/reflect/protoreflect"
-	"google.golang.org/protobuf/types/descriptorpb"
 )
 
 // NewHyperPbDecoder falls back to using NewDynamicPbDecoder
 // on platforms where hyperpb is not supported.
 func NewHyperPbParser(
-	schema *descriptorpb.FileDescriptorSet,
-	messageName protoreflect.FullName,
+	md protoreflect.MessageDescriptor,
 	opts ProfilingOptions,
-) (ProtobufDecoder, error) {
-	return NewDynamicPbDecoder(schema, messageName, opts)
+) ProtobufDecoder {
+	return NewDynamicPbDecoder(md, opts)
 }

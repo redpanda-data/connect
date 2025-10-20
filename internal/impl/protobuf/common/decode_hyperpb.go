@@ -18,19 +18,14 @@ import (
 	"buf.build/go/hyperpb"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
-	"google.golang.org/protobuf/types/descriptorpb"
 )
 
 // NewHyperPbParser returns a new ProtobufDecoder based on hyperpb.
 func NewHyperPbDecoder(
-	schema *descriptorpb.FileDescriptorSet,
-	messageName protoreflect.FullName,
+	md protoreflect.MessageDescriptor,
 	opts ProfilingOptions,
-) (ProtobufDecoder, error) {
-	msgType, err := hyperpb.CompileFileDescriptorSet(schema, messageName)
-	if err != nil {
-		return nil, err
-	}
+) ProtobufDecoder {
+	msgType := hyperpb.CompileMessageDescriptor(md)
 	parser := &hyperPbParser{}
 	parser.state.Store(&hyperPbParserState{
 		msgType: msgType,
@@ -40,7 +35,7 @@ func NewHyperPbDecoder(
 		return new(hyperpb.Shared)
 	}
 	parser.opts = opts
-	return parser, nil
+	return parser
 }
 
 type hyperPbParserState struct {

@@ -16,25 +16,16 @@ import (
 
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
-	"google.golang.org/protobuf/types/descriptorpb"
+	"google.golang.org/protobuf/types/dynamicpb"
 )
 
 // NewDynamicPbParser returns a new ProtobufDecoder based on standard proto reflection
 // in the offical protobuf library.
 func NewDynamicPbDecoder(
-	schema *descriptorpb.FileDescriptorSet,
-	messageName protoreflect.FullName,
+	md protoreflect.MessageDescriptor,
 	_ ProfilingOptions,
-) (ProtobufDecoder, error) {
-	_, types, err := BuildRegistries(schema)
-	if err != nil {
-		return nil, fmt.Errorf("unable to build protobuf registry for '%v': %w", messageName, err)
-	}
-	msgType, err := types.FindMessageByName(messageName)
-	if err != nil {
-		return nil, fmt.Errorf("unable to find message '%v' definition", messageName)
-	}
-	return &dynamicPbParser{msgType}, nil
+) ProtobufDecoder {
+	return &dynamicPbParser{dynamicpb.NewMessageType(md)}
 }
 
 type dynamicPbParser struct {
