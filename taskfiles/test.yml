@@ -8,14 +8,14 @@ tasks:
     vars:
       TIMEOUT: '{{if .CI}}5m{{else}}1m{{end}}'
     cmds:
-      - go test {{.GO_FLAGS}} -timeout {{.TIMEOUT}} -shuffle=on ./...
+      - go test {{.GO_FLAGS}} -timeout {{.TIMEOUT}} -shuffle=on {{if .CI}}{{else}}-v{{end}} ./...
 
   unit-race:
     desc: Run unit tests with race detection
     aliases:
       - ut-race
     cmds:
-      - go test {{.GO_FLAGS}} -timeout 3m -shuffle=on -race ./...
+      - go test {{.GO_FLAGS}} -timeout 3m -shuffle=on -race {{if .CI}}{{else}}-v{{end}} ./...
 
   integration-package:
     desc: Run integration tests for package PKG
@@ -27,7 +27,7 @@ tasks:
     vars:
       TIMEOUT: '{{if .CI}}15m{{else}}5m{{end}}'
     cmds:
-      - go test {{.GO_FLAGS}} -run "^Test.*Integration" -timeout {{.TIMEOUT}} {{.PKG}}
+      - go test {{.GO_FLAGS}} -run "^Test.*Integration" -timeout {{.TIMEOUT}} {{if .CI}}{{else}}-v{{end}} {{.PKG}}
 
   template:
     desc: Run template tests
