@@ -41,9 +41,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/protobuf/common"
@@ -483,29 +480,11 @@ func strToProtobufBSROperator(multiModuleWatcher *multiModuleWatcher, opStr, mes
 }
 
 func loadDescriptors(f fs.FS, importPaths []string) (*protoregistry.Files, *protoregistry.Types, error) {
-	files := map[string]string{}
-	for _, importPath := range importPaths {
-		if err := fs.WalkDir(f, importPath, func(path string, info fs.DirEntry, ferr error) error {
-			if ferr != nil || info.IsDir() {
-				return ferr
-			}
-			if filepath.Ext(info.Name()) == ".proto" && !strings.HasPrefix(info.Name(), ".") {
-				rPath, ferr := filepath.Rel(importPath, path)
-				if ferr != nil {
-					return fmt.Errorf("failed to get relative path: %v", ferr)
-				}
-				content, ferr := os.ReadFile(path)
-				if ferr != nil {
-					return fmt.Errorf("failed to read import %v: %v", path, ferr)
-				}
-				files[rPath] = string(content)
-			}
-			return nil
-		}); err != nil {
-			return nil, nil, err
-		}
+	files, err := common.ParseFromFS(f, importPaths)
+	if err != nil {
+		return nil, nil, err
 	}
-	return common.RegistriesFromMap(files)
+	return common.BuildRegistries(files)
 }
 
 //------------------------------------------------------------------------------

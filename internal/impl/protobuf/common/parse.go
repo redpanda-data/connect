@@ -16,6 +16,9 @@ package common
 
 import (
 	"fmt"
+	"io/fs"
+	"path/filepath"
+	"strings"
 
 	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -23,6 +26,8 @@ import (
 	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/dynamicpb"
 
+	//nolint:staticcheck // Ignore SA1019 "github.com/jhump/protoreflect/desc" is deprecated warning
+	"github.com/jhump/protoreflect/desc"
 	//nolint:staticcheck // Ignore SA1019 "github.com/jhump/protoreflect/desc/protoparse" is deprecated warning
 	"github.com/jhump/protoreflect/desc/protoparse"
 )
@@ -37,6 +42,33 @@ func RegistriesFromMap(filesMap map[string]string) (*protoregistry.Files, *proto
 		return nil, nil, err
 	}
 	return BuildRegistries(fds)
+}
+
+// ParseFromFS loads a bunch of `.proto` files found in importPaths using the specified filesystem.
+func ParseFromFS(fsys fs.FS, importPaths []string) (*descriptorpb.FileDescriptorSet, error) {
+	files := map[string]string{}
+	for _, importPath := range importPaths {
+		if err := fs.WalkDir(fsys, importPath, func(path string, info fs.DirEntry, ferr error) error {
+			if ferr != nil || info.IsDir() {
+				return ferr
+			}
+			if filepath.Ext(info.Name()) == ".proto" && !strings.HasPrefix(info.Name(), ".") {
+				rPath, ferr := filepath.Rel(importPath, path)
+				if ferr != nil {
+					return fmt.Errorf("failed to get relative path: %v", ferr)
+				}
+				content, ferr := fs.ReadFile(fsys, path)
+				if ferr != nil {
+					return fmt.Errorf("failed to read import %v: %v", path, ferr)
+				}
+				files[rPath] = string(content)
+			}
+			return nil
+		}); err != nil {
+			return nil, err
+		}
+	}
+	return ParseProtos(files)
 }
 
 // ParseProtos dynamically parses protobuf files from a map of import path to proto file contents,
@@ -55,9 +87,19 @@ func ParseProtos(filesMap map[string]string) (*descriptorpb.FileDescriptorSet, e
 		return nil, err
 	}
 	var files []*descriptorpb.FileDescriptorProto
-	for _, v := range fds {
-		files = append(files, v.AsFileDescriptorProto())
+	seen := map[string]bool{}
+	var toProto func([]*desc.FileDescriptor)
+	toProto = func(fds []*desc.FileDescriptor) {
+		for _, fd := range fds {
+			if seen[fd.GetFullyQualifiedName()] {
+				continue
+			}
+			files = append(files, fd.AsFileDescriptorProto())
+			seen[fd.GetFullyQualifiedName()] = true
+			toProto(fd.GetDependencies())
+		}
 	}
+	toProto(fds)
 	return &descriptorpb.FileDescriptorSet{File: files}, nil
 }
 
