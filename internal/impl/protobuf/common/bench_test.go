@@ -12,9 +12,6 @@
 package common
 
 import (
-	"io/fs"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -59,9 +56,8 @@ func loadTestFileDescriptorSet(t testing.TB) (*descriptorpb.FileDescriptorSet, p
 
 // BenchmarkProtobufToMessage benchmarks the complete pipeline of decoding protobuf
 // and converting to a Benthos message, testing the matrix of:
-// - Decoding: dynamicpb vs hyperpb
+// - Decoding: dynamicpb vs hyperpb (with PGO)
 // - Conversion: Fast (SetStructuredMut) vs Slow (SetBytes)
-// - Read pattern: convert only vs convert + read structured data
 func BenchmarkProtobufToMessage(b *testing.B) {
 	schema, md, types := loadTestFileDescriptorSet(b)
 
@@ -115,20 +111,29 @@ func BenchmarkProtobufToMessage(b *testing.B) {
 
 	messageName := md.FullName()
 
+	b.StopTimer()
+	// Profile-guided optimization settings for hyperpb
+	pgoOpts := ProfilingOptions{
+		Rate:              0.01,   // Profile every message during priming
+		RecompileInterval: 100000, // Recompile after 1000 messages
+	}
+
 	// Create decoders
-	dynamicpbDecoder, err := NewDynamicPbDecoder(schema, messageName)
+	dynamicpbDecoder, err := NewDynamicPbDecoder(schema, messageName, ProfilingOptions{})
 	if err != nil {
 		b.Fatal(err)
 	}
 
-	hyperpbDecoder, err := NewHyperPbDecoder(schema, messageName)
+	hyperpbDecoder, err := NewHyperPbDecoder(schema, messageName, pgoOpts)
 	if err != nil {
 		b.Fatal(err)
 	}
+	b.StartTimer()
 
 	marshalOpts := protojson.MarshalOptions{Resolver: types}
 
 	for _, tc := range testCases {
+		b.StopTimer()
 		// Parse and marshal to protobuf bytes once per test case
 		pbMsg := dynamicpb.NewMessage(md)
 		unmarshalOpts := prototext.UnmarshalOptions{Resolver: types}
@@ -140,21 +145,20 @@ func BenchmarkProtobufToMessage(b *testing.B) {
 			b.Fatal(err)
 		}
 
-		// Benchmark: dynamicpb decode + fast conversion
-		b.Run(tc.name+"/dynamicpb/fast/convert_only", func(b *testing.B) {
-			b.ReportAllocs()
-			for b.Loop() {
-				msg := service.NewMessage(nil)
-				err := dynamicpbDecoder.WithDecoded(pbBytes, func(decoded proto.Message) error {
-					return ToMessageFast(decoded.(protoreflect.Message), marshalOpts, msg)
-				})
-				if err != nil {
-					b.Fatal(err)
-				}
+		// Prime the hyperpb decoder with sample data to build profile
+		// Run with enough iterations to trigger at least one recompilation
+		for range pgoOpts.RecompileInterval * 2 {
+			err := hyperpbDecoder.WithDecoded(pbBytes, func(decoded proto.Message) error {
+				return nil
+			})
+			if err != nil {
+				b.Fatal(err)
 			}
-		})
+		}
+		b.StartTimer()
 
-		b.Run(tc.name+"/dynamicpb/fast/convert_and_read", func(b *testing.B) {
+		// Benchmark: dynamicpb decode + fast conversion + read
+		b.Run(tc.name+"/dynamicpb/fast", func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
 				msg := service.NewMessage(nil)
@@ -171,21 +175,8 @@ func BenchmarkProtobufToMessage(b *testing.B) {
 			}
 		})
 
-		// Benchmark: dynamicpb decode + slow conversion
-		b.Run(tc.name+"/dynamicpb/slow/convert_only", func(b *testing.B) {
-			b.ReportAllocs()
-			for b.Loop() {
-				msg := service.NewMessage(nil)
-				err := dynamicpbDecoder.WithDecoded(pbBytes, func(decoded proto.Message) error {
-					return ToMessageSlow(decoded.(protoreflect.Message), marshalOpts, msg)
-				})
-				if err != nil {
-					b.Fatal(err)
-				}
-			}
-		})
-
-		b.Run(tc.name+"/dynamicpb/slow/convert_and_read", func(b *testing.B) {
+		// Benchmark: dynamicpb decode + slow conversion + read
+		b.Run(tc.name+"/dynamicpb/slow", func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
 				msg := service.NewMessage(nil)
@@ -202,21 +193,8 @@ func BenchmarkProtobufToMessage(b *testing.B) {
 			}
 		})
 
-		// Benchmark: hyperpb decode + fast conversion
-		b.Run(tc.name+"/hyperpb/fast/convert_only", func(b *testing.B) {
-			b.ReportAllocs()
-			for b.Loop() {
-				msg := service.NewMessage(nil)
-				err := hyperpbDecoder.WithDecoded(pbBytes, func(decoded proto.Message) error {
-					return ToMessageFast(decoded.(protoreflect.Message), marshalOpts, msg)
-				})
-				if err != nil {
-					b.Fatal(err)
-				}
-			}
-		})
-
-		b.Run(tc.name+"/hyperpb/fast/convert_and_read", func(b *testing.B) {
+		// Benchmark: hyperpb decode + fast conversion + read
+		b.Run(tc.name+"/hyperpb/fast", func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
 				msg := service.NewMessage(nil)
@@ -233,21 +211,8 @@ func BenchmarkProtobufToMessage(b *testing.B) {
 			}
 		})
 
-		// Benchmark: hyperpb decode + slow conversion
-		b.Run(tc.name+"/hyperpb/slow/convert_only", func(b *testing.B) {
-			b.ReportAllocs()
-			for b.Loop() {
-				msg := service.NewMessage(nil)
-				err := hyperpbDecoder.WithDecoded(pbBytes, func(decoded proto.Message) error {
-					return ToMessageSlow(decoded.(protoreflect.Message), marshalOpts, msg)
-				})
-				if err != nil {
-					b.Fatal(err)
-				}
-			}
-		})
-
-		b.Run(tc.name+"/hyperpb/slow/convert_and_read", func(b *testing.B) {
+		// Benchmark: hyperpb decode + slow conversion + read
+		b.Run(tc.name+"/hyperpb/slow", func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
 				msg := service.NewMessage(nil)

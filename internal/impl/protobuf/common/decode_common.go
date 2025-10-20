@@ -25,3 +25,10 @@ type ProtobufDecoder interface {
 	// the provided callback.
 	WithDecoded(buf []byte, cb func(msg proto.Message) error) error
 }
+
+// ProfilingOptions specifies the profiling rate and how often we recompile
+// for ProtobufDecoders that support profile-guided optimizations in flight (PGO)
+type ProfilingOptions struct {
+	Rate              float64
+	RecompileInterval int64
+}

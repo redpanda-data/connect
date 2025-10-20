@@ -21,6 +21,7 @@ import (
 func NewHyperPbParser(
 	schema *descriptorpb.FileDescriptorSet,
 	messageName protoreflect.FullName,
+	opts ProfilingOptions,
 ) (ProtobufDecoder, error) {
-	return NewDynamicPbDecoder(schema, messageName)
+	return NewDynamicPbDecoder(schema, messageName, opts)
 }
