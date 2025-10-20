@@ -24,6 +24,7 @@ import (
 func NewDynamicPbDecoder(
 	schema *descriptorpb.FileDescriptorSet,
 	messageName protoreflect.FullName,
+	_ ProfilingOptions,
 ) (ProtobufDecoder, error) {
 	_, types, err := BuildRegistries(schema)
 	if err != nil {
