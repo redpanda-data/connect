@@ -30,7 +30,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
-	"github.com/redpanda-data/connect/v4/internal/impl/protobuf"
+	"github.com/redpanda-data/connect/v4/internal/impl/protobuf/common"
 )
 
 func (s *schemaRegistryDecoder) getProtobufDecoder(
@@ -51,7 +51,7 @@ func (s *schemaRegistryDecoder) getProtobufDecoder(
 		return nil, err
 	}
 
-	files, types, err := protobuf.RegistriesFromMap(regMap)
+	files, types, err := common.RegistriesFromMap(regMap)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse proto schema: %v", err)
 	}
@@ -121,7 +121,7 @@ func (s *schemaRegistryEncoder) getProtobufEncoder(ctx context.Context, schema s
 		return nil, err
 	}
 
-	files, types, err := protobuf.RegistriesFromMap(regMap)
+	files, types, err := common.RegistriesFromMap(regMap)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse proto schema: %v", err)
 	}
