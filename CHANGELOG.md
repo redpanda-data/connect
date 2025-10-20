@@ -22,6 +22,11 @@ All notable changes to this project will be documented in this file.
 
 - The `kafka`, `kafka_franz` and `redpanda_common` inputs and outputs are now deprecated as their respective functionality has been rolled into the `redpanda` input and output. (@Jeffail)
 
+### Changed
+
+- (Schema Registry Decode) Improve performance and output numerical types always as numbers instead sometimes being strings. (@rockwotj)
+- (Protobuf) Improve performance and output numerical types always as numbers instead of sometimes being strings. (@rockwotj)
+
 ## 4.67.0 - 2025-10-13
 
 ### Changed
