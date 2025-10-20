@@ -235,22 +235,20 @@ and it must be set to the `+"`<cloud>`"+` part of the Account Identifier
 }`).
 		Example("Kafka / realtime brokers", "Upload message batches from realtime brokers such as Kafka persisting the batch partition and offsets in the stage path and filename similarly to the https://docs.snowflake.com/en/user-guide/kafka-connector-ts.html#step-1-view-the-copy-history-for-the-table[Kafka Connector scheme^] and call Snowpipe to load them into a table. When batching is configured at the input level, it is done per-partition.", `
 input:
-  kafka:
-    addresses:
+  redpanda:
+    seed_brokers:
       - localhost:9092
     topics:
       - foo
-    consumer_group: benthos
-    batching:
-      count: 10
-      period: 3s
-      processors:
-        - mapping: |
-            meta kafka_start_offset = meta("kafka_offset").from(0)
-            meta kafka_end_offset = meta("kafka_offset").from(-1)
-            meta batch_timestamp = if batch_index() == 0 { now() }
-        - mapping: |
-            meta batch_timestamp = if batch_index() != 0 { meta("batch_timestamp").from(0) }
+    consumer_group: rpcn
+    max_yield_batch_bytes: 8MB
+  processors:
+    - mapping: |
+        meta kafka_start_offset = meta("kafka_offset").from(0)
+        meta kafka_end_offset = meta("kafka_offset").from(-1)
+        meta batch_timestamp = if batch_index() == 0 { now() }
+    - mapping: |
+        meta batch_timestamp = if batch_index() != 0 { meta("batch_timestamp").from(0) }
 
 output:
   snowflake_put:

@@ -15,6 +15,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -43,7 +44,10 @@ func TestComponentExamples(t *testing.T) {
 				lints, err := linter.LintYAML([]byte(e.Config))
 				require.NoError(t, err)
 				for _, l := range lints {
-					t.Error(l.Error())
+					// TODO: Remove this once kafka is out of the benthos repo examples
+					if !strings.Contains(l.What, "component kafka is deprecated") {
+						t.Error(l.Error())
+					}
 				}
 			}
 		})

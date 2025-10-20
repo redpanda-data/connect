@@ -24,10 +24,6 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
-// SharedGlobalRedpandaClientKey points to a generic resource for obtaining the
-// global redpanda handle.
-const SharedGlobalRedpandaClientKey = "__redpanda_global"
-
 const (
 	grwFieldPipelineID  = "pipeline_id"
 	grwFieldLogsTopic   = "logs_topic"
@@ -345,7 +341,7 @@ func (f *franzTopicLoggerWriter) Connect(ctx context.Context) error {
 	}
 
 	if f.mgr != nil {
-		if err := kafka.FranzSharedClientSet(SharedGlobalRedpandaClientKey, &kafka.FranzSharedClientInfo{
+		if err := kafka.FranzSharedClientSet(kafka.SharedGlobalRedpandaClientKey, &kafka.FranzSharedClientInfo{
 			Client:      cl,
 			ConnDetails: f.connDetails,
 		}, f.mgr); err != nil {
@@ -393,7 +389,7 @@ func (f *franzTopicLoggerWriter) disconnect() {
 		return
 	}
 	if f.mgr != nil {
-		_, _ = kafka.FranzSharedClientPop(SharedGlobalRedpandaClientKey, f.mgr)
+		_, _ = kafka.FranzSharedClientPop(kafka.SharedGlobalRedpandaClientKey, f.mgr)
 	}
 	f.client.Close()
 	f.client = nil
