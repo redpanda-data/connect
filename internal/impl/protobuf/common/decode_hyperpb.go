@@ -20,7 +20,7 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-// NewHyperPbParser returns a new ProtobufDecoder based on hyperpb.
+// NewHyperPbDecoder returns a new ProtobufDecoder based on hyperpb.
 func NewHyperPbDecoder(
 	md protoreflect.MessageDescriptor,
 	opts ProfilingOptions,
@@ -77,7 +77,6 @@ func (p *hyperPbParser) WithDecoded(buf []byte, cb func(msg proto.Message) error
 					profile: recompiled.NewProfile(),
 				})
 			}()
-
 		}
 	}
 	return cb(msg)

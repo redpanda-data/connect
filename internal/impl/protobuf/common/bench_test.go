@@ -14,13 +14,14 @@ package common
 import (
 	"testing"
 
-	"github.com/redpanda-data/benthos/v4/public/service"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
 	"google.golang.org/protobuf/types/dynamicpb"
+
+	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
 // loadTestFileDescriptorSet loads test proto descriptors as a FileDescriptorSet
@@ -139,7 +140,7 @@ func BenchmarkProtobufToMessage(b *testing.B) {
 		// Prime the hyperpb decoder with sample data to build profile
 		// Run with enough iterations to trigger at least one recompilation
 		for range pgoOpts.RecompileInterval * 2 {
-			err := hyperpbDecoder.WithDecoded(pbBytes, func(decoded proto.Message) error {
+			err := hyperpbDecoder.WithDecoded(pbBytes, func(proto.Message) error {
 				return nil
 			})
 			if err != nil {
