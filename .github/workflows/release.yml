@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'v*'
+  schedule:
+    - cron: '0 2 * * *' # run at 2 AM UTC
   workflow_dispatch:
 
 jobs:
@@ -115,8 +117,17 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         CLOUDSMITH_API_KEY: ${{ env.CLOUDSMITH_API_KEY }}
 
+    - name: GoReleaser Edge
+      if: ${{ github.event_name == 'schedule' }}
+      uses: goreleaser/goreleaser-action@v6
+      with:
+        args: release --timeout 120m --snapshot --skip archive,nfpm --config ./.goreleaser/${{ matrix.variant }}.yaml
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        CLOUDSMITH_API_KEY: ${{ env.CLOUDSMITH_API_KEY }}
+
     - name: GoReleaser Test
-      if: ${{ github.event_name != 'push' }}
+      if: ${{ github.event_name == 'workflow_dispatch' }}
       uses: goreleaser/goreleaser-action@v6
       with:
         args: release --timeout 120m --snapshot --skip publish --config ./.goreleaser/${{ matrix.variant }}.yaml
