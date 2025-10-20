@@ -10,6 +10,10 @@ All notable changes to this project will be documented in this file.
 - New `a2a_message` processor. (@birdayz)
 - New `jira` processor. (@zoltancsontosness, @atudose-ness)
 
+### Changed
+
+- The `kafka`, `kafka_franz` and `redpanda_common` inputs and outputs are now deprecated as their respective functionality has been rolled into the `redpanda` input and output. (@Jeffail)
+
 ## 4.67.0 - 2025-10-13
 
 ### Changed
