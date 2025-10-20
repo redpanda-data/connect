@@ -26,7 +26,7 @@ jobs:
           - ./internal/impl/cockroachdb
           # - ./internal/impl/couchbase
           - ./internal/impl/elasticsearch/v8
-          - ./internal/impl/gcp
+          # - ./internal/impl/gcp
           - ./internal/impl/gcp/enterprise
           # - ./internal/impl/gcp/enterprise/changestreams
           # - ./internal/impl/gcp/enterprise/changestreams/metadata
@@ -53,7 +53,9 @@ jobs:
           - ./internal/impl/snowflake/streaming
           # - ./internal/impl/splunk
           # - ./internal/impl/sql
-          - ./internal/impl/tigerbeetle
+
+          # Requires CGO_ENABLED=1
+          # - ./internal/impl/tigerbeetle
           # - ./internal/impl/zeromq
 
     steps:
