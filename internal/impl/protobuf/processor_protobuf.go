@@ -46,6 +46,7 @@ import (
 	"strings"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/impl/protobuf/common"
 
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -504,7 +505,7 @@ func loadDescriptors(f fs.FS, importPaths []string) (*protoregistry.Files, *prot
 			return nil, nil, err
 		}
 	}
-	return RegistriesFromMap(files)
+	return common.RegistriesFromMap(files)
 }
 
 //------------------------------------------------------------------------------
