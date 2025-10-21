@@ -397,19 +397,7 @@ func FranzRecordToMessageV1(record *kgo.Record) *service.Message {
 	msg.MetaSetMut("kafka_timestamp_ms", record.Timestamp.UnixMilli())
 	msg.MetaSetMut("kafka_tombstone_message", record.Value == nil)
 
-	headers := map[string][]any{}
-
-	for _, hdr := range record.Headers {
-		headers[hdr.Key] = append(headers[hdr.Key], string(hdr.Value))
-	}
-
-	for key, values := range headers {
-		if len(values) == 1 {
-			msg.MetaSetMut(key, values[0])
-		} else {
-			msg.MetaSetMut(key, values)
-		}
-	}
+	AddHeaders(msg, record.Headers)
 
 	return msg
 }
