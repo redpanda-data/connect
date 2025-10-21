@@ -120,9 +120,9 @@ json_api                  ,metric    ,json_api                  ,0.0.0   ,certif
 json_array                ,scanner   ,json_array                ,4.65.0  ,community  ,n          ,y     ,y
 json_documents            ,scanner   ,json_documents            ,4.27.0  ,certified  ,n          ,y     ,y
 json_schema               ,processor ,JSON Schema               ,0.0.0   ,certified  ,n          ,y     ,y
-kafka                     ,input     ,Kafka                     ,0.0.0   ,certified  ,n          ,y     ,y
+kafka                     ,input     ,Kafka                     ,0.0.0   ,certified  ,y          ,y     ,y
 kafka                     ,output    ,Kafka                     ,0.0.0   ,certified  ,n          ,y     ,y
-kafka_franz               ,input     ,kafka_franz               ,3.61.0  ,certified  ,n          ,y     ,y
+kafka_franz               ,input     ,kafka_franz               ,3.61.0  ,certified  ,y          ,y     ,y
 kafka_franz               ,output    ,kafka_franz               ,3.61.0  ,certified  ,n          ,y     ,y
 legacy_redpanda_migrator  ,input     ,redpanda_migrator         ,4.37.0  ,certified  ,y          ,y     ,y
 legacy_redpanda_migrator  ,output    ,redpanda_migrator         ,4.37.0  ,certified  ,y          ,y     ,y
@@ -219,8 +219,8 @@ redis_streams             ,output    ,Redis Streams             ,0.0.0   ,certif
 redpanda                  ,cache     ,redpanda                  ,4.55.0  ,certified  ,n          ,y     ,y
 redpanda                  ,input     ,redpanda                  ,4.39.0  ,certified  ,n          ,y     ,y
 redpanda                  ,output    ,redpanda                  ,4.39.0  ,certified  ,n          ,y     ,y
-redpanda_common           ,input     ,redpanda_common           ,4.39.0  ,enterprise ,n          ,y     ,y
-redpanda_common           ,output    ,redpanda_common           ,4.39.0  ,enterprise ,n          ,y     ,y
+redpanda_common           ,input     ,redpanda_common           ,4.39.0  ,enterprise ,y          ,y     ,y
+redpanda_common           ,output    ,redpanda_common           ,4.39.0  ,enterprise ,y          ,y     ,y
 redpanda_data_transform   ,processor ,redpanda_data_transform   ,4.31.0  ,certified  ,n          ,n     ,n
 redpanda_migrator         ,input     ,redpanda_migrator         ,4.66.0  ,certified  ,n          ,y     ,y
 redpanda_migrator         ,output    ,redpanda_migrator         ,4.66.0  ,certified  ,n          ,y     ,y

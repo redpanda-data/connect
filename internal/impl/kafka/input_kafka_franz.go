@@ -22,7 +22,7 @@ import (
 
 func franzKafkaInputConfig() *service.ConfigSpec {
 	return service.NewConfigSpec().
-		Beta().
+		Deprecated().
 		Categories("Services").
 		Version("3.61.0").
 		Summary(`A Kafka input using the https://github.com/twmb/franz-go[Franz Kafka client library^].`).

@@ -37,7 +37,7 @@ Common::
 input:
   label: ""
   redpanda:
-    seed_brokers: [] # No default (required)
+    seed_brokers: [] # No default (optional)
     topics: [] # No default (required)
     regexp_topics: false
     transaction_isolation_level: read_uncommitted
@@ -55,8 +55,8 @@ Advanced::
 input:
   label: ""
   redpanda:
-    seed_brokers: [] # No default (required)
-    client_id: benthos
+    seed_brokers: [] # No default (optional)
+    client_id: redpanda-connect
     tls:
       enabled: false
       skip_cert_verify: false
@@ -86,6 +86,15 @@ input:
     partition_buffer_bytes: 1MB
     topic_lag_refresh_period: 5s
     max_yield_batch_bytes: 32KB
+    unordered_processing:
+      enabled: false
+      checkpoint_limit: 1024
+      batching:
+        count: 0
+        byte_size: 0
+        period: ""
+        check: ""
+        processors: [] # No default (optional)
     auto_replay_nacks: true
     timely_nacks_maximum_wait: "" # No default (optional)
 ```
@@ -151,7 +160,7 @@ This input adds the following metadata fields to each message:
 
 === `seed_brokers`
 
-A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses.
+A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses. When this field is omitted the global `redpanda` block will be referenced for connection details.
 
 
 *Type*: `array`
@@ -178,7 +187,7 @@ An identifier for the client connection.
 
 *Type*: `string`
 
-*Default*: `"benthos"`
+*Default*: `"redpanda-connect"`
 
 === `tls`
 
@@ -754,6 +763,134 @@ The maximum size (in bytes) for each batch yielded by this input. When routed to
 *Type*: `string`
 
 *Default*: `"32KB"`
+
+=== `unordered_processing`
+
+Configures partition consumers to allow parallel and therefore unordered processing of messages of any given partition. This allows for better utilization of processing threads and asynchronous publishing at the output level. The maximum parallelization of each partition is determined by the checkpoint_limit field.
+
+
+*Type*: `object`
+
+
+=== `unordered_processing.enabled`
+
+Whether to enable the unordered processing of messages from a given partition.
+
+
+*Type*: `bool`
+
+*Default*: `false`
+
+=== `unordered_processing.checkpoint_limit`
+
+Determines how many messages of the same partition can be processed in parallel before applying back pressure. When a message of a given offset is delivered to the output the offset is only allowed to be committed when all messages of prior offsets have also been delivered, this ensures at-least-once delivery guarantees. However, this mechanism also increases the likelihood of duplicates in the event of crashes or server faults, reducing the checkpoint limit will mitigate this.
+
+
+*Type*: `int`
+
+*Default*: `1024`
+
+=== `unordered_processing.batching`
+
+Allows you to configure a xref:configuration:batching.adoc[batching policy] that applies to individual topic partitions in order to batch messages together before flushing them for processing. Batching can be beneficial for performance as well as useful for windowed processing, and doing so this way preserves the ordering of topic partitions.
+
+
+*Type*: `object`
+
+
+```yml
+# Examples
+
+batching:
+  byte_size: 5000
+  count: 0
+  period: 1s
+
+batching:
+  count: 10
+  period: 1s
+
+batching:
+  check: this.contains("END BATCH")
+  count: 0
+  period: 1m
+```
+
+=== `unordered_processing.batching.count`
+
+A number of messages at which the batch should be flushed. If `0` disables count based batching.
+
+
+*Type*: `int`
+
+*Default*: `0`
+
+=== `unordered_processing.batching.byte_size`
+
+An amount of bytes at which the batch should be flushed. If `0` disables size based batching.
+
+
+*Type*: `int`
+
+*Default*: `0`
+
+=== `unordered_processing.batching.period`
+
+A period in which an incomplete batch should be flushed regardless of its size.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+```yml
+# Examples
+
+period: 1s
+
+period: 1m
+
+period: 500ms
+```
+
+=== `unordered_processing.batching.check`
+
+A xref:guides:bloblang/about.adoc[Bloblang query] that should return a boolean value indicating whether a message should end a batch.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+```yml
+# Examples
+
+check: this.type == "end_of_transaction"
+```
+
+=== `unordered_processing.batching.processors`
+
+A list of xref:components:processors/about.adoc[processors] to apply to a batch as it is flushed. This allows you to aggregate and archive the batch however you see fit. Please note that all resulting messages are flushed as a single batch, therefore splitting the batch into smaller batches using these processors is a no-op.
+
+
+*Type*: `array`
+
+
+```yml
+# Examples
+
+processors:
+  - archive:
+      format: concatenate
+
+processors:
+  - archive:
+      format: lines
+
+processors:
+  - archive:
+      format: json_array
+```
 
 === `auto_replay_nacks`
 

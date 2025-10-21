@@ -65,7 +65,7 @@ output:
   label: ""
   kafka_franz:
     seed_brokers: [] # No default (required)
-    client_id: benthos
+    client_id: redpanda-connect
     tls:
       enabled: false
       skip_cert_verify: false
@@ -139,7 +139,7 @@ An identifier for the client connection.
 
 *Type*: `string`
 
-*Default*: `"benthos"`
+*Default*: `"redpanda-connect"`
 
 === `tls`
 

@@ -34,20 +34,32 @@ const (
 	kfcFieldMetadataMaxAge         = "metadata_max_age"
 	kfcFieldRequestTimeoutOverhead = "request_timeout_overhead"
 	kfcFieldConnIdleTimeout        = "conn_idle_timeout"
+
+	kfcFieldSeedBrokersDescription = "A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses."
 )
+
+// FranzConnectionOptionalFields returns a slice of connection fields but
+// with any non-optional fields switched to be optional.
+func FranzConnectionOptionalFields() []*service.ConfigField {
+	fields := FranzConnectionFields()
+	fields[0] = fields[0].
+		Description(kfcFieldSeedBrokersDescription + " When this field is omitted the global `redpanda` block will be referenced for connection details.").
+		Optional()
+	return fields
+}
 
 // FranzConnectionFields returns a slice of fields specifically for establishing
 // connections to kafka brokers via the franz-go library.
 func FranzConnectionFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewStringListField(kfcFieldSeedBrokers).
-			Description("A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses.").
+			Description(kfcFieldSeedBrokersDescription).
 			Example([]string{"localhost:9092"}).
 			Example([]string{"foo:9092", "bar:9092"}).
 			Example([]string{"foo:9092,bar:9092"}),
 		service.NewStringField(kfcFieldClientID).
 			Description("An identifier for the client connection.").
-			Default("benthos").
+			Default("redpanda-connect").
 			Advanced(),
 		service.NewTLSToggledField(kfcFieldTLS),
 		SASLFields(),
@@ -88,14 +100,17 @@ func FranzConnectionDetailsFromConfig(conf *service.ParsedConfig, log *service.L
 		Logger: log,
 	}
 
-	brokerList, err := conf.FieldStringList(kfcFieldSeedBrokers)
-	if err != nil {
-		return nil, err
-	}
-	for _, b := range brokerList {
-		d.SeedBrokers = append(d.SeedBrokers, strings.Split(b, ",")...)
+	if conf.Contains(kfcFieldSeedBrokers) {
+		brokerList, err := conf.FieldStringList(kfcFieldSeedBrokers)
+		if err != nil {
+			return nil, err
+		}
+		for _, b := range brokerList {
+			d.SeedBrokers = append(d.SeedBrokers, strings.Split(b, ",")...)
+		}
 	}
 
+	var err error
 	if d.TLSConf, d.TLSEnabled, err = conf.FieldTLSToggled(kfcFieldTLS); err != nil {
 		return nil, err
 	}
@@ -121,6 +136,11 @@ func FranzConnectionDetailsFromConfig(conf *service.ParsedConfig, log *service.L
 	}
 
 	return &d, nil
+}
+
+// IsConfigured returns true if any of the connection fields have been set.
+func (d *FranzConnectionDetails) IsConfigured() bool {
+	return len(d.SeedBrokers) > 0
 }
 
 // FranzOpts returns a slice of franz-go opts that establish a connection

@@ -16,6 +16,7 @@ package kafka
 
 import (
 	"slices"
+	"time"
 
 	"github.com/twmb/franz-go/pkg/kgo"
 
@@ -87,9 +88,9 @@ This input adds the following metadata fields to each message:
 
 func redpandaInputConfigFields() []*service.ConfigField {
 	return slices.Concat(
-		FranzConnectionFields(),
+		FranzConnectionOptionalFields(),
 		FranzConsumerFields(),
-		FranzReaderOrderedConfigFields(),
+		FranzReaderToggledConfigFields(),
 		[]*service.ConfigField{
 			service.NewAutoRetryNacksToggleField(),
 			service.NewForceTimelyNacksField(),
@@ -100,22 +101,47 @@ func redpandaInputConfigFields() []*service.ConfigField {
 func init() {
 	service.MustRegisterBatchInput("redpanda", redpandaInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchInput, error) {
-			tmpOpts, err := FranzConnectionOptsFromConfig(conf, mgr.Logger())
+			connDetails, err := FranzConnectionDetailsFromConfig(conf, mgr.Logger())
 			if err != nil {
 				return nil, err
 			}
-			clientOpts := slices.Clone(tmpOpts)
 
-			if tmpOpts, err = FranzConsumerOptsFromConfig(conf); err != nil {
+			consumerOpts, err := FranzConsumerOptsFromConfig(conf)
+			if err != nil {
 				return nil, err
 			}
-			clientOpts = append(clientOpts, tmpOpts...)
 
 			var rdr service.BatchInput
-			if rdr, err = NewFranzReaderOrderedFromConfig(conf, mgr, func() ([]kgo.Opt, error) {
-				return clientOpts, nil
-			}); err != nil {
-				return nil, err
+			if connDetails.IsConfigured() {
+				// We're using a custom connection from config.
+				clientOpts := append(connDetails.FranzOpts(), consumerOpts...)
+				if rdr, err = NewFranzReaderToggledFromConfig(conf, mgr, func() ([]kgo.Opt, error) {
+					return clientOpts, nil
+				}); err != nil {
+					return nil, err
+				}
+			} else {
+				mgr.Logger().Info("Connection fields omitted, falling back to common redpanda config.")
+
+				// We're using a common redpanda block to determine the connection.
+				if rdr, err = NewFranzReaderToggledFromConfig(conf, mgr, func() (clientOpts []kgo.Opt, err error) {
+					// Make multiple attempts here just to allow the redpanda logger
+					// to initialise in the background. Otherwise we get an annoying
+					// log.
+					for range 20 {
+						if err = FranzSharedClientUse(SharedGlobalRedpandaClientKey, mgr, func(details *FranzSharedClientInfo) error {
+							clientOpts = append(clientOpts, details.ConnDetails.FranzOpts()...)
+							return nil
+						}); err == nil {
+							clientOpts = append(clientOpts, consumerOpts...)
+							return
+						}
+						time.Sleep(time.Millisecond * 100)
+					}
+					return
+				}); err != nil {
+					return nil, err
+				}
 			}
 
 			if rdr, err = service.AutoRetryNacksBatchedToggled(conf, rdr); err != nil {
