@@ -525,7 +525,7 @@ func (p *vertexAIChatProcessor) Process(ctx context.Context, msg *service.Messag
 			if resp.PromptFeedback != nil && resp.PromptFeedback.BlockReasonMessage != "" {
 				return nil, fmt.Errorf("response blocked due to: %s", resp.PromptFeedback.BlockReasonMessage)
 			}
-			return nil, errors.New("no candidate responses returned")
+			return nil, fmt.Errorf("unexpected number of candidate responses returned: %d", len(resp.Candidates))
 		}
 		respParts := resp.Candidates[0].Content.Parts
 		reqParts = nil
