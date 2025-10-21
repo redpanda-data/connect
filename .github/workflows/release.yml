@@ -117,6 +117,11 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         CLOUDSMITH_API_KEY: ${{ env.CLOUDSMITH_API_KEY }}
 
+    - name: Disable checksums for Edge build
+      if: ${{ github.event_name == 'schedule' }}
+      run: |
+        yq eval '.checksum.disable = true' -i .goreleaser/${{ matrix.variant }}.yaml
+
     - name: GoReleaser Edge
       if: ${{ github.event_name == 'schedule' }}
       uses: goreleaser/goreleaser-action@v6
