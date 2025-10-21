@@ -35,6 +35,7 @@ jobs:
           # - ./internal/impl/kafka
           - ./internal/impl/kafka/enterprise
           - ./internal/impl/memcached
+          - ./internal/impl/mssqlserver
           - ./internal/impl/mongodb
           - ./internal/impl/mongodb/cdc
           # - ./internal/impl/mqtt
@@ -48,6 +49,7 @@ jobs:
           - ./internal/impl/qdrant
           # - ./internal/impl/questdb
           - ./internal/impl/redis
+          - ./internal/impl/redpanda/migrator
           - ./internal/impl/sftp
           # - ./internal/impl/snowflake
           - ./internal/impl/snowflake/streaming
