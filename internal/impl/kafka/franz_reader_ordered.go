@@ -37,6 +37,7 @@ const (
 	kroFieldPartitionBuffer       = "partition_buffer_bytes"
 	kroFieldTopicLagRefreshPeriod = "topic_lag_refresh_period"
 	kroFieldMaxYieldBatchBytes    = "max_yield_batch_bytes"
+	kroFieldHeadersAsMeta         = "headers_as_metadata"
 )
 
 // FranzReaderOrderedConfigFields returns config fields for customising the
@@ -62,6 +63,10 @@ func FranzReaderOrderedConfigFields() []*service.ConfigField {
 			Description("The maximum size (in bytes) for each batch yielded by this input. When routed to a redpanda output without modification this would roughly translate to the batch.bytes config field of a traditional producer.").
 			Default("32KB").
 			Advanced(),
+		service.NewBoolField(kroFieldHeadersAsMeta).
+			Description("Store Kafka record headers as individual metadata fields. Headers are always available in raw form; this option adds them as separate fields for easier access in processing.").
+			Default(false).
+			Advanced(),
 	}
 }
 
@@ -80,6 +85,7 @@ type FranzReaderOrdered struct {
 	readBackOff           backoff.BackOff
 	topicLagRefreshPeriod time.Duration
 	batchMaxSize          uint64
+	headersAsMeta         bool
 
 	res     *service.Resources
 	log     *service.Logger
@@ -120,6 +126,10 @@ func NewFranzReaderOrderedFromConfig(conf *service.ParsedConfig, res *service.Re
 		return nil, err
 	}
 
+	if f.headersAsMeta, err = conf.FieldBool(kroFieldHeadersAsMeta); err != nil {
+		return nil, err
+	}
+
 	return &f, nil
 }
 
@@ -134,11 +144,11 @@ type batchWithRecords struct {
 	size uint64
 }
 
-func recordsToBatch(records []*kgo.Record, consumerLag *ConsumerLag) (batch batchWithRecords) {
+func recordsToBatch(records []*kgo.Record, consumerLag *ConsumerLag, headersAsMeta bool) (batch batchWithRecords) {
 	batch.b = make([]*messageWithRecord, len(records))
 
 	for i, r := range records {
-		msg := FranzRecordToMessageV1(r)
+		msg := FranzRecordToMessageV1(r, headersAsMeta)
 		if consumerLag != nil {
 			lag := consumerLag.Load(r.Topic, r.Partition)
 			msg.MetaSetMut("kafka_lag", lag)
@@ -533,14 +543,13 @@ func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 			if closeCtx.Err() != nil {
 				return
 			}
-
 			pauseTopicPartitions := map[string][]int32{}
 			fetches.EachPartition(func(p kgo.FetchTopicPartition) {
 				if len(p.Records) == 0 {
 					return
 				}
 
-				batch := recordsToBatch(p.Records, consumerLag)
+				batch := recordsToBatch(p.Records, consumerLag, f.headersAsMeta)
 				if len(batch.b) == 0 {
 					return
 				}

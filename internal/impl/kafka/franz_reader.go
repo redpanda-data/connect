@@ -386,8 +386,10 @@ func FranzRecordToMessageV0(record *kgo.Record, multiHeader bool) *service.Messa
 }
 
 // FranzRecordToMessageV1 converts a record into a service.Message, adding
-// metadata and other relevant information.
-func FranzRecordToMessageV1(record *kgo.Record) *service.Message {
+// metadata and other relevant information. Headers are always stored raw via
+// [AddHeadersRaw]. If withHeadersAsMeta is true, headers are also stored
+// individually via [AddHeaders] for ease of access.
+func FranzRecordToMessageV1(record *kgo.Record, withHeadersAsMeta bool) *service.Message {
 	msg := service.NewMessage(record.Value)
 	msg.MetaSetMut("kafka_key", record.Key)
 	msg.MetaSetMut("kafka_topic", record.Topic)
@@ -397,18 +399,9 @@ func FranzRecordToMessageV1(record *kgo.Record) *service.Message {
 	msg.MetaSetMut("kafka_timestamp_ms", record.Timestamp.UnixMilli())
 	msg.MetaSetMut("kafka_tombstone_message", record.Value == nil)
 
-	headers := map[string][]any{}
-
-	for _, hdr := range record.Headers {
-		headers[hdr.Key] = append(headers[hdr.Key], string(hdr.Value))
-	}
-
-	for key, values := range headers {
-		if len(values) == 1 {
-			msg.MetaSetMut(key, values[0])
-		} else {
-			msg.MetaSetMut(key, values)
-		}
+	AddHeadersRaw(msg, record.Headers)
+	if withHeadersAsMeta {
+		AddHeaders(msg, record.Headers)
 	}
 
 	return msg

@@ -86,6 +86,7 @@ input:
     partition_buffer_bytes: 1MB
     topic_lag_refresh_period: 5s
     max_yield_batch_bytes: 32KB
+    headers_as_metadata: false
     unordered_processing:
       enabled: false
       checkpoint_limit: 1024
@@ -763,6 +764,15 @@ The maximum size (in bytes) for each batch yielded by this input. When routed to
 *Type*: `string`
 
 *Default*: `"32KB"`
+
+=== `headers_as_metadata`
+
+Store Kafka record headers as individual metadata fields. Headers are always available in raw form; this option adds them as separate fields for easier access in processing.
+
+
+*Type*: `bool`
+
+*Default*: `false`
 
 === `unordered_processing`
 

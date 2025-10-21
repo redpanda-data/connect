@@ -59,14 +59,21 @@ func NewFranzReaderToggledFromConfig(conf *service.ParsedConfig, res *service.Re
 	if err != nil {
 		return nil, err
 	}
+	headersAsMeta, err := conf.FieldBool(kroFieldHeadersAsMeta)
+	if err != nil {
+		return nil, err
+	}
+
 	if unordered {
 		f := FranzReaderUnordered{
 			res:     res,
 			log:     res.Logger(),
 			shutSig: shutdown.NewSignaller(),
 
-			clientOpts:         optsFn,
-			franzRecordToMsgFn: FranzRecordToMessageV1,
+			clientOpts: optsFn,
+			franzRecordToMsgFn: func(record *kgo.Record) *service.Message {
+				return FranzRecordToMessageV1(record, headersAsMeta)
+			},
 		}
 
 		var err error
