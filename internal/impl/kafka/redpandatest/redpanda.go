@@ -103,7 +103,9 @@ func StartRedpanda(t *testing.T, pool *dockertest.Pool, exposeBroker, autocreate
 		ctx, done := context.WithTimeout(t.Context(), 3*time.Second)
 		defer done()
 
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("http://localhost:%s/v1/cluster/health_overview", resource.GetPort("9644/tcp")), nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+			fmt.Sprintf("http://127.0.0.1:%s/v1/cluster/health_overview", resource.GetPort("9644/tcp")),
+			nil)
 		if err != nil {
 			return fmt.Errorf("failed to create request: %s", err)
 		}
