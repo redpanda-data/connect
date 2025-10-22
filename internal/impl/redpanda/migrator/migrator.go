@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/Jeffail/shutdown"
 	"github.com/twmb/franz-go/pkg/kadm"
@@ -344,7 +345,7 @@ func init() {
 			if err != nil {
 				return
 			}
-			fw.OnWrite = m.onWrite
+			fw.MessageBatchToFranzRecords = m.messageBatchToFranzRecords
 			out = migratorBatchOutput{fw, m}
 
 			// Force single in-flight batch message to ensure data ordering
@@ -378,6 +379,7 @@ type Migrator struct {
 	mu     sync.RWMutex
 	src    *kgo.Client
 	srcAdm *kadm.Client
+	dstAdm *kadm.Client
 }
 
 // NewMigrator creates a new Migrator instance with the provided logger.
@@ -445,7 +447,7 @@ func (m *Migrator) initOutputFromParsed(pConf *service.ParsedConfig, mgr *servic
 	return nil
 }
 
-func (m *Migrator) onInputConnected(_ context.Context, fr *kafka.FranzReaderOrdered) error { //nolint:revive
+func (m *Migrator) onInputConnected(_ context.Context, fr *kafka.FranzReaderOrdered) error {
 	if err := m.validateInitialized(); err != nil {
 		return err
 	}
@@ -473,7 +475,10 @@ func (m *Migrator) onOutputConnected(_ context.Context, fw franzWriter) error {
 		cancel()
 		return fmt.Errorf("get franz client: %w", err)
 	}
+	dstAdm := kadm.NewClient(clientInfo.Client)
+
 	m.mu.Lock()
+	m.dstAdm = dstAdm
 	m.groups.dstAdm = kadm.NewClient(clientInfo.Client)
 	m.mu.Unlock()
 
@@ -512,21 +517,24 @@ func (m *Migrator) validateInitialized() error {
 	return nil
 }
 
-func (m *Migrator) onWrite(
-	ctx context.Context,
-	dst *kgo.Client,
-	records []*kgo.Record,
-) error {
+func (m *Migrator) messageBatchToFranzRecords(batch service.MessageBatch) ([]kgo.Record, error) {
+	if len(batch) == 0 {
+		return nil, nil
+	}
+
 	m.mu.RLock()
 	src := m.src
 	srcAdm := m.srcAdm
+	dstAdm := m.dstAdm
 	m.mu.RUnlock()
 
-	dstAdm := kadm.NewClient(dst)
+	ctx := batch[0].Context()
 
 	if err := m.topic.SyncOnce(ctx, srcAdm, dstAdm, src.GetConsumeTopics); err != nil {
-		return fmt.Errorf("sync topics: %w", err)
+		return nil, fmt.Errorf("sync topics: %w", err)
 	}
+
+	records := make([]kgo.Record, 0, len(batch))
 
 	var (
 		lastTopic       string
@@ -534,42 +542,91 @@ func (m *Migrator) onWrite(
 		lastSchemaID    int
 		lastDstSchemaID int
 	)
-	for _, record := range records {
-		if record == nil {
-			continue
+
+	for _, msg := range batch {
+		r := kgo.Record{
+			Context: msg.Context(),
 		}
 
-		if record.Topic != lastTopic {
-			topic, err := m.topic.CreateTopicIfNeeded(ctx, srcAdm, dstAdm, record.Topic)
-			if err != nil {
-				return err
+		// Key (optional)
+		if keyVal, ok := msg.MetaGetMut("kafka_key"); ok {
+			switch v := keyVal.(type) {
+			case string:
+				r.Key = []byte(v)
+			case []byte:
+				r.Key = v
 			}
-			lastTopic, lastDstTopic = record.Topic, topic
 		}
-		record.Topic = lastDstTopic
 
-		// Update schema ID
+		// Value (required)
+		value, err := msg.AsBytes()
+		if err != nil {
+			return nil, fmt.Errorf("message to bytes: %w", err)
+		}
 		if m.sr.enabled() && m.sr.conf.TranslateIDs {
-			schemaID, err := parseSchemaID(record.Value)
+			schemaID, err := parseSchemaID(value)
 			if err != nil {
-				return fmt.Errorf("parse schema ID: %w", err)
+				return nil, fmt.Errorf("parse schema ID: %w", err)
 			}
 			if schemaID != 0 {
 				if schemaID != lastSchemaID {
-					id, err := m.sr.DestinationSchemaID(schemaID)
+					dstSchemaID, err := m.sr.DestinationSchemaID(schemaID)
 					if err != nil {
-						return fmt.Errorf("resolve destination schema ID: %w", err)
+						return nil, fmt.Errorf("resolve destination schema ID: %w", err)
 					}
-					lastSchemaID, lastDstSchemaID = schemaID, id
+					lastSchemaID, lastDstSchemaID = schemaID, dstSchemaID
 				}
-				if err := updateSchemaID(record.Value, lastDstSchemaID); err != nil {
-					return fmt.Errorf("update schema ID: %w", err)
+				if err := updateSchemaID(value, lastDstSchemaID); err != nil {
+					return nil, fmt.Errorf("update schema ID: %w", err)
 				}
 			}
 		}
+		r.Value = value
+
+		// Timestamp (required)
+		tsVal, ok := msg.MetaGetMut("kafka_timestamp_ms")
+		if !ok {
+			return nil, errors.New("kafka_timestamp_ms metadata not found")
+		}
+		tsInt, ok := tsVal.(int64)
+		if !ok {
+			return nil, errors.New("kafka_timestamp_ms metadata is not int64")
+		}
+		r.Timestamp = time.UnixMilli(tsInt)
+
+		// Topic (required)
+		srcTopic, ok := msg.MetaGetMut("kafka_topic")
+		if !ok {
+			return nil, errors.New("kafka_topic metadata not found")
+		}
+		srcTopicStr, ok := srcTopic.(string)
+		if !ok {
+			return nil, errors.New("kafka_topic metadata is not a string")
+		}
+		if srcTopicStr != lastTopic {
+			dstTopic, err := m.topic.CreateTopicIfNeeded(ctx, srcAdm, dstAdm, srcTopicStr)
+			if err != nil {
+				return nil, err
+			}
+			lastTopic, lastDstTopic = srcTopicStr, dstTopic
+		}
+		r.Topic = lastDstTopic
+
+		// Partition (required)
+		partVal, ok := msg.MetaGetMut("kafka_partition")
+		if !ok {
+			return nil, errors.New("kafka_partition metadata not found")
+		}
+		partInt, ok := partVal.(int)
+		if !ok {
+			return nil, errors.New("kafka_partition metadata is not int")
+		}
+		r.Partition = int32(partInt)
+
+		records = append(records, r)
 	}
 
-	return nil
+	return records, nil
 }
 
 func parseSchemaID(b []byte) (int, error) {

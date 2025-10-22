@@ -22,6 +22,7 @@ import (
 	"slices"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -292,8 +293,23 @@ type FranzWriter struct {
 	IsTimestampMs bool
 	MetaFilter    *service.MetadataFilter
 	hooks         franzWriterHooks
-	// OnWrite is executed for each record before it is written to the broker.
-	OnWrite func(ctx context.Context, client *kgo.Client, records []*kgo.Record) error
+
+	// MessageBatchToFranzRecords is a custom batch record constructor for
+	// specialized cases like migrator.
+	//
+	// Contract:
+	// - Must return exactly one record per input message (same slice length)
+	// - Use SkipRecord sentinel value for messages that should not be written
+	// - Returned records are validated for count match before processing
+	//
+	// When nil, the default messageBatchToFranzRecords implementation is used.
+	MessageBatchToFranzRecords func(batch service.MessageBatch) ([]kgo.Record, error)
+
+	// DecorateRecord is executed for each record before it is written to the
+	// broker.
+	//
+	// DEPRECATED: Use [MessageBatchToFranzRecords] instead.
+	DecorateRecord func(r *kgo.Record) error
 }
 
 // NewFranzWriterFromConfig uses a parsed config to extract customisation for writing data to a Kafka broker. A closure
@@ -348,73 +364,87 @@ func NewFranzWriterFromConfig(conf *service.ParsedConfig, hooks franzWriterHooks
 
 //------------------------------------------------------------------------------
 
-// BatchToRecords converts a batch of messages into a slice of records ready to
-// send via the franz-go library.
-func (w *FranzWriter) BatchToRecords(_ context.Context, b service.MessageBatch) ([]*kgo.Record, error) {
-	topicExecutor := b.InterpolationExecutor(w.Topic)
-	var keyExecutor *service.MessageBatchInterpolationExecutor
-	if w.Key != nil {
-		keyExecutor = b.InterpolationExecutor(w.Key)
-	}
-	var partitionExecutor *service.MessageBatchInterpolationExecutor
-	if w.Partition != nil {
-		partitionExecutor = b.InterpolationExecutor(w.Partition)
-	}
-	var timestampExecutor *service.MessageBatchInterpolationExecutor
-	if w.Timestamp != nil {
-		timestampExecutor = b.InterpolationExecutor(w.Timestamp)
-	}
+// SkipRecord is a sentinel value that can be returned by custom
+// MessageBatchToFranzRecords implementations to indicate a record should be
+// skipped and not written to Kafka.
+var SkipRecord = kgo.Record{}
 
-	records := make([]*kgo.Record, 0, len(b))
-	for i, msg := range b {
-		topic, err := topicExecutor.TryString(i)
+// messageBatchToFranzRecords is the default implementation that converts
+// messages to records using configured interpolation and metadata filters.
+func (w *FranzWriter) messageBatchToFranzRecords(batch service.MessageBatch) ([]kgo.Record, error) {
+	records := make([]kgo.Record, 0, len(batch))
+
+	for _, msg := range batch {
+		r := kgo.Record{
+			Context: msg.Context(),
+		}
+
+		var err error
+
+		// Required: Value
+		r.Value, err = msg.AsBytes()
 		if err != nil {
-			return nil, fmt.Errorf("topic interpolation error: %w", err)
+			return nil, fmt.Errorf("message to bytes: %w", err)
 		}
 
-		record := &kgo.Record{Topic: topic}
-		if record.Value, err = msg.AsBytes(); err != nil {
-			return nil, err
+		// Required: Topic
+		r.Topic, err = w.Topic.TryString(msg)
+		if err != nil {
+			return nil, fmt.Errorf("topic interpolation: %w", err)
 		}
-		if keyExecutor != nil {
-			if record.Key, err = keyExecutor.TryBytes(i); err != nil {
-				return nil, fmt.Errorf("key interpolation error: %w", err)
-			}
-		}
-		if partitionExecutor != nil {
-			partStr, err := partitionExecutor.TryString(i)
+
+		// Optional: Key
+		if w.Key != nil {
+			r.Key, err = w.Key.TryBytes(msg)
 			if err != nil {
-				return nil, fmt.Errorf("partition interpolation error: %w", err)
+				return nil, fmt.Errorf("key interpolation: %w", err)
 			}
-			partInt, err := strconv.Atoi(partStr)
-			if err != nil {
-				return nil, fmt.Errorf("partition parse error: %w", err)
-			}
-			record.Partition = int32(partInt)
 		}
-		_ = w.MetaFilter.Walk(msg, func(key, value string) error {
-			record.Headers = append(record.Headers, kgo.RecordHeader{
-				Key:   key,
-				Value: []byte(value),
+
+		// Optional: Headers
+		if w.MetaFilter != nil {
+			_ = w.MetaFilter.Walk(msg, func(key, value string) error {
+				r.Headers = append(r.Headers, kgo.RecordHeader{
+					Key:   key,
+					Value: []byte(value),
+				})
+				return nil
 			})
-			return nil
-		})
-		if timestampExecutor != nil {
-			if tsStr, err := timestampExecutor.TryString(i); err != nil {
-				return nil, fmt.Errorf("timestamp interpolation error: %w", err)
+		}
+
+		// Optional: Timestamp
+		if w.Timestamp != nil {
+			tsStr, err := w.Timestamp.TryString(msg)
+			if err != nil {
+				return nil, fmt.Errorf("timestamp interpolation: %w", err)
+			}
+
+			ts, err := strconv.ParseInt(tsStr, 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("parse timestamp: %w", err)
+			}
+
+			if w.IsTimestampMs {
+				r.Timestamp = time.UnixMilli(ts)
 			} else {
-				if ts, err := strconv.ParseInt(tsStr, 10, 64); err != nil {
-					return nil, fmt.Errorf("failed to parse timestamp: %w", err)
-				} else {
-					if w.IsTimestampMs {
-						record.Timestamp = time.UnixMilli(ts)
-					} else {
-						record.Timestamp = time.Unix(ts, 0)
-					}
-				}
+				r.Timestamp = time.Unix(ts, 0)
 			}
 		}
-		records = append(records, record)
+
+		// Optional: Partition
+		if w.Partition != nil {
+			partStr, err := w.Partition.TryString(msg)
+			if err != nil {
+				return nil, fmt.Errorf("partition interpolation: %w", err)
+			}
+			partInt, err := strconv.ParseInt(partStr, 10, 32)
+			if err != nil {
+				return nil, fmt.Errorf("parse partition: %w", err)
+			}
+			r.Partition = int32(partInt)
+		}
+
+		records = append(records, r)
 	}
 
 	return records, nil
@@ -434,38 +464,84 @@ func (w *FranzWriter) WriteBatch(ctx context.Context, b service.MessageBatch) er
 	if len(b) == 0 {
 		return nil
 	}
-	return w.hooks.accessClientFn(ctx, func(details *FranzSharedClientInfo) error {
-		records, err := w.BatchToRecords(ctx, b)
-		if err != nil {
-			return err
+	return w.hooks.accessClientFn(ctx, w.newBatchWriter(ctx, b).writeBatch)
+}
+
+// batchWriter handles concurrent writes of a message batch to Kafka.
+type batchWriter struct {
+	*FranzWriter
+	ctx   context.Context
+	batch service.MessageBatch
+
+	wg  sync.WaitGroup
+	err atomic.Value
+}
+
+func (w *FranzWriter) newBatchWriter(ctx context.Context, batch service.MessageBatch) *batchWriter {
+	return &batchWriter{
+		FranzWriter: w,
+		ctx:         ctx,
+		batch:       batch,
+	}
+}
+
+func (w *batchWriter) writeBatch(details *FranzSharedClientInfo) error {
+	conv := w.MessageBatchToFranzRecords
+	if conv == nil {
+		conv = w.messageBatchToFranzRecords
+	}
+	records, err := conv(w.batch)
+	if err != nil {
+		return fmt.Errorf("failed to create records: %w", err)
+	}
+	if len(records) != len(w.batch) {
+		return fmt.Errorf("record count mismatch: got %d records for %d messages", len(records), len(w.batch))
+	}
+	for i := range records {
+		r := &records[i]
+
+		// Skip records that match the SkipRecord sentinel
+		if r.Topic == "" && r.Value == nil && r.Key == nil {
+			dispatch.TriggerSignal(w.batch[i].Context())
+			continue
 		}
 
-		if w.OnWrite != nil {
-			if err := w.OnWrite(ctx, details.Client, records); err != nil {
-				return fmt.Errorf("on write hook failed: %s", err)
+		if r.Context == nil {
+			r.Context = w.ctx
+		}
+		if w.DecorateRecord != nil {
+			if err := w.DecorateRecord(r); err != nil {
+				return fmt.Errorf("decorate record: %w", err)
 			}
 		}
 
-		var (
-			wg      sync.WaitGroup
-			results = make(kgo.ProduceResults, 0, len(records))
-			promise = func(r *kgo.Record, err error) {
-				results = append(results, kgo.ProduceResult{Record: r, Err: err})
-				wg.Done()
-			}
-		)
+		w.wg.Add(1)
+		details.Client.Produce(w.ctx, r, w.onRecordProduced)
+	}
+	return w.wait()
+}
 
-		wg.Add(len(records))
-		for i, r := range records {
-			details.Client.Produce(ctx, r, promise)
-			dispatch.TriggerSignal(b[i].Context())
-		}
-		wg.Wait()
+func (w *batchWriter) onRecordProduced(r *kgo.Record, err error) {
+	// Note: the order of these operations is important, first set the error if
+	// there is one, then signal completion.
+	if err != nil {
+		w.err.CompareAndSwap(nil, err)
+	}
+	w.wg.Done()
 
-		// TODO: This is very cool and allows us to easily return granular errors,
-		// so we should honor travis by doing it.
-		return results.FirstErr()
-	})
+	if r.Context != nil {
+		dispatch.TriggerSignal(r.Context)
+	}
+}
+
+func (w *batchWriter) wait() error {
+	w.wg.Wait()
+
+	if err := w.err.Load(); err != nil {
+		return err.(error)
+	}
+
+	return nil
 }
 
 // Close calls into the provided yield client func.
