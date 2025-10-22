@@ -191,7 +191,7 @@ func redpandaMigratorOutputFromParsed(conf *service.ParsedConfig, mgr *service.R
 	if err != nil {
 		return nil, err
 	}
-	o.OnWrite = o.onWrite
+	o.DecorateRecord = o.decorateRecord
 
 	if o.topicPrefix, err = conf.FieldString(rmoFieldTopicPrefix); err != nil {
 		return nil, err
@@ -244,22 +244,32 @@ func redpandaMigratorOutputFromParsed(conf *service.ParsedConfig, mgr *service.R
 	return o, nil
 }
 
-func (o *redpandaMigratorOutput) onWrite(ctx context.Context, _ *kgo.Client, records []*kgo.Record) error {
+func (o *redpandaMigratorOutput) decorateRecord(r *kgo.Record) error {
 	return FranzSharedClientUse(o.inputResource, o.mgr, func(details *FranzSharedClientInfo) error {
 		o.once.Do(func() {
 			o.logger.Infof("Creating topics for %s", o.inputResource)
-			count := o.tryCreateAllTopics(ctx, details)
+			count := o.tryCreateAllTopics(r.Context, details)
 			o.logger.Infof("Created %d topics for %s", count, o.inputResource)
 		})
 
-		if err := o.updateTopicsInRecords(ctx, details.Client, records); err != nil {
+		var err error
+
+		r.Topic, err = o.createTopicIfNeeded(r.Context, details.Client, r.Topic)
+		if err != nil {
 			return err
 		}
 		if o.translateSchemaIDs {
-			if err := o.updateSchemaIDsInRecords(ctx, records); err != nil {
-				return err
+			res, ok := o.mgr.GetGeneric(o.schemaRegistryOutputResource)
+			if !ok {
+				return fmt.Errorf("schema_registry output resource %q not found", o.schemaRegistryOutputResource)
+			}
+			srOutput := res.(*schemaRegistryOutput)
+
+			if err := o.updateRecordSchemaID(r.Context, srOutput, r); err != nil {
+				return fmt.Errorf("update schema ID in record offset %d on topic %s: %w", r.Offset, r.Topic, err)
 			}
 		}
+
 		return nil
 	})
 }
@@ -279,17 +289,6 @@ func (o *redpandaMigratorOutput) tryCreateAllTopics(ctx context.Context, details
 	}
 
 	return count
-}
-
-func (o *redpandaMigratorOutput) updateTopicsInRecords(ctx context.Context, inputClient *kgo.Client, records []*kgo.Record) error {
-	for _, record := range records {
-		destTopic, err := o.createTopicIfNeeded(ctx, inputClient, record.Topic)
-		if err != nil {
-			return err
-		}
-		record.Topic = destTopic
-	}
-	return nil
 }
 
 func (o *redpandaMigratorOutput) createTopicIfNeeded(ctx context.Context, inputClient *kgo.Client, topic string) (string, error) {
@@ -339,22 +338,6 @@ func (o *redpandaMigratorOutput) resolveTopic(topic string) (string, error) {
 	destTopic = o.topicPrefix + destTopic
 
 	return destTopic, nil
-}
-
-func (o *redpandaMigratorOutput) updateSchemaIDsInRecords(ctx context.Context, records []*kgo.Record) error {
-	res, ok := o.mgr.GetGeneric(o.schemaRegistryOutputResource)
-	if !ok {
-		return fmt.Errorf("schema_registry output resource %q not found", o.schemaRegistryOutputResource)
-	}
-	srOutput := res.(*schemaRegistryOutput)
-
-	for _, record := range records {
-		if err := o.updateRecordSchemaID(ctx, srOutput, record); err != nil {
-			return fmt.Errorf("update schema ID in record offset %d on topic %s: %w", record.Offset, record.Topic, err)
-		}
-	}
-
-	return nil
 }
 
 func (o *redpandaMigratorOutput) updateRecordSchemaID(ctx context.Context, srOutput *schemaRegistryOutput, record *kgo.Record) error {

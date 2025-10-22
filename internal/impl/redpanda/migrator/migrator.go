@@ -344,7 +344,7 @@ func init() {
 			if err != nil {
 				return
 			}
-			fw.OnWrite = m.onWrite
+			fw.DecorateRecord = m.decorateRecord
 			out = migratorBatchOutput{fw, m}
 
 			// Force single in-flight batch message to ensure data ordering
@@ -378,6 +378,7 @@ type Migrator struct {
 	mu     sync.RWMutex
 	src    *kgo.Client
 	srcAdm *kadm.Client
+	dstAdm       *kadm.Client
 }
 
 // NewMigrator creates a new Migrator instance with the provided logger.
@@ -473,8 +474,11 @@ func (m *Migrator) onOutputConnected(_ context.Context, fw franzWriter) error {
 		cancel()
 		return fmt.Errorf("get franz client: %w", err)
 	}
+	dstAdm := kadm.NewClient(clientInfo.Client)
+
 	m.mu.Lock()
-	m.groups.dstAdm = kadm.NewClient(clientInfo.Client)
+	m.dstAdm = dstAdm
+	m.groups.dstAdm = dstAdm
 	m.mu.Unlock()
 
 	// Syncing topics is deferred until the first message is received because
@@ -512,59 +516,38 @@ func (m *Migrator) validateInitialized() error {
 	return nil
 }
 
-func (m *Migrator) onWrite(
-	ctx context.Context,
-	dst *kgo.Client,
-	records []*kgo.Record,
-) error {
+func (m *Migrator) decorateRecord(r *kgo.Record) error {
 	m.mu.RLock()
 	src := m.src
 	srcAdm := m.srcAdm
+	dstAdm := m.dstAdm
 	m.mu.RUnlock()
 
-	dstAdm := kadm.NewClient(dst)
-
-	if err := m.topic.SyncOnce(ctx, srcAdm, dstAdm, src.GetConsumeTopics); err != nil {
+	if err := m.topic.SyncOnce(r.Context, srcAdm, dstAdm, src.GetConsumeTopics); err != nil {
 		return fmt.Errorf("sync topics: %w", err)
 	}
 
-	var (
-		lastTopic       string
-		lastDstTopic    string
-		lastSchemaID    int
-		lastDstSchemaID int
-	)
-	for _, record := range records {
-		if record == nil {
-			continue
-		}
+	var err error
 
-		if record.Topic != lastTopic {
-			topic, err := m.topic.CreateTopicIfNeeded(ctx, srcAdm, dstAdm, record.Topic)
-			if err != nil {
-				return err
-			}
-			lastTopic, lastDstTopic = record.Topic, topic
-		}
-		record.Topic = lastDstTopic
+	// Update topic name
+	r.Topic, err = m.topic.CreateTopicIfNeeded(r.Context, srcAdm, dstAdm, r.Topic)
+	if err != nil {
+		return err
+	}
 
-		// Update schema ID
-		if m.sr.enabled() && m.sr.conf.TranslateIDs {
-			schemaID, err := parseSchemaID(record.Value)
+	// Update schema ID
+	if m.sr.enabled() && m.sr.conf.TranslateIDs {
+		schemaID, err := parseSchemaID(r.Value)
+		if err != nil {
+			return fmt.Errorf("parse schema ID: %w", err)
+		}
+		if schemaID != 0 {
+			dstSchemaID, err := m.sr.DestinationSchemaID(schemaID)
 			if err != nil {
-				return fmt.Errorf("parse schema ID: %w", err)
+				return fmt.Errorf("resolve destination schema ID: %w", err)
 			}
-			if schemaID != 0 {
-				if schemaID != lastSchemaID {
-					id, err := m.sr.DestinationSchemaID(schemaID)
-					if err != nil {
-						return fmt.Errorf("resolve destination schema ID: %w", err)
-					}
-					lastSchemaID, lastDstSchemaID = schemaID, id
-				}
-				if err := updateSchemaID(record.Value, lastDstSchemaID); err != nil {
-					return fmt.Errorf("update schema ID: %w", err)
-				}
+			if err := updateSchemaID(r.Value, dstSchemaID); err != nil {
+				return fmt.Errorf("update schema ID: %w", err)
 			}
 		}
 	}
