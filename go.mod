@@ -7,7 +7,7 @@ replace github.com/99designs/keyring => github.com/Jeffail/keyring v1.2.3
 require (
 	buf.build/gen/go/bufbuild/reflect/connectrpc/go v1.19.1-20240117202343-bf8f65e8876c.2
 	buf.build/gen/go/bufbuild/reflect/protocolbuffers/go v1.36.10-20240117202343-bf8f65e8876c.1
-	cloud.google.com/go/aiplatform v1.104.0
+	cloud.google.com/go/aiplatform v1.107.0
 	cloud.google.com/go/bigquery v1.71.0
 	cloud.google.com/go/pubsub v1.50.1
 	cloud.google.com/go/spanner v1.86.0
@@ -18,8 +18,8 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.13.0
 	github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos v1.4.1
 	github.com/Azure/azure-sdk-for-go/sdk/data/aztables v1.4.0
-	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.6.2
-	github.com/Azure/azure-sdk-for-go/sdk/storage/azdatalake v1.4.2
+	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.6.3
+	github.com/Azure/azure-sdk-for-go/sdk/storage/azdatalake v1.4.3
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azqueue v1.0.1
 	github.com/Azure/go-amqp v1.5.0
 	github.com/ClickHouse/clickhouse-go/v2 v2.40.3
@@ -33,26 +33,26 @@ require (
 	github.com/PaesslerAG/gval v1.2.4
 	github.com/PaesslerAG/jsonpath v0.1.1
 	github.com/a2aproject/a2a-go v0.0.0-20251009070416-49deee794474
-	github.com/apache/pulsar-client-go v0.16.0
+	github.com/apache/pulsar-client-go v0.17.0
 	github.com/auth0/go-jwt-middleware/v2 v2.3.0
 	github.com/authzed/authzed-go v1.6.0
 	github.com/authzed/grpcutil v0.0.0-20250221190651-1985b19b35b8
 	github.com/aws/aws-lambda-go v1.50.0
-	github.com/aws/aws-sdk-go-v2 v1.39.2
-	github.com/aws/aws-sdk-go-v2/config v1.31.12
-	github.com/aws/aws-sdk-go-v2/credentials v1.18.16
-	github.com/aws/aws-sdk-go-v2/feature/dynamodb/expression v1.8.14
-	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.19.12
-	github.com/aws/aws-sdk-go-v2/service/bedrockruntime v1.41.0
-	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.51.1
-	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.51.0
-	github.com/aws/aws-sdk-go-v2/service/firehose v1.41.6
-	github.com/aws/aws-sdk-go-v2/service/kinesis v1.40.5
-	github.com/aws/aws-sdk-go-v2/service/lambda v1.78.0
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.88.4
-	github.com/aws/aws-sdk-go-v2/service/sns v1.38.5
-	github.com/aws/aws-sdk-go-v2/service/sqs v1.42.8
-	github.com/aws/aws-sdk-go-v2/service/sts v1.38.6
+	github.com/aws/aws-sdk-go-v2 v1.39.3
+	github.com/aws/aws-sdk-go-v2/config v1.31.13
+	github.com/aws/aws-sdk-go-v2/credentials v1.18.17
+	github.com/aws/aws-sdk-go-v2/feature/dynamodb/expression v1.8.16
+	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.19.13
+	github.com/aws/aws-sdk-go-v2/service/bedrockruntime v1.41.1
+	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.51.2
+	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.52.0
+	github.com/aws/aws-sdk-go-v2/service/firehose v1.41.7
+	github.com/aws/aws-sdk-go-v2/service/kinesis v1.40.6
+	github.com/aws/aws-sdk-go-v2/service/lambda v1.78.1
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.88.5
+	github.com/aws/aws-sdk-go-v2/service/sns v1.38.6
+	github.com/aws/aws-sdk-go-v2/service/sqs v1.42.9
+	github.com/aws/aws-sdk-go-v2/service/sts v1.38.7
 	github.com/beanstalkd/go-beanstalk v0.2.0
 	github.com/benhoyt/goawk v1.29.1
 	github.com/bmatcuk/doublestar/v4 v4.9.1
@@ -66,14 +66,14 @@ require (
 	github.com/couchbase/gocb/v2 v2.11.1
 	github.com/cyborginc/cyborgdb-go v0.12.0
 	github.com/dgraph-io/ristretto/v2 v2.3.0
-	github.com/dop251/goja v0.0.0-20250630131328-58d95d85e994
-	github.com/dop251/goja_nodejs v0.0.0-20250409162600-f7acab6894b0
+	github.com/dop251/goja v0.0.0-20251008123653-cf18d89f3cf6
+	github.com/dop251/goja_nodejs v0.0.0-20251015164255-5e94316bedaf
 	github.com/dustin/go-humanize v1.0.1
 	github.com/eclipse/paho.mqtt.golang v1.5.1
 	github.com/elastic/elastic-transport-go/v8 v8.7.0
 	github.com/elastic/go-elasticsearch/v8 v8.19.0
 	github.com/generikvault/gvalstrings v0.0.0-20180926130504-471f38f0112a
-	github.com/getsentry/sentry-go v0.35.3
+	github.com/getsentry/sentry-go v0.36.1
 	github.com/go-faker/faker/v4 v4.7.0
 	github.com/go-git/go-git/v5 v5.16.3
 	github.com/go-jose/go-jose/v4 v4.1.3
@@ -94,19 +94,19 @@ require (
 	github.com/jhump/protoreflect v1.17.0
 	github.com/lib/pq v1.10.9
 	github.com/linkedin/goavro/v2 v2.14.0
-	github.com/mark3labs/mcp-go v0.41.1
+	github.com/mark3labs/mcp-go v0.42.0
 	github.com/matoous/go-nanoid/v2 v2.1.0
 	github.com/microcosm-cc/bluemonday v1.0.27
 	github.com/microsoft/go-mssqldb v1.9.3
 	github.com/microsoft/gocosmos v1.1.1
-	github.com/nats-io/nats.go v1.46.1
+	github.com/nats-io/nats.go v1.47.0
 	github.com/nats-io/nkeys v0.4.11
 	github.com/nats-io/stan.go v0.10.4
 	github.com/neo4j/neo4j-go-driver/v5 v5.28.4
 	github.com/nsf/jsondiff v0.0.0-20230430225905-43f6cf3098c1
 	github.com/nsqio/go-nsq v1.1.0
 	github.com/oklog/ulid/v2 v2.1.1
-	github.com/ollama/ollama v0.12.5
+	github.com/ollama/ollama v0.12.6
 	github.com/opensearch-project/opensearch-go/v3 v3.1.0
 	github.com/ory/dockertest/v3 v3.12.0
 	github.com/oschwald/geoip2-golang v1.13.0
@@ -123,10 +123,10 @@ require (
 	github.com/r3labs/diff/v3 v3.0.2
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9
-	github.com/redis/go-redis/v9 v9.14.0
+	github.com/redis/go-redis/v9 v9.14.1
 	github.com/redpanda-data/benthos/v4 v4.57.1
 	github.com/redpanda-data/common-go/secrets v0.1.4
-	github.com/redpanda-data/connect/public/bundle/free/v4 v4.66.1
+	github.com/redpanda-data/connect/public/bundle/free/v4 v4.67.5
 	github.com/rs/xid v1.6.0
 	github.com/sashabaranov/go-openai v1.41.2
 	github.com/sijms/go-ora/v2 v2.9.0
@@ -138,14 +138,14 @@ require (
 	github.com/testcontainers/testcontainers-go/modules/ollama v0.39.0
 	github.com/testcontainers/testcontainers-go/modules/qdrant v0.39.0
 	github.com/tetratelabs/wazero v1.9.0
-	github.com/tigerbeetle/tigerbeetle-go v0.16.61
+	github.com/tigerbeetle/tigerbeetle-go v0.16.62
 	github.com/timeplus-io/proton-go-driver/v2 v2.1.2
-	github.com/tmc/langchaingo v0.1.13
+	github.com/tmc/langchaingo v0.1.14
 	github.com/trinodb/trino-go-client v0.330.0
-	github.com/twmb/franz-go v1.19.6-0.20251010052650-46982310c50d
-	github.com/twmb/franz-go/pkg/kadm v1.16.1
+	github.com/twmb/franz-go v1.20.1
+	github.com/twmb/franz-go/pkg/kadm v1.17.0
 	github.com/twmb/franz-go/pkg/kfake v0.0.0-20250625174842-669b18eeee83
-	github.com/twmb/franz-go/pkg/kmsg v1.11.2
+	github.com/twmb/franz-go/pkg/kmsg v1.12.0
 	github.com/twmb/franz-go/pkg/sr v1.5.0
 	github.com/twmb/go-cache v1.2.1
 	github.com/vmihailenco/msgpack/v5 v5.4.1
@@ -177,10 +177,10 @@ require (
 require (
 	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.10-20250912141014-52f32327d4b0.1 // indirect
 	cel.dev/expr v0.24.0 // indirect
-	cloud.google.com/go/longrunning v0.6.7 // indirect
-	cloud.google.com/go/monitoring v1.24.2 // indirect
-	cloud.google.com/go/pubsub/v2 v2.1.0 // indirect
-	cloud.google.com/go/secretmanager v1.15.0 // indirect
+	cloud.google.com/go/longrunning v0.7.0 // indirect
+	cloud.google.com/go/monitoring v1.24.3 // indirect
+	cloud.google.com/go/pubsub/v2 v2.2.1 // indirect
+	cloud.google.com/go/secretmanager v1.15.1 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/keyvault/azsecrets v0.12.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/keyvault/internal v0.7.1 // indirect
 	github.com/BurntSushi/toml v1.5.0 // indirect
@@ -195,7 +195,7 @@ require (
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/certifi/gocertifi v0.0.0-20210507211836-431795d63e8d // indirect
 	github.com/cloudflare/circl v1.6.1 // indirect
-	github.com/cncf/xds/go v0.0.0-20250501225837-2ac532fd4443 // indirect
+	github.com/cncf/xds/go v0.0.0-20251014123835-2ee22ca58382 // indirect
 	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
 	github.com/containerd/platforms v1.0.0-rc.1 // indirect
@@ -231,10 +231,10 @@ require (
 	github.com/pingcap/tidb/pkg/parser v0.0.0-20250421232622-526b2c79173d // indirect
 	github.com/pjbgf/sha1cd v0.5.0 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
-	github.com/samber/lo v1.51.0 // indirect
+	github.com/samber/lo v1.52.0 // indirect
 	github.com/sergi/go-diff v1.4.0 // indirect
 	github.com/shirou/gopsutil/v4 v4.25.7 // indirect
-	github.com/skeema/knownhosts v1.3.1 // indirect
+	github.com/skeema/knownhosts v1.3.2 // indirect
 	github.com/spf13/cast v1.7.1 // indirect
 	github.com/spiffe/go-spiffe/v2 v2.6.0 // indirect
 	github.com/theparanoids/crypki v1.20.9 // indirect
@@ -255,8 +255,8 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.38.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/exp v0.0.0-20251002181428-27f1f14c8bb9 // indirect
-	golang.org/x/telemetry v0.0.0-20251001141935-4eae98a72453 // indirect
+	golang.org/x/exp v0.0.0-20251009144603-d2f985daa21b // indirect
+	golang.org/x/telemetry v0.0.0-20251014153721-24f779f6aaef // indirect
 	gopkg.in/go-jose/go-jose.v2 v2.6.3 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	k8s.io/apimachinery v0.34.1 // indirect
@@ -273,19 +273,19 @@ require (
 	cloud.google.com/go/auth v0.17.0
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
-	cloud.google.com/go/iam v1.5.2 // indirect
-	cloud.google.com/go/trace v1.11.6 // indirect
-	cuelang.org/go v0.14.1 // indirect
+	cloud.google.com/go/iam v1.5.3 // indirect
+	cloud.google.com/go/trace v1.11.7 // indirect
+	cuelang.org/go v0.14.2 // indirect
 	dario.cat/mergo v1.0.2 // indirect
 	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/99designs/go-keychain v0.0.0-20191008050251-8e49817e8af4 // indirect
 	github.com/99designs/keyring v1.2.2 // indirect
-	github.com/AthenZ/athenz v1.12.26 // indirect
+	github.com/AthenZ/athenz v1.12.27 // indirect
 	github.com/Azure/azure-sdk-for-go v68.0.0+incompatible // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.11.2 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
 	github.com/AzureAD/microsoft-authentication-library-for-go v1.5.0 // indirect
-	github.com/ClickHouse/ch-go v0.68.0 // indirect
+	github.com/ClickHouse/ch-go v0.69.0 // indirect
 	github.com/DataDog/zstd v1.5.7 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.54.0 // indirect
 	github.com/Jeffail/grok v1.1.0 // indirect
@@ -299,25 +299,25 @@ require (
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/ardielle/ardielle-go v1.5.2 // indirect
 	github.com/armon/go-metrics v0.3.10 // indirect
-	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.1 // indirect
-	github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue v1.20.14 // indirect
-	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.9 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.9 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.9 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.3 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.9 // indirect
-	github.com/aws/aws-sdk-go-v2/service/dynamodbstreams v1.31.0 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.1 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.9.0 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/endpoint-discovery v1.11.9 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.9 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.9 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sso v1.29.6 // indirect
-	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.1 // indirect
-	github.com/aws/smithy-go v1.23.0
+	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.2 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue v1.20.16 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.10 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.10 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.10 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.4 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.10 // indirect
+	github.com/aws/aws-sdk-go-v2/service/dynamodbstreams v1.31.1 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.2 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.9.1 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/endpoint-discovery v1.11.10 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.10 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.10 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.29.7 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.2 // indirect
+	github.com/aws/smithy-go v1.23.1
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/bits-and-blooms/bitset v1.24.0 // indirect
+	github.com/bits-and-blooms/bitset v1.24.1 // indirect
 	github.com/btnguyen2k/consu/checksum v1.1.1 // indirect
 	github.com/btnguyen2k/consu/g18 v0.1.0 // indirect
 	github.com/btnguyen2k/consu/gjrc v0.2.2 // indirect
@@ -367,7 +367,7 @@ require (
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/golang/snappy v1.0.0 // indirect
 	github.com/google/flatbuffers v25.9.23+incompatible // indirect
-	github.com/google/pprof v0.0.0-20251002213607-436353cc1ee6 // indirect
+	github.com/google/pprof v0.0.0-20251007162407-5df77e3f7d1d // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/google/uuid v1.6.0
@@ -405,7 +405,7 @@ require (
 	github.com/jcmturner/gokrb5/v8 v8.4.4 // indirect
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
-	github.com/klauspost/compress v1.18.0
+	github.com/klauspost/compress v1.18.1
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/klauspost/pgzip v1.2.6 // indirect
 	github.com/kr/fs v0.1.0 // indirect
@@ -426,7 +426,7 @@ require (
 	github.com/nats-io/nats-server/v2 v2.9.23 // indirect
 	github.com/nats-io/nats-streaming-server v0.24.6 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
-	github.com/ncruces/go-strftime v0.1.9 // indirect
+	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/oapi-codegen/runtime v1.1.2 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
@@ -477,17 +477,17 @@ require (
 	go.opentelemetry.io/proto/otlp v1.8.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
-	golang.org/x/mod v0.28.0 // indirect
+	golang.org/x/mod v0.29.0 // indirect
 	golang.org/x/oauth2 v0.32.0
 	golang.org/x/sys v0.37.0 // indirect
 	golang.org/x/term v0.36.0 // indirect
-	golang.org/x/time v0.13.0 // indirect
-	golang.org/x/tools v0.37.0 // indirect
+	golang.org/x/time v0.14.0 // indirect
+	golang.org/x/tools v0.38.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
-	google.golang.org/genai v1.30.0
-	google.golang.org/genproto v0.0.0-20251002232023-7c0ddcbb5797 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20251002232023-7c0ddcbb5797 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20251002232023-7c0ddcbb5797 // indirect
+	google.golang.org/genai v1.31.0
+	google.golang.org/genproto v0.0.0-20251014184007-4626949a642f // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20251014184007-4626949a642f // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20251014184007-4626949a642f // indirect
 	google.golang.org/grpc v1.76.0
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
