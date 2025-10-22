@@ -293,7 +293,7 @@ func (w migratorBatchInput) Connect(ctx context.Context) error {
 	if err := w.BatchInput.Connect(ctx); err != nil {
 		return err
 	}
-	return w.m.OnInputConnected(ctx, w.BatchInput.(*kafka.FranzReaderOrdered))
+	return w.m.onInputConnected(ctx, w.BatchInput.(*kafka.FranzReaderOrdered))
 }
 
 type migratorBatchOutput struct {
@@ -305,7 +305,7 @@ func (w migratorBatchOutput) Connect(ctx context.Context) error {
 	if err := w.BatchOutput.Connect(ctx); err != nil {
 		return err
 	}
-	return w.m.OnOutputConnected(ctx, w.BatchOutput.(franzWriter))
+	return w.m.onOutputConnected(ctx, w.BatchOutput.(franzWriter))
 }
 
 func (w migratorBatchOutput) Close(ctx context.Context) error {
@@ -445,7 +445,7 @@ func (m *Migrator) initOutputFromParsed(pConf *service.ParsedConfig, mgr *servic
 	return nil
 }
 
-func (m *Migrator) OnInputConnected(_ context.Context, fr *kafka.FranzReaderOrdered) error { //nolint:revive
+func (m *Migrator) onInputConnected(_ context.Context, fr *kafka.FranzReaderOrdered) error { //nolint:revive
 	if err := m.validateInitialized(); err != nil {
 		return err
 	}
@@ -460,7 +460,7 @@ func (m *Migrator) OnInputConnected(_ context.Context, fr *kafka.FranzReaderOrde
 	return nil
 }
 
-func (m *Migrator) OnOutputConnected(_ context.Context, fw franzWriter) error { //nolint:revive
+func (m *Migrator) onOutputConnected(_ context.Context, fw franzWriter) error {
 	if err := m.validateInitialized(); err != nil {
 		return err
 	}
