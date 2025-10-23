@@ -41,11 +41,9 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/impl/protobuf/common"
 
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -303,44 +301,37 @@ func newProtobufToJSONOperator(f fs.FS, msg string, importPaths []string, usePro
 		return nil, errors.New("message field must not be empty")
 	}
 
-	descriptors, types, err := loadDescriptors(f, importPaths)
+	fds, err := common.ParseFromFS(f, importPaths)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to load protos: %w", err)
 	}
-
-	d, err := descriptors.FindDescriptorByName(protoreflect.FullName(msg))
+	_, types, err := common.BuildRegistries(fds)
 	if err != nil {
-		return nil, fmt.Errorf("unable to find message '%v' definition within '%v'", msg, importPaths)
+		return nil, fmt.Errorf("unable to resolve protobuf types: %w", err)
 	}
-
-	md, ok := d.(protoreflect.MessageDescriptor)
-	if !ok {
-		return nil, fmt.Errorf("message descriptor %v was unexpected type %T", msg, d)
+	msgType, err := types.FindMessageByName(protoreflect.FullName(msg))
+	if err != nil {
+		return nil, fmt.Errorf("unable to find protobuf type %q: %w", msg, err)
 	}
-
+	decoder := common.NewHyperPbDecoder(
+		msgType.Descriptor(),
+		common.ProfilingOptions{
+			Rate:              0.01,
+			RecompileInterval: 100_000,
+		})
+	opts := protojson.MarshalOptions{
+		Resolver:       types,
+		UseProtoNames:  useProtoNames,
+		UseEnumNumbers: useEnumNumbers,
+	}
 	return func(part *service.Message) error {
 		partBytes, err := part.AsBytes()
 		if err != nil {
 			return err
 		}
-
-		dynMsg := dynamicpb.NewMessage(md)
-		if err := proto.Unmarshal(partBytes, dynMsg); err != nil {
-			return fmt.Errorf("failed to unmarshal protobuf message '%v': %w", msg, err)
-		}
-
-		opts := protojson.MarshalOptions{
-			Resolver:       types,
-			UseProtoNames:  useProtoNames,
-			UseEnumNumbers: useEnumNumbers,
-		}
-		data, err := opts.Marshal(dynMsg)
-		if err != nil {
-			return fmt.Errorf("failed to unmarshal JSON protobuf message '%v': %w", msg, err)
-		}
-
-		part.SetBytes(data)
-		return nil
+		return decoder.WithDecoded(partBytes, func(msg proto.Message) error {
+			return common.ToMessageFast(msg.ProtoReflect(), opts, part)
+		})
 	}, nil
 }
 
@@ -398,30 +389,25 @@ func newProtobufToJSONBSROperator(multiModuleWatcher *multiModuleWatcher, msg st
 	if err != nil {
 		return nil, fmt.Errorf("unable to find message '%v' definition: %w", msg, err)
 	}
-
+	decoder := common.NewHyperPbDecoder(
+		d.Descriptor(),
+		common.ProfilingOptions{
+			Rate:              0.01,
+			RecompileInterval: 100_000,
+		})
+	opts := protojson.MarshalOptions{
+		Resolver:       multiModuleWatcher,
+		UseProtoNames:  useProtoNames,
+		UseEnumNumbers: useEnumNumbers,
+	}
 	return func(part *service.Message) error {
 		partBytes, err := part.AsBytes()
 		if err != nil {
 			return err
 		}
-
-		dynMsg := dynamicpb.NewMessage(d.Descriptor())
-		if err := proto.Unmarshal(partBytes, dynMsg); err != nil {
-			return fmt.Errorf("failed to unmarshal protobuf message '%v': %w", msg, err)
-		}
-
-		opts := protojson.MarshalOptions{
-			Resolver:       multiModuleWatcher,
-			UseProtoNames:  useProtoNames,
-			UseEnumNumbers: useEnumNumbers,
-		}
-		data, err := opts.Marshal(dynMsg)
-		if err != nil {
-			return fmt.Errorf("failed to marshal JSON protobuf message '%v': %w", msg, err)
-		}
-
-		part.SetBytes(data)
-		return nil
+		return decoder.WithDecoded(partBytes, func(msg proto.Message) error {
+			return common.ToMessageFast(msg.ProtoReflect(), opts, part)
+		})
 	}, nil
 }
 
@@ -482,29 +468,11 @@ func strToProtobufBSROperator(multiModuleWatcher *multiModuleWatcher, opStr, mes
 }
 
 func loadDescriptors(f fs.FS, importPaths []string) (*protoregistry.Files, *protoregistry.Types, error) {
-	files := map[string]string{}
-	for _, importPath := range importPaths {
-		if err := fs.WalkDir(f, importPath, func(path string, info fs.DirEntry, ferr error) error {
-			if ferr != nil || info.IsDir() {
-				return ferr
-			}
-			if filepath.Ext(info.Name()) == ".proto" && !strings.HasPrefix(info.Name(), ".") {
-				rPath, ferr := filepath.Rel(importPath, path)
-				if ferr != nil {
-					return fmt.Errorf("failed to get relative path: %v", ferr)
-				}
-				content, ferr := os.ReadFile(path)
-				if ferr != nil {
-					return fmt.Errorf("failed to read import %v: %v", path, ferr)
-				}
-				files[rPath] = string(content)
-			}
-			return nil
-		}); err != nil {
-			return nil, nil, err
-		}
+	files, err := common.ParseFromFS(f, importPaths)
+	if err != nil {
+		return nil, nil, err
 	}
-	return RegistriesFromMap(files)
+	return common.BuildRegistries(files)
 }
 
 //------------------------------------------------------------------------------

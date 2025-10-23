@@ -643,7 +643,7 @@ func TestSchemaRegistryDecodeProtobuf(t *testing.T) {
 		{
 			name:   "successful message",
 			input:  "\x00\x00\x00\x00\x01\x00\b\xa2\xb8\xe2\xec\xaf+\x12\x06User_2\x1a\bRegion_9\"\x05OTHER",
-			output: `{"registertime":"1490313321506","userid":"User_2","regionid":"Region_9","gender":"OTHER"}`,
+			output: `{"registertime":1490313321506,"userid":"User_2","regionid":"Region_9","gender":"OTHER"}`,
 		},
 		{
 			name:        "not supported message",

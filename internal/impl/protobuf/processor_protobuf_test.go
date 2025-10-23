@@ -43,7 +43,6 @@ import (
 	"net"
 	"net/http"
 	"strconv"
-	"strings"
 	"testing"
 
 	"buf.build/gen/go/bufbuild/reflect/connectrpc/go/buf/reflect/v1beta1/reflectv1beta1connect"
@@ -53,12 +52,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
-	"google.golang.org/protobuf/reflect/protodesc"
-	"google.golang.org/protobuf/reflect/protoreflect"
-	"google.golang.org/protobuf/reflect/protoregistry"
 	"google.golang.org/protobuf/types/descriptorpb"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/impl/protobuf/common"
 )
 
 func TestProtobufFromJSON(t *testing.T) {
@@ -455,37 +452,15 @@ func (s *fileDescriptorSetServer) GetFileDescriptorSet(_ context.Context, reques
 func runMockBSRServer(t *testing.T, importPath string) string {
 	// load files into protoregistry.Files
 	mockResources := service.MockResources()
-	files, _, err := loadDescriptors(mockResources.FS(), []string{importPath})
+	files, err := common.ParseFromFS(mockResources.FS(), []string{importPath})
 	require.NoError(t, err)
-
-	// populate into a FileDescriptorSet
-	fileDescriptorSet := &descriptorpb.FileDescriptorSet{}
-	standardImportPaths := make(map[string]bool)
-	files.RangeFiles(func(fd protoreflect.FileDescriptor) bool {
-		fileDescriptorSet.File = append(fileDescriptorSet.File, protodesc.ToFileDescriptorProto(fd))
-		// find any standard imports used https://protobuf.com/docs/descriptors#standard-imports
-		for i := 0; i < fd.Imports().Len(); i++ {
-			imp := fd.Imports().Get(i)
-			if strings.HasPrefix(imp.Path(), "google/protobuf/") {
-				standardImportPaths[imp.Path()] = true
-			}
-		}
-		return true
-	})
-
-	// add standard imports to the FileDescriptorSet
-	for standardImportPath := range standardImportPaths {
-		fd, err := protoregistry.GlobalFiles.FindFileByPath(standardImportPath)
-		require.NoError(t, err)
-		fileDescriptorSet.File = append(fileDescriptorSet.File, protodesc.ToFileDescriptorProto(fd))
-	}
 
 	// run GRPC server on an available port
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 
 	mux := http.NewServeMux()
-	fileDescriptorSetServer := &fileDescriptorSetServer{fileDescriptorSet: fileDescriptorSet}
+	fileDescriptorSetServer := &fileDescriptorSetServer{fileDescriptorSet: files}
 	mux.Handle(reflectv1beta1connect.NewFileDescriptorSetServiceHandler(fileDescriptorSetServer))
 	go func() {
 		if err := http.Serve(listener, h2c.NewHandler(mux, &http2.Server{})); err != nil && !errors.Is(err, http.ErrServerClosed) {
