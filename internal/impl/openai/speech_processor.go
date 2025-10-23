@@ -23,8 +23,6 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
-
-	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 const (
@@ -71,11 +69,7 @@ To learn more about turning text into spoken audio, see the https://platform.ope
 		)
 }
 
-func makeSpeechProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-	if err := license.CheckRunningEnterprise(mgr); err != nil {
-		return nil, err
-	}
-
+func makeSpeechProcessor(conf *service.ParsedConfig, _ *service.Resources) (service.Processor, error) {
 	b, err := newBaseProcessor(conf)
 	if err != nil {
 		return nil, err

@@ -30,8 +30,6 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
-
-	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 const (
@@ -203,11 +201,7 @@ output:
 `)
 }
 
-func newVertexAIProcessor(conf *service.ParsedConfig, mgr *service.Resources) (p service.Processor, err error) {
-	if err = license.CheckRunningEnterprise(mgr); err != nil {
-		return
-	}
-
+func newVertexAIProcessor(conf *service.ParsedConfig, _ *service.Resources) (p service.Processor, err error) {
 	ctx := context.Background()
 	proc := &vertexAIChatProcessor{}
 	var project string
