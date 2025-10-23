@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/Jeffail/shutdown"
 	"github.com/twmb/franz-go/pkg/kadm"
@@ -344,7 +345,7 @@ func init() {
 			if err != nil {
 				return
 			}
-			fw.DecorateRecord = m.decorateRecord
+			fw.MessageToFranzRecord = m.messageToFranzRecord
 			out = migratorBatchOutput{fw, m}
 
 			// Force single in-flight batch message to ensure data ordering
@@ -516,43 +517,96 @@ func (m *Migrator) validateInitialized() error {
 	return nil
 }
 
-func (m *Migrator) decorateRecord(r *kgo.Record) error {
+func (m *Migrator) messageToFranzRecord(msg *service.Message) (*kgo.Record, error) {
 	m.mu.RLock()
 	src := m.src
 	srcAdm := m.srcAdm
 	dstAdm := m.dstAdm
 	m.mu.RUnlock()
 
-	if err := m.topic.SyncOnce(r.Context, srcAdm, dstAdm, src.GetConsumeTopics); err != nil {
-		return fmt.Errorf("sync topics: %w", err)
+	ctx := msg.Context()
+
+	if err := m.topic.SyncOnce(ctx, srcAdm, dstAdm, src.GetConsumeTopics); err != nil {
+		return nil, fmt.Errorf("sync topics: %w", err)
 	}
 
-	var err error
+	r := &kgo.Record{
+		Context: ctx,
+	}
 
-	// Update topic name
-	r.Topic, err = m.topic.CreateTopicIfNeeded(r.Context, srcAdm, dstAdm, r.Topic)
+	// Key (optional)
+	if keyVal, ok := msg.MetaGetMut("kafka_key"); ok {
+		switch v := keyVal.(type) {
+		case string:
+			r.Key = []byte(v)
+		case []byte:
+			r.Key = v
+		}
+	}
+
+	// Value (required)
+	value, err := msg.AsBytes()
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("message to bytes: %w", err)
 	}
-
-	// Update schema ID
 	if m.sr.enabled() && m.sr.conf.TranslateIDs {
-		schemaID, err := parseSchemaID(r.Value)
+		schemaID, err := parseSchemaID(value)
 		if err != nil {
-			return fmt.Errorf("parse schema ID: %w", err)
+			return nil, fmt.Errorf("parse schema ID: %w", err)
 		}
 		if schemaID != 0 {
 			dstSchemaID, err := m.sr.DestinationSchemaID(schemaID)
 			if err != nil {
-				return fmt.Errorf("resolve destination schema ID: %w", err)
+				return nil, fmt.Errorf("resolve destination schema ID: %w", err)
 			}
-			if err := updateSchemaID(r.Value, dstSchemaID); err != nil {
-				return fmt.Errorf("update schema ID: %w", err)
+			if err := updateSchemaID(value, dstSchemaID); err != nil {
+				return nil, fmt.Errorf("update schema ID: %w", err)
 			}
 		}
 	}
+	r.Value = value
 
-	return nil
+	// Headers (optional)
+	r.Headers = kafka.ExtractHeaders(msg)
+
+	// Timestamp (required)
+	tsVal, ok := msg.MetaGetMut("kafka_timestamp_ms")
+	if !ok {
+		return nil, errors.New("kafka_timestamp_ms metadata not found")
+	}
+	tsInt, ok := tsVal.(int64)
+	if !ok {
+		return nil, errors.New("kafka_timestamp_ms metadata is not int64")
+	}
+	r.Timestamp = time.UnixMilli(tsInt)
+
+	// Topic (required)
+	srcTopic, ok := msg.MetaGetMut("kafka_topic")
+	if !ok {
+		return nil, errors.New("kafka_topic metadata not found")
+	}
+	srcTopicStr, ok := srcTopic.(string)
+	if !ok {
+		return nil, errors.New("kafka_topic metadata is not a string")
+	}
+	dstTopic, err := m.topic.CreateTopicIfNeeded(ctx, srcAdm, dstAdm, srcTopicStr)
+	if err != nil {
+		return nil, err
+	}
+	r.Topic = dstTopic
+
+	// Partition (required)
+	partVal, ok := msg.MetaGetMut("kafka_partition")
+	if !ok {
+		return nil, errors.New("kafka_partition metadata not found")
+	}
+	partInt, ok := partVal.(int)
+	if !ok {
+		return nil, errors.New("kafka_partition metadata is not int")
+	}
+	r.Partition = int32(partInt)
+
+	return r, nil
 }
 
 func parseSchemaID(b []byte) (int, error) {
