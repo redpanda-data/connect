@@ -3,12 +3,13 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.68.0 - TBD
+## 4.68.0 - 2025-10-24
 
 ### Added
 
 - New `a2a_message` processor. (@birdayz)
 - New `jira` processor. (@zoltancsontosness, @atudose-ness)
+- (Benthos) Exporting a schema with the format `jsonschema` now includes `is_advanced`, `is_deprecated`, `is_optional`, `is_secret` extra fields. (@tomasz-sadura)
 
 ### Changed
 
