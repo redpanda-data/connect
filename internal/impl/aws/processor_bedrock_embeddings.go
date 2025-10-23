@@ -27,7 +27,6 @@ import (
 	amzn "github.com/aws/aws-sdk-go-v2/aws"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/aws/config"
-	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 const (
@@ -81,11 +80,7 @@ output:
 `)
 }
 
-func newBedrockEmbeddingsProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-	if err := license.CheckRunningEnterprise(mgr); err != nil {
-		return nil, err
-	}
-
+func newBedrockEmbeddingsProcessor(conf *service.ParsedConfig, _ *service.Resources) (service.Processor, error) {
 	aconf, err := GetSession(context.Background(), conf)
 	if err != nil {
 		return nil, err

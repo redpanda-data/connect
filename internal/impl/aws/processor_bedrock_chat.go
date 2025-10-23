@@ -26,7 +26,6 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/aws/config"
-	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
 const (
@@ -79,11 +78,7 @@ For more information, see the https://docs.aws.amazon.com/bedrock/latest/usergui
 			LintRule(`root = if this < 0 || this > 1 { ["field must be between 0.0-1.0"] }`))
 }
 
-func newBedrockChatProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
-	if err := license.CheckRunningEnterprise(mgr); err != nil {
-		return nil, err
-	}
-
+func newBedrockChatProcessor(conf *service.ParsedConfig, _ *service.Resources) (service.Processor, error) {
 	aconf, err := GetSession(context.Background(), conf)
 	if err != nil {
 		return nil, err
