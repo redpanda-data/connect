@@ -14,7 +14,7 @@
 
 name: redpanda_migrator_bundle
 type: input
-status: experimental
+status: deprecated
 categories: [ Services ]
 summary: Redpanda Migrator bundle input
 description: |
