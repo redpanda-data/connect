@@ -27,17 +27,18 @@ import (
 )
 
 const (
-	fieldConnectionString         = "connection_string"
-	fieldStreamSnapshot           = "stream_snapshot"
-	fieldSnapshotMaxBatchSize     = "snapshot_max_batch_size"
-	fieldStreamBackoffInterval    = "stream_backoff_interval"
-	fieldTablesExclude            = "exclude"
-	fieldTablesInclude            = "include"
-	fieldCheckpointLimit          = "checkpoint_limit"
-	fieldCheckpointCache          = "checkpoint_cache"
-	fieldCheckpointCacheKey       = "checkpoint_cache_key"
-	fieldCheckpointCacheTableName = "checkpoint_cache_table_name"
-	fieldBatching                 = "batching"
+	fieldConnectionString          = "connection_string"
+	fieldStreamSnapshot            = "stream_snapshot"
+	fieldMaxParallelSnapshotTables = "max_parallel_snapshot_tables"
+	fieldSnapshotMaxBatchSize      = "snapshot_max_batch_size"
+	fieldStreamBackoffInterval     = "stream_backoff_interval"
+	fieldTablesExclude             = "exclude"
+	fieldTablesInclude             = "include"
+	fieldCheckpointLimit           = "checkpoint_limit"
+	fieldCheckpointCache           = "checkpoint_cache"
+	fieldCheckpointCacheKey        = "checkpoint_cache_key"
+	fieldCheckpointCacheTableName  = "checkpoint_cache_table_name"
+	fieldBatching                  = "batching"
 
 	shutdownTimeout = 5 * time.Second
 )
@@ -73,6 +74,9 @@ To use the default Microsoft SQL Server cache, the user must have permissions to
 	Field(service.NewBoolField(fieldStreamSnapshot).
 		Description("If set to true, the connector will query all the existing data as a part of snapshot process. Otherwise, it will start from the current Log Sequence Number position."),
 	).
+	Field(service.NewIntField(fieldMaxParallelSnapshotTables).
+		Description("Specifies a number of tables that will be processed in parallel during the snapshot processing stage.").
+		Default(1)).
 	Field(service.NewIntField(fieldSnapshotMaxBatchSize).
 		Description("The maximum number of rows to be streamed in a single batch when taking a snapshot.").
 		Default(1000),
@@ -119,8 +123,9 @@ type asyncMessage struct {
 }
 
 type config struct {
-	connectionString      string
+	connString            string
 	streamSnapshot        bool
+	maxSnapshotWorkers    int
 	streamBackoffInterval time.Duration
 	snapshotMaxBatchSize  int
 	tablesFilter          *confx.RegexpFilter
@@ -146,6 +151,7 @@ func newMSSQLServerCDCInput(conf *service.ParsedConfig, resources *service.Resou
 	var (
 		connectionString             string
 		streamSnapshot               bool
+		maxParallelSnapshotTables    int
 		streamBackoffInterval        time.Duration
 		snapshotMaxBatchSize         int
 		lsnCache, lsnCacheKey        string
@@ -163,6 +169,9 @@ func newMSSQLServerCDCInput(conf *service.ParsedConfig, resources *service.Resou
 		return nil, err
 	}
 	if streamSnapshot, err = conf.FieldBool(fieldStreamSnapshot); err != nil {
+		return nil, err
+	}
+	if maxParallelSnapshotTables, err = conf.FieldInt(fieldMaxParallelSnapshotTables); err != nil {
 		return nil, err
 	}
 	if snapshotMaxBatchSize, err = conf.FieldInt(fieldSnapshotMaxBatchSize); err != nil {
@@ -221,9 +230,10 @@ func newMSSQLServerCDCInput(conf *service.ParsedConfig, resources *service.Resou
 
 	i := sqlServerCDCInput{
 		cfg: &config{
-			connectionString:      connectionString,
+			connString:            connectionString,
 			streamSnapshot:        streamSnapshot,
 			streamBackoffInterval: streamBackoffInterval,
+			maxSnapshotWorkers:    maxParallelSnapshotTables,
 			snapshotMaxBatchSize:  snapshotMaxBatchSize,
 			lsnCache:              lsnCache,
 			lsnCacheKey:           lsnCacheKey,
@@ -245,6 +255,9 @@ func newMSSQLServerCDCInput(conf *service.ParsedConfig, resources *service.Resou
 		return i.cacheLSN(ctx, lsn)
 	}
 
+	// Has stopped is how we notify that we're not connected. This will get reset at connection time.
+	i.stopSig.TriggerHasStopped()
+
 	batchInput, err := service.AutoRetryNacksBatchedToggled(conf, &i)
 	if err != nil {
 		return nil, err
@@ -259,14 +272,14 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 		userTables []replication.UserDefinedTable
 		cachedLSN  replication.LSN
 	)
-	if i.db, err = sql.Open("mssql", i.cfg.connectionString); err != nil {
+	if i.db, err = sql.Open("mssql", i.cfg.connString); err != nil {
 		return fmt.Errorf("failed to connect to microsoft sql server: %s", err)
 	}
 
 	// no cache specified so use default, custom sql cache
 	if i.cfg.lsnCache == "" {
 		// setup internal cache
-		cache, err := newCheckpointCache(ctx, i.cfg.connectionString, i.cfg.cpCacheTableName, i.log)
+		cache, err := newCheckpointCache(ctx, i.cfg.connString, i.cfg.cpCacheTableName, i.log)
 		if err != nil {
 			return fmt.Errorf("initialising sql server based checkpoint cache: %s", err)
 		}
@@ -287,49 +300,46 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 	)
 	// no cached LSN means we're not recovering from a restart
 	if i.cfg.streamSnapshot && len(cachedLSN) == 0 {
-		db, err := sql.Open("mssql", i.cfg.connectionString)
-		if err != nil {
-			return fmt.Errorf("connecting to microsoft sql server for snapshotting: %s", err)
+		if snapshotter, err = replication.NewSnapshot(i.cfg.connString, userTables, i.cfg.maxSnapshotWorkers, i.publisher, i.log, i.metrics); err != nil {
+			return fmt.Errorf("creating database snapshotter: %w", err)
 		}
-		snapshotter = replication.NewSnapshot(db, userTables, i.publisher, i.log, i.metrics)
 	} else {
 		i.log.Infof("Snapshotting disabled, skipping...")
 	}
 
 	streaming = replication.NewChangeTableStream(userTables, i.publisher, i.cfg.streamBackoffInterval, i.log)
 
-	if i.stopSig == nil {
-		i.stopSig = shutdown.NewSignaller()
-	}
+	// Reset our stop signal
+	i.stopSig = shutdown.NewSignaller()
 
 	go func() {
+		var (
+			err    error
+			maxLSN = cachedLSN
+		)
 		softCtx, _ := i.stopSig.SoftStopCtx(context.Background())
-		wg, _ := errgroup.WithContext(softCtx)
-		wg.Go(func() error {
-			var (
-				err    error
-				maxLSN = cachedLSN
-			)
 
-			// snapshot if no LSN exists then store checkpoint once complete
-			if snapshotter != nil {
-				if maxLSN, err = i.processSnapshot(softCtx, snapshotter); err != nil {
-					return fmt.Errorf("processing snapshotting: %w", err)
-				}
-				if err := i.cacheLSN(softCtx, maxLSN); err != nil {
-					return fmt.Errorf("caching LSN after snapshotting: %w", err)
-				}
-				i.log.Debugf("Cached LSN following snapshot: '%s'", maxLSN)
+		// snapshot if no LSN exists then store checkpoint once complete
+		if snapshotter != nil {
+			if maxLSN, err = i.processSnapshot(softCtx, snapshotter); err != nil {
+				i.log.Errorf("Error during Microsoft SQL Server CDC Component: %s", err)
+				return
 			}
+			if err := i.cacheLSN(softCtx, maxLSN); err != nil {
+				i.log.Errorf("Error during Microsoft SQL Server CDC Component: %s", err)
+				return
+			}
+			i.log.Debugf("Cached LSN following snapshot: '%s'", maxLSN)
+		}
 
-			// start streaming changes
-			if err := streaming.ReadChangeTables(softCtx, i.db, maxLSN); err != nil {
+		// streaming
+		wg, ctx := errgroup.WithContext(softCtx)
+		wg.Go(func() error {
+			if err := streaming.ReadChangeTables(ctx, i.db, maxLSN); err != nil {
 				return fmt.Errorf("streaming from change tables: %w", err)
 			}
-
 			return nil
 		})
-
 		if err := wg.Wait(); err != nil && !errors.Is(err, context.Canceled) {
 			i.log.Errorf("Error during Microsoft SQL Server CDC Component: %s", err)
 		} else {
