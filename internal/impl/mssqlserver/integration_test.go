@@ -542,12 +542,14 @@ microsoft_sql_server_cdc:
 	)
 	require.NoError(t, err, "Inserting CDC test data to verify data types")
 
+	want := 2
 	assert.Eventually(t, func() bool {
 		outBatchesMu.Lock()
 		defer outBatchesMu.Unlock()
-		return len(outBatches) == 2
+		return len(outBatches) == want
 	}, time.Second*30, time.Millisecond*100)
 	require.NoError(t, stream.StopWithin(time.Second*10))
+	require.Lenf(t, outBatches, want, "Expected %d batches but got %d", want, len(outBatches))
 
 	// assert min
 	require.JSONEq(t, `{
@@ -803,8 +805,11 @@ func (db *testDB) createTableWithCDCEnabledIfNotExists(ctx context.Context, full
 	q := `
 	IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = '%s')
 	BEGIN
-		EXEC('CREATE SCHEMA rpcn');
 		EXEC('CREATE SCHEMA %s');
+	END
+	IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = 'rpcn')
+	BEGIN
+		EXEC('CREATE SCHEMA rpcn');
 	END`
 	if _, err := db.Exec(fmt.Sprintf(q, schema, schema)); err != nil {
 		return err
