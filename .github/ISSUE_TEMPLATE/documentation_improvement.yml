@@ -1,0 +1,173 @@
+name: 📚 Documentation Improvement
+description: Suggest improvements to documentation, examples, or guides
+title: "[Docs]: "
+labels: ["documentation", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for helping improve our documentation! Clear documentation is crucial for a great developer experience.
+
+  - type: textarea
+    id: documentation-issue
+    attributes:
+      label: Documentation Issue
+      description: Clearly describe the documentation issue or improvement needed
+      placeholder: What documentation issue are you reporting?
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: documentation-location
+    attributes:
+      label: Documentation Location
+      description: Where is this documentation located?
+      options:
+        - label: README.md
+        - label: CONTRIBUTING.md
+        - label: Official docs site (https://docs.redpanda.com/redpanda-connect/)
+        - label: Code comments
+        - label: Configuration examples
+        - label: Other
+
+  - type: input
+    id: specific-url
+    attributes:
+      label: Specific URL or File
+      description: Link to the specific documentation page or file
+      placeholder: "e.g., https://docs.redpanda.com/redpanda-connect/components/inputs/kafka/"
+
+  - type: dropdown
+    id: issue-type
+    attributes:
+      label: Issue Type
+      description: What type of documentation improvement is this?
+      options:
+        - Information is missing
+        - Information is incorrect or outdated
+        - Information is unclear or confusing
+        - Examples are missing or poor quality
+        - Formatting or presentation issues
+        - Typos or grammatical errors
+        - Broken links
+        - Needs better organization
+        - Translation issue
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: current-documentation
+    attributes:
+      label: Current Documentation
+      description: What does the current documentation say? (copy/paste the relevant section)
+      placeholder: Paste the current text that needs improvement
+      render: text
+
+  - type: textarea
+    id: proposed-improvement
+    attributes:
+      label: Proposed Improvement
+      description: What should the documentation say instead? How would you improve it?
+      placeholder: Your proposed improvement or new content
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context & Importance
+      description: Why is this improvement important?
+      placeholder: |
+        - What confusion does the current documentation cause?
+        - What use case is not well covered?
+        - What would help new users better understand this feature?
+        - How does this relate to common user questions or issues?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: user-impact
+    attributes:
+      label: Primary Audience
+      description: Who would benefit most from this change?
+      options:
+        - New users
+        - Advanced users
+        - Specific connector users
+        - Developers/contributors
+        - All users
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority-level
+    attributes:
+      label: Priority Level
+      description: Based on user impact, how would you rate the priority?
+      options:
+        - High - Critical for user success
+        - Medium - Important improvement
+        - Low - Nice to have
+
+  - type: checkboxes
+    id: examples-needed
+    attributes:
+      label: Examples Needed
+      description: If this is about missing examples, what examples would be helpful?
+      options:
+        - label: Basic configuration example
+        - label: Advanced use case example
+        - label: Integration with other components
+        - label: Troubleshooting example
+        - label: Performance tuning example
+        - label: Real-world use case
+        - label: Migration guide
+        - label: Best practices guide
+
+  - type: textarea
+    id: related-components
+    attributes:
+      label: Related Components
+      description: Which Redpanda Connect components does this documentation relate to?
+      placeholder: |
+        - Inputs: kafka, http_server
+        - Processors: mapping, branch  
+        - Outputs: elasticsearch, webhook
+        - Other: configuration, deployment, monitoring
+
+  - type: checkboxes
+    id: research-done
+    attributes:
+      label: Research Done
+      description: Have you checked the following?
+      options:
+        - label: Searched existing documentation for this information
+        - label: Checked if this is covered elsewhere
+        - label: Reviewed related issues or discussions
+        - label: Tested the current examples/instructions
+        - label: Looked at similar tools' documentation for reference
+
+  - type: textarea
+    id: additional-resources
+    attributes:
+      label: Additional Resources
+      description: Provide any helpful resources
+      placeholder: |
+        - Links to related documentation
+        - External references or specifications
+        - Community discussions or questions
+        - Similar examples from other projects
+
+  - type: dropdown
+    id: contribution-offer
+    attributes:
+      label: Contribution Willingness
+      description: How would you like to be involved in this improvement?
+      options:
+        - I would like to contribute this documentation improvement myself
+        - I can help review proposed changes
+        - I can provide technical expertise on this topic
+        - I prefer someone else handle this
+        - Not sure yet
