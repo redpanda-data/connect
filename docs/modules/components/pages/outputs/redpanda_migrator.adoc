@@ -140,6 +140,7 @@ output:
     topic_replication_factor: "3" # No default (optional)
     sync_topic_acls: false
     serverless: false
+    provenance_header: redpanda-migrator-provenance
 ```
 
 --
@@ -1414,5 +1415,14 @@ Enable serverless mode for Redpanda Cloud serverless clusters. This restricts to
 *Type*: `bool`
 
 *Default*: `false`
+
+=== `provenance_header`
+
+Header name to add to migrated records indicating their source cluster. If empty, no provenance header is added.
+
+
+*Type*: `string`
+
+*Default*: `"redpanda-migrator-provenance"`
 
 
