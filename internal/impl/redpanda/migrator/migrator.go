@@ -15,6 +15,7 @@
 package migrator
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -35,6 +36,7 @@ const (
 	rmoFieldTopicReplicationFactor = "topic_replication_factor"
 	rmoFieldSyncTopicACLs          = "sync_topic_acls"
 	rmoFieldServerless             = "serverless"
+	rmoFieldProvenanceHeader       = "provenance_header"
 )
 
 func migratorInputConfig() *service.ConfigSpec {
@@ -250,6 +252,10 @@ output:
 			Description("Enable serverless mode for Redpanda Cloud serverless clusters. This restricts topic configurations and schema features to those supported by serverless environments.").
 			Default(false).
 			Advanced()).
+		Field(service.NewStringField(rmoFieldProvenanceHeader).
+			Description("Header name to add to migrated records indicating their source cluster. If empty, no provenance header is added.").
+			Default("redpanda-migrator-provenance").
+			Advanced()).
 		LintRule(`
 root = [
   if this.key.or("") != "" {
@@ -373,13 +379,16 @@ type Migrator struct {
 	groups groupsMigrator
 	log    *service.Logger
 
-	plumbing uint8
-	stopSig  *shutdown.Signaller
+	provenanceHeader string
+	plumbing         uint8
+	stopSig          *shutdown.Signaller
 
-	mu     sync.RWMutex
-	src    *kgo.Client
-	srcAdm *kadm.Client
-	dstAdm *kadm.Client
+	mu           sync.RWMutex
+	src          *kgo.Client
+	srcAdm       *kadm.Client
+	srcClusterID []byte
+	dstAdm       *kadm.Client
+	dstClusterID []byte
 }
 
 // NewMigrator creates a new Migrator instance with the provided logger.
@@ -431,6 +440,11 @@ func (m *Migrator) initOutputFromParsed(pConf *service.ParsedConfig, mgr *servic
 		return err
 	}
 
+	m.provenanceHeader, err = pConf.FieldString(rmoFieldProvenanceHeader)
+	if err != nil {
+		return err
+	}
+
 	m.sr.dst, err = schemaRegistryClientFromParsed(pConf, mgr)
 	if err != nil {
 		return err
@@ -447,14 +461,23 @@ func (m *Migrator) initOutputFromParsed(pConf *service.ParsedConfig, mgr *servic
 	return nil
 }
 
-func (m *Migrator) onInputConnected(_ context.Context, fr *kafka.FranzReaderOrdered) error {
+func (m *Migrator) onInputConnected(ctx context.Context, fr *kafka.FranzReaderOrdered) error {
 	if err := m.validateInitialized(); err != nil {
 		return err
+	}
+
+	metadata, err := kadm.NewClient(fr.Client).Metadata(ctx)
+	if err != nil {
+		return fmt.Errorf("get source cluster metadata: %w", err)
+	}
+	if metadata.Cluster == "" {
+		return errors.New("source cluster ID not found")
 	}
 
 	m.mu.Lock()
 	m.src = fr.Client
 	m.srcAdm = kadm.NewClient(fr.Client)
+	m.srcClusterID = []byte(metadata.Cluster)
 	m.groups.src = fr.Client
 	m.groups.srcAdm = m.srcAdm
 	m.mu.Unlock()
@@ -477,8 +500,17 @@ func (m *Migrator) onOutputConnected(_ context.Context, fw franzWriter) error {
 	}
 	dstAdm := kadm.NewClient(clientInfo.Client)
 
+	metadata, err := dstAdm.Metadata(ctx)
+	if err != nil {
+		return fmt.Errorf("get destination cluster metadata: %w", err)
+	}
+	if metadata.Cluster == "" {
+		return errors.New("destination cluster ID not found")
+	}
+
 	m.mu.Lock()
 	m.dstAdm = dstAdm
+	m.dstClusterID = []byte(metadata.Cluster)
 	m.groups.dstAdm = kadm.NewClient(clientInfo.Client)
 	m.mu.Unlock()
 
@@ -525,7 +557,9 @@ func (m *Migrator) messageBatchToFranzRecords(batch service.MessageBatch) ([]kgo
 	m.mu.RLock()
 	src := m.src
 	srcAdm := m.srcAdm
+	srcClusterID := m.srcClusterID
 	dstAdm := m.dstAdm
+	dstClusterID := m.dstClusterID
 	m.mu.RUnlock()
 
 	ctx := batch[0].Context()
@@ -582,6 +616,30 @@ func (m *Migrator) messageBatchToFranzRecords(batch service.MessageBatch) ([]kgo
 			}
 		}
 		r.Value = value
+
+		// Headers (optional)
+		r.Headers = kafka.ExtractHeaders(msg)
+		if m.provenanceHeader != "" {
+			origin, ok := kafka.GetHeaderValue(r.Headers, m.provenanceHeader)
+			if ok {
+				if len(origin) == 0 {
+					return nil, errors.New("provenance header is empty, possibility of data corruption")
+				}
+				if bytes.Equal(origin, srcClusterID) {
+					return nil, errors.New("record contains provenance header from source cluster, possibility of data corruption")
+				}
+				if bytes.Equal(origin, dstClusterID) {
+					// Do not send message to its origin cluster
+					records = append(records, kafka.SkipRecord)
+					continue
+				}
+			} else {
+				r.Headers = append(r.Headers, kgo.RecordHeader{
+					Key:   m.provenanceHeader,
+					Value: srcClusterID,
+				})
+			}
+		}
 
 		// Timestamp (required)
 		tsVal, ok := msg.MetaGetMut("kafka_timestamp_ms")

@@ -872,6 +872,66 @@ output:
 	}
 }
 
+func TestIntegrationMigratorTwoWayWithProvenanceHeaders(t *testing.T) {
+	integration.CheckSkip(t)
+
+	const numMessages = 10
+
+	t.Log("Given: Two Redpanda clusters")
+	src, dst := startRedpandaSourceAndDestination(t)
+	src.SchemaRegistryURL = ""
+	dst.SchemaRegistryURL = ""
+	dst.CreateTopic(migratorTestTopic)
+
+	t.Log("When: Migrator is started from src to dst")
+	startMigrator(t, src, dst, nil)
+
+	t.Log("And: Migrator is started from dst to src")
+	startMigrator(t, dst, src, nil)
+
+	t.Log("And: 10 messages are produced to src")
+	for i := range numMessages {
+		src.Produce(migratorTestTopic, []byte(fmt.Sprintf("src-%d", i)))
+	}
+
+	t.Log("And: 10 messages are produced to dst")
+	for i := range numMessages {
+		dst.Produce(migratorTestTopic, []byte(fmt.Sprintf("dst-%d", i)))
+	}
+
+	t.Log("Then: Both clusters have 20 messages")
+	assert.Eventually(t, func() bool {
+		srcRecords := countMessages(t, src)
+		dstRecords := countMessages(t, dst)
+		t.Logf("src has %d messages, dst has %d messages", srcRecords, dstRecords)
+		return srcRecords == 20 && dstRecords == 20
+	}, redpandaTestWaitTimeout, 500*time.Millisecond)
+	assert.Never(t, func() bool {
+		srcRecords := countMessages(t, src)
+		dstRecords := countMessages(t, dst)
+		return srcRecords != 20 || dstRecords != 20
+	}, time.Second, 100*time.Millisecond)
+}
+
+func countMessages(t *testing.T, cluster EmbeddedRedpandaCluster) int {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(t.Context(), redpandaTestOpTimeout)
+	defer cancel()
+
+	offsets, err := cluster.Admin.ListEndOffsets(ctx, migratorTestTopic)
+	if err != nil {
+		t.Logf("Failed to list end offsets: %v", err)
+		return 0
+	}
+
+	total := 0
+	offsets.Each(func(o kadm.ListedOffset) {
+		total += int(o.Offset)
+	})
+	return total
+}
+
 const stopStreamTimeout = 3 * time.Second
 
 func stopStreamAndWait(t *testing.T, stream *service.Stream, d time.Duration) {
