@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.69.0 - TBD
+
+### Changed
+
+- `redpanda_migrator` output now supports two-way syncing using provenance headers (@mmatczuk)
+
 ## 4.68.0 - 2025-10-24
 
 ### Added
