@@ -23,6 +23,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -244,14 +245,35 @@ func (ri *Input) Connect(_ context.Context) error {
 	ri.mux = mux.NewRouter()
 	ri.mux.PathPrefix(ri.conf.Path).Handler(ri.createHandler())
 
+	// Create a custom listener with SO_REUSEADDR to allow fast port reuse during reloads
+	lc := net.ListenConfig{
+		Control: func(_, _ string, c syscall.RawConn) error {
+			var sockOptErr error
+			if err := c.Control(func(fd uintptr) {
+				// Enable SO_REUSEADDR to allow binding to ports in TIME_WAIT state
+				sockOptErr = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
+			}); err != nil {
+				return err
+			}
+			return sockOptErr
+		},
+	}
+
+	listener, err := lc.Listen(context.Background(), "tcp", ri.conf.Address)
+	if err != nil {
+		ri.log.With("error", err, "address", ri.conf.Address).Error("Failed to bind to address")
+		return fmt.Errorf("failed to bind to address %s: %w", ri.conf.Address, err)
+	}
+
 	ri.server = &http.Server{Addr: ri.conf.Address, Handler: ri.mux}
 
 	go func() {
 		defer ri.shutSig.TriggerHasStopped()
 
 		ri.log.With("address", ri.conf.Address+ri.conf.Path).Info("Receiving HTTP messages")
-		if err := ri.server.ListenAndServe(); err != http.ErrServerClosed {
-			ri.log.With("error").Error("Server error")
+
+		if err := ri.server.Serve(listener); err != http.ErrServerClosed {
+			ri.log.With("error", err).Error("Server error")
 		}
 	}()
 	return nil
