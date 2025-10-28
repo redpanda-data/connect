@@ -17,16 +17,15 @@ package kafka
 import (
 	"context"
 	"crypto/tls"
-	"fmt"
 	"net"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/sasl"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/netutil"
 )
 
 const (
@@ -169,29 +168,20 @@ func (d *FranzConnectionDetails) FranzOpts() []kgo.Opt {
 		kgo.ConnIdleTimeout(d.ConnIdleTimeout),
 	}
 
-	// If TCP_USER_TIMEOUT is configured, create a custom dialer
+	// If TCP_USER_TIMEOUT is configured, create a custom dialer with netutil
 	if d.TCPUserTimeout > 0 {
 		baseDialer := &net.Dialer{
 			Timeout: 10 * time.Second,
-			Control: func(network, address string, c syscall.RawConn) error {
-				var sockOptErr error
-				if err := c.Control(func(fd uintptr) {
-					// Set TCP_USER_TIMEOUT (Linux only)
-					// TCP_USER_TIMEOUT = 18 on Linux
-					sockOptErr = syscall.SetsockoptInt(
-						int(fd),
-						syscall.IPPROTO_TCP,
-						18, // TCP_USER_TIMEOUT constant
-						int(d.TCPUserTimeout.Milliseconds()),
-					)
-				}); err != nil {
-					return fmt.Errorf("failed to access raw socket connection: %w", err)
-				}
-				if sockOptErr != nil {
-					return fmt.Errorf("failed to set TCP_USER_TIMEOUT socket option: %w", sockOptErr)
-				}
-				return nil
-			},
+		}
+
+		// Use benthos netutil to configure TCP_USER_TIMEOUT
+		dialerConfig := netutil.DialerConfig{
+			TCPUserTimeout: d.TCPUserTimeout,
+		}
+
+		if err := netutil.DecorateDialer(baseDialer, dialerConfig); err != nil {
+			// This shouldn't happen with our config, but log if it does
+			d.Logger.Errorf("Failed to configure TCP dialer: %v", err)
 		}
 
 		if d.TLSEnabled {
