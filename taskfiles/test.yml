@@ -42,3 +42,13 @@ tasks:
       - '{{.TARGET_DIR}}/redpanda-connect template lint {{.TEMPLATE_FILES}}'
       - '{{.TARGET_DIR}}/redpanda-connect test ./config/test/...'
       - '{{.TARGET_DIR}}/redpanda-connect template lint ./config/rag/templates/...'
+
+  ffi:
+    desc: Run FFI tests
+    dir: internal/impl/ffi
+    vars:
+      TIMEOUT: '{{if .CI}}15m{{else}}5m{{end}}'
+    cmds:
+      # g++ is aliased to clang++ on darwin
+      - g++ -shared -fPIC testdata/plugin.cc -o plugin.{{if eq OS "darwin"}}dylib{{else}}so{{end}}
+      - go test {{.GO_FLAGS}} -timeout {{.TIMEOUT}} {{if .CI}}{{else}}-v{{end}} .

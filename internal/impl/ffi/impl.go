@@ -1,0 +1,136 @@
+// Copyright 2025 Redpanda Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package ffi
+
+import (
+	"fmt"
+	"unsafe"
+
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
+)
+
+// processorImpl takes a set of executors (one for each parameter)
+// and the message being operated on, and returns the output values
+// or an error.
+type processorImpl func(executors []any) ([]any, error)
+
+// signature is a string that represents a specific ABI that is supported.
+//
+// The syntax is as follows:
+// `<return type>(out? <input type>*?,+)`
+type signature string
+
+// signatureImpl is an implementation of given FFI signature
+// from Bloblang/Connect to the foreign function and back.
+type signatureImpl struct {
+	signature signature
+	// Given a symbol for a function that implements the signature,
+	// return a processor that uses the function
+	impl func(addr uintptr) processorImpl
+}
+
+// Maybe it's possible to do something with reflection here, but that seems both tricky,
+// and maybe not optimal from a performance prospective, so we just do the conversion switch
+// here. Maybe someday we can generate the permutations here.
+//
+// Until then, feel free to send a PR for your FFI Signature.
+var supportedSignatures = []signatureImpl{
+	{
+		signature: "void(int64)",
+		impl: func(addr uintptr) processorImpl {
+			var fn func(int64)
+			registerFunc(&fn, addr)
+			return func(args []any) ([]any, error) {
+				if len(args) != 1 {
+					return nil, fmt.Errorf("expected 1 arg, got %d", len(args))
+				}
+				v, err := bloblang.ValueAsInt64(args[0])
+				if err != nil {
+					return nil, err
+				}
+				fn(v)
+				return []any{}, nil
+			}
+		},
+	},
+	{
+		signature: "int64()",
+		impl: func(addr uintptr) processorImpl {
+			var fn func() int64
+			registerFunc(&fn, addr)
+			return func(args []any) ([]any, error) {
+				if len(args) != 0 {
+					return nil, fmt.Errorf("expected 0 args, got %d", len(args))
+				}
+				return []any{fn()}, nil
+			}
+		},
+	},
+	{
+		signature: "int32(int64)",
+		impl: func(addr uintptr) processorImpl {
+			var fn func(int64) int32
+			registerFunc(&fn, addr)
+			return func(args []any) ([]any, error) {
+				if len(args) != 1 {
+					return nil, fmt.Errorf("expected 1 args, got %d", len(args))
+				}
+				v, err := bloblang.ValueAsInt64(args[0])
+				if err != nil {
+					return nil, err
+				}
+				result := fn(v)
+				return []any{result}, nil
+			}
+		},
+	},
+	{
+		signature: "int32(byte*,out byte*,int32)",
+		impl: func(addr uintptr) processorImpl {
+			var fn func(unsafe.Pointer, unsafe.Pointer, int32) int32
+			registerFunc(&fn, addr)
+			return func(args []any) ([]any, error) {
+				if len(args) != 3 {
+					return nil, fmt.Errorf("expected 3 args, got %d", len(args))
+				}
+				inBytes, err := bloblang.ValueAsBytes(args[0])
+				if err != nil {
+					return nil, err
+				}
+				outBytes, err := bloblang.ValueAsBytes(args[1])
+				if err != nil {
+					return nil, err
+				}
+				v, err := bloblang.ValueAsInt64(args[2])
+				if err != nil {
+					return nil, err
+				}
+				inPtr := unsafe.SliceData(inBytes)
+				outPtr := unsafe.SliceData(outBytes)
+				ret := fn(unsafe.Pointer(inPtr), unsafe.Pointer(outPtr), int32(v))
+				return []any{ret, outBytes}, nil
+			}
+		},
+	},
+}
+
+func makeProcessorImpl(sig signature, addr uintptr) (processorImpl, error) {
+	for _, supported := range supportedSignatures {
+		if supported.signature == sig {
+			return supported.impl(addr), nil
+		}
+	}
+	return nil, fmt.Errorf("unsupported signature %q, please contact Redpanda Support to add new FFI signatures", sig)
+}
