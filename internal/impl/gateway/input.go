@@ -253,9 +253,12 @@ func (ri *Input) Connect(_ context.Context) error {
 				// Enable SO_REUSEADDR to allow binding to ports in TIME_WAIT state
 				sockOptErr = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
 			}); err != nil {
-				return err
+				return fmt.Errorf("failed to access raw socket connection: %w", err)
 			}
-			return sockOptErr
+			if sockOptErr != nil {
+				return fmt.Errorf("failed to set SO_REUSEADDR socket option: %w", sockOptErr)
+			}
+			return nil
 		},
 	}
 
