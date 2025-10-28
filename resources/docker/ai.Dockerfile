@@ -18,7 +18,7 @@ RUN setcap 'cap_sys_chroot=+ep' /tmp/redpanda-connect
 
 RUN touch /tmp/keep
 
-FROM ollama/ollama AS package
+FROM ollama/ollama:0.12.6 AS package
 
 # Override the HOST from the ollama dockerfile
 ENV OLLAMA_HOST=127.0.0.1
