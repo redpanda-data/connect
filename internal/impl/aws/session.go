@@ -16,6 +16,8 @@ package aws
 
 import (
 	"context"
+	"net"
+	"net/http"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -25,6 +27,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/netutil"
 )
 
 func int64Field(conf *service.ParsedConfig, path ...string) (int64, error) {
@@ -40,7 +43,27 @@ func GetSession(ctx context.Context, parsedConf *service.ParsedConfig, opts ...f
 	if region, _ := parsedConf.FieldString("region"); region != "" {
 		opts = append(opts, config.WithRegion(region))
 	}
+	if parsedConf.Contains("tcp") {
+		dialerConf, err := netutil.DialerConfigFromParsed(parsedConf.Namespace("tcp"))
+		if err != nil {
+			return aws.Config{}, err
+		}
+		d := new(net.Dialer)
+		if err := netutil.DecorateDialer(d, dialerConf); err != nil {
+			return aws.Config{}, err
+		}
 
+		// Cloning the default values for the Transport to ensure we get
+		// all the public settings from the 'http.DefaultTransport'.
+		transport := http.DefaultTransport.(*http.Transport).Clone()
+		transport.DialContext = d.DialContext
+
+		httpClient := &http.Client{
+			Transport: transport,
+		}
+
+		opts = append(opts, config.WithHTTPClient(httpClient))
+	}
 	credsConf := parsedConf.Namespace("credentials")
 	if profile, _ := credsConf.FieldString("profile"); profile != "" {
 		opts = append(opts, config.WithSharedConfigProfile(profile))
