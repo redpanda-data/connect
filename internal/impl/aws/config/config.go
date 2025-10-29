@@ -14,7 +14,10 @@
 
 package config
 
-import "github.com/redpanda-data/benthos/v4/public/service"
+import (
+	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/netutil"
+)
 
 // SessionFields defines a re-usable set of config fields for an AWS session
 // that is compatible with the public service APIs and avoids importing the full
@@ -29,6 +32,7 @@ func SessionFields() []*service.ConfigField {
 			Description("Allows you to specify a custom endpoint for the AWS API.").
 			Optional().
 			Advanced(),
+		netutil.DialerConfigSpec(),
 		service.NewObjectField("credentials",
 			service.NewStringField("profile").
 				Description("A profile from `~/.aws/credentials` to use.").
