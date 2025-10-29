@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 
 ## 4.69.0 - TBD
 
+### Added
+
+- Added `regexp_topics_include` and `regexp_topics_exclude` fields to `redpanda`, `redpanda_migrator`, `ockam` inputs. (@mmatczuk)
+
+### Deprecated
+
+- The `regexp_topics` boolean field is now deprecated in favor of `regexp_topics_include`. (@mmatczuk)
+
 ### Changed
 
 - `redpanda_migrator` output now supports two-way syncing using provenance headers (@mmatczuk)

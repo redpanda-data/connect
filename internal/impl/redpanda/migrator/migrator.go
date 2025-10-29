@@ -199,9 +199,10 @@ output:
 			`input:
   redpanda_migrator:
     seed_brokers: ["source-kafka:9092"]
-    topics:
-      - '^[^_]'  # All topics not starting with underscore
-    regexp_topics: true
+    regexp_topics_include:
+      - '.'
+    regexp_topics_exclude:
+      - '^_'
     consumer_group: "migrator_cg"
     schema_registry:
       url: "http://source-registry:8081"
