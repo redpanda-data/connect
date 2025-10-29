@@ -23,7 +23,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -32,6 +31,7 @@ import (
 	"github.com/Jeffail/shutdown"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/netutil"
 	"github.com/redpanda-data/connect/v4/internal/gateway"
 )
 
@@ -245,21 +245,12 @@ func (ri *Input) Connect(_ context.Context) error {
 	ri.mux = mux.NewRouter()
 	ri.mux.PathPrefix(ri.conf.Path).Handler(ri.createHandler())
 
-	// Create a custom listener with SO_REUSEADDR to allow fast port reuse during reloads
-	lc := net.ListenConfig{
-		Control: func(_, _ string, c syscall.RawConn) error {
-			var sockOptErr error
-			if err := c.Control(func(fd uintptr) {
-				// Enable SO_REUSEADDR to allow binding to ports in TIME_WAIT state
-				sockOptErr = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
-			}); err != nil {
-				return fmt.Errorf("failed to access raw socket connection: %w", err)
-			}
-			if sockOptErr != nil {
-				return fmt.Errorf("failed to set SO_REUSEADDR socket option: %w", sockOptErr)
-			}
-			return nil
-		},
+	// Create listener with SO_REUSEADDR to allow fast port reuse during reloads
+	lc := net.ListenConfig{}
+	if err := netutil.DecorateListenerConfig(&lc, netutil.ListenerConfig{
+		ReuseAddr: true,
+	}); err != nil {
+		return fmt.Errorf("failed to configure listener: %w", err)
 	}
 
 	listener, err := lc.Listen(context.Background(), "tcp", ri.conf.Address)
