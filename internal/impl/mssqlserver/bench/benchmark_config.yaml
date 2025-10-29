@@ -1,0 +1,28 @@
+http:
+  debug_endpoints: true
+
+input:
+  microsoft_sql_server_cdc:
+    connection_string: sqlserver://sa:YourStrong!Passw0rd@localhost:1433?database=testdb&encrypt=disable
+    stream_snapshot: false
+    include:
+      - dbo.users
+      - dbo.products
+      - dbo.cart
+    batching:
+      count: 1000
+
+output:
+  processors:
+    - benchmark:
+        interval: 1s
+        count_bytes: true
+  drop: {}
+
+logger:
+  level: DEBUG
+
+metrics:
+  prometheus:
+    add_process_metrics: true
+    add_go_metrics: true
