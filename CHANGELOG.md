@@ -9,6 +9,11 @@ All notable changes to this project will be documented in this file.
 
 - (Benthos) New `string.repeat(int)` method to repeat a string or byte array N times. (@rockwotj)
 - (Benthos) New `bytes` method to create a 0 initialized byte array. (@rockwotj)
+- Added `regexp_topics_include` and `regexp_topics_exclude` fields to `redpanda`, `redpanda_migrator`, `ockam` inputs. (@mmatczuk)
+
+### Deprecated
+
+- The `regexp_topics` boolean field is now deprecated in favor of `regexp_topics_include`. (@mmatczuk)
 
 ### Changed
 

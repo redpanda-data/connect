@@ -40,8 +40,9 @@ input:
   label: ""
   redpanda_migrator:
     seed_brokers: [] # No default (required)
-    topics: [] # No default (required)
-    regexp_topics: false
+    topics: [] # No default (optional)
+    regexp_topics_include: [] # No default (optional)
+    regexp_topics_exclude: [] # No default (optional)
     transaction_isolation_level: read_uncommitted
     consumer_group: "" # No default (optional)
     schema_registry:
@@ -72,8 +73,9 @@ input:
     metadata_max_age: 5m
     request_timeout_overhead: 10s
     conn_idle_timeout: 20s
-    topics: [] # No default (required)
-    regexp_topics: false
+    topics: [] # No default (optional)
+    regexp_topics_include: [] # No default (optional)
+    regexp_topics_exclude: [] # No default (optional)
     rack_id: ""
     instance_id: ""
     rebalance_timeout: 45s
@@ -575,14 +577,32 @@ topics:
   - foo:0-5
 ```
 
-=== `regexp_topics`
+=== `regexp_topics_include`
 
-Whether listed topics should be interpreted as regular expression patterns for matching multiple topics. When enabled, the client will periodically refresh the list of matching topics based on the `metadata_max_age` interval. When topics are specified with explicit partitions this field must remain set to `false`.
+A list of regular expression patterns for matching topics to consume from. When specified, the client will periodically refresh the list of matching topics based on the `metadata_max_age` interval. This enables regex mode and cannot be used together with the `topics` field. Use `regexp_topics_exclude` to exclude specific patterns.
 
 
-*Type*: `bool`
+*Type*: `array`
 
-*Default*: `false`
+
+```yml
+# Examples
+
+regexp_topics_include:
+  - logs_.*
+  - metrics_.*
+
+regexp_topics_include:
+  - events_[0-9]+
+```
+
+=== `regexp_topics_exclude`
+
+A list of regular expression patterns for excluding topics when regex mode is enabled (via `regexp_topics` or `regexp_topics_include`). Topics matching any of these patterns will be excluded from consumption, even if they match include patterns.
+
+
+*Type*: `array`
+
 
 === `rack_id`
 
