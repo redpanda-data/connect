@@ -43,11 +43,23 @@ input:
     dynamodb:
       table: ""
       create: false
+      tcp:
+        keep_alive:
+          idle: 15s
+          interval: 15s
+          count: 9
+        tcp_user_timeout: 0s
     checkpoint_limit: 1024
     auto_replay_nacks: true
     commit_period: 5s
     steal_grace_period: 2s
     start_from_oldest: true
+    tcp:
+      keep_alive:
+        idle: 15s
+        interval: 15s
+        count: 9
+      tcp_user_timeout: 0s
     batching:
       count: 0
       byte_size: 0
@@ -74,6 +86,12 @@ input:
       write_capacity_units: 0
       region: "" # No default (optional)
       endpoint: "" # No default (optional)
+      tcp:
+        keep_alive:
+          idle: 15s
+          interval: 15s
+          count: 9
+        tcp_user_timeout: 0s
       credentials:
         profile: "" # No default (optional)
         id: "" # No default (optional)
@@ -91,6 +109,12 @@ input:
     start_from_oldest: true
     region: "" # No default (optional)
     endpoint: "" # No default (optional)
+    tcp:
+      keep_alive:
+        idle: 15s
+        interval: 15s
+        count: 9
+      tcp_user_timeout: 0s
     credentials:
       profile: "" # No default (optional)
       id: "" # No default (optional)
@@ -218,6 +242,58 @@ Allows you to specify a custom endpoint for the AWS API.
 
 *Type*: `string`
 
+
+=== `dynamodb.tcp`
+
+TCP socket configuration.
+
+
+*Type*: `object`
+
+
+=== `dynamodb.tcp.keep_alive`
+
+TCP keep-alive probe configuration.
+
+
+*Type*: `object`
+
+
+=== `dynamodb.tcp.keep_alive.idle`
+
+Duration the connection must be idle before sending the first keep-alive probe. Zero defaults to 15s. Negative values disable keep-alive probes.
+
+
+*Type*: `string`
+
+*Default*: `"15s"`
+
+=== `dynamodb.tcp.keep_alive.interval`
+
+Duration between keep-alive probes. Zero defaults to 15s.
+
+
+*Type*: `string`
+
+*Default*: `"15s"`
+
+=== `dynamodb.tcp.keep_alive.count`
+
+Maximum unanswered keep-alive probes before dropping the connection. Zero defaults to 9.
+
+
+*Type*: `int`
+
+*Default*: `9`
+
+=== `dynamodb.tcp.tcp_user_timeout`
+
+Maximum time to wait for acknowledgment of transmitted data before killing the connection. Linux-only (kernel 2.6.37+), ignored on other platforms. When enabled, keep_alive.idle must be greater than this value per RFC 5482. Zero disables.
+
+
+*Type*: `string`
+
+*Default*: `"0s"`
 
 === `dynamodb.credentials`
 
@@ -367,6 +443,58 @@ Allows you to specify a custom endpoint for the AWS API.
 
 *Type*: `string`
 
+
+=== `tcp`
+
+TCP socket configuration.
+
+
+*Type*: `object`
+
+
+=== `tcp.keep_alive`
+
+TCP keep-alive probe configuration.
+
+
+*Type*: `object`
+
+
+=== `tcp.keep_alive.idle`
+
+Duration the connection must be idle before sending the first keep-alive probe. Zero defaults to 15s. Negative values disable keep-alive probes.
+
+
+*Type*: `string`
+
+*Default*: `"15s"`
+
+=== `tcp.keep_alive.interval`
+
+Duration between keep-alive probes. Zero defaults to 15s.
+
+
+*Type*: `string`
+
+*Default*: `"15s"`
+
+=== `tcp.keep_alive.count`
+
+Maximum unanswered keep-alive probes before dropping the connection. Zero defaults to 9.
+
+
+*Type*: `int`
+
+*Default*: `9`
+
+=== `tcp.tcp_user_timeout`
+
+Maximum time to wait for acknowledgment of transmitted data before killing the connection. Linux-only (kernel 2.6.37+), ignored on other platforms. When enabled, keep_alive.idle must be greater than this value per RFC 5482. Zero disables.
+
+
+*Type*: `string`
+
+*Default*: `"0s"`
 
 === `credentials`
 
