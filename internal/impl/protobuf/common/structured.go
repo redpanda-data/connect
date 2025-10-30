@@ -75,7 +75,7 @@ func (m *marshaller) valueToStructured(f protoreflect.FieldDescriptor, v protore
 }
 
 func (m *marshaller) listToStructured(f protoreflect.FieldDescriptor, v protoreflect.List) (any, error) {
-	var out []any
+	out := make([]any, 0, v.Len())
 	for i := range v.Len() {
 		e, err := m.singularValueToStructured(f, v.Get(i))
 		if err != nil {
@@ -87,7 +87,7 @@ func (m *marshaller) listToStructured(f protoreflect.FieldDescriptor, v protoref
 }
 
 func (m *marshaller) mapToStructured(f protoreflect.FieldDescriptor, v protoreflect.Map) (any, error) {
-	out := make(map[string]any)
+	out := make(map[string]any, v.Len())
 	for k, v := range v.Range {
 		v, err := m.singularValueToStructured(f.MapValue(), v)
 		if err != nil {
@@ -146,7 +146,7 @@ func (m *marshaller) messageToStructured(msg protoreflect.Message) (any, error) 
 	if v, err := m.wellKnownType(msg); !errors.Is(err, errNotWellKnown) {
 		return v, err
 	}
-	structured := map[string]any{}
+	structured := make(map[string]any, msg.Descriptor().Fields().Len())
 	emit := func(field protoreflect.FieldDescriptor, value protoreflect.Value) error {
 		v, err := m.valueToStructured(field, value)
 		if err != nil {
