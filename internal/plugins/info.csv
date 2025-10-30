@@ -75,6 +75,7 @@ dynamic                   ,input     ,dynamic                   ,0.0.0   ,commun
 dynamic                   ,output    ,dynamic                   ,0.0.0   ,community  ,n          ,n     ,n
 elasticsearch_v8          ,output    ,elasticsearch_v8          ,4.47.0  ,certified  ,n          ,y     ,y
 fallback                  ,output    ,fallback                  ,3.58.0  ,certified  ,n          ,y     ,y
+ffi                       ,processor ,Foreign Function Interface,4.69.0  ,certified  ,n          ,n     ,n
 file                      ,cache     ,File                      ,0.0.0   ,certified  ,n          ,n     ,n
 file                      ,input     ,File                      ,0.0.0   ,certified  ,n          ,n     ,n
 file                      ,output    ,File                      ,0.0.0   ,certified  ,n          ,n     ,n
