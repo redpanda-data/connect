@@ -39,6 +39,34 @@ ffi:
 
 A processor that allows for dlopen'ing (or platform equivalent) and invoking functions dynamically at runtime. The result from this processor is an array, where the first element is the return type if not void, and then each `out` parameter in parameter order.
 
+== Examples
+
+[tabs]
+======
+Call a libc function::
++
+--
+
+This is an example of loading libc.so and calling a function on linux.
+
+```yaml
+pipeline:
+  processors:
+    - ffi:
+        library_path: libc.6.so
+        function_name: symlink
+        args_mapping: 'root = ["./foo.txt", "./bar.txt"]'
+        signature:
+          return:
+            type: int32
+          parameters:
+            - type: byte*
+            - type: byte*
+```
+
+--
+======
+
 == Fields
 
 === `library_path`

@@ -73,7 +73,24 @@ func ffiProcessorConfig() *service.ConfigSpec {
 						Description("If the parameter provided is an 'out' parameter, meaning if the function mutates the value, and the resulting value should be returned. This is only valid for pointer types."),
 				).Description("The parameters of the function."),
 			).Description("The signature of the function."),
-		)
+		).Example(
+		"Call a libc function",
+		"This is an example of loading libc.so and calling a function on linux.",
+		`
+pipeline:
+  processors:
+    - ffi:
+        library_path: libc.6.so
+        function_name: memcmp
+        args_mapping: 'root = ["foo", "bar", 3]'
+        signature:
+          return:
+            type: int32
+          parameters:
+            - type: byte*
+            - type: byte*
+            - type: int64
+`)
 }
 
 func makeProcessor(conf *service.ParsedConfig, _ *service.Resources) (service.BatchProcessor, error) {
