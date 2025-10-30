@@ -56,7 +56,6 @@ tasks:
     deps:
       - test:unit
       - test:template
-      - test:ffi
 
   run:
     desc: Run redpanda-connect with the specified config

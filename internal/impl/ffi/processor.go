@@ -33,14 +33,14 @@ func init() {
 
 var (
 	returnTypes = map[string]string{
-		"void":  "The function returns nothing",
-		"int32": "A 32 bit signed integer is returned",
-		"int64": "A 64 bit signed integer is returned",
+		string(returnTypeVoid):  "The function returns nothing",
+		string(returnTypeInt32): "A 32 bit signed integer is returned",
+		string(returnTypeInt64): "A 64 bit signed integer is returned",
 	}
 	paramTypes = map[string]string{
-		"int32": "A 32 bit signed integer is provided as an argument",
-		"int64": "A 64 bit signed integer is provided as an argument",
-		"byte*": "A pointer to a byte array is provided as an argument. Note this byte array cannot be referenced once the function returns. `args_mapping` must return a byte array or string type for this argument, and the parameter in C for this should be `void*`.",
+		string(paramTypeInt32):   "A 32 bit signed integer is provided as an argument",
+		string(paramTypeInt64):   "A 64 bit signed integer is provided as an argument",
+		string(paramTypeBytePtr): "A pointer to a byte array is provided as an argument. Note this byte array cannot be referenced once the function returns. `args_mapping` must return a byte array or string type for this argument, and the parameter in C for this should be `void*`.",
 	}
 )
 
@@ -113,23 +113,19 @@ func makeProcessor(conf *service.ParsedConfig, _ *service.Resources) (service.Ba
 	if _, ok := returnTypes[retType]; !ok {
 		return nil, fmt.Errorf("invalid return type %q", retType)
 	}
+	var sig signature
+	sig.Return = returnType(retType)
 	parameters, err := conf.FieldObjectList("signature", "parameters")
 	if err != nil {
 		return nil, err
 	}
-	var sig strings.Builder
-	sig.WriteString(retType)
-	sig.WriteRune('(')
-	for i, paramConf := range parameters {
-		if i != 0 {
-			sig.WriteRune(',')
-		}
-		paramType, err := paramConf.FieldString("type")
+	for _, paramConf := range parameters {
+		pt, err := paramConf.FieldString("type")
 		if err != nil {
 			return nil, err
 		}
-		if _, ok := paramTypes[paramType]; !ok {
-			return nil, fmt.Errorf("invalid parameter type %q", paramType)
+		if _, ok := paramTypes[pt]; !ok {
+			return nil, fmt.Errorf("invalid parameter type %q", pt)
 		}
 		out, err := paramConf.FieldBool("out")
 		if err != nil {
@@ -137,14 +133,15 @@ func makeProcessor(conf *service.ParsedConfig, _ *service.Resources) (service.Ba
 		}
 		if out {
 			// Require pointers only for out parameters
-			if !strings.HasSuffix(paramType, "*") {
-				return nil, fmt.Errorf("unsupported out parameter type, only pointers may be out parameters: %q", paramType)
+			if !strings.HasSuffix(pt, "*") {
+				return nil, fmt.Errorf("unsupported out parameter type, only pointers may be out parameters: %q", pt)
 			}
-			sig.WriteString("out ")
 		}
-		sig.WriteString(paramType)
+		sig.Params = append(sig.Params, parameterSpec{
+			Type: paramType(pt),
+			Out:  out,
+		})
 	}
-	sig.WriteRune(')')
 
 	so, err := openSharedLibrary(libPath)
 	if err != nil {
@@ -155,7 +152,7 @@ func makeProcessor(conf *service.ParsedConfig, _ *service.Resources) (service.Ba
 		_ = so.Close()
 		return nil, fmt.Errorf("unable to find symbol %q: %w", funcName, err)
 	}
-	impl, err := makeProcessorImpl(signature(sig.String()), handle)
+	impl, err := makeProcessorImpl(sig, handle)
 	if err != nil {
 		_ = so.Close()
 		return nil, err

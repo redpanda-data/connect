@@ -17,6 +17,7 @@ package ffi
 import (
 	"context"
 	"os"
+	"os/exec"
 	"runtime"
 	"slices"
 	"strings"
@@ -31,21 +32,31 @@ import (
 func SharedLibraryPath() string {
 	switch runtime.GOOS {
 	case "linux":
-		return "./plugin.so"
+		return "./testdata/plugin.so"
 	case "darwin":
-		return "./plugin.dylib"
+		return "./testdata/plugin.dylib"
 	default:
 		return ""
 	}
 }
 
-func CheckSharedLibraryExists(t *testing.T) {
+func CreateSharedLibrary(t *testing.T) {
 	t.Helper()
 	switch runtime.GOOS {
 	case "linux", "darwin":
 		_, err := os.Stat(SharedLibraryPath())
-		if err != nil {
-			t.Skip("no shared library:", err)
+		if err == nil {
+			return
+		}
+		cmd := exec.CommandContext(
+			t.Context(),
+			"g++",
+			"-shared", "-fPIC",
+			"./testdata/plugin.cc",
+			"-o", SharedLibraryPath(),
+		)
+		if err := cmd.Run(); err != nil {
+			t.Skip("unable to compile shared library:", err)
 		}
 	default:
 		t.Skip("no shared library tests on platform", runtime.GOOS)
@@ -104,7 +115,7 @@ func CheckMessageJSON(t *testing.T, m *service.Message, expected string) {
 }
 
 func TestFFIProcessor(t *testing.T) {
-	CheckSharedLibraryExists(t)
+	CreateSharedLibrary(t)
 	t.Run("SetAndGet", func(t *testing.T) {
 		producer, consumer := SetupFFIProcessor(t, `
 try:

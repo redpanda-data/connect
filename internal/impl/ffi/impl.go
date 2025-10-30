@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"reflect"
 	"runtime"
-	"strings"
 	"unsafe"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
@@ -29,11 +28,32 @@ import (
 // or an error.
 type processorImpl func(args []any) ([]any, error)
 
+type returnType string
+
+const (
+	returnTypeVoid  returnType = "void"
+	returnTypeInt32 returnType = "int32"
+	returnTypeInt64 returnType = "int64"
+)
+
+type paramType string
+
+const (
+	paramTypeBytePtr paramType = "byte*"
+	paramTypeInt32   paramType = "int32"
+	paramTypeInt64   paramType = "int64"
+)
+
+type parameterSpec struct {
+	Type paramType
+	Out  bool
+}
+
 // signature is a string that represents a specific ABI that is supported.
-//
-// The syntax is as follows:
-// `<return type>(out? <input type>*?,+)`
-type signature string
+type signature struct {
+	Return returnType
+	Params []parameterSpec
+}
 
 // signatureImpl is an implementation of given FFI signature
 // from Bloblang/Connect to the foreign function and back.
@@ -51,7 +71,10 @@ type signatureImpl struct {
 // Feel free to add more specializations here.
 var optimizedSignatures = []signatureImpl{
 	{
-		signature: "void(int64)",
+		signature: signature{
+			Return: returnTypeVoid,
+			Params: []parameterSpec{{Type: paramTypeInt64}},
+		},
 		impl: func(addr uintptr) processorImpl {
 			var fn func(int64)
 			registerFunc(&fn, addr)
@@ -69,7 +92,10 @@ var optimizedSignatures = []signatureImpl{
 		},
 	},
 	{
-		signature: "int64()",
+		signature: signature{
+			Return: returnTypeInt64,
+			Params: []parameterSpec{},
+		},
 		impl: func(addr uintptr) processorImpl {
 			var fn func() int64
 			registerFunc(&fn, addr)
@@ -82,7 +108,10 @@ var optimizedSignatures = []signatureImpl{
 		},
 	},
 	{
-		signature: "int32(int64)",
+		signature: signature{
+			Return: returnTypeInt32,
+			Params: []parameterSpec{{Type: paramTypeInt64}},
+		},
 		impl: func(addr uintptr) processorImpl {
 			var fn func(int64) int32
 			registerFunc(&fn, addr)
@@ -100,7 +129,14 @@ var optimizedSignatures = []signatureImpl{
 		},
 	},
 	{
-		signature: "int32(byte*,out byte*,int32)",
+		signature: signature{
+			Return: returnTypeInt32,
+			Params: []parameterSpec{
+				{Type: paramTypeBytePtr},
+				{Type: paramTypeBytePtr, Out: true},
+				{Type: paramTypeInt32},
+			},
+		},
 		impl: func(addr uintptr) processorImpl {
 			var fn func(unsafe.Pointer, unsafe.Pointer, int32) int32
 			registerFunc(&fn, addr)
@@ -131,7 +167,7 @@ var optimizedSignatures = []signatureImpl{
 
 func makeProcessorImpl(sig signature, addr uintptr) (processorImpl, error) {
 	for _, supported := range optimizedSignatures {
-		if supported.signature == sig {
+		if reflect.DeepEqual(supported.signature, sig) {
 			return supported.impl(addr), nil
 		}
 	}
@@ -140,50 +176,43 @@ func makeProcessorImpl(sig signature, addr uintptr) (processorImpl, error) {
 }
 
 func makeFallbackProcessorImpl(sig signature, addr uintptr) (processorImpl, error) {
-	pos := strings.IndexByte(string(sig), '(')
-	if pos == -1 {
-		return nil, fmt.Errorf("invalid signature: %q", sig)
-	}
-	returnType := sig[0:pos]
 	returnTypes := []reflect.Type{}
-	switch returnType {
-	case "void":
+	switch sig.Return {
+	case returnTypeVoid:
 		// No return types in golang
-	case "int32":
+	case returnTypeInt32:
 		returnTypes = append(returnTypes, reflect.TypeFor[int32]())
-	case "int64":
+	case returnTypeInt64:
 		returnTypes = append(returnTypes, reflect.TypeFor[int64]())
 	default:
-		return nil, fmt.Errorf("unexpected return type: %q", returnType)
+		return nil, fmt.Errorf("unexpected return type: %q", sig.Return)
 	}
-	params := strings.Split(strings.TrimSuffix(string(sig)[pos+1:], ")"), ",")
-	paramTypes := []reflect.Type{}
-	paramConverter := []func(any) (any, error){}
+	var paramTypes []reflect.Type
+	var paramConverter []func(any) (any, error)
 	outParameters := map[int]bool{}
-	for i, param := range params {
-		out := strings.HasPrefix(param, "out ")
-		if out {
+	for i, param := range sig.Params {
+		if param.Out {
 			outParameters[i] = true
 		}
-		switch strings.TrimPrefix(param, "out ") {
-		case "int32":
+		switch param.Type {
+		case paramTypeInt32:
 			paramTypes = append(paramTypes, reflect.TypeFor[int32]())
 			paramConverter = append(paramConverter, func(a any) (any, error) {
 				v, err := bloblang.ValueAsInt64(a)
 				return int32(v), err
 			})
-		case "int64":
+		case paramTypeInt64:
 			paramTypes = append(paramTypes, reflect.TypeFor[int64]())
 			paramConverter = append(paramConverter, func(a any) (any, error) {
 				return bloblang.ValueAsInt64(a)
 			})
-		case "byte*":
+		case paramTypeBytePtr:
 			paramTypes = append(paramTypes, reflect.TypeFor[unsafe.Pointer]())
 			paramConverter = append(paramConverter, func(a any) (any, error) {
 				return bloblang.ValueAsBytes(a)
 			})
 		default:
-			return nil, fmt.Errorf("unexpected parameter type: %q", param)
+			return nil, fmt.Errorf("unexpected parameter type: %q", param.Type)
 		}
 	}
 	funcType := reflect.FuncOf(paramTypes, returnTypes, false)
