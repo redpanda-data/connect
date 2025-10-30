@@ -9,6 +9,9 @@ All notable changes to this project will be documented in this file.
 
 - `redpanda_migrator` output now supports two-way syncing using provenance headers (@mmatczuk)
 - New `ffi` processor. (@rockwotj)
+- `schema_registry_encode` gains a new `protobuf.serialize_to_json` option that is by default true. If disabled, then messages are decoded into a structured format which preserves types better and is faster. (@rockwotj)
+- Add `decode` option to field `operator` in `protobuf` processor that decodes messages into a structured format (as opposed to serializing to JSON) that perserves types better and is faster. (@rockwotj)
+
 
 ## 4.68.0 - 2025-10-24
 
