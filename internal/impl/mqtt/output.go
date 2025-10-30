@@ -21,7 +21,8 @@ import (
 	"sync"
 	"time"
 
-	mqtt "github.com/eclipse/paho.mqtt.golang"
+	"github.com/eclipse/paho.golang/autopaho"
+	"github.com/eclipse/paho.golang/paho"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -86,7 +87,7 @@ type mqttWriter struct {
 	retainedInterp *service.InterpolatedString
 	qos            uint8
 
-	client  mqtt.Client
+	client  *autopaho.ConnectionManager
 	connMut sync.RWMutex
 }
 
@@ -122,7 +123,7 @@ func newMQTTWriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources)
 	return m, nil
 }
 
-func (m *mqttWriter) Connect(context.Context) error {
+func (m *mqttWriter) Connect(ctx context.Context) error {
 	m.connMut.Lock()
 	defer m.connMut.Unlock()
 
@@ -130,26 +131,34 @@ func (m *mqttWriter) Connect(context.Context) error {
 		return nil
 	}
 
-	conf := m.clientBuilder.apply(mqtt.NewClientOptions()).
-		SetConnectionLostHandler(func(client mqtt.Client, reason error) {
-			client.Disconnect(0)
-			m.log.Errorf("Connection lost due to: %v", reason)
-		}).
-		SetWriteTimeout(m.writeTimeout)
+	conf := m.clientBuilder.apply(&autopaho.ClientConfig{})
+	conf.PacketTimeout = m.writeTimeout
 
-	client := mqtt.NewClient(conf)
+	conf.OnConnectionDown = func() bool {
+		return false // We handle reconnections ourselves.
+	}
 
-	tok := client.Connect()
-	tok.Wait()
-	if err := tok.Error(); err != nil {
+	conf.OnServerDisconnect = func(d *paho.Disconnect) {
+		if d.Properties != nil {
+			m.log.Errorf("Connection lost due to: %s\n", d.Properties.ReasonString)
+		} else {
+			m.log.Errorf("Connection lost due to: %d\n", d.ReasonCode)
+		}
+	}
+
+	c, err := autopaho.NewConnection(ctx, *conf)
+	if err != nil {
+		return err
+	}
+	if err = c.AwaitConnection(ctx); err != nil {
 		return err
 	}
 
-	m.client = client
+	m.client = c
 	return nil
 }
 
-func (m *mqttWriter) Write(_ context.Context, msg *service.Message) error {
+func (m *mqttWriter) Write(ctx context.Context, msg *service.Message) error {
 	m.connMut.RLock()
 	client := m.client
 	m.connMut.RUnlock()
@@ -178,10 +187,13 @@ func (m *mqttWriter) Write(_ context.Context, msg *service.Message) error {
 		return err
 	}
 
-	mtok := client.Publish(topicStr, m.qos, retained, mBytes)
-	mtok.Wait()
-	sendErr := mtok.Error()
-	if sendErr == mqtt.ErrNotConnected {
+	_, sendErr := client.Publish(ctx, &paho.Publish{
+		Topic:   topicStr,
+		QoS:     m.qos,
+		Retain:  retained,
+		Payload: mBytes,
+	})
+	if sendErr == autopaho.ConnectionDownError {
 		m.connMut.RLock()
 		m.client = nil
 		m.connMut.RUnlock()
@@ -190,12 +202,12 @@ func (m *mqttWriter) Write(_ context.Context, msg *service.Message) error {
 	return sendErr
 }
 
-func (m *mqttWriter) Close(context.Context) error {
+func (m *mqttWriter) Close(ctx context.Context) error {
 	m.connMut.Lock()
 	defer m.connMut.Unlock()
 
 	if m.client != nil {
-		m.client.Disconnect(0)
+		m.client.Disconnect(ctx)
 		m.client = nil
 	}
 	return nil

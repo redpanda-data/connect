@@ -21,7 +21,8 @@ import (
 	"net/url"
 	"time"
 
-	mqtt "github.com/eclipse/paho.mqtt.golang"
+	"github.com/eclipse/paho.golang/autopaho"
+	"github.com/eclipse/paho.golang/paho"
 	gonanoid "github.com/matoous/go-nanoid/v2"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -159,24 +160,21 @@ func clientOptsFromParsed(conf *service.ParsedConfig) (opts clientOptsBuilder, e
 	return
 }
 
-func (b *clientOptsBuilder) apply(opts *mqtt.ClientOptions) *mqtt.ClientOptions {
-	opts = opts.SetAutoReconnect(false).
-		SetClientID(b.clientID).
-		SetConnectTimeout(b.connectTimeout).
-		SetKeepAlive(time.Duration(b.keepAlive) * time.Second)
+func (b *clientOptsBuilder) apply(opts *autopaho.ClientConfig) *autopaho.ClientConfig {
+	opts.ClientID = b.clientID
+	opts.ConnectTimeout = b.connectTimeout
+	opts.KeepAlive = uint16(b.keepAlive) // TODO safe conversion?
 
 	opts = b.will.apply(opts)
 
 	if b.tlsEnabled {
-		opts = opts.SetTLSConfig(b.tlsConf)
+		opts.TlsCfg = b.tlsConf
 	}
 
-	opts = opts.SetUsername(b.username)
-	opts = opts.SetPassword(b.password)
+	opts.ConnectUsername = b.username
+	opts.ConnectPassword = []byte(b.password)
 
-	for _, u := range b.urls {
-		opts = opts.AddBroker(u.String())
-	}
+	opts.BrokerUrls = b.urls
 
 	return opts
 }
@@ -219,10 +217,15 @@ type willOpt struct {
 	Payload  string
 }
 
-func (w *willOpt) apply(opts *mqtt.ClientOptions) *mqtt.ClientOptions {
+func (w *willOpt) apply(opts *autopaho.ClientConfig) *autopaho.ClientConfig {
 	if !w.Enabled {
 		return opts
 	}
-	opts = opts.SetWill(w.Topic, w.Payload, w.QoS, w.Retained)
+	opts.WillMessage = &paho.WillMessage{
+		Topic:   w.Topic,
+		Payload: []byte(w.Payload),
+		QoS:     w.QoS,
+		Retain:  w.Retained,
+	}
 	return opts
 }

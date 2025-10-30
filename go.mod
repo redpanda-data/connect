@@ -69,7 +69,7 @@ require (
 	github.com/dop251/goja v0.0.0-20250630131328-58d95d85e994
 	github.com/dop251/goja_nodejs v0.0.0-20250409162600-f7acab6894b0
 	github.com/dustin/go-humanize v1.0.1
-	github.com/eclipse/paho.mqtt.golang v1.5.1
+	github.com/eclipse/paho.golang v0.23.0
 	github.com/elastic/elastic-transport-go/v8 v8.7.0
 	github.com/elastic/go-elasticsearch/v8 v8.19.0
 	github.com/generikvault/gvalstrings v0.0.0-20180926130504-471f38f0112a

@@ -17,9 +17,9 @@ package mqtt
 import (
 	"context"
 	"sync"
-	"time"
 
-	mqtt "github.com/eclipse/paho.mqtt.golang"
+	"github.com/eclipse/paho.golang/autopaho"
+	"github.com/eclipse/paho.golang/paho"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -79,8 +79,8 @@ type mqttReader struct {
 	qos           uint8
 	cleanSession  bool
 
-	client  mqtt.Client
-	msgChan chan mqtt.Message
+	client  *autopaho.ConnectionManager
+	msgChan chan paho.PublishReceived
 	cMut    sync.Mutex
 
 	interruptChan chan struct{}
@@ -114,7 +114,7 @@ func newMQTTReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources)
 	return m, nil
 }
 
-func (m *mqttReader) Connect(context.Context) error {
+func (m *mqttReader) Connect(ctx context.Context) error {
 	m.cMut.Lock()
 	defer m.cMut.Unlock()
 
@@ -123,7 +123,7 @@ func (m *mqttReader) Connect(context.Context) error {
 	}
 
 	var msgMut sync.Mutex
-	msgChan := make(chan mqtt.Message)
+	msgChan := make(chan paho.PublishReceived)
 
 	closeMsgChan := func() bool {
 		msgMut.Lock()
@@ -136,62 +136,63 @@ func (m *mqttReader) Connect(context.Context) error {
 		return chanOpen
 	}
 
-	conf := m.clientBuilder.apply(mqtt.NewClientOptions()).
-		SetCleanSession(m.cleanSession).
-		SetConnectionLostHandler(func(client mqtt.Client, reason error) {
-			client.Disconnect(0)
-			closeMsgChan()
-			m.log.Errorf("Connection lost due to: %v\n", reason)
-		}).
-		SetOnConnectHandler(func(c mqtt.Client) {
-			topics := make(map[string]byte)
-			for _, topic := range m.topics {
-				topics[topic] = m.qos
-			}
+	conf := m.clientBuilder.apply(&autopaho.ClientConfig{})
+	conf.CleanStartOnInitialConnection = m.cleanSession
+	conf.EnableManualAcknowledgment = true
 
-			tok := c.SubscribeMultiple(topics, func(_ mqtt.Client, msg mqtt.Message) {
-				msgMut.Lock()
-				if msgChan != nil {
-					select {
-					case msgChan <- msg:
-					case <-m.interruptChan:
-					}
-				}
-				msgMut.Unlock()
+	conf.OnConnectionDown = func() bool {
+		closeMsgChan()
+		return false // We handle reconnections ourselves.
+	}
+
+	conf.OnConnectionUp = func(cm *autopaho.ConnectionManager, _ *paho.Connack) {
+		var s []paho.SubscribeOptions
+		for _, topic := range m.topics {
+			s = append(s, paho.SubscribeOptions{
+				Topic: topic,
+				QoS:   m.qos,
 			})
-			tok.Wait()
-			if err := tok.Error(); err != nil {
-				m.log.Errorf("Failed to subscribe to topics '%v': %v", m.topics, err)
-				m.log.Error("Shutting connection down.")
-				closeMsgChan()
+		}
+		_, err := cm.Subscribe(ctx, &paho.Subscribe{Subscriptions: s})
+		if err != nil {
+			m.log.Errorf("Failed to subscribe to topics '%v': %v", m.topics, err)
+			m.log.Error("Shutting connection down.")
+			closeMsgChan()
+		}
+	}
+
+	conf.OnPublishReceived = []func(paho.PublishReceived) (bool, error){
+		func(pr paho.PublishReceived) (bool, error) {
+			msgMut.Lock()
+			if msgChan != nil {
+				select {
+				case msgChan <- pr:
+				case <-m.interruptChan:
+				}
 			}
-		})
+			msgMut.Unlock()
+			return true, nil
+		}}
 
-	client := mqtt.NewClient(conf)
+	conf.OnServerDisconnect = func(d *paho.Disconnect) {
+		if d.Properties != nil {
+			m.log.Errorf("Connection lost due to: %s\n", d.Properties.ReasonString)
+		} else {
+			m.log.Errorf("Connection lost due to: %d\n", d.ReasonCode)
+		}
+	}
 
-	tok := client.Connect()
-	tok.Wait()
-	if err := tok.Error(); err != nil {
+	c, err := autopaho.NewConnection(ctx, *conf)
+	if err != nil {
+		closeMsgChan()
+		return err
+	}
+	if err = c.AwaitConnection(ctx); err != nil {
+		closeMsgChan()
 		return err
 	}
 
-	go func() {
-		for {
-			select {
-			case <-time.After(time.Second):
-				if !client.IsConnected() {
-					if closeMsgChan() {
-						m.log.Error("Connection lost for unknown reasons.")
-					}
-					return
-				}
-			case <-m.interruptChan:
-				return
-			}
-		}
-	}()
-
-	m.client = client
+	m.client = c
 	m.msgChan = msgChan
 	return nil
 }
@@ -215,17 +216,17 @@ func (m *mqttReader) Read(ctx context.Context) (*service.Message, service.AckFun
 			return nil, nil, service.ErrNotConnected
 		}
 
-		message := service.NewMessage(msg.Payload())
+		message := service.NewMessage(msg.Packet.Payload)
 
-		message.MetaSetMut("mqtt_duplicate", msg.Duplicate())
-		message.MetaSetMut("mqtt_qos", int(msg.Qos()))
-		message.MetaSetMut("mqtt_retained", msg.Retained())
-		message.MetaSetMut("mqtt_topic", msg.Topic())
-		message.MetaSetMut("mqtt_message_id", int(msg.MessageID()))
+		message.MetaSetMut("mqtt_duplicate", msg.Packet.Duplicate())
+		message.MetaSetMut("mqtt_qos", int(msg.Packet.QoS))
+		message.MetaSetMut("mqtt_retained", msg.Packet.Retain)
+		message.MetaSetMut("mqtt_topic", msg.Packet.Topic)
+		message.MetaSetMut("mqtt_message_id", int(msg.Packet.PacketID))
 
 		return message, func(_ context.Context, res error) error {
 			if res == nil {
-				msg.Ack()
+				msg.Client.Ack(msg.Packet)
 			}
 			return nil
 		}, nil
@@ -236,12 +237,12 @@ func (m *mqttReader) Read(ctx context.Context) (*service.Message, service.AckFun
 	}
 }
 
-func (m *mqttReader) Close(context.Context) (err error) {
+func (m *mqttReader) Close(ctx context.Context) (err error) {
 	m.cMut.Lock()
 	defer m.cMut.Unlock()
 
 	if m.client != nil {
-		m.client.Disconnect(0)
+		m.client.Disconnect(ctx)
 		m.client = nil
 		close(m.interruptChan)
 	}

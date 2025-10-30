@@ -15,11 +15,14 @@
 package mqtt
 
 import (
+	"context"
 	"fmt"
+	"net/url"
 	"testing"
 	"time"
 
-	mqtt "github.com/eclipse/paho.mqtt.golang"
+	"github.com/eclipse/paho.golang/autopaho"
+	"github.com/eclipse/paho.golang/paho"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -43,16 +46,25 @@ func TestIntegrationMQTT(t *testing.T) {
 
 	_ = resource.Expire(900)
 	require.NoError(t, pool.Retry(func() error {
-		inConf := mqtt.NewClientOptions().SetClientID("UNIT_TEST")
-		inConf = inConf.AddBroker(fmt.Sprintf("tcp://localhost:%v", resource.GetPort("1883/tcp")))
+		u, err := url.Parse(fmt.Sprintf("tcp://localhost:%v", resource.GetPort("1883/tcp")))
+		if err != nil {
+			panic(err)
+		}
+		inConf := autopaho.ClientConfig{
+			BrokerUrls:   []*url.URL{u},
+			ClientConfig: paho.ClientConfig{ClientID: "UNIT_TEST"},
+		}
 
-		mIn := mqtt.NewClient(inConf)
-		tok := mIn.Connect()
-		tok.Wait()
-		if cErr := tok.Error(); cErr != nil {
+		ctx := context.Background()
+		mIn, cErr := autopaho.NewConnection(ctx, inConf)
+		if cErr != nil {
 			return cErr
 		}
-		mIn.Disconnect(0)
+		cErr = mIn.AwaitConnection(ctx)
+		if cErr != nil {
+			return cErr
+		}
+		mIn.Disconnect(ctx)
 		return nil
 	}))
 
