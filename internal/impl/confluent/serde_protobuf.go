@@ -33,12 +33,17 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/protobuf/common"
 )
 
+type protobufOptions struct {
+	useProtoNames     bool
+	useEnumNumbers    bool
+	emitUnpopulated   bool
+	emitDefaultValues bool
+	serializeToJSON   bool
+}
+
 func (s *schemaRegistryDecoder) getProtobufDecoder(
 	ctx context.Context,
-	useProtoNames bool,
-	useEnumNumbers bool,
-	emitUnpopulated bool,
-	emitDefaultValues bool,
+	decoderOpts protobufOptions,
 	schema sr.Schema,
 ) (schemaDecoder, error) {
 	regMap := map[string]string{
@@ -64,10 +69,10 @@ func (s *schemaRegistryDecoder) getProtobufDecoder(
 	msgTypes := targetFile.Messages()
 	opts := protojson.MarshalOptions{
 		Resolver:          types,
-		UseProtoNames:     useProtoNames,
-		UseEnumNumbers:    useEnumNumbers,
-		EmitUnpopulated:   emitUnpopulated,
-		EmitDefaultValues: emitDefaultValues,
+		UseProtoNames:     decoderOpts.useProtoNames,
+		UseEnumNumbers:    decoderOpts.useEnumNumbers,
+		EmitUnpopulated:   decoderOpts.emitUnpopulated,
+		EmitDefaultValues: decoderOpts.emitDefaultValues,
 	}
 
 	// Cache a decoder as it's unlikely the type is going to change
@@ -107,7 +112,11 @@ func (s *schemaRegistryDecoder) getProtobufDecoder(
 		}
 		remaining := b[bytesRead:]
 		return cachedDecoder.WithDecoded(remaining, func(msg proto.Message) error {
-			return common.ToMessageFast(msg.ProtoReflect(), opts, m)
+			if decoderOpts.serializeToJSON {
+				return common.ToMessageSlow(msg.ProtoReflect(), opts, m)
+			} else {
+				return common.ToMessageFast(msg.ProtoReflect(), opts, m)
+			}
 		})
 	}, nil
 }

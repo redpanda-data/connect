@@ -24,6 +24,9 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
+// ToMessageFn is an abstraction between ToMessageFast and ToMessageSlow
+type ToMessageFn = func(protoreflect.Message, protojson.MarshalOptions, *service.Message) error
+
 // ToMessageFast converts a protobuf message into a benthos message using protobuf JSON encoding rules.
 //
 // This encoder converts the protobuf message into a Golang `any` type compatible with Redpanda Connect and

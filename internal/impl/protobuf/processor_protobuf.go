@@ -84,13 +84,23 @@ The processor will ignore any files that begin with a dot ("."g), a convention f
 
 === `+"`to_json`"+`
 
-Converts protobuf messages into a generic JSON structure. This makes it easier to manipulate the contents of the document within Redpanda Connect.
+Converts protobuf messages into serialized proto3 JSON.
 
 === `+"`from_json`"+`
 
-Attempts to create a target protobuf message from a generic JSON structure.
+Attempts to create a target protobuf message from a serialized proto3 JSON.
+
+=== `+"`decode`"+`
+
+Converts protobuf messages into a generic structured message. This makes it easier to manipulate the contents of the document within Redpanda Connect.
+This differs from `+"`to_json`"+` in the following ways:
+
+- 64 bit numbers are *not* converted into strings
+- Bytes and google.protobuf.Timestamp types are preserved (not encoded as strings unless serialized)
+
+This operator is also considerably faster in scenario where you manipulate the data as the data does not need to be serialized then deserialized like with the `+"`to_json`"+` operator.
 `).Fields(
-		service.NewStringEnumField(fieldOperator, "to_json", "from_json").
+		service.NewStringEnumField(fieldOperator, "to_json", "from_json", "decode").
 			Description("The [operator](#operators) to execute"),
 		service.NewStringField(fieldMessage).
 			Description("The fully qualified name of the protobuf message to convert to/from."),
@@ -98,13 +108,13 @@ Attempts to create a target protobuf message from a generic JSON structure.
 			Description("If `true`, the `from_json` operator discards fields that are unknown to the schema.").
 			Default(false),
 		service.NewBoolField(fieldUseProtoNames).
-			Description("If `true`, the `to_json` operator deserializes fields exactly as named in schema file.").
+			Description("If `true`, the `to_json` or `decode` operator deserializes fields exactly as named in schema file.").
 			Default(false),
 		service.NewStringListField(fieldImportPaths).
 			Description("A list of directories containing .proto files, including all definitions required for parsing the target message. If left empty the current directory is used. Each directory listed will be walked with all found .proto files imported. Either this field or `bsr` must be populated.").
 			Default([]string{}),
 		service.NewBoolField(fieldUseEnumNumbers).
-			Description("If `true`, the `to_json` operator deserializes enums as numerical values instead of string names.").
+			Description("If `true`, the `to_json` or `decode` operator deserializes enums as numerical values instead of string names.").
 			Default(false),
 		service.NewObjectListField(fieldBSRConfig,
 			service.NewStringField(fieldBSRModule).
@@ -296,7 +306,13 @@ func init() {
 
 type protobufOperator func(part *service.Message) error
 
-func newProtobufToJSONOperator(f fs.FS, msg string, importPaths []string, useProtoNames, useEnumNumbers bool) (protobufOperator, error) {
+func newProtobufToJSONOperator(
+	f fs.FS,
+	msg string,
+	importPaths []string,
+	toMessage common.ToMessageFn,
+	opts protojson.MarshalOptions,
+) (protobufOperator, error) {
 	if msg == "" {
 		return nil, errors.New("message field must not be empty")
 	}
@@ -319,23 +335,19 @@ func newProtobufToJSONOperator(f fs.FS, msg string, importPaths []string, usePro
 			Rate:              0.01,
 			RecompileInterval: 100_000,
 		})
-	opts := protojson.MarshalOptions{
-		Resolver:       types,
-		UseProtoNames:  useProtoNames,
-		UseEnumNumbers: useEnumNumbers,
-	}
+	opts.Resolver = types
 	return func(part *service.Message) error {
 		partBytes, err := part.AsBytes()
 		if err != nil {
 			return err
 		}
 		return decoder.WithDecoded(partBytes, func(msg proto.Message) error {
-			return common.ToMessageFast(msg.ProtoReflect(), opts, part)
+			return toMessage(msg.ProtoReflect(), opts, part)
 		})
 	}, nil
 }
 
-func newProtobufFromJSONOperator(f fs.FS, msg string, importPaths []string, discardUnknown bool) (protobufOperator, error) {
+func newProtobufFromJSONOperator(f fs.FS, msg string, importPaths []string, opts protojson.UnmarshalOptions) (protobufOperator, error) {
 	if msg == "" {
 		return nil, errors.New("message field must not be empty")
 	}
@@ -362,10 +374,7 @@ func newProtobufFromJSONOperator(f fs.FS, msg string, importPaths []string, disc
 
 		dynMsg := dynamicpb.NewMessage(md.Descriptor())
 
-		opts := protojson.UnmarshalOptions{
-			Resolver:       types,
-			DiscardUnknown: discardUnknown,
-		}
+		opts.Resolver = types
 		if err := opts.Unmarshal(msgBytes, dynMsg); err != nil {
 			return fmt.Errorf("failed to unmarshal JSON message '%v': %w", msg, err)
 		}
@@ -380,7 +389,12 @@ func newProtobufFromJSONOperator(f fs.FS, msg string, importPaths []string, disc
 	}, nil
 }
 
-func newProtobufToJSONBSROperator(multiModuleWatcher *multiModuleWatcher, msg string, useProtoNames, useEnumNumbers bool) (protobufOperator, error) {
+func newProtobufToJSONBSROperator(
+	multiModuleWatcher *multiModuleWatcher,
+	msg string,
+	toMessage common.ToMessageFn,
+	opts protojson.MarshalOptions,
+) (protobufOperator, error) {
 	if msg == "" {
 		return nil, errors.New("message field must not be empty")
 	}
@@ -395,23 +409,19 @@ func newProtobufToJSONBSROperator(multiModuleWatcher *multiModuleWatcher, msg st
 			Rate:              0.01,
 			RecompileInterval: 100_000,
 		})
-	opts := protojson.MarshalOptions{
-		Resolver:       multiModuleWatcher,
-		UseProtoNames:  useProtoNames,
-		UseEnumNumbers: useEnumNumbers,
-	}
+	opts.Resolver = multiModuleWatcher
 	return func(part *service.Message) error {
 		partBytes, err := part.AsBytes()
 		if err != nil {
 			return err
 		}
 		return decoder.WithDecoded(partBytes, func(msg proto.Message) error {
-			return common.ToMessageFast(msg.ProtoReflect(), opts, part)
+			return toMessage(msg.ProtoReflect(), opts, part)
 		})
 	}, nil
 }
 
-func newProtobufFromJSONBSROperator(multiModuleWatcher *multiModuleWatcher, msg string, discardUnknown bool) (protobufOperator, error) {
+func newProtobufFromJSONBSROperator(multiModuleWatcher *multiModuleWatcher, msg string, opts protojson.UnmarshalOptions) (protobufOperator, error) {
 	if msg == "" {
 		return nil, errors.New("message field must not be empty")
 	}
@@ -421,22 +431,16 @@ func newProtobufFromJSONBSROperator(multiModuleWatcher *multiModuleWatcher, msg 
 		return nil, fmt.Errorf("unable to find message '%v' definition: %w", msg, err)
 	}
 
+	opts.Resolver = multiModuleWatcher
 	return func(part *service.Message) error {
 		msgBytes, err := part.AsBytes()
 		if err != nil {
 			return err
 		}
-
 		dynMsg := dynamicpb.NewMessage(d.Descriptor())
-
-		opts := protojson.UnmarshalOptions{
-			Resolver:       multiModuleWatcher,
-			DiscardUnknown: discardUnknown,
-		}
 		if err := opts.Unmarshal(msgBytes, dynMsg); err != nil {
 			return fmt.Errorf("failed to unmarshal JSON message '%v': %w", msg, err)
 		}
-
 		data, err := proto.Marshal(dynMsg)
 		if err != nil {
 			return fmt.Errorf("failed to marshal protobuf message '%v': %v", msg, err)
@@ -447,22 +451,31 @@ func newProtobufFromJSONBSROperator(multiModuleWatcher *multiModuleWatcher, msg 
 	}, nil
 }
 
-func strToProtobufOperator(f fs.FS, opStr, message string, importPaths []string, discardUnknown, useProtoNames, useEnumNumbers bool) (protobufOperator, error) {
+type protojsonOptions struct {
+	protojson.MarshalOptions
+	protojson.UnmarshalOptions
+}
+
+func strToProtobufOperator(f fs.FS, opStr, message string, importPaths []string, opts protojsonOptions) (protobufOperator, error) {
 	switch opStr {
 	case "to_json":
-		return newProtobufToJSONOperator(f, message, importPaths, useProtoNames, useEnumNumbers)
+		return newProtobufToJSONOperator(f, message, importPaths, common.ToMessageSlow, opts.MarshalOptions)
 	case "from_json":
-		return newProtobufFromJSONOperator(f, message, importPaths, discardUnknown)
+		return newProtobufFromJSONOperator(f, message, importPaths, opts.UnmarshalOptions)
+	case "decode":
+		return newProtobufToJSONOperator(f, message, importPaths, common.ToMessageFast, opts.MarshalOptions)
 	}
 	return nil, fmt.Errorf("operator not recognised: %v", opStr)
 }
 
-func strToProtobufBSROperator(multiModuleWatcher *multiModuleWatcher, opStr, message string, discardUnknown, useProtoNames, useEnumNumbers bool) (protobufOperator, error) {
+func strToProtobufBSROperator(multiModuleWatcher *multiModuleWatcher, opStr, message string, opts protojsonOptions) (protobufOperator, error) {
 	switch opStr {
 	case "to_json":
-		return newProtobufToJSONBSROperator(multiModuleWatcher, message, useProtoNames, useEnumNumbers)
+		return newProtobufToJSONBSROperator(multiModuleWatcher, message, common.ToMessageSlow, opts.MarshalOptions)
 	case "from_json":
-		return newProtobufFromJSONBSROperator(multiModuleWatcher, message, discardUnknown)
+		return newProtobufFromJSONBSROperator(multiModuleWatcher, message, opts.UnmarshalOptions)
+	case "decode":
+		return newProtobufToJSONBSROperator(multiModuleWatcher, message, common.ToMessageSlow, opts.MarshalOptions)
 	}
 	return nil, fmt.Errorf("operator not recognised: %v", opStr)
 }
@@ -499,18 +512,17 @@ func newProtobuf(conf *service.ParsedConfig, mgr *service.Resources) (*protobufP
 		return nil, err
 	}
 
-	var discardUnknown bool
-	if discardUnknown, err = conf.FieldBool(fieldDiscardUnknown); err != nil {
+	var opts protojsonOptions
+
+	if opts.DiscardUnknown, err = conf.FieldBool(fieldDiscardUnknown); err != nil {
 		return nil, err
 	}
 
-	var useProtoNames bool
-	if useProtoNames, err = conf.FieldBool(fieldUseProtoNames); err != nil {
+	if opts.UseProtoNames, err = conf.FieldBool(fieldUseProtoNames); err != nil {
 		return nil, err
 	}
 
-	var useEnumNumbers bool
-	if useEnumNumbers, err = conf.FieldBool(fieldUseEnumNumbers); err != nil {
+	if opts.UseEnumNumbers, err = conf.FieldBool(fieldUseEnumNumbers); err != nil {
 		return nil, err
 	}
 
@@ -525,7 +537,7 @@ func newProtobuf(conf *service.ParsedConfig, mgr *service.Resources) (*protobufP
 		if p.multiModuleWatcher, err = newMultiModuleWatcher(bsrModules); err != nil {
 			return nil, fmt.Errorf("failed to create multiModuleWatcher: %w", err)
 		}
-		if p.operator, err = strToProtobufBSROperator(p.multiModuleWatcher, operatorStr, message, discardUnknown, useProtoNames, useEnumNumbers); err != nil {
+		if p.operator, err = strToProtobufBSROperator(p.multiModuleWatcher, operatorStr, message, opts); err != nil {
 			return nil, err
 		}
 	} else {
@@ -534,7 +546,7 @@ func newProtobuf(conf *service.ParsedConfig, mgr *service.Resources) (*protobufP
 		if importPaths, err = conf.FieldStringList(fieldImportPaths); err != nil {
 			return nil, err
 		}
-		if p.operator, err = strToProtobufOperator(mgr.FS(), operatorStr, message, importPaths, discardUnknown, useProtoNames, useEnumNumbers); err != nil {
+		if p.operator, err = strToProtobufOperator(mgr.FS(), operatorStr, message, importPaths, opts); err != nil {
 			return nil, err
 		}
 	}
