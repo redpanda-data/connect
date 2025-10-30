@@ -21,6 +21,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/connect/v4/internal/impl/ffi/impl"
 )
 
 func init() {
@@ -33,14 +34,14 @@ func init() {
 
 var (
 	returnTypes = map[string]string{
-		string(returnTypeVoid):  "The function returns nothing",
-		string(returnTypeInt32): "A 32 bit signed integer is returned",
-		string(returnTypeInt64): "A 64 bit signed integer is returned",
+		string(impl.ReturnTypeVoid):  "The function returns nothing",
+		string(impl.ReturnTypeInt32): "A 32 bit signed integer is returned",
+		string(impl.ReturnTypeInt64): "A 64 bit signed integer is returned",
 	}
 	paramTypes = map[string]string{
-		string(paramTypeInt32):   "A 32 bit signed integer is provided as an argument",
-		string(paramTypeInt64):   "A 64 bit signed integer is provided as an argument",
-		string(paramTypeBytePtr): "A pointer to a byte array is provided as an argument. Note this byte array cannot be referenced once the function returns. `args_mapping` must return a byte array or string type for this argument, and the parameter in C for this should be `void*`.",
+		string(impl.ParamTypeInt32):   "A 32 bit signed integer is provided as an argument",
+		string(impl.ParamTypeInt64):   "A 64 bit signed integer is provided as an argument",
+		string(impl.ParamTypeBytePtr): "A pointer to a byte array is provided as an argument. Note this byte array cannot be referenced once the function returns. `args_mapping` must return a byte array or string type for this argument, and the parameter in C for this should be `void*`.",
 	}
 )
 
@@ -113,8 +114,8 @@ func makeProcessor(conf *service.ParsedConfig, _ *service.Resources) (service.Ba
 	if _, ok := returnTypes[retType]; !ok {
 		return nil, fmt.Errorf("invalid return type %q", retType)
 	}
-	var sig signature
-	sig.Return = returnType(retType)
+	var sig impl.Signature
+	sig.Return = impl.ReturnType(retType)
 	parameters, err := conf.FieldObjectList("signature", "parameters")
 	if err != nil {
 		return nil, err
@@ -137,13 +138,13 @@ func makeProcessor(conf *service.ParsedConfig, _ *service.Resources) (service.Ba
 				return nil, fmt.Errorf("unsupported out parameter type, only pointers may be out parameters: %q", pt)
 			}
 		}
-		sig.Params = append(sig.Params, parameterSpec{
-			Type: paramType(pt),
+		sig.Params = append(sig.Params, impl.ParameterSpec{
+			Type: impl.ParamType(pt),
 			Out:  out,
 		})
 	}
 
-	so, err := openSharedLibrary(libPath)
+	so, err := impl.OpenSharedLibrary(libPath)
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +153,7 @@ func makeProcessor(conf *service.ParsedConfig, _ *service.Resources) (service.Ba
 		_ = so.Close()
 		return nil, fmt.Errorf("unable to find symbol %q: %w", funcName, err)
 	}
-	impl, err := makeProcessorImpl(sig, handle)
+	impl, err := impl.MakeForeignFunc(sig, handle)
 	if err != nil {
 		_ = so.Close()
 		return nil, err
@@ -161,9 +162,9 @@ func makeProcessor(conf *service.ParsedConfig, _ *service.Resources) (service.Ba
 }
 
 type ffiProcessor struct {
-	so   *sharedLibrary
-	impl processorImpl
-	args *bloblang.Executor
+	so       *impl.SharedLibrary
+	function impl.ForeignFunc
+	args     *bloblang.Executor
 }
 
 var _ service.BatchProcessor = (*ffiProcessor)(nil)
@@ -185,7 +186,7 @@ func (f *ffiProcessor) ProcessBatch(_ context.Context, batch service.MessageBatc
 		if !ok {
 			return nil, fmt.Errorf("failed to extract structured result from `args_mapping` bloblang: expected type []any, got %T", structured)
 		}
-		outs, err := f.impl(args)
+		outs, err := f.function(args)
 		if err != nil {
 			msg.SetError(err)
 		} else {

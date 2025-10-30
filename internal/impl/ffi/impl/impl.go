@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ffi
+package impl
 
 import (
 	"fmt"
@@ -23,45 +23,52 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 )
 
-// processorImpl takes a set of executors (one for each parameter)
-// and the message being operated on, and returns the output values
-// or an error.
-type processorImpl func(args []any) ([]any, error)
+// ForeignFunc invokes a C ABI function and returns the result.
+type ForeignFunc func(args []any) ([]any, error)
 
-type returnType string
-
-const (
-	returnTypeVoid  returnType = "void"
-	returnTypeInt32 returnType = "int32"
-	returnTypeInt64 returnType = "int64"
-)
-
-type paramType string
+// ReturnType the result of an FFI function
+type ReturnType string
 
 const (
-	paramTypeBytePtr paramType = "byte*"
-	paramTypeInt32   paramType = "int32"
-	paramTypeInt64   paramType = "int64"
+	// ReturnTypeVoid is a void return type in C
+	ReturnTypeVoid ReturnType = "void"
+	// ReturnTypeInt32 is a int32_t in C
+	ReturnTypeInt32 ReturnType = "int32"
+	// ReturnTypeInt64 is a int64_t in C
+	ReturnTypeInt64 ReturnType = "int64"
 )
 
-type parameterSpec struct {
-	Type paramType
+// ParamType is the type of a FFI function parameter
+type ParamType string
+
+const (
+	// ParamTypeBytePtr is a void* type in C
+	ParamTypeBytePtr ParamType = "byte*"
+	// ParamTypeInt32 is a int32_t in C
+	ParamTypeInt32 ParamType = "int32"
+	// ParamTypeInt64 is a int64_t in C
+	ParamTypeInt64 ParamType = "int64"
+)
+
+// ParameterSpec is a specification for a parameter of an FFI function.
+type ParameterSpec struct {
+	Type ParamType
 	Out  bool
 }
 
-// signature is a string that represents a specific ABI that is supported.
-type signature struct {
-	Return returnType
-	Params []parameterSpec
+// Signature is a string that represents a specific ABI that is supported.
+type Signature struct {
+	Return ReturnType
+	Params []ParameterSpec
 }
 
-// signatureImpl is an implementation of given FFI signature
+// specialization is an implementation of given FFI signature
 // from Bloblang/Connect to the foreign function and back.
-type signatureImpl struct {
-	signature signature
+type specialization struct {
+	signature Signature
 	// Given a symbol for a function that implements the signature,
 	// return a processor that uses the function
-	impl func(addr uintptr) processorImpl
+	impl func(addr uintptr) ForeignFunc
 }
 
 // The reflection based fallback approach is very slow.
@@ -69,13 +76,13 @@ type signatureImpl struct {
 // inline them here so the compiler can optimize.
 //
 // Feel free to add more specializations here.
-var optimizedSignatures = []signatureImpl{
+var optimizedSignatures = []specialization{
 	{
-		signature: signature{
-			Return: returnTypeVoid,
-			Params: []parameterSpec{{Type: paramTypeInt64}},
+		signature: Signature{
+			Return: ReturnTypeVoid,
+			Params: []ParameterSpec{{Type: ParamTypeInt64}},
 		},
-		impl: func(addr uintptr) processorImpl {
+		impl: func(addr uintptr) ForeignFunc {
 			var fn func(int64)
 			registerFunc(&fn, addr)
 			return func(args []any) ([]any, error) {
@@ -92,11 +99,11 @@ var optimizedSignatures = []signatureImpl{
 		},
 	},
 	{
-		signature: signature{
-			Return: returnTypeInt64,
-			Params: []parameterSpec{},
+		signature: Signature{
+			Return: ReturnTypeInt64,
+			Params: []ParameterSpec{},
 		},
-		impl: func(addr uintptr) processorImpl {
+		impl: func(addr uintptr) ForeignFunc {
 			var fn func() int64
 			registerFunc(&fn, addr)
 			return func(args []any) ([]any, error) {
@@ -108,11 +115,11 @@ var optimizedSignatures = []signatureImpl{
 		},
 	},
 	{
-		signature: signature{
-			Return: returnTypeInt32,
-			Params: []parameterSpec{{Type: paramTypeInt64}},
+		signature: Signature{
+			Return: ReturnTypeInt32,
+			Params: []ParameterSpec{{Type: ParamTypeInt64}},
 		},
-		impl: func(addr uintptr) processorImpl {
+		impl: func(addr uintptr) ForeignFunc {
 			var fn func(int64) int32
 			registerFunc(&fn, addr)
 			return func(args []any) ([]any, error) {
@@ -129,15 +136,15 @@ var optimizedSignatures = []signatureImpl{
 		},
 	},
 	{
-		signature: signature{
-			Return: returnTypeInt32,
-			Params: []parameterSpec{
-				{Type: paramTypeBytePtr},
-				{Type: paramTypeBytePtr, Out: true},
-				{Type: paramTypeInt32},
+		signature: Signature{
+			Return: ReturnTypeInt32,
+			Params: []ParameterSpec{
+				{Type: ParamTypeBytePtr},
+				{Type: ParamTypeBytePtr, Out: true},
+				{Type: ParamTypeInt32},
 			},
 		},
-		impl: func(addr uintptr) processorImpl {
+		impl: func(addr uintptr) ForeignFunc {
 			var fn func(unsafe.Pointer, unsafe.Pointer, int32) int32
 			registerFunc(&fn, addr)
 			return func(args []any) ([]any, error) {
@@ -165,7 +172,9 @@ var optimizedSignatures = []signatureImpl{
 	},
 }
 
-func makeProcessorImpl(sig signature, addr uintptr) (processorImpl, error) {
+// MakeForeignFunc creates a foreign function based on that signature for
+// a symbol at `addr`.
+func MakeForeignFunc(sig Signature, addr uintptr) (ForeignFunc, error) {
 	for _, supported := range optimizedSignatures {
 		if reflect.DeepEqual(supported.signature, sig) {
 			return supported.impl(addr), nil
@@ -175,14 +184,14 @@ func makeProcessorImpl(sig signature, addr uintptr) (processorImpl, error) {
 	return makeFallbackProcessorImpl(sig, addr)
 }
 
-func makeFallbackProcessorImpl(sig signature, addr uintptr) (processorImpl, error) {
+func makeFallbackProcessorImpl(sig Signature, addr uintptr) (ForeignFunc, error) {
 	returnTypes := []reflect.Type{}
 	switch sig.Return {
-	case returnTypeVoid:
+	case ReturnTypeVoid:
 		// No return types in golang
-	case returnTypeInt32:
+	case ReturnTypeInt32:
 		returnTypes = append(returnTypes, reflect.TypeFor[int32]())
-	case returnTypeInt64:
+	case ReturnTypeInt64:
 		returnTypes = append(returnTypes, reflect.TypeFor[int64]())
 	default:
 		return nil, fmt.Errorf("unexpected return type: %q", sig.Return)
@@ -195,18 +204,18 @@ func makeFallbackProcessorImpl(sig signature, addr uintptr) (processorImpl, erro
 			outParameters[i] = true
 		}
 		switch param.Type {
-		case paramTypeInt32:
+		case ParamTypeInt32:
 			paramTypes = append(paramTypes, reflect.TypeFor[int32]())
 			paramConverter = append(paramConverter, func(a any) (any, error) {
 				v, err := bloblang.ValueAsInt64(a)
 				return int32(v), err
 			})
-		case paramTypeInt64:
+		case ParamTypeInt64:
 			paramTypes = append(paramTypes, reflect.TypeFor[int64]())
 			paramConverter = append(paramConverter, func(a any) (any, error) {
 				return bloblang.ValueAsInt64(a)
 			})
-		case paramTypeBytePtr:
+		case ParamTypeBytePtr:
 			paramTypes = append(paramTypes, reflect.TypeFor[unsafe.Pointer]())
 			paramConverter = append(paramConverter, func(a any) (any, error) {
 				return bloblang.ValueAsBytes(a)
@@ -220,6 +229,9 @@ func makeFallbackProcessorImpl(sig signature, addr uintptr) (processorImpl, erro
 	fnPtr := reflect.New(funcType)
 	registerFunc(fnPtr.Interface(), addr)
 	return func(args []any) ([]any, error) {
+		if len(args) != len(paramConverter) {
+			return nil, fmt.Errorf("expected %d args, got %d", len(paramConverter), len(args))
+		}
 		values := make([]reflect.Value, len(args))
 		outs := make([]any, len(returnTypes), len(returnTypes)+len(outParameters))
 		// Make sure we pin the pointers while invoking the C function

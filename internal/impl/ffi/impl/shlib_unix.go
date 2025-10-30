@@ -14,31 +14,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ffi
+package impl
 
 import "github.com/ebitengine/purego"
 
-// An abstraction around a shared library
-type sharedLibrary struct {
+// SharedLibrary an abstraction around a platform specific shared library
+type SharedLibrary struct {
 	handle uintptr
 }
 
-// openSharedLibrary opens a new sharedLibrary from a path to a file.
-func openSharedLibrary(path string) (*sharedLibrary, error) {
+// OpenSharedLibrary opens a new sharedLibrary from a path to a file.
+func OpenSharedLibrary(path string) (*SharedLibrary, error) {
 	h, err := purego.Dlopen(path, purego.RTLD_GLOBAL|purego.RTLD_LAZY)
 	if err != nil {
 		return nil, err
 	}
-	return &sharedLibrary{h}, nil
+	return &SharedLibrary{h}, nil
 }
 
 // LookupSymbol returns the symbol or an error for the named symbol.
-func (so *sharedLibrary) LookupSymbol(name string) (uintptr, error) {
+func (so *SharedLibrary) LookupSymbol(name string) (uintptr, error) {
 	return purego.Dlsym(so.handle, name)
 }
 
 // Close releases the dynamically loaded library from this process.
-func (so *sharedLibrary) Close() error {
+func (so *SharedLibrary) Close() error {
 	return purego.Dlclose(so.handle)
 }
 

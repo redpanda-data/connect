@@ -1,4 +1,4 @@
-//go:build !(darwin || freebsd || linux || netbsd || windows)
+//go:build windows
 
 // Copyright 2025 Redpanda Data, Inc.
 //
@@ -14,27 +14,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ffi
+package impl
 
 import (
-	"errors"
-	"fmt"
-	"runtime"
+	"github.com/ebitengine/purego"
+	"golang.org/x/sys/windows"
 )
 
-type sharedLibrary struct{}
-
-func openSharedLibrary(path string) (*sharedLibrary, error) {
-	return nil, fmt.Errorf("ffi processor not supported on %s/%s", runtime.GOOS, runtime.GOARCH)
+type SharedLibrary struct {
+	handle windows.Handle
 }
 
-func (so *sharedLibrary) LookupSymbol(name string) (uintptr, error) {
-	return 0, errors.ErrUnsupported
+func OpenSharedLibrary(path string) (*SharedLibrary, error) {
+	h, err := windows.LoadLibrary(path)
+	if err != nil {
+		return nil, err
+	}
+	return &SharedLibrary{h}, nil
 }
 
-func (so *sharedLibrary) Close() error {
-	return errors.ErrUnsupported
+func (so *SharedLibrary) LookupSymbol(name string) (uintptr, error) {
+	return windows.GetProcAddress(so.handle, name)
 }
 
-func registerFunc(any, uintptr) {
+func (so *SharedLibrary) Close() error {
+	return windows.FreeLibrary(so.handle)
+}
+
+func registerFunc(fnPtr any, addr uintptr) {
+	purego.RegisterFunc(fnPtr, addr)
 }
