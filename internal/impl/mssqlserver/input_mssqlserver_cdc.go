@@ -193,10 +193,10 @@ func newMSSQLServerCDCInput(conf *service.ParsedConfig, resources *service.Resou
 				return nil, err
 			}
 		}
-	} else {
-		if cpCacheTableName, err = conf.FieldString(fieldCheckpointCacheTableName); err != nil {
-			return nil, err
-		}
+	}
+
+	if cpCacheTableName, err = conf.FieldString(fieldCheckpointCacheTableName); err != nil {
+		return nil, err
 	}
 
 	// checkpointing

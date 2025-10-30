@@ -66,6 +66,7 @@ func TestIntegration_MicrosoftSQLServerCDC_SnapshotAndStreaming(t *testing.T) {
 microsoft_sql_server_cdc:
   connection_string: %s
   stream_snapshot: true
+  checkpoint_cache: ""
   snapshot_max_batch_size: 10
   include: ["test.foo", "dbo.foo", "dbo.bar"]
   exclude: ["dbo.doesnotexist"]`
