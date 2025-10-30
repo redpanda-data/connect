@@ -18,6 +18,7 @@ import (
 	"context"
 	"os"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
@@ -50,13 +51,13 @@ func CheckSharedLibraryExists(t *testing.T) {
 	}
 }
 
-func ReplaceConfig(s string) string {
+func ReplaceConfig(s string, extra []string) string {
 	return strings.NewReplacer(
-		"$LIB", SharedLibraryPath(),
+		slices.Concat([]string{"$LIB", SharedLibraryPath()}, extra)...,
 	).Replace(s)
 }
 
-func SetupFFIProcessor(t *testing.T, config string) (producer chan<- *service.Message, consumer <-chan *service.Message) {
+func SetupFFIProcessor(t *testing.T, config string, extraReplacements ...string) (producer chan<- *service.Message, consumer <-chan *service.Message) {
 	builder := service.NewStreamBuilder()
 	p := make(chan *service.Message)
 	producer = p
@@ -78,7 +79,7 @@ func SetupFFIProcessor(t *testing.T, config string) (producer chan<- *service.Me
 		return nil
 	})
 	require.NoError(t, err)
-	err = builder.AddProcessorYAML(ReplaceConfig(config))
+	err = builder.AddProcessorYAML(ReplaceConfig(config, extraReplacements))
 	require.NoError(t, err)
 	stream, err := builder.Build()
 	require.NoError(t, err)
@@ -193,5 +194,58 @@ try:
 		CheckMessageJSON(t, <-consumer, `[0, ""]`)
 		producer <- service.NewMessage([]byte(`{"str":"0123456789"}`))
 		CheckMessageJSON(t, <-consumer, `[10, "9876543210"]`)
+	})
+	// This test ensures that our fallback signature support is working.
+	t.Run("Fallbacks", func(t *testing.T) {
+		for _, functionName := range []string{"AssignAll", "AssignAllWithResult"} {
+			retType := "void"
+			if functionName == "AssignAllWithResult" {
+				retType = "int64"
+			}
+			producer, consumer := SetupFFIProcessor(t, `
+try:
+  - ffi:
+      library_path: $LIB
+      function_name: AddInt32
+      args_mapping: 'root = [68, -1]'
+      signature:
+        return:
+          type: int32
+        parameters:
+          - type: int32
+          - type: int32
+  - ffi:
+      library_path: $LIB
+      function_name: AddInt64
+      args_mapping: 'root = [this.0, 2]'
+      signature:
+        return:
+          type: int64
+        parameters:
+          - type: int64
+          - type: int64
+  - ffi:
+      library_path: $LIB
+      function_name: $FUNC
+      args_mapping: |
+        root = ["000", 3, this.0]
+      signature:
+        return:
+          type: $RET_TYPE
+        parameters:
+          - type: byte*
+            out: true
+          - type: int64
+          - type: int32
+  - mapping: |
+      root = this.map_each(e -> e.string())
+`, "$FUNC", functionName, "$RET_TYPE", retType)
+			producer <- service.NewMessage([]byte(`{}`))
+			if functionName == "AssignAllWithResult" {
+				CheckMessageJSON(t, <-consumer, `["3", "EEE"]`)
+			} else {
+				CheckMessageJSON(t, <-consumer, `["EEE"]`)
+			}
+		}
 	})
 }

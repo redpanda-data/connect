@@ -48,3 +48,13 @@ extern "C" int64_t GetState() {
 extern "C" int32_t UpperBits(int64_t v) {
   return static_cast<int32_t>(v >> 32);
 }
+
+extern "C" int32_t AddInt32(int32_t a, int32_t b) { return a + b; }
+extern "C" int64_t AddInt64(int64_t a, int64_t b) { return a + b; }
+extern "C" void AssignAll(void *a, int64_t len, int32_t val) {
+  std::fill_n(static_cast<char *>(a), len, static_cast<char>(val));
+}
+extern "C" int64_t AssignAllWithResult(void *a, int64_t len, int32_t val) {
+  std::fill_n(static_cast<char *>(a), len, static_cast<char>(val));
+  return len;
+}

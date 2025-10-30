@@ -119,6 +119,10 @@ func makeProcessor(conf *service.ParsedConfig, _ *service.Resources) (service.Ba
 			return nil, err
 		}
 		if out {
+			// Require pointers only for out parameters
+			if !strings.HasSuffix(paramType, "*") {
+				return nil, fmt.Errorf("unsupported out parameter type, only pointers maybe out parameters: %q", paramType)
+			}
 			sig.WriteString("out ")
 		}
 		sig.WriteString(paramType)

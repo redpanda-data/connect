@@ -16,6 +16,9 @@ package ffi
 
 import (
 	"fmt"
+	"reflect"
+	"runtime"
+	"strings"
 	"unsafe"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
@@ -24,7 +27,7 @@ import (
 // processorImpl takes a set of executors (one for each parameter)
 // and the message being operated on, and returns the output values
 // or an error.
-type processorImpl func(executors []any) ([]any, error)
+type processorImpl func(args []any) ([]any, error)
 
 // signature is a string that represents a specific ABI that is supported.
 //
@@ -41,12 +44,12 @@ type signatureImpl struct {
 	impl func(addr uintptr) processorImpl
 }
 
-// Maybe it's possible to do something with reflection here, but that seems both tricky,
-// and maybe not optimal from a performance prospective, so we just do the conversion switch
-// here. Maybe someday we can generate the permutations here.
+// The reflection based fallback approach is very slow.
+// For certain signatures we know will be called in high performance scenarios,
+// inline them here so the compiler can optimize.
 //
-// Until then, feel free to send a PR for your FFI Signature.
-var supportedSignatures = []signatureImpl{
+// Feel free to add more specializations here.
+var optimizedSignatures = []signatureImpl{
 	{
 		signature: "void(int64)",
 		impl: func(addr uintptr) processorImpl {
@@ -127,10 +130,94 @@ var supportedSignatures = []signatureImpl{
 }
 
 func makeProcessorImpl(sig signature, addr uintptr) (processorImpl, error) {
-	for _, supported := range supportedSignatures {
+	for _, supported := range optimizedSignatures {
 		if supported.signature == sig {
 			return supported.impl(addr), nil
 		}
 	}
-	return nil, fmt.Errorf("unsupported signature %q, please contact Redpanda Support to add new FFI signatures", sig)
+	// The fallback processor is slower, but works with all our supported types
+	return makeFallbackProcessorImpl(sig, addr)
+}
+
+func makeFallbackProcessorImpl(sig signature, addr uintptr) (processorImpl, error) {
+	pos := strings.IndexByte(string(sig), '(')
+	if pos == -1 {
+		return nil, fmt.Errorf("invalid signature: %q", sig)
+	}
+	returnType := sig[0:pos]
+	returnTypes := []reflect.Type{}
+	switch returnType {
+	case "void":
+		// No return types in golang
+	case "int32":
+		returnTypes = append(returnTypes, reflect.TypeFor[int32]())
+	case "int64":
+		returnTypes = append(returnTypes, reflect.TypeFor[int64]())
+	default:
+		return nil, fmt.Errorf("unexpected return type: %q", returnType)
+	}
+	params := strings.Split(strings.TrimSuffix(string(sig)[pos+1:], ")"), ",")
+	paramTypes := []reflect.Type{}
+	paramConverter := []func(any) (any, error){}
+	outParameters := map[int]bool{}
+	for i, param := range params {
+		out := strings.HasPrefix(param, "out ")
+		if out {
+			outParameters[i] = true
+		}
+		switch strings.TrimPrefix(param, "out ") {
+		case "int32":
+			paramTypes = append(paramTypes, reflect.TypeFor[int32]())
+			paramConverter = append(paramConverter, func(a any) (any, error) {
+				v, err := bloblang.ValueAsInt64(a)
+				return int32(v), err
+			})
+		case "int64":
+			paramTypes = append(paramTypes, reflect.TypeFor[int64]())
+			paramConverter = append(paramConverter, func(a any) (any, error) {
+				return bloblang.ValueAsInt64(a)
+			})
+		case "byte*":
+			paramTypes = append(paramTypes, reflect.TypeFor[unsafe.Pointer]())
+			paramConverter = append(paramConverter, func(a any) (any, error) {
+				return bloblang.ValueAsBytes(a)
+			})
+		default:
+			return nil, fmt.Errorf("unexpected parameter type: %q", param)
+		}
+	}
+	funcType := reflect.FuncOf(paramTypes, returnTypes, false)
+	// We have to pass in a pointer to a function in `registerFunc`
+	fnPtr := reflect.New(funcType)
+	registerFunc(fnPtr.Interface(), addr)
+	return func(args []any) ([]any, error) {
+		values := make([]reflect.Value, len(args))
+		outs := make([]any, len(returnTypes), len(returnTypes)+len(outParameters))
+		// Make sure we pin the pointers while invoking the C function
+		// so the golang memory collector doesn't move anything on us.
+		var pinner runtime.Pinner
+		defer pinner.Unpin()
+		for i, arg := range args {
+			v, err := paramConverter[i](arg)
+			if err != nil {
+				return nil, err
+			}
+			switch t := v.(type) {
+			case []byte:
+				ptr := unsafe.Pointer(unsafe.SliceData(t))
+				pinner.Pin(ptr)
+				values[i] = reflect.ValueOf(ptr)
+			default:
+				values[i] = reflect.ValueOf(v)
+			}
+			if outParameters[i] {
+				outs = append(outs, v)
+			}
+		}
+		results := fnPtr.Elem().Call(values)
+		for i, result := range results {
+			outs[i] = result.Interface()
+		}
+		return outs, nil
+	}, nil
 }
