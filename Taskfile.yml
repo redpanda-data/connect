@@ -52,10 +52,11 @@ tasks:
       - '{{.TOOLS_BIN_DIR}}/govulncheck ./...'
 
   test:
-    desc: Run unit and template tests
+    desc: Run unit, template and ffi tests
     deps:
       - test:unit
       - test:template
+      - test:ffi
 
   run:
     desc: Run redpanda-connect with the specified config
