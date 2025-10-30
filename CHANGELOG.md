@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - `redpanda_migrator` output now supports two-way syncing using provenance headers (@mmatczuk)
+- New `ffi` processor. (@rockwotj)
 
 ## 4.68.0 - 2025-10-24
 
