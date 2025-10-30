@@ -43,7 +43,7 @@ A processor that allows for dlopen'ing (or platform equivalent) and invoking fun
 
 === `library_path`
 
-The path to the shared library (.so, .dylib or .ddl) file to load dynamically.
+The path to the shared library (.so, .dylib or .dll) file to load dynamically.
 
 
 *Type*: `string`
@@ -113,9 +113,9 @@ The data type of function's return value
 | Option | Summary
 
 | `int32`
-| A 32 bit signed integer is provided as an argument
+| A 32 bit signed integer is returned
 | `int64`
-| A 64 bit signed integer is provided as an argument
+| A 64 bit signed integer is returned
 | `void`
 | The function returns nothing
 

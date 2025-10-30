@@ -22,8 +22,7 @@ import (
 	"runtime"
 )
 
-type sharedLibrary struct {
-}
+type sharedLibrary struct{}
 
 func openSharedLibrary(path string) (*sharedLibrary, error) {
 	return nil, fmt.Errorf("ffi processor not supported on %s/%s", runtime.GOOS, runtime.GOARCH)

@@ -34,8 +34,8 @@ func init() {
 var (
 	returnTypes = map[string]string{
 		"void":  "The function returns nothing",
-		"int32": "A 32 bit signed integer is provided as an argument",
-		"int64": "A 64 bit signed integer is provided as an argument",
+		"int32": "A 32 bit signed integer is returned",
+		"int64": "A 64 bit signed integer is returned",
 	}
 	paramTypes = map[string]string{
 		"int32": "A 32 bit signed integer is provided as an argument",
@@ -51,7 +51,7 @@ func ffiProcessorConfig() *service.ConfigSpec {
 			"The result from this processor is an array, where the first element is the return type if not void, and then each `out` parameter in parameter order.").
 		Fields(
 			service.NewStringField("library_path").
-				Description("The path to the shared library (.so, .dylib or .ddl) file to load dynamically.").
+				Description("The path to the shared library (.so, .dylib or .dll) file to load dynamically.").
 				Example("libbar.6.so").
 				Example("libfoo.dylib"),
 			service.NewStringField("function_name").
@@ -121,7 +121,7 @@ func makeProcessor(conf *service.ParsedConfig, _ *service.Resources) (service.Ba
 		if out {
 			// Require pointers only for out parameters
 			if !strings.HasSuffix(paramType, "*") {
-				return nil, fmt.Errorf("unsupported out parameter type, only pointers maybe out parameters: %q", paramType)
+				return nil, fmt.Errorf("unsupported out parameter type, only pointers may be out parameters: %q", paramType)
 			}
 			sig.WriteString("out ")
 		}

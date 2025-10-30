@@ -22,9 +22,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"github.com/stretchr/testify/require"
 )
 
 func SharedLibraryPath() string {
@@ -62,7 +63,6 @@ func SetupFFIProcessor(t *testing.T, config string, extraReplacements ...string)
 	p := make(chan *service.Message)
 	producer = p
 	t.Cleanup(func() { close(p) })
-	builder.SetLoggerYAML(`level: trace`)
 	builder.SetThreads(1)
 	produce, err := builder.AddProducerFunc()
 	require.NoError(t, err)
@@ -74,7 +74,7 @@ func SetupFFIProcessor(t *testing.T, config string, extraReplacements ...string)
 	c := make(chan *service.Message)
 	consumer = c
 	t.Cleanup(func() { close(c) })
-	err = builder.AddConsumerFunc(func(ctx context.Context, m *service.Message) error {
+	err = builder.AddConsumerFunc(func(_ context.Context, m *service.Message) error {
 		c <- m
 		return nil
 	})
