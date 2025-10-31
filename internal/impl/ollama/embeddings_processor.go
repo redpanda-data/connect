@@ -19,8 +19,6 @@ import (
 	"errors"
 	"unicode/utf8"
 
-	"github.com/ollama/ollama/api"
-
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
@@ -180,7 +178,7 @@ func (o *ollamaEmbeddingProcessor) computeText(msg *service.Message) (string, er
 }
 
 func (o *ollamaEmbeddingProcessor) generateEmbedding(ctx context.Context, text string) ([]float64, error) {
-	var req api.EmbeddingRequest
+	var req EmbeddingRequest
 	req.Model = o.model
 	req.Prompt = text
 	req.Options = o.opts
