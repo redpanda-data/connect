@@ -70,6 +70,7 @@ output:
     metadata_max_age: 5m
     request_timeout_overhead: 10s
     conn_idle_timeout: 20s
+    tcp_user_timeout: 0s
     topic: "" # No default (required)
     key: "" # No default (optional)
     partition: ${! meta("partition") } # No default (optional)
@@ -529,6 +530,15 @@ The rough amount of time to allow connections to idle before they are closed.
 *Type*: `string`
 
 *Default*: `"20s"`
+
+=== `tcp_user_timeout`
+
+The TCP user timeout for detecting dead connections. Sets the TCP_USER_TIMEOUT socket option (Linux only). When set to 0 (default), the option is not applied. This controls how long transmitted data may remain unacknowledged before the TCP connection is forcibly closed. Recommended values: 60s-120s for environments with frequent broker maintenance.
+
+
+*Type*: `string`
+
+*Default*: `"0s"`
 
 === `topic`
 

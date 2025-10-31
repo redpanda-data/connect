@@ -573,10 +573,33 @@ func (f *FranzReaderUnordered) Connect(ctx context.Context) error {
 				}
 
 				if nonTemporalErr && fetches.Empty() {
+					// Close the client to force a reconnection
+					f.log.Warn("Closing Kafka client due to non-temporal errors")
+					cl.Close()
+
 					select {
 					case <-time.After(connErrBackOff.NextBackOff()):
 					case <-closeCtx.Done():
 						return
+					}
+
+					// Recreate the client with a fresh connection
+					f.log.Info("Reconnecting to Kafka brokers")
+					var reconErr error
+					cl, reconErr = NewFranzClient(closeCtx, clientOpts...)
+					if reconErr != nil {
+						f.log.Errorf("Failed to recreate Kafka client: %v", reconErr)
+						// Continue to retry on next iteration
+						continue
+					}
+					f.log.Info("Successfully reconnected to Kafka")
+
+					// Recreate the consumer lag tracker with the new client
+					if consumerLag != nil {
+						consumerLag.Stop()
+						topicLagGauge := f.res.Metrics().NewGauge("kafka_lag", "topic", "partition")
+						consumerLag = NewConsumerLag(cl, f.consumerGroup, f.res.Logger(), topicLagGauge, f.topicLagRefreshPeriod)
+						consumerLag.Start()
 					}
 				}
 			} else {

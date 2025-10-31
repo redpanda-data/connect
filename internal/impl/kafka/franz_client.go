@@ -17,6 +17,7 @@ package kafka
 import (
 	"context"
 	"crypto/tls"
+	"net"
 	"strings"
 	"time"
 
@@ -24,6 +25,7 @@ import (
 	"github.com/twmb/franz-go/pkg/sasl"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/netutil"
 )
 
 const (
@@ -34,6 +36,7 @@ const (
 	kfcFieldMetadataMaxAge         = "metadata_max_age"
 	kfcFieldRequestTimeoutOverhead = "request_timeout_overhead"
 	kfcFieldConnIdleTimeout        = "conn_idle_timeout"
+	kfcFieldTCPUserTimeout         = "tcp_user_timeout"
 
 	kfcFieldSeedBrokersDescription = "A list of broker addresses to connect to in order to establish connections. If an item of the list contains commas it will be expanded into multiple addresses."
 )
@@ -75,6 +78,10 @@ func FranzConnectionFields() []*service.ConfigField {
 			Description("The rough amount of time to allow connections to idle before they are closed.").
 			Default("20s").
 			Advanced(),
+		service.NewDurationField(kfcFieldTCPUserTimeout).
+			Description("The TCP user timeout for detecting dead connections. Sets the TCP_USER_TIMEOUT socket option (Linux only). When set to 0 (default), the option is not applied. This controls how long transmitted data may remain unacknowledged before the TCP connection is forcibly closed. Recommended values: 60s-120s for environments with frequent broker maintenance.").
+			Default("0s").
+			Advanced(),
 	}
 }
 
@@ -89,6 +96,7 @@ type FranzConnectionDetails struct {
 	MetaMaxAge             time.Duration
 	RequestTimeoutOverhead time.Duration
 	ConnIdleTimeout        time.Duration
+	TCPUserTimeout         time.Duration
 
 	Logger *service.Logger
 }
@@ -135,6 +143,10 @@ func FranzConnectionDetailsFromConfig(conf *service.ParsedConfig, log *service.L
 		return nil, err
 	}
 
+	if d.TCPUserTimeout, err = conf.FieldDuration(kfcFieldTCPUserTimeout); err != nil {
+		return nil, err
+	}
+
 	return &d, nil
 }
 
@@ -156,7 +168,34 @@ func (d *FranzConnectionDetails) FranzOpts() []kgo.Opt {
 		kgo.ConnIdleTimeout(d.ConnIdleTimeout),
 	}
 
-	if d.TLSEnabled {
+	// If TCP_USER_TIMEOUT is configured, create a custom dialer with netutil
+	if d.TCPUserTimeout > 0 {
+		baseDialer := &net.Dialer{
+			Timeout: 10 * time.Second,
+		}
+
+		// Use benthos netutil to configure TCP_USER_TIMEOUT
+		dialerConfig := netutil.DialerConfig{
+			TCPUserTimeout: d.TCPUserTimeout,
+		}
+
+		if err := netutil.DecorateDialer(baseDialer, dialerConfig); err != nil {
+			// This shouldn't happen with our config, but log if it does
+			d.Logger.Errorf("Failed to configure TCP dialer: %v", err)
+		}
+
+		if d.TLSEnabled {
+			// TLS dialer that wraps our custom dialer
+			tlsDialer := &tls.Dialer{
+				NetDialer: baseDialer,
+				Config:    d.TLSConf,
+			}
+			opts = append(opts, kgo.Dialer(tlsDialer.DialContext))
+		} else {
+			opts = append(opts, kgo.Dialer(baseDialer.DialContext))
+		}
+	} else if d.TLSEnabled {
+		// Existing TLS behavior when no TCP_USER_TIMEOUT
 		opts = append(opts, kgo.DialTLSConfig(d.TLSConf))
 	}
 
