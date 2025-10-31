@@ -38,6 +38,12 @@ Common::
 # Common config fields, showing default values
 label: ""
 aws_bedrock_embeddings:
+  tcp:
+    keep_alive:
+      idle: 15s
+      interval: 15s
+      count: 9
+    tcp_user_timeout: 0s
   model: amazon.titan-embed-text-v1 # No default (required)
   text: "" # No default (optional)
 ```
@@ -53,6 +59,12 @@ label: ""
 aws_bedrock_embeddings:
   region: "" # No default (optional)
   endpoint: "" # No default (optional)
+  tcp:
+    keep_alive:
+      idle: 15s
+      interval: 15s
+      count: 9
+    tcp_user_timeout: 0s
   credentials:
     profile: "" # No default (optional)
     id: "" # No default (optional)
@@ -125,6 +137,58 @@ Allows you to specify a custom endpoint for the AWS API.
 
 *Type*: `string`
 
+
+=== `tcp`
+
+TCP socket configuration.
+
+
+*Type*: `object`
+
+
+=== `tcp.keep_alive`
+
+TCP keep-alive probe configuration.
+
+
+*Type*: `object`
+
+
+=== `tcp.keep_alive.idle`
+
+Duration the connection must be idle before sending the first keep-alive probe. Zero defaults to 15s. Negative values disable keep-alive probes.
+
+
+*Type*: `string`
+
+*Default*: `"15s"`
+
+=== `tcp.keep_alive.interval`
+
+Duration between keep-alive probes. Zero defaults to 15s.
+
+
+*Type*: `string`
+
+*Default*: `"15s"`
+
+=== `tcp.keep_alive.count`
+
+Maximum unanswered keep-alive probes before dropping the connection. Zero defaults to 9.
+
+
+*Type*: `int`
+
+*Default*: `9`
+
+=== `tcp.tcp_user_timeout`
+
+Maximum time to wait for acknowledgment of transmitted data before killing the connection. Linux-only (kernel 2.6.37+), ignored on other platforms. When enabled, keep_alive.idle must be greater than this value per RFC 5482. Zero disables.
+
+
+*Type*: `string`
+
+*Default*: `"0s"`
 
 === `credentials`
 
