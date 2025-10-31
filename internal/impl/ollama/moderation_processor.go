@@ -19,8 +19,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ollama/ollama/api"
-
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
@@ -147,21 +145,21 @@ func (o *ollamaModerationProcessor) Process(ctx context.Context, msg *service.Me
 }
 
 func (o *ollamaModerationProcessor) generateCompletion(ctx context.Context, prompt, response string) (string, error) {
-	var req api.ChatRequest
+	var req ChatRequest
 	req.Model = o.model
 	req.Options = o.opts
-	req.Messages = append(req.Messages, api.Message{
+	req.Messages = append(req.Messages, Message{
 		Role:    "user",
 		Content: prompt,
 	})
-	req.Messages = append(req.Messages, api.Message{
+	req.Messages = append(req.Messages, Message{
 		Role:    "assistant",
 		Content: response,
 	})
 	shouldStream := false
 	req.Stream = &shouldStream
 	var g string
-	err := o.client.Chat(ctx, &req, func(resp api.ChatResponse) error {
+	err := o.client.Chat(ctx, &req, func(resp ChatResponse) error {
 		g = resp.Message.Content
 		return nil
 	})
