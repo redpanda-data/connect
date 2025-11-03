@@ -65,14 +65,16 @@ This input adds the following metadata fields to each message:
 
 == Permissions
 
-To use the default Microsoft SQL Server cache, the user must have permissions to create tables and stored procedures. Refer to ` + "`" + fieldCheckpointCacheTableName + "`" + ` for additional details.
+When using the default Microsoft SQL Server based cache, the Connect user requires permission to create tables and stored procedures, and the ` + "rpcn" + `  schema must already exist. Refer to ` + "`" + fieldCheckpointCacheTableName + "`" + ` for more information.
 		`).
 	Field(service.NewStringField(fieldConnectionString).
 		Description("The connection string of the Microsoft SQL Server database to connect to.").
 		Example("sqlserver://username:password@host/instance?param1=value&param2=value"),
 	).
 	Field(service.NewBoolField(fieldStreamSnapshot).
-		Description("If set to true, the connector will query all the existing data as a part of snapshot process. Otherwise, it will start from the current Log Sequence Number position."),
+		Description("If set to true, the connector will query all the existing data as a part of snapshot process. Otherwise, it will start from the current Log Sequence Number position.").
+		Example(true).
+		Default(false),
 	).
 	Field(service.NewIntField(fieldMaxParallelSnapshotTables).
 		Description("Specifies a number of tables that will be processed in parallel during the snapshot processing stage.").
@@ -91,7 +93,7 @@ To use the default Microsoft SQL Server cache, the user must have permissions to
 		Optional(),
 	).
 	Field(service.NewStringField(fieldCheckpointCache).
-		Description("A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current Log Sequence Number (LSN) that has been successfully delivered, this allows Redpanda Connect to continue from that Log Sequence Number (LSN) upon restart, rather than consume the entire state of the change table.").
+		Description("A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current Log Sequence Number (LSN) that has been successfully delivered, this allows Redpanda Connect to continue from that Log Sequence Number (LSN) upon restart, rather than consume the entire state of the change table. If not set the default Microsoft SQL Server based cache will be used, see `" + fieldCheckpointCacheTableName + "` for more information.").
 		Optional(),
 	).
 	Field(service.NewStringField(fieldCheckpointCacheTableName).
