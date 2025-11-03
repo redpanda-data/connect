@@ -30,6 +30,21 @@ root.values_two = range(0, this.max, 2)
 
 == General
 
+=== `bytes`
+
+Create a new byte array that is zero initialized
+
+==== Parameters
+
+- *`length`* &lt;integer&gt; The size of the resulting byte array.  
+
+==== Examples
+
+
+```coffeescript
+root.data = bytes(5)
+```
+
 === `counter`
 
 [CAUTION]
