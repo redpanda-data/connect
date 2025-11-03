@@ -439,6 +439,25 @@ root.quoted = this.thing.quote()
 # Out: {"quoted":"\"foo\\nbar\""}
 ```
 
+=== `repeat`
+
+Repeat returns a new string consisting of count copies of the string
+
+==== Parameters
+
+*`count`* &lt;integer&gt; The number of times to repeat the string.  
+
+==== Examples
+
+
+```coffeescript
+root.repeated = this.name.repeat(3)
+root.not_repeated = this.name.repeat(0)
+
+# In:  {"name":"bob"}
+# Out: {"not_repeated":"","repeated":"bobbobbob"}
+```
+
 === `replace_all`
 
 Replaces all occurrences of the first argument in a target string with the second argument.
