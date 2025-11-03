@@ -322,11 +322,21 @@ func (i *sqlServerCDCInput) Connect(ctx context.Context) error {
 		// snapshot if no LSN exists then store checkpoint once complete
 		if snapshotter != nil {
 			if maxLSN, err = i.processSnapshot(softCtx, snapshotter); err != nil {
-				i.log.Errorf("Error during Microsoft SQL Server CDC Component: %s", err)
+				if i.stopSig.IsHardStopSignalled() {
+					i.log.Errorf("Shutting down snapshotting process: %s", err)
+				} else {
+					i.log.Infof("Gracefully shutting down snapshotting process: %s", err)
+				}
+				i.stopSig.TriggerHasStopped()
 				return
 			}
-			if err := i.cacheLSN(softCtx, maxLSN); err != nil {
-				i.log.Errorf("Error during Microsoft SQL Server CDC Component: %s", err)
+			if err = i.cacheLSN(softCtx, maxLSN); err != nil {
+				if i.stopSig.IsHardStopSignalled() {
+					i.log.Errorf("Shutting down snapshotting process: %s", err)
+				} else {
+					i.log.Infof("Gracefully shutting down snapshotting process: %s", err)
+				}
+				i.stopSig.TriggerHasStopped()
 				return
 			}
 			i.log.Debugf("Cached LSN following snapshot: '%s'", maxLSN)

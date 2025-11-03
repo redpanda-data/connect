@@ -88,17 +88,17 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserDefinedTable, ma
 
 		// BeginTx opens/reuses a dedicated connection for the given table-based transaction, using context.Background()
 		// because we want the transaction to be long lived. We explicitly rollback/commit it on function exit
-		if tx, err = s.db.BeginTx(context.Background(), &sql.TxOptions{Isolation: sql.LevelSnapshot}); err != nil {
+		if tx, err = s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSnapshot}); err != nil {
 			return fmt.Errorf("starting snapshot transaction: %w", err)
 		}
 		defer func() {
 			if err != nil {
-				if rbErr := tx.Rollback(); rbErr != nil {
-					l.Errorf("Failed to rollback snapshot transaction: %v", rbErr)
-				}
-			} else {
-				if cmErr := tx.Commit(); cmErr != nil {
-					l.Errorf("Failed to commit snapshot transaction: %v", cmErr)
+				// sql package automatically rolls back transaction if context is cancelled
+				if !errors.Is(err, context.Canceled) {
+					if rbErr := tx.Rollback(); rbErr != nil {
+						l.Errorf("Failed to rollback snapshot transaction: %v", rbErr)
+					}
+					return
 				}
 			}
 		}()
@@ -183,6 +183,9 @@ func (s *Snapshot) snapshotTable(ctx context.Context, table UserDefinedTable, ma
 			}
 		}
 
+		if err := tx.Commit(); err != nil {
+			l.Errorf("Failed to commit snapshot transaction: %v", err)
+		}
 		s.snapshotStatusMetric.Set(1, tableName)
 		l.Infof("Table snapshot completed, %d rows processed", numRowsProcessed)
 
