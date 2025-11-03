@@ -41,6 +41,7 @@ input:
   microsoft_sql_server_cdc:
     connection_string: sqlserver://username:password@host/instance?param1=value&param2=value # No default (required)
     stream_snapshot: false # No default (required)
+    max_parallel_snapshot_tables: 1
     snapshot_max_batch_size: 1000
     include: [] # No default (required)
     exclude: [] # No default (optional)
@@ -69,6 +70,7 @@ input:
   microsoft_sql_server_cdc:
     connection_string: sqlserver://username:password@host/instance?param1=value&param2=value # No default (required)
     stream_snapshot: false # No default (required)
+    max_parallel_snapshot_tables: 1
     snapshot_max_batch_size: 1000
     include: [] # No default (required)
     exclude: [] # No default (optional)
@@ -128,6 +130,15 @@ If set to true, the connector will query all the existing data as a part of snap
 
 *Type*: `bool`
 
+
+=== `max_parallel_snapshot_tables`
+
+Specifies a number of tables that will be processed in parallel during the snapshot processing stage.
+
+
+*Type*: `int`
+
+*Default*: `1`
 
 === `snapshot_max_batch_size`
 
