@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 
 ## 4.69.0 - TBD
 
+### Added
+
+- (Benthos) New `string.repeat(int)` method to repeat a string or byte array N times. (@rockwotj)
+- (Benthos) New `bytes` method to create a 0 initialized byte array. (@rockwotj)
+
 ### Changed
 
 - `redpanda_migrator` output now supports two-way syncing using provenance headers (@mmatczuk)
