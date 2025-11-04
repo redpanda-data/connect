@@ -957,3 +957,205 @@ func stopStreamAndWait(t *testing.T, stream *service.Stream, d time.Duration) {
 		time.Sleep(d)
 	}
 }
+
+func TestIntegrationMigratorJiraCON229(t *testing.T) {
+	integration.CheckSkip(t)
+
+	const (
+		numMessages   = 1000
+		numPartitions = 4
+		topicA        = "topicA"
+		topicB        = "topicB"
+		topicC        = "topicC"
+		topicD        = "topicD"
+		consumerGroup = "use2-aa-pfx-tp-pipe"
+		schemaSubject = "test-value"
+		schema        = `{"type":"record","name":"TestRecord","fields":[{"name":"id","type":"int"},{"name":"data","type":"string"}]}`
+	)
+
+	t.Log("Given: Redpanda clusters with schema registry")
+	src, dst := startRedpandaSourceAndDestination(t)
+
+	t.Log("And: Schema registry initialized with test schema")
+	srSrc, err := sr.NewClient(sr.URLs(src.SchemaRegistryURL))
+	require.NoError(t, err)
+	ss, err := srSrc.CreateSchema(t.Context(), schemaSubject, sr.Schema{Schema: schema})
+	require.NoError(t, err)
+	t.Logf("Created schema with ID: %d", ss.ID)
+
+	t.Log("And: Multiple topics created with multiple partitions")
+	for _, topic := range []string{topicA, topicB, topicC, topicD} {
+		_, err := src.Admin.CreateTopic(t.Context(), numPartitions, 1, nil, topic)
+		require.NoError(t, err)
+		t.Logf("Created topic: %s", topic)
+	}
+
+	t.Log("When: 1000 messages are written to each partition of each topic")
+	{
+		addSchemaID := ProduceWithSchemaIDOpt(ss.ID)
+
+		for _, topic := range []string{topicA, topicB, topicC, topicD} {
+			records := make([]*kgo.Record, 0, numMessages)
+			for i := 0; i < numMessages; i++ {
+				r := &kgo.Record{
+					Topic:     topic,
+					Key:       []byte(fmt.Sprintf("%s-key-%d", topic, i)),
+					Value:     []byte(fmt.Sprintf(`{"id":%d,"data":"msg-%d"}`, i, i)),
+					Partition: int32(i % numPartitions),
+					Timestamp: time.Unix(100, 0).Add(time.Duration(i) * 100 * time.Millisecond),
+				}
+				addSchemaID(r)
+				records = append(records, r)
+			}
+			require.NoError(t, src.Client.ProduceSync(t.Context(), records...).FirstErr())
+		}
+		t.Logf("Successfully wrote %d messages to each of 4 topics", numMessages)
+	}
+
+	t.Log("And: Migrator is started with schema registry and consumer group migration")
+	{
+		const yamlTmpl = `
+http:
+  enabled: true
+  address: {{.HTTPAddr}}
+
+input:
+  redpanda_migrator:
+    seed_brokers: 
+      - {{.Src.BrokerAddr}}
+    topics: 
+      - {{.TopicA}}
+      - {{.TopicB}}
+      - {{.TopicC}}
+      - {{.TopicD}}
+    consumer_group: {{.ConsumerGroup}}
+    auto_replay_nacks: false
+    commit_period: 5s
+    conn_idle_timeout: 60s
+    fetch_max_bytes: 100MiB
+    fetch_max_partition_bytes: 10MiB
+    fetch_max_wait: 1s
+    fetch_min_bytes: 100KB
+    heartbeat_interval: 3s
+    max_yield_batch_bytes: 100MB
+    metadata_max_age: 1m
+    partition_buffer_bytes: 10MB
+    rebalance_timeout: 45s
+    session_timeout: 1m
+    start_offset: earliest
+    topic_lag_refresh_period: 5s
+    schema_registry:
+      url: {{.Src.SchemaRegistryURL}}
+
+output:
+  redpanda_migrator:
+    seed_brokers: [ {{.Dst.BrokerAddr}} ]
+    allow_auto_topic_creation: true
+    topic: use1_${! @kafka_topic }
+    broker_write_max_bytes: 100MiB
+    compression: snappy
+    conn_idle_timeout: 120s
+    consumer_groups:
+      enabled: true
+      fetch_timeout: 10s
+      interval: 5s
+      only_empty: false
+    idempotent_write: true
+    max_message_bytes: 100MB
+    metadata_max_age: 5s
+    sync_topic_acls: false
+    timeout: 10s
+    schema_registry:
+      url: {{.Dst.SchemaRegistryURL}}
+      enabled: true
+
+logger:
+  level: DEBUG
+`
+		tmpl, err := template.New("migrator").Parse(yamlTmpl)
+		require.NoError(t, err)
+
+		data := struct {
+			Src           EmbeddedRedpandaCluster
+			Dst           EmbeddedRedpandaCluster
+			TopicA        string
+			TopicB        string
+			TopicC        string
+			TopicD        string
+			ConsumerGroup string
+			HTTPAddr      string
+		}{
+			Src:           src,
+			Dst:           dst,
+			TopicA:        topicA,
+			TopicB:        topicB,
+			TopicC:        topicC,
+			TopicD:        topicD,
+			ConsumerGroup: consumerGroup,
+			HTTPAddr:      httpAddr,
+		}
+		var yamlBuf bytes.Buffer
+		require.NoError(t, tmpl.Execute(&yamlBuf, data))
+
+		sb := service.NewStreamBuilder()
+		require.NoError(t, sb.SetYAML(yamlBuf.String()))
+
+		msgChan := make(chan *service.Message, 1000)
+		require.NoError(t, sb.AddConsumerFunc(func(_ context.Context, m *service.Message) error {
+			msgChan <- m
+			return nil
+		}))
+
+		stream, err := sb.Build()
+		require.NoError(t, err)
+
+		go func() {
+			if err := stream.Run(t.Context()); err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
+			t.Log("Migrator pipeline shutdown")
+		}()
+
+		t.Cleanup(func() {
+			require.NoError(t, stream.StopWithin(stopStreamTimeout))
+		})
+
+		totalMessages := numMessages * 4
+		t.Logf("Then: Waiting for %d messages to be migrated", totalMessages)
+		for i := 0; i < totalMessages; i++ {
+			select {
+			case <-msgChan:
+				if (i+1)%100 == 0 {
+					t.Logf("Migrated %d messages", i+1)
+				}
+			case <-time.After(redpandaTestWaitTimeout):
+				t.Fatalf("Timed out waiting for message %d of %d", i+1, totalMessages)
+			}
+		}
+	}
+
+	t.Log("Then: Schema is visible at destination")
+	srDst, err := sr.NewClient(sr.URLs(dst.SchemaRegistryURL))
+	require.NoError(t, err)
+	txt, err := srDst.SchemaTextByVersion(t.Context(), schemaSubject, 1)
+	require.NoError(t, err)
+	assert.Equal(t, schema, txt)
+
+	t.Log("And: Destination topics exist with correct partitions")
+	for _, topic := range []string{topicA, topicB, topicC, topicD} {
+		dstTopic := fmt.Sprintf("use1_%s", topic)
+		details := dst.DescribeTopic(dstTopic)
+		assert.Len(t, details.Partitions, numPartitions, "Topic %s should have %d partitions", dstTopic, numPartitions)
+		t.Logf("Topic %s exists with %d partitions", dstTopic, len(details.Partitions))
+	}
+
+	t.Log("And: All messages are present in destination topics")
+	ctx, cancel := context.WithTimeout(t.Context(), redpandaTestWaitTimeout)
+	defer cancel()
+	for _, topic := range []string{topicA, topicB, topicC, topicD} {
+		dstTopic := fmt.Sprintf("use1_%s", topic)
+		records := readTopicContentContext(ctx, dst, numMessages)
+		assert.Len(t, records, numMessages, "Topic %s should have %d messages", dstTopic, numMessages)
+		t.Logf("Topic %s has %d messages", dstTopic, len(records))
+	}
+}
