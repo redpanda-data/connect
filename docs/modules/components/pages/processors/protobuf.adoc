@@ -49,11 +49,21 @@ The processor will ignore any files that begin with a dot ("."g), a convention f
 
 === `to_json`
 
-Converts protobuf messages into a generic JSON structure. This makes it easier to manipulate the contents of the document within Redpanda Connect.
+Converts protobuf messages into serialized proto3 JSON.
 
 === `from_json`
 
-Attempts to create a target protobuf message from a generic JSON structure.
+Attempts to create a target protobuf message from a serialized proto3 JSON.
+
+=== `decode`
+
+Converts protobuf messages into a generic structured message. This makes it easier to manipulate the contents of the document within Redpanda Connect.
+This differs from `to_json` in the following ways:
+
+- 64 bit numbers are *not* converted into strings
+- Bytes and google.protobuf.Timestamp types are preserved (not encoded as strings unless serialized)
+
+This operator is also considerably faster in scenario where you manipulate the data as the data does not need to be serialized then deserialized like with the `to_json` operator.
 
 
 == Examples
@@ -266,6 +276,7 @@ The [operator](#operators) to execute
 Options:
 `to_json`
 , `from_json`
+, `decode`
 .
 
 === `message`
@@ -287,7 +298,7 @@ If `true`, the `from_json` operator discards fields that are unknown to the sche
 
 === `use_proto_names`
 
-If `true`, the `to_json` operator deserializes fields exactly as named in schema file.
+If `true`, the `to_json` or `decode` operator deserializes fields exactly as named in schema file.
 
 
 *Type*: `bool`
@@ -305,7 +316,7 @@ A list of directories containing .proto files, including all definitions require
 
 === `use_enum_numbers`
 
-If `true`, the `to_json` operator deserializes enums as numerical values instead of string names.
+If `true`, the `to_json` or `decode` operator deserializes enums as numerical values instead of string names.
 
 
 *Type*: `bool`

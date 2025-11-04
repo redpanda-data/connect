@@ -15,10 +15,12 @@
 package migrator
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/Jeffail/shutdown"
 	"github.com/twmb/franz-go/pkg/kadm"
@@ -34,6 +36,7 @@ const (
 	rmoFieldTopicReplicationFactor = "topic_replication_factor"
 	rmoFieldSyncTopicACLs          = "sync_topic_acls"
 	rmoFieldServerless             = "serverless"
+	rmoFieldProvenanceHeader       = "provenance_header"
 )
 
 func migratorInputConfig() *service.ConfigSpec {
@@ -196,9 +199,10 @@ output:
 			`input:
   redpanda_migrator:
     seed_brokers: ["source-kafka:9092"]
-    topics:
-      - '^[^_]'  # All topics not starting with underscore
-    regexp_topics: true
+    regexp_topics_include:
+      - '.'
+    regexp_topics_exclude:
+      - '^_'
     consumer_group: "migrator_cg"
     schema_registry:
       url: "http://source-registry:8081"
@@ -249,6 +253,10 @@ output:
 			Description("Enable serverless mode for Redpanda Cloud serverless clusters. This restricts topic configurations and schema features to those supported by serverless environments.").
 			Default(false).
 			Advanced()).
+		Field(service.NewStringField(rmoFieldProvenanceHeader).
+			Description("Header name to add to migrated records indicating their source cluster. If empty, no provenance header is added.").
+			Default("redpanda-migrator-provenance").
+			Advanced()).
 		LintRule(`
 root = [
   if this.key.or("") != "" {
@@ -293,7 +301,7 @@ func (w migratorBatchInput) Connect(ctx context.Context) error {
 	if err := w.BatchInput.Connect(ctx); err != nil {
 		return err
 	}
-	return w.m.OnInputConnected(ctx, w.BatchInput.(*kafka.FranzReaderOrdered))
+	return w.m.onInputConnected(ctx, w.BatchInput.(*kafka.FranzReaderOrdered))
 }
 
 type migratorBatchOutput struct {
@@ -305,7 +313,7 @@ func (w migratorBatchOutput) Connect(ctx context.Context) error {
 	if err := w.BatchOutput.Connect(ctx); err != nil {
 		return err
 	}
-	return w.m.OnOutputConnected(ctx, w.BatchOutput.(franzWriter))
+	return w.m.onOutputConnected(ctx, w.BatchOutput.(franzWriter))
 }
 
 func (w migratorBatchOutput) Close(ctx context.Context) error {
@@ -344,7 +352,7 @@ func init() {
 			if err != nil {
 				return
 			}
-			fw.OnWrite = m.onWrite
+			fw.MessageBatchToFranzRecords = m.messageBatchToFranzRecords
 			out = migratorBatchOutput{fw, m}
 
 			// Force single in-flight batch message to ensure data ordering
@@ -372,12 +380,16 @@ type Migrator struct {
 	groups groupsMigrator
 	log    *service.Logger
 
-	plumbing uint8
-	stopSig  *shutdown.Signaller
+	provenanceHeader string
+	plumbing         uint8
+	stopSig          *shutdown.Signaller
 
-	mu     sync.RWMutex
-	src    *kgo.Client
-	srcAdm *kadm.Client
+	mu           sync.RWMutex
+	src          *kgo.Client
+	srcAdm       *kadm.Client
+	srcClusterID []byte
+	dstAdm       *kadm.Client
+	dstClusterID []byte
 }
 
 // NewMigrator creates a new Migrator instance with the provided logger.
@@ -429,6 +441,11 @@ func (m *Migrator) initOutputFromParsed(pConf *service.ParsedConfig, mgr *servic
 		return err
 	}
 
+	m.provenanceHeader, err = pConf.FieldString(rmoFieldProvenanceHeader)
+	if err != nil {
+		return err
+	}
+
 	m.sr.dst, err = schemaRegistryClientFromParsed(pConf, mgr)
 	if err != nil {
 		return err
@@ -445,14 +462,23 @@ func (m *Migrator) initOutputFromParsed(pConf *service.ParsedConfig, mgr *servic
 	return nil
 }
 
-func (m *Migrator) OnInputConnected(_ context.Context, fr *kafka.FranzReaderOrdered) error { //nolint:revive
+func (m *Migrator) onInputConnected(ctx context.Context, fr *kafka.FranzReaderOrdered) error {
 	if err := m.validateInitialized(); err != nil {
 		return err
+	}
+
+	metadata, err := kadm.NewClient(fr.Client).Metadata(ctx)
+	if err != nil {
+		return fmt.Errorf("get source cluster metadata: %w", err)
+	}
+	if metadata.Cluster == "" {
+		return errors.New("source cluster ID not found")
 	}
 
 	m.mu.Lock()
 	m.src = fr.Client
 	m.srcAdm = kadm.NewClient(fr.Client)
+	m.srcClusterID = []byte(metadata.Cluster)
 	m.groups.src = fr.Client
 	m.groups.srcAdm = m.srcAdm
 	m.mu.Unlock()
@@ -460,7 +486,7 @@ func (m *Migrator) OnInputConnected(_ context.Context, fr *kafka.FranzReaderOrde
 	return nil
 }
 
-func (m *Migrator) OnOutputConnected(_ context.Context, fw franzWriter) error { //nolint:revive
+func (m *Migrator) onOutputConnected(_ context.Context, fw franzWriter) error {
 	if err := m.validateInitialized(); err != nil {
 		return err
 	}
@@ -473,7 +499,19 @@ func (m *Migrator) OnOutputConnected(_ context.Context, fw franzWriter) error { 
 		cancel()
 		return fmt.Errorf("get franz client: %w", err)
 	}
+	dstAdm := kadm.NewClient(clientInfo.Client)
+
+	metadata, err := dstAdm.Metadata(ctx)
+	if err != nil {
+		return fmt.Errorf("get destination cluster metadata: %w", err)
+	}
+	if metadata.Cluster == "" {
+		return errors.New("destination cluster ID not found")
+	}
+
 	m.mu.Lock()
+	m.dstAdm = dstAdm
+	m.dstClusterID = []byte(metadata.Cluster)
 	m.groups.dstAdm = kadm.NewClient(clientInfo.Client)
 	m.mu.Unlock()
 
@@ -512,21 +550,26 @@ func (m *Migrator) validateInitialized() error {
 	return nil
 }
 
-func (m *Migrator) onWrite(
-	ctx context.Context,
-	dst *kgo.Client,
-	records []*kgo.Record,
-) error {
+func (m *Migrator) messageBatchToFranzRecords(batch service.MessageBatch) ([]kgo.Record, error) {
+	if len(batch) == 0 {
+		return nil, nil
+	}
+
 	m.mu.RLock()
 	src := m.src
 	srcAdm := m.srcAdm
+	srcClusterID := m.srcClusterID
+	dstAdm := m.dstAdm
+	dstClusterID := m.dstClusterID
 	m.mu.RUnlock()
 
-	dstAdm := kadm.NewClient(dst)
+	ctx := batch[0].Context()
 
 	if err := m.topic.SyncOnce(ctx, srcAdm, dstAdm, src.GetConsumeTopics); err != nil {
-		return fmt.Errorf("sync topics: %w", err)
+		return nil, fmt.Errorf("sync topics: %w", err)
 	}
+
+	records := make([]kgo.Record, 0, len(batch))
 
 	var (
 		lastTopic       string
@@ -534,42 +577,115 @@ func (m *Migrator) onWrite(
 		lastSchemaID    int
 		lastDstSchemaID int
 	)
-	for _, record := range records {
-		if record == nil {
-			continue
+
+	for _, msg := range batch {
+		r := kgo.Record{
+			Context: msg.Context(),
 		}
 
-		if record.Topic != lastTopic {
-			topic, err := m.topic.CreateTopicIfNeeded(ctx, srcAdm, dstAdm, record.Topic)
-			if err != nil {
-				return err
+		// Key (optional)
+		if keyVal, ok := msg.MetaGetMut("kafka_key"); ok {
+			switch v := keyVal.(type) {
+			case string:
+				r.Key = []byte(v)
+			case []byte:
+				r.Key = v
 			}
-			lastTopic, lastDstTopic = record.Topic, topic
 		}
-		record.Topic = lastDstTopic
 
-		// Update schema ID
+		// Value (required)
+		value, err := msg.AsBytes()
+		if err != nil {
+			return nil, fmt.Errorf("message to bytes: %w", err)
+		}
 		if m.sr.enabled() && m.sr.conf.TranslateIDs {
-			schemaID, err := parseSchemaID(record.Value)
+			schemaID, err := parseSchemaID(value)
 			if err != nil {
-				return fmt.Errorf("parse schema ID: %w", err)
+				return nil, fmt.Errorf("parse schema ID: %w", err)
 			}
 			if schemaID != 0 {
 				if schemaID != lastSchemaID {
-					id, err := m.sr.DestinationSchemaID(schemaID)
+					dstSchemaID, err := m.sr.DestinationSchemaID(schemaID)
 					if err != nil {
-						return fmt.Errorf("resolve destination schema ID: %w", err)
+						return nil, fmt.Errorf("resolve destination schema ID: %w", err)
 					}
-					lastSchemaID, lastDstSchemaID = schemaID, id
+					lastSchemaID, lastDstSchemaID = schemaID, dstSchemaID
 				}
-				if err := updateSchemaID(record.Value, lastDstSchemaID); err != nil {
-					return fmt.Errorf("update schema ID: %w", err)
+				if err := updateSchemaID(value, lastDstSchemaID); err != nil {
+					return nil, fmt.Errorf("update schema ID: %w", err)
 				}
 			}
 		}
+		r.Value = value
+
+		// Headers (optional)
+		r.Headers = kafka.ExtractHeaders(msg)
+		if m.provenanceHeader != "" {
+			origin, ok := kafka.GetHeaderValue(r.Headers, m.provenanceHeader)
+			if ok {
+				if len(origin) == 0 {
+					return nil, errors.New("provenance header is empty, possibility of data corruption")
+				}
+				if bytes.Equal(origin, srcClusterID) {
+					return nil, errors.New("record contains provenance header from source cluster, possibility of data corruption")
+				}
+				if bytes.Equal(origin, dstClusterID) {
+					// Do not send message to its origin cluster
+					records = append(records, kafka.SkipRecord)
+					continue
+				}
+			} else {
+				r.Headers = append(r.Headers, kgo.RecordHeader{
+					Key:   m.provenanceHeader,
+					Value: srcClusterID,
+				})
+			}
+		}
+
+		// Timestamp (required)
+		tsVal, ok := msg.MetaGetMut("kafka_timestamp_ms")
+		if !ok {
+			return nil, errors.New("kafka_timestamp_ms metadata not found")
+		}
+		tsInt, ok := tsVal.(int64)
+		if !ok {
+			return nil, errors.New("kafka_timestamp_ms metadata is not int64")
+		}
+		r.Timestamp = time.UnixMilli(tsInt)
+
+		// Topic (required)
+		srcTopic, ok := msg.MetaGetMut("kafka_topic")
+		if !ok {
+			return nil, errors.New("kafka_topic metadata not found")
+		}
+		srcTopicStr, ok := srcTopic.(string)
+		if !ok {
+			return nil, errors.New("kafka_topic metadata is not a string")
+		}
+		if srcTopicStr != lastTopic {
+			dstTopic, err := m.topic.CreateTopicIfNeeded(ctx, srcAdm, dstAdm, srcTopicStr)
+			if err != nil {
+				return nil, err
+			}
+			lastTopic, lastDstTopic = srcTopicStr, dstTopic
+		}
+		r.Topic = lastDstTopic
+
+		// Partition (required)
+		partVal, ok := msg.MetaGetMut("kafka_partition")
+		if !ok {
+			return nil, errors.New("kafka_partition metadata not found")
+		}
+		partInt, ok := partVal.(int)
+		if !ok {
+			return nil, errors.New("kafka_partition metadata is not int")
+		}
+		r.Partition = int32(partInt)
+
+		records = append(records, r)
 	}
 
-	return nil
+	return records, nil
 }
 
 func parseSchemaID(b []byte) (int, error) {

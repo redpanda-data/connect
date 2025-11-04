@@ -39,3 +39,6 @@ dockers_v2:
     extra_files:
       - config/docker.yaml
 
+release:
+  disable: true
+

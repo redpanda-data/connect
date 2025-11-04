@@ -23,7 +23,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
-  "id": 1,
+  "id": 2,
   "links": [],
   "panels": [
     {
@@ -130,7 +130,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "rate(input_received{}[$__rate_interval])",
+          "expr": "rate(input_received{}[$rate_interval])",
           "interval": "",
           "legendFormat": "",
           "range": true,
@@ -142,7 +142,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "rate(output_sent{}[$__rate_interval])",
+          "expr": "rate(output_sent{}[$rate_interval])",
           "hide": false,
           "instant": false,
           "legendFormat": "__auto",
@@ -239,7 +239,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "rate(output_sent[$__rate_interval])/rate(output_batch_sent[$__rate_interval])",
+          "expr": "rate(output_sent[$rate_interval])/rate(output_batch_sent[$rate_interval])",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -564,7 +564,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "rate(benchmark_bytes_total[$__rate_interval])",
+          "expr": "rate(benchmark_bytes_total[$rate_interval])",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -579,7 +579,19 @@
   "schemaVersion": 42,
   "tags": [],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "current": {
+          "text": "15s",
+          "value": "15s"
+        },
+        "hide": 2,
+        "name": "rate_interval",
+        "query": "15s",
+        "skipUrlSync": true,
+        "type": "constant"
+      }
+    ]
   },
   "time": {
     "from": "now-30m",

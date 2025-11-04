@@ -23,7 +23,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/Jeffail/gabs/v2"
-	"github.com/ollama/ollama/api"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -284,7 +283,7 @@ func makeOllamaCompletionProcessor(conf *service.ParsedConfig, mgr *service.Reso
 			return nil, err
 		}
 		for _, toolConf := range tools {
-			t := api.Tool{Type: "function"}
+			t := Tool{Type: "function"}
 			t.Function.Name, err = toolConf.FieldString(ocpToolFieldName)
 			if err != nil {
 				return nil, err
@@ -303,7 +302,7 @@ func makeOllamaCompletionProcessor(conf *service.ParsedConfig, mgr *service.Reso
 			if err != nil {
 				return nil, err
 			}
-			t.Function.Parameters.Properties = map[string]api.ToolProperty{}
+			t.Function.Parameters.Properties = map[string]ToolProperty{}
 			for name, paramConf := range propsConf {
 				paramType, err := paramConf.FieldString(ocpToolParamPropFieldType)
 				if err != nil {
@@ -321,8 +320,8 @@ func makeOllamaCompletionProcessor(conf *service.ParsedConfig, mgr *service.Reso
 				for _, e := range enumStr {
 					enum = append(enum, e)
 				}
-				t.Function.Parameters.Properties[name] = api.ToolProperty{
-					Type:        api.PropertyType{paramType},
+				t.Function.Parameters.Properties[name] = ToolProperty{
+					Type:        PropertyType{paramType},
 					Description: desc,
 					Enum:        enum,
 				}
@@ -344,7 +343,7 @@ func makeOllamaCompletionProcessor(conf *service.ParsedConfig, mgr *service.Reso
 }
 
 type tool struct {
-	spec     api.Tool
+	spec     Tool
 	pipeline []*service.OwnedProcessor
 }
 
@@ -385,7 +384,7 @@ func (o *ollamaCompletionProcessor) Process(ctx context.Context, msg *service.Me
 			return nil, fmt.Errorf("unable to convert `%s` result to a byte array: %w", ocpFieldImage, err)
 		}
 	}
-	var history []api.Message
+	var history []Message
 	if o.history != nil {
 		h, err := msg.BloblangQuery(o.history)
 		if err != nil {
@@ -428,8 +427,8 @@ func (o *ollamaCompletionProcessor) computePrompt(msg *service.Message) (string,
 	return string(b), nil
 }
 
-func (o *ollamaCompletionProcessor) generateCompletion(ctx context.Context, systemPrompt, userPrompt string, image []byte, history []api.Message) (string, error) {
-	var req api.ChatRequest
+func (o *ollamaCompletionProcessor) generateCompletion(ctx context.Context, systemPrompt, userPrompt string, image []byte, history []Message) (string, error) {
+	var req ChatRequest
 	req.Model = o.model
 	req.Options = o.opts
 	req.Messages = history
@@ -437,16 +436,16 @@ func (o *ollamaCompletionProcessor) generateCompletion(ctx context.Context, syst
 		req.Format = o.format
 	}
 	if systemPrompt != "" {
-		req.Messages = append(req.Messages, api.Message{
+		req.Messages = append(req.Messages, Message{
 			Role:    "system",
 			Content: systemPrompt,
 		})
 	}
-	var images []api.ImageData
+	var images []ImageData
 	if image != nil {
-		images = []api.ImageData{image}
+		images = []ImageData{image}
 	}
-	req.Messages = append(req.Messages, api.Message{
+	req.Messages = append(req.Messages, Message{
 		Role:    "user",
 		Content: userPrompt,
 		Images:  images,
@@ -458,9 +457,9 @@ func (o *ollamaCompletionProcessor) generateCompletion(ctx context.Context, syst
 	}
 	// Allow up to N iterations of calling tools
 	for range o.maxToolCalls + 1 {
-		var resp api.ChatResponse
+		var resp ChatResponse
 		o.logger.Tracef("making LLM chat request messages: %s", gabs.Wrap(req.Messages).EncodeJSON())
-		err := o.client.Chat(ctx, &req, func(r api.ChatResponse) error {
+		err := o.client.Chat(ctx, &req, func(r ChatResponse) error {
 			resp = r
 			return nil
 		})
@@ -489,7 +488,7 @@ func (o *ollamaCompletionProcessor) generateCompletion(ctx context.Context, syst
 				return "", fmt.Errorf("error processing pipeline %s output: %w", toolCall.Function.Name, err)
 			}
 			o.logger.Debugf("Tool %s response: %s", toolCall.Function.Name, resp)
-			req.Messages = append(req.Messages, api.Message{Role: "tool", Content: resp})
+			req.Messages = append(req.Messages, Message{Role: "tool", Content: resp})
 		}
 	}
 	return "", fmt.Errorf("model did not finish after %d function calls", o.maxToolCalls)

@@ -53,6 +53,8 @@ const (
 	kfrFieldRackID                 = "rack_id"
 	kfrFieldTopics                 = "topics"
 	kfrFieldRegexpTopics           = "regexp_topics"
+	kfrFieldRegexpTopicsInclude    = "regexp_topics_include"
+	kfrFieldRegexpTopicsExclude    = "regexp_topics_exclude"
 	kfrFieldStartFromOldest        = "start_from_oldest"
 	kfrFieldStartOffset            = "start_offset"
 	kfrFieldFetchMaxBytes          = "fetch_max_bytes"
@@ -92,6 +94,9 @@ const (
 	// FranzConsumerFieldLintRules contains the lint rules for the consumer fields.
 	FranzConsumerFieldLintRules = `
 let has_topic_partitions = this.topics.any(t -> t.contains(":"))
+let has_topics = this.topics.length() > 0
+let has_regexp_topics_include = this.regexp_topics_include.length() > 0 
+let is_regex_mode = this.regexp_topics || $has_regexp_topics_include
 
 root = [
   if $has_topic_partitions {
@@ -104,6 +109,15 @@ root = [
     if this.consumer_group.or("") == "" {
       "a consumer group is mandatory when not using explicit topic partitions"
     }
+  },
+  if !$has_topics && !$has_regexp_topics_include {
+    "either topics or regexp_topics_include must be specified"
+  },
+  if $has_topics && $has_regexp_topics_include {
+    "cannot specify both topics and regexp_topics_include, use one or the other"
+  },
+  if this.regexp_topics_exclude.length() > 0 && !$is_regex_mode {
+    "regexp_topics_exclude can only be used when regexp_topics is set to true or regexp_topics_include is specified"
   },
   # We don't have any way to distinguish between start_from_oldest set explicitly to true and not set at all, so we
   # assume users will be OK if start_offset overwrites it silently
@@ -130,10 +144,20 @@ Finally, it's also possible to specify an explicit offset to consume from by add
 			Example([]string{"foo,bar"}).
 			Example([]string{"foo:0", "bar:1", "bar:3"}).
 			Example([]string{"foo:0,bar:1,bar:3"}).
-			Example([]string{"foo:0-5"}),
+			Example([]string{"foo:0-5"}).
+			Optional(),
 		service.NewBoolField(kfrFieldRegexpTopics).
-			Description("Whether listed topics should be interpreted as regular expression patterns for matching multiple topics. When enabled, the client will periodically refresh the list of matching topics based on the `metadata_max_age` interval. When topics are specified with explicit partitions this field must remain set to `false`.").
-			Default(false),
+			Description("Whether listed topics should be interpreted as regular expression patterns for matching multiple topics. When enabled, the client will periodically refresh the list of matching topics based on the `metadata_max_age` interval. When topics are specified with explicit partitions this field must remain set to `false`.\n\nThis field is deprecated, use `regexp_topics_include` instead.").
+			Default(false).
+			Deprecated(),
+		service.NewStringListField(kfrFieldRegexpTopicsInclude).
+			Description("A list of regular expression patterns for matching topics to consume from. When specified, the client will periodically refresh the list of matching topics based on the `metadata_max_age` interval. This enables regex mode and cannot be used together with the `topics` field. Use `regexp_topics_exclude` to exclude specific patterns.").
+			Example([]string{"logs_.*", "metrics_.*"}).
+			Example([]string{"events_[0-9]+"}).
+			Optional(),
+		service.NewStringListField(kfrFieldRegexpTopicsExclude).
+			Description("A list of regular expression patterns for excluding topics when regex mode is enabled (via `regexp_topics` or `regexp_topics_include`). Topics matching any of these patterns will be excluded from consumption, even if they match include patterns.").
+			Optional(),
 		service.NewStringField(kfrFieldRackID).
 			Description("A rack specifies where the client is physically located and changes fetch requests to consume from the closest replica as opposed to the leader replica.").
 			Default("").
@@ -204,6 +228,7 @@ type FranzConsumerDetails struct {
 	Topics                 []string
 	TopicPartitions        map[string]map[int32]kgo.Offset
 	RegexPattern           bool
+	ExcludeTopics          []string
 	FetchMinBytes          int32
 	FetchMaxBytes          int32
 	FetchMaxPartitionBytes int32
@@ -278,6 +303,21 @@ func FranzConsumerDetailsFromConfig(conf *service.ParsedConfig) (*FranzConsumerD
 		return nil, err
 	}
 
+	regexpTopics, err := conf.FieldBool(kfrFieldRegexpTopics)
+	if err != nil {
+		return nil, err
+	}
+	regexpIncludeTopics, err := conf.FieldStringList(kfrFieldRegexpTopicsInclude)
+	if err != nil {
+		return nil, err
+	}
+	d.RegexPattern = regexpTopics || len(regexpIncludeTopics) > 0
+
+	// Update topic list based on regex mode
+	if len(regexpIncludeTopics) != 0 {
+		topicList = regexpIncludeTopics
+	}
+
 	var topicPartitionsInts map[string]map[int32]int64
 	if d.Topics, topicPartitionsInts, err = ParseTopics(topicList, d.StartOffset.EpochOffset().Offset, true); err != nil {
 		return nil, err
@@ -294,7 +334,7 @@ func FranzConsumerDetailsFromConfig(conf *service.ParsedConfig) (*FranzConsumerD
 		}
 	}
 
-	if d.RegexPattern, err = conf.FieldBool(kfrFieldRegexpTopics); err != nil {
+	if d.ExcludeTopics, err = conf.FieldStringList(kfrFieldRegexpTopicsExclude); err != nil {
 		return nil, err
 	}
 
@@ -335,6 +375,9 @@ func (d *FranzConsumerDetails) FranzOpts() []kgo.Opt {
 
 	if d.RegexPattern {
 		opts = append(opts, kgo.ConsumeRegex())
+		if len(d.ExcludeTopics) > 0 {
+			opts = append(opts, kgo.ConsumeExcludeTopics(d.ExcludeTopics...))
+		}
 	}
 
 	if d.InstanceID != "" {
@@ -397,19 +440,7 @@ func FranzRecordToMessageV1(record *kgo.Record) *service.Message {
 	msg.MetaSetMut("kafka_timestamp_ms", record.Timestamp.UnixMilli())
 	msg.MetaSetMut("kafka_tombstone_message", record.Value == nil)
 
-	headers := map[string][]any{}
-
-	for _, hdr := range record.Headers {
-		headers[hdr.Key] = append(headers[hdr.Key], string(hdr.Value))
-	}
-
-	for key, values := range headers {
-		if len(values) == 1 {
-			msg.MetaSetMut(key, values[0])
-		} else {
-			msg.MetaSetMut(key, values)
-		}
-	}
+	AddHeaders(msg, record.Headers)
 
 	return msg
 }

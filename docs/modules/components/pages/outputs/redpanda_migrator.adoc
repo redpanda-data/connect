@@ -141,6 +141,7 @@ output:
     topic_replication_factor: "3" # No default (optional)
     sync_topic_acls: false
     serverless: false
+    provenance_header: redpanda-migrator-provenance
 ```
 
 --
@@ -277,9 +278,10 @@ Migrate from Confluent/Kafka to Redpanda Cloud serverless cluster with authentic
 ```yamlinput:
   redpanda_migrator:
     seed_brokers: ["source-kafka:9092"]
-    topics:
-      - '^[^_]'  # All topics not starting with underscore
-    regexp_topics: true
+    regexp_topics_include:
+      - '.'
+    regexp_topics_exclude:
+      - '^_'
     consumer_group: "migrator_cg"
     schema_registry:
       url: "http://source-registry:8081"
@@ -1424,5 +1426,14 @@ Enable serverless mode for Redpanda Cloud serverless clusters. This restricts to
 *Type*: `bool`
 
 *Default*: `false`
+
+=== `provenance_header`
+
+Header name to add to migrated records indicating their source cluster. If empty, no provenance header is added.
+
+
+*Type*: `string`
+
+*Default*: `"redpanda-migrator-provenance"`
 
 
