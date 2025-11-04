@@ -43,7 +43,7 @@ const migratorTestTopic = "test_topic"
 
 // EmbeddedRedpandaCluster represents a Redpanda cluster with client and admin access.
 type EmbeddedRedpandaCluster struct {
-	redpandatest.RedpandaEndpoints
+	redpandatest.Endpoints
 	Client *kgo.Client
 	Admin  *kadm.Client
 	t      *testing.T
@@ -59,10 +59,10 @@ func startRedpandaSourceAndDestination(t *testing.T) (src, dst EmbeddedRedpandaC
 	src = EmbeddedRedpandaCluster{t: t}
 	dst = EmbeddedRedpandaCluster{t: t}
 
-	src.RedpandaEndpoints, err = redpandatest.StartRedpanda(t, pool, true, false)
+	src.Endpoints, err = redpandatest.StartRedpanda(t, pool, true, false)
 	require.NoError(t, err)
 
-	dst.RedpandaEndpoints, err = redpandatest.StartRedpanda(t, pool, true, false)
+	dst.Endpoints, err = redpandatest.StartRedpanda(t, pool, true, false)
 	require.NoError(t, err)
 
 	src.Client, err = kgo.NewClient(
@@ -576,7 +576,7 @@ func startConfluentInPool(t *testing.T, pool *dockertest.Pool, connect bool) Emb
 
 	return EmbeddedConfluentCluster{
 		EmbeddedRedpandaCluster: EmbeddedRedpandaCluster{
-			RedpandaEndpoints: redpandatest.RedpandaEndpoints{
+			Endpoints: redpandatest.Endpoints{
 				BrokerAddr:        brokerAddr,
 				SchemaRegistryURL: schemaRegistryURL,
 			},

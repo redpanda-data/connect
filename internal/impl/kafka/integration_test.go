@@ -291,7 +291,7 @@ func TestRedpandaRecordOrderIntegration(t *testing.T) {
 		t.Log("Finished producing messages")
 	}()
 
-	runRedpandaPipeline := func(t *testing.T, source, destination redpandatest.RedpandaEndpoints, topic string, suppressLogs bool) {
+	runRedpandaPipeline := func(t *testing.T, source, destination redpandatest.Endpoints, topic string, suppressLogs bool) {
 		streamBuilder := service.NewStreamBuilder()
 		require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
 input:

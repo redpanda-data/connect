@@ -112,7 +112,7 @@ func TestIntegrationMigratorSoak(t *testing.T) {
 	{
 		ep, err := redpandatest.StartRedpanda(t, pool, true, false)
 		require.NoError(t, err)
-		dst = EmbeddedRedpandaCluster{t: t, RedpandaEndpoints: ep}
+		dst = EmbeddedRedpandaCluster{t: t, Endpoints: ep}
 		dst.Client, err = kgo.NewClient(kgo.SeedBrokers(src.BrokerAddr))
 		require.NoError(t, err)
 		t.Cleanup(func() { src.Client.Close() })

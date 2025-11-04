@@ -33,14 +33,14 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
 
-// RedpandaEndpoints contains the endpoints for the Redpanda container.
-type RedpandaEndpoints struct {
+// Endpoints contains the endpoints for the Redpanda container.
+type Endpoints struct {
 	BrokerAddr        string
 	SchemaRegistryURL string
 }
 
 // StartRedpanda starts a Redpanda container.
-func StartRedpanda(t *testing.T, pool *dockertest.Pool, exposeBroker, autocreateTopics bool) (RedpandaEndpoints, error) {
+func StartRedpanda(t *testing.T, pool *dockertest.Pool, exposeBroker, autocreateTopics bool) (Endpoints, error) {
 	t.Helper()
 
 	cmd := []string{
@@ -63,7 +63,7 @@ func StartRedpanda(t *testing.T, pool *dockertest.Pool, exposeBroker, autocreate
 	if exposeBroker {
 		brokerPort, err := integration.GetFreePort()
 		if err != nil {
-			return RedpandaEndpoints{}, fmt.Errorf("failed to start container: %s", err)
+			return Endpoints{}, fmt.Errorf("failed to start container: %s", err)
 		}
 
 		// Note: Schema Registry uses `--advertise-kafka-addr` to talk to the broker, so we need to use the same port for `--kafka-addr`.
@@ -88,11 +88,11 @@ func StartRedpanda(t *testing.T, pool *dockertest.Pool, exposeBroker, autocreate
 
 	resource, err := pool.RunWithOptions(options)
 	if err != nil {
-		return RedpandaEndpoints{}, fmt.Errorf("failed to start container: %s", err)
+		return Endpoints{}, fmt.Errorf("failed to start container: %s", err)
 	}
 
 	if err := resource.Expire(900); err != nil {
-		return RedpandaEndpoints{}, fmt.Errorf("failed to set container expiry period: %s", err)
+		return Endpoints{}, fmt.Errorf("failed to set container expiry period: %s", err)
 	}
 
 	t.Cleanup(func() {
@@ -138,7 +138,7 @@ func StartRedpanda(t *testing.T, pool *dockertest.Pool, exposeBroker, autocreate
 		return nil
 	}))
 
-	return RedpandaEndpoints{
+	return Endpoints{
 		BrokerAddr:        "localhost:" + resource.GetPort(kafkaPort),
 		SchemaRegistryURL: "http://localhost:" + resource.GetPort("8081/tcp"),
 	}, nil
