@@ -44,12 +44,13 @@ type snapshotter struct {
 
 // newSnapshotter creates a new Snapshotter instance
 func newSnapshotter(
+	config *Config,
 	dbDSN string,
 	logger *service.Logger,
 	snapshotName string,
 	maxReaders int,
 ) (*snapshotter, error) {
-	pgConn, err := openPgConnectionFromConfig(dbDSN)
+	pgConn, err := openPgConnectionFromConfig(dbDSN, config.TLSConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -257,7 +258,7 @@ type tuple struct {
 func (t *tuple) ToSql() (sql string, args []any, err error) {
 	sql = "(" + strings.Join(slices.Repeat([]string{"?"}, len(t.elements)), ", ") + ")"
 	args = t.elements
-	return
+	return sql, args, err
 }
 
 var _ squirrel.Sqlizer = &tuple{}

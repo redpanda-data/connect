@@ -11,7 +11,6 @@ package pglogicalstream
 import (
 	"context"
 	"database/sql"
-	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
@@ -25,13 +24,13 @@ type heartbeat struct {
 	prefix, value string
 }
 
-func newHeartbeat(dsn string, interval time.Duration, logger *service.Logger, prefix, value string) (*heartbeat, error) {
-	dbConn, err := openPgConnectionFromConfig(dsn)
+func newHeartbeat(config *Config, prefix, value string) (*heartbeat, error) {
+	dbConn, err := openPgConnectionFromConfig(config.DBRawDSN, config.TLSConfig)
 	if err != nil {
 		return nil, err
 	}
-	h := &heartbeat{db: dbConn, task: nil, logger: logger, prefix: prefix, value: value}
-	h.task = asyncroutine.NewPeriodicWithContext(interval, h.run)
+	h := &heartbeat{db: dbConn, task: nil, logger: config.Logger, prefix: prefix, value: value}
+	h.task = asyncroutine.NewPeriodicWithContext(config.HeartbeatInterval, h.run)
 	return h, nil
 }
 

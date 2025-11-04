@@ -43,8 +43,7 @@ const (
 	fieldMaxParallelSnapshotTables = "max_parallel_snapshot_tables"
 	fieldUnchangedToastValue       = "unchanged_toast_value"
 	fieldHeartbeatInterval         = "heartbeat_interval"
-
-	shutdownTimeout = 5 * time.Second
+	shutdownTimeout                = 5 * time.Second
 )
 
 type asyncMessage struct {
@@ -125,6 +124,8 @@ This input adds the following metadata fields to each message:
 			Example("0s").
 			Example("24h").
 			Advanced()).
+		Field(service.NewTLSField("tls")).
+		Description("Using this field overrides the SSL/TLS settings in the environment and DSN.").
 		Field(service.NewAutoRetryNacksToggleField()).
 		Field(service.NewBatchPolicyField(fieldBatching))
 }
@@ -155,7 +156,6 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	if dsn, err = conf.FieldString(fieldDSN); err != nil {
 		return nil, err
 	}
-
 	if dbSlotName, err = conf.FieldString(fieldSlotName); err != nil {
 		return nil, err
 	}
@@ -228,6 +228,13 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	if err != nil {
 		return nil, err
 	}
+
+	if pgConnConfig.TLSConfig, err = conf.FieldTLS("tls"); err != nil {
+		return nil, err
+	}
+	if pgConnConfig.TLSConfig != nil {
+		pgConnConfig.TLSConfig.ServerName = pgConnConfig.Host
+	}
 	// This is required for postgres to understand we're interested in replication.
 	// https://github.com/jackc/pglogrepl/issues/6
 	pgConnConfig.RuntimeParams["replication"] = "database"
@@ -237,10 +244,11 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 
 	i := &pgStreamInput{
 		streamConfig: &pglogicalstream.Config{
-			DBConfig: pgConnConfig,
-			DBRawDSN: dsn,
-			DBSchema: schema,
-			DBTables: tables,
+			DBConfig:  pgConnConfig,
+			TLSConfig: pgConnConfig.TLSConfig,
+			DBRawDSN:  dsn,
+			DBSchema:  schema,
+			DBTables:  tables,
 
 			IncludeTxnMarkers:        includeTxnMarkers,
 			ReplicationSlotName:      dbSlotName,

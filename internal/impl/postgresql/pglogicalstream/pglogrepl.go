@@ -558,7 +558,7 @@ func SendStandbyCopyDone(_ context.Context, conn *pgconn.PgConn) (cdr *CopyDoneR
 	conn.Frontend().Send(&pgproto3.CopyDone{})
 	err = conn.Frontend().Flush()
 	if err != nil {
-		return
+		return cdr, err
 	}
 
 	for {
