@@ -218,10 +218,13 @@ func writeToTopic(cluster EmbeddedRedpandaCluster, numMessages int, opts ...func
 
 // readTopicContent reads specified number of messages from a topic.
 func readTopicContent(cluster EmbeddedRedpandaCluster, numMessages int) []*kgo.Record {
-	ctx := cluster.t.Context()
+	return readTopicContentContext(cluster.t.Context(), cluster, numMessages)
+}
+
+// readTopicContentContext reads specified number of messages from a topic.
+func readTopicContentContext(ctx context.Context, cluster EmbeddedRedpandaCluster, numMessages int) []*kgo.Record {
 	t := cluster.t
 	client := cluster.Client
-
 	records := make([]*kgo.Record, 0, numMessages)
 	for len(records) < numMessages {
 		fetches := client.PollFetches(ctx)
@@ -238,6 +241,7 @@ func readTopicContent(cluster EmbeddedRedpandaCluster, numMessages int) []*kgo.R
 			return nil
 		default:
 			if len(records) < numMessages {
+				t.Logf("Waiting for more messages... %d/%d", len(records), numMessages)
 				time.Sleep(100 * time.Millisecond)
 			}
 		}
