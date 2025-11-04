@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/twmb/franz-go/pkg/kadm"
+	"github.com/twmb/franz-go/pkg/kerr"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
 
@@ -783,7 +784,7 @@ func readRecordTimestamp(
 	}
 	respPartition := &respTopic.Partitions[0]
 	if respPartition.ErrorCode != 0 {
-		return time.Time{}, fmt.Errorf("partition error: %d", respPartition.ErrorCode)
+		return time.Time{}, fmt.Errorf("partition error: %w", kerr.ErrorForCode(respPartition.ErrorCode))
 	}
 
 	// Extract record timestamp
