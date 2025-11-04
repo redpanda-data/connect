@@ -17,6 +17,7 @@ package kafka
 import (
 	"context"
 	"crypto/tls"
+	"net"
 	"strings"
 	"time"
 
@@ -24,6 +25,7 @@ import (
 	"github.com/twmb/franz-go/pkg/sasl"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/netutil"
 )
 
 const (
@@ -75,6 +77,7 @@ func FranzConnectionFields() []*service.ConfigField {
 			Description("The rough amount of time to allow connections to idle before they are closed.").
 			Default("20s").
 			Advanced(),
+		netutil.DialerConfigSpec(),
 	}
 }
 
@@ -89,6 +92,7 @@ type FranzConnectionDetails struct {
 	MetaMaxAge             time.Duration
 	RequestTimeoutOverhead time.Duration
 	ConnIdleTimeout        time.Duration
+	DialerConfig           netutil.DialerConfig
 
 	Logger *service.Logger
 }
@@ -135,6 +139,12 @@ func FranzConnectionDetailsFromConfig(conf *service.ParsedConfig, log *service.L
 		return nil, err
 	}
 
+	if conf.Contains("tcp") {
+		if d.DialerConfig, err = netutil.DialerConfigFromParsed(conf.Namespace("tcp")); err != nil {
+			return nil, err
+		}
+	}
+
 	return &d, nil
 }
 
@@ -158,6 +168,15 @@ func (d *FranzConnectionDetails) FranzOpts() []kgo.Opt {
 
 	if d.TLSEnabled {
 		opts = append(opts, kgo.DialTLSConfig(d.TLSConf))
+	}
+
+	{
+		var nd net.Dialer
+		if err := netutil.DecorateDialer(&nd, d.DialerConfig); err != nil {
+			d.Logger.Errorf("Failed to configure custom dialer: %v", err)
+		} else {
+			opts = append(opts, kgo.Dialer(nd.DialContext))
+		}
 	}
 
 	return opts
