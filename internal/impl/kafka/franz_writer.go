@@ -81,7 +81,13 @@ func FranzProducerFields() []*service.ConfigField {
 				Description("Override the default murmur2 hashing partitioner.").
 				Advanced().Optional(),
 			service.NewBoolField(kfwFieldIdempotentWrite).
-				Description("Enable the idempotent write producer option. This requires the `IDEMPOTENT_WRITE` permission on `CLUSTER` and can be disabled if this permission is not available.").
+				Description("Enable the idempotent write producer option. " +
+					"When enabled, the producer initializes a producer ID and uses it to guarantee exactly-once semantics per partition (no duplicates on retries). " +
+					"This requires the `IDEMPOTENT_WRITE` permission on the `CLUSTER` resource. " +
+					"If your cluster does not grant this permission or uses ACLs restrictively, disable this option. " +
+					"Note: Idempotent writes are strictly a win for data integrity but may be unavailable in restricted environments " +
+					"(e.g., some managed Kafka services, Redpanda with strict ACLs). " +
+					"Disabling this option is safe and only affects retry behavior—duplicates may occur on producer retries, but the pipeline will continue to function normally.").
 				Default(true).
 				Advanced(),
 			service.NewStringEnumField(kfwFieldCompression, "lz4", "snappy", "gzip", "none", "zstd").
