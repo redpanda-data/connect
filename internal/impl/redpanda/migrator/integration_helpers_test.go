@@ -127,6 +127,22 @@ func (e *EmbeddedRedpandaCluster) CreateACLAllow(topic, principal string, op kms
 	require.NoError(e.t, err)
 }
 
+// CreateClusterACLAllow creates an ALLOW ACL for a principal and operation on the cluster resource.
+func (e *EmbeddedRedpandaCluster) CreateClusterACLAllow(principal string, op kmsg.ACLOperation) {
+	e.t.Helper()
+
+	ctx, cancel := context.WithTimeout(e.t.Context(), redpandaTestOpTimeout)
+	defer cancel()
+
+	b := kadm.NewACLs().
+		Clusters().
+		ResourcePatternType(kadm.ACLPatternLiteral).
+		Operations(op).
+		Allow(principal)
+	_, err := e.Admin.CreateACLs(ctx, b)
+	require.NoError(e.t, err)
+}
+
 // DescribeTopicACLs returns ACLs for a topic.
 func (e *EmbeddedRedpandaCluster) DescribeTopicACLs(topic string) ([]kadm.DescribedACL, error) {
 	e.t.Helper()

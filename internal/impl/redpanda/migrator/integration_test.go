@@ -976,6 +976,10 @@ func TestIntegrationMigratorJiraCON229(t *testing.T) {
 	t.Log("Given: Redpanda clusters with schema registry")
 	src, dst := startRedpandaSourceAndDestination(t)
 
+	t.Log("And: ACLs configured for idempotent writes")
+	src.CreateClusterACLAllow("User:*", kmsg.ACLOperationIdempotentWrite)
+	dst.CreateClusterACLAllow("User:*", kmsg.ACLOperationIdempotentWrite)
+
 	t.Log("And: Schema registry initialized with test schema")
 	srSrc, err := sr.NewClient(sr.URLs(src.SchemaRegistryURL))
 	require.NoError(t, err)
