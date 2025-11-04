@@ -35,8 +35,8 @@ import (
 	"github.com/twmb/franz-go/pkg/kmsg"
 
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
-	"github.com/redpanda-data/connect/v4/internal/impl/kafka/redpandatest"
 	"github.com/redpanda-data/connect/v4/internal/impl/redpanda/migrator"
+	"github.com/redpanda-data/connect/v4/internal/impl/redpanda/redpandatest"
 )
 
 const migratorTestTopic = "test_topic"

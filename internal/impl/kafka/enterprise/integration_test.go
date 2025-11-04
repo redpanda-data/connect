@@ -32,7 +32,7 @@ import (
 
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka/enterprise"
-	"github.com/redpanda-data/connect/v4/internal/impl/kafka/redpandatest"
+	"github.com/redpanda-data/connect/v4/internal/impl/redpanda/redpandatest"
 	"github.com/redpanda-data/connect/v4/internal/license"
 	"github.com/redpanda-data/connect/v4/internal/protoconnect"
 	_ "github.com/redpanda-data/connect/v4/public/components/confluent"

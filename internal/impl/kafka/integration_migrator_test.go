@@ -36,7 +36,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
-	"github.com/redpanda-data/connect/v4/internal/impl/kafka/redpandatest"
+	"github.com/redpanda-data/connect/v4/internal/impl/redpanda/redpandatest"
 )
 
 func runRedpandaPairForMigrator(t *testing.T) (src, dst redpandatest.RedpandaEndpoints) {
