@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - (Benthos) New `string.repeat(int)` method to repeat a string or byte array N times. (@rockwotj)
 - (Benthos) New `bytes` method to create a 0 initialized byte array. (@rockwotj)
 - Added `regexp_topics_include` and `regexp_topics_exclude` fields to `redpanda`, `redpanda_migrator`, `ockam` inputs. (@mmatczuk)
+- New `ffi` processor in CGO builds. (@rockwotj)
 
 ### Deprecated
 
@@ -18,7 +19,6 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - `redpanda_migrator` output now supports two-way syncing using provenance headers (@mmatczuk)
-- New `ffi` processor. (@rockwotj)
 - `schema_registry_encode` gains a new `protobuf.serialize_to_json` option that is by default true. If disabled, then messages are decoded into a structured format which preserves types better and is faster. (@rockwotj)
 - Add `decode` option to field `operator` in `protobuf` processor that decodes messages into a structured format (as opposed to serializing to JSON) that perserves types better and is faster. (@rockwotj)
 
