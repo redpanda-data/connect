@@ -328,14 +328,14 @@ func (m *groupsMigrator) Sync(ctx context.Context, getTopics func() []TopicMappi
 		return nil
 	}
 
-	m.log.Info("Consumer group migration: syncing consumer groups")
+	m.log.Debug("Consumer group migration: syncing consumer groups")
 
 	mappings := getTopics()
 
 	// Filter out topics
 	topics := m.filterTopics(mappings)
 	if len(topics) == 0 {
-		m.log.Infof("Consumer group migration: no topics to sync")
+		m.log.Debug("Consumer group migration: no topics to sync")
 		return nil
 	}
 
@@ -373,7 +373,7 @@ func (m *groupsMigrator) Sync(ctx context.Context, getTopics func() []TopicMappi
 		return false
 	})
 	if len(gcos) == 0 {
-		m.log.Infof("Consumer group migration: nothing to do")
+		m.log.Debug("Consumer group migration: nothing to do")
 		return nil
 	}
 	topics = extractTopics(gcos)
@@ -511,7 +511,7 @@ func (m *groupsMigrator) Sync(ctx context.Context, getTopics func() []TopicMappi
 		offsetsToCommitCount += 1
 	}
 	if len(offsetsToCommit) == 0 {
-		m.log.Infof("Consumer group migration: no offsets to commit")
+		m.log.Debug("Consumer group migration: no offsets to commit")
 		return nil
 	}
 
