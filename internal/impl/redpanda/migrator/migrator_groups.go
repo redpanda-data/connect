@@ -351,6 +351,7 @@ func (m *groupsMigrator) Sync(ctx context.Context, getTopics func() []TopicMappi
 		p := gco.Partition
 
 		if g == m.conf.SkipSourceGroup {
+			m.log.Debugf("Consumer group migration: skipping source group '%s'", g)
 			return true
 		}
 
