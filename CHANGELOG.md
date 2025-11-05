@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - (Benthos) New `bytes` method to create a 0 initialized byte array. (@rockwotj)
 - Added `regexp_topics_include` and `regexp_topics_exclude` fields to `redpanda`, `redpanda_migrator`, `ockam` inputs. (@mmatczuk)
 - New `ffi` processor in CGO builds. (@rockwotj)
+- Add `tcp` connection options to `redpanda`, `redpanda_migrator` inputs and outputs. (@mmatczuk)
 
 ### Deprecated
 
