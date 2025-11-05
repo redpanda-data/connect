@@ -110,7 +110,10 @@ func TestIntegrationMigratorSoak(t *testing.T) {
 	t.Log("And: Redpanda destination cluster")
 	var dst EmbeddedRedpandaCluster
 	{
-		ep, err := redpandatest.StartRedpanda(t, pool, true, false)
+		ep, _, err := redpandatest.StartSingleBrokerWithConfig(t, pool, redpandatest.Config{
+			ExposeBroker:     true,
+			AutoCreateTopics: false,
+		})
 		require.NoError(t, err)
 		dst = EmbeddedRedpandaCluster{t: t, Endpoints: ep}
 		dst.Client, err = kgo.NewClient(kgo.SeedBrokers(src.BrokerAddr))

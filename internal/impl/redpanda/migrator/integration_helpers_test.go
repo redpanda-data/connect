@@ -59,10 +59,15 @@ func startRedpandaSourceAndDestination(t *testing.T) (src, dst EmbeddedRedpandaC
 	src = EmbeddedRedpandaCluster{t: t}
 	dst = EmbeddedRedpandaCluster{t: t}
 
-	src.Endpoints, err = redpandatest.StartRedpanda(t, pool, true, false)
+	cfg := redpandatest.Config{
+		ExposeBroker:     true,
+		AutoCreateTopics: false,
+	}
+
+	src.Endpoints, _, err = redpandatest.StartSingleBrokerWithConfig(t, pool, cfg)
 	require.NoError(t, err)
 
-	dst.Endpoints, err = redpandatest.StartRedpanda(t, pool, true, false)
+	dst.Endpoints, _, err = redpandatest.StartSingleBrokerWithConfig(t, pool, cfg)
 	require.NoError(t, err)
 
 	src.Client, err = kgo.NewClient(
