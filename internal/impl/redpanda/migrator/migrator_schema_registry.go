@@ -448,6 +448,9 @@ func (m *schemaRegistryMigrator) Sync(ctx context.Context) error {
 		return fmt.Errorf("list subject schemas: %w", err)
 	}
 	m.log.Debugf("Schema migration: found %d subject schemas", len(all))
+	for _, s := range all {
+		m.log.Debugf("Schema migration: found subject schema %s version=%d id=%d", s.Subject, s.Version, s.ID)
+	}
 
 	for _, s := range all {
 		if err := m.syncSubjectSchemaIfNeeded(ctx, s); err != nil {
@@ -588,7 +591,7 @@ func (m *schemaRegistryMigrator) syncSubjectSchemaLocked(ctx context.Context, ss
 		}
 
 		info = schemaInfoFromSubjectSchema(dss)
-		m.log.Infof("Schema migration: schema created with fixed id: subject=%s id=%d version=%d",
+		m.log.Infof("Schema migration: schema created with fixed id: subject=%s version=%d id=%d",
 			info.Subject, info.Version, info.ID)
 	}
 	m.metrics.ObserveSchemaCreateLatency(time.Since(t0))
