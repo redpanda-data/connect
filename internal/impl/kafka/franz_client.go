@@ -166,16 +166,19 @@ func (d *FranzConnectionDetails) FranzOpts() []kgo.Opt {
 		kgo.ConnIdleTimeout(d.ConnIdleTimeout),
 	}
 
-	if d.TLSEnabled {
-		opts = append(opts, kgo.DialTLSConfig(d.TLSConf))
-	}
-
 	{
 		var nd net.Dialer
 		if err := netutil.DecorateDialer(&nd, d.DialerConfig); err != nil {
 			d.Logger.Errorf("Failed to configure custom dialer: %v", err)
 		} else {
-			opts = append(opts, kgo.Dialer(nd.DialContext))
+			if d.TLSEnabled {
+				opts = append(opts, kgo.Dialer((&tls.Dialer{
+					NetDialer: &nd,
+					Config:    d.TLSConf,
+				}).DialContext))
+			} else {
+				opts = append(opts, kgo.Dialer(nd.DialContext))
+			}
 		}
 	}
 
