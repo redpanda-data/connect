@@ -28,19 +28,39 @@ import (
 	"github.com/ory/dockertest/v3"
 	"github.com/ory/dockertest/v3/docker"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 )
 
-// RedpandaEndpoints contains the endpoints for the Redpanda container.
-type RedpandaEndpoints struct {
+// Endpoints contains the endpoints for the Redpanda container.
+type Endpoints struct {
 	BrokerAddr        string
 	SchemaRegistryURL string
 }
 
-// StartRedpanda starts a Redpanda container.
-func StartRedpanda(t *testing.T, pool *dockertest.Pool, exposeBroker, autocreateTopics bool) (RedpandaEndpoints, error) {
+// Config contains configuration for starting a Redpanda broker.
+type Config struct {
+	// ExposeBroker exposes the Kafka broker port to the host.
+	ExposeBroker bool
+	// AutoCreateTopics enables automatic topic creation.
+	AutoCreateTopics bool
+}
+
+// DefaultConfig returns the default configuration for starting a Redpanda broker.
+var DefaultConfig = Config{
+	ExposeBroker:     true,
+	AutoCreateTopics: true,
+}
+
+// StartSingleBroker starts a single Redpanda broker with default configuration.
+// It exposes the broker port and enables auto-create topics by default.
+func StartSingleBroker(t *testing.T, pool *dockertest.Pool) (Endpoints, *dockertest.Resource, error) {
+	t.Helper()
+	return StartSingleBrokerWithConfig(t, pool, DefaultConfig)
+}
+
+// StartSingleBrokerWithConfig starts a single Redpanda broker with custom configuration.
+func StartSingleBrokerWithConfig(t *testing.T, pool *dockertest.Pool, cfg Config) (Endpoints, *dockertest.Resource, error) {
 	t.Helper()
 
 	cmd := []string{
@@ -52,7 +72,7 @@ func StartRedpanda(t *testing.T, pool *dockertest.Pool, exposeBroker, autocreate
 		"--schema-registry-addr 0.0.0.0:8081",
 	}
 
-	if !autocreateTopics {
+	if !cfg.AutoCreateTopics {
 		cmd = append(cmd, "--set redpanda.auto_create_topics_enabled=false")
 	}
 
@@ -60,10 +80,10 @@ func StartRedpanda(t *testing.T, pool *dockertest.Pool, exposeBroker, autocreate
 	exposedPorts := []string{"8081/tcp", "9644/tcp"}
 	var portBindings map[docker.Port][]docker.PortBinding
 	var kafkaPort string
-	if exposeBroker {
+	if cfg.ExposeBroker {
 		brokerPort, err := integration.GetFreePort()
 		if err != nil {
-			return RedpandaEndpoints{}, fmt.Errorf("failed to start container: %s", err)
+			return Endpoints{}, nil, fmt.Errorf("get free port: %w", err)
 		}
 
 		// Note: Schema Registry uses `--advertise-kafka-addr` to talk to the broker, so we need to use the same port for `--kafka-addr`.
@@ -88,29 +108,29 @@ func StartRedpanda(t *testing.T, pool *dockertest.Pool, exposeBroker, autocreate
 
 	resource, err := pool.RunWithOptions(options)
 	if err != nil {
-		return RedpandaEndpoints{}, fmt.Errorf("failed to start container: %s", err)
+		return Endpoints{}, nil, fmt.Errorf("run container: %w", err)
 	}
 
 	if err := resource.Expire(900); err != nil {
-		return RedpandaEndpoints{}, fmt.Errorf("failed to set container expiry period: %s", err)
+		return Endpoints{}, nil, fmt.Errorf("set container expiry: %w", err)
 	}
 
 	t.Cleanup(func() {
 		assert.NoError(t, pool.Purge(resource))
 	})
 
-	require.NoError(t, pool.Retry(func() error {
+	if err := pool.Retry(func() error {
 		ctx, done := context.WithTimeout(t.Context(), 3*time.Second)
 		defer done()
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("http://localhost:%s/v1/cluster/health_overview", resource.GetPort("9644/tcp")), nil)
 		if err != nil {
-			return fmt.Errorf("failed to create request: %s", err)
+			return fmt.Errorf("create request: %w", err)
 		}
 
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
-			return fmt.Errorf("failed to execute request: %s", err)
+			return fmt.Errorf("execute request: %w", err)
 		}
 		defer resp.Body.Close()
 
@@ -120,7 +140,7 @@ func StartRedpanda(t *testing.T, pool *dockertest.Pool, exposeBroker, autocreate
 
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
-			return fmt.Errorf("failed to read response body: %s", err)
+			return fmt.Errorf("read response body: %w", err)
 		}
 
 		var res struct {
@@ -128,7 +148,7 @@ func StartRedpanda(t *testing.T, pool *dockertest.Pool, exposeBroker, autocreate
 		}
 
 		if err := json.Unmarshal(body, &res); err != nil {
-			return fmt.Errorf("failed to unmarshal response body: %s", err)
+			return fmt.Errorf("unmarshal response body: %w", err)
 		}
 
 		if !res.IsHealthy {
@@ -136,10 +156,27 @@ func StartRedpanda(t *testing.T, pool *dockertest.Pool, exposeBroker, autocreate
 		}
 
 		return nil
-	}))
+	}); err != nil {
+		return Endpoints{}, nil, fmt.Errorf("health check: %w", err)
+	}
 
-	return RedpandaEndpoints{
+	return Endpoints{
 		BrokerAddr:        "localhost:" + resource.GetPort(kafkaPort),
 		SchemaRegistryURL: "http://localhost:" + resource.GetPort("8081/tcp"),
-	}, nil
+	}, resource, nil
+}
+
+// StartRedpanda starts a Redpanda container.
+//
+// Deprecated: Use StartSingleBroker or StartSingleBrokerWithConfig instead.
+func StartRedpanda(t *testing.T, pool *dockertest.Pool, exposeBroker, autocreateTopics bool) (Endpoints, error) {
+	t.Helper()
+
+	cfg := Config{
+		ExposeBroker:     exposeBroker,
+		AutoCreateTopics: autocreateTopics,
+	}
+
+	endpoints, _, err := StartSingleBrokerWithConfig(t, pool, cfg)
+	return endpoints, err
 }

@@ -37,6 +37,12 @@ Common::
 label: ""
 redpanda:
   seed_brokers: [] # No default (required)
+  tcp:
+    keep_alive:
+      idle: 15s
+      interval: 15s
+      count: 9
+    tcp_user_timeout: 0s
   topic: "" # No default (required)
 ```
 
@@ -62,6 +68,12 @@ redpanda:
   metadata_max_age: 5m
   request_timeout_overhead: 10s
   conn_idle_timeout: 20s
+  tcp:
+    keep_alive:
+      idle: 15s
+      interval: 15s
+      count: 9
+    tcp_user_timeout: 0s
   topic: "" # No default (required)
   allow_auto_topic_creation: true
 ```
@@ -527,6 +539,58 @@ The rough amount of time to allow connections to idle before they are closed.
 *Type*: `string`
 
 *Default*: `"20s"`
+
+=== `tcp`
+
+TCP socket configuration.
+
+
+*Type*: `object`
+
+
+=== `tcp.keep_alive`
+
+TCP keep-alive probe configuration.
+
+
+*Type*: `object`
+
+
+=== `tcp.keep_alive.idle`
+
+Duration the connection must be idle before sending the first keep-alive probe. Zero defaults to 15s. Negative values disable keep-alive probes.
+
+
+*Type*: `string`
+
+*Default*: `"15s"`
+
+=== `tcp.keep_alive.interval`
+
+Duration between keep-alive probes. Zero defaults to 15s.
+
+
+*Type*: `string`
+
+*Default*: `"15s"`
+
+=== `tcp.keep_alive.count`
+
+Maximum unanswered keep-alive probes before dropping the connection. Zero defaults to 9.
+
+
+*Type*: `int`
+
+*Default*: `9`
+
+=== `tcp.tcp_user_timeout`
+
+Maximum time to wait for acknowledgment of transmitted data before killing the connection. Linux-only (kernel 2.6.37+), ignored on other platforms. When enabled, keep_alive.idle must be greater than this value per RFC 5482. Zero disables.
+
+
+*Type*: `string`
+
+*Default*: `"0s"`
 
 === `topic`
 

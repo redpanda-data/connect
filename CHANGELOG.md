@@ -3,6 +3,27 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.69.0 - TBD
+
+### Added
+
+- (Benthos) New `string.repeat(int)` method to repeat a string or byte array N times. (@rockwotj)
+- (Benthos) New `bytes` method to create a 0 initialized byte array. (@rockwotj)
+- Added `regexp_topics_include` and `regexp_topics_exclude` fields to `redpanda`, `redpanda_migrator`, `ockam` inputs. (@mmatczuk)
+- New `ffi` processor in CGO builds. (@rockwotj)
+- Add `tcp` connection options to `redpanda`, `redpanda_migrator` inputs and outputs. (@mmatczuk)
+
+### Deprecated
+
+- The `regexp_topics` boolean field is now deprecated in favor of `regexp_topics_include`. (@mmatczuk)
+
+### Changed
+
+- `redpanda_migrator` output now supports two-way syncing using provenance headers (@mmatczuk)
+- `schema_registry_encode` gains a new `protobuf.serialize_to_json` option that is by default true. If disabled, then messages are decoded into a structured format which preserves types better and is faster. (@rockwotj)
+- Add `decode` option to field `operator` in `protobuf` processor that decodes messages into a structured format (as opposed to serializing to JSON) that perserves types better and is faster. (@rockwotj)
+- `redpanda_migrator` output `schema_registry.interval` default value changed to `5m` enabling continuous schema migration by default. (@mmatczuk)
+
 ## 4.68.0 - 2025-10-24
 
 ### Added
@@ -10,6 +31,7 @@ All notable changes to this project will be documented in this file.
 - New `a2a_message` processor. (@birdayz)
 - New `jira` processor. (@zoltancsontosness, @atudose-ness)
 - (Benthos) Exporting a schema with the format `jsonschema` now includes `is_advanced`, `is_deprecated`, `is_optional`, `is_secret` extra fields. (@tomasz-sadura)
+- (MS SQL Server CDC) Now supports processing snapshots in parallel via the `max_parallel_snapshot_tables` configuration. (@josephwoodward)
 
 ### Changed
 

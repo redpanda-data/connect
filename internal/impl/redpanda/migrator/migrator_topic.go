@@ -268,13 +268,26 @@ func (m *topicMigrator) createTopicLocked(ctx context.Context, srcAdm, dstAdm *k
 	if err != nil && errors.Is(err, kerr.TopicAlreadyExists) {
 		m.log.Infof("Topic migration: destination topic '%s' for source '%s' already exists", dstTopic, topic)
 
-		dstInfo, _, err := topicDetailsWithClient(ctx, srcAdm, dstTopic)
+		dstInfo, _, err := topicDetailsWithClient(ctx, dstAdm, dstTopic)
 		if err != nil {
 			return fmt.Errorf("get destination topic details %s: %w", dstTopic, err)
 		}
 		if len(dstInfo.Partitions) != len(info.Partitions) {
-			m.log.Warnf("Topic migration: topic partitions mismatch: got %d expected %d - this would disable conumer group migration for this topic", len(dstInfo.Partitions), len(info.Partitions))
-			tm.Dst.Partitions = len(dstInfo.Partitions)
+			srcCount := len(info.Partitions)
+			dstCount := len(dstInfo.Partitions)
+
+			if srcCount > dstCount {
+				_, err := dstAdm.CreatePartitions(ctx, srcCount-dstCount, dstTopic)
+				if err != nil {
+					m.metrics.IncCreateErrors()
+					return fmt.Errorf("increase partitions for topic %q from %d to %d: %w", dstTopic, dstCount, srcCount, err)
+				}
+
+				m.log.Infof("Topic migration: increased partitions for destination topic '%s' from %d to %d", dstTopic, dstCount, srcCount)
+				tm.Dst.Partitions = srcCount
+			} else {
+				tm.Dst.Partitions = dstCount
+			}
 		}
 	} else if err != nil {
 		m.metrics.IncCreateErrors()

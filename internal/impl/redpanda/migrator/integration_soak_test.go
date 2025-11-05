@@ -33,7 +33,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
-	"github.com/redpanda-data/connect/v4/internal/impl/kafka/redpandatest"
+	"github.com/redpanda-data/connect/v4/internal/impl/redpanda/redpandatest"
 	_ "github.com/redpanda-data/connect/v4/public/components/prometheus"
 )
 
@@ -110,9 +110,12 @@ func TestIntegrationMigratorSoak(t *testing.T) {
 	t.Log("And: Redpanda destination cluster")
 	var dst EmbeddedRedpandaCluster
 	{
-		ep, err := redpandatest.StartRedpanda(t, pool, true, false)
+		ep, _, err := redpandatest.StartSingleBrokerWithConfig(t, pool, redpandatest.Config{
+			ExposeBroker:     true,
+			AutoCreateTopics: false,
+		})
 		require.NoError(t, err)
-		dst = EmbeddedRedpandaCluster{t: t, RedpandaEndpoints: ep}
+		dst = EmbeddedRedpandaCluster{t: t, Endpoints: ep}
 		dst.Client, err = kgo.NewClient(kgo.SeedBrokers(src.BrokerAddr))
 		require.NoError(t, err)
 		t.Cleanup(func() { src.Client.Close() })

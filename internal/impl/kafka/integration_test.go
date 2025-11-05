@@ -26,7 +26,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
-	"github.com/redpanda-data/connect/v4/internal/impl/kafka/redpandatest"
+	"github.com/redpanda-data/connect/v4/internal/impl/redpanda/redpandatest"
 	_ "github.com/redpanda-data/connect/v4/public/components/confluent"
 
 	"github.com/ory/dockertest/v3"
@@ -291,7 +291,7 @@ func TestRedpandaRecordOrderIntegration(t *testing.T) {
 		t.Log("Finished producing messages")
 	}()
 
-	runRedpandaPipeline := func(t *testing.T, source, destination redpandatest.RedpandaEndpoints, topic string, suppressLogs bool) {
+	runRedpandaPipeline := func(t *testing.T, source, destination redpandatest.Endpoints, topic string, suppressLogs bool) {
 		streamBuilder := service.NewStreamBuilder()
 		require.NoError(t, streamBuilder.SetYAML(fmt.Sprintf(`
 input:

@@ -35,15 +35,15 @@ import (
 	"github.com/twmb/franz-go/pkg/kmsg"
 
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
-	"github.com/redpanda-data/connect/v4/internal/impl/kafka/redpandatest"
 	"github.com/redpanda-data/connect/v4/internal/impl/redpanda/migrator"
+	"github.com/redpanda-data/connect/v4/internal/impl/redpanda/redpandatest"
 )
 
 const migratorTestTopic = "test_topic"
 
 // EmbeddedRedpandaCluster represents a Redpanda cluster with client and admin access.
 type EmbeddedRedpandaCluster struct {
-	redpandatest.RedpandaEndpoints
+	redpandatest.Endpoints
 	Client *kgo.Client
 	Admin  *kadm.Client
 	t      *testing.T
@@ -59,10 +59,15 @@ func startRedpandaSourceAndDestination(t *testing.T) (src, dst EmbeddedRedpandaC
 	src = EmbeddedRedpandaCluster{t: t}
 	dst = EmbeddedRedpandaCluster{t: t}
 
-	src.RedpandaEndpoints, err = redpandatest.StartRedpanda(t, pool, true, false)
+	cfg := redpandatest.Config{
+		ExposeBroker:     true,
+		AutoCreateTopics: false,
+	}
+
+	src.Endpoints, _, err = redpandatest.StartSingleBrokerWithConfig(t, pool, cfg)
 	require.NoError(t, err)
 
-	dst.RedpandaEndpoints, err = redpandatest.StartRedpanda(t, pool, true, false)
+	dst.Endpoints, _, err = redpandatest.StartSingleBrokerWithConfig(t, pool, cfg)
 	require.NoError(t, err)
 
 	src.Client, err = kgo.NewClient(
@@ -120,6 +125,22 @@ func (e *EmbeddedRedpandaCluster) CreateACLAllow(topic, principal string, op kms
 
 	b := kadm.NewACLs().
 		Topics(topic).
+		ResourcePatternType(kadm.ACLPatternLiteral).
+		Operations(op).
+		Allow(principal)
+	_, err := e.Admin.CreateACLs(ctx, b)
+	require.NoError(e.t, err)
+}
+
+// CreateClusterACLAllow creates an ALLOW ACL for a principal and operation on the cluster resource.
+func (e *EmbeddedRedpandaCluster) CreateClusterACLAllow(principal string, op kmsg.ACLOperation) {
+	e.t.Helper()
+
+	ctx, cancel := context.WithTimeout(e.t.Context(), redpandaTestOpTimeout)
+	defer cancel()
+
+	b := kadm.NewACLs().
+		Clusters().
 		ResourcePatternType(kadm.ACLPatternLiteral).
 		Operations(op).
 		Allow(principal)
@@ -218,10 +239,13 @@ func writeToTopic(cluster EmbeddedRedpandaCluster, numMessages int, opts ...func
 
 // readTopicContent reads specified number of messages from a topic.
 func readTopicContent(cluster EmbeddedRedpandaCluster, numMessages int) []*kgo.Record {
-	ctx := cluster.t.Context()
+	return readTopicContentContext(cluster.t.Context(), cluster, numMessages)
+}
+
+// readTopicContentContext reads specified number of messages from a topic.
+func readTopicContentContext(ctx context.Context, cluster EmbeddedRedpandaCluster, numMessages int) []*kgo.Record {
 	t := cluster.t
 	client := cluster.Client
-
 	records := make([]*kgo.Record, 0, numMessages)
 	for len(records) < numMessages {
 		fetches := client.PollFetches(ctx)
@@ -238,6 +262,7 @@ func readTopicContent(cluster EmbeddedRedpandaCluster, numMessages int) []*kgo.R
 			return nil
 		default:
 			if len(records) < numMessages {
+				t.Logf("Waiting for more messages... %d/%d", len(records), numMessages)
 				time.Sleep(100 * time.Millisecond)
 			}
 		}
@@ -556,7 +581,7 @@ func startConfluentInPool(t *testing.T, pool *dockertest.Pool, connect bool) Emb
 
 	return EmbeddedConfluentCluster{
 		EmbeddedRedpandaCluster: EmbeddedRedpandaCluster{
-			RedpandaEndpoints: redpandatest.RedpandaEndpoints{
+			Endpoints: redpandatest.Endpoints{
 				BrokerAddr:        brokerAddr,
 				SchemaRegistryURL: schemaRegistryURL,
 			},

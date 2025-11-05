@@ -172,6 +172,9 @@ root = this.apply("debeziumTimestampToAvroTimestamp")
 				service.NewBoolField("emit_default_values").
 					Description("Whether to emit default-valued primitive fields, empty lists, and empty maps. emit_unpopulated takes precedence over emit_default_values ").
 					Default(false),
+				service.NewBoolField("serialize_to_json").
+					Description("If messages should be serialized to JSON bytes. If false then the message is kept in decoded form, which means that 64 bit integers are not converted to strings and types for bytes and google.protobuf.Timestamp are preserved (as they are not serialized to JSON strings).").
+					Default(true),
 			).Description("Configuration for how to decode schemas that are of type PROTOBUF."),
 		).
 		Field(
@@ -209,12 +212,7 @@ type decodingConfig struct {
 		mapping                    *bloblang.Executor
 		storeSchemaMeta            string
 	}
-	protobuf struct {
-		useProtoNames     bool
-		useEnumNumbers    bool
-		emitUnpopulated   bool
-		emitDefaultValues bool
-	}
+	protobuf        protobufOptions
 	defaultSchemaID int
 }
 
@@ -288,6 +286,10 @@ func newSchemaRegistryDecoderFromConfig(conf *service.ParsedConfig, mgr *service
 		return nil, err
 	}
 	cfg.protobuf.emitDefaultValues, err = conf.FieldBool("protobuf", "emit_default_values")
+	if err != nil {
+		return nil, err
+	}
+	cfg.protobuf.serializeToJSON, err = conf.FieldBool("protobuf", "serialize_to_json")
 	if err != nil {
 		return nil, err
 	}
@@ -454,12 +456,7 @@ func (s *schemaRegistryDecoder) getDecoder(id int) (schemaDecoder, error) {
 	var decoder schemaDecoder
 	switch resPayload.Type {
 	case franz_sr.TypeProtobuf:
-		decoder, err = s.getProtobufDecoder(ctx,
-			s.cfg.protobuf.useProtoNames,
-			s.cfg.protobuf.useEnumNumbers,
-			s.cfg.protobuf.emitUnpopulated,
-			s.cfg.protobuf.emitDefaultValues,
-			resPayload)
+		decoder, err = s.getProtobufDecoder(ctx, s.cfg.protobuf, resPayload)
 	case franz_sr.TypeJSON:
 		decoder, err = s.getJSONDecoder(ctx, resPayload)
 	default:

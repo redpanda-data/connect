@@ -1,0 +1,36 @@
+version: '3'
+
+tasks:
+  sqlserver:up:
+    cmd: |
+      docker run -d \
+      --name sqlserver \
+      -e ACCEPT_EULA=Y \
+      -e MSSQL_SA_PASSWORD='YourStrong!Passw0rd' \
+      -e MSSQL_AGENT_ENABLED=true \
+      -p 1433:1433 \
+      mcr.microsoft.com/azure-sql-edge
+
+  sqlserver:down:
+    cmd: docker rm -fv sqlserver
+
+  sqlserver:logs:
+    cmd: docker logs -f sqlserver
+
+  sqlcmd:
+    cmd: sqlcmd -S localhost -U sa -P 'YourStrong!Passw0rd' {{.EXTRA_ARGS}}
+
+  sqlcmd:create:
+    cmd: task sqlcmd EXTRA_ARGS="-i create.sql"
+
+  sqlcmd:data:users:
+    cmd: task sqlcmd EXTRA_ARGS="-i users.sql"
+
+  sqlcmd:data:products:
+    cmd: task sqlcmd EXTRA_ARGS="-i products.sql"
+
+  sqlcmd:data:cart:
+    cmd: task sqlcmd EXTRA_ARGS="-i cart.sql"
+
+  sqlcmd:drop-cache:
+    cmd: task sqlcmd EXTRA_ARGS="-Q 'USE testdb; DROP TABLE rpcn.CdcCheckpointCache;'"

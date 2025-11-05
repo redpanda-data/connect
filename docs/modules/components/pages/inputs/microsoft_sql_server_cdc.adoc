@@ -40,7 +40,8 @@ input:
   label: ""
   microsoft_sql_server_cdc:
     connection_string: sqlserver://username:password@host/instance?param1=value&param2=value # No default (required)
-    stream_snapshot: false # No default (required)
+    stream_snapshot: false
+    max_parallel_snapshot_tables: 1
     snapshot_max_batch_size: 1000
     include: [] # No default (required)
     exclude: [] # No default (optional)
@@ -68,7 +69,8 @@ input:
   label: ""
   microsoft_sql_server_cdc:
     connection_string: sqlserver://username:password@host/instance?param1=value&param2=value # No default (required)
-    stream_snapshot: false # No default (required)
+    stream_snapshot: false
+    max_parallel_snapshot_tables: 1
     snapshot_max_batch_size: 1000
     include: [] # No default (required)
     exclude: [] # No default (optional)
@@ -102,7 +104,7 @@ This input adds the following metadata fields to each message:
 
 == Permissions
 
-To use the default Microsoft SQL Server cache, the user must have permissions to create tables and stored procedures. Refer to `checkpoint_cache_table_name` for additional details.
+When using the default Microsoft SQL Server based cache, the Connect user requires permission to create tables and stored procedures, and the rpcn  schema must already exist. Refer to `checkpoint_cache_table_name` for more information.
 		
 
 == Fields
@@ -128,6 +130,22 @@ If set to true, the connector will query all the existing data as a part of snap
 
 *Type*: `bool`
 
+*Default*: `false`
+
+```yml
+# Examples
+
+stream_snapshot: true
+```
+
+=== `max_parallel_snapshot_tables`
+
+Specifies a number of tables that will be processed in parallel during the snapshot processing stage.
+
+
+*Type*: `int`
+
+*Default*: `1`
 
 === `snapshot_max_batch_size`
 
@@ -168,7 +186,7 @@ exclude: dbo.privatetable
 
 === `checkpoint_cache`
 
-A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current Log Sequence Number (LSN) that has been successfully delivered, this allows Redpanda Connect to continue from that Log Sequence Number (LSN) upon restart, rather than consume the entire state of the change table.
+A https://www.docs.redpanda.com/redpanda-connect/components/caches/about[cache resource^] to use for storing the current Log Sequence Number (LSN) that has been successfully delivered, this allows Redpanda Connect to continue from that Log Sequence Number (LSN) upon restart, rather than consume the entire state of the change table. If not set the default Microsoft SQL Server based cache will be used, see `checkpoint_cache_table_name` for more information.
 
 
 *Type*: `string`

@@ -108,7 +108,7 @@ func schemaRegistryMigratorFields() []*service.ConfigField {
 			Example("0s     # One-time sync only").
 			Example("5m     # Sync every 5 minutes").
 			Example("30m    # Sync every 30 minutes").
-			Default("0s"),
+			Default("5m"),
 		service.NewStringListField(srFieldInclude).
 			Description("Regular expressions for schema subjects to include in migration. If empty, all subjects are included (unless excluded).").
 			Example(`["prod-.*", "staging-.*"]`).

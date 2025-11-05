@@ -15,11 +15,11 @@
 package ollama
 
 import (
+	"context"
 	"net/http"
 	"net/url"
 	"testing"
 
-	"github.com/ollama/ollama/api"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go/modules/ollama"
@@ -39,7 +39,7 @@ func createModerationProcessorForTest(t *testing.T, model, addr, prompt, respons
 	return &ollamaModerationProcessor{
 		baseOllamaProcessor: &baseOllamaProcessor{
 			model:  model,
-			client: api.NewClient(url, http.DefaultClient),
+			client: NewClient(url, http.DefaultClient),
 		},
 		prompt:   p,
 		response: r,
@@ -56,7 +56,7 @@ func TestOllamaModerationIntegration(t *testing.T) {
 	)
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		if err := ollamaContainer.Terminate(ctx); err != nil {
+		if err := ollamaContainer.Terminate(context.Background()); err != nil {
 			t.Fatalf("failed to terminate container: %s", err)
 		}
 	})

@@ -99,6 +99,10 @@ linters:
       - linters:
           - revive
         text: "exported method .*\\.(Close|Connect|Read|ReadBatch|Write|WriteBatch|Process|ProcessBatch|NextBatch|Create|EndOfInput) should have comment or be unexported"
+      - linters:
+          - staticcheck
+        text: "redpandatest.StartRedpanda is deprecated: Use StartSingleBroker or StartSingleBrokerWithConfig instead"
+        path: internal/impl/kafka
     paths:
       - third_party$
       - builtin$

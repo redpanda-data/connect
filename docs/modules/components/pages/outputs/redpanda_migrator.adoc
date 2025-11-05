@@ -40,10 +40,16 @@ output:
   label: ""
   redpanda_migrator:
     seed_brokers: [] # No default (required)
+    tcp:
+      keep_alive:
+        idle: 15s
+        interval: 15s
+        count: 9
+      tcp_user_timeout: 0s
     schema_registry:
       url: http://localhost:8081 # No default (required)
       enabled: true
-      interval: 0s
+      interval: 5m
       include: [] # No default (optional)
       exclude: [] # No default (optional)
       subject: '"prod_${! metadata(''schema_registry_subject'') }"' # No default (optional)
@@ -87,6 +93,12 @@ output:
     metadata_max_age: 5m
     request_timeout_overhead: 10s
     conn_idle_timeout: 20s
+    tcp:
+      keep_alive:
+        idle: 15s
+        interval: 15s
+        count: 9
+      tcp_user_timeout: 0s
     partitioner: "" # No default (optional)
     idempotent_write: true
     compression: "" # No default (optional)
@@ -120,7 +132,7 @@ output:
         claims: {}
         headers: {}
       enabled: true
-      interval: 0s
+      interval: 5m
       include: [] # No default (optional)
       exclude: [] # No default (optional)
       subject: '"prod_${! metadata(''schema_registry_subject'') }"' # No default (optional)
@@ -140,6 +152,7 @@ output:
     topic_replication_factor: "3" # No default (optional)
     sync_topic_acls: false
     serverless: false
+    provenance_header: redpanda-migrator-provenance
 ```
 
 --
@@ -276,9 +289,10 @@ Migrate from Confluent/Kafka to Redpanda Cloud serverless cluster with authentic
 ```yamlinput:
   redpanda_migrator:
     seed_brokers: ["source-kafka:9092"]
-    topics:
-      - '^[^_]'  # All topics not starting with underscore
-    regexp_topics: true
+    regexp_topics_include:
+      - '.'
+    regexp_topics_exclude:
+      - '^_'
     consumer_group: "migrator_cg"
     schema_registry:
       url: "http://source-registry:8081"
@@ -757,6 +771,58 @@ The rough amount of time to allow connections to idle before they are closed.
 
 *Default*: `"20s"`
 
+=== `tcp`
+
+TCP socket configuration.
+
+
+*Type*: `object`
+
+
+=== `tcp.keep_alive`
+
+TCP keep-alive probe configuration.
+
+
+*Type*: `object`
+
+
+=== `tcp.keep_alive.idle`
+
+Duration the connection must be idle before sending the first keep-alive probe. Zero defaults to 15s. Negative values disable keep-alive probes.
+
+
+*Type*: `string`
+
+*Default*: `"15s"`
+
+=== `tcp.keep_alive.interval`
+
+Duration between keep-alive probes. Zero defaults to 15s.
+
+
+*Type*: `string`
+
+*Default*: `"15s"`
+
+=== `tcp.keep_alive.count`
+
+Maximum unanswered keep-alive probes before dropping the connection. Zero defaults to 9.
+
+
+*Type*: `int`
+
+*Default*: `9`
+
+=== `tcp.tcp_user_timeout`
+
+Maximum time to wait for acknowledgment of transmitted data before killing the connection. Linux-only (kernel 2.6.37+), ignored on other platforms. When enabled, keep_alive.idle must be greater than this value per RFC 5482. Zero disables.
+
+
+*Type*: `string`
+
+*Default*: `"0s"`
+
 === `partitioner`
 
 Override the default murmur2 hashing partitioner.
@@ -781,7 +847,7 @@ Override the default murmur2 hashing partitioner.
 
 === `idempotent_write`
 
-Enable the idempotent write producer option. This requires the `IDEMPOTENT_WRITE` permission on `CLUSTER` and can be disabled if this permission is not available.
+Enable the idempotent write producer option. When enabled, the producer initializes a producer ID and uses it to guarantee exactly-once semantics per partition (no duplicates on retries). This requires the `IDEMPOTENT_WRITE` permission on the `CLUSTER` resource. If your cluster does not grant this permission or uses ACLs restrictively, disable this option. Note: Idempotent writes are strictly a win for data integrity but may be unavailable in restricted environments (e.g., some managed Kafka services, Redpanda with strict ACLs). Disabling this option is safe and only affects retry behavior—duplicates may occur on producer retries, but the pipeline will continue to function normally.
 
 
 *Type*: `bool`
@@ -1212,7 +1278,7 @@ How often to synchronise schema registry subjects. Set to 0s for one-time sync a
 
 *Type*: `string`
 
-*Default*: `"0s"`
+*Default*: `"5m"`
 
 ```yml
 # Examples
@@ -1466,5 +1532,14 @@ Enable serverless mode for Redpanda Cloud serverless clusters. This restricts to
 *Type*: `bool`
 
 *Default*: `false`
+
+=== `provenance_header`
+
+Header name to add to migrated records indicating their source cluster. If empty, no provenance header is added.
+
+
+*Type*: `string`
+
+*Default*: `"redpanda-migrator-provenance"`
 
 

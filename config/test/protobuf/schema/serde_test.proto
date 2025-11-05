@@ -1,0 +1,56 @@
+syntax = "proto3";
+package testing;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/any.proto";
+
+message SerdeTest {
+  enum Status {
+    STATUS_UNSPECIFIED = 0;
+    STATUS_ACTIVE = 1;
+    STATUS_INACTIVE = 2;
+  }
+
+  // Basic types
+  string name = 1;
+  int32 count = 2;
+  double price = 3;
+  bool active = 4;
+
+  // Edge case types
+  google.protobuf.Timestamp created_at = 5;
+  bytes data = 6;
+  Status status = 7;
+  google.protobuf.Any any_field = 27;
+
+  // Special float values (NaN, Inf)
+  double nan_value = 8;
+  double inf_value = 9;
+  double neg_inf_value = 10;
+  float float_nan = 11;
+  float float_inf = 12;
+
+  // Lists and maps
+  repeated string tags = 13;
+  repeated int32 numbers = 14;
+  map<string, string> metadata = 15;
+
+  // Nested message
+  message NestedMessage {
+    string inner_field = 1;
+    int32 inner_count = 2;
+  }
+  NestedMessage nested = 16;
+
+  // All numeric types
+  int32 int32_val = 17;
+  int64 int64_val = 18;
+  uint32 uint32_val = 19;
+  uint64 uint64_val = 20;
+  sint32 sint32_val = 21;
+  sint64 sint64_val = 22;
+  fixed32 fixed32_val = 23;
+  fixed64 fixed64_val = 24;
+  sfixed32 sfixed32_val = 25;
+  sfixed64 sfixed64_val = 26;
+}

@@ -104,6 +104,7 @@ This input adds the following metadata fields to each message:
 - nats_num_pending
 - nats_domain
 - nats_timestamp_unix_nano
+- nats_consumer
 ```
 
 You can access these metadata fields using

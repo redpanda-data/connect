@@ -46,6 +46,7 @@ schema_registry_decode:
     use_enum_numbers: false
     emit_unpopulated: false
     emit_default_values: false
+    serialize_to_json: true
   cache_duration: 10m
   url: "" # No default (required)
   default_schema_id: 0 # No default (optional)
@@ -85,6 +86,7 @@ schema_registry_decode:
     use_enum_numbers: false
     emit_unpopulated: false
     emit_default_values: false
+    serialize_to_json: true
   cache_duration: 10m
   url: "" # No default (required)
   default_schema_id: 0 # No default (optional)
@@ -314,6 +316,15 @@ Whether to emit default-valued primitive fields, empty lists, and empty maps. em
 *Type*: `bool`
 
 *Default*: `false`
+
+=== `protobuf.serialize_to_json`
+
+If messages should be serialized to JSON bytes. If false then the message is kept in decoded form, which means that 64 bit integers are not converted to strings and types for bytes and google.protobuf.Timestamp are preserved (as they are not serialized to JSON strings).
+
+
+*Type*: `bool`
+
+*Default*: `true`
 
 === `cache_duration`
 

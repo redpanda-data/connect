@@ -52,7 +52,7 @@ tasks:
       - '{{.TOOLS_BIN_DIR}}/govulncheck ./...'
 
   test:
-    desc: Run unit and template tests
+    desc: Run unit, template and ffi tests
     deps:
       - test:unit
       - test:template

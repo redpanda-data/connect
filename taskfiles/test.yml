@@ -42,3 +42,4 @@ tasks:
       - '{{.TARGET_DIR}}/redpanda-connect template lint {{.TEMPLATE_FILES}}'
       - '{{.TARGET_DIR}}/redpanda-connect test ./config/test/...'
       - '{{.TARGET_DIR}}/redpanda-connect template lint ./config/rag/templates/...'
+

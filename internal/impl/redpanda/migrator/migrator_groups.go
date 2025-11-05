@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/twmb/franz-go/pkg/kadm"
+	"github.com/twmb/franz-go/pkg/kerr"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
 
@@ -327,14 +328,14 @@ func (m *groupsMigrator) Sync(ctx context.Context, getTopics func() []TopicMappi
 		return nil
 	}
 
-	m.log.Info("Consumer group migration: syncing consumer groups")
+	m.log.Debug("Consumer group migration: syncing consumer groups")
 
 	mappings := getTopics()
 
 	// Filter out topics
 	topics := m.filterTopics(mappings)
 	if len(topics) == 0 {
-		m.log.Infof("Consumer group migration: no topics to sync")
+		m.log.Debug("Consumer group migration: no topics to sync")
 		return nil
 	}
 
@@ -372,7 +373,7 @@ func (m *groupsMigrator) Sync(ctx context.Context, getTopics func() []TopicMappi
 		return false
 	})
 	if len(gcos) == 0 {
-		m.log.Infof("Consumer group migration: nothing to do")
+		m.log.Debug("Consumer group migration: nothing to do")
 		return nil
 	}
 	topics = extractTopics(gcos)
@@ -510,7 +511,7 @@ func (m *groupsMigrator) Sync(ctx context.Context, getTopics func() []TopicMappi
 		offsetsToCommitCount += 1
 	}
 	if len(offsetsToCommit) == 0 {
-		m.log.Infof("Consumer group migration: no offsets to commit")
+		m.log.Debug("Consumer group migration: no offsets to commit")
 		return nil
 	}
 
@@ -607,8 +608,7 @@ func (m *groupsMigrator) filterTopics(all []TopicMapping) []string {
 	topics := make([]string, 0, len(all))
 	for _, tm := range all {
 		// Partition counts must match between source and destination clusters.
-		// Otherwise, it is impossible to migrate the consumer groups.
-		if tm.Src.Partitions != tm.Dst.Partitions {
+		if tm.Src.Partitions > tm.Dst.Partitions {
 			m.log.Infof("Consumer group migration: skipping topic '%s' with mismatched partition counts, source: %d, destination: %d",
 				tm.Src.Topic, tm.Src.Partitions, tm.Dst.Partitions)
 			continue
@@ -783,7 +783,7 @@ func readRecordTimestamp(
 	}
 	respPartition := &respTopic.Partitions[0]
 	if respPartition.ErrorCode != 0 {
-		return time.Time{}, fmt.Errorf("partition error: %d", respPartition.ErrorCode)
+		return time.Time{}, fmt.Errorf("partition error: %w", kerr.ErrorForCode(respPartition.ErrorCode))
 	}
 
 	// Extract record timestamp
