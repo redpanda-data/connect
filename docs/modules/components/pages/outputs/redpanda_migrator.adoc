@@ -49,7 +49,7 @@ output:
     schema_registry:
       url: http://localhost:8081 # No default (required)
       enabled: true
-      interval: 0s
+      interval: 5m
       include: [] # No default (optional)
       exclude: [] # No default (optional)
       subject: '"prod_${! metadata(''schema_registry_subject'') }"' # No default (optional)
@@ -132,7 +132,7 @@ output:
         claims: {}
         headers: {}
       enabled: true
-      interval: 0s
+      interval: 5m
       include: [] # No default (optional)
       exclude: [] # No default (optional)
       subject: '"prod_${! metadata(''schema_registry_subject'') }"' # No default (optional)
@@ -1226,7 +1226,7 @@ How often to synchronise schema registry subjects. Set to 0s for one-time sync a
 
 *Type*: `string`
 
-*Default*: `"0s"`
+*Default*: `"5m"`
 
 ```yml
 # Examples
