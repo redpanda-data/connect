@@ -608,8 +608,7 @@ func (m *groupsMigrator) filterTopics(all []TopicMapping) []string {
 	topics := make([]string, 0, len(all))
 	for _, tm := range all {
 		// Partition counts must match between source and destination clusters.
-		// Otherwise, it is impossible to migrate the consumer groups.
-		if tm.Src.Partitions != tm.Dst.Partitions {
+		if tm.Src.Partitions > tm.Dst.Partitions {
 			m.log.Infof("Consumer group migration: skipping topic '%s' with mismatched partition counts, source: %d, destination: %d",
 				tm.Src.Topic, tm.Src.Partitions, tm.Dst.Partitions)
 			continue
