@@ -143,3 +143,38 @@ func TestIntegrationTopicMigratorIdempotentSyncIdempotence(t *testing.T) {
 
 	t.Log("Then: nothing changes")
 }
+
+func TestIntegrationTopicMigratorPartitionGrowth(t *testing.T) {
+	integration.CheckSkip(t)
+
+	partitionCount := func(adm *kadm.Client, topic string) int {
+		topics, err := adm.ListTopics(t.Context(), topic)
+		require.NoError(t, err)
+		topicDetail, ok := topics[topic]
+		require.True(t, ok, "topic not found")
+		return len(topicDetail.Partitions)
+	}
+
+	t.Log("Given: Redpanda clusters")
+	src, dst := startRedpandaSourceAndDestination(t)
+
+	t.Log("And: destination topic exists with 1 partition")
+	const testTopic = "partition-growth-topic"
+	_, err := dst.Admin.CreateTopic(t.Context(), 1, 1, nil, testTopic)
+	require.NoError(t, err)
+	assert.Equal(t, 1, partitionCount(dst.Admin, testTopic))
+
+	t.Log("And: source topic exists with 2 partitions")
+	_, err = src.Admin.CreateTopic(t.Context(), 2, 1, nil, testTopic)
+	require.NoError(t, err)
+	assert.Equal(t, 2, partitionCount(src.Admin, testTopic))
+
+	t.Log("When: Sync is called")
+	m := migrator.NewTopicMigratorForTesting(t, migrator.TopicMigratorConfig{})
+	require.NoError(t, m.Sync(t.Context(), src.Admin, dst.Admin, func() []string {
+		return []string{testTopic}
+	}))
+
+	t.Log("Then: destination topic partition count increased to 2")
+	assert.Equal(t, 2, partitionCount(dst.Admin, testTopic))
+}
