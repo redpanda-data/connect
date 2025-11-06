@@ -340,9 +340,9 @@ type schemaRegistryMigrator struct {
 	metrics *schemaRegistryMetrics
 	log     *service.Logger
 
-	mu           sync.RWMutex
-	knownSchemas map[int]schemaInfo  // source schema ID -> destination schema info
-	compatSet    map[string]struct{} // subject -> struct{}
+	mu            sync.RWMutex
+	knownSubjects map[schemaInfo]struct{} // source schema info set
+	knownSchemas  map[int]schemaInfo      // source schema ID -> destination schema info
 }
 
 // ListSubjectSchemas returns a list of all source subject schemas Filtered by
@@ -460,12 +460,33 @@ func (m *schemaRegistryMigrator) Sync(ctx context.Context) error {
 	}
 
 	for _, s := range all {
-		if err := m.syncSubjectSchemaIfNeeded(ctx, s); err != nil {
+		srcInfo := schemaInfoFromSubjectSchema(s)
+
+		if _, ok := m.knownSubjects[srcInfo]; ok {
+			m.log.Debugf("Schema migration: schema already synced, skipping: subject=%s version=%d id=%d",
+				s.Subject, s.Version, s.ID)
+			continue
+		}
+
+		info, err := m.syncSubjectSchema(ctx, s)
+		if err != nil {
 			return fmt.Errorf("sync subject schema %s version %d: %w", s.Subject, s.Version, err)
 		}
-		if err := m.syncSubjectCompatibilityIfNeeded(ctx, s.Subject); err != nil {
+		if existing, ok := m.knownSchemas[s.ID]; ok {
+			if existing.ID != info.ID {
+				return fmt.Errorf("schema ID mapping conflict: source ID %d maps to both destination IDs %d and %d",
+					s.ID, existing.ID, info.ID)
+			}
+		}
+
+		if err := m.syncSubjectCompatibility(ctx, s.Subject); err != nil {
 			return fmt.Errorf("sync subject compatibility %s: %w", s.Subject, err)
 		}
+
+		m.mu.Lock()
+		m.knownSubjects[srcInfo] = struct{}{}
+		m.knownSchemas[s.ID] = info
+		m.mu.Unlock()
 	}
 
 	return nil
@@ -516,34 +537,10 @@ func (m *schemaRegistryMigrator) resolveSubject(subject string, version int) (st
 	return dstSubject, nil
 }
 
-func (m *schemaRegistryMigrator) syncSubjectSchemaIfNeeded(ctx context.Context, ss sr.SubjectSchema) error {
-	m.mu.RLock()
-	_, ok := m.knownSchemas[ss.ID]
-	m.mu.RUnlock()
-	if ok {
-		m.log.Debugf("Schema migration: schema already synced, skipping: subject=%s version=%d id=%d",
-			ss.Subject, ss.Version, ss.ID)
-		return nil
-	}
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.syncSubjectSchemaLocked(ctx, ss)
-}
-
-func (m *schemaRegistryMigrator) syncSubjectSchemaLocked(ctx context.Context, ss sr.SubjectSchema) error {
-	if _, ok := m.knownSchemas[ss.ID]; ok {
-		m.log.Debugf("Schema already synced (locked), skipping: subject=%s version=%d id=%d",
-			ss.Subject, ss.Version, ss.ID)
-		return nil
-	}
-
-	m.log.Debugf("Schema migration: subject=%s version=%d id=%d",
-		ss.Subject, ss.Version, ss.ID)
-
+func (m *schemaRegistryMigrator) syncSubjectSchema(ctx context.Context, ss sr.SubjectSchema) (schemaInfo, error) {
 	dstSubject, err := m.resolveSubject(ss.Subject, ss.Version)
 	if err != nil {
-		return err
+		return schemaInfo{}, err
 	}
 	if dstSubject != ss.Subject {
 		m.log.Debugf("Schema migration: resolved subject=%s version=%d => subject=%s",
@@ -569,7 +566,7 @@ func (m *schemaRegistryMigrator) syncSubjectSchemaLocked(ctx context.Context, ss
 		dss, err := m.dst.CreateSchema(ctx, dstSubject, sch)
 		if err != nil {
 			m.metrics.IncSchemaCreateErrors()
-			return fmt.Errorf("create schema: %w", err)
+			return schemaInfo{}, fmt.Errorf("create schema: %w", err)
 		}
 
 		info = schemaInfoFromSubjectSchema(dss)
@@ -580,7 +577,7 @@ func (m *schemaRegistryMigrator) syncSubjectSchemaLocked(ctx context.Context, ss
 		if err != nil {
 			const conflictPattern = `Schema already registered with id \d+ instead of input id \d+`
 			if ok, _ := regexp.MatchString(conflictPattern, err.Error()); ok {
-				return fmt.Errorf("create schema: %w - try enabling translate-ids", err)
+				return schemaInfo{}, fmt.Errorf("create schema: %w - try enabling translate-ids", err)
 			}
 
 			// This is a workaround for Allow POSTing the same schemas with
@@ -591,11 +588,14 @@ func (m *schemaRegistryMigrator) syncSubjectSchemaLocked(ctx context.Context, ss
 			// [1] https://github.com/redpanda-data/redpanda/issues/26331
 			if s, _ := m.dst.SchemaByID(sr.WithParams(ctx, sr.ShowDeleted), ss.ID); !schemaEquals(s, sch) {
 				m.metrics.IncSchemaCreateErrors()
-				return fmt.Errorf("create schema: %w", err)
+				return schemaInfo{}, fmt.Errorf("create schema: %w", err)
 			}
 
 			// If the schema already exists (and is identical), use the source
 			// schema ID and version...
+			m.log.Warnf("Schema migration: schema subject=%s version=%d id=%d could not be created (server error: %s) - using existing schema with the same ID, if this is not the desired behavior, try enabling translate-ids",
+				ss.Subject, ss.Version, ss.ID, err.Error())
+
 			dss = ss
 			dss.Subject = dstSubject
 		}
@@ -607,9 +607,7 @@ func (m *schemaRegistryMigrator) syncSubjectSchemaLocked(ctx context.Context, ss
 	m.metrics.ObserveSchemaCreateLatency(time.Since(t0))
 	m.metrics.IncSchemasCreated()
 
-	m.knownSchemas[ss.ID] = info
-
-	return nil
+	return info, nil
 }
 
 func schemaEquals(a, b sr.Schema) bool {
@@ -660,26 +658,7 @@ func schemaStringEquals(a, b string, st sr.SchemaType) bool {
 	return true
 }
 
-func (m *schemaRegistryMigrator) syncSubjectCompatibilityIfNeeded(ctx context.Context, subject string) error {
-	m.mu.RLock()
-	_, ok := m.compatSet[subject]
-	m.mu.RUnlock()
-	if ok {
-		m.log.Debugf("Schema migration: compatibility already set, skipping: subject=%s", subject)
-		return nil
-	}
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.syncSubjectCompatibilityLocked(ctx, subject)
-}
-
-func (m *schemaRegistryMigrator) syncSubjectCompatibilityLocked(ctx context.Context, subject string) error {
-	if _, ok := m.compatSet[subject]; ok {
-		m.log.Debugf("Schema migration: compatibility already set (locked), skipping: subject=%s", subject)
-		return nil
-	}
-
+func (m *schemaRegistryMigrator) syncSubjectCompatibility(ctx context.Context, subject string) error {
 	var cl sr.CompatibilityLevel
 	res := m.src.Compatibility(ctx, subject)
 	if res[0].Err == nil && res[0].Level != 0 {
@@ -705,7 +684,6 @@ func (m *schemaRegistryMigrator) syncSubjectCompatibilityLocked(ctx context.Cont
 	m.metrics.IncCompatUpdates()
 
 	m.log.Infof("Schema migration: set compatibility level=%s subject=%s", cl, dstSubject)
-	m.compatSet[subject] = struct{}{}
 
 	return nil
 }

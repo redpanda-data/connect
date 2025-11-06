@@ -26,6 +26,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	"github.com/redpanda-data/connect/v4/internal/impl/redpanda/migrator"
+	"github.com/redpanda-data/connect/v4/internal/impl/redpanda/redpandatest"
 )
 
 func startSchemaRegistrySourceAndDestination(t *testing.T, opts ...redpandatestConfigOpt) (*sr.Client, *sr.Client) {
@@ -335,6 +336,79 @@ func TestIntegrationSchemaRegistryMigratorSyncTranslateIDs(t *testing.T) {
 	assert.Greater(t, sd1.ID, 1)
 	assert.Greater(t, sd2.ID, 1)
 	assert.NotEqual(t, sd1.ID, sd2.ID)
+}
+
+func TestIntegrationSchemaRegistryMigratorSyncReuseIDs(t *testing.T) {
+	integration.CheckSkip(t)
+
+	// This test requires Redpanda 25.3 or newer to work around this issue
+	// https://github.com/redpanda-data/redpanda/issues/26331
+	nightly := func(kind redpandatestConfigOptKind, cfg *redpandatest.Config) {
+		if kind == redpandatestConfigOptKindDst {
+			cfg.Nightly = true
+		}
+	}
+
+	t.Log("Given: source and destination Schema Registry")
+	src, dst := startSchemaRegistrySourceAndDestination(t, nightly)
+
+	const (
+		schema1 = `{"type":"record","name":"User","fields":[{"name":"id","type":"int"}]}`
+		schema2 = `{"type":"record","name":"Order","fields":[{"name":"orderId","type":"string"}]}`
+	)
+
+	t.Log("When: three subjects are created where two share identical schemas")
+	ctx := t.Context()
+
+	// Subject 1 and 2 have different schemas
+	ss1, err := src.CreateSchema(ctx, "subject-1", sr.Schema{Schema: schema1})
+	require.NoError(t, err)
+	ss2, err := src.CreateSchema(ctx, "subject-2", sr.Schema{Schema: schema2})
+	require.NoError(t, err)
+
+	// Subject 3 shares the same schema as subject 1
+	ss3, err := src.CreateSchema(ctx, "subject-3", sr.Schema{Schema: schema1})
+	require.NoError(t, err)
+
+	t.Log("Then: subjects 1 and 3 should have the same schema ID")
+	assert.Equal(t, ss1.ID, ss3.ID, "subject-1 and subject-3 should share schema ID")
+	assert.NotEqual(t, ss1.ID, ss2.ID, "subject-1 and subject-2 should have different schema IDs")
+
+	t.Log("When: destination is set to import mode")
+	modeRes := dst.SetMode(ctx, sr.ModeImport)
+	require.NoError(t, modeRes[0].Err)
+
+	t.Log("And: migrator syncs schemas to destination")
+	conf := migrator.SchemaRegistryMigratorConfig{
+		Enabled:  true,
+		Versions: migrator.VersionsLatest,
+	}
+	m := migrator.NewSchemaRegistryMigratorForTesting(t, conf, src, dst)
+
+	syncCtx, cancel := context.WithTimeout(ctx, redpandaTestWaitTimeout)
+	defer cancel()
+	require.NoError(t, m.Sync(syncCtx))
+
+	t.Log("Then: destination should have three subjects")
+	subjects, err := dst.Subjects(ctx)
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{"subject-1", "subject-2", "subject-3"}, subjects)
+
+	t.Log("And: destination subjects should preserve schema ID relationships")
+	ds1, err := dst.SchemaByVersion(ctx, "subject-1", 1)
+	require.NoError(t, err)
+	ds2, err := dst.SchemaByVersion(ctx, "subject-2", 1)
+	require.NoError(t, err)
+	ds3, err := dst.SchemaByVersion(ctx, "subject-3", 1)
+	require.NoError(t, err)
+
+	assert.Equal(t, ds1.ID, ds3.ID, "destination subject-1 and subject-3 should share schema ID")
+	assert.NotEqual(t, ds1.ID, ds2.ID, "destination subject-1 and subject-2 should have different schema IDs")
+
+	t.Log("And: schema content should match source")
+	assert.True(t, migrator.SchemaStringEquals(schema1, ds1.Schema.Schema, ds1.Type))
+	assert.True(t, migrator.SchemaStringEquals(schema2, ds2.Schema.Schema, ds2.Type))
+	assert.True(t, migrator.SchemaStringEquals(schema1, ds3.Schema.Schema, ds3.Type))
 }
 
 func TestIntegrationSchemaRegistryMigratorSyncNormalize(t *testing.T) {
