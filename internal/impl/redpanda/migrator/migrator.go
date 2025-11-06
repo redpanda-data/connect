@@ -402,10 +402,10 @@ func NewMigrator(mgr *service.Resources) *Migrator {
 			knownTopics: make(map[string]TopicMapping),
 		},
 		sr: schemaRegistryMigrator{
-			metrics:      newSchemaRegistryMetrics(mgr.Metrics()),
-			log:          log,
-			knownSchemas: make(map[int]schemaInfo),
-			compatSet:    make(map[string]struct{}),
+			metrics:       newSchemaRegistryMetrics(mgr.Metrics()),
+			log:           log,
+			knownSubjects: make(map[schemaInfo]struct{}),
+			knownSchemas:  make(map[int]schemaInfo),
 		},
 		groups: groupsMigrator{
 			metrics:         newGroupsMetrics(mgr.Metrics()),

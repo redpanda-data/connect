@@ -62,8 +62,8 @@ func NewSchemaRegistryMigratorForTesting(t *testing.T, conf SchemaRegistryMigrat
 		log: service.NewLoggerFromSlog(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{
 			Level: slog.LevelDebug,
 		}))),
-		knownSchemas: make(map[int]schemaInfo),
-		compatSet:    make(map[string]struct{}),
+		knownSubjects: make(map[schemaInfo]struct{}),
+		knownSchemas:  make(map[int]schemaInfo),
 	}
 }
 
