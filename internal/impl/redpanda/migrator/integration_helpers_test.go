@@ -49,9 +49,18 @@ type EmbeddedRedpandaCluster struct {
 	t      *testing.T
 }
 
+type redpandatestConfigOptKind int8
+
+const (
+	redpandatestConfigOptKindSrc redpandatestConfigOptKind = iota
+	redpandatestConfigOptKindDst
+)
+
+type redpandatestConfigOpt func(redpandatestConfigOptKind, *redpandatest.Config)
+
 // startRedpandaSourceAndDestination starts two containers for Redpanda and
 // returns the EmbeddedRedpandaCluster for each container.
-func startRedpandaSourceAndDestination(t *testing.T) (src, dst EmbeddedRedpandaCluster) {
+func startRedpandaSourceAndDestination(t *testing.T, opts ...redpandatestConfigOpt) (src, dst EmbeddedRedpandaCluster) {
 	pool, err := dockertest.NewPool("")
 	require.NoError(t, err)
 	pool.MaxWait = time.Minute
@@ -59,15 +68,26 @@ func startRedpandaSourceAndDestination(t *testing.T) (src, dst EmbeddedRedpandaC
 	src = EmbeddedRedpandaCluster{t: t}
 	dst = EmbeddedRedpandaCluster{t: t}
 
-	cfg := redpandatest.Config{
+	srcCfg := redpandatest.Config{
 		ExposeBroker:     true,
 		AutoCreateTopics: false,
 	}
+	for _, opt := range opts {
+		opt(redpandatestConfigOptKindSrc, &srcCfg)
+	}
 
-	src.Endpoints, _, err = redpandatest.StartSingleBrokerWithConfig(t, pool, cfg)
+	dstCfg := redpandatest.Config{
+		ExposeBroker:     true,
+		AutoCreateTopics: false,
+	}
+	for _, opt := range opts {
+		opt(redpandatestConfigOptKindDst, &dstCfg)
+	}
+
+	src.Endpoints, _, err = redpandatest.StartSingleBrokerWithConfig(t, pool, srcCfg)
 	require.NoError(t, err)
 
-	dst.Endpoints, _, err = redpandatest.StartSingleBrokerWithConfig(t, pool, cfg)
+	dst.Endpoints, _, err = redpandatest.StartSingleBrokerWithConfig(t, pool, dstCfg)
 	require.NoError(t, err)
 
 	src.Client, err = kgo.NewClient(
