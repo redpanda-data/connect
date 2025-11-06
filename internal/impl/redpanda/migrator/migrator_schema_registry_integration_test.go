@@ -28,8 +28,8 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/redpanda/migrator"
 )
 
-func startSchemaRegistrySourceAndDestination(t *testing.T) (*sr.Client, *sr.Client) {
-	src, dst := startRedpandaSourceAndDestination(t)
+func startSchemaRegistrySourceAndDestination(t *testing.T, opts ...redpandatestConfigOpt) (*sr.Client, *sr.Client) {
+	src, dst := startRedpandaSourceAndDestination(t, opts...)
 	srSrc, err := sr.NewClient(sr.URLs(src.SchemaRegistryURL))
 	require.NoError(t, err)
 	srDst, err := sr.NewClient(sr.URLs(dst.SchemaRegistryURL))
