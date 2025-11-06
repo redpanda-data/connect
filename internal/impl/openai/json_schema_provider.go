@@ -40,13 +40,21 @@ func (s *fixedSchemaProvider) GetJSONSchema(context.Context) (*oai.ChatCompletio
 }
 
 func newFixedSchema(name, description, raw string) (jsonSchemaProvider, error) {
-	p := &fixedSchemaProvider{}
-	p.Name = name
-	p.Description = description
-	if err := json.Unmarshal([]byte(raw), &p.Schema); err != nil {
-		return nil, fmt.Errorf("invalid JSON schema: %w", err)
+	p := &fixedSchemaProvider{
+		oai.ChatCompletionResponseFormatJSONSchema{
+            Name: name,
+			Description: description,
+			Strict: true,
+		},
 	}
-	p.Strict = true
+	if len(raw) > 0 && raw != "null" {
+		var d jsonschema.Definition
+		err := json.Unmarshal([]byte(raw), &d)
+		if err != nil {
+			return nil, fmt.Errorf("invalid JSON schema: %w", err)
+		}
+		p.Schema = &d
+	}
 	return p, nil
 }
 
