@@ -40,6 +40,8 @@ type Endpoints struct {
 
 // Config contains configuration for starting a Redpanda broker.
 type Config struct {
+	// Nightly uses the nightly Redpanda image instead of the latest stable image.
+	Nightly bool
 	// ExposeBroker exposes the Kafka broker port to the host.
 	ExposeBroker bool
 	// AutoCreateTopics enables automatic topic creation.
@@ -97,8 +99,12 @@ func StartSingleBrokerWithConfig(t *testing.T, pool *dockertest.Pool, cfg Config
 		}
 	}
 
+	repo := "docker.redpanda.com/redpandadata/redpanda"
+	if cfg.Nightly {
+		repo = "docker.redpanda.com/redpandadata/redpanda-nightly"
+	}
 	options := &dockertest.RunOptions{
-		Repository:   "docker.redpanda.com/redpandadata/redpanda",
+		Repository:   repo,
 		Tag:          "latest",
 		Hostname:     "redpanda",
 		Cmd:          cmd,
