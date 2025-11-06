@@ -456,7 +456,7 @@ func (m *schemaRegistryMigrator) Sync(ctx context.Context) error {
 	}
 	m.log.Debugf("Schema migration: found %d subject schemas", len(all))
 	for _, s := range all {
-		m.log.Debugf("Schema migration: found subject schema %s version=%d id=%d", s.Subject, s.Version, s.ID)
+		m.log.Debugf("Schema migration: found subject=%s version=%d id=%d", s.Subject, s.Version, s.ID)
 	}
 
 	for _, s := range all {
@@ -546,7 +546,7 @@ func (m *schemaRegistryMigrator) syncSubjectSchemaLocked(ctx context.Context, ss
 		return err
 	}
 	if dstSubject != ss.Subject {
-		m.log.Debugf("Schema migration: resolved subject=%s version=%d to %s",
+		m.log.Debugf("Schema migration: resolved subject=%s version=%d => subject=%s",
 			ss.Subject, ss.Version, dstSubject)
 	}
 
@@ -573,7 +573,7 @@ func (m *schemaRegistryMigrator) syncSubjectSchemaLocked(ctx context.Context, ss
 		}
 
 		info = schemaInfoFromSubjectSchema(dss)
-		m.log.Infof("Schema migration: schema created with translated id: subject=%s version=%d id=%d as subject=%s version=%d id=%d",
+		m.log.Infof("Schema migration: schema created with translated id: subject=%s version=%d id=%d => subject=%s version=%d id=%d",
 			ss.Subject, ss.Version, ss.ID, info.Subject, info.Version, info.ID)
 	} else {
 		dss, err := m.dst.CreateSchemaWithIDAndVersion(ctx, dstSubject, sch, ss.ID, ss.Version)
@@ -704,7 +704,7 @@ func (m *schemaRegistryMigrator) syncSubjectCompatibilityLocked(ctx context.Cont
 	m.metrics.ObserveCompatUpdateLatency(time.Since(t0))
 	m.metrics.IncCompatUpdates()
 
-	m.log.Infof("Schema migration: set compatibility level %s for subject %s", cl, dstSubject)
+	m.log.Infof("Schema migration: set compatibility level=%s subject=%s", cl, dstSubject)
 	m.compatSet[subject] = struct{}{}
 
 	return nil
