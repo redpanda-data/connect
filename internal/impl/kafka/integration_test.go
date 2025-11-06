@@ -65,6 +65,52 @@ func createKafkaTopic(ctx context.Context, address, id string, partitions int32)
 	return kerr.ErrorForCode(res.Topics[0].ErrorCode)
 }
 
+func setConsumerGroupOffset(ctx context.Context, address, topicName, consumerGroup string, partition int32, offset int64) error {
+	cl, err := kgo.NewClient(
+		kgo.SeedBrokers(address),
+		kgo.ConsumerGroup(consumerGroup),
+		kgo.DisableAutoCommit(),
+	)
+	if err != nil {
+		return err
+	}
+
+	defer cl.Close()
+
+	cl.AddConsumePartitions(map[string]map[int32]kgo.Offset{
+		topicName: {
+			partition: kgo.NewOffset().At(offset),
+		},
+	})
+
+	return cl.CommitMarkedOffsets(ctx)
+}
+
+func getConsumerGroupOffset(ctx context.Context, address, topicName, consumerGroup string, partition int32) (int64, error) {
+	cl, err := kgo.NewClient(kgo.SeedBrokers(address))
+	if err != nil {
+		return 0, err
+	}
+
+	defer cl.Close()
+
+	offsetReq := kmsg.NewOffsetFetchRequest()
+	offsetReq.Group = consumerGroup
+	offsetReq.Topics = []kmsg.OffsetFetchRequestTopic{
+		{
+			Topic:      topicName,
+			Partitions: []int32{0},
+		},
+	}
+
+	res, err := offsetReq.RequestWith(ctx, cl)
+	if err != nil {
+		return 0, err
+	}
+
+	return res.Groups[0].Topics[0].Partitions[0].Offset, nil
+}
+
 func createKafkaTopicSasl(address, id string, partitions int32) error {
 	topicName := fmt.Sprintf("topic-%v", id)
 
@@ -631,4 +677,150 @@ input:
 			integration.StreamTestOptPort(kafkaPortStr),
 		)
 	})
+}
+
+func TestRedpandaCustomOffsetsIntegration(t *testing.T) {
+	integration.CheckSkip(t)
+
+	pool, err := dockertest.NewPool("")
+	require.NoError(t, err)
+
+	kafkaPort, err := integration.GetFreePort()
+	require.NoError(t, err)
+
+	kafkaPortStr := strconv.Itoa(kafkaPort)
+
+	options := &dockertest.RunOptions{
+		Repository:   "docker.redpanda.com/redpandadata/redpanda",
+		Tag:          "latest",
+		Hostname:     "redpanda",
+		ExposedPorts: []string{"9092/tcp"},
+		PortBindings: map[docker.Port][]docker.PortBinding{
+			"9092/tcp": {{HostIP: "", HostPort: kafkaPortStr + "/tcp"}},
+		},
+		Cmd: []string{
+			"redpanda",
+			"start",
+			"--node-id 0",
+			"--mode dev-container",
+			"--set rpk.additional_start_flags=[--reactor-backend=epoll]",
+			"--kafka-addr 0.0.0.0:9092",
+			fmt.Sprintf("--advertise-kafka-addr localhost:%v", kafkaPort),
+		},
+	}
+
+	pool.MaxWait = time.Minute
+	resource, err := pool.RunWithOptions(options)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		assert.NoError(t, pool.Purge(resource))
+	})
+
+	_ = resource.Expire(900)
+	require.NoError(t, pool.Retry(func() error {
+		return createKafkaTopic(t.Context(), "localhost:"+kafkaPortStr, "testingconnection", 1)
+	}))
+
+	topic, consumerGroup := "custom_offsets_test_topic", "custom_offsets_test_group"
+	address := "localhost:" + kafkaPortStr
+
+	require.NoError(t, createKafkaTopic(t.Context(), address, topic, 1))
+	require.NoError(t, setConsumerGroupOffset(t.Context(), address, topic, consumerGroup, int32(0), int64(-1001)))
+	offset, err := getConsumerGroupOffset(t.Context(), address, topic, consumerGroup, int32(0))
+	require.NoError(t, err)
+	require.Equal(t, int64(-1001), offset)
+
+	resBuilder := service.NewResourceBuilder()
+	require.NoError(t, resBuilder.AddOutputYAML(fmt.Sprintf(`
+label: testout
+redpanda:
+  seed_brokers: [ %v ]
+  topic: %v
+  max_in_flight: 1
+  timeout: "5s"
+  metadata:
+    include_patterns: [ .* ]
+`, address, topic)))
+
+	res, closeFn, err := resBuilder.Build()
+	require.NoError(t, err)
+
+	t.Log("Writing test data")
+
+	require.NoError(t, res.AccessOutput(t.Context(), "testout", func(o *service.ResourceOutput) {
+		for i := range 10 {
+			require.NoError(t, o.Write(t.Context(), service.NewMessage(strconv.AppendInt(nil, int64(i), 10))))
+		}
+	}))
+	require.NoError(t, closeFn(t.Context()))
+
+	t.Log("Finished writing test data")
+
+	inConf := fmt.Sprintf(`
+label: testin
+redpanda:
+  seed_brokers: [ %v ]
+  topics: [ %v ]
+  consumer_group: %v
+  commit_period: 100ms
+  max_yield_batch_bytes: 1b
+`, address, topic, consumerGroup)
+
+	resBuilder = service.NewResourceBuilder()
+	require.NoError(t, resBuilder.AddInputYAML(inConf))
+
+	res, closeFn, err = resBuilder.Build()
+	require.NoError(t, err)
+
+	seen := map[string]struct{}{}
+
+	t.Log("Reading data first pass")
+	require.NoError(t, res.AccessInput(t.Context(), "testin", func(i *service.ResourceInput) {
+		for range 5 {
+			msgs, ackFn, err := i.ReadBatch(t.Context())
+			require.NoError(t, err)
+			require.Len(t, msgs, 1)
+			for _, m := range msgs {
+				data, err := m.AsBytes()
+				require.NoError(t, err)
+
+				require.NotContains(t, seen, string(data))
+				seen[string(data)] = struct{}{}
+			}
+			require.NoError(t, ackFn(t.Context(), nil))
+		}
+	}))
+
+	require.NoError(t, closeFn(t.Context()))
+	t.Log("Finished reading data first pass")
+
+	assert.Len(t, seen, 5)
+
+	resBuilder = service.NewResourceBuilder()
+	require.NoError(t, resBuilder.AddInputYAML(inConf))
+
+	res, closeFn, err = resBuilder.Build()
+	require.NoError(t, err)
+
+	t.Log("Reading data second pass")
+	require.NoError(t, res.AccessInput(t.Context(), "testin", func(i *service.ResourceInput) {
+		for range 5 {
+			msgs, ackFn, err := i.ReadBatch(t.Context())
+			require.NoError(t, err)
+			require.Len(t, msgs, 1)
+			for _, m := range msgs {
+				data, err := m.AsBytes()
+				require.NoError(t, err)
+
+				require.NotContains(t, seen, string(data))
+				seen[string(data)] = struct{}{}
+			}
+			require.NoError(t, ackFn(t.Context(), nil))
+		}
+	}))
+
+	require.NoError(t, closeFn(t.Context()))
+	t.Log("Finished reading data second pass")
+
+	assert.Len(t, seen, 10)
 }
