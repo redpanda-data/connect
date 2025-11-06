@@ -33,7 +33,7 @@ func TestRedpandaConnDetailsParserSimple(t *testing.T) {
 	assert.False(t, details.TLSEnabled)
 
 	assert.Equal(t, time.Second*20, details.ConnIdleTimeout)
-	assert.Equal(t, time.Minute*5, details.MetaMaxAge)
+	assert.Equal(t, time.Minute, details.MetaMaxAge)
 }
 
 func TestRedpandaConnDetailsParserTLS(t *testing.T) {

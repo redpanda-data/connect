@@ -65,7 +65,7 @@ redpanda:
     root_cas_file: ""
     client_certs: []
   sasl: [] # No default (optional)
-  metadata_max_age: 5m
+  metadata_max_age: 1m
   request_timeout_overhead: 10s
   conn_idle_timeout: 20s
   tcp:
@@ -468,7 +468,7 @@ The maximum age of metadata before it is refreshed. This interval also controls 
 
 *Type*: `string`
 
-*Default*: `"5m"`
+*Default*: `"1m"`
 
 === `request_timeout_overhead`
 
