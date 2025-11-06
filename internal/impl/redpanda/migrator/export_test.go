@@ -54,9 +54,11 @@ func NewSchemaRegistryMigratorForTesting(t *testing.T, conf SchemaRegistryMigrat
 		t.Log(buf.String())
 	})
 	return &schemaRegistryMigrator{
-		conf: conf,
-		src:  src,
-		dst:  dst,
+		conf:   conf,
+		src:    src,
+		srcURL: "src",
+		dst:    dst,
+		dstURL: "dst",
 		log: service.NewLoggerFromSlog(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{
 			Level: slog.LevelDebug,
 		}))),

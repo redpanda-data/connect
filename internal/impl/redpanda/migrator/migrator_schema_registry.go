@@ -150,9 +150,9 @@ func schemaRegistryMigratorFields() []*service.ConfigField {
 	}
 }
 
-func schemaRegistryClientFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (*sr.Client, error) {
+func schemaRegistryClientAndURLFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (*sr.Client, string, error) {
 	if !pConf.Contains("schema_registry") {
-		return nil, nil
+		return nil, "", nil
 	}
 	pConf = pConf.Namespace(srObjectField)
 
@@ -160,26 +160,26 @@ func schemaRegistryClientFromParsed(pConf *service.ParsedConfig, mgr *service.Re
 	if pConf.Contains(srFieldEnabled) {
 		enabled, err := pConf.FieldBool(srFieldEnabled)
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 		if !enabled {
-			return nil, nil
+			return nil, "", nil
 		}
 	}
 
 	srURL, err := pConf.FieldURL(srFieldURL)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	reqSigner, err := pConf.HTTPRequestAuthSignerFromParsed()
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	tlsConf, tlsEnabled, err := pConf.FieldTLSToggled(srFieldTLS)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if !tlsEnabled {
 		tlsConf = nil
@@ -192,7 +192,8 @@ func schemaRegistryClientFromParsed(pConf *service.ParsedConfig, mgr *service.Re
 	if reqSigner != nil {
 		opts = append(opts, sr.PreReq(func(req *http.Request) error { return reqSigner(mgr.FS(), req) }))
 	}
-	return sr.NewClient(opts...)
+	client, err := sr.NewClient(opts...)
+	return client, srURL.String(), err
 }
 
 // SchemaRegistryMigratorConfig configures subject selection, transformation,
@@ -333,7 +334,9 @@ func schemaInfoFromSubjectSchema(ss sr.SubjectSchema) schemaInfo {
 type schemaRegistryMigrator struct {
 	conf    SchemaRegistryMigratorConfig
 	src     *sr.Client
+	srcURL  string
 	dst     *sr.Client
+	dstURL  string
 	metrics *schemaRegistryMetrics
 	log     *service.Logger
 
@@ -478,6 +481,9 @@ func (m *schemaRegistryMigrator) validateSchemaRegistries(ctx context.Context) e
 	}
 	if m.dst == nil {
 		return errors.New("destination schema registry client not configured")
+	}
+	if m.srcURL == m.dstURL {
+		return fmt.Errorf("source and destination schema registry URLs must be different: %s", m.srcURL)
 	}
 	mode, err := srGlobalMode(ctx, m.dst)
 	if err != nil {

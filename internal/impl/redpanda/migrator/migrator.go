@@ -421,7 +421,7 @@ func NewMigrator(mgr *service.Resources) *Migrator {
 func (m *Migrator) initInputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) error {
 	var err error
 
-	m.sr.src, err = schemaRegistryClientFromParsed(pConf, mgr)
+	m.sr.src, m.sr.srcURL, err = schemaRegistryClientAndURLFromParsed(pConf, mgr)
 	if err != nil {
 		return err
 	}
@@ -446,7 +446,7 @@ func (m *Migrator) initOutputFromParsed(pConf *service.ParsedConfig, mgr *servic
 		return err
 	}
 
-	m.sr.dst, err = schemaRegistryClientFromParsed(pConf, mgr)
+	m.sr.dst, m.sr.dstURL, err = schemaRegistryClientAndURLFromParsed(pConf, mgr)
 	if err != nil {
 		return err
 	}
