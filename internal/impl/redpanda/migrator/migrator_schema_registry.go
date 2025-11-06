@@ -110,12 +110,16 @@ func schemaRegistryMigratorFields() []*service.ConfigField {
 			Example("30m    # Sync every 30 minutes").
 			Default("5m"),
 		service.NewStringListField(srFieldInclude).
-			Description("Regular expressions for schema subjects to include in migration. If empty, all subjects are included (unless excluded).").
+			Description("Regular expressions for schema subjects to include in migration. " +
+				"If empty, all subjects are included (unless excluded). " +
+				"Note: the migrator consumer group is always ignored.").
 			Example(`["prod-.*", "staging-.*"]`).
 			Example(`["user-.*", "order-.*"]`).
 			Optional(),
 		service.NewStringListField(srFieldExclude).
-			Description("Regular expressions for schema subjects to exclude from migration. Takes precedence over include patterns.").
+			Description("Regular expressions for schema subjects to exclude from migration. " +
+				"Takes precedence over include patterns. " +
+				"Note: the migrator consumer group is always ignored.").
 			Example(`[".*-test", ".*-temp"]`).
 			Example(`["dev-.*", "local-.*"]`).
 			Optional(),
