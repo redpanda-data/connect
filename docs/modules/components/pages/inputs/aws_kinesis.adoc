@@ -43,23 +43,11 @@ input:
     dynamodb:
       table: ""
       create: false
-      tcp:
-        keep_alive:
-          idle: 15s
-          interval: 15s
-          count: 9
-        tcp_user_timeout: 0s
     checkpoint_limit: 1024
     auto_replay_nacks: true
     commit_period: 5s
     steal_grace_period: 2s
     start_from_oldest: true
-    tcp:
-      keep_alive:
-        idle: 15s
-        interval: 15s
-        count: 9
-      tcp_user_timeout: 0s
     batching:
       count: 0
       byte_size: 0
@@ -87,6 +75,7 @@ input:
       region: "" # No default (optional)
       endpoint: "" # No default (optional)
       tcp:
+        connect_timeout: 0s
         keep_alive:
           idle: 15s
           interval: 15s
@@ -110,6 +99,7 @@ input:
     region: "" # No default (optional)
     endpoint: "" # No default (optional)
     tcp:
+      connect_timeout: 0s
       keep_alive:
         idle: 15s
         interval: 15s
@@ -250,6 +240,15 @@ TCP socket configuration.
 
 *Type*: `object`
 
+
+=== `dynamodb.tcp.connect_timeout`
+
+Maximum amount of time a dial will wait for a connect to complete. Zero disables.
+
+
+*Type*: `string`
+
+*Default*: `"0s"`
 
 === `dynamodb.tcp.keep_alive`
 
@@ -451,6 +450,15 @@ TCP socket configuration.
 
 *Type*: `object`
 
+
+=== `tcp.connect_timeout`
+
+Maximum amount of time a dial will wait for a connect to complete. Zero disables.
+
+
+*Type*: `string`
+
+*Default*: `"0s"`
 
 === `tcp.keep_alive`
 
