@@ -7,7 +7,7 @@ builds:
   - id: connect-cloud
     main: cmd/redpanda-connect-cloud/main.go
     binary: redpanda-connect
-    goos: [ linux ]
+    goos: [ linux, darwin ]
     goarch: [ amd64, arm64 ]
     env:
       - CGO_ENABLED=0
