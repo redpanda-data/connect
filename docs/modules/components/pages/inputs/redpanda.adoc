@@ -38,12 +38,6 @@ input:
   label: ""
   redpanda:
     seed_brokers: [] # No default (optional)
-    tcp:
-      keep_alive:
-        idle: 15s
-        interval: 15s
-        count: 9
-      tcp_user_timeout: 0s
     topics: [] # No default (optional)
     regexp_topics_include: [] # No default (optional)
     regexp_topics_exclude: [] # No default (optional)
@@ -76,6 +70,7 @@ input:
     request_timeout_overhead: 10s
     conn_idle_timeout: 20s
     tcp:
+      connect_timeout: 0s
       keep_alive:
         idle: 15s
         interval: 15s
@@ -626,6 +621,15 @@ TCP socket configuration.
 
 *Type*: `object`
 
+
+=== `tcp.connect_timeout`
+
+Maximum amount of time a dial will wait for a connect to complete. Zero disables.
+
+
+*Type*: `string`
+
+*Default*: `"0s"`
 
 === `tcp.keep_alive`
 

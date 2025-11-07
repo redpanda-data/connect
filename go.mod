@@ -125,7 +125,7 @@ require (
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9
 	github.com/redis/go-redis/v9 v9.14.0
-	github.com/redpanda-data/benthos/v4 v4.59.0
+	github.com/redpanda-data/benthos/v4 v4.60.0
 	github.com/redpanda-data/common-go/secrets v0.1.4
 	github.com/redpanda-data/connect/public/bundle/free/v4 v4.66.1
 	github.com/rs/xid v1.6.0
@@ -143,7 +143,7 @@ require (
 	github.com/timeplus-io/proton-go-driver/v2 v2.1.2
 	github.com/tmc/langchaingo v0.1.13
 	github.com/trinodb/trino-go-client v0.330.0
-	github.com/twmb/franz-go v1.20.1
+	github.com/twmb/franz-go v1.20.3
 	github.com/twmb/franz-go/pkg/kadm v1.16.1
 	github.com/twmb/franz-go/pkg/kfake v0.0.0-20250625174842-669b18eeee83
 	github.com/twmb/franz-go/pkg/kmsg v1.12.0

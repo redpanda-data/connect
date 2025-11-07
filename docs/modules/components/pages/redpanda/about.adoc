@@ -27,12 +27,6 @@ Common::
 # Common config fields, showing default values
 redpanda:
   seed_brokers: [] # No default (required)
-  tcp:
-    keep_alive:
-      idle: 15s
-      interval: 15s
-      count: 9
-    tcp_user_timeout: 0s
   pipeline_id: ""
   logs_topic: ""
   logs_level: info
@@ -61,6 +55,7 @@ redpanda:
   request_timeout_overhead: 10s
   conn_idle_timeout: 20s
   tcp:
+    connect_timeout: 0s
     keep_alive:
       idle: 15s
       interval: 15s
@@ -538,6 +533,15 @@ TCP socket configuration.
 
 *Type*: `object`
 
+
+=== `tcp.connect_timeout`
+
+Maximum amount of time a dial will wait for a connect to complete. Zero disables.
+
+
+*Type*: `string`
+
+*Default*: `"0s"`
 
 === `tcp.keep_alive`
 
