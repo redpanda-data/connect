@@ -3,7 +3,7 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.69.0 - TBD
+## 4.69.0 - 2025-11-07
 
 ### Added
 
@@ -11,7 +11,7 @@ All notable changes to this project will be documented in this file.
 - (Benthos) New `bytes` method to create a 0 initialized byte array. (@rockwotj)
 - Added `regexp_topics_include` and `regexp_topics_exclude` fields to `redpanda`, `redpanda_migrator`, `ockam` inputs. (@mmatczuk)
 - New `ffi` processor in CGO builds. (@rockwotj)
-- Add `tcp` connection options to `redpanda`, `redpanda_migrator` inputs and outputs. (@mmatczuk)
+- Add `tcp` connection options to `redpanda`, `redpanda_migrator` inputs and outputs as well as all AWS components. (@mmatczuk, @alextreichler)
 
 ### Deprecated
 
