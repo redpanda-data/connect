@@ -367,7 +367,7 @@ func TestIntegrationSchemaRegistryMigratorSyncReuseIDs(t *testing.T) {
 	require.NoError(t, err)
 
 	// Subject 3 shares the same schema as subject 1
-	ss3, err := src.CreateSchema(ctx, "subject-3", sr.Schema{Schema: schema1})
+	ss3, err := src.CreateSchema(ctx, "subject-3", sr.Schema{Schema: schema1 + "   "}) // Add trailing spaces to make it different
 	require.NoError(t, err)
 
 	t.Log("Then: subjects 1 and 3 should have the same schema ID")
