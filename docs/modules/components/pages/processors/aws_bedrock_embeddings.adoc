@@ -38,12 +38,6 @@ Common::
 # Common config fields, showing default values
 label: ""
 aws_bedrock_embeddings:
-  tcp:
-    keep_alive:
-      idle: 15s
-      interval: 15s
-      count: 9
-    tcp_user_timeout: 0s
   model: amazon.titan-embed-text-v1 # No default (required)
   text: "" # No default (optional)
 ```
@@ -60,6 +54,7 @@ aws_bedrock_embeddings:
   region: "" # No default (optional)
   endpoint: "" # No default (optional)
   tcp:
+    connect_timeout: 0s
     keep_alive:
       idle: 15s
       interval: 15s
@@ -145,6 +140,15 @@ TCP socket configuration.
 
 *Type*: `object`
 
+
+=== `tcp.connect_timeout`
+
+Maximum amount of time a dial will wait for a connect to complete. Zero disables.
+
+
+*Type*: `string`
+
+*Default*: `"0s"`
 
 === `tcp.keep_alive`
 

@@ -473,6 +473,15 @@ TCP socket configuration.
 *Type*: `object`
 
 
+=== `sasl[].aws.tcp.connect_timeout`
+
+Maximum amount of time a dial will wait for a connect to complete. Zero disables.
+
+
+*Type*: `string`
+
+*Default*: `"0s"`
+
 === `sasl[].aws.tcp.keep_alive`
 
 TCP keep-alive probe configuration.
