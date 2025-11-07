@@ -75,3 +75,8 @@ tasks:
       - go run -tags "{{.TAGS}}" ./cmd/tools/plugins_csv_fmt
       - '{{.TARGET_DIR}}/redpanda-connect lint --deprecated "./config/examples/*.yaml" "{{.WEBSITE_DIR}}/**/*.md"'
       - '{{.TARGET_DIR}}/redpanda-connect template lint "./config/template_examples/*.yaml"'
+
+  bundles:
+    desc: Update bundles
+    cmds:
+      - sh ./resources/scripts/update_bundles.sh
