@@ -42,9 +42,9 @@ func (s *fixedSchemaProvider) GetJSONSchema(context.Context) (*oai.ChatCompletio
 func newFixedSchema(name, description, raw string) (jsonSchemaProvider, error) {
 	p := &fixedSchemaProvider{
 		oai.ChatCompletionResponseFormatJSONSchema{
-            Name: name,
+			Name:        name,
 			Description: description,
-			Strict: true,
+			Strict:      true,
 		},
 	}
 	if len(raw) > 0 && raw != "null" {
