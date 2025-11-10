@@ -82,6 +82,22 @@ This output benefits from sending multiple messages in flight in parallel for im
 				Description("Specify the message body content type. The option `string` will transfer the message as an AMQP value of type string. Consider choosing the option `string` if your intention is to transfer UTF-8 string messages (like JSON messages) to the destination.").
 				Advanced().
 				Default(string(amqpContentTypeOpaqueBinary)),
+			service.NewBoolField(persistentField).
+				Description("If set to true, the message will be marked as persistent, ensuring it is stored durably and not lost if an intermediary (such as a broker) restarts. By default, messages are not durable.").
+				Advanced().
+				Default(false),
+			service.NewStringListField(targetCapsField).
+				Description("Lists the extension capabilities the sender desires from the target, such as support for queues, topics, durability, sharing, or temporary destinations.").
+				Optional().
+				Advanced().
+				Example([]string{"queue"}).
+				Example([]string{"topic"}).
+				Example([]string{"queue", "topic"}),
+			service.NewStringField(messagePropsTo).
+				Description("The field specifies the node that is the intended destination of the message, which may differ from the node currently receiving the transfer.").
+				Optional().
+				Advanced().
+				Example("amqp://localhost:5672/"),
 		).LintRule(`
 root = if this.url.or("") == "" && this.urls.or([]).length() == 0 {
   "field 'urls' must be set"
@@ -117,6 +133,9 @@ type amqp1Writer struct {
 	applicationPropertiesMap *bloblang.Executor
 	connOpts                 *amqp.ConnOptions
 	contentType              amqpContentType
+	senderOpts               *amqp.SenderOptions
+	persistent               bool
+	msgTo                    string
 
 	log      *service.Logger
 	connLock sync.RWMutex
@@ -124,8 +143,9 @@ type amqp1Writer struct {
 
 func amqp1WriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (*amqp1Writer, error) {
 	a := amqp1Writer{
-		log:      mgr.Logger(),
-		connOpts: &amqp.ConnOptions{},
+		connOpts:   &amqp.ConnOptions{},
+		senderOpts: &amqp.SenderOptions{},
+		log:        mgr.Logger(),
 	}
 
 	urlStrs, err := conf.FieldStringList(urlsField)
@@ -183,6 +203,25 @@ func amqp1WriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) (
 		a.contentType = amqpContentType(contentType)
 	}
 
+	if a.persistent, err = conf.FieldBool(persistentField); err != nil {
+		return nil, err
+	}
+
+	var targetCaps []string
+	targetCaps, err = conf.FieldStringList(targetCapsField)
+	if err != nil {
+		return nil, err
+	}
+	if len(targetCaps) != 0 {
+		a.senderOpts.TargetCapabilities = targetCaps
+	}
+
+	if conf.Contains(messagePropsTo) {
+		if a.msgTo, err = conf.FieldString(messagePropsTo); err != nil {
+			return nil, err
+		}
+	}
+
 	return &a, nil
 }
 
@@ -191,7 +230,7 @@ func (a *amqp1Writer) Connect(ctx context.Context) (err error) {
 	defer a.connLock.Unlock()
 
 	if a.client != nil {
-		return
+		return err
 	}
 
 	var (
@@ -208,14 +247,14 @@ func (a *amqp1Writer) Connect(ctx context.Context) (err error) {
 	// Open a session
 	if session, err = client.NewSession(ctx, nil); err != nil {
 		_ = client.Close()
-		return
+		return err
 	}
 
 	// Create a sender
-	if sender, err = session.NewSender(ctx, a.targetAddr, nil); err != nil {
+	if sender, err = session.NewSender(ctx, a.targetAddr, a.senderOpts); err != nil {
 		_ = session.Close(ctx)
 		_ = client.Close()
-		return
+		return err
 	}
 
 	a.client = client
@@ -276,6 +315,14 @@ func (a *amqp1Writer) Write(ctx context.Context, msg *service.Message) error {
 		m.Value = string(mBytes)
 	default:
 		return fmt.Errorf("invalid content type specified: %s", a.contentType)
+	}
+
+	if a.persistent {
+		m.Header = &amqp.MessageHeader{Durable: true}
+	}
+
+	if a.msgTo != "" {
+		m.Properties = &amqp.MessageProperties{To: &a.msgTo}
 	}
 
 	if a.applicationPropertiesMap != nil {
