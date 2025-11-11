@@ -9,6 +9,7 @@
 package pglogicalstream
 
 import (
+	"crypto/tls"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -19,12 +20,11 @@ import (
 // Config is the configuration for the pglogicalstream plugin
 type Config struct {
 	// DBConfig is the configuration to connect to the database with
-	DBConfig *pgconn.Config
-	DBRawDSN string
-	// The DB schema to lookup tables in
-	DBSchema string
-	// DbTables is the tables to stream changes from
-	DBTables []string
+	DBConfig  *pgconn.Config
+	DBRawDSN  string
+	TLSConfig *tls.Config
+	DBSchema  string
+	DBTables  []string
 	// ReplicationSlotName is the name of the replication slot to use
 	//
 	// MUST BE SQL INJECTION FREE

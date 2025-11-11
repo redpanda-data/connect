@@ -123,7 +123,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		unchangedToastValue:   config.UnchangedToastValue,
 	}
 
-	monitor, err := NewMonitor(ctx, config.DBRawDSN, stream.logger, tables, stream.slotName, config.WalMonitorInterval)
+	monitor, err := NewMonitor(ctx, config, stream.logger, tables, stream.slotName)
 	if err != nil {
 		return nil, err
 	}
@@ -136,9 +136,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 
 	if config.HeartbeatInterval > 0 {
 		stream.heartbeat, err = newHeartbeat(
-			config.DBRawDSN,
-			config.HeartbeatInterval,
-			config.Logger,
+			config,
 			"redpanda_connect_"+stream.slotName,
 			`{"type":"heartbeat"}`,
 		)
@@ -154,8 +152,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	}
 
 	var version int
-	version, err = getPostgresVersion(config.DBRawDSN)
-	if err != nil {
+	if version, err = getPostgresVersion(config.DBRawDSN, config.TLSConfig); err != nil {
 		return nil, err
 	}
 
@@ -180,11 +177,11 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 		// TODO: Drop publication if it was created (meaning it's not existing state we might want to keep).
 	})
 
-	s, err := sanitize.SQLQuery("SELECT confirmed_flush_lsn, plugin FROM pg_replication_slots WHERE slot_name = $1", config.ReplicationSlotName)
+	query, err := sanitize.SQLQuery("SELECT confirmed_flush_lsn, plugin FROM pg_replication_slots WHERE slot_name = $1", config.ReplicationSlotName)
 	if err != nil {
 		return nil, err
 	}
-	connExecResult, err := stream.pgConn.Exec(ctx, s).ReadAll()
+	connExecResult, err := stream.pgConn.Exec(ctx, query).ReadAll()
 	if err != nil {
 		return nil, err
 	}
@@ -226,25 +223,21 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 
 	var snapshotter *snapshotter
 	if config.StreamOldData {
-		// Create a temporary replication slot that just creates a snapshot and freezes the LSN for the snapshot.
-		// We make this temporary so that if the snapshotting phase fails, we restart the snapshotting phase
-		// instead of resuming from the start of the stream (with an incomplete snapshot).
-		_, snapshotName, err := CreateReplicationSlot(
-			ctx, stream.pgConn,
+		var snapshotName string
+		_, snapshotName, err = CreateReplicationSlot(
+			ctx,
+			stream.pgConn,
 			stream.slotName+"_tmp",
 			decodingPlugin,
-			CreateReplicationSlotOptions{
-				Temporary:      true,
-				SnapshotAction: "EXPORT_SNAPSHOT",
-			},
+			CreateReplicationSlotOptions{Temporary: true, SnapshotAction: "EXPORT_SNAPSHOT"},
 		)
 		if err != nil {
-			return nil, fmt.Errorf("unable to create temporary replication slot for snapshot: %w", err)
+			return nil, fmt.Errorf("failed to create temporary replication slot for snapshot: %w", err)
 		}
-		stream.logger.Tracef("exported snapshot named: %s", snapshotName)
-		snapshotter, err = newSnapshotter(config.DBRawDSN, stream.logger, snapshotName, 1)
+
+		snapshotter, err = newSnapshotter(config, config.DBRawDSN, config.Logger, snapshotName, config.MaxSnapshotWorkers)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("unable to create snapshotter: %w", err)
 		}
 	}
 

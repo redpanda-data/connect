@@ -9,28 +9,36 @@
 package pglogicalstream
 
 import (
+	"crypto/tls"
 	"database/sql"
 	"fmt"
 	"regexp"
 	"strconv"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
 )
 
 var re = regexp.MustCompile(`^(\d+)`)
 
-func openPgConnectionFromConfig(dbDSN string) (*sql.DB, error) {
-	return sql.Open("postgres", dbDSN)
+func openPgConnectionFromConfig(dbDSN string, tlsConfig *tls.Config) (*sql.DB, error) {
+	config, err := pgxpool.ParseConfig(dbDSN)
+	if err != nil {
+		return nil, err
+	}
+	config.ConnConfig.TLSConfig = tlsConfig
+	return stdlib.OpenDB(*config.ConnConfig), nil
 }
 
-func getPostgresVersion(dbDSN string) (int, error) {
-	conn, err := openPgConnectionFromConfig(dbDSN)
+func getPostgresVersion(dbDSN string, tls *tls.Config) (int, error) {
+	conn, err := openPgConnectionFromConfig(dbDSN, tls)
 	if err != nil {
 		return 0, fmt.Errorf("failed to connect to the database: %w", err)
 	}
 	defer conn.Close()
 
 	var versionString string
-	err = conn.QueryRow("SHOW server_version").Scan(&versionString)
-	if err != nil {
+	if err = conn.QueryRow("SHOW server_version").Scan(&versionString); err != nil {
 		return 0, fmt.Errorf("failed to execute query: %w", err)
 	}
 

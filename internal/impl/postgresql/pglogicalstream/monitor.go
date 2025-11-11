@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"strings"
 	"sync/atomic"
-	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 
@@ -47,18 +46,17 @@ type Monitor struct {
 // NewMonitor creates a new Monitor instance
 func NewMonitor(
 	ctx context.Context,
-	dbDSN string,
+	config *Config,
 	logger *service.Logger,
 	tables []TableFQN,
 	slotName string,
-	interval time.Duration,
 ) (*Monitor, error) {
-	dbConn, err := openPgConnectionFromConfig(dbDSN)
+	dbConn, err := openPgConnectionFromConfig(config.DBRawDSN, config.TLSConfig)
 	if err != nil {
 		return nil, err
 	}
-	if interval <= 0 {
-		return nil, fmt.Errorf("invalid monitoring interval: %s", interval.String())
+	if config.HeartbeatInterval <= 0 {
+		return nil, fmt.Errorf("invalid monitoring interval: %s", config.WalMonitorInterval.String())
 	}
 
 	m := &Monitor{
@@ -69,7 +67,7 @@ func NewMonitor(
 		slotName:              slotName,
 		logger:                logger,
 	}
-	m.loop = asyncroutine.NewPeriodicWithContext(interval, m.readReplicationLag)
+	m.loop = asyncroutine.NewPeriodicWithContext(config.WalMonitorInterval, m.readReplicationLag)
 	for _, table := range tables {
 		m.snapshotProgress[table] = &atomic.Int64{}
 		m.tableStat[table] = 0
