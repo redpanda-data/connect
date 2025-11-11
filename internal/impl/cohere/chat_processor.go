@@ -340,7 +340,6 @@ func makeChatProcessor(conf *service.ParsedConfig, mgr *service.Resources) (serv
 			params[paramName] = param
 		}
 		tool := cohere.ToolV2{
-			Type: cohere.String("function"),
 			Function: &cohere.ToolV2Function{
 				Name:        name,
 				Description: &desc,
