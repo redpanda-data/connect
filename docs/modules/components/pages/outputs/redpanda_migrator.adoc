@@ -46,7 +46,7 @@ output:
       interval: 5m
       include: [] # No default (optional)
       exclude: [] # No default (optional)
-      subject: '"prod_${! metadata(''schema_registry_subject'') }"' # No default (optional)
+      subject: prod_${! metadata("schema_registry_subject") } # No default (optional)
       versions: all
       include_deleted: false
       translate_ids: false
@@ -130,7 +130,7 @@ output:
       interval: 5m
       include: [] # No default (optional)
       exclude: [] # No default (optional)
-      subject: '"prod_${! metadata(''schema_registry_subject'') }"' # No default (optional)
+      subject: prod_${! metadata("schema_registry_subject") } # No default (optional)
       versions: all
       include_deleted: false
       translate_ids: false
@@ -1347,9 +1347,9 @@ This field supports xref:configuration:interpolation.adoc#bloblang-queries[inter
 ```yml
 # Examples
 
-subject: '"prod_${! metadata(''schema_registry_subject'') }"'
+subject: prod_${! metadata("schema_registry_subject") }
 
-subject: '"${! metadata(''schema_registry_subject'') | replace(''dev_'', ''prod_'') }"'
+subject: ${! metadata("schema_registry_subject") | replace("dev_", "prod_") }
 ```
 
 === `schema_registry.versions`

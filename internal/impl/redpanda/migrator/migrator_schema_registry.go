@@ -125,8 +125,8 @@ func schemaRegistryMigratorFields() []*service.ConfigField {
 			Optional(),
 		service.NewInterpolatedStringField(srFieldSubject).
 			Description("Template for transforming subject names during migration. Use interpolation to rename subjects systematically.").
-			Example(`"prod_${! metadata('schema_registry_subject') }"`).
-			Example(`"${! metadata('schema_registry_subject') | replace('dev_', 'prod_') }"`).
+			Example(`prod_${! metadata("schema_registry_subject") }`).
+			Example(`${! metadata("schema_registry_subject") | replace("dev_", "prod_") }`).
 			Optional(),
 		service.NewStringEnumField(srFieldVersions, VersionsLatest.String(), VersionsAll.String()).
 			Description("Which schema versions to migrate. 'latest' migrates only the current version, 'all' migrates complete version history for better compatibility.").
