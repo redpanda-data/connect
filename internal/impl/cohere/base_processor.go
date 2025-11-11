@@ -17,6 +17,7 @@ package cohere
 import (
 	"context"
 
+	"github.com/cohere-ai/cohere-go/v2/core"
 	coopt "github.com/cohere-ai/cohere-go/v2/option"
 	coherev2 "github.com/cohere-ai/cohere-go/v2/v2"
 
@@ -61,10 +62,11 @@ func newBaseProcessor(conf *service.ParsedConfig) (*baseProcessor, error) {
 	if err != nil {
 		return nil, err
 	}
-	c := coherev2.NewClient(
+	opts := core.NewRequestOptions(
 		coopt.WithBaseURL(bu),
 		coopt.WithToken(k),
 	)
+	c := coherev2.NewClient(opts)
 	m, err := conf.FieldString(cpFieldModel)
 	if err != nil {
 		return nil, err
