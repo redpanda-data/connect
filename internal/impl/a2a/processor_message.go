@@ -143,8 +143,8 @@ func makeProcessor(conf *service.ParsedConfig, mgr *service.Resources) (service.
 	// Parse the agent card URL to separate base URL and path
 	baseURL, cardPath := parseAgentCardURL(agentCardURL)
 
-	resolver := &agentcard.Resolver{BaseURL: baseURL}
-	card, err := resolver.Resolve(ctx,
+	resolver := &agentcard.Resolver{}
+	card, err := resolver.Resolve(ctx, baseURL,
 		agentcard.WithPath(cardPath),
 		agentcard.WithRequestHeader("Authorization", "Bearer "+token.AccessToken))
 	if err != nil {
