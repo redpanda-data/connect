@@ -152,8 +152,7 @@ func NewPgStream(ctx context.Context, config *Config) (*Stream, error) {
 	}
 
 	var version int
-	version, err = getPostgresVersion(config.DBRawDSN)
-	if err != nil {
+	if version, err = getPostgresVersion(config.DBRawDSN, config.TLSConfig); err != nil {
 		return nil, err
 	}
 
