@@ -72,6 +72,9 @@ output:
     metadata:
       exclude_prefixes: []
     content_type: opaque_binary
+    persistent: false
+    target_capabilities: [] # No default (optional)
+    message_properties_to: amqp://localhost:5672/ # No default (optional)
 ```
 
 --
@@ -399,5 +402,50 @@ Options:
 `opaque_binary`
 , `string`
 .
+
+=== `persistent`
+
+If set to true, the message will be marked as persistent, ensuring it is stored durably and not lost if an intermediary (such as a broker) restarts. By default, messages are not durable.
+
+
+*Type*: `bool`
+
+*Default*: `false`
+
+=== `target_capabilities`
+
+Lists the extension capabilities the sender desires from the target, such as support for queues, topics, durability, sharing, or temporary destinations.
+
+
+*Type*: `array`
+
+
+```yml
+# Examples
+
+target_capabilities:
+  - queue
+
+target_capabilities:
+  - topic
+
+target_capabilities:
+  - queue
+  - topic
+```
+
+=== `message_properties_to`
+
+The field specifies the node that is the intended destination of the message, which may differ from the node currently receiving the transfer.
+
+
+*Type*: `string`
+
+
+```yml
+# Examples
+
+message_properties_to: amqp://localhost:5672/
+```
 
 
