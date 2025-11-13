@@ -29,7 +29,6 @@ import (
 	_ "github.com/redpanda-data/benthos/v4/public/components/io"
 	_ "github.com/redpanda-data/benthos/v4/public/components/pure"
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
@@ -162,7 +161,7 @@ hostssl all all all cert clientcert=%s
 
 func TestIntegrationSSLVerifyFull(t *testing.T) {
 	t.Parallel()
-	integration.CheckSkip(t)
+	// integration.CheckSkip(t)
 
 	certs, cleanup := generateCerts(t)
 	defer cleanup()
@@ -191,7 +190,6 @@ postgres_cdc:
     tables:
        - test_table
     tls:
-      enabled: true
       root_cas: |
 %s
       client_certs:
