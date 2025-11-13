@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - (PostgreSQL CDC) Support inlining SSL certificates in config (@alextreichler)
+- (AMQP Output) Added support for additional fields (@timo102)
 
 ## 4.69.0 - 2025-11-07
 
