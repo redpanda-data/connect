@@ -31,6 +31,7 @@ const (
 	hoFieldWalkMetadata = "walk_metadata"
 	hoFieldWalkJSON     = "walk_json_object"
 	hoFieldFields       = "fields"
+	hoFieldBatching     = "batching"
 )
 
 func redisHashOutputConfig() *service.ConfigSpec {
@@ -80,13 +81,17 @@ Where latter stages will overwrite matching field names of a former stage.`+serv
 				Description("A map of key/value pairs to set as hash fields.").
 				Default(map[string]any{}),
 			service.NewOutputMaxInFlightField(),
+			service.NewBatchPolicyField(loFieldBatching),
 		)
 }
 
 func init() {
-	service.MustRegisterOutput(
+	service.MustRegisterBatchOutput(
 		"redis_hash", redisHashOutputConfig(),
-		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.Output, maxInFlight int, err error) {
+		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPol service.BatchPolicy, maxInFlight int, err error) {
+			if batchPol, err = conf.FieldBatchPolicy(loFieldBatching); err != nil {
+				return
+			}
 			if maxInFlight, err = conf.FieldMaxInFlight(); err != nil {
 				return
 			}
@@ -168,7 +173,7 @@ func walkForHashFields(msg *service.Message, fields map[string]any) error {
 	return nil
 }
 
-func (r *redisHashWriter) Write(ctx context.Context, msg *service.Message) error {
+func (r *redisHashWriter) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
 	r.connMut.RLock()
 	client := r.client
 	r.connMut.RUnlock()
@@ -177,33 +182,86 @@ func (r *redisHashWriter) Write(ctx context.Context, msg *service.Message) error
 		return service.ErrNotConnected
 	}
 
-	key, err := r.key.TryString(msg)
+	if len(batch) == 1 {
+		key, err := r.key.TryString(batch[0])
+		if err != nil {
+			return fmt.Errorf("key interpolation error: %w", err)
+		}
+		fields := map[string]any{}
+		if r.walkMetadata {
+			_ = batch[0].MetaWalkMut(func(k string, v any) error {
+				fields[k] = v
+				return nil
+			})
+		}
+		if r.walkJSON {
+			if err := walkForHashFields(batch[0], fields); err != nil {
+				err = fmt.Errorf("failed to walk JSON object: %v", err)
+				r.log.Errorf("HSET error: %v\n", err)
+				return err
+			}
+		}
+		for k, v := range r.fields {
+			if fields[k], err = v.TryString(batch[0]); err != nil {
+				return fmt.Errorf("field %v interpolation error: %w", k, err)
+			}
+		}
+		if err := client.HSet(ctx, key, fields).Err(); err != nil {
+			_ = r.disconnect()
+			r.log.Errorf("Error from redis: %v\n", err)
+			return service.ErrNotConnected
+		}
+		return nil
+	}
+
+	pipe := client.Pipeline()
+
+	for i := range batch {
+		key, err := batch.TryInterpolatedString(i, r.key)
+		if err != nil {
+			return fmt.Errorf("key interpolation error: %w", err)
+		}
+
+		fields := map[string]any{}
+		if r.walkMetadata {
+			_ = batch[i].MetaWalkMut(func(k string, v any) error {
+				fields[k] = v
+				return nil
+			})
+		}
+		if r.walkJSON {
+			if err := walkForHashFields(batch[i], fields); err != nil {
+				err = fmt.Errorf("failed to walk JSON object: %v", err)
+				r.log.Errorf("HSET error: %v\n", err)
+				return err
+			}
+		}
+		for k, v := range r.fields {
+			if fields[k], err = v.TryString(batch[i]); err != nil {
+				return fmt.Errorf("field %v interpolation error: %w", k, err)
+			}
+		}
+		_ = pipe.HSet(ctx, key, fields)
+	}
+
+	cmders, err := pipe.Exec(ctx)
 	if err != nil {
-		return fmt.Errorf("key interpolation error: %w", err)
-	}
-	fields := map[string]any{}
-	if r.walkMetadata {
-		_ = msg.MetaWalkMut(func(k string, v any) error {
-			fields[k] = v
-			return nil
-		})
-	}
-	if r.walkJSON {
-		if err := walkForHashFields(msg, fields); err != nil {
-			err = fmt.Errorf("failed to walk JSON object: %v", err)
-			r.log.Errorf("HSET error: %v\n", err)
-			return err
-		}
-	}
-	for k, v := range r.fields {
-		if fields[k], err = v.TryString(msg); err != nil {
-			return fmt.Errorf("field %v interpolation error: %w", k, err)
-		}
-	}
-	if err := client.HSet(ctx, key, fields).Err(); err != nil {
 		_ = r.disconnect()
-		r.log.Errorf("Error from redis: %v\n", err)
+		r.log.Errorf("Errorf from redis: %v\n", err)
 		return service.ErrNotConnected
+	}
+
+	var batchErr *service.BatchError
+	for i, res := range cmders {
+		if res.Err() != nil {
+			if batchErr == nil {
+				batchErr = service.NewBatchError(batch, res.Err())
+			}
+			batchErr.Failed(i, res.Err())
+		}
+	}
+	if batchErr != nil {
+		return batchErr
 	}
 	return nil
 }
