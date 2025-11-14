@@ -409,34 +409,36 @@ func (*httpTransport) parseEventByType(data []byte, eventType string) (a2a.Event
 	}
 }
 
+var errNotImplemented = errors.New("not implemented")
+
 // CancelTask implements the tasks/cancel method.
 func (*httpTransport) CancelTask(_ context.Context, _ *a2a.TaskIDParams) (*a2a.Task, error) {
-	return nil, a2aclient.ErrNotImplemented
+	return nil, errNotImplemented
 }
 
 // GetTaskPushConfig implements the tasks/pushNotificationConfig/get method.
 func (*httpTransport) GetTaskPushConfig(_ context.Context, _ *a2a.GetTaskPushConfigParams) (*a2a.TaskPushConfig, error) {
-	return nil, a2aclient.ErrNotImplemented
+	return nil, errNotImplemented
 }
 
 // ListTaskPushConfig implements the tasks/pushNotificationConfig/list method.
 func (*httpTransport) ListTaskPushConfig(_ context.Context, _ *a2a.ListTaskPushConfigParams) ([]*a2a.TaskPushConfig, error) {
-	return nil, a2aclient.ErrNotImplemented
+	return nil, errNotImplemented
 }
 
 // SetTaskPushConfig implements the tasks/pushNotificationConfig/set method.
 func (*httpTransport) SetTaskPushConfig(_ context.Context, _ *a2a.TaskPushConfig) (*a2a.TaskPushConfig, error) {
-	return nil, a2aclient.ErrNotImplemented
+	return nil, errNotImplemented
 }
 
 // DeleteTaskPushConfig implements the tasks/pushNotificationConfig/delete method.
 func (*httpTransport) DeleteTaskPushConfig(_ context.Context, _ *a2a.DeleteTaskPushConfigParams) error {
-	return a2aclient.ErrNotImplemented
+	return errNotImplemented
 }
 
 // GetAgentCard retrieves the agent card from /.well-known/agent.json.
 func (*httpTransport) GetAgentCard(_ context.Context) (*a2a.AgentCard, error) {
-	return nil, a2aclient.ErrNotImplemented
+	return nil, errNotImplemented
 }
 
 // Destroy cleans up resources.

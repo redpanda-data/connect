@@ -340,7 +340,6 @@ func makeChatProcessor(conf *service.ParsedConfig, mgr *service.Resources) (serv
 			params[paramName] = param
 		}
 		tool := cohere.ToolV2{
-			Type: cohere.String("function"),
 			Function: &cohere.ToolV2Function{
 				Name:        name,
 				Description: &desc,
@@ -488,7 +487,7 @@ func (p *chatProcessor) Process(ctx context.Context, msg *service.Message) (serv
 			break
 		}
 		for _, tool := range resp.Message.ToolCalls {
-			if tool.Id == nil {
+			if tool.Id == "" {
 				return nil, errors.New("tool call has no ID")
 			}
 			if tool.Function == nil || tool.Function.Name == nil {
@@ -545,7 +544,7 @@ func (p *chatProcessor) Process(ctx context.Context, msg *service.Message) (serv
 			body.Messages = append(body.Messages, &cohere.ChatMessageV2{
 				Role: "tool",
 				Tool: &cohere.ToolMessageV2{
-					ToolCallId: *tool.Id,
+					ToolCallId: tool.Id,
 					Content: &cohere.ToolMessageV2Content{
 						ToolContentList: outputs,
 					},
