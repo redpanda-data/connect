@@ -298,6 +298,83 @@ func TestIntegrationSchemaRegistryMigratorSyncVersionsAll(t *testing.T) {
 	assert.True(t, migrator.SchemaStringEquals(dummyAvroSchemaV2, sd2s, sd2.Type))
 }
 
+func TestIntegrationSchemaRegistryMigratorSyncWithReferences(t *testing.T) {
+	integration.CheckSkip(t)
+
+	t.Log("Given: source and destination Schema Registry")
+	src, dst := startSchemaRegistrySourceAndDestination(t)
+
+	ctx := t.Context()
+
+	t.Log("When: address schema is created as reference schema with fixed ID")
+	const (
+		addressSubject = "address01-value"
+		addressSchema  = `{"type":"record","name":"Address","namespace":"com.example.schemas","fields":[{"name":"street","type":"string"},{"name":"city","type":"string"},{"name":"state","type":"string"},{"name":"zipCode","type":"string"}]}`
+	)
+
+	addressSchemaResp, err := src.CreateSchemaWithIDAndVersion(ctx, addressSubject, sr.Schema{
+		Schema: addressSchema,
+		Type:   sr.TypeAvro,
+	}, 189, 1)
+	require.NoError(t, err)
+	t.Logf("Address schema created with ID: %d, version: %d", addressSchemaResp.ID, addressSchemaResp.Version)
+
+	t.Log("And: person schema is created with reference to address schema with fixed ID")
+	const (
+		personSubject = "person01-value"
+		personSchema  = `{"type":"record","name":"Person","namespace":"com.example.schemas","fields":[{"name":"id","type":"string"},{"name":"firstName","type":"string"},{"name":"lastName","type":"string"},{"name":"address","type":"com.example.schemas.Address"}]}`
+	)
+
+	personSchemaResp, err := src.CreateSchemaWithIDAndVersion(ctx, personSubject, sr.Schema{
+		Schema: personSchema,
+		Type:   sr.TypeAvro,
+		References: []sr.SchemaReference{
+			{
+				Name:    "com.example.schemas.Address",
+				Subject: addressSubject,
+				Version: addressSchemaResp.Version,
+			},
+		},
+	}, 195, 1)
+	require.NoError(t, err)
+	t.Logf("Person schema created with ID: %d, version: %d", personSchemaResp.ID, personSchemaResp.Version)
+
+	t.Log("When: migrator syncs schemas")
+	conf := migrator.SchemaRegistryMigratorConfig{
+		Enabled:  true,
+		Versions: migrator.VersionsLatest,
+	}
+	m := migrator.NewSchemaRegistryMigratorForTesting(t, conf, src, dst)
+
+	t.Log("When: migrator is run")
+	ctx, cancel := context.WithTimeout(t.Context(), redpandaTestWaitTimeout)
+	defer cancel()
+	require.NoError(t, m.Sync(ctx))
+
+	t.Log("Then: address schema exists at destination with same ID")
+	dstAddress, err := dst.SchemaByVersion(ctx, addressSubject, addressSchemaResp.Version)
+	require.NoError(t, err)
+	assert.Equal(t, addressSubject, dstAddress.Subject)
+	assert.Equal(t, addressSchemaResp.ID, dstAddress.ID)
+	assert.Equal(t, addressSchemaResp.Version, dstAddress.Version)
+	assert.True(t, migrator.SchemaStringEquals(addressSchema, dstAddress.Schema.Schema, dstAddress.Type))
+
+	t.Log("And: person schema exists at destination with same ID and reference")
+	dstPerson, err := dst.SchemaByVersion(ctx, personSubject, personSchemaResp.Version)
+	require.NoError(t, err)
+	assert.Equal(t, personSubject, dstPerson.Subject)
+	assert.Equal(t, personSchemaResp.ID, dstPerson.ID)
+	assert.Equal(t, personSchemaResp.Version, dstPerson.Version)
+	assert.True(t, migrator.SchemaStringEquals(personSchema, dstPerson.Schema.Schema, dstPerson.Type))
+
+	t.Log("And: person schema has correct reference to address schema")
+	require.Len(t, dstPerson.References, 1)
+	ref := dstPerson.References[0]
+	assert.Equal(t, "com.example.schemas.Address", ref.Name)
+	assert.Equal(t, addressSubject, ref.Subject)
+	assert.Equal(t, addressSchemaResp.Version, ref.Version)
+}
+
 func TestIntegrationSchemaRegistryMigratorSyncTranslateIDs(t *testing.T) {
 	integration.CheckSkip(t)
 
