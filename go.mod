@@ -4,6 +4,18 @@ go 1.25.2
 
 replace github.com/99designs/keyring => github.com/Jeffail/keyring v1.2.3
 
+ignore (
+	./bin
+	./config
+	./dist
+	./docs
+	./licenses
+	./proto
+	./resources
+	./target
+	./taskfiles
+)
+
 require (
 	buf.build/gen/go/bufbuild/reflect/connectrpc/go v1.19.1-20240117202343-bf8f65e8876c.2
 	buf.build/gen/go/bufbuild/reflect/protocolbuffers/go v1.36.10-20240117202343-bf8f65e8876c.1
