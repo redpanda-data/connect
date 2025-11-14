@@ -104,7 +104,7 @@ hostssl all all all cert clientcert=%s
 		Repository: "postgres",
 		Tag:        version,
 		Env: []string{
-			"POSTGRES_PASSWORD=l]YLSc|4[i56%{gY",
+			"POSTGRES_PASSWORD=l]YLSc|4[i56_@{gY",
 			"POSTGRES_USER=testuser",
 			"POSTGRES_DB=dbname",
 		},
@@ -138,7 +138,7 @@ hostssl all all all cert clientcert=%s
 	require.NoError(t, err)
 
 	hostAndPort := resource.GetHostPort("5432/tcp")
-	dsn := fmt.Sprintf("user=testuser password='l]YLSc|4[i56%%{gY' dbname=dbname sslmode=disable host=%s port=%s", strings.Split(hostAndPort, ":")[0], strings.Split(hostAndPort, ":")[1])
+	dsn := fmt.Sprintf("user=testuser password='l]YLSc|4[i56_@{gY' dbname=dbname sslmode=disable host=%s port=%s", strings.Split(hostAndPort, ":")[0], strings.Split(hostAndPort, ":")[1])
 
 	var db *sql.DB
 	require.NoError(t, pool.Retry(func() error {
@@ -184,14 +184,13 @@ func TestIntegrationSSLVerifyFull(t *testing.T) {
 
 	template := fmt.Sprintf(`
 postgres_cdc:
-    dsn: "host=%s port=%s user=testuser password='l]YLSc|4[i56%%%%{gY' dbname=dbname sslmode=verify-full"
+    dsn: "host=%s port=%s user=testuser password='l]YLSc|4[i56_@{gY' dbname=dbname sslmode=verify-full"
     slot_name: test_slot_ssl
     stream_snapshot: true
     schema: public
     tables:
        - test_table
     tls:
-      enabled: true
       root_cas: |
 %s
       client_certs:
