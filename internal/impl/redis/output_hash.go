@@ -189,6 +189,33 @@ func walkForHashFields(msg *service.Message, fields map[string]any) error {
 	return nil
 }
 
+func (r *redisHashWriter) buildMessage(msg *service.Message) (string, map[string]any, error) {
+	key, err := r.key.TryString(msg)
+	if err != nil {
+		return "", nil, fmt.Errorf("key interpolation error: %w", err)
+	}
+
+	fields := map[string]any{}
+
+	if r.walkMetadata {
+		_ = msg.MetaWalkMut(func(k string, v any) error {
+			fields[k] = v
+			return nil
+		})
+	}
+	if r.walkJSON {
+		if err := walkForHashFields(msg, fields); err != nil {
+			return "", nil, fmt.Errorf("HSET error: failed to walk JSON object: %v", err)
+		}
+	}
+	for k, v := range r.fields {
+		if fields[k], err = v.TryString(msg); err != nil {
+			return "", nil, fmt.Errorf("field %v interpolation error: %w", k, err)
+		}
+	}
+	return key, fields, nil
+}
+
 func (r *redisHashWriter) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
 	r.connMut.RLock()
 	client := r.client
@@ -199,28 +226,10 @@ func (r *redisHashWriter) WriteBatch(ctx context.Context, batch service.MessageB
 	}
 
 	if len(batch) == 1 {
-		key, err := r.key.TryString(batch[0])
+		key, fields, err := r.buildMessage(batch[0])
 		if err != nil {
-			return fmt.Errorf("key interpolation error: %w", err)
-		}
-		fields := map[string]any{}
-		if r.walkMetadata {
-			_ = batch[0].MetaWalkMut(func(k string, v any) error {
-				fields[k] = v
-				return nil
-			})
-		}
-		if r.walkJSON {
-			if err := walkForHashFields(batch[0], fields); err != nil {
-				err = fmt.Errorf("failed to walk JSON object: %v", err)
-				r.log.Errorf("HSET error: %v\n", err)
-				return err
-			}
-		}
-		for k, v := range r.fields {
-			if fields[k], err = v.TryString(batch[0]); err != nil {
-				return fmt.Errorf("field %v interpolation error: %w", k, err)
-			}
+			err = fmt.Errorf("failed to create message: %v", err)
+			return err
 		}
 		if err := client.HSet(ctx, key, fields).Err(); err != nil {
 			_ = r.disconnect()
@@ -233,29 +242,10 @@ func (r *redisHashWriter) WriteBatch(ctx context.Context, batch service.MessageB
 	pipe := client.Pipeline()
 
 	for i := range batch {
-		key, err := batch.TryInterpolatedString(i, r.key)
+		key, fields, err := r.buildMessage(batch[i])
 		if err != nil {
-			return fmt.Errorf("key interpolation error: %w", err)
-		}
-
-		fields := map[string]any{}
-		if r.walkMetadata {
-			_ = batch[i].MetaWalkMut(func(k string, v any) error {
-				fields[k] = v
-				return nil
-			})
-		}
-		if r.walkJSON {
-			if err := walkForHashFields(batch[i], fields); err != nil {
-				err = fmt.Errorf("failed to walk JSON object: %v", err)
-				r.log.Errorf("HSET error: %v\n", err)
-				return err
-			}
-		}
-		for k, v := range r.fields {
-			if fields[k], err = v.TryString(batch[i]); err != nil {
-				return fmt.Errorf("field %v interpolation error: %w", k, err)
-			}
+			err = fmt.Errorf("failed to create message: %v", err)
+			return err
 		}
 		_ = pipe.HSet(ctx, key, fields)
 	}
@@ -263,7 +253,7 @@ func (r *redisHashWriter) WriteBatch(ctx context.Context, batch service.MessageB
 	cmders, err := pipe.Exec(ctx)
 	if err != nil {
 		_ = r.disconnect()
-		r.log.Errorf("Errorf from redis: %v\n", err)
+		r.log.Errorf("Error from redis: %v\n", err)
 		return service.ErrNotConnected
 	}
 
