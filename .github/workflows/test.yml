@@ -59,7 +59,7 @@ jobs:
         cat .versions >> $GITHUB_ENV
 
     - name: Lint
-      uses: golangci/golangci-lint-action@v8
+      uses: golangci/golangci-lint-action@v9
       with:
         version: "v${{env.GOLANGCI_LINT_VERSION}}"
         args: "--timeout=30m cmd/... internal/... public/..."
