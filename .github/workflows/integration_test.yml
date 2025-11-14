@@ -44,7 +44,7 @@ jobs:
           # - ./internal/impl/nats
           - ./internal/impl/nsq
           - ./internal/impl/opensearch
-          # - ./internal/impl/postgresql
+          - ./internal/impl/postgresql
           - ./internal/impl/pulsar
           - ./internal/impl/qdrant
           # - ./internal/impl/questdb
