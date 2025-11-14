@@ -173,7 +173,7 @@ func walkForHashFields(msg *service.Message, fields map[string]any) error {
 	return nil
 }
 
-func (r *redisHashWriter) buildMessageString(msg *service.Message) (string, map[string]any, error) {
+func (r *redisHashWriter) buildMessage(msg *service.Message) (string, map[string]any, error) {
 	key, err := r.key.TryString(msg)
 	if err != nil {
 		return "", nil, fmt.Errorf("key interpolation error: %w", err)
@@ -210,7 +210,7 @@ func (r *redisHashWriter) WriteBatch(ctx context.Context, batch service.MessageB
 	}
 
 	if len(batch) == 1 {
-		key, fields, err := r.buildMessageString(batch[0])
+		key, fields, err := r.buildMessage(batch[0])
 		if err != nil {
 			err = fmt.Errorf("failed to create message: %v", err)
 			r.log.Errorf("%v\n", err)
@@ -227,7 +227,7 @@ func (r *redisHashWriter) WriteBatch(ctx context.Context, batch service.MessageB
 	pipe := client.Pipeline()
 
 	for i := range batch {
-		key, fields, err := r.buildMessageString(batch[i])
+		key, fields, err := r.buildMessage(batch[i])
 		if err != nil {
 			err = fmt.Errorf("failed to create message: %v", err)
 			r.log.Errorf("%v\n", err)
