@@ -693,16 +693,16 @@ func (m *groupsMigrator) translateOffset(
 	ts, err := readRecordTimestamp(ctx, m.src, srcTopic, m.topicIDs[srcTopic],
 		partition, offset-1, m.conf.FetchTimeout)
 	if err != nil {
-		return unknownOffset, err
+		return unknownOffset, fmt.Errorf("read record timestamp: %w", err)
 	}
 
 	// List first offset with timestamp >= requested timestamp
 	lo, err := m.dstAdm.ListOffsetsAfterMilli(ctx, ts.UnixMilli(), dstTopic)
 	if err != nil {
-		return unknownOffset, err
+		return unknownOffset, fmt.Errorf("list offsets after timestamp: %w", err)
 	}
 	if err := lo.Error(); err != nil {
-		return unknownOffset, err
+		return unknownOffset, fmt.Errorf("list offsets after timestamp: %w", err)
 	}
 
 	tpo, ok := lo.Lookup(dstTopic, partition)
