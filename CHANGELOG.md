@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.71.0 - TBD
+
+### Added
+
+- (SQL) Support `databricks` driver for all SQL components. (@rohan-darji)
+
 ## 4.70.0 - 2025-11-13
 
 ### Added

@@ -24,6 +24,7 @@ import (
 
 	// Import all (supported) sql drivers.
 	_ "github.com/ClickHouse/clickhouse-go/v2"
+	_ "github.com/databricks/databricks-sql-go"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/googleapis/go-sql-spanner"
 	_ "github.com/lib/pq"
