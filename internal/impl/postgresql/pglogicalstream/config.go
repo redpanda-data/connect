@@ -9,6 +9,7 @@
 package pglogicalstream
 
 import (
+	"context"
 	"crypto/tls"
 	"time"
 
@@ -25,6 +26,8 @@ type Config struct {
 	TLSConfig *tls.Config
 	DBSchema  string
 	DBTables  []string
+	// Refreshes short lived IAM auth token that is treated as a password
+	RefreshAuthToken func(ctx context.Context) error
 	// ReplicationSlotName is the name of the replication slot to use
 	//
 	// MUST BE SQL INJECTION FREE
