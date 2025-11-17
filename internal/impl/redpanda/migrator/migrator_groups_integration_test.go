@@ -248,6 +248,87 @@ func TestIntegrationReadRecordTimestamp(t *testing.T) {
 	})
 }
 
+// TestIntegrationReadRecordTimestampMultiNodeCluster tests ReadRecordTimestamp
+// against a multi-node cluster. It is skipped by default because it requires
+// an external multi-node Redpanda cluster.
+//
+// To run this test:
+//  1. Start a multi-node Redpanda cluster (e.g., using `resources/docker/redpanda`)
+//     and ensure a broker is available at localhost:19092.
+//  2. Comment out the t.Skip() line below.
+//  3. Run the test
+func TestIntegrationReadRecordTimestampMultiNodeCluster(t *testing.T) {
+	integration.CheckSkip(t)
+	t.Skip("run Redpanda with resources/docker/redpanda")
+
+	t.Log("Given: multi-node Redpanda cluster")
+	client, err := kgo.NewClient(
+		kgo.SeedBrokers("localhost:19092"),
+		kgo.RecordPartitioner(kgo.ManualPartitioner()))
+	require.NoError(t, err)
+	defer client.Close()
+	admin := kadm.NewClient(client)
+	ctx := t.Context()
+
+	const parts = 6
+	t.Logf("When: topic %q with %d partitions containing 2 records per partition", migratorTestTopic, parts)
+	_, err = admin.DeleteTopics(ctx, migratorTestTopic)
+	require.NoError(t, err)
+	_, err = admin.CreateTopic(ctx, parts, 1, nil, migratorTestTopic)
+	require.NoError(t, err)
+
+	secs := func(n int) time.Time {
+		return time.Unix(int64(n), 0)
+	}
+	type record struct {
+		partition int32
+		offset    int64
+		timestamp time.Time
+		value     string
+	}
+	records := []record{
+		{0, 0, secs(0), "p0-0"},
+		{0, 1, secs(1), "p0-1"},
+		{1, 0, secs(10), "p1-0"},
+		{1, 1, secs(11), "p1-1"},
+		{2, 0, secs(20), "p2-0"},
+		{2, 1, secs(21), "p2-1"},
+		{3, 0, secs(30), "p3-0"},
+		{3, 1, secs(31), "p3-1"},
+		{4, 0, secs(40), "p4-0"},
+		{4, 1, secs(41), "p4-1"},
+		{5, 0, secs(50), "p5-0"},
+		{5, 1, secs(51), "p5-1"},
+	}
+
+	for _, rec := range records {
+		kr := &kgo.Record{
+			Topic:     migratorTestTopic,
+			Partition: rec.partition,
+			Value:     []byte(rec.value),
+			Timestamp: rec.timestamp,
+		}
+		res := client.ProduceSync(ctx, kr)
+		require.NoError(t, res.FirstErr())
+
+		r, err := res.First()
+		require.NoError(t, err)
+		require.Equal(t, rec.offset, r.Offset)
+	}
+
+	t.Log("Then: ReadRecordTimestamp returns exact timestamps for each (partition, offset)")
+	for _, r := range records {
+		t.Run(r.value, func(t *testing.T) {
+			ts, err := migrator.ReadRecordTimestamp(ctx, client,
+				migratorTestTopic, kadm.TopicID{},
+				r.partition, r.offset, redpandaTestOpTimeout)
+			require.NoError(t, err)
+			require.Equal(t, r.timestamp, ts,
+				"partition %d offset %d", r.partition, r.offset)
+		})
+	}
+}
+
 func TestIntegrationGroupsOffsetSync(t *testing.T) {
 	integration.CheckSkip(t)
 

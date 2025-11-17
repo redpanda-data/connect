@@ -749,6 +749,15 @@ func readRecordTimestamp(
 	offset int64,
 	fetchTimeout time.Duration,
 ) (time.Time, error) {
+	// Get partition leader to route request correctly
+	leader, _, err := client.PartitionLeader(topic, partition)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("get partition leader: %w", err)
+	}
+	if leader < 0 {
+		return time.Time{}, fmt.Errorf("partition leader unknown for topic %s partition %d", topic, partition)
+	}
+
 	// Build fetch request
 	req := kmsg.NewPtrFetchRequest()
 	req.MaxWaitMillis = int32(fetchTimeout.Milliseconds()) // If data is not available we wait at most this duration
@@ -767,7 +776,7 @@ func readRecordTimestamp(
 	req.Topics = append(req.Topics, topicReq)
 
 	// Send fetch request and process response
-	resp, err := client.Request(ctx, req)
+	resp, err := client.Broker(int(leader)).Request(ctx, req)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("fetch request failed: %w", err)
 	}
