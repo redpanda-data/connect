@@ -170,6 +170,7 @@ Options:
 , `trino`
 , `gocosmos`
 , `spanner`
+, `databricks`
 .
 
 === `dsn`
@@ -214,6 +215,9 @@ The following is a list of supported drivers, their placeholder style, and their
 
 | `spanner` 
 | projects/[PROJECT]/instances/[INSTANCE]/databases/[DATABASE] 
+
+| `databricks` 
+| `token:<access-token>@<server-hostname>:<port>/<http-path>` 
 |===
 
 Please note that the `postgres` driver enforces SSL by default, you can override this with the parameter `sslmode=disable` if required.
@@ -236,6 +240,8 @@ dsn: foouser:foopassword@tcp(localhost:3306)/foodb
 dsn: postgres://foouser:foopass@localhost:5432/foodb?sslmode=disable
 
 dsn: oracle://foouser:foopass@localhost:1521/service_name
+
+dsn: token:dapi1234567890ab@dbc-a1b2345c-d6e7.cloud.databricks.com:443/sql/1.0/warehouses/abc123def456
 ```
 
 === `query`
