@@ -213,7 +213,6 @@ func (r *redisHashWriter) WriteBatch(ctx context.Context, batch service.MessageB
 		key, fields, err := r.buildMessage(batch[0])
 		if err != nil {
 			err = fmt.Errorf("failed to create message: %v", err)
-			r.log.Errorf("%v\n", err)
 			return err
 		}
 		if err := client.HSet(ctx, key, fields).Err(); err != nil {
@@ -230,7 +229,6 @@ func (r *redisHashWriter) WriteBatch(ctx context.Context, batch service.MessageB
 		key, fields, err := r.buildMessage(batch[i])
 		if err != nil {
 			err = fmt.Errorf("failed to create message: %v", err)
-			r.log.Errorf("%v\n", err)
 			return err
 		}
 		_ = pipe.HSet(ctx, key, fields)
@@ -239,7 +237,7 @@ func (r *redisHashWriter) WriteBatch(ctx context.Context, batch service.MessageB
 	cmders, err := pipe.Exec(ctx)
 	if err != nil {
 		_ = r.disconnect()
-		r.log.Errorf("Errorf from redis: %v\n", err)
+		r.log.Errorf("Error from redis: %v\n", err)
 		return service.ErrNotConnected
 	}
 
