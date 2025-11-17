@@ -1,0 +1,54 @@
+version: '3'
+
+vars:
+  COMPOSE_FILE: docker-compose.yml
+  DOWNLOAD_URL: https://docs.redpanda.com/redpanda-labs/docker-compose/_attachments/three-brokers/docker-compose.yml
+  CONSOLE_URL: http://localhost:8080
+
+tasks:
+  setup:
+    desc: Download docker-compose.yml from Redpanda Labs
+    cmds:
+      - curl -sSL {{.DOWNLOAD_URL}} -o {{.COMPOSE_FILE}}
+      - echo "Downloaded {{.COMPOSE_FILE}}"
+    status:
+      - test -f {{.COMPOSE_FILE}}
+
+  up:
+    desc: Start the Redpanda cluster
+    deps: [setup]
+    cmds:
+      - docker compose up -d
+      - echo "Cluster started. Console available at {{.CONSOLE_URL}}"
+
+  down:
+    desc: Stop and remove the cluster
+    cmds:
+      - docker compose down
+
+  restart:
+    desc: Restart the cluster
+    cmds:
+      - task: down
+      - task: up
+
+  logs:
+    desc: View cluster logs (use -f to follow)
+    cmds:
+      - docker compose logs {{.CLI_ARGS}}
+
+  console:
+    desc: Open Redpanda Console in browser
+    cmds:
+      - open {{.CONSOLE_URL}}
+
+  status:
+    desc: Check cluster status
+    cmds:
+      - docker compose ps
+
+  update:
+    desc: Download latest docker-compose.yml
+    cmds:
+      - rm -f {{.COMPOSE_FILE}}
+      - task: setup
