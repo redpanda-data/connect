@@ -903,7 +903,7 @@ The maximum period of time to wait for message sends before abandoning the reque
 
 === `max_message_bytes`
 
-The maximum space in bytes than an individual message may take, messages larger than this value will be rejected. This field corresponds to Kafka's `max.message.bytes`.
+The maximum size of a produced record batch in bytes. A `MESSAGE_TOO_LARGE` error is returned if a batch exceeds this limit. This field maps to the `max.message.bytes` Kafka property. Ensure the Redpanda broker's `kafka_batch_max_bytes` property is at least as large as this value, see https://docs.redpanda.com/current/reference/properties/cluster-properties/#kafka_batch_max_bytes.
 
 
 *Type*: `string`
