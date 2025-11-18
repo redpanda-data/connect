@@ -140,8 +140,9 @@ For capabilities, guarantees, scheduling, and examples, see the output documenta
 
 **Performance tuning for high throughput:** For workloads with high message rates or large messages, 
 adjust the following fields to increase buffer sizes and batch processing:
-- `partition_buffer_bytes`: Increase to 10MB or higher (default: 1MB)
-- `max_yield_batch_bytes`: Increase to 100MB or higher (default: 10MB)
+
+- `partition_buffer_bytes: 2MB`
+- `max_yield_batch_bytes: 1MB`
 
 These settings allow the consumer to buffer more data per partition and yield larger batches, 
 reducing overhead and improving throughput at the cost of higher memory usage.
@@ -887,7 +888,7 @@ The period of time between each topic lag refresh cycle.
 
 === `max_yield_batch_bytes`
 
-The maximum size (in bytes) for each batch yielded by this input. When routed to a redpanda output without modification this would roughly translate to the batch.bytes config field of a traditional producer.
+The maximum size (in bytes) for each batch yielded by this input. This value must be less than or equal to the `partition_buffer_bytes`. If using Redpanda output, this value should not be greater than the `max_message_bytes` option value (1MB by default), and for high-throughput scenarios they should be equal.
 
 
 *Type*: `string`

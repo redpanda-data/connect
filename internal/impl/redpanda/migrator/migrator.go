@@ -55,8 +55,9 @@ For capabilities, guarantees, scheduling, and examples, see the output documenta
 
 **Performance tuning for high throughput:** For workloads with high message rates or large messages, 
 adjust the following fields to increase buffer sizes and batch processing:
-- ` + "`partition_buffer_bytes`" + `: Increase to 10MB or higher (default: 1MB)
-- ` + "`max_yield_batch_bytes`" + `: Increase to 100MB or higher (default: 10MB)
+
+- ` + "`partition_buffer_bytes: 2MB`" + `
+- ` + "`max_yield_batch_bytes: 1MB`" + `
 
 These settings allow the consumer to buffer more data per partition and yield larger batches, 
 reducing overhead and improving throughput at the cost of higher memory usage.`).
