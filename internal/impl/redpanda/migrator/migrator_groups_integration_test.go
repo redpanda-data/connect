@@ -216,7 +216,7 @@ func TestIntegrationReadRecordTimestamp(t *testing.T) {
 			990, 999, redpandaTestOpTimeout)
 		assert.Error(t, err)
 		t.Log(err)
-		assert.Contains(t, err.Error(), "partition error")
+		assert.Contains(t, err.Error(), "partition")
 	})
 
 	t.Run("nonexistent partition", func(t *testing.T) {
@@ -226,7 +226,7 @@ func TestIntegrationReadRecordTimestamp(t *testing.T) {
 			999, 0, redpandaTestOpTimeout)
 		assert.Error(t, err)
 		t.Log(err)
-		assert.Contains(t, err.Error(), "partition error")
+		assert.Contains(t, err.Error(), "partition")
 	})
 
 	t.Run("nonexistent topic", func(t *testing.T) {

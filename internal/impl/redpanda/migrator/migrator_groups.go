@@ -689,11 +689,12 @@ func (m *groupsMigrator) translateOffset(
 	partition int32, offset int64,
 ) (int64, error) {
 	// Read record timestamp for the PREVIOUS offset
-	ts, err := readRecordTimestamp(ctx, m.src, srcTopic, m.topicIDs[srcTopic],
+	r, err := readRecordAtOffset(ctx, m.src, srcTopic, m.topicIDs[srcTopic],
 		partition, offset-1, m.conf.FetchTimeout)
 	if err != nil {
 		return unknownOffset, fmt.Errorf("read record timestamp: %w", err)
 	}
+	ts := r.Timestamp
 
 	// List first offset with timestamp >= requested timestamp
 	lo, err := m.dstAdm.ListOffsetsAfterMilli(ctx, ts.UnixMilli(), dstTopic)
@@ -731,15 +732,9 @@ func (m *groupsMigrator) translateOffset(
 	return o1, nil
 }
 
-// readRecordTimestamp sends a fetch request to the Redpanda cluster to read the
-// timestamp of the record at the given topic, partition, and offset.
-//
-// The function returns the timestamp of the record at the given offset, or an
-// error if the request fails or if the record is not found.
-//
-// The function does not retry the request if it fails, as the caller should
-// handle retries according to their needs.
-func readRecordTimestamp(
+// readRecord sends a fetch request to the Redpanda cluster to read the record
+// at the given topic, partition, and offset.
+func readRecordAtOffset(
 	ctx context.Context,
 	client *kgo.Client,
 	topic string,
@@ -747,14 +742,14 @@ func readRecordTimestamp(
 	partition int32,
 	offset int64,
 	fetchTimeout time.Duration,
-) (time.Time, error) {
+) (*kgo.Record, error) {
 	// Get partition leader to route request correctly
 	leader, _, err := client.PartitionLeader(topic, partition)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("get partition leader: %w", err)
+		return nil, fmt.Errorf("get partition leader: %w", err)
 	}
 	if leader < 0 {
-		return time.Time{}, fmt.Errorf("partition leader unknown for topic %s partition %d", topic, partition)
+		return nil, fmt.Errorf("partition leader unknown for topic %s partition %d", topic, partition)
 	}
 
 	// Build fetch request
@@ -775,41 +770,45 @@ func readRecordTimestamp(
 	req.Topics = append(req.Topics, topicReq)
 
 	// Send fetch request and process response
-	resp, err := client.Broker(int(leader)).Request(ctx, req)
+	resp, err := client.Broker(int(leader)).RetriableRequest(ctx, req)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("fetch request failed: %w", err)
+		return nil, fmt.Errorf("fetch request failed: %w", err)
 	}
 	fetchResp, ok := resp.(*kmsg.FetchResponse)
 	if !ok {
-		return time.Time{}, fmt.Errorf("unexpected response type: %T", resp)
+		return nil, fmt.Errorf("unexpected response type: %T", resp)
 	}
 	if len(fetchResp.Topics) == 0 {
-		return time.Time{}, errors.New("no topics in response")
+		return nil, errors.New("no topics in response")
 	}
 	respTopic := &fetchResp.Topics[0]
 	if len(respTopic.Partitions) == 0 {
-		return time.Time{}, errors.New("no partitions in response")
+		return nil, errors.New("no partitions in response")
 	}
 	respPartition := &respTopic.Partitions[0]
 	if respPartition.ErrorCode != 0 {
-		return time.Time{}, fmt.Errorf("partition error: %w", kerr.ErrorForCode(respPartition.ErrorCode))
+		return nil, fmt.Errorf("partition error: %w", kerr.ErrorForCode(respPartition.ErrorCode))
 	}
 
-	// Extract record timestamp
+	// Extract record
 	fp, _ := kgo.ProcessFetchPartition(kgo.ProcessFetchPartitionOpts{
 		Partition: partition,
 		Offset:    offset,
 	}, respPartition, kgo.DefaultDecompressor(), nil)
 	if fp.Err != nil {
-		return time.Time{}, fmt.Errorf("processing partition failed: %w", fp.Err)
+		return nil, fmt.Errorf("processing partition failed: %w", fp.Err)
 	}
 	if len(fp.Records) == 0 {
-		return time.Time{}, errors.New("no records in response")
+		return nil, errors.New("no records in response")
 	}
-	if fp.Records[0].Offset != offset {
-		return time.Time{}, fmt.Errorf("first record has offset %d, expected %d", fp.Records[0].Offset, offset)
+	r := fp.Records[0]
+	if r == nil {
+		return nil, errors.New("no records in response")
 	}
-	return fp.Records[0].Timestamp, nil
+	if r.Offset != offset {
+		return nil, fmt.Errorf("first record has offset %d, expected %d", fp.Records[0].Offset, offset)
+	}
+	return r, nil
 }
 
 type groupsMetrics struct {
