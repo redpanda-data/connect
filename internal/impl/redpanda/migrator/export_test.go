@@ -16,8 +16,10 @@ package migrator
 
 import (
 	"bytes"
+	"context"
 	"log/slog"
 	"testing"
+	"time"
 
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -30,8 +32,23 @@ var (
 	TopicDetailsWithClient = topicDetailsWithClient
 	DescribeACLs           = describeACLs
 	SchemaStringEquals     = schemaStringEquals
-	ReadRecordTimestamp    = readRecordTimestamp
 )
+
+func ReadRecordTimestamp(
+	ctx context.Context,
+	client *kgo.Client,
+	topic string,
+	topicID kadm.TopicID,
+	partition int32,
+	offset int64,
+	fetchTimeout time.Duration,
+) (time.Time, error) {
+	r, err := readRecordAtOffset(ctx, client, topic, topicID, partition, offset, fetchTimeout)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return r.Timestamp, nil
+}
 
 func NewTopicMigratorForTesting(t *testing.T, conf TopicMigratorConfig) *topicMigrator {
 	var buf bytes.Buffer
