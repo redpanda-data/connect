@@ -17,6 +17,7 @@ package migrator
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"sync"
@@ -655,6 +656,24 @@ func (m *Migrator) messageBatchToFranzRecords(batch service.MessageBatch) ([]kgo
 			}
 		}
 
+		// Offset header (required when consumer group migration is enabled).
+		// This is hop-by-hop header used for exact consumer group offset
+		// migration of empty groups.
+		if m.groups.enabled() {
+			if offsetVal, ok := msg.MetaGetMut("kafka_offset"); !ok {
+				return nil, errors.New("kafka_offset metadata not found")
+			} else {
+				offsetInt, ok := offsetVal.(int)
+				if !ok {
+					return nil, errors.New("kafka_offset metadata is not int")
+				}
+				if offsetInt < 0 {
+					return nil, errors.New("kafka_offset metadata is negative")
+				}
+				r.Headers = kafka.SetHeaderValue(r.Headers, offsetHeader, encodeOffsetHeader(offsetInt))
+			}
+		}
+
 		// Timestamp (required)
 		tsVal, ok := msg.MetaGetMut("kafka_timestamp_ms")
 		if !ok {
@@ -717,4 +736,17 @@ func parseSchemaID(b []byte) (int, error) {
 func updateSchemaID(b []byte, schemaID int) error {
 	var ch sr.ConfluentHeader
 	return ch.UpdateID(b, uint32(schemaID))
+}
+
+const offsetHeader = "redpanda-migrator-offset"
+
+func encodeOffsetHeader(offsetInt int) []byte {
+	return binary.BigEndian.AppendUint64(nil, uint64(offsetInt))
+}
+
+func decodeOffsetHeader(b []byte) (int, error) {
+	if len(b) != 8 {
+		return 0, fmt.Errorf("invalid offset header length: %d", len(b))
+	}
+	return int(binary.BigEndian.Uint64(b)), nil
 }
