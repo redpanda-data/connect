@@ -408,12 +408,12 @@ func TestIntegrationGroupsOffsetSync(t *testing.T) {
 		writeToTopic(src, 10, monotonic(topic))
 		writeToTopic(dst, 10, monotonic(topic))
 
-		t.Run("6", func(t *testing.T) {
+		t.Run("6", func(t *testing.T) { // Beyond partition end offset
 			src.CommitOffset(group, topic, 0, 6)
 			assert.Nil(t, sync(t, group, topic))
 		})
 		t.Run("0", func(t *testing.T) {
-			src.CommitOffset(group, topic, 0, 6)
+			src.CommitOffset(group, topic, 0, 0) // At start offset
 			assert.Nil(t, sync(t, group, topic))
 		})
 		for i := 1; i <= 5; i++ {
