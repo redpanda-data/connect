@@ -10,7 +10,6 @@ IMPORTANT: The unified migrator is not backward-compatible with the legacy compo
 
 * One input and one output only; no bundle.
 * All migration behavior is controlled by the output.
-* Pair input and output by matching the same `label`.
 * Source Schema Registry is configured at `input.redpanda_migrator.schema_registry`.
 * Destination Schema Registry is configured at `output.redpanda_migrator.schema_registry`.
 * Consumer group migration is configured at `output.redpanda_migrator.consumer_groups`.
