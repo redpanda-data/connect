@@ -10,8 +10,8 @@ input:
     regexp_topics: true
     start_from_oldest: true
     consumer_group: migrator_cg
-    partition_buffer_bytes: 10MB
-    max_yield_batch_bytes: 100MB
+    partition_buffer_bytes: 2MB
+    max_yield_batch_bytes: 1MB
 
 output:
   processors:

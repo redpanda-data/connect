@@ -59,7 +59,10 @@ func FranzReaderOrderedConfigFields() []*service.ConfigField {
 			Default("5s").
 			Advanced(),
 		service.NewStringField(kroFieldMaxYieldBatchBytes).
-			Description("The maximum size (in bytes) for each batch yielded by this input. When routed to a redpanda output without modification this would roughly translate to the batch.bytes config field of a traditional producer.").
+			Description("The maximum size (in bytes) for each batch yielded by this input. " +
+				"This value must be less than or equal to the `partition_buffer_bytes`. " +
+				"If using Redpanda output, this value should not be greater than the `max_message_bytes` option value (1MB by default), " +
+				"and for high-throughput scenarios they should be equal.").
 			Default("32KB").
 			Advanced(),
 	}
