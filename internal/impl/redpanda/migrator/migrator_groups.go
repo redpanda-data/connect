@@ -671,9 +671,7 @@ func (m *groupsMigrator) fillTopicIDs(ctx context.Context, topics []string) erro
 const unknownOffset int64 = -1
 
 // translateOffset returns approximate commited offset in the destination
-// cluster for a given commited offset in the source cluster. It is a special
-// case of translateOffset function that is safe to use when we might point to
-// the end of the partition.
+// cluster for a given commited offset in the source cluster.
 //
 // The function performs timestamp based offset translation. It reads the record
 // timestamp of the PREVIOUS offset and then finds the first offset with the
