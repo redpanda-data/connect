@@ -1158,8 +1158,17 @@ logger:
 	defer cancel()
 	for _, topic := range []string{topicA, topicB, topicC, topicD} {
 		dstTopic := fmt.Sprintf("use1_%s", topic)
-		records := readTopicContentContext(ctx, dst, numMessages)
-		assert.Len(t, records, numMessages, "Topic %s should have %d messages", dstTopic, numMessages)
-		t.Logf("Topic %s has %d messages", dstTopic, len(records))
+		assert.Eventually(t, func() bool {
+			eo, err := dst.Admin.ListEndOffsets(ctx, dstTopic)
+			if err != nil {
+				t.Logf("list end offsets error for %s: %v", dstTopic, err)
+				return false
+			}
+			var total int64
+			eo.Each(func(lo kadm.ListedOffset) {
+				total += lo.Offset
+			})
+			return total == int64(numMessages)
+		}, redpandaTestWaitTimeout, 500*time.Millisecond, "Topic %s should have %d messages", dstTopic, numMessages)
 	}
 }
