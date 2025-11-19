@@ -67,7 +67,12 @@ func NewSchemaRegistryMigratorForTesting(t *testing.T, conf SchemaRegistryMigrat
 	}
 }
 
-func NewGroupsMigratorForTesting(t *testing.T, conf GroupsMigratorConfig, src *kgo.Client, srcAdm, dstAdm *kadm.Client) *groupsMigrator {
+func NewGroupsMigratorForTesting(
+	t *testing.T,
+	conf GroupsMigratorConfig,
+	src, dst *kgo.Client,
+	srcAdm, dstAdm *kadm.Client,
+) *groupsMigrator {
 	var buf bytes.Buffer
 	t.Cleanup(func() {
 		t.Log(buf.String())
@@ -76,6 +81,7 @@ func NewGroupsMigratorForTesting(t *testing.T, conf GroupsMigratorConfig, src *k
 		conf:   conf,
 		src:    src,
 		srcAdm: srcAdm,
+		dst:    dst,
 		dstAdm: dstAdm,
 		log: service.NewLoggerFromSlog(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{
 			Level: slog.LevelDebug,

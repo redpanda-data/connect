@@ -192,6 +192,7 @@ type groupsMigrator struct {
 	conf    GroupsMigratorConfig
 	src     *kgo.Client
 	srcAdm  *kadm.Client
+	dst     *kgo.Client
 	dstAdm  *kadm.Client
 	metrics *groupsMetrics
 	log     *service.Logger
