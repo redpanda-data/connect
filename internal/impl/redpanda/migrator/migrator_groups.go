@@ -31,6 +31,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/confx"
+	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
 )
 
 const (
@@ -169,9 +170,11 @@ func (c *GroupsMigratorConfig) initFromParsedInput(pConf *service.ParsedConfig) 
 	return nil
 }
 
-// GroupOffset is a tuple of group name and offset (topic, partition, position).
+// GroupOffset is a tuple of group name, state and offset (topic, partition,
+// position).
 type GroupOffset struct {
 	Group string
+	State string
 	kadm.Offset
 }
 
@@ -283,6 +286,7 @@ func (m *groupsMigrator) listGroupsOffsets(ctx context.Context, adm *kadm.Client
 			for _, o := range p {
 				gcos = append(gcos, GroupOffset{
 					Group:  g,
+					State:  cg[g].State,
 					Offset: o.Offset,
 				})
 			}
@@ -396,10 +400,21 @@ func (m *groupsMigrator) Sync(ctx context.Context, getTopics func() []TopicMappi
 		return err
 	}
 
+	nameConv := nameConverterFromTopicMappings(mappings)
+
+	// List end offsets for destination topics
+	dstTopics := make([]string, len(topics))
+	for i := range topics {
+		dstTopics[i] = nameConv.ToDst(topics[i])
+	}
+	dteo, err := m.dstAdm.ListEndOffsets(ctx, dstTopics...)
+	if err != nil {
+		return err
+	}
+
 	var wg sync.WaitGroup
 
 	// Translate group offsets to destination cluster (in parallel due to MaxWaitMillis)
-	nameConv := nameConverterFromTopicMappings(mappings)
 	dstOffset := make([]int64, len(gcos))
 	for i := range gcos {
 		dstOffset[i] = unknownOffset
@@ -413,6 +428,19 @@ func (m *groupsMigrator) Sync(ctx context.Context, getTopics func() []TopicMappi
 		}
 		if o1 == unknownOffset {
 			return errors.New("unknown offset")
+		}
+		if g.State == "Empty" {
+			eo, ok := dteo.Lookup(nameConv.ToDst(g.Topic), g.Partition)
+			if !ok {
+				m.log.Debugf("Consumer group migration: group '%s' topic '%s' partition %d: exact offset translation: end offset not found", g.Group, g.Topic, g.Partition)
+			} else {
+				exo1, err := m.tryFindExactOffset(ctx, nameConv.ToDst(g.Topic), g.Partition, offset, eo.Offset, o1)
+				if err != nil {
+					m.log.Warnf("Consumer group migration: group '%s' topic '%s' partition %d offset %d: exact offset translation: %v", g.Group, g.Topic, g.Partition, offset, err)
+				} else {
+					o1 = exo1
+				}
+			}
 		}
 
 		m.log.Debugf("Consumer group migration: translated group '%s' topic '%s' partition %d offset %d to %d",
@@ -730,6 +758,63 @@ func (m *groupsMigrator) translateOffset(
 		o1 += 1
 	}
 	return o1, nil
+}
+
+// tryFindExactOffset refines a timestamp-based offset translation to the exact
+// destination offset when possible.
+//
+// The method assumes destination records carry the source offset in the
+// header identified by offsetHeader. Starting from o1 (an approximate
+// translation result), it reads records at o1 and compares the embedded source
+// offset to the requested source offset. It then adjusts by the observed delta
+// and repeats until either:
+//
+//   - the exact offset is found (returns the refined destination offset)
+//   - the computed offset reaches the destination end offset eo (returns eo)
+//   - the computed offset exceeds bounds (returns unknownOffset with error), o
+//   - the maximum number of attempts is exhausted (returns unknownOffset with error)
+func (m *groupsMigrator) tryFindExactOffset(
+	ctx context.Context,
+	dstTopic string,
+	partition int32, offset int64,
+	eo, o1 int64,
+) (int64, error) {
+	so := o1
+
+	const maxAttempts = 5
+	for range maxAttempts {
+		switch {
+		case o1 == eo:
+			return o1, nil
+		case o1 > eo:
+			return unknownOffset, errors.New("offset out of range")
+		case o1 < so:
+			return unknownOffset, errors.New("negative delta")
+		}
+
+		var topicID kadm.TopicID // TODO: use real topic ID
+		r, err := readRecordAtOffset(ctx, m.dst, dstTopic, topicID,
+			partition, o1, m.conf.FetchTimeout)
+		if err != nil {
+			return unknownOffset, fmt.Errorf("read record at offset: %w", err)
+		}
+		b, ok := kafka.GetHeaderValue(r.Headers, offsetHeader)
+		if !ok {
+			return unknownOffset, errors.New("offset header not found in record")
+		}
+		ro, err := decodeOffsetHeader(b)
+		if err != nil {
+			return unknownOffset, fmt.Errorf("decode offset header: %w", err)
+		}
+
+		d := offset - int64(ro)
+		if d == 0 {
+			return o1, nil
+		}
+		o1 += d
+	}
+
+	return unknownOffset, errors.New("offset not found")
 }
 
 // readRecord sends a fetch request to the Redpanda cluster to read the record
