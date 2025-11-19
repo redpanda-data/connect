@@ -15,9 +15,9 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-// NewHyperPbParser falls back to using NewDynamicPbDecoder
+// NewHyperPbDecoder falls back to using NewDynamicPbDecoder
 // on platforms where hyperpb is not supported.
-func NewHyperPbParser(
+func NewHyperPbDecoder(
 	md protoreflect.MessageDescriptor,
 	opts ProfilingOptions,
 ) ProtobufDecoder {
