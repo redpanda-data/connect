@@ -524,7 +524,8 @@ func (m *Migrator) onOutputConnected(_ context.Context, fw franzWriter) error {
 	m.mu.Lock()
 	m.dstAdm = dstAdm
 	m.dstClusterID = []byte(metadata.Cluster)
-	m.groups.dstAdm = kadm.NewClient(clientInfo.Client)
+	m.groups.dst = clientInfo.Client
+	m.groups.dstAdm = dstAdm
 	m.mu.Unlock()
 
 	// Syncing topics is deferred until the first message is received because

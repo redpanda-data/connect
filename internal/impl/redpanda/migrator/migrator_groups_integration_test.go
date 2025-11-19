@@ -72,7 +72,7 @@ func TestIntegrationListGroupOffsets(t *testing.T) {
 	// Helper to create migrator and list group offsets
 	listGroupOffsets := func(t *testing.T, conf migrator.GroupsMigratorConfig, topics []string) []migrator.GroupOffset {
 		t.Helper()
-		gm := migrator.NewGroupsMigratorForTesting(t, conf, src.Client, src.Admin, dst.Admin)
+		gm := migrator.NewGroupsMigratorForTesting(t, conf, src.Client, dst.Client, src.Admin, dst.Admin)
 		ctx, cancel := context.WithTimeout(t.Context(), redpandaTestWaitTimeout)
 		defer cancel()
 		offsets, err := gm.ListGroupOffsets(ctx, topics)
@@ -345,7 +345,7 @@ func TestIntegrationGroupsOffsetSync(t *testing.T) {
 			Enabled: true,
 		}
 		conf.Include = []*regexp.Regexp{regexp.MustCompile(fmt.Sprintf("^%s$", group))}
-		gm := migrator.NewGroupsMigratorForTesting(t, conf, src.Client, src.Admin, dst.Admin)
+		gm := migrator.NewGroupsMigratorForTesting(t, conf, src.Client, dst.Client, src.Admin, dst.Admin)
 
 		ctx, cancel := context.WithTimeout(t.Context(), redpandaTestWaitTimeout)
 		defer cancel()
