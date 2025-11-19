@@ -132,3 +132,74 @@ func TestGetHeaderValue(t *testing.T) {
 		})
 	}
 }
+
+func TestSetHeaderValue(t *testing.T) {
+	tests := []struct {
+		name    string
+		initial []kgo.RecordHeader
+		key     string
+		value   []byte
+		want    []kgo.RecordHeader
+	}{
+		{
+			name:    "empty headers appends new",
+			initial: nil,
+			key:     "foo",
+			value:   []byte("bar"),
+			want: []kgo.RecordHeader{
+				{Key: "foo", Value: []byte("bar")},
+			},
+		},
+		{
+			name: "updates existing single key",
+			initial: []kgo.RecordHeader{
+				{Key: "foo", Value: []byte("old")},
+			},
+			key:   "foo",
+			value: []byte("new"),
+			want: []kgo.RecordHeader{
+				{Key: "foo", Value: []byte("new")},
+			},
+		},
+		{
+			name: "updates last of duplicate keys",
+			initial: []kgo.RecordHeader{
+				{Key: "foo", Value: []byte("first")},
+				{Key: "bar", Value: []byte("middle")},
+				{Key: "foo", Value: []byte("last")},
+			},
+			key:   "foo",
+			value: []byte("updated"),
+			want: []kgo.RecordHeader{
+				{Key: "foo", Value: []byte("first")},
+				{Key: "bar", Value: []byte("middle")},
+				{Key: "foo", Value: []byte("updated")},
+			},
+		},
+		{
+			name: "absent key appends at end",
+			initial: []kgo.RecordHeader{
+				{Key: "a", Value: []byte("x")},
+			},
+			key:   "foo",
+			value: []byte("bar"),
+			want: []kgo.RecordHeader{
+				{Key: "a", Value: []byte("x")},
+				{Key: "foo", Value: []byte("bar")},
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Work on a copy to avoid mutating test table data.
+			var headers []kgo.RecordHeader
+			if tc.initial != nil {
+				headers = make([]kgo.RecordHeader, len(tc.initial))
+				copy(headers, tc.initial)
+			}
+			got := SetHeaderValue(headers, tc.key, tc.value)
+			require.Equal(t, tc.want, got)
+		})
+	}
+}
