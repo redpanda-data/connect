@@ -28,10 +28,13 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
+const OffsetHeader = offsetHeader
+
 var (
 	TopicDetailsWithClient = topicDetailsWithClient
 	DescribeACLs           = describeACLs
 	SchemaStringEquals     = schemaStringEquals
+	EncodeOffsetHeader     = encodeOffsetHeader
 )
 
 func ReadRecordTimestamp(

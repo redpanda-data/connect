@@ -28,6 +28,7 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
+	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
 	"github.com/redpanda-data/connect/v4/internal/impl/redpanda/migrator"
 )
 
@@ -87,10 +88,10 @@ func TestIntegrationListGroupOffsets(t *testing.T) {
 		offsets := listGroupOffsets(t, conf, []string{topicFoo1, topicFoo2, topicBar})
 
 		expected := []migrator.GroupOffset{
-			{Group: groupFoo1, Offset: kadm.Offset{Topic: topicFoo1, Partition: 0, At: 2}},
-			{Group: groupFoo1, Offset: kadm.Offset{Topic: topicFoo1, Partition: 1, At: 3}},
-			{Group: groupFoo2, Offset: kadm.Offset{Topic: topicFoo2, Partition: 0, At: 1}},
-			{Group: groupBar, Offset: kadm.Offset{Topic: topicBar, Partition: 0, At: 2}},
+			{Group: groupFoo1, State: "Empty", Offset: kadm.Offset{Topic: topicFoo1, Partition: 0, At: 2}},
+			{Group: groupFoo1, State: "Empty", Offset: kadm.Offset{Topic: topicFoo1, Partition: 1, At: 3}},
+			{Group: groupFoo2, State: "Empty", Offset: kadm.Offset{Topic: topicFoo2, Partition: 0, At: 1}},
+			{Group: groupBar, State: "Empty", Offset: kadm.Offset{Topic: topicBar, Partition: 0, At: 2}},
 		}
 		assert.ElementsMatch(t, expected, offsets)
 	})
@@ -103,9 +104,9 @@ func TestIntegrationListGroupOffsets(t *testing.T) {
 		offsets := listGroupOffsets(t, conf, []string{topicFoo1, topicFoo2, topicBar})
 
 		expected := []migrator.GroupOffset{
-			{Group: groupFoo1, Offset: kadm.Offset{Topic: topicFoo1, Partition: 0, At: 2}},
-			{Group: groupFoo1, Offset: kadm.Offset{Topic: topicFoo1, Partition: 1, At: 3}},
-			{Group: groupFoo2, Offset: kadm.Offset{Topic: topicFoo2, Partition: 0, At: 1}},
+			{Group: groupFoo1, State: "Empty", Offset: kadm.Offset{Topic: topicFoo1, Partition: 0, At: 2}},
+			{Group: groupFoo1, State: "Empty", Offset: kadm.Offset{Topic: topicFoo1, Partition: 1, At: 3}},
+			{Group: groupFoo2, State: "Empty", Offset: kadm.Offset{Topic: topicFoo2, Partition: 0, At: 1}},
 		}
 		assert.ElementsMatch(t, expected, offsets)
 	})
@@ -119,8 +120,8 @@ func TestIntegrationListGroupOffsets(t *testing.T) {
 		offsets := listGroupOffsets(t, conf, []string{topicFoo1, topicFoo2, topicBar})
 
 		expected := []migrator.GroupOffset{
-			{Group: groupFoo1, Offset: kadm.Offset{Topic: topicFoo1, Partition: 0, At: 2}},
-			{Group: groupFoo1, Offset: kadm.Offset{Topic: topicFoo1, Partition: 1, At: 3}},
+			{Group: groupFoo1, State: "Empty", Offset: kadm.Offset{Topic: topicFoo1, Partition: 0, At: 2}},
+			{Group: groupFoo1, State: "Empty", Offset: kadm.Offset{Topic: topicFoo1, Partition: 1, At: 3}},
 		}
 		assert.ElementsMatch(t, expected, offsets)
 	})
@@ -133,9 +134,9 @@ func TestIntegrationListGroupOffsets(t *testing.T) {
 		offsets := listGroupOffsets(t, conf, []string{topicFoo1, topicFoo2, topicBar})
 
 		expected := []migrator.GroupOffset{
-			{Group: groupFoo1, Offset: kadm.Offset{Topic: topicFoo1, Partition: 0, At: 2}},
-			{Group: groupFoo1, Offset: kadm.Offset{Topic: topicFoo1, Partition: 1, At: 3}},
-			{Group: groupFoo2, Offset: kadm.Offset{Topic: topicFoo2, Partition: 0, At: 1}},
+			{Group: groupFoo1, State: "Empty", Offset: kadm.Offset{Topic: topicFoo1, Partition: 0, At: 2}},
+			{Group: groupFoo1, State: "Empty", Offset: kadm.Offset{Topic: topicFoo1, Partition: 1, At: 3}},
+			{Group: groupFoo2, State: "Empty", Offset: kadm.Offset{Topic: topicFoo2, Partition: 0, At: 1}},
 		}
 		assert.ElementsMatch(t, expected, offsets)
 	})
@@ -147,8 +148,8 @@ func TestIntegrationListGroupOffsets(t *testing.T) {
 		offsets := listGroupOffsets(t, conf, []string{topicFoo1})
 
 		expected := []migrator.GroupOffset{
-			{Group: groupFoo1, Offset: kadm.Offset{Topic: topicFoo1, Partition: 0, At: 2}},
-			{Group: groupFoo1, Offset: kadm.Offset{Topic: topicFoo1, Partition: 1, At: 3}},
+			{Group: groupFoo1, State: "Empty", Offset: kadm.Offset{Topic: topicFoo1, Partition: 0, At: 2}},
+			{Group: groupFoo1, State: "Empty", Offset: kadm.Offset{Topic: topicFoo1, Partition: 1, At: 3}},
 		}
 		assert.ElementsMatch(t, expected, offsets)
 	})
@@ -426,8 +427,9 @@ func TestIntegrationGroupsOffsetSync(t *testing.T) {
 	})
 
 	t.Run("monotonic sub millisecond timestamp", func(t *testing.T) {
-		// monotonic2 writes records to partition 0 with monotonic timestamps
-		// with sub millisecond precision generating 4 records per millisecond.
+		// monotonicSubMillisecond writes records to partition 0 with monotonic
+		// timestamps with sub millisecond precision generating 4 records per
+		// millisecond.
 		monotonicSubMillisecond := func(topic string) func(r *kgo.Record) {
 			t0 := time.Unix(0, 0)
 			delta := time.Millisecond / 4
@@ -440,9 +442,19 @@ func TestIntegrationGroupsOffsetSync(t *testing.T) {
 			}
 		}
 
+		// addOffsetHeader can supplement monotonicSubMillisecond when writing
+		// to destination topic.
+		addOffsetHeader := func() func(*kgo.Record) {
+			n := 0
+			return func(r *kgo.Record) {
+				r.Headers = kafka.SetHeaderValue(r.Headers, migrator.OffsetHeader, migrator.EncodeOffsetHeader(n))
+				n++
+			}
+		}
+
 		group, topic := next()
 		writeToTopic(src, 10, monotonicSubMillisecond(topic))
-		writeToTopic(dst, 10, monotonicSubMillisecond(topic))
+		writeToTopic(dst, 10, monotonicSubMillisecond(topic), addOffsetHeader())
 
 		for i := 1; i <= 10; i++ {
 			t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
@@ -451,8 +463,8 @@ func TestIntegrationGroupsOffsetSync(t *testing.T) {
 					{
 						Topic:     topic,
 						Partition: 0,
-						At:        int64(4*((i-1)/4) + 1),
-					}, // 1-4 -> 1, 5-8 -> 5, 9-12 -> 9
+						At:        int64(i),
+					},
 				}
 				assert.Equal(t, want, sync(t, group, topic), "iteration %d", i)
 			})
@@ -506,30 +518,42 @@ func TestIntegrationGroupsOffsetSync(t *testing.T) {
 			}
 		}
 
+		addOffsetHeader := func() func(*kgo.Record) {
+			n := 0
+			return func(r *kgo.Record) {
+				r.Headers = kafka.SetHeaderValue(r.Headers, migrator.OffsetHeader, migrator.EncodeOffsetHeader(n))
+				n++
+			}
+		}
+		sharedAddOffsetHeader := addOffsetHeader()
+
 		// Source: monotonic timestamps to partition 0
 		writeToTopic(src, 5, monotonic(topic), ProduceToPartitionOpt(0))
+
+		// Destination: move offsets by 10
+		{
+			writeToTopic(dst, 10, monotonic(topic), ProduceToPartitionOpt(0))
+			offsets := make(kadm.Offsets)
+			offsets.Add(kadm.Offset{Topic: topic, Partition: 0, At: 10})
+			_, err := dst.Admin.DeleteRecords(t.Context(), offsets)
+			require.NoError(t, err)
+		}
+
 		// Destination: non-monotonic timestamps creating overlapping ranges
-		// Batch 1: offsets 0-2, timestamps 3-5
+		// Batch 1: offsets 10-12, timestamps 3-5
 		writeToTopic(dst, 3, monotonic(topic), ProduceToPartitionOpt(0),
-			incTimestamp(3*time.Second),
-		)
-		// Batch 2: offsets 3-5, timestamps 2-4 (overlapping with batch 1)
+			incTimestamp(3*time.Second), sharedAddOffsetHeader)
+		// Batch 2: offsets 13-15, timestamps 2-4 (overlapping with batch 1)
 		writeToTopic(dst, 3, monotonic(topic), ProduceToPartitionOpt(0),
-			incTimestamp(2*time.Second),
-		)
+			incTimestamp(2*time.Second), sharedAddOffsetHeader)
 
-		t.Run("timestamp 3", func(t *testing.T) {
-			t.Skip("We don't sync offset 0")
-			src.CommitOffset(group, topic, 0, 3)
-			want := []TopicPartitionAt{{Topic: topic, Partition: 0, At: 0}} // First occurrence of timestamp 3
-			assert.Equal(t, want, sync(t, group, topic))
-		})
-
-		t.Run("timestamp 4", func(t *testing.T) {
-			src.CommitOffset(group, topic, 0, 4)
-			want := []TopicPartitionAt{{Topic: topic, Partition: 0, At: 1}} // First occurrence of timestamp 4
-			assert.Equal(t, want, sync(t, group, topic))
-		})
+		for i := 1; i <= 5; i++ {
+			t.Run(fmt.Sprintf("timestamp %d", i), func(t *testing.T) {
+				src.CommitOffset(group, topic, 0, i)
+				want := []TopicPartitionAt{{Topic: topic, Partition: 0, At: int64(i + 10)}}
+				assert.Equal(t, want, sync(t, group, topic))
+			})
+		}
 	})
 
 	t.Run("mapping", func(t *testing.T) {
