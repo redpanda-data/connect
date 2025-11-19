@@ -107,3 +107,22 @@ func GetHeaderValue(headers []kgo.RecordHeader, key string) ([]byte, bool) {
 	}
 	return nil, false
 }
+
+// SetHeaderValue sets the last header value matching the given key. If the key
+// is not found, a new header is appended to the end of the list.
+// The returned slice references the original header data and must not be
+// modified.
+func SetHeaderValue(headers []kgo.RecordHeader, key string, value []byte) []kgo.RecordHeader {
+	for i := range headers {
+		h := &headers[len(headers)-1-i]
+		if h.Key == key {
+			h.Value = value
+			return headers
+		}
+	}
+	headers = append(headers, kgo.RecordHeader{
+		Key:   key,
+		Value: value,
+	})
+	return headers
+}
