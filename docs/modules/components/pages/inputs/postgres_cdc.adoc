@@ -92,7 +92,7 @@ input:
     aws:
       enabled: false
       region: "" # No default (optional)
-      endpoint: "" # No default (optional)
+      endpoint: "" # No default (required)
     auto_replay_nacks: true
     batching:
       count: 0
@@ -467,7 +467,7 @@ Enable AWS IAM authentication for PostgreSQL. When enabled, an IAM authenticatio
 
 === `aws.region`
 
-The AWS region where the PostgreSQL instance is located. If not specified, the region from the endpoint hostname will be used.
+The AWS region where the PostgreSQL instance is located. If no region is specified then the environment default will be used.
 
 
 *Type*: `string`

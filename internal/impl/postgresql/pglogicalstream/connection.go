@@ -9,7 +9,6 @@
 package pglogicalstream
 
 import (
-	"crypto/tls"
 	"database/sql"
 	"fmt"
 	"regexp"
@@ -21,17 +20,18 @@ import (
 
 var re = regexp.MustCompile(`^(\d+)`)
 
-func openPgConnectionFromConfig(dbDSN string, tlsConfig *tls.Config) (*sql.DB, error) {
-	config, err := pgxpool.ParseConfig(dbDSN)
+func openPgConnectionFromConfig(cfg *Config) (*sql.DB, error) {
+	parsedCfg, err := pgxpool.ParseConfig(cfg.DBRawDSN)
 	if err != nil {
 		return nil, err
 	}
-	config.ConnConfig.TLSConfig = tlsConfig
-	return stdlib.OpenDB(*config.ConnConfig), nil
+	parsedCfg.ConnConfig.Password = cfg.DBConfig.Password
+	parsedCfg.ConnConfig.TLSConfig = cfg.TLSConfig
+	return stdlib.OpenDB(*parsedCfg.ConnConfig), nil
 }
 
-func getPostgresVersion(dbDSN string, tls *tls.Config) (int, error) {
-	conn, err := openPgConnectionFromConfig(dbDSN, tls)
+func getPostgresVersion(cfg *Config) (int, error) {
+	conn, err := openPgConnectionFromConfig(cfg)
 	if err != nil {
 		return 0, fmt.Errorf("failed to connect to the database: %w", err)
 	}

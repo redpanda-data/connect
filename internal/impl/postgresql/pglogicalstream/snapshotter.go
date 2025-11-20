@@ -45,12 +45,12 @@ type snapshotter struct {
 // newSnapshotter creates a new Snapshotter instance
 func newSnapshotter(
 	config *Config,
-	dbDSN string,
+	_ string,
 	logger *service.Logger,
 	snapshotName string,
 	maxReaders int,
 ) (*snapshotter, error) {
-	pgConn, err := openPgConnectionFromConfig(dbDSN, config.TLSConfig)
+	pgConn, err := openPgConnectionFromConfig(config)
 	if err != nil {
 		return nil, err
 	}

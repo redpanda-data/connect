@@ -25,7 +25,7 @@ type heartbeat struct {
 }
 
 func newHeartbeat(config *Config, prefix, value string) (*heartbeat, error) {
-	dbConn, err := openPgConnectionFromConfig(config.DBRawDSN, config.TLSConfig)
+	dbConn, err := openPgConnectionFromConfig(config)
 	if err != nil {
 		return nil, err
 	}

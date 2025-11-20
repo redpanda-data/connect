@@ -44,13 +44,13 @@ const (
 	fieldUnchangedToastValue       = "unchanged_toast_value"
 	fieldHeartbeatInterval         = "heartbeat_interval"
 	fieldAWSIAMAuth                = "aws"
-	// FieldAWSEnabled enabled field.
-	FieldAWSEnabled = "enabled"
-	shutdownTimeout = 5 * time.Second
+	// FieldAWSIAMAuthEnabled enabled field.
+	FieldAWSIAMAuthEnabled = "enabled"
+	shutdownTimeout        = 5 * time.Second
 )
 
 func notImportedAWSOptFn(_ context.Context, awsConf *service.ParsedConfig, _ *pgconn.Config, _ *service.Logger) (TokenBuilder, error) {
-	if enabled, _ := awsConf.FieldBool(FieldAWSEnabled); !enabled {
+	if enabled, _ := awsConf.FieldBool(FieldAWSIAMAuthEnabled); !enabled {
 		return nil, nil
 	}
 	return nil, errors.New("unable to configure AWS authentication as this binary does not import components/aws")
@@ -143,15 +143,14 @@ This input adds the following metadata fields to each message:
 		Field(service.NewTLSField("tls")).
 		Description("Using this field overrides the SSL/TLS settings in the environment and DSN.").
 		Field(service.NewObjectField(fieldAWSIAMAuth,
-			service.NewBoolField(FieldAWSEnabled).
+			service.NewBoolField(FieldAWSIAMAuthEnabled).
 				Description("Enable AWS IAM authentication for PostgreSQL. When enabled, an IAM authentication token is generated and used as the password.").
 				Default(false),
 			service.NewStringField("region").
-				Description("The AWS region where the PostgreSQL instance is located. If not specified, the region from the endpoint hostname will be used.").
+				Description("The AWS region where the PostgreSQL instance is located. If no region is specified then the environment default will be used.").
 				Optional(),
 			service.NewStringField("endpoint").
-				Description("The PostgreSQL endpoint hostname (e.g., mydb.abc123.us-east-1.rds.amazonaws.com).").
-				Optional(),
+				Description("The PostgreSQL endpoint hostname (e.g., mydb.abc123.us-east-1.rds.amazonaws.com)."),
 		).
 			Description("AWS IAM authentication configuration for PostgreSQL instances. When enabled, IAM credentials are used to generate temporary authentication tokens instead of a static password.").
 			Advanced().
@@ -178,6 +177,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		unchangedToastValue       any
 		heartbeatInterval         time.Duration
 		iamAuthEnabled            bool
+		iamAuthTokenBuilder       TokenBuilder
 	)
 
 	if err := license.CheckRunningEnterprise(mgr); err != nil {
@@ -252,9 +252,8 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		return nil, err
 	}
 
-	if iamAuthEnabled, err = conf.Namespace(fieldAWSIAMAuth).FieldBool(FieldAWSEnabled); err != nil {
-		return nil, err
-	}
+	awsConf := conf.Namespace(fieldAWSIAMAuth)
+	iamAuthEnabled, _ = awsConf.FieldBool(FieldAWSIAMAuthEnabled)
 
 	pgConnConfig, err := pgconn.ParseConfigWithOptions(dsn, pgconn.ParseConfigOptions{
 		// Don't support dynamic reading of password
@@ -265,9 +264,9 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 	}
 
 	logger := mgr.Logger()
-	var iamAuthTokenBuilder TokenBuilder
-	if iamAuthTokenBuilder, err = AWSOptFn(context.Background(), conf.Namespace(fieldAWSIAMAuth), pgConnConfig, logger); err != nil {
-		return
+
+	if iamAuthTokenBuilder, err = AWSOptFn(context.Background(), awsConf, pgConnConfig, logger); err != nil {
+		return nil, err
 	}
 	if pgConnConfig.TLSConfig, err = conf.FieldTLS("tls"); err != nil {
 		return nil, err
@@ -365,7 +364,7 @@ type pgStreamInput struct {
 
 func (p *pgStreamInput) Connect(ctx context.Context) error {
 	// If IAM authentication is enabled, generate a new token
-	if p.iamAuthEnabled {
+	if p.iamAuthEnabled && p.streamConfig.RefreshAuthToken != nil {
 		if err := p.streamConfig.RefreshAuthToken(ctx); err != nil {
 			return fmt.Errorf("unable to generate IAM auth token: %w", err)
 		}

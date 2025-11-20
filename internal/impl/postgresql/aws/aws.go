@@ -1,4 +1,4 @@
-// Copyright 2024 Redpanda Data, Inc.
+// Copyright 2025 Redpanda Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,43 +31,41 @@ import (
 
 func init() {
 	pgstream.AWSOptFn = func(ctx context.Context, awsConf *service.ParsedConfig, dbConf *pgconn.Config, log *service.Logger) (pgstream.TokenBuilder, error) {
-		if enabled, _ := awsConf.FieldBool(pgstream.FieldAWSEnabled); !enabled {
+		if enabled, _ := awsConf.FieldBool(pgstream.FieldAWSIAMAuthEnabled); !enabled {
 			return nil, nil
 		}
 
 		var (
 			err      error
-			region   string
 			awsCfg   aws.Config
 			endpoint string
+			region   string
 		)
-		if region, err = awsConf.FieldString("region"); err != nil {
-			return nil, err
+		if awsCfg, err = awsconfig.LoadDefaultConfig(ctx); err != nil {
+			return nil, fmt.Errorf("unable to load AWS config: %w", err)
 		}
 		if endpoint, err = awsConf.FieldString("endpoint"); err != nil {
 			return nil, err
 		}
-		if awsCfg, err = awsconfig.LoadDefaultConfig(ctx); err != nil {
-			return nil, fmt.Errorf("unable to load AWS config: %w", err)
+		region, _ = awsConf.FieldString("region")
+		if region != "" {
+			awsCfg.Region = region
 		}
-		awsCfg.Region = region
 		if awsCfg.Region == "" {
-			return nil, errors.New("AWS region is required for IAM authentication")
+			return nil, errors.New("aws.region is required for IAM authentication")
 		}
 
-		builder := func(ctx context.Context) error {
+		// tokenBuilder will be called upon component connection to refresh token/password and reconnect.
+		// Tokens last ~15 minutes and will only need refreshing after a connection is lost.
+		tokenBuilder := func(ctx context.Context) error {
 			password, err := auth.BuildAuthToken(ctx, endpoint, awsCfg.Region, dbConf.User, awsCfg.Credentials)
 			if err != nil {
 				return fmt.Errorf("unable to build IAM auth token: %w", err)
 			}
-
 			dbConf.Password = password
-			// dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s", endpoint, dbConf.Port, dbConf.User, dbConf.Password, dbConf.Database)
-			// fmt.Println(dsn)
 			log.Debug("IAM authentication token generated successfully")
 			return nil
 		}
-
-		return builder, nil
+		return tokenBuilder, nil
 	}
 }

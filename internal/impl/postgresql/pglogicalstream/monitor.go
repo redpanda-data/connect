@@ -51,7 +51,7 @@ func NewMonitor(
 	tables []TableFQN,
 	slotName string,
 ) (*Monitor, error) {
-	dbConn, err := openPgConnectionFromConfig(config.DBRawDSN, config.TLSConfig)
+	dbConn, err := openPgConnectionFromConfig(config)
 	if err != nil {
 		return nil, err
 	}
