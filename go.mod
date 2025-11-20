@@ -156,9 +156,9 @@ require (
 	github.com/timeplus-io/proton-go-driver/v2 v2.1.2
 	github.com/tmc/langchaingo v0.1.13
 	github.com/trinodb/trino-go-client v0.330.0
-	github.com/twmb/franz-go v1.20.3
-	github.com/twmb/franz-go/pkg/kadm v1.16.1
-	github.com/twmb/franz-go/pkg/kfake v0.0.0-20250625174842-669b18eeee83
+	github.com/twmb/franz-go v1.20.4
+	github.com/twmb/franz-go/pkg/kadm v1.17.1
+	github.com/twmb/franz-go/pkg/kfake v0.0.0-20251115002817-3affad808a82
 	github.com/twmb/franz-go/pkg/kmsg v1.12.0
 	github.com/twmb/franz-go/pkg/sr v1.5.0
 	github.com/twmb/go-cache v1.2.1
@@ -428,7 +428,7 @@ require (
 	github.com/jcmturner/gokrb5/v8 v8.4.4 // indirect
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
-	github.com/klauspost/compress v1.18.0
+	github.com/klauspost/compress v1.18.1
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/klauspost/pgzip v1.2.6 // indirect
 	github.com/kr/fs v0.1.0 // indirect
