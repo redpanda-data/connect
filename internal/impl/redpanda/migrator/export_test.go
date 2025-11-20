@@ -107,6 +107,7 @@ func NewGroupsMigratorForTesting(
 			Level: slog.LevelDebug,
 		}))),
 		topicIDs:        make(map[string]kadm.TopicID),
+		dstTopicIDs:     make(map[string]kadm.TopicID),
 		commitedOffsets: make(map[string]map[string]map[int32][2]int64),
 	}
 }

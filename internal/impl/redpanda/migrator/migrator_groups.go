@@ -200,7 +200,9 @@ type groupsMigrator struct {
 	metrics *groupsMetrics
 	log     *service.Logger
 
-	topicIDs map[string]kadm.TopicID
+	topicIDs    map[string]kadm.TopicID
+	dstTopicIDs map[string]kadm.TopicID
+
 	// commitedOffsets is a map of group -> topic -> partition -> (src.offset, dst.offset)
 	// it's used to avoid committing the same offset twice.
 	commitedOffsets map[string]map[string]map[int32][2]int64
@@ -386,10 +388,10 @@ func (m *groupsMigrator) Sync(ctx context.Context, getTopics func() []TopicMappi
 
 	m.log.Debugf("Consumer group migration: syncing groups %s", extractGroupNames(gcos))
 
-	if err := m.fillTopicIDs(ctx, topics); err != nil {
+	// Fill topic IDs
+	if err := fillTopicIDs(ctx, m.srcAdm, m.topicIDs, topics); err != nil {
 		return err
 	}
-
 	// List start and end offsets for topics
 	tso, err := m.srcAdm.ListStartOffsets(ctx, topics...)
 	if err != nil {
@@ -402,11 +404,16 @@ func (m *groupsMigrator) Sync(ctx context.Context, getTopics func() []TopicMappi
 
 	nameConv := nameConverterFromTopicMappings(mappings)
 
-	// List end offsets for destination topics
 	dstTopics := make([]string, len(topics))
 	for i := range topics {
 		dstTopics[i] = nameConv.ToDst(topics[i])
 	}
+
+	// Fill topic IDs
+	if err := fillTopicIDs(ctx, m.dstAdm, m.dstTopicIDs, dstTopics); err != nil {
+		return err
+	}
+	// List end offsets for destination topics
 	dteo, err := m.dstAdm.ListEndOffsets(ctx, dstTopics...)
 	if err != nil {
 		return err
@@ -671,10 +678,10 @@ func extractGroupNames(gcos []GroupOffset) []string {
 	return ss
 }
 
-func (m *groupsMigrator) fillTopicIDs(ctx context.Context, topics []string) error {
+func fillTopicIDs(ctx context.Context, adm *kadm.Client, m map[string]kadm.TopicID, topics []string) error {
 	var unknownTopics []string
 	for _, t := range topics {
-		if _, ok := m.topicIDs[t]; !ok {
+		if _, ok := m[t]; !ok {
 			unknownTopics = append(unknownTopics, t)
 		}
 	}
@@ -682,7 +689,7 @@ func (m *groupsMigrator) fillTopicIDs(ctx context.Context, topics []string) erro
 		return nil
 	}
 
-	details, err := m.srcAdm.ListTopics(ctx, unknownTopics...)
+	details, err := adm.ListTopics(ctx, unknownTopics...)
 	if err != nil {
 		return err
 	}
@@ -691,7 +698,7 @@ func (m *groupsMigrator) fillTopicIDs(ctx context.Context, topics []string) erro
 	}
 
 	for _, t := range unknownTopics {
-		m.topicIDs[t] = details[t].ID
+		m[t] = details[t].ID
 	}
 
 	return nil
@@ -792,8 +799,7 @@ func (m *groupsMigrator) tryFindExactOffset(
 			return unknownOffset, errors.New("negative delta")
 		}
 
-		var topicID kadm.TopicID // TODO: use real topic ID
-		r, err := readRecordAtOffset(ctx, m.dst, dstTopic, topicID,
+		r, err := readRecordAtOffset(ctx, m.dst, dstTopic, m.dstTopicIDs[dstTopic],
 			partition, o1, m.conf.FetchTimeout)
 		if err != nil {
 			return unknownOffset, fmt.Errorf("read record at offset: %w", err)
