@@ -43,8 +43,24 @@ const (
 	fieldMaxParallelSnapshotTables = "max_parallel_snapshot_tables"
 	fieldUnchangedToastValue       = "unchanged_toast_value"
 	fieldHeartbeatInterval         = "heartbeat_interval"
-	shutdownTimeout                = 5 * time.Second
+	fieldAWSIAMAuth                = "aws"
+	// FieldAWSIAMAuthEnabled enabled field.
+	FieldAWSIAMAuthEnabled = "enabled"
+	shutdownTimeout        = 5 * time.Second
 )
+
+func notImportedAWSOptFn(_ context.Context, awsConf *service.ParsedConfig, _ *pgconn.Config, _ *service.Logger) (TokenBuilder, error) {
+	if enabled, _ := awsConf.FieldBool(FieldAWSIAMAuthEnabled); !enabled {
+		return nil, nil
+	}
+	return nil, errors.New("unable to configure AWS authentication as this binary does not import components/aws")
+}
+
+// AWSOptFn is populated with the child `aws` package when imported.
+var AWSOptFn = notImportedAWSOptFn
+
+// TokenBuilder can be used for fetching passwords at runtime during connection (ie. IAM auth tokens)
+type TokenBuilder func(context.Context) error
 
 type asyncMessage struct {
 	msg   service.MessageBatch
@@ -126,6 +142,19 @@ This input adds the following metadata fields to each message:
 			Advanced()).
 		Field(service.NewTLSField("tls")).
 		Description("Using this field overrides the SSL/TLS settings in the environment and DSN.").
+		Field(service.NewObjectField(fieldAWSIAMAuth,
+			service.NewBoolField(FieldAWSIAMAuthEnabled).
+				Description("Enable AWS IAM authentication for PostgreSQL. When enabled, an IAM authentication token is generated and used as the password.").
+				Default(false),
+			service.NewStringField("region").
+				Description("The AWS region where the PostgreSQL instance is located. If no region is specified then the environment default will be used.").
+				Optional(),
+			service.NewStringField("endpoint").
+				Description("The PostgreSQL endpoint hostname (e.g., mydb.abc123.us-east-1.rds.amazonaws.com)."),
+		).
+			Description("AWS IAM authentication configuration for PostgreSQL instances. When enabled, IAM credentials are used to generate temporary authentication tokens instead of a static password.").
+			Advanced().
+			Optional()).
 		Field(service.NewAutoRetryNacksToggleField()).
 		Field(service.NewBatchPolicyField(fieldBatching))
 }
@@ -147,6 +176,8 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		batching                  service.BatchPolicy
 		unchangedToastValue       any
 		heartbeatInterval         time.Duration
+		iamAuthEnabled            bool
+		iamAuthTokenBuilder       TokenBuilder
 	)
 
 	if err := license.CheckRunningEnterprise(mgr); err != nil {
@@ -221,6 +252,9 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		return nil, err
 	}
 
+	awsConf := conf.Namespace(fieldAWSIAMAuth)
+	iamAuthEnabled, _ = awsConf.FieldBool(FieldAWSIAMAuthEnabled)
+
 	pgConnConfig, err := pgconn.ParseConfigWithOptions(dsn, pgconn.ParseConfigOptions{
 		// Don't support dynamic reading of password
 		GetSSLPassword: func(context.Context) string { return "" },
@@ -229,6 +263,11 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		return nil, err
 	}
 
+	logger := mgr.Logger()
+
+	if iamAuthTokenBuilder, err = AWSOptFn(context.Background(), awsConf, pgConnConfig, logger); err != nil {
+		return nil, err
+	}
 	if pgConnConfig.TLSConfig, err = conf.FieldTLS("tls"); err != nil {
 		return nil, err
 	}
@@ -244,11 +283,12 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 
 	i := &pgStreamInput{
 		streamConfig: &pglogicalstream.Config{
-			DBConfig:  pgConnConfig,
-			TLSConfig: pgConnConfig.TLSConfig,
-			DBRawDSN:  dsn,
-			DBSchema:  schema,
-			DBTables:  tables,
+			DBConfig:         pgConnConfig,
+			TLSConfig:        pgConnConfig.TLSConfig,
+			DBRawDSN:         dsn,
+			DBSchema:         schema,
+			DBTables:         tables,
+			RefreshAuthToken: iamAuthTokenBuilder,
 
 			IncludeTxnMarkers:        includeTxnMarkers,
 			ReplicationSlotName:      dbSlotName,
@@ -258,7 +298,7 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 			PgStandbyTimeout:         pgStandbyTimeout,
 			WalMonitorInterval:       walMonitorInterval,
 			MaxSnapshotWorkers:       maxParallelSnapshotTables,
-			Logger:                   mgr.Logger(),
+			Logger:                   logger,
 			UnchangedToastValue:      unchangedToastValue,
 			HeartbeatInterval:        heartbeatInterval,
 		},
@@ -271,6 +311,8 @@ func newPgStreamInput(conf *service.ParsedConfig, mgr *service.Resources) (s ser
 		snapshotMetrics: snapshotMetrics,
 		replicationLag:  replicationLag,
 		stopSig:         shutdown.NewSignaller(),
+
+		iamAuthEnabled: iamAuthEnabled,
 	}
 
 	// Has stopped is how we notify that we're not connected. This will get reset at connection time.
@@ -315,9 +357,19 @@ type pgStreamInput struct {
 	snapshotMetrics *service.MetricGauge
 	replicationLag  *service.MetricGauge
 	stopSig         *shutdown.Signaller
+
+	// IAM authentication fields
+	iamAuthEnabled bool
 }
 
 func (p *pgStreamInput) Connect(ctx context.Context) error {
+	// If IAM authentication is enabled, generate a new token
+	if p.iamAuthEnabled && p.streamConfig.RefreshAuthToken != nil {
+		if err := p.streamConfig.RefreshAuthToken(ctx); err != nil {
+			return fmt.Errorf("unable to generate IAM auth token: %w", err)
+		}
+	}
+
 	pgStream, err := pglogicalstream.NewPgStream(ctx, p.streamConfig)
 	if err != nil {
 		return fmt.Errorf("unable to create replication stream: %w", err)

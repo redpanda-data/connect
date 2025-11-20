@@ -89,6 +89,10 @@ input:
       root_cas: ""
       root_cas_file: ""
       client_certs: []
+    aws:
+      enabled: false
+      region: "" # No default (optional)
+      endpoint: "" # No default (required)
     auto_replay_nacks: true
     batching:
       count: 0
@@ -443,6 +447,39 @@ password: foo
 
 password: ${KEY_PASSWORD}
 ```
+
+=== `aws`
+
+AWS IAM authentication configuration for PostgreSQL instances. When enabled, IAM credentials are used to generate temporary authentication tokens instead of a static password.
+
+
+*Type*: `object`
+
+
+=== `aws.enabled`
+
+Enable AWS IAM authentication for PostgreSQL. When enabled, an IAM authentication token is generated and used as the password.
+
+
+*Type*: `bool`
+
+*Default*: `false`
+
+=== `aws.region`
+
+The AWS region where the PostgreSQL instance is located. If no region is specified then the environment default will be used.
+
+
+*Type*: `string`
+
+
+=== `aws.endpoint`
+
+The PostgreSQL endpoint hostname (e.g., mydb.abc123.us-east-1.rds.amazonaws.com).
+
+
+*Type*: `string`
+
 
 === `auto_replay_nacks`
 
