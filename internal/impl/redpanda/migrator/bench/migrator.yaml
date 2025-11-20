@@ -27,6 +27,7 @@ output:
     schema_registry:
       url: ""
       enabled: false
+    max_in_flight: 40
 
 metrics:
   prometheus:

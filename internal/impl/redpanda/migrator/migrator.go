@@ -37,6 +37,7 @@ const (
 	rmoFieldSyncTopicACLs          = "sync_topic_acls"
 	rmoFieldServerless             = "serverless"
 	rmoFieldProvenanceHeader       = "provenance_header"
+	rmoFieldMaxInFlight            = "max_in_flight"
 )
 
 func migratorInputConfig() *service.ConfigSpec {
@@ -89,7 +90,14 @@ the mapping between input and output components is done based on the label field
 The label of the input and output must match exactly for proper coordination.
 
 **Performance tuning for high throughput:** For workloads with high message rates or large messages, 
-adjust buffer sizes on the paired input component to improve throughput. See the input documentation for details.
+adjust the following settings to optimize throughput:
+
+On the paired input component:
+- `+"`partition_buffer_bytes: 2MB`"+` - increases per-partition buffer size
+- `+"`max_yield_batch_bytes: 1MB`"+` - allows larger batches to be yielded
+
+On this output component:
+- `+"`max_in_flight`"+` - set to the total number of partitions being copied in parallel (up to all partitions in the cluster)
 
 What gets synchronised:
 
@@ -254,6 +262,11 @@ output:
 			Description("Header name to add to migrated records indicating their source cluster. If empty, no provenance header is added.").
 			Default("redpanda-migrator-provenance").
 			Advanced()).
+		Field(service.NewIntField(rmoFieldMaxInFlight).
+			Description("Maximum number of batches to have in flight at any given time. For optimal throughput, set this to the total number of partitions being copied in parallel (up to all partitions in the cluster). Setting it higher than the number of consumed partitions is ineffective.").
+			Default(10).
+			Example("64  # For a cluster with 64 partitions").
+			Example("128 # For multiple topics with combined 128 partitions")).
 		LintRule(`
 root = [
   if this.key.or("") != "" {
@@ -352,8 +365,10 @@ func init() {
 			fw.MessageBatchToFranzRecords = m.messageBatchToFranzRecords
 			out = migratorBatchOutput{fw, m}
 
-			// Force single in-flight batch message to ensure data ordering
-			maxInFlight = 1
+			maxInFlight, err = pConf.FieldInt(rmoFieldMaxInFlight)
+			if err != nil {
+				return
+			}
 
 			return
 		})
