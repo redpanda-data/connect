@@ -424,6 +424,7 @@ func NewMigrator(mgr *service.Resources) *Migrator {
 			metrics:         newGroupsMetrics(mgr.Metrics()),
 			log:             log,
 			topicIDs:        make(map[string]kadm.TopicID),
+			dstTopicIDs:     make(map[string]kadm.TopicID),
 			commitedOffsets: make(map[string]map[string]map[int32][2]int64),
 		},
 		log:     log,
