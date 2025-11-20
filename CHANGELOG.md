@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - (SQL) Support `databricks` driver for all SQL components. (@rohan-darji)
+- Introduce a new `redpanda` tracing component that sends spans directly to a Redpanda Broker topic. (@rockwotj)
 
 ## 4.70.0 - 2025-11-13
 
