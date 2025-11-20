@@ -220,6 +220,7 @@ redis_streams             ,output    ,Redis Streams             ,0.0.0   ,certif
 redpanda                  ,cache     ,redpanda                  ,4.55.0  ,certified  ,n          ,y     ,y
 redpanda                  ,input     ,redpanda                  ,4.39.0  ,certified  ,n          ,y     ,y
 redpanda                  ,output    ,redpanda                  ,4.39.0  ,certified  ,n          ,y     ,y
+redpanda                  ,tracer    ,redpanda                  ,4.71.0  ,certified  ,n          ,y     ,y
 redpanda_common           ,input     ,redpanda_common           ,4.39.0  ,enterprise ,y          ,y     ,y
 redpanda_common           ,output    ,redpanda_common           ,4.39.0  ,enterprise ,y          ,y     ,y
 redpanda_data_transform   ,processor ,redpanda_data_transform   ,4.31.0  ,certified  ,n          ,n     ,n
