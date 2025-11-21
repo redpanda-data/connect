@@ -28,8 +28,6 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
-const OffsetHeader = offsetHeader
-
 var (
 	TopicDetailsWithClient = topicDetailsWithClient
 	DescribeACLs           = describeACLs
@@ -98,11 +96,12 @@ func NewGroupsMigratorForTesting(
 		t.Log(buf.String())
 	})
 	return &groupsMigrator{
-		conf:   conf,
-		src:    src,
-		srcAdm: srcAdm,
-		dst:    dst,
-		dstAdm: dstAdm,
+		conf:         conf,
+		offsetHeader: DefaultOffsetHeader,
+		src:          src,
+		srcAdm:       srcAdm,
+		dst:          dst,
+		dstAdm:       dstAdm,
 		log: service.NewLoggerFromSlog(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{
 			Level: slog.LevelDebug,
 		}))),

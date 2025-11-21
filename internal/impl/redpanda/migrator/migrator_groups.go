@@ -192,13 +192,14 @@ type GroupOffset struct {
 //   - Runs in one-shot or continuous sync modes
 //   - Provides metrics and caching for performance
 type groupsMigrator struct {
-	conf    GroupsMigratorConfig
-	src     *kgo.Client
-	srcAdm  *kadm.Client
-	dst     *kgo.Client
-	dstAdm  *kadm.Client
-	metrics *groupsMetrics
-	log     *service.Logger
+	conf         GroupsMigratorConfig
+	offsetHeader string
+	src          *kgo.Client
+	srcAdm       *kadm.Client
+	dst          *kgo.Client
+	dstAdm       *kadm.Client
+	metrics      *groupsMetrics
+	log          *service.Logger
 
 	topicIDs    map[string]kadm.TopicID
 	dstTopicIDs map[string]kadm.TopicID
@@ -436,7 +437,7 @@ func (m *groupsMigrator) Sync(ctx context.Context, getTopics func() []TopicMappi
 		if o1 == unknownOffset {
 			return errors.New("unknown offset")
 		}
-		if g.State == "Empty" {
+		if g.State == "Empty" && m.offsetHeader != "" {
 			eo, ok := dteo.Lookup(nameConv.ToDst(g.Topic), g.Partition)
 			if !ok {
 				m.log.Debugf("Consumer group migration: group '%s' topic '%s' partition %d: exact offset translation: end offset not found", g.Group, g.Topic, g.Partition)
@@ -771,15 +772,17 @@ func (m *groupsMigrator) translateOffset(
 // destination offset when possible.
 //
 // The method assumes destination records carry the source offset in the
-// header identified by offsetHeader. Starting from o1 (an approximate
+// header identified by m.offsetHeader. Starting from o1 (an approximate
 // translation result), it reads records at o1 and compares the embedded source
 // offset to the requested source offset. It then adjusts by the observed delta
 // and repeats until either:
 //
 //   - the exact offset is found (returns the refined destination offset)
 //   - the computed offset reaches the destination end offset eo (returns eo)
-//   - the computed offset exceeds bounds (returns unknownOffset with error), o
+//   - the computed offset exceeds bounds (returns unknownOffset with error)
 //   - the maximum number of attempts is exhausted (returns unknownOffset with error)
+//
+// This method should only be called when m.offsetHeader is not empty.
 func (m *groupsMigrator) tryFindExactOffset(
 	ctx context.Context,
 	dstTopic string,
@@ -804,7 +807,7 @@ func (m *groupsMigrator) tryFindExactOffset(
 		if err != nil {
 			return unknownOffset, fmt.Errorf("read record at offset: %w", err)
 		}
-		b, ok := kafka.GetHeaderValue(r.Headers, offsetHeader)
+		b, ok := kafka.GetHeaderValue(r.Headers, m.offsetHeader)
 		if !ok {
 			return unknownOffset, errors.New("offset header not found in record")
 		}
