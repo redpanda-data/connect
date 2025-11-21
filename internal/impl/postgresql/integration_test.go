@@ -202,17 +202,19 @@ pg_stream:
 `, databaseURL)
 
 	streamOutBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: TRACE`))
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: DEBUG`))
 	require.NoError(t, streamOutBuilder.AddInputYAML(template))
 
 	var outBatches []string
 	var outBatchMut sync.Mutex
 	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-		msgBytes, err := mb[0].AsBytes()
-		require.NoError(t, err)
 		outBatchMut.Lock()
-		outBatches = append(outBatches, string(msgBytes))
-		outBatchMut.Unlock()
+		defer outBatchMut.Unlock()
+		for _, msg := range mb {
+			msgBytes, err := msg.AsBytes()
+			require.NoError(t, err)
+			outBatches = append(outBatches, string(msgBytes))
+		}
 		return nil
 	}))
 
@@ -396,17 +398,19 @@ pg_stream:
 `, databaseURL)
 
 	streamOutBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: TRACE`))
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: DEBUG`))
 	require.NoError(t, streamOutBuilder.AddInputYAML(template))
 
 	var outBatches []string
 	var outBatchMut sync.Mutex
 	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-		msgBytes, err := mb[0].AsBytes()
-		require.NoError(t, err)
 		outBatchMut.Lock()
-		outBatches = append(outBatches, string(msgBytes))
-		outBatchMut.Unlock()
+		defer outBatchMut.Unlock()
+		for _, msg := range mb {
+			msgBytes, err := msg.AsBytes()
+			require.NoError(t, err)
+			outBatches = append(outBatches, string(msgBytes))
+		}
 		return nil
 	}))
 
@@ -541,13 +545,13 @@ pg_stream:
 `, databaseURL)
 
 	streamOutBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: TRACE`))
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: DEBUG`))
 	require.NoError(t, streamOutBuilder.AddInputYAML(template))
 
 	var outBatches []string
 	var outBatchMut sync.Mutex
-	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-		msgBytes, err := mb[0].AsBytes()
+	require.NoError(t, streamOutBuilder.AddConsumerFunc(func(_ context.Context, msg *service.Message) error {
+		msgBytes, err := msg.AsBytes()
 		require.NoError(t, err)
 		outBatchMut.Lock()
 		outBatches = append(outBatches, string(msgBytes))
@@ -646,11 +650,13 @@ pg_stream:
 			var outBatches []string
 			var outBatchMut sync.Mutex
 			require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-				msgBytes, err := mb[0].AsBytes()
-				require.NoError(t, err)
 				outBatchMut.Lock()
-				outBatches = append(outBatches, string(msgBytes))
-				outBatchMut.Unlock()
+				defer outBatchMut.Unlock()
+				for _, msg := range mb {
+					msgBytes, err := msg.AsBytes()
+					require.NoError(t, err)
+					outBatches = append(outBatches, string(msgBytes))
+				}
 				return nil
 			}))
 
@@ -784,17 +790,19 @@ pg_stream:
 			}
 
 			streamOutBuilder := service.NewStreamBuilder()
-			require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: TRACE`))
+			require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: DEBUG`))
 			require.NoError(t, streamOutBuilder.AddInputYAML(template))
 
 			var outBatches []string
 			var outBatchMut sync.Mutex
 			require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-				msgBytes, err := mb[0].AsBytes()
-				require.NoError(t, err)
 				outBatchMut.Lock()
-				outBatches = append(outBatches, string(msgBytes))
-				outBatchMut.Unlock()
+				defer outBatchMut.Unlock()
+				for _, msg := range mb {
+					msgBytes, err := msg.AsBytes()
+					require.NoError(t, err)
+					outBatches = append(outBatches, string(msgBytes))
+				}
 				return nil
 			}))
 
@@ -989,7 +997,7 @@ postgres_cdc:
 `, databaseURL)
 
 	streamOutBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: TRACE`))
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: DEBUG`))
 	require.NoError(t, streamOutBuilder.AddInputYAML(template))
 	require.NoError(t, streamOutBuilder.AddProcessorYAML(`mapping: 'root = @'`))
 
@@ -1094,7 +1102,7 @@ postgres_cdc:
     heartbeat_interval: 1s
     pg_standby_timeout: 1s
     tables:
-      - flights
+      - seq
 `, databaseURL)
 
 	writer := asyncroutine.NewPeriodic(time.Millisecond, func() {
@@ -1105,7 +1113,7 @@ postgres_cdc:
 	t.Cleanup(writer.Stop)
 
 	streamOutBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: TRACE`))
+	require.NoError(t, streamOutBuilder.SetLoggerYAML(`level: DEBUG`))
 	require.NoError(t, streamOutBuilder.AddInputYAML(template))
 	recvCount := &atomic.Int64{}
 	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(context.Context, service.MessageBatch) error {
@@ -1118,28 +1126,49 @@ postgres_cdc:
 	go func() {
 		require.NoError(t, streamOut.Run(t.Context()))
 	}()
-	time.Sleep(time.Second)
+
+	// Wait for replication slot to be created
+	t.Log("Waiting for replication slot to be created")
+	require.Eventually(t, func() bool {
+		rows, err := db.Query("SELECT slot_name FROM pg_replication_slots WHERE slot_name = 'test_slot_native_decoder'")
+		if err != nil {
+			t.Logf("Error querying replication slots: %v", err)
+			return false
+		}
+		defer rows.Close()
+		require.NoError(t, rows.Err())
+
+		exists := rows.Next()
+		if exists {
+			t.Log("Replication slot 'test_slot_native_decoder' has been created")
+		}
+		return exists
+	}, 10*time.Second, 500*time.Millisecond, "replication slot was not created in time")
 
 	getRestartLSN := func() string {
-		for range 10 {
-			rows, err := db.Query("SELECT restart_lsn FROM pg_replication_slots WHERE slot_name = 'test_slot_native_decoder'")
-			require.NoError(t, err)
-			for rows.Next() {
-				var lsn string
-				require.NoError(t, rows.Scan(&lsn))
-				return lsn
-			}
-			require.NoError(t, rows.Err())
-			time.Sleep(1 * time.Second)
+		rows, err := db.Query("SELECT confirmed_flush_lsn FROM pg_replication_slots WHERE slot_name = 'test_slot_native_decoder'")
+		require.NoError(t, err)
+		defer rows.Close()
+
+		for rows.Next() {
+			var lsn string
+			require.NoError(t, rows.Scan(&lsn))
+			return lsn
 		}
+		require.NoError(t, rows.Err())
 		require.FailNow(t, "unable to get replication slot position")
 		return ""
 	}
 
-	// Make sure the LSN advances even when no messages are being emitted
+	// Make sure the LSN advances even when no messages are being emitted (via heartbeat)
 	startLSN := getRestartLSN()
+	t.Logf("Initial confirmed_flush_lsn: %s", startLSN)
 	require.Eventually(t, func() bool {
-		return getRestartLSN() > startLSN
-	}, 5*time.Second, 500*time.Millisecond)
+		currentLSN := getRestartLSN()
+		t.Logf("Current confirmed_flush_lsn: %s, start: %s", currentLSN, startLSN)
+		return currentLSN > startLSN
+	}, 10*time.Second, 500*time.Millisecond, "LSN did not advance within timeout")
+
+	t.Log("LSN successfully advanced, stopping stream")
 	require.NoError(t, streamOut.StopWithin(time.Second*10))
 }
