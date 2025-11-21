@@ -31,6 +31,7 @@ import (
 	"github.com/Jeffail/shutdown"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/utils/netutil"
 	"github.com/redpanda-data/connect/v4/internal/gateway"
 )
 
@@ -149,7 +150,8 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 					}),
 				service.NewMetadataFilterField(hsiFieldResponseExtractMetadata).
 					Description("Specify criteria for which metadata values are added to the response as headers."),
-			).
+			),
+			netutil.ListenerConfigSpec().
 				Description("Customize messages returned via xref:guides:sync_responses.adoc[synchronous responses].").
 				Advanced(),
 		)
@@ -176,6 +178,7 @@ type Input struct {
 	log  *service.Logger
 	mgr  *service.Resources
 
+	lc     netutil.ListenerConfig
 	mux    *mux.Router
 	server *http.Server
 
@@ -214,6 +217,10 @@ func InputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (*Inpu
 		}
 	}
 
+	if h.lc, err = netutil.ListenerConfigFromParsed(pConf.Namespace("tcp")); err != nil {
+		return nil, fmt.Errorf("parse tcp config: %w", err)
+	}
+
 	return &h, nil
 }
 
@@ -244,14 +251,22 @@ func (ri *Input) Connect(_ context.Context) error {
 	ri.mux = mux.NewRouter()
 	ri.mux.PathPrefix(ri.conf.Path).Handler(ri.createHandler())
 
+	var lc net.ListenConfig
+	if err := netutil.DecorateListenerConfig(&lc, ri.lc); err != nil {
+		return fmt.Errorf("failed to configure listener: %w", err)
+	}
+
+	l, err := lc.Listen(context.Background(), "tcp", ri.conf.Address)
+	if err != nil {
+		return fmt.Errorf("failed to bind to address %s: %w", ri.conf.Address, err)
+	}
 	ri.server = &http.Server{Addr: ri.conf.Address, Handler: ri.mux}
 
 	go func() {
 		defer ri.shutSig.TriggerHasStopped()
-
 		ri.log.With("address", ri.conf.Address+ri.conf.Path).Info("Receiving HTTP messages")
-		if err := ri.server.ListenAndServe(); err != http.ErrServerClosed {
-			ri.log.With("error").Error("Server error")
+		if err := ri.server.Serve(l); errors.Is(err, http.ErrServerClosed) {
+			ri.log.With("error", err).Error("Server error")
 		}
 	}()
 	return nil

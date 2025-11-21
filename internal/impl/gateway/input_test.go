@@ -198,3 +198,147 @@ func readMultipart(res *http.Response) ([]string, error) {
 
 	return output, nil
 }
+
+// TestHTTPServerReload tests that the server can be restarted on the same port
+// without getting stuck in a "not ready" state. This simulates config reload behavior.
+func TestHTTPServerReload(t *testing.T) {
+	// Use a random available port
+	t.Setenv("REDPANDA_CLOUD_GATEWAY_ADDRESS", "127.0.0.1:0")
+
+	tCtx, done := context.WithTimeout(t.Context(), time.Second*30)
+	defer done()
+
+	// First server instance
+	pConf1, err := gateway.InputSpec().ParseYAML(`
+path: /testpost
+tcp:
+  reuse_port: true
+`, nil)
+	require.NoError(t, err)
+
+	h1, err := gateway.InputFromParsed(pConf1, service.MockResources())
+	require.NoError(t, err)
+
+	// Connect first server (binds to port)
+	require.NoError(t, h1.Connect(tCtx))
+
+	// Read handler goroutine for first server
+	received1 := make(chan struct{})
+	go func() {
+		batch, aFn, err := h1.ReadBatch(tCtx)
+		if err != nil {
+			return
+		}
+		require.NoError(t, aFn(tCtx, nil))
+		require.Len(t, batch, 1)
+		close(received1)
+	}()
+
+	// Give server time to start listening
+	time.Sleep(100 * time.Millisecond)
+
+	// Get the actual bound address from the first server
+	// Since we used port 0, we need to extract the actual port
+	// For this test, we'll use a fixed port instead
+	t.Setenv("REDPANDA_CLOUD_GATEWAY_ADDRESS", "127.0.0.1:19283")
+
+	// Recreate with fixed port
+	h1.Close(tCtx)
+
+	pConf1, err = gateway.InputSpec().ParseYAML(`
+path: /testpost
+tcp:
+  reuse_port: true
+`, nil)
+	require.NoError(t, err)
+
+	h1, err = gateway.InputFromParsed(pConf1, service.MockResources())
+	require.NoError(t, err)
+
+	require.NoError(t, h1.Connect(tCtx))
+
+	go func() {
+		batch, aFn, err := h1.ReadBatch(tCtx)
+		if err != nil {
+			return
+		}
+		require.NoError(t, aFn(tCtx, nil))
+		require.Len(t, batch, 1)
+		close(received1)
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Send request to first server
+	res, err := http.Post(
+		"http://127.0.0.1:19283/testpost",
+		"application/octet-stream",
+		bytes.NewBufferString("test message 1"),
+	)
+	require.NoError(t, err)
+	require.Equal(t, 200, res.StatusCode)
+	res.Body.Close()
+
+	// Wait for message to be received
+	select {
+	case <-received1:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Timeout waiting for first message")
+	}
+
+	// Close first server (releases port)
+	closeCtx, closeDone := context.WithTimeout(context.Background(), 5*time.Second)
+	defer closeDone()
+	require.NoError(t, h1.Close(closeCtx))
+
+	// Small delay to ensure port is fully released
+	time.Sleep(100 * time.Millisecond)
+
+	// Create second server instance on the same address (simulating reload)
+	pConf2, err := gateway.InputSpec().ParseYAML(`
+path: /testpost
+tcp:
+  reuse_port: true
+`, nil)
+	require.NoError(t, err)
+
+	h2, err := gateway.InputFromParsed(pConf2, service.MockResources())
+	require.NoError(t, err)
+
+	// This should succeed due to SO_REUSEADDR
+	require.NoError(t, h2.Connect(tCtx), "Failed to bind to port after reload - this is the bug we're fixing")
+
+	// Read handler goroutine for second server
+	received2 := make(chan struct{})
+	go func() {
+		batch, aFn, err := h2.ReadBatch(tCtx)
+		if err != nil {
+			return
+		}
+		require.NoError(t, aFn(tCtx, nil))
+		require.Len(t, batch, 1)
+		close(received2)
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Send request to second server - should work (not return 503)
+	res, err = http.Post(
+		"http://127.0.0.1:19283/testpost",
+		"application/octet-stream",
+		bytes.NewBufferString("test message 2"),
+	)
+	require.NoError(t, err)
+	require.Equal(t, 200, res.StatusCode, "Server returned non-200 status after reload")
+	res.Body.Close()
+
+	// Wait for message to be received
+	select {
+	case <-received2:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Timeout waiting for second message - server may not be accepting connections after reload")
+	}
+
+	// Cleanup
+	require.NoError(t, h2.Close(closeCtx))
+}
