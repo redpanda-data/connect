@@ -40,7 +40,7 @@ require (
 	github.com/IBM/sarama v1.46.2
 	github.com/Jeffail/checkpoint v1.1.0
 	github.com/Jeffail/gabs/v2 v2.7.0
-	github.com/Jeffail/shutdown v1.0.0
+	github.com/Jeffail/shutdown v1.1.0
 	github.com/Masterminds/semver v1.5.0
 	github.com/Masterminds/squirrel v1.5.4
 	github.com/PaesslerAG/gval v1.2.4
@@ -138,7 +138,7 @@ require (
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9
 	github.com/redis/go-redis/v9 v9.14.0
-	github.com/redpanda-data/benthos/v4 v4.60.0
+	github.com/redpanda-data/benthos/v4 v4.61.0
 	github.com/redpanda-data/common-go/redpanda-otel-exporter v0.1.0
 	github.com/redpanda-data/common-go/secrets v0.1.4
 	github.com/redpanda-data/connect/public/bundle/free/v4 v4.66.1
