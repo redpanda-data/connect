@@ -180,10 +180,10 @@ require (
 	go.opentelemetry.io/otel/trace v1.38.0
 	go.starlark.net v0.0.0-20250318223901-d9371fef63fe
 	go.uber.org/multierr v1.11.0
-	golang.org/x/crypto v0.43.1-0.20251009181029-0b7aa0cfb07b
-	golang.org/x/net v0.46.0
-	golang.org/x/sync v0.17.0
-	golang.org/x/text v0.30.0
+	golang.org/x/crypto v0.45.0
+	golang.org/x/net v0.47.0
+	golang.org/x/sync v0.18.0
+	golang.org/x/text v0.31.0
 	google.golang.org/api v0.252.0
 	google.golang.org/protobuf v1.36.10
 	modernc.org/sqlite v1.39.1
@@ -281,7 +281,7 @@ require (
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/exp v0.0.0-20251002181428-27f1f14c8bb9 // indirect
-	golang.org/x/telemetry v0.0.0-20251001141935-4eae98a72453 // indirect
+	golang.org/x/telemetry v0.0.0-20251008203120-078029d740a8 // indirect
 	gopkg.in/go-jose/go-jose.v2 v2.6.3 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	gotest.tools/gotestsum v1.8.2 // indirect
@@ -504,12 +504,12 @@ require (
 	go.opentelemetry.io/proto/otlp v1.9.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
-	golang.org/x/mod v0.28.0 // indirect
+	golang.org/x/mod v0.29.0 // indirect
 	golang.org/x/oauth2 v0.32.0
-	golang.org/x/sys v0.37.0
-	golang.org/x/term v0.36.0 // indirect
+	golang.org/x/sys v0.38.0
+	golang.org/x/term v0.37.0 // indirect
 	golang.org/x/time v0.13.0 // indirect
-	golang.org/x/tools v0.37.0 // indirect
+	golang.org/x/tools v0.38.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
 	google.golang.org/genai v1.30.0
 	google.golang.org/genproto v0.0.0-20251002232023-7c0ddcbb5797 // indirect
