@@ -149,6 +149,7 @@ output:
     sync_topic_acls: false
     serverless: false
     provenance_header: redpanda-migrator-provenance
+    offset_header: redpanda-migrator-offset
     max_in_flight: 10
 ```
 
@@ -1563,6 +1564,15 @@ Header name to add to migrated records indicating their source cluster. If empty
 *Type*: `string`
 
 *Default*: `"redpanda-migrator-provenance"`
+
+=== `offset_header`
+
+Header name to add to migrated records containing the source offset for exact consumer group migration. If empty, no offset header is added and exact offset translation is disabled. When disabled, consumer groups are still migrated but precision for empty groups may not be ideal if there are multiple records with the same timestamp, as timestamps have millisecond resolution. When consumer group migration is disabled, this header is not added.
+
+
+*Type*: `string`
+
+*Default*: `"redpanda-migrator-offset"`
 
 === `max_in_flight`
 

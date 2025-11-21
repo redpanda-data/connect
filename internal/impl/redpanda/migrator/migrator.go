@@ -38,7 +38,14 @@ const (
 	rmoFieldSyncTopicACLs          = "sync_topic_acls"
 	rmoFieldServerless             = "serverless"
 	rmoFieldProvenanceHeader       = "provenance_header"
+	rmoFieldOffsetHeader           = "offset_header"
 	rmoFieldMaxInFlight            = "max_in_flight"
+)
+
+// Default header names
+const (
+	DefaultProvenanceHeader = "redpanda-migrator-provenance"
+	DefaultOffsetHeader     = "redpanda-migrator-offset"
 )
 
 func migratorInputConfig() *service.ConfigSpec {
@@ -261,7 +268,14 @@ output:
 			Advanced()).
 		Field(service.NewStringField(rmoFieldProvenanceHeader).
 			Description("Header name to add to migrated records indicating their source cluster. If empty, no provenance header is added.").
-			Default("redpanda-migrator-provenance").
+			Default(DefaultProvenanceHeader).
+			Advanced()).
+		Field(service.NewStringField(rmoFieldOffsetHeader).
+			Description("Header name to add to migrated records containing the source offset for exact consumer group migration. " +
+				"If empty, no offset header is added and exact offset translation is disabled. " +
+				"When disabled, consumer groups are still migrated but precision for empty groups may not be ideal if there are multiple records with the same timestamp, as timestamps have millisecond resolution. " +
+				"When consumer group migration is disabled, this header is not added.").
+			Default(DefaultOffsetHeader).
 			Advanced()).
 		Field(service.NewIntField(rmoFieldMaxInFlight).
 			Description("Maximum number of batches to have in flight at any given time. For optimal throughput, set this to the total number of partitions being copied in parallel (up to all partitions in the cluster). Setting it higher than the number of consumed partitions is ineffective.").
@@ -394,6 +408,7 @@ type Migrator struct {
 	log    *service.Logger
 
 	provenanceHeader string
+	offsetHeader     string
 	plumbing         uint8
 	stopSig          *shutdown.Signaller
 
@@ -456,6 +471,11 @@ func (m *Migrator) initOutputFromParsed(pConf *service.ParsedConfig, mgr *servic
 	}
 
 	m.provenanceHeader, err = pConf.FieldString(rmoFieldProvenanceHeader)
+	if err != nil {
+		return err
+	}
+
+	m.offsetHeader, err = pConf.FieldString(rmoFieldOffsetHeader)
 	if err != nil {
 		return err
 	}
@@ -524,6 +544,7 @@ func (m *Migrator) onOutputConnected(_ context.Context, fw franzWriter) error {
 	}
 
 	m.mu.Lock()
+	m.groups.offsetHeader = m.offsetHeader
 	m.dstAdm = dstAdm
 	m.dstClusterID = []byte(metadata.Cluster)
 	m.groups.dst = clientInfo.Client
@@ -657,10 +678,10 @@ func (m *Migrator) messageBatchToFranzRecords(batch service.MessageBatch) ([]kgo
 			}
 		}
 
-		// Offset header (required when consumer group migration is enabled).
+		// Offset header (required when consumer group migration is enabled and offset header is configured).
 		// This is hop-by-hop header used for exact consumer group offset
 		// migration of empty groups.
-		if m.groups.enabled() {
+		if m.groups.enabled() && m.offsetHeader != "" {
 			if offsetVal, ok := msg.MetaGetMut("kafka_offset"); !ok {
 				return nil, errors.New("kafka_offset metadata not found")
 			} else {
@@ -671,7 +692,7 @@ func (m *Migrator) messageBatchToFranzRecords(batch service.MessageBatch) ([]kgo
 				if offsetInt < 0 {
 					return nil, errors.New("kafka_offset metadata is negative")
 				}
-				r.Headers = kafka.SetHeaderValue(r.Headers, offsetHeader, encodeOffsetHeader(offsetInt))
+				r.Headers = kafka.SetHeaderValue(r.Headers, m.offsetHeader, encodeOffsetHeader(offsetInt))
 			}
 		}
 
@@ -738,8 +759,6 @@ func updateSchemaID(b []byte, schemaID int) error {
 	var ch sr.ConfluentHeader
 	return ch.UpdateID(b, uint32(schemaID))
 }
-
-const offsetHeader = "redpanda-migrator-offset"
 
 func encodeOffsetHeader(offsetInt int) []byte {
 	return binary.BigEndian.AppendUint64(nil, uint64(offsetInt))

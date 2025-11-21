@@ -447,7 +447,7 @@ func TestIntegrationGroupsOffsetSync(t *testing.T) {
 		addOffsetHeader := func() func(*kgo.Record) {
 			n := 0
 			return func(r *kgo.Record) {
-				r.Headers = kafka.SetHeaderValue(r.Headers, migrator.OffsetHeader, migrator.EncodeOffsetHeader(n))
+				r.Headers = kafka.SetHeaderValue(r.Headers, migrator.DefaultOffsetHeader, migrator.EncodeOffsetHeader(n))
 				n++
 			}
 		}
@@ -521,7 +521,7 @@ func TestIntegrationGroupsOffsetSync(t *testing.T) {
 		addOffsetHeader := func() func(*kgo.Record) {
 			n := 0
 			return func(r *kgo.Record) {
-				r.Headers = kafka.SetHeaderValue(r.Headers, migrator.OffsetHeader, migrator.EncodeOffsetHeader(n))
+				r.Headers = kafka.SetHeaderValue(r.Headers, migrator.DefaultOffsetHeader, migrator.EncodeOffsetHeader(n))
 				n++
 			}
 		}
