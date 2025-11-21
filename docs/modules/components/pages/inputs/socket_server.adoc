@@ -58,6 +58,7 @@ Options:
 , `tcp`
 , `udp`
 , `tls`
+, `unixgram`
 .
 
 === `address`
