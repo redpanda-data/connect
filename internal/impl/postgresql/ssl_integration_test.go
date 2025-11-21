@@ -132,10 +132,18 @@ hostssl all all all cert clientcert=%s
 	})
 
 	// Overwrite pg_hba.conf to enforce SSL
-	_, err = resource.Exec([]string{"bash", "-c", fmt.Sprintf("echo '%s' > /var/lib/postgresql/data/pg_hba.conf", pgHbaContent)}, dockertest.ExecOptions{})
-	require.NoError(t, err)
-	_, err = resource.Exec([]string{"pg_ctl", "reload"}, dockertest.ExecOptions{})
-	require.NoError(t, err)
+	for range 10 {
+		time.Sleep(1 * time.Second)
+		_, err = resource.Exec([]string{"bash", "-c", fmt.Sprintf("echo '%s' > /var/lib/postgresql/data/pg_hba.conf", pgHbaContent)}, dockertest.ExecOptions{})
+		if err != nil {
+			continue
+		}
+		_, err = resource.Exec([]string{"pg_ctl", "reload"}, dockertest.ExecOptions{})
+		if err != nil {
+			continue
+		}
+	}
+	require.NoError(t, err, "Exhausted all retires updating container configuration")
 
 	hostAndPort := resource.GetHostPort("5432/tcp")
 	dsn := fmt.Sprintf("user=testuser password='l]YLSc|4[i56_@{gY' dbname=dbname sslmode=disable host=%s port=%s", strings.Split(hostAndPort, ":")[0], strings.Split(hostAndPort, ":")[1])
@@ -213,11 +221,13 @@ postgres_cdc:
 	var outBatches []string
 	var outBatchMut sync.Mutex
 	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-		msgBytes, err := mb[0].AsBytes()
-		require.NoError(t, err)
 		outBatchMut.Lock()
-		outBatches = append(outBatches, string(msgBytes))
-		outBatchMut.Unlock()
+		defer outBatchMut.Unlock()
+		for _, msg := range mb {
+			msgBytes, err := msg.AsBytes()
+			require.NoError(t, err)
+			outBatches = append(outBatches, string(msgBytes))
+		}
 		return nil
 	}))
 
