@@ -3,12 +3,20 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.71.0 - TBD
+## 4.71.0 - 2025-11-21
 
 ### Added
 
-- (SQL) Support `databricks` driver for all SQL components. (@rohan-darji)
-- Introduce a new `redpanda` tracing component that sends spans directly to a Redpanda Broker topic. (@rockwotj)
+- Introduce a new `redpanda` tracing component that sends spans directly to a Redpanda Broker topic (@rockwotj)
+- `sql_select`, `sql_raw`, `sql_insert`: Support `databricks` driver for all SQL components (@rohan-darji)
+- `postgres_cdc`: Added support for IAM authenticated users (@josephwoodward)
+- `redpanda_migrator`: Added `max_in_flight` config parameter (@mmatczuk)
+
+### Fixed
+
+- `redpanda_migrator`: Exact migration of empty consumer groups (@mmatczuk)
+- `redpanda_migrator`: Fix record reading in consumer group migraton for some multi-node setups (@mmatczuk)
+- `protobuf_processor`: Fix decode Hyperpb fallback (@jeffail)
 
 ## 4.70.0 - 2025-11-13
 
