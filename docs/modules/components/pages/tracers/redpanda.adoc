@@ -83,6 +83,7 @@ tracer:
     format: json
     service: redpanda-connect
     tags: {}
+    use_redpanda_cloud_service_account: false
     sampling:
       enabled: false
       ratio: 0.05 # No default (optional)
@@ -754,6 +755,15 @@ A map of tags to add to all tracing spans.
 *Type*: `object`
 
 *Default*: `{}`
+
+=== `use_redpanda_cloud_service_account`
+
+Use the Redpanda Cloud service account for authentication. This is a Redpanda Cloud only feature that uses OAuth2 credentials provided via CLI flags (--x-redpanda-cloud-service-account-*). When enabled, explicit SASL configuration is not required.
+
+
+*Type*: `bool`
+
+*Default*: `false`
 
 === `sampling`
 

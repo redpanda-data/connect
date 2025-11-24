@@ -16,6 +16,7 @@ package redpanda
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 
@@ -153,7 +154,7 @@ func tracerConfigFromParsed(conf *service.ParsedConfig, logger *service.Logger) 
 			// Check if SASL was actually configured (not just the field existing)
 			saslList, _ := conf.FieldObjectList("sasl")
 			if len(saslList) > 0 {
-				return nil, fmt.Errorf("use_redpanda_cloud_service_account cannot be used together with explicit sasl configuration")
+				return nil, errors.New("use_redpanda_cloud_service_account cannot be used together with explicit sasl configuration")
 			}
 		}
 	}
@@ -181,7 +182,7 @@ func tracerConfigFromParsed(conf *service.ParsedConfig, logger *service.Logger) 
 		}
 
 		// Create OAuth SASL mechanism using the token source
-		oauthMech := oauth.Oauth(func(ctx context.Context) (oauth.Auth, error) {
+		oauthMech := oauth.Oauth(func(context.Context) (oauth.Auth, error) {
 			token, err := tokenSource.Token()
 			if err != nil {
 				return oauth.Auth{}, fmt.Errorf("failed to obtain OAuth2 token: %w", err)
