@@ -24,6 +24,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/aws/config"
+	"github.com/redpanda-data/connect/v4/internal/serviceaccount"
 
 	"github.com/twmb/franz-go/pkg/sasl"
 	"github.com/twmb/franz-go/pkg/sasl/oauth"
@@ -42,12 +43,13 @@ var AWSSASLFromConfigFn = notImportedAWSFn
 func SASLFields() *service.ConfigField {
 	return service.NewObjectListField("sasl",
 		service.NewStringAnnotatedEnumField("mechanism", map[string]string{
-			"none":          "Disable sasl authentication",
-			"PLAIN":         "Plain text authentication.",
-			"OAUTHBEARER":   "OAuth Bearer based authentication.",
-			"SCRAM-SHA-256": "SCRAM based authentication as specified in RFC5802.",
-			"SCRAM-SHA-512": "SCRAM based authentication as specified in RFC5802.",
-			"AWS_MSK_IAM":   "AWS IAM based authentication as specified by the 'aws-msk-iam-auth' java library.",
+			"none":                           "Disable sasl authentication",
+			"PLAIN":                          "Plain text authentication.",
+			"OAUTHBEARER":                    "OAuth Bearer based authentication.",
+			"SCRAM-SHA-256":                  "SCRAM based authentication as specified in RFC5802.",
+			"SCRAM-SHA-512":                  "SCRAM based authentication as specified in RFC5802.",
+			"AWS_MSK_IAM":                    "AWS IAM based authentication as specified by the 'aws-msk-iam-auth' java library.",
+			"REDPANDA_CLOUD_SERVICE_ACCOUNT": "Redpanda Cloud Service Account authentication when running in Redpanda Cloud.",
 		}).
 			Description("The SASL mechanism to use."),
 		service.NewStringField("username").
@@ -112,6 +114,9 @@ func SASLMechanismsFromConfig(c *service.ParsedConfig) ([]sasl.Mechanism, error)
 				mechanisms = append(mechanisms, mechanism)
 			case "AWS_MSK_IAM":
 				mechanism, err = AWSSASLFromConfigFn(mConf)
+				mechanisms = append(mechanisms, mechanism)
+			case "REDPANDA_CLOUD_SERVICE_ACCOUNT":
+				mechanism, err = redpandaCloudSaslFromConfig(mConf)
 				mechanisms = append(mechanisms, mechanism)
 			default:
 				err = fmt.Errorf("unknown mechanism: %v", mechStr)
@@ -195,6 +200,20 @@ func scram512SaslFromConfig(c *service.ParsedConfig) (sasl.Mechanism, error) {
 			User: username,
 			Pass: password,
 		}, nil
+	}), nil
+}
+
+func redpandaCloudSaslFromConfig(_ *service.ParsedConfig) (sasl.Mechanism, error) {
+	tokenSource, err := serviceaccount.GetTokenSource()
+	if err != nil {
+		return nil, fmt.Errorf("missing Redpanda Cloud service account: %w", err)
+	}
+	return oauth.Oauth(func(context.Context) (oauth.Auth, error) {
+		token, err := tokenSource.Token()
+		if err != nil {
+			return oauth.Auth{}, err
+		}
+		return oauth.Auth{Token: token.AccessToken}, nil
 	}), nil
 }
 

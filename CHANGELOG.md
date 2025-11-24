@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.72.0 - TBD
+
+### Added
+
+- Added Redpanda Cloud service account authentication to all redpanda/kafka based components (@rockwotj)
+
 ## 4.71.0 - 2025-11-21
 
 ### Added
