@@ -15,6 +15,7 @@
 package redpanda
 
 import (
+	"context"
 	"fmt"
 	"slices"
 
@@ -22,6 +23,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.9.0"
 
 	"github.com/twmb/franz-go/pkg/kgo"
+	"github.com/twmb/franz-go/pkg/sasl/oauth"
 	"go.opentelemetry.io/otel/sdk/resource"
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
@@ -30,6 +32,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
+	"github.com/redpanda-data/connect/v4/internal/serviceaccount"
 	"github.com/redpanda-data/connect/v4/internal/tracing"
 )
 
@@ -55,6 +58,10 @@ func tracerSpec() *service.ConfigSpec {
 			service.NewStringMapField("tags").
 				Description("A map of tags to add to all tracing spans.").
 				Default(map[string]any{}).
+				Advanced(),
+			service.NewBoolField("use_redpanda_cloud_service_account").
+				Description("Use the Redpanda Cloud service account for authentication. This is a Redpanda Cloud only feature that uses OAuth2 credentials provided via CLI flags (--x-redpanda-cloud-service-account-*). When enabled, explicit SASL configuration is not required.").
+				Default(false).
 				Advanced(),
 			service.NewObjectField("sampling",
 				service.NewBoolField("enabled").
@@ -135,6 +142,22 @@ func tracerConfigFromParsed(conf *service.ParsedConfig, logger *service.Logger) 
 		return nil, fmt.Errorf("unknown `format` value: %q", formatStr)
 	}
 
+	useCloudServiceAccount, err := conf.FieldBool("use_redpanda_cloud_service_account")
+	if err != nil {
+		return nil, err
+	}
+
+	// Validate conflicting auth configuration before parsing
+	if useCloudServiceAccount {
+		if conf.Contains("sasl") {
+			// Check if SASL was actually configured (not just the field existing)
+			saslList, _ := conf.FieldObjectList("sasl")
+			if len(saslList) > 0 {
+				return nil, fmt.Errorf("use_redpanda_cloud_service_account cannot be used together with explicit sasl configuration")
+			}
+		}
+	}
+
 	connDeets, err := kafka.FranzConnectionDetailsFromConfig(conf, logger)
 	if err != nil {
 		return nil, err
@@ -145,6 +168,33 @@ func tracerConfigFromParsed(conf *service.ParsedConfig, logger *service.Logger) 
 		return nil, err
 	}
 
+	// Build kafka options
+	kafkaOpts := slices.Concat(connDeets.FranzOpts(), producerOpts)
+
+	// Handle cloud service account authentication
+	if useCloudServiceAccount {
+
+		// Get the OAuth2 token source from the global service account singleton
+		tokenSource, err := serviceaccount.GetTokenSource()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get Redpanda Cloud service account token source: %w (this feature requires --x-redpanda-cloud-service-account-* CLI flags)", err)
+		}
+
+		// Create OAuth SASL mechanism using the token source
+		oauthMech := oauth.Oauth(func(ctx context.Context) (oauth.Auth, error) {
+			token, err := tokenSource.Token()
+			if err != nil {
+				return oauth.Auth{}, fmt.Errorf("failed to obtain OAuth2 token: %w", err)
+			}
+			return oauth.Auth{
+				Token: token.AccessToken,
+			}, nil
+		})
+
+		// Prepend the OAuth mechanism to kafka options
+		kafkaOpts = append([]kgo.Opt{kgo.SASL(oauthMech)}, kafkaOpts...)
+	}
+
 	return &tracer{
 		serviceName:   serviceName,
 		topic:         topic,
@@ -152,7 +202,7 @@ func tracerConfigFromParsed(conf *service.ParsedConfig, logger *service.Logger) 
 		tags:          tags,
 		sampling:      sampling,
 		brokers:       brokers,
-		opts:          slices.Concat(connDeets.FranzOpts(), producerOpts),
+		opts:          kafkaOpts,
 		format:        format,
 	}, nil
 }
