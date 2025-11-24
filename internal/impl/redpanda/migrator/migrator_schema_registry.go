@@ -66,8 +66,9 @@ const (
 	srObjectField = "schema_registry"
 
 	// Schema registry fields
-	srFieldURL = "url"
-	srFieldTLS = "tls"
+	srFieldURL     = "url"
+	srFieldTimeout = "timeout"
+	srFieldTLS     = "tls"
 
 	// Schema registry migrator fields
 	srFieldEnabled        = "enabled"
@@ -89,6 +90,10 @@ func schemaRegistryField(extraFields ...*service.ConfigField) *service.ConfigFie
 				Description("The base URL of the schema registry service. Required for schema migration functionality.").
 				Example("http://localhost:8081").
 				Example("https://schema-registry.example.com:8081"),
+			service.NewDurationField(srFieldTimeout).
+				Description("HTTP client timeout for schema registry requests.").
+				Default("5s").
+				Optional(),
 			service.NewTLSToggledField(srFieldTLS),
 		},
 		service.NewHTTPRequestAuthSignerFields()...)
@@ -172,6 +177,11 @@ func schemaRegistryClientAndURLFromParsed(pConf *service.ParsedConfig, mgr *serv
 		return nil, "", err
 	}
 
+	timeout, err := pConf.FieldDuration(srFieldTimeout)
+	if err != nil {
+		return nil, "", err
+	}
+
 	reqSigner, err := pConf.HTTPRequestAuthSignerFromParsed()
 	if err != nil {
 		return nil, "", err
@@ -185,7 +195,12 @@ func schemaRegistryClientAndURLFromParsed(pConf *service.ParsedConfig, mgr *serv
 		tlsConf = nil
 	}
 
-	opts := []sr.ClientOpt{sr.URLs(srURL.String())}
+	opts := []sr.ClientOpt{
+		sr.HTTPClient(&http.Client{Timeout: timeout}),
+		sr.UserAgent("franz-go"),
+		sr.URLs(srURL.String()),
+	}
+
 	if tlsConf != nil {
 		opts = append(opts, sr.DialTLSConfig(tlsConf))
 	}

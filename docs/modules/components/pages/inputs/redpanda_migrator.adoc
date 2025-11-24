@@ -47,6 +47,7 @@ input:
     consumer_group: "" # No default (optional)
     schema_registry:
       url: http://localhost:8081 # No default (required)
+      timeout: 5s
     auto_replay_nacks: true
 ```
 
@@ -101,6 +102,7 @@ input:
     max_yield_batch_bytes: 32KB
     schema_registry:
       url: http://localhost:8081 # No default (required)
+      timeout: 5s
       tls:
         enabled: false
         skip_cert_verify: false
@@ -920,6 +922,15 @@ url: http://localhost:8081
 
 url: https://schema-registry.example.com:8081
 ```
+
+=== `schema_registry.timeout`
+
+HTTP client timeout for schema registry requests.
+
+
+*Type*: `string`
+
+*Default*: `"5s"`
 
 === `schema_registry.tls`
 
