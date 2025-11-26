@@ -16,7 +16,9 @@ package confluent
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
+	"sync"
 	"testing"
 	"time"
 
@@ -91,7 +93,6 @@ message bar {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			encoder, err := newSchemaRegistryEncoder(urlStr, noopReqSign, nil, subj, true, time.Minute*10, time.Minute, service.MockResources())
 			require.NoError(t, err)
@@ -387,5 +388,66 @@ message bar {
 			[]byte(`{"a":1.23,"b":"foo"}`),
 			[]byte(`{"c":2.34,"d":"bar"}`),
 		})
+	})
+}
+
+func TestProtobufDecode(t *testing.T) {
+	thingsSchema := `
+syntax = "proto3";
+package things;
+
+message foo{
+  double a = 1;
+  string b = 2;
+}
+message bar {
+  float c = 2;
+  string d = 1;
+}
+`
+
+	urlStr := runSchemaRegistryServer(t, func(path string) ([]byte, error) {
+		switch path {
+		case "/subjects/things/versions/latest", "/schemas/ids/1":
+			return mustJBytes(t, map[string]any{
+				"id":         1,
+				"version":    10,
+				"schema":     thingsSchema,
+				"schemaType": "PROTOBUF",
+			}), nil
+		}
+		return nil, nil
+	})
+
+	t.Run("parallel decode", func(t *testing.T) {
+		decoder, err := newSchemaRegistryDecoder(
+			urlStr,
+			noopReqSign,
+			nil,
+			decodingConfig{},
+			schemaStaleAfter,
+			service.MockResources(),
+		)
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			_ = decoder.Close(context.Background())
+		})
+		foo, err := hex.DecodeString("000000000100091f85eb51b81e094012026869")
+		require.NoError(t, err)
+		bar, err := hex.DecodeString("000000000102020a02686915c3f54840")
+		require.NoError(t, err)
+		var wg sync.WaitGroup
+		for range 3 {
+			wg.Go(func() {
+				for _, b := range [][]byte{foo, bar} {
+					msg := service.NewMessage(b)
+					batch, err := decoder.Process(t.Context(), msg)
+					require.NoError(t, err)
+					require.Len(t, batch, 1)
+					require.NoError(t, batch[0].GetError())
+				}
+			})
+		}
+		wg.Wait()
 	})
 }
