@@ -223,4 +223,3 @@ func parseSnowflakePrivateKey(privateKeyBytes []byte, passphrase string) (*rsa.P
 	}
 	return rsaPrivateKey, nil
 }
-

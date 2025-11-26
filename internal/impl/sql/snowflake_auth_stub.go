@@ -44,4 +44,3 @@ func parseSnowflakeAuthConfig(_ *service.ParsedConfig, _ *service.Resources) (*s
 func openSnowflakeWithKeyPair(_ string, _ *rsa.PrivateKey) (*sql.DB, error) {
 	return nil, errors.New("snowflake key pair authentication is not supported on ARM architecture")
 }
-
