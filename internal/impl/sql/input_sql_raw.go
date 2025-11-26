@@ -27,18 +27,27 @@ import (
 )
 
 func sqlRawInputConfig() *service.ConfigSpec {
-	return service.NewConfigSpec().
+	spec := service.NewConfigSpec().
 		Beta().
 		Categories("Services").
 		Summary("Executes a select query and creates a message for each row received.").
-		Description(`Once the rows from the query are exhausted this input shuts down, allowing the pipeline to gracefully terminate (or the next input in a xref:components:inputs/sequence.adoc[sequence] to execute).`).
+		Description(`Once the rows from the query are exhausted this input shuts down, allowing the pipeline to gracefully terminate (or the next input in a xref:components:inputs/sequence.adoc[sequence] to execute).
+
+For Snowflake key pair authentication, provide the private key using ` + "`snowflake_private_key`" + ` or ` + "`snowflake_private_key_file`" + ` fields. When these are set, the driver will use JWT-based authentication instead of password-based authentication.`).
 		Field(driverField).
 		Field(dsnField).
 		Field(rawQueryField().
 			Example("SELECT * FROM footable WHERE user_id = $1;")).
 		Field(rawQueryArgsMappingField()).
 		Field(service.NewAutoRetryNacksToggleField()).
-		Fields(connFields()...).
+		Fields(connFields()...)
+
+	// Add Snowflake-specific authentication fields
+	for _, f := range snowflakeAuthFields() {
+		spec = spec.Field(f)
+	}
+
+	spec = spec.
 		Version("4.10.0").
 		Example("Consumes an SQL table using a query as an input.",
 			`
@@ -54,7 +63,21 @@ input:
         now().ts_unix() - 3600
       ]
 `,
+		).
+		Example("Query a Snowflake Table (Key Pair Auth)",
+			`
+Here we query a Snowflake table using RSA key pair authentication:`,
+			`
+input:
+  sql_raw:
+    driver: snowflake
+    dsn: myuser@myaccount/mydb/myschema?warehouse=mywh&role=myrole
+    query: "SELECT * FROM mytable WHERE status = ?"
+    args_mapping: 'root = [ "active" ]'
+    snowflake_private_key_file: /path/to/rsa_key.p8
+`,
 		)
+	return spec
 }
 
 func init() {
@@ -83,7 +106,8 @@ type sqlRawInput struct {
 
 	argsMapping *bloblang.Executor
 
-	connSettings *connSettings
+	connSettings      *connSettings
+	snowflakeAuthConf *snowflakeAuthConfig
 
 	logger  *service.Logger
 	shutSig *shutdown.Signaller
@@ -115,13 +139,17 @@ func newSQLRawInputFromConfig(conf *service.ParsedConfig, mgr *service.Resources
 		}
 	}
 
-	if err != nil {
-		return nil, err
-	}
-
 	if s.connSettings, err = connSettingsFromParsed(conf, mgr); err != nil {
 		return nil, err
 	}
+
+	// Parse Snowflake-specific authentication if driver is snowflake
+	if s.driver == "snowflake" {
+		if s.snowflakeAuthConf, err = parseSnowflakeAuthConfig(conf, mgr); err != nil {
+			return nil, err
+		}
+	}
+
 	return s, nil
 }
 
@@ -134,8 +162,17 @@ func (s *sqlRawInput) Connect(ctx context.Context) (err error) {
 	}
 
 	var db *sql.DB
-	if db, err = sqlOpenWithReworks(s.logger, s.driver, s.dsn); err != nil {
-		return err
+
+	// Use key pair authentication for Snowflake if configured
+	if s.driver == "snowflake" && s.snowflakeAuthConf != nil && s.snowflakeAuthConf.hasKeyPairAuth {
+		s.logger.Debug("Using Snowflake key pair (JWT) authentication")
+		if db, err = openSnowflakeWithKeyPair(s.dsn, s.snowflakeAuthConf.privateKey); err != nil {
+			return fmt.Errorf("failed to connect to Snowflake with key pair auth: %w", err)
+		}
+	} else {
+		if db, err = sqlOpenWithReworks(s.logger, s.driver, s.dsn); err != nil {
+			return err
+		}
 	}
 	defer func() {
 		if err != nil {
