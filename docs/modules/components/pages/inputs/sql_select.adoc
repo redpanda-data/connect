@@ -46,6 +46,9 @@ input:
     where: type = ? and created_at > ? # No default (optional)
     args_mapping: root = [ "article", now().ts_format("2006-01-02") ] # No default (optional)
     auto_replay_nacks: true
+    snowflake_private_key: "" # No default (optional)
+    snowflake_private_key_file: "" # No default (optional)
+    snowflake_private_key_pass: "" # No default (optional)
 ```
 
 --
@@ -79,12 +82,17 @@ input:
     conn_max_life_time: "" # No default (optional)
     conn_max_idle: 2
     conn_max_open: 0 # No default (optional)
+    snowflake_private_key: "" # No default (optional)
+    snowflake_private_key_file: "" # No default (optional)
+    snowflake_private_key_pass: "" # No default (optional)
 ```
 
 --
 ======
 
 Once the rows from the query are exhausted this input shuts down, allowing the pipeline to gracefully terminate (or the next input in a xref:components:inputs/sequence.adoc[sequence] to execute).
+
+For Snowflake key pair authentication, provide the private key using `snowflake_private_key` or `snowflake_private_key_file` fields. When these are set, the driver will use JWT-based authentication instead of password-based authentication.
 
 == Examples
 
@@ -109,6 +117,25 @@ input:
       root = [
         now().ts_unix() - 3600
       ]
+```
+
+--
+Consume a Table (Snowflake with Key Pair Auth)::
++
+--
+
+
+Here we define a pipeline that will consume all rows from a Snowflake table using RSA key pair authentication:
+
+```yaml
+input:
+  sql_select:
+    driver: snowflake
+    dsn: myuser@myaccount/mydb/myschema?warehouse=mywh&role=myrole
+    table: mytable
+    columns: [ '*' ]
+    snowflake_private_key_file: /path/to/rsa_key.p8
+    # snowflake_private_key_pass: optional_passphrase
 ```
 
 --
@@ -378,6 +405,40 @@ An optional maximum number of open connections to the database. If conn_max_idle
 
 
 *Type*: `int`
+
+
+=== `snowflake_private_key`
+
+The PEM encoded private RSA key for Snowflake key pair authentication. Either this or `snowflake_private_key_file` must be specified for key pair auth.
+[CAUTION]
+====
+This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
+====
+
+
+
+*Type*: `string`
+
+
+=== `snowflake_private_key_file`
+
+The file path to load the private RSA key from for Snowflake key pair authentication. This should be a `.p8` PEM encoded file. Either this or `snowflake_private_key` must be specified for key pair auth.
+
+
+*Type*: `string`
+
+
+=== `snowflake_private_key_pass`
+
+The RSA key passphrase if the RSA key is encrypted.
+[CAUTION]
+====
+This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
+====
+
+
+
+*Type*: `string`
 
 
 
