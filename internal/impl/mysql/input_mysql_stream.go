@@ -40,6 +40,7 @@ const (
 	fieldMySQLTables          = "tables"
 	fieldStreamSnapshot       = "stream_snapshot"
 	fieldSnapshotMaxBatchSize = "snapshot_max_batch_size"
+	fieldMaxReconnectAttempts = "max_reconnect_attempts"
 	fieldBatching             = "batching"
 	fieldCheckpointKey        = "checkpoint_key"
 	fieldCheckpointCache      = "checkpoint_cache"
@@ -100,6 +101,10 @@ This input adds the following metadata fields to each message:
 		service.NewIntField(fieldSnapshotMaxBatchSize).
 			Description("The maximum number of rows to be streamed in a single batch when taking a snapshot.").
 			Default(1000),
+		service.NewIntField(fieldMaxReconnectAttempts).
+			Description("The maximum number of attempts the MySQL driver will try to re-establish a broken connection before Connect attempts reconnection. A zero or negative number means infinite retry attempts.").
+			Advanced().
+			Default(10),
 		service.NewBoolField(fieldStreamSnapshot).
 			Description("If set to true, the connector will query all the existing data as a part of snapshot process. Otherwise, it will start from the current binlog position."),
 		service.NewAutoRetryNacksToggleField(),
@@ -111,18 +116,27 @@ This input adds the following metadata fields to each message:
 			Optional(),
 		service.NewObjectField(fieldAWSIAMAuth,
 			service.NewBoolField(FieldAWSIAMAuthEnabled).
-				Description("Enable AWS IAM authentication for MySQL. When enabled, an IAM authentication token is generated and used as the password.").
+				Description("Enable AWS IAM authentication for MySQL. When enabled, an IAM authentication token is generated and used as the password. When using IAM authentication ensure `"+fieldMaxReconnectAttempts+"` is set to a low value to ensure it can refresh credentials.").
 				Default(false),
 			service.NewStringField("region").
 				Description("The AWS region where the MySQL instance is located. If no region is specified then the environment default will be used.").
 				Optional(),
 			service.NewStringField("endpoint").
 				Description("The MySQL endpoint hostname (e.g., mydb.abc123.us-east-1.rds.amazonaws.com)."),
+			service.NewStringField("id").
+				Description("The ID of credentials to use.").
+				Optional().Advanced(),
+			service.NewStringField("secret").
+				Description("The secret for the credentials being used.").
+				Optional().Advanced().Secret(),
+			service.NewStringField("token").
+				Description("The token for the credentials being used, required when using short term credentials.").
+				Optional().Advanced(),
 			service.NewStringField("role").
-				Description("Optional AWS IAM role ARN to assume for authentication. Use this for cross-account access to RDS instances. Deprecated: use `roles` array for multiple roles or roles with external IDs.").
+				Description("Optional AWS IAM role ARN to assume for authentication. Alternatively, use `roles` array for role chaining instead.").
 				Optional(),
 			service.NewStringField("role_external_id").
-				Description("Optional external ID for the role assumption. Only used with the `role` field. Deprecated: use `roles` array instead.").
+				Description("Optional external ID for the role assumption. Only used with the `role` field. Alternatively, use `roles` array for role chaining instead.").
 				Optional(),
 			service.NewObjectListField("roles",
 				service.NewStringField("role").
@@ -133,7 +147,7 @@ This input adds the following metadata fields to each message:
 					Default("").
 					Optional(),
 			).
-				Description("Optional array of AWS IAM roles to assume for authentication. Roles are assumed in sequence, enabling role chaining for cross-account access. Each role can optionally specify an external ID.").
+				Description("Optional array of AWS IAM roles to assume for authentication. Roles can be assumed in sequence, enabling chaining for purposes such as cross-account access. Each role can optionally specify an external ID.").
 				Optional(),
 		).
 			Description("AWS IAM authentication configuration for MySQL instances. When enabled, IAM credentials are used to generate temporary authentication tokens instead of a static password.").
@@ -153,11 +167,12 @@ type mysqlStreamInput struct {
 	mutex  sync.Mutex
 	flavor string
 	// canal stands for mysql binlog listener connection
-	canal             *canal.Canal
-	mysqlConfig       *mysql.Config
-	binLogCache       string
-	binLogCacheKey    string
-	currentBinlogName string
+	canal                *canal.Canal
+	canalMaxConnAttempts int
+	mysqlConfig          *mysql.Config
+	binLogCache          string
+	binLogCacheKey       string
+	currentBinlogName    string
 
 	dsn            string
 	tables         []string
@@ -257,6 +272,10 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 		return nil, err
 	}
 
+	if i.canalMaxConnAttempts, err = conf.FieldInt(fieldMaxReconnectAttempts); err != nil {
+		return nil, err
+	}
+
 	if i.checkPointLimit, err = conf.FieldInt(fieldCheckpointLimit); err != nil {
 		return nil, err
 	}
@@ -319,6 +338,7 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 	canalConfig.Addr = i.mysqlConfig.Addr
 	canalConfig.User = i.mysqlConfig.User
 	canalConfig.Password = i.mysqlConfig.Passwd
+	canalConfig.MaxReconnectAttempts = i.canalMaxConnAttempts
 	// resetting dump path since we are doing snapshot manually
 	// this is required since canal will try to prepare dumper on init stage
 	canalConfig.Dump.ExecutionPath = ""

@@ -93,6 +93,12 @@ input:
       enabled: false
       region: "" # No default (optional)
       endpoint: "" # No default (required)
+      id: "" # No default (optional)
+      secret: "" # No default (optional)
+      token: "" # No default (optional)
+      role: "" # No default (optional)
+      role_external_id: "" # No default (optional)
+      roles: [] # No default (optional)
     auto_replay_nacks: true
     batching:
       count: 0
@@ -480,6 +486,77 @@ The PostgreSQL endpoint hostname (e.g., mydb.abc123.us-east-1.rds.amazonaws.com)
 
 *Type*: `string`
 
+
+=== `aws.id`
+
+The ID of credentials to use.
+
+
+*Type*: `string`
+
+
+=== `aws.secret`
+
+The secret for the credentials being used.
+[CAUTION]
+====
+This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
+====
+
+
+
+*Type*: `string`
+
+
+=== `aws.token`
+
+The token for the credentials being used, required when using short term credentials.
+
+
+*Type*: `string`
+
+
+=== `aws.role`
+
+Optional AWS IAM role ARN to assume for authentication. Alternatively, use `roles` array for role chaining instead.
+
+
+*Type*: `string`
+
+
+=== `aws.role_external_id`
+
+Optional external ID for the role assumption. Only used with the `role` field. Alternatively, use `roles` array for role chaining instead.
+
+
+*Type*: `string`
+
+
+=== `aws.roles`
+
+Optional array of AWS IAM roles to assume for authentication. Roles can be assumed in sequence, enabling chaining for purposes such as cross-account access. Each role can optionally specify an external ID.
+
+
+*Type*: `array`
+
+
+=== `aws.roles[].role`
+
+AWS IAM role ARN to assume.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `aws.roles[].role_external_id`
+
+Optional external ID for the role assumption.
+
+
+*Type*: `string`
+
+*Default*: `""`
 
 === `auto_replay_nacks`
 

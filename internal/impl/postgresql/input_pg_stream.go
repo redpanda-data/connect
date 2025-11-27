@@ -151,6 +151,32 @@ This input adds the following metadata fields to each message:
 				Optional(),
 			service.NewStringField("endpoint").
 				Description("The PostgreSQL endpoint hostname (e.g., mydb.abc123.us-east-1.rds.amazonaws.com)."),
+			service.NewStringField("id").
+				Description("The ID of credentials to use.").
+				Optional().Advanced(),
+			service.NewStringField("secret").
+				Description("The secret for the credentials being used.").
+				Optional().Advanced().Secret(),
+			service.NewStringField("token").
+				Description("The token for the credentials being used, required when using short term credentials.").
+				Optional().Advanced(),
+			service.NewStringField("role").
+				Description("Optional AWS IAM role ARN to assume for authentication. Alternatively, use `roles` array for role chaining instead.").
+				Optional(),
+			service.NewStringField("role_external_id").
+				Description("Optional external ID for the role assumption. Only used with the `role` field. Alternatively, use `roles` array for role chaining instead.").
+				Optional(),
+			service.NewObjectListField("roles",
+				service.NewStringField("role").
+					Default("").
+					Description("AWS IAM role ARN to assume."),
+				service.NewStringField("role_external_id").
+					Description("Optional external ID for the role assumption.").
+					Default("").
+					Optional(),
+			).
+				Description("Optional array of AWS IAM roles to assume for authentication. Roles can be assumed in sequence, enabling chaining for purposes such as cross-account access. Each role can optionally specify an external ID.").
+				Optional(),
 		).
 			Description("AWS IAM authentication configuration for PostgreSQL instances. When enabled, IAM credentials are used to generate temporary authentication tokens instead of a static password.").
 			Advanced().

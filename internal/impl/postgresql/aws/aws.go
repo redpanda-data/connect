@@ -16,12 +16,14 @@ package aws
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
 	"github.com/aws/aws-sdk-go-v2/feature/rds/auth"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -29,43 +31,133 @@ import (
 	pgstream "github.com/redpanda-data/connect/v4/internal/impl/postgresql"
 )
 
+type roleConfig struct {
+	arn        string
+	externalID string
+}
+
 func init() {
-	pgstream.AWSOptFn = func(ctx context.Context, awsConf *service.ParsedConfig, dbConf *pgconn.Config, log *service.Logger) (pgstream.TokenBuilder, error) {
-		if enabled, _ := awsConf.FieldBool(pgstream.FieldAWSIAMAuthEnabled); !enabled {
-			return nil, nil
-		}
+	pgstream.AWSOptFn = awsIAMAuth
+}
 
-		var (
-			err      error
-			awsCfg   aws.Config
-			endpoint string
-			region   string
-		)
-		if awsCfg, err = awsconfig.LoadDefaultConfig(ctx); err != nil {
-			return nil, fmt.Errorf("unable to load AWS config: %w", err)
-		}
-		if endpoint, err = awsConf.FieldString("endpoint"); err != nil {
-			return nil, err
-		}
-		region, _ = awsConf.FieldString("region")
-		if region != "" {
-			awsCfg.Region = region
-		}
-		if awsCfg.Region == "" {
-			return nil, errors.New("aws.region is required for IAM authentication")
-		}
-
-		// tokenBuilder will be called upon component connection to refresh token/password and reconnect.
-		// Tokens last ~15 minutes and will only need refreshing after a connection is lost.
-		tokenBuilder := func(ctx context.Context) error {
-			password, err := auth.BuildAuthToken(ctx, endpoint, awsCfg.Region, dbConf.User, awsCfg.Credentials)
-			if err != nil {
-				return fmt.Errorf("unable to build IAM auth token: %w", err)
-			}
-			dbConf.Password = password
-			log.Debug("IAM authentication token generated successfully")
-			return nil
-		}
-		return tokenBuilder, nil
+func awsIAMAuth(ctx context.Context, awsConf *service.ParsedConfig, dbConf *pgconn.Config, log *service.Logger) (pgstream.TokenBuilder, error) {
+	if enabled, _ := awsConf.FieldBool(pgstream.FieldAWSIAMAuthEnabled); !enabled {
+		return nil, nil
 	}
+
+	var (
+		err         error
+		awsCfg      aws.Config
+		endpoint    string
+		region      string
+		roleConfigs []roleConfig
+
+		opts []func(*awsconfig.LoadOptions) error
+	)
+	if endpoint, err = awsConf.FieldString("endpoint"); err != nil {
+		return nil, err
+	}
+	if region, _ = awsConf.FieldString("region"); region != "" {
+		opts = append(opts, awsconfig.WithRegion(region))
+	}
+
+	if id, _ := awsConf.FieldString("id"); id != "" {
+		secret, _ := awsConf.FieldString("secret")
+		token, _ := awsConf.FieldString("token")
+		cfg := awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+			id, secret, token,
+		))
+		opts = append(opts, cfg)
+	}
+
+	if awsCfg, err = awsconfig.LoadDefaultConfig(ctx, opts...); err != nil {
+		return nil, fmt.Errorf("unable to load AWS config: %w", err)
+	}
+
+	// parse aws.role and aws.roles[]
+	role, _ := parseRoleConfig(awsConf)
+	roleConfigs = append(roleConfigs, role...)
+
+	if rolesConfs, err := awsConf.FieldObjectList("roles"); err != nil {
+		return nil, err
+	} else {
+		for _, conf := range rolesConfs {
+			if roles, err := parseRoleConfig(conf); err != nil {
+				return nil, err
+			} else {
+				for i, v := range roles {
+					if v.arn == "" {
+						return nil, fmt.Errorf("roles[%d].role is required for IAM authentication", i)
+					}
+				}
+				roleConfigs = append(roleConfigs, roles...)
+			}
+		}
+	}
+
+	// tokenBuilder will be called upon component connection to refresh token/password and reconnect.
+	// Tokens last ~15 minutes and will only need refreshing after a connection is lost.
+	tokenBuilder := func(ctx context.Context) error {
+		// reassign to avoid mutating original config
+		cfg := awsCfg
+		if len(roleConfigs) > 0 {
+			var err error
+			if cfg, err = assumeRoleChain(ctx, cfg, roleConfigs, log); err != nil {
+				return fmt.Errorf("assuming role based on configured roles: %w", err)
+			}
+		}
+		password, err := auth.BuildAuthToken(ctx, endpoint, cfg.Region, dbConf.User, cfg.Credentials)
+		if err != nil {
+			return fmt.Errorf("building IAM auth token: %w", err)
+		}
+		dbConf.Password = password
+
+		log.Debug("IAM authentication token generated successfully")
+		return nil
+	}
+	return tokenBuilder, nil
+}
+
+// assumeRoleChain iterates through one or more roles enabling the user to chain elevation them (ie, from local role, privileged then cross-account).
+// If no roles are set, AWS SDK will check for environment configured roles and automatically assume them.
+func assumeRoleChain(ctx context.Context, awsCfg aws.Config, roles []roleConfig, log *service.Logger) (aws.Config, error) {
+	currentConfig := awsCfg
+	for _, role := range roles {
+		if role.arn == "" {
+			continue
+		}
+
+		// Create credentials provider for this role
+		stsClient := sts.NewFromConfig(currentConfig)
+		provider := stscreds.NewAssumeRoleProvider(stsClient, role.arn, func(opts *stscreds.AssumeRoleOptions) {
+			if role.externalID != "" {
+				opts.ExternalID = &role.externalID
+				log.Debugf("Using external ID for role '%s'", role.arn)
+			}
+		})
+		currentConfig.Credentials = aws.NewCredentialsCache(provider)
+
+		// Verify the role assumption worked
+		identity, err := sts.NewFromConfig(currentConfig).GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
+		if err != nil {
+			return aws.Config{}, fmt.Errorf("verifying role assumption for '%s': %w", role.arn, err)
+		}
+
+		log.Debugf("Successfully assumed role '%s' with identity '%s'", role.arn, *identity.Arn)
+	}
+
+	return currentConfig, nil
+}
+
+func parseRoleConfig(awsConf *service.ParsedConfig) ([]roleConfig, error) {
+	var roles []roleConfig
+	if role, err := awsConf.FieldString("role"); err != nil {
+		return nil, err
+	} else if externalID, err := awsConf.FieldString("role_external_id"); err != nil {
+		return nil, err
+	} else {
+		roles = append(roles, roleConfig{role, externalID})
+	}
+
+	return roles, nil
 }

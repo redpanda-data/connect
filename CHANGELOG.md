@@ -3,11 +3,13 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.72.0 - TBD
+## 4.72.0 - 2025-11-28
 
 ### Added
 
 - Added Redpanda Cloud service account authentication to all redpanda/kafka based components (@rockwotj)
+- `mysql_cdc`: Support for chained or unchained IAM authentication (@josephwoodward)
+- `postgresql_cdc`: Support for chained or unchained IAM authentication (@josephwoodward)
 
 ## 4.71.0 - 2025-11-21
 
