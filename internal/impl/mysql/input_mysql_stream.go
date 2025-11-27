@@ -10,6 +10,7 @@ package mysql
 
 import (
 	"context"
+	"crypto/tls"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -43,9 +44,25 @@ const (
 	fieldCheckpointKey        = "checkpoint_key"
 	fieldCheckpointCache      = "checkpoint_cache"
 	fieldCheckpointLimit      = "checkpoint_limit"
+	fieldAWSIAMAuth           = "aws"
+	// FieldAWSIAMAuthEnabled enabled field.
+	FieldAWSIAMAuthEnabled = "enabled"
 
 	shutdownTimeout = 5 * time.Second
 )
+
+func notImportedAWSOptFn(_ context.Context, awsConf *service.ParsedConfig, _ *mysql.Config, _ *service.Logger) (TokenBuilder, error) {
+	if enabled, _ := awsConf.FieldBool(FieldAWSIAMAuthEnabled); !enabled {
+		return nil, nil
+	}
+	return nil, errors.New("unable to configure AWS authentication as this binary does not import components/aws")
+}
+
+// AWSOptFn is populated with the child `aws` package when imported.
+var AWSOptFn = notImportedAWSOptFn
+
+// TokenBuilder can be used for fetching passwords at runtime during connection (ie. IAM auth tokens)
+type TokenBuilder func(context.Context) error
 
 var mysqlStreamConfigSpec = service.NewConfigSpec().
 	Beta().
@@ -89,6 +106,39 @@ This input adds the following metadata fields to each message:
 		service.NewIntField(fieldCheckpointLimit).
 			Description("The maximum number of messages that can be processed at a given time. Increasing this limit enables parallel processing and batching at the output level. Any given BinLog Position will not be acknowledged unless all messages under that offset are delivered in order to preserve at least once delivery guarantees.").
 			Default(1024),
+		service.NewTLSField("tls").
+			Description("Using this field overrides the SSL/TLS settings in the environment and DSN.").
+			Optional(),
+		service.NewObjectField(fieldAWSIAMAuth,
+			service.NewBoolField(FieldAWSIAMAuthEnabled).
+				Description("Enable AWS IAM authentication for MySQL. When enabled, an IAM authentication token is generated and used as the password.").
+				Default(false),
+			service.NewStringField("region").
+				Description("The AWS region where the MySQL instance is located. If no region is specified then the environment default will be used.").
+				Optional(),
+			service.NewStringField("endpoint").
+				Description("The MySQL endpoint hostname (e.g., mydb.abc123.us-east-1.rds.amazonaws.com)."),
+			service.NewStringField("role").
+				Description("Optional AWS IAM role ARN to assume for authentication. Use this for cross-account access to RDS instances. Deprecated: use `roles` array for multiple roles or roles with external IDs.").
+				Optional(),
+			service.NewStringField("role_external_id").
+				Description("Optional external ID for the role assumption. Only used with the `role` field. Deprecated: use `roles` array instead.").
+				Optional(),
+			service.NewObjectListField("roles",
+				service.NewStringField("role").
+					Default("").
+					Description("AWS IAM role ARN to assume."),
+				service.NewStringField("role_external_id").
+					Description("Optional external ID for the role assumption.").
+					Default("").
+					Optional(),
+			).
+				Description("Optional array of AWS IAM roles to assume for authentication. Roles are assumed in sequence, enabling role chaining for cross-account access. Each role can optionally specify an external ID.").
+				Optional(),
+		).
+			Description("AWS IAM authentication configuration for MySQL instances. When enabled, IAM credentials are used to generate temporary authentication tokens instead of a static password.").
+			Advanced().
+			Optional(),
 		service.NewBatchPolicyField(fieldBatching),
 	)
 
@@ -126,6 +176,13 @@ type mysqlStreamInput struct {
 	cp               *checkpoint.Capped[*position]
 
 	shutSig *shutdown.Signaller
+
+	// TLS configuration
+	tlsConfig *tls.Config
+
+	// IAM authentication fields
+	iamAuthEnabled      bool
+	iamAuthTokenBuilder TokenBuilder
 }
 
 func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s service.BatchInput, err error) {
@@ -158,6 +215,34 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 	}
 	// We require this configuration option is enabled.
 	i.mysqlConfig.ParseTime = true
+
+	// Configure TLS if specified
+	if i.tlsConfig, err = conf.FieldTLS("tls"); err != nil {
+		return nil, err
+	}
+	if i.tlsConfig != nil {
+		// Get ServerName from the address, stripping the port if present
+		host := i.mysqlConfig.Addr
+		if idx := strings.Index(host, ":"); idx != -1 {
+			host = host[:idx]
+		}
+		i.tlsConfig.ServerName = host
+
+		tlsConfigKey := "custom-tls"
+		if err := mysql.RegisterTLSConfig(tlsConfigKey, i.tlsConfig); err != nil {
+			return nil, fmt.Errorf("failed to register TLS config: %w", err)
+		}
+		i.mysqlConfig.TLSConfig = tlsConfigKey
+	}
+
+	// Configure AWS IAM authentication if enabled
+	awsConf := conf.Namespace(fieldAWSIAMAuth)
+	i.iamAuthEnabled, _ = awsConf.FieldBool(FieldAWSIAMAuthEnabled)
+
+	if i.iamAuthTokenBuilder, err = AWSOptFn(context.Background(), awsConf, i.mysqlConfig, res.Logger()); err != nil {
+		return nil, err
+	}
+
 	i.dsn = i.mysqlConfig.FormatDSN()
 
 	if i.tables, err = conf.FieldStringList(fieldMySQLTables); err != nil {
@@ -222,6 +307,13 @@ func init() {
 // ---- Redpanda Connect specific methods----
 
 func (i *mysqlStreamInput) Connect(ctx context.Context) error {
+	// If IAM authentication is enabled, generate a new token
+	if i.iamAuthEnabled && i.iamAuthTokenBuilder != nil {
+		if err := i.iamAuthTokenBuilder(ctx); err != nil {
+			return fmt.Errorf("unable to generate IAM auth token: %w", err)
+		}
+	}
+
 	canalConfig := canal.NewDefaultConfig()
 	canalConfig.Flavor = i.flavor
 	canalConfig.Addr = i.mysqlConfig.Addr
@@ -233,8 +325,9 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 
 	// Parse and set additional parameters
 	canalConfig.Charset = i.mysqlConfig.Collation
-	if i.mysqlConfig.TLS != nil {
-		canalConfig.TLSConfig = i.mysqlConfig.TLS
+	if i.tlsConfig != nil {
+		canalConfig.TLSConfig = i.tlsConfig
+		i.logger.Debugf("Using custom TLS config with ServerName: '%s'", i.tlsConfig.ServerName)
 	}
 	// Parse time values as time.Time values not strings
 	canalConfig.ParseTime = true
@@ -261,7 +354,7 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 	// create snapshot instance if we were requested and haven't finished it before.
 	var snapshot *Snapshot
 	if i.streamSnapshot && pos == nil {
-		db, err := sql.Open("mysql", i.dsn)
+		db, err := sql.Open("mysql", i.mysqlConfig.FormatDSN())
 		if err != nil {
 			return fmt.Errorf("failed to connect to MySQL server: %s", err)
 		}
