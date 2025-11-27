@@ -142,6 +142,6 @@ jobs:
       uses: aquasecurity/trivy-action@master
       with:
         image-ref: ${{ fromJSON('{"connect":"redpandadata/connect:edge","connect-ai":"redpandadata/connect:edge-ai","connect-cloud":"redpandadata/connect:edge-cloud"}')[matrix.variant] }}
-        format: json
+        format: table
         ignore-unfixed: true
         exit-code: 1
