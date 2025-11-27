@@ -13,14 +13,14 @@
 // limitations under the License.
 package elasticsearch
 
-// NOTE: This implementation is intentionally duplicated in ../v9/output.go.
+// NOTE: This implementation is intentionally duplicated from ../v8/output.go.
 // The Elasticsearch TypedAPI is designed to be stable across major versions,
 // differing only in import paths. This allows for:
 //   - Clear version boundaries for users
 //   - Independent deprecation of older versions
 //   - Dead code elimination benefits in v9+
 //
-// When modifying this file, check if ../v9/output.go needs the same changes.
+// When modifying this file, check if ../v8/output.go needs the same changes.
 
 import (
 	"context"
@@ -33,9 +33,9 @@ import (
 	"time"
 
 	"github.com/elastic/elastic-transport-go/v8/elastictransport"
-	"github.com/elastic/go-elasticsearch/v8"
-	"github.com/elastic/go-elasticsearch/v8/typedapi/core/bulk"
-	"github.com/elastic/go-elasticsearch/v8/typedapi/types"
+	"github.com/elastic/go-elasticsearch/v9"
+	"github.com/elastic/go-elasticsearch/v9/typedapi/core/bulk"
+	"github.com/elastic/go-elasticsearch/v9/typedapi/types"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -189,7 +189,7 @@ output:
         meta id = this.id
         # Performs a partial update on the document.
         root.doc = this
-  elasticsearch_v8:
+  elasticsearch_v9:
     urls: [localhost:9200]
     index: foo
     id: ${! @id }
@@ -202,7 +202,7 @@ output:
         meta id = this.id
         # Increments the field "counter" by 1.
         root.script.source = "ctx._source.counter += 1"
-  elasticsearch_v8:
+  elasticsearch_v9:
     urls: [localhost:9200]
     index: foo
     id: ${! @id }
@@ -218,7 +218,7 @@ output:
         # of 50 will be inserted.
         root.doc.product_price = 50
         root.upsert.product_price = 100
-  elasticsearch_v8:
+  elasticsearch_v9:
     urls: [localhost:9200]
     index: foo
     id: ${! @id }
@@ -235,7 +235,7 @@ input:
         meta id = this.id
         root = this
 output:
-  elasticsearch_v8:
+  elasticsearch_v9:
     urls: ['http://localhost:9200']
     index: "things"
     action: "index"
@@ -249,7 +249,7 @@ input:
     scanner:
       to_the_end: {}
 output:
-  elasticsearch_v8:
+  elasticsearch_v9:
     urls: ['http://localhost:9200']
     index: "cool-bug-facts"
     action: "index"
@@ -257,7 +257,7 @@ output:
 `).
 		Example("Create Documents", "When using the `create` action, a new document will be created if the document ID does not already exist. If the document ID already exists, the operation will fail.", `
 output:
-  elasticsearch_v8:
+  elasticsearch_v9:
     urls: [localhost:9200]
     index: foo
     id: ${! json("id") }
@@ -269,7 +269,7 @@ output:
     - mapping: |
         meta id = this.id
         root = this.doc
-  elasticsearch_v8:
+  elasticsearch_v9:
     urls: [localhost:9200]
     index: foo
     id: ${! @id }
@@ -278,7 +278,7 @@ output:
 }
 
 func init() {
-	service.MustRegisterBatchOutput("elasticsearch_v8", elasticsearchConfigSpec(),
+	service.MustRegisterBatchOutput("elasticsearch_v9", elasticsearchConfigSpec(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (out service.BatchOutput, batchPolicy service.BatchPolicy, maxInFlight int, err error) {
 			if maxInFlight, err = conf.FieldMaxInFlight(); err != nil {
 				return
@@ -358,7 +358,7 @@ func (e *esOutput) WriteBatch(ctx context.Context, batch service.MessageBatch) e
 	tookDuration := time.Duration(result.Took) * time.Millisecond
 
 	e.log.Debugf(
-		"Successfully dispatched [%d] documents in %s (%f docs/sec)",
+		"Successfully dispatched [%s] documents in %s (%s docs/sec)",
 		len(result.Items),
 		tookDuration,
 		float64(len(result.Items))/tookDuration.Seconds(),
