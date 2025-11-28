@@ -79,6 +79,19 @@ func (s *schemaRegistryDecoder) getProtobufDecoder(
 	// within a single processor for a given schema ID (which this is cached by)
 	var cachedMessageName protoreflect.FullName
 	var cachedDecoder common.ProtobufDecoder
+	var mu sync.Mutex
+	getDecoder := func(msgDesc protoreflect.MessageDescriptor) common.ProtobufDecoder {
+		mu.Lock()
+		defer mu.Unlock()
+		if msgDesc.FullName() != cachedMessageName {
+			cachedMessageName = msgDesc.FullName()
+			cachedDecoder = common.NewHyperPbDecoder(msgDesc, common.ProfilingOptions{
+				Rate:              0.01,
+				RecompileInterval: 100_000,
+			})
+		}
+		return cachedDecoder
+	}
 	return func(m *service.Message) error {
 		b, err := m.AsBytes()
 		if err != nil {
@@ -103,15 +116,9 @@ func (s *schemaRegistryDecoder) getProtobufDecoder(
 			}
 			msgDesc = targetDescriptors.Get(j)
 		}
-		if cachedMessageName != msgDesc.FullName() {
-			cachedMessageName = msgDesc.FullName()
-			cachedDecoder = common.NewHyperPbDecoder(msgDesc, common.ProfilingOptions{
-				Rate:              0.01,
-				RecompileInterval: 100_000,
-			})
-		}
+		decoder := getDecoder(msgDesc)
 		remaining := b[bytesRead:]
-		return cachedDecoder.WithDecoded(remaining, func(msg proto.Message) error {
+		return decoder.WithDecoded(remaining, func(msg proto.Message) error {
 			if decoderOpts.serializeToJSON {
 				return common.ToMessageSlow(msg.ProtoReflect(), opts, m)
 			} else {
