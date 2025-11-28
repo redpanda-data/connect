@@ -26,6 +26,7 @@ jobs:
           - ./internal/impl/cockroachdb
           # - ./internal/impl/couchbase
           - ./internal/impl/elasticsearch/v8
+          - ./internal/impl/elasticsearch/v9
           # - ./internal/impl/gcp
           - ./internal/impl/gcp/enterprise
           # - ./internal/impl/gcp/enterprise/changestreams
