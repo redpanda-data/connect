@@ -131,6 +131,10 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         CLOUDSMITH_API_KEY: ${{ env.CLOUDSMITH_API_KEY }}
 
+    - name: GoReleaser Edge push docker
+      if: ${{ github.event_name == 'schedule' && (matrix.variant == 'connect' || matrix.variant == 'connect-ai' || matrix.variant == 'connect-cloud') }}
+      run: docker push ${{ fromJSON('{"connect":"redpandadata/connect:edge","connect-ai":"redpandadata/connect:edge-ai","connect-cloud":"redpandadata/connect:edge-cloud"}')[matrix.variant] }}
+
     - name: GoReleaser Test
       if: ${{ github.event_name == 'workflow_dispatch' }}
       uses: goreleaser/goreleaser-action@v6
