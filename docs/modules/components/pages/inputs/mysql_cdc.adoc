@@ -71,6 +71,7 @@ input:
     checkpoint_cache: "" # No default (required)
     checkpoint_key: mysql_binlog_position
     snapshot_max_batch_size: 1000
+    max_reconnect_attempts: 10
     stream_snapshot: false # No default (required)
     auto_replay_nacks: true
     checkpoint_limit: 1024
@@ -84,6 +85,9 @@ input:
       enabled: false
       region: "" # No default (optional)
       endpoint: "" # No default (required)
+      id: "" # No default (optional)
+      secret: "" # No default (optional)
+      token: "" # No default (optional)
       role: "" # No default (optional)
       role_external_id: "" # No default (optional)
       roles: [] # No default (optional)
@@ -183,6 +187,15 @@ The maximum number of rows to be streamed in a single batch when taking a snapsh
 *Type*: `int`
 
 *Default*: `1000`
+
+=== `max_reconnect_attempts`
+
+The maximum number of attempts the MySQL driver will try to re-establish a broken connection before Connect attempts reconnection. A zero or negative number means infinite retry attempts.
+
+
+*Type*: `int`
+
+*Default*: `10`
 
 === `stream_snapshot`
 
@@ -371,7 +384,7 @@ AWS IAM authentication configuration for MySQL instances. When enabled, IAM cred
 
 === `aws.enabled`
 
-Enable AWS IAM authentication for MySQL. When enabled, an IAM authentication token is generated and used as the password.
+Enable AWS IAM authentication for MySQL. When enabled, an IAM authentication token is generated and used as the password. When using IAM authentication ensure `max_reconnect_attempts` is set to a low value to ensure it can refresh credentials.
 
 
 *Type*: `bool`
@@ -394,9 +407,38 @@ The MySQL endpoint hostname (e.g., mydb.abc123.us-east-1.rds.amazonaws.com).
 *Type*: `string`
 
 
+=== `aws.id`
+
+The ID of credentials to use.
+
+
+*Type*: `string`
+
+
+=== `aws.secret`
+
+The secret for the credentials being used.
+[CAUTION]
+====
+This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
+====
+
+
+
+*Type*: `string`
+
+
+=== `aws.token`
+
+The token for the credentials being used, required when using short term credentials.
+
+
+*Type*: `string`
+
+
 === `aws.role`
 
-Optional AWS IAM role ARN to assume for authentication. Use this for cross-account access to RDS instances. Deprecated: use `roles` array for multiple roles or roles with external IDs.
+Optional AWS IAM role ARN to assume for authentication. Alternatively, use `roles` array for role chaining instead.
 
 
 *Type*: `string`
@@ -404,7 +446,7 @@ Optional AWS IAM role ARN to assume for authentication. Use this for cross-accou
 
 === `aws.role_external_id`
 
-Optional external ID for the role assumption. Only used with the `role` field. Deprecated: use `roles` array instead.
+Optional external ID for the role assumption. Only used with the `role` field. Alternatively, use `roles` array for role chaining instead.
 
 
 *Type*: `string`
@@ -412,7 +454,7 @@ Optional external ID for the role assumption. Only used with the `role` field. D
 
 === `aws.roles`
 
-Optional array of AWS IAM roles to assume for authentication. Roles are assumed in sequence, enabling role chaining for cross-account access. Each role can optionally specify an external ID.
+Optional array of AWS IAM roles to assume for authentication. Roles can be assumed in sequence, enabling chaining for purposes such as cross-account access. Each role can optionally specify an external ID.
 
 
 *Type*: `array`

@@ -16,11 +16,11 @@ package aws
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
 	"github.com/aws/aws-sdk-go-v2/feature/rds/auth"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
@@ -46,12 +46,13 @@ func awsIAMAuth(ctx context.Context, awsConf *service.ParsedConfig, dbConf *mysq
 	}
 
 	var (
-		err    error
-		awsCfg aws.Config
-
+		err         error
+		awsCfg      aws.Config
 		endpoint    string
 		region      string
 		roleConfigs []roleConfig
+
+		opts []func(*awsconfig.LoadOptions) error
 	)
 	if awsCfg, err = awsconfig.LoadDefaultConfig(ctx); err != nil {
 		return nil, fmt.Errorf("unable to load AWS config: %w", err)
@@ -59,13 +60,21 @@ func awsIAMAuth(ctx context.Context, awsConf *service.ParsedConfig, dbConf *mysq
 	if endpoint, err = awsConf.FieldString("endpoint"); err != nil {
 		return nil, err
 	}
-	if region, err = awsConf.FieldString("region"); err != nil {
-		return nil, err
-	} else if region != "" {
-		awsCfg.Region = region
+	if region, _ = awsConf.FieldString("region"); region != "" {
+		opts = append(opts, awsconfig.WithRegion(region))
 	}
-	if awsCfg.Region == "" {
-		return nil, errors.New("aws.region is required for IAM authentication")
+
+	if id, _ := awsConf.FieldString("id"); id != "" {
+		secret, _ := awsConf.FieldString("secret")
+		token, _ := awsConf.FieldString("token")
+		cfg := awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+			id, secret, token,
+		))
+		opts = append(opts, cfg)
+	}
+
+	if awsCfg, err = awsconfig.LoadDefaultConfig(ctx, opts...); err != nil {
+		return nil, fmt.Errorf("unable to load AWS config: %w", err)
 	}
 
 	// parse aws.role and aws.roles[]
@@ -92,15 +101,19 @@ func awsIAMAuth(ctx context.Context, awsConf *service.ParsedConfig, dbConf *mysq
 	// tokenBuilder will be called upon component connection to refresh token/password and reconnect.
 	// Tokens last ~15 minutes and will only need refreshing after a connection is lost.
 	tokenBuilder := func(ctx context.Context) error {
+		// reassign to avoid mutating original config
+		cfg := awsCfg
 		if len(roleConfigs) > 0 {
-			if awsCfg, err = assumeRoleChain(ctx, awsCfg, roleConfigs, log); err != nil {
+			var err error
+			if cfg, err = assumeRoleChain(ctx, cfg, roleConfigs, log); err != nil {
 				return fmt.Errorf("assuming role based on configured roles: %w", err)
 			}
 		}
-		password, err := auth.BuildAuthToken(ctx, endpoint, awsCfg.Region, dbConf.User, awsCfg.Credentials)
+		password, err := auth.BuildAuthToken(ctx, endpoint, cfg.Region, dbConf.User, cfg.Credentials)
 		if err != nil {
 			return fmt.Errorf("building IAM auth token: %w", err)
 		}
+		// feels racy, can we return the password from the token builder to be safe?
 		dbConf.Passwd = password
 
 		log.Debug("IAM authentication token generated successfully")
