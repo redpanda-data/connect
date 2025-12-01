@@ -126,9 +126,9 @@ func TestIntegrationCouchbaseProcessor(t *testing.T) {
 	servicePort := requireCouchbase(t)
 
 	bucket := fmt.Sprintf("testing-processor-%d", time.Now().Unix())
-	require.NoError(t, createBucket(t.Context(), t, servicePort, bucket))
+	require.NoError(t, createBucket(t.Context(), servicePort, bucket))
 	t.Cleanup(func() {
-		require.NoError(t, removeBucket(t.Context(), t, servicePort, bucket))
+		require.NoError(t, removeBucket(context.Background(), servicePort, bucket))
 	})
 
 	uid := faker.UUIDHyphenated()
@@ -361,15 +361,13 @@ operation: 'get'
 }
 
 func TestIntegrationCouchbaseStream(t *testing.T) {
-	ctx := context.Background()
-
 	integration.CheckSkip(t)
 
 	servicePort := requireCouchbase(t)
 	bucket := fmt.Sprintf("testing-stream-%d", time.Now().Unix())
-	require.NoError(t, createBucket(context.Background(), t, servicePort, bucket))
+	require.NoError(t, createBucket(t.Context(), servicePort, bucket))
 	t.Cleanup(func() {
-		require.NoError(t, removeBucket(context.Background(), t, servicePort, bucket))
+		require.NoError(t, removeBucket(context.Background(), servicePort, bucket))
 	})
 
 	for _, clearCAS := range []bool{true, false} {
@@ -382,7 +380,7 @@ func TestIntegrationCouchbaseStream(t *testing.T) {
 
 			var outBatches []service.MessageBatch
 			var outBatchMut sync.Mutex
-			require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
+			require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 				outBatchMut.Lock()
 				outBatches = append(outBatches, mb)
 				outBatchMut.Unlock()
@@ -444,7 +442,7 @@ couchbase:
 				require.NoError(t, err)
 			}()
 
-			require.NoError(t, inFn(ctx, service.MessageBatch{
+			require.NoError(t, inFn(t.Context(), service.MessageBatch{
 				service.NewMessage([]byte(`{"key":"hello","value":"word"}`)),
 			}))
 			require.NoError(t, streamOut.StopWithin(time.Second*15))
@@ -467,15 +465,13 @@ couchbase:
 }
 
 func TestIntegrationCouchbaseStreamError(t *testing.T) {
-	ctx := context.Background()
-
 	integration.CheckSkip(t)
 
 	servicePort := requireCouchbase(t)
 	bucket := fmt.Sprintf("testing-stream-error-%d", time.Now().Unix())
-	require.NoError(t, createBucket(context.Background(), t, servicePort, bucket))
+	require.NoError(t, createBucket(t.Context(), servicePort, bucket))
 	t.Cleanup(func() {
-		require.NoError(t, removeBucket(context.Background(), t, servicePort, bucket))
+		require.NoError(t, removeBucket(context.Background(), servicePort, bucket))
 	})
 
 	streamOutBuilder := service.NewStreamBuilder()
@@ -486,7 +482,7 @@ func TestIntegrationCouchbaseStreamError(t *testing.T) {
 
 	var outBatches []service.MessageBatch
 	var outBatchMut sync.Mutex
-	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(c context.Context, mb service.MessageBatch) error {
+	require.NoError(t, streamOutBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
 		outBatchMut.Lock()
 		outBatches = append(outBatches, mb)
 		outBatchMut.Unlock()
@@ -547,7 +543,7 @@ workflow:
 		require.NoError(t, err)
 	}()
 
-	require.NoError(t, inFn(ctx, service.MessageBatch{
+	require.NoError(t, inFn(t.Context(), service.MessageBatch{
 		service.NewMessage([]byte(`{"key":"hello","value":"word"}`)),
 	}))
 	require.NoError(t, streamOut.StopWithin(time.Second*15))

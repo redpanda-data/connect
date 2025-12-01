@@ -54,15 +54,15 @@ cache_resources:
 		integration.CacheTestOptVarSet("USER", username),
 		integration.CacheTestOptVarSet("PASS", password),
 		integration.CacheTestOptPreTest(func(tb testing.TB, ctx context.Context, vars *integration.CacheTestConfigVars) {
-			require.NoError(tb, createBucket(ctx, tb, servicePort, vars.ID))
+			require.NoError(tb, createBucket(ctx, servicePort, vars.ID))
 			tb.Cleanup(func() {
-				require.NoError(tb, removeBucket(ctx, tb, servicePort, vars.ID))
+				require.NoError(tb, removeBucket(ctx, servicePort, vars.ID))
 			})
 		}),
 	)
 }
 
-func getCluster(ctx context.Context, tb testing.TB, port string) (*gocb.Cluster, error) {
+func getCluster(port string) (*gocb.Cluster, error) {
 	return gocb.Connect(fmt.Sprintf("couchbase://localhost:%v", port), gocb.ClusterOptions{
 		Authenticator: gocb.PasswordAuthenticator{
 			Username: username,
@@ -71,8 +71,8 @@ func getCluster(ctx context.Context, tb testing.TB, port string) (*gocb.Cluster,
 	})
 }
 
-func removeBucket(ctx context.Context, tb testing.TB, port, bucket string) error {
-	cluster, err := getCluster(ctx, tb, port)
+func removeBucket(ctx context.Context, port, bucket string) error {
+	cluster, err := getCluster(port)
 	if err != nil {
 		return err
 	}
@@ -82,8 +82,8 @@ func removeBucket(ctx context.Context, tb testing.TB, port, bucket string) error
 	})
 }
 
-func createBucket(ctx context.Context, tb testing.TB, port, bucket string) error {
-	cluster, err := getCluster(ctx, tb, port)
+func createBucket(ctx context.Context, port, bucket string) error {
+	cluster, err := getCluster(port)
 	if err != nil {
 		return err
 	}
