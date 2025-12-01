@@ -68,7 +68,7 @@ type Output struct {
 	client  *couchbaseClient
 	id      *service.InterpolatedString
 	content *bloblang.Executor
-	op      func(key string, data []byte) gocb.BulkOp
+	op      opFunc
 }
 
 // NewOutput returns a new couchbase output based on the provided config
@@ -140,7 +140,7 @@ func (o *Output) WriteBatch(_ context.Context, batch service.MessageBatch) error
 	}
 
 	// generate query
-	for index := range batch {
+	for index, msg := range batch {
 		// generate id
 		k, err := batch.TryInterpolatedString(index, o.id)
 		if err != nil {
@@ -160,7 +160,14 @@ func (o *Output) WriteBatch(_ context.Context, batch service.MessageBatch) error
 			}
 		}
 
-		ops[index] = o.op(k, content)
+		var cas gocb.Cas // retrieve cas if set
+		if val, ok := msg.MetaGetMut(MetaCASKey); ok {
+			if v, ok := val.(gocb.Cas); ok {
+				cas = v
+			}
+		}
+
+		ops[index] = o.op(k, content, cas)
 	}
 
 	return o.client.collection.Do(ops, &gocb.BulkOpOptions{})

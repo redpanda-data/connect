@@ -27,6 +27,8 @@ import (
 	"github.com/redpanda-data/connect/v4/internal/impl/couchbase/client"
 )
 
+type opFunc func(key string, data []byte, cas gocb.Cas) gocb.BulkOp
+
 const (
 	// MetaCASKey hold CAS of entry.
 	MetaCASKey = "couchbase_cas"
@@ -75,7 +77,7 @@ type Processor struct {
 	*couchbaseClient
 	id      *service.InterpolatedString
 	content *bloblang.Executor
-	op      func(key string, data []byte, cas gocb.Cas) gocb.BulkOp
+	op      opFunc
 }
 
 // NewProcessor returns a Couchbase processor.
