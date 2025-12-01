@@ -15,6 +15,7 @@
 package couchbase_test
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -96,7 +97,26 @@ couchbase:
   bucket: 'bucket'
   id: '${! json("id") }'
   content: 'root = this'
-  operation: 'insert'
+  operation: 'insert'`,
+		},
+		{
+			name: "increment without content",
+			config: `
+couchbase:
+  url: 'url'
+  bucket: 'bucket'
+  id: '${! json("id") }'
+  operation: 'increment'
+`,
+		},
+		{
+			name: "decrement without content",
+			config: `
+couchbase:
+  url: 'url'
+  bucket: 'bucket'
+  id: '${! json("id") }'
+  operation: 'decrement'
 `,
 		},
 	}
@@ -123,8 +143,8 @@ func TestIntegrationCouchbaseProcessor(t *testing.T) {
 
 	bucket := fmt.Sprintf("testing-processor-%d", time.Now().Unix())
 	require.NoError(t, createBucket(t.Context(), servicePort, bucket))
-	t.Cleanup(func() {
-		require.NoError(t, removeBucket(t.Context(), servicePort, bucket))
+	t.Cleanup(func() { // t.Context() can't be used here because it is closed before cleanup
+		require.NoError(t, removeBucket(context.Background(), servicePort, bucket))
 	})
 
 	uid := faker.UUIDHyphenated()
@@ -157,6 +177,36 @@ func TestIntegrationCouchbaseProcessor(t *testing.T) {
 	})
 	t.Run("Get", func(t *testing.T) {
 		testCouchbaseProcessorGet(uid, payload, bucket, servicePort, t)
+	})
+
+	// counters tests
+	t.Run("Remove", func(t *testing.T) {
+		testCouchbaseProcessorRemove(uid, bucket, servicePort, t)
+	})
+	t.Run("Increment", func(t *testing.T) {
+		testCouchbaseProcessorCounter(uid, "increment", "1", "1", bucket, servicePort, t)
+	})
+	t.Run("Decrement", func(t *testing.T) { // minimum value of counter is zero
+		testCouchbaseProcessorCounter(uid, "decrement", "2", "0", bucket, servicePort, t)
+	})
+	t.Run("Increment", func(t *testing.T) {
+		testCouchbaseProcessorCounter(uid, "increment", "8", "8", bucket, servicePort, t)
+	})
+	t.Run("Decrement", func(t *testing.T) {
+		testCouchbaseProcessorCounter(uid, "decrement", "2", "6", bucket, servicePort, t)
+	})
+	// noop only retrive value
+	t.Run("Increment", func(t *testing.T) {
+		testCouchbaseProcessorCounter(uid, "increment", "0", "6", bucket, servicePort, t)
+	})
+	t.Run("Decrement", func(t *testing.T) {
+		testCouchbaseProcessorCounter(uid, "decrement", "0", "6", bucket, servicePort, t)
+	})
+	t.Run("Increment", func(t *testing.T) {
+		testCouchbaseProcessorCounter(uid, "increment", "", "6", bucket, servicePort, t)
+	})
+	t.Run("Decrement", func(t *testing.T) {
+		testCouchbaseProcessorCounter(uid, "decrement", "", "6", bucket, servicePort, t)
 	})
 }
 
@@ -329,4 +379,35 @@ operation: 'get'
 	dataOut, err := msgOut[0][0].AsBytes()
 	assert.NoError(t, err)
 	assert.Equal(t, uid, string(dataOut))
+}
+
+func testCouchbaseProcessorCounter(uid, operation, value, expected, bucket, port string, t *testing.T) {
+	config := fmt.Sprintf(`
+url: 'couchbase://localhost:%s'
+bucket: %s
+username: %s
+password: %s
+id: '${! meta("id") }'
+content: 'root = this.or(null)'
+operation: '%s'
+`, port, bucket, username, password, operation)
+
+	msg := service.NewMessage([]byte(value))
+	msg.MetaSetMut("id", uid)
+	msgOut, err := getProc(t, config).ProcessBatch(t.Context(), service.MessageBatch{
+		msg,
+	})
+
+	// batch processing should be fine and contain one message.
+	assert.NoError(t, err)
+	assert.Len(t, msgOut, 1)
+	assert.Len(t, msgOut[0], 1)
+
+	// message content should be the counter value (1)
+	dataOut, err := msgOut[0][0].AsBytes()
+	assert.NoError(t, err)
+	// The result of increment is the new value.
+	// Since we didn't provide content, delta is 1, initial is 1.
+	// So first increment should return 1.
+	assert.Equal(t, expected, string(dataOut))
 }
