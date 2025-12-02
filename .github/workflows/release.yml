@@ -133,7 +133,11 @@ jobs:
 
     - name: GoReleaser Edge push docker
       if: ${{ github.event_name == 'schedule' && (matrix.variant == 'connect' || matrix.variant == 'connect-ai' || matrix.variant == 'connect-cloud') }}
-      run: docker push ${{ fromJSON('{"connect":"redpandadata/connect:edge","connect-ai":"redpandadata/connect:edge-ai","connect-cloud":"redpandadata/connect:edge-cloud"}')[matrix.variant] }}
+      run: |
+        IMAGE_BASE=${{ fromJSON('{"connect":"redpandadata/connect:edge","connect-ai":"redpandadata/connect:edge-ai","connect-cloud":"redpandadata/connect:edge-cloud"}')[matrix.variant] }}
+        docker push ${IMAGE_BASE}-amd64
+        docker push ${IMAGE_BASE}-arm64
+        docker buildx imagetools create -t ${IMAGE_BASE} ${IMAGE_BASE}-amd64 ${IMAGE_BASE}-arm64
 
     - name: GoReleaser Test
       if: ${{ github.event_name == 'workflow_dispatch' }}
