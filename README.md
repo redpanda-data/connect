@@ -35,6 +35,8 @@ output:
 
 ### !NEW! Check Out the Latest AI Goodies
 
+[Claude Plugin for Redpanda Connect Configs](./.claude-plugin/README.md)
+
 MCP Demo:
 
 [![MCP Demo](https://img.youtube.com/vi/JhF8HMpVmus/0.jpg)](https://www.youtube.com/watch?v=JhF8HMpVmus)

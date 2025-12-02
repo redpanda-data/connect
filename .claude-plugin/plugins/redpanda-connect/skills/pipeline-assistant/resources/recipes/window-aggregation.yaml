@@ -1,0 +1,25 @@
+# Window-Based Aggregation
+# Pattern: Aggregation - Time Windows
+# Difficulty: Advanced
+
+input:
+  kafka_franz:
+    seed_brokers: ["${KAFKA_BROKER}"]
+    topics: ["${SOURCE_TOPIC}"]
+    consumer_group: "${CONSUMER_GROUP}"
+
+pipeline:
+  processors:
+    - group_by_value:
+        value: ${!json("user_id")}
+    - mapping: |
+        root.user_id = this.0.user_id
+        root.count = this.length()
+        root.total = this.map_each(item -> item.amount).fold(0, item -> item.tally + item.value)
+        root.window_start = this.0.timestamp
+        root.window_end = now()
+
+output:
+  kafka_franz:
+    seed_brokers: ["${KAFKA_BROKER}"]
+    topic: aggregated_results

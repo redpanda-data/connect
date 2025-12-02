@@ -1,0 +1,21 @@
+{
+  "name": "redpanda-connect",
+  "description": "Interactive YAML config and Bloblang authoring for Redpanda Connect",
+  "version": "0.2.0",
+  "author": {
+    "name": "Michał Matczuk",
+    "email": "michal.matczuk@redpanda.com"
+  },
+  "license": "Apache-2.0",
+  "repository": "https://github.com/redpanda-data/connect",
+  "homepage": "https://docs.redpanda.com/connect",
+  "keywords": [
+    "redpanda",
+    "connect",
+    "kafka",
+    "streaming",
+    "bloblang",
+    "yaml",
+    "configuration"
+  ]
+}

@@ -1,0 +1,93 @@
+# Stateful Counter with Circuit Breaker
+# Pattern: Stateful Processing - Counter with Threshold
+# Difficulty: Intermediate
+
+# --- Input Configuration ---
+input:
+  stdin:
+    scanner:
+      lines: {}
+    auto_replay_nacks: true
+
+# --- Processing Pipeline ---
+pipeline:
+  processors:
+    # Validate JSON format
+    - label: validate_json
+      mapping: |
+        let content = content().string()
+        let test_json = $content.parse_json(use_number: true).catch(this)
+
+        if ($test_json.is_error != null) {
+          # Invalid JSON detected
+          meta json_error = true
+          meta error_text = "Invalid JSON: " + $content
+        } else {
+          # Valid JSON
+          root.value = this
+          meta json_error = false
+        }
+
+    # Handle errors: log, count, check threshold
+    - label: handle_errors
+      switch:
+        - check: "@json_error"
+          processors:
+            # Log error for debugging
+            - log:
+                level: WARN
+                message: "${!meta(\"error_text\")}"
+
+            # Update error counter (atomic operations in branch)
+            - branch:
+                processors:
+                  # Get current count from cache
+                  - cache:
+                      resource: error_cache
+                      operator: get
+                      key: error_count
+
+                  # Increment the count
+                  - mapping: |
+                      root.error_count = this.string().parse_json().catch(0) + 1
+
+                  # Store updated count
+                  - cache:
+                      resource: error_cache
+                      operator: set
+                      key: error_count
+                      value: ${!json("error_count")}
+
+            # Check if threshold exceeded (circuit breaker)
+            - switch:
+                - check: 'this.error_count > 3'
+                  processors:
+                    - log:
+                        level: ERROR
+                        message: "Error threshold exceeded (${!json(\"error_count\")} errors)"
+
+                    # Stop the pipeline
+                    - crash: 'Pipeline failed due to error threshold'
+
+# --- Output Configuration ---
+output:
+  switch:
+    cases:
+      # Valid messages go to stdout
+      - check: "@json_error == false"
+        output:
+          label: "valid_messages"
+          stdout: {}
+
+      # Invalid messages are dropped
+      - output:
+          label: "drop_invalid"
+          drop: {}
+
+# --- Cache Resources ---
+cache_resources:
+  - label: error_cache
+    memory:
+      compaction_interval: ''  # Never expire (until pipeline restart)
+      init_values:
+        error_count: 0  # Start at zero

@@ -1,7 +1,6 @@
 bin
 target
 vendor
-tmp
 site
 .tags
 .DS_Store

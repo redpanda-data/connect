@@ -1,0 +1,420 @@
+[
+  {
+    "id": "stdin-stdout",
+    "description": "simple pipeline from stdin to stdout",
+    "context": null,
+    "validation_criteria": [
+      "Uses stdin input component",
+      "Uses stdout output component",
+      "Passes rpk connect lint",
+      "No secrets in config"
+    ]
+  },
+  {
+    "id": "kafka-postgres",
+    "description": "stream from Kafka to PostgreSQL database",
+    "context": "consumer group: my-app, topic: events, table: events_log",
+    "validation_criteria": [
+      "Uses Kafka input with seed_brokers, topics, consumer_group",
+      "Uses SQL output with DSN and table",
+      "All secrets use environment variables",
+      "Creates .env.example file",
+      "Passes rpk connect lint"
+    ]
+  },
+  {
+    "id": "http-redis-transform",
+    "description": "HTTP webhook to Redis cache with uppercase transformation",
+    "context": "transform the 'name' field to uppercase before caching",
+    "validation_criteria": [
+      "Uses http_server input",
+      "Includes processor with uppercase transformation",
+      "Uses Redis output/cache",
+      "Has proper Bloblang mapping",
+      "Passes rpk connect lint"
+    ]
+  },
+  {
+    "id": "s3-batch-processing",
+    "description": "batch process files from S3 bucket",
+    "context": "read CSV files, parse and write to database",
+    "validation_criteria": [
+      "Uses AWS S3 input",
+      "Includes CSV parsing processor",
+      "Uses database output",
+      "Has AWS credentials as env vars",
+      "Passes rpk connect lint"
+    ]
+  },
+  {
+    "id": "mqtt-fan-out",
+    "description": "read from MQTT broker and write to both file and stdout",
+    "context": "topic: sensor/temperature, file path: /tmp/temperatures.log",
+    "validation_criteria": [
+      "Uses MQTT input",
+      "Uses broker output with fan_out pattern",
+      "Has both file and stdout outputs",
+      "File path uses environment variable",
+      "Passes rpk connect lint"
+    ]
+  },
+  {
+    "id": "postgres-cdc-s3",
+    "description": "change data capture from PostgreSQL to S3",
+    "context": "capture changes from 'users' table and write as JSON to S3",
+    "validation_criteria": [
+      "Uses PostgreSQL input (CDC or polling)",
+      "Includes JSON encoding",
+      "Uses S3 output",
+      "Has proper batching configuration",
+      "All credentials use env vars",
+      "Passes rpk connect lint"
+    ]
+  },
+  {
+    "id": "websocket-kafka",
+    "description": "WebSocket server to Kafka producer",
+    "context": "listen on port 8080, write to topic 'websocket-events'",
+    "validation_criteria": [
+      "Uses websocket input",
+      "Uses Kafka output",
+      "Port uses environment variable",
+      "Topic uses environment variable",
+      "Passes rpk connect lint"
+    ]
+  },
+  {
+    "id": "multi-stage-enrichment",
+    "description": "enrich events with cache lookup and API call",
+    "context": "read from Kafka, lookup user data in Redis, call external API for additional data",
+    "validation_criteria": [
+      "Uses Kafka input",
+      "Has cache resource for Redis",
+      "Includes cache lookup processor",
+      "Has http processor for API call",
+      "Output to Kafka or database",
+      "Proper error handling",
+      "Passes rpk connect lint"
+    ]
+  },
+  {
+    "id": "repair-deprecated",
+    "description": "fix pipeline using deprecated kafka component",
+    "context": "pipeline uses old 'kafka' component, should use 'kafka_franz' instead",
+    "validation_criteria": [
+      "Identifies deprecated component",
+      "Replaces with modern equivalent",
+      "Preserves all configuration",
+      "Adds migration notes",
+      "Passes rpk connect lint"
+    ]
+  },
+  {
+    "id": "elasticsearch-aggregation",
+    "description": "aggregate logs and write to Elasticsearch",
+    "context": "read from file, aggregate by status code, write to ES index 'logs'",
+    "validation_criteria": [
+      "Uses file input",
+      "Includes aggregation/windowing processor",
+      "Uses Elasticsearch output",
+      "ES credentials use env vars",
+      "Proper index configuration",
+      "Passes rpk connect lint"
+    ],
+    "difficulty": "intermediate"
+  },
+  {
+    "id": "nats-to-postgres",
+    "description": "NATS to PostgreSQL pipeline",
+    "context": "subscribe to subject 'events', write to table 'events_log'",
+    "validation_criteria": [
+      "Uses NATS input",
+      "Uses SQL output",
+      "All credentials use env vars",
+      "Passes rpk connect lint"
+    ],
+    "difficulty": "basic"
+  },
+  {
+    "id": "sqs-to-kafka",
+    "description": "AWS SQS to Kafka producer",
+    "context": "queue: my-queue, topic: events, consumer group: processors",
+    "validation_criteria": [
+      "Uses aws_sqs input",
+      "Uses kafka_franz output",
+      "All credentials use env vars",
+      "Passes rpk connect lint"
+    ],
+    "difficulty": "intermediate"
+  },
+  {
+    "id": "mongodb-cdc-to-s3",
+    "description": "MongoDB change stream to S3",
+    "context": "watch collection 'users', write JSONL to s3://bucket/changes/",
+    "validation_criteria": [
+      "Uses mongodb CDC input",
+      "Uses aws_s3 output",
+      "Handles JSONL format",
+      "All credentials use env vars",
+      "Passes rpk connect lint"
+    ],
+    "difficulty": "advanced"
+  },
+  {
+    "id": "file-polling-snowflake",
+    "description": "File polling to Snowflake",
+    "context": "poll /data/*.json every 5min, load to table 'uploads'",
+    "validation_criteria": [
+      "Uses file input with polling",
+      "Uses snowflake output",
+      "Handles JSON parsing",
+      "All credentials use env vars",
+      "Passes rpk connect lint"
+    ],
+    "difficulty": "intermediate"
+  },
+  {
+    "id": "kafka-avro-deserialization",
+    "description": "Kafka with Avro deserialization",
+    "context": "topic: users, schema registry: http://localhost:8081, output: stdout",
+    "validation_criteria": [
+      "Uses kafka input",
+      "Uses schema_registry_decode processor",
+      "Handles Avro deserialization",
+      "Passes rpk connect lint"
+    ],
+    "difficulty": "advanced"
+  },
+  {
+    "id": "s3-csv-to-parquet",
+    "description": "S3 CSV to Parquet conversion",
+    "context": "read from s3://input/*.csv, convert to parquet, write to s3://output/",
+    "validation_criteria": [
+      "Uses aws_s3 input",
+      "Uses CSV scanner",
+      "Uses parquet encoder",
+      "Uses aws_s3 output",
+      "All credentials use env vars",
+      "Passes rpk connect lint"
+    ],
+    "difficulty": "advanced"
+  },
+  {
+    "id": "api-polling-pagination",
+    "description": "API polling with pagination",
+    "context": "poll https://api.example.com/data, handle next_page cursor, output: kafka",
+    "validation_criteria": [
+      "Uses generate + http pattern",
+      "Handles pagination cursor",
+      "Uses kafka output",
+      "Passes rpk connect lint"
+    ],
+    "difficulty": "advanced"
+  },
+  {
+    "id": "log-parsing-grok",
+    "description": "Log parsing with Grok to Elasticsearch",
+    "context": "tail /var/log/app.log, parse with grok, index to elasticsearch 'logs'",
+    "validation_criteria": [
+      "Uses file input",
+      "Uses grok processor",
+      "Uses elasticsearch output",
+      "Passes rpk connect lint"
+    ],
+    "difficulty": "intermediate"
+  },
+  {
+    "id": "json-flattening",
+    "description": "JSON flattening pipeline",
+    "context": "kafka input, flatten nested JSON, postgres output with dynamic columns",
+    "validation_criteria": [
+      "Uses kafka input",
+      "Uses bloblang to flatten",
+      "Uses sql output",
+      "Passes rpk connect lint"
+    ],
+    "difficulty": "intermediate"
+  },
+  {
+    "id": "data-masking",
+    "description": "Data masking before storage",
+    "context": "kinesis input, mask PII fields (email, ssn), output to S3",
+    "validation_criteria": [
+      "Uses aws_kinesis input",
+      "Uses bloblang to mask PII",
+      "Uses aws_s3 output",
+      "All credentials use env vars",
+      "Passes rpk connect lint"
+    ],
+    "difficulty": "advanced"
+  },
+  {
+    "id": "deduplication-cache",
+    "description": "Deduplication with cache",
+    "context": "kafka input, dedupe by ID using redis cache with 1h TTL, kafka output",
+    "validation_criteria": [
+      "Uses kafka input",
+      "Uses redis cache resource",
+      "Implements dedupe logic",
+      "Uses kafka output",
+      "Passes rpk connect lint"
+    ],
+    "difficulty": "advanced"
+  },
+  {
+    "id": "cdc-routing",
+    "description": "CDC replication with routing",
+    "context": "postgres CDC, route: INSERTs→kafka, UPDATEs→redis, DELETEs→audit S3",
+    "validation_criteria": [
+      "Uses postgres_cdc input",
+      "Uses switch output for routing",
+      "Routes by operation type",
+      "Multiple output destinations",
+      "Passes rpk connect lint"
+    ],
+    "difficulty": "advanced"
+  },
+  {
+    "id": "stream-enrichment-api",
+    "description": "Stream enrichment with API calls",
+    "context": "kafka input, lookup user in redis, call profile API, merge fields, kafka output",
+    "validation_criteria": [
+      "Uses kafka input",
+      "Uses redis cache lookup",
+      "Uses http processor for API",
+      "Uses kafka output",
+      "Passes rpk connect lint"
+    ],
+    "difficulty": "advanced"
+  },
+  {
+    "id": "fan-out-multiple",
+    "description": "Fan-out to multiple destinations",
+    "context": "HTTP input, write to: kafka (all), S3 (errors), postgres (critical)",
+    "validation_criteria": [
+      "Uses http_server input",
+      "Uses broker output",
+      "Multiple output destinations",
+      "Conditional routing logic",
+      "Passes rpk connect lint"
+    ],
+    "difficulty": "advanced"
+  },
+  {
+    "id": "windowing-aggregation",
+    "description": "Aggregation with windowing",
+    "context": "kafka input, 5-min tumbling window, count by category, write to timescaledb",
+    "validation_criteria": [
+      "Uses kafka input",
+      "Uses workflow or windowing",
+      "Aggregates by category",
+      "Uses sql output (timescale)",
+      "Passes rpk connect lint"
+    ],
+    "difficulty": "advanced"
+  },
+  {
+    "id": "ml-inference-pipeline",
+    "description": "ML inference pipeline",
+    "context": "s3 images, generate embeddings (openai), store vectors (pinecone) + metadata (postgres)",
+    "validation_criteria": [
+      "Uses aws_s3 input",
+      "Uses openai_embeddings processor",
+      "Uses pinecone output",
+      "Uses postgres for metadata",
+      "Passes rpk connect lint"
+    ],
+    "difficulty": "advanced"
+  },
+  {
+    "id": "content-routing",
+    "description": "Content-based routing",
+    "context": "HTTP input, route by type: orders→kafka, logs→elasticsearch, metrics→prometheus",
+    "validation_criteria": [
+      "Uses http_server input",
+      "Uses switch output",
+      "Routes by content type",
+      "Multiple destinations",
+      "Passes rpk connect lint"
+    ],
+    "difficulty": "intermediate"
+  },
+  {
+    "id": "retry-exponential-backoff",
+    "description": "Retry with exponential backoff",
+    "context": "kafka input, HTTP output with 3 retries (1s, 2s, 4s), DLQ to error topic",
+    "validation_criteria": [
+      "Uses kafka input",
+      "Uses http processor with retry",
+      "Implements exponential backoff",
+      "DLQ pattern for failures",
+      "Passes rpk connect lint"
+    ],
+    "difficulty": "advanced"
+  },
+  {
+    "id": "dlq-pattern",
+    "description": "Dead letter queue pattern",
+    "context": "kafka input, transform, on error: send to DLQ topic with error metadata",
+    "validation_criteria": [
+      "Uses kafka input",
+      "Uses try/catch processors",
+      "DLQ output on error",
+      "Includes error metadata",
+      "Passes rpk connect lint"
+    ],
+    "difficulty": "advanced"
+  },
+  {
+    "id": "circuit-breaker",
+    "description": "Circuit breaker for external API",
+    "context": "kafka input, call API, circuit breaker: 5 failures → open for 60s",
+    "validation_criteria": [
+      "Uses kafka input",
+      "Uses http processor",
+      "Implements circuit breaker logic",
+      "Handles failures gracefully",
+      "Passes rpk connect lint"
+    ],
+    "difficulty": "advanced"
+  },
+  {
+    "id": "fallback-chain",
+    "description": "Fallback output chain",
+    "context": "kafka input, try: primary DB, fallback: secondary DB, final: S3 backup",
+    "validation_criteria": [
+      "Uses kafka input",
+      "Uses try/fallback pattern",
+      "Multiple output attempts",
+      "Final fallback to S3",
+      "Passes rpk connect lint"
+    ],
+    "difficulty": "advanced"
+  },
+  {
+    "id": "poison-pill-handling",
+    "description": "Poison pill handling",
+    "context": "kafka input, skip malformed messages, log to errors, continue processing",
+    "validation_criteria": [
+      "Uses kafka input",
+      "Uses try/catch",
+      "Logs errors without stopping",
+      "Continues processing",
+      "Passes rpk connect lint"
+    ],
+    "difficulty": "intermediate"
+  },
+  {
+    "id": "transaction-batching",
+    "description": "Transaction batching with rollback",
+    "context": "kafka input, batch 100 msgs, postgres transaction, rollback batch on any error",
+    "validation_criteria": [
+      "Uses kafka input",
+      "Implements batching",
+      "Uses sql with transactions",
+      "Rollback on error",
+      "Passes rpk connect lint"
+    ],
+    "difficulty": "advanced"
+  }
+]
