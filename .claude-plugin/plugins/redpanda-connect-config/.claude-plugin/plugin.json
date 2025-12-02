@@ -1,0 +1,9 @@
+{
+  "name": "redpanda-connect-config",
+  "description": "Interactive YAML config and Bloblang authoring for Redpanda Connect",
+  "version": "0.1.0",
+  "author": {
+    "name": "Michał Matczuk",
+    "email": "michal.matczuk@redpanda.com"
+  }
+}
