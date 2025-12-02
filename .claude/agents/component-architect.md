@@ -1,5 +1,5 @@
 ---
-name: component-architect
+name: rpcn:component-architect
 description: PROACTIVELY handles component creation, registration patterns, multi-distribution builds, and benthos integration for Redpanda Connect
 tools: bash, file_access, git
 model: sonnet
