@@ -154,6 +154,11 @@ task bundles                      # Update bundle imports
 
 This file provides general repository guidance. For detailed context on specific topics:
 
-- **Go patterns & testing**: See `internal/CLAUDE.md` for Go code patterns, unit testing standards, and integration test patterns
+- **Specialized Agents**: See `.claude/agents/` for domain-specific expertise
+  - `go-expert.md` - Go code patterns, idioms, and best practices
+  - `unit-test-writer.md` - Table-driven tests, testify patterns
+  - `integration-test-writer.md` - Docker-based tests with testcontainers-go
+  - `component-architect.md` - Component registration and multi-distribution system
+  - `code-reviewer.md` - Comprehensive code review orchestration
 - **YAML & Bloblang**: See `config/CLAUDE.md` for configuration patterns and Bloblang transformation language
 - **Agent standards & gotchas**: See `AGENTS.md` for certification requirements and common pitfalls
