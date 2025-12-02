@@ -33,10 +33,16 @@ TAGS=x_benthos_extra task build:all
 ### Testing
 ```bash
 task test                         # Run unit and template tests
-task test:unit                    # Run unit tests only
+task test:unit                    # Run unit tests only (alias: task test:ut)
 task test:unit-race               # Run unit tests with race detection
-task test:template                # Run template/Bloblang tests
-task test:integration-package PKG=./internal/impl/kafka/...  # Run integration tests for specific package
+task test:template                # Run template/Bloblang tests (alias: task test:tmpl)
+task test:integration-package PKG=./internal/impl/kafka/...  # Run integration tests (alias: task test:it PKG=...)
+
+# Run specific test
+go test -v -run TestFunctionName ./internal/impl/category/
+
+# Run integration test for specific package (requires Docker)
+go test -v -run "^Test.*Integration.*$" ./internal/impl/kafka/
 ```
 
 Integration tests require Docker and are skipped by default.
@@ -47,6 +53,12 @@ Run them individually per component.
 task fmt                          # Format code with gofumpt
 task lint                         # Run golangci-lint
 task vuln                         # Run vulnerability scanner
+task build:clean                  # Clean build artifacts
+```
+
+### Documentation
+```bash
+task docs                         # Generate documentation and validate examples
 ```
 
 ### Running Locally
@@ -56,6 +68,9 @@ task run CONF=./path/to/config.yaml # Run with specific config
 
 # Or directly with go
 go run ./cmd/redpanda-connect --config ./config.yaml
+
+# Or using rpk (if installed)
+rpk connect run ./config.yaml
 ```
 
 ---
@@ -78,7 +93,10 @@ FOSS/Apache 2.0 components only.
 **`redpanda-connect-ai`** - AI-specific workflows.
 Cloud components + AI integrations (OpenAI, Claude, etc.).
 
-Component availability controlled by `public/bundle/` (distribution-specific imports), `public/schema/` (schema generation per distribution), and `internal/plugins/info.csv` (component metadata).
+Component availability controlled by:
+- `public/bundle/enterprise/` and `public/bundle/free/` - Distribution-specific package imports
+- `public/schema/` - Schema generation and filtering per distribution
+- `internal/plugins/info.csv` - Component metadata defining which components are available in which distributions (columns: `cloud`, `cloud_with_gpu` indicate cloud-safe components)
 
 ### Directory Structure
 
@@ -122,3 +140,20 @@ Inherits benthos's configuration DSL, validation, and runtime.
 Extends with enterprise-only components.
 
 Update benthos dependency: `task bump-benthos`
+
+### Other Commands
+
+```bash
+task deps                         # Tidy Go modules
+task bundles                      # Update bundle imports
+```
+
+---
+
+## Additional Context Files
+
+This file provides general repository guidance. For detailed context on specific topics:
+
+- **Go patterns & testing**: See `internal/CLAUDE.md` for Go code patterns, unit testing standards, and integration test patterns
+- **YAML & Bloblang**: See `config/CLAUDE.md` for configuration patterns and Bloblang transformation language
+- **Agent standards & gotchas**: See `AGENTS.md` for certification requirements and common pitfalls
