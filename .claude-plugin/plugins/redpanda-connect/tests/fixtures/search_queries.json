@@ -1,0 +1,279 @@
+[
+  {
+    "id": "kafka-consumer",
+    "query": "kafka consumer",
+    "expected_category": "inputs",
+    "expected_components": ["ockam_kafka", "redpanda"],
+    "description": "Basic Kafka consumer search",
+    "difficulty": "basic"
+  },
+  {
+    "id": "postgres-output",
+    "query": "postgres output",
+    "expected_category": "outputs",
+    "expected_components": ["sql_insert", "postgresql", "postgres"],
+    "description": "PostgreSQL database output search",
+    "difficulty": "basic"
+  },
+  {
+    "id": "http-server",
+    "query": "http server",
+    "expected_category": "inputs",
+    "expected_components": ["http_server"],
+    "description": "HTTP server input search",
+    "difficulty": "basic"
+  },
+  {
+    "id": "redis-cache",
+    "query": "redis cache with TTL",
+    "expected_category": "caches",
+    "expected_components": ["redis"],
+    "description": "Redis cache with TTL configuration",
+    "difficulty": "basic"
+  },
+  {
+    "id": "s3-output",
+    "query": "write to S3 bucket",
+    "expected_category": "outputs",
+    "expected_components": ["aws_s3"],
+    "description": "AWS S3 output search",
+    "difficulty": "basic"
+  },
+  {
+    "id": "mqtt-broker",
+    "query": "mqtt broker",
+    "expected_category": "inputs",
+    "expected_components": ["mqtt"],
+    "description": "MQTT broker connection",
+    "difficulty": "basic"
+  },
+  {
+    "id": "gcp-pubsub",
+    "query": "google cloud pub/sub",
+    "expected_category": "inputs",
+    "expected_components": ["gcp_pubsub"],
+    "description": "GCP Pub/Sub search",
+    "difficulty": "basic"
+  },
+  {
+    "id": "elasticsearch",
+    "query": "elasticsearch output",
+    "expected_category": "outputs",
+    "expected_components": ["elasticsearch"],
+    "description": "Elasticsearch output search",
+    "difficulty": "basic"
+  },
+  {
+    "id": "websocket",
+    "query": "websocket server",
+    "expected_category": "inputs",
+    "expected_components": ["websocket"],
+    "description": "WebSocket server input"  ,
+    "difficulty": "basic"
+  },
+  {
+    "id": "azure-storage",
+    "query": "azure blob storage",
+    "expected_category": "outputs",
+    "expected_components": ["azure_blob_storage"],
+    "description": "Azure Blob Storage output",
+    "difficulty": "basic"
+  },
+  {
+    "id": "pulsar-topic",
+    "query": "consume from Pulsar topic",
+    "expected_category": "inputs",
+    "expected_components": ["pulsar"],
+    "description": "Pulsar topic consumer",
+    "difficulty": "basic"
+  },
+  {
+    "id": "parquet-s3",
+    "query": "read parquet files from S3",
+    "expected_category": "inputs",
+    "expected_components": ["aws_s3"],
+    "expected_config": ["scanner", "parquet"],
+    "description": "S3 with Parquet scanner",
+    "difficulty": "intermediate"
+  },
+  {
+    "id": "nats-jetstream",
+    "query": "subscribe to NATS JetStream",
+    "expected_category": "inputs",
+    "expected_components": ["nats_jetstream"],
+    "description": "NATS JetStream subscription",
+    "difficulty": "basic"
+  },
+  {
+    "id": "mysql-polling",
+    "query": "poll MySQL database for new records",
+    "expected_category": "inputs",
+    "expected_components": ["sql_select", "mysql_cdc"],
+    "description": "MySQL polling or CDC",
+    "difficulty": "intermediate"
+  },
+  {
+    "id": "snowflake-output",
+    "query": "write to Snowflake table",
+    "expected_category": "outputs",
+    "expected_components": ["snowflake_put", "snowflake_streaming"],
+    "description": "Snowflake data warehouse output",
+    "difficulty": "intermediate"
+  },
+  {
+    "id": "sns-output",
+    "query": "publish to AWS SNS",
+    "expected_category": "outputs",
+    "expected_components": ["aws_sns"],
+    "description": "AWS SNS publish",
+    "difficulty": "basic"
+  },
+  {
+    "id": "mongodb-output",
+    "query": "store in MongoDB collection",
+    "expected_category": "outputs",
+    "expected_components": ["mongodb"],
+    "description": "MongoDB collection write",
+    "difficulty": "basic"
+  },
+  {
+    "id": "clickhouse-output",
+    "query": "write to ClickHouse database",
+    "expected_category": "outputs",
+    "expected_components": ["sql"],
+    "expected_config": ["driver", "clickhouse"],
+    "description": "ClickHouse database output",
+    "difficulty": "intermediate"
+  },
+  {
+    "id": "compress-processor",
+    "query": "compress messages with gzip",
+    "expected_category": "processors",
+    "expected_components": ["compress"],
+    "expected_config": ["algorithm", "gzip"],
+    "description": "Gzip compression processor",
+    "difficulty": "basic"
+  },
+  {
+    "id": "avro-schema-registry",
+    "query": "decode Avro with schema registry",
+    "expected_category": "processors",
+    "expected_components": ["avro", "schema_registry_decode"],
+    "description": "Avro schema registry decoding",
+    "difficulty": "intermediate"
+  },
+  {
+    "id": "openai-embeddings",
+    "query": "generate embeddings with OpenAI",
+    "expected_category": "processors",
+    "expected_components": ["openai_embeddings"],
+    "description": "OpenAI embeddings generation",
+    "difficulty": "intermediate"
+  },
+  {
+    "id": "javascript-processor",
+    "query": "run custom JavaScript code",
+    "expected_category": "processors",
+    "expected_components": ["javascript"],
+    "description": "JavaScript processor",
+    "difficulty": "basic"
+  },
+  {
+    "id": "grok-parser",
+    "query": "parse logs with Grok patterns",
+    "expected_category": "processors",
+    "expected_components": ["grok"],
+    "description": "Grok log parsing",
+    "difficulty": "intermediate"
+  },
+  {
+    "id": "http-processor",
+    "query": "call external REST API",
+    "expected_category": "processors",
+    "expected_components": ["http"],
+    "description": "HTTP API call processor",
+    "difficulty": "basic"
+  },
+  {
+    "id": "json-schema-validation",
+    "query": "validate JSON schema",
+    "expected_category": "processors",
+    "expected_components": ["json_schema"],
+    "description": "JSON schema validation",
+    "difficulty": "intermediate"
+  },
+  {
+    "id": "kafka-to-elasticsearch",
+    "query": "build Kafka to Elasticsearch pipeline",
+    "expected_category": "multi",
+    "expected_components": ["kafka", "elasticsearch"],
+    "description": "Kafka to Elasticsearch integration",
+    "difficulty": "intermediate"
+  },
+  {
+    "id": "s3-to-bigquery",
+    "query": "S3 to BigQuery ETL with transformation",
+    "expected_category": "multi",
+    "expected_components": ["aws_s3", "gcp_bigquery"],
+    "description": "S3 to BigQuery ETL",
+    "difficulty": "advanced"
+  },
+  {
+    "id": "postgres-cdc-snowflake",
+    "query": "PostgreSQL CDC to Snowflake replication",
+    "expected_category": "multi",
+    "expected_components": ["postgres_cdc", "snowflake"],
+    "description": "PostgreSQL CDC to Snowflake",
+    "difficulty": "advanced"
+  },
+  {
+    "id": "lru-cache",
+    "query": "in-memory cache with LRU eviction",
+    "expected_category": "caches",
+    "expected_components": ["lru", "ristretto"],
+    "description": "LRU cache",
+    "difficulty": "basic"
+  },
+  {
+    "id": "multilevel-cache",
+    "query": "multi-level caching strategy",
+    "expected_category": "caches",
+    "expected_components": ["multilevel"],
+    "description": "Multi-level cache",
+    "difficulty": "advanced"
+  },
+  {
+    "id": "high-throughput-kafka",
+    "query": "high throughput Kafka consumer",
+    "expected_category": "inputs",
+    "expected_components": ["kafka_franz"],
+    "expected_config": ["batching", "parallel"],
+    "description": "High-performance Kafka setup",
+    "difficulty": "advanced"
+  },
+  {
+    "id": "vector-database",
+    "query": "write to vector database",
+    "expected_category": "outputs",
+    "expected_components": ["pinecone", "qdrant"],
+    "description": "Vector database output",
+    "difficulty": "intermediate"
+  },
+  {
+    "id": "ai-llm-processing",
+    "query": "stream processing with AI/LLM",
+    "expected_category": "processors",
+    "expected_components": ["openai_chat_completion", "aws_bedrock_chat", "cohere_chat"],
+    "description": "AI/LLM processing",
+    "difficulty": "advanced"
+  },
+  {
+    "id": "nonexistent-component",
+    "query": "nonexistent_database_xyz",
+    "expected_category": null,
+    "expected_components": [],
+    "description": "Hallucination prevention test - component doesn't exist",
+    "difficulty": "edge_case",
+    "should_not_hallucinate": true
+  }
+]

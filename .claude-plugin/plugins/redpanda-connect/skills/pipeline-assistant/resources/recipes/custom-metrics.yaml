@@ -1,0 +1,74 @@
+# Custom Prometheus Metrics
+# Pattern: Monitoring - Custom Metrics
+# Difficulty: Basic
+
+# --- Input Configuration ---
+input:
+  stdin:
+    scanner:
+      lines: {}
+    auto_replay_nacks: true
+
+# --- Processing Pipeline ---
+pipeline:
+  processors:
+    # Validate JSON format
+    - label: validate_json
+      mapping: |
+        let content = content().string()
+        let test_json = $content.parse_json(use_number: true).catch(this)
+
+        if ($test_json.is_error != null) {
+          # Invalid JSON
+          meta json_error = true
+          meta error_text = "Invalid JSON: " + $content
+        } else {
+          # Valid JSON
+          root.value = this
+          meta json_error = false
+        }
+
+    # Emit custom metric for errors
+    - label: emit_error_metric
+      switch:
+        - check: "@json_error"
+          processors:
+            # Log the error
+            - log:
+                level: WARN
+                message: "${!meta(\"error_text\")}"
+
+            # Emit Prometheus counter metric
+            - metric:
+                type: counter_by
+                name: json_error_count
+                value: 1
+                labels:
+                  pipeline: "json_validation"
+                  error_type: "invalid_json"
+
+# --- Output Configuration ---
+output:
+  switch:
+    cases:
+      # Valid messages
+      - check: "@json_error == false"
+        output:
+          label: "valid_messages"
+          stdout: {}
+
+      # Invalid messages (drop)
+      - output:
+          label: "drop_invalid"
+          drop: {}
+
+# --- Metrics Configuration ---
+metrics:
+  # Expose Prometheus metrics on default endpoint
+  # Default: http://localhost:4195/stats
+  prometheus: {}
+
+  # Filter which metrics to expose
+  # Only expose our custom metric, hide internal metrics
+  mapping: |
+    if this != "json_error_count" { deleted() }

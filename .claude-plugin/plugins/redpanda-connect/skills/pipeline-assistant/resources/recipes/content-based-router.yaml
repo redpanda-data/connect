@@ -1,0 +1,66 @@
+# Content-Based Router for Kafka
+# Pattern: Kafka Patterns - Content-Based Routing
+# Difficulty: Basic
+
+# --- Input Configuration ---
+input:
+  label: consume_from_source
+  kafka_franz:
+    seed_brokers: ["${KAFKA_BROKER}"]
+    topics: ["${SOURCE_TOPIC}"]
+    regexp_topics: false
+    consumer_group: "${CONSUMER_GROUP}"
+    auto_replay_nacks: true  # Retry failed messages
+
+  processors:
+    # Preserve Kafka metadata before processing
+    - label: copy_kafka_metadata
+      mapping: |
+        # Separate Kafka-specific metadata from custom metadata
+        # This allows us to restore partition/key/timestamp in output
+        let kafka_meta = @.filter(kv -> kv.key.has_prefix("kafka_"))
+        meta = @.filter(kv -> !kv.key.has_prefix("kafka_"))
+        meta kafka_metadata = $kafka_meta
+
+    # Filter messages based on content
+    - label: filter_by_marketid
+      mapping: |
+        # Route only NYSE messages
+        if (this.marketid == "nyse") {
+          root = this
+        } else {
+          # Filter out non-NYSE messages
+          root = deleted()
+        }
+
+# --- Output Configuration ---
+output:
+  label: write_to_destination
+  kafka_franz:
+    seed_brokers: ["${KAFKA_BROKER}"]
+    topic: "${DEST_TOPIC}"
+
+    # Preserve source partition (maintains ordering)
+    partitioner: "manual"
+    partition: "${!metadata(\"kafka_metadata\").kafka_partition}"
+
+    # Preserve source message key (maintains co-partitioning)
+    key: "${!metadata(\"kafka_metadata\").kafka_key}"
+
+    # Preserve source timestamp (maintains event time)
+    timestamp: "${!metadata(\"kafka_metadata\").kafka_timestamp_unix}"
+
+    # Preserve all custom headers
+    metadata:
+      include_patterns: [".*"]
+
+    # Use idempotent writes to minimize duplicates
+    idempotent_write: true
+
+    # Performance tuning
+    max_message_bytes: 1024          # Batch size before compression
+    broker_write_max_bytes: 100MiB   # Max request size for large messages
+    max_in_flight: 256               # High parallelism for throughput
+
+    # Set client ID for tracing/debugging
+    client_id: "content_based_router"

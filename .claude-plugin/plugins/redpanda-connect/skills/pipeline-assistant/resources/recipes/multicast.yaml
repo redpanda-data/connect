@@ -1,0 +1,104 @@
+# Message Multicast (Fan-Out)
+# Pattern: Routing - Multicast / Fan-Out
+# Difficulty: Basic
+
+# --- Input Configuration ---
+input:
+  label: consume_from_source
+  kafka_franz:
+    seed_brokers: ["${KAFKA_BROKER}"]
+    topics: ["${SOURCE_TOPIC}"]
+    consumer_group: "${CONSUMER_GROUP}"
+    auto_replay_nacks: true
+
+# --- Processing Pipeline ---
+pipeline:
+  processors:
+    # Preserve Kafka metadata
+    - label: copy_metadata
+      mapping: |
+        # Save original Kafka metadata for output
+        let kafka_meta = @.filter(kv -> kv.key.has_prefix("kafka_"))
+        meta kafka_metadata = $kafka_meta
+
+    # Determine target topics based on content
+    - label: determine_destinations
+      mapping: |
+        # Build list of target topics
+        let target_topics = []
+
+        # Example: Route based on "type" field
+        let multicast_type = this.type
+
+        if ($multicast_type == null) {
+          # Invalid message, skip
+          root = deleted()
+        } else {
+          # Add topics based on content
+          if ($multicast_type.contains("A")) {
+            let target_topics = $target_topics.append("topic_a")
+          }
+
+          if ($multicast_type.contains("B")) {
+            let target_topics = $target_topics.append("topic_b")
+          }
+
+          if ($multicast_type.contains("C")) {
+            let target_topics = $target_topics.append("topic_c")
+          }
+
+          # Store target list in metadata
+          meta target_topics = $target_topics
+
+          # Pass original message through
+          root = this
+        }
+
+# --- Output Configuration ---
+output:
+  # Fan out to multiple destinations
+  broker:
+    pattern: fan_out
+    outputs:
+      # Topic A
+      - label: destination_a
+        kafka_franz:
+          seed_brokers: ["${KAFKA_BROKER}"]
+          topic: topic_a
+
+          # Preserve original metadata
+          partitioner: "manual"
+          partition: "${!metadata(\"kafka_metadata\").kafka_partition}"
+          key: "${!metadata(\"kafka_metadata\").kafka_key}"
+          timestamp: "${!metadata(\"kafka_metadata\").kafka_timestamp_unix}"
+
+          idempotent_write: true
+          max_in_flight: 256
+
+      # Topic B
+      - label: destination_b
+        kafka_franz:
+          seed_brokers: ["${KAFKA_BROKER}"]
+          topic: topic_b
+
+          partitioner: "manual"
+          partition: "${!metadata(\"kafka_metadata\").kafka_partition}"
+          key: "${!metadata(\"kafka_metadata\").kafka_key}"
+          timestamp: "${!metadata(\"kafka_metadata\").kafka_timestamp_unix}"
+
+          idempotent_write: true
+          max_in_flight: 256
+
+      # Topic C
+      - label: destination_c
+        kafka_franz:
+          seed_brokers: ["${KAFKA_BROKER}"]
+          topic: topic_c
+
+          partitioner: "manual"
+          partition: "${!metadata(\"kafka_metadata\").kafka_partition}"
+          key: "${!metadata(\"kafka_metadata\").kafka_key}"
+          timestamp: "${!metadata(\"kafka_metadata\").kafka_timestamp_unix}"
+
+          idempotent_write: true
+          max_in_flight: 256

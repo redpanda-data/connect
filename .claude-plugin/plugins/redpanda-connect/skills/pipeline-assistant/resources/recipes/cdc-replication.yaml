@@ -1,0 +1,90 @@
+# Change Data Capture (CDC) Replication
+# Pattern: Kafka Patterns - Database CDC Replication
+# Difficulty: Advanced
+
+# --- Input Configuration ---
+input:
+  postgres_cdc:
+    # Source database connection
+    dsn: "${SOURCE_DSN}"
+
+    # Include transaction begin/commit markers for grouping
+    include_transaction_markers: true
+
+    # Replication slot name (must be created beforehand)
+    slot_name: test_slot
+
+    # Stream initial snapshot before changes
+    stream_snapshot: true
+
+    # Schema and tables to replicate
+    schema: public
+    tables: [my_src_table]
+
+    # Group changes by transaction
+    # All changes in a transaction are batched together
+    batching:
+      # Batch completes when commit marker is seen
+      check: '@operation == "commit"'
+
+      # Window period - must be large enough for full transaction
+      # If a transaction takes longer than this, it may be split
+      period: 10s
+
+      processors:
+        # Remove transaction markers (begin/commit)
+        # Only keep actual data changes
+        - mapping: |
+            root = if @operation == "begin" || @operation == "commit" {
+              deleted()
+            } else {
+              this
+            }
+
+# --- Output Configuration ---
+output:
+  # Route based on operation type
+  switch:
+    # Strict mode ensures all messages match a case
+    strict_mode: true
+
+    cases:
+      # Handle INSERT and UPDATE operations
+      - check: '@operation != "delete"'
+        output:
+          sql_raw:
+            driver: postgres
+            dsn: "${DEST_DSN}"
+
+            # Map message fields to SQL parameters
+            args_mapping: root = [this.id, this.foo, this.bar]
+
+            # MERGE statement for upsert (insert or update)
+            query: |
+              MERGE INTO my_dst_table AS old
+              USING (SELECT
+                $1 id,
+                $2 foo,
+                $3 bar
+              ) AS new
+              ON new.id = old.id
+              WHEN MATCHED THEN
+                UPDATE SET
+                  foo = new.foo,
+                  bar = new.bar
+              WHEN NOT MATCHED THEN
+                INSERT (id, foo, bar)
+                VALUES (new.id, new.foo, new.bar);
+
+      # Handle DELETE operations
+      - check: '@operation == "delete"'
+        output:
+          sql_raw:
+            driver: postgres
+            dsn: "${DEST_DSN}"
+
+            # Delete by ID
+            query: DELETE FROM my_dst_table WHERE id = $1
+
+            # Only pass the ID field
+            args_mapping: root = [this.id]

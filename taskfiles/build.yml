@@ -75,6 +75,34 @@ tasks:
     cmds:
       - mkdir -p '{{.TARGET_DIR}}'
 
+  skills:
+    desc: Build Claude Code skill ZIPs
+    vars:
+      PLUGIN_VERSION:
+        sh: jq -r '.version' .claude-plugin/plugins/redpanda-connect/.claude-plugin/plugin.json
+    sources:
+      - .claude-plugin/plugins/redpanda-connect/skills/**/*.md
+      - .claude-plugin/plugins/redpanda-connect/skills/**/*.py
+      - .claude-plugin/plugins/redpanda-connect/skills/**/*.sh
+      - .claude-plugin/plugins/redpanda-connect/skills/**/*.yaml
+      - .claude-plugin/plugins/redpanda-connect/.claude-plugin/plugin.json
+    generates:
+      - '{{.TARGET_DIR}}/skills/bloblang-authoring.zip'
+      - '{{.TARGET_DIR}}/skills/component-search.zip'
+      - '{{.TARGET_DIR}}/skills/pipeline-assistant.zip'
+      - .claude-plugin/dist/bloblang-authoring-{{.PLUGIN_VERSION}}.zip
+      - .claude-plugin/dist/component-search-{{.PLUGIN_VERSION}}.zip
+      - .claude-plugin/dist/pipeline-assistant-{{.PLUGIN_VERSION}}.zip
+    cmds:
+      - mkdir -p .claude-plugin/dist
+      - |
+        BUILD_DIR=$(pwd)/.claude-plugin/dist
+        cd .claude-plugin/plugins/redpanda-connect/skills
+        for skill in bloblang-authoring component-search pipeline-assistant; do
+          cd $skill && zip -q -r "$BUILD_DIR/$skill-{{.PLUGIN_VERSION}}.zip" . -x ".*" -x "__pycache__/*" -x "*.pyc" && cd ..
+          echo "✓ Built $skill-{{.PLUGIN_VERSION}}.zip"
+        done
+
   clean:
     desc: Clean build artifacts
     cmds:

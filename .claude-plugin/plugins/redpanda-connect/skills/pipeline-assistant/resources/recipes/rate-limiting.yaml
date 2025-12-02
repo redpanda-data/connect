@@ -1,0 +1,26 @@
+# Rate Limiting
+# Pattern: Performance - Rate Limiting
+# Difficulty: Intermediate
+
+input:
+  kafka_franz:
+    seed_brokers: ["${KAFKA_BROKER}"]
+    topics: ["${SOURCE_TOPIC}"]
+    consumer_group: "${CONSUMER_GROUP}"
+
+pipeline:
+  processors:
+    - rate_limit:
+        resource: api_limiter
+
+output:
+  http_client:
+    url: "${API_URL}"
+    verb: POST
+    rate_limit: api_limiter
+
+rate_limit_resources:
+  - label: api_limiter
+    local:
+      count: 100
+      interval: 1s
