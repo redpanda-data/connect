@@ -1,5 +1,5 @@
 ---
-name: unit-test-writer
+name: rpcn:unit-test-writer
 description: PROACTIVELY writes and maintains unit tests using table-driven patterns, testify, and assert/require for Redpanda Connect
 tools: bash, file_access
 model: sonnet

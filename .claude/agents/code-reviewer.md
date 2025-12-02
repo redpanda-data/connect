@@ -1,5 +1,5 @@
 ---
-name: code-reviewer
+name: rpcn:code-reviewer
 description: PROACTIVELY reviews code for Go best practices, test coverage, component patterns, and Redpanda Connect conventions
 tools: bash, file_access, git
 model: sonnet

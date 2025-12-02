@@ -1,5 +1,5 @@
 ---
-name: go-expert
+name: rpcn:go-expert
 description: PROACTIVELY handles Go code writing, reviews, refactoring, and architectural decisions following Redpanda Connect patterns
 tools: bash, file_access, git
 model: sonnet

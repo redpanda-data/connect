@@ -1,5 +1,5 @@
 ---
-name: integration-test-writer
+name: rpcn:integration-test-writer
 description: PROACTIVELY writes integration tests using Docker containers, handles async operations, and follows Given-When-Then patterns for Redpanda Connect
 tools: bash, file_access, git
 model: sonnet
