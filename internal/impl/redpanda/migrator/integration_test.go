@@ -46,6 +46,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
+	"github.com/redpanda-data/connect/v4/internal/impl/redpanda/redpandatest"
 	_ "github.com/redpanda-data/connect/v4/public/components/confluent"
 )
 
@@ -209,7 +210,9 @@ func TestIntegrationMigratorSinglePartitionMalformedSchemaID(t *testing.T) {
 	)
 
 	t.Log("Given: Redpanda clusters")
-	src, dst := startRedpandaSourceAndDestination(t)
+	src, dst := startRedpandaSourceAndDestination(t, func(rcok redpandatestConfigOptKind, c *redpandatest.Config) {
+		c.Nightly = true
+	})
 
 	t.Log("And: Schema registry containing a subject and schema")
 	{
@@ -217,6 +220,14 @@ func TestIntegrationMigratorSinglePartitionMalformedSchemaID(t *testing.T) {
 		require.NoError(t, err)
 		_, err = srScr.CreateSchema(t.Context(), subj, sr.Schema{Schema: schema})
 		require.NoError(t, err)
+	}
+
+	t.Log("And: Destination schema registry subject is set to import mode")
+	{
+		srDst, err := sr.NewClient(sr.URLs(dst.SchemaRegistryURL))
+		require.NoError(t, err)
+		modeRes := srDst.SetMode(t.Context(), sr.ModeImport, subj)
+		require.NoError(t, modeRes[0].Err)
 	}
 
 	pfx := []byte{0x00, 0x01, 0x02, 0x03, 0x04}
@@ -252,13 +263,23 @@ func TestIntegrationMigratorMultiPartitionSchemaAwareWithConsumerGroups(t *testi
 	)
 
 	t.Log("Given: Redpanda clusters")
-	src, dst := startRedpandaSourceAndDestination(t)
+	src, dst := startRedpandaSourceAndDestination(t, func(rcok redpandatestConfigOptKind, c *redpandatest.Config) {
+		c.Nightly = true
+	})
 
 	t.Log("And: Schema registry containing a subject and schema")
 	srScr, err := sr.NewClient(sr.URLs(src.SchemaRegistryURL))
 	require.NoError(t, err)
 	ss, err := srScr.CreateSchema(t.Context(), subj, sr.Schema{Schema: schema})
 	require.NoError(t, err)
+
+	t.Log("And: Destination schema registry subject is set to import mode")
+	{
+		srDst, err := sr.NewClient(sr.URLs(dst.SchemaRegistryURL))
+		require.NoError(t, err)
+		modeRes := srDst.SetMode(t.Context(), sr.ModeImport, subj)
+		require.NoError(t, modeRes[0].Err)
+	}
 
 	t.Log("When: Messages are written to the source cluster")
 	{
