@@ -42,7 +42,10 @@ func TestIntegrationTopicMigratorSyncACLs(t *testing.T) {
 
 	hasACL := func(t *testing.T, cluster EmbeddedRedpandaCluster, topic, principal string, perm kmsg.ACLPermissionType, op kmsg.ACLOperation) bool {
 		acls, err := cluster.DescribeTopicACLs(topic)
-		require.NoError(t, err)
+		if err != nil {
+			t.Logf("Failed to describe ACLs (treating as not found): %v", err)
+			return false
+		}
 		for _, a := range acls {
 			t.Logf("Found ACL: %v", a)
 

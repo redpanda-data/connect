@@ -41,3 +41,13 @@ tasks:
       .dockers_v2[0].platforms = ["linux/{{.GOARCH}}"] |
       .checksum.disable = true'
       {{.CONFIG_FILE}})
+
+  pull-redpanda:
+    desc: Pull latest version of Redpanda for local development/testing
+    vars:
+      IMAGE_BASE: 'docker.redpanda.com/redpandadata/redpanda'
+      IMAGE_TAG: '{{.IMAGE_TAG | default "latest"}}'
+    cmds:
+      - echo "Pulling latest Redpanda version..."
+      - docker pull {{.IMAGE_BASE }}:{{ .IMAGE_TAG }}
+      - docker inspect {{.IMAGE_BASE }}:{{ .IMAGE_TAG }} | jq '[.[].RepoTags[]]'

@@ -18,6 +18,7 @@ import (
 	"context"
 	"regexp"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -26,7 +27,6 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	"github.com/redpanda-data/connect/v4/internal/impl/redpanda/migrator"
-	"github.com/redpanda-data/connect/v4/internal/impl/redpanda/redpandatest"
 )
 
 func startSchemaRegistrySourceAndDestination(t *testing.T, opts ...redpandatestConfigOpt) (*sr.Client, *sr.Client) {
@@ -235,6 +235,10 @@ func TestIntegrationSchemaRegistryMigratorSyncNameResolver(t *testing.T) {
 	_, err := src.CreateSchema(t.Context(), subj, sr.Schema{Schema: schema})
 	require.NoError(t, err)
 
+	t.Log("And: destination is set to import mode")
+	modeRes := dst.SetMode(t.Context(), sr.ModeImport)
+	require.NoError(t, modeRes[0].Err)
+
 	nr, err := service.NewInterpolatedString("dst_${! @schema_registry_subject }")
 	require.NoError(t, err)
 
@@ -271,6 +275,10 @@ func TestIntegrationSchemaRegistryMigratorSyncVersionsAll(t *testing.T) {
 	require.NoError(t, err)
 	_, err = src.CreateSchema(t.Context(), subj, sr.Schema{Schema: dummyAvroSchemaV2})
 	require.NoError(t, err)
+
+	t.Log("And: destination is set to import mode")
+	modeRes := dst.SetMode(t.Context(), sr.ModeImport)
+	require.NoError(t, modeRes[0].Err)
 
 	t.Log("And: migrator is configured with all versions")
 	conf := migrator.SchemaRegistryMigratorConfig{
@@ -312,6 +320,14 @@ func TestIntegrationSchemaRegistryMigratorSyncWithReferences(t *testing.T) {
 		addressSchema  = `{"type":"record","name":"Address","namespace":"com.example.schemas","fields":[{"name":"street","type":"string"},{"name":"city","type":"string"},{"name":"state","type":"string"},{"name":"zipCode","type":"string"}]}`
 	)
 
+	t.Log("And: source and destination address subject is set to import mode")
+	modeRes := src.SetMode(ctx, sr.ModeImport, addressSubject)
+	require.NoError(t, modeRes[0].Err)
+	modeRes = dst.SetMode(ctx, sr.ModeImport, addressSubject)
+	require.NoError(t, modeRes[0].Err)
+
+	time.Sleep(3 * time.Second)
+
 	addressSchemaResp, err := src.CreateSchemaWithIDAndVersion(ctx, addressSubject, sr.Schema{
 		Schema: addressSchema,
 		Type:   sr.TypeAvro,
@@ -324,6 +340,14 @@ func TestIntegrationSchemaRegistryMigratorSyncWithReferences(t *testing.T) {
 		personSubject = "person01-value"
 		personSchema  = `{"type":"record","name":"Person","namespace":"com.example.schemas","fields":[{"name":"id","type":"string"},{"name":"firstName","type":"string"},{"name":"lastName","type":"string"},{"name":"address","type":"com.example.schemas.Address"}]}`
 	)
+
+	t.Log("And: source and destination person subject is set to import mode")
+	modeRes = src.SetMode(ctx, sr.ModeImport, personSubject)
+	require.NoError(t, modeRes[0].Err)
+	modeRes = dst.SetMode(ctx, sr.ModeImport, personSubject)
+	require.NoError(t, modeRes[0].Err)
+
+	time.Sleep(3 * time.Second)
 
 	personSchemaResp, err := src.CreateSchemaWithIDAndVersion(ctx, personSubject, sr.Schema{
 		Schema: personSchema,
@@ -418,16 +442,8 @@ func TestIntegrationSchemaRegistryMigratorSyncTranslateIDs(t *testing.T) {
 func TestIntegrationSchemaRegistryMigratorSyncReuseIDs(t *testing.T) {
 	integration.CheckSkip(t)
 
-	// This test requires Redpanda 25.3 or newer to work around this issue
-	// https://github.com/redpanda-data/redpanda/issues/26331
-	nightly := func(kind redpandatestConfigOptKind, cfg *redpandatest.Config) {
-		if kind == redpandatestConfigOptKindDst {
-			cfg.Nightly = true
-		}
-	}
-
 	t.Log("Given: source and destination Schema Registry")
-	src, dst := startSchemaRegistrySourceAndDestination(t, nightly)
+	src, dst := startSchemaRegistrySourceAndDestination(t)
 
 	const (
 		schema1 = `{"type":"record","name":"User","fields":[{"name":"id","type":"int"}]}`
@@ -520,6 +536,10 @@ message R {
 	_, err := src.CreateSchema(t.Context(), subj, sr.Schema{Schema: denorm, Type: sr.TypeProtobuf})
 	require.NoError(t, err)
 
+	t.Log("And: destination is set to import mode")
+	modeRes := dst.SetMode(t.Context(), sr.ModeImport)
+	require.NoError(t, modeRes[0].Err)
+
 	t.Log("And: migrator is configured to normalize")
 	conf := migrator.SchemaRegistryMigratorConfig{
 		Enabled:   true,
@@ -546,17 +566,16 @@ func TestIntegrationSchemaRegistryMigratorSyncIdempotence(t *testing.T) {
 	tests := []struct {
 		name      string
 		translate bool
+		mode      sr.Mode
 	}{
-		{name: "translate_ids=true", translate: true},
-		{name: "translate_ids=false", translate: false},
+		{name: "translate_ids=true", translate: true, mode: sr.ModeReadWrite},
+		{name: "translate_ids=false", translate: false, mode: sr.ModeImport},
 	}
 
 	const subj = "idem"
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
 			t.Log("Given: source and destination Schema Registry")
 			src, dst := startSchemaRegistrySourceAndDestination(t)
 
@@ -565,6 +584,10 @@ func TestIntegrationSchemaRegistryMigratorSyncIdempotence(t *testing.T) {
 			require.NoError(t, err)
 			_, err = src.CreateSchema(t.Context(), subj, sr.Schema{Schema: dummyAvroSchemaV2})
 			require.NoError(t, err)
+
+			t.Logf("And: destination is set to %s mode", tc.mode)
+			modeRes := dst.SetMode(t.Context(), tc.mode)
+			require.NoError(t, modeRes[0].Err)
 
 			conf := migrator.SchemaRegistryMigratorConfig{
 				Enabled:      true,
@@ -615,6 +638,10 @@ func TestIntegrationSchemaRegistryMigratorCompatibilityFromSource(t *testing.T) 
 	level := sr.CompatFull
 	set := src.SetCompatibility(t.Context(), sr.SetCompatibility{Level: level}, subj)
 	require.NoError(t, set[0].Err)
+
+	t.Log("And: destination is set to import mode")
+	modeRes := dst.SetMode(t.Context(), sr.ModeImport)
+	require.NoError(t, modeRes[0].Err)
 
 	t.Log("When: migrator runs")
 	conf := migrator.SchemaRegistryMigratorConfig{
