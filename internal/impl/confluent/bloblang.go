@@ -31,15 +31,15 @@ func registerWithSchemaRegistryHeader() {
 	spec := bloblang.NewPluginSpec().
 		Beta().
 		Category("Encoding").
-		Description("Prepends a 5-byte Schema Registry header to a message. The header consists of a magic byte (0x00) followed by a 4-byte big-endian schema ID.").
-		Param(bloblang.NewAnyParam("schema_id").Description("The schema ID to include in the header (must be a valid unsigned 32-bit integer).")).
-		Param(bloblang.NewAnyParam("message").Description("The message bytes to prepend the header to.")).
+		Description("Prepends a Confluent Schema Registry wire format header to message bytes. The header is 5 bytes: a magic byte (0x00) followed by a 4-byte big-endian schema ID. This format is required when producing messages to Kafka topics that use Confluent Schema Registry for schema validation and evolution.").
+		Param(bloblang.NewAnyParam("schema_id").Description("The schema ID from your Schema Registry (0 to 4294967295). This ID references the schema version used to encode the message.")).
+		Param(bloblang.NewAnyParam("message").Description("The serialized message bytes (e.g., Avro, Protobuf, or JSON Schema encoded data) to prepend the header to.")).
 		Example(
-			"Add header with schema ID 123",
+			"Add Schema Registry header to Avro-encoded message",
 			`root = with_schema_registry_header(123, content())`,
 		).
 		Example(
-			"Add header with schema ID from metadata",
+			"Use schema ID from metadata to add header dynamically",
 			`root = with_schema_registry_header(meta("schema_id").number(), content())`,
 		)
 

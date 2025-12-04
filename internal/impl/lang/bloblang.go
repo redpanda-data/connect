@@ -38,19 +38,19 @@ func init() {
 	slugSpec := bloblang.NewPluginSpec().
 		Beta().
 		Category("String Manipulation").
-		Description(`Creates a "slug" from a given string. Wraps the github.com/gosimple/slug package. See its https://pkg.go.dev/github.com/gosimple/slug[docs^] for more information.`).
+		Description(`Converts a string into a URL-friendly slug by replacing spaces with hyphens, removing special characters, and converting to lowercase. Supports multiple languages for proper transliteration of non-ASCII characters.`).
 		Version("4.2.0").
-		Example("Creates a slug from an English string",
-			`root.slug = this.value.slug()`,
+		Example("Create a URL-friendly slug from a string with special characters",
+			`root.slug = this.title.slug()`,
 			[2]string{
-				`{"value":"Gopher & Benthos"}`,
-				`{"slug":"gopher-and-benthos"}`,
+				`{"title":"Hello World! Welcome to Redpanda Connect"}`,
+				`{"slug":"hello-world-welcome-to-redpanda-connect"}`,
 			}).
-		Example("Creates a slug from a French string",
-			`root.slug = this.value.slug("fr")`,
+		Example("Create a slug preserving French language rules",
+			`root.slug = this.title.slug("fr")`,
 			[2]string{
-				`{"value":"Gaufre & Poisson d'Eau Profonde"}`,
-				`{"slug":"gaufre-et-poisson-deau-profonde"}`,
+				`{"title":"Café & Restaurant"}`,
+				`{"slug":"cafe-et-restaurant"}`,
 			}).Param(bloblang.NewStringParam("lang").Optional().Default("en"))
 
 	if err := bloblang.RegisterMethodV2(
@@ -71,25 +71,19 @@ func init() {
 	unicodeSegmentsSpec := bloblang.NewPluginSpec().
 		Beta().
 		Category("String Manipulation").
-		Description(`Splits text into segments from a given string based on the unicode text segmentation rules.`).
-		Example("Splits a string into different sentences",
-			`root.sentences = this.value.unicode_segments("sentence")`,
+		Description(`Splits text into segments based on Unicode text segmentation rules. Returns an array of strings representing individual graphemes (visual characters), words (including punctuation and whitespace), or sentences. Handles complex Unicode correctly, including emoji with skin tone modifiers and zero-width joiners.`).
+		Example("Split text into sentences (preserves trailing spaces)",
+			`root.sentences = this.text.unicode_segments("sentence")`,
 			[2]string{
-				`{"value":"This is sentence 1.0. And this is sentence two."}`,
-				`{"sentences":["This is sentence 1.0. ","And this is sentence two."]}`,
+				`{"text":"Hello world. How are you?"}`,
+				`{"sentences":["Hello world. ","How are you?"]}`,
 			}).
-		Example("Splits a string into different graphemes",
-			`root.graphemes = this.value.unicode_segments("grapheme")`,
+		Example("Split text into grapheme clusters (handles complex emoji correctly)",
+			`root.graphemes = this.emoji.unicode_segments("grapheme")`,
 			[2]string{
-				`{"value":"🐕‍🦺 🫠"}`,
-				`{"graphemes":["🐕‍🦺"," ","🫠"]}`,
-			}).
-		Example("Splits text into words",
-			`root.words = this.value.unicode_segments("word")`,
-			[2]string{
-				`{"value":"Hello, world!"}`,
-				`{"words":["Hello",","," ","world","!"]}`,
-			}).Param(bloblang.NewStringParam("segmentation_type"))
+				`{"emoji":"👨‍👩‍👧‍👦❤️"}`,
+				`{"graphemes":["👨‍👩‍👧‍👦","❤️"]}`,
+			}).Param(bloblang.NewStringParam("segmentation_type").Description("Type of segmentation: \"grapheme\", \"word\", or \"sentence\""))
 
 	if err := bloblang.RegisterMethodV2(
 		"unicode_segments", unicodeSegmentsSpec,
@@ -130,23 +124,27 @@ func init() {
 	fakerSpec := bloblang.NewPluginSpec().
 		Beta().
 		Category("Fake Data Generation").
-		Description("Takes in a string that maps to a https://github.com/go-faker/faker[faker^] function and returns the result from that faker function. "+
-			"Returns an error if the given string doesn't match a supported faker function. Supported functions: `latitude`, `longitude`, `unix_time`, "+
-			"`date`, `time_string`, `month_name`, `year_string`, `day_of_week`, `day_of_month`, `timestamp`, `century`, `timezone`, `time_period`, "+
+		Description("Generates realistic fake data for testing and development purposes. Supports a wide variety of data types including personal information, network addresses, dates/times, financial data, and UUIDs. "+
+			"Useful for creating mock data, populating test databases, or anonymizing sensitive information.\n\n"+
+			"Supported functions: `latitude`, `longitude`, `unix_time`, `date`, `time_string`, `month_name`, `year_string`, `day_of_week`, `day_of_month`, `timestamp`, `century`, `timezone`, `time_period`, "+
 			"`email`, `mac_address`, `domain_name`, `url`, `username`, `ipv4`, `ipv6`, `password`, `jwt`, `word`, `sentence`, `paragraph`, "+
 			"`cc_type`, `cc_number`, `currency`, `amount_with_currency`, `title_male`, `title_female`, `first_name`, `first_name_male`, "+
 			"`first_name_female`, `last_name`, `name`, `gender`, `chinese_first_name`, `chinese_last_name`, `chinese_name`, `phone_number`, "+
-			"`toll_free_phone_number`, `e164_phone_number`, `uuid_hyphenated`, `uuid_digit`. Refer to the https://github.com/go-faker/faker[faker^] docs "+
-			"for details on these functions.").
-		Param(bloblang.NewStringParam("function").Description("The name of the function to use to generate the value.").Default("")).
-		Example("Use `time_string` to generate a time in the format `00:00:00`:",
-			`root.time = fake("time_string")`).
-		Example("Use `email` to generate a string in email address format:",
-			`root.email = fake("email")`).
-		Example("Use `jwt` to generate a JWT token:",
-			`root.jwt = fake("jwt")`).
-		Example("Use `uuid_hyphenated` to generate a hyphenated UUID:",
-			`root.uuid = fake("uuid_hyphenated")`)
+			"`toll_free_phone_number`, `e164_phone_number`, `uuid_hyphenated`, `uuid_digit`.").
+		Param(bloblang.NewStringParam("function").Description("The name of the faker function to use. See description for full list of supported functions.").Default("")).
+		Example("Generate fake user profile data for testing",
+			`root.user = {
+  "id": fake("uuid_hyphenated"),
+  "name": fake("name"),
+  "email": fake("email"),
+  "created_at": fake("timestamp")
+}`).
+		Example("Create realistic test data for network monitoring",
+			`root.event = {
+  "source_ip": fake("ipv4"),
+  "mac_address": fake("mac_address"),
+  "url": fake("url")
+}`)
 
 	if err := bloblang.RegisterFunctionV2(
 		"fake", fakerSpec,
@@ -166,10 +164,14 @@ func init() {
 
 	snowflakeidSpec := bloblang.NewPluginSpec().
 		Category("General").
-		Description("Generate a new snowflake ID each time it is invoked and prints a string representation. I.e.: 1559229974454472704").
-		Param(bloblang.NewInt64Param("node_id").Description("It is possible to specify the node_id.").Default(int64(1))).
-		Example("", `root.id = snowflake_id()`).
-		Example("It is possible to specify the node_id.", `root.id = snowflake_id(2)`)
+		Description("Generates a unique, time-ordered Snowflake ID. Snowflake IDs are 64-bit integers that encode timestamp, node ID, and sequence information, making them ideal for distributed systems where sortable unique identifiers are needed. Returns a string representation of the ID.").
+		Param(bloblang.NewInt64Param("node_id").Description("Optional node identifier (0-1023) to distinguish IDs generated by different machines in a distributed system. Defaults to 1.").Default(int64(1))).
+		Example("Generate a unique Snowflake ID for each message",
+			`root.id = snowflake_id()
+root.payload = this`).
+		Example("Generate Snowflake IDs with different node IDs for multi-datacenter deployments",
+			`root.id = snowflake_id(42)
+root.data = this`)
 
 	if err := bloblang.RegisterFunctionV2(
 		"snowflake_id", snowflakeidSpec,
@@ -319,28 +321,26 @@ func registerULID() error {
 	spec := bloblang.NewPluginSpec().
 		Experimental().
 		Category("General").
-		Description("Generate a random ULID.").
+		Description("Generates a Universally Unique Lexicographically Sortable Identifier (ULID). ULIDs are 128-bit identifiers that are sortable by creation time, URL-safe, and case-insensitive. They consist of a 48-bit timestamp (millisecond precision) and 80 bits of randomness, making them ideal for distributed systems that need time-ordered unique IDs without coordination.").
 		Param(
 			bloblang.NewStringParam("encoding").
 				Default("crockford").
-				Description("The format to encode a ULID into. Valid options are: "+strings.Join(encodings, ", ")),
+				Description("Encoding format for the ULID. \"crockford\" produces 26-character Base32 strings (recommended). \"hex\" produces 32-character hexadecimal strings."),
 		).
 		Param(
 			bloblang.NewStringParam("random_source").
 				Default("secure_random").
-				Description(`The source of randomness to use for generating ULIDs. "secure_random" is recommended for most use cases. "fast_random" can be used if security is not a concern.`),
+				Description("Randomness source: \"secure_random\" uses cryptographically secure random (recommended for production), \"fast_random\" uses faster but non-secure random (only for non-sensitive testing)."),
 		).
 		Example(
-			"Using the defaults of Crockford Base32 encoding and secure random source",
-			`root.id = ulid()`,
+			"Generate time-sortable IDs for distributed message ordering",
+			`root.message_id = ulid()
+root.timestamp = now()
+root.data = this`,
 		).
 		Example(
-			"ULIDs can be hex-encoded too.",
+			"Generate hex-encoded ULIDs for systems that prefer hexadecimal format",
 			`root.id = ulid("hex")`,
-		).
-		Example(
-			"They can be generated using a fast, but unsafe, random source for use cases that are not security-sensitive.",
-			`root.id = ulid("crockford", "fast_random")`,
 		)
 
 	secureRandom := rand.Reader

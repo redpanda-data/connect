@@ -557,7 +557,7 @@ root.the_rest = this.value.slice(0, -4)
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
-Creates a "slug" from a given string. Wraps the github.com/gosimple/slug package. See its https://pkg.go.dev/github.com/gosimple/slug[docs^] for more information.
+Converts a string into a URL-friendly slug by replacing spaces with hyphens, removing special characters, and converting to lowercase. Supports multiple languages for proper transliteration of non-ASCII characters.
 
 Introduced in version 4.2.0.
 
@@ -569,22 +569,22 @@ Introduced in version 4.2.0.
 ==== Examples
 
 
-Creates a slug from an English string
+Create a URL-friendly slug from a string with special characters
 
 ```coffeescript
-root.slug = this.value.slug()
+root.slug = this.title.slug()
 
-# In:  {"value":"Gopher & Benthos"}
-# Out: {"slug":"gopher-and-benthos"}
+# In:  {"title":"Hello World! Welcome to Redpanda Connect"}
+# Out: {"slug":"hello-world-welcome-to-redpanda-connect"}
 ```
 
-Creates a slug from a French string
+Create a slug preserving French language rules
 
 ```coffeescript
-root.slug = this.value.slug("fr")
+root.slug = this.title.slug("fr")
 
-# In:  {"value":"Gaufre & Poisson d'Eau Profonde"}
-# Out: {"slug":"gaufre-et-poisson-deau-profonde"}
+# In:  {"title":"Café & Restaurant"}
+# Out: {"slug":"cafe-et-restaurant"}
 ```
 
 === `split`
@@ -607,29 +607,31 @@ root.new_value = this.value.split(",")
 
 === `strip_html`
 
-Attempts to remove all HTML tags from a target string.
+Removes HTML tags from a string, returning only the text content. Useful for extracting plain text from HTML documents, sanitizing user input, or preparing content for text analysis. Optionally preserves specific HTML elements while stripping all others.
 
 ==== Parameters
 
-*`preserve`* &lt;(optional) unknown&gt; An optional array of element types to preserve in the output.  
+*`preserve`* &lt;(optional) unknown&gt; Optional array of HTML element names to preserve (e.g., ["strong", "em", "a"]). All other HTML tags will be removed.  
 
 ==== Examples
 
 
-```coffeescript
-root.stripped = this.value.strip_html()
+Extract plain text from HTML content
 
-# In:  {"value":"<p>the plain <strong>old text</strong></p>"}
-# Out: {"stripped":"the plain old text"}
+```coffeescript
+root.plain_text = this.html_content.strip_html()
+
+# In:  {"html_content":"<p>Welcome to <strong>Redpanda Connect</strong>!</p>"}
+# Out: {"plain_text":"Welcome to Redpanda Connect!"}
 ```
 
-It's also possible to provide an explicit list of element types to preserve in the output.
+Preserve specific HTML elements while removing others
 
 ```coffeescript
-root.stripped = this.value.strip_html(["article"])
+root.sanitized = this.html.strip_html(["strong", "em"])
 
-# In:  {"value":"<article><p>the plain <strong>old text</strong></p></article>"}
-# Out: {"stripped":"<article>the plain old text</article>"}
+# In:  {"html":"<div><p>Some <strong>bold</strong> and <em>italic</em> text with a <script>alert('xss')</script></p></div>"}
+# Out: {"sanitized":"Some <strong>bold</strong> and <em>italic</em> text with a "}
 ```
 
 === `trim`
@@ -729,40 +731,31 @@ root.unescaped = this.value.unescape_url_query()
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
-Splits text into segments from a given string based on the unicode text segmentation rules.
+Splits text into segments based on Unicode text segmentation rules. Returns an array of strings representing individual graphemes (visual characters), words (including punctuation and whitespace), or sentences. Handles complex Unicode correctly, including emoji with skin tone modifiers and zero-width joiners.
 
 ==== Parameters
 
-*`segmentation_type`* &lt;string&gt;   
+*`segmentation_type`* &lt;string&gt; Type of segmentation: "grapheme", "word", or "sentence"  
 
 ==== Examples
 
 
-Splits a string into different sentences
+Split text into sentences (preserves trailing spaces)
 
 ```coffeescript
-root.sentences = this.value.unicode_segments("sentence")
+root.sentences = this.text.unicode_segments("sentence")
 
-# In:  {"value":"This is sentence 1.0. And this is sentence two."}
-# Out: {"sentences":["This is sentence 1.0. ","And this is sentence two."]}
+# In:  {"text":"Hello world. How are you?"}
+# Out: {"sentences":["Hello world. ","How are you?"]}
 ```
 
-Splits a string into different graphemes
+Split text into grapheme clusters (handles complex emoji correctly)
 
 ```coffeescript
-root.graphemes = this.value.unicode_segments("grapheme")
+root.graphemes = this.emoji.unicode_segments("grapheme")
 
-# In:  {"value":"🐕‍🦺 🫠"}
-# Out: {"graphemes":["🐕‍🦺"," ","🫠"]}
-```
-
-Splits text into words
-
-```coffeescript
-root.words = this.value.unicode_segments("word")
-
-# In:  {"value":"Hello, world!"}
-# Out: {"words":["Hello",","," ","world","!"]}
+# In:  {"emoji":"👨‍👩‍👧‍👦❤️"}
+# Out: {"graphemes":["👨‍👩‍👧‍👦","❤️"]}
 ```
 
 === `unquote`
@@ -2253,14 +2246,35 @@ root.has_bar = this.thing.contains(20)
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
-Create a diff by comparing the current value with the given one. Wraps the github.com/r3labs/diff/v3 package. See its https://pkg.go.dev/github.com/r3labs/diff/v3[docs^] for more information.
+Compares the current value with another value and returns a detailed changelog describing all differences. The changelog contains operations (create, update, delete) with their paths and values, enabling you to track changes between data versions, implement audit logs, or synchronize data between systems.
 
 Introduced in version 4.25.0.
 
 
 ==== Parameters
 
-*`other`* &lt;unknown&gt; The value to compare against.  
+*`other`* &lt;unknown&gt; The value to compare against the current value. Can be any structured data (object or array).  
+
+==== Examples
+
+
+Compare two objects to track field changes
+
+```coffeescript
+root.changes = this.before.diff(this.after)
+
+# In:  {"before":{"name":"Alice","age":30},"after":{"name":"Alice","age":31,"city":"NYC"}}
+# Out: {"changes":[{"From":30,"Path":["age"],"To":31,"Type":"update"},{"From":null,"Path":["city"],"To":"NYC","Type":"create"}]}
+```
+
+Detect deletions in configuration changes
+
+```coffeescript
+root.changelog = this.old_config.diff(this.new_config)
+
+# In:  {"old_config":{"debug":true,"timeout":30},"new_config":{"timeout":60}}
+# Out: {"changelog":[{"From":true,"Path":["debug"],"To":null,"Type":"delete"},{"From":30,"Path":["timeout"],"To":60,"Type":"update"}]}
+```
 
 === `enumerated`
 
@@ -2760,14 +2774,35 @@ root = this.foo.merge(this.bar)
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
-Create a diff by comparing the current value with the given one. Wraps the github.com/r3labs/diff/v3 package. See its https://pkg.go.dev/github.com/r3labs/diff/v3[docs^] for more information.
+Applies a changelog (created by the diff method) to the current value, transforming it according to the specified operations. This enables you to synchronize data, replay changes, or implement event sourcing patterns by applying recorded changes to reconstruct state.
 
 Introduced in version 4.25.0.
 
 
 ==== Parameters
 
-*`changelog`* &lt;unknown&gt; The changelog to apply.  
+*`changelog`* &lt;unknown&gt; The changelog array to apply. Should be in the format returned by the diff method, containing Type, Path, From, and To fields for each change.  
+
+==== Examples
+
+
+Apply recorded changes to update an object
+
+```coffeescript
+root.updated = this.current.patch(this.changelog)
+
+# In:  {"current":{"name":"Alice","age":30},"changelog":[{"Type":"update","Path":["age"],"From":30,"To":31},{"Type":"create","Path":["city"],"From":null,"To":"NYC"}]}
+# Out: {"updated":{"age":31,"city":"NYC","name":"Alice"}}
+```
+
+Restore previous state by applying inverse changes
+
+```coffeescript
+root.restored = this.modified.patch(this.reverse_changelog)
+
+# In:  {"modified":{"timeout":60},"reverse_changelog":[{"Type":"create","Path":["debug"],"From":null,"To":true},{"Type":"update","Path":["timeout"],"From":60,"To":30}]}
+# Out: {"restored":{"debug":true,"timeout":30}}
+```
 
 === `slice`
 
@@ -3060,10 +3095,12 @@ root = this.doc.format_json(escape_html: false)
 
 === `format_msgpack`
 
-Formats data as a https://msgpack.org/[MessagePack^] message in bytes format.
+Serializes structured data into MessagePack binary format. MessagePack is a compact binary serialization that is faster and more space-efficient than JSON, making it ideal for network transmission and storage of structured data. Returns a byte array that can be further encoded as needed.
 
 ==== Examples
 
+
+Serialize object to MessagePack and encode as hex for transmission
 
 ```coffeescript
 root = this.format_msgpack().encode("hex")
@@ -3072,29 +3109,29 @@ root = this.format_msgpack().encode("hex")
 # Out: 81a3666f6fa3626172
 ```
 
-```coffeescript
-root.encoded = this.format_msgpack().encode("base64")
+Serialize data to MessagePack and base64 encode for embedding in JSON
 
-# In:  {"foo":"bar"}
-# Out: {"encoded":"gaNmb2+jYmFy"}
+```coffeescript
+root.msgpack_payload = this.data.format_msgpack().encode("base64")
+
+# In:  {"data":{"foo":"bar"}}
+# Out: {"msgpack_payload":"gaNmb2+jYmFy"}
 ```
 
 === `format_xml`
 
-
-Serializes a target value into an XML byte array.
-
+Serializes an object into an XML document. Converts structured data to XML format with support for attributes (prefixed with hyphen), custom indentation, and configurable root element. Returns XML as a byte array.
 
 ==== Parameters
 
-*`indent`* &lt;string, default `"    "`&gt; Indentation string. Each element in an XML object or array will begin on a new, indented line followed by one or more copies of indent according to the indentation nesting.  
-*`no_indent`* &lt;bool, default `false`&gt; Disable indentation.  
-*`root_tag`* &lt;(optional) string&gt; Root tag. Set this if you wish to override the root tag of the document.  
+*`indent`* &lt;string, default `"    "`&gt; String to use for each level of indentation (default is 4 spaces). Each nested XML element will be indented by this string.  
+*`no_indent`* &lt;bool, default `false`&gt; Disable indentation and newlines to produce compact XML on a single line.  
+*`root_tag`* &lt;(optional) string&gt; Custom name for the root XML element. By default, the root element name is derived from the first key in the object.  
 
 ==== Examples
 
 
-Serializes a target value into a pretty-printed XML byte array (with 4 space indentation by default).
+Serialize object to pretty-printed XML with default indentation
 
 ```coffeescript
 root = this.format_xml()
@@ -3105,82 +3142,15 @@ root = this.format_xml()
 #              <baz>foo bar baz</baz>
 #          </bar>
 #      </foo>
-
-# In:  {"-foo":"bar","fizz":"buzz"}
-# Out: <doc foo="bar">
-#          <fizz>buzz</fizz>
-#      </doc>
-
-# In:  {"foo":[{"bar":"baz"},{"fizz":"buzz"}]}
-# Out: <doc>
-#          <foo>
-#              <bar>baz</bar>
-#          </foo>
-#          <foo>
-#              <fizz>buzz</fizz>
-#          </foo>
-#      </doc>
 ```
 
-Pass a string to the `indent` parameter in order to customise the indentation.
-
-```coffeescript
-root = this.format_xml("  ")
-
-# In:  {"foo":{"bar":{"baz":"foo bar baz"}}}
-# Out: <foo>
-#        <bar>
-#          <baz>foo bar baz</baz>
-#        </bar>
-#      </foo>
-```
-
-Use the `.string()` method in order to coerce the result into a string.
-
-```coffeescript
-root.doc = this.format_xml("").string()
-
-# In:  {"foo":{"bar":{"baz":"foo bar baz"}}}
-# Out: {"doc":"<foo>\n<bar>\n<baz>foo bar baz</baz>\n</bar>\n</foo>"}
-```
-
-Set the `no_indent` parameter to true to disable indentation.
+Create compact XML without indentation for smaller message size
 
 ```coffeescript
 root = this.format_xml(no_indent: true)
 
 # In:  {"foo":{"bar":{"baz":"foo bar baz"}}}
 # Out: <foo><bar><baz>foo bar baz</baz></bar></foo>
-```
-
-Set a custom root tag.
-
-```coffeescript
-root = this.format_xml(root_tag: "blobfish")
-
-# In:  {"foo":{"bar":{"baz":"foo bar baz"}}}
-# Out: <blobfish>
-#          <foo>
-#              <bar>
-#                  <baz>foo bar baz</baz>
-#              </bar>
-#          </foo>
-#      </blobfish>
-
-# In:  {"-foo":"bar","fizz":"buzz"}
-# Out: <blobfish foo="bar">
-#          <fizz>buzz</fizz>
-#      </blobfish>
-
-# In:  {"foo":[{"bar":"baz"},{"fizz":"buzz"}]}
-# Out: <blobfish>
-#          <foo>
-#              <bar>baz</bar>
-#          </foo>
-#          <foo>
-#              <fizz>buzz</fizz>
-#          </foo>
-#      </blobfish>
 ```
 
 === `format_yaml`
@@ -3300,10 +3270,12 @@ root.doc = this.doc.parse_json(use_number: true)
 
 === `parse_msgpack`
 
-Parses a https://msgpack.org/[MessagePack^] message into a structured document.
+Parses MessagePack binary data into a structured object. MessagePack is an efficient binary serialization format that is more compact than JSON while maintaining similar data structures. Commonly used for high-performance APIs and data interchange between microservices.
 
 ==== Examples
 
+
+Parse MessagePack data from hex-encoded content
 
 ```coffeescript
 root = content().decode("hex").parse_msgpack()
@@ -3312,16 +3284,18 @@ root = content().decode("hex").parse_msgpack()
 # Out: {"foo":"bar"}
 ```
 
-```coffeescript
-root = this.encoded.decode("base64").parse_msgpack()
+Parse MessagePack from base64-encoded field
 
-# In:  {"encoded":"gaNmb2+jYmFy"}
-# Out: {"foo":"bar"}
+```coffeescript
+root.decoded = this.msgpack_data.decode("base64").parse_msgpack()
+
+# In:  {"msgpack_data":"gaNmb2+jYmFy"}
+# Out: {"decoded":{"foo":"bar"}}
 ```
 
 === `parse_parquet`
 
-Decodes a https://parquet.apache.org/docs/[Parquet file^] into an array of objects, one for each row within the file.
+Parses Apache Parquet binary data into an array of objects. Parquet is a columnar storage format optimized for analytics, commonly used with big data systems like Apache Spark, Hive, and cloud data warehouses. Each row in the Parquet file becomes an object in the output array.
 
 ==== Parameters
 
@@ -3330,8 +3304,16 @@ Decodes a https://parquet.apache.org/docs/[Parquet file^] into an array of objec
 ==== Examples
 
 
+Parse Parquet file data into structured objects
+
 ```coffeescript
-root = content().parse_parquet()
+root.records = content().parse_parquet()
+```
+
+Process Parquet data from a field and extract specific columns
+
+```coffeescript
+root.users = this.parquet_data.parse_parquet().map_each(row -> {"name": row.name, "email": row.email})
 ```
 
 === `parse_url`
@@ -3360,22 +3342,22 @@ root.username = this.url.parse_url().user.name | "unknown"
 
 === `parse_xml`
 
+Parses an XML document into a structured object. Converts XML elements to JSON-like objects following these rules:
 
-Attempts to parse a string as an XML document and returns a structured result, where elements appear as keys of an object according to the following rules:
-
-- If an element contains attributes they are parsed by prefixing a hyphen, `-`, to the attribute label.
-- If the element is a simple element and has attributes, the element value is given the key `#text`.
-- XML comments, directives, and process instructions are ignored.
-- When elements are repeated the resulting JSON value is an array.
-- If cast is true, try to cast values to numbers and booleans instead of returning strings.
-
+- Element attributes are prefixed with a hyphen (e.g., `-id` for an `id` attribute)
+- Elements with both attributes and text content store the text in a `#text` field
+- Repeated elements become arrays
+- XML comments, directives, and processing instructions are ignored
+- Optionally cast numeric and boolean strings to their proper types
 
 ==== Parameters
 
-*`cast`* &lt;(optional) bool, default `false`&gt; whether to try to cast values that are numbers and booleans to the right type.  
+*`cast`* &lt;(optional) bool, default `false`&gt; Whether to automatically cast numeric and boolean string values to their proper types. When false, all values remain as strings.  
 
 ==== Examples
 
+
+Parse XML document into object structure
 
 ```coffeescript
 root.doc = this.doc.parse_xml()
@@ -3384,17 +3366,12 @@ root.doc = this.doc.parse_xml()
 # Out: {"doc":{"root":{"content":"This is some content","title":"This is a title"}}}
 ```
 
-```coffeescript
-root.doc = this.doc.parse_xml(cast: false)
-
-# In:  {"doc":"<root><title>This is a title</title><number id=99>123</number><bool>True</bool></root>"}
-# Out: {"doc":{"root":{"bool":"True","number":{"#text":"123","-id":"99"},"title":"This is a title"}}}
-```
+Parse XML with type casting enabled to convert strings to numbers and booleans
 
 ```coffeescript
 root.doc = this.doc.parse_xml(cast: true)
 
-# In:  {"doc":"<root><title>This is a title</title><number id=99>123</number><bool>True</bool></root>"}
+# In:  {"doc":"<root><title>This is a title</title><number id=\"99\">123</number><bool>True</bool></root>"}
 # Out: {"doc":{"root":{"bool":true,"number":{"#text":123,"-id":99},"title":"This is a title"}}}
 ```
 
@@ -3632,9 +3609,7 @@ root.id = "example".uuid_v5("77f836b7-9f61-46c0-851e-9b6ca3535e69")
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
-Creates a vector from a given array of floating point numbers.
-
-This vector can be inserted into various SQL databases if they have support for embeddings vectors (for example `pgvector`).
+Converts an array of numbers into a vector type suitable for insertion into SQL databases with vector/embedding support. This is commonly used with PostgreSQL's pgvector extension for storing and querying machine learning embeddings, enabling similarity search and vector operations in your database.
 
 Introduced in version 4.33.0.
 
@@ -3642,16 +3617,18 @@ Introduced in version 4.33.0.
 ==== Examples
 
 
-Create a vector from an array literal
+Convert embeddings array to vector for pgvector storage
 
 ```coffeescript
-root.embeddings = [1.2, 0.6, 0.9].vector()
+root.embedding = this.embeddings.vector()
+root.text = this.text
 ```
 
-Create a vector from an array
+Process ML model output into database-ready vector format
 
 ```coffeescript
-root.embedding_vector = this.embedding_array.vector()
+root.doc_id = this.id
+root.vector_embedding = this.model_output.map_each(num -> num.number()).vector()
 ```
 
 == JSON Web Tokens
