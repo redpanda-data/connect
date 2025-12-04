@@ -62,13 +62,17 @@ cache_resources:
 	)
 }
 
-func removeBucket(ctx context.Context, port, bucket string) error {
-	cluster, err := gocb.Connect(fmt.Sprintf("couchbase://localhost:%v", port), gocb.ClusterOptions{
+func getCluster(port string) (*gocb.Cluster, error) {
+	return gocb.Connect(fmt.Sprintf("couchbase://localhost:%v", port), gocb.ClusterOptions{
 		Authenticator: gocb.PasswordAuthenticator{
 			Username: username,
 			Password: password,
 		},
 	})
+}
+
+func removeBucket(ctx context.Context, port, bucket string) error {
+	cluster, err := getCluster(port)
 	if err != nil {
 		return err
 	}
@@ -79,12 +83,7 @@ func removeBucket(ctx context.Context, port, bucket string) error {
 }
 
 func createBucket(ctx context.Context, port, bucket string) error {
-	cluster, err := gocb.Connect(fmt.Sprintf("couchbase://localhost:%v", port), gocb.ClusterOptions{
-		Authenticator: gocb.PasswordAuthenticator{
-			Username: username,
-			Password: password,
-		},
-	})
+	cluster, err := getCluster(port)
 	if err != nil {
 		return err
 	}

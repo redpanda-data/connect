@@ -15,6 +15,7 @@
 package couchbase_test
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -114,7 +115,7 @@ func TestIntegrationCouchbaseOutput(t *testing.T) {
 	bucket := fmt.Sprintf("testing-output-%d", time.Now().Unix())
 	require.NoError(t, createBucket(t.Context(), servicePort, bucket))
 	t.Cleanup(func() {
-		require.NoError(t, removeBucket(t.Context(), servicePort, bucket))
+		require.NoError(t, removeBucket(context.Background(), servicePort, bucket))
 	})
 
 	uid := faker.UUIDHyphenated()
