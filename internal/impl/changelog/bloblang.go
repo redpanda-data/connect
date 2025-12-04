@@ -26,9 +26,21 @@ func init() {
 	diffSpec := bloblang.NewPluginSpec().
 		Beta().
 		Category("Object & Array Manipulation").
-		Description(`Create a diff by comparing the current value with the given one. Wraps the github.com/r3labs/diff/v3 package. See its https://pkg.go.dev/github.com/r3labs/diff/v3[docs^] for more information.`).
+		Description(`Compares the current value with another value and returns a detailed changelog describing all differences. The changelog contains operations (create, update, delete) with their paths and values, enabling you to track changes between data versions, implement audit logs, or synchronize data between systems.`).
 		Version("4.25.0").
-		Param(bloblang.NewAnyParam("other").Description("The value to compare against."))
+		Param(bloblang.NewAnyParam("other").Description("The value to compare against the current value. Can be any structured data (object or array).")).
+		Example("Compare two objects to track field changes",
+			`root.changes = this.before.diff(this.after)`,
+			[2]string{
+				`{"before":{"name":"Alice","age":30},"after":{"name":"Alice","age":31,"city":"NYC"}}`,
+				`{"changes":[{"From":30,"Path":["age"],"To":31,"Type":"update"},{"From":null,"Path":["city"],"To":"NYC","Type":"create"}]}`,
+			}).
+		Example("Detect deletions in configuration changes",
+			`root.changelog = this.old_config.diff(this.new_config)`,
+			[2]string{
+				`{"old_config":{"debug":true,"timeout":30},"new_config":{"timeout":60}}`,
+				`{"changelog":[{"From":true,"Path":["debug"],"To":null,"Type":"delete"},{"From":30,"Path":["timeout"],"To":60,"Type":"update"}]}`,
+			})
 
 	if err := bloblang.RegisterMethodV2("diff", diffSpec, func(args *bloblang.ParsedParams) (bloblang.Method, error) {
 		other, err := args.Get("other")
@@ -59,9 +71,21 @@ func init() {
 	patchSpec := bloblang.NewPluginSpec().
 		Beta().
 		Category("Object & Array Manipulation").
-		Description(`Create a diff by comparing the current value with the given one. Wraps the github.com/r3labs/diff/v3 package. See its https://pkg.go.dev/github.com/r3labs/diff/v3[docs^] for more information.`).
+		Description(`Applies a changelog (created by the diff method) to the current value, transforming it according to the specified operations. This enables you to synchronize data, replay changes, or implement event sourcing patterns by applying recorded changes to reconstruct state.`).
 		Version("4.25.0").
-		Param(bloblang.NewAnyParam("changelog").Description("The changelog to apply."))
+		Param(bloblang.NewAnyParam("changelog").Description("The changelog array to apply. Should be in the format returned by the diff method, containing Type, Path, From, and To fields for each change.")).
+		Example("Apply recorded changes to update an object",
+			`root.updated = this.current.patch(this.changelog)`,
+			[2]string{
+				`{"current":{"name":"Alice","age":30},"changelog":[{"Type":"update","Path":["age"],"From":30,"To":31},{"Type":"create","Path":["city"],"From":null,"To":"NYC"}]}`,
+				`{"updated":{"age":31,"city":"NYC","name":"Alice"}}`,
+			}).
+		Example("Restore previous state by applying inverse changes",
+			`root.restored = this.modified.patch(this.reverse_changelog)`,
+			[2]string{
+				`{"modified":{"timeout":60},"reverse_changelog":[{"Type":"create","Path":["debug"],"From":null,"To":true},{"Type":"update","Path":["timeout"],"From":60,"To":30}]}`,
+				`{"restored":{"debug":true,"timeout":30}}`,
+			})
 
 	if err := bloblang.RegisterMethodV2("patch", patchSpec, func(args *bloblang.ParsedParams) (bloblang.Method, error) {
 		clog, err := args.Get("changelog")

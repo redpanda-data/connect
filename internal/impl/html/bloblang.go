@@ -25,19 +25,19 @@ import (
 func init() {
 	stripHTMLSpec := bloblang.NewPluginSpec().
 		Category("String Manipulation").
-		Description(`Attempts to remove all HTML tags from a target string.`).
-		Example("", `root.stripped = this.value.strip_html()`,
+		Description(`Removes HTML tags from a string, returning only the text content. Useful for extracting plain text from HTML documents, sanitizing user input, or preparing content for text analysis. Optionally preserves specific HTML elements while stripping all others.`).
+		Example("Extract plain text from HTML content", `root.plain_text = this.html_content.strip_html()`,
 			[2]string{
-				`{"value":"<p>the plain <strong>old text</strong></p>"}`,
-				`{"stripped":"the plain old text"}`,
+				`{"html_content":"<p>Welcome to <strong>Redpanda Connect</strong>!</p>"}`,
+				`{"plain_text":"Welcome to Redpanda Connect!"}`,
 			}).
-		Example("It's also possible to provide an explicit list of element types to preserve in the output.",
-			`root.stripped = this.value.strip_html(["article"])`,
+		Example("Preserve specific HTML elements while removing others",
+			`root.sanitized = this.html.strip_html(["strong", "em"])`,
 			[2]string{
-				`{"value":"<article><p>the plain <strong>old text</strong></p></article>"}`,
-				`{"stripped":"<article>the plain old text</article>"}`,
+				`{"html":"<div><p>Some <strong>bold</strong> and <em>italic</em> text with a <script>alert('xss')</script></p></div>"}`,
+				`{"sanitized":"Some <strong>bold</strong> and <em>italic</em> text with a "}`,
 			}).
-		Param(bloblang.NewAnyParam("preserve").Description("An optional array of element types to preserve in the output.").Optional())
+		Param(bloblang.NewAnyParam("preserve").Description("Optional array of HTML element names to preserve (e.g., [\"strong\", \"em\", \"a\"]). All other HTML tags will be removed.").Optional())
 
 	if err := bloblang.RegisterMethodV2(
 		"strip_html", stripHTMLSpec,

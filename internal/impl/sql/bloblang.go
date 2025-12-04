@@ -28,16 +28,14 @@ func init() {
 	vectorSpec := bloblang.NewPluginSpec().
 		Beta().
 		Category("SQL").
-		Description(`Creates a vector from a given array of floating point numbers.
-
-This vector can be inserted into various SQL databases if they have support for embeddings vectors (for example `+"`pgvector`).").
+		Description(`Converts an array of numbers into a vector type suitable for insertion into SQL databases with vector/embedding support. This is commonly used with PostgreSQL's pgvector extension for storing and querying machine learning embeddings, enabling similarity search and vector operations in your database.`).
 		Version("4.33.0").
-		Example("Create a vector from an array literal",
-			`root.embeddings = [1.2, 0.6, 0.9].vector()`,
-		).
-		Example("Create a vector from an array",
-			`root.embedding_vector = this.embedding_array.vector()`,
-		)
+		ExampleNotTested("Convert embeddings array to vector for pgvector storage",
+			`root.embedding = this.embeddings.vector()
+root.text = this.text`).
+		ExampleNotTested("Process ML model output into database-ready vector format",
+			`root.doc_id = this.id
+root.vector_embedding = this.model_output.map_each(num -> num.number()).vector()`)
 
 	if err := bloblang.RegisterMethodV2(
 		"vector", vectorSpec,
