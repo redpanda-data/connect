@@ -994,8 +994,14 @@ func TestIntegrationMigratorJiraCON229(t *testing.T) {
 		schema        = `{"type":"record","name":"TestRecord","fields":[{"name":"id","type":"int"},{"name":"data","type":"string"}]}`
 	)
 
+	nightly := func(kind redpandatestConfigOptKind, cfg *redpandatest.Config) {
+		if kind == redpandatestConfigOptKindDst {
+			cfg.Nightly = true
+		}
+	}
+
 	t.Log("Given: Redpanda clusters with schema registry")
-	src, dst := startRedpandaSourceAndDestination(t)
+	src, dst := startRedpandaSourceAndDestination(t, nightly)
 
 	t.Log("And: ACLs configured for idempotent writes")
 	src.CreateClusterACLAllow("User:*", kmsg.ACLOperationIdempotentWrite)
@@ -1007,6 +1013,14 @@ func TestIntegrationMigratorJiraCON229(t *testing.T) {
 	ss, err := srSrc.CreateSchema(t.Context(), schemaSubject, sr.Schema{Schema: schema})
 	require.NoError(t, err)
 	t.Logf("Created schema with ID: %d", ss.ID)
+
+	t.Log("And: Destination schema registry subject is set to import mode")
+	{
+		srDst, err := sr.NewClient(sr.URLs(dst.SchemaRegistryURL))
+		require.NoError(t, err)
+		modeRes := srDst.SetMode(t.Context(), sr.ModeImport, schemaSubject)
+		require.NoError(t, modeRes[0].Err)
+	}
 
 	t.Log("And: Multiple topics created with multiple partitions")
 	for _, topic := range []string{topicA, topicB, topicC, topicD} {

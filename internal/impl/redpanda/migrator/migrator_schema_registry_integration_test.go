@@ -39,6 +39,14 @@ func startSchemaRegistrySourceAndDestination(t *testing.T, opts ...redpandatestC
 	return srSrc, srDst
 }
 
+// Tests using this requires Redpanda 25.3 or newer to work around this issue
+// https://github.com/redpanda-data/redpanda/issues/26331
+var withNightly = func(kind redpandatestConfigOptKind, cfg *redpandatest.Config) {
+	if kind == redpandatestConfigOptKindDst {
+		cfg.Nightly = true
+	}
+}
+
 // Use compatible Avro record evolution for multi: add fields with defaults
 const (
 	dummyAvroSchemaV1 = `{
@@ -225,7 +233,8 @@ func TestIntegrationSchemaRegistryMigratorSyncNameResolver(t *testing.T) {
 	integration.CheckSkip(t)
 
 	t.Log("Given: source and destination Schema Registry")
-	src, dst := startSchemaRegistrySourceAndDestination(t)
+
+	src, dst := startSchemaRegistrySourceAndDestination(t, withNightly)
 
 	t.Log("When: a source contains a schema")
 	const (
@@ -234,6 +243,10 @@ func TestIntegrationSchemaRegistryMigratorSyncNameResolver(t *testing.T) {
 	)
 	_, err := src.CreateSchema(t.Context(), subj, sr.Schema{Schema: schema})
 	require.NoError(t, err)
+
+	t.Log("And: destination is set to import mode")
+	modeRes := dst.SetMode(t.Context(), sr.ModeImport)
+	require.NoError(t, modeRes[0].Err)
 
 	nr, err := service.NewInterpolatedString("dst_${! @schema_registry_subject }")
 	require.NoError(t, err)
@@ -262,7 +275,7 @@ func TestIntegrationSchemaRegistryMigratorSyncVersionsAll(t *testing.T) {
 	integration.CheckSkip(t)
 
 	t.Log("Given: source and destination Schema Registry")
-	src, dst := startSchemaRegistrySourceAndDestination(t)
+	src, dst := startSchemaRegistrySourceAndDestination(t, withNightly)
 
 	t.Log("When: two schema versions exist at source")
 	const subj = "multi"
@@ -271,6 +284,10 @@ func TestIntegrationSchemaRegistryMigratorSyncVersionsAll(t *testing.T) {
 	require.NoError(t, err)
 	_, err = src.CreateSchema(t.Context(), subj, sr.Schema{Schema: dummyAvroSchemaV2})
 	require.NoError(t, err)
+
+	t.Log("And: destination is set to import mode")
+	modeRes := dst.SetMode(t.Context(), sr.ModeImport)
+	require.NoError(t, modeRes[0].Err)
 
 	t.Log("And: migrator is configured with all versions")
 	conf := migrator.SchemaRegistryMigratorConfig{
@@ -302,7 +319,7 @@ func TestIntegrationSchemaRegistryMigratorSyncWithReferences(t *testing.T) {
 	integration.CheckSkip(t)
 
 	t.Log("Given: source and destination Schema Registry")
-	src, dst := startSchemaRegistrySourceAndDestination(t)
+	src, dst := startSchemaRegistrySourceAndDestination(t, withNightly)
 
 	ctx := t.Context()
 
@@ -311,6 +328,10 @@ func TestIntegrationSchemaRegistryMigratorSyncWithReferences(t *testing.T) {
 		addressSubject = "address01-value"
 		addressSchema  = `{"type":"record","name":"Address","namespace":"com.example.schemas","fields":[{"name":"street","type":"string"},{"name":"city","type":"string"},{"name":"state","type":"string"},{"name":"zipCode","type":"string"}]}`
 	)
+
+	t.Log("And: destination address subject is set to import mode")
+	modeRes := dst.SetMode(ctx, sr.ModeImport, addressSubject)
+	require.NoError(t, modeRes[0].Err)
 
 	addressSchemaResp, err := src.CreateSchemaWithIDAndVersion(ctx, addressSubject, sr.Schema{
 		Schema: addressSchema,
@@ -324,6 +345,10 @@ func TestIntegrationSchemaRegistryMigratorSyncWithReferences(t *testing.T) {
 		personSubject = "person01-value"
 		personSchema  = `{"type":"record","name":"Person","namespace":"com.example.schemas","fields":[{"name":"id","type":"string"},{"name":"firstName","type":"string"},{"name":"lastName","type":"string"},{"name":"address","type":"com.example.schemas.Address"}]}`
 	)
+
+	t.Log("And: destination person subject is set to import mode")
+	modeRes = dst.SetMode(ctx, sr.ModeImport, personSubject)
+	require.NoError(t, modeRes[0].Err)
 
 	personSchemaResp, err := src.CreateSchemaWithIDAndVersion(ctx, personSubject, sr.Schema{
 		Schema: personSchema,
@@ -418,16 +443,8 @@ func TestIntegrationSchemaRegistryMigratorSyncTranslateIDs(t *testing.T) {
 func TestIntegrationSchemaRegistryMigratorSyncReuseIDs(t *testing.T) {
 	integration.CheckSkip(t)
 
-	// This test requires Redpanda 25.3 or newer to work around this issue
-	// https://github.com/redpanda-data/redpanda/issues/26331
-	nightly := func(kind redpandatestConfigOptKind, cfg *redpandatest.Config) {
-		if kind == redpandatestConfigOptKindDst {
-			cfg.Nightly = true
-		}
-	}
-
 	t.Log("Given: source and destination Schema Registry")
-	src, dst := startSchemaRegistrySourceAndDestination(t, nightly)
+	src, dst := startSchemaRegistrySourceAndDestination(t, withNightly)
 
 	const (
 		schema1 = `{"type":"record","name":"User","fields":[{"name":"id","type":"int"}]}`
@@ -492,7 +509,7 @@ func TestIntegrationSchemaRegistryMigratorSyncNormalize(t *testing.T) {
 	integration.CheckSkip(t)
 
 	t.Log("Given: source and destination Schema Registry")
-	src, dst := startSchemaRegistrySourceAndDestination(t)
+	src, dst := startSchemaRegistrySourceAndDestination(t, withNightly)
 
 	// Use Protobuf with fields out of order to exercise normalization at server
 	t.Log("When: Protobuf schema with fields are out of order")
@@ -519,6 +536,10 @@ message R {
 	)
 	_, err := src.CreateSchema(t.Context(), subj, sr.Schema{Schema: denorm, Type: sr.TypeProtobuf})
 	require.NoError(t, err)
+
+	t.Log("And: destination is set to import mode")
+	modeRes := dst.SetMode(t.Context(), sr.ModeImport)
+	require.NoError(t, modeRes[0].Err)
 
 	t.Log("And: migrator is configured to normalize")
 	conf := migrator.SchemaRegistryMigratorConfig{
@@ -601,20 +622,26 @@ func TestIntegrationSchemaRegistryMigratorCompatibilityFromSource(t *testing.T) 
 	integration.CheckSkip(t)
 
 	t.Log("Given: source and destination Schema Registry")
-	src, dst := startSchemaRegistrySourceAndDestination(t)
+	src, dst := startSchemaRegistrySourceAndDestination(t, withNightly)
+
+	ctx := t.Context()
 
 	t.Log("And: a subject and schema exist at source")
 	const (
 		subj   = "compat-src"
 		schema = `{"type":"string"}`
 	)
-	_, err := src.CreateSchema(t.Context(), subj, sr.Schema{Schema: schema})
+	_, err := src.CreateSchema(ctx, subj, sr.Schema{Schema: schema})
 	require.NoError(t, err)
 
 	t.Log("And: source subject compatibility is set")
 	level := sr.CompatFull
-	set := src.SetCompatibility(t.Context(), sr.SetCompatibility{Level: level}, subj)
+	set := src.SetCompatibility(ctx, sr.SetCompatibility{Level: level}, subj)
 	require.NoError(t, set[0].Err)
+
+	t.Log("And: destination is set to import mode")
+	modeRes := dst.SetMode(ctx, sr.ModeImport)
+	require.NoError(t, modeRes[0].Err)
 
 	t.Log("When: migrator runs")
 	conf := migrator.SchemaRegistryMigratorConfig{
