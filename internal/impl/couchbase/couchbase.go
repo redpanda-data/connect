@@ -16,6 +16,7 @@ package couchbase
 
 import (
 	"errors"
+	"time"
 
 	"github.com/couchbase/gocb/v2"
 )
@@ -41,35 +42,53 @@ func valueFromOp(op gocb.BulkOp) (out any, err error) {
 	return nil, errors.New("type not supported")
 }
 
-func get(key string, _ []byte) gocb.BulkOp {
+func get(key string, _ []byte, _ *time.Duration) gocb.BulkOp {
 	return &gocb.GetOp{
 		ID: key,
 	}
 }
 
-func insert(key string, data []byte) gocb.BulkOp {
-	return &gocb.InsertOp{
+func insert(key string, data []byte, ttl *time.Duration) gocb.BulkOp {
+	op := &gocb.InsertOp{
 		ID:    key,
 		Value: data,
 	}
+
+	if ttl != nil {
+		op.Expiry = *ttl
+	}
+
+	return op
 }
 
-func remove(key string, _ []byte) gocb.BulkOp {
+func remove(key string, _ []byte, _ *time.Duration) gocb.BulkOp {
 	return &gocb.RemoveOp{
 		ID: key,
 	}
 }
 
-func replace(key string, data []byte) gocb.BulkOp {
-	return &gocb.ReplaceOp{
+func replace(key string, data []byte, ttl *time.Duration) gocb.BulkOp {
+	op := &gocb.ReplaceOp{
 		ID:    key,
 		Value: data,
 	}
+
+	if ttl != nil {
+		op.Expiry = *ttl
+	}
+
+	return op
 }
 
-func upsert(key string, data []byte) gocb.BulkOp {
-	return &gocb.UpsertOp{
+func upsert(key string, data []byte, ttl *time.Duration) gocb.BulkOp {
+	op := &gocb.UpsertOp{
 		ID:    key,
 		Value: data,
 	}
+
+	if ttl != nil {
+		op.Expiry = *ttl
+	}
+
+	return op
 }
