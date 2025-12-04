@@ -16,6 +16,7 @@ package couchbase
 
 import (
 	"errors"
+	"strconv"
 
 	"github.com/couchbase/gocb/v2"
 )
@@ -36,6 +37,10 @@ func valueFromOp(op gocb.BulkOp) (out any, err error) {
 		return nil, o.Err
 	case *gocb.UpsertOp:
 		return nil, o.Err
+	case *gocb.IncrementOp:
+		return o.Result.Content(), o.Err
+	case *gocb.DecrementOp:
+		return o.Result.Content(), o.Err
 	}
 
 	return nil, errors.New("type not supported")
@@ -71,5 +76,35 @@ func upsert(key string, data []byte) gocb.BulkOp {
 	return &gocb.UpsertOp{
 		ID:    key,
 		Value: data,
+	}
+}
+
+func increment(key string, data []byte) gocb.BulkOp {
+	delta := int64(0)
+	if len(data) > 0 {
+		if d, err := strconv.ParseInt(string(data), 10, 64); err == nil {
+			delta = d
+		}
+	}
+
+	return &gocb.IncrementOp{
+		ID:      key,
+		Delta:   delta,
+		Initial: delta, // Default initial to delta
+	}
+}
+
+func decrement(key string, data []byte) gocb.BulkOp {
+	delta := int64(0)
+	if len(data) > 0 {
+		if d, err := strconv.ParseInt(string(data), 10, 64); err == nil {
+			delta = d
+		}
+	}
+
+	return &gocb.DecrementOp{
+		ID:      key,
+		Delta:   delta,
+		Initial: -delta, // Default initial to -delta
 	}
 }

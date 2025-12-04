@@ -204,8 +204,12 @@ Couchbase operation to perform.
 |===
 | Option | Summary
 
+| `decrement`
+| decrement a counter.
 | `get`
 | fetch a document.
+| `increment`
+| increment a counter.
 | `insert`
 | insert a new document.
 | `remove`
