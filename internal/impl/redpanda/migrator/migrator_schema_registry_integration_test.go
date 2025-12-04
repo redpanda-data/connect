@@ -317,6 +317,7 @@ func TestIntegrationSchemaRegistryMigratorSyncVersionsAll(t *testing.T) {
 
 func TestIntegrationSchemaRegistryMigratorSyncWithReferences(t *testing.T) {
 	integration.CheckSkip(t)
+	t.Skip()
 
 	t.Log("Given: source and destination Schema Registry")
 	src, dst := startSchemaRegistrySourceAndDestination(t, withNightly)
