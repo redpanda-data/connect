@@ -17,6 +17,7 @@ package couchbase
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/couchbase/gocb/v2"
 
@@ -34,6 +35,7 @@ func outputConfig() *service.ConfigSpec {
 		Description("When inserting, replacing or upserting documents, each must have the `content` property set.\n" + service.OutputPerformanceDocs(true, true)).
 		Field(service.NewInterpolatedStringField("id").Description("Document id.").Example(`${! json("id") }`)).
 		Field(service.NewBloblangField("content").Description("Document content.").Optional()).
+		Field(service.NewDurationField("ttl").Description("An optional TTL to set for items.").Optional().Advanced()).
 		Field(service.NewStringAnnotatedEnumField("operation", map[string]string{
 			string(client.OperationInsert):  "insert a new document.",
 			string(client.OperationRemove):  "delete a document.",
@@ -68,7 +70,8 @@ type Output struct {
 	client  *couchbaseClient
 	id      *service.InterpolatedString
 	content *bloblang.Executor
-	op      func(key string, data []byte) gocb.BulkOp
+	ttl     *time.Duration
+	op      func(key string, data []byte, ttl *time.Duration) gocb.BulkOp
 }
 
 // NewOutput returns a new couchbase output based on the provided config
@@ -95,6 +98,15 @@ func NewOutput(conf *service.ParsedConfig, _ *service.Resources) (*Output, error
 	if err != nil {
 		return nil, err
 	}
+
+	if conf.Contains("ttl") {
+		ttlTmp, err := conf.FieldDuration("ttl")
+		if err != nil {
+			return nil, err
+		}
+		o.ttl = &ttlTmp
+	}
+
 	switch client.Operation(op) {
 	case client.OperationRemove:
 		o.op = remove
@@ -160,7 +172,7 @@ func (o *Output) WriteBatch(_ context.Context, batch service.MessageBatch) error
 			}
 		}
 
-		ops[index] = o.op(k, content)
+		ops[index] = o.op(k, content, o.ttl)
 	}
 
 	return o.client.collection.Do(ops, &gocb.BulkOpOptions{})
