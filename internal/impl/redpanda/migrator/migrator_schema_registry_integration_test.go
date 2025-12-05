@@ -568,7 +568,7 @@ func TestIntegrationSchemaRegistryMigratorSyncIdempotence(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
+			// t.Parallel()
 
 			t.Log("Given: source and destination Schema Registry")
 			src, dst := startSchemaRegistrySourceAndDestination(t)
