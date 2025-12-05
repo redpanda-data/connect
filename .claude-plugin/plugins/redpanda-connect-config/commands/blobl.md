@@ -12,160 +12,146 @@ arguments:
 
 # Redpanda Connect Bloblang Script Generator
 
-You are a Bloblang transformation expert for Redpanda Connect.
-Your task is to create, test, and refine Bloblang scripts from natural language descriptions.
+Create working, tested Bloblang transformation scripts from natural language descriptions.
 
-## Your Role
+## Objective
 
-Generate Bloblang scripts by:
-1. Understanding the transformation requirements
-2. Discovering relevant Bloblang functions and methods
-3. Generating the script with proper syntax
-4. Testing with sample data using `rpk connect blobl`
-5. Iterating until the script works correctly
-6. Providing the final script with usage examples
+Generate a Bloblang script that correctly transforms the user's input data according to their requirements. The script must be tested and validated before presenting it.
 
-## Bloblang Script Generation Process
+## Context
 
-### Step 1: Analyze the Requirements
+**Bloblang** is Redpanda Connect's transformation language for manipulating message data. It provides:
+- **Functions** - Generate values (e.g., `uuid_v4()`, `now()`, `counter()`)
+- **Methods** - Transform values (e.g., `.uppercase()`, `.ts_parse()`, `.filter()`)
+- **Syntax** - Mappings start with `root`, reference input with `this`
 
-Parse the description to identify:
-- **Input structure**: What fields exist in the input data
-- **Output structure**: What the result should look like
-- **Transformations**: What operations to perform (map, filter, transform, etc.)
-- **Functions needed**: Which Bloblang functions/methods are required
+**Available Resources:**
 
-### Step 2: Discover Bloblang Functions and Methods
-
-**Session-Based Category File Discovery:**
-
-Create temp directory, split functions/methods by category into separate files, then read only relevant category files.
-
-#### Phase 1: Create Session Directory and Generate Category Files
-
+**format-bloblang.sh** - Generates category-organized Bloblang reference files
 ```bash
-# Create session directory (like test-blobl.sh pattern)
+# Usage:
+${CLAUDE_PLUGIN_ROOT}/scripts/format-bloblang.sh --output-dir <directory>
+
+# Example:
+${CLAUDE_PLUGIN_ROOT}/scripts/format-bloblang.sh --output-dir /tmp/my-session
+```
+- Splits Bloblang functions/methods into ~16 category files
+- Categories include: General, String_Manipulation, Timestamp_Manipulation, Object_&_Array_Manipulation, etc.
+- Each file contains XML-formatted function/method definitions with parameters and examples
+- Output directory contains category files like `functions-General.txt`, `methods-String_Manipulation.txt`, etc.
+
+**test-blobl.sh** - Tests a Bloblang script against input data
+```bash
+# Usage:
+${CLAUDE_PLUGIN_ROOT}/scripts/test-blobl.sh <session-directory>
+
+# Example:
+${CLAUDE_PLUGIN_ROOT}/scripts/test-blobl.sh /tmp/my-session
+```
+- Expects `data.json` (input) and `script.blobl` (transformation) in the session directory
+- Executes the Bloblang script and returns results or errors
+- Can be run repeatedly during iteration
+
+**Session Pattern:**
+
+Create a temporary session directory to hold all working files:
+```bash
+# Create temp directory (important: save the path for passing to scripts)
 SESSION_DIR=$(mktemp -d -t rpcn-blobl-XXXXXX)
-# Creates: /tmp/rpcn-blobl-XXXXXX/
-
-# Generate category files for both functions and methods
-${CLAUDE_PLUGIN_ROOT}/scripts/format-bloblang.sh --output-dir "$SESSION_DIR"
+# Creates: /tmp/rpcn-blobl-XXXXXX/ (or system equivalent)
 ```
 
-**CRITICAL**:
-- Single command processes both bloblang-functions and bloblang-methods
-- Splits output into category-specific files
-- Files created:
-  - **Functions** (5 files): `functions-General.txt`, `functions-Environment.txt`, `functions-Message_Info.txt`, etc.
-  - **Methods** (~11 files): `methods-General.txt`, `methods-String_Manipulation.txt`, `methods-Object_&_Array_Manipulation.txt`, etc.
-- Total: ~16 category files
+The session directory contains:
+- Category reference files (generated once at start by format-bloblang.sh)
+- `data.json` - Sample input for testing (immutable during iteration)
+- `script.blobl` - The transformation script (edit and re-test as needed)
 
-**Session Directory Structure:**
-```
-/tmp/rpcn-blobl-XXXXXX/
-├── functions-General.txt                      (~300-500 tokens)
-├── functions-Environment.txt                  (~200-400 tokens)
-├── functions-Message_Info.txt                 (~200-400 tokens)
-├── methods-General.txt                        (~200-300 tokens)
-├── methods-String_Manipulation.txt            (~600-800 tokens)
-├── methods-Object_&_Array_Manipulation.txt    (~800-1000 tokens)
-├── methods-Timestamp_Manipulation.txt         (~400-600 tokens)
-├── data.json                                  (created in Step 4)
-└── script.blobl                               (created in Step 5)
-```
-
-**Quick Reference - Listing Available Functions/Methods:**
-
-You can quickly list or search functions/methods using grep without loading full files:
-
+Clean up when done:
 ```bash
-# List all functions and methods
-grep -hE '<(function|method) name=' "$SESSION_DIR"/*.txt
-
-# Search by keyword (searches names, descriptions, params, examples)
-grep -i "timestamp" "$SESSION_DIR"/*.txt
-
-# Search by parameter name (e.g., find all functions with "format" parameter)
-grep 'params="[^"]*format' "$SESSION_DIR"/*.txt
+rm -rf "$SESSION_DIR"
 ```
 
-This allows efficient discovery without consuming tokens by reading entire files.
+## Requirements
 
-#### Phase 2: Analyze Requirements to Identify Categories
+1. **Understand the transformation** - Identify input structure, desired output, and operations needed
 
-Based on the user's transformation description, identify which categories are needed:
+2. **Discover relevant functions** - Find the right Bloblang functions/methods to use:
+   - Generate category files into a session directory
+   - Identify which categories are relevant (strings, timestamps, arrays, etc.)
+   - Read only the relevant category files to find appropriate functions/methods
+   - Category files contain full details: names, parameters, descriptions, examples
 
-**Category Mapping Guide:**
-- **Timestamps/Dates** → `functions-Environment.txt`, `methods-Timestamp_Manipulation.txt`
-- **Strings** → `methods-String_Manipulation.txt`
-- **Arrays/Objects** → `methods-Object_&_Array_Manipulation.txt`
-- **Numbers** → `methods-Number_Manipulation.txt`
-- **JSON parsing** → `methods-Parsing.txt`
-- **Hashing/Encoding** → `methods-Encoding_and_Encryption.txt`
-- **UUIDs/IDs** → `functions-General.txt`
-- **Regular expressions** → `methods-Regular_Expressions.txt`
-- **GeoIP** → `methods-GeoIP.txt`
+3. **Generate the script** - Write valid Bloblang syntax:
+   - Use `root` for output fields
+   - Use `this` for input fields
+   - Chain methods for readability
+   - Handle null/missing fields appropriately
 
-**Analysis Process:**
-1. Parse user description for data types and operations
-2. Map to 2-4 relevant categories
-3. **ALWAYS include**: `functions-General.txt`, `methods-General.txt`, and `functions-Message_Info.txt` (universally useful)
-4. **Optional**: Use grep to search for specific keywords across all category files to help identify relevant categories
+4. **Test thoroughly** - Validate the script works:
+   - Create or use provided sample input
+   - Run the script against the input data
+   - Verify the output matches expectations
+   - If errors occur, debug and iterate until it works
 
-**Example:**
-```
-User: "Convert timestamp to ISO format and uppercase name"
+5. **Present complete results** - Provide:
+   - The working script with comments
+   - Sample input and actual output
+   - Usage examples (in YAML config or standalone)
+   - Any assumptions about input structure
 
-Analysis:
-→ "timestamp" + "ISO format" → Need: functions-Environment.txt, methods-Timestamp_Manipulation.txt
-→ "uppercase name" → Need: methods-String_Manipulation.txt
-→ Always include: functions-General.txt, methods-General.txt, functions-Message_Info.txt
+## Tool Interactions
 
-Selected category files to read:
-- functions-General.txt (always)
-- methods-General.txt (always)
-- functions-Message_Info.txt (always)
-- functions-Environment.txt
-- methods-Timestamp_Manipulation.txt
-- methods-String_Manipulation.txt
+**Creating temporary directories**:
+Use `mktemp` to create temporary directories that can be passed to scripts:
+```bash
+SESSION_DIR=$(mktemp -d -t rpcn-blobl-XXXXXX)
+# The variable $SESSION_DIR now contains the path (e.g., /tmp/rpcn-blobl-abc123)
+# This path is passed to format-bloblang.sh and test-blobl.sh
 ```
 
-#### Phase 3: Read Relevant Category Files (PARALLEL)
-
-Use the Read tool to read selected category files in PARALLEL (multiple Read tool calls in single message):
-
+**format-bloblang.sh**:
+```bash
+# Usage:
+${CLAUDE_PLUGIN_ROOT}/scripts/format-bloblang.sh --output-dir <directory>
 ```
-Read: $SESSION_DIR/functions-General.txt
-Read: $SESSION_DIR/methods-General.txt
-Read: $SESSION_DIR/functions-Message_Info.txt
-Read: $SESSION_DIR/functions-Environment.txt
-Read: $SESSION_DIR/methods-Timestamp_Manipulation.txt
-Read: $SESSION_DIR/methods-String_Manipulation.txt
-```
+- Accepts `--output-dir` parameter pointing to where category files should be written
+- Generates category files organized by function type
+- Files are XML-formatted with structured function/method definitions
 
-**Token Budget:**
-- Typical case: 3 always-included + 2-3 specific categories = 5-6 files × ~400 tokens avg = ~2.5-3K tokens
+**Generated Category Files:**
 
-**Each file contains full details:**
-- Function/method names as XML attributes
-- Descriptions (sentence per line, no prefix)
-- Parameters with types in `params` attribute
-- All examples in code block format
-- Error messages for missing descriptions
+The three foundational categories (`functions-General.txt`, `functions-Message_Info.txt`, `methods-General.txt`) contain universally useful functions/methods that apply to most transformations. When discovering functions for a transformation, these should typically be consulted along with any specialized categories relevant to the specific transformation needs (strings, timestamps, arrays, etc.).
 
-**File Format Example:**
+Function categories:
+- `functions-Encoding.txt` - Schema registry headers
+- `functions-Environment.txt` - Environment vars, files, timestamps, hostname
+- `functions-Fake_Data_Generation.txt` - Fake data generation
+- `functions-General.txt` - Bytes, counter, deleted, ksuid, nanoid, uuid, random, range, snowflake
+- `functions-Message_Info.txt` - Batch index, content, error, metadata, span links, tracing IDs
+
+Method categories:
+- `methods-Encoding_and_Encryption.txt` - Base64, compression, hashing, encryption
+- `methods-General.txt` - Basic operations, type checking
+- `methods-GeoIP.txt` - GeoIP lookups
+- `methods-JSON_Web_Tokens.txt` - JWT operations
+- `methods-Number_Manipulation.txt` - Arithmetic, rounding, formatting
+- `methods-Object___Array_Manipulation.txt` - Filtering, mapping, sorting, merging
+- `methods-Parsing.txt` - JSON, CSV, XML, protocol buffer parsing
+- `methods-Regular_Expressions.txt` - Regex matching and replacement
+- `methods-SQL.txt` - SQL operations
+- `methods-String_Manipulation.txt` - Case, trimming, splitting, formatting
+- `methods-Timestamp_Manipulation.txt` - Parsing, formatting, timezone conversion
+- `methods-Type_Coercion.txt` - Type conversions
+
+**Output Format:**
+
+Each category file contains XML-formatted entries:
+
 ```xml
-<bloblang-functions>
-<function name="uuid_v4" params="">
-Generates a new RFC-4122 UUID each time it is invoked.
-<example>
-root.id = uuid_v4()
-</example>
-</function>
-
 <function name="counter" params="min:query expression, max:query expression, set:query expression">
 Generates an incrementing sequence of integers starting from a minimum value (default 1).
 Each counter instance maintains its own independent state across message processing.
+When the maximum value is reached, the counter automatically resets to the minimum.
 <example summary="Generate sequential IDs for each message.">
 root.id = counter()
 </example>
@@ -174,283 +160,58 @@ root.batch_num = counter(min: 100, max: 200)
 </example>
 </function>
 
-<function name="example_missing_desc" params="">
-ERROR missing description for example_missing_desc
+<method name="ts_format" params="format:string, tz:string">
+Formats a timestamp into a string using the specified format layout.
 <example>
-root.test = example_missing_desc()
-</example>
-</function>
-</bloblang-functions>
-```
-
-**Methods Format Example:**
-```xml
-<bloblang-methods>
-<method name="uppercase" params="">
-Converts a string to uppercase.
-<example>
-root.name = this.name.uppercase()
+root.formatted = this.timestamp.ts_format("2006-01-02T15:04:05Z07:00")
 </example>
 </method>
-
-<method name="ts_parse" params="format:string">
-Parses a timestamp string using the specified format.
-Format uses Go's reference time layout (Mon Jan 2 15:04:05 2006).
-<example summary="Parse RFC3339 timestamp">
-root.parsed = this.timestamp.ts_parse("2006-01-02T15:04:05Z07:00")
-</example>
-</method>
-</bloblang-methods>
 ```
 
-#### Phase 4: Select Functions and Generate Script
+**Format Details:**
+- `name` attribute: Function/method name
+- `params` attribute: Parameter list with types (empty string if no params)
+- Description: Multi-line text (no prefix)
+- `<example>` tags: Code blocks, optional `summary` attribute
+- Error messages: Lines starting with "ERROR" indicate missing descriptions
 
-From the read category files:
+**Quick Reference - Listing Available Functions/Methods:**
 
-1. **Scan for relevant functions/methods** within each file
-2. **Output selected names** (no verbose reasoning)
-   - Example: `Selected: ts_parse, ts_format, uppercase, now`
-3. **Generate Bloblang script** using full details from files
-   - Params and examples are available in the category files you just read
-
-#### Phase 5: Test Script
-
-Continue to Step 4 to create sample input and Step 5 to test using existing workflow with `$SESSION_DIR/data.json` and `$SESSION_DIR/script.blobl`.
-
-#### Phase 6: Cleanup
+Search category files without loading full content:
 
 ```bash
-# When done (after successful script generation or user ends conversation)
-rm -rf "$SESSION_DIR"
+# List all available functions and methods by name
+grep -hE '<(function|method) name=' "$SESSION_DIR"/*.txt
+
+# Search by keyword (searches names, descriptions, params, examples)
+grep -i "timestamp" "$SESSION_DIR"/*.txt
+
+# Search by parameter name (e.g., find all with "format" parameter)
+grep 'params="[^"]*format' "$SESSION_DIR"/*.txt
 ```
 
-**Error Handling:**
-- **Too vague description** → Ask user for clarification on data types/operations
-- **No matching functions in selected categories** → Use grep to search all category files for keywords, then read relevant files
-- **Selected function doesn't work** → Use grep to find similar functions in related categories, then read those category files
-- **Need more functions during iteration** → Use grep to search or read additional category files as needed
-- **Unsure what's available** → Use grep commands from Quick Reference section to list all functions/methods
+This allows efficient discovery before reading full category files.
 
-### Step 3: Generate the Bloblang Script
-
-Create the transformation script following Bloblang syntax:
-
-**Basic structure:**
-```bloblang
-# Simple field mapping
-root.output_field = this.input_field
-
-# With transformation
-root.name = this.name.uppercase()
-root.timestamp = this.created_at.ts_parse("2006-01-02").ts_format("ISO8601")
-
-# Conditional logic
-root.status = if this.age >= 18 { "adult" } else { "minor" }
-
-# Deleting fields
-root = this.without("password", "secret")
-```
-
-**Best Practices:**
-1. **Always start with `root =`** to set the base output
-2. **Use descriptive field names** in the output
-3. **Handle null/missing fields** gracefully with `.catch()` or `.or()`
-4. **Comment complex transformations** for clarity
-5. **Use methods chaining** for readability
-6. **Validate before parsing** when dealing with user input
-
-### Step 4: Create Sample Input (if not provided)
-
-If the user didn't provide sample input, create a representative example:
-
-```json
-{
-  "name": "john doe",
-  "created_at": "2025-12-03",
-  "age": 25,
-  "email": "john@example.com"
-}
-```
-
-### Step 5: Test the Script
-
-**Use structured session management for all Bloblang testing:**
-
+**test-blobl.sh**:
 ```bash
-# Create new session directory (uses system tmp dir)
-SESSION_DIR=$(mktemp -d -t rpcn-blobl-XXXXXX)
-# Creates: /tmp/rpcn-blobl-XXXXXX/ (or system equivalent)
-
-# Write input data
-cat > "$SESSION_DIR/data.json" << 'EOF'
-{
-  "name": "john doe",
-  "created_at": "2025-12-03",
-  "age": 25
-}
-EOF
-
-# Write Bloblang script
-cat > "$SESSION_DIR/script.blobl" << 'EOF'
-root.name = this.name.uppercase()
-root.timestamp = this.created_at.ts_parse("2006-01-02").ts_format("ISO8601")
-root.status = if this.age >= 18 { "adult" } else { "minor" }
-root = this.without("age")
-EOF
-
-# Run test using helper script
-${CLAUDE_PLUGIN_ROOT}/scripts/test-blobl.sh "$SESSION_DIR"
-
-# For iteration: edit script.blobl and re-run
-cat > "$SESSION_DIR/script.blobl" << 'EOF'
-root.name = this.name.uppercase()
-root.age_group = if this.age >= 18 { "adult" } else { "minor" }
-EOF
-
-${CLAUDE_PLUGIN_ROOT}/scripts/test-blobl.sh "$SESSION_DIR"
-
-# Cleanup when done
-rm -rf "$SESSION_DIR"
+# Usage:
+${CLAUDE_PLUGIN_ROOT}/scripts/test-blobl.sh <session-directory>
 ```
+- Accepts session directory path as the only parameter
+- Expects `data.json` (input) and `script.blobl` (transformation) in that directory
+- Executes the Bloblang script and returns results or errors
+- Can be run repeatedly during iteration
 
-**Session structure:**
-```
-/tmp/rpcn-blobl-abc123/
-├── data.json          # Input data for testing
-└── script.blobl       # Bloblang transformation script (iterate on this)
-```
+**Session directory lifecycle**:
+- Created at conversation start: `SESSION_DIR=$(mktemp -d -t rpcn-blobl-XXXXXX)`
+- Populated with category files: `format-bloblang.sh --output-dir "$SESSION_DIR"`
+- Contains data.json and script.blobl for testing
+- Cleaned up when conversation ends: `rm -rf "$SESSION_DIR"`
 
-**Workflow best practices:**
-1. **One session per conversation** - Create session at start, cleanup at end
-2. **data.json is immutable** - Set once, don't change during iteration
-3. **script.blobl is mutable** - Edit and re-test as you iterate
-4. **Use helper script** - `${CLAUDE_PLUGIN_ROOT}/scripts/test-blobl.sh` handles jq compaction and rpk blobl execution
-5. **Always cleanup** - Run `rm -rf "$SESSION_DIR"` when done
+## Quality Standards
 
-### Step 6: Handle Errors and Iterate
-
-If the test fails:
-1. **Parse the error message** - Identify syntax errors, missing functions, type mismatches
-2. **Search for correct function** - Use grep to search category files for the right function/method, then read relevant files if needed
-3. **Fix the script** - Apply corrections
-4. **Re-test** - Run rpk blobl again
-5. **Repeat** until it works
-
-**Common Errors:**
-
-**Syntax Error:**
-```
-Error: expected ')' but got '}'
-```
-→ Check for mismatched parentheses or braces
-
-**Unknown Function:**
-```
-Error: unknown function 'uppercase'
-```
-→ Use grep to search: `grep -i "uppercase" "$SESSION_DIR"/*.txt`
-→ If found in methods file, read that category file for full details
-→ Fix: Use method syntax `this.field.uppercase()` not function syntax
-
-**Type Mismatch:**
-```
-Error: expected string but got number
-```
-→ Add type conversion: `this.id.string()` or `this.count.number()`
-
-**Null Field:**
-```
-Error: field 'missing_field' does not exist
-```
-→ Add null handling: `this.missing_field.catch("default")` or `this.missing_field.or("default")`
-
-### Step 7: Present the Final Script
-
-Show the working script with documentation:
-
-```markdown
-## Bloblang Transformation
-
-**Description:** Convert name to uppercase, format timestamp, add status field
-
-**Script:**
-```bloblang
-# Set base output
-root = this
-
-# Transform name to uppercase
-root.name = this.name.uppercase()
-
-# Parse and reformat timestamp
-root.timestamp = this.created_at.ts_parse("2006-01-02").ts_format("ISO8601")
-
-# Add computed status field
-root.status = if this.age >= 18 { "adult" } else { "minor" }
-
-# Remove sensitive age field
-root = this.without("age")
-```
-
-**Test Input:**
-```json
-{"name":"john doe","created_at":"2025-12-03","age":25}
-```
-
-**Test Output:**
-```json
-{"name":"JOHN DOE","timestamp":"2025-12-03T00:00:00Z","status":"adult"}
-```
-
-**Usage in Config:**
-```yaml
-pipeline:
-  processors:
-    - mapping: |
-        root = this
-        root.name = this.name.uppercase()
-        root.timestamp = this.created_at.ts_parse("2006-01-02").ts_format("ISO8601")
-        root.status = if this.age >= 18 { "adult" } else { "minor" }
-        root = this.without("age")
-```
-
-**Standalone File:** Save as `transform.blobl` for reusable transformations
-```
-
-## Tool Usage
-
-You have access to:
-- **Bash**: Run rpk blobl tests, jq for JSON compaction, mktemp for session creation
-- **Write**: Write to session files (data.json, script.blobl)
-- **Read**: Read existing Bloblang scripts and session files
-
-**Required helpers:**
-- `${CLAUDE_PLUGIN_ROOT}/scripts/format-bloblang.sh` - Bloblang metadata formatting
-
-## Output Format
-
-Always present results as:
-
-```markdown
-## Bloblang Script: {Brief Description}
-
-**Requirements:** {What the script does}
-
-**Script:**
-```bloblang
-{bloblang code}
-```
-
-**Test Results:**
-✅ Input: {sample input}
-✅ Output: {actual output}
-
-**Usage:** {How to use in a config or standalone}
-```
-
-## Important Notes
-
-1. **Always test scripts** - Never present untested Bloblang code
-2. **Use real functions** - Search for actual Bloblang functions, don't guess
-3. **Provide working examples** - Include sample input/output with every script
-4. **Iterate on failures** - Fix and re-test until it works
-5. **Document assumptions** - Note any assumptions about input structure
+- **Never present untested code** - All scripts must be validated before showing to user
+- **Use real functions** - Discover actual Bloblang functions from category files, don't guess
+- **Provide working examples** - Include tested input/output pairs
+- **Iterate on failures** - Debug errors until the script works correctly
+- **Document assumptions** - Note any assumptions about input data structure or types
