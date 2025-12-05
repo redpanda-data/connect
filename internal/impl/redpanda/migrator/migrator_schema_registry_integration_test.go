@@ -18,6 +18,7 @@ import (
 	"context"
 	"regexp"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -320,10 +321,9 @@ func TestIntegrationSchemaRegistryMigratorSyncWithReferences(t *testing.T) {
 	)
 
 	t.Log("And: source and destination address subject is set to import mode")
-	modeRes := src.SetMode(ctx, sr.ModeImport, addressSubject)
-	require.NoError(t, modeRes[0].Err)
-	modeRes = dst.SetMode(ctx, sr.ModeImport, addressSubject)
-	require.NoError(t, modeRes[0].Err)
+	require.NoError(t, src.SetMode(ctx, sr.ModeImport, addressSubject)[0].Err)
+	require.NoError(t, dst.SetMode(ctx, sr.ModeImport, addressSubject)[0].Err)
+	time.Sleep(3 * time.Second)
 
 	addressSchemaResp, err := src.CreateSchemaWithIDAndVersion(ctx, addressSubject, sr.Schema{
 		Schema: addressSchema,
@@ -339,10 +339,9 @@ func TestIntegrationSchemaRegistryMigratorSyncWithReferences(t *testing.T) {
 	)
 
 	t.Log("And: source and destination person subject is set to import mode")
-	modeRes = src.SetMode(ctx, sr.ModeImport, personSubject)
-	require.NoError(t, modeRes[0].Err)
-	modeRes = dst.SetMode(ctx, sr.ModeImport, personSubject)
-	require.NoError(t, modeRes[0].Err)
+	require.NoError(t, src.SetMode(ctx, sr.ModeImport, personSubject)[0].Err)
+	require.NoError(t, dst.SetMode(ctx, sr.ModeImport, personSubject)[0].Err)
+	time.Sleep(3 * time.Second)
 
 	personSchemaResp, err := src.CreateSchemaWithIDAndVersion(ctx, personSubject, sr.Schema{
 		Schema: personSchema,
