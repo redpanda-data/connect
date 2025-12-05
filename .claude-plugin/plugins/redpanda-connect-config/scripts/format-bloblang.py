@@ -15,24 +15,24 @@ Output:
     - etc.
 """
 
-import sys
-import json
 import argparse
-from typing import Dict, Any, List
-from pathlib import Path
+import json
+import sys
 from collections import defaultdict
+from pathlib import Path
+from typing import Any, Dict, List
 
 
 def parse_args():
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
-        description='Format bloblang metadata into category files'
+        description="Format bloblang metadata into category files"
     )
     parser.add_argument(
-        '--output-dir',
+        "--output-dir",
         type=str,
         required=True,
-        help='Directory to write category files to'
+        help="Directory to write category files to",
     )
     return parser.parse_args()
 
@@ -50,20 +50,22 @@ def get_category_names(category_type: str) -> tuple:
         return ("method", "methods")
 
 
-def group_by_category(items: List[Dict[str, Any]], category_type: str) -> Dict[str, List[Dict]]:
+def group_by_category(
+    items: List[Dict[str, Any]], category_type: str
+) -> Dict[str, List[Dict]]:
     """Group items by category (functions) or tags (methods)."""
     grouped = defaultdict(list)
 
     for item in items:
         if category_type == "bloblang-functions":
-            category = item.get('category', 'Uncategorized')
+            category = item.get("category", "Uncategorized")
         else:  # methods
-            categories = item.get('categories', [])
+            categories = item.get("categories", [])
             if categories:
                 # Methods can have multiple categories - use first one
-                category = categories[0].get('Category', 'Uncategorized')
+                category = categories[0].get("Category", "Uncategorized")
             else:
-                category = 'Uncategorized'
+                category = "Uncategorized"
 
         grouped[category].append(item)
 
@@ -72,13 +74,13 @@ def group_by_category(items: List[Dict[str, Any]], category_type: str) -> Dict[s
 
 def format_item(item: Dict[str, Any], category_type: str) -> str:
     """Format a single function or method as a tagged section (no category field)."""
-    name = item['name']
+    name = item["name"]
 
     # Build params string
     params = item.get("params", {}).get("named", [])
     if params:
         param_strs = [f"{p['name']}:{p['type']}" for p in params]
-        params_attr = ', '.join(param_strs)
+        params_attr = ", ".join(param_strs)
     else:
         params_attr = ""
 
@@ -89,16 +91,16 @@ def format_item(item: Dict[str, Any], category_type: str) -> str:
     lines = [f'<{tag_type} name="{name}" params="{params_attr}">']
 
     # Description (no prefix, only if meaningful)
-    desc = item.get('description', '')
+    desc = item.get("description", "")
     if desc:
         # Split description into sentences (each sentence on its own line)
         # Split on '. ' to preserve sentence boundaries
-        sentences = desc.split('. ')
+        sentences = desc.split(". ")
         for i, sentence in enumerate(sentences):
             if sentence:  # Skip empty strings
                 # Add period back if not the last sentence
-                if i < len(sentences) - 1 and not sentence.endswith('.'):
-                    lines.append(sentence + '.')
+                if i < len(sentences) - 1 and not sentence.endswith("."):
+                    lines.append(sentence + ".")
                 else:
                     lines.append(sentence)
     else:
@@ -120,12 +122,12 @@ def format_item(item: Dict[str, Any], category_type: str) -> str:
             if summary:
                 lines.append(f'<example summary="{summary}">')
             else:
-                lines.append('<example>')
+                lines.append("<example>")
             lines.append(mapping)
-            lines.append('</example>')
+            lines.append("</example>")
 
     # Closing tag
-    lines.append(f'</{tag_type}>')
+    lines.append(f"</{tag_type}>")
     return "\n".join(lines)
 
 
@@ -161,20 +163,19 @@ def main():
     # Write each category to separate file
     for category_name in sorted(grouped.keys()):
         # Skip empty and deprecated categories
-        if not category_name or category_name == 'Deprecated':
+        if not category_name or category_name == "Deprecated":
             continue
 
         # Sanitize category name for filename (replace spaces with underscores)
-        safe_category = category_name.replace(' ', '_').replace('/', '_').replace('&', '_')
+        safe_category = (
+            category_name.replace(" ", "_").replace("/", "_").replace("&", "_")
+        )
         filename = f"{file_prefix}-{safe_category}.txt"
         filepath = output_dir / filename
 
-        with open(filepath, 'w') as f:
-            # Write opening tag
-            f.write(f"<{category_type}>\n")
-
+        with open(filepath, "w") as f:
             # Sort items within category by name
-            category_items = sorted(grouped[category_name], key=lambda x: x['name'])
+            category_items = sorted(grouped[category_name], key=lambda x: x["name"])
 
             # Format each item (no category field needed)
             formatted_items = []
@@ -183,9 +184,6 @@ def main():
 
             f.write("\n\n".join(formatted_items))
             f.write("\n")
-
-            # Write closing tag
-            f.write(f"</{category_type}>\n")
 
         # Log to stderr for visibility
         print(f"Written: {filename}", file=sys.stderr)
