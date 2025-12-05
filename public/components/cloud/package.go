@@ -24,6 +24,7 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/cyborgdb"
 	_ "github.com/redpanda-data/connect/v4/public/components/dgraph"
 	_ "github.com/redpanda-data/connect/v4/public/components/elasticsearch/v8"
+	_ "github.com/redpanda-data/connect/v4/public/components/elasticsearch/v9"
 	_ "github.com/redpanda-data/connect/v4/public/components/gateway"
 	_ "github.com/redpanda-data/connect/v4/public/components/gcp"
 	_ "github.com/redpanda-data/connect/v4/public/components/gcp/enterprise"
