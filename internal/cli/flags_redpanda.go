@@ -29,20 +29,22 @@ import (
 )
 
 const (
-	rfPipelineID        = "x-redpanda-pipeline-id"
-	rfLogsTopic         = "x-redpanda-logs-topic"
-	rfStatusTopic       = "x-redpanda-status-topic"
-	rfBrokers           = "x-redpanda-brokers"
-	rfTLSEnabled        = "x-redpanda-tls-enabled"
-	rfTLSSkipCertVerify = "x-redpanda-tls-skip-verify"
-	rfTLSRootCasFile    = "x-redpanda-root-cas-file"
-	rfSASLMechanism     = "x-redpanda-sasl-mechanism"
-	rfSASLUsername      = "x-redpanda-sasl-username"
-	rfSASLPassword      = "x-redpanda-sasl-password"
-	rfCloudTokenURL     = "x-redpanda-cloud-service-account-token-url"
-	rfCloudClientID     = "x-redpanda-cloud-service-account-client-id"
-	rfCloudClientSecret = "x-redpanda-cloud-service-account-client-secret"
-	rfCloudAudience     = "x-redpanda-cloud-service-account-audience"
+	rfPipelineID             = "x-redpanda-pipeline-id"
+	rfLogsTopic              = "x-redpanda-logs-topic"
+	rfStatusTopic            = "x-redpanda-status-topic"
+	rfBrokers                = "x-redpanda-brokers"
+	rfTLSEnabled             = "x-redpanda-tls-enabled"
+	rfTLSSkipCertVerify      = "x-redpanda-tls-skip-verify"
+	rfTLSRootCasFile         = "x-redpanda-root-cas-file"
+	rfSASLMechanism          = "x-redpanda-sasl-mechanism"
+	rfSASLUsername           = "x-redpanda-sasl-username"
+	rfSASLPassword           = "x-redpanda-sasl-password"
+	rfCloudTokenURL          = "x-redpanda-cloud-service-account-token-url"
+	rfCloudClientID          = "x-redpanda-cloud-service-account-client-id"
+	rfCloudClientSecret      = "x-redpanda-cloud-service-account-client-secret"
+	rfCloudAudience          = "x-redpanda-cloud-service-account-audience"
+	rfCloudAuthzResourceName = "x-redpanda-cloud-authz-resource-name"
+	rfCloudAuthzPolicyFile   = "x-redpanda-cloud-authz-policy-file"
 )
 
 var secretsFlag = &cli.StringSliceFlag{
@@ -173,6 +175,18 @@ func redpandaFlags() []cli.Flag {
 			Hidden: true,
 			Value:  "",
 		},
+		&cli.StringFlag{
+			Name:   rfCloudAuthzResourceName,
+			Usage:  "Authorization resource name for scope lookup in the policy file",
+			Hidden: true,
+			Value:  "",
+		},
+		&cli.PathFlag{
+			Name:   rfCloudAuthzPolicyFile,
+			Usage:  "Authorization policy file for enforcing permissions",
+			Hidden: true,
+			Value:  "",
+		},
 	}
 }
 
@@ -277,18 +291,21 @@ func resolveSecret(ctx context.Context, value string, lookupFn secrets.LookupFn)
 
 // parseCloudAuthFlags parses the OAuth2/cloud authentication CLI flags,
 // resolves any secret references, and initializes the global service account configuration.
-func parseCloudAuthFlags(ctx context.Context, c *cli.Context, secretLookupFn secrets.LookupFn) error {
+// returns the authz policy file (if specified)
+func parseCloudAuthFlags(ctx context.Context, c *cli.Context, secretLookupFn secrets.LookupFn) (authzResourceName, authzPolicyFile string, err error) {
 	tokenURL := resolveSecret(ctx, c.String(rfCloudTokenURL), secretLookupFn)
 	clientID := resolveSecret(ctx, c.String(rfCloudClientID), secretLookupFn)
 	clientSecret := resolveSecret(ctx, c.String(rfCloudClientSecret), secretLookupFn)
 	audience := resolveSecret(ctx, c.String(rfCloudAudience), secretLookupFn)
+	authzResourceName = resolveSecret(ctx, c.Path(rfCloudAuthzResourceName), secretLookupFn)
+	authzPolicyFile = resolveSecret(ctx, c.Path(rfCloudAuthzPolicyFile), secretLookupFn)
 
 	// Initialize global service account config if credentials are provided
 	if tokenURL != "" && clientID != "" && clientSecret != "" {
 		if err := serviceaccount.InitGlobal(ctx, tokenURL, clientID, clientSecret, audience); err != nil {
-			return fmt.Errorf("failed to initialize service account authentication: %w", err)
+			return "", "", fmt.Errorf("failed to initialize service account authentication: %w", err)
 		}
 	}
 
-	return nil
+	return authzResourceName, authzPolicyFile, nil
 }

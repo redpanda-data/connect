@@ -184,8 +184,8 @@ func InitEnterpriseCLI(binaryName, version, dateBuilt string, schema *service.Co
 					return err
 				}
 
-				// Parse and resolve cloud auth flags (for a2a processor OAuth2)
-				if err := parseCloudAuthFlags(c.Context, c, secretLookupFn); err != nil {
+				// Parse and resolve cloud auth flags
+				if _, _, err := parseCloudAuthFlags(c.Context, c, secretLookupFn); err != nil {
 					return err
 				}
 
