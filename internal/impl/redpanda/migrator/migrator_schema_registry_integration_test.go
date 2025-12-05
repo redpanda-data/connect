@@ -319,8 +319,10 @@ func TestIntegrationSchemaRegistryMigratorSyncWithReferences(t *testing.T) {
 		addressSchema  = `{"type":"record","name":"Address","namespace":"com.example.schemas","fields":[{"name":"street","type":"string"},{"name":"city","type":"string"},{"name":"state","type":"string"},{"name":"zipCode","type":"string"}]}`
 	)
 
-	t.Log("And: destination address subject is set to import mode")
-	modeRes := dst.SetMode(ctx, sr.ModeImport, addressSubject)
+	t.Log("And: source and destination address subject is set to import mode")
+	modeRes := src.SetMode(ctx, sr.ModeImport, addressSubject)
+	require.NoError(t, modeRes[0].Err)
+	modeRes = dst.SetMode(ctx, sr.ModeImport, addressSubject)
 	require.NoError(t, modeRes[0].Err)
 
 	addressSchemaResp, err := src.CreateSchemaWithIDAndVersion(ctx, addressSubject, sr.Schema{
@@ -336,7 +338,9 @@ func TestIntegrationSchemaRegistryMigratorSyncWithReferences(t *testing.T) {
 		personSchema  = `{"type":"record","name":"Person","namespace":"com.example.schemas","fields":[{"name":"id","type":"string"},{"name":"firstName","type":"string"},{"name":"lastName","type":"string"},{"name":"address","type":"com.example.schemas.Address"}]}`
 	)
 
-	t.Log("And: destination person subject is set to import mode")
+	t.Log("And: source and destination person subject is set to import mode")
+	modeRes = src.SetMode(ctx, sr.ModeImport, personSubject)
+	require.NoError(t, modeRes[0].Err)
 	modeRes = dst.SetMode(ctx, sr.ModeImport, personSubject)
 	require.NoError(t, modeRes[0].Err)
 
