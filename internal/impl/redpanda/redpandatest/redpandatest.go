@@ -101,11 +101,11 @@ func StartSingleBrokerWithConfig(t *testing.T, pool *dockertest.Pool, cfg Config
 
 	repo := "docker.redpanda.com/redpandadata/redpanda"
 	if cfg.Nightly {
-		repo = "redpandadata/redpanda-nightly"
+		repo = "docker.redpanda.com/redpandadata/redpanda-nightly"
 	}
 	options := &dockertest.RunOptions{
 		Repository:   repo,
-		Tag:          "latest",
+		Tag:          "v25.3.1",
 		Hostname:     "redpanda",
 		Cmd:          cmd,
 		ExposedPorts: exposedPorts,

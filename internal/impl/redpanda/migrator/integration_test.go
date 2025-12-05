@@ -46,7 +46,6 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
-	"github.com/redpanda-data/connect/v4/internal/impl/redpanda/redpandatest"
 	_ "github.com/redpanda-data/connect/v4/public/components/confluent"
 )
 
@@ -210,9 +209,7 @@ func TestIntegrationMigratorSinglePartitionMalformedSchemaID(t *testing.T) {
 	)
 
 	t.Log("Given: Redpanda clusters")
-	src, dst := startRedpandaSourceAndDestination(t, func(rcok redpandatestConfigOptKind, c *redpandatest.Config) {
-		c.Nightly = true
-	})
+	src, dst := startRedpandaSourceAndDestination(t)
 
 	t.Log("And: Schema registry containing a subject and schema")
 	{
@@ -263,9 +260,7 @@ func TestIntegrationMigratorMultiPartitionSchemaAwareWithConsumerGroups(t *testi
 	)
 
 	t.Log("Given: Redpanda clusters")
-	src, dst := startRedpandaSourceAndDestination(t, func(rcok redpandatestConfigOptKind, c *redpandatest.Config) {
-		c.Nightly = true
-	})
+	src, dst := startRedpandaSourceAndDestination(t)
 
 	t.Log("And: Schema registry containing a subject and schema")
 	srScr, err := sr.NewClient(sr.URLs(src.SchemaRegistryURL))
@@ -994,14 +989,8 @@ func TestIntegrationMigratorJiraCON229(t *testing.T) {
 		schema        = `{"type":"record","name":"TestRecord","fields":[{"name":"id","type":"int"},{"name":"data","type":"string"}]}`
 	)
 
-	nightly := func(kind redpandatestConfigOptKind, cfg *redpandatest.Config) {
-		if kind == redpandatestConfigOptKindDst {
-			cfg.Nightly = true
-		}
-	}
-
 	t.Log("Given: Redpanda clusters with schema registry")
-	src, dst := startRedpandaSourceAndDestination(t, nightly)
+	src, dst := startRedpandaSourceAndDestination(t)
 
 	t.Log("And: ACLs configured for idempotent writes")
 	src.CreateClusterACLAllow("User:*", kmsg.ACLOperationIdempotentWrite)
