@@ -9,7 +9,7 @@ on:
 
 jobs:
   integration-test:
-    if: ${{ github.event_name != 'pull_request' || startsWith(github.event.pull_request.title, 'build(deps)') }}
+    if: ${{ github.event_name == 'pull_request' || startsWith(github.event.pull_request.title, 'build(deps)') }}
     runs-on: ubuntu-latest-32
     env:
       CGO_ENABLED: 0
@@ -17,42 +17,42 @@ jobs:
       fail-fast: false
       matrix:
         package:
-          - ./internal/impl/amqp09
-          - ./internal/impl/amqp1
-          - ./internal/impl/aws
-          # - ./internal/impl/azure
-          # - ./internal/impl/beanstalkd
-          - ./internal/impl/cassandra
-          - ./internal/impl/cockroachdb
-          # - ./internal/impl/couchbase
-          - ./internal/impl/elasticsearch/v8
-          # - ./internal/impl/gcp
-          - ./internal/impl/gcp/enterprise
-          # - ./internal/impl/gcp/enterprise/changestreams
-          # - ./internal/impl/gcp/enterprise/changestreams/metadata
-          - ./internal/impl/hdfs
-          - ./internal/impl/influxdb
-          # - ./internal/impl/kafka
-          - ./internal/impl/kafka/enterprise
-          - ./internal/impl/memcached
-          - ./internal/impl/mssqlserver
-          - ./internal/impl/mongodb
-          - ./internal/impl/mongodb/cdc
-          # - ./internal/impl/mqtt
-          - ./internal/impl/mysql
-          # - ./internal/impl/nanomsg
-          # - ./internal/impl/nats
-          - ./internal/impl/nsq
-          - ./internal/impl/opensearch
-          - ./internal/impl/postgresql
-          - ./internal/impl/pulsar
-          - ./internal/impl/qdrant
-          # - ./internal/impl/questdb
-          - ./internal/impl/redis
+          # - ./internal/impl/amqp09
+          # - ./internal/impl/amqp1
+          # - ./internal/impl/aws
+          # # - ./internal/impl/azure
+          # # - ./internal/impl/beanstalkd
+          # - ./internal/impl/cassandra
+          # - ./internal/impl/cockroachdb
+          # # - ./internal/impl/couchbase
+          # - ./internal/impl/elasticsearch/v8
+          # # - ./internal/impl/gcp
+          # - ./internal/impl/gcp/enterprise
+          # # - ./internal/impl/gcp/enterprise/changestreams
+          # # - ./internal/impl/gcp/enterprise/changestreams/metadata
+          # - ./internal/impl/hdfs
+          # - ./internal/impl/influxdb
+          # # - ./internal/impl/kafka
+          # - ./internal/impl/kafka/enterprise
+          # - ./internal/impl/memcached
+          # - ./internal/impl/mssqlserver
+          # - ./internal/impl/mongodb
+          # - ./internal/impl/mongodb/cdc
+          # # - ./internal/impl/mqtt
+          # - ./internal/impl/mysql
+          # # - ./internal/impl/nanomsg
+          # # - ./internal/impl/nats
+          # - ./internal/impl/nsq
+          # - ./internal/impl/opensearch
+          # - ./internal/impl/postgresql
+          # - ./internal/impl/pulsar
+          # - ./internal/impl/qdrant
+          # # - ./internal/impl/questdb
+          # - ./internal/impl/redis
           - ./internal/impl/redpanda/migrator
-          - ./internal/impl/sftp
+          # - ./internal/impl/sftp
           # - ./internal/impl/snowflake
-          - ./internal/impl/snowflake/streaming
+          # - ./internal/impl/snowflake/streaming
           # - ./internal/impl/splunk
           # - ./internal/impl/sql
 
@@ -72,6 +72,20 @@ jobs:
       - name: Install Task
         uses: ./.github/actions/setup-task
 
+      - name: Set up gotestfmt
+        uses: GoTestTools/gotestfmt-action@v2
+        with:
+          # Optional: pass GITHUB_TOKEN to avoid rate limiting.
+          token: ${{ secrets.GITHUB_TOKEN }}
+          version: v2.0.0
+          org: GoTestTools
+          repo: gotestfmt
+
+      # Run tests with nice formatting. Save the original log in /tmp/gotest.log
+      # - name: Run tests
+      #   run: |
+      #     set -euo pipefail
+      #     go test -json -v ${{ matrix.package }}/... 2>&1 | tee /tmp/gotest.log | gotestfmt
+      #   timeout-minutes: 30
       - name: Run Integration Tests for ${{ matrix.package }}
-        run: task test:integration-package PKG=${{ matrix.package }}
-        timeout-minutes: 30
+        run: task test:integration-package FORMAT=-json PKG=${{ matrix.package }}

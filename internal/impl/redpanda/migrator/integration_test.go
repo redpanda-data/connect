@@ -219,6 +219,14 @@ func TestIntegrationMigratorSinglePartitionMalformedSchemaID(t *testing.T) {
 		require.NoError(t, err)
 	}
 
+	t.Log("And: Destination schema registry subject is set to import mode")
+	{
+		srDst, err := sr.NewClient(sr.URLs(dst.SchemaRegistryURL))
+		require.NoError(t, err)
+		modeRes := srDst.SetMode(t.Context(), sr.ModeImport, subj)
+		require.NoError(t, modeRes[0].Err)
+	}
+
 	pfx := []byte{0x00, 0x01, 0x02, 0x03, 0x04}
 
 	t.Log("When: Messages with malformed schema ID headers are written to source cluster")
@@ -259,6 +267,14 @@ func TestIntegrationMigratorMultiPartitionSchemaAwareWithConsumerGroups(t *testi
 	require.NoError(t, err)
 	ss, err := srScr.CreateSchema(t.Context(), subj, sr.Schema{Schema: schema})
 	require.NoError(t, err)
+
+	t.Log("And: Destination schema registry subject is set to import mode")
+	{
+		srDst, err := sr.NewClient(sr.URLs(dst.SchemaRegistryURL))
+		require.NoError(t, err)
+		modeRes := srDst.SetMode(t.Context(), sr.ModeImport, subj)
+		require.NoError(t, modeRes[0].Err)
+	}
 
 	t.Log("When: Messages are written to the source cluster")
 	{
@@ -986,6 +1002,14 @@ func TestIntegrationMigratorJiraCON229(t *testing.T) {
 	ss, err := srSrc.CreateSchema(t.Context(), schemaSubject, sr.Schema{Schema: schema})
 	require.NoError(t, err)
 	t.Logf("Created schema with ID: %d", ss.ID)
+
+	t.Log("And: Destination schema registry subject is set to import mode")
+	{
+		srDst, err := sr.NewClient(sr.URLs(dst.SchemaRegistryURL))
+		require.NoError(t, err)
+		modeRes := srDst.SetMode(t.Context(), sr.ModeImport, schemaSubject)
+		require.NoError(t, modeRes[0].Err)
+	}
 
 	t.Log("And: Multiple topics created with multiple partitions")
 	for _, topic := range []string{topicA, topicB, topicC, topicD} {
