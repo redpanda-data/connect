@@ -88,4 +88,4 @@ jobs:
       #     go test -json -v ${{ matrix.package }}/... 2>&1 | tee /tmp/gotest.log | gotestfmt
       #   timeout-minutes: 30
       - name: Run Integration Tests for ${{ matrix.package }}
-        run: task test:integration-package FORMAT=-json PKG=${{ matrix.package }} 2>&1 | tee /tmp/gotest.log | gotestfmt
+        run: task test:integration-package FORMAT=-json PKG=${{ matrix.package }}
