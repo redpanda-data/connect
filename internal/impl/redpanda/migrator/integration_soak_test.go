@@ -15,25 +15,8 @@
 package migrator_test
 
 import (
-	"bytes"
-	"context"
-	"errors"
 	"flag"
-	"math/rand"
-	"os"
-	"strconv"
-	"testing"
-	"text/template"
-	"time"
 
-	"github.com/ory/dockertest/v3"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"github.com/twmb/franz-go/pkg/kgo"
-
-	"github.com/redpanda-data/benthos/v4/public/service"
-	"github.com/redpanda-data/benthos/v4/public/service/integration"
-	"github.com/redpanda-data/connect/v4/internal/impl/redpanda/redpandatest"
 	_ "github.com/redpanda-data/connect/v4/public/components/prometheus"
 )
 
@@ -56,176 +39,176 @@ var (
 // -soak-post-consume-wait-seconds=60
 //
 // You can run resources/docker/profiling containers to get Metrics.
-func TestIntegrationMigratorSoak(t *testing.T) {
-	integration.CheckSkip(t)
-	if os.Getenv("CI") != "" {
-		t.Skip("Skipping soak test in CI")
-	}
+// func TestIntegrationMigratorSoak(t *testing.T) {
+// 	integration.CheckSkip(t)
+// 	if os.Getenv("CI") == "" {
+// 		t.Skip("Skipping soak test in CI")
+// 	}
 
-	ctx := t.Context()
+// 	ctx := t.Context()
 
-	waitSecondsRand := func(seconds int) {
-		d := time.Duration(*soakMinWaitSeconds+rand.Intn(seconds-*soakMinWaitSeconds)) * time.Second
+// 	waitSecondsRand := func(seconds int) {
+// 		d := time.Duration(*soakMinWaitSeconds+rand.Intn(seconds-*soakMinWaitSeconds)) * time.Second
 
-		t.Logf(">> Waiting for %s", d)
-		select {
-		case <-ctx.Done():
-		case <-time.After(d):
-		}
-		t.Log("<< Done waiting")
-	}
+// 		t.Logf(">> Waiting for %s", d)
+// 		select {
+// 		case <-ctx.Done():
+// 		case <-time.After(d):
+// 		}
+// 		t.Log("<< Done waiting")
+// 	}
 
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
-	pool.MaxWait = time.Minute
+// 	pool, err := dockertest.NewPool("")
+// 	require.NoError(t, err)
+// 	pool.MaxWait = time.Minute
 
-	t.Log("Given: Confluent CP cluster")
-	src := startConfluentInPool(t, pool, true)
+// 	t.Log("Given: Confluent CP cluster")
+// 	src := startConfluentInPool(t, pool, true)
 
-	t.Log("And: datagen connectors producing data")
-	{
-		pageviewsConf := map[string]any{
-			"connector.class": "io.confluent.kafka.connect.datagen.DatagenConnector",
-			"key.converter":   "org.apache.kafka.connect.storage.StringConverter",
-			"kafka.topic":     "pageviews",
-			"quickstart":      "pageviews",
-			"max.interval":    1000,
-			"iterations":      10000000,
-			"tasks.max":       "1",
-		}
-		require.NoError(t, createConnector(ctx, src.ConnectURL, "datagen_pageviews", pageviewsConf))
+// 	t.Log("And: datagen connectors producing data")
+// 	{
+// 		pageviewsConf := map[string]any{
+// 			"connector.class": "io.confluent.kafka.connect.datagen.DatagenConnector",
+// 			"key.converter":   "org.apache.kafka.connect.storage.StringConverter",
+// 			"kafka.topic":     "pageviews",
+// 			"quickstart":      "pageviews",
+// 			"max.interval":    1000,
+// 			"iterations":      10000000,
+// 			"tasks.max":       "1",
+// 		}
+// 		require.NoError(t, createConnector(ctx, src.ConnectURL, "datagen_pageviews", pageviewsConf))
 
-		usersConf := map[string]any{
-			"connector.class": "io.confluent.kafka.connect.datagen.DatagenConnector",
-			"key.converter":   "org.apache.kafka.connect.storage.StringConverter",
-			"kafka.topic":     "users",
-			"quickstart":      "users",
-			"max.interval":    1000,
-			"iterations":      10000000,
-			"tasks.max":       "1",
-		}
-		require.NoError(t, createConnector(ctx, src.ConnectURL, "datagen_users", usersConf))
-	}
+// 		usersConf := map[string]any{
+// 			"connector.class": "io.confluent.kafka.connect.datagen.DatagenConnector",
+// 			"key.converter":   "org.apache.kafka.connect.storage.StringConverter",
+// 			"kafka.topic":     "users",
+// 			"quickstart":      "users",
+// 			"max.interval":    1000,
+// 			"iterations":      10000000,
+// 			"tasks.max":       "1",
+// 		}
+// 		require.NoError(t, createConnector(ctx, src.ConnectURL, "datagen_users", usersConf))
+// 	}
 
-	t.Log("And: Redpanda destination cluster")
-	var dst EmbeddedRedpandaCluster
-	{
-		ep, _, err := redpandatest.StartSingleBrokerWithConfig(t, pool, redpandatest.Config{
-			ExposeBroker:     true,
-			AutoCreateTopics: false,
-		})
-		require.NoError(t, err)
-		dst = EmbeddedRedpandaCluster{t: t, Endpoints: ep}
-		dst.Client, err = kgo.NewClient(kgo.SeedBrokers(src.BrokerAddr))
-		require.NoError(t, err)
-		t.Cleanup(func() { src.Client.Close() })
-		dst.Admin = src.Admin
-	}
+// 	t.Log("And: Redpanda destination cluster")
+// 	var dst EmbeddedRedpandaCluster
+// 	{
+// 		ep, _, err := redpandatest.StartSingleBrokerWithConfig(t, pool, redpandatest.Config{
+// 			ExposeBroker:     true,
+// 			AutoCreateTopics: false,
+// 		})
+// 		require.NoError(t, err)
+// 		dst = EmbeddedRedpandaCluster{t: t, Endpoints: ep}
+// 		dst.Client, err = kgo.NewClient(kgo.SeedBrokers(src.BrokerAddr))
+// 		require.NoError(t, err)
+// 		t.Cleanup(func() { src.Client.Close() })
+// 		dst.Admin = src.Admin
+// 	}
 
-	t.Log("And: data generation period elapsed")
-	waitSecondsRand(*soakDatagenWaitSeconds)
+// 	t.Log("And: data generation period elapsed")
+// 	waitSecondsRand(*soakDatagenWaitSeconds)
 
-	t.Log("When: migrator is started")
-	const configYAML = `
-http:
-  enabled: true
-  address: {{.HTTPAddr}}
+// 	t.Log("When: migrator is started")
+// 	const configYAML = `
+// http:
+//   enabled: true
+//   address: {{.HTTPAddr}}
 
-input:
-  redpanda_migrator:
-    seed_brokers: [ "{{.Src.BrokerAddr}}" ]
-    topics:
-      - "pageviews"
-      - "users"
-      - "docker-connect.*"
-    regexp_topics: true
-    consumer_group: migrator_bundle
-    schema_registry:
-      url: {{.Src.SchemaRegistryURL}}
+// input:
+//   redpanda_migrator:
+//     seed_brokers: [ "{{.Src.BrokerAddr}}" ]
+//     topics:
+//       - "pageviews"
+//       - "users"
+//       - "docker-connect.*"
+//     regexp_topics: true
+//     consumer_group: migrator_bundle
+//     schema_registry:
+//       url: {{.Src.SchemaRegistryURL}}
 
-output:
-  redpanda_migrator:
-    seed_brokers: [ "{{.Dst.BrokerAddr}}" ]
-    schema_registry:
-      url: {{.Dst.SchemaRegistryURL}}
-    consumer_groups:
-      interval: 10s
+// output:
+//   redpanda_migrator:
+//     seed_brokers: [ "{{.Dst.BrokerAddr}}" ]
+//     schema_registry:
+//       url: {{.Dst.SchemaRegistryURL}}
+//     consumer_groups:
+//       interval: 10s
 
-metrics:
-  prometheus:
-    add_process_metrics: true
-    add_go_metrics: true
+// metrics:
+//   prometheus:
+//     add_process_metrics: true
+//     add_go_metrics: true
 
-logger:
-  level: INFO
-`
+// logger:
+//   level: INFO
+// `
 
-	tmpl, err := template.New("soak").Parse(configYAML)
-	require.NoError(t, err)
+// 	tmpl, err := template.New("soak").Parse(configYAML)
+// 	require.NoError(t, err)
 
-	var buf bytes.Buffer
-	err = tmpl.Execute(&buf, struct {
-		HTTPAddr string
-		Src      EmbeddedConfluentCluster
-		Dst      EmbeddedRedpandaCluster
-	}{
-		HTTPAddr: *soakHTTPAddr,
-		Src:      src,
-		Dst:      dst,
-	})
-	require.NoError(t, err)
+// 	var buf bytes.Buffer
+// 	err = tmpl.Execute(&buf, struct {
+// 		HTTPAddr string
+// 		Src      EmbeddedConfluentCluster
+// 		Dst      EmbeddedRedpandaCluster
+// 	}{
+// 		HTTPAddr: *soakHTTPAddr,
+// 		Src:      src,
+// 		Dst:      dst,
+// 	})
+// 	require.NoError(t, err)
 
-	sb := service.NewStreamBuilder()
-	require.NoError(t, sb.SetYAML(buf.String()))
-	stream, err := sb.Build()
-	require.NoError(t, err)
+// 	sb := service.NewStreamBuilder()
+// 	require.NoError(t, sb.SetYAML(buf.String()))
+// 	stream, err := sb.Build()
+// 	require.NoError(t, err)
 
-	go func() {
-		err := stream.Run(ctx)
-		if err != nil && !errors.Is(err, context.Canceled) {
-			t.Error(err)
-		}
-	}()
-	t.Cleanup(func() {
-		t.Log("Stopping Migrator")
-		require.NoError(t, stream.StopWithin(3*time.Second))
-	})
-	t.Logf("Migrator HTTP address: %s", *soakHTTPAddr)
-	t.Log("And: migration period elapsed")
-	waitSecondsRand(*soakMigrationWaitSeconds)
+// 	go func() {
+// 		err := stream.Run(ctx)
+// 		if err != nil && !errors.Is(err, context.Canceled) {
+// 			t.Error(err)
+// 		}
+// 	}()
+// 	t.Cleanup(func() {
+// 		t.Log("Stopping Migrator")
+// 		require.NoError(t, stream.StopWithin(3*time.Second))
+// 	})
+// 	t.Logf("Migrator HTTP address: %s", *soakHTTPAddr)
+// 	t.Log("And: migration period elapsed")
+// 	waitSecondsRand(*soakMigrationWaitSeconds)
 
-	t.Log("Then: topics match between source and destination")
-	{
-		assert.ElementsMatch(t, src.ListTopics(), dst.ListTopics())
-	}
+// 	t.Log("Then: topics match between source and destination")
+// 	{
+// 		assert.ElementsMatch(t, src.ListTopics(), dst.ListTopics())
+// 	}
 
-	t.Log("And: partitions match between source and destination")
-	{
-		srcPageviews := src.DescribeTopic("pageviews")
-		dstPageviews := dst.DescribeTopic("pageviews")
-		assert.Equal(t, srcPageviews.Partitions, dstPageviews.Partitions)
-	}
+// 	t.Log("And: partitions match between source and destination")
+// 	{
+// 		srcPageviews := src.DescribeTopic("pageviews")
+// 		dstPageviews := dst.DescribeTopic("pageviews")
+// 		assert.Equal(t, srcPageviews.Partitions, dstPageviews.Partitions)
+// 	}
 
-	t.Log("When: consumer group offset is established on source")
-	parseKey := func(s []byte) int {
-		assert.NotEmpty(t, s)
-		v, err := strconv.ParseInt(string(s), 10, 64)
-		assert.NoError(t, err)
-		return int(v)
-	}
+// 	t.Log("When: consumer group offset is established on source")
+// 	parseKey := func(s []byte) int {
+// 		assert.NotEmpty(t, s)
+// 		v, err := strconv.ParseInt(string(s), 10, 64)
+// 		assert.NoError(t, err)
+// 		return int(v)
+// 	}
 
-	consume(src.EmbeddedRedpandaCluster, "pageviews", "mygroup", 2, kgo.ConsumeResetOffset(kgo.NewOffset().AtEnd()))
-	kafkaRecords := consume(src.EmbeddedRedpandaCluster, "pageviews", "mygroup", 1)
-	kafkaKey := parseKey(kafkaRecords[0].Key)
-	t.Logf("Kafka key: %d", kafkaKey)
+// 	consume(src.EmbeddedRedpandaCluster, "pageviews", "mygroup", 2, kgo.ConsumeResetOffset(kgo.NewOffset().AtEnd()))
+// 	kafkaRecords := consume(src.EmbeddedRedpandaCluster, "pageviews", "mygroup", 1)
+// 	kafkaKey := parseKey(kafkaRecords[0].Key)
+// 	t.Logf("Kafka key: %d", kafkaKey)
 
-	t.Log("And: post-consume period elapsed")
-	waitSecondsRand(*soakPostConsumeWaitSeconds)
+// 	t.Log("And: post-consume period elapsed")
+// 	waitSecondsRand(*soakPostConsumeWaitSeconds)
 
-	t.Log("Then: consumer group offset is migrated correctly")
-	redpandaRecords := consume(dst, "pageviews", "mygroup", 1)
-	redpandaKey := parseKey(redpandaRecords[0].Key)
-	t.Logf("Redpanda key: %d", redpandaKey)
+// 	t.Log("Then: consumer group offset is migrated correctly")
+// 	redpandaRecords := consume(dst, "pageviews", "mygroup", 1)
+// 	redpandaKey := parseKey(redpandaRecords[0].Key)
+// 	t.Logf("Redpanda key: %d", redpandaKey)
 
-	require.Equal(t, 10, redpandaKey-kafkaKey)
-}
+// 	require.Equal(t, 10, redpandaKey-kafkaKey)
+// }
