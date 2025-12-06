@@ -28,7 +28,7 @@ tasks:
       TIMEOUT: '{{if .CI}}15m{{else}}5m{{end}}'
       FORMAT: ''
     cmds:
-      - go test {{.GO_FLAGS}} {{ .FORMAT }} -run "^Test.*Integration" -timeout {{.TIMEOUT}} {{if .CI}}-v{{else}}-v{{end}} {{.PKG}} 2>&1 | tee /tmp/gotest.log | gotestfmt
+      - go test {{.GO_FLAGS}} {{ .FORMAT }} -run "^Test.*Integration" -timeout {{.TIMEOUT}} -v {{.PKG}} 2>&1 | tee /tmp/gotest.log | gotestfmt
 
   template:
     desc: Run template tests
