@@ -100,6 +100,7 @@ func RunAgent(
 			},
 			nil,
 			licenseConfig,
+			nil,
 		)
 		if err != nil {
 			return nil, err
