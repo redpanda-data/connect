@@ -297,7 +297,7 @@ func parseCloudAuthFlags(ctx context.Context, c *cli.Context, secretLookupFn sec
 	clientID := resolveSecret(ctx, c.String(rfCloudClientID), secretLookupFn)
 	clientSecret := resolveSecret(ctx, c.String(rfCloudClientSecret), secretLookupFn)
 	audience := resolveSecret(ctx, c.String(rfCloudAudience), secretLookupFn)
-	authzResourceName = resolveSecret(ctx, c.Path(rfCloudAuthzResourceName), secretLookupFn)
+	authzResourceName = resolveSecret(ctx, c.String(rfCloudAuthzResourceName), secretLookupFn)
 	authzPolicyFile = resolveSecret(ctx, c.Path(rfCloudAuthzPolicyFile), secretLookupFn)
 
 	// Initialize global service account config if credentials are provided
