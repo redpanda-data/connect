@@ -32,6 +32,7 @@ import (
 
 	"github.com/redpanda-data/connect/v4/internal/gateway"
 	"github.com/redpanda-data/connect/v4/internal/license"
+	"github.com/redpanda-data/connect/v4/internal/mcp/metrics"
 	"github.com/redpanda-data/connect/v4/internal/mcp/repository"
 	"github.com/redpanda-data/connect/v4/internal/mcp/starlark"
 	"github.com/redpanda-data/connect/v4/internal/mcp/tools"
@@ -155,6 +156,10 @@ func NewServer(
 	}
 
 	license.RegisterService(resources, licenseConfig)
+
+	// Add metrics middleware to track all MCP method calls
+	mcpMetrics := metrics.NewMetrics(resources.Metrics())
+	s.AddReceivingMiddleware(mcpMetrics.Middleware)
 
 	if auth != nil {
 		if err := license.CheckRunningEnterprise(resources); err != nil {
