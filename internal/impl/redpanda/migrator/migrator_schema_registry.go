@@ -453,6 +453,10 @@ func (m *schemaRegistryMigrator) SyncLoop(ctx context.Context) {
 // It lists all subject schemas in the source schema registry, filters them by
 // the migrator configuration, and then syncs each subject schema and its
 // compatibility mode.
+//
+// For serverless schema registries, it automatically handles IMPORT mode by
+// temporarily switching subject to IMPORT mode and restoring the original mode
+// after migration completes.
 func (m *schemaRegistryMigrator) Sync(ctx context.Context) error {
 	if !m.enabled() {
 		m.log.Info("Schema migration: schema registry sync disabled")
@@ -526,7 +530,7 @@ func (m *schemaRegistryMigrator) validateSchemaRegistries(ctx context.Context) e
 		return err
 	}
 	m.log.Debugf("Schema migration: destination schema registry mode=%s", mode)
-	if mode != "READWRITE" && mode != "IMPORT" {
+	if mode != sr.ModeReadWrite && mode != sr.ModeImport {
 		return fmt.Errorf("schema registry instance mode must be READWRITE or IMPORT, got %q", mode)
 	}
 
@@ -560,6 +564,15 @@ func (m *schemaRegistryMigrator) syncSubjectSchema(ctx context.Context, ss sr.Su
 	if dstSubject != ss.Subject {
 		m.log.Debugf("Schema migration: resolved subject=%s version=%d => subject=%s",
 			ss.Subject, ss.Version, dstSubject)
+	}
+
+	// Ensure subject is in IMPORT mode for serverless registries
+	if m.conf.Serverless {
+		restoreMode, err := m.ensureSubjectImportMode(ctx, dstSubject)
+		if err != nil {
+			return schemaInfo{}, fmt.Errorf("ensure IMPORT mode for subject %s: %w", dstSubject, err)
+		}
+		defer restoreMode()
 	}
 
 	if m.conf.Normalize {
@@ -703,12 +716,85 @@ func (m *schemaRegistryMigrator) syncSubjectCompatibility(ctx context.Context, s
 	return nil
 }
 
-func srGlobalMode(ctx context.Context, client *sr.Client) (string, error) {
+var noMode sr.Mode = -1
+
+func srGlobalMode(ctx context.Context, client *sr.Client) (sr.Mode, error) {
 	res := client.Mode(ctx)
 	if res[0].Err != nil {
-		return "", fmt.Errorf("fetch schema registry mode: %w", res[0].Err)
+		return noMode, fmt.Errorf("fetch schema registry mode: %w", res[0].Err)
 	}
-	return res[0].Mode.String(), nil
+	return res[0].Mode, nil
+}
+
+// ensureSubjectImportMode checks if the destination subject is in IMPORT mode.
+// If not in IMPORT mode, it switches to IMPORT mode and returns a function to
+// restore the original mode.
+func (m *schemaRegistryMigrator) ensureSubjectImportMode(ctx context.Context, subject string) (func(), error) {
+	noop := func() {}
+
+	// Check global mode first, if global mode is IMPORT, subject is implicitly IMPORT
+	mode, err := srGlobalMode(ctx, m.dst)
+	if err != nil {
+		return noop, err
+	}
+	if mode == sr.ModeImport {
+		return noop, nil
+	}
+
+	mode, err = srSubjectMode(ctx, m.dst, subject)
+	if err != nil {
+		if strings.Contains(err.Error(), "does not have subject-level mode configured") {
+			mode = noMode
+		} else {
+			return noop, err
+		}
+	} else if mode == sr.ModeImport {
+		return noop, nil
+	}
+
+	m.log.Infof("Schema migration: setting subject=%s mode to %s for migration", subject, sr.ModeImport)
+	if err := srSetSubjectMode(ctx, m.dst, sr.ModeImport, subject); err != nil {
+		if strings.Contains(err.Error(), "Invalid mode. Valid values are") {
+			m.log.Warnf("Schema migration: destination schema registry does not support IMPORT mode for subject=%s, proceeding without mode change", subject)
+			return noop, nil
+		}
+		return noop, fmt.Errorf("failed to set IMPORT mode: %w", err)
+	}
+
+	return func() {
+		if mode == noMode {
+			m.log.Infof("Schema migration: resetting subject=%s mode", subject)
+		} else {
+			m.log.Infof("Schema migration: restoring subject=%s mode to %s", subject, mode)
+		}
+
+		if err := srSetSubjectMode(context.Background(), m.dst, mode, subject); err != nil {
+			m.log.Errorf("Schema migration: failed to restore subject=%s: %v", subject, err)
+		}
+	}, nil
+}
+
+func srSubjectMode(ctx context.Context, client *sr.Client, subject string) (sr.Mode, error) {
+	res := client.Mode(ctx, subject)
+	if res[0].Err != nil {
+		return 0, fmt.Errorf("fetch subject mode: %w", res[0].Err)
+	}
+	return res[0].Mode, nil
+}
+
+func srSetSubjectMode(ctx context.Context, client *sr.Client, mode sr.Mode, subject string) error {
+	if mode == noMode {
+		res := client.ResetMode(ctx, subject)
+		if res[0].Err != nil {
+			return fmt.Errorf("reset subject mode: %w", res[0].Err)
+		}
+	} else {
+		res := client.SetMode(ctx, mode, subject)
+		if res[0].Err != nil {
+			return fmt.Errorf("set subject mode to %s: %w", mode, res[0].Err)
+		}
+	}
+	return nil
 }
 
 // DestinationSchemaID attempts to fetch the destination schema ID for the
