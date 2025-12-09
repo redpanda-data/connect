@@ -1,0 +1,8 @@
+roles:
+  - id: mcp.readonly
+    permissions: []
+
+bindings:
+  - role: mcp.readonly
+    principal: test@example.com
+    scope: organization/test-org/resourcegroup/default/dataplane/mcp-server

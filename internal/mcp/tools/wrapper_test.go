@@ -21,8 +21,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/xeipuuv/gojsonschema"
@@ -40,7 +39,10 @@ func (dh discardHandler) WithAttrs([]slog.Attr) slog.Handler     { return dh }
 func (dh discardHandler) WithGroup(string) slog.Handler          { return dh }
 
 func TestResourcesWrappersCacheHappy(t *testing.T) {
-	s := server.NewMCPServer("Testing", "1.0.0")
+	s := mcp.NewServer(&mcp.Implementation{
+		Name:    "Testing",
+		Version: "1.0.0",
+	}, nil)
 
 	r := tools.NewResourcesWrapper(slog.New(discardHandler{}), s, nil, nil)
 
@@ -72,21 +74,29 @@ memory: {}
 	ctx, done := context.WithTimeout(t.Context(), time.Minute)
 	defer done()
 
-	toolsList, ok := s.HandleMessage(ctx, []byte(`{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "tools/list"
-}`)).(mcp.JSONRPCResponse)
-	require.True(t, ok)
+	// Use in-memory transport to test
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
 
-	tools := toolsList.Result.(mcp.ListToolsResult).Tools
-	assert.Len(t, tools, 2)
+	// Start server in background
+	go func() {
+		_ = s.Run(ctx, serverTransport)
+	}()
 
-	assert.Equal(t, "get-foocache", tools[0].Name)
-	assert.Contains(t, tools[0].Description, "my foo cache")
+	// Connect client
+	client := mcp.NewClient(&mcp.Implementation{Name: "test-client"}, nil)
+	session, err := client.Connect(ctx, clientTransport, nil)
+	require.NoError(t, err)
+	defer session.Close()
 
-	assert.Equal(t, "set-foocache", tools[1].Name)
-	assert.Contains(t, tools[1].Description, "my foo cache")
+	// List tools
+	result, err := session.ListTools(ctx, &mcp.ListToolsParams{})
+	require.NoError(t, err)
+
+	assert.Len(t, result.Tools, 2)
+	assert.Equal(t, "get-foocache", result.Tools[0].Name)
+	assert.Contains(t, result.Tools[0].Description, "my foo cache")
+	assert.Equal(t, "set-foocache", result.Tools[1].Name)
+	assert.Contains(t, result.Tools[1].Description, "my foo cache")
 
 	assert.True(t, res.HasCache("bazcache"))
 
@@ -94,7 +104,10 @@ memory: {}
 }
 
 func TestResourcesWrappersTagFiltering(t *testing.T) {
-	s := server.NewMCPServer("Testing", "1.0.0")
+	s := mcp.NewServer(&mcp.Implementation{
+		Name:    "Testing",
+		Version: "1.0.0",
+	}, nil)
 
 	r := tools.NewResourcesWrapper(slog.New(discardHandler{}), s, nil, func(tags []string) bool {
 		if slices.Contains(tags, "foo") || slices.Contains(tags, "bar") {
@@ -140,21 +153,29 @@ meta:
 	ctx, done := context.WithTimeout(t.Context(), time.Minute)
 	defer done()
 
-	toolsList, ok := s.HandleMessage(ctx, []byte(`{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "tools/list"
-}`)).(mcp.JSONRPCResponse)
-	require.True(t, ok)
+	// Use in-memory transport to test
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
 
-	tools := toolsList.Result.(mcp.ListToolsResult).Tools
-	assert.Len(t, tools, 2)
+	// Start server in background
+	go func() {
+		_ = s.Run(ctx, serverTransport)
+	}()
 
-	assert.Equal(t, "get-barcache", tools[0].Name)
-	assert.Contains(t, tools[0].Description, "my bar cache")
+	// Connect client
+	client := mcp.NewClient(&mcp.Implementation{Name: "test-client"}, nil)
+	session, err := client.Connect(ctx, clientTransport, nil)
+	require.NoError(t, err)
+	defer session.Close()
 
-	assert.Equal(t, "set-barcache", tools[1].Name)
-	assert.Contains(t, tools[1].Description, "my bar cache")
+	// List tools
+	result, err := session.ListTools(ctx, &mcp.ListToolsParams{})
+	require.NoError(t, err)
+
+	assert.Len(t, result.Tools, 2)
+	assert.Equal(t, "get-barcache", result.Tools[0].Name)
+	assert.Contains(t, result.Tools[0].Description, "my bar cache")
+	assert.Equal(t, "set-barcache", result.Tools[1].Name)
+	assert.Contains(t, result.Tools[1].Description, "my bar cache")
 
 	assert.False(t, res.HasCache("bazcache"))
 	assert.True(t, res.HasCache("buzcache"))
@@ -163,7 +184,10 @@ meta:
 }
 
 func TestOutputSchemaDefaultProps(t *testing.T) {
-	s := server.NewMCPServer("Testing", "1.0.0")
+	s := mcp.NewServer(&mcp.Implementation{
+		Name:    "Testing",
+		Version: "1.0.0",
+	}, nil)
 
 	r := tools.NewResourcesWrapper(slog.New(discardHandler{}), s, nil, nil)
 
@@ -182,17 +206,26 @@ meta:
 	ctx, done := context.WithTimeout(t.Context(), time.Minute)
 	defer done()
 
-	toolsList, ok := s.HandleMessage(ctx, []byte(`{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "tools/list"
-}`)).(mcp.JSONRPCResponse)
-	require.True(t, ok)
+	// Use in-memory transport to test
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
 
-	tools := toolsList.Result.(mcp.ListToolsResult).Tools
-	require.Len(t, tools, 1)
+	// Start server in background
+	go func() {
+		_ = s.Run(ctx, serverTransport)
+	}()
 
-	tool := tools[0]
+	// Connect client
+	client := mcp.NewClient(&mcp.Implementation{Name: "test-client"}, nil)
+	session, err := client.Connect(ctx, clientTransport, nil)
+	require.NoError(t, err)
+	defer session.Close()
+
+	// List tools
+	result, err := session.ListTools(ctx, &mcp.ListToolsParams{})
+	require.NoError(t, err)
+	require.Len(t, result.Tools, 1)
+
+	tool := result.Tools[0]
 	assert.Equal(t, "foooutput", tool.Name)
 	assert.Contains(t, tool.Description, "my foo output")
 
@@ -203,7 +236,10 @@ meta:
 }
 
 func TestOutputSchemaCustomProps(t *testing.T) {
-	s := server.NewMCPServer("Testing", "1.0.0")
+	s := mcp.NewServer(&mcp.Implementation{
+		Name:    "Testing",
+		Version: "1.0.0",
+	}, nil)
 
 	r := tools.NewResourcesWrapper(slog.New(discardHandler{}), s, nil, nil)
 
@@ -232,17 +268,26 @@ meta:
 	ctx, done := context.WithTimeout(t.Context(), time.Minute)
 	defer done()
 
-	toolsList, ok := s.HandleMessage(ctx, []byte(`{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "tools/list"
-}`)).(mcp.JSONRPCResponse)
-	require.True(t, ok)
+	// Use in-memory transport to test
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
 
-	tools := toolsList.Result.(mcp.ListToolsResult).Tools
-	require.Len(t, tools, 1)
+	// Start server in background
+	go func() {
+		_ = s.Run(ctx, serverTransport)
+	}()
 
-	tool := tools[0]
+	// Connect client
+	client := mcp.NewClient(&mcp.Implementation{Name: "test-client"}, nil)
+	session, err := client.Connect(ctx, clientTransport, nil)
+	require.NoError(t, err)
+	defer session.Close()
+
+	// List tools
+	result, err := session.ListTools(ctx, &mcp.ListToolsParams{})
+	require.NoError(t, err)
+	require.Len(t, result.Tools, 1)
+
+	tool := result.Tools[0]
 	assert.Equal(t, "baroutput", tool.Name)
 	assert.Contains(t, tool.Description, "my bar output")
 

@@ -16,12 +16,12 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 
-	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"gopkg.in/yaml.v3"
@@ -34,7 +34,7 @@ import (
 // server as tools.
 type ResourcesWrapper struct {
 	logger    *slog.Logger
-	svr       *server.MCPServer
+	svr       *mcp.Server
 	builder   *service.ResourceBuilder
 	resources *service.Resources
 	closeFn   func(context.Context) error
@@ -44,7 +44,7 @@ type ResourcesWrapper struct {
 }
 
 // NewResourcesWrapper creates a new resources wrapper.
-func NewResourcesWrapper(logger *slog.Logger, svr *server.MCPServer, labelFilter func(label string) bool, tagsFilter func(tags []string) bool) *ResourcesWrapper {
+func NewResourcesWrapper(logger *slog.Logger, svr *mcp.Server, labelFilter func(label string) bool, tagsFilter func(tags []string) bool) *ResourcesWrapper {
 	if labelFilter == nil {
 		labelFilter = func(string) bool {
 			return true
@@ -114,31 +114,14 @@ type mcpProperty struct {
 	Required    bool   `yaml:"required"`
 }
 
-func (p mcpProperty) rawOption() (any, bool, error) {
-	return map[string]any{
-		"type":        p.Type,
-		"description": p.Description,
-	}, p.Required, nil
-}
-
-func (p mcpProperty) toolOption() (mcp.ToolOption, error) {
-	var opts []mcp.PropertyOption
-	if p.Required {
-		opts = append(opts, mcp.Required())
+func (p mcpProperty) toSchemaProperty() map[string]any {
+	prop := map[string]any{
+		"type": p.Type,
 	}
 	if p.Description != "" {
-		opts = append(opts, mcp.Description(p.Description))
+		prop["description"] = p.Description
 	}
-
-	switch p.Type {
-	case "string":
-		return mcp.WithString(p.Name, opts...), nil
-	case "bool", "boolean":
-		return mcp.WithBoolean(p.Name, opts...), nil
-	case "number":
-		return mcp.WithNumber(p.Name, opts...), nil
-	}
-	return nil, fmt.Errorf("property type '%v' not supported", p.Type)
+	return prop
 }
 
 type mcpConfig struct {
@@ -205,26 +188,32 @@ func (w *ResourcesWrapper) AddCacheYAML(fileBytes []byte) error {
 
 	w.logger.With("label", res.Label).Info("Registering cache tools")
 
-	w.svr.AddTool(mcp.NewTool("get-"+res.Label,
-		mcp.WithDescription("Obtain an item from "+res.Meta.MCP.Description),
-		mcp.WithString("key",
-			mcp.Description("The key of the item to obtain."),
-			mcp.Required(),
-		),
-	), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	w.svr.AddTool(&mcp.Tool{
+		Name:        "get-" + res.Label,
+		Description: "Obtain an item from " + res.Meta.MCP.Description,
+		InputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"key": map[string]any{
+					"type":        "string",
+					"description": "The key of the item to obtain.",
+				},
+			},
+			"required": []string{"key"},
+		},
+	}, func(ctx context.Context, request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		ctx, span := w.initSpan(ctx, res.Label)
 		defer span.End()
 
 		span.SetAttributes(attribute.String("operation", "get"))
 
-		argsObj, ok := request.Params.Arguments.(map[string]any)
-		if !ok {
-			err := fmt.Errorf("expected object arguments, got %T", request.Params.Arguments)
+		var args map[string]any
+		if err := json.Unmarshal(request.Params.Arguments, &args); err != nil {
 			span.RecordError(err)
 			return nil, err
 		}
 
-		key, exists := argsObj["key"].(string)
+		key, exists := args["key"].(string)
 		if !exists {
 			err := errors.New("missing key [string] argument")
 			span.RecordError(err)
@@ -250,38 +239,43 @@ func (w *ResourcesWrapper) AddCacheYAML(fileBytes []byte) error {
 
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				mcp.TextContent{
-					Type: "text",
+				&mcp.TextContent{
 					Text: string(value),
 				},
 			},
 		}, nil
 	})
 
-	w.svr.AddTool(mcp.NewTool("set-"+res.Label,
-		mcp.WithDescription("Set an item within "+res.Meta.MCP.Description),
-		mcp.WithString("key",
-			mcp.Description("The key of the item to set."),
-			mcp.Required(),
-		),
-		mcp.WithString("value",
-			mcp.Description("The value of the item to set."),
-			mcp.Required(),
-		),
-	), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	w.svr.AddTool(&mcp.Tool{
+		Name:        "set-" + res.Label,
+		Description: "Set an item within " + res.Meta.MCP.Description,
+		InputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"key": map[string]any{
+					"type":        "string",
+					"description": "The key of the item to set.",
+				},
+				"value": map[string]any{
+					"type":        "string",
+					"description": "The value of the item to set.",
+				},
+			},
+			"required": []string{"key", "value"},
+		},
+	}, func(ctx context.Context, request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		ctx, span := w.initSpan(ctx, res.Label)
 		defer span.End()
 
 		span.SetAttributes(attribute.String("operation", "set"))
 
-		argsObj, ok := request.Params.Arguments.(map[string]any)
-		if !ok {
-			err := fmt.Errorf("expected object arguments, got %T", request.Params.Arguments)
+		var args map[string]any
+		if err := json.Unmarshal(request.Params.Arguments, &args); err != nil {
 			span.RecordError(err)
 			return nil, err
 		}
 
-		key, exists := argsObj["key"].(string)
+		key, exists := args["key"].(string)
 		if !exists {
 			err := errors.New("missing key [string] argument")
 			span.RecordError(err)
@@ -290,7 +284,7 @@ func (w *ResourcesWrapper) AddCacheYAML(fileBytes []byte) error {
 
 		span.SetAttributes(attribute.String("key", key))
 
-		value, exists := argsObj["value"].(string)
+		value, exists := args["value"].(string)
 		if !exists {
 			err := errors.New("missing value [string] argument")
 			span.RecordError(err)
@@ -313,8 +307,7 @@ func (w *ResourcesWrapper) AddCacheYAML(fileBytes []byte) error {
 
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				mcp.TextContent{
-					Type: "text",
+				&mcp.TextContent{
 					Text: "Value set successfully",
 				},
 			},
@@ -349,22 +342,26 @@ func (w *ResourcesWrapper) AddInputYAML(fileBytes []byte) error {
 
 	w.logger.With("label", res.Label).Info("Registering input tool")
 
-	opts := []mcp.ToolOption{
-		mcp.WithDescription(res.Meta.MCP.Description),
-		mcp.WithNumber("count",
-			mcp.Description("The number of messages to read from this input before returning the results."),
-			mcp.DefaultNumber(1),
-		),
-	}
-
-	w.svr.AddTool(mcp.NewTool(res.Label, opts...), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		argsObj, ok := request.Params.Arguments.(map[string]any)
-		if !ok {
-			err := fmt.Errorf("expected object arguments, got %T", request.Params.Arguments)
+	w.svr.AddTool(&mcp.Tool{
+		Name:        res.Label,
+		Description: res.Meta.MCP.Description,
+		InputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"count": map[string]any{
+					"type":        "number",
+					"description": "The number of messages to read from this input before returning the results.",
+					"default":     1,
+				},
+			},
+		},
+	}, func(ctx context.Context, request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		var args map[string]any
+		if err := json.Unmarshal(request.Params.Arguments, &args); err != nil {
 			return nil, err
 		}
 
-		countFloat, _ := argsObj["count"].(float64)
+		countFloat, _ := args["count"].(float64)
 
 		count := int(countFloat)
 		if count <= 0 {
@@ -405,8 +402,7 @@ func (w *ResourcesWrapper) AddInputYAML(fileBytes []byte) error {
 				return nil, err
 			}
 
-			content = append(content, mcp.TextContent{
-				Type: "text",
+			content = append(content, &mcp.TextContent{
 				Text: string(mBytes),
 			})
 		}
@@ -443,45 +439,53 @@ func (w *ResourcesWrapper) AddProcessorYAML(fileBytes []byte) error {
 
 	w.logger.With("label", res.Label).Info("Registering processor tool")
 
-	opts := []mcp.ToolOption{mcp.WithDescription(res.Meta.MCP.Description)}
-
 	params := map[string]bool{}
+	properties := make(map[string]any)
+	var required []string
+
 	for _, p := range res.Meta.MCP.Properties {
-		o, err := p.toolOption()
-		if err != nil {
-			return fmt.Errorf("property '%v': %w", p.Name, err)
-		}
 		if _, exists := params[p.Name]; exists {
 			return fmt.Errorf("duplicate property '%v' detected", p.Name)
 		}
 		params[p.Name] = p.Required
-		opts = append(opts, o)
+		properties[p.Name] = p.toSchemaProperty()
+		if p.Required {
+			required = append(required, p.Name)
+		}
 	}
 
 	if len(params) == 0 {
 		// If no explicit parameters are specified, just add a generic value string
-		opts = append(
-			opts,
-			mcp.WithString("value",
-				mcp.Description("The value to execute the tool upon."),
-				// mcp.Required(), TODO: Maybe enforce this with no other params?
-			),
-		)
+		properties["value"] = map[string]any{
+			"type":        "string",
+			"description": "The value to execute the tool upon.",
+		}
 	}
 
-	w.svr.AddTool(mcp.NewTool(res.Label, opts...), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	inputSchema := map[string]any{
+		"type":       "object",
+		"properties": properties,
+	}
+	if len(required) > 0 {
+		inputSchema["required"] = required
+	}
+
+	w.svr.AddTool(&mcp.Tool{
+		Name:        res.Label,
+		Description: res.Meta.MCP.Description,
+		InputSchema: inputSchema,
+	}, func(ctx context.Context, request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		msg := service.NewMessage(nil)
 		msg, span := w.initMsgSpan(res.Label, msg.WithContext(ctx))
 		defer span.End()
 
-		argsObj, ok := request.Params.Arguments.(map[string]any)
-		if !ok {
-			err := fmt.Errorf("expected object arguments, got %T", request.Params.Arguments)
+		var args map[string]any
+		if err := json.Unmarshal(request.Params.Arguments, &args); err != nil {
 			return nil, err
 		}
 
 		for k, required := range params {
-			if v, exists := argsObj[k]; exists {
+			if v, exists := args[k]; exists {
 				msg.MetaSetMut(k, v)
 				attrString(span, k, fmt.Sprintf("%v", v))
 			} else if required {
@@ -490,11 +494,11 @@ func (w *ResourcesWrapper) AddProcessorYAML(fileBytes []byte) error {
 		}
 
 		if len(params) == 0 {
-			value, _ := argsObj["value"].(string)
+			value, _ := args["value"].(string)
 			attrString(span, "value", value)
 			msg.SetBytes([]byte(value))
 		} else {
-			for k, v := range argsObj {
+			for k, v := range args {
 				switch t := v.(type) {
 				case string:
 					attrString(span, k, t)
@@ -506,7 +510,7 @@ func (w *ResourcesWrapper) AddProcessorYAML(fileBytes []byte) error {
 					span.SetAttributes(attribute.Float64(k, t))
 				}
 			}
-			msg.SetStructured(request.Params.Arguments)
+			msg.SetStructured(args)
 		}
 
 		var resBatch service.MessageBatch
@@ -537,8 +541,7 @@ func (w *ResourcesWrapper) AddProcessorYAML(fileBytes []byte) error {
 
 			attrString(span, "result", string(mBytes))
 
-			content = append(content, mcp.TextContent{
-				Type: "text",
+			content = append(content, &mcp.TextContent{
 				Text: string(mBytes),
 			})
 		}
@@ -579,15 +582,11 @@ func (w *ResourcesWrapper) AddOutputYAML(fileBytes []byte) error {
 	requiredProperties := []string{}
 
 	for _, p := range res.Meta.MCP.Properties {
-		o, required, err := p.rawOption()
-		if err != nil {
-			return fmt.Errorf("property '%v': %w", p.Name, err)
-		}
 		if _, exists := messageProperties[p.Name]; exists {
 			return fmt.Errorf("duplicate property '%v' detected", p.Name)
 		}
-		messageProperties[p.Name] = o
-		if required {
+		messageProperties[p.Name] = p.toSchemaProperty()
+		if p.Required {
 			requiredProperties = append(requiredProperties, p.Name)
 		}
 	}
@@ -600,26 +599,30 @@ func (w *ResourcesWrapper) AddOutputYAML(fileBytes []byte) error {
 		requiredProperties = append(requiredProperties, "value")
 	}
 
-	opts := []mcp.ToolOption{
-		mcp.WithDescription(res.Meta.MCP.Description),
-		mcp.WithArray("messages",
-			mcp.Required(),
-			mcp.Items(map[string]any{
-				"type":       "object",
-				"properties": messageProperties,
-				"required":   requiredProperties,
-			}),
-		),
-	}
-
-	w.svr.AddTool(mcp.NewTool(res.Label, opts...), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		argsObj, ok := request.Params.Arguments.(map[string]any)
-		if !ok {
-			err := fmt.Errorf("expected object arguments, got %T", request.Params.Arguments)
+	w.svr.AddTool(&mcp.Tool{
+		Name:        res.Label,
+		Description: res.Meta.MCP.Description,
+		InputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"messages": map[string]any{
+					"type": "array",
+					"items": map[string]any{
+						"type":       "object",
+						"properties": messageProperties,
+						"required":   requiredProperties,
+					},
+				},
+			},
+			"required": []string{"messages"},
+		},
+	}, func(ctx context.Context, request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		var args map[string]any
+		if err := json.Unmarshal(request.Params.Arguments, &args); err != nil {
 			return nil, err
 		}
 
-		messages, exists := argsObj["messages"].([]any)
+		messages, exists := args["messages"].([]any)
 		if !exists || len(messages) == 0 {
 			return nil, errors.New("at least one message is required")
 		}
@@ -679,8 +682,7 @@ func (w *ResourcesWrapper) AddOutputYAML(fileBytes []byte) error {
 
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
-				mcp.TextContent{
-					Type: "text",
+				&mcp.TextContent{
 					Text: "Messages delivered successfully",
 				},
 			},

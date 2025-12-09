@@ -31,8 +31,9 @@ func Run(
 	repositoryDir, addr string,
 	tagFilterFunc func([]string) bool,
 	license license.Config,
+	auth *Authorizer,
 ) error {
-	srv, err := NewServer(repositoryDir, logger, envVarLookupFunc, nil, tagFilterFunc, license)
+	srv, err := NewServer(repositoryDir, logger, envVarLookupFunc, nil, tagFilterFunc, license, auth)
 	if err != nil {
 		return err
 	}

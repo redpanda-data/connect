@@ -18,6 +18,7 @@ import (
 	"github.com/urfave/cli/v2"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/common-go/authz"
 
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka/enterprise"
 	"github.com/redpanda-data/connect/v4/internal/mcp"
@@ -104,8 +105,9 @@ Each resource will be exposed as a tool that AI can interact with:
 				return err
 			}
 
-			// Parse and resolve cloud auth flags (for a2a processor OAuth2)
-			if err := parseCloudAuthFlags(c.Context, c, secretLookupFn); err != nil {
+			// Parse and resolve cloud auth flags
+			authzResourceName, authzPolicyFile, err := parseCloudAuthFlags(c.Context, c, secretLookupFn)
+			if err != nil {
 				return err
 			}
 
@@ -117,6 +119,14 @@ Each resource will be exposed as a tool that AI can interact with:
 					return err
 				}
 				tagFilterREs = append(tagFilterREs, r)
+			}
+
+			var auth *mcp.Authorizer
+			if authzPolicyFile != "" && authzResourceName != "" {
+				auth, err = mcp.NewAuthorizer(authz.ResourceName(authzResourceName), authzPolicyFile, logger)
+				if err != nil {
+					return err
+				}
 			}
 
 			if err := mcp.Run(logger, secretLookupFn, repositoryDir, addr, func(tags []string) bool {
@@ -132,7 +142,7 @@ Each resource will be exposed as a tool that AI can interact with:
 					}
 				}
 				return true
-			}, licenseConfig); err != nil {
+			}, licenseConfig, auth); err != nil {
 				return err
 			}
 			return nil
