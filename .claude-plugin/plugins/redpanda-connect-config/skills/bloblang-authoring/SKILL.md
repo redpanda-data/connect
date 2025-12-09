@@ -194,12 +194,6 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/test-blobl.sh <session-directory>
 - Executes the Bloblang script and returns results or errors
 - Can be run repeatedly during iteration
 
-**Session directory lifecycle**:
-- Created at conversation start: `SESSION_DIR=$(mktemp -d -t rpcn-blobl-XXXXXX)`
-- Populated with category files: `format-bloblang.sh --output-dir "$SESSION_DIR"`
-- Contains data.json and script.blobl for testing
-- Cleaned up when conversation ends: `rm -rf "$SESSION_DIR"`
-
 ## Common Patterns
 
 These patterns cover frequent Bloblang transformations. Use them as starting points.

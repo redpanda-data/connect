@@ -79,15 +79,13 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/rpk-version.sh
 **validate-pipeline.sh** - Validates pipeline configurations with environment variables
 ```bash
 # Usage:
-${CLAUDE_PLUGIN_ROOT}/scripts/validate-pipeline.sh <directory>
-
-# Example:
-${CLAUDE_PLUGIN_ROOT}/scripts/validate-pipeline.sh /tmp/my-session
+${CLAUDE_PLUGIN_ROOT}/scripts/validate-pipeline.sh <session-directory>
 ```
-
-The script expects these files in the target directory:
-- `pipeline.yaml` (required) - The configuration to validate
-- `.env` (optional) - Environment variables for validation
+- Accepts session directory path as the only parameter
+- Expects `pipeline.yaml` (required) - the configuration to validate
+- Expects `.env` (optional) in that directory - environment variables for validation
+- Validates pipeline configurations
+- Can be run repeatedly during iteration
 
 **YAML Essentials:**
 
