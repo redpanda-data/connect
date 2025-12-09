@@ -5,8 +5,6 @@ tasks:
     desc: Run unit tests
     aliases:
       - ut
-    deps:
-      - :tools:install-gotestfmt
     vars:
       TIMEOUT: '{{if .CI}}5m{{else}}1m{{end}}'
     cmds:
@@ -16,8 +14,6 @@ tasks:
     desc: Run unit tests with race detection
     aliases:
       - ut-race
-    deps:
-      - :tools:install-gotestfmt
     cmds:
       - go test {{.GO_FLAGS}} -json -timeout 3m -shuffle=on -race {{if .CI}}{{else}}-v{{end}} ./... 2>&1 | tee /tmp/gotest.log | {{.TOOLS_BIN_DIR}}/gotestfmt
 
@@ -25,8 +21,6 @@ tasks:
     desc: Run integration tests for package PKG
     aliases:
       - it
-    deps:
-      - :tools:install-gotestfmt
     requires:
       vars:
         - PKG
