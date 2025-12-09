@@ -122,6 +122,51 @@ Redpanda Connect also [emits open telemetry tracing events][tracers], which can 
 
 Redpanda Connect provides lots of tools for making configuration discovery, debugging and organisation easy. You can [read about them here][config-doc].
 
+## Claude Code Plugin
+
+An interactive Claude Code plugin is available in `.claude-plugin/` for AI-assisted configuration authoring and Bloblang script generation.
+
+**Installation:**
+
+Add the marketplace and install the plugin:
+```bash
+# Add the Redpanda Connect marketplace or
+/plugin marketplace add https://github.com/redpanda-data/connect.git
+# Add local marketplace
+/plugin marketplace add /path/to/connect
+
+# Install the plugin
+/plugin install redpanda-connect-config
+
+# Restart Claude Code to load the plugin
+```
+
+**Features:**
+- 🔍 Semantic component search - Find inputs, outputs, and processors using natural language
+- ✨ Interactive config generation - Create validated pipelines from descriptions
+- 🔒 Security-first approach - Automatic secret detection with environment variable usage
+- ✅ Tested transformations - Bloblang scripts are tested before presenting
+- 🤖 Proactive assistance - Agents trigger automatically based on conversation context
+
+**Quick Start:**
+```bash
+# Search for components
+/rpcn:search kafka consumer
+
+# Generate Bloblang transformation
+/rpcn:blobl "convert timestamp to ISO format"
+
+# Create complete pipeline
+/rpcn:pipeline "read from Kafka to S3 with transformations"
+```
+
+**Architecture:**
+- 3 commands for user control (`/rpcn:search`, `/rpcn:blobl`, `/rpcn:pipeline`)
+- 3 skills with domain expertise (component search, Bloblang authoring, pipeline assistance)
+- 3 proactive agents (auto-trigger on relevant conversations)
+
+For detailed documentation, see [.claude-plugin/plugins/redpanda-connect-config/README.md](.claude-plugin/plugins/redpanda-connect-config/README.md).
+
 ## Build
 
 Build with Go (any [currently supported version](https://go.dev/dl/)):
