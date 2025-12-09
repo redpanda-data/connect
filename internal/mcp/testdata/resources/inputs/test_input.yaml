@@ -1,0 +1,17 @@
+label: test-input
+generate:
+  interval: 1s
+  count: 10
+  mapping: |
+    root.id = counter()
+    root.message = "test message " + counter().string()
+meta:
+  tags: [test]
+  mcp:
+    enabled: true
+    description: "Test input that generates messages"
+    properties:
+      - name: count
+        type: integer
+        description: "Number of messages to generate"
+        required: false

@@ -50,10 +50,11 @@ func (g *gMux) HandleFunc(pattern string, handler func(http.ResponseWriter, *htt
 // Server runs an mcp server against a target directory, with an optiona base
 // URL for an HTTP server.
 type Server struct {
-	base  *mcp.Server
-	mux   *mux.Router
-	rpJWT *gateway.RPJWTMiddleware
-	cors  gateway.CORSConfig
+	base      *mcp.Server
+	mux       *mux.Router
+	rpJWT     *gateway.RPJWTMiddleware
+	cors      gateway.CORSConfig
+	resources *service.Resources
 }
 
 // NewServer initializes the MCP server.
@@ -169,7 +170,18 @@ func NewServer(
 
 	cors := gateway.NewCORSConfigFromEnv()
 
-	return &Server{s, mux, rpJWT, cors}, nil
+	return &Server{
+		base:      s,
+		mux:       mux,
+		rpJWT:     rpJWT,
+		cors:      cors,
+		resources: resources,
+	}, nil
+}
+
+// Resources returns the server's service resources for testing purposes.
+func (m *Server) Resources() *service.Resources {
+	return m.resources
 }
 
 // ServeStdio attempts to run the MCP server in stdio mode.
