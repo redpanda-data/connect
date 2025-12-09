@@ -208,6 +208,71 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/test-blobl.sh <session-directory>
 - Contains data.json and script.blobl for testing
 - Cleaned up when conversation ends: `rm -rf "$SESSION_DIR"`
 
+## Common Patterns
+
+These patterns cover frequent Bloblang transformations. Use them as starting points.
+
+**Copy and Modify:**
+```bloblang
+root = this
+root.timestamp = now()
+root.id = uuid_v4()
+```
+
+**Field Access:**
+```bloblang
+root.name = this.user.name
+root.age = this.user.profile.age
+```
+
+**Conditionals:**
+```bloblang
+root.status = if this.age >= 18 { "adult" } else { "minor" }
+root.category = if this.score > 80 {
+  "high"
+} else if this.score > 50 {
+  "medium"
+} else {
+  "low"
+}
+```
+
+**Deletion:**
+```bloblang
+root = this
+root.sensitive_field = deleted()  # Remove specific field
+
+# Or delete entire message (won't be output)
+root = deleted()
+```
+
+**Variables:**
+```bloblang
+let name = this.user.name
+let greeting = "Hello " + $name
+root.message = $greeting
+```
+
+**Error Handling:**
+```bloblang
+root.value = this.field.catch("default")
+root.parsed = this.json_field.parse_json().catch({})
+```
+
+The `.catch()` method provides a fallback value if the operation fails.
+
+**Metadata Operations:**
+```bloblang
+# Read metadata
+root.topic = @kafka_topic
+root.partition = @kafka_partition
+root.custom = meta("custom_key")
+
+# Set metadata
+meta new_key = "value"
+meta kafka_key = this.id
+```
+
 ## Quality Standards
 
 - **Never present untested code** - All scripts must be validated before showing to user
