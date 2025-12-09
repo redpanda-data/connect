@@ -659,3 +659,46 @@ func TestIntegrationSchemaRegistryMigratorCompatibilityFromSource(t *testing.T) 
 	require.NoError(t, got[0].Err)
 	assert.Equal(t, level, got[0].Level)
 }
+
+func TestIntegrationSchemaRegistryMigratorServerlessImportMode(t *testing.T) {
+	integration.CheckSkip(t)
+
+	t.Log("Given: source and destination Schema Registry")
+	src, dst := startSchemaRegistrySourceAndDestination(t)
+
+	t.Log("And: destination starts in READWRITE mode")
+	ctx := t.Context()
+	modeRes := dst.SetMode(ctx, sr.ModeReadWrite)
+	require.NoError(t, modeRes[0].Err)
+
+	t.Log("And: a schema exists at source")
+	const (
+		subj   = "serverless-test"
+		schema = `{"type":"string"}`
+	)
+	_, err := src.CreateSchema(ctx, subj, sr.Schema{Schema: schema})
+	require.NoError(t, err)
+
+	t.Log("When: migrator runs in serverless mode")
+	conf := migrator.SchemaRegistryMigratorConfig{
+		Enabled:    true,
+		Versions:   migrator.VersionsLatest,
+		Serverless: true,
+	}
+	m := migrator.NewSchemaRegistryMigratorForTesting(t, conf, src, dst)
+
+	syncCtx, cancel := context.WithTimeout(ctx, redpandaTestWaitTimeout)
+	defer cancel()
+	require.NoError(t, m.Sync(syncCtx))
+
+	t.Log("Then: schema exists at destination")
+	dstSchema, err := dst.SchemaByVersion(ctx, subj, 1)
+	require.NoError(t, err)
+	assert.Equal(t, subj, dstSchema.Subject)
+	assert.True(t, migrator.SchemaStringEquals(schema, dstSchema.Schema.Schema, dstSchema.Type))
+
+	t.Log("And: destination mode is restored to READWRITE")
+	mode := dst.Mode(ctx)
+	require.NoError(t, mode[0].Err)
+	assert.Equal(t, "READWRITE", mode[0].Mode.String())
+}
