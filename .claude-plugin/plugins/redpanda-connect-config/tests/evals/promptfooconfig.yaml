@@ -1,0 +1,27 @@
+# Promptfoo Configuration for Redpanda Connect Plugin Quality Evaluations
+#
+# This is the main configuration file for running quality evaluations (evals)
+# on the Claude Code plugin commands.
+#
+# Usage:
+#   npx promptfoo eval -c search-eval.yaml     # Run search evals
+#   npx promptfoo eval -c blobl-eval.yaml      # Run Bloblang evals
+#   npx promptfoo eval -c pipeline-eval.yaml   # Run pipeline evals
+#
+# Prerequisites:
+#   npm install -g promptfoo
+
+# Default provider configuration
+defaultProvider:
+  id: anthropic:messages:claude-sonnet-4-5-20250929
+  config:
+    temperature: 0.7
+    max_tokens: 4096
+
+# Output configuration
+outputPath: ./promptfoo-results.json
+
+# Evaluation settings
+evaluateOptions:
+  maxConcurrency: 2
+  showProgressBar: true
