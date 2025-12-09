@@ -1,0 +1,19 @@
+# S3 Polling with Bookmarking
+# Pattern: Cloud Storage - S3 Polling
+# Difficulty: Intermediate
+
+input:
+  aws_s3:
+    bucket: "${S3_BUCKET}"
+    prefix: "${S3_PREFIX}"
+    region: "${AWS_REGION}"
+    credentials:
+      id: "${AWS_ACCESS_KEY_ID}"
+      secret: "${AWS_SECRET_ACCESS_KEY}"
+    scanner:
+      to_the_end: {}
+
+output:
+  kafka_franz:
+    seed_brokers: ["${KAFKA_BROKER}"]
+    topic: "${DEST_TOPIC}"

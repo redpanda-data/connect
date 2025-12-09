@@ -97,6 +97,75 @@ The script expects these files in the target directory:
 - `pipeline.yaml` (required) - The configuration to validate
 - `.env` (optional) - Environment variables for validation
 
+**YAML Essentials:**
+
+Configuration structure - top-level keys:
+- `input` - Data source (required): kafka_franz, http_server, stdin, aws_s3, etc.
+- `output` - Data destination (required): kafka_franz, postgres, stdout, aws_s3, etc.
+- `pipeline.processors` - Transformations (optional, execute sequentially)
+- `cache_resources`, `rate_limit_resources` - Reusable components (optional)
+
+Environment variables (required for secrets):
+```yaml
+# Basic reference
+broker: "${KAFKA_BROKER}"
+
+# With default value
+broker: "${KAFKA_BROKER:localhost:9092}"
+```
+
+Field type conventions:
+- Durations: `"30s"`, `"5m"`, `"1h"`, `"100ms"`
+- Sizes: `"5MB"`, `"1GB"`, `"512KB"`
+- Booleans: `true`, `false` (no quotes)
+
+Minimal example:
+```yaml
+input:
+  kafka_franz:
+    seed_brokers: ["${KAFKA_BROKER}"]
+    topics: ["${TOPIC}"]
+
+pipeline:
+  processors:
+    - mapping: |  # Bloblang transformation - use /rpcn:blobl to create
+        root = this
+        root.timestamp = now()
+
+output:
+  stdout: {}
+```
+
+**Production Patterns:**
+
+See `recipes/` directory of validated patterns:
+
+**Error Handling**
+- `dlq-basic.md` - Route invalid messages to dead letter queue
+
+**Routing**
+- `content-based-router.md` - Filter and route by field values
+- `multicast.md` - Send messages to multiple destinations
+
+**Replication**
+- `kafka-replication.md` - Cross-cluster Kafka replication
+- `cdc-replication.md` - Database change data capture streaming
+
+**Cloud Storage**
+- `s3-sink-basic.md` - Write to S3 with batching
+- `s3-sink-time-based.md` - Time-based S3 partitioning
+- `s3-polling.md` - Poll S3 for new files
+
+**Stateful Processing**
+- `stateful-counter.md` - Track counts with circuit breaker
+- `window-aggregation.md` - Time-window aggregations
+
+**Performance & Monitoring**
+- `rate-limiting.md` - Control throughput to downstream systems
+- `custom-metrics.md` - Emit custom Prometheus metrics
+
+All recipes include complete YAML, inline comments, and testing instructions.
+
 ## Requirements
 
 ### For All Configurations
