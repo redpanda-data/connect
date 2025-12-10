@@ -214,11 +214,11 @@ Couchbase operation to perform.
 | Option | Summary
 
 | `decrement`
-| decrement a counter.
+| decrement a counter by the value in content.
 | `get`
 | fetch a document.
 | `increment`
-| increment a counter.
+| increment a counter by the value in content.
 | `insert`
 | insert a new document.
 | `remove`

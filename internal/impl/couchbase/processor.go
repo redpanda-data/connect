@@ -53,10 +53,10 @@ func ProcessorConfig() *service.ConfigSpec {
 			string(client.OperationReplace): "replace the contents of a document.",
 			string(client.OperationUpsert):  "creates a new document if it does not exist, if it does exist then it updates it.",
 			// counters ops
-			string(client.OperationIncrement): "increment a counter.",
-			string(client.OperationDecrement): "decrement a counter.",
+			string(client.OperationIncrement): "increment a counter by the value in content.",
+			string(client.OperationDecrement): "decrement a counter by the value in content.",
 		}).Description("Couchbase operation to perform.").Default(string(client.OperationGet))).
-		LintRule(`root = if ((this.operation == "insert" || this.operation == "replace" || this.operation == "upsert") && !this.exists("content")) { [ "content must be set for insert, replace and upsert operations." ] }`)
+		LintRule(`root = if ((this.operation == "insert" || this.operation == "replace" || this.operation == "upsert" || this.operation == "increment" || this.operation == "decrement") && !this.exists("content")) { [ "content must be set for insert, replace, upsert, increment and decrement operations." ] }`)
 }
 
 func init() {
@@ -76,7 +76,7 @@ type Processor struct {
 	id      *service.InterpolatedString
 	content *bloblang.Executor
 	ttl     *time.Duration
-	op      func(key string, data []byte, ttl *time.Duration) gocb.BulkOp
+	op      func(key string, data []byte, ttl *time.Duration) (gocb.BulkOp, error)
 }
 
 // NewProcessor returns a Couchbase processor.
@@ -175,7 +175,10 @@ func (p *Processor) ProcessBatch(_ context.Context, inBatch service.MessageBatch
 			}
 		}
 
-		ops[index] = p.op(k, content, p.ttl)
+		ops[index], err = p.op(k, content, p.ttl)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// execute

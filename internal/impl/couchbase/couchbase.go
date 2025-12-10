@@ -16,6 +16,7 @@ package couchbase
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -47,13 +48,13 @@ func valueFromOp(op gocb.BulkOp) (out any, err error) {
 	return nil, errors.New("type not supported")
 }
 
-func get(key string, _ []byte, _ *time.Duration) gocb.BulkOp {
+func get(key string, _ []byte, _ *time.Duration) (gocb.BulkOp, error) {
 	return &gocb.GetOp{
 		ID: key,
-	}
+	}, nil
 }
 
-func insert(key string, data []byte, ttl *time.Duration) gocb.BulkOp {
+func insert(key string, data []byte, ttl *time.Duration) (gocb.BulkOp, error) {
 	op := &gocb.InsertOp{
 		ID:    key,
 		Value: data,
@@ -63,16 +64,16 @@ func insert(key string, data []byte, ttl *time.Duration) gocb.BulkOp {
 		op.Expiry = *ttl
 	}
 
-	return op
+	return op, nil
 }
 
-func remove(key string, _ []byte, _ *time.Duration) gocb.BulkOp {
+func remove(key string, _ []byte, _ *time.Duration) (gocb.BulkOp, error) {
 	return &gocb.RemoveOp{
 		ID: key,
-	}
+	}, nil
 }
 
-func replace(key string, data []byte, ttl *time.Duration) gocb.BulkOp {
+func replace(key string, data []byte, ttl *time.Duration) (gocb.BulkOp, error) {
 	op := &gocb.ReplaceOp{
 		ID:    key,
 		Value: data,
@@ -82,10 +83,10 @@ func replace(key string, data []byte, ttl *time.Duration) gocb.BulkOp {
 		op.Expiry = *ttl
 	}
 
-	return op
+	return op, nil
 }
 
-func upsert(key string, data []byte, ttl *time.Duration) gocb.BulkOp {
+func upsert(key string, data []byte, ttl *time.Duration) (gocb.BulkOp, error) {
 	op := &gocb.UpsertOp{
 		ID:    key,
 		Value: data,
@@ -95,15 +96,13 @@ func upsert(key string, data []byte, ttl *time.Duration) gocb.BulkOp {
 		op.Expiry = *ttl
 	}
 
-	return op
+	return op, nil
 }
 
-func increment(key string, data []byte, ttl *time.Duration) gocb.BulkOp {
-	delta := int64(0)
-	if len(data) > 0 {
-		if d, err := strconv.ParseInt(string(data), 10, 64); err == nil {
-			delta = d
-		}
+func increment(key string, data []byte, ttl *time.Duration) (gocb.BulkOp, error) {
+	delta, err := strconv.ParseInt(string(data), 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse increment value (require integer value): %s", err)
 	}
 
 	op := &gocb.IncrementOp{
@@ -116,15 +115,13 @@ func increment(key string, data []byte, ttl *time.Duration) gocb.BulkOp {
 		op.Expiry = *ttl
 	}
 
-	return op
+	return op, nil
 }
 
-func decrement(key string, data []byte, ttl *time.Duration) gocb.BulkOp {
-	delta := int64(0)
-	if len(data) > 0 {
-		if d, err := strconv.ParseInt(string(data), 10, 64); err == nil {
-			delta = d
-		}
+func decrement(key string, data []byte, ttl *time.Duration) (gocb.BulkOp, error) {
+	delta, err := strconv.ParseInt(string(data), 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse decrement value (require integer value): %s", err)
 	}
 
 	op := &gocb.DecrementOp{
@@ -137,5 +134,5 @@ func decrement(key string, data []byte, ttl *time.Duration) gocb.BulkOp {
 		op.Expiry = *ttl
 	}
 
-	return op
+	return op, nil
 }
