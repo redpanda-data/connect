@@ -1,0 +1,8 @@
+label: test-cache
+memory:
+  default_ttl: 5m
+meta:
+  tags: [test]
+  mcp:
+    enabled: true
+    description: "Test cache for integration testing"

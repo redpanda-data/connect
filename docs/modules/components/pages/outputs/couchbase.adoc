@@ -74,6 +74,7 @@ output:
     timeout: 15s
     id: ${! json("id") } # No default (required)
     content: "" # No default (optional)
+    ttl: "" # No default (optional)
     operation: upsert
     max_in_flight: 64
     batching:
@@ -209,6 +210,14 @@ id: ${! json("id") }
 === `content`
 
 Document content.
+
+
+*Type*: `string`
+
+
+=== `ttl`
+
+An optional TTL to set for items.
 
 
 *Type*: `string`

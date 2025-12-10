@@ -27,29 +27,23 @@ func init() {
 	if err := bloblang.RegisterMethodV2("parse_xml",
 		bloblang.NewPluginSpec().
 			Category("Parsing").
-			Description(`
-Attempts to parse a string as an XML document and returns a structured result, where elements appear as keys of an object according to the following rules:
+			Description(`Parses an XML document into a structured object. Converts XML elements to JSON-like objects following these rules:
 
-- If an element contains attributes they are parsed by prefixing a hyphen, `+"`-`"+`, to the attribute label.
-- If the element is a simple element and has attributes, the element value is given the key `+"`#text`"+`.
-- XML comments, directives, and process instructions are ignored.
-- When elements are repeated the resulting JSON value is an array.
-- If cast is true, try to cast values to numbers and booleans instead of returning strings.
-`).
-			Example("", `root.doc = this.doc.parse_xml()`, [2]string{
+- Element attributes are prefixed with a hyphen (e.g., `+"`-id`"+` for an `+"`id`"+` attribute)
+- Elements with both attributes and text content store the text in a `+"`#text`"+` field
+- Repeated elements become arrays
+- XML comments, directives, and processing instructions are ignored
+- Optionally cast numeric and boolean strings to their proper types`).
+			Example("Parse XML document into object structure", `root.doc = this.doc.parse_xml()`, [2]string{
 				`{"doc":"<root><title>This is a title</title><content>This is some content</content></root>"}`,
 				`{"doc":{"root":{"content":"This is some content","title":"This is a title"}}}`,
 			}).
-			Example("", `root.doc = this.doc.parse_xml(cast: false)`, [2]string{
-				`{"doc":"<root><title>This is a title</title><number id=99>123</number><bool>True</bool></root>"}`,
-				`{"doc":{"root":{"bool":"True","number":{"#text":"123","-id":"99"},"title":"This is a title"}}}`,
-			}).
-			Example("", `root.doc = this.doc.parse_xml(cast: true)`, [2]string{
-				`{"doc":"<root><title>This is a title</title><number id=99>123</number><bool>True</bool></root>"}`,
+			Example("Parse XML with type casting enabled to convert strings to numbers and booleans", `root.doc = this.doc.parse_xml(cast: true)`, [2]string{
+				`{"doc":"<root><title>This is a title</title><number id=\"99\">123</number><bool>True</bool></root>"}`,
 				`{"doc":{"root":{"bool":true,"number":{"#text":123,"-id":99},"title":"This is a title"}}}`,
 			}).
 			Param(bloblang.NewBoolParam("cast").
-				Description("whether to try to cast values that are numbers and booleans to the right type.").
+				Description("Whether to automatically cast numeric and boolean string values to their proper types. When false, all values remain as strings.").
 				Optional().Default(false)),
 		func(args *bloblang.ParsedParams) (bloblang.Method, error) {
 			castOpt, err := args.GetOptionalBool("cast")
@@ -74,10 +68,8 @@ Attempts to parse a string as an XML document and returns a structured result, w
 	if err := bloblang.RegisterMethodV2("format_xml",
 		bloblang.NewPluginSpec().
 			Category("Parsing").
-			Description(`
-Serializes a target value into an XML byte array.
-`).
-			Example("Serializes a target value into a pretty-printed XML byte array (with 4 space indentation by default).",
+			Description(`Serializes an object into an XML document. Converts structured data to XML format with support for attributes (prefixed with hyphen), custom indentation, and configurable root element. Returns XML as a byte array.`).
+			Example("Serialize object to pretty-printed XML with default indentation",
 				`root = this.format_xml()`,
 				[2]string{
 					`{"foo":{"bar":{"baz":"foo bar baz"}}}`,
@@ -87,87 +79,22 @@ Serializes a target value into an XML byte array.
     </bar>
 </foo>`,
 				},
-				[2]string{
-					`{"-foo":"bar","fizz":"buzz"}`,
-					`<doc foo="bar">
-    <fizz>buzz</fizz>
-</doc>`,
-				},
-				[2]string{
-					`{"foo":[{"bar":"baz"},{"fizz":"buzz"}]}`,
-					`<doc>
-    <foo>
-        <bar>baz</bar>
-    </foo>
-    <foo>
-        <fizz>buzz</fizz>
-    </foo>
-</doc>`,
-				},
 			).
-			Example("Pass a string to the `indent` parameter in order to customise the indentation.",
-				`root = this.format_xml("  ")`,
-				[2]string{
-					`{"foo":{"bar":{"baz":"foo bar baz"}}}`,
-					`<foo>
-  <bar>
-    <baz>foo bar baz</baz>
-  </bar>
-</foo>`,
-				},
-			).
-			Example("Use the `.string()` method in order to coerce the result into a string.",
-				`root.doc = this.format_xml("").string()`,
-				[2]string{
-					`{"foo":{"bar":{"baz":"foo bar baz"}}}`,
-					`{"doc":"<foo>\n<bar>\n<baz>foo bar baz</baz>\n</bar>\n</foo>"}`,
-				},
-			).
-			Example("Set the `no_indent` parameter to true to disable indentation.",
+			Example("Create compact XML without indentation for smaller message size",
 				`root = this.format_xml(no_indent: true)`,
 				[2]string{
 					`{"foo":{"bar":{"baz":"foo bar baz"}}}`,
 					`<foo><bar><baz>foo bar baz</baz></bar></foo>`,
 				},
 			).
-			Example("Set a custom root tag.",
-				`root = this.format_xml(root_tag: "blobfish")`,
-				[2]string{
-					`{"foo":{"bar":{"baz":"foo bar baz"}}}`,
-					`<blobfish>
-    <foo>
-        <bar>
-            <baz>foo bar baz</baz>
-        </bar>
-    </foo>
-</blobfish>`,
-				},
-				[2]string{
-					`{"-foo":"bar","fizz":"buzz"}`,
-					`<blobfish foo="bar">
-    <fizz>buzz</fizz>
-</blobfish>`,
-				},
-				[2]string{
-					`{"foo":[{"bar":"baz"},{"fizz":"buzz"}]}`,
-					`<blobfish>
-    <foo>
-        <bar>baz</bar>
-    </foo>
-    <foo>
-        <fizz>buzz</fizz>
-    </foo>
-</blobfish>`,
-				},
-			).
 			Param(bloblang.NewStringParam("indent").Description(
-				"Indentation string. Each element in an XML object or array will begin on a new, indented line followed by one or more copies of indent according to the indentation nesting.").
+				"String to use for each level of indentation (default is 4 spaces). Each nested XML element will be indented by this string.").
 				Default(strings.Repeat(" ", 4))).
 			Param(bloblang.NewBoolParam("no_indent").Description(
-				"Disable indentation.").
+				"Disable indentation and newlines to produce compact XML on a single line.").
 				Default(false)).
 			Param(bloblang.NewStringParam("root_tag").Description(
-				"Root tag. Set this if you wish to override the root tag of the document.").
+				"Custom name for the root XML element. By default, the root element name is derived from the first key in the object.").
 				Optional()),
 		func(args *bloblang.ParsedParams) (bloblang.Method, error) {
 			return bloblang.ObjectMethod(func(obj map[string]any) (any, error) {

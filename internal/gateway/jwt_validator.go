@@ -23,6 +23,7 @@ import (
 	"github.com/twmb/go-cache/cache"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/common-go/authz"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
@@ -96,12 +97,18 @@ func NewRPJWTMiddleware(mgr *service.Resources) (*RPJWTMiddleware, error) {
 }
 
 type rpCustomClaims struct {
-	OrgID string `json:"https://cloud.redpanda.com/organization_id,omitempty"`
+	OrgID       string `json:"https://cloud.redpanda.com/organization_id,omitempty"`
+	AccountInfo struct {
+		Email string `json:"email,omitempty"`
+	} `json:"account_info"`
 }
 
 func (r *rpCustomClaims) Validate(_ context.Context) error {
 	if r.OrgID == "" {
 		return errors.New("there is no organization present in the token")
+	}
+	if r.AccountInfo.Email == "" {
+		return errors.New("there is no email present in the token")
 	}
 	return nil
 }
@@ -140,7 +147,14 @@ func (r *RPJWTMiddleware) Wrap(next http.Handler) http.Handler {
 			return
 		}
 
-		next.ServeHTTP(w, req)
+		if customClaims.AccountInfo.Email == "" {
+			r.logger.Error("Missing email claim")
+			http.Error(w, "missing email claim", http.StatusUnauthorized)
+			return
+		}
+
+		principal := authz.PrincipalID(customClaims.AccountInfo.Email)
+		next.ServeHTTP(w, req.WithContext(ContextWithValidatedPrincipalID(req.Context(), principal)))
 	})
 }
 
@@ -174,4 +188,19 @@ func (r *RPJWTMiddleware) validateToken(ctx context.Context, tokenString string)
 	})
 
 	return parsedToken, err
+}
+
+type validatedPrincipalIDContextKeyType string
+
+const validatedPrincipalIDContextKey validatedPrincipalIDContextKeyType = ""
+
+// ContextWithValidatedPrincipalID adds a validated principal to an existing [context.Context].
+func ContextWithValidatedPrincipalID(ctx context.Context, principal authz.PrincipalID) context.Context {
+	return context.WithValue(ctx, validatedPrincipalIDContextKey, principal)
+}
+
+// ValidatedPrincipalIDFromContext extracts a validated principal from the context, if present.
+func ValidatedPrincipalIDFromContext(ctx context.Context) (authz.PrincipalID, bool) {
+	pid, ok := ctx.Value(validatedPrincipalIDContextKey).(authz.PrincipalID)
+	return pid, ok
 }

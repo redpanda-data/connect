@@ -25,7 +25,7 @@ import (
 	"os"
 
 	"github.com/gorilla/mux"
-	"github.com/mark3labs/mcp-go/server"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel/propagation"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -50,10 +50,11 @@ func (g *gMux) HandleFunc(pattern string, handler func(http.ResponseWriter, *htt
 // Server runs an mcp server against a target directory, with an optiona base
 // URL for an HTTP server.
 type Server struct {
-	base  *server.MCPServer
-	mux   *mux.Router
-	rpJWT *gateway.RPJWTMiddleware
-	cors  gateway.CORSConfig
+	base      *mcp.Server
+	mux       *mux.Router
+	rpJWT     *gateway.RPJWTMiddleware
+	cors      gateway.CORSConfig
+	resources *service.Resources
 }
 
 // NewServer initializes the MCP server.
@@ -64,12 +65,13 @@ func NewServer(
 	filterFunc func(label string) bool,
 	tagFilterFunc func(tags []string) bool,
 	licenseConfig license.Config,
+	auth *Authorizer,
 ) (*Server, error) {
 	// Create MCP server
-	s := server.NewMCPServer(
-		"Redpanda Runtime",
-		"1.0.0",
-	)
+	s := mcp.NewServer(&mcp.Implementation{
+		Name:    "Redpanda Runtime",
+		Version: "1.0.0",
+	}, nil)
 
 	mux := mux.NewRouter()
 
@@ -154,6 +156,13 @@ func NewServer(
 
 	license.RegisterService(resources, licenseConfig)
 
+	if auth != nil {
+		if err := license.CheckRunningEnterprise(resources); err != nil {
+			return nil, fmt.Errorf("unable to apply authorization policy: %w", err)
+		}
+		s.AddReceivingMiddleware(auth.Middleware)
+	}
+
 	rpJWT, err := gateway.NewRPJWTMiddleware(resources)
 	if err != nil {
 		return nil, err
@@ -161,44 +170,58 @@ func NewServer(
 
 	cors := gateway.NewCORSConfigFromEnv()
 
-	return &Server{s, mux, rpJWT, cors}, nil
+	return &Server{
+		base:      s,
+		mux:       mux,
+		rpJWT:     rpJWT,
+		cors:      cors,
+		resources: resources,
+	}, nil
+}
+
+// Resources returns the server's service resources for testing purposes.
+func (m *Server) Resources() *service.Resources {
+	return m.resources
 }
 
 // ServeStdio attempts to run the MCP server in stdio mode.
 func (m *Server) ServeStdio() error {
-	if err := server.ServeStdio(m.base); err != nil {
-		return err
-	}
-	return nil
+	return m.base.Run(context.Background(), &mcp.StdioTransport{})
 }
 
 func (m *Server) addSSEEndpoints() {
-	sseServer := server.NewSSEServer(
-		m.base,
-		server.WithSSEContextFunc(func(ctx context.Context, r *http.Request) context.Context {
-			// Propagate tracing using the traceparent header from the request to the handlers in the MCP server.
-			w3cTraceContext := propagation.TraceContext{}
-			ctx = w3cTraceContext.Extract(ctx, propagation.HeaderCarrier(r.Header))
-			return ctx
-		}),
-	)
+	sseHandler := mcp.NewSSEHandler(func(_ *http.Request) *mcp.Server {
+		return m.base
+	}, nil)
 
-	m.mux.PathPrefix("/sse").Handler(sseServer)
-	m.mux.PathPrefix("/message").Handler(sseServer)
+	// Wrap the handler to propagate tracing from traceparent header
+	wrappedHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Propagate tracing using the traceparent header from the request
+		w3cTraceContext := propagation.TraceContext{}
+		ctx := w3cTraceContext.Extract(r.Context(), propagation.HeaderCarrier(r.Header))
+		r = r.WithContext(ctx)
+		sseHandler.ServeHTTP(w, r)
+	})
+
+	m.mux.PathPrefix("/sse").Handler(wrappedHandler)
+	m.mux.PathPrefix("/message").Handler(wrappedHandler)
 }
 
 func (m *Server) addStreamableEndpoints() {
-	streamableServer := server.NewStreamableHTTPServer(
-		m.base,
-		server.WithHTTPContextFunc(func(ctx context.Context, r *http.Request) context.Context {
-			// Propagate tracing using the traceparent header from the request to the handlers in the MCP server.
-			w3cTraceContext := propagation.TraceContext{}
-			ctx = w3cTraceContext.Extract(ctx, propagation.HeaderCarrier(r.Header))
-			return ctx
-		}),
-	)
+	streamableHandler := mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server {
+		return m.base
+	}, nil)
 
-	m.mux.PathPrefix("/mcp").Handler(streamableServer)
+	// Wrap the handler to propagate tracing from traceparent header
+	wrappedHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Propagate tracing using the traceparent header from the request
+		w3cTraceContext := propagation.TraceContext{}
+		ctx := w3cTraceContext.Extract(r.Context(), propagation.HeaderCarrier(r.Header))
+		r = r.WithContext(ctx)
+		streamableHandler.ServeHTTP(w, r)
+	})
+
+	m.mux.PathPrefix("/mcp").Handler(wrappedHandler)
 }
 
 // ServeHTTP attempts to run the MCP server over HTTP.

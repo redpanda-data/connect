@@ -143,7 +143,7 @@ func TestIntegrationCouchbaseProcessor(t *testing.T) {
 
 	bucket := fmt.Sprintf("testing-processor-%d", time.Now().Unix())
 	require.NoError(t, createBucket(t.Context(), servicePort, bucket))
-	t.Cleanup(func() { // t.Context() can't be used here because it is closed before cleanup
+	t.Cleanup(func() {
 		require.NoError(t, removeBucket(context.Background(), servicePort, bucket))
 	})
 
@@ -178,7 +178,12 @@ func TestIntegrationCouchbaseProcessor(t *testing.T) {
 	t.Run("Get", func(t *testing.T) {
 		testCouchbaseProcessorGet(uid, payload, bucket, servicePort, t)
 	})
-
+	t.Run("TTL", func(t *testing.T) {
+		testCouchbaseProcessorUpsertTTL(payload, bucket, servicePort, t)
+		testCouchbaseProcessorGet(uid, payload, bucket, servicePort, t)
+		time.Sleep(5 * time.Second)
+		testCouchbaseProcessorGetMissing(uid, bucket, servicePort, t)
+	})
 	// counters tests
 	t.Run("Remove", func(t *testing.T) {
 		testCouchbaseProcessorRemove(uid, bucket, servicePort, t)
@@ -379,6 +384,33 @@ operation: 'get'
 	dataOut, err := msgOut[0][0].AsBytes()
 	assert.NoError(t, err)
 	assert.Equal(t, uid, string(dataOut))
+}
+
+func testCouchbaseProcessorUpsertTTL(payload, bucket, port string, t *testing.T) {
+	config := fmt.Sprintf(`
+url: 'couchbase://localhost:%s'
+bucket: %s
+username: %s
+password: %s
+id: '${! json("id") }'
+content: 'root = this'
+operation: 'upsert'
+ttl: 3s
+`, port, bucket, username, password)
+
+	msgOut, err := getProc(t, config).ProcessBatch(t.Context(), service.MessageBatch{
+		service.NewMessage([]byte(payload)),
+	})
+
+	// batch processing should be fine and contain one message.
+	assert.NoError(t, err)
+	assert.Len(t, msgOut, 1)
+	assert.Len(t, msgOut[0], 1)
+
+	// message content should stay the same.
+	dataOut, err := msgOut[0][0].AsBytes()
+	assert.NoError(t, err)
+	assert.JSONEq(t, payload, string(dataOut))
 }
 
 func testCouchbaseProcessorCounter(uid, operation, value, expected, bucket, port string, t *testing.T) {
