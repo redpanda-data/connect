@@ -159,7 +159,8 @@ func NewServer(
 
 	// Add metrics middleware to track all MCP method calls
 	mcpMetrics := metrics.NewMetrics(resources.Metrics())
-	s.AddReceivingMiddleware(mcpMetrics.Middleware)
+	s.AddReceivingMiddleware(mcpMetrics.ReceivingMiddleware)
+	s.AddSendingMiddleware(mcpMetrics.SendingMiddleware)
 
 	if auth != nil {
 		if err := license.CheckRunningEnterprise(resources); err != nil {
