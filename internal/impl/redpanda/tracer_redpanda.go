@@ -16,12 +16,15 @@ package redpanda
 
 import (
 	"fmt"
+	"net/http"
+	"net/url"
 	"slices"
 
 	"go.opentelemetry.io/otel/attribute"
 	semconv "go.opentelemetry.io/otel/semconv/v1.9.0"
 
 	"github.com/twmb/franz-go/pkg/kgo"
+	"github.com/twmb/franz-go/pkg/sr"
 	"go.opentelemetry.io/otel/sdk/resource"
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
@@ -43,12 +46,22 @@ func tracerSpec() *service.ConfigSpec {
 				Default("otel-traces").
 				Description("The name of the topic to emit spans to"),
 			service.NewStringAnnotatedEnumField("format", map[string]string{
-				exporter.SerializationFormatJSON.String():     "Emit in OTLP JSON Format",
-				exporter.SerializationFormatProtobuf.String(): "Emit in OTLP Protobuf Format",
+				exporter.SerializationFormatJSON.String():                   "Emit in JSON Format",
+				exporter.SerializationFormatProtobuf.String():               "Emit in Protobuf Format",
+				exporter.SerializationFormatSchemaRegistryJSON.String():     "Emit in JSON Format with Schema Registry encoding",
+				exporter.SerializationFormatSchemaRegistryProtobuf.String(): "Emit in Protobuf Format with Schema Registry encoding",
 			}).
 				Description("The serialization format for individual spans in the topic.").
-				Default(exporter.SerializationFormatJSON.String()).
-				Advanced(),
+				Default(exporter.SerializationFormatJSON.String()),
+			service.NewObjectField("schema_registry",
+				slices.Concat(
+					[]*service.ConfigField{
+						service.NewURLField("url").Description("The base URL of the schema registry service.").Optional(),
+						service.NewTLSField("tls"),
+					},
+					service.NewHTTPRequestAuthSignerFields(),
+				)...,
+			).Description("Schema registry information to publish schemas for tracing data along with the data."),
 			service.NewStringField("service").
 				Default("redpanda-connect").
 				Description("The name of the service in traces."),
@@ -94,6 +107,8 @@ type tracer struct {
 	topic         string
 	opts          []kgo.Opt
 	format        exporter.SerializationFormat
+	srURL         *url.URL
+	srOpts        []sr.ClientOpt
 }
 
 func tracerConfigFromParsed(conf *service.ParsedConfig, logger *service.Logger) (*tracer, error) {
@@ -131,6 +146,10 @@ func tracerConfigFromParsed(conf *service.ParsedConfig, logger *service.Logger) 
 		format = exporter.SerializationFormatJSON
 	} else if formatStr == exporter.SerializationFormatProtobuf.String() {
 		format = exporter.SerializationFormatProtobuf
+	} else if formatStr == exporter.SerializationFormatSchemaRegistryJSON.String() {
+		format = exporter.SerializationFormatSchemaRegistryJSON
+	} else if formatStr == exporter.SerializationFormatSchemaRegistryProtobuf.String() {
+		format = exporter.SerializationFormatSchemaRegistryProtobuf
 	} else {
 		return nil, fmt.Errorf("unknown `format` value: %q", formatStr)
 	}
@@ -145,7 +164,7 @@ func tracerConfigFromParsed(conf *service.ParsedConfig, logger *service.Logger) 
 		return nil, err
 	}
 
-	return &tracer{
+	t := &tracer{
 		serviceName:   serviceName,
 		topic:         topic,
 		engineVersion: conf.EngineVersion(),
@@ -154,7 +173,33 @@ func tracerConfigFromParsed(conf *service.ParsedConfig, logger *service.Logger) 
 		brokers:       brokers,
 		opts:          slices.Concat(connDeets.FranzOpts(), producerOpts),
 		format:        format,
-	}, nil
+	}
+
+	if conf.Contains("schema_registry", "url") {
+		srURL, err := conf.FieldURL("schema_registry", "url")
+		if err != nil {
+			return nil, err
+		}
+		t.srURL = srURL
+		authSigner, err := conf.HTTPRequestAuthSignerFromParsed()
+		if err != nil {
+			return nil, err
+		}
+		if authSigner != nil {
+			t.srOpts = append(t.srOpts, sr.PreReq(func(req *http.Request) error {
+				return authSigner(conf.Resources().FS(), req)
+			}))
+		}
+		tlsConf, err := conf.FieldTLS("tls")
+		if err != nil {
+			return nil, err
+		}
+		if tlsConf != nil {
+			t.srOpts = append(t.srOpts, sr.DialTLSConfig(tlsConf))
+		}
+	}
+
+	return t, nil
 }
 
 func sampleConfigFromParsed(conf *service.ParsedConfig) (tracerSampleConfig, error) {
@@ -195,13 +240,19 @@ func newTracer(config *tracer) (trace.TracerProvider, error) {
 		}
 		res = resource.NewWithAttributes(semconv.SchemaURL, attrs...)
 	}
-	exporter, err := exporter.NewTraceExporter(
+	exporterOpts := []exporter.Option{
 		exporter.WithBrokers(config.brokers...),
 		exporter.WithTopic(config.topic),
-		exporter.WithResource(res),
 		exporter.WithSerializationFormat(config.format),
 		exporter.WithKafkaOptions(config.opts...),
-	)
+	}
+	if config.srURL != nil {
+		exporterOpts = append(exporterOpts,
+			exporter.WithSchemaRegistryURL(config.srURL.String()),
+			exporter.WithSchemaRegistryOptions(config.srOpts...),
+		)
+	}
+	exporter, err := exporter.NewTraceExporter(exporterOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create trace exporter: %w", err)
 	}
