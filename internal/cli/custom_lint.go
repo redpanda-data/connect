@@ -156,7 +156,9 @@ func directoryMode(c *cli.Context, repositoryDir string) error {
 		return err
 	}
 
+	hasLintErrors := false
 	for _, pl := range pathLints {
+		hasLintErrors = hasLintErrors || len(pl.lints) > 0 || pl.err != nil
 		for _, lint := range pl.lints {
 			lintText := fmt.Sprintf("%v%v\n", pl.fileName, lint.Error())
 			fmt.Fprint(os.Stderr, yellow(lintText))
@@ -165,6 +167,10 @@ func directoryMode(c *cli.Context, repositoryDir string) error {
 			lintText := fmt.Sprintf("%v%v\n", pl.fileName, pl.err.Error())
 			fmt.Fprint(os.Stderr, red(lintText))
 		}
+	}
+
+	if hasLintErrors {
+		os.Exit(1)
 	}
 
 	return nil

@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.73.0 - TBD
+
+### Fixed
+
+- The `mcp-server lint` subcommand now exits with status 1 when linting errors are detected.
+
 ## 4.72.0 - 2025-11-28
 
 ### Added
