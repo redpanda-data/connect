@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - The `mcp-server` command exposes MCP metrics.
+- Couchbase: Add TTL (expiry) support. @sapk
 
 ### Fixed
 
