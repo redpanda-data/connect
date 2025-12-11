@@ -3,7 +3,11 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.73.0 - TBD
+## 4.73.0 - 2025-12-12
+
+### Added
+
+- The `mcp-server` command exposes MCP metrics.
 
 ### Fixed
 
