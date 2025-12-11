@@ -1,6 +1,6 @@
 module github.com/redpanda-data/connect/public/bundle/free/v4
 
-go 1.25.4
+go 1.25.5
 
 require github.com/redpanda-data/connect/v4 v4.72.0
 
