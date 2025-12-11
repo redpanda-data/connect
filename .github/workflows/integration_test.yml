@@ -72,6 +72,9 @@ jobs:
       - name: Install Task
         uses: ./.github/actions/setup-task
 
+      - name: Pull Latest Redpanda Image 
+        run: task docker:pull-redpanda
+
       - name: Run Integration Tests for ${{ matrix.package }}
         run: task test:integration-package PKG=${{ matrix.package }}
         timeout-minutes: 30

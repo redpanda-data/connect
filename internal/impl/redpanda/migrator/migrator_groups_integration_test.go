@@ -169,6 +169,12 @@ func TestIntegrationReadRecordTimestamp(t *testing.T) {
 
 	src, _ := startRedpandaSourceAndDestination(t)
 
+	// Get the topic ID for migratorTestTopic, Kafka Fetch v13 (KIP-516)
+	topicDetails, err := src.Admin.ListTopics(t.Context(), migratorTestTopic)
+	require.NoError(t, err)
+	topicDetail, exists := topicDetails[migratorTestTopic]
+	require.True(t, exists, "topic should exist")
+
 	secs := func(n int) time.Time {
 		return time.Unix(int64(n), 0)
 	}
@@ -203,7 +209,7 @@ func TestIntegrationReadRecordTimestamp(t *testing.T) {
 		t.Parallel()
 		for _, rec := range records {
 			ts, err := migrator.ReadRecordTimestamp(t.Context(), src.Client,
-				migratorTestTopic, kadm.TopicID{},
+				migratorTestTopic, topicDetail.ID,
 				rec.partition, rec.offset, redpandaTestOpTimeout)
 			require.NoError(t, err)
 			assert.Equal(t, rec.timestamp, ts)
