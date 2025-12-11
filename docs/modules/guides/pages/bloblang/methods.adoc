@@ -32,153 +32,11 @@ root.foo_one = this.(bar | baz).trim().replace_all(old: "dog", new: "cat")
 root.foo_two = this.(bar | baz).trim().replace_all("dog", "cat")
 ```
 
-== General
-
-=== `apply`
-
-Apply a declared mapping to a target value.
-
-==== Parameters
-
-*`mapping`* &lt;string&gt; The mapping to apply.  
-
-==== Examples
-
-
-```coffeescript
-map thing {
-  root.inner = this.first
-}
-
-root.foo = this.doc.apply("thing")
-
-# In:  {"doc":{"first":"hello world"}}
-# Out: {"foo":{"inner":"hello world"}}
-```
-
-```coffeescript
-map create_foo {
-  root.name = "a foo"
-  root.purpose = "to be a foo"
-}
-
-root = this
-root.foo = null.apply("create_foo")
-
-# In:  {"id":"1234"}
-# Out: {"foo":{"name":"a foo","purpose":"to be a foo"},"id":"1234"}
-```
-
-=== `catch`
-
-If the result of a target query fails (due to incorrect types, failed parsing, etc) the argument is returned instead.
-
-==== Parameters
-
-*`fallback`* &lt;query expression&gt; A value to yield, or query to execute, if the target query fails.  
-
-==== Examples
-
-
-```coffeescript
-root.doc.id = this.thing.id.string().catch(uuid_v4())
-```
-
-The fallback argument can be a mapping, allowing you to capture the error string and yield structured data back.
-
-```coffeescript
-root.url = this.url.parse_url().catch(err -> {"error":err,"input":this.url})
-
-# In:  {"url":"invalid %&# url"}
-# Out: {"url":{"error":"field `this.url`: parse \"invalid %&\": invalid URL escape \"%&\"","input":"invalid %&# url"}}
-```
-
-When the input document is not structured attempting to reference structured fields with `this` will result in an error. Therefore, a convenient way to delete non-structured data is with a catch.
-
-```coffeescript
-root = this.catch(deleted())
-
-# In:  {"doc":{"foo":"bar"}}
-# Out: {"doc":{"foo":"bar"}}
-
-# In:  not structured data
-# Out: <Message deleted>
-```
-
-=== `exists`
-
-Checks that a field, identified via a xref:configuration:field_paths.adoc[dot path], exists in an object.
-
-==== Parameters
-
-*`path`* &lt;string&gt; A xref:configuration:field_paths.adoc[dot path] to a field.  
-
-==== Examples
-
-
-```coffeescript
-root.result = this.foo.exists("bar.baz")
-
-# In:  {"foo":{"bar":{"baz":"yep, I exist"}}}
-# Out: {"result":true}
-
-# In:  {"foo":{"bar":{}}}
-# Out: {"result":false}
-
-# In:  {"foo":{}}
-# Out: {"result":false}
-```
-
-=== `from`
-
-Modifies a target query such that certain functions are executed from the perspective of another message in the batch. This allows you to mutate events based on the contents of other messages. Functions that support this behavior are `content`, `json` and `meta`.
-
-==== Parameters
-
-*`index`* &lt;integer&gt; The message index to use as a perspective.  
-
-==== Examples
-
-
-For example, the following map extracts the contents of the JSON field `foo` specifically from message index `1` of a batch, effectively overriding the field `foo` for all messages of a batch to that of message 1:
-
-```coffeescript
-root = this
-root.foo = json("foo").from(1)
-```
-
-=== `from_all`
-
-Modifies a target query such that certain functions are executed from the perspective of each message in the batch, and returns the set of results as an array. Functions that support this behavior are `content`, `json` and `meta`.
-
-==== Examples
-
-
-```coffeescript
-root = this
-root.foo_summed = json("foo").from_all().sum()
-```
-
-=== `or`
-
-If the result of the target query fails or resolves to `null`, returns the argument instead. This is an explicit method alternative to the coalesce pipe operator `|`.
-
-==== Parameters
-
-*`fallback`* &lt;query expression&gt; A value to yield, or query to execute, if the target query fails or resolves to `null`.  
-
-==== Examples
-
-
-```coffeescript
-root.doc.id = this.thing.id.or(uuid_v4())
-```
-
 == String Manipulation
 
 === `capitalize`
 
-Takes a string value and returns a copy with all Unicode letters that begin words mapped to their Unicode title case.
+Converts the first letter of each word in a string to uppercase (title case). Useful for formatting names, titles, and headings.
 
 ==== Examples
 
@@ -188,6 +46,13 @@ root.title = this.title.capitalize()
 
 # In:  {"title":"the foo bar"}
 # Out: {"title":"The Foo Bar"}
+```
+
+```coffeescript
+root.name = this.name.capitalize()
+
+# In:  {"name":"alice smith"}
+# Out: {"name":"Alice Smith"}
 ```
 
 === `compare_argon2`
@@ -263,7 +128,7 @@ root.has_foo = this.thing.contains("foo")
 
 === `escape_html`
 
-Escapes a string so that special characters like `<` to become `&lt;`. It escapes only five such characters: `<`, `>`, `&`, `'` and `"` so that it can be safely placed within an HTML entity.
+Escapes special HTML characters (`<`, `>`, `&`, `'`, `"`) to make a string safe for HTML output. Use when embedding untrusted text in HTML to prevent XSS vulnerabilities.
 
 ==== Examples
 
@@ -275,9 +140,16 @@ root.escaped = this.value.escape_html()
 # Out: {"escaped":"foo &amp; bar"}
 ```
 
+```coffeescript
+root.safe_html = this.user_input.escape_html()
+
+# In:  {"user_input":"<script>alert('xss')</script>"}
+# Out: {"safe_html":"&lt;script&gt;alert(&#39;xss&#39;)&lt;/script&gt;"}
+```
+
 === `escape_url_query`
 
-Escapes a string so that it can be safely placed within a URL query.
+Encodes a string for safe use in URL query parameters. Converts spaces to `+` and special characters to percent-encoded values. Use when building URLs with dynamic query parameters.
 
 ==== Examples
 
@@ -289,9 +161,16 @@ root.escaped = this.value.escape_url_query()
 # Out: {"escaped":"foo+%26+bar"}
 ```
 
+```coffeescript
+root.url = "https://example.com?search=" + this.query.escape_url_query()
+
+# In:  {"query":"hello world!"}
+# Out: {"url":"https://example.com?search=hello+world%21"}
+```
+
 === `filepath_join`
 
-Joins an array of path elements into a single file path. The separator depends on the operating system of the machine.
+Combines an array of path components into a single OS-specific file path using the correct separator (`/` on Unix, `\` on Windows). Use for constructing file paths from components.
 
 ==== Examples
 
@@ -305,7 +184,7 @@ root.path = this.path_elements.filepath_join()
 
 === `filepath_split`
 
-Splits a file path immediately following the final Separator, separating it into a directory and file name component returned as a two element array of strings. If there is no Separator in the path, the first element will be empty and the second will contain the path. The separator depends on the operating system of the machine.
+Separates a file path into directory and filename components, returning a two-element array `[directory, filename]`. Use for extracting the filename or directory from a full path.
 
 ==== Examples
 
@@ -322,7 +201,7 @@ root.path_sep = this.path.filepath_split()
 
 === `format`
 
-Use a value string as a format specifier in order to produce a new string, using any number of provided arguments. Please refer to the Go https://pkg.go.dev/fmt[`fmt` package documentation^] for the list of valid format verbs.
+Formats a string using Go's printf-style formatting with the string as the format template. Supports all Go format verbs (`%s`, `%d`, `%v`, etc.). Use for building formatted strings from dynamic values.
 
 ==== Examples
 
@@ -334,9 +213,16 @@ root.foo = "%s(%v): %v".format(this.name, this.age, this.fingers)
 # Out: {"foo":"lance(37): 13"}
 ```
 
+```coffeescript
+root.message = "User %s has %v points".format(this.username, this.score)
+
+# In:  {"username":"alice","score":100}
+# Out: {"message":"User alice has 100 points"}
+```
+
 === `has_prefix`
 
-Checks whether a string has a prefix argument and returns a bool.
+Tests if a string starts with a specified prefix. Returns `true` if the string begins with the prefix, `false` otherwise. Use for conditional logic based on string patterns.
 
 ==== Parameters
 
@@ -355,7 +241,7 @@ root.t2 = this.v2.has_prefix("foo")
 
 === `has_suffix`
 
-Checks whether a string has a suffix argument and returns a bool.
+Tests if a string ends with a specified suffix. Returns `true` if the string ends with the suffix, `false` otherwise. Use for filtering or routing based on file extensions or string patterns.
 
 ==== Parameters
 
@@ -374,7 +260,7 @@ root.t2 = this.v2.has_suffix("foo")
 
 === `index_of`
 
-Returns the starting index of the argument substring in a string target, or `-1` if the target doesn't contain the argument.
+Finds the position of a substring within a string. Returns the zero-based index of the first occurrence, or -1 if not found. Useful for searching and string manipulation.
 
 ==== Parameters
 
@@ -399,7 +285,7 @@ root.index = content().index_of("meow")
 
 === `length`
 
-Returns the length of a string.
+Returns the character count of a string.
 
 ==== Examples
 
@@ -413,7 +299,7 @@ root.foo_len = this.foo.length()
 
 === `lowercase`
 
-Convert a string value into lowercase.
+Converts all letters in a string to lowercase. Use for case-insensitive comparisons, normalization, or formatting output.
 
 ==== Examples
 
@@ -425,9 +311,16 @@ root.foo = this.foo.lowercase()
 # Out: {"foo":"hello world"}
 ```
 
+```coffeescript
+root.email = this.user_email.lowercase()
+
+# In:  {"user_email":"User@Example.COM"}
+# Out: {"email":"user@example.com"}
+```
+
 === `quote`
 
-Quotes a target string using escape sequences (`\t`, `\n`, `\xFF`, `\u0100`) for control characters and non-printable characters.
+Wraps a string in double quotes and escapes special characters (newlines, tabs, etc.) using Go escape sequences. Use for generating string literals or preparing strings for JSON-like formats.
 
 ==== Examples
 
@@ -439,9 +332,16 @@ root.quoted = this.thing.quote()
 # Out: {"quoted":"\"foo\\nbar\""}
 ```
 
+```coffeescript
+root.literal = this.text.quote()
+
+# In:  {"text":"hello\tworld"}
+# Out: {"literal":"\"hello\\tworld\""}
+```
+
 === `repeat`
 
-Repeat returns a new string consisting of count copies of the string
+Creates a new string by repeating the input string a specified number of times. Use for generating padding, separators, or test data.
 
 ==== Parameters
 
@@ -458,9 +358,25 @@ root.not_repeated = this.name.repeat(0)
 # Out: {"not_repeated":"","repeated":"bobbobbob"}
 ```
 
+```coffeescript
+root.separator = "-".repeat(10)
+
+# In:  {}
+# Out: {"separator":"----------"}
+```
+
+=== `replace`
+
+Replaces all occurrences of a substring with another string. Use for text transformation, cleaning data, or normalizing strings.
+
+==== Parameters
+
+*`old`* &lt;string&gt; A string to match against.  
+*`new`* &lt;string&gt; A string to replace with.  
+
 === `replace_all`
 
-Replaces all occurrences of the first argument in a target string with the second argument.
+Replaces all occurrences of a substring with another string. Use for text transformation, cleaning data, or normalizing strings.
 
 ==== Parameters
 
@@ -477,9 +393,16 @@ root.new_value = this.value.replace_all("foo","dog")
 # Out: {"new_value":"The dog ate my homework"}
 ```
 
+```coffeescript
+root.clean = this.text.replace_all("  ", " ")
+
+# In:  {"text":"hello  world  foo"}
+# Out: {"clean":"hello world foo"}
+```
+
 === `replace_all_many`
 
-For each pair of strings in an argument array, replaces all occurrences of the first item of the pair with the second. This is a more compact way of chaining a series of `replace_all` methods.
+Performs multiple find-and-replace operations in sequence using an array of `[old, new]` pairs. More efficient than chaining multiple `replace_all` calls. Use for bulk text transformations.
 
 ==== Parameters
 
@@ -500,9 +423,17 @@ root.new_value = this.value.replace_all_many([
 # Out: {"new_value":"&lt;i&gt;Hello&lt;/i&gt; &lt;b&gt;World&lt;/b&gt;"}
 ```
 
+=== `replace_many`
+
+Performs multiple find-and-replace operations in sequence using an array of `[old, new]` pairs. More efficient than chaining multiple `replace_all` calls. Use for bulk text transformations.
+
+==== Parameters
+
+*`values`* &lt;array&gt; An array of values, each even value will be replaced with the following odd value.  
+
 === `reverse`
 
-Returns the target string in reverse order.
+Reverses the order of characters in a string. Unicode-aware for proper handling of multi-byte characters. Use for creating palindrome checks or reversing text data.
 
 ==== Examples
 
@@ -589,7 +520,7 @@ root.slug = this.title.slug("fr")
 
 === `split`
 
-Split a string value into an array of strings by splitting it on a string separator.
+Splits a string into an array of substrings using a delimiter. Use for parsing CSV-like data, splitting paths, or breaking text into tokens.
 
 ==== Parameters
 
@@ -603,6 +534,13 @@ root.new_value = this.value.split(",")
 
 # In:  {"value":"foo,bar,baz"}
 # Out: {"new_value":["foo","bar","baz"]}
+```
+
+```coffeescript
+root.words = this.sentence.split(" ")
+
+# In:  {"sentence":"hello world from bloblang"}
+# Out: {"words":["hello","world","from","bloblang"]}
 ```
 
 === `strip_html`
@@ -636,7 +574,7 @@ root.sanitized = this.html.strip_html(["strong", "em"])
 
 === `trim`
 
-Remove all leading and trailing characters from a string that are contained within an argument cutset. If no arguments are provided then whitespace is removed.
+Removes leading and trailing characters from a string. Without arguments, removes whitespace. With a cutset argument, removes any characters in the cutset. Use for cleaning user input or normalizing strings.
 
 ==== Parameters
 
@@ -655,7 +593,7 @@ root.description = this.description.trim()
 
 === `trim_prefix`
 
-Remove the provided leading prefix substring from a string. If the string does not have the prefix substring, it is returned unchanged.
+Removes a specified prefix from the beginning of a string if present. If the string doesn't start with the prefix, returns the string unchanged. Use for stripping known prefixes from identifiers or paths.
 
 Introduced in version 4.12.0.
 
@@ -677,7 +615,7 @@ root.description = this.description.trim_prefix("foobar_")
 
 === `trim_suffix`
 
-Remove the provided trailing suffix substring from a string. If the string does not have the suffix substring, it is returned unchanged.
+Removes a specified suffix from the end of a string if present. If the string doesn't end with the suffix, returns the string unchanged. Use for stripping file extensions or known suffixes.
 
 Introduced in version 4.12.0.
 
@@ -699,7 +637,7 @@ root.description = this.description.trim_suffix("_foobar")
 
 === `unescape_html`
 
-Unescapes a string so that entities like `&lt;` become `<`. It unescapes a larger range of entities than `escape_html` escapes. For example, `&aacute;` unescapes to `á`, as does `&#225;` and `&xE1;`.
+Converts HTML entities back to their original characters. Handles named entities (`&amp;`, `&lt;`), decimal (`&#225;`), and hexadecimal (`&xE1;`) formats. Use for processing HTML content or decoding HTML-escaped data.
 
 ==== Examples
 
@@ -711,9 +649,16 @@ root.unescaped = this.value.unescape_html()
 # Out: {"unescaped":"foo & bar"}
 ```
 
+```coffeescript
+root.text = this.html.unescape_html()
+
+# In:  {"html":"&lt;p&gt;Hello &amp; goodbye&lt;/p&gt;"}
+# Out: {"text":"<p>Hello & goodbye</p>"}
+```
+
 === `unescape_url_query`
 
-Expands escape sequences from a URL query string.
+Decodes URL query parameter encoding, converting `+` to spaces and percent-encoded characters to their original values. Use for parsing URL query parameters.
 
 ==== Examples
 
@@ -723,6 +668,13 @@ root.unescaped = this.value.unescape_url_query()
 
 # In:  {"value":"foo+%26+bar"}
 # Out: {"unescaped":"foo & bar"}
+```
+
+```coffeescript
+root.search = this.param.unescape_url_query()
+
+# In:  {"param":"hello+world%21"}
+# Out: {"search":"hello world!"}
 ```
 
 === `unicode_segments`
@@ -760,7 +712,7 @@ root.graphemes = this.emoji.unicode_segments("grapheme")
 
 === `unquote`
 
-Unquotes a target string, expanding any escape sequences (`\t`, `\n`, `\xFF`, `\u0100`) for control characters and non-printable characters.
+Removes surrounding quotes and interprets escape sequences (`\n`, `\t`, etc.) to their literal characters. Use for parsing quoted string literals.
 
 ==== Examples
 
@@ -772,9 +724,16 @@ root.unquoted = this.thing.unquote()
 # Out: {"unquoted":"foo\nbar"}
 ```
 
+```coffeescript
+root.text = this.literal.unquote()
+
+# In:  {"literal":"\"hello\\tworld\""}
+# Out: {"text":"hello\tworld"}
+```
+
 === `uppercase`
 
-Convert a string value into uppercase.
+Converts all letters in a string to uppercase. Use for case-insensitive comparisons or formatting output.
 
 ==== Examples
 
@@ -786,11 +745,18 @@ root.foo = this.foo.uppercase()
 # Out: {"foo":"HELLO WORLD"}
 ```
 
+```coffeescript
+root.code = this.product_code.uppercase()
+
+# In:  {"product_code":"abc-123"}
+# Out: {"code":"ABC-123"}
+```
+
 == Regular Expressions
 
 === `re_find_all`
 
-Returns an array containing all successive matches of a regular expression in a string.
+Finds all matches of a regular expression in a string and returns them as an array. Use for extracting multiple patterns or validating repeating structures.
 
 ==== Parameters
 
@@ -806,9 +772,16 @@ root.matches = this.value.re_find_all("a.")
 # Out: {"matches":["ar","an","al"]}
 ```
 
+```coffeescript
+root.numbers = this.text.re_find_all("[0-9]+")
+
+# In:  {"text":"I have 2 apples and 15 oranges"}
+# Out: {"numbers":["2","15"]}
+```
+
 === `re_find_all_object`
 
-Returns an array of objects containing all matches of the regular expression and the matches of its subexpressions. The key of each match value is the name of the group when specified, otherwise it is the index of the matching group, starting with the expression as a whole at 0.
+Finds all regex matches and returns an array of objects with named capture groups as keys. Each object represents one match with its captured groups. Use for parsing multiple structured records from text.
 
 ==== Parameters
 
@@ -833,7 +806,7 @@ root.matches = this.value.re_find_all_object("(?m)(?P<key>\\w+):\\s+(?P<value>\\
 
 === `re_find_all_submatch`
 
-Returns an array of arrays containing all successive matches of the regular expression in a string and the matches, if any, of its subexpressions.
+Finds all regex matches and their capture groups, returning an array of arrays where each inner array contains the full match and captured subgroups. Use for extracting structured data with capture groups.
 
 ==== Parameters
 
@@ -849,9 +822,16 @@ root.matches = this.value.re_find_all_submatch("a(x*)b")
 # Out: {"matches":[["axxb","xx"],["ab",""]]}
 ```
 
+```coffeescript
+root.emails = this.text.re_find_all_submatch("(\\w+)@(\\w+\\.\\w+)")
+
+# In:  {"text":"Contact: alice@example.com or bob@test.org"}
+# Out: {"emails":[["alice@example.com","alice","example.com"],["bob@test.org","bob","test.org"]]}
+```
+
 === `re_find_object`
 
-Returns an object containing the first match of the regular expression and the matches of its subexpressions. The key of each match value is the name of the group when specified, otherwise it is the index of the matching group, starting with the expression as a whole at 0.
+Finds the first regex match and returns an object with named capture groups as keys (or numeric indices for unnamed groups). The key "0" contains the full match. Use for parsing structured text into fields.
 
 ==== Parameters
 
@@ -876,7 +856,7 @@ root.matches = this.value.re_find_object("(?P<key>\\w+):\\s+(?P<value>\\w+)")
 
 === `re_match`
 
-Checks whether a regular expression matches against any part of a string and returns a boolean.
+Tests if a regular expression matches anywhere in a string, returning `true` or `false`. Use for validation or conditional routing based on patterns.
 
 ==== Parameters
 
@@ -895,9 +875,18 @@ root.matches = this.value.re_match("[0-9]")
 # Out: {"matches":false}
 ```
 
+=== `re_replace`
+
+Replaces all regex matches with a replacement string that can reference capture groups using `$1`, `$2`, etc. Use for pattern-based transformations or data reformatting.
+
+==== Parameters
+
+*`pattern`* &lt;string&gt; The pattern to match against.  
+*`value`* &lt;string&gt; The value to replace with.  
+
 === `re_replace_all`
 
-Replaces all occurrences of the argument regular expression in a string with a value. Inside the value $ signs are interpreted as submatch expansions, e.g. `$1` represents the text of the first submatch.
+Replaces all regex matches with a replacement string that can reference capture groups using `$1`, `$2`, etc. Use for pattern-based transformations or data reformatting.
 
 ==== Parameters
 
@@ -912,6 +901,13 @@ root.new_value = this.value.re_replace_all("ADD ([0-9]+)","+($1)")
 
 # In:  {"value":"foo ADD 70"}
 # Out: {"new_value":"foo +(70)"}
+```
+
+```coffeescript
+root.masked = this.email.re_replace_all("(\\w{2})\\w+@", "$1***@")
+
+# In:  {"email":"alice@example.com"}
+# Out: {"masked":"al***@example.com"}
 ```
 
 == Number Manipulation
@@ -934,7 +930,7 @@ root.outs = this.ins.map_each(ele -> ele.abs())
 
 === `bitwise_and`
 
-Returns the number bitwise AND-ed with the specified value.
+Performs a bitwise AND operation between the integer and the specified value.
 
 ==== Parameters
 
@@ -948,17 +944,18 @@ root.new_value = this.value.bitwise_and(6)
 
 # In:  {"value":12}
 # Out: {"new_value":4}
+```
 
-# In:  {"value":0}
-# Out: {"new_value":0}
+```coffeescript
+root.masked = this.flags.bitwise_and(15)
 
-# In:  {"value":-4}
-# Out: {"new_value":4}
+# In:  {"flags":127}
+# Out: {"masked":15}
 ```
 
 === `bitwise_or`
 
-Returns the number bitwise OR-ed with the specified value.
+Performs a bitwise OR operation between the integer and the specified value.
 
 ==== Parameters
 
@@ -972,17 +969,18 @@ root.new_value = this.value.bitwise_or(6)
 
 # In:  {"value":12}
 # Out: {"new_value":14}
+```
 
-# In:  {"value":0}
-# Out: {"new_value":6}
+```coffeescript
+root.combined = this.flags.bitwise_or(8)
 
-# In:  {"value":-2}
-# Out: {"new_value":-2}
+# In:  {"flags":4}
+# Out: {"combined":12}
 ```
 
 === `bitwise_xor`
 
-Returns the number bitwise eXclusive-OR-ed with the specified value.
+Performs a bitwise XOR (exclusive OR) operation between the integer and the specified value.
 
 ==== Parameters
 
@@ -996,17 +994,18 @@ root.new_value = this.value.bitwise_xor(6)
 
 # In:  {"value":12}
 # Out: {"new_value":10}
+```
 
-# In:  {"value":0}
-# Out: {"new_value":6}
+```coffeescript
+root.toggled = this.flags.bitwise_xor(5)
 
-# In:  {"value":-2}
-# Out: {"new_value":-8}
+# In:  {"flags":3}
+# Out: {"toggled":6}
 ```
 
 === `ceil`
 
-Returns the least integer value greater than or equal to a number. If the resulting value fits within a 64-bit integer then that is returned, otherwise a new floating point number is returned.
+Rounds a number up to the nearest integer. Returns an integer if the result fits in 64-bit, otherwise returns a float.
 
 ==== Examples
 
@@ -1019,6 +1018,13 @@ root.new_value = this.value.ceil()
 
 # In:  {"value":-5.9}
 # Out: {"new_value":-5}
+```
+
+```coffeescript
+root.result = this.price.ceil()
+
+# In:  {"price":19.99}
+# Out: {"result":20}
 ```
 
 === `cos`
@@ -1081,7 +1087,7 @@ root.out = this.in.float64()
 
 === `floor`
 
-Returns the greatest integer value less than or equal to the target number. If the resulting value fits within a 64-bit integer then that is returned, otherwise a new floating point number is returned.
+Rounds a number down to the nearest integer. Returns an integer if the result fits in 64-bit, otherwise returns a float.
 
 ==== Examples
 
@@ -1091,6 +1097,16 @@ root.new_value = this.value.floor()
 
 # In:  {"value":5.7}
 # Out: {"new_value":5}
+
+# In:  {"value":-3.2}
+# Out: {"new_value":-4}
+```
+
+```coffeescript
+root.whole_seconds = this.duration_seconds.floor()
+
+# In:  {"duration_seconds":12.345}
+# Out: {"whole_seconds":12}
 ```
 
 === `int16`
@@ -1219,7 +1235,7 @@ root = this.int8()
 
 === `log`
 
-Returns the natural logarithm of a number.
+Calculates the natural logarithm (base e) of a number.
 
 ==== Examples
 
@@ -1234,9 +1250,16 @@ root.new_value = this.value.log().round()
 # Out: {"new_value":1}
 ```
 
+```coffeescript
+root.ln_result = this.number.log()
+
+# In:  {"number":10}
+# Out: {"ln_result":2.302585092994046}
+```
+
 === `log10`
 
-Returns the decimal logarithm of a number.
+Calculates the base-10 logarithm of a number.
 
 ==== Examples
 
@@ -1251,9 +1274,16 @@ root.new_value = this.value.log10()
 # Out: {"new_value":3}
 ```
 
+```coffeescript
+root.log_value = this.magnitude.log10()
+
+# In:  {"magnitude":10000}
+# Out: {"log_value":4}
+```
+
 === `max`
 
-Returns the largest numerical value found within an array. All values must be numerical and the array must not be empty, otherwise an error is returned.
+Returns the largest number from an array. All elements must be numbers and the array cannot be empty.
 
 ==== Examples
 
@@ -1266,18 +1296,15 @@ root.biggest = this.values.max()
 ```
 
 ```coffeescript
-root.new_value = [0,this.value].max()
+root.highest_temp = this.temperatures.max()
 
-# In:  {"value":-1}
-# Out: {"new_value":0}
-
-# In:  {"value":7}
-# Out: {"new_value":7}
+# In:  {"temperatures":[20.5,22.1,19.8,23.4]}
+# Out: {"highest_temp":23.4}
 ```
 
 === `min`
 
-Returns the smallest numerical value found within an array. All values must be numerical and the array must not be empty, otherwise an error is returned.
+Returns the smallest number from an array. All elements must be numbers and the array cannot be empty.
 
 ==== Examples
 
@@ -1290,13 +1317,10 @@ root.smallest = this.values.min()
 ```
 
 ```coffeescript
-root.new_value = [10,this.value].min()
+root.lowest_temp = this.temperatures.min()
 
-# In:  {"value":2}
-# Out: {"new_value":2}
-
-# In:  {"value":23}
-# Out: {"new_value":10}
+# In:  {"temperatures":[20.5,22.1,19.8,23.4]}
+# Out: {"lowest_temp":19.8}
 ```
 
 === `pow`
@@ -1326,7 +1350,7 @@ root.new_value = this.value.pow(-2)
 
 === `round`
 
-Rounds numbers to the nearest integer, rounding half away from zero. If the resulting value fits within a 64-bit integer then that is returned, otherwise a new floating point number is returned.
+Rounds a number to the nearest integer. Values at .5 round away from zero. Returns an integer if the result fits in 64-bit, otherwise returns a float.
 
 ==== Examples
 
@@ -1339,6 +1363,13 @@ root.new_value = this.value.round()
 
 # In:  {"value":5.9}
 # Out: {"new_value":6}
+```
+
+```coffeescript
+root.rounded = this.score.round()
+
+# In:  {"score":87.5}
+# Out: {"rounded":88}
 ```
 
 === `sin`
@@ -1509,10 +1540,12 @@ root = this.uint8()
 
 === `parse_duration`
 
-Attempts to parse a string as a duration and returns an integer of nanoseconds. A duration string is a possibly signed sequence of decimal numbers, each with an optional fraction and a unit suffix, such as "300ms", "-1.5h" or "2h45m". Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+Parses a Go-style duration string into nanoseconds. A duration string is a signed sequence of decimal numbers with unit suffixes like "300ms", "-1.5h", or "2h45m". Valid units: "ns", "us" (or "µs"), "ms", "s", "m", "h".
 
 ==== Examples
 
+
+Parse microseconds to nanoseconds.
 
 ```coffeescript
 root.delay_for_ns = this.delay_for.parse_duration()
@@ -1520,6 +1553,8 @@ root.delay_for_ns = this.delay_for.parse_duration()
 # In:  {"delay_for":"50us"}
 # Out: {"delay_for_ns":50000}
 ```
+
+Parse hours to seconds.
 
 ```coffeescript
 root.delay_for_s = this.delay_for.parse_duration() / 1000000000
@@ -1534,12 +1569,12 @@ root.delay_for_s = this.delay_for.parse_duration() / 1000000000
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
-Attempts to parse a string using ISO-8601 rules as a duration and returns an integer of nanoseconds. A duration string is represented by the format "P[n]Y[n]M[n]DT[n]H[n]M[n]S" or "P[n]W". In these representations, the "[n]" is replaced by the value for each of the date and time elements that follow the "[n]". For example, "P3Y6M4DT12H30M5S" represents a duration of "three years, six months, four days, twelve hours, thirty minutes, and five seconds". The last field of the format allows fractions with one decimal place, so "P3.5S" will return 3500000000ns. Any additional decimals will be truncated.
+Parses an ISO 8601 duration string into nanoseconds. Format: "P[n]Y[n]M[n]DT[n]H[n]M[n]S" or "P[n]W". Example: "P3Y6M4DT12H30M5S" means 3 years, 6 months, 4 days, 12 hours, 30 minutes, 5 seconds. Supports fractional seconds with full precision (not just one decimal place).
 
 ==== Examples
 
 
-Arbitrary ISO-8601 duration string to nanoseconds:
+Parse complex ISO 8601 duration to nanoseconds.
 
 ```coffeescript
 root.delay_for_ns = this.delay_for.parse_duration_iso8601()
@@ -1548,7 +1583,7 @@ root.delay_for_ns = this.delay_for.parse_duration_iso8601()
 # Out: {"delay_for_ns":110839937000000000}
 ```
 
-Two hours ISO-8601 duration string to seconds:
+Parse hours to seconds.
 
 ```coffeescript
 root.delay_for_s = this.delay_for.parse_duration_iso8601() / 1000000000
@@ -1557,26 +1592,38 @@ root.delay_for_s = this.delay_for.parse_duration_iso8601() / 1000000000
 # Out: {"delay_for_s":7200}
 ```
 
-Two and a half seconds ISO-8601 duration string to seconds:
-
-```coffeescript
-root.delay_for_s = this.delay_for.parse_duration_iso8601() / 1000000000
-
-# In:  {"delay_for":"PT2.5S"}
-# Out: {"delay_for_s":2.5}
-```
-
 === `ts_add_iso8601`
 
 [CAUTION]
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
-Parse parameter string as ISO 8601 period and add it to value with high precision for units larger than an hour.
+Adds an ISO 8601 duration to a timestamp with calendar-aware precision for years, months, and days. Useful when you need to add durations that account for variable month lengths or leap years.
 
 ==== Parameters
 
-*`duration`* &lt;string&gt; Duration in ISO 8601 format  
+*`duration`* &lt;string&gt; Duration in ISO 8601 format (e.g., "P1Y2M3D" for 1 year, 2 months, 3 days)  
+
+==== Examples
+
+
+Add one year to a timestamp.
+
+```coffeescript
+root.next_year = this.created_at.ts_add_iso8601("P1Y")
+
+# In:  {"created_at":"2020-08-14T05:54:23Z"}
+# Out: {"next_year":"2021-08-14T05:54:23Z"}
+```
+
+Add a complex duration with multiple units.
+
+```coffeescript
+root.future_date = this.created_at.ts_add_iso8601("P1Y2M3DT4H5M6S")
+
+# In:  {"created_at":"2020-01-01T00:00:00Z"}
+# Out: {"future_date":"2021-03-04T04:05:06Z"}
+```
 
 === `ts_format`
 
@@ -1584,50 +1631,32 @@ Parse parameter string as ISO 8601 period and add it to value with high precisio
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
-Attempts to format a timestamp value as a string according to a specified format, or RFC 3339 by default. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format.
-
-The output format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value. For an alternative way to specify formats check out the <<ts_strftime, `ts_strftime`>> method.
+Formats a timestamp as a string using Go's reference time format. Defaults to RFC 3339 if no format specified. The format uses "Mon Jan 2 15:04:05 -0700 MST 2006" as a reference. Accepts unix timestamps (with decimal precision) or RFC 3339 strings. Use ts_strftime for strftime-style formats.
 
 ==== Parameters
 
-*`format`* &lt;string, default `"2006-01-02T15:04:05.999999999Z07:00"`&gt; The output format to use.  
-*`tz`* &lt;(optional) string&gt; An optional timezone to use, otherwise the timezone of the input string is used, or in the case of unix timestamps the local timezone is used.  
+*`format`* &lt;string, default `"2006-01-02T15:04:05.999999999Z07:00"`&gt; The output format using Go's reference time.  
+*`tz`* &lt;(optional) string&gt; Optional timezone (e.g., 'UTC', 'America/New_York'). Defaults to input timezone or local time for unix timestamps.  
 
 ==== Examples
 
 
-```coffeescript
-root.something_at = (this.created_at + 300).ts_format()
-```
-
-An optional string argument can be used in order to specify the output format of the timestamp. The format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value.
+Format timestamp with custom format.
 
 ```coffeescript
-root.something_at = (this.created_at + 300).ts_format("2006-Jan-02 15:04:05")
+root.something_at = this.created_at.ts_format("2006-Jan-02 15:04:05")
+
+# In:  {"created_at":"2020-08-14T11:50:26.371Z"}
+# Out: {"something_at":"2020-Aug-14 11:50:26"}
 ```
 
-A second optional string argument can also be used in order to specify a timezone, otherwise the timezone of the input string is used, or in the case of unix timestamps the local timezone is used.
+Format unix timestamp with timezone specification.
 
 ```coffeescript
 root.something_at = this.created_at.ts_format(format: "2006-Jan-02 15:04:05", tz: "UTC")
 
 # In:  {"created_at":1597405526}
 # Out: {"something_at":"2020-Aug-14 11:45:26"}
-
-# In:  {"created_at":"2020-08-14T11:50:26.371Z"}
-# Out: {"something_at":"2020-Aug-14 11:50:26"}
-```
-
-And `ts_format` supports up to nanosecond precision with floating point timestamp values.
-
-```coffeescript
-root.something_at = this.created_at.ts_format("2006-Jan-02 15:04:05.999999", "UTC")
-
-# In:  {"created_at":1597405526.123456}
-# Out: {"something_at":"2020-Aug-14 11:45:26.123456"}
-
-# In:  {"created_at":"2020-08-14T11:50:26.371Z"}
-# Out: {"something_at":"2020-Aug-14 11:50:26.371"}
 ```
 
 === `ts_parse`
@@ -1636,16 +1665,16 @@ root.something_at = this.created_at.ts_format("2006-Jan-02 15:04:05.999999", "UT
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
-Attempts to parse a string as a timestamp following a specified format and outputs a timestamp, which can then be fed into methods such as <<ts_format, `ts_format`>>.
-
-The input format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value. For an alternative way to specify formats check out the <<ts_strptime, `ts_strptime`>> method.
+Parses a timestamp string using Go's reference time format and outputs a timestamp object. The format uses "Mon Jan 2 15:04:05 -0700 MST 2006" as a reference - show how this reference time would appear in your format. Use ts_strptime for strftime-style formats instead.
 
 ==== Parameters
 
-*`format`* &lt;string&gt; The format of the target string.  
+*`format`* &lt;string&gt; The format of the input string using Go's reference time.  
 
 ==== Examples
 
+
+Parse a date with abbreviated month name.
 
 ```coffeescript
 root.doc.timestamp = this.doc.timestamp.ts_parse("2006-Jan-02")
@@ -1654,13 +1683,22 @@ root.doc.timestamp = this.doc.timestamp.ts_parse("2006-Jan-02")
 # Out: {"doc":{"timestamp":"2020-08-14T00:00:00Z"}}
 ```
 
+Parse a custom datetime format.
+
+```coffeescript
+root.parsed = this.timestamp.ts_parse("Jan 2, 2006 at 3:04pm (MST)")
+
+# In:  {"timestamp":"Aug 14, 2020 at 5:54am (UTC)"}
+# Out: {"parsed":"2020-08-14T05:54:00Z"}
+```
+
 === `ts_round`
 
 [CAUTION]
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
-Returns the result of rounding a timestamp to the nearest multiple of the argument duration (nanoseconds). The rounding behavior for halfway values is to round up. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The <<ts_parse, `ts_parse`>> method can be used in order to parse different timestamp formats.
+Rounds a timestamp to the nearest multiple of the specified duration. Halfway values round up. Accepts unix timestamps (seconds with optional decimal precision) or RFC 3339 formatted strings.
 
 Introduced in version 4.2.0.
 
@@ -1672,7 +1710,7 @@ Introduced in version 4.2.0.
 ==== Examples
 
 
-Use the method `parse_duration` to convert a duration string into an integer argument.
+Round timestamp to the nearest hour.
 
 ```coffeescript
 root.created_at_hour = this.created_at.ts_round("1h".parse_duration())
@@ -1681,47 +1719,44 @@ root.created_at_hour = this.created_at.ts_round("1h".parse_duration())
 # Out: {"created_at_hour":"2020-08-14T06:00:00Z"}
 ```
 
+Round timestamp to the nearest minute.
+
+```coffeescript
+root.created_at_minute = this.created_at.ts_round("1m".parse_duration())
+
+# In:  {"created_at":"2020-08-14T05:54:23Z"}
+# Out: {"created_at_minute":"2020-08-14T05:54:00Z"}
+```
+
 === `ts_strftime`
 
 [CAUTION]
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
-Attempts to format a timestamp value as a string according to a specified strftime-compatible format. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format.
+Formats a timestamp as a string using strptime format specifiers (like %Y, %m, %d). Accepts unix timestamps (with decimal precision) or RFC 3339 strings. Supports %f for microseconds. Use ts_format for Go-style reference time formats.
 
 ==== Parameters
 
-*`format`* &lt;string&gt; The output format to use.  
-*`tz`* &lt;(optional) string&gt; An optional timezone to use, otherwise the timezone of the input string is used.  
+*`format`* &lt;string&gt; The output format using strptime specifiers.  
+*`tz`* &lt;(optional) string&gt; Optional timezone. Defaults to input timezone or local time for unix timestamps.  
 
 ==== Examples
 
 
-The format consists of zero or more conversion specifiers and ordinary characters (except `%`). All ordinary characters are copied to the output string without modification. Each conversion specification begins with `%` character followed by the character that determines the behavior of the specifier. Please refer to https://linux.die.net/man/3/strftime[man 3 strftime] for the list of format specifiers.
+Format timestamp with strftime specifiers.
 
 ```coffeescript
-root.something_at = (this.created_at + 300).ts_strftime("%Y-%b-%d %H:%M:%S")
-```
-
-A second optional string argument can also be used in order to specify a timezone, otherwise the timezone of the input string is used, or in the case of unix timestamps the local timezone is used.
-
-```coffeescript
-root.something_at = this.created_at.ts_strftime("%Y-%b-%d %H:%M:%S", "UTC")
-
-# In:  {"created_at":1597405526}
-# Out: {"something_at":"2020-Aug-14 11:45:26"}
+root.something_at = this.created_at.ts_strftime("%Y-%b-%d %H:%M:%S")
 
 # In:  {"created_at":"2020-08-14T11:50:26.371Z"}
 # Out: {"something_at":"2020-Aug-14 11:50:26"}
 ```
 
-As an extension provided by the underlying formatting library, https://github.com/itchyny/timefmt-go[itchyny/timefmt-go], the `%f` directive is supported for zero-padded microseconds, which originates from Python. Note that E and O modifier characters are not supported.
+Format with microseconds using %f directive.
 
 ```coffeescript
 root.something_at = this.created_at.ts_strftime("%Y-%b-%d %H:%M:%S.%f", "UTC")
-
-# In:  {"created_at":1597405526}
-# Out: {"something_at":"2020-Aug-14 11:45:26.000000"}
 
 # In:  {"created_at":"2020-08-14T11:50:26.371Z"}
 # Out: {"something_at":"2020-Aug-14 11:50:26.371000"}
@@ -1733,16 +1768,16 @@ root.something_at = this.created_at.ts_strftime("%Y-%b-%d %H:%M:%S.%f", "UTC")
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
-Attempts to parse a string as a timestamp following a specified strptime-compatible format and outputs a timestamp, which can then be fed into <<ts_format, `ts_format`>>.
+Parses a timestamp string using strptime format specifiers (like %Y, %m, %d) and outputs a timestamp object. Use ts_parse for Go-style reference time formats instead.
 
 ==== Parameters
 
-*`format`* &lt;string&gt; The format of the target string.  
+*`format`* &lt;string&gt; The format string using strptime specifiers (e.g., %Y-%m-%d).  
 
 ==== Examples
 
 
-The format consists of zero or more conversion specifiers and ordinary characters (except `%`). All ordinary characters are copied to the output string without modification. Each conversion specification begins with a `%` character followed by the character that determines the behavior of the specifier. Please refer to https://linux.die.net/man/3/strptime[man 3 strptime] for the list of format specifiers.
+Parse date with abbreviated month using strptime format.
 
 ```coffeescript
 root.doc.timestamp = this.doc.timestamp.ts_strptime("%Y-%b-%d")
@@ -1751,7 +1786,7 @@ root.doc.timestamp = this.doc.timestamp.ts_strptime("%Y-%b-%d")
 # Out: {"doc":{"timestamp":"2020-08-14T00:00:00Z"}}
 ```
 
-As an extension provided by the underlying formatting library, https://github.com/itchyny/timefmt-go[itchyny/timefmt-go], the `%f` directive is supported for zero-padded microseconds, which originates from Python. Note that E and O modifier characters are not supported.
+Parse datetime with microseconds using %f directive.
 
 ```coffeescript
 root.doc.timestamp = this.doc.timestamp.ts_strptime("%Y-%b-%d %H:%M:%S.%f")
@@ -1766,19 +1801,19 @@ root.doc.timestamp = this.doc.timestamp.ts_strptime("%Y-%b-%d %H:%M:%S.%f")
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
-Returns the difference in nanoseconds between the target timestamp (t1) and the timestamp provided as a parameter (t2). The <<ts_parse, `ts_parse`>> method can be used in order to parse different timestamp formats.
+Calculates the duration in nanoseconds between two timestamps (t1 - t2). Returns a signed integer: positive if t1 is after t2, negative if t1 is before t2. Use .abs() for absolute duration.
 
 Introduced in version 4.23.0.
 
 
 ==== Parameters
 
-*`t2`* &lt;timestamp&gt; The second timestamp to be subtracted from the method target.  
+*`t2`* &lt;timestamp&gt; The timestamp to subtract from the target timestamp.  
 
 ==== Examples
 
 
-Use the `.abs()` method in order to calculate an absolute duration between two timestamps.
+Calculate absolute duration between two timestamps.
 
 ```coffeescript
 root.between = this.started_at.ts_sub("2020-08-14T05:54:23Z").abs()
@@ -1787,17 +1822,47 @@ root.between = this.started_at.ts_sub("2020-08-14T05:54:23Z").abs()
 # Out: {"between":86400000000000}
 ```
 
+Calculate signed duration (can be negative).
+
+```coffeescript
+root.duration_ns = this.end_time.ts_sub(this.start_time)
+
+# In:  {"start_time":"2020-08-14T10:00:00Z","end_time":"2020-08-14T11:30:00Z"}
+# Out: {"duration_ns":5400000000000}
+```
+
 === `ts_sub_iso8601`
 
 [CAUTION]
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
-Parse parameter string as ISO 8601 period and subtract it from value with high precision for units larger than an hour.
+Subtracts an ISO 8601 duration from a timestamp with calendar-aware precision for years, months, and days. Useful when you need to subtract durations that account for variable month lengths or leap years.
 
 ==== Parameters
 
-*`duration`* &lt;string&gt; Duration in ISO 8601 format  
+*`duration`* &lt;string&gt; Duration in ISO 8601 format (e.g., "P1Y2M3D" for 1 year, 2 months, 3 days)  
+
+==== Examples
+
+
+Subtract one year from a timestamp.
+
+```coffeescript
+root.last_year = this.created_at.ts_sub_iso8601("P1Y")
+
+# In:  {"created_at":"2020-08-14T05:54:23Z"}
+# Out: {"last_year":"2019-08-14T05:54:23Z"}
+```
+
+Subtract a complex duration with multiple units.
+
+```coffeescript
+root.past_date = this.created_at.ts_sub_iso8601("P1Y2M3DT4H5M6S")
+
+# In:  {"created_at":"2021-03-04T04:05:06Z"}
+# Out: {"past_date":"2020-01-01T00:00:00Z"}
+```
 
 === `ts_tz`
 
@@ -1805,17 +1870,19 @@ Parse parameter string as ISO 8601 period and subtract it from value with high p
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
-Returns the result of converting a timestamp to a specified timezone. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The <<ts_parse, `ts_parse`>> method can be used in order to parse different timestamp formats.
+Converts a timestamp to a different timezone while preserving the moment in time. Accepts unix timestamps (seconds with optional decimal precision) or RFC 3339 formatted strings.
 
 Introduced in version 4.3.0.
 
 
 ==== Parameters
 
-*`tz`* &lt;string&gt; The timezone to change to. If set to "UTC" then the timezone will be UTC. If set to "Local" then the local timezone will be used. Otherwise, the argument is taken to be a location name corresponding to a file in the IANA Time Zone database, such as "America/New_York".  
+*`tz`* &lt;string&gt; The timezone to change to. Use "UTC" for UTC, "Local" for local timezone, or an IANA Time Zone database location name like "America/New_York".  
 
 ==== Examples
 
+
+Convert timestamp to UTC timezone.
 
 ```coffeescript
 root.created_at_utc = this.created_at.ts_tz("UTC")
@@ -1824,16 +1891,27 @@ root.created_at_utc = this.created_at.ts_tz("UTC")
 # Out: {"created_at_utc":"2021-02-03T16:05:06Z"}
 ```
 
+Convert timestamp to a specific timezone.
+
+```coffeescript
+root.created_at_ny = this.created_at.ts_tz("America/New_York")
+
+# In:  {"created_at":"2021-02-03T16:05:06Z"}
+# Out: {"created_at_ny":"2021-02-03T11:05:06-05:00"}
+```
+
 === `ts_unix`
 
 [CAUTION]
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
-Attempts to format a timestamp value as a unix timestamp. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The <<ts_parse, `ts_parse`>> method can be used in order to parse different timestamp formats.
+Converts a timestamp to a unix timestamp (seconds since epoch). Accepts unix timestamps or RFC 3339 strings. Returns an integer representing seconds.
 
 ==== Examples
 
+
+Convert RFC 3339 timestamp to unix seconds.
 
 ```coffeescript
 root.created_at_unix = this.created_at.ts_unix()
@@ -1842,16 +1920,27 @@ root.created_at_unix = this.created_at.ts_unix()
 # Out: {"created_at_unix":1257894000}
 ```
 
+Unix timestamp passthrough returns same value.
+
+```coffeescript
+root.timestamp = this.ts.ts_unix()
+
+# In:  {"ts":1257894000}
+# Out: {"timestamp":1257894000}
+```
+
 === `ts_unix_micro`
 
 [CAUTION]
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
-Attempts to format a timestamp value as a unix timestamp with microsecond precision. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The <<ts_parse, `ts_parse`>> method can be used in order to parse different timestamp formats.
+Converts a timestamp to a unix timestamp with microsecond precision (microseconds since epoch). Accepts unix timestamps or RFC 3339 strings. Returns an integer representing microseconds.
 
 ==== Examples
 
+
+Convert timestamp to microseconds since epoch.
 
 ```coffeescript
 root.created_at_unix = this.created_at.ts_unix_micro()
@@ -1860,16 +1949,27 @@ root.created_at_unix = this.created_at.ts_unix_micro()
 # Out: {"created_at_unix":1257894000000000}
 ```
 
+Preserve microsecond precision from timestamp.
+
+```coffeescript
+root.precise_time = this.timestamp.ts_unix_micro()
+
+# In:  {"timestamp":"2020-08-14T11:45:26.123456Z"}
+# Out: {"precise_time":1597405526123456}
+```
+
 === `ts_unix_milli`
 
 [CAUTION]
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
-Attempts to format a timestamp value as a unix timestamp with millisecond precision. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The <<ts_parse, `ts_parse`>> method can be used in order to parse different timestamp formats.
+Converts a timestamp to a unix timestamp with millisecond precision (milliseconds since epoch). Accepts unix timestamps or RFC 3339 strings. Returns an integer representing milliseconds.
 
 ==== Examples
 
+
+Convert timestamp to milliseconds since epoch.
 
 ```coffeescript
 root.created_at_unix = this.created_at.ts_unix_milli()
@@ -1878,22 +1978,42 @@ root.created_at_unix = this.created_at.ts_unix_milli()
 # Out: {"created_at_unix":1257894000000}
 ```
 
+Useful for JavaScript timestamp compatibility.
+
+```coffeescript
+root.js_timestamp = this.event_time.ts_unix_milli()
+
+# In:  {"event_time":"2020-08-14T11:45:26.123Z"}
+# Out: {"js_timestamp":1597405526123}
+```
+
 === `ts_unix_nano`
 
 [CAUTION]
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
-Attempts to format a timestamp value as a unix timestamp with nanosecond precision. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The <<ts_parse, `ts_parse`>> method can be used in order to parse different timestamp formats.
+Converts a timestamp to a unix timestamp with nanosecond precision (nanoseconds since epoch). Accepts unix timestamps or RFC 3339 strings. Returns an integer representing nanoseconds.
 
 ==== Examples
 
+
+Convert timestamp to nanoseconds since epoch.
 
 ```coffeescript
 root.created_at_unix = this.created_at.ts_unix_nano()
 
 # In:  {"created_at":"2009-11-10T23:00:00Z"}
 # Out: {"created_at_unix":1257894000000000000}
+```
+
+Preserve full nanosecond precision.
+
+```coffeescript
+root.precise_time = this.timestamp.ts_unix_nano()
+
+# In:  {"timestamp":"2020-08-14T11:45:26.123456789Z"}
+# Out: {"precise_time":1597405526123456789}
 ```
 
 == Type Coercion
@@ -2006,7 +2126,7 @@ root.bar = this.thing.number(5) * 10
 
 === `string`
 
-Marshal a value into a string. If the value is already a string it is unchanged.
+Converts any value to its string representation. Numbers, booleans, and objects are converted to strings; existing strings are unchanged. Use for type coercion or creating string representations.
 
 ==== Examples
 
@@ -2096,7 +2216,7 @@ root.type = this.ts_parse("2006-01-02").type()
 
 === `all`
 
-Checks each element of an array against a query and returns true if all elements passed. An error occurs if the target is not an array, or if any element results in the provided query returning a non-boolean result. Returns false if the target array is empty.
+Tests whether all elements in an array satisfy a condition. Returns true only if the query evaluates to true for every element. Returns false for empty arrays.
 
 ==== Parameters
 
@@ -2115,9 +2235,19 @@ root.all_over_21 = this.patrons.all(patron -> patron.age >= 21)
 # Out: {"all_over_21":true}
 ```
 
+```coffeescript
+root.all_positive = this.values.all(v -> v > 0)
+
+# In:  {"values":[1,2,3,4,5]}
+# Out: {"all_positive":true}
+
+# In:  {"values":[1,-2,3,4,5]}
+# Out: {"all_positive":false}
+```
+
 === `any`
 
-Checks the elements of an array against a query and returns true if any element passes. An error occurs if the target is not an array, or if an element results in the provided query returning a non-boolean result. Returns false if the target array is empty.
+Tests whether at least one element in an array satisfies a condition. Returns true if the query evaluates to true for any element. Returns false for empty arrays.
 
 ==== Parameters
 
@@ -2136,9 +2266,19 @@ root.any_over_21 = this.patrons.any(patron -> patron.age >= 21)
 # Out: {"any_over_21":false}
 ```
 
+```coffeescript
+root.has_errors = this.results.any(r -> r.status == "error")
+
+# In:  {"results":[{"status":"ok"},{"status":"error"},{"status":"ok"}]}
+# Out: {"has_errors":true}
+
+# In:  {"results":[{"status":"ok"},{"status":"ok"}]}
+# Out: {"has_errors":false}
+```
+
 === `append`
 
-Returns an array with new elements appended to the end.
+Adds one or more elements to the end of an array and returns the new array. The original array is not modified.
 
 ==== Examples
 
@@ -2150,9 +2290,16 @@ root.foo = this.foo.append("and", "this")
 # Out: {"foo":["bar","baz","and","this"]}
 ```
 
+```coffeescript
+root.combined = this.items.append(this.new_item)
+
+# In:  {"items":["apple","banana"],"new_item":"orange"}
+# Out: {"combined":["apple","banana","orange"]}
+```
+
 === `assign`
 
-Merge a source object into an existing destination object. When a collision is found within the merged structures (both a source and destination object contain the same non-object keys) the value in the destination object will be overwritten by that of source object. In order to preserve both values on collision use the <<merge, `merge`>> method.
+Merges two objects or arrays with override behavior. For objects, source values replace destination values on key conflicts. Arrays are concatenated. To preserve both values on conflict, use the merge method instead.
 
 ==== Parameters
 
@@ -2168,9 +2315,18 @@ root = this.foo.assign(this.bar)
 # Out: {"first_name":"fooer","likes":"foos","second_name":"barer"}
 ```
 
+Override defaults with user settings
+
+```coffeescript
+root.config = this.defaults.assign(this.user_settings)
+
+# In:  {"defaults":{"timeout":30,"retries":3},"user_settings":{"timeout":60}}
+# Out: {"config":{"retries":3,"timeout":60}}
+```
+
 === `collapse`
 
-Collapse an array or object into an object of key/value pairs for each field, where the key is the full path of the structured field in dot path notation. Empty arrays an objects are ignored by default.
+Flattens a nested structure into a single-level object with dot-notation keys representing the full path to each value. Empty arrays and objects are excluded by default.
 
 ==== Parameters
 
@@ -2186,7 +2342,7 @@ root.result = this.collapse()
 # Out: {"result":{"foo.0.bar":"1","foo.2.bar":"2"}}
 ```
 
-An optional boolean parameter can be set to true in order to include empty objects and arrays.
+Set include_empty to true to preserve empty objects and arrays in the output.
 
 ```coffeescript
 root.result = this.collapse(include_empty: true)
@@ -2278,7 +2434,7 @@ root.changelog = this.old_config.diff(this.new_config)
 
 === `enumerated`
 
-Converts an array into a new array of objects, where each object has a field index containing the `index` of the element and a field `value` containing the original value of the element.
+Transforms an array into an array of objects with index and value fields, making it easy to access both the position and content of each element.
 
 ==== Examples
 
@@ -2290,9 +2446,54 @@ root.foo = this.foo.enumerated()
 # Out: {"foo":[{"index":0,"value":"bar"},{"index":1,"value":"baz"}]}
 ```
 
+Useful for filtering by index position
+
+```coffeescript
+root.first_two = this.items.enumerated().filter(item -> item.index < 2).map_each(item -> item.value)
+
+# In:  {"items":["a","b","c","d"]}
+# Out: {"first_two":["a","b"]}
+```
+
+=== `exists`
+
+Checks whether a field exists at the specified dot path within an object. Returns true if the field is present (even if null), false otherwise.
+
+==== Parameters
+
+*`path`* &lt;string&gt; A xref:configuration:field_paths.adoc[dot path] to a field.  
+
+==== Examples
+
+
+```coffeescript
+root.result = this.foo.exists("bar.baz")
+
+# In:  {"foo":{"bar":{"baz":"yep, I exist"}}}
+# Out: {"result":true}
+
+# In:  {"foo":{"bar":{}}}
+# Out: {"result":false}
+
+# In:  {"foo":{}}
+# Out: {"result":false}
+```
+
+Also returns true for null values if the field exists
+
+```coffeescript
+root.has_field = this.data.exists("optional_field")
+
+# In:  {"data":{"optional_field":null}}
+# Out: {"has_field":true}
+
+# In:  {"data":{}}
+# Out: {"has_field":false}
+```
+
 === `explode`
 
-Explodes an array or object at a xref:configuration:field_paths.adoc[field path].
+Expands a nested array or object field into multiple documents, distributing elements while preserving the surrounding structure. Useful for denormalizing data.
 
 ==== Parameters
 
@@ -2303,7 +2504,7 @@ Explodes an array or object at a xref:configuration:field_paths.adoc[field path]
 
 ##### On arrays
 
-Exploding arrays results in an array containing elements matching the original document, where the target field of each element is an element of the exploded array:
+When exploding an array, each element becomes a separate document with the array element replacing the original field:
 
 ```coffeescript
 root = this.explode("value")
@@ -2314,7 +2515,7 @@ root = this.explode("value")
 
 ##### On objects
 
-Exploding objects results in an object where the keys match the target object, and the values match the original document but with the target field replaced by the exploded value:
+When exploding an object, the output keys match the nested object's keys, with values being the full document where the target field is replaced by each nested value:
 
 ```coffeescript
 root = this.explode("value")
@@ -2325,7 +2526,7 @@ root = this.explode("value")
 
 === `filter`
 
-Executes a mapping query argument for each element of an array or key/value pair of an object. If the query returns `false` the item is removed from the resulting array or object. The item will also be removed if the query returns any non-boolean value.
+Returns a new array or object containing only elements that satisfy the provided condition. Elements for which the query returns true are kept, all others are removed.
 
 ==== Parameters
 
@@ -2343,7 +2544,7 @@ root.new_nums = this.nums.filter(num -> num > 10)
 
 ##### On objects
 
-When filtering objects the mapping query argument is provided a context with a field `key` containing the value key, and a field `value` containing the value.
+When filtering objects, the query receives a context with `key` and `value` fields for each entry:
 
 ```coffeescript
 root.new_dict = this.dict.filter(item -> item.value.contains("foo"))
@@ -2358,7 +2559,7 @@ root.new_dict = this.dict.filter(item -> item.value.contains("foo"))
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
-Returns the index of the first occurrence of a value in an array. `-1` is returned if there are no matches. Numerical comparisons are made irrespective of the representation type (float versus integer).
+Searches an array for a matching value and returns the index of the first occurrence. Returns -1 if no match is found. Numeric types are compared by value regardless of representation.
 
 ==== Parameters
 
@@ -2387,7 +2588,7 @@ root.index = this.things.find(this.goal)
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
-Returns an array containing the indexes of all occurrences of a value in an array. An empty array is returned if there are no matches. Numerical comparisons are made irrespective of the representation type (float versus integer).
+Searches an array for all occurrences of a value and returns an array of matching indexes. Returns an empty array if no matches are found. Numeric types are compared by value regardless of representation.
 
 ==== Parameters
 
@@ -2416,7 +2617,7 @@ root.indexes = this.things.find_all(this.goal)
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
-Returns an array containing the indexes of all occurrences of an array where the provided query resolves to a boolean `true`. An empty array is returned if there are no matches. Numerical comparisons are made irrespective of the representation type (float versus integer).
+Searches an array for all elements that satisfy a condition and returns an array of their indexes. Returns an empty array if no elements match.
 
 ==== Parameters
 
@@ -2432,13 +2633,22 @@ root.index = this.find_all_by(v -> v != "bar")
 # Out: {"index":[0,2]}
 ```
 
+Find all indexes matching criteria
+
+```coffeescript
+root.error_indexes = this.logs.find_all_by(log -> log.level == "error")
+
+# In:  {"logs":[{"level":"info"},{"level":"error"},{"level":"warn"},{"level":"error"}]}
+# Out: {"error_indexes":[1,3]}
+```
+
 === `find_by`
 
 [CAUTION]
 ====
 This method is mostly stable but breaking changes could still be made outside of major version releases if a fundamental problem with it is found.
 ====
-Returns the index of the first occurrence of an array where the provided query resolves to a boolean `true`. `-1` is returned if there are no matches.
+Searches an array for the first element that satisfies a condition and returns its index. Returns -1 if no element matches the query.
 
 ==== Parameters
 
@@ -2454,9 +2664,18 @@ root.index = this.find_by(v -> v != "bar")
 # Out: {"index":0}
 ```
 
+Find first object matching criteria
+
+```coffeescript
+root.first_adult = this.users.find_by(u -> u.age >= 18)
+
+# In:  {"users":[{"name":"Alice","age":15},{"name":"Bob","age":22},{"name":"Carol","age":19}]}
+# Out: {"first_adult":1}
+```
+
 === `flatten`
 
-Iterates an array and any element that is itself an array is removed and has its elements inserted directly in the resulting array.
+Flattens an array by one level, expanding nested arrays into the parent array. Only the first level of nesting is removed.
 
 ==== Examples
 
@@ -2468,11 +2687,18 @@ root.result = this.flatten()
 # Out: {"result":["foo","bar","baz","buz"]}
 ```
 
+Deeper nesting requires multiple flatten calls
+
+```coffeescript
+root.result = this.data.flatten()
+
+# In:  {"data":["a",["b",["c","d"]],"e"]}
+# Out: {"result":["a","b",["c","d"],"e"]}
+```
+
 === `fold`
 
-Takes two arguments: an initial value, and a mapping query. For each element of an array the mapping context is an object with two fields `tally` and `value`, where `tally` contains the current accumulated value and `value` is the value of the current element. The mapping must return the result of adding the value to the tally.
-
-The first argument is the value that `tally` will have on the first call.
+Reduces an array to a single value by iteratively applying a function. Also known as reduce or aggregate. The query receives an accumulator (tally) and current element (value) for each iteration.
 
 ==== Parameters
 
@@ -2482,12 +2708,16 @@ The first argument is the value that `tally` will have on the first call.
 ==== Examples
 
 
+Sum numbers in an array
+
 ```coffeescript
 root.sum = this.foo.fold(0, item -> item.tally + item.value)
 
 # In:  {"foo":[3,8,11]}
 # Out: {"sum":22}
 ```
+
+Concatenate strings
 
 ```coffeescript
 root.result = this.foo.fold("", item -> "%v%v".format(item.tally, item.value))
@@ -2496,7 +2726,7 @@ root.result = this.foo.fold("", item -> "%v%v".format(item.tally, item.value))
 # Out: {"result":"hello world"}
 ```
 
-You can use fold to merge an array of objects together:
+Merge an array of objects into a single object
 
 ```coffeescript
 root.smoothie = this.fruits.fold({}, item -> item.tally.merge(item.value))
@@ -2555,7 +2785,7 @@ root.last_byte = this.name.bytes().index(-1)
 
 === `join`
 
-Join an array of strings with an optional delimiter into a single string.
+Concatenates an array of strings into a single string with an optional delimiter between elements. Use for building CSV strings, URLs, or combining text fragments.
 
 ==== Parameters
 
@@ -2645,7 +2875,7 @@ root = this.json_schema(file(env("BENTHOS_TEST_BLOBLANG_SCHEMA_FILE")))
 
 === `key_values`
 
-Returns the key/value pairs of an object as an array, where each element is an object with a `key` field and a `value` field. The order of the resulting array will be random.
+Converts an object into an array of key-value pair objects. Each element has a 'key' field and a 'value' field. Order is not guaranteed unless sorted.
 
 ==== Examples
 
@@ -2657,9 +2887,18 @@ root.foo_key_values = this.foo.key_values().sort_by(pair -> pair.key)
 # Out: {"foo_key_values":[{"key":"bar","value":1},{"key":"baz","value":2}]}
 ```
 
+Filter object entries by value
+
+```coffeescript
+root.large_items = this.items.key_values().filter(pair -> pair.value > 15).map_each(pair -> pair.key)
+
+# In:  {"items":{"a":5,"b":15,"c":20,"d":3}}
+# Out: {"large_items":["c"]}
+```
+
 === `keys`
 
-Returns the keys of an object as an array.
+Extracts all keys from an object and returns them as a sorted array.
 
 ==== Examples
 
@@ -2671,9 +2910,18 @@ root.foo_keys = this.foo.keys()
 # Out: {"foo_keys":["bar","baz"]}
 ```
 
+Check if specific keys exist
+
+```coffeescript
+root.has_id = this.data.keys().contains("id")
+
+# In:  {"data":{"id":123,"name":"test"}}
+# Out: {"has_id":true}
+```
+
 === `length`
 
-Returns the length of an array or object (number of keys).
+Returns the size of an array (element count) or object (key count).
 
 ==== Examples
 
@@ -2690,7 +2938,7 @@ root.foo_len = this.foo.length()
 
 === `map_each`
 
-
+Applies a mapping query to each element of an array or each value in an object. Returns a new collection with the transformed values.
 
 ==== Parameters
 
@@ -2701,7 +2949,7 @@ root.foo_len = this.foo.length()
 
 ##### On arrays
 
-Apply a mapping to each element of an array and replace the element with the result. Within the argument mapping the context is the value of the element being mapped.
+Transforms each array element using a query. Return deleted() to remove an element, or the new value to replace it.
 
 ```coffeescript
 root.new_nums = this.nums.map_each(num -> if num < 10 {
@@ -2716,7 +2964,7 @@ root.new_nums = this.nums.map_each(num -> if num < 10 {
 
 ##### On objects
 
-Apply a mapping to each value of an object and replace the value with the result. Within the argument mapping the context is an object with a field `key` containing the value key, and a field `value`.
+Transforms each object value using a query. The query receives an object with 'key' and 'value' fields for each entry.
 
 ```coffeescript
 root.new_dict = this.dict.map_each(item -> item.value.uppercase())
@@ -2727,7 +2975,7 @@ root.new_dict = this.dict.map_each(item -> item.value.uppercase())
 
 === `map_each_key`
 
-Apply a mapping to each key of an object, and replace the key with the result, which must be a string.
+Transforms object keys using a query. The query receives each key as a string and must return a new string key. Use this to rename or transform keys while preserving values.
 
 ==== Parameters
 
@@ -2743,6 +2991,8 @@ root.new_dict = this.dict.map_each_key(key -> key.uppercase())
 # Out: {"new_dict":{"KEYA":"hello","KEYB":"world"}}
 ```
 
+Conditionally transform keys
+
 ```coffeescript
 root = this.map_each_key(key -> if key.contains("kafka") { "_" + key })
 
@@ -2752,7 +3002,7 @@ root = this.map_each_key(key -> if key.contains("kafka") { "_" + key })
 
 === `merge`
 
-Merge a source object into an existing destination object. When a collision is found within the merged structures (both a source and destination object contain the same non-object keys) the result will be an array containing both values, where values that are already arrays will be expanded into the resulting array. In order to simply override destination fields on collision use the <<assign, `assign`>> method.
+Combines two objects or arrays. When merging objects, conflicting keys create arrays containing both values. Arrays are concatenated. For key override behavior instead, use the assign method.
 
 ==== Parameters
 
@@ -2766,6 +3016,15 @@ root = this.foo.merge(this.bar)
 
 # In:  {"foo":{"first_name":"fooer","likes":"bars"},"bar":{"second_name":"barer","likes":"foos"}}
 # Out: {"first_name":"fooer","likes":["bars","foos"],"second_name":"barer"}
+```
+
+Merge arrays
+
+```coffeescript
+root.combined = this.list1.merge(this.list2)
+
+# In:  {"list1":["a","b"],"list2":["c","d"]}
+# Out: {"combined":["a","b","c","d"]}
 ```
 
 === `patch`
@@ -2836,7 +3095,7 @@ root.the_rest = this.value.slice(0, -2)
 
 === `sort`
 
-Attempts to sort the values of an array in increasing order. The type of all values must match in order for the ordering to succeed. Supports string and number values.
+Sorts an array in ascending order. Works with strings and numbers. For custom sorting logic, provide a comparison query that receives 'left' and 'right' elements.
 
 ==== Parameters
 
@@ -2852,7 +3111,7 @@ root.sorted = this.foo.sort()
 # Out: {"sorted":["aaa","bbb","ccc"]}
 ```
 
-It's also possible to specify a mapping argument, which is provided an object context with fields `left` and `right`, the mapping must return a boolean indicating whether the `left` value is less than `right`. This allows you to sort arrays containing non-string or non-number values.
+Custom comparison for complex objects - return true if left < right
 
 ```coffeescript
 root.sorted = this.foo.sort(item -> item.left.v < item.right.v)
@@ -2863,7 +3122,7 @@ root.sorted = this.foo.sort(item -> item.left.v < item.right.v)
 
 === `sort_by`
 
-Attempts to sort the elements of an array, in increasing order, by a value emitted by an argument query applied to each element. The type of all values must match in order for the ordering to succeed. Supports string and number values.
+Sorts an array by a value extracted from each element using a query. The extracted values determine sort order and must all be strings or numbers.
 
 ==== Parameters
 
@@ -2877,6 +3136,15 @@ root.sorted = this.foo.sort_by(ele -> ele.id)
 
 # In:  {"foo":[{"id":"bbb","message":"bar"},{"id":"aaa","message":"foo"},{"id":"ccc","message":"baz"}]}
 # Out: {"sorted":[{"id":"aaa","message":"foo"},{"id":"bbb","message":"bar"},{"id":"ccc","message":"baz"}]}
+```
+
+Sort by numeric field
+
+```coffeescript
+root.sorted = this.items.sort_by(item -> item.priority)
+
+# In:  {"items":[{"name":"low","priority":3},{"name":"high","priority":1},{"name":"med","priority":2}]}
+# Out: {"sorted":[{"name":"high","priority":1},{"name":"med","priority":2},{"name":"low","priority":3}]}
 ```
 
 === `squash`
@@ -2895,7 +3163,7 @@ root.locations = this.locations.map_each(loc -> {loc.state: [loc.name]}).squash(
 
 === `sum`
 
-Sum the numerical values of an array.
+Calculates the sum of all numeric values in an array. Non-numeric values cause an error.
 
 ==== Examples
 
@@ -2907,9 +3175,18 @@ root.sum = this.foo.sum()
 # Out: {"sum":15}
 ```
 
+Works with decimals
+
+```coffeescript
+root.total = this.prices.sum()
+
+# In:  {"prices":[10.5,20.25,5.00]}
+# Out: {"total":35.75}
+```
+
 === `unique`
 
-Attempts to remove duplicate values from an array. The array may contain a combination of different value types, but numbers and strings are checked separately (`"5"` is a different element to `5`).
+Removes duplicate values from an array, keeping the first occurrence of each unique value. Strings and numbers are treated as distinct types ("5" differs from 5).
 
 ==== Parameters
 
@@ -2925,9 +3202,18 @@ root.uniques = this.foo.unique()
 # Out: {"uniques":["a","b","c"]}
 ```
 
+Use a query to determine uniqueness by a field
+
+```coffeescript
+root.unique_users = this.users.unique(u -> u.id)
+
+# In:  {"users":[{"id":1,"name":"Alice"},{"id":2,"name":"Bob"},{"id":1,"name":"Alice Duplicate"}]}
+# Out: {"unique_users":[{"id":1,"name":"Alice"},{"id":2,"name":"Bob"}]}
+```
+
 === `values`
 
-Returns the values of an object as an array. The order of the resulting array will be random.
+Extracts all values from an object and returns them as an array. Order is not guaranteed unless the result is sorted.
 
 ==== Examples
 
@@ -2937,6 +3223,15 @@ root.foo_vals = this.foo.values().sort()
 
 # In:  {"foo":{"bar":1,"baz":2}}
 # Out: {"foo_vals":[1,2]}
+```
+
+Find max value in object
+
+```coffeescript
+root.max = this.scores.values().sort().index(-1)
+
+# In:  {"scores":{"player1":85,"player2":92,"player3":78}}
+# Out: {"max":92}
 ```
 
 === `with`
@@ -2957,9 +3252,7 @@ root = this.with("inner.a","inner.c","d")
 
 === `without`
 
-Returns an object where one or more xref:configuration:field_paths.adoc[field path] arguments are removed. Each path specifies a specific field to be deleted from the input object, allowing for nested fields.
-
-If a key within a nested path does not exist or is not an object then it is not removed.
+Removes specified fields from an object using dot-notation paths. Returns a new object with the fields removed. Non-existent paths are safely ignored.
 
 ==== Examples
 
@@ -2969,6 +3262,15 @@ root = this.without("inner.a","inner.c","d")
 
 # In:  {"inner":{"a":"first","b":"second","c":"third"},"d":"fourth","e":"fifth"}
 # Out: {"e":"fifth","inner":{"b":"second"}}
+```
+
+Remove sensitive fields
+
+```coffeescript
+root = this.without("password","ssn","creditCard")
+
+# In:  {"username":"alice","password":"secret","email":"alice@example.com","ssn":"123-45-6789"}
+# Out: {"email":"alice@example.com","username":"alice"}
 ```
 
 === `zip`
@@ -3034,8 +3336,8 @@ root = this.doc.format_json()
 
 # In:  {"doc":{"foo":"bar"}}
 # Out: {
-#          "foo": "bar"
-#      }
+#      #          "foo": "bar"
+#      #      }
 ```
 
 Pass a string to the `indent` parameter in order to customise the indentation.
@@ -3045,10 +3347,10 @@ root = this.format_json("  ")
 
 # In:  {"doc":{"foo":"bar"}}
 # Out: {
-#        "doc": {
-#          "foo": "bar"
-#        }
-#      }
+#      #        "doc": {
+#      #          "foo": "bar"
+#      #        }
+#      #      }
 ```
 
 Use the `.string()` method in order to coerce the result into a string.
@@ -3076,9 +3378,9 @@ root = this.doc.format_json()
 
 # In:  {"doc":{"email":"foo&bar@benthos.dev","name":"foo>bar"}}
 # Out: {
-#          "email": "foo\u0026bar@benthos.dev",
-#          "name": "foo\u003ebar"
-#      }
+#      #          "email": "foo\u0026bar@benthos.dev",
+#      #          "name": "foo\u003ebar"
+#      #      }
 ```
 
 Set the `escape_html` parameter to false to disable escaping of problematic HTML characters.
@@ -3088,9 +3390,9 @@ root = this.doc.format_json(escape_html: false)
 
 # In:  {"doc":{"email":"foo&bar@benthos.dev","name":"foo>bar"}}
 # Out: {
-#          "email": "foo&bar@benthos.dev",
-#          "name": "foo>bar"
-#      }
+#      #          "email": "foo&bar@benthos.dev",
+#      #          "name": "foo>bar"
+#      #      }
 ```
 
 === `format_msgpack`
@@ -3138,10 +3440,10 @@ root = this.format_xml()
 
 # In:  {"foo":{"bar":{"baz":"foo bar baz"}}}
 # Out: <foo>
-#          <bar>
-#              <baz>foo bar baz</baz>
-#          </bar>
-#      </foo>
+#      #          <bar>
+#      #              <baz>foo bar baz</baz>
+#      #          </bar>
+#      #      </foo>
 ```
 
 Create compact XML without indentation for smaller message size
@@ -3393,31 +3695,34 @@ root.doc = this.doc.parse_yaml()
 
 === `compress`
 
-Compresses a string or byte array value according to a specified algorithm.
+Compresses a string or byte array using the specified compression algorithm. Returns compressed data as bytes. Useful for reducing payload size before transmission or storage.
 
 ==== Parameters
 
-*`algorithm`* &lt;string&gt; One of `flate`, `gzip`, `pgzip`, `lz4`, `snappy`, `zlib`, `zstd`.  
-*`level`* &lt;integer, default `-1`&gt; The level of compression to use. May not be applicable to all algorithms.  
+*`algorithm`* &lt;string&gt; The compression algorithm: `flate`, `gzip`, `pgzip` (parallel gzip), `lz4`, `snappy`, `zlib`, or `zstd`.  
+*`level`* &lt;integer, default `-1`&gt; Compression level (default: -1 for default compression). Higher values increase compression ratio but use more CPU. Range and effect varies by algorithm.  
 
 ==== Examples
 
 
+Compress and encode for safe transmission
+
 ```coffeescript
-let long_content = range(0, 1000).map_each(content()).join(" ")
-root.a_len = $long_content.length()
-root.b_len = $long_content.compress("gzip").length()
+root.compressed = content().bytes().compress("gzip").encode("base64")
 
-
-# In:  hello world this is some content
-# Out: {"a_len":32999,"b_len":161}
+# In:  {"message":"hello world I love space"}
+# Out: {"compressed":"H4sIAAAJbogA/wAmANn/eyJtZXNzYWdlIjoiaGVsbG8gd29ybGQgSSBsb3ZlIHNwYWNlIn0DAHEvdwomAAAA"}
 ```
 
-```coffeescript
-root.compressed = content().compress("lz4").encode("base64")
+Compare compression ratios across algorithms
 
-# In:  hello world I love space
-# Out: {"compressed":"BCJNGGRwuRgAAIBoZWxsbyB3b3JsZCBJIGxvdmUgc3BhY2UAAAAAGoETLg=="}
+```coffeescript
+root.original_size = content().length()
+root.gzip_size = content().compress("gzip").length()
+root.lz4_size = content().compress("lz4").length()
+
+# In:  The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog.
+# Out: {"gzip_size":114,"lz4_size":85,"original_size":89}
 ```
 
 === `decode`
@@ -3449,29 +3754,31 @@ root = this.encoded.decode("ascii85")
 
 === `decompress`
 
-Decompresses a string or byte array value according to a specified algorithm. The result of decompression 
+Decompresses a byte array using the specified decompression algorithm. Returns decompressed data as bytes. Use with data that was previously compressed using the corresponding algorithm.
 
 ==== Parameters
 
-*`algorithm`* &lt;string&gt; One of `gzip`, `pgzip`, `zlib`, `bzip2`, `flate`, `snappy`, `lz4`, `zstd`.  
+*`algorithm`* &lt;string&gt; The decompression algorithm: `gzip`, `pgzip` (parallel gzip), `zlib`, `bzip2`, `flate`, `snappy`, `lz4`, or `zstd`.  
 
 ==== Examples
 
 
-```coffeescript
-root = this.compressed.decode("base64").decompress("lz4")
+Decompress base64-encoded compressed data
 
-# In:  {"compressed":"BCJNGGRwuRgAAIBoZWxsbyB3b3JsZCBJIGxvdmUgc3BhY2UAAAAAGoETLg=="}
+```coffeescript
+root = this.compressed.decode("base64").decompress("gzip")
+
+# In:  {"compressed":"H4sIAN12MWkAA8tIzcnJVyjPL8pJUfBUyMkvS1UoLkhMTgUAQpDxbxgAAAA="}
 # Out: hello world I love space
 ```
 
-Use the `.string()` method in order to coerce the result into a string, this makes it possible to place the data within a JSON document without automatic base64 encoding.
+Convert decompressed bytes to string for JSON output
 
 ```coffeescript
-root.result = this.compressed.decode("base64").decompress("lz4").string()
+root.message = this.compressed.decode("base64").decompress("gzip").string()
 
-# In:  {"compressed":"BCJNGGRwuRgAAIBoZWxsbyB3b3JsZCBJIGxvdmUgc3BhY2UAAAAAGoETLg=="}
-# Out: {"result":"hello world I love space"}
+# In:  {"compressed":"H4sIAN12MWkAA8tIzcnJVyjPL8pJUfBUyMkvS1UoLkhMTgUAQpDxbxgAAAA="}
+# Out: {"message":"hello world I love space"}
 ```
 
 === `decrypt_aes`
@@ -4169,55 +4476,51 @@ Looks up an IP address against a https://www.maxmind.com/en/home[MaxMind databas
 
 === `format_timestamp`
 
-Attempts to format a timestamp value as a string according to a specified format, or RFC 3339 by default. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format.
-
-The output format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value. For an alternative way to specify formats check out the <<ts_strftime, `ts_strftime`>> method.
+Formats a timestamp as a string using Go's reference time format. Defaults to RFC 3339 if no format specified. The format uses "Mon Jan 2 15:04:05 -0700 MST 2006" as a reference. Accepts unix timestamps (with decimal precision) or RFC 3339 strings. Use ts_strftime for strftime-style formats.
 
 ==== Parameters
 
-*`format`* &lt;string, default `"2006-01-02T15:04:05.999999999Z07:00"`&gt; The output format to use.  
-*`tz`* &lt;(optional) string&gt; An optional timezone to use, otherwise the timezone of the input string is used, or in the case of unix timestamps the local timezone is used.  
+*`format`* &lt;string, default `"2006-01-02T15:04:05.999999999Z07:00"`&gt; The output format using Go's reference time.  
+*`tz`* &lt;(optional) string&gt; Optional timezone (e.g., 'UTC', 'America/New_York'). Defaults to input timezone or local time for unix timestamps.  
 
 === `format_timestamp_strftime`
 
-Attempts to format a timestamp value as a string according to a specified strftime-compatible format. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format.
+Formats a timestamp as a string using strptime format specifiers (like %Y, %m, %d). Accepts unix timestamps (with decimal precision) or RFC 3339 strings. Supports %f for microseconds. Use ts_format for Go-style reference time formats.
 
 ==== Parameters
 
-*`format`* &lt;string&gt; The output format to use.  
-*`tz`* &lt;(optional) string&gt; An optional timezone to use, otherwise the timezone of the input string is used.  
+*`format`* &lt;string&gt; The output format using strptime specifiers.  
+*`tz`* &lt;(optional) string&gt; Optional timezone. Defaults to input timezone or local time for unix timestamps.  
 
 === `format_timestamp_unix`
 
-Attempts to format a timestamp value as a unix timestamp. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The <<ts_parse, `ts_parse`>> method can be used in order to parse different timestamp formats.
+Converts a timestamp to a unix timestamp (seconds since epoch). Accepts unix timestamps or RFC 3339 strings. Returns an integer representing seconds.
 
 === `format_timestamp_unix_micro`
 
-Attempts to format a timestamp value as a unix timestamp with microsecond precision. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The <<ts_parse, `ts_parse`>> method can be used in order to parse different timestamp formats.
+Converts a timestamp to a unix timestamp with microsecond precision (microseconds since epoch). Accepts unix timestamps or RFC 3339 strings. Returns an integer representing microseconds.
 
 === `format_timestamp_unix_milli`
 
-Attempts to format a timestamp value as a unix timestamp with millisecond precision. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The <<ts_parse, `ts_parse`>> method can be used in order to parse different timestamp formats.
+Converts a timestamp to a unix timestamp with millisecond precision (milliseconds since epoch). Accepts unix timestamps or RFC 3339 strings. Returns an integer representing milliseconds.
 
 === `format_timestamp_unix_nano`
 
-Attempts to format a timestamp value as a unix timestamp with nanosecond precision. Timestamp values can either be a numerical unix time in seconds (with up to nanosecond precision via decimals), or a string in RFC 3339 format. The <<ts_parse, `ts_parse`>> method can be used in order to parse different timestamp formats.
+Converts a timestamp to a unix timestamp with nanosecond precision (nanoseconds since epoch). Accepts unix timestamps or RFC 3339 strings. Returns an integer representing nanoseconds.
 
 === `parse_timestamp`
 
-Attempts to parse a string as a timestamp following a specified format and outputs a timestamp, which can then be fed into methods such as <<ts_format, `ts_format`>>.
-
-The input format is defined by showing how the reference time, defined to be Mon Jan 2 15:04:05 -0700 MST 2006, would be displayed if it were the value. For an alternative way to specify formats check out the <<ts_strptime, `ts_strptime`>> method.
+Parses a timestamp string using Go's reference time format and outputs a timestamp object. The format uses "Mon Jan 2 15:04:05 -0700 MST 2006" as a reference - show how this reference time would appear in your format. Use ts_strptime for strftime-style formats instead.
 
 ==== Parameters
 
-*`format`* &lt;string&gt; The format of the target string.  
+*`format`* &lt;string&gt; The format of the input string using Go's reference time.  
 
 === `parse_timestamp_strptime`
 
-Attempts to parse a string as a timestamp following a specified strptime-compatible format and outputs a timestamp, which can then be fed into <<ts_format, `ts_format`>>.
+Parses a timestamp string using strptime format specifiers (like %Y, %m, %d) and outputs a timestamp object. Use ts_parse for Go-style reference time formats instead.
 
 ==== Parameters
 
-*`format`* &lt;string&gt; The format of the target string.  
+*`format`* &lt;string&gt; The format string using strptime specifiers (e.g., %Y-%m-%d).  
 

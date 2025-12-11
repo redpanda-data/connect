@@ -32,7 +32,7 @@ root.values_two = range(0, this.max, 2)
 
 === `bytes`
 
-Create a new byte array that is zero initialized
+Creates a zero-initialized byte array of specified length. Use this to allocate fixed-size byte buffers for binary data manipulation or to generate padding.
 
 ==== Parameters
 
@@ -45,22 +45,31 @@ Create a new byte array that is zero initialized
 root.data = bytes(5)
 ```
 
+Create a buffer for binary operations.
+
+```coffeescript
+root.header = bytes(16)
+root.payload = content()
+```
+
 === `counter`
 
 [CAUTION]
 ====
 This function is experimental and therefore breaking changes could be made to it outside of major version releases.
 ====
-Returns a non-negative integer that increments each time it is resolved, yielding the minimum (`1` by default) as the first value. Each instantiation of `counter` has its own independent count. Once the maximum integer (or `max` argument) is reached the counter resets back to the minimum.
+Generates an incrementing sequence of integers starting from a minimum value (default 1). Each counter instance maintains its own independent state across message processing. When the maximum value is reached, the counter automatically resets to the minimum.
 
 ==== Parameters
 
-- *`min`* &lt;query expression, default `1`&gt; The minimum value of the counter, this is the first value that will be yielded. If this parameter is dynamic it will be resolved only once during the lifetime of the mapping.  
-- *`max`* &lt;query expression, default `9223372036854775807`&gt; The maximum value of the counter, once this value is yielded the counter will reset back to the min. If this parameter is dynamic it will be resolved only once during the lifetime of the mapping.  
-- *`set`* &lt;(optional) query expression&gt; An optional mapping that when specified will be executed each time the counter is resolved. When this mapping resolves to a non-negative integer value it will cause the counter to reset to this value and yield it. If this mapping is omitted or doesn't resolve to anything then the counter will increment and yield the value as normal. If this mapping resolves to `null` then the counter is not incremented and the current value is yielded. If this mapping resolves to a deletion then the counter is reset to the `min` value.  
+- *`min`* &lt;query expression, default `1`&gt; The starting value of the counter. This is the first value yielded. Evaluated once when the mapping is initialized.  
+- *`max`* &lt;query expression, default `9223372036854775807`&gt; The maximum value before the counter resets to min. Evaluated once when the mapping is initialized.  
+- *`set`* &lt;(optional) query expression&gt; An optional query that controls counter behavior: when it resolves to a non-negative integer, the counter is set to that value; when it resolves to `null`, the counter is read without incrementing; when it resolves to a deletion, the counter resets to min; otherwise the counter increments normally.  
 
 ==== Examples
 
+
+Generate sequential IDs for each message.
 
 ```coffeescript
 root.id = counter()
@@ -72,64 +81,76 @@ root.id = counter()
 # Out: {"id":2}
 ```
 
-It's possible to increment a counter multiple times within a single mapping invocation using a map.
+Use a custom range for the counter.
+
+```coffeescript
+root.batch_num = counter(min: 100, max: 200)
+
+# In:  {}
+# Out: {"batch_num":100}
+
+# In:  {}
+# Out: {"batch_num":101}
+```
+
+Increment a counter multiple times within a single mapping using a named map.
 
 ```coffeescript
 
-map foos {
+map increment {
   root = counter()
 }
 
-root.meow_id = null.apply("foos")
-root.woof_id = null.apply("foos")
+root.first_id = null.apply("increment")
+root.second_id = null.apply("increment")
 
 
 # In:  {}
-# Out: {"meow_id":1,"woof_id":2}
+# Out: {"first_id":1,"second_id":2}
 
 # In:  {}
-# Out: {"meow_id":3,"woof_id":4}
+# Out: {"first_id":3,"second_id":4}
 ```
 
-By specifying an optional `set` parameter it is possible to dynamically reset the counter based on input data.
+Conditionally reset a counter based on input data.
 
 ```coffeescript
-root.consecutive_doggos = counter(min: 1, set: if !this.sound.lowercase().contains("woof") { 0 })
+root.streak = counter(set: if this.status != "success" { 0 })
 
-# In:  {"sound":"woof woof"}
-# Out: {"consecutive_doggos":1}
+# In:  {"status":"success"}
+# Out: {"streak":1}
 
-# In:  {"sound":"woofer wooooo"}
-# Out: {"consecutive_doggos":2}
+# In:  {"status":"success"}
+# Out: {"streak":2}
 
-# In:  {"sound":"meow"}
-# Out: {"consecutive_doggos":0}
+# In:  {"status":"failure"}
+# Out: {"streak":0}
 
-# In:  {"sound":"uuuuh uh uh woof uhhhhhh"}
-# Out: {"consecutive_doggos":1}
+# In:  {"status":"success"}
+# Out: {"streak":1}
 ```
 
-The `set` parameter can also be utilized to peek at the counter without mutating it by returning `null`.
+Peek at the current counter value without incrementing by using null in the set parameter.
 
 ```coffeescript
-root.things = counter(set: if this.id == null { null })
+root.count = counter(set: if this.peek { null })
 
-# In:  {"id":"a"}
-# Out: {"things":1}
+# In:  {"peek":false}
+# Out: {"count":1}
 
-# In:  {"id":"b"}
-# Out: {"things":2}
+# In:  {"peek":false}
+# Out: {"count":2}
 
-# In:  {"what":"just checking"}
-# Out: {"things":2}
+# In:  {"peek":true}
+# Out: {"count":2}
 
-# In:  {"id":"c"}
-# Out: {"things":3}
+# In:  {"peek":false}
+# Out: {"count":3}
 ```
 
 === `deleted`
 
-A function that returns a result indicating that the mapping target should be deleted. Deleting, also known as dropping, messages will result in them being acknowledged as successfully processed to inputs in a Redpanda Connect pipeline. For more information about error handling patterns read xref:configuration:error_handling.adoc[].
+Returns a deletion marker that removes the target field or message. When applied to root, the entire message is dropped while still being acknowledged as successfully processed. Use this to filter data or conditionally remove fields.
 
 ==== Examples
 
@@ -142,7 +163,7 @@ root.bar = deleted()
 # Out: {"baz":"baz_value","foo":"foo value"}
 ```
 
-Since the result is a value it can be used to do things like remove elements of an array within `map_each`.
+Filter array elements by returning deleted for unwanted items.
 
 ```coffeescript
 root.new_nums = this.nums.map_each(num -> if num < 10 { deleted() } else { num - 10 })
@@ -153,7 +174,7 @@ root.new_nums = this.nums.map_each(num -> if num < 10 { deleted() } else { num -
 
 === `ksuid`
 
-Generates a new ksuid each time it is invoked and prints a string representation.
+Generates a K-Sortable Unique Identifier with built-in timestamp ordering. Use this for distributed unique IDs that sort chronologically and remain collision-resistant without coordination between generators.
 
 ==== Examples
 
@@ -162,9 +183,19 @@ Generates a new ksuid each time it is invoked and prints a string representation
 root.id = ksuid()
 ```
 
+Create sortable event IDs for logging.
+
+```coffeescript
+root.event = {
+  "id": ksuid(),
+  "type": this.event_type,
+  "data": this.payload
+}
+```
+
 === `nanoid`
 
-Generates a new nanoid each time it is invoked and prints a string representation.
+Generates a URL-safe unique identifier using Nano ID. Use this for compact, URL-friendly IDs with good collision resistance. Customize the length (default 21) or provide a custom alphabet for specific character requirements.
 
 ==== Parameters
 
@@ -178,13 +209,13 @@ Generates a new nanoid each time it is invoked and prints a string representatio
 root.id = nanoid()
 ```
 
-It is possible to specify an optional length parameter.
+Generate a longer ID for additional uniqueness.
 
 ```coffeescript
 root.id = nanoid(54)
 ```
 
-It is also possible to specify an optional custom alphabet after the length parameter.
+Use a custom alphabet for domain-specific IDs.
 
 ```coffeescript
 root.id = nanoid(54, "abcde")
@@ -214,9 +245,9 @@ root.degrees = this.radians * (180 / pi())
 === `random_int`
 
 
-Generates a non-negative pseudo-random 64-bit integer. An optional integer argument can be provided in order to seed the random number generator.
+Generates a pseudo-random non-negative 64-bit integer. Use this for creating random IDs, sampling data, or generating test values. Provide a seed for reproducible randomness, or use a dynamic seed like `timestamp_unix_nano()` for unique values per mapping instance.
 
-Optional `min` and `max` arguments can be provided in order to only generate numbers within a range. Neither of these parameters can be set via a dynamic expression (i.e. from values taken from mapped data). Instead, for dynamic ranges extract a min and max manually using a modulo operator (`random_int() % a + b`).
+Optional `min` and `max` parameters constrain the output range (both inclusive). For dynamic ranges based on message data, use the modulo operator instead: `random_int() % dynamic_max + dynamic_min`.
 
 ==== Parameters
 
@@ -237,15 +268,16 @@ root.sixth = random_int(seed:timestamp_unix_nano(), max:20)
 
 ```
 
-It is possible to specify a dynamic seed argument, in which case the argument will only be resolved once during the lifetime of the mapping.
+Use a dynamic seed for unique random values per mapping instance.
 
 ```coffeescript
-root.first = random_int(timestamp_unix_nano())
+root.random_id = random_int(timestamp_unix_nano())
+root.sample_percent = random_int(seed: timestamp_unix_nano(), min: 0, max: 100)
 ```
 
 === `range`
 
-The `range` function creates an array of integers following a range between a start, stop and optional step integer argument. If the step argument is omitted then it defaults to 1. A negative step can be provided as long as stop < start.
+Creates an array of integers from start (inclusive) to stop (exclusive) with an optional step. Use this to generate sequences for iteration, indexing, or creating numbered lists.
 
 ==== Parameters
 
@@ -263,6 +295,18 @@ root.c = range(0, -this.max, -2)
 
 # In:  {"max":10}
 # Out: {"a":[0,1,2,3,4,5,6,7,8,9],"b":[0,2,4,6,8],"c":[0,-2,-4,-6,-8]}
+```
+
+Generate a sequence for batch processing.
+
+```coffeescript
+root.pages = range(0, this.total_items, 100).map_each(offset -> {
+  "offset": offset,
+  "limit": 100
+})
+
+# In:  {"total_items":250}
+# Out: {"pages":[{"limit":100,"offset":0},{"limit":100,"offset":100}]}
 ```
 
 === `snowflake_id`
@@ -292,7 +336,7 @@ root.data = this
 
 === `throw`
 
-Throws an error similar to a regular mapping error. This is useful for abandoning a mapping entirely given certain conditions.
+Immediately fails the mapping with a custom error message. Use this to halt processing when data validation fails or required fields are missing, causing the message to be routed to error handlers.
 
 ==== Parameters
 
@@ -314,6 +358,22 @@ root.doc.contents = (this.body.content | this.thing.body)
 
 # In:  {"nothing":"matches"}
 # Out: Error("failed assignment (line 1): unknown type")
+```
+
+Validate required fields before processing.
+
+```coffeescript
+root = if this.exists("user_id") {
+  this
+} else {
+  throw("missing required field: user_id")
+}
+
+# In:  {"user_id":123,"name":"alice"}
+# Out: {"name":"alice","user_id":123}
+
+# In:  {"name":"bob"}
+# Out: Error("failed assignment (line 1): missing required field: user_id")
 ```
 
 === `ulid`
@@ -348,7 +408,7 @@ root.id = ulid("hex")
 
 === `uuid_v4`
 
-Generates a new RFC-4122 UUID each time it is invoked and prints a string representation.
+Generates a random RFC-4122 version 4 UUID. Use this for creating unique identifiers that don't reveal timing information or require ordering. Each invocation produces a new globally unique ID.
 
 ==== Examples
 
@@ -357,9 +417,16 @@ Generates a new RFC-4122 UUID each time it is invoked and prints a string repres
 root.id = uuid_v4()
 ```
 
+Add unique request IDs for tracing.
+
+```coffeescript
+root = this
+root.request_id = uuid_v4()
+```
+
 === `uuid_v7`
 
-Generates a new time ordered UUID each time it is invoked and prints a string representation.
+Generates a time-ordered UUID version 7 with millisecond timestamp precision. Use this for sortable unique identifiers that maintain chronological ordering, ideal for database keys or event IDs. Optionally specify a custom timestamp.
 
 ==== Parameters
 
@@ -372,7 +439,7 @@ Generates a new time ordered UUID each time it is invoked and prints a string re
 root.id = uuid_v7()
 ```
 
-It is also possible to specify the timestamp for the uuid_v7
+Generate a UUID with a specific timestamp for backdating events.
 
 ```coffeescript
 root.id = uuid_v7(now().ts_sub_iso8601("PT1M"))
@@ -382,7 +449,7 @@ root.id = uuid_v7(now().ts_sub_iso8601("PT1M"))
 
 === `batch_index`
 
-Returns the index of the mapped message within a batch. This is useful for applying maps only on certain messages of a batch.
+Returns the zero-based index of the current message within its batch. Use this to conditionally process messages based on their position, or to create sequential identifiers within a batch.
 
 ==== Examples
 
@@ -391,20 +458,32 @@ Returns the index of the mapped message within a batch. This is useful for apply
 root = if batch_index() > 0 { deleted() }
 ```
 
+Create a unique identifier combining batch position with timestamp.
+
+```coffeescript
+root.id = "%v-%v".format(timestamp_unix(), batch_index())
+```
+
 === `batch_size`
 
-Returns the size of the message batch.
+Returns the total number of messages in the current batch. Use this to determine batch boundaries or compute relative positions.
 
 ==== Examples
 
 
 ```coffeescript
-root.foo = batch_size()
+root.total = batch_size()
+```
+
+Check if processing the last message in a batch.
+
+```coffeescript
+root.is_last = batch_index() == batch_size() - 1
 ```
 
 === `content`
 
-Returns the full raw contents of the mapping target message as a byte array. When mapping to a JSON field the value should be encoded using the method xref:guides:bloblang/methods.adoc#encode[`encode`], or cast to a string directly using the method xref:guides:bloblang/methods.adoc#string[`string`], otherwise it will be base64 encoded by default.
+Returns the raw message payload as bytes, regardless of the current mapping context. Use this to access the original message when working within nested contexts, or to store the entire message as a field.
 
 ==== Examples
 
@@ -416,9 +495,19 @@ root.doc = content().string()
 # Out: {"doc":"{\"foo\":\"bar\"}"}
 ```
 
+Preserve original message while adding metadata.
+
+```coffeescript
+root.original = content().string()
+root.processed_by = "ai"
+
+# In:  {"foo":"bar"}
+# Out: {"original":"{\"foo\":\"bar\"}","processed_by":"ai"}
+```
+
 === `error`
 
-If an error has occurred during the processing of a message this function returns the reported cause of the error as a string, otherwise `null`. For more information about error handling patterns read xref:configuration:error_handling.adoc[].
+Returns the error message string if the message has failed processing, otherwise `null`. Use this in error handling pipelines to log or route failed messages based on their error details.
 
 ==== Examples
 
@@ -427,9 +516,17 @@ If an error has occurred during the processing of a message this function return
 root.doc.error = error()
 ```
 
+Route messages to different outputs based on error presence.
+
+```coffeescript
+root = this
+root.error_msg = error()
+root.has_error = error() != null
+```
+
 === `error_source_label`
 
-Returns the label of the source component which raised the error during the processing of a message or an empty string if not set. `null` is returned when the error is null or no source component is associated with it. For more information about error handling patterns read xref:configuration:error_handling.adoc[].
+Returns the user-defined label of the component that caused the error, empty string if no label is set, or `null` if the message has no error. Use this for more human-readable error tracking when components have custom labels.
 
 ==== Examples
 
@@ -438,9 +535,15 @@ Returns the label of the source component which raised the error during the proc
 root.doc.error_source_label = error_source_label()
 ```
 
+Route errors based on component labels.
+
+```coffeescript
+root.error_category = error_source_label().or("unknown")
+```
+
 === `error_source_name`
 
-Returns the name of the source component which raised the error during the processing of a message. `null` is returned when the error is null or no source component is associated with it. For more information about error handling patterns read xref:configuration:error_handling.adoc[].
+Returns the component name that caused the error, or `null` if the message has no error or the error has no associated component. Use this to identify which processor or component in your pipeline caused a failure.
 
 ==== Examples
 
@@ -449,9 +552,21 @@ Returns the name of the source component which raised the error during the proce
 root.doc.error_source_name = error_source_name()
 ```
 
+Create detailed error logs with component information.
+
+```coffeescript
+root.error_details = if errored() {
+  {
+    "message": error(),
+    "component": error_source_name(),
+    "timestamp": now()
+  }
+}
+```
+
 === `error_source_path`
 
-Returns the path of the source component which raised the error during the processing of a message. `null` is returned when the error is null or no source component is associated with it. For more information about error handling patterns read xref:configuration:error_handling.adoc[].
+Returns the dot-separated path to the component that caused the error, or `null` if the message has no error. Use this to identify the exact location of a failed component in nested pipeline configurations.
 
 ==== Examples
 
@@ -460,9 +575,19 @@ Returns the path of the source component which raised the error during the proce
 root.doc.error_source_path = error_source_path()
 ```
 
+Build comprehensive error context for debugging.
+
+```coffeescript
+root.error_info = {
+  "path": error_source_path(),
+  "component": error_source_name(),
+  "message": error()
+}
+```
+
 === `errored`
 
-Returns a boolean value indicating whether an error has occurred during the processing of a message. For more information about error handling patterns read xref:configuration:error_handling.adoc[].
+Returns true if the message has failed processing, false otherwise. Use this for conditional logic in error handling workflows or to route failed messages to dead letter queues.
 
 ==== Examples
 
@@ -471,9 +596,15 @@ Returns a boolean value indicating whether an error has occurred during the proc
 root.doc.status = if errored() { 400 } else { 200 }
 ```
 
+Send only failed messages to a separate stream.
+
+```coffeescript
+root = if errored() { this } else { deleted() }
+```
+
 === `json`
 
-Returns the value of a field within a JSON message located by a [dot path][field_paths] argument. This function always targets the entire source JSON document regardless of the mapping context.
+Returns a field from the original JSON message by dot path, always accessing the root document regardless of mapping context. Use this to reference the source message when working in nested contexts or to extract specific fields.
 
 ==== Parameters
 
@@ -489,7 +620,7 @@ root.mapped = json("foo.bar")
 # Out: {"mapped":"hello world"}
 ```
 
-The path argument is optional and if omitted the entire JSON payload is returned.
+Access the original message from within nested mapping contexts.
 
 ```coffeescript
 root.doc = json()
@@ -500,7 +631,7 @@ root.doc = json()
 
 === `metadata`
 
-Returns the value of a metadata key from the input message, or `null` if the key does not exist. Since values are extracted from the read-only input message they do NOT reflect changes made from within the map, in order to query metadata mutations made within a mapping use the xref:guides:bloblang/about.adoc#metadata[`@` operator]. This function supports extracting metadata from other messages of a batch with the `from` method.
+Returns metadata from the input message by key, or `null` if the key doesn't exist. This reads the original metadata; to access modified metadata during mapping, use the `@` operator instead. Use this to extract message properties like topics, headers, or timestamps.
 
 ==== Parameters
 
@@ -513,10 +644,20 @@ Returns the value of a metadata key from the input message, or `null` if the key
 root.topic = metadata("kafka_topic")
 ```
 
-The key parameter is optional and if omitted the entire metadata contents are returned as an object.
+Retrieve all metadata as an object by omitting the key parameter.
 
 ```coffeescript
 root.all_metadata = metadata()
+```
+
+Copy specific metadata fields to the message body.
+
+```coffeescript
+root.source = {
+  "topic": metadata("kafka_topic"),
+  "partition": metadata("kafka_partition"),
+  "timestamp": metadata("kafka_timestamp_unix")
+}
 ```
 
 === `tracing_id`
@@ -525,7 +666,7 @@ root.all_metadata = metadata()
 ====
 This function is experimental and therefore breaking changes could be made to it outside of major version releases.
 ====
-Provides the message trace id. The returned value will be zeroed if the message does not contain a span.
+Returns the OpenTelemetry trace ID for the message, or an empty string if no tracing span exists. Use this to correlate logs and events with distributed traces.
 
 ==== Examples
 
@@ -534,13 +675,20 @@ Provides the message trace id. The returned value will be zeroed if the message 
 meta trace_id = tracing_id()
 ```
 
+Add trace ID to structured logs.
+
+```coffeescript
+root.log_entry = this
+root.log_entry.trace_id = tracing_id()
+```
+
 === `tracing_span`
 
 [CAUTION]
 ====
 This function is experimental and therefore breaking changes could be made to it outside of major version releases.
 ====
-Provides the message tracing span xref:components:tracers/about.adoc[(created via Open Telemetry APIs)] as an object serialized via text map formatting. The returned value will be `null` if the message does not have a span.
+Returns the OpenTelemetry tracing span attached to the message as a text map object, or `null` if no span exists. Use this to propagate trace context to downstream systems via headers or metadata.
 
 ==== Examples
 
@@ -552,104 +700,106 @@ root.headers.traceparent = tracing_span().traceparent
 # Out: {"headers":{"traceparent":"00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"}}
 ```
 
+Forward all tracing fields to output metadata.
+
+```coffeescript
+meta = tracing_span()
+```
+
 == Environment
 
 === `env`
 
-Returns the value of an environment variable, or `null` if the environment variable does not exist.
+Reads an environment variable and returns its value as a string. Returns `null` if the variable is not set. By default, values are cached for performance.
 
 ==== Parameters
 
-- *`name`* &lt;string&gt; The name of an environment variable.  
-- *`no_cache`* &lt;bool, default `false`&gt; Force the variable lookup to occur for each mapping invocation.  
+- *`name`* &lt;string&gt; The name of the environment variable to read.  
+- *`no_cache`* &lt;bool, default `false`&gt; Disable caching to read the latest value on each invocation.  
 
 ==== Examples
 
 
 ```coffeescript
-root.thing.key = env("key").or("default value")
+root.api_key = env("API_KEY")
 ```
 
 ```coffeescript
-root.thing.key = env(this.thing.key_name)
+root.database_url = env("DB_URL").or("localhost:5432")
 ```
 
-When the name parameter is static this function will only resolve once and yield the same result for each invocation as an optimization, this means that updates to env vars during runtime will not be reflected. You can disable this cache with the optional parameter `no_cache`, which when set to `true` will cause the variable lookup to be performed for each execution of the mapping.
+Use `no_cache` to read updated environment variables during runtime, useful for dynamic configuration changes.
 
 ```coffeescript
-root.thing.key = env(name: "key", no_cache: true)
+root.config = env(name: "DYNAMIC_CONFIG", no_cache: true)
 ```
 
 === `file`
 
-Reads a file and returns its contents. Relative paths are resolved from the directory of the process executing the mapping. In order to read files relative to the mapping file use the newer <<file_rel, `file_rel` function>>
+Reads a file and returns its contents as bytes. Paths are resolved from the process working directory. For paths relative to the mapping file, use `file_rel`. By default, files are cached after first read.
 
 ==== Parameters
 
-- *`path`* &lt;string&gt; The path of the target file.  
-- *`no_cache`* &lt;bool, default `false`&gt; Force the file to be read for each mapping invocation.  
+- *`path`* &lt;string&gt; The absolute or relative path to the file.  
+- *`no_cache`* &lt;bool, default `false`&gt; Disable caching to read the latest file contents on each invocation.  
 
 ==== Examples
 
 
 ```coffeescript
-root.doc = file(env("BENTHOS_TEST_BLOBLANG_FILE")).parse_json()
-
-# In:  {}
-# Out: {"doc":{"foo":"bar"}}
+root.config = file("/etc/config.json").parse_json()
 ```
 
-When the path parameter is static this function will only read the specified file once and yield the same result for each invocation as an optimization, this means that updates to files during runtime will not be reflected. You can disable this cache with the optional parameter `no_cache`, which when set to `true` will cause the file to be read for each execution of the mapping.
+```coffeescript
+root.template = file("./templates/email.html").string()
+```
+
+Use `no_cache` to read updated file contents during runtime, useful for hot-reloading configuration.
 
 ```coffeescript
-root.doc = file(path: env("BENTHOS_TEST_BLOBLANG_FILE"), no_cache: true).parse_json()
-
-# In:  {}
-# Out: {"doc":{"foo":"bar"}}
+root.rules = file(path: "/etc/rules.yaml", no_cache: true).parse_yaml()
 ```
 
 === `file_rel`
 
-Reads a file and returns its contents. Relative paths are resolved from the directory of the mapping.
+Reads a file and returns its contents as bytes. Paths are resolved relative to the mapping file's directory, making it portable across different environments. By default, files are cached after first read.
 
 ==== Parameters
 
-- *`path`* &lt;string&gt; The path of the target file.  
-- *`no_cache`* &lt;bool, default `false`&gt; Force the file to be read for each mapping invocation.  
+- *`path`* &lt;string&gt; The path to the file, relative to the mapping file's directory.  
+- *`no_cache`* &lt;bool, default `false`&gt; Disable caching to read the latest file contents on each invocation.  
 
 ==== Examples
 
 
 ```coffeescript
-root.doc = file_rel(env("BENTHOS_TEST_BLOBLANG_FILE")).parse_json()
-
-# In:  {}
-# Out: {"doc":{"foo":"bar"}}
+root.schema = file_rel("./schemas/user.json").parse_json()
 ```
 
-When the path parameter is static this function will only read the specified file once and yield the same result for each invocation as an optimization, this means that updates to files during runtime will not be reflected. You can disable this cache with the optional parameter `no_cache`, which when set to `true` will cause the file to be read for each execution of the mapping.
+```coffeescript
+root.lookup = file_rel("../data/lookup.csv").parse_csv()
+```
+
+Use `no_cache` to read updated file contents during runtime, useful for reloading data files without restarting.
 
 ```coffeescript
-root.doc = file_rel(path: env("BENTHOS_TEST_BLOBLANG_FILE"), no_cache: true).parse_json()
-
-# In:  {}
-# Out: {"doc":{"foo":"bar"}}
+root.translations = file_rel(path: "./i18n/en.yaml", no_cache: true).parse_yaml()
 ```
 
 === `hostname`
 
-Returns a string matching the hostname of the machine running Benthos.
+Returns the hostname of the machine running Benthos. Useful for identifying which instance processed a message in distributed deployments.
 
 ==== Examples
 
 
 ```coffeescript
-root.thing.host = hostname()
+root.processed_by = hostname()
 ```
 
 === `now`
 
-Returns the current timestamp as a string in RFC 3339 format with the local timezone. Use the method `ts_format` in order to change the format and timezone.
+Returns the current timestamp as an RFC 3339 formatted string with nanosecond precision. Use this to add processing timestamps to messages or measure time between events. Chain with `ts_format` to customize the format or timezone.
 
 ==== Examples
 
@@ -658,13 +808,15 @@ Returns the current timestamp as a string in RFC 3339 format with the local time
 root.received_at = now()
 ```
 
+Format the timestamp in a custom format and timezone.
+
 ```coffeescript
 root.received_at = now().ts_format("Mon Jan 2 15:04:05 -0700 MST 2006", "UTC")
 ```
 
 === `timestamp_unix`
 
-Returns the current unix timestamp in seconds.
+Returns the current Unix timestamp in seconds since epoch. Use this for numeric timestamps compatible with most systems, or as a seed for random number generation.
 
 ==== Examples
 
@@ -673,9 +825,15 @@ Returns the current unix timestamp in seconds.
 root.received_at = timestamp_unix()
 ```
 
+Create a sortable ID combining timestamp with a counter.
+
+```coffeescript
+root.id = "%v-%v".format(timestamp_unix(), batch_index())
+```
+
 === `timestamp_unix_micro`
 
-Returns the current unix timestamp in microseconds.
+Returns the current Unix timestamp in microseconds since epoch. Use this for high-precision timing measurements or when microsecond resolution is required.
 
 ==== Examples
 
@@ -684,9 +842,15 @@ Returns the current unix timestamp in microseconds.
 root.received_at = timestamp_unix_micro()
 ```
 
+Measure elapsed time between events.
+
+```coffeescript
+root.processing_duration_us = timestamp_unix_micro() - this.start_time_us
+```
+
 === `timestamp_unix_milli`
 
-Returns the current unix timestamp in milliseconds.
+Returns the current Unix timestamp in milliseconds since epoch. Use this for millisecond-precision timestamps common in web APIs and JavaScript systems.
 
 ==== Examples
 
@@ -695,15 +859,27 @@ Returns the current unix timestamp in milliseconds.
 root.received_at = timestamp_unix_milli()
 ```
 
+Add processing time metadata.
+
+```coffeescript
+meta processing_time_ms = timestamp_unix_milli()
+```
+
 === `timestamp_unix_nano`
 
-Returns the current unix timestamp in nanoseconds.
+Returns the current Unix timestamp in nanoseconds since epoch. Use this for the highest precision timing or as a unique seed value that changes on every invocation.
 
 ==== Examples
 
 
 ```coffeescript
 root.received_at = timestamp_unix_nano()
+```
+
+Generate unique random values on each mapping.
+
+```coffeescript
+root.random_value = random_int(timestamp_unix_nano())
 ```
 
 == Fake Data Generation

@@ -25,8 +25,15 @@ component_type_dropdown::[]
 
 Creates a server that receives a stream of messages over a TCP, UDP or Unix socket.
 
+
+[tabs]
+======
+Common::
++
+--
+
 ```yml
-# Config fields, showing default values
+# Common config fields, showing default values
 input:
   label: ""
   socket_server:
@@ -42,6 +49,35 @@ input:
     scanner:
       lines: {}
 ```
+
+--
+Advanced::
++
+--
+
+```yml
+# All config fields, showing default values
+input:
+  label: ""
+  socket_server:
+    network: "" # No default (required)
+    address: /tmp/benthos.sock # No default (required)
+    address_cache: "" # No default (optional)
+    tcp:
+      reuse_addr: false
+      reuse_port: false
+    tls:
+      cert_file: "" # No default (optional)
+      key_file: "" # No default (optional)
+      self_signed: false
+      client_auth: "no"
+    auto_replay_nacks: true
+    scanner:
+      lines: {}
+```
+
+--
+======
 
 == Fields
 
@@ -85,6 +121,32 @@ An optional xref:components:caches/about.adoc[`cache`] within which this input s
 *Type*: `string`
 
 Requires version 4.25.0 or newer
+
+=== `tcp`
+
+TCP listener socket configuration.
+
+
+*Type*: `object`
+
+
+=== `tcp.reuse_addr`
+
+Enable SO_REUSEADDR, allowing binding to ports in TIME_WAIT state. Useful for graceful restarts and config reloads where the server needs to rebind to the same port immediately after shutdown.
+
+
+*Type*: `bool`
+
+*Default*: `false`
+
+=== `tcp.reuse_port`
+
+Enable SO_REUSEPORT, allowing multiple sockets to bind to the same port for load balancing across multiple processes/threads.
+
+
+*Type*: `bool`
+
+*Default*: `false`
 
 === `tls`
 
