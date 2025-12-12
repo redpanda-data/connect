@@ -92,6 +92,13 @@ tracer:
         root_cas: ""
         root_cas_file: ""
         client_certs: []
+      oauth2:
+        enabled: false
+        client_key: ""
+        client_secret: ""
+        token_url: ""
+        scopes: []
+        endpoint_params: {}
       oauth:
         enabled: false
         consumer_key: ""
@@ -935,6 +942,86 @@ This field contains sensitive information that usually shouldn't be added to a c
 password: foo
 
 password: ${KEY_PASSWORD}
+```
+
+=== `schema_registry.oauth2`
+
+Allows you to specify open authentication via OAuth version 2 using the client credentials token flow.
+
+
+*Type*: `object`
+
+
+=== `schema_registry.oauth2.enabled`
+
+Whether to use OAuth version 2 in requests.
+
+
+*Type*: `bool`
+
+*Default*: `false`
+
+=== `schema_registry.oauth2.client_key`
+
+A value used to identify the client to the token provider.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `schema_registry.oauth2.client_secret`
+
+A secret used to establish ownership of the client key.
+[CAUTION]
+====
+This field contains sensitive information that usually shouldn't be added to a config directly, read our xref:configuration:secrets.adoc[secrets page for more info].
+====
+
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `schema_registry.oauth2.token_url`
+
+The URL of the token provider.
+
+
+*Type*: `string`
+
+*Default*: `""`
+
+=== `schema_registry.oauth2.scopes`
+
+A list of optional requested permissions.
+
+
+*Type*: `array`
+
+*Default*: `[]`
+Requires version 3.45.0 or newer
+
+=== `schema_registry.oauth2.endpoint_params`
+
+A list of optional endpoint parameters, values should be arrays of strings.
+
+
+*Type*: `object`
+
+*Default*: `{}`
+Requires version 4.21.0 or newer
+
+```yml
+# Examples
+
+endpoint_params:
+  bar:
+    - woof
+  foo:
+    - meow
+    - quack
 ```
 
 === `schema_registry.oauth`
