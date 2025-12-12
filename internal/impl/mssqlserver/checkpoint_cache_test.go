@@ -10,25 +10,21 @@ package mssqlserver
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
+	"github.com/redpanda-data/connect/v4/internal/impl/mssqlserver/mssqlservertest"
 	"github.com/redpanda-data/connect/v4/internal/impl/mssqlserver/replication"
 
-	"github.com/ory/dockertest/v3"
-	"github.com/ory/dockertest/v3/docker"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestIntegration_MicrosoftSQLServerCDC_CheckpointCache(t *testing.T) {
 	integration.CheckSkip(t)
-	connStr, db := mustSetupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
+	connStr, db := mssqlservertest.MustSetupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
 
 	t.Run("cache initialises checkpoint table", func(t *testing.T) {
 		t.Parallel()
@@ -153,59 +149,4 @@ func TestValidateTableName(t *testing.T) {
 			}
 		})
 	}
-}
-
-func mustSetupTestWithMicrosoftSQLServerVersion(t *testing.T, version string) (string, *sql.DB) {
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
-
-	pool.MaxWait = time.Minute
-	// MS SQL Server specific environment variables
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository: "mcr.microsoft.com/mssql/server",
-		Tag:        version,
-		Env: []string{
-			"ACCEPT_EULA=y",
-			"MSSQL_SA_PASSWORD=YourStrong!Passw0rd",
-			"MSSQL_AGENT_ENABLED=true",
-		},
-		Cmd:          []string{},
-		ExposedPorts: []string{"1433:1433"},
-	}, func(config *docker.HostConfig) {
-		// set AutoRemove to true so that stopped container goes away by itself
-		config.AutoRemove = true
-		config.RestartPolicy = docker.RestartPolicy{
-			Name: "no",
-		}
-	})
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
-
-	port := resource.GetPort("1433/tcp")
-	connectionString := fmt.Sprintf("sqlserver://sa:YourStrong!Passw0rd@localhost:%s?database=%s&encrypt=disable", port, "master")
-
-	var db *sql.DB
-	err = pool.Retry(func() error {
-		var err error
-		if db, err = sql.Open("mssql", connectionString); err != nil {
-			return err
-		}
-
-		db.SetMaxOpenConns(10)
-		db.SetMaxIdleConns(5)
-		db.SetConnMaxLifetime(time.Minute * 5)
-
-		if err = db.Ping(); err != nil {
-			return err
-		}
-
-		return nil
-	})
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, db.Close())
-	})
-	return connectionString, db
 }
