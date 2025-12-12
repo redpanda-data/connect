@@ -270,18 +270,29 @@ func querySnapshotTable(
 		return tx.QueryContext(ctx, q)
 	}
 
+	// Build lexicographic comparison for composite keys (SQL Server doesn't support tuple comparisons)
+	// For pk [col1, col2, col3], generates:
+	// WHERE (col1 > ?) OR (col1 = ? AND col2 > ?) OR (col1 = ? AND col2 = ? AND col3 > ?)
 	var (
 		lastSeenPkVals []any
-		placeholders   []string
+		conditions     []string
 	)
-	for _, pkCol := range lastSeenPkVal {
-		lastSeenPkVals = append(lastSeenPkVals, pkCol)
-		placeholders = append(placeholders, "?")
+
+	for i := 0; i < len(pk); i++ {
+		var condParts []string
+		// Add equality conditions for all previous columns
+		for j := 0; j < i; j++ {
+			condParts = append(condParts, fmt.Sprintf("%s = ?", pk[j]))
+			lastSeenPkVals = append(lastSeenPkVals, lastSeenPkVal[pk[j]])
+		}
+		// Add greater-than condition for current column
+		condParts = append(condParts, fmt.Sprintf("%s > ?", pk[i]))
+		lastSeenPkVals = append(lastSeenPkVals, lastSeenPkVal[pk[i]])
+
+		conditions = append(conditions, "("+strings.Join(condParts, " AND ")+")")
 	}
 
-	ph1 := strings.Join(pk, ", ")
-	ph2 := strings.Join(placeholders, ", ")
-	res := fmt.Sprintf("WHERE (%s) > (%s)", ph1, ph2)
+	res := "WHERE " + strings.Join(conditions, " OR ")
 	snapshotQueryParts = append(snapshotQueryParts, res)
 	snapshotQueryParts = append(snapshotQueryParts, buildOrderByClause(pk))
 	q := strings.Join(snapshotQueryParts, " ")
