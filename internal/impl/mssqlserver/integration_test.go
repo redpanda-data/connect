@@ -12,14 +12,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	_ "github.com/microsoft/go-mssqldb"
-	"github.com/ory/dockertest/v3"
-	"github.com/ory/dockertest/v3/docker"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -28,6 +25,7 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 
+	"github.com/redpanda-data/connect/v4/internal/impl/mssqlserver/mssqlservertest"
 	"github.com/redpanda-data/connect/v4/internal/license"
 )
 
@@ -38,10 +36,10 @@ func TestIntegration_MicrosoftSQLServerCDC_SnapshotAndStreaming(t *testing.T) {
 		t.Parallel()
 
 		// Create tables
-		connStr, db := setupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
-		require.NoError(t, db.createTableWithCDCEnabledIfNotExists(t.Context(), "test.foo", "CREATE TABLE test.foo (id INT IDENTITY(1,1) PRIMARY KEY);"))
-		require.NoError(t, db.createTableWithCDCEnabledIfNotExists(t.Context(), "dbo.foo", "CREATE TABLE dbo.foo (id INT IDENTITY(1,1) PRIMARY KEY);"))
-		require.NoError(t, db.createTableWithCDCEnabledIfNotExists(t.Context(), "dbo.bar", "CREATE TABLE dbo.bar (id INT IDENTITY(1,1) PRIMARY KEY);"))
+		connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
+		require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "test.foo", "CREATE TABLE test.foo (id INT IDENTITY(1,1) PRIMARY KEY);"))
+		require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.foo", "CREATE TABLE dbo.foo (id INT IDENTITY(1,1) PRIMARY KEY);"))
+		require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.bar", "CREATE TABLE dbo.bar (id INT IDENTITY(1,1) PRIMARY KEY);"))
 
 		// Insert 3000 rows across tables for initial snapshot streaming
 		want := 3000
@@ -136,10 +134,10 @@ microsoft_sql_server_cdc:
 		t.Parallel()
 
 		// Create tables
-		connStr, db := setupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
-		require.NoError(t, db.createTableWithCDCEnabledIfNotExists(t.Context(), "test.foo", "CREATE TABLE test.foo (id INT IDENTITY(1,1) PRIMARY KEY);"))
-		require.NoError(t, db.createTableWithCDCEnabledIfNotExists(t.Context(), "dbo.foo", "CREATE TABLE dbo.foo (id INT IDENTITY(1,1) PRIMARY KEY);"))
-		require.NoError(t, db.createTableWithCDCEnabledIfNotExists(t.Context(), "dbo.bar", "CREATE TABLE dbo.bar (id INT IDENTITY(1,1) PRIMARY KEY);"))
+		connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
+		require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "test.foo", "CREATE TABLE test.foo (id INT IDENTITY(1,1) PRIMARY KEY);"))
+		require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.foo", "CREATE TABLE dbo.foo (id INT IDENTITY(1,1) PRIMARY KEY);"))
+		require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.bar", "CREATE TABLE dbo.bar (id INT IDENTITY(1,1) PRIMARY KEY);"))
 
 		// Insert 3000 rows across tables for initial snapshot streaming
 		want := 3000
@@ -242,10 +240,10 @@ func TestIntegration_MicrosoftSQLServerCDC_ConcurrentSnapshot(t *testing.T) {
 	t.Parallel()
 
 	// Create tables
-	connStr, db := setupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
-	require.NoError(t, db.createTableWithCDCEnabledIfNotExists(t.Context(), "test.foo", "CREATE TABLE test.foo (id INT IDENTITY(1,1) PRIMARY KEY);"))
-	require.NoError(t, db.createTableWithCDCEnabledIfNotExists(t.Context(), "dbo.foo", "CREATE TABLE dbo.foo (id INT IDENTITY(1,1) PRIMARY KEY);"))
-	require.NoError(t, db.createTableWithCDCEnabledIfNotExists(t.Context(), "dbo.bar", "CREATE TABLE dbo.bar (id INT IDENTITY(1,1) PRIMARY KEY);"))
+	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
+	require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "test.foo", "CREATE TABLE test.foo (id INT IDENTITY(1,1) PRIMARY KEY);"))
+	require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.foo", "CREATE TABLE dbo.foo (id INT IDENTITY(1,1) PRIMARY KEY);"))
+	require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.bar", "CREATE TABLE dbo.bar (id INT IDENTITY(1,1) PRIMARY KEY);"))
 
 	// Insert 3000 rows across tables for initial snapshot streaming
 	want := 3000
@@ -318,8 +316,8 @@ func TestIntegration_MicrosoftSQLServerCDC_ResumesFromCheckpoint(t *testing.T) {
 	t.Parallel()
 
 	// Create table
-	connStr, db := setupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
-	require.NoError(t, db.createTableWithCDCEnabledIfNotExists(t.Context(), "test.foo", "CREATE TABLE test.foo (id INT IDENTITY(1,1) PRIMARY KEY);"))
+	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
+	require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "test.foo", "CREATE TABLE test.foo (id INT IDENTITY(1,1) PRIMARY KEY);"))
 
 	cfg := `
 microsoft_sql_server_cdc:
@@ -399,9 +397,9 @@ func TestIntegration_MicrosoftSQLServerCDC_OrderingOfIterator(t *testing.T) {
 	t.Parallel()
 
 	// Create table
-	connStr, db := setupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
-	require.NoError(t, db.createTableWithCDCEnabledIfNotExists(t.Context(), "dbo.foo", `CREATE TABLE dbo.foo (a INT PRIMARY KEY);`))
-	require.NoError(t, db.createTableWithCDCEnabledIfNotExists(t.Context(), "boo.bar", `CREATE TABLE boo.bar (b INT PRIMARY KEY);`))
+	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
+	require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.foo", `CREATE TABLE dbo.foo (a INT PRIMARY KEY);`))
+	require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "boo.bar", `CREATE TABLE boo.bar (b INT PRIMARY KEY);`))
 
 	// Data across change tables will have the same LSN but unique
 	// command IDs (and in rare cases sequence values that are harder to test)
@@ -465,7 +463,7 @@ func TestIntegration_MicrosoftSQLServerCDC_AllTypes(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
-	connStr, db := setupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
+	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
 	q := `
 	CREATE TABLE dbo.all_data_types (
 		-- Numeric Data Types
@@ -506,7 +504,7 @@ func TestIntegration_MicrosoftSQLServerCDC_AllTypes(t *testing.T) {
 		xml_col           XML,
 		json_col          NVARCHAR(MAX)                -- SQL Server has no native JSON, stored as NVARCHAR
 	);`
-	err := db.createTableWithCDCEnabledIfNotExists(t.Context(), "dbo.all_data_types", q)
+	err := db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.all_data_types", q)
 	require.NoError(t, err)
 
 	// insert min
@@ -737,8 +735,8 @@ func Test_ManualTesting_AddTestDataWithUniqueLSN(t *testing.T) {
 
 	// --- create tables and enable CDC on them
 	t.Log("Creating test tables 'test.users'...")
-	testDB := &testDB{db, t}
-	err = testDB.createTableWithCDCEnabledIfNotExists(t.Context(), "test.users", `
+	testDB := &mssqlservertest.TestDB{DB: db, T: t}
+	err = testDB.CreateTableWithCDCEnabledIfNotExists(t.Context(), "test.users", `
 		CREATE TABLE test.users (
 			id INT IDENTITY(1,1) PRIMARY KEY,
 			name NVARCHAR(100) NOT NULL,
@@ -755,7 +753,7 @@ func Test_ManualTesting_AddTestDataWithUniqueLSN(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Log("Creating test tables 'dbo.products'...")
-	err = testDB.createTableWithCDCEnabledIfNotExists(t.Context(), "dbo.products", `
+	err = testDB.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.products", `
 	CREATE TABLE dbo.products (
 		id INT IDENTITY(1,1) PRIMARY KEY,
 		name NVARCHAR(100),
@@ -765,7 +763,7 @@ func Test_ManualTesting_AddTestDataWithUniqueLSN(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Log("Creating test tables 'dbo.cart'...")
-	err = testDB.createTableWithCDCEnabledIfNotExists(t.Context(), "dbo.cart", `
+	err = testDB.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.cart", `
 		CREATE TABLE dbo.cart (
 			id INT IDENTITY(1,1) PRIMARY KEY,
 			name NVARCHAR(100) NOT NULL,
@@ -857,163 +855,4 @@ func Test_ManualTesting_AddTestDataWithUniqueLSN(t *testing.T) {
 	FROM Numbers;
 	`)
 	require.NoError(t, err)
-}
-
-type testDB struct {
-	*sql.DB
-
-	t *testing.T
-}
-
-func (db *testDB) MustExec(query string, args ...any) {
-	_, err := db.Exec(query, args...)
-	require.NoError(db.t, err)
-}
-
-func (db *testDB) createTableWithCDCEnabledIfNotExists(ctx context.Context, fullTableName, createTableQuery string, _ ...any) error {
-	// default to dbo if not found
-	table := strings.Split(fullTableName, ".")
-	if len(table) != 2 {
-		table = []string{"dbo", table[0]}
-	}
-	schema := table[0]
-	tableName := table[1]
-
-	q := `
-	IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = '%s')
-	BEGIN
-		EXEC('CREATE SCHEMA %s');
-	END
-	IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = 'rpcn')
-	BEGIN
-		EXEC('CREATE SCHEMA rpcn');
-	END`
-	if _, err := db.Exec(fmt.Sprintf(q, schema, schema)); err != nil {
-		return err
-	}
-
-	enableSnapshot := `ALTER DATABASE testdb SET ALLOW_SNAPSHOT_ISOLATION ON;`
-	enableCDC := fmt.Sprintf(`
-		EXEC sys.sp_cdc_enable_table
-		@source_schema = '%s',
-		@source_name   = '%s',
-		@role_name     = NULL;`, schema, tableName)
-	q = fmt.Sprintf(`
-		IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = '%s' AND schema_id = SCHEMA_ID('%s'))
-		BEGIN
-			%s
-			%s
-			%s
-		END;`, tableName, schema, createTableQuery, enableCDC, enableSnapshot)
-	if _, err := db.Exec(q); err != nil {
-		return err
-	}
-
-	// wait for CDC table to be ready, this avoids time.sleeps
-	for {
-		var minLSN, maxLSN []byte
-		// table isn't ready yet
-		if err := db.QueryRowContext(ctx, "SELECT sys.fn_cdc_get_min_lsn(?)", fullTableName).Scan(&minLSN); err != nil {
-			return err
-		}
-		// cdc agent still preparing
-		if err := db.QueryRowContext(ctx, "SELECT sys.fn_cdc_get_max_lsn()").Scan(&maxLSN); err != nil {
-			return err
-		}
-		if minLSN != nil && maxLSN != nil {
-			break
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(time.Second):
-		}
-	}
-	return nil
-}
-
-func setupTestWithMicrosoftSQLServerVersion(t *testing.T, version string) (string, *testDB) {
-	pool, err := dockertest.NewPool("")
-	require.NoError(t, err)
-
-	pool.MaxWait = time.Minute
-	// MS SQL Server specific environment variables
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository: "mcr.microsoft.com/mssql/server",
-		Tag:        version,
-		Env: []string{
-			"ACCEPT_EULA=y",
-			"MSSQL_SA_PASSWORD=YourStrong!Passw0rd",
-			"MSSQL_AGENT_ENABLED=true",
-		},
-		Cmd:          []string{},
-		ExposedPorts: []string{"1433:1433"},
-	}, func(config *docker.HostConfig) {
-		// set AutoRemove to true so that stopped container goes away by itself
-		config.AutoRemove = true
-		config.RestartPolicy = docker.RestartPolicy{
-			Name: "no",
-		}
-	})
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, pool.Purge(resource))
-	})
-
-	port := resource.GetPort("1433/tcp")
-	connectionString := fmt.Sprintf("sqlserver://sa:YourStrong!Passw0rd@localhost:%s?database=%s&encrypt=disable", port, "master")
-
-	var db *sql.DB
-	err = pool.Retry(func() error {
-		var err error
-		db, err = sql.Open("mssql", connectionString)
-		if err != nil {
-			return err
-		}
-
-		db.SetMaxOpenConns(10)
-		db.SetMaxIdleConns(5)
-		db.SetConnMaxLifetime(time.Minute * 5)
-
-		if err = db.Ping(); err != nil {
-			return err
-		}
-
-		_, err = db.Exec(`
-			IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = N'testdb')
-			BEGIN
-				CREATE DATABASE testdb;
-			END;`)
-		if err != nil {
-			return err
-		}
-		db.Close()
-
-		// switch from using master to testdb as it avoids lots of permission issues with enabling CDC on tables
-		connectionString = fmt.Sprintf("sqlserver://sa:YourStrong!Passw0rd@localhost:%s?database=%s&encrypt=disable", port, "testdb")
-		db, err = sql.Open("mssql", connectionString)
-		if err != nil {
-			return err
-		}
-
-		db.SetMaxOpenConns(10)
-		db.SetMaxIdleConns(5)
-		db.SetConnMaxLifetime(time.Minute * 5)
-
-		if err = db.Ping(); err != nil {
-			return err
-		}
-
-		// enable CDC on database
-		if _, err = db.Exec("EXEC sys.sp_cdc_enable_db;"); err != nil {
-			return err
-		}
-
-		return nil
-	})
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		assert.NoError(t, db.Close())
-	})
-	return connectionString, &testDB{db, t}
 }
