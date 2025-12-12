@@ -460,6 +460,23 @@ func (w *FranzWriter) messageBatchToFranzRecords(batch service.MessageBatch) ([]
 	return records, nil
 }
 
+// ConnectionTest attempts to test the connection configuration of this output
+// without actually consuming data. The connection, if successful, is then
+// closed.
+func (w *FranzWriter) ConnectionTest(ctx context.Context) service.ConnectionTestResults {
+	if err := w.hooks.accessClientFn(ctx, func(details *FranzSharedClientInfo) error {
+		return details.Client.Ping(ctx)
+	}); err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+
+	if err := w.hooks.yieldClientFn(ctx); err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+
+	return service.ConnectionTestSucceeded().AsList()
+}
+
 // Connect to the target seed brokers.
 func (w *FranzWriter) Connect(ctx context.Context) error {
 	return w.hooks.accessClientFn(ctx, func(_ *FranzSharedClientInfo) error {
