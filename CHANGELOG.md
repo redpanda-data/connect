@@ -9,10 +9,15 @@ All notable changes to this project will be documented in this file.
 
 - The `mcp-server` command exposes MCP metrics.
 - Couchbase: Add TTL (expiry) support. @sapk
+- CLI: Add support for listing bloblang functions and methods with jsonschema. (@mmatczuk)
+- CLI: Add input field to `blobl` command. (@mmatczuk)
+- socket_server: Add new listener options. (@alextreichler)
 
 ### Fixed
 
 - The `mcp-server lint` subcommand now exits with status 1 when linting errors are detected.
+- CLI: Fix data race in `blobl` command where program exits before printing output. (@mmatczuk)
+- sequence: Fix input hanging when input fails. (@eduardodbr)
 
 ## 4.72.0 - 2025-11-28
 
