@@ -403,6 +403,28 @@ func (c *partitionState) tallyActivePartitions(pausedPartitions map[string][]int
 
 //------------------------------------------------------------------------------
 
+// ConnectionTest attempts to test the connection configuration of this input
+// without actually consuming data. The connection, if successful, is then
+// closed.
+func (f *FranzReaderOrdered) ConnectionTest(ctx context.Context) service.ConnectionTestResults {
+	clientOpts, err := f.clientOpts()
+	if err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+
+	tmpClient, err := NewFranzClient(ctx, clientOpts...)
+	if err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+	defer tmpClient.Close()
+
+	if err := tmpClient.Ping(ctx); err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+
+	return service.ConnectionTestSucceeded().AsList()
+}
+
 // Connect to the kafka seed brokers.
 func (f *FranzReaderOrdered) Connect(ctx context.Context) error {
 	if f.partState != nil {
