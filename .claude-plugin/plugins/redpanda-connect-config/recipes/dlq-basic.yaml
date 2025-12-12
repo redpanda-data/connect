@@ -1,0 +1,105 @@
+# Dead Letter Queue - Basic Pattern
+# Pattern: Error Handling - Dead Letter Queue (DLQ)
+# Difficulty: Basic
+
+# --- Input Configuration ---
+input:
+  stdin:
+    scanner:
+      lines: {}
+    auto_replay_nacks: true  # Retry failed messages
+
+# --- Processing Pipeline ---
+pipeline:
+  processors:
+    # Validate JSON format
+    - label: validate_json
+      mapping: |
+        # Try to parse message as JSON
+        let content = content().string()
+        let test_json = $content.parse_json(use_number: true).catch(this)
+
+        # Check if parsing failed
+        if ($test_json.is_error != null) {
+          # Invalid JSON - set error metadata
+          meta json_error = true
+          meta error_text = "Invalid JSON: %s".format($content)
+          meta origin_value = $content
+        } else {
+          # Valid JSON - pass through
+          root.value = this
+          meta json_error = false
+        }
+
+    # Log invalid messages for monitoring
+    - label: log_errors
+      switch:
+        - check: "@json_error"
+          processors:
+            - log:
+                level: WARN
+                message: "Invalid JSON detected: ${!meta(\"error_text\")}"
+
+    # Track error count in cache
+    - label: track_error_count
+      switch:
+        - check: "@json_error"
+          processors:
+            - branch:
+                processors:
+                  # Get current error count from cache
+                  - cache:
+                      resource: error_cache
+                      operator: get
+                      key: json_error_count
+
+                  # Increment counter (cache returns as string, parse to int)
+                  - mapping: |
+                      root.json_error_count = this.string().parse_json().catch(0) + 1
+
+                  # Store updated count back to cache
+                  - cache:
+                      resource: error_cache
+                      operator: set
+                      key: json_error_count
+                      value: ${!json("json_error_count")}
+
+    # Prepare error message for DLQ
+    - label: format_dlq_message
+      switch:
+        - check: "@json_error"
+          processors:
+            - mapping: |
+                root = {
+                  "error": meta("error_text"),
+                  "original_input": meta("origin_value"),
+                  "timestamp": now(),
+                  "error_count": this.json_error_count
+                }
+
+# --- Output Configuration ---
+output:
+  # Route based on validation result
+  switch:
+    cases:
+      # Valid JSON goes to stdout (or your primary destination)
+      - check: "@json_error == false"
+        output:
+          label: "valid_messages"
+          stdout: {}
+
+      # Invalid JSON goes to DLQ file
+      - check: "@json_error == true"
+        output:
+          label: "dlq_messages"
+          file:
+            path: ./json_error_dlq.txt
+            codec: lines  # One message per line
+
+# --- Cache Resources ---
+cache_resources:
+  - label: error_cache
+    memory:
+      compaction_interval: ''  # Never expire
+      init_values:
+        json_error_count: 0  # Start at zero

@@ -1,0 +1,561 @@
+[
+  {
+    "id": "uppercase-field",
+    "description": "uppercase the name field",
+    "sample_input": {
+      "name": "alice",
+      "age": 30
+    },
+    "expected_output": {
+      "name": "ALICE",
+      "age": 30
+    },
+    "validation_criteria": [
+      "Script passes rpk connect blobl validation",
+      "Handles null values gracefully",
+      "Preserves other fields unchanged"
+    ]
+  },
+  {
+    "id": "timestamp-conversion",
+    "description": "convert timestamp field from epoch to ISO format",
+    "sample_input": {
+      "timestamp": 1234567890,
+      "data": "test"
+    },
+    "expected_output": {
+      "timestamp": "2009-02-13T23:31:30Z",
+      "data": "test"
+    },
+    "validation_criteria": [
+      "Uses ts_unix() and ts_format() functions",
+      "Produces valid ISO 8601 format",
+      "Handles invalid timestamps gracefully"
+    ]
+  },
+  {
+    "id": "array-filtering",
+    "description": "filter array elements where age > 18",
+    "sample_input": {
+      "users": [
+        {"name": "alice", "age": 25},
+        {"name": "bob", "age": 15},
+        {"name": "charlie", "age": 30}
+      ]
+    },
+    "expected_output": {
+      "users": [
+        {"name": "alice", "age": 25},
+        {"name": "charlie", "age": 30}
+      ]
+    },
+    "validation_criteria": [
+      "Uses filter() method correctly",
+      "Preserves array structure",
+      "All results satisfy the condition"
+    ]
+  },
+  {
+    "id": "nested-field-extraction",
+    "description": "extract user.profile.email and flatten to top level",
+    "sample_input": {
+      "user": {
+        "profile": {
+          "email": "test@example.com"
+        }
+      },
+      "id": 1
+    },
+    "expected_output": {
+      "id": 1,
+      "email": "test@example.com"
+    },
+    "validation_criteria": [
+      "Correctly accesses nested fields",
+      "Handles missing fields with catch()",
+      "Flattens structure appropriately"
+    ]
+  },
+  {
+    "id": "uuid-generation",
+    "description": "add a unique ID field using UUID",
+    "sample_input": {
+      "data": "test"
+    },
+    "expected_output": {
+      "data": "test",
+      "id": "<uuid>"
+    },
+    "validation_criteria": [
+      "Uses uuid_v4() function",
+      "Generated UUID is valid format",
+      "Preserves existing fields"
+    ]
+  },
+  {
+    "id": "json-parsing",
+    "description": "parse JSON string in message field to object",
+    "sample_input": {
+      "message": "{\"key\": \"value\", \"count\": 42}",
+      "metadata": "info"
+    },
+    "expected_output": {
+      "message": {
+        "key": "value",
+        "count": 42
+      },
+      "metadata": "info"
+    },
+    "validation_criteria": [
+      "Uses parse_json() function",
+      "Handles invalid JSON gracefully",
+      "Preserves other fields"
+    ]
+  },
+  {
+    "id": "conditional-transform",
+    "description": "if status is 'active' set priority to 'high', otherwise 'low'",
+    "sample_input": {
+      "name": "task1",
+      "status": "active"
+    },
+    "expected_output": {
+      "name": "task1",
+      "status": "active",
+      "priority": "high"
+    },
+    "validation_criteria": [
+      "Uses conditional logic correctly",
+      "Handles both conditions",
+      "Sets appropriate priority values"
+    ]
+  },
+  {
+    "id": "string-manipulation",
+    "description": "remove whitespace from name and convert to lowercase",
+    "sample_input": {
+      "name": "  John Doe  ",
+      "id": 123
+    },
+    "expected_output": {
+      "name": "john doe",
+      "id": 123
+    },
+    "validation_criteria": [
+      "Uses trim() and lowercase() functions",
+      "Handles extra whitespace",
+      "Preserves non-string fields"
+    ]
+  },
+  {
+    "id": "default-values",
+    "description": "set country to 'US' if not provided",
+    "sample_input": {
+      "name": "Alice",
+      "age": 30
+    },
+    "expected_output": {
+      "name": "Alice",
+      "age": 30,
+      "country": "US"
+    },
+    "validation_criteria": [
+      "Uses catch() or conditional for defaults",
+      "Doesn't override existing values",
+      "Adds field when missing"
+    ]
+  },
+  {
+    "id": "array-mapping",
+    "description": "extract just the names from the users array",
+    "sample_input": {
+      "users": [
+        {"name": "alice", "age": 25},
+        {"name": "bob", "age": 30}
+      ]
+    },
+    "expected_output": {
+      "names": ["alice", "bob"]
+    },
+    "validation_criteria": [
+      "Uses map() method correctly",
+      "Extracts correct field",
+      "Returns array of strings"
+    ],
+    "difficulty": "basic"
+  },
+  {
+    "id": "extract-email-domain",
+    "description": "extract domain from email field",
+    "sample_input": {
+      "email": "user@example.com",
+      "id": 123
+    },
+    "expected_output": {
+      "email": "user@example.com",
+      "id": 123,
+      "domain": "example.com"
+    },
+    "validation_criteria": [
+      "Uses split('@') or regex",
+      "Handles missing @ symbol",
+      "Preserves original fields"
+    ],
+    "difficulty": "basic"
+  },
+  {
+    "id": "mask-credit-card",
+    "description": "mask credit card showing only last 4 digits",
+    "sample_input": {
+      "card": "4532123456789012",
+      "name": "Alice"
+    },
+    "expected_output": {
+      "card": "************9012",
+      "name": "Alice"
+    },
+    "validation_criteria": [
+      "Uses string slicing or regex",
+      "Preserves last 4 digits",
+      "Masks first 12 digits"
+    ],
+    "difficulty": "intermediate"
+  },
+  {
+    "id": "extract-urls",
+    "description": "extract all URLs from text",
+    "sample_input": {
+      "text": "Check https://example.com and http://test.org",
+      "id": 1
+    },
+    "expected_output": {
+      "text": "Check https://example.com and http://test.org",
+      "id": 1,
+      "urls": ["https://example.com", "http://test.org"]
+    },
+    "validation_criteria": [
+      "Uses re_find_all with URL regex",
+      "Captures both http and https",
+      "Returns array of URLs"
+    ],
+    "difficulty": "intermediate"
+  },
+  {
+    "id": "generate-slug",
+    "description": "generate slug from title (lowercase, hyphens)",
+    "sample_input": {
+      "title": "Hello World Example!",
+      "id": 1
+    },
+    "expected_output": {
+      "title": "Hello World Example!",
+      "id": 1,
+      "slug": "hello-world-example"
+    },
+    "validation_criteria": [
+      "Converts to lowercase",
+      "Replaces spaces with hyphens",
+      "Removes special characters"
+    ],
+    "difficulty": "intermediate"
+  },
+  {
+    "id": "calculate-age",
+    "description": "calculate age from birthdate",
+    "sample_input": {
+      "birthdate": "1990-05-15",
+      "name": "Alice"
+    },
+    "expected_output": {
+      "birthdate": "1990-05-15",
+      "name": "Alice",
+      "age": 34
+    },
+    "validation_criteria": [
+      "Calculates years from birthdate to now",
+      "Uses timestamp math",
+      "Returns integer age"
+    ],
+    "difficulty": "intermediate"
+  },
+  {
+    "id": "round-timestamp-15min",
+    "description": "round to nearest 15 minute interval",
+    "sample_input": {
+      "timestamp": "2024-01-15T10:37:00Z",
+      "id": 1
+    },
+    "expected_output": {
+      "timestamp": "2024-01-15T10:45:00Z",
+      "id": 1
+    },
+    "validation_criteria": [
+      "Rounds to :00, :15, :30, :45",
+      "Uses timestamp rounding",
+      "Produces valid ISO format"
+    ],
+    "difficulty": "advanced"
+  },
+  {
+    "id": "sum-array",
+    "description": "sum array of numeric values",
+    "sample_input": {
+      "amounts": [10.5, 20.3, 15.2],
+      "id": 1
+    },
+    "expected_output": {
+      "amounts": [10.5, 20.3, 15.2],
+      "id": 1,
+      "total": 46.0
+    },
+    "validation_criteria": [
+      "Uses fold or sum",
+      "Handles decimal values",
+      "Returns numeric result"
+    ],
+    "difficulty": "basic"
+  },
+  {
+    "id": "deduplicate-array",
+    "description": "deduplicate array preserving order",
+    "sample_input": {
+      "items": ["apple", "banana", "apple", "cherry"],
+      "id": 1
+    },
+    "expected_output": {
+      "items": ["apple", "banana", "cherry"],
+      "id": 1
+    },
+    "validation_criteria": [
+      "Removes duplicates",
+      "Preserves first occurrence order",
+      "Returns array"
+    ],
+    "difficulty": "intermediate"
+  },
+  {
+    "id": "flatten-nested-array",
+    "description": "flatten nested array of arrays",
+    "sample_input": {
+      "data": [[1, 2], [3, 4], [5, 6]],
+      "id": 1
+    },
+    "expected_output": {
+      "data": [1, 2, 3, 4, 5, 6],
+      "id": 1
+    },
+    "validation_criteria": [
+      "Uses flatten()",
+      "Produces single-level array",
+      "Preserves order"
+    ],
+    "difficulty": "basic"
+  },
+  {
+    "id": "group-by-category",
+    "description": "group objects by category field",
+    "sample_input": {
+      "items": [
+        {"cat": "A", "val": 1},
+        {"cat": "B", "val": 2},
+        {"cat": "A", "val": 3}
+      ]
+    },
+    "expected_output": {
+      "grouped": {
+        "A": [1, 3],
+        "B": [2]
+      }
+    },
+    "validation_criteria": [
+      "Uses fold with object building",
+      "Groups by category",
+      "Aggregates values correctly"
+    ],
+    "difficulty": "advanced"
+  },
+  {
+    "id": "parse-nginx-log",
+    "description": "parse nginx access log to structured JSON",
+    "sample_input": {
+      "log": "192.168.1.1 - - [15/Jan/2024:10:30:00 +0000] \"GET /api/users HTTP/1.1\" 200 1234"
+    },
+    "expected_output": {
+      "ip": "192.168.1.1",
+      "timestamp": "15/Jan/2024:10:30:00 +0000",
+      "method": "GET",
+      "path": "/api/users",
+      "status": 200,
+      "size": 1234
+    },
+    "validation_criteria": [
+      "Extracts IP address",
+      "Parses timestamp",
+      "Extracts method, path, status, size",
+      "Uses regex or grok patterns"
+    ],
+    "difficulty": "advanced"
+  },
+  {
+    "id": "calculate-order-total",
+    "description": "normalize e-commerce order (calculate totals, tax)",
+    "sample_input": {
+      "items": [
+        {"price": 10.00, "qty": 2},
+        {"price": 5.50, "qty": 1}
+      ],
+      "tax_rate": 0.08
+    },
+    "expected_output": {
+      "items": [
+        {"price": 10.00, "qty": 2},
+        {"price": 5.50, "qty": 1}
+      ],
+      "tax_rate": 0.08,
+      "subtotal": 25.50,
+      "tax": 2.04,
+      "total": 27.54
+    },
+    "validation_criteria": [
+      "Calculates subtotal from items",
+      "Applies tax rate",
+      "Computes final total",
+      "Handles decimal precision"
+    ],
+    "difficulty": "intermediate"
+  },
+  {
+    "id": "cdc-event-transform",
+    "description": "CDC event transformation (before/after diff)",
+    "sample_input": {
+      "op": "UPDATE",
+      "before": {"id": 1, "status": "pending"},
+      "after": {"id": 1, "status": "completed"}
+    },
+    "expected_output": {
+      "op": "UPDATE",
+      "id": 1,
+      "changes": {
+        "status": {
+          "old": "pending",
+          "new": "completed"
+        }
+      }
+    },
+    "validation_criteria": [
+      "Extracts operation type",
+      "Identifies changed fields",
+      "Shows before/after values"
+    ],
+    "difficulty": "advanced"
+  },
+  {
+    "id": "anonymize-pii",
+    "description": "anonymize PII (hash email, mask phone)",
+    "sample_input": {
+      "email": "alice@example.com",
+      "phone": "555-123-4567",
+      "id": 1
+    },
+    "expected_output": {
+      "email_hash": "<hash>",
+      "phone": "XXX-XXX-4567",
+      "id": 1
+    },
+    "validation_criteria": [
+      "Hashes email (sha256 or similar)",
+      "Masks phone number",
+      "Removes original PII"
+    ],
+    "difficulty": "advanced"
+  },
+  {
+    "id": "handle-deeply-nested",
+    "description": "handle deeply nested optional fields",
+    "sample_input": {
+      "a": {"b": null},
+      "id": 1
+    },
+    "expected_output": {
+      "value": null,
+      "id": 1
+    },
+    "validation_criteria": [
+      "Safely accesses a.b.c.d with catch chains",
+      "Handles null values",
+      "Doesn't throw errors"
+    ],
+    "difficulty": "edge_case"
+  },
+  {
+    "id": "parse-json-with-fallback",
+    "description": "parse JSON with fallback to raw string",
+    "sample_input": {
+      "payload": "{\"broken json}",
+      "id": 1
+    },
+    "expected_output": {
+      "payload": "{\"broken json}",
+      "id": 1,
+      "parsed": false
+    },
+    "validation_criteria": [
+      "Tries parse_json with catch",
+      "Falls back to original on error",
+      "Indicates parse failure"
+    ],
+    "difficulty": "edge_case"
+  },
+  {
+    "id": "divide-with-zero-check",
+    "description": "divide with zero-check",
+    "sample_input": {
+      "numerator": 10,
+      "denominator": 0
+    },
+    "expected_output": {
+      "numerator": 10,
+      "denominator": 0,
+      "result": null
+    },
+    "validation_criteria": [
+      "Checks for zero denominator",
+      "Handles gracefully",
+      "Returns null or error indicator"
+    ],
+    "difficulty": "edge_case"
+  },
+  {
+    "id": "mixed-type-array",
+    "description": "process array with mixed types",
+    "sample_input": {
+      "items": [1, "two", 3, null, 5]
+    },
+    "expected_output": {
+      "numbers": [1, 3, 5],
+      "strings": ["two"],
+      "nulls": 1
+    },
+    "validation_criteria": [
+      "Handles type checking with match",
+      "Separates by type",
+      "Counts nulls"
+    ],
+    "difficulty": "edge_case"
+  },
+  {
+    "id": "hallucination-check",
+    "description": "convert user data using the superprocess function",
+    "sample_input": {
+      "user": "alice"
+    },
+    "expected_output": null,
+    "validation_criteria": [
+      "Does not hallucinate 'superprocess' function",
+      "Explains function doesn't exist",
+      "Suggests alternative approach"
+    ],
+    "difficulty": "edge_case",
+    "should_fail": true
+  }
+]

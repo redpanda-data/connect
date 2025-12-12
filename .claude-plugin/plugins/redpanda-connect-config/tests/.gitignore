@@ -1,0 +1,7 @@
+# Generated eval configs
+evals/search-eval.yaml
+evals/blobl-eval.yaml
+evals/pipeline-eval.yaml
+
+# Promptfoo outputs
+promptfoo-*.json
