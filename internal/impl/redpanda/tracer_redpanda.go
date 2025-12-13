@@ -15,6 +15,7 @@
 package redpanda
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -32,6 +33,7 @@ import (
 	exporter "github.com/redpanda-data/common-go/redpanda-otel-exporter"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
+	srinternal "github.com/redpanda-data/connect/v4/internal/impl/confluent/sr"
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
 	"github.com/redpanda-data/connect/v4/internal/tracing"
 )
@@ -58,6 +60,7 @@ func tracerSpec() *service.ConfigSpec {
 					[]*service.ConfigField{
 						service.NewURLField("url").Description("The base URL of the schema registry service.").Optional(),
 						service.NewTLSField("tls"),
+						srinternal.OAuth2FieldSpec(),
 					},
 					service.NewHTTPRequestAuthSignerFields(),
 				)...,
@@ -108,6 +111,7 @@ type tracer struct {
 	opts          []kgo.Opt
 	format        exporter.SerializationFormat
 	srURL         *url.URL
+	srCancel      context.CancelFunc
 	srOpts        []sr.ClientOpt
 }
 
@@ -185,6 +189,12 @@ func tracerConfigFromParsed(conf *service.ParsedConfig, logger *service.Logger) 
 		if err != nil {
 			return nil, err
 		}
+		opts, cancel, err := srinternal.OAuth2ClientOptFromConfig(conf.Namespace("schema_registry"))
+		if err != nil {
+			return nil, err
+		}
+		t.srCancel = cancel
+		t.srOpts = append(t.srOpts, opts...)
 		if authSigner != nil {
 			t.srOpts = append(t.srOpts, sr.PreReq(func(req *http.Request) error {
 				return authSigner(conf.Resources().FS(), req)
@@ -224,6 +234,30 @@ func sampleConfigFromParsed(conf *service.ParsedConfig) (tracerSampleConfig, err
 
 //------------------------------------------------------------------------------
 
+type wrappedExporter struct {
+	exporter tracesdk.SpanExporter
+	cancel   context.CancelFunc
+}
+
+var _ tracesdk.SpanExporter = (*wrappedExporter)(nil)
+
+// ExportSpans implements trace.SpanExporter.
+func (w *wrappedExporter) ExportSpans(ctx context.Context, spans []tracesdk.ReadOnlySpan) error {
+	return w.exporter.ExportSpans(ctx, spans)
+}
+
+// Shutdown implements trace.SpanExporter.
+func (w *wrappedExporter) Shutdown(ctx context.Context) error {
+	w.cancel()
+	return w.exporter.Shutdown(ctx)
+}
+
+func wrapTracerExporter(exporter tracesdk.SpanExporter, cancel context.CancelFunc) tracesdk.SpanExporter {
+	return &wrappedExporter{exporter, cancel}
+}
+
+//------------------------------------------------------------------------------
+
 func newTracer(config *tracer) (trace.TracerProvider, error) {
 	var attrs []attribute.KeyValue
 	for k, v := range config.tags {
@@ -257,7 +291,7 @@ func newTracer(config *tracer) (trace.TracerProvider, error) {
 		return nil, fmt.Errorf("unable to create trace exporter: %w", err)
 	}
 	var opts []tracesdk.TracerProviderOption
-	opts = append(opts, tracesdk.WithBatcher(exporter))
+	opts = append(opts, tracesdk.WithBatcher(wrapTracerExporter(exporter, config.srCancel)))
 	if config.sampling.enabled {
 		opts = append(opts, tracesdk.WithSampler(tracesdk.TraceIDRatioBased(config.sampling.ratio)))
 	}
