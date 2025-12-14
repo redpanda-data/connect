@@ -31,7 +31,41 @@ func TestIntegration_Snapshot_(t *testing.T) {
 	connStr, db := mssqlservertest.SetupTestWithMicrosoftSQLServerVersion(t, "2022-latest")
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 
-	t.Run("CompositeKeyPagination", func(t *testing.T) {
+	t.Run("SinglePrimaryKey", func(t *testing.T) {
+		createTableSQL := `
+		CREATE TABLE dbo.single_key_test (
+			id INT NOT NULL PRIMARY KEY,
+			data NVARCHAR(100)
+		);`
+		require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.single_key_test", createTableSQL))
+
+		var totalRows int
+		for i := range 50 {
+			totalRows++
+			db.MustExec("INSERT INTO dbo.single_key_test (id, data) VALUES (?, ?)", i, "test-data")
+		}
+
+		publisher := &publisherStub{}
+		tables := []replication.UserDefinedTable{
+			{Schema: "dbo", Name: "single_key_test"},
+		}
+
+		snapshot, err := replication.NewSnapshot(connStr, tables, publisher, service.NewLoggerFromSlog(log), nil)
+		require.NoError(t, err)
+		defer snapshot.Close()
+
+		lsn, err := snapshot.Prepare(t.Context())
+		require.NoError(t, err)
+		require.NotEmpty(t, lsn)
+
+		// Read snapshot with small batch size to trigger pagination
+		err = snapshot.Read(t.Context(), 1, 12)
+		require.NoError(t, err)
+
+		assert.Equalf(t, totalRows, publisher.count(), "Expected all %d rows to be captured during snapshot", totalRows)
+	})
+
+	t.Run("TwoColumnCompositeKey_WithPagination", func(t *testing.T) {
 		createTableSQL := `
 		CREATE TABLE dbo.composite_key_test (
 			col1 INT NOT NULL,
@@ -65,6 +99,47 @@ func TestIntegration_Snapshot_(t *testing.T) {
 
 		// Read snapshot with small batch size to trigger pagination
 		err = snapshot.Read(t.Context(), 1, 10)
+		require.NoError(t, err)
+
+		assert.Equalf(t, totalRows, publisher.count(), "Expected all %d rows to be captured during snapshot", totalRows)
+	})
+
+	t.Run("TwoColumnCompositeKey_WithPagination", func(t *testing.T) {
+		createTableSQL := `
+		CREATE TABLE dbo.three_col_key_test (
+			col1 INT NOT NULL,
+			col2 INT NOT NULL,
+			col3 INT NOT NULL,
+			data NVARCHAR(100),
+			PRIMARY KEY (col1, col2, col3)
+		);`
+		require.NoError(t, db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.three_col_key_test", createTableSQL))
+
+		var totalRows int
+		for i := range 5 {
+			for j := range 3 {
+				for k := range 4 {
+					totalRows++
+					db.MustExec("INSERT INTO dbo.three_col_key_test (col1, col2, col3, data) VALUES (?, ?, ?, ?)", i, j, k, "test-data")
+				}
+			}
+		}
+
+		publisher := &publisherStub{}
+		tables := []replication.UserDefinedTable{
+			{Schema: "dbo", Name: "three_col_key_test"},
+		}
+
+		snapshot, err := replication.NewSnapshot(connStr, tables, publisher, service.NewLoggerFromSlog(log), nil)
+		require.NoError(t, err)
+		defer snapshot.Close()
+
+		lsn, err := snapshot.Prepare(t.Context())
+		require.NoError(t, err)
+		require.NotEmpty(t, lsn)
+
+		// Read snapshot with small batch size to trigger pagination
+		err = snapshot.Read(t.Context(), 1, 8)
 		require.NoError(t, err)
 
 		assert.Equalf(t, totalRows, publisher.count(), "Expected all %d rows to be captured during snapshot", totalRows)
