@@ -15,6 +15,10 @@
 package changelog
 
 import (
+	"fmt"
+	"slices"
+	"strings"
+
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/r3labs/diff/v3"
 	"go.uber.org/multierr"
@@ -61,6 +65,29 @@ func init() {
 			if err := mapstructure.Decode(cl, &result); err != nil {
 				return nil, err
 			}
+
+			// Sort the result by Path for stable output
+			pathAsString := func(m map[string]any) string {
+				pathVal, ok := m["Path"]
+				if !ok {
+					return ""
+				}
+				switch p := pathVal.(type) {
+				case []interface{}:
+					parts := make([]string, len(p))
+					for i, v := range p {
+						parts[i] = fmt.Sprintf("%v", v)
+					}
+					return strings.Join(parts, ".")
+				case []string:
+					return strings.Join(p, ".")
+				default:
+					return fmt.Sprintf("%v", pathVal)
+				}
+			}
+			slices.SortFunc(result, func(a, b map[string]any) int {
+				return strings.Compare(pathAsString(a), pathAsString(b))
+			})
 
 			return result, nil
 		}, nil
