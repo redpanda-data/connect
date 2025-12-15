@@ -13,6 +13,7 @@ import (
 	"container/heap"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -83,11 +84,12 @@ func (c *change) reset() {
 // It moves to the next row, sorts them by min-heap based on LSN ordering criteria,
 // parses the data and sends it for processing.
 type changeTableRowIter struct {
-	table   UserDefinedTable
-	rows    *sql.Rows
-	cols    []string
-	current *change
-	log     *service.Logger
+	table    UserDefinedTable
+	rows     *sql.Rows
+	cols     []string
+	colTypes []*sql.ColumnType
+	current  *change
+	log      *service.Logger
 
 	vals []any
 }
@@ -117,6 +119,12 @@ func newChangeTableRowIter(
 		return nil, err
 	}
 
+	colTypes, err := rows.ColumnTypes()
+	if err != nil {
+		rows.Close()
+		return nil, err
+	}
+
 	// pre-allocate slice of pointers for sql.Scan operations
 	vals := make([]any, len(cols))
 	for i := range vals {
@@ -125,11 +133,12 @@ func newChangeTableRowIter(
 	}
 
 	iter := &changeTableRowIter{
-		table: changeTable,
-		rows:  rows,
-		cols:  cols,
-		vals:  vals,
-		log:   logger,
+		table:    changeTable,
+		rows:     rows,
+		cols:     cols,
+		colTypes: colTypes,
+		vals:     vals,
+		log:      logger,
 	}
 	// Prime the iterator by loading the first row
 	if err := iter.next(); err != nil {
@@ -224,10 +233,32 @@ func (ct *changeTableRowIter) mapValsToChange(vals []any, dst *change) error {
 				return errors.New("failed to map 'seqval' column from change table")
 			}
 		default:
-			dst.columns[c] = v
+			if ct.colTypes[i] != nil {
+				dst.columns[c] = mapScannedValue(v, ct.colTypes[i])
+			} else {
+				dst.columns[c] = v
+			}
 		}
 	}
 	return nil
+}
+
+// mapScannedValue takes an already-scanned value and column type, and converts it
+// to the appropriate Go type for JSON marshaling.
+func mapScannedValue(val any, colType *sql.ColumnType) any {
+	if val == nil {
+		return nil
+	}
+
+	switch colType.DatabaseTypeName() {
+	// Decimals come as []byte from the driver, convert to json.Number to preserve precision
+	case "DECIMAL", "NUMERIC":
+		if b, ok := val.([]byte); ok {
+			return json.Number(string(b))
+		}
+	}
+
+	return val
 }
 
 // ChangePublisher is responsible for handling and processing of a replication.MessageEvent.
