@@ -169,6 +169,17 @@ func NewServer(
 		s.AddReceivingMiddleware(auth.Middleware)
 	}
 
+	s.AddReceivingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
+		return func(ctx context.Context, method string, req mcp.Request) (result mcp.Result, err error) {
+			// Propagate tracing using the traceparent header from the request
+			if extra := req.GetExtra(); extra != nil && extra.Header != nil {
+				w3cTraceContext := propagation.TraceContext{}
+				ctx = w3cTraceContext.Extract(ctx, propagation.HeaderCarrier(extra.Header))
+			}
+			return next(ctx, method, req)
+		}
+	})
+
 	rpJWT, err := gateway.NewRPJWTMiddleware(resources)
 	if err != nil {
 		return nil, err
@@ -199,35 +210,15 @@ func (m *Server) addSSEEndpoints() {
 	sseHandler := mcp.NewSSEHandler(func(_ *http.Request) *mcp.Server {
 		return m.base
 	}, nil)
-
-	// Wrap the handler to propagate tracing from traceparent header
-	wrappedHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Propagate tracing using the traceparent header from the request
-		w3cTraceContext := propagation.TraceContext{}
-		ctx := w3cTraceContext.Extract(r.Context(), propagation.HeaderCarrier(r.Header))
-		r = r.WithContext(ctx)
-		sseHandler.ServeHTTP(w, r)
-	})
-
-	m.mux.PathPrefix("/sse").Handler(wrappedHandler)
-	m.mux.PathPrefix("/message").Handler(wrappedHandler)
+	m.mux.PathPrefix("/sse").Handler(sseHandler)
+	m.mux.PathPrefix("/message").Handler(sseHandler)
 }
 
 func (m *Server) addStreamableEndpoints() {
 	streamableHandler := mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server {
 		return m.base
 	}, nil)
-
-	// Wrap the handler to propagate tracing from traceparent header
-	wrappedHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Propagate tracing using the traceparent header from the request
-		w3cTraceContext := propagation.TraceContext{}
-		ctx := w3cTraceContext.Extract(r.Context(), propagation.HeaderCarrier(r.Header))
-		r = r.WithContext(ctx)
-		streamableHandler.ServeHTTP(w, r)
-	})
-
-	m.mux.PathPrefix("/mcp").Handler(wrappedHandler)
+	m.mux.PathPrefix("/mcp").Handler(streamableHandler)
 }
 
 // ServeHTTP attempts to run the MCP server over HTTP.
