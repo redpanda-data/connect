@@ -10,7 +10,6 @@ package mssqlserver
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -128,12 +127,8 @@ func (p *batchPublisher) loop() {
 // Publish turns the provided message into a service.Message before batching and
 // flushing them based on batch size or time elapsed.
 func (b *batchPublisher) Publish(ctx context.Context, m replication.MessageEvent) error {
-	data, err := json.Marshal(m.Data)
-	if err != nil {
-		return fmt.Errorf("failure to marshal message: %w", err)
-	}
-
-	msg := service.NewMessage(data)
+	msg := service.NewMessage(nil)
+	msg.SetStructured(m.Data)
 	msg.MetaSet("schema", m.Schema)
 	msg.MetaSet("table", m.Table)
 	msg.MetaSet("operation", m.Operation)
@@ -142,6 +137,7 @@ func (b *batchPublisher) Publish(ctx context.Context, m replication.MessageEvent
 	}
 
 	var flushedBatch []*service.Message
+	var err error
 	b.batcherMu.Lock()
 	if b.batcher.Add(msg) {
 		flushedBatch, err = b.batcher.Flush(ctx)

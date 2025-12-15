@@ -82,9 +82,9 @@ func (op OpType) String() string {
 
 // MessageEvent represents a single change from Table's change table in the database.
 type MessageEvent struct {
-	LSN       LSN    `json:"start_lsn"`
-	Operation string `json:"operation"`
-	Schema    string `json:"schema"`
-	Table     string `json:"table"`
-	Data      any    `json:"data"`
+	LSN       LSN
+	Operation string
+	Schema    string
+	Table     string
+	Data      map[string]any
 }

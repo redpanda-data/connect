@@ -15,6 +15,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"maps"
 	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -312,10 +313,15 @@ func (r *ChangeTableStream) ReadChangeTables(ctx context.Context, db *sql.DB, st
 			item := heap.Pop(h).(*heapItem)
 			cur := item.iter.current
 
+			// As we send structured data we need to create a copy of the map to avoid concurrent
+			// operations from upstream processors.
+			data := make(map[string]any, len(cur.columns))
+			maps.Copy(data, cur.columns)
+
 			msg := MessageEvent{
 				Table:     item.iter.table.Name,
 				Schema:    item.iter.table.Schema,
-				Data:      cur.columns,
+				Data:      data,
 				LSN:       cur.startLSN,
 				Operation: cur.operation.String(),
 			}
