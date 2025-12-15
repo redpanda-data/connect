@@ -3,6 +3,17 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+
+## 4.74.0 - 2025-12-15
+
+### Added
+
+- redpanda/tracer: add oauth2 support for schema registry (@rockwotj)
+
+### Fixed
+
+- microsoft_sql_server_cdc: Fix tuple comparison when using composite keys (@josephwoodward)
+
 ## 4.73.0 - 2025-12-12
 
 ### Added
