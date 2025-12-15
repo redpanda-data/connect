@@ -60,7 +60,7 @@ output:
 
 == Batching
 
-Records are processed and delivered from each partition in batches as received from brokers. These batch sizes are therefore dynamically sized in order to optimise throughput, but can be tuned with the config fields ` + "`fetch_max_partition_bytes` and `fetch_max_bytes`" + `. Batches can be further broken down using the ` + "xref:components:processors/split.adoc[`split`] processor" + `.
+Records are processed and delivered from each partition in batches as received from brokers. These batch sizes are therefore dynamically sized in order to optimise throughput, but can be tuned with the config field ` + "`max_yield_batch_bytes`, or `unordered_processing.batching` when unordered processing is enabled" + `. Batches can be further broken down using the ` + "xref:components:processors/split.adoc[`split`] processor" + `.
 
 == Metrics
 
