@@ -1,0 +1,41 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(task *)",
+      "Bash(rpk *)",
+      "Bash(go *)",
+      "Bash(./target/redpanda-connect *)",
+      "Bash(./bin/*)",
+      "Bash(./.claude-plugin/*)",
+      "Bash(./scripts/*)",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(grep *)",
+      "Bash(find *)",
+      "Bash(wc *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(sed *)",
+      "Bash(awk *)",
+      "Bash(sort *)",
+      "Bash(uniq *)",
+      "Bash(xargs *)",
+      "Bash(printf *)",
+      "Bash(echo *)",
+      "Bash(jq *)",
+      "Bash(yq *)",
+      "Bash(git *)",
+      "Bash(docker *)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:docs.redpanda.com)",
+      "WebFetch(domain:pkg.go.dev)",
+      "WebFetch(domain:golang.org)",
+      "SlashCommand(/rpcn:*)"
+    ],
+    "deny": [
+      "Bash(git push *)",
+      "Bash(git remote *)"
+    ],
+    "ask": []
+  }
+}
