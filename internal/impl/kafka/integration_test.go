@@ -154,6 +154,8 @@ output:
     timeout: "5s"
     metadata:
       include_patterns: [ .* ]
+    batching:
+      count: $OUTPUT_BATCH_COUNT
 
 input:
   redpanda:
@@ -169,6 +171,7 @@ input:
 		integration.StreamTestSendBatch(10),
 		integration.StreamTestStreamSequential(1000),
 		integration.StreamTestStreamParallel(1000),
+		integration.StreamTestSendBatchCount(10),
 	)
 
 	suite.Run(
@@ -231,6 +234,8 @@ output:
     partition: "0"
     metadata:
       include_patterns: [ .* ]
+    batching:
+      count: $OUTPUT_BATCH_COUNT
 
 input:
   redpanda:

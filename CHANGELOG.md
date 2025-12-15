@@ -3,6 +3,11 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.75.0 - TBD
+
+### Added
+
+- Field `batching` added to the `redpanda` output. (@Jeffail)
 
 ## 4.74.0 - 2025-12-15
 
