@@ -30,6 +30,82 @@ func (db *TestDB) MustExec(query string, args ...any) {
 	require.NoError(db.T, err)
 }
 
+// MustExecContext takes a context and executes a SQL query and fails the test if an error occurs.
+func (db *TestDB) MustExecContext(ctx context.Context, query string, args ...any) {
+	_, err := db.ExecContext(ctx, query, args...)
+	require.NoError(db.T, err)
+}
+
+// MustEnableCDC enables Change Data Capture on the specified table.
+// The fullTableName should be in format "schema.table" (e.g., "dbo.all_data_types").
+// If only a table name is provided, defaults to "dbo" schema.
+func (db *TestDB) MustEnableCDC(ctx context.Context, fullTableName string) {
+	db.T.Logf("Enabling Change Data Capture for table %q", fullTableName)
+	table := strings.Split(fullTableName, ".")
+	if len(table) != 2 {
+		table = []string{"dbo", table[0]}
+	}
+	schema := table[0]
+	tableName := table[1]
+
+	query := fmt.Sprintf(`
+		EXEC sys.sp_cdc_enable_table
+		@source_schema = '%s',
+		@source_name   = '%s',
+		@role_name     = NULL;`, schema, tableName)
+
+	_, err := db.ExecContext(ctx, query)
+	require.NoError(db.T, err)
+
+	// Wait for CDC table to be ready
+	for {
+		var minLSN, maxLSN []byte
+		if err = db.QueryRowContext(ctx, "SELECT sys.fn_cdc_get_min_lsn(?)", fullTableName).Scan(&minLSN); err != nil {
+			break
+		}
+		if err := db.QueryRowContext(ctx, "SELECT sys.fn_cdc_get_max_lsn()").Scan(&maxLSN); err != nil {
+			break
+		}
+		if minLSN != nil && maxLSN != nil {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			err = ctx.Err()
+			goto end
+		case <-time.After(time.Second):
+		}
+	}
+
+end:
+	require.NoError(db.T, err)
+	db.T.Logf("Change Data Capture enabled for table %q", fullTableName)
+}
+
+// MustDisableCDC disables Change Data Capture on the specified table.
+// The fullTableName should be in format "schema.table" (e.g., "dbo.all_data_types").
+// If only a table name is provided, defaults to "dbo" schema.
+func (db *TestDB) MustDisableCDC(ctx context.Context, fullTableName string) {
+	db.T.Logf("Disabling Change Data Capture for table %q", fullTableName)
+	table := strings.Split(fullTableName, ".")
+	if len(table) != 2 {
+		table = []string{"dbo", table[0]}
+	}
+	schema := table[0]
+	tableName := table[1]
+
+	query := fmt.Sprintf(`
+		EXEC sys.sp_cdc_disable_table
+		@source_schema = '%s',
+		@source_name   = '%s',
+		@capture_instance = 'all';`, schema, tableName)
+
+	_, err := db.ExecContext(ctx, query)
+	require.NoError(db.T, err)
+
+	db.T.Logf("Change Data Capture enabled for table %q", fullTableName)
+}
+
 // CreateTableWithCDCEnabledIfNotExists creates the given test tables ensuring CDC is enabled.
 func (db *TestDB) CreateTableWithCDCEnabledIfNotExists(ctx context.Context, fullTableName, createTableQuery string, _ ...any) error {
 	// default to dbo if not found

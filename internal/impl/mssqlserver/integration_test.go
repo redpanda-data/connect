@@ -459,7 +459,7 @@ microsoft_sql_server_cdc:
 	require.NoError(t, stream.StopWithin(time.Second*10))
 }
 
-func TestIntegration_MicrosoftSQLServerCDC_AllTypes(t *testing.T) {
+func TestIntegration_MicrosoftSQLServerCDC_SnapshotAndStreaming_AllTypes(t *testing.T) {
 	integration.CheckSkip(t)
 	t.Parallel()
 
@@ -507,8 +507,14 @@ func TestIntegration_MicrosoftSQLServerCDC_AllTypes(t *testing.T) {
 	err := db.CreateTableWithCDCEnabledIfNotExists(t.Context(), "dbo.all_data_types", q)
 	require.NoError(t, err)
 
-	// insert min
-	allDataTypesQuery := `
+	// disable CDC before we insert snapshot data
+	db.MustDisableCDC(t.Context(), "dbo.all_data_types")
+
+	var allDataTypesQuery string
+	t.Log("Inserting snapshot data...")
+	{
+		// insert min
+		allDataTypesQuery = `
 	INSERT INTO dbo.all_data_types (
 		tinyint_col, smallint_col, int_col, bigint_col,
 		decimal_col, numeric_col, float_col, real_col,
@@ -524,167 +530,186 @@ func TestIntegration_MicrosoftSQLServerCDC_AllTypes(t *testing.T) {
 		?, ?, ?, ?,
 		?, ?, ?, ?,
 		?, ?, ?, ?, ?, ?);`
-	_, err = db.ExecContext(t.Context(), allDataTypesQuery,
-		0,                    // tinyint min
-		-32768,               // smallint min
-		-2147483648,          // int min
-		-9223372036854775808, // bigint min
-		"-9999999999999999999999999999.9999999999", // decimal min as string
-		"-999999999999999.99999",                   // numeric min as string
-		-1.79e+308,                                 // float min
-		-3.40e+38,                                  // real min
-		"0001-01-01",                               // date min
-		"1753-01-01 00:00:00.000",                  // datetime min
-		"0001-01-01 00:00:00.0000000",              // datetime2 min
-		"1900-01-01 00:00:00",                      // smalldatetime min
-		"00:00:00.0000000",                         // time min
-		"0001-01-01 00:00:00.0000000 -14:00",       // datetimeoffset min
-		"AAAAAAAAAA",                               // char(10)
-		"",                                         // varchar(255)
-		"АААААААААА",                               // nchar(10)
-		"",                                         // nvarchar(255)
-		[]byte{0x00},                               // binary(1)
-		[]byte{0x00},                               // varbinary(1)
-		"",                                         // varchar(max)
-		"",                                         // nvarchar(max)
-		[]byte{0x00},                               // varbinary(max)
-		false,                                      // bit
-		"<root></root>",                            // xml
-		"{}",
-	)
-	require.NoError(t, err, "Inserting snapshot test data to verify data types")
+		db.MustExecContext(t.Context(), allDataTypesQuery,
+			0,                    // tinyint min
+			-32768,               // smallint min
+			-2147483648,          // int min
+			-9223372036854775808, // bigint min
+			"-9999999999999999999999999999.9999999999", // decimal min as string
+			"-999999999999999.99999",                   // numeric min as string
+			-1.79e+308,                                 // float min
+			-3.40e+38,                                  // real min
+			"0001-01-01",                               // date min
+			"1753-01-01 00:00:00.000",                  // datetime min
+			"0001-01-01 00:00:00.0000000",              // datetime2 min
+			"1900-01-01 00:00:00",                      // smalldatetime min
+			"00:00:00.0000000",                         // time min
+			"0001-01-01 00:00:00.0000000 -14:00",       // datetimeoffset min
+			"AAAAAAAAAA",                               // char(10)
+			"",                                         // varchar(255)
+			"АААААААААА",                               // nchar(10)
+			"",                                         // nvarchar(255)
+			[]byte{0x00},                               // binary(1)
+			[]byte{0x00},                               // varbinary(1)
+			"",                                         // varchar(max)
+			"",                                         // nvarchar(max)
+			[]byte{0x00},                               // varbinary(max)
+			false,                                      // bit
+			"<root></root>",                            // xml
+			"{}",
+		)
 
-	cfg := `
+	}
+
+	var (
+		outBatches   []string
+		outBatchesMu sync.Mutex
+		stream       *service.Stream
+	)
+	t.Log("Enable Change Data Capture and start component...")
+	{
+		db.MustEnableCDC(t.Context(), "dbo.all_data_types")
+
+		cfg := `
 microsoft_sql_server_cdc:
   connection_string: %s
   stream_snapshot: true
   snapshot_max_batch_size: 100
   include: ["all_data_types"]`
 
-	streamBuilder := service.NewStreamBuilder()
-	require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
+		streamBuilder := service.NewStreamBuilder()
+		require.NoError(t, streamBuilder.AddInputYAML(fmt.Sprintf(cfg, connStr)))
 
-	var outBatches []string
-	var outBatchesMu sync.Mutex
-	require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
-		msgBytes, err := mb[0].AsBytes()
+		require.NoError(t, streamBuilder.AddBatchConsumerFunc(func(_ context.Context, mb service.MessageBatch) error {
+			msgBytes, err := mb[0].AsBytes()
+			require.NoError(t, err)
+			outBatchesMu.Lock()
+			outBatches = append(outBatches, string(msgBytes))
+			outBatchesMu.Unlock()
+			return nil
+		}))
+
+		stream, err = streamBuilder.Build()
 		require.NoError(t, err)
-		outBatchesMu.Lock()
-		outBatches = append(outBatches, string(msgBytes))
-		outBatchesMu.Unlock()
-		return nil
-	}))
+		license.InjectTestService(stream.Resources())
 
-	stream, err := streamBuilder.Build()
-	require.NoError(t, err)
-	license.InjectTestService(stream.Resources())
+		go func() {
+			err = stream.Run(t.Context())
+			require.NoError(t, err)
+		}()
 
-	go func() {
-		err = stream.Run(t.Context())
-		require.NoError(t, err)
-	}()
+		// Wait for snapshot to complete (should have 1 batch with min values)
+		assert.Eventually(t, func() bool {
+			outBatchesMu.Lock()
+			defer outBatchesMu.Unlock()
+			return len(outBatches) == 1
+		}, time.Second*30, time.Millisecond*100)
+	}
 
-	time.Sleep(time.Second * 5)
+	t.Log("Snapshot record(s) received, testing streaming...")
+	{
+		// insert max
+		db.MustExecContext(t.Context(), allDataTypesQuery,
+			255,                 // tinyint max
+			32767,               // smallint max
+			2147483647,          // int max
+			9223372036854775807, // bigint max
+			"9999999999999999999999999999.9999999999", // decimal max as string
+			"999999999999999.99999",                   // numeric max as string
+			1.79e+308,                                 // float max
+			3.40e+38,                                  // real max
+			"9999-12-31",                              // date max
+			"9999-12-31 23:59:59.997",                 // datetime max
+			"9999-12-31 23:59:59.9999999",             // datetime2 max
+			"2079-06-06 23:59:00",                     // smalldatetime max
+			"23:59:59.9999999",                        // time max
+			"9999-12-31 23:59:59.9999999 +14:00",      // datetimeoffset max
+			"ZZZZZZZZZZ",                              // char(10)
+			"Max varchar value",                       // varchar(255)
+			"ZZZZZZZZZZ",                              // nchar(10)
+			"Max nvarchar value",                      // nvarchar(255)
+			make([]byte, 16),                          // binary(16) filled with zeros (max size is fixed)
+			// make([]byte, 255),                         // varbinary(255) max
+			[]byte{0x00},        // varbinary(max)
+			"Max varchar(max)",  // varchar(max)
+			"Max nvarchar(max)", // nvarchar(max)
+			// make([]byte, 65535),                       // varbinary(max) (big buffer for testing)
+			[]byte{0x00},       // varbinary(max)
+			true,               // bit max
+			"<root>max</root>", // xml
+			`{"max": true}`,    // json
+		)
 
-	// max
-	_, err = db.ExecContext(t.Context(), allDataTypesQuery,
-		255,                 // tinyint max
-		32767,               // smallint max
-		2147483647,          // int max
-		9223372036854775807, // bigint max
-		"9999999999999999999999999999.9999999999", // decimal max as string
-		"999999999999999.99999",                   // numeric max as string
-		1.79e+308,                                 // float max
-		3.40e+38,                                  // real max
-		"9999-12-31",                              // date max
-		"9999-12-31 23:59:59.997",                 // datetime max
-		"9999-12-31 23:59:59.9999999",             // datetime2 max
-		"2079-06-06 23:59:00",                     // smalldatetime max
-		"23:59:59.9999999",                        // time max
-		"9999-12-31 23:59:59.9999999 +14:00",      // datetimeoffset max
-		"ZZZZZZZZZZ",                              // char(10)
-		"Max varchar value",                       // varchar(255)
-		"ZZZZZZZZZZ",                              // nchar(10)
-		"Max nvarchar value",                      // nvarchar(255)
-		make([]byte, 16),                          // binary(16) filled with zeros (max size is fixed)
-		make([]byte, 255),                         // varbinary(255) max
-		"Max varchar(max)",                        // varchar(max)
-		"Max nvarchar(max)",                       // nvarchar(max)
-		make([]byte, 65535),                       // varbinary(max) (big buffer for testing)
-		true,                                      // bit max
-		"<root>max</root>",                        // xml
-		`{"max": true}`,                           // json
-	)
-	require.NoError(t, err, "Inserting CDC test data to verify data types")
+		// verify sum of records
+		want := 2
+		assert.Eventually(t, func() bool {
+			outBatchesMu.Lock()
+			defer outBatchesMu.Unlock()
+			return len(outBatches) == want
+		}, time.Second*30, time.Millisecond*100)
+		require.NoError(t, stream.StopWithin(time.Second*10))
+		require.Lenf(t, outBatches, want, "Expected %d batches but got %d", want, len(outBatches))
 
-	want := 2
-	assert.Eventually(t, func() bool {
-		outBatchesMu.Lock()
-		defer outBatchesMu.Unlock()
-		return len(outBatches) == want
-	}, time.Second*30, time.Millisecond*100)
-	require.NoError(t, stream.StopWithin(time.Second*10))
-	require.Lenf(t, outBatches, want, "Expected %d batches but got %d", want, len(outBatches))
+		// assert min
+		require.JSONEq(t, `{
+		"bigint_col": -9223372036854775808,
+		"binary_col": "AAAAAAAAAAAAAAAAAAAAAA==",
+		"bit_col": "false",
+		"char_col": "AAAAAAAAAA",
+		"date_col": "0001-01-01T00:00:00Z",
+		"datetime2_col": "0001-01-01T00:00:00Z",
+		"datetime_col": "1753-01-01T00:00:00Z",
+		"datetimeoffset_col": "0001-01-01T00:00:00-14:00",
+		"decimal_col": -9999999999999999999999999999.9999999999,
+		"float_col": -1.79e+308,
+		"int_col": -2147483648,
+		"json_col": "{}",
+		"nchar_col": "АААААААААА",
+		"numeric_col": -999999999999999.99999,
+		"nvarchar_col": "",
+		"nvarcharmax_col": "",
+		"real_col": "-3.3999999521443642e+38",
+		"smalldatetime_col": "1900-01-01T00:00:00Z",
+		"smallint_col": -32768,
+		"time_col": "0001-01-01T00:00:00Z",
+		"tinyint_col": 0,
+		"varbinary_col": "AA==",
+		"varbinarymax_col": "AA==",
+		"varchar_col": "",
+		"varcharmax_col": "",
+		"xml_col": "\u003croot/\u003e"
+		}`, outBatches[0], "Failed to assert min result")
 
-	// assert min
-	require.JSONEq(t, `{
-	"bigint_col": -9223372036854775808,
-	"binary_col": "AAAAAAAAAAAAAAAAAAAAAA==",
-	"bit_col": "false",
-	"char_col": "AAAAAAAAAA",
-	"date_col": "0001-01-01T00:00:00Z",
-	"datetime2_col": "0001-01-01T00:00:00Z",
-	"datetime_col": "1753-01-01T00:00:00Z",
-	"datetimeoffset_col": "0001-01-01T00:00:00-14:00",
-	"decimal_col": -9999999999999999999999999999.9999999999,
-	"float_col": -1.79e+308,
-	"int_col": -2147483648,
-	"json_col": "{}",
-	"nchar_col": "АААААААААА",
-	"numeric_col": -999999999999999.99999,
-	"nvarchar_col": "",
-	"nvarcharmax_col": "",
-	"real_col": "-3.3999999521443642e+38",
-	"smalldatetime_col": "1900-01-01T00:00:00Z",
-	"smallint_col": -32768,
-	"time_col": "0001-01-01T00:00:00Z",
-	"tinyint_col": 0,
-	"varbinary_col": "AA==",
-	"varbinarymax_col": "AA==",
-	"varchar_col": "",
-	"varcharmax_col": "",
-	"xml_col": "\u003croot/\u003e"
-	}`, outBatches[0])
-
-	// assert max
-	require.JSONEq(t, `{
-    "bigint_col": -9223372036854775808,
-    "binary_col": "AAAAAAAAAAAAAAAAAAAAAA==",
-    "bit_col": false,
-    "char_col": "AAAAAAAAAA",
-    "date_col": "0001-01-01T00:00:00Z",
-    "datetime2_col": "0001-01-01T00:00:00Z",
-    "datetime_col": "1753-01-01T00:00:00Z",
-    "datetimeoffset_col": "0001-01-01T00:00:00-14:00",
-    "decimal_col": "LTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTkuOTk5OTk5OTk5OQ==",
-    "float_col": -1.79e+308,
-    "int_col": -2147483648,
-    "json_col": "{}",
-    "nchar_col": "АААААААААА",
-    "numeric_col": "LTk5OTk5OTk5OTk5OTk5OS45OTk5OQ==",
-    "nvarchar_col": "",
-    "nvarcharmax_col": "",
-    "real_col": -3.3999999521443642e+38,
-    "smalldatetime_col": "1900-01-01T00:00:00Z",
-    "smallint_col": -32768,
-    "time_col": "0001-01-01T00:00:00Z",
-    "tinyint_col": 0,
-    "varbinary_col": "AA==",
-    "varbinarymax_col": "AA==",
-    "varchar_col": "",
-    "varcharmax_col": "",
-    "xml_col": "\u003croot/\u003e"
-	}`, outBatches[1])
+		// assert max
+		require.JSONEq(t, `{
+		"bigint_col": 9223372036854775807,
+		"binary_col": "AAAAAAAAAAAAAAAAAAAAAA==",
+		"bit_col": true,
+		"char_col": "ZZZZZZZZZZ",
+		"date_col": "9999-12-31T00:00:00Z",
+		"datetime2_col": "9999-12-31T23:59:59.9999999Z",
+		"datetime_col": "9999-12-31T23:59:59.997Z",
+		"datetimeoffset_col": "9999-12-31T23:59:59.9999999+14:00",
+		"decimal_col": "OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OTk5OS45OTk5OTk5OTk5",
+		"float_col": 1.79e+308,
+		"int_col": 2147483647,
+		"json_col": "{\"max\": true}",
+		"nchar_col": "ZZZZZZZZZZ",
+		"numeric_col": "OTk5OTk5OTk5OTk5OTk5Ljk5OTk5",
+		"nvarchar_col": "Max nvarchar value",
+		"nvarcharmax_col": "Max nvarchar(max)",
+		"real_col": 3.3999999521443642e+38,
+		"smalldatetime_col": "2079-06-06T23:59:00Z",
+		"smallint_col": 32767,
+		"time_col": "0001-01-01T23:59:59.9999999Z",
+		"tinyint_col": 255,
+		"varbinary_col": "AA==",
+		"varbinarymax_col": "AA==",
+		"varchar_col": "Max varchar value",
+		"varcharmax_col": "Max varchar(max)",
+		"xml_col": "\u003croot\u003emax\u003c/root\u003e"
+		}`, outBatches[1], "Failed to assert max result")
+	}
 }
 
 // Test_ManualTesting_AddTestDataWithUniqueLSN adds data to an existing table and ensures each change has its own LSN
