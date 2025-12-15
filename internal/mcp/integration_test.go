@@ -30,13 +30,33 @@ import (
 	"github.com/oauth2-proxy/mockoidc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/propagation"
+	tracesdk "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	"go.opentelemetry.io/otel/trace"
 
+	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/benthos/v4/public/service/integration"
 	"github.com/redpanda-data/common-go/authz"
 
 	"github.com/redpanda-data/connect/v4/internal/license"
 	mcpinternal "github.com/redpanda-data/connect/v4/internal/mcp"
 )
+
+var testInMemoryTraceExporter = tracetest.NewInMemoryExporter()
+var traceID trace.TraceID
+
+func init() {
+	traceID, _ = trace.TraceIDFromHex("4e441824ec2b6a44ffdc9bb9a6453df3")
+	service.MustRegisterOtelTracerProvider(
+		"test_tracer",
+		service.NewConfigSpec(),
+		func(*service.ParsedConfig) (trace.TracerProvider, error) {
+			tp := tracesdk.NewTracerProvider(tracesdk.WithSyncer(testInMemoryTraceExporter))
+			return tp, nil
+		},
+	)
+}
 
 // mcpServerHandle wraps the MCP server and provides test utilities
 type mcpServerHandle struct {
@@ -120,7 +140,7 @@ func setupMCPServer(t *testing.T, issuerURL, orgID, policyFile string) *mcpServe
 	t.Setenv("REDPANDA_CLOUD_GATEWAY_JWT_AUDIENCE", "test-audience")
 	t.Setenv("REDPANDA_CLOUD_GATEWAY_JWT_ORGANIZATION_ID", orgID)
 
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
 	envVarFunc := func(_ context.Context, key string) (string, bool) {
 		val := os.Getenv(key)
@@ -136,6 +156,9 @@ func setupMCPServer(t *testing.T, issuerURL, orgID, policyFile string) *mcpServe
 			t.Log(err)
 		}
 	})
+
+	// Cleanup any previous traces
+	testInMemoryTraceExporter.Reset()
 
 	server, err := mcpinternal.NewServer(
 		"./testdata",
@@ -218,7 +241,7 @@ func createMCPClient(t *testing.T, serverURL, token string) (*mcp.ClientSession,
 	transport := &mcp.StreamableClientTransport{
 		Endpoint: serverURL + "/mcp",
 		HTTPClient: &http.Client{
-			Transport: &authTransport{
+			Transport: &mcpClientTransport{
 				token:     token,
 				transport: http.DefaultTransport,
 			},
@@ -237,13 +260,24 @@ func createMCPClient(t *testing.T, serverURL, token string) (*mcp.ClientSession,
 	return session, cleanup
 }
 
-// authTransport adds Authorization header to all requests
-type authTransport struct {
+// mcpClientTransport adds Authorization header to all requests
+type mcpClientTransport struct {
 	token     string
 	transport http.RoundTripper
 }
 
-func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+func (t *mcpClientTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	// I can't figure out a way to propagate this from the MCP session methods because contexts are decoupled,
+	// but this is the dumb way for now. We'll just hardcode these for every request.
+	spanID, _ := trace.SpanIDFromHex("ffdc9bb9a6453df3")
+	ctx := trace.ContextWithSpanContext(
+		req.Context(),
+		trace.SpanContext{}.
+			WithTraceID(traceID).
+			WithSpanID(spanID).
+			WithTraceFlags(trace.FlagsSampled),
+	)
+	propagation.TraceContext{}.Inject(ctx, propagation.HeaderCarrier(req.Header))
 	if t.token != "" {
 		req.Header.Set("Authorization", "Bearer "+t.token)
 	}
@@ -380,7 +414,7 @@ func TestIntegrationMCPServerJWTAuth_Invalid(t *testing.T) {
 			transport := &mcp.SSEClientTransport{
 				Endpoint: server.URL() + "/sse",
 				HTTPClient: &http.Client{
-					Transport: &authTransport{
+					Transport: &mcpClientTransport{
 						token:     token,
 						transport: http.DefaultTransport,
 					},
@@ -464,7 +498,7 @@ func TestIntegrationMCPServerAuthz_DenyAll(t *testing.T) {
 	transport := &mcp.SSEClientTransport{
 		Endpoint: server.URL() + "/sse",
 		HTTPClient: &http.Client{
-			Transport: &authTransport{
+			Transport: &mcpClientTransport{
 				token:     token,
 				transport: http.DefaultTransport,
 			},
@@ -529,5 +563,49 @@ func TestIntegrationMCPServerAuthz_PolicyReload(t *testing.T) {
 	assert.Error(t, err, "Should fail with deny_all policy after reload")
 	if err != nil {
 		t.Logf("Expected permission denied error: %v", err)
+	}
+}
+
+func TestIntegrationMCPServerTracing(t *testing.T) {
+	integration.CheckSkip(t)
+
+	const testOrgID = "test-org-123"
+	const testEmail = "test@example.com"
+
+	t.Log("Given: mockoidc provider with Redpanda custom claims")
+	mockOIDC, issuerURL := setupMockOIDC(t)
+
+	t.Log("And: MCP server with tracing enabled")
+	server := setupMCPServer(t, issuerURL, testOrgID, "testdata/policies/allow_all.yaml")
+
+	t.Log("And: User with valid token")
+	user := &redpandaUser{
+		subject: "test-user-123",
+		email:   testEmail,
+		orgID:   testOrgID,
+	}
+	token := getAccessToken(t, mockOIDC, user)
+
+	t.Log("When: MCP client connects with valid JWT token")
+	session, cleanup := createMCPClient(t, server.URL(), token)
+	defer cleanup()
+	testInMemoryTraceExporter.Reset()
+
+	t.Log("And: Client makes an RPC request")
+	_, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name:      "test-processor",
+		Arguments: json.RawMessage(`{"value":"{\"foo\":\"bar\"}"}`),
+	})
+	require.NoError(t, err)
+
+	t.Log("Then: Traces are captured by the in-memory exporter")
+	spans := testInMemoryTraceExporter.GetSpans()
+	assert.NotEmpty(t, spans, "Expected traces to be captured from MCP request")
+	t.Logf("Captured %d spans:", len(spans))
+	for i, span := range spans {
+		t.Logf("  Span %d: %s (traceID: %s)", i, span.Name, span.SpanContext.TraceID())
+	}
+	for _, span := range spans {
+		assert.Equal(t, span.SpanContext.TraceID(), traceID)
 	}
 }
