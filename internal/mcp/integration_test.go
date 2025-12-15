@@ -43,8 +43,10 @@ import (
 	mcpinternal "github.com/redpanda-data/connect/v4/internal/mcp"
 )
 
-var testInMemoryTraceExporter = tracetest.NewInMemoryExporter()
-var traceID trace.TraceID
+var (
+	testInMemoryTraceExporter = tracetest.NewInMemoryExporter()
+	traceID                   trace.TraceID
+)
 
 func init() {
 	traceID, _ = trace.TraceIDFromHex("4e441824ec2b6a44ffdc9bb9a6453df3")
