@@ -3,11 +3,15 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.75.0 - TBD
+## 4.75.0 - 2025-12-15
 
 ### Added
 
 - Field `batching` added to the `redpanda` output. (@Jeffail)
+
+### Fixed
+
+- Fixed a regression in MCP servers to properly propagate traceparent headers in requests. (@rockwotj)
 
 ## 4.74.0 - 2025-12-15
 
