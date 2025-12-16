@@ -15,6 +15,7 @@ import (
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
+	_ "embed"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -26,8 +27,6 @@ import (
 	"time"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
-
-	_ "embed"
 )
 
 //go:embed public_key.pem
