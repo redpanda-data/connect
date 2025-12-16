@@ -10,6 +10,7 @@ package license
 
 import (
 	"bytes"
+	"context"
 	"crypto"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -44,6 +45,9 @@ type Service struct {
 	logger        *service.Logger
 	loadedLicense *atomic.Pointer[RedpandaLicense]
 	conf          Config
+
+	expiryMetric *service.MetricGauge
+	cancel       context.CancelFunc
 }
 
 // Config is a struct used to provide configuration to a license service.
@@ -83,8 +87,8 @@ func RegisterService(res *service.Resources, conf Config) {
 	if err != nil {
 		res.Logger().With("error", err).Error("Failed to read Redpanda License")
 	}
-	s.loadedLicense.Store(&license)
 
+	s.setLicense(res, &license)
 	setSharedService(res, s)
 }
 
@@ -95,7 +99,7 @@ func InjectTestService(res *service.Resources) {
 		logger:        res.Logger(),
 		loadedLicense: &atomic.Pointer[RedpandaLicense]{},
 	}
-	s.loadedLicense.Store(&RedpandaLicense{
+	s.setLicense(res, &RedpandaLicense{
 		Version:      1,
 		Organization: "test",
 		Type:         1,
@@ -129,9 +133,52 @@ func InjectCustomLicenseBytes(res *service.Resources, conf Config, licenseBytes 
 		"expires_at", time.Unix(license.Expiry, 0).Format(time.RFC3339),
 	).Info("Successfully loaded Redpanda license")
 
-	s.loadedLicense.Store(&license)
+	s.setLicense(res, &license)
 	setSharedService(res, s)
+
 	return nil
+}
+
+func (s *Service) setLicense(res *service.Resources, l *RedpandaLicense) {
+	s.loadedLicense.Store(l)
+
+	if s.cancel != nil {
+		s.cancel()
+	}
+	if l == nil || !l.AllowsEnterpriseFeatures() {
+		return
+	}
+
+	if s.expiryMetric == nil {
+		s.expiryMetric = res.Metrics().NewGauge("redpanda_cluster_features_enterprise_license_expiry_sec",
+			"Seconds remaining until the enterprise license expires.",
+		)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	s.cancel = cancel
+	go s.updateExpiryMetricLoop(ctx, *l)
+}
+
+// updateExpiryMetricLoop updates the license expiry metric every hour. The
+// metric value is the delta in seconds between now and the expiry time.
+func (s *Service) updateExpiryMetricLoop(ctx context.Context, license RedpandaLicense) {
+	updateMetric := func() {
+		expiryTime := time.Unix(license.Expiry, 0)
+		deltaSeconds := time.Until(expiryTime).Seconds()
+		s.expiryMetric.Set(int64(deltaSeconds))
+	}
+	updateMetric()
+
+	t := time.NewTicker(time.Hour)
+	defer t.Stop()
+	for {
+		select {
+		case <-t.C:
+			updateMetric()
+		case <-ctx.Done():
+			return
+		}
+	}
 }
 
 func (s *Service) readAndValidateLicense() (RedpandaLicense, error) {
