@@ -73,7 +73,7 @@ func init() {
 					return ""
 				}
 				switch p := pathVal.(type) {
-				case []interface{}:
+				case []any:
 					parts := make([]string, len(p))
 					for i, v := range p {
 						parts[i] = fmt.Sprintf("%v", v)
