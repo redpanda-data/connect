@@ -193,7 +193,7 @@ type mysqlStreamInput struct {
 	shutSig *shutdown.Signaller
 
 	// TLS configuration
-	tlsConfig *tls.Config
+	customTLSConfig *tls.Config
 
 	// IAM authentication fields
 	iamAuthEnabled      bool
@@ -232,19 +232,19 @@ func newMySQLStreamInput(conf *service.ParsedConfig, res *service.Resources) (s 
 	i.mysqlConfig.ParseTime = true
 
 	// Configure TLS if specified
-	if i.tlsConfig, err = conf.FieldTLS("tls"); err != nil {
+	if i.customTLSConfig, err = conf.FieldTLS("tls"); err != nil {
 		return nil, err
 	}
-	if i.tlsConfig != nil {
+	if i.customTLSConfig != nil {
 		// Get ServerName from the address, stripping the port if present
 		host := i.mysqlConfig.Addr
 		if idx := strings.Index(host, ":"); idx != -1 {
 			host = host[:idx]
 		}
-		i.tlsConfig.ServerName = host
+		i.customTLSConfig.ServerName = host
 
 		tlsConfigKey := "custom-tls"
-		if err := mysql.RegisterTLSConfig(tlsConfigKey, i.tlsConfig); err != nil {
+		if err := mysql.RegisterTLSConfig(tlsConfigKey, i.customTLSConfig); err != nil {
 			return nil, fmt.Errorf("failed to register TLS config: %w", err)
 		}
 		i.mysqlConfig.TLSConfig = tlsConfigKey
@@ -345,9 +345,12 @@ func (i *mysqlStreamInput) Connect(ctx context.Context) error {
 
 	// Parse and set additional parameters
 	canalConfig.Charset = i.mysqlConfig.Collation
-	if i.tlsConfig != nil {
-		canalConfig.TLSConfig = i.tlsConfig
-		i.logger.Debugf("Using custom TLS config with ServerName: '%s'", i.tlsConfig.ServerName)
+	if i.customTLSConfig != nil {
+		canalConfig.TLSConfig = i.customTLSConfig
+		i.logger.Debugf("Using custom TLS config with ServerName: '%s'", i.customTLSConfig.ServerName)
+	} else if i.mysqlConfig.TLS != nil {
+		canalConfig.TLSConfig = i.mysqlConfig.TLS
+		i.logger.Debugf("Using TLS config from DSN")
 	}
 	// Parse time values as time.Time values not strings
 	canalConfig.ParseTime = true
