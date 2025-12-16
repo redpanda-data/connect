@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.76.0 - 2025-12-16
+
+### Fixed
+
+- mysql_cdc: Fixed a regression where tls params are passed to mysql client when set via dns (@josephwoodward)
+
 ## 4.75.0 - 2025-12-15
 
 ### Added
