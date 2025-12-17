@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.76.0 - TBD
+
+### Fixed
+
+- cgo builds now include FFI and zmq components (@rockwotj)
+
 ## 4.75.1 - 2025-12-16
 
 ### Fixed
