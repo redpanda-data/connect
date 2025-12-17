@@ -9,6 +9,8 @@ builds:
     binary: redpanda-connect
     goos: [ linux ]
     goarch: [ amd64 ]
+    tags:
+      - x_benthos_extra
     env:
       - CGO_ENABLED=1
     ldflags: >
