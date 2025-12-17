@@ -29,6 +29,7 @@ const (
 	smFieldAddress     = "address"
 	smFieldFlushPeriod = "flush_period"
 	smFieldTagFormat   = "tag_format"
+	smFieldTags        = "tags"
 )
 
 func statsdSpec() *service.ConfigSpec {
@@ -44,6 +45,14 @@ func statsdSpec() *service.ConfigSpec {
 			service.NewStringEnumField(smFieldTagFormat, "none", "datadog", "influxdb").
 				Description("Metrics tagging is supported in a variety of formats.").
 				Default("none"),
+			service.NewStringMapField(smFieldTags).
+				Description("Global tags added to each metric.").
+				Advanced().
+				Example(map[string]string{
+					"hostname": "localhost",
+					"zone":     "danger",
+				}).
+				Default(map[string]any{}),
 		)
 }
 
@@ -111,8 +120,9 @@ func (s *statsdStat) SetFloat64(value float64) {
 //------------------------------------------------------------------------------
 
 type statsdMetrics struct {
-	s   *statsd.Client
-	log *service.Logger
+	s          *statsd.Client
+	log        *service.Logger
+	globalTags []statsd.Tag
 }
 
 func newStatsdFromParsed(conf *service.ParsedConfig, log *service.Logger) (s *statsdMetrics, err error) {
@@ -150,6 +160,14 @@ func newStatsdFromParsed(conf *service.ParsedConfig, log *service.Logger) (s *st
 		return
 	}
 
+	var tagsMap map[string]string
+	if tagsMap, err = conf.FieldStringMap(smFieldTags); err != nil {
+		return
+	}
+	for k, v := range tagsMap {
+		s.globalTags = append(s.globalTags, statsd.StringTag(k, v))
+	}
+
 	client := statsd.NewClient(address, statsdOpts...)
 
 	s.s = client
@@ -163,7 +181,7 @@ func (h *statsdMetrics) NewCounterCtor(path string, n ...string) service.Metrics
 		return &statsdStat{
 			path: path,
 			s:    h.s,
-			tags: tags(n, labelValues),
+			tags: h.tagsWithGlobal(tags(n, labelValues)),
 		}
 	}
 }
@@ -173,7 +191,7 @@ func (h *statsdMetrics) NewTimerCtor(path string, n ...string) service.MetricsEx
 		return &statsdStat{
 			path: path,
 			s:    h.s,
-			tags: tags(n, labelValues),
+			tags: h.tagsWithGlobal(tags(n, labelValues)),
 		}
 	}
 }
@@ -183,7 +201,7 @@ func (h *statsdMetrics) NewGaugeCtor(path string, n ...string) service.MetricsEx
 		return &statsdStat{
 			path: path,
 			s:    h.s,
-			tags: tags(n, labelValues),
+			tags: h.tagsWithGlobal(tags(n, labelValues)),
 		}
 	}
 }
@@ -195,6 +213,17 @@ func (*statsdMetrics) HandlerFunc() http.HandlerFunc {
 func (h *statsdMetrics) Close(context.Context) error {
 	_ = h.s.Close()
 	return nil
+}
+
+func (h *statsdMetrics) tagsWithGlobal(metricTags []statsd.Tag) []statsd.Tag {
+	if len(h.globalTags) == 0 {
+		return metricTags
+	}
+	// Global tags first, then metric-specific tags (so metric tags can override)
+	result := make([]statsd.Tag, 0, len(h.globalTags)+len(metricTags))
+	result = append(result, h.globalTags...)
+	result = append(result, metricTags...)
+	return result
 }
 
 func tags(labels, values []string) []statsd.Tag {
