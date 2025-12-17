@@ -28,7 +28,7 @@ import (
 func Run(
 	logger *slog.Logger,
 	envVarLookupFunc func(context.Context, string) (string, bool),
-	repositoryDir, addr string,
+	repositoryDir, addr, observabilityAddr string,
 	tagFilterFunc func([]string) bool,
 	license license.Config,
 	auth *Authorizer,
@@ -45,5 +45,22 @@ func Run(
 		return err
 	}
 	defer l.Close()
+
+	// Start observability server on configured address (default :6060)
+	if observabilityAddr != "" {
+		obsListener, err := net.Listen("tcp", observabilityAddr)
+		if err != nil {
+			logger.Warn("Failed to start observability server", "error", err, "address", observabilityAddr)
+		} else {
+			logger.Info("Starting observability server", "address", observabilityAddr)
+			go func() {
+				if err := srv.ServeObservability(context.Background(), obsListener); err != nil {
+					logger.Error("Observability server error", "error", err)
+				}
+			}()
+			defer obsListener.Close()
+		}
+	}
+
 	return srv.ServeHTTP(context.Background(), l)
 }

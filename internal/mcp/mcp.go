@@ -51,11 +51,12 @@ func (g *gMux) HandleFunc(pattern string, handler func(http.ResponseWriter, *htt
 // Server runs an mcp server against a target directory, with an optiona base
 // URL for an HTTP server.
 type Server struct {
-	base      *mcp.Server
-	mux       *mux.Router
-	rpJWT     *gateway.RPJWTMiddleware
-	cors      gateway.CORSConfig
-	resources *service.Resources
+	base             *mcp.Server
+	mux              *mux.Router
+	observabilityMux *http.ServeMux
+	rpJWT            *gateway.RPJWTMiddleware
+	cors             gateway.CORSConfig
+	resources        *service.Resources
 }
 
 // NewServer initializes the MCP server.
@@ -75,6 +76,7 @@ func NewServer(
 	}, nil)
 
 	mux := mux.NewRouter()
+	observabilityMux := http.NewServeMux()
 
 	env := service.GlobalEnvironment()
 
@@ -155,6 +157,19 @@ func NewServer(
 		return nil, err
 	}
 
+	// The metrics exporter should have registered itself via SetHTTPMux during Build()
+	// If it did, HandleFunc will have been called on our gMux wrapper
+	logger.Info("Finished building resources, metrics should be registered if configured")
+
+	// Register metrics endpoints on the observability mux (without authentication)
+	// by proxying to the main mux routes
+	observabilityMux.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
+		mux.ServeHTTP(w, r)
+	})
+	observabilityMux.HandleFunc("/stats", func(w http.ResponseWriter, r *http.Request) {
+		mux.ServeHTTP(w, r)
+	})
+
 	license.RegisterService(resources, licenseConfig)
 
 	// Add metrics middleware to track all MCP method calls
@@ -188,11 +203,12 @@ func NewServer(
 	cors := gateway.NewCORSConfigFromEnv()
 
 	return &Server{
-		base:      s,
-		mux:       mux,
-		rpJWT:     rpJWT,
-		cors:      cors,
-		resources: resources,
+		base:             s,
+		mux:              mux,
+		observabilityMux: observabilityMux,
+		rpJWT:            rpJWT,
+		cors:             cors,
+		resources:        resources,
 	}, nil
 }
 
@@ -228,6 +244,25 @@ func (m *Server) ServeHTTP(ctx context.Context, l net.Listener) error {
 
 	srv := &http.Server{
 		Handler: m.cors.WrapHandler(m.rpJWT.Wrap(m.mux)),
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go func() {
+		<-ctx.Done()
+		_ = srv.Shutdown(context.Background())
+	}()
+	err := srv.Serve(l)
+	if errors.Is(err, http.ErrServerClosed) {
+		return nil
+	}
+	return err
+}
+
+// ServeObservability serves the observability endpoints (metrics, stats) on a separate listener.
+// These endpoints are unauthenticated for easy access by monitoring systems.
+func (m *Server) ServeObservability(ctx context.Context, l net.Listener) error {
+	srv := &http.Server{
+		Handler: m.observabilityMux,
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
