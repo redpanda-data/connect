@@ -3,6 +3,34 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.76.0 - 2025-12-18
+
+### Fixed
+
+- cgo builds now include FFI and zmq components (@rockwotj)
+- microsoft_sql_server_cdc: Make character encoding between snapshot and streaming consistent (@josephwoodward)
+
+### Added
+
+- metrics: Added support for global metric tags in statsd (@danspark)
+- metrics: Added license expiration metric (@rockwotj)
+- redpanda/migrator: Automatically manage subject import mode in serverless (@mmatczuk)
+
+## 4.75.1 - 2025-12-16
+
+### Fixed
+
+- mysql_cdc: Fixed a regression where tls params are passed to mysql client when set via dns (@josephwoodward)
+
+## 4.75.0 - 2025-12-15
+
+### Added
+
+- Field `batching` added to the `redpanda` output. (@Jeffail)
+
+### Fixed
+
+- Fixed a regression in MCP servers to properly propagate traceparent headers in requests. (@rockwotj)
 
 ## 4.74.0 - 2025-12-15
 
