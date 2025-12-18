@@ -366,6 +366,11 @@ func (a *amazonS3Writer) Connect(context.Context) error {
 
 	client := s3.NewFromConfig(a.conf.aconf, func(o *s3.Options) {
 		o.UsePathStyle = a.conf.UsePathStyle
+
+		// For S3-compatible services, set BaseEndpoint at the client level
+		if a.conf.aconf.BaseEndpoint != nil {
+			o.BaseEndpoint = a.conf.aconf.BaseEndpoint
+		}
 	})
 	a.uploader = manager.NewUploader(client)
 	return nil
