@@ -93,6 +93,11 @@ func newS3CacheFromConfig(conf *service.ParsedConfig) (*s3Cache, error) {
 
 	client := s3.NewFromConfig(sess, func(o *s3.Options) {
 		o.UsePathStyle = forcePathStyleURLs
+
+		// For S3-compatible services, set BaseEndpoint at the client level
+		if sess.BaseEndpoint != nil {
+			o.BaseEndpoint = sess.BaseEndpoint
+		}
 	})
 
 	backOff, err := conf.FieldBackOff("retries")

@@ -715,6 +715,11 @@ func (a *awsS3Reader) Connect(ctx context.Context) error {
 
 	a.s3 = s3.NewFromConfig(a.awsConf, func(o *s3.Options) {
 		o.UsePathStyle = a.conf.ForcePathStyleURLs
+
+		// For S3-compatible services, set BaseEndpoint at the client level
+		if a.awsConf.BaseEndpoint != nil {
+			o.BaseEndpoint = a.awsConf.BaseEndpoint
+		}
 	})
 	if a.conf.SQS.URL != "" {
 		sqsConf := a.awsConf.Copy()
