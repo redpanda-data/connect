@@ -246,6 +246,6 @@ func TestStatsdTagsHelperFunction(t *testing.T) {
 
 	t.Run("empty labels and values", func(t *testing.T) {
 		result := tags([]string{}, []string{})
-		assert.Len(t, result, 0)
+		assert.Empty(t, result, 0)
 	})
 }
