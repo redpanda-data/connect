@@ -30,6 +30,10 @@ func mcpServerCli(rpMgr *enterprise.GlobalRedpandaManager) *cli.Command {
 			Name:  "address",
 			Usage: "An optional address to bind the MCP server to instead of running in stdio mode.",
 		},
+		&cli.StringFlag{
+			Name:  "observability-address",
+			Usage: "Address to bind the observability server (metrics, pprof) to. If not set, observability server is disabled. Only applies when --address is set.",
+		},
 		&cli.StringSliceFlag{
 			Name:  "tag",
 			Usage: "Optionally limit the resources that this command runs by providing one or more regular expressions. Resources that do not contain a match within the field `meta.tags` for each tag regular expression specified will be ignored.",
@@ -77,6 +81,7 @@ Each resource will be exposed as a tool that AI can interact with:
 			}))
 
 			addr := c.String("address")
+			observabilityAddr := c.String("observability-address")
 			if addr != "" {
 				// It's safe to initialise a stdout logger
 				fallbackLogger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
@@ -129,7 +134,7 @@ Each resource will be exposed as a tool that AI can interact with:
 				}
 			}
 
-			if err := mcp.Run(logger, secretLookupFn, repositoryDir, addr, func(tags []string) bool {
+			if err := mcp.Run(logger, secretLookupFn, repositoryDir, addr, observabilityAddr, func(tags []string) bool {
 				for _, f := range tagFilterREs {
 					var matched bool
 					for _, tag := range tags {
