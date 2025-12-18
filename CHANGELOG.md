@@ -3,11 +3,18 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
-## 4.76.0 - TBD
+## 4.76.0 - 2025-12-18
 
 ### Fixed
 
 - cgo builds now include FFI and zmq components (@rockwotj)
+- microsoft_sql_server_cdc: Make character encoding between snapshot and streaming consistent (@josephwoodward)
+
+### Added
+
+- metrics: Added support for global metric tags in statsd (@danspark)
+- metrics: Added license expiration metric (@mmatczuk)
+- redpanda/migrator: Automatically manage subject import mode in serverless (@mmatczuk)
 
 ## 4.75.1 - 2025-12-16
 
