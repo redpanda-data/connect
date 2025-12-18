@@ -24,8 +24,15 @@ component_type_dropdown::[]
 
 Pushes metrics using the https://github.com/statsd/statsd[StatsD protocol^]. Supported tagging formats are 'none', 'datadog' and 'influxdb'.
 
+
+[tabs]
+======
+Common::
++
+--
+
 ```yml
-# Config fields, showing default values
+# Common config fields, showing default values
 metrics:
   statsd:
     address: "" # No default (required)
@@ -33,6 +40,25 @@ metrics:
     tag_format: none
   mapping: ""
 ```
+
+--
+Advanced::
++
+--
+
+```yml
+# All config fields, showing default values
+metrics:
+  statsd:
+    address: "" # No default (required)
+    flush_period: 100ms
+    tag_format: none
+    tags: {}
+  mapping: ""
+```
+
+--
+======
 
 == Fields
 
@@ -67,5 +93,22 @@ Options:
 , `datadog`
 , `influxdb`
 .
+
+=== `tags`
+
+Global tags added to each metric.
+
+
+*Type*: `object`
+
+*Default*: `{}`
+
+```yml
+# Examples
+
+tags:
+  hostname: localhost
+  zone: danger
+```
 
 
