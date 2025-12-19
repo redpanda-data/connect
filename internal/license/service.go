@@ -149,9 +149,7 @@ func (s *Service) setLicense(res *service.Resources, l *RedpandaLicense) {
 	}
 
 	if s.expiryMetric == nil {
-		s.expiryMetric = res.Metrics().NewGauge("redpanda_cluster_features_enterprise_license_expiry_sec",
-			"Seconds remaining until the enterprise license expires.",
-		)
+		s.expiryMetric = res.Metrics().NewGauge("redpanda_cluster_features_enterprise_license_expiry_sec")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancel = cancel
