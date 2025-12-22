@@ -3,6 +3,12 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.76.1 - 2025-12-22
+
+### Fixed
+
+- metrics: Fixed regression with license expiration metric (@birdayz)
+
 ## 4.76.0 - 2025-12-18
 
 ### Fixed
