@@ -15,14 +15,12 @@ package elasticsearch
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"strings"
 
 	"github.com/elastic/elastic-transport-go/v8/elastictransport"
-	elasticsearch_v8_types "github.com/elastic/go-elasticsearch/v8/typedapi/types"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -388,25 +386,13 @@ func (e *esOutput) newBatchInterpolator(batch service.MessageBatch) *BatchInterp
 	}
 }
 
+// BatchInterpolator type.
 type BatchInterpolator struct {
 	Action   *service.MessageBatchInterpolationExecutor
 	Index    *service.MessageBatchInterpolationExecutor
 	Routing  *service.MessageBatchInterpolationExecutor
 	Id       *service.MessageBatchInterpolationExecutor
 	Pipeline *service.MessageBatchInterpolationExecutor
-}
-
-type updateAction struct {
-	Doc    json.RawMessage                `json:"doc"`
-	Script *elasticsearch_v8_types.Script `json:"script"`
-	Upsert json.RawMessage                `json:"upsert"`
-}
-
-func optionalStr(s string) *string {
-	if s == "" {
-		return nil
-	}
-	return &s
 }
 
 func (*esOutput) Close(context.Context) error {
