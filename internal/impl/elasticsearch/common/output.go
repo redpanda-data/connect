@@ -44,7 +44,7 @@ const (
 )
 
 type esConfig struct {
-	clientOpts ElasticsearchConfig
+	clientOpts Config
 
 	action          *service.InterpolatedString
 	id              *service.InterpolatedString
@@ -119,16 +119,23 @@ func esConfigFromParsed(pConf *service.ParsedConfig) (*esConfig, error) {
 	return conf, nil
 }
 
-// ElasticsearchConfigSpecFromTagName function.
-func ElasticsearchConfigSpecFromTagName(tagName string) *service.ConfigSpec {
+// ConfigSpecFromTagName function.
+func ConfigSpecFromTagName(stable bool, tagName string) *service.ConfigSpec {
 	replacer := strings.NewReplacer(tagNameMacro, tagName)
 
 	replaceTags := func(s string) string {
 		return replacer.Replace(s)
 	}
 
-	return service.NewConfigSpec().
-		Stable().
+	spec := service.NewConfigSpec()
+
+	if stable {
+		spec = spec.Stable()
+	} else {
+		spec = spec.Beta()
+	}
+
+	return spec.
 		Categories("Services").
 		Summary(`Publishes messages into an Elasticsearch index. If the index does not exist then it is created with a dynamic mapping.`).
 		Description(`
