@@ -1,6 +1,6 @@
 = elasticsearch_v9
 :type: output
-:status: stable
+:status: beta
 :categories: ["Services"]
 
 

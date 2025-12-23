@@ -37,7 +37,7 @@ func TestIntegrationElasticsearch(t *testing.T) {
 	require.NoError(t, err)
 	pool.MaxWait = time.Second * 60
 
-	resource, err := pool.Run("docker.elastic.co/elasticsearch/elasticsearch", "9.1.7", []string{
+	resource, err := pool.Run("docker.elastic.co/elasticsearch/elasticsearch", "9.2.2", []string{
 		"discovery.type=single-node",
 		"cluster.routing.allocation.disk.threshold_enabled=false",
 		"xpack.security.enabled=false",
