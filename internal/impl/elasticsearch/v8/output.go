@@ -28,9 +28,11 @@ import (
 	elasticsearch_common "github.com/redpanda-data/connect/v4/internal/impl/elasticsearch/common"
 )
 
+const stable = true
+
 func init() {
 	service.MustRegisterBatchOutput("elasticsearch_v8",
-		elasticsearch_common.ElasticsearchConfigSpecFromTagName("elasticsearch_v8"),
+		elasticsearch_common.ConfigSpecFromTagName(stable, "elasticsearch_v8"),
 		elasticsearch_common.BuildBatchOutputConstructor(newBulkWriterBuilderV8))
 }
 
@@ -45,7 +47,7 @@ type bulkWriterBuilderV8 struct {
 }
 
 func newBulkWriterBuilderV8(
-	clientOpts elasticsearch_common.ElasticsearchConfig,
+	clientOpts elasticsearch_common.Config,
 ) (elasticsearch_common.BulkWriterBuilder, error) {
 	client, err := elasticsearch_v8.NewTypedClient(clientOpts.ToV8Configuration())
 	if err != nil {

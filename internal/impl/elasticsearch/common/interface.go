@@ -25,10 +25,12 @@ import (
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
 
+// BulkWriterBuilder interface.
 type BulkWriterBuilder interface {
 	Bulk() BulkWriter
 }
 
+// BulkWriter is the common abstraction between elasticsearch v8 and v9.
 type BulkWriter interface {
 	AddOpToBatch(
 		batch service.MessageBatch,
@@ -40,13 +42,15 @@ type BulkWriter interface {
 	Do(ctx context.Context) (result *Result, err error)
 }
 
+// Result it is a simple struct with useful and common information between elasticsearch v8 and v9.
 type Result struct {
 	Errors  bool
 	Results []error
 	Took    time.Duration
 }
 
-type ElasticsearchConfig struct {
+// Config common configuration between elasticsearch v8 and v9.
+type Config struct {
 	Logger    elastictransport.Logger
 	Transport http.RoundTripper
 
@@ -55,7 +59,8 @@ type ElasticsearchConfig struct {
 	Password  string
 }
 
-func (c *ElasticsearchConfig) ToV8Configuration() elasticsearch_v8.Config {
+// ToV8Configuration convert to elasticsearch v8 configuration.
+func (c *Config) ToV8Configuration() elasticsearch_v8.Config {
 	return elasticsearch_v8.Config{
 		Addresses: c.Addresses,
 		Username:  c.Username,
@@ -65,7 +70,8 @@ func (c *ElasticsearchConfig) ToV8Configuration() elasticsearch_v8.Config {
 	}
 }
 
-func (c *ElasticsearchConfig) ToV9Configuration() elasticsearch_v9.Config {
+// ToV9Configuration convert to elasticsearch v9 configuration.
+func (c *Config) ToV9Configuration() elasticsearch_v9.Config {
 	return elasticsearch_v9.Config{
 		Addresses: c.Addresses,
 		Username:  c.Username,
@@ -75,4 +81,5 @@ func (c *ElasticsearchConfig) ToV9Configuration() elasticsearch_v9.Config {
 	}
 }
 
-type BulkWriterConnector func(clientOpts ElasticsearchConfig) (BulkWriterBuilder, error)
+// BulkWriterConnector common func.
+type BulkWriterConnector func(clientOpts Config) (BulkWriterBuilder, error)
