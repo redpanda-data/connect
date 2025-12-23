@@ -347,7 +347,7 @@ func (e *Output) WriteBatch(ctx context.Context, msg service.MessageBatch) error
 	dur := time.Since(start)
 
 	e.log.Debugf(
-		"Successfully dispatched [%s] documents in %s (%s docs/sec)",
+		"Successfully dispatched [%d] documents in %s (%f docs/sec)",
 		biStats.NumFlushed,
 		dur.Truncate(time.Millisecond),
 		int64(1000.0/float64(dur/time.Millisecond)*float64(biStats.NumFlushed)),
