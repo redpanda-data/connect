@@ -20,7 +20,7 @@ import (
 
 	"github.com/elastic/elastic-transport-go/v8/elastictransport"
 	elasticsearch_v8 "github.com/elastic/go-elasticsearch/v8"
-elasticsearch_v9 "github.com/elastic/go-elasticsearch/v9"
+	elasticsearch_v9 "github.com/elastic/go-elasticsearch/v9"
 
 	"github.com/redpanda-data/benthos/v4/public/service"
 )
@@ -74,6 +74,5 @@ func (c *ElasticsearchConfig) ToV9Configuration() elasticsearch_v9.Config {
 		Logger:    c.Logger,
 	}
 }
-
 
 type BulkWriterConnector func(clientOpts ElasticsearchConfig) (BulkWriterBuilder, error)
