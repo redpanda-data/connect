@@ -1,4 +1,4 @@
-= elasticsearch_v8
+= elasticsearch_v9
 :type: output
 :status: stable
 :categories: ["Services"]
@@ -36,7 +36,7 @@ Common::
 # Common config fields, showing default values
 output:
   label: ""
-  elasticsearch_v8:
+  elasticsearch_v9:
     urls: [] # No default (required)
     index: "" # No default (required)
     action: "" # No default (required)
@@ -58,7 +58,7 @@ Advanced::
 # All config fields, showing default values
 output:
   label: ""
-  elasticsearch_v8:
+  elasticsearch_v9:
     urls: [] # No default (required)
     index: "" # No default (required)
     action: "" # No default (required)
@@ -115,7 +115,7 @@ output:
         meta id = this.id
         # Performs a partial update on the document.
         root.doc = this
-  elasticsearch_v8:
+  elasticsearch_v9:
     urls: [localhost:9200]
     index: foo
     id: ${! @id }
@@ -128,7 +128,7 @@ output:
         meta id = this.id
         # Increments the field "counter" by 1.
         root.script.source = "ctx._source.counter += 1"
-  elasticsearch_v8:
+  elasticsearch_v9:
     urls: [localhost:9200]
     index: foo
     id: ${! @id }
@@ -144,7 +144,7 @@ output:
         # of 50 will be inserted.
         root.doc.product_price = 50
         root.upsert.product_price = 100
-  elasticsearch_v8:
+  elasticsearch_v9:
     urls: [localhost:9200]
     index: foo
     id: ${! @id }
@@ -169,7 +169,7 @@ input:
         meta id = this.id
         root = this
 output:
-  elasticsearch_v8:
+  elasticsearch_v9:
     urls: ['http://localhost:9200']
     index: "things"
     action: "index"
@@ -191,7 +191,7 @@ input:
     scanner:
       to_the_end: {}
 output:
-  elasticsearch_v8:
+  elasticsearch_v9:
     urls: ['http://localhost:9200']
     index: "cool-bug-facts"
     action: "index"
@@ -207,7 +207,7 @@ When using the `create` action, a new document will be created if the document I
 
 ```yaml
 output:
-  elasticsearch_v8:
+  elasticsearch_v9:
     urls: [localhost:9200]
     index: foo
     id: ${! json("id") }
@@ -227,7 +227,7 @@ output:
     - mapping: |
         meta id = this.id
         root = this.doc
-  elasticsearch_v8:
+  elasticsearch_v9:
     urls: [localhost:9200]
     index: foo
     id: ${! @id }

@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/elastic/go-elasticsearch/v8"
+	"github.com/elastic/go-elasticsearch/v9"
 	"github.com/ory/dockertest/v3"
 	"github.com/stretchr/testify/require"
 
@@ -37,7 +37,7 @@ func TestIntegrationElasticsearch(t *testing.T) {
 	require.NoError(t, err)
 	pool.MaxWait = time.Second * 60
 
-	resource, err := pool.Run("docker.elastic.co/elasticsearch/elasticsearch", "8.17.1", []string{
+	resource, err := pool.Run("docker.elastic.co/elasticsearch/elasticsearch", "9.1.7", []string{
 		"discovery.type=single-node",
 		"cluster.routing.allocation.disk.threshold_enabled=false",
 		"xpack.security.enabled=false",
@@ -63,7 +63,7 @@ func TestIntegrationElasticsearch(t *testing.T) {
 
 	streamBuilder := service.NewStreamBuilder()
 	require.NoError(t, streamBuilder.AddOutputYAML(fmt.Sprintf(`
-elasticsearch_v8:
+elasticsearch_v9:
   urls: ['%s']
   index: "things"
   action: ${! meta("action") }
