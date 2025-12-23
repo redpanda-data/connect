@@ -192,7 +192,7 @@ output:
         meta id = this.id
         # Performs a partial update on the document.
         root.doc = this
-  {TAGNAME}
+  {TAGNAME}:
     urls: [localhost:9200]
     index: foo
     id: ${! @id }
@@ -205,7 +205,7 @@ output:
         meta id = this.id
         # Increments the field "counter" by 1.
         root.script.source = "ctx._source.counter += 1"
-  {TAGNAME}
+  {TAGNAME}:
     urls: [localhost:9200]
     index: foo
     id: ${! @id }
@@ -221,7 +221,7 @@ output:
         # of 50 will be inserted.
         root.doc.product_price = 50
         root.upsert.product_price = 100
-  {TAGNAME}
+  {TAGNAME}:
     urls: [localhost:9200]
     index: foo
     id: ${! @id }
@@ -240,7 +240,7 @@ input:
         meta id = this.id
         root = this
 output:
-  {TAGNAME}
+  {TAGNAME}:
     urls: ['http://localhost:9200']
     index: "things"
     action: "index"
@@ -256,7 +256,7 @@ input:
     scanner:
       to_the_end: {}
 output:
-  {TAGNAME}
+  {TAGNAME}:
     urls: ['http://localhost:9200']
     index: "cool-bug-facts"
     action: "index"
@@ -266,7 +266,7 @@ output:
 			"When using the `create` action, a new document will be created if the document ID does not already exist. If the document ID already exists, the operation will fail.",
 			replaceTags(`
 output:
-  {TAGNAME}
+  {TAGNAME}:
     urls: [localhost:9200]
     index: foo
     id: ${! json("id") }
@@ -280,7 +280,7 @@ output:
     - mapping: |
         meta id = this.id
         root = this.doc
-  {TAGNAME}
+  {TAGNAME}:
     urls: [localhost:9200]
     index: foo
     id: ${! @id }
