@@ -358,7 +358,7 @@ func (e *esOutput) WriteBatch(ctx context.Context, batch service.MessageBatch) e
 	tookDuration := time.Duration(result.Took) * time.Millisecond
 
 	e.log.Debugf(
-		"Successfully dispatched [%s] documents in %s (%s docs/sec)",
+		"Successfully dispatched [%d] documents in %s (%f docs/sec)",
 		len(result.Items),
 		tookDuration,
 		float64(len(result.Items))/tookDuration.Seconds(),
