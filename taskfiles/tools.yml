@@ -9,6 +9,7 @@ tasks:
     deps:
       - install-golangci-lint
       - install-govulncheck
+      - install-gotestfmt
 
   install-golangci-lint:
     desc: Install golangci-lint
@@ -28,3 +29,10 @@ tasks:
     silent: true
     cmds:
       - GOBIN={{.GOBIN}} go install golang.org/x/vuln/cmd/govulncheck@latest
+
+  install-gotestfmt:
+    desc: Install gotestfmt
+    run: always
+    silent: true
+    cmds:
+      - GOBIN={{.GOBIN}} go install github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@v2.5.0
