@@ -47,6 +47,7 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/jaeger"
 	_ "github.com/redpanda-data/connect/v4/public/components/javascript"
 	_ "github.com/redpanda-data/connect/v4/public/components/kafka"
+	_ "github.com/redpanda-data/connect/v4/public/components/kubernetes"
 	_ "github.com/redpanda-data/connect/v4/public/components/maxmind"
 	_ "github.com/redpanda-data/connect/v4/public/components/memcached"
 	_ "github.com/redpanda-data/connect/v4/public/components/mongodb"
