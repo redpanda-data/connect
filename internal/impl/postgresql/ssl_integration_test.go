@@ -122,7 +122,7 @@ hostssl all all all cert clientcert=%s
 		assert.NoError(t, pool.Purge(resource))
 	})
 
-	// First, connect to the database before enabling SSL to ensure it's ready
+	// Wait for PostgreSQL to be ready
 	hostAndPort := resource.GetHostPort("5432/tcp")
 	dsn := fmt.Sprintf("user=testuser password='l]YLSc|4[i56_@{gY' dbname=dbname sslmode=disable host=%s port=%s", strings.Split(hostAndPort, ":")[0], strings.Split(hostAndPort, ":")[1])
 
@@ -137,7 +137,7 @@ hostssl all all all cert clientcert=%s
 		return db.Ping()
 	}))
 
-	// Copy certificate files into the container with correct permissions
+	// Copy certificate files into container with proper ownership
 	caCertContent, err := os.ReadFile(certs.caCert)
 	require.NoError(t, err)
 	serverCertContent, err := os.ReadFile(certs.serverCert)
@@ -152,28 +152,39 @@ hostssl all all all cert clientcert=%s
 	_, err = resource.Exec([]string{"bash", "-c", fmt.Sprintf("cat > /var/lib/postgresql/server.key << 'EOF'\n%s\nEOF", string(serverKeyContent))}, dockertest.ExecOptions{})
 	require.NoError(t, err)
 
-	// Fix permissions on the key file (PostgreSQL requires 0600)
+	// Fix ownership and permissions (PostgreSQL requires key file to be owned by postgres with mode 0600)
 	_, err = resource.Exec([]string{"chown", "postgres:postgres", "/var/lib/postgresql/server.key", "/var/lib/postgresql/server.crt", "/var/lib/postgresql/ca.crt"}, dockertest.ExecOptions{})
 	require.NoError(t, err)
 	_, err = resource.Exec([]string{"chmod", "0600", "/var/lib/postgresql/server.key"}, dockertest.ExecOptions{})
 	require.NoError(t, err)
-
-	// Enable SSL by updating postgresql.conf
-	_, err = resource.Exec([]string{"bash", "-c", "echo 'ssl = on' >> /var/lib/postgresql/data/postgresql.conf"}, dockertest.ExecOptions{})
-	require.NoError(t, err)
-	_, err = resource.Exec([]string{"bash", "-c", "echo \"ssl_cert_file = '/var/lib/postgresql/server.crt'\" >> /var/lib/postgresql/data/postgresql.conf"}, dockertest.ExecOptions{})
-	require.NoError(t, err)
-	_, err = resource.Exec([]string{"bash", "-c", "echo \"ssl_key_file = '/var/lib/postgresql/server.key'\" >> /var/lib/postgresql/data/postgresql.conf"}, dockertest.ExecOptions{})
-	require.NoError(t, err)
-	_, err = resource.Exec([]string{"bash", "-c", "echo \"ssl_ca_file = '/var/lib/postgresql/ca.crt'\" >> /var/lib/postgresql/data/postgresql.conf"}, dockertest.ExecOptions{})
+	_, err = resource.Exec([]string{"chmod", "0644", "/var/lib/postgresql/server.crt", "/var/lib/postgresql/ca.crt"}, dockertest.ExecOptions{})
 	require.NoError(t, err)
 
-	// Reload PostgreSQL to apply SSL settings
-	_, err = resource.Exec([]string{"su", "-", "postgres", "-c", "pg_ctl reload -D /var/lib/postgresql/data"}, dockertest.ExecOptions{})
+	// Update postgresql.conf to enable SSL
+	_, err = resource.Exec([]string{"bash", "-c", `cat >> /var/lib/postgresql/data/postgresql.conf << 'EOF'
+ssl = on
+ssl_cert_file = '/var/lib/postgresql/server.crt'
+ssl_key_file = '/var/lib/postgresql/server.key'
+ssl_ca_file = '/var/lib/postgresql/ca.crt'
+EOF
+`}, dockertest.ExecOptions{})
 	require.NoError(t, err)
 
-	// Wait a moment for SSL to be enabled
-	time.Sleep(2 * time.Second)
+	// Close the old connection before restart
+	require.NoError(t, db.Close())
+
+	// Restart PostgreSQL to enable SSL (SSL requires restart, not just reload)
+	require.NoError(t, pool.Client.RestartContainer(resource.Container.ID, 10))
+
+	// Reconnect after restart (SSL is now enabled, but pg_hba.conf still allows non-SSL)
+	require.NoError(t, pool.Retry(func() error {
+		var err error
+		db, err = sql.Open("postgres", dsn)
+		if err != nil {
+			return err
+		}
+		return db.Ping()
+	}))
 
 	t.Cleanup(func() {
 		_ = db.Close()
@@ -182,7 +193,7 @@ hostssl all all all cert clientcert=%s
 	_, err = db.Exec("CREATE TABLE IF NOT EXISTS test_table (id serial PRIMARY KEY, content VARCHAR(50));")
 	require.NoError(t, err)
 
-	// Now close the non-SSL connection before enforcing SSL
+	// Now close the non-SSL connection before enforcing SSL-only via pg_hba.conf
 	require.NoError(t, db.Close())
 
 	// Overwrite pg_hba.conf to enforce SSL
@@ -203,6 +214,9 @@ hostssl all all all cert clientcert=%s
 		break // Success! Exit retry loop
 	}
 	require.NoError(t, err, "Exhausted all retries updating container configuration")
+
+	// Wait a moment for pg_hba.conf changes to fully take effect
+	time.Sleep(2 * time.Second)
 
 	// Create a new SSL connection with client cert for use in the test
 	sslDsn := fmt.Sprintf(
