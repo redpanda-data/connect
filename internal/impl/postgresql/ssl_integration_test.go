@@ -132,8 +132,10 @@ hostssl all all all cert clientcert=%s
 	})
 
 	// Overwrite pg_hba.conf to enforce SSL
-	for range 10 {
-		time.Sleep(10 * time.Second)
+	for i := range 10 {
+		if i > 0 {
+			time.Sleep(10 * time.Second)
+		}
 		_, err = resource.Exec([]string{"bash", "-c", fmt.Sprintf("echo '%s' > /var/lib/postgresql/data/pg_hba.conf", pgHbaContent)}, dockertest.ExecOptions{})
 		if err != nil {
 			continue
@@ -142,8 +144,9 @@ hostssl all all all cert clientcert=%s
 		if err != nil {
 			continue
 		}
+		break // Success! Exit retry loop
 	}
-	require.NoError(t, err, "Exhausted all retires updating container configuration")
+	require.NoError(t, err, "Exhausted all retries updating container configuration")
 
 	hostAndPort := resource.GetHostPort("5432/tcp")
 	dsn := fmt.Sprintf("user=testuser password='l]YLSc|4[i56_@{gY' dbname=dbname sslmode=disable host=%s port=%s", strings.Split(hostAndPort, ":")[0], strings.Split(hostAndPort, ":")[1])
