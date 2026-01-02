@@ -133,7 +133,7 @@ hostssl all all all cert clientcert=%s
 
 	// Overwrite pg_hba.conf to enforce SSL
 	for range 10 {
-		time.Sleep(1 * time.Second)
+		time.Sleep(10 * time.Second)
 		_, err = resource.Exec([]string{"bash", "-c", fmt.Sprintf("echo '%s' > /var/lib/postgresql/data/pg_hba.conf", pgHbaContent)}, dockertest.ExecOptions{})
 		if err != nil {
 			continue
