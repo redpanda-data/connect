@@ -138,10 +138,12 @@ hostssl all all all cert clientcert=%s
 		}
 		_, err = resource.Exec([]string{"bash", "-c", fmt.Sprintf("echo '%s' > /var/lib/postgresql/data/pg_hba.conf", pgHbaContent)}, dockertest.ExecOptions{})
 		if err != nil {
+			t.Logf("Failed on 1")
 			continue
 		}
 		_, err = resource.Exec([]string{"pg_ctl", "reload"}, dockertest.ExecOptions{})
 		if err != nil {
+			t.Logf("Failed on 2")
 			continue
 		}
 		break // Success! Exit retry loop
