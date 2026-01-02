@@ -45,6 +45,7 @@ import (
 	_ "github.com/redpanda-data/connect/v4/public/components/nats"
 	_ "github.com/redpanda-data/connect/v4/public/components/openai"
 	_ "github.com/redpanda-data/connect/v4/public/components/opensearch"
+	_ "github.com/redpanda-data/connect/v4/public/components/oracledb"
 	_ "github.com/redpanda-data/connect/v4/public/components/otlp"
 	_ "github.com/redpanda-data/connect/v4/public/components/pinecone"
 	_ "github.com/redpanda-data/connect/v4/public/components/postgresql"
