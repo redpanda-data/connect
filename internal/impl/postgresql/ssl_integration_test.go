@@ -111,15 +111,6 @@ hostssl all all all cert clientcert=%s
 		Cmd: []string{
 			"postgres",
 			"-c", "wal_level=logical",
-			"-c", "ssl=on",
-			"-c", "ssl_cert_file=/var/lib/postgresql/server.crt",
-			"-c", "ssl_key_file=/var/lib/postgresql/server.key",
-			"-c", "ssl_ca_file=/var/lib/postgresql/ca.crt",
-		},
-		Mounts: []string{
-			fmt.Sprintf("%s:/var/lib/postgresql/server.crt", certs.serverCert),
-			fmt.Sprintf("%s:/var/lib/postgresql/server.key", certs.serverKey),
-			fmt.Sprintf("%s:/var/lib/postgresql/ca.crt", certs.caCert),
 		},
 	}, func(config *docker.HostConfig) {
 		config.AutoRemove = true
@@ -131,11 +122,12 @@ hostssl all all all cert clientcert=%s
 		assert.NoError(t, pool.Purge(resource))
 	})
 
-	// First, connect to the database before enforcing SSL to create the table
+	// First, connect to the database before enabling SSL to ensure it's ready
 	hostAndPort := resource.GetHostPort("5432/tcp")
 	dsn := fmt.Sprintf("user=testuser password='l]YLSc|4[i56_@{gY' dbname=dbname sslmode=disable host=%s port=%s", strings.Split(hostAndPort, ":")[0], strings.Split(hostAndPort, ":")[1])
 
 	var db *sql.DB
+	pool.MaxWait = 120 * time.Second
 	require.NoError(t, pool.Retry(func() error {
 		var err error
 		db, err = sql.Open("postgres", dsn)
@@ -144,6 +136,44 @@ hostssl all all all cert clientcert=%s
 		}
 		return db.Ping()
 	}))
+
+	// Copy certificate files into the container with correct permissions
+	caCertContent, err := os.ReadFile(certs.caCert)
+	require.NoError(t, err)
+	serverCertContent, err := os.ReadFile(certs.serverCert)
+	require.NoError(t, err)
+	serverKeyContent, err := os.ReadFile(certs.serverKey)
+	require.NoError(t, err)
+
+	_, err = resource.Exec([]string{"bash", "-c", fmt.Sprintf("cat > /var/lib/postgresql/ca.crt << 'EOF'\n%s\nEOF", string(caCertContent))}, dockertest.ExecOptions{})
+	require.NoError(t, err)
+	_, err = resource.Exec([]string{"bash", "-c", fmt.Sprintf("cat > /var/lib/postgresql/server.crt << 'EOF'\n%s\nEOF", string(serverCertContent))}, dockertest.ExecOptions{})
+	require.NoError(t, err)
+	_, err = resource.Exec([]string{"bash", "-c", fmt.Sprintf("cat > /var/lib/postgresql/server.key << 'EOF'\n%s\nEOF", string(serverKeyContent))}, dockertest.ExecOptions{})
+	require.NoError(t, err)
+
+	// Fix permissions on the key file (PostgreSQL requires 0600)
+	_, err = resource.Exec([]string{"chown", "postgres:postgres", "/var/lib/postgresql/server.key", "/var/lib/postgresql/server.crt", "/var/lib/postgresql/ca.crt"}, dockertest.ExecOptions{})
+	require.NoError(t, err)
+	_, err = resource.Exec([]string{"chmod", "0600", "/var/lib/postgresql/server.key"}, dockertest.ExecOptions{})
+	require.NoError(t, err)
+
+	// Enable SSL by updating postgresql.conf
+	_, err = resource.Exec([]string{"bash", "-c", "echo 'ssl = on' >> /var/lib/postgresql/data/postgresql.conf"}, dockertest.ExecOptions{})
+	require.NoError(t, err)
+	_, err = resource.Exec([]string{"bash", "-c", "echo \"ssl_cert_file = '/var/lib/postgresql/server.crt'\" >> /var/lib/postgresql/data/postgresql.conf"}, dockertest.ExecOptions{})
+	require.NoError(t, err)
+	_, err = resource.Exec([]string{"bash", "-c", "echo \"ssl_key_file = '/var/lib/postgresql/server.key'\" >> /var/lib/postgresql/data/postgresql.conf"}, dockertest.ExecOptions{})
+	require.NoError(t, err)
+	_, err = resource.Exec([]string{"bash", "-c", "echo \"ssl_ca_file = '/var/lib/postgresql/ca.crt'\" >> /var/lib/postgresql/data/postgresql.conf"}, dockertest.ExecOptions{})
+	require.NoError(t, err)
+
+	// Reload PostgreSQL to apply SSL settings
+	_, err = resource.Exec([]string{"su", "-", "postgres", "-c", "pg_ctl reload -D /var/lib/postgresql/data"}, dockertest.ExecOptions{})
+	require.NoError(t, err)
+
+	// Wait a moment for SSL to be enabled
+	time.Sleep(2 * time.Second)
 
 	t.Cleanup(func() {
 		_ = db.Close()
@@ -160,12 +190,12 @@ hostssl all all all cert clientcert=%s
 		if i > 0 {
 			time.Sleep(2 * time.Second)
 		}
-		_, err = resource.Exec([]string{"bash", "-c", fmt.Sprintf("echo '%s' > /var/lib/postgresql/data/pg_hba.conf", pgHbaContent)}, dockertest.ExecOptions{})
+		_, err = resource.Exec([]string{"bash", "-c", fmt.Sprintf("cat > /var/lib/postgresql/data/pg_hba.conf << 'EOF'\n%s\nEOF", pgHbaContent)}, dockertest.ExecOptions{})
 		if err != nil {
 			t.Logf("Failed to write pg_hba.conf: %v", err)
 			continue
 		}
-		_, err = resource.Exec([]string{"pg_ctl", "reload"}, dockertest.ExecOptions{})
+		_, err = resource.Exec([]string{"su", "-", "postgres", "-c", "pg_ctl reload -D /var/lib/postgresql/data"}, dockertest.ExecOptions{})
 		if err != nil {
 			t.Logf("Failed to reload pg_ctl: %v", err)
 			continue
@@ -185,6 +215,7 @@ hostssl all all all cert clientcert=%s
 	)
 
 	var sslDB *sql.DB
+	pool.MaxWait = 120 * time.Second
 	require.NoError(t, pool.Retry(func() error {
 		var err error
 		sslDB, err = sql.Open("postgres", sslDsn)
