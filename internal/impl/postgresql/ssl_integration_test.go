@@ -131,25 +131,7 @@ hostssl all all all cert clientcert=%s
 		assert.NoError(t, pool.Purge(resource))
 	})
 
-	// Overwrite pg_hba.conf to enforce SSL
-	for i := range 10 {
-		if i > 0 {
-			time.Sleep(10 * time.Second)
-		}
-		_, err = resource.Exec([]string{"bash", "-c", fmt.Sprintf("echo '%s' > /var/lib/postgresql/data/pg_hba.conf", pgHbaContent)}, dockertest.ExecOptions{})
-		if err != nil {
-			t.Logf("Failed on 1")
-			continue
-		}
-		_, err = resource.Exec([]string{"pg_ctl", "reload"}, dockertest.ExecOptions{})
-		if err != nil {
-			t.Logf("Failed on 2")
-			continue
-		}
-		break // Success! Exit retry loop
-	}
-	require.NoError(t, err, "Exhausted all retries updating container configuration")
-
+	// First, connect to the database before enforcing SSL to create the table
 	hostAndPort := resource.GetHostPort("5432/tcp")
 	dsn := fmt.Sprintf("user=testuser password='l]YLSc|4[i56_@{gY' dbname=dbname sslmode=disable host=%s port=%s", strings.Split(hostAndPort, ":")[0], strings.Split(hostAndPort, ":")[1])
 
@@ -170,7 +152,53 @@ hostssl all all all cert clientcert=%s
 	_, err = db.Exec("CREATE TABLE IF NOT EXISTS test_table (id serial PRIMARY KEY, content VARCHAR(50));")
 	require.NoError(t, err)
 
-	return resource, db
+	// Now close the non-SSL connection before enforcing SSL
+	require.NoError(t, db.Close())
+
+	// Overwrite pg_hba.conf to enforce SSL
+	for i := range 10 {
+		if i > 0 {
+			time.Sleep(2 * time.Second)
+		}
+		_, err = resource.Exec([]string{"bash", "-c", fmt.Sprintf("echo '%s' > /var/lib/postgresql/data/pg_hba.conf", pgHbaContent)}, dockertest.ExecOptions{})
+		if err != nil {
+			t.Logf("Failed to write pg_hba.conf: %v", err)
+			continue
+		}
+		_, err = resource.Exec([]string{"pg_ctl", "reload"}, dockertest.ExecOptions{})
+		if err != nil {
+			t.Logf("Failed to reload pg_ctl: %v", err)
+			continue
+		}
+		break // Success! Exit retry loop
+	}
+	require.NoError(t, err, "Exhausted all retries updating container configuration")
+
+	// Create a new SSL connection with client cert for use in the test
+	sslDsn := fmt.Sprintf(
+		"host=%s port=%s user=testuser password='l]YLSc|4[i56_@{gY' dbname=dbname sslmode=verify-full sslrootcert=%s sslcert=%s sslkey=%s",
+		strings.Split(hostAndPort, ":")[0],
+		strings.Split(hostAndPort, ":")[1],
+		certs.caCert,
+		certs.clientCert,
+		certs.clientKey,
+	)
+
+	var sslDB *sql.DB
+	require.NoError(t, pool.Retry(func() error {
+		var err error
+		sslDB, err = sql.Open("postgres", sslDsn)
+		if err != nil {
+			return err
+		}
+		return sslDB.Ping()
+	}))
+
+	t.Cleanup(func() {
+		_ = sslDB.Close()
+	})
+
+	return resource, sslDB
 }
 
 func TestIntegrationSSLVerifyFull(t *testing.T) {
