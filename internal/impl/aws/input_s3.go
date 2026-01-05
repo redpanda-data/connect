@@ -49,6 +49,7 @@ const (
 	s3iSQSFieldDelayPeriod     = "delay_period"
 	s3iSQSFieldMaxMessages     = "max_messages"
 	s3iSQSFieldWaitTimeSeconds = "wait_time_seconds"
+	s3iSQSVisibilityTimeout    = "visibility_timeout"
 
 	// S3 Input Fields
 	s3iFieldBucket             = "bucket"
@@ -59,14 +60,15 @@ const (
 )
 
 type s3iSQSConfig struct {
-	URL             string
-	Endpoint        string
-	EnvelopePath    string
-	KeyPath         string
-	BucketPath      string
-	DelayPeriod     string
-	MaxMessages     int64
-	WaitTimeSeconds int64
+	URL               string
+	Endpoint          string
+	EnvelopePath      string
+	KeyPath           string
+	BucketPath        string
+	DelayPeriod       string
+	MaxMessages       int64
+	WaitTimeSeconds   int64
+	VisibilityTimeout int32
 }
 
 func s3iSQSConfigFromParsed(pConf *service.ParsedConfig) (conf s3iSQSConfig, err error) {
@@ -92,6 +94,9 @@ func s3iSQSConfigFromParsed(pConf *service.ParsedConfig) (conf s3iSQSConfig, err
 		return
 	}
 	if conf.WaitTimeSeconds, err = int64Field(pConf, s3iSQSFieldWaitTimeSeconds); err != nil {
+		return
+	}
+	if conf.VisibilityTimeout, err = int32Field(pConf, s3iSQSVisibilityTimeout); err != nil {
 		return
 	}
 	return
@@ -221,6 +226,10 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 					Description("Whether to set the wait time. Enabling this activates long-polling. Valid values: 0 to 20.").
 					Default(0).
 					Advanced(),
+				service.NewIntField(s3iSQSVisibilityTimeout).
+					Description("Custom SQS Visibility timeout in seconds. Default is 30s").
+					Default(30).
+					Optional(),
 			).
 				Description("Consume SQS messages in order to trigger key downloads.").
 				Optional(),
@@ -634,7 +643,7 @@ func (s *sqsTargetReader) nackSQSMessage(ctx context.Context, msg sqstypes.Messa
 	_, err := s.sqs.ChangeMessageVisibility(ctx, &sqs.ChangeMessageVisibilityInput{
 		QueueUrl:          &s.conf.SQS.URL,
 		ReceiptHandle:     msg.ReceiptHandle,
-		VisibilityTimeout: 0,
+		VisibilityTimeout: s.conf.SQS.VisibilityTimeout,
 	})
 	return err
 }
