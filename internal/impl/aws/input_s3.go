@@ -41,15 +41,15 @@ import (
 
 const (
 	// S3 Input SQS Fields
-	s3iSQSFieldURL             = "url"
-	s3iSQSFieldEndpoint        = "endpoint"
-	s3iSQSFieldEnvelopePath    = "envelope_path"
-	s3iSQSFieldKeyPath         = "key_path"
-	s3iSQSFieldBucketPath      = "bucket_path"
-	s3iSQSFieldDelayPeriod     = "delay_period"
-	s3iSQSFieldMaxMessages     = "max_messages"
-	s3iSQSFieldWaitTimeSeconds = "wait_time_seconds"
-	s3iSQSVisibilityTimeout    = "visibility_timeout"
+	s3iSQSFieldURL              = "url"
+	s3iSQSFieldEndpoint         = "endpoint"
+	s3iSQSFieldEnvelopePath     = "envelope_path"
+	s3iSQSFieldKeyPath          = "key_path"
+	s3iSQSFieldBucketPath       = "bucket_path"
+	s3iSQSFieldDelayPeriod      = "delay_period"
+	s3iSQSFieldMaxMessages      = "max_messages"
+	s3iSQSFieldWaitTimeSeconds  = "wait_time_seconds"
+	s3iSQSNackVisibilityTimeout = "nack_visibility_timeout"
 
 	// S3 Input Fields
 	s3iFieldBucket             = "bucket"
@@ -96,7 +96,7 @@ func s3iSQSConfigFromParsed(pConf *service.ParsedConfig) (conf s3iSQSConfig, err
 	if conf.WaitTimeSeconds, err = int64Field(pConf, s3iSQSFieldWaitTimeSeconds); err != nil {
 		return
 	}
-	if conf.VisibilityTimeout, err = int32Field(pConf, s3iSQSVisibilityTimeout); err != nil {
+	if conf.VisibilityTimeout, err = int32Field(pConf, s3iSQSNackVisibilityTimeout); err != nil {
 		return
 	}
 	return
@@ -226,9 +226,9 @@ You can access these metadata fields using xref:configuration:interpolation.adoc
 					Description("Whether to set the wait time. Enabling this activates long-polling. Valid values: 0 to 20.").
 					Default(0).
 					Advanced(),
-				service.NewIntField(s3iSQSVisibilityTimeout).
-					Description("Custom SQS Visibility timeout in seconds. Default is 30s").
-					Default(30).
+				service.NewIntField(s3iSQSNackVisibilityTimeout).
+					Description("Custom SQS Nack Visibility timeout in seconds. Default is 0").
+					Default(0).
 					Optional(),
 			).
 				Description("Consume SQS messages in order to trigger key downloads.").

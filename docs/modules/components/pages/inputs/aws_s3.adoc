@@ -46,7 +46,7 @@ input:
       key_path: Records.*.s3.object.key
       bucket_path: Records.*.s3.bucket.name
       envelope_path: ""
-      visibility_timeout: 30
+      nack_visibility_timeout: 0
 ```
 
 --
@@ -91,7 +91,7 @@ input:
       delay_period: ""
       max_messages: 10
       wait_time_seconds: 0
-      visibility_timeout: 30
+      nack_visibility_timeout: 0
 ```
 
 --
@@ -419,13 +419,13 @@ Whether to set the wait time. Enabling this activates long-polling. Valid values
 
 *Default*: `0`
 
-=== `sqs.visibility_timeout`
+=== `sqs.nack_visibility_timeout`
 
-Custom SQS Visibility timeout in seconds. Default is 30s
+Custom SQS Nack Visibility timeout in seconds. Default is 0
 
 
 *Type*: `int`
 
-*Default*: `30`
+*Default*: `0`
 
 
