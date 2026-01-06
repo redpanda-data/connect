@@ -3,6 +3,16 @@ Changelog
 
 All notable changes to this project will be documented in this file.
 
+## 4.77.0 - 2026-01-06
+
+### Fixed
+
+- elasticsearch_v8: fix Debugf template to respect each argument types (@peczenyj)
+
+### Added
+
+- elasticsearch_v9: Add support for Elasticsearch v9 (@peczenyj)
+
 ## 4.76.1 - 2025-12-22
 
 ### Fixed
