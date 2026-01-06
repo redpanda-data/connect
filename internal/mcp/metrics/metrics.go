@@ -107,10 +107,17 @@ func (m *Metrics) handleToolCall(ctx context.Context, next mcp.MethodHandler, re
 
 // extractToolName extracts the tool name from a tools/call request.
 func extractToolName(req mcp.Request) string {
-	// Get params and try to type assert to CallToolParams
 	params := req.GetParams()
+
+	// Try CallToolParamsRaw first (server-side)
+	if callToolParams, ok := params.(*mcp.CallToolParamsRaw); ok {
+		return callToolParams.Name
+	}
+
+	// Try CallToolParams (client-side)
 	if callToolParams, ok := params.(*mcp.CallToolParams); ok {
 		return callToolParams.Name
 	}
+
 	return "unknown"
 }
