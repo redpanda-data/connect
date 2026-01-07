@@ -10,4 +10,5 @@ release_notes.md
 .task
 .vscode
 .op
+.gomodcache
 __pycache__
