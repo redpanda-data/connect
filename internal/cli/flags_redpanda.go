@@ -10,7 +10,6 @@ package cli
 
 import (
 	"context"
-	"crypto/tls"
 	"crypto/x509"
 	"fmt"
 	"log/slog"
@@ -21,6 +20,7 @@ import (
 	"github.com/twmb/franz-go/pkg/sasl/scram"
 	"github.com/urfave/cli/v2"
 
+	btls "github.com/redpanda-data/benthos/v4/internal/tls"
 	"github.com/redpanda-data/benthos/v4/public/service"
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
 	"github.com/redpanda-data/connect/v4/internal/license"
@@ -229,9 +229,8 @@ client_id: rpcn
 	connDetails.SeedBrokers = brokers
 
 	if connDetails.TLSEnabled = tlsEnabled; connDetails.TLSEnabled {
-		connDetails.TLSConf = &tls.Config{
-			MinVersion: tls.VersionTLS12,
-		}
+		// Use strict security level for Redpanda-to-Redpanda communication
+		connDetails.TLSConf = btls.NewSecureConfig(btls.SecurityLevelStrict)
 
 		if rootCasFile != "" {
 			var caCert []byte
