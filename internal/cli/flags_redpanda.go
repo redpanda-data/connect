@@ -20,8 +20,8 @@ import (
 	"github.com/twmb/franz-go/pkg/sasl/scram"
 	"github.com/urfave/cli/v2"
 
-	btls "github.com/redpanda-data/benthos/v4/internal/tls"
 	"github.com/redpanda-data/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/service/securetls"
 	"github.com/redpanda-data/connect/v4/internal/impl/kafka"
 	"github.com/redpanda-data/connect/v4/internal/license"
 	"github.com/redpanda-data/connect/v4/internal/secrets"
@@ -230,7 +230,7 @@ client_id: rpcn
 
 	if connDetails.TLSEnabled = tlsEnabled; connDetails.TLSEnabled {
 		// Use strict security level for Redpanda-to-Redpanda communication
-		connDetails.TLSConf = btls.NewSecureConfig(btls.SecurityLevelStrict)
+		connDetails.TLSConf = securetls.NewSecureConfig(securetls.SecurityLevelStrict)
 
 		if rootCasFile != "" {
 			var caCert []byte
