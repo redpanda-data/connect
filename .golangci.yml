@@ -103,6 +103,10 @@ linters:
           - staticcheck
         text: "redpandatest.StartRedpanda is deprecated: Use StartSingleBroker or StartSingleBrokerWithConfig instead"
         path: internal/impl/kafka
+      - linters:
+          - errcheck
+        text: "Error return value of.*Write.*is not checked"
+        path: internal/impl/otlp/otlpconv/conv.go
     paths:
       - third_party$
       - builtin$
