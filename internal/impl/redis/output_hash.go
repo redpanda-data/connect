@@ -138,6 +138,22 @@ func newRedisHashWriter(conf *service.ParsedConfig, mgr *service.Resources) (r *
 	return
 }
 
+// ConnectionTest attempts to test the connection configuration of this output
+// without actually sending data. The connection, if successful, is then
+// closed.
+func (r *redisHashWriter) ConnectionTest(ctx context.Context) service.ConnectionTestResults {
+	client, err := r.clientCtor()
+	if err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+	defer client.Close()
+
+	if _, err = client.Ping(ctx).Result(); err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+	return service.ConnectionTestSucceeded().AsList()
+}
+
 func (r *redisHashWriter) Connect(ctx context.Context) error {
 	r.connMut.Lock()
 	defer r.connMut.Unlock()
