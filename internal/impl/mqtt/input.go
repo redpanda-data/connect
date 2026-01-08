@@ -114,6 +114,25 @@ func newMQTTReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources)
 	return m, nil
 }
 
+// ConnectionTest attempts to test the connection configuration of this input
+// without actually consuming data. The connection, if successful, is then
+// closed.
+func (m *mqttReader) ConnectionTest(_ context.Context) service.ConnectionTestResults {
+	conf := m.clientBuilder.apply(mqtt.NewClientOptions()).
+		SetCleanSession(m.cleanSession)
+
+	tmpClient := mqtt.NewClient(conf)
+
+	tok := tmpClient.Connect()
+	tok.Wait()
+	if err := tok.Error(); err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+
+	tmpClient.Disconnect(250)
+	return service.ConnectionTestSucceeded().AsList()
+}
+
 func (m *mqttReader) Connect(context.Context) error {
 	m.cMut.Lock()
 	defer m.cMut.Unlock()
