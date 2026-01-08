@@ -309,6 +309,24 @@ type esOutput struct {
 	client *elasticsearch.TypedClient
 }
 
+// ConnectionTest attempts to test the connection configuration of this output
+// without actually sending data. The connection, if successful, is then
+// closed.
+func (e *esOutput) ConnectionTest(ctx context.Context) service.ConnectionTestResults {
+	client, err := elasticsearch.NewTypedClient(e.conf.clientOpts)
+	if err != nil {
+		return service.ConnectionTestFailed(fmt.Errorf("failed to create client: %w", err)).AsList()
+	}
+
+	// Test connection by pinging the cluster
+	_, err = client.Info().Do(ctx)
+	if err != nil {
+		return service.ConnectionTestFailed(fmt.Errorf("failed to connect to cluster: %w", err)).AsList()
+	}
+
+	return service.ConnectionTestSucceeded().AsList()
+}
+
 func (e *esOutput) Connect(context.Context) error {
 	if e.client != nil {
 		return nil
