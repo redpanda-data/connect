@@ -1,0 +1,13 @@
+dictionaries = ["en_us"]
+
+words = [
+    "Redpanda",
+    "Benthos",
+    "Bloblang",
+    "gopls",
+    "gofumpt",
+    "testify",
+    "postgres",
+    "kafka",
+    "redis",
+]
