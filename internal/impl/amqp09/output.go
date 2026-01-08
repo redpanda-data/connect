@@ -297,6 +297,25 @@ func amqp09WriterFromParsed(conf *service.ParsedConfig, mgr *service.Resources) 
 	return &a, nil
 }
 
+// ConnectionTest attempts to test the connection configuration of this output
+// without actually sending data. The connection, if successful, is then
+// closed.
+func (a *amqp09Writer) ConnectionTest(_ context.Context) service.ConnectionTestResults {
+	conn, err := a.reDial(a.urls)
+	if err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+	defer conn.Close()
+
+	amqpChan, err := conn.Channel()
+	if err != nil {
+		return service.ConnectionTestFailed(fmt.Errorf("amqp failed to create channel: %w", err)).AsList()
+	}
+	defer amqpChan.Close()
+
+	return service.ConnectionTestSucceeded().AsList()
+}
+
 func (a *amqp09Writer) Connect(context.Context) error {
 	a.connLock.Lock()
 	defer a.connLock.Unlock()

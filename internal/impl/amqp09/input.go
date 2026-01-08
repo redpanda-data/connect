@@ -323,6 +323,25 @@ func amqp09ReaderFromParsed(conf *service.ParsedConfig, mgr *service.Resources) 
 
 //------------------------------------------------------------------------------
 
+// ConnectionTest attempts to test the connection configuration of this input
+// without actually consuming data. The connection, if successful, is then
+// closed.
+func (a *amqp09Reader) ConnectionTest(_ context.Context) service.ConnectionTestResults {
+	conn, err := a.reDial(a.urls)
+	if err != nil {
+		return service.ConnectionTestFailed(err).AsList()
+	}
+	defer conn.Close()
+
+	amqpChan, err := conn.Channel()
+	if err != nil {
+		return service.ConnectionTestFailed(fmt.Errorf("AMQP 0.9 Channel: %w", err)).AsList()
+	}
+	defer amqpChan.Close()
+
+	return service.ConnectionTestSucceeded().AsList()
+}
+
 // Connect establishes a connection to an AMQP09 server.
 func (a *amqp09Reader) Connect(context.Context) (err error) {
 	a.m.Lock()
