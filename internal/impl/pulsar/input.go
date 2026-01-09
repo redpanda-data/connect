@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
-	"time"
 
 	"github.com/apache/pulsar-client-go/pulsar"
 
@@ -219,18 +218,7 @@ func (p *pulsarReader) Connect(context.Context) error {
 		err        error
 	)
 
-	opts := pulsar.ClientOptions{
-		Logger:                createDefaultLogger(p.log),
-		ConnectionTimeout:     time.Second * 3,
-		URL:                   p.url,
-		TLSTrustCertsFilePath: p.rootCasFile,
-	}
-
-	if p.authConf.OAuth2.Enabled {
-		opts.Authentication = pulsar.NewAuthenticationOAuth2(p.authConf.OAuth2.ToMap())
-	} else if p.authConf.Token.Enabled {
-		opts.Authentication = pulsar.NewAuthenticationToken(p.authConf.Token.Token)
-	}
+	opts := newClientOptions(p.authConf, p.url, p.rootCasFile, p.log)
 
 	if client, err = pulsar.NewClient(opts); err != nil {
 		return err
@@ -347,18 +335,7 @@ func (p *pulsarReader) Read(ctx context.Context) (*service.Message, service.AckF
 // without actually consuming data. The connection, if successful, is then
 // closed.
 func (p *pulsarReader) ConnectionTest(_ context.Context) service.ConnectionTestResults {
-	opts := pulsar.ClientOptions{
-		Logger:                createDefaultLogger(p.log),
-		ConnectionTimeout:     time.Second * 3,
-		URL:                   p.url,
-		TLSTrustCertsFilePath: p.rootCasFile,
-	}
-
-	if p.authConf.OAuth2.Enabled {
-		opts.Authentication = pulsar.NewAuthenticationOAuth2(p.authConf.OAuth2.ToMap())
-	} else if p.authConf.Token.Enabled {
-		opts.Authentication = pulsar.NewAuthenticationToken(p.authConf.Token.Token)
-	}
+	opts := newClientOptions(p.authConf, p.url, p.rootCasFile, p.log)
 
 	client, err := pulsar.NewClient(opts)
 	if err != nil {
