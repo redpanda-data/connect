@@ -1,0 +1,31 @@
+http:
+  debug_endpoints: true
+
+input:
+  oracledb_cdc:
+    connection_string: oracle://testdb:testdb123@localhost:1521/XEPDB1
+    stream_snapshot: true
+    snapshot_max_batch_size: 500
+    include:
+      - TESTDB.USERS
+      # - testdb.products
+      # - testdb.cart
+    batching:
+      count: 1
+
+
+output:
+  processors:
+    - benchmark:
+        interval: 1s
+        count_bytes: true
+  drop: {}
+  # stdout: {}
+
+logger:
+  level: DEBUG
+
+metrics:
+  prometheus:
+    add_process_metrics: true
+    add_go_metrics: true

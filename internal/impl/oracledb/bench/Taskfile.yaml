@@ -1,0 +1,34 @@
+version: '3'
+
+tasks:
+  oracledb:up:
+    cmd: |
+      docker run -d \
+          --name oracledb \
+          -p 1521:1521 \
+          -e ORACLE_PWD=YourPassword123 \
+          container-registry.oracle.com/database/express:latest
+
+  oracledb:down:
+    cmd: docker rm -fv oracledb
+
+  oracledb:logs:
+    cmd: docker logs -f oracledb
+
+  sqlcl:
+    cmd: sqlcl system/YourPassword123@localhost:1521/XEPDB1 {{.EXTRA_ARGS}}
+
+  sqlcl:create:
+    cmd: task sqlcl EXTRA_ARGS="@create.sql"
+
+  sqlcl:data:users:
+    cmd: task sqlcl EXTRA_ARGS="@users.sql"
+
+  sqlcl:data:products:
+    cmd: task sqlcl EXTRA_ARGS="@products.sql"
+
+  sqlcl:data:cart:
+    cmd: task sqlcl EXTRA_ARGS="@cart.sql"
+
+  sqlcl:drop-cache:
+    # cmd: task sqlcl EXTRA_ARGS="-Q 'USE testdb; DROP TABLE rpcn.CdcCheckpointCache;'"
