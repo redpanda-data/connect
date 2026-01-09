@@ -405,7 +405,7 @@ func (t *UserDefinedTable) FullName() string {
 }
 
 // VerifyUserDefinedTables verifies underlying user defined tables based on supplied
-// include and exclude filters, validating the associated change table also exists.
+// include and exclude filters, validating change tracking is enabled.
 func VerifyUserDefinedTables(ctx context.Context, db *sql.DB, tableFilter *confx.RegexpFilter, log *service.Logger) ([]UserDefinedTable, error) {
 	rows, err := db.QueryContext(ctx, "SELECT USER AS SchemaName, TABLE_NAME AS TableName FROM USER_TABLES ORDER BY TABLE_NAME")
 	if err != nil {
