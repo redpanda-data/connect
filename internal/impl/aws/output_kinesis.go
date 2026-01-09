@@ -186,6 +186,27 @@ func (a *kinesisWriter) toRecords(batch service.MessageBatch) ([]types.PutRecord
 	return entries, err
 }
 
+// ConnectionTest attempts to test the connection configuration of this output
+// without actually sending data. The connection, if successful, is then
+// closed.
+func (a *kinesisWriter) ConnectionTest(ctx context.Context) service.ConnectionTestResults {
+	k := kinesis.NewFromConfig(a.conf.aconf)
+
+	in := &kinesis.DescribeStreamInput{}
+	if strings.HasPrefix(a.conf.Stream, "arn:") {
+		in.StreamARN = &a.conf.Stream
+	} else {
+		in.StreamName = &a.conf.Stream
+	}
+
+	_, err := k.DescribeStream(ctx, in)
+	if err != nil {
+		return service.ConnectionTestFailed(fmt.Errorf("failed to describe stream %s: %w", a.conf.Stream, err)).AsList()
+	}
+
+	return service.ConnectionTestSucceeded().AsList()
+}
+
 func (a *kinesisWriter) Connect(ctx context.Context) error {
 	if a.kinesis != nil {
 		return nil

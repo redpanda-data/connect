@@ -359,6 +359,26 @@ func newAmazonS3Writer(conf s3oConfig, mgr *service.Resources) (*amazonS3Writer,
 	return a, nil
 }
 
+// ConnectionTest attempts to test the connection configuration of this output
+// without actually sending data. The connection, if successful, is then
+// closed.
+func (a *amazonS3Writer) ConnectionTest(ctx context.Context) service.ConnectionTestResults {
+	client := s3.NewFromConfig(a.conf.aconf, func(o *s3.Options) {
+		o.UsePathStyle = a.conf.UsePathStyle
+		if a.conf.aconf.BaseEndpoint != nil {
+			o.BaseEndpoint = a.conf.aconf.BaseEndpoint
+		}
+	})
+
+	_, err := client.HeadBucket(ctx, &s3.HeadBucketInput{
+		Bucket: aws.String(a.conf.Bucket),
+	})
+	if err != nil {
+		return service.ConnectionTestFailed(fmt.Errorf("failed to access bucket %s: %w", a.conf.Bucket, err)).AsList()
+	}
+	return service.ConnectionTestSucceeded().AsList()
+}
+
 func (a *amazonS3Writer) Connect(context.Context) error {
 	if a.uploader != nil {
 		return nil

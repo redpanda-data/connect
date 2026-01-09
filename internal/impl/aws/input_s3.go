@@ -706,6 +706,47 @@ func (a *awsS3Reader) getTargetReader(ctx context.Context) (s3ObjectTargetReader
 	return newStaticTargetReader(ctx, a.conf, a.s3)
 }
 
+// ConnectionTest attempts to test the connection configuration of this input
+// without actually consuming data. The connection, if successful, is then
+// closed.
+func (a *awsS3Reader) ConnectionTest(ctx context.Context) service.ConnectionTestResults {
+	s3Client := s3.NewFromConfig(a.awsConf, func(o *s3.Options) {
+		o.UsePathStyle = a.conf.ForcePathStyleURLs
+		if a.awsConf.BaseEndpoint != nil {
+			o.BaseEndpoint = a.awsConf.BaseEndpoint
+		}
+	})
+
+	// Test S3 bucket access if bucket is specified
+	if a.conf.Bucket != "" {
+		_, err := s3Client.HeadBucket(ctx, &s3.HeadBucketInput{
+			Bucket: aws.String(a.conf.Bucket),
+		})
+		if err != nil {
+			return service.ConnectionTestFailed(fmt.Errorf("failed to access bucket %s: %w", a.conf.Bucket, err)).AsList()
+		}
+	}
+
+	// Test SQS queue access if URL is specified
+	if a.conf.SQS.URL != "" {
+		sqsConf := a.awsConf.Copy()
+		if a.conf.SQS.Endpoint != "" {
+			sqsConf.BaseEndpoint = &a.conf.SQS.Endpoint
+		}
+		sqsClient := sqs.NewFromConfig(sqsConf)
+
+		_, err := sqsClient.GetQueueAttributes(ctx, &sqs.GetQueueAttributesInput{
+			QueueUrl:       aws.String(a.conf.SQS.URL),
+			AttributeNames: []sqstypes.QueueAttributeName{sqstypes.QueueAttributeNameQueueArn},
+		})
+		if err != nil {
+			return service.ConnectionTestFailed(fmt.Errorf("failed to access SQS queue: %w", err)).AsList()
+		}
+	}
+
+	return service.ConnectionTestSucceeded().AsList()
+}
+
 // Connect attempts to establish a connection to the target S3 bucket
 // and any relevant queues used to traverse the objects (SQS, etc).
 func (a *awsS3Reader) Connect(ctx context.Context) error {

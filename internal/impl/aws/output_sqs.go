@@ -175,6 +175,29 @@ func newSQSWriter(conf sqsoConfig, mgr *service.Resources) (*sqsWriter, error) {
 	return s, nil
 }
 
+// ConnectionTest attempts to test the connection configuration of this output
+// without actually sending data. The connection, if successful, is then
+// closed.
+func (a *sqsWriter) ConnectionTest(ctx context.Context) service.ConnectionTestResults {
+	client := sqs.NewFromConfig(a.conf.aconf)
+
+	// Try to get a static URL first, fall back to a template URL check
+	urlStr, isStatic := a.conf.URL.Static()
+	if !isStatic {
+		// We can't perform connection tests if the URL is dynamic.
+		return service.ConnectionTestNotSupported().AsList()
+	}
+
+	_, err := client.GetQueueAttributes(ctx, &sqs.GetQueueAttributesInput{
+		QueueUrl:       aws.String(urlStr),
+		AttributeNames: []types.QueueAttributeName{types.QueueAttributeNameQueueArn},
+	})
+	if err != nil {
+		return service.ConnectionTestFailed(fmt.Errorf("failed to get queue attributes: %w", err)).AsList()
+	}
+	return service.ConnectionTestSucceeded().AsList()
+}
+
 func (a *sqsWriter) Connect(context.Context) error {
 	if a.sqs != nil {
 		return nil

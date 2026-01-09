@@ -140,6 +140,28 @@ func newSNSWriter(conf snsoConfig, mgr *service.Resources) (*snsWriter, error) {
 	return s, nil
 }
 
+// ConnectionTest attempts to test the connection configuration of this output
+// without actually sending data. The connection, if successful, is then
+// closed.
+func (a *snsWriter) ConnectionTest(ctx context.Context) service.ConnectionTestResults {
+	client := sns.NewFromConfig(a.conf.aconf)
+
+	// Try to get a static topic ARN first, fall back to a template ARN check
+	topicArn, isStatic := a.conf.TopicArn.Static()
+	if !isStatic {
+		// We can't perform connection tests if the ARN is dynamic.
+		return service.ConnectionTestNotSupported().AsList()
+	}
+
+	_, err := client.GetTopicAttributes(ctx, &sns.GetTopicAttributesInput{
+		TopicArn: aws.String(topicArn),
+	})
+	if err != nil {
+		return service.ConnectionTestFailed(fmt.Errorf("failed to get topic attributes: %w", err)).AsList()
+	}
+	return service.ConnectionTestSucceeded().AsList()
+}
+
 func (a *snsWriter) Connect(context.Context) error {
 	if a.sns != nil {
 		return nil

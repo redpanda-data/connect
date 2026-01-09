@@ -231,6 +231,20 @@ func newDynamoDBWriter(conf ddboConfig, mgr *service.Resources) (*dynamoDBWriter
 	return db, nil
 }
 
+// ConnectionTest attempts to test the connection configuration of this output
+// without actually sending data. The connection, if successful, is then
+// closed.
+func (d *dynamoDBWriter) ConnectionTest(ctx context.Context) service.ConnectionTestResults {
+	client := dynamodb.NewFromConfig(d.conf.aconf)
+	_, err := client.DescribeTable(ctx, &dynamodb.DescribeTableInput{
+		TableName: d.table,
+	})
+	if err != nil {
+		return service.ConnectionTestFailed(fmt.Errorf("failed to describe table %s: %w", *d.table, err)).AsList()
+	}
+	return service.ConnectionTestSucceeded().AsList()
+}
+
 func (d *dynamoDBWriter) Connect(ctx context.Context) error {
 	if d.client != nil {
 		return nil

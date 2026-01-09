@@ -902,6 +902,29 @@ func (k *kinesisReader) waitUntilStreamsExists(ctx context.Context) error {
 
 //------------------------------------------------------------------------------
 
+// ConnectionTest attempts to test the connection configuration of this input
+// without actually consuming data. The connection, if successful, is then
+// closed.
+func (k *kinesisReader) ConnectionTest(ctx context.Context) service.ConnectionTestResults {
+	svc := kinesis.NewFromConfig(k.sess)
+
+	// Test connection to at least one stream
+	if len(k.streams) == 0 {
+		return service.ConnectionTestFailed(errors.New("no streams configured")).AsList()
+	}
+
+	// Test the first stream to verify connectivity
+	streamInfo := k.streams[0]
+	_, err := svc.DescribeStream(ctx, &kinesis.DescribeStreamInput{
+		StreamName: aws.String(streamInfo.id),
+	})
+	if err != nil {
+		return service.ConnectionTestFailed(fmt.Errorf("failed to describe stream %s: %w", streamInfo.id, err)).AsList()
+	}
+
+	return service.ConnectionTestSucceeded().AsList()
+}
+
 // Connect establishes a kinesisReader connection.
 func (k *kinesisReader) Connect(ctx context.Context) error {
 	k.cMut.Lock()
