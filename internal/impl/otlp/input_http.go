@@ -55,7 +55,7 @@ const (
 
 type httpInputConfig struct {
 	Address        string
-	TLS            tlsConfig
+	TLS            tlsServerConfig
 	AuthToken      string
 	ReadTimeout    time.Duration
 	WriteTimeout   time.Duration
@@ -139,7 +139,7 @@ An optional rate limit resource can be specified to throttle incoming requests. 
 				Description("The address to listen on for HTTP connections.").
 				Default(defaultHTTPAddress),
 			service.NewObjectField(hiFieldTLS,
-				tlsFields()...,
+				tlsServerConfigFields()...,
 			).Description("TLS configuration for HTTP.").
 				Advanced(),
 			service.NewStringField(hiFieldAuthToken).
@@ -203,7 +203,7 @@ func HTTPInputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (s
 
 	// Parse TLS config
 	if pConf.Contains(hiFieldTLS) {
-		if conf.TLS, err = parseTLSConfig(pConf.Namespace(hiFieldTLS)); err != nil {
+		if conf.TLS, err = parseTLSServerConfig(pConf.Namespace(hiFieldTLS)); err != nil {
 			return nil, err
 		}
 	}

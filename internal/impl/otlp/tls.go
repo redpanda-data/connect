@@ -21,12 +21,32 @@ import (
 )
 
 const (
-	tlsFieldEnabled  = "enabled"
-	tlsFieldCertFile = "cert_file"
-	tlsFieldKeyFile  = "key_file"
+	tlsFieldEnabled        = "enabled"
+	tlsFieldSkipCertVerify = "skip_cert_verify"
+	tlsFieldCertFile       = "cert_file"
+	tlsFieldKeyFile        = "key_file"
 )
 
-func tlsFields() []*service.ConfigField {
+// tlsClientConfigFields returns TLS configuration fields for client connections (outputs).
+func tlsClientConfigFields() []*service.ConfigField {
+	return []*service.ConfigField{
+		service.NewBoolField(tlsFieldEnabled).
+			Description("Enable TLS connections.").
+			Default(false),
+		service.NewBoolField(tlsFieldSkipCertVerify).
+			Description("Skip certificate verification (insecure).").
+			Default(false),
+		service.NewStringField(tlsFieldCertFile).
+			Description("Path to the TLS certificate file for client authentication.").
+			Default(""),
+		service.NewStringField(tlsFieldKeyFile).
+			Description("Path to the TLS key file for client authentication.").
+			Default(""),
+	}
+}
+
+// tlsServerConfigFields returns TLS configuration fields for server connections (inputs).
+func tlsServerConfigFields() []*service.ConfigField {
 	return []*service.ConfigField{
 		service.NewBoolField(tlsFieldEnabled).
 			Description("Enable TLS connections.").
@@ -40,13 +60,41 @@ func tlsFields() []*service.ConfigField {
 	}
 }
 
-type tlsConfig struct {
+type tlsClientConfig struct {
+	Enabled        bool
+	SkipCertVerify bool
+	CertFile       string
+	KeyFile        string
+}
+
+type tlsServerConfig struct {
 	Enabled  bool
 	CertFile string
 	KeyFile  string
 }
 
-func parseTLSConfig(pConf *service.ParsedConfig) (tlsConf tlsConfig, err error) {
+func parseTLSClientConfig(pConf *service.ParsedConfig) (tlsConf tlsClientConfig, err error) {
+	if tlsConf.Enabled, err = pConf.FieldBool(tlsFieldEnabled); err != nil {
+		return
+	}
+	if tlsConf.SkipCertVerify, err = pConf.FieldBool(tlsFieldSkipCertVerify); err != nil {
+		return
+	}
+	if tlsConf.CertFile, err = pConf.FieldString(tlsFieldCertFile); err != nil {
+		return
+	}
+	if tlsConf.KeyFile, err = pConf.FieldString(tlsFieldKeyFile); err != nil {
+		return
+	}
+	if tlsConf.Enabled && !tlsConf.SkipCertVerify && (tlsConf.CertFile == "" || tlsConf.KeyFile == "") {
+		err = errors.New("both cert_file and key_file must be provided when TLS is enabled and skip_cert_verify is false")
+		return
+	}
+
+	return tlsConf, nil
+}
+
+func parseTLSServerConfig(pConf *service.ParsedConfig) (tlsConf tlsServerConfig, err error) {
 	if tlsConf.Enabled, err = pConf.FieldBool(tlsFieldEnabled); err != nil {
 		return
 	}

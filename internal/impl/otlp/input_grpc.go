@@ -52,7 +52,7 @@ const (
 
 type grpcInputConfig struct {
 	Address        string
-	TLS            tlsConfig
+	TLS            tlsServerConfig
 	AuthToken      string
 	MaxRecvMsgSize int
 	RateLimit      string
@@ -119,7 +119,7 @@ An optional rate limit resource can be specified to throttle incoming requests. 
 				Description("The address to listen on for gRPC connections.").
 				Default(defaultGRPCAddress),
 			service.NewObjectField(giFieldTLS,
-				tlsFields()...,
+				tlsServerConfigFields()...,
 			).Description("TLS configuration for gRPC.").
 				Advanced(),
 			service.NewStringField(giFieldAuthToken).
@@ -167,7 +167,7 @@ func GRPCInputFromParsed(pConf *service.ParsedConfig, mgr *service.Resources) (s
 
 	// Parse TLS config
 	if pConf.Contains(giFieldTLS) {
-		if conf.TLS, err = parseTLSConfig(pConf.Namespace(giFieldTLS)); err != nil {
+		if conf.TLS, err = parseTLSServerConfig(pConf.Namespace(giFieldTLS)); err != nil {
 			return nil, err
 		}
 	}
