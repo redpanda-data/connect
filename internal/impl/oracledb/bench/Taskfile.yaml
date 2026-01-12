@@ -31,4 +31,4 @@ tasks:
     cmd: task sqlcl EXTRA_ARGS="@cart.sql"
 
   sqlcl:drop-cache:
-    # cmd: task sqlcl EXTRA_ARGS="-Q 'USE testdb; DROP TABLE rpcn.CdcCheckpointCache;'"
+    cmd: echo "DROP TABLE RPCN.CDC_CHECKPOINT_CACHE;" | sqlcl system/YourPassword123@localhost:1521/XEPDB1
