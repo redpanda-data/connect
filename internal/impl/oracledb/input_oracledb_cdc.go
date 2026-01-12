@@ -279,21 +279,21 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) error {
 	}
 
 	// no cache specified so use default, custom sql cache
-	// if i.cfg.scnCache == "" {
-	// 	// setup internal cache
-	// 	cache, err := newCheckpointCache(ctx, i.cfg.connectionString, i.cfg.cpCacheTableName, i.log)
-	// 	if err != nil {
-	// 		return fmt.Errorf("initialising oracle based checkpoint cache: %s", err)
-	// 	}
-	// 	i.cpCache = cache
-	// }
+	if i.cfg.scnCache == "" {
+		// setup internal cache
+		cache, err := newCheckpointCache(ctx, i.cfg.connectionString, i.cfg.cpCacheTableName, i.log)
+		if err != nil {
+			return fmt.Errorf("initialising oracle based checkpoint cache: %s", err)
+		}
+		i.cpCache = cache
+	}
 
 	if userTables, err = replication.VerifyUserDefinedTables(ctx, i.db, i.cfg.tablesFilter, i.log); err != nil {
 		return fmt.Errorf("verifying user defined tables: %w", err)
 	}
-	// if cachedSCN, err = i.getCachedSCN(ctx); err != nil {
-	// 	return fmt.Errorf("unable to get cached SCN: %s", err)
-	// }
+	if cachedSCN, err = i.getCachedSCN(ctx); err != nil {
+		return fmt.Errorf("unable to get cached SCN: %s", err)
+	}
 
 	// setup snapshotting and streaming
 	var (
@@ -346,8 +346,9 @@ func (i *oracleDBCDCInput) Connect(ctx context.Context) error {
 		}
 
 		// streaming
-		wg, ctx := errgroup.WithContext(softCtx)
+		wg, _ := errgroup.WithContext(softCtx)
 		wg.Go(func() error {
+			return nil
 			if err := streaming.ReadChangeTables(ctx, i.db, maxSCN); err != nil {
 				return fmt.Errorf("streaming from change tables: %w", err)
 			}
@@ -392,7 +393,6 @@ func (i *oracleDBCDCInput) getCachedSCN(ctx context.Context) (replication.SCN, e
 }
 
 func (i *oracleDBCDCInput) cacheSCN(ctx context.Context, scn replication.SCN) error {
-	return nil
 	if len(scn) == 0 {
 		return errors.New("SCN for caching is empty")
 	}
